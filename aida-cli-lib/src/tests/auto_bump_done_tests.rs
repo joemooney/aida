@@ -5318,7 +5318,7 @@ fn bug_2516_gitlab_open_or_unreadable_changes_preserve() {
     }
     crate::test_exec::write_executable(
         &bin.join("glab"),
-        "#!/bin/sh\nif [ \"$1\" = --version ]; then echo glab-test; exit 0; fi\necho '[{\"iid\":2,\"title\":\"another deliverable (BUG-2516)\"}]'\n",
+        "#!/bin/sh\nif [ \"$1\" = --version ]; then echo glab-test; exit 0; fi\necho '[{\"iid\":2,\"title\":\"another deliverable (BUG-2516)\",\"description\":null,\"source_branch\":\"other\"}]'\n",
     );
     assert_eq!(
         specs_with_open_prs(&root, ["BUG-2516".into()]),
@@ -5328,7 +5328,7 @@ fn bug_2516_gitlab_open_or_unreadable_changes_preserve() {
 
 // trace:BUG-2516 | ai:codex
 #[test]
-fn bug_2516_gitlab_search_requires_credit_across_whole_page() {
+fn bug_2516_gitlab_search_contains_spec_across_whole_page() {
     if crate::test_env::run_path_isolated_test() {
         return;
     }
@@ -5343,8 +5343,8 @@ fn bug_2516_gitlab_search_requires_credit_across_whole_page() {
     std::fs::create_dir(&bin).unwrap();
     let _path = crate::test_env::EnvVarGuard::prepend_path(&bin);
     let miss = serde_json::json!({
-        "iid": 2, "title": "follow-up from BUG-2516 (TASK-999)",
-        "description": "follow-up from BUG-2516", "source_branch": "task-999",
+        "iid": 2, "title": "follow-up from TASK-999",
+        "description": "follow-up from TASK-999", "source_branch": "task-999",
         "state": "opened"
     });
     let check = |rows: Vec<serde_json::Value>, expected| {
@@ -5353,9 +5353,9 @@ fn bug_2516_gitlab_search_requires_credit_across_whole_page() {
     };
     check(vec![miss.clone()], Some(std::collections::BTreeMap::new()));
     for (title, description, branch) in [
-        ("fix (BUG-2516)", "", "other"),
-        ("fix (TASK-999)", "* complete (BUG-2516)", "other"),
-        ("fix (TASK-999)", "", "fix/bug-2516-rework"),
+        ("follow-up for bUg-2516", "", "follow-up"),
+        ("fix (TASK-999)", "follow-up for bug-2516", "other"),
+        ("fix (TASK-999)", "", "prefixbug-2516suffix"),
     ] {
         check(
             vec![
@@ -5368,6 +5368,46 @@ fn bug_2516_gitlab_search_requires_credit_across_whole_page() {
             Some(std::collections::BTreeMap::from([("BUG-2516".into(), 3)])),
         );
     }
+    // Missing or malformed evidence must preserve status, even after a match.
+    for field in ["description", "source_branch"] {
+        for invalid in [
+            None,
+            Some(serde_json::json!(42)),
+            Some(serde_json::json!({})),
+            Some(serde_json::Value::Null),
+        ] {
+            if field == "description" && invalid == Some(serde_json::Value::Null) {
+                continue;
+            }
+            let mut incomplete = miss.clone();
+            incomplete.as_object_mut().unwrap().remove(field);
+            if let Some(value) = invalid {
+                incomplete[field] = value;
+            }
+            check(vec![incomplete.clone()], None);
+            check(
+                vec![
+                    serde_json::json!({
+                        "iid": 3, "title": "BUG-2516", "description": "",
+                        "source_branch": "other", "state": "opened"
+                    }),
+                    incomplete,
+                ],
+                None,
+            );
+        }
+    }
+    let mut null_description = miss.clone();
+    null_description["description"] = serde_json::Value::Null;
+    check(
+        vec![null_description.clone()],
+        Some(std::collections::BTreeMap::new()),
+    );
+    null_description["source_branch"] = serde_json::json!("BUG-2516");
+    check(
+        vec![null_description],
+        Some(std::collections::BTreeMap::from([("BUG-2516".into(), 2)])),
+    );
     // A full nonmatching page needs the empty second page to establish clear.
     check(
         vec![miss.clone(); 100],

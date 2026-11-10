@@ -3874,9 +3874,10 @@ fn glab_lookup_from_list_output(
     }
 }
 
-/// Open MRs are candidates, not completion credit. Reuse the GitHub
-/// reconciliation matcher across the entire page, with GitLab's field names.
-/// The caller follows full pages before treating absence as authoritative.
+/// Enumerate open MR ownership using case-insensitive spec-ID containment in
+/// title, description or source_branch (binding advisor ruling PR-3774 round 2).
+/// Every row must retain all ownership evidence; only an explicit null description
+/// means an empty body. The caller follows full pages before declaring absence.
 // trace:BUG-2516 | ai:codex
 fn glab_spec_lookup_from_list_output(
     out: Result<std::process::Output>,
@@ -3890,35 +3891,38 @@ fn glab_spec_lookup_from_list_output(
         Ok(serde_json::Value::Array(rows)) => rows,
         _ => return ChangeLookup::CliFailed("invalid GitLab search response".into()),
     };
-    let normalized: Vec<_> = rows
-        .iter()
-        .map(|row| {
-            serde_json::json!({
-                "number": row.get("iid"),
-                "title": row.get("title"),
-                // GitLab permits a null description for an empty MR body.
-                "body": row.get("description").filter(|v| !v.is_null()).cloned().unwrap_or_else(|| serde_json::json!("")),
-                "headRefName": row.get("source_branch"),
-                "state": match row.get("state").and_then(|v| v.as_str()) {
-                    Some("opened") | None => "OPEN",
-                    Some(state) => state,
-                },
-            })
-        })
-        .collect();
-    use crate::reconcile_evidence::{parse_open_change_rows, OpenChangeCheck};
-    match parse_open_change_rows(&serde_json::to_vec(&normalized).unwrap(), spec) {
-        OpenChangeCheck::Clear => ChangeLookup::NoChange,
-        OpenChangeCheck::Open(id) => rows
-            .iter()
-            .find(|row| row.get("iid").and_then(|v| v.as_u64()) == Some(id))
-            .and_then(|row| change_ref_from_glab_mr(row, ""))
-            .map(ChangeLookup::Found)
-            .expect("validated matching MR"),
-        OpenChangeCheck::Unavailable(why) => ChangeLookup::CliFailed(format!(
-            "GitLab search could not establish open-change evidence: {why}"
-        )),
+    let spec = spec.to_ascii_lowercase();
+    let mut first = None;
+    for row in &rows {
+        let field = |name: &str| row.get(name).and_then(|v| v.as_str());
+        let description = match row.get("description") {
+            Some(serde_json::Value::Null) => Some(""),
+            Some(value) => value.as_str(),
+            None => None,
+        };
+        let (Some(_id), Some(title), Some(description), Some(branch)) = (
+            row.get("iid").and_then(|v| v.as_u64()).filter(|id| *id > 0),
+            field("title"),
+            description,
+            field("source_branch"),
+        ) else {
+            return ChangeLookup::CliFailed(
+                "GitLab search could not establish open-change evidence: incomplete ownership fields".into(),
+            );
+        };
+        if field("state").is_some_and(|state| !state.eq_ignore_ascii_case("opened")) {
+            continue;
+        }
+        if !spec.is_empty()
+            && [title, description, branch]
+                .iter()
+                .any(|text| text.to_ascii_lowercase().contains(&spec))
+            && first.is_none()
+        {
+            first = change_ref_from_glab_mr(row, "");
+        }
     }
+    first.map_or(ChangeLookup::NoChange, ChangeLookup::Found)
 }
 
 /// Heuristic: does a `glab` stderr indicate a *transient* network/API outage
