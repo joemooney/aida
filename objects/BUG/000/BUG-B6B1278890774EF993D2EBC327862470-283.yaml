@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-10T10:24:49.978786902Z
-modified_at: 2026-11-10T12:29:36.881263125Z
+modified_at: 2026-11-10T12:35:48.829183123Z
 req_type: Bug
 comments:
 - id: 01a1c544-9448-77c1-a5a0-c8d1776ee831
@@ -102,6 +102,10 @@ history:
   session_id: 01a1c39a-801a-7bd1-8da9-c955a6707f0b
   harness_version: 2.1.321 (Claude Code)
   changes: []
+- id: 01a1c575-1c54-7a72-863c-ca11ba867419
+  author: joe
+  timestamp: 2026-11-10T12:35:48.948148662Z
+  changes: []
 filed_at:
   code_sha: af0288e60a2f6f00d4699098632234b246f6e511
   branch: main
@@ -111,3 +115,11 @@ filed_at:
   vendor: claude
   session: 01a1c39a-801a-7bd1-8da9-c955a6707f0b
   harness_version: 2.1.321 (Claude Code)
+failure_reason:
+  phase: reviewer
+  phase_index: 3
+  kind: verdict:request-changes
+  detail: 'Full sweep: distributed admission blocks missing-verdict retries; retry also omits process-group completion proof. BUG-2518 AC1 unverified; AC2 unverified; AC3 verified by source/test inspection; AC4 unverified. BUG-2518 (bug protocol): met. CI: seven queued; merge-hold-gate failed on existing hold.'
+  recovery_hint: address the review findings, move BUG-2518 back to In Progress, and clear the PR hold only after approval
+  shelved_by: reviewer
+  shelved_at: 2026-11-10T12:35:48.829183123Z
