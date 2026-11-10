@@ -13,12 +13,12 @@ description: |
   3. Works for Claude, Codex and AGY through their headless resume commands; one adapter test per vendor using a recorded fixture.
   4. A wait whose seat or session has been lost surfaces as an escalation, never a silent drop.
   Ref: docs/plans/2026-11-07-infinity-agent-architecture-deep-dive.md section 3.3 and the SPIKE-711 results table.
-status: NeedsAttention
+status: Approved
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-08T02:58:08.667753563Z
-modified_at: 2026-11-10T00:07:03.891852616Z
+modified_at: 2026-11-10T00:19:37.240813516Z
 req_type: Story
 tags:
 - area:human-wait
@@ -503,6 +503,13 @@ comments:
   modified_at: 2026-11-10T00:07:03.891852616Z
   session_id: 01a1beff-fc3b-78e2-93e2-9b0c283b0339
   harness_version: 2.1.319 (Claude Code)
+- id: 01a1c2d3-1a98-7263-b959-2018d05a32c4
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was punted on: blocked-dependency: R1 is accepted, not disputed. Latest review at 3131cc27b3a3 explicitly requires host/advisor metadata action and says no seat commit clears it; do not send this back for another revision. Host/advisor must retitle PR #3666 exactly: [AI:codex] docs(plans): sketch park-on-ask resume-on-answer (Refs STORY-2661). Existing sketch at docs/plans/2026-11-08-story-2661-park-resume-sketch.md already records that gate. Binding advisor ruling also requires recorded sketch signoff before code; none is recorded. Retain publication veto until title repair and signoff. No source edits needed or made; git diff --check passed; runtime untested=true (design-only gate). Native seat cannot commit or edit publication metadata under launch instructions.. No triage reason was given.'
+  created_at: 2026-11-10T00:19:37.240804068Z
+  modified_at: 2026-11-10T00:19:37.240804068Z
+  session_id: 01a1beff-fc3b-78e2-93e2-9b0c283b0339
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1b9c5-1aa6-78e3-9355-9af12a0ce44c
   author: joe
@@ -862,6 +869,15 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a1c2d3-1a98-7263-b959-200efa421144
+  author: joe
+  timestamp: 2026-11-10T00:19:37.240773556Z
+  session_id: 01a1beff-fc3b-78e2-93e2-9b0c283b0339
+  harness_version: 2.1.319 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 filed_at:
   code_sha: dc41ee8da2f44f88178936fc1a8e6cb7168a3de7
   branch: main
@@ -871,8 +887,3 @@ filed_at:
   vendor: claude
   session: 01a1b8be-8170-7fb2-89ab-ecb4c6eee98c
   harness_version: 2.1.319 (Claude Code)
-attention_reason:
-  category: blocked-dependency
-  detail: 'R1 is accepted, not disputed. Latest review at 3131cc27b3a3 explicitly requires host/advisor metadata action and says no seat commit clears it; do not send this back for another revision. Host/advisor must retitle PR #3666 exactly: [AI:codex] docs(plans): sketch park-on-ask resume-on-answer (Refs STORY-2661). Existing sketch at docs/plans/2026-11-08-story-2661-park-resume-sketch.md already records that gate. Binding advisor ruling also requires recorded sketch signoff before code; none is recorded. Retain publication veto until title repair and signoff. No source edits needed or made; git diff --check passed; runtime untested=true (design-only gate). Native seat cannot commit or edit publication metadata under launch instructions.'
-  raised_by: implementer
-  raised_at: 2026-11-08T12:33:58.090790045Z
