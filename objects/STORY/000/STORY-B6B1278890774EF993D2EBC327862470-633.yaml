@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-10T22:04:54.061461738Z
-modified_at: 2026-11-10T23:10:38.487895821Z
+modified_at: 2026-11-10T23:10:40.898325026Z
 req_type: Story
 comments:
 - id: 01a1c781-4cf1-7c80-b086-89c5c5096ab6
@@ -139,6 +139,21 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: STORY-2710 remains incomplete (AC1-6); marker scan also regresses ordinary publication. CI pending at review time.. It was punted on: design-fork: Round 2 P1 (reviewed 67d115e25b02): AC1-6 remain incomplete; I dispute treating the merge-mechanics ruling as approval of the proposed shared dispatch-state contract. The binding 22:22 UTC ruling is incorporated in docs/plans/2026-11-10-story-2710-conflict-lane.md and read-only Codex .git is preserved. Before production watcher/direct-rework coordination, master must approve the proposed shared versioned repair journal (per repository/PR/head reservation, ambiguous-spawn retention and deduplicated path-bearing refusal notices), or select the watcher-state alternative. AGENTS.md Sketch-First Protocol requires that sign-off for new orchestrator state. Independent AC7 marker-refusal code and a real Git fixture regression are left uncommitted as a partial safety slice; no story approval/completion is claimed. Host staging with MERGE_HEAD, generated-output regeneration, compile gate, automatic dispatch, notices and AC6 end-to-end coverage remain required.. No triage reason was given.'
   created_at: 2026-11-10T23:10:38.487891581Z
   modified_at: 2026-11-10T23:10:38.487891581Z
+  session_id: 01a1c530-c917-7f13-ab81-f6b5e1d1cd30
+  harness_version: 2.1.322 (Claude Code)
+- id: 01a1c7ba-586f-7333-b14e-4cd62aec6e3c
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (STORY-2710):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: f89e7ce27a76
+    Recorded: 2026-11-10T22:35:48.751541376+00:00
+    Findings:
+    1. [P1] docs/plans/2026-11-10-story-2710-conflict-lane.md:122-131 — Implement the amended STORY-2710 contract or obtain explicit approval to narrow this PR to a separately tracked safety slice. AC1-6 remain unsatisfied: review_watch_update::attempt still routes conflicts to the advisor, queue_cmd/work::rework_conflict_route still forces Claude, and host merge handling aborts conflicts. No registered regeneration flow, exact-merged-tree compile gate, repair refusal notices with paths and per-head deduplication, or dispatch/regeneration/refusal and end-to-end read-only Codex regressions were added. commit_pending still snapshots with git write-tree before staging, so a resolved worktree with unmerged index entries cannot complete the required host-staged merge. Obtain the outstanding state-contract ruling before implementation; the AC7 helper test alone cannot establish story acceptance.
+    2. [P2] aida-cli-lib/src/seat_clone.rs:4082-4085,4217-4247 — Restrict the marker guard to host-recorded conflict paths and retain that list for retries. commit_pending now unconditionally scans the entire contents of every changed tracked path against HEAD, even when no merge is pending. A normal edit to a tracked conflict-resolution guide or test fixture containing a literal line beginning <<<<<<< or >>>>>>> now refuses publication, including when that example was already present before the edit. The advisor contract requires scanning listed conflicted paths, not imposing a repository-wide prohibition on marker literals. Add regression coverage for ordinary non-conflict publication with legitimate marker examples, alongside refusal coverage for actual conflicted paths and staged retries.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-10T23:10:40.751312156Z
+  modified_at: 2026-11-10T23:10:40.751312156Z
   session_id: 01a1c530-c917-7f13-ab81-f6b5e1d1cd30
   harness_version: 2.1.322 (Claude Code)
 history:
