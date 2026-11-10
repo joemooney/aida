@@ -37,9 +37,9 @@ fn report_multicall_parity_and_no_writes() {
     fs::create_dir(&bin).unwrap();
     let git = bin.join("git");
     fs::write(&git,"#!/bin/sh\n[ \"$1\" = log ] || exit 19\nprintf '2026-11-09T04:00:00Z\\tsubject (#42)\\n'\n").unwrap();
-    let gh = bin.join("gh");
-    fs::write(&gh,"#!/bin/sh\ncase \"$1 $2\" in\n'pr view') echo '{\"createdAt\":\"2026-11-09T00:00:00Z\",\"commits\":[{\"oid\":\"abc\"}]}' ;;\n'run list') echo '[]' ;;\n*) exit 19 ;;\nesac\n").unwrap();
-    for path in [&git, &gh] {
+    let reader = bin.join("aida");
+    fs::write(&reader, "#!/bin/sh\n[ \"$1 $2\" = \"flow report\" ] || exit 19\necho '{\"prs\":[{\"open_hours\":4.0,\"ledger_present\":false}],\"aggregate\":{},\"notes\":[]}'\n").unwrap();
+    for path in [&git, &reader] {
         fs::set_permissions(path, fs::Permissions::from_mode(0o755)).unwrap();
     }
     let before = snapshot(dir.path());
@@ -50,6 +50,7 @@ fn report_multicall_parity_and_no_writes() {
             .args(extra)
             .current_dir(dir.path())
             .env("PATH", &bin)
+            .env("AIDA_BIN", &reader)
             .output()
             .unwrap()
     };
@@ -88,25 +89,14 @@ fn report_multicall_parity_and_no_writes() {
             .code(),
         Some(1)
     );
-    assert_eq!(before, snapshot(dir.path()));
-}
-
-/// Requires a pre-existing AIDA on PATH; kept separate from hermetic tests.
-#[test]
-#[ignore = "requires an installed built-in aida for cross-binary comparison"]
-fn installed_builtin_parity() {
-    let result = Command::new("python3")
-        .arg(concat!(
-            env!("CARGO_MANIFEST_DIR"),
-            "/../tests/test_porcelain_flow_parity.py"
-        ))
-        .args(["aida", env!("CARGO_BIN_EXE_aida-porcelain")])
+    let missing_reader = Command::new(env!("CARGO_BIN_EXE_aida-porcelain"))
+        .args(["flow", "report", "--since", "2026-11-09"])
+        .env_remove("AIDA_BIN")
+        .env_remove("AIDA_OUTPUT_FORMAT")
+        .env("AIDA_AGENT_OUTPUT", "1")
         .output()
         .unwrap();
-    assert!(
-        result.status.success(),
-        "{}{}",
-        String::from_utf8_lossy(&result.stdout),
-        String::from_utf8_lossy(&result.stderr)
-    );
+    assert_eq!(missing_reader.status.code(), Some(1));
+    assert!(String::from_utf8_lossy(&missing_reader.stdout).contains("AIDA_BIN is required"));
+    assert_eq!(before, snapshot(dir.path()));
 }

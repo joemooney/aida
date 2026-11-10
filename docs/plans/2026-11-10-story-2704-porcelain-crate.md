@@ -189,3 +189,18 @@ Add multi-call argv[0], install conflict, upgrade, rollback/recovery and no-writ
 controls above. Update docs/cli and affected help goldens in implementation.
 Sketch signoff precedes those code changes; this document alone claims no
 runtime tests or completion credit for STORY-2704 or STORY-2699.
+
+## Round 2 implementation correction (2026-11-10)
+
+The advisor ruling supersedes the migration sketch during built-in overlap.
+The built-in owns flow evidence collection. Porcelain reads its public
+`AIDA_BIN flow report --json` output and renders it; it never spawns `gh`.
+No porcelain exemption is added to the forge-read ratchet. The parity test
+runs without `ignore` against checkout-built binaries, with fixture forge
+responses and filesystem snapshots.
+
+Dev generations retain `.inventory.json` with their binary and alias names.
+Rollback removes members absent from the restored generation, including when
+rolling back the first porcelain adoption, and can roll forward again. Complete
+snapshots keep interrupted generation swaps replayable. Legacy generations
+without inventories use their actual installed members.

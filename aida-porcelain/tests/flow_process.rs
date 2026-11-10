@@ -66,6 +66,14 @@ fn report_process_alias_help_and_errors_preserve_fixture() {
     symlink(binary, links.path().join("aida-porcelain")).unwrap();
     symlink("aida-porcelain", links.path().join("aida-flow")).unwrap();
     symlink("aida-porcelain", links.path().join("aida-unknown")).unwrap();
+    let reader = links.path().join("reader");
+    fs::write(
+        &reader,
+        "#!/bin/sh\necho '{\"prs\":[],\"aggregate\":{},\"notes\":[]}'\n",
+    )
+    .unwrap();
+    use std::os::unix::fs::PermissionsExt;
+    fs::set_permissions(&reader, fs::Permissions::from_mode(0o755)).unwrap();
     let before = snapshot(root);
     let report = [
         "report",
@@ -79,6 +87,7 @@ fn report_process_alias_help_and_errors_preserve_fixture() {
         let output = Command::new(links.path().join(name))
             .current_dir(root)
             .env_remove("AIDA_OUTPUT_FORMAT")
+            .env("AIDA_BIN", &reader)
             .args(args)
             .output()
             .unwrap();

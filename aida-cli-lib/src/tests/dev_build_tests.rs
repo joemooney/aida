@@ -524,6 +524,7 @@ fn successful_build_promotes_keeps_prev_and_restarts_mcp() {
     assert_eq!(
         names,
         [
+            ".inventory.json",
             ".lock",
             ".promoted",
             "aida",
@@ -2337,18 +2338,52 @@ fn rustc_wrapper_for_prefers_the_child_override() {
 
 // trace:STORY-2704 | ai:codex
 #[test]
-fn rollback_first_porcelain_adoption_retains_additive_companion() {
+fn rollback_first_porcelain_adoption_restores_generation_membership() {
     let f = fixture();
     put_live(&f.layout, "LIVE");
     for name in ["aida", "aida-server"] {
         write(&f.layout.prev(name), &format!("PREV-{name}"));
     }
+    std::os::unix::fs::symlink("aida-porcelain", f.layout.live("aida-flow")).unwrap();
     rollback(&f.layout).unwrap();
     assert_eq!(read(&f.layout.live("aida")), "PREV-aida");
+    assert!(f.layout.live("aida-flow").symlink_metadata().is_err());
+    assert!(!f.layout.live("aida-porcelain").exists());
     assert_eq!(
-        read(&f.layout.live("aida-porcelain")),
+        read(&f.layout.prev("aida-porcelain")),
         "LIVE-aida-porcelain"
     );
     rollback(&f.layout).unwrap();
     assert_eq!(read(&f.layout.live("aida")), "LIVE-aida");
+}
+
+// trace:STORY-2704 | ai:codex
+#[test]
+fn rollback_generation_inventory_recovers_ready_snapshot() {
+    let f = fixture();
+    put_live(&f.layout, "LIVE");
+    for name in ["aida", "aida-server"] {
+        write(&f.layout.prev(name), &format!("PREV-{name}"));
+    }
+    std::os::unix::fs::symlink("aida-porcelain", f.layout.live("aida-flow")).unwrap();
+    assert!(rollback_with_steps(&f.layout, &mut |step| {
+        if step == "generation-ready" {
+            anyhow::bail!("simulated interruption");
+        }
+        Ok(())
+    })
+    .is_err());
+    recover_live_dir(&f.layout).unwrap();
+    recover_live_dir(&f.layout).unwrap();
+    assert_eq!(read(&f.layout.live("aida")), "PREV-aida");
+    assert!(f.layout.live("aida-flow").symlink_metadata().is_err());
+    rollback(&f.layout).unwrap();
+    assert_eq!(
+        read(&f.layout.live("aida-porcelain")),
+        "LIVE-aida-porcelain"
+    );
+    assert_eq!(
+        std::fs::read_link(f.layout.live("aida-flow")).unwrap(),
+        PathBuf::from("aida-porcelain")
+    );
 }

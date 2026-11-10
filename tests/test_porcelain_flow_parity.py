@@ -43,7 +43,7 @@ esac
             path.write_text('{"kind":"verdict","record":{"verdict":"APPROVED","recorded_at":"2026-11-09T02:00:00Z"}}\n' if name.endswith("jsonl") else "fixture")
         git("-C", str(root / ".aida-store"), "init", "-b", "aida-store")
         git("-C", str(root / ".aida-store"), "-c", "user.name=Fixture", "-c", "user.email=fixture@example.invalid", "commit", "--allow-empty", "-m", "store fixture")
-        env = {**env, "PATH": f"{gh.parent}:{os.defpath}", "AIDA_TEST_GH_BINARY": str(gh), "AIDA_NO_UPDATE_CHECK": "1"}
+        env = {**env, "PATH": f"{gh.parent}:{os.defpath}", "AIDA_TEST_GH_BINARY": str(gh), "AIDA_NO_UPDATE_CHECK": "1", "AIDA_BIN": builtin}
         def snapshot():
             return {str(p.relative_to(root)): p.read_bytes() for p in root.rglob("*") if p.is_file()}
         before = snapshot()

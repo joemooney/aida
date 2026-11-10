@@ -3,9 +3,8 @@
 use clap::CommandFactory;
 #[path = "flow_cmd_args.rs"]
 mod args;
-// Temporary source inclusion keeps the overlap implementation identical,
-// without a Rust dependency in either direction. Removed with the S3 built-in.
-#[path = "../../aida-porcelain/src/flow/mod.rs"]
+// The built-in owns evidence collection; porcelain consumes its public JSON.
+#[path = "flow_report.rs"]
 mod report;
 use args::*;
 pub(crate) static FLOW: crate::cmdkit::CommandReg = crate::cmdkit::CommandReg {

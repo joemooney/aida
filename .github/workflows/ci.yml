@@ -206,6 +206,12 @@ jobs:
         if: ${{ startsWith(matrix.shard, 'lib-') && (steps.changes.outputs.full_ci == 'true') }}
         run: cargo build -p aida-cli --bin aida
 
+      # Cross-binary parity uses the binaries from this checkout.
+      # trace:STORY-2704 | ai:codex
+      - name: Build porcelain binary for CLI parity tests
+        if: ${{ startsWith(matrix.shard, 'cli-') && (steps.changes.outputs.full_ci == 'true') }}
+        run: cargo build -p aida-porcelain --bin aida-porcelain
+
       # Pinned action commit (v2.87.22) and nextest version: a prebuilt
       # binary, no `cargo install`. trace:TASK-1957 | ai:claude
       - name: Install cargo-nextest

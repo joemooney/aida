@@ -1,7 +1,6 @@
 //! First-party read-only report tenants. trace:STORY-2704 | ai:codex
 mod flow;
 mod flow_runtime;
-mod forge;
 use std::{ffi::OsString, io::IsTerminal, path::Path};
 
 fn parse(argv: Vec<OsString>) -> Result<clap::ArgMatches, clap::Error> {
