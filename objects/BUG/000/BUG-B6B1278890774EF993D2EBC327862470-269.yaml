@@ -3,12 +3,12 @@ spec_id: BUG-b6b1278890774ef993d2ebc327862470-269
 agreed_id: BUG-2504
 title: Queue-work rework lanes exit with no changes or nothing to publish on a conflicting PR instead of resolving the conflict
 description: 'Seen 2026-11-08 on #3641 and #3643: lanes briefed to merge main and resolve exited with no pending changes or pushed a head that still conflicted, and the advisor had to hand merge. Reported each time only as ''Queue-work lane exited without changes''. Lanes also reported check-ci-fast cannot run in the native sandbox (sccache cannot write dep-info on a read-only filesystem), which may share a cause.'
-status: InProgress
+status: Completed
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-08T21:20:08.484660Z
-modified_at: 2026-11-10T14:39:51.620507024Z
+modified_at: 2026-11-10T14:39:53.348458447Z
 req_type: Bug
 comments:
 - id: 01a1beb1-ae7c-7c52-89a5-00a6bc02eeb0
@@ -393,6 +393,15 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1c5e6-b404-79d2-ac32-24951ec20ade
+  author: joe
+  timestamp: 2026-11-10T14:39:53.348453043Z
+  session_id: 01a1c530-c917-7f13-ab81-f6b5e1d1cd30
+  harness_version: 2.1.322 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
 filed_at:
   code_sha: b57c1fab753d30430c7a544b781bd8c7d91da0d2
   branch: main
@@ -402,3 +411,6 @@ filed_at:
   vendor: claude
   session: 01a1bc93-77a0-7740-8b03-df4e3e8d1df5
   harness_version: 2.1.319 (Claude Code)
+implementation_info:
+  implemented: false
+  completed_at: 2026-11-10T14:39:53.348436568Z
