@@ -6,7 +6,9 @@ Registry values, JSON values and non-output strings are intentionally excluded.
 import json
 from pathlib import Path
 import re
+import tempfile
 import unittest
+from unittest.mock import patch
 import unicodedata
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -51,6 +53,26 @@ class TerminalGlyphPadding(unittest.TestCase):
         self.assertEqual(missing_padding('⚠ x'), 0)
         self.assertEqual(missing_padding('⏸️x'), 1)
         self.assertEqual(missing_padding('ASCII text ──'), 0)
+
+    # trace:TASK-3779 | ai:codex
+    def test_new_unpadded_output_fails_ratchet(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source = root / 'aida-cli/src/new_marker.rs'
+            source.parent.mkdir(parents=True)
+            baseline = root / 'baseline.json'
+            baseline.write_text('{}')
+            with patch(__name__ + '.ROOT', root), patch(__name__ + '.BASELINE', baseline):
+                for literal, expected_failures in [('🤖x', 1), ('🤖  x', 0)]:
+                    with self.subTest(literal=literal):
+                        source.write_text('fn main() { println!("' + literal + '"); }')
+                        result = unittest.TestResult()
+                        TerminalGlyphPadding('test_raw_output_padding_does_not_regress').run(result)
+                        self.assertEqual(result.testsRun, 1)
+                        self.assertEqual(result.errors, [])
+                        self.assertEqual(len(result.failures), expected_failures)
+                        if expected_failures:
+                            self.assertIn('aida-cli/src/new_marker.rs', result.failures[0][1])
 
     def test_raw_output_padding_does_not_regress(self):
         baseline = json.loads(BASELINE.read_text())

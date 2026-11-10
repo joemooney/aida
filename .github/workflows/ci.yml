@@ -994,6 +994,11 @@ jobs:
         if: matrix.shard == 'gates'
         run: python3 -m unittest tests/test_bug_2135_sccache_tmpdir.py
 
+      # trace:TASK-3779 | ai:codex
+      - name: Terminal glyph padding ratchet
+        if: matrix.shard == 'gates'
+        run: python3 -m unittest tests/test_terminal_glyph_padding.py
+
       - name: Run clippy
         if: ${{ matrix.shard == 'gates' && (steps.changes.outputs.full_ci == 'true') }}
         # Style/pedantic lints stay warnings; the deny-by-default CORRECTNESS
@@ -1003,11 +1008,6 @@ jobs:
         # (clippy 1.96 surfaced 23+ lints beyond the cleanup with no code change).
         # Revisit only with a pinned toolchain. trace:TASK-709 trace:TASK-710
         run: cargo clippy --workspace -- -W clippy::all -D clippy::correctness
-
-      # trace:TASK-3779 | ai:codex
-      - name: Terminal glyph padding ratchet
-        if: matrix.shard == 'gates'
-        run: python3 -m unittest tests/test_terminal_glyph_padding.py
 
       # EPIC-45 / TASK-835: the glyph-literal forward-guard (substrate-as-bouncer).
       # Fails the PR when a NEW raw status/marker glyph literal is typed inline
