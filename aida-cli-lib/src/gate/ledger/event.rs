@@ -47,6 +47,12 @@ pub(crate) struct GateEvent {
     /// The recorder's attestation, as the verdict record carries it.
     #[serde(default)]
     pub actor: Option<RecorderAttestation>,
+    /// Advisory classifier evidence only; never review or shipping authority.
+    /// Keep data untyped here: malformed/future advisory metadata must not
+    /// prevent the authority-bearing verdict event from being read.
+    // trace:STORY-2698 | ai:codex
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub risk: Option<serde_json::Value>,
     #[serde(flatten)]
     pub body: EventBody,
 }
@@ -151,6 +157,7 @@ impl GateEvent {
             spec: None,
             spec_key: None,
             actor: None,
+            risk: None,
             body,
         }
     }
@@ -216,6 +223,15 @@ pub(crate) fn verdict_event(
     if let Some(head) = event.head.as_deref() {
         (event.base_ref, event.base_tip, event.patch_id) = patch_identity(root, head);
     }
+    // Compute afresh on every verdict, including refusals and collected verdicts.
+    // Keep this outside the signed body and delivery reconciliation identity.
+    // trace:STORY-2698 | ai:codex
+    event.risk = serde_json::to_value(crate::review_risk::assess(
+        root,
+        event.base_tip.as_deref(),
+        event.head.as_deref(),
+    ))
+    .ok();
     event
 }
 
