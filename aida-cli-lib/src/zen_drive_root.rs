@@ -651,17 +651,22 @@ pub(crate) fn guided_launch_command(
         posture != session::ContainmentPosture::Aida,
         "guided launch requires the supervised agent launcher for AIDA containment"
     );
-    let ctx = crate::launch::LaunchContext::resolve(crate::launch::LaunchRequest {
-        vendor,
-        kind: aida_core::launch_policy::LaunchKind::Fresh,
-        program: launch.program.into(),
-        args: vec![launch.prompt.clone()],
-        tail: Vec::new(),
-        posture,
-        cwd: worktree.to_path_buf(),
-        set_cwd: true,
-        host_main: None,
-    })?;
+    let ctx = {
+        let req = crate::launch::LaunchRequest {
+            vendor,
+            kind: aida_core::launch_policy::LaunchKind::Fresh,
+            program: launch.program.into(),
+            args: vec![launch.prompt.clone()],
+            tail: Vec::new(),
+            posture,
+            cwd: worktree.to_path_buf(),
+            set_cwd: true,
+            host_main: None,
+        };
+        // trace:STORY-2538 | ai:codex
+        let exec = crate::session::capture_launch_exec(&req.cwd, req.host_main.as_deref())?;
+        crate::launch::LaunchContext::resolve(&exec, req)
+    }?;
     let mut cmd = crate::launch::spawn_agent(&ctx)?;
     crate::launch::assign_seat(
         &mut cmd,
