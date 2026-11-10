@@ -19,7 +19,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-10T03:05:40.778642968Z
-modified_at: 2026-11-10T07:05:19.171326133Z
+modified_at: 2026-11-10T07:05:20.452309036Z
 req_type: Story
 comments:
 - id: 01a1c370-9b5f-7770-a921-e48f45e2aecb
@@ -81,6 +81,20 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: S1 full sweep found malformed finding-container evidence can retain approval; required CI gates lane remains pending.. No triage reason was given.'
   created_at: 2026-11-10T07:05:19.171321809Z
   modified_at: 2026-11-10T07:05:19.171321809Z
+  session_id: 01a1c39a-801a-7bd1-8da9-c955a6707f0b
+  harness_version: 2.1.321 (Claude Code)
+- id: 01a1c446-8cb8-7bb0-af8a-780e908d8966
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (STORY-2698):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: de2a3f1e9c9e
+    Recorded: 2026-11-10T06:55:18.442532647+00:00
+    Findings:
+    1. [P2] Fail closed on malformed finding containers in aida-cli-lib/src/gate/review_verdict.rs:677-682. disposition_verdict uses as_array plus an early return, so {"verdict":"approved","findings":"unresolved bug"} stays Approved without any disposition, and parse_recorded_verdict silently drops the finding. An empty findings array also bypasses validation of nonempty/dangling finding_dispositions. These direct JSON records can pass collection without sweep delivery. Distinguish absent/valid-empty findings from malformed present fields, validate positional metadata even for empty arrays, and return RequestChanges or a schema error for inconsistent evidence. Add parser and collected-verdict regressions for wrong-type findings/legacy blocking_findings and dangling metadata.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-10T07:05:20.312136949Z
+  modified_at: 2026-11-10T07:05:20.312136949Z
   session_id: 01a1c39a-801a-7bd1-8da9-c955a6707f0b
   harness_version: 2.1.321 (Claude Code)
 history:
