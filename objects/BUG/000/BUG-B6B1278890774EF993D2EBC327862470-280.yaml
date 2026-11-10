@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-10T03:07:38.542859262Z
-modified_at: 2026-11-10T07:09:58.603450347Z
+modified_at: 2026-11-10T08:12:17.826613444Z
 req_type: Bug
 comments:
 - id: 01a1c3a1-bccc-7ef0-b6b7-2fdb52e783f5
@@ -79,6 +79,24 @@ comments:
   content: 'ADVISOR RULING (2026-11-10 07:05 UTC) — binding for PR #3762 CI repair at head 50c9ea44e9. Fix: forge_observed::forge_read_ratchet_tests::story_2401_no_new_raw_gh_reads_outside_forge fails (story_2401_forge_read_ratchet_tests.rs:235): the change adds a raw gh read outside the forge module. Route that read through crate::forge (the resolved-forge ChangeLookup path) instead of shelling gh; do not grow the ratchet allowlist. The bug2187_failed_headless_reviewer_keeps_exit_code_and_draft panic at test_env.rs:109 is the known env-sensitive test set (STORY-2695 S1), not this PR''s: leave it alone unless your change touches status_sections. LIGHT gate: cargo test -p aida-cli-lib --lib story_2401_no_new_raw_gh_reads bug_2515 bug_1957, then make check-ci-fast.'
   created_at: 2026-11-10T07:05:08.037929660Z
   modified_at: 2026-11-10T07:05:08.037929660Z
+  session_id: 01a1c39a-801a-7bd1-8da9-c955a6707f0b
+  harness_version: 2.1.321 (Claude Code)
+- id: 01a1c483-da22-7590-b4b5-52b0f7409618
+  author: joe
+  content: |-
+    CI FAILURES at 9905896784bc (run 42776154790). Fix exactly these before pushing; a push without a code change for them will fail again and must not be made:
+    error: test run failed
+            FAIL  aida-cli-lib status_sections::bug_2149_2150_standalone_reviewer_tests::bug2187_failed_headless_reviewer_keeps_exit_code_and_draft
+            FAIL  aida-cli-lib status_sections::bug_2149_2150_standalone_reviewer_tests::bug2187_unrecorded_headless_review_surfaces_draft_and_record_command
+            FAIL  aida-cli-lib status_sections::bug_2149_2150_standalone_reviewer_tests::standalone_reviewer_verdict_written_in_worktree_reaches_launcher_checkout
+        thread 'status_sections::bug_2149_2150_standalone_reviewer_tests::bug2187_failed_headless_reviewer_keeps_exit_code_and_draft' (233947) panicked at aida-cli-lib/src/test_env.rs:109:5:
+        thread 'status_sections::bug_2149_2150_standalone_reviewer_tests::bug2187_failed_headless_reviewer_keeps_exit_code_and_draft' (233949) panicked at aida-cli-lib/src/tests/bug_2149_2150_standalone_reviewer_tests.rs:1019:5:
+        thread 'status_sections::bug_2149_2150_standalone_reviewer_tests::bug2187_unrecorded_headless_review_surfaces_draft_and_record_command' (234037) panicked at aida-cli-lib/src/test_env.rs:109:5:
+        thread 'status_sections::bug_2149_2150_standalone_reviewer_tests::bug2187_unrecorded_headless_review_surfaces_draft_and_record_command' (234039) panicked at aida-cli-lib/src/tests/bug_2149_2150_standalone_reviewer_tests.rs:990:
+        thread 'status_sections::bug_2149_2150_standalone_reviewer_tests::standalone_reviewer_verdict_written_in_worktree_reaches_launcher_checkout' (234629) panicked at aida-cli-lib/src/test_env.rs:109:5:
+        thread 'status_sections::bug_2149_2150_standalone_reviewer_tests::standalone_reviewer_verdict_written_in_worktree_reaches_launcher_checkout' (234635) panicked at aida-cli-lib/src/tests/bug_2149_2150_standalone_reviewer_tests.rs
+  created_at: 2026-11-10T08:12:17.826613444Z
+  modified_at: 2026-11-10T08:12:17.826613444Z
   session_id: 01a1c39a-801a-7bd1-8da9-c955a6707f0b
   harness_version: 2.1.321 (Claude Code)
 history:
