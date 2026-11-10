@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-10T07:32:20.786755079Z
-modified_at: 2026-11-10T08:42:19.067148458Z
+modified_at: 2026-11-10T08:42:20.315845572Z
 req_type: Story
 comments:
 - id: 01a1c47d-19fb-7373-b169-6a484b05ebcd
@@ -30,6 +30,20 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Cross-host default-role implementer claims bypass the deferral gate; full acceptance sweep completed; CI remains pending.. No triage reason was given.'
   created_at: 2026-11-10T08:42:19.067144172Z
   modified_at: 2026-11-10T08:42:19.067144172Z
+  session_id: 01a1c39a-801a-7bd1-8da9-c955a6707f0b
+  harness_version: 2.1.321 (Claude Code)
+- id: 01a1c49f-5a83-71b0-ab8a-7401a5d3600c
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (STORY-2705):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 6617aa081f87
+    Recorded: 2026-11-10T08:15:35.303212304+00:00
+    Findings:
+    1. [P2] aida-cli-lib/src/review_implementer_gate.rs:71-74 skips valid cross-host implementer sessions created with the scope-default role. session_start.rs:2386-2396 writes claim.agent from launch_role or AIDA_SESSION_ROLE (empty when both are absent, or advisor/reviewer when inherited), while session_start.rs:3322-3352 later assigns the local spec lease role=implementer by scope default. Thus a live remote session started with aida session start --owns STORY-X without --role is omitted before remote_live is evaluated, and both watcher and explicit reviewer admission can review its intermediate/merge-only head. Persist the effective scope-derived role consistently in the shared claim (while handling existing ambiguous records deliberately), and add a regression using production default-role claim creation plus review admission.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-10T08:42:20.163887428Z
+  modified_at: 2026-11-10T08:42:20.163887428Z
   session_id: 01a1c39a-801a-7bd1-8da9-c955a6707f0b
   harness_version: 2.1.321 (Claude Code)
 history:
