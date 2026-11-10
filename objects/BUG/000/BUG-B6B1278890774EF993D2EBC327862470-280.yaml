@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-10T03:07:38.542859262Z
-modified_at: 2026-11-10T11:59:32.425588646Z
+modified_at: 2026-11-10T12:05:01.058646041Z
 req_type: Bug
 comments:
 - id: 01a1c3a1-bccc-7ef0-b6b7-2fdb52e783f5
@@ -141,6 +141,13 @@ comments:
   modified_at: 2026-11-10T11:57:36.718490409Z
   session_id: 01a1c39a-801a-7bd1-8da9-c955a6707f0b
   harness_version: 2.1.321 (Claude Code)
+- id: 01a1c558-ea02-7120-a72e-966944fccf71
+  author: dirtlab
+  content: 'Addressed binding 11:46 UTC ruling: queue_cmd/mod.rs now imports fetch_pr_ship_metadata_via_forge, matching the helper used by queue_cmd/work.rs. Repository-wide search finds no removed fetch_pr_ship_metadata_via_gh identifier. Lane job j20261110T120002946-2-0 compiled aida-cli-lib and executed 12 tests: bug_2515, bug_1957, story_2401_no_new_raw_gh_reads; all passed. git diff --check passes. One-line edit remains uncommitted for host publication. Full make check-ci-fast remains host validation as its direct Cargo invocation conflicts with lane-only Cargo rules; not rerun here. Supplied codegraph client absent; used rg.'
+  created_at: 2026-11-10T12:05:01.058646041Z
+  modified_at: 2026-11-10T12:05:01.058646041Z
+  session_id: 01a1c553e000
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1c3a2-0b0e-7e70-890b-6fe8aaba4acd
   author: joe
