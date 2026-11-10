@@ -1,0 +1,35 @@
+id: 01a1c316-537f-7c61-b9da-0589d9d9e1d0
+spec_id: STORY-b6b1278890774ef993d2ebc327862470-620
+agreed_id: STORY-2697
+title: Reviewers approve a defect-free head while CI is still running; readiness keeps enforcing CI
+description: |-
+  ## Problem
+  Reviews are dispatched as soon as a head is pushed, so they usually finish before CI. A reviewer who finds no defects records WAITING on CI, and after CI turns green the head needs a second full review. On 2026-11-09 five of six fresh PRs (#3744, #3746, #3748, #3749, #3750) were WAITING purely on CI at once. Each such head costs a second reviewer run (about 20 minutes and its tokens) and adds that time to the PR's latency.
+
+  ## Sketch
+  CI is already gated independently: merge readiness (`review_watch_ready.rs`, judge_commit_checks) refuses a head unless every required check succeeded on that exact head, and the train runs CI again on the stacked result. A reviewer's approval therefore never needs to wait for CI.
+  1. Reviewer contract (reviewer prompt/skill and verdict guidance): when the reviewer finds no actionable defect, record APPROVED at the head even if CI is pending or running. State "CI pending at review time" in the rationale. WAITING stays only for external evidence a reviewer genuinely cannot assess (operator canaries, live evidence), never for CI that the readiness gate already enforces.
+  2. A CI failure after an approval at the same head keeps the approval unusable through readiness, and the fix is a new head, which needs a new review (or STORY-2694 carry-over when the change is a clean merge). No change to the CI gates.
+  3. If the reviewer's judgment depends on a specific test result (for example a timing or flaky test named in a finding), the reviewer may still record WAITING naming that check; the default is approve.
+
+  ## Acceptance
+  - Reviewer guidance states the rule and its exception; a regression test pins the guidance text or verdict classification.
+  - An approval at a head with pending CI does not make the PR ready or trainable until required CI is green at that head (existing readiness test extended to assert this).
+  - waiting-release style re-reviews no longer occur for CI-only waits (measured over the next 10 PRs).
+  Safety-gate change: requires independent review and advisor signoff before implementation.
+status: Draft
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-10T01:33:02.719338782Z
+modified_at: 2026-11-10T01:33:02.719338782Z
+req_type: Story
+filed_at:
+  code_sha: 8f434152668380b710e1d3ab9dc76d91ad559e1c
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 8f434152668
+  vendor: claude
+  session: 01a1beff-fc3b-78e2-93e2-9b0c283b0339
+  harness_version: 2.1.319 (Claude Code)
