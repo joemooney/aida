@@ -3,12 +3,12 @@ spec_id: STORY-b6b1278890774ef993d2ebc327862470-419
 agreed_id: STORY-2493
 title: 'Cross-machine review from an untrusted (work) node: verdict and finding envelopes over the aida-intent channel'
 description: 'Deferred (operator 2026-11-04: do the trusted-node case STORY-2492 first). When the reviewing node must not write to the home store, findings come back as content, not IDs. Add kind=review-verdict (fixed fields: PR, head SHA, decision, blocking finding digests, reviewer node; no free text, automatic) and kind=finding (severity, blocking, title, body, home file/line; free text, so it passes the validator and sensitive-pattern check and needs operator sign-off at work) to the STORY-2479 envelope format, carried over the STORY-2480 return channel. Home processes findings into specs and receipts map digest → home ID. Merge stays blocked while a blocking digest is unprocessed or open. Depends on STORY-2479, STORY-2480, STORY-2492.'
-status: NeedsAttention
+status: Approved
 priority: Low
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-05T04:41:25.538710401Z
-modified_at: 2026-11-10T03:05:48.328546156Z
+modified_at: 2026-11-10T03:05:56.822724563Z
 req_type: Story
 relationships:
 - rel_type: Supersedes
@@ -283,6 +283,11 @@ comments:
         thread 'gate::ledger::tests::legacy_gate_paths_do_not_gain_new_references' (54696) panicked at aida-cli-lib/src/gate/ledger/tests.rs:1887:9:
   created_at: 2026-11-10T03:05:48.328546156Z
   modified_at: 2026-11-10T03:05:48.328546156Z
+- id: 01a1c36b-6156-7643-af38-ab26ad85a7c8
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida edit --status`. It was shelved on: reviewer/verdict:request-changes: Slice 1 retains the deny-pattern empty-string defect; required PR CI remains pending. Full-sweep checklist completed.. No triage reason was given.'
+  created_at: 2026-11-10T03:05:56.822714281Z
+  modified_at: 2026-11-10T03:05:56.822714281Z
 history:
 - id: 01a1aa0a-8ae7-7523-b84e-68f1c2e158c7
   author: joe
@@ -647,6 +652,13 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a1c36b-6156-7643-af38-ab12ca9b5978
+  author: joe
+  timestamp: 2026-11-10T03:05:56.822708382Z
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 filed_at:
   code_sha: d561213a36febec31d45921d3d43d4dc7590135e
   branch: main
@@ -655,11 +667,3 @@ filed_at:
   aida_build_sha: e1fc3f06903
   vendor: claude
   session: 5bf140f7-38b2-4a04-9e8c-ccf69b1258f8
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: Slice 1 retains the deny-pattern empty-string defect; required PR CI remains pending. Full-sweep checklist completed.
-  recovery_hint: address the review findings, move STORY-2493 back to In Progress, and clear the PR hold only after approval
-  shelved_by: reviewer
-  shelved_at: 2026-11-10T02:28:39.429375524Z
