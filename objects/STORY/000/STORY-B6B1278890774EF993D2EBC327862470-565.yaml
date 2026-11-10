@@ -28,7 +28,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T19:59:40.192574Z
-modified_at: 2026-11-10T03:16:46.863777692Z
+modified_at: 2026-11-10T03:16:48.148993688Z
 req_type: Story
 relationships:
 - rel_type: Supersedes
@@ -375,6 +375,20 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Full sweep found missing cache-probe integration coverage, untraced acceptance coverage, and stale FAQ guidance; seven CI lanes remain pending.. No triage reason was given.'
   created_at: 2026-11-10T03:16:46.863770478Z
   modified_at: 2026-11-10T03:16:46.863770478Z
+- id: 01a1c375-5100-7b42-b3a8-5660a26fddf2
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (STORY-2642):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 28845a97aa4e
+    Recorded: 2026-11-10T03:00:40.462215241+00:00
+    Findings:
+    1. P2 AC1: aida-cli-lib/src/lane_job.rs:343-444 has no test exercising probe_cache beyond its disabled-sandbox early return. The shell test invokes CACHE_PROBE_SCRIPT directly outside bubblewrap and uses /bin/true as the wrapper, so it cannot verify sandbox argv, cleared/projected environment, cache mounts, server startup/transport, cleanup, or propagation of sandbox failure. Add a regression through probe_cache with a passing control and denied/failed transport controls, using isolated fixtures or suitable CI host evidence.
+    2. P2 Acceptance coverage: the supplied aida criteria output lists STORY-b6b1278890774ef993d2ebc327862470-565.ace1a25e, .ac4b8ea3, .ac1692c8 and .acbeedc3 as untraced, and this diff adds no criterion-linked coverage. Link the existing per-finding, user-only/idempotent fix, and real no-human refusal tests to their exact criterion IDs; add coverage for the FAQ pointer/manual-steps contract. Existing AC2/AC3 source tests are useful evidence but do not resolve the explicitly supplied untraced-criteria contract.
+    3. P3 AC4: FAQ-151 still says in-sandbox cache reachability remains advisory and must be verified manually with a lane job. This PR makes lane-cache-reachability required and runs an actual sandbox probe (lane_host.rs:207-217, 426-427); docs/cli/07-project-setup.md has already been updated. Update the canonical FAQ through AIDA to point to the current command and retain only the remaining manual setup, so operators do not follow obsolete readiness guidance.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-10T03:16:48.000873213Z
+  modified_at: 2026-11-10T03:16:48.000873213Z
 history:
 - id: 01a1b85d-3f02-70c2-a82d-cefccf97dc04
   author: aida-session-start
