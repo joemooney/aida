@@ -513,7 +513,7 @@ mod tests {
     use super::*;
     use crate::vendors::host_diagnostics::{auth_check, codex_config_check};
     #[test]
-    // FAQ-151's canonical description is mirrored in this reviewed checklist.
+    // The host applies this reviewed FAQ-151 text from the PR body to the store.
     // trace:STORY-b6b1278890774ef993d2ebc327862470-565.acbeedc3 | ai:codex
     fn faq_pointer_retains_manual_steps_and_required_cache_probe() {
         let faq = include_str!("../../docs/advanced/lane-host-checklist.md");
@@ -522,6 +522,10 @@ mod tests {
             "aida doctor --lane-host --fix",
             "docs/cli/07-project-setup.md#lane-host-readiness",
             "Configure SSH access",
+            "192.168.179.100",
+            "127.0.0.1 on dell1",
+            "~/.local/bin",
+            "aida doctor --fix-sandbox",
             "Clone the project",
             "Log in with the selected vendor CLI",
             "Fetch dependencies on the host",
@@ -820,6 +824,7 @@ mod tests {
     }
 
     #[test]
+    // trace:STORY-b6b1278890774ef993d2ebc327862470-565.ac1692c8 | ai:codex
     fn containment_refusals_stop_before_following_mutation() {
         use crate::session::{BwrapAvailability, ContainmentPosture};
         for failed in [

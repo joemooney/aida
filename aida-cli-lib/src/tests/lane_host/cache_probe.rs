@@ -1,5 +1,5 @@
 //! Synthetic transport controls exercise the real doctor probe and lifecycle.
-//! The bwrap fixture checks the launch contract; it is not live confinement evidence.
+//! Synthetic bwrap checks the launch contract; a separate live test exercises the sandbox.
 // trace:STORY-2642 | ai:codex
 use super::*;
 
@@ -9,10 +9,50 @@ fn doctor_cache_probe_transport_controls() {
     if crate::test_env::run_path_isolated_test() {
         return;
     }
+    probe_transport_controls(false);
+}
+
+#[test]
+// trace:STORY-b6b1278890774ef993d2ebc327862470-565.ace1a25e | ai:codex
+fn doctor_cache_probe_live_transport_controls() {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
+    let available = std::process::Command::new("bwrap")
+        .args([
+            "--ro-bind",
+            "/",
+            "/",
+            "--dev",
+            "/dev",
+            "--proc",
+            "/proc",
+            "/bin/true",
+        ])
+        .output();
+    if !available
+        .as_ref()
+        .is_ok_and(|output| output.status.success())
+    {
+        assert!(
+            aida_core::exec_context::Environment::capture()
+                .get(crate::test_env::REQUIRE_BWRAP_LIVE_ENV)
+                .is_none(),
+            "live cache probe requires bubblewrap: {available:?}"
+        );
+        eprintln!("SKIP live cache probe: bubblewrap unavailable: {available:?}");
+        return;
+    }
+    probe_transport_controls(true);
+}
+
+#[cfg(target_os = "linux")]
+fn probe_transport_controls(live: bool) {
     let fixture = tempfile::tempdir().unwrap();
     let home = fixture.path();
     let bin = home.join("bin");
-    let seat = home.join("seat");
+    // Keep every fixture input under the bound seat: real bwrap hides host /tmp.
+    let seat = home.to_path_buf();
     std::fs::create_dir_all(&bin).unwrap();
     std::fs::create_dir_all(seat.join(".git")).unwrap();
     std::fs::create_dir_all(home.join(".cargo")).unwrap();
@@ -20,9 +60,10 @@ fn doctor_cache_probe_transport_controls() {
         let path = bin.join(name);
         crate::test_exec::write_executable(&path, body);
     };
-    write_executable(
-        "bwrap",
-        r#"#!/bin/sh
+    if !live {
+        write_executable(
+            "bwrap",
+            r#"#!/bin/sh
 # Preflight uses true; the real probe uses /bin/sh.
 case "$*" in *'/bin/sh'*) ;; *) exit 0 ;; esac
 printf '%s\n' "$@" >"$HOME/argv"
@@ -33,7 +74,8 @@ export SCCACHE_SERVER_UDS="$HOME/probe.sock"
 while [ "$1" != /bin/sh ]; do shift; done
 exec "$@"
 "#,
-    );
+        );
+    }
     write_executable(
         "sccache",
         r#"#!/usr/bin/python3
@@ -81,21 +123,28 @@ else:
         ("AIDA_HANDLE", "must-not-reach-probe"),
     ]);
     probe_cache(&seat).unwrap();
-    let argv = std::fs::read_to_string(home.join("argv")).unwrap();
     let cache = home.join(".cache/aida/lane-sccache");
-    assert!(
-        argv.contains(&format!("--bind-try\n{0}\n{0}\n", cache.display())),
-        "{argv}"
-    );
-    assert!(argv.contains("--tmpfs\n/tmp\n"));
-    let env = std::fs::read_to_string(home.join("projected-env")).unwrap();
-    assert!(!env.contains("AIDA_HANDLE="));
-    assert!(!env.contains("must-not-reach-probe"));
-    assert!(env.contains("CARGO_NET_OFFLINE=true"));
-    assert!(env.contains("SCCACHE_SERVER_UDS=/tmp/aida-lane-sccache.sock"));
+    if !live {
+        let argv = std::fs::read_to_string(home.join("argv")).unwrap();
+        assert!(
+            argv.contains(&format!("--bind-try\n{0}\n{0}\n", cache.display())),
+            "{argv}"
+        );
+        assert!(argv.contains("--tmpfs\n/tmp\n"));
+        let env = std::fs::read_to_string(home.join("projected-env")).unwrap();
+        assert!(!env.contains("AIDA_HANDLE="));
+        assert!(!env.contains("must-not-reach-probe"));
+        assert!(env.contains("CARGO_NET_OFFLINE=true"));
+        assert!(env.contains("SCCACHE_SERVER_UDS=/tmp/aida-lane-sccache.sock"));
+    }
     assert!(!home.join("probe.sock").exists(), "server did not clean up");
     assert_eq!(std::fs::read_dir(&cache).unwrap().count(), 0);
-    for denial in ["startup-denied", "transport-denied", "deny"] {
+    let denials: &[&str] = if live {
+        &["transport-denied"]
+    } else {
+        &["startup-denied", "transport-denied", "deny"]
+    };
+    for denial in denials {
         std::fs::write(home.join(denial), "").unwrap();
         let error = probe_cache(&seat).unwrap_err();
         assert!(
