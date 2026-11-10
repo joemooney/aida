@@ -298,7 +298,9 @@ fn inherited_connection_authenticates_actual_sender_and_exit() {
         own()
     );
     let source = sender.as_raw_fd();
-    let mut command = std::process::Command::new(std::env::current_exe().unwrap());
+    let mut command = std::process::Command::new(
+        crate::aida_bin::current_executable_path().expect("resolve current test executable"),
+    );
     command.args([
         "--ignored",
         "--exact",
