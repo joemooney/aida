@@ -398,3 +398,18 @@ pub(crate) fn codex_binary_diagnostic(path: &std::path::Path) -> String {
 
 // trace:STORY-2642 | ai:codex
 pub(crate) mod host_diagnostics;
+
+/// Render a runnable unattended review pickup, including its launch vendor.
+// trace:BUG-2514 | ai:codex
+pub(crate) fn review_pickup_cmd(
+    profile: Option<&VendorProfile>,
+    noun: &str,
+    number: u64,
+) -> String {
+    let profile = profile
+        .unwrap_or_else(|| aida_core::vendors::profile(aida_core::vendors::LaunchVendor::Claude));
+    format!(
+        "aida queue work {noun}-{number} --role reviewer --vendor {} --no-human --strict",
+        profile.session_name
+    )
+}
