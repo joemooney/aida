@@ -18,7 +18,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-08T02:46:34.549817Z
-modified_at: 2026-11-09T08:22:08.316648768Z
+modified_at: 2026-11-10T06:38:52.208959986Z
 req_type: Bug
 tags:
 - area:ci
@@ -415,6 +415,13 @@ comments:
   created_at: 2026-11-09T05:16:23.360074548Z
   modified_at: 2026-11-09T05:16:23.360074548Z
   session_id: 7aacb1ed-ebaa-4da4-a195-500864e99e7d
+- id: 01a1c42e-5130-7a40-be63-dabd80e79386
+  author: joe
+  content: "PRE-MERGE CANARY EVIDENCE (advisor-run with operator at the UI, 2026-11-10; raw outputs in ~/.local/share/aida/ops/canary-2492/ on the primary host). Canary PR #3764 (closed, not merged): main + PR #3651's merge-hold-gate.yml and shell fixture only, so the pull_request bootstrap publisher ran against main's real protection.\nProtection before/after identical: required merge-hold-gate + Build (ubuntu-latest), both app_id 15368, enforce_admins=true, strict=false. Branch ruleset 'main' disabled; the only active ruleset targets tags.\nStatus-only case (no legacy merge-hold-gate check run on head 1340fce): \n- Held via aida merge-hold add: merge-hold-gate status=pending 'Merge held: awaiting recorded clearance' from run 42761952705; publish-merge-hold-status job passed.\n- AC1: with Build and all CI lanes green, raw 'gh pr merge 3764 --squash --match-head-commit 1340fce' exit 1: 'the base branch policy prohibits the merge.' Web UI (operator): '1 pending ... merge-hold-gate — Waiting for status to be reported — Merge held: awaiting recorded clearance — Required'.\n- AC2: aida merge-hold clear 3764 via the operator deputy, no push: labels recorded+cleared, head still 1340fce; status flipped to success 'No active hold; recorded clearance verified' from label-event run 42769777129 (06:37:47Z); earlier pending records remain in /statuses history; mergeStateStatus CLEAN. Both concurrent label runs (…087, …129) concluded success.\n- AC4: operator saw NO 'PR run failed' mail for #3764 across hold, two heads and a cancelled publisher run (42757812358); the cancelled row did not block. Same evening, held PRs on main's legacy gate (#3757 at 2e193bd, #3762 at 23eaa04) still sent 'PR run failed: merge-hold-gate' mail.\nNot yet done (post-merge per the runbook): legacy-success collision on an existing PR head after installation, and the pull_request_target trusted-base label run. Advisor runs those after #3651 merges. The canary did not merge; GitHub's CLEAN state after clearance is the acceptance evidence, which avoided landing a partial #3651 on main."
+  created_at: 2026-11-10T06:38:52.208959986Z
+  modified_at: 2026-11-10T06:38:52.208959986Z
+  session_id: 01a1c39a-801a-7bd1-8da9-c955a6707f0b
+  harness_version: 2.1.321 (Claude Code)
 history:
 - id: 01a1b90d-4bec-7bd0-9af1-86f501692f64
   author: joe
