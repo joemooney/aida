@@ -444,6 +444,52 @@ mod gate {
             ready::evaluate(&c, &evidence),
             (Readiness::Ready, Some(_))
         ));
+        // trace:STORY-2697 | ai:codex — carry-over never carries source CI.
+        for (checks, expected) in [
+            (
+                CommitChecks {
+                    sha: c.head.clone(),
+                    checks: vec![],
+                },
+                "no CI checks on the head".to_string(),
+            ),
+            (
+                CommitChecks {
+                    sha: c.head.clone(),
+                    checks: vec![check(CI_AGGREGATOR_CHECK, CheckOutcome::Pending)],
+                },
+                format!("CI pending: {CI_AGGREGATOR_CHECK}"),
+            ),
+            (
+                CommitChecks {
+                    sha: c.head.clone(),
+                    checks: vec![check(CI_AGGREGATOR_CHECK, CheckOutcome::Failed)],
+                },
+                format!("CI failed: {CI_AGGREGATOR_CHECK}"),
+            ),
+            (
+                green(&approved),
+                format!("CI evidence is for {}, not the head", &approved[..12]),
+            ),
+        ] {
+            let blocked = Fake {
+                ci: Ok(checks),
+                approval: evidence.approval.clone(),
+                head: Ok(c.head.clone()),
+                ..Fake::ready()
+            };
+            assert_eq!(not_ready(&blocked, &c), expected);
+            // The same carried approval and stable destination head become ready
+            // when only the destination CI evidence changes to green.
+            let green_destination = Fake {
+                ci: Ok(green(&c.head)),
+                ..blocked
+            };
+            assert!(matches!(
+                ready::evaluate(&c, &green_destination),
+                (Readiness::Ready, Some(_))
+            ));
+        }
         untouched(repo.path());
     }
 
