@@ -4268,6 +4268,19 @@ pub(crate) fn handle_queue_work(
                 )?;
             }
 
+            // trace:STORY-2705 | ai:codex — before worktree/queue mutation.
+            if role == "reviewer" {
+                if let Some((forge, n)) = plan.review_target {
+                    if let Some(reason) = crate::review_implementer_gate::deferred(
+                        &project_root,
+                        n,
+                        forge == ReviewForge::GitLab,
+                    )? {
+                        anyhow::bail!("{reason}");
+                    }
+                }
+            }
+
             // trace:STORY-1662 | ai:claude
             // trace:STORY-2660 | ai:codex
             if standalone_implementer {
