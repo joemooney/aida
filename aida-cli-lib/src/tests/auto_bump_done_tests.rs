@@ -396,8 +396,7 @@ fn gitlab_unavailable_forge_defers_rather_than_completing() {
         &bin.join("glab"),
         "#!/bin/sh\nif [ \"$1\" = --version ]; then echo glab-test; exit 0; fi\nexit 1\n",
     );
-    let path = format!("{}:{}", bin.display(), std::env::var("PATH").unwrap());
-    let _path = crate::test_env::EnvVarGuard::set("PATH", &path);
+    let _path = crate::test_env::EnvVarGuard::prepend_path(&bin);
     seed_spec_at(&store_path, "BUG-1456", "Done");
     run_git(
         &project_root,
@@ -5186,8 +5185,7 @@ fn bug_2516_gitlab_pull_completion_trailers() {
     crate::test_exec::write_executable(&bin.join("glab"), format!(
         "#!/bin/sh\nif [ \"$1\" = --version ]; then echo glab-test; exit 0; fi\necho \"$*\" >> '{}'\ncase \"$*\" in\n*state=opened*) echo '[]';;\n*) exit 1;;\nesac\n", log.display()
     ));
-    let path = format!("{}:{}", bin.display(), std::env::var("PATH").unwrap());
-    let _path = crate::test_env::EnvVarGuard::set("PATH", &path);
+    let _path = crate::test_env::EnvVarGuard::prepend_path(&bin);
     seed_spec_at(&store_path, "BUG-2516", "InProgress");
     seed_spec_at(&store_path, "BUG-2517", "InProgress");
     let pre = run_git(&root, &["rev-parse", "HEAD"]);
@@ -5251,8 +5249,7 @@ fn bug_2516_gitlab_open_or_unreadable_changes_preserve() {
     .unwrap();
     let bin = root.join("bin");
     std::fs::create_dir(&bin).unwrap();
-    let path = format!("{}:{}", bin.display(), std::env::var("PATH").unwrap());
-    let _path = crate::test_env::EnvVarGuard::set("PATH", &path);
+    let _path = crate::test_env::EnvVarGuard::prepend_path(&bin);
     for response in [
         "exit 1",
         "printf ''",
