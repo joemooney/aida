@@ -8,7 +8,7 @@ priority: Low
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-05T04:41:25.538710401Z
-modified_at: 2026-11-10T05:19:47.467160291Z
+modified_at: 2026-11-10T05:26:33.769517749Z
 req_type: Story
 relationships:
 - rel_type: Supersedes
@@ -304,6 +304,13 @@ comments:
         thread 'seat_clone::seat_publish_tests::bug_2488_other_branch_work_refuses_no_change_publication' (249981) panicked at aida-cli-lib/src/tests/bug_home_038_seat_publish_tests.rs:4279:5:
   created_at: 2026-11-10T05:17:10.819322309Z
   modified_at: 2026-11-10T05:17:10.819322309Z
+- id: 01a1c3ec-1e29-7903-80a2-d8e25ecce1c9
+  author: dirtlab
+  content: 'Addressed the latest CI failure from run 42756237816. The full failed log shows Bubblewrap raced a disappearing /run/credentials/systemd-tmpfiles-clean.service mount before the probe command executed. seat_clone.rs now retries only this specific read-only sandbox setup failure, at most three attempts under the original timeout; commit runs and other failures are never retried. Persistent failures still refuse publication. Added deterministic recovery, exhaustion, deadline and non-retry tests. Lane job j20261110T052217808-2-0: 3 tests passed; post-change job j20261110T052233645-2-0: the previously failing bug_2488_other_branch_work_refuses_no_change_publication test passed. Store-writer inventory, rustfmt --check and git diff --check passed. Only aida-cli-lib/src/seat_clone.rs changed, left uncommitted for the host. Recorded non-completing Refs STORY-2493 publication declaration. This is rework for the approved partial slice, not story completion; blocking projection and home-attested approval remain later slices. No commit, push, PR creation, review record or queue completion performed.'
+  created_at: 2026-11-10T05:26:33.769517749Z
+  modified_at: 2026-11-10T05:26:33.769517749Z
+  session_id: 01a1c3e57949
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1aa0a-8ae7-7523-b84e-68f1c2e158c7
   author: joe
