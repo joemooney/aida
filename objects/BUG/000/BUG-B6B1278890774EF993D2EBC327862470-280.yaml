@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-10T03:07:38.542859262Z
-modified_at: 2026-11-10T20:25:22.555568616Z
+modified_at: 2026-11-10T20:31:21.287124229Z
 req_type: Bug
 comments:
 - id: 01a1c3a1-bccc-7ef0-b6b7-2fdb52e783f5
@@ -260,6 +260,13 @@ comments:
   content: 'Round 3: confirmed queue_cmd imports fetch_pr_ship_metadata_via_forge and no removed helper references remain. Restored standalone reviewer spec recovery through a GitHub forge fallback only when no local forge is resolved; configured GitLab stays on its resolved forge. Targeted LIGHT tests submitted to lane runner.'
   created_at: 2026-11-10T20:22:51.266105678Z
   modified_at: 2026-11-10T20:22:51.266105678Z
+  session_id: 01a1c71f915d
+  harness_version: codex-cli 0.167.0
+- id: 01a1c728-7ac7-7270-b74e-4f337bf3903c
+  author: dirtlab
+  content: 'Round 3 validation: built matching CLI via lane job j20261110T202753724-2-0, then LIGHT gate job j20261110T203050663-2-0 passed all 38 tests, including both bug2187 recovery hints, bug_2515, bug_1957 and story_2401_no_new_raw_gh_reads. git diff --check passed. Edits left uncommitted for host publication.'
+  created_at: 2026-11-10T20:31:21.287124229Z
+  modified_at: 2026-11-10T20:31:21.287124229Z
   session_id: 01a1c71f915d
   harness_version: codex-cli 0.167.0
 history:
