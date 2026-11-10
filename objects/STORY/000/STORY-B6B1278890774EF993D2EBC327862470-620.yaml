@@ -30,7 +30,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-10T01:33:02.719338782Z
-modified_at: 2026-11-10T02:25:58.920214532Z
+modified_at: 2026-11-10T02:28:57.066016939Z
 req_type: Story
 comments:
 - id: 01a1c318-2e6f-7041-93e0-3128dbbb39f7
@@ -89,6 +89,13 @@ comments:
   modified_at: 2026-11-10T02:24:58.671178436Z
   session_id: 01a1beff-fc3b-78e2-93e2-9b0c283b0339
   harness_version: 2.1.319 (Claude Code)
+- id: 01a1c349-826a-78d3-ad4a-2a2b90f937da
+  author: dirtlab
+  content: 'CI-only rework for PR #3753: restored mergeStateStatus: CLEAN re-verification before landing a reviewer fix-forward while retaining APPROVED for defect-free heads with CI pending. Changed only aida-core/templates/skills/aida-review.md. Lane job j20261110T022723276-2-0 executed all 24 templates::tests successfully, including TASK-333. make check-templates and git diff --check passed. make sync-templates refreshed Claude links and discipline mirror but failed at portable agent_skill_pack sync with read-only filesystem; hook sync was completed separately. Failed CI run 42739079488 had only the TASK-333 test failure; Build was its aggregate failure. Host must finish portable-pack sync and publish; edits remain uncommitted.'
+  created_at: 2026-11-10T02:28:57.066016939Z
+  modified_at: 2026-11-10T02:28:57.066016939Z
+  session_id: 01a1c346c429
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1c318-268c-7ed1-aacc-7017cc5cbe36
   author: joe
@@ -153,6 +160,12 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1c347-c642-7ae3-bc17-e8232a2543b5
+  author: dirtlab
+  timestamp: 2026-11-10T02:27:03.362210937Z
+  session_id: 01a1c346c429
+  harness_version: codex-cli 0.167.0
+  changes: []
 filed_at:
   code_sha: 8f434152668380b710e1d3ab9dc76d91ad559e1c
   branch: main
