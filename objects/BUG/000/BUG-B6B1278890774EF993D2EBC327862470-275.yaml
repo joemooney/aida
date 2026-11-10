@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-10T03:06:27.088766021Z
-modified_at: 2026-11-10T04:27:06.365300385Z
+modified_at: 2026-11-10T04:36:47.611469918Z
 req_type: Bug
 comments:
 - id: 01a1c3a1-b5e4-7b12-9593-2238c442f4e7
@@ -30,6 +30,13 @@ comments:
   modified_at: 2026-11-10T04:15:51.358619790Z
   session_id: 01a1c3a42e52
   harness_version: codex-cli 0.167.0
+- id: 01a1c3be-8d7b-77a2-9774-c9d83a4846b9
+  author: joe
+  content: 'ADVISOR RULING (2026-11-10 04:36 UTC) — binding for PR #3761 rework at head e7e1fd12df. Fix exactly one finding: [P1] agent_codex_background.rs:1190 adds a second production literal "codex" in build_worker_exec; story_2539_vendor_literals.tsv allows 1 (shrink-only ledger). Bind the vendor identity once (the value the AIDA_AGENT_TYPE assignment already uses) and pass it to load_vendor_env_passthrough; do not edit the ledger. LIGHT gate: cargo test -p aida-cli-lib story_2539_vendor_literal_ratchet plus the BUG-2510 tests, then make check-ci-fast.'
+  created_at: 2026-11-10T04:36:47.611469918Z
+  modified_at: 2026-11-10T04:36:47.611469918Z
+  session_id: 01a1c39a-801a-7bd1-8da9-c955a6707f0b
+  harness_version: 2.1.321 (Claude Code)
 history:
 - id: 01a1c3a1-c986-7701-888f-f136e7b68108
   author: joe
