@@ -8,8 +8,16 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-10T03:06:27.088766021Z
-modified_at: 2026-11-10T03:06:27.088766021Z
+modified_at: 2026-11-10T04:05:17.412050928Z
 req_type: Bug
+comments:
+- id: 01a1c3a1-b5e4-7b12-9593-2238c442f4e7
+  author: joe
+  content: 'ADVISOR RULING (2026-11-10 04:05 UTC): approved. Scope: per-vendor explicit credential passthrough list in agents.toml (e.g. [vendors.codex] env_passthrough = ["XAIAA_API_KEY"]): exact names only, reject wildcards and AIDA_* names at config load; merge with WORKER_AMBIENT_ENV in agent_codex_background.rs; document in the agents.toml docs; doctor --lane-host reports a configured name that is unset (name only, never values). Tests: config parse (wildcard/AIDA_ rejected), worker env keeps a configured var and drops an unconfigured one. LIGHT gate.'
+  created_at: 2026-11-10T04:05:17.412050928Z
+  modified_at: 2026-11-10T04:05:17.412050928Z
+  session_id: 01a1c39a-801a-7bd1-8da9-c955a6707f0b
+  harness_version: 2.1.321 (Claude Code)
 filed_at:
   code_sha: 838f14c3c2811c6b63da5d465700cff773c36190
   branch: main
