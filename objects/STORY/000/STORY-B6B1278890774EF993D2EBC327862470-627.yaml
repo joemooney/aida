@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-10T03:52:00.571796159Z
-modified_at: 2026-11-10T11:00:04.819809245Z
+modified_at: 2026-11-10T11:37:39.266339276Z
 req_type: Story
 comments:
 - id: 01a1c399-6840-7383-843e-9930f6eaa3f7
@@ -71,6 +71,19 @@ comments:
   modified_at: 2026-11-10T11:00:04.819809245Z
   session_id: 01a1c515100e
   harness_version: codex-cli 0.167.0
+- id: 01a1c53f-dcc2-7990-a826-762f36d252f5
+  author: joe
+  content: |-
+    CI FAILURES at efff9412f404 (run 42804676617). Fix exactly these before pushing; a push without a code change for them will fail again and must not be made:
+    error: test run failed
+            FAIL  aida-cli-lib forge_observed::forge_read_ratchet_tests::story_2401_no_new_raw_gh_reads_outside_forge
+            FAIL  aida-cli-lib gate::mandate_gates::story_1888_gate_paths_tests::no_unprotected_file_reexports_gate_items
+        thread 'forge_observed::forge_read_ratchet_tests::story_2401_no_new_raw_gh_reads_outside_forge' (59377) panicked at aida-cli-lib/src/tests/story_2401_forge_read_ratchet_tests.rs:235:5:
+        thread 'gate::mandate_gates::story_1888_gate_paths_tests::no_unprotected_file_reexports_gate_items' (69019) panicked at aida-cli-lib/src/gate/../tests/story_1888_gate_paths_tests.rs:799:5:
+  created_at: 2026-11-10T11:37:39.266339276Z
+  modified_at: 2026-11-10T11:37:39.266339276Z
+  session_id: 01a1c39a-801a-7bd1-8da9-c955a6707f0b
+  harness_version: 2.1.321 (Claude Code)
 history:
 - id: 01a1c399-7102-7f81-9bb9-fd37379159d3
   author: joe
