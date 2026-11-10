@@ -1,0 +1,22 @@
+{
+  "schema_version": 1,
+  "spec": "BUG-2511",
+  "publishes": [
+    {
+      "at": "2026-11-10T18:46:43.516075818Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-11-10T18:46:43.467560449Z",
+      "spec": "BUG-2511",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "1a6e7452e2cbd196dbef6d503b1049fc1f10743b",
+        "pr": 3802,
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
