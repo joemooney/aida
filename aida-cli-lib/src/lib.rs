@@ -54,6 +54,10 @@ mod auto_complete_telemetry;
 mod autonomy_cmd;
 mod autopilot;
 mod launch_permission_profile;
+// Disabled host-only transport; no command or consumer is registered.
+// trace:TASK-3368 | ai:codex
+#[cfg(target_os = "linux")]
+mod proc_broker;
 // trace:TASK-1018 | ai:claude — durable execution audit + one-command reversal.
 mod autopilot_audit;
 mod autopilot_intake;
@@ -528,6 +532,7 @@ mod intent;
 mod intent_intake;
 mod internal_cmd;
 mod observation_envelope;
+mod review_envelope;
 // Retire a tree's mail before it is removed or reused. trace:STORY-1843 | ai:claude
 mod mail_retention;
 mod mailbox_cmd;

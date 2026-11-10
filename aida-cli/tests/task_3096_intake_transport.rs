@@ -27,12 +27,25 @@ impl Fixture {
             home,
         };
         f.git(&["init", "-q", "-b", "main"]);
+        // Transport trust must not depend on the launching host's umask.
+        // trace:STORY-2493 | ai:codex
+        use std::os::unix::fs::PermissionsExt;
+        fs::set_permissions(f.root.join(".git"), fs::Permissions::from_mode(0o700)).unwrap();
         f.git(&["commit", "-q", "--allow-empty", "-m", "product"]);
         f.git(&["branch", "aida-store"]);
         f
     }
     fn cmd(&self, args: &[&str]) -> Command {
         let mut cmd = Command::new(env!("CARGO_BIN_EXE_aida"));
+        // Restrict only the forked child; never race a process-wide test umask.
+        // trace:STORY-2493 | ai:codex
+        use std::os::unix::process::CommandExt;
+        unsafe {
+            cmd.pre_exec(|| {
+                libc::umask(0o077);
+                Ok(())
+            });
+        }
         for (key, _) in std::env::vars_os() {
             if key.to_string_lossy().starts_with("AIDA_")
                 || key.to_string_lossy().starts_with("GIT_")
@@ -1770,4 +1783,227 @@ fn per_writer_foreign_paths_refuse_and_standalone_receipts_are_readable() {
         git(&reader.intake(), &["rev-parse", &receipt_ref]),
         git(&remote, &["rev-parse", &receipt_ref])
     );
+}
+
+// trace:STORY-2493 | ai:codex
+fn review_return(f: &Fixture, kind: &str, payload: Value) -> String {
+    fs::write(
+        f.root.join("review-input.json"),
+        serde_json::to_vec(&json!({
+            "version": 1, "kind": kind, "payload": payload, "checksum": ""
+        }))
+        .unwrap(),
+    )
+    .unwrap();
+    let out = f.run(&["intent", "review-return", "--file", "review-input.json"]);
+    good(&out);
+    fs::write(f.root.join("envelope.json"), &out.stdout).unwrap();
+    serde_json::from_slice::<Value>(&out.stdout).unwrap()["checksum"]
+        .as_str()
+        .unwrap()
+        .into()
+}
+fn review_finding() -> Value {
+    json!({"severity":"major", "blocking":true, "title":"Untrusted review finding", "body":"Text is data: $(touch NEVER)", "file":"src/lib.rs", "line":12})
+}
+
+#[test]
+fn untrusted_review_finding_round_trip_and_duplicate_receipt() {
+    let temp = tempfile::tempdir().unwrap();
+    let hub = remote(&temp);
+    let work = Fixture::new();
+    let home = Fixture::new();
+    work.enroll(&hub);
+    home.enroll(&hub);
+    let work_refs = work.snapshot();
+    home.git(&["branch", "-D", "aida-store"]);
+    good(&home.run(&[
+        "init",
+        "--no-skills",
+        "--no-hooks",
+        "--no-agent-config",
+        "--no-roles",
+    ]));
+    let checksum = review_return(&work, "finding", review_finding());
+    bad(
+        &work.run(&["intent", "publish", "--file", "envelope.json"]),
+        "--reviewed",
+    );
+    good(&work.publish());
+    good(&home.run(&["intent", "pull"]));
+    bad(
+        &home.run(&["intent", "process", &checksum, "--action", "dismiss"]),
+        "only create or pending",
+    );
+    good(&home.run(&["intent", "process", &checksum, "--action", "create"]));
+    good(&home.run(&["intent", "process", &checksum, "--action", "create"]));
+    let store_path = aida_core::store_locate::detect_distributed_store_from(&home.root).unwrap();
+    let backend = aida_core::GitBackend::new(&store_path).unwrap();
+    let store = aida_core::DatabaseBackend::load(&backend).unwrap();
+    let matches: Vec<_> = store
+        .requirements
+        .iter()
+        .filter(|r| r.title == "Untrusted review finding")
+        .collect();
+    assert_eq!(matches.len(), 1);
+    assert!(matches[0].tags.iter().any(|t| t == "from-review:INTENT"));
+    assert!(matches[0].tags.iter().any(|t| t == "severity:major"));
+    assert!(matches[0].description.contains("src/lib.rs:12"));
+    good(&work.run(&["intent", "pull"]));
+    assert!(work
+        .intake()
+        .join(format!("receipts/{checksum}.json"))
+        .is_file());
+    assert_eq!(work.snapshot(), work_refs);
+    assert!(!home.root.join("NEVER").exists());
+}
+
+#[test]
+fn untrusted_review_schema_tamper_and_sensitive_path_refuse() {
+    let temp = tempfile::tempdir().unwrap();
+    let hub = remote(&temp);
+    let work = Fixture::new();
+    good(&work.run(&[
+        "intent",
+        "enroll",
+        "--remote",
+        hub.to_str().unwrap(),
+        "--reviewed",
+        "--deny-pattern",
+        "private",
+    ]));
+    review_return(&work, "finding", review_finding());
+    let valid = fs::read(work.root.join("envelope.json")).unwrap();
+    let mut value: Value = serde_json::from_slice(&valid).unwrap();
+    value["payload"]["body"] = json!("tampered");
+    fs::write(
+        work.root.join("envelope.json"),
+        serde_json::to_vec(&value).unwrap(),
+    )
+    .unwrap();
+    bad(&work.publish(), "checksum");
+    value = serde_json::from_slice(&valid).unwrap();
+    value["payload"]["extra"] = json!(true);
+    fs::write(
+        work.root.join("envelope.json"),
+        serde_json::to_vec(&value).unwrap(),
+    )
+    .unwrap();
+    bad(&work.publish(), "schema");
+    let mut payload = review_finding();
+    payload["file"] = json!("private/lib.rs");
+    review_return(&work, "finding", payload);
+    bad(&work.publish(), "Sensitive content");
+    assert!(git(&hub, &["for-each-ref", "--format=%(refname)"]).is_empty());
+}
+
+#[test]
+fn untrusted_review_verdict_is_pending_data_and_node_bound() {
+    let temp = tempfile::tempdir().unwrap();
+    let hub = remote(&temp);
+    let work = Fixture::new();
+    let home = Fixture::new();
+    good(&enroll_writer(&work, &hub, false));
+    good(&enroll_writer(&home, &hub, true));
+    // Match the explicitly enrolled producer, not an identity inferred from prose.
+    let profile: Value =
+        serde_json::from_slice(&fs::read(work.root.join(".git/aida-intake/profile.json")).unwrap())
+            .unwrap();
+    let payload = json!({"pr":7, "head_sha":"a".repeat(40), "decision":"approved", "blocking_findings":[], "reviewer_node": profile["writer_id"]});
+    let checksum = review_return(&work, "review-verdict", payload.clone());
+    good(&work.run(&["intent", "publish", "--file", "envelope.json"]));
+    good(&home.run(&["intent", "pull"]));
+    let out = home.run(&["intent", "list", "--json"]);
+    good(&out);
+    let rows: Value = serde_json::from_slice(&out.stdout).unwrap();
+    assert_eq!(rows[0]["state"], "pending");
+    assert_eq!(rows[0]["kind"], "review-verdicts");
+    bad(
+        &home.run(&["intent", "process", &checksum, "--action", "create"]),
+        "pending data",
+    );
+    assert!(!home.root.join(".aida/review-verdicts/PR-7.json").exists());
+    let mut payload = payload;
+    payload["reviewer_node"] = json!("f".repeat(32));
+    review_return(&work, "review-verdict", payload);
+    bad(&work.publish(), "enrolled producer identity");
+}
+
+#[test]
+fn untrusted_review_quarantine_revalidates_sensitive_paths() {
+    let temp = tempfile::tempdir().unwrap();
+    let hub = remote(&temp);
+    let work = Fixture::new();
+    let home = Fixture::new();
+    work.enroll(&hub);
+    good(&home.run(&[
+        "intent",
+        "enroll",
+        "--remote",
+        hub.to_str().unwrap(),
+        "--reviewed",
+        "--deny-pattern",
+        "private",
+    ]));
+    review_return(&work, "finding", review_finding());
+    good(&work.publish());
+    good(&home.run(&["intent", "pull"]));
+    let accepted = git(&home.intake(), &["rev-parse", "HEAD"]);
+    let mut finding = review_finding();
+    finding["file"] = json!("private/lib.rs");
+    review_return(&work, "finding", finding);
+    good(&work.publish());
+    bad(&home.run(&["intent", "pull"]), "Sensitive content");
+    assert_eq!(accepted, git(&home.intake(), &["rev-parse", "HEAD"]));
+}
+
+#[test]
+fn untrusted_review_receipt_retry_recovers_same_finding() {
+    use std::os::unix::fs::PermissionsExt;
+    let temp = tempfile::tempdir().unwrap();
+    let hub = remote(&temp);
+    let work = Fixture::new();
+    let home = Fixture::new();
+    work.enroll(&hub);
+    home.enroll(&hub);
+    home.git(&["branch", "-D", "aida-store"]);
+    good(&home.run(&[
+        "init",
+        "--no-skills",
+        "--no-hooks",
+        "--no-agent-config",
+        "--no-roles",
+    ]));
+    let checksum = review_return(&work, "finding", review_finding());
+    good(&work.publish());
+    good(&home.run(&["intent", "pull"]));
+    // Reject the receipt push after the canonical write, independently of uid.
+    let hook = hub.join("hooks/pre-receive");
+    fs::write(&hook, "#!/bin/sh\necho receipt-denied >&2\nexit 1\n").unwrap();
+    fs::set_permissions(&hook, fs::Permissions::from_mode(0o755)).unwrap();
+    bad(
+        &home.run(&["intent", "process", &checksum, "--action", "create"]),
+        "rerun the same process command",
+    );
+    assert!(home
+        .root
+        .join(format!(".git/aida-intake/operation-{checksum}.json"))
+        .is_file());
+    fs::remove_file(&hook).unwrap();
+    good(&home.run(&["intent", "process", &checksum, "--action", "create"]));
+    let store_path = aida_core::store_locate::detect_distributed_store_from(&home.root).unwrap();
+    let backend = aida_core::GitBackend::new(&store_path).unwrap();
+    let store = aida_core::DatabaseBackend::load(&backend).unwrap();
+    assert_eq!(
+        store
+            .requirements
+            .iter()
+            .filter(|r| r.title == "Untrusted review finding")
+            .count(),
+        1
+    );
+    assert!(!home
+        .root
+        .join(format!(".git/aida-intake/operation-{checksum}.json"))
+        .exists());
 }
