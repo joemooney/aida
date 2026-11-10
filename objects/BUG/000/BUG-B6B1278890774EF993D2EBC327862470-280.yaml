@@ -8,8 +8,16 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-10T03:07:38.542859262Z
-modified_at: 2026-11-10T03:07:38.542859262Z
+modified_at: 2026-11-10T04:05:19.180439375Z
 req_type: Bug
+comments:
+- id: 01a1c3a1-bccc-7ef0-b6b7-2fdb52e783f5
+  author: joe
+  content: 'ADVISOR RULING (2026-11-10 04:05 UTC): approved. Scope: aida pr ship resolves the configured forge (crate::forge, as fetch_change_info_via_resolved_forge does) for change metadata, CI wait and merge instead of calling gh directly; CI detection also recognises .gitlab-ci.yml. Tests use a fake glab on PATH (no network). Out of scope: merge-time completion on GitLab (BUG-2516). LIGHT gate.'
+  created_at: 2026-11-10T04:05:19.180439375Z
+  modified_at: 2026-11-10T04:05:19.180439375Z
+  session_id: 01a1c39a-801a-7bd1-8da9-c955a6707f0b
+  harness_version: 2.1.321 (Claude Code)
 filed_at:
   code_sha: 838f14c3c2811c6b63da5d465700cff773c36190
   branch: main
