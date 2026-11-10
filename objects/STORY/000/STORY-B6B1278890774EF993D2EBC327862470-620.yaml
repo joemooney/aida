@@ -30,7 +30,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-10T01:33:02.719338782Z
-modified_at: 2026-11-10T02:00:34.115953237Z
+modified_at: 2026-11-10T02:24:17.542034351Z
 req_type: Story
 comments:
 - id: 01a1c318-2e6f-7041-93e0-3128dbbb39f7
@@ -59,6 +59,13 @@ comments:
   content: 'ADVISOR RULING (2026-11-10 02:05 UTC) on PR #3753: the ''measured over the next 10 PRs'' criterion cannot be verified before merge; it was mis-specified as a merge criterion. It is now an advisor-owned post-merge check in the description. The reviewer''s only finding is resolved by this ruling; same head 94c52ba34334 released for re-review against the other criteria.'
   created_at: 2026-11-10T02:00:34.115953237Z
   modified_at: 2026-11-10T02:00:34.115953237Z
+  session_id: 01a1beff-fc3b-78e2-93e2-9b0c283b0339
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a1c345-3e86-7570-9626-b0ef849e635a
+  author: joe
+  content: 'ADVISOR RULING (2026-11-10 02:30 UTC), PR #3753 rework = CI only. CI (rest) fails templates::tests::aida_review_carries_task_333_fix_forward_policy (aida-core/src/templates.rs:867): the reviewer-guidance edit removed or reworded text that test pins. Restore the TASK-333 fix-forward policy wording it asserts (keep it alongside the new approve-while-CI-pending rule; they are compatible), or, only if the old wording now contradicts STORY-2697, update the test to pin the new rule while keeping its fix-forward assertion. Also fix anything else red at the head (Build). Run make sync-templates and make check-templates. Keep (STORY-2697).'
+  created_at: 2026-11-10T02:24:17.542034351Z
+  modified_at: 2026-11-10T02:24:17.542034351Z
   session_id: 01a1beff-fc3b-78e2-93e2-9b0c283b0339
   harness_version: 2.1.319 (Claude Code)
 history:
