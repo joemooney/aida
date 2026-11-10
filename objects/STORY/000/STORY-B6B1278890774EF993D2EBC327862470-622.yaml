@@ -8,8 +8,16 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-10T03:05:48.772156134Z
-modified_at: 2026-11-10T03:05:48.772156134Z
+modified_at: 2026-11-10T03:08:56.340612970Z
 req_type: Story
+comments:
+- id: 01a1c36e-1e94-7e70-8f74-74786437eaa0
+  author: joe
+  content: 'ADVISOR BRIEF (2026-11-10 03:15 UTC): implement as a read-only command registered from its own module (command_registry::REGISTRY, args in its own *_args.rs). Reference implementation of the metrics: the advisor''s scripts flow_report.py and cr_reasons.py (classification regexes and ledger walk: verdict records are events with kind=verdict and a record object holding verdict, findings, recorded_at). Keep the classifier table in one place and covered by tests. Use (STORY-2699).'
+  created_at: 2026-11-10T03:08:56.340612970Z
+  modified_at: 2026-11-10T03:08:56.340612970Z
+  session_id: 01a1beff-fc3b-78e2-93e2-9b0c283b0339
+  harness_version: 2.1.319 (Claude Code)
 filed_at:
   code_sha: 838f14c3c2811c6b63da5d465700cff773c36190
   branch: main
