@@ -5167,6 +5167,7 @@ fn bug_2516_write_glab_pages(bin: &std::path::Path, rows: &[serde_json::Value], 
         format!(
             r#"#!/usr/bin/python3
 import json, sys
+from pathlib import Path
 if sys.argv[1:] == ['--version']:
     print('glab-test')
     sys.exit(0)
@@ -5178,6 +5179,8 @@ for arg in sys.argv[1:]:
         term = arg.split('=', 1)[1].lower()
         rows = [r for r in rows if term in (r.get('title', '') + ' ' + (r.get('description') or '')).lower()]
 page = int(next(arg.split('=', 1)[1] for arg in sys.argv if arg.startswith('page=')))
+with Path(__file__).with_suffix('.pages').open('a') as log:
+    print(page, file=log)
 if page == 2 and {fail_second}:
     print('second page failed', file=sys.stderr)
     sys.exit(1)
@@ -5381,4 +5384,67 @@ fn bug_2516_gitlab_search_requires_credit_across_whole_page() {
     );
     bug_2516_write_glab_pages(&bin, &rows, true);
     assert_eq!(specs_with_open_prs(&root, ["BUG-2516".into()]), None);
+}
+
+// trace:BUG-2516 | ai:codex
+#[test]
+fn bug_2516_gitlab_pagination_requires_readable_final_page() {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
+    let (_tmp, root, _store_path) = init_test_project();
+    let bin = root.join("bin");
+    std::fs::create_dir(&bin).unwrap();
+    let _path = crate::test_env::EnvVarGuard::prepend_path(&bin);
+    let rows: Vec<_> = (1..=100)
+        .map(|iid| {
+            serde_json::json!({
+                "iid": iid, "title": "unrelated", "description": "",
+                "source_branch": format!("task-{iid}"), "state": "opened"
+            })
+        })
+        .collect();
+    use crate::forge::{ChangeLookup, Forge, GitLabForge};
+    let provider = GitLabForge::new(&root);
+    let log = bin.join("glab.pages");
+    let assert_pages = || {
+        assert_eq!(std::fs::read_to_string(&log).unwrap(), "1\n2\n");
+        std::fs::remove_file(&log).unwrap();
+    };
+    bug_2516_write_glab(&bin, &rows);
+    assert!(matches!(
+        provider.change_for_spec("BUG-2516").unwrap(),
+        ChangeLookup::NoChange
+    ));
+    assert_pages();
+
+    let mut owning = rows.clone();
+    owning.push(serde_json::json!({
+        "iid": 101, "title": "unrelated", "description": "",
+        "source_branch": "fix/bug-2516-rework", "state": "opened"
+    }));
+    bug_2516_write_glab(&bin, &owning);
+    assert!(
+        matches!(provider.change_for_spec("BUG-2516").unwrap(), ChangeLookup::Found(change) if change.id == 101)
+    );
+    assert_pages();
+
+    bug_2516_write_glab_pages(&bin, &rows, true);
+    assert!(matches!(
+        provider.change_for_spec("BUG-2516").unwrap(),
+        ChangeLookup::CliFailed(_)
+    ));
+    assert_pages();
+
+    // Exit success with a truncated page is still unknown, never absence.
+    let script = std::fs::read_to_string(bin.join("glab")).unwrap().replace(
+        "print('second page failed', file=sys.stderr)\n    sys.exit(1)",
+        "print('[{')\n    sys.exit(0)",
+    );
+    crate::test_exec::write_executable(&bin.join("glab"), script);
+    assert!(matches!(
+        provider.change_for_spec("BUG-2516").unwrap(),
+        ChangeLookup::CliFailed(_)
+    ));
+    assert_pages();
 }
