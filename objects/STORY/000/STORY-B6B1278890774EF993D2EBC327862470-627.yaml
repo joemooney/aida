@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-10T03:52:00.571796159Z
-modified_at: 2026-11-10T14:19:29.552809106Z
+modified_at: 2026-11-10T14:19:30.798451772Z
 req_type: Story
 comments:
 - id: 01a1c399-6840-7383-843e-9930f6eaa3f7
@@ -103,6 +103,22 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Full sweep found forge-boundary, rollback-inventory and parity-test gaps; CI unsettled.. No triage reason was given.'
   created_at: 2026-11-10T14:19:29.552802411Z
   modified_at: 2026-11-10T14:19:29.552802411Z
+  session_id: 01a1c39a-801a-7bd1-8da9-c955a6707f0b
+  harness_version: 2.1.321 (Claude Code)
+- id: 01a1c5d4-0be2-7f02-b407-c092df886249
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (STORY-2704):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: eb7fbc9e6b35
+    Recorded: 2026-11-10T13:59:00.282477097+00:00
+    Findings:
+    1. [P1] aida-porcelain/src/forge.rs:12: replace raw gh with fixed read-only AIDA_BIN JSON queries and remove the new forge-ratchet BOUNDARY exemption; both violate the binding 11:56 advisor ruling.
+    2. [P2] aida-cli-lib/src/dev_build.rs:1256,1280,1343: persist and restore generation-owned binary/alias inventory, including first-adoption absence. Rollback currently retains new porcelain and never restores aida-flow; add adoption and interrupted-recovery coverage.
+    3. [P2] aida-porcelain/tests/multicall.rs:96: enforce fixture parity against explicit current-build aida and porcelain paths in CI. The only cross-binary test is ignored and uses ambient PATH aida, leaving required output/flags/JSON/exit-code parity unguarded.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-10T14:19:30.658291502Z
+  modified_at: 2026-11-10T14:19:30.658291502Z
   session_id: 01a1c39a-801a-7bd1-8da9-c955a6707f0b
   harness_version: 2.1.321 (Claude Code)
 history:
