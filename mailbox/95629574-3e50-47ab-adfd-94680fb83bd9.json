@@ -1,0 +1,18 @@
+{
+  "id": "95629574-3e50-47ab-adfd-94680fb83bd9",
+  "thread_id": "95629574-3e50-47ab-adfd-94680fb83bd9",
+  "from": "dirtlab",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1794354927015,
+  "body": "Codex queue-work lane 01a1c7de1240 for TASK-b6b1278890774ef993d2ebc327862470-1062 exited with no pending changes in /home/dirtlab/ai/aida-worktrees/aida-seat-aida-task-b6b1278890774ef993d2ebc327862470-1062 (clean_exit=false). Check its existing PR and failing checks; a still-red PR needs a new rework assignment. Fast-gate settlement: Ok(())",
+  "subject": "Queue-work lane exited without changes",
+  "urgent": false,
+  "intent": "request",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "shell_user"
+}
