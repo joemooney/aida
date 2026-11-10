@@ -3,12 +3,12 @@ spec_id: BUG-b6b1278890774ef993d2ebc327862470-275
 agreed_id: BUG-2510
 title: Detached Codex workers drop custom credential environment variables (only OPENAI_API_KEY is allowlisted)
 description: Reported from operator's work machine (Codex, GitLab project hello-work-0x), 2026-11-09. The detached-worker environment allowlist (aida-cli-lib/src/agent_codex_background.rs:45) passes OPENAI_API_KEY but not a deployment's custom credential variable (for example XAIAA_API_KEY), so the worker fails authentication. Make the passthrough configurable per vendor in agents.toml (explicit names only, no wildcards), document it, and have doctor --lane-host report a configured credential variable that is unset. Never log values.
-status: Approved
+status: InProgress
 priority: High
-owner: ''
+owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-10T03:06:27.088766021Z
-modified_at: 2026-11-10T04:05:22.438211724Z
+modified_at: 2026-11-10T04:08:00.923803062Z
 req_type: Bug
 comments:
 - id: 01a1c3a1-b5e4-7b12-9593-2238c442f4e7
@@ -28,6 +28,13 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Approved
+- id: 01a1c3a4-349b-7cd0-8d7f-ed51de5b9ea6
+  author: aida-session-start
+  timestamp: 2026-11-10T04:08:00.923801593Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: 838f14c3c2811c6b63da5d465700cff773c36190
   branch: main
