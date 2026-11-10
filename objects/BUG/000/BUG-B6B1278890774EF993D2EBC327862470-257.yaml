@@ -18,7 +18,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-08T02:46:34.549817Z
-modified_at: 2026-11-10T06:40:22.235191493Z
+modified_at: 2026-11-10T23:05:53.095244137Z
 req_type: Bug
 tags:
 - area:ci
@@ -429,6 +429,13 @@ comments:
   modified_at: 2026-11-10T06:40:22.235191493Z
   session_id: 01a1c39a-801a-7bd1-8da9-c955a6707f0b
   harness_version: 2.1.321 (Claude Code)
+- id: 01a1c7b5-f4c7-7a82-9f5a-0390ad7f9914
+  author: joe
+  content: 'Completed by advisor: #3651 merged as 15b5fe7265c with a non-completing ''Refs'' subject; its approved review at the merged head verified all five acceptance criteria, and pre-merge canary evidence is recorded above.'
+  created_at: 2026-11-10T23:05:53.095244137Z
+  modified_at: 2026-11-10T23:05:53.095244137Z
+  session_id: 01a1c70f-d731-7b70-acf8-e9ab3d288fca
+  harness_version: 2.1.322 (Claude Code)
 history:
 - id: 01a1b90d-4bec-7bd0-9af1-86f501692f64
   author: joe
