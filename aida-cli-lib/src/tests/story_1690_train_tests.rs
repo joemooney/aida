@@ -2841,7 +2841,7 @@ fn bug2401_absent_aggregate_behind_running_lanes_is_pending() {
     rows[3].bucket = "pending".into();
     match train_ci_readiness(&rows, &required, &cfg, false) {
         TrainCiReadiness::Pending(names) => {
-            assert!(names[0].starts_with("Build (ubuntu-latest)"), "{names:?}")
+            assert_eq!(names[0], "Build summary appears after all shards finish")
         }
         other => panic!("absent aggregate behind a running lane: {other:?}"),
     }

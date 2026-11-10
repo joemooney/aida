@@ -405,6 +405,14 @@ command; `--max N` caps the batch (default 10), and naming more PRs than
 landed. The train is GitHub-only for now: GitLab's merge-hold gate has no
 train mode, so `aida pr train` refuses a GitLab project; ship its merge
 requests one at a time with `aida pr ship N`.
+<!-- trace:TASK-3782 | ai:codex -->
+While waiting, the train reports CI run IDs, passed shard counts, running
+jobs, and queued jobs with runner wait age when creation timestamps are
+available. The Build summary appears after all shards finish. Job-detail
+reads are informational: unavailable details never replace readiness checks.
+The forge reader also supports GitLab pipeline jobs, without enabling GitLab
+train admission.
+
 A newly opened train waits up to 180 seconds for its first CI checks to
 register. After checks appear, pending lanes continue through the ordinary
 CI wait; a missing required check after the other lanes settle keeps its

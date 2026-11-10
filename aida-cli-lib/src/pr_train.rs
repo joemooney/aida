@@ -647,7 +647,13 @@ fn train_ci_readiness(
             return TrainCiReadiness::Pending(
                 missing
                     .into_iter()
-                    .map(|n| format!("{n} (not registered yet)"))
+                    .map(|n| {
+                        if crate::ci_gate::check_name_eq(&n, "Build (ubuntu-latest)") {
+                            "Build summary appears after all shards finish".into()
+                        } else {
+                            format!("waiting for {n} to register")
+                        }
+                    })
                     .collect(),
             );
         }
@@ -782,7 +788,23 @@ fn wait_train_ci(
             }
             waiting => waiting,
         };
-        println!("  train PR #{pr} CI waiting: {waiting:?}");
+        // trace:TASK-3782 | ai:codex
+        match &waiting {
+            TrainCiReadiness::Pending(names) | TrainCiReadiness::Missing(names) => {
+                let display: Vec<_> = names
+                    .iter()
+                    .map(|name| {
+                        if crate::ci_gate::check_name_eq(name, "Build (ubuntu-latest)") {
+                            "Build summary appears after all shards finish".to_string()
+                        } else {
+                            name.clone()
+                        }
+                    })
+                    .collect();
+                println!("  train PR #{pr} CI waiting: {}", display.join("; "))
+            }
+            _ => println!("  train PR #{pr} CI waiting: checks have not registered"),
+        }
         // An empty row set is normal immediately after opening the PR.
         // trace:BUG-2423 | ai:codex
         if waiting == TrainCiReadiness::Unregistered {
@@ -2438,7 +2460,28 @@ impl LiveTrainForge<'_> {
         // Green (BUG-2214's tolerance, decided once the others settle).
         // trace:BUG-2401 | ai:claude
         let admitted = hold_release_admitted(&rows, cars, labels);
-        let state = train_ci_readiness(&rows, required, &cfg, admitted);
+        let mut state = train_ci_readiness(&rows, required, &cfg, admitted);
+        // Detail is informational and cannot replace the pinned readiness proof.
+        // trace:TASK-3782 | ai:codex
+        if matches!(
+            state,
+            TrainCiReadiness::Pending(_) | TrainCiReadiness::Missing(_)
+        ) {
+            let runs: std::collections::BTreeSet<_> =
+                rows.iter().filter_map(|r| r.run_id.as_deref()).collect();
+            for run in runs {
+                journal::before("read CI job progress")?;
+                let detail = self
+                    .forge
+                    .ci_wait_details(run)
+                    .unwrap_or_else(|_| format!("run {run}: job detail unavailable"));
+                if let TrainCiReadiness::Pending(names) = &mut state {
+                    names.push(detail);
+                } else {
+                    println!("  train PR #{} CI waiting: {detail}", change.id);
+                }
+            }
+        }
         assert_head()?;
         self.dispatch_check()?;
         Ok(state)
