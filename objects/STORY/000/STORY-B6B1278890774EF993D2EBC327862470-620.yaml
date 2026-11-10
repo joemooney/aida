@@ -30,7 +30,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-10T01:33:02.719338782Z
-modified_at: 2026-11-10T02:39:24.072676200Z
+modified_at: 2026-11-10T02:49:46.941308760Z
 req_type: Story
 comments:
 - id: 01a1c318-2e6f-7041-93e0-3128dbbb39f7
@@ -96,6 +96,13 @@ comments:
   modified_at: 2026-11-10T02:28:57.066016939Z
   session_id: 01a1c346c429
   harness_version: codex-cli 0.167.0
+- id: 01a1c35c-94bd-75d0-9a60-d3ee4e0dee9a
+  author: joe
+  content: 'ADVISOR RULING (2026-11-10 02:55 UTC), PR #3753 rework at 6338e1ff147c: exactly the latest review finding. aida-cli-lib/src/queue_cmd/work.rs:4612-4620 still appends ''Reviewer CI contract: gate on PR CI'' to every no_human reviewer pickup, contradicting the new rule. Update that suffix to: approve a defect-free head while CI is pending; WAITING only for independent evidence or a named test the judgment depends on. Add a regression on the composed headless reviewer prompt (the existing tests check only role/launch strings and templates). Also fix any CI failure at the head. Nothing else.'
+  created_at: 2026-11-10T02:49:46.941308760Z
+  modified_at: 2026-11-10T02:49:46.941308760Z
+  session_id: 01a1beff-fc3b-78e2-93e2-9b0c283b0339
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1c318-268c-7ed1-aacc-7017cc5cbe36
   author: joe
