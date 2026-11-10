@@ -7798,3 +7798,26 @@ mod task_1222_gc_forge_tests {
         assert_eq!(parse(serde_json::json!([fork])), Some(false));
     }
 }
+
+/// Closed read surface for flow metrics; never invokes mutation or train retry state.
+// trace:STORY-2699 | ai:codex
+pub(crate) fn flow_report_read(root: &Path, args: &[&str]) -> Result<serde_json::Value> {
+    anyhow::ensure!(
+        matches!(args, ["pr", "view", ..] | ["run", "list", ..]),
+        "unsupported flow read"
+    );
+    let gh = crate::resolve_gh_binary().ok_or_else(|| anyhow::anyhow!("gh is unavailable"))?;
+    let mut cmd = Command::new(gh);
+    cmd.current_dir(root)
+        .args(args)
+        .stdin(std::process::Stdio::null());
+    match crate::forge_observed::observe_gh_stdout(crate::command_output_with_timeout(
+        cmd,
+        std::time::Duration::from_secs(15),
+    )) {
+        Observed::Known(body) => Ok(serde_json::from_str(&body)?),
+        Observed::Pending(why) | Observed::Transient(why) => {
+            anyhow::bail!("flow forge evidence unavailable: {why}")
+        }
+    }
+}
