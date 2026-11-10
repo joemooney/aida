@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-10T03:52:00.571796159Z
-modified_at: 2026-11-10T18:38:49.592073525Z
+modified_at: 2026-11-10T19:38:43.377248356Z
 req_type: Story
 comments:
 - id: 01a1c399-6840-7383-843e-9930f6eaa3f7
@@ -326,6 +326,19 @@ comments:
   modified_at: 2026-11-10T18:38:49.592073525Z
   session_id: 01a1c6ba16ab
   harness_version: codex-cli 0.167.0
+- id: 01a1c6f8-4b31-7e23-aedb-4e295815ba8b
+  author: joe
+  content: |-
+    CI FAILURES at fceba273ea84 (run 42878780653). Fix exactly these before pushing; a push without a code change for them will fail again and must not be made:
+    error: test run failed
+            FAIL  aida-cli::story_1641_external_subcommands builtin_shadows_external
+            FAIL  aida-cli::story_1641_external_subcommands help_and_alias_list_show_externals
+        thread 'builtin_shadows_external' (161486) panicked at aida-cli/tests/story_1641_external_subcommands.rs:170:5:
+        thread 'help_and_alias_list_show_externals' (161767) panicked at aida-cli/tests/story_1641_external_subcommands.rs:315:9:
+  created_at: 2026-11-10T19:38:43.377248356Z
+  modified_at: 2026-11-10T19:38:43.377248356Z
+  session_id: 01a1c530-c917-7f13-ab81-f6b5e1d1cd30
+  harness_version: 2.1.322 (Claude Code)
 history:
 - id: 01a1c399-7102-7f81-9bb9-fd37379159d3
   author: joe
