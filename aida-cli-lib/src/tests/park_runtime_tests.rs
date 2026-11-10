@@ -167,6 +167,37 @@ fn unsafe_or_corrupt_runtime_evidence_refuses_read_and_overwrite() {
 }
 
 #[test]
+fn runtime_directory_creation_syncs_pinned_parent_before_lock_creation() {
+    let dir = tempfile::tempdir().unwrap();
+    let runtime = dir.path().join("waits");
+    let id = Uuid::new_v4();
+    let expected_parent = dir.path().metadata().unwrap();
+    let mut synced = false;
+    let result = WaitLock::acquire_with_parent_sync(&runtime, id, |parent| {
+        synced = true;
+        let actual_parent = parent.metadata()?;
+        assert_eq!(actual_parent.dev(), expected_parent.dev());
+        assert_eq!(actual_parent.ino(), expected_parent.ino());
+        assert!(runtime.is_dir());
+        assert_eq!(std::fs::read_dir(&runtime)?.count(), 0);
+        Err(std::io::Error::other("injected parent sync failure"))
+    });
+    assert!(synced);
+    let error = result
+        .err()
+        .expect("parent sync failure must refuse acquisition");
+    assert_eq!(error.to_string(), "injected parent sync failure");
+    assert_eq!(std::fs::read_dir(&runtime).unwrap().count(), 0);
+
+    // An existing runtime directory creates no new parent entry to sync.
+    let lock = WaitLock::acquire_with_parent_sync(&runtime, id, |_| {
+        panic!("existing directory must not take the creation sync path")
+    })
+    .unwrap();
+    assert!(lock.read().unwrap().is_none());
+}
+
+#[test]
 fn atomic_replacement_recovers_without_consuming_abandoned_temporary_files() {
     let (spec, question, mut record) = fixture();
     let dir = tempfile::tempdir().unwrap();

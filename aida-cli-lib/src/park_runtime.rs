@@ -148,6 +148,14 @@ pub(crate) struct WaitLock {
 }
 impl WaitLock {
     pub(crate) fn acquire(directory: &Path, wait_id: Uuid) -> Result<Self> {
+        Self::acquire_with_parent_sync(directory, wait_id, File::sync_all)
+    }
+
+    fn acquire_with_parent_sync(
+        directory: &Path,
+        wait_id: Uuid,
+        sync_parent: impl FnOnce(&File) -> std::io::Result<()>,
+    ) -> Result<Self> {
         // Resolve each directory component relative to a pinned handle. Checking
         // only the final component would still follow a symlinked .aida parent.
         ensure!(
@@ -156,6 +164,7 @@ impl WaitLock {
         );
         let mut parent = File::open("/")?;
         let components: Vec<_> = directory.components().collect();
+        let mut sync_parent = Some(sync_parent);
         for (index, component) in components.iter().enumerate().skip(1) {
             let std::path::Component::Normal(name) = component else {
                 anyhow::bail!("invalid park runtime path component");
@@ -163,7 +172,8 @@ impl WaitLock {
             let path = PathBuf::from(format!("/proc/self/fd/{}", parent.as_raw_fd())).join(name);
             if index + 1 == components.len() {
                 match std::fs::DirBuilder::new().mode(0o700).create(&path) {
-                    Ok(()) => (),
+                    // Persist the new directory entry before writing runtime evidence.
+                    Ok(()) => sync_parent.take().unwrap()(&parent)?,
                     Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => (),
                     Err(e) => return Err(e.into()),
                 }
