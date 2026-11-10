@@ -17,7 +17,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-08T03:08:54.290380002Z
-modified_at: 2026-11-09T00:28:58.827979588Z
+modified_at: 2026-11-10T00:07:05.552383579Z
 req_type: Task
 tags:
 - area:architecture
@@ -92,6 +92,13 @@ comments:
   modified_at: 2026-11-09T00:28:57.051632044Z
   session_id: 01a1bdb422db
   harness_version: codex-cli 0.167.0
+- id: 01a1c2c7-a250-7793-ad8e-732cb76aea55
+  author: joe
+  content: 'ADVISOR RULING (2026-11-10 00:15 UTC): proceed now; only 3 PRs are open. Migrate consumer imports of the cmdkit framework types from command_registry to cmdkit across every importer EXCEPT files touched by open PRs #3731, #3744 and #3651 (check with gh pr view N --json files at start). Keep the re-exports (acceptance 4: they drop only once every importer is migrated); list the skipped files in the PR body. Use (Refs TASK-3448).'
+  created_at: 2026-11-10T00:07:05.552383579Z
+  modified_at: 2026-11-10T00:07:05.552383579Z
+  session_id: 01a1beff-fc3b-78e2-93e2-9b0c283b0339
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1b921-d315-74a0-9c9a-0ca54df44ce6
   author: joe
