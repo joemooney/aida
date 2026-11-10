@@ -442,3 +442,46 @@ fn task3420_original_relay_retains_uuid_identity_until_ack() {
 fn task3420_original_relay_sidecar_only_retains_uuid_identity_until_ack() {
     original_relay_retirement_roundtrip(false);
 }
+
+// An ACK for the original delivery must not cover the handover recipient,
+// even though both deliveries reference the same canonical message.
+// trace:TASK-3420 | ai:codex
+#[test]
+fn task3420_original_ack_does_not_retire_unacked_handover() {
+    let (root, store) = handover_seed(false, true);
+    ack_relay(root.path(), &store, 1);
+    let before = relay_snapshot(root.path(), &store);
+    assert!(before.complete(), "{before:?}");
+    assert_eq!(before.records.len(), 1);
+    assert_eq!(before.records[0].delivered_to, Some(relay_recipient(2)));
+    assert!(before.records[0]
+        .owned_delivery
+        .as_ref()
+        .unwrap()
+        .handover_of
+        .is_some());
+    assert_eq!(
+        before.records[0].read,
+        crate::mailbox_logical::ReadEvidence::Unread
+    );
+
+    let (reason, _) = refusal(retire_source(root.path(), &opts()).unwrap());
+    assert!(matches!(reason, RefusalReason::MessageState { .. }));
+    assert_open(root.path());
+    let after = relay_snapshot(root.path(), &store);
+    assert!(after.complete(), "{after:?}");
+    assert_eq!(after.records, before.records);
+
+    ack_relay(root.path(), &store, 2);
+    let acked = relay_snapshot(root.path(), &store);
+    assert!(acked.complete(), "{acked:?}");
+    assert!(matches!(
+        acked.records[0].read,
+        crate::mailbox_logical::ReadEvidence::Acknowledged { .. }
+    ));
+    assert_eq!(
+        acked.records[0].owned_delivery,
+        before.records[0].owned_delivery
+    );
+    retired(retire_source(root.path(), &opts()).unwrap());
+}
