@@ -9,7 +9,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T00:17:53.805850Z
-modified_at: 2026-11-10T13:20:00.880865860Z
+modified_at: 2026-11-10T13:28:47.172551903Z
 req_type: Story
 tags:
 - architecture
@@ -434,6 +434,22 @@ comments:
   modified_at: 2026-11-10T13:20:00.880865860Z
   session_id: 01a1c530-c917-7f13-ab81-f6b5e1d1cd30
   harness_version: 2.1.322 (Claude Code)
+- id: 01a1c5a5-9ad2-7eb2-81ce-6a4af139e4c9
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (STORY-2538):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 20856bfc3d17
+    Recorded: 2026-11-10T13:00:56.358182912+00:00
+    Findings:
+    1. [P2] glyph_config.rs:39 collapses config.toml path construction to one production literal, but scripts/config-trust.toml still declares sites = 2. Prior CI run 42812013493 failed every_config_toml_site_is_inventoried_and_every_worktree_key_is_policy (measured 1, inventory 2); these files and the guard are unchanged at 20856bfc3d17. Audit and lower the inventory count.
+    2. [P2] launch/spawn.rs:42,45 calls ctx.exec(), which the task_2708_every_spawn_agent_builder_is_inventoried_and_guarded guard rejects via its forbidden .exec() substring. Prior CI run 42812013493 failed with launch::spawn_agent must only construct the child Command (.exec()); source and guard remain unchanged at 20856bfc3d17. Rename the context accessor and uses, or distinguish it from process execution without weakening negative controls.
+    3. [P2] launch/context.rs:164 moves vendor references from resolve_with into resolve_inputs, while tests/story_2539_vendor_literals.tsv still keys the agy literal and typed Agy/LaunchVendor entries to resolve_with. Prior CI run 42812013493 reports three forbidden additions and three removed entries; unchanged at 20856bfc3d17. Audit and relocate existing debt entries without growth, or preserve the original production item.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-10T13:28:47.058577510Z
+  modified_at: 2026-11-10T13:28:47.058577510Z
+  session_id: 01a1c39a-801a-7bd1-8da9-c955a6707f0b
+  harness_version: 2.1.321 (Claude Code)
 history:
 - id: 01a1ae38-af42-7111-8ef3-7b278b3830e7
   author: joe
