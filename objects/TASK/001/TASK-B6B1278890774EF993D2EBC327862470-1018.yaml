@@ -3,12 +3,12 @@ spec_id: TASK-b6b1278890774ef993d2ebc327862470-1018
 agreed_id: TASK-3665
 title: 'PR CI: 53% of decided runs fail and 42% of all runs are cancelled; job runtime has doubled since Oct 31'
 description: 'Measured 2026-11-08 over 926 PR runs since Nov 6: 272/517 decided runs failed, 388 cancelled, 6.4 runs per branch. Main run wall time 12 min on Oct 31, 20-36 min on Nov 8; 12-21 runs queued with 1-3 running gave about 73 minutes per run for PRs. Of 60 sampled failures, gates ratchets that check-ci-fast should catch locally were the largest avoidable group (store writers 13, portability 9, CLI manual 7, ExecContext 5). Investigate job growth; STORY-2640 addresses local gate escape; STORY-2672 addresses runner capacity.'
-status: Draft
+status: Superseded
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-08T21:19:56.393105400Z
-modified_at: 2026-11-10T14:28:45.084436144Z
+modified_at: 2026-11-10T14:28:46.724413633Z
 req_type: Task
 comments:
 - id: 01a1c133-32b4-71f0-9d0b-9ea545392432
@@ -39,6 +39,16 @@ comments:
   modified_at: 2026-11-10T14:28:45.084436144Z
   session_id: 01a1c530-c917-7f13-ab81-f6b5e1d1cd30
   harness_version: 2.1.322 (Claude Code)
+history:
+- id: 01a1c5dc-8804-7a33-b185-45d0b0f19f3f
+  author: joe
+  timestamp: 2026-11-10T14:28:46.724410314Z
+  session_id: 01a1c530-c917-7f13-ab81-f6b5e1d1cd30
+  harness_version: 2.1.322 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Superseded
 filed_at:
   code_sha: b57c1fab753d30430c7a544b781bd8c7d91da0d2
   branch: main
