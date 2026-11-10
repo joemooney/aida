@@ -8,8 +8,16 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-10T03:41:53.967511011Z
-modified_at: 2026-11-10T03:43:34.626375116Z
+modified_at: 2026-11-10T03:43:36.821457474Z
 req_type: Story
+comments:
+- id: 01a1c38d-dd75-7a00-bfe5-e899329946c8
+  author: joe
+  content: 'Duplicate: already delivered by STORY-1641 (git-style external subcommands, completed 2026-10-11) under ADR-71. Verified 2026-11-09 with a PATH aida-hellox stub on the live binary. Rejected by the advisor who filed it.'
+  created_at: 2026-11-10T03:43:36.821457474Z
+  modified_at: 2026-11-10T03:43:36.821457474Z
+  session_id: 01a1beff-fc3b-78e2-93e2-9b0c283b0339
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1c38d-d4e2-74c3-af25-5eb7ce61e9da
   author: joe
