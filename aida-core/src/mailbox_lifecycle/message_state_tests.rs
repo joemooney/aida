@@ -163,7 +163,7 @@ fn task3420_same_id_with_different_canonical_payload_retains() {
 }
 
 #[test]
-fn task3420_bound_queued_delivery_can_retire_once_preserved() {
+fn task3420_bound_queued_delivery_retains_until_ack() {
     use crate::mailbox_delivery::{bind_queued_delivery, RecipientUuid};
     let root = repo();
     let msg = message("bound");
@@ -180,7 +180,9 @@ fn task3420_bound_queued_delivery_can_retire_once_preserved() {
         Duration::from_secs(1),
     )
     .unwrap();
-    retired(retire_source(root.path(), &opts()).unwrap());
+    let (reason, _) = refusal(retire_source(root.path(), &opts()).unwrap());
+    assert!(matches!(reason, RefusalReason::MessageState { .. }));
+    assert_open(root.path());
 }
 
 #[test]
@@ -230,15 +232,7 @@ fn handover_seed(with_message: bool, valid_chain: bool) -> (tempfile::TempDir, P
     let sidecar = DeliverySidecar::relay("handed", &relay_recipient(1));
     crate::mailbox::write_local_message_with_deliveries(root.path(), &msg, Some(&sidecar)).unwrap();
     let store = preserve_canonical(root.path());
-    // Keep the original delivery live in the canonical source; the retiring
-    // source is the only holder of the handover.
-    std::fs::create_dir_all(store.join("mailbox/.deliveries")).unwrap();
-    std::fs::copy(
-        mailbox(root.path()).join(".deliveries/handed.json"),
-        store.join("mailbox/.deliveries/handed.json"),
-    )
-    .unwrap();
-    std::fs::remove_file(mailbox(root.path()).join(".deliveries/handed.json")).unwrap();
+    assert!(!store.join("mailbox/.deliveries").exists());
     if !with_message {
         std::fs::remove_file(mailbox(root.path()).join("handed.json")).unwrap();
     }
@@ -307,15 +301,11 @@ fn handover_retirement_roundtrip(with_message: bool) {
         relay_snapshot(root.path(), &store).records[0].read,
         crate::mailbox_logical::ReadEvidence::Acknowledged { .. }
     ));
+    // The original delivery is also local and still unacked.
+    let (reason, _) = refusal(retire_source(root.path(), &opts()).unwrap());
+    assert!(matches!(reason, RefusalReason::MessageState { .. }));
+    ack_relay(root.path(), &store, 1);
     retired(retire_source(root.path(), &opts()).unwrap());
-    // Ownership may now disappear, but no unread mail is lost or resurrected.
-    assert!(relay_snapshot(root.path(), &store)
-        .records
-        .iter()
-        .all(|r| matches!(
-            r.read,
-            crate::mailbox_logical::ReadEvidence::Acknowledged { .. }
-        )));
 }
 
 #[test]
@@ -349,7 +339,8 @@ fn task3420_invalid_handover_chain_cannot_authorize_ack_or_retirement() {
 
 #[test]
 fn task3420_unreadable_handover_ack_retains() {
-    let (root, _store) = handover_seed(false, true);
+    let (root, store) = handover_seed(false, true);
+    ack_relay(root.path(), &store, 1);
     let common = root.path().join(".git");
     let receipts = common.join("aida/mail-lifecycle/receipts");
     std::fs::create_dir_all(&receipts).unwrap();
@@ -363,4 +354,73 @@ fn task3420_unreadable_handover_ack_retains() {
     let (reason, _) = refusal(retire_source(root.path(), &opts()).unwrap());
     assert!(matches!(reason, RefusalReason::MessageState { .. }));
     assert_open(root.path());
+}
+
+fn ack_relay(root: &Path, store: &Path, n: u8) {
+    let snapshot = logical_snapshot(
+        &MailboxContext::resolve(root, Some(store)).unwrap(),
+        &relay_audience(n),
+        &Query::Inbox,
+        &ReadLimits::explicit_read(),
+    );
+    assert!(snapshot.complete(), "{snapshot:?}");
+    crate::mailbox_lifecycle::ack::AckPlan::prepare(
+        &snapshot,
+        Some(&root.join(".git")),
+        &relay_audience(n),
+        &snapshot.records.iter().collect::<Vec<_>>(),
+    )
+    .unwrap()
+    .unwrap()
+    .commit(&relay_audience(n))
+    .unwrap();
+}
+
+#[test]
+fn task3420_original_relay_retains_uuid_identity_until_ack() {
+    let root = repo();
+    let mut msg = message("original-relay");
+    msg.to = crate::mailbox::Recipient::Agent("relay-a".into());
+    let sidecar = DeliverySidecar::relay(&msg.id, &relay_recipient(1));
+    crate::mailbox::write_local_message_with_deliveries(root.path(), &msg, Some(&sidecar)).unwrap();
+    let store = preserve_canonical(root.path());
+    assert!(!store.join("mailbox/.deliveries").exists());
+    let snapshot = |n| {
+        logical_snapshot(
+            &MailboxContext::resolve(root.path(), Some(&store)).unwrap(),
+            &relay_audience(n),
+            &Query::Inbox,
+            &ReadLimits::explicit_read(),
+        )
+    };
+    let before = snapshot(1);
+    assert!(before.complete(), "{before:?}");
+    assert_eq!(before.records.len(), 1);
+    assert_eq!(before.records[0].delivered_to, Some(relay_recipient(1)));
+    assert_eq!(
+        before.records[0].owned_delivery.as_ref(),
+        Some(&sidecar.deliveries[0])
+    );
+    assert!(snapshot(2).records.is_empty());
+    let (reason, _) = refusal(retire_source(root.path(), &opts()).unwrap());
+    assert!(matches!(reason, RefusalReason::MessageState { .. }));
+    assert_open(root.path());
+    let after = snapshot(1);
+    assert!(after.complete(), "{after:?}");
+    assert_eq!(after.records, before.records);
+    let later = snapshot(2);
+    assert!(later.complete(), "{later:?}");
+    assert!(later.records.is_empty());
+    ack_relay(root.path(), &store, 1);
+    let acked = snapshot(1);
+    assert!(matches!(
+        acked.records[0].read,
+        crate::mailbox_logical::ReadEvidence::Acknowledged { .. }
+    ));
+    assert_eq!(acked.records[0].delivered_to, Some(relay_recipient(1)));
+    assert_eq!(
+        acked.records[0].owned_delivery.as_ref(),
+        Some(&sidecar.deliveries[0])
+    );
+    retired(retire_source(root.path(), &opts()).unwrap());
 }

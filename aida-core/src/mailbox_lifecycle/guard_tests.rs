@@ -1189,6 +1189,28 @@ fn a_retired_source_keeps_its_cohort_gate_from_the_retained_copy() {
     assert!(visible(&outsider).is_empty());
 
     let before = source(&wt);
+    // All local sidecars retain their source until the owner durably ACKs.
+    // trace:TASK-3420 | ai:codex
+    assert!(remove_worktree_retained(dir.path(), &wt, true, "test").is_err());
+    assert!(wt.exists());
+    assert_eq!(visible(&member_aud), owned);
+    assert!(visible(&outsider).is_empty());
+    let snapshot = logical_snapshot(
+        &MailboxContext::resolve(dir.path(), None).unwrap(),
+        &member_aud,
+        &Query::Inbox,
+        &ReadLimits::explicit_read(),
+    );
+    super::ack::AckPlan::prepare(
+        &snapshot,
+        Some(before.anchor.parent().unwrap().parent().unwrap()),
+        &member_aud,
+        &snapshot.records.iter().collect::<Vec<_>>(),
+    )
+    .unwrap()
+    .unwrap()
+    .commit(&member_aud)
+    .unwrap();
     remove_worktree_retained(dir.path(), &wt, true, "test").unwrap();
     assert!(!wt.exists());
     let kept = retained_generations(&before.anchor, &before.key);

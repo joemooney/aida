@@ -2445,9 +2445,9 @@ fn read_binding(
 
 // ── Reconciliation ───────────────────────────────────────────────────────────
 
-/// Retirement requires readable canonical messages; retained sidecars keep
-/// original delivery ownership available after the source goes. Handovers
-/// require anchored ACKs because their chains are read only from live sources.
+/// Retirement requires readable canonical messages and durable UUID ACKs for
+/// every local original or handover delivery. Canonical digest copies carry
+/// messages only, so retiring unacked sidecars would lose delivery ownership.
 /// Use the same bounded, no-follow readers as an inbox snapshot. This runs
 /// after fencing and outside Lifecycle/Store; the final admission scan runs
 /// under Lifecycle afterwards.
@@ -2458,37 +2458,37 @@ pub(crate) fn retirement_message_state(common: &Path, mailbox: &Path) -> Result<
         let Some(local) = read_source(mailbox, &[], &mut budget)? else {
             return Ok(());
         };
-        // Handover chains are read only from live sources. Retained sidecars
-        // preserve original deliveries, but cannot replace this ownership.
-        // Require the new owner's durable ACK even for handover-only sources;
-        // missing, invalid or unreadable evidence must keep the source alive.
-        // trace:TASK-3420 | ai:codex
-        for handover in &local.handovers {
-            if budget.expired() {
-                return Err(SourceErrorCode::OverBudget);
-            }
-            let recipient = handover
-                .recipient_uuid
-                .as_ref()
-                .ok_or(SourceErrorCode::CorruptReceipt)?;
-            let (ledger, size) = read_ledger_sized(common, &recipient.receipt_key())?
-                .ok_or(SourceErrorCode::SourceChanged)?;
-            budget.take(size)?;
-            if !ledger.receipts.contains_key(&handover.message_id) {
-                return Err(SourceErrorCode::SourceChanged);
-            }
-        }
         let ctx = MailboxContext {
             requested_checkout: CheckoutRoot(mailbox.to_path_buf()),
             repository: Some(VerifiedCommonGit(common.to_path_buf())),
             canonical: CanonicalCoverage::NotConfigured,
         };
-        // A canonical copy never changes an undelivered message into a delivery.
-        for sidecar in &local.deliveries {
-            for id in sidecar.queued_ids() {
-                if read_binding(&ctx, id, &mut budget)?.is_none() {
-                    return Err(SourceErrorCode::SourceChanged);
+        // Any unacked local delivery keeps the source alive, including private
+        // relay handles that cannot recover ownership from retained sidecars.
+        // Queued deliveries must first have a durable recipient binding.
+        // trace:TASK-3420 | ai:codex
+        for delivery in local
+            .deliveries
+            .iter()
+            .flat_map(|sidecar| &sidecar.deliveries)
+            .chain(&local.handovers)
+        {
+            if budget.expired() {
+                return Err(SourceErrorCode::OverBudget);
+            }
+            let recipient = match &delivery.recipient_uuid {
+                Some(recipient) => recipient.clone(),
+                None if delivery.queued_for_role => {
+                    read_binding(&ctx, &delivery.delivery_id, &mut budget)?
+                        .ok_or(SourceErrorCode::SourceChanged)?
                 }
+                None => return Err(SourceErrorCode::CorruptReceipt),
+            };
+            let (ledger, size) = read_ledger_sized(common, &recipient.receipt_key())?
+                .ok_or(SourceErrorCode::SourceChanged)?;
+            budget.take(size)?;
+            if !ledger.receipts.contains_key(&delivery.message_id) {
+                return Err(SourceErrorCode::SourceChanged);
             }
         }
         if local.messages.is_empty() {
@@ -2534,7 +2534,7 @@ pub(crate) fn retirement_message_state(common: &Path, mailbox: &Path) -> Result<
         Ok(())
     };
     check().map_err(|code| {
-        format!("queued/undelivered mail, handover acknowledgement or canonical preservation not verified ({code:?}); deliver queued mail, acknowledge handed-over mail and digest messages to the canonical store before retrying")
+        format!("queued/undelivered mail, delivery acknowledgement or canonical preservation not verified ({code:?}); deliver queued mail, acknowledge all local deliveries and digest messages to the canonical store before retrying")
     })
 }
 
