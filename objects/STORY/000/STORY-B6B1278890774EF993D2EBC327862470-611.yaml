@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-09T01:57:49.197822183Z
-modified_at: 2026-11-10T14:29:15.183170755Z
+modified_at: 2026-11-10T19:35:23.153142833Z
 req_type: Story
 tags:
 - area:orchestration
@@ -19,6 +19,13 @@ comments:
   created_at: 2026-11-09T02:43:49.101663439Z
   modified_at: 2026-11-09T02:43:49.101663439Z
   session_id: 20abb7c3-8f9b-4a5e-b326-404921f3b450
+- id: 01a1c6f5-3d11-7741-9bca-69e979970591
+  author: joe
+  content: 'ADVISOR BRIEF (2026-11-10): sketch-only lane. Post the architecture sketch (the PR-state derivation source of truth, the state enum, next action, owner, and how the auto-train/auto-rework/review-watch loops consume it) on this spec and punt for advisor signoff. No source edits.'
+  created_at: 2026-11-10T19:35:23.153142833Z
+  modified_at: 2026-11-10T19:35:23.153142833Z
+  session_id: 01a1c530-c917-7f13-ab81-f6b5e1d1cd30
+  harness_version: 2.1.322 (Claude Code)
 history:
 - id: 01a1be07-037f-7533-9b8f-9af4ceb825a2
   author: joe
