@@ -3,13 +3,23 @@ spec_id: BUG-b6b1278890774ef993d2ebc327862470-283
 agreed_id: BUG-2518
 title: review-watch never retries a head whose recorded review attempt produced no verdict, so PRs sit unreviewed for hours
 description: 'Observed 2026-11-10: PR #3754 (5h), #3753 (7h at head 913476ba, last verdict against an older head) and #3651 each had one recorded review attempt at the current head and no verdict for that head; review-watch skipped them until the advisor ran ''aida review watch --release PR-N'' by hand, after which a reviewer launched within minutes and #3754 was approved and landed. Expected: an attempt that ends without recording a verdict (reviewer crash, timeout, lease loss) is retried automatically with backoff, bounded by a per-head attempt cap; when the cap is hit, review-watch status names the PR and the reason so the advisor sees it. Acceptance: (1) a failed attempt with no verdict is retried after a backoff; (2) a cap (e.g. 3 per head) then surfaces a blocker row in ''aida advisor loops status'' / review-watch status; (3) a new head resets the count; (4) tests for each.'
-status: Draft
+status: Approved
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-10T10:24:49.978786902Z
-modified_at: 2026-11-10T10:24:49.978786902Z
+modified_at: 2026-11-10T10:25:52.585755149Z
 req_type: Bug
+history:
+- id: 01a1c4fe-25c9-7752-878d-7f4b5f4e9270
+  author: joe
+  timestamp: 2026-11-10T10:25:52.585748357Z
+  session_id: 01a1c39a-801a-7bd1-8da9-c955a6707f0b
+  harness_version: 2.1.321 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Approved
 filed_at:
   code_sha: af0288e60a2f6f00d4699098632234b246f6e511
   branch: main
