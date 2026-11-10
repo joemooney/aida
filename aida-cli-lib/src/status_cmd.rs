@@ -11,9 +11,9 @@ use crate::{
     collect_user_context, config_path_for_project, detect_stranded_primary, drain_state, events,
     failure_reason_lines, find_main_worktree_root, find_project_root, history,
     humanize_duration_secs, is_aida_repo, is_real_requirement_summary, is_standing_artifact_type,
-    lease_state_for, list_leases, load_store_for_lookup, orphan_branch_sync_state,
-    output_format_is_json, parse_since_arg, print_aida_dev_context, print_aida_dev_context_summary,
-    print_fast_status, print_fast_status_json, print_lease_detail, print_morning_after_banner,
+    leases, list_leases, load_store_for_lookup, orphan_branch_sync_state, output_format_is_json,
+    parse_since_arg, print_aida_dev_context, print_aida_dev_context_summary, print_fast_status,
+    print_fast_status_json, print_lease_detail, print_morning_after_banner,
     print_morning_after_toon, print_status_agents_section, print_status_branch_section,
     print_status_claude_code_section, print_status_codex_section,
     print_status_coordination_section, print_status_findings_section, print_status_hygiene_section,
@@ -109,7 +109,7 @@ pub(crate) fn handle_status_spec(spec: &str, idle_minutes: u64, json: bool) -> R
 
     let now = chrono::Utc::now();
     let live = process_probe::probe_live_claude_sessions();
-    let lease_state = lease.map(|l| lease_state_for(l, &live, now));
+    let lease_state = lease.map(|l| leases::lease_state_for(l, &live, now));
     let mut verdict = classify_spec_liveness(lease_state, in_progress);
     let drain = drain_state::live_drain_spec(&project_root, &disp);
     if drain.is_some() {
@@ -1172,7 +1172,7 @@ fn count_live_and_stale_leases(project_root: &std::path::Path) -> (usize, usize)
     let mut live_count = 0;
     let mut stale_count = 0;
     for lease in &leases {
-        match lease_state_for(lease, &live, now) {
+        match leases::lease_state_for(lease, &live, now) {
             LeaseState::Unknown | LeaseState::Live | LeaseState::Dormant => live_count += 1,
             LeaseState::Stale => stale_count += 1,
         }

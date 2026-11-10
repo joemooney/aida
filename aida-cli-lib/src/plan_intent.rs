@@ -9,7 +9,7 @@ use crate::{
     detect_distributed_store_from, detect_open_pr_for_spec, drain_state, dryrun,
     effective_display_status, effective_needs_attention_lens_with_source, events,
     filing_drift_hint, find_project_root, humanize_duration_secs, in_flight_lease_role_map,
-    in_flight_lease_scopes, intent, interview, lease_state_for, list_leases, load_dispenser,
+    in_flight_lease_scopes, intent, interview, leases, list_leases, load_dispenser,
     load_store_for_lookup, process_probe, short_lease_id, spec_scoped_lease, status_display,
     PrLookup, SpecCommand,
 };
@@ -1736,7 +1736,7 @@ pub(crate) fn handle_why(id: &str, plain: bool, json: bool) -> Result<()> {
             let now = chrono::Utc::now();
             let live = process_probe::probe_live_claude_sessions();
             if !matches!(
-                lease_state_for(lease, &live, now),
+                leases::lease_state_for(lease, &live, now),
                 LeaseState::Live | LeaseState::Unknown
             ) {
                 let elapsed = now

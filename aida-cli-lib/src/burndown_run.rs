@@ -8,9 +8,9 @@ use crate::{
     collect_open_prs, collect_open_prs_uncached, current_role_instance_is_companion,
     current_user_id, detect_distributed_store_from, drain_lock, drive_robustness,
     find_main_worktree_root, find_project_root, findings, forge, get_default_author, headless_tee,
-    humanize_relative, in_flight_lease_role_map, integrate, lease_state_for, list_leases,
-    load_dispenser, load_store_for_lookup, machine_readiness, main_worktree_root_from,
-    maybe_sync_pull, network_retry, pane_host, parse_requirement_type, process_probe, queue_cmd,
+    humanize_relative, in_flight_lease_role_map, integrate, leases, list_leases, load_dispenser,
+    load_store_for_lookup, machine_readiness, main_worktree_root_from, maybe_sync_pull,
+    network_retry, pane_host, parse_requirement_type, process_probe, queue_cmd,
     record_role_activity, session, shelve_spec_on_failure, spec_title_cell, status_cleanup,
     truncate, wait_for_ci_terminal, CiProbe,
 };
@@ -1662,7 +1662,7 @@ pub(crate) fn leased_spec_ids(project_root: &std::path::Path) -> std::collection
     let live = process_probe::probe_live_claude_sessions();
     list_leases(project_root)
         .into_iter()
-        .filter(|l| !matches!(lease_state_for(l, &live, now), LeaseState::Stale))
+        .filter(|l| !matches!(leases::lease_state_for(l, &live, now), LeaseState::Stale))
         .map(|l| l.scope)
         .collect()
 }
@@ -1751,7 +1751,7 @@ pub(crate) fn handle_burndown_status(json: bool) -> Result<()> {
     let live = process_probe::probe_live_claude_sessions();
     let in_flight: Vec<InFlightLease> = list_leases(&project_root)
         .into_iter()
-        .filter(|l| !matches!(lease_state_for(l, &live, now), LeaseState::Stale))
+        .filter(|l| !matches!(leases::lease_state_for(l, &live, now), LeaseState::Stale))
         .map(|l| InFlightLease {
             scope: l.scope.clone(),
             branch: l.branch.clone(),

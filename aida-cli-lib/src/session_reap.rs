@@ -53,7 +53,7 @@ use crate::{
     collect_unshipped_work_items, confirm, current_user_id, detect_distributed_store_from,
     detect_merged_pr_for_branch_via_forge, extract_referenced_spec_ids_from_commit,
     extract_spec_ids_from_commit, find_project_root, is_plan_commit_subject, lease_path,
-    lease_recorded_owner, lease_state_for, list_leases, load_dispenser, mailbox_store,
+    lease_recorded_owner, leases, list_leases, load_dispenser, mailbox_store,
     main_worktree_root_from, process_probe, resolve_default_branch_ref, run,
     salvage_worktree_patch, session_activity_path, session_manifest, worktree_dirty_entries,
     worktree_is_active, worktree_is_locked, worktree_pool_global_hooks, PrLookup, SessionLease,
@@ -1008,7 +1008,7 @@ pub(crate) fn scan_reapable_with(
             has_worktree && worktree_is_active(&lease.worktree_path, &active);
         let owner_gone = crate::leases::lease_owner_gone(lease);
         let process_exited = session_process_exited(
-            lease_state_for(lease, &live, now),
+            leases::lease_state_for(lease, &live, now),
             owner_gone,
             worktree_has_live_process,
         );
@@ -1376,7 +1376,7 @@ fn scan_clone_lease(
 ) -> ReapRow {
     let owner_gone = crate::leases::lease_owner_gone(lease);
     let process_exited = session_process_exited(
-        lease_state_for(lease, live, now),
+        leases::lease_state_for(lease, live, now),
         owner_gone,
         worktree_is_active(&lease.worktree_path, active),
     );

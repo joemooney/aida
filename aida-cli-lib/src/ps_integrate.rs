@@ -8,11 +8,11 @@ use crate::{
     detect_distributed_store_from, detect_open_pr_for_spec_via_forge, detect_stranded_primary,
     dispatch_health_ps, drain_lock, drain_state, driver_view, enforce_team_gate, find_project_root,
     focus, humanize_duration_secs, inspector_pids, integrate, integrate_view,
-    is_agent_managed_worktree, lease_state_for, list_leases, load_store_for_lookup,
-    main_worktree_root_from, output_format_is_json, pending_approval, permissions, presence,
-    print_stranded_primary_banner, probe_resume_facts, process_probe, queue_cmd, session,
-    session_manifest, session_reap, spec_scoped_lease, tail_cmd, toon_status_token, truncate,
-    unique_prefix_len, worktree_lease, worktree_lock, PrLookup, SessionLease,
+    is_agent_managed_worktree, list_leases, load_store_for_lookup, main_worktree_root_from,
+    output_format_is_json, pending_approval, permissions, presence, print_stranded_primary_banner,
+    probe_resume_facts, process_probe, queue_cmd, session, session_manifest, session_reap,
+    spec_scoped_lease, tail_cmd, toon_status_token, truncate, unique_prefix_len, worktree_lease,
+    worktree_lock, PrLookup, SessionLease,
 };
 use crate::{
     dispatch, hostname, lease_path, leases, leases_dir, mail_wake, ownership, role, worker,
@@ -689,7 +689,7 @@ pub(crate) fn ps_live_fanout_leases<'a>(
                 // the observer testifying for itself — see the doc comment.
                 // trace:BUG-1740 | ai:claude
                 && !ps_lease_identity_is_caller(l, caller_pids)
-                && matches!(lease_state_for(l, &corroborating, now), LeaseState::Live)
+                && matches!(leases::lease_state_for(l, &corroborating, now), LeaseState::Live)
         })
         .collect()
 }
@@ -2312,7 +2312,7 @@ pub(crate) fn build_running_work(
     let rows: Vec<PsRow> = leases
         .iter()
         .map(|l| {
-            let state = lease_state_for(l, live, now);
+            let state = leases::lease_state_for(l, live, now);
             // BUG-2197: a pid-less lease never borrows the inspector's pid.
             // trace:BUG-2197 | ai:claude
             let attributable = if state == LeaseState::Unknown {
@@ -2588,7 +2588,7 @@ pub(crate) fn build_running_work(
         }
         let id_refs: Vec<&str> = id_owned.iter().map(|s| s.as_str()).collect();
         let lease = spec_scoped_lease(leases, &id_refs);
-        let lease_state = lease.map(|l| lease_state_for(l, live, now));
+        let lease_state = lease.map(|l| leases::lease_state_for(l, live, now));
         // trace:BUG-778 | ai:claude
         let awaiting_agent = lease.is_some_and(|l| ps_row_awaiting_agent(&rows, &l.id));
         // BUG-1656: a non-live spec lease whose worktree is still being

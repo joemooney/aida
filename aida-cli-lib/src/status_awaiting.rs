@@ -15,7 +15,7 @@ use crate::{
     effective_role_resolved, find_aida_project_root_from, find_main_worktree_root,
     find_project_root, findings, gather_running_work, gh_pr_is_merged, git_commits_since_tag,
     git_describe_latest_tag, humanize_duration_secs, insert_summary_statuses, is_ancestor_commit,
-    is_standing_artifact_type, is_work_spec_branch_name, last_drain, lease_state_for, list_leases,
+    is_standing_artifact_type, is_work_spec_branch_name, last_drain, leases, list_leases,
     list_local_branches, list_worktrees, live_owned_branches, local_suppressed_prs,
     mailbox_latency_warning, mailbox_store, main_worktree_root_from, maintenance_schedule,
     orphaned_in_progress_items, output_format_is_json, parse_pr_scope,
@@ -79,7 +79,7 @@ pub(crate) fn collect_cleanup_report_until(
     let lease_states: Vec<(SessionLease, LeaseState)> = leases
         .iter()
         // BUG-511: review-verb leases classify by creator PID, not worktree.
-        .map(|l| (l.clone(), lease_state_for(l, &live_sessions, now)))
+        .map(|l| (l.clone(), leases::lease_state_for(l, &live_sessions, now)))
         .collect();
 
     // TASK-1056: batch the per-branch git probes the detectors below need into
