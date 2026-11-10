@@ -14,12 +14,12 @@ description: |-
   - Tier computed and recorded in the gate ledger with its reasons; overridable by the advisor, never by the implementer.
   - A verdict with only non-blocking findings is recorded APPROVED with sweep entries.
   - Tests for tier classification of gate, docs and mixed diffs, and for the severity rule.
-status: Approved
+status: InProgress
 priority: High
-owner: ''
+owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-10T03:05:40.778642968Z
-modified_at: 2026-11-10T03:11:42.895555698Z
+modified_at: 2026-11-10T03:13:11.875714917Z
 req_type: Story
 comments:
 - id: 01a1c370-9b5f-7770-a921-e48f45e2aecb
@@ -39,6 +39,13 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Approved
+- id: 01a1c372-04c3-7b60-94d6-318f5dc012f5
+  author: aida-session-start
+  timestamp: 2026-11-10T03:13:11.875712470Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: 838f14c3c2811c6b63da5d465700cff773c36190
   branch: main
