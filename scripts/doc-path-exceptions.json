@@ -1150,5 +1150,23 @@
     "target": "docs/monitor-contract-fixtures/events-follow.json",
     "count": 4,
     "reason": "Frozen historical replay evidence: paths identify committed blobs, not current documentation."
+  },
+  {
+    "source": "aida-cli-lib/src/gate/ledger/tests.rs",
+    "target": "docs/help.md",
+    "count": 2,
+    "reason": "Synthetic advisory risk test fixture; not a repository document."
+  },
+  {
+    "source": "aida-cli-lib/src/review_risk.rs",
+    "target": "docs/usage.md",
+    "count": 3,
+    "reason": "Synthetic advisory risk test fixture; not a repository document."
+  },
+  {
+    "source": "aida-cli-lib/src/review_risk.rs",
+    "target": "docs/check.md",
+    "count": 1,
+    "reason": "Synthetic advisory risk test fixture; not a repository document."
   }
 ]
