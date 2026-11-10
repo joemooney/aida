@@ -350,7 +350,6 @@ pub use models::{
     // Async decision-inbox types (STORY-522)
     DecisionChoice,
     DecisionRequest,
-    ParkBinding,
     // Execution-mode dispatch (STORY-776)
     ExecutionMode,
     FailureReason,
@@ -375,6 +374,7 @@ pub use models::{
     NumberingStrategy,
     // Multi-repo origin dimension (ADR-12)
     Origin,
+    ParkBinding,
     // Durable processing-record audit trail (STORY-582)
     ProcessingRecord,
     PuntCategory,
