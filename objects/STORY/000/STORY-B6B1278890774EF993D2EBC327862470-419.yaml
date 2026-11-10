@@ -3,12 +3,12 @@ spec_id: STORY-b6b1278890774ef993d2ebc327862470-419
 agreed_id: STORY-2493
 title: 'Cross-machine review from an untrusted (work) node: verdict and finding envelopes over the aida-intent channel'
 description: 'Deferred (operator 2026-11-04: do the trusted-node case STORY-2492 first). When the reviewing node must not write to the home store, findings come back as content, not IDs. Add kind=review-verdict (fixed fields: PR, head SHA, decision, blocking finding digests, reviewer node; no free text, automatic) and kind=finding (severity, blocking, title, body, home file/line; free text, so it passes the validator and sensitive-pattern check and needs operator sign-off at work) to the STORY-2479 envelope format, carried over the STORY-2480 return channel. Home processes findings into specs and receipts map digest → home ID. Merge stays blocked while a blocking digest is unprocessed or open. Depends on STORY-2479, STORY-2480, STORY-2492.'
-status: InProgress
+status: Approved
 priority: Low
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-05T04:41:25.538710401Z
-modified_at: 2026-11-10T05:17:10.819322309Z
+modified_at: 2026-11-10T05:17:13.658332773Z
 req_type: Story
 relationships:
 - rel_type: Supersedes
@@ -688,6 +688,13 @@ history:
   session_id: 01a1c36d58dd
   harness_version: codex-cli 0.167.0
   changes: []
+- id: 01a1c3e3-923a-77a1-a551-c95cb496cab1
+  author: joe
+  timestamp: 2026-11-10T05:17:13.658329525Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Approved
 filed_at:
   code_sha: d561213a36febec31d45921d3d43d4dc7590135e
   branch: main
