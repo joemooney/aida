@@ -1457,6 +1457,8 @@ fn retry_readonly_mount_race(
         let output = run(remaining);
         let retry = match &output {
             crate::BoundedCommandOutput::Completed(out) if readonly && out.stdout.is_empty() => {
+                // Bubblewrap exposes this pre-exec mount failure only through stderr.
+                // external-prose-classifier: seat_clone::retry_readonly_mount_race
                 let stderr = String::from_utf8_lossy(&out.stderr);
                 out.status.code() == Some(1)
                     && stderr.starts_with("bwrap: Can't bind mount /oldroot/ on /newroot/:")
