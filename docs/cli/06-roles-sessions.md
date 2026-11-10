@@ -1051,6 +1051,11 @@ backoff deadlines survive watcher restarts; a new head resets them. Exhaustion
 names the change, head and last diagnostic in `aida advisor loops status`.
 Inspect the logs and use `aida review watch --release PR-N` (or `MR-N`) for
 operator recovery. Live or ambiguous descendants still prevent a retry.
+With a distributed admission hub, the stopped owner records a signed
+`Terminal` with `NoVerdict` evidence. Only that terminal permits the new `Retry`
+claim for the same head, and the hub independently caps started attempts at three.
+An active claim or a durable verdict refuses readmission; ordinary terminal
+records remain consumed. Local release does not reset the hub's attempt cap.
 <!-- trace:BUG-2518 | ai:codex -->
 
 The parent records each dispatcher's process identity; if a dispatcher exits before claiming its

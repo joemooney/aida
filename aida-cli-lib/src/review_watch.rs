@@ -2139,8 +2139,14 @@ fn finish_admission(
             .flatten()
             .all(|p| p.observable() && !p.alive())
     {
+        let no_verdict = admission::Hub::load(root)?.is_some()
+            && !review_publication::watcher_history(root, key)?.iter().any(|(body, _)| {
+                crate::gate::review_verdict::parse_recorded_verdict(body)
+                    .is_some_and(|v| v.reviewed_sha.as_deref() == Some(head))
+            });
         admission::transition(root, key, head, token, admission::State::Terminal,
-            format!("owner observed queue exit {status}; all recorded worker/reviewer identities stopped"))?;
+            format!("{}owner observed queue exit {status}; all recorded worker/reviewer identities stopped",
+                if no_verdict { admission::NO_VERDICT } else { "" }))?;
     }
     Ok(())
 }
@@ -3321,6 +3327,41 @@ pub(crate) fn fixture_admission_exit(
             )
         },
     )
+}
+
+#[cfg(test)]
+// trace:BUG-2518 | ai:codex
+pub(crate) fn fixture_admission_retry(root: &Path, exhausted: bool) -> Result<()> {
+    let store = Store::open(root, "github:github.com/fixture/review")?;
+    let change = forge::Change {
+        id: 7, head: "a".repeat(40), base: "main".into(),
+        author: "fixture-author".into(), gitlab: false, overlap: Some(false),
+        behind: Some(0), head_branch: None,
+    };
+    // The fixture's dispatcher ran in this test process; model its observed exit.
+    store.transaction("PR-7", |state| {
+        let attempt = &mut state.entries.get_mut("PR-7").unwrap().attempts[0];
+        let mut stopped = Identity::current()?;
+        stopped.boot = "previous-boot".into();
+        attempt.identity = Some(stopped);
+        Ok(())
+    })?;
+    let Action::Skip(reason) = select(&store, &change, None, 2)? else {
+        anyhow::bail!("retry must be delayed or exhausted");
+    };
+    if exhausted {
+        anyhow::ensure!(reason.contains("three review attempts"), "{reason}");
+        anyhow::ensure!(service::retry_blockers(&store.root, &store.dir)?.len() == 1);
+    } else {
+        anyhow::ensure!(reason.contains("retry after"), "{reason}");
+        store.transaction("PR-7", |state| {
+            state.entries.get_mut("PR-7").unwrap().attempts[0].no_verdict_retry_at =
+                Some(chrono::Utc::now() - chrono::Duration::seconds(1));
+            Ok(())
+        })?;
+        fixture_admission_exit(root, false, false, || {})?;
+    }
+    Ok(())
 }
 
 #[cfg(test)]

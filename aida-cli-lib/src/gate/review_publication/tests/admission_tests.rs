@@ -859,3 +859,80 @@ fn task3196_terminal_retries_changed_roster_evidence() {
     );
     assert_eq!(history.last().unwrap().state, State::Terminal);
 }
+
+// trace:BUG-2518 | ai:codex
+#[test]
+fn bug2518_admission_no_verdict_backoff_retry_and_exhaustion() {
+    let f = Fixture::new();
+    let _env = f.environment();
+    crate::review_watch::fixture_admission_exit(&f.a, false, false, || {}).unwrap();
+    crate::review_watch::fixture_admission_retry(&f.a, false).unwrap();
+    crate::review_watch::fixture_admission_retry(&f.a, false).unwrap();
+    crate::review_watch::fixture_admission_retry(&f.a, true).unwrap();
+    // The authority cap also holds if a caller bypasses local backoff/state.
+    assert!(!f
+        .step(
+            &f.b,
+            "PR-7",
+            &"a".repeat(40),
+            Uuid::new_v4(),
+            State::Reserved
+        )
+        .unwrap());
+    assert!(f
+        .step(
+            &f.b,
+            "PR-7",
+            &"b".repeat(40),
+            Uuid::new_v4(),
+            State::Reserved
+        )
+        .unwrap());
+}
+
+// trace:BUG-2518 | ai:codex
+#[test]
+fn bug2518_chain_accepts_only_no_verdict_terminal_retry_edge() {
+    let f = Fixture::new();
+    let _env = f.environment();
+    let token = Uuid::new_v4();
+    let head = "a".repeat(40);
+    f.step(&f.a, "PR-7", &head, token, State::Reserved).unwrap();
+    f.step(&f.a, "PR-7", &head, token, State::Running).unwrap();
+    let repo = private_repo().unwrap();
+    let (_, table) = read_table(repo.path(), &f.hub, "PR-7").unwrap();
+    let config = publisher(&f.a).unwrap().unwrap();
+    let store = f.a.join(".aida-store");
+    let roster = roster(&store, &super::super::head(&store).unwrap()).unwrap();
+    let base = table.changes["PR-7"].clone();
+    let running: Transition = serde_json::from_str(&base.last().unwrap().payload).unwrap();
+    for (state, evidence, admitted) in [
+        (State::Running, "NoVerdict: stopped", false),
+        (State::Terminal, "ordinary exit", false),
+        (State::Terminal, "NoVerdict: stopped", true),
+    ] {
+        let mut records = base[..1].to_vec();
+        let mut end = running.clone();
+        records.push(sign(&config, &end).unwrap());
+        if state == State::Terminal {
+            end.predecessor = Some(end.id);
+            end.id = Uuid::new_v4();
+            end.state = state;
+            end.evidence = Some(evidence.into());
+            records.push(sign(&config, &end).unwrap());
+        }
+        let mut retry = end.clone();
+        retry.predecessor = Some(end.id);
+        retry.id = Uuid::new_v4();
+        retry.token = Uuid::new_v4();
+        retry.state = State::Retry;
+        retry.evidence = None;
+        records.push(sign(&config, &retry).unwrap());
+        assert_eq!(chain(&f.hub, "PR-7", &records, &roster).is_ok(), admitted);
+        if admitted {
+            retry.state = State::Reserved;
+            *records.last_mut().unwrap() = sign(&config, &retry).unwrap();
+            assert!(chain(&f.hub, "PR-7", &records, &roster).is_err());
+        }
+    }
+}
