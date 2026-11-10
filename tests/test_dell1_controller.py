@@ -279,7 +279,7 @@ class GateAndShell(unittest.TestCase):
                 gate = c.Gate(endpoint, os.getuid(), lambda: None)
             self.addCleanup(gate.close)
             hook = ROOT / 'scripts/runner/job-gate.py'
-            env = dict(os.environ, AIDA_CI_GATE=str(endpoint))
+            env = {'PATH': '/usr/bin:/bin', 'AIDA_CI_GATE': str(endpoint)}
             wrapper = (ROOT / 'scripts/runner/job-gate.sh').read_text().replace(
                 '/usr/local/libexec/aida-ci-job-gate.py', str(hook))
             self.assertEqual(subprocess.run(['bash', '-c', wrapper], env=env, timeout=5).returncode, 0)
