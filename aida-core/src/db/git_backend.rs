@@ -2787,7 +2787,10 @@ impl GitBackend {
                         if weight != current.weight {
                             changes.push(crate::models::FieldChange {
                                 field_name: "weight".into(),
-                                old_value: current.weight.map(|w| w.to_string()).unwrap_or_default(),
+                                old_value: current
+                                    .weight
+                                    .map(|w| w.to_string())
+                                    .unwrap_or_default(),
                                 new_value: weight.map(|w| w.to_string()).unwrap_or_default(),
                             });
                             next.weight = weight;
