@@ -2,8 +2,14 @@
 //! Extracted verbatim from `main.rs` (SPIKE-78 pure-movement refactor).
 
 use crate::cli::{DocCommand, DocsCommand};
-use crate::*;
+use crate::{
+    docs, find_project_root, find_uncovered_completed_specs, git_describe_latest_tag,
+    handle_doc_suggest, parse_tag_list, record_role_activity, render_discipline_glossary,
+    resolve_description,
+};
+use aida_core::DatabaseBackend;
 use aida_core::RequirementsStore;
+use aida_core::{RelationshipType, RequirementStatus, RequirementType, Storage};
 use anyhow::Result;
 use colored::Colorize;
 
@@ -569,7 +575,6 @@ fn run_docs(
     matches: &clap::ArgMatches,
     ctx: &crate::cmdkit::DispatchCtx,
 ) -> anyhow::Result<crate::cmdkit::Flow> {
-    use crate::*;
     let args = <DocsArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
     // The sweep reads the working tree and git, not the requirements graph,
     // so it runs the same under every store backend. trace:STORY-2220 | ai:claude
@@ -651,7 +656,6 @@ fn run_doc(
     matches: &clap::ArgMatches,
     ctx: &crate::cmdkit::DispatchCtx,
 ) -> anyhow::Result<crate::cmdkit::Flow> {
-    use crate::*;
     let args = <DocArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
     match &ctx.store {
         None => Ok(crate::cmdkit::Flow::Continue),

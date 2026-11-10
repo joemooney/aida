@@ -3,7 +3,13 @@
 //! (SPIKE-78 / STORY-771; pure movement, no behavior change).
 // trace:STORY-771 | ai:claude
 
-use crate::*;
+use crate::{
+    active_lease_for_cwd, ahead_behind_vs_ref, change_lookup_for_branch, current_branch_at,
+    drain_state, find_main_worktree_root, orchestrator, session_manifest, state_snapshot,
+    upstream_ref_for, OrchestratorCommand,
+};
+use anyhow::Result;
+use colored::Colorize;
 
 // trace:STORY-1728 | ai:claude
 #[path = "orchestrator_cmd_args.rs"]
@@ -319,7 +325,7 @@ fn run_state_snapshot(
     matches: &clap::ArgMatches,
     ctx: &crate::cmdkit::DispatchCtx,
 ) -> anyhow::Result<crate::cmdkit::Flow> {
-    use crate::*;
+    use crate::{handle_state_snapshot_command, StateSnapshotArgs};
     let args = <StateSnapshotArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
     match &ctx.store {
         None => Ok(crate::cmdkit::Flow::Continue),
