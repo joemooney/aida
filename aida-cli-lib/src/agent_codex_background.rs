@@ -1184,10 +1184,10 @@ fn build_worker_exec(
     grant_id: &str,
     mail_wake: agent_registry::MailWake,
 ) -> Result<WorkerExec> {
+    let vendor = "codex";
     let (ceiling_key, ceiling_value) =
         crate::burndown_run::bg_wait_ceiling_env(Some(&plan.project_root));
-    let passthrough =
-        crate::agent_config::load_vendor_env_passthrough(&plan.project_root, "codex")?;
+    let passthrough = crate::agent_config::load_vendor_env_passthrough(&plan.project_root, vendor)?;
     let mut command = std::process::Command::new(binary);
     command
         .current_dir(&plan.launch_cwd)
@@ -1203,7 +1203,7 @@ fn build_worker_exec(
             "AIDA_CONTAINMENT_POSTURE",
             agent_containment_posture(config),
         )
-        .env("AIDA_AGENT_TYPE", "codex")
+        .env("AIDA_AGENT_TYPE", vendor)
         .env("AIDA_AGENT_NAME", &plan.name)
         .env("AIDA_USER", &plan.name)
         .env("AIDA_PROJECT_ROOT", &plan.project_root)
