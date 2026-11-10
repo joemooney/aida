@@ -18,7 +18,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-08T02:58:08.667753563Z
-modified_at: 2026-11-08T13:09:39.758102122Z
+modified_at: 2026-11-10T00:07:03.891852616Z
 req_type: Story
 tags:
 - area:human-wait
@@ -495,6 +495,13 @@ comments:
   created_at: 2026-11-08T13:09:39.758102122Z
   modified_at: 2026-11-08T13:09:39.758102122Z
   session_id: 01a1b9af-8230-75d2-82f8-667491cc010a
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a1c2c7-9bd3-76e0-8e6c-2040d1456cf1
+  author: joe
+  content: 'ADVISOR RULING (2026-11-10 00:15 UTC): implementation slice 1 of the signed sketch docs/plans/2026-11-08-story-2661-park-resume-sketch.md, following its ''Implementation and verification after signoff'' order: the durable runtime record (canonical question identity schema, parked-work-is-live-work records) and its reconciliation only, with the sketch''s tests for record persistence, restart at each write boundary and legacy question migration. No exit handshake, answer dispatch or vendor adapters in this slice. Use (Refs STORY-2661).'
+  created_at: 2026-11-10T00:07:03.891852616Z
+  modified_at: 2026-11-10T00:07:03.891852616Z
+  session_id: 01a1beff-fc3b-78e2-93e2-9b0c283b0339
   harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1b9c5-1aa6-78e3-9355-9af12a0ce44c
