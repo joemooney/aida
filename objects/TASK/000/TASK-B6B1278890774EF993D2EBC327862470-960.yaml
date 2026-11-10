@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T23:39:41.575597Z
-modified_at: 2026-11-10T14:01:32.311078578Z
+modified_at: 2026-11-10T22:30:44.765980341Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -639,6 +639,13 @@ comments:
   created_at: 2026-11-10T14:01:32.311078578Z
   modified_at: 2026-11-10T14:01:32.311078578Z
   session_id: 01a1c530-c917-7f13-ab81-f6b5e1d1cd30
+  harness_version: 2.1.322 (Claude Code)
+- id: 01a1c795-c91d-76f1-9776-a1156e2f4909
+  author: joe
+  content: 'ADVISOR BRIEF batch 4 (2026-11-10 15:30 MST): replace ''use crate::*;'' with explicit imports in EXACTLY these 5 files, which no open PR touches: aida-cli-lib/src/agent_launch.rs, phase_driver_trait.rs, pr_cmd.rs, role.rs, session_start.rs. Do NOT touch the 8 held files (ci_probe, config_cmd, db_reconcile, merge_hold_cmd, pr_list, status_prs, status_sections, upgrade_release); they are batch 5 after their PRs land. Mechanical only: no behavior change, no renames. LIGHT gate: cargo check --profile agent -p aida-cli-lib --tests via the lane runner, then make check-ci-fast. Commit subject: [AI:codex] refactor(crate-split): explicit imports batch 4 (Refs TASK-3428).'
+  created_at: 2026-11-10T22:30:44.765980341Z
+  modified_at: 2026-11-10T22:30:44.765980341Z
+  session_id: 01a1c70f-d731-7b70-acf8-e9ab3d288fca
   harness_version: 2.1.322 (Claude Code)
 history:
 - id: 01a1b862-2e0b-7a50-a4d0-25097c707b57
