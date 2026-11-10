@@ -6706,8 +6706,8 @@ fn agent_launch_context(
         "native" => session::ContainmentPosture::Native,
         _ => session::ContainmentPosture::None,
     };
-    Ok(crate::launch::LaunchContext::resolve(
-        crate::launch::LaunchRequest {
+    Ok({
+        let req = crate::launch::LaunchRequest {
             vendor,
             kind,
             program,
@@ -6718,8 +6718,11 @@ fn agent_launch_context(
             set_cwd: true,
             // trace:TASK-2032 | ai:claude
             host_main: host_main.map(std::path::Path::to_path_buf),
-        },
-    )?)
+        };
+        // trace:STORY-2538 | ai:codex
+        let exec = crate::session::capture_launch_exec(&req.cwd, req.host_main.as_deref())?;
+        crate::launch::LaunchContext::resolve(&exec, req)
+    }?)
 }
 
 // trace:BUG-2006 | ai:antigravity
