@@ -2140,6 +2140,13 @@ pub(crate) fn headless_waiting_rule_suffix(role: &str) -> String {
     } else {
         "result"
     };
+    // trace:STORY-2697 | ai:codex
+    let reviewer_ci_contract = if role.eq_ignore_ascii_case("reviewer") {
+        "\n\nReviewer CI contract: approve a defect-free head while CI is pending; \
+         WAITING only for independent evidence or a named test the judgment depends on."
+    } else {
+        ""
+    };
     format!(
         "\n\nHEADLESS WAITING RULE: AIDA_HEADLESS=1 means there is no next \
          conversational turn. Never end your turn waiting for a notification, \
@@ -2148,7 +2155,7 @@ pub(crate) fn headless_waiting_rule_suffix(role: &str) -> String {
          tool call) and print the current state each step so stream-json emits \
          progress for the watchdog. If the wait would exceed the phase's \
          remaining budget, write the {artifact} with the current wait state and \
-         exit instead."
+         exit instead.{reviewer_ci_contract}"
     )
 }
 
@@ -4287,6 +4294,19 @@ pub(crate) fn handle_queue_work(
                 )?;
             }
 
+            // trace:STORY-2705 | ai:codex — before worktree/queue mutation.
+            if role == "reviewer" {
+                if let Some((forge, n)) = plan.review_target {
+                    if let Some(reason) = crate::review_implementer_gate::deferred(
+                        &project_root,
+                        n,
+                        forge == ReviewForge::GitLab,
+                    )? {
+                        anyhow::bail!("{reason}");
+                    }
+                }
+            }
+
             // trace:STORY-1662 | ai:claude
             // trace:STORY-2660 | ai:codex
             if standalone_implementer {
@@ -4630,14 +4650,6 @@ pub(crate) fn handle_queue_work(
     }
     if no_human {
         prompt.push_str(&headless_waiting_rule_suffix(&role));
-        if role.eq_ignore_ascii_case("reviewer") {
-            prompt.push_str(
-                "\n\nReviewer CI contract: gate on PR CI, but do not gate on the \
-                 nightly cross-platform workflow unless the spec acceptance \
-                 explicitly names it; when it does, poll by the bounded-step \
-                 rule above.",
-            );
-        }
     }
 
     // STORY-281: reviewer pre-flight stale-base check. Fires whenever the
@@ -6655,7 +6667,23 @@ pub(crate) fn run_standalone_reviewer(
     // every ship until someone commits by hand. trace:BUG-2180 | ai:claude
     store_commit.commit();
 
-    let pr_spec_ids: Vec<String> = fetch_pr_ship_metadata_via_gh(project_root, pr)
+    let pr_spec_ids: Vec<String> = fetch_pr_ship_metadata_via_forge(project_root, pr)
+        // trace:BUG-2515 | ai:codex
+        // Standalone PR reviewers can lack local forge configuration (for
+        // example in a scratch launch root). Preserve their GitHub recovery
+        // lookup without redirecting a configured GitLab MR to GitHub.
+        .or_else(|err| {
+            if crate::forge::resolve_forge_kind(project_root) != crate::forge::ForgeKind::None {
+                return Err(err);
+            }
+            crate::forge::forge_for_kind(project_root, crate::forge::ForgeKind::GitHub)
+                .change_title_and_body(pr)
+                .map(|(title, body)| crate::pr_cmd::PrShipMetadata {
+                    title,
+                    body,
+                    number: Some(pr),
+                })
+        })
         .map(|meta| review_calibration_spec_ids(project_root, &meta.title, branch, &meta.body))
         .unwrap_or_default();
 

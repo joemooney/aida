@@ -10,6 +10,8 @@ fn plain_plan(dir: std::path::PathBuf) -> BootstrapPlan {
         forge: None,
         github_repo: None,
         gitlab: None,
+        gitlab_enable_ci: false,
+        gitlab_runner_tags: Vec::new(),
     }
 }
 
@@ -260,6 +262,56 @@ fn bootstrap_flags_require_the_positional_dir() {
         "--public"
     ])
     .is_ok());
+}
+
+// trace:STORY-2700 | ai:codex
+#[test]
+fn story_2700_bootstrap_child_preserves_workspace() {
+    use clap::Parser;
+    crate::command_registry::try_parse_from(["aida", "init", "my-project", "--git-init"])
+        .expect("the workspace refusal's suggested command must parse");
+    let _guard = crate::test_env::EnvVarsGuard::set(&[
+        ("GIT_AUTHOR_NAME", "aida-test"),
+        ("GIT_AUTHOR_EMAIL", "aida-test@example.invalid"),
+        ("GIT_COMMITTER_NAME", "aida-test"),
+        ("GIT_COMMITTER_EMAIL", "aida-test@example.invalid"),
+    ]);
+    let parent = tempfile::tempdir().unwrap();
+    for n in 0..100 {
+        let sibling = parent.path().join(format!("existing-{n}"));
+        std::fs::create_dir_all(sibling.join(".git")).unwrap();
+        std::fs::write(sibling.join("keep.txt"), "existing content").unwrap();
+    }
+    for name in ["new-project", "empty-project"] {
+        let dir = parent.path().join(name);
+        if name == "empty-project" {
+            std::fs::create_dir(&dir).unwrap();
+        }
+        let plan = plain_plan(dir.clone());
+        preflight(&plan).unwrap();
+        create_and_scaffold(&plan).unwrap();
+        assert!(dir.join(".git").is_dir());
+        let root = std::process::Command::new("git")
+            .args(["rev-parse", "--show-toplevel"])
+            .current_dir(&dir)
+            .output()
+            .unwrap();
+        assert!(root.status.success());
+        assert_eq!(
+            std::path::Path::new(String::from_utf8_lossy(&root.stdout).trim()),
+            dir.canonicalize().unwrap()
+        );
+    }
+    assert!(!parent.path().join(".git").exists());
+    assert!(!parent.path().join(".aida").exists());
+    for n in 0..100 {
+        let sibling = parent.path().join(format!("existing-{n}"));
+        assert_eq!(
+            std::fs::read_to_string(sibling.join("keep.txt")).unwrap(),
+            "existing content"
+        );
+        assert!(!sibling.join(".aida").exists());
+    }
 }
 
 #[test]

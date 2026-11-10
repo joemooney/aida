@@ -102,7 +102,7 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
         else {
             return;
         };
-        let body = fetch_pr_ship_metadata_via_gh(&self.project_root, change.id)
+        let body = fetch_pr_ship_metadata_via_forge(&self.project_root, change.id)
             .map(|meta| meta.body)
             .unwrap_or_default();
         if !queue_cmd::rework_pr_head_matches_spec(
@@ -4321,21 +4321,26 @@ pub(crate) fn build_phase_driver_ci_fix_command(
         }
         cmd
     } else {
-        let ctx = crate::launch::LaunchContext::resolve(crate::launch::LaunchRequest {
-            vendor: crate::launch::context::launch_vendor(vendor),
-            kind: aida_core::launch_policy::LaunchKind::Fresh,
-            program: program.into(),
-            // Trusted output of session::headless_vendor_args (including
-            // posture flags and a prompt), not a default_flags/template tail.
-            // Caller configuration flags must be validated before this builder.
-            args: headless_vendor_args.to_vec(),
-            tail: Vec::new(),
-            posture,
-            cwd: worktree.to_path_buf(),
-            set_cwd: true,
-            // Native/None constructors do not cross the AIDA boundary.
-            host_main: None,
-        })?;
+        let ctx = {
+            let req = crate::launch::LaunchRequest {
+                vendor: crate::launch::context::launch_vendor(vendor),
+                kind: aida_core::launch_policy::LaunchKind::Fresh,
+                program: program.into(),
+                // Trusted output of session::headless_vendor_args (including
+                // posture flags and a prompt), not a default_flags/template tail.
+                // Caller configuration flags must be validated before this builder.
+                args: headless_vendor_args.to_vec(),
+                tail: Vec::new(),
+                posture,
+                cwd: worktree.to_path_buf(),
+                set_cwd: true,
+                // Native/None constructors do not cross the AIDA boundary.
+                host_main: None,
+            };
+            // trace:STORY-2538 | ai:codex
+            let exec = crate::session::capture_launch_exec(&req.cwd, req.host_main.as_deref())?;
+            crate::launch::LaunchContext::resolve(&exec, req)
+        }?;
         crate::launch::spawn_agent(&ctx)?
     };
     cmd.current_dir(worktree)
