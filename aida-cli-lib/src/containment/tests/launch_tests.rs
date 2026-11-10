@@ -2169,20 +2169,24 @@ print('signal storm exactly once and SIGPIPE ok')
 // trace:TASK-2708 | ai:codex
 #[test]
 fn task_2708_live_host_udp_named_send_refused() {
-    if !live_available() {
-        return;
-    }
+    // trace:STORY-2695 | ai:codex
+    assert!(
+        live_available(),
+        "UDP containment precondition unmet: live sandbox unavailable"
+    );
     let script = r#"
 import socket,os,array,errno,signal
 signal.alarm(15)
 with socket.socket(socket.AF_UNIX,socket.SOCK_STREAM) as ipc:
     ipc.connect(os.environ['HOME']+'/host-fd.sock')
     port,anc,_,_=ipc.recvmsg(64,socket.CMSG_SPACE(4))
-    assert len(anc)==1
+    assert len(anc)==1, "UDP control precondition unmet: missing SCM_RIGHTS"
     level,kind,data=anc[0]
     assert (level,kind)==(socket.SOL_SOCKET,socket.SCM_RIGHTS)
     fds=array.array('i');fds.frombytes(data)
+    assert len(fds)==1, 'UDP control precondition unmet: expected one descriptor'
     with socket.socket(fileno=fds[0]) as host:
+        assert host.type==socket.SOCK_DGRAM and host.getsockname()[1]!=0, 'UDP control precondition unmet: descriptor is not bound UDP'
         try:
             host.sendto(b'bypass',('127.0.0.1',int(port)))
             raise AssertionError('host netns named send allowed')
@@ -2196,6 +2200,7 @@ import socket,array,sys,signal
 signal.alarm(20)
 with socket.socket(socket.AF_UNIX,socket.SOCK_STREAM) as ipc, socket.socket(socket.AF_INET,socket.SOCK_DGRAM) as sender, socket.socket(socket.AF_INET,socket.SOCK_DGRAM) as receiver:
     ipc.bind(sys.argv[1]);ipc.listen(1)
+    sender.bind(('127.0.0.1',0))
     receiver.bind(('127.0.0.1',0));receiver.settimeout(0.3)
     port=receiver.getsockname()[1]
     sender.sendto(b'control',('127.0.0.1',port));assert receiver.recv(64)==b'control'
@@ -2221,7 +2226,14 @@ with socket.socket(socket.AF_UNIX,socket.SOCK_STREAM) as ipc, socket.socket(sock
     std::io::BufReader::new(host.stdout.take().unwrap())
         .read_line(&mut ready)
         .unwrap();
-    assert_eq!(ready, "ready\n");
+    if ready != "ready\n" {
+        let result = host.wait_with_output().unwrap();
+        panic!(
+            "UDP positive control precondition unmet (bind/send/receive): {}: {}",
+            result.status,
+            String::from_utf8_lossy(&result.stderr)
+        );
+    }
     let mut output = tempfile::tempfile().unwrap();
     plan.command.stderr(output.try_clone().unwrap());
     let mut run = plan.spawn(output.try_clone().unwrap().into()).unwrap();
