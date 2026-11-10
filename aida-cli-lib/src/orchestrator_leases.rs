@@ -1,8 +1,31 @@
 //! Orchestrated phase-1 workspace, lease receipts and child refusals, implementer phase args, implementer branch push and orchestrator PR open (STORY-1488 slice 1)
 // trace:STORY-1488 | ai:claude
 
-use crate::*;
+use crate::probe_branch_on_origin;
+use crate::process_retry::RetryEtxtbsy;
+use crate::BranchOriginProbe;
+use crate::{
+    acceptance_command_policy_global, aida_bin, auto_complete, branch_commits_ahead_main,
+    capture_review_calibration_for_spec, drain_next_n, drain_signal,
+    enrich_no_verdict_with_headless_diagnostic, ensure_pr_publication_spec_attribution, evaluator,
+    exit_signal, external_cmd, find_scope_lease_conflict, git_arg_guard, graded_review,
+    humanize_secs_short, implementer_preflight, lease_path, leases_dir, list_leases,
+    load_store_for_lookup, orchestrator, phase3_head_archive_fallback, pr_head_sha_best_effort,
+    pr_rebase, pr_ship, process_probe, queue_cmd, release_dead_phase_predecessor_leases,
+    repo_review_optin_present, resolve_default_branch_ref, resolve_pickup_workspace,
+    sanitize_gate_file_token, session, session_manifest, sibling_verdict_sweep_for_phase3,
+    spec_verdict_fallback_for_phase3, AgentGateConfig, AutonomyMode, LeasePeek, Phase1PrResolve,
+    PhaseWatchdog, RealPhaseDriver, SessionLease,
+};
+use crate::{
+    aida_exe_path, forge, leases, pr_ship_post_merge_aida_exe, resolve_aida_exe, run, worktree,
+    write_implementer_complete_banner, OpenPrInfo,
+};
 use aida_core::git_ops::RemoteCredentialsExt as _;
+use aida_core::Storage;
+use aida_core::{write_atomic, RequirementStatus};
+use anyhow::{Context, Result};
+use colored::Colorize;
 
 /// BUG-1629: the workspace phase 1 launches. `fresh` marks a branch the
 /// pickup resolver chose as free that has not been launched yet; see

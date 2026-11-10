@@ -2,7 +2,20 @@
 //! session prune/show/handoff/manifest and queue-work launch helpers (STORY-1488 slice 1)
 // trace:STORY-1488 | ai:claude
 
-use crate::*;
+use crate::canonical_role_name;
+use crate::process_retry::RetryEtxtbsy;
+use crate::{
+    aida_exe_path, drain_lock, find_lease_by_id_prefix, find_project_root, force_cleanup_lease,
+    humanize_age_secs, humanize_relative, humanize_size, lease_covers_cwd, lease_has_durable_owner,
+    lease_path, list_leases, load_session_activity, load_store_for_lookup, main_worktree_root_from,
+    parent_project_root_for_session, probe_dangling_claudes_at_path,
+    probe_live_claudes_in_worktree, process_probe, seat_rotation, session, session_manifest,
+    shell_quote, PruneCandidate, QueueWorkPlan, SessionLease, SessionManifestCommand,
+};
+use aida_core::{RequirementStatus, Storage};
+use anyhow::{Context, Result};
+use colored::Colorize;
+use std::io::IsTerminal;
 
 pub(crate) fn session_prune_orphans(dry_run: bool, yes: bool) -> Result<()> {
     let home = crate::home_dir().context("HOME not set; cannot locate Claude project dir")?;
