@@ -1,0 +1,21 @@
+id: 01a1c36b-7dbb-7153-92ff-ec19a874ed67
+spec_id: STORY-b6b1278890774ef993d2ebc327862470-623
+agreed_id: STORY-2700
+title: aida init can create a new project in a named subdirectory of a workspace directory
+description: Reported from operator's work machine (Codex, GitLab project hello-work-0x), 2026-11-09. Running 'aida init --git-init' in a directory holding 100 child projects refuses (correctly) with a workspace warning, but there is no direct way to create a new project as a subdirectory. Add 'aida init <dir>' (create the directory if absent, git init it with --git-init, and initialize there), and make the workspace refusal suggest it with the exact command.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-10T03:06:04.091362856Z
+modified_at: 2026-11-10T03:06:04.091362856Z
+req_type: Story
+filed_at:
+  code_sha: 838f14c3c2811c6b63da5d465700cff773c36190
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 838f14c3c28
+  vendor: claude
+  session: 01a1beff-fc3b-78e2-93e2-9b0c283b0339
+  harness_version: 2.1.319 (Claude Code)
