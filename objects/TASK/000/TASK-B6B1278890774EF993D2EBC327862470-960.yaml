@@ -3,12 +3,12 @@ spec_id: TASK-b6b1278890774ef993d2ebc327862470-960
 agreed_id: TASK-3428
 title: 'Crate-split PR4: explicit imports instead of use crate::* in non-in-flight files, a glob-import ratchet, dissolve lib_part1..6.rs, and relocate-ledger-paths.py'
 description: 'Per SPIKE-713 deep dive section 7 row 4 and advisor rulings 3 and 8 (2026-11-07). Acceptance: (1) replace use crate::*; with explicit imports in every file not owned by an in-flight spec (section 7 list; about 85 of 104), no behavior change; (2) a ratchet (same shape as scripts/check-exec-context.py) forbids new glob crate imports, wired into make check-ci-fast and CI gates; (3) lib_part1..6.rs (lib.rs:772-777) dissolved into real modules, closing the TASK-1538 condition; (4) scripts/relocate-ledger-paths.py rewrites path-keyed ledgers (including scripts/portability-allowlist.txt and exec-context-legacy.json) for pure moves, with a test; (5) make check-ci-fast green. Split into two PRs if over ~40 files.'
-status: InProgress
+status: NeedsAttention
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T23:39:41.575597Z
-modified_at: 2026-11-10T22:30:44.765980341Z
+modified_at: 2026-11-10T22:47:34.982215374Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -1223,6 +1223,15 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1c7a5-3346-72b1-ad0d-634b0db24507
+  author: dirtlab
+  timestamp: 2026-11-10T22:47:34.982225052Z
+  session_id: 01a1c79cec17
+  harness_version: codex-cli 0.167.0
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 test_coverage_notes: 'Round 14 validation passed: launcher command_registry suite 32 executed tests / 0 failures (j20261109T002347723-110306-0), launcher no-default-features aida-cli check exit 0 (j20261109T002353591-110846-0), 17 Python tooling fixtures, glob ratchet vs origin/main at 181, ExecContext 1239 sites, store-writer 3406 sinks / 293 mappings, 84 CI gate classifications, portability guard/growth, retained Rust formatting and diff hygiene. Prospective PR exactly 40 files; all 12 deferred modules match pre-batch contents. Reviewed-head CI at 4e32c5de630 passed all seven shards and aggregate Build; final published head still requires CI and independent re-review. Full make check-ci-fast remains host validation under runner-only Cargo policy. Codegraph unreachable. Handoff: /tmp/task-3428-round14-handoff.md.'
 implementation_summary: 'Round 14 scope correction restores the 12-module batch from 4e32c5de630 to pre-batch contents and restores its 12 ledger rows (18 imports), reducing PR #3695 to 40 files: 37 modules, two test files and ledger. Remaining glob debt is 181. Deferred changes remain in branch history and /tmp/task-3428-round14-deferred-imports.patch for a separate Refs PR, with import-source and module-trace polish required there. Removed code contains all findings 3-5. Corrected PR title to 37 modules. Refs host publication declaration recorded; no local commit, push, merge or queue completion. TASK-3428 remains In Progress; remaining imports and lib_part dissolution are later slices.'
 filed_at:
@@ -1234,3 +1243,9 @@ filed_at:
   vendor: claude
   session: 01a1b848-940b-7bd2-8acd-52e428b182b8
   harness_version: 2.1.319 (Claude Code)
+attention_reason:
+  category: ambiguous-spec
+  detail: 'Batch 4 five-file import-only patch is ready and lane cargo check --profile agent -p aida-cli-lib --tests passed (j20261110T224418644-2-0). LIGHT gate cannot pass within current instructions: scripts/check-crate-globs.py requires pruning exactly five entries (six globs) from scripts/crate-globs-legacy.json, but advisor brief authorizes exactly five Rust files. make check-ci-fast also invokes direct cargo check -p aida-tui --all-targets; stopped to honor runner-only Cargo policy. Need host decision on ledger scope and host execution/routing of fast gate. No held files changed; no commit or publication from native seat.'
+  lean: Authorize only the mechanical five-entry ledger prune as a sixth file, and run the fast gate on the host; retain the requested Refs publication subject.
+  raised_by: implementer
+  raised_at: 2026-11-10T22:47:34.982215374Z
