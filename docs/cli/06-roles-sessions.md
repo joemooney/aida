@@ -1044,8 +1044,16 @@ a PID disappears or is reused. When the dispatcher observes queue work exit
 unsuccessfully (a stale-base or intermediate-only refusal, a reviewer lease
 already held, or a launch-boundary revalidation failure), it records the
 attempt as exited with the last line of its log. That frees the slot, the head
-is not relaunched, and a later head dispatches normally. The parent records
-each dispatcher's process identity; if a dispatcher exits before claiming its
+uses the existing bounded setup retry policy, and a later head dispatches normally.
+A review that ends without a verdict for its head retries after 60 seconds,
+then 120 seconds, with at most three attempts per head. Retry counts and
+backoff deadlines survive watcher restarts; a new head resets them. Exhaustion
+names the change, head and last diagnostic in `aida advisor loops status`.
+Inspect the logs and use `aida review watch --release PR-N` (or `MR-N`) for
+operator recovery. Live or ambiguous descendants still prevent a retry.
+<!-- trace:BUG-2518 | ai:codex -->
+
+The parent records each dispatcher's process identity; if a dispatcher exits before claiming its
 reservation (a refused grant, an unusable store, a timed-out claim), any
 watcher, including a restarted one, records the reservation as exited and
 frees its slot. Only a dispatcher lost after claiming, before recording an

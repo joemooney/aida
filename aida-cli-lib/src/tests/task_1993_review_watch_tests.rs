@@ -1485,6 +1485,8 @@ fn task1993_state_stays_bounded_far_past_one_thousand_changes() {
                             setup_retry: false,
                             retryable_fetch: false,
                             fetch_failures: 0,
+                            no_verdict_attempts: 0,
+                            no_verdict_retry_at: None,
                             reviewer: None,
                             pgid: None,
                             supersede: None,
@@ -2977,4 +2979,130 @@ fn review_watch_four_reviews_share_persisted_capacity() {
         select(&store, &change(5, 5, false), None, 4).unwrap(),
         Action::Skip(reason) if reason.contains("global reviewer capacity (4)")
     ));
+}
+
+// trace:BUG-2518 | ai:codex
+#[test]
+fn bug2518_no_verdict_backoff_cap_and_new_head() {
+    for phase in [Phase::Exited, Phase::Completed] {
+        let (_temp, store) = fixture();
+        let c = change(1, 1, false);
+        let mut attempt = dispatch(select(&store, &c, None, 2).unwrap());
+        for count in 1..=3 {
+            store
+                .transaction("PR-1", |state| {
+                    let a = attempt_mut(state, "PR-1", &attempt.token).unwrap();
+                    a.phase = phase.clone();
+                    let mut dead = Identity::current()?;
+                    dead.boot = "previous-boot".into();
+                    a.identity = Some(dead);
+                    a.diagnostic = Some("reviewer ended without recording".into());
+                    Ok(())
+                })
+                .unwrap();
+            let Action::Skip(reason) = select(&store, &c, None, 2).unwrap() else {
+                panic!("retry must be delayed or capped");
+            };
+            if count == 3 {
+                assert!(reason.contains("three review attempts"), "{reason}");
+                let blockers = service::retry_blockers(&store.root, &store.dir).unwrap();
+                assert_eq!(blockers.len(), 1);
+                assert!(blockers[0].contains("PR-1:") && blockers[0].contains("reviewer ended"));
+                assert!(
+                    no_verdict_blocker(&store.load().unwrap().entries["PR-1"].attempts[0])
+                        .is_some()
+                );
+                break;
+            }
+            assert!(reason.contains("retry after"), "{reason}");
+            assert!(probe_unneeded_with_coverage(&store, &c, || None)
+                .unwrap()
+                .is_none());
+            store
+                .transaction("PR-1", |state| {
+                    attempt_mut(state, "PR-1", &attempt.token)
+                        .unwrap()
+                        .no_verdict_retry_at =
+                        Some(chrono::Utc::now() - chrono::Duration::seconds(1));
+                    Ok(())
+                })
+                .unwrap();
+            let reopened = Store::open(&store.root, &store.load().unwrap().repository).unwrap();
+            attempt = dispatch(select(&reopened, &c, None, 2).unwrap());
+            assert_eq!(attempt.no_verdict_attempts, count + 1);
+        }
+        let fresh = dispatch(select(&store, &change(1, 2, false), None, 2).unwrap());
+        assert_eq!(fresh.no_verdict_attempts, 0);
+    }
+}
+
+// trace:BUG-2518 | ai:codex
+#[test]
+fn bug2518_retry_preserves_capacity_and_verdict_gates() {
+    let (_temp, store) = fixture();
+    let c = change(1, 1, false);
+    let attempt = dispatch(select(&store, &c, None, 1).unwrap());
+    store
+        .transaction("PR-1", |state| {
+            let a = attempt_mut(state, "PR-1", &attempt.token).unwrap();
+            a.phase = Phase::Exited;
+            a.no_verdict_retry_at = Some(chrono::Utc::now() - chrono::Duration::seconds(1));
+            a.reviewer_spawning = true;
+            Ok(())
+        })
+        .unwrap();
+    assert!(
+        matches!(select(&store, &c, None, 1).unwrap(), Action::Skip(reason)
+        if reason.contains("unfinished review processes"))
+    );
+    store
+        .transaction("PR-1", |state| {
+            attempt_mut(state, "PR-1", &attempt.token)
+                .unwrap()
+                .reviewer_spawning = false;
+            Ok(())
+        })
+        .unwrap();
+    let other = change(2, 2, false);
+    let held = dispatch(select(&store, &other, None, 1).unwrap());
+    for _ in 0..3 {
+        assert!(
+            matches!(select(&store, &c, None, 1).unwrap(), Action::Skip(reason)
+            if reason.contains("global reviewer capacity"))
+        );
+        assert_eq!(
+            store.load().unwrap().entries["PR-1"].attempts[0].no_verdict_attempts,
+            1
+        );
+    }
+    store
+        .transaction("PR-2", |state| {
+            attempt_mut(state, "PR-2", &held.token).unwrap().phase = Phase::Failed;
+            Ok(())
+        })
+        .unwrap();
+    let retried = dispatch(select(&store, &c, None, 1).unwrap());
+    assert_eq!(retried.no_verdict_attempts, 2);
+    let verdicts = Directory::open(&store.runtime.path().join("review-verdicts")).unwrap();
+    write_verdict(
+        &verdicts.path().join("PR-1.json"),
+        &verdict_json(&c.head, "approved"),
+    );
+    store
+        .transaction("PR-1", |state| {
+            attempt_mut(state, "PR-1", &retried.token).unwrap().phase = Phase::Exited;
+            Ok(())
+        })
+        .unwrap();
+    assert!(matches!(
+        select(&store, &c, None, 1).unwrap(),
+        Action::Skip(_)
+    ));
+    assert!(probe_unneeded_with_coverage(&store, &c, || None)
+        .unwrap()
+        .is_some());
+    assert_eq!(
+        store.load().unwrap().entries["PR-1"].attempts[0].no_verdict_attempts,
+        2
+    );
 }
