@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-10T03:07:46.884496242Z
-modified_at: 2026-11-10T21:24:32.910766092Z
+modified_at: 2026-11-10T21:24:34.217388545Z
 req_type: Bug
 comments:
 - id: 01a1c4af-2f66-7590-be69-dad5e180b9a4
@@ -203,6 +203,21 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Full sweep: incomplete GitLab ownership fields can grant absence; latest advisor matching prescription remains unresolved. CI pending. BUG-2516 (bug protocol): met, two test files touched.. No triage reason was given.'
   created_at: 2026-11-10T21:24:32.910760270Z
   modified_at: 2026-11-10T21:24:32.910760270Z
+  session_id: 01a1c530-c917-7f13-ab81-f6b5e1d1cd30
+  harness_version: 2.1.322 (Claude Code)
+- id: 01a1c759-3264-7561-b6eb-2c1dadb37aaa
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (BUG-2516):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 8d2e0a5b6687
+    Recorded: 2026-11-10T21:21:50.207028299+00:00
+    Findings:
+    1. [P2] aida-cli-lib/src/forge.rs:3900-3901: Reject incomplete GitLab ownership fields before declaring NoChange. Missing description is normalized to empty; absent/null/non-string source_branch is silently treated as empty by parse_open_change_rows. A row with iid=2, title=other, source_branch=other, state=opened but no description returns Clear despite missing potential ownership evidence; similarly an absent branch loses branch-only ownership. Two incomplete responses permit premature completion. Accept explicit null description as empty, reject absent/invalid descriptions and absent/null/non-string branches as unavailable, and add fake-glab preservation regressions plus valid-null-description coverage.
+    2. [P2] aida-cli-lib/src/forge.rs:3909-3911: Resolve matching semantics against the latest binding advisor ruling https://github.com/joemooney/aida/pull/3774#issuecomment-6766672762. It explicitly requires case-insensitive spec-ID containment in title, description OR source_branch. parse_open_change_rows instead requires completion-credit syntax or branch token boundaries, discarding an open MR titled follow-up for BUG-2516 with empty description and branch follow-up, allowing premature completion under that prescription. This follows the earlier prose-only exclusion ruling but conflicts with the later exact prescription. Implement the later matching and update regressions, or obtain an explicit advisor amendment reconciling the rules before approval.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-10T21:24:34.020688926Z
+  modified_at: 2026-11-10T21:24:34.020688926Z
   session_id: 01a1c530-c917-7f13-ab81-f6b5e1d1cd30
   harness_version: 2.1.322 (Claude Code)
 history:
