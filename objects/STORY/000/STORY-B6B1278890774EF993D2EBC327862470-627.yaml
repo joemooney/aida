@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-10T03:52:00.571796159Z
-modified_at: 2026-11-10T11:56:49.000043254Z
+modified_at: 2026-11-10T13:59:04.344576357Z
 req_type: Story
 comments:
 - id: 01a1c399-6840-7383-843e-9930f6eaa3f7
@@ -200,6 +200,10 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a1c5c1-5642-7a22-ab6e-dce447d475e6
+  author: joe
+  timestamp: 2026-11-10T13:59:04.514259260Z
+  changes: []
 filed_at:
   code_sha: 838f14c3c2811c6b63da5d465700cff773c36190
   branch: main
@@ -213,7 +217,7 @@ failure_reason:
   phase: reviewer
   phase_index: 3
   kind: verdict:request-changes
-  detail: 'Full sweep: two unchanged source defects violate required forge-read and protected-gate ratchets; seven CI lanes still pending. Acceptance audit in PR review comment.'
+  detail: Full sweep found forge-boundary, rollback-inventory and parity-test gaps; CI unsettled.
   recovery_hint: address the review findings, move STORY-2704 back to In Progress, and clear the PR hold only after approval
   shelved_by: reviewer
-  shelved_at: 2026-11-10T11:49:36.137325672Z
+  shelved_at: 2026-11-10T13:59:04.344576357Z
