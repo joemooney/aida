@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-10T07:33:27.149131118Z
-modified_at: 2026-11-10T09:50:15.562372535Z
+modified_at: 2026-11-10T10:34:37.489810923Z
 req_type: Task
 comments:
 - id: 01a1c4d8-63dc-7a10-9752-9da27cb0e52b
@@ -16,6 +16,34 @@ comments:
   content: 'ADVISOR RULING (2026-11-10 09:44 UTC): PR9a (#3769) landed, so PR9b is unblocked. Scope as described: doctor/{store_repair.rs, worktrees.rs, disk.rs, remote.rs, sandbox.rs, vendors.rs, report.rs} by concern from doctor_cmd.rs; the library helpers used outside doctor move to their owning modules (db_block, worktree_gc, maintenance_schedule, remote_create, scaffold) per SPIKE-713 section 6. Verbatim moves; widen visibility only as needed; no behavior change; help goldens unchanged; path-keyed ledgers via scripts/relocate-ledger-paths.py. If the diff exceeds ~40 files, ship the directory split first and helper relocation second (two Refs PRs). LIGHT gate: one cargo test -p aida-cli-lib --lib doctor_cmd run plus cargo check --profile agent -p aida-cli --tests, then make check-ci-fast.'
   created_at: 2026-11-10T09:44:38.108595104Z
   modified_at: 2026-11-10T09:44:38.108595104Z
+  session_id: 01a1c39a-801a-7bd1-8da9-c955a6707f0b
+  harness_version: 2.1.321 (Claude Code)
+- id: 01a1c506-2831-7d00-b960-d46c75407a0c
+  author: joe
+  content: |-
+    CI FAILURES at 2ebadf918c0a (run 42797162467). Fix exactly these before pushing; a push without a code change for them will fail again and must not be made:
+    error: test run failed
+            FAIL  aida-cli-lib agent_launch::story_1741_adoption_projection_tests::a_failed_refresh_is_reported_and_delivers_nothing_stale
+            FAIL  aida-cli-lib agent_launch::story_1741_adoption_projection_tests::a_launch_delivers_verified_plane_guidance_and_reports_how
+            FAIL  aida-cli-lib agent_launch::story_1741_adoption_projection_tests::a_local_config_written_before_the_first_projection_is_kept_and_reported
+            FAIL  aida-cli-lib agent_launch::story_1741_adoption_projection_tests::an_edited_projected_config_reads_the_same_in_preview_and_launch
+            FAIL  aida-cli-lib agent_launch::story_1741_adoption_projection_tests::a_projected_config_refusal_names_where_local_keys_belong
+            FAIL  aida-cli-lib agent_launch::story_1741_adoption_projection_tests::a_tracked_product_config_skip_is_reported_in_preview_and_launch
+            FAIL  aida-cli-lib agent_launch::story_1741_adoption_projection_tests::config_edits_and_scaffolding_refuse_in_an_adopted_worktree
+            FAIL  aida-cli-lib agent_launch::story_1741_adoption_projection_tests::every_project_config_writer_refuses_the_projected_config
+            FAIL  aida-cli-lib agent_launch::story_1741_adoption_projection_tests::every_scaffold_write_path_refuses_in_an_adopted_worktree
+            FAIL  aida-cli-lib agent_launch::story_1741_adoption_projection_tests::product_writing_init_modes_refuse_in_an_adopted_clone
+            FAIL  aida-cli-lib agent_launch::story_1741_adoption_projection_tests::scaffolding_refuses_in_an_adopted_worktree_before_its_first_projection
+            FAIL  aida-cli-lib bug_1723_config_trust_tests::every_config_toml_site_is_inventoried_and_every_worktree_key_is_policy
+            FAIL  aida-cli-lib bug_1723_config_trust_tests::every_project_config_writer_goes_through_the_adoption_guard
+            FAIL  aida-cli::story_1741_adoption_cli init_in_a_fresh_clone_projects_the_plane_and_writes_no_product_file
+            FAIL  aida-cli::story_1741_adoption_cli inventory_uninstall_and_ci_bootstrap_leave_the_product_untouched
+            FAIL  aida-cli::story_1741_adoption_cli product_writing_init_modes_refuse_through_the_cli_in_an_adopted_clone
+            FAIL  aida-cli::story_1741_adoption_cli re_running_init_in_a_projected_clone_takes_the_adopted_route_again
+            FAIL  aida-core adoption_migration::tests::a_policy_only_config_is_removable_once_published_and_its_settings_round_trip
+            FAIL  aida-core adoption_migration::tests::the_inventory_classifies_tracked_scaffolding_and_writes_nothing
+  created_at: 2026-11-10T10:34:37.489810923Z
+  modified_at: 2026-11-10T10:34:37.489810923Z
   session_id: 01a1c39a-801a-7bd1-8da9-c955a6707f0b
   harness_version: 2.1.321 (Claude Code)
 history:
