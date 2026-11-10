@@ -8,7 +8,7 @@ priority: Low
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T10:46:47.827833836Z
-modified_at: 2026-11-10T01:43:59.100281498Z
+modified_at: 2026-11-10T02:24:13.732650100Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -182,6 +182,13 @@ comments:
   modified_at: 2026-11-10T01:43:59.100281498Z
   session_id: 01a1c31b9986
   harness_version: codex-cli 0.167.0
+- id: 01a1c345-2fa4-7931-8683-1085f4d4015c
+  author: joe
+  content: 'ADVISOR RULING (2026-11-10 02:30 UTC), PR #3747 rework. The earlier findings 1-2 (title, commit subject, change notes) are DONE host-side: title is (Refs TASK-3368), the body carries ''aida: no-complete'' and change notes; do not punt on them again. Your task is exactly the two code findings of the latest review at d782a710e008: (1) aida-cli-lib/src/proc_broker/tests.rs:301 uses std::env::current_exe(), which fails the raw executable lookup guard in CI lib-1; use crate::aida_bin::current_executable_path() as test_env does, keep test-runner execution, do not weaken the guard; validate with cargo test -p aida-cli-lib no_cli_source_outside_the_resolver_uses_raw_current_executable_lookup and proc_broker::tests::inherited_connection_authenticates_actual_sender_and_exit. (2) aida-cli-lib/src/lib.rs:37-41 fails cargo fmt (CI gates): run cargo fmt --all and keep the disabled-host comment and TASK-3368 trace with the proc_broker declaration. Nothing else.'
+  created_at: 2026-11-10T02:24:13.732650100Z
+  modified_at: 2026-11-10T02:24:13.732650100Z
+  session_id: 01a1beff-fc3b-78e2-93e2-9b0c283b0339
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1b59e-5972-7d63-967f-d8572322d9d1
   author: joe
