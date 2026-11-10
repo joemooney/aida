@@ -143,7 +143,9 @@ impl Envelope {
         fn scan(value: &serde_json::Value, patterns: &[String]) -> Result<()> {
             match value {
                 serde_json::Value::String(s) => {
-                    crate::observation_envelope::check_patterns(s, "", patterns)?
+                    // trace:STORY-2493 | ai:codex
+                    // The paired-field helper must only see actual field values.
+                    crate::observation_envelope::check_patterns(s, s, patterns)?
                 }
                 serde_json::Value::Array(a) => {
                     for v in a {
@@ -244,6 +246,23 @@ mod tests {
         tamper["payload"]["blocking"] = json!(false);
         assert!(parse(&serde_json::to_vec(&tamper).unwrap(), &[]).is_err());
         assert!(parse(&vec![b' '; 131073], &[]).is_err());
+    }
+    #[test]
+    fn empty_string_policy_checks_actual_fields_only() {
+        let patterns = ["^$".to_string()];
+        let finding = input();
+        let verdict = json!({"version":1,"kind":"review-verdict","payload":{"pr":7,"head_sha":"a".repeat(40),"decision":"approved","blocking_findings":["b".repeat(64)],"reviewer_node":"c".repeat(32)},"checksum":""});
+        for value in [&finding, &verdict] {
+            let bytes = generate(&serde_json::to_vec(value).unwrap(), &patterns).unwrap();
+            parse(&bytes, &patterns).unwrap();
+            assert!(parse(&bytes, &["[".into()]).is_err());
+        }
+        let mut empty_body = finding;
+        empty_body["payload"]["body"] = json!("");
+        let input_bytes = serde_json::to_vec(&empty_body).unwrap();
+        assert!(generate(&input_bytes, &patterns).is_err());
+        let bytes = generate(&input_bytes, &[]).unwrap();
+        assert!(parse(&bytes, &patterns).is_err());
     }
     #[test]
     fn verdicts_are_fixed_closed_and_digest_sets_unique() {
