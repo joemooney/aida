@@ -241,7 +241,16 @@ fn session_start_default_role_claim_defers_cross_host_review_implementer_gate() 
         git_ok(&store, &["config", "user.email", "test@example.com"]);
         git_ok(&store, &["config", "user.name", "AIDA Test"]);
         git_ok(&store, &["add", "-A"]);
-        git_ok(&store, &["commit", "--allow-empty", "-qm", "seed"]);
+        let seed = crate::test_git::git_command()
+            .current_dir(&store)
+            .args(["commit", "--allow-empty", "-qm", "seed"])
+            .output()
+            .unwrap();
+        assert!(
+            seed.status.success(),
+            "{}",
+            String::from_utf8_lossy(&seed.stderr)
+        );
         let origin = fx.root.join("store-origin.git");
         git_ok(
             &fx.root,
