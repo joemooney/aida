@@ -29,7 +29,10 @@ jobs:
     # Forks and merge groups always use hosted capacity. Disabling the variable
     # restores hosted routing; GitHub cannot fail over an already queued job.
     # trace:STORY-2672 | ai:codex
-    runs-on: ${{ vars.AIDA_DELL1_CI == 'true' && (github.event_name == 'push' || (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository)) && contains(fromJSON('["lib-0","lib-1","cli-0","cli-1"]'), matrix.shard) && fromJSON('["self-hosted","Linux","X64","aida-dell1"]') || matrix.os }}
+    # BUG-2526: every shard routes to dell1 under the variable; hosted runners
+    # could not resolve the Ubuntu archives, so a hosted shard hung in apt.
+    # trace:BUG-2526 | ai:claude
+    runs-on: ${{ vars.AIDA_DELL1_CI == 'true' && (github.event_name == 'push' || (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository)) && fromJSON('["self-hosted","Linux","X64","aida-dell1"]') || matrix.os }}
     defaults:
       run:
         # Keep this explicit: implementer_preflight.rs validates this contract
@@ -119,8 +122,10 @@ jobs:
       - name: Install Linux dependencies
         if: steps.changes.outputs.full_ci == 'true' && runner.os == 'Linux' && runner.environment != 'self-hosted'
         run: |
-          sudo apt-get update
-          sudo apt-get install -y protobuf-compiler libxcb-render0-dev libxcb-shape0-dev libxcb-xfixes0-dev libxkbcommon-dev libssl-dev libgtk-3-dev bubblewrap ripgrep
+          # BUG-2526: bound apt so a mirror/DNS outage fails in minutes, not
+          # at the 40-minute job timeout. trace:BUG-2526 | ai:claude
+          sudo timeout 600 apt-get -o Acquire::Retries=1 -o Acquire::http::Timeout=15 -o Acquire::https::Timeout=15 update
+          sudo timeout 600 apt-get -o Acquire::Retries=1 -o Acquire::http::Timeout=15 -o Acquire::https::Timeout=15 install -y protobuf-compiler libxcb-render0-dev libxcb-shape0-dev libxcb-xfixes0-dev libxkbcommon-dev libssl-dev libgtk-3-dev bubblewrap ripgrep
           # The mandatory synthetic containment tracer runs in the lib shard,
           # too. Apply the existing live-gate userns preparation before any
           # test lane; it must exercise namespaces rather than skip/refuse on
@@ -149,7 +154,7 @@ jobs:
       - name: Install zsh (shell-wrapper test matrix)
         if: steps.changes.outputs.full_ci == 'true' && runner.os == 'Linux' && runner.environment != 'self-hosted'
         run: |
-          sudo apt-get install -y zsh
+          sudo timeout 600 apt-get -o Acquire::Retries=1 -o Acquire::http::Timeout=15 -o Acquire::https::Timeout=15 install -y zsh
           zsh --version
 
       # No sudo or host policy changes on dell1. Fail closed if the operator's
@@ -829,8 +834,14 @@ jobs:
       - name: Install awk engines
         if: matrix.shard == 'gates'
         run: |
-          sudo apt-get update
-          sudo apt-get install -y mawk gawk
+          # Self-hosted images are prepared by the operator: require, never sudo.
+          # trace:BUG-2526 | ai:claude
+          if [ "${{ runner.environment }}" = self-hosted ]; then
+            command -v mawk && command -v gawk
+          else
+            sudo timeout 600 apt-get -o Acquire::Retries=1 -o Acquire::http::Timeout=15 -o Acquire::https::Timeout=15 update
+            sudo timeout 600 apt-get -o Acquire::Retries=1 -o Acquire::http::Timeout=15 -o Acquire::https::Timeout=15 install -y mawk gawk
+          fi
 
       - name: Mail notice hook JSON protocol
         if: matrix.shard == 'gates'
