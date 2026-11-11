@@ -1,0 +1,78 @@
+{
+  "schema_version": 1,
+  "spec": "BUG-2505",
+  "publishes": [
+    {
+      "at": "2026-11-11T19:23:33.827167633Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-11-09T06:03:05.371703424Z",
+      "spec": "BUG-2505",
+      "seat": "advisor",
+      "kind": {
+        "event": "SpecRequeued",
+        "via": "queue-rework",
+        "actor": "joe",
+        "from": "Needs Attention",
+        "to": "Approved"
+      }
+    },
+    {
+      "ts": "2026-11-09T07:12:40.386291331Z",
+      "spec": "BUG-2505",
+      "seat": "advisor",
+      "kind": {
+        "event": "SpecRequeued",
+        "via": "queue-rework",
+        "actor": "joe",
+        "from": "Needs Attention",
+        "to": "Approved"
+      }
+    },
+    {
+      "ts": "2026-11-09T08:16:32.907222789Z",
+      "spec": "BUG-2505",
+      "seat": "advisor",
+      "kind": {
+        "event": "SpecRequeued",
+        "via": "queue-rework",
+        "actor": "joe",
+        "from": "Needs Attention",
+        "to": "Approved"
+      }
+    },
+    {
+      "ts": "2026-11-11T13:21:29.626744218Z",
+      "spec": "BUG-2505",
+      "seat": "advisor",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 1,
+        "slug": "implementer",
+        "attempt": 1
+      }
+    },
+    {
+      "ts": "2026-11-11T19:22:53.398723311Z",
+      "spec": "BUG-2505",
+      "seat": "advisor",
+      "kind": {
+        "event": "PrMerged",
+        "pr": 3845
+      }
+    },
+    {
+      "ts": "2026-11-11T19:23:33.683302246Z",
+      "spec": "BUG-2505",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "2240b91cf0ed204fc4d7169cf23d5469bd0eb6b2",
+        "pr": 3845,
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
