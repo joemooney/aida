@@ -67,7 +67,7 @@ fn collect(root: &Path) {
     let sha = std::env::var("AIDA_REVIEW_WATCH_HEAD").unwrap();
     let decision = std::fs::read_to_string(root.parent().unwrap().join("decision")).unwrap();
     let identity = vec!["session:reviewer-b".into(), "proc:123@start".into()];
-    let id = authority::write_human_receipt(&sha, "STORY-1", &identity, false).unwrap();
+    let id = authority::write_human_receipt(&sha, "STORY-1", &identity, false, true).unwrap();
     let att = rv::RecorderAttestation {
         sha: sha.clone(),
         human_at_tty: true,

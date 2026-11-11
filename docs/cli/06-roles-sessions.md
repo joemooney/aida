@@ -1152,6 +1152,15 @@ attempt. It stays refused while any recorded process is still running. An
 attempt recorded before process groups were kept gets per-process signals
 only, with no group sweep.
 
+Reviewers can record `aida review record <SPEC> --verdict approved --no-carry`
+to require fresh review whenever the head changes, including a clean merge from
+main. The approval remains valid at its exact reviewed head. The policy is part
+of the authenticated recording and signed publication; older approvals default
+to carry-eligible. A later reviewer recording sets the policy anew. Cached
+carry-over proofs cannot override a no-carry approval. `--no-carry` is refused
+for other verdicts.
+<!-- trace:STORY-2696 | ai:codex -->
+
 An authorized approval at an older head can also suppress review dispatch after
 clean merges of the protected default branch. Both dispatch checks reconcile
 the live verdict corpus and require a durable carry-over proof naming the
