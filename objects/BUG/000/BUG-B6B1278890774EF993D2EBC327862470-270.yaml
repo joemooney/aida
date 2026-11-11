@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-09T03:00:45.690194532Z
-modified_at: 2026-11-11T15:10:21.987262007Z
+modified_at: 2026-11-11T15:12:04.898941609Z
 req_type: Bug
 tags:
 - area:cli
@@ -159,6 +159,13 @@ comments:
   created_at: 2026-11-11T14:40:23.285392343Z
   modified_at: 2026-11-11T14:40:23.285392343Z
   session_id: 01a1caf478ac
+- id: 01a1cb2a-8922-7160-b14f-1a7468fa49c4
+  author: joe
+  content: 'ADVISOR BRIEF (2026-11-11 08:12 MST, rework round 1 on PR #3845 at 0a272b0dc42c): P1 from review: lib_part1.rs:1826 changed run() to run(refusal_to_stderr: &mut bool), but the source extractor in aida-cli-lib/src/tests/story_1728_command_registry_tests.rs:543 still searches for the exact text ''pub(crate) fn run() -> Result<()> {'', so run_dispatches_early_handlers_before_any_store_is_opened panics. Fix: make the extractor find the run function without depending on its parameter list, keep every early-dispatch assertion unchanged. Also prefer a design that does not thread a &mut bool through run(): route refusal diagnostics to stderr at the point of refusal if that is simpler. Validate: cargo test -p aida-cli-lib run_dispatches_early_handlers via the lane runner, plus the bug_2505 test, then make check-ci-fast. Push to the same PR branch.'
+  created_at: 2026-11-11T15:12:04.898941609Z
+  modified_at: 2026-11-11T15:12:04.898941609Z
+  session_id: 01a1ca83-fabb-7663-852c-12c78d4e097f
+  harness_version: 2.1.322 (Claude Code)
 history:
 - id: 01a1beaa-5541-7fd1-9192-5cf255b115f3
   author: joe
