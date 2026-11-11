@@ -1129,6 +1129,25 @@ fn prompt_reviewer_pr_passes_number() {
     );
 }
 
+// trace:STORY-2697 | ai:codex
+#[test]
+fn prompt_headless_reviewer_approves_defect_free_head_with_pending_ci() {
+    let _env = quiet_queue_env();
+    let e = resolved("STORY-X", entry(Uuid::now_v7(), Some("reviewer"), None));
+    let plan = plan_with(QueueWorkMode::Cluster, "PR-11", vec![e]);
+    let mut prompt = derive_queue_work_prompt(&plan, "reviewer", false, false, None);
+    append_reviewer_prompt_suffixes_with(&mut prompt, None);
+    prompt.push_str(&headless_waiting_rule_suffix("reviewer"));
+
+    assert!(prompt.starts_with(&reviewer_prompt_for_round(11, 1)));
+    assert!(prompt.contains("write the verdict file with the current wait state"));
+    assert!(prompt.contains("approve a defect-free head while CI is pending"));
+    assert!(prompt
+        .contains("WAITING only for independent evidence or a named test the judgment depends on"));
+    assert!(!prompt.contains("gate on PR CI"));
+    assert!(!headless_waiting_rule_suffix("implementer").contains("Reviewer CI contract"));
+}
+
 #[test]
 fn prompt_agent_gate_reuses_review_verdict_skill_for_custom_role() {
     // trace:BUG-1666 | ai:claude

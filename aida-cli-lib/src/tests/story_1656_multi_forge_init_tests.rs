@@ -223,6 +223,8 @@ fn bare_plan(dir: std::path::PathBuf) -> crate::init_bootstrap::BootstrapPlan {
         forge: None,
         github_repo: None,
         gitlab: None,
+        gitlab_enable_ci: false,
+        gitlab_runner_tags: Vec::new(),
     }
 }
 
@@ -462,6 +464,7 @@ fn init_github_plus_gitlab_creates_both_and_publishes_in_order() {
             "glab api --hostname gitlab.example.test namespaces/ai",
             "glab api --hostname gitlab.example.test -X POST projects -f name=proj -f path=proj -f namespace_id=42 -f visibility=private",
             "push gitlab refs/heads/main",
+            "glab api --hostname gitlab.example.test projects/ai%2Fproj",
             "push github refs/heads/aida-store",
             "push gitlab refs/heads/aida-store",
         ]

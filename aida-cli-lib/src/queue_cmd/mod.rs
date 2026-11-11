@@ -26,7 +26,7 @@ use crate::{
     drive_robustness, dup_pickup_recheck, effective_role, effort_calibration, enforce_team_gate,
     entry_matches_role_filter, entry_scope_session_match, epic_descendant_uuid_set, event_wait,
     extract_plan_followups, extract_referenced_spec_ids_from_commit, extract_spec_ids_from_commit,
-    fetch_pr_ship_metadata_via_gh, filter_entries_by_descendant_set, find_lease_by_id_prefix,
+    fetch_pr_ship_metadata_via_forge, filter_entries_by_descendant_set, find_lease_by_id_prefix,
     find_lease_by_spec, find_main_worktree_root, find_project_root, findings, first_run, focus,
     focus_scope_guard_for_spec, for_target_requires_dispatch_authority, forecast_rebase_onto,
     forge, format_review_label, format_review_story_display, format_tag_chip, get_default_author,
