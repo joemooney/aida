@@ -1,0 +1,18 @@
+{
+  "id": "review-lease-a04e28883f3e533a2a8343e3000344ee0d49d0ef74c6d389b6d1cfeada0f2b57",
+  "thread_id": "review-lease-a04e28883f3e533a2a8343e3000344ee0d49d0ef74c6d389b6d1cfeada0f2b57",
+  "from": "review-launch",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1794413998826,
+  "body": "lease 01a1cb34dff2 (implementer, seat /home/joe/ai/aida-worktrees/aida-seat-aida-story-b6b1278890774ef993d2ebc327862470-633) holds branch `story-2710-slice-1` and its session has exited, but it was not ended automatically: its tree has 1 uncommitted change(s): ? .claude/settings.local.json. Commit and push the work on its branch, or discard it with `aida session end 01a1cb34dff2 --force --discard-unpushed`, then retry To keep its tree and work: `aida queue work STORY-b6b1278890774ef993d2ebc327862470-633 --resume --sandbox` re-enters it in place, contained, since it is a seat's private clone (a new session starts there when none was recorded), or `aida session end 01a1cb34dff2 --force` discards it.",
+  "subject": "Review blocked by retained lease 01a1cb34dff2",
+  "urgent": false,
+  "intent": "request",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "explicit"
+}
