@@ -3,12 +3,12 @@ spec_id: TASK-b6b1278890774ef993d2ebc327862470-1062
 agreed_id: TASK-3782
 title: Train CI wait line shows shard progress and runner-queue time instead of only the unregistered Build summary job
 description: 'While a train waits, it prints ''train PR #3815 CI waiting: Pending(["Build (ubuntu-latest) (not registered yet)"])''. Build (ubuntu-latest) is the summary job that GitHub creates only after every CI shard finishes, so that line is shown for the whole run and says nothing about progress; the operator asked (2026-11-10) what command gives more insight. Observed on run 42913999193: 4 of 7 shards had succeeded, 3 were running, and 3 shards had queued ~10 min for a runner before starting. Acceptance: (1) the wait line names the CI run id and per-shard state, e.g. ''4/7 shards passed; running: lib-1, gates, rest''; (2) a shard still queued shows how long it has waited for a runner, e.g. ''queued 9m (runner)''; (3) a not-yet-registered summary job is described in plain words (''Build summary appears after all shards finish'') rather than as a pending check; (4) a failed shard is named at once, without waiting for the summary; (5) works for GitLab pipelines through the forge layer with the same fields where available; (6) unit tests over recorded check-run fixtures (all queued, partial, failed shard, summary registered).'
-status: Approved
+status: Completed
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-10T22:45:07.512110557Z
-modified_at: 2026-11-11T06:08:58.815973662Z
+modified_at: 2026-11-11T07:51:53.500828946Z
 req_type: Task
 tags:
 - batch:fasttrack
@@ -314,6 +314,19 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1c997-8795-7980-8b7b-9e219aaef8c3
+  author: aida-auto-bump
+  timestamp: 2026-11-11T07:51:53.493461909Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 01a1c997-879c-7bd2-aee2-56075a6d31b6
+  timestamp: 2026-11-11T07:51:53.500827904Z
+  agent: aida
+  commit_sha: 796cf978ef961ed29438d2e8e5afe3850352b632
+  summary: Completed via merge 796cf978
 execution_mode: drain
 filed_at:
   code_sha: 08c562ec6bb9f936f0e0f8c9bad273de57ccf7b0
@@ -324,3 +337,7 @@ filed_at:
   vendor: claude
   session: 01a1c70f-d731-7b70-acf8-e9ab3d288fca
   harness_version: 2.1.322 (Claude Code)
+implementation_info:
+  implemented: false
+  completed_at: 2026-11-11T07:51:53.493457662Z
+  completion_sha: 796cf978ef961ed29438d2e8e5afe3850352b632
