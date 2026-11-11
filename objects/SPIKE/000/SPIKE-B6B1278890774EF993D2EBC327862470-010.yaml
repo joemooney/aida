@@ -13,12 +13,12 @@ description: |-
   Then summarise: counts per class; the first porcelain-views batch (the read-only commands with the fewest helper dependencies, about 20); which helpers block the most moves; and any command whose class surprised you (a 'read' that writes, such as a cache refresh or a usage log).
   Use rg to confirm any 'no callers' result from codegraph. Do this after TASK-3428 batch 5 (#3829) lands if possible, since glob imports hide edges; otherwise list the glob-importing files as lower-bound rows.
   Acceptance: (1) every REGISTRY entry has a row with class and evidence; (2) every core-write or authority row cites at least one writer or gate site; (3) the first porcelain batch is named with its blocking helpers; (4) the doc states its commit and method so it can be re-run.
-status: InProgress
+status: NeedsAttention
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-11T05:40:53.335487241Z
-modified_at: 2026-11-11T06:29:19.062318863Z
+modified_at: 2026-11-11T06:34:35.794120296Z
 req_type: Spike
 tags:
 - architecture
@@ -127,6 +127,15 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1c950-c392-7682-8cc4-c17f4bc07c0c
+  author: dirtlab
+  timestamp: 2026-11-11T06:34:35.794131804Z
+  session_id: 01a1c94be773
+  harness_version: codex-cli 0.167.0
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 execution_mode: drain
 filed_at:
   code_sha: eb1b39c30c9f9f6ce3f5ccf1c5ffd8966e5f8a23
@@ -137,4 +146,9 @@ filed_at:
   vendor: claude
   session: 01a1c87f-970d-7ce0-9351-e4e75a87731e
   harness_version: 2.1.322 (Claude Code)
+attention_reason:
+  category: missing-context
+  detail: 'Round 2: accept, do not dispute, review items 1-3: all 167 classifications/writer-gate evidence, full dependency/visibility/stage/home analysis, and first porcelain batch remain incomplete. Required reviewed codegraph client /home/joe/ai/aida/.codegraph/proxy-state/bin/codegraph is absent; aida doctor check codegraph reports codegraph,missing. Host must deploy the reviewed client and supply its absolute path/shared main index. Advisor must clarify classification of direct cli-lib coordination/cache writers versus writes-through-core. Item 4 fixed: all three closure handlers retained in full, four Python regression tests pass; source-grounded partial evidence and recovery in docs/spikes/2026-11-11-command-inventory-round-2.md. Native seat leaves edits uncommitted; no completion or publication requested.'
+  raised_by: implementer
+  raised_at: 2026-11-11T06:34:35.794120296Z
 human_only: true
