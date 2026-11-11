@@ -8,8 +8,28 @@ use crate::gate::approval::*;
 use crate::gate::ci_freshness::*;
 use crate::gate::mandate_ship::*;
 use crate::process_retry::RetryEtxtbsy;
-use crate::*;
+#[cfg(test)]
+use crate::{
+    auto_complete, extract_pr_number_from_commit_subject, help, spec_status, AutonomyMode,
+    Phase3StaleOverlapAction, RealPhaseDriver,
+};
+// trace:TASK-3428 | ai:codex
+use crate::{
+    active_lease_for_cwd, aida_bin, apply_effort_tag, change_lookup_for_branch, cli,
+    commit_subjects, complexity_calibration, current_git_branch, current_user_id,
+    detect_default_branch_ref, detect_merged_pr_for_branch_via_forge, doctor_cmd,
+    effort_calibration, events, extract_spec_ids_from_commit, find_main_worktree_root,
+    find_project_root, forge, format_review_label, gate, list_leases, load_store_for_lookup,
+    main_worktree_root_from, merge_lock, network_retry, orchestrator, parse_review_scope,
+    permissions, pr_is_merged_with_sink, pr_list_handler, pr_rebase, pr_ship, punt,
+    read_commits_in_range, remote_head_sha, render_auto_queue_outcome, resolve_aida_exe,
+    resolve_gate_range, role, run, run_client_trailer_guard, run_pr_open_spec_guard, session, ship,
+    spec_matches, stacks, truncate, try_auto_queue_pr_review, watch, worktree_gc, AutoQueueOrigin,
+    AutoQueueStatus, PrLookup, ReviewForge, Storage,
+};
 use aida_core::git_ops::RemoteCredentialsExt as _;
+use anyhow::{Context, Result};
+use colored::Colorize;
 use serde::{Deserialize, Serialize};
 
 // trace:STORY-1728 | ai:claude

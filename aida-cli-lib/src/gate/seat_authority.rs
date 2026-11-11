@@ -590,6 +590,11 @@ pub(crate) enum GrantRejection {
         grant_subject: String,
         caller: String,
     },
+    // trace:BUG-2520 | ai:codex
+    PrincipalMismatch {
+        principal: String,
+        caller: String,
+    },
     /// The team roster no longer allows the principal this seat.
     RosterDenied {
         principal: String,
@@ -640,6 +645,10 @@ impl std::fmt::Display for GrantRejection {
             } => write!(
                 f,
                 "it was issued to `{grant_subject}` but this process runs as `{caller}`"
+            ),
+            Self::PrincipalMismatch { principal, caller } => write!(
+                f,
+                "its principal is `{principal}` but this deputy runs as `{caller}`"
             ),
             Self::RosterDenied { principal, seat } => write!(
                 f,
@@ -1150,6 +1159,28 @@ fn grant_check_for_at(
     caller: &str,
     now: DateTime<Utc>,
 ) -> GrantCheck {
+    grant_check_identity_at(project_root, id, caller, now, false)
+}
+
+/// Validate a deputy submitter against the operator principal, retaining the
+/// complete grant-chain checks. Peer presentation is checked by the deputy.
+// trace:BUG-2520 | ai:codex
+pub(crate) fn grant_check_for_principal(
+    project_root: &Path,
+    id: &str,
+    principal: &str,
+) -> GrantCheck {
+    grant_check_identity_at(project_root, id, principal, Utc::now(), true)
+}
+
+// trace:BUG-2520 | ai:codex
+fn grant_check_identity_at(
+    project_root: &Path,
+    id: &str,
+    caller: &str,
+    now: DateTime<Utc>,
+    principal: bool,
+) -> GrantCheck {
     let rejected = |seat: Option<String>, reason| GrantCheck::Rejected {
         id: id.to_string(),
         seat,
@@ -1160,10 +1191,15 @@ fn grant_check_for_at(
         Err(reason) => return rejected(None, reason),
     };
     // Checks run in the order `current_grant` always used: revoked, expired,
-    // subject, roster; then the parent's revoked, expired, principal,
+    // subject (or deputy principal), roster; then the parent's revoked, expired, principal,
     // roster, delegable.
     let own = check_lifetime(&grant, now).and_then(|()| {
-        if grant.subject == caller {
+        if principal && grant.principal != caller {
+            Err(GrantRejection::PrincipalMismatch {
+                principal: grant.principal.clone(),
+                caller: caller.to_string(),
+            })
+        } else if principal || grant.subject == caller {
             check_roster(project_root, &grant)
         } else {
             Err(GrantRejection::SubjectMismatch {
