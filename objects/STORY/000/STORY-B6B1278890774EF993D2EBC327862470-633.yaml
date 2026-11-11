@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-10T22:04:54.061461Z
-modified_at: 2026-11-11T16:01:50.407200075Z
+modified_at: 2026-11-11T21:57:59.996091648Z
 req_type: Story
 comments:
 - id: 01a1c781-4cf1-7c80-b086-89c5c5096ab6
@@ -354,6 +354,13 @@ comments:
   created_at: 2026-11-11T16:01:50.407200075Z
   modified_at: 2026-11-11T16:01:50.407200075Z
   session_id: 01a1cb34dff2
+  harness_version: 2.1.322 (Claude Code)
+- id: 01a1cc9e-2a3c-7b92-8264-a0f68bd5a55e
+  author: joe
+  content: '[advisor 2026-11-11 15:10 MST] PR #3832 head c8ae27f: CI red. lib-1: agent_launch::bug_2002_launch_lease_tests::bug2188_refused_launch_restores_approved_status_and_retry_succeeds. lib-0: orchestrator_leases::resolve_aida_exe_tests::no_cli_source_outside_the_resolver_uses_raw_current_executable_lookup (ratchet). Rework both.'
+  created_at: 2026-11-11T21:57:59.996091648Z
+  modified_at: 2026-11-11T21:57:59.996091648Z
+  session_id: 01a1cc9c-1eae-7a72-9a24-8ec1afc42772
   harness_version: 2.1.322 (Claude Code)
 history:
 - id: 01a1c77f-ffdf-7ac3-a382-33d6a384e617
