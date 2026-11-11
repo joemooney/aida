@@ -263,6 +263,10 @@ fn story_2710_actual_orphan_adoption_transfers_pending_repair() {
             "user.name=T",
             "-c",
             "user.email=t@example.com",
+            "-c",
+            "maintenance.auto=false",
+            "-c",
+            "gc.auto=0",
             "commit",
             "-qm",
             "PR edits",
@@ -270,11 +274,26 @@ fn story_2710_actual_orphan_adoption_transfers_pending_repair() {
     );
     let head = git_ok(tree, &["rev-parse", "HEAD"]);
     std::fs::write(fx.main.join("README.md"), "competing main edit\n").unwrap();
-    git_ok(&fx.main, &["commit", "-qam", "main edit"]);
+    git_ok(
+        &fx.main,
+        &[
+            "-c",
+            "maintenance.auto=false",
+            "-c",
+            "gc.auto=0",
+            "commit",
+            "-qam",
+            "main edit",
+        ],
+    );
     let base = git_ok(&fx.main, &["rev-parse", "HEAD"]);
     git_ok(
         tree,
         &[
+            "-c",
+            "maintenance.auto=false",
+            "-c",
+            "gc.auto=0",
             "fetch",
             "--no-write-fetch-head",
             fx.main.to_str().unwrap(),

@@ -3753,7 +3753,15 @@ mod rework_merge_tests {
         tests::git_ok(&fx.main, &["add", "."]);
         tests::git_ok(
             &fx.main,
-            &["commit", "-qm", "registered real renderer fixture"],
+            &[
+                "-c",
+                "maintenance.auto=false",
+                "-c",
+                "gc.auto=0",
+                "commit",
+                "-qm",
+                "registered real renderer fixture",
+            ],
         );
         let base = tests::git_ok(&fx.main, &["rev-parse", "HEAD"]);
         assert!(tests::git_ok(
