@@ -12,30 +12,13 @@ use super::*;
 fn put_mail(clone: &Path) {
     let mailbox = clone.join(".aida").join("mailbox");
     std::fs::create_dir_all(&mailbox).unwrap();
-    std::fs::write(mailbox.join("m.json"), "{}").unwrap();
+    let msg = serde_json::json!({"id": "m", "thread_id": "m", "from": "alice",
+        "to": {"kind": "agent", "agent": "bob"}, "timestamp": 1, "body": "mail"});
+    std::fs::write(mailbox.join("m.json"), serde_json::to_vec(&msg).unwrap()).unwrap();
 }
 
 fn has_mail(clone: &Path) -> bool {
     clone.join(".aida").join("mailbox").join("m.json").is_file()
-}
-
-/// Record an activation under `main`'s anchor, as an operator would.
-fn activate(main: &Path) {
-    let anchor = main.join(".git").join("aida").join("mail-lifecycle");
-    std::os::unix::fs::DirBuilderExt::mode(std::fs::DirBuilder::new().recursive(true), 0o700)
-        .create(&anchor)
-        .unwrap();
-    // Only the source build that recorded an activation honours it: this
-    // test binary's, named as `main_entry` names it.
-    crate::upgrade_release::register_test_source_build();
-    let build = aida_core::mailbox_lifecycle::source_build().expect("a git build");
-    std::fs::write(
-        anchor.join("activation.json"),
-        format!(
-            r#"{{"schema":1,"all_writer_hosts_admitting":true,"recorded_at":"2026-10-27T00:00:00Z","source_build":"{build}"}}"#
-        ),
-    )
-    .unwrap();
 }
 
 #[test]
@@ -74,10 +57,11 @@ fn a_clone_without_a_verified_binding_is_never_destroyed() {
 
 #[test]
 fn destroy_retained_reopens_a_retirement_when_it_keeps_the_clone() {
+    let _scan = aida_core::mailbox_lifecycle::activation::test_writer_scan(true);
     let fx = fixture();
     let clone = leased_clone(&fx, "c2-reopen", "c0ffee184303");
-    activate(&fx.main);
     put_mail(&clone);
+    crate::mail_retention::preserve_fixture_mail(&fx.main, &clone);
     let retirement = crate::mail_retention::retire_tree(&fx.main, &clone, true, "test")
         .unwrap()
         .expect("the bound clone retires into main's anchor");
