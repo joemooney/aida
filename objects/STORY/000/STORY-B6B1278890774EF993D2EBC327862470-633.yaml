@@ -2,316 +2,276 @@ id: 01a1c77e-1fad-7aa1-8039-5aaae36df683
 spec_id: STORY-b6b1278890774ef993d2ebc327862470-633
 agreed_id: STORY-2710
 title: Conflicted PRs route automatically to a conflict-resolution lane instead of waiting for an advisor hand merge
-description: 'Codex seats cannot merge main (read-only .git, BUG-2456), so when the host-merge of main into a PR branch hits a real conflict, the PR waits for the advisor to hand-merge. On 2026-11-10 this cost #3768 13.6h and #3753 several hours; the advisor hand-merged 3 PRs (#3775, #3753, #3768). Most conflicts were mechanical: both sides appended tests or doc sections, plus regenerable ledgers (scripts/exec-context-legacy.json via check-exec-context.py --write-ledger, template mirrors via make sync-templates). Acceptance: (1) when review-watch or the rework path finds a PR CONFLICTING and its host merge fails, it dispatches a conflict-resolution lane on a vendor that can write .git (Claude) for that branch without advisor action; (2) known generated files (exec-context ledger, template mirrors, other ratchet ledgers registered in one table) are regenerated rather than hand-resolved; (3) the lane compile-checks the merged tree (cargo check -p aida-cli-lib --tests) before pushing; (4) a conflict it cannot resolve mechanically is reported to the advisor with the conflicting paths, one mail per head; (5) tests cover dispatch on conflict, ledger regeneration, and the one-mail-per-head refusal path.'
+description: 'Codex seats cannot merge main (read-only .git, BUG-2456), so when the host-merge of main into a PR branch hits a real conflict, the PR waits for the advisor to hand-merge. On 2026-11-10 this cost #3768 13.6h and #3753 several hours; the advisor hand-merged 3 PRs (#3775, #3753, #3768). Most conflicts were mechanical: both sides appended tests or doc sections, plus regenerable ledgers (scripts/exec-context-legacy.json via check-exec-context.py --write-ledger, template mirrors via make sync-templates). Acceptance: (1) when review-watch or the rework path finds a PR CONFLICTING and its host merge fails, it dispatches a conflict-resolution lane on a vendor that can write .git (Claude) for that branch without advisor action; (2) known generated files (exec-context ledger, template mirrors, other ratchet ledgers registered in one table) are regenerated rather than hand-resolved; (3) the lane compile-checks the merged tree (cargo check -p aida-cli-lib --tests) before pushing; (4) a
+  conflict it cannot resolve mechanically is reported to the advisor with the conflicting paths, one mail per head; (5) tests cover dispatch on conflict, ledger regeneration, and the one-mail-per-head refusal path.'
 status: NeedsAttention
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
-created_at: 2026-11-10T22:04:54.061461738Z
-modified_at: 2026-11-11T08:00:10.371887567Z
+created_at: 2026-11-10 22:04:54.061461+00:00
+modified_at: 2026-11-11 08:00:10.371887+00:00
 req_type: Story
 comments:
 - id: 01a1c781-4cf1-7c80-b086-89c5c5096ab6
   author: dirtlab
-  content: |
-    # Automatic conflict-resolution lane sketch
-
-    Status: proposed; requires master sign-off before production implementation.
-    <!-- trace:STORY-2710 | ai:codex -->
-
-    The existing rework pickup already performs a host merge and routes fresh
-    conflicted pickups to Claude in `queue_cmd/work.rs::apply_rework_conflict_route`.
-    It refuses a resumed non-Claude thread. Its conflict prompt currently instructs
-    the child to resolve, commit and push without an explicit compile gate.
-    `review_watch_update.rs::attempt` instead records a refused forge update and
-    routes it to the advisor. These are separate entry points; a forge refusal is
-    not evidence that a local host merge was attempted.
-
-    ## Proposed control flow
-
-    1. Keep live-author and unknown-liveness protections in review-watch. Only a
-       positively observed conflict on an open, same-repository PR with an exact
-       head, branch, base and unambiguous backing spec may request a conflict lane.
-       Network/auth failures retain the existing retry and advisor behavior.
-    2. Have the watcher request an ordinary fresh queue-work pickup pinned to Claude
-       and the existing PR branch. Reuse its lease, vendor admission, containment,
-       host-merge and rollback checks. The watcher must not run a local merge or
-       Cargo itself. Revalidate the PR head before admission; a changed head is
-       rediscovered rather than repaired using stale evidence.
-    3. Reserve dispatch under shared state locking before spawning. Persist an
-       exact forge/repository/PR/head key and invocation identity. A confirmed spawn
-       keeps the reservation until observed completion; an ambiguous spawn retains
-       capacity and cannot trigger another lane. Failed pre-spawn setup can retry
-       only after cleanup is confirmed. Use the same reservation for watcher and
-       rework requests so concurrent entry points cannot launch duplicate repairs.
-    4. In the admitted Claude lane, repeat the host merge against the pinned base.
-       A clean merge uses the ordinary publication path. A real conflict enters the
-       shared repair policy below. Never convert an existing Codex resume thread
-       into a Claude resume: request a fresh admitted lane after releasing its seat.
-    5. Before publication, require no unmerged entries or conflict markers and a
-       successful `cargo check --profile agent -p aida-cli-lib --tests` on the exact
-       merged tree. Any subsequent source change invalidates that check. Push only
-       to the same PR branch with expected-head protection; preserve ordinary
-       publication vetoes. This does not grant merge, review or completion credit.
-
-    ## Generated-file and source policy
-
-    Keep a compiled, closed table of output paths, authoritative inputs and fixed
-    argv regeneration commands. Initially register the exec-context ledger with
-    `python3 scripts/check-exec-context.py --write-ledger`, and enumerate template
-    mirror outputs from the existing template sync mechanism using
-    `make sync-templates`. Inspect the Makefile's symlink behavior before choosing
-    the exact output set; do not treat all of `.claude/` as generated. Other ratchet
-    ledgers enter this table only with reviewed generators and source dependencies.
-
-    Resolve authoritative source conflicts first. Restore only registered generated
-    outputs to a parseable starting state, run their generators once in dependency
-    order, and stage only validated declared outputs. Refuse generator failures,
-    unexpected writes or unresolved source dependencies; never accept a ledger by
-    unioning conflict sides or enlarging an allowance merely to pass a guard.
-
-    Mechanical source repair permits independent appended tests/document sections
-    when both sides remain intact and identifiers are unambiguous. Changes to the
-    same behavior, contradictory documentation or overlapping declarations stop the
-    lane. Preserve diagnostics and the original conflict paths for advisor triage.
-
-    ## Refusal delivery and state decision requiring sign-off
-
-    Persist a refusal notice keyed by repository/PR/original head, including paths,
-    reason, lane invocation and validation result. Deliver through ordinary advisor
-    mail routing and mark accepted delivery in the same existing notice protocol.
-    Polling must not resend an accepted notice for that head; a new head may notify
-    again. A send/receipt crash window has the mailbox protocol's existing semantics,
-    so strict exactly-once delivery must not be claimed without an idempotent send.
-
-    Approve extending shared watcher state for conflict dispatch reservations, or
-    choose a separate shared repair journal usable by direct rework as well. The
-    recommended choice is a shared repair journal with a versioned schema, while
-    watcher state retains only its reference. This avoids making direct queue-work
-    depend on the watcher's private state format. This is an orchestrator semantics
-    and persisted-state change covered by the repository sketch-first gate.
-
-    ## Validation after approval
-
-    Use injected spawn/forge/mail seams to test conflict-only dispatch, live or
-    unknown ownership refusal, moving heads, concurrent watcher/rework admission,
-    ambiguous receipts and failed-setup recovery. Exercise real temporary Git merge
-    fixtures for generated-ledger regeneration, independent appended source changes
-    and semantic refusal. Assert compile failure prevents push and checks bind the
-    published tree. Verify repeated refused passes send one accepted notice per
-    head, with conflicting paths, and a new head permits another notice. Preserve
-    the watcher no-Cargo/no-local-merge ratchet. Execute targeted Rust tests via the
-    lane job runner; no implementation or executed-test evidence is claimed here.
-  created_at: 2026-11-10T22:08:22.257627557Z
-  modified_at: 2026-11-10T22:08:22.257627557Z
+  content: "# Automatic conflict-resolution lane sketch\n\nStatus: proposed; requires master sign-off before production implementation.\n<!-- trace:STORY-2710 | ai:codex -->\n\nThe existing rework pickup already performs a host merge and routes fresh\nconflicted pickups to Claude in `queue_cmd/work.rs::apply_rework_conflict_route`.\nIt refuses a resumed non-Claude thread. Its conflict prompt currently instructs\nthe child to resolve, commit and push without an explicit compile gate.\n`review_watch_update.rs::attempt` instead records a refused forge update and\nroutes it to the advisor. These are separate entry points; a forge refusal is\nnot evidence that a local host merge was attempted.\n\n## Proposed control flow\n\n1. Keep live-author and unknown-liveness protections in review-watch. Only a\n   positively observed conflict on an open, same-repository PR with an exact\n   head, branch, base and unambiguous backing spec may request a conflict lane.\n   Network/auth failures retain the\
+    \ existing retry and advisor behavior.\n2. Have the watcher request an ordinary fresh queue-work pickup pinned to Claude\n   and the existing PR branch. Reuse its lease, vendor admission, containment,\n   host-merge and rollback checks. The watcher must not run a local merge or\n   Cargo itself. Revalidate the PR head before admission; a changed head is\n   rediscovered rather than repaired using stale evidence.\n3. Reserve dispatch under shared state locking before spawning. Persist an\n   exact forge/repository/PR/head key and invocation identity. A confirmed spawn\n   keeps the reservation until observed completion; an ambiguous spawn retains\n   capacity and cannot trigger another lane. Failed pre-spawn setup can retry\n   only after cleanup is confirmed. Use the same reservation for watcher and\n   rework requests so concurrent entry points cannot launch duplicate repairs.\n4. In the admitted Claude lane, repeat the host merge against the pinned base.\n   A clean merge uses the\
+    \ ordinary publication path. A real conflict enters the\n   shared repair policy below. Never convert an existing Codex resume thread\n   into a Claude resume: request a fresh admitted lane after releasing its seat.\n5. Before publication, require no unmerged entries or conflict markers and a\n   successful `cargo check --profile agent -p aida-cli-lib --tests` on the exact\n   merged tree. Any subsequent source change invalidates that check. Push only\n   to the same PR branch with expected-head protection; preserve ordinary\n   publication vetoes. This does not grant merge, review or completion credit.\n\n## Generated-file and source policy\n\nKeep a compiled, closed table of output paths, authoritative inputs and fixed\nargv regeneration commands. Initially register the exec-context ledger with\n`python3 scripts/check-exec-context.py --write-ledger`, and enumerate template\nmirror outputs from the existing template sync mechanism using\n`make sync-templates`. Inspect the Makefile's\
+    \ symlink behavior before choosing\nthe exact output set; do not treat all of `.claude/` as generated. Other ratchet\nledgers enter this table only with reviewed generators and source dependencies.\n\nResolve authoritative source conflicts first. Restore only registered generated\noutputs to a parseable starting state, run their generators once in dependency\norder, and stage only validated declared outputs. Refuse generator failures,\nunexpected writes or unresolved source dependencies; never accept a ledger by\nunioning conflict sides or enlarging an allowance merely to pass a guard.\n\nMechanical source repair permits independent appended tests/document sections\nwhen both sides remain intact and identifiers are unambiguous. Changes to the\nsame behavior, contradictory documentation or overlapping declarations stop the\nlane. Preserve diagnostics and the original conflict paths for advisor triage.\n\n## Refusal delivery and state decision requiring sign-off\n\nPersist a refusal notice\
+    \ keyed by repository/PR/original head, including paths,\nreason, lane invocation and validation result. Deliver through ordinary advisor\nmail routing and mark accepted delivery in the same existing notice protocol.\nPolling must not resend an accepted notice for that head; a new head may notify\nagain. A send/receipt crash window has the mailbox protocol's existing semantics,\nso strict exactly-once delivery must not be claimed without an idempotent send.\n\nApprove extending shared watcher state for conflict dispatch reservations, or\nchoose a separate shared repair journal usable by direct rework as well. The\nrecommended choice is a shared repair journal with a versioned schema, while\nwatcher state retains only its reference. This avoids making direct queue-work\ndepend on the watcher's private state format. This is an orchestrator semantics\nand persisted-state change covered by the repository sketch-first gate.\n\n## Validation after approval\n\nUse injected spawn/forge/mail\
+    \ seams to test conflict-only dispatch, live or\nunknown ownership refusal, moving heads, concurrent watcher/rework admission,\nambiguous receipts and failed-setup recovery. Exercise real temporary Git merge\nfixtures for generated-ledger regeneration, independent appended source changes\nand semantic refusal. Assert compile failure prevents push and checks bind the\npublished tree. Verify repeated refused passes send one accepted notice per\nhead, with conflicting paths, and a new head permits another notice. Preserve\nthe watcher no-Cargo/no-local-merge ratchet. Execute targeted Rust tests via the\nlane job runner; no implementation or executed-test evidence is claimed here.\n"
+  created_at: 2026-11-10 22:08:22.257627+00:00
+  modified_at: 2026-11-10 22:08:22.257627+00:00
   session_id: 01a1c77ff9fe
   harness_version: codex-cli 0.167.0
 - id: 01a1c78d-02b1-7e62-802d-ebe48a549d91
   author: joe
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: STORY-2710 is not implemented: this PR contains only a proposed sketch; all five acceptance criteria remain unverified. CI gates/contracts are pending.. It was punted on: design-fork: Sketch-first gate: automatic watcher conflict dispatch changes orchestrator semantics and needs durable shared reservations across watcher and direct rework. Posted concrete sketch in spec comment and docs/plans/2026-11-10-story-2710-conflict-lane.md; master sign-off required before implementation.. No triage reason was given.'
-  created_at: 2026-11-10T22:21:09.681818495Z
-  modified_at: 2026-11-10T22:21:09.681818495Z
+  created_at: 2026-11-10 22:21:09.681818+00:00
+  modified_at: 2026-11-10 22:21:09.681818+00:00
   session_id: 01a1c530-c917-7f13-ab81-f6b5e1d1cd30
   harness_version: 2.1.322 (Claude Code)
 - id: 01a1c78d-07ef-7550-8ab6-c71cf77d45af
   author: joe
-  content: |-
-    REVIEW FINDINGS TO ADDRESS (STORY-2710):
+  content: 'REVIEW FINDINGS TO ADDRESS (STORY-2710):
+
     Verdict: CHANGES REQUESTED
+
     Reviewed commit: 67d115e25b02
+
     Recorded: 2026-11-10T22:12:04.590425875+00:00
+
     Findings:
+
     1. [P1] docs/plans/2026-11-10-story-2710-conflict-lane.md:3-12,78-88 — Deliver the accepted story implementation and regression coverage, or obtain an explicit sketch-only scope before requesting story approval. The sole changed file is a proposed plan: review_watch_update::attempt still sends conflict failures to the advisor, and rework_direction::conflict_task still tells the lane to commit/push without a compile gate. There is no added generated-output registry/regeneration flow, mechanically-unresolvable repair notice with paths and per-head deduplication, or tests of the requested dispatch/regeneration/refusal behavior. Thus AC1-5 are not satisfied by this head. Obtain required master sketch sign-off before production implementation, then implement and verify all five criteria; do not mark STORY-2710 complete for this sketch alone.
-    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
-  created_at: 2026-11-10T22:21:11.023897514Z
-  modified_at: 2026-11-10T22:21:11.023897514Z
+
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.'
+  created_at: 2026-11-10 22:21:11.023897+00:00
+  modified_at: 2026-11-10 22:21:11.023897+00:00
   session_id: 01a1c530-c917-7f13-ab81-f6b5e1d1cd30
   harness_version: 2.1.322 (Claude Code)
 - id: 01a1c78e-2a53-73a1-a46f-b13a42390093
   author: joe
-  content: 'ADVISOR RULING (2026-11-10 15:25 MST, operator-requested): resolve conflicts on ANY vendor via a HOST-STAGED merge; do NOT make the Codex seat''s .git writable (read-only .git is a containment boundary: a writable .git lets a lane plant hooks/config the host later executes). Design: (1) host (which can write .git) runs git fetch + git merge origin/main in the seat clone before launch, leaving conflict markers and MERGE_HEAD; regenerable files (exec-context ledger, template mirrors) are taken from main and regenerated by the host at this step; (2) the lane, Codex or Claude, edits only working-tree files to resolve the markers; the brief lists the conflicted paths since the lane cannot rely on writing git state; (3) the existing host publication path (aida ship --from-seat --commit-pending) refuses while any conflict marker remains in a listed path, then git add + commit, which completes the merge because MERGE_HEAD is set, and pushes. Acceptance amendment: AC1 ''on a vendor that can write .git (Claude)'' becomes ''on the project''s configured implementer vendor''; add AC6: a Codex lane resolves a staged conflict end-to-end with .git still mounted read-only (regression test with a fixture conflict); add AC7: publication refuses when a conflicted path still contains <<<<<<< / >>>>>>> markers. This also retires the ''merge-conflict reworks go to a Claude lane'' rule in FAQ-150 step 6 and BUG-2456''s Claude routing.'
-  created_at: 2026-11-10T22:22:25.363739647Z
-  modified_at: 2026-11-10T22:22:25.363739647Z
+  content: 'ADVISOR RULING (2026-11-10 15:25 MST, operator-requested): resolve conflicts on ANY vendor via a HOST-STAGED merge; do NOT make the Codex seat''s .git writable (read-only .git is a containment boundary: a writable .git lets a lane plant hooks/config the host later executes). Design: (1) host (which can write .git) runs git fetch + git merge origin/main in the seat clone before launch, leaving conflict markers and MERGE_HEAD; regenerable files (exec-context ledger, template mirrors) are taken from main and regenerated by the host at this step; (2) the lane, Codex or Claude, edits only working-tree files to resolve the markers; the brief lists the conflicted paths since the lane cannot rely on writing git state; (3) the existing host publication path (aida ship --from-seat --commit-pending) refuses while any conflict marker remains in a listed path, then git add + commit, which completes the merge because MERGE_HEAD is set, and pushes. Acceptance amendment: AC1 ''on a vendor that
+    can write .git (Claude)'' becomes ''on the project''s configured implementer vendor''; add AC6: a Codex lane resolves a staged conflict end-to-end with .git still mounted read-only (regression test with a fixture conflict); add AC7: publication refuses when a conflicted path still contains <<<<<<< / >>>>>>> markers. This also retires the ''merge-conflict reworks go to a Claude lane'' rule in FAQ-150 step 6 and BUG-2456''s Claude routing.'
+  created_at: 2026-11-10 22:22:25.363739+00:00
+  modified_at: 2026-11-10 22:22:25.363739+00:00
   session_id: 01a1c70f-d731-7b70-acf8-e9ab3d288fca
   harness_version: 2.1.322 (Claude Code)
 - id: 01a1c7ba-4f97-7213-9ae2-903a9b430de2
   author: joe
-  content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: STORY-2710 remains incomplete (AC1-6); marker scan also regresses ordinary publication. CI pending at review time.. It was punted on: design-fork: Round 2 P1 (reviewed 67d115e25b02): AC1-6 remain incomplete; I dispute treating the merge-mechanics ruling as approval of the proposed shared dispatch-state contract. The binding 22:22 UTC ruling is incorporated in docs/plans/2026-11-10-story-2710-conflict-lane.md and read-only Codex .git is preserved. Before production watcher/direct-rework coordination, master must approve the proposed shared versioned repair journal (per repository/PR/head reservation, ambiguous-spawn retention and deduplicated path-bearing refusal notices), or select the watcher-state alternative. AGENTS.md Sketch-First Protocol requires that sign-off for new orchestrator state. Independent AC7 marker-refusal code and a real Git fixture regression are left uncommitted as a partial safety slice; no story approval/completion is claimed. Host staging with MERGE_HEAD, generated-output regeneration, compile gate, automatic dispatch, notices and AC6 end-to-end coverage remain required.. No triage reason was given.'
-  created_at: 2026-11-10T23:10:38.487891581Z
-  modified_at: 2026-11-10T23:10:38.487891581Z
+  content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: STORY-2710 remains incomplete (AC1-6); marker scan also regresses ordinary publication. CI pending at review time.. It was punted on: design-fork: Round 2 P1 (reviewed 67d115e25b02): AC1-6 remain incomplete; I dispute treating the merge-mechanics ruling as approval of the proposed shared dispatch-state contract. The binding 22:22 UTC ruling is incorporated in docs/plans/2026-11-10-story-2710-conflict-lane.md and read-only Codex .git is preserved. Before production watcher/direct-rework coordination, master must approve the proposed shared versioned repair journal (per repository/PR/head reservation, ambiguous-spawn retention and deduplicated path-bearing refusal notices), or select the watcher-state alternative. AGENTS.md Sketch-First Protocol requires that sign-off for new orchestrator state. Independent AC7 marker-refusal code and a real Git fixture regression
+    are left uncommitted as a partial safety slice; no story approval/completion is claimed. Host staging with MERGE_HEAD, generated-output regeneration, compile gate, automatic dispatch, notices and AC6 end-to-end coverage remain required.. No triage reason was given.'
+  created_at: 2026-11-10 23:10:38.487891+00:00
+  modified_at: 2026-11-10 23:10:38.487891+00:00
   session_id: 01a1c530-c917-7f13-ab81-f6b5e1d1cd30
   harness_version: 2.1.322 (Claude Code)
 - id: 01a1c7ba-586f-7333-b14e-4cd62aec6e3c
   author: joe
-  content: |-
-    REVIEW FINDINGS TO ADDRESS (STORY-2710):
+  content: 'REVIEW FINDINGS TO ADDRESS (STORY-2710):
+
     Verdict: CHANGES REQUESTED
+
     Reviewed commit: f89e7ce27a76
+
     Recorded: 2026-11-10T22:35:48.751541376+00:00
+
     Findings:
+
     1. [P1] docs/plans/2026-11-10-story-2710-conflict-lane.md:122-131 — Implement the amended STORY-2710 contract or obtain explicit approval to narrow this PR to a separately tracked safety slice. AC1-6 remain unsatisfied: review_watch_update::attempt still routes conflicts to the advisor, queue_cmd/work::rework_conflict_route still forces Claude, and host merge handling aborts conflicts. No registered regeneration flow, exact-merged-tree compile gate, repair refusal notices with paths and per-head deduplication, or dispatch/regeneration/refusal and end-to-end read-only Codex regressions were added. commit_pending still snapshots with git write-tree before staging, so a resolved worktree with unmerged index entries cannot complete the required host-staged merge. Obtain the outstanding state-contract ruling before implementation; the AC7 helper test alone cannot establish story acceptance.
+
     2. [P2] aida-cli-lib/src/seat_clone.rs:4082-4085,4217-4247 — Restrict the marker guard to host-recorded conflict paths and retain that list for retries. commit_pending now unconditionally scans the entire contents of every changed tracked path against HEAD, even when no merge is pending. A normal edit to a tracked conflict-resolution guide or test fixture containing a literal line beginning <<<<<<< or >>>>>>> now refuses publication, including when that example was already present before the edit. The advisor contract requires scanning listed conflicted paths, not imposing a repository-wide prohibition on marker literals. Add regression coverage for ordinary non-conflict publication with legitimate marker examples, alongside refusal coverage for actual conflicted paths and staged retries.
-    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
-  created_at: 2026-11-10T23:10:40.751312156Z
-  modified_at: 2026-11-10T23:10:40.751312156Z
+
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.'
+  created_at: 2026-11-10 23:10:40.751312+00:00
+  modified_at: 2026-11-10 23:10:40.751312+00:00
   session_id: 01a1c530-c917-7f13-ab81-f6b5e1d1cd30
   harness_version: 2.1.322 (Claude Code)
 - id: 01a1c838-c38e-7b30-a20b-7eb919e0ff6e
   author: joe
-  content: 'ADVISOR RULING (2026-11-10 18:50 MST) on the round-3 design fork: APPROVE the shared versioned repair journal as proposed in docs/plans/2026-11-10-story-2710-conflict-lane.md (state section). Reason: direct rework and the watcher must coordinate without direct queue-work depending on the watcher''s private state format. Contract: one journal file per repository under .aida/, schema ''version'' field, entries keyed (repository, PR, original head); holds the reservation (who dispatched, when, lane id), ambiguous-spawn retention (an entry whose spawn outcome is unknown blocks re-dispatch for that head until its lane is proven dead), the host-recorded original conflict paths, exact-tree validation evidence, and refusal-notice delivery state. Watcher state keeps only a reference. Writes go under the existing store writer lock (or a journal lock with the same discipline). P2 RULED: publication''s marker check and the lane brief both use the HOST-RECORDED original conflict path list retained in the journal across staging retries; the changed-tracked-path scan is not a substitute (keep it only as an extra guard if cheap). Proceed with the production slice on #3813; no further signoff needed for this state contract.'
-  created_at: 2026-11-11T01:28:45.710045270Z
-  modified_at: 2026-11-11T01:28:45.710045270Z
+  content: 'ADVISOR RULING (2026-11-10 18:50 MST) on the round-3 design fork: APPROVE the shared versioned repair journal as proposed in docs/plans/2026-11-10-story-2710-conflict-lane.md (state section). Reason: direct rework and the watcher must coordinate without direct queue-work depending on the watcher''s private state format. Contract: one journal file per repository under .aida/, schema ''version'' field, entries keyed (repository, PR, original head); holds the reservation (who dispatched, when, lane id), ambiguous-spawn retention (an entry whose spawn outcome is unknown blocks re-dispatch for that head until its lane is proven dead), the host-recorded original conflict paths, exact-tree validation evidence, and refusal-notice delivery state. Watcher state keeps only a reference. Writes go under the existing store writer lock (or a journal lock with the same discipline). P2 RULED: publication''s marker check and the lane brief both use the HOST-RECORDED original conflict path list
+    retained in the journal across staging retries; the changed-tracked-path scan is not a substitute (keep it only as an extra guard if cheap). Proceed with the production slice on #3813; no further signoff needed for this state contract.'
+  created_at: 2026-11-11 01:28:45.710045+00:00
+  modified_at: 2026-11-11 01:28:45.710045+00:00
   session_id: 01a1c70f-d731-7b70-acf8-e9ab3d288fca
   harness_version: 2.1.322 (Claude Code)
 - id: 01a1c838-cbd2-7312-a238-3de940eee712
   author: joe
-  content: 'Returned from NeedsAttention to Approved via `aida edit --status`. It was punted on: design-fork: Round 3 findings P1 and P2, reviewed f89e7ce27a76: I accept the reported implementation gaps and marker-scan regression. I dispute proceeding with production shared-state implementation or treating another partial safety slice as approved before the explicit ruling required by P1. The 22:22 UTC advisor ruling settles host-staged merge mechanics and read-only Codex .git, but does not select the shared dispatch-state contract. Please approve the versioned repair journal proposed in docs/plans/2026-11-10-story-2710-conflict-lane.md (repository/PR/head reservations shared by watcher and direct rework, ambiguous-spawn retention, host-recorded original conflict paths retained across staging retries, exact-tree validation evidence, per-head refusal delivery), or select the watcher-state alternative. P2 requires the retained host-recorded path list; the current changed-tracked-path scan is not an acceptable substitute. No separately tracked safety-slice scope has been authorized. Both findings remain open; no acceptance or completion is claimed. No source edits or tests performed this round; Git metadata remains read-only.. No triage reason was given.'
-  created_at: 2026-11-11T01:28:47.826921874Z
-  modified_at: 2026-11-11T01:28:47.826921874Z
+  content: 'Returned from NeedsAttention to Approved via `aida edit --status`. It was punted on: design-fork: Round 3 findings P1 and P2, reviewed f89e7ce27a76: I accept the reported implementation gaps and marker-scan regression. I dispute proceeding with production shared-state implementation or treating another partial safety slice as approved before the explicit ruling required by P1. The 22:22 UTC advisor ruling settles host-staged merge mechanics and read-only Codex .git, but does not select the shared dispatch-state contract. Please approve the versioned repair journal proposed in docs/plans/2026-11-10-story-2710-conflict-lane.md (repository/PR/head reservations shared by watcher and direct rework, ambiguous-spawn retention, host-recorded original conflict paths retained across staging retries, exact-tree validation evidence, per-head refusal delivery), or select the watcher-state alternative. P2 requires the retained host-recorded path list; the current changed-tracked-path scan
+    is not an acceptable substitute. No separately tracked safety-slice scope has been authorized. Both findings remain open; no acceptance or completion is claimed. No source edits or tests performed this round; Git metadata remains read-only.. No triage reason was given.'
+  created_at: 2026-11-11 01:28:47.826921+00:00
+  modified_at: 2026-11-11 01:28:47.826921+00:00
   session_id: 01a1c70f-d731-7b70-acf8-e9ab3d288fca
   harness_version: 2.1.322 (Claude Code)
 - id: 01a1c848-cf86-7101-b8a6-4048eed058f8
   author: joe
-  content: 'ADVISOR SLICE PLAN (2026-11-10 19:00 MST, binding). The story is too big for one lane run, so it lands in slices; each slice is its own PR with a ''(Refs STORY-2710)'' subject, and only slice 3''s PR completes the story. REVIEWERS: judge each PR against ITS slice''s acceptance only; the absence of later slices is not a finding. Slice 0 = PR #3813 as it stands at 1d0d1cbcdf: AC7 publication marker guard + the P2 ordinary-publication marker-example fix. Ship it on approval. Slice 1: the shared versioned repair journal (contract in the 18:50 ruling); host-staged merge that records the original conflict paths in the journal and survives staging retries; publication''s marker check reads the journal path list (P2 complete); registered regeneration table (exec-context ledger, template mirrors) applied by the host at staging. Slice 2: automatic dispatch from review-watch and direct rework on the project''s configured implementer vendor, with journal reservations and ambiguous-spawn retention; the lane brief lists the journal''s conflict paths. Slice 3: exact-tree compile gate (cargo check -p aida-cli-lib --tests on the merged tree before push), per-head refusal notices via advisor mail (one accepted notice per head), and the end-to-end Codex test with .git read-only (AC6). Commit subject for 3: (STORY-2710). Start slice 1 only after #3813 lands, on a fresh branch from main.'
-  created_at: 2026-11-11T01:46:17.350676583Z
-  modified_at: 2026-11-11T01:46:17.350676583Z
+  content: 'ADVISOR SLICE PLAN (2026-11-10 19:00 MST, binding). The story is too big for one lane run, so it lands in slices; each slice is its own PR with a ''(Refs STORY-2710)'' subject, and only slice 3''s PR completes the story. REVIEWERS: judge each PR against ITS slice''s acceptance only; the absence of later slices is not a finding. Slice 0 = PR #3813 as it stands at 1d0d1cbcdf: AC7 publication marker guard + the P2 ordinary-publication marker-example fix. Ship it on approval. Slice 1: the shared versioned repair journal (contract in the 18:50 ruling); host-staged merge that records the original conflict paths in the journal and survives staging retries; publication''s marker check reads the journal path list (P2 complete); registered regeneration table (exec-context ledger, template mirrors) applied by the host at staging. Slice 2: automatic dispatch from review-watch and direct rework on the project''s configured implementer vendor, with journal reservations and ambiguous-spawn
+    retention; the lane brief lists the journal''s conflict paths. Slice 3: exact-tree compile gate (cargo check -p aida-cli-lib --tests on the merged tree before push), per-head refusal notices via advisor mail (one accepted notice per head), and the end-to-end Codex test with .git read-only (AC6). Commit subject for 3: (STORY-2710). Start slice 1 only after #3813 lands, on a fresh branch from main.'
+  created_at: 2026-11-11 01:46:17.350676+00:00
+  modified_at: 2026-11-11 01:46:17.350676+00:00
   session_id: 01a1c70f-d731-7b70-acf8-e9ab3d288fca
   harness_version: 2.1.322 (Claude Code)
 - id: 01a1c870-beba-7261-960c-bfd1ab098ab3
   author: joe
-  content: |-
-    CI FAILURES at 1d0d1cbcdf17 (run 42940415391). Fix exactly these before pushing; a push without a code change for them will fail again and must not be made:
-    (no test lines extracted; open run 42940415391)
-  created_at: 2026-11-11T02:29:54.490278655Z
-  modified_at: 2026-11-11T02:29:54.490278655Z
+  content: 'CI FAILURES at 1d0d1cbcdf17 (run 42940415391). Fix exactly these before pushing; a push without a code change for them will fail again and must not be made:
+
+    (no test lines extracted; open run 42940415391)'
+  created_at: 2026-11-11 02:29:54.490278+00:00
+  modified_at: 2026-11-11 02:29:54.490278+00:00
   session_id: 01a1c70f-d731-7b70-acf8-e9ab3d288fca
   harness_version: 2.1.322 (Claude Code)
 - id: 01a1c870-d67f-7081-b2b4-49ba183edd60
   author: joe
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was punted on: other: Round 3 incomplete: P1 is not disputed but remains unimplemented (shared repair journal, conflict dispatch/configured vendor, retained host merge, registered regeneration, exact-tree compile gate, refusal notices and end-to-end read-only Codex coverage). P2 ordinary-publication marker-example regression is fixed in this checkout, but host-recorded journal path retention across staging retries remains unimplemented. The 2026-11-11 advisor journal ruling is accepted and no additional state-contract signoff is needed. This run cannot deliver the full production integration; do not treat this bounded fix as story acceptance or publish past existing punt/hold vetoes.. No triage reason was given.'
-  created_at: 2026-11-11T02:30:00.575166440Z
-  modified_at: 2026-11-11T02:30:00.575166440Z
+  created_at: 2026-11-11 02:30:00.575166+00:00
+  modified_at: 2026-11-11 02:30:00.575166+00:00
   session_id: 01a1c70f-d731-7b70-acf8-e9ab3d288fca
   harness_version: 2.1.322 (Claude Code)
 - id: 01a1c879-5dd3-7883-b6b9-3db14cdb5395
   author: dirtlab
-  content: |
-    Round-3 follow-up: P1 and P2 remain open and are not disputed; successful aida punt records both. The shared journal ruling is accepted and needs no further signoff. Changed seat_clone.rs to take explicit original conflict paths in the marker helper, remove changed-path inference, and fail closed before staging when host evidence is unavailable. Publication has no journal reader yet and passes no evidence, so pending merges remain refused. Regression permits unrelated changed marker examples during a merge and retains explicit paths across staged retries; missing, empty and invalid evidence refuses. Plan updated with current limitations and ruling status. Lane job j20261111T023415446-2-0 executed story_2710_marker_gate: 1 passed, 0 failed, 0 ignored. Rustfmt and git diff --check pass. This is preparatory work, not a scope-reduction approval or completion. Journal reservation/persistence, watcher and direct rework, lane briefs, regeneration, host-staged merge, exact-tree compile gate and refusal notices remain unfinished. Refs-only publication declaration recorded; punt remains a publication veto. Edits left uncommitted as required by this native seat. Host codegraph client unavailable; session manifest write refused by filesystem boundary.
-  created_at: 2026-11-11T02:39:19.507360527Z
-  modified_at: 2026-11-11T02:39:19.507360527Z
+  content: 'Round-3 follow-up: P1 and P2 remain open and are not disputed; successful aida punt records both. The shared journal ruling is accepted and needs no further signoff. Changed seat_clone.rs to take explicit original conflict paths in the marker helper, remove changed-path inference, and fail closed before staging when host evidence is unavailable. Publication has no journal reader yet and passes no evidence, so pending merges remain refused. Regression permits unrelated changed marker examples during a merge and retains explicit paths across staged retries; missing, empty and invalid evidence refuses. Plan updated with current limitations and ruling status. Lane job j20261111T023415446-2-0 executed story_2710_marker_gate: 1 passed, 0 failed, 0 ignored. Rustfmt and git diff --check pass. This is preparatory work, not a scope-reduction approval or completion. Journal reservation/persistence, watcher and direct rework, lane briefs, regeneration, host-staged merge, exact-tree compile
+    gate and refusal notices remain unfinished. Refs-only publication declaration recorded; punt remains a publication veto. Edits left uncommitted as required by this native seat. Host codegraph client unavailable; session manifest write refused by filesystem boundary.
+
+    '
+  created_at: 2026-11-11 02:39:19.507360+00:00
+  modified_at: 2026-11-11 02:39:19.507360+00:00
   session_id: 01a1c872c8d8
   harness_version: codex-cli 0.167.0
 - id: 01a1c898-5612-7d10-99d8-3dde1110b5dc
   author: joe
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Slice-0 marker guard and ordinary marker-example behavior reviewed; known store-writer inventory failure remains and completing title violates Refs-only slice scope. CI pending at review time.. It was punted on: other: Round-3 P1 and P2 remain open; neither finding is disputed. This seat only replaces the changed-path marker scan with an explicit original-conflict-path interface and refuses pending publication without host evidence. The approved shared journal is not yet implemented or integrated with watcher/direct rework, lane briefs, staging retries, regeneration, exact-tree compile evidence or refusal delivery. No further state-contract signoff is needed; do not accept this as AC1-7 completion or an approved scope reduction.. No triage reason was given.'
-  created_at: 2026-11-11T03:13:09.138819095Z
-  modified_at: 2026-11-11T03:13:09.138819095Z
+  created_at: 2026-11-11 03:13:09.138819+00:00
+  modified_at: 2026-11-11 03:13:09.138819+00:00
   session_id: 01a1c70f-d731-7b70-acf8-e9ab3d288fca
   harness_version: 2.1.322 (Claude Code)
 - id: 01a1c898-5ab0-7a12-907b-08af7a9db260
   author: joe
-  content: |-
-    REVIEW FINDINGS TO ADDRESS (STORY-2710):
+  content: 'REVIEW FINDINGS TO ADDRESS (STORY-2710):
+
     Verdict: CHANGES REQUESTED
+
     Reviewed commit: 70ca06985f10
+
     Recorded: 2026-11-11T02:44:17.134863785+00:00
+
     Findings:
+
     1. [P1] aida-cli-lib/src/seat_clone.rs:4277,4321 and scripts/store-writers.toml: Fix the outstanding store-writer inventory guard failure. Prior-head CI run 42940415391, job 130260751104, failed with `unclassified writer/caller sink site (addition): aida-cli-lib/src/seat_clone.rs|refuse_pending_conflict_markers|execute`. This head still calls execute in that same production item, scripts/check-store-writers.py:30 still inventories every execute call regardless of its argv, and scripts/store-writers.toml has no matching classification. The changed arguments do not remove the sink identity, so the known required gates failure remains. Add a reviewed read_only classification for the bounded probe callback through the prescribed inventory workflow (or refactor to an appropriately named probe callback), then verify the Store writer inventory ratchet in CI.
+
     2. [P2] PR #3813 title and commit subjects 1d0d1cbcdf17/70ca06985f10: Publish slice 0 as non-completing `(Refs STORY-2710)`, as required by the binding 19:00 MST advisor slice plan. The current PR title ends in `(STORY-2710)` and claims automatic conflict routing, while the diff only delivers the marker safety slice; both added commit subjects also carry completing trailers. pr_ship.rs:333-374 derives completion credit from the explicit title trailer, so ordinary squash shipping can prematurely complete the story reserved for slice 3. Correct the PR title/default squash subject to describe the marker guard and end in `(Refs STORY-2710)`; ensure published commit evidence does not claim completion.
-    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
-  created_at: 2026-11-11T03:13:10.320407313Z
-  modified_at: 2026-11-11T03:13:10.320407313Z
+
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.'
+  created_at: 2026-11-11 03:13:10.320407+00:00
+  modified_at: 2026-11-11 03:13:10.320407+00:00
   session_id: 01a1c70f-d731-7b70-acf8-e9ab3d288fca
   harness_version: 2.1.322 (Claude Code)
 - id: 01a1c90d-fed6-7963-981d-1b9520e493c7
   author: joe
   content: '[advisor 2026-11-10 22:28 MST] Slice 0 landed as #3813 (eb1b39c). Starting SLICE 1 now on fresh branch story-2710-slice-1 from main, per the 19:00 MST slice plan: shared versioned repair journal (18:50 contract); host-staged merge that records the original conflict paths in the journal and survives staging retries; publication''s marker check reads the journal path list; registered regeneration table applied by the host at staging. Subject ''(Refs STORY-2710)''. LIGHT gate. Classify any new execute/probe sink in scripts/store-writers.toml in the same commit (the slice-0 lesson).'
-  created_at: 2026-11-11T05:21:40.054080015Z
-  modified_at: 2026-11-11T05:21:40.054080015Z
+  created_at: 2026-11-11 05:21:40.054080+00:00
+  modified_at: 2026-11-11 05:21:40.054080+00:00
   session_id: 01a1c87f-970d-7ce0-9351-e4e75a87731e
   harness_version: 2.1.322 (Claude Code)
 - id: 01a1c90e-4f90-7380-b357-6936da636778
   author: joe
   content: 'Returned from NeedsAttention to Approved via `aida edit --status`. It was shelved on: reviewer/verdict:request-changes: Approved advisor-authorized slice 0: marker guard and ordinary-publication fix; inventory classification and Refs-only title corrected; no actionable defects. CI pending at review time. Later slices retain STORY-2710 completion.. No triage reason was given.'
-  created_at: 2026-11-11T05:22:00.720773256Z
-  modified_at: 2026-11-11T05:22:00.720773256Z
+  created_at: 2026-11-11 05:22:00.720773+00:00
+  modified_at: 2026-11-11 05:22:00.720773+00:00
   session_id: 01a1c87f-970d-7ce0-9351-e4e75a87731e
   harness_version: 2.1.322 (Claude Code)
 - id: 01a1c928-6843-75a1-a65a-cafc763576e0
   author: joe
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Binding slice-1 acceptance is unimplemented: this head only adds inventory regression coverage. CI pending at review time.. No triage reason was given.'
-  created_at: 2026-11-11T05:50:30.979975068Z
-  modified_at: 2026-11-11T05:50:30.979975068Z
+  created_at: 2026-11-11 05:50:30.979975+00:00
+  modified_at: 2026-11-11 05:50:30.979975+00:00
   session_id: 01a1c87f-970d-7ce0-9351-e4e75a87731e
   harness_version: 2.1.322 (Claude Code)
 - id: 01a1c928-6d2d-7ed3-b3a0-c3159dc9f90d
   author: joe
-  content: |-
-    REVIEW FINDINGS TO ADDRESS (STORY-2710):
+  content: 'REVIEW FINDINGS TO ADDRESS (STORY-2710):
+
     Verdict: CHANGES REQUESTED
+
     Reviewed commit: 19834b492934
+
     Recorded: 2026-11-11T05:46:08.951425133+00:00
+
     Findings:
-    1. [P1] tests/test_store_writer_inventory.py:30 and scripts/store-writers.toml:1805: Deliver the assigned slice-1 implementation before requesting slice-1 approval, or obtain an explicit advisor scope amendment for this inventory-only follow-up. The binding 19:00 MST slice plan and 05:21 UTC start instruction require a locked versioned repair journal with the approved repository/PR/original-head entries, host-staged merges retaining original conflict paths across retries, publication loading those paths, and a registered host regeneration table for exec-context/template outputs. This diff only adds an inventory fixture and changes an evidence reference. In particular, aida-cli-lib/src/seat_clone.rs:4133 still calls refuse_pending_conflict_markers with None, so pending merges refuse instead of consuming journal evidence. Implement and cover all four slice-1 deliverables, preserve read-only seat .git and Refs-only completion semantics; later-slice dispatch, compile gate and notice delivery are not requested in this finding.
-    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
-  created_at: 2026-11-11T05:50:32.237748564Z
-  modified_at: 2026-11-11T05:50:32.237748564Z
+
+    1. [P1] tests/test_store_writer_inventory.py:30 and scripts/store-writers.toml:1805: Deliver the assigned slice-1 implementation before requesting slice-1 approval, or obtain an explicit advisor scope amendment for this inventory-only follow-up. The binding 19:00 MST slice plan and 05:21 UTC start instruction require a locked versioned repair journal with the approved repository/PR/original-head entries, host-staged merges retaining original conflict paths across retries, publication loading those paths, and a registered host regeneration table for exec-context/template outputs. This diff only adds an inventory fixture and changes an evidence reference. In particular, aida-cli-lib/src/seat_clone.rs:4133 still calls refuse_pending_conflict_markers with None, so pending merges refuse instead of consuming journal evidence. Implement and cover all four slice-1 deliverables, preserve read-only seat .git and Refs-only completion semantics; later-slice dispatch, compile gate and notice delivery
+    are not requested in this finding.
+
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.'
+  created_at: 2026-11-11 05:50:32.237748+00:00
+  modified_at: 2026-11-11 05:50:32.237748+00:00
   session_id: 01a1c87f-970d-7ce0-9351-e4e75a87731e
   harness_version: 2.1.322 (Claude Code)
 - id: 01a1c949-f392-7bd3-a82d-5ad80fec9b42
   author: dirtlab
-  content: |
-    Round 5 P1: implemented all four assigned slice-1 foundations: locked versioned repair journal keyed by repository/PR/original head; host-staged merges with immutable original paths across retries; journal-backed publication marker scans and lane briefs; compiled closed host regeneration registry for exec-context/template outputs. Configured vendor/model selection, read-only lane Git and Refs-only publication remain intact. Actual generator runs deny Git metadata writes for both recorded clones and linked worktrees; only host restoration exposes the private index.
+  content: 'Round 5 P1: implemented all four assigned slice-1 foundations: locked versioned repair journal keyed by repository/PR/original head; host-staged merges with immutable original paths across retries; journal-backed publication marker scans and lane briefs; compiled closed host regeneration registry for exec-context/template outputs. Configured vendor/model selection, read-only lane Git and Refs-only publication remain intact. Actual generator runs deny Git metadata writes for both recorded clones and linked worktrees; only host restoration exposes the private index.
+
 
     Final story_2710 lane job j20261111T062416168-2-0: 6 passed. Additional bug_2456 clone publication: 1 passed (j20261111T060542167-2-0); bug_2504 recovery: 5 passed (j20261111T060840583-2-0); vendor ratchet: 3 passed (j20261111T060847634-2-0). Python regeneration: 5 passed; writer inventory: 55 passed. Inventory/exec-context validation, rustfmt and diff checks pass. No full-repository template Cargo regeneration was exercised; registered generator failures remain fail-closed.
 
+
     Later-slice dispatch, exact-tree compile gating and notice delivery remain outstanding for the story, outside this assigned finding. Codegraph client absent at the supplied host path; doctor confirmed missing, and navigation used rg. Native seat edits are uncommitted for the host launcher; no push, PR creation, review recording, merge or queue completion was performed.
-  created_at: 2026-11-11T06:27:09.330634745Z
-  modified_at: 2026-11-11T06:27:09.330634745Z
+
+    '
+  created_at: 2026-11-11 06:27:09.330634+00:00
+  modified_at: 2026-11-11 06:27:09.330634+00:00
   session_id: 01a1c92abb7e
   harness_version: codex-cli 0.167.0
 - id: 01a1c999-2e80-7273-a832-a375e5f0c33f
   author: joe
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Slice-1 review found five actionable defects in source-conflict admission, successor-lease resume, regeneration retry enforcement, template output enumeration and merge-probe classification. CI pending at review time.. No triage reason was given.'
-  created_at: 2026-11-11T07:53:41.760028464Z
-  modified_at: 2026-11-11T07:53:41.760028464Z
+  created_at: 2026-11-11 07:53:41.760028+00:00
+  modified_at: 2026-11-11 07:53:41.760028+00:00
   session_id: 01a1c87f-970d-7ce0-9351-e4e75a87731e
   harness_version: 2.1.322 (Claude Code)
 - id: 01a1c999-3e93-76d3-9009-22abe8a92c0b
   author: joe
-  content: |-
-    REVIEW FINDINGS TO ADDRESS (STORY-2710):
+  content: 'REVIEW FINDINGS TO ADDRESS (STORY-2710):
+
     Verdict: CHANGES REQUESTED
+
     Reviewed commit: 2f179152efd6
+
     Recorded: 2026-11-11T07:45:40.652031003+00:00
+
     Findings:
+
     1. [P1] scripts/repair-generated.py:82-86 and aida-cli-lib/src/seat_clone.rs:3557-3558: Do not make every Rust/source conflict fail before the repair lane can start. Host preparation invokes regeneration before launch, and the driver refuses any unmerged .rs/.py/Cargo.toml/Makefile/template source whenever registered outputs exist, even when those outputs did not conflict. Thus an ordinary appended-test conflict in this repository never reaches the configured resolver; setup rolls back with the merge/reservation retained. Separate safe generated-output restoration from source-dependent generation, let the lane resolve authoritative sources, then require host regeneration before publication. Cover a real repository fixture with both registered generators and an authoritative-source conflict.
-    2. [P1] aida-cli-lib/src/seat_clone.rs:3495-3497: Support authorized successor leases when resuming a retained repair. queue_cmd/work.rs:5293-5299 passes the newly minted lease.id, but session_start.rs:3347-3348 always generates a new UUID, including orphan adoption (the old lease is removed at 3492-3498). Consequently queue work --resume always fails entry.lane_id == lane_id after an interrupted conflict repair. Persist and validate an explicit predecessor/successor handoff under the journal lock instead of equating a repair identity with each pickup's new lease ID. Add command-level/adoption coverage; the current helper retry test passes the same literal lease-1 twice and misses this.
+
+    2. [P1] aida-cli-lib/src/seat_clone.rs:3495-3497: Support authorized successor leases when resuming a retained repair. queue_cmd/work.rs:5293-5299 passes the newly minted lease.id, but session_start.rs:3347-3348 always generates a new UUID, including orphan adoption (the old lease is removed at 3492-3498). Consequently queue work --resume always fails entry.lane_id == lane_id after an interrupted conflict repair. Persist and validate an explicit predecessor/successor handoff under the journal lock instead of equating a repair identity with each pickup''s new lease ID. Add command-level/adoption coverage; the current helper retry test passes the same literal lease-1 twice and misses this.
+
     3. [P1] aida-cli-lib/src/seat_clone.rs:3490-3499,3557-3558 and commit_pending:4480-4500: Persist successful regeneration and enforce it on retry/publication. record_paths is saved before regenerate; a generator error, timeout, unexpected write or ratchet-growth refusal leaves matching journal evidence and MERGE_HEAD, but the pending-merge resume branch returns the paths without rerunning regeneration. commit_pending likewise checks only matching paths/markers, so a direct host publication retry can commit a partially regenerated or rejected ledger. Record failed/incomplete regeneration explicitly, rerun required generation after recovery, and refuse publication until it succeeds; test failure after an output write and subsequent resume/publication.
+
     4. [P2] scripts/repair-generated.py:79,99-104: Derive declared template outputs from the resolved authoritative template inventory, including legitimate additions/removals, rather than only paths tracked at pinned main. make sync-templates renders the merged templates: adding a new command/skill produces a new mirror outside outputs and is rejected as an unexpected write; removing a portable skill removes an old declared output and is rejected as missing. These normal PR changes make conflict repair impossible even with all sources resolved. Keep the trusted closed registration rules, but enumerate the expected post-merge products from those rules and validate against that set. Cover a new template and a removed portable skill.
+
     5. [P2] aida-cli-lib/src/seat_clone.rs:3522-3529: Distinguish a positive merge-tree conflict result from probe failures before reserving the head. execute(...).is_err() also covers timeouts, spawn failures and Git fatal errors, yet immediately persists an Unknown reservation and attempts a real merge. A transient probe failure can therefore leave an otherwise clean PR head permanently reserved (including when the real merge succeeds and this function bails at 3545). Preserve/classify merge-tree exit status and reserve only a confirmed conflict; operational failures should return without a repair reservation or index mutation. Add injected timeout/fatal-probe tests.
-    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
-  created_at: 2026-11-11T07:53:45.875813768Z
-  modified_at: 2026-11-11T07:53:45.875813768Z
+
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.'
+  created_at: 2026-11-11 07:53:45.875813+00:00
+  modified_at: 2026-11-11 07:53:45.875813+00:00
   session_id: 01a1c87f-970d-7ce0-9351-e4e75a87731e
   harness_version: 2.1.322 (Claude Code)
 history:
 - id: 01a1c77f-ffdf-7ac3-a382-33d6a384e617
   author: aida-session-start
-  timestamp: 2026-11-10T22:06:56.991548387Z
+  timestamp: 2026-11-10 22:06:56.991548+00:00
   changes:
   - field_name: status
     old_value: Approved
     new_value: InProgress
 - id: 01a1c780-4fc4-7a11-9165-1440ad30b363
   author: dirtlab
-  timestamp: 2026-11-10T22:07:17.444104819Z
+  timestamp: 2026-11-10 22:07:17.444104+00:00
   session_id: 01a1c77ff9fe
   harness_version: codex-cli 0.167.0
   changes: []
 - id: 01a1c781-552e-7b62-a66c-7462fe395343
   author: dirtlab
-  timestamp: 2026-11-10T22:08:24.366179503Z
+  timestamp: 2026-11-10 22:08:24.366179+00:00
   session_id: 01a1c77ff9fe
   harness_version: codex-cli 0.167.0
   changes:
@@ -320,11 +280,11 @@ history:
     new_value: NeedsAttention
 - id: 01a1c784-c9b9-7823-b9f8-08a8af63245b
   author: joe
-  timestamp: 2026-11-10T22:12:10.809923113Z
+  timestamp: 2026-11-10 22:12:10.809923+00:00
   changes: []
 - id: 01a1c78d-02b1-7e62-802d-ebdfc96a28ec
   author: joe
-  timestamp: 2026-11-10T22:21:09.681792918Z
+  timestamp: 2026-11-10 22:21:09.681792+00:00
   session_id: 01a1c530-c917-7f13-ab81-f6b5e1d1cd30
   harness_version: 2.1.322 (Claude Code)
   changes:
@@ -333,20 +293,20 @@ history:
     new_value: Approved
 - id: 01a1c78d-283b-7e10-93ba-e76a96e4f6e9
   author: joe
-  timestamp: 2026-11-10T22:21:19.291597506Z
+  timestamp: 2026-11-10 22:21:19.291597+00:00
   session_id: 01a1c530-c917-7f13-ab81-f6b5e1d1cd30
   harness_version: 2.1.322 (Claude Code)
   changes: []
 - id: 01a1c78f-04ee-7792-bda9-1940e07f0902
   author: aida-session-start
-  timestamp: 2026-11-10T22:23:21.326240194Z
+  timestamp: 2026-11-10 22:23:21.326240+00:00
   changes:
   - field_name: status
     old_value: Approved
     new_value: InProgress
 - id: 01a1c793-752e-7d42-9a7b-49ae658e5884
   author: dirtlab
-  timestamp: 2026-11-10T22:28:12.206697164Z
+  timestamp: 2026-11-10 22:28:12.206697+00:00
   session_id: 01a1c78ef9de
   harness_version: codex-cli 0.167.0
   changes:
@@ -355,11 +315,11 @@ history:
     new_value: NeedsAttention
 - id: 01a1c79a-7bab-7fb2-8c0e-f82dd07dbac5
   author: joe
-  timestamp: 2026-11-10T22:35:52.619111257Z
+  timestamp: 2026-11-10 22:35:52.619111+00:00
   changes: []
 - id: 01a1c7ba-4f97-7213-9ae2-9023300db2a3
   author: joe
-  timestamp: 2026-11-10T23:10:38.487864462Z
+  timestamp: 2026-11-10 23:10:38.487864+00:00
   session_id: 01a1c530-c917-7f13-ab81-f6b5e1d1cd30
   harness_version: 2.1.322 (Claude Code)
   changes:
@@ -368,20 +328,20 @@ history:
     new_value: Approved
 - id: 01a1c7ba-6a1d-7fe1-8358-b10dad63f07d
   author: joe
-  timestamp: 2026-11-10T23:10:45.277887618Z
+  timestamp: 2026-11-10 23:10:45.277887+00:00
   session_id: 01a1c530-c917-7f13-ab81-f6b5e1d1cd30
   harness_version: 2.1.322 (Claude Code)
   changes: []
 - id: 01a1c7bc-5d42-7453-8989-a9f0c76444f1
   author: aida-session-start
-  timestamp: 2026-11-10T23:12:53.058348642Z
+  timestamp: 2026-11-10 23:12:53.058348+00:00
   changes:
   - field_name: status
     old_value: Approved
     new_value: InProgress
 - id: 01a1c7bc-fc83-7b33-872f-80a78a1a9883
   author: dirtlab
-  timestamp: 2026-11-10T23:13:33.827474709Z
+  timestamp: 2026-11-10 23:13:33.827474+00:00
   session_id: 01a1c7bc5670
   harness_version: codex-cli 0.167.0
   changes:
@@ -390,7 +350,7 @@ history:
     new_value: NeedsAttention
 - id: 01a1c838-cbd2-7312-a238-3dd00be58419
   author: joe
-  timestamp: 2026-11-11T01:28:47.826899551Z
+  timestamp: 2026-11-11 01:28:47.826899+00:00
   session_id: 01a1c70f-d731-7b70-acf8-e9ab3d288fca
   harness_version: 2.1.322 (Claude Code)
   changes:
@@ -399,14 +359,14 @@ history:
     new_value: Approved
 - id: 01a1c83b-3dc9-72d2-b70b-20c40c7bd8df
   author: aida-session-start
-  timestamp: 2026-11-11T01:31:28.073950882Z
+  timestamp: 2026-11-11 01:31:28.073950+00:00
   changes:
   - field_name: status
     old_value: Approved
     new_value: InProgress
 - id: 01a1c83d-1459-7ac2-b272-04bb70f79dbc
   author: dirtlab
-  timestamp: 2026-11-11T01:33:28.537129637Z
+  timestamp: 2026-11-11 01:33:28.537129+00:00
   session_id: 01a1c83b3748
   harness_version: codex-cli 0.167.0
   changes:
@@ -415,7 +375,7 @@ history:
     new_value: NeedsAttention
 - id: 01a1c870-d67f-7081-b2b4-49acece83adb
   author: joe
-  timestamp: 2026-11-11T02:30:00.575153570Z
+  timestamp: 2026-11-11 02:30:00.575153+00:00
   session_id: 01a1c70f-d731-7b70-acf8-e9ab3d288fca
   harness_version: 2.1.322 (Claude Code)
   changes:
@@ -424,20 +384,20 @@ history:
     new_value: Approved
 - id: 01a1c870-e882-7513-8f16-f6b5c71da4db
   author: joe
-  timestamp: 2026-11-11T02:30:05.186541336Z
+  timestamp: 2026-11-11 02:30:05.186541+00:00
   session_id: 01a1c70f-d731-7b70-acf8-e9ab3d288fca
   harness_version: 2.1.322 (Claude Code)
   changes: []
 - id: 01a1c872-cf04-7c52-80b4-9e28c9292d97
   author: aida-session-start
-  timestamp: 2026-11-11T02:32:09.732196901Z
+  timestamp: 2026-11-11 02:32:09.732196+00:00
   changes:
   - field_name: status
     old_value: Approved
     new_value: InProgress
 - id: 01a1c874-fd43-7ae0-8e3e-e265d5224036
   author: dirtlab
-  timestamp: 2026-11-11T02:34:32.643580650Z
+  timestamp: 2026-11-11 02:34:32.643580+00:00
   session_id: 01a1c872c8d8
   harness_version: codex-cli 0.167.0
   changes:
@@ -446,11 +406,11 @@ history:
     new_value: NeedsAttention
 - id: 01a1c87d-f797-71b1-a621-56e97d585cf1
   author: joe
-  timestamp: 2026-11-11T02:44:21.015975941Z
+  timestamp: 2026-11-11 02:44:21.015975+00:00
   changes: []
 - id: 01a1c898-5612-7d10-99d8-3dc19884bd98
   author: joe
-  timestamp: 2026-11-11T03:13:09.138794056Z
+  timestamp: 2026-11-11 03:13:09.138794+00:00
   session_id: 01a1c70f-d731-7b70-acf8-e9ab3d288fca
   harness_version: 2.1.322 (Claude Code)
   changes:
@@ -459,27 +419,27 @@ history:
     new_value: Approved
 - id: 01a1c898-6eeb-7321-acf7-12e6ad457628
   author: joe
-  timestamp: 2026-11-11T03:13:15.499962626Z
+  timestamp: 2026-11-11 03:13:15.499962+00:00
   session_id: 01a1c70f-d731-7b70-acf8-e9ab3d288fca
   harness_version: 2.1.322 (Claude Code)
   changes: []
 - id: 01a1c89a-29f9-79e2-8fab-2cbe11731bb0
   author: aida-session-start
-  timestamp: 2026-11-11T03:15:08.921038372Z
+  timestamp: 2026-11-11 03:15:08.921038+00:00
   changes:
   - field_name: status
     old_value: Approved
     new_value: InProgress
 - id: 01a1c8a4-457e-76a2-862d-2820f6ed86c1
   author: aida-orchestrator
-  timestamp: 2026-11-11T03:26:11.326319337Z
+  timestamp: 2026-11-11 03:26:11.326319+00:00
   changes:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
 - id: 01a1c90e-4f90-7380-b357-692879038ada
   author: joe
-  timestamp: 2026-11-11T05:22:00.720755176Z
+  timestamp: 2026-11-11 05:22:00.720755+00:00
   session_id: 01a1c87f-970d-7ce0-9351-e4e75a87731e
   harness_version: 2.1.322 (Claude Code)
   changes:
@@ -488,21 +448,21 @@ history:
     new_value: Approved
 - id: 01a1c90f-637e-7062-878a-e22fb4615fd1
   author: aida-session-start
-  timestamp: 2026-11-11T05:23:11.358389482Z
+  timestamp: 2026-11-11 05:23:11.358389+00:00
   changes:
   - field_name: status
     old_value: Approved
     new_value: InProgress
 - id: 01a1c924-7aa5-7a51-a62b-a27ce6690012
   author: aida-orchestrator
-  timestamp: 2026-11-11T05:46:13.541597889Z
+  timestamp: 2026-11-11 05:46:13.541597+00:00
   changes:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
 - id: 01a1c928-6843-75a1-a65a-cae8914a61dd
   author: joe
-  timestamp: 2026-11-11T05:50:30.979960496Z
+  timestamp: 2026-11-11 05:50:30.979960+00:00
   session_id: 01a1c87f-970d-7ce0-9351-e4e75a87731e
   harness_version: 2.1.322 (Claude Code)
   changes:
@@ -511,20 +471,20 @@ history:
     new_value: Approved
 - id: 01a1c928-a75d-78c0-8362-e17c8a65b7c5
   author: joe
-  timestamp: 2026-11-11T05:50:47.133653938Z
+  timestamp: 2026-11-11 05:50:47.133653+00:00
   session_id: 01a1c87f-970d-7ce0-9351-e4e75a87731e
   harness_version: 2.1.322 (Claude Code)
   changes: []
 - id: 01a1c92a-c206-7361-a5cb-de122826f451
   author: aida-session-start
-  timestamp: 2026-11-11T05:53:05.030470239Z
+  timestamp: 2026-11-11 05:53:05.030470+00:00
   changes:
   - field_name: status
     old_value: Approved
     new_value: InProgress
 - id: 01a1c991-df25-71b3-ae94-8933ab8c9d7c
   author: aida-orchestrator
-  timestamp: 2026-11-11T07:45:42.693400032Z
+  timestamp: 2026-11-11 07:45:42.693400+00:00
   session_id: 01a1c87f-970d-7ce0-9351-e4e75a87731e
   harness_version: 2.1.322 (Claude Code)
   changes:
@@ -533,7 +493,7 @@ history:
     new_value: NeedsAttention
 - id: 01a1c999-2e80-7273-a832-a3652f6553e0
   author: joe
-  timestamp: 2026-11-11T07:53:41.760020272Z
+  timestamp: 2026-11-11 07:53:41.760020+00:00
   session_id: 01a1c87f-970d-7ce0-9351-e4e75a87731e
   harness_version: 2.1.322 (Claude Code)
   changes:
@@ -542,20 +502,29 @@ history:
     new_value: Approved
 - id: 01a1c999-6223-7852-8b6b-2bf7848be127
   author: joe
-  timestamp: 2026-11-11T07:53:54.979079189Z
+  timestamp: 2026-11-11 07:53:54.979079+00:00
   session_id: 01a1c87f-970d-7ce0-9351-e4e75a87731e
   harness_version: 2.1.322 (Claude Code)
   changes: []
 - id: 01a1c99b-3cc1-76c0-81fb-873a756e883b
   author: aida-session-start
-  timestamp: 2026-11-11T07:55:56.481561898Z
+  timestamp: 2026-11-11 07:55:56.481561+00:00
   changes:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1c99e-7651-74e3-a874-e57fe960157b
+  author: dirtlab
+  timestamp: 2026-11-11 07:59:27.825219+00:00
+  session_id: 01a1c99b3640
+  harness_version: codex-cli 0.167.0
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 - id: 01a1c99f-1c83-7a50-b7a6-9c0d3f202d31
   author: aida-orchestrator
-  timestamp: 2026-11-11T08:00:10.371907780Z
+  timestamp: 2026-11-11 08:00:10.371907+00:00
   changes:
   - field_name: status
     old_value: InProgress
@@ -576,4 +545,9 @@ failure_reason:
   detail: 'Slice 1 has three regeneration/recovery defects: portable output enumeration, successor-lease resume, and failed-regeneration gating. CI pending at review time.'
   recovery_hint: address the review findings, move STORY-B6B1278890774EF993D2EBC327862470-633 back to In Progress, and clear the PR hold only after approval
   shelved_by: reviewer
-  shelved_at: 2026-11-11T08:00:10.371887567Z
+  shelved_at: 2026-11-11 08:00:10.371887+00:00
+attention_reason:
+  category: other
+  detail: Round 6 partial patch only; publication must remain vetoed. Findings 2 (authorized predecessor/successor lease handoff), 4 (resolved template product inventory), and 5 (typed merge-tree conflict versus timeout/fatal probe evidence) remain unresolved and are not disputed. Findings 1 and 3 have preparation/publication phase separation and retry regeneration changes under targeted validation. This is not a complete production repair slice; do not publish as story completion.
+  raised_by: implementer
+  raised_at: 2026-11-11 07:59:27.825209+00:00
