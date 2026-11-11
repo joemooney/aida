@@ -1,0 +1,103 @@
+{
+  "schema_version": 1,
+  "spec": "BUG-2518",
+  "publishes": [
+    {
+      "at": "2026-11-11T09:26:03.057408429Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-11-10T12:29:32.298283159Z",
+      "spec": "BUG-2518",
+      "seat": "advisor",
+      "kind": {
+        "event": "SpecRequeued",
+        "via": "queue-rework",
+        "actor": "joe",
+        "from": "Needs Attention",
+        "to": "Approved"
+      }
+    },
+    {
+      "ts": "2026-11-11T04:06:07.263484709Z",
+      "spec": "BUG-2518",
+      "seat": "advisor",
+      "kind": {
+        "event": "SpecRequeued",
+        "via": "queue-rework",
+        "actor": "joe",
+        "from": "Needs Attention",
+        "to": "Approved"
+      }
+    },
+    {
+      "ts": "2026-11-11T04:31:15.353314953Z",
+      "spec": "BUG-2518",
+      "seat": "advisor",
+      "kind": {
+        "event": "SpecRequeued",
+        "via": "queue-rework",
+        "actor": "joe",
+        "from": "Needs Attention",
+        "to": "Approved"
+      }
+    },
+    {
+      "ts": "2026-11-11T06:07:38.764288547Z",
+      "spec": "BUG-2518",
+      "seat": "advisor",
+      "kind": {
+        "event": "SpecRequeued",
+        "via": "queue-rework",
+        "actor": "joe",
+        "from": "Needs Attention",
+        "to": "Approved"
+      }
+    },
+    {
+      "ts": "2026-11-11T07:33:21.992078344Z",
+      "spec": "BUG-2518",
+      "seat": "advisor",
+      "kind": {
+        "event": "SpecRequeued",
+        "via": "queue-rework",
+        "actor": "joe",
+        "from": "Needs Attention",
+        "to": "Approved"
+      }
+    },
+    {
+      "ts": "2026-11-11T07:56:53.294457247Z",
+      "spec": "BUG-2518",
+      "seat": "advisor",
+      "kind": {
+        "event": "SpecRequeued",
+        "via": "queue-rework",
+        "actor": "joe",
+        "from": "Needs Attention",
+        "to": "Approved"
+      }
+    },
+    {
+      "ts": "2026-11-11T09:25:40.971598097Z",
+      "spec": "BUG-2518",
+      "seat": "advisor",
+      "kind": {
+        "event": "PrMerged",
+        "pr": 3783
+      }
+    },
+    {
+      "ts": "2026-11-11T09:26:02.911474119Z",
+      "spec": "BUG-2518",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "1b2f94a58c52c1fa07b1cbcd7b54a0b0d44b2ef8",
+        "pr": 3783,
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
