@@ -546,7 +546,6 @@ pub(crate) struct CommitCmdArgs {
 // inference), no requirements store. Dispatch before storage init like
 // goal / ultraplan. trace:STORY-663 | ai:claude
 fn run_commit(matches: &clap::ArgMatches, _ctx: &crate::cmdkit::DispatchCtx) -> anyhow::Result<()> {
-    use crate::*;
     let args = <CommitCmdArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
     let CommitCmdArgs {
         commit_type,

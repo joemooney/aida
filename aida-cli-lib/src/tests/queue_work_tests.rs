@@ -6,6 +6,39 @@
 //! trace:STORY-42 | ai:claude
 // trace:BUG-2017 | ai:codex — explicit positive global-ID fixture.
 use super::*;
+use crate::{
+    append_reviewer_prompt_suffixes_with, apply_rework_conflict_route, auto_complete,
+    auto_complete_phase1_target_status, build_implementer_phase_args, build_resolved_entry,
+    canonical_review_story, classify_no_human_gate, derive_queue_work_prompt,
+    derive_scope_from_entry, derive_scope_from_req_id, drain_state, effective_auto_complete_role,
+    find_scope_lease_conflict, format_queue_work_not_queued_error, format_review_label,
+    guarded_execution_mode_drain_message, handle_queue_rework, handle_rework_entry,
+    headless_waiting_rule_suffix, held_resume_plan, held_resume_reentry_allowed,
+    infer_queue_work_role, latest_findings_block, leased_implementer_queue_head,
+    merge_current_spec_queue_entries, no_human_scope_line,
+    non_tty_interactive_implementer_preflight, orchestrator,
+    orchestrator_authorizes_explicit_queue_pickup_with_token, parse_review_scope,
+    pick_auto_complete_head_for_role, preflight_queue_work_branch,
+    prepare_auto_complete_phase1_status, prepare_registered_auto_complete_phase1, prepend_due_jobs,
+    queue_add_for_scope_routing, queue_add_hidden_view_reason, queue_drain_pickup_policy,
+    queue_fresh_pickup_policy, queue_fresh_pickup_reason_label,
+    queue_work_plan_wants_pr_head_branch, queue_work_role_mismatch, queued_review_story_for_pr,
+    read_behavior_permission_mode, refuse_waiting_pickup, resolve_auto_complete_head,
+    resolve_autonomy_mode, resolve_batch_members, resolve_batch_members_with_context,
+    resolve_drain_alias, resolve_next_n_head, resolve_pickup_attempt,
+    resolve_queue_work_permission_mode, resolve_queue_work_plan,
+    resume_autocomplete_conflict_message, review_calibration_spec_ids,
+    review_calibration_spec_ids_in, review_pickup_hint, review_round_from_comments,
+    review_title_matches, reviewer_prompt_for_round, rework_conflict_route,
+    rework_findings_block_for_spec, rework_pickup_prompt, rework_pr_head_branch_from_lookup,
+    rework_pr_head_branch_override, rework_pr_head_matches_spec, rework_round_from_comments,
+    spec_matches, strip_toml_inline_comment, worktree_lease, AutoCompleteHeadCandidate,
+    AutonomyMode, Cli, NoHumanGate, OpenPrInfo, OrchestratorBadge, PrLookup, QueueCommand,
+    QueueFreshPickup, QueueWorkEntry, QueueWorkMode, QueueWorkPlan, RealNextNDriver,
+    RealPhaseDriver, RelationshipType, ReviewForge, ReviewStoryLookup, ReworkConflictLaunch,
+    ReworkFlags, Storage,
+};
+use aida_core::{DatabaseBackend, RequirementStatus};
 use aida_core::{QueueEntry, Relationship, Requirement, RequirementType};
 use uuid::Uuid;
 
@@ -4032,8 +4065,8 @@ fn requeued_spec_reenters_queue_wide_drain_head() {
 }
 
 /// STORY-1429: requeue does not bypass the dependency gate. A requeued
-/// dependent whose prerequisite is not Completed is still skipped by the
-/// BlockedBy gate, and its requeue preview said so before it was taken.
+/// dependent whose prerequisite is not Completed refuses rework without
+/// changing its status or queue; the preview names the same dependency.
 // trace:STORY-1429 | ai:claude
 #[test]
 fn requeued_dependent_still_skipped_by_blocked_by_gate() {
@@ -4054,7 +4087,8 @@ fn requeued_dependent_still_skipped_by_blocked_by_gate() {
         "the preview names the unmet dependency"
     );
 
-    handle_queue_rework(
+    let queue_before = serde_json::to_value(storage.queue_list("u", false).unwrap()).unwrap();
+    let refusal = handle_queue_rework(
         &storage,
         "NFR-56",
         false,
@@ -4069,24 +4103,23 @@ fn requeued_dependent_still_skipped_by_blocked_by_gate() {
         true,
         Some("u"),
     )
-    .unwrap();
+    .unwrap_err();
+    assert!(
+        refusal.to_string().contains("reason=blocked-by"),
+        "{refusal:#}"
+    );
     let store = storage.load().unwrap();
     assert_eq!(
         store.get_requirement_by_spec_id("NFR-56").unwrap().status,
-        RequirementStatus::Approved
+        RequirementStatus::NeedsAttention
     );
 
-    let (pick, _role, blocked) = resolve_next_n_head(&storage, "u", Some("implementer"));
+    let (pick, _role, _) = resolve_next_n_head(&storage, "u", Some("implementer"));
     assert_eq!(pick.map(|p| p.spec), Some("STORY-52".to_string()));
-    bug_1608_set_status(&storage, "STORY-52", RequirementStatus::InProgress);
-    let (pick, _role, blocked_after) = resolve_next_n_head(&storage, "u", Some("implementer"));
-    assert!(pick.is_none(), "the requeued dependent must not be picked");
-    assert!(
-        blocked
-            .iter()
-            .chain(blocked_after.iter())
-            .any(|(id, reason)| id == "NFR-56" && reason.starts_with("blocked-by STORY-52")),
-        "{blocked:?} {blocked_after:?}"
+    assert_eq!(
+        serde_json::to_value(storage.queue_list("u", false).unwrap()).unwrap(),
+        queue_before,
+        "refused rework must preserve the existing queue"
     );
 }
 
@@ -4814,4 +4847,111 @@ fn task_3608_pipelined_sidecar_preserves_no_change() {
             .unwrap()
             .no_change
     );
+}
+
+// trace:STORY-2690 | ai:codex
+#[test]
+fn story_2690_receipt_uses_queue_route_and_pr_scope() {
+    for shell in ["implementer", "advisor", "reviewer"] {
+        let _env = crate::test_env::EnvVarGuard::set("AIDA_SESSION_ROLE", shell);
+        for (scope, routed, explicit, expected) in [
+            ("STORY-2690", Some("reviewer"), None, false),
+            ("STORY-2690", Some("implementer"), None, true),
+            ("STORY-2690", None, None, true),
+            ("STORY-2690", Some("reviewer"), Some("implementer"), true),
+            ("STORY-2690", Some("implementer"), Some("reviewer"), false),
+            ("PR-42", None, None, false),
+            ("MR-42", None, None, false),
+            ("PR-42", None, Some("implementer"), false),
+        ] {
+            let e = resolved("STORY-2690", entry(Uuid::now_v7(), routed, None));
+            let plan = plan_with(QueueWorkMode::Item, scope, vec![e]);
+            let (role, _, _) = infer_queue_work_role(&plan, explicit);
+            let tmp = tempfile::tempdir().unwrap();
+            let mut attempt =
+                Some(crate::lane_result::Attempt::begin(tmp.path(), "queue-head", None).unwrap());
+            let launch_route =
+                resolve_pickup_attempt(&mut attempt, &plan, &role, true, None).unwrap();
+            assert_eq!(launch_route, expected, "launch must use receipt routing");
+            assert_eq!(attempt.is_some(), expected);
+            let receipts: Vec<_> = std::fs::read_dir(tmp.path().join(".aida/lane-results"))
+                .unwrap()
+                .collect();
+            assert_eq!(receipts.len(), usize::from(expected));
+            if let Some(attempt) = attempt {
+                attempt
+                    .finish_result(&Err(anyhow::anyhow!("preflight refusal")))
+                    .unwrap();
+                let path = receipts[0].as_ref().unwrap().path();
+                let receipt: serde_json::Value =
+                    serde_json::from_slice(&std::fs::read(path).unwrap()).unwrap();
+                assert_eq!(receipt["spec"], scope);
+                assert_eq!(receipt["result"], "refused-before-start");
+            }
+            assert_eq!(
+                crate::standalone_implementer::is_standalone_implementer(
+                    &role,
+                    plan.review_target.is_none(),
+                    true,
+                ),
+                expected,
+                "scope={scope}, routed={routed:?}, explicit={explicit:?}"
+            );
+        }
+    }
+}
+
+// trace:STORY-2690 | ai:codex
+#[test]
+fn story_2690_no_argument_hold_refusal_keeps_resolved_head_and_rework() {
+    let _env = crate::test_env::EnvVarGuard::set("AIDA_SESSION_ROLE", "implementer");
+    let (_dir, storage) = queued_status_fixture(&[
+        ("BUG-1017", RequirementStatus::Done),
+        ("BUG-1018", RequirementStatus::Approved),
+    ]);
+    let plan =
+        resolve_queue_work_plan(&storage, "u", None, None, false, true, false, None).unwrap();
+    let (role, _, _) = infer_queue_work_role(&plan, None);
+    for rework in [false, true] {
+        let tmp = tempfile::tempdir().unwrap();
+        let mut attempt =
+            Some(crate::lane_result::Attempt::begin(tmp.path(), "queue-head", None).unwrap());
+        assert!(resolve_pickup_attempt(&mut attempt, &plan, &role, true, None).unwrap());
+        let attempt = attempt.unwrap();
+        if rework {
+            let branch = rework_pr_head_branch_from_lookup(PrLookup::Found(OpenPrInfo {
+                number: 42,
+                title: "Rework BUG-1018".into(),
+                url: "https://example.test/pr/42".into(),
+                head_branch: Some("bug-1018-rework".into()),
+            }))
+            .unwrap();
+            attempt
+                .resolve_scope(&plan.anchor_display, Some(&branch), Some(42))
+                .unwrap();
+        }
+        let refusal = crate::gate::operator_hold::operator_hold_refusal(
+            &plan.anchor_display,
+            true,
+            Some("operator must inspect"),
+            None,
+        )
+        .expect("reasoned operator hold refuses admission");
+        attempt.finish_result(&Err(refusal)).unwrap();
+        let path = std::fs::read_dir(tmp.path().join(".aida/lane-results"))
+            .unwrap()
+            .next()
+            .unwrap()
+            .unwrap()
+            .path();
+        let receipt: serde_json::Value =
+            serde_json::from_slice(&std::fs::read(path).unwrap()).unwrap();
+        assert_eq!(receipt["spec"], "BUG-1018");
+        assert_eq!(receipt["result"], "refused-before-start");
+        assert_eq!(receipt["started"], false);
+        if rework {
+            assert_eq!(receipt["branch"], "bug-1018-rework");
+            assert_eq!(receipt["pr"], 42);
+        }
+    }
 }

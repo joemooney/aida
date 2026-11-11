@@ -121,6 +121,7 @@ impl Hub {
 #[serde(rename_all = "snake_case")]
 pub(crate) enum State {
     Reserved,
+    Retry,
     Running,
     Terminal,
     Cancelled,
@@ -188,7 +189,39 @@ fn validate_anchor(hub: &Hub, key: &str, table: &Table, roster: &Roster) -> Resu
 }
 
 fn active(state: &State) -> bool {
-    matches!(state, State::Reserved | State::Running)
+    matches!(state, State::Reserved | State::Retry | State::Running)
+}
+
+// Only a stopped, verdict-less attempt can authorize bounded same-head readmission.
+// trace:BUG-2518 | ai:codex
+pub(crate) const NO_VERDICT: &str = "NoVerdict: ";
+fn retry_allowed(history: &[Transition], head: &str) -> bool {
+    // A cancelled pre-spawn Retry did not consume a started attempt. Peel only
+    // those exact pairs; unrelated heads or reservations cannot borrow authority.
+    let mut authority = history;
+    while let [rest @ .., retry, cancelled] = authority {
+        if cancelled.state != State::Cancelled
+            || retry.state != State::Retry
+            || retry.head != head
+            || cancelled.head != head
+            || cancelled.token != retry.token
+            || cancelled.predecessor != Some(retry.id)
+        {
+            break;
+        }
+        authority = rest;
+    }
+    authority.last().is_some_and(|p| {
+        p.head == head
+            && p.state == State::Terminal
+            && p.evidence
+                .as_deref()
+                .is_some_and(|e| e.starts_with(NO_VERDICT))
+    }) && history
+        .iter()
+        .filter(|p| p.head == head && p.state == State::Running)
+        .count()
+        < 3
 }
 
 fn chain(hub: &Hub, key: &str, records: &[Signed], roster: &Roster) -> Result<Vec<Transition>> {
@@ -234,15 +267,19 @@ fn chain(hub: &Hub, key: &str, records: &[Signed], roster: &Roster) -> Result<Ve
             "invalid admission predecessor"
         );
         match &t.state {
-            State::Reserved => {
+            State::Reserved | State::Retry => {
                 ensure!(
                     prior.is_none_or(|p| !active(&p.state)),
                     "active admission cannot be replaced"
                 );
                 ensure!(
-                    !out.iter()
-                        .any(|p| p.token == t.token
-                            || (p.head == t.head && p.state == State::Terminal)),
+                    !out.iter().any(|p| p.token == t.token)
+                        && if t.state == State::Retry {
+                            retry_allowed(&out, &t.head)
+                        } else {
+                            !out.iter()
+                                .any(|p| p.head == t.head && p.state == State::Terminal)
+                        },
                     "consumed token/head cannot be readmitted"
                 );
                 ensure!(
@@ -263,6 +300,8 @@ fn chain(hub: &Hub, key: &str, records: &[Signed], roster: &Roster) -> Result<Ve
                     matches!(
                         (&p.state, state),
                         (State::Reserved, State::Running)
+                            | (State::Retry, State::Running)
+                            | (State::Retry, State::Cancelled)
                             | (State::Reserved, State::Cancelled)
                             | (State::Running, State::Terminal)
                     ),
@@ -409,7 +448,7 @@ fn commit_table(repo: &Path, tip: Option<&str>, key: &str, table: &Table) -> Res
     text(git(repo, &args)?)
 }
 
-/// Returns false for a winning peer or a previously consumed head. A push
+/// Returns false for a winning peer or an ineligible consumed head. A push
 /// failure is never success, even when a later read happens to find our token.
 fn update(
     root: &Path,
@@ -442,7 +481,7 @@ fn admission_evidence(
     let store = store(root).context("review admission needs a canonical store")?;
     aida_core::db::with_store_write_lock(&store, || {
         require_pinned(root, &Some(hub.clone()))?;
-        if *state == State::Reserved
+        if matches!(state, State::Reserved | State::Retry)
             && watcher_history(root, key)?.iter().any(|(body, _)| {
                 rv::parse_recorded_verdict(body)
                     .is_some_and(|v| v.reviewed_sha.as_deref() == Some(head))
@@ -483,15 +522,25 @@ fn update_with_observer(
         let records = table.changes.entry(key.into()).or_default();
         let history = chain(hub, key, records, &roster)?;
         let prior = history.last();
-        if state == State::Reserved {
-            if prior.is_some_and(|p| active(&p.state))
-                || history
-                    .iter()
-                    .any(|p| p.head == head && p.state == State::Terminal)
-            {
+        let state = if state == State::Reserved {
+            if prior.is_some_and(|p| active(&p.state)) {
                 return Ok(false);
             }
+            if history
+                .iter()
+                .any(|p| p.head == head && p.state == State::Terminal)
+            {
+                if !retry_allowed(&history, head) {
+                    return Ok(false);
+                }
+                State::Retry
+            } else {
+                State::Reserved
+            }
         } else {
+            state.clone()
+        };
+        if !matches!(state, State::Reserved | State::Retry) {
             let p = prior.context("missing accepted admission")?;
             ensure!(
                 p.token == token && p.node == config.node && p.head == head,
@@ -512,7 +561,7 @@ fn update_with_observer(
             predecessor: prior.map(|p| p.id),
             token,
             node: config.node.clone(),
-            session: if state == State::Reserved {
+            session: if matches!(state, State::Reserved | State::Retry) {
                 std::env::var("AIDA_SESSION_ID")
                     .ok()
                     .filter(|s| !s.is_empty())
