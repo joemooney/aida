@@ -1,0 +1,21 @@
+id: 01a1ca8b-d64a-7bd2-bbb0-f40d4ae89db1
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-1067
+agreed_id: TASK-3787
+title: 'Crate-split PR7: lift inline tests batch B and split session.rs by concern'
+description: 'Per SPIKE-713 (docs/plans/2026-11-07-aida-cli-lib-crate-split-deep-dive.md) section 7 row 7 and section 6. Acceptance: session.rs split by concern into a session/ directory; inline #[cfg(test)] blocks of init_cmd, agent_registry, history and forge lifted into src/tests/; verbatim moves only, ledgers relocated in the same PR. Land in a quiet window after STORY-2538 and STORY-2539 settle.'
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-11T12:18:44.426945707Z
+modified_at: 2026-11-11T12:18:44.426945707Z
+req_type: Task
+filed_at:
+  code_sha: 11b131dfe3341e6d9c7127d64370f91366094711
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 11b131dfe33
+  vendor: claude
+  session: 01a1ca83-fabb-7663-852c-12c78d4e097f
+  harness_version: 2.1.322 (Claude Code)
