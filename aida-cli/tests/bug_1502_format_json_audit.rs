@@ -676,6 +676,11 @@ fn checked_in_audit_is_exhaustive_and_every_honoured_probe_parses() {
         ),
         // trace:STORY-2571 | ai:codex
         ("aida advisor loops status", &["advisor", "loops", "status"]),
+        // trace:STORY-2691 | ai:codex
+        (
+            "aida advisor loops train-status",
+            &["advisor", "loops", "train-status"],
+        ),
         ("aida fasttrack status", &["fasttrack", "status"]),
         ("aida show", &["show", &spec, "--no-git"]),
         ("aida list", &["list", "--limit", "1"]),
