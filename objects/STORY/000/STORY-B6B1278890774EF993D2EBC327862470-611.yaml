@@ -3,12 +3,12 @@ spec_id: STORY-b6b1278890774ef993d2ebc327862470-611
 agreed_id: STORY-2688
 title: 'PR reconciler: one tested command maps every open PR to one state, next action and owner, and performs the mechanical actions'
 description: 'Problem: on 2026-11-08 the PR control plane was untested bash loops (auto-train, auto-rework, review-watch-loop) plus advisor sweeps. A restart wiped auto-rework''s in-memory seen set and it re-reworked old heads. Requirement: derive each PR''s state from durable facts (open/closed, mergeable, head SHA, verdict at head, CI at head, hold state, lane running) into exactly one of a closed set of states, each with one next action and owner. Mechanical actions run idempotently from durable state; judgment states route to a named seat. Acceptance: table-driven tests cover every state; restart mid-pass repeats no action; the operator scripts can be retired. Architecture change: sketch and advisor signoff first.'
-status: Approved
+status: InProgress
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-09T01:57:49.197822183Z
-modified_at: 2026-11-11T11:10:53.587336950Z
+modified_at: 2026-11-11T11:12:56.918648583Z
 req_type: Story
 tags:
 - area:orchestration
@@ -248,6 +248,13 @@ history:
   session_id: 01a1c87f-970d-7ce0-9351-e4e75a87731e
   harness_version: 2.1.322 (Claude Code)
   changes: []
+- id: 01a1ca4f-9a56-76e3-b9fc-f69ca4eaaf57
+  author: aida-session-start
+  timestamp: 2026-11-11T11:12:56.918647080Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: a7a14984cec5533987dfeccb70d1f91aaebbf22a
   branch: main
