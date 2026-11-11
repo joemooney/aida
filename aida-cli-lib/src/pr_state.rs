@@ -260,8 +260,12 @@ impl<T> PendingReason for Observed<T> {
 }
 
 #[derive(clap::Args, Debug)]
-pub(crate) struct StateArgs {}
-pub(crate) fn run(_args: &StateArgs) -> Result<()> {
+pub(crate) struct StateArgs {
+    /// Emit the read-only decisions as JSON.
+    #[arg(long)]
+    pub json: bool,
+}
+pub(crate) fn run(args: &StateArgs) -> Result<()> {
     let root = crate::find_main_worktree_root()?;
     let facts = collect(&root)?;
     let decisions: Vec<_> = facts
@@ -275,7 +279,7 @@ pub(crate) fn run(_args: &StateArgs) -> Result<()> {
                 "verdict_kind": facts.verdict.as_ref().map(|v| v.kind.label()), "decision": classify(facts.clone())})
         })
         .collect();
-    if crate::output_format::output_format_is_json() {
+    if args.json || crate::output_format::output_format_is_json() {
         println!("{}", serde_json::to_string_pretty(&decisions)?);
     } else {
         println!("PR\tSTATE\tNEXT ACTION\tOWNER\tATTEMPTS\tREASON");
@@ -310,7 +314,7 @@ fn collect(root: &std::path::Path) -> Result<Vec<PrFacts>> {
             f.mergeable = Observed::Pending("observation budget exhausted".into());
             continue;
         }
-        let mut cmd = std::process::Command::new("git");
+        let mut cmd = aida_core::git_ops::host_git_command(root);
         cmd.current_dir(root)
             .args(["merge-base", "--is-ancestor", &f.base, &f.head]);
         match crate::command_output_with_timeout(cmd, std::time::Duration::from_millis(100))
@@ -474,7 +478,7 @@ fn collect_with(
                 let attested = if v.kind.approves()
                     && v.reviewed_sha.as_deref() == Some(f.head.as_str())
                 {
-                    let mut cmd = std::process::Command::new("git");
+                    let mut cmd = aida_core::git_ops::host_git_command(root);
                     cmd.current_dir(root)
                         .args(["show", "-s", "--format=%cI", &f.head]);
                     let at = crate::command_output_with_timeout(

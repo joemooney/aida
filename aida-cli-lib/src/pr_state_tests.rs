@@ -233,6 +233,9 @@ fn pr_state_cli_registration() {
     ));
     let args = cli.command.registered::<crate::pr_cmd::PrArgs>();
     assert!(matches!(args.inner, crate::pr_cmd::PrCommand::State(_)));
+    let cli = crate::command_registry::try_parse_from(["aida", "pr", "state", "--json"]).unwrap();
+    let args = cli.command.registered::<crate::pr_cmd::PrArgs>();
+    assert!(matches!(&args.inner, crate::pr_cmd::PrCommand::State(args) if args.json));
     assert!(crate::command_registry::try_parse_from(["aida", "pr", "state", "--execute"]).is_err());
 }
 
