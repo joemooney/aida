@@ -1,7 +1,7 @@
 id: 01a1c91f-37b3-7240-8ac9-86991219b6a9
 spec_id: ADR-b6b1278890774ef993d2ebc327862470-001
 agreed_id: ADR-601
-title: 'ADR draft: every state mutation goes through core; read-only views and conveniences live in peripheral crates packaged linked-in or standalone; no dynamic-library plugins'
+title: Every state mutation goes through core; read-only views and conveniences live in peripheral crates packaged linked-in or standalone; no dynamic-library plugins
 description: |-
   STATUS: Draft for operator signoff. Extends ADR-71 (core admits only substrate-state capabilities; convenience ships as external aida-<name>). Parent: EPIC-613.
 
@@ -17,7 +17,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-11T05:40:28.723507407Z
-modified_at: 2026-11-11T05:49:59.558382668Z
+modified_at: 2026-11-11T05:50:07.156231953Z
 req_type: Decision
 tags:
 - architecture
@@ -53,6 +53,12 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Approved
+- id: 01a1c928-0b80-7d12-8175-5bd4fc696c8f
+  author: joe
+  timestamp: 2026-11-11T05:50:07.232019093Z
+  session_id: 01a1c87f-970d-7ce0-9351-e4e75a87731e
+  harness_version: 2.1.322 (Claude Code)
+  changes: []
 filed_at:
   code_sha: eb1b39c30c9f9f6ce3f5ccf1c5ffd8966e5f8a23
   branch: main
