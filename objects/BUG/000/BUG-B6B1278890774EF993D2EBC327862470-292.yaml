@@ -1,0 +1,27 @@
+id: 01a1cb75-2430-7ab3-9517-af258732f50b
+spec_id: BUG-b6b1278890774ef993d2ebc327862470-292
+agreed_id: BUG-2527
+title: review record --verdict approved silently records CHANGES REQUESTED when prior findings carry over
+description: |-
+  Observed 2026-11-11: operator ran 'aida review record SPIKE-714 --pr 3833 --verdict approved --summary ...' and STORY-2688/#3843 likewise; both printed '✓ recorded CHANGES REQUESTED' with no explanation. Cause: STORY-2698 carry-over (gate/review_verdict.rs build_verdict_object) keeps the previous round's findings when --finding is omitted, and a verdict with findings is coerced to request-changes. Only an undocumented --finding "" clears them. Cost: ~1h of the 5.5h no-merge stall on 2026-11-11.
+
+  ## Acceptance
+  - An explicit --verdict approved never records a different verdict silently: either refuse with the reason and the exact fix (--finding "" or a disposition flag), or record approved with the carried findings marked accepted.
+  - --help for --finding documents how to clear carried findings.
+  - Regression test: approved over a prior request-changes with findings and no --finding produces the refusal/explicit outcome, not a silent request-changes.
+status: Draft
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-11T16:33:34.256595406Z
+modified_at: 2026-11-11T16:33:34.256595406Z
+req_type: Bug
+filed_at:
+  code_sha: 11b131dfe3341e6d9c7127d64370f91366094711
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 11b131dfe33
+  vendor: claude
+  session: 01a1cb56-f02b-7652-869e-3788560cbf1b
+  harness_version: 2.1.322 (Claude Code)
