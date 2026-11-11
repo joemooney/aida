@@ -7,18 +7,18 @@
   for_role: reviewer
   added_by_machine: imac
 - user_id: review-watch-controller
-  requirement_id: 01a1cb1a-4d1d-7b31-be76-ac737fe4be76
-  position: 2000
-  added_by: review-watch-controller
-  note: auto-queue retry reused canonical review story; covers 1 spec
-  added_at: 2026-11-11T15:01:42.467787470Z
-  for_role: reviewer
-  added_by_machine: imac
-- user_id: review-watch-controller
   requirement_id: 01a1cb46-3929-7171-87b0-8e68a0d4fb14
   position: 3000
   added_by: review-watch-controller
   note: auto-queue retry reused canonical review story; covers 1 spec
   added_at: 2026-11-11T15:50:25.681608623Z
+  for_role: reviewer
+  added_by_machine: imac
+- user_id: review-watch-controller
+  requirement_id: 01a1cb1a-4d1d-7b31-be76-ac737fe4be76
+  position: 4000
+  added_by: review-watch-controller
+  note: auto-queue retry reused canonical review story; covers 1 spec
+  added_at: 2026-11-11T16:38:17.726162066Z
   for_role: reviewer
   added_by_machine: imac
