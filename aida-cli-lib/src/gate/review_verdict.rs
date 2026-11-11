@@ -3124,6 +3124,17 @@ pub fn close_verdict_on_merge(
     spec: &str,
     merge_ref: &str,
 ) -> std::io::Result<bool> {
+    close_verdict_on_merge_for_change(project_root, spec, merge_ref, None)
+}
+
+// A historical batch closes on its own change, never the spec's newest batch.
+// trace:BUG-2525 | ai:codex
+fn close_verdict_on_merge_for_change(
+    project_root: &Path,
+    spec: &str,
+    merge_ref: &str,
+    change: Option<crate::gate::ledger::ChangeKey>,
+) -> std::io::Result<bool> {
     let merge_ref = merge_ref.trim();
     if merge_ref.is_empty() {
         return Ok(false);
@@ -3159,8 +3170,126 @@ pub fn close_verdict_on_merge(
         serde_json::Value::String(chrono::Utc::now().to_rfc3339()),
     );
     refuse_unsafe_legacy_history(&path, round_sha(&obj).as_deref())?;
-    crate::gate::ledger::record_verdict_at(&path, &obj, None)?;
+    if let Some(change) = change.filter(|_| crate::gate::ledger::ChangeKey::parse(spec).is_none()) {
+        let binding = crate::gate::ledger::GateSpec::resolve(project_root, spec);
+        crate::gate::ledger::record_verdict_at(
+            &verdict_path(project_root, &change.as_key()),
+            &obj,
+            Some(&binding),
+        )?;
+    } else {
+        crate::gate::ledger::record_verdict_at(&path, &obj, None)?;
+    }
     Ok(true)
+}
+
+/// Close waits belonging to terminal batches independently of spec completion.
+/// Unknown forge evidence and open changes retain the wait. Explicit change
+/// identity survives a moved PR head; index-only matches require head evidence.
+/// This annotates the old review; it grants no approval or spec completion.
+// trace:BUG-2525 | ai:codex
+pub(crate) fn reconcile_waiting_verdicts(project_root: &Path, keys: Option<&[String]>) {
+    use crate::forge_observed::Observed;
+    let forge = crate::forge::forge_for(project_root);
+    let kind = forge.kind();
+    reconcile_waiting_verdicts_with(project_root, keys, |change| {
+        use crate::gate::ledger::ChangeForge;
+        if !matches!(
+            (kind, change.forge),
+            (crate::forge::ForgeKind::GitHub, ChangeForge::Pr)
+                | (crate::forge::ForgeKind::GitLab, ChangeForge::Mr)
+        ) {
+            return None;
+        }
+        match forge.observe_change_metadata(change.number, &mut crate::network_retry::NoopSink) {
+            Observed::Known(Ok(meta)) => Some((meta.state, meta.head_sha)),
+            _ => None,
+        }
+    });
+}
+
+// Injectable observation keeps regression tests independent of PATH and live APIs.
+// trace:BUG-2525 | ai:codex
+pub(crate) fn reconcile_waiting_verdicts_with(
+    project_root: &Path,
+    keys: Option<&[String]>,
+    mut observe: impl FnMut(
+        crate::gate::ledger::ChangeKey,
+    ) -> Option<(crate::forge::ChangeState, String)>,
+) {
+    use crate::forge::ChangeState;
+    use crate::gate::ledger::{self, ChangeForge, ChangeKey};
+    let mut observations = std::collections::HashMap::new();
+    let candidates = keys
+        .map(<[String]>::to_vec)
+        .unwrap_or_else(|| verdict_keys(project_root));
+    for key in candidates {
+        let Some(verdict) = read_recorded_verdict(project_root, &key) else {
+            continue;
+        };
+        if verdict.kind != VerdictKind::Waiting || verdict.is_closed() {
+            continue;
+        }
+        let Some(head) = verdict
+            .reviewed_sha
+            .as_deref()
+            .filter(|s| !s.trim().is_empty())
+        else {
+            continue;
+        };
+        let mut changes = Vec::new();
+        let mut explicitly_named = ChangeKey::parse(&key).is_some();
+        if let Some(change) = ChangeKey::parse(&key) {
+            changes.push(change);
+        } else {
+            if let Some(url) = &verdict.comment_url {
+                if let Some(number) = crate::db_reconcile::parse_pr_number_from_url(url) {
+                    explicitly_named = true;
+                    changes.push(ChangeKey {
+                        number,
+                        forge: if url.contains("/merge_requests/") {
+                            ChangeForge::Mr
+                        } else {
+                            ChangeForge::Pr
+                        },
+                    });
+                }
+            }
+            // An explicit review URL identifies the batch. Only fall back to
+            // the spec index when the round does not name its own change.
+            if changes.is_empty() {
+                if let Ok(root) = ledger::store_root(project_root) {
+                    changes.extend(ledger::project::changes_for_spec(&root, &key));
+                }
+            }
+        }
+        for change in changes {
+            let observation = observations
+                .entry(change)
+                .or_insert_with(|| observe(change));
+            let Some((state, terminal_head)) = observation else {
+                continue;
+            };
+            if matches!(state, ChangeState::Merged | ChangeState::Closed)
+                && (explicitly_named || same_reviewed_sha(head, terminal_head))
+            {
+                // Re-read after network I/O; leave a round that changed during
+                // the lookup alone, rather than applying the old head evidence.
+                if read_recorded_verdict(project_root, &key).as_ref() != Some(&verdict) {
+                    break;
+                }
+                if let Err(error) = close_verdict_on_merge_for_change(
+                    project_root,
+                    &key,
+                    &change.as_key(),
+                    Some(change),
+                ) {
+                    eprintln!("warning: could not close terminal batch review for {key}: {error}");
+                }
+                break;
+            }
+        }
+    }
 }
 
 /// TASK-2135 on the gate ledger: an older binary closed the current file and

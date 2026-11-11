@@ -2630,6 +2630,19 @@ pub(crate) fn resolve_rework_review(
     use crate::gate::review_verdict::RecordedVerdict;
     let ids = [display_id, spec_id];
     let labels = spec_labels(&ids);
+    // Refs-only batches do not complete the spec, but their terminal reviews
+    // must not block the next batch. Reconcile only this spec's proved keys.
+    // trace:BUG-2525 | ai:codex
+    let mut review_keys = labels.clone();
+    review_keys.extend(
+        crate::gate::review_verdict::verdict_keys(project_root)
+            .into_iter()
+            .filter(|key| {
+                change_verdict_bound_to(project_root, key, &labels)
+                    || open_change.is_some_and(|open| open.eq_ignore_ascii_case(key))
+            }),
+    );
+    crate::gate::review_verdict::reconcile_waiting_verdicts(project_root, Some(&review_keys));
     let shown = labels
         .first()
         .cloned()
@@ -2730,7 +2743,7 @@ pub(crate) fn resolve_rework_review(
             // trace:TASK-1191 | ai:codex
             let mut bound = crate::gate::review_verdict::list_active_verdicts(project_root)
                 .into_iter()
-                .filter(|(_, verdict)| verdict.kind.blocks_done())
+                .filter(|(_, verdict)| verdict.kind.blocks_done() && !verdict.is_closed())
                 .filter(|(key, _)| change_verdict_bound_to(project_root, key, &labels))
                 .collect::<Vec<_>>();
             // A wait cannot hide actionable findings in another bound change.
@@ -2828,6 +2841,23 @@ pub(crate) fn resolve_rework_review(
             render_change(&key, &v)
         }
         (Some((sv, s_at)), Some((key, cv))) => {
+            // Closing a terminal batch appends an annotation, not a fresh
+            // review. Its new ledger timestamp cannot clear code findings.
+            // trace:BUG-2525 | ai:codex
+            if sv.kind == crate::gate::review_verdict::VerdictKind::Waiting
+                && sv.is_closed()
+                && !cv.is_closed()
+                && cv.kind.requires_changes()
+            {
+                return Ok(render_change(&key, &cv));
+            }
+            if cv.kind == crate::gate::review_verdict::VerdictKind::Waiting
+                && cv.is_closed()
+                && !sv.is_closed()
+                && sv.kind.requires_changes()
+            {
+                return Ok(render_spec(&sv));
+            }
             let c_at = change_time(&key, &cv);
             // A wait carries no findings and must not replace substantive work.
             // trace:BUG-2500 | ai:codex
