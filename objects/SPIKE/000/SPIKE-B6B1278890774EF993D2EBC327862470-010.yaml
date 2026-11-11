@@ -13,12 +13,12 @@ description: |-
   Then summarise: counts per class; the first porcelain-views batch (the read-only commands with the fewest helper dependencies, about 20); which helpers block the most moves; and any command whose class surprised you (a 'read' that writes, such as a cache refresh or a usage log).
   Use rg to confirm any 'no callers' result from codegraph. Do this after TASK-3428 batch 5 (#3829) lands if possible, since glob imports hide edges; otherwise list the glob-importing files as lower-bound rows.
   Acceptance: (1) every REGISTRY entry has a row with class and evidence; (2) every core-write or authority row cites at least one writer or gate site; (3) the first porcelain batch is named with its blocking helpers; (4) the doc states its commit and method so it can be re-run.
-status: InProgress
+status: NeedsAttention
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-11T05:40:53.335487241Z
-modified_at: 2026-11-11T05:47:28.974216414Z
+modified_at: 2026-11-11T06:26:37.982583316Z
 req_type: Spike
 tags:
 - architecture
@@ -74,6 +74,15 @@ history:
   session_id: 01a1c9254a1d
   harness_version: codex-cli 0.167.0
   changes: []
+- id: 01a1c949-791e-7cf2-b1f8-a1b64a92db1b
+  author: aida-orchestrator
+  timestamp: 2026-11-11T06:26:37.982606595Z
+  session_id: 01a1c87f-970d-7ce0-9351-e4e75a87731e
+  harness_version: 2.1.322 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 execution_mode: drain
 filed_at:
   code_sha: eb1b39c30c9f9f6ce3f5ccf1c5ffd8966e5f8a23
@@ -84,4 +93,12 @@ filed_at:
   vendor: claude
   session: 01a1c87f-970d-7ce0-9351-e4e75a87731e
   harness_version: 2.1.322 (Claude Code)
+failure_reason:
+  phase: reviewer
+  phase_index: 3
+  kind: verdict:request-changes
+  detail: 'Advisor relay of the codex reviewer''s verdict, lost to BUG-2522 (its fix #3830 is approved and awaiting train). Full text at https://github.com/joemooney/aida/pull/3833#issuecomment-6788426276. The PR is a baseline only: (1) all 167 command classifications and their writer/gate evidence are unresolved; (2) the dependency, visibility, move-stage and home-crate analysis is absent; (3) the first porcelain batch is missing; (4) closure-handler extraction truncates three entries. These are SPIKE-714 acceptance items 1-3; finish them in this PR.'
+  recovery_hint: address the review findings, move SPIKE-714 back to In Progress, and clear the PR hold only after approval
+  shelved_by: advisor
+  shelved_at: 2026-11-11T06:26:37.982583316Z
 human_only: true
