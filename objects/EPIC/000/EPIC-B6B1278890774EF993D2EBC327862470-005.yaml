@@ -1,0 +1,25 @@
+id: 01a1c91e-cfa5-7032-a3a8-2a4d85e2321c
+spec_id: EPIC-b6b1278890774ef993d2ebc327862470-005
+agreed_id: EPIC-613
+title: 'Separation of concerns for parallel development: mutations through core, read-only views and conveniences as peripheral crates, application families as sibling crates'
+description: 'Operator direction 2026-11-10 21:22 MST: rearchitect so features can be built in parallel with fewer collisions, faster builds and cheaper review. Evidence (SPIKE-713, docs/plans/2026-11-07-aida-cli-lib-crate-split-deep-dive.md): aida-cli-lib is one 580k-line production crate (997k with tests) compiling as a single 122 s rustc unit that runs alone for 100 s of a 163 s clean build; every test binary compiles all of it; 337 modules form one strongly connected component; lib.rs was touched by 123 PRs in five weeks. Sequence: (1) finish the current split: TASK-3428 (glob imports, then dissolve lib_part1..6), TASK-3448 (cmdkit imports), TASK-3429 (aida-mcp crate); (2) SPIKE: inventory the 173 registered commands (read-only / writes through core / authority) and the helpers each reaches; (3) leaf crates aida-term + aida-cmdkit, then a porcelain-views crate for read-only commands, buildable both linked into aida and as a standalone aida-<name> binary (cargo feature), plus a ratchet that forbids peripheral crates from depending on store-writer modules; (4) EPIC-78 application families (queue, review, session, launch, ops) as SIBLING crates under an aida-kernel crate (siblings, not a chain: a chain makes most incremental builds slower). Decision record: the ADR filed with this epic (extends ADR-71). Non-goals: Rust dylib or cdylib plugins (no stable ABI; abi_stable or WASM add unsafe or a runtime without build or review gains); binary size (the 110 MB live binary is unstripped, opt-level 1). Success measures: clean build wall time, one-line-edit rebuild time, per-crate test binary size, CI lib shard time, and the hand-merge conflict rate on hub files, each measured before and after steps 3 and 4.'
+status: Draft
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-11T05:40:02.085047934Z
+modified_at: 2026-11-11T05:40:02.085047934Z
+req_type: Epic
+tags:
+- architecture
+- crate-split
+- parallel-dev
+filed_at:
+  code_sha: eb1b39c30c9f9f6ce3f5ccf1c5ffd8966e5f8a23
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 496312a2eab
+  vendor: claude
+  session: 01a1c87f-970d-7ce0-9351-e4e75a87731e
+  harness_version: 2.1.322 (Claude Code)
