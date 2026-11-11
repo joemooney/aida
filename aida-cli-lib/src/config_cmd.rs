@@ -1075,13 +1075,13 @@ pub(crate) fn handle_config_permissions_command(cmd: &ConfigPermissionsCommand) 
                 anyhow::bail!("containment probe did not pass: {}", report.cause);
             }
         }
-        ConfigPermissionsCommand::Show { json } => {
+        ConfigPermissionsCommand::Show { json, verbose } => {
             let project_root = main_worktree_root_from(&find_project_root()?);
             let report = permission_posture_report(&project_root);
             if *json || output_format_is_json() || aida_agent_output_truthy() {
                 println!("{}", serde_json::to_string_pretty(&report)?);
             } else {
-                render_permission_posture_report(&report);
+                render_permission_posture_report(&report, *verbose);
             }
         }
         ConfigPermissionsCommand::Set { tier, user, local } => {
@@ -1660,36 +1660,34 @@ pub(crate) fn permission_posture_report(project_root: &std::path::Path) -> Permi
     }
 }
 
-fn render_permission_posture_report(report: &PermissionPostureReport) {
+// trace:TASK-3779 | ai:codex
+fn render_permission_posture_report(report: &PermissionPostureReport, verbose: bool) {
     println!("{}", "Permission Posture:".blue().bold());
+    if verbose {
+        println!(
+            "  Confirm bypass: {} ({})",
+            report.confirm_bypass, report.confirm_bypass_source
+        );
+    }
     println!(
-        "  {}",
-        "Read-only view of AIDA agent launch defaults and native Codex sandbox config.".dimmed()
-    );
-    println!(
-        "  Confirm bypass: {} ({})",
-        report.confirm_bypass, report.confirm_bypass_source
-    );
-    println!();
-    println!(
-        "  {:<12} {:<10} {:<24} {:<12} {:<12} {}",
+        "  {:<12} {:<10} {:<12} {}",
         "agent".cyan(),
         "tier".cyan(),
-        "flags".cyan(),
-        "prompts".cyan(),
-        "sandbox".cyan(),
+        "launch".cyan(),
         "net effect".cyan()
     );
     for row in &report.agents {
+        println!("{}", permission_summary_row(row));
+        if !verbose {
+            continue;
+        }
         println!(
-            "  {:<12} {:<10} {:<24} {:<12} {:<12} {}",
-            row.agent,
-            row.tier,
-            truncate_middle(&row.flags.join(" "), 24),
+            "    flags={} · prompts={} · sandbox={}",
+            row.flags.join(" "),
             row.prompts,
-            row.sandboxed,
-            row.net_effect
+            row.sandboxed
         );
+        println!("    effect: {}", row.net_effect);
         // trace:BUG-2513 | ai:codex
         println!(
             "    launch readiness (configured containment policy): {}",
@@ -1731,13 +1729,26 @@ fn render_permission_posture_report(report: &PermissionPostureReport) {
             );
         }
     }
-    if report.findings.is_empty() {
+    if verbose && report.findings.is_empty() {
         println!();
         println!(
-            "  {} Consistency check: no dangerous permission-posture inconsistencies detected (see launch readiness above)",
-            crate::glyph(crate::glyphs::Glyph::Check).green()
+            "  {}Consistency check: no dangerous permission-posture inconsistencies detected (see launch readiness above)",
+            crate::glyphs::terminal_marker(crate::glyph(crate::glyphs::Glyph::Check)).green()
         );
     }
+}
+
+// trace:TASK-3779 | ai:codex
+fn permission_summary_row(row: &PermissionPostureRow) -> String {
+    let (readiness, effect) = if row.refused_under_containment {
+        ("refused", "launch blocked by containment policy")
+    } else {
+        ("configured", row.net_effect.as_str())
+    };
+    format!(
+        "  {:<12} {:<10} {:<12} {}",
+        row.agent, row.tier, readiness, effect
+    )
 }
 
 fn truncate_middle(s: &str, max: usize) -> String {
@@ -4719,6 +4730,26 @@ mod bug_533_config_show_tests {
         assert_eq!(value_for("claude"), "disabled");
         assert_eq!(value_for("codex"), "enabled");
         assert_eq!(value_for("antigravity"), "disabled");
+    }
+
+    // trace:TASK-3779 | ai:codex
+    #[test]
+    fn permission_summary_row_keeps_refusal_compact() {
+        let dir = tempfile::tempdir().unwrap();
+        let report = permission_posture_report(dir.path());
+        let mut row = report.agents[0].clone();
+        row.refused_under_containment = true;
+        row.net_effect = "refused under containment: lengthy private diagnostic".into();
+        let summary = permission_summary_row(&row);
+        assert_eq!(summary.lines().count(), 1);
+        assert!(summary.contains("refused"));
+        assert!(summary.contains("launch blocked by containment policy"));
+        assert!(!summary.contains("private diagnostic"));
+        row.refused_under_containment = false;
+        row.net_effect = "native sandbox".into();
+        let summary = permission_summary_row(&row);
+        assert!(summary.contains("configured"));
+        assert!(summary.contains("native sandbox"));
     }
 
     #[test]
