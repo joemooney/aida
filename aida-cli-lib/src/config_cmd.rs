@@ -1004,6 +1004,9 @@ pub(crate) struct PermissionPostureRow {
     pub network: String,
     pub writable_roots: Vec<String>,
     pub net_effect: String,
+    // trace:BUG-2513 | ai:codex
+    pub launch_readiness: String,
+    pub launch_fix: Option<String>,
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub findings: Vec<PermissionPostureFinding>,
 }
@@ -1520,6 +1523,54 @@ pub(crate) fn scan_permission_posture_findings(
         .collect()
 }
 
+// trace:BUG-2513 | ai:codex
+pub(crate) fn offer_init_codex_native(
+    project_root: &std::path::Path,
+    selected: bool,
+    interactive: bool,
+    consent: impl FnOnce() -> Result<bool>,
+) -> Result<bool> {
+    if !selected || !interactive {
+        return Ok(false);
+    }
+    let path = crate::config_path_for_project(project_root);
+    let mut doc = load_edit_doc(&path)?;
+    if let Some(contained) = doc.get("contained") {
+        anyhow::ensure!(
+            contained.is_table(),
+            "[contained] must be a table; leaving config unchanged"
+        );
+        if let Some(vendors) = contained.get("vendors") {
+            anyhow::ensure!(
+                vendors.is_table() || vendors.is_inline_table(),
+                "[contained.vendors] must be a table; leaving config unchanged"
+            );
+        }
+    }
+    if doc
+        .get("contained")
+        .and_then(|v| v.get("vendors"))
+        .and_then(|v| v.get(crate::vendors::native_setup::KEY))
+        .is_some()
+    {
+        return Ok(false);
+    }
+    if !consent()? {
+        return Ok(false);
+    }
+    let contained = ensure_root_table(&mut doc, "contained");
+    if !contained.contains_key("vendors") {
+        contained.insert("vendors", Item::Table(Table::new()));
+    }
+    contained["vendors"]
+        .as_table_like_mut()
+        .expect("validated table")
+        .insert(crate::vendors::native_setup::KEY, value("native"));
+    save_edit_doc(&path, &doc)?;
+    eprintln!("  {}", crate::vendors::native_setup::WRITTEN);
+    Ok(true)
+}
+
 // trace:TASK-1233 | ai:codex
 pub(crate) fn maybe_offer_permission_posture_fix(project_root: &std::path::Path) -> Result<()> {
     let report = permission_posture_report(project_root);
@@ -1639,6 +1690,14 @@ fn render_permission_posture_report(report: &PermissionPostureReport) {
             row.sandboxed,
             row.net_effect
         );
+        // trace:BUG-2513 | ai:codex
+        println!(
+            "    launch readiness (configured containment policy): {}",
+            row.launch_readiness
+        );
+        if let Some(fix) = &row.launch_fix {
+            println!("    fix: {fix}");
+        }
         println!(
             "    launch: interactive flags={} prompts={} · headless flags={} prompts={}",
             truncate_middle(&row.interactive_flags.join(" "), 72).dimmed(),
@@ -1675,7 +1734,7 @@ fn render_permission_posture_report(report: &PermissionPostureReport) {
     if report.findings.is_empty() {
         println!();
         println!(
-            "  {} no dangerous permission-posture inconsistencies detected",
+            "  {} Consistency check: no dangerous permission-posture inconsistencies detected (see launch readiness above)",
             crate::glyph(crate::glyphs::Glyph::Check).green()
         );
     }
@@ -1946,7 +2005,24 @@ fn permission_posture_for_agent(
         "tool native defaults".to_string()
     };
 
+    // trace:BUG-2513 | ai:codex
+    let launch_readiness = match &boundary {
+        Err(error) => format!("refused: {error}"),
+        Ok(posture) => format!(
+            "ready: {} (launch prerequisites still apply)",
+            posture.label()
+        ),
+    };
+    let launch_fix = boundary.as_ref().err().map(|_| {
+        if agent == crate::vendors::native_setup::KEY {
+            crate::vendors::native_setup::FIX.to_string()
+        } else {
+            crate::vendors::native_setup::OTHER_FIX.to_string()
+        }
+    });
     PermissionPostureRow {
+        launch_readiness,
+        launch_fix,
         agent: agent.to_string(),
         tier,
         tier_source,
@@ -4866,6 +4942,80 @@ mod bug_533_config_show_tests {
         );
     }
 
+    // trace:BUG-2513 | ai:codex
+    #[test]
+    fn bug_2513_init_native_requires_consent_and_preserves_policy() {
+        let root = tempfile::tempdir().unwrap();
+        let path = root.path().join(".aida/config.toml");
+        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+        let original =
+            "# retain comment\n[contained]\nenable = true\n[contained.vendors]\nclaude = 'aida'\n";
+        std::fs::write(&path, original).unwrap();
+        for (selected, interactive) in [(false, true), (true, false)] {
+            assert!(
+                !offer_init_codex_native(root.path(), selected, interactive, || panic!(
+                    "must not prompt"
+                ))
+                .unwrap()
+            );
+            assert_eq!(std::fs::read_to_string(&path).unwrap(), original);
+        }
+        assert!(!offer_init_codex_native(root.path(), true, true, || Ok(false)).unwrap());
+        assert_eq!(std::fs::read_to_string(&path).unwrap(), original);
+        assert!(offer_init_codex_native(root.path(), true, true, || Ok(true)).unwrap());
+        let written = std::fs::read_to_string(&path).unwrap();
+        let parsed: toml::Value = toml::from_str(&written).unwrap();
+        assert_eq!(
+            parsed["contained"]["vendors"]["codex"].as_str(),
+            Some("native")
+        );
+        assert_eq!(
+            parsed["contained"]["vendors"]["claude"].as_str(),
+            Some("aida")
+        );
+        assert!(written.starts_with("# retain comment"));
+        for policy in ["native", "aida", "invalid"] {
+            let body = format!("[contained.vendors]\ncodex = '{policy}'\n");
+            std::fs::write(&path, &body).unwrap();
+            assert!(!offer_init_codex_native(root.path(), true, true, || panic!(
+                "existing policy"
+            ))
+            .unwrap());
+            assert_eq!(std::fs::read_to_string(&path).unwrap(), body);
+        }
+    }
+
+    // trace:BUG-2513 | ai:codex
+    #[test]
+    fn bug_2513_init_native_preserves_inline_tables_and_refuses_malformed_policy() {
+        let root = tempfile::tempdir().unwrap();
+        let path = root.path().join(".aida/config.toml");
+        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+        std::fs::write(&path, "[contained]\nvendors = { claude = 'aida' }\n").unwrap();
+        assert!(offer_init_codex_native(root.path(), true, true, || Ok(true)).unwrap());
+        let parsed: toml::Value = toml::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
+        assert_eq!(
+            parsed["contained"]["vendors"]["claude"].as_str(),
+            Some("aida")
+        );
+        assert_eq!(
+            parsed["contained"]["vendors"]["codex"].as_str(),
+            Some("native")
+        );
+        for body in [
+            "contained = false\n",
+            "[contained]\nvendors = 'invalid'\n",
+            "[contained\n",
+        ] {
+            std::fs::write(&path, body).unwrap();
+            assert!(
+                offer_init_codex_native(root.path(), true, true, || panic!("invalid policy"))
+                    .is_err()
+            );
+            assert_eq!(std::fs::read_to_string(&path).unwrap(), body);
+        }
+    }
+
     // trace:BUG-b6b1278890774ef993d2ebc327862470-028 | ai:claude
     #[test]
     fn permission_posture_marks_uncontainable_vendors_refused_under_containment() {
@@ -4889,9 +5039,24 @@ mod bug_533_config_show_tests {
         let row = |agent: &str| report.agents.iter().find(|r| r.agent == agent).unwrap();
 
         assert!(!row("claude").refused_under_containment);
+        // trace:BUG-2513 | ai:codex
+        assert!(row("claude").launch_readiness.starts_with("ready:"));
+        assert!(row("claude").launch_fix.is_none());
+        assert!(row("codex")
+            .launch_fix
+            .as_deref()
+            .unwrap()
+            .contains("aida init --agent codex"));
+        assert!(
+            serde_json::to_value(row("codex")).unwrap()["launch_readiness"]
+                .as_str()
+                .unwrap()
+                .starts_with("refused:")
+        );
         for agent in ["codex", "antigravity"] {
             assert!(row(agent).refused_under_containment, "{:?}", row(agent));
             assert_eq!(row(agent).sandboxed, "refused");
+            assert!(row(agent).launch_readiness.starts_with("refused:"));
             assert!(row(agent)
                 .net_effect
                 .starts_with("refused under containment"));
