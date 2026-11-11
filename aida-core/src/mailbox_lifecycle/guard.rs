@@ -141,7 +141,8 @@ impl Retirement {
 pub struct RetentionRefusal {
     pub checkout: PathBuf,
     pub reason: String,
-    /// The source holds mail and no activation is recorded for this build
+    /// The fresh scan could not verify all writer admissions, or a replayed
+    /// legacy retirement needs activation
     /// (QC1); the reason names [`super::ACTIVATION_COMMAND`].
     pub needs_activation: bool,
     /// A preserved copy that is also kept.
@@ -241,7 +242,8 @@ fn retire_with(
             reason.to_string(),
             matches!(
                 reason,
-                RefusalReason::MailBearingBeforeActivation
+                RefusalReason::WriterAdmissionUnknown
+                    | RefusalReason::MailBearingBeforeActivation
                     | RefusalReason::ActivationForOtherBuild { .. }
             ),
             retained_dir,
