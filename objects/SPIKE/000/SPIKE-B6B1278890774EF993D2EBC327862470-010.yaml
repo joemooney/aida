@@ -13,12 +13,12 @@ description: |-
   Then summarise: counts per class; the first porcelain-views batch (the read-only commands with the fewest helper dependencies, about 20); which helpers block the most moves; and any command whose class surprised you (a 'read' that writes, such as a cache refresh or a usage log).
   Use rg to confirm any 'no callers' result from codegraph. Do this after TASK-3428 batch 5 (#3829) lands if possible, since glob imports hide edges; otherwise list the glob-importing files as lower-bound rows.
   Acceptance: (1) every REGISTRY entry has a row with class and evidence; (2) every core-write or authority row cites at least one writer or gate site; (3) the first porcelain batch is named with its blocking helpers; (4) the doc states its commit and method so it can be re-run.
-status: Approved
+status: InProgress
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-11T05:40:53.335487241Z
-modified_at: 2026-11-11T07:50:08.059493656Z
+modified_at: 2026-11-11T07:52:50.025493827Z
 req_type: Spike
 tags:
 - architecture
@@ -298,6 +298,13 @@ history:
   session_id: 01a1c87f-970d-7ce0-9351-e4e75a87731e
   harness_version: 2.1.322 (Claude Code)
   changes: []
+- id: 01a1c998-6469-7bc0-a089-a2062c5ae367
+  author: aida-session-start
+  timestamp: 2026-11-11T07:52:50.025491318Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 execution_mode: drain
 filed_at:
   code_sha: eb1b39c30c9f9f6ce3f5ccf1c5ffd8966e5f8a23
