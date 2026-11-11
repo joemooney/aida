@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-10T03:07:22.550186240Z
-modified_at: 2026-11-11T02:29:38.864639642Z
+modified_at: 2026-11-11T02:30:57.887528104Z
 req_type: Story
 comments:
 - id: 01a1c86e-3b64-7461-953d-6be133ed1057
@@ -22,6 +22,13 @@ comments:
   modified_at: 2026-11-11T02:27:09.796748864Z
   session_id: 01a1c70f-d731-7b70-acf8-e9ab3d288fca
   harness_version: 2.1.322 (Claude Code)
+- id: 01a1c871-b65f-71b1-9547-a48dc4fbcaec
+  author: dirtlab
+  content: 'Fixed the reported CI regression in aida-core/src/templates.rs: the pre-edit approach test now checks the declared evidence-type contract, retaining behavioral automated-test and non-gating requirements. Validation: lane cargo test --profile agent -p aida-core --lib -- templates::tests::aida_pickup_ executed 3 tests, all passed; git diff --check passed. Edits left uncommitted for host publication. Codegraph client unavailable; doctor reports missing tool.'
+  created_at: 2026-11-11T02:30:57.887528104Z
+  modified_at: 2026-11-11T02:30:57.887528104Z
+  session_id: 01a1c870151f
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1c5dd-3d24-7340-8065-bbd896505e8d
   author: joe
