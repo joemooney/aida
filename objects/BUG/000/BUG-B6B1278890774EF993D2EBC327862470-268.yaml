@@ -3,12 +3,12 @@ spec_id: BUG-b6b1278890774ef993d2ebc327862470-268
 agreed_id: BUG-2503
 title: aida role status offers --bind-pid for a managed agent session, but the resulting grant is refused and cannot be issued to the agent's handle
 description: 'Seen 2026-11-08. role status printed ''for aida role enter <seat> --bind-pid 2907980''. The operator ran it: the grant was issued to joe and rejected in the session (''issued to joe but this process runs as claude-advisor-106''). Issuing with AIDA_USER=claude-advisor-106 failed the team roster check for the advisor seat. So a running managed advisor has no way to renew an expiring grant short of a relaunch. Either make the bind usable for the session it names, or stop offering it and name the supported renewal.'
-status: InProgress
+status: Completed
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-08T21:19:43.130807780Z
-modified_at: 2026-11-10T16:15:00.291135606Z
+modified_at: 2026-11-11T04:36:03.891313075Z
 req_type: Bug
 comments:
 - id: 01a1c638-05a7-7131-9809-d7d1148a56b2
@@ -55,6 +55,20 @@ history:
   session_id: 01a1c6348847
   harness_version: codex-cli 0.167.0
   changes: []
+- id: 01a1c8e4-3e6e-7080-9943-2732b5bc7123
+  author: aida-auto-bump
+  timestamp: 2026-11-11T04:36:03.822863992Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a1c8e4-3eb3-7ee3-a288-1960ffb8b630
+  timestamp: 2026-11-11T04:36:03.891310438Z
+  agent: aida
+  commit_sha: e0984b39430c2784ce2f448148ac04ba3020443b
+  summary: 'Full sweep: guidance alternative verified for visible/hidden harness PIDs; bind usability alternative not applicable. BUG-2503 (bug protocol): met (test snapshot and unit regression touched). All four changed files inspected; no actionable defects. CI pending at review time. No local tests run under review-watch policy.'
+  review_verdict: approved
 filed_at:
   code_sha: b57c1fab753d30430c7a544b781bd8c7d91da0d2
   branch: main
@@ -64,3 +78,7 @@ filed_at:
   vendor: claude
   session: 01a1bc93-77a0-7740-8b03-df4e3e8d1df5
   harness_version: 2.1.319 (Claude Code)
+implementation_info:
+  implemented: false
+  completed_at: 2026-11-11T04:36:03.822857986Z
+  completion_sha: e0984b39430c2784ce2f448148ac04ba3020443b
