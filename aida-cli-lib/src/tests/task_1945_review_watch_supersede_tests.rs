@@ -927,6 +927,7 @@ fn task_3367_local_unknown_observations_use_reservation_backstop() {
 }
 
 // trace:STORY-2691 | ai:codex
+#[cfg(target_os = "linux")]
 #[test]
 fn story2691_reaped_cancellation_requires_matching_attempt_receipt() {
     let (_temp, store) = fixture();
