@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-10T10:24:49.978786902Z
-modified_at: 2026-11-11T03:04:06.645329501Z
+modified_at: 2026-11-11T03:31:03.684854757Z
 req_type: Bug
 comments:
 - id: 01a1c544-9448-77c1-a5a0-c8d1776ee831
@@ -57,6 +57,20 @@ comments:
   modified_at: 2026-11-10T12:29:32.380956014Z
   session_id: 01a1c39a-801a-7bd1-8da9-c955a6707f0b
   harness_version: 2.1.321 (Claude Code)
+- id: 01a1c8a8-bb17-7de3-bb77-7bb8565d6ccb
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (BUG-2518):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 7fe3c6dd8b98
+    Recorded: 2026-11-11T03:04:02.689944679+00:00
+    Findings:
+    1. [P1] aida-cli-lib/src/gate/review_publication/admission.rs:198-209: Preserve same-head retry eligibility after a proven pre-spawn cancellation. Sequence Reserved -> Running -> Terminal(NoVerdict) -> Retry -> Cancelled is accepted, but every subsequent reserve finds the earlier Terminal and retry_allowed rejects because the latest transition is Cancelled. This occurs through cancel_spawn_failure, mark_unclaimed_exit, or the dispatcher preflight cancellation. reserve_dispatch then persists RemoteHeld and probe_unneeded suppresses the head indefinitely, even though fewer than three reviews started and no verdict exists; local release does not repair the hub chain. Permit safe fresh-token readmission after cancelled Retry claims while preserving the original NoVerdict authority, started-attempt cap, active-claim exclusion and durable-verdict gates in both update and chain validation. Add integration regressions for retry cancellation before spawn/preflight followed by successful re-reservation and eventual exhaustion.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-11T03:31:03.575749692Z
+  modified_at: 2026-11-11T03:31:03.575749692Z
+  session_id: 01a1c70f-d731-7b70-acf8-e9ab3d288fca
+  harness_version: 2.1.322 (Claude Code)
 history:
 - id: 01a1c4fe-25c9-7752-878d-7f4b5f4e9270
   author: joe
