@@ -3,12 +3,12 @@ spec_id: STORY-b6b1278890774ef993d2ebc327862470-613
 agreed_id: STORY-2690
 title: 'Spec status invariants and typed lane exits: a spec with an open PR is never unpickable for rework, and every lane exit has a typed result'
 description: 'Problem: on 2026-11-08 STORY-2571 stayed needs-attention so rework lanes died with not-pickable needs-triage, and PR-3640 received no fix across three attempts. The advisor inbox collected many exited-without-changes notices needing manual reading. BUG-2502 fixes one instance. Requirement: enforce that rework routing leaves the spec pickable, or refuses loudly at routing time; each lane exit records a closed-set result such as pushed, no-change-with-reason, refused-before-start or punted. Acceptance: a refused-before-start lane is never reported as a launched rework; repeated identical refusals surface once.'
-status: NeedsAttention
+status: Approved
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-09T01:58:39.064485765Z
-modified_at: 2026-11-11T08:51:05.533676168Z
+modified_at: 2026-11-11T08:51:21.594732798Z
 req_type: Story
 tags:
 - area:orchestration
@@ -218,6 +218,13 @@ comments:
   modified_at: 2026-11-11T08:51:05.533676168Z
   session_id: 01a1c87f-970d-7ce0-9351-e4e75a87731e
   harness_version: 2.1.322 (Claude Code)
+- id: 01a1c9cd-f97a-7b02-b056-ac24bfeb571c
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Full diff and acceptance sweep found no actionable defects in the declared partial standalone/rework slice. CI pending at review time; cli-0 porcelain parity fixture-state failure remains a readiness blocker, with no connection established to this diff. Drain/resume receipts and refusal dedup remain unverified; keep STORY-2690 open.. No triage reason was given.'
+  created_at: 2026-11-11T08:51:21.594724131Z
+  modified_at: 2026-11-11T08:51:21.594724131Z
+  session_id: 01a1c87f-970d-7ce0-9351-e4e75a87731e
+  harness_version: 2.1.322 (Claude Code)
 history:
 - id: 01a1c5dd-0795-7ee0-b474-74b907f4c43a
   author: joe
@@ -423,6 +430,15 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a1c9cd-f97a-7b02-b056-ac19dbf52b04
+  author: joe
+  timestamp: 2026-11-11T08:51:21.594698165Z
+  session_id: 01a1c87f-970d-7ce0-9351-e4e75a87731e
+  harness_version: 2.1.322 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 filed_at:
   code_sha: a7a14984cec5533987dfeccb70d1f91aaebbf22a
   branch: main
@@ -431,11 +447,3 @@ filed_at:
   aida_build_sha: 8a4a909a967
   vendor: claude
   session: 20abb7c3-8f9b-4a5e-b326-404921f3b450
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: Full diff and acceptance sweep found no actionable defects in the declared partial standalone/rework slice. CI pending at review time; cli-0 porcelain parity fixture-state failure remains a readiness blocker, with no connection established to this diff. Drain/resume receipts and refusal dedup remain unverified; keep STORY-2690 open.
-  recovery_hint: address the review findings, move STORY-2690 back to In Progress, and clear the PR hold only after approval
-  shelved_by: reviewer
-  shelved_at: 2026-11-11T08:37:07.183507255Z
