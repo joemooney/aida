@@ -306,7 +306,7 @@ pub(crate) struct ManualArgs {
 // no store, no cache, no network. Dispatch it before storage init like
 // changelog. trace:STORY-600 | ai:claude
 fn run_manual(matches: &clap::ArgMatches, _ctx: &crate::cmdkit::DispatchCtx) -> anyhow::Result<()> {
-    use crate::*;
+    use crate::find_project_root;
     let args = <ManualArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
     let ManualArgs { command } = &args;
     let project_root =
