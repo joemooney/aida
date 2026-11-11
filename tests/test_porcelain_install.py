@@ -15,6 +15,9 @@ class ReleaseInstall(unittest.TestCase):
         self.tmp = tempfile.TemporaryDirectory()
         self.addCleanup(self.tmp.cleanup)
         self.root = Path(self.tmp.name)
+        # Explicit child inputs keep host configuration out of install fixtures.
+        # trace:STORY-2704 | ai:codex
+        self.env = {'HOME': str(self.root), 'PATH': '/usr/bin:/bin'}
         self.src = self.root / 'bundle'
         self.dest = self.root / 'installed'
         self.src.mkdir()
@@ -28,12 +31,12 @@ class ReleaseInstall(unittest.TestCase):
     def run_upgrade(self, env=None):
         return subprocess.run(['sh', str(ROOT / 'scripts/upgrade-release-bundle.sh'),
                                str(self.src), str(self.dest), 'linux-x86_64'],
-                              env=env, capture_output=True)
+                              env=self.env if env is None else env, capture_output=True)
 
     def assert_bundle(self):
         for name in ('aida', 'aida-server', 'aida-porcelain', 'aida-flow'):
             want = 'aida-porcelain' if name == 'aida-flow' else name
-            self.assertEqual(subprocess.check_output([str(self.dest / name)]),
+            self.assertEqual(subprocess.check_output([str(self.dest / name)], env=self.env),
                              ('new-' + want + '\n').encode())
         self.assertEqual(os.readlink(self.dest / 'aida-flow'), 'aida-porcelain')
 
@@ -58,7 +61,7 @@ class ReleaseInstall(unittest.TestCase):
         (self.src / 'aida-porcelain').unlink()
         result = self.run_upgrade()
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertEqual(subprocess.check_output([str(self.dest / 'aida')]), b'new-aida\n')
+        self.assertEqual(subprocess.check_output([str(self.dest / 'aida')], env=self.env), b'new-aida\n')
         self.assertTrue((self.dest / 'aida-server').is_file())
 
     def test_replacement_failure_rolls_back(self):
@@ -71,7 +74,7 @@ class ReleaseInstall(unittest.TestCase):
         stub = bin_dir / 'mv'
         stub.write_text('#!/bin/sh\ncase "$2" in */new/aida-porcelain) exit 1;; esac\nexec /usr/bin/mv "$@"\n')
         stub.chmod(0o755)
-        env = dict(os.environ, PATH=str(bin_dir) + ':' + os.environ['PATH'])
+        env = dict(self.env, PATH=str(bin_dir) + ':' + self.env['PATH'])
         self.assertNotEqual(self.run_upgrade(env).returncode, 0)
         for name in ('aida', 'aida-server', 'aida-porcelain'):
             self.assertEqual((self.dest / name).read_text(), 'old-' + name)
@@ -88,7 +91,7 @@ class ReleaseInstall(unittest.TestCase):
         release.mkdir(parents=True)
         for name in ('aida', 'aida-server', 'aida-porcelain'):
             (release / name).write_bytes((self.src / name).read_bytes())
-        subprocess.run(['bash', '-eu', '-c', script], cwd=self.root, check=True)
+        subprocess.run(['bash', '-eu', '-c', script], cwd=self.root, env=self.env, check=True)
         with tarfile.open(self.root / 'fixture.tar.gz') as tar:
             self.assertEqual(set(tar.getnames()),
                              {'aida', 'aida-server', 'aida-porcelain', 'aida-flow'})
@@ -104,7 +107,7 @@ class ReleaseInstall(unittest.TestCase):
                          "mkdir -p \"$CARGO_HOME/bin\"\n"
                          "cp \"$FIXTURE_BUNDLE/$name\" \"$CARGO_HOME/bin/$name\"\n")
         cargo.chmod(0o755)
-        env = dict(os.environ, PATH=str(bin_dir) + ':' + os.environ['PATH'],
+        env = dict(self.env, PATH=str(bin_dir) + ':' + self.env['PATH'],
                    CARGO_HOME=str(self.root / 'cargo'), FIXTURE_BUNDLE=str(self.src))
         result = subprocess.run(['make', '-o', 'build-release', 'install'], cwd=ROOT,
                                 env=env, capture_output=True)
@@ -122,7 +125,7 @@ class ReleaseInstall(unittest.TestCase):
         curl = bin_dir / 'curl'
         curl.write_text('#!/bin/sh\n[ "$1 $2" = "-fSL -o" ] || exit 2\ncp "$FIXTURE_ARCHIVE" "$3"\n')
         curl.chmod(0o755)
-        env = dict(os.environ, PATH=str(bin_dir) + ':' + os.environ['PATH'],
+        env = dict(self.env, PATH=str(bin_dir) + ':' + self.env['PATH'],
                    FIXTURE_ARCHIVE=str(archive))
         result = subprocess.run(['bash', str(ROOT / 'scripts/install.sh'), '--version',
                                  'v1.0.0', '--prefix', str(self.dest)], env=env,
