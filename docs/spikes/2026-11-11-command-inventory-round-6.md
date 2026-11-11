@@ -63,3 +63,35 @@ The native-seat instruction requires uncommitted edits and forbids commit,
 push, PR creation and queue completion here. Only this new report is handed
 off. An explicit `aida punt` names findings 1 and 3's prerequisite dispute;
 the resulting publication veto must be respected. No ship declaration is made.
+
+## Renewed round-six pickup at b5982660c981 — 2026-11-11
+
+This retry inspected `b5982660c981178b51a37bfff90208d63f638204`.
+The visible spec has thirteen comments; comment 12 records the preceding
+round-six punt and a return to Approved without a triage reason. It supplies
+none of the three requested advisor decisions. The read again reports stale
+cache context; this is evidence about the visible comments only, not proof
+that no advisor response exists elsewhere.
+
+Rechecked the three wrapper/registration locations above at this revision:
+their line numbers and expressions are unchanged. The reviewed absolute
+client remains non-executable and doctor still reports `codegraph,missing`.
+No graph queries could be performed; no index was initialized or updated.
+
+The TOML deficit check again reports 167 rows, 167 unresolved classifications
+and one distinct evidence value. All 167 `helpers_to_widen` values carry the
+same unresolved message, all 167 stages are unresolved, and all 167 homes
+say advisor decision pending. The four Python extraction tests pass again;
+they do not verify acceptance or reachable production paths. No Rust changes
+or Cargo tests were made.
+
+Renewed disposition explicitly disputes **findings 1 and 3 only as requiring
+certification before their required advisor ruling**. All substantive deficits
+are accepted, including finding 2, which remains independently researchable
+and incomplete. This retry does not address that matrix by implication or
+claim that the missing tool prevents source-only work. AC1–3 remain unmet.
+The next advisor action is to record the effect boundary, direct-writer
+classification rule and mixed-family rule; the host tooling action is to
+supply the reviewed client and indexed main revision. This report update
+is left uncommitted under the native-seat contract. The renewed punt, rather
+than a completion/publication declaration, is the disposition for this pickup.
