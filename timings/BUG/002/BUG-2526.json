@@ -1,0 +1,42 @@
+{
+  "schema_version": 1,
+  "spec": "BUG-2526",
+  "publishes": [
+    {
+      "at": "2026-11-11T19:23:34.679382593Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-11-11T16:37:13.312978517Z",
+      "spec": "BUG-2526",
+      "seat": "advisor",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 1,
+        "slug": "implementer",
+        "attempt": 1
+      }
+    },
+    {
+      "ts": "2026-11-11T19:22:56.491087002Z",
+      "spec": "BUG-2526",
+      "seat": "advisor",
+      "kind": {
+        "event": "PrMerged",
+        "pr": 3848
+      }
+    },
+    {
+      "ts": "2026-11-11T19:23:34.539139362Z",
+      "spec": "BUG-2526",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "e4adcf93fdc19a8476619a9a1abe0d2b36588c75",
+        "pr": 3848,
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
