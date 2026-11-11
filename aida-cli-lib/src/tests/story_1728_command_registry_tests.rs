@@ -539,8 +539,10 @@ fn early_handlers_run_without_a_store_and_continue_reaches_the_store_phase() {
 fn run_fn_body() -> String {
     let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src/lib_part1.rs");
     let text = std::fs::read_to_string(path).unwrap();
+    // Match the function name without coupling this invariant to its parameters.
+    // trace:BUG-2505 | ai:codex
     let start = text
-        .find("\npub(crate) fn run() -> Result<()> {")
+        .find("\npub(crate) fn run(")
         .expect("lib_part1.rs defines run()");
     let end = start + text[start..].find("\n}\n").expect("run() closes");
     text[start..end].to_string()
