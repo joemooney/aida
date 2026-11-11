@@ -1,0 +1,35 @@
+id: 01a1c91f-37b3-7240-8ac9-86991219b6a9
+spec_id: ADR-b6b1278890774ef993d2ebc327862470-001
+agreed_id: ADR-601
+title: 'ADR draft: every state mutation goes through core; read-only views and conveniences live in peripheral crates packaged linked-in or standalone; no dynamic-library plugins'
+description: |-
+  STATUS: Draft for operator signoff. Extends ADR-71 (core admits only substrate-state capabilities; convenience ships as external aida-<name>). Parent: EPIC-613.
+
+  CONTEXT: Parallel development collides in one 580k-line crate (see EPIC-613 evidence). ADR-71 draws the boundary by intent (substrate vs convenience); this ADR makes it enforceable by dependency direction and settles packaging.
+
+  DECISION: (1) Core = aida-core plus an aida-kernel crate: store, gate (authority), events, leases, merge-holds. Only core writes substrate state; the store-writer inventory already enumerates the writers. (2) Peripheral crates (porcelain-views and convenience extensions) depend only on leaf crates (aida-term: output, glyphs, toon; aida-cmdkit: command registration) and a read-only query API, never on a store-writer or gate module. A ratchet enforces this in CI. A peripheral command that must change state calls a core command or API, never a writer directly. (3) Packaging: each peripheral crate builds two ways from the same source behind a cargo feature: linked into the single aida binary (the default install) or as a standalone aida-<name> binary resolved by STORY-1641's extension lookup (the STORY-2704 multi-call shape). (4) No dylib or cdylib plugins: Rust has no stable ABI, so plugins must match compiler and dependency versions exactly, and the workarounds (abi_stable, WASM) add unsafe code or a runtime without build or review gains. Process-boundary extensions give the same independence. (5) Application families (queue, review, session, launch, ops) become sibling crates under aida-kernel, not a layered chain.
+
+  CONSEQUENCES: A view or report PR cannot conflict with core work, cannot weaken an authority check, and compiles and tests only its own crate, so review can be risk-scaled by crate. Moving modules costs ledger and ratchet path churn (relocate-ledger-paths.py exists for that). The read-only query API becomes a contract that needs versioning.
+
+  ALTERNATIVES REJECTED: a single crate with module boundaries only (no build or test isolation); a chained layering (slower incremental builds, measured in SPIKE-713 section 3.1); dylib plugins (ABI).
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-11T05:40:28.723507407Z
+modified_at: 2026-11-11T05:40:28.723507407Z
+req_type: Decision
+tags:
+- architecture
+- core-boundary
+- crate-split
+- operator-decision
+filed_at:
+  code_sha: eb1b39c30c9f9f6ce3f5ccf1c5ffd8966e5f8a23
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 496312a2eab
+  vendor: claude
+  session: 01a1c87f-970d-7ce0-9351-e4e75a87731e
+  harness_version: 2.1.322 (Claude Code)

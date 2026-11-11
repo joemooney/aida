@@ -1077,7 +1077,7 @@ blocks:
   type_prefix: ADR
   range_start: 601
   range_end: 700
-  next: 601
+  next: 602
   allocated_at: 2026-10-31T22:53:56.205125953Z
 - node_id: b6b1278890774ef993d2ebc327862470
   owner: aida-backfill-agreed-ids
