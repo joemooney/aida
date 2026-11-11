@@ -2,6 +2,10 @@
 
 <!-- trace:SPIKE-714 | ai:codex -->
 
+Historical baseline. The generator and machine-readable snapshot were updated
+in [the round-two report](2026-11-11-command-inventory-round-2.md), which records
+the closure extraction correction and the explicit blockers to acceptance.
+
 This is a partial research deliverable, not a crate placement or design decision.
 It does not establish SPIKE-714's acceptance criteria. The accompanying
 `../../scripts/command-inventory.toml` enumerates registrations and preserves

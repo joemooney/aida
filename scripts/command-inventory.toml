@@ -2,14 +2,14 @@
 # trace:SPIKE-714 | ai:codex
 version = 1
 complete = false
-source_commit = "eb1b39c30c9f9f6ce3f5ccf1c5ffd8966e5f8a23"
+source_commit = "bcb67e299d057c874734b01b13a665cbbbf7d4ee"
 registry_count = 167
 
 [[command]]
 name = "_bg-fetch"
 registration = "session_misc_cmd::BG_FETCH"
 source = "aida-cli-lib/src/session_misc_cmd.rs:197"
-handler = "|matches, _| {\n        let args = <BgFetchArgs as clap::FromArgMatches>::from_arg_matches(matches"
+handler = "|matches, _| {\n        let args = <BgFetchArgs as clap::FromArgMatches>::from_arg_matches(matches)?;\n        handle_bg_fetch_command(&args.store_path)\n    }"
 dispatch = "Early"
 classification = "unresolved"
 classification_evidence = "Requires production call-path review; policy and same-file sinks are not proof."
@@ -204,7 +204,7 @@ home_option = "advisor decision pending"
 name = "away"
 registration = "presence_cmd::AWAY"
 source = "aida-cli-lib/src/presence_cmd.rs:105"
-handler = "|_, _| handle_away_command("
+handler = "|_, _| handle_away_command()"
 dispatch = "Early"
 classification = "unresolved"
 classification_evidence = "Requires production call-path review; policy and same-file sinks are not proof."
@@ -413,13 +413,13 @@ home_option = "advisor decision pending"
 [[command]]
 name = "criteria"
 registration = "criteria::CRITERIA"
-source = "aida-cli-lib/src/criteria.rs:1840"
+source = "aida-cli-lib/src/criteria.rs:1875"
 handler = "run_criteria"
 dispatch = "Store"
 classification = "unresolved"
 classification_evidence = "Requires production call-path review; policy and same-file sinks are not proof."
 lexical_crate_roots = ["cmdkit", "criteria_coverage", "criteria_red_run", "git_backend_cmd", "main_worktree_root_from", "parse_trace_id_token", "spec_arg", "stakeholder_role"]
-glob_sites = ["aida-cli-lib/src/criteria.rs:1778", "aida-cli-lib/src/criteria.rs:1787"]
+glob_sites = ["aida-cli-lib/src/criteria.rs:1813", "aida-cli-lib/src/criteria.rs:1822"]
 same_file_writer_candidates = []
 helpers_to_widen = "unresolved: explicit re-exports, traits and globs require item-level review"
 move_stage = "unresolved"
@@ -1029,7 +1029,7 @@ home_option = "advisor decision pending"
 name = "home"
 registration = "presence_cmd::HOME"
 source = "aida-cli-lib/src/presence_cmd.rs:114"
-handler = "|_, _| handle_home_command("
+handler = "|_, _| handle_home_command()"
 dispatch = "Early"
 classification = "unresolved"
 classification_evidence = "Requires production call-path review; policy and same-file sinks are not proof."
