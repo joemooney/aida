@@ -28,6 +28,19 @@ def target(name, kind='test'):
 
 
 class ShardsTest(unittest.TestCase):
+    # trace:TASK-3779 | ai:codex
+    def test_terminal_glyph_ratchet_is_a_required_ci_gate(self):
+        command = 'python3 -m unittest tests/test_terminal_glyph_padding.py'
+        github = yaml.safe_load((ROOT / '.github/workflows/ci.yml').read_text())
+        steps = github['jobs']['build']['steps']
+        matches = [step for step in steps if step.get('run') == command]
+        self.assertEqual(len(matches), 1)
+        self.assertEqual(matches[0]['if'], "matrix.shard == 'gates'")
+        self.assertFalse(matches[0].get('continue-on-error', False))
+        gitlab = yaml.safe_load((ROOT / '.gitlab-ci.yml').read_text())
+        self.assertIn(command, gitlab['verify']['script'])
+        self.assertFalse(gitlab['verify'].get('allow_failure', False))
+
     def test_cli_partition_is_complete_disjoint_and_stable(self):
         targets = [target(n) for n in ['d', 'a', 'c', 'b', 'new_test']]
         budgets = {'b:tests/b.rs': 100, 'c:tests/c.rs': 70}
