@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-10T22:04:54.061461738Z
-modified_at: 2026-11-10T23:13:33.827465334Z
+modified_at: 2026-11-11T01:28:45.710045270Z
 req_type: Story
 comments:
 - id: 01a1c781-4cf1-7c80-b086-89c5c5096ab6
@@ -155,6 +155,13 @@ comments:
   created_at: 2026-11-10T23:10:40.751312156Z
   modified_at: 2026-11-10T23:10:40.751312156Z
   session_id: 01a1c530-c917-7f13-ab81-f6b5e1d1cd30
+  harness_version: 2.1.322 (Claude Code)
+- id: 01a1c838-c38e-7b30-a20b-7eb919e0ff6e
+  author: joe
+  content: 'ADVISOR RULING (2026-11-10 18:50 MST) on the round-3 design fork: APPROVE the shared versioned repair journal as proposed in docs/plans/2026-11-10-story-2710-conflict-lane.md (state section). Reason: direct rework and the watcher must coordinate without direct queue-work depending on the watcher''s private state format. Contract: one journal file per repository under .aida/, schema ''version'' field, entries keyed (repository, PR, original head); holds the reservation (who dispatched, when, lane id), ambiguous-spawn retention (an entry whose spawn outcome is unknown blocks re-dispatch for that head until its lane is proven dead), the host-recorded original conflict paths, exact-tree validation evidence, and refusal-notice delivery state. Watcher state keeps only a reference. Writes go under the existing store writer lock (or a journal lock with the same discipline). P2 RULED: publication''s marker check and the lane brief both use the HOST-RECORDED original conflict path list retained in the journal across staging retries; the changed-tracked-path scan is not a substitute (keep it only as an extra guard if cheap). Proceed with the production slice on #3813; no further signoff needed for this state contract.'
+  created_at: 2026-11-11T01:28:45.710045270Z
+  modified_at: 2026-11-11T01:28:45.710045270Z
+  session_id: 01a1c70f-d731-7b70-acf8-e9ab3d288fca
   harness_version: 2.1.322 (Claude Code)
 history:
 - id: 01a1c77f-ffdf-7ac3-a382-33d6a384e617
