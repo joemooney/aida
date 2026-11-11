@@ -8,6 +8,6 @@ result: done
 due_since: 2026-11-11T10:33:07.832674274Z
 due_reason: on CronJobFailed:disk-headroom-guard
 due_failure:
-  trip_id: disk-headroom-guard@2026-11-11T14:54:17.910377109Z
+  trip_id: disk-headroom-guard@2026-11-11T15:36:02.705933473Z
   job: disk-headroom-guard
-  error: 'exit 1: STUCK: `aida worktree reclaim` can free only 0 B of the 12.0 GiB needed to restore the floor, so the guard cannot clear this on its own — 1 finding(s) in disk-headroom — failing because --fail-on-findings was requested'
+  error: 'exit 1: STUCK: `aida worktree reclaim` can free only 0 B of the 13.0 GiB needed to restore the floor, so the guard cannot clear this on its own — 1 finding(s) in disk-headroom — failing because --fail-on-findings was requested'
