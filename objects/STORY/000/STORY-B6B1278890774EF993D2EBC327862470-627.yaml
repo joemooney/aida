@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-10T03:52:00.571796159Z
-modified_at: 2026-11-11T05:37:05.895349208Z
+modified_at: 2026-11-11T09:47:55.730308084Z
 req_type: Story
 comments:
 - id: 01a1c399-6840-7383-843e-9930f6eaa3f7
@@ -471,6 +471,13 @@ comments:
   modified_at: 2026-11-11T05:17:10.602427580Z
   session_id: 01a1c90597eb
   harness_version: codex-cli 0.167.0
+- id: 01a1ca01-c3d2-7133-960a-86afefd380a2
+  author: joe
+  content: 'ADVISOR BRIEF slice 3, FINAL (2026-11-11 02:50 MST). #3777 landed S1 and S2 (multi-call crate, aida-flow tenant, nested aida-<builtin>-<name> resolution). S3 completes the story: (1) .github/workflows/release.yml archives include aida-porcelain and the aida-flow link; (2) scripts/install.sh and ''make install'' install both; (3) upgrade_cmd''s tarball path installs and replaces them atomically with the aida pair; (4) remove the built-in ''aida flow'' registration now that every install path ships aida-flow, keeping ''aida flow'' working through external resolution, and update the help golden; (5) the accepted round-4 item: porcelain error formatting reuses core output_format::parse_output_format so AIDA_OUTPUT_FORMAT aliases match core. Tests: install.sh into a temp prefix places both binaries and the link; the upgrade fixture replaces all three; ''aida flow'' resolves externally with identical output on the parity fixtures. Subject ''(STORY-2704)'' (completing). Fresh branch story-2704-s3. LIGHT gate.'
+  created_at: 2026-11-11T09:47:55.730308084Z
+  modified_at: 2026-11-11T09:47:55.730308084Z
+  session_id: 01a1c87f-970d-7ce0-9351-e4e75a87731e
+  harness_version: 2.1.322 (Claude Code)
 history:
 - id: 01a1c399-7102-7f81-9bb9-fd37379159d3
   author: joe
