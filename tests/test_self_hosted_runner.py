@@ -114,4 +114,4 @@ class LauncherRefusals(unittest.TestCase):
 
 # Keep the existing CI fixture entry point; S2 adds no workflow/routing edit.
 # trace:STORY-2695 | ai:codex
-from tests.test_dell1_controller import Admission, Cache, GateAndShell, LaunchIntegration, Selection, Rearm, Source  # noqa: E402,F401
+from tests.test_dell1_controller import Admission, Cache, GateAndShell, LaunchIntegration, Selection, Rearm, Source, RoundThree  # noqa: E402,F401

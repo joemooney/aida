@@ -212,4 +212,4 @@ retains the state intentionally. A crash during publication may leave an
 unreferenced generation; the manifest remains authoritative. Root-only offline
 pruning must retain the manifest's generation and validate paths before deletion.
 
-The slot lock covers all cache reads and writes. A manifest swap removes superseded generations; preparation retains only the current compatibility key per slot/shard, including TRAIN cold misses. Successful MAIN publication also removes stale key directories. No workflow routing is enabled by this change.
+The slot lock covers all cache reads and writes. A manifest swap removes superseded generations; preparation preserves all published compatibility keys, including on TRAIN cold misses and failed MAIN runs. Only successful MAIN publication removes stale key directories, retaining one published key and generation per slot/shard. The controller creates and validates both stable root-owned slot parents before either unit starts, and enforces traversal modes independently of the operator umask (jobs/slot/runtime parents 0755, current 0711; private work/cache trees remain 0700). No workflow routing is enabled by this change.

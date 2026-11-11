@@ -60,6 +60,14 @@ def trusted(path, directory=False):
     return path
 
 
+def traversal_directory(path, mode):
+    """Create/validate host-owned traversal roots independently of sudo umask."""
+    path.mkdir(mode=mode, exist_ok=True)
+    trusted(path, directory=True)
+    path.chmod(mode)
+    return path
+
+
 def host_json(path):
     trusted(path)
     return json.loads(path.read_text())
@@ -222,6 +230,8 @@ def publish(cache, key, work, admission):
         for entry in cache.iterdir():
             if entry.name != generation and re.fullmatch(r'(?:[0-9a-f]{32}|\.new-[0-9a-f]{32})', entry.name):
                 shutil.rmtree(entry)
+        # Retain one published compatibility key per slot/shard. Preparation,
+        # TRAIN and unsuccessful MAIN runs never retire trusted generations.
         for entry in cache.parent.iterdir():
             if entry != cache and re.fullmatch('[0-9a-f]{64}', entry.name):
                 shutil.rmtree(entry)
@@ -436,15 +446,16 @@ def launch(slot, envelope):
         toolchain = Path('/opt/aida-ci-toolchain')
         for entry in toolchain.rglob('*'):
             trusted(entry, directory=entry.is_dir())
-        JOBS.mkdir(mode=0o755, exist_ok=True)
-        trusted(JOBS, directory=True)
+        traversal_directory(JOBS, 0o755)
+        # Mandatory InaccessiblePaths must exist even on the first single-slot
+        # launch. Keep both parents stable so later sibling jobs stay hidden.
+        for sibling in SLOTS:
+            traversal_directory(JOBS / sibling, 0o755)
         parent = JOBS / slot
-        parent.mkdir(mode=0o755, exist_ok=True)
-        trusted(parent, directory=True)
         state = parent / 'current'
         if state.exists():
             shutil.rmtree(state)
-        state.mkdir(mode=0o711)
+        traversal_directory(state, 0o711)
         gate = None
         try:
             # Each class has a stable private view. Only these three trees persist.
@@ -455,8 +466,7 @@ def launch(slot, envelope):
             own_tree(state / 'runner', account)
             cache = key = None
             runtime = RUNTIME / unit
-            runtime.mkdir(mode=0o755, exist_ok=True)
-            trusted(runtime, directory=True)
+            traversal_directory(runtime, 0o755)
             endpoint = runtime / 'gate.sock'
             endpoint.unlink(missing_ok=True)
             def verify_job():
@@ -472,9 +482,6 @@ def launch(slot, envelope):
                 cache = CACHE / slot / admission['shard'] / key
                 cache.mkdir(mode=0o700, parents=True, exist_ok=True)
                 trusted(cache, directory=True)
-                for stale in cache.parent.iterdir():
-                    if stale != cache and re.fullmatch('[0-9a-f]{64}', stale.name):
-                        shutil.rmtree(stale)
                 record = seed(cache, key, work)
                 print(json.dumps({'slot': slot, 'admission': admission, 'seed': record}), flush=True)
                 for directory in ('target', 'cargo', 'home'):

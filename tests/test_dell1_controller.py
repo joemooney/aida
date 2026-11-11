@@ -8,6 +8,7 @@ import json
 import os
 from pathlib import Path
 import socket
+import stat
 import subprocess
 import tempfile
 import time
@@ -342,7 +343,7 @@ class GateAndShell(unittest.TestCase):
 
 class LaunchIntegration(unittest.TestCase):
     """Run orchestration with a real gate/cache and fake systemd/public forge."""
-    def exercise(self, kind, *, unit_failure=False, stop_failure=False, gate_failure=False, alternate=False, pending=False, test_failure=False, priority=False):
+    def exercise(self, kind, *, unit_failure=False, stop_failure=False, gate_failure=False, alternate=False, pending=False, test_failure=False, priority=False, restrictive_umask=False):
         from contextlib import ExitStack
         from types import SimpleNamespace
         with tempfile.TemporaryDirectory() as directory, ExitStack() as stack:
@@ -354,7 +355,11 @@ class LaunchIntegration(unittest.TestCase):
             (root / 'config/trains.json').write_text(json.dumps([RECORD]))
             stale = root / 'cache/s0' / ('cli-0' if alternate else 'lib-0') / ('0' * 64)
             stale.mkdir(parents=True)
-            (stale / 'old-artifact').write_text('obsolete')
+            previous_generation = stale / ('a' * 32)
+            previous_generation.mkdir()
+            (previous_generation / 'old-artifact').write_text('trusted previous generation')
+            previous_manifest = json.dumps({'key': '0' * 64, 'generation': 'a' * 32})
+            (stale / 'manifest.json').write_text(previous_manifest)
             forge = Forge(kind)
             runner = 'aida-ci-s0-' + '1'*32
             forge.job['runner_name'] = runner
@@ -389,6 +394,16 @@ class LaunchIntegration(unittest.TestCase):
             def system(command, **kwargs):
                 commands.append(command)
                 if command[0] == 'systemd-run':
+                    # Model systemd's mandatory path resolution before the gate.
+                    for sibling in c.SLOTS:
+                        parent = root / 'jobs' / sibling
+                        self.assertTrue(parent.is_dir())
+                        self.assertEqual(stat.S_IMODE(parent.stat().st_mode), 0o755)
+                    for path, mode in ((root / 'jobs', 0o755),
+                                       (root / 'jobs/s0/current', 0o711),
+                                       (root / 'run/aida-ci-s0', 0o755),
+                                       (root / f'jobs/s0/current/{kind.lower()}', 0o700)):
+                        self.assertEqual(stat.S_IMODE(path.stat().st_mode), mode)
                     forge.job['status'] = 'in_progress'
                     if alternate:
                         forge.job.update(id=21, name='CI (cli-0)')
@@ -431,6 +446,9 @@ class LaunchIntegration(unittest.TestCase):
             stack.enter_context(patch.object(c, 'Gate', side_effect=lambda p, uid, check, **kw: original_gate(p, os.getuid(), check, **kw)))
             clock = iter([0, 11])
             stack.enter_context(patch.object(c.time, 'monotonic', side_effect=lambda: next(clock)))
+            if restrictive_umask:
+                previous_umask = os.umask(0o077)
+                stack.callback(os.umask, previous_umask)
             if priority:
                 with self.assertRaises(c.Deferred):
                     c.launch('s0', dict(run=10, job=20, runner=runner, jit=lambda: self.fail('registered before priority check')))
@@ -442,11 +460,14 @@ class LaunchIntegration(unittest.TestCase):
                     c.launch('s0', dict(run=10, job=20, runner=runner, jit='secret-jit'))
             else:
                 c.launch('s0', dict(run=10, job=20, runner=runner, jit='secret-jit'))
-            manifests = list((root / 'cache').rglob('manifest.json'))
+            manifests = [p for p in (root / 'cache').rglob('manifest.json') if p.parent != stale]
             self.assertEqual(len(manifests), int(kind == 'MAIN' and not unit_failure and not stop_failure and not gate_failure and not pending and not test_failure))
             self.assertEqual((root / 'run/aida-ci-s0.json').exists(), stop_failure)
-            if not gate_failure and not priority:
-                self.assertFalse(stale.exists())
+            published = bool(manifests)
+            self.assertEqual(stale.exists(), not published)
+            if not published:
+                self.assertEqual((stale / 'manifest.json').read_text(), previous_manifest)
+                self.assertEqual((previous_generation / 'old-artifact').read_text(), 'trusted previous generation')
             if alternate and manifests:
                 self.assertEqual(manifests[0].parent.parent.name, 'cli-0')
             self.assertEqual((root / 'jobs/s0/current').exists(), stop_failure)
@@ -465,6 +486,15 @@ class LaunchIntegration(unittest.TestCase):
 
     def test_priority_deferral_leaves_no_reservation_or_registration(self):
         self.exercise('MAIN', priority=True)
+
+    def test_fresh_single_slot_startup_with_restrictive_umask(self):
+        self.exercise('MAIN', restrictive_umask=True)
+
+    def test_changed_key_train_preserves_previous_main(self):
+        self.exercise('TRAIN', restrictive_umask=True)
+
+    def test_changed_key_failed_main_preserves_previous_main(self):
+        self.exercise('MAIN', test_failure=True, restrictive_umask=True)
 
     def test_successful_main_publishes_only_after_stop(self):
         self.exercise('MAIN')
