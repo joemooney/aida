@@ -4,10 +4,10 @@
 use crate::process_retry::RetryEtxtbsy;
 #[cfg(test)]
 use crate::{
-    alias, branch_exists_anywhere, cli, help, history, intent, lease_path, lease_state_for,
-    leases_dir, leases_json_rows, process_probe, remove_session_lease_record_only,
-    select_lease_listing, worker, worktree_lease, DatabaseBackend, LeaseState, Requirement,
-    RequirementStatus, ScaffoldCommand,
+    alias, branch_exists_anywhere, cli, help, history, intent, lease_path, leases_dir,
+    leases_json_rows, process_probe, remove_session_lease_record_only, select_lease_listing,
+    worker, worktree_lease, DatabaseBackend, LeaseState, Requirement, RequirementStatus,
+    ScaffoldCommand,
 };
 // trace:TASK-3428 | ai:codex
 use crate::{

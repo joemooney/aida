@@ -8,10 +8,10 @@ use crate::{advisor, human_route_is_open, is_human_route, role};
 use crate::{
     active_lease_for_cwd, agent_launch_views, agent_output_mode, agent_registry,
     append_session_activity, canonical_role_name, current_user_id, find_aida_project_root_from,
-    find_main_worktree_root, find_project_root, humanize_relative, is_toml_kv_line,
-    lease_state_for, leases, list_leases, load_session_activity, main_worktree_root_from,
-    orchestrator, permissions, picker_terminal_width, process_probe, prompt_yes_no, queue_cmd,
-    statusline_project_root, team, truncate, write_atomic, Command, LeaseState, ACTIVITY_MAX,
+    find_main_worktree_root, find_project_root, humanize_relative, is_toml_kv_line, leases,
+    list_leases, load_session_activity, main_worktree_root_from, orchestrator, permissions,
+    picker_terminal_width, process_probe, prompt_yes_no, queue_cmd, statusline_project_root, team,
+    truncate, write_atomic, Command, LeaseState, ACTIVITY_MAX,
 };
 use anyhow::{Context, Result};
 use colored::Colorize;
@@ -1289,7 +1289,7 @@ pub(crate) fn validate_registered_agent_role(raw: &str) -> Result<String> {
 /// BUG-511: like [`in_flight_lease_scopes`] but keeps each live lease's
 /// role, so the open-spec explainer can say *what kind* of work holds the
 /// spec ("being reviewed" vs the generic in-flight line). Same liveness
-/// rules: [`lease_state_for`] over every lease, keep the `Live` ones.
+/// rules: [`crate::leases::lease_state_for`] over every lease, keep the `Live` ones.
 /// trace:BUG-511 | ai:claude
 pub(crate) fn in_flight_lease_role_map(
     project_root: &std::path::Path,
@@ -1302,7 +1302,7 @@ pub(crate) fn in_flight_lease_role_map(
     let live = process_probe::probe_live_claude_sessions();
     leases
         .iter()
-        .filter_map(|l| match lease_state_for(l, &live, now) {
+        .filter_map(|l| match crate::leases::lease_state_for(l, &live, now) {
             LeaseState::Live => Some((l.scope.to_ascii_lowercase(), l.role.clone())),
             _ => None,
         })
