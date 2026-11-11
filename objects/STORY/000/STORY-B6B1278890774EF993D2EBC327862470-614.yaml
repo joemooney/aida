@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-09T01:58:46.910276326Z
-modified_at: 2026-11-11T02:14:56.591517892Z
+modified_at: 2026-11-11T02:26:46.666915030Z
 req_type: Story
 tags:
 - area:orchestration
@@ -69,6 +69,13 @@ comments:
   content: 'ADVISOR ADDENDUM (2026-11-10 19:22 MST) to the 18:45 contract: since BUG-2492 (#3651) a held PR''s merge-hold-gate check reports PENDING, not FAILURE. Every ''has CI settled?'' test in these loops must exclude merge-hold-gate, or a held PR is never reworked or trained (observed: auto-rework skipped #3791''s request-changes for 30+ min). Add a regression test for a held PR with only merge-hold-gate pending.'
   created_at: 2026-11-11T02:14:56.591517892Z
   modified_at: 2026-11-11T02:14:56.591517892Z
+  session_id: 01a1c70f-d731-7b70-acf8-e9ab3d288fca
+  harness_version: 2.1.322 (Claude Code)
+- id: 01a1c86d-e10a-75b0-9b38-85b74a6b37df
+  author: joe
+  content: 'ADVISOR ADDENDUM 2 (2026-11-10 19:32 MST): merge-hold-gate arrives as a commit STATUS (GraphQL StatusContext: name in .context, result in .state), not a check run (.name/.conclusion). Match checks by (name or context) and read (conclusion or state). The 19:22 addendum''s filter on .name alone missed it, so held PRs still looked pending.'
+  created_at: 2026-11-11T02:26:46.666915030Z
+  modified_at: 2026-11-11T02:26:46.666915030Z
   session_id: 01a1c70f-d731-7b70-acf8-e9ab3d288fca
   harness_version: 2.1.322 (Claude Code)
 history:
