@@ -18,7 +18,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-11T05:40:53.335487241Z
-modified_at: 2026-11-11T06:50:26.137598678Z
+modified_at: 2026-11-11T07:13:41.636107162Z
 req_type: Spike
 tags:
 - architecture
@@ -194,6 +194,12 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a1c974-a55c-78f3-bd8a-b6f4722475b1
+  author: joe
+  timestamp: 2026-11-11T07:13:47.356025198Z
+  session_id: 01a1c87f-970d-7ce0-9351-e4e75a87731e
+  harness_version: 2.1.322 (Claude Code)
+  changes: []
 execution_mode: drain
 filed_at:
   code_sha: eb1b39c30c9f9f6ce3f5ccf1c5ffd8966e5f8a23
@@ -209,4 +215,12 @@ attention_reason:
   detail: 'Round 3: explicitly dispute finding 3 only insofar as it requires certification of about twenty invocation-level read-only commands before the advisor defines the effect boundary. New source-grounded evidence: normal schema/commands/help-all paths reach lib_part1.rs:2079 -> presence::auto_flip_if_interactive -> set_home -> write_presence_file, and successful returns reach lib_part1.rs:389 -> usage::append_event; four exact sink IDs verified in store-writers.toml. Handler-only versus full-invocation classification, direct CLI-owned writers under core-write, and mixed-family aggregation require advisor ruling. Accept findings 1 and 2; all 167 classifications, full dependency matrix/global ranking, and AC3 remain incomplete. Required reviewed host client /home/joe/ai/aida/.codegraph/proxy-state/bin/codegraph is still absent; doctor reports codegraph,missing. Recovery: advisor ruling plus host-deployed query client and indexed main revision, then complete audit. New report docs/spikes/2026-11-11-command-inventory-round-3.md adds exact production paths, decision alternatives, and dependencies/visibility blockers for schema, commands and help-all; four Python tests and ledger/denominator checks pass. Report left uncommitted per native-seat contract; no publication declaration or completion requested.'
   raised_by: implementer
   raised_at: 2026-11-11T06:50:26.137598678Z
+failure_reason:
+  phase: reviewer
+  phase_index: 3
+  kind: verdict:request-changes
+  detail: 'Full sweep: SPIKE-714 AC1 unverified (167 unresolved class/evidence rows); AC2 unverified (reachable writer/gate audit incomplete); AC3 unverified (first batch absent); AC4 verified by pinned revisions and documented method in spike reports. SPIKE-714 (spike protocol): met (dated docs/spikes deliverables in diff). Three actionable acceptance/dependency gaps remain; CI pending at review time.'
+  recovery_hint: address the review findings, move SPIKE-714 back to In Progress, and clear the PR hold only after approval
+  shelved_by: advisor
+  shelved_at: 2026-11-11T07:13:41.636107162Z
 human_only: true
