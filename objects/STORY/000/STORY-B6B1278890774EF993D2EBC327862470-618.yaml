@@ -28,12 +28,12 @@ description: |
   - Two jobs run concurrently without sharing a job directory or cache slot; the slot cap holds.
   - A test proves a PR job cannot write to the main/train cache.
   - Runbook updated. After activation, compare queue time and end-to-end run time against this baseline, and roll back the variable if wait increases.
-status: NeedsAttention
+status: Approved
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-09T16:33:51.967266Z
-modified_at: 2026-11-11T01:16:48.566513195Z
+modified_at: 2026-11-11T02:33:04.042398389Z
 req_type: Story
 tags:
 - area:ci
@@ -189,6 +189,13 @@ comments:
   modified_at: 2026-11-10T15:04:02.452195536Z
   session_id: 01a1c5eafaba
   harness_version: codex-cli 0.167.0
+- id: 01a1c873-a32a-73b1-a7a3-d45206616a00
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: S2 runner controller is well-fenced on trust (admission, gate, MAIN-only publish) but cannot run as written: source extraction refuses the repo''s 135 tracked symlinks, the gate kills legitimately assigned jobs because JIT labels do not pin the proposed job, routine outcomes wedge slots, and cache generations grow without bound. CI green at head.. No triage reason was given.'
+  created_at: 2026-11-11T02:33:04.042390657Z
+  modified_at: 2026-11-11T02:33:04.042390657Z
+  session_id: 01a1c70f-d731-7b70-acf8-e9ab3d288fca
+  harness_version: 2.1.322 (Claude Code)
 history:
 - id: 01a1c325-9cdb-7b81-a057-a76e1b9c8512
   author: joe
@@ -277,6 +284,15 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a1c873-a32a-73b1-a7a3-d44709e00bf4
+  author: joe
+  timestamp: 2026-11-11T02:33:04.042367185Z
+  session_id: 01a1c70f-d731-7b70-acf8-e9ab3d288fca
+  harness_version: 2.1.322 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 execution_mode: drain
 filed_at:
   code_sha: e4eee38238fa4cb8e8c85dadaa4ed07894cfbeea
@@ -287,11 +303,3 @@ filed_at:
   vendor: claude
   session: 01a1beff-fc3b-78e2-93e2-9b0c283b0339
   harness_version: 2.1.319 (Claude Code)
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: 'S2 runner controller is well-fenced on trust (admission, gate, MAIN-only publish) but cannot run as written: source extraction refuses the repo''s 135 tracked symlinks, the gate kills legitimately assigned jobs because JIT labels do not pin the proposed job, routine outcomes wedge slots, and cache generations grow without bound. CI green at head.'
-  recovery_hint: address the review findings, move STORY-2695 back to In Progress, and clear the PR hold only after approval
-  shelved_by: reviewer
-  shelved_at: 2026-11-11T01:16:48.566513195Z
