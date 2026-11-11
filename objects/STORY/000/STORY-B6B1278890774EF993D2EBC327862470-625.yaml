@@ -3,12 +3,12 @@ spec_id: STORY-b6b1278890774ef993d2ebc327862470-625
 agreed_id: STORY-2702
 title: 'Review policy distinguishes evidence types per criterion: behavioral test, configuration validation, documentation inspection'
 description: Reported from operator's work machine (Codex, GitLab project hello-work-0x), 2026-11-09. A reviewer requested automated coverage for a documented Python prerequisite and for CI routing on a small prototype, because the policy requires automated coverage for every criterion. Let each acceptance criterion declare its evidence type (behavioral test, configuration validation, documentation or manual inspection) and have the reviewer verify that evidence type rather than demanding a test for every criterion. Behavioral criteria still require tests. Relates to risk-scaled review.
-status: InProgress
+status: Approved
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-10T03:07:22.550186240Z
-modified_at: 2026-11-11T02:27:09.796748864Z
+modified_at: 2026-11-11T02:27:15.525063511Z
 req_type: Story
 comments:
 - id: 01a1c86e-3b64-7461-953d-6be133ed1057
@@ -45,6 +45,15 @@ history:
   session_id: 01a1c789b8dd
   harness_version: codex-cli 0.167.0
   changes: []
+- id: 01a1c86e-523a-71b2-a702-6df27335051b
+  author: joe
+  timestamp: 2026-11-11T02:27:15.642390195Z
+  session_id: 01a1c70f-d731-7b70-acf8-e9ab3d288fca
+  harness_version: 2.1.322 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Approved
 filed_at:
   code_sha: 838f14c3c2811c6b63da5d465700cff773c36190
   branch: main
