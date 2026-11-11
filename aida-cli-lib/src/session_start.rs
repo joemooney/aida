@@ -1,8 +1,28 @@
 //! `aida session start` and its preflight, pool and dirty-tree gates (STORY-1488 slice 1)
 // trace:STORY-1488 | ai:claude
 
-use crate::*;
+use crate::process_retry::RetryEtxtbsy;
+#[cfg(test)]
+use crate::{distributed_mode_declared_from, validate_session_start_args, Requirement};
+// trace:TASK-3428 | ai:codex
+use crate::{
+    active_lease_for_cwd, agent_registry, aggregate_session_activity_into_roles,
+    apply_session_env_to_process, change_lookup_for_branch, claim, cli, coordination,
+    current_branch_at, detect_cargo_target_dir, detect_default_branch_ref,
+    detect_merged_pr_for_branch_via_forge, events, existing_lease_for_scope,
+    find_main_worktree_root, find_project_root, forge, git_arg_guard, hostname, humanize_relative,
+    isolate_cargo_target_dir, launch, lease_covers_cwd, lease_path, leases, leases_dir,
+    link_worktree_runtime_state, list_leases, live_spec_claim_by_other, main_worktree_root_from,
+    orchestrator, process_probe, queue_cmd, recent_files_for_branch,
+    remove_session_lease_record_only, review_source_branch_conflict_decision, role, session,
+    sh_single_quote, slugify, worktree, worktree_config_init_submodules,
+    worktree_pool_config_lease_ttl_secs, worktree_pool_config_max_trees,
+    worktree_pool_config_worktree_parent, worktree_pool_global_hooks, write_session_env_file, zen,
+    LeaseConflictDecision, PrLookup, RequirementStatus, SessionLease, Storage,
+};
 use aida_core::git_ops::RemoteCredentialsExt as _;
+use anyhow::{Context, Result};
+use colored::Colorize;
 
 /// STORY-61: forge-specific PR/MR scope. When `aida session start
 /// --owns PR-1` or `--owns MR-42` is invoked, we route through a

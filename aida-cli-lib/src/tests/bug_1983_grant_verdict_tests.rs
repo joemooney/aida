@@ -345,6 +345,8 @@ fn same_check(reason: &GrantRejection) -> String {
         GrantRejection::SubjectMismatch { grant_subject, .. } => {
             format!("SubjectMismatch({grant_subject})")
         }
+        // trace:BUG-2520 | ai:codex
+        GrantRejection::PrincipalMismatch { .. } => "PrincipalMismatch".into(),
         GrantRejection::RosterDenied { seat, .. } => format!("RosterDenied({seat})"),
         GrantRejection::Parent(inner) => format!("Parent({})", same_check(inner)),
         GrantRejection::ParentPrincipalMismatch => "ParentPrincipalMismatch".into(),
