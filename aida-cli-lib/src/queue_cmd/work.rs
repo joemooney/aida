@@ -1,5 +1,7 @@
 // trace:TASK-3426 | ai:codex
 use super::*;
+// trace:BUG-2509 | ai:codex
+use crate::rework_direction::ReviewResult;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum QueueFreshPickup {
@@ -2138,6 +2140,13 @@ pub(crate) fn headless_waiting_rule_suffix(role: &str) -> String {
     } else {
         "result"
     };
+    // trace:STORY-2697 | ai:codex
+    let reviewer_ci_contract = if role.eq_ignore_ascii_case("reviewer") {
+        "\n\nReviewer CI contract: approve a defect-free head while CI is pending; \
+         WAITING only for independent evidence or a named test the judgment depends on."
+    } else {
+        ""
+    };
     format!(
         "\n\nHEADLESS WAITING RULE: AIDA_HEADLESS=1 means there is no next \
          conversational turn. Never end your turn waiting for a notification, \
@@ -2146,7 +2155,7 @@ pub(crate) fn headless_waiting_rule_suffix(role: &str) -> String {
          tool call) and print the current state each step so stream-json emits \
          progress for the watchdog. If the wait would exceed the phase's \
          remaining budget, write the {artifact} with the current wait state and \
-         exit instead."
+         exit instead.{reviewer_ci_contract}"
     )
 }
 
@@ -2540,11 +2549,14 @@ pub(crate) fn resolve_rework_findings(
     spec_id: &str,
     open_change: Option<&str>,
 ) -> Result<Option<String>, String> {
-    resolve_rework_review(project_root, display_id, spec_id, open_change).map_err(|error| {
-        match error {
+    resolve_rework_review(project_root, display_id, spec_id, open_change)
+        .map(|review| match review {
+            ReviewResult::Available(findings) => Some(findings),
+            _ => None,
+        })
+        .map_err(|error| match error {
             ReworkReviewError::Waiting(why) | ReworkReviewError::Unavailable(why) => why,
-        }
-    })
+        })
 }
 
 // trace:BUG-2500 | ai:codex
@@ -2587,7 +2599,7 @@ pub(crate) fn refuse_waiting_pickup(
 
 // trace:BUG-2500 | ai:codex
 #[derive(Debug)]
-enum ReworkReviewError {
+pub(crate) enum ReworkReviewError {
     Waiting(String),
     Unavailable(String),
 }
@@ -2608,12 +2620,12 @@ fn waiting_rework_error(
     Ok(())
 }
 
-fn resolve_rework_review(
+pub(crate) fn resolve_rework_review(
     project_root: &Path,
     display_id: &str,
     spec_id: &str,
     open_change: Option<&str>,
-) -> Result<Option<String>, ReworkReviewError> {
+) -> Result<ReviewResult<String>, ReworkReviewError> {
     use crate::gate::review_alias::{select_verdict, spec_labels, AliasSelection};
     use crate::gate::review_verdict::RecordedVerdict;
     let ids = [display_id, spec_id];
@@ -2666,7 +2678,7 @@ fn resolve_rework_review(
                         })
                         .collect::<Vec<_>>();
                     if !findings.is_empty() {
-                        return Ok(Some(findings.join("\n\n")));
+                        return Ok(ReviewResult::Available(findings.join("\n\n")));
                     }
                     for (_, v) in &candidates {
                         waiting_rework_error(&shown, v)?;
@@ -2684,7 +2696,7 @@ fn resolve_rework_review(
                 eprintln!(
                     "warning: no review findings imported for {shown}: its current review cannot be selected ({reason}). Read the review comment before starting rework."
                 );
-                return Ok(None);
+                return Ok(ReviewResult::Unavailable);
             }
         };
 
@@ -2747,7 +2759,7 @@ fn resolve_rework_review(
                     }
                 }
                 if !findings.is_empty() {
-                    return Ok(Some(findings.join("\n\n")));
+                    return Ok(ReviewResult::Available(findings.join("\n\n")));
                 }
                 for (_, v) in &bound {
                     waiting_rework_error(&shown, v)?;
@@ -2777,22 +2789,36 @@ fn resolve_rework_review(
             .map(chrono::DateTime::<chrono::Utc>::from);
         verdict_recorded_time(v, written)
     };
+    // Only an explicit approval clears durable findings; an unknown verdict
+    // supplies no authoritative clearance.
+    // trace:BUG-2509 | ai:codex
+    let classify = |v: &RecordedVerdict, findings: Option<String>| match findings {
+        Some(findings) => ReviewResult::Available(findings),
+        None if v.kind.approves() => ReviewResult::ClearedByApproval,
+        None => ReviewResult::Unavailable,
+    };
     let render_change = |key: &str, v: &RecordedVerdict| {
         let review_ref = review_ref_from_verdict_filename(
             &crate::gate::review_verdict::verdict_path(project_root, key),
         );
-        crate::review_verdict_display::rework_findings_comment(display_id, &review_ref, v)
+        classify(
+            v,
+            crate::review_verdict_display::rework_findings_comment(display_id, &review_ref, v),
+        )
     };
     // Named by the caller's first label, not the answering partition's: the
     // recurrence guard compares whole blocks, so the same findings must
     // render the same whichever label recorded them.
     let render_spec = |v: &RecordedVerdict| {
-        crate::review_verdict_display::rework_findings_comment(&shown, &shown, v)
+        classify(
+            v,
+            crate::review_verdict_display::rework_findings_comment(&shown, &shown, v),
+        )
     };
     // trace:BUG-2500 | ai:codex
     let refuse_wait = |v: &RecordedVerdict| waiting_rework_error(&shown, v);
     Ok(match (spec_keyed, change_keyed) {
-        (None, None) => None,
+        (None, None) => ReviewResult::Unavailable,
         (Some((v, _)), None) => {
             refuse_wait(&v)?;
             render_spec(&v)
@@ -4268,6 +4294,19 @@ pub(crate) fn handle_queue_work(
                 )?;
             }
 
+            // trace:STORY-2705 | ai:codex — before worktree/queue mutation.
+            if role == "reviewer" {
+                if let Some((forge, n)) = plan.review_target {
+                    if let Some(reason) = crate::review_implementer_gate::deferred(
+                        &project_root,
+                        n,
+                        forge == ReviewForge::GitLab,
+                    )? {
+                        anyhow::bail!("{reason}");
+                    }
+                }
+            }
+
             // trace:STORY-1662 | ai:claude
             // trace:STORY-2660 | ai:codex
             if standalone_implementer {
@@ -4457,7 +4496,7 @@ pub(crate) fn handle_queue_work(
         .as_deref()
         .filter(|_| !role.eq_ignore_ascii_case("reviewer") && !plan_only && !guided)
     {
-        None => None,
+        None => ReviewResult::Unavailable,
         Some(root) => {
             let spec_id = plan
                 .entries
@@ -4465,8 +4504,9 @@ pub(crate) fn handle_queue_work(
                 .map(|entry| entry.spec_id.as_str())
                 .unwrap_or(plan.anchor_display.as_str());
             let open_change = spec_open_change_key(root, &[plan.anchor_display.as_str(), spec_id]);
-            resolve_rework_findings(root, &plan.anchor_display, spec_id, open_change.as_deref())
-                .map_err(|why| {
+            resolve_rework_review(root, &plan.anchor_display, spec_id, open_change.as_deref())
+                .map_err(|error| {
+                    let (ReworkReviewError::Waiting(why) | ReworkReviewError::Unavailable(why)) = error;
                     anyhow::anyhow!(
                         "refusing to launch {}: {why}. Read the review with `aida review verdict {}` \
                          or post its findings as an advisor ruling, then relaunch.",
@@ -4490,7 +4530,7 @@ pub(crate) fn handle_queue_work(
         && !plan_only
         && !guided
         && plan.mode == QueueWorkMode::Item;
-    let spec_comments = if review_findings.is_some() || implementer_item {
+    let spec_comments = if review_findings.findings().is_some() || implementer_item {
         let spec_id = plan
             .entries
             .first()
@@ -4514,7 +4554,7 @@ pub(crate) fn handle_queue_work(
     // leads its prompt with the PR head's failing tests and panic lines.
     // trace:BUG-2380 | ai:claude
     let ci_failures = review_findings
-        .as_ref()
+        .findings()
         .and(project_root_for_config.as_deref())
         .and_then(|root| {
             let spec_id = plan
@@ -4610,14 +4650,6 @@ pub(crate) fn handle_queue_work(
     }
     if no_human {
         prompt.push_str(&headless_waiting_rule_suffix(&role));
-        if role.eq_ignore_ascii_case("reviewer") {
-            prompt.push_str(
-                "\n\nReviewer CI contract: gate on PR CI, but do not gate on the \
-                 nightly cross-platform workflow unless the spec acceptance \
-                 explicitly names it; when it does, poll by the bounded-step \
-                 rule above.",
-            );
-        }
     }
 
     // STORY-281: reviewer pre-flight stale-base check. Fires whenever the
@@ -6635,7 +6667,23 @@ pub(crate) fn run_standalone_reviewer(
     // every ship until someone commits by hand. trace:BUG-2180 | ai:claude
     store_commit.commit();
 
-    let pr_spec_ids: Vec<String> = fetch_pr_ship_metadata_via_gh(project_root, pr)
+    let pr_spec_ids: Vec<String> = fetch_pr_ship_metadata_via_forge(project_root, pr)
+        // trace:BUG-2515 | ai:codex
+        // Standalone PR reviewers can lack local forge configuration (for
+        // example in a scratch launch root). Preserve their GitHub recovery
+        // lookup without redirecting a configured GitLab MR to GitHub.
+        .or_else(|err| {
+            if crate::forge::resolve_forge_kind(project_root) != crate::forge::ForgeKind::None {
+                return Err(err);
+            }
+            crate::forge::forge_for_kind(project_root, crate::forge::ForgeKind::GitHub)
+                .change_title_and_body(pr)
+                .map(|(title, body)| crate::pr_cmd::PrShipMetadata {
+                    title,
+                    body,
+                    number: Some(pr),
+                })
+        })
         .map(|meta| review_calibration_spec_ids(project_root, &meta.title, branch, &meta.body))
         .unwrap_or_default();
 

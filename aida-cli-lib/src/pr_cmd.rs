@@ -8,8 +8,28 @@ use crate::gate::approval::*;
 use crate::gate::ci_freshness::*;
 use crate::gate::mandate_ship::*;
 use crate::process_retry::RetryEtxtbsy;
-use crate::*;
+#[cfg(test)]
+use crate::{
+    auto_complete, extract_pr_number_from_commit_subject, help, spec_status, AutonomyMode,
+    Phase3StaleOverlapAction, RealPhaseDriver,
+};
+// trace:TASK-3428 | ai:codex
+use crate::{
+    active_lease_for_cwd, aida_bin, apply_effort_tag, change_lookup_for_branch, cli,
+    commit_subjects, complexity_calibration, current_git_branch, current_user_id,
+    detect_default_branch_ref, detect_merged_pr_for_branch_via_forge, doctor_cmd,
+    effort_calibration, events, extract_spec_ids_from_commit, find_main_worktree_root,
+    find_project_root, forge, format_review_label, gate, list_leases, load_store_for_lookup,
+    main_worktree_root_from, merge_lock, network_retry, orchestrator, parse_review_scope,
+    permissions, pr_is_merged_with_sink, pr_list_handler, pr_rebase, pr_ship, punt,
+    read_commits_in_range, remote_head_sha, render_auto_queue_outcome, resolve_aida_exe,
+    resolve_gate_range, role, run, run_client_trailer_guard, run_pr_open_spec_guard, session, ship,
+    spec_matches, stacks, truncate, try_auto_queue_pr_review, watch, worktree_gc, AutoQueueOrigin,
+    AutoQueueStatus, PrLookup, ReviewForge, Storage,
+};
 use aida_core::git_ops::RemoteCredentialsExt as _;
+use anyhow::{Context, Result};
+use colored::Colorize;
 use serde::{Deserialize, Serialize};
 
 // trace:STORY-1728 | ai:claude
@@ -3547,7 +3567,7 @@ pub(crate) fn pr_ship_with_method_and_dispatch_ctx(
         // branch-name fallback or non-final rebase slice never completes a spec
         // silently. Rebase merges produce no squash subject.
         // trace:BUG-1919 trace:STORY-1663 | ai:antigravity
-        let ship_meta = fetch_pr_ship_metadata_via_gh(&project_root, pr_number)?;
+        let ship_meta = fetch_pr_ship_metadata_via_forge(&project_root, pr_number)?;
         let (explicit_squash_subject, completion_trailer) = derive_pr_ship_subject_for_method_from(
             &project_root,
             &ship_meta,
@@ -4199,7 +4219,7 @@ pub(crate) fn pr_ship_with_method_and_dispatch_ctx(
     // Best-effort: emit failures never fail the ship. trace:BUG-1423 | ai:claude
     let mut pr_merged_spec_ids: Vec<String> = Vec::new();
     let mut pr_title_body: Option<(String, String)> = None;
-    if let Ok(pr_meta) = fetch_pr_ship_metadata_via_gh(&project_root, pr_number) {
+    if let Ok(pr_meta) = fetch_pr_ship_metadata_via_forge(&project_root, pr_number) {
         pr_title_body = Some((pr_meta.title.clone(), pr_meta.body.clone()));
         // Use the same store-qualified completion intent as the squash subject
         // — including BUG-1919's non-completing / closure-held suppression, so
@@ -5389,7 +5409,7 @@ pub(crate) fn derive_pr_ship_squash_subject(
     // main's tip. TASK-142: prefer the PR title as the explicit squash subject
     // base because the branch head may itself be a merge commit.
     // trace:TASK-140 TASK-142 | ai:codex
-    let pr = fetch_pr_ship_metadata_via_gh(project_root, pr_number)?;
+    let pr = fetch_pr_ship_metadata_via_forge(project_root, pr_number)?;
     derive_pr_ship_squash_subject_from(project_root, &pr, branch, no_complete)
 }
 
@@ -5489,7 +5509,7 @@ pub(crate) fn derive_pr_ship_subject_for_method(
     if method != crate::forge::MergeMethod::Rebase {
         return derive_pr_ship_squash_subject(project_root, pr_number, branch, no_complete);
     }
-    let pr = fetch_pr_ship_metadata_via_gh(project_root, pr_number)?;
+    let pr = fetch_pr_ship_metadata_via_forge(project_root, pr_number)?;
     derive_pr_ship_subject_for_method_from(
         project_root,
         &pr,
@@ -6923,43 +6943,24 @@ pub(crate) struct PrShipMetadata {
     pub(crate) number: Option<u64>,
 }
 
-pub(crate) fn fetch_pr_ship_metadata_via_gh(
+pub(crate) fn fetch_pr_ship_metadata_via_forge(
     project_root: &std::path::Path,
     n: u64,
 ) -> Result<PrShipMetadata> {
-    let n_str = n.to_string();
-    let mut command = std::process::Command::new("gh");
-    command
-        .current_dir(project_root)
-        .args(["pr", "view", &n_str, "--json", "title,body"]);
-    let out = crate::process_retry::command_output_retrying_etxtbsy(&mut command).map_err(|e| {
-        if e.kind() == std::io::ErrorKind::NotFound {
-            anyhow::anyhow!("`gh` not on PATH — install from https://cli.github.com/")
-        } else {
-            anyhow::anyhow!("`gh pr view {}` failed to spawn: {}", n, e)
-        }
-    })?;
-    if !out.status.success() {
-        anyhow::bail!(
-            "`gh pr view {}` exited {} — {}",
-            n,
-            out.status,
-            String::from_utf8_lossy(&out.stderr).trim()
-        );
-    }
-    let json: serde_json::Value = serde_json::from_slice(&out.stdout)
-        .with_context(|| format!("`gh pr view {}` returned non-JSON output", n))?;
+    // trace:BUG-2515 | ai:codex
+    let kind = crate::forge::resolve_forge_kind(project_root);
+    let (title, body) = crate::forge::forge_for_kind(project_root, kind)
+        .change_title_and_body(n)
+        .with_context(|| {
+            format!(
+                "could not resolve {} metadata via `{}`",
+                kind.change_noun(),
+                kind.cli_name()
+            )
+        })?;
     Ok(PrShipMetadata {
-        title: json
-            .get("title")
-            .and_then(|v| v.as_str())
-            .unwrap_or("")
-            .to_string(),
-        body: json
-            .get("body")
-            .and_then(|v| v.as_str())
-            .unwrap_or("")
-            .to_string(),
+        title,
+        body,
         number: Some(n),
     })
 }
@@ -6967,9 +6968,8 @@ pub(crate) fn fetch_pr_ship_metadata_via_gh(
 /// BUG-417: return `Some(reason)` when `aida pr ship` should skip the blocking
 /// CI wait rather than hang on a repo that will never register checks. Two
 /// triggers: (1) an explicit opt-out env (`AIDA_PR_SHIP_NO_CI_WAIT=1` or the
-/// `lifecycle:no-ci-wait` token in `AIDA_LIFECYCLE_TAGS`); (2) no GitHub Actions
-/// workflow files configured (`.github/workflows/*.{yml,yaml}` absent or empty)
-/// — the quizdom "no `.github/workflows` at all" case. `None` ⇒ wait normally.
+/// `lifecycle:no-ci-wait` token in `AIDA_LIFECYCLE_TAGS`); (2) neither GitHub
+/// Actions workflows nor `.gitlab-ci.yml` configured. `None` ⇒ wait normally.
 // trace:BUG-417 | ai:claude
 pub(crate) fn pr_ship_ci_wait_skip_reason(project_root: &std::path::Path) -> Option<String> {
     // Explicit opt-out (env-level honoring of lifecycle:no-ci-wait, which the
@@ -6992,16 +6992,22 @@ pub(crate) fn pr_ship_ci_wait_skip_reason(project_root: &std::path::Path) -> Opt
 
     // No workflows configured ⇒ checks will never register.
     if !repo_has_ci_workflows(project_root) {
-        return Some("no CI workflows configured (.github/workflows)".to_string());
+        return Some(
+            "no CI workflows configured (.github/workflows or .gitlab-ci.yml)".to_string(),
+        );
     }
     None
 }
 
-/// BUG-417: true when the project has at least one GitHub Actions workflow file
+/// True when the project has a GitLab CI file or at least one GitHub Actions workflow file
 /// (`.github/workflows/*.{yml,yaml}`). The pure file-name rule lives in
 /// `pr_ship::workflow_files_indicate_ci`; this only does the directory read.
 // trace:BUG-417 | ai:claude
 pub(crate) fn repo_has_ci_workflows(project_root: &std::path::Path) -> bool {
+    // trace:BUG-2515 | ai:codex
+    if project_root.join(".gitlab-ci.yml").is_file() {
+        return true;
+    }
     let dir = project_root.join(".github").join("workflows");
     let Ok(entries) = std::fs::read_dir(&dir) else {
         return false;
@@ -10526,3 +10532,7 @@ mod bug_2384_cleanup_tests {
         assert!(!lock.exists());
     }
 }
+
+#[cfg(test)]
+#[path = "tests/bug_2515_gitlab_ship_tests.rs"]
+mod bug_2515_gitlab_ship_tests;

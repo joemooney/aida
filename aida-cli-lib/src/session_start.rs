@@ -1,8 +1,28 @@
 //! `aida session start` and its preflight, pool and dirty-tree gates (STORY-1488 slice 1)
 // trace:STORY-1488 | ai:claude
 
-use crate::*;
+use crate::process_retry::RetryEtxtbsy;
+#[cfg(test)]
+use crate::{distributed_mode_declared_from, validate_session_start_args, Requirement};
+// trace:TASK-3428 | ai:codex
+use crate::{
+    active_lease_for_cwd, agent_registry, aggregate_session_activity_into_roles,
+    apply_session_env_to_process, change_lookup_for_branch, claim, cli, coordination,
+    current_branch_at, detect_cargo_target_dir, detect_default_branch_ref,
+    detect_merged_pr_for_branch_via_forge, events, existing_lease_for_scope,
+    find_main_worktree_root, find_project_root, forge, git_arg_guard, hostname, humanize_relative,
+    isolate_cargo_target_dir, launch, lease_covers_cwd, lease_path, leases, leases_dir,
+    link_worktree_runtime_state, list_leases, live_spec_claim_by_other, main_worktree_root_from,
+    orchestrator, process_probe, queue_cmd, recent_files_for_branch,
+    remove_session_lease_record_only, review_source_branch_conflict_decision, role, session,
+    sh_single_quote, slugify, worktree, worktree_config_init_submodules,
+    worktree_pool_config_lease_ttl_secs, worktree_pool_config_max_trees,
+    worktree_pool_config_worktree_parent, worktree_pool_global_hooks, write_session_env_file, zen,
+    LeaseConflictDecision, PrLookup, RequirementStatus, SessionLease, Storage,
+};
 use aida_core::git_ops::RemoteCredentialsExt as _;
+use anyhow::{Context, Result};
+use colored::Colorize;
 
 /// STORY-61: forge-specific PR/MR scope. When `aida session start
 /// --owns PR-1` or `--owns MR-42` is invoked, we route through a
@@ -2370,6 +2390,58 @@ pub(crate) fn session_start_with_receipt(
         }
     }
 
+    // STORY-65 + TASK-67: role resolution by INTENT, not blind env
+    // inheritance. Order:
+    //   1. --role <name>             explicit override always wins
+    //   2. scope-derived default     PR-N/MR-N → reviewer; else → implementer
+    //   3. $AIDA_SESSION_ROLE        env fallback when no scope default fires
+    //                                (which currently never happens — every
+    //                                scope shape has a default — but kept as
+    //                                a safety net for future scope kinds)
+    //   4. None                      no role recorded
+    //
+    // The earlier (pre-TASK-67) behavior was step 3 only: a reviewer shell
+    // starting an EPIC session recorded reviewer, which then misrouted the
+    // queue/activity surfaces while real implementer work happened inside.
+    // When the env and scope-default disagree we warn (don't fail) — the
+    // user might genuinely want the env's role (e.g. an architect shell
+    // starting an EPIC; the implementer default would be wrong for them).
+    // Resolve once before publishing the shared claim; the lease below uses
+    // this same effective role. trace:STORY-2705 | ai:codex
+    // trace:TASK-67 | ai:claude
+    let env_role = std::env::var("AIDA_SESSION_ROLE")
+        .ok()
+        .filter(|s| !s.trim().is_empty());
+    let scope_default_role: Option<&'static str> = if review_target.is_some() {
+        Some("reviewer")
+    } else {
+        Some("implementer")
+    };
+    let (inherited_role, role_origin) = if let Some(r) = launch_role.as_ref() {
+        (Some(r.clone()), "--role flag")
+    } else if let Some(d) = scope_default_role {
+        // Warn when env-role disagrees with the scope default — the user
+        // probably wanted the scope default but might have meant otherwise.
+        if let Some(env) = env_role.as_ref() {
+            if !env.eq_ignore_ascii_case(d) {
+                eprintln!(
+                    "{} active role {} doesn't match this scope's default {}.\n  \
+                     Recording: {} (scope-derived). Pass --role {} to override.",
+                    crate::glyph(crate::glyphs::Glyph::Warning).yellow().bold(),
+                    format!("({})", env).cyan(),
+                    format!("({})", d).cyan(),
+                    d.cyan().bold(),
+                    env.cyan(),
+                );
+            }
+        }
+        (Some(d.to_string()), "scope-derived")
+    } else if let Some(env) = env_role.clone() {
+        (Some(env), "inherited")
+    } else {
+        (None, "")
+    };
+
     let mut rollback = rollback_failed_setup.then(|| SessionStartCleanup::new(&project_root, owns));
 
     // STORY-637: cross-clone lease claim on the shared store. The intra-clone
@@ -2383,15 +2455,11 @@ pub(crate) fn session_start_with_receipt(
     {
         let store_root = project_root.join(".aida-store");
         let orchestrated = orchestrator::detect(&project_root).is_orchestrated();
-        let claim_role = launch_role
-            .clone()
-            .or_else(|| std::env::var("AIDA_SESSION_ROLE").ok())
-            .unwrap_or_default();
         match coordination::acquire_claim_receipted(
             &store_root,
             owns,
             &project_root,
-            &claim_role,
+            inherited_role.as_deref().unwrap_or_default(),
             /* review_verb */ is_review_session,
             force_claim || orchestrated,
         ) {
@@ -3299,56 +3367,6 @@ pub(crate) fn session_start_with_receipt(
             .or_else(|| std::env::var("USER").ok())
             .unwrap_or_else(|| "unknown".to_string())
     };
-    // STORY-65 + TASK-67: role resolution by INTENT, not blind env
-    // inheritance. Order:
-    //   1. --role <name>             explicit override always wins
-    //   2. scope-derived default     PR-N/MR-N → reviewer; else → implementer
-    //   3. $AIDA_SESSION_ROLE        env fallback when no scope default fires
-    //                                (which currently never happens — every
-    //                                scope shape has a default — but kept as
-    //                                a safety net for future scope kinds)
-    //   4. None                      no role recorded
-    //
-    // The earlier (pre-TASK-67) behavior was step 3 only: a reviewer shell
-    // starting an EPIC session recorded reviewer, which then misrouted the
-    // queue/activity surfaces while real implementer work happened inside.
-    // When the env and scope-default disagree we warn (don't fail) — the
-    // user might genuinely want the env's role (e.g. an architect shell
-    // starting an EPIC; the implementer default would be wrong for them).
-    // trace:TASK-67 | ai:claude
-    let env_role = std::env::var("AIDA_SESSION_ROLE")
-        .ok()
-        .filter(|s| !s.trim().is_empty());
-    let scope_default_role: Option<&'static str> = if review_target.is_some() {
-        Some("reviewer")
-    } else {
-        Some("implementer")
-    };
-    let (inherited_role, role_origin) = if let Some(r) = launch_role.as_ref() {
-        (Some(r.clone()), "--role flag")
-    } else if let Some(d) = scope_default_role {
-        // Warn when env-role disagrees with the scope default — the user
-        // probably wanted the scope default but might have meant otherwise.
-        if let Some(env) = env_role.as_ref() {
-            if !env.eq_ignore_ascii_case(d) {
-                eprintln!(
-                    "{} active role {} doesn't match this scope's default {}.\n  \
-                     Recording: {} (scope-derived). Pass --role {} to override.",
-                    crate::glyph(crate::glyphs::Glyph::Warning).yellow().bold(),
-                    format!("({})", env).cyan(),
-                    format!("({})", d).cyan(),
-                    d.cyan().bold(),
-                    env.cyan(),
-                );
-            }
-        }
-        (Some(d.to_string()), "scope-derived")
-    } else if let Some(env) = env_role.clone() {
-        (Some(env), "inherited")
-    } else {
-        (None, "")
-    };
-
     // STORY-73: capture the parent shell PID so `aida session end` (without
     // an arg) can resolve the right lease from the shell that ran `start`,
     // even when cwd doesn't help. Best effort — if PPID isn't set / process

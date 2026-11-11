@@ -2637,19 +2637,24 @@ pub(crate) fn build_implementer_launch_command(
         posture == crate::session::ContainmentPosture::None,
         "this dispatch vendor requires the supervised agent launcher"
     );
-    let ctx = crate::launch::LaunchContext::resolve(crate::launch::LaunchRequest {
-        vendor: launch_vendor,
-        kind,
-        program: agent_bin.as_os_str().to_owned(),
-        // Switches above are launcher-owned. The name is a -n operand;
-        // the prompt is positional data, so neither is a flag tail.
-        args,
-        tail: Vec::new(),
-        posture,
-        cwd: wt_path.to_path_buf(),
-        set_cwd: true,
-        host_main: Some(main_worktree.to_path_buf()),
-    })?;
+    let ctx = {
+        let req = crate::launch::LaunchRequest {
+            vendor: launch_vendor,
+            kind,
+            program: agent_bin.as_os_str().to_owned(),
+            // Switches above are launcher-owned. The name is a -n operand;
+            // the prompt is positional data, so neither is a flag tail.
+            args,
+            tail: Vec::new(),
+            posture,
+            cwd: wt_path.to_path_buf(),
+            set_cwd: true,
+            host_main: Some(main_worktree.to_path_buf()),
+        };
+        // trace:STORY-2538 | ai:codex
+        let exec = crate::session::capture_launch_exec(&req.cwd, req.host_main.as_deref())?;
+        crate::launch::LaunchContext::resolve(&exec, req)
+    }?;
     let mut cmd = crate::launch::spawn_agent(&ctx)?;
     // Critical Boundary B requirement: implementer lanes never inherit or hold
     // any session grant, purpose, or dispatch worker claim token.

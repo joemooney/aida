@@ -1,7 +1,49 @@
 //! the impl auto_complete::PhaseDriver for RealPhaseDriver trait impl (STORY-1488 slice 1; Q9 split)
 // trace:STORY-1488 | ai:claude
 
-use crate::*;
+use crate::process_retry::RetryEtxtbsy;
+// trace:TASK-3428 | ai:codex
+use crate::{
+    advisor, agent_seat_for_phase, aida_subcmd_queue_add_for_reviewer_using, assemble_punt_payload,
+    auto_complete, auto_complete_telemetry, blocking_rework_verdict, build_ci_fix_prompt,
+    build_implementer_phase_args, build_phase3_auto_rebase_args, calibration,
+    capture_review_calibration_for_spec, ci_gate, ci_probe_change_id, ci_probe_with_forge,
+    ci_red_recovery_hint, ci_red_refine_poll_interval, classify_branch_swap_attribution,
+    classify_drain_merge_failure, classify_rework_head_change, claude_log_indicates_api_outage,
+    commit, current_branch_head_sha, decide_shelve_attribution, discard_orchestrated_child_refusal,
+    dispatched_branch_head_sha, drain_lock, drain_merge_lease_failure, drain_state,
+    effective_calibration_mode, emit_ci_terminal, empty_launch_decision,
+    enrich_headless_wait_failure, enrich_no_verdict_with_headless_diagnostic,
+    ensure_implementer_branch_pushed, ensure_pr_open_spec_attribution, ensure_spec_done_after_pr,
+    events, exit_signal, extract_bughunter_severity, failing_ci_log_excerpt,
+    fetch_pr_ship_metadata_via_forge, file_agent_gate_warning_finding,
+    file_reviewer_verdict_unavailable_finding, find_main_worktree_root, forge, gate, graded_review,
+    harvest, headless_launch_log_evidence, hold_signal, implementer_preflight,
+    latest_run_id_for_branch, lease_path, list_leases, load_store_for_lookup,
+    main_worktree_root_from, mark_lease_escalated_to_human, matching_agent_gates_for_spec,
+    merge_hold, network_retry, open_pr_review_story_using, orchestrated_session_lease_evidence,
+    orchestrator, orchestrator_phase_child_env, pane_host, phase1_empty_launch_retry_delay,
+    phase1_empty_launch_retry_sleep, phase3_head_archive_fallback, pr_credit_match_with_sink,
+    pr_credited_spec_id_with_sink, pr_head_branch, pr_head_ref_best_effort,
+    pr_head_sha_best_effort, pr_rebase, preflight_intermediate_only_check_with_forge,
+    preflight_stale_base_check_with_forge, prepare_graded_review,
+    prepare_orchestrated_lease_receipt, punt, queue_cmd, read_commits_in_range,
+    read_headless_log_for_session, read_review_mode, reclaim_implementer_retry_predecessor,
+    reconcile_orchestrated_branch, reconcile_verdict, release_dead_phase_predecessor_leases,
+    remote_head_sha, render_auto_queue_outcome, require_review_handoff, resolve_gh_binary,
+    resolve_pickup_workspace, resolve_shelve_gate_range, resume_command_with_cwd,
+    reviewer_wrote_message, rework_no_op_message, role, schedule, session, shelve_spec_on_failure,
+    sibling_verdict_sweep_for_phase3, spec_status, spec_verdict_fallback_for_phase3,
+    stamp_pr_review_verdict, try_auto_queue_pr_review,
+    try_open_orchestrator_pr_for_no_pr_pushed_branch, try_open_orchestrator_pr_for_no_pr_worktree,
+    verified_phase2_branch, wait_for_ci_terminal, watch_ci_for_context_with_forge,
+    watchdog_failure_with_committed_work, worktree, AdvisorPass, AgentGateOnFail, AutoQueueOrigin,
+    AutoQueueStatus, CiProbe, EmptyLaunchLog, OpenPrInfo, Phase1PrResolve, Phase1Workspace,
+    Phase3StaleOverlapAction, PhaseWatchdog, RealPhaseDriver, RequirementStatus, ReworkHeadChange,
+    ShelveAttribution,
+};
+use anyhow::{Context, Result};
+use colored::Colorize;
 
 impl auto_complete::PhaseDriver for RealPhaseDriver {
     fn capture_phase_done_pr(&mut self) {
@@ -102,7 +144,7 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
         else {
             return;
         };
-        let body = fetch_pr_ship_metadata_via_gh(&self.project_root, change.id)
+        let body = fetch_pr_ship_metadata_via_forge(&self.project_root, change.id)
             .map(|meta| meta.body)
             .unwrap_or_default();
         if !queue_cmd::rework_pr_head_matches_spec(
@@ -4321,21 +4363,26 @@ pub(crate) fn build_phase_driver_ci_fix_command(
         }
         cmd
     } else {
-        let ctx = crate::launch::LaunchContext::resolve(crate::launch::LaunchRequest {
-            vendor: crate::launch::context::launch_vendor(vendor),
-            kind: aida_core::launch_policy::LaunchKind::Fresh,
-            program: program.into(),
-            // Trusted output of session::headless_vendor_args (including
-            // posture flags and a prompt), not a default_flags/template tail.
-            // Caller configuration flags must be validated before this builder.
-            args: headless_vendor_args.to_vec(),
-            tail: Vec::new(),
-            posture,
-            cwd: worktree.to_path_buf(),
-            set_cwd: true,
-            // Native/None constructors do not cross the AIDA boundary.
-            host_main: None,
-        })?;
+        let ctx = {
+            let req = crate::launch::LaunchRequest {
+                vendor: crate::launch::context::launch_vendor(vendor),
+                kind: aida_core::launch_policy::LaunchKind::Fresh,
+                program: program.into(),
+                // Trusted output of session::headless_vendor_args (including
+                // posture flags and a prompt), not a default_flags/template tail.
+                // Caller configuration flags must be validated before this builder.
+                args: headless_vendor_args.to_vec(),
+                tail: Vec::new(),
+                posture,
+                cwd: worktree.to_path_buf(),
+                set_cwd: true,
+                // Native/None constructors do not cross the AIDA boundary.
+                host_main: None,
+            };
+            // trace:STORY-2538 | ai:codex
+            let exec = crate::session::capture_launch_exec(&req.cwd, req.host_main.as_deref())?;
+            crate::launch::LaunchContext::resolve(&exec, req)
+        }?;
         crate::launch::spawn_agent(&ctx)?
     };
     cmd.current_dir(worktree)
