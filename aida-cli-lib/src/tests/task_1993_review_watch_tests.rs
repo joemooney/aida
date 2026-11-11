@@ -1693,6 +1693,9 @@ fn task1993_dispatcher_lost_before_claim_frees_its_reservation() {
         let (temp, store) = fixture();
         let c = change(1, 1, false);
         let attempt = dispatch(select(&store, &c, None, 1).unwrap());
+        // This recovery is local and proves no claim or descendant ever started.
+        assert!(attempt.admission_hub.is_none());
+        assert!(attempt.unclaimed_before_spawn());
         // A real dispatcher process, identified while alive, then gone.
         let mut dispatcher = Command::new("/bin/sleep").arg("30").spawn().unwrap();
         let identity = Identity::of(dispatcher.id()).unwrap();
@@ -1739,11 +1742,17 @@ fn task1993_dispatcher_lost_before_claim_frees_its_reservation() {
         restarted.release("PR-2").unwrap();
         let retry = dispatch(select(&restarted, &c, None, 1).unwrap());
         assert_ne!(retry.token, attempt.token);
+        assert_eq!(retry.head, attempt.head);
         let state = restarted.load().unwrap();
         let attempts = &state.entries["PR-1"].attempts;
         assert_eq!(attempts.len(), 1);
         assert_eq!(attempts[0].token, retry.token);
         assert!(active(&attempts[0]));
+        let Action::Skip(reason) = select(&restarted, &change(2, 2, false), None, 1).unwrap()
+        else {
+            panic!("the readmitted head should hold the only slot");
+        };
+        assert!(reason.contains("global reviewer capacity"), "{reason}");
         assert!(log_tail(&restarted, &format!("PR-1-{}.log", attempt.token))
             .unwrap()
             .contains(trigger));
@@ -1752,6 +1761,12 @@ fn task1993_dispatcher_lost_before_claim_frees_its_reservation() {
     let (_temp, store) = fixture();
     let c = change(1, 1, false);
     let attempt = dispatch(select(&store, &c, None, 1).unwrap());
+    assert!(attempt.admission_hub.is_none());
+    assert!(attempt.unclaimed_before_spawn());
+    let logs = Directory::open(&store.dir.path().join("logs")).unwrap();
+    let log_name = format!("PR-1-{}.log", attempt.token);
+    let mut log = logs.file(&log_name, true).unwrap();
+    writeln!(log, "grant refused before claim").unwrap();
     mark_unclaimed_exit(&store, "PR-1", &attempt.token, "exit status: 1").unwrap();
     let state = store.load().unwrap();
     let recorded = &state.entries["PR-1"].attempts[0];
@@ -1759,6 +1774,10 @@ fn task1993_dispatcher_lost_before_claim_frees_its_reservation() {
     assert!(!active(recorded));
     let diagnostic = recorded.diagnostic.clone();
     assert!(diagnostic.as_deref().unwrap().contains("exit status: 1"));
+    assert!(diagnostic
+        .as_deref()
+        .unwrap()
+        .contains("grant refused before claim"));
     dispatch(select(&store, &change(2, 2, false), None, 1).unwrap());
     assert_eq!(
         store.load().unwrap().entries["PR-1"].attempts[0].diagnostic,
@@ -1767,11 +1786,19 @@ fn task1993_dispatcher_lost_before_claim_frees_its_reservation() {
     store.release("PR-2").unwrap();
     let retry = dispatch(select(&store, &c, None, 1).unwrap());
     assert_ne!(retry.token, attempt.token);
+    assert_eq!(retry.head, attempt.head);
     let state = store.load().unwrap();
     let attempts = &state.entries["PR-1"].attempts;
     assert_eq!(attempts.len(), 1);
     assert_eq!(attempts[0].token, retry.token);
     assert!(active(&attempts[0]));
+    let Action::Skip(reason) = select(&store, &change(2, 2, false), None, 1).unwrap() else {
+        panic!("the readmitted head should hold the only slot");
+    };
+    assert!(reason.contains("global reviewer capacity"), "{reason}");
+    assert!(log_tail(&store, &log_name)
+        .unwrap()
+        .contains("grant refused before claim"));
 }
 
 // The triggers above really do leave the reservation unclaimed.
