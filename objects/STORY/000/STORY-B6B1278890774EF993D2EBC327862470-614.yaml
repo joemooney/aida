@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-09T01:58:46.910276326Z
-modified_at: 2026-11-11T03:53:34.951145251Z
+modified_at: 2026-11-11T03:53:36.235718044Z
 req_type: Story
 tags:
 - area:orchestration
@@ -103,6 +103,24 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Full sweep: 5 defects in train refusal classification and service failure accounting; 23 criterion statuses documented; CI pending.. No triage reason was given.'
   created_at: 2026-11-11T03:53:34.951138262Z
   modified_at: 2026-11-11T03:53:34.951138262Z
+  session_id: 01a1c70f-d731-7b70-acf8-e9ab3d288fca
+  harness_version: 2.1.322 (Claude Code)
+- id: 01a1c8bd-5e60-74a3-baf0-ec8ed3a49d48
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (STORY-2691):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: e1247c6cf21d
+    Recorded: 2026-11-11T03:09:43.623593868+00:00
+    Findings:
+    1. [P1] aida-cli-lib/src/pr_train.rs:1212-1215: Preserve Refused versus Unavailable for automatic eligibility. Every eligible() error is currently Unavailable, including a confirmed merge hold, withdrawn approval or failed CI. If one appears after a train is built, observe_gate reports Transient and land suspends with the journal/riders retained instead of ejecting the member; each supervised restart repeats the same refusal and blocks later trains. Return typed settled refusals and regression-test a hold/withdrawn approval during pre-land and recovery.
+    2. [P2] aida-cli-lib/src/advisor_loop_train.rs:57-69: Treat an empty discovery as an idle pass. advisor_train_handler invokes the ordinary --all-ready handler, whose filter_recovered_candidates errors when there are no open non-train PRs and nothing to recover. Three healthy idle polls therefore publish a repeated-service-failure alert. Handle this as a nonfailure without masking real errors; cover zero open PRs and only train/ PRs.
+    3. [P1] aida-cli-lib/src/review_watch.rs:2436-2459: Include asynchronous dispatcher failures in service failure accounting. watch_change returns Ok after spawning a dispatcher, and later children.retain_mut only marks its exit. A child that exits nonzero before claiming/launching a reviewer (including an authority refusal) never increments failures; controller_pass(None) instead clears the episode. Count confirmed failed dispatch outcomes and reset only on meaningful success; test repeated failing child launches, not just direct calls to record_failure.
+    4. [P2] aida-cli-lib/src/review_watch.rs:2436-2459: Account for pre-discovery pass failures too. In the supervised once=false worker, repo.discover failures log/sleep/continue before controller_pass, and unsuccessful sync_pass likewise bypasses it. Persistent forge/auth/sync failures can stop all review dispatch indefinitely with no alert while the controller stays alive. Feed real discovery/sync failures into the durable episode (keep normal contention separate) and cover repeated failure/recovery.
+    5. [P2] aida-cli-lib/src/advisor_loop_train.rs:57-58: Do not interpret all-ready admission infrastructure failures as successful passes. pr_train_handler converts every gate_member error into a refused candidate and returns Ok under all_ready even when all gates failed because approval/hold/CI evidence could not be read. The new service then resets failures every three minutes and never alerts. Preserve structured unavailable/error outcomes through the automatic pass, while retaining ordinary ineligibility as a skip; test repeated CI/hold/approval read failures.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-11T03:53:36.096454852Z
+  modified_at: 2026-11-11T03:53:36.096454852Z
   session_id: 01a1c70f-d731-7b70-acf8-e9ab3d288fca
   harness_version: 2.1.322 (Claude Code)
 history:
