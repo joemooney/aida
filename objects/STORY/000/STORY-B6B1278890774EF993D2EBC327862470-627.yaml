@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-10T03:52:00.571796159Z
-modified_at: 2026-11-11T13:02:53.038880977Z
+modified_at: 2026-11-11T15:43:35.041356693Z
 req_type: Story
 comments:
 - id: 01a1c399-6840-7383-843e-9930f6eaa3f7
@@ -689,6 +689,13 @@ comments:
   created_at: 2026-11-11T13:00:41.906912688Z
   modified_at: 2026-11-11T13:00:41.906912688Z
   session_id: 01a1c87f-970d-7ce0-9351-e4e75a87731e
+  harness_version: 2.1.322 (Claude Code)
+- id: 01a1cb47-6081-7211-886d-ef1a0ffb5cd3
+  author: joe
+  content: 'ADVISOR BRIEF (2026-11-11 08:50 MST, rework on PR #3842 at 0f923b16): address the 4 findings recorded in .aida/gate-ledger/PR-3842.jsonl (latest verdict entry) with a regression test each; push to the same PR branch, keep the title. LIGHT gate: targeted tests via the lane runner, then make check-ci-fast.'
+  created_at: 2026-11-11T15:43:35.041356693Z
+  modified_at: 2026-11-11T15:43:35.041356693Z
+  session_id: 01a1ca83-fabb-7663-852c-12c78d4e097f
   harness_version: 2.1.322 (Claude Code)
 history:
 - id: 01a1c399-7102-7f81-9bb9-fd37379159d3
