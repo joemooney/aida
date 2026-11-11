@@ -5,10 +5,10 @@ last_by:
   session: 01a1beff-fc3b-78e2-93e2-9b0c283b0339
   vendor: claude
 result: done
-note: 'advisor: unread [request] from review-watch, 4h24m old: PR-3809 behind `main` with overlap; update-branch conflicts; advisor: unread [request] from review-watch, 4h24m old: PR-3783 behind `main` with overlap; update-branch conflicts; advisor: unread [request] from review-watch, 2h11m old: PR-3820 behind `main` with overlap; update-branch conflicts; advisor: unread [request] from dirtlab, 43m old: Rework merge conflicts require Claude'
+note: 'advisor: unread [request] from review-watch, 4h20m old: PR-3817 behind `main` with overlap; update-branch conflicts; advisor: unread [request] from dirtlab, 3h31m old: Queue-work lane exited without changes; advisor: unread [request] from dirtlab, 3h29m old: Queue-work lane exited without changes; advisor: unread [request] from dirtlab, 3h03m old: Queue-work lane exited without changes; advisor: unread [request] from dirtlab, 2h59m old: Queue-work lane exited without changes'
 due_since: 2026-11-09T10:53:52.591288010Z
 due_reason: on CronJobFired:mail-backlog-guard-route-advisor
 due_failure:
-  trip_id: mail-backlog-guard-route-advisor@2026-11-11T02:16:56Z
+  trip_id: mail-backlog-guard-route-advisor@2026-11-11T02:55:05Z
   job: mail-backlog
-  error: 'advisor: unread [request] from review-watch, 4h24m old: PR-3809 behind `main` with overlap; update-branch conflicts; advisor: unread [request] from review-watch, 4h24m old: PR-3783 behind `main` with overlap; update-branch conflicts; advisor: unread [request] from review-watch, 2h11m old: PR-3820 behind `main` with overlap; update-branch conflicts; advisor: unread [request] from dirtlab, 43m old: Rework merge conflicts require Claude'
+  error: 'advisor: unread [request] from review-watch, 4h20m old: PR-3817 behind `main` with overlap; update-branch conflicts; advisor: unread [request] from dirtlab, 3h31m old: Queue-work lane exited without changes; advisor: unread [request] from dirtlab, 3h29m old: Queue-work lane exited without changes; advisor: unread [request] from dirtlab, 3h03m old: Queue-work lane exited without changes; advisor: unread [request] from dirtlab, 2h59m old: Queue-work lane exited without changes'
