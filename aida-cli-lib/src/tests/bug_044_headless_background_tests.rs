@@ -910,7 +910,7 @@ impl Fixture {
             anyhow::ensure!(status.success(), "mock child failed");
             return Ok(());
         }
-        si::run(si::Launch {
+        si::run_for_test(si::Launch {
             project_root: &self.project,
             vendor,
             prompt: "/aida-pickup STORY-9",
