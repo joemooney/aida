@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-10T10:24:49.978786902Z
-modified_at: 2026-11-11T07:35:34.984977813Z
+modified_at: 2026-11-11T07:41:21.326671237Z
 req_type: Bug
 comments:
 - id: 01a1c544-9448-77c1-a5a0-c8d1776ee831
@@ -183,6 +183,13 @@ comments:
   modified_at: 2026-11-11T07:33:20.901631177Z
   session_id: 01a1c87f-970d-7ce0-9351-e4e75a87731e
   harness_version: 2.1.322 (Claude Code)
+- id: 01a1c98d-e22e-7b70-bbc0-4c134dee4a9b
+  author: dirtlab
+  content: 'Round 6 finding 1: current checkout already contains Failed phase expectations and capacity/readmission checks. Strengthened the regression with explicit local/no-claim/no-descendant prerequisites, same-head identity and reacquired-capacity assertions for both recovery paths, plus parent-observed exit log retention through readmission. Lane validation: targeted regression 1 passed (j20261111T073621511-2-0); review_watch suite 163 passed (j20261111T074108940-2-0). rustfmt and git diff --check pass. Edits remain uncommitted for host publication per native implementer contract.'
+  created_at: 2026-11-11T07:41:21.326671237Z
+  modified_at: 2026-11-11T07:41:21.326671237Z
+  session_id: 01a1c9889309
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1c4fe-25c9-7752-878d-7f4b5f4e9270
   author: joe
