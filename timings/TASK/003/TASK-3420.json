@@ -1,0 +1,197 @@
+{
+  "schema_version": 1,
+  "spec": "TASK-3420",
+  "publishes": [
+    {
+      "at": "2026-11-11T05:18:35.176033616Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-11-08T06:59:50.338201810Z",
+      "spec": "TASK-3420",
+      "seat": "advisor",
+      "kind": {
+        "event": "SpecRequeued",
+        "via": "queue-rework",
+        "actor": "joe",
+        "from": "Needs Attention",
+        "to": "Approved"
+      }
+    },
+    {
+      "ts": "2026-11-08T07:24:27.940755268Z",
+      "spec": "TASK-3420",
+      "seat": "advisor",
+      "kind": {
+        "event": "SpecRequeued",
+        "via": "queue-rework",
+        "actor": "joe",
+        "from": "Needs Attention",
+        "to": "Approved"
+      }
+    },
+    {
+      "ts": "2026-11-08T10:53:58.096300085Z",
+      "spec": "TASK-3420",
+      "seat": "advisor",
+      "kind": {
+        "event": "SpecRequeued",
+        "via": "queue-rework",
+        "actor": "joe",
+        "from": "Needs Attention",
+        "to": "Approved"
+      }
+    },
+    {
+      "ts": "2026-11-08T19:29:44.040823242Z",
+      "spec": "TASK-3420",
+      "seat": "advisor",
+      "kind": {
+        "event": "SpecRequeued",
+        "via": "queue-rework",
+        "actor": "joe",
+        "from": "Needs Attention",
+        "to": "Approved"
+      }
+    },
+    {
+      "ts": "2026-11-09T05:26:48.285509205Z",
+      "spec": "TASK-3420",
+      "seat": "advisor",
+      "kind": {
+        "event": "SpecRequeued",
+        "via": "queue-rework",
+        "actor": "joe",
+        "from": "Needs Attention",
+        "to": "Approved"
+      }
+    },
+    {
+      "ts": "2026-11-09T09:48:01.640658492Z",
+      "spec": "TASK-3420",
+      "seat": "advisor",
+      "kind": {
+        "event": "SpecRequeued",
+        "via": "queue-rework",
+        "actor": "joe",
+        "from": "Needs Attention",
+        "to": "Approved"
+      }
+    },
+    {
+      "ts": "2026-11-09T10:29:25.306152311Z",
+      "spec": "TASK-3420",
+      "seat": "advisor",
+      "kind": {
+        "event": "SpecRequeued",
+        "via": "queue-rework",
+        "actor": "joe",
+        "from": "Needs Attention",
+        "to": "Approved"
+      }
+    },
+    {
+      "ts": "2026-11-09T11:12:59.849604729Z",
+      "spec": "TASK-3420",
+      "seat": "advisor",
+      "kind": {
+        "event": "SpecRequeued",
+        "via": "queue-rework",
+        "actor": "joe",
+        "from": "Needs Attention",
+        "to": "Approved"
+      }
+    },
+    {
+      "ts": "2026-11-09T12:17:22.302311349Z",
+      "spec": "TASK-3420",
+      "seat": "advisor",
+      "kind": {
+        "event": "SpecRequeued",
+        "via": "queue-rework",
+        "actor": "joe",
+        "from": "Needs Attention",
+        "to": "Approved"
+      }
+    },
+    {
+      "ts": "2026-11-09T12:52:06.382012387Z",
+      "spec": "TASK-3420",
+      "seat": "advisor",
+      "kind": {
+        "event": "SpecRequeued",
+        "via": "queue-rework",
+        "actor": "joe",
+        "from": "Needs Attention",
+        "to": "Approved"
+      }
+    },
+    {
+      "ts": "2026-11-10T17:31:28.465704926Z",
+      "spec": "TASK-3420",
+      "seat": "advisor",
+      "kind": {
+        "event": "SpecRequeued",
+        "via": "queue-rework",
+        "actor": "joe",
+        "from": "Needs Attention",
+        "to": "Approved"
+      }
+    },
+    {
+      "ts": "2026-11-10T18:17:21.252891383Z",
+      "spec": "TASK-3420",
+      "seat": "advisor",
+      "kind": {
+        "event": "SpecRequeued",
+        "via": "queue-rework",
+        "actor": "joe",
+        "from": "Needs Attention",
+        "to": "Approved"
+      }
+    },
+    {
+      "ts": "2026-11-10T20:24:09.678247387Z",
+      "spec": "TASK-3420",
+      "seat": "advisor",
+      "kind": {
+        "event": "SpecRequeued",
+        "via": "queue-rework",
+        "actor": "joe",
+        "from": "Needs Attention",
+        "to": "Approved"
+      }
+    },
+    {
+      "ts": "2026-11-10T21:15:55.288812710Z",
+      "spec": "TASK-3420",
+      "kind": {
+        "event": "UnshippedWorkDetected",
+        "spec": "TASK-3420",
+        "branch": "origin/task-3420-part-a",
+        "first_seen": "2026-11-10T21:15:55.288753426+00:00"
+      }
+    },
+    {
+      "ts": "2026-11-11T05:18:13.430797269Z",
+      "spec": "TASK-3420",
+      "seat": "advisor",
+      "kind": {
+        "event": "PrMerged",
+        "pr": 3801
+      }
+    },
+    {
+      "ts": "2026-11-11T05:18:35.015968955Z",
+      "spec": "TASK-3420",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "aef854074f9ed7dfbaa2974a51a8b4e22f4ef0f0",
+        "pr": 3801,
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
