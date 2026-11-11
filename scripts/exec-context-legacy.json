@@ -1,5 +1,5 @@
 {
-  "ceiling": 1239,
+  "ceiling": 1235,
   "owner": "STORY-2538",
   "scope": "All Rust workspace members and tests/**/*.rs, tests/**/*.py; reads, all mutations and import bindings. Migration owner: R4 slices B-D.",
   "sites": {
@@ -250,7 +250,6 @@
     "aida-cli-lib/src/gate/tests/task_1800_trace_replay_tests.rs:task_1800_corpus_replay:var_os:521c73fca0ebc0196451": 1,
     "aida-cli-lib/src/gate/tests/task_1800_trace_replay_tests.rs:task_1800_corpus_replay:var_os:b1ea43cf6a4709a4fb47": 1,
     "aida-cli-lib/src/gate/tests/task_1800_trace_replay_tests.rs:task_1800_corpus_replay:var_os:fa17ffc20afa250a69cf": 1,
-    "aida-cli-lib/src/glyph_config.rs:home_dir:var_os:a68801ef1e0e74e746cc": 1,
     "aida-cli-lib/src/glyphs.rs:active_profile:var_os:12730d2d7452fd0c53a5": 1,
     "aida-cli-lib/src/glyphs.rs:aida_home_dir:var_os:a68801ef1e0e74e746cc": 1,
     "aida-cli-lib/src/goal_advisor.rs:observed:var:3315a1cfaf683f2ec650": 1,
@@ -298,9 +297,7 @@
     "aida-cli-lib/src/launch/contained.rs:prepare_with_io:var_os:72ed78ea02980040c596": 1,
     "aida-cli-lib/src/launch/contained.rs:prepare_with_io:var_os:cec8903392e5c5529bf7": 1,
     "aida-cli-lib/src/launch/contained.rs:prepare_with_io:var_os:edbdfa3b1d2e49b22873": 1,
-    "aida-cli-lib/src/launch/context.rs:resolve:var_os:a62e1c5985a9bd485ca7": 1,
     "aida-cli-lib/src/launch/control.rs:story_2326_control_child_survives_running_image_replacement:var_os:e6b82eb41df3169ce686": 1,
-    "aida-cli-lib/src/launch/resources.rs:cargo_slot_dir:var_os:9f24a9bc311701d96033": 1,
     "aida-cli-lib/src/leases.rs:session_harness_worktree_register:var:b2f19d32c23343449272": 1,
     "aida-cli-lib/src/leases.rs:shelve_spec_on_failure:var:4ebb4af463260a0a0210": 1,
     "aida-cli-lib/src/lib_part1.rs:main_entry:var:4ebb4af463260a0a0210": 1,
@@ -559,7 +556,7 @@
     "aida-cli-lib/src/session_misc_cmd.rs:caller_identity_rows:var:b62501a7f878ea388081": 1,
     "aida-cli-lib/src/session_misc_cmd.rs:env_with_source:var:fc44aa600418287fdfb0": 1,
     "aida-cli-lib/src/session_start.rs:session_start_is_review_session:var:ed34b008deec89e596e6": 1,
-    "aida-cli-lib/src/session_start.rs:session_start_with_receipt:var:4ebb4af463260a0a0210": 3,
+    "aida-cli-lib/src/session_start.rs:session_start_with_receipt:var:4ebb4af463260a0a0210": 2,
     "aida-cli-lib/src/session_start.rs:session_start_with_receipt:var:b2f19d32c23343449272": 1,
     "aida-cli-lib/src/session_start.rs:session_start_with_receipt:var:caf303ab9af1acd24bfd": 1,
     "aida-cli-lib/src/session_start.rs:session_start_with_receipt:var_os:3509d8288f994eacfc84": 1,

@@ -10,6 +10,20 @@ The one-time and once-in-a-while plumbing: the commands that *establish* an AIDA
 
 *(Covered deeply in [Chapter 1](01-getting-started.md#aida-init).)* The one-time bootstrap that turns a git repo into an AIDA project — store + cache + selected agent scaffolding, plus first-machine-global defaults. MCP registration is explicit opt-in with `--with-mcp`; the CLI is the default surface for CLI-capable agents. See the [operator route](../operator-setup.md) for adopted projects and sibling-store setup. Everything else in this chapter either *re-runs a slice* of what `init` set up (`scaffold`, `memories`, `statusline`) or *configures* it after the fact (`config`, `type`, `feature`, `node`). If you're reading Chapter 7 to set up a project, start there.
 
+`aida init DIR --gitlab HOST/GROUP` checks project CI/CD after publication.
+Disabled CI/CD requires an affirmative terminal answer or explicit
+`--gitlab-enable-ci`; headless runs never prompt or enable it implicitly.
+A missing `.gitlab-ci.yml` receives a starter test job for detected Python,
+Rust or Node projects, with `--gitlab-runner-tags linux,docker` selecting tags.
+Existing pipelines are preserved. Review the generated dependency and test
+commands; a new project may still need tests or a lockfile before CI passes.
+The runner check requires an online, unpaused runner matching the selected tags;
+permission errors, policy restrictions and unknown availability are reported as
+incomplete setup. It does not register runners or change group/instance policy.
+After enabling previously disabled CI/CD, start a pipeline for the pushed branch
+in GitLab. On a resumed repository, commit and push any newly generated pipeline.
+<!-- trace:STORY-2701 | ai:codex -->
+
 ---
 
 ### `aida remote`
@@ -648,6 +662,17 @@ through `trusted_config`; local default branch only when no remote ref exists):
 codex = "native"
 ```
 
+Interactive `aida init` offers this opt-in when Codex is selected (including
+`--agent codex`). The separate consent defaults to no and warns that native
+sandboxing is weaker than AIDA containment. Existing vendor settings are preserved.
+Non-interactive init and `aida init --no-agent-config` do not grant the opt-in.
+
+`aida config permissions show` reports each vendor's configured containment-policy
+launch readiness separately from permission consistency: `ready` or `refused`
+with the reason and a fix command. JSON includes `launch_readiness` and
+`launch_fix` on each agent row. Readiness here does not verify credentials,
+installed executables, or launch-surface prerequisites.
+
 Branch-local edits cannot grant this opt-in. Merge the configuration into the
 default branch before launching Codex under containment. Missing or unreadable
 trusted config preserves refusal.
@@ -841,6 +866,14 @@ same checks as one array. Required failures exit nonzero. Advisory NOTE rows
 carry `required: false` in JSON and do not fail the command.
 `aida init` prints local checks without a live store-network probe or blocking setup.
 
+<!-- trace:BUG-2519 | ai:codex -->
+The advisory `lane-cache-reuse` check compiles a tiny Rust library in two working
+directories, then retries in the first directory if reuse fails. It distinguishes
+path-sensitive misses from failure to cache the same compilation at all. This
+performance evidence is separate from required cache transport/write checks;
+a passing transport check alone does not prove cross-seat Rust reuse. See the
+[cache reuse investigation](../internal/testing/bug-2519-lane-cache-reuse.md).
+
 `aida doctor --lane-host --fix` applies the existing contained permission
 preset to the **user** agents and Codex config files, honoring `CODEX_HOME`
 for both config checks and writes (default `~/.codex`). It clears old extra
@@ -927,3 +960,24 @@ The advisor-approved legacy `[lane_host] allow_ungranted = true` opt-in is
 reported as a warning. It grants no new authority in this slice: host placement,
 SSH dispatch, a remote grant issuer, unified remote leases/ps, and script
 retirement remain follow-up work.
+
+### Project validation commands
+
+Set project-specific commands in the default branch's `.aida/config.toml`:
+
+```toml
+[validation]
+format = "ruff format ."
+test = "python3 -m unittest discover"
+fast_check = "python3 -m unittest discover"
+```
+
+Lane launch prompts name `format` and `test`. The host runs `fast_check` via
+`/bin/sh -c` in the lane's existing fast-gate sandbox before publication, with
+network and host IPC isolated and a ten-minute timeout. Commands run from the
+seat checkout. A failing check retains the existing single repair round.
+Missing or blank `fast_check` skips the gate with `skipped(unconfigured)` and a
+stated reason; no Makefile or Rust toolchain is assumed. Malformed configuration
+reports an infrastructure error instead of executing a command. These commands come only from trusted default-branch
+configuration; edits in a lane cannot select host gate commands.
+<!-- trace:BUG-2512 | ai:codex -->

@@ -2688,18 +2688,29 @@ fn watch_change(
     service::check_controller(root)?;
     service::validate_controller_delegation(root)?;
     let key = change.key();
-    // trace:STORY-2640 | ai:codex — reserve before the seat can open its PR.
-    if let Some(branch) = change.head_branch.as_deref() {
-        if crate::lane_fast_gate::blocks_review(root, branch)? {
-            eprintln!("{key}: host fast gate or its single repair round is pending");
-            return Ok(());
-        }
-    }
     // An obsolete head is superseded before anything else, whether or not
     // the new head is stale or overlapping. trace:TASK-1945 | ai:claude
     if let Some(reason) = supersede(store, &change, || Ok(repo.change(root, change.id)?.head))? {
         eprintln!("{key}: {reason}");
         return Ok(());
+    }
+    // trace:STORY-2705 | ai:codex
+    if let Some(reason) = crate::review_implementer_gate::deferred(root, change.id, change.gitlab)?
+    {
+        eprintln!("{key}: {reason}");
+        record_skip(store, &change, Some(&reason))?;
+        return Ok(());
+    }
+    // trace:STORY-2640 | ai:codex — reserve before the seat can open its PR.
+    if let Some(branch) = change.head_branch.as_deref() {
+        if crate::lane_fast_gate::blocks_review(root, branch)? {
+            let reason = "host fast gate or its single repair round is pending";
+            eprintln!("{key}: {reason}");
+            // Replace a former live-lane diagnostic after that lease ends.
+            // trace:STORY-2705 | ai:codex
+            record_skip(store, &change, Some(reason))?;
+            return Ok(());
+        }
     }
     // A reviewed head is reported on, and needs no base probe to be skipped.
     // trace:TASK-1945 | ai:claude

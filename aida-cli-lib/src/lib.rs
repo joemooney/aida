@@ -172,6 +172,7 @@ mod lane_cmd;
 mod lane_job;
 // trace:STORY-2640 | ai:codex
 mod lane_fast_gate;
+mod project_checks;
 // One agent launcher. trace:STORY-2326 | ai:claude
 mod launch;
 pub mod leases;
@@ -272,6 +273,7 @@ mod review_gates;
 #[cfg(unix)]
 mod sanitized_intake;
 // trace:TASK-1993 | ai:codex
+mod review_implementer_gate;
 mod review_watch;
 mod role;
 mod runaway_seats;

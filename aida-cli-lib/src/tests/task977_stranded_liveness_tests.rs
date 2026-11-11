@@ -56,8 +56,14 @@ fn claim_lease_with_pid(pid: u32) -> SessionLease {
 }
 
 fn live_session_at(cwd: &std::path::Path) -> LiveSession {
+    // Keep synthetic snapshot evidence outside the inspector's ancestry:
+    // a fixed PID can collide with a CI runner and be correctly excluded.
+    // trace:BUG-2513 | ai:codex
+    let pid = (1..=u32::MAX)
+        .find(|pid| !crate::leases::inspector_pids().contains(pid))
+        .unwrap();
     LiveSession {
-        pid: 4242,
+        pid,
         cwd: cwd.to_path_buf(),
         jsonl: None,
         stale_cwd: false,
@@ -82,6 +88,13 @@ fn live_lease_count_excludes_dead_holder_lease() {
         1,
         "only the process-alive lease counts toward the stranded alarm"
     );
+    // The inspector itself must still not supply liveness for a pidless lease.
+    // trace:BUG-2513 | ai:codex
+    let inspector_snapshot = vec![LiveSession {
+        pid: std::process::id(),
+        ..live_session_at(live_dir.path())
+    }];
+    assert_eq!(live_lease_count(now, &[live], &inspector_snapshot), 0);
 }
 
 // A dormant session lease (worktree exists, but no live session covers it and

@@ -876,6 +876,17 @@ This host step replaces the advisor's manual auto-publish workaround.
 
 ## Watching for new review heads
 
+Review-watch and explicit `aida queue work PR-N --role reviewer` pickups defer
+while a live implementer lane owns the change's branch or a linked spec. The
+watcher prints `deferred: implementer lane live (host, lease)` and records the
+reason for `aida awaiting`, without reserving a review attempt. Local leases
+require positive process liveness; cross-host claims use their existing heartbeat
+expiry. Dormant, dead and expired records do not defer review. This also covers
+merge-only heads after a changes-requested verdict. Once the lane ends, the next
+pass admits the current head through ordinary review deduplication; merge-only
+history alone never blocks review indefinitely.
+<!-- trace:STORY-2705 | ai:codex -->
+
 For an advisor service that follows grant rotation, start the operator's
 `aida deputy shell run` in its ordinary advisor terminal, then launch the
 advisor through `aida agent new ... --role advisor`. The trusted host launcher
@@ -1435,10 +1446,24 @@ conditions to the human queue after 14 days.
 <!-- trace:STORY-2402 | ai:codex -->
 
 <!-- trace:BUG-2500 | ai:codex -->
-A review blocked solely on external CI or host evidence records `waiting`
+<!-- trace:STORY-2697 | ai:codex -->
+A defect-free head receives `approved` even while CI is pending or running;
+include "CI pending at review time" in the rationale. Readiness still requires
+successful exact-head CI, including after clean-merge approval carry-over.
+An approved member may enter a train before its CI settles, but landing still
+requires successful stacked-tip CI. Approval may release an eligible Rework
+hold before CI settles; releasing a hold merges nothing. Ordinary ship CI
+gates and their existing opt-outs are unchanged. A CI failure keeps readiness
+blocked; fixing it creates a new head requiring review or eligible carry-over.
+
+A review blocked on independent external evidence (such as an operator-only
+canary), or a specific named test result needed for judgment, records `waiting`
 (displayed `WAITING`), with a summary naming the dependency, responsible actor
 and resume condition, and no substantive findings. Code defects still require
 `request-changes`. Waiting blocks completion and merge without implementer
 rework, repeat-findings credit or a Rework hold. Existing holds remain intact.
 Only a fresh recorded review at the current head ends the wait; green CI or
 a changed head alone does not. There is no automatic resume service.
+
+Existing CI-only WAITING records are not migrated; they still resume through a
+fresh review at the current head.
