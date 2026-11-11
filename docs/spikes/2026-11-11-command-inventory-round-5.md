@@ -63,3 +63,44 @@ the publication veto remains in force. No commit, push, PR, completion, or ship
 declaration is requested from this seat. Resume after an advisor records the
 three boundary decisions and the host supplies the reviewed query client;
 the full 167-row audit, global blocker ranking, and first batch still remain.
+
+## Round-five retry at ddaf14c06e52 — CI repair and renewed disposition
+
+This retry inspected `ddaf14c06e52e0bfcf4adb2c8bebd10727f815b1` on
+2026-11-11. The visible spec now has ten comments. Comment 9 records the
+previous round-five punt and return to Approved without a triage reason; it
+does not supply the requested effect-boundary ruling. The CLI still reports
+stale cache context. An attempted canonical `read_punt` MCP read was refused
+because that tool requires approval and this seat's approval policy is never.
+Consequently this report cannot establish whether a ruling exists elsewhere.
+The prescribed absolute codegraph client remains unavailable; doctor again
+reports `codegraph,missing`.
+
+There is a newly verified, independently repairable CI defect. Reading failed
+logs for run 42982877272 with `gh run view --log-failed` showed the store-writer
+ratchet refusing exactly `scripts/command-inventory.py|generate|python:write_text`.
+The aggregate Build failure follows the failed gates lane. The source at
+`scripts/command-inventory.py:108` writes only the generated checkout artifact
+`scripts/command-inventory.toml`; it is not a reachable registered-command sink.
+`generate` is called by this script's `main`, not by REGISTRY dispatch.
+
+Running `python3 scripts/check-store-writers.py --regenerate` added exactly that
+one site to `scripts/store-writers.toml`, retaining the conservative blocked
+metadata used for adjacent offline Python generators. This ledger maintenance
+makes no command-class, crate-placement or runtime-authority decision. It also
+does not convert same-file candidates into reachability evidence.
+
+Findings 1 and 3 are explicitly disputed only as instructions to certify classes
+or the batch before their expressly required advisor ruling. The audit deficits
+in both findings are accepted. Finding 2 is accepted and remains incomplete:
+the full matrix and global helper ranking have not been delivered. The current
+TOML check still counts 167 unresolved rows and one evidence value. AC1–3 remain
+unmet; this retry supplies a CI repair, not audit completion.
+
+The four extraction tests pass again. The regenerated ledger contains 3500 sink
+sites and changes one row. No Rust code changed or Cargo test ran. Both this
+report and the ledger change are left uncommitted for the host. A renewed punt
+records the decision fork; no publication declaration is made while that veto
+is active. Required recovery remains an advisor-recorded ruling on handler
+versus invocation scope, direct CLI-owned writes and mixed-family aggregation,
+plus the host-deployed reviewed query client and indexed main revision.
