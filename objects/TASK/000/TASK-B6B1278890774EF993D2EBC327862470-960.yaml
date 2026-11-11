@@ -8,12 +8,16 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T23:39:41.575597Z
-modified_at: 2026-11-11T09:39:21.759925872Z
+modified_at: 2026-11-11T12:17:27.261839581Z
 req_type: Task
 relationships:
 - rel_type: Child
   target_id: 01a13390-7b59-7570-a329-3542db098e83
   created_at: 2026-11-07T23:40:02.824548Z
+- rel_type: Blocks
+  target_id: 01a1ca8a-722c-79a0-b301-26e4d9948e37
+  created_at: 2026-11-11T12:17:27.261835228Z
+  created_by: joe
 comments:
 - id: 01a1b86d-007a-75d3-ae18-4d12eea38c3f
   author: joe
@@ -1579,6 +1583,12 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1ca8a-ade0-7792-ab40-e002fec6e10d
+  author: joe
+  timestamp: 2026-11-11T12:17:28.544456869Z
+  session_id: 01a1ca83-fabb-7663-852c-12c78d4e097f
+  harness_version: 2.1.322 (Claude Code)
+  changes: []
 test_coverage_notes: 'Round 14 validation passed: launcher command_registry suite 32 executed tests / 0 failures (j20261109T002347723-110306-0), launcher no-default-features aida-cli check exit 0 (j20261109T002353591-110846-0), 17 Python tooling fixtures, glob ratchet vs origin/main at 181, ExecContext 1239 sites, store-writer 3406 sinks / 293 mappings, 84 CI gate classifications, portability guard/growth, retained Rust formatting and diff hygiene. Prospective PR exactly 40 files; all 12 deferred modules match pre-batch contents. Reviewed-head CI at 4e32c5de630 passed all seven shards and aggregate Build; final published head still requires CI and independent re-review. Full make check-ci-fast remains host validation under runner-only Cargo policy. Codegraph unreachable. Handoff: /tmp/task-3428-round14-handoff.md.'
 implementation_summary: 'Round 14 scope correction restores the 12-module batch from 4e32c5de630 to pre-batch contents and restores its 12 ledger rows (18 imports), reducing PR #3695 to 40 files: 37 modules, two test files and ledger. Remaining glob debt is 181. Deferred changes remain in branch history and /tmp/task-3428-round14-deferred-imports.patch for a separate Refs PR, with import-source and module-trace polish required there. Removed code contains all findings 3-5. Corrected PR title to 37 modules. Refs host publication declaration recorded; no local commit, push, merge or queue completion. TASK-3428 remains In Progress; remaining imports and lib_part dissolution are later slices.'
 filed_at:
