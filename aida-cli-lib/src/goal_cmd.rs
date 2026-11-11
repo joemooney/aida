@@ -496,7 +496,6 @@ pub(crate) enum AdvisorGoalAction {
 // `aida goal` is a pure condition generator — no store needed.
 // trace:TASK-242 | ai:claude
 fn run_goal(matches: &clap::ArgMatches, _ctx: &crate::cmdkit::DispatchCtx) -> anyhow::Result<()> {
-    use crate::*;
     let args = <GoalArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
     // trace:STORY-2243 | ai:claude
     if let Some(GoalCommand::Advisor { action }) = &args.command {
