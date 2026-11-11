@@ -785,8 +785,9 @@ fn failure_state(root: &Path) -> Result<Failures> {
         .map(|v| v.unwrap_or_default())
 }
 pub(super) fn record_failure(root: &Path, reason: Option<&str>) -> Result<()> {
-    // A supervisor failure observes no dispatch success; retain any pending failure.
-    record_outcome(root, reason, reason.is_none().then_some(true))
+    // Supervisor observations prove no dispatch success, even on healthy ticks.
+    // Retain pending failures until the controller confirms a successful dispatch.
+    record_outcome(root, reason, None)
 }
 fn record_outcome(root: &Path, reason: Option<&str>, dispatched: Option<bool>) -> Result<()> {
     let dir = directory(root, true)?.context("service directory missing")?;
@@ -857,6 +858,10 @@ mod loop_tests {
         CONTROLLER.with(|id| *id.borrow_mut() = None);
         record_failure(root, Some("controller exited before successful dispatch")).unwrap();
         assert!(failure_state(root).unwrap().dispatch_pending);
+        // A healthy supervisor tick is not evidence of a successful dispatch.
+        record_failure(root, None).unwrap();
+        assert_eq!(failure_state(root).unwrap().count, 2);
+        assert!(failure_state(root).unwrap().dispatch_pending);
         CONTROLLER.with(|id| *id.borrow_mut() = Some("replacement-controller".into()));
         controller_pass(root, None).unwrap();
         assert_eq!(failure_state(root).unwrap().count, 2);
@@ -887,8 +892,15 @@ mod loop_tests {
                 head_branch: None,
             })
             .collect();
+        let mut observed = 0;
         super::super::watch_changes(&store, changes, |_| {
-            super::super::observe_dispatch_result(root, Err(anyhow::anyhow!("spawn refused")))
+            observed += 1;
+            let result = super::super::observe_dispatch_result(
+                root,
+                Err(anyhow::anyhow!("spawn {observed} refused")),
+            );
+            assert_eq!(failure_state(root).unwrap().count, observed);
+            result
         })
         .unwrap();
         controller_pass(root, None).unwrap();
@@ -945,7 +957,7 @@ mod loop_tests {
         }];
         let outcomes = super::super::reap_dispatchers(&store, &mut children);
         assert_eq!(outcomes, vec![None]);
-        record_failure(root, None).unwrap();
+        record_outcome(root, None, Some(true)).unwrap();
         assert_eq!(failure_state(root).unwrap().count, 0);
     }
 
@@ -997,7 +1009,7 @@ mod loop_tests {
                 .count()
         };
         assert_eq!(count(), 1);
-        record_failure(root, None).unwrap();
+        record_outcome(root, None, Some(true)).unwrap();
         assert_eq!(failure_state(root).unwrap().count, 0);
         for _ in 0..3 {
             record_failure(root, Some("new episode")).unwrap();
