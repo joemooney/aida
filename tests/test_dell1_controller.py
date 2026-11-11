@@ -198,6 +198,8 @@ class Cache(unittest.TestCase):
         record = c.publish(self.cache, 'key', self.work, self.admission)
         cached = self.cache / record['generation'] / 'target/incremental/object'
         self.assertLess(cached.stat().st_mtime_ns, future)
+        self.assertEqual(sorted(p.name for p in self.cache.iterdir()),
+                         sorted(['manifest.json', record['generation']]))
 
     def test_cold_miss_and_key_mismatch(self):
         self.assertIsNone(c.seed(self.cache, 'key', self.work))
@@ -340,7 +342,7 @@ class GateAndShell(unittest.TestCase):
 
 class LaunchIntegration(unittest.TestCase):
     """Run orchestration with a real gate/cache and fake systemd/public forge."""
-    def exercise(self, kind, *, unit_failure=False, stop_failure=False, gate_failure=False):
+    def exercise(self, kind, *, unit_failure=False, stop_failure=False, gate_failure=False, alternate=False, pending=False, test_failure=False, priority=False):
         from contextlib import ExitStack
         from types import SimpleNamespace
         with tempfile.TemporaryDirectory() as directory, ExitStack() as stack:
@@ -350,9 +352,23 @@ class LaunchIntegration(unittest.TestCase):
             (root / 'dist/run.sh').write_text('fixture runner')
             (root / 'config/policy.json').write_text(json.dumps(POLICY))
             (root / 'config/trains.json').write_text(json.dumps([RECORD]))
+            stale = root / 'cache/s0' / ('cli-0' if alternate else 'lib-0') / ('0' * 64)
+            stale.mkdir(parents=True)
+            (stale / 'old-artifact').write_text('obsolete')
             forge = Forge(kind)
             runner = 'aida-ci-s0-' + '1'*32
             forge.job['runner_name'] = runner
+            forge.runs = [forge.run]
+            forge.jobs = [forge.job]
+            if priority:
+                forge.runs = [Forge().run]
+            if alternate:
+                original_get = forge.get
+                def get(route):
+                    if route == 'actions/jobs/21':
+                        return forge.job
+                    return original_get(route)
+                forge.get = get
             accounts = {f'aida-ci-{slot}-{cls}': SimpleNamespace(pw_name=f'aida-ci-{slot}-{cls}',
                         pw_uid=10000+i*2+j, pw_gid=10000+i*2+j)
                         for i, slot in enumerate(c.SLOTS) for j, cls in enumerate(('main', 'train'))}
@@ -374,6 +390,8 @@ class LaunchIntegration(unittest.TestCase):
                 commands.append(command)
                 if command[0] == 'systemd-run':
                     forge.job['status'] = 'in_progress'
+                    if alternate:
+                        forge.job.update(id=21, name='CI (cli-0)')
                     if gate_failure:
                         forge.job['runner_name'] = 'unrelated-pickup'
                     endpoint = root / 'run/aida-ci-s0/gate.sock'
@@ -389,7 +407,8 @@ class LaunchIntegration(unittest.TestCase):
                     (work / 'target/incremental/object').write_text('compiled delta')
                     (work / 'cargo/registry').mkdir()
                     (work / 'cargo/registry/crate').write_text('download')
-                    forge.job.update(status='completed', conclusion='failure' if unit_failure else 'success')
+                    forge.job.update(status='in_progress' if pending else 'completed',
+                                     conclusion='failure' if unit_failure or test_failure else 'success')
                     return subprocess.CompletedProcess(command, 1 if unit_failure else 0)
                 return subprocess.CompletedProcess(command, 0)
 
@@ -412,13 +431,24 @@ class LaunchIntegration(unittest.TestCase):
             stack.enter_context(patch.object(c, 'Gate', side_effect=lambda p, uid, check, **kw: original_gate(p, os.getuid(), check, **kw)))
             clock = iter([0, 11])
             stack.enter_context(patch.object(c.time, 'monotonic', side_effect=lambda: next(clock)))
+            if priority:
+                with self.assertRaises(c.Deferred):
+                    c.launch('s0', dict(run=10, job=20, runner=runner, jit=lambda: self.fail('registered before priority check')))
+                self.assertFalse((root / 'run/aida-ci-s0.json').exists())
+                self.assertFalse(commands)
+                return
             if unit_failure or stop_failure or gate_failure:
                 with self.assertRaises(RuntimeError):
                     c.launch('s0', dict(run=10, job=20, runner=runner, jit='secret-jit'))
             else:
                 c.launch('s0', dict(run=10, job=20, runner=runner, jit='secret-jit'))
             manifests = list((root / 'cache').rglob('manifest.json'))
-            self.assertEqual(len(manifests), int(kind == 'MAIN' and not unit_failure and not stop_failure and not gate_failure))
+            self.assertEqual(len(manifests), int(kind == 'MAIN' and not unit_failure and not stop_failure and not gate_failure and not pending and not test_failure))
+            self.assertEqual((root / 'run/aida-ci-s0.json').exists(), stop_failure)
+            if not gate_failure and not priority:
+                self.assertFalse(stale.exists())
+            if alternate and manifests:
+                self.assertEqual(manifests[0].parent.parent.name, 'cli-0')
             self.assertEqual((root / 'jobs/s0/current').exists(), stop_failure)
             self.assertGreaterEqual(len(stops), 2)
             unit = next(command for command in commands if command[0] == 'systemd-run')
@@ -433,8 +463,20 @@ class LaunchIntegration(unittest.TestCase):
             self.assertNotIn('secret-jit', ' '.join(unit))
             self.assertFalse(any('RuntimeMaxSec=' in arg for arg in unit))
 
+    def test_priority_deferral_leaves_no_reservation_or_registration(self):
+        self.exercise('MAIN', priority=True)
+
     def test_successful_main_publishes_only_after_stop(self):
         self.exercise('MAIN')
+
+    def test_other_valid_shard_is_admitted_and_published(self):
+        self.exercise('MAIN', alternate=True)
+
+    def test_failed_tests_with_successful_runner_release_slot(self):
+        self.exercise('MAIN', test_failure=True)
+
+    def test_delayed_completion_releases_slot(self):
+        self.exercise('MAIN', pending=True)
 
     def test_successful_train_never_publishes(self):
         self.exercise('TRAIN')
@@ -476,36 +518,30 @@ class Selection(unittest.TestCase):
 
 
 class Rearm(unittest.TestCase):
-    def test_fresh_jit_stdin_and_failures_stop_supervision(self):
-        for status in (0, 1):
-            with self.subTest(status=status), tempfile.TemporaryDirectory() as directory:
-                root = Path(directory)
-                selector = root / 'selector.py'
-                selector.write_text('import json,sys; assert sys.argv[1] == "s0"; '
-                                    'print(json.dumps(dict(run=10,job=20,**{"class":"TRAIN"})))')
-                received = root / 'received'
-                args = root / 'args'
-                count = root / 'count'
-                commands = {
-                    'gh': f'echo register >> "{count}"; echo secret-jit',
-                    'jq': 'cat >/dev/null; echo TRAIN',
-                    'sudo': f'printf "%s\\n" "$@" > "{args}"; cat > "{received}"; exit {status}',
-                }
-                for name, body in commands.items():
-                    path = root / name
-                    path.write_text('#!/bin/sh\n' + body + '\n')
-                    path.chmod(0o755)
-                script = (ROOT / 'scripts/runner/rearm.sh').read_text()
-                script = script.replace('"$EUID"', '"1001"').replace('/usr/local/libexec/aida-ci-select-job.py', str(selector))
-                result = subprocess.run(['bash', '-c', script, 'rearm', 's0'],
-                                        env={'PATH': f'{root}:/usr/bin:/bin'}, capture_output=True, timeout=5)
-                self.assertNotEqual(result.returncode, 0)
-                self.assertEqual(count.read_text().splitlines(), ['register'])
-                envelope = json.loads(received.read_text())
-                self.assertEqual(envelope['jit'], 'secret-jit')
-                self.assertEqual(envelope['job'], 20)
-                self.assertRegex(envelope['runner'], '^aida-ci-s0-[0-9a-f]{32}$')
-                self.assertEqual(args.read_text().splitlines(), ['-n', '/usr/local/sbin/aida-ci-one-job', 's0'])
+    def test_registration_follows_admission_and_deferral_creates_no_jit(self):
+        import io
+        spec = importlib.util.spec_from_file_location('rearm', ROOT / 'scripts/runner/rearm.py')
+        rearm = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(rearm)
+        from unittest.mock import MagicMock
+        for deferred in (False, True):
+            child = MagicMock()
+            child.stdin = io.StringIO()
+            child.stdout = io.StringIO('' if deferred else '{"ready":true}\n')
+            child.wait.return_value = 75 if deferred else 0
+            child.poll.return_value = 0
+            # Keep stdin available for assertions after once closes it.
+            child.stdin.close = lambda: None
+            def register(*args, **kwargs):
+                self.assertIn('"job": 20', child.stdin.getvalue())
+                return 'secret-jit'
+            with patch.object(rearm.subprocess, 'Popen', return_value=child), \
+                    patch.object(rearm.subprocess, 'check_output', side_effect=register) as jit:
+                self.assertEqual(rearm.once('s0', dict(run=10, job=20, **{'class': 'MAIN'})),
+                                 75 if deferred else 0)
+                self.assertEqual(jit.call_count, 0 if deferred else 1)
+                self.assertEqual('secret-jit' in child.stdin.getvalue(), not deferred)
+
 
 
 class Source(unittest.TestCase):
@@ -513,13 +549,13 @@ class Source(unittest.TestCase):
         import io
         import tarfile
         from contextlib import ExitStack
-        for kind in ('regular', 'traversal', 'symlink', 'fifo'):
+        for kind in ('regular', 'traversal', 'symlink', 'relative-escape', 'fifo'):
             stream = io.BytesIO()
             with tarfile.open(fileobj=stream, mode='w:gz') as archive:
                 info = tarfile.TarInfo('prefix/Cargo.lock' if kind != 'traversal' else 'prefix/../escape')
-                if kind == 'symlink':
+                if kind in ('symlink', 'relative-escape'):
                     info.type = tarfile.SYMTYPE
-                    info.linkname = '/etc/passwd'
+                    info.linkname = '/etc/passwd' if kind == 'symlink' else '../../escape'
                 elif kind == 'fifo':
                     info.type = tarfile.FIFOTYPE
                 archive.addfile(info, io.BytesIO(b''))
@@ -541,6 +577,58 @@ class Source(unittest.TestCase):
                         c.source_tree(SHA, source)
                     runner.assert_not_called()
 
+
+class RoundThree(unittest.TestCase):
+    def test_real_repository_archive_extracts_tracked_links(self):
+        import io
+        archive = subprocess.check_output(['git', 'archive', '--format=tar.gz', '--prefix=repo/', 'HEAD'], cwd=ROOT)
+        with tempfile.TemporaryDirectory() as directory:
+            source = Path(directory) / 'source'
+            with patch.object(c.urllib.request, 'urlopen', return_value=io.BytesIO(archive)), \
+                    patch.object(c.subprocess, 'run'), \
+                    patch.object(c.subprocess, 'check_output', return_value=SHA):
+                c.source_tree(SHA, source)
+            links = [p for p in source.rglob('*') if p.is_symlink()]
+            self.assertGreater(len(links), 100)
+            self.assertTrue(all(p.resolve().is_relative_to(source) for p in links))
+
+
+    def test_repo_shaped_archive_and_safe_ownership_and_key(self):
+        import io
+        import tarfile
+        stream = io.BytesIO()
+        with tarfile.open(fileobj=stream, mode='w:gz') as archive:
+            for name, content in [('Cargo.lock', b'lock'), ('templates/help.md', b'template')]:
+                info = tarfile.TarInfo('prefix/' + name)
+                info.size = len(content)
+                archive.addfile(info, io.BytesIO(content))
+            info = tarfile.TarInfo('prefix/.claude/commands/help.md')
+            info.type = tarfile.SYMTYPE
+            info.linkname = '../../templates/help.md'
+            archive.addfile(info)
+        with tempfile.TemporaryDirectory() as directory:
+            source = Path(directory) / 'source'
+            with patch.object(c.urllib.request, 'urlopen', return_value=io.BytesIO(stream.getvalue())), \
+                    patch.object(c.subprocess, 'run'), \
+                    patch.object(c.subprocess, 'check_output', return_value=SHA):
+                c.source_tree(SHA, source)
+            self.assertEqual((source / '.claude/commands/help.md').read_text(), 'template')
+            (source / 'scripts').mkdir()
+            (source / 'scripts/build.rs').symlink_to('/nonexistent')
+            c.key_for('s0', {'shard': 'lib-0'}, POLICY, source)
+            from types import SimpleNamespace
+            with patch.object(c.os, 'chown') as chown:
+                c.own_tree(source, SimpleNamespace(pw_uid=1, pw_gid=1))
+                self.assertEqual(chown.call_args_list[-1].args[0], source)
+                self.assertTrue(all(call.kwargs == {'follow_symlinks': False}
+                                    for call in chown.call_args_list))
+
+    def test_priority_only_for_slot_family(self):
+        forge = Forge()
+        forge.runs = [forge.run]
+        forge.jobs = [dict(forge.job, name='CI (lib-1)')]
+        self.assertFalse(c.train_waiting(forge, [RECORD], 's0'))
+        self.assertTrue(c.train_waiting(forge, [RECORD], 's1'))
 
 if __name__ == '__main__':
     unittest.main()

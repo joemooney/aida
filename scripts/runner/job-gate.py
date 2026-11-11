@@ -9,7 +9,7 @@ import sys
 
 try:
     with socket.socket(socket.AF_UNIX) as client:
-        client.settimeout(120)
+        client.settimeout(600)  # Host may fetch source and copy a cold seed before ALLOW.
         client.connect(os.environ['AIDA_CI_GATE'])
         if client.recv(32) != b'ALLOW\n':
             raise RuntimeError('Host admission refused this job')

@@ -29,6 +29,11 @@ import uuid
 REPO = 'joemooney/aida'
 SLOTS = ('s0', 's1')
 SHARDS = ('lib-0', 'lib-1', 'cli-0', 'cli-1')
+FAMILIES = {'s0': ('lib-0', 'cli-1'), 's1': ('lib-1', 'cli-0')}
+
+
+class Deferred(RuntimeError):
+    pass
 JOBS = Path('/var/lib/aida-ci-jobs')
 CACHE = Path('/var/lib/aida-ci-cache')
 CONFIG = Path('/etc/aida-ci')
@@ -169,7 +174,7 @@ def copy_tree(source, destination):
 def key_for(slot, admission, policy, source):
     inputs = {}
     for path in sorted(source.rglob('*')):
-        if path.is_file() and (path.name in ('Cargo.lock', 'Cargo.toml', 'build.rs', 'rust-toolchain.toml')
+        if stat.S_ISREG(path.lstat().st_mode) and (path.name in ('Cargo.lock', 'Cargo.toml', 'build.rs', 'rust-toolchain.toml')
                                or any(part in path.parts for part in ('.cargo', '.github', '.config', 'scripts'))
                                or path.name in ('Makefile', 'rust-toolchain')):
             inputs[str(path.relative_to(source))] = hashlib.sha256(path.read_bytes()).hexdigest()
@@ -213,6 +218,13 @@ def publish(cache, key, work, admission):
         temporary.write_text(json.dumps(record) + '\n')
         temporary.chmod(0o600)
         os.replace(temporary, cache / 'manifest.json')
+        # The slot lock excludes seed readers, including other compatibility keys.
+        for entry in cache.iterdir():
+            if entry.name != generation and re.fullmatch(r'(?:[0-9a-f]{32}|\.new-[0-9a-f]{32})', entry.name):
+                shutil.rmtree(entry)
+        for entry in cache.parent.iterdir():
+            if entry != cache and re.fullmatch('[0-9a-f]{64}', entry.name):
+                shutil.rmtree(entry)
         return record
     finally:
         if staging.exists():
@@ -228,15 +240,21 @@ def source_tree(sha, destination):
     destination.mkdir(mode=0o700)
     with tarfile.open(fileobj=io.BytesIO(data), mode='r:gz') as archive:
         total = 0
+        links = []
         for member in archive:
             parts = Path(member.name).parts[1:]
             require('..' not in parts and not Path(member.name).is_absolute(), 'unsafe archive path')
-            require(member.isdir() or member.isfile(), 'source archive link/special file')
+            require(member.isdir() or member.isfile() or member.issym(), 'source archive link/special file')
             if not parts:
                 continue
             target = destination.joinpath(*parts)
             require('.git' not in parts, 'source archive Git metadata')
-            if member.isdir():
+            if member.issym():
+                require(not Path(member.linkname).is_absolute(), 'absolute source link')
+                resolved = (target.parent / member.linkname).resolve()
+                require(resolved.is_relative_to(destination.resolve()), 'escaping source link')
+                links.append((target, member.linkname))
+            elif member.isdir():
                 target.mkdir(parents=True, exist_ok=True)
             else:
                 total += member.size
@@ -245,6 +263,14 @@ def source_tree(sha, destination):
                 with archive.extractfile(member) as reader, target.open('xb') as writer:
                     shutil.copyfileobj(reader, writer)
                 target.chmod(0o755 if member.mode & 0o111 else 0o644)
+
+        # Install links last: archive writes never traverse a link. Resolve again
+        # after each insertion to reject chained escapes.
+        for target, link in links:
+            target.parent.mkdir(parents=True, exist_ok=True)
+            require(target.parent.resolve().is_relative_to(destination.resolve()), 'escaping link parent')
+            require((target.parent / link).resolve().is_relative_to(destination.resolve()), 'escaping source link')
+            os.symlink(link, target)
 
     # Recreate Git identity independently; never reuse a cached repository/config.
     # No checkout filters or hooks run on the host: the archive supplies files,
@@ -321,7 +347,7 @@ class Gate:
         self.server.close()
 
 
-def train_waiting(forge, trains):
+def train_waiting(forge, trains, slot=None):
     for status in ('queued', 'in_progress'):
         runs = forge.get(f'actions/runs?event=pull_request&status={status}&per_page=100')['workflow_runs']
         require(len(runs) < 100, 'train queue truncated; refuse MAIN')
@@ -330,9 +356,30 @@ def train_waiting(forge, trains):
                    and r['branch'] == run['head_branch'] for r in trains):
                 jobs = forge.get(f'actions/runs/{run["id"]}/jobs?per_page=100')['jobs']
                 require(len(jobs) < 100, 'job queue truncated')
-                if any(j['status'] == 'queued' and j['name'] in [f'CI ({s})' for s in SHARDS] for j in jobs):
+                if any(j['status'] == 'queued' and j['name'] in [f'CI ({s})' for s in (FAMILIES[slot] if slot else SHARDS)] for j in jobs):
                     return True
     return False
+
+
+def assigned_job(forge, name, policy, trains):
+    matches = []
+    runs = forge.get('actions/runs?status=in_progress&per_page=100')['workflow_runs']
+    require(len(runs) < 100, 'assigned run discovery truncated')
+    for run in runs:
+        jobs = forge.get(f'actions/runs/{run["id"]}/jobs?per_page=100')['jobs']
+        require(len(jobs) < 100, 'assigned job discovery truncated')
+        matches.extend((run['id'], job['id']) for job in jobs
+                       if job.get('runner_name') == name and job['status'] == 'in_progress')
+    require(len(matches) == 1, 'missing/ambiguous runner assignment')
+    return admit(forge, *matches[0], policy, trains, runner=name)
+
+
+def own_tree(path, account):
+    for root, dirs, files in os.walk(path, topdown=False, followlinks=False):
+        # Transfer each enclosing directory last: the live service cannot
+        # replace an ancestor while root still visits its descendants.
+        for entry in [*(Path(root) / name for name in dirs + files), Path(root)]:
+            os.chown(entry, account.pw_uid, account.pw_gid, follow_symlinks=False)
 
 
 def launch(slot, envelope):
@@ -363,120 +410,145 @@ def launch(slot, envelope):
         if path.exists():
             require(host_json(path)['job'] != admission['job'], 'job already reserved')
     if admission['class'] == 'MAIN':
-        require(not train_waiting(forge, trains), 'TRAIN priority: queued train work exists')
+        if train_waiting(forge, trains, slot):
+            os.close(admission_lock)
+            os.close(lock)
+            raise Deferred('TRAIN priority: queued train work exists')
     reservation.write_text(json.dumps(admission))
     reservation.chmod(0o600)
     os.close(admission_lock)
-    name = envelope['runner']
-    require(re.fullmatch(f'aida-ci-{slot}-[0-9a-f]{{32}}', name) is not None, 'invalid runner name')
-    account = pwd.getpwnam(f'aida-ci-{slot}-{admission["class"].lower()}')
-    accounts = [pwd.getpwnam(f'aida-ci-{s}-{c}') for s in SLOTS for c in ('main', 'train')]
-    require(len({a.pw_uid for a in accounts}) == 4 and all(a.pw_uid != 0 for a in accounts),
-            'four distinct non-root uids required')
-    require(os.getgrouplist(account.pw_name, account.pw_gid) == [account.pw_gid], 'supplementary groups')
-    unit = 'aida-ci-' + slot
-    stop(unit)  # Must succeed before deleting or changing class.
-    trusted(DIST, directory=True)
-    for entry in DIST.rglob('*'):
-        trusted(entry, directory=entry.is_dir())
-    trusted(HOOK)
-    trusted(Path('/usr/local/libexec/aida-ci-job-gate.py'))
-    toolchain = Path('/opt/aida-ci-toolchain')
-    for entry in toolchain.rglob('*'):
-        trusted(entry, directory=entry.is_dir())
-    JOBS.mkdir(mode=0o755, exist_ok=True)
-    trusted(JOBS, directory=True)
-    parent = JOBS / slot
-    parent.mkdir(mode=0o755, exist_ok=True)
-    trusted(parent, directory=True)
-    state = parent / 'current'
-    if state.exists():
-        shutil.rmtree(state)
-    state.mkdir(mode=0o700)
-    gate = None
+    state = gate = None
     try:
-        # Each class has a stable private view. Only these three trees persist.
-        work = state / admission['class'].lower()
-        work.mkdir(mode=0o700)
-        source_tree(admission['sha'], work / 'workspace')
-        key = key_for(slot, admission, policy, work / 'workspace')
-        cache = CACHE / slot / admission['shard'] / key
-        cache.mkdir(mode=0o700, parents=True, exist_ok=True)
-        trusted(cache, directory=True)
-        record = seed(cache, key, work)
-        print(json.dumps({'slot': slot, 'admission': admission, 'seed': record,
-                          'seed_age_seconds': time.time() - record['time'] if record else None}), flush=True)
-        for directory in ('target', 'cargo', 'home'):
-            (work / directory).mkdir(mode=0o700, exist_ok=True)
-        shutil.copytree(DIST, state / 'runner', symlinks=False)
-        for root, dirs, files in os.walk(state):
-            os.chown(root, account.pw_uid, account.pw_gid)
-            for file in files:
-                os.chown(Path(root) / file, account.pw_uid, account.pw_gid)
-        runtime = RUNTIME / unit
-        runtime.mkdir(mode=0o755, exist_ok=True)
-        trusted(runtime, directory=True)
-        endpoint = runtime / 'gate.sock'
-        endpoint.unlink(missing_ok=True)
-        def verify_job():
-            current_policy = host_json(CONFIG / 'policy.json')
-            require(current_policy == policy, 'host policy changed during setup')
-            current = admit(forge, envelope['run'], envelope['job'], current_policy,
-                            host_json(CONFIG / 'trains.json'), runner=name)
-            require(current == admission, 'admission changed since dispatch')
-        gate = Gate(endpoint, account.pw_uid, verify_job, refuse=lambda: stop(unit))
-        subprocess.run(['systemctl', 'start', 'aida-ci.slice'], check=True, timeout=15)
-        subprocess.run(['systemctl', 'set-property', '--runtime', 'aida-ci.slice', 'CPUQuota=800%',
-                        'AllowedCPUs=0-7', 'MemoryHigh=20G', 'MemoryMax=24G', 'MemorySwapMax=0'],
-                       check=True, timeout=15)
-        properties = {
-            'User': account.pw_name, 'Group': account.pw_name, 'WorkingDirectory': str(state / 'runner'),
-            'ProtectHome': 'yes', 'ProtectSystem': 'strict', 'ReadWritePaths': str(state),
-            'PrivateTmp': 'yes', 'PrivateIPC': 'yes', 'PrivateDevices': 'yes', 'NoNewPrivileges': 'yes',
-            'RestrictSUIDSGID': 'yes', 'ProtectKernelModules': 'yes', 'ProtectControlGroups': 'yes',
-            'RemoveIPC': 'yes', 'KillMode': 'control-group', 'TimeoutStopSec': '30',
-            'CPUAccounting': 'yes', 'MemoryAccounting': 'yes', 'CPUQuota': '400%', 'CPUWeight': '100', 'AllowedCPUs': '0-7',
-            'MemoryHigh': '10G', 'MemoryMax': '12G', 'MemorySwapMax': '0',
-            'InaccessiblePaths': f'-/run/docker.sock -/run/podman -/run/dbus {CACHE} {CONFIG} '
-                                 + ' '.join(str(JOBS / s) for s in SLOTS if s != slot),
-        }
-        command = ['systemd-run', '--quiet', '--wait', '--pipe', '--collect',
-                   '--unit=' + unit, '--slice=aida-ci.slice']
-        for prop, value in properties.items():
-            command += ['-p', f'{prop}={value}']
-        command += ['/usr/bin/env', '-i', f'HOME={work}/home', 'PATH=/opt/aida-ci-toolchain/bin:/usr/local/bin:/usr/bin:/bin',
-                    f'CARGO_HOME={work}/cargo', f'CARGO_TARGET_DIR={work}/target',
-                    f'AIDA_CI_WORKSPACE={work}/workspace', f'AIDA_CI_SHA={admission["sha"]}',
-                    f'AIDA_CI_GATE={endpoint}', f'ACTIONS_RUNNER_HOOK_JOB_STARTED={HOOK}',
-                    'CARGO_BUILD_JOBS=4', 'RUST_TEST_THREADS=4', 'AIDA_REQUIRE_BWRAP_LIVE=1',
-                    '/bin/bash', '-c', 'set -eu; IFS= read -r config; exec ./run.sh --jitconfig "$config"']
-        started = time.monotonic()
-        result = subprocess.run(command, input=envelope['jit'] + '\n', text=True)
-        stop(unit)  # No publisher traverses a tree until every descendant is dead.
-        require(result.returncode == 0 and gate.accepted and time.monotonic() - started >= 10,
-                'runner failed, gate not accepted or short service lifetime')
-        if admission['class'] == 'MAIN':
-            current_policy = host_json(CONFIG / 'policy.json')
-            require(current_policy == policy, 'host policy changed before publication')
-            final = admit(forge, envelope['run'], envelope['job'], current_policy,
-                          host_json(CONFIG / 'trains.json'), runner=name, completed=True)
-            require(final == admission, 'publication evidence changed')
-            publish(cache, key, work, admission)
+        name = envelope['runner']
+        require(re.fullmatch(f'aida-ci-{slot}-[0-9a-f]{{32}}', name) is not None, 'invalid runner name')
+        account = pwd.getpwnam(f'aida-ci-{slot}-{admission["class"].lower()}')
+        accounts = [pwd.getpwnam(f'aida-ci-{s}-{c}') for s in SLOTS for c in ('main', 'train')]
+        require(len({a.pw_uid for a in accounts}) == 4 and all(a.pw_uid != 0 for a in accounts),
+                'four distinct non-root uids required')
+        require(os.getgrouplist(account.pw_name, account.pw_gid) == [account.pw_gid], 'supplementary groups')
+        unit = 'aida-ci-' + slot
+        stop(unit)  # Must succeed before deleting or changing class.
+        trusted(DIST, directory=True)
+        for entry in DIST.rglob('*'):
+            trusted(entry, directory=entry.is_dir())
+        trusted(HOOK)
+        trusted(Path('/usr/local/libexec/aida-ci-job-gate.py'))
+        toolchain = Path('/opt/aida-ci-toolchain')
+        for entry in toolchain.rglob('*'):
+            trusted(entry, directory=entry.is_dir())
+        JOBS.mkdir(mode=0o755, exist_ok=True)
+        trusted(JOBS, directory=True)
+        parent = JOBS / slot
+        parent.mkdir(mode=0o755, exist_ok=True)
+        trusted(parent, directory=True)
+        state = parent / 'current'
+        if state.exists():
+            shutil.rmtree(state)
+        state.mkdir(mode=0o711)
+        gate = None
+        try:
+            # Each class has a stable private view. Only these three trees persist.
+            work = state / admission['class'].lower()
+            work.mkdir(mode=0o700)
+            shutil.copytree(DIST, state / 'runner', symlinks=False)
+            (state / 'runner/home').mkdir(mode=0o700)
+            own_tree(state / 'runner', account)
+            cache = key = None
+            runtime = RUNTIME / unit
+            runtime.mkdir(mode=0o755, exist_ok=True)
+            trusted(runtime, directory=True)
+            endpoint = runtime / 'gate.sock'
+            endpoint.unlink(missing_ok=True)
+            def verify_job():
+                nonlocal admission, cache, key
+                current_policy = host_json(CONFIG / 'policy.json')
+                require(current_policy == policy, 'host policy changed during setup')
+                current = assigned_job(forge, name, current_policy, host_json(CONFIG / 'trains.json'))
+                require(current['class'] == admission['class'], 'assigned class changed')
+                admission = current
+                reservation.write_text(json.dumps(admission))
+                source_tree(admission['sha'], work / 'workspace')
+                key = key_for(slot, admission, policy, work / 'workspace')
+                cache = CACHE / slot / admission['shard'] / key
+                cache.mkdir(mode=0o700, parents=True, exist_ok=True)
+                trusted(cache, directory=True)
+                for stale in cache.parent.iterdir():
+                    if stale != cache and re.fullmatch('[0-9a-f]{64}', stale.name):
+                        shutil.rmtree(stale)
+                record = seed(cache, key, work)
+                print(json.dumps({'slot': slot, 'admission': admission, 'seed': record}), flush=True)
+                for directory in ('target', 'cargo', 'home'):
+                    (work / directory).mkdir(mode=0o700, exist_ok=True)
+                own_tree(work, account)
+            gate = Gate(endpoint, account.pw_uid, verify_job, refuse=lambda: stop(unit))
+            subprocess.run(['systemctl', 'start', 'aida-ci.slice'], check=True, timeout=15)
+            subprocess.run(['systemctl', 'set-property', '--runtime', 'aida-ci.slice', 'CPUQuota=800%',
+                            'AllowedCPUs=0-7', 'MemoryHigh=20G', 'MemoryMax=24G', 'MemorySwapMax=0'],
+                           check=True, timeout=15)
+            properties = {
+                'User': account.pw_name, 'Group': account.pw_name, 'WorkingDirectory': str(state / 'runner'),
+                'ProtectHome': 'yes', 'ProtectSystem': 'strict', 'ReadWritePaths': str(state),
+                'PrivateTmp': 'yes', 'PrivateIPC': 'yes', 'PrivateDevices': 'yes', 'NoNewPrivileges': 'yes',
+                'RestrictSUIDSGID': 'yes', 'ProtectKernelModules': 'yes', 'ProtectControlGroups': 'yes',
+                'RemoveIPC': 'yes', 'KillMode': 'control-group', 'TimeoutStopSec': '30',
+                'CPUAccounting': 'yes', 'MemoryAccounting': 'yes', 'CPUQuota': '400%', 'CPUWeight': '100', 'AllowedCPUs': '0-7',
+                'MemoryHigh': '10G', 'MemoryMax': '12G', 'MemorySwapMax': '0',
+                'InaccessiblePaths': f'-/run/docker.sock -/run/podman -/run/dbus {CACHE} {CONFIG} '
+                                     + ' '.join(str(JOBS / s) for s in SLOTS if s != slot),
+            }
+            command = ['systemd-run', '--quiet', '--wait', '--pipe', '--collect',
+                       '--unit=' + unit, '--slice=aida-ci.slice']
+            for prop, value in properties.items():
+                command += ['-p', f'{prop}={value}']
+            command += ['/usr/bin/env', '-i', f'HOME={state}/runner/home', 'PATH=/opt/aida-ci-toolchain/bin:/usr/local/bin:/usr/bin:/bin',
+                        f'CARGO_HOME={work}/cargo', f'CARGO_TARGET_DIR={work}/target',
+                        f'AIDA_CI_WORKSPACE={work}/workspace',
+                        f'AIDA_CI_GATE={endpoint}', f'ACTIONS_RUNNER_HOOK_JOB_STARTED={HOOK}',
+                        'CARGO_BUILD_JOBS=4', 'RUST_TEST_THREADS=4', 'AIDA_REQUIRE_BWRAP_LIVE=1',
+                        '/bin/bash', '-c', 'set -eu; IFS= read -r config; exec ./run.sh --jitconfig "$config"']
+            started = time.monotonic()
+            jit = envelope['jit']() if callable(envelope['jit']) else envelope['jit']
+            result = subprocess.run(command, input=jit + '\n', text=True)
+            stop(unit)  # No publisher traverses a tree until every descendant is dead.
+            require(result.returncode == 0 and gate.accepted and time.monotonic() - started >= 10,
+                    'runner failed, gate not accepted or short service lifetime')
+            if admission['class'] == 'MAIN':
+                current_policy = host_json(CONFIG / 'policy.json')
+                require(current_policy == policy, 'host policy changed before publication')
+                job = forge.get(f'actions/jobs/{admission["job"]}')
+                if job['status'] != 'completed' or job['conclusion'] != 'success':
+                    print('MAIN not successful/completed; cache unchanged', flush=True)
+                    return
+                final = admit(forge, admission['run'], admission['job'], current_policy,
+                              host_json(CONFIG / 'trains.json'), runner=name, completed=True)
+                require(final == admission, 'publication evidence changed')
+                publish(cache, key, work, admission)
+        finally:
+            if gate:
+                gate.close()
+            stop(unit)  # If stop fails, retain all state for operator recovery.
+            shutil.rmtree(state)
     finally:
-        if gate:
-            gate.close()
-        stop(unit)  # If stop fails, retain all state for operator recovery.
-        shutil.rmtree(state)
-    reservation.unlink()
-    os.close(lock)
+        try:
+            stop('aida-ci-' + slot)
+        except Exception:
+            raise  # Preserve reservation when cgroup death cannot be established.
+        else:
+            reservation.unlink(missing_ok=True)
+            os.close(lock)
 
 
 def main():
     require(len(sys.argv) == 2 and sys.argv[1] in SLOTS, 'Usage: controller.py s0|s1 < envelope.json')
-    data = sys.stdin.buffer.read(1024 * 1024 + 1)
+    data = sys.stdin.buffer.readline(1024 * 1024 + 1)
     require(len(data) <= 1024 * 1024, 'envelope too large')
     envelope = json.loads(data)
-    require(isinstance(envelope['jit'], str) and envelope['jit'] and '\n' not in envelope['jit'], 'invalid JIT')
+    def registration():
+        print(json.dumps({'ready': True}), flush=True)
+        jit = sys.stdin.buffer.readline(1024 * 1024).decode().strip()
+        require(jit, 'missing JIT')
+        return jit
+    envelope['jit'] = registration
     def terminate(signum, frame):
         raise SystemExit(128 + signum)
     signal.signal(signal.SIGTERM, terminate)
@@ -486,6 +558,9 @@ def main():
 if __name__ == '__main__':
     try:
         main()
+    except Deferred as error:
+        print(str(error), file=sys.stderr)
+        sys.exit(75)
     except Exception as error:
         print(f'Runner refused: {error}', file=sys.stderr)
         sys.exit(1)

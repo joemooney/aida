@@ -16,7 +16,7 @@ Only `s0` and `s1` exist. Each has a root-owned `/run/aida-ci-sN.lock`, service
 `aida-ci-sN`, and private job root `/var/lib/aida-ci-jobs/sN/current` (0700).
 Parents are root-owned 0755 for .NET traversal. A global admission lock reserves
 run/job identities across both slots; execution uses independent slot locks.
-A reservation left after an error intentionally prevents automatic rearming.
+Reservations are released after confirmed cgroup shutdown, including failed tests and delayed forge completion. Failed shutdown retains the reservation for operator reconciliation.
 Stop/reconcile the previous service before reuse; failed stop or populated
 cgroup refuses deletion, class switching and publication. Entire cgroups die
 before cache traversal. A fast service exit or any refusal stops the operator
@@ -31,12 +31,9 @@ inaccessible inside units. Distinct uids prevent cross-slot/class signalling,
 This is a host sandbox, not a VM and not a secrets-bearing runner.
 
 `rearm.sh sN`, in the credentialed operator's foreground session, proposes a
-queued heavy job (TRAIN first), generates fresh JIT configuration, and sends a
-bounded JSON envelope on stdin through the installed launcher. The envelope has
-`run`, `job` (positive integers), `runner` (`aida-ci-sN-` plus UUID hex) and `jit`.
+queued heavy job (TRAIN first) and sends a bounded JSON admission envelope on stdin through the installed launcher. The envelope has `run`, `job` (positive integers) and `runner` (`aida-ci-sN-` plus UUID hex). The installed `rearm.py` waits for the controller readiness handshake before generating JIT configuration and sending it on the next stdin line. Priority deferral exits 75 without registration; the loop retries.
 Its identities, class labels and cache requests grant **no** authority.
-The proposal queues are disjoint: s0 handles lib-0/cli-1 and s1 handles
-lib-1/cli-0, preserving cache affinity and avoiding a two-loop setup race.
+The proposal queues are disjoint: s0 proposes lib-0/cli-1 and s1 proposes lib-1/cli-0. MAIN priority checks use this same proposal family. Actual GitHub assignment may cross families.
 Registration credentials never enter the unit or root controller; only the
 single-use runner configuration goes through stdin. No JIT value goes in argv
 or a persistent file. Public read-only GitHub API requests run independently
@@ -56,8 +53,7 @@ TRAIN heavy jobs are queued; the two classes share the same two-slot cap.
 JIT labels do not bind a queued job to a runner. Therefore an immutable
 `ACTIONS_RUNNER_HOOK_JOB_STARTED` connects to a host Unix socket before any
 workflow step. Kernel peer uid must equal this slot/class uid. The host fetches
-forge evidence again, requiring the actual assigned runner name and original
-run/job/attempt/head. An unexpected pickup makes the host stop the whole cgroup while the hook
+the uniquely assigned job by runner name across in-progress runs and applies full admission again, including repository, PR, SHA, train record and workflow digest. Source extraction, key selection and seeding then use the actual job and shard, before releasing the hook. The root-owned work directory stays inaccessible to the service uid until preparation finishes; ownership changes never follow links. A refused pickup makes the host stop the whole cgroup while the hook
 stays blocked; merely returning a failed hook would allow `if: always()` steps.
 Transport failure also stays blocked for operator recovery, never returning
 execution to a refused job. The gate is one-shot. This is essential even with reviewed routing YAML.
@@ -103,7 +99,7 @@ The host fetches the exact admitted SHA's public source archive, refuses archive
 links/traversal, and reconstructs Git object/index identity with an independent
 public fetch/reset. It never runs checkout filters/hooks, cached Git config or
 cached programs. The reviewed S3 workflow must use `AIDA_CI_WORKSPACE` and
-`AIDA_CI_SHA`, compile into `CARGO_TARGET_DIR`, and honor the installed pinned
+the Git HEAD in `AIDA_CI_WORKSPACE`, compile into `CARGO_TARGET_DIR`, and honor the installed pinned
 Rust toolchain. It must not silently checkout a PR merge ref instead of the
 admitted head. Remote rust-cache restore/save must be disabled on local paths;
 no fallback to PR cache keys. Hosted jobs retain their existing behavior.
@@ -131,6 +127,7 @@ no fallback to PR cache keys. Hosted jobs retain their existing behavior.
    `controller.py` at `/usr/local/libexec/aida-ci-controller.py` (0644),
    `job-gate.py` at `/usr/local/libexec/aida-ci-job-gate.py` (0644),
    `job-gate.sh` at `/usr/local/libexec/aida-ci-job-gate.sh` (0755), and
+   `rearm.py` at `/usr/local/libexec/aida-ci-rearm.py` (0644), and
    `select-job.py` at `/usr/local/libexec/aida-ci-select-job.py` (0644), all
    root-owned. Install `aida-ci.slice` under `/etc/systemd/system` and reload.
 5. Install root-owned `/etc/aida-ci` (0700), policy and train record JSON (0600).
@@ -156,8 +153,7 @@ no fallback to PR cache keys. Hosted jobs retain their existing behavior.
    A changed compiler/build configuration creates a cold key; changed workflow
    bytes require fresh policy review. Install cache root root:root 0700 and jobs
    root root:root 0755. Keep enough disk for concurrent private copies, source,
-   incoming generations and retained generations. Stop loops for root-only
-   pruning/quarantine of old generations; never prune a live seed/copy operation.
+   incoming and current generations. Normal pruning is automatic under the slot lock; stop loops for manual quarantine or crash recovery.
 7. Review exact sudoers arguments with `visudo`; only the operator gets:
 
    ```sudoers
@@ -215,3 +211,5 @@ remove only that slot's `/run/aida-ci-sN.json`, stale gate socket and disposable
 retains the state intentionally. A crash during publication may leave an
 unreferenced generation; the manifest remains authoritative. Root-only offline
 pruning must retain the manifest's generation and validate paths before deletion.
+
+The slot lock covers all cache reads and writes. A manifest swap removes superseded generations; preparation retains only the current compatibility key per slot/shard, including TRAIN cold misses. Successful MAIN publication also removes stale key directories. No workflow routing is enabled by this change.
