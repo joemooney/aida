@@ -3,12 +3,12 @@ spec_id: STORY-b6b1278890774ef993d2ebc327862470-611
 agreed_id: STORY-2688
 title: 'PR reconciler: one tested command maps every open PR to one state, next action and owner, and performs the mechanical actions'
 description: 'Problem: on 2026-11-08 the PR control plane was untested bash loops (auto-train, auto-rework, review-watch-loop) plus advisor sweeps. A restart wiped auto-rework''s in-memory seen set and it re-reworked old heads. Requirement: derive each PR''s state from durable facts (open/closed, mergeable, head SHA, verdict at head, CI at head, hold state, lane running) into exactly one of a closed set of states, each with one next action and owner. Mechanical actions run idempotently from durable state; judgment states route to a named seat. Acceptance: table-driven tests cover every state; restart mid-pass repeats no action; the operator scripts can be retired. Architecture change: sketch and advisor signoff first.'
-status: NeedsAttention
+status: Approved
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-09T01:57:49.197822183Z
-modified_at: 2026-11-11T15:20:16.534352893Z
+modified_at: 2026-11-11T15:43:40.347960992Z
 req_type: Story
 tags:
 - area:orchestration
@@ -168,6 +168,11 @@ comments:
   modified_at: 2026-11-11T15:20:16.534352893Z
   session_id: 01a1ca83-fabb-7663-852c-12c78d4e097f
   harness_version: 2.1.322 (Claude Code)
+- id: 01a1cb47-753b-78f0-953a-944f10b45420
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida edit --status`. It was shelved on: reviewer/verdict:request-changes: S1 full sweep: five collector defects in workflow freshness, cleared holds, verdict corpus, lease evidence and review-watch receipts; exact-head CI green.. No triage reason was given.'
+  created_at: 2026-11-11T15:43:40.347953117Z
+  modified_at: 2026-11-11T15:43:40.347953117Z
 history:
 - id: 01a1be07-037f-7533-9b8f-9af4ceb825a2
   author: joe
@@ -269,6 +274,13 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a1cb47-753b-78f0-953a-943d971b6e66
+  author: joe
+  timestamp: 2026-11-11T15:43:40.347944526Z
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 filed_at:
   code_sha: a7a14984cec5533987dfeccb70d1f91aaebbf22a
   branch: main
@@ -277,11 +289,3 @@ filed_at:
   aida_build_sha: 8a4a909a967
   vendor: claude
   session: 20abb7c3-8f9b-4a5e-b326-404921f3b450
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: 'S1 full sweep: five collector defects in workflow freshness, cleared holds, verdict corpus, lease evidence and review-watch receipts; exact-head CI green.'
-  recovery_hint: address the review findings, move STORY-2688 back to In Progress, and clear the PR hold only after approval
-  shelved_by: reviewer
-  shelved_at: 2026-11-11T13:20:32.088538727Z
