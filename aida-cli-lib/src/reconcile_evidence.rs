@@ -23,8 +23,10 @@ pub(crate) enum EvidenceUnavailable {
     /// The forge could not be classified (unreadable config, unrecognized
     /// provider, failed `origin` lookup).
     ForgeDiscovery(String),
-    /// A configured forge this check has no query for.
+    /// A configured forge this operation has no query for.
     UnsupportedForge(ForgeKind),
+    /// A forge query could not establish open-change evidence.
+    ForgeQuery(String),
     /// The forge CLI executable could not be found.
     MissingExecutable(&'static str),
     /// The forge CLI could not be started.
@@ -54,6 +56,7 @@ impl std::fmt::Display for EvidenceUnavailable {
                 "the configured forge `{}` has no supported open-change query",
                 kind.config_token()
             ),
+            Self::ForgeQuery(why) => write!(f, "open-change query unavailable: {why}"),
             Self::MissingExecutable(cli) => write!(f, "`{cli}` executable not found"),
             Self::Spawn(e) => write!(f, "could not run `gh`: {e}"),
             Self::Exit { code, stderr } => {
@@ -99,11 +102,9 @@ pub(crate) enum OpenChangeCheck {
 /// forge. `forge` comes from [`crate::forge::checked_forge_kind`] (read-only)
 /// or, for compatibility callers, `resolve_forge_kind`.
 ///
-/// "Not GitHub" is two situations with opposite answers. A pure-git project
-/// has no change requests, so "none is open" is a measured truth — every
-/// candidate is `Clear`. A configured GitLab project has merge requests that
-/// `gh` cannot read, so its state is unknown and every candidate is
-/// `Unavailable`; unknown must never read as clear.
+/// Pure-git projects use the default-branch log as completion evidence and
+/// have no open changes. GitLab queries its provider; GitHub retains the
+/// checked search below. Unknown evidence always preserves the spec.
 ///
 /// With `stop_at_unavailable`, the first unavailable answer ends the scan
 /// (the compatibility wrapper needs only "all clear or not"); otherwise each
@@ -132,10 +133,31 @@ pub(crate) fn check_open_changes(
             ))
         }
         Ok(ForgeKind::None) => return all(OpenChangeCheck::Clear),
+        // trace:BUG-2516 | ai:codex
         Ok(ForgeKind::GitLab) => {
-            return all(OpenChangeCheck::Unavailable(
-                EvidenceUnavailable::UnsupportedForge(ForgeKind::GitLab),
-            ))
+            let provider = crate::forge::GitLabForge::new(project_root);
+            use crate::forge::Forge;
+            let mut out = Vec::with_capacity(ids.len());
+            for id in ids {
+                let check = confirm_clear(
+                    || match provider.change_for_spec(&id) {
+                        Ok(crate::forge::ChangeLookup::NoChange) => OpenChangeCheck::Clear,
+                        Ok(crate::forge::ChangeLookup::Found(change)) if change.id > 0 => {
+                            OpenChangeCheck::Open(change.id)
+                        }
+                        answer => OpenChangeCheck::Unavailable(EvidenceUnavailable::ForgeQuery(
+                            format!("{answer:?}"),
+                        )),
+                    },
+                    crate::forge_confirmation::backoff,
+                );
+                let stop = stop_at_unavailable && matches!(check, OpenChangeCheck::Unavailable(_));
+                out.push((id, check));
+                if stop {
+                    break;
+                }
+            }
+            return out;
         }
         Ok(ForgeKind::GitHub) => {}
     }
@@ -1039,7 +1061,7 @@ mod tests {
                 .iter()
                 .all(|(_, c)| matches!(
                     c,
-                    OpenChangeCheck::Unavailable(EvidenceUnavailable::UnsupportedForge(_))
+                    OpenChangeCheck::Unavailable(EvidenceUnavailable::ForgeQuery(_))
                 ))
         );
         assert!(check_open_changes(root, &Ok(ForgeKind::None), ids(), false)

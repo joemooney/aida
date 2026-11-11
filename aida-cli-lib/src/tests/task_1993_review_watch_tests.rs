@@ -2978,3 +2978,37 @@ fn review_watch_four_reviews_share_persisted_capacity() {
         Action::Skip(reason) if reason.contains("global reviewer capacity (4)")
     ));
 }
+
+// trace:STORY-2705 | ai:codex
+#[test]
+fn story2705_parked_merge_head_is_unreserved_then_admitted_once_after_lease_ends() {
+    let (temp, store) = fixture();
+    let old = change(1, 1, false);
+    let verdicts = temp.path().join(".aida/review-verdicts");
+    std::fs::create_dir_all(&verdicts).unwrap();
+    write_verdict(
+        &verdicts.join("PR-1.json"),
+        &verdict_json(&old.head, "request-changes"),
+    );
+    let merge_head = change(1, 2, false);
+    let reason = "deferred: implementer lane live (host-two, lease-one)";
+    for _ in 0..2 {
+        record_skip(&store, &merge_head, Some(reason)).unwrap();
+        let state = store.load().unwrap();
+        let entry = &state.entries["PR-1"];
+        assert!(entry.attempts.is_empty());
+        assert_eq!(entry.skipped.as_ref().unwrap().line, reason);
+        assert_eq!(skipped_changes(temp.path()).len(), 1);
+    }
+    // No live lease remains: the ordinary admission path reviews this exact
+    // head once, even if its only commit since the refusal was a merge.
+    record_skip(&store, &merge_head, None).unwrap();
+    assert!(skipped_changes(temp.path()).is_empty());
+    let attempt = dispatch(select(&store, &merge_head, None, 2).unwrap());
+    assert_eq!(attempt.head, merge_head.head);
+    assert!(matches!(
+        select(&store, &merge_head, None, 2).unwrap(),
+        Action::Skip(_)
+    ));
+    assert_eq!(store.load().unwrap().entries["PR-1"].attempts.len(), 1);
+}

@@ -481,24 +481,9 @@ pub(crate) struct AutoBumpFlip {
     pub(crate) prior_status: RequirementStatus,
 }
 
-/// BUG-1454: return the candidate specs that still have an open GitHub PR.
-///
-/// A completion trailer proves that *some* work landed, but an open PR naming
-/// the same spec is stronger evidence that the spec has another deliverable in
-/// flight. Keep those specs at Done until the final PR closes. One search is
-/// made per candidate because GitHub's PR search covers title, body, and
-/// comments without downloading every open PR in a large repository.
-///
-/// `None` means the GitHub lookup was unavailable or failed. Callers
-/// default-to-preserve in that ambiguous case; hiding unfinished work is more
-/// damaging than leaving shipped work visible for another pass.
-///
-/// Compatibility wrapper over the checked lookup in [`reconcile_evidence`],
-/// which owns the forge query and response validation (a non-array or
-/// malformed response is unavailable, never empty). The pure-git positive
-/// and GitLab-is-unknown rules are documented there.
-// trace:BUG-1454 | ai:codex
-// trace:TASK-1335 | ai:claude
+/// Return candidate specs with an open forge change. Unknown evidence preserves
+/// the current status; default-branch trailers supply completion evidence.
+// trace:BUG-1454 TASK-1335 BUG-2516 | ai:codex
 pub(crate) fn specs_with_open_prs(
     project_root: &std::path::Path,
     spec_ids: impl IntoIterator<Item = String>,
