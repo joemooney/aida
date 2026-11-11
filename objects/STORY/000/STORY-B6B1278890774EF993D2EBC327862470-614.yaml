@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-09T01:58:46.910276326Z
-modified_at: 2026-11-10T22:17:34.470150800Z
+modified_at: 2026-11-11T01:27:16.881561405Z
 req_type: Story
 tags:
 - area:orchestration
@@ -20,6 +20,13 @@ comments:
   modified_at: 2026-11-10T07:32:19.214249580Z
   session_id: 01a1c39a-801a-7bd1-8da9-c955a6707f0b
   harness_version: 2.1.321 (Claude Code)
+- id: 01a1c837-6891-7a31-9b85-ccb41b3f4a03
+  author: joe
+  content: 'ADVISOR RULING (2026-11-10 18:45 MST) on the missing-context punt: do NOT read or port the host scripts; they are advisor stopgaps outside the repo. Their behavior is the contract: auto-train: every few minutes, train open PRs whose recorded verdict is APPROVED at the exact head with green required CI and no merge hold, skipping train/ branches; log landed/ejected. auto-rework: for each open PR whose verdict is CHANGES REQUESTED at its exact head (only after its CI has settled), or whose CI failed at that head, run ''aida queue rework SPEC --for implementer'' once per head and dispatch an implementer lane; if the PR is CONFLICTING, merge main on the host first (BUG-2456); skip a spec with a live lane. stale-release: release the review attempt of a head with no verdict, no running reviewer, pushed more than 40 min ago (until BUG-2518 lands). Build these as supervised services alongside review-watch under ''aida advisor loops'' (same binding, grant adoption and alerting as review-watch), one slice per loop; slice 1 = train.'
+  created_at: 2026-11-11T01:27:16.881561405Z
+  modified_at: 2026-11-11T01:27:16.881561405Z
+  session_id: 01a1c70f-d731-7b70-acf8-e9ab3d288fca
+  harness_version: 2.1.322 (Claude Code)
 history:
 - id: 01a1c5dd-0f8f-79d0-9864-f10de50286f7
   author: joe
