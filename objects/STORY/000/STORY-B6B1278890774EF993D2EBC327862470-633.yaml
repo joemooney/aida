@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-10T22:04:54.061461738Z
-modified_at: 2026-11-11T07:53:41.760034653Z
+modified_at: 2026-11-11T07:53:47.404296504Z
 req_type: Story
 comments:
 - id: 01a1c781-4cf1-7c80-b086-89c5c5096ab6
@@ -275,6 +275,24 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Slice-1 review found five actionable defects in source-conflict admission, successor-lease resume, regeneration retry enforcement, template output enumeration and merge-probe classification. CI pending at review time.. No triage reason was given.'
   created_at: 2026-11-11T07:53:41.760028464Z
   modified_at: 2026-11-11T07:53:41.760028464Z
+  session_id: 01a1c87f-970d-7ce0-9351-e4e75a87731e
+  harness_version: 2.1.322 (Claude Code)
+- id: 01a1c999-3e93-76d3-9009-22abe8a92c0b
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (STORY-2710):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 2f179152efd6
+    Recorded: 2026-11-11T07:45:40.652031003+00:00
+    Findings:
+    1. [P1] scripts/repair-generated.py:82-86 and aida-cli-lib/src/seat_clone.rs:3557-3558: Do not make every Rust/source conflict fail before the repair lane can start. Host preparation invokes regeneration before launch, and the driver refuses any unmerged .rs/.py/Cargo.toml/Makefile/template source whenever registered outputs exist, even when those outputs did not conflict. Thus an ordinary appended-test conflict in this repository never reaches the configured resolver; setup rolls back with the merge/reservation retained. Separate safe generated-output restoration from source-dependent generation, let the lane resolve authoritative sources, then require host regeneration before publication. Cover a real repository fixture with both registered generators and an authoritative-source conflict.
+    2. [P1] aida-cli-lib/src/seat_clone.rs:3495-3497: Support authorized successor leases when resuming a retained repair. queue_cmd/work.rs:5293-5299 passes the newly minted lease.id, but session_start.rs:3347-3348 always generates a new UUID, including orphan adoption (the old lease is removed at 3492-3498). Consequently queue work --resume always fails entry.lane_id == lane_id after an interrupted conflict repair. Persist and validate an explicit predecessor/successor handoff under the journal lock instead of equating a repair identity with each pickup's new lease ID. Add command-level/adoption coverage; the current helper retry test passes the same literal lease-1 twice and misses this.
+    3. [P1] aida-cli-lib/src/seat_clone.rs:3490-3499,3557-3558 and commit_pending:4480-4500: Persist successful regeneration and enforce it on retry/publication. record_paths is saved before regenerate; a generator error, timeout, unexpected write or ratchet-growth refusal leaves matching journal evidence and MERGE_HEAD, but the pending-merge resume branch returns the paths without rerunning regeneration. commit_pending likewise checks only matching paths/markers, so a direct host publication retry can commit a partially regenerated or rejected ledger. Record failed/incomplete regeneration explicitly, rerun required generation after recovery, and refuse publication until it succeeds; test failure after an output write and subsequent resume/publication.
+    4. [P2] scripts/repair-generated.py:79,99-104: Derive declared template outputs from the resolved authoritative template inventory, including legitimate additions/removals, rather than only paths tracked at pinned main. make sync-templates renders the merged templates: adding a new command/skill produces a new mirror outside outputs and is rejected as an unexpected write; removing a portable skill removes an old declared output and is rejected as missing. These normal PR changes make conflict repair impossible even with all sources resolved. Keep the trusted closed registration rules, but enumerate the expected post-merge products from those rules and validate against that set. Cover a new template and a removed portable skill.
+    5. [P2] aida-cli-lib/src/seat_clone.rs:3522-3529: Distinguish a positive merge-tree conflict result from probe failures before reserving the head. execute(...).is_err() also covers timeouts, spawn failures and Git fatal errors, yet immediately persists an Unknown reservation and attempts a real merge. A transient probe failure can therefore leave an otherwise clean PR head permanently reserved (including when the real merge succeeds and this function bails at 3545). Preserve/classify merge-tree exit status and reserve only a confirmed conflict; operational failures should return without a repair reservation or index mutation. Add injected timeout/fatal-probe tests.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-11T07:53:45.875813768Z
+  modified_at: 2026-11-11T07:53:45.875813768Z
   session_id: 01a1c87f-970d-7ce0-9351-e4e75a87731e
   harness_version: 2.1.322 (Claude Code)
 history:
