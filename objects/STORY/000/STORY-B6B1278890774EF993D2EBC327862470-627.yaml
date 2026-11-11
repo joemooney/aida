@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-10T03:52:00.571796159Z
-modified_at: 2026-11-11T09:55:22.391351389Z
+modified_at: 2026-11-11T10:11:47.597077864Z
 req_type: Story
 comments:
 - id: 01a1c399-6840-7383-843e-9930f6eaa3f7
@@ -502,6 +502,27 @@ comments:
   modified_at: 2026-11-11T09:54:08.745039285Z
   session_id: 01a1c87f-970d-7ce0-9351-e4e75a87731e
   harness_version: 2.1.322 (Claude Code)
+- id: 01a1ca13-5a94-7a71-8893-9d0af093a682
+  author: dirtlab
+  content: |
+    S3 implementation complete on story-2704-s3; edits remain uncommitted for native-seat host publication.
+
+    Release packaging now ships aida, aida-server, aida-porcelain and relative aida-flow link. install.sh and make install/install-cli install the companion and alias. Tarball upgrades stage on the destination filesystem and use per-file atomic renames with rollback; old pinned release layouts remain supported. Public aida flow resolves externally, with report collection retained as hidden flow-data; help golden and reporting docs updated. Shared output_format::parse_output_format and alias coverage were already present in the baseline and validated here.
+
+    Validation passed through lane jobs: CLI plus porcelain build; help snapshot (1 test); porcelain (5 tests); flow_cmd reader/metric tests (8 tests); story_1641_external_subcommands (9 tests, with porcelain built beside original aida). The first external suite run exposed a launch-time ETXTBSY not handled by the existing stderr-only retry; bounded launch-error retries fixed it, and all nine passed on rerun. Python packaging/install fixtures: 7 passed, including real release packaging step, temp-prefix install.sh, temp-Cargo-home make install, upgrade replacement, injected rollback, missing-member refusal and historical pair. rustfmt, shell syntax and git diff --check passed.
+
+    The supplied codegraph executable was absent; navigation used rg. No implementation blockers. Host must commit/publish; no queue completion or review/merge action was taken.
+  created_at: 2026-11-11T10:07:08.436220838Z
+  modified_at: 2026-11-11T10:07:08.436220838Z
+  session_id: 01a1ca088e8a
+  harness_version: codex-cli 0.167.0
+- id: 01a1ca17-9d0d-72f3-8391-8c4b5f699b2a
+  author: dirtlab
+  content: 'Fast-gate fix: replaced the six newly introduced os.environ reads in tests/test_porcelain_install.py with explicit fixture HOME and PATH inputs, also projecting that fixture environment to every test subprocess. No ledger changes or exemptions. Validation: all 19 ExecContext ratchet tests passed; check-exec-context.py reports 1235 exact sites and zero additions; all 7 porcelain packaging/install fixtures passed; git diff --check passed. Edits remain uncommitted for host publication.'
+  created_at: 2026-11-11T10:11:47.597077864Z
+  modified_at: 2026-11-11T10:11:47.597077864Z
+  session_id: 01a1ca088e8a
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1c399-7102-7f81-9bb9-fd37379159d3
   author: joe
