@@ -14,6 +14,7 @@ use std::os::unix::fs::PermissionsExt;
 use tempfile::TempDir;
 
 pub(super) fn repo() -> TempDir {
+    super::activation::FRESH_SCAN.with(|f| f.set(true));
     let dir = tempfile::tempdir().unwrap();
     let out = crate::test_git::git_command()
         .args(["init", "-q"])
@@ -81,6 +82,8 @@ pub(super) fn test_source_build() -> String {
 }
 
 pub(super) fn activate(root: &Path) {
+    super::activation::FRESH_SCAN.with(|f| f.set(true));
+    super::message_state_tests::preserve_canonical(root);
     let anchor = source(root).anchor;
     write_json(
         &anchor.join(ACTIVATION_FILE),
@@ -104,6 +107,9 @@ pub(super) fn seed_mail(root: &Path) {
     let receipts = mailbox(root).join(".read-receipts/bob");
     std::fs::create_dir_all(&receipts).unwrap();
     std::fs::write(receipts.join("m1.txt"), "2").unwrap();
+    if source(root).anchor.join(ACTIVATION_FILE).exists() {
+        super::message_state_tests::preserve_canonical(root);
+    }
 }
 
 pub(super) const SEEDED: [&str; 4] = [
@@ -597,25 +603,24 @@ fn an_absent_mailbox_is_created_so_it_can_be_fenced() {
 }
 
 #[test]
-fn a_mail_bearing_source_refuses_before_activation_and_reopens() {
+fn an_unpreserved_source_refuses_and_reopens() {
     let dir = repo();
     seed_mail(dir.path());
     let (reason, retained) = refusal(retire_source(dir.path(), &opts()).unwrap());
-    assert_eq!(reason, RefusalReason::MailBearingBeforeActivation);
-    assert!(reason.to_string().contains(ACTIVATION_COMMAND));
-    assert_eq!(retained, None);
+    assert!(matches!(reason, RefusalReason::MessageState { .. }));
+    assert!(retained.is_some());
     assert_eq!(files_under(&mailbox(dir.path())), SEEDED);
     assert_open(dir.path());
 }
 
 #[test]
-fn even_an_empty_file_makes_a_source_mail_bearing() {
+fn receipt_bytes_without_messages_can_be_preserved_without_activation() {
     let dir = repo();
     ensure_mailbox(dir.path());
     std::fs::create_dir_all(mailbox(dir.path()).join(".read")).unwrap();
     std::fs::write(mailbox(dir.path()).join(".read/x.txt"), "").unwrap();
-    let (reason, _) = refusal(retire_source(dir.path(), &opts()).unwrap());
-    assert_eq!(reason, RefusalReason::MailBearingBeforeActivation);
+    let (_, retained) = retired(retire_source(dir.path(), &opts()).unwrap());
+    assert!(retained.join("data/.read/x.txt").exists());
 }
 
 #[test]
@@ -728,6 +733,7 @@ fn a_writer_admitted_before_the_fence_finishes_and_is_captured() {
     let permit = admit_local_write(dir.path()).unwrap().unwrap();
     let root = dir.path().to_path_buf();
     let retirer = std::thread::spawn(move || {
+        super::activation::FRESH_SCAN.with(|f| f.set(true));
         let opts = RetireOptions {
             quiesce_timeout: Duration::from_secs(20),
             ..RetireOptions::default()
@@ -740,7 +746,12 @@ fn a_writer_admitted_before_the_fence_finishes_and_is_captured() {
         std::thread::sleep(Duration::from_millis(10));
     }
     // The admitted writer finishes its write after the fence...
-    std::fs::write(mailbox(dir.path()).join("m3.json"), "{}").unwrap();
+    std::fs::write(
+        mailbox(dir.path()).join("m3.json"),
+        serde_json::to_vec(&message("m3")).unwrap(),
+    )
+    .unwrap();
+    super::message_state_tests::preserve_canonical(dir.path());
     permit.complete().unwrap();
     // ...and the barrier waited for it, so the write is preserved.
     let (_, retained) = retired(retirer.join().unwrap().unwrap());
@@ -999,7 +1010,7 @@ fn a_crash_after_aborted_reopens_on_the_next_call() {
     assert!(matches!(crashed, Err(LifecycleError::InjectedCrash(_))));
     assert_retiring(dir.path());
     let (reason, _) = refusal(retire_source(dir.path(), &opts()).unwrap());
-    assert_eq!(reason, RefusalReason::MailBearingBeforeActivation);
+    assert!(matches!(reason, RefusalReason::MessageState { .. }));
     assert_eq!(files_under(&mailbox(dir.path())), SEEDED);
     assert_open(dir.path());
 }
@@ -1022,8 +1033,14 @@ fn a_crash_after_a_late_writer_abort_restores_on_replay() {
     assert!(matches!(crashed, Err(LifecycleError::InjectedCrash(_))));
     // The preserved bytes are out of the tree until the abort is replayed.
     assert_eq!(files_under(&mailbox(dir.path())), vec!["late.json"]);
-    // The next call restores them, reopens, and retires afresh: the late
-    // file is now part of the source and preserved too.
+    // Publish the late message before retrying: replay restores the source,
+    // and its next retirement requires canonical preservation too.
+    std::fs::write(
+        mailbox(dir.path()).join("late.json"),
+        serde_json::to_vec(&message("late")).unwrap(),
+    )
+    .unwrap();
+    super::message_state_tests::preserve_canonical(dir.path());
     let (_, retained) = retired(retire_source(dir.path(), &opts()).unwrap());
     let mut expected: Vec<String> = SEEDED.iter().map(|s| s.to_string()).collect();
     expected.push("late.json".into());
@@ -1282,10 +1299,10 @@ fn journal_files(root: &Path) -> usize {
 fn finished_operations_leave_no_journal_behind() {
     let dir = repo();
     seed_mail(dir.path());
-    // Refused (no activation) three times: each Aborted entry is pruned.
+    // Refused (no canonical preservation) three times: each Aborted entry is pruned.
     for _ in 0..3 {
         let (reason, _) = refusal(retire_source(dir.path(), &opts()).unwrap());
-        assert_eq!(reason, RefusalReason::MailBearingBeforeActivation);
+        assert!(matches!(reason, RefusalReason::MessageState { .. }));
     }
     assert_eq!(journal_files(dir.path()), 0, "aborted entries are pruned");
     // Retired then reopened: the Reopened entry is pruned too.
