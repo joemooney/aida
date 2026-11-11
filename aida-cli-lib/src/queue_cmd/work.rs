@@ -3945,7 +3945,8 @@ pub(crate) fn handle_queue_work(
         // Provisional capture above retains failures before a plan is available.
         // trace:STORY-2690 | ai:codex
         let (role, role_origin, warnings) = infer_queue_work_role(&plan, role_override);
-        resolve_pickup_attempt(&mut attempt, &plan, &role, no_human, branch_override)?;
+        let implementer_route =
+            resolve_pickup_attempt(&mut attempt, &plan, &role, no_human, branch_override)?;
 
         // Recheck the resolved anchor, including no-argument queue-head pickup.
         // This runs before launch resolution, calibration, worktree creation, or
@@ -4145,6 +4146,13 @@ pub(crate) fn handle_queue_work(
                 branch_override,
             )?
         };
+        if let Some(attempt) = &attempt {
+            attempt.resolve_scope(
+                &plan.anchor_display,
+                branch_override.or_else(|| rework_pr.as_ref().map(|(_, branch)| branch.as_str())),
+                rework_pr.as_ref().map(|(pr, _)| *pr),
+            )?;
+        }
         // BUG-022: say which existing branch the rework must continue.
         // trace:BUG-b6b1278890774ef993d2ebc327862470-022 | ai:claude
         if let Some((pr, branch)) = rework_pr.as_ref().filter(|_| !list_sessions) {
@@ -4157,13 +4165,6 @@ pub(crate) fn handle_queue_work(
             (plan.entries.len() == 1 && plan.review_target.is_none()).then(|| rework_pr.clone());
         let rework_branch_override = rework_pr.as_ref().map(|(_, branch)| branch.clone());
         let session_branch_override = branch_override.or(rework_branch_override.as_deref());
-        if let Some(attempt) = &attempt {
-            attempt.resolve_scope(
-                &plan.anchor_display,
-                session_branch_override,
-                rework_pr.as_ref().map(|(pr, _)| *pr),
-            )?;
-        } // trace:STORY-2690 | ai:codex
 
         // BUG-2223: an adopted orphan fixes the tree and branch; an explicit
         // --path or --branch naming another one refuses rather than guess.
@@ -4216,13 +4217,8 @@ pub(crate) fn handle_queue_work(
         // for its child and reports the outcome. Its concurrency slot is taken
         // before any setup and held until this command returns.
         // trace:STORY-1662 | ai:claude
-        let standalone_implementer = !no_launch
-            && matches!(launch, Some(QueueWorkLaunch::Fresh(_)))
-            && crate::standalone_implementer::is_standalone_implementer(
-                &role,
-                plan.review_target.is_none(),
-                no_human,
-            );
+        let standalone_implementer =
+            !no_launch && matches!(launch, Some(QueueWorkLaunch::Fresh(_))) && implementer_route;
         // TASK-619: capture the anchor spec's status from the *local* (pre-pull)
         // view so we can detect whether the pull below reveals that another
         // machine claimed the spec under us. Best-effort + read-only — a load
@@ -6190,7 +6186,8 @@ pub(crate) fn handle_queue_work(
     result
 }
 
-// Bind admission to the same resolved role and scope used by launch.
+// Bind admission to the resolved role and scope, returning the decision for
+// launch to consume even when receipt capture is disabled (for example previews).
 // trace:STORY-2690 | ai:codex
 pub(crate) fn resolve_pickup_attempt(
     attempt: &mut Option<crate::lane_result::Attempt>,
@@ -6198,12 +6195,13 @@ pub(crate) fn resolve_pickup_attempt(
     role: &str,
     no_human: bool,
     branch: Option<&str>,
-) -> Result<()> {
-    if !crate::standalone_implementer::is_standalone_implementer(
+) -> Result<bool> {
+    let implementer_route = crate::standalone_implementer::is_standalone_implementer(
         role,
         plan.review_target.is_none(),
         no_human,
-    ) {
+    );
+    if !implementer_route {
         if let Some(provisional) = attempt.take() {
             provisional.discard()?;
         }
@@ -6211,7 +6209,7 @@ pub(crate) fn resolve_pickup_attempt(
     if let Some(attempt) = attempt {
         attempt.resolve_scope(&plan.anchor_display, branch, None)?;
     }
-    Ok(())
+    Ok(implementer_route)
 }
 
 /// Advisor comment 35: release the lease `lease_id` a failed pickup minted

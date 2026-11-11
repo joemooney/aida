@@ -4032,8 +4032,8 @@ fn requeued_spec_reenters_queue_wide_drain_head() {
 }
 
 /// STORY-1429: requeue does not bypass the dependency gate. A requeued
-/// dependent whose prerequisite is not Completed is still skipped by the
-/// BlockedBy gate, and its requeue preview said so before it was taken.
+/// dependent whose prerequisite is not Completed refuses rework without
+/// changing its status or queue; the preview names the same dependency.
 // trace:STORY-1429 | ai:claude
 #[test]
 fn requeued_dependent_still_skipped_by_blocked_by_gate() {
@@ -4054,7 +4054,8 @@ fn requeued_dependent_still_skipped_by_blocked_by_gate() {
         "the preview names the unmet dependency"
     );
 
-    handle_queue_rework(
+    let queue_before = serde_json::to_value(storage.queue_list("u", false).unwrap()).unwrap();
+    let refusal = handle_queue_rework(
         &storage,
         "NFR-56",
         false,
@@ -4069,24 +4070,23 @@ fn requeued_dependent_still_skipped_by_blocked_by_gate() {
         true,
         Some("u"),
     )
-    .unwrap();
+    .unwrap_err();
+    assert!(
+        refusal.to_string().contains("reason=blocked-by"),
+        "{refusal:#}"
+    );
     let store = storage.load().unwrap();
     assert_eq!(
         store.get_requirement_by_spec_id("NFR-56").unwrap().status,
-        RequirementStatus::Approved
+        RequirementStatus::NeedsAttention
     );
 
-    let (pick, _role, blocked) = resolve_next_n_head(&storage, "u", Some("implementer"));
+    let (pick, _role, _) = resolve_next_n_head(&storage, "u", Some("implementer"));
     assert_eq!(pick.map(|p| p.spec), Some("STORY-52".to_string()));
-    bug_1608_set_status(&storage, "STORY-52", RequirementStatus::InProgress);
-    let (pick, _role, blocked_after) = resolve_next_n_head(&storage, "u", Some("implementer"));
-    assert!(pick.is_none(), "the requeued dependent must not be picked");
-    assert!(
-        blocked
-            .iter()
-            .chain(blocked_after.iter())
-            .any(|(id, reason)| id == "NFR-56" && reason.starts_with("blocked-by STORY-52")),
-        "{blocked:?} {blocked_after:?}"
+    assert_eq!(
+        serde_json::to_value(storage.queue_list("u", false).unwrap()).unwrap(),
+        queue_before,
+        "refused rework must preserve the existing queue"
     );
 }
 
@@ -4825,7 +4825,10 @@ fn story_2690_receipt_uses_queue_route_and_pr_scope() {
             ("STORY-2690", Some("reviewer"), None, false),
             ("STORY-2690", Some("implementer"), None, true),
             ("STORY-2690", None, None, true),
+            ("STORY-2690", Some("reviewer"), Some("implementer"), true),
+            ("STORY-2690", Some("implementer"), Some("reviewer"), false),
             ("PR-42", None, None, false),
+            ("MR-42", None, None, false),
             ("PR-42", None, Some("implementer"), false),
         ] {
             let e = resolved("STORY-2690", entry(Uuid::now_v7(), routed, None));
@@ -4834,7 +4837,9 @@ fn story_2690_receipt_uses_queue_route_and_pr_scope() {
             let tmp = tempfile::tempdir().unwrap();
             let mut attempt =
                 Some(crate::lane_result::Attempt::begin(tmp.path(), "queue-head", None).unwrap());
-            resolve_pickup_attempt(&mut attempt, &plan, &role, true, None).unwrap();
+            let launch_route =
+                resolve_pickup_attempt(&mut attempt, &plan, &role, true, None).unwrap();
+            assert_eq!(launch_route, expected, "launch must use receipt routing");
             assert_eq!(attempt.is_some(), expected);
             let receipts: Vec<_> = std::fs::read_dir(tmp.path().join(".aida/lane-results"))
                 .unwrap()
@@ -4859,6 +4864,61 @@ fn story_2690_receipt_uses_queue_route_and_pr_scope() {
                 expected,
                 "scope={scope}, routed={routed:?}, explicit={explicit:?}"
             );
+        }
+    }
+}
+
+// trace:STORY-2690 | ai:codex
+#[test]
+fn story_2690_no_argument_hold_refusal_keeps_resolved_head_and_rework() {
+    let _env = crate::test_env::EnvVarGuard::set("AIDA_SESSION_ROLE", "implementer");
+    let (_dir, storage) = queued_status_fixture(&[
+        ("BUG-1017", RequirementStatus::Done),
+        ("BUG-1018", RequirementStatus::Approved),
+    ]);
+    let plan =
+        resolve_queue_work_plan(&storage, "u", None, None, false, true, false, None).unwrap();
+    let (role, _, _) = infer_queue_work_role(&plan, None);
+    for rework in [false, true] {
+        let tmp = tempfile::tempdir().unwrap();
+        let mut attempt =
+            Some(crate::lane_result::Attempt::begin(tmp.path(), "queue-head", None).unwrap());
+        assert!(resolve_pickup_attempt(&mut attempt, &plan, &role, true, None).unwrap());
+        let attempt = attempt.unwrap();
+        if rework {
+            let branch = rework_pr_head_branch_from_lookup(PrLookup::Found(OpenPrInfo {
+                number: 42,
+                title: "Rework BUG-1018".into(),
+                url: "https://example.test/pr/42".into(),
+                head_branch: Some("bug-1018-rework".into()),
+            }))
+            .unwrap();
+            attempt
+                .resolve_scope(&plan.anchor_display, Some(&branch), Some(42))
+                .unwrap();
+        }
+        let refusal = crate::gate::operator_hold::operator_hold_refusal(
+            &plan.anchor_display,
+            true,
+            Some("operator must inspect"),
+            None,
+        )
+        .expect("reasoned operator hold refuses admission");
+        attempt.finish_result(&Err(refusal)).unwrap();
+        let path = std::fs::read_dir(tmp.path().join(".aida/lane-results"))
+            .unwrap()
+            .next()
+            .unwrap()
+            .unwrap()
+            .path();
+        let receipt: serde_json::Value =
+            serde_json::from_slice(&std::fs::read(path).unwrap()).unwrap();
+        assert_eq!(receipt["spec"], "BUG-1018");
+        assert_eq!(receipt["result"], "refused-before-start");
+        assert_eq!(receipt["started"], false);
+        if rework {
+            assert_eq!(receipt["branch"], "bug-1018-rework");
+            assert_eq!(receipt["pr"], 42);
         }
     }
 }
