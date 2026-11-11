@@ -1436,6 +1436,19 @@ fn corpus_carry_over(
         if !corpus_approves {
             continue;
         }
+        // trace:STORY-2696 | ai:codex — only effective acts set carry policy.
+        let effective =
+            rv::effective_recordings_for_sha(live.iter().map(|(_, body)| body.as_str()), &sha)
+                .ok()?;
+        if effective
+            .iter()
+            .any(|recording| !rv::recording_carry_eligible(recording))
+        {
+            last = Some(Err(
+                crate::gate::review_carryover::CarryOverRefusal::ReviewerPolicy,
+            ));
+            continue;
+        }
         let refusal = crate::gate::ship::ApprovalHeadRefusal::Moved {
             reviewed_sha: sha,
             head_sha: head.to_string(),

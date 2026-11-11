@@ -2193,11 +2193,12 @@ fn notices_are_kept_for_the_current_head_only() {
 fn retained_rounds_are_capped_on_write() {
     let (_temp, store) = fixture();
     let keys = (1..=20u64).map(|n| {
-        (
+        crate::gate::review_verdict::RecordingKey(
             Some(format!("{n:040x}")),
             "reviewer seat".to_string(),
             "request-changes".to_string(),
             Vec::new(),
+            true,
         )
     });
     store.retain("PR-1", keys).unwrap();
