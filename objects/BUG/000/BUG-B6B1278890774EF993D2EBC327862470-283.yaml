@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-10T10:24:49.978786902Z
-modified_at: 2026-11-11T04:06:06.287552481Z
+modified_at: 2026-11-11T04:06:07.487973729Z
 req_type: Bug
 comments:
 - id: 01a1c544-9448-77c1-a5a0-c8d1776ee831
@@ -84,6 +84,20 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Pre-claim retry cancellation consumes the local no-verdict budget and can strand a head after only one started review. AC1 unverified; AC2/AC3/AC4 verified by source/test inspection. BUG-2518 (bug protocol): met. CI pending at review time.. No triage reason was given.'
   created_at: 2026-11-11T04:06:06.287545968Z
   modified_at: 2026-11-11T04:06:06.287545968Z
+  session_id: 01a1c87f-970d-7ce0-9351-e4e75a87731e
+  harness_version: 2.1.322 (Claude Code)
+- id: 01a1c8c8-d4f1-7452-9711-2b2050413729
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (BUG-2518):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: ec98f4c644a5
+    Recorded: 2026-11-11T03:52:30.772170727+00:00
+    Findings:
+    1. [P2] aida-cli-lib/src/review_watch.rs:1484-1501: Preserve the no-verdict attempt budget when a retry dispatcher exits before claiming its launch receipt. After one real review ends without a verdict, selection creates retry count 2. If that dispatcher exits before execute_reservation (for example a refused grant or claim timeout), mark_unclaimed_exit records Phase::Exited and cancels the hub Retry without starting work. This branch treats that cancellation as another completed review and increments to 3 after backoff; a second pre-claim exit then permanently reports three review attempts although the hub has only one Running transition. Unlike the covered spawn/preflight failures, these proven pre-spawn cancellations exhaust local retries and strand the head until manual release. Distinguish unclaimed cancellations from started reviews, preserve the inherited counter, and add an integration regression using mark_unclaimed_exit on repeated Retry claims followed by successful readmission and exhaustion after three actual started attempts.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-11T04:06:07.345680477Z
+  modified_at: 2026-11-11T04:06:07.345680477Z
   session_id: 01a1c87f-970d-7ce0-9351-e4e75a87731e
   harness_version: 2.1.322 (Claude Code)
 history:
