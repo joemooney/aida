@@ -33,7 +33,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-09T16:33:51.967266Z
-modified_at: 2026-11-11T18:31:25.586187561Z
+modified_at: 2026-11-11T18:34:36.006477509Z
 req_type: Story
 tags:
 - area:ci
@@ -286,6 +286,18 @@ comments:
   modified_at: 2026-11-11T17:22:09.756029156Z
   session_id: 01a1cb56-f02b-7652-869e-3788560cbf1b
   harness_version: 2.1.322 (Claude Code)
+- id: 01a1cbe3-70e8-7893-86d5-a3aae04fa76f
+  author: joe
+  content: 'Round 5: checkout already includes validated root-owned current 0755 and modeled listener enumeration. Added kernel-backed non-root subprocess regression for each jobs/slot/current ancestor: execute-only denies readdir, 0755 succeeds, work remains 0700. Updated controller explanation and S3 runbook acceptance. Targeted controller and runner suites passed 95 executed tests; fast gate result follows in publication handoff. Routing remains off; S3 still owns deployment and story completion.'
+  created_at: 2026-11-11T18:34:02.856229309Z
+  modified_at: 2026-11-11T18:34:02.856229309Z
+  session_id: 01a1cbe100f7
+- id: 01a1cbe3-f266-76a2-b998-54429f6b33a7
+  author: joe
+  content: 'Round-5 final validation: 95 targeted Python tests passed and git diff --check passed. Full make check-ci-fast is NOT complete: stopped after discovering fast TUI seam guard invokes direct cargo check (which completed successfully); native seat requires builds via host lane runner. Host must run the complete fast gate before publication. Publication declaration uses Refs STORY-2695; edits remain uncommitted per native-seat contract.'
+  created_at: 2026-11-11T18:34:36.006477509Z
+  modified_at: 2026-11-11T18:34:36.006477509Z
+  session_id: 01a1cbe100f7
 history:
 - id: 01a1c325-9cdb-7b81-a057-a76e1b9c8512
   author: joe
