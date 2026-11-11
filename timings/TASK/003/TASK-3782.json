@@ -1,0 +1,22 @@
+{
+  "schema_version": 1,
+  "spec": "TASK-3782",
+  "publishes": [
+    {
+      "at": "2026-11-11T07:51:57.089566119Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-11-11T07:51:57.029539586Z",
+      "spec": "TASK-3782",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "796cf978ef961ed29438d2e8e5afe3850352b632",
+        "pr": 3820,
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
