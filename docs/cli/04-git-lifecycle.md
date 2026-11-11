@@ -405,6 +405,29 @@ command; `--max N` caps the batch (default 10), and naming more PRs than
 landed. The train is GitHub-only for now: GitLab's merge-hold gate has no
 train mode, so `aida pr train` refuses a GitLab project; ship its merge
 requests one at a time with `aida pr ship N`.
+<!-- trace:STORY-2693 | ai:codex -->
+Train selection gates all candidates before applying `--max`. It greedily picks
+the PR with the smallest sum of shared-file counts against the remaining
+approved candidates, recomputing after each pick and breaking ties by PR number.
+This deterministic heuristic reduces disruption to waiting PRs; it does not
+promise a globally optimal schedule. Unreadable changed-file evidence stops
+selection. Existing approval and landing gates still apply.
+
+Before assembling a train, advisors can run
+`python3 scripts/check-open-pr-flags.py` from the checkout. This read-only GitHub
+check includes draft and other open PRs, excludes synthetic `train/*` copies,
+and emits JSON naming potential duplicate long flags and PR numbers. Exit 0
+means no candidates found, 1 means candidates await triage, and 2 means the
+inventory could not be checked. The check recognizes explicit clap `long =
+"name"`, builder `.long("name")`, and single-line bare `#[arg(long)]` /
+`#[clap(long)]` declarations followed by a field. It compares added names minus
+removed names within each PR's Rust diff. Macro-generated declarations and
+unrecognized formatting can be missed. Matching names in different subcommands
+can be legitimate; this is an advisor signal, not a merge gate. PR heads and
+open state are rechecked after each diff; a moving head refuses the report.
+`--fixture <file>` accepts a JSON array of `{ "number": 123, "diff": "..." }`
+for offline checks without forge access.
+
 <!-- trace:TASK-3782 | ai:codex -->
 While waiting, the train reports CI run IDs, passed shard counts, running
 jobs, and queued jobs with runner wait age when creation timestamps are
