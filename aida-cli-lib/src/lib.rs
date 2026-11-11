@@ -242,6 +242,7 @@ mod mcp_cmd;
 mod orchestrator_cmd;
 mod pr_cmd;
 pub(crate) mod pr_list;
+mod pr_state;
 mod protocol_cmd;
 mod ps_integrate;
 mod punt_done;

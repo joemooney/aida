@@ -351,3 +351,31 @@ impl Drop for Scope {
         clear();
     }
 }
+
+/// Report reservations without the recovery reader's terminal-file cleanup.
+// trace:STORY-2688 | ai:codex
+pub(super) fn pr_state_members(dir: &Path) -> Result<Vec<u64>> {
+    let entries = match std::fs::read_dir(dir) {
+        Ok(entries) => entries,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(Vec::new()),
+        Err(e) => return Err(e.into()),
+    };
+    let mut members = Vec::new();
+    for item in entries {
+        let path = item?.path();
+        if path.extension().is_none_or(|ext| ext != "json") {
+            continue;
+        }
+        let body = aida_core::seat_clone_detect::read_regular_file(&path)
+            .context("unsafe or unreadable train receipt")?;
+        let entry: Entry = serde_json::from_str(&body)?;
+        entry.validate()?;
+        anyhow::ensure!(entry.path(dir) == path, "train receipt filename mismatch");
+        if entry.step != Step::Done {
+            members.extend(entry.train.cars.iter().map(|c| c.member.pr).filter(|pr| {
+                !entry.completed_members.contains(pr) && !entry.rejected.iter().any(|r| r.pr == *pr)
+            }));
+        }
+    }
+    Ok(members)
+}
