@@ -577,73 +577,25 @@ fn upgrade_via_release_tarball(current_exe: &std::path::Path, tag: &str) -> Resu
         .ok_or_else(|| anyhow::anyhow!("Could not determine install directory"))?;
     let needs_sudo = !dest_writable(dest_dir);
 
-    let install_from = |src: &std::path::Path, dst_name: &str| -> Result<()> {
-        let dst = dest_dir.join(dst_name);
-        let mut cmd = if needs_sudo {
-            let mut c = std::process::Command::new("sudo");
-            c.arg("install");
-            c
-        } else {
-            std::process::Command::new("install")
-        };
-        cmd.args(["-m", "755"]).arg(src).arg(&dst);
-        let s = cmd
-            .status()
-            .with_context(|| format!("Failed to install {}", dst.display()))?;
-        if !s.success() {
-            anyhow::bail!("install failed for {}", dst.display());
-        }
-        println!("  {} {}", "Installed".green(), dst.display());
-        Ok(())
+    // All files are staged on the destination filesystem before per-file atomic
+    // renames, with rollback if a replacement fails. trace:STORY-2704 | ai:codex
+    let mut command = if needs_sudo {
+        let mut command = std::process::Command::new("sudo");
+        command.arg("sh");
+        command
+    } else {
+        std::process::Command::new("sh")
     };
-
-    // Find binaries in the extracted tarball. The release workflow has
-    // shipped two layouts at different times:
-    //   v0.4.0 era: a single file named `aida-${target}` (the renamed
-    //               aida binary; no aida-server).
-    //   future:     two files `aida` and `aida-server` at top level.
-    // Handle both.
-    let mut installed_any = false;
-
-    let single = temp_dir.join(format!("aida-{}", target));
-    if single.is_file() {
-        install_from(&single, "aida")?;
-        installed_any = true;
-    }
-
-    let aida_top = temp_dir.join("aida");
-    if aida_top.is_file() {
-        install_from(&aida_top, "aida")?;
-        installed_any = true;
-    }
-
-    let server_top = temp_dir.join("aida-server");
-    if server_top.is_file() {
-        install_from(&server_top, "aida-server")?;
-        installed_any = true;
-    }
-
-    if !installed_any {
-        // Surface what WAS in the tarball so the user can debug, instead
-        // of the previous silent "OK: upgraded" lie.
-        let mut entries: Vec<String> = std::fs::read_dir(&temp_dir)
-            .map(|rd| {
-                rd.flatten()
-                    .map(|e| e.file_name().to_string_lossy().into_owned())
-                    .collect()
-            })
-            .unwrap_or_default();
-        entries.sort();
-        anyhow::bail!(
-            "Extracted tarball at {} contains no aida binary I recognize.\n\
-             Expected one of: aida-{}, aida.\n\
-             Tarball contents: {:?}\n\
-             This is an aida bug — please report.",
-            temp_dir.display(),
-            target,
-            entries
-        );
-    }
+    let status = command
+        .arg("-c")
+        .arg(include_str!("../../scripts/upgrade-release-bundle.sh"))
+        .arg("aida-upgrade")
+        .arg(&temp_dir)
+        .arg(dest_dir)
+        .arg(target)
+        .status()
+        .context("Failed to install release bundle")?;
+    anyhow::ensure!(status.success(), "release bundle installation failed");
 
     let _ = std::fs::remove_dir_all(&temp_dir);
     println!("\n{}: upgraded to {}.", "OK".green(), tag);

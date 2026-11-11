@@ -38,7 +38,6 @@ Commands:
   findings      Triage findings filed by headless drain phases (reviewer + implementer). Bare `aida
                 findings` defaults to `aida findings list` — the command every failure message
                 points the user at, so it must run without a subcommand
-  flow          Measure landed PR flow from forge and gate-ledger evidence
   questions     The async decision inbox — structured questions the advisor distilled from forks it
                 couldn't resolve, which you answer OUTSIDE any agent (plain CLI, no LLM session).
                 Bare `aida questions` lists the inbox and, at a TTY with pending items, offers to
@@ -2099,10 +2098,10 @@ Options:
 
   -h, --help
           Print help (see a summary with '-h')
-===== aida flow
+===== aida flow-data
 Measure landed PR flow from forge and gate-ledger evidence
 
-Usage: aida flow [OPTIONS] <COMMAND>
+Usage: aida flow-data [OPTIONS] <COMMAND>
 
 Commands:
   report  Report PRs landed on origin/main in a time window (GitHub)
@@ -2125,10 +2124,10 @@ Options:
 
   -h, --help
           Print help (see a summary with '-h')
-===== aida flow report
+===== aida flow-data report
 Report PRs landed on origin/main in a time window (GitHub)
 
-Usage: aida flow report [OPTIONS] --since <SINCE>
+Usage: aida flow-data report [OPTIONS] --since <SINCE>
 
 Options:
       --since <SINCE>
@@ -33885,7 +33884,7 @@ Working on aida itself
   {
     "path": [
       "aida",
-      "flow"
+      "flow-data"
     ],
     "about": "Measure landed PR flow from forge and gate-ledger evidence",
     "flags": [
@@ -33905,12 +33904,12 @@ Working on aida itself
         "help": "Print help (see more with '--help')"
       }
     ],
-    "hidden": false
+    "hidden": true
   },
   {
     "path": [
       "aida",
-      "flow",
+      "flow-data",
       "report"
     ],
     "about": "Report PRs landed on origin/main in a time window (GitHub)",
@@ -33946,7 +33945,7 @@ Working on aida itself
         "help": "Inclusive RFC3339 timestamp or YYYY-MM-DD (UTC); defaults to now"
       }
     ],
-    "hidden": false
+    "hidden": true
   },
   {
     "path": [

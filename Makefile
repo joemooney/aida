@@ -152,9 +152,15 @@ server: ## Build gRPC/REST server (aida-server binary)
 install: build-release ## Install in-repo dev build to ~/.cargo/bin (developer)
 	cargo install --path aida-cli --force
 	cargo install --path aida-server --force
+	# trace:STORY-2704 | ai:codex
+	cargo install --path aida-porcelain --force
+	ln -sfn aida-porcelain "$${CARGO_HOME:-$$HOME/.cargo}/bin/aida-flow"
 
-install-cli: ## Install CLI only (developer, in-repo build)
+install-cli: ## Install CLI and porcelain commands (developer, in-repo build)
 	cargo install --path aida-cli --force
+	# trace:STORY-2704 | ai:codex
+	cargo install --path aida-porcelain --force
+	ln -sfn aida-porcelain "$${CARGO_HOME:-$$HOME/.cargo}/bin/aida-flow"
 
 install-server: ## Install server only (developer, in-repo build)
 	cargo install --path aida-server --force

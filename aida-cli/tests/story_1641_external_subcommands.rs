@@ -95,7 +95,7 @@ fn aida(fx: &Fx, dir: &Path, args: &[&str], env: &[(&str, &str)]) -> Output {
     // A stub written moments ago can still be held open by a sibling test's
     // fork; retry the rare "Text file busy" exec failure.
     for attempt in 0..5 {
-        let out = Command::new(fx.bin_dir.join("aida"))
+        let result = Command::new(fx.bin_dir.join("aida"))
             .current_dir(dir)
             .env("HOME", &fx.home)
             .env("PATH", &path)
@@ -111,8 +111,17 @@ fn aida(fx: &Fx, dir: &Path, args: &[&str], env: &[(&str, &str)]) -> Output {
             .env_remove("AIDA_CALLER_KIND")
             .envs(env.iter().copied())
             .args(args)
-            .output()
-            .expect("run aida");
+            .output();
+        // A sibling fork can briefly retain a just-copied fixture executable's
+        // write handle too. Handle exec-time ETXTBSY as well as stub stderr.
+        // trace:STORY-2704 | ai:codex
+        let out = match result {
+            Err(error) if error.raw_os_error() == Some(26) && attempt < 4 => {
+                std::thread::sleep(std::time::Duration::from_millis(100));
+                continue;
+            }
+            result => result.expect("run aida"),
+        };
         let busy = String::from_utf8_lossy(&out.stderr).contains("Text file busy");
         if busy && attempt < 4 {
             std::thread::sleep(std::time::Duration::from_millis(100));
@@ -335,4 +344,144 @@ fn help_for_external_delegates_to_its_help() {
     let out = aida(&fx, &fx.outside, &["help", "hello"], &[]);
     assert!(out.status.success(), "{}", text(&out));
     assert!(stdout(&out).starts_with("arg=[--help]\n"), "{}", text(&out));
+}
+
+// The release companion is built beside aida by CI and the lane build job.
+// Compare the external renderer with the retained substrate reader on the same
+// empty-history fixture, including formatting and error channels.
+// trace:STORY-2704 | ai:codex
+#[test]
+fn installed_flow_resolves_externally_with_reader_parity() {
+    let fx = fixture(&[]);
+    let companion = Path::new(env!("CARGO_BIN_EXE_aida")).with_file_name("aida-porcelain");
+    assert!(
+        companion.is_file(),
+        "build aida-porcelain beside aida first"
+    );
+    std::fs::copy(companion, fx.bin_dir.join("aida-porcelain")).unwrap();
+    std::os::unix::fs::symlink("aida-porcelain", fx.bin_dir.join("aida-flow")).unwrap();
+    for args in [
+        vec!["init", "-b", "main"],
+        vec![
+            "-c",
+            "user.name=Fixture",
+            "-c",
+            "user.email=fixture@example.invalid",
+            "commit",
+            "--allow-empty",
+            "-m",
+            "fixture",
+        ],
+        vec!["update-ref", "refs/remotes/origin/main", "HEAD"],
+    ] {
+        let result = Command::new("/usr/bin/git")
+            .current_dir(&fx.proj)
+            .args(args)
+            .output()
+            .unwrap();
+        assert!(result.status.success(), "{result:?}");
+    }
+    for format in ["human", "toon", "json"] {
+        for since in ["2000-01-01", "bad"] {
+            let args = [
+                "flow",
+                "report",
+                "--since",
+                since,
+                "--until",
+                "2000-01-02",
+                "--format",
+                format,
+            ];
+            let external = aida(&fx, &fx.proj, &args, &[]);
+            let mut reader_args = args;
+            reader_args[0] = "flow-data";
+            let reader = aida(&fx, &fx.proj, &reader_args, &[]);
+            assert_eq!(
+                external.status.code(),
+                reader.status.code(),
+                "{}",
+                text(&external)
+            );
+            assert_eq!(
+                external.stdout, reader.stdout,
+                "format={format}, since={since}"
+            );
+            assert_eq!(
+                external.stderr, reader.stderr,
+                "format={format}, since={since}"
+            );
+            if since != "bad" {
+                assert!(external.status.success(), "{}", text(&external));
+            }
+        }
+    }
+}
+
+// Exercise upgrade_cmd's download/extract/install path, not just the shared
+// installer script. A fake curl supplies a real local release tarball.
+// trace:STORY-2704 | ai:codex
+#[test]
+fn tarball_upgrade_replaces_pair_companion_and_link() {
+    let fx = fixture(&[]);
+    for utility in [
+        "tar", "gzip", "sh", "install", "mktemp", "mkdir", "cp", "mv", "rm", "ln",
+    ] {
+        std::os::unix::fs::symlink(
+            Path::new("/usr/bin").join(utility),
+            fx.bin_dir.join(utility),
+        )
+        .unwrap();
+    }
+    let source = fx._tmp.path().join("bundle");
+    let installed = fx._tmp.path().join("installed");
+    std::fs::create_dir(&source).unwrap();
+    std::fs::create_dir(&installed).unwrap();
+    for name in ["aida", "aida-server", "aida-porcelain"] {
+        write_exec(&source.join(name), &format!("#!/bin/sh\necho new-{name}\n"));
+        write_exec(&installed.join(name), "#!/bin/sh\necho 'aida 0.0.1'\n");
+    }
+    std::os::unix::fs::symlink("aida-porcelain", source.join("aida-flow")).unwrap();
+    write_exec(&installed.join("aida-flow"), "#!/bin/sh\necho old-flow\n");
+    let archive = fx._tmp.path().join("release.tar.gz");
+    assert!(Command::new("/usr/bin/tar")
+        .arg("czf")
+        .arg(&archive)
+        .arg("-C")
+        .arg(&source)
+        .args(["aida", "aida-server", "aida-porcelain", "aida-flow"])
+        .status()
+        .unwrap()
+        .success());
+    write_exec(
+        &fx.bin_dir.join("curl"),
+        "#!/bin/sh\n[ \"$1 $2\" = '-fSL -o' ] || exit 19\ncp \"$FIXTURE_ARCHIVE\" \"$3\"\n",
+    );
+    let output = aida(
+        &fx,
+        &fx.outside,
+        &[
+            "upgrade",
+            "--target",
+            installed.join("aida").to_str().unwrap(),
+            "--version",
+            "v99.0.0",
+            "--yes",
+        ],
+        &[("FIXTURE_ARCHIVE", archive.to_str().unwrap())],
+    );
+    assert!(output.status.success(), "{}", text(&output));
+    for name in ["aida", "aida-server", "aida-porcelain", "aida-flow"] {
+        let label = if name == "aida-flow" {
+            "aida-porcelain"
+        } else {
+            name
+        };
+        let output = Command::new(installed.join(name)).output().unwrap();
+        assert_eq!(output.stdout, format!("new-{label}\n").as_bytes());
+    }
+    assert_eq!(
+        std::fs::read_link(installed.join("aida-flow")).unwrap(),
+        Path::new("aida-porcelain")
+    );
 }

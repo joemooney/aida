@@ -152,6 +152,15 @@ fi
 
 # ---- Install ---------------------------------------------------------------
 
+# Modern bundles must be complete before installing the first binary.
+# Historical single-binary and two-binary releases retain built-in flow.
+# trace:STORY-2704 | ai:codex
+if [ -f "$tmpdir/aida-porcelain" ]; then
+    for member in aida aida-server; do
+        [ -f "$tmpdir/$member" ] || { echo "error: release bundle missing $member" >&2; exit 1; }
+    done
+fi
+
 mkdir -p "$PREFIX"
 
 # If the destination is not writable, escalate via sudo.
@@ -186,6 +195,16 @@ if [ -f "$tmpdir/aida-server" ]; then
     "${install_cmd[@]}" "$tmpdir/aida-server" "$PREFIX/aida-server"
     echo "  installed $PREFIX/aida-server"
     installed_any=1
+fi
+# trace:STORY-2704 | ai:codex
+if [ -f "$tmpdir/aida-porcelain" ]; then
+    "${install_cmd[@]}" "$tmpdir/aida-porcelain" "$PREFIX/aida-porcelain"
+    if [ -w "$PREFIX" ]; then
+        ln -sfn aida-porcelain "$PREFIX/aida-flow"
+    else
+        sudo ln -sfn aida-porcelain "$PREFIX/aida-flow"
+    fi
+    echo "  installed $PREFIX/aida-porcelain and aida-flow"
 fi
 if [ -f "$tmpdir/aida.exe" ]; then
     "${install_cmd[@]}" "$tmpdir/aida.exe" "$PREFIX/aida.exe"
