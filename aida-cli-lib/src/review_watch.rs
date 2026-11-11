@@ -3345,6 +3345,16 @@ pub(crate) fn fixture_admission_exit(
 #[cfg(test)]
 // trace:BUG-2518 | ai:codex
 pub(crate) fn fixture_admission_retry(root: &Path, exhausted: bool) -> Result<()> {
+    fixture_admission_retry_cancel(root, exhausted, None)
+}
+
+#[cfg(test)]
+// trace:BUG-2518 | ai:codex
+pub(crate) fn fixture_admission_retry_cancel(
+    root: &Path,
+    exhausted: bool,
+    cancellation: Option<u8>,
+) -> Result<()> {
     let store = Store::open(root, "github:github.com/fixture/review")?;
     let change = forge::Change {
         id: 7,
@@ -3377,6 +3387,48 @@ pub(crate) fn fixture_admission_retry(root: &Path, exhausted: bool) -> Result<()
                 Some(chrono::Utc::now() - chrono::Duration::seconds(1));
             Ok(())
         })?;
+        if let Some(mode) = cancellation {
+            // Cancel two consecutive fresh Retry claims before starting work.
+            for _ in 0..2 {
+                let mut attempt = match select(&store, &change, None, 2)? {
+                    Action::Dispatch(attempt) => attempt,
+                    Action::Skip(reason) => {
+                        anyhow::bail!("cancelled retry not selectable ({mode}): {reason}")
+                    }
+                    _ => anyhow::bail!("cancelled retry unexpectedly requested a notification"),
+                };
+                anyhow::ensure!(reserve_dispatch(root, &store, "PR-7", &mut attempt)?);
+                match mode {
+                    0 => cancel_spawn_failure(
+                        root,
+                        &store,
+                        "PR-7",
+                        &attempt,
+                        "fixture missing executable",
+                    )?,
+                    _ => {
+                        let result = execute_reservation(
+                            &store,
+                            "PR-7",
+                            &attempt.token,
+                            |_| {
+                                admission::transition(
+                                    root,
+                                    "PR-7",
+                                    &attempt.head,
+                                    &attempt.token,
+                                    admission::State::Cancelled,
+                                    "pre-spawn preflight failed: fixture".into(),
+                                )?;
+                                anyhow::bail!("fixture preflight refused")
+                            },
+                            |_| panic!("cancelled preflight must never spawn"),
+                        );
+                        anyhow::ensure!(result.is_err());
+                    }
+                }
+            }
+        }
         fixture_admission_exit(root, false, false, || {})?;
     }
     Ok(())

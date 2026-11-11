@@ -196,7 +196,22 @@ fn active(state: &State) -> bool {
 // trace:BUG-2518 | ai:codex
 pub(crate) const NO_VERDICT: &str = "NoVerdict: ";
 fn retry_allowed(history: &[Transition], head: &str) -> bool {
-    history.last().is_some_and(|p| {
+    // A cancelled pre-spawn Retry did not consume a started attempt. Peel only
+    // those exact pairs; unrelated heads or reservations cannot borrow authority.
+    let mut authority = history;
+    while let [rest @ .., retry, cancelled] = authority {
+        if cancelled.state != State::Cancelled
+            || retry.state != State::Retry
+            || retry.head != head
+            || cancelled.head != head
+            || cancelled.token != retry.token
+            || cancelled.predecessor != Some(retry.id)
+        {
+            break;
+        }
+        authority = rest;
+    }
+    authority.last().is_some_and(|p| {
         p.head == head
             && p.state == State::Terminal
             && p.evidence

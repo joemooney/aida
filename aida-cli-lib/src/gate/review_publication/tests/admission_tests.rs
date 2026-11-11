@@ -930,9 +930,73 @@ fn bug2518_chain_accepts_only_no_verdict_terminal_retry_edge() {
         records.push(sign(&config, &retry).unwrap());
         assert_eq!(chain(&f.hub, "PR-7", &records, &roster).is_ok(), admitted);
         if admitted {
+            let mut cancelled_records = records.clone();
+            let mut cancelled = retry.clone();
+            cancelled.predecessor = Some(retry.id);
+            cancelled.id = Uuid::new_v4();
+            cancelled.state = State::Cancelled;
+            cancelled.evidence = Some("pre-spawn cancellation".into());
+            cancelled_records.push(sign(&config, &cancelled).unwrap());
+            let mut next = retry.clone();
+            next.predecessor = Some(cancelled.id);
+            next.id = Uuid::new_v4();
+            next.token = Uuid::new_v4();
+            cancelled_records.push(sign(&config, &next).unwrap());
+            assert!(chain(&f.hub, "PR-7", &cancelled_records, &roster).is_ok());
+            for invalid in 0..3 {
+                let mut bad = next.clone();
+                match invalid {
+                    0 => bad.token = retry.token,
+                    1 => bad.head = "b".repeat(40),
+                    _ => bad.state = State::Reserved,
+                }
+                *cancelled_records.last_mut().unwrap() = sign(&config, &bad).unwrap();
+                assert!(chain(&f.hub, "PR-7", &cancelled_records, &roster).is_err());
+            }
             retry.state = State::Reserved;
             *records.last_mut().unwrap() = sign(&config, &retry).unwrap();
             assert!(chain(&f.hub, "PR-7", &records, &roster).is_err());
         }
+    }
+}
+
+// trace:BUG-2518 | ai:codex
+#[test]
+fn bug2518_cancelled_retry_readmits_after_spawn_and_preflight_failures() {
+    for cancellation in 0..2 {
+        let f = Fixture::new();
+        let _env = f.environment();
+        crate::review_watch::fixture_admission_exit(&f.a, false, false, || {}).unwrap();
+        crate::review_watch::fixture_admission_retry_cancel(&f.a, false, Some(cancellation))
+            .unwrap();
+        crate::review_watch::fixture_admission_retry_cancel(&f.a, false, Some(cancellation))
+            .unwrap();
+        crate::review_watch::fixture_admission_retry(&f.a, true).unwrap();
+        let head = "a".repeat(40);
+        assert!(!f
+            .step(&f.b, "PR-7", &head, Uuid::new_v4(), State::Reserved)
+            .unwrap());
+        let repo = private_repo().unwrap();
+        let (_, table) = read_table(repo.path(), &f.hub, "PR-7").unwrap();
+        let store = f.a.join(".aida-store");
+        let history = chain(
+            &f.hub,
+            "PR-7",
+            &table.changes["PR-7"],
+            &roster(&store, &super::super::head(&store).unwrap()).unwrap(),
+        )
+        .unwrap();
+        assert_eq!(
+            history.iter().filter(|t| t.state == State::Running).count(),
+            3
+        );
+        assert_eq!(
+            history
+                .iter()
+                .filter(|t| t.state == State::Cancelled)
+                .count(),
+            4
+        );
+        assert_eq!(history.last().unwrap().state, State::Terminal);
     }
 }
