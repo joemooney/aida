@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-09T01:57:49.197822183Z
-modified_at: 2026-11-10T19:40:26.177092127Z
+modified_at: 2026-11-11T09:38:35.049019627Z
 req_type: Story
 tags:
 - area:orchestration
@@ -75,6 +75,13 @@ comments:
   modified_at: 2026-11-10T19:40:16.483366951Z
   session_id: 01a1c6f7ed8e
   harness_version: codex-cli 0.167.0
+- id: 01a1c9f9-35a9-7d80-abef-38f4c11f8ecc
+  author: joe
+  content: 'ADVISOR SIGNOFF (2026-11-11 02:45 MST) on the 2026-11-10 19:40 sketch. APPROVED: (a) derivation boundary: one pr_state module, pure classify(PrFacts) -> PrDecision; state is derived evidence, never a writable status or an authorization; (b) the closed enum and first-match precedence as written; (c) owners resolve to concrete seat IDs, and a missing or ambiguous owner is NeedsRuling; (d) train boundary: the reconciler only nominates exact heads, and aida pr train keeps batching, CI, gate confirmation and merge authority; (e) receipt-based recovery, with S3 effects gated on the receipt contracts. AMENDMENT 1 (from 2026-11-10 evidence, BUG-2518/2521/2522): a reviewer attempt at the current head that exited without a recorded verdict, or recorded only WAITING, does NOT count as a verdict. Classify it as CiPendingThenVerdict/NeedsVerdict once BUG-2518''s retry backoff allows, else EvidencePending, and surface the attempt count. A verdict recorded at an older head is diagnostic only. AMENDMENT 2: aida pr state must run in under 10 s for 20 open PRs, reading forge facts in batch (one gh call per fact kind, not per PR), so loops can call it every pass. SLICING: S1 now (classifier + read-only ''aida pr state'' table/JSON + table-driven tests for every state and precedence pair, no effects), subject ''(Refs STORY-2688)'', drain, LIGHT gate. S2 and S3 follow after S1 lands; S3 retires auto-train/auto-rework classification only after shadow parity. STORY-2689''s sketch gets an independent read once S1 is up.'
+  created_at: 2026-11-11T09:38:35.049019627Z
+  modified_at: 2026-11-11T09:38:35.049019627Z
+  session_id: 01a1c87f-970d-7ce0-9351-e4e75a87731e
+  harness_version: 2.1.322 (Claude Code)
 history:
 - id: 01a1be07-037f-7533-9b8f-9af4ceb825a2
   author: joe
