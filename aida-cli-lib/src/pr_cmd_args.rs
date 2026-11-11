@@ -10,6 +10,9 @@ use std::path::PathBuf;
 // trace:STORY-90 trace:TASK-2251 | ai:claude
 #[derive(Subcommand, Debug)]
 pub enum PrCommand {
+    /// Derive PR states, next actions and owners without performing actions.
+    // trace:STORY-2688 | ai:codex
+    State(crate::pr_state::StateArgs),
     // Sequential post-merge worker, launched only after releasing the merge lease.
     // trace:BUG-2384 | ai:codex
     /// Internal: the post-merge cleanup worker `aida pr ship` launches
