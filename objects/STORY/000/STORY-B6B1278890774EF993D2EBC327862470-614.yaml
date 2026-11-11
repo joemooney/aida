@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-09T01:58:46.910276326Z
-modified_at: 2026-11-11T03:55:41.593792499Z
+modified_at: 2026-11-11T04:10:00.890663622Z
 req_type: Story
 tags:
 - area:orchestration
@@ -123,6 +123,13 @@ comments:
   modified_at: 2026-11-11T03:53:36.096454852Z
   session_id: 01a1c70f-d731-7b70-acf8-e9ab3d288fca
   harness_version: 2.1.322 (Claude Code)
+- id: 01a1c8cc-653a-7070-ba94-4f37cfc25810
+  author: dirtlab
+  content: 'Round 2: addressed findings 1-5. Automatic eligibility now preserves Refused versus Unavailable through admission/pre-land/recovery; empty automatic discovery is idle; admission evidence errors fail the service pass. Review-watch accounts for reaped failed dispatcher children and discovery/sync failures; dispatch failure episodes persist across idle polls/restarts until a successful dispatcher. Lane validation passed: 126 train tests, 14 story2691 tests, 34 readiness tests; rustfmt and diff checks passed. Final runner jobs reported overlay-stale after a primary seed-artifact rewrite. Native publication declaration recorded with Help-Golden: unchanged; edits left uncommitted for host publication. Codegraph client was absent at the supplied path (doctor confirms missing); callers were confirmed with rg.'
+  created_at: 2026-11-11T04:10:00.890663622Z
+  modified_at: 2026-11-11T04:10:00.890663622Z
+  session_id: 01a1c8bf425f
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1c5dd-0f8f-79d0-9864-f10de50286f7
   author: joe
