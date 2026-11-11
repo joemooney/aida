@@ -1810,7 +1810,10 @@ fn run_criteria(
     matches: &clap::ArgMatches,
     ctx: &crate::cmdkit::DispatchCtx,
 ) -> anyhow::Result<crate::cmdkit::Flow> {
-    use crate::*;
+    // trace:TASK-3428 | ai:codex
+    use crate::criteria_coverage;
+    use crate::kernel::find_project_root;
+    use aida_core::DatabaseBackend;
     let args = <CriteriaArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
     match &ctx.store {
         None => Ok(crate::cmdkit::Flow::Continue),

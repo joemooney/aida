@@ -1804,7 +1804,7 @@ pub(crate) struct SchemaArgs {
 // dispatch it before storage resolution (like `memories`/`dev`).
 // trace:STORY-538 | ai:claude
 fn run_schema(matches: &clap::ArgMatches, _ctx: &crate::cmdkit::DispatchCtx) -> anyhow::Result<()> {
-    use crate::*;
+    // trace:TASK-3428 | ai:codex
     let args = <SchemaArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
     let SchemaArgs {
         object,
