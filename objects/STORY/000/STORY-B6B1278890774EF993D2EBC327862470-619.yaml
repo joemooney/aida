@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-09T23:18:35.052711129Z
-modified_at: 2026-11-10T22:12:50.690891482Z
+modified_at: 2026-11-11T01:27:14.853117892Z
 req_type: Story
 comments:
 - id: 01a1c5dc-7b38-79a0-b14b-a53401fc1b6e
@@ -123,6 +123,13 @@ comments:
   modified_at: 2026-11-10T22:12:38.190385686Z
   session_id: 01a1c7833707
   harness_version: codex-cli 0.167.0
+- id: 01a1c837-60a5-7e73-8f63-b0097b99a472
+  author: joe
+  content: 'ADVISOR SIGNOFF (2026-11-10 18:45 MST): the sketch in docs/plans/2026-11-10-story-2696-reviewer-no-carry.md (PR #3814) is APPROVED as written. It implements the selected fork (carry_eligible on the signed publication receipt, missing = true, no second receipt type) and keeps the authority boundary. Two binding notes: (1) keep v1 canonical bytes identical by omitting carry_eligible when true; add a regression test that verifies a stored real v1 receipt fixture byte-for-byte; (2) PROOF_VERSION 1 -> 2 must not invalidate any approval that has no no-carry marker: an old v1 proof is simply recomputed, never treated as a refusal. Implement on the existing #3814 branch. LIGHT gate: cargo test -p aida-cli-lib --lib review_carryover review_publication story_2696, then make check-ci-fast.'
+  created_at: 2026-11-11T01:27:14.853117892Z
+  modified_at: 2026-11-11T01:27:14.853117892Z
+  session_id: 01a1c70f-d731-7b70-acf8-e9ab3d288fca
+  harness_version: 2.1.322 (Claude Code)
 history:
 - id: 01a1c5dd-2088-7231-a4d0-43a9e3af8e19
   author: joe
