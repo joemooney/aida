@@ -3,12 +3,12 @@ spec_id: BUG-b6b1278890774ef993d2ebc327862470-283
 agreed_id: BUG-2518
 title: review-watch never retries a head whose recorded review attempt produced no verdict, so PRs sit unreviewed for hours
 description: 'Observed 2026-11-10: PR #3754 (5h), #3753 (7h at head 913476ba, last verdict against an older head) and #3651 each had one recorded review attempt at the current head and no verdict for that head; review-watch skipped them until the advisor ran ''aida review watch --release PR-N'' by hand, after which a reviewer launched within minutes and #3754 was approved and landed. Expected: an attempt that ends without recording a verdict (reviewer crash, timeout, lease loss) is retried automatically with backoff, bounded by a per-head attempt cap; when the cap is hit, review-watch status names the PR and the reason so the advisor sees it. Acceptance: (1) a failed attempt with no verdict is retried after a backoff; (2) a cap (e.g. 3 per head) then surfaces a blocker row in ''aida advisor loops status'' / review-watch status; (3) a new head resets the count; (4) tests for each.'
-status: InProgress
+status: NeedsAttention
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-10T10:24:49.978786902Z
-modified_at: 2026-11-11T03:41:41.065435821Z
+modified_at: 2026-11-11T03:52:33.997049223Z
 req_type: Bug
 comments:
 - id: 01a1c544-9448-77c1-a5a0-c8d1776ee831
@@ -152,6 +152,13 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1c8bc-6bcd-7580-b055-1e67cfa09c94
+  author: aida-orchestrator
+  timestamp: 2026-11-11T03:52:33.997077196Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 filed_at:
   code_sha: af0288e60a2f6f00d4699098632234b246f6e511
   branch: main
@@ -165,7 +172,7 @@ failure_reason:
   phase: reviewer
   phase_index: 3
   kind: verdict:request-changes
-  detail: 'BUG-2518 AC1 unverified: cancelled retries strand the head; AC2 verified by retry_blockers and cap assertions; AC3 verified by new-head assertions; AC4 verified by added test coverage (not executed locally). BUG-2518 (bug protocol): met. CI pending at review time.'
+  detail: 'Pre-claim retry cancellation consumes the local no-verdict budget and can strand a head after only one started review. AC1 unverified; AC2/AC3/AC4 verified by source/test inspection. BUG-2518 (bug protocol): met. CI pending at review time.'
   recovery_hint: address the review findings, move BUG-2518 back to In Progress, and clear the PR hold only after approval
   shelved_by: reviewer
-  shelved_at: 2026-11-11T03:04:06.645329501Z
+  shelved_at: 2026-11-11T03:52:33.997049223Z
