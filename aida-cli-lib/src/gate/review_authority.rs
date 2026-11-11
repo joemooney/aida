@@ -1331,6 +1331,9 @@ pub(crate) fn visible_leases(project_root: &Path) -> Vec<SessionLease> {
 /// the human-at-TTY floor when recording an approval of `sha`.
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub(crate) struct HumanReviewReceipt {
+    // trace:STORY-2696 | ai:codex
+    #[serde(default = "super::review_verdict::carry_eligible_default")]
+    pub(crate) carry_eligible: bool,
     pub(crate) id: String,
     pub(crate) sha: String,
     pub(crate) subject: String,
@@ -1363,9 +1366,10 @@ pub(crate) fn write_human_receipt(
     subject: &str,
     identity: &[String],
     solo_human: bool,
+    carry_eligible: bool,
 ) -> anyhow::Result<String> {
     let dir = receipt_dir().ok_or_else(|| anyhow::anyhow!("cannot locate the AIDA home"))?;
-    write_human_receipt_as(&dir, sha, subject, identity, solo_human)
+    write_human_receipt_policy(&dir, sha, subject, identity, solo_human, carry_eligible)
 }
 
 pub(crate) fn write_human_receipt_in(
@@ -1387,8 +1391,21 @@ pub(crate) fn write_human_receipt_as(
     identity: &[String],
     solo_human: bool,
 ) -> anyhow::Result<String> {
+    write_human_receipt_policy(dir, sha, subject, identity, solo_human, true)
+}
+
+// trace:STORY-2696 | ai:codex
+pub(crate) fn write_human_receipt_policy(
+    dir: &Path,
+    sha: &str,
+    subject: &str,
+    identity: &[String],
+    solo_human: bool,
+    carry_eligible: bool,
+) -> anyhow::Result<String> {
     let id = uuid::Uuid::new_v4().to_string();
     let receipt = HumanReviewReceipt {
+        carry_eligible,
         id: id.clone(),
         sha: sha.trim().to_string(),
         subject: subject.trim().to_string(),
@@ -1479,6 +1496,7 @@ pub(crate) fn verified_authority_keys(
                 .receipt_id
                 .as_deref()
                 .and_then(|id| human_receipt_for(id, &att.sha))
+                .filter(|r| r.carry_eligible == att.carry_eligible)
                 .map(|r| r.identity),
         };
         if let Some(identity) = identity {

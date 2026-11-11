@@ -515,11 +515,14 @@ tree comparison with a moving base.
 
 ### 3. Walk each spec — verdict per item, recorded inline
 
+<!-- trace:STORY-2702 | ai:codex -->
+Declare evidence immediately after the criterion label: `AC1: [evidence: behavioral-test] ...`, `[evidence: configuration-validation]`, `[evidence: documentation-inspection]`, or `[evidence: manual-inspection]`. Omitted or unknown annotations retain the behavioral test requirement. Behavioral criteria require automated tests. For configuration validation, cite the configuration and validation command/result or routing analysis; for documentation inspection, cite the document and check its claims; for manual inspection, record the procedure, observed result and limitations. An annotation is not evidence of satisfaction. Reviewers must report missing evidence and behavioral requirements mislabeled as inspection, without demanding automated tests solely for documentation, configuration or manual criteria.
+
 For each non-informational spec in the checklist, in order:
 
 1. **Read the diff against acceptance criteria** — the merge-base diff from
    step 2b above, never a raw tree diff against `main`'s tip — does each
-   `- [ ]` line in the spec have matching code?
+   `- [ ]` line in the spec have the evidence required by its declared type?
 2. **Gate on CI, not local cargo** — by default the reviewer runs no cargo: cite available CI evidence at the exact PR head, and record approval without waiting for pending CI when there are no actionable defects. Run one targeted `cargo test --profile agent -p <crate> <test_name>` only to reproduce a specific suspected defect. Never run `cargo test --workspace`, `make check-ci` or an unfiltered `aida-cli-lib --lib` locally: CI's run at the PR head is the full-suite evidence, so cite it. Never set `AIDA_CARGO_NO_SLOT`. trace:TASK-2209 | ai:claude
 3. **Record the verdict inline in `.aida/review-prompt-pr-<N>.md`** — the file `aida review prompt --write` generated is your worksheet. Edit it in place, appending a verdict block under each spec's section:
    - ✅ **PASS** — every acceptance bullet covered, no actionable defect; pending CI is reported separately
