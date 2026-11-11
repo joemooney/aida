@@ -823,13 +823,12 @@ impl Store {
                 // Local recovery can prove no review started. A distributed
                 // claim still requires its owner's explicit cancellation.
                 // trace:BUG-2518 | ai:codex
-                attempt.phase = if attempt.admission_hub.is_none()
-                    && attempt.unclaimed_before_spawn()
-                {
-                    Phase::Failed
-                } else {
-                    Phase::Exited
-                };
+                attempt.phase =
+                    if attempt.admission_hub.is_none() && attempt.unclaimed_before_spawn() {
+                        Phase::Failed
+                    } else {
+                        Phase::Exited
+                    };
                 attempt.diagnostic = Some(diagnostic);
             }
         }
