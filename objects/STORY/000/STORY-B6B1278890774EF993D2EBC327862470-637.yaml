@@ -1,0 +1,37 @@
+id: 01a1cade-b026-76c1-93e4-3211d05c259f
+spec_id: STORY-b6b1278890774ef993d2ebc327862470-637
+agreed_id: STORY-2714
+title: 'Review PR-3832: [AI:codex] test(seat): retain marker probe inventory coverage (Refs STORY-2710)'
+description: |
+  Auto-filed by `aida session end` (backup trigger) (session `01a1cac4`) for branch `story-2710-slice-1`.
+
+  - PR: <https://github.com/joemooney/aida/pull/3832>
+  - Branch: `story-2710-slice-1` → `main`
+
+  ## Slice of (Refs only — not completed by this PR)
+
+  Commit subjects carry `(Refs SPEC-ID)`: this PR is one slice of a spec that a later PR completes. Review this slice against that spec's acceptance criteria.
+
+  - STORY-2710
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 3832` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-11T13:49:14.150141111Z
+modified_at: 2026-11-11T13:49:14.150141111Z
+req_type: Story
+filed_at:
+  code_sha: 11b131dfe3341e6d9c7127d64370f91366094711
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 11b131dfe33
+  vendor: claude
+  session: 01a1ca83-fabb-7663-852c-12c78d4e097f
+  harness_version: 2.1.322 (Claude Code)
