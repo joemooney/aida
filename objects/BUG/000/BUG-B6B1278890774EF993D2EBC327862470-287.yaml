@@ -1,0 +1,21 @@
+id: 01a1c8ef-65da-7d93-9dfa-b7792bc9913e
+spec_id: BUG-b6b1278890774ef993d2ebc327862470-287
+agreed_id: BUG-2522
+title: 'A native-sandboxed Codex reviewer loses every first REQUEST CHANGES verdict: it tries to place the merge hold itself and the sandbox refuses the write'
+description: 'Observed 2026-11-10 18:54-21:43 MST on PR-3775, PR-3809, PR-3817 and PR-3820: the Codex reviewer reached REQUEST CHANGES, but ''aida review record ... --verdict request-changes'' failed with ''could not protect PR-N with a merge hold'' (lib_part5.rs:3322). No verdict file was written; review-watch logged ''exited without recording a verifiable verdict'' (exit 30). The findings survive only as a PR comment, and each lost review cost about 1.5-2M input tokens. Approvals record fine, and so do refusals on PRs that already have a hold (PR-3824, PR-3814, PR-3783 at 21:20-21:44), because placing an existing hold is a no-op. Cause: lib_part5.rs:3314 defers hold arming to the launcher only when crate::session::process_contained() is true, and that reads AIDA_CONTAINED only. Since BUG-2513 Codex lanes run under Codex''s native sandbox (''codex: native sandbox, not AIDA-contained''), which leaves AIDA_CONTAINED unset but cannot write the primary checkout''s .aida/merge-holds. Expected: a reviewer launched by the launcher (review-watch or queue work --role reviewer) always records a refusing verdict, and the launcher arms the hold when it collects it, whatever the sandbox posture. Do not fake containment: AIDA_CONTAINED stays truthful. Acceptance: (1) a native-sandboxed reviewer''s request-changes on a PR with no existing hold records the verdict, and the launcher places the hold on collect; (2) an uncontained human or operator ''aida review record --verdict request-changes'' still places the hold directly; (3) a hold-placement failure never discards the verdict: write the verdict first, then report the hold failure loudly; (4) regression test for the native-sandbox reviewer path.'
+status: Draft
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-11T04:48:14.810158291Z
+modified_at: 2026-11-11T04:48:14.810158291Z
+req_type: Bug
+filed_at:
+  code_sha: 496312a2eabee394b741e459cbf47972c8947905
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: fec48a79042
+  vendor: claude
+  session: 01a1c87f-970d-7ce0-9351-e4e75a87731e
+  harness_version: 2.1.322 (Claude Code)
