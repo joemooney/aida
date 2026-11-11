@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-11T04:48:14.810158291Z
-modified_at: 2026-11-11T14:17:40.556801940Z
+modified_at: 2026-11-11T14:49:00.837197888Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -58,6 +58,13 @@ comments:
   created_at: 2026-11-11T13:07:36.390680110Z
   modified_at: 2026-11-11T13:07:36.390680110Z
   session_id: 01a1ca83-fabb-7663-852c-12c78d4e097f
+  harness_version: 2.1.322 (Claude Code)
+- id: 01a1cb15-6aa5-7310-9ff5-33bebfb825cb
+  author: joe
+  content: 'Round 2 (PR #3830): merged origin/main (b95a588f06f) resolving the lib_part5.rs conflict — main''s handle_review_record_policy_at(no_carry) split kept, BUG-2522 launcher_collects_review routing moved into its body. Finding 1 [P1] (AIDA_REVIEW_VERDICT_FILE treated as proof a launcher arms the hold) is disputed as stale: reviewed commit 1fdb5ad5731e predates 06ffa438531 + 2d8b3dee61b, which add collect_interactive_review_refusal (lib_part5.rs:1010) — handle_review_spec now collects the child''s verdict against the live PR head and exact child grant and calls merge_hold::arm_collected_refusal (Rework hold + forge label) before re-recording. The requested regression (request-changes and rejected, verdict anchor, no existing hold; wrong grant / wrong head refused; hold-write failure recoverable) is bug_013_review_record_sha_tests::interactive_review_anchor_refusals_are_collected_and_held — re-run on the merged tree: 1 passed.'
+  created_at: 2026-11-11T14:49:00.837197888Z
+  modified_at: 2026-11-11T14:49:00.837197888Z
+  session_id: 01a1caf8ae39
   harness_version: 2.1.322 (Claude Code)
 history:
 - id: 01a1c8ef-b4bc-7b62-a163-3209968104a9
