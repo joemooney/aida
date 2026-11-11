@@ -3257,3 +3257,37 @@ fn bug2518_local_recovery_retains_live_and_ambiguous_process_gates() {
         }
     }
 }
+
+// A reaped dispatcher alone cannot prove that an unrecorded descendant never
+// started. Exercise the direct exit path as well as PID-based recovery above.
+// trace:BUG-2518 | ai:codex
+#[test]
+fn bug2518_local_reaped_exit_retains_ambiguous_descendant_gates() {
+    for mode in 0..4 {
+        let (_temp, store) = fixture();
+        let c = change(1, 1, false);
+        let attempt = dispatch(select(&store, &c, None, 2).unwrap());
+        store
+            .transaction("PR-1", |state| {
+                let a = attempt_mut(state, "PR-1", &attempt.token).unwrap();
+                assert!(a.admission_hub.is_none());
+                match mode {
+                    0 => a.spawning = true,
+                    1 => a.reviewer_spawning = true,
+                    2 => a.worker = Some(Identity::current()?),
+                    _ => a.reviewer = Some(Identity::current()?),
+                }
+                Ok(())
+            })
+            .unwrap();
+        mark_unclaimed_exit(&store, "PR-1", &attempt.token, "grant refused").unwrap();
+        assert_eq!(
+            store.load().unwrap().entries["PR-1"].attempts[0].phase,
+            Phase::Exited
+        );
+        assert!(matches!(
+            select(&store, &c, None, 2).unwrap(),
+            Action::Skip(_)
+        ));
+    }
+}

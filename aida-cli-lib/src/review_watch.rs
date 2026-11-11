@@ -415,6 +415,16 @@ impl Attempt {
             && self.worker.is_none()
             && self.reviewer.is_none()
     }
+    // Call only after proving the dispatcher exited. Hub cancellation authority
+    // is checked separately; local budget accounting depends only on spawn proof.
+    // trace:BUG-2518 | ai:codex
+    fn unclaimed_exit_phase(&self) -> Phase {
+        if self.unclaimed_before_spawn() {
+            Phase::Failed
+        } else {
+            Phase::Exited
+        }
+    }
     fn unrecorded_descendant(&self) -> bool {
         (self.spawning && self.worker.is_none())
             || (self.reviewer_spawning && self.reviewer.is_none())
@@ -823,12 +833,11 @@ impl Store {
                 // Local recovery can prove no review started. A distributed
                 // claim still requires its owner's explicit cancellation.
                 // trace:BUG-2518 | ai:codex
-                attempt.phase =
-                    if attempt.admission_hub.is_none() && attempt.unclaimed_before_spawn() {
-                        Phase::Failed
-                    } else {
-                        Phase::Exited
-                    };
+                attempt.phase = if attempt.admission_hub.is_none() {
+                    attempt.unclaimed_exit_phase()
+                } else {
+                    Phase::Exited
+                };
                 attempt.diagnostic = Some(diagnostic);
             }
         }
@@ -2651,11 +2660,7 @@ fn mark_unclaimed_exit(store: &Store, key: &str, token: &str, status: &str) -> R
                 // A proven pre-claim cancellation never started a review. Keep
                 // its inherited budget, just like a dispatcher spawn failure.
                 // trace:BUG-2518 | ai:codex
-                a.phase = if pre_spawn_failure {
-                    Phase::Failed
-                } else {
-                    Phase::Exited
-                };
+                a.phase = a.unclaimed_exit_phase();
                 a.diagnostic = Some(diagnostic);
             }
             Phase::Superseding => {
