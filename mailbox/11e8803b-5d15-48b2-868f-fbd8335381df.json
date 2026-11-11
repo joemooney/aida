@@ -1,0 +1,19 @@
+{
+  "id": "11e8803b-5d15-48b2-868f-fbd8335381df",
+  "thread_id": "11e8803b-5d15-48b2-868f-fbd8335381df",
+  "from": "dispatch",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1794411001876,
+  "body": "Dispatch request 0ef9a6ee-0bd4-48e1-9267-6ff7750c7454 (flow PR #3844) failed: flow ship failed for PR #3844: CI is red on PR-3844: failing: CI (lib-0), CI (lib-1), CI (cli-0), CI (cli-1), CI (gates), CI (contracts)\nreason: flow ship failed for PR #3844: CI is red on PR-3844: failing: CI (lib-0), CI (lib-1), CI (cli-0), CI (cli-1), CI (gates), CI (contracts)\nlog: logs/0ef9a6ee-0bd4-48e1-9267-6ff7750c7454.log",
+  "subject": "dispatch flow PR #3844: failed (0ef9a6ee)",
+  "urgent": true,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "explicit",
+  "from_role": "dispatch"
+}

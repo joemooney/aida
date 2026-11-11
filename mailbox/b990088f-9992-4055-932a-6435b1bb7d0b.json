@@ -1,0 +1,19 @@
+{
+  "id": "b990088f-9992-4055-932a-6435b1bb7d0b",
+  "thread_id": "b990088f-9992-4055-932a-6435b1bb7d0b",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1794410613760,
+  "body": "STORY-b6b1278890774ef993d2ebc327862470-633 PR #3832 conflicts with origin/main in: aida-cli-lib/src/queue_cmd/work.rs. The host aborted the merge. Conflict resolution requires Claude on branch story-2710-slice-1. Fresh route: aida queue work STORY-b6b1278890774ef993d2ebc327862470-633 --vendor claude --fresh --no-human.",
+  "subject": "Rework merge conflicts require Claude",
+  "urgent": false,
+  "intent": "request",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "advisor"
+}

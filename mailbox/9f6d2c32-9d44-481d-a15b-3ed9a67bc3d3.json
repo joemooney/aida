@@ -1,0 +1,19 @@
+{
+  "id": "9f6d2c32-9d44-481d-a15b-3ed9a67bc3d3",
+  "thread_id": "9f6d2c32-9d44-481d-a15b-3ed9a67bc3d3",
+  "from": "dispatch",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1794411823589,
+  "body": "Dispatch request 3c8bdc21-2df8-4a00-9ea8-4c2131cba717 (flow PR #3844) failed: flow ship failed for PR #3844: CI is red on PR-3844: failing: Build (ubuntu-latest), CI (rest), CI (cli-0), CI (cli-1), CI (lib-0), CI (gates), CI (contracts), CI (lib-1)\nreason: flow ship failed for PR #3844: CI is red on PR-3844: failing: Build (ubuntu-latest), CI (rest), CI (cli-0), CI (cli-1), CI (lib-0), CI (gates), CI (contracts), CI (lib-1)\nlog: logs/3c8bdc21-2df8-4a00-9ea8-4c2131cba717.log",
+  "subject": "dispatch flow PR #3844: failed (3c8bdc21)",
+  "urgent": true,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "explicit",
+  "from_role": "dispatch"
+}
