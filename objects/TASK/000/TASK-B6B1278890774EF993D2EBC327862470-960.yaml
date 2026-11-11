@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T23:39:41.575597Z
-modified_at: 2026-11-11T12:18:14.322806602Z
+modified_at: 2026-11-11T12:19:52.229945943Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -814,6 +814,13 @@ comments:
   modified_at: 2026-11-11T09:39:21.759925872Z
   session_id: 01a1c9f0bdbf
   harness_version: codex-cli 0.167.0
+- id: 01a1ca8c-df25-7593-aecc-921c18073aeb
+  author: joe
+  content: 'ADVISOR BRIEF batch 8 (2026-11-11 05:30 MST, main 11b131dfe33, after batch 7 #3840): (A) replace the last ''use crate::*;'' at aida-cli-lib/src/queue_cmd/rework.rs:1263 (an inner/test module) with explicit imports and empty scripts/crate-globs-legacy.json; the ratchet ceiling becomes zero. Same binding rules as batches 4-7. Ship (A) as its own PR now, Refs title. (B) Dissolve lib_part1..6.rs into named modules: HOLD until the advisor confirms PRs #3775 and #3830 (both conflict in lib_part5.rs) have merged, then move each lib_partN item verbatim to the module that owns it, keep re-exports so crate:: paths do not change, run relocate-ledger-paths.py for the ledgers, and use the (TASK-3428) closing trailer. LIGHT gate for each: cargo check --profile agent -p aida-cli-lib --tests via the lane runner, then make check-ci-fast.'
+  created_at: 2026-11-11T12:19:52.229945943Z
+  modified_at: 2026-11-11T12:19:52.229945943Z
+  session_id: 01a1ca83-fabb-7663-852c-12c78d4e097f
+  harness_version: 2.1.322 (Claude Code)
 history:
 - id: 01a1b862-2e0b-7a50-a4d0-25097c707b57
   author: joe
