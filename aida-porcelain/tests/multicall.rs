@@ -164,6 +164,7 @@ fn reader_fallback_and_failure_passthrough() {
     );
 }
 
+// trace:STORY-2704 | ai:codex
 // Environment aliases must select the same error channels as their canonical
 // explicit formats, regardless of piped stdout or the agent-output fallback.
 // The explicit reference also verifies that the flag overrides an unknown env pin.
@@ -182,6 +183,7 @@ fn environment_alias_error_parity() {
                explicit: Option<&str>,
                agent: &str,
                since: &str,
+               until: &str,
                reader: &Path| {
         let mut command = Command::new(env!("CARGO_BIN_EXE_aida-porcelain"));
         command.arg0(name);
@@ -192,7 +194,7 @@ fn environment_alias_error_parity() {
             command.args(["--format", explicit]);
         }
         command
-            .args(["report", "--since", since])
+            .args(["report", "--since", since, "--until", until])
             .current_dir(dir.path())
             .env("AIDA_OUTPUT_FORMAT", format)
             .env("AIDA_AGENT_OUTPUT", agent)
@@ -209,19 +211,28 @@ fn environment_alias_error_parity() {
             ("agent", "toon", "1"),
             (" AgEnT ", "toon", "0"),
         ] {
-            for (since, selected_reader, code) in [
-                ("bad", reader.clone(), 1),
-                ("2026-11-09", dir.path().join("missing-reader"), 1),
-                ("2026-11-09", reader.clone(), 23),
+            for (since, until, selected_reader, code) in [
+                ("bad", "2026-11-10", reader.clone(), 1),
+                ("2026-11-09", "bad", reader.clone(), 1),
+                ("2026-11-10", "2026-11-09", reader.clone(), 1),
+                (
+                    "2026-11-09",
+                    "2026-11-10",
+                    dir.path().join("missing-reader"),
+                    1,
+                ),
+                ("2026-11-09", "2026-11-10", reader.clone(), 23),
             ] {
-                let aliased = run(name, alias, None, agent, since, &selected_reader);
-                let canonical_env = run(name, canonical, None, agent, since, &selected_reader);
+                let aliased = run(name, alias, None, agent, since, until, &selected_reader);
+                let canonical_env =
+                    run(name, canonical, None, agent, since, until, &selected_reader);
                 let expected = run(
                     name,
                     "unsupported",
                     Some(canonical),
                     agent,
                     since,
+                    until,
                     &selected_reader,
                 );
                 assert_eq!(aliased.status.code(), Some(code));
