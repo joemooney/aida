@@ -3,12 +3,12 @@ spec_id: TASK-b6b1278890774ef993d2ebc327862470-1062
 agreed_id: TASK-3782
 title: Train CI wait line shows shard progress and runner-queue time instead of only the unregistered Build summary job
 description: 'While a train waits, it prints ''train PR #3815 CI waiting: Pending(["Build (ubuntu-latest) (not registered yet)"])''. Build (ubuntu-latest) is the summary job that GitHub creates only after every CI shard finishes, so that line is shown for the whole run and says nothing about progress; the operator asked (2026-11-10) what command gives more insight. Observed on run 42913999193: 4 of 7 shards had succeeded, 3 were running, and 3 shards had queued ~10 min for a runner before starting. Acceptance: (1) the wait line names the CI run id and per-shard state, e.g. ''4/7 shards passed; running: lib-1, gates, rest''; (2) a shard still queued shows how long it has waited for a runner, e.g. ''queued 9m (runner)''; (3) a not-yet-registered summary job is described in plain words (''Build summary appears after all shards finish'') rather than as a pending check; (4) a failed shard is named at once, without waiting for the summary; (5) works for GitLab pipelines through the forge layer with the same fields where available; (6) unit tests over recorded check-run fixtures (all queued, partial, failed shard, summary registered).'
-status: NeedsAttention
+status: Approved
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-10T22:45:07.512110557Z
-modified_at: 2026-11-11T05:48:45.156228062Z
+modified_at: 2026-11-11T05:56:37.237078969Z
 req_type: Task
 tags:
 - batch:fasttrack
@@ -121,6 +121,13 @@ comments:
     Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
   created_at: 2026-11-11T05:20:27.392560077Z
   modified_at: 2026-11-11T05:20:27.392560077Z
+  session_id: 01a1c87f-970d-7ce0-9351-e4e75a87731e
+  harness_version: 2.1.322 (Claude Code)
+- id: 01a1c92d-fef5-7a63-8167-53bab154e492
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Full sweep verifies advisor-scoped AC1/3/4/6 and display-only constraints; AC2/5 explicitly dropped. No actionable defects. CI pending at review time; no local builds/tests per review-watch policy.. No triage reason was given.'
+  created_at: 2026-11-11T05:56:37.237074244Z
+  modified_at: 2026-11-11T05:56:37.237074244Z
   session_id: 01a1c87f-970d-7ce0-9351-e4e75a87731e
   harness_version: 2.1.322 (Claude Code)
 history:
@@ -249,6 +256,15 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a1c92d-fef5-7a63-8167-53adc51dad79
+  author: joe
+  timestamp: 2026-11-11T05:56:37.237056977Z
+  session_id: 01a1c87f-970d-7ce0-9351-e4e75a87731e
+  harness_version: 2.1.322 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 execution_mode: drain
 filed_at:
   code_sha: 08c562ec6bb9f936f0e0f8c9bad273de57ccf7b0
@@ -259,11 +275,3 @@ filed_at:
   vendor: claude
   session: 01a1c70f-d731-7b70-acf8-e9ab3d288fca
   harness_version: 2.1.322 (Claude Code)
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: Full sweep verifies advisor-scoped AC1/3/4/6 and display-only constraints; AC2/5 explicitly dropped. No actionable defects. CI pending at review time; no local builds/tests per review-watch policy.
-  recovery_hint: address the review findings, move TASK-B6B1278890774EF993D2EBC327862470-1062 back to In Progress, and clear the PR hold only after approval
-  shelved_by: reviewer
-  shelved_at: 2026-11-11T05:48:45.156228062Z
