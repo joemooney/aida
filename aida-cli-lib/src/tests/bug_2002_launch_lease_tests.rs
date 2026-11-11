@@ -1,6 +1,8 @@
 // trace:BUG-2476 | ai:codex
 // trace:BUG-2017 | ai:codex — explicit positive global-ID fixture.
 use super::*;
+// trace:TASK-3428 | ai:codex
+use crate::leases::lease_state_for;
 
 // The lane's shared-write umask must not weaken this synthetic HOME setting.
 // trace:STORY-2325 | ai:codex
