@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-11T04:48:14.810158291Z
-modified_at: 2026-11-11T14:49:00.837197888Z
+modified_at: 2026-11-11T21:57:54.825131410Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -65,6 +65,13 @@ comments:
   created_at: 2026-11-11T14:49:00.837197888Z
   modified_at: 2026-11-11T14:49:00.837197888Z
   session_id: 01a1caf8ae39
+  harness_version: 2.1.322 (Claude Code)
+- id: 01a1cc9e-1609-7d83-b1fa-bc4818bafdca
+  author: joe
+  content: '[advisor 2026-11-11 15:10 MST] PR #3830 head 7260eb6: CI red, two lib-1 tests fail: gate::mandate_gates::story_1888_gate_paths_tests::gate_authority_code_is_on_the_floor (story_1888_gate_paths_tests.rs:562) and gate::review_marker::story_1405_review_marker_tests::contained_record_falls_back_to_worktree_when_anchor_is_read_only (''uncontained refusal is an error'', :170). Rework must fix both before the re-review can ship.'
+  created_at: 2026-11-11T21:57:54.825131410Z
+  modified_at: 2026-11-11T21:57:54.825131410Z
+  session_id: 01a1cc9c-1eae-7a72-9a24-8ec1afc42772
   harness_version: 2.1.322 (Claude Code)
 history:
 - id: 01a1c8ef-b4bc-7b62-a163-3209968104a9
