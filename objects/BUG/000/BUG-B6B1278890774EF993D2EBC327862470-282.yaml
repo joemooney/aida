@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-10T06:40:07.764479561Z
-modified_at: 2026-11-11T15:03:41.529425022Z
+modified_at: 2026-11-11T15:51:17.907873424Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -144,6 +144,13 @@ comments:
   modified_at: 2026-11-11T06:15:03.526002642Z
   session_id: 01a1c93272e7
   harness_version: codex-cli 0.167.0
+- id: 01a1cb4e-7093-7481-8449-a97a17500048
+  author: joe
+  content: 'Round 3: merged origin/main (1275df40e3e; reconciled STORY-2696 --no-carry with the head-pinned recorder: handle_review_record_with_head_at now takes no_carry; policy_at routes through the forge head). Findings 1-3 were substantively fixed in a83699dda00 (is_spec_only filter in bind_unbound + load_view; no spec-wide marker clearing; load_view uses one pinned discovery). b5e01e626d5 closes the remaining gap: spec-keyed verdict_events now filters all indexed changes through one discovery instead of one per PR, and clear_review_markers_for_verdict drops its dead spec param. cargo check --tests passes; targeted cargo test timed out at the 900s lane cap while compiling (untested=true).'
+  created_at: 2026-11-11T15:51:17.907873424Z
+  modified_at: 2026-11-11T15:51:17.907873424Z
+  session_id: 01a1cb22c9f7
+  harness_version: 2.1.322 (Claude Code)
 history:
 - id: 01a1c4af-45a0-7a32-8edf-55980e6f5825
   author: joe
