@@ -13,12 +13,12 @@ description: |-
   Then summarise: counts per class; the first porcelain-views batch (the read-only commands with the fewest helper dependencies, about 20); which helpers block the most moves; and any command whose class surprised you (a 'read' that writes, such as a cache refresh or a usage log).
   Use rg to confirm any 'no callers' result from codegraph. Do this after TASK-3428 batch 5 (#3829) lands if possible, since glob imports hide edges; otherwise list the glob-importing files as lower-bound rows.
   Acceptance: (1) every REGISTRY entry has a row with class and evidence; (2) every core-write or authority row cites at least one writer or gate site; (3) the first porcelain batch is named with its blocking helpers; (4) the doc states its commit and method so it can be re-run.
-status: InProgress
+status: NeedsAttention
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-11T05:40:53.335487241Z
-modified_at: 2026-11-11T06:46:01.451305637Z
+modified_at: 2026-11-11T06:50:26.137598678Z
 req_type: Spike
 tags:
 - architecture
@@ -185,6 +185,15 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1c95f-43d9-70c1-afe8-c753983ee0dd
+  author: dirtlab
+  timestamp: 2026-11-11T06:50:26.137608052Z
+  session_id: 01a1c95b336d
+  harness_version: codex-cli 0.167.0
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 execution_mode: drain
 filed_at:
   code_sha: eb1b39c30c9f9f6ce3f5ccf1c5ffd8966e5f8a23
@@ -195,4 +204,9 @@ filed_at:
   vendor: claude
   session: 01a1c87f-970d-7ce0-9351-e4e75a87731e
   harness_version: 2.1.322 (Claude Code)
+attention_reason:
+  category: design-fork
+  detail: 'Round 3: explicitly dispute finding 3 only insofar as it requires certification of about twenty invocation-level read-only commands before the advisor defines the effect boundary. New source-grounded evidence: normal schema/commands/help-all paths reach lib_part1.rs:2079 -> presence::auto_flip_if_interactive -> set_home -> write_presence_file, and successful returns reach lib_part1.rs:389 -> usage::append_event; four exact sink IDs verified in store-writers.toml. Handler-only versus full-invocation classification, direct CLI-owned writers under core-write, and mixed-family aggregation require advisor ruling. Accept findings 1 and 2; all 167 classifications, full dependency matrix/global ranking, and AC3 remain incomplete. Required reviewed host client /home/joe/ai/aida/.codegraph/proxy-state/bin/codegraph is still absent; doctor reports codegraph,missing. Recovery: advisor ruling plus host-deployed query client and indexed main revision, then complete audit. New report docs/spikes/2026-11-11-command-inventory-round-3.md adds exact production paths, decision alternatives, and dependencies/visibility blockers for schema, commands and help-all; four Python tests and ledger/denominator checks pass. Report left uncommitted per native-seat contract; no publication declaration or completion requested.'
+  raised_by: implementer
+  raised_at: 2026-11-11T06:50:26.137598678Z
 human_only: true
