@@ -16,7 +16,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T10:04:17.050576260Z
-modified_at: 2026-11-11T14:12:53.849200304Z
+modified_at: 2026-11-11T14:36:57.342258886Z
 req_type: Bug
 tags:
 - closure:pending
@@ -65,6 +65,18 @@ comments:
   modified_at: 2026-11-11T12:37:52.013873877Z
   session_id: 01a1ca83-fabb-7663-852c-12c78d4e097f
   harness_version: 2.1.322 (Claude Code)
+- id: 01a1cafc-73a1-7e23-b48e-9fa4809caa2f
+  author: joe
+  content: 'Native lane diagnosis: exact retained performance-guard window 2026-11-07T15:40:14.840529418Z through 2026-11-08T15:40:14.840529418Z reproduces 67/485 over 2000 ms, worst 7578 ms. Events retain argc and phase timing, not ID form, individual flags, cache state or fallback name; do not infer those shapes. Slow-call medians: open.cache 1240 ms, lookup 31 ms, linkage 740 ms; largest phase is open.cache in 36/67. Found remaining source escape after c0110e5: rejected snapshot locator falls through to legacy unbounded agreed-ID scan. Lane fix uses existing invocation-deadline bounded resolver and prevents repeating the same exact-ID fallback. Canonical mutations/collisions and scan counts covered by targeted regression, validation pending. Durable diagnosis: docs/internal/testing/bug-2402-show-fallback.md. Budgets unchanged, closure:pending retained; no claim of deployed SLO recovery.'
+  created_at: 2026-11-11T14:21:44.737968426Z
+  modified_at: 2026-11-11T14:21:44.737968426Z
+  session_id: 01a1caf449c8
+- id: 01a1cb0a-607e-7fd3-aef2-6b2e5b53b462
+  author: joe
+  content: 'Final native lane validation: j20261111T142454845-2-0 executed show_snapshot_rejected_locator_bounds_store_scans: 1 passed, 0 failed. rustfmt check and git diff --check passed. Subsequent launcher make check-ci-fast job j20261111T142611571-327110-0 timed out at its fixed 600-second limit, exit 124, during Check aida-cli without default features; preceding gates passed. Aggregate fast gate is NOT green; no repeated capped compile or limiter bypass. Host must finish validation. Source and durable diagnosis remain uncommitted. Refs publication declaration reflects this validation blocker; budgets and closure:pending unchanged.'
+  created_at: 2026-11-11T14:36:57.342258886Z
+  modified_at: 2026-11-11T14:36:57.342258886Z
+  session_id: 01a1caf449c8
 history:
 - id: 01a19809-e494-74a2-9ac1-332231d47592
   author: aida-session-start
