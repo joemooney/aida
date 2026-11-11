@@ -18,7 +18,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-11T05:40:53.335487241Z
-modified_at: 2026-11-11T10:45:17.150871735Z
+modified_at: 2026-11-11T15:46:52.992377500Z
 req_type: Spike
 tags:
 - architecture
@@ -165,6 +165,13 @@ comments:
   created_at: 2026-11-11T10:42:31.721202971Z
   modified_at: 2026-11-11T10:42:31.721202971Z
   session_id: 01a1c87f-970d-7ce0-9351-e4e75a87731e
+  harness_version: 2.1.322 (Claude Code)
+- id: 01a1cb4a-65c0-7192-a042-e4041a07344e
+  author: joe
+  content: 'Advisor ruling 2026-11-11 08:50 MST: PR #3833 merges as a Refs-only partial under the 2-round cap. SPIKE-714 stays open for the three P1 acceptance gaps from the round-10 verdict: (1) classify all 167 REGISTRY entries (AC1/AC2); (2) the called-module/dependency map per command; (3) AC3, a named first porcelain-views batch of about twenty commands. Next lane finishes these on top of the merged inventory.'
+  created_at: 2026-11-11T15:46:52.992377500Z
+  modified_at: 2026-11-11T15:46:52.992377500Z
+  session_id: 01a1ca83-fabb-7663-852c-12c78d4e097f
   harness_version: 2.1.322 (Claude Code)
 history:
 - id: 01a1c91f-b83e-7f80-9fa2-6e6d8963f6a1
