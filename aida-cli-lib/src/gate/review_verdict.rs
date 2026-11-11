@@ -879,7 +879,22 @@ fn round_findings(m: &JsonObj) -> Vec<String> {
 
 // Shared with watcher admission to count exactly the writer's retained rounds.
 // trace:TASK-1993 | ai:codex
-pub(crate) type RecordingKey = (Option<String>, String, String, Vec<String>);
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, serde::Serialize, serde::Deserialize)]
+pub(crate) struct RecordingKey(
+    pub Option<String>,
+    pub String,
+    pub String,
+    pub Vec<String>,
+    #[serde(default = "carry_eligible_default")] pub bool,
+);
+
+// trace:STORY-2696 | ai:codex
+pub(crate) fn recording_carry_eligible(m: &JsonObj) -> bool {
+    m.get(ATTESTATION_KEY)
+        .and_then(|a| a.get("carry_eligible"))
+        .and_then(|v| v.as_bool())
+        .unwrap_or(true)
+}
 
 /// Everything about a round that carries review signal. Two rounds with equal
 /// keys are the same recording, so retaining the second adds nothing; any
@@ -893,7 +908,7 @@ pub(crate) fn recording_key(m: &JsonObj) -> RecordingKey {
             .trim()
             .to_string()
     };
-    (
+    RecordingKey(
         round_sha(m),
         field("recorded_by"),
         // BUG-1505: a re-spelling of the same verdict is the same recording.
@@ -916,6 +931,7 @@ pub(crate) fn recording_key(m: &JsonObj) -> RecordingKey {
                 }
             })
             .collect(),
+        recording_carry_eligible(m),
     )
 }
 
@@ -1846,6 +1862,32 @@ pub(crate) fn build_verdict_object(
     findings: &[String],
     recorded_by: &str,
 ) -> std::io::Result<serde_json::Map<String, serde_json::Value>> {
+    build_verdict_object_with_policy(
+        project_root,
+        path,
+        verdict,
+        reviewed_sha,
+        reviewed_branch,
+        summary,
+        findings,
+        recorded_by,
+        None,
+    )
+}
+
+// trace:STORY-2696 | ai:codex
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn build_verdict_object_with_policy(
+    project_root: &Path,
+    path: &Path,
+    verdict: Option<&str>,
+    reviewed_sha: Option<&str>,
+    reviewed_branch: Option<&str>,
+    summary: Option<&str>,
+    findings: &[String],
+    recorded_by: &str,
+    carry_eligible: Option<bool>,
+) -> std::io::Result<serde_json::Map<String, serde_json::Value>> {
     // trace:BUG-2500 | ai:codex
     if verdict.is_some_and(|v| VerdictKind::parse(v) == VerdictKind::Waiting)
         && (summary.is_none_or(|s| s.trim().is_empty()) || !findings.is_empty())
@@ -1911,6 +1953,15 @@ pub(crate) fn build_verdict_object(
     if let Some(word) = disposition_verdict(incoming.as_object().unwrap()).canonical() {
         incoming["verdict"] = word.into();
     }
+    // Compare incoming policy before archiving the previous attestation.
+    incoming[ATTESTATION_KEY] = serde_json::json!({"carry_eligible":
+    carry_eligible.unwrap_or_else(|| {
+        if verdict.map(str::trim).is_some_and(|word| !word.is_empty()) {
+            true
+        } else {
+            recording_carry_eligible(&obj)
+        }
+    })});
     let incoming_key = recording_key(incoming.as_object().unwrap());
     archive_current_round(&mut obj, &incoming_key);
     // BUG-1918: a new verdict word is a new act of review; it must not

@@ -3375,7 +3375,7 @@ pub(crate) fn handle_review_record_policy_at(
     let record_before = crate::gate::review_verdict::current_verdict_body_at(&path)
         .and_then(|b| serde_json::from_str::<serde_json::Value>(&b).ok())
         .and_then(|v| v.as_object().cloned());
-    let mut verdict_obj = crate::gate::review_verdict::build_verdict_object(
+    let mut verdict_obj = crate::gate::review_verdict::build_verdict_object_with_policy(
         &project_root,
         &path,
         Some(verdict),
@@ -3384,6 +3384,7 @@ pub(crate) fn handle_review_record_policy_at(
         summary,
         findings,
         &recorded_by,
+        Some(!no_carry),
     )
     .with_context(|| "could not write the review verdict")?;
     // trace:STORY-1687 | ai:codex
@@ -3548,7 +3549,7 @@ pub(crate) fn handle_review_record_policy_at(
         // to claim the handshake exists.
         // trace:BUG-1581 | ai:codex
         // trace:BUG-1571 | ai:claude
-        let mut handshake_obj = crate::gate::review_verdict::build_verdict_object(
+        let mut handshake_obj = crate::gate::review_verdict::build_verdict_object_with_policy(
             &project_root,
             &handshake,
             Some(kind.label()),
@@ -3557,6 +3558,7 @@ pub(crate) fn handle_review_record_policy_at(
             summary,
             findings,
             origin_field("recorded_by").unwrap_or(&recorded_by),
+            Some(!no_carry),
         )
         .with_context(|| format!("could not prepare {}", handshake.display()))?;
         // trace:STORY-1417 | ai:claude

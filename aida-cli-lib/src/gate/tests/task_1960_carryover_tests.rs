@@ -1581,3 +1581,35 @@ fn story_2696_corpus_refuses_policy_before_prover() {
         matches!(corpus_merge_gate_carrying(7, &corpus, Some(&head), prove), CorpusMergeGate::Refuse { message, .. } if message.contains("not carry-eligible"))
     );
 }
+
+// trace:STORY-2696 | ai:codex
+#[test]
+fn story_2696_corpus_superseded_policy_cannot_veto_clean_merge() {
+    use crate::gate::merge_hold_core::{corpus_merge_gate_carrying, CorpusMergeGate};
+    let (tmp, approved) = fixture();
+    let repo = tmp.path();
+    let head = clean_merge(repo);
+    record_corpus_verdict(repo, &format!("PR-{PR}"), "approved", &approved);
+    corpus_gate(repo, &[], "main", &head).unwrap();
+    let proof = proof_event(repo, &head).unwrap();
+    let old = serde_json::json!({"verdict":"approved", "reviewed_sha":approved,
+        "recorded_by":"reviewer", "recorder_attestation":{"sha":approved,
+        "seat":"reviewer", "carry_eligible":false}});
+    let mut new = old.clone();
+    new["recorder_attestation"]["carry_eligible"] = true.into();
+    new["rounds"] = serde_json::json!([old]);
+    for reverse in [false, true] {
+        let mut corpus = vec![
+            ("PR-7".into(), old.to_string()),
+            ("STORY-2696".into(), new.to_string()),
+        ];
+        if reverse {
+            corpus.reverse();
+        }
+        let prove = &|_: &crate::gate::ship::ApprovalHeadRefusal| Some(Ok(proof.clone()));
+        assert!(matches!(
+            corpus_merge_gate_carrying(PR, &corpus, Some(&head), prove),
+            CorpusMergeGate::Clear
+        ));
+    }
+}

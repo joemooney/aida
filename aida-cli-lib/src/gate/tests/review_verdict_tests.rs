@@ -2891,3 +2891,95 @@ fn task2964_uncertain_repeated_order_cannot_erase_all_evidence() {
     assert!(reconcile_artifacts_for_sha(bodies.iter().map(String::as_str), HEAD).is_err());
     assert!(corpus_hold_at_head(&bodies, Some(HEAD), false).is_some());
 }
+
+// trace:STORY-2696 | ai:codex
+#[test]
+fn story_2696_policy_changes_retain_spec_and_pr_rounds() {
+    for id in ["STORY-2696", "PR-99"] {
+        for previous_policy in [None, Some(true), Some(false)] {
+            let dir = TempDir::new().unwrap();
+            let path = verdict_path(dir.path(), id);
+            let sha = "4444444444444444444444444444444444444444";
+            let mut before = build_verdict_object(
+                dir.path(),
+                &path,
+                Some("approved"),
+                Some(sha),
+                None,
+                None,
+                &[],
+                "reviewer",
+            )
+            .unwrap();
+            if let Some(policy) = previous_policy {
+                before.insert(
+                    ATTESTATION_KEY.into(),
+                    serde_json::json!({"sha":sha,
+                    "carry_eligible":policy}),
+                );
+            }
+            write_verdict_object(&path, &before).unwrap();
+            let incoming_policy = !previous_policy.unwrap_or(true);
+            let mut after = build_verdict_object_with_policy(
+                dir.path(),
+                &path,
+                Some("approved"),
+                Some(sha),
+                None,
+                None,
+                &[],
+                "reviewer",
+                Some(incoming_policy),
+            )
+            .unwrap();
+            after.insert(
+                ATTESTATION_KEY.into(),
+                serde_json::json!({"sha":sha,
+                "carry_eligible":incoming_policy}),
+            );
+            assert_eq!(after["rounds"].as_array().unwrap().len(), 1);
+            assert_eq!(
+                after["rounds"][0],
+                serde_json::Value::Object(before.clone())
+            );
+            assert_eq!(
+                record_outcome(Some(&before), &after),
+                RecordOutcome::Recorded { round: 2 }
+            );
+            write_verdict_object(&path, &after).unwrap();
+            let mut repeat = build_verdict_object_with_policy(
+                dir.path(),
+                &path,
+                Some("approved"),
+                Some(sha),
+                None,
+                None,
+                &[],
+                "reviewer",
+                Some(incoming_policy),
+            )
+            .unwrap();
+            repeat.insert(ATTESTATION_KEY.into(), after[ATTESTATION_KEY].clone());
+            assert_eq!(repeat["rounds"], after["rounds"]);
+            assert_eq!(
+                record_outcome(Some(&after), &repeat),
+                RecordOutcome::Unchanged
+            );
+        }
+    }
+}
+
+// trace:STORY-2696 | ai:codex
+#[test]
+fn story_2696_legacy_watcher_recording_key_defaults_eligible() {
+    let key: RecordingKey = serde_json::from_value(serde_json::json!([
+        "4444444444444444444444444444444444444444",
+        "reviewer",
+        "approved",
+        []
+    ]))
+    .unwrap();
+    assert!(key.4);
+    let value = serde_json::to_value(&key).unwrap();
+    assert_eq!(value[4], true);
+}

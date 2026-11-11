@@ -1423,16 +1423,6 @@ fn corpus_carry_over(
         if sha.is_empty() || rv::same_reviewed_sha(sha, head) {
             return None;
         }
-        // trace:STORY-2696 | ai:codex — corpus proofs obey reviewer policy too.
-        if verdict
-            .attestation
-            .as_ref()
-            .is_some_and(|a| !a.carry_eligible)
-        {
-            return Some(Err(
-                crate::gate::review_carryover::CarryOverRefusal::ReviewerPolicy,
-            ));
-        }
         if !approved.iter().any(|a| rv::same_reviewed_sha(a, sha)) {
             approved.push(sha.to_string());
         }
@@ -1444,6 +1434,19 @@ fn corpus_carry_over(
             Ok(Some(kind)) if kind.approves()
         );
         if !corpus_approves {
+            continue;
+        }
+        // trace:STORY-2696 | ai:codex — only effective acts set carry policy.
+        let effective =
+            rv::effective_recordings_for_sha(live.iter().map(|(_, body)| body.as_str()), &sha)
+                .ok()?;
+        if effective
+            .iter()
+            .any(|recording| !rv::recording_carry_eligible(recording))
+        {
+            last = Some(Err(
+                crate::gate::review_carryover::CarryOverRefusal::ReviewerPolicy,
+            ));
             continue;
         }
         let refusal = crate::gate::ship::ApprovalHeadRefusal::Moved {
