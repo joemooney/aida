@@ -3006,7 +3006,9 @@ pub(crate) fn handle_review_record_at(
     // trace:BUG-2522 | ai:codex
     let env = aida_core::exec_context::Environment::capture();
     let launcher_collects_review = crate::session::process_contained()
-        || env.get("AIDA_REVIEW_VERDICT_FILE").is_some_and(|p| !p.is_empty());
+        || env
+            .get("AIDA_REVIEW_VERDICT_FILE")
+            .is_some_and(|p| !p.is_empty());
     // trace:STORY-1662 | ai:claude
     crate::standalone_implementer::refuse_under_marker("review record")?;
     #[cfg(test)]
@@ -3292,7 +3294,9 @@ pub(crate) fn handle_review_record_at(
     // Validate the refusal target before writing any record.
     // trace:BUG-2522 | ai:codex
     if kind.requires_changes() && pr.is_none() {
-        anyhow::bail!("a refusing verdict must name `--pr <N>` so AIDA can protect the pull request");
+        anyhow::bail!(
+            "a refusing verdict must name `--pr <N>` so AIDA can protect the pull request"
+        );
     }
     // STORY-1417: build + classify + one verified write — the same boundary
     // `record_verdict` uses, with the typed classes layered on before the
