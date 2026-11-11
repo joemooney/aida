@@ -217,8 +217,15 @@ pub(crate) const ATTESTATION_KEY: &str = "recorder_attestation";
 /// re-stamps the verdict at a different `reviewed_sha` leaves the attestation
 /// pointing at the old commit, so it no longer vouches for the new one.
 // trace:BUG-1918 | ai:claude
-#[derive(Debug, Clone, PartialEq, Eq, Default, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct RecorderAttestation {
+    /// Reviewer policy: exact-head approval remains valid when false.
+    // trace:STORY-2696 | ai:codex
+    #[serde(
+        default = "carry_eligible_default",
+        skip_serializing_if = "std::clone::Clone::clone"
+    )]
+    pub carry_eligible: bool,
     /// The commit this attestation vouches for.
     pub sha: String,
     /// The seat of the validated session grant that recorded it, if any.
@@ -258,6 +265,27 @@ pub struct RecorderAttestation {
     pub grant_binding: Vec<String>,
 }
 
+// trace:STORY-2696 | ai:codex
+pub(crate) fn carry_eligible_default() -> bool {
+    true
+}
+
+impl Default for RecorderAttestation {
+    fn default() -> Self {
+        Self {
+            carry_eligible: true,
+            sha: String::new(),
+            seat: None,
+            grant_id: None,
+            human_at_tty: false,
+            identity: Vec::new(),
+            receipt_id: None,
+            solo_human: false,
+            grant_binding: Vec::new(),
+        }
+    }
+}
+
 impl RecorderAttestation {
     /// Does this attestation carry authority to approve on its own terms: a
     /// non-implementer seat grant or a human who passed the TTY floor, made
@@ -283,6 +311,9 @@ impl RecorderAttestation {
     /// attestation names neither, which never verifies.
     // trace:BUG-1918 | ai:claude
     pub(crate) fn authority_key(&self, recorded_at: Option<&str>) -> Option<String> {
+        // trace:STORY-2696 | ai:codex — a valid sibling cannot lend authority
+        // to the same receipt with a tampered policy. Keep legacy true keys.
+        let policy = if self.carry_eligible { "" } else { ":no-carry" };
         fn nonempty(v: Option<&str>) -> Option<&str> {
             v.map(str::trim).filter(|s| !s.is_empty())
         }
@@ -297,7 +328,7 @@ impl RecorderAttestation {
                 nonempty(self.receipt_id.as_deref()).filter(|id| id.starts_with("publication:"))
             {
                 return Some(format!(
-                    "{publication}:{}@{}",
+                    "{publication}:{}@{}{policy}",
                     self.sha,
                     nonempty(recorded_at)?
                 ));
@@ -308,11 +339,11 @@ impl RecorderAttestation {
             nonempty(self.seat.as_deref()),
         ) {
             let at = nonempty(recorded_at)?;
-            return Some(format!("grant:{grant}:{seat}@{at}"));
+            return Some(format!("grant:{grant}:{seat}@{at}{policy}"));
         }
         if self.human_at_tty {
             let receipt = nonempty(self.receipt_id.as_deref())?;
-            return Some(format!("receipt:{receipt}:{}", self.sha.trim()));
+            return Some(format!("receipt:{receipt}:{}{policy}", self.sha.trim()));
         }
         None
     }

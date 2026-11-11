@@ -1,6 +1,6 @@
 # Authenticated reviewer carry-over policy
 
-Status: sketch posted for advisor/master signoff before implementation.
+Status: approved by advisor Joe on 2026-11-10; implementation follows this sketch.
 Owning requirement: STORY-2696.
 <!-- trace:STORY-2696 | ai:codex -->
 
@@ -8,7 +8,7 @@ The advisor ruling of 2026-11-10 selects an extension of the existing signed
 publication receipt, with `carry_eligible: bool`, missing meaning true. There
 is no second receipt type, migration, expiration or removal mechanism. The
 marker is permanent schema. This sketch implements that selection; it does
-not reopen the design fork or claim signoff for the sketch itself.
+not reopen the design fork. Advisor signoff is recorded on the owning spec.
 
 ## Publication schema v2
 
@@ -26,6 +26,9 @@ include it in parsed verdict equality. `verified_identity` already compares
 the entire parsed verdict to the signed projection: changing a projected
 false to true must refuse authority, including after a proof was cached.
 Malformed boolean values and unsupported schema versions must refuse.
+Authority-map keys distinguish false policy from true, so a valid sibling
+projection cannot lend authority to a tampered policy on the same receipt.
+Legacy true authority keys retain their encoding.
 
 ## Local recording
 
@@ -69,7 +72,7 @@ lookup; a cached true proof cannot authorize a newly false recording.
 Keep policy refusals separate from commit-only deterministic refusals so
 one recording's policy cannot poison a later eligible recording's proof.
 
-## Targeted acceptance evidence after signoff
+## Targeted acceptance evidence after implementation
 
 - Existing canonical v1 signed bytes and legacy local receipts still verify;
   missing policy is true. Version-2 true/false round trips preserve policy.
@@ -85,14 +88,16 @@ one recording's policy cannot poison a later eligible recording's proof.
   unrelated or superseded records cannot supply or clear the marker.
 
 Run executed-test filters through `aida lane job run -- cargo test --profile
-agent -p aida-cli --lib -- <filter>` (CLI-local modules include private
-fixtures), plus the applicable formatting and schema/CLI guards. No Rust
-implementation or runtime validation is claimed by this sketch-only slice.
+agent -p aida-cli-lib --lib -- <filter>` (CLI-local modules include private
+fixtures), plus the applicable formatting and schema/CLI guards. The legacy
+regression keeps a stored OpenSSH-signed v1 payload and public key and checks
+canonical bytes as well as the signature. Version-1 proofs are recomputed,
+never converted into refusals merely because the version changed.
 
 ## Handoff
 
-Advisor/master signoff on this concrete sketch is the remaining manual gate
-from the owning spec. After signoff, implement the schema and cache changes
-as one slice so policy cannot be recorded without enforcement. The reviewed
+The advisor approved this concrete sketch in the owning spec comments. The
+schema and cache changes are implemented together so policy cannot be
+recorded without enforcement. The reviewed
 host codegraph executable configured in AGENTS.md was unavailable in this
 seat; source relationships above were inspected with `rg` and direct reads.

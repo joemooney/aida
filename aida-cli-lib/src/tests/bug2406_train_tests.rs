@@ -208,9 +208,10 @@ impl Fixture {
             req.execution_mode = Some(aida_core::ExecutionMode::Drain);
             store.requirements.push(req);
             let identity = vec![format!("session:fixture-reviewer-{n}")];
-            let receipt =
-                crate::gate::review_authority::write_human_receipt(&sha, alias, &identity, false)
-                    .unwrap();
+            let receipt = crate::gate::review_authority::write_human_receipt(
+                &sha, alias, &identity, false, true,
+            )
+            .unwrap();
             let record = json!({"verdict":"approved", "reviewed_sha":sha, "reviewed_branch":branch,
                 "recorded_at":chrono::Utc::now().to_rfc3339(), "recorded_by":"fixture independent human",
                 "recorder_attestation": {"sha":sha,"human_at_tty":true,"receipt_id":receipt,"identity":identity}});

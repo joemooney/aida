@@ -1423,6 +1423,16 @@ fn corpus_carry_over(
         if sha.is_empty() || rv::same_reviewed_sha(sha, head) {
             return None;
         }
+        // trace:STORY-2696 | ai:codex — corpus proofs obey reviewer policy too.
+        if verdict
+            .attestation
+            .as_ref()
+            .is_some_and(|a| !a.carry_eligible)
+        {
+            return Some(Err(
+                crate::gate::review_carryover::CarryOverRefusal::ReviewerPolicy,
+            ));
+        }
         if !approved.iter().any(|a| rv::same_reviewed_sha(a, sha)) {
             approved.push(sha.to_string());
         }

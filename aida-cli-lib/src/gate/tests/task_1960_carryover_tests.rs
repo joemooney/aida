@@ -403,7 +403,7 @@ fn record_is_written_and_reread_on_a_second_attempt() {
         &ledger,
         body.replace(
             &format!("\"proof_version\":{PROOF_VERSION}"),
-            "\"proof_version\":0",
+            "\"proof_version\":1",
         ),
     )
     .unwrap();
@@ -1484,4 +1484,100 @@ fn consumer_verdict_display_exposes_coverage_without_restamping_or_writing() {
         .contains("carried to"));
     assert_eq!(std::fs::read(path).unwrap(), before);
     assert_eq!(carry_events(repo, &h).len(), count);
+}
+
+// trace:STORY-2696 | ai:codex
+#[test]
+fn story_2696_no_carry_exact_head_and_cached_proof() {
+    let _env = crate::test_env::EnvVarsGuard::apply(&[("AIDA_CONTAINED", None)]);
+    use crate::gate::approval::{approval_decision, HeadDecision};
+    let (tmp, approved) = fixture();
+    let repo = tmp.path();
+    git(repo, &["merge", "--quiet", "--no-edit", "main"]);
+    let h = head(repo);
+    let mut v = approval(&approved);
+    let site = CarryOverSite::new(repo, Some("main"));
+    assert!(matches!(
+        approval_decision(PR, &[v.clone()], Some(&h), &policy(&v), Some(&site)).unwrap(),
+        HeadDecision::CarriedOver(..)
+    ));
+    assert!(proof_event(repo, &h).is_some());
+    v.attestation.as_mut().unwrap().carry_eligible = false;
+    assert!(matches!(
+        approval_decision(PR, &[v.clone()], Some(&approved), &policy(&v), Some(&site)).unwrap(),
+        HeadDecision::Covered(_)
+    ));
+    let answer = approval_decision(PR, &[v.clone()], Some(&h), &policy(&v), Some(&site)).unwrap();
+    assert!(
+        matches!(answer, HeadDecision::Stale { message, .. } if message.contains("not carry-eligible"))
+    );
+    // No Git or cache operation is necessary for a reviewer-policy refusal.
+    let absent = CarryOverSite::new(Path::new("/no/such/repo"), Some("main"));
+    let refusal = crate::gate::ship::approval_head_refusal(&[v.clone()], Some(&h)).unwrap();
+    assert_eq!(
+        prove_for_refusal(&absent, PR, &refusal),
+        Some(Err(CarryOverRefusal::ReviewerPolicy))
+    );
+    assert!(!CarryOverRefusal::ReviewerPolicy.is_deterministic());
+    v.attestation.as_mut().unwrap().carry_eligible = true;
+    assert!(matches!(
+        approval_decision(PR, &[v.clone()], Some(&h), &policy(&v), Some(&site)).unwrap(),
+        HeadDecision::CarriedOver(..)
+    ));
+}
+
+// trace:STORY-2696 | ai:codex
+#[test]
+fn story_2696_cache_key_policy_and_legacy_version_recompute() {
+    let _env = crate::test_env::EnvVarsGuard::apply(&[("AIDA_CONTAINED", None)]);
+    let (tmp, approved) = fixture();
+    let repo = tmp.path();
+    git(repo, &["merge", "--quiet", "--no-edit", "main"]);
+    let h = head(repo);
+    let site = CarryOverSite::new(repo, Some("main"));
+    carry_over_for_refusal(&site, PR, &moved(&approved, &h))
+        .unwrap()
+        .unwrap();
+    let path =
+        crate::gate::ledger::store::ledger_file(repo, crate::gate::ledger::ChangeKey::pr(PR));
+    let original = std::fs::read_to_string(&path).unwrap();
+    assert!(original.contains("\"carry_eligible\":true"));
+    std::fs::write(
+        &path,
+        original.replace("\"carry_eligible\":true", "\"carry_eligible\":false"),
+    )
+    .unwrap();
+    assert!(stored_answer(repo, PR, "main", &approved, &h).is_none());
+    // A missing legacy policy is true, but a v1 proof must be recomputed.
+    let legacy = original
+        .replace(",\"carry_eligible\":true", "")
+        .replace("\"proof_version\":2", "\"proof_version\":1");
+    std::fs::write(&path, legacy).unwrap();
+    assert!(stored_answer(repo, PR, "main", &approved, &h).is_none());
+    let (_, outcome) = carry_over_for_refusal(&site, PR, &moved(&approved, &h))
+        .unwrap()
+        .unwrap();
+    assert_eq!(outcome, Some(RecordOutcome::Written));
+}
+
+// trace:STORY-2696 | ai:codex
+#[test]
+fn story_2696_corpus_refuses_policy_before_prover() {
+    use crate::gate::merge_hold_core::{corpus_merge_gate_carrying, CorpusMergeGate};
+    let approved = "a".repeat(40);
+    let head = "b".repeat(40);
+    let body = serde_json::json!({"verdict":"approved", "reviewed_sha":approved,
+        "recorder_attestation":{"sha":approved,"seat":"reviewer","carry_eligible":false}})
+    .to_string();
+    let corpus = vec![("PR-7".into(), body)];
+    let prove = &|_: &crate::gate::ship::ApprovalHeadRefusal| {
+        panic!("no-carry must not consult proof cache")
+    };
+    assert!(matches!(
+        corpus_merge_gate_carrying(7, &corpus, Some(&approved), prove),
+        CorpusMergeGate::Clear
+    ));
+    assert!(
+        matches!(corpus_merge_gate_carrying(7, &corpus, Some(&head), prove), CorpusMergeGate::Refuse { message, .. } if message.contains("not carry-eligible"))
+    );
 }

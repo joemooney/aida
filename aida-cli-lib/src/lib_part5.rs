@@ -2876,9 +2876,10 @@ pub(crate) fn handle_review_record(
     findings: &[String],
     finding_classes: &[String],
     pr: Option<u64>,
+    no_carry: bool,
 ) -> Result<()> {
     let project_root = drive_root_or_project_root()?;
-    handle_review_record_at(
+    handle_review_record_policy_at(
         project_root,
         spec,
         verdict,
@@ -2888,6 +2889,7 @@ pub(crate) fn handle_review_record(
         findings,
         finding_classes,
         pr,
+        no_carry,
     )
 }
 
@@ -3001,6 +3003,33 @@ pub(crate) fn handle_review_record_at(
     finding_classes: &[String],
     pr: Option<u64>,
 ) -> Result<()> {
+    handle_review_record_policy_at(
+        project_root,
+        spec,
+        verdict,
+        sha,
+        branch,
+        summary,
+        findings,
+        finding_classes,
+        pr,
+        false,
+    )
+}
+
+// trace:STORY-2696 | ai:codex
+pub(crate) fn handle_review_record_policy_at(
+    project_root: std::path::PathBuf,
+    spec: &str,
+    verdict: &str,
+    sha: Option<&str>,
+    branch: Option<&str>,
+    summary: Option<&str>,
+    findings: &[String],
+    finding_classes: &[String],
+    pr: Option<u64>,
+    no_carry: bool,
+) -> Result<()> {
     // trace:STORY-1662 | ai:claude
     crate::standalone_implementer::refuse_under_marker("review record")?;
     #[cfg(test)]
@@ -3026,6 +3055,10 @@ pub(crate) fn handle_review_record_at(
     } else {
         crate::gate::review_verdict::incoming_disposition(verdict, findings)
     };
+    anyhow::ensure!(
+        !no_carry || kind.approves(),
+        "--no-carry requires an approved verdict"
+    );
     let verdict = kind.canonical().unwrap_or(verdict);
     if kind == crate::gate::review_verdict::VerdictKind::Unknown {
         anyhow::bail!(
@@ -3236,6 +3269,7 @@ pub(crate) fn handle_review_record_at(
                 spec,
                 &recorder.tokens,
                 solo_human,
+                !no_carry,
             )
             .context("could not write the human-review receipt")?,
         )
@@ -3243,6 +3277,7 @@ pub(crate) fn handle_review_record_at(
         None
     };
     let attestation = serde_json::to_value(crate::gate::review_verdict::RecorderAttestation {
+        carry_eligible: !no_carry,
         sha: resolved_sha.clone().unwrap_or_default(),
         seat: recorder_grant.as_ref().map(|g| g.seat.clone()),
         grant_id: recorder_grant.as_ref().map(|g| g.id.clone()),
