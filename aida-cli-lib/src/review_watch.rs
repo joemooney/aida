@@ -404,6 +404,17 @@ impl Attempt {
         };
         gone(self.spawning, &self.worker) && gone(self.reviewer_spawning, &self.reviewer)
     }
+    // No process-bound claim or descendant launch ever started this review.
+    // Keep this proof separate from authority to cancel a distributed claim.
+    // trace:BUG-2518 | ai:codex
+    fn unclaimed_before_spawn(&self) -> bool {
+        self.identity.is_none()
+            && matches!(self.phase, Phase::Reserved | Phase::Superseding)
+            && !self.spawning
+            && !self.reviewer_spawning
+            && self.worker.is_none()
+            && self.reviewer.is_none()
+    }
     fn unrecorded_descendant(&self) -> bool {
         (self.spawning && self.worker.is_none())
             || (self.reviewer_spawning && self.reviewer.is_none())
@@ -809,7 +820,16 @@ impl Store {
                 } else {
                     diagnostic
                 };
-                attempt.phase = Phase::Exited;
+                // Local recovery can prove no review started. A distributed
+                // claim still requires its owner's explicit cancellation.
+                // trace:BUG-2518 | ai:codex
+                attempt.phase = if attempt.admission_hub.is_none()
+                    && attempt.unclaimed_before_spawn()
+                {
+                    Phase::Failed
+                } else {
+                    Phase::Exited
+                };
                 attempt.diagnostic = Some(diagnostic);
             }
         }
@@ -2617,15 +2637,12 @@ fn mark_unclaimed_exit(store: &Store, key: &str, token: &str, status: &str) -> R
         else {
             return Ok(None);
         };
-        // Only the parent observing its Child exit can prove this pre-spawn
-        // failure. Background PID/age reconciliation never cancels hub claims.
-        // trace:STORY-2492 | ai:codex
-        let can_cancel = a.admission_hub.is_some()
-            && matches!(a.phase, Phase::Reserved | Phase::Superseding)
-            && !a.spawning
-            && !a.reviewer_spawning
-            && a.worker.is_none()
-            && a.reviewer.is_none();
+        // Only the parent observing its Child exit may publish a hub
+        // cancellation. Local pre-spawn failure proof needs no hub authority.
+        // Background PID/age reconciliation never cancels hub claims.
+        // trace:STORY-2492 trace:BUG-2518 | ai:codex
+        let pre_spawn_failure = a.unclaimed_before_spawn();
+        let can_cancel = pre_spawn_failure && a.admission_hub.is_some();
         let diagnostic = bounded_diagnostic(&format!(
             "dispatcher exited {status} before claiming its launch receipt: {}",
             tail.as_deref().unwrap_or("no log output")
@@ -2635,7 +2652,7 @@ fn mark_unclaimed_exit(store: &Store, key: &str, token: &str, status: &str) -> R
                 // A proven pre-claim cancellation never started a review. Keep
                 // its inherited budget, just like a dispatcher spawn failure.
                 // trace:BUG-2518 | ai:codex
-                a.phase = if can_cancel {
+                a.phase = if pre_spawn_failure {
                     Phase::Failed
                 } else {
                     Phase::Exited
