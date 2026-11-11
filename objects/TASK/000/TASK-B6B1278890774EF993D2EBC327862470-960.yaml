@@ -735,6 +735,20 @@ comments:
   modified_at: 2026-11-11T05:29:56.371442608Z
   session_id: 01a1c87f-970d-7ce0-9351-e4e75a87731e
   harness_version: 2.1.322 (Claude Code)
+- id: 01a1c920-eafc-71d2-b985-7ae0eb0b6002
+  author: dirtlab
+  content: |
+    Partial batch 5 for TASK-3428: replace crate-glob imports with explicit imports in exactly eight production modules: ci_probe, config_cmd, db_reconcile, merge_hold_cmd, pr_list, status_prs, status_sections, and upgrade_release. Remove only those eight entries from the crate-glob ledger; retain entries for surviving globs. Test dependencies exposed by removing the globs are imported in the test files.
+
+    Round 18 removes the two explicit lease_state_for imports that introduced unledgered module-level ownership-liveness sites. The authorized qualified-call rewrites are status_prs::collect_unshipped_work_items_bounded and status_sections::lease_agent_view, both calling crate::leases::lease_state_for. The ownership-liveness baseline is unchanged.
+
+    This is an incomplete slice: surviving crate-glob ledger entries and lib.rs include!(lib_part1.rs) through include!(lib_part6.rs) remain. AC1/AC3 and TASK-3428 remain unfinished. Use the PR title and eventual squash subject: [AI:codex] fix(imports): correct partial batch 5 ownership sites (Refs TASK-3428). This supersedes the completion claim in implementation commit 86443475a37; do not use its bare completion trailer for the squash.
+
+    Validation: ownership-liveness ratchet passed (2 executed Python tests); launcher job j20261111T053254502-2-0 passed cargo check --profile agent -p aida-cli-lib --tests (compilation only). rustfmt --check and git diff --check passed. make check-ci-fast passed all 47 fast-tier gates with umask 077, including the crate-glob ratchet (45 remaining imports, zero additions). The initial fast-gate attempt stopped in mail-wake fixtures because the inherited shared-write umask made fixture directories fail their ownership/mode checks. Logs: /tmp/task-3428-round18-fast-private.log (passing run), /tmp/task-3428-round18-fast.log (initial attempt).
+  created_at: 2026-11-11T05:42:20.156128151Z
+  modified_at: 2026-11-11T05:42:20.156128151Z
+  session_id: 01a1c917c7bb
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1b862-2e0b-7a50-a4d0-25097c707b57
   author: joe
