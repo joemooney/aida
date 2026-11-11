@@ -960,43 +960,59 @@ fn bug2518_chain_accepts_only_no_verdict_terminal_retry_edge() {
     }
 }
 
+// Each cancellation path gets its own nextest process and timing budget. The
+// combined regression measured 31.82s in CI, exceeding the default 30s limit.
+// Keep the full repeated-cancellation and exhaustion assertions for every path.
+// trace:BUG-2518 | ai:codex
+fn assert_cancelled_retry_readmits(cancellation: u8) {
+    let f = Fixture::new();
+    let _env = f.environment();
+    crate::review_watch::fixture_admission_exit(&f.a, false, false, || {}).unwrap();
+    crate::review_watch::fixture_admission_retry_cancel(&f.a, false, Some(cancellation)).unwrap();
+    crate::review_watch::fixture_admission_retry_cancel(&f.a, false, Some(cancellation)).unwrap();
+    crate::review_watch::fixture_admission_retry(&f.a, true).unwrap();
+    let head = "a".repeat(40);
+    assert!(!f
+        .step(&f.b, "PR-7", &head, Uuid::new_v4(), State::Reserved)
+        .unwrap());
+    let repo = private_repo().unwrap();
+    let (_, table) = read_table(repo.path(), &f.hub, "PR-7").unwrap();
+    let store = f.a.join(".aida-store");
+    let history = chain(
+        &f.hub,
+        "PR-7",
+        &table.changes["PR-7"],
+        &roster(&store, &super::super::head(&store).unwrap()).unwrap(),
+    )
+    .unwrap();
+    assert_eq!(
+        history.iter().filter(|t| t.state == State::Running).count(),
+        3
+    );
+    assert_eq!(
+        history
+            .iter()
+            .filter(|t| t.state == State::Cancelled)
+            .count(),
+        4
+    );
+    assert_eq!(history.last().unwrap().state, State::Terminal);
+}
+
 // trace:BUG-2518 | ai:codex
 #[test]
-fn bug2518_cancelled_retry_readmits_after_spawn_preflight_and_unclaimed_exits() {
-    for cancellation in 0..3 {
-        let f = Fixture::new();
-        let _env = f.environment();
-        crate::review_watch::fixture_admission_exit(&f.a, false, false, || {}).unwrap();
-        crate::review_watch::fixture_admission_retry_cancel(&f.a, false, Some(cancellation))
-            .unwrap();
-        crate::review_watch::fixture_admission_retry_cancel(&f.a, false, Some(cancellation))
-            .unwrap();
-        crate::review_watch::fixture_admission_retry(&f.a, true).unwrap();
-        let head = "a".repeat(40);
-        assert!(!f
-            .step(&f.b, "PR-7", &head, Uuid::new_v4(), State::Reserved)
-            .unwrap());
-        let repo = private_repo().unwrap();
-        let (_, table) = read_table(repo.path(), &f.hub, "PR-7").unwrap();
-        let store = f.a.join(".aida-store");
-        let history = chain(
-            &f.hub,
-            "PR-7",
-            &table.changes["PR-7"],
-            &roster(&store, &super::super::head(&store).unwrap()).unwrap(),
-        )
-        .unwrap();
-        assert_eq!(
-            history.iter().filter(|t| t.state == State::Running).count(),
-            3
-        );
-        assert_eq!(
-            history
-                .iter()
-                .filter(|t| t.state == State::Cancelled)
-                .count(),
-            4
-        );
-        assert_eq!(history.last().unwrap().state, State::Terminal);
-    }
+fn bug2518_cancelled_retry_readmits_after_spawn_failure() {
+    assert_cancelled_retry_readmits(0);
+}
+
+// trace:BUG-2518 | ai:codex
+#[test]
+fn bug2518_cancelled_retry_readmits_after_preflight_failure() {
+    assert_cancelled_retry_readmits(1);
+}
+
+// trace:BUG-2518 | ai:codex
+#[test]
+fn bug2518_cancelled_retry_readmits_after_unclaimed_exit() {
+    assert_cancelled_retry_readmits(2);
 }
