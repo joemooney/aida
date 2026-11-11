@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-10T06:40:07.764479561Z
-modified_at: 2026-11-11T15:51:17.907873424Z
+modified_at: 2026-11-11T21:57:56.524732862Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -150,6 +150,13 @@ comments:
   created_at: 2026-11-11T15:51:17.907873424Z
   modified_at: 2026-11-11T15:51:17.907873424Z
   session_id: 01a1cb22c9f7
+  harness_version: 2.1.322 (Claude Code)
+- id: 01a1cc9e-1cac-7951-b502-29f3686d22d1
+  author: joe
+  content: '[advisor 2026-11-11 15:10 MST] PR #3775 head c232f91: CI (gates) red. Likely cause: docs/internal/architecture/external-tool-output-classifiers.md does not match the markers in the tree (regenerate it). Confirm against run 43072516014 during rework.'
+  created_at: 2026-11-11T21:57:56.524732862Z
+  modified_at: 2026-11-11T21:57:56.524732862Z
+  session_id: 01a1cc9c-1eae-7a72-9a24-8ec1afc42772
   harness_version: 2.1.322 (Claude Code)
 history:
 - id: 01a1c4af-45a0-7a32-8edf-55980e6f5825
