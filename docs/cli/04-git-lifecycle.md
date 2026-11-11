@@ -428,6 +428,16 @@ open state are rechecked after each diff; a moving head refuses the report.
 `--fixture <file>` accepts a JSON array of `{ "number": 123, "diff": "..." }`
 for offline checks without forge access.
 
+<!-- trace:TASK-3782 | ai:codex -->
+While waiting, the train reports CI run IDs and each shard's check bucket from
+its existing check-row snapshot. Only `CI (...)` checks in workflow `CI` count
+as shards; ancillary checks such as Release are listed separately. The Build
+summary appears after all shards finish. Failed checks are named immediately.
+This display adds no forge reads and leaves the readiness result unchanged;
+progress lines are printed separately from required-check names. Check rows do
+not distinguish runner queue time from execution time. No GitLab-specific
+progress lookup or runner queue timing is provided.
+
 A newly opened train waits up to 180 seconds for its first CI checks to
 register. After checks appear, pending lanes continue through the ordinary
 CI wait; a missing required check after the other lanes settle keeps its

@@ -217,8 +217,15 @@ pub(crate) const ATTESTATION_KEY: &str = "recorder_attestation";
 /// re-stamps the verdict at a different `reviewed_sha` leaves the attestation
 /// pointing at the old commit, so it no longer vouches for the new one.
 // trace:BUG-1918 | ai:claude
-#[derive(Debug, Clone, PartialEq, Eq, Default, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct RecorderAttestation {
+    /// Reviewer policy: exact-head approval remains valid when false.
+    // trace:STORY-2696 | ai:codex
+    #[serde(
+        default = "carry_eligible_default",
+        skip_serializing_if = "std::clone::Clone::clone"
+    )]
+    pub carry_eligible: bool,
     /// The commit this attestation vouches for.
     pub sha: String,
     /// The seat of the validated session grant that recorded it, if any.
@@ -258,6 +265,27 @@ pub struct RecorderAttestation {
     pub grant_binding: Vec<String>,
 }
 
+// trace:STORY-2696 | ai:codex
+pub(crate) fn carry_eligible_default() -> bool {
+    true
+}
+
+impl Default for RecorderAttestation {
+    fn default() -> Self {
+        Self {
+            carry_eligible: true,
+            sha: String::new(),
+            seat: None,
+            grant_id: None,
+            human_at_tty: false,
+            identity: Vec::new(),
+            receipt_id: None,
+            solo_human: false,
+            grant_binding: Vec::new(),
+        }
+    }
+}
+
 impl RecorderAttestation {
     /// Does this attestation carry authority to approve on its own terms: a
     /// non-implementer seat grant or a human who passed the TTY floor, made
@@ -283,6 +311,9 @@ impl RecorderAttestation {
     /// attestation names neither, which never verifies.
     // trace:BUG-1918 | ai:claude
     pub(crate) fn authority_key(&self, recorded_at: Option<&str>) -> Option<String> {
+        // trace:STORY-2696 | ai:codex — a valid sibling cannot lend authority
+        // to the same receipt with a tampered policy. Keep legacy true keys.
+        let policy = if self.carry_eligible { "" } else { ":no-carry" };
         fn nonempty(v: Option<&str>) -> Option<&str> {
             v.map(str::trim).filter(|s| !s.is_empty())
         }
@@ -297,7 +328,7 @@ impl RecorderAttestation {
                 nonempty(self.receipt_id.as_deref()).filter(|id| id.starts_with("publication:"))
             {
                 return Some(format!(
-                    "{publication}:{}@{}",
+                    "{publication}:{}@{}{policy}",
                     self.sha,
                     nonempty(recorded_at)?
                 ));
@@ -308,11 +339,11 @@ impl RecorderAttestation {
             nonempty(self.seat.as_deref()),
         ) {
             let at = nonempty(recorded_at)?;
-            return Some(format!("grant:{grant}:{seat}@{at}"));
+            return Some(format!("grant:{grant}:{seat}@{at}{policy}"));
         }
         if self.human_at_tty {
             let receipt = nonempty(self.receipt_id.as_deref())?;
-            return Some(format!("receipt:{receipt}:{}", self.sha.trim()));
+            return Some(format!("receipt:{receipt}:{}{policy}", self.sha.trim()));
         }
         None
     }
@@ -848,12 +879,27 @@ fn round_findings(m: &JsonObj) -> Vec<String> {
 
 // Shared with watcher admission to count exactly the writer's retained rounds.
 // trace:TASK-1993 | ai:codex
-pub(crate) type RecordingKey = (Option<String>, String, String, Vec<String>);
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, serde::Serialize, serde::Deserialize)]
+pub(crate) struct RecordingKey(
+    pub Option<String>,
+    pub String,
+    pub String,
+    pub Vec<String>,
+    #[serde(default = "carry_eligible_default")] pub bool,
+);
+
+// trace:STORY-2696 | ai:codex
+pub(crate) fn recording_carry_eligible(m: &JsonObj) -> bool {
+    m.get(ATTESTATION_KEY)
+        .and_then(|a| a.get("carry_eligible"))
+        .and_then(|v| v.as_bool())
+        .unwrap_or(true)
+}
 
 /// Everything about a round that carries review signal. Two rounds with equal
-/// keys are the same recording, so retaining the second adds nothing; any
-/// difference — a different reviewer above all — is signal that overwriting
-/// would destroy.
+/// keys are semantically identical for immediate re-record idempotence.
+/// Historical acts still have distinct identities (including receipts and
+/// timestamps), even when their semantic keys match.
 pub(crate) fn recording_key(m: &JsonObj) -> RecordingKey {
     let field = |k: &str| {
         m.get(k)
@@ -862,7 +908,7 @@ pub(crate) fn recording_key(m: &JsonObj) -> RecordingKey {
             .trim()
             .to_string()
     };
-    (
+    RecordingKey(
         round_sha(m),
         field("recorded_by"),
         // BUG-1505: a re-spelling of the same verdict is the same recording.
@@ -885,6 +931,7 @@ pub(crate) fn recording_key(m: &JsonObj) -> RecordingKey {
                 }
             })
             .collect(),
+        recording_carry_eligible(m),
     )
 }
 
@@ -1570,12 +1617,15 @@ fn archive_current_round(
     let mut snapshot = obj.clone();
     snapshot.remove("rounds");
     snapshot.remove("unarchived_rounds");
-    // Retain iff something would otherwise be LOST. A byte-identical
-    // re-recording carries nothing new; anything else does — including a
-    // second reviewer at the SAME commit, which is the collision this spec
+    // Retain iff something would otherwise be LOST. An immediately repeated
+    // unattested semantic recording carries nothing new; anything else does,
+    // including a second reviewer at the SAME commit, the collision this spec
     // exists for and the one case an is-it-the-same-head test cannot see.
     let key = recording_key(&snapshot);
-    if &key == incoming {
+    // trace:STORY-2696 | ai:codex — an attested repeat replaces the
+    // receipt/timestamp identity even when its review signal is unchanged.
+    // Retain the displaced act so stale aliases connect to later policy changes.
+    if &key == incoming && !snapshot.contains_key(ATTESTATION_KEY) {
         return;
     }
     if round_sha(obj).is_none() {
@@ -1598,11 +1648,10 @@ fn archive_current_round(
         .get("rounds")
         .and_then(|v| v.as_array().cloned())
         .unwrap_or_default();
-    if rounds
-        .iter()
-        .filter_map(|r| r.as_object())
-        .any(|r| recording_key(r) == key)
-    {
+    // trace:STORY-2696 | ai:codex — repeated policy toggles can revisit a
+    // semantic key while displacing a distinct act. Preserve that act so stale
+    // aliases remain connected to the later recording by append evidence.
+    if rounds.iter().any(|r| r.as_object() == Some(&snapshot)) {
         return;
     }
     rounds.push(serde_json::Value::Object(snapshot));
@@ -1815,6 +1864,32 @@ pub(crate) fn build_verdict_object(
     findings: &[String],
     recorded_by: &str,
 ) -> std::io::Result<serde_json::Map<String, serde_json::Value>> {
+    build_verdict_object_with_policy(
+        project_root,
+        path,
+        verdict,
+        reviewed_sha,
+        reviewed_branch,
+        summary,
+        findings,
+        recorded_by,
+        None,
+    )
+}
+
+// trace:STORY-2696 | ai:codex
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn build_verdict_object_with_policy(
+    project_root: &Path,
+    path: &Path,
+    verdict: Option<&str>,
+    reviewed_sha: Option<&str>,
+    reviewed_branch: Option<&str>,
+    summary: Option<&str>,
+    findings: &[String],
+    recorded_by: &str,
+    carry_eligible: Option<bool>,
+) -> std::io::Result<serde_json::Map<String, serde_json::Value>> {
     // trace:BUG-2500 | ai:codex
     if verdict.is_some_and(|v| VerdictKind::parse(v) == VerdictKind::Waiting)
         && (summary.is_none_or(|s| s.trim().is_empty()) || !findings.is_empty())
@@ -1880,6 +1955,15 @@ pub(crate) fn build_verdict_object(
     if let Some(word) = disposition_verdict(incoming.as_object().unwrap()).canonical() {
         incoming["verdict"] = word.into();
     }
+    // Compare incoming policy before archiving the previous attestation.
+    incoming[ATTESTATION_KEY] = serde_json::json!({"carry_eligible":
+    carry_eligible.unwrap_or_else(|| {
+        if verdict.map(str::trim).is_some_and(|word| !word.is_empty()) {
+            true
+        } else {
+            recording_carry_eligible(&obj)
+        }
+    })});
     let incoming_key = recording_key(incoming.as_object().unwrap());
     archive_current_round(&mut obj, &incoming_key);
     // BUG-1918: a new verdict word is a new act of review; it must not
@@ -3520,8 +3604,8 @@ pub(crate) enum RecordOutcome {
 
 /// BUG-2136: compare the record as it stood before the write (`before`, `None`
 /// when there was no file) with the object about to be written (`after`).
-/// Uses the same [`recording_key`] that decides round retention, so the
-/// printed outcome can never disagree with what the record kept.
+/// Uses [`recording_key`] to report review signal changes. Retained attested
+/// displacement identities do not turn a semantic repeat into a new outcome.
 // trace:BUG-2136 trace:TASK-1766 | ai:claude
 pub(crate) fn record_outcome(before: Option<&JsonObj>, after: &JsonObj) -> RecordOutcome {
     let identical = before.is_some_and(|prev| {

@@ -2841,7 +2841,7 @@ fn bug2401_absent_aggregate_behind_running_lanes_is_pending() {
     rows[3].bucket = "pending".into();
     match train_ci_readiness(&rows, &required, &cfg, false) {
         TrainCiReadiness::Pending(names) => {
-            assert!(names[0].starts_with("Build (ubuntu-latest)"), "{names:?}")
+            assert_eq!(names[0], "Build summary appears after all shards finish")
         }
         other => panic!("absent aggregate behind a running lane: {other:?}"),
     }
@@ -5034,4 +5034,150 @@ fn bug2492_train_pending_inspection_waits_instead_of_rebuilding() {
         matches!(train_ci_readiness(&rows, &[], &crate::ci_gate::CiGateConfig::default(), false),
         TrainCiReadiness::Pending(names) if names == vec!["merge-hold-gate"])
     );
+}
+
+// Reduced check-row fixture for recorded run 42913999193: seven CI matrix
+// checks and the skipped Release job identified by the review evidence.
+// trace:TASK-3782 | ai:codex
+#[test]
+fn train_ci_row_progress_recorded_run() {
+    let rows =
+        crate::ci_gate::parse_check_rows(include_str!("task_3782_run_42913999193.json")).unwrap();
+    let text = train_ci_wait_details(&rows).join("; ");
+    assert!(text.contains("run 42913999193: 7/7 shards passed"));
+    assert!(text.contains("ancillary Release (${{ matrix.os }}): skipping"));
+    assert!(text.contains("Build summary appears after all shards finish"));
+    assert!(!text.contains("7/8"));
+}
+
+// trace:TASK-3782 | ai:codex
+#[test]
+fn train_ci_row_progress_buckets_runs_and_failure() {
+    let mut rows =
+        crate::ci_gate::parse_check_rows(include_str!("task_3782_run_42913999193.json")).unwrap();
+    rows[0].bucket = "pending".into();
+    rows[1].bucket = "fail".into();
+    rows.push(crate::ci_gate::CheckRow {
+        name: "CI (other)".into(),
+        workflow: "Other".into(),
+        bucket: "pass".into(),
+        run_id: Some("99".into()),
+    });
+    let before = train_ci_readiness(
+        &rows,
+        &["Build (ubuntu-latest)".into()],
+        &crate::ci_gate::CiGateConfig::default(),
+        false,
+    );
+    let details = train_ci_wait_details(&rows);
+    assert_eq!(details.len(), 2);
+    assert!(details[0].contains("5/7 shards passed"));
+    assert!(details[0].contains("CI (lib-0): pending"));
+    assert!(details[0].contains("CI (lib-1): fail"));
+    assert_eq!(details[1], "run 99; ancillary CI (other): pass");
+    assert!(matches!(&before, TrainCiReadiness::Red(why) if why.contains("CI (lib-1)")));
+    assert_eq!(
+        before,
+        train_ci_readiness(
+            &rows,
+            &["Build (ubuntu-latest)".into()],
+            &crate::ci_gate::CiGateConfig::default(),
+            false
+        )
+    );
+    assert!(train_ci_wait_details(&[]).is_empty());
+    rows.push(crate::ci_gate::CheckRow {
+        name: "Build (ubuntu-latest)".into(),
+        workflow: "CI".into(),
+        bucket: "pass".into(),
+        run_id: Some("42913999193".into()),
+    });
+    let text = train_ci_wait_details(&rows)[0].clone();
+    assert!(text.contains("Build summary: pass"));
+    assert!(!text.contains("appears after"));
+}
+
+// trace:TASK-3782 | ai:codex
+#[test]
+fn train_ci_row_progress_all_pending() {
+    let mut rows =
+        crate::ci_gate::parse_check_rows(include_str!("task_3782_run_42913999193.json")).unwrap();
+    for row in &mut rows {
+        row.bucket = "pending".into();
+    }
+    let details = train_ci_wait_details(&rows);
+    assert_eq!(details.len(), 1);
+    let text = &details[0];
+    assert!(text.contains("run 42913999193: 0/7 shards passed"));
+    for shard in [
+        "lib-0",
+        "lib-1",
+        "cli-0",
+        "cli-1",
+        "rest",
+        "gates",
+        "contracts",
+    ] {
+        assert!(text.contains(&format!("CI ({shard}): pending")), "{text}");
+    }
+    assert!(text.contains("ancillary Release (${{ matrix.os }}): pending"));
+    assert!(text.contains("Build summary appears after all shards finish"));
+    assert!(!text.contains("0/8"));
+}
+
+// trace:TASK-3782 | ai:codex
+#[test]
+fn train_ci_row_progress_passing_build_with_separate_hold_run() {
+    let mut rows =
+        crate::ci_gate::parse_check_rows(include_str!("task_3782_run_42913999193.json")).unwrap();
+    rows.push(crate::ci_gate::CheckRow {
+        name: "Build (ubuntu-latest)".into(),
+        workflow: "CI".into(),
+        bucket: "pass".into(),
+        run_id: Some("42913999193".into()),
+    });
+    rows.push(crate::ci_gate::CheckRow {
+        name: "publish-merge-hold-status".into(),
+        workflow: "merge-hold-gate".into(),
+        bucket: "pending".into(),
+        run_id: Some("99".into()),
+    });
+    let details = train_ci_wait_details(&rows);
+    assert_eq!(details.len(), 2);
+    assert!(details[0].contains("7/7 shards passed"));
+    assert!(details[0].contains("Build summary: pass"));
+    assert!(!details[0].contains("appears after"));
+    assert_eq!(
+        details[1],
+        "run 99; ancillary publish-merge-hold-status: pending"
+    );
+}
+
+// Same-run ancillary checks and similarly named checks from other workflows
+// remain visible without entering the CI shard count.
+// trace:TASK-3782 | ai:codex
+#[test]
+fn train_ci_row_progress_same_run_ancillary_identity() {
+    let mut rows =
+        crate::ci_gate::parse_check_rows(include_str!("task_3782_run_42913999193.json")).unwrap();
+    for (name, workflow) in [
+        ("CI (ancillary)", "Release"),
+        ("CI helper", "CI"),
+        ("Build (ubuntu-latest)", "CI"),
+    ] {
+        rows.push(crate::ci_gate::CheckRow {
+            name: name.into(),
+            workflow: workflow.into(),
+            bucket: "pending".into(),
+            run_id: Some("42913999193".into()),
+        });
+    }
+    assert_eq!(rows.iter().filter(|row| train_ci_is_shard(row)).count(), 7);
+    let text = train_ci_wait_details(&rows).join("; ");
+    assert!(text.contains("run 42913999193: 7/7 shards passed"));
+    assert!(text.contains("ancillary Release (${{ matrix.os }}): skipping"));
+    assert!(text.contains("ancillary CI (ancillary): pending"));
+    assert!(text.contains("ancillary CI helper: pending"));
+    assert!(text.contains("Build summary: pending"));
+    assert!(!text.contains("appears after"));
 }

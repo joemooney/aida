@@ -547,7 +547,17 @@ fn run_db(
     matches: &clap::ArgMatches,
     ctx: &crate::cmdkit::DispatchCtx,
 ) -> anyhow::Result<crate::cmdkit::Flow> {
-    use crate::*;
+    // trace:TASK-3428 | ai:codex
+    use crate::db_block::{handle_block_command, handle_db_check_collisions};
+    use crate::db_reconcile::{
+        auto_bump_done_to_completed, auto_bump_enabled, handle_db_reconcile_status,
+        print_auto_bump_summary,
+    };
+    use crate::output_format::output_format_is_json;
+    use crate::rel_cards::load_dispenser;
+    use crate::role::enforce_team_gate;
+    use crate::{handle_retire_legacy_ids, permissions};
+    use aida_core::Storage;
     let args = <DbArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
     match &ctx.store {
         None => Ok(crate::cmdkit::Flow::Continue),

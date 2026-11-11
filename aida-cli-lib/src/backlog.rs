@@ -2126,7 +2126,9 @@ fn run_backlog(
     matches: &clap::ArgMatches,
     ctx: &crate::cmdkit::DispatchCtx,
 ) -> anyhow::Result<crate::cmdkit::Flow> {
-    use crate::*;
+    // trace:TASK-3428 | ai:codex
+    use crate::cli::LoadCommand;
+    use crate::load_cmd;
     let args = <BacklogArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
     match &ctx.store {
         None => Ok(crate::cmdkit::Flow::Continue),

@@ -501,7 +501,11 @@ persistence.
 
 **One line** — show which acceptance criteria for one spec are traced by Rust, pytest, JavaScript/TypeScript, or Go tests.
 
-**Mental model.** `criteria` turns a spec's `## Acceptance` section into stable criterion IDs, then scans Rust `#[test]` functions, pytest `def test_*` functions, Jest/Vitest/Mocha `test(...)` and `it(...)` calls, and Go `func TestXxx(...)` functions. Put a `trace:<SPEC>.<label>` token in a comment directly above the test (`//` in Rust, JS/TS, and Go; `#` in Python) or inside its body. A blank or non-comment line breaks an above-test attachment. It is the smallest anti-drift loop between the store and executable tests: each acceptance criterion should have at least one traced test, and each traced test should point at a real criterion rather than a stale or vague marker.
+**Mental model.** `criteria` turns a spec's `## Acceptance` section into stable criterion IDs, then scans Rust `#[test]` functions, pytest `def test_*` functions, Jest/Vitest/Mocha `test(...)` and `it(...)` calls, and Go `func TestXxx(...)` functions. Put a `trace:<SPEC>.<label>` token in a comment directly above the test (`//` in Rust, JS/TS, and Go; `#` in Python) or inside its body. A blank or non-comment line breaks an above-test attachment. It is the smallest anti-drift loop between the store and executable tests: each behavioral acceptance criterion should have at least one traced test, and each traced test should point at a real criterion rather than a stale or vague marker.
+
+<!-- trace:STORY-2702 | ai:codex -->
+Declare evidence immediately after the criterion label: `AC1: [evidence: behavioral-test] ...`, `[evidence: configuration-validation]`, `[evidence: documentation-inspection]`, or `[evidence: manual-inspection]`. Omitted or unknown annotations retain the behavioral test requirement. Behavioral criteria require automated tests. For configuration validation, cite the configuration and validation command/result or routing analysis; for documentation inspection, cite the document and check its claims; for manual inspection, record the procedure, observed result and limitations. An annotation is not evidence of satisfaction. Reviewers must report missing evidence and behavioral requirements mislabeled as inspection, without demanding automated tests solely for documentation, configuration or manual criteria. Non-behavioral criteria appear as `inspection-required` with `evidence_type` in JSON; they are excluded from the untested done gate but remain mandatory reviewer checks. Use explicit AC labels to keep trace IDs stable when annotations change.
+
 
 **Reach for it when** — you want to audit a spec's test coverage at the criterion level, especially before reconstitution/harvest work. The report answers: which criteria have tests, which criteria are untested, and which tests trace a bare spec or an unknown criterion.
 
@@ -802,6 +806,23 @@ current working directory, as they would for a shell lookup.
 <!-- trace:STORY-1673 | ai:claude -->
 
 ## Flow report
+
+<!-- trace:STORY-2704 | ai:codex -->
+Development builds also provide `aida-porcelain flow report ...` and
+`aida-flow report ...`, with the same text/JSON report and window flags.
+`aida dev build --install-links` installs the companion and the relative
+`aida-flow -> aida-porcelain` alias. The built-in `aida flow` retains precedence.
+The companion renders the built-in's public JSON report. It selects the reader
+from `AIDA_BIN`, then `aida` beside the running companion, then `aida` on `PATH`.
+An explicit selection is authoritative: execution failures do not try another
+reader. There is no additional report timeout; the built-in owns query budgets.
+Child failures preserve stdout, stderr and exit code (signals use 128 + signal).
+The companion does not open a mutable store, refresh caches, acquire leases or
+update the queue.
+Development promotion and rollback restore each generation’s binary and alias
+inventory. Rolling back to a generation predating porcelain removes the
+companion and its alias; rolling forward restores them.
+Release archives, `install.sh` and upgrade support remain follow-up work.
 
 <!-- trace:STORY-2699 | ai:codex -->
 `aida flow report --since 2026-11-09 --until 2026-11-10 --format json`

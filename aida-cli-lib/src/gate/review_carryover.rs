@@ -72,7 +72,8 @@ pub(crate) struct CarryOver {
 /// The version of the proof's rules (diff flags, protected-base policy). A
 /// ledger event from another version is not reused: the head proves afresh.
 // trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
-pub(crate) const PROOF_VERSION: u32 = 1;
+// trace:STORY-2696 | ai:codex — old proofs remain readable and are recomputed.
+pub(crate) const PROOF_VERSION: u32 = 2;
 
 /// Why an approval does NOT carry over. Each variant names the reason the
 /// refusal prints.
@@ -80,6 +81,9 @@ pub(crate) const PROOF_VERSION: u32 = 1;
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[serde(tag = "refusal", rename_all = "kebab-case")]
 pub(crate) enum CarryOverRefusal {
+    /// Reviewer policy forbids extending the approval to another head.
+    // trace:STORY-2696 | ai:codex
+    ReviewerPolicy,
     /// A commit or ref could not be resolved locally.
     Unresolvable { what: String },
     /// The head does not descend from the approved commit (a rebase or other
@@ -119,6 +123,7 @@ impl CarryOverRefusal {
     pub(crate) fn reason(&self) -> String {
         let short = |s: &str| crate::gate::review_verdict::short_sha(s).to_string();
         match self {
+            Self::ReviewerPolicy => "the reviewer marked this approval as not carry-eligible; fresh review of the new head is required".into(),
             Self::Unresolvable { what } => format!("{what} could not be resolved locally"),
             Self::NotDescendant => "the head does not descend from the approved commit (a rebase \
                  or rewritten history), so it cannot be shown to add only base merges"
@@ -173,7 +178,8 @@ impl CarryOverRefusal {
     pub(crate) fn is_deterministic(&self) -> bool {
         !matches!(
             self,
-            Self::Unresolvable { .. }
+            Self::ReviewerPolicy
+                | Self::Unresolvable { .. }
                 | Self::Git { .. }
                 | Self::BaseNotProtected { .. }
                 | Self::IntentUnavailable { .. }
@@ -344,6 +350,13 @@ fn proved_for_refusal(
     pr: u64,
     refusal: &crate::gate::ship::ApprovalHeadRefusal,
 ) -> Option<Proved> {
+    // trace:STORY-2696 | ai:codex — enforce before any cache or Git reads.
+    if matches!(
+        refusal,
+        crate::gate::ship::ApprovalHeadRefusal::NoCarry { .. }
+    ) {
+        return Some(Err(CarryOverRefusal::ReviewerPolicy));
+    }
     let crate::gate::ship::ApprovalHeadRefusal::Moved {
         reviewed_sha,
         head_sha,
@@ -388,7 +401,7 @@ fn proved_for_refusal(
 // trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
 fn stored_answer(repo: &Path, pr: u64, base: &str, approved: &str, head: &str) -> Option<Proved> {
     use crate::gate::ledger::{project, ChangeKey, EventBody};
-    let event = project::carry_over_at(repo, ChangeKey::pr(pr), approved, head)?;
+    let event = project::carry_over_at(repo, ChangeKey::pr(pr), approved, head, true)?;
     let tip = resolve_commit(repo, &format!("refs/remotes/origin/{base}"))?;
     if event.base_ref.as_deref() != Some(base) || event.base_tip.as_deref() != Some(tip.as_str()) {
         return None;
@@ -397,14 +410,18 @@ fn stored_answer(repo: &Path, pr: u64, base: &str, approved: &str, head: &str) -
         EventBody::CarryOverProof {
             proof,
             proof_version,
-        } if proof_version == PROOF_VERSION && proof.base_branch() == base => {
+            carry_eligible,
+        } if carry_eligible && proof_version == PROOF_VERSION && proof.base_branch() == base => {
             Some(Ok((proof, Stored::Read(event.at))))
         }
         EventBody::CarryOverRefused {
             refusal,
             proof_version,
+            carry_eligible,
             ..
-        } if proof_version == PROOF_VERSION && refusal.is_deterministic() => Some(Err(refusal)),
+        } if carry_eligible && proof_version == PROOF_VERSION && refusal.is_deterministic() => {
+            Some(Err(refusal))
+        }
         _ => None,
     }
 }
@@ -427,6 +444,7 @@ fn append_answer(
             EventBody::CarryOverProof {
                 proof: proof.clone(),
                 proof_version: PROOF_VERSION,
+                carry_eligible: true,
             },
             proof.new_head.clone(),
             Some(proof.head_patch_id.clone()),
@@ -444,6 +462,7 @@ fn append_answer(
                     reason: refusal.reason(),
                     refusal: refusal.clone(),
                     proof_version: PROOF_VERSION,
+                    carry_eligible: true,
                 },
                 head.trim().to_string(),
                 patch_id,
