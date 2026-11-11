@@ -3,12 +3,12 @@ spec_id: STORY-b6b1278890774ef993d2ebc327862470-633
 agreed_id: STORY-2710
 title: Conflicted PRs route automatically to a conflict-resolution lane instead of waiting for an advisor hand merge
 description: 'Codex seats cannot merge main (read-only .git, BUG-2456), so when the host-merge of main into a PR branch hits a real conflict, the PR waits for the advisor to hand-merge. On 2026-11-10 this cost #3768 13.6h and #3753 several hours; the advisor hand-merged 3 PRs (#3775, #3753, #3768). Most conflicts were mechanical: both sides appended tests or doc sections, plus regenerable ledgers (scripts/exec-context-legacy.json via check-exec-context.py --write-ledger, template mirrors via make sync-templates). Acceptance: (1) when review-watch or the rework path finds a PR CONFLICTING and its host merge fails, it dispatches a conflict-resolution lane on a vendor that can write .git (Claude) for that branch without advisor action; (2) known generated files (exec-context ledger, template mirrors, other ratchet ledgers registered in one table) are regenerated rather than hand-resolved; (3) the lane compile-checks the merged tree (cargo check -p aida-cli-lib --tests) before pushing; (4) a conflict it cannot resolve mechanically is reported to the advisor with the conflicting paths, one mail per head; (5) tests cover dispatch on conflict, ledger regeneration, and the one-mail-per-head refusal path.'
-status: Approved
+status: InProgress
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-10T22:04:54.061461Z
-modified_at: 2026-11-11T09:56:59.882994138Z
+modified_at: 2026-11-11T09:59:18.340293963Z
 req_type: Story
 comments:
 - id: 01a1c781-4cf1-7c80-b086-89c5c5096ab6
@@ -652,6 +652,13 @@ history:
   session_id: 01a1c87f-970d-7ce0-9351-e4e75a87731e
   harness_version: 2.1.322 (Claude Code)
   changes: []
+- id: 01a1ca0c-2e44-7bf1-a1c9-d9778751ba61
+  author: aida-session-start
+  timestamp: 2026-11-11T09:59:18.340290841Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: a3d2ba258e4015854c6f615c6481beb672b8798c
   branch: main
