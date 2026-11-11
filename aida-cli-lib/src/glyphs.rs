@@ -303,6 +303,38 @@ impl Glyph {
     ];
 }
 
+/// Render a standalone terminal marker with protective trailing spaces.
+/// Keep raw registry values unpadded for JSON, configuration and width calculations.
+/// ASCII markers need one separator; wide or East-Asian ambiguous symbols need two.
+// trace:TASK-3779 | ai:codex
+pub(crate) fn terminal_marker(marker: &str) -> String {
+    use unicode_width::UnicodeWidthStr;
+    let marker = marker.trim_end_matches(' ');
+    let padding = if marker.width_cjk() >= 2 && !marker.is_ascii() {
+        "  "
+    } else {
+        " "
+    };
+    format!("{marker}{padding}")
+}
+
+#[cfg(test)]
+mod terminal_marker_tests {
+    use super::terminal_marker;
+
+    // trace:TASK-3779 | ai:codex
+    #[test]
+    fn terminal_marker_padding() {
+        assert_eq!(terminal_marker("OK"), "OK ");
+        assert_eq!(terminal_marker("✓"), "✓ ");
+        assert_eq!(terminal_marker("🤖"), "🤖  ");
+        assert_eq!(terminal_marker("⚠"), "⚠ ");
+        assert_eq!(terminal_marker("▶"), "▶  ");
+        assert_eq!(terminal_marker("🤖  "), "🤖  ");
+        assert_eq!(terminal_marker("[bot]"), "[bot] ");
+    }
+}
+
 /// Which rendering profile is active.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub(crate) enum GlyphProfile {
