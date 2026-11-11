@@ -1618,11 +1618,14 @@ fn archive_current_round(
     snapshot.remove("rounds");
     snapshot.remove("unarchived_rounds");
     // Retain iff something would otherwise be LOST. An immediately repeated
-    // semantic recording carries nothing new; anything else does — including a
-    // second reviewer at the SAME commit, which is the collision this spec
+    // unattested semantic recording carries nothing new; anything else does,
+    // including a second reviewer at the SAME commit, the collision this spec
     // exists for and the one case an is-it-the-same-head test cannot see.
     let key = recording_key(&snapshot);
-    if &key == incoming {
+    // trace:STORY-2696 | ai:codex — an attested repeat replaces the
+    // receipt/timestamp identity even when its review signal is unchanged.
+    // Retain the displaced act so stale aliases connect to later policy changes.
+    if &key == incoming && !snapshot.contains_key(ATTESTATION_KEY) {
         return;
     }
     if round_sha(obj).is_none() {
@@ -3594,8 +3597,8 @@ pub(crate) enum RecordOutcome {
 
 /// BUG-2136: compare the record as it stood before the write (`before`, `None`
 /// when there was no file) with the object about to be written (`after`).
-/// Uses the same [`recording_key`] that decides round retention, so the
-/// printed outcome can never disagree with what the record kept.
+/// Uses [`recording_key`] to report review signal changes. Retained attested
+/// displacement identities do not turn a semantic repeat into a new outcome.
 // trace:BUG-2136 trace:TASK-1766 | ai:claude
 pub(crate) fn record_outcome(before: Option<&JsonObj>, after: &JsonObj) -> RecordOutcome {
     let identical = before.is_some_and(|prev| {
