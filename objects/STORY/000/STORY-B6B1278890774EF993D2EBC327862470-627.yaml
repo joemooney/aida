@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-10T03:52:00.571796159Z
-modified_at: 2026-11-11T19:49:39.780226330Z
+modified_at: 2026-11-11T21:58:02.145730749Z
 req_type: Story
 relationships:
 - rel_type:
@@ -714,6 +714,13 @@ comments:
   created_at: 2026-11-11T17:21:00.336105764Z
   modified_at: 2026-11-11T17:21:00.336105764Z
   session_id: 01a1cb5aa456
+- id: 01a1cc9e-32a1-7dc3-a369-6e3b157482cc
+  author: joe
+  content: '[advisor 2026-11-11 15:10 MST] PR #3842 head 3874c18: besides the recorded request-changes, CI lib-1 fails launch::story_2326_launch_ratchet_tests::launch_sites_outside_the_launcher_match_the_ledger (update the launch ledger or route through the launcher). Include in the rework.'
+  created_at: 2026-11-11T21:58:02.145730749Z
+  modified_at: 2026-11-11T21:58:02.145730749Z
+  session_id: 01a1cc9c-1eae-7a72-9a24-8ec1afc42772
+  harness_version: 2.1.322 (Claude Code)
 history:
 - id: 01a1c399-7102-7f81-9bb9-fd37379159d3
   author: joe
