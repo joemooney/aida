@@ -925,3 +925,29 @@ fn task_3367_local_unknown_observations_use_reservation_backstop() {
         identity.boot = boot;
     }
 }
+
+// trace:STORY-2691 | ai:codex
+#[test]
+fn story2691_reaped_cancellation_requires_matching_attempt_receipt() {
+    let (_temp, store) = fixture();
+    let old = change(1, 1);
+    let attempt = reserve(&store, &old);
+    intent(&store, &old.key(), &change(1, 2));
+    let mut children = Vec::new();
+    for token in [attempt.token.clone(), "other-attempt".into()] {
+        let mut child = std::process::Command::new("/bin/sh")
+            .args(["-c", "kill -TERM $$"])
+            .spawn()
+            .unwrap();
+        child.wait().unwrap();
+        children.push(Dispatcher {
+            child,
+            key: old.key(),
+            token,
+        });
+    }
+    let outcomes = reap_dispatchers(&store, &mut children);
+    assert!(children.is_empty());
+    assert_eq!(outcomes.len(), 1);
+    assert!(outcomes[0].as_ref().unwrap().contains("dispatcher exited"));
+}

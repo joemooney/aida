@@ -829,6 +829,23 @@ fn record_outcome(root: &Path, reason: Option<&str>, dispatched: Option<bool>) -
 mod loop_tests {
     use super::*;
 
+    // trace:STORY-2691 | ai:codex
+    #[test]
+    fn story2691_synchronous_dispatch_failures_survive_idle() {
+        let temp = tempfile::tempdir().unwrap();
+        let root = temp.path();
+        CONTROLLER.with(|id| *id.borrow_mut() = Some("fixture".into()));
+        for count in 1..=3 {
+            controller_dispatch(root, Some("spawn refused"), false).unwrap();
+            controller_pass(root, None).unwrap();
+            assert_eq!(failure_state(root).unwrap().count, count);
+        }
+        assert!(failure_state(root).unwrap().alert.unwrap().sent);
+        controller_dispatch(root, None, true).unwrap();
+        assert_eq!(failure_state(root).unwrap().count, 0);
+        CONTROLLER.with(|id| *id.borrow_mut() = None);
+    }
+
     // Reap actual asynchronous children, rather than simulating record_failure calls.
     // trace:STORY-2691 | ai:codex
     #[cfg(target_os = "linux")]
@@ -837,21 +854,26 @@ mod loop_tests {
         let temp = tempfile::tempdir().unwrap();
         let root = temp.path();
         let store = Store::open(root, "github:github.com/owner/repo").unwrap();
-        for _ in 0..3 {
-            let mut child = std::process::Command::new("/bin/sh")
-                .args(["-c", "exit 23"])
-                .spawn()
-                .unwrap();
-            child.wait().unwrap();
-            let mut children = vec![super::super::Dispatcher {
-                child,
-                key: "PR-7".into(),
-                token: "missing".into(),
-            }];
-            let (failure, success) = super::super::reap_dispatchers(&store, &mut children);
-            assert!(!success);
+        for batch in [2, 1] {
+            let mut children = Vec::new();
+            for _ in 0..batch {
+                let mut child = std::process::Command::new("/bin/sh")
+                    .args(["-c", "exit 23"])
+                    .spawn()
+                    .unwrap();
+                child.wait().unwrap();
+                children.push(super::super::Dispatcher {
+                    child,
+                    key: "PR-7".into(),
+                    token: "missing".into(),
+                });
+            }
+            let outcomes = super::super::reap_dispatchers(&store, &mut children);
+            assert_eq!(outcomes.len(), batch);
             assert!(children.is_empty());
-            record_outcome(root, Some(&failure.unwrap()), Some(false)).unwrap();
+            for failure in outcomes {
+                record_outcome(root, Some(&failure.unwrap()), Some(false)).unwrap();
+            }
             record_outcome(root, None, None).unwrap();
         }
         assert!(failure_state(root).unwrap().alert.unwrap().sent);
@@ -868,8 +890,8 @@ mod loop_tests {
             key: "PR-7".into(),
             token: "missing".into(),
         }];
-        let (failure, success) = super::super::reap_dispatchers(&store, &mut children);
-        assert!(success && failure.is_none());
+        let outcomes = super::super::reap_dispatchers(&store, &mut children);
+        assert_eq!(outcomes, vec![None]);
         record_failure(root, None).unwrap();
         assert_eq!(failure_state(root).unwrap().count, 0);
     }

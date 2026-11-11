@@ -2384,9 +2384,10 @@ pub(crate) fn run_with_program(
     let mut reported_trains = BTreeSet::new();
     loop {
         service::check_controller(&root)?;
-        let (mut pass_failure, dispatch_succeeded) = reap_dispatchers(&store, &mut children);
-        service::controller_dispatch(&root, pass_failure.as_deref(), dispatch_succeeded)?;
-        pass_failure = None;
+        for outcome in reap_dispatchers(&store, &mut children) {
+            service::controller_dispatch(&root, outcome.as_deref(), outcome.is_none())?;
+        }
+        let mut pass_failure = None;
         // trace:STORY-2492 | ai:codex
         if !sync_pass(&root, args.once)? {
             std::thread::sleep(std::time::Duration::from_secs(args.interval));
@@ -2447,7 +2448,11 @@ pub(crate) fn run_with_program(
                 result
             },
         )?;
-        service::controller_pass(&root, pass_failure.as_deref())?;
+        // Synchronous setup/spawn errors are dispatch failures too: an idle
+        // discovery pass must not clear them before a dispatch succeeds.
+        // trace:STORY-2691 | ai:codex
+        service::controller_dispatch(&root, pass_failure.as_deref(), false)?;
+        service::controller_pass(&root, None)?;
         if args.once {
             return Ok(children.into_iter().map(|d| d.child).collect());
         }
@@ -2457,15 +2462,25 @@ pub(crate) fn run_with_program(
 
 // Confirm outcomes by reaping our own children; reservations alone are not success.
 // trace:STORY-2691 | ai:codex
-fn reap_dispatchers(store: &Store, children: &mut Vec<Dispatcher>) -> (Option<String>, bool) {
-    let mut pass_failure = None;
-    let mut dispatch_succeeded = false;
+fn reap_dispatchers(store: &Store, children: &mut Vec<Dispatcher>) -> Vec<Option<String>> {
+    let mut outcomes = Vec::new();
     children.retain_mut(|d| match d.child.try_wait() {
         Ok(Some(status)) => {
-            if status.success() {
-                dispatch_succeeded = true;
-            } else {
-                pass_failure = Some(format!("{}: dispatcher exited {status}", d.key));
+            // Match the durable receipt by both change and attempt token. A
+            // superseded attempt may already be terminal by the time we reap.
+            // Unreadable evidence cannot excuse an unexpected child failure.
+            let cancelled = store.load().ok().is_some_and(|state| {
+                state.entries.get(&d.key).is_some_and(|entry| {
+                    entry
+                        .attempts
+                        .iter()
+                        .any(|attempt| attempt.token == d.token && attempt.supersede.is_some())
+                })
+            });
+            if !cancelled {
+                outcomes.push(
+                    (!status.success()).then(|| format!("{}: dispatcher exited {status}", d.key)),
+                );
             }
             if let Err(error) = mark_unclaimed_exit(store, &d.key, &d.token, &status.to_string()) {
                 eprintln!("{}: could not record dispatcher exit: {error:#}", d.key);
@@ -2474,7 +2489,7 @@ fn reap_dispatchers(store: &Store, children: &mut Vec<Dispatcher>) -> (Option<St
         }
         _ => true,
     });
-    (pass_failure, dispatch_succeeded)
+    outcomes
 }
 
 // Train members were reviewed at their own heads. Exclude the landing PR
