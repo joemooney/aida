@@ -105,17 +105,19 @@ yet resolved that early); its absence is not a signal of anything.
 
 ### Pipelining
 
+<!-- trace:BUG-2492 | ai:codex -->
 ### Which red checks gate a merge (`[ci]`)
 
 A PR's checks collapse to one coarse pass/fail for the drain's CI phase and for
-`aida pr ship`. Two reds are *not* failures and are re-classified before the
+`aida pr ship`. Supervised pending holds and informational failures are re-classified before the
 drain shelves `ci-red` or `pr ship` aborts:
 
-- **The supervised merge-hold itself.** `merge-hold-gate` is designed to be red
+- **The supervised merge-hold itself.** `merge-hold-gate` is designed to stay pending
   while the PR's hold is open on its gate ledger (`aida merge-hold list`). `aida pr ship` keeps the hold through
   the CI watch, releases it at the merge step, waits (up to 180s) for the gate
-  to re-run green, then merges. A red gate with **no** open ledger hold is a
-  lingering label — `aida merge-hold clear <n>` re-syncs it.
+  to re-run green, then merges. An active or uncleared recorded hold without
+  release authority refuses immediately; `aida merge-hold clear <n>` records
+  authorized clearance. A malformed gate remains a real failure.
 - **Informational checks.** A red check is ignored only when it is *not* a
   branch-protection-required check **and** matches the allow-list below.
   Everything else red is a real failure, so a repo with no branch protection

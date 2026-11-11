@@ -24,6 +24,8 @@
 #[path = "pr_train_journal.rs"]
 mod journal;
 pub(crate) use journal::TrainJournalBusy;
+#[path = "pr_train_overlap.rs"]
+mod overlap;
 #[path = "pr_train_verified.rs"]
 mod verified;
 pub(crate) use verified::VerifiedTrainMerge;
@@ -566,7 +568,7 @@ pub(crate) fn hold_gate_tolerance(
 /// The member half of [`hold_gate_tolerance`], without its "every other row
 /// is green" half: a non-pass hold gate is explained by admitted held members
 /// whose live labels agree with the member gate. The train's readiness poll
-/// uses this while lanes still run (the hold gate fails within seconds, long
+/// uses this while lanes still run (the hold gate becomes pending within seconds, long
 /// before the lanes settle); readiness still needs every other row to settle
 /// green before it reports Green. Unreadable labels fail closed.
 // trace:BUG-2401 | ai:claude
@@ -1454,7 +1456,7 @@ impl MemberChecks for LiveChecks<'_> {
         let ship_meta = if self.forge.kind() == crate::forge::ForgeKind::GitHub {
             // trace:STORY-2401 | ai:codex
             journal::before("read member title and body").map_err(|e| format!("{e:#}"))?;
-            crate::pr_cmd::fetch_pr_ship_metadata_via_gh(self.project_root, pr)
+            crate::pr_cmd::fetch_pr_ship_metadata_via_forge(self.project_root, pr)
                 .map_err(|e| format!("its title and body could not be read ({e:#})"))?
         } else {
             crate::pr_cmd::PrShipMetadata {
@@ -2167,7 +2169,7 @@ pub(crate) trait TrainForge {
     }
     /// Push `train`'s tip to `branch` and open its train PR.
     fn open(&mut self, train: &Built, branch: &str) -> Result<crate::forge::ChangeRef>;
-    /// BUG-2214: `train` lets the live wait tolerate a merge-hold-gate red
+    /// BUG-2214: `train` lets the live wait tolerate a merge-hold-gate blocker
     /// that is fully explained by admitted held members the mandate covers.
     fn wait_ci(&mut self, change: &crate::forge::ChangeRef, train: &Built) -> Result<CiVerdict>;
     // trace:STORY-2401 | ai:codex
@@ -2432,7 +2434,7 @@ impl LiveTrainForge<'_> {
         }
         let cfg = crate::ci_gate::read_ci_gate_config(&self.project_root);
         // Only the existing, live member-label proof may tolerate a hold. The
-        // hold gate fails seconds after the train opens, while lanes still
+        // hold gate becomes pending seconds after the train opens, while lanes still
         // run: admission is decided from the members' live labels alone, and
         // readiness still waits for every other row to settle green before
         // Green (BUG-2214's tolerance, decided once the others settle).
@@ -2654,7 +2656,7 @@ impl TrainForge for LiveTrainForge<'_> {
         Ok(match ci_state {
             CiState::Success => CiVerdict::Green,
             other => {
-                // BUG-2214: ship tolerates a merge-hold-gate red while the
+                // BUG-2214: ship tolerates a merge-hold-gate blocker while the
                 // hold it will release is still armed (BUG-1180); the train
                 // does the same for admitted held members, re-verifying every
                 // member's live labels. trace:BUG-2214 | ai:claude
@@ -3948,13 +3950,8 @@ pub(crate) fn pr_train_handler_with_dispatch_ctx(
     }
     let mut members = Vec::new();
     let mut refused = Vec::new();
-    let mut waiting = Vec::new();
     for pr in candidates {
         crate::gate::dispatch_auth::checkpoint(dispatch_ctx, "pr train")?;
-        if members.len() >= opts.max.max(1) {
-            waiting.push(pr);
-            continue;
-        }
         let ownership_refusal = ownership_rider_refusal(&main_worktree, pr)?;
         if let Some(reason) =
             ownership_refusal.or_else(|| train_rider_refusal(pr, &open_trains, &leased_trains))
@@ -3981,6 +3978,42 @@ pub(crate) fn pr_train_handler_with_dispatch_ctx(
             }
         }
     }
+    // Gate all candidates before choosing a bounded train: waiting approved
+    // PRs must contribute to the overlap cost. trace:STORY-2693 | ai:codex
+    let main = fetch_base(&main_worktree, &base)?;
+    let mut files = std::collections::BTreeMap::new();
+    for member in &members {
+        let changed = git_raw(
+            &main_worktree,
+            &[
+                "diff",
+                "--no-renames",
+                "--name-only",
+                "-z",
+                &format!("{main}...{}", member.head),
+                "--",
+            ],
+        )?;
+        anyhow::ensure!(
+            changed.status.success(),
+            "could not read changed files for PR #{}: {}",
+            member.pr,
+            String::from_utf8_lossy(&changed.stderr)
+        );
+        files.insert(
+            member.pr,
+            changed
+                .stdout
+                .split(|b| *b == 0)
+                .filter(|p| !p.is_empty())
+                .map(|p| p.to_vec())
+                .collect(),
+        );
+    }
+    let order = overlap::order(&files);
+    members.sort_by_key(|m| order.iter().position(|pr| *pr == m.pr).unwrap());
+    let waiting: Vec<u64> = members.iter().skip(opts.max.max(1)).map(|m| m.pr).collect();
+    members.truncate(opts.max.max(1));
     if !waiting.is_empty() {
         let list: Vec<String> = waiting.iter().map(|p| format!("#{p}")).collect();
         println!(
@@ -3990,7 +4023,6 @@ pub(crate) fn pr_train_handler_with_dispatch_ctx(
             list.join(", ")
         );
     }
-    let main = fetch_base(&main_worktree, &base)?;
     let mut warnings = Vec::new();
     let mut dispatch_abort: Option<String> = None;
     let mut outcome = if opts.dry_run {

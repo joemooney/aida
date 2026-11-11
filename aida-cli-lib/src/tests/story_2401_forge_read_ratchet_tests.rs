@@ -52,7 +52,8 @@ const RAW_GH_ALLOWLIST: &[(&str, usize)] = &[
     // Present on main before this ratchet's initial landing (STORY-2476).
     ("aida-cli-lib/src/pipeline_stall.rs", 2),
     ("aida-cli-lib/src/plan_cmd.rs", 1),
-    ("aida-cli-lib/src/pr_cmd.rs", 4),
+    // BUG-2515 moved ship title/body reads behind the resolved forge.
+    ("aida-cli-lib/src/pr_cmd.rs", 3),
     ("aida-cli-lib/src/pr_list.rs", 1),
     ("aida-cli-lib/src/pr_lookup.rs", 3),
     ("aida-cli-lib/src/pr_ship_batch.rs", 1),
