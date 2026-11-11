@@ -15,10 +15,19 @@ relationships:
   target_id: 01a1ca8a-722c-79a0-b301-26e4d9948e37
   created_at: 2026-11-11T12:17:53.802911480Z
   created_by: joe
+- rel_type: Child
+  target_id: 01a1c91e-cfa5-7032-a3a8-2a4d85e2321c
+  created_at: 2026-11-11T12:17:59.940037575Z
 history:
 - id: 01a1ca8b-157a-7c50-9f73-dc13d565bf63
   author: joe
   timestamp: 2026-11-11T12:17:55.066117236Z
+  session_id: 01a1ca83-fabb-7663-852c-12c78d4e097f
+  harness_version: 2.1.322 (Claude Code)
+  changes: []
+- id: 01a1ca8b-2d8d-77d3-99b2-8791be92d585
+  author: joe
+  timestamp: 2026-11-11T12:18:01.229549319Z
   session_id: 01a1ca83-fabb-7663-852c-12c78d4e097f
   harness_version: 2.1.322 (Claude Code)
   changes: []
