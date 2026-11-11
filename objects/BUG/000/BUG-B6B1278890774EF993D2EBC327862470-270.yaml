@@ -3,12 +3,12 @@ spec_id: BUG-b6b1278890774ef993d2ebc327862470-270
 agreed_id: BUG-2505
 title: aida add can exit without creating a spec when given a tag such as from:2026-11-08-review-closeout
 description: 'Observed 2026-11-08: six aida add calls with that tag created nothing, while the same calls with only area:orchestration succeeded. The error text was hidden by the caller''s output filter, so the cause is inferred from the difference. Reproduce with the tag and read the output first.'
-status: NeedsAttention
+status: Approved
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-09T03:00:45.690194532Z
-modified_at: 2026-11-11T15:12:04.898941609Z
+modified_at: 2026-11-11T15:12:18.221588920Z
 req_type: Bug
 tags:
 - area:cli
@@ -164,6 +164,13 @@ comments:
   content: 'ADVISOR BRIEF (2026-11-11 08:12 MST, rework round 1 on PR #3845 at 0a272b0dc42c): P1 from review: lib_part1.rs:1826 changed run() to run(refusal_to_stderr: &mut bool), but the source extractor in aida-cli-lib/src/tests/story_1728_command_registry_tests.rs:543 still searches for the exact text ''pub(crate) fn run() -> Result<()> {'', so run_dispatches_early_handlers_before_any_store_is_opened panics. Fix: make the extractor find the run function without depending on its parameter list, keep every early-dispatch assertion unchanged. Also prefer a design that does not thread a &mut bool through run(): route refusal diagnostics to stderr at the point of refusal if that is simpler. Validate: cargo test -p aida-cli-lib run_dispatches_early_handlers via the lane runner, plus the bug_2505 test, then make check-ci-fast. Push to the same PR branch.'
   created_at: 2026-11-11T15:12:04.898941609Z
   modified_at: 2026-11-11T15:12:04.898941609Z
+  session_id: 01a1ca83-fabb-7663-852c-12c78d4e097f
+  harness_version: 2.1.322 (Claude Code)
+- id: 01a1cb2a-bd2d-7ff0-b312-3d0137d586fb
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida edit --status`. It was shelved on: reviewer/verdict:request-changes: Stderr routing meets the advisor brief, but the changed run signature deterministically breaks the existing early-dispatch invariant test; CI pending at review time.. No triage reason was given.'
+  created_at: 2026-11-11T15:12:18.221582900Z
+  modified_at: 2026-11-11T15:12:18.221582900Z
   session_id: 01a1ca83-fabb-7663-852c-12c78d4e097f
   harness_version: 2.1.322 (Claude Code)
 history:
@@ -376,6 +383,15 @@ history:
   author: joe
   timestamp: 2026-11-11T15:10:22.197992789Z
   changes: []
+- id: 01a1cb2a-bd2d-7ff0-b312-3cf219478d6b
+  author: joe
+  timestamp: 2026-11-11T15:12:18.221572326Z
+  session_id: 01a1ca83-fabb-7663-852c-12c78d4e097f
+  harness_version: 2.1.322 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 filed_at:
   code_sha: d73f4e6b86c9f6a85cc01a4aa9893b869252b3a9
   branch: main
@@ -387,11 +403,3 @@ filed_at:
 implementation_info:
   implemented: false
   reopened_at_sha: 11b131dfe3341e6d9c7127d64370f91366094711
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: Stderr routing meets the advisor brief, but the changed run signature deterministically breaks the existing early-dispatch invariant test; CI pending at review time.
-  recovery_hint: address the review findings, move BUG-2505 back to In Progress, and clear the PR hold only after approval
-  shelved_by: reviewer
-  shelved_at: 2026-11-11T15:10:21.987262007Z
