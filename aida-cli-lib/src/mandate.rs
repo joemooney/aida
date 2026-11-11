@@ -1106,7 +1106,7 @@ fn run_mandate(
     matches: &clap::ArgMatches,
     _ctx: &crate::cmdkit::DispatchCtx,
 ) -> anyhow::Result<()> {
-    use crate::*;
+    // trace:TASK-3428 | ai:codex
     let args = <MandateArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
     let MandateArgs { action } = &args;
     return self::handle_mandate(action);

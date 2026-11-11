@@ -1,22 +1,3 @@
 {
-  "aida-cli-lib/src/backlog.rs": 1,
-  "aida-cli-lib/src/criteria.rs": 1,
-  "aida-cli-lib/src/db_cmd.rs": 1,
-  "aida-cli-lib/src/exposition.rs": 1,
-  "aida-cli-lib/src/harvest.rs": 1,
-  "aida-cli-lib/src/history.rs": 1,
-  "aida-cli-lib/src/identity_gate.rs": 1,
-  "aida-cli-lib/src/maintenance_schedule.rs": 1,
-  "aida-cli-lib/src/mandate.rs": 1,
-  "aida-cli-lib/src/notify.rs": 1,
-  "aida-cli-lib/src/queue_cmd/rework.rs": 1,
-  "aida-cli-lib/src/reconstitute.rs": 1,
-  "aida-cli-lib/src/report_cmd.rs": 1,
-  "aida-cli-lib/src/schema.rs": 1,
-  "aida-cli-lib/src/shift.rs": 1,
-  "aida-cli-lib/src/supervise_cmd.rs": 1,
-  "aida-cli-lib/src/tail_cmd.rs": 1,
-  "aida-cli-lib/src/terminal_cmd.rs": 1,
-  "aida-cli-lib/src/usage_cmd.rs": 1,
-  "aida-cli-lib/src/watch.rs": 1
+  "aida-cli-lib/src/queue_cmd/rework.rs": 1
 }

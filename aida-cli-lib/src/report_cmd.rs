@@ -1070,7 +1070,7 @@ fn run_report(
     matches: &clap::ArgMatches,
     ctx: &crate::cmdkit::DispatchCtx,
 ) -> anyhow::Result<crate::cmdkit::Flow> {
-    use crate::*;
+    // trace:TASK-3428 | ai:codex
     let args = <ReportArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
     // trace:BUG-2189 | ai:claude
     if matches!(
