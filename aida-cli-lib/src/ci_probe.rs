@@ -1,7 +1,13 @@
 //! CI probing: CiProbe, decide_ci_action and wait_for_ci_terminal (STORY-1488 slice 1)
 // trace:STORY-1488 | ai:claude
 
-use crate::*;
+use crate::process_retry::RetryEtxtbsy;
+use crate::{
+    detect_default_branch_ref, drain_state, events, git_arg_guard, resolve_forge_cli,
+    watch_ci_terminal, Result,
+};
+use colored::Colorize;
+use std::io::IsTerminal;
 
 pub(crate) fn branch_behind_main(
     repo: &std::path::Path,

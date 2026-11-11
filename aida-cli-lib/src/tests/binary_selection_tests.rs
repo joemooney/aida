@@ -4,6 +4,10 @@
 //! the `ShaMatch::Exact` shortcut path of `classify_sha_match` which
 //! is logic, not git. trace:TASK-221 | ai:claude
 use super::*;
+use crate::{
+    classify_from_merge_base_exit, classify_sha_match, parse_embedded_sha, pull_binary_is_stale,
+    ShaMatch,
+};
 // The pure auto-select binary picker moved to `dev_cmd` (SPIKE-78).
 use crate::dev_cmd::{
     activate_reexec_target, auto_select_dev_profile, classify_dev_activation,
