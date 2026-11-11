@@ -205,6 +205,7 @@ fn environment_alias_error_parity() {
             ("2026-11-09", reader.clone(), 23),
         ] {
             let aliased = run(alias, None, agent, since, &selected_reader);
+            let canonical_env = run(canonical, None, agent, since, &selected_reader);
             let expected = run(
                 "unsupported",
                 Some(canonical),
@@ -213,6 +214,9 @@ fn environment_alias_error_parity() {
                 &selected_reader,
             );
             assert_eq!(aliased.status.code(), Some(code));
+            assert_eq!(aliased.status.code(), canonical_env.status.code());
+            assert_eq!(aliased.stdout, canonical_env.stdout, "{alias}: {since}");
+            assert_eq!(aliased.stderr, canonical_env.stderr, "{alias}: {since}");
             assert_eq!(aliased.status.code(), expected.status.code());
             assert_eq!(aliased.stdout, expected.stdout, "{alias}: {since}");
             assert_eq!(aliased.stderr, expected.stderr, "{alias}: {since}");
