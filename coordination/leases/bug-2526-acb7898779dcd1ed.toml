@@ -1,0 +1,14 @@
+pid_namespace = 4026531836
+claim_id = "e8503c65-f483-4386-8395-4a913e55d0a0"
+scope = "BUG-2526"
+node_id = "b6b1278890774ef993d2ebc327862470"
+clone_path = "/home/joe/ai/aida"
+host = "imac"
+pid = 1335656
+pid_start_time = "linux-starttime:100644848"
+agent = "advisor"
+started_at = "2026-11-11T16:36:49.277277563+00:00"
+heartbeat_at = "2026-11-11T16:36:49.277277563+00:00"
+ttl_secs = 1800
+process_backed = false
+review_verb = false
