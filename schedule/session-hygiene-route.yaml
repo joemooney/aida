@@ -9,6 +9,6 @@ note: 'TASK-2708 seat: commit already on origin, only ignored files; dead sessio
 due_since: 2026-11-08T10:42:18.898345894Z
 due_reason: on CronJobFailed:session-hygiene
 due_failure:
-  trip_id: session-hygiene@2026-11-11T02:28:48.713906902Z
+  trip_id: session-hygiene@2026-11-11T03:31:54.170373005Z
   job: session-hygiene
   error: 'exit 1: '
