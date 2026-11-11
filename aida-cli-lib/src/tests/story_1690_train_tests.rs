@@ -5152,3 +5152,32 @@ fn train_ci_row_progress_passing_build_with_separate_hold_run() {
         "run 99; ancillary publish-merge-hold-status: pending"
     );
 }
+
+// Same-run ancillary checks and similarly named checks from other workflows
+// remain visible without entering the CI shard count.
+// trace:TASK-3782 | ai:codex
+#[test]
+fn train_ci_row_progress_same_run_ancillary_identity() {
+    let mut rows =
+        crate::ci_gate::parse_check_rows(include_str!("task_3782_run_42913999193.json")).unwrap();
+    for (name, workflow) in [
+        ("CI (ancillary)", "Release"),
+        ("CI helper", "CI"),
+        ("Build (ubuntu-latest)", "CI"),
+    ] {
+        rows.push(crate::ci_gate::CheckRow {
+            name: name.into(),
+            workflow: workflow.into(),
+            bucket: "pending".into(),
+            run_id: Some("42913999193".into()),
+        });
+    }
+    assert_eq!(rows.iter().filter(|row| train_ci_is_shard(row)).count(), 7);
+    let text = train_ci_wait_details(&rows).join("; ");
+    assert!(text.contains("run 42913999193: 7/7 shards passed"));
+    assert!(text.contains("ancillary Release (${{ matrix.os }}): skipping"));
+    assert!(text.contains("ancillary CI (ancillary): pending"));
+    assert!(text.contains("ancillary CI helper: pending"));
+    assert!(text.contains("Build summary: pending"));
+    assert!(!text.contains("appears after"));
+}

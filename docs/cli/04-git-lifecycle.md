@@ -433,8 +433,10 @@ While waiting, the train reports CI run IDs and each shard's check bucket from
 its existing check-row snapshot. Only `CI (...)` checks in workflow `CI` count
 as shards; ancillary checks such as Release are listed separately. The Build
 summary appears after all shards finish. Failed checks are named immediately.
-This display adds no forge reads and changes no readiness or wait decisions;
-check rows do not distinguish runner queue time from execution time.
+This display adds no forge reads and leaves the readiness result unchanged;
+progress lines are printed separately from required-check names. Check rows do
+not distinguish runner queue time from execution time. No GitLab-specific
+progress lookup or runner queue timing is provided.
 
 A newly opened train waits up to 180 seconds for its first CI checks to
 register. After checks appear, pending lanes continue through the ordinary

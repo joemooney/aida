@@ -592,6 +592,13 @@ pub(crate) fn hold_release_admitted(
     })
 }
 
+/// CI matrix identity from the existing check snapshot. Summary and ancillary
+/// jobs (including Release) must never increase the shard denominator.
+// trace:TASK-3782 | ai:codex
+fn train_ci_is_shard(row: &crate::ci_gate::CheckRow) -> bool {
+    row.workflow == "CI" && row.name.starts_with("CI (") && row.name.ends_with(')')
+}
+
 /// Cosmetic progress from the same snapshot used for readiness. No forge reads.
 /// Shards are the CI workflow's matrix checks; Release and other checks are
 /// ancillary and never enter the shard denominator.
@@ -605,10 +612,11 @@ fn train_ci_wait_details(rows: &[crate::ci_gate::CheckRow]) -> Vec<String> {
                 .iter()
                 .filter(|r| r.run_id.as_deref() == Some(run))
                 .collect();
-            let is_shard = |r: &&crate::ci_gate::CheckRow| {
-                r.workflow == "CI" && r.name.starts_with("CI (") && r.name.ends_with(')')
-            };
-            let shards: Vec<_> = checks.iter().copied().filter(is_shard).collect();
+            let shards: Vec<_> = checks
+                .iter()
+                .copied()
+                .filter(|row| train_ci_is_shard(row))
+                .collect();
             let passed = shards.iter().filter(|r| r.bucket == "pass").count();
             let is_ci_run = checks.iter().any(|r| r.workflow == "CI");
             let mut parts = if is_ci_run {
@@ -624,7 +632,7 @@ fn train_ci_wait_details(rows: &[crate::ci_gate::CheckRow]) -> Vec<String> {
                     && crate::ci_gate::check_name_eq(&row.name, "Build (ubuntu-latest)")
                 {
                     parts.push(format!("Build summary: {}", row.bucket));
-                } else if is_shard(&row) {
+                } else if train_ci_is_shard(row) {
                     parts.push(format!("{}: {}", row.name, row.bucket));
                 } else {
                     parts.push(format!("ancillary {}: {}", row.name, row.bucket));
@@ -2514,7 +2522,7 @@ impl LiveTrainForge<'_> {
         // Green (BUG-2214's tolerance, decided once the others settle).
         // trace:BUG-2401 | ai:claude
         let admitted = hold_release_admitted(&rows, cars, labels);
-        let mut state = train_ci_readiness(&rows, required, &cfg, admitted);
+        let state = train_ci_readiness(&rows, required, &cfg, admitted);
         // Detail is informational and cannot replace the pinned readiness proof.
         // trace:TASK-3782 | ai:codex
         if matches!(
@@ -2522,11 +2530,7 @@ impl LiveTrainForge<'_> {
             TrainCiReadiness::Pending(_) | TrainCiReadiness::Missing(_)
         ) {
             for detail in train_ci_wait_details(&rows) {
-                if let TrainCiReadiness::Pending(names) = &mut state {
-                    names.push(detail);
-                } else {
-                    println!("  train PR #{} CI waiting: {detail}", change.id);
-                }
+                println!("  train PR #{} CI waiting: {detail}", change.id);
             }
         }
         assert_head()?;
