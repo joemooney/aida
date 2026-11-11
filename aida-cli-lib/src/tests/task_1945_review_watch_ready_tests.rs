@@ -1336,6 +1336,16 @@ fn story2691_unreadable_approval_artifacts_are_unavailable() {
         ready::train_verdict_reads(temp.path(), 7, &[]),
         Err(crate::pr_train::MemberGateError::Unavailable(_))
     ));
+    record_verdict(temp.path(), "approved");
+    assert!(ready::train_verdict_reads(temp.path(), 7, &[]).is_ok());
+    let path = dir.join("PR-7.json");
+    let target = temp.path().join("approval.json");
+    std::fs::rename(&path, &target).unwrap();
+    std::os::unix::fs::symlink(&target, &path).unwrap();
+    assert!(matches!(
+        ready::train_verdict_reads(temp.path(), 7, &[]),
+        Err(crate::pr_train::MemberGateError::Unavailable(_))
+    ));
 }
 
 // trace:STORY-2691 | ai:codex

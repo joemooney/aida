@@ -367,22 +367,11 @@ pub(super) fn train_verdict_reads(
     let main = crate::main_worktree_root_from(root);
     for root in [root, main.as_path()] {
         for key in std::iter::once(format!("PR-{pr}")).chain(ids.iter().cloned()) {
-            let path = crate::gate::review_verdict::verdict_path(root, &key);
-            match crate::gate::review_verdict::read_verdict_body(&path) {
-                Ok(body)
-                    if crate::gate::review_verdict::parse_recorded_verdict(&body).is_some() => {}
-                Err(error)
-                    if error.kind() == std::io::ErrorKind::NotFound
-                        && matches!(std::fs::symlink_metadata(&path), Err(e) if e.kind() == std::io::ErrorKind::NotFound) =>
-                    {}
-                result => {
-                    return Err(Unavailable(format!(
-                        "approval evidence {} unreadable or invalid: {:?}",
-                        path.display(),
-                        result.err()
-                    )))
-                }
-            }
+            crate::gate::review_verdict::checked_current_verdict(root, &key).map_err(|error| {
+                Unavailable(format!(
+                    "approval evidence {key} unreadable or invalid: {error}"
+                ))
+            })?;
         }
     }
     Ok(())

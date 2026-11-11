@@ -796,7 +796,6 @@ fn record_outcome(root: &Path, reason: Option<&str>, dispatched: Option<bool>) -
     match dispatched {
         Some(false) => state.dispatch_pending = true,
         Some(true) => state.dispatch_pending = false,
-        None if reason.is_none() && state.dispatch_pending => return Ok(()),
         None => {}
     }
     if let Some(reason) = reason {
@@ -812,8 +811,13 @@ fn record_outcome(root: &Path, reason: Option<&str>, dispatched: Option<bool>) -
                 sent: false,
             });
         }
-    } else {
-        state = Failures::default();
+    } else if !state.dispatch_pending {
+        // Success resets bookkeeping, but cannot discard an undelivered notice.
+        let pending = state.alert.take().filter(|alert| !alert.sent);
+        state = Failures {
+            alert: pending,
+            ..Failures::default()
+        };
     }
     if let Some(alert) = state.alert.as_mut() {
         alert.message.from = NAME.into();
@@ -1019,6 +1023,50 @@ mod loop_tests {
             first.message.id
         );
         assert_eq!(count(), 2);
+    }
+
+    // trace:STORY-2691 | ai:codex
+    #[test]
+    fn story2691_unsent_alert_retries_after_restart_before_idle_or_success() {
+        for success in [false, true] {
+            let temp = tempfile::tempdir().unwrap();
+            let root = temp.path();
+            CONTROLLER.with(|id| *id.borrow_mut() = Some("old".into()));
+            controller_dispatch(root, Some("failed"), false).unwrap();
+            controller_dispatch(root, Some("failed"), false).unwrap();
+            let mailbox = root.join(".aida/mailbox");
+            std::fs::write(&mailbox, "temporarily unavailable").unwrap();
+            assert!(controller_dispatch(root, Some("failed"), false).is_err());
+            let original = failure_state(root).unwrap().alert.unwrap();
+            assert!(!original.sent);
+            CONTROLLER.with(|id| *id.borrow_mut() = Some("replacement".into()));
+            assert!(controller_pass(root, None).is_err());
+            if success {
+                assert!(controller_dispatch(root, None, true).is_err());
+                let saved = failure_state(root).unwrap();
+                assert_eq!(saved.count, 0);
+                assert!(!saved.dispatch_pending);
+                assert_eq!(saved.alert.unwrap().message.id, original.message.id);
+            }
+            std::fs::remove_file(&mailbox).unwrap();
+            if success {
+                controller_dispatch(root, None, true).unwrap();
+            } else {
+                controller_pass(root, None).unwrap();
+                assert!(failure_state(root).unwrap().alert.unwrap().sent);
+                controller_dispatch(root, None, true).unwrap();
+            }
+            controller_pass(root, None).unwrap();
+            let entries: Vec<_> = std::fs::read_dir(&mailbox).unwrap().collect();
+            assert_eq!(entries.len(), 1);
+            let message: serde_json::Value = serde_json::from_slice(
+                &std::fs::read(entries[0].as_ref().unwrap().path()).unwrap(),
+            )
+            .unwrap();
+            assert_eq!(message["id"], original.message.id);
+            assert_eq!(failure_state(root).unwrap().count, 0);
+            CONTROLLER.with(|id| *id.borrow_mut() = None);
+        }
     }
 
     // Rotation changes only the binding, never a live worker or its grant.

@@ -2545,3 +2545,47 @@ fn review_risk_is_ledger_metadata_not_verdict_authority() {
         .risk
         .is_none());
 }
+
+// trace:STORY-2691 | ai:codex
+#[test]
+fn story2691_checked_verdict_projects_ledger_without_hiding_invalid_files() {
+    let (_temp, root) = root();
+    let _env = uncontained();
+    let key = "PR-14";
+    assert!(rv::checked_current_verdict(&root, key).unwrap().is_none());
+    let path = rv::verdict_path(&root, key);
+    std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+    std::fs::write(
+        &path,
+        serde_json::to_vec(&record("approved", "2026-01-01T00:00:00Z", None)).unwrap(),
+    )
+    .unwrap();
+    record_event(
+        &root,
+        verdict(
+            ChangeKey::pr(14),
+            None,
+            record("request-changes", "2026-01-02T00:00:00Z", None),
+        ),
+    )
+    .unwrap();
+    assert_eq!(
+        rv::checked_current_verdict(&root, key)
+            .unwrap()
+            .unwrap()
+            .kind,
+        rv::VerdictKind::RequestChanges
+    );
+    std::fs::write(&path, "malformed").unwrap();
+    assert!(rv::checked_current_verdict(&root, key).is_err());
+    std::fs::remove_file(&path).unwrap();
+    assert_eq!(
+        rv::checked_current_verdict(&root, key)
+            .unwrap()
+            .unwrap()
+            .kind,
+        rv::VerdictKind::RequestChanges
+    );
+    std::os::unix::fs::symlink(root.join("missing"), &path).unwrap();
+    assert!(rv::checked_current_verdict(&root, key).is_err());
+}
