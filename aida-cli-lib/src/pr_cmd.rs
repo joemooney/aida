@@ -41,6 +41,7 @@ pub(crate) use pr_cmd_args::*;
 // trace:STORY-90 | ai:claude
 pub(crate) fn handle_pr_command(cmd: &PrCommand) -> Result<()> {
     match cmd {
+        PrCommand::State(args) => crate::pr_state::run(args),
         // Internal worker preserves the existing cleanup gates after ship exits.
         // trace:BUG-2384 | ai:codex
         PrCommand::PostShipCleanup {
@@ -8715,6 +8716,14 @@ fn review_queue_argv(change: &str) -> [&str; 4] {
 /// every other subcommand keeps the `pr` policy.
 // trace:TASK-1715 | ai:claude
 fn pr_cli_policy(matches: &clap::ArgMatches) -> crate::command_registry::CmdPolicy {
+    if matches.subcommand_name() == Some("state") {
+        return crate::command_registry::CmdPolicy {
+            stakeholder: crate::stakeholder_role::StakeholderAction::Read,
+            per_write_auto_push: false,
+            skip_role_restore_prompt: true,
+            team_identity_write: false,
+        };
+    }
     let review = <PrArgs as clap::FromArgMatches>::from_arg_matches(matches)
         .ok()
         .and_then(|args| match args.inner {

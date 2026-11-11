@@ -7952,3 +7952,111 @@ pub(crate) fn flow_report_read(root: &Path, args: &[&str]) -> Result<serde_json:
         }
     }
 }
+
+/// One bounded, repository-pinned read for all open PRs. No per-PR forge calls.
+// trace:STORY-2688 | ai:codex
+pub(crate) fn pr_state_batch(
+    root: &Path,
+    timeout: std::time::Duration,
+) -> Result<Vec<serde_json::Value>> {
+    let (host, project) = pr_state_repository(root)?;
+    let mut cmd = Command::new("gh");
+    pr_state_pin(&mut cmd, root, &host);
+    cmd.args(["pr", "list", "--repo", &format!("{host}/{project}"), "--state", "open", "--limit", "1000", "--json",
+        "number,url,title,state,headRefOid,headRefName,baseRefOid,baseRefName,mergeable,mergeStateStatus,isDraft,labels,statusCheckRollup"]);
+    let out = crate::command_output_with_timeout(cmd, timeout)
+        .context("PR state probe failed or timed out")?;
+    anyhow::ensure!(
+        out.status.success(),
+        "PR state forge observation failed: {}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    anyhow::ensure!(
+        out.stdout.len() <= 8 * 1024 * 1024,
+        "PR state snapshot too large"
+    );
+    let rows: Vec<serde_json::Value> = serde_json::from_slice(&out.stdout)?;
+    anyhow::ensure!(rows.len() < 1000, "PR state snapshot truncated at 1000 PRs");
+    Ok(rows)
+}
+// trace:STORY-2688 | ai:codex
+fn pr_state_repository(root: &Path) -> Result<(String, String)> {
+    let mut git = Command::new("git");
+    git.current_dir(root).args(["remote", "get-url", "origin"]);
+    let out = crate::command_output_with_timeout(git, std::time::Duration::from_millis(500))
+        .context("repository probe failed or timed out")?;
+    anyhow::ensure!(out.status.success(), "cannot resolve PR state repository");
+    let remote = String::from_utf8(out.stdout)?;
+    anyhow::ensure!(detect_forge_kind(remote.trim()) == ForgeKind::GitHub,
+        "PR state batch collection currently supports GitHub; unsupported forge requires advisor routing");
+    Ok((
+        forge_host_of(remote.trim()).context("missing forge host")?,
+        project_path_of(remote.trim()).context("missing forge project")?,
+    ))
+}
+fn pr_state_pin(cmd: &mut Command, root: &Path, host: &str) {
+    cmd.current_dir(root)
+        .stdin(std::process::Stdio::null())
+        .env("GH_HOST", host);
+    for key in [
+        "GH_REPO",
+        "GIT_DIR",
+        "GIT_WORK_TREE",
+        "GIT_COMMON_DIR",
+        "GIT_INDEX_FILE",
+        "GIT_NAMESPACE",
+        "GIT_CONFIG_COUNT",
+        "GIT_CONFIG_PARAMETERS",
+    ] {
+        cmd.env_remove(key);
+    }
+}
+/// Workflow tree OIDs for every pinned head and base in one GraphQL request.
+// trace:STORY-2688 | ai:codex
+pub(crate) fn pr_state_workflows(
+    root: &Path,
+    rows: &[serde_json::Value],
+    timeout: std::time::Duration,
+) -> Result<serde_json::Value> {
+    let (host, project) = pr_state_repository(root)?;
+    let (owner, name) = project.split_once('/').context("invalid repository path")?;
+    let mut fields = String::new();
+    for (i, row) in rows.iter().enumerate() {
+        let number = row["number"].as_u64().context("missing PR number")?;
+        fields.push_str(&format!(" r{i}: pullRequest(number: {number}) {{ baseRef {{ branchProtectionRule {{ requiredStatusCheckContexts }} }} }}"));
+        for (suffix, field) in [("h", "headRefOid"), ("b", "baseRefOid")] {
+            let sha = row[field].as_str().context("missing pinned SHA")?;
+            anyhow::ensure!(
+                (40..=64).contains(&sha.len()) && sha.bytes().all(|b| b.is_ascii_hexdigit()),
+                "invalid pinned SHA"
+            );
+            fields.push_str(&format!(
+                " p{i}{suffix}: object(expression: \"{sha}:.github/workflows\") {{ oid }}"
+            ));
+        }
+    }
+    let query = format!(
+        "query {{ repository(owner: {}, name: {}) {{ {fields} }} }}",
+        serde_json::to_string(owner)?,
+        serde_json::to_string(name)?
+    );
+    let mut cmd = Command::new("gh");
+    pr_state_pin(&mut cmd, root, &host);
+    cmd.args([
+        "api",
+        "graphql",
+        "--hostname",
+        &host,
+        "-f",
+        &format!("query={query}"),
+    ]);
+    let out = crate::command_output_with_timeout(cmd, timeout)
+        .context("PR state probe failed or timed out")?;
+    anyhow::ensure!(out.status.success(), "workflow batch observation failed");
+    let body: serde_json::Value = serde_json::from_slice(&out.stdout)?;
+    anyhow::ensure!(
+        body.get("errors").is_none(),
+        "workflow batch returned GraphQL errors"
+    );
+    Ok(body["data"]["repository"].clone())
+}

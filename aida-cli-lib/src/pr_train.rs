@@ -4224,3 +4224,8 @@ pub(crate) fn pr_train_handler_with_dispatch_ctx(
 #[cfg(test)]
 #[path = "tests/story_1690_train_tests.rs"]
 mod tests;
+
+// trace:STORY-2688 | ai:codex
+pub(crate) fn pr_state_members(root: &Path) -> Result<Vec<u64>> {
+    journal::pr_state_members(&root.join(".aida/train"))
+}
