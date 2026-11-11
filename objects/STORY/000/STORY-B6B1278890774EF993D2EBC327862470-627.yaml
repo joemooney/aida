@@ -3,12 +3,12 @@ spec_id: STORY-b6b1278890774ef993d2ebc327862470-627
 agreed_id: STORY-2704
 title: 'Porcelain crate: area-grouped Rust convenience commands as one multi-call aida-porcelain extension, plus nested aida-<builtin>-<name> resolution'
 description: 'Operator direction 2026-11-09, under ADR-71 (core admits substrate capabilities; convenience ships as external aida-<name>, delivered by STORY-1641). ## Sketch (needs sketch signoff) 1. New workspace crate aida-porcelain producing one multi-call binary; installed (by aida dev build and release) under several aida-<name> names it dispatches on by argv[0]. Commands grouped by area modules (flow/metrics, review, queue, ...). Commands read state only through aida-core public APIs and documented --format json surfaces, never raw internal files. 2. Nested externals for BUILT-IN parents: when aida <builtin> <unknown> fails to match, resolve aida-<builtin>-<unknown> on PATH; built-in children always win; help for the parent lists them. External parents dispatch their own children. 3. Review: porcelain commands are read-only unless separately approved, which places them in the LOW tier of STORY-2698. 4. First tenant: move STORY-2699''s flow report here once the crate exists. ## Acceptance - Multi-call dispatch, install names and help listing tested. - Nested resolution: precedence, unknown-name error unchanged, help listing; regression tests beside aida-cli/tests/story_1641_external_subcommands.rs. - A porcelain command cannot mutate the store (test). - Docs in docs/cli.'
-status: InProgress
+status: NeedsAttention
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-10T03:52:00.571796159Z
-modified_at: 2026-11-11T04:49:41.215149624Z
+modified_at: 2026-11-11T05:03:39.278859851Z
 req_type: Story
 comments:
 - id: 01a1c399-6840-7383-843e-9930f6eaa3f7
@@ -857,6 +857,13 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1c8fd-810e-7183-b1d0-4be294cea806
+  author: aida-orchestrator
+  timestamp: 2026-11-11T05:03:39.278887549Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 execution_mode: drain
 filed_at:
   code_sha: 838f14c3c2811c6b63da5d465700cff773c36190
@@ -867,3 +874,11 @@ filed_at:
   vendor: claude
   session: 01a1beff-fc3b-78e2-93e2-9b0c283b0339
   harness_version: 2.1.319 (Claude Code)
+failure_reason:
+  phase: reviewer
+  phase_index: 3
+  kind: verdict:request-changes
+  detail: 'Full sweep: external-discovery fixture isolation is defeated by startup PATH prepend; two demonstrated CI regressions remain. Current-head CI pending.'
+  recovery_hint: address the review findings, move STORY-2704 back to In Progress, and clear the PR hold only after approval
+  shelved_by: reviewer
+  shelved_at: 2026-11-11T05:03:39.278859851Z
