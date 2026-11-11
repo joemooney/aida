@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-09T01:58:46.910276326Z
-modified_at: 2026-11-11T05:33:06.780994560Z
+modified_at: 2026-11-11T05:33:08.042668977Z
 req_type: Story
 tags:
 - area:orchestration
@@ -158,6 +158,22 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Three defects; full diff and 32 criteria reviewed; CI pending.. No triage reason was given.'
   created_at: 2026-11-11T05:33:06.780990068Z
   modified_at: 2026-11-11T05:33:06.780990068Z
+  session_id: 01a1c87f-970d-7ce0-9351-e4e75a87731e
+  harness_version: 2.1.322 (Claude Code)
+- id: 01a1c918-7dbc-7f63-9e71-321b1a61b31f
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (STORY-2691):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 11ace61c5ac7
+    Recorded: 2026-11-11T05:21:57.288874706+00:00
+    Findings:
+    1. F1 [P2] advisor_loop_service.rs:787: Failure-only supervisor observations pass Some(true), clearing dispatch_pending; the next idle pass erases unresolved dispatch failures after restart. Preserve pending state until confirmed dispatch success and test supervisor restart plus idle.
+    2. F2 [P2] review_watch.rs:2445: pass_failure overwrites multiple synchronous dispatch failures, counting three failed spawns in one pass as one. Count each outcome and test three synchronous failures in one pass.
+    3. F3 [P2] pr_train.rs:3946: automatic_idle returns before logging recovered landed/ejected members when discovery is empty. Report recovered outcomes before returning and test recovery of the last open member.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-11T05:33:07.900936960Z
+  modified_at: 2026-11-11T05:33:07.900936960Z
   session_id: 01a1c87f-970d-7ce0-9351-e4e75a87731e
   harness_version: 2.1.322 (Claude Code)
 history:
