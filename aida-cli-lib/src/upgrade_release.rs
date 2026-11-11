@@ -2,8 +2,16 @@
 //! Upgrade and release: mode normalisation, SHA match classification, release/dev-release handlers, workspace version and install method (STORY-1488 slice 1)
 // trace:STORY-1488 | ai:claude
 
-use crate::*;
+use crate::process_retry::RetryEtxtbsy;
+use crate::{
+    agent_registry, aida_exe_path, auto_complete, build_sha_short, cli, collect_open_prs,
+    current_branch_at, detect_store_path, forge, is_aida_repo, poll_until_published, pr_ship,
+    release_unmerged_pr_warning, upgrade_cmd, ReleaseCommand, Requirement, Result, Storage,
+    UpgradeCommand, UsageCommand,
+};
 use aida_core::git_ops::RemoteCredentialsExt as _;
+use anyhow::Context;
+use colored::Colorize;
 
 // trace:STORY-1728 | ai:claude
 #[path = "upgrade_release_args.rs"]
@@ -380,6 +388,7 @@ mod task_1244_drain_merge_lease_tests {
 #[cfg(all(test, unix))]
 mod bug_1265_finish_ci_tests {
     use super::*;
+    use crate::{AutonomyMode, RealPhaseDriver};
 
     struct Fixture {
         _temp: tempfile::TempDir,
@@ -743,6 +752,7 @@ exit 2
 #[cfg(test)]
 mod bug_1205_ci_phase_fallthrough_tests {
     use super::*;
+    use crate::{lease_conflict_decision, LeaseConflictDecision};
 
     #[test]
     fn headless_lease_conflict_is_decided_from_the_substrate() {
@@ -823,6 +833,7 @@ mod bug_1205_ci_phase_fallthrough_tests {
 #[cfg(test)]
 mod bug_1195_review_story_lookup_tests {
     use super::*;
+    use crate::{classify_review_story_lookup, RequirementsStore, ReviewForge, ReviewStoryLookup};
 
     fn story(title: &str, status: aida_core::RequirementStatus) -> aida_core::Requirement {
         let mut r = aida_core::Requirement::new(title.to_string(), String::new());

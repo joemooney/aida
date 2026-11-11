@@ -1,7 +1,18 @@
 //! status report sections: worktrees, open and recently merged PRs, remote activity, findings, working tree and process hygiene (STORY-1488 slice 1)
 // trace:STORY-1488 | ai:claude
 
-use crate::*;
+use crate::process_retry::RetryEtxtbsy;
+use crate::{
+    agent_registry, awaiting_you, branch_ahead_of, classify_lease_state, claude_agents,
+    collect_branch_ahead_of, collect_open_prs, config_path_for_project, current_branch_at,
+    current_user_id, detect_default_branch_ref, extract_spec_ids_from_commit, forge, git_arg_guard,
+    humanize_relative, lease_covers_cwd, lease_state_for, leases, list_leases, list_worktrees,
+    mail_wake, main_worktree_root_from, parse_session_env, presence, probe_clone_seat_trees,
+    process_probe, queue_role_fallback, remote_activity, resolve_gh_binary, role, session,
+    session_activity_path, session_manifest, status_cleanup, status_display, worktree, LeaseState,
+    Result, SessionActivityLog, SessionLease, WorktreeRecord, CLONE_PROBE_BUDGET,
+};
+use colored::Colorize;
 
 /// TASK-53: list distinct files touched by commits on `branch` since
 /// `since` (a git-friendly time string like "14 days ago"). Returns
