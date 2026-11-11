@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-10T06:40:07.764479561Z
-modified_at: 2026-11-11T05:59:37.018789910Z
+modified_at: 2026-11-11T05:59:38.434504033Z
 req_type: Bug
 comments:
 - id: 01a1c4af-35ea-7243-ac9f-f3b9d11983b0
@@ -109,6 +109,22 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Full sweep: 3 defects in spec-only isolation/claims and repeated discovery budget; BUG-2517 (bug protocol): met (test files touched). Current-head CI pending; source/ledger evidence inspected, no local tests run.. No triage reason was given.'
   created_at: 2026-11-11T05:59:37.018786395Z
   modified_at: 2026-11-11T05:59:37.018786395Z
+  session_id: 01a1c87f-970d-7ce0-9351-e4e75a87731e
+  harness_version: 2.1.322 (Claude Code)
+- id: 01a1c930-c209-7230-8eab-aa027139252c
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (BUG-2517):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 544b8b9dbc27
+    Recorded: 2026-11-11T05:57:28.013526843+00:00
+    Findings:
+    1. [P1] Honor change_binding=unbound in every consumer (aida-cli-lib/src/gate/ledger/mod.rs:293-296). The marker only prevents immediate spec->PR routing. store::bind_unbound (store.rs:411-449), called when a change is opened, recorded or collected, still copies these records into an arbitrary change for that spec; effective::load_view (effective.rs:675-707) also consumes them as member evidence before any copy. Thus a local spec-only waiting/approval at a matching SHA can change a PR's gate without ever checking that PR's head. Distinguish deliberately spec-only records from legacy pre-change records in binding and gate projection, and add regressions that record locally, then open/record/collect another PR sharing the spec.
+    2. [P2] Do not clear change claims after an unbound spec-only review (aida-cli-lib/src/lib_part5.rs:3484-3488). With no matching review lease or explicit change, pr is None but clear_review_markers_for_verdict removes every live PR marker naming the spec (helper at 2757-2770). A local spec-only waiting/approval can therefore clear both PRs' under-review protection despite settling neither change. Clear only the resolved ChangeKey's claim; leave all change claims intact for an unbound record. Add a two-PR marker regression.
+    3. [P2] Reuse one bounded ledger discovery per gate operation (aida-cli-lib/src/gate/ledger/checked.rs:450,472-473). Every read_change_events now scans all change ledgers and charges the same shared Budget again. effective::load_view calls it for the requested change and each other indexed change, so two PRs sharing a spec scan the entire corpus twice. The current shared ledger has 672 files totaling 58,946,197 bytes: two complete passes exceed MAX_SELECTION_BYTES=64 MiB even though the relevant PR ledgers are small, causing a spurious Unsafe refusal. Pass/cache a single pinned discovery through load_view and filter all requested changes from it; cover multiple related changes with a budget that fits one corpus pass.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-11T05:59:38.249331290Z
+  modified_at: 2026-11-11T05:59:38.249331290Z
   session_id: 01a1c87f-970d-7ce0-9351-e4e75a87731e
   harness_version: 2.1.322 (Claude Code)
 history:
