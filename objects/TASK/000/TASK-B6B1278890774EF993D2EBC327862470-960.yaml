@@ -3,12 +3,12 @@ spec_id: TASK-b6b1278890774ef993d2ebc327862470-960
 agreed_id: TASK-3428
 title: 'Crate-split PR4: explicit imports instead of use crate::* in non-in-flight files, a glob-import ratchet, dissolve lib_part1..6.rs, and relocate-ledger-paths.py'
 description: 'Per SPIKE-713 deep dive section 7 row 4 and advisor rulings 3 and 8 (2026-11-07). Acceptance: (1) replace use crate::*; with explicit imports in every file not owned by an in-flight spec (section 7 list; about 85 of 104), no behavior change; (2) a ratchet (same shape as scripts/check-exec-context.py) forbids new glob crate imports, wired into make check-ci-fast and CI gates; (3) lib_part1..6.rs (lib.rs:772-777) dissolved into real modules, closing the TASK-1538 condition; (4) scripts/relocate-ledger-paths.py rewrites path-keyed ledgers (including scripts/portability-allowlist.txt and exec-context-legacy.json) for pure moves, with a test; (5) make check-ci-fast green. Split into two PRs if over ~40 files.'
-status: NeedsAttention
+status: Approved
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T23:39:41.575597Z
-modified_at: 2026-11-11T05:53:08.918571007Z
+modified_at: 2026-11-11T05:53:51.618684892Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -749,6 +749,13 @@ comments:
   modified_at: 2026-11-11T05:42:20.156128151Z
   session_id: 01a1c917c7bb
   harness_version: codex-cli 0.167.0
+- id: 01a1c92b-7802-70a1-8c74-bbe23075f2c2
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Full 25-file sweep: ownership-liveness fixes are correct; partial batch still has a completion-claiming PR title and lacks required scope/qualified-call disclosures. CI pending at review time.. No triage reason was given.'
+  created_at: 2026-11-11T05:53:51.618674863Z
+  modified_at: 2026-11-11T05:53:51.618674863Z
+  session_id: 01a1c87f-970d-7ce0-9351-e4e75a87731e
+  harness_version: 2.1.322 (Claude Code)
 history:
 - id: 01a1b862-2e0b-7a50-a4d0-25097c707b57
   author: joe
@@ -1468,6 +1475,15 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a1c92b-7802-70a1-8c74-bbd7d708d575
+  author: joe
+  timestamp: 2026-11-11T05:53:51.618658108Z
+  session_id: 01a1c87f-970d-7ce0-9351-e4e75a87731e
+  harness_version: 2.1.322 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 test_coverage_notes: 'Round 14 validation passed: launcher command_registry suite 32 executed tests / 0 failures (j20261109T002347723-110306-0), launcher no-default-features aida-cli check exit 0 (j20261109T002353591-110846-0), 17 Python tooling fixtures, glob ratchet vs origin/main at 181, ExecContext 1239 sites, store-writer 3406 sinks / 293 mappings, 84 CI gate classifications, portability guard/growth, retained Rust formatting and diff hygiene. Prospective PR exactly 40 files; all 12 deferred modules match pre-batch contents. Reviewed-head CI at 4e32c5de630 passed all seven shards and aggregate Build; final published head still requires CI and independent re-review. Full make check-ci-fast remains host validation under runner-only Cargo policy. Codegraph unreachable. Handoff: /tmp/task-3428-round14-handoff.md.'
 implementation_summary: 'Round 14 scope correction restores the 12-module batch from 4e32c5de630 to pre-batch contents and restores its 12 ledger rows (18 imports), reducing PR #3695 to 40 files: 37 modules, two test files and ledger. Remaining glob debt is 181. Deferred changes remain in branch history and /tmp/task-3428-round14-deferred-imports.patch for a separate Refs PR, with import-source and module-trace polish required there. Removed code contains all findings 3-5. Corrected PR title to 37 modules. Refs host publication declaration recorded; no local commit, push, merge or queue completion. TASK-3428 remains In Progress; remaining imports and lib_part dissolution are later slices.'
 filed_at:
@@ -1479,11 +1495,3 @@ filed_at:
   vendor: claude
   session: 01a1b848-940b-7bd2-8acd-52e428b182b8
   harness_version: 2.1.319 (Claude Code)
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: 'Full 25-file sweep: ownership-liveness fixes are correct; partial batch still has a completion-claiming PR title and lacks required scope/qualified-call disclosures. CI pending at review time.'
-  recovery_hint: address the review findings, move TASK-3428 back to In Progress, and clear the PR hold only after approval
-  shelved_by: reviewer
-  shelved_at: 2026-11-11T05:53:08.918571007Z
