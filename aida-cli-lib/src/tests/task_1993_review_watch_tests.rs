@@ -1680,7 +1680,8 @@ fn task1993_watcher_never_signals_merges_or_runs_cargo() {
 // (validate_child_delegation runs before the reservation branch), the store
 // unusable (Store::open), or the claim timing out under lock contention. Any
 // watcher, including one restarted after the spawning parent is gone, sees
-// the recorded dispatcher is gone and frees the slot terminally.
+// the recorded dispatcher is gone and frees the slot for local preclaim retry.
+// trace:BUG-2518 | ai:codex
 // trace:TASK-1993.ac55aab8 | ai:claude
 #[test]
 fn task1993_dispatcher_lost_before_claim_frees_its_reservation() {
@@ -1720,25 +1721,59 @@ fn task1993_dispatcher_lost_before_claim_frees_its_reservation() {
         let restarted = Store::open(temp.path(), &store.repository).unwrap();
         dispatch(select(&restarted, &change(2, 2, false), None, 1).unwrap());
         let recorded = &restarted.load().unwrap().entries["PR-1"].attempts[0];
-        assert_eq!(recorded.phase, Phase::Exited);
+        assert_eq!(recorded.phase, Phase::Failed);
+        assert!(!active(recorded));
         assert!(
             recorded.diagnostic.as_deref().unwrap().contains(trigger),
             "{recorded:?}"
         );
+        let diagnostic = recorded.diagnostic.clone();
         let Action::Skip(reason) = select(&restarted, &c, None, 1).unwrap() else {
-            panic!("the lost head relaunched");
+            panic!("the other PR should hold the only slot");
         };
-        assert!(reason.contains("exited"));
+        assert!(reason.contains("global reviewer capacity"), "{reason}");
+        assert_eq!(
+            restarted.load().unwrap().entries["PR-1"].attempts[0].diagnostic,
+            diagnostic
+        );
+        restarted.release("PR-2").unwrap();
+        let retry = dispatch(select(&restarted, &c, None, 1).unwrap());
+        assert_ne!(retry.token, attempt.token);
+        let state = restarted.load().unwrap();
+        let attempts = &state.entries["PR-1"].attempts;
+        assert_eq!(attempts.len(), 1);
+        assert_eq!(attempts[0].token, retry.token);
+        assert!(active(&attempts[0]));
+        assert!(
+            log_tail(&restarted, &format!("PR-1-{}.log", attempt.token))
+                .unwrap()
+                .contains(trigger)
+        );
     }
     // The parent's own reaping records an observed early exit directly.
     let (_temp, store) = fixture();
-    let attempt = dispatch(select(&store, &change(1, 1, false), None, 1).unwrap());
+    let c = change(1, 1, false);
+    let attempt = dispatch(select(&store, &c, None, 1).unwrap());
     mark_unclaimed_exit(&store, "PR-1", &attempt.token, "exit status: 1").unwrap();
-    assert_eq!(
-        store.load().unwrap().entries["PR-1"].attempts[0].phase,
-        Phase::Exited
-    );
+    let state = store.load().unwrap();
+    let recorded = &state.entries["PR-1"].attempts[0];
+    assert_eq!(recorded.phase, Phase::Failed);
+    assert!(!active(recorded));
+    let diagnostic = recorded.diagnostic.clone();
+    assert!(diagnostic.as_deref().unwrap().contains("exit status: 1"));
     dispatch(select(&store, &change(2, 2, false), None, 1).unwrap());
+    assert_eq!(
+        store.load().unwrap().entries["PR-1"].attempts[0].diagnostic,
+        diagnostic
+    );
+    store.release("PR-2").unwrap();
+    let retry = dispatch(select(&store, &c, None, 1).unwrap());
+    assert_ne!(retry.token, attempt.token);
+    let state = store.load().unwrap();
+    let attempts = &state.entries["PR-1"].attempts;
+    assert_eq!(attempts.len(), 1);
+    assert_eq!(attempts[0].token, retry.token);
+    assert!(active(&attempts[0]));
 }
 
 // The triggers above really do leave the reservation unclaimed.
