@@ -918,3 +918,65 @@ fn bug_2500_ledger_waiting_blocks_both_heads_until_fresh_review() {
         assert!(matches!(s.decision, Decision::Mergeable { .. }));
     }
 }
+
+// trace:BUG-2517 | ai:codex
+#[test]
+fn bug_2517_spec_only_never_binds_or_projects_and_related_changes_scan_once() {
+    let root = tempfile::tempdir().unwrap();
+    let r = subject();
+    let set = snapshot(&[r.clone()]).resolve(&["BUG-2403"]);
+    let spec = crate::gate::canon::GateSpec::with_key("BUG-2403", Some(SpecKey(r.id)));
+    for (i, word) in ["waiting", "approved"].iter().enumerate() {
+        let mut local = record(word, HEAD_A, &at(i as u64 + 1), &[]);
+        local.insert("change_binding".into(), "unbound".into());
+        crate::gate::ledger::store::append_unbound(root.path(), &spec, &local).unwrap();
+    }
+    for n in [3185, 3194] {
+        assert_eq!(
+            crate::gate::ledger::store::bind_unbound(root.path(), &spec, ChangeKey::pr(n)).unwrap(),
+            0
+        );
+        let mut e = verdict_ev(n, Some("BUG-2403"), "approved", HEAD_A);
+        e.change = format!("PR-{n}");
+        e.spec_key = Some(SpecKey(r.id));
+        crate::gate::ledger::store::append_one(root.path(), e).unwrap();
+        assert_eq!(
+            crate::gate::ledger::store::bind_unbound(root.path(), &spec, ChangeKey::pr(n)).unwrap(),
+            0
+        );
+    }
+    let dir = root.path().join(".aida/gate-ledger");
+    let corpus: u64 = [3185, 3194]
+        .iter()
+        .map(|n| {
+            std::fs::metadata(dir.join(format!("PR-{n}.jsonl")))
+                .unwrap()
+                .len()
+        })
+        .sum();
+    let hints: u64 = std::fs::read_dir(dir.join("by-spec"))
+        .unwrap()
+        .map(|e| e.unwrap().metadata().unwrap().len())
+        .sum();
+    for n in [3185, 3194] {
+        let view = load_view_with_budget(
+            root.path(),
+            ChangeKey::pr(n),
+            &set,
+            Budget::with_limits(corpus + hints, 100),
+        )
+        .unwrap();
+        assert!(view.unbound.is_empty());
+        assert_eq!(
+            view.change_events
+                .iter()
+                .filter(|e| e.verdict_record().is_some())
+                .count(),
+            1
+        );
+    }
+    assert_eq!(
+        crate::gate::ledger::store::read_unbound(root.path(), "BUG-2403").len(),
+        2
+    );
+}

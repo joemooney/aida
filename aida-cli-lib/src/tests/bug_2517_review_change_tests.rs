@@ -145,6 +145,17 @@ fn bug_2517_two_prs_one_spec_records_only_the_leased_change() {
         rv::current_verdict_body_at(&second_path).unwrap(),
         second_before
     );
+    // Opening/adopting or collecting either change must not adopt the local record.
+    let spec = crate::gate::canon::GateSpec::with_key("BUG-2492", None);
+    for n in [3651, 3764] {
+        let path = ledger::store::ledger_file(root, ChangeKey::pr(n));
+        let before = std::fs::read(&path).unwrap();
+        assert_eq!(
+            ledger::store::bind_unbound(root, &spec, ChangeKey::pr(n)).unwrap(),
+            0
+        );
+        assert_eq!(std::fs::read(path).unwrap(), before);
+    }
 }
 
 #[test]

@@ -387,6 +387,7 @@ pub(crate) fn append_unbound_expected(
 /// the key its unbound original was written with).
 // trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
 // trace:STORY-2324 | ai:claude
+// trace:BUG-2517 | ai:codex
 pub(crate) fn bind_unbound(
     root: &Path,
     gate_spec: &GateSpec,
@@ -404,6 +405,7 @@ pub(crate) fn bind_unbound(
         .collect();
     let unbound: Vec<GateEvent> = read_unbound(root, &spec)
         .into_iter()
+        .filter(|e| !e.is_spec_only())
         .filter(|u| {
             !bound_elsewhere
                 .iter()

@@ -666,8 +666,24 @@ pub(crate) fn load_view(
     change: ChangeKey,
     set: &CanonicalSet,
 ) -> Result<LedgerView, Unsafe> {
-    let mut budget = Budget::default();
-    let change_events = checked::read_change_events(root, change, &mut budget)?;
+    load_view_with_budget(root, change, set, Budget::default())
+}
+
+// trace:BUG-2517 | ai:codex
+fn load_view_with_budget(
+    root: &Path,
+    change: ChangeKey,
+    set: &CanonicalSet,
+    mut budget: Budget,
+) -> Result<LedgerView, Unsafe> {
+    let discovery = checked::discover(root, &mut budget)?;
+    let read_change = |key| {
+        discovery
+            .as_ref()
+            .map(|d| d.change_events(key))
+            .unwrap_or_default()
+    };
+    let change_events = read_change(change);
     let mut unbound = BTreeMap::new();
     let mut others: std::collections::HashMap<ChangeKey, Vec<GateEvent>> = Default::default();
     for m in &set.members {
@@ -686,7 +702,7 @@ pub(crate) fn load_view(
         let mut bound_elsewhere: Vec<JsonObj> = Vec::new();
         for other in indexed.into_iter().filter(|c| *c != change) {
             if !others.contains_key(&other) {
-                let read = checked::read_change_events(root, other, &mut budget)?;
+                let read = read_change(other);
                 others.insert(other, read);
             }
             bound_elsewhere.extend(
@@ -697,8 +713,9 @@ pub(crate) fn load_view(
             );
         }
         events.retain(|e| {
-            e.verdict_record()
-                .is_some_and(|r| !bound_elsewhere.contains(r))
+            !e.is_spec_only()
+                && e.verdict_record()
+                    .is_some_and(|r| !bound_elsewhere.contains(r))
         });
         // Unbound entries live in one file per label; the primary writer's
         // append time orders them across files, seq within one.

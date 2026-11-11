@@ -2739,9 +2739,10 @@ pub(crate) fn assert_handshake_anchor_is_pinned(
 /// `spec`. Checks the given root and the main clone (where merge surfaces
 /// look). Returns the PRs cleared.
 // trace:STORY-1405 | ai:claude
+// trace:BUG-2517 | ai:codex
 pub(crate) fn clear_review_markers_for_verdict(
     project_root: &std::path::Path,
-    spec: &str,
+    _spec: &str,
     pr: Option<u64>,
 ) -> Vec<u64> {
     let mut roots = vec![project_root.to_path_buf()];
@@ -2753,15 +2754,7 @@ pub(crate) fn clear_review_markers_for_verdict(
     for root in &roots {
         let targets: Vec<u64> = match pr {
             Some(n) => vec![n],
-            None => crate::gate::review_marker::list(root)
-                .into_iter()
-                .filter(|m| {
-                    m.spec
-                        .as_deref()
-                        .is_some_and(|s| s.eq_ignore_ascii_case(spec))
-                })
-                .map(|m| m.pr)
-                .collect(),
+            None => Vec::new(),
         };
         for n in targets {
             if crate::gate::review_marker::clear(root, n) {

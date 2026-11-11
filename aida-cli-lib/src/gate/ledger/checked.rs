@@ -318,18 +318,21 @@ pub(crate) struct Discovery {
     /// `None` when the ledger has no `by-spec` directory.
     by_spec: Option<File>,
     discovered: Vec<String>,
+    changes: std::collections::HashMap<ChangeKey, Vec<GateEvent>>,
     /// Upper-cased spec label -> its change-bound verdict events.
     bound: std::collections::HashMap<String, Vec<GateEvent>>,
 }
 
 /// Discover the gate ledger under `root`; `Ok(None)` when it does not exist.
 // trace:BUG-2403 | ai:claude
+// trace:BUG-2517 | ai:codex
 pub(crate) fn discover(root: &Path, budget: &mut Budget) -> Result<Option<Discovery>, Unsafe> {
     let Some((ledger, by_spec)) = ledger_dirs(root)? else {
         return Ok(None);
     };
     let ledger_path = super::ledger_dir(root);
     let mut discovered: Vec<String> = Vec::new();
+    let mut changes = std::collections::HashMap::new();
     let mut bound: std::collections::HashMap<String, Vec<GateEvent>> = Default::default();
     for name in list_pinned(&ledger, &ledger_path)? {
         let Some(change) = name
@@ -351,6 +354,7 @@ pub(crate) fn discover(root: &Path, budget: &mut Budget) -> Result<Option<Discov
                 "refusing gate-ledger discovery: {name} vanished while it was read"
             )));
         };
+        changes.insert(change, events.clone());
         for e in events.into_iter().filter(|e| e.verdict_record().is_some()) {
             if let Some(spec) = e.spec.as_deref() {
                 bound
@@ -365,7 +369,11 @@ pub(crate) fn discover(root: &Path, budget: &mut Budget) -> Result<Option<Discov
     for events in bound.values_mut() {
         super::project::filter_miskeyed_events(events, &witnesses);
     }
+    for events in changes.values_mut() {
+        super::project::filter_miskeyed_events(events, &witnesses);
+    }
     Ok(Some(Discovery {
+        changes,
         by_spec,
         discovered,
         bound,
@@ -373,6 +381,11 @@ pub(crate) fn discover(root: &Path, budget: &mut Budget) -> Result<Option<Discov
 }
 
 impl Discovery {
+    // trace:BUG-2517 | ai:codex
+    pub(crate) fn change_events(&self, change: ChangeKey) -> Vec<GateEvent> {
+        self.changes.get(&change).cloned().unwrap_or_default()
+    }
+
     /// Every verdict event for each spec label in `labels`, oldest first per
     /// label: the discovered change-bound events plus the label's unbound
     /// ledger (a record already bound to a change is read once, from the
@@ -465,12 +478,9 @@ pub(crate) fn read_change_events(
     change: ChangeKey,
     budget: &mut Budget,
 ) -> Result<Vec<GateEvent>, Unsafe> {
-    let Some((ledger, _)) = ledger_dirs(root)? else {
-        return Ok(Vec::new());
-    };
-    let key = change.as_key();
-    let events = read_change(&ledger, &format!("{key}.jsonl"), &key, budget)?.unwrap_or_default();
-    filter_miskeyed(root, events, budget)
+    Ok(discover(root, budget)?
+        .map(|d| d.change_events(change))
+        .unwrap_or_default())
 }
 
 /// STORY-2324: the `by-spec` entries for one spec `label` under `root`, read
