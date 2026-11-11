@@ -3,15 +3,14 @@ spec_id: BUG-b6b1278890774ef993d2ebc327862470-155
 agreed_id: BUG-2381
 title: Containment tests inherit the live sibling-worktree main and refuse hermetic fixtures
 description: 'Observed while validating TASK-2631 in /home/joe/ai/aida-worktrees/aida-seat-aida-task-2631: cargo test -p aida-cli-lib --lib contain completed 220 passes and 27 failures. Two refusal-message expectations were implementation regressions and are being fixed in TASK-2631. Most other failures arise in unchanged containment-boundary code: ambient Claude argv builders reject the real linked worktree as an unrecorded seat clone, and some fixture roots incorrectly resolve the live main /home/joe/ai/aida, including a store-write-lock attempt there. Example: tool_contained_flags_for_claude_keep_interactive_prompts fails before assertion with a .git identity refusal; bug_2169 fixture session_start tries the real shared store lock. Investigate process-global host-main discovery/test isolation; tests should use only hermetic fixture roots and never discover or write the operator live store. Separate sandbox restriction: oracle containment test creates /var/tmp and gets ReadOnlyFilesystem. No production containment weakening or test assertion changes are proposed in TASK-2631.'
-status: Done
+status: Completed
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T01:39:06.904532581Z
-modified_at: 2026-11-11T12:25:25.612956029Z
+modified_at: 2026-11-11T12:25:27.422042991Z
 req_type: Bug
 tags:
-- closure:pending
 - containment
 - kind:finding
 - tests
@@ -107,6 +106,15 @@ history:
   - field_name: status
     old_value: NeedsAttention
     new_value: Done
+- id: 01a1ca91-fc7e-7610-9107-d9e9c6f7e119
+  author: joe
+  timestamp: 2026-11-11T12:25:27.422036653Z
+  session_id: 01a1ca83-fabb-7663-852c-12c78d4e097f
+  harness_version: 2.1.322 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
 filed_at:
   aida_version: 0.16.0
   aida_build_sha: 43d9f958030
@@ -115,6 +123,7 @@ implementation_info:
   implemented: true
   implemented_at: 2026-11-01T03:53:06.969702146Z
   implemented_by: joe
+  completed_at: 2026-11-11T12:25:27.422018869Z
 failure_reason:
   phase: reviewer
   phase_index: 3
