@@ -3,12 +3,12 @@ spec_id: TASK-b6b1278890774ef993d2ebc327862470-959
 agreed_id: TASK-3426
 title: 'Crate-split PR3: split queue_cmd.rs into a queue_cmd/ directory by subcommand, leaving the Work region (STORY-2326''s hunks) in place'
 description: 'Plan: docs/plans/2026-11-07-aida-cli-lib-crate-split-deep-dive.md (PR #3633, SPIKE-713). Turn queue_cmd.rs into queue_cmd/mod.rs plus one file per subcommand group, by concern. Do NOT move the Work region (about lines 11,095-16,470 at 79603aff6b, where STORY-2326 PR-D lands) until STORY-2326 PR-D merges. Pure moves, no behaviour change. Update every path-keyed ledger and script that names aida-cli-lib/src/queue_cmd.rs (the plan lists them) using one relocation script, committed as scripts/relocate-paths.py so later moves reuse it. Acceptance: git diff --stat shows moves only; make check-ci-fast passes; targeted queue tests pass. LIGHT gate.'
-status: Done
+status: Completed
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T22:12:32.196595160Z
-modified_at: 2026-11-10T00:41:31.559370221Z
+modified_at: 2026-11-11T12:23:11.805527943Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -417,6 +417,15 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: Done
+- id: 01a1ca8f-eabd-7bb3-a77b-e033fff34412
+  author: joe
+  timestamp: 2026-11-11T12:23:11.805523476Z
+  session_id: 01a1ca83-fabb-7663-852c-12c78d4e097f
+  harness_version: 2.1.322 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
 filed_at:
   code_sha: 77bc9e4e4d38b978afaaf602dd8300419c320ea7
   branch: main
@@ -426,3 +435,6 @@ filed_at:
   vendor: claude
   session: 01a1b76b-2fe7-7dd2-88d0-356fc8d96d04
   harness_version: 2.1.319 (Claude Code)
+implementation_info:
+  implemented: false
+  completed_at: 2026-11-11T12:23:11.805500632Z
