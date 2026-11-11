@@ -18,7 +18,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-11T05:40:53.335487241Z
-modified_at: 2026-11-11T07:49:58.245637818Z
+modified_at: 2026-11-11T07:49:59.863952639Z
 req_type: Spike
 tags:
 - architecture
@@ -102,6 +102,22 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Full sweep: SPIKE-714 AC1 unverified (167 unresolved class/evidence rows); AC2 unverified (reachable writer/gate audit incomplete); AC3 unverified (first batch absent); AC4 verified by pinned revisions and reproduction method in dated reports. SPIKE-714 (spike protocol): met (docs/spikes deliverables in diff). Three actionable gaps remain. No exact-head CI checks reported; no local tests/builds run.. It was punted on: design-fork: Round 4 explicit dispute: findings 1 and 3 require advisor resolution of handler-versus-invocation effects before classification/candidate certification; dispute proceeding past that decision gate without a ruling, not the missing acceptance deliverables. No ruling supplied in authoritative instructions or visible spec comments. Accept finding 2 and all substantive audit deficits: 167 unresolved rows, missing full dependency/visibility/stage/home matrix and global ranking, absent approximately twenty-command batch. Required reviewed client /home/joe/ai/aida/.codegraph/proxy-state/bin/codegraph remains absent; doctor reports codegraph,missing. Advisor must record effect boundary, direct-writer taxonomy and mixed-family aggregation; host must supply reviewed query client and indexed main revision. New dated source-grounded disposition: docs/spikes/2026-11-11-command-inventory-round-4.md. Four Python extraction tests pass; TOML confirms 167 unresolved rows. Native seat leaves report uncommitted; punt remains publication veto, no completion declaration.. No triage reason was given.'
   created_at: 2026-11-11T07:49:58.245636419Z
   modified_at: 2026-11-11T07:49:58.245636419Z
+  session_id: 01a1c87f-970d-7ce0-9351-e4e75a87731e
+  harness_version: 2.1.322 (Claude Code)
+- id: 01a1c995-cb26-7f60-9308-bfbdf3cfad50
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (SPIKE-714):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: a84ba6cee99c
+    Recorded: 2026-11-11T07:44:43.943851287+00:00
+    Findings:
+    1. [P1] scripts/command-inventory.py:99-101 and scripts/command-inventory.toml: complete SPIKE-714 AC1/AC2 for all 167 REGISTRY entries. Every classification is unresolved and every classification_evidence is the same placeholder. Same-file writer candidates do not establish reachable production sinks. Obtain the advisor ruling on handler-versus-invocation effects, direct CLI-owned writes and mixed families, then supply each class with production-path evidence cross-checked against scripts/store-writers.toml, at least one reachable writer or gate per core-write/authority row, and per-class totals. The round-four punt documents prerequisites but does not supply this audit.
+    2. [P1] scripts/command-inventory.py:97-101 and docs/spikes/2026-11-11-command-inventory-round-4.md:25-29: complete the required dependency/visibility/placement matrix for every registration. All 167 helpers_to_widen, move_stage and home_option fields remain placeholders; whole-file lexical crate roots are not called-module evidence. Record actual external called modules, exact helper/type visibility blockers, move-now/after-leaf/after-family stage and proposed home alternatives per command, then rank globally shared blockers. The six bounded prose inspections leave the full matrix absent.
+    3. [P1] docs/spikes/2026-11-11-command-inventory-round-4.md:30-34: supply SPIKE-714 AC3, a named approximately twenty-command first porcelain-views batch ranked by verified helper dependencies and listing each command's blocking helpers. Resolve the advisor effect-boundary decision before certifying candidates; the three conditional view candidates and recovery instructions do not supply the requested batch.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-11T07:49:59.718570950Z
+  modified_at: 2026-11-11T07:49:59.718570950Z
   session_id: 01a1c87f-970d-7ce0-9351-e4e75a87731e
   harness_version: 2.1.322 (Claude Code)
 history:
