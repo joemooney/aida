@@ -1,0 +1,30 @@
+{
+  "schema_version": 1,
+  "spec": "STORY-2693",
+  "publishes": [
+    {
+      "at": "2026-11-11T00:04:26.961944004Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-11-11T00:04:09.881053169Z",
+      "spec": "STORY-2693",
+      "kind": {
+        "event": "PrMerged",
+        "pr": 3816
+      }
+    },
+    {
+      "ts": "2026-11-11T00:04:26.800302752Z",
+      "spec": "STORY-2693",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "404230e79a0ac523ae26701cba9a912c48f08320",
+        "pr": 3816,
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
