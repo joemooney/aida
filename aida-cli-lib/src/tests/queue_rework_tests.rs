@@ -2375,7 +2375,14 @@ fn story_2690_rework_refuses_all_human_parking_before_mutation() {
     ];
     let mut cases: Vec<(Option<String>, bool)> = tags
         .into_iter()
-        .flat_map(|tag| [tag.to_string(), format!("  {} ", tag.to_ascii_uppercase())])
+        .flat_map(|tag| {
+            [
+                tag.to_string(),
+                tag.to_ascii_uppercase(),
+                format!(" \t{tag}\n"),
+                format!("  {} ", tag.to_ascii_uppercase()),
+            ]
+        })
         .map(|tag| (Some(tag), false))
         .collect();
     cases.push((None, true));
@@ -2418,6 +2425,19 @@ fn story_2690_rework_refuses_all_human_parking_before_mutation() {
             } else {
                 "parking-tag"
             };
+            // The post-transition live check uses this same validator. Exercise
+            // it directly as well as the command's projected preflight below:
+            // Approved must never hide a preserved parking tag or decision.
+            let live = before.get_requirement_by_spec_id("BUG-26901").unwrap();
+            let live_before = serde_json::to_value(live).unwrap();
+            let live_err = crate::queue_cmd::require_rework_pickable(live, &before).unwrap_err();
+            assert!(
+                live_err
+                    .to_string()
+                    .contains(&format!("reason={expected}:")),
+                "live {tag:?}: {live_err:#}"
+            );
+            assert_eq!(live_before, serde_json::to_value(live).unwrap());
             let err = rework_as(&storage, "BUG-26901", Some("retry"), true).unwrap_err();
             assert!(
                 err.to_string().contains(&format!("reason={expected}:")),

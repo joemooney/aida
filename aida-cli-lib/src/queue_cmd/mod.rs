@@ -128,6 +128,8 @@ mod recover;
 pub(crate) use recover::{handle_queue_recover, recover_action_label, recover_push_branch};
 mod remove_move;
 mod rework;
+#[cfg(test)]
+pub(crate) use rework::require_rework_pickable;
 pub(crate) use rework::{
     current_queue_route, drain_running, drain_running_notice, handle_queue_rework,
     handle_rework_entry, loop_guard_park, needs_attention_parks, park_reason_line,
