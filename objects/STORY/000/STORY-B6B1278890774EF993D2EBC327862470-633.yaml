@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-10T22:04:54.061461738Z
-modified_at: 2026-11-11T02:34:32.643571149Z
+modified_at: 2026-11-11T02:39:19.507360527Z
 req_type: Story
 comments:
 - id: 01a1c781-4cf1-7c80-b086-89c5c5096ab6
@@ -193,6 +193,14 @@ comments:
   modified_at: 2026-11-11T02:30:00.575166440Z
   session_id: 01a1c70f-d731-7b70-acf8-e9ab3d288fca
   harness_version: 2.1.322 (Claude Code)
+- id: 01a1c879-5dd3-7883-b6b9-3db14cdb5395
+  author: dirtlab
+  content: |
+    Round-3 follow-up: P1 and P2 remain open and are not disputed; successful aida punt records both. The shared journal ruling is accepted and needs no further signoff. Changed seat_clone.rs to take explicit original conflict paths in the marker helper, remove changed-path inference, and fail closed before staging when host evidence is unavailable. Publication has no journal reader yet and passes no evidence, so pending merges remain refused. Regression permits unrelated changed marker examples during a merge and retains explicit paths across staged retries; missing, empty and invalid evidence refuses. Plan updated with current limitations and ruling status. Lane job j20261111T023415446-2-0 executed story_2710_marker_gate: 1 passed, 0 failed, 0 ignored. Rustfmt and git diff --check pass. This is preparatory work, not a scope-reduction approval or completion. Journal reservation/persistence, watcher and direct rework, lane briefs, regeneration, host-staged merge, exact-tree compile gate and refusal notices remain unfinished. Refs-only publication declaration recorded; punt remains a publication veto. Edits left uncommitted as required by this native seat. Host codegraph client unavailable; session manifest write refused by filesystem boundary.
+  created_at: 2026-11-11T02:39:19.507360527Z
+  modified_at: 2026-11-11T02:39:19.507360527Z
+  session_id: 01a1c872c8d8
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1c77f-ffdf-7ac3-a382-33d6a384e617
   author: aida-session-start
