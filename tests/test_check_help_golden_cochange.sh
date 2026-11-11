@@ -80,6 +80,22 @@ printf 'pub struct A; // reorder\n' >"$TMP/aida-cli-lib/src/queue_args.rs"
 commit $'refactor args\n\nHelp-Golden: unchanged'
 expect_pass "Help-Golden trailer did not opt out"
 
+# A stale base can include a large log after the newest trailer. The checker
+# must consume it all under pipefail rather than treating git's SIGPIPE as a
+# missing trailer. trace:STORY-2704 | ai:codex
+branch large-log
+printf 'pub struct A; // shared parser\n' >"$TMP/aida-cli-lib/src/queue_args.rs"
+{
+  printf 'older detailed commit\n\n'
+  for ((i = 0; i < 6000; i++)); do
+    printf 'Detailed historical context line %s without a trailer.\n' "$i"
+  done
+} >"$TMP/.git/long-message"
+g add -A
+g commit -q -F "$TMP/.git/long-message"
+g commit -q --allow-empty -m $'refactor args\n\nHelp-Golden: unchanged'
+expect_pass "large history caused a valid trailer to be ignored"
+
 # (f) The trailer must be its own line, not prose that mentions it.
 branch f
 printf 'pub struct A; // again\n' >"$TMP/aida-cli-lib/src/queue_args.rs"
