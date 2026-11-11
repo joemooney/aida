@@ -18,7 +18,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-11T05:40:53.335487241Z
-modified_at: 2026-11-11T06:34:35.794120296Z
+modified_at: 2026-11-11T06:40:08.395821339Z
 req_type: Spike
 tags:
 - architecture
@@ -136,6 +136,10 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a1c955-d73e-7241-b82e-edc9c6218384
+  author: joe
+  timestamp: 2026-11-11T06:40:08.510268106Z
+  changes: []
 execution_mode: drain
 filed_at:
   code_sha: eb1b39c30c9f9f6ce3f5ccf1c5ffd8966e5f8a23
@@ -151,4 +155,12 @@ attention_reason:
   detail: 'Round 2: accept, do not dispute, review items 1-3: all 167 classifications/writer-gate evidence, full dependency/visibility/stage/home analysis, and first porcelain batch remain incomplete. Required reviewed codegraph client /home/joe/ai/aida/.codegraph/proxy-state/bin/codegraph is absent; aida doctor check codegraph reports codegraph,missing. Host must deploy the reviewed client and supply its absolute path/shared main index. Advisor must clarify classification of direct cli-lib coordination/cache writers versus writes-through-core. Item 4 fixed: all three closure handlers retained in full, four Python regression tests pass; source-grounded partial evidence and recovery in docs/spikes/2026-11-11-command-inventory-round-2.md. Native seat leaves edits uncommitted; no completion or publication requested.'
   raised_by: implementer
   raised_at: 2026-11-11T06:34:35.794120296Z
+failure_reason:
+  phase: reviewer
+  phase_index: 3
+  kind: verdict:request-changes
+  detail: 'Full sweep: SPIKE-714 AC1-AC3 unverified; AC4 verified by pinned source/method. SPIKE-714 (spike protocol): met (dated docs/spikes reports in diff). Closure truncation corrected; classification, dependency/placement audit and first batch remain incomplete. CI pending at review time.'
+  recovery_hint: address the review findings, move SPIKE-714 back to In Progress, and clear the PR hold only after approval
+  shelved_by: reviewer
+  shelved_at: 2026-11-11T06:40:08.395821339Z
 human_only: true
