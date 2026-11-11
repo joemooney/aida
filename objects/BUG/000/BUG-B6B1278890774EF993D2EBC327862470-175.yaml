@@ -16,7 +16,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T10:04:17.050576260Z
-modified_at: 2026-11-11T12:37:45.358484945Z
+modified_at: 2026-11-11T12:37:52.013873877Z
 req_type: Bug
 tags:
 - closure:pending
@@ -58,6 +58,13 @@ comments:
   content: '[aida:closure-held] Code merged to the default branch (commit c0110e5), but completion is held at Done: the spec''s own declared closure criteria are unmet: "tag `closure:pending` is set". Whoever owns those criteria (the spec''s owner or the advisor) resolves them by checking the box in the spec''s Closure section, or removing the tag, via `aida edit BUG-2402 --description ...` / `aida edit BUG-2402 --remove-tag closure:pending`. The next `aida pull` completes it once nothing holds it; to replay by hand, run `aida db reconcile-status --spec BUG-2402 --since c0110e5^`. If the blockers form a cycle, or you decide to ship regardless, a human runs `aida edit BUG-2402 --status completed`. (merge sha: c0110e5db66c985b4c16fff2db8591fb512136ab)'
   created_at: 2026-11-01T23:28:44.561733643Z
   modified_at: 2026-11-01T23:28:44.561733643Z
+- id: 01a1ca9d-590d-77e3-b7c0-c06e832e7356
+  author: joe
+  content: 'ADVISOR BRIEF (2026-11-11 05:35 MST): still recurring: performance-guard@2026-11-08T15:40Z shows ''aida show'' 13.8% of 485 calls over 2000 ms (tolerance 10%), worst 7578 ms over the 5000 ms ceiling. Do not change the budget (TASK-2529 set it deliberately). (1) From the retained usage events, find which ''aida show'' call shapes exceed 2000 ms (ID form, --comments/--full, cache state, which store fallback scan runs). (2) Fix the slow path (c0110e5 already validates canonical locators before fallback scans; find what still scans). (3) Add a regression test that bounds the slow path''s work (scan count, not wall time). Closing trailer (BUG-2402). LIGHT gate: one targeted cargo test via the lane runner, then make check-ci-fast.'
+  created_at: 2026-11-11T12:37:52.013873877Z
+  modified_at: 2026-11-11T12:37:52.013873877Z
+  session_id: 01a1ca83-fabb-7663-852c-12c78d4e097f
+  harness_version: 2.1.322 (Claude Code)
 history:
 - id: 01a19809-e494-74a2-9ac1-332231d47592
   author: aida-session-start
