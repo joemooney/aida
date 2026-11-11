@@ -3,12 +3,12 @@ spec_id: STORY-b6b1278890774ef993d2ebc327862470-619
 agreed_id: STORY-2696
 title: Authenticated reviewer no-carry marker for approval carry-over
 description: 'Follow-up split from STORY-2694. Let a reviewer mark an approval as not carry-eligible across clean merges from main (for example security-critical or gate-touching changes). A design fork is open: extend local recording receipts plus the signed publication schema, or introduce a distinct authenticated reviewer-policy receipt (see STORY-2694 punt, gate/review_authority.rs::verified_authority_keys). Needs migration and removal rules, including a marker change after a cached proof. Architecture: sketch and advisor signoff before implementation.'
-status: NeedsAttention
+status: Approved
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-09T23:18:35.052711129Z
-modified_at: 2026-11-11T01:27:14.853117892Z
+modified_at: 2026-11-11T01:27:19.576213552Z
 req_type: Story
 comments:
 - id: 01a1c5dc-7b38-79a0-b14b-a53401fc1b6e
@@ -130,6 +130,13 @@ comments:
   modified_at: 2026-11-11T01:27:14.853117892Z
   session_id: 01a1c70f-d731-7b70-acf8-e9ab3d288fca
   harness_version: 2.1.322 (Claude Code)
+- id: 01a1c837-7318-75c3-a97e-15b632f2e7d4
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida edit --status`. It was punted on: other: Required sketch is posted on STORY-2696 and in docs/plans/2026-11-10-story-2696-reviewer-no-carry.md. Awaiting advisor/master signoff on this concrete sketch before implementation, as required by the spec architecture gate and AGENTS.md Sketch-First Protocol. The 2026-11-10 ruling resolves the design fork; proposed publication schema v2, legacy-default-true encoding and proof version 2 with carry_eligible in the cache key follow that ruling. No Rust changes or tests yet.. No triage reason was given.'
+  created_at: 2026-11-11T01:27:19.576199963Z
+  modified_at: 2026-11-11T01:27:19.576199963Z
+  session_id: 01a1c70f-d731-7b70-acf8-e9ab3d288fca
+  harness_version: 2.1.322 (Claude Code)
 history:
 - id: 01a1c5dd-2088-7231-a4d0-43a9e3af8e19
   author: joe
@@ -156,6 +163,15 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a1c837-7318-75c3-a97e-15abcb0553b4
+  author: joe
+  timestamp: 2026-11-11T01:27:19.576178514Z
+  session_id: 01a1c70f-d731-7b70-acf8-e9ab3d288fca
+  harness_version: 2.1.322 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 filed_at:
   code_sha: b1331e379c1fd3de1eef43e3d2d99b58b5d59a61
   branch: main
@@ -165,9 +181,3 @@ filed_at:
   vendor: claude
   session: 01a1beff-fc3b-78e2-93e2-9b0c283b0339
   harness_version: 2.1.319 (Claude Code)
-attention_reason:
-  category: other
-  detail: Required sketch is posted on STORY-2696 and in docs/plans/2026-11-10-story-2696-reviewer-no-carry.md. Awaiting advisor/master signoff on this concrete sketch before implementation, as required by the spec architecture gate and AGENTS.md Sketch-First Protocol. The 2026-11-10 ruling resolves the design fork; proposed publication schema v2, legacy-default-true encoding and proof version 2 with carry_eligible in the cache key follow that ruling. No Rust changes or tests yet.
-  lean: Approve the posted sketch, then resume the implementation lane.
-  raised_by: implementer
-  raised_at: 2026-11-10T22:12:50.690891482Z
