@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-09T03:00:45.690194532Z
-modified_at: 2026-11-11T14:13:04.385776724Z
+modified_at: 2026-11-11T14:14:24.012125329Z
 req_type: Bug
 tags:
 - area:cli
@@ -141,6 +141,12 @@ comments:
   modified_at: 2026-11-11T12:37:50.394501181Z
   session_id: 01a1ca83-fabb-7663-852c-12c78d4e097f
   harness_version: 2.1.322 (Claude Code)
+- id: 01a1caf5-ba0c-7893-b230-cf21b8bf99ad
+  author: joe
+  content: 'Implementation approach per latest advisor brief: retain nonzero add refusals and route their diagnostics to stderr at the shared top-level error boundary, using the parsed canonical command so global flags and aliases are respected. Update the existing bug_2505 canonical-store regression to require stderr diagnostics and no new object, with additional validation refusals. Run targeted lane job, then make check-ci-fast; leave native-seat edits uncommitted and declare closing BUG-2505 publication subject.'
+  created_at: 2026-11-11T14:14:24.012125329Z
+  modified_at: 2026-11-11T14:14:24.012125329Z
+  session_id: 01a1caf478ac
 history:
 - id: 01a1beaa-5541-7fd1-9192-5cf255b115f3
   author: joe
