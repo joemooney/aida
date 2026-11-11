@@ -829,9 +829,17 @@ fn record_outcome(root: &Path, reason: Option<&str>, dispatched: Option<bool>) -
             state.episode = uuid::Uuid::new_v4().to_string();
         }
         state.count = state.count.saturating_add(1);
-        if state.count >= 3 && state.alert.is_none() {
+        let id = format!("advisor-loop-{NAME}-{}", state.episode);
+        // A prior episode's notice carried across success is delivered first,
+        // then retired so it cannot suppress this episode's own alert.
+        // trace:STORY-2691 | ai:claude
+        let open = state
+            .alert
+            .as_ref()
+            .is_none_or(|alert| alert.sent && alert.message.id != id);
+        if state.count >= 3 && open {
             state.alert = Some(Notice {
-                message: notice::message(format!("advisor-loop-{NAME}-{}", state.episode), "advisor",
+                message: notice::message(id, "advisor",
                     format!("{NAME}: repeated service failure"),
                     format!("{NAME} failed {} consecutive times. Last failure: {}. Inspect aida advisor loops status and train-status, and .aida/{NAME}/service.log; renew/rebind the advisor grant if authority ended.", state.count, bounded_diagnostic(reason))),
                 sent: false,
@@ -1049,6 +1057,47 @@ mod loop_tests {
             first.message.id
         );
         assert_eq!(count(), 2);
+    }
+
+    // A carried-over notice delivered after success must not suppress the next
+    // episode's alert: each episode alerts exactly once with its own ID.
+    // trace:STORY-2691 | ai:claude
+    #[test]
+    fn story2691_carried_alert_does_not_suppress_next_episode() {
+        let temp = tempfile::tempdir().unwrap();
+        let root = temp.path();
+        CONTROLLER.with(|id| *id.borrow_mut() = Some("fixture".into()));
+        let mailbox = root.join(".aida/mailbox");
+        controller_dispatch(root, Some("failed"), false).unwrap();
+        controller_dispatch(root, Some("failed"), false).unwrap();
+        std::fs::create_dir_all(root.join(".aida")).unwrap();
+        std::fs::write(&mailbox, "temporarily unavailable").unwrap();
+        assert!(controller_dispatch(root, Some("failed"), false).is_err());
+        let first = failure_state(root).unwrap().alert.unwrap();
+        // Success resets the count but keeps the unsent notice pending.
+        assert!(controller_dispatch(root, None, true).is_err());
+        std::fs::remove_file(&mailbox).unwrap();
+        // The next episode's first failure delivers the carried notice...
+        controller_dispatch(root, Some("failed again"), false).unwrap();
+        // ...and its third failure still raises a fresh alert of its own.
+        controller_dispatch(root, Some("failed again"), false).unwrap();
+        controller_dispatch(root, Some("failed again"), false).unwrap();
+        let second = failure_state(root).unwrap().alert.unwrap();
+        assert!(second.sent);
+        assert_ne!(second.message.id, first.message.id);
+        let mut ids: Vec<String> = std::fs::read_dir(&mailbox)
+            .unwrap()
+            .map(|entry| {
+                let value: serde_json::Value =
+                    serde_json::from_slice(&std::fs::read(entry.unwrap().path()).unwrap()).unwrap();
+                value["id"].as_str().unwrap().to_string()
+            })
+            .collect();
+        ids.sort();
+        let mut expected = vec![first.message.id.clone(), second.message.id.clone()];
+        expected.sort();
+        assert_eq!(ids, expected);
+        CONTROLLER.with(|id| *id.borrow_mut() = None);
     }
 
     // trace:STORY-2691 | ai:codex
