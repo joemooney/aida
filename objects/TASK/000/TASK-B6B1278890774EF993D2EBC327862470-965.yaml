@@ -17,7 +17,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-08T03:08:54.290380002Z
-modified_at: 2026-11-11T12:17:22.022188973Z
+modified_at: 2026-11-11T12:19:50.685247794Z
 req_type: Task
 tags:
 - area:architecture
@@ -127,6 +127,13 @@ comments:
   created_at: 2026-11-10T23:04:30.868523572Z
   modified_at: 2026-11-10T23:04:30.868523572Z
   session_id: 01a1c70f-d731-7b70-acf8-e9ab3d288fca
+  harness_version: 2.1.322 (Claude Code)
+- id: 01a1ca8c-d91d-7d90-af80-ec6fab62db05
+  author: joe
+  content: 'ADVISOR BRIEF (2026-11-11 05:30 MST, final slice): #3809 and #3818 are closed, so pr_cmd.rs and queue_cmd/rework.rs are free. (1) Migrate the remaining command_registry:: framework-type imports in aida-cli-lib/src/pr_cmd.rs and aida-cli-lib/src/queue_cmd/rework.rs to crate::cmdkit. (2) Delete ''pub use crate::cmdkit::*;'' at command_registry.rs:16 and fix every importer cargo check then names (import-line changes only). (3) Re-measure the main SCC size with the SPIKE-713 method and record before/after on this spec (the deferred TASK-3425 acceptance). Leave rework.rs''s ''use crate::*'' alone; TASK-3428 owns it. LIGHT gate: cargo check --profile agent -p aida-cli-lib --tests via the lane runner, then make check-ci-fast. Subject: [AI:codex] refactor(crate-split): finish cmdkit imports and drop command_registry re-exports (TASK-3448).'
+  created_at: 2026-11-11T12:19:50.685247794Z
+  modified_at: 2026-11-11T12:19:50.685247794Z
+  session_id: 01a1ca83-fabb-7663-852c-12c78d4e097f
   harness_version: 2.1.322 (Claude Code)
 history:
 - id: 01a1b921-d315-74a0-9c9a-0ca54df44ce6
