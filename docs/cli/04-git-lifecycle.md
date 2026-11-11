@@ -429,12 +429,12 @@ open state are rechecked after each diff; a moving head refuses the report.
 for offline checks without forge access.
 
 <!-- trace:TASK-3782 | ai:codex -->
-While waiting, the train reports CI run IDs, passed shard counts, running
-jobs, and queued jobs with runner wait age when creation timestamps are
-available. The Build summary appears after all shards finish. Job-detail
-reads are informational: unavailable details never replace readiness checks.
-The forge reader also supports GitLab pipeline jobs, without enabling GitLab
-train admission.
+While waiting, the train reports CI run IDs and each shard's check bucket from
+its existing check-row snapshot. Only `CI (...)` checks in workflow `CI` count
+as shards; ancillary checks such as Release are listed separately. The Build
+summary appears after all shards finish. Failed checks are named immediately.
+This display adds no forge reads and changes no readiness or wait decisions;
+check rows do not distinguish runner queue time from execution time.
 
 A newly opened train waits up to 180 seconds for its first CI checks to
 register. After checks appear, pending lanes continue through the ordinary

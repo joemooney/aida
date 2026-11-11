@@ -592,6 +592,48 @@ pub(crate) fn hold_release_admitted(
     })
 }
 
+/// Cosmetic progress from the same snapshot used for readiness. No forge reads.
+/// Shards are the CI workflow's matrix checks; Release and other checks are
+/// ancillary and never enter the shard denominator.
+// trace:TASK-3782 | ai:codex
+fn train_ci_wait_details(rows: &[crate::ci_gate::CheckRow]) -> Vec<String> {
+    let runs: std::collections::BTreeSet<_> =
+        rows.iter().filter_map(|r| r.run_id.as_deref()).collect();
+    runs.into_iter()
+        .map(|run| {
+            let checks: Vec<_> = rows
+                .iter()
+                .filter(|r| r.run_id.as_deref() == Some(run))
+                .collect();
+            let is_shard = |r: &&crate::ci_gate::CheckRow| {
+                r.workflow == "CI" && r.name.starts_with("CI (") && r.name.ends_with(')')
+            };
+            let shards: Vec<_> = checks.iter().copied().filter(is_shard).collect();
+            let passed = shards.iter().filter(|r| r.bucket == "pass").count();
+            let mut parts = vec![format!(
+                "run {run}: {passed}/{} shards passed",
+                shards.len()
+            )];
+            for row in checks {
+                if crate::ci_gate::check_name_eq(&row.name, "Build (ubuntu-latest)") {
+                    parts.push(format!("Build summary: {}", row.bucket));
+                } else if is_shard(&row) {
+                    parts.push(format!("{}: {}", row.name, row.bucket));
+                } else {
+                    parts.push(format!("ancillary {}: {}", row.name, row.bucket));
+                }
+            }
+            if !rows.iter().any(|r| {
+                r.run_id.as_deref() == Some(run)
+                    && crate::ci_gate::check_name_eq(&r.name, "Build (ubuntu-latest)")
+            }) {
+                parts.push("Build summary appears after all shards finish".into());
+            }
+            parts.join("; ")
+        })
+        .collect()
+}
+
 /// Required presence is checked before any informational or hold exception.
 // trace:BUG-2401 | ai:codex
 #[derive(Debug, PartialEq, Eq)]
@@ -2469,14 +2511,7 @@ impl LiveTrainForge<'_> {
             state,
             TrainCiReadiness::Pending(_) | TrainCiReadiness::Missing(_)
         ) {
-            let runs: std::collections::BTreeSet<_> =
-                rows.iter().filter_map(|r| r.run_id.as_deref()).collect();
-            for run in runs {
-                journal::before("read CI job progress")?;
-                let detail = self
-                    .forge
-                    .ci_wait_details(run)
-                    .unwrap_or_else(|_| format!("run {run}: job detail unavailable"));
+            for detail in train_ci_wait_details(&rows) {
                 if let TrainCiReadiness::Pending(names) = &mut state {
                     names.push(detail);
                 } else {

@@ -1036,11 +1036,6 @@ pub trait Forge {
     fn check_rows(&self, _change: &ChangeRef) -> Result<Vec<crate::ci_gate::CheckRow>> {
         anyhow::bail!("this forge exposes no per-check CI rows")
     }
-    /// Display-only job detail; failures never alter CI admission.
-    // trace:TASK-3782 | ai:codex
-    fn ci_wait_details(&self, _run: &str) -> Result<String> {
-        anyhow::bail!("job detail unavailable")
-    }
     /// STORY-1166: names of the branch-protection-required checks; empty when
     /// the forge has no such concept (GitLab gates on the whole pipeline).
     // trace:STORY-1166 | ai:claude
@@ -2148,23 +2143,7 @@ impl Forge for GitHubForge {
     fn ci_progress_snapshot(&self, branch: &str) -> String {
         crate::ci_rollup_json_for_branch(branch)
     }
-    // trace:TASK-3782 | ai:codex
-    fn ci_wait_details(&self, run: &str) -> Result<String> {
-        anyhow::ensure!(
-            run.bytes().all(|b| b.is_ascii_digit()) && !run.is_empty(),
-            "invalid run id"
-        );
-        let out = train_gh_api_read(
-            &self.project_root,
-            &format!("repos/{{owner}}/{{repo}}/actions/runs/{run}/jobs?per_page=100&filter=latest"),
-        )?;
-        anyhow::ensure!(out.status.success(), "CI jobs unavailable");
-        format_ci_wait_jobs(
-            &String::from_utf8_lossy(&out.stdout),
-            run,
-            chrono::Utc::now(),
-        )
-    }
+
     fn supports_delegated_review(&self) -> bool {
         true
     }
@@ -2967,23 +2946,7 @@ impl Forge for GitLabForge {
             .map(|out| String::from_utf8_lossy(&out.stdout).to_string());
         glab_ci_progress_snapshot(&pipelines, jobs.as_deref())
     }
-    // trace:TASK-3782 | ai:codex
-    fn ci_wait_details(&self, run: &str) -> Result<String> {
-        anyhow::ensure!(
-            run.bytes().all(|b| b.is_ascii_digit()) && !run.is_empty(),
-            "invalid pipeline id"
-        );
-        let out = self.glab_api_get(
-            &format!("projects/:id/pipelines/{run}/jobs?per_page=100"),
-            &[],
-        )?;
-        anyhow::ensure!(out.status.success(), "CI jobs unavailable");
-        format_ci_wait_jobs(
-            &String::from_utf8_lossy(&out.stdout),
-            run,
-            chrono::Utc::now(),
-        )
-    }
+
     fn kind(&self) -> ForgeKind {
         ForgeKind::GitLab
     }
@@ -4723,76 +4686,6 @@ pub(crate) fn check_rows_from_glab_jobs(
         .collect()
 }
 
-// trace:TASK-3782 | ai:codex
-fn format_ci_wait_jobs(
-    body: &str,
-    run: &str,
-    now: chrono::DateTime<chrono::Utc>,
-) -> Result<String> {
-    let value: serde_json::Value = serde_json::from_str(body)?;
-    let jobs = value
-        .get("jobs")
-        .unwrap_or(&value)
-        .as_array()
-        .context("CI jobs must be an array")?;
-    // Never present a truncated API page as a complete shard tally.
-    anyhow::ensure!(
-        jobs.len() < 100
-            && value
-                .get("total_count")
-                .and_then(|v| v.as_u64())
-                .unwrap_or(jobs.len() as u64)
-                <= jobs.len() as u64,
-        "CI job list exceeds display page"
-    );
-    let mut passed = 0;
-    let mut total = 0;
-    let mut states = Vec::new();
-    let mut summary = None;
-    for job in jobs {
-        let name = job["name"].as_str().context("CI job has no name")?;
-        let status = job["conclusion"]
-            .as_str()
-            .unwrap_or_else(|| job["status"].as_str().unwrap_or("unknown"));
-        if crate::ci_gate::check_name_eq(name, "Build (ubuntu-latest)") {
-            summary = Some(status);
-            continue;
-        }
-        total += 1;
-        match status {
-            "success" => passed += 1,
-            "in_progress" | "running" => states.push(format!("running: {name}")),
-            "queued" | "pending" | "created" | "waiting_for_resource" => {
-                let age = job["created_at"]
-                    .as_str()
-                    .and_then(|s| chrono::DateTime::parse_from_rfc3339(s).ok())
-                    .map(|t| {
-                        format!(
-                            " {}m",
-                            now.signed_duration_since(t).num_seconds().max(0) / 60
-                        )
-                    })
-                    .unwrap_or_default();
-                states.push(format!("{name}: queued{age} (runner)"));
-            }
-            other => states.push(format!("{name}: {other}")),
-        }
-    }
-    let summary = summary
-        .map(|s| format!("Build summary: {s}"))
-        .unwrap_or_else(|| {
-            if value.is_object() {
-                "Build summary appears after all shards finish".into()
-            } else {
-                "pipeline jobs".into()
-            }
-        });
-    Ok(format!(
-        "run {run}: {passed}/{total} shards passed; {}; {summary}",
-        states.join("; ")
-    ))
-}
-
 fn newest_glab_pipeline(arr: &[serde_json::Value]) -> Option<&serde_json::Value> {
     arr.iter().max_by(|a, b| {
         let ai = a.get("id").and_then(|v| v.as_u64()).unwrap_or(0);
@@ -5654,35 +5547,6 @@ mod story_1689_commit_ci_status_tests;
 #[cfg(test)]
 mod tests {
 
-    // trace:TASK-3782 | ai:codex
-    #[test]
-    fn train_ci_job_progress_fixtures() {
-        let now = chrono::DateTime::parse_from_rfc3339("2026-11-10T22:10:00Z")
-            .unwrap()
-            .with_timezone(&chrono::Utc);
-        let queued = r#"{"total_count":2,"jobs":[{"name":"lib-1","status":"queued","created_at":"2026-11-10T22:01:00Z"},{"name":"gates","status":"queued","created_at":"2026-11-10T22:00:00Z"}]}"#;
-        let text = super::format_ci_wait_jobs(queued, "42", now).unwrap();
-        assert!(text.contains("run 42: 0/2 shards passed"));
-        assert!(text.contains("lib-1: queued 9m (runner)"));
-        assert!(text.contains("Build summary appears after all shards finish"));
-        let partial = r#"{"jobs":[{"name":"lib-1","status":"completed","conclusion":"success"},{"name":"gates","status":"in_progress"}]}"#;
-        let text = super::format_ci_wait_jobs(partial, "42", now).unwrap();
-        assert!(text.contains("1/2 shards passed"));
-        assert!(text.contains("running: gates"));
-        let failed = r#"{"jobs":[{"name":"lib-1","conclusion":"failure"},{"name":"gates","status":"in_progress"}]}"#;
-        assert!(super::format_ci_wait_jobs(failed, "42", now)
-            .unwrap()
-            .contains("lib-1: failure"));
-        let summary = r#"{"jobs":[{"name":"lib-1","conclusion":"success"},{"name":"Build (ubuntu-latest)","conclusion":"success"}]}"#;
-        let text = super::format_ci_wait_jobs(summary, "42", now).unwrap();
-        assert!(text.contains("1/1 shards passed"));
-        assert!(text.contains("Build summary: success"));
-        let gitlab = r#"[{"name":"lib-1","status":"success"},{"name":"gates","status":"pending","created_at":"2026-11-10T22:01:00Z"}]"#;
-        let text = super::format_ci_wait_jobs(gitlab, "73", now).unwrap();
-        assert!(text.contains("run 73: 1/2 shards passed"));
-        assert!(text.contains("gates: queued 9m (runner)"));
-        assert!(super::format_ci_wait_jobs("{}", "42", now).is_err());
-    }
     use super::*;
 
     // trace:BUG-2494 | ai:codex
