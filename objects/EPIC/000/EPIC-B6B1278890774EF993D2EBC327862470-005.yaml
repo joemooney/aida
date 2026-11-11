@@ -8,12 +8,24 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-11T05:40:02.085047934Z
-modified_at: 2026-11-11T05:40:02.085047934Z
+modified_at: 2026-11-11T05:41:34.332820001Z
 req_type: Epic
 tags:
 - architecture
 - crate-split
 - parallel-dev
+relationships:
+- rel_type: Parent
+  target_id: 01a1c91f-97d7-7a61-a284-680bd6a4b9fb
+  created_at: 2026-11-11T05:41:34.332816520Z
+  created_by: joe
+history:
+- id: 01a1c920-3cf3-7ae0-a484-bce0db5d9cc4
+  author: joe
+  timestamp: 2026-11-11T05:41:35.603145154Z
+  session_id: 01a1c87f-970d-7ce0-9351-e4e75a87731e
+  harness_version: 2.1.322 (Claude Code)
+  changes: []
 filed_at:
   code_sha: eb1b39c30c9f9f6ce3f5ccf1c5ffd8966e5f8a23
   branch: main
