@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-10T10:24:49.978786902Z
-modified_at: 2026-11-11T07:56:52.167964387Z
+modified_at: 2026-11-11T07:56:53.512738491Z
 req_type: Bug
 comments:
 - id: 01a1c544-9448-77c1-a5a0-c8d1776ee831
@@ -195,6 +195,20 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Full diff inspected. BUG-2518 AC1: verified by select_with_coverage/finish_admission/retry_allowed and backoff regression source. AC2: verified by no_verdict_blocker/retry_blockers and local/distributed exhaustion assertions. AC3: verified by local/distributed new-head assertions. AC4: verified by tests for each criterion in both changed test files (source inspection; current-head execution unverified). BUG-2518 (bug protocol): met. One unresolved CI test-budget defect; CI pending at review time; no local tests/builds run.. No triage reason was given.'
   created_at: 2026-11-11T07:56:52.167958830Z
   modified_at: 2026-11-11T07:56:52.167958830Z
+  session_id: 01a1c87f-970d-7ce0-9351-e4e75a87731e
+  harness_version: 2.1.322 (Claude Code)
+- id: 01a1c99c-1af8-70c1-afc3-c2109092840b
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (BUG-2518):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 8f4a46e6babc
+    Recorded: 2026-11-11T07:52:44.524381119+00:00
+    Findings:
+    1. [P2] aida-cli-lib/src/gate/review_publication/tests/admission_tests.rs:965-974: Resolve the known test-time budget failure for bug2518_cancelled_retry_readmits_after_spawn_preflight_and_unclaimed_exits. CI run 42973678606 at 23f8a3c8f307, lib-1 job 130368161735, passed all 7272 tests but failed Test time budget because this new regression took 31.82s against the unbudgeted 30s limit. The test, its production/fixture helpers, and scripts/test-time-budget.toml are unchanged between that head and 8f4a46e6babc, so the reported failure has no corresponding fix. Split or speed up the three-mode integration test while preserving coverage, or add a justified measured budget with headroom following repository policy and document it in the PR. Validate through the permitted implementer lane/CI, including the timing gate. Evidence: https://github.com/joemooney/aida/actions/runs/42973678606/job/130368161735
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-11T07:56:53.368144620Z
+  modified_at: 2026-11-11T07:56:53.368144620Z
   session_id: 01a1c87f-970d-7ce0-9351-e4e75a87731e
   harness_version: 2.1.322 (Claude Code)
 history:
