@@ -11,12 +11,12 @@ description: |
   2. If currentartifact stillbreaches, fix diagnosedpath preserving canonicalcorrectness, authoritychecks, useful truthfulbounded/incomplete linkage and BUG1801 zero-refresh-wait semantics. Budgets2000ms/10%/5000ms stayunchanged. For an architectural fork postsketch and seek independent signoff beforeimplementation; routineboundedfix mayproceed.
   3. Add decisive mechanism regression iffixneeded (fixtures/fakeHOME only); remeasure sameartifact/shapes/load and report before/after plus new-buildsamplecounts separately from old24hwindow. Never claimthreewarmcalls provefullSLO. Ifhistoricalonly, documentverifiedsupersedingmergedfix and representativefreshtelemetry instead ofcreatingunnecessarycode.
   4. Independentreview andnormalPRgates forcode. LIGHT one targetedregressionplusfast; >10files/sharedinfrastructure addsmandatorygates; no fullsuite/slotbypass/repeatedcappedcompiles. Longcargo background. Diagnosisfirst, nopollingloop, nouserconfigedits orbenchmarkbudgetrelaxation.
-status: InProgress
+status: NeedsAttention
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T10:04:17.050576260Z
-modified_at: 2026-11-11T14:36:57.342258886Z
+modified_at: 2026-11-11T14:59:12.818755239Z
 req_type: Bug
 tags:
 - closure:pending
@@ -130,6 +130,13 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1cb1e-c132-7e33-9b28-ec6d35d2dec0
+  author: aida-orchestrator
+  timestamp: 2026-11-11T14:59:12.818776589Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 filed_at:
   code_sha: 6fefb63280c352be0194c2cfadf54a085eb55471
   branch: main
@@ -140,3 +147,11 @@ filed_at:
 implementation_info:
   implemented: false
   reopened_at_sha: 11b131dfe3341e6d9c7127d64370f91366094711
+failure_reason:
+  phase: reviewer
+  phase_index: 3
+  kind: verdict:request-changes
+  detail: 'Approved bounded Refs source fix; no actionable defects. CI pending at review time. Whole BUG-2402 remains partial: comparable deployed SLO evidence unverified; retain closure:pending.'
+  recovery_hint: address the review findings, move BUG-2402 back to In Progress, and clear the PR hold only after approval
+  shelved_by: reviewer
+  shelved_at: 2026-11-11T14:59:12.818755239Z
