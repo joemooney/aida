@@ -35,6 +35,9 @@ relationships:
   target_id: 01a1b921-5e92-7f00-9152-3328d4dab40c
   created_at: 2026-11-11T05:42:03.778407457Z
   created_by: joe
+- rel_type: Parent
+  target_id: 01a1ca8a-722c-79a0-b301-26e4d9948e37
+  created_at: 2026-11-11T12:17:29.883723531Z
 history:
 - id: 01a1c920-3cf3-7ae0-a484-bce0db5d9cc4
   author: joe
@@ -64,6 +67,12 @@ history:
   author: joe
   timestamp: 2026-11-11T05:42:05.040411436Z
   session_id: 01a1c87f-970d-7ce0-9351-e4e75a87731e
+  harness_version: 2.1.322 (Claude Code)
+  changes: []
+- id: 01a1ca8a-c239-7602-9c26-b096ee92752f
+  author: joe
+  timestamp: 2026-11-11T12:17:33.753033350Z
+  session_id: 01a1ca83-fabb-7663-852c-12c78d4e097f
   harness_version: 2.1.322 (Claude Code)
   changes: []
 filed_at:
