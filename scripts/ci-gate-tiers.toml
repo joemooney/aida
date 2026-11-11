@@ -44,6 +44,7 @@
 #     while an agent is mid-edit, so that gate belongs after the push, not
 #     before it. trace:TASK-1567
 [tiers]
+"Terminal glyph padding ratchet" = "fast" # trace:TASK-3779 | ai:codex
 # trace:STORY-2672 | ai:codex
 "Self-hosted routing security fixtures" = "fast"
 # trace:STORY-2606 | ai:codex

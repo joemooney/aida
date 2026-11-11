@@ -1000,6 +1000,11 @@ jobs:
         if: matrix.shard == 'gates'
         run: python3 -m unittest tests/test_bug_2135_sccache_tmpdir.py
 
+      # trace:TASK-3779 | ai:codex
+      - name: Terminal glyph padding ratchet
+        if: matrix.shard == 'gates'
+        run: python3 -m unittest tests/test_terminal_glyph_padding.py
+
       - name: Run clippy
         if: ${{ matrix.shard == 'gates' && (steps.changes.outputs.full_ci == 'true') }}
         # Style/pedantic lints stay warnings; the deny-by-default CORRECTNESS
