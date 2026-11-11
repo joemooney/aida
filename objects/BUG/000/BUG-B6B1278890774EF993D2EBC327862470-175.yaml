@@ -11,12 +11,12 @@ description: |
   2. If currentartifact stillbreaches, fix diagnosedpath preserving canonicalcorrectness, authoritychecks, useful truthfulbounded/incomplete linkage and BUG1801 zero-refresh-wait semantics. Budgets2000ms/10%/5000ms stayunchanged. For an architectural fork postsketch and seek independent signoff beforeimplementation; routineboundedfix mayproceed.
   3. Add decisive mechanism regression iffixneeded (fixtures/fakeHOME only); remeasure sameartifact/shapes/load and report before/after plus new-buildsamplecounts separately from old24hwindow. Never claimthreewarmcalls provefullSLO. Ifhistoricalonly, documentverifiedsupersedingmergedfix and representativefreshtelemetry instead ofcreatingunnecessarycode.
   4. Independentreview andnormalPRgates forcode. LIGHT one targetedregressionplusfast; >10files/sharedinfrastructure addsmandatorygates; no fullsuite/slotbypass/repeatedcappedcompiles. Longcargo background. Diagnosisfirst, nopollingloop, nouserconfigedits orbenchmarkbudgetrelaxation.
-status: Done
+status: Approved
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T10:04:17.050576260Z
-modified_at: 2026-11-01T23:28:44.176391958Z
+modified_at: 2026-11-11T12:37:45.358484945Z
 req_type: Bug
 tags:
 - closure:pending
@@ -77,6 +77,15 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: Done
+- id: 01a1ca9d-3f8d-7360-8496-4dbaa06213b2
+  author: joe
+  timestamp: 2026-11-11T12:37:45.485283809Z
+  session_id: 01a1ca83-fabb-7663-852c-12c78d4e097f
+  harness_version: 2.1.322 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Approved
 filed_at:
   code_sha: 6fefb63280c352be0194c2cfadf54a085eb55471
   branch: main
@@ -84,3 +93,6 @@ filed_at:
   aida_version: 0.16.0
   aida_build_sha: 4ce0af750fc
   vendor: codex
+implementation_info:
+  implemented: false
+  reopened_at_sha: 11b131dfe3341e6d9c7127d64370f91366094711
