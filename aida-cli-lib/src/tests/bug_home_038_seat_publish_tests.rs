@@ -4466,6 +4466,7 @@ if '--write-ledger' in sys.argv:
             raise RuntimeError('Git metadata was writable')
     Path('scripts/exec-context-legacy.json').write_text('regenerated\n')
     if Path('reject-regeneration').exists():
+        Path('partial-generator-write').write_text('partial')
         raise RuntimeError('failure after output write')
 "#,
         )
@@ -4536,6 +4537,9 @@ if '--write-ledger' in sys.argv:
             assert!(format!("{why:#}").contains("failure after output write"));
             assert_eq!(git_ok(&tree, &["rev-parse", "HEAD"]), head);
             assert_eq!(git_ok(&tree, &["rev-parse", "MERGE_HEAD"]), base);
+            // The refused run's write is rolled back, so no later attempt can
+            // stage it. trace:STORY-2710 | ai:claude
+            assert!(!tree.join("partial-generator-write").exists());
             let guard = crate::repair_journal::RepairGuard::lock(&fx.main).unwrap();
             assert_eq!(
                 guard
@@ -4579,6 +4583,19 @@ if '--write-ledger' in sys.argv:
                     .regeneration_success,
                 Some(true)
             );
+            drop(guard);
+            assert!(git_ok(
+                &tree,
+                &[
+                    "ls-tree",
+                    "-r",
+                    "--name-only",
+                    "HEAD",
+                    "--",
+                    "partial-generator-write"
+                ]
+            )
+            .is_empty());
         }
         assert!(!fx.main.join(".git/generator-escaped").exists());
     }

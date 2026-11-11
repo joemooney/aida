@@ -3469,6 +3469,13 @@ fn regenerate_repair_outputs(
     for (key, value) in policy.project(&tools, [])?.pairs() {
         sandbox.extend(["--setenv".into(), key.to_owned(), value.to_owned()]);
     }
+    // The driver bounds its generators inside PROBE_TIMEOUT so a slow or
+    // refused run rolls its own writes back before the host would kill it.
+    // trace:STORY-2710 | ai:claude
+    let budget = PROBE_TIMEOUT
+        .saturating_sub(std::time::Duration::from_secs(20))
+        .as_secs()
+        .to_string();
     execute_driver(
         &sandbox,
         &[
@@ -3477,6 +3484,7 @@ fn regenerate_repair_outputs(
             OsStr::new(base),
             OsStr::new("generate"),
             OsStr::new(&pack_outputs),
+            OsStr::new(&budget),
         ],
     )
 }
@@ -3798,15 +3806,61 @@ mod rework_merge_tests {
                 assert_eq!(std::fs::read_to_string(fx.main.join(path)).unwrap(), *body);
             }
         }
-        // The closed inventory still catches an extra write under the pack.
+        // The real renderer removes a retired skill's orphaned pack files.
+        // trace:STORY-2710 | ai:claude
+        let retired = fx.main.join(".agents/skills/aida-retired/SKILL.md");
+        std::fs::create_dir_all(retired.parent().unwrap()).unwrap();
+        std::fs::write(&retired, "retired").unwrap();
+        let out = generate();
+        assert!(
+            out.status.success(),
+            "{}",
+            String::from_utf8_lossy(&out.stderr)
+        );
+        assert!(!retired.exists());
+        // A renderer compiled from merged sources may ship a skill this host
+        // binary does not know; its staged master authorizes the pack file.
+        let merged_skill = ".agents/skills/aida-fixture/SKILL.md";
         std::fs::write(
             fx.main.join("Makefile"),
-            format!("{makefile}\techo unexpected > .agents/skills/aida-invented.md\n"),
+            format!("{makefile}\tmkdir -p .agents/skills/aida-fixture\n\techo merged > {merged_skill}\n"),
+        )
+        .unwrap();
+        let out = generate();
+        assert!(
+            out.status.success(),
+            "{}",
+            String::from_utf8_lossy(&out.stderr)
+        );
+        assert!(fx.main.join(merged_skill).is_file());
+        // The closed inventory still catches an extra write under the pack,
+        // including one whose would-be master is not a staged source, and the
+        // refused run leaves none of its writes behind.
+        std::fs::write(
+            fx.main.join("aida-core/templates/skills/aida-unstaged.md"),
+            "unstaged",
+        )
+        .unwrap();
+        std::fs::write(
+            fx.main.join("Makefile"),
+            format!(
+                "{makefile}\techo unexpected > .agents/skills/aida-invented.md\n\
+                 \tmkdir -p .agents/skills/aida-unstaged\n\
+                 \techo unexpected > .agents/skills/aida-unstaged/SKILL.md\n"
+            ),
         )
         .unwrap();
         let out = generate();
         assert!(!out.status.success());
-        assert!(String::from_utf8_lossy(&out.stderr).contains("unregistered outputs"));
+        let stderr = String::from_utf8_lossy(&out.stderr);
+        assert!(stderr.contains("unregistered outputs"), "{stderr}");
+        assert!(stderr.contains("aida-unstaged/SKILL.md"), "{stderr}");
+        assert!(stderr.contains("rolled back"), "{stderr}");
+        assert!(!fx.main.join(".agents/skills/aida-invented.md").exists());
+        assert!(!fx
+            .main
+            .join(".agents/skills/aida-unstaged/SKILL.md")
+            .exists());
     }
 
     // A real staged merge, with the index left untouched while the lane edits

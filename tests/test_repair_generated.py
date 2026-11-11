@@ -2,6 +2,7 @@
 trace:STORY-2710 | ai:codex
 """
 import importlib.util
+import os
 from pathlib import Path
 import subprocess
 import tempfile
@@ -62,6 +63,11 @@ class RepairGenerationTests(unittest.TestCase):
             result = self.run_driver(root, base, 'generate')
             self.assertNotEqual(result.returncode, 0)
             self.assertIn('unregistered outputs', result.stderr)
+            # The refused run's writes, registered or not, return to the index
+            # so no later publication attempt can stage them.
+            self.assertIn('rolled back', result.stderr)
+            self.assertEqual((root / 'source.rs').read_text(), 'base\n')
+            self.assertEqual((root / 'scripts/exec-context-legacy.json').read_text(), 'main\n')
 
     def test_unresolved_authoritative_source_allows_restoration_but_blocks_generation(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -113,7 +119,8 @@ class RepairGenerationTests(unittest.TestCase):
             self.assertEqual(self.run_driver(root, base, 'restore').returncode, 0)
             result = self.run_driver(root, base, 'generate')
             self.assertNotEqual(result.returncode, 0)
-            self.assertEqual((root / 'scripts/exec-context-legacy.json').read_text(), 'regenerated\n')
+            # The partial product is rolled back to the staged (restored) bytes.
+            self.assertEqual((root / 'scripts/exec-context-legacy.json').read_text(), 'main\n')
             self.assertEqual(git('rev-parse', 'MERGE_HEAD').stdout.strip(), base)
             # Retry runs the generator rather than treating a written product
             # as proof of success. Resolve the generator source for recovery.
@@ -145,6 +152,44 @@ class RepairGenerationTests(unittest.TestCase):
             self.assertTrue((root / '.claude/commands/run.md').is_symlink())
             self.assertEqual((root / '.claude/commands/run.md').read_text(), 'authoritative\n')
             self.assertEqual((root / '.claude/settings.json').read_text(), 'local settings\n')
+
+    def test_generator_timeout_rolls_back_new_and_modified_files(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            git, base = self.fixture(root, '    Path("stray.txt").write_text("partial")\n'
+                                           '    import time; time.sleep(30)\n')
+            self.assertEqual(self.run_driver(root, base, 'restore').returncode, 0)
+            result = subprocess.run(('python3', str(DRIVER), base, 'generate', '[]', '2'),
+                                    cwd=root, capture_output=True, text=True)
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn('timed out', result.stderr)
+            self.assertFalse((root / 'stray.txt').exists())
+            self.assertEqual((root / 'scripts/exec-context-legacy.json').read_text(), 'main\n')
+
+    def test_pack_rule_is_closed_over_staged_masters(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            old = os.getcwd()
+            os.chdir(tmp)
+            try:
+                Path('aida-core/templates/skills/aida-x').mkdir(parents=True)
+                Path('aida-core/templates/skills/aida-x/SKILL.md').write_text('m')
+                Path('aida-core/templates/skills/aida-x/examples').mkdir()
+                Path('aida-core/templates/skills/aida-x/examples/e.md').write_text('h')
+                staged = {'aida-core/templates/skills/aida-x/SKILL.md',
+                          'aida-core/templates/skills/aida-x/examples/e.md'}
+                new = (0o644, 'h')
+                allowed = driver.pack_change_allowed
+                self.assertTrue(allowed('.agents/skills/aida-x/SKILL.md', None, new, set(), staged))
+                self.assertTrue(allowed('.agents/skills/aida-x/examples/e.md', None, new, set(), staged))
+                self.assertFalse(allowed('.agents/skills/aida-x/SKILL.md', None, new, set(), set()))
+                self.assertFalse(allowed('.agents/skills/aida-x/run.sh', None, new, set(), staged))
+                self.assertFalse(allowed('.agents/skills/aida-x/SKILL.md', None, ('link', 'x'), set(), staged))
+                self.assertFalse(allowed('.agents/skills/other/SKILL.md', None, new, set(), staged))
+                self.assertTrue(allowed('.agents/skills/aida-old/SKILL.md', new, None, set(), staged))
+                self.assertTrue(allowed('.agents/skills/aida-h/SKILL.md', None, new,
+                                        {'.agents/skills/aida-h/SKILL.md'}, set()))
+            finally:
+                os.chdir(old)
 
     def test_registry_excludes_local_extensions_and_unrelated_claude_files(self):
         self.assertTrue(driver.registered('.claude/skills/aida-test/SKILL.md', '120000'))

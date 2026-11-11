@@ -10,8 +10,10 @@ import hashlib
 import json
 import os
 from pathlib import Path
+import shutil
 import subprocess
 import sys
+import time
 
 # Outputs are enumerated from pinned main, never from a seat-authored registry.
 REGISTRY = (
@@ -23,6 +25,8 @@ REGISTRY = (
      ("aida-core/templates/", "aida-core/src/", "Makefile", "scripts/check-template-hooks.py"),
      ("make", "sync-templates")),
 )
+PACK = ".agents/skills/"
+TEMPLATES = "aida-core/templates/"
 
 
 def git(*args):
@@ -32,10 +36,9 @@ def git(*args):
 def registered(path, mode, masters=None):
     if path == "scripts/exec-context-legacy.json":
         return True
-    # Only tracked mirror files with a corresponding master, or portable pack
-    # files whose authoritative renderer is covered by the template dependency.
+    # Only tracked mirror files with a corresponding master. The ignored
+    # portable pack is governed by pack_change_allowed below.
     if path.startswith(".agents/skills/aida-"):
-        # Only the host-rendered closed inventory below authorizes pack writes.
         return False
     if path.startswith(".aida/discipline/") and path.endswith(".md"):
         return masters is None or "aida-core/templates/" + path in masters
@@ -51,6 +54,47 @@ def registered(path, mode, masters=None):
         source = "aida-core/templates/" + rel
         return source in masters or any(p.startswith(source + "/") for p in masters)
     return False
+
+
+def pack_master(path):
+    """The template master that authorizes one portable pack file.
+
+    The real renderer (make sync-agent-skills) is compiled from the resolved
+    sources, so a merged tree may add or retire skills the host binary does not
+    know. Each rendered file maps to one master shape (scaffolding inventory:
+    skills-portable/<name>.md, skills/<name>.md, skills/<name>/SKILL.md, or a
+    folder-form helper skills/<name>/<sub>.md); anything else is unregistered.
+    trace:STORY-2710 | ai:claude
+    """
+    if not path.startswith(PACK):
+        return None
+    name, _, rel = path[len(PACK):].partition("/")
+    if not name.startswith("aida-") or not rel or ".." in rel.split("/"):
+        return None
+    if rel == "SKILL.md":
+        candidates = (TEMPLATES + "skills-portable/" + name + ".md",
+                      TEMPLATES + "skills/" + name + ".md",
+                      TEMPLATES + "skills/" + name + "/SKILL.md")
+    elif rel.endswith(".md"):
+        candidates = (TEMPLATES + "skills/" + name + "/" + rel,)
+    else:
+        return None
+    return [c for c in candidates if not Path(c).is_symlink() and Path(c).is_file()]
+
+
+def pack_change_allowed(path, before, after, pack_outputs, staged):
+    """Closed rule for the ignored portable pack: regular-file writes whose
+    master is a staged (host-published) source or in the host-rendered
+    inventory, and removal of existing aida-* entries, which the real renderer
+    deletes as orphans when a skill retires or becomes Claude-only. Removing an
+    ignored file cannot reach the published tree. trace:STORY-2710 | ai:claude
+    """
+    if not path.startswith(PACK + "aida-"):
+        return False
+    if after is None:
+        return before is not None and before[0] != "special"
+    expected = path in pack_outputs or any(m in staged for m in pack_master(path) or ())
+    return expected and isinstance(after[0], int)
 
 
 def snapshot():
@@ -70,7 +114,52 @@ def snapshot():
     return result
 
 
-def main(base, phase, pack_outputs=()):
+def index_entries():
+    entries = {}
+    for row in git("ls-files", "-s", "-z").split(b"\0"):
+        if not row:
+            continue
+        meta, raw = row.split(b"\t", 1)
+        mode, oid, stage = meta.decode().split()
+        entries.setdefault(os.fsdecode(raw), []).append((mode, oid, stage))
+    return entries
+
+
+def roll_back(before, after):
+    """Return every path a refused generation changed to its staged state.
+
+    Publication stages the lane's whole tree before generation, so the index
+    holds everything a refused run may have touched; Git metadata stays
+    read-only. Paths the index cannot restore are reported, never guessed.
+    trace:STORY-2710 | ai:claude
+    """
+    index = index_entries()
+    kept = []
+    for key in sorted(p for p in before.keys() | after.keys() if before.get(p) != after.get(p)):
+        path = Path(key)
+        entry = index.get(key)
+        if entry and len(entry) == 1 and entry[0][2] == "0":
+            mode, oid, _ = entry[0]
+            if path.is_symlink() or path.is_file():
+                path.unlink()
+            elif path.is_dir():
+                shutil.rmtree(path)
+            path.parent.mkdir(parents=True, exist_ok=True)
+            blob = git("cat-file", "blob", oid)
+            if mode == "120000":
+                os.symlink(os.fsdecode(blob), path)
+            else:
+                path.write_bytes(blob)
+                path.chmod(0o755 if mode == "100755" else 0o644)
+        elif entry is None and before.get(key) is None:
+            if path.is_symlink() or path.is_file():
+                path.unlink()
+        else:
+            kept.append(key)
+    return kept
+
+
+def main(base, phase, pack_outputs=(), budget=100.0):
     pinned = {}
     for row in git("ls-tree", "-rz", base).split(b"\0"):
         if not row:
@@ -78,12 +167,11 @@ def main(base, phase, pack_outputs=()):
         meta, raw = row.split(b"\t", 1)
         path = os.fsdecode(raw)
         pinned[path] = meta.split()[0].decode()
+    # Required products: tracked outputs enumerated from pinned main. The
+    # ignored portable pack is permitted, never required (skills may retire).
     outputs = {path for path, mode in pinned.items() if registered(path, mode, pinned)}
-    # The host binary derives this closed inventory with the real renderer and
-    # default ScaffoldConfig. Ignored .agents files cannot come from ls-tree.
-    if any(p.startswith("aida-core/templates/skills/") for p in pinned):
-        outputs.update(pack_outputs)
-    if not outputs:
+    has_pack = any(p.startswith(TEMPLATES + "skills/") for p in pinned)
+    if not outputs and not has_pack:
         return
     if phase == "restore":
         # Preparation must not run source-dependent generators. Restore only
@@ -100,24 +188,42 @@ def main(base, phase, pack_outputs=()):
     blockers = sorted(unmerged - outputs)
     if blockers:
         raise RuntimeError("regeneration requires resolved authoritative sources: " + repr(blockers))
+    pack_outputs = set(pack_outputs)
+    staged = set(index_entries())
     before = snapshot()
-    for name, _, _, argv in REGISTRY:
-        if name == "exec-context" and "scripts/exec-context-legacy.json" not in outputs:
-            continue
-        if name == "templates" and outputs == {"scripts/exec-context-legacy.json"}:
-            continue
-        subprocess.run(argv, check=True)
-    after = snapshot()
-    unexpected = sorted(p for p in before.keys() | after.keys() if before.get(p) != after.get(p) and p not in outputs)
-    if unexpected:
-        raise RuntimeError("generator wrote unregistered outputs: " + repr(unexpected))
-    for path in outputs:
-        if path not in after:
-            raise RuntimeError("generator removed declared output: " + repr(path))
-    # Ratchet regeneration may reduce allowances, never enlarge main's ceiling.
-    if "scripts/exec-context-legacy.json" in outputs:
-        subprocess.run(("python3", "scripts/check-exec-context.py", "--base", base), check=True)
+    deadline = time.monotonic() + budget
+    try:
+        for name, _, _, argv in REGISTRY:
+            if name == "exec-context" and "scripts/exec-context-legacy.json" not in outputs:
+                continue
+            if name == "templates" and not has_pack and outputs <= {"scripts/exec-context-legacy.json"}:
+                continue
+            # Stay inside the host's bound so a slow generator is rolled back here.
+            subprocess.run(argv, check=True, timeout=max(1.0, deadline - time.monotonic()))
+        after = snapshot()
+        unexpected = sorted(
+            p for p in before.keys() | after.keys()
+            if before.get(p) != after.get(p) and p not in outputs
+            and not pack_change_allowed(p, before.get(p), after.get(p), pack_outputs, staged))
+        if unexpected:
+            raise RuntimeError("generator wrote unregistered outputs: " + repr(unexpected))
+        for path in outputs:
+            if path not in after:
+                raise RuntimeError("generator removed declared output: " + repr(path))
+        # Ratchet regeneration may reduce allowances, never enlarge main's ceiling.
+        if "scripts/exec-context-legacy.json" in outputs:
+            subprocess.run(("python3", "scripts/check-exec-context.py", "--base", base), check=True,
+                           timeout=max(1.0, deadline - time.monotonic()))
+    except BaseException as error:
+        # A refused or failed run never leaves partial products for a later
+        # attempt to stage. trace:STORY-2710 | ai:claude
+        kept = roll_back(before, snapshot())
+        note = "; generator writes rolled back to the staged index"
+        if kept:
+            note += "; not restorable from the index: " + repr(kept)
+        raise RuntimeError(f"{error}{note}") from error
 
 
 if __name__ == "__main__":
-    main(sys.argv[1], sys.argv[2], json.loads(sys.argv[3]) if len(sys.argv) > 3 else ())
+    main(sys.argv[1], sys.argv[2], json.loads(sys.argv[3]) if len(sys.argv) > 3 else (),
+         float(sys.argv[4]) if len(sys.argv) > 4 else 100.0)
