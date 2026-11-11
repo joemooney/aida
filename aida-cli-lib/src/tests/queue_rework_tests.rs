@@ -2393,12 +2393,15 @@ fn story_2690_rework_refuses_all_human_parking_before_mutation() {
         .map(|tag| (Some(tag), false))
         .collect();
     cases.push((None, true));
+    let mut requirements = Vec::new();
+    let mut checks = Vec::new();
     for (tag, pending) in cases {
         for status in [
             RequirementStatus::NeedsAttention,
             RequirementStatus::Approved,
         ] {
-            let mut req = req_for_test("BUG-26901", status);
+            let spec_id = format!("BUG-{}", 26901 + requirements.len());
+            let mut req = req_for_test(&spec_id, status);
             if let Some(tag) = &tag {
                 req.tags.insert(tag.clone());
             }
@@ -2416,50 +2419,55 @@ fn story_2690_rework_refuses_all_human_parking_before_mutation() {
                     answered_at: None,
                 });
             }
-            let (tmp, storage) = story_1429_fixture(vec![req]);
-            let _ambient =
-                crate::test_env::AmbientGuard::hermetic_with_seat(tmp.path(), "advisor", &[]);
-            let before = storage.load().unwrap();
-            let expected = if pending {
-                "pending-decision"
-            } else if tag
-                .as_ref()
-                .unwrap()
-                .trim()
-                .eq_ignore_ascii_case("needs-human")
-            {
-                "needs-human"
-            } else {
-                "parking-tag"
-            };
-            // The post-transition live check uses this same validator. Exercise
-            // it directly as well as the command's projected preflight below:
-            // Approved must never hide a preserved parking tag or decision.
-            let live = before.get_requirement_by_spec_id("BUG-26901").unwrap();
-            let live_before = serde_json::to_value(live).unwrap();
-            let live_err = crate::queue_cmd::require_rework_pickable(live, &before).unwrap_err();
-            assert!(
-                live_err
-                    .to_string()
-                    .contains(&format!("reason={expected}:")),
-                "live {tag:?}: {live_err:#}"
-            );
-            assert_eq!(live_before, serde_json::to_value(live).unwrap());
-            let err = rework_as(&storage, "BUG-26901", Some("retry"), true).unwrap_err();
-            assert!(
-                err.to_string().contains(&format!("reason={expected}:")),
-                "{tag:?}: {err:#}"
-            );
-            let after = storage.load().unwrap();
-            assert_eq!(
-                serde_json::to_value(&before.requirements).unwrap(),
-                serde_json::to_value(&after.requirements).unwrap(),
-                "{tag:?}"
-            );
-            assert!(
-                storage.queue_list("codex", true).unwrap().is_empty(),
-                "{tag:?}"
-            );
+            requirements.push(req);
+            checks.push((spec_id, tag.clone(), pending));
         }
+    }
+    // Share the Git backend and enrollment across all variants. Each refusal
+    // still compares the entire store and checks that no queue row was added.
+    let (tmp, storage) = story_1429_fixture(requirements);
+    let _ambient = crate::test_env::AmbientGuard::hermetic_with_seat(tmp.path(), "advisor", &[]);
+    let before = storage.load().unwrap();
+    for (spec_id, tag, pending) in checks {
+        let expected = if pending {
+            "pending-decision"
+        } else if tag
+            .as_ref()
+            .unwrap()
+            .trim()
+            .eq_ignore_ascii_case("needs-human")
+        {
+            "needs-human"
+        } else {
+            "parking-tag"
+        };
+        // The post-transition live check uses this same validator. Exercise
+        // it directly as well as the command's projected preflight below:
+        // Approved must never hide a preserved parking tag or decision.
+        let live = before.get_requirement_by_spec_id(&spec_id).unwrap();
+        let live_before = serde_json::to_value(live).unwrap();
+        let live_err = crate::queue_cmd::require_rework_pickable(live, &before).unwrap_err();
+        assert!(
+            live_err
+                .to_string()
+                .contains(&format!("reason={expected}:")),
+            "live {tag:?}: {live_err:#}"
+        );
+        assert_eq!(live_before, serde_json::to_value(live).unwrap());
+        let err = rework_as(&storage, &spec_id, Some("retry"), true).unwrap_err();
+        assert!(
+            err.to_string().contains(&format!("reason={expected}:")),
+            "{tag:?}: {err:#}"
+        );
+        let after = storage.load().unwrap();
+        assert_eq!(
+            serde_json::to_value(&before.requirements).unwrap(),
+            serde_json::to_value(&after.requirements).unwrap(),
+            "{tag:?}"
+        );
+        assert!(
+            storage.queue_list("codex", true).unwrap().is_empty(),
+            "{tag:?}"
+        );
     }
 }
