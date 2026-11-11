@@ -3107,7 +3107,7 @@ pub(crate) fn prepare_rework_merge(
         branch,
         resume,
         |tip| publish_rework_merge(main, tree, branch, tip),
-        |base| regenerate_repair_outputs(tree, main, base, &identity, &execution_environment, true),
+        |base, restore_only| regenerate_repair_outputs(tree, main, base, &identity, &execution_environment, restore_only),
         || {
             // Fetch in the trusted host, never through a seat-controlled origin.
             let mut fetch = aida_core::git_ops::host_remote_git_command(main, "origin");
@@ -3323,16 +3323,27 @@ fn regenerate_repair_outputs(
         ".claude/hooks",
         ".agents/skills",
         ".aida/discipline",
+        "aida-core/templates/skills",
     ]);
     if run(inventory, "inspect pinned regeneration outputs")?.is_empty() {
         return Ok(());
     }
+    let pack_outputs = serde_json::to_string(
+        &aida_core::scaffolding::agent_pack::rendered_portable_pack(
+            aida_core::scaffolding::inventory::PORTABLE_PACK,
+            &aida_core::scaffolding::ScaffoldConfig::default(),
+        )
+        .keys()
+        .map(|p| p.to_string_lossy().into_owned())
+        .collect::<Vec<_>>(),
+    )?;
     let driver = include_str!("../../scripts/repair-generated.py");
     let restore = [
         OsStr::new("-c"),
         OsStr::new(driver),
         OsStr::new(base),
         OsStr::new("restore"),
+        OsStr::new(&pack_outputs),
     ];
     let config = tempfile::NamedTempFile::new()?;
     std::fs::write(config.path(), probe_repo_config(main, tree))?;
@@ -3465,6 +3476,7 @@ fn regenerate_repair_outputs(
             OsStr::new(driver),
             OsStr::new(base),
             OsStr::new("generate"),
+            OsStr::new(&pack_outputs),
         ],
     )
 }
@@ -3481,7 +3493,7 @@ fn prepare_host_repair_with(
     branch: &str,
     resume: bool,
     publish: impl FnOnce(&str) -> Result<()>,
-    regenerate: impl FnOnce(&str) -> Result<()>,
+    regenerate: impl FnOnce(&str, bool) -> Result<()>,
     fetch_heads: impl FnOnce() -> Result<(String, String)>,
 ) -> Result<Vec<String>> {
     use crate::repair_journal::{RepairEntry, RepairGuard, RepairKey, SpawnOutcome};
@@ -3499,7 +3511,20 @@ fn prepare_host_repair_with(
             resume && entry.lane_id == lane_id && pr_head == head,
             "pending repair belongs to a different lane or head"
         );
-        return Ok(entry.original_conflict_paths.clone());
+        let paths = entry.original_conflict_paths.clone();
+        let key = entry.key.clone();
+        let prepared = entry.preparation_success == Some(true);
+        let failed_generation = entry.regeneration_success == Some(false);
+        drop(guard);
+        if !prepared || failed_generation {
+            RepairGuard::lock(main)?.record_preparation(&key, false)?;
+            regenerate(&merge, !failed_generation)?;
+            RepairGuard::lock(main)?.record_preparation(&key, true)?;
+            if failed_generation {
+                RepairGuard::lock(main)?.record_regeneration(&key, true)?;
+            }
+        }
+        return Ok(paths);
     }
     let dirty = !execute(&["status", "--porcelain", "--untracked-files=all"])?.is_empty();
     anyhow::ensure!(
@@ -3540,6 +3565,7 @@ fn prepare_host_repair_with(
             spawn: SpawnOutcome::Unknown,
             original_conflict_paths: vec![],
             regeneration_success: None,
+            preparation_success: None,
             validation: None,
             refusal_notice: None,
         })?;
@@ -3559,7 +3585,9 @@ fn prepare_host_repair_with(
                     .collect();
                 anyhow::ensure!(!paths.is_empty(), "merge failed without conflicts: {why:#}");
                 RepairGuard::lock(main)?.record_paths(&key, &paths)?;
-                regenerate(&base)?;
+                RepairGuard::lock(main)?.record_preparation(&key, false)?;
+                regenerate(&base, true)?;
+                RepairGuard::lock(main)?.record_preparation(&key, true)?;
                 // Return the persisted list, including generated files already staged.
                 let journal = RepairGuard::lock(main)?;
                 Ok(journal
@@ -3676,6 +3704,103 @@ fn finish_rework_merge(
 #[cfg(test)]
 mod rework_merge_tests {
     use super::*;
+    // Run the actual registered library renderer in a child selected by the
+    // fixture Makefile. No Cargo, fake symlinks, or handwritten pack layout.
+    // trace:STORY-2710 | ai:codex
+    #[test]
+    #[ignore = "child generator entry point; invoked by the real portable renderer regression"]
+    fn portable_renderer_child() {
+        assert!(Path::new("repair-generator-fixture").is_file());
+        aida_core::scaffolding::agent_pack::sync_portable_pack(
+            Path::new("."),
+            aida_core::scaffolding::inventory::PORTABLE_PACK,
+            &aida_core::scaffolding::ScaffoldConfig::default(),
+        )
+        .unwrap();
+    }
+
+    #[test]
+    fn story_2710_real_portable_renderer_outputs_are_registered() {
+        let fx = tests::fixture();
+        let config = aida_core::scaffolding::ScaffoldConfig::default();
+        let expected = aida_core::scaffolding::agent_pack::rendered_portable_pack(
+            aida_core::scaffolding::inventory::PORTABLE_PACK,
+            &config,
+        );
+        assert!(expected.len() > 10);
+        let inventory = serde_json::to_string(
+            &expected
+                .keys()
+                .map(|p| p.to_string_lossy().into_owned())
+                .collect::<Vec<_>>(),
+        )
+        .unwrap();
+        std::fs::create_dir_all(fx.main.join("aida-core/templates/skills")).unwrap();
+        std::fs::write(
+            fx.main.join("aida-core/templates/skills/aida-fixture.md"),
+            "fixture",
+        )
+        .unwrap();
+        std::fs::write(fx.main.join("repair-generator-fixture"), "fixture").unwrap();
+        std::fs::write(fx.main.join(".gitignore"), "/.agents/\n").unwrap();
+        let executable = std::env::current_exe().unwrap();
+        let quoted = format!(
+            "'{}'",
+            executable.display().to_string().replace('\'', "'\"'\"'")
+        );
+        let makefile = format!("sync-templates:\n\t{quoted} --exact seat_clone::rework_merge_tests::portable_renderer_child --ignored\n");
+        std::fs::write(fx.main.join("Makefile"), &makefile).unwrap();
+        tests::git_ok(&fx.main, &["add", "."]);
+        tests::git_ok(
+            &fx.main,
+            &["commit", "-qm", "registered real renderer fixture"],
+        );
+        let base = tests::git_ok(&fx.main, &["rev-parse", "HEAD"]);
+        assert!(tests::git_ok(
+            &fx.main,
+            &["ls-tree", "-r", "--name-only", &base, "--", ".agents"]
+        )
+        .is_empty());
+        let generate = || {
+            std::process::Command::new("python3")
+                .current_dir(&fx.main)
+                .args([
+                    "-c",
+                    include_str!("../../scripts/repair-generated.py"),
+                    &base,
+                    "generate",
+                    &inventory,
+                ])
+                .output()
+                .unwrap()
+        };
+        // A fresh ignored pack, then byte drift in an existing pack.
+        for changed in [false, true] {
+            if changed {
+                std::fs::write(fx.main.join(expected.keys().next().unwrap()), "stale pack")
+                    .unwrap();
+            }
+            let out = generate();
+            assert!(
+                out.status.success(),
+                "{}",
+                String::from_utf8_lossy(&out.stderr)
+            );
+            for (path, body) in &expected {
+                assert_eq!(std::fs::read_to_string(fx.main.join(path)).unwrap(), *body);
+            }
+        }
+        // The closed inventory still catches an extra write under the pack.
+        std::fs::write(
+            fx.main.join("Makefile"),
+            format!("{makefile}\techo unexpected > .agents/skills/aida-invented.md\n"),
+        )
+        .unwrap();
+        let out = generate();
+        assert!(!out.status.success());
+        assert!(String::from_utf8_lossy(&out.stderr).contains("unregistered outputs"));
+    }
+
     // A real staged merge, with the index left untouched while the lane edits
     // files. This exercises the marker gate without requiring bubblewrap.
     // trace:STORY-2710 | ai:codex
@@ -3735,7 +3860,66 @@ mod rework_merge_tests {
             "repair",
             false,
             |_| panic!("conflicts must not publish"),
-            |_| Ok(()),
+            |_, _| anyhow::bail!("generator timeout after partial write"),
+            || Ok((base.clone(), head.clone())),
+        );
+        assert!(files.is_err());
+        // Preparation failure retains the merge, but neither resume nor direct
+        // publication may infer success from the retained original path list.
+        let journal = crate::repair_journal::RepairGuard::lock(&fx.main).unwrap();
+        assert_eq!(
+            journal
+                .for_tree(&fx.main, "repair", &head, &base)
+                .unwrap()
+                .preparation_success,
+            Some(false)
+        );
+        drop(journal);
+        let resumed = prepare_host_repair_with(
+            &fx.main,
+            &fx.main,
+            3813,
+            "lease-1",
+            &git_execute,
+            "repair",
+            true,
+            |_| panic!("failed preparation cannot publish"),
+            |_, _| anyhow::bail!("generator still fails"),
+            || Ok((base.clone(), head.clone())),
+        );
+        assert!(resumed.is_err());
+        // This is the same transfer the verified session-start orphan adoption
+        // performs after writing its freshly minted successor lease.
+        crate::repair_journal::RepairGuard::lock(&fx.main)
+            .unwrap()
+            .transfer_adopted_lane(&fx.main, "repair", "lease-1", "successor-lease")
+            .unwrap();
+        assert!(prepare_host_repair_with(
+            &fx.main,
+            &fx.main,
+            3813,
+            "unrelated-lease",
+            &git_execute,
+            "repair",
+            true,
+            |_| panic!("unrelated lane cannot publish"),
+            |_, _| panic!("unrelated lane cannot regenerate"),
+            || Ok((base.clone(), head.clone())),
+        )
+        .is_err());
+        let files = prepare_host_repair_with(
+            &fx.main,
+            &fx.main,
+            3813,
+            "successor-lease",
+            &git_execute,
+            "repair",
+            true,
+            |_| panic!("conflicts cannot publish"),
+            |_, restore_only| {
+                assert!(restore_only);
+                Ok(())
+            },
             || Ok((base.clone(), head.clone())),
         )
         .unwrap();
@@ -3788,12 +3972,12 @@ mod rework_merge_tests {
             &fx.main,
             &fx.main,
             3813,
-            "lease-1",
+            "successor-lease",
             &git_execute,
             "repair",
             true,
             |_| panic!("retry must not publish"),
-            |_| panic!("retry must not overwrite evidence"),
+            |_, _| panic!("retry must not overwrite evidence"),
             || Ok((base.clone(), head.clone())),
         )
         .unwrap();
@@ -4482,9 +4666,11 @@ pub(crate) fn commit_pending(
     let repair_paths = if let Some(base) = merge_base.as_deref() {
         let original_head = probe_text(&[os("rev-parse"), os("HEAD")])?;
         let journal = crate::repair_journal::RepairGuard::lock(main)?;
+        let entry = journal.for_tree(clone, branch, &original_head, base)?;
+        anyhow::ensure!(entry.preparation_success == Some(true),
+            "repair preparation did not succeed; resume pickup to retry regeneration before publication");
         Some(
-            journal
-                .for_tree(clone, branch, &original_head, base)?
+            entry
                 .original_conflict_paths
                 .iter()
                 .map(std::ffi::OsString::from)

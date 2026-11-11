@@ -51,6 +51,10 @@ pub(crate) struct RepairEntry {
     pub original_conflict_paths: Vec<String>,
     #[serde(default)]
     pub regeneration_success: Option<bool>,
+    // Preparation restores outputs from this entry's immutable base/head inputs.
+    // Missing evidence (including journals from older hosts) fails closed.
+    #[serde(default)]
+    pub preparation_success: Option<bool>,
     pub validation: Option<Validation>,
     pub refusal_notice: Option<RefusalNotice>,
 }
@@ -158,6 +162,36 @@ impl RepairGuard {
         entry.original_conflict_paths = paths.to_vec();
         self.save()
     }
+    /// Called only after session_start has verified orphan adoption. Repeating
+    /// the transfer is harmless; a different lane never acquires the entry.
+    pub fn transfer_adopted_lane(
+        &mut self,
+        tree: &Path,
+        branch: &str,
+        previous: &str,
+        successor: &str,
+    ) -> Result<()> {
+        for entry in &mut self.journal.entries {
+            if entry.tree_path == tree
+                && entry.branch == branch
+                && entry.lane_id == previous
+                && entry.spawn != SpawnOutcome::ProvenDead
+            {
+                entry.lane_id = successor.to_owned();
+            }
+        }
+        self.save()
+    }
+    pub fn record_preparation(&mut self, key: &RepairKey, success: bool) -> Result<()> {
+        let entry = self
+            .journal
+            .entries
+            .iter_mut()
+            .find(|e| &e.key == key)
+            .context("missing repair reservation")?;
+        entry.preparation_success = Some(success);
+        self.save()
+    }
     pub fn record_regeneration(&mut self, key: &RepairKey, success: bool) -> Result<()> {
         let entry = self
             .journal
@@ -220,6 +254,7 @@ mod tests {
             spawn: SpawnOutcome::Unknown,
             original_conflict_paths: vec![],
             regeneration_success: None,
+            preparation_success: None,
             validation: None,
             refusal_notice: None,
         };

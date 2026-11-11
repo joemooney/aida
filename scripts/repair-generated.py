@@ -7,6 +7,7 @@ pack, discipline copies and hooks. It deliberately excludes local extensions.
 trace:STORY-2710 | ai:codex
 """
 import hashlib
+import json
 import os
 from pathlib import Path
 import subprocess
@@ -34,7 +35,8 @@ def registered(path, mode, masters=None):
     # Only tracked mirror files with a corresponding master, or portable pack
     # files whose authoritative renderer is covered by the template dependency.
     if path.startswith(".agents/skills/aida-"):
-        return True
+        # Only the host-rendered closed inventory below authorizes pack writes.
+        return False
     if path.startswith(".aida/discipline/") and path.endswith(".md"):
         return masters is None or "aida-core/templates/" + path in masters
     if mode == "120000" and path.startswith((".claude/skills/", ".claude/commands/", ".claude/hooks/")):
@@ -68,7 +70,7 @@ def snapshot():
     return result
 
 
-def main(base, phase):
+def main(base, phase, pack_outputs=()):
     pinned = {}
     for row in git("ls-tree", "-rz", base).split(b"\0"):
         if not row:
@@ -77,6 +79,10 @@ def main(base, phase):
         path = os.fsdecode(raw)
         pinned[path] = meta.split()[0].decode()
     outputs = {path for path, mode in pinned.items() if registered(path, mode, pinned)}
+    # The host binary derives this closed inventory with the real renderer and
+    # default ScaffoldConfig. Ignored .agents files cannot come from ls-tree.
+    if any(p.startswith("aida-core/templates/skills/") for p in pinned):
+        outputs.update(pack_outputs)
     if not outputs:
         return
     if phase == "restore":
@@ -114,4 +120,4 @@ def main(base, phase):
 
 
 if __name__ == "__main__":
-    main(sys.argv[1], sys.argv[2])
+    main(sys.argv[1], sys.argv[2], json.loads(sys.argv[3]) if len(sys.argv) > 3 else ())

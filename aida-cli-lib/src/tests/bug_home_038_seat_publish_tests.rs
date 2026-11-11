@@ -4530,8 +4530,28 @@ if '--write-ledger' in sys.argv:
                     .regeneration_success,
                 Some(false)
             );
+            let key = guard
+                .for_tree(&tree, "feat", &head, &base)
+                .unwrap()
+                .key
+                .clone();
             drop(guard);
+            // A retained merge cannot resume around a failed full generation.
+            assert!(
+                prepare_rework_merge(&fx.main, &tree, "feat", true, 3813, "regen-lane").is_err()
+            );
+            // Preparation failures also refuse direct host commit before staging,
+            // even after the operator fixes the generator's triggering input.
+            crate::repair_journal::RepairGuard::lock(&fx.main)
+                .unwrap()
+                .record_preparation(&key, false)
+                .unwrap();
             std::fs::remove_file(tree.join("reject-regeneration")).unwrap();
+            let why =
+                commit_pending(&fx.main, &tree, "feat", "repair (Refs STORY-2710)").unwrap_err();
+            assert!(format!("{why:#}").contains("preparation did not succeed"));
+            assert_eq!(git_ok(&tree, &["rev-parse", "HEAD"]), head);
+            prepare_rework_merge(&fx.main, &tree, "feat", true, 3813, "regen-lane").unwrap();
             assert!(
                 commit_pending(&fx.main, &tree, "feat", "repair (Refs STORY-2710)")
                     .unwrap()

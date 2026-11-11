@@ -292,3 +292,40 @@ Round 6 validation result:
   updated phase assertions and passes all six tests.
 - Required codegraph client is absent at the supplied absolute path; doctor
   confirms the tool is missing. Navigation used rg. Edits remain uncommitted.
+
+## Round 7 repair evidence corrections
+
+<!-- trace:STORY-2710 | ai:codex -->
+
+The ignored portable skill pack is enumerated by the trusted host's shared
+`rendered_portable_pack` renderer and default scaffold configuration, then
+passed as a closed inventory to the embedded driver. It no longer depends on
+`.agents/` appearing in the pinned Git tree. The regression invokes the real
+portable renderer for fresh and stale packs and rejects an additional pack write.
+
+Verified orphan adoption transfers the journal's lane identity from the retired
+lease to its newly minted successor under the journal lock, before removing the
+orphan lease. Setup rollback transfers it back before removing the successor.
+Neither a stale lease nor an unrelated lane can resume the retained merge.
+
+The additive `preparation_success` field defaults to absent and fails closed.
+It records restoration against the journal entry's immutable original head and
+base inputs, separately from publication's full `regeneration_success` result.
+Preparation is invalidated before each retry and only successful completion
+permits admission or host staging. A failed full generation also requires a
+successful full-generation retry on resume. Every publication still reruns full
+generation before exact-tree validation; the preparation flag cannot replace it.
+
+Round-7 validation: the final lane-runner `story_2710 --nocapture` run executed
+**8 passing tests**, with no sandbox skips reported. Python driver tests:
+**7 passed**. Writer-inventory tests: **55 passed**. The writer guard reconciled
+3514 sites; the exec-context ratchet reported zero additions. Changed Rust files
+pass rustfmt and the diff passes whitespace checks.
+
+The broader `seat_clone::orphan_reentry_tests` run executed **22 passing tests
+and 1 failure**. The existing
+`queue_work_reclaims_dead_clean_lane_without_an_origin_branch` failure reproduced
+alone: mail retention's fresh writer-admission scan refused teardown before the
+repair-adoption path. That broader suite is not green in this lane; no mail
+retention policy was weakened. The initial broader filter matched zero tests
+and is excluded from validation evidence.

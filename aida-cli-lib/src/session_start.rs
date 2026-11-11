@@ -1682,6 +1682,15 @@ impl Drop for SessionStartCleanup {
                         return Err(error.into());
                     }
                 }
+                // trace:STORY-2710 | ai:codex
+                if let Some(successor) = &self.lease_id {
+                    crate::repair_journal::RepairGuard::lock(&self.root)?.transfer_adopted_lane(
+                        &orphan.worktree_path,
+                        &orphan.branch,
+                        successor,
+                        &orphan.id,
+                    )?;
+                }
                 crate::ownership::dual::lease_written(&self.root, orphan);
                 Ok(())
             })();
@@ -3493,6 +3502,15 @@ pub(crate) fn session_start_with_receipt(
         if let Some(cleanup) = rollback.as_mut() {
             cleanup.adopted_orphan = Some(orphan.clone());
         }
+        // Transfer only at the verified adoption boundary, before removing the
+        // original lease. The shared journal remains independent of watcher state.
+        // trace:STORY-2710 | ai:codex
+        crate::repair_journal::RepairGuard::lock(&project_root)?.transfer_adopted_lane(
+            &lease.worktree_path,
+            &lease.branch,
+            &orphan.id,
+            &lease.id,
+        )?;
         aggregate_session_activity_into_roles(&project_root, &orphan.id);
         if !remove_session_lease_record_only(&project_root, &orphan.id) {
             // Not `aida session end`: that would tear down the adopted tree.

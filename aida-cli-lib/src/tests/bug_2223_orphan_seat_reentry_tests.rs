@@ -247,6 +247,101 @@ fn an_orphaned_clone_with_uncommitted_work_is_re_entered_in_place() {
     );
 }
 
+// trace:STORY-2710 | ai:codex
+#[test]
+fn story_2710_actual_orphan_adoption_transfers_pending_repair() {
+    let fx = fixture();
+    clone_config(&fx.main, &fx.root);
+    let _ambient = crate::test_env::AmbientGuard::hermetic_with_seat(&fx.main, "implementer", &[]);
+    let orphan = orphaned_clone(&fx.main, "TASK-2223");
+    let tree = &orphan.worktree_path;
+    git_ok(tree, &["add", "-A"]);
+    git_ok(
+        tree,
+        &[
+            "-c",
+            "user.name=T",
+            "-c",
+            "user.email=t@example.com",
+            "commit",
+            "-qm",
+            "PR edits",
+        ],
+    );
+    let head = git_ok(tree, &["rev-parse", "HEAD"]);
+    std::fs::write(fx.main.join("README.md"), "competing main edit\n").unwrap();
+    git_ok(&fx.main, &["commit", "-qam", "main edit"]);
+    let base = git_ok(&fx.main, &["rev-parse", "HEAD"]);
+    git_ok(
+        tree,
+        &[
+            "fetch",
+            "--no-write-fetch-head",
+            fx.main.to_str().unwrap(),
+            "main",
+        ],
+    );
+    let execute = |args: &[&str]| -> anyhow::Result<String> {
+        let out = crate::test_git::git_command()
+            .current_dir(tree)
+            .args(["-c", "user.name=T", "-c", "user.email=t@example.com"])
+            .args(args)
+            .output()?;
+        anyhow::ensure!(
+            out.status.success(),
+            "Git refused: {}",
+            String::from_utf8_lossy(&out.stderr)
+        );
+        Ok(String::from_utf8(out.stdout)?.trim().to_owned())
+    };
+    assert!(execute(&["merge", "--no-edit", &base]).is_err());
+    assert_eq!(execute(&["rev-parse", "MERGE_HEAD"]).unwrap(), base);
+    let key = crate::repair_journal::RepairKey {
+        repository: fx.main.clone(),
+        pr: 3813,
+        original_head: head.clone(),
+    };
+    let mut journal = crate::repair_journal::RepairGuard::lock(&fx.main).unwrap();
+    journal
+        .reserve(crate::repair_journal::RepairEntry {
+            key: key.clone(),
+            dispatched_by: "direct-rework".into(),
+            reserved_at: "now".into(),
+            lane_id: orphan.id.clone(),
+            tree_path: tree.clone(),
+            branch: orphan.branch.clone(),
+            base: base.clone(),
+            spawn: crate::repair_journal::SpawnOutcome::Unknown,
+            original_conflict_paths: vec!["README.md".into()],
+            preparation_success: Some(true),
+            regeneration_success: None,
+            validation: None,
+            refusal_notice: None,
+        })
+        .unwrap();
+    drop(journal);
+    adopt("TASK-2223", &orphan.branch, tree).unwrap();
+    let successor = lease_for(&fx.main, "TASK-2223");
+    assert_ne!(successor.id, orphan.id);
+    let resume = |lane: &str| {
+        prepare_host_repair_with(
+            &fx.main,
+            tree,
+            3813,
+            lane,
+            &execute,
+            &orphan.branch,
+            true,
+            |_| panic!("pending conflicts cannot publish"),
+            |_, _| panic!("successful preparation must be retained"),
+            || Ok((base.clone(), head.clone())),
+        )
+    };
+    assert!(resume(&orphan.id).is_err());
+    assert!(resume("unrelated-lane").is_err());
+    assert_eq!(resume(&successor.id).unwrap(), ["README.md"]);
+}
+
 /// Binding 5b: a lease whose owner is alive is never adopted.
 #[test]
 fn a_live_lease_is_refused() {
