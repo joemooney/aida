@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T23:39:41.575597Z
-modified_at: 2026-11-11T02:06:14.336039172Z
+modified_at: 2026-11-11T04:37:12.427458354Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -684,6 +684,13 @@ comments:
   created_at: 2026-11-11T01:39:03.714641525Z
   modified_at: 2026-11-11T01:39:03.714641525Z
   session_id: 01a1c70f-d731-7b70-acf8-e9ab3d288fca
+  harness_version: 2.1.322 (Claude Code)
+- id: 01a1c8e5-4a6b-7de3-97d2-6f53ec0e50dc
+  author: joe
+  content: 'ADVISOR BRIEF batch 5, FINAL (2026-11-10 21:40 MST, main 496312a2eab): replace ''use crate::*;'' with explicit imports in EXACTLY these 8 files, now touched by no open PR: aida-cli-lib/src/{ci_probe,config_cmd,db_reconcile,merge_hold_cmd,pr_list,status_prs,status_sections,upgrade_release}.rs. Prune each of them from scripts/crate-globs-legacy.json, so the ledger ends EMPTY and the glob ratchet then forbids any new ''use crate::*''. Batch-4 lessons are binding: (1) prune the exact-match ledger in the same commit, or the gates shard goes red; (2) where removing the glob drops a name that inline or #[path] tests use, add the explicit import in the TEST file only; (3) no renames, no qualified-call rewrites unless the compiler forces them, and list every such rewrite in the PR body. This batch COMPLETES PR4, so the commit and PR title end with ''(TASK-3428)'', not Refs. Gate: LIGHT (one ''cargo check --profile agent -p aida-cli-lib --tests'' plus ''make check-ci-fast''), use a fresh branch off main.'
+  created_at: 2026-11-11T04:37:12.427458354Z
+  modified_at: 2026-11-11T04:37:12.427458354Z
+  session_id: 01a1c87f-970d-7ce0-9351-e4e75a87731e
   harness_version: 2.1.322 (Claude Code)
 history:
 - id: 01a1b862-2e0b-7a50-a4d0-25097c707b57
