@@ -202,6 +202,20 @@ class Cache(unittest.TestCase):
         self.assertEqual(sorted(p.name for p in self.cache.iterdir()),
                          sorted(['manifest.json', record['generation']]))
 
+    def test_changed_key_publication_failure_retains_previous_key(self):
+        previous = self.root / ('0' * 64)
+        previous.mkdir()
+        record = c.publish(previous, previous.name, self.work, self.admission)
+        artifact = previous / record['generation'] / 'target/incremental/object'
+        for owner, operation in ((c, 'copy_tree'), (c.os, 'replace')):
+            with self.subTest(operation=operation):
+                with patch.object(owner, operation, side_effect=OSError('disk full')):
+                    with self.assertRaisesRegex(OSError, 'disk full'):
+                        c.publish(self.cache, 'new-key', self.work, self.admission)
+                self.assertEqual(json.loads((previous / 'manifest.json').read_text()), record)
+                self.assertEqual(artifact.read_text(), 'main object')
+                self.assertFalse((self.cache / 'manifest.json').exists())
+
     def test_cold_miss_and_key_mismatch(self):
         self.assertIsNone(c.seed(self.cache, 'key', self.work))
         c.publish(self.cache, 'key', self.work, self.admission)
@@ -275,6 +289,32 @@ class Cache(unittest.TestCase):
 
 
 class GateAndShell(unittest.TestCase):
+    def test_traversal_directories_validate_before_changing_modes(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            path = root / 'parent'
+            # Exercise real mkdir/chmod under the operator's restrictive umask.
+            previous = os.umask(0o077)
+            try:
+                for mode in (0o755, 0o711):
+                    with patch.object(c, 'trusted', return_value=path) as validate:
+                        c.traversal_directory(path, mode)
+                        validate.assert_called_once_with(path, directory=True)
+                    self.assertEqual(stat.S_IMODE(path.stat().st_mode), mode)
+                path.chmod(0o700)
+                with patch.object(c, 'trusted', side_effect=RuntimeError('untrusted owner/mode')):
+                    with self.assertRaisesRegex(RuntimeError, 'untrusted'):
+                        c.traversal_directory(path, 0o755)
+                self.assertEqual(stat.S_IMODE(path.stat().st_mode), 0o700)
+                link = root / 'link'
+                link.symlink_to(path, target_is_directory=True)
+                # Real trust validation rejects the link even for root-owned fixtures.
+                with self.assertRaises(RuntimeError):
+                    c.traversal_directory(link, 0o755)
+                self.assertEqual(stat.S_IMODE(path.stat().st_mode), 0o700)
+            finally:
+                os.umask(previous)
+
     def test_actual_socket_gate_is_one_shot_and_hook_fails_closed(self):
         with tempfile.TemporaryDirectory() as directory:
             endpoint = Path(directory) / 'gate'
@@ -343,7 +383,7 @@ class GateAndShell(unittest.TestCase):
 
 class LaunchIntegration(unittest.TestCase):
     """Run orchestration with a real gate/cache and fake systemd/public forge."""
-    def exercise(self, kind, *, unit_failure=False, stop_failure=False, gate_failure=False, alternate=False, pending=False, test_failure=False, priority=False, restrictive_umask=False):
+    def exercise(self, kind, *, unit_failure=False, stop_failure=False, gate_failure=False, alternate=False, pending=False, test_failure=False, priority=False, restrictive_umask=False, slot='s0'):
         from contextlib import ExitStack
         from types import SimpleNamespace
         with tempfile.TemporaryDirectory() as directory, ExitStack() as stack:
@@ -353,7 +393,7 @@ class LaunchIntegration(unittest.TestCase):
             (root / 'dist/run.sh').write_text('fixture runner')
             (root / 'config/policy.json').write_text(json.dumps(POLICY))
             (root / 'config/trains.json').write_text(json.dumps([RECORD]))
-            stale = root / 'cache/s0' / ('cli-0' if alternate else 'lib-0') / ('0' * 64)
+            stale = root / 'cache' / slot / ('cli-0' if alternate else 'lib-0') / ('0' * 64)
             stale.mkdir(parents=True)
             previous_generation = stale / ('a' * 32)
             previous_generation.mkdir()
@@ -361,7 +401,7 @@ class LaunchIntegration(unittest.TestCase):
             previous_manifest = json.dumps({'key': '0' * 64, 'generation': 'a' * 32})
             (stale / 'manifest.json').write_text(previous_manifest)
             forge = Forge(kind)
-            runner = 'aida-ci-s0-' + '1'*32
+            runner = f'aida-ci-{slot}-' + '1'*32
             forge.job['runner_name'] = runner
             forge.runs = [forge.run]
             forge.jobs = [forge.job]
@@ -377,7 +417,7 @@ class LaunchIntegration(unittest.TestCase):
             accounts = {f'aida-ci-{slot}-{cls}': SimpleNamespace(pw_name=f'aida-ci-{slot}-{cls}',
                         pw_uid=10000+i*2+j, pw_gid=10000+i*2+j)
                         for i, slot in enumerate(c.SLOTS) for j, cls in enumerate(('main', 'train'))}
-            account = accounts[f'aida-ci-s0-{kind.lower()}']
+            account = accounts[f'aida-ci-{slot}-{kind.lower()}']
             commands = []
             stops = []
 
@@ -400,16 +440,16 @@ class LaunchIntegration(unittest.TestCase):
                         self.assertTrue(parent.is_dir())
                         self.assertEqual(stat.S_IMODE(parent.stat().st_mode), 0o755)
                     for path, mode in ((root / 'jobs', 0o755),
-                                       (root / 'jobs/s0/current', 0o711),
-                                       (root / 'run/aida-ci-s0', 0o755),
-                                       (root / f'jobs/s0/current/{kind.lower()}', 0o700)):
+                                       (root / f'jobs/{slot}/current', 0o711),
+                                       (root / f'run/aida-ci-{slot}', 0o755),
+                                       (root / f'jobs/{slot}/current/{kind.lower()}', 0o700)):
                         self.assertEqual(stat.S_IMODE(path.stat().st_mode), mode)
                     forge.job['status'] = 'in_progress'
                     if alternate:
                         forge.job.update(id=21, name='CI (cli-0)')
                     if gate_failure:
                         forge.job['runner_name'] = 'unrelated-pickup'
-                    endpoint = root / 'run/aida-ci-s0/gate.sock'
+                    endpoint = root / f'run/aida-ci-{slot}/gate.sock'
                     with socket.socket(socket.AF_UNIX) as client:
                         client.settimeout(5)
                         client.connect(str(endpoint))
@@ -417,7 +457,7 @@ class LaunchIntegration(unittest.TestCase):
                     if gate_failure:
                         self.assertGreaterEqual(len(stops), 2, 'refusal stops unit before replying')
                         return subprocess.CompletedProcess(command, 1)
-                    work = root / f'jobs/s0/current/{kind.lower()}'
+                    work = root / f'jobs/{slot}/current/{kind.lower()}'
                     (work / 'target/incremental').mkdir()
                     (work / 'target/incremental/object').write_text('compiled delta')
                     (work / 'cargo/registry').mkdir()
@@ -451,18 +491,18 @@ class LaunchIntegration(unittest.TestCase):
                 stack.callback(os.umask, previous_umask)
             if priority:
                 with self.assertRaises(c.Deferred):
-                    c.launch('s0', dict(run=10, job=20, runner=runner, jit=lambda: self.fail('registered before priority check')))
-                self.assertFalse((root / 'run/aida-ci-s0.json').exists())
+                    c.launch(slot, dict(run=10, job=20, runner=runner, jit=lambda: self.fail('registered before priority check')))
+                self.assertFalse((root / f'run/aida-ci-{slot}.json').exists())
                 self.assertFalse(commands)
                 return
             if unit_failure or stop_failure or gate_failure:
                 with self.assertRaises(RuntimeError):
-                    c.launch('s0', dict(run=10, job=20, runner=runner, jit='secret-jit'))
+                    c.launch(slot, dict(run=10, job=20, runner=runner, jit='secret-jit'))
             else:
-                c.launch('s0', dict(run=10, job=20, runner=runner, jit='secret-jit'))
+                c.launch(slot, dict(run=10, job=20, runner=runner, jit='secret-jit'))
             manifests = [p for p in (root / 'cache').rglob('manifest.json') if p.parent != stale]
             self.assertEqual(len(manifests), int(kind == 'MAIN' and not unit_failure and not stop_failure and not gate_failure and not pending and not test_failure))
-            self.assertEqual((root / 'run/aida-ci-s0.json').exists(), stop_failure)
+            self.assertEqual((root / f'run/aida-ci-{slot}.json').exists(), stop_failure)
             published = bool(manifests)
             self.assertEqual(stale.exists(), not published)
             if not published:
@@ -470,7 +510,7 @@ class LaunchIntegration(unittest.TestCase):
                 self.assertEqual((previous_generation / 'old-artifact').read_text(), 'trusted previous generation')
             if alternate and manifests:
                 self.assertEqual(manifests[0].parent.parent.name, 'cli-0')
-            self.assertEqual((root / 'jobs/s0/current').exists(), stop_failure)
+            self.assertEqual((root / f'jobs/{slot}/current').exists(), stop_failure)
             self.assertGreaterEqual(len(stops), 2)
             unit = next(command for command in commands if command[0] == 'systemd-run')
             for setting in ('CPUQuota=400%', 'CPUWeight=100', 'MemoryHigh=10G', 'MemoryMax=12G',
@@ -479,7 +519,7 @@ class LaunchIntegration(unittest.TestCase):
                 self.assertIn(setting, unit)
             self.assertIn('User=' + account.pw_name, unit)
             hidden = next(arg for arg in unit if arg.startswith('InaccessiblePaths='))
-            self.assertIn(str(root / 'jobs/s1'), hidden)
+            self.assertIn(str(root / 'jobs' / ('s1' if slot == 's0' else 's0')), hidden)
             self.assertIn(str(root / 'cache'), hidden)
             self.assertNotIn('secret-jit', ' '.join(unit))
             self.assertFalse(any('RuntimeMaxSec=' in arg for arg in unit))
@@ -488,7 +528,9 @@ class LaunchIntegration(unittest.TestCase):
         self.exercise('MAIN', priority=True)
 
     def test_fresh_single_slot_startup_with_restrictive_umask(self):
-        self.exercise('MAIN', restrictive_umask=True)
+        for slot in c.SLOTS:
+            with self.subTest(slot=slot):
+                self.exercise('MAIN', restrictive_umask=True, slot=slot)
 
     def test_changed_key_train_preserves_previous_main(self):
         self.exercise('TRAIN', restrictive_umask=True)

@@ -13,6 +13,21 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 class Routing(unittest.TestCase):
+    def test_ci_entry_point_discovers_all_controller_regressions(self):
+        import sys
+        from tests import test_dell1_controller
+        loader = unittest.TestLoader()
+        def ids(suite):
+            for test in suite:
+                if isinstance(test, unittest.TestSuite):
+                    yield from ids(test)
+                else:
+                    yield test.id()
+        expected = set(ids(loader.loadTestsFromModule(test_dell1_controller)))
+        actual = set(ids(loader.loadTestsFromModule(sys.modules[__name__])))
+        self.assertTrue(expected)
+        self.assertEqual(expected - actual, set(), 'controller regressions missing from CI entry point')
+
     def test_actual_expression_routes_only_opted_in_trusted_heavy_shards(self):
         workflow = yaml.safe_load((ROOT / '.github/workflows/ci.yml').read_text())
         build = workflow['jobs']['build']

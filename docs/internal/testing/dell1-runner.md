@@ -153,7 +153,14 @@ no fallback to PR cache keys. Hosted jobs retain their existing behavior.
    A changed compiler/build configuration creates a cold key; changed workflow
    bytes require fresh policy review. Install cache root root:root 0700 and jobs
    root root:root 0755. Keep enough disk for concurrent private copies, source,
-   incoming and current generations. Normal pruning is automatic under the slot lock; stop loops for manual quarantine or crash recovery.
+   incoming and current generations. Preparation retains published compatibility keys, including on cold-key TRAIN
+   and failed MAIN runs. Only successful MAIN publication atomically replaces
+   its manifest, then prunes to one published key and generation per slot/shard
+   under the slot lock. Stop loops for manual quarantine or crash recovery.
+   The launcher creates and validates both root-owned slot parents before either
+   unit starts, so mandatory sibling hiding also works on a fresh installation.
+   Traversal parents use explicit 0755 modes and `current` uses 0711 even under
+   operator umask 077; work and cache trees remain private.
 7. Review exact sudoers arguments with `visudo`; only the operator gets:
 
    ```sudoers
