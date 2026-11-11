@@ -3107,7 +3107,7 @@ pub(crate) fn prepare_rework_merge(
         branch,
         resume,
         |tip| publish_rework_merge(main, tree, branch, tip),
-        |base| regenerate_repair_outputs(tree, main, base, &identity, &execution_environment),
+        |base| regenerate_repair_outputs(tree, main, base, &identity, &execution_environment, true),
         || {
             // Fetch in the trusted host, never through a seat-controlled origin.
             let mut fetch = aida_core::git_ops::host_remote_git_command(main, "origin");
@@ -3305,6 +3305,7 @@ fn regenerate_repair_outputs(
     base: &str,
     identity: &[(&'static str, std::ffi::OsString)],
     parent: &aida_core::exec_context::Environment,
+    restore_only: bool,
 ) -> Result<()> {
     use std::ffi::OsStr;
     // Repositories without registered outputs need no generator (including
@@ -3396,7 +3397,9 @@ fn regenerate_repair_outputs(
         }
     };
     // The embedded restore driver runs no checkout-authored programs.
-    execute_driver(&sandbox, &restore)?;
+    if restore_only {
+        return execute_driver(&sandbox, &restore);
+    }
     sandbox.extend(["--ro-bind".into(), git_dir.clone().into(), git_dir.into()]);
     if linked_git {
         sandbox.extend([
@@ -3536,6 +3539,7 @@ fn prepare_host_repair_with(
             base: base.clone(),
             spawn: SpawnOutcome::Unknown,
             original_conflict_paths: vec![],
+            regeneration_success: None,
             validation: None,
             refusal_notice: None,
         })?;
@@ -4548,6 +4552,32 @@ pub(crate) fn commit_pending(
             &identity,
         )
         .map_err(|failure| recovery("stage", failure))?;
+        if let Some(base) = merge_base.as_deref() {
+            let head = head_before.as_deref().context("missing repair head")?;
+            let key = crate::repair_journal::RepairGuard::lock(main)?
+                .for_tree(clone, branch, head, base)?
+                .key
+                .clone();
+            // Invalidate prior success before any generator can write. Every
+            // publication attempt regenerates; stale success never grants credit.
+            crate::repair_journal::RepairGuard::lock(main)?.record_regeneration(&key, false)?;
+            regenerate_repair_outputs(
+                clone,
+                main,
+                base,
+                &identity,
+                &aida_core::exec_context::Environment::capture(),
+                false,
+            )?;
+            run_commit_sandboxed(
+                clone,
+                main,
+                &[os("add"), os("-A"), os("--"), os(".")],
+                &identity,
+            )
+            .map_err(|failure| recovery("stage regenerated outputs", failure))?;
+            crate::repair_journal::RepairGuard::lock(main)?.record_regeneration(&key, true)?;
+        }
         // Should the seat's exclude no longer ignore the marker, unstage it.
         let staged_marker = probe_text(&[
             os("diff"),

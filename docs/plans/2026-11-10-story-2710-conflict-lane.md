@@ -260,3 +260,35 @@ The regeneration tests use small registered-generator fixtures; full-repository
 sandboxed, offline and bounded; failures refuse launch. The required codegraph
 host client was absent at its supplied path, confirmed by doctor; navigation
 used rg. No local Git commit, push, PR creation or queue completion was run.
+
+Round 6 partial repair (publication vetoed by explicit punt):
+
+- Preparation now restores only conflicted registered products and does not run
+  source-dependent generators. Authoritative source conflicts can reach the lane.
+- Host pending-merge publication stages resolved sources, invalidates persisted
+  regeneration success, reruns the pinned generators without restoring products,
+  stages their results and records success only after both steps succeed. Each
+  publication retry repeats generation, even when the index is already resolved.
+- The journal's additive `regeneration_success` field defaults to absent for old
+  records; absence and failure never substitute for executing generation.
+- Findings 2, 4 and 5 remain open: authorized successor lease handoff, post-merge
+  template product inventory, and typed merge-tree conflict/probe-failure evidence.
+  These findings are not disputed. STORY-2710 was explicitly punted; these edits
+  do not claim production readiness or story completion.
+- Python fixtures cover a real authoritative-source merge conflict with registered
+  generation, plus generator failure after writing a product and a fresh retry.
+  Rust coverage exercises failed host publication, persisted failure, preserved
+  MERGE_HEAD, and a successful publication retry for a clone.
+
+Round 6 validation result:
+
+- Final lane job `j20261111T075915879-2-0`: `story_2710`, **6 passed**,
+  including clone publication failure after an output write and successful retry.
+- Python regeneration fixtures: **7 passed**. Writer inventory tests: **55 passed**.
+- Execution-context ledger: **zero additions**. Writer checker: **3510 sites
+  reconciled**, with the new journal save classified under existing discipline.
+- Rustfmt and `git diff --check` pass. The first Rust run used the old
+  preparation expectation (5 passed, 1 failed); the final run includes the
+  updated phase assertions and passes all six tests.
+- Required codegraph client is absent at the supplied absolute path; doctor
+  confirms the tool is missing. Navigation used rg. Edits remain uncommitted.

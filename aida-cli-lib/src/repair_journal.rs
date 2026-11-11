@@ -49,6 +49,8 @@ pub(crate) struct RepairEntry {
     // Immutable once host merge observation has been recorded. Never replaced
     // by a later (possibly fully staged) index scan.
     pub original_conflict_paths: Vec<String>,
+    #[serde(default)]
+    pub regeneration_success: Option<bool>,
     pub validation: Option<Validation>,
     pub refusal_notice: Option<RefusalNotice>,
 }
@@ -156,6 +158,16 @@ impl RepairGuard {
         entry.original_conflict_paths = paths.to_vec();
         self.save()
     }
+    pub fn record_regeneration(&mut self, key: &RepairKey, success: bool) -> Result<()> {
+        let entry = self
+            .journal
+            .entries
+            .iter_mut()
+            .find(|e| &e.key == key)
+            .context("missing repair reservation")?;
+        entry.regeneration_success = Some(success);
+        self.save()
+    }
     pub fn for_tree(
         &self,
         tree: &Path,
@@ -207,6 +219,7 @@ mod tests {
             base: "b".repeat(40),
             spawn: SpawnOutcome::Unknown,
             original_conflict_paths: vec![],
+            regeneration_success: None,
             validation: None,
             refusal_notice: None,
         };

@@ -4451,6 +4451,8 @@ if '--write-ledger' in sys.argv:
         else:
             raise RuntimeError('Git metadata was writable')
     Path('scripts/exec-context-legacy.json').write_text('regenerated\n')
+    if Path('reject-regeneration').exists():
+        raise RuntimeError('failure after output write')
 "#,
         )
         .unwrap();
@@ -4483,6 +4485,22 @@ if '--write-ledger' in sys.argv:
         assert_eq!(files, [ledger]);
         assert_eq!(
             std::fs::read_to_string(tree.join(ledger)).unwrap(),
+            "main\n"
+        );
+        // Preparation restores safely; only the publication phase executes
+        // source-dependent generators with metadata read-only.
+        let base = git_ok(&tree, &["rev-parse", "MERGE_HEAD"]);
+        crate::seat_clone::regenerate_repair_outputs(
+            &tree,
+            &fx.main,
+            &base,
+            &[],
+            &aida_core::exec_context::Environment::default(),
+            false,
+        )
+        .unwrap();
+        assert_eq!(
+            std::fs::read_to_string(tree.join(ledger)).unwrap(),
             "regenerated\n"
         );
         assert_eq!(git_ok(&tree, &["rev-parse", "HEAD"]), head);
@@ -4496,6 +4514,38 @@ if '--write-ledger' in sys.argv:
                 .original_conflict_paths,
             [ledger]
         );
+        drop(journal);
+        if cloned {
+            std::fs::write(tree.join("reject-regeneration"), "reject").unwrap();
+            let why =
+                commit_pending(&fx.main, &tree, "feat", "repair (Refs STORY-2710)").unwrap_err();
+            assert!(format!("{why:#}").contains("failure after output write"));
+            assert_eq!(git_ok(&tree, &["rev-parse", "HEAD"]), head);
+            assert_eq!(git_ok(&tree, &["rev-parse", "MERGE_HEAD"]), base);
+            let guard = crate::repair_journal::RepairGuard::lock(&fx.main).unwrap();
+            assert_eq!(
+                guard
+                    .for_tree(&tree, "feat", &head, &base)
+                    .unwrap()
+                    .regeneration_success,
+                Some(false)
+            );
+            drop(guard);
+            std::fs::remove_file(tree.join("reject-regeneration")).unwrap();
+            assert!(
+                commit_pending(&fx.main, &tree, "feat", "repair (Refs STORY-2710)")
+                    .unwrap()
+                    .is_some()
+            );
+            let guard = crate::repair_journal::RepairGuard::lock(&fx.main).unwrap();
+            assert_eq!(
+                guard
+                    .for_tree(&tree, "feat", &head, &base)
+                    .unwrap()
+                    .regeneration_success,
+                Some(true)
+            );
+        }
         assert!(!fx.main.join(".git/generator-escaped").exists());
     }
 }

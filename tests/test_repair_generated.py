@@ -63,7 +63,7 @@ class RepairGenerationTests(unittest.TestCase):
             self.assertNotEqual(result.returncode, 0)
             self.assertIn('unregistered outputs', result.stderr)
 
-    def test_unresolved_authoritative_source_refuses_before_restoration(self):
+    def test_unresolved_authoritative_source_allows_restoration_but_blocks_generation(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             git, base = self.fixture(root)
@@ -74,10 +74,53 @@ class RepairGenerationTests(unittest.TestCase):
                            text=True, check=True, capture_output=True)
             before = (root / 'scripts/exec-context-legacy.json').read_bytes()
             result = self.run_driver(root, base, 'restore')
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertNotEqual((root / 'scripts/exec-context-legacy.json').read_bytes(), before)
+            result = self.run_driver(root, base, 'generate')
             self.assertNotEqual(result.returncode, 0)
             self.assertIn('authoritative sources', result.stderr)
-            self.assertEqual((root / 'scripts/exec-context-legacy.json').read_bytes(), before)
+            git('add', 'source.rs')
+            result = self.run_driver(root, base, 'generate')
+            self.assertEqual(result.returncode, 0, result.stderr)
             self.assertEqual(git('rev-parse', 'MERGE_HEAD').stdout.strip(), base)
+
+    def test_real_source_conflict_with_registered_generator_reaches_resolution(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            git, _ = self.fixture(root)
+            git('merge', '--abort')
+            (root / 'source.rs').write_text('pr source\n')
+            git('commit', '-qam', 'PR source change')
+            git('checkout', 'main')
+            (root / 'source.rs').write_text('main source\n')
+            git('commit', '-qam', 'main source change')
+            base = git('rev-parse', 'HEAD').stdout.strip()
+            git('checkout', 'pr')
+            self.assertEqual(git('merge', '--no-edit', 'main', check=False).returncode, 1)
+            result = self.run_driver(root, base, 'restore')
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertEqual(git('diff', '--name-only', '--diff-filter=U').stdout, 'source.rs\n')
+            (root / 'source.rs').write_text('resolved source\n')
+            git('add', 'source.rs')
+            result = self.run_driver(root, base, 'generate')
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertEqual(git('rev-parse', 'MERGE_HEAD').stdout.strip(), base)
+
+    def test_failure_after_output_write_requires_generation_again(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            git, base = self.fixture(root, '    raise RuntimeError("after output write")\n')
+            self.assertEqual(self.run_driver(root, base, 'restore').returncode, 0)
+            result = self.run_driver(root, base, 'generate')
+            self.assertNotEqual(result.returncode, 0)
+            self.assertEqual((root / 'scripts/exec-context-legacy.json').read_text(), 'regenerated\n')
+            self.assertEqual(git('rev-parse', 'MERGE_HEAD').stdout.strip(), base)
+            # Retry runs the generator rather than treating a written product
+            # as proof of success. Resolve the generator source for recovery.
+            script = root / 'scripts/check-exec-context.py'
+            script.write_text(script.read_text().replace('    raise RuntimeError("after output write")\n', ''))
+            result = self.run_driver(root, base, 'generate')
+            self.assertEqual(result.returncode, 0, result.stderr)
 
     def test_template_mirror_uses_symlink_without_touching_unrelated_claude_files(self):
         with tempfile.TemporaryDirectory() as tmp:

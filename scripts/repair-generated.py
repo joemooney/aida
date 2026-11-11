@@ -79,16 +79,22 @@ def main(base, phase):
     outputs = {path for path, mode in pinned.items() if registered(path, mode, pinned)}
     if not outputs:
         return
+    if phase == "restore":
+        # Preparation must not run source-dependent generators. Restore only
+        # conflicted products; preserve already merged generated changes.
+        unmerged = {os.fsdecode(p) for p in git("diff", "--name-only", "--diff-filter=U", "-z").split(b"\0") if p}
+        restore = outputs & unmerged
+        if restore:
+            subprocess.run(("git", "--literal-pathspecs", "restore", "--source", base,
+                            "--staged", "--worktree", "--", *sorted(restore)), check=True)
+        return
+    # Publication stages resolved authoritative sources before generation.
+    # Unmerged source entries therefore indicate incomplete host preparation.
     unmerged = {os.fsdecode(p) for p in git("diff", "--name-only", "--diff-filter=U", "-z").split(b"\0") if p}
-    # Both generators inspect Rust sources. Do not run against partial sources.
-    blockers = sorted(p for p in unmerged - outputs if p.endswith((".rs", ".py")) or p.startswith("aida-core/templates/") or p.endswith("Cargo.toml") or p == "Makefile")
+    blockers = sorted(unmerged - outputs)
     if blockers:
         raise RuntimeError("regeneration requires resolved authoritative sources: " + repr(blockers))
     before = snapshot()
-    if phase == "restore":
-        subprocess.run(("git", "--literal-pathspecs", "restore", "--source", base,
-                        "--staged", "--worktree", "--", *sorted(outputs)), check=True)
-        return
     for name, _, _, argv in REGISTRY:
         if name == "exec-context" and "scripts/exec-context-legacy.json" not in outputs:
             continue
