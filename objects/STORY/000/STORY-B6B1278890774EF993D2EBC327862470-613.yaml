@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-09T01:58:39.064485765Z
-modified_at: 2026-11-11T06:37:52.393554037Z
+modified_at: 2026-11-11T07:41:35.318008093Z
 req_type: Story
 tags:
 - area:orchestration
@@ -168,6 +168,15 @@ comments:
     Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
   created_at: 2026-11-11T06:36:02.393302192Z
   modified_at: 2026-11-11T06:36:02.393302192Z
+  session_id: 01a1c87f-970d-7ce0-9351-e4e75a87731e
+  harness_version: 2.1.322 (Claude Code)
+- id: 01a1c98e-18d6-7df2-9e27-3b45a62cf7d6
+  author: joe
+  content: |-
+    CI FAILURES at a3379384e5a1 (run 42975147459). Fix exactly these before pushing; a push without a code change for them will fail again and must not be made:
+    test-timings: BUDGET: aida-cli-lib status_sections::queue_rework_tests::story_2690_rework_refuses_all_human_parking_before_mutation: 35.2s with no budget entry (limit 30s for an unbudgeted test). Make it faster, or add it to script
+  created_at: 2026-11-11T07:41:35.318008093Z
+  modified_at: 2026-11-11T07:41:35.318008093Z
   session_id: 01a1c87f-970d-7ce0-9351-e4e75a87731e
   harness_version: 2.1.322 (Claude Code)
 history:
