@@ -8,7 +8,7 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-10-06T05:47:44.689506175Z
-modified_at: 2026-10-23T17:58:20.133487074Z
+modified_at: 2026-11-11T12:25:22.353867741Z
 req_type: Task
 tags:
 - from-advisor:general
@@ -55,6 +55,13 @@ comments:
     These are branch-artifact verdicts, not completion or dispatch/merge authority. No spec status, branch, PR or active worktree changed. Full 14-branch table: .aida/handoff/advisor/unshipped-audit-2026-10-23.md (8 SHIPPED-ELSEWHERE, 3 SALVAGE, 3 ABANDON).
   created_at: 2026-10-23T17:58:20.133487074Z
   modified_at: 2026-10-23T17:58:20.133487074Z
+- id: 01a1ca91-e8b1-7431-8a80-6f9e694b1163
+  author: joe
+  content: 'Advisor disposition 2026-11-11 05:30 MST: REJECTED. ADR-72 makes AIDA Linux-only, so a Windows CI per-test timeout has no CI job to guard; the 2026-10-23 integrator audit already ruled ABANDON.'
+  created_at: 2026-11-11T12:25:22.353867741Z
+  modified_at: 2026-11-11T12:25:22.353867741Z
+  session_id: 01a1ca83-fabb-7663-852c-12c78d4e097f
+  harness_version: 2.1.322 (Claude Code)
 history:
 - id: 01a1189e-6dce-7be3-ab02-05713cfac939
   author: joe
