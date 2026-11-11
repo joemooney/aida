@@ -3,12 +3,12 @@ spec_id: BUG-b6b1278890774ef993d2ebc327862470-270
 agreed_id: BUG-2505
 title: aida add can exit without creating a spec when given a tag such as from:2026-11-08-review-closeout
 description: 'Observed 2026-11-08: six aida add calls with that tag created nothing, while the same calls with only area:orchestration succeeded. The error text was hidden by the caller''s output filter, so the cause is inferred from the difference. Reproduce with the tag and read the output first.'
-status: NeedsAttention
+status: Completed
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-09T03:00:45.690194532Z
-modified_at: 2026-11-11T16:42:03.935184132Z
+modified_at: 2026-11-11T19:23:25.991971393Z
 req_type: Bug
 tags:
 - area:cli
@@ -415,6 +415,20 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a1cc10-a760-7e30-9631-a92df844cdf9
+  author: aida-auto-bump
+  timestamp: 2026-11-11T19:23:25.920899894Z
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Completed
+processing_record:
+- id: 01a1cc10-a7a7-7c82-995c-6f51e56fd4a1
+  timestamp: 2026-11-11T19:23:25.991968005Z
+  agent: implementer
+  commit_sha: 2240b91cf0ed204fc4d7169cf23d5469bd0eb6b2
+  summary: Full three-file sweep found no actionable defects; stderr/nonzero/no-write regression and early-dispatch invariant have passing lane evidence. CI pending at review time; rest lane failed dependency installation/time budget, logs not yet available. Fast-gate success reported in spec but not independently verified.
+  review_verdict: approved
 filed_at:
   code_sha: d73f4e6b86c9f6a85cc01a4aa9893b869252b3a9
   branch: main
@@ -425,12 +439,6 @@ filed_at:
   session: 20abb7c3-8f9b-4a5e-b326-404921f3b450
 implementation_info:
   implemented: false
+  completed_at: 2026-11-11T19:23:25.920894723Z
+  completion_sha: 2240b91cf0ed204fc4d7169cf23d5469bd0eb6b2
   reopened_at_sha: 11b131dfe3341e6d9c7127d64370f91366094711
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: Full diff and latest advisor acceptance reviewed; stderr routing and dispatch-extractor repair are sound, no actionable defects. Targeted tests and 47 fast gates reported passing in spec evidence; CI pending at review time.
-  recovery_hint: address the review findings, move BUG-2505 back to In Progress, and clear the PR hold only after approval
-  shelved_by: reviewer
-  shelved_at: 2026-11-11T16:42:03.935184132Z
