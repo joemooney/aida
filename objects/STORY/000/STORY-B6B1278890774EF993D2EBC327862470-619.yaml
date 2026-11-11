@@ -3,12 +3,12 @@ spec_id: STORY-b6b1278890774ef993d2ebc327862470-619
 agreed_id: STORY-2696
 title: Authenticated reviewer no-carry marker for approval carry-over
 description: 'Follow-up split from STORY-2694. Let a reviewer mark an approval as not carry-eligible across clean merges from main (for example security-critical or gate-touching changes). A design fork is open: extend local recording receipts plus the signed publication schema, or introduce a distinct authenticated reviewer-policy receipt (see STORY-2694 punt, gate/review_authority.rs::verified_authority_keys). Needs migration and removal rules, including a marker change after a cached proof. Architecture: sketch and advisor signoff before implementation.'
-status: InProgress
+status: Completed
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-09T23:18:35.052711129Z
-modified_at: 2026-11-11T04:30:57.015052782Z
+modified_at: 2026-11-11T06:26:21.401466239Z
 req_type: Story
 comments:
 - id: 01a1c5dc-7b38-79a0-b14b-a53401fc1b6e
@@ -384,6 +384,20 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1c949-3814-76f1-afa8-dd0feac1e43e
+  author: aida-auto-bump
+  timestamp: 2026-11-11T06:26:21.332600173Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a1c949-3859-7c92-8110-dc6f0aa3e46a
+  timestamp: 2026-11-11T06:26:21.401463080Z
+  agent: aida
+  commit_sha: 2549f60452a898583c0af8f31cdc6857a7de6361
+  summary: 'Full sweep: approved sketch and prior findings satisfied; no actionable defects found. CI pending at review time; source and regression inspection only, no local builds/tests.'
+  review_verdict: approved
 filed_at:
   code_sha: b1331e379c1fd3de1eef43e3d2d99b58b5d59a61
   branch: main
@@ -393,3 +407,7 @@ filed_at:
   vendor: claude
   session: 01a1beff-fc3b-78e2-93e2-9b0c283b0339
   harness_version: 2.1.319 (Claude Code)
+implementation_info:
+  implemented: false
+  completed_at: 2026-11-11T06:26:21.332595271Z
+  completion_sha: 2549f60452a898583c0af8f31cdc6857a7de6361
