@@ -188,7 +188,12 @@ unload host AppArmor; obtain narrow reviewed policy or use disposable VMs.
 ## Acceptance, recovery and rollback
 
 S2 tests use fake forge/systemd plus real filesystem/socket operations; they do
-not establish host isolation or measured warm-build equivalence. S3 must retain
+not establish host isolation or measured warm-build equivalence. The ancestor
+regression also runs real directory enumeration in a non-root subprocess: each
+execute-only ancestor must fail, while 0755 permits startup enumeration with
+private work trees still 0700. At S3 installation, verify the actual service uid
+can enumerate every runner ancestor, including `current`, before job pickup;
+merely testing `cd` does not cover Runner.Listener's startup check. S3 must retain
 positive private-cache writes plus direct/alias/symlink seed and sibling denial
 attempts, cross-uid file/signal/proc denials, cache-miss clean-build equivalence,
 train mutation with unchanged trusted hashes, failed-main preservation and
