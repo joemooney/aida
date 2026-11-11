@@ -3,12 +3,12 @@ spec_id: BUG-b6b1278890774ef993d2ebc327862470-283
 agreed_id: BUG-2518
 title: review-watch never retries a head whose recorded review attempt produced no verdict, so PRs sit unreviewed for hours
 description: 'Observed 2026-11-10: PR #3754 (5h), #3753 (7h at head 913476ba, last verdict against an older head) and #3651 each had one recorded review attempt at the current head and no verdict for that head; review-watch skipped them until the advisor ran ''aida review watch --release PR-N'' by hand, after which a reviewer launched within minutes and #3754 was approved and landed. Expected: an attempt that ends without recording a verdict (reviewer crash, timeout, lease loss) is retried automatically with backoff, bounded by a per-head attempt cap; when the cap is hit, review-watch status names the PR and the reason so the advisor sees it. Acceptance: (1) a failed attempt with no verdict is retried after a backoff; (2) a cap (e.g. 3 per head) then surfaces a blocker row in ''aida advisor loops status'' / review-watch status; (3) a new head resets the count; (4) tests for each.'
-status: InProgress
+status: Completed
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-10T10:24:49.978786902Z
-modified_at: 2026-11-11T07:58:33.573840746Z
+modified_at: 2026-11-11T09:25:59.859900273Z
 req_type: Bug
 comments:
 - id: 01a1c544-9448-77c1-a5a0-c8d1776ee831
@@ -451,6 +451,20 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1c9ed-af6d-72a3-b461-073337e458d3
+  author: aida-auto-bump
+  timestamp: 2026-11-11T09:25:59.789927539Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a1c9ed-afb3-71b0-92e7-41764badc750
+  timestamp: 2026-11-11T09:25:59.859896925Z
+  agent: aida
+  commit_sha: 1b2f94a58c52c1fa07b1cbcd7b54a0b0d44b2ef8
+  summary: 'Full diff inspected; no actionable defects. BUG-2518 AC1: verified by persisted backoff and local/distributed retry regression source. AC2: verified by local/hub three-attempt caps, retry_blockers and exhaustion assertions. AC3: verified by local/distributed fresh-head assertions. AC4: verified by both changed test files covering each criterion (source inspection; current-head execution unverified). BUG-2518 (bug protocol): met. Prior timing failure addressed by splitting cancellation modes while preserving assertions. CI pending at review time; no local tests/builds run.'
+  review_verdict: approved
 filed_at:
   code_sha: af0288e60a2f6f00d4699098632234b246f6e511
   branch: main
@@ -460,3 +474,7 @@ filed_at:
   vendor: claude
   session: 01a1c39a-801a-7bd1-8da9-c955a6707f0b
   harness_version: 2.1.321 (Claude Code)
+implementation_info:
+  implemented: false
+  completed_at: 2026-11-11T09:25:59.789922276Z
+  completion_sha: 1b2f94a58c52c1fa07b1cbcd7b54a0b0d44b2ef8
