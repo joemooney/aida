@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T23:39:41.575597Z
-modified_at: 2026-11-11T01:39:02.336477433Z
+modified_at: 2026-11-11T01:39:03.898670250Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -668,6 +668,21 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Batch-4 import conversion of 5 files is sound and compiles in all CI shards, but the exact-match glob ledger was not pruned (gates shard red) and the PR title/commit trailer would complete TASK-3428 while lib_part1..6 and 8 held files remain.. No triage reason was given.'
   created_at: 2026-11-11T01:39:02.336467843Z
   modified_at: 2026-11-11T01:39:02.336467843Z
+  session_id: 01a1c70f-d731-7b70-acf8-e9ab3d288fca
+  harness_version: 2.1.322 (Claude Code)
+- id: 01a1c842-31a2-7eb0-a694-cb97e9683668
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (TASK-3428):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: c83a434258fd
+    Recorded: 2026-11-11T01:15:02.532732793+00:00
+    Findings:
+    1. BLOCKING scripts/crate-globs-legacy.json:2,32,33,40,42: the PR removes all 6 `use crate::*` imports from agent_launch.rs (2), phase_driver_trait.rs, pr_cmd.rs, role.rs and session_start.rs, but leaves their 5 ledger rows. scripts/check-crate-globs.py check() requires actual == expected exactly, so the CI gates step "Crate glob import ratchet" (ci.yml:961-971) fails with prune={...5 files}, which turns CI (gates) and aggregate Build red at c83a434258f. (The launcher-scraped lane_fixture_fails line is a deliberate expected-failure fixture inside bug_2383_seat_target_overlay_tests.rs:1190, not the cause.) Fix: delete exactly those 5 rows (60 -> 54 imports), add nothing else, and confirm python3 scripts/check-crate-globs.py --base origin/main passes. This resolves the comment-62 punt: pruning the ledger rows for converted files is part of every batch brief (batches 1-3 did it).
+    2. BLOCKING PR title and commit subject: the title ("...explicit imports ... a glob-import ratchet, dissolve lib_part1..6.rs, and relocate-ledger-paths.py (TASK-3428)") describes the whole spec, not this 5-file slice. Its bare (TASK-3428) trailer would mark TASK-3428 complete on squash merge, but AC3 is unmet (aida-cli-lib/src/lib_part1..6.rs still exist) and AC1 is unmet (8 held files remain in the ledger, batch 5). Commit 078c1a50fdc also says only "fix: address CI failures and review findings". Fix: set the title/squash subject to the brief-mandated "[AI:codex] refactor(crate-split): explicit imports batch 4 (Refs TASK-3428)", and give the PR body a short description of scope (5 files, ledger prune) and validation. The body currently has only fast_gate=fail.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-11T01:39:03.714641525Z
+  modified_at: 2026-11-11T01:39:03.714641525Z
   session_id: 01a1c70f-d731-7b70-acf8-e9ab3d288fca
   harness_version: 2.1.322 (Claude Code)
 history:
