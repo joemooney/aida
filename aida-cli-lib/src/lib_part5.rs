@@ -2735,16 +2735,19 @@ pub(crate) fn assert_handshake_anchor_is_pinned(
 }
 
 /// STORY-1405: remove the review-in-progress marker(s) a recorded verdict
-/// settles — PR-keyed when `pr` is known, otherwise every marker naming
-/// `spec`. Checks the given root and the main clone (where merge surfaces
-/// look). Returns the PRs cleared.
+/// settles: only the resolved change's marker. A spec-only verdict (`pr` is
+/// `None`) settles no change, so it leaves every change's marker intact.
+/// Checks the given root and the main clone (where merge surfaces look).
+/// Returns the PRs cleared.
 // trace:STORY-1405 | ai:claude
 // trace:BUG-2517 | ai:codex
 pub(crate) fn clear_review_markers_for_verdict(
     project_root: &std::path::Path,
-    _spec: &str,
     pr: Option<u64>,
 ) -> Vec<u64> {
+    let Some(n) = pr else {
+        return Vec::new();
+    };
     let mut roots = vec![project_root.to_path_buf()];
     let main = main_worktree_root_from(project_root);
     if main != project_root {
@@ -2752,14 +2755,8 @@ pub(crate) fn clear_review_markers_for_verdict(
     }
     let mut cleared = Vec::new();
     for root in &roots {
-        let targets: Vec<u64> = match pr {
-            Some(n) => vec![n],
-            None => Vec::new(),
-        };
-        for n in targets {
-            if crate::gate::review_marker::clear(root, n) {
-                cleared.push(n);
-            }
+        if crate::gate::review_marker::clear(root, n) {
+            cleared.push(n);
         }
     }
     cleared
@@ -3515,10 +3512,11 @@ pub(crate) fn handle_review_record_with_head_at(
         );
     }
     // STORY-1405: the verdict is on disk, so the review is no longer "in
-    // progress" — clear the PR's marker (by `--pr`, else any marker naming
-    // this spec) so merge surfaces now read the verdict instead.
+    // progress" — clear the resolved change's marker so merge surfaces now
+    // read the verdict instead. A spec-only verdict clears no change marker.
     // trace:STORY-1405 | ai:claude
-    clear_review_markers_for_verdict(&project_root, spec, pr);
+    // trace:BUG-2517 | ai:codex
+    clear_review_markers_for_verdict(&project_root, pr);
     // TASK-1450: a recorded review verdict is a reviewer-seat coordination
     // decision — the other gap BUG-1423's event feed left (that bug closed
     // the merge-path gap; this is the review-path gap). Emitted only after

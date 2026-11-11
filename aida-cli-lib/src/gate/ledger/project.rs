@@ -175,11 +175,16 @@ fn verdict_events(root: &Path, key: &str) -> Vec<GateEvent> {
     let Some(spec) = spec_key(key) else {
         return Vec::new();
     };
-    let bound: Vec<GateEvent> = changes_for_spec(root, &spec)
+    // trace:BUG-2517 | ai:codex
+    // One pinned discovery filters every related change: per-change
+    // rediscovery would rescan the whole ledger once for each PR.
+    let raw: Vec<GateEvent> = changes_for_spec(root, &spec)
         .into_iter()
-        .flat_map(|change| events(root, change))
+        .flat_map(|change| store::read_file(root, change))
         .filter(|e| e.verdict_record().is_some() && e.spec.as_deref() == Some(spec.as_str()))
         .collect();
+    let bound = super::checked::filter_miskeyed(root, raw.clone(), &mut Default::default())
+        .unwrap_or(raw);
     // An unbound record already bound to a change (AC2) is read once, from
     // the change. trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
     let unbound: Vec<GateEvent> = store::read_unbound(root, &spec)

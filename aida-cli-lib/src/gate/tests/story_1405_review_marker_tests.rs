@@ -191,11 +191,11 @@ fn bug_2517_verdict_without_pr_preserves_all_change_markers() {
             crate::gate::review_marker::Marker::for_this_process(pr, Some("abc"), Some(spec), "r");
         crate::gate::review_marker::write(root.path(), &m).unwrap();
     }
-    let cleared = clear_review_markers_for_verdict(root.path(), "task-1", None);
+    let cleared = clear_review_markers_for_verdict(root.path(), None);
     assert!(cleared.is_empty());
     assert!(crate::gate::review_marker::read(root.path(), 1).is_some());
     assert_eq!(
-        clear_review_markers_for_verdict(root.path(), "TASK-1", Some(1)),
+        clear_review_markers_for_verdict(root.path(), Some(1)),
         vec![1]
     );
     assert!(crate::gate::review_marker::read(root.path(), 2).is_some());
