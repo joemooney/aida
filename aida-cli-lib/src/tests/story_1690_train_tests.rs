@@ -5112,12 +5112,8 @@ fn story2691_recovered_last_member_is_logged_with_empty_discovery() {
             let idle = report_automatic_idle(true, &[], &recovered, &mut output);
             // Idle must propagate a log failure instead of silently losing the
             // only recovered rider's terminal outcome.
-            let failed_log = report_automatic_idle(
-                true,
-                &[],
-                &recovered,
-                std::io::Cursor::new(&mut [][..]),
-            );
+            let failed_log =
+                report_automatic_idle(true, &[], &recovered, std::io::Cursor::new(&mut [][..]));
             automatic.set(false);
             assert!(failed_log.is_err());
             assert!(idle.unwrap());
