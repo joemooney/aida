@@ -355,7 +355,8 @@ fn a_stale_head_carry_over_proof_and_carry_over_refusal() {
         None,
         EventBody::CarryOverProof {
             proof,
-            proof_version: 1,
+            proof_version: crate::gate::review_carryover::PROOF_VERSION,
+            carry_eligible: true,
         },
     );
     let s = state(
@@ -380,7 +381,8 @@ fn a_stale_head_carry_over_proof_and_carry_over_refusal() {
             new_head: HEAD_B.into(),
             refusal: crate::gate::review_carryover::CarryOverRefusal::NotDescendant,
             reason: "rewritten history".into(),
-            proof_version: 1,
+            proof_version: crate::gate::review_carryover::PROOF_VERSION,
+            carry_eligible: true,
         },
     );
     let s = state(&[r], &["BUG-2403"], &view(vec![approval, refused]), HEAD_B);
@@ -917,4 +919,25 @@ fn bug_2500_ledger_waiting_blocks_both_heads_until_fresh_review() {
         );
         assert!(matches!(s.decision, Decision::Mergeable { .. }));
     }
+}
+
+// trace:STORY-2696 | ai:codex
+#[test]
+fn story_2696_effective_policy_refuses_only_the_moved_head() {
+    let mut obj = record("approved", HEAD_A, &at(1), &[]);
+    obj.insert(
+        rv::ATTESTATION_KEY.into(),
+        serde_json::json!({"sha":HEAD_A,"seat":"reviewer","carry_eligible":false}),
+    );
+    let v = rv::parse_recorded_verdict(&serde_json::to_string(&obj).unwrap()).unwrap();
+    assert!(matches!(
+        approval_at_head(1, &v, HEAD_A, &[]),
+        Verdict::Approved {
+            carried_over: false,
+            ..
+        }
+    ));
+    assert!(
+        matches!(approval_at_head(1, &v, HEAD_B, &[]), Verdict::Stale { reason, .. } if reason.contains("not carry-eligible"))
+    );
 }
