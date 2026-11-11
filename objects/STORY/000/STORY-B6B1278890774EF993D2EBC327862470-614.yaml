@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-09T01:58:46.910276326Z
-modified_at: 2026-11-11T02:05:53.535790783Z
+modified_at: 2026-11-11T02:14:56.591517892Z
 req_type: Story
 tags:
 - area:orchestration
@@ -64,6 +64,13 @@ comments:
   modified_at: 2026-11-11T02:05:53.535790783Z
   session_id: 01a1c84b4142
   harness_version: codex-cli 0.167.0
+- id: 01a1c863-0b4f-7792-ac05-7e128ea4bfca
+  author: joe
+  content: 'ADVISOR ADDENDUM (2026-11-10 19:22 MST) to the 18:45 contract: since BUG-2492 (#3651) a held PR''s merge-hold-gate check reports PENDING, not FAILURE. Every ''has CI settled?'' test in these loops must exclude merge-hold-gate, or a held PR is never reworked or trained (observed: auto-rework skipped #3791''s request-changes for 30+ min). Add a regression test for a held PR with only merge-hold-gate pending.'
+  created_at: 2026-11-11T02:14:56.591517892Z
+  modified_at: 2026-11-11T02:14:56.591517892Z
+  session_id: 01a1c70f-d731-7b70-acf8-e9ab3d288fca
+  harness_version: 2.1.322 (Claude Code)
 history:
 - id: 01a1c5dd-0f8f-79d0-9864-f10de50286f7
   author: joe
