@@ -18,7 +18,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-11T05:40:53.335487241Z
-modified_at: 2026-11-11T15:46:52.992377500Z
+modified_at: 2026-11-11T15:56:53.929492853Z
 req_type: Spike
 tags:
 - architecture
@@ -472,6 +472,10 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a1cb53-9963-7d32-8db3-40c56ad12651
+  author: joe
+  timestamp: 2026-11-11T15:56:56.035722482Z
+  changes: []
 execution_mode: drain
 filed_at:
   code_sha: eb1b39c30c9f9f6ce3f5ccf1c5ffd8966e5f8a23
@@ -487,4 +491,12 @@ attention_reason:
   detail: 'Renewed round-six pickup at b5982660c981: explicitly dispute findings 1 and 3 only insofar as they require classification or porcelain-batch certification before their expressly required advisor ruling. Research lane cannot adopt decisions on handler versus invocation effects, direct CLI-owned writes or mixed-family aggregation. Thirteen visible spec comments include prior punt return without a ruling; stale cache limits this observation. Accept all substantive deficits and finding 2: 167 unresolved classes, full dependency/visibility/stage/home matrix and global ranking absent, approximately twenty-command batch absent. Missing client does not preclude source-only research. Reviewed absolute codegraph client still unavailable and doctor reports codegraph,missing. Updated docs/spikes/2026-11-11-command-inventory-round-6.md pins current source and records renewed checks; four extraction tests pass. Report left uncommitted under native-seat contract. No completion or publication declaration. Advisor must record the three rules; host must supply reviewed query client and indexed main revision.'
   raised_by: implementer
   raised_at: 2026-11-11T10:45:17.150871735Z
+failure_reason:
+  phase: reviewer
+  phase_index: 3
+  kind: verdict:request-changes
+  detail: 'Advisor ruling 2026-11-11 (2-round cap, 10 rounds): Refs-only partial; P1 acceptance gaps stay open on SPIKE-714'
+  recovery_hint: address the review findings, move SPIKE-714 back to In Progress, and clear the PR hold only after approval
+  shelved_by: advisor
+  shelved_at: 2026-11-11T15:56:53.929492853Z
 human_only: true
