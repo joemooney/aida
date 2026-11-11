@@ -13,12 +13,12 @@ description: |-
   Then summarise: counts per class; the first porcelain-views batch (the read-only commands with the fewest helper dependencies, about 20); which helpers block the most moves; and any command whose class surprised you (a 'read' that writes, such as a cache refresh or a usage log).
   Use rg to confirm any 'no callers' result from codegraph. Do this after TASK-3428 batch 5 (#3829) lands if possible, since glob imports hide edges; otherwise list the glob-importing files as lower-bound rows.
   Acceptance: (1) every REGISTRY entry has a row with class and evidence; (2) every core-write or authority row cites at least one writer or gate site; (3) the first porcelain batch is named with its blocking helpers; (4) the doc states its commit and method so it can be re-run.
-status: NeedsAttention
+status: Approved
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-11T05:40:53.335487241Z
-modified_at: 2026-11-11T08:30:52.417730735Z
+modified_at: 2026-11-11T08:31:08.046653761Z
 req_type: Spike
 tags:
 - architecture
@@ -127,6 +127,13 @@ comments:
     (no test lines extracted; open run 42982877272)
   created_at: 2026-11-11T08:30:52.417730735Z
   modified_at: 2026-11-11T08:30:52.417730735Z
+  session_id: 01a1c87f-970d-7ce0-9351-e4e75a87731e
+  harness_version: 2.1.322 (Claude Code)
+- id: 01a1c9bb-750e-7440-85a9-550a7610aad2
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was punted on: design-fork: Round 5 explicit dispute of findings 1 and 3 only as requiring classification/candidate certification before their expressly required advisor ruling. Research contract prohibits adopting the design decision here. Need advisor decisions on handler versus whole invocation effects, direct CLI-owned writes, and mixed-family aggregation. Visible eight spec comments contain no ruling; stale cache context means absence elsewhere is not established. Accept finding 2 and all substantive deficits: 167 unresolved rows, missing full dependency/visibility/stage/home matrix and global ranking, absent approximately twenty-command batch. Required reviewed absolute codegraph client remains unavailable and doctor reports codegraph,missing; host must deploy reviewed client and supply indexed main revision. New report docs/spikes/2026-11-11-command-inventory-round-5.md pins source 0a32b51bdbb0be085c9999c5064a839bf22c0b05 and records evidence, limitations, and recovery. Four extraction tests pass. Report left uncommitted per native-seat contract; no publication or completion declaration.. No triage reason was given.'
+  created_at: 2026-11-11T08:31:08.046650035Z
+  modified_at: 2026-11-11T08:31:08.046650035Z
   session_id: 01a1c87f-970d-7ce0-9351-e4e75a87731e
   harness_version: 2.1.322 (Claude Code)
 history:
@@ -323,6 +330,15 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a1c9bb-750e-7440-85a9-54f27b62e416
+  author: joe
+  timestamp: 2026-11-11T08:31:08.046635491Z
+  session_id: 01a1c87f-970d-7ce0-9351-e4e75a87731e
+  harness_version: 2.1.322 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 execution_mode: drain
 filed_at:
   code_sha: eb1b39c30c9f9f6ce3f5ccf1c5ffd8966e5f8a23
@@ -333,9 +349,4 @@ filed_at:
   vendor: claude
   session: 01a1c87f-970d-7ce0-9351-e4e75a87731e
   harness_version: 2.1.322 (Claude Code)
-attention_reason:
-  category: design-fork
-  detail: 'Round 5 explicit dispute of findings 1 and 3 only as requiring classification/candidate certification before their expressly required advisor ruling. Research contract prohibits adopting the design decision here. Need advisor decisions on handler versus whole invocation effects, direct CLI-owned writes, and mixed-family aggregation. Visible eight spec comments contain no ruling; stale cache context means absence elsewhere is not established. Accept finding 2 and all substantive deficits: 167 unresolved rows, missing full dependency/visibility/stage/home matrix and global ranking, absent approximately twenty-command batch. Required reviewed absolute codegraph client remains unavailable and doctor reports codegraph,missing; host must deploy reviewed client and supply indexed main revision. New report docs/spikes/2026-11-11-command-inventory-round-5.md pins source 0a32b51bdbb0be085c9999c5064a839bf22c0b05 and records evidence, limitations, and recovery. Four extraction tests pass. Report left uncommitted per native-seat contract; no publication or completion declaration.'
-  raised_by: implementer
-  raised_at: 2026-11-11T07:53:48.004258022Z
 human_only: true
