@@ -2143,6 +2143,7 @@ impl Forge for GitHubForge {
     fn ci_progress_snapshot(&self, branch: &str) -> String {
         crate::ci_rollup_json_for_branch(branch)
     }
+
     fn supports_delegated_review(&self) -> bool {
         true
     }
@@ -2945,6 +2946,7 @@ impl Forge for GitLabForge {
             .map(|out| String::from_utf8_lossy(&out.stdout).to_string());
         glab_ci_progress_snapshot(&pipelines, jobs.as_deref())
     }
+
     fn kind(&self) -> ForgeKind {
         ForgeKind::GitLab
     }
@@ -5544,6 +5546,7 @@ mod story_1689_commit_ci_status_tests;
 
 #[cfg(test)]
 mod tests {
+
     use super::*;
 
     // trace:BUG-2494 | ai:codex
