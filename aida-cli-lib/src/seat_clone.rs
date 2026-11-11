@@ -3395,12 +3395,14 @@ mod rework_merge_tests {
             anyhow::ensure!(out.status.success(), "probe failed: {:?}", out);
             Ok(out.stdout)
         };
-        refuse_pending_conflict_markers(&ordinary_probe).unwrap();
+        refuse_pending_conflict_markers(&ordinary_probe, None).unwrap();
         g(&["add", "conflict-guide.md"]);
-        refuse_pending_conflict_markers(&ordinary_probe).unwrap();
+        refuse_pending_conflict_markers(&ordinary_probe, None).unwrap();
         g(&["commit", "-qm", "explain markers"]);
         // Even absent a merge, an unreadable probe must fail closed.
-        assert!(refuse_pending_conflict_markers(&|_, _| anyhow::bail!("probe failed")).is_err());
+        assert!(
+            refuse_pending_conflict_markers(&|_, _| anyhow::bail!("probe failed"), None).is_err()
+        );
         std::fs::write(fx.main.join(path), "base\n").unwrap();
         g(&["add", "--", path]);
         g(&["commit", "-qm", "base"]);
@@ -3432,6 +3434,7 @@ mod rework_merge_tests {
             );
             Ok(out.stdout)
         };
+        let original_paths = vec![std::ffi::OsString::from(path)];
         let index = g(&["ls-files", "--stage"]);
         let merge_head = g(&["rev-parse", "MERGE_HEAD"]);
         for contents in [
@@ -3440,7 +3443,7 @@ mod rework_merge_tests {
             "resolved except closing\n>>>>>>> main\n",
         ] {
             std::fs::write(fx.main.join(path), contents).unwrap();
-            let why = refuse_pending_conflict_markers(&execute)
+            let why = refuse_pending_conflict_markers(&execute, Some(&original_paths))
                 .unwrap_err()
                 .to_string();
             assert!(why.contains("refusing to publish"), "{why}");
@@ -3453,14 +3456,39 @@ mod rework_merge_tests {
         // on retry as well, rather than trusting absence of unmerged entries.
         g(&["add", "--", path]);
         assert!(g(&["ls-files", "--unmerged"]).is_empty());
-        assert!(refuse_pending_conflict_markers(&execute).is_err());
+        assert!(refuse_pending_conflict_markers(&execute, Some(&original_paths)).is_err());
+        // Unrelated changed files may contain marker examples even during a
+        // repair. They were never in the host's original conflict list.
+        std::fs::write(
+            &guide,
+            "<<<<<<< example\n>>>>>>> example\nmore explanation\n",
+        )
+        .unwrap();
         std::fs::write(fx.main.join(path), "lane and main\n").unwrap();
-        refuse_pending_conflict_markers(&execute).unwrap();
+        refuse_pending_conflict_markers(&execute, Some(&original_paths)).unwrap();
+        g(&["add", "--", path, "conflict-guide.md"]);
+        refuse_pending_conflict_markers(&execute, Some(&original_paths)).unwrap();
+        // Missing evidence must not fall back to a changed-path/index scan.
+        let why = refuse_pending_conflict_markers(&execute, None)
+            .unwrap_err()
+            .to_string();
+        assert!(
+            why.contains("host-recorded original conflict paths"),
+            "{why}"
+        );
+        assert!(refuse_pending_conflict_markers(&execute, Some(&[])).is_err());
+        for invalid in ["", "../outside", "/absolute", "a/../../outside"] {
+            assert!(refuse_pending_conflict_markers(&execute, Some(&[invalid.into()])).is_err());
+        }
         assert!(!fx.main.join("sentinel").exists());
         // A deletion is also a valid resolution; no file must be opened.
         std::fs::remove_file(fx.main.join(path)).unwrap();
-        refuse_pending_conflict_markers(&execute).unwrap();
-        assert!(refuse_pending_conflict_markers(&|_, _| anyhow::bail!("read failed")).is_err());
+        refuse_pending_conflict_markers(&execute, Some(&original_paths)).unwrap();
+        assert!(refuse_pending_conflict_markers(
+            &|_, _| anyhow::bail!("read failed"),
+            Some(&original_paths)
+        )
+        .is_err());
     }
 
     // trace:BUG-2456 | ai:codex
@@ -4099,10 +4127,16 @@ pub(crate) fn commit_pending(
     // entries until this host stages them. Check working-tree bytes first,
     // including staged resolutions on a retry, before any index mutation.
     // trace:STORY-2710 | ai:codex
-    refuse_pending_conflict_markers(&|program, args| {
-        run_sandboxed(clone, main, program, args, PROBE_OUTPUT_CAP)
-            .map_err(|why| anyhow::anyhow!("could not inspect conflict markers: {why}"))
-    })?;
+    // No shared host journal is wired into publication yet. Refuse a pending
+    // merge rather than infer its original conflicts from a mutable index or
+    // changed paths. Ordinary publication needs no conflict evidence.
+    refuse_pending_conflict_markers(
+        &|program, args| {
+            run_sandboxed(clone, main, program, args, PROBE_OUTPUT_CAP)
+                .map_err(|why| anyhow::anyhow!("could not inspect conflict markers: {why}"))
+        },
+        None,
+    )?;
     let identity: [(&'static str, std::ffi::OsString); 4] = [
         ("GIT_AUTHOR_NAME", name.clone().into()),
         ("GIT_AUTHOR_EMAIL", email.clone().into()),
@@ -4223,17 +4257,17 @@ pub(crate) fn commit_pending(
     }
 }
 
-/// Inspect pending merges through the existing read-only probe sandbox.
-/// Ordinary publications may contain literal marker examples. The changed-path
-/// scan below is only a temporary extra guard: pending-merge publication still
-/// refuses at write-tree until journal-backed host staging is implemented.
-/// Literal, NUL-delimited pathspecs preserve unusual names and prevent a path
-/// from selecting additional files. Deleted resolutions have no bytes to scan.
-/// Git grep does not follow worktree symlinks or run textconv filters. All
-/// errors, including capped output and timeouts, refuse publication.
+/// Scan only the host-recorded original conflicts, including on staged retries.
+/// The caller must obtain these from the shared repair journal, never reconstruct
+/// them from changed paths or the current index. Missing evidence refuses pending
+/// merge publication; ordinary publication needs no journal entry.
+/// Literal pathspecs preserve unusual names without selecting additional files.
+/// Deleted resolutions have no bytes to scan. Git grep does not follow worktree
+/// symlinks or run textconv filters. Probe errors refuse publication.
 // trace:STORY-2710 | ai:codex
 fn refuse_pending_conflict_markers(
     execute: &dyn Fn(&str, &[&std::ffi::OsStr]) -> Result<Vec<u8>>,
+    original_conflict_paths: Option<&[std::ffi::OsString]>,
 ) -> Result<()> {
     use std::ffi::{OsStr, OsString};
     use std::os::unix::ffi::OsStringExt;
@@ -4252,32 +4286,30 @@ fn refuse_pending_conflict_markers(
     if pending.is_empty() {
         return Ok(());
     }
-    let diff: Vec<&OsStr> = [
-        "diff",
-        "--name-only",
-        "--no-ext-diff",
-        "--no-textconv",
-        "--diff-filter=ACMRTUXB",
-        "-z",
-        "HEAD",
-        "--",
-    ]
-    .iter()
-    .map(OsStr::new)
-    .collect();
-    let paths = execute("git", &diff)?;
-    let paths: Vec<OsString> = paths
-        .split(|b| *b == 0)
-        .filter(|p| !p.is_empty())
+    let original = original_conflict_paths.context(
+        "refusing to publish a pending merge: host-recorded original conflict paths are unavailable; shared repair journal integration is required; nothing was staged or committed",
+    )?;
+    anyhow::ensure!(
+        !original.is_empty(),
+        "refusing to publish a pending merge: host-recorded conflict path list is empty"
+    );
+    let paths: Vec<OsString> = original
+        .iter()
         .map(|p| {
+            use std::os::unix::ffi::OsStrExt;
+            anyhow::ensure!(
+                !p.is_empty()
+                    && !p.as_bytes().contains(&0)
+                    && std::path::Path::new(p)
+                        .components()
+                        .all(|c| matches!(c, std::path::Component::Normal(_))),
+                "refusing to publish: invalid host-recorded conflict path {p:?}"
+            );
             let mut literal = b":(literal)".to_vec();
-            literal.extend_from_slice(p);
-            OsString::from_vec(literal)
+            literal.extend_from_slice(p.as_bytes());
+            Ok(OsString::from_vec(literal))
         })
-        .collect();
-    if paths.is_empty() {
-        return Ok(());
-    }
+        .collect::<Result<_>>()?;
     // grep's 1 means no matches; every other failure remains a failure. The
     // shell program is fixed, with filenames passed only as argv, never code.
     let mut args: Vec<&OsStr> = [

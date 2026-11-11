@@ -131,13 +131,10 @@ an unmerged index or enable automatic conflict dispatch.
 P1 remains open: AC1-6 need production dispatch, host regeneration, merged-tree
 compile gating, per-head refusal notices and their regression coverage. AC7 has
 a fixture regression, but does not alone establish the full story. No story
-approval or completion is requested for this slice. The remaining master
-decision is approval of the shared versioned repair journal in the state section
-above (reservation identity, ambiguous-spawn retention and watcher/direct-rework
-coordination). The merge-mechanics ruling does not explicitly decide that state
-contract. Implementation of that new orchestrator state remains gated by the
-repository Sketch-First Protocol; the advisor should approve that journal or
-choose the watcher-state alternative before the next production slice.
+approval or completion is requested for this slice. At the end of round 2,
+the shared journal state contract still awaited a ruling. The advisor approved
+it on 2026-11-11 at 01:28 UTC; that design gate is now satisfied. Production
+implementation, rather than further state-contract approval, remains required.
 
 Validation for this slice: lane job `j20261110T222603765-2-0` ran
 `cargo test --profile agent -p aida-cli-lib --lib -- story_2710_marker_gate`:
@@ -174,3 +171,35 @@ Round 3 validation: lane job `j20261111T013744670-2-0` executed
 `git diff --check` pass. A Refs-only native publication declaration is recorded;
 `aida punt` succeeded for the unfinished P1 and P2 integration and remains a
 publication veto. No Git commit or push was performed in this seat.
+
+## Round 3 follow-up: explicit conflict-path boundary, findings punted
+
+The marker helper accepts an explicit original conflict-path list. It no longer
+reconstructs conflicts from changed tracked paths. The real Git regression
+retains that same list across unmerged and staged retries and permits marker
+examples in an unrelated changed guide during a merge. Missing, empty, absolute
+or parent-traversing path evidence refuses. Ordinary publication remains allowed
+without conflict evidence.
+
+Publication does not yet load a shared repair journal, so `commit_pending`
+passes no evidence and explicitly refuses every pending merge before staging.
+This replaces the prior incidental `write-tree` refusal; it does not implement
+the approved host-staged merge flow. The test supplies host paths directly and
+does not establish persistence, lane-brief integration or end-to-end acceptance.
+
+P1 and P2 remain open and are not disputed. A successful `aida punt` names both
+findings and records that journal persistence/reservation, watcher/direct-rework
+integration, configured-vendor routing, retained host merges, regeneration,
+exact-tree compile evidence, refusal notices and lane briefs remain unfinished.
+This is preparatory code, not an approved scope reduction or story completion.
+The journal ruling is accepted without another signoff request. The punt remains
+a publication veto. The native-seat edits are left uncommitted for host review.
+
+Follow-up validation: lane job `j20261111T023415446-2-0` executed
+`cargo test --profile agent -p aida-cli-lib --lib -- story_2710_marker_gate`:
+**1 passed, 0 failed, 0 ignored**. Rustfmt check and `git diff --check` pass.
+The test establishes only the explicit-path helper behavior. A Refs-only native
+publication declaration is recorded; the punt remains in force. The required
+host codegraph client was absent at its supplied absolute path; `aida doctor
+check codegraph` also reported the tool missing. Session-manifest writing was
+refused by the seat filesystem boundary; no permission expansion was attempted.
