@@ -2898,7 +2898,14 @@ pub fn collect_standalone_verdict(
     let canonical_in_place = fresh_candidate(canonical, since);
     candidates.extend(canonical_in_place.clone());
     for id in &spec_ids {
-        candidates.extend(fresh_candidate(&verdict_path(launcher_root, id), since));
+        let path = verdict_path(launcher_root, id);
+        // Interactive spec review anchors its native child's record by spec,
+        // so its original grant-bound evidence can be ledger-only too.
+        // trace:BUG-2522 | ai:codex
+        candidates.extend(
+            fresh_candidate(&path, since)
+                .or_else(|| fresh_ledger_candidate(launcher_root, &path, since)),
+        );
     }
     // An uncontained reviewer's `aida review record` writes the ledger, not a
     // file: its record for this change, appended after the reviewer started,

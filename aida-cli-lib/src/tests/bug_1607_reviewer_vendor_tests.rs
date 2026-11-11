@@ -269,7 +269,7 @@ fn review_spec_resolve_and_launch_uses_codex_for_codex_only_project() {
     let prompt = "/aida-review --pr 52";
     let launch = review_spec_launch_reviewer(vendor, "review-story-52", prompt, "session-52");
     crate::test_ambient::replace(outer);
-    let status = launch.expect("launch with a reachable mock must succeed");
+    let (status, _grant) = launch.expect("launch with a reachable mock must succeed");
     assert!(status.success());
 
     let argv = read_captured_argv(&capture);

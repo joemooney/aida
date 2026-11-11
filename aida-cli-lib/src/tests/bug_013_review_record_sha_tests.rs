@@ -260,3 +260,120 @@ fn operator_hold_failure_preserves_both_verdict_records() {
         );
     }
 }
+
+// trace:BUG-2522 | ai:codex
+#[test]
+fn interactive_review_anchor_refusals_are_collected_and_held() {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
+    for disposition in ["request-changes", "rejected"] {
+        let (root, head) = project();
+        let home = root.path().join("home");
+        std::fs::create_dir_all(&home).unwrap();
+        let anchor = crate::gate::review_verdict::verdict_path(root.path(), "BUG-2522");
+        let root_str = root.path().to_str().unwrap();
+        let mut env = crate::test_env::EnvVarsGuard::apply(&[
+            ("AIDA_PROJECT_ROOT", Some(root_str)),
+            ("AIDA_DRIVE_ROOT", Some(root_str)),
+            ("AIDA_REVIEW_VERDICT_FILE", Some(anchor.to_str().unwrap())),
+            ("AIDA_HOME", Some(home.to_str().unwrap())),
+            ("HOME", Some(home.to_str().unwrap())),
+            ("AIDA_CONTAINED", None),
+            ("AIDA_FROM_PR_HEAD_SHA", Some(&head)),
+            (crate::gate::seat_authority::GRANT_ENV, None),
+        ]);
+        let grant = crate::gate::seat_authority::test_support::mint_grant_for(
+            root.path(),
+            &crate::current_user_id(None),
+            "reviewer",
+            &[],
+        );
+        env.set_key(crate::gate::seat_authority::GRANT_ENV, &grant);
+        let launched_at = std::time::SystemTime::now();
+        assert!(!crate::session::process_contained());
+        let result = handle_review_record_at(
+            root.path().to_path_buf(),
+            "BUG-2522",
+            disposition,
+            Some(&head),
+            None,
+            Some("needs a fix"),
+            &[],
+            &[],
+            Some(2522),
+        );
+        if let Err(error) = result {
+            assert!(error.to_string().contains("could not park"), "{error:#}");
+        }
+        assert!(crate::gate::merge_hold_core::read_hold_record(root.path(), 2522).is_none());
+        // Native record is ledger-only, under the SPEC anchor, not PR-2522.
+        assert!(!anchor.exists());
+        let mut checks = crate::queue_cmd::StandaloneVerdictChecks {
+            project_root: root.path(),
+            pr: 2522,
+            head_sha: Some(head.clone()),
+            launcher_grant: None,
+            child_grant: Some("other-reviewer".into()),
+        };
+        assert!(
+            crate::collect_interactive_review_refusal(
+                root.path(),
+                2522,
+                "BUG-2522",
+                launched_at,
+                &checks,
+            )
+            .is_err(),
+            "another reviewer's grant must not collect"
+        );
+        assert!(crate::gate::merge_hold_core::read_hold_record(root.path(), 2522).is_none());
+        checks.child_grant = Some(grant);
+        checks.head_sha = Some("0000000000000000000000000000000000000000".into());
+        assert!(
+            crate::collect_interactive_review_refusal(
+                root.path(),
+                2522,
+                "BUG-2522",
+                launched_at,
+                &checks,
+            )
+            .is_err(),
+            "a different PR head must not collect"
+        );
+        assert!(crate::gate::merge_hold_core::read_hold_record(root.path(), 2522).is_none());
+        checks.head_sha = Some(head.clone());
+        let lock = crate::gate::merge_hold_core::hold_lock_path(root.path(), 2522);
+        std::fs::create_dir_all(&lock).unwrap();
+        let error = crate::collect_interactive_review_refusal(
+            root.path(),
+            2522,
+            "BUG-2522",
+            launched_at,
+            &checks,
+        )
+        .unwrap_err();
+        assert!(error.to_string().contains("could not protect"), "{error:#}");
+        assert!(
+            crate::gate::review_verdict::read_recorded_verdict(root.path(), "BUG-2522")
+                .unwrap()
+                .kind
+                .requires_changes()
+        );
+        std::fs::remove_dir(&lock).unwrap();
+        crate::collect_interactive_review_refusal(
+            root.path(),
+            2522,
+            "BUG-2522",
+            launched_at,
+            &checks,
+        )
+        .expect("the interactive parent must protect its child's refusal");
+        let hold = crate::gate::merge_hold_core::read_hold_record(root.path(), 2522).unwrap();
+        assert_eq!(
+            hold.reason_kind,
+            crate::gate::merge_hold_core::HoldReasonKind::Rework
+        );
+        assert_eq!(hold.target_head_sha.as_deref(), Some(head.as_str()));
+    }
+}

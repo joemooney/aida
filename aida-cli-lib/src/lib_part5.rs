@@ -966,7 +966,7 @@ pub(crate) fn review_spec_launch_reviewer(
     session_name: &str,
     prompt: &str,
     session_id: &str,
-) -> Result<std::process::ExitStatus> {
+) -> Result<(std::process::ExitStatus, String)> {
     // TASK-2032: `aida review` launches from the host project root.
     // trace:TASK-2032 | ai:claude
     let plan = session::interactive_reviewer_launch_plan(
@@ -983,7 +983,7 @@ pub(crate) fn review_spec_launch_reviewer(
     // resolved the same way every other authority check resolves it — not
     // whatever directory the process happens to sit in.
     // trace:STORY-1473 | ai:claude
-    session::spawn_reviewer_launch_plan(&plan, &find_project_root()?)
+    session::spawn_reviewer_launch_plan_granted(&plan, &find_project_root()?)
         .context("failed to launch the reviewer")
 }
 
@@ -1000,6 +1000,35 @@ pub(crate) fn review_spec_verdict(
 ) -> Option<reviewer_summary::VerdictFile> {
     crate::gate::review_verdict::current_verdict_since(verdict_path, Some(launched_at))
         .and_then(|current| reviewer_summary::parse_verdict_file(&current.body))
+}
+
+/// Collect the interactive child's original evidence with the same head and
+/// grant checks as standalone review, then protect any refusing disposition.
+/// Keeping this before presentation/re-recording prevents either from hiding a
+/// failed hold or manufacturing collectable provenance.
+// trace:BUG-2522 | ai:codex
+pub(crate) fn collect_interactive_review_refusal(
+    project_root: &std::path::Path,
+    pr: u64,
+    spec: &str,
+    launched_at: std::time::SystemTime,
+    checks: &dyn crate::gate::review_verdict::VerdictCollectionChecks,
+) -> Result<()> {
+    let canonical = crate::gate::review_verdict::verdict_path(project_root, &format!("PR-{pr}"));
+    let collected = crate::gate::review_verdict::collect_standalone_verdict(
+        project_root,
+        project_root,
+        &canonical,
+        &[spec.to_string()],
+        launched_at,
+        checks,
+    )
+    .map_err(|why| {
+        anyhow::anyhow!("interactive review verdict was not collected for PR-{pr}: {why}")
+    })?;
+    crate::merge_hold::arm_collected_refusal(project_root, pr, &collected)
+        .with_context(|| format!("verdict collected, but could not protect PR-{pr} with a merge hold; run `aida review stranded --fix`"))?;
+    Ok(())
 }
 
 /// trace:STORY-553 | ai:claude — `aida review <SPEC>`: the human-review
@@ -1452,14 +1481,29 @@ pub(crate) fn handle_review_spec(
     let vendor = review_vendor
         .expect("review_vendor is Some whenever no_agent is false (already returned above)");
     let launched_at = std::time::SystemTime::now();
-    let status: std::process::ExitStatus =
-        review_spec_launch_reviewer(vendor, &name, &prompt, &session_id)?;
+    let launcher_grant = crate::gate::seat_authority::current_grant_id();
+    let (status, child_grant) = review_spec_launch_reviewer(vendor, &name, &prompt, &session_id)?;
     if !status.success() {
         eprintln!(
             "  {} the reviewer exited non-zero ({})",
             crate::glyph(crate::glyphs::Glyph::Warning).yellow(),
             status
         );
+    }
+
+    // An anchor delegates refusal holding to this parent, including native
+    // interactive reviewers. Collect before re-recording can stamp a new head
+    // or provenance onto the child's evidence. Refuse on unverifiable evidence.
+    // trace:BUG-2522 | ai:codex
+    if let Some(pr) = pr_number {
+        let checks = crate::queue_cmd::StandaloneVerdictChecks {
+            project_root,
+            pr,
+            head_sha: crate::queue_cmd::standalone_review_pr_head(project_root, pr),
+            launcher_grant,
+            child_grant: Some(child_grant),
+        };
+        collect_interactive_review_refusal(project_root, pr, &spec_id, launched_at, &checks)?;
     }
 
     // ---- Read + present the verdict (AGENT ANALYZES + RECOMMENDS) ----
