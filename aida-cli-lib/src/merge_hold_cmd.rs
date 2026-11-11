@@ -1,7 +1,12 @@
 //! `aida merge-hold`/`merge-lock` handlers and stale-hold partitioning (STORY-1488 slice 1)
 // trace:STORY-1488 | ai:claude
 
-use crate::*;
+use crate::{
+    all_requirement_summaries, collect_open_prs, current_user_id, events, find_main_worktree_root,
+    find_project_root, forge, leases, merge_hold, merge_lock, network_retry, pr_claim_surface,
+    pr_is_merged_with_sink, print_merge_hold_no_forge, spec_status, Result,
+};
+use colored::Colorize;
 
 // trace:STORY-1728 | ai:claude
 #[path = "merge_hold_cmd_args.rs"]
