@@ -20622,7 +20622,7 @@ Commands:
   runtime-policy  Print the runtime descriptor embedded in this binary. No launch authority
   probe           Run the fixed, model-free filesystem/supervisor containment tracer. This does not
                   enable vendor launches or change permission policy
-  show            Show the resolved per-agent posture and diagnostics. Read-only
+  show            Show a compact per-agent permission summary. Read-only
   set             Apply a named agent permission posture to local or user config files. `bypass`
                   must be confirmed by a person at an interactive terminal; it is refused when stdin
                   or stdout is not a terminal
@@ -20729,13 +20729,16 @@ Options:
   -h, --help
           Print help (see a summary with '-h')
 ===== aida config permissions show
-Show the resolved per-agent posture and diagnostics. Read-only
+Show a compact per-agent permission summary. Read-only
 
 Usage: aida config permissions show [OPTIONS]
 
 Options:
       --json
           Emit machine-readable JSON
+
+  -v, --verbose
+          Include launch flags, scope, findings and full refusal diagnostics
 
       --format <FORMAT>
           Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
@@ -52797,7 +52800,7 @@ Working on aida itself
       "permissions",
       "show"
     ],
-    "about": "Show the resolved per-agent posture and diagnostics. Read-only",
+    "about": "Show a compact per-agent permission summary. Read-only",
     "flags": [
       {
         "name": "canonical-ids",
@@ -52818,6 +52821,11 @@ Working on aida itself
         "name": "json",
         "takes_value": false,
         "help": "Emit machine-readable JSON"
+      },
+      {
+        "name": "verbose",
+        "takes_value": false,
+        "help": "Include launch flags, scope, findings and full refusal diagnostics"
       }
     ],
     "hidden": true
