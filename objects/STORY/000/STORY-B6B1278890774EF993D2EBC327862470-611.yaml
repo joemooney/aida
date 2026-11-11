@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-09T01:57:49.197822183Z
-modified_at: 2026-11-11T15:43:40.347960992Z
+modified_at: 2026-11-11T15:47:44.899222696Z
 req_type: Story
 tags:
 - area:orchestration
@@ -173,6 +173,13 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida edit --status`. It was shelved on: reviewer/verdict:request-changes: S1 full sweep: five collector defects in workflow freshness, cleared holds, verdict corpus, lease evidence and review-watch receipts; exact-head CI green.. No triage reason was given.'
   created_at: 2026-11-11T15:43:40.347953117Z
   modified_at: 2026-11-11T15:43:40.347953117Z
+- id: 01a1cb4b-3083-7262-840f-7d0dcdd0fee8
+  author: joe
+  content: 'Advisor ruling 2026-11-11 08:50 MST: PR #3843 merges as Refs-only under the 2-round cap (read-only command, low risk). The five round-3 P2 findings (pr_state.rs workflow_fresh overwrite, merge-hold-recorded label vs active hold, spec-key refusal reconciliation, unknown lease ownership, review_watch receipt-reader invariants) remain STORY-2688''s next slice; the queued STORY-2688 lane works them on top of main after the merge.'
+  created_at: 2026-11-11T15:47:44.899222696Z
+  modified_at: 2026-11-11T15:47:44.899222696Z
+  session_id: 01a1ca83-fabb-7663-852c-12c78d4e097f
+  harness_version: 2.1.322 (Claude Code)
 history:
 - id: 01a1be07-037f-7533-9b8f-9af4ceb825a2
   author: joe
