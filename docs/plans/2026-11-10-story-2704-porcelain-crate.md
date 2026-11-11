@@ -14,7 +14,8 @@ budget exception for its unconditional 46-second sleep. The test is removed.
 The accepted non-blocking environment-alias finding was assigned to S2; the
 current implementation already reuses core `output_format::parse_output_format`.
 `environment_alias_error_parity` covers `table`/`human` and `agent`/`toon` for
-invalid windows, missing readers and failed readers, including stream parity.
+invalid windows, missing readers and failed readers, including stream parity
+through both `aida-porcelain flow` and the `aida-flow` multicall entrypoint.
 
 ## Evidence and boundary
 

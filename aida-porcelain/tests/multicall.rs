@@ -177,13 +177,22 @@ fn environment_alias_error_parity() {
     )
     .unwrap();
     fs::set_permissions(&reader, fs::Permissions::from_mode(0o755)).unwrap();
-    let run = |format: &str, explicit: Option<&str>, agent: &str, since: &str, reader: &Path| {
+    let run = |name: &str,
+               format: &str,
+               explicit: Option<&str>,
+               agent: &str,
+               since: &str,
+               reader: &Path| {
         let mut command = Command::new(env!("CARGO_BIN_EXE_aida-porcelain"));
+        command.arg0(name);
+        if name == "aida-porcelain" {
+            command.arg("flow");
+        }
         if let Some(explicit) = explicit {
             command.args(["--format", explicit]);
         }
         command
-            .args(["flow", "report", "--since", since])
+            .args(["report", "--since", since])
             .current_dir(dir.path())
             .env("AIDA_OUTPUT_FORMAT", format)
             .env("AIDA_AGENT_OUTPUT", agent)
@@ -191,44 +200,47 @@ fn environment_alias_error_parity() {
             .output()
             .unwrap()
     };
-    for (alias, canonical, agent) in [
-        ("table", "human", "0"),
-        ("table", "human", "1"),
-        (" TABLE ", "human", "1"),
-        ("agent", "toon", "0"),
-        ("agent", "toon", "1"),
-        (" AgEnT ", "toon", "0"),
-    ] {
-        for (since, selected_reader, code) in [
-            ("bad", reader.clone(), 1),
-            ("2026-11-09", dir.path().join("missing-reader"), 1),
-            ("2026-11-09", reader.clone(), 23),
+    for name in ["aida-porcelain", "aida-flow"] {
+        for (alias, canonical, agent) in [
+            ("table", "human", "0"),
+            ("table", "human", "1"),
+            (" TABLE ", "human", "1"),
+            ("agent", "toon", "0"),
+            ("agent", "toon", "1"),
+            (" AgEnT ", "toon", "0"),
         ] {
-            let aliased = run(alias, None, agent, since, &selected_reader);
-            let canonical_env = run(canonical, None, agent, since, &selected_reader);
-            let expected = run(
-                "unsupported",
-                Some(canonical),
-                agent,
-                since,
-                &selected_reader,
-            );
-            assert_eq!(aliased.status.code(), Some(code));
-            assert_eq!(aliased.status.code(), canonical_env.status.code());
-            assert_eq!(aliased.stdout, canonical_env.stdout, "{alias}: {since}");
-            assert_eq!(aliased.stderr, canonical_env.stderr, "{alias}: {since}");
-            assert_eq!(aliased.status.code(), expected.status.code());
-            assert_eq!(aliased.stdout, expected.stdout, "{alias}: {since}");
-            assert_eq!(aliased.stderr, expected.stderr, "{alias}: {since}");
-            if code == 23 {
-                assert_eq!(aliased.stdout, b"reader-out");
-                assert_eq!(aliased.stderr, b"reader-err");
-            } else if canonical == "human" {
-                assert!(aliased.stdout.is_empty());
-                assert!(String::from_utf8_lossy(&aliased.stderr).starts_with("Error: "));
-            } else {
-                assert!(aliased.stderr.is_empty());
-                assert!(String::from_utf8_lossy(&aliased.stdout).starts_with("error: \""));
+            for (since, selected_reader, code) in [
+                ("bad", reader.clone(), 1),
+                ("2026-11-09", dir.path().join("missing-reader"), 1),
+                ("2026-11-09", reader.clone(), 23),
+            ] {
+                let aliased = run(name, alias, None, agent, since, &selected_reader);
+                let canonical_env = run(name, canonical, None, agent, since, &selected_reader);
+                let expected = run(
+                    name,
+                    "unsupported",
+                    Some(canonical),
+                    agent,
+                    since,
+                    &selected_reader,
+                );
+                assert_eq!(aliased.status.code(), Some(code));
+                assert_eq!(aliased.status.code(), canonical_env.status.code());
+                assert_eq!(aliased.stdout, canonical_env.stdout, "{alias}: {since}");
+                assert_eq!(aliased.stderr, canonical_env.stderr, "{alias}: {since}");
+                assert_eq!(aliased.status.code(), expected.status.code());
+                assert_eq!(aliased.stdout, expected.stdout, "{alias}: {since}");
+                assert_eq!(aliased.stderr, expected.stderr, "{alias}: {since}");
+                if code == 23 {
+                    assert_eq!(aliased.stdout, b"reader-out");
+                    assert_eq!(aliased.stderr, b"reader-err");
+                } else if canonical == "human" {
+                    assert!(aliased.stdout.is_empty());
+                    assert!(String::from_utf8_lossy(&aliased.stderr).starts_with("Error: "));
+                } else {
+                    assert!(aliased.stderr.is_empty());
+                    assert!(String::from_utf8_lossy(&aliased.stdout).starts_with("error: \""));
+                }
             }
         }
     }
