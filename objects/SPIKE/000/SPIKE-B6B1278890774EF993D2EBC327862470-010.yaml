@@ -18,7 +18,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-11T05:40:53.335487241Z
-modified_at: 2026-11-11T08:48:06.874135898Z
+modified_at: 2026-11-11T10:33:48.206837548Z
 req_type: Spike
 tags:
 - architecture
@@ -421,6 +421,12 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a1ca2b-c427-7370-bef4-68b59a6e8c20
+  author: joe
+  timestamp: 2026-11-11T10:33:48.327696103Z
+  session_id: 01a1c87f-970d-7ce0-9351-e4e75a87731e
+  harness_version: 2.1.322 (Claude Code)
+  changes: []
 execution_mode: drain
 filed_at:
   code_sha: eb1b39c30c9f9f6ce3f5ccf1c5ffd8966e5f8a23
@@ -436,4 +442,12 @@ attention_reason:
   detail: 'Round 6: explicitly dispute findings 1 and 3 only insofar as they require class or porcelain-batch certification before their expressly required advisor ruling. Need recorded decisions on handler versus invocation effects, direct CLI-owned writes and mixed-family aggregation; research lane cannot adopt that design decision. Accept every audit deficit and finding 2: all 167 classifications remain unresolved, complete dependency/visibility/stage/home matrix and global ranking absent, approximately twenty-command batch absent. Twelve visible spec comments provide no ruling, with stale-cache limitation. Prescribed reviewed absolute codegraph client remains unavailable; host must deploy it or supply a reviewed replacement and indexed main revision. New report docs/spikes/2026-11-11-command-inventory-round-6.md pins 80d9ee24449b and rechecks wrapper sources and ledger deficit. Four extraction tests pass; no Rust changes. Report left uncommitted per native-seat contract. No completion or publication declaration.'
   raised_by: implementer
   raised_at: 2026-11-11T08:48:06.874135898Z
+failure_reason:
+  phase: reviewer
+  phase_index: 3
+  kind: verdict:request-changes
+  detail: 'Full sweep: SPIKE-714 AC1 unverified (167 unresolved class/evidence rows); AC2 unverified (reachable writer/gate audit incomplete); AC3 unverified (first batch absent); AC4 verified by pinned revisions and reproduction methods in dated reports. SPIKE-714 (spike protocol): met (docs/spikes deliverables in diff). Three actionable gaps remain; CI pending at review time.'
+  recovery_hint: address the review findings, move SPIKE-714 back to In Progress, and clear the PR hold only after approval
+  shelved_by: advisor
+  shelved_at: 2026-11-11T10:33:48.206837548Z
 human_only: true
