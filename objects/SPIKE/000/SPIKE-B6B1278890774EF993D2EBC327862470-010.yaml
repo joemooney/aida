@@ -18,7 +18,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-11T05:40:53.335487241Z
-modified_at: 2026-11-11T08:35:32.918543327Z
+modified_at: 2026-11-11T08:44:35.443198525Z
 req_type: Spike
 tags:
 - architecture
@@ -361,6 +361,12 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a1c9c7-c759-7cf0-9943-7170b6ca3d6f
+  author: joe
+  timestamp: 2026-11-11T08:44:35.545261583Z
+  session_id: 01a1c87f-970d-7ce0-9351-e4e75a87731e
+  harness_version: 2.1.322 (Claude Code)
+  changes: []
 execution_mode: drain
 filed_at:
   code_sha: eb1b39c30c9f9f6ce3f5ccf1c5ffd8966e5f8a23
@@ -376,4 +382,12 @@ attention_reason:
   detail: 'Round-five retry at ddaf14c06e52: explicitly dispute findings 1 and 3 only insofar as classification or batch certification proceeds before their required advisor ruling on handler-versus-invocation effects, direct CLI-owned writes and mixed-family aggregation. Accept all audit deficits and finding 2: 167 rows remain unresolved; full dependency/visibility/stage/home matrix, blocker ranking and approximately twenty-command batch remain incomplete. Visible ten spec comments contain no ruling; stale cache and approval-refused MCP read_punt prevent establishing absence elsewhere. Required reviewed absolute codegraph client remains unavailable. Independently fixed the reported CI run 42982877272 writer-ratchet failure by adding exactly scripts/command-inventory.py|generate|python:write_text to the conservative blocked ledger. Writer guard passes at 3500 sites; four extraction tests pass. Updated dated round-five report and ledger left uncommitted per native-seat contract. No publication or completion declaration; advisor ruling and host query-client deployment required.'
   raised_by: implementer
   raised_at: 2026-11-11T08:35:32.918543327Z
+failure_reason:
+  phase: reviewer
+  phase_index: 3
+  kind: verdict:request-changes
+  detail: 'Full sweep: SPIKE-714 AC1 unverified (167 unresolved class/evidence rows); AC2 unverified (reachable writer/gate audit incomplete); AC3 unverified (first batch absent); AC4 verified by pinned revisions and reproduction methods in dated reports. SPIKE-714 (spike protocol): met (docs/spikes deliverables in diff). Three actionable gaps remain; CI pending at review time.'
+  recovery_hint: address the review findings, move SPIKE-714 back to In Progress, and clear the PR hold only after approval
+  shelved_by: advisor
+  shelved_at: 2026-11-11T08:44:35.443198525Z
 human_only: true
