@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-09T01:58:46.910276326Z
-modified_at: 2026-11-11T07:21:16.329434275Z
+modified_at: 2026-11-11T07:21:18.048136369Z
 req_type: Story
 tags:
 - area:orchestration
@@ -200,6 +200,21 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Full sweep: ledger-projection guard violation and unsent alert loss; 34 criterion statuses documented; CI pending.. No triage reason was given.'
   created_at: 2026-11-11T07:21:16.329427402Z
   modified_at: 2026-11-11T07:21:16.329427402Z
+  session_id: 01a1c87f-970d-7ce0-9351-e4e75a87731e
+  harness_version: 2.1.322 (Claude Code)
+- id: 01a1c97b-8518-7772-a4cb-bcf7f9199033
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (STORY-2691):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 97de35387f27
+    Recorded: 2026-11-11T07:13:57.694926524+00:00
+    Findings:
+    1. F1 [P1] aida-cli-lib/src/review_watch_ready.rs:371: Replace the direct legacy read in train_verdict_reads with an error-aware reader owned by gate/review_verdict or gate::ledger that respects the current ledger projection while retaining fail-closed unreadable/malformed evidence classification. The existing gate::ledger::tests::legacy_verdict_files_are_read_only_through_the_ledger_projection scans non-test calls to read_verdict_body; review_watch_ready.rs is neither SANCTIONED nor ALLOWED, so this new production call deterministically violates the guard (the same test failure already reported on the spec at 9bee49888ea8). The two latest commits do not change that call or its boundary. Verify the named guard and malformed/unreadable approval regressions; do not just whitelist another legacy reader.
+    2. F2 [P2] aida-cli-lib/src/advisor_loop_service.rs:799-823: Retry persisted unsent alerts before skipping idle bookkeeping or clearing a successful episode. At the third failed dispatch, failures.json is saved with alert.sent=false before deliver; if mailbox delivery fails temporarily, subsequent controller_pass(None) returns immediately while dispatch_pending is true and never retries. A subsequent successful dispatch (or healthy train pass with dispatch_pending=false) resets Failures and permanently discards the undelivered alert. Thus the threshold can be reached without the promised operator notification even after mailbox recovery. Preserve pending notification delivery independently of failure reset, retry on healthy/idle ticks, and add a transient-delivery-failure regression proving exactly one delivery with the original ID after recovery/restart.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-11T07:21:17.848339169Z
+  modified_at: 2026-11-11T07:21:17.848339169Z
   session_id: 01a1c87f-970d-7ce0-9351-e4e75a87731e
   harness_version: 2.1.322 (Claude Code)
 history:
