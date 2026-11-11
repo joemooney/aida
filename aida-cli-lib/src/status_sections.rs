@@ -6,11 +6,11 @@ use crate::{
     agent_registry, awaiting_you, branch_ahead_of, classify_lease_state, claude_agents,
     collect_branch_ahead_of, collect_open_prs, config_path_for_project, current_branch_at,
     current_user_id, detect_default_branch_ref, extract_spec_ids_from_commit, forge, git_arg_guard,
-    humanize_relative, lease_covers_cwd, lease_state_for, leases, list_leases, list_worktrees,
-    mail_wake, main_worktree_root_from, parse_session_env, presence, probe_clone_seat_trees,
-    process_probe, queue_role_fallback, remote_activity, resolve_gh_binary, role, session,
-    session_activity_path, session_manifest, status_cleanup, status_display, worktree, LeaseState,
-    Result, SessionActivityLog, SessionLease, WorktreeRecord, CLONE_PROBE_BUDGET,
+    humanize_relative, lease_covers_cwd, leases, list_leases, list_worktrees, mail_wake,
+    main_worktree_root_from, parse_session_env, presence, probe_clone_seat_trees, process_probe,
+    queue_role_fallback, remote_activity, resolve_gh_binary, role, session, session_activity_path,
+    session_manifest, status_cleanup, status_display, worktree, LeaseState, Result,
+    SessionActivityLog, SessionLease, WorktreeRecord, CLONE_PROBE_BUDGET,
 };
 use colored::Colorize;
 
@@ -1930,7 +1930,7 @@ pub(crate) fn lease_agent_view(
     live_sessions: &[process_probe::LiveSession],
 ) -> agent_registry::AgentRegistryView {
     // BUG-511: review-verb leases classify by creator PID, not worktree.
-    let lease_state = lease_state_for(lease, live_sessions, ctx.now);
+    let lease_state = crate::leases::lease_state_for(lease, live_sessions, ctx.now);
     let status = match lease_state {
         LeaseState::Stale => agent_registry::AgentStatus::Stale,
         LeaseState::Unknown | LeaseState::Live | LeaseState::Dormant => {

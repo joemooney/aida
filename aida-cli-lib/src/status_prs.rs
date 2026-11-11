@@ -7,7 +7,7 @@ use crate::{
     change_lookup_for_branch, ci_probe_with_forge, command_output_with_timeout,
     detect_default_branch_ref, detect_distributed_store_from, doctor_cmd, events,
     extract_spec_ids_from_commit, forge, git_arg_guard, git_output_checked, humanize_relative,
-    is_review_session_branch, lease_state_for, leases, list_leases, load_dispenser, network_retry,
+    is_review_session_branch, leases, list_leases, load_dispenser, network_retry,
     parse_review_scope, parse_review_story_pr_number, parse_squash_pr_number, plural, pr_cmd,
     pr_has_local_verdict, pr_has_merge_hold, process_probe, resolve_default_branch_ref,
     resolve_gh_binary, status_cleanup, try_auto_queue_pr_review, AutoQueueOrigin, AutoQueueStatus,
@@ -2564,7 +2564,12 @@ pub(crate) fn collect_unshipped_work_items_bounded(
     let leases = list_leases(project_root);
     let live_leases: Vec<SessionLease> = leases
         .iter()
-        .filter(|l| matches!(lease_state_for(l, &live, now), LeaseState::Live))
+        .filter(|l| {
+            matches!(
+                crate::leases::lease_state_for(l, &live, now),
+                LeaseState::Live
+            )
+        })
         .cloned()
         .collect();
     let live_scopes: std::collections::HashSet<String> = live_leases
