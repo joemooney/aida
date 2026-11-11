@@ -36,7 +36,7 @@ pub(crate) enum EnforceMode {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum CriteriaGate {
-    /// Every acceptance criterion is traced (or the spec has none) — the
+    /// Every behavioral criterion is traced (or none require tests) — the
     /// caller must produce NO output for this gate. Quiet when clean.
     Proceed,
     /// Untraced criteria exist under `enforce = warn` — print `lines` and
@@ -119,18 +119,26 @@ pub(crate) fn force_override_ledger_comment(display_id: &str, lines: &[String]) 
 /// The block appended to the round-1 headless reviewer prompt so round 1
 /// CITES the untraced list instead of discovering it during review.
 /// `reports` is one `(display_id, CriteriaReport)` pair per spec the PR
-/// covers. Returns `None` when every criterion across every spec is
-/// traced — quiet when clean applies here too, the prompt gains no new
-/// section for a clean PR.
+/// covers. Inspection declarations always produce a reviewer checklist; they
+/// are never automatically verified. Returns `None` when all criteria are
+/// traced behavioral criteria (or absent).
 // trace:TASK-1290 | ai:claude
 pub(crate) fn reviewer_prompt_block(reports: &[(String, CriteriaReport)]) -> Option<String> {
     let mut untraced: Vec<String> = Vec::new();
     let mut post_deployment: Vec<String> = Vec::new();
+    let mut inspections: Vec<String> = Vec::new();
     for (display_id, report) in reports {
         for line in untraced_lines(report) {
             untraced.push(format!("- {display_id}: {line}"));
         }
         for row in &report.criteria {
+            // trace:STORY-2702 | ai:codex
+            if row.state == CriterionState::InspectionRequired {
+                inspections.push(format!(
+                    "- {display_id}: {} {:?}: {}",
+                    row.criterion.id, row.evidence_type, row.criterion.text
+                ));
+            }
             if row.state == CriterionState::PostDeployment {
                 post_deployment.push(format!(
                     "- {display_id}: {} {}",
@@ -139,10 +147,23 @@ pub(crate) fn reviewer_prompt_block(reports: &[(String, CriteriaReport)]) -> Opt
             }
         }
     }
-    if untraced.is_empty() && post_deployment.is_empty() {
+    if untraced.is_empty() && post_deployment.is_empty() && inspections.is_empty() {
         return None;
     }
     let mut block = String::new();
+    if !inspections.is_empty() {
+        block.push_str(&format!(
+            "\n\nDeclared inspection evidence (verify each criterion against its declared type): \
+             configuration validation requires inspecting the configuration and recording the validation command/result or routing analysis; \
+             documentation inspection requires citing the document and checking its claims; \
+             manual inspection requires recording the procedure, observed result and limitations. \
+             An annotation is not proof of satisfaction. Report missing or inadequate evidence. \
+             Do not demand an automated test solely for an inspection criterion. Behavioral criteria \
+             still require automated tests; flag behavioral requirements mislabeled as inspection.\n{}\n",
+            inspections.join("\n")
+        ));
+    }
+
     if !untraced.is_empty() {
         block.push_str(&format!(
             "\n\nUntraced acceptance criteria (from `aida criteria`, reuse — do not re-derive): \
@@ -169,6 +190,56 @@ pub(crate) fn reviewer_prompt_block(reports: &[(String, CriteriaReport)]) -> Opt
 mod tests {
     use super::*;
     use crate::criteria::build_criteria_report;
+
+    #[test]
+    fn declared_evidence_routes_review_without_waiving_behavioral_tests() {
+        // trace:STORY-2702 | ai:codex
+        let dir = tempfile::tempdir().unwrap();
+        let description = "## Acceptance\n\n- AC1: [evidence: behavioral-test] rejects invalid input\n- AC2: [evidence: configuration-validation] CI routes changes\n- AC3: [evidence: documentation-inspection] Python prerequisite documented\n- AC4: [evidence: manual-inspection] visual alignment\n- AC5: [evidence: typo] still requires tests\n- AC6: legacy behavior\n";
+        std::fs::write(
+            dir.path().join("evidence.rs"),
+            "#[test]\nfn example() {\n// trace:EVID-1.AC2 | ai:codex\nassert!(true);\n}\n",
+        )
+        .unwrap();
+        let report = build_criteria_report(dir.path(), "EVID-1", description).unwrap();
+        assert_eq!(
+            report.untested,
+            vec!["EVID-1.AC1", "EVID-1.AC5", "EVID-1.AC6"]
+        );
+        for row in &report.criteria[1..4] {
+            assert_eq!(row.state, CriterionState::InspectionRequired);
+        }
+        let serialized = serde_json::to_value(&report).unwrap();
+        assert_eq!(
+            serialized["criteria"][1]["evidence_type"],
+            "configuration-validation"
+        );
+        let CriteriaGate::Refuse(lines) = evaluate(&report, EnforceMode::Refuse) else {
+            panic!("behavioral criteria must still block");
+        };
+        assert_eq!(lines.len(), 3);
+        let block = reviewer_prompt_block(&[("EVID-1".into(), report)]).unwrap();
+        for expected in [
+            "EVID-1.AC2",
+            "EVID-1.AC3",
+            "EVID-1.AC4",
+            "configuration validation requires",
+            "documentation inspection requires",
+            "manual inspection requires",
+            "annotation is not proof",
+            "Behavioral criteria",
+            "mislabeled as inspection",
+        ] {
+            assert!(block.contains(expected), "{expected}: {block}");
+        }
+        let inspection_only = build_criteria_report(dir.path(), "EVID-2",
+            "## Acceptance\n\n- AC1: [evidence: documentation-inspection] prerequisite documented\n").unwrap();
+        assert_eq!(
+            evaluate(&inspection_only, EnforceMode::Refuse),
+            CriteriaGate::Proceed
+        );
+        assert!(reviewer_prompt_block(&[("EVID-2".into(), inspection_only)]).is_some());
+    }
 
     fn build_gate_report(root: &Path, spec: &str) -> CriteriaReport {
         let description = "## Acceptance\n\n- AC1: the widget renders\n- AC2: the widget saves\n";

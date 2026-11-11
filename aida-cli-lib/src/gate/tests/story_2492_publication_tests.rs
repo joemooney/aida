@@ -289,7 +289,7 @@ impl Fixture {
     }
     fn record_at(&self, decision: &str, identity: &str, sha: &str) -> rv::JsonObj {
         let identity = vec![format!("session:{identity}"), "proc:123@start".into()];
-        let id = authority::write_human_receipt(sha, "STORY-1", &identity, false).unwrap();
+        let id = authority::write_human_receipt(sha, "STORY-1", &identity, false, true).unwrap();
         let att = rv::RecorderAttestation {
             sha: sha.to_string(),
             human_at_tty: true,
@@ -1061,4 +1061,53 @@ fn synced_publication_skips_watcher_without_a_local_verdict_directory() {
             .is_none(),
         "stale publications do not suppress a new head"
     );
+}
+
+// trace:STORY-2696 | ai:codex
+#[test]
+fn story_2696_signed_no_carry_projection_and_supersession() {
+    assert!(available(), "OpenSSH is required for this regression");
+    let f = Fixture::new();
+    {
+        let _env = env(&f.temp.path().join("home-b"));
+        let mut record = f.record("approved", "reviewer-session");
+        let mut att: rv::RecorderAttestation =
+            serde_json::from_value(record["recorder_attestation"].clone()).unwrap();
+        att.carry_eligible = false;
+        att.receipt_id = Some(
+            authority::write_human_receipt(&f.sha, "STORY-1", &att.identity, false, false).unwrap(),
+        );
+        record.insert(
+            "recorder_attestation".into(),
+            serde_json::to_value(att).unwrap(),
+        );
+        f.collect(&record).unwrap();
+    }
+    {
+        let _env = env(&f.temp.path().join("home-a"));
+        f.sync(&f.a);
+        let mut verdict = f.selected();
+        assert!(!verdict.attestation.as_ref().unwrap().carry_eligible);
+        assert!(!authority::verified_authority_keys(&f.a, &[verdict.clone()]).is_empty());
+        assert!(ship::approval_head_refusal(&[verdict.clone()], Some(&f.sha)).is_none());
+        assert!(matches!(
+            ship::approval_head_refusal(&[verdict.clone()], Some(&"b".repeat(40))),
+            Some(ship::ApprovalHeadRefusal::NoCarry { .. })
+        ));
+        verdict.attestation.as_mut().unwrap().carry_eligible = true;
+        assert!(
+            authority::verified_authority_keys(&f.a, &[verdict]).is_empty(),
+            "projection tampering cannot restore eligibility"
+        );
+    }
+    {
+        let _env = env(&f.temp.path().join("home-b"));
+        f.collect(&f.record("approved", "reviewer-session"))
+            .unwrap();
+    }
+    let _env = env(&f.temp.path().join("home-a"));
+    f.sync(&f.a);
+    let verdict = f.selected();
+    assert!(verdict.attestation.as_ref().unwrap().carry_eligible);
+    assert!(!authority::verified_authority_keys(&f.a, &[verdict]).is_empty());
 }
