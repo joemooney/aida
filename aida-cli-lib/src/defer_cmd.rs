@@ -257,7 +257,6 @@ fn run_defer(
     matches: &clap::ArgMatches,
     ctx: &crate::cmdkit::DispatchCtx,
 ) -> anyhow::Result<crate::cmdkit::Flow> {
-    use crate::*;
     let args = <DeferArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
     if let Some(DeferCommand::Resurface {
         dry_run,
@@ -361,7 +360,6 @@ fn run_undefer(
     matches: &clap::ArgMatches,
     ctx: &crate::cmdkit::DispatchCtx,
 ) -> anyhow::Result<crate::cmdkit::Flow> {
-    use crate::*;
     let args = <UndeferArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
     match &ctx.store {
         None => Ok(crate::cmdkit::Flow::Continue),

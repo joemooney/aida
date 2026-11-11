@@ -1485,6 +1485,8 @@ fn task1993_state_stays_bounded_far_past_one_thousand_changes() {
                             setup_retry: false,
                             retryable_fetch: false,
                             fetch_failures: 0,
+                            no_verdict_attempts: 0,
+                            no_verdict_retry_at: None,
                             reviewer: None,
                             pgid: None,
                             supersede: None,
@@ -1678,7 +1680,8 @@ fn task1993_watcher_never_signals_merges_or_runs_cargo() {
 // (validate_child_delegation runs before the reservation branch), the store
 // unusable (Store::open), or the claim timing out under lock contention. Any
 // watcher, including one restarted after the spawning parent is gone, sees
-// the recorded dispatcher is gone and frees the slot terminally.
+// the recorded dispatcher is gone and frees the slot for local preclaim retry.
+// trace:BUG-2518 | ai:codex
 // trace:TASK-1993.ac55aab8 | ai:claude
 #[test]
 fn task1993_dispatcher_lost_before_claim_frees_its_reservation() {
@@ -1690,6 +1693,9 @@ fn task1993_dispatcher_lost_before_claim_frees_its_reservation() {
         let (temp, store) = fixture();
         let c = change(1, 1, false);
         let attempt = dispatch(select(&store, &c, None, 1).unwrap());
+        // This recovery is local and proves no claim or descendant ever started.
+        assert!(attempt.admission_hub.is_none());
+        assert!(attempt.unclaimed_before_spawn());
         // A real dispatcher process, identified while alive, then gone.
         let mut dispatcher = Command::new("/bin/sleep").arg("30").spawn().unwrap();
         let identity = Identity::of(dispatcher.id()).unwrap();
@@ -1718,25 +1724,81 @@ fn task1993_dispatcher_lost_before_claim_frees_its_reservation() {
         let restarted = Store::open(temp.path(), &store.repository).unwrap();
         dispatch(select(&restarted, &change(2, 2, false), None, 1).unwrap());
         let recorded = &restarted.load().unwrap().entries["PR-1"].attempts[0];
-        assert_eq!(recorded.phase, Phase::Exited);
+        assert_eq!(recorded.phase, Phase::Failed);
+        assert!(!active(recorded));
         assert!(
             recorded.diagnostic.as_deref().unwrap().contains(trigger),
             "{recorded:?}"
         );
+        let diagnostic = recorded.diagnostic.clone();
         let Action::Skip(reason) = select(&restarted, &c, None, 1).unwrap() else {
-            panic!("the lost head relaunched");
+            panic!("the other PR should hold the only slot");
         };
-        assert!(reason.contains("exited"));
+        assert!(reason.contains("global reviewer capacity"), "{reason}");
+        assert_eq!(
+            restarted.load().unwrap().entries["PR-1"].attempts[0].diagnostic,
+            diagnostic
+        );
+        restarted.release("PR-2").unwrap();
+        let retry = dispatch(select(&restarted, &c, None, 1).unwrap());
+        assert_ne!(retry.token, attempt.token);
+        assert_eq!(retry.head, attempt.head);
+        let state = restarted.load().unwrap();
+        let attempts = &state.entries["PR-1"].attempts;
+        assert_eq!(attempts.len(), 1);
+        assert_eq!(attempts[0].token, retry.token);
+        assert!(active(&attempts[0]));
+        let Action::Skip(reason) = select(&restarted, &change(2, 2, false), None, 1).unwrap()
+        else {
+            panic!("the readmitted head should hold the only slot");
+        };
+        assert!(reason.contains("global reviewer capacity"), "{reason}");
+        assert!(log_tail(&restarted, &format!("PR-1-{}.log", attempt.token))
+            .unwrap()
+            .contains(trigger));
     }
     // The parent's own reaping records an observed early exit directly.
     let (_temp, store) = fixture();
-    let attempt = dispatch(select(&store, &change(1, 1, false), None, 1).unwrap());
+    let c = change(1, 1, false);
+    let attempt = dispatch(select(&store, &c, None, 1).unwrap());
+    assert!(attempt.admission_hub.is_none());
+    assert!(attempt.unclaimed_before_spawn());
+    let logs = Directory::open(&store.dir.path().join("logs")).unwrap();
+    let log_name = format!("PR-1-{}.log", attempt.token);
+    let mut log = logs.file(&log_name, true).unwrap();
+    writeln!(log, "grant refused before claim").unwrap();
     mark_unclaimed_exit(&store, "PR-1", &attempt.token, "exit status: 1").unwrap();
-    assert_eq!(
-        store.load().unwrap().entries["PR-1"].attempts[0].phase,
-        Phase::Exited
-    );
+    let state = store.load().unwrap();
+    let recorded = &state.entries["PR-1"].attempts[0];
+    assert_eq!(recorded.phase, Phase::Failed);
+    assert!(!active(recorded));
+    let diagnostic = recorded.diagnostic.clone();
+    assert!(diagnostic.as_deref().unwrap().contains("exit status: 1"));
+    assert!(diagnostic
+        .as_deref()
+        .unwrap()
+        .contains("grant refused before claim"));
     dispatch(select(&store, &change(2, 2, false), None, 1).unwrap());
+    assert_eq!(
+        store.load().unwrap().entries["PR-1"].attempts[0].diagnostic,
+        diagnostic
+    );
+    store.release("PR-2").unwrap();
+    let retry = dispatch(select(&store, &c, None, 1).unwrap());
+    assert_ne!(retry.token, attempt.token);
+    assert_eq!(retry.head, attempt.head);
+    let state = store.load().unwrap();
+    let attempts = &state.entries["PR-1"].attempts;
+    assert_eq!(attempts.len(), 1);
+    assert_eq!(attempts[0].token, retry.token);
+    assert!(active(&attempts[0]));
+    let Action::Skip(reason) = select(&store, &change(2, 2, false), None, 1).unwrap() else {
+        panic!("the readmitted head should hold the only slot");
+    };
+    assert!(reason.contains("global reviewer capacity"), "{reason}");
+    assert!(log_tail(&store, &log_name)
+        .unwrap()
+        .contains("grant refused before claim"));
 }
 
 // The triggers above really do leave the reservation unclaimed.
@@ -2980,6 +3042,132 @@ fn review_watch_four_reviews_share_persisted_capacity() {
     ));
 }
 
+// trace:BUG-2518 | ai:codex
+#[test]
+fn bug2518_no_verdict_backoff_cap_and_new_head() {
+    for phase in [Phase::Exited, Phase::Completed] {
+        let (_temp, store) = fixture();
+        let c = change(1, 1, false);
+        let mut attempt = dispatch(select(&store, &c, None, 2).unwrap());
+        for count in 1..=3 {
+            store
+                .transaction("PR-1", |state| {
+                    let a = attempt_mut(state, "PR-1", &attempt.token).unwrap();
+                    a.phase = phase.clone();
+                    let mut dead = Identity::current()?;
+                    dead.boot = "previous-boot".into();
+                    a.identity = Some(dead);
+                    a.diagnostic = Some("reviewer ended without recording".into());
+                    Ok(())
+                })
+                .unwrap();
+            let Action::Skip(reason) = select(&store, &c, None, 2).unwrap() else {
+                panic!("retry must be delayed or capped");
+            };
+            if count == 3 {
+                assert!(reason.contains("three review attempts"), "{reason}");
+                let blockers = service::retry_blockers(&store.root, &store.dir).unwrap();
+                assert_eq!(blockers.len(), 1);
+                assert!(blockers[0].contains("PR-1:") && blockers[0].contains("reviewer ended"));
+                assert!(
+                    no_verdict_blocker(&store.load().unwrap().entries["PR-1"].attempts[0])
+                        .is_some()
+                );
+                break;
+            }
+            assert!(reason.contains("retry after"), "{reason}");
+            assert!(probe_unneeded_with_coverage(&store, &c, || None)
+                .unwrap()
+                .is_none());
+            store
+                .transaction("PR-1", |state| {
+                    attempt_mut(state, "PR-1", &attempt.token)
+                        .unwrap()
+                        .no_verdict_retry_at =
+                        Some(chrono::Utc::now() - chrono::Duration::seconds(1));
+                    Ok(())
+                })
+                .unwrap();
+            let reopened = Store::open(&store.root, &store.load().unwrap().repository).unwrap();
+            attempt = dispatch(select(&reopened, &c, None, 2).unwrap());
+            assert_eq!(attempt.no_verdict_attempts, count + 1);
+        }
+        let fresh = dispatch(select(&store, &change(1, 2, false), None, 2).unwrap());
+        assert_eq!(fresh.no_verdict_attempts, 0);
+    }
+}
+
+// trace:BUG-2518 | ai:codex
+#[test]
+fn bug2518_retry_preserves_capacity_and_verdict_gates() {
+    let (_temp, store) = fixture();
+    let c = change(1, 1, false);
+    let attempt = dispatch(select(&store, &c, None, 1).unwrap());
+    store
+        .transaction("PR-1", |state| {
+            let a = attempt_mut(state, "PR-1", &attempt.token).unwrap();
+            a.phase = Phase::Exited;
+            a.no_verdict_retry_at = Some(chrono::Utc::now() - chrono::Duration::seconds(1));
+            a.reviewer_spawning = true;
+            Ok(())
+        })
+        .unwrap();
+    assert!(
+        matches!(select(&store, &c, None, 1).unwrap(), Action::Skip(reason)
+        if reason.contains("unfinished review processes"))
+    );
+    store
+        .transaction("PR-1", |state| {
+            attempt_mut(state, "PR-1", &attempt.token)
+                .unwrap()
+                .reviewer_spawning = false;
+            Ok(())
+        })
+        .unwrap();
+    let other = change(2, 2, false);
+    let held = dispatch(select(&store, &other, None, 1).unwrap());
+    for _ in 0..3 {
+        assert!(
+            matches!(select(&store, &c, None, 1).unwrap(), Action::Skip(reason)
+            if reason.contains("global reviewer capacity"))
+        );
+        assert_eq!(
+            store.load().unwrap().entries["PR-1"].attempts[0].no_verdict_attempts,
+            1
+        );
+    }
+    store
+        .transaction("PR-2", |state| {
+            attempt_mut(state, "PR-2", &held.token).unwrap().phase = Phase::Failed;
+            Ok(())
+        })
+        .unwrap();
+    let retried = dispatch(select(&store, &c, None, 1).unwrap());
+    assert_eq!(retried.no_verdict_attempts, 2);
+    let verdicts = Directory::open(&store.runtime.path().join("review-verdicts")).unwrap();
+    write_verdict(
+        &verdicts.path().join("PR-1.json"),
+        &verdict_json(&c.head, "approved"),
+    );
+    store
+        .transaction("PR-1", |state| {
+            attempt_mut(state, "PR-1", &retried.token).unwrap().phase = Phase::Exited;
+            Ok(())
+        })
+        .unwrap();
+    assert!(matches!(
+        select(&store, &c, None, 1).unwrap(),
+        Action::Skip(_)
+    ));
+    assert!(probe_unneeded_with_coverage(&store, &c, || None)
+        .unwrap()
+        .is_some());
+    assert_eq!(
+        store.load().unwrap().entries["PR-1"].attempts[0].no_verdict_attempts,
+        2
+    );
+}
+
 // trace:STORY-2705 | ai:codex
 #[test]
 fn story2705_parked_merge_head_is_unreserved_then_admitted_once_after_lease_ends() {
@@ -3012,4 +3200,155 @@ fn story2705_parked_merge_head_is_unreserved_then_admitted_once_after_lease_ends
         Action::Skip(_)
     ));
     assert_eq!(store.load().unwrap().entries["PR-1"].attempts.len(), 1);
+}
+
+// trace:BUG-2518 | ai:codex
+#[test]
+fn bug2518_local_preclaim_exits_preserve_started_attempt_budget() {
+    for recover in [false, true] {
+        let (_temp, store) = fixture();
+        let c = change(1, 1, false);
+        let mut attempt = dispatch(select(&store, &c, None, 2).unwrap());
+        for started in 1..=3 {
+            // Complete an actual claimed review without publishing a verdict.
+            complete(&store, &c, &attempt);
+            // The fixture claimed in this test process; model its reaped exit.
+            store
+                .transaction("PR-1", |state| {
+                    let mut dead = Identity::current()?;
+                    dead.boot = "previous-boot".into();
+                    attempt_mut(state, "PR-1", &attempt.token).unwrap().identity = Some(dead);
+                    Ok(())
+                })
+                .unwrap();
+            let Action::Skip(reason) = select(&store, &c, None, 2).unwrap() else {
+                panic!("started attempt must back off or exhaust");
+            };
+            if started == 3 {
+                assert!(reason.contains("three review attempts"), "{reason}");
+                assert_eq!(
+                    service::retry_blockers(&store.root, &store.dir)
+                        .unwrap()
+                        .len(),
+                    1
+                );
+                break;
+            }
+            assert!(reason.contains("retry after"), "{reason}");
+            store
+                .transaction("PR-1", |state| {
+                    attempt_mut(state, "PR-1", &attempt.token)
+                        .unwrap()
+                        .no_verdict_retry_at =
+                        Some(chrono::Utc::now() - chrono::Duration::seconds(1));
+                    Ok(())
+                })
+                .unwrap();
+            for _ in 0..4 {
+                attempt = dispatch(select(&store, &c, None, 2).unwrap());
+                assert_eq!(attempt.no_verdict_attempts, started + 1);
+                assert!(attempt.admission_hub.is_none());
+                if recover {
+                    store
+                        .transaction("PR-1", |state| {
+                            let a = attempt_mut(state, "PR-1", &attempt.token).unwrap();
+                            let mut dead = Identity::current()?;
+                            dead.boot = "previous-boot".into();
+                            a.dispatcher = Some(dead);
+                            store.reconcile_lost_dispatchers(state);
+                            Ok(())
+                        })
+                        .unwrap();
+                } else {
+                    mark_unclaimed_exit(&store, "PR-1", &attempt.token, "grant refused").unwrap();
+                }
+                let saved = store.load().unwrap().entries["PR-1"].attempts[0].clone();
+                assert_eq!(saved.phase, Phase::Failed);
+                assert_eq!(saved.no_verdict_attempts, started + 1);
+                assert!(service::retry_blockers(&store.root, &store.dir)
+                    .unwrap()
+                    .is_empty());
+            }
+            attempt = dispatch(select(&store, &c, None, 2).unwrap());
+            assert_eq!(attempt.no_verdict_attempts, started + 1);
+        }
+    }
+}
+
+// trace:BUG-2518 | ai:codex
+#[test]
+fn bug2518_local_recovery_retains_live_and_ambiguous_process_gates() {
+    for mode in 0..5 {
+        let (_temp, store) = fixture();
+        let c = change(1, 1, false);
+        let attempt = dispatch(select(&store, &c, None, 2).unwrap());
+        store
+            .transaction("PR-1", |state| {
+                let a = attempt_mut(state, "PR-1", &attempt.token).unwrap();
+                let mut dead = Identity::current()?;
+                dead.boot = "previous-boot".into();
+                a.dispatcher = Some(dead);
+                match mode {
+                    0 => a.dispatcher = Some(Identity::current()?),
+                    1 => a.spawning = true,
+                    2 => a.reviewer_spawning = true,
+                    3 => a.worker = Some(Identity::current()?),
+                    _ => a.reviewer = Some(Identity::current()?),
+                }
+                store.reconcile_lost_dispatchers(state);
+                Ok(())
+            })
+            .unwrap();
+        let phase = store.load().unwrap().entries["PR-1"].attempts[0]
+            .phase
+            .clone();
+        assert_eq!(
+            phase,
+            if mode == 0 {
+                Phase::Reserved
+            } else {
+                Phase::Exited
+            }
+        );
+        if mode != 0 {
+            assert!(matches!(
+                select(&store, &c, None, 2).unwrap(),
+                Action::Skip(_)
+            ));
+        }
+    }
+}
+
+// A reaped dispatcher alone cannot prove that an unrecorded descendant never
+// started. Exercise the direct exit path as well as PID-based recovery above.
+// trace:BUG-2518 | ai:codex
+#[test]
+fn bug2518_local_reaped_exit_retains_ambiguous_descendant_gates() {
+    for mode in 0..4 {
+        let (_temp, store) = fixture();
+        let c = change(1, 1, false);
+        let attempt = dispatch(select(&store, &c, None, 2).unwrap());
+        store
+            .transaction("PR-1", |state| {
+                let a = attempt_mut(state, "PR-1", &attempt.token).unwrap();
+                assert!(a.admission_hub.is_none());
+                match mode {
+                    0 => a.spawning = true,
+                    1 => a.reviewer_spawning = true,
+                    2 => a.worker = Some(Identity::current()?),
+                    _ => a.reviewer = Some(Identity::current()?),
+                }
+                Ok(())
+            })
+            .unwrap();
+        mark_unclaimed_exit(&store, "PR-1", &attempt.token, "grant refused").unwrap();
+        assert_eq!(
+            store.load().unwrap().entries["PR-1"].attempts[0].phase,
+            Phase::Exited
+        );
+        assert!(matches!(
+            select(&store, &c, None, 2).unwrap(),
+            Action::Skip(_)
+        ));
+    }
 }

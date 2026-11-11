@@ -699,7 +699,7 @@ pub(crate) struct AliasArgs {
 // scope. trace:STORY-667 | ai:claude
 // trace:TASK-877 | ai:claude — user-alias CRUD dispatch.
 fn run_alias(matches: &clap::ArgMatches, _ctx: &crate::cmdkit::DispatchCtx) -> anyhow::Result<()> {
-    use crate::*;
+    use crate::alias;
     let args = <AliasArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
     let AliasArgs { json, command } = &args;
     match command {
