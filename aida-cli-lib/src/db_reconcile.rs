@@ -2137,7 +2137,7 @@ pub(crate) fn auto_bump_done_to_completed_with(
     // A Refs-only merge never enters the completion flips below. Close its
     // waiting review even when there are no specs eligible for completion.
     // trace:BUG-2525 | ai:codex
-    crate::gate::review_verdict::reconcile_waiting_verdicts(project_root, None);
+    crate::review_waiting::reconcile_waiting_verdicts(project_root, None);
 
     // BUG-568: this scan only walks the LOCAL repo's default branch. If the
     // store is shared across multiple repos, a spec landed in a sibling repo

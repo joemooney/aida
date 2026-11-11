@@ -611,7 +611,12 @@ impl<'a> Selector<'a> {
     /// [`select_verdict`] for one requirement's labels.
     pub(crate) fn select(&mut self, ids: &[&str]) -> AliasSelection {
         // trace:STORY-2492 | ai:codex — remote refusals cannot lose to alias cache order.
-        if let Some(remote) = super::review_publication::current(self.project_root, ids) {
+        if let Some(mut remote) = super::review_publication::current(self.project_root, ids) {
+            // Terminal annotations retire only this exact signed round.
+            // trace:BUG-2525 | ai:codex
+            for label in spec_labels(ids) {
+                remote = rv::terminal_wait_overlay(self.project_root, &label, remote);
+            }
             let verdict = rv::parse_recorded_verdict(&remote.body)
                 .expect("publication projection is a verdict");
             return AliasSelection::Selected(Box::new(Selected {

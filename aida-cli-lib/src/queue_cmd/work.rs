@@ -2642,13 +2642,28 @@ pub(crate) fn resolve_rework_review(
                     || open_change.is_some_and(|open| open.eq_ignore_ascii_case(key))
             }),
     );
-    crate::gate::review_verdict::reconcile_waiting_verdicts(project_root, Some(&review_keys));
+    crate::review_waiting::reconcile_waiting_verdicts(project_root, Some(&review_keys));
     let shown = labels
         .first()
         .cloned()
         .unwrap_or_else(|| display_id.to_string());
+    // Ignore terminal waits before alias ordering as well as PR/spec ordering.
+    // Otherwise a late annotation can hide an active review on another label.
+    // Refused or unreadable labels remain in the strict selector.
+    // trace:BUG-2525 | ai:codex
+    let active_ids: Vec<&str> = ids
+        .iter()
+        .copied()
+        .filter(|id| {
+            !crate::gate::review_verdict::current_verdict(project_root, id)
+                .and_then(|c| crate::gate::review_verdict::parse_recorded_verdict(&c.body))
+                .is_some_and(|v| {
+                    v.kind == crate::gate::review_verdict::VerdictKind::Waiting && v.is_closed()
+                })
+        })
+        .collect();
     let spec_keyed: Option<(RecordedVerdict, Option<chrono::DateTime<chrono::Utc>>)> =
-        match select_verdict(project_root, &ids) {
+        match select_verdict(project_root, &active_ids) {
             AliasSelection::Selected(s) => {
                 let at = verdict_recorded_time(
                     &s.verdict,
@@ -2713,6 +2728,12 @@ pub(crate) fn resolve_rework_review(
             }
         };
 
+    // A closed wait has no selection priority over any active review.
+    // trace:BUG-2525 | ai:codex
+    let spec_keyed = spec_keyed.filter(|(v, _)| {
+        !(v.kind == crate::gate::review_verdict::VerdictKind::Waiting && v.is_closed())
+    });
+
     let open_key = open_change
         .and_then(crate::gate::ledger::ChangeKey::parse)
         .map(|k| k.as_key());
@@ -2734,6 +2755,9 @@ pub(crate) fn resolve_rework_review(
         },
         None => None,
     };
+    let change_keyed = change_keyed.filter(|(_, v)| {
+        !(v.kind == crate::gate::review_verdict::VerdictKind::Waiting && v.is_closed())
+    });
     let change_keyed = match change_keyed {
         Some(found) => Some(found),
         None => {

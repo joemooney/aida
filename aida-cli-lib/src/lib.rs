@@ -270,6 +270,7 @@ mod remote_cmd;
 pub mod requirements_cli;
 mod review_cmd;
 mod review_gates;
+mod review_waiting;
 // trace:STORY-1742 | ai:claude
 #[cfg(unix)]
 mod sanitized_intake;

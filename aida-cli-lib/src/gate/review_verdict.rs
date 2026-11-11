@@ -1290,7 +1290,7 @@ fn surviving_against_previous_round(
 pub fn read_recorded_verdict(project_root: &Path, spec: &str) -> Option<RecordedVerdict> {
     // trace:STORY-2492 | ai:codex
     if let Some(remote) = super::review_publication::current(project_root, &[spec]) {
-        return parse_recorded_verdict(&remote.body);
+        return parse_recorded_verdict(&terminal_wait_overlay(project_root, spec, remote).body);
     }
     let path = verdict_path(project_root, spec);
     let legacy = read_verdict_body(&path)
@@ -1364,6 +1364,19 @@ pub(crate) fn ledger_supersedes(
             .is_some_and(|body| parse_recorded_verdict(&body).is_none());
         return !unparseable;
     };
+    // An annotation may retire only the exact legacy source it observed.
+    // Equal timestamps alone cannot retire a subsequently replaced record.
+    // trace:BUG-2525 | ai:codex
+    if let Some(source) = event
+        .verdict_record()
+        .and_then(|r| r.get("terminal_wait_source"))
+    {
+        return read_verdict_body(path)
+            .ok()
+            .and_then(|body| serde_json::from_str::<serde_json::Value>(&body).ok())
+            .as_ref()
+            == Some(source);
+    }
     if file.recorded_at.is_some() && file.recorded_at == led.recorded_at {
         return true;
     }
@@ -1527,7 +1540,7 @@ fn choose_current(
                 super::review_publication::report(report);
             }
         }
-        return Some(remote);
+        return Some(terminal_wait_overlay(start, key, remote));
     }
     // A current file that exists but the anchored reader refuses (unreadable,
     // or a linked file or directory) is not evidence, and the ledger must not
@@ -3183,113 +3196,75 @@ fn close_verdict_on_merge_for_change(
     Ok(true)
 }
 
-/// Close waits belonging to terminal batches independently of spec completion.
-/// Unknown forge evidence and open changes retain the wait. Explicit change
-/// identity survives a moved PR head; index-only matches require head evidence.
-/// This annotates the old review; it grants no approval or spec completion.
+// A terminal annotation is scoped to one exact source, never a new review.
 // trace:BUG-2525 | ai:codex
-pub(crate) fn reconcile_waiting_verdicts(project_root: &Path, keys: Option<&[String]>) {
-    use crate::forge_observed::Observed;
-    let forge = crate::forge::forge_for(project_root);
-    let kind = forge.kind();
-    reconcile_waiting_verdicts_with(project_root, keys, |change| {
-        use crate::gate::ledger::ChangeForge;
-        if !matches!(
-            (kind, change.forge),
-            (crate::forge::ForgeKind::GitHub, ChangeForge::Pr)
-                | (crate::forge::ForgeKind::GitLab, ChangeForge::Mr)
-        ) {
-            return None;
+pub(crate) fn close_terminal_wait(
+    root: &Path,
+    key: &str,
+    change: crate::gate::ledger::ChangeKey,
+    expected: &CurrentVerdict,
+) -> std::io::Result<bool> {
+    use crate::gate::ledger::{self, store};
+    if ledger::contained() {
+        return Err(std::io::Error::other(
+            "a contained seat cannot close gate reviews",
+        ));
+    }
+    let store_root = ledger::store_root(root)?;
+    store::with_exclusive(&store_root, || {
+        let Some(current) = current_verdict(root, key) else {
+            return Ok(false);
+        };
+        if current.body != expected.body
+            || current.source != expected.source
+            || current.written_at != expected.written_at
+            || !parse_recorded_verdict(&current.body)
+                .is_some_and(|v| v.kind == VerdictKind::Waiting && !v.is_closed())
+        {
+            return Ok(false);
         }
-        match forge.observe_change_metadata(change.number, &mut crate::network_retry::NoopSink) {
-            Observed::Known(Ok(meta)) => Some((meta.state, meta.head_sha)),
-            _ => None,
-        }
-    });
+        let mut obj: JsonObj =
+            serde_json::from_str(&current.body).map_err(std::io::Error::other)?;
+        refuse_unsafe_legacy_history(&verdict_path(root, key), round_sha(&obj).as_deref())?;
+        let source = serde_json::Value::Object(obj.clone());
+        obj.insert("terminal_wait_key".into(), key.into());
+        obj.insert("terminal_wait_source".into(), source);
+        obj.insert("closed_by_merge".into(), change.as_key().into());
+        obj.insert("closed_at".into(), chrono::Utc::now().to_rfc3339().into());
+        let spec = ledger::ChangeKey::parse(key)
+            .is_none()
+            .then(|| ledger::GateSpec::resolve(root, key));
+        // This local lifecycle annotation must not be published as a new signed review.
+        store::append_one(
+            &store_root,
+            ledger::event::verdict_event(&store_root, change, &obj, spec.as_ref()),
+        )?;
+        Ok(true)
+    })
 }
 
-// Injectable observation keeps regression tests independent of PATH and live APIs.
+// A signed publication remains immutable. Apply only a local annotation of
+// that exact source; a later signed round automatically invalidates it.
 // trace:BUG-2525 | ai:codex
-pub(crate) fn reconcile_waiting_verdicts_with(
-    project_root: &Path,
-    keys: Option<&[String]>,
-    mut observe: impl FnMut(
-        crate::gate::ledger::ChangeKey,
-    ) -> Option<(crate::forge::ChangeState, String)>,
-) {
-    use crate::forge::ChangeState;
-    use crate::gate::ledger::{self, ChangeForge, ChangeKey};
-    let mut observations = std::collections::HashMap::new();
-    let candidates = keys
-        .map(<[String]>::to_vec)
-        .unwrap_or_else(|| verdict_keys(project_root));
-    for key in candidates {
-        let Some(verdict) = read_recorded_verdict(project_root, &key) else {
-            continue;
-        };
-        if verdict.kind != VerdictKind::Waiting || verdict.is_closed() {
-            continue;
-        }
-        let Some(head) = verdict
-            .reviewed_sha
-            .as_deref()
-            .filter(|s| !s.trim().is_empty())
-        else {
-            continue;
-        };
-        let mut changes = Vec::new();
-        let mut explicitly_named = ChangeKey::parse(&key).is_some();
-        if let Some(change) = ChangeKey::parse(&key) {
-            changes.push(change);
-        } else {
-            if let Some(url) = &verdict.comment_url {
-                if let Some(number) = crate::db_reconcile::parse_pr_number_from_url(url) {
-                    explicitly_named = true;
-                    changes.push(ChangeKey {
-                        number,
-                        forge: if url.contains("/merge_requests/") {
-                            ChangeForge::Mr
-                        } else {
-                            ChangeForge::Pr
-                        },
-                    });
-                }
-            }
-            // An explicit review URL identifies the batch. Only fall back to
-            // the spec index when the round does not name its own change.
-            if changes.is_empty() {
-                if let Ok(root) = ledger::store_root(project_root) {
-                    changes.extend(ledger::project::changes_for_spec(&root, &key));
-                }
-            }
-        }
-        for change in changes {
-            let observation = observations
-                .entry(change)
-                .or_insert_with(|| observe(change));
-            let Some((state, terminal_head)) = observation else {
-                continue;
-            };
-            if matches!(state, ChangeState::Merged | ChangeState::Closed)
-                && (explicitly_named || same_reviewed_sha(head, terminal_head))
-            {
-                // Re-read after network I/O; leave a round that changed during
-                // the lookup alone, rather than applying the old head evidence.
-                if read_recorded_verdict(project_root, &key).as_ref() != Some(&verdict) {
-                    break;
-                }
-                if let Err(error) = close_verdict_on_merge_for_change(
-                    project_root,
-                    &key,
-                    &change.as_key(),
-                    Some(change),
-                ) {
-                    eprintln!("warning: could not close terminal batch review for {key}: {error}");
-                }
-                break;
-            }
+pub(crate) fn terminal_wait_overlay(
+    start: &Path,
+    key: &str,
+    mut current: CurrentVerdict,
+) -> CurrentVerdict {
+    let Some(record) = crate::gate::ledger::project::newest_verdict(start, key) else {
+        return current;
+    };
+    let source = serde_json::from_str::<serde_json::Value>(&current.body).ok();
+    if record.get("terminal_wait_key").and_then(|v| v.as_str()) == Some(key)
+        && record.get("terminal_wait_source") == source.as_ref()
+        && parse_recorded_verdict(&current.body)
+            .is_some_and(|v| v.kind == VerdictKind::Waiting && !v.is_closed())
+    {
+        if let Ok(body) = serde_json::to_string(&record) {
+            current.body = body;
         }
     }
+    current
 }
 
 /// TASK-2135 on the gate ledger: an older binary closed the current file and
@@ -3829,7 +3804,13 @@ pub(crate) fn verdict_keys(project_root: &Path) -> Vec<String> {
         .filter(|p| p.is_file() && p.extension().and_then(|e| e.to_str()) == Some("json"))
         .filter_map(|p| Some(p.file_stem()?.to_str()?.to_string()))
         .collect();
-    crate::gate::ledger::project::keys_with_ledger(project_root, file_keys)
+    let mut keys = crate::gate::ledger::project::keys_with_ledger(project_root, file_keys);
+    keys.extend(super::review_publication::recorded_change_keys(
+        project_root,
+    ));
+    keys.sort();
+    keys.dedup();
+    keys
 }
 
 // STORY-1889: moved from `queue_cmd.rs`.

@@ -674,6 +674,23 @@ fn bug_2525_terminal_refs_batch_wait_admits_next_pickup_without_open_pr() {
     for state in [ChangeState::Merged, ChangeState::Closed] {
         for key in ["TASK-3448", "PR-4273"] {
             let tmp = tempfile::tempdir().unwrap();
+            assert!(std::process::Command::new("git")
+                .args(["init", "-q"])
+                .arg(tmp.path())
+                .status()
+                .unwrap()
+                .success());
+            assert!(std::process::Command::new("git")
+                .current_dir(tmp.path())
+                .args([
+                    "remote",
+                    "add",
+                    "origin",
+                    "https://github.com/owner/repo.git"
+                ])
+                .status()
+                .unwrap()
+                .success());
             let dir = tmp.path().join(".aida/review-verdicts");
             std::fs::create_dir_all(&dir).unwrap();
             std::fs::write(
@@ -693,7 +710,7 @@ fn bug_2525_terminal_refs_batch_wait_admits_next_pickup_without_open_pr() {
                 )
                 .unwrap();
             }
-            rv::reconcile_waiting_verdicts_with(tmp.path(), None, |change| {
+            crate::review_waiting::reconcile_waiting_verdicts_with(tmp.path(), None, |change| {
                 assert_eq!(change.number, 4273);
                 // A terminal named PR also retires a wait from an earlier head.
                 Some((state, "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa".into()))
@@ -706,7 +723,9 @@ fn bug_2525_terminal_refs_batch_wait_admits_next_pickup_without_open_pr() {
             assert_eq!(closed.kind, rv::VerdictKind::Waiting);
             assert_eq!(closed.closed_by_merge.as_deref(), Some("PR-4273"));
             assert_eq!(closed.summary.as_deref(), Some(SUMMARY));
-            rv::reconcile_waiting_verdicts_with(tmp.path(), None, |_| panic!("already closed"));
+            crate::review_waiting::reconcile_waiting_verdicts_with(tmp.path(), None, |_| {
+                panic!("already closed")
+            });
         }
     }
 }
@@ -743,7 +762,9 @@ fn bug_2525_wait_requires_terminal_matching_head_evidence() {
             crate::gate::ledger::ChangeKey::pr(4273),
         )
         .unwrap();
-        rv::reconcile_waiting_verdicts_with(tmp.path(), None, |_| observation.clone());
+        crate::review_waiting::reconcile_waiting_verdicts_with(tmp.path(), None, |_| {
+            observation.clone()
+        });
         let verdict = rv::read_recorded_verdict(tmp.path(), "TASK-3448").unwrap();
         assert!(!verdict.is_closed(), "{observation:?}");
         assert!(matches!(
@@ -774,7 +795,7 @@ fn bug_2525_terminal_observation_does_not_close_a_newer_round() {
     )
     .unwrap();
     let next = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
-    rv::reconcile_waiting_verdicts_with(tmp.path(), None, |_| {
+    crate::review_waiting::reconcile_waiting_verdicts_with(tmp.path(), None, |_| {
         rv::record_verdict(
             tmp.path(),
             "PR-4273",
@@ -819,16 +840,20 @@ fn bug_2525_indexed_spec_wait_closes_only_matching_batch_in_pickup_scope() {
             .unwrap();
         }
     }
-    rv::reconcile_waiting_verdicts_with(tmp.path(), Some(&["TASK-3448".into()]), |change| {
-        Some((
-            crate::forge::ChangeState::Merged,
-            if change.number == 4273 {
-                HEAD.into()
-            } else {
-                "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa".into()
-            },
-        ))
-    });
+    crate::review_waiting::reconcile_waiting_verdicts_with(
+        tmp.path(),
+        Some(&["TASK-3448".into()]),
+        |change| {
+            Some((
+                crate::forge::ChangeState::Merged,
+                if change.number == 4273 {
+                    HEAD.into()
+                } else {
+                    "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa".into()
+                },
+            ))
+        },
+    );
     let verdict = rv::read_recorded_verdict(tmp.path(), "TASK-3448").unwrap();
     assert_eq!(verdict.closed_by_merge.as_deref(), Some("PR-4273"));
     assert!(
@@ -882,4 +907,230 @@ fn bug_2525_closed_wait_annotation_does_not_clear_code_findings() {
                 .expect("the code findings remain actionable");
         assert!(findings.contains("repair the code defect"));
     }
+}
+
+// trace:BUG-2525 | ai:codex
+#[test]
+fn bug_2525_spec_closure_preserves_independent_pr_review() {
+    let _env = crate::test_env::EnvVarsGuard::apply(&[("AIDA_CONTAINED", None)]);
+    let tmp = tempfile::tempdir().unwrap();
+    rv::record_verdict(
+        tmp.path(),
+        "TASK-3448",
+        Some("waiting"),
+        Some(HEAD),
+        None,
+        Some(SUMMARY),
+        &[],
+        "reviewer",
+    )
+    .unwrap();
+    rv::record_verdict(
+        tmp.path(),
+        "PR-4273",
+        Some("request-changes"),
+        Some(HEAD),
+        None,
+        Some("code defect"),
+        &["repair the code defect".into()],
+        "reviewer",
+    )
+    .unwrap();
+    let source = rv::current_verdict(tmp.path(), "TASK-3448").unwrap();
+    assert!(rv::close_terminal_wait(
+        tmp.path(),
+        "TASK-3448",
+        crate::gate::ledger::ChangeKey::pr(4273),
+        &source
+    )
+    .unwrap());
+    let pr = rv::read_recorded_verdict(tmp.path(), "PR-4273").unwrap();
+    assert_eq!(pr.kind, rv::VerdictKind::RequestChanges);
+    assert!(!pr.is_closed());
+    assert!(
+        resolve_rework_findings(tmp.path(), "TASK-3448", "TASK-3448", Some("PR-4273"))
+            .unwrap()
+            .unwrap()
+            .contains("repair the code defect")
+    );
+}
+
+// trace:BUG-2525 | ai:codex
+#[test]
+fn bug_2525_closed_spec_wait_cannot_hide_new_batch_wait() {
+    let _env = crate::test_env::EnvVarsGuard::apply(&[("AIDA_CONTAINED", None)]);
+    let tmp = tempfile::tempdir().unwrap();
+    rv::record_verdict(
+        tmp.path(),
+        "PR-4274",
+        Some("waiting"),
+        Some(HEAD),
+        None,
+        Some("new batch evidence"),
+        &[],
+        "reviewer",
+    )
+    .unwrap();
+    rv::record_verdict(
+        tmp.path(),
+        "TASK-3448",
+        Some("waiting"),
+        Some(HEAD),
+        None,
+        Some(SUMMARY),
+        &[],
+        "reviewer",
+    )
+    .unwrap();
+    let source = rv::current_verdict(tmp.path(), "TASK-3448").unwrap();
+    rv::close_terminal_wait(
+        tmp.path(),
+        "TASK-3448",
+        crate::gate::ledger::ChangeKey::pr(4273),
+        &source,
+    )
+    .unwrap();
+    let err = crate::queue_cmd::refuse_waiting_review(
+        tmp.path(),
+        "TASK-3448",
+        "TASK-3448",
+        Some("PR-4274"),
+    )
+    .unwrap_err();
+    assert!(err.contains("new batch evidence"), "{err}");
+}
+
+// trace:BUG-2525 | ai:codex
+#[test]
+fn bug_2525_writer_refuses_changed_source_at_same_head() {
+    let _env = crate::test_env::EnvVarsGuard::apply(&[("AIDA_CONTAINED", None)]);
+    let tmp = tempfile::tempdir().unwrap();
+    rv::record_verdict(
+        tmp.path(),
+        "PR-4273",
+        Some("waiting"),
+        Some(HEAD),
+        None,
+        Some(SUMMARY),
+        &[],
+        "reviewer",
+    )
+    .unwrap();
+    let old = rv::current_verdict(tmp.path(), "PR-4273").unwrap();
+    rv::record_verdict(
+        tmp.path(),
+        "PR-4273",
+        Some("waiting"),
+        Some(HEAD),
+        None,
+        Some("new evidence"),
+        &[],
+        "reviewer",
+    )
+    .unwrap();
+    assert!(!rv::close_terminal_wait(
+        tmp.path(),
+        "PR-4273",
+        crate::gate::ledger::ChangeKey::pr(4273),
+        &old
+    )
+    .unwrap());
+    assert!(!rv::read_recorded_verdict(tmp.path(), "PR-4273")
+        .unwrap()
+        .is_closed());
+}
+
+// trace:BUG-2525 | ai:codex
+#[test]
+fn bug_2525_annotation_cannot_override_replaced_legacy_source() {
+    let _env = crate::test_env::EnvVarsGuard::apply(&[("AIDA_CONTAINED", None)]);
+    let tmp = tempfile::tempdir().unwrap();
+    let dir = tmp.path().join(".aida/review-verdicts");
+    std::fs::create_dir_all(&dir).unwrap();
+    let path = dir.join("PR-4273.json");
+    let mut body = serde_json::json!({"verdict":"waiting", "reviewed_sha":HEAD, "summary":SUMMARY, "recorded_at":"2026-11-11T00:00:00Z"});
+    std::fs::write(&path, body.to_string()).unwrap();
+    let old = rv::current_verdict(tmp.path(), "PR-4273").unwrap();
+    rv::close_terminal_wait(
+        tmp.path(),
+        "PR-4273",
+        crate::gate::ledger::ChangeKey::pr(4273),
+        &old,
+    )
+    .unwrap();
+    assert!(rv::read_recorded_verdict(tmp.path(), "PR-4273")
+        .unwrap()
+        .is_closed());
+    body["summary"] = "replacement round at the same timestamp".into();
+    std::fs::write(&path, body.to_string()).unwrap();
+    let current = rv::read_recorded_verdict(tmp.path(), "PR-4273").unwrap();
+    assert!(!current.is_closed());
+    assert_eq!(
+        current.summary.as_deref(),
+        Some("replacement round at the same timestamp")
+    );
+}
+
+// trace:BUG-2525 | ai:codex
+#[test]
+fn bug_2525_raw_gate_projection_rejects_annotation_of_another_round() {
+    use crate::gate::ledger::{self, project};
+    let tmp = tempfile::tempdir().unwrap();
+    let source = serde_json::json!({"verdict":"waiting", "reviewed_sha":HEAD, "summary":SUMMARY});
+    let independent = serde_json::json!({"verdict":"request-changes", "reviewed_sha":HEAD, "findings":["independent defect"]});
+    let annotation = serde_json::json!({"verdict":"waiting", "reviewed_sha":HEAD, "closed_by_merge":"PR-4273", "terminal_wait_key":"TASK-3448", "terminal_wait_source":source});
+    let events = [&independent, &annotation]
+        .into_iter()
+        .map(|v| {
+            ledger::event::verdict_event(
+                tmp.path(),
+                ledger::ChangeKey::pr(4273),
+                v.as_object().unwrap(),
+                None,
+            )
+        })
+        .collect();
+    let selected = project::newest_of(events).unwrap();
+    assert_eq!(selected.verdict_record(), independent.as_object());
+}
+
+// trace:BUG-2525 | ai:codex
+#[test]
+fn bug_2525_closed_alias_wait_cannot_hide_active_alias_findings() {
+    let _env = crate::test_env::EnvVarsGuard::apply(&[("AIDA_CONTAINED", None)]);
+    let tmp = tempfile::tempdir().unwrap();
+    rv::record_verdict(
+        tmp.path(),
+        "TASK-3448",
+        Some("request-changes"),
+        Some(HEAD),
+        None,
+        Some("code defect"),
+        &["repair the code defect".into()],
+        "reviewer",
+    )
+    .unwrap();
+    rv::record_verdict(
+        tmp.path(),
+        "TASK-NATIVE-3448",
+        Some("waiting"),
+        Some(HEAD),
+        None,
+        Some(SUMMARY),
+        &[],
+        "reviewer",
+    )
+    .unwrap();
+    let source = rv::current_verdict(tmp.path(), "TASK-NATIVE-3448").unwrap();
+    rv::close_terminal_wait(
+        tmp.path(),
+        "TASK-NATIVE-3448",
+        crate::gate::ledger::ChangeKey::pr(4273),
+        &source,
+    )
+    .unwrap();
+    let findings = resolve_rework_findings(tmp.path(), "TASK-3448", "TASK-NATIVE-3448", None)
+        .unwrap()
+        .unwrap();
+    assert!(findings.contains("repair the code defect"));
 }

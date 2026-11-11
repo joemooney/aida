@@ -161,7 +161,7 @@ fn verdict_events(root: &Path, key: &str) -> Vec<GateEvent> {
     if let Some(change) = ChangeKey::parse(key) {
         return events(root, change)
             .into_iter()
-            .filter(|e| e.verdict_record().is_some())
+            .filter(|e| e.verdict_record().is_some() && terminal_annotation_matches(e, key))
             .collect();
     }
     let Some(spec) = spec_key(key) else {
@@ -208,7 +208,18 @@ fn verdict_events(root: &Path, key: &str) -> Vec<GateEvent> {
     {
         out.push(streams[index].pop_front().unwrap());
     }
+    out.retain(|e| terminal_annotation_matches(e, key));
     out
+}
+
+// A spec-scoped closure cannot replace the PR review or another spec review.
+// trace:BUG-2525 | ai:codex
+fn terminal_annotation_matches(event: &GateEvent, key: &str) -> bool {
+    event
+        .verdict_record()
+        .and_then(|r| r.get("terminal_wait_key"))
+        .and_then(|v| v.as_str())
+        .is_none_or(|target| target.eq_ignore_ascii_case(key))
 }
 
 /// The newest verdict event the ledger holds for `key`, read from `start`
@@ -223,6 +234,26 @@ pub(crate) fn newest_verdict_event(start: &Path, key: &str) -> Option<GateEvent>
 /// last, or the ordinary origin a proved phase-3 overlay duplicates.
 // trace:BUG-2403 | ai:claude
 pub(crate) fn newest_of(mut events: Vec<GateEvent>) -> Option<GateEvent> {
+    // A lifecycle annotation is not a review of an independent ledger round.
+    // This also protects raw effective-gate projections, which partition the
+    // events themselves rather than reading one key through verdict_events.
+    // trace:BUG-2525 | ai:codex
+    while events.last().is_some_and(|event| {
+        let Some(source) = event
+            .verdict_record()
+            .and_then(|r| r.get("terminal_wait_source"))
+        else {
+            return false;
+        };
+        events
+            .iter()
+            .rev()
+            .skip(1)
+            .find_map(|e| e.verdict_record())
+            .is_some_and(|prior| source != &serde_json::Value::Object(prior.clone()))
+    }) {
+        events.pop();
+    }
     let newest = events.pop()?;
     // BUG-2403: a retained receipt-less phase-3 overlay answers with the
     // ordinary record it duplicates, when that pairing is proved.
