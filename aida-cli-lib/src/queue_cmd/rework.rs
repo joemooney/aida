@@ -1446,13 +1446,24 @@ pub(crate) fn require_rework_pickable(
     req: &Requirement,
     store: &aida_core::RequirementsStore,
 ) -> Result<()> {
+    let tags: Vec<_> = req.tags.iter().cloned().collect();
+    if let Some(tag) = crate::burndown::parking_tag(&tags) {
+        let code = if tag.eq_ignore_ascii_case("needs-human") {
+            "needs-human"
+        } else {
+            "parking-tag"
+        };
+        anyhow::bail!(
+            "rework-routing-refused reason={code}: a human must clear the parking tag {tag}"
+        );
+    }
     if req
-        .tags
-        .iter()
-        .any(|tag| tag.eq_ignore_ascii_case("needs-human"))
+        .decision_request
+        .as_ref()
+        .is_some_and(|request| request.is_pending())
     {
         anyhow::bail!(
-            "rework-routing-refused reason=needs-human: a human must clear the escalation"
+            "rework-routing-refused reason=pending-decision: a human must answer the decision request"
         );
     }
     let policy = super::work::queue_drain_pickup_policy(req, store, false, None);

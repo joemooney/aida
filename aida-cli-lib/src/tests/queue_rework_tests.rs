@@ -2356,3 +2356,83 @@ fn story_2690_rework_refuses_deferred_before_status_or_queue_mutation() {
     );
     assert!(storage.queue_list("codex", true).unwrap().is_empty());
 }
+
+// Every shared human parking gate must refuse the projected return to flight
+// before status, comments, or queue rows change. trace:STORY-2690 | ai:codex
+#[test]
+fn story_2690_rework_refuses_all_human_parking_before_mutation() {
+    let tags = [
+        "blocked",
+        "needs-human-input",
+        "needs-human",
+        "needs-design-signoff",
+        "needs-design",
+        "operator-action",
+        "needs-decision",
+        "needs-supervised-build",
+        "review:draft-only",
+        "deferred:operator",
+    ];
+    let mut cases: Vec<(Option<String>, bool)> = tags
+        .into_iter()
+        .flat_map(|tag| [tag.to_string(), format!("  {} ", tag.to_ascii_uppercase())])
+        .map(|tag| (Some(tag), false))
+        .collect();
+    cases.push((None, true));
+    for (tag, pending) in cases {
+        for status in [
+            RequirementStatus::NeedsAttention,
+            RequirementStatus::Approved,
+        ] {
+            let mut req = req_for_test("BUG-26901", status);
+            if let Some(tag) = &tag {
+                req.tags.insert(tag.clone());
+            }
+            if pending {
+                req.decision_request = Some(aida_core::DecisionRequest {
+                    question_id: Some(uuid::Uuid::new_v4()),
+                    park_binding: None,
+                    question: "which fork?".into(),
+                    choices: Vec::new(),
+                    recommended: None,
+                    rationale: None,
+                    answered: None,
+                    note: None,
+                    asked_at: None,
+                    answered_at: None,
+                });
+            }
+            let (tmp, storage) = story_1429_fixture(vec![req]);
+            let _ambient =
+                crate::test_env::AmbientGuard::hermetic_with_seat(tmp.path(), "advisor", &[]);
+            let before = storage.load().unwrap();
+            let expected = if pending {
+                "pending-decision"
+            } else if tag
+                .as_ref()
+                .unwrap()
+                .trim()
+                .eq_ignore_ascii_case("needs-human")
+            {
+                "needs-human"
+            } else {
+                "parking-tag"
+            };
+            let err = rework_as(&storage, "BUG-26901", Some("retry"), true).unwrap_err();
+            assert!(
+                err.to_string().contains(&format!("reason={expected}:")),
+                "{tag:?}: {err:#}"
+            );
+            let after = storage.load().unwrap();
+            assert_eq!(
+                serde_json::to_value(&before.requirements).unwrap(),
+                serde_json::to_value(&after.requirements).unwrap(),
+                "{tag:?}"
+            );
+            assert!(
+                storage.queue_list("codex", true).unwrap().is_empty(),
+                "{tag:?}"
+            );
+        }
+    }
+}
