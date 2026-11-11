@@ -533,6 +533,10 @@ fn standalone_reviewer_reaps_its_finished_review_once_the_verdict_is_collected()
     if crate::test_env::run_path_isolated_test() {
         return;
     }
+    // Cleanup runs on this thread and requires fresh writer admission even
+    // for an empty mailbox. Keep the evidence scoped to the isolated child.
+    // trace:TASK-3420 | ai:codex
+    let _scan = aida_core::mailbox_lifecycle::activation::test_writer_scan(true);
     let tmp = tempfile::tempdir().unwrap();
     let worktree = tmp.path().join("reviewer-worktree");
     let (result, project) =
@@ -541,9 +545,10 @@ fn standalone_reviewer_reaps_its_finished_review_once_the_verdict_is_collected()
         });
     result.expect("a verified review verdict must succeed");
 
+    let leases = crate::list_leases(&project);
     assert!(
-        crate::list_leases(&project).is_empty(),
-        "review lease retained: dirty={}, removal check={:?}",
+        leases.is_empty(),
+        "review lease retained: leases={leases:?}, dirty={}, removal check={:?}",
         crate::session_reap::worktree_status_dirty(&worktree),
         aida_core::worktree_holders::check_worktree_removal(&worktree)
     );
