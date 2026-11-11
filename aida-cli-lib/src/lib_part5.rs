@@ -2397,7 +2397,7 @@ thread_local! {
 // trace:BUG-912 | ai:codex
 pub(crate) fn review_pr_handshake_path(
     project_root: &std::path::Path,
-    pr_number: u64,
+    key: &str,
 ) -> std::path::PathBuf {
     if let Some(path) = std::env::var_os("AIDA_REVIEW_VERDICT_FILE")
         .map(std::path::PathBuf::from)
@@ -2409,20 +2409,20 @@ pub(crate) fn review_pr_handshake_path(
         .map(std::path::PathBuf::from)
         .filter(|p| p.is_dir())
     {
-        return crate::gate::review_verdict::verdict_path(&root, &format!("PR-{pr_number}"));
+        return crate::gate::review_verdict::verdict_path(&root, key);
     }
     if let Ok(cwd) = std::env::current_dir() {
         if let Some(root) = parent_project_root_for_session(&cwd).filter(|p| p.is_dir()) {
-            return crate::gate::review_verdict::verdict_path(&root, &format!("PR-{pr_number}"));
+            return crate::gate::review_verdict::verdict_path(&root, key);
         }
     }
     if let Some(root) = std::env::var_os("AIDA_DRIVE_ROOT")
         .map(std::path::PathBuf::from)
         .filter(|p| p.is_dir())
     {
-        return crate::gate::review_verdict::verdict_path(&root, &format!("PR-{pr_number}"));
+        return crate::gate::review_verdict::verdict_path(&root, key);
     }
-    crate::gate::review_verdict::verdict_path(project_root, &format!("PR-{pr_number}"))
+    crate::gate::review_verdict::verdict_path(project_root, key)
 }
 
 /// BUG-2201 / TASK-2040: where a contained reviewer writes the phase-3
@@ -3076,6 +3076,23 @@ fn fetch_review_record_head(
         .map_err(anyhow::Error::msg)
 }
 
+// Classify exactly the record whose findings the builder will inherit.
+// trace:BUG-2517 | ai:codex
+pub(crate) fn review_record_kind(
+    path: &std::path::Path,
+    verdict: &str,
+    findings: &[String],
+) -> Result<crate::gate::review_verdict::VerdictKind> {
+    Ok(if findings.is_empty() {
+        let mut obj = crate::gate::review_verdict::read_current_verdict_object(path)?;
+        obj.insert("verdict".into(), verdict.into());
+        obj.remove("sweep_pending");
+        crate::gate::review_verdict::disposition_verdict(&obj)
+    } else {
+        crate::gate::review_verdict::incoming_disposition(verdict, findings)
+    })
+}
+
 // Existing authority/lifecycle fixtures inject their current forge head; real
 // forge/head regressions call handle_review_record_at instead.
 // trace:BUG-2517 | ai:codex
@@ -3124,6 +3141,22 @@ pub(crate) fn handle_review_record_with_head_at(
     crate::standalone_implementer::refuse_under_marker("review record")?;
     #[cfg(test)]
     assert_review_write_root_is_isolated(&project_root);
+    // trace:BUG-2517 | ai:codex
+    // Resolve the recorder's change from its own lease, never from the spec.
+    let leases = crate::gate::review_authority::visible_leases(&project_root);
+    let recorder_identity = crate::gate::review_authority::RecorderIdentity::current(&leases);
+    let change = review_record_change(
+        &leases,
+        &recorder_identity.tokens,
+        spec,
+        pr,
+        crate::forge::resolve_open_change_forge_kind(&project_root),
+    )?;
+    let pr = change.map(|c| c.number);
+    let key = change
+        .map(|c| c.as_key())
+        .unwrap_or_else(|| spec.to_string());
+    let path = crate::gate::review_verdict::verdict_path(&project_root, &key);
     // STORY-1417: resolve classes up front; a bad class is a warning, never a
     // reason to refuse the verdict. trace:STORY-1417 | ai:claude
     let (classes, class_warnings) =
@@ -3136,15 +3169,7 @@ pub(crate) fn handle_review_record_with_head_at(
     }
     // trace:STORY-2698 | ai:codex — decide hold/authority routing using the
     // same inherited evidence the builder will retain, before any mutation.
-    let kind = if findings.is_empty() {
-        let path = crate::gate::review_verdict::verdict_path(&project_root, spec);
-        let mut obj = crate::gate::review_verdict::read_current_verdict_object(&path)?;
-        obj.insert("verdict".into(), verdict.into());
-        obj.remove("sweep_pending");
-        crate::gate::review_verdict::disposition_verdict(&obj)
-    } else {
-        crate::gate::review_verdict::incoming_disposition(verdict, findings)
-    };
+    let kind = review_record_kind(&path, verdict, findings)?;
     let verdict = kind.canonical().unwrap_or(verdict);
     if kind == crate::gate::review_verdict::VerdictKind::Unknown {
         anyhow::bail!(
@@ -3173,18 +3198,6 @@ pub(crate) fn handle_review_record_with_head_at(
         anyhow::bail!("refused: review record. {rejection}.");
     }
 
-    // trace:BUG-2517 | ai:codex
-    // Resolve the recorder's change from its own lease, never from the spec.
-    let leases = crate::gate::review_authority::visible_leases(&project_root);
-    let recorder_identity = crate::gate::review_authority::RecorderIdentity::current(&leases);
-    let change = review_record_change(
-        &leases,
-        &recorder_identity.tokens,
-        spec,
-        pr,
-        crate::forge::resolve_open_change_forge_kind(&project_root),
-    )?;
-    let pr = change.map(|c| c.number);
     // A launch envelope describes the launch, not the change's current head.
     // Even an explicit --sha must be checked against a fresh pinned forge read.
     let forge_pr_sha = change
@@ -3415,11 +3428,6 @@ pub(crate) fn handle_review_record_with_head_at(
     // STORY-1417: build + classify + one verified write — the same boundary
     // `record_verdict` uses, with the typed classes layered on before the
     // single durable write (BUG-1571). trace:STORY-1417 | ai:claude
-    // trace:BUG-2517 | ai:codex
-    let key = change
-        .map(|c| c.as_key())
-        .unwrap_or_else(|| spec.to_string());
-    let path = crate::gate::review_verdict::verdict_path(&project_root, &key);
     // BUG-2136: snapshot the record as it stands so the outcome line can say
     // whether this call added a round or re-recorded an identical one.
     // trace:BUG-2136 | ai:claude
@@ -3580,17 +3588,7 @@ pub(crate) fn handle_review_record_with_head_at(
                 hook(&project_root, spec);
             }
         });
-        let handshake = review_pr_handshake_path(&project_root, n);
-        // trace:BUG-2517 | ai:codex
-        let handshake = match (
-            change,
-            crate::gate::review_verdict::canonical_verdict_key(&handshake),
-        ) {
-            (Some(change), Some((root, _))) => {
-                crate::gate::review_verdict::verdict_path(&root, &change.as_key())
-            }
-            _ => handshake,
-        };
+        let handshake = review_pr_handshake_path(&project_root, &key);
         // trace:BUG-1743 | ai:claude
         #[cfg(test)]
         assert_handshake_anchor_is_pinned(&project_root, &handshake);
@@ -4162,7 +4160,7 @@ mod bug_1452_refusal_aftermath_tests {
         // repository, and `handle_review_record_at` had already read it back
         // and confirmed its bytes. The claim that has to hold is about WHERE.
         // trace:BUG-1743 | ai:claude
-        let handshake = review_pr_handshake_path(root.path(), 1452);
+        let handshake = review_pr_handshake_path(root.path(), "PR-1452");
         assert!(
             handshake.starts_with(root.path()),
             "the phase-3 handshake anchor must resolve inside this test's own \

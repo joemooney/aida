@@ -5601,13 +5601,13 @@ pub(crate) fn handle_queue_work(
         // trace:BUG-226 | ai:claude
         let standalone_reviewer: Option<(u64, std::path::PathBuf)> =
             if is_standalone_reviewer(&role, plan.review_target.is_some()) {
-                plan.review_target.map(|(_, n)| {
+                plan.review_target.map(|(forge, n)| {
                     (
                         n,
                         project_root
                             .join(".aida")
                             .join("review-verdicts")
-                            .join(format!("PR-{n}.json")),
+                            .join(format!("{}.json", format_review_label(forge, n))),
                     )
                 })
             } else {

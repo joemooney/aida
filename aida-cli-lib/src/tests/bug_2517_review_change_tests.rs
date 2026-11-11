@@ -63,6 +63,7 @@ fn bug_2517_two_prs_one_spec_records_only_the_leased_change() {
     crate::test_exec::write_executable(&bin.join("gh"), &format!(
         "#!/bin/sh\nprintf '%s\\n' '{{\"url\":\"https://github.com/test/repo/pull/3764\",\"state\":\"OPEN\",\"headRefOid\":\"{head}\",\"labels\":[]}}'\n"));
     let path = format!("{}:/usr/bin:/bin", bin.display());
+    let anchor = rv::verdict_path(root, "PR-3764-security");
     let _ambient = crate::test_env::AmbientGuard::hermetic_and(
         root,
         None,
@@ -71,7 +72,7 @@ fn bug_2517_two_prs_one_spec_records_only_the_leased_change() {
             ("AIDA_CONTAINED", None),
             ("AIDA_SESSION_ID", Some("251725172517")),
             ("AIDA_PROJECT_ROOT", Some(root.to_str().unwrap())),
-            ("AIDA_REVIEW_VERDICT_FILE", None),
+            ("AIDA_REVIEW_VERDICT_FILE", Some(anchor.to_str().unwrap())),
             (crate::gate::seat_authority::GRANT_ENV, None),
         ],
     );
@@ -80,7 +81,7 @@ fn bug_2517_two_prs_one_spec_records_only_the_leased_change() {
     std::fs::create_dir_all(file.parent().unwrap()).unwrap();
     std::fs::write(&file, toml::to_string(&l).unwrap()).unwrap();
     let first = rv::verdict_path(root, "PR-3651");
-    let rec = json!({"verdict":"approved", "reviewed_sha":"1111111111111111111111111111111111111111",
+    let rec = json!({"verdict":"request-changes", "findings":["foreign actionable defect"], "reviewed_sha":head,
         "recorded_at":"2026-11-09T00:00:00Z", "recorded_by":"prior-reviewer"});
     rv::write_verdict_object_for_spec(&first, rec.as_object().unwrap(), Some("BUG-2492")).unwrap();
     let before = rv::current_verdict_body_at(&first).unwrap();
@@ -101,6 +102,10 @@ fn bug_2517_two_prs_one_spec_records_only_the_leased_change() {
     assert_eq!(
         std::fs::read(ledger::store::ledger_file(root, ChangeKey::pr(3651))).unwrap(),
         bytes
+    );
+    assert!(
+        rv::current_verdict_body_at(&anchor).is_some(),
+        "explicit gate anchor must survive"
     );
     let second = rv::read_recorded_verdict(root, "PR-3764").unwrap();
     assert_eq!(second.reviewed_sha.as_deref(), Some(head.as_str()));
@@ -174,4 +179,109 @@ fn bug_2517_head_moving_during_recording_refuses_before_mutation() {
     assert_eq!(reads.get(), 2);
     assert!(!ledger::store::ledger_file(root, ChangeKey::pr(3764)).exists());
     assert!(rv::read_recorded_verdict(root, "BUG-2492").is_none());
+}
+
+#[test]
+fn bug_2517_inherited_findings_use_the_same_change_as_the_builder() {
+    let tmp = tempfile::tempdir().unwrap();
+    let root = tmp.path();
+    let head = crate::test_git::commit_fixture(root);
+    let _ambient =
+        crate::test_env::AmbientGuard::hermetic_and(root, None, &[("AIDA_CONTAINED", None)]);
+    let own = rv::verdict_path(root, "PR-3764");
+    let prior = json!({"verdict":"request-changes", "reviewed_sha":head,
+        "findings":["own actionable defect"], "recorded_at":"2026-11-09T00:00:00Z"});
+    rv::write_verdict_object(&own, prior.as_object().unwrap()).unwrap();
+    let before = rv::current_verdict_body_at(&own).unwrap();
+    let other = rv::verdict_path(root, "PR-3651");
+    let clean = json!({"verdict":"approved", "reviewed_sha":head, "findings":[]});
+    rv::write_verdict_object(&other, clean.as_object().unwrap()).unwrap();
+    assert_eq!(
+        crate::review_record_kind(&own, "approved", &[]).unwrap(),
+        rv::VerdictKind::RequestChanges
+    );
+    assert_eq!(
+        crate::review_record_kind(&other, "approved", &[]).unwrap(),
+        rv::VerdictKind::Approved
+    );
+    assert_eq!(rv::current_verdict_body_at(&own).unwrap(), before);
+    // Reverse the differing prior records: foreign findings cannot turn this approval into a hold.
+    rv::write_verdict_object(&own, clean.as_object().unwrap()).unwrap();
+    rv::write_verdict_object(&other, prior.as_object().unwrap()).unwrap();
+    assert_eq!(
+        crate::review_record_kind(&own, "approved", &[]).unwrap(),
+        rv::VerdictKind::Approved
+    );
+}
+
+#[test]
+fn bug_2517_contained_mr_handshake_collects_only_into_its_mr_ledger() {
+    let tmp = tempfile::tempdir().unwrap();
+    let launcher = tmp.path();
+    let worktree = launcher.join("reviewer");
+    std::fs::create_dir(&worktree).unwrap();
+    let head = crate::test_git::commit_fixture(&worktree);
+    let canonical = rv::verdict_path(launcher, "MR-3764");
+    let local = rv::verdict_path(&worktree, "MR-3764");
+    let _ambient = crate::test_env::AmbientGuard::hermetic_and(
+        &worktree,
+        None,
+        &[
+            ("AIDA_CONTAINED", Some("1")),
+            ("AIDA_SESSION_ID", Some("251725172517")),
+            ("AIDA_REVIEW_VERDICT_FILE", Some(local.to_str().unwrap())),
+        ],
+    );
+    let l = lease("MR-3764");
+    let file = crate::lease_path(&worktree, &l.id);
+    std::fs::create_dir_all(file.parent().unwrap()).unwrap();
+    std::fs::write(file, toml::to_string(&l).unwrap()).unwrap();
+    handle_review_record_with_head_at(
+        worktree.clone(),
+        "BUG-2492",
+        "waiting",
+        Some(&head),
+        None,
+        Some("operator must run check; resume after result"),
+        &[],
+        &[],
+        None,
+        |_, c| {
+            assert_eq!(c, ChangeKey::parse("MR-3764").unwrap());
+            Ok(head.clone())
+        },
+    )
+    .unwrap();
+    // Supply the launch grant stamp; collection checks below verify it, independently
+    // of live seat issuance (covered by the collection authority fixtures).
+    let mut obj: serde_json::Value =
+        serde_json::from_str(&rv::current_verdict_body_at(&local).unwrap()).unwrap();
+    obj["recorder_attestation"]["grant_id"] = "reviewer-grant".into();
+    std::fs::write(&local, obj.to_string()).unwrap();
+    struct Checks;
+    impl rv::VerdictCollectionChecks for Checks {
+        fn check_record(&self, c: &rv::VerdictCandidate) -> Result<(), String> {
+            assert_eq!(c.verdict.kind, rv::VerdictKind::Waiting);
+            Ok(())
+        }
+        fn check_identity(&self, grant: &str) -> Result<(), String> {
+            assert_eq!(grant, "reviewer-grant");
+            Ok(())
+        }
+    }
+    drop(_ambient);
+    let _host =
+        crate::test_env::AmbientGuard::hermetic_and(launcher, None, &[("AIDA_CONTAINED", None)]);
+    let collected = rv::collect_standalone_verdict(
+        launcher,
+        &worktree,
+        &canonical,
+        &[],
+        std::time::UNIX_EPOCH,
+        &Checks,
+    )
+    .unwrap();
+    assert!(collected.collected_from_worktree);
+    assert!(rv::read_recorded_verdict(launcher, "MR-3764").is_some());
+    assert!(!ledger::store::ledger_file(launcher, ChangeKey::pr(3764)).exists());
 }
