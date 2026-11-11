@@ -785,7 +785,8 @@ fn failure_state(root: &Path) -> Result<Failures> {
         .map(|v| v.unwrap_or_default())
 }
 pub(super) fn record_failure(root: &Path, reason: Option<&str>) -> Result<()> {
-    record_outcome(root, reason, Some(true))
+    // A supervisor failure observes no dispatch success; retain any pending failure.
+    record_outcome(root, reason, reason.is_none().then_some(true))
 }
 fn record_outcome(root: &Path, reason: Option<&str>, dispatched: Option<bool>) -> Result<()> {
     let dir = directory(root, true)?.context("service directory missing")?;
@@ -843,6 +844,58 @@ mod loop_tests {
         assert!(failure_state(root).unwrap().alert.unwrap().sent);
         controller_dispatch(root, None, true).unwrap();
         assert_eq!(failure_state(root).unwrap().count, 0);
+        CONTROLLER.with(|id| *id.borrow_mut() = None);
+    }
+
+    // trace:STORY-2691 | ai:codex
+    #[test]
+    fn story2691_supervisor_restart_failure_preserves_pending_dispatch() {
+        let temp = tempfile::tempdir().unwrap();
+        let root = temp.path();
+        CONTROLLER.with(|id| *id.borrow_mut() = Some("old-controller".into()));
+        controller_dispatch(root, Some("spawn refused"), false).unwrap();
+        CONTROLLER.with(|id| *id.borrow_mut() = None);
+        record_failure(root, Some("controller exited before successful dispatch")).unwrap();
+        assert!(failure_state(root).unwrap().dispatch_pending);
+        CONTROLLER.with(|id| *id.borrow_mut() = Some("replacement-controller".into()));
+        controller_pass(root, None).unwrap();
+        assert_eq!(failure_state(root).unwrap().count, 2);
+        controller_dispatch(root, None, true).unwrap();
+        assert_eq!(failure_state(root).unwrap().count, 0);
+        CONTROLLER.with(|id| *id.borrow_mut() = None);
+    }
+
+    // trace:STORY-2691 | ai:codex
+    #[test]
+    fn story2691_three_synchronous_failures_in_one_pass_alert() {
+        if TRAIN {
+            return;
+        }
+        let temp = tempfile::tempdir().unwrap();
+        let root = temp.path();
+        CONTROLLER.with(|id| *id.borrow_mut() = Some("fixture".into()));
+        let store = Store::open(root, "github:github.com/owner/repo").unwrap();
+        let changes = (1..=3)
+            .map(|id| forge::Change {
+                id,
+                head: format!("{id:040x}"),
+                base: "main".into(),
+                author: "writer".into(),
+                gitlab: false,
+                overlap: Some(false),
+                behind: Some(0),
+                head_branch: None,
+            })
+            .collect();
+        super::super::watch_changes(&store, changes, |_| {
+            super::super::observe_dispatch_result(root, Err(anyhow::anyhow!("spawn refused")))
+        })
+        .unwrap();
+        controller_pass(root, None).unwrap();
+        let state = failure_state(root).unwrap();
+        assert_eq!(state.count, 3);
+        assert!(state.dispatch_pending);
+        assert!(state.alert.unwrap().sent);
         CONTROLLER.with(|id| *id.borrow_mut() = None);
     }
 

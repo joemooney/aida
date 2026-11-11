@@ -5085,3 +5085,45 @@ fn story2691_settled_gate_refusals_eject_before_land_and_on_recovery() {
         }
     }
 }
+
+// trace:STORY-2691 | ai:codex
+#[test]
+fn story2691_recovered_last_member_is_logged_with_empty_discovery() {
+    for landed in [true, false] {
+        let dir = tempfile::tempdir().unwrap();
+        let train = train_of("main", &fms(&[1]));
+        let mut entry = journal::Entry::new(train, "train/old-1".into());
+        entry.change_id = Some(901);
+        entry.step = journal::Step::Merge;
+        journal::activate(dir.path(), entry).unwrap();
+        journal::clear();
+        let mut forge = FakeForge::mains(&["main"]);
+        forge.confirmation = Some(if landed {
+            crate::forge_observed::Confirmed::Positive
+        } else {
+            forge.gates.insert(1, Err("approval withdrawn".into()));
+            crate::forge_observed::Confirmed::Negative
+        });
+        let mut rails = ForgeRails::new(&mut forge, "recovery".into()).with_journal(dir.path());
+        let recovered = rails.resume().unwrap();
+        let mut output = Vec::new();
+        ADVISOR_LOOP.with(|automatic| {
+            automatic.set(true);
+            let idle = report_automatic_idle(true, &[], &recovered, &mut output);
+            automatic.set(false);
+            assert!(idle.unwrap());
+        });
+        let output = String::from_utf8(output).unwrap();
+        if landed {
+            assert_eq!(recovered.landed.len(), 1);
+            assert!(output.contains("landed #1 ("), "{output}");
+        } else {
+            assert_eq!(recovered.ejected.len(), 1);
+            assert!(
+                output.contains("ejected #1: approval withdrawn"),
+                "{output}"
+            );
+        }
+        assert!(journal::entries(dir.path()).unwrap().is_empty());
+    }
+}

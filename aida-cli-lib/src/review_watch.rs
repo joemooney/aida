@@ -2387,7 +2387,6 @@ pub(crate) fn run_with_program(
         for outcome in reap_dispatchers(&store, &mut children) {
             service::controller_dispatch(&root, outcome.as_deref(), outcome.is_none())?;
         }
-        let mut pass_failure = None;
         // trace:STORY-2492 | ai:codex
         if !sync_pass(&root, args.once)? {
             std::thread::sleep(std::time::Duration::from_secs(args.interval));
@@ -2440,24 +2439,30 @@ pub(crate) fn run_with_program(
                     change,
                     program,
                 );
-                if let Err(error) = &result {
-                    if !is_busy(error) {
-                        pass_failure = Some(format!("{error:#}"));
-                    }
-                }
-                result
+                observe_dispatch_result(&root, result)
             },
         )?;
         // Synchronous setup/spawn errors are dispatch failures too: an idle
         // discovery pass must not clear them before a dispatch succeeds.
         // trace:STORY-2691 | ai:codex
-        service::controller_dispatch(&root, pass_failure.as_deref(), false)?;
         service::controller_pass(&root, None)?;
         if args.once {
             return Ok(children.into_iter().map(|d| d.child).collect());
         }
         std::thread::sleep(std::time::Duration::from_secs(args.interval));
     }
+}
+
+// Count every synchronous dispatch refusal as it occurs, including several
+// failures in one pass and a fatal refusal that stops the pass early.
+// trace:STORY-2691 | ai:codex
+fn observe_dispatch_result(root: &Path, result: Result<()>) -> Result<()> {
+    if let Err(error) = &result {
+        if !is_busy(error) {
+            service::controller_dispatch(root, Some(&format!("{error:#}")), false)?;
+        }
+    }
+    result
 }
 
 // Confirm outcomes by reaping our own children; reservations alone are not success.

@@ -1614,6 +1614,27 @@ fn automatic_idle(all_ready: bool, candidates: &[u64]) -> bool {
     all_ready && candidates.is_empty() && ADVISOR_LOOP.with(std::cell::Cell::get)
 }
 
+// Recovery can close the last open rider before discovery. Report those
+// outcomes even though this automatic pass has no new train to run.
+// trace:STORY-2691 | ai:codex
+fn report_automatic_idle(
+    all_ready: bool,
+    candidates: &[u64],
+    recovered: &Outcome,
+    mut output: impl std::io::Write,
+) -> Result<bool> {
+    if !automatic_idle(all_ready, candidates) {
+        return Ok(false);
+    }
+    for (pr, commit) in &recovered.landed {
+        writeln!(output, "  landed #{pr} ({})", short(commit))?;
+    }
+    for e in &recovered.ejected {
+        writeln!(output, "  ejected #{}: {}", e.pr, e.reason)?;
+    }
+    Ok(true)
+}
+
 fn filter_recovered_candidates(candidates: &mut Vec<u64>, recovered: &Outcome) -> Result<()> {
     let mut seen = std::collections::BTreeSet::new();
     candidates.retain(|n| seen.insert(*n));
@@ -3943,7 +3964,12 @@ pub(crate) fn pr_train_handler_with_dispatch_ctx(
     } else {
         opts.prs.to_vec()
     };
-    if automatic_idle(opts.all_ready, &candidates) {
+    if report_automatic_idle(
+        opts.all_ready,
+        &candidates,
+        &recovered,
+        std::io::stdout().lock(),
+    )? {
         return Ok(());
     }
     filter_recovered_candidates(&mut candidates, &recovered)?;
