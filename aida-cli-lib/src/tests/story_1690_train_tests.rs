@@ -5074,7 +5074,7 @@ fn train_ci_row_progress_buckets_runs_and_failure() {
     assert!(details[0].contains("5/7 shards passed"));
     assert!(details[0].contains("CI (lib-0): pending"));
     assert!(details[0].contains("CI (lib-1): fail"));
-    assert!(details[1].contains("run 99: 0/0 shards passed"));
+    assert_eq!(details[1], "run 99; ancillary CI (other): pass");
     assert!(matches!(&before, TrainCiReadiness::Red(why) if why.contains("CI (lib-1)")));
     assert_eq!(
         before,
@@ -5095,4 +5095,60 @@ fn train_ci_row_progress_buckets_runs_and_failure() {
     let text = train_ci_wait_details(&rows)[0].clone();
     assert!(text.contains("Build summary: pass"));
     assert!(!text.contains("appears after"));
+}
+
+// trace:TASK-3782 | ai:codex
+#[test]
+fn train_ci_row_progress_all_pending() {
+    let mut rows =
+        crate::ci_gate::parse_check_rows(include_str!("task_3782_run_42913999193.json")).unwrap();
+    for row in &mut rows {
+        row.bucket = "pending".into();
+    }
+    let details = train_ci_wait_details(&rows);
+    assert_eq!(details.len(), 1);
+    let text = &details[0];
+    assert!(text.contains("run 42913999193: 0/7 shards passed"));
+    for shard in [
+        "lib-0",
+        "lib-1",
+        "cli-0",
+        "cli-1",
+        "rest",
+        "gates",
+        "contracts",
+    ] {
+        assert!(text.contains(&format!("CI ({shard}): pending")), "{text}");
+    }
+    assert!(text.contains("ancillary Release (${{ matrix.os }}): pending"));
+    assert!(text.contains("Build summary appears after all shards finish"));
+    assert!(!text.contains("0/8"));
+}
+
+// trace:TASK-3782 | ai:codex
+#[test]
+fn train_ci_row_progress_passing_build_with_separate_hold_run() {
+    let mut rows =
+        crate::ci_gate::parse_check_rows(include_str!("task_3782_run_42913999193.json")).unwrap();
+    rows.push(crate::ci_gate::CheckRow {
+        name: "Build (ubuntu-latest)".into(),
+        workflow: "CI".into(),
+        bucket: "pass".into(),
+        run_id: Some("42913999193".into()),
+    });
+    rows.push(crate::ci_gate::CheckRow {
+        name: "publish-merge-hold-status".into(),
+        workflow: "merge-hold-gate".into(),
+        bucket: "pending".into(),
+        run_id: Some("99".into()),
+    });
+    let details = train_ci_wait_details(&rows);
+    assert_eq!(details.len(), 2);
+    assert!(details[0].contains("7/7 shards passed"));
+    assert!(details[0].contains("Build summary: pass"));
+    assert!(!details[0].contains("appears after"));
+    assert_eq!(
+        details[1],
+        "run 99; ancillary publish-merge-hold-status: pending"
+    );
 }

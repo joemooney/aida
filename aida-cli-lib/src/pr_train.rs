@@ -610,12 +610,19 @@ fn train_ci_wait_details(rows: &[crate::ci_gate::CheckRow]) -> Vec<String> {
             };
             let shards: Vec<_> = checks.iter().copied().filter(is_shard).collect();
             let passed = shards.iter().filter(|r| r.bucket == "pass").count();
-            let mut parts = vec![format!(
-                "run {run}: {passed}/{} shards passed",
-                shards.len()
-            )];
+            let is_ci_run = checks.iter().any(|r| r.workflow == "CI");
+            let mut parts = if is_ci_run {
+                vec![format!(
+                    "run {run}: {passed}/{} shards passed",
+                    shards.len()
+                )]
+            } else {
+                vec![format!("run {run}")]
+            };
             for row in checks {
-                if crate::ci_gate::check_name_eq(&row.name, "Build (ubuntu-latest)") {
+                if row.workflow == "CI"
+                    && crate::ci_gate::check_name_eq(&row.name, "Build (ubuntu-latest)")
+                {
                     parts.push(format!("Build summary: {}", row.bucket));
                 } else if is_shard(&row) {
                     parts.push(format!("{}: {}", row.name, row.bucket));
@@ -623,10 +630,13 @@ fn train_ci_wait_details(rows: &[crate::ci_gate::CheckRow]) -> Vec<String> {
                     parts.push(format!("ancillary {}: {}", row.name, row.bucket));
                 }
             }
-            if !rows.iter().any(|r| {
-                r.run_id.as_deref() == Some(run)
-                    && crate::ci_gate::check_name_eq(&r.name, "Build (ubuntu-latest)")
-            }) {
+            if is_ci_run
+                && !rows.iter().any(|r| {
+                    r.run_id.as_deref() == Some(run)
+                        && r.workflow == "CI"
+                        && crate::ci_gate::check_name_eq(&r.name, "Build (ubuntu-latest)")
+                })
+            {
                 parts.push("Build summary appears after all shards finish".into());
             }
             parts.join("; ")
