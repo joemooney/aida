@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-10T22:04:54.061461738Z
-modified_at: 2026-11-11T05:53:05.030472786Z
+modified_at: 2026-11-11T06:27:09.330634745Z
 req_type: Story
 comments:
 - id: 01a1c781-4cf1-7c80-b086-89c5c5096ab6
@@ -258,6 +258,18 @@ comments:
   modified_at: 2026-11-11T05:50:32.237748564Z
   session_id: 01a1c87f-970d-7ce0-9351-e4e75a87731e
   harness_version: 2.1.322 (Claude Code)
+- id: 01a1c949-f392-7bd3-a82d-5ad80fec9b42
+  author: dirtlab
+  content: |
+    Round 5 P1: implemented all four assigned slice-1 foundations: locked versioned repair journal keyed by repository/PR/original head; host-staged merges with immutable original paths across retries; journal-backed publication marker scans and lane briefs; compiled closed host regeneration registry for exec-context/template outputs. Configured vendor/model selection, read-only lane Git and Refs-only publication remain intact. Actual generator runs deny Git metadata writes for both recorded clones and linked worktrees; only host restoration exposes the private index.
+
+    Final story_2710 lane job j20261111T062416168-2-0: 6 passed. Additional bug_2456 clone publication: 1 passed (j20261111T060542167-2-0); bug_2504 recovery: 5 passed (j20261111T060840583-2-0); vendor ratchet: 3 passed (j20261111T060847634-2-0). Python regeneration: 5 passed; writer inventory: 55 passed. Inventory/exec-context validation, rustfmt and diff checks pass. No full-repository template Cargo regeneration was exercised; registered generator failures remain fail-closed.
+
+    Later-slice dispatch, exact-tree compile gating and notice delivery remain outstanding for the story, outside this assigned finding. Codegraph client absent at the supplied host path; doctor confirmed missing, and navigation used rg. Native seat edits are uncommitted for the host launcher; no push, PR creation, review recording, merge or queue completion was performed.
+  created_at: 2026-11-11T06:27:09.330634745Z
+  modified_at: 2026-11-11T06:27:09.330634745Z
+  session_id: 01a1c92abb7e
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1c77f-ffdf-7ac3-a382-33d6a384e617
   author: aida-session-start
