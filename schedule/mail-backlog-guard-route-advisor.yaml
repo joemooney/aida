@@ -5,10 +5,10 @@ last_by:
   session: 01a1beff-fc3b-78e2-93e2-9b0c283b0339
   vendor: claude
 result: done
-note: 'advisor: unread [request] from review-watch, 3h06m old: PR-3817 behind `main` with overlap; update-branch conflicts; advisor: unread [request] from dirtlab, 2h16m old: Queue-work lane exited without changes; advisor: unread [request] from dirtlab, 2h14m old: Queue-work lane exited without changes; advisor: unread [request] from dirtlab, 108m old: Queue-work lane exited without changes; advisor: unread [request] from dirtlab, 105m old: Queue-work lane exited without changes'
+note: 'advisor: unread [request] from review-watch, 4h24m old: PR-3809 behind `main` with overlap; update-branch conflicts; advisor: unread [request] from review-watch, 4h24m old: PR-3783 behind `main` with overlap; update-branch conflicts; advisor: unread [request] from review-watch, 2h11m old: PR-3820 behind `main` with overlap; update-branch conflicts; advisor: unread [request] from dirtlab, 43m old: Rework merge conflicts require Claude'
 due_since: 2026-11-09T10:53:52.591288010Z
 due_reason: on CronJobFired:mail-backlog-guard-route-advisor
 due_failure:
-  trip_id: mail-backlog-guard-route-advisor@2026-11-11T01:40:34Z
+  trip_id: mail-backlog-guard-route-advisor@2026-11-11T02:16:56Z
   job: mail-backlog
-  error: 'advisor: unread [request] from review-watch, 3h06m old: PR-3817 behind `main` with overlap; update-branch conflicts; advisor: unread [request] from dirtlab, 2h16m old: Queue-work lane exited without changes; advisor: unread [request] from dirtlab, 2h14m old: Queue-work lane exited without changes; advisor: unread [request] from dirtlab, 108m old: Queue-work lane exited without changes; advisor: unread [request] from dirtlab, 105m old: Queue-work lane exited without changes'
+  error: 'advisor: unread [request] from review-watch, 4h24m old: PR-3809 behind `main` with overlap; update-branch conflicts; advisor: unread [request] from review-watch, 4h24m old: PR-3783 behind `main` with overlap; update-branch conflicts; advisor: unread [request] from review-watch, 2h11m old: PR-3820 behind `main` with overlap; update-branch conflicts; advisor: unread [request] from dirtlab, 43m old: Rework merge conflicts require Claude'
