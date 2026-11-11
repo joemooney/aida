@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-10T10:24:49.978786902Z
-modified_at: 2026-11-11T06:44:46.347133133Z
+modified_at: 2026-11-11T07:33:14.880890809Z
 req_type: Bug
 comments:
 - id: 01a1c544-9448-77c1-a5a0-c8d1776ee831
@@ -165,6 +165,15 @@ comments:
     Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
   created_at: 2026-11-11T06:07:38.846719202Z
   modified_at: 2026-11-11T06:07:38.846719202Z
+  session_id: 01a1c87f-970d-7ce0-9351-e4e75a87731e
+  harness_version: 2.1.322 (Claude Code)
+- id: 01a1c986-7600-7540-a519-6e186c42f2d0
+  author: joe
+  content: |-
+    CI FAILURES at 23f8a3c8f307 (run 42973678606). Fix exactly these before pushing; a push without a code change for them will fail again and must not be made:
+    test-timings: BUDGET: aida-cli-lib gate::review_publication::admission::tests::bug2518_cancelled_retry_readmits_after_spawn_preflight_and_unclaimed_exits: 31.8s with no budget entry (limit 30s for an unbudgeted test). Make it faste
+  created_at: 2026-11-11T07:33:14.880890809Z
+  modified_at: 2026-11-11T07:33:14.880890809Z
   session_id: 01a1c87f-970d-7ce0-9351-e4e75a87731e
   harness_version: 2.1.322 (Claude Code)
 history:
