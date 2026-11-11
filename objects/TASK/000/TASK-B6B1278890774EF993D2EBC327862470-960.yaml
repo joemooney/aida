@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T23:39:41.575597Z
-modified_at: 2026-11-11T05:55:59.544354789Z
+modified_at: 2026-11-11T07:53:27.458994295Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -769,6 +769,13 @@ comments:
     Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
   created_at: 2026-11-11T05:53:53.055066567Z
   modified_at: 2026-11-11T05:53:53.055066567Z
+  session_id: 01a1c87f-970d-7ce0-9351-e4e75a87731e
+  harness_version: 2.1.322 (Claude Code)
+- id: 01a1c998-f6a3-7e62-93e2-5c2ddb49e5db
+  author: joe
+  content: 'ADVISOR BRIEF batch 6 (2026-11-11 00:55 MST, main 50853146bc6, after batch 5 #3829 landed; ledger 40 files): replace every ''use crate::*;'' (top-level AND inside inner or test modules) with explicit imports in EXACTLY these 20 files under aida-cli-lib/src/: {monitor_contract,review_cmd,driver_cmd,assign_cmd,import_export_cmd,manual,defer_cmd,graph_cmd,goal_cmd,do_dispatch,commit,metrics_cmd,comment_cmd,wiki,cache_cmd,user_alias,regen,help_catalog,trace_cmd,archive_cmd}.rs, and prune exactly those 20 keys from scripts/crate-globs-legacy.json in the same commit. Rules from batches 4-5 are binding: no new lease_state_for imports (qualify via crate::leases:: and list each in the PR body); where removing a glob drops a name a test needs, import it in the test file only; no renames, and list every qualified-call rewrite the compiler forced. Title and commit trailer ''(Refs TASK-3428)'', not completing. Fresh branch task-3428-batch-6. LIGHT gate: one ''cargo check --profile agent -p aida-cli-lib --tests'' plus ''make check-ci-fast''. Batch 7 (the remaining 19 + queue_cmd/rework.rs once #3809 lands) and the lib_part1..6 dissolution follow; only the dissolution PR completes TASK-3428.'
+  created_at: 2026-11-11T07:53:27.458994295Z
+  modified_at: 2026-11-11T07:53:27.458994295Z
   session_id: 01a1c87f-970d-7ce0-9351-e4e75a87731e
   harness_version: 2.1.322 (Claude Code)
 history:
