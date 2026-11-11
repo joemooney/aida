@@ -159,8 +159,10 @@ no fallback to PR cache keys. Hosted jobs retain their existing behavior.
    under the slot lock. Stop loops for manual quarantine or crash recovery.
    The launcher creates and validates both root-owned slot parents before either
    unit starts, so mandatory sibling hiding also works on a fresh installation.
-   Traversal parents use explicit 0755 modes and `current` uses 0711 even under
-   operator umask 077; work and cache trees remain private.
+   Traversal parents, including root-owned `current`, use explicit 0755 modes even
+   under operator umask 077: Runner.Listener enumerates every ancestor during
+   startup, so execute-only access fails before job pickup. Work and cache trees
+   remain 0700.
 7. Review exact sudoers arguments with `visudo`; only the operator gets:
 
    ```sudoers
@@ -219,4 +221,4 @@ retains the state intentionally. A crash during publication may leave an
 unreferenced generation; the manifest remains authoritative. Root-only offline
 pruning must retain the manifest's generation and validate paths before deletion.
 
-The slot lock covers all cache reads and writes. A manifest swap removes superseded generations; preparation preserves all published compatibility keys, including on TRAIN cold misses and failed MAIN runs. Only successful MAIN publication removes stale key directories, retaining one published key and generation per slot/shard. The controller creates and validates both stable root-owned slot parents before either unit starts, and enforces traversal modes independently of the operator umask (jobs/slot/runtime parents 0755, current 0711; private work/cache trees remain 0700). No workflow routing is enabled by this change.
+The slot lock covers all cache reads and writes. A manifest swap removes superseded generations; preparation preserves all published compatibility keys, including on TRAIN cold misses and failed MAIN runs. Only successful MAIN publication removes stale key directories, retaining one published key and generation per slot/shard. The controller creates and validates both stable root-owned slot parents before either unit starts, and enforces traversal modes independently of the operator umask (jobs/slot/runtime parents 0755, current 0755; private work/cache trees remain 0700). No workflow routing is enabled by this change.

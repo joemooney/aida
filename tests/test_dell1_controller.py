@@ -383,6 +383,33 @@ class GateAndShell(unittest.TestCase):
 
 class LaunchIntegration(unittest.TestCase):
     """Run orchestration with a real gate/cache and fake systemd/public forge."""
+    @staticmethod
+    def enumerate_runner_ancestors(runner, boundary, service_uid):
+        # Model IOUtil.ValidateExecutePermission (actions/runner 5f626f109076):
+        # enumerate every ancestor, not merely chdir/execute the runner.
+        # Ownership is modeled because launch fixtures cannot chown to service uids.
+        for path in runner.parents:
+            if path == boundary:
+                break  # Temporary fixture wrapper is outside the installed tree.
+            owner_uid = 0
+            mode = stat.S_IMODE(path.stat().st_mode)
+            access = (mode >> 6) & 7 if service_uid == owner_uid else mode & 7
+            if access & 5 != 5:
+                raise PermissionError(f'runner cannot enumerate ancestor: {path}')
+            list(path.iterdir())
+
+    def test_execute_only_ancestor_refuses_before_job_pickup(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            current = root / 'current'
+            runner = current / 'runner'
+            runner.mkdir(parents=True)
+            current.chmod(0o711)
+            with self.assertRaisesRegex(PermissionError, 'cannot enumerate ancestor'):
+                self.enumerate_runner_ancestors(runner, root, 10000)
+            current.chmod(0o755)
+            self.enumerate_runner_ancestors(runner, root, 10000)
+
     def exercise(self, kind, *, unit_failure=False, stop_failure=False, gate_failure=False, alternate=False, pending=False, test_failure=False, priority=False, restrictive_umask=False, slot='s0'):
         from contextlib import ExitStack
         from types import SimpleNamespace
@@ -440,10 +467,12 @@ class LaunchIntegration(unittest.TestCase):
                         self.assertTrue(parent.is_dir())
                         self.assertEqual(stat.S_IMODE(parent.stat().st_mode), 0o755)
                     for path, mode in ((root / 'jobs', 0o755),
-                                       (root / f'jobs/{slot}/current', 0o711),
+                                       (root / f'jobs/{slot}/current', 0o755),
                                        (root / f'run/aida-ci-{slot}', 0o755),
                                        (root / f'jobs/{slot}/current/{kind.lower()}', 0o700)):
                         self.assertEqual(stat.S_IMODE(path.stat().st_mode), mode)
+                    self.enumerate_runner_ancestors(
+                        root / f'jobs/{slot}/current/runner', root, account.pw_uid)
                     forge.job['status'] = 'in_progress'
                     if alternate:
                         forge.job.update(id=21, name='CI (cli-0)')

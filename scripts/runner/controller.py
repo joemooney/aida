@@ -455,7 +455,9 @@ def launch(slot, envelope):
         state = parent / 'current'
         if state.exists():
             shutil.rmtree(state)
-        traversal_directory(state, 0o711)
+        # Runner.Listener enumerates every ancestor before parsing arguments.
+        # Root-owned current must permit service-uid reads as well as traversal.
+        traversal_directory(state, 0o755)
         gate = None
         try:
             # Each class has a stable private view. Only these three trees persist.
