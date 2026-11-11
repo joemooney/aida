@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-09T23:18:35.052711129Z
-modified_at: 2026-11-11T03:58:54.806378305Z
+modified_at: 2026-11-11T04:06:28.030103706Z
 req_type: Story
 comments:
 - id: 01a1c5dc-7b38-79a0-b14b-a53401fc1b6e
@@ -211,6 +211,13 @@ comments:
   content: 'Round 3 sketch before code: retain approved signed publication schema v2, missing carry_eligible defaults true, mirrored receipt and carry proof cache key including carry_eligible. No further schema/key change. Preserve each distinct displaced act using full snapshot identity instead of historical RecordingKey equality; retain immediate semantic equality idempotence. Regress four toggles for spec/PR and stale C with D in both corpus orders.'
   created_at: 2026-11-11T03:58:54.806378305Z
   modified_at: 2026-11-11T03:58:54.806378305Z
+  session_id: 01a1c8c1b659
+  harness_version: codex-cli 0.167.0
+- id: 01a1c8c9-25be-7261-9ccc-00af3867b4ea
+  author: dirtlab
+  content: 'Round 3 finding 1 addressed: archive dedup now compares full displaced-act snapshots rather than historical semantic RecordingKeys, retaining distinct timestamps/receipts across A no-carry, B eligible, C no-carry, D eligible. Immediate identical re-records remain idempotent. Added spec/PR four-toggle regression and strengthened clean-merge carry corpus regression with stale C plus D in both orders. Validation: lane job j20261111T035936542-2-0 cargo test --profile agent -p aida-cli-lib --lib -- story_2696: 14 passed, 0 failed. git diff --check passed. Native seat leaves edits uncommitted for host publication. Configured Codegraph executable missing; doctor confirms missing, caller confirmed with rg.'
+  created_at: 2026-11-11T04:06:28.030103706Z
+  modified_at: 2026-11-11T04:06:28.030103706Z
   session_id: 01a1c8c1b659
   harness_version: codex-cli 0.167.0
 history:
