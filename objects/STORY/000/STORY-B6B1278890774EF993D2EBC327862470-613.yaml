@@ -3,12 +3,12 @@ spec_id: STORY-b6b1278890774ef993d2ebc327862470-613
 agreed_id: STORY-2690
 title: 'Spec status invariants and typed lane exits: a spec with an open PR is never unpickable for rework, and every lane exit has a typed result'
 description: 'Problem: on 2026-11-08 STORY-2571 stayed needs-attention so rework lanes died with not-pickable needs-triage, and PR-3640 received no fix across three attempts. The advisor inbox collected many exited-without-changes notices needing manual reading. BUG-2502 fixes one instance. Requirement: enforce that rework routing leaves the spec pickable, or refuses loudly at routing time; each lane exit records a closed-set result such as pushed, no-change-with-reason, refused-before-start or punted. Acceptance: a refused-before-start lane is never reported as a launched rework; repeated identical refusals surface once.'
-status: Approved
+status: InProgress
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-09T01:58:39.064485765Z
-modified_at: 2026-11-11T03:39:22.506034246Z
+modified_at: 2026-11-11T03:41:27.986156607Z
 req_type: Story
 tags:
 - area:orchestration
@@ -229,6 +229,13 @@ history:
   - field_name: status
     old_value: NeedsAttention
     new_value: Approved
+- id: 01a1c8b2-4232-7bc0-a17f-746a706ac330
+  author: aida-session-start
+  timestamp: 2026-11-11T03:41:27.986154992Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: a7a14984cec5533987dfeccb70d1f91aaebbf22a
   branch: main
