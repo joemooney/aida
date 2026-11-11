@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-09T01:58:46.910276326Z
-modified_at: 2026-11-11T14:18:13.504165632Z
+modified_at: 2026-11-11T14:57:49.997123357Z
 req_type: Story
 tags:
 - area:orchestration
@@ -223,6 +223,13 @@ comments:
   created_at: 2026-11-11T13:13:49.178531942Z
   modified_at: 2026-11-11T13:13:49.178531942Z
   session_id: 01a1ca83-fabb-7663-852c-12c78d4e097f
+  harness_version: 2.1.322 (Claude Code)
+- id: 01a1cb1d-7dad-74a2-8354-9f907ed55cd3
+  author: joe
+  content: 'Round 5: merged origin/main (325f377ef02) — resolved review_watch_service.rs by keeping the shared advisor_loop_service include and porting BUG-2518 retry_blockers into it (review loop only); kept both STORY-2691 and TASK-3782 train tests. F1/F2 had already been addressed in 4b8340585d4 (checked_current_verdict in gate::review_verdict; unsent alerts retried and kept across success). e13dd8ad95c closes a remaining F2 gap: a carried notice delivered at the next episode no longer blocks that episode''s own threshold alert. Lane tests: story2691 27/27, ledger legacy-read guard 1/1, bug2518 10/10. make check-ci-fast could not run within this lane''s 60s tool cap.'
+  created_at: 2026-11-11T14:57:49.997123357Z
+  modified_at: 2026-11-11T14:57:49.997123357Z
+  session_id: 01a1caf92759
   harness_version: 2.1.322 (Claude Code)
 history:
 - id: 01a1c5dd-0f8f-79d0-9864-f10de50286f7
