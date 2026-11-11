@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-10T22:45:07.512110557Z
-modified_at: 2026-11-11T04:55:20.857852743Z
+modified_at: 2026-11-11T04:55:23.831005088Z
 req_type: Task
 tags:
 - batch:fasttrack
@@ -69,6 +69,25 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Advisor relay of the codex reviewer''s verdict, lost to BUG-2522. Full text at https://github.com/joemooney/aida/pull/3820#issuecomment-6784684017. P1 (REPEATED from the c06a3fb round): new forge reads violate the advisor''s 2026-11-10 15:53 MST scope cut. That ruling stands: no new forge reads, no runner-queue age, no GitLab work; show CI shard progress only from data the train already has. P2: ancillary jobs inflate shard totals, so seven passing shards can display as 7/8; count only CI shard jobs.. No triage reason was given.'
   created_at: 2026-11-11T04:55:20.857849485Z
   modified_at: 2026-11-11T04:55:20.857849485Z
+  session_id: 01a1c87f-970d-7ce0-9351-e4e75a87731e
+  harness_version: 2.1.322 (Claude Code)
+- id: 01a1c8f5-f120-7da2-bf63-319a9da6c45e
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (TASK-3782):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 47ccaf229807
+    Recorded: 2026-11-11T04:53:06.797609593+00:00
+    Findings:
+    1. [P1] aida-cli-lib/src/pr_train.rs:2468-2485 and forge.rs:2152,2971: Respect the explicit advisor ruling on TASK-3782: build the display ONLY from the CheckRow values already fetched, with no new forge/gh reads. This patch instead adds ci_wait_details to both forges and synchronously fetches every run jobs endpoint on every pending/missing poll, implementing the explicitly dropped queue-age/GitLab scope and adding network/retry latency to readiness. Remove the new data path and render run IDs, buckets and names from the existing rows; adjust docs/tests to the accepted cosmetic scope.
+    2. [P2] aida-cli-lib/src/forge.rs:4700-4706: Count CI shards rather than every non-summary job. The recorded run 42913999193 named in the spec contains seven CI (...) jobs plus a skipped Release (${{ matrix.os }}) job. This formatter excludes only Build, so it reports 7/8 shards passed and Release: skipped after all seven shards pass (and can overcount while that job is registered during a wait). Filter the shard set using existing workflow/check identity, keep ancillary jobs separate, and add a recorded-real-run fixture including the skipped Release job.
+    Survived the previous round:
+    - [P1] aida-cli-lib/src/pr_train.rs:2468-2485 and forge.rs:2152,2971: Respect the explicit advisor ruling on TASK-3782: build the display ONLY from the CheckRow values already fetched, with no new forge/gh reads. This patch instead adds ci_wait_details to both forges and synchronously fetches every run jobs endpoint on every pending/missing poll, implementing the explicitly dropped queue-age/GitLab scope and adding network/retry latency to readiness. Remove the new data path and render run IDs, buckets and names from the existing rows; adjust docs/tests to the accepted cosmetic scope.
+    - [P2] aida-cli-lib/src/forge.rs:4700-4706: Count CI shards rather than every non-summary job. The recorded run 42913999193 named in the spec contains seven CI (...) jobs plus a skipped Release (${{ matrix.os }}) job. This formatter excludes only Build, so it reports 7/8 shards passed and Release: skipped after all seven shards pass (and can overcount while that job is registered during a wait). Filter the shard set using existing workflow/check identity, keep ancillary jobs separate, and add a recorded-real-run fixture including the skipped Release job.
+    These were raised before and are unchanged. Restating them more firmly will not help: establish whether each can be done AS WRITTEN. Supply the missing mechanism (a constant, a helper, a terminating definition), split the finding into parts that can be done, or say explicitly that it is blocked and why.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-11T04:55:23.680460340Z
+  modified_at: 2026-11-11T04:55:23.680460340Z
   session_id: 01a1c87f-970d-7ce0-9351-e4e75a87731e
   harness_version: 2.1.322 (Claude Code)
 history:
