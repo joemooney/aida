@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-10T22:02:08.404275451Z
-modified_at: 2026-11-11T02:58:24.730516227Z
+modified_at: 2026-11-11T04:05:00.256582257Z
 req_type: Bug
 comments:
 - id: 01a1c7b0-34cf-7b31-ae89-70edaed48848
@@ -23,6 +23,13 @@ comments:
   content: '[advisor 2026-11-10 19:58 MST] Post-merge probe: primary promoted to c0f01ac (fix included), but the script deputy still refuses the echo probe with the same ''issued to claude-advisor-111 but this process runs as joe'' error. Cause: the running ''aida deputy shell run --name default'' (pid 2277935) started 2026-11-09 23:50 and still runs the pre-fix binary. Needs an operator restart of that deputy in its terminal; re-probe afterwards to close AC1.'
   created_at: 2026-11-11T02:58:24.730516227Z
   modified_at: 2026-11-11T02:58:24.730516227Z
+  session_id: 01a1c87f-970d-7ce0-9351-e4e75a87731e
+  harness_version: 2.1.322 (Claude Code)
+- id: 01a1c8c7-cee0-7f91-a3ac-c4b4d71b7510
+  author: joe
+  content: '[advisor 2026-11-10 21:05 MST] AC1 verified post-merge: after the operator restarted the deputy on c0f01ac, an echo job submitted from the advisor seat ran as joe and returned rc 0 (job 01a1c8c7). Transient ''review-watch lock busy: admission.lock'' lines during the restart were the old worker releasing the lock; the lock is free now and review-watch shows no blockers.'
+  created_at: 2026-11-11T04:05:00.256582257Z
+  modified_at: 2026-11-11T04:05:00.256582257Z
   session_id: 01a1c87f-970d-7ce0-9351-e4e75a87731e
   harness_version: 2.1.322 (Claude Code)
 history:
