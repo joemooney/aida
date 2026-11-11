@@ -4,6 +4,11 @@
 //! lifecycle changes don't silently corrupt the handoff.
 //! trace:TASK-111 | ai:claude
 use super::*;
+use crate::{
+    ci_ceiling_verdict_from_rollup, decide_ci_action, decide_ci_probe_failure,
+    first_run_id_from_gh_json, parse_ci_probe, should_stream_ci_watch, CiAction, CiProbe,
+    CiProbeFailureAction,
+};
 
 #[test]
 fn no_signal_proceeds_silently() {

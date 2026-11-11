@@ -12,6 +12,7 @@
 //! trace:BUG-1609 | ai:claude
 
 use super::*;
+use crate::{format_review_label, parse_review_scope, pr_base_head, ReviewForge};
 
 /// A fake `glab` that answers `api -X GET projects/:id/merge_requests/<n>`
 /// with a real-shaped MR object whose source/target branches are NOT
