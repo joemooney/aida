@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-10T22:45:07.512110557Z
-modified_at: 2026-11-11T05:56:37.237078969Z
+modified_at: 2026-11-11T05:56:38.534033353Z
 req_type: Task
 tags:
 - batch:fasttrack
@@ -128,6 +128,25 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Full sweep verifies advisor-scoped AC1/3/4/6 and display-only constraints; AC2/5 explicitly dropped. No actionable defects. CI pending at review time; no local builds/tests per review-watch policy.. No triage reason was given.'
   created_at: 2026-11-11T05:56:37.237074244Z
   modified_at: 2026-11-11T05:56:37.237074244Z
+  session_id: 01a1c87f-970d-7ce0-9351-e4e75a87731e
+  harness_version: 2.1.322 (Claude Code)
+- id: 01a1c92e-0375-7413-a7e9-f858cccf7e60
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (TASK-3782):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 6c59be67b079
+    Recorded: 2026-11-11T05:48:42.195334183+00:00
+    Findings:
+    1. [P1] aida-cli-lib/src/pr_train.rs:2468-2485 and forge.rs:2152,2971: Respect the explicit advisor ruling on TASK-3782: build the display ONLY from the CheckRow values already fetched, with no new forge/gh reads. This patch instead adds ci_wait_details to both forges and synchronously fetches every run jobs endpoint on every pending/missing poll, implementing the explicitly dropped queue-age/GitLab scope and adding network/retry latency to readiness. Remove the new data path and render run IDs, buckets and names from the existing rows; adjust docs/tests to the accepted cosmetic scope.
+    2. [P2] aida-cli-lib/src/forge.rs:4700-4706: Count CI shards rather than every non-summary job. The recorded run 42913999193 named in the spec contains seven CI (...) jobs plus a skipped Release (${{ matrix.os }}) job. This formatter excludes only Build, so it reports 7/8 shards passed and Release: skipped after all seven shards pass (and can overcount while that job is registered during a wait). Filter the shard set using existing workflow/check identity, keep ancillary jobs separate, and add a recorded-real-run fixture including the skipped Release job.
+    Survived the previous round:
+    - [P1] aida-cli-lib/src/pr_train.rs:2468-2485 and forge.rs:2152,2971: Respect the explicit advisor ruling on TASK-3782: build the display ONLY from the CheckRow values already fetched, with no new forge/gh reads. This patch instead adds ci_wait_details to both forges and synchronously fetches every run jobs endpoint on every pending/missing poll, implementing the explicitly dropped queue-age/GitLab scope and adding network/retry latency to readiness. Remove the new data path and render run IDs, buckets and names from the existing rows; adjust docs/tests to the accepted cosmetic scope.
+    - [P2] aida-cli-lib/src/forge.rs:4700-4706: Count CI shards rather than every non-summary job. The recorded run 42913999193 named in the spec contains seven CI (...) jobs plus a skipped Release (${{ matrix.os }}) job. This formatter excludes only Build, so it reports 7/8 shards passed and Release: skipped after all seven shards pass (and can overcount while that job is registered during a wait). Filter the shard set using existing workflow/check identity, keep ancillary jobs separate, and add a recorded-real-run fixture including the skipped Release job.
+    These were raised before and are unchanged. Restating them more firmly will not help: establish whether each can be done AS WRITTEN. Supply the missing mechanism (a constant, a helper, a terminating definition), split the finding into parts that can be done, or say explicitly that it is blocked and why.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-11T05:56:38.389155189Z
+  modified_at: 2026-11-11T05:56:38.389155189Z
   session_id: 01a1c87f-970d-7ce0-9351-e4e75a87731e
   harness_version: 2.1.322 (Claude Code)
 history:
