@@ -1,0 +1,26 @@
+id: 01a1cbfc-dcd4-73d3-ae8e-27aa1b039a4f
+spec_id: BUG-b6b1278890774ef993d2ebc327862470-293
+agreed_id: BUG-2528
+title: 'pr train: releasing a member''s merge hold re-runs the required merge-hold-gate status, and the exact-tip CI check reads it mid-flight and refuses'
+description: |-
+  Observed 2026-11-11 train #3853 (#3848): all checks green on tip bdf2e8d4; the train released PR-3848's hold under mandate cf98da0b, which re-ran the required 'merge-hold-gate' status (pending 18:58:55-18:59:06Z). pr_train_verified.rs:271-276 read commit checks inside that window, judged required CI not green, refused the merge ('train exact-tip required CI is not green') and re-armed the hold. One full CI cycle lost. Workaround: clear member holds and wait for merge-hold-gate to settle before 'aida pr train'.
+
+  ## Acceptance
+  - After releasing member holds, the train waits (bounded) for required status contexts on the exact tip to settle before judging; a pending context caused by its own release does not eject the member.
+  - Regression test: a required context that is pending then success within the wait window lands the train; one that stays pending past the bound refuses with that reason.
+status: Draft
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-11T19:01:48.884172712Z
+modified_at: 2026-11-11T19:01:48.884172712Z
+req_type: Bug
+filed_at:
+  code_sha: 084db2045ab47ac1c18fbef293abb2a3db53cb92
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 084db2045ab
+  vendor: claude
+  session: 01a1cb56-f02b-7652-869e-3788560cbf1b
+  harness_version: 2.1.322 (Claude Code)
