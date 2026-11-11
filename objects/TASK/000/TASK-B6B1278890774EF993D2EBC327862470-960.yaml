@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T23:39:41.575597Z
-modified_at: 2026-11-11T09:29:21.632985788Z
+modified_at: 2026-11-11T09:39:21.759925872Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -785,6 +785,27 @@ comments:
   modified_at: 2026-11-11T09:28:13.025580581Z
   session_id: 01a1c87f-970d-7ce0-9351-e4e75a87731e
   harness_version: 2.1.322 (Claude Code)
+- id: 01a1c9f9-ec1f-75f0-b080-30d70a8b7f05
+  author: dirtlab
+  content: |
+    Replace the remaining root crate globs in exactly these 19 aida-cli-lib/src modules: backlog, criteria, db_cmd, exposition, harvest, history, identity_gate, maintenance_schedule, mandate, notify, reconstitute, report_cmd, schema, shift, supervise_cmd, tail_cmd, terminal_cmd, usage_cmd, and watch.
+
+    Add explicit function-local imports only where dispatch needs them; remove redundant globs where existing lexical bindings suffice. No test-only import repairs were needed. No renames, new lease_state_for imports, or forced qualified-call rewrites (complete rewrite list: none).
+
+    Prune exactly the corresponding 19 scripts/crate-globs-legacy.json keys. Retain queue_cmd/rework.rs and its ledger key for the final PR, along with lib_part1..6.rs dissolution. TASK-3428 remains incomplete.
+
+    Validation:
+    - Launcher: cargo test --profile agent -p aida-cli-lib --lib -- backlog::tests: 33 passed, 0 failed; library test target compiled successfully (job j20261111T093204747-2-0).
+    - make check-ci-fast with umask 077: all 47 fast-tier gates passed, including aida-cli without default features. Initial run under inherited shared-write permissions stopped in Codex mail wake fixtures; private-permissions rerun passed.
+    - python3 scripts/check-crate-globs.py --base HEAD: 1 remaining import, zero additions.
+    - git diff --check and exact 19-file/19-key scope assertions passed.
+    - CI will run after host publication; no PR was opened from this native seat.
+
+    Host handoff: leave this as a partial batch on task-3428-batch-7 with the Refs subject. Edits are uncommitted as required by the native-seat protocol. No implementation blockers remain.
+  created_at: 2026-11-11T09:39:21.759925872Z
+  modified_at: 2026-11-11T09:39:21.759925872Z
+  session_id: 01a1c9f0bdbf
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1b862-2e0b-7a50-a4d0-25097c707b57
   author: joe
