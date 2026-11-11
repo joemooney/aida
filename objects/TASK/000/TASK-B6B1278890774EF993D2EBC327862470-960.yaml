@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T23:39:41.575597Z
-modified_at: 2026-11-11T04:54:48.475770428Z
+modified_at: 2026-11-11T05:20:54.539083933Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -706,6 +706,13 @@ comments:
   modified_at: 2026-11-11T04:54:48.475770428Z
   session_id: 01a1c8ed5824
   harness_version: codex-cli 0.167.0
+- id: 01a1c90d-4d0b-7901-974d-7bd05f9c25bf
+  author: joe
+  content: '[advisor 2026-11-10 22:25 MST] CORRECTION to the 21:40 batch-5 brief: batch 5 does NOT complete PR4. My count used a top-level-only grep; the ledger still lists 48 files (65 ''use crate::*'' lines, most inside inner/test modules), and lib.rs still include!s lib_part1..6.rs. Batch 5 keeps its 8 files and uses ''(Refs TASK-3428)'' in the PR title and commit trailer. Also fix the reviewer''s P1 on PR-3829: do not add new lease_state_for imports (ownership-liveness ratchet); qualify the calls via crate::leases:: where the compiler needs them, and list each one in the PR body. Remaining PR4 plan after #3829 lands: batch 6 = every ledger file no open PR touches, in groups of about 20; then a final PR dissolves lib_part1..6.rs into owning modules; only that PR completes TASK-3428.'
+  created_at: 2026-11-11T05:20:54.539083933Z
+  modified_at: 2026-11-11T05:20:54.539083933Z
+  session_id: 01a1c87f-970d-7ce0-9351-e4e75a87731e
+  harness_version: 2.1.322 (Claude Code)
 history:
 - id: 01a1b862-2e0b-7a50-a4d0-25097c707b57
   author: joe
