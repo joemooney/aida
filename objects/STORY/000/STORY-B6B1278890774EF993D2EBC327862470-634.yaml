@@ -1,0 +1,21 @@
+id: 01a1cad4-2d59-7ec3-aafa-5c9c9f23373b
+spec_id: STORY-b6b1278890774ef993d2ebc327862470-634
+agreed_id: STORY-2711
+title: 'aida gc: one umbrella over worktree gc, session reap, mailbox gc, store gc and queue gc; disk guard applies eligible-only worktree GC below the floor'
+description: 'Operator ask 2026-11-11. (1) ''aida gc'' runs every collector as a dry-run and prints one report (items, bytes, why kept); ''aida gc --apply'' applies only the set each collector already calls eligible (worktree: clean, no lease or lock, merged/closed head; sessions: dead and reapable; mail: read and past retention). Nothing dirty or leased is touched. (2) Scheduler: the worktree-lifecycle-gc job fails with exit 127 because ''worktree gc --fail-on-findings'' is not in the scheduler''s allowed command list; add it. (3) disk-headroom-guard: when free space is below the floor (default: volume 90% full), apply eligible-only worktree GC and session reap itself, then report what it freed; route to the advisor only if still below the floor. Evidence 2026-11-11: disk 95% full, 260 worktrees, gc dry-run eligible=45 reclaimable 3.7 GB, guard STUCK because reclaim alone frees 0 B. Also fixes mailbox inbox OverBudget, which the worktree count causes.'
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-11T13:37:45.305550937Z
+modified_at: 2026-11-11T13:37:45.305550937Z
+req_type: Story
+filed_at:
+  code_sha: 11b131dfe3341e6d9c7127d64370f91366094711
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 11b131dfe33
+  vendor: claude
+  session: 01a1ca83-fabb-7663-852c-12c78d4e097f
+  harness_version: 2.1.322 (Claude Code)
