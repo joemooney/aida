@@ -23,7 +23,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T19:59:26.079479Z
-modified_at: 2026-11-10T11:29:37.024576816Z
+modified_at: 2026-11-11T12:25:11.175674148Z
 req_type: Story
 relationships:
 - rel_type: Supersedes
@@ -624,6 +624,13 @@ comments:
   created_at: 2026-11-10T11:29:32.779019989Z
   modified_at: 2026-11-10T11:29:32.779019989Z
   session_id: 01a1c530-c917-7f13-ab81-f6b5e1d1cd30
+  harness_version: 2.1.322 (Claude Code)
+- id: 01a1ca91-bd07-71e1-ab97-383e2e5e6183
+  author: joe
+  content: 'Advisor disposition 2026-11-11 05:30 MST: COMPLETE. #3657 landed; the last review records AC1 met on both hosts. The primary-host hit-rate shortfall is tracked by BUG-2519.'
+  created_at: 2026-11-11T12:25:11.175674148Z
+  modified_at: 2026-11-11T12:25:11.175674148Z
+  session_id: 01a1ca83-fabb-7663-852c-12c78d4e097f
   harness_version: 2.1.322 (Claude Code)
 history:
 - id: 01a1b929-7921-7980-8202-36c2cc4f3845
