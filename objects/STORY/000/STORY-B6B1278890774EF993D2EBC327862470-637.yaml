@@ -24,8 +24,21 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-11T13:49:14.150141111Z
-modified_at: 2026-11-11T13:49:14.150141111Z
+modified_at: 2026-11-11T13:49:23.686340003Z
 req_type: Story
+relationships:
+- rel_type:
+    custom: covers
+  target_id: 01a1c77e-1fad-7aa1-8039-5aaae36df683
+  created_at: 2026-11-11T13:49:23.686336956Z
+  created_by: joe
+history:
+- id: 01a1cade-da12-7dd2-9600-b62c946849dd
+  author: joe
+  timestamp: 2026-11-11T13:49:24.882990463Z
+  session_id: 01a1ca83-fabb-7663-852c-12c78d4e097f
+  harness_version: 2.1.322 (Claude Code)
+  changes: []
 filed_at:
   code_sha: 11b131dfe3341e6d9c7127d64370f91366094711
   branch: main
