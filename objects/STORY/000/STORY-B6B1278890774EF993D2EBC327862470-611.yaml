@@ -3,12 +3,12 @@ spec_id: STORY-b6b1278890774ef993d2ebc327862470-611
 agreed_id: STORY-2688
 title: 'PR reconciler: one tested command maps every open PR to one state, next action and owner, and performs the mechanical actions'
 description: 'Problem: on 2026-11-08 the PR control plane was untested bash loops (auto-train, auto-rework, review-watch-loop) plus advisor sweeps. A restart wiped auto-rework''s in-memory seen set and it re-reworked old heads. Requirement: derive each PR''s state from durable facts (open/closed, mergeable, head SHA, verdict at head, CI at head, hold state, lane running) into exactly one of a closed set of states, each with one next action and owner. Mechanical actions run idempotently from durable state; judgment states route to a named seat. Acceptance: table-driven tests cover every state; restart mid-pass repeats no action; the operator scripts can be retired. Architecture change: sketch and advisor signoff first.'
-status: NeedsAttention
+status: Approved
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-09T01:57:49.197822183Z
-modified_at: 2026-11-11T09:38:35.049019627Z
+modified_at: 2026-11-11T09:38:37.706385957Z
 req_type: Story
 tags:
 - area:orchestration
@@ -82,6 +82,13 @@ comments:
   modified_at: 2026-11-11T09:38:35.049019627Z
   session_id: 01a1c87f-970d-7ce0-9351-e4e75a87731e
   harness_version: 2.1.322 (Claude Code)
+- id: 01a1c9f9-400a-7863-ac31-d248d5ffd923
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida edit --status`. It was punted on: design-fork: Architecture sketch posted on this spec per binding 2026-11-10 advisor brief. Advisor signoff required before implementation: shared PR-state derivation, expanded state enum and precedence, concrete owner routing, train nomination boundary, and durable operation receipts for crash recovery. Sketch-only lane complete; no source edits.. No triage reason was given.'
+  created_at: 2026-11-11T09:38:37.706374746Z
+  modified_at: 2026-11-11T09:38:37.706374746Z
+  session_id: 01a1c87f-970d-7ce0-9351-e4e75a87731e
+  harness_version: 2.1.322 (Claude Code)
 history:
 - id: 01a1be07-037f-7533-9b8f-9af4ceb825a2
   author: joe
@@ -113,6 +120,15 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a1c9f9-400a-7863-ac31-d236d962e443
+  author: joe
+  timestamp: 2026-11-11T09:38:37.706357204Z
+  session_id: 01a1c87f-970d-7ce0-9351-e4e75a87731e
+  harness_version: 2.1.322 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 filed_at:
   code_sha: a7a14984cec5533987dfeccb70d1f91aaebbf22a
   branch: main
@@ -121,9 +137,3 @@ filed_at:
   aida_build_sha: 8a4a909a967
   vendor: claude
   session: 20abb7c3-8f9b-4a5e-b326-404921f3b450
-attention_reason:
-  category: design-fork
-  detail: 'Architecture sketch posted on this spec per binding 2026-11-10 advisor brief. Advisor signoff required before implementation: shared PR-state derivation, expanded state enum and precedence, concrete owner routing, train nomination boundary, and durable operation receipts for crash recovery. Sketch-only lane complete; no source edits.'
-  lean: Approve the shared pure classifier and existing effect-owner boundaries; require downstream idempotency/receipt contracts before enabling reconciliation effects.
-  raised_by: implementer
-  raised_at: 2026-11-10T19:40:26.177092127Z
