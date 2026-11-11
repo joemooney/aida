@@ -1744,11 +1744,9 @@ fn task1993_dispatcher_lost_before_claim_frees_its_reservation() {
         assert_eq!(attempts.len(), 1);
         assert_eq!(attempts[0].token, retry.token);
         assert!(active(&attempts[0]));
-        assert!(
-            log_tail(&restarted, &format!("PR-1-{}.log", attempt.token))
-                .unwrap()
-                .contains(trigger)
-        );
+        assert!(log_tail(&restarted, &format!("PR-1-{}.log", attempt.token))
+            .unwrap()
+            .contains(trigger));
     }
     // The parent's own reaping records an observed early exit directly.
     let (_temp, store) = fixture();
