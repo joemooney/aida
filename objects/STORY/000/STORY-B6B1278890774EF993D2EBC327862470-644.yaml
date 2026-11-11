@@ -1,0 +1,36 @@
+id: 01a1cbec-b3dd-7c72-8dfd-c7ab22f04ef8
+spec_id: STORY-b6b1278890774ef993d2ebc327862470-644
+agreed_id: STORY-2721
+title: 'Review PR-3854: [AI:codex] test(ci): verify runner ancestor reads with kernel permissions (Refs STORY-2695)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a1cbe1`) for branch `story-2695-s3`.
+
+  - PR: <https://github.com/joemooney/aida/pull/3854>
+  - Branch: `story-2695-s3` → `main`
+
+  ## Slice of (Refs only — not completed by this PR)
+
+  Commit subjects carry `(Refs SPEC-ID)`: this PR is one slice of a spec that a later PR completes. Review this slice against that spec's acceptance criteria.
+
+  - STORY-2695
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 3854` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-11T18:44:09.821000188Z
+modified_at: 2026-11-11T18:44:09.821000188Z
+req_type: Story
+filed_at:
+  code_sha: 084db2045ab47ac1c18fbef293abb2a3db53cb92
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 11b131dfe33
+  vendor: claude
+  session: 01a1cbe100f7
