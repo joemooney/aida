@@ -3,12 +3,12 @@ spec_id: BUG-b6b1278890774ef993d2ebc327862470-290
 agreed_id: BUG-2525
 title: A WAITING review verdict on a merged Refs-only batch PR never closes, so the spec's next batch lane is refused
 description: 'Observed 2026-11-11 for TASK-3448 and TASK-3428 (crate split, delivered as Refs-only batches): ''aida queue work TASK-3448 --no-human'' refuses with ''TASK-3448: WAITING - ... WAITING on GitHub Actions CI run 42732867418 ... Resume with a fresh review at the current head'' although that batch''s PR merged long ago and no PR is open for the spec. Cause: queue_cmd/work.rs refuse_waiting_review admits only when verdict.is_closed() (closed_by_merge); close_verdict_on_merge runs only in db_reconcile when a spec flips Done->Completed, which a Refs-only batch never causes. Fix: when the verdict''s reviewed PR/head is merged (or closed), treat it as closed; close it at merge detection for Refs-only PRs too. Acceptance: a test where a spec''s WAITING verdict names a merged PR and no open PR exists, and queue work admits the next batch; the TASK-3448/TASK-3428 verdicts are closed by the fix. Blocks EPIC-613 crate-split completion.'
-status: InProgress
+status: NeedsAttention
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-11T14:11:33.148855447Z
-modified_at: 2026-11-11T15:42:50.426346429Z
+modified_at: 2026-11-11T16:02:46.056800024Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -41,6 +41,13 @@ history:
   timestamp: 2026-11-11T15:42:53.131996478Z
   session_id: 01a1cb1ea835
   changes: []
+- id: 01a1cb58-f0a8-7291-ba3c-55e96b49a265
+  author: aida-orchestrator
+  timestamp: 2026-11-11T16:02:46.056826575Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 filed_at:
   code_sha: 11b131dfe3341e6d9c7127d64370f91366094711
   branch: main
@@ -50,3 +57,11 @@ filed_at:
   vendor: claude
   session: 01a1ca83-fabb-7663-852c-12c78d4e097f
   harness_version: 2.1.322 (Claude Code)
+failure_reason:
+  phase: reviewer
+  phase_index: 3
+  kind: verdict:request-changes
+  detail: 'Full diff reviewed: terminal WAITING closure can hide change findings, cannot retire synced waits, and accepts foreign-repository URLs; live TASK-3448/TASK-3428 repair unverified. CI pending at review time.'
+  recovery_hint: address the review findings, move BUG-2525 back to In Progress, and clear the PR hold only after approval
+  shelved_by: reviewer
+  shelved_at: 2026-11-11T16:02:46.056800024Z
