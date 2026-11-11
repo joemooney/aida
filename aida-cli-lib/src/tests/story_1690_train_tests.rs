@@ -5035,3 +5035,53 @@ fn bug2492_train_pending_inspection_waits_instead_of_rebuilding() {
         TrainCiReadiness::Pending(names) if names == vec!["merge-hold-gate"])
     );
 }
+
+// trace:STORY-2691 | ai:codex
+#[test]
+fn story2691_automatic_empty_discovery_is_idle() {
+    ADVISOR_LOOP.with(|automatic| {
+        automatic.set(true);
+        // Both no open PRs and train-only discovery produce zero candidates.
+        assert!(automatic_idle(true, &[]));
+        assert!(!automatic_idle(true, &[7]));
+        assert!(!automatic_idle(false, &[]));
+        automatic.set(false);
+    });
+    assert!(!automatic_idle(true, &[]));
+}
+
+// trace:STORY-2691 | ai:codex
+#[test]
+fn story2691_settled_gate_refusals_eject_before_land_and_on_recovery() {
+    for reason in ["merge hold present", "approval withdrawn"] {
+        for recovery in [false, true] {
+            let dir = tempfile::tempdir().unwrap();
+            let train = train_of("main", &fms(&[1]));
+            let mut forge = FakeForge::mains(&["main"]);
+            forge.gates.insert(1, Err(reason.into()));
+            if recovery {
+                let mut entry = journal::Entry::new(train.clone(), "train/old-1".into());
+                entry.change_id = Some(901);
+                entry.step = journal::Step::Merge;
+                journal::activate(dir.path(), entry).unwrap();
+                journal::clear();
+                let mut rails =
+                    ForgeRails::new(&mut forge, "recovery".into()).with_journal(dir.path());
+                let outcome = rails.resume().unwrap();
+                assert_eq!(outcome.ejected.len(), 1);
+                assert!(outcome.ejected[0].reason.contains(reason));
+                assert!(journal::entries(dir.path()).unwrap().is_empty());
+            } else {
+                let mut rails = ForgeRails::new(&mut forge, "preland".into());
+                opened(&mut rails, &train);
+                let Landing::Refused(ejected) = rails.land(&train).unwrap() else {
+                    panic!("settled refusal must eject");
+                };
+                assert_eq!(ejected.len(), 1);
+                assert!(ejected[0].reason.contains(reason));
+            }
+            assert!(forge.merged.is_empty());
+            assert_eq!(forge.retired.len(), 1);
+        }
+    }
+}

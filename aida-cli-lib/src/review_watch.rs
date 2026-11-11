@@ -2384,23 +2384,15 @@ pub(crate) fn run_with_program(
     let mut reported_trains = BTreeSet::new();
     loop {
         service::check_controller(&root)?;
-        children.retain_mut(|d| match d.child.try_wait() {
-            Ok(Some(status)) => {
-                if let Err(error) =
-                    mark_unclaimed_exit(&store, &d.key, &d.token, &status.to_string())
-                {
-                    eprintln!("{}: could not record dispatcher exit: {error:#}", d.key);
-                }
-                false
-            }
-            _ => true,
-        });
+        let (mut pass_failure, dispatch_succeeded) = reap_dispatchers(&store, &mut children);
+        service::controller_dispatch(&root, pass_failure.as_deref(), dispatch_succeeded)?;
+        pass_failure = None;
         // trace:STORY-2492 | ai:codex
         if !sync_pass(&root, args.once)? {
             std::thread::sleep(std::time::Duration::from_secs(args.interval));
             continue;
         }
-        let changes = match repo.discover(&root) {
+        let changes = match observe_pass_input(&root, "discovery", repo.discover(&root)) {
             Ok(changes) => changes,
             Err(error) if !args.once => {
                 eprintln!("review-watch discovery refused: {error:#}");
@@ -2433,7 +2425,6 @@ pub(crate) fn run_with_program(
         // One lazy classification per pass, rather than one /proc scan per PR.
         // trace:BUG-2442 | ai:codex
         let authors = update::AuthorLiveness::default();
-        let mut pass_failure = None;
         watch_changes(
             &store,
             reviewable_changes(changes, &mut reported_trains),
@@ -2462,6 +2453,28 @@ pub(crate) fn run_with_program(
         }
         std::thread::sleep(std::time::Duration::from_secs(args.interval));
     }
+}
+
+// Confirm outcomes by reaping our own children; reservations alone are not success.
+// trace:STORY-2691 | ai:codex
+fn reap_dispatchers(store: &Store, children: &mut Vec<Dispatcher>) -> (Option<String>, bool) {
+    let mut pass_failure = None;
+    let mut dispatch_succeeded = false;
+    children.retain_mut(|d| match d.child.try_wait() {
+        Ok(Some(status)) => {
+            if status.success() {
+                dispatch_succeeded = true;
+            } else {
+                pass_failure = Some(format!("{}: dispatcher exited {status}", d.key));
+            }
+            if let Err(error) = mark_unclaimed_exit(store, &d.key, &d.token, &status.to_string()) {
+                eprintln!("{}: could not record dispatcher exit: {error:#}", d.key);
+            }
+            false
+        }
+        _ => true,
+    });
+    (pass_failure, dispatch_succeeded)
 }
 
 // Train members were reviewed at their own heads. Exclude the landing PR
@@ -2495,8 +2508,17 @@ fn reviewable_changes(
 // A transient synchronization refusal skips only this pass. `--once` retains
 // its nonzero contract; continuous mode will try again after the interval.
 // trace:STORY-b6b1278890774ef993d2ebc327862470-418.ac8cff0f | ai:codex
+fn observe_pass_input<T>(root: &Path, label: &str, result: Result<T>) -> Result<T> {
+    if let Err(error) = &result {
+        if !is_busy(error) {
+            service::controller_pass(root, Some(&format!("{label}: {error:#}")))?;
+        }
+    }
+    result
+}
+
 fn sync_pass(root: &Path, once: bool) -> Result<bool> {
-    match admission::sync(root) {
+    match observe_pass_input(root, "synchronization", admission::sync(root)) {
         Ok(()) => Ok(true),
         Err(error) if once => Err(error),
         Err(error) => {
@@ -3336,9 +3358,14 @@ pub(crate) fn fixture_admission_spawn_failure(
 // Automatic trains deliberately require an approval recorded on this exact
 // head. The train's ordinary member gate still checks all publication gates.
 // trace:STORY-2691 | ai:codex
-pub(crate) fn advisor_train_eligible(root: &Path, pr: u64) -> Result<String> {
-    let repo = forge::Repository::load(root)?;
-    let change = repo.change(root, pr)?;
+pub(crate) fn advisor_train_eligible(
+    root: &Path,
+    pr: u64,
+) -> std::result::Result<String, crate::pr_train::MemberGateError> {
+    let unavailable =
+        |e: anyhow::Error| crate::pr_train::MemberGateError::Unavailable(format!("{e:#}"));
+    let repo = forge::Repository::load(root).map_err(unavailable)?;
+    let change = repo.change(root, pr).map_err(unavailable)?;
     train::eligible(&change, &ready::Live { root, repo: &repo })?;
     Ok(change.head)
 }

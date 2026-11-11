@@ -1300,3 +1300,79 @@ fn story2691_auto_train_requires_exact_head_green_ci_and_no_hold() {
     c.head_branch = None;
     assert!(train::eligible(&c, &Fake::ready()).is_err());
 }
+
+// trace:STORY-2691 | ai:codex
+#[test]
+fn story2691_train_settled_refusals_differ_from_evidence_failures() {
+    use crate::pr_train::MemberGateError::{Refused, Unavailable};
+    let mut c = change(0, false);
+    c.head_branch = Some("feature/example".into());
+    let mut f = Fake::ready();
+    f.hold = Ok(Some("hold added before landing".into()));
+    assert!(matches!(train::eligible(&c, &f), Err(Refused(_))));
+    f = Fake::ready();
+    f.approval = Err("approval withdrawn during recovery".into());
+    assert!(matches!(train::eligible(&c, &f), Err(Refused(_))));
+    f = Fake::ready();
+    f.ci.as_mut().unwrap().checks[1].outcome = CheckOutcome::Failed;
+    assert!(matches!(train::eligible(&c, &f), Err(Refused(_))));
+    f = Fake::ready();
+    f.hold = Err("hold read failed".into());
+    assert!(matches!(train::eligible(&c, &f), Err(Unavailable(_))));
+    f = Fake::ready();
+    f.ci = Err("CI read failed".into());
+    assert!(matches!(train::eligible(&c, &f), Err(Unavailable(_))));
+}
+
+// trace:STORY-2691 | ai:codex
+#[test]
+fn story2691_unreadable_approval_artifacts_are_unavailable() {
+    let (temp, _) = fixture();
+    assert!(ready::train_verdict_reads(temp.path(), 7, &[]).is_ok());
+    let dir = temp.path().join(".aida/review-verdicts");
+    std::fs::create_dir_all(&dir).unwrap();
+    std::fs::write(dir.join("PR-7.json"), "invalid verdict").unwrap();
+    assert!(matches!(
+        ready::train_verdict_reads(temp.path(), 7, &[]),
+        Err(crate::pr_train::MemberGateError::Unavailable(_))
+    ));
+}
+
+// trace:STORY-2691 | ai:codex
+#[test]
+fn story2691_repeated_train_evidence_failures_alert() {
+    for source in ["CI", "hold", "approval"] {
+        let (temp, _) = fixture();
+        let mut c = change(0, false);
+        c.head_branch = Some("feature/example".into());
+        for _ in 0..3 {
+            let mut f = Fake::ready();
+            let failure = match source {
+                "CI" => {
+                    f.ci = Err("CI unavailable".into());
+                    train::eligible(&c, &f).unwrap_err()
+                }
+                "hold" => {
+                    f.hold = Err("hold unavailable".into());
+                    train::eligible(&c, &f).unwrap_err()
+                }
+                _ => {
+                    let dir = temp.path().join(".aida/review-verdicts");
+                    std::fs::create_dir_all(&dir).unwrap();
+                    std::fs::write(dir.join("PR-7.json"), "invalid verdict").unwrap();
+                    ready::train_verdict_reads(temp.path(), 7, &[]).unwrap_err()
+                }
+            };
+            let crate::pr_train::MemberGateError::Unavailable(reason) = failure else {
+                panic!("evidence failure must not become ineligibility");
+            };
+            train_service::record_failure(temp.path(), Some(&reason)).unwrap();
+        }
+        let state: serde_json::Value = serde_json::from_slice(
+            &std::fs::read(temp.path().join(".aida/auto-train/failures.json")).unwrap(),
+        )
+        .unwrap();
+        assert_eq!(state["count"], 3);
+        assert_eq!(state["alert"]["sent"], true);
+    }
+}

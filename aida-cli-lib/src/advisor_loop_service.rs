@@ -769,6 +769,8 @@ fn rebind_after_launch_with(
 #[derive(Default, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 struct Failures {
+    #[serde(default)]
+    dispatch_pending: bool,
     count: u32,
     episode: String,
     alert: Option<Notice>,
@@ -783,9 +785,18 @@ fn failure_state(root: &Path) -> Result<Failures> {
         .map(|v| v.unwrap_or_default())
 }
 pub(super) fn record_failure(root: &Path, reason: Option<&str>) -> Result<()> {
+    record_outcome(root, reason, Some(true))
+}
+fn record_outcome(root: &Path, reason: Option<&str>, dispatched: Option<bool>) -> Result<()> {
     let dir = directory(root, true)?.context("service directory missing")?;
     let _lock = dir.lock("failures.lock")?;
     let mut state = failure_state(root)?;
+    match dispatched {
+        Some(false) => state.dispatch_pending = true,
+        Some(true) => state.dispatch_pending = false,
+        None if reason.is_none() && state.dispatch_pending => return Ok(()),
+        None => {}
+    }
     if let Some(reason) = reason {
         if state.episode.is_empty() {
             state.episode = uuid::Uuid::new_v4().to_string();
@@ -817,6 +828,75 @@ pub(super) fn record_failure(root: &Path, reason: Option<&str>) -> Result<()> {
 #[cfg(test)]
 mod loop_tests {
     use super::*;
+
+    // Reap actual asynchronous children, rather than simulating record_failure calls.
+    // trace:STORY-2691 | ai:codex
+    #[test]
+    fn story2691_failed_dispatch_children_raise_a_durable_alert() {
+        let temp = tempfile::tempdir().unwrap();
+        let root = temp.path();
+        let store = Store::open(root, "github:github.com/owner/repo").unwrap();
+        for _ in 0..3 {
+            let mut child = std::process::Command::new("/bin/sh")
+                .args(["-c", "exit 23"])
+                .spawn()
+                .unwrap();
+            child.wait().unwrap();
+            let mut children = vec![super::super::Dispatcher {
+                child,
+                key: "PR-7".into(),
+                token: "missing".into(),
+            }];
+            let (failure, success) = super::super::reap_dispatchers(&store, &mut children);
+            assert!(!success);
+            assert!(children.is_empty());
+            record_outcome(root, Some(&failure.unwrap()), Some(false)).unwrap();
+            record_outcome(root, None, None).unwrap();
+        }
+        assert!(failure_state(root).unwrap().alert.unwrap().sent);
+        // Reloading the durable episode and an idle pass cannot erase it.
+        record_outcome(root, None, None).unwrap();
+        assert_eq!(failure_state(root).unwrap().count, 3);
+        let mut child = std::process::Command::new("/bin/sh")
+            .args(["-c", "exit 0"])
+            .spawn()
+            .unwrap();
+        child.wait().unwrap();
+        let mut children = vec![super::super::Dispatcher {
+            child,
+            key: "PR-7".into(),
+            token: "missing".into(),
+        }];
+        let (failure, success) = super::super::reap_dispatchers(&store, &mut children);
+        assert!(success && failure.is_none());
+        record_failure(root, None).unwrap();
+        assert_eq!(failure_state(root).unwrap().count, 0);
+    }
+
+    // trace:STORY-2691 | ai:codex
+    #[test]
+    fn story2691_discovery_and_sync_failures_alert_then_recover() {
+        if TRAIN {
+            return;
+        }
+        let temp = tempfile::tempdir().unwrap();
+        let root = temp.path();
+        CONTROLLER.with(|id| *id.borrow_mut() = Some("fixture".into()));
+        for label in ["discovery", "synchronization", "discovery"] {
+            assert!(super::super::observe_pass_input::<()>(
+                root,
+                label,
+                Err(anyhow::anyhow!("authentication unavailable"))
+            )
+            .is_err());
+        }
+        assert_eq!(failure_state(root).unwrap().count, 3);
+        assert!(failure_state(root).unwrap().alert.unwrap().sent);
+        super::super::observe_pass_input(root, "discovery", Ok(())).unwrap();
+        controller_pass(root, None).unwrap();
+        assert_eq!(failure_state(root).unwrap().count, 0);
+        CONTROLLER.with(|id| *id.borrow_mut() = None);
+    }
 
     // Both fixed services exercise the same durable alert state machine.
     // trace:STORY-2691 | ai:codex
@@ -906,7 +986,21 @@ mod loop_tests {
 // trace:STORY-2691 | ai:codex
 pub(super) fn controller_pass(root: &Path, failure: Option<&str>) -> Result<()> {
     if CONTROLLER.with(|id| id.borrow().is_some()) {
-        record_failure(root, failure)?;
+        record_outcome(root, failure, None)?;
+    }
+    Ok(())
+}
+
+// A failed asynchronous dispatch remains an episode across controller restarts.
+// Only a confirmed successful dispatch clears that part of the episode.
+// trace:STORY-2691 | ai:codex
+pub(super) fn controller_dispatch(root: &Path, failure: Option<&str>, success: bool) -> Result<()> {
+    if CONTROLLER.with(|id| id.borrow().is_some()) {
+        if failure.is_some() {
+            record_outcome(root, failure, Some(false))?;
+        } else if success {
+            record_outcome(root, None, Some(true))?;
+        }
     }
     Ok(())
 }

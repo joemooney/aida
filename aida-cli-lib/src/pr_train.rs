@@ -1209,10 +1209,7 @@ fn typed_gate_member_with(
     // directly. Compare the strict evidence with this metadata snapshot.
     // trace:STORY-2691 | ai:codex
     if ADVISOR_LOOP.with(std::cell::Cell::get) {
-        let observed = crate::review_watch::advisor_train_eligible(checks.marker_root(), pr)
-            .map_err(|e| {
-                MemberGateError::Unavailable(format!("automatic train eligibility: {e:#}"))
-            })?;
+        let observed = crate::review_watch::advisor_train_eligible(checks.marker_root(), pr)?;
         if observed != head {
             return Err(MemberGateError::Unavailable(
                 "head moved during automatic train admission".into(),
@@ -1613,6 +1610,10 @@ pub(crate) fn tty_consents(interactive_tty: bool, named: bool) -> bool {
 // Recovery settles riders before admission, including an invocation whose only
 // candidates were just recovered. It must not schedule those members again.
 // trace:STORY-2401 | ai:codex
+fn automatic_idle(all_ready: bool, candidates: &[u64]) -> bool {
+    all_ready && candidates.is_empty() && ADVISOR_LOOP.with(std::cell::Cell::get)
+}
+
 fn filter_recovered_candidates(candidates: &mut Vec<u64>, recovered: &Outcome) -> Result<()> {
     let mut seen = std::collections::BTreeSet::new();
     candidates.retain(|n| seen.insert(*n));
@@ -3942,6 +3943,9 @@ pub(crate) fn pr_train_handler_with_dispatch_ctx(
     } else {
         opts.prs.to_vec()
     };
+    if automatic_idle(opts.all_ready, &candidates) {
+        return Ok(());
+    }
     filter_recovered_candidates(&mut candidates, &recovered)?;
     if let Some(why) = explicit_over_max_refusal(candidates.len(), opts.max, opts.all_ready) {
         anyhow::bail!(why);
@@ -3974,19 +3978,28 @@ pub(crate) fn pr_train_handler_with_dispatch_ctx(
             refused.push(Ejected { pr, reason });
             continue;
         }
-        match gate_member(
-            &project_root,
-            &main_worktree,
-            forge.as_ref(),
+        match typed_gate_member_with(
+            &mut LiveChecks {
+                project_root: &project_root,
+                main_worktree: &main_worktree,
+                forge: forge.as_ref(),
+                base: &base,
+                named: prs_named_on_command_line(opts),
+            },
             &base,
             pr,
-            prs_named_on_command_line(opts),
         ) {
             Ok(m) => {
                 println!("  ✓ #{pr} ready at {}: {}", short(&m.head), m.subject);
                 members.push(m);
             }
-            Err(reason) => {
+            Err(MemberGateError::Unavailable(reason))
+                if ADVISOR_LOOP.with(std::cell::Cell::get) =>
+            {
+                anyhow::bail!("PR #{pr} admission evidence unavailable: {reason}");
+            }
+            Err(error) => {
+                let reason = error.reason();
                 println!("  ✗ #{pr} not eligible: {reason}");
                 refused.push(Ejected { pr, reason });
             }

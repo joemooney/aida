@@ -81,6 +81,13 @@ pub(super) trait Evidence {
     /// round-cap wake asks this, since a capped change's earlier blocking
     /// rounds can keep the corpus refusing a head that was reviewed.
     // trace:TASK-2238 | ai:claude
+    fn train_approval(
+        &self,
+        change: &forge::Change,
+    ) -> std::result::Result<Approval, crate::pr_train::MemberGateError> {
+        self.approval(change)
+            .map_err(crate::pr_train::MemberGateError::Refused)
+    }
     fn approval_only(&self, change: &forge::Change) -> std::result::Result<Approval, String> {
         self.approval(change)
     }
@@ -262,6 +269,59 @@ impl Evidence for Live<'_> {
     fn approval(&self, change: &forge::Change) -> std::result::Result<Approval, String> {
         live_approval(self.root, change)
     }
+    fn train_approval(
+        &self,
+        change: &forge::Change,
+    ) -> std::result::Result<Approval, crate::pr_train::MemberGateError> {
+        use crate::forge_observed::Observed;
+        use crate::pr_train::MemberGateError::{Refused, Unavailable};
+        let (_, _, ids) = crate::gate::approval::merge_approval_subject(
+            &[self.root],
+            self.root,
+            change.id,
+            &[],
+            change.head_branch.as_deref(),
+            Some(&change.head),
+        );
+        train_verdict_reads(self.root, change.id, &ids)?;
+        match crate::gate::approval::observe_merge_path_approval_gate(
+            self.root,
+            change.id,
+            &[],
+            change.head_branch.as_deref(),
+            Some(&change.head),
+        ) {
+            Observed::Known(result) => {
+                result.map_err(Refused)?;
+            }
+            Observed::Pending(why) | Observed::Transient(why) => return Err(Unavailable(why)),
+        }
+        let (candidates, policy, ids) = crate::gate::approval::merge_approval_subject(
+            &[self.root],
+            self.root,
+            change.id,
+            &[],
+            None,
+            Some(&change.head),
+        );
+        let site =
+            crate::gate::review_carryover::CarryOverSite::read_only(self.root, Some(&change.base));
+        let approval =
+            approval_at(change.id, &candidates, &change.head, &policy, &site).map_err(Refused)?;
+        let decision = crate::gate::merge_hold_core::corpus_gate_decision(
+            self.root,
+            change.id,
+            &ids,
+            Some(&change.base),
+            || Some(change.head.clone()),
+            false,
+        )
+        .map_err(|e| Unavailable(format!("{e:#}")))?;
+        if let crate::gate::merge_hold_core::CorpusMergeGate::Refuse { message, .. } = decision {
+            return Err(Refused(message));
+        }
+        Ok(approval)
+    }
     fn approval_only(&self, change: &forge::Change) -> std::result::Result<Approval, String> {
         live_approval_only(self.root, change)
     }
@@ -295,6 +355,39 @@ impl Evidence for Live<'_> {
 
 // The Live adapters' bodies, free of the forge repository so tests drive
 // them on real fixtures. trace:TASK-1945 | ai:claude (TASK-2203)
+// Optional absent verdicts are settled absence; refused or malformed current
+// artifacts are unavailable evidence, never a withdrawn approval.
+// trace:STORY-2691 | ai:codex
+pub(super) fn train_verdict_reads(
+    root: &Path,
+    pr: u64,
+    ids: &[String],
+) -> std::result::Result<(), crate::pr_train::MemberGateError> {
+    use crate::pr_train::MemberGateError::Unavailable;
+    let main = crate::main_worktree_root_from(root);
+    for root in [root, main.as_path()] {
+        for key in std::iter::once(format!("PR-{pr}")).chain(ids.iter().cloned()) {
+            let path = crate::gate::review_verdict::verdict_path(root, &key);
+            match crate::gate::review_verdict::read_verdict_body(&path) {
+                Ok(body)
+                    if crate::gate::review_verdict::parse_recorded_verdict(&body).is_some() => {}
+                Err(error)
+                    if error.kind() == std::io::ErrorKind::NotFound
+                        && matches!(std::fs::symlink_metadata(&path), Err(e) if e.kind() == std::io::ErrorKind::NotFound) =>
+                    {}
+                result => {
+                    return Err(Unavailable(format!(
+                        "approval evidence {} unreadable or invalid: {:?}",
+                        path.display(),
+                        result.err()
+                    )))
+                }
+            }
+        }
+    }
+    Ok(())
+}
+
 pub(super) fn live_approval(
     root: &Path,
     change: &forge::Change,

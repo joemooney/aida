@@ -2,31 +2,52 @@
 // trace:STORY-2691 | ai:codex
 use super::*;
 
-pub(super) fn eligible(change: &forge::Change, evidence: &dyn ready::Evidence) -> Result<()> {
-    anyhow::ensure!(!change.gitlab, "automatic trains require GitHub");
-    anyhow::ensure!(
+pub(super) fn eligible(
+    change: &forge::Change,
+    evidence: &dyn ready::Evidence,
+) -> std::result::Result<(), crate::pr_train::MemberGateError> {
+    use crate::pr_train::MemberGateError::{Refused, Unavailable};
+    macro_rules! ensure {
+        ($condition:expr, $message:expr $(,)?) => {
+            if !$condition {
+                return Err(Refused($message.into()));
+            }
+        };
+    }
+    ensure!(!change.gitlab, "automatic trains require GitHub");
+    ensure!(
         change
             .head_branch
             .as_deref()
             .is_some_and(|b| !b.starts_with(crate::pr_train::BRANCH_PREFIX)),
         "train branch or unknown source branch"
     );
-    anyhow::ensure!(
+    ensure!(
         evidence.under_review(change).is_none(),
         "review still running"
     );
-    anyhow::ensure!(evidence.hold(change)?.is_none(), "merge hold present");
-    let approval = evidence.approval(change).map_err(anyhow::Error::msg)?;
-    anyhow::ensure!(
+    ensure!(
+        evidence
+            .hold(change)
+            .map_err(|e| Unavailable(format!("{e:#}")))?
+            .is_none(),
+        "merge hold present"
+    );
+    let approval = evidence.train_approval(change)?;
+    ensure!(
         approval.reviewed == change.head && approval.carried.is_none(),
         "approval must be recorded at the exact head"
     );
-    let mut checks = evidence.ci(&change.head)?;
-    anyhow::ensure!(
+    let mut checks = evidence
+        .ci(&change.head)
+        .map_err(|e| Unavailable(format!("{e:#}")))?;
+    ensure!(
         checks.sha.eq_ignore_ascii_case(&change.head),
         "CI is for another head"
     );
-    let required = evidence.required_checks()?;
+    let required = evidence
+        .required_checks()
+        .map_err(|e| Unavailable(format!("{e:#}")))?;
     // The ordinary train gate also resolves forge-required policy. With no
     // configured list, preserve the conservative all-checks readiness rule.
     // Informational checks cannot delay an explicitly configured required set.
@@ -34,15 +55,18 @@ pub(super) fn eligible(change: &forge::Change, evidence: &dyn ready::Evidence) -
         checks.checks.retain(|c| required.contains(&c.name));
     }
     let names: Vec<&str> = required.iter().map(String::as_str).collect();
-    anyhow::ensure!(
+    ensure!(
         matches!(
             crate::forge::judge_commit_checks(&checks, &names),
             crate::forge::CommitCi::Green
         ),
         "required CI is not green at the head"
     );
-    anyhow::ensure!(
-        evidence.head(change)? == change.head,
+    ensure!(
+        evidence
+            .head(change)
+            .map_err(|e| Unavailable(format!("{e:#}")))?
+            == change.head,
         "head moved during evaluation"
     );
 
