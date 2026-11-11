@@ -2037,7 +2037,7 @@ pub(crate) struct ReleaseArgs {
 // early like `dev`. trace:STORY-472 | ai:claude
 fn run_release(
     matches: &clap::ArgMatches,
-    _ctx: &crate::command_registry::DispatchCtx,
+    _ctx: &crate::cmdkit::DispatchCtx,
 ) -> anyhow::Result<()> {
     let args = <ReleaseArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
     let ReleaseArgs {
@@ -2050,19 +2050,18 @@ fn run_release(
 }
 
 // trace:STORY-1728 | ai:claude
-pub(crate) static RELEASE: crate::command_registry::CommandReg =
-    crate::command_registry::CommandReg {
-        name: "release",
-        help_after: "rebase",
-        command: <ReleaseArgs as clap::CommandFactory>::command,
-        policy: |_| crate::command_registry::CmdPolicy {
-            stakeholder: crate::stakeholder_role::StakeholderAction::Write,
-            per_write_auto_push: false,
-            skip_role_restore_prompt: false,
-            team_identity_write: false,
-        },
-        run: crate::command_registry::Handler::Early(run_release),
-    };
+pub(crate) static RELEASE: crate::cmdkit::CommandReg = crate::cmdkit::CommandReg {
+    name: "release",
+    help_after: "rebase",
+    command: <ReleaseArgs as clap::CommandFactory>::command,
+    policy: |_| crate::cmdkit::CmdPolicy {
+        stakeholder: crate::stakeholder_role::StakeholderAction::Write,
+        per_write_auto_push: false,
+        skip_role_restore_prompt: false,
+        team_identity_write: false,
+    },
+    run: crate::cmdkit::Handler::Early(run_release),
+};
 
 #[cfg(test)]
 mod task_1981_publication_tests {
