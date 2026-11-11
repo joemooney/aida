@@ -1621,7 +1621,8 @@ fn story_2696_corpus_superseded_policy_cannot_veto_clean_merge() {
                 }),
             );
             if index == 1 {
-                let previous = crate::gate::review_verdict::read_current_verdict_object(&path).unwrap();
+                let previous =
+                    crate::gate::review_verdict::read_current_verdict_object(&path).unwrap();
                 assert_eq!(
                     crate::gate::review_verdict::record_outcome(Some(&previous), &act),
                     crate::gate::review_verdict::RecordOutcome::Unchanged
