@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-10T10:24:49.978786902Z
-modified_at: 2026-11-11T04:31:14.256134744Z
+modified_at: 2026-11-11T04:31:15.607515513Z
 req_type: Bug
 comments:
 - id: 01a1c544-9448-77c1-a5a0-c8d1776ee831
@@ -112,6 +112,20 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: No-hub pre-claim exits still consume the missing-verdict budget and strand a head prematurely. BUG-2518 AC1: unverified; AC2: verified by no_verdict_blocker/retry_blockers and bug2518_no_verdict_backoff_cap_and_new_head; AC3: verified by bug2518_no_verdict_backoff_cap_and_new_head; AC4: verified by added local/admission regression tests (source inspection only). BUG-2518 (bug protocol): met, two test files changed. CI pending at review time.. No triage reason was given.'
   created_at: 2026-11-11T04:31:14.256129210Z
   modified_at: 2026-11-11T04:31:14.256129210Z
+  session_id: 01a1c87f-970d-7ce0-9351-e4e75a87731e
+  harness_version: 2.1.322 (Claude Code)
+- id: 01a1c8df-d7fe-75f1-be47-0a18b8acbca7
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (BUG-2518):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: bc5812a873ed
+    Recorded: 2026-11-11T04:25:30.343777417+00:00
+    Findings:
+    1. [P2] aida-cli-lib/src/review_watch.rs:2638-2642: Preserve the inherited no-verdict budget for proven pre-claim dispatcher exits without a distributed hub. can_cancel requires admission_hub.is_some(), so mark_unclaimed_exit still records Exited in ordinary local-only operation even though identity is absent and no worker/reviewer started. After one actual verdict-less review, selection earmarks count 2; a reaped pre-claim failure becomes Exited and the next selection advances to 3, then another pre-claim failure permanently reports three review attempts although only one review started. Separate proof of local pre-spawn failure from authorization to publish a hub Cancelled transition, retaining live/ambiguous process gates. Add a no-hub regression with repeated mark_unclaimed_exit cancellations, successful readmission, and exhaustion only after three started attempts. Also cover the equivalent proven pre-claim recovery through reconcile_lost_dispatchers.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-11T04:31:15.454789550Z
+  modified_at: 2026-11-11T04:31:15.454789550Z
   session_id: 01a1c87f-970d-7ce0-9351-e4e75a87731e
   harness_version: 2.1.322 (Claude Code)
 history:
