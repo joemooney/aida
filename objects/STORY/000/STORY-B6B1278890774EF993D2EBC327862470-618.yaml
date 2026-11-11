@@ -33,7 +33,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-09T16:33:51.967266Z
-modified_at: 2026-11-11T08:54:07.569380486Z
+modified_at: 2026-11-11T08:54:09.644905596Z
 req_type: Story
 tags:
 - area:ci
@@ -256,6 +256,20 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: S2 full sweep: runner cannot start because root-owned current is 0711; upstream ancestor enumeration requires read access. CI pending at review time; S3 acceptance remains separate.. No triage reason was given.'
   created_at: 2026-11-11T08:54:07.569373758Z
   modified_at: 2026-11-11T08:54:07.569373758Z
+  session_id: 01a1c87f-970d-7ce0-9351-e4e75a87731e
+  harness_version: 2.1.322 (Claude Code)
+- id: 01a1c9d0-8956-7330-a57a-91d553042ab4
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (STORY-2695):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: ba579362b4cc
+    Recorded: 2026-11-11T08:41:28.626047883+00:00
+    Findings:
+    1. [P1] scripts/runner/controller.py:458: current is root-owned mode 0711, while every runner uid is non-root and the runner root is current/runner. Runner.Listener Program.cs calls IOUtil.ValidateExecutePermission before parsing arguments; IOUtil.cs:431-463 enumerates every ancestor and throws UnauthorizedAccessException when directory contents cannot be read. Thus every slot fails startup before job pickup/gate. Make current readable to its service uid (e.g. validated root-owned 0755, keeping work trees 0700), correct runbook guidance, and add a regression modeling actual ancestor enumeration: LaunchIntegration currently mocks the runner and asserts the broken 0711 mode. Upstream evidence at actions/runner commit 5f626f109076e392150ac367cf67db5deea65033, src/Runner.Listener/Program.cs:88-100 and src/Runner.Sdk/Util/IOUtil.cs:431-463.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-11T08:54:09.494413384Z
+  modified_at: 2026-11-11T08:54:09.494413384Z
   session_id: 01a1c87f-970d-7ce0-9351-e4e75a87731e
   harness_version: 2.1.322 (Claude Code)
 history:
