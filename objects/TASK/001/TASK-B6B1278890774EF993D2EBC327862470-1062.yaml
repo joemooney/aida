@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-10T22:45:07.512110557Z
-modified_at: 2026-11-11T04:57:21.137852867Z
+modified_at: 2026-11-11T05:04:46.018834173Z
 req_type: Task
 tags:
 - batch:fasttrack
@@ -90,6 +90,17 @@ comments:
   modified_at: 2026-11-11T04:55:23.680460340Z
   session_id: 01a1c87f-970d-7ce0-9351-e4e75a87731e
   harness_version: 2.1.322 (Claude Code)
+- id: 01a1c8fe-85c2-7853-b244-408c4d22d4bc
+  author: dirtlab
+  content: |
+    Round 3 addresses both findings as written. P1: removed Forge::ci_wait_details, both GitHub/GitLab implementations and the jobs-payload formatter/tests; train progress now uses a pure CheckRow slice helper with run IDs, names and buckets only. No additional forge reads or readiness/wait/eject changes. Removed queue-age/GitLab scope from docs. P2: shard membership is workflow CI plus check name CI (...); Release is ancillary. Added a reduced check-row fixture for review-evidence run 42913999193 (seven matrix checks plus skipped Release), with 7/7 regression coverage, per-run grouping, pending/fail wording and Build summary wording.
+    Validation: lane job j20261111T045851163-2-0 executed train_ci_row_progress tests: 2 passed. Lane job j20261111T050026556-2-0 executed bug2401 readiness regressions: 3 passed. rustfmt --check and git diff --check passed. CI gate inventory audit passed (85 classified).
+    Required make check-ci-fast remains BLOCKED: it invokes cargo check -p aida-tui --all-targets directly, conflicting with this seat's launcher-only Cargo rule. Stopped that invocation; retry with a temporary Cargo-to-lane-job adapter was refused by check-ci-gates' fast-tier aida-command guard. Host must run the unmodified gate. No gate pass claimed; CI and independent approval remain required. Codegraph client at supplied path is absent; navigation used rg.
+    Changed files: aida-cli-lib/src/forge.rs, aida-cli-lib/src/pr_train.rs, aida-cli-lib/src/tests/story_1690_train_tests.rs, aida-cli-lib/src/tests/task_3782_run_42913999193.json, docs/cli/04-git-lifecycle.md. Native seat leaves all edits uncommitted for host publication; Refs declaration retains incomplete gate status.
+  created_at: 2026-11-11T05:04:46.018834173Z
+  modified_at: 2026-11-11T05:04:46.018834173Z
+  session_id: 01a1c8f7b53a
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1c7a5-2ff2-70e0-9325-0f86de361dd1
   author: aida-session-start
