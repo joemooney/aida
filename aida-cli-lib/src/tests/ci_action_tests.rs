@@ -464,3 +464,53 @@ fn ceiling_with_only_hold_gate_failure_is_not_red() {
         "a hold-gate-only failure must not become a ceiling Red"
     );
 }
+
+// trace:BUG-2492 | ai:codex
+#[test]
+fn bug2492_pending_hold_reaches_refinement_only_after_other_checks_settle() {
+    for gate in [
+        serde_json::json!({"__typename":"StatusContext","context":"merge-hold-gate","state":"PENDING"}),
+        serde_json::json!({"name":"merge-hold-gate","status":"PENDING"}),
+    ] {
+        for build in ["SUCCESS", "PENDING", "FAILURE"] {
+            let payload = serde_json::json!([{"number":42,"labels":[{"name":"aida:merge-hold"}],"statusCheckRollup":[
+                gate.clone(), {"context":"Build","state":build}
+            ]}])
+            .to_string();
+            let result = parse_ci_probe(&payload);
+            if build == "PENDING" {
+                assert_eq!(result, CiProbe::InProgress { pr_number: 42 });
+            } else {
+                let CiProbe::Red {
+                    pr_number,
+                    failed_summary,
+                } = result
+                else {
+                    panic!("hold never grants coarse green: {result:?}");
+                };
+                assert_eq!(pr_number, 42);
+                assert!(failed_summary.contains("merge-hold-gate"));
+                assert_eq!(failed_summary.contains("Build"), build == "FAILURE");
+            }
+        }
+    }
+}
+
+// trace:BUG-2492 | ai:codex
+#[test]
+fn bug2492_unconfirmed_pending_hold_is_not_red() {
+    for labels in [
+        serde_json::json!([]),
+        serde_json::json!([{"name":"aida:merge-hold-recorded"},{"name":"aida:merge-hold-cleared"}]),
+    ] {
+        let payload = serde_json::json!([{"number":42,"labels":labels,"statusCheckRollup":[
+            {"context":"merge-hold-gate","state":"PENDING"},
+            {"name":"Build","status":"COMPLETED","conclusion":"SUCCESS"}
+        ]}])
+        .to_string();
+        assert_eq!(
+            parse_ci_probe(&payload),
+            CiProbe::InProgress { pr_number: 42 }
+        );
+    }
+}

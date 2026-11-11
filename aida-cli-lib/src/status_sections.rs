@@ -2154,7 +2154,7 @@ pub(crate) fn collect_pr_facts_uncached(project_root: &std::path::Path, branch: 
             "--json",
             "number,title,url,state,statusCheckRollup",
             "-q",
-            r#"[(.number|tostring), .title, .url, .state, ([.statusCheckRollup[]?.conclusion] | unique | join(","))] | @tsv"#,
+            r#"[(.number|tostring), .title, .url, .state, ([.statusCheckRollup[]? | (.conclusion // .state)] | unique | join(","))] | @tsv"#,
         ])
         .output_retrying_etxtbsy();
     let out = match out {
