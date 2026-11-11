@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-11T04:48:14.810158291Z
-modified_at: 2026-11-11T04:53:33.054605177Z
+modified_at: 2026-11-11T05:00:25.943927052Z
 req_type: Bug
 comments:
 - id: 01a1c8f4-40fe-74c3-b857-9092196269fb
@@ -23,6 +23,13 @@ comments:
   content: 'Implementation: record and verify both verdict artifacts before hold/spec side effects; defer holds for launcher-anchored reviewers independently of AIDA_CONTAINED; permit handshake boundary fallback for those reviewers. Regression coverage includes native refusal/host holding and operator hold failure preserving both records. Validation is running through the lane job runner.'
   created_at: 2026-11-11T04:54:47.205013747Z
   modified_at: 2026-11-11T04:54:47.205013747Z
+  session_id: 01a1c8f1c9fd
+  harness_version: codex-cli 0.167.0
+- id: 01a1c8fa-8dd7-78f3-b7e3-d28675dcbb5e
+  author: dirtlab
+  content: 'Validation passed: lane job j20261111T045530690-2-0 ran cargo test --profile agent -p aida-cli-lib --lib -- bug_013_review_record_sha_tests: 8 passed, 0 failed, including native launcher refusal/host hold and operator hold-failure persistence regressions. git diff --check passed. Edits remain uncommitted for host publication.'
+  created_at: 2026-11-11T05:00:25.943927052Z
+  modified_at: 2026-11-11T05:00:25.943927052Z
   session_id: 01a1c8f1c9fd
   harness_version: codex-cli 0.167.0
 history:
