@@ -283,8 +283,9 @@ enum Phase {
     Completed,
     Failed,
     // The dispatcher observed queue work exit unsuccessfully. Terminal: it
-    // frees capacity and lets a later head dispatch, but never relaunches
-    // this head. trace:TASK-1993 | ai:claude
+    // frees capacity. Missing-verdict retries are bounded below.
+    // trace:TASK-1993 | ai:claude
+    // trace:BUG-2518 | ai:codex
     Exited,
     // A newer head made this review obsolete: its processes are being
     // stopped. Still active, so it keeps its capacity slot, and no new
@@ -357,6 +358,12 @@ struct Attempt {
     // trace:STORY-2401 | ai:codex
     #[serde(default)]
     fetch_failures: u8,
+    // Bounded retries survive replacement and controller restarts.
+    // trace:BUG-2518 | ai:codex
+    #[serde(default)]
+    no_verdict_attempts: u8,
+    #[serde(default)]
+    no_verdict_retry_at: Option<chrono::DateTime<chrono::Utc>>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     reviewer: Option<Identity>,
     // The dispatcher's process group (it leads it), recorded by the watcher
@@ -396,6 +403,27 @@ impl Attempt {
             !spawning || process.as_ref().is_some_and(|p| !p.alive())
         };
         gone(self.spawning, &self.worker) && gone(self.reviewer_spawning, &self.reviewer)
+    }
+    // No process-bound claim or descendant launch ever started this review.
+    // Keep this proof separate from authority to cancel a distributed claim.
+    // trace:BUG-2518 | ai:codex
+    fn unclaimed_before_spawn(&self) -> bool {
+        self.identity.is_none()
+            && matches!(self.phase, Phase::Reserved | Phase::Superseding)
+            && !self.spawning
+            && !self.reviewer_spawning
+            && self.worker.is_none()
+            && self.reviewer.is_none()
+    }
+    // Call only after proving the dispatcher exited. Hub cancellation authority
+    // is checked separately; local budget accounting depends only on spawn proof.
+    // trace:BUG-2518 | ai:codex
+    fn unclaimed_exit_phase(&self) -> Phase {
+        if self.unclaimed_before_spawn() {
+            Phase::Failed
+        } else {
+            Phase::Exited
+        }
     }
     fn unrecorded_descendant(&self) -> bool {
         (self.spawning && self.worker.is_none())
@@ -802,7 +830,14 @@ impl Store {
                 } else {
                     diagnostic
                 };
-                attempt.phase = Phase::Exited;
+                // Local recovery can prove no review started. A distributed
+                // claim still requires its owner's explicit cancellation.
+                // trace:BUG-2518 | ai:codex
+                attempt.phase = if attempt.admission_hub.is_none() {
+                    attempt.unclaimed_exit_phase()
+                } else {
+                    Phase::Exited
+                };
                 attempt.diagnostic = Some(diagnostic);
             }
         }
@@ -1240,6 +1275,7 @@ fn validate_state(state: &State, repository: &str) -> Result<()> {
         for attempt in &entry.attempts {
             anyhow::ensure!(
                 valid_sha(&attempt.head)
+                    && attempt.no_verdict_attempts <= 3
                     && heads.insert(&attempt.head)
                     && uuid::Uuid::parse_str(&attempt.token).is_ok()
                     && attempt
@@ -1335,6 +1371,17 @@ enum Action {
     Dispatch(Attempt),
     Notify(Notice),
     Skip(String),
+}
+
+// trace:BUG-2518 | ai:codex
+fn no_verdict_blocker(attempt: &Attempt) -> Option<String> {
+    (attempt.no_verdict_attempts >= 3
+        && attempt.no_verdict_retry_at.is_some()
+        && matches!(attempt.phase, Phase::Completed | Phase::Exited))
+    .then(|| format!(
+        "head {} blocked: three review attempts ended without a verdict ({}); inspect logs and release to retry",
+        attempt.head, attempt.diagnostic.as_deref().unwrap_or("no diagnostic")
+    ))
 }
 
 fn valid_sha(sha: &str) -> bool {
@@ -1452,13 +1499,42 @@ fn select_with_coverage(
         if fetch_failures >= 3 {
             return Ok(Action::Skip(format!("fetch unavailable on three dispatches for this head; repair credentials/remote and retry with `aida review watch --release {key}`, or route to the advisor")));
         }
-        if let Some(attempt) = entry.attempts.iter().find(|a| a.head == change.head && !a.retryable_fetch && (a.phase == Phase::Exited || (a.phase == Phase::Failed && a.setup_retry && a.diagnostic.is_some()))) {
-            // trace:TASK-1993 | ai:claude
-            return Ok(Action::Skip(format!("review of this head exited without completing ({}); not relaunched: push a new head, route it to the advisor, or retry with `aida review watch --release {key}`", attempt.diagnostic.as_deref().unwrap_or("no diagnostic"))));
+        // A terminal receipt proves process completion, not verdict publication.
+        // Preserve ordinary setup/fetch retry policy; retry actual review attempts.
+        // trace:BUG-2518 | ai:codex
+        let mut no_verdict_attempts = 0;
+        let mut no_verdict_ready = false;
+        if let Some(attempt) = entry.attempts.iter_mut().find(|a| a.head == change.head) {
+            if history.contains(&change.head) {
+                attempt.no_verdict_retry_at = None;
+            }
+            no_verdict_attempts = attempt.no_verdict_attempts;
+            if matches!(attempt.phase, Phase::Completed | Phase::Exited)
+                && !attempt.retryable_fetch && !history.contains(&change.head)
+                && !(attempt.setup_retry && !attempt.reviewer_spawning)
+            {
+                no_verdict_attempts = no_verdict_attempts.max(1);
+                attempt.no_verdict_attempts = no_verdict_attempts;
+                if !attempt.descendants_gone() || attempt.recorded().iter().any(|p| p.alive()) {
+                    return Ok(Action::Skip(format!("unfinished review processes still hold this head; inspect before `aida review watch --release {key}`")));
+                }
+                let retry_at = *attempt.no_verdict_retry_at.get_or_insert_with(||
+                    chrono::Utc::now() + chrono::Duration::seconds(60 * i64::from(no_verdict_attempts)));
+                if let Some(reason) = no_verdict_blocker(attempt) {
+                    return Ok(Action::Skip(reason));
+                }
+                if chrono::Utc::now() < retry_at {
+                    return Ok(Action::Skip(format!("review exited without a verdict; retry after {retry_at}")));
+                }
+                no_verdict_attempts += 1;
+                no_verdict_ready = true;
+            } else if !attempt.retryable_fetch && (attempt.phase == Phase::Exited || (attempt.phase == Phase::Failed && attempt.setup_retry && attempt.diagnostic.is_some())) {
+                return Ok(Action::Skip(format!("review setup exited without completing ({}); retry with `aida review watch --release {key}`", attempt.diagnostic.as_deref().unwrap_or("no diagnostic"))));
+            }
         }
         // A superseded review of this head never finished: it may be reviewed
         // again. trace:TASK-1945 | ai:claude
-        if let Some(attempt) = entry.attempts.iter().find(|a| a.head == change.head && !matches!(a.phase, Phase::Failed | Phase::Superseded)) {
+        if let Some(attempt) = entry.attempts.iter().find(|a| a.head == change.head && !no_verdict_ready && !matches!(a.phase, Phase::Failed | Phase::Superseded)) {
             return Ok(Action::Skip(format!("head already reserved ({:?}); inspect .aida/review-watch/state.json and `aida session leases --all` for unfinished attempts", attempt.phase)));
         }
         if entry.attempts.iter().any(active) {
@@ -1469,11 +1545,13 @@ fn select_with_coverage(
         if history.contains(&change.head) { return Ok(Action::Skip("head already has a recorded review".into())); }
         if history.blocking() >= 2 { return Ok(Action::Skip("two-round review cap reached; route further work to the advisor".into())); }
         if total >= usize::from(max) { return Ok(Action::Skip(format!("global reviewer capacity ({max}) is held by {holders}; a running review frees its slot when it exits, and an ambiguous one (dispatcher lost) stays reserved until an operator confirms it ended: check its log in .aida/review-watch/logs/ and `aida session leases --all`"))); }
-        // Only Exited->Failed setup conversions carry a diagnostic. Preflight
-        // and spawn failures do not consume a retry; preserve an inherited one.
+        // Exited->Failed setup conversions have a claimed dispatcher identity
+        // and a diagnostic. Unclaimed cancellations retain diagnostics alone.
+        // Preflight and spawn failures preserve the inherited review budget.
+        // trace:BUG-2518 | ai:codex
         // trace:TASK-3112 | ai:codex
-        let setup_retry = entry.attempts.iter().any(|a| a.head == change.head && a.phase == Phase::Failed && (a.setup_retry || (!a.retryable_fetch && a.diagnostic.is_some())));
-        let attempt = Attempt { review_lease: None, admission_hub: None, setup_retry, retryable_fetch: false, fetch_failures, head: change.head.clone(), token: uuid::Uuid::new_v4().to_string(), vendor, phase: Phase::Reserved, identity: None, diagnostic: None, dispatcher: None, spawning: false, worker: None, reviewer_spawning: false, reviewer: None, pgid: None, supersede: None };
+        let setup_retry = entry.attempts.iter().any(|a| a.head == change.head && a.phase == Phase::Failed && (a.setup_retry || (!a.retryable_fetch && a.identity.is_some() && a.diagnostic.is_some())));
+        let attempt = Attempt { no_verdict_attempts, no_verdict_retry_at: None, review_lease: None, admission_hub: None, setup_retry, retryable_fetch: false, fetch_failures, head: change.head.clone(), token: uuid::Uuid::new_v4().to_string(), vendor, phase: Phase::Reserved, identity: None, diagnostic: None, dispatcher: None, spawning: false, worker: None, reviewer_spawning: false, reviewer: None, pgid: None, supersede: None };
         // Nothing is active here, so earlier terminal attempts are history only:
         // durable verdicts carry the rounds. trace:TASK-1993 | ai:claude
         entry.attempts.clear();
@@ -1485,7 +1563,7 @@ fn select_with_coverage(
 /// The cheap, lock-held admission pre-check run before the forge probe (two
 /// fetches, a merge-base and two diffs): `Some(reason)` when this head can
 /// neither be dispatched nor needs a stale-head notice — its notice was sent,
-/// a review of it is reserved, running or completed, it already has a
+/// a review of it is reserved or running, it already has a
 /// recorded review, or the change is at the round cap. A merge-base notice
 /// asks for a merge *before review*, so a head already reviewed gets none;
 /// one whose review exited unfinished is still probed.
@@ -1516,7 +1594,7 @@ fn probe_unneeded_with_coverage(
                 a.head == head
                     && matches!(
                         a.phase,
-                        Phase::RemoteHeld | Phase::Reserved | Phase::Running | Phase::Completed
+                        Phase::RemoteHeld | Phase::Reserved | Phase::Running
                     )
             })
             .map(|a| {
@@ -2091,8 +2169,16 @@ fn finish_admission(
             .flatten()
             .all(|p| p.observable() && !p.alive())
     {
+        let no_verdict = admission::Hub::load(root)?.is_some()
+            && !review_publication::watcher_history(root, key)?
+                .iter()
+                .any(|(body, _)| {
+                    crate::gate::review_verdict::parse_recorded_verdict(body)
+                        .is_some_and(|v| v.reviewed_sha.as_deref() == Some(head))
+                });
         admission::transition(root, key, head, token, admission::State::Terminal,
-            format!("owner observed queue exit {status}; all recorded worker/reviewer identities stopped"))?;
+            format!("{}owner observed queue exit {status}; all recorded worker/reviewer identities stopped",
+                if no_verdict { admission::NO_VERDICT } else { "" }))?;
     }
     Ok(())
 }
@@ -2559,22 +2645,22 @@ fn mark_unclaimed_exit(store: &Store, key: &str, token: &str, status: &str) -> R
         else {
             return Ok(None);
         };
-        // Only the parent observing its Child exit can prove this pre-spawn
-        // failure. Background PID/age reconciliation never cancels hub claims.
-        // trace:STORY-2492 | ai:codex
-        let can_cancel = a.admission_hub.is_some()
-            && matches!(a.phase, Phase::Reserved | Phase::Superseding)
-            && !a.spawning
-            && !a.reviewer_spawning
-            && a.worker.is_none()
-            && a.reviewer.is_none();
+        // Only the parent observing its Child exit may publish a hub
+        // cancellation. Local pre-spawn failure proof needs no hub authority.
+        // Background PID/age reconciliation never cancels hub claims.
+        // trace:STORY-2492 trace:BUG-2518 | ai:codex
+        let pre_spawn_failure = a.unclaimed_before_spawn();
+        let can_cancel = pre_spawn_failure && a.admission_hub.is_some();
         let diagnostic = bounded_diagnostic(&format!(
             "dispatcher exited {status} before claiming its launch receipt: {}",
             tail.as_deref().unwrap_or("no log output")
         ));
         match a.phase {
             Phase::Reserved => {
-                a.phase = Phase::Exited;
+                // A proven pre-claim cancellation never started a review. Keep
+                // its inherited budget, just like a dispatcher spawn failure.
+                // trace:BUG-2518 | ai:codex
+                a.phase = a.unclaimed_exit_phase();
                 a.diagnostic = Some(diagnostic);
             }
             Phase::Superseding => {
@@ -3284,6 +3370,111 @@ pub(crate) fn fixture_admission_exit(
             )
         },
     )
+}
+
+#[cfg(test)]
+// trace:BUG-2518 | ai:codex
+pub(crate) fn fixture_admission_retry(root: &Path, exhausted: bool) -> Result<()> {
+    fixture_admission_retry_cancel(root, exhausted, None)
+}
+
+#[cfg(test)]
+// trace:BUG-2518 | ai:codex
+pub(crate) fn fixture_admission_retry_cancel(
+    root: &Path,
+    exhausted: bool,
+    cancellation: Option<u8>,
+) -> Result<()> {
+    let store = Store::open(root, "github:github.com/fixture/review")?;
+    let change = forge::Change {
+        id: 7,
+        head: "a".repeat(40),
+        base: "main".into(),
+        author: "fixture-author".into(),
+        gitlab: false,
+        overlap: Some(false),
+        behind: Some(0),
+        head_branch: None,
+    };
+    // The fixture's dispatcher ran in this test process; model its observed exit.
+    store.transaction("PR-7", |state| {
+        let attempt = &mut state.entries.get_mut("PR-7").unwrap().attempts[0];
+        let mut stopped = Identity::current()?;
+        stopped.boot = "previous-boot".into();
+        attempt.identity = Some(stopped);
+        Ok(())
+    })?;
+    let Action::Skip(reason) = select(&store, &change, None, 2)? else {
+        anyhow::bail!("retry must be delayed or exhausted");
+    };
+    if exhausted {
+        anyhow::ensure!(reason.contains("three review attempts"), "{reason}");
+        anyhow::ensure!(service::retry_blockers(&store.root, &store.dir)?.len() == 1);
+    } else {
+        anyhow::ensure!(reason.contains("retry after"), "{reason}");
+        store.transaction("PR-7", |state| {
+            state.entries.get_mut("PR-7").unwrap().attempts[0].no_verdict_retry_at =
+                Some(chrono::Utc::now() - chrono::Duration::seconds(1));
+            Ok(())
+        })?;
+        if let Some(mode) = cancellation {
+            // Cancel two consecutive fresh Retry claims before starting work.
+            for _ in 0..2 {
+                let mut attempt = match select(&store, &change, None, 2)? {
+                    Action::Dispatch(attempt) => attempt,
+                    Action::Skip(reason) => {
+                        anyhow::bail!("cancelled retry not selectable ({mode}): {reason}")
+                    }
+                    _ => anyhow::bail!("cancelled retry unexpectedly requested a notification"),
+                };
+                anyhow::ensure!(reserve_dispatch(root, &store, "PR-7", &mut attempt)?);
+                let inherited = attempt.no_verdict_attempts;
+                match mode {
+                    0 => cancel_spawn_failure(
+                        root,
+                        &store,
+                        "PR-7",
+                        &attempt,
+                        "fixture missing executable",
+                    )?,
+                    2 => mark_unclaimed_exit(
+                        &store,
+                        "PR-7",
+                        &attempt.token,
+                        "fixture refused grant",
+                    )?,
+                    _ => {
+                        let result = execute_reservation(
+                            &store,
+                            "PR-7",
+                            &attempt.token,
+                            |_| {
+                                admission::transition(
+                                    root,
+                                    "PR-7",
+                                    &attempt.head,
+                                    &attempt.token,
+                                    admission::State::Cancelled,
+                                    "pre-spawn preflight failed: fixture".into(),
+                                )?;
+                                anyhow::bail!("fixture preflight refused")
+                            },
+                            |_| panic!("cancelled preflight must never spawn"),
+                        );
+                        anyhow::ensure!(result.is_err());
+                    }
+                }
+                store.transaction("PR-7", |state| {
+                    let cancelled = attempt_mut(state, "PR-7", &attempt.token).unwrap();
+                    anyhow::ensure!(cancelled.phase == Phase::Failed);
+                    anyhow::ensure!(cancelled.no_verdict_attempts == inherited);
+                    Ok(())
+                })?;
+            }
+        }
+        fixture_admission_exit(root, false, false, || {})?;
+    }
+    Ok(())
 }
 
 #[cfg(test)]

@@ -859,3 +859,160 @@ fn task3196_terminal_retries_changed_roster_evidence() {
     );
     assert_eq!(history.last().unwrap().state, State::Terminal);
 }
+
+// trace:BUG-2518 | ai:codex
+#[test]
+fn bug2518_admission_no_verdict_backoff_retry_and_exhaustion() {
+    let f = Fixture::new();
+    let _env = f.environment();
+    crate::review_watch::fixture_admission_exit(&f.a, false, false, || {}).unwrap();
+    crate::review_watch::fixture_admission_retry(&f.a, false).unwrap();
+    crate::review_watch::fixture_admission_retry(&f.a, false).unwrap();
+    crate::review_watch::fixture_admission_retry(&f.a, true).unwrap();
+    // The authority cap also holds if a caller bypasses local backoff/state.
+    assert!(!f
+        .step(
+            &f.b,
+            "PR-7",
+            &"a".repeat(40),
+            Uuid::new_v4(),
+            State::Reserved
+        )
+        .unwrap());
+    assert!(f
+        .step(
+            &f.b,
+            "PR-7",
+            &"b".repeat(40),
+            Uuid::new_v4(),
+            State::Reserved
+        )
+        .unwrap());
+}
+
+// trace:BUG-2518 | ai:codex
+#[test]
+fn bug2518_chain_accepts_only_no_verdict_terminal_retry_edge() {
+    let f = Fixture::new();
+    let _env = f.environment();
+    let token = Uuid::new_v4();
+    let head = "a".repeat(40);
+    f.step(&f.a, "PR-7", &head, token, State::Reserved).unwrap();
+    f.step(&f.a, "PR-7", &head, token, State::Running).unwrap();
+    let repo = private_repo().unwrap();
+    let (_, table) = read_table(repo.path(), &f.hub, "PR-7").unwrap();
+    let config = publisher(&f.a).unwrap().unwrap();
+    let store = f.a.join(".aida-store");
+    let roster = roster(&store, &super::super::head(&store).unwrap()).unwrap();
+    let base = table.changes["PR-7"].clone();
+    let running: Transition = serde_json::from_str(&base.last().unwrap().payload).unwrap();
+    for (state, evidence, admitted) in [
+        (State::Running, "NoVerdict: stopped", false),
+        (State::Terminal, "ordinary exit", false),
+        (State::Terminal, "NoVerdict: stopped", true),
+    ] {
+        let mut records = base[..1].to_vec();
+        let mut end = running.clone();
+        records.push(sign(&config, &end).unwrap());
+        if state == State::Terminal {
+            end.predecessor = Some(end.id);
+            end.id = Uuid::new_v4();
+            end.state = state;
+            end.evidence = Some(evidence.into());
+            records.push(sign(&config, &end).unwrap());
+        }
+        let mut retry = end.clone();
+        retry.predecessor = Some(end.id);
+        retry.id = Uuid::new_v4();
+        retry.token = Uuid::new_v4();
+        retry.state = State::Retry;
+        retry.evidence = None;
+        records.push(sign(&config, &retry).unwrap());
+        assert_eq!(chain(&f.hub, "PR-7", &records, &roster).is_ok(), admitted);
+        if admitted {
+            let mut cancelled_records = records.clone();
+            let mut cancelled = retry.clone();
+            cancelled.predecessor = Some(retry.id);
+            cancelled.id = Uuid::new_v4();
+            cancelled.state = State::Cancelled;
+            cancelled.evidence = Some("pre-spawn cancellation".into());
+            cancelled_records.push(sign(&config, &cancelled).unwrap());
+            let mut next = retry.clone();
+            next.predecessor = Some(cancelled.id);
+            next.id = Uuid::new_v4();
+            next.token = Uuid::new_v4();
+            cancelled_records.push(sign(&config, &next).unwrap());
+            assert!(chain(&f.hub, "PR-7", &cancelled_records, &roster).is_ok());
+            for invalid in 0..3 {
+                let mut bad = next.clone();
+                match invalid {
+                    0 => bad.token = retry.token,
+                    1 => bad.head = "b".repeat(40),
+                    _ => bad.state = State::Reserved,
+                }
+                *cancelled_records.last_mut().unwrap() = sign(&config, &bad).unwrap();
+                assert!(chain(&f.hub, "PR-7", &cancelled_records, &roster).is_err());
+            }
+            retry.state = State::Reserved;
+            *records.last_mut().unwrap() = sign(&config, &retry).unwrap();
+            assert!(chain(&f.hub, "PR-7", &records, &roster).is_err());
+        }
+    }
+}
+
+// Each cancellation path gets its own nextest process and timing budget. The
+// combined regression measured 31.82s in CI, exceeding the default 30s limit.
+// Keep the full repeated-cancellation and exhaustion assertions for every path.
+// trace:BUG-2518 | ai:codex
+fn assert_cancelled_retry_readmits(cancellation: u8) {
+    let f = Fixture::new();
+    let _env = f.environment();
+    crate::review_watch::fixture_admission_exit(&f.a, false, false, || {}).unwrap();
+    crate::review_watch::fixture_admission_retry_cancel(&f.a, false, Some(cancellation)).unwrap();
+    crate::review_watch::fixture_admission_retry_cancel(&f.a, false, Some(cancellation)).unwrap();
+    crate::review_watch::fixture_admission_retry(&f.a, true).unwrap();
+    let head = "a".repeat(40);
+    assert!(!f
+        .step(&f.b, "PR-7", &head, Uuid::new_v4(), State::Reserved)
+        .unwrap());
+    let repo = private_repo().unwrap();
+    let (_, table) = read_table(repo.path(), &f.hub, "PR-7").unwrap();
+    let store = f.a.join(".aida-store");
+    let history = chain(
+        &f.hub,
+        "PR-7",
+        &table.changes["PR-7"],
+        &roster(&store, &super::super::head(&store).unwrap()).unwrap(),
+    )
+    .unwrap();
+    assert_eq!(
+        history.iter().filter(|t| t.state == State::Running).count(),
+        3
+    );
+    assert_eq!(
+        history
+            .iter()
+            .filter(|t| t.state == State::Cancelled)
+            .count(),
+        4
+    );
+    assert_eq!(history.last().unwrap().state, State::Terminal);
+}
+
+// trace:BUG-2518 | ai:codex
+#[test]
+fn bug2518_cancelled_retry_readmits_after_spawn_failure() {
+    assert_cancelled_retry_readmits(0);
+}
+
+// trace:BUG-2518 | ai:codex
+#[test]
+fn bug2518_cancelled_retry_readmits_after_preflight_failure() {
+    assert_cancelled_retry_readmits(1);
+}
+
+// trace:BUG-2518 | ai:codex
+#[test]
+fn bug2518_cancelled_retry_readmits_after_unclaimed_exit() {
+    assert_cancelled_retry_readmits(2);
+}
