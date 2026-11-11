@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-09T01:58:39.064485765Z
-modified_at: 2026-11-11T08:37:07.183507255Z
+modified_at: 2026-11-11T08:51:05.533676168Z
 req_type: Story
 tags:
 - area:orchestration
@@ -205,6 +205,17 @@ comments:
     Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
   created_at: 2026-11-11T08:09:36.628707572Z
   modified_at: 2026-11-11T08:09:36.628707572Z
+  session_id: 01a1c87f-970d-7ce0-9351-e4e75a87731e
+  harness_version: 2.1.322 (Claude Code)
+- id: 01a1c9cd-babd-7652-81ee-77fcba5b1849
+  author: joe
+  content: |-
+    CI FAILURES at b57d10df665f (run 42986865827). Fix exactly these before pushing; a push without a code change for them will fail again and must not be made:
+    error: test run failed
+            FAIL  aida-cli::story_2704_porcelain_parity builtin_porcelain_parity
+        thread 'builtin_porcelain_parity' (185090) panicked at aida-cli/tests/story_2704_porcelain_parity.rs:19:5:
+  created_at: 2026-11-11T08:51:05.533676168Z
+  modified_at: 2026-11-11T08:51:05.533676168Z
   session_id: 01a1c87f-970d-7ce0-9351-e4e75a87731e
   harness_version: 2.1.322 (Claude Code)
 history:
