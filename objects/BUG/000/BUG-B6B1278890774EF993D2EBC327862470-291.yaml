@@ -8,8 +8,16 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-11T15:56:46.138811998Z
-modified_at: 2026-11-11T15:56:46.138811998Z
+modified_at: 2026-11-11T16:35:51.680229996Z
 req_type: Bug
+comments:
+- id: 01a1cb77-3d00-7202-a118-8aee5a8beb52
+  author: joe
+  content: '2026-11-11 16:40Z advisor diagnosis: the hang is DNS on GitHub-hosted runners. Job logs show ''Temporary failure resolving azure.archive.ubuntu.com / archive.ubuntu.com / security.ubuntu.com''; each amd64v3 .deb takes ~60s (3 mirrors x 20s) before Err, so 105-package installs exceed timeout-minutes 40. packages.microsoft.com resolves fine. Still ongoing at 16:35Z (run 43042217891 jobs stuck in ''Install Linux dependencies'' since 16:01). Mitigations: (1) repo var AIDA_DELL1_CI=true routes lib/cli shards to the dell1 self-hosted runner, which skips apt (it is unset now); (2) the fix should bound apt (timeout + Acquire::*::Timeout=10, Retries=1) so a mirror outage fails in minutes, and route contracts/gates/rest to dell1 under the same var.'
+  created_at: 2026-11-11T16:35:51.680229996Z
+  modified_at: 2026-11-11T16:35:51.680229996Z
+  session_id: 01a1cb56-f02b-7652-869e-3788560cbf1b
+  harness_version: 2.1.322 (Claude Code)
 filed_at:
   code_sha: 11b131dfe3341e6d9c7127d64370f91366094711
   branch: main
