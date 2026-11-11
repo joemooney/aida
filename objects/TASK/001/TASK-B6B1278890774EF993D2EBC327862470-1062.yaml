@@ -3,12 +3,12 @@ spec_id: TASK-b6b1278890774ef993d2ebc327862470-1062
 agreed_id: TASK-3782
 title: Train CI wait line shows shard progress and runner-queue time instead of only the unregistered Build summary job
 description: 'While a train waits, it prints ''train PR #3815 CI waiting: Pending(["Build (ubuntu-latest) (not registered yet)"])''. Build (ubuntu-latest) is the summary job that GitHub creates only after every CI shard finishes, so that line is shown for the whole run and says nothing about progress; the operator asked (2026-11-10) what command gives more insight. Observed on run 42913999193: 4 of 7 shards had succeeded, 3 were running, and 3 shards had queued ~10 min for a runner before starting. Acceptance: (1) the wait line names the CI run id and per-shard state, e.g. ''4/7 shards passed; running: lib-1, gates, rest''; (2) a shard still queued shows how long it has waited for a runner, e.g. ''queued 9m (runner)''; (3) a not-yet-registered summary job is described in plain words (''Build summary appears after all shards finish'') rather than as a pending check; (4) a failed shard is named at once, without waiting for the summary; (5) works for GitLab pipelines through the forge layer with the same fields where available; (6) unit tests over recorded check-run fixtures (all queued, partial, failed shard, summary registered).'
-status: InProgress
+status: NeedsAttention
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-10T22:45:07.512110557Z
-modified_at: 2026-11-11T05:04:46.018834173Z
+modified_at: 2026-11-11T05:15:58.546979748Z
 req_type: Task
 tags:
 - batch:fasttrack
@@ -191,6 +191,13 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1c908-c8d2-7a22-838f-749853b69350
+  author: aida-orchestrator
+  timestamp: 2026-11-11T05:15:58.547005075Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 execution_mode: drain
 filed_at:
   code_sha: 08c562ec6bb9f936f0e0f8c9bad273de57ccf7b0
@@ -201,3 +208,11 @@ filed_at:
   vendor: claude
   session: 01a1c70f-d731-7b70-acf8-e9ab3d288fca
   harness_version: 2.1.322 (Claude Code)
+failure_reason:
+  phase: reviewer
+  phase_index: 3
+  kind: verdict:request-changes
+  detail: 'Full sweep: ancillary workflow runs incorrectly announce a missing Build summary; all-queued fixture coverage is absent. CI pending at review time.'
+  recovery_hint: address the review findings, move TASK-3782 back to In Progress, and clear the PR hold only after approval
+  shelved_by: reviewer
+  shelved_at: 2026-11-11T05:15:58.546979748Z
