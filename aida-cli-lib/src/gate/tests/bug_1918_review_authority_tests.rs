@@ -1479,3 +1479,36 @@ fn concurrent_ledger_appends_keep_every_line_parseable() {
             .unwrap_or_else(|e| panic!("malformed ledger line {line:?}: {e}"));
     }
 }
+
+// trace:STORY-2696 | ai:codex
+#[test]
+fn story_2696_human_policy_must_match_durable_receipt() {
+    let home = tempfile::tempdir().unwrap();
+    let _env = crate::test_env::EnvVarsGuard::apply(&[("AIDA_HOME", home.path().to_str())]);
+    let identity = vec!["session:independent-reviewer".into()];
+    let id = write_human_receipt(HEAD, SPEC, &identity, false, false).unwrap();
+    let mut v = RecordedVerdict {
+        kind: VerdictKind::Approved,
+        reviewed_sha: Some(HEAD.into()),
+        attestation: Some(RecorderAttestation {
+            sha: HEAD.into(),
+            human_at_tty: true,
+            receipt_id: Some(id),
+            carry_eligible: false,
+            identity,
+            ..Default::default()
+        }),
+        ..Default::default()
+    };
+    assert_eq!(verified_authority_keys(home.path(), &[v.clone()]).len(), 1);
+    let valid = v.clone();
+    v.attestation.as_mut().unwrap().carry_eligible = true;
+    let invalid_key = v.attestation.as_ref().unwrap().authority_key(None).unwrap();
+    assert!(verified_authority_keys(home.path(), &[v.clone()]).is_empty());
+    assert!(!verified_authority_keys(home.path(), &[valid, v]).contains_key(&invalid_key));
+    let legacy: HumanReviewReceipt = serde_json::from_value(serde_json::json!({
+        "id":"old", "sha":HEAD, "subject":SPEC, "recorded_at":"2026-11-09T00:00:00Z"
+    }))
+    .unwrap();
+    assert!(legacy.carry_eligible);
+}

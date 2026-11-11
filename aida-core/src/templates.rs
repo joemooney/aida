@@ -583,9 +583,10 @@ mod tests {
 
     /// STORY-1350 regression guard — every pickup must leave a durable,
     /// reviewable statement of intent before implementation begins. The
-    /// statement is deliberately self-directed: it records criteria-as-tests,
+    /// statement is deliberately self-directed: it records criterion evidence,
     /// scope, and questions without introducing an approval round trip.
     // trace:STORY-1350 | ai:codex
+    // trace:STORY-2702 | ai:codex
     #[test]
     fn aida_pickup_requires_non_gating_pre_edit_approach_comment() {
         let pickup = EMBEDDED_TEMPLATES
@@ -604,8 +605,12 @@ mod tests {
         );
 
         for required in [
-            "Acceptance criteria as tests",
-            "name the test layer",
+            "Acceptance criteria and evidence",
+            "honor each criterion's declared evidence type",
+            "name the automated test and test layer",
+            "For configuration, documentation or manual inspection, name",
+            "the artifact, validation procedure and expected result instead",
+            "declaration alone does not prove satisfaction",
             "tested, flag that explicitly",
             "Expected files",
             "Ambiguities / conflicts as questions",

@@ -897,7 +897,7 @@ fn run_explain(
     matches: &clap::ArgMatches,
     _ctx: &crate::cmdkit::DispatchCtx,
 ) -> anyhow::Result<()> {
-    use crate::*;
+    // trace:TASK-3428 | ai:codex
     let args = <ExplainArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
     let ExplainArgs {
         spec,

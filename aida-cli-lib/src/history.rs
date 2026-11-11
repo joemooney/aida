@@ -5180,7 +5180,10 @@ fn run_history(
     matches: &clap::ArgMatches,
     ctx: &crate::cmdkit::DispatchCtx,
 ) -> anyhow::Result<crate::cmdkit::Flow> {
-    use crate::*;
+    // trace:TASK-3428 | ai:codex
+    use crate::config_init::effective_history_limit;
+    use crate::rel_cards::resolve_history_id_filter;
+    use crate::{history, history_kind_report, history_should_exclude_meta, history_timeline};
     let args = <HistoryArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
     match &ctx.store {
         None => Ok(crate::cmdkit::Flow::Continue),

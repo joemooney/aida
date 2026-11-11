@@ -335,6 +335,16 @@ fn the_handshake_the_verb_writes_is_the_handshake_phase4_parses() {
 // trace:BUG-912 | ai:codex
 #[test]
 fn review_record_pr_handshake_honors_explicit_verdict_file() {
+    record_pr_handshake(false);
+}
+
+// trace:STORY-2696 | ai:codex
+#[test]
+fn story_2696_record_no_carry_matches_spec_and_handshake() {
+    record_pr_handshake(true);
+}
+
+fn record_pr_handshake(no_carry: bool) {
     let drive = tempfile::tempdir().unwrap();
     // BUG-b6b1278890774ef993d2ebc327862470-013: a typed `--sha` must resolve
     // to a real commit in the write root.
@@ -379,6 +389,7 @@ fn review_record_pr_handshake_honors_explicit_verdict_file() {
                 &[],
                 &[],
                 Some(1706),
+                no_carry,
                 |_, change| {
                     assert_eq!(change, crate::gate::ledger::ChangeKey::pr(1706));
                     Ok(head.clone())
@@ -410,7 +421,16 @@ fn review_record_pr_handshake_honors_explicit_verdict_file() {
     let review_json: serde_json::Value = serde_json::from_str(&review_body).unwrap();
     let handshake_body = body_at(parent.path(), "PR-1706").unwrap();
     let handshake_json: serde_json::Value = serde_json::from_str(&handshake_body).unwrap();
+    assert_eq!(
+        crate::gate::review_verdict::parse_recorded_verdict(&review_body)
+            .unwrap()
+            .attestation
+            .unwrap()
+            .carry_eligible,
+        !no_carry
+    );
     for field in [
+        "recorder_attestation",
         "reviewed_sha",
         "reviewed_branch",
         "recorded_at",
@@ -1108,5 +1128,33 @@ fn concurrent_sibling_publication_has_one_winner_and_never_two_links() {
             leftovers.is_empty(),
             "staged files left behind: {leftovers:?}"
         );
+    }
+}
+
+// trace:STORY-2696 | ai:codex
+#[test]
+fn story_2696_no_carry_nonapproval_refuses_without_writing() {
+    let tmp = tempfile::tempdir().unwrap();
+    let _env = crate::test_env::EnvVarsGuard::apply(&[("AIDA_STANDALONE_IMPLEMENTER", None)]);
+    for verdict in ["request-changes", "waiting", "rejected"] {
+        let err = crate::handle_review_record_policy_at(
+            tmp.path().into(),
+            "STORY-993",
+            verdict,
+            None,
+            None,
+            None,
+            &[],
+            &[],
+            None,
+            true,
+        )
+        .unwrap_err();
+        assert!(
+            err.to_string()
+                .contains("--no-carry requires an approved verdict"),
+            "{err:#}"
+        );
+        assert!(!tmp.path().join(".aida").exists());
     }
 }

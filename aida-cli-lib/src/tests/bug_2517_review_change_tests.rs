@@ -176,6 +176,7 @@ fn bug_2517_head_moving_during_recording_refuses_before_mutation() {
         &[],
         &[],
         Some(3764),
+        false,
         |_, change| {
             assert_eq!(change, ChangeKey::pr(3764));
             reads.set(reads.get() + 1);
@@ -257,6 +258,7 @@ fn bug_2517_contained_mr_handshake_collects_only_into_its_mr_ledger() {
         &[],
         &[],
         None,
+        false,
         |_, c| {
             assert_eq!(c, ChangeKey::parse("MR-3764").unwrap());
             Ok(head.clone())

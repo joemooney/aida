@@ -63,7 +63,8 @@ fn run_review(
     matches: &clap::ArgMatches,
     ctx: &crate::cmdkit::DispatchCtx,
 ) -> anyhow::Result<crate::cmdkit::Flow> {
-    use crate::*;
+    use crate::handle_review_spec;
+    use aida_core::Storage;
     let args = <ReviewArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
     match &ctx.store {
         None => Ok(crate::cmdkit::Flow::Continue),
@@ -164,7 +165,11 @@ pub(crate) fn handle_review_command(
     cmd: &crate::ReviewCommand,
     storage: &crate::Storage,
 ) -> anyhow::Result<()> {
-    use crate::*;
+    use crate::{
+        cli, find_project_root, generate_review_prompt, handle_review_claim, handle_review_classes,
+        handle_review_list, handle_review_normalize_shas, handle_review_record,
+        handle_review_stranded, handle_review_verdict_show, mass_change, rules_sync, ReviewCommand,
+    };
     match cmd {
         ReviewCommand::Authorship { pr, specs } => {
             crate::gate::review_publication::publish_checkout_authorship(
@@ -205,6 +210,7 @@ pub(crate) fn handle_review_command(
         }
         // trace:BUG-775 | ai:claude
         ReviewCommand::Record {
+            no_carry,
             spec,
             verdict,
             sha,
@@ -222,6 +228,7 @@ pub(crate) fn handle_review_command(
             finding,
             finding_class,
             *pr,
+            *no_carry,
         ),
         // trace:STORY-1417 | ai:claude
         ReviewCommand::Classes { since, json } => handle_review_classes(since.as_deref(), *json),

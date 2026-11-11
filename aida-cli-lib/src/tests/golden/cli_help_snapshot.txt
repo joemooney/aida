@@ -22089,6 +22089,9 @@ Arguments:
           Spec the verdict applies to
 
 Options:
+      --no-carry
+          Keep this approval valid only for the exact reviewed head
+
       --verdict <VERDICT>
           The verdict: approved, request-changes, rejected, or waiting
 
@@ -22113,9 +22116,6 @@ Options:
           unknown class is warned about and the finding is recorded unclassified — it never blocks
           the verdict
 
-      --pr <PR>
-          Change number. Must match the reviewer lease; otherwise the review stays spec-only
-
       --format <FORMAT>
           Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
           compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
@@ -22125,6 +22125,9 @@ Options:
           - human: Human-readable tables / emoji (the interactive default at a TTY)
           - toon:  Token-efficient TOON — the compact agent default when piped/captured
           - json:  Machine JSON, for commands that support a JSON projection
+
+      --pr <PR>
+          Change number. Must match the reviewer lease; otherwise the review stays spec-only
 
       --canonical-ids
           Show node-local spec IDs in their canonical form instead of the node's friendly label (for
@@ -54269,6 +54272,11 @@ Working on aida itself
         "name": "help",
         "takes_value": false,
         "help": "Print help (see more with '--help')"
+      },
+      {
+        "name": "no-carry",
+        "takes_value": false,
+        "help": "Keep this approval valid only for the exact reviewed head"
       },
       {
         "name": "pr",

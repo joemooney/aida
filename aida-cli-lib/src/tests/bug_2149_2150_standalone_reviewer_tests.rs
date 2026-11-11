@@ -12,6 +12,13 @@
 //!   on the same PR is still refused.
 // trace:BUG-2017 | ai:codex — explicit positive global-ID fixture.
 use super::*;
+use crate::{
+    find_scope_lease_conflict, infer_queue_work_role, resolve_queue_work_plan,
+    review_source_branch_conflict_decision, reviewer_pickup_keeps_pr_scope,
+    run_standalone_reviewer, standalone_review_plan, LeaseConflictDecision, QueueWorkLaunch,
+    RequirementStatus, ReviewForge, Storage, NO_REVIEW_VERDICT_EXIT_CODE,
+};
+use aida_core::DatabaseBackend;
 // trace:BUG-2476 | ai:codex
 
 const HEAD: &str = "0123456789abcdef0123456789abcdef01234567";

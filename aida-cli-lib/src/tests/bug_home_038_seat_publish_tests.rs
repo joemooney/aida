@@ -3023,7 +3023,7 @@ fn task_2902_launch_paths_preserve_signals_on_refused_spawn() {
         }
         let error = match path {
             "standalone" => {
-                crate::standalone_implementer::run(crate::standalone_implementer::Launch {
+                crate::standalone_implementer::run_for_test(crate::standalone_implementer::Launch {
                     project_root: &fx.main,
                     vendor: HeadlessVendor::Codex,
                     prompt: "go",
@@ -3108,6 +3108,20 @@ fn task_2902_launch_paths_preserve_signals_on_refused_spawn() {
             .err(),
         };
         let error = error.unwrap_or_else(|| panic!("{path} should refuse a binding write failure"));
+        // Admission failure retains a typed receipt and never claims spawn.
+        // trace:STORY-2690 | ai:codex
+        if path == "standalone" {
+            let receipts: Vec<_> = std::fs::read_dir(fx.main.join(".aida/lane-results"))
+                .unwrap()
+                .map(|e| e.unwrap().path())
+                .collect();
+            assert_eq!(receipts.len(), 1);
+            let receipt: serde_json::Value =
+                serde_json::from_slice(&std::fs::read(&receipts[0]).unwrap()).unwrap();
+            assert_eq!(receipt["result"], "refused-before-start");
+            assert_eq!(receipt["started"], false);
+            assert_eq!(receipt["detail"].as_str().unwrap(), format!("{error:#}"));
+        }
         if matches!(path, "standalone" | "drain" | "queue-resume") {
             for signal in &stale_signals {
                 assert!(
@@ -3326,7 +3340,7 @@ fn story_2640_fast_gate_real_lane_exit_paths_settle_reservations() {
         crate::lane_fast_gate::begin(&fx.main, branch).unwrap();
         let error = match path {
             "standalone" => {
-                crate::standalone_implementer::run(crate::standalone_implementer::Launch {
+                crate::standalone_implementer::run_for_test(crate::standalone_implementer::Launch {
                     project_root: &fx.main,
                     vendor: HeadlessVendor::Codex,
                     prompt: "go",

@@ -3865,646 +3865,675 @@ pub(crate) fn handle_queue_work(
     // STORY-1003: opaque vendor model override for this pickup/drain.
     model_override: Option<&str>,
 ) -> Result<()> {
-    refuse_retired_steal(steal)?;
-    let role_override = role_input.pickup;
-    // STORY-132: validate a caller-minted --session-id up front — before
-    // any side effect — so a malformed id fails clean with a clear
-    // message rather than surfacing deep in session setup.
-    if let Some(sid) = session_id {
-        uuid::Uuid::parse_str(sid)
-            .with_context(|| format!("--session-id `{}` is not a valid UUID", sid))?;
-    }
-    // trace:STORY-1133 | ai:codex
-    if current_role_instance_is_companion() {
-        anyhow::bail!(
-            "companion sessions cannot drive queued work. Use the authoritative driver seat \
+    // Record admission before any pickup gate; previews and interactive sessions
+    // do not claim a headless lane attempt. trace:STORY-2690 | ai:codex
+    let mut attempt = if no_human && resume.is_none() && !dry_run && !no_launch && !list_sessions {
+        Some(crate::lane_result::Attempt::begin(
+            &requeue_project_root(storage),
+            arg.unwrap_or("queue-head"),
+            branch_override,
+        )?)
+    } else {
+        None
+    };
+    let result = (|| -> Result<()> {
+        refuse_retired_steal(steal)?;
+        let role_override = role_input.pickup;
+        // STORY-132: validate a caller-minted --session-id up front — before
+        // any side effect — so a malformed id fails clean with a clear
+        // message rather than surfacing deep in session setup.
+        if let Some(sid) = session_id {
+            uuid::Uuid::parse_str(sid)
+                .with_context(|| format!("--session-id `{}` is not a valid UUID", sid))?;
+        }
+        // trace:STORY-1133 | ai:codex
+        if current_role_instance_is_companion() {
+            anyhow::bail!(
+                "companion sessions cannot drive queued work. Use the authoritative driver seat \
              for this role, or launch a doer role for implementation/review work."
-        );
-    }
-    // TASK-630: a deliberate PR-hold (BUG-250) parks the spec Done + dequeued
-    // with a persisted marker at `.aida/pr-holds/<spec>.json`. Normal queue
-    // resolution then bails ("isn't queued. Status is Done") — wrong for a
-    // re-entry. When the operator explicitly `--resume`s such a spec, recognise
-    // the hold as a re-enterable state and synthesise an Item-mode plan so the
-    // rest of the verb (lease/pull/worktree + QueueWorkLaunch::Resume) runs
-    // unchanged. We try the normal resolution first; only on its failure do we
-    // consult the marker, so a still-queued or non-held spec keeps its existing
-    // behaviour exactly. trace:TASK-630 | ai:claude
-    let plan = match resolve_queue_work_plan(
-        storage,
-        user_id,
-        arg,
-        type_filter,
-        strict,
-        /* read-only synthesis until launch preflight passes */ true,
-        force || force_claim,
-        role_override,
-    ) {
-        Ok(plan) => plan,
-        Err(e) => match arg.filter(|_| resume.is_some()) {
-            Some(arg_str) => {
-                let store = storage.load()?;
-                let held = store
-                    .requirements
-                    .iter()
-                    .find(|r| spec_matches(r, arg_str))
-                    .and_then(|req| {
-                        let main_root = find_main_worktree_root().ok()?;
-                        let display = req
-                            .agreed_id
-                            .as_deref()
-                            .or(req.spec_id.as_deref())
-                            .unwrap_or(arg_str);
-                        let marker = punt::hold_signal_path(&main_root, display);
-                        let present = punt::read_hold_signal(&marker).is_some();
-                        held_resume_reentry_allowed(true, &req.status, present)
-                            .then(|| held_resume_plan(req, user_id))
-                    });
-                match held {
-                    Some(plan) => plan,
-                    None => return Err(e),
+            );
+        }
+        // TASK-630: a deliberate PR-hold (BUG-250) parks the spec Done + dequeued
+        // with a persisted marker at `.aida/pr-holds/<spec>.json`. Normal queue
+        // resolution then bails ("isn't queued. Status is Done") — wrong for a
+        // re-entry. When the operator explicitly `--resume`s such a spec, recognise
+        // the hold as a re-enterable state and synthesise an Item-mode plan so the
+        // rest of the verb (lease/pull/worktree + QueueWorkLaunch::Resume) runs
+        // unchanged. We try the normal resolution first; only on its failure do we
+        // consult the marker, so a still-queued or non-held spec keeps its existing
+        // behaviour exactly. trace:TASK-630 | ai:claude
+        let plan = match resolve_queue_work_plan(
+            storage,
+            user_id,
+            arg,
+            type_filter,
+            strict,
+            /* read-only synthesis until launch preflight passes */ true,
+            force || force_claim,
+            role_override,
+        ) {
+            Ok(plan) => plan,
+            Err(e) => match arg.filter(|_| resume.is_some()) {
+                Some(arg_str) => {
+                    let store = storage.load()?;
+                    let held = store
+                        .requirements
+                        .iter()
+                        .find(|r| spec_matches(r, arg_str))
+                        .and_then(|req| {
+                            let main_root = find_main_worktree_root().ok()?;
+                            let display = req
+                                .agreed_id
+                                .as_deref()
+                                .or(req.spec_id.as_deref())
+                                .unwrap_or(arg_str);
+                            let marker = punt::hold_signal_path(&main_root, display);
+                            let present = punt::read_hold_signal(&marker).is_some();
+                            held_resume_reentry_allowed(true, &req.status, present)
+                                .then(|| held_resume_plan(req, user_id))
+                        });
+                    match held {
+                        Some(plan) => plan,
+                        None => return Err(e),
+                    }
+                }
+                None => return Err(e),
+            },
+        };
+
+        // Resolve once for both receipt applicability and the actual launch.
+        // Provisional capture above retains failures before a plan is available.
+        // trace:STORY-2690 | ai:codex
+        let (role, role_origin, warnings) = infer_queue_work_role(&plan, role_override);
+        let implementer_route =
+            resolve_pickup_attempt(&mut attempt, &plan, &role, no_human, branch_override)?;
+
+        // Recheck the resolved anchor, including no-argument queue-head pickup.
+        // This runs before launch resolution, calibration, worktree creation, or
+        // lease acquisition, so held work cannot be picked indirectly. trace:BUG-1793
+        if let Some(req) = storage
+            .load()?
+            .requirements
+            .into_iter()
+            .find(|r| spec_matches(r, &plan.anchor_display))
+        {
+            let display = req.spec_id.as_deref().unwrap_or(&plan.anchor_display);
+            if let Some(refusal) = crate::gate::operator_hold::operator_hold_refusal(
+                display,
+                req.deferred,
+                req.deferred_reason.as_deref(),
+                req.deferred_until.as_deref(),
+            ) {
+                return Err(refusal);
+            }
+        }
+
+        // TASK-304: on a no-arg head pickup, surface the ultraplan suggestion
+        // for a chunky head spec under `[ultraplan] mode = "suggested"`. Only
+        // the no-arg form (the operator hasn't already chosen a spec) gets the
+        // nudge; an explicit `aida queue work SPEC` is already a deliberate
+        // choice. Best-effort and read-only — never perturbs the pickup.
+        // trace:TASK-304 | ai:claude
+        if arg.is_none() && !list_sessions {
+            if let Ok(root) = find_project_root() {
+                if let Ok(store) = storage.load() {
+                    if let Some(req) = store.get_requirement_by_spec_id(&plan.anchor_display) {
+                        print_ultraplan_suggestion_hint(&root, req);
+                    }
                 }
             }
-            None => return Err(e),
-        },
-    };
-
-    // Recheck the resolved anchor, including no-argument queue-head pickup.
-    // This runs before launch resolution, calibration, worktree creation, or
-    // lease acquisition, so held work cannot be picked indirectly. trace:BUG-1793
-    if let Some(req) = storage
-        .load()?
-        .requirements
-        .into_iter()
-        .find(|r| spec_matches(r, &plan.anchor_display))
-    {
-        let display = req.spec_id.as_deref().unwrap_or(&plan.anchor_display);
-        if let Some(refusal) = crate::gate::operator_hold::operator_hold_refusal(
-            display,
-            req.deferred,
-            req.deferred_reason.as_deref(),
-            req.deferred_until.as_deref(),
-        ) {
-            return Err(refusal);
         }
-    }
 
-    // TASK-304: on a no-arg head pickup, surface the ultraplan suggestion
-    // for a chunky head spec under `[ultraplan] mode = "suggested"`. Only
-    // the no-arg form (the operator hasn't already chosen a spec) gets the
-    // nudge; an explicit `aida queue work SPEC` is already a deliberate
-    // choice. Best-effort and read-only — never perturbs the pickup.
-    // trace:TASK-304 | ai:claude
-    if arg.is_none() && !list_sessions {
-        if let Ok(root) = find_project_root() {
+        // TASK-516: warn before picking up a spec whose imported plan is still
+        // awaiting master review (tagged `plan-review:pending`). The plan is
+        // archived but NOT yet canonical — the master hasn't signed off, so
+        // riding it into the implementer session as the brief would treat an
+        // unreviewed plan as load-bearing. Best-effort, read-only; never blocks
+        // the pickup (this minimal slice warns, it doesn't gate).
+        // trace:TASK-516 | ai:claude
+        if !list_sessions {
             if let Ok(store) = storage.load() {
                 if let Some(req) = store.get_requirement_by_spec_id(&plan.anchor_display) {
-                    print_ultraplan_suggestion_hint(&root, req);
+                    if let Some(msg) = plan_review_warning(&req.tags, &plan.anchor_display) {
+                        eprintln!("{msg}");
+                    }
                 }
             }
         }
-    }
 
-    // TASK-516: warn before picking up a spec whose imported plan is still
-    // awaiting master review (tagged `plan-review:pending`). The plan is
-    // archived but NOT yet canonical — the master hasn't signed off, so
-    // riding it into the implementer session as the brief would treat an
-    // unreviewed plan as load-bearing. Best-effort, read-only; never blocks
-    // the pickup (this minimal slice warns, it doesn't gate).
-    // trace:TASK-516 | ai:claude
-    if !list_sessions {
-        if let Ok(store) = storage.load() {
-            if let Some(req) = store.get_requirement_by_spec_id(&plan.anchor_display) {
-                if let Some(msg) = plan_review_warning(&req.tags, &plan.anchor_display) {
-                    eprintln!("{msg}");
-                }
-            }
-        }
-    }
+        // TASK-112: decide cold-launch-vs-resume up front, *before*
+        // session_start mints a worktree — so a bad `--resume <id>` (or a
+        // bare `--resume` with no prior session) fails clean with nothing to
+        // unwind. `None` when `--no-launch` (setup-only, no conversation).
+        // BUG-2223: `--resume` on a scope whose lease is orphaned (owner
+        // verifiably gone, tree still on disk) re-enters that tree in place:
+        // the conflict sweep below leaves the lease alone and session start
+        // adopts it. With no recorded claude session the launch cold-starts
+        // there instead of refusing.
+        // trace:BUG-2223 | ai:claude
+        let adopt_orphan: Option<SessionLease> = if resume.is_some() && !list_sessions {
+            find_main_worktree_root()
+                .ok()
+                .and_then(|root| crate::leases::adoptable_orphan_lease(&root, &plan.scope))
+        } else {
+            None
+        };
+        let launch: Option<QueueWorkLaunch> = if no_launch {
+            None
+        } else {
+            Some(resolve_queue_work_launch(
+                &plan.anchor_display,
+                resume,
+                fresh,
+                session_id,
+                adopt_orphan.as_ref().map(|l| l.worktree_path.as_path()),
+            )?)
+        };
 
-    // TASK-112: decide cold-launch-vs-resume up front, *before*
-    // session_start mints a worktree — so a bad `--resume <id>` (or a
-    // bare `--resume` with no prior session) fails clean with nothing to
-    // unwind. `None` when `--no-launch` (setup-only, no conversation).
-    // BUG-2223: `--resume` on a scope whose lease is orphaned (owner
-    // verifiably gone, tree still on disk) re-enters that tree in place:
-    // the conflict sweep below leaves the lease alone and session start
-    // adopts it. With no recorded claude session the launch cold-starts
-    // there instead of refusing.
-    // trace:BUG-2223 | ai:claude
-    let adopt_orphan: Option<SessionLease> = if resume.is_some() && !list_sessions {
-        find_main_worktree_root()
-            .ok()
-            .and_then(|root| crate::leases::adoptable_orphan_lease(&root, &plan.scope))
-    } else {
-        None
-    };
-    let launch: Option<QueueWorkLaunch> = if no_launch {
-        None
-    } else {
-        Some(resolve_queue_work_launch(
-            &plan.anchor_display,
-            resume,
-            fresh,
-            session_id,
-            adopt_orphan.as_ref().map(|l| l.worktree_path.as_path()),
-        )?)
-    };
-
-    let project_root_for_config = find_main_worktree_root().ok();
-    // BUG-898/BUG-902/BUG-913: resolve + validate the launch/display vendor
-    // before any write below (calibration tags, leases, worktrees), for both
-    // launching and non-launching previews. A codex-only profile should
-    // auto-pick codex; disabled defaults must not leak into dry-run or
-    // no-launch output. trace:BUG-898 BUG-902 BUG-913 | ai:codex
-    // BUG-2386: a `--resume`'s recorded vendor and resumable id, resolved
-    // once here (before any lease is minted) and reused by the launch arms.
-    // trace:BUG-2386 | ai:claude
-    // Infer the recorded vendor type without adding vendor-ratchet debt.
-    // trace:STORY-2642 | ai:codex
-    let mut resume_target = None;
-    let resolved_launch_vendor = if !list_sessions {
-        let root = project_root_for_config
-            .clone()
-            .or_else(|| std::env::current_dir().ok())
-            .unwrap_or_else(|| std::path::PathBuf::from("."));
-        // BUG-2386: a resume runs on the vendor that recorded the session
-        // (a Codex thread resumes on Codex), gated on that vendor being
-        // resumable and enabled — not on the configured vendor being Claude.
+        let project_root_for_config = find_main_worktree_root().ok();
+        // BUG-898/BUG-902/BUG-913: resolve + validate the launch/display vendor
+        // before any write below (calibration tags, leases, worktrees), for both
+        // launching and non-launching previews. A codex-only profile should
+        // auto-pick codex; disabled defaults must not leak into dry-run or
+        // no-launch output. trace:BUG-898 BUG-902 BUG-913 | ai:codex
+        // BUG-2386: a `--resume`'s recorded vendor and resumable id, resolved
+        // once here (before any lease is minted) and reused by the launch arms.
         // trace:BUG-2386 | ai:claude
-        match (&launch, no_launch) {
-            (Some(QueueWorkLaunch::Resume(id)), false) => {
-                let (recorded, resume_id) =
-                    crate::codex_resume::recorded_resume(&root, id, Some(plan.scope.as_str()))?;
-                session::require_resume_vendor(&root, recorded)?;
-                resume_target = Some((recorded, resume_id));
-                Some(recorded)
+        // Infer the recorded vendor type without adding vendor-ratchet debt.
+        // trace:STORY-2642 | ai:codex
+        let mut resume_target = None;
+        let resolved_launch_vendor = if !list_sessions {
+            let root = project_root_for_config
+                .clone()
+                .or_else(|| std::env::current_dir().ok())
+                .unwrap_or_else(|| std::path::PathBuf::from("."));
+            // BUG-2386: a resume runs on the vendor that recorded the session
+            // (a Codex thread resumes on Codex), gated on that vendor being
+            // resumable and enabled — not on the configured vendor being Claude.
+            // trace:BUG-2386 | ai:claude
+            match (&launch, no_launch) {
+                (Some(QueueWorkLaunch::Resume(id)), false) => {
+                    let (recorded, resume_id) =
+                        crate::codex_resume::recorded_resume(&root, id, Some(plan.scope.as_str()))?;
+                    session::require_resume_vendor(&root, recorded)?;
+                    resume_target = Some((recorded, resume_id));
+                    Some(recorded)
+                }
+                _ => Some(session::resolve_enabled_headless_vendor(&root)?),
             }
-            _ => Some(session::resolve_enabled_headless_vendor(&root)?),
-        }
-    } else {
-        None
-    };
-    let launch_vendor = resolved_launch_vendor.unwrap_or_else(|| {
-        session::HeadlessVendor::parse(vendor).unwrap_or(session::HeadlessVendor::Claude)
-    });
-    // BUG-2146: a malformed agents.toml is a refusal naming the file, not a
-    // silent "uncontained". trace:BUG-2146 | ai:claude
-    let contained_knob = project_root_for_config
-        .as_deref()
-        .map(load_agents_contained)
-        .transpose()?
-        .unwrap_or(false);
-    // trace:STORY-2642 | ai:codex — a resume uses its recorded vendor.
-    if crate::lane_host::needs_preflight(no_human, dry_run, no_launch, list_sessions)
-        && preflight_vendor != Some(launch_vendor)
-    {
-        let root = project_root_for_config
-            .as_deref()
-            .context("cannot resolve lane host root")?;
-        crate::lane_host::preflight(root, launch_vendor.as_str(), sandbox)?;
-        preflight_vendor = Some(launch_vendor);
-    }
-    // trace:BUG-2146 | ai:claude
-    let contained_env = session::aida_contained_env()?;
-    // BUG-2166: a contained parent's env always wins (monotonic containment,
-    // BUG-2151 ruling). `--plan-only` must not disable containment, and
-    // `--permission-mode` must be refused under a contained parent.
-    // trace:BUG-2166 | ai:antigravity
-    if sandbox && permission_mode.is_some() {
-        anyhow::bail!(
-            "--sandbox and --permission-mode are mutually exclusive Claude launch postures"
-        );
-    }
-    // trace:BUG-2172 | ai:codex
-    crate::session::refuse_contained_permission_override(permission_mode, contained_env)?;
-    let contained = sandbox || contained_env || contained_knob;
-    // BUG-2144: containment is monotonic (BUG-2133 ruling). A contained launch
-    // on a vendor that cannot apply it is refused HERE — before the queue_add
-    // row, the calibration/effort tags, any lease or worktree — rather than
-    // silently running uncontained. `contained` below uses the same inputs.
-    // trace:BUG-2144 | ai:claude
-    // trace:BUG-2166 | ai:antigravity
-    if !no_launch && !list_sessions {
-        session::require_vendor_containment(launch_vendor, contained, "queue-work session")?;
-    }
-    let model_root = project_root_for_config
-        .clone()
-        .or_else(|| std::path::Path::new(".").canonicalize().ok());
-    let resolved_model = model_override
-        .filter(|m| !m.trim().is_empty())
-        .map(str::to_string)
-        .or_else(|| {
-            model_root
-                .as_deref()
-                .and_then(|r| session::resolve_vendor_model(r, launch_vendor))
+        } else {
+            None
+        };
+        let launch_vendor = resolved_launch_vendor.unwrap_or_else(|| {
+            session::HeadlessVendor::parse(vendor).unwrap_or(session::HeadlessVendor::Claude)
         });
-    if let Some(model) = &resolved_model {
-        std::env::set_var("AIDA_AGENT_MODEL", model);
-    }
+        // BUG-2146: a malformed agents.toml is a refusal naming the file, not a
+        // silent "uncontained". trace:BUG-2146 | ai:claude
+        let contained_knob = project_root_for_config
+            .as_deref()
+            .map(load_agents_contained)
+            .transpose()?
+            .unwrap_or(false);
+        // trace:STORY-2642 | ai:codex — a resume uses its recorded vendor.
+        if crate::lane_host::needs_preflight(no_human, dry_run, no_launch, list_sessions)
+            && preflight_vendor != Some(launch_vendor)
+        {
+            let root = project_root_for_config
+                .as_deref()
+                .context("cannot resolve lane host root")?;
+            crate::lane_host::preflight(root, launch_vendor.as_str(), sandbox)?;
+            preflight_vendor = Some(launch_vendor);
+        }
+        // trace:BUG-2146 | ai:claude
+        let contained_env = session::aida_contained_env()?;
+        // BUG-2166: a contained parent's env always wins (monotonic containment,
+        // BUG-2151 ruling). `--plan-only` must not disable containment, and
+        // `--permission-mode` must be refused under a contained parent.
+        // trace:BUG-2166 | ai:antigravity
+        if sandbox && permission_mode.is_some() {
+            anyhow::bail!(
+                "--sandbox and --permission-mode are mutually exclusive Claude launch postures"
+            );
+        }
+        // trace:BUG-2172 | ai:codex
+        crate::session::refuse_contained_permission_override(permission_mode, contained_env)?;
+        let contained = sandbox || contained_env || contained_knob;
+        // BUG-2144: containment is monotonic (BUG-2133 ruling). A contained launch
+        // on a vendor that cannot apply it is refused HERE — before the queue_add
+        // row, the calibration/effort tags, any lease or worktree — rather than
+        // silently running uncontained. `contained` below uses the same inputs.
+        // trace:BUG-2144 | ai:claude
+        // trace:BUG-2166 | ai:antigravity
+        if !no_launch && !list_sessions {
+            session::require_vendor_containment(launch_vendor, contained, "queue-work session")?;
+        }
+        let model_root = project_root_for_config
+            .clone()
+            .or_else(|| std::path::Path::new(".").canonicalize().ok());
+        let resolved_model = model_override
+            .filter(|m| !m.trim().is_empty())
+            .map(str::to_string)
+            .or_else(|| {
+                model_root
+                    .as_deref()
+                    .and_then(|r| session::resolve_vendor_model(r, launch_vendor))
+            });
+        if let Some(model) = &resolved_model {
+            std::env::set_var("AIDA_AGENT_MODEL", model);
+        }
 
-    // trace:TASK-1337 | ai:codex
-    // Resolve role, branch, and delegation before calibration, cleanup, pull,
-    // lease creation, or status writes. Shell roles route; grants authorize.
-    let (role, role_origin, warnings) = infer_queue_work_role(&plan, role_override);
-    let project_root = find_main_worktree_root()?;
-    // trace:BUG-2500 | ai:codex — admission precedes calibration and setup.
-    refuse_waiting_pickup(
-        &project_root,
-        &plan,
-        &role,
-        list_sessions,
-        plan_only,
-        guided,
-    )
-    .map_err(|why| anyhow::anyhow!(why))?;
-    // trace:BUG-2451 | ai:codex — session listing allocates nothing.
-    let rework_pr = if list_sessions {
-        None
-    } else {
-        rework_pr_head_branch_override(
-            &*crate::forge::forge_for_open_change(&project_root),
+        // trace:TASK-1337 | ai:codex
+        // Resolve role, branch, and delegation before calibration, cleanup, pull,
+        // lease creation, or status writes. Shell roles route; grants authorize.
+        let project_root = find_main_worktree_root()?;
+        // trace:BUG-2500 | ai:codex — admission precedes calibration and setup.
+        refuse_waiting_pickup(
+            &project_root,
             &plan,
-            branch_override,
-        )?
-    };
-    // BUG-022: say which existing branch the rework must continue.
-    // trace:BUG-b6b1278890774ef993d2ebc327862470-022 | ai:claude
-    if let Some((pr, branch)) = rework_pr.as_ref().filter(|_| !list_sessions) {
-        eprintln!(
-            "  rework: continuing open PR #{pr} on its branch `{branch}`; \
+            &role,
+            list_sessions,
+            plan_only,
+            guided,
+        )
+        .map_err(|why| anyhow::anyhow!(why))?;
+        // trace:BUG-2451 | ai:codex — session listing allocates nothing.
+        let rework_pr = if list_sessions {
+            None
+        } else {
+            rework_pr_head_branch_override(
+                &*crate::forge::forge_for_open_change(&project_root),
+                &plan,
+                branch_override,
+            )?
+        };
+        if let Some(attempt) = &attempt {
+            attempt.resolve_scope(
+                &plan.anchor_display,
+                branch_override.or_else(|| rework_pr.as_ref().map(|(_, branch)| branch.as_str())),
+                rework_pr.as_ref().map(|(pr, _)| *pr),
+            )?;
+        }
+        // BUG-022: say which existing branch the rework must continue.
+        // trace:BUG-b6b1278890774ef993d2ebc327862470-022 | ai:claude
+        if let Some((pr, branch)) = rework_pr.as_ref().filter(|_| !list_sessions) {
+            eprintln!(
+                "  rework: continuing open PR #{pr} on its branch `{branch}`; \
              this pickup must keep the existing PR branch"
-        );
-    }
-    let resolved_pickup_pr =
-        (plan.entries.len() == 1 && plan.review_target.is_none()).then(|| rework_pr.clone());
-    let rework_branch_override = rework_pr.as_ref().map(|(_, branch)| branch.clone());
-    let session_branch_override = branch_override.or(rework_branch_override.as_deref());
-    // BUG-2223: an adopted orphan fixes the tree and branch; an explicit
-    // --path or --branch naming another one refuses rather than guess.
-    // trace:BUG-2223 | ai:claude
-    let adopt_path = adopt_orphan
-        .as_ref()
-        .map(|l| l.worktree_path.to_string_lossy().into_owned());
-    let (path_override, session_branch_override) = match &adopt_orphan {
-        Some(orphan) => {
-            let id = &orphan.id[..orphan.id.len().min(8)];
-            if let Some(p) = path_override.filter(|p| {
-                std::path::Path::new(p).canonicalize().ok()
-                    != orphan.worktree_path.canonicalize().ok()
-            }) {
-                anyhow::bail!(
-                    "--resume re-enters orphaned lease {id}'s tree {}, but --path names {p}; \
+            );
+        }
+        let resolved_pickup_pr =
+            (plan.entries.len() == 1 && plan.review_target.is_none()).then(|| rework_pr.clone());
+        let rework_branch_override = rework_pr.as_ref().map(|(_, branch)| branch.clone());
+        let session_branch_override = branch_override.or(rework_branch_override.as_deref());
+
+        // BUG-2223: an adopted orphan fixes the tree and branch; an explicit
+        // --path or --branch naming another one refuses rather than guess.
+        // trace:BUG-2223 | ai:claude
+        let adopt_path = adopt_orphan
+            .as_ref()
+            .map(|l| l.worktree_path.to_string_lossy().into_owned());
+        let (path_override, session_branch_override) = match &adopt_orphan {
+            Some(orphan) => {
+                let id = &orphan.id[..orphan.id.len().min(8)];
+                if let Some(p) = path_override.filter(|p| {
+                    std::path::Path::new(p).canonicalize().ok()
+                        != orphan.worktree_path.canonicalize().ok()
+                }) {
+                    anyhow::bail!(
+                        "--resume re-enters orphaned lease {id}'s tree {}, but --path names {p}; \
                      drop --path to resume there",
-                    orphan.worktree_path.display()
-                );
-            }
-            if let Some(b) = branch_override.filter(|b| *b != orphan.branch) {
-                anyhow::bail!(
+                        orphan.worktree_path.display()
+                    );
+                }
+                if let Some(b) = branch_override.filter(|b| *b != orphan.branch) {
+                    anyhow::bail!(
                     "--resume re-enters orphaned lease {id} on branch `{}`, but --branch names \
                      `{b}`; drop --branch to resume there",
                     orphan.branch
                 );
-            }
-            // trace:BUG-2223 | ai:claude — no --branch was passed here: the
-            // open PR's head picked the branch, so name what works instead.
-            if let Some(b) = rework_branch_override
-                .as_deref()
-                .filter(|b| *b != orphan.branch)
-            {
-                anyhow::bail!(
-                    "--resume re-enters orphaned lease {id} on branch `{}`, but the open PR \
+                }
+                // trace:BUG-2223 | ai:claude — no --branch was passed here: the
+                // open PR's head picked the branch, so name what works instead.
+                if let Some(b) = rework_branch_override
+                    .as_deref()
+                    .filter(|b| *b != orphan.branch)
+                {
+                    anyhow::bail!(
+                        "--resume re-enters orphaned lease {id} on branch `{}`, but the open PR \
                      for `{}` is on branch `{b}`, so its rework belongs there. Commit or stash \
                      the work in {}, then `aida session end {id} --force` and re-run \
                      `aida queue work {}` without --resume.",
-                    orphan.branch,
-                    plan.scope,
-                    orphan.worktree_path.display(),
-                    plan.scope,
-                );
+                        orphan.branch,
+                        plan.scope,
+                        orphan.worktree_path.display(),
+                        plan.scope,
+                    );
+                }
+                (adopt_path.as_deref(), Some(orphan.branch.as_str()))
             }
-            (adopt_path.as_deref(), Some(orphan.branch.as_str()))
-        }
-        None => (path_override, session_branch_override),
-    };
-    // STORY-1662: a fresh headless implementer pickup outside a drain waits
-    // for its child and reports the outcome. Its concurrency slot is taken
-    // before any setup and held until this command returns.
-    // trace:STORY-1662 | ai:claude
-    let standalone_implementer = !no_launch
-        && matches!(launch, Some(QueueWorkLaunch::Fresh(_)))
-        && crate::standalone_implementer::is_standalone_implementer(
-            &role,
-            plan.review_target.is_none(),
-            no_human,
-        );
-    // TASK-619: capture the anchor spec's status from the *local* (pre-pull)
-    // view so we can detect whether the pull below reveals that another
-    // machine claimed the spec under us. Best-effort + read-only — a load
-    // failure just yields None, which makes the guard a no-op.
-    // trace:TASK-619 | ai:claude
-    let status_before_pull: Option<RequirementStatus> = storage.load().ok().and_then(|store| {
-        store
-            .get_requirement_by_spec_id(&plan.scope)
-            .map(|r| r.status.clone())
-    });
+            None => (path_override, session_branch_override),
+        };
+        // STORY-1662: a fresh headless implementer pickup outside a drain waits
+        // for its child and reports the outcome. Its concurrency slot is taken
+        // before any setup and held until this command returns.
+        // trace:STORY-1662 | ai:claude
+        let standalone_implementer =
+            !no_launch && matches!(launch, Some(QueueWorkLaunch::Fresh(_))) && implementer_route;
+        // TASK-619: capture the anchor spec's status from the *local* (pre-pull)
+        // view so we can detect whether the pull below reveals that another
+        // machine claimed the spec under us. Best-effort + read-only — a load
+        // failure just yields None, which makes the guard a no-op.
+        // trace:TASK-619 | ai:claude
+        let status_before_pull: Option<RequirementStatus> = storage.load().ok().and_then(|store| {
+            store
+                .get_requirement_by_spec_id(&plan.scope)
+                .map(|r| r.status.clone())
+        });
 
-    let mut _standalone_slot = None;
-    if !list_sessions {
-        eprintln!("  pickup role: {role} ({role_origin}); --role overrides queue routing, then scope default");
-        if let Some(message) = queue_work_role_mismatch(
-            &role,
-            role_origin,
-            std::env::var("AIDA_SESSION_ROLE").ok().as_deref(),
-        ) {
-            eprintln!("  {message}");
-        }
-        if !dry_run {
-            let review_branch = plan
-                .review_target
-                .map(|(forge, n)| forge.local_branch_for(n));
-            // trace:BUG-1808 | ai:claude
-            // Preflight every launch path that later mints a child grant —
-            // including the `--no-human` resume and standalone-reviewer
-            // launches, which used to skip this check and refuse in
-            // `issue_child` only after the status bump, queue row, worktree,
-            // lease and manifest had landed.
-            if queue_work_issues_child_grant(no_launch) {
-                let child_seat = crate::canonical_role_name(&role);
-                // BUG-2139: a fresh headless pickup now mints a child grant
-                // too. Its baseline seats may fall back to an ungranted child;
-                // every other arm and seat must be delegated.
-                let preflight = if queue_work_is_fresh_headless(
-                    no_human,
-                    matches!(launch, Some(QueueWorkLaunch::Resume(_))),
-                    is_standalone_reviewer(&role, plan.review_target.is_some()),
-                ) {
-                    crate::gate::seat_authority::preflight_headless_child(
-                        &project_root,
-                        &child_seat,
-                    )
-                    .map(|authority| {
-                        matches!(
-                            authority,
-                            crate::gate::seat_authority::HeadlessChildAuthority::Delegated
-                        )
-                    })
-                } else {
-                    crate::gate::seat_authority::validate_child_delegation(
-                        &project_root,
-                        &child_seat,
-                    )
-                    .map(|_| true)
-                };
-                let mints_child = match preflight {
-                    Ok(mints_child) => mints_child,
-                    Err(cause) => {
-                        let launcher = crate::gate::seat_authority::current_grant(&project_root);
-                        anyhow::bail!(queue_work_delegation_refusal(
+        let mut _standalone_slot = None;
+        if !list_sessions {
+            eprintln!("  pickup role: {role} ({role_origin}); --role overrides queue routing, then scope default");
+            if let Some(message) = queue_work_role_mismatch(
+                &role,
+                role_origin,
+                std::env::var("AIDA_SESSION_ROLE").ok().as_deref(),
+            ) {
+                eprintln!("  {message}");
+            }
+            if !dry_run {
+                let review_branch = plan
+                    .review_target
+                    .map(|(forge, n)| forge.local_branch_for(n));
+                // trace:BUG-1808 | ai:claude
+                // Preflight every launch path that later mints a child grant —
+                // including the `--no-human` resume and standalone-reviewer
+                // launches, which used to skip this check and refuse in
+                // `issue_child` only after the status bump, queue row, worktree,
+                // lease and manifest had landed.
+                if queue_work_issues_child_grant(no_launch) {
+                    let child_seat = crate::canonical_role_name(&role);
+                    // BUG-2139: a fresh headless pickup now mints a child grant
+                    // too. Its baseline seats may fall back to an ungranted child;
+                    // every other arm and seat must be delegated.
+                    let preflight = if queue_work_is_fresh_headless(
+                        no_human,
+                        matches!(launch, Some(QueueWorkLaunch::Resume(_))),
+                        is_standalone_reviewer(&role, plan.review_target.is_some()),
+                    ) {
+                        crate::gate::seat_authority::preflight_headless_child(
+                            &project_root,
                             &child_seat,
-                            role_origin,
-                            launcher
-                                .as_ref()
-                                .map(|g| (g.seat.as_str(), g.delegable_seats.as_slice())),
-                            &format!("{cause:#}"),
-                        ));
-                    }
-                };
-                // BUG-2428: a sandboxed child whose grant key this launcher
-                // cannot put in a session keyring is refused at mint time —
-                // after the worktree and lease exist. Probe the keyring now,
-                // before any setup, so that refusal leaves nothing behind.
-                // trace:BUG-2428 | ai:claude
-                if is_standalone_reviewer(&role, plan.review_target.is_some()) {
-                    refuse_unpresentable_contained_reviewer(contained)?;
-                } else if mints_child
+                        )
+                        .map(|authority| {
+                            matches!(
+                                authority,
+                                crate::gate::seat_authority::HeadlessChildAuthority::Delegated
+                            )
+                        })
+                    } else {
+                        crate::gate::seat_authority::validate_child_delegation(
+                            &project_root,
+                            &child_seat,
+                        )
+                        .map(|_| true)
+                    };
+                    let mints_child = match preflight {
+                        Ok(mints_child) => mints_child,
+                        Err(cause) => {
+                            let launcher =
+                                crate::gate::seat_authority::current_grant(&project_root);
+                            anyhow::bail!(queue_work_delegation_refusal(
+                                &child_seat,
+                                role_origin,
+                                launcher
+                                    .as_ref()
+                                    .map(|g| (g.seat.as_str(), g.delegable_seats.as_slice())),
+                                &format!("{cause:#}"),
+                            ));
+                        }
+                    };
+                    // BUG-2428: a sandboxed child whose grant key this launcher
+                    // cannot put in a session keyring is refused at mint time —
+                    // after the worktree and lease exist. Probe the keyring now,
+                    // before any setup, so that refusal leaves nothing behind.
+                    // trace:BUG-2428 | ai:claude
+                    if is_standalone_reviewer(&role, plan.review_target.is_some()) {
+                        refuse_unpresentable_contained_reviewer(contained)?;
+                    } else if mints_child
                     // trace:TASK-2708 | ai:claude
                     && session::sandboxed_child_grant(launch_vendor, contained)?
-                {
-                    crate::gate::seat_authority::preflight_sandboxed_child_key(&child_seat)?;
+                    {
+                        crate::gate::seat_authority::preflight_sandboxed_child_key(&child_seat)?;
+                    }
                 }
-            }
-            // Pull after read-only launch preflights and before session setup
-            // or store writes. A stale view cannot authorize pickup after failure.
-            // trace:BUG-2490 | ai:codex
-            if !no_pull {
-                run_aida_db_sync_pull(storage.path()).context(
+                // Pull after read-only launch preflights and before session setup
+                // or store writes. A stale view cannot authorize pickup after failure.
+                // trace:BUG-2490 | ai:codex
+                if !no_pull {
+                    run_aida_db_sync_pull(storage.path()).context(
                     "pre-pickup pull failed; pickup stopped before session setup and store writes; \
                      resolve the store sync failure and retry `aida db sync --pull`, or use `--no-pull` for an intentional offline pickup",
                 )?;
-            }
+                }
 
-            // trace:STORY-2705 | ai:codex — before worktree/queue mutation.
-            if role == "reviewer" {
-                if let Some((forge, n)) = plan.review_target {
-                    if let Some(reason) = crate::review_implementer_gate::deferred(
+                // trace:STORY-2705 | ai:codex — before worktree/queue mutation.
+                if role == "reviewer" {
+                    if let Some((forge, n)) = plan.review_target {
+                        if let Some(reason) = crate::review_implementer_gate::deferred(
+                            &project_root,
+                            n,
+                            forge == ReviewForge::GitLab,
+                        )? {
+                            anyhow::bail!("{reason}");
+                        }
+                    }
+                }
+
+                // trace:STORY-1662 | ai:claude
+                // trace:STORY-2660 | ai:codex
+                if standalone_implementer {
+                    _standalone_slot = Some(crate::standalone_implementer::acquire_slot(
                         &project_root,
-                        n,
-                        forge == ReviewForge::GitLab,
-                    )? {
-                        anyhow::bail!("{reason}");
+                        &plan.scope,
+                        crate::standalone_implementer::configured_cap(&project_root)?,
+                    )?);
+                }
+                // Force-claim may retire a dead clone, so delegation and launch
+                // capacity must succeed before this preflight mutates anything.
+                // trace:BUG-2455 | ai:codex
+                // trace:BUG-2457 | ai:codex
+                if role == "reviewer"
+                    && adopt_orphan.is_none()
+                    && session_branch_override.is_none()
+                    && path_override.is_none()
+                {
+                    if let Some((forge, n)) = plan.review_target {
+                        retire_idle_review_worktree(&project_root, forge, n)?;
+                    }
+                }
+                preflight_queue_work_branch_reclaiming(
+                    &project_root,
+                    session_branch_override.or(review_branch.as_deref()),
+                    adopt_orphan.as_ref().map(|l| l.worktree_path.as_path()),
+                    force_claim,
+                )?;
+                // Persist only the synthesized explicit row, after all three
+                // preflight decisions. Do not reselect a different queue head.
+                for entry in &plan.entries {
+                    if entry.queue.position == i64::MAX
+                        && !storage
+                            .queue_list(&entry.queue.user_id, false)?
+                            .iter()
+                            .any(|queued| queued.requirement_id == entry.queue.requirement_id)
+                    {
+                        storage.queue_add(entry.queue.clone())?;
+                        record_role_activity(&entry.spec_id, "queue-add");
+                        println!(
+                            "queued {} for role:{}",
+                            entry.spec_id,
+                            entry.queue.for_role.as_deref().unwrap_or(&role)
+                        );
                     }
                 }
             }
+        }
 
-            // trace:STORY-1662 | ai:claude
-            // trace:STORY-2660 | ai:codex
-            if standalone_implementer {
-                _standalone_slot = Some(crate::standalone_implementer::acquire_slot(
-                    &project_root,
-                    &plan.scope,
-                    crate::standalone_implementer::configured_cap(&project_root)?,
-                )?);
-            }
-            // Force-claim may retire a dead clone, so delegation and launch
-            // capacity must succeed before this preflight mutates anything.
-            // trace:BUG-2455 | ai:codex
-            // trace:BUG-2457 | ai:codex
-            if role == "reviewer"
-                && adopt_orphan.is_none()
-                && session_branch_override.is_none()
-                && path_override.is_none()
-            {
-                if let Some((forge, n)) = plan.review_target {
-                    retire_idle_review_worktree(&project_root, forge, n)?;
-                }
-            }
-            preflight_queue_work_branch_reclaiming(
-                &project_root,
-                session_branch_override.or(review_branch.as_deref()),
-                adopt_orphan.as_ref().map(|l| l.worktree_path.as_path()),
-                force_claim,
-            )?;
-            // Persist only the synthesized explicit row, after all three
-            // preflight decisions. Do not reselect a different queue head.
-            for entry in &plan.entries {
-                if entry.queue.position == i64::MAX
-                    && !storage
-                        .queue_list(&entry.queue.user_id, false)?
-                        .iter()
-                        .any(|queued| queued.requirement_id == entry.queue.requirement_id)
+        // STORY-439: capture pickup-time complexity + assistance estimate
+        // ASAP after plan resolution — we know the anchor spec, the project
+        // root is reachable via `find_project_root`, and the capture is a
+        // local FS write that won't perturb the rest of the pickup flow.
+        // Best-effort: a write error logs and continues. Cluster mode uses
+        // the anchor (the parent scope) as the captured spec; the
+        // operator's estimate is for the cluster as a whole.
+        // trace:STORY-439 | ai:claude
+        if (complexity.is_some() || assist_est.is_some()) && !list_sessions && !dry_run {
+            if let Ok(project_root) = find_project_root() {
+                let main_root = main_worktree_root_from(&project_root);
+                let spec = plan.anchor_display.as_str();
+                if let Err(e) =
+                    complexity_calibration::upsert_pickup(&main_root, spec, complexity, assist_est)
                 {
-                    storage.queue_add(entry.queue.clone())?;
-                    record_role_activity(&entry.spec_id, "queue-add");
-                    println!(
-                        "queued {} for role:{}",
-                        entry.spec_id,
-                        entry.queue.for_role.as_deref().unwrap_or(&role)
+                    eprintln!(
+                        "  {} could not record pickup calibration for {spec}: {e}",
+                        crate::glyph(crate::glyphs::Glyph::Warning).yellow()
                     );
                 }
+                // Stamp the tags on the spec so existing tag tooling works
+                // on the new dimension. Best-effort — a load/save failure
+                // doesn't fail the pickup.
+                apply_calibration_tags(storage, spec, complexity, assist_est);
             }
         }
-    }
-
-    // STORY-439: capture pickup-time complexity + assistance estimate
-    // ASAP after plan resolution — we know the anchor spec, the project
-    // root is reachable via `find_project_root`, and the capture is a
-    // local FS write that won't perturb the rest of the pickup flow.
-    // Best-effort: a write error logs and continues. Cluster mode uses
-    // the anchor (the parent scope) as the captured spec; the
-    // operator's estimate is for the cluster as a whole.
-    // trace:STORY-439 | ai:claude
-    if (complexity.is_some() || assist_est.is_some()) && !list_sessions && !dry_run {
-        if let Ok(project_root) = find_project_root() {
-            let main_root = main_worktree_root_from(&project_root);
-            let spec = plan.anchor_display.as_str();
-            if let Err(e) =
-                complexity_calibration::upsert_pickup(&main_root, spec, complexity, assist_est)
-            {
-                eprintln!(
-                    "  {} could not record pickup calibration for {spec}: {e}",
-                    crate::glyph(crate::glyphs::Glyph::Warning).yellow()
+        if effort.is_some() && !list_sessions && !dry_run {
+            if let Ok(project_root) = find_project_root() {
+                let main_root = main_worktree_root_from(&project_root);
+                let spec = plan.anchor_display.as_str();
+                if let Err(e) = effort_calibration::upsert_plan(
+                    &main_root,
+                    spec,
+                    effort,
+                    Some(current_user_id(None)),
+                ) {
+                    eprintln!(
+                        "  {} could not record plan effort for {spec}: {e}",
+                        crate::glyph(crate::glyphs::Glyph::Warning).yellow()
+                    );
+                }
+                apply_effort_tag(
+                    storage,
+                    spec,
+                    effort_calibration::EffortTouchpoint::Plan,
+                    effort,
                 );
             }
-            // Stamp the tags on the spec so existing tag tooling works
-            // on the new dimension. Best-effort — a load/save failure
-            // doesn't fail the pickup.
-            apply_calibration_tags(storage, spec, complexity, assist_est);
         }
-    }
-    if effort.is_some() && !list_sessions && !dry_run {
-        if let Ok(project_root) = find_project_root() {
-            let main_root = main_worktree_root_from(&project_root);
-            let spec = plan.anchor_display.as_str();
-            if let Err(e) = effort_calibration::upsert_plan(
-                &main_root,
-                spec,
-                effort,
-                Some(current_user_id(None)),
-            ) {
-                eprintln!(
-                    "  {} could not record plan effort for {spec}: {e}",
-                    crate::glyph(crate::glyphs::Glyph::Warning).yellow()
-                );
-            }
-            apply_effort_tag(
-                storage,
-                spec,
-                effort_calibration::EffortTouchpoint::Plan,
-                effort,
-            );
+
+        // TASK-112: `--list-sessions` is a pure read — print the recorded
+        // claude conversations for this scope and exit before any side
+        // effects (no worktree, no lease, no pull).
+        if list_sessions {
+            return print_scope_sessions(&plan.anchor_display);
         }
-    }
 
-    // TASK-112: `--list-sessions` is a pure read — print the recorded
-    // claude conversations for this scope and exit before any side
-    // effects (no worktree, no lease, no pull).
-    if list_sessions {
-        return print_scope_sessions(&plan.anchor_display);
-    }
-
-    // Permission mode resolution (TASK-83 → TASK-84). Order:
-    //   1. --permission-mode flag (explicit override always wins)
-    //   2. AIDA_PERMISSION_MODE env var (process-level opt-out)
-    //   3. .aida/config.toml [behavior] permission_mode (project policy)
-    //   4. AIDA-managed worktree default → `bypassPermissions` (TASK-84:
-    //      worktree is sandboxed git state; the prompt flood was eating
-    //      autonomous overnight runs and circuit breakers stay in place)
-    //   5. Non-AIDA default → `acceptEdits` (safe default for foreign cwd)
-    // The pass-through to `claude --permission-mode` is unvalidated, so
-    // users can pick `auto`, `plan`, etc. trace:STORY-42, TASK-83, TASK-84
-    // | ai:claude
-    let env_mode = std::env::var("AIDA_PERMISSION_MODE")
-        .ok()
-        .filter(|s| !s.is_empty());
-    let config_mode = project_root_for_config
-        .as_deref()
-        .and_then(read_behavior_permission_mode);
-    // STORY-495: the interactive worktree default is now faithful (native).
-    // The uniform `[agents] bypass` knob is the single opt-in that restores
-    // bypass posture — read it from user-base + project agents.toml.
-    let bypass_knob = project_root_for_config
-        .as_deref()
-        .map(|r| load_agents_bypass(r).unwrap_or(false))
-        .unwrap_or(false);
-    let posture = resolve_queue_work_posture(
-        permission_mode,
-        sandbox,
-        contained_env,
-        contained_knob,
-        bypass_knob,
-        // The headless launcher never runs Claude plan mode (it owns its own
-        // posture), so only an interactive plan lane resolves to `plan`; the
-        // headless plan phase must not report a mode it will not run.
-        // trace:TASK-1794 | ai:claude
-        plan_only && !no_human,
-        env_mode.as_deref(),
-        config_mode.as_deref(),
-    )?;
-    let contained = posture.contained;
-    // trace:BUG-2131 | ai:claude
-    if contained {
-        aida_core::git_ops::ensure_git_supports_contained()?;
-    }
-    apply_queue_work_contained_env(contained);
-    let explicit_permission_mode = permission_mode.is_some();
-    let mut bypass_prompt_declined = false;
-    let (mut permission_mode, permission_mode_origin) =
-        (posture.permission_mode, posture.permission_mode_origin);
-    // TASK-1500: interactive queue work owns a human consent prompt. Corroborated
-    // orchestrated children already passed dispatch authority and must not hang.
-    // BUG-2166: `--plan-only` must not skip the bypass consent prompt if an
-    // uncontained interactive session resolves to bypassPermissions.
-    // trace:BUG-2166 | ai:antigravity
-    if !no_human && permission_mode.as_deref() == Some("bypassPermissions") {
-        let orchestrated = project_root_for_config
+        // Permission mode resolution (TASK-83 → TASK-84). Order:
+        //   1. --permission-mode flag (explicit override always wins)
+        //   2. AIDA_PERMISSION_MODE env var (process-level opt-out)
+        //   3. .aida/config.toml [behavior] permission_mode (project policy)
+        //   4. AIDA-managed worktree default → `bypassPermissions` (TASK-84:
+        //      worktree is sandboxed git state; the prompt flood was eating
+        //      autonomous overnight runs and circuit breakers stay in place)
+        //   5. Non-AIDA default → `acceptEdits` (safe default for foreign cwd)
+        // The pass-through to `claude --permission-mode` is unvalidated, so
+        // users can pick `auto`, `plan`, etc. trace:STORY-42, TASK-83, TASK-84
+        // | ai:claude
+        let env_mode = std::env::var("AIDA_PERMISSION_MODE")
+            .ok()
+            .filter(|s| !s.is_empty());
+        let config_mode = project_root_for_config
             .as_deref()
-            .is_some_and(|root| crate::orchestrator::detect(root).is_orchestrated());
-        if !orchestrated {
-            if let Some(root) = project_root_for_config.as_deref() {
-                let mut argv = vec![
-                    "--permission-mode".to_string(),
-                    "bypassPermissions".to_string(),
-                ];
-                crate::gate_agent_bypass(root, vendor, &mut argv, false, explicit_permission_mode)?;
-                if !argv.iter().any(|a| a == "bypassPermissions") {
-                    permission_mode = None;
-                    bypass_prompt_declined = true;
+            .and_then(read_behavior_permission_mode);
+        // STORY-495: the interactive worktree default is now faithful (native).
+        // The uniform `[agents] bypass` knob is the single opt-in that restores
+        // bypass posture — read it from user-base + project agents.toml.
+        let bypass_knob = project_root_for_config
+            .as_deref()
+            .map(|r| load_agents_bypass(r).unwrap_or(false))
+            .unwrap_or(false);
+        let posture = resolve_queue_work_posture(
+            permission_mode,
+            sandbox,
+            contained_env,
+            contained_knob,
+            bypass_knob,
+            // The headless launcher never runs Claude plan mode (it owns its own
+            // posture), so only an interactive plan lane resolves to `plan`; the
+            // headless plan phase must not report a mode it will not run.
+            // trace:TASK-1794 | ai:claude
+            plan_only && !no_human,
+            env_mode.as_deref(),
+            config_mode.as_deref(),
+        )?;
+        let contained = posture.contained;
+        // trace:BUG-2131 | ai:claude
+        if contained {
+            aida_core::git_ops::ensure_git_supports_contained()?;
+        }
+        apply_queue_work_contained_env(contained);
+        let explicit_permission_mode = permission_mode.is_some();
+        let mut bypass_prompt_declined = false;
+        let (mut permission_mode, permission_mode_origin) =
+            (posture.permission_mode, posture.permission_mode_origin);
+        // TASK-1500: interactive queue work owns a human consent prompt. Corroborated
+        // orchestrated children already passed dispatch authority and must not hang.
+        // BUG-2166: `--plan-only` must not skip the bypass consent prompt if an
+        // uncontained interactive session resolves to bypassPermissions.
+        // trace:BUG-2166 | ai:antigravity
+        if !no_human && permission_mode.as_deref() == Some("bypassPermissions") {
+            let orchestrated = project_root_for_config
+                .as_deref()
+                .is_some_and(|root| crate::orchestrator::detect(root).is_orchestrated());
+            if !orchestrated {
+                if let Some(root) = project_root_for_config.as_deref() {
+                    let mut argv = vec![
+                        "--permission-mode".to_string(),
+                        "bypassPermissions".to_string(),
+                    ];
+                    crate::gate_agent_bypass(
+                        root,
+                        vendor,
+                        &mut argv,
+                        false,
+                        explicit_permission_mode,
+                    )?;
+                    if !argv.iter().any(|a| a == "bypassPermissions") {
+                        permission_mode = None;
+                        bypass_prompt_declined = true;
+                    }
                 }
             }
         }
-    }
-    if permission_mode.is_none() && !contained {
-        maybe_show_faithful_launcher_notice();
-    }
+        if permission_mode.is_none() && !contained {
+            maybe_show_faithful_launcher_notice();
+        }
 
-    // BUG-2430: the findings come from the newest review of the spec, its
-    // open PR's change-keyed record included; a refusal that exists but
-    // cannot be read stops the launch instead of sending the lane out on
-    // older rulings. trace:BUG-2430 | ai:claude
-    let review_findings = match project_root_for_config
-        .as_deref()
-        .filter(|_| !role.eq_ignore_ascii_case("reviewer") && !plan_only && !guided)
-    {
-        None => ReviewResult::Unavailable,
-        Some(root) => {
-            let spec_id = plan
-                .entries
-                .first()
-                .map(|entry| entry.spec_id.as_str())
-                .unwrap_or(plan.anchor_display.as_str());
-            let open_change = spec_open_change_key(root, &[plan.anchor_display.as_str(), spec_id]);
-            resolve_rework_review(root, &plan.anchor_display, spec_id, open_change.as_deref())
+        // BUG-2430: the findings come from the newest review of the spec, its
+        // open PR's change-keyed record included; a refusal that exists but
+        // cannot be read stops the launch instead of sending the lane out on
+        // older rulings. trace:BUG-2430 | ai:claude
+        let review_findings = match project_root_for_config
+            .as_deref()
+            .filter(|_| !role.eq_ignore_ascii_case("reviewer") && !plan_only && !guided)
+        {
+            None => ReviewResult::Unavailable,
+            Some(root) => {
+                let spec_id = plan
+                    .entries
+                    .first()
+                    .map(|entry| entry.spec_id.as_str())
+                    .unwrap_or(plan.anchor_display.as_str());
+                let open_change =
+                    spec_open_change_key(root, &[plan.anchor_display.as_str(), spec_id]);
+                resolve_rework_review(root, &plan.anchor_display, spec_id, open_change.as_deref())
                 .map_err(|error| {
                     let (ReworkReviewError::Waiting(why) | ReworkReviewError::Unavailable(why)) = error;
                     anyhow::anyhow!(
@@ -4514,517 +4543,531 @@ pub(crate) fn handle_queue_work(
                         open_change.as_deref().unwrap_or(&plan.anchor_display)
                     )
                 })?
-        }
-    };
-    // BUG-1213: the pickup leads with the ACTUAL rework round, derived from
-    // the spec's recorded findings blocks (one per `queue rework`), not a
-    // constant. trace:BUG-1213 | ai:claude
-    // An advisor ruling or brief left as a spec comment leads the implementer
-    // pickup; a lane that read only the description repeated the overruled
-    // change. trace:BUG-B6B1278890774EF993D2EBC327862470-021 | ai:claude
-    // BUG-057: a brief newer than the last verdict is the task; the verdict's
-    // findings become superseded context instead of the authoritative round.
-    // The assembly is a pure function so the whole path is testable.
-    // trace:BUG-B6B1278890774EF993D2EBC327862470-057 | ai:claude
-    let implementer_item = !role.eq_ignore_ascii_case("reviewer")
-        && !plan_only
-        && !guided
-        && plan.mode == QueueWorkMode::Item;
-    let spec_comments = if review_findings.findings().is_some() || implementer_item {
-        let spec_id = plan
-            .entries
-            .first()
-            .map(|entry| entry.spec_id.as_str())
-            .unwrap_or(plan.anchor_display.as_str());
-        storage
-            .load()
-            .ok()
-            .and_then(|store| {
-                store
-                    .requirements
-                    .iter()
-                    .find(|r| spec_matches(r, spec_id))
-                    .map(|r| r.comments.clone())
-            })
-            .unwrap_or_default()
-    } else {
-        Vec::new()
-    };
-    // A rework lane is contained and cannot download CI logs, so the launcher
-    // leads its prompt with the PR head's failing tests and panic lines.
-    // trace:BUG-2380 | ai:claude
-    let ci_failures = review_findings
-        .findings()
-        .and(project_root_for_config.as_deref())
-        .and_then(|root| {
+            }
+        };
+        // BUG-1213: the pickup leads with the ACTUAL rework round, derived from
+        // the spec's recorded findings blocks (one per `queue rework`), not a
+        // constant. trace:BUG-1213 | ai:claude
+        // An advisor ruling or brief left as a spec comment leads the implementer
+        // pickup; a lane that read only the description repeated the overruled
+        // change. trace:BUG-B6B1278890774EF993D2EBC327862470-021 | ai:claude
+        // BUG-057: a brief newer than the last verdict is the task; the verdict's
+        // findings become superseded context instead of the authoritative round.
+        // The assembly is a pure function so the whole path is testable.
+        // trace:BUG-B6B1278890774EF993D2EBC327862470-057 | ai:claude
+        let implementer_item = !role.eq_ignore_ascii_case("reviewer")
+            && !plan_only
+            && !guided
+            && plan.mode == QueueWorkMode::Item;
+        let spec_comments = if review_findings.findings().is_some() || implementer_item {
             let spec_id = plan
                 .entries
                 .first()
                 .map(|entry| entry.spec_id.as_str())
                 .unwrap_or(plan.anchor_display.as_str());
-            crate::ci_failures::section_for_spec(root, spec_id)
-        });
-    let mut prompt =
-        crate::rework_direction::assemble_pickup_prompt(&crate::rework_direction::PickupInputs {
-            plan: &plan,
-            role: &role,
-            plan_only,
-            guided,
-            review_findings: review_findings.as_deref(),
-            spec_comments: &spec_comments,
-            conflict: None, // Host prepares the merge before launch (STORY-2475).
-            ci_failures: ci_failures.as_deref(),
-        });
-    // Interactive implementers and every headless phase receive the same
-    // resolved, capped type+lane protocol. Reviewers are included headlessly
-    // because there is no conversational pickup hook to inject it later.
-    // trace:STORY-1221 trace:TASK-1278 | ai:codex
-    if no_human || !role.eq_ignore_ascii_case("reviewer") {
-        let spec_id = plan
-            .entries
-            .first()
-            .map(|entry| entry.spec_id.as_str())
-            .unwrap_or(plan.anchor_display.as_str());
-        if let Ok(store) = storage.load() {
-            if let Some(req) = store.requirements.iter().find(|r| spec_matches(r, spec_id)) {
-                prompt = crate::protocol_cmd::prepend_resolved_pickup_protocol(&store, req, prompt);
-            }
-        }
-    }
-    // STORY-1226: due seat jobs for this pickup's role lead the prompt (the
-    // Codex/Antigravity delivery channel; a nudge on Claude). File-only read.
-    // trace:STORY-1226 | ai:claude
-    {
-        let due_root = project_root_for_config
-            .clone()
-            .or_else(|| std::env::current_dir().ok())
-            .unwrap_or_else(|| std::path::PathBuf::from("."));
-        let due = maintenance_schedule::due_seat_jobs(&due_root, Some(&role));
-        prompt = prepend_due_jobs(
-            prompt,
-            &maintenance_schedule::render_due_jobs_block(&due, &role),
-        );
-    }
-    // BUG-809: orchestrated reviewer child — the parent set the verdict-file
-    // env; bake the absolute anchor into the prompt text as well.
-    if role.eq_ignore_ascii_case("reviewer") {
-        append_reviewer_prompt_suffixes(&mut prompt);
-        // TASK-1277: every review round carries the type protocol's
-        // machine-checkable checklist verbatim, resolved from the plan's own
-        // spec entries (no forge call), so rounds cite protocol items by name.
-        // trace:TASK-1277 | ai:claude
-        if let Ok(store) = storage.load() {
-            let typed: Vec<(String, aida_core::RequirementType)> = plan
-                .entries
-                .iter()
-                .filter_map(|entry| {
-                    let req = store
+            storage
+                .load()
+                .ok()
+                .and_then(|store| {
+                    store
                         .requirements
                         .iter()
-                        .find(|r| spec_matches(r, &entry.spec_id))?;
-                    Some((req.display_id().to_string(), req.req_type.clone()))
+                        .find(|r| spec_matches(r, spec_id))
+                        .map(|r| r.comments.clone())
                 })
-                .collect();
-            if let Some(block) = crate::protocol_gate::reviewer_prompt_block(&typed) {
-                prompt.push_str(&block);
-            }
-        }
-        // trace:TASK-1290 | ai:claude
-        if let Some((forge, pr_n)) = plan.review_target {
-            if let Some(root) = project_root_for_config.as_deref() {
-                if let Ok(store) = storage.load() {
-                    append_untraced_criteria_prompt_block(&mut prompt, root, &store, forge, pr_n);
-                }
-            }
-        }
-        // The reviewer gets the same failing-test digest the rework lane does.
+                .unwrap_or_default()
+        } else {
+            Vec::new()
+        };
+        // A rework lane is contained and cannot download CI logs, so the launcher
+        // leads its prompt with the PR head's failing tests and panic lines.
         // trace:BUG-2380 | ai:claude
-        if let Some((ReviewForge::GitHub, pr_n)) = plan.review_target {
-            if let Some(root) = project_root_for_config.as_deref() {
-                if let Some(section) = crate::ci_failures::section_for_pr(root, pr_n) {
-                    prompt.push_str("\n\n");
-                    prompt.push_str(section.trim_end());
+        let ci_failures = review_findings
+            .findings()
+            .and(project_root_for_config.as_deref())
+            .and_then(|root| {
+                let spec_id = plan
+                    .entries
+                    .first()
+                    .map(|entry| entry.spec_id.as_str())
+                    .unwrap_or(plan.anchor_display.as_str());
+                crate::ci_failures::section_for_spec(root, spec_id)
+            });
+        let mut prompt = crate::rework_direction::assemble_pickup_prompt(
+            &crate::rework_direction::PickupInputs {
+                plan: &plan,
+                role: &role,
+                plan_only,
+                guided,
+                review_findings: review_findings.as_deref(),
+                spec_comments: &spec_comments,
+                conflict: None, // Host prepares the merge before launch (STORY-2475).
+                ci_failures: ci_failures.as_deref(),
+            },
+        );
+        // Interactive implementers and every headless phase receive the same
+        // resolved, capped type+lane protocol. Reviewers are included headlessly
+        // because there is no conversational pickup hook to inject it later.
+        // trace:STORY-1221 trace:TASK-1278 | ai:codex
+        if no_human || !role.eq_ignore_ascii_case("reviewer") {
+            let spec_id = plan
+                .entries
+                .first()
+                .map(|entry| entry.spec_id.as_str())
+                .unwrap_or(plan.anchor_display.as_str());
+            if let Ok(store) = storage.load() {
+                if let Some(req) = store.requirements.iter().find(|r| spec_matches(r, spec_id)) {
+                    prompt =
+                        crate::protocol_cmd::prepend_resolved_pickup_protocol(&store, req, prompt);
                 }
             }
         }
-    }
-    if no_human {
-        prompt.push_str(&headless_waiting_rule_suffix(&role));
-    }
-
-    // STORY-281: reviewer pre-flight stale-base check. Fires whenever the
-    // resolved scope is ANY forge's PR/MR AND the inferred role is the
-    // reviewer — every other pickup (implementer, dialog, architect) skips
-    // this branch. The check is also no-op'd when the pickup is
-    // `--no-launch` (no reviewer session about to run) and when the user
-    // passed `--list-sessions` (already exited above).
-    //
-    // BUG-1609: this used to match only `(ReviewForge::GitHub, pr_n)`, so a
-    // GitLab MR silently skipped the check entirely — not because the check
-    // itself was GitHub-only (`preflight_stale_base_check` reads metadata
-    // through the forge-routed `fetch_change_info_via_forge`, GitLab-safe
-    // since STORY-621 slice 2), but because this call site never reached it
-    // for GitLab. trace:BUG-1609 | ai:claude
-    //
-    // Behaviour mirrors the orchestrator's phase-3 pre-flight:
-    //   Current        → silent proceed
-    //   StaleNoOverlap → warning, proceed
-    //   StaleOverlap   → refuse (anyhow::bail!) unless allow_stale_base
-    //   Err (gh/glab / fetch) → warning, proceed (never block on transient infra)
-    //
-    // trace:STORY-281 | ai:claude
-    if !no_launch && role == "reviewer" {
-        if let Some(pr_n) = reviewer_preflight_pr_n(plan.review_target) {
-            if let Some(root) = project_root_for_config.as_deref() {
-                match preflight_stale_base_check(root, pr_n) {
-                    Ok(pr_rebase::StaleBaseOutcome::Current) => {}
-                    Ok(pr_rebase::StaleBaseOutcome::StaleNoOverlap { behind }) => {
-                        eprintln!(
-                            "  {} {}",
-                            crate::glyph(crate::glyphs::Glyph::Warning).yellow().bold(),
-                            pr_rebase::stale_base_warn_message(pr_n, behind).yellow()
+        // STORY-1226: due seat jobs for this pickup's role lead the prompt (the
+        // Codex/Antigravity delivery channel; a nudge on Claude). File-only read.
+        // trace:STORY-1226 | ai:claude
+        {
+            let due_root = project_root_for_config
+                .clone()
+                .or_else(|| std::env::current_dir().ok())
+                .unwrap_or_else(|| std::path::PathBuf::from("."));
+            let due = maintenance_schedule::due_seat_jobs(&due_root, Some(&role));
+            prompt = prepend_due_jobs(
+                prompt,
+                &maintenance_schedule::render_due_jobs_block(&due, &role),
+            );
+        }
+        // BUG-809: orchestrated reviewer child — the parent set the verdict-file
+        // env; bake the absolute anchor into the prompt text as well.
+        if role.eq_ignore_ascii_case("reviewer") {
+            append_reviewer_prompt_suffixes(&mut prompt);
+            // TASK-1277: every review round carries the type protocol's
+            // machine-checkable checklist verbatim, resolved from the plan's own
+            // spec entries (no forge call), so rounds cite protocol items by name.
+            // trace:TASK-1277 | ai:claude
+            if let Ok(store) = storage.load() {
+                let typed: Vec<(String, aida_core::RequirementType)> = plan
+                    .entries
+                    .iter()
+                    .filter_map(|entry| {
+                        let req = store
+                            .requirements
+                            .iter()
+                            .find(|r| spec_matches(r, &entry.spec_id))?;
+                        Some((req.display_id().to_string(), req.req_type.clone()))
+                    })
+                    .collect();
+                if let Some(block) = crate::protocol_gate::reviewer_prompt_block(&typed) {
+                    prompt.push_str(&block);
+                }
+            }
+            // trace:TASK-1290 | ai:claude
+            if let Some((forge, pr_n)) = plan.review_target {
+                if let Some(root) = project_root_for_config.as_deref() {
+                    if let Ok(store) = storage.load() {
+                        append_untraced_criteria_prompt_block(
+                            &mut prompt,
+                            root,
+                            &store,
+                            forge,
+                            pr_n,
                         );
                     }
-                    Ok(pr_rebase::StaleBaseOutcome::StaleOverlap {
-                        behind,
-                        overlap_files,
-                        ..
-                    }) => {
-                        let msg = pr_rebase::stale_base_block_message(pr_n, behind, &overlap_files);
-                        if allow_stale_base {
+                }
+            }
+            // The reviewer gets the same failing-test digest the rework lane does.
+            // trace:BUG-2380 | ai:claude
+            if let Some((ReviewForge::GitHub, pr_n)) = plan.review_target {
+                if let Some(root) = project_root_for_config.as_deref() {
+                    if let Some(section) = crate::ci_failures::section_for_pr(root, pr_n) {
+                        prompt.push_str("\n\n");
+                        prompt.push_str(section.trim_end());
+                    }
+                }
+            }
+        }
+        if no_human {
+            prompt.push_str(&headless_waiting_rule_suffix(&role));
+        }
+
+        // STORY-281: reviewer pre-flight stale-base check. Fires whenever the
+        // resolved scope is ANY forge's PR/MR AND the inferred role is the
+        // reviewer — every other pickup (implementer, dialog, architect) skips
+        // this branch. The check is also no-op'd when the pickup is
+        // `--no-launch` (no reviewer session about to run) and when the user
+        // passed `--list-sessions` (already exited above).
+        //
+        // BUG-1609: this used to match only `(ReviewForge::GitHub, pr_n)`, so a
+        // GitLab MR silently skipped the check entirely — not because the check
+        // itself was GitHub-only (`preflight_stale_base_check` reads metadata
+        // through the forge-routed `fetch_change_info_via_forge`, GitLab-safe
+        // since STORY-621 slice 2), but because this call site never reached it
+        // for GitLab. trace:BUG-1609 | ai:claude
+        //
+        // Behaviour mirrors the orchestrator's phase-3 pre-flight:
+        //   Current        → silent proceed
+        //   StaleNoOverlap → warning, proceed
+        //   StaleOverlap   → refuse (anyhow::bail!) unless allow_stale_base
+        //   Err (gh/glab / fetch) → warning, proceed (never block on transient infra)
+        //
+        // trace:STORY-281 | ai:claude
+        if !no_launch && role == "reviewer" {
+            if let Some(pr_n) = reviewer_preflight_pr_n(plan.review_target) {
+                if let Some(root) = project_root_for_config.as_deref() {
+                    match preflight_stale_base_check(root, pr_n) {
+                        Ok(pr_rebase::StaleBaseOutcome::Current) => {}
+                        Ok(pr_rebase::StaleBaseOutcome::StaleNoOverlap { behind }) => {
                             eprintln!(
-                                "  {} stale-base + overlap detected; \
+                                "  {} {}",
+                                crate::glyph(crate::glyphs::Glyph::Warning).yellow().bold(),
+                                pr_rebase::stale_base_warn_message(pr_n, behind).yellow()
+                            );
+                        }
+                        Ok(pr_rebase::StaleBaseOutcome::StaleOverlap {
+                            behind,
+                            overlap_files,
+                            ..
+                        }) => {
+                            let msg =
+                                pr_rebase::stale_base_block_message(pr_n, behind, &overlap_files);
+                            if allow_stale_base {
+                                eprintln!(
+                                    "  {} stale-base + overlap detected; \
                                  `--allow-stale-base` is set, proceeding.\n{}",
-                                crate::glyph(crate::glyphs::Glyph::Warning).yellow().bold(),
-                                msg.yellow()
-                            );
-                        } else {
-                            anyhow::bail!(msg);
+                                    crate::glyph(crate::glyphs::Glyph::Warning).yellow().bold(),
+                                    msg.yellow()
+                                );
+                            } else {
+                                anyhow::bail!(msg);
+                            }
                         }
-                    }
-                    Err(e) => {
-                        eprintln!(
-                            "  {} pre-flight stale-base check for PR-{pr_n} failed \
-                             ({e}); proceeding with reviewer",
-                            crate::glyph(crate::glyphs::Glyph::Warning).yellow().bold()
-                        );
-                    }
-                }
-            }
-        }
-    }
-
-    // TASK-480: reviewer pre-flight intermediate-only check. Sibling
-    // substrate-as-bouncer gate to the STORY-281 stale-base refusal
-    // above — same scoping (reviewer + any forge's PR/MR + launching).
-    // Refuses a PR/MR whose diff is exclusively intermediate/generated paths
-    // (build outputs, gitignored files, lockfiles with no source change)
-    // because such a fix is not reproducible. The check is a
-    // PROGRAMMATIC GATE here, not skill-template instruction text
-    // (BUG-280-class lesson). Fails open on infra error.
-    //
-    // BUG-1609: was gated on `ReviewForge::GitHub` like its stale-base
-    // sibling above, so GitLab MRs never ran it even though
-    // `preflight_intermediate_only_check` is itself forge-routed.
-    // trace:BUG-1609 | ai:claude
-    //
-    //   Clean                   → silent proceed
-    //   SourcePlusIntermediate  → warning, proceed (flag-but-allow)
-    //   IntermediateOnly        → refuse unless --allow-intermediate-only
-    //
-    // trace:TASK-480 | ai:claude
-    if !no_launch && role == "reviewer" {
-        if let Some(pr_n) = reviewer_preflight_pr_n(plan.review_target) {
-            if let Some(root) = project_root_for_config.as_deref() {
-                let allow = allow_intermediate_only
-                    || std::env::var("AIDA_ALLOW_INTERMEDIATE_ONLY")
-                        .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
-                        .unwrap_or(false);
-                match preflight_intermediate_only_check(root, pr_n) {
-                    Ok(pr_rebase::IntermediateOnlyOutcome::Clean) => {}
-                    Ok(pr_rebase::IntermediateOnlyOutcome::SourcePlusIntermediate {
-                        intermediate,
-                    }) => {
-                        eprintln!(
-                            "  {} {}",
-                            crate::glyph(crate::glyphs::Glyph::Warning).yellow().bold(),
-                            pr_rebase::intermediate_only_warn_message(pr_n, &intermediate).yellow()
-                        );
-                    }
-                    Ok(pr_rebase::IntermediateOnlyOutcome::IntermediateOnly { intermediate }) => {
-                        let msg = pr_rebase::intermediate_only_block_message(pr_n, &intermediate);
-                        if allow {
+                        Err(e) => {
                             eprintln!(
-                                "  {} intermediate-only diff detected; \
-                                 `--allow-intermediate-only` is set, proceeding.\n{}",
-                                crate::glyph(crate::glyphs::Glyph::Warning).yellow().bold(),
-                                msg.yellow()
-                            );
-                        } else {
-                            anyhow::bail!(msg);
-                        }
-                    }
-                    Err(e) => {
-                        eprintln!(
-                            "  {} pre-flight intermediate-only check for PR-{pr_n} failed \
+                                "  {} pre-flight stale-base check for PR-{pr_n} failed \
                              ({e}); proceeding with reviewer",
-                            crate::glyph(crate::glyphs::Glyph::Warning).yellow().bold()
-                        );
+                                crate::glyph(crate::glyphs::Glyph::Warning).yellow().bold()
+                            );
+                        }
                     }
                 }
             }
         }
-    }
 
-    // Pre-flight summary so the user sees what we resolved before any
-    // side effects fire (worktree create, lease, exec). Goes to stderr.
-    eprintln!();
-    eprintln!(
-        "{} queue work {} mode",
-        crate::glyph(crate::glyphs::Glyph::FlowActive)
-            .green()
-            .bold(),
-        format!("({:?})", plan.mode).to_lowercase().cyan()
-    );
-    let line = |label: &str, value: String| {
-        // Pad label to 8 chars so anchor/scope/role/mode/skill/cluster
-        // line up vertically. The bold() call doesn't affect width as
-        // seen by humans (terminal renders the same column).
-        eprintln!("  {:<8} {}", format!("{}:", label).bold(), value);
-    };
-    line(
-        "anchor",
-        format!(
-            "{}  {}",
-            plan.anchor_display.cyan(),
-            plan.anchor_title.dimmed()
-        ),
-    );
-    line("scope", plan.scope.cyan().to_string());
-    line(
-        "role",
-        format!("{} {}", role.cyan(), format!("({})", role_origin).dimmed()),
-    );
-    line(
-        "mode",
-        format!(
-            "{} {}",
-            permission_mode.as_deref().unwrap_or("native").cyan(),
-            format!(
-                "({}{})",
-                permission_mode_origin,
-                if bypass_prompt_declined {
-                    "; prompt declined; native"
-                } else {
-                    ""
+        // TASK-480: reviewer pre-flight intermediate-only check. Sibling
+        // substrate-as-bouncer gate to the STORY-281 stale-base refusal
+        // above — same scoping (reviewer + any forge's PR/MR + launching).
+        // Refuses a PR/MR whose diff is exclusively intermediate/generated paths
+        // (build outputs, gitignored files, lockfiles with no source change)
+        // because such a fix is not reproducible. The check is a
+        // PROGRAMMATIC GATE here, not skill-template instruction text
+        // (BUG-280-class lesson). Fails open on infra error.
+        //
+        // BUG-1609: was gated on `ReviewForge::GitHub` like its stale-base
+        // sibling above, so GitLab MRs never ran it even though
+        // `preflight_intermediate_only_check` is itself forge-routed.
+        // trace:BUG-1609 | ai:claude
+        //
+        //   Clean                   → silent proceed
+        //   SourcePlusIntermediate  → warning, proceed (flag-but-allow)
+        //   IntermediateOnly        → refuse unless --allow-intermediate-only
+        //
+        // trace:TASK-480 | ai:claude
+        if !no_launch && role == "reviewer" {
+            if let Some(pr_n) = reviewer_preflight_pr_n(plan.review_target) {
+                if let Some(root) = project_root_for_config.as_deref() {
+                    let allow = allow_intermediate_only
+                        || std::env::var("AIDA_ALLOW_INTERMEDIATE_ONLY")
+                            .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
+                            .unwrap_or(false);
+                    match preflight_intermediate_only_check(root, pr_n) {
+                        Ok(pr_rebase::IntermediateOnlyOutcome::Clean) => {}
+                        Ok(pr_rebase::IntermediateOnlyOutcome::SourcePlusIntermediate {
+                            intermediate,
+                        }) => {
+                            eprintln!(
+                                "  {} {}",
+                                crate::glyph(crate::glyphs::Glyph::Warning).yellow().bold(),
+                                pr_rebase::intermediate_only_warn_message(pr_n, &intermediate)
+                                    .yellow()
+                            );
+                        }
+                        Ok(pr_rebase::IntermediateOnlyOutcome::IntermediateOnly {
+                            intermediate,
+                        }) => {
+                            let msg =
+                                pr_rebase::intermediate_only_block_message(pr_n, &intermediate);
+                            if allow {
+                                eprintln!(
+                                    "  {} intermediate-only diff detected; \
+                                 `--allow-intermediate-only` is set, proceeding.\n{}",
+                                    crate::glyph(crate::glyphs::Glyph::Warning).yellow().bold(),
+                                    msg.yellow()
+                                );
+                            } else {
+                                anyhow::bail!(msg);
+                            }
+                        }
+                        Err(e) => {
+                            eprintln!(
+                                "  {} pre-flight intermediate-only check for PR-{pr_n} failed \
+                             ({e}); proceeding with reviewer",
+                                crate::glyph(crate::glyphs::Glyph::Warning).yellow().bold()
+                            );
+                        }
+                    }
                 }
-            )
-            .dimmed()
-        ),
-    );
-    line("skill", prompt.cyan().to_string());
-    // STORY-287: surface the `--zen` autonomy mode in the pre-flight so the
-    // user sees the flag took. ADR-10 / TASK-1060: consult the typed `autonomy`
-    // value (resolved ONCE at dispatch and threaded in) instead of re-reading
-    // the bare `AIDA_ZEN` env var — the env var stays as the cross-process
-    // transport to phase children, not the in-process source of truth. This
-    // also subsumes the old TASK-327 value-semantics guard (`AIDA_ZEN=0`/`false`
-    // must not enable zen): `resolve_autonomy_mode` already handles it.
-    // The full three-mode pre-launch banner is TASK-306's job.
-    // trace:STORY-287 trace:ADR-10 trace:TASK-1060 | ai:claude
-    if autonomy.is_zen() {
-        // BUG-232: `--zen`'s end-of-session behavior differs by whether an
-        // orchestrator is present to hand off to. With one, `--auto-complete`
-        // drives PR → CI → review → merge; without one, `--zen` auto-opens
-        // the PR at end-of-session then pauses on the grab-next/stop fork.
-        // Corroborate via `orchestrator::detect` — BUG-233: never key off
-        // the bare `AIDA_AUTO_COMPLETE` var, a stray value would lie here.
-        // trace:BUG-232 | ai:claude
-        let orch_root = project_root_for_config
-            .clone()
-            .or_else(|| std::env::current_dir().ok())
-            .unwrap_or_else(|| std::path::PathBuf::from("."));
-        let (mode, note) = if orchestrator::detect(&orch_root).is_orchestrated() {
-            (
-                "zen + auto-complete",
-                "(orchestrator drives end-of-session: PR → CI → review → merge)",
-            )
-        } else {
-            (
-                "zen",
-                "(no orchestrator — confirmations auto-resolve; at end-of-session the PR \
-                 auto-opens, then grab-next/stop pauses)",
-            )
-        };
-        line("autonomy", format!("{} {}", mode.cyan(), note.dimmed()));
-    }
-    // TASK-112: surface a resume in the pre-flight summary.
-    if let Some(QueueWorkLaunch::Resume(id)) = &launch {
-        line(
-            "resume",
-            format!(
-                "{} {}",
-                id[..id.len().min(8)].cyan(),
-                "(continuing prior conversation)".dimmed()
-            ),
-        );
-    }
-    if plan.entries.len() > 1 {
-        line(
-            "cluster",
-            format!(
-                "{} item{}",
-                plan.entries.len().to_string().cyan(),
-                if plan.entries.len() == 1 { "" } else { "s" }
-            ),
-        );
-    }
-    if let Some(warns) = &warnings {
-        for w in warns {
-            eprintln!(
-                "  {} {}",
-                crate::glyph(crate::glyphs::Glyph::Warning).yellow().bold(),
-                w.yellow()
-            );
+            }
         }
-    }
 
-    // BUG-233: if this session carries `AIDA_AUTO_COMPLETE` without a live
-    // corroboration token, surface it once — informationally. It is NOT a
-    // leak to hunt (BUG-233's corrected diagnosis): the session simply runs
-    // interactive. A corroborated orchestrator child stays silent here.
-    // trace:BUG-233 | ai:claude
-    {
-        let root_for_orch = project_root_for_config
-            .clone()
-            .or_else(|| std::env::current_dir().ok())
-            .unwrap_or_else(|| std::path::PathBuf::from("."));
-        if let Some(note) = orchestrator::detect(&root_for_orch).informational_note() {
-            eprintln!(
-                "  {} {}",
-                crate::glyph(crate::glyphs::Glyph::Info).cyan(),
-                note.dimmed()
-            );
-        }
-    }
-
-    // TASK-1053: single-spec dry-run preview. The plan is now fully resolved —
-    // the pre-flight summary above already printed anchor/scope/role/mode/skill;
-    // here we add the branch, worktree path, session id, and the lease the
-    // pickup WOULD create, then return. The earlier pre-pickup pull and
-    // admission writes are guarded by !dry_run; we return before the
-    // scope-conflict sweep and session_start, so a dry run creates no
-    // worktree, takes no lease, writes no
-    // manifest, and launches no claude. The branch + worktree derivation
-    // mirror `session_start` exactly so the preview matches a real pickup.
-    // The `--batch` dry-run is a separate path that returns at the dispatch
-    // site before this function is even called. trace:TASK-1053 | ai:claude
-    // trace:BUG-2490 | ai:codex
-    if dry_run {
-        let dry_line = |label: &str, value: String| {
-            eprintln!("  {:<8} {}", format!("{}:", label).bold(), value);
-        };
-        let slug = slugify(&plan.scope);
-        let branch = if let Some(b) = session_branch_override {
-            b.to_string()
-        } else if let Some((forge, n)) = plan.review_target {
-            forge.local_branch_for(n)
-        } else {
-            // Best-effort: on the rare all-candidates-taken error, fall back to
-            // the bare slug rather than failing a read-only preview.
-            resolve_session_branch(&project_root, &slug, "auto").unwrap_or_else(|_| slug.clone())
-        };
-        // trace:BUG-1628 | ai:claude — the shared pickup resolver.
-        let worktree_path = match path_override {
-            Some(p) => std::path::PathBuf::from(p),
-            None => pickup_worktree_path(&project_root, &slug)
-                .unwrap_or_else(|_| std::path::PathBuf::from(&slug)),
-        };
-        let executable = session::resolve_agent_program(launch_vendor.program());
-        dry_line("branch", branch.cyan().to_string());
-        dry_line(
-            "worktree",
-            worktree_path.display().to_string().cyan().to_string(),
-        );
-        dry_line("vendor", launch_vendor.as_str().cyan().to_string());
-        dry_line("exec", executable.cyan().to_string());
-        if let Some(model) = &resolved_model {
-            dry_line("model", model.cyan().to_string());
-        }
-        if launch_vendor == session::HeadlessVendor::Claude {
-            let session_render = match &launch {
-                Some(l) => format!(
-                    "{} {}",
-                    l.session_id().cyan(),
-                    "(claude session id it would launch / resume)".dimmed()
-                ),
-                None => "(deferred — --no-launch)".dimmed().to_string(),
-            };
-            dry_line("session", session_render);
-        }
-        dry_line(
-            "lease",
-            format!(
-                "{} {}",
-                "would be created".cyan(),
-                format!("(owner {}, scope {}, role {})", user_id, plan.scope, role).dimmed()
-            ),
-        );
+        // Pre-flight summary so the user sees what we resolved before any
+        // side effects fire (worktree create, lease, exec). Goes to stderr.
         eprintln!();
         eprintln!(
-            "{} dry run — nothing created (no worktree, no lease, no session). \
-             Re-run without --dry-run to pick up.",
-            crate::glyph(crate::glyphs::Glyph::Check).green().bold()
+            "{} queue work {} mode",
+            crate::glyph(crate::glyphs::Glyph::FlowActive)
+                .green()
+                .bold(),
+            format!("({:?})", plan.mode).to_lowercase().cyan()
         );
-        return Ok(());
-    }
-
-    // Re-list after each guarded end: a prior owner may exit during pickup,
-    // but PID scans and lease age cannot authorize reclaim. Ownership's judge
-    // supplies death proof; tree coverage and ordinary session_end protect WIP.
-    // trace:STORY-2325 | ai:codex
-    {
-        let project_root_for_conflict = find_main_worktree_root()?;
-        // trace:STORY-2325 | ai:codex — the judge alone decides ownership.
-        // Tree coverage and session_end still guard every destructive step.
-        let mut remaining = 16usize;
-        let adopting = adopt_orphan.as_ref().map(|o| o.id.as_str());
-        while let Some(conflict) = crate::leases::next_scope_conflict(
-            list_leases(&project_root_for_conflict),
-            &plan.scope,
-            adopting,
-        ) {
-            let conflict_id = conflict.id.as_str();
-            let pr_branch = crate::pr_lease_takeover::pr_branch_for_lease(
-                &project_root_for_conflict,
-                &conflict,
+        let line = |label: &str, value: String| {
+            // Pad label to 8 chars so anchor/scope/role/mode/skill/cluster
+            // line up vertically. The bold() call doesn't affect width as
+            // seen by humans (terminal renders the same column).
+            eprintln!("  {:<8} {}", format!("{}:", label).bold(), value);
+        };
+        line(
+            "anchor",
+            format!(
+                "{}  {}",
+                plan.anchor_display.cyan(),
+                plan.anchor_title.dimmed()
+            ),
+        );
+        line("scope", plan.scope.cyan().to_string());
+        line(
+            "role",
+            format!("{} {}", role.cyan(), format!("({})", role_origin).dimmed()),
+        );
+        line(
+            "mode",
+            format!(
+                "{} {}",
+                permission_mode.as_deref().unwrap_or("native").cyan(),
+                format!(
+                    "({}{})",
+                    permission_mode_origin,
+                    if bypass_prompt_declined {
+                        "; prompt declined; native"
+                    } else {
+                        ""
+                    }
+                )
+                .dimmed()
+            ),
+        );
+        line("skill", prompt.cyan().to_string());
+        // STORY-287: surface the `--zen` autonomy mode in the pre-flight so the
+        // user sees the flag took. ADR-10 / TASK-1060: consult the typed `autonomy`
+        // value (resolved ONCE at dispatch and threaded in) instead of re-reading
+        // the bare `AIDA_ZEN` env var — the env var stays as the cross-process
+        // transport to phase children, not the in-process source of truth. This
+        // also subsumes the old TASK-327 value-semantics guard (`AIDA_ZEN=0`/`false`
+        // must not enable zen): `resolve_autonomy_mode` already handles it.
+        // The full three-mode pre-launch banner is TASK-306's job.
+        // trace:STORY-287 trace:ADR-10 trace:TASK-1060 | ai:claude
+        if autonomy.is_zen() {
+            // BUG-232: `--zen`'s end-of-session behavior differs by whether an
+            // orchestrator is present to hand off to. With one, `--auto-complete`
+            // drives PR → CI → review → merge; without one, `--zen` auto-opens
+            // the PR at end-of-session then pauses on the grab-next/stop fork.
+            // Corroborate via `orchestrator::detect` — BUG-233: never key off
+            // the bare `AIDA_AUTO_COMPLETE` var, a stray value would lie here.
+            // trace:BUG-232 | ai:claude
+            let orch_root = project_root_for_config
+                .clone()
+                .or_else(|| std::env::current_dir().ok())
+                .unwrap_or_else(|| std::path::PathBuf::from("."));
+            let (mode, note) = if orchestrator::detect(&orch_root).is_orchestrated() {
+                (
+                    "zen + auto-complete",
+                    "(orchestrator drives end-of-session: PR → CI → review → merge)",
+                )
+            } else {
+                (
+                    "zen",
+                    "(no orchestrator — confirmations auto-resolve; at end-of-session the PR \
+                 auto-opens, then grab-next/stop pauses)",
+                )
+            };
+            line("autonomy", format!("{} {}", mode.cyan(), note.dimmed()));
+        }
+        // TASK-112: surface a resume in the pre-flight summary.
+        if let Some(QueueWorkLaunch::Resume(id)) = &launch {
+            line(
+                "resume",
+                format!(
+                    "{} {}",
+                    id[..id.len().min(8)].cyan(),
+                    "(continuing prior conversation)".dimmed()
+                ),
             );
-            match crate::pr_lease_takeover::plan_lease_end(
-                &project_root_for_conflict,
-                &conflict,
-                pr_branch.as_deref(),
+        }
+        if plan.entries.len() > 1 {
+            line(
+                "cluster",
+                format!(
+                    "{} item{}",
+                    plan.entries.len().to_string().cyan(),
+                    if plan.entries.len() == 1 { "" } else { "s" }
+                ),
+            );
+        }
+        if let Some(warns) = &warnings {
+            for w in warns {
+                eprintln!(
+                    "  {} {}",
+                    crate::glyph(crate::glyphs::Glyph::Warning).yellow().bold(),
+                    w.yellow()
+                );
+            }
+        }
+
+        // BUG-233: if this session carries `AIDA_AUTO_COMPLETE` without a live
+        // corroboration token, surface it once — informationally. It is NOT a
+        // leak to hunt (BUG-233's corrected diagnosis): the session simply runs
+        // interactive. A corroborated orchestrator child stays silent here.
+        // trace:BUG-233 | ai:claude
+        {
+            let root_for_orch = project_root_for_config
+                .clone()
+                .or_else(|| std::env::current_dir().ok())
+                .unwrap_or_else(|| std::path::PathBuf::from("."));
+            if let Some(note) = orchestrator::detect(&root_for_orch).informational_note() {
+                eprintln!(
+                    "  {} {}",
+                    crate::glyph(crate::glyphs::Glyph::Info).cyan(),
+                    note.dimmed()
+                );
+            }
+        }
+
+        // TASK-1053: single-spec dry-run preview. The plan is now fully resolved —
+        // the pre-flight summary above already printed anchor/scope/role/mode/skill;
+        // here we add the branch, worktree path, session id, and the lease the
+        // pickup WOULD create, then return. The earlier pre-pickup pull and
+        // admission writes are guarded by !dry_run; we return before the
+        // scope-conflict sweep and session_start, so a dry run creates no
+        // worktree, takes no lease, writes no
+        // manifest, and launches no claude. The branch + worktree derivation
+        // mirror `session_start` exactly so the preview matches a real pickup.
+        // The `--batch` dry-run is a separate path that returns at the dispatch
+        // site before this function is even called. trace:TASK-1053 | ai:claude
+        // trace:BUG-2490 | ai:codex
+        if dry_run {
+            let dry_line = |label: &str, value: String| {
+                eprintln!("  {:<8} {}", format!("{}:", label).bold(), value);
+            };
+            let slug = slugify(&plan.scope);
+            let branch = if let Some(b) = session_branch_override {
+                b.to_string()
+            } else if let Some((forge, n)) = plan.review_target {
+                forge.local_branch_for(n)
+            } else {
+                // Best-effort: on the rare all-candidates-taken error, fall back to
+                // the bare slug rather than failing a read-only preview.
+                resolve_session_branch(&project_root, &slug, "auto")
+                    .unwrap_or_else(|_| slug.clone())
+            };
+            // trace:BUG-1628 | ai:claude — the shared pickup resolver.
+            let worktree_path = match path_override {
+                Some(p) => std::path::PathBuf::from(p),
+                None => pickup_worktree_path(&project_root, &slug)
+                    .unwrap_or_else(|_| std::path::PathBuf::from(&slug)),
+            };
+            let executable = session::resolve_agent_program(launch_vendor.program());
+            dry_line("branch", branch.cyan().to_string());
+            dry_line(
+                "worktree",
+                worktree_path.display().to_string().cyan().to_string(),
+            );
+            dry_line("vendor", launch_vendor.as_str().cyan().to_string());
+            dry_line("exec", executable.cyan().to_string());
+            if let Some(model) = &resolved_model {
+                dry_line("model", model.cyan().to_string());
+            }
+            if launch_vendor == session::HeadlessVendor::Claude {
+                let session_render = match &launch {
+                    Some(l) => format!(
+                        "{} {}",
+                        l.session_id().cyan(),
+                        "(claude session id it would launch / resume)".dimmed()
+                    ),
+                    None => "(deferred — --no-launch)".dimmed().to_string(),
+                };
+                dry_line("session", session_render);
+            }
+            dry_line(
+                "lease",
+                format!(
+                    "{} {}",
+                    "would be created".cyan(),
+                    format!("(owner {}, scope {}, role {})", user_id, plan.scope, role).dimmed()
+                ),
+            );
+            eprintln!();
+            eprintln!(
+                "{} dry run — nothing created (no worktree, no lease, no session). \
+             Re-run without --dry-run to pick up.",
+                crate::glyph(crate::glyphs::Glyph::Check).green().bold()
+            );
+            return Ok(());
+        }
+
+        // Re-list after each guarded end: a prior owner may exit during pickup,
+        // but PID scans and lease age cannot authorize reclaim. Ownership's judge
+        // supplies death proof; tree coverage and ordinary session_end protect WIP.
+        // trace:STORY-2325 | ai:codex
+        {
+            let project_root_for_conflict = find_main_worktree_root()?;
+            // trace:STORY-2325 | ai:codex — the judge alone decides ownership.
+            // Tree coverage and session_end still guard every destructive step.
+            let mut remaining = 16usize;
+            let adopting = adopt_orphan.as_ref().map(|o| o.id.as_str());
+            while let Some(conflict) = crate::leases::next_scope_conflict(
+                list_leases(&project_root_for_conflict),
+                &plan.scope,
+                adopting,
             ) {
-                crate::pr_lease_takeover::LeaseEndAction::SafeEnd => {
-                    eprintln!(
+                let conflict_id = conflict.id.as_str();
+                let pr_branch = crate::pr_lease_takeover::pr_branch_for_lease(
+                    &project_root_for_conflict,
+                    &conflict,
+                );
+                match crate::pr_lease_takeover::plan_lease_end(
+                    &project_root_for_conflict,
+                    &conflict,
+                    pr_branch.as_deref(),
+                ) {
+                    crate::pr_lease_takeover::LeaseEndAction::SafeEnd => {
+                        eprintln!(
                         "  {} lease {}'s session has exited and its seat on `{}` is clean and fully covered by origin — ending it",
                         crate::glyph(crate::glyphs::Glyph::Info).cyan(),
                         &conflict.id[..conflict.id.len().min(8)],
                         conflict.branch
                     );
-                }
-                crate::pr_lease_takeover::LeaseEndAction::Bail(message) => {
-                    anyhow::bail!(
-                        "ownership reclaim could not end lease {}: {}",
-                        conflict_id,
-                        message
-                    );
-                }
-            };
-            crate::ownership::reader::journal_reclaim(&project_root_for_conflict, &conflict)
-                .with_context(|| {
-                    format!("ownership reclaim could not end lease {}", conflict.id)
-                })?;
-            session_end(
+                    }
+                    crate::pr_lease_takeover::LeaseEndAction::Bail(message) => {
+                        anyhow::bail!(
+                            "ownership reclaim could not end lease {}: {}",
+                            conflict_id,
+                            message
+                        );
+                    }
+                };
+                crate::ownership::reader::journal_reclaim(&project_root_for_conflict, &conflict)
+                    .with_context(|| {
+                        format!("ownership reclaim could not end lease {}", conflict.id)
+                    })?;
+                session_end(
                 Some(&conflict.id),
                 /* spec */ None,
                 /* branch */ None,
@@ -5044,79 +5087,80 @@ pub(crate) fn handle_queue_work(
                 "ownership reclaim could not end lease {}: {error:#}; retain the lane and resolve its tree or mail safeguards before retrying",
                 conflict_id,
             ))?;
-            remaining -= 1;
-            if remaining == 0 {
-                anyhow::bail!(
-                    "ownership reclaim sweep gave up after 16 iterations on scope `{}` — \
+                remaining -= 1;
+                if remaining == 0 {
+                    anyhow::bail!(
+                        "ownership reclaim sweep gave up after 16 iterations on scope `{}` — \
                      the lease store may be corrupt; inspect `.aida/sessions/`",
-                    plan.scope
+                        plan.scope
+                    );
+                }
+            }
+            // trace:BUG-2223 | ai:claude
+            if let Some(orphan) = &adopt_orphan {
+                eprintln!(
+                    "  {} re-entering orphaned lease {}'s tree in place (--resume): {}",
+                    crate::glyph(crate::glyphs::Glyph::Info).cyan(),
+                    (&orphan.id[..orphan.id.len().min(8)]).yellow(),
+                    orphan.worktree_path.display()
                 );
             }
         }
-        // trace:BUG-2223 | ai:claude
-        if let Some(orphan) = &adopt_orphan {
-            eprintln!(
-                "  {} re-entering orphaned lease {}'s tree in place (--resume): {}",
-                crate::glyph(crate::glyphs::Glyph::Info).cyan(),
-                (&orphan.id[..orphan.id.len().min(8)]).yellow(),
-                orphan.worktree_path.display()
-            );
-        }
-    }
 
-    // TASK-619: cross-machine duplicate-pickup guard. Session leases are
-    // machine-local (.aida/sessions/, gitignored), so the only shared
-    // "someone is on this" signal across machines is the git-canonical
-    // status flip — which is eventually-consistent. Now that we've pulled
-    // the latest store, re-read the anchor spec's status and refuse if it
-    // was claimed/shipped elsewhere in the window between planning this
-    // pickup and now. The existing BUG-379 preflight in `session_start`
-    // catches stuck-InProgress-without-lease; this guard specifically names
-    // the cross-machine dup-pickup case with a recovery hint and respects
-    // --force-claim / orchestrator-corroboration / review sessions.
-    // trace:TASK-619 | ai:claude
-    if !no_pull {
-        let status_after_pull: Option<RequirementStatus> = storage.load().ok().and_then(|store| {
-            store
-                .get_requirement_by_spec_id(&plan.scope)
-                .map(|r| r.status.clone())
-        });
-        let orchestrator_corroborated = {
+        // TASK-619: cross-machine duplicate-pickup guard. Session leases are
+        // machine-local (.aida/sessions/, gitignored), so the only shared
+        // "someone is on this" signal across machines is the git-canonical
+        // status flip — which is eventually-consistent. Now that we've pulled
+        // the latest store, re-read the anchor spec's status and refuse if it
+        // was claimed/shipped elsewhere in the window between planning this
+        // pickup and now. The existing BUG-379 preflight in `session_start`
+        // catches stuck-InProgress-without-lease; this guard specifically names
+        // the cross-machine dup-pickup case with a recovery hint and respects
+        // --force-claim / orchestrator-corroboration / review sessions.
+        // trace:TASK-619 | ai:claude
+        if !no_pull {
+            let status_after_pull: Option<RequirementStatus> =
+                storage.load().ok().and_then(|store| {
+                    store
+                        .get_requirement_by_spec_id(&plan.scope)
+                        .map(|r| r.status.clone())
+                });
+            let orchestrator_corroborated = {
+                let root = project_root_for_config
+                    .clone()
+                    .or_else(|| std::env::current_dir().ok())
+                    .unwrap_or_else(|| std::path::PathBuf::from("."));
+                orchestrator::detect(&root).is_orchestrated()
+            };
+            let is_review_session = plan.review_target.is_some()
+                || role == "reviewer"
+                || std::env::var("AIDA_REVIEW_VERDICT_FILE").is_ok();
+            if let DupPickupDecision::Refuse(msg) = dup_pickup_recheck(
+                &plan.anchor_display,
+                status_before_pull.as_ref(),
+                status_after_pull.as_ref(),
+                force_claim,
+                orchestrator_corroborated,
+                is_review_session,
+            ) {
+                anyhow::bail!("{}", msg);
+            }
+        }
+
+        // BUG-1761: the suffix allocator already knows when the spec branch is
+        // occupied; expose that collision before claiming status, lease, or tree.
+        // trace:BUG-1761 | ai:codex
+        let preclaim_orchestrator_corroborated = {
             let root = project_root_for_config
                 .clone()
                 .or_else(|| std::env::current_dir().ok())
                 .unwrap_or_else(|| std::path::PathBuf::from("."));
             orchestrator::detect(&root).is_orchestrated()
         };
-        let is_review_session = plan.review_target.is_some()
+        let preclaim_review_session = plan.review_target.is_some()
             || role == "reviewer"
             || std::env::var("AIDA_REVIEW_VERDICT_FILE").is_ok();
-        if let DupPickupDecision::Refuse(msg) = dup_pickup_recheck(
-            &plan.anchor_display,
-            status_before_pull.as_ref(),
-            status_after_pull.as_ref(),
-            force_claim,
-            orchestrator_corroborated,
-            is_review_session,
-        ) {
-            anyhow::bail!("{}", msg);
-        }
-    }
-
-    // BUG-1761: the suffix allocator already knows when the spec branch is
-    // occupied; expose that collision before claiming status, lease, or tree.
-    // trace:BUG-1761 | ai:codex
-    let preclaim_orchestrator_corroborated = {
-        let root = project_root_for_config
-            .clone()
-            .or_else(|| std::env::current_dir().ok())
-            .unwrap_or_else(|| std::path::PathBuf::from("."));
-        orchestrator::detect(&root).is_orchestrated()
-    };
-    let preclaim_review_session = plan.review_target.is_some()
-        || role == "reviewer"
-        || std::env::var("AIDA_REVIEW_VERDICT_FILE").is_ok();
-    let preclaim_bypass = force_claim
+        let preclaim_bypass = force_claim
         || queue_work_plan_wants_pr_head_branch(&plan)
         // BUG-022: the open PR is the one this pickup continues, not a
         // collision. trace:BUG-b6b1278890774ef993d2ebc327862470-022 | ai:claude
@@ -5125,171 +5169,172 @@ pub(crate) fn handle_queue_work(
         || preclaim_orchestrator_corroborated
         || resume.is_some()
         || branch_override.is_some();
-    if !preclaim_bypass {
-        let (open_pr, branch_probe_allowed) =
-            match crate::detect_open_pr_for_spec_via_forge(&project_root, &plan.scope) {
-                crate::PrLookup::Found(info) => (Some(info), false),
-                crate::PrLookup::NoOpenPr => (None, true),
-                // Forge failures mean unknown, not "no PR". Skip the branch
-                // refusal too, so an offline or gh-less pickup proceeds.
-                crate::PrLookup::GhMissing
-                | crate::PrLookup::GhFailed(_)
-                | crate::PrLookup::GhUnreachable(_) => (None, false),
+        if !preclaim_bypass {
+            let (open_pr, branch_probe_allowed) =
+                match crate::detect_open_pr_for_spec_via_forge(&project_root, &plan.scope) {
+                    crate::PrLookup::Found(info) => (Some(info), false),
+                    crate::PrLookup::NoOpenPr => (None, true),
+                    // Forge failures mean unknown, not "no PR". Skip the branch
+                    // refusal too, so an offline or gh-less pickup proceeds.
+                    crate::PrLookup::GhMissing
+                    | crate::PrLookup::GhFailed(_)
+                    | crate::PrLookup::GhUnreachable(_) => (None, false),
+                };
+            let branch = slugify(&plan.scope);
+            let branch_exists =
+                branch_probe_allowed && crate::branch_exists_anywhere(&project_root, &branch);
+            // BUG-1763: an existing branch only collides when it is UNMERGED.
+            // Merged-ness comes from the forge (`gh pr list --head <branch>
+            // --state merged`) — never from a git ancestry test, which reports
+            // NO for every squash-merged branch. The probe runs only when the
+            // branch exists, and a probe failure fails open.
+            // trace:BUG-1763 | ai:claude
+            let branch_state = preclaim_branch_state(branch_exists, || {
+                crate::detect_merged_pr_for_branch_via_forge(&project_root, &branch)
+            });
+            if let PreclaimDecision::Refuse(msg) = preclaim_collision_check(
+                &plan.scope,
+                open_pr
+                    .as_ref()
+                    .map(|info| (info.number, info.title.as_str(), info.url.as_str())),
+                &branch,
+                branch_state,
+                preclaim_bypass,
+            ) {
+                anyhow::bail!("{}", msg);
             };
-        let branch = slugify(&plan.scope);
-        let branch_exists =
-            branch_probe_allowed && crate::branch_exists_anywhere(&project_root, &branch);
-        // BUG-1763: an existing branch only collides when it is UNMERGED.
-        // Merged-ness comes from the forge (`gh pr list --head <branch>
-        // --state merged`) — never from a git ancestry test, which reports
-        // NO for every squash-merged branch. The probe runs only when the
-        // branch exists, and a probe failure fails open.
-        // trace:BUG-1763 | ai:claude
-        let branch_state = preclaim_branch_state(branch_exists, || {
-            crate::detect_merged_pr_for_branch_via_forge(&project_root, &branch)
-        });
-        if let PreclaimDecision::Refuse(msg) = preclaim_collision_check(
-            &plan.scope,
-            open_pr
-                .as_ref()
-                .map(|info| (info.number, info.title.as_str(), info.url.as_str())),
-            &branch,
-            branch_state,
-            preclaim_bypass,
-        ) {
-            anyhow::bail!("{}", msg);
-        };
-    }
-
-    // BUG-1607: preflight the resolved launch vendor BEFORE `session_start`
-    // below mints a lease/worktree — both vendor SUPPORT (an interactive
-    // launch refuses Agy; this used to be checked only after session_start,
-    // at the `launch_vendor == Agy && !no_human` bail further down, leaving
-    // an orphaned lease/worktree behind exactly like the bug this fixes) and
-    // binary reachability (`launch_vendor` above, via
-    // `resolve_enabled_headless_vendor`, only checks the `[agents] enabled`
-    // config, not whether the binary is installed — the observed failure:
-    // `vendor: codex` resolved correctly, then the launch itself hardcoded
-    // `claude`, or on a genuinely codex-only machine `codex` was never
-    // installed). `--no-launch` is exempt: it deliberately defers the
-    // launch, so neither check should block the setup-only prep.
-    // trace:BUG-1607 | ai:claude
-    if !no_launch {
-        session::preflight_launch_vendor(launch_vendor, !no_human)?;
-        // BUG-014: a contained Claude reviewer needs the egress allowlist and
-        // the reviewer allow entries on the PR branch it checks out; refuse
-        // before any lease or worktree.
-        // trace:BUG-b6b1278890774ef993d2ebc327862470-014 | ai:claude
-        if let Some((forge, pr)) = plan.review_target.filter(|_| {
-            contained
-                && launch_vendor == session::HeadlessVendor::Claude
-                && role.eq_ignore_ascii_case("reviewer")
-        }) {
-            crate::reviewer_preflight::preflight_contained_reviewer(&project_root, forge, pr)?;
         }
-    }
 
-    // The selected role is launch intent, never a process-wide authority
-    // mutation. Each child receives it together with its own grant below.
-    // trace:STORY-2326 | ai:codex
-
-    // STORY-248: resolve the stacked base BEFORE session_start so the
-    // worktree is forked from the right place and the SHA capture has a
-    // real base to record. Both `--stack` and `--base` flow through the
-    // same `session_start(base: Option<&str>)` parameter.
-    // trace:STORY-248 | ai:claude
-    let project_root_for_base = project_root.clone();
-    let cwd_for_base = std::env::current_dir().unwrap_or_else(|_| project_root_for_base.clone());
-    let resolved_base = resolve_stack_base(
-        &project_root_for_base,
-        &cwd_for_base,
-        stack,
-        base,
-        force_base,
-    )?;
-    if let Some(b) = resolved_base.as_deref() {
-        eprintln!(
-            "  {} base: {} {}",
-            crate::glyph(crate::glyphs::Glyph::FlowActive).cyan().bold(),
-            b.cyan(),
-            if stack {
-                "(detected via --stack)".dimmed().to_string()
-            } else {
-                "(--base)".dimmed().to_string()
+        // BUG-1607: preflight the resolved launch vendor BEFORE `session_start`
+        // below mints a lease/worktree — both vendor SUPPORT (an interactive
+        // launch refuses Agy; this used to be checked only after session_start,
+        // at the `launch_vendor == Agy && !no_human` bail further down, leaving
+        // an orphaned lease/worktree behind exactly like the bug this fixes) and
+        // binary reachability (`launch_vendor` above, via
+        // `resolve_enabled_headless_vendor`, only checks the `[agents] enabled`
+        // config, not whether the binary is installed — the observed failure:
+        // `vendor: codex` resolved correctly, then the launch itself hardcoded
+        // `claude`, or on a genuinely codex-only machine `codex` was never
+        // installed). `--no-launch` is exempt: it deliberately defers the
+        // launch, so neither check should block the setup-only prep.
+        // trace:BUG-1607 | ai:claude
+        if !no_launch {
+            session::preflight_launch_vendor(launch_vendor, !no_human)?;
+            // BUG-014: a contained Claude reviewer needs the egress allowlist and
+            // the reviewer allow entries on the PR branch it checks out; refuse
+            // before any lease or worktree.
+            // trace:BUG-b6b1278890774ef993d2ebc327862470-014 | ai:claude
+            if let Some((forge, pr)) = plan.review_target.filter(|_| {
+                contained
+                    && launch_vendor == session::HeadlessVendor::Claude
+                    && role.eq_ignore_ascii_case("reviewer")
+            }) {
+                crate::reviewer_preflight::preflight_contained_reviewer(&project_root, forge, pr)?;
             }
-        );
-    }
+        }
 
-    // session_start handles worktree creation, lease persistence, env
-    // shim, conflict detection. We always pass launch=false so we can
-    // (a) write the cluster manifest from the new lease and (b) emit
-    // a queue-work-specific launch summary before exec.
-    // BUG-1918: when this command launches the worker, the claim is made FOR
-    // it — the ledger must name the worker, not this launcher.
-    // trace:BUG-1918 | ai:claude
-    let start = || {
-        crate::session_start::session_start_with_receipt(
-            &plan.scope,
-            session_branch_override,
-            resolved_base.as_deref(),
-            /* reuse_branch */ false,
-            path_override,
-            /* forge_override */ None,
-            /* branch_style */ "auto",
-            /* launch */ false,
-            /* launch_title */ None,
-            /* launch_set_title */ false,
-            /* launch_name */ None,
-            // STORY-495: inert here (launch=false); the real launch below threads
-            // the resolved `permission_mode` into the exec call directly.
-            /* permission_mode */
-            permission_mode.as_deref(),
-            /* launch_contained */
-            false,
-            /* role */ Some(role.clone()),
-            /* force_claim */ force_claim,
-            // STORY-714: config-driven ([worktree_pool] enabled). The pool is used
-            // only for non-stacked spawns (resolved_base is None unless --stack /
-            // --base), so stacked work keeps a fresh `git worktree add`.
-            /* use_pool */
-            None,
-            /* self_claim */
-            queue_work_self_claim(no_launch),
-            // trace:TASK-1786 | ai:codex
-            role_input.review_coexistence(&plan),
-            // trace:BUG-2169 | ai:claude
-            /* contained_seat */
-            contained,
-            // BUG-2428: a launching pickup keeps the setup's rollback armed
-            // until it knows whether an agent was launched (below).
-            // trace:BUG-2428 | ai:claude
-            /* rollback_failed_setup */
-            !no_launch,
-            // BUG-2223: re-enter the orphan's tree in place. Session start
-            // re-checks it and bypasses nothing else: a live claim on the
-            // scope still refuses. trace:BUG-2223 | ai:claude
-            if adopt_orphan.is_some() {
-                crate::session_start::PathReentry::AdoptOrphan
-            } else {
-                crate::session_start::PathReentry::None
-            },
-            resolved_pickup_pr.clone(),
-        )
-    };
-    let setup_receipt = if no_launch {
-        start()?
-    } else {
-        crate::gate::review_authority::as_launcher(start)?
-    };
+        // The selected role is launch intent, never a process-wide authority
+        // mutation. Each child receives it together with its own grant below.
+        // trace:STORY-2326 | ai:codex
 
-    // The lease this pickup minted, for the refused-delegation release below.
-    let mut minted_lease_id: Option<String> = None;
-    // trace:TASK-1337 | ai:codex
-    // TASK-2807: the setup rollback stays armed only until `agent` marks a
-    // call that can start an agent. trace:TASK-2807 | ai:claude
-    let launch_agent = |agent: &AgentLaunchMark| -> Result<()> {
-        // Look up the lease we just minted: by scope, by owner=us, freshest.
-        let lease = list_leases(&project_root)
+        // STORY-248: resolve the stacked base BEFORE session_start so the
+        // worktree is forked from the right place and the SHA capture has a
+        // real base to record. Both `--stack` and `--base` flow through the
+        // same `session_start(base: Option<&str>)` parameter.
+        // trace:STORY-248 | ai:claude
+        let project_root_for_base = project_root.clone();
+        let cwd_for_base =
+            std::env::current_dir().unwrap_or_else(|_| project_root_for_base.clone());
+        let resolved_base = resolve_stack_base(
+            &project_root_for_base,
+            &cwd_for_base,
+            stack,
+            base,
+            force_base,
+        )?;
+        if let Some(b) = resolved_base.as_deref() {
+            eprintln!(
+                "  {} base: {} {}",
+                crate::glyph(crate::glyphs::Glyph::FlowActive).cyan().bold(),
+                b.cyan(),
+                if stack {
+                    "(detected via --stack)".dimmed().to_string()
+                } else {
+                    "(--base)".dimmed().to_string()
+                }
+            );
+        }
+
+        // session_start handles worktree creation, lease persistence, env
+        // shim, conflict detection. We always pass launch=false so we can
+        // (a) write the cluster manifest from the new lease and (b) emit
+        // a queue-work-specific launch summary before exec.
+        // BUG-1918: when this command launches the worker, the claim is made FOR
+        // it — the ledger must name the worker, not this launcher.
+        // trace:BUG-1918 | ai:claude
+        let start = || {
+            crate::session_start::session_start_with_receipt(
+                &plan.scope,
+                session_branch_override,
+                resolved_base.as_deref(),
+                /* reuse_branch */ false,
+                path_override,
+                /* forge_override */ None,
+                /* branch_style */ "auto",
+                /* launch */ false,
+                /* launch_title */ None,
+                /* launch_set_title */ false,
+                /* launch_name */ None,
+                // STORY-495: inert here (launch=false); the real launch below threads
+                // the resolved `permission_mode` into the exec call directly.
+                /* permission_mode */
+                permission_mode.as_deref(),
+                /* launch_contained */
+                false,
+                /* role */ Some(role.clone()),
+                /* force_claim */ force_claim,
+                // STORY-714: config-driven ([worktree_pool] enabled). The pool is used
+                // only for non-stacked spawns (resolved_base is None unless --stack /
+                // --base), so stacked work keeps a fresh `git worktree add`.
+                /* use_pool */
+                None,
+                /* self_claim */
+                queue_work_self_claim(no_launch),
+                // trace:TASK-1786 | ai:codex
+                role_input.review_coexistence(&plan),
+                // trace:BUG-2169 | ai:claude
+                /* contained_seat */
+                contained,
+                // BUG-2428: a launching pickup keeps the setup's rollback armed
+                // until it knows whether an agent was launched (below).
+                // trace:BUG-2428 | ai:claude
+                /* rollback_failed_setup */
+                !no_launch,
+                // BUG-2223: re-enter the orphan's tree in place. Session start
+                // re-checks it and bypasses nothing else: a live claim on the
+                // scope still refuses. trace:BUG-2223 | ai:claude
+                if adopt_orphan.is_some() {
+                    crate::session_start::PathReentry::AdoptOrphan
+                } else {
+                    crate::session_start::PathReentry::None
+                },
+                resolved_pickup_pr.clone(),
+            )
+        };
+        let setup_receipt = if no_launch {
+            start()?
+        } else {
+            crate::gate::review_authority::as_launcher(start)?
+        };
+
+        // The lease this pickup minted, for the refused-delegation release below.
+        let mut minted_lease_id: Option<String> = None;
+        // trace:TASK-1337 | ai:codex
+        // TASK-2807: the setup rollback stays armed only until `agent` marks a
+        // call that can start an agent. trace:TASK-2807 | ai:claude
+        let launch_agent = |agent: &AgentLaunchMark| -> Result<()> {
+            // Look up the lease we just minted: by scope, by owner=us, freshest.
+            let lease = list_leases(&project_root)
         .into_iter()
         .filter(|l| l.scope.eq_ignore_ascii_case(&plan.scope))
         .max_by_key(|l| l.started_at)
@@ -5299,482 +5344,523 @@ pub(crate) fn handle_queue_work(
                 plan.scope
             )
         })?;
-        minted_lease_id = Some(lease.id.clone());
-        // The PR branch has been seated by session_start. Prepare it before
-        // any vendor, red run, child grant or resume is started.
-        // trace:STORY-2475 | ai:codex
-        let mut launch_vendor = launch_vendor;
-        let mut resolved_model = resolved_model.clone();
-        let mut prompt = prompt.clone();
-        if !no_launch && !plan_only && !guided && role == "implementer" {
-            if let Some((pr, branch)) = rework_pr.as_ref() {
-                let files = crate::seat_clone::prepare_rework_merge(
+            minted_lease_id = Some(lease.id.clone());
+            // The PR branch has been seated by session_start. Prepare it before
+            // any vendor, red run, child grant or resume is started.
+            // trace:STORY-2475 | ai:codex
+            let mut launch_vendor = launch_vendor;
+            let mut resolved_model = resolved_model.clone();
+            let mut prompt = prompt.clone();
+            if !no_launch && !plan_only && !guided && role == "implementer" {
+                if let Some((pr, branch)) = rework_pr.as_ref() {
+                    let files = crate::seat_clone::prepare_rework_merge(
+                        &project_root,
+                        &lease.worktree_path,
+                        branch,
+                        matches!(launch, Some(QueueWorkLaunch::Resume(_))),
+                    );
+                    launch_vendor = apply_rework_conflict_route(
+                        &project_root,
+                        files,
+                        ReworkConflictLaunch {
+                            vendor: launch_vendor,
+                            resume: matches!(launch, Some(QueueWorkLaunch::Resume(_))),
+                            interactive: !no_human,
+                            contained,
+                            scope: &plan.scope,
+                            pr: *pr,
+                            branch,
+                        },
+                        &mut prompt,
+                        &mut resolved_model,
+                        |subject, body| {
+                            crate::ship_from_seat::advisor_request(&project_root, subject, body)
+                        },
+                    )?;
+                }
+            }
+            // Rework may select another vendor after the early host gate. Recheck
+            // its actual policy before spawning; ordinary cleanup retains the lease
+            // recovery path if this late check refuses. trace:STORY-2642 | ai:codex
+            if crate::lane_host::needs_preflight(no_human, dry_run, no_launch, list_sessions)
+                && preflight_vendor != Some(launch_vendor)
+            {
+                crate::lane_host::preflight(&project_root, launch_vendor.as_str(), sandbox)?;
+            }
+            let headless_vendor = no_human.then_some(launch_vendor);
+
+            // STORY-1386: opt-in pre-implementation red run, in this lane's own
+            // freshly created worktree and BEFORE the implementer agent launches.
+            // `lane_is_fresh` skips a lane already carrying commits (retry/rework).
+            // trace:STORY-1386 | ai:claude
+            if role == "implementer" && plan.review_target.is_none() {
+                crate::criteria_red_run::after_lane_created(
                     &project_root,
                     &lease.worktree_path,
-                    branch,
-                    matches!(launch, Some(QueueWorkLaunch::Resume(_))),
-                );
-                launch_vendor = apply_rework_conflict_route(
-                    &project_root,
-                    files,
-                    ReworkConflictLaunch {
-                        vendor: launch_vendor,
-                        resume: matches!(launch, Some(QueueWorkLaunch::Resume(_))),
-                        interactive: !no_human,
-                        contained,
-                        scope: &plan.scope,
-                        pr: *pr,
-                        branch,
-                    },
-                    &mut prompt,
-                    &mut resolved_model,
-                    |subject, body| {
-                        crate::ship_from_seat::advisor_request(&project_root, subject, body)
-                    },
-                )?;
-            }
-        }
-        // Rework may select another vendor after the early host gate. Recheck
-        // its actual policy before spawning; ordinary cleanup retains the lease
-        // recovery path if this late check refuses. trace:STORY-2642 | ai:codex
-        if crate::lane_host::needs_preflight(no_human, dry_run, no_launch, list_sessions)
-            && preflight_vendor != Some(launch_vendor)
-        {
-            crate::lane_host::preflight(&project_root, launch_vendor.as_str(), sandbox)?;
-        }
-        let headless_vendor = no_human.then_some(launch_vendor);
-
-        // STORY-1386: opt-in pre-implementation red run, in this lane's own
-        // freshly created worktree and BEFORE the implementer agent launches.
-        // `lane_is_fresh` skips a lane already carrying commits (retry/rework).
-        // trace:STORY-1386 | ai:claude
-        if role == "implementer" && plan.review_target.is_none() {
-            crate::criteria_red_run::after_lane_created(
-                &project_root,
-                &lease.worktree_path,
-                &plan.anchor_display,
-            );
-        }
-
-        // TASK-99: warn (don't auto-pull) when the base the new worktree forked
-        // from is behind origin/main. Closes the visibility half of the
-        // 2026-05-13 stale-base pain cheaply: the operator sees the drift at
-        // pickup and can `aida rebase` before the session accumulates work on a
-        // stale base. We deliberately do NOT auto-pull here — that risks
-        // surprising the worktree; the orchestrator drain (fresh main per-phase)
-        // and the rebase verb own divergence handling. Best-effort + silent on
-        // missing data (no origin/main → fresh clone / offline).
-        // trace:TASK-99 | ai:claude
-        {
-            let base_ref = resolved_base.as_deref().unwrap_or("main");
-            if let Some(behind) = commits_behind_origin_main(&project_root, base_ref) {
-                if let Some(msg) = behind_origin_warning(behind, "main") {
-                    eprintln!(
-                        "  {} {}",
-                        crate::glyph(crate::glyphs::Glyph::Warning).yellow().bold(),
-                        msg.yellow()
-                    );
-                }
-            }
-        }
-
-        // STORY-248: register the stacked-branch entry in `.aida/stacks.json`
-        // so `aida pull --auto`'s cascade can find it when the parent merges.
-        // session_start records the parent fields on the lease itself; we
-        // mirror them into the dedicated graph file because the cascade
-        // needs to consult them AFTER the lease has been removed by
-        // `aida queue done`. Best-effort — a write failure logs but doesn't
-        // fail the pickup. trace:STORY-248 | ai:claude
-        if let (Some(parent), Some(sha)) = (
-            lease.parent_branch.as_deref(),
-            lease.parent_branch_sha.as_deref(),
-        ) {
-            let mut graph = stacks::load(&project_root);
-            stacks::add(
-                &mut graph,
-                stacks::StackEntry {
-                    branch: lease.branch.clone(),
-                    parent_branch: parent.to_string(),
-                    parent_branch_sha: sha.to_string(),
-                    spec_id: Some(plan.scope.clone()),
-                    created_at: chrono::Utc::now(),
-                },
-            );
-            if let Err(e) = stacks::save(&project_root, &graph) {
-                eprintln!(
-                    "  {} {}",
-                    crate::glyph(crate::glyphs::Glyph::Warning).yellow().bold(),
-                    format!(
-                        "stack graph save failed: {} (cascade may miss this branch)",
-                        e
-                    )
-                    .yellow()
-                );
-            } else {
-                eprintln!(
-                    "  {} stacked: {} → {}",
-                    crate::glyph(crate::glyphs::Glyph::Check).green(),
-                    lease.branch.cyan(),
-                    parent.cyan()
+                    &plan.anchor_display,
                 );
             }
-        }
 
-        // Cluster manifest: pre-populate items so /aida-pickup can walk
-        // them top-down. Skip for head/item modes (single item → no plan
-        // needed beyond the queue head). trace:STORY-98 | ai:claude
-        //
-        // TASK-95: discover the plan brief for the anchor spec from any
-        // owning docs/plans/ file. Cluster mode always writes a manifest, so
-        // it just gains the brief; head/item modes write a manifest only
-        // when a plan file exists (no plan file → today's no-op behavior).
-        // trace:TASK-95 | ai:claude
-        let plan_context = discover_plan_context(&project_root, &plan.anchor_display);
-        // TASK-112: the claude session id to record in the manifest — the
-        // UUID minted for a fresh launch, or the id being resumed.
-        // STORY-132: a caller-minted `--session-id` is recorded even under
-        // `--no-launch` (the TUI sets up a session then hosts the launch
-        // itself), so the manifest carries the id either way.
-        let claude_session_id: Option<String> = match (&launch, session_id) {
-            (Some(l), _) => Some(l.session_id().to_string()),
-            // --no-launch + caller-minted id: record it so the manifest
-            // carries it (already validated as a UUID at function entry).
-            (None, Some(sid)) => Some(sid.to_string()),
-            // BUG-225: --no-launch --no-human defers a headless launch, and
-            // `claude -p` requires a `--session-id`. Mint one when the caller
-            // didn't supply it so the manifest carries the id and the printed
-            // hint is a complete, round-trippable command.
-            (None, None) if no_human => Some(uuid::Uuid::now_v7().to_string()),
-            (None, None) => None,
-        };
-        // Write the manifest when there are planned cluster items, a plan
-        // brief was discovered, there's a claude session id to record so
-        // a later `--resume` can find this conversation, or this is a batch
-        // pickup whose batch marker /aida-pickup needs.
-        // trace:STORY-98, TASK-95, TASK-112, TASK-272 | ai:claude
-        if plan.mode == QueueWorkMode::Cluster
-            || plan_context.is_some()
-            || claude_session_id.is_some()
-            || batch_name.is_some()
-        {
-            write_queue_work_manifest(
-                &project_root,
-                &lease,
-                &plan,
-                plan_context.clone(),
-                claude_session_id.clone(),
-                batch_name,
-            )?;
-            if plan.mode == QueueWorkMode::Cluster {
-                eprintln!(
-                    "  {} wrote manifest with {} planned item(s)",
-                    crate::glyph(crate::glyphs::Glyph::Check).green(),
-                    plan.entries.len()
-                );
-            }
-            if let Some(ctx) = &plan_context {
-                eprintln!(
-                    "  {} attached plan brief from {}",
-                    crate::glyph(crate::glyphs::Glyph::Check).green(),
-                    ctx.plan_file.cyan()
-                );
-            }
-        }
-
-        // BUG-1485: publish the parent/child correlation while the lease is
-        // definitely present. This receipt deliberately lives outside the lease
-        // directory, so a fast `queue done` or `pr ship` cannot erase the only
-        // mapping before the orchestrator resumes after waitpid.
-        // trace:BUG-1485 | ai:codex
-        publish_orchestrated_lease_receipt_from_env(claude_session_id.as_deref(), &lease)?;
-
-        if no_launch {
-            eprintln!();
-            eprintln!(
-                "{} setup complete; launch deferred (`--no-launch`).",
-                crate::glyph(crate::glyphs::Glyph::Check).green().bold()
-            );
-            eprintln!(
-                "  {}",
-                format!("cd {}", lease.worktree_path.display()).cyan()
-            );
-            // Never point at a raw `source` of the worktree's session-env file (a
-            // branch can commit it); the eval'd enter applies the filtered env.
-            // trace:BUG-1627 | ai:claude
-            eprintln!(
-                "  {}    {}",
-                format!("aida worktree enter {}", lease.scope).cyan(),
-                "# cd in + warm build cache (filtered session env)".dimmed()
-            );
-            if no_human {
-                // STORY-263: mirror the headless launch the non-`--no-launch`
-                // path would have run. BUG-225: render it from
-                // `claude_headless_args_with_posture` (via `headless_launch_hint`) so the
-                // copy-pasteable command can't drift from `exec_claude_headless`
-                // — same flag order, `--session-id` included, prompt last.
-                // STORY-278: helper also prefixes `AIDA_HEADLESS=1` to match
-                // the env `exec_claude_headless` sets, so the copy-pasted hint
-                // launches an equivalent process.
-                let sid = claude_session_id.as_deref().unwrap_or_default();
-                eprintln!(
-                    "  {}",
-                    deferred_headless_launch_hint(
-                        launch_vendor,
-                        &prompt,
-                        sid,
-                        contained,
-                        resolved_model.as_deref(),
-                    )
-                    .cyan()
-                );
-            } else {
-                eprintln!(
-                    "  {}",
-                    deferred_interactive_launch_hint(
-                        launch_vendor,
-                        &prompt,
-                        permission_mode.as_deref(),
-                        contained,
-                        resolved_model.as_deref(),
-                    )
-                    .cyan()
-                );
-            }
-            // BUG-673: next-step breadcrumb after a `queue work` pickup. The lease
-            // is taken and the worktree is set up (only the launch is deferred), so
-            // this IS a genuine pickup — the natural next move is to finish the work
-            // (`aida queue done <id>`). Closes the gap where the next[] block
-            // dropped out at `queue work`. Emit the TOON `next[]` block in agent
-            // mode, the human `Next:` block otherwise. trace:BUG-673 | ai:claude
+            // TASK-99: warn (don't auto-pull) when the base the new worktree forked
+            // from is behind origin/main. Closes the visibility half of the
+            // 2026-05-13 stale-base pain cheaply: the operator sees the drift at
+            // pickup and can `aida rebase` before the session accumulates work on a
+            // stale base. We deliberately do NOT auto-pull here — that risks
+            // surprising the worktree; the orchestrator drain (fresh main per-phase)
+            // and the rebase verb own divergence handling. Best-effort + silent on
+            // missing data (no origin/main → fresh clone / offline).
+            // trace:TASK-99 | ai:claude
             {
-                let next = crate::help_next::queue_work_next(&plan.anchor_display);
-                let rendered = if agent_output_mode() {
-                    crate::help_next::render(&next)
-                } else {
-                    crate::help_next::render_human(&next)
-                };
-                if let Some(block) = rendered {
-                    println!("{block}");
-                }
-            }
-            return Ok(());
-        }
-
-        // Chdir + source session-env shim + exec claude with the skill prompt.
-        // Mirrors session_start's launch path (TASK-63 env sourcing).
-        let env_shim = lease.worktree_path.join(".aida").join("session-env.sh");
-        let applied_vars: Vec<String> = match std::fs::read_to_string(&env_shim) {
-            Ok(body) => apply_session_env_to_process(&body),
-            Err(_) => Vec::new(),
-        };
-        if !applied_vars.is_empty() {
-            eprintln!(
-                "  {} sourced .aida/session-env.sh ({})",
-                crate::glyph(crate::glyphs::Glyph::InfoAlt).cyan(),
-                applied_vars.join(", ").dimmed()
-            );
-        }
-        // TASK-2032: the host main, resolved once before the chdir into the
-        // seat and threaded explicitly into the launch below.
-        // trace:TASK-2032 | ai:claude
-        let host_main = crate::seat_clone::launcher_main();
-        std::env::set_current_dir(&lease.worktree_path)
-            .with_context(|| format!("failed to chdir into {}", lease.worktree_path.display()))?;
-        // BUG-1918: the launched worker (exec'd or spawned below) carries its
-        // lease id, so it stays its lease's author wherever it later runs.
-        // trace:BUG-1918 | ai:claude
-        crate::gate::review_authority::export_worker_session_env(&lease.id);
-
-        // TASK-112: exec — resume the prior conversation, or cold-launch
-        // with the minted session id so this conversation is itself
-        // resumable later. trace:TASK-112 | ai:claude
-        let launch = launch.expect("launch decision is set when !no_launch");
-
-        // BUG-226: a standalone `aida queue work <PR-N> --role reviewer` — a
-        // reviewer session on a PR scope NOT spawned by the `--auto-complete`
-        // orchestrator. The orchestrator sets `AIDA_REVIEW_VERDICT_FILE` on
-        // its phase-3 child, so its absence is the standalone signal. For a
-        // standalone run, point the `/aida-review` skill at a verdict file and
-        // route the launch through `run_standalone_reviewer` (spawn + wait +
-        // end-of-command summary) instead of `exec`'ing claude — so the
-        // command no longer exits silently to the shell prompt.
-        // trace:BUG-226 | ai:claude
-        let standalone_reviewer: Option<(u64, std::path::PathBuf)> =
-            if is_standalone_reviewer(&role, plan.review_target.is_some()) {
-                plan.review_target.map(|(forge, n)| {
-                    (
-                        n,
-                        project_root
-                            .join(".aida")
-                            .join("review-verdicts")
-                            .join(format!("{}.json", format_review_label(forge, n))),
-                    )
-                })
-            } else {
-                None
-            };
-        if let Some((pr, verdict_path)) = &standalone_reviewer {
-            // A watch launch revalidates head, overlap and its reservation
-            // before the destructive verdict reset, so a refused launch keeps
-            // the prior verdict. Outside a watch launch this is inert.
-            // trace:TASK-1993 | ai:claude
-            crate::review_watch::reviewer_launch_context(&project_root, *pr)?;
-            // A contained reviewer whose grant key cannot be held is refused
-            // here, before the reset, so the refusal keeps the prior verdict.
-            // trace:BUG-b6b1278890774ef993d2ebc327862470-045 | ai:claude
-            refuse_unpresentable_contained_reviewer(contained)?;
-            clear_standalone_reviewer_verdict(verdict_path);
-            // The `/aida-review` skill writes the verdict here — it keys off
-            // this env var. Setting it for standalone runs too is what makes
-            // the skill "always write the verdict file" (BUG-226 acceptance).
-            std::env::set_var("AIDA_REVIEW_VERDICT_FILE", verdict_path);
-            // BUG-809: same prompt-text anchor for the standalone reviewer —
-            // the env var was absent at prompt-derivation time above.
-            // trace:BUG-b6b1278890774ef993d2ebc327862470-045 | ai:claude
-            append_standalone_reviewer_prompt_suffixes(&mut prompt, &lease.worktree_path);
-        }
-
-        eprintln!();
-        if let Some((pr, verdict_path)) = standalone_reviewer {
-            return run_standalone_reviewer(
-                &project_root,
-                pr,
-                launch,
-                &prompt,
-                permission_mode.as_deref(),
-                &plan.scope,
-                &lease.branch,
-                &role,
-                &lease.worktree_path,
-                no_human,
-                quiet,
-                &verdict_path,
-                contained,
-                launch_vendor,
-                host_main.as_deref(),
-            );
-        }
-        // trace:TASK-1594 | ai:claude
-        let mut child_grant_id = None;
-        // BUG-2139: the fresh headless child's own authority — minted here,
-        // never inherited from the launcher. `None` on every other arm.
-        let mut headless_child_grant = None;
-        if !no_human {
-            // trace:BUG-b6b1278890774ef993d2ebc327862470-045 | ai:claude
-            let child_grant = crate::launch::issue_launch_child(
-                &project_root,
-                &crate::canonical_role_name(&role),
-                &crate::current_user_id(None),
-                // trace:TASK-2631 | ai:codex
-                // trace:TASK-2708 | ai:claude
-                session::sandboxed_child_grant(launch_vendor, contained)?,
-            )?;
-            child_grant_id = Some(child_grant.id);
-        } else if matches!(launch, QueueWorkLaunch::Fresh(_)) {
-            // trace:BUG-2139 | ai:claude
-            // A contained child of any seat whose key cannot be held is
-            // refused here, before it spawns.
-            // trace:TASK-b6b1278890774ef993d2ebc327862470-144 | ai:claude
-            let seat = crate::canonical_role_name(&role);
-            let grant = crate::gate::seat_authority::issue_headless_child(
-                &project_root,
-                &seat,
-                &crate::current_user_id(None),
-                // trace:TASK-2631 | ai:codex
-                // trace:TASK-2708 | ai:claude
-                session::sandboxed_child_grant(launch_vendor, contained)?,
-            )?;
-            match &grant {
-                crate::gate::seat_authority::HeadlessChildGrant::Issued(issued) => {
-                    // Stamped beside `active_pid`, so a lease end or reap
-                    // revokes it even if this launcher dies before the child.
-                    if let Err(e) =
-                        session::stamp_lease_child_grant_at(&project_root, &lease.id, &issued.id)
-                    {
-                        session::revoke_headless_child_grant(&issued.id);
-                        return Err(
-                            e.context("could not record the headless child grant on its lease")
+                let base_ref = resolved_base.as_deref().unwrap_or("main");
+                if let Some(behind) = commits_behind_origin_main(&project_root, base_ref) {
+                    if let Some(msg) = behind_origin_warning(behind, "main") {
+                        eprintln!(
+                            "  {} {}",
+                            crate::glyph(crate::glyphs::Glyph::Warning).yellow().bold(),
+                            msg.yellow()
                         );
                     }
                 }
-                crate::gate::seat_authority::HeadlessChildGrant::Baseline { cause } => eprintln!(
-                    "  {} {}",
-                    crate::glyph(crate::glyphs::Glyph::InfoAlt).cyan(),
-                    headless_baseline_notice(&seat, cause)
-                ),
             }
-            headless_child_grant = Some(grant);
-        }
-        // STORY-1662: spawn the standalone implementer, wait, and report its
-        // outcome instead of exec'ing the vendor.
-        // trace:STORY-1662 | ai:claude
-        if standalone_implementer {
-            if let (QueueWorkLaunch::Fresh(id), Some(child_grant)) =
-                (&launch, headless_child_grant.as_ref())
-            {
-                crate::standalone_implementer::record_child_authority(
-                    &project_root,
-                    &lease.id,
-                    child_grant,
-                    crate::gate::seat_authority::current_grant_id().as_deref(),
+
+            // STORY-248: register the stacked-branch entry in `.aida/stacks.json`
+            // so `aida pull --auto`'s cascade can find it when the parent merges.
+            // session_start records the parent fields on the lease itself; we
+            // mirror them into the dedicated graph file because the cascade
+            // needs to consult them AFTER the lease has been removed by
+            // `aida queue done`. Best-effort — a write failure logs but doesn't
+            // fail the pickup. trace:STORY-248 | ai:claude
+            if let (Some(parent), Some(sha)) = (
+                lease.parent_branch.as_deref(),
+                lease.parent_branch_sha.as_deref(),
+            ) {
+                let mut graph = stacks::load(&project_root);
+                stacks::add(
+                    &mut graph,
+                    stacks::StackEntry {
+                        branch: lease.branch.clone(),
+                        parent_branch: parent.to_string(),
+                        parent_branch_sha: sha.to_string(),
+                        spec_id: Some(plan.scope.clone()),
+                        created_at: chrono::Utc::now(),
+                    },
                 );
-                eprintln!();
-                // TASK-2807: from here an implementer can have run.
-                // trace:TASK-2807 | ai:claude
-                agent.starting();
-                return crate::standalone_implementer::run(crate::standalone_implementer::Launch {
-                    project_root: &project_root,
-                    vendor: launch_vendor,
-                    prompt: &prompt,
-                    session_id: id,
-                    spec: &plan.scope,
-                    lease_id: &lease.id,
-                    branch: &lease.branch,
-                    contained,
-                    child_grant,
-                    host_main: host_main.as_deref(),
-                });
+                if let Err(e) = stacks::save(&project_root, &graph) {
+                    eprintln!(
+                        "  {} {}",
+                        crate::glyph(crate::glyphs::Glyph::Warning).yellow().bold(),
+                        format!(
+                            "stack graph save failed: {} (cascade may miss this branch)",
+                            e
+                        )
+                        .yellow()
+                    );
+                } else {
+                    eprintln!(
+                        "  {} stacked: {} → {}",
+                        crate::glyph(crate::glyphs::Glyph::Check).green(),
+                        lease.branch.cyan(),
+                        parent.cyan()
+                    );
+                }
             }
-        }
-        // TASK-895: a Codex tab hosts a fresh interactive Codex session. Codex has
-        // no caller-minted session id / AIDA-addressable resume, and the interactive
-        // tab launch is never `--no-human` (the headless drain resolves its own
-        // vendor via STORY-683), so this branch handles only the interactive Codex
-        // launch and leaves the entire Claude `match launch` below byte-identical.
-        // trace:TASK-895 | ai:claude
-        if launch_vendor == session::HeadlessVendor::Codex && !no_human {
-            // BUG-743: queue/do's interactive Codex path used to ignore the
-            // STORY-495 `[agents] bypass` resolver and launch bare `codex
-            // /aida-pickup`, leaving operators in prompt-per-command posture even
-            // after opting the supervised fleet into bypass. Map the resolved
-            // uniform bypass posture to Codex's actual flag here; `None` and every
-            // non-bypass Claude permission mode keep Codex native.
-            let codex_bypass = permission_mode.as_deref() == Some("bypassPermissions");
-            // BUG-2394: `--plan-only` resolves to `plan`, which Codex has no
-            // permission-mode for — map it to the read-only sandbox instead of
-            // falling through to the ordinary write posture. A resumed plan
-            // lane keeps it too (BUG-2386).
-            // trace:BUG-2394 | ai:claude
-            let codex_read_only = session::codex_plan_read_only(permission_mode.as_deref());
-            // BUG-2386: `--resume` continues the recorded Codex thread instead
-            // of silently starting a fresh session. trace:BUG-2386 | ai:claude
-            if let QueueWorkLaunch::Resume(id) = &launch {
-                let (_, thread) = match resume_target.clone() {
-                    Some(target) => target,
-                    None => crate::codex_resume::recorded_resume(
-                        &project_root,
-                        id,
-                        Some(lease.scope.as_str()),
-                    )?,
+
+            // Cluster manifest: pre-populate items so /aida-pickup can walk
+            // them top-down. Skip for head/item modes (single item → no plan
+            // needed beyond the queue head). trace:STORY-98 | ai:claude
+            //
+            // TASK-95: discover the plan brief for the anchor spec from any
+            // owning docs/plans/ file. Cluster mode always writes a manifest, so
+            // it just gains the brief; head/item modes write a manifest only
+            // when a plan file exists (no plan file → today's no-op behavior).
+            // trace:TASK-95 | ai:claude
+            let plan_context = discover_plan_context(&project_root, &plan.anchor_display);
+            // TASK-112: the claude session id to record in the manifest — the
+            // UUID minted for a fresh launch, or the id being resumed.
+            // STORY-132: a caller-minted `--session-id` is recorded even under
+            // `--no-launch` (the TUI sets up a session then hosts the launch
+            // itself), so the manifest carries the id either way.
+            let claude_session_id: Option<String> = match (&launch, session_id) {
+                (Some(l), _) => Some(l.session_id().to_string()),
+                // --no-launch + caller-minted id: record it so the manifest
+                // carries it (already validated as a UUID at function entry).
+                (None, Some(sid)) => Some(sid.to_string()),
+                // BUG-225: --no-launch --no-human defers a headless launch, and
+                // `claude -p` requires a `--session-id`. Mint one when the caller
+                // didn't supply it so the manifest carries the id and the printed
+                // hint is a complete, round-trippable command.
+                (None, None) if no_human => Some(uuid::Uuid::now_v7().to_string()),
+                (None, None) => None,
+            };
+            // Write the manifest when there are planned cluster items, a plan
+            // brief was discovered, there's a claude session id to record so
+            // a later `--resume` can find this conversation, or this is a batch
+            // pickup whose batch marker /aida-pickup needs.
+            // trace:STORY-98, TASK-95, TASK-112, TASK-272 | ai:claude
+            if plan.mode == QueueWorkMode::Cluster
+                || plan_context.is_some()
+                || claude_session_id.is_some()
+                || batch_name.is_some()
+            {
+                write_queue_work_manifest(
+                    &project_root,
+                    &lease,
+                    &plan,
+                    plan_context.clone(),
+                    claude_session_id.clone(),
+                    batch_name,
+                )?;
+                if plan.mode == QueueWorkMode::Cluster {
+                    eprintln!(
+                        "  {} wrote manifest with {} planned item(s)",
+                        crate::glyph(crate::glyphs::Glyph::Check).green(),
+                        plan.entries.len()
+                    );
+                }
+                if let Some(ctx) = &plan_context {
+                    eprintln!(
+                        "  {} attached plan brief from {}",
+                        crate::glyph(crate::glyphs::Glyph::Check).green(),
+                        ctx.plan_file.cyan()
+                    );
+                }
+            }
+
+            // BUG-1485: publish the parent/child correlation while the lease is
+            // definitely present. This receipt deliberately lives outside the lease
+            // directory, so a fast `queue done` or `pr ship` cannot erase the only
+            // mapping before the orchestrator resumes after waitpid.
+            // trace:BUG-1485 | ai:codex
+            publish_orchestrated_lease_receipt_from_env(claude_session_id.as_deref(), &lease)?;
+
+            if no_launch {
+                eprintln!();
+                eprintln!(
+                    "{} setup complete; launch deferred (`--no-launch`).",
+                    crate::glyph(crate::glyphs::Glyph::Check).green().bold()
+                );
+                eprintln!(
+                    "  {}",
+                    format!("cd {}", lease.worktree_path.display()).cyan()
+                );
+                // Never point at a raw `source` of the worktree's session-env file (a
+                // branch can commit it); the eval'd enter applies the filtered env.
+                // trace:BUG-1627 | ai:claude
+                eprintln!(
+                    "  {}    {}",
+                    format!("aida worktree enter {}", lease.scope).cyan(),
+                    "# cd in + warm build cache (filtered session env)".dimmed()
+                );
+                if no_human {
+                    // STORY-263: mirror the headless launch the non-`--no-launch`
+                    // path would have run. BUG-225: render it from
+                    // `claude_headless_args_with_posture` (via `headless_launch_hint`) so the
+                    // copy-pasteable command can't drift from `exec_claude_headless`
+                    // — same flag order, `--session-id` included, prompt last.
+                    // STORY-278: helper also prefixes `AIDA_HEADLESS=1` to match
+                    // the env `exec_claude_headless` sets, so the copy-pasted hint
+                    // launches an equivalent process.
+                    let sid = claude_session_id.as_deref().unwrap_or_default();
+                    eprintln!(
+                        "  {}",
+                        deferred_headless_launch_hint(
+                            launch_vendor,
+                            &prompt,
+                            sid,
+                            contained,
+                            resolved_model.as_deref(),
+                        )
+                        .cyan()
+                    );
+                } else {
+                    eprintln!(
+                        "  {}",
+                        deferred_interactive_launch_hint(
+                            launch_vendor,
+                            &prompt,
+                            permission_mode.as_deref(),
+                            contained,
+                            resolved_model.as_deref(),
+                        )
+                        .cyan()
+                    );
+                }
+                // BUG-673: next-step breadcrumb after a `queue work` pickup. The lease
+                // is taken and the worktree is set up (only the launch is deferred), so
+                // this IS a genuine pickup — the natural next move is to finish the work
+                // (`aida queue done <id>`). Closes the gap where the next[] block
+                // dropped out at `queue work`. Emit the TOON `next[]` block in agent
+                // mode, the human `Next:` block otherwise. trace:BUG-673 | ai:claude
+                {
+                    let next = crate::help_next::queue_work_next(&plan.anchor_display);
+                    let rendered = if agent_output_mode() {
+                        crate::help_next::render(&next)
+                    } else {
+                        crate::help_next::render_human(&next)
+                    };
+                    if let Some(block) = rendered {
+                        println!("{block}");
+                    }
+                }
+                return Ok(());
+            }
+
+            // Chdir + source session-env shim + exec claude with the skill prompt.
+            // Mirrors session_start's launch path (TASK-63 env sourcing).
+            let env_shim = lease.worktree_path.join(".aida").join("session-env.sh");
+            let applied_vars: Vec<String> = match std::fs::read_to_string(&env_shim) {
+                Ok(body) => apply_session_env_to_process(&body),
+                Err(_) => Vec::new(),
+            };
+            if !applied_vars.is_empty() {
+                eprintln!(
+                    "  {} sourced .aida/session-env.sh ({})",
+                    crate::glyph(crate::glyphs::Glyph::InfoAlt).cyan(),
+                    applied_vars.join(", ").dimmed()
+                );
+            }
+            // TASK-2032: the host main, resolved once before the chdir into the
+            // seat and threaded explicitly into the launch below.
+            // trace:TASK-2032 | ai:claude
+            let host_main = crate::seat_clone::launcher_main();
+            std::env::set_current_dir(&lease.worktree_path).with_context(|| {
+                format!("failed to chdir into {}", lease.worktree_path.display())
+            })?;
+            // BUG-1918: the launched worker (exec'd or spawned below) carries its
+            // lease id, so it stays its lease's author wherever it later runs.
+            // trace:BUG-1918 | ai:claude
+            crate::gate::review_authority::export_worker_session_env(&lease.id);
+
+            // TASK-112: exec — resume the prior conversation, or cold-launch
+            // with the minted session id so this conversation is itself
+            // resumable later. trace:TASK-112 | ai:claude
+            let launch = launch.expect("launch decision is set when !no_launch");
+
+            // BUG-226: a standalone `aida queue work <PR-N> --role reviewer` — a
+            // reviewer session on a PR scope NOT spawned by the `--auto-complete`
+            // orchestrator. The orchestrator sets `AIDA_REVIEW_VERDICT_FILE` on
+            // its phase-3 child, so its absence is the standalone signal. For a
+            // standalone run, point the `/aida-review` skill at a verdict file and
+            // route the launch through `run_standalone_reviewer` (spawn + wait +
+            // end-of-command summary) instead of `exec`'ing claude — so the
+            // command no longer exits silently to the shell prompt.
+            // trace:BUG-226 | ai:claude
+            let standalone_reviewer: Option<(u64, std::path::PathBuf)> =
+                if is_standalone_reviewer(&role, plan.review_target.is_some()) {
+                    plan.review_target.map(|(forge, n)| {
+                        (
+                            n,
+                            project_root
+                                .join(".aida")
+                                .join("review-verdicts")
+                                .join(format!("{}.json", format_review_label(forge, n))),
+                        )
+                    })
+                } else {
+                    None
                 };
+            if let Some((pr, verdict_path)) = &standalone_reviewer {
+                // A watch launch revalidates head, overlap and its reservation
+                // before the destructive verdict reset, so a refused launch keeps
+                // the prior verdict. Outside a watch launch this is inert.
+                // trace:TASK-1993 | ai:claude
+                crate::review_watch::reviewer_launch_context(&project_root, *pr)?;
+                // A contained reviewer whose grant key cannot be held is refused
+                // here, before the reset, so the refusal keeps the prior verdict.
+                // trace:BUG-b6b1278890774ef993d2ebc327862470-045 | ai:claude
+                refuse_unpresentable_contained_reviewer(contained)?;
+                clear_standalone_reviewer_verdict(verdict_path);
+                // The `/aida-review` skill writes the verdict here — it keys off
+                // this env var. Setting it for standalone runs too is what makes
+                // the skill "always write the verdict file" (BUG-226 acceptance).
+                std::env::set_var("AIDA_REVIEW_VERDICT_FILE", verdict_path);
+                // BUG-809: same prompt-text anchor for the standalone reviewer —
+                // the env var was absent at prompt-derivation time above.
+                // trace:BUG-b6b1278890774ef993d2ebc327862470-045 | ai:claude
+                append_standalone_reviewer_prompt_suffixes(&mut prompt, &lease.worktree_path);
+            }
+
+            eprintln!();
+            if let Some((pr, verdict_path)) = standalone_reviewer {
+                return run_standalone_reviewer(
+                    &project_root,
+                    pr,
+                    launch,
+                    &prompt,
+                    permission_mode.as_deref(),
+                    &plan.scope,
+                    &lease.branch,
+                    &role,
+                    &lease.worktree_path,
+                    no_human,
+                    quiet,
+                    &verdict_path,
+                    contained,
+                    launch_vendor,
+                    host_main.as_deref(),
+                );
+            }
+            // trace:TASK-1594 | ai:claude
+            let mut child_grant_id = None;
+            // BUG-2139: the fresh headless child's own authority — minted here,
+            // never inherited from the launcher. `None` on every other arm.
+            let mut headless_child_grant = None;
+            if !no_human {
+                // trace:BUG-b6b1278890774ef993d2ebc327862470-045 | ai:claude
+                let child_grant = crate::launch::issue_launch_child(
+                    &project_root,
+                    &crate::canonical_role_name(&role),
+                    &crate::current_user_id(None),
+                    // trace:TASK-2631 | ai:codex
+                    // trace:TASK-2708 | ai:claude
+                    session::sandboxed_child_grant(launch_vendor, contained)?,
+                )?;
+                child_grant_id = Some(child_grant.id);
+            } else if matches!(launch, QueueWorkLaunch::Fresh(_)) {
+                // trace:BUG-2139 | ai:claude
+                // A contained child of any seat whose key cannot be held is
+                // refused here, before it spawns.
+                // trace:TASK-b6b1278890774ef993d2ebc327862470-144 | ai:claude
+                let seat = crate::canonical_role_name(&role);
+                let grant = crate::gate::seat_authority::issue_headless_child(
+                    &project_root,
+                    &seat,
+                    &crate::current_user_id(None),
+                    // trace:TASK-2631 | ai:codex
+                    // trace:TASK-2708 | ai:claude
+                    session::sandboxed_child_grant(launch_vendor, contained)?,
+                )?;
+                match &grant {
+                    crate::gate::seat_authority::HeadlessChildGrant::Issued(issued) => {
+                        // Stamped beside `active_pid`, so a lease end or reap
+                        // revokes it even if this launcher dies before the child.
+                        if let Err(e) = session::stamp_lease_child_grant_at(
+                            &project_root,
+                            &lease.id,
+                            &issued.id,
+                        ) {
+                            session::revoke_headless_child_grant(&issued.id);
+                            return Err(e.context(
+                                "could not record the headless child grant on its lease",
+                            ));
+                        }
+                    }
+                    crate::gate::seat_authority::HeadlessChildGrant::Baseline { cause } => {
+                        eprintln!(
+                            "  {} {}",
+                            crate::glyph(crate::glyphs::Glyph::InfoAlt).cyan(),
+                            headless_baseline_notice(&seat, cause)
+                        )
+                    }
+                }
+                headless_child_grant = Some(grant);
+            }
+            // STORY-1662: spawn the standalone implementer, wait, and report its
+            // outcome instead of exec'ing the vendor.
+            // trace:STORY-1662 | ai:claude
+            if standalone_implementer {
+                if let (QueueWorkLaunch::Fresh(id), Some(child_grant)) =
+                    (&launch, headless_child_grant.as_ref())
+                {
+                    crate::standalone_implementer::record_child_authority(
+                        &project_root,
+                        &lease.id,
+                        child_grant,
+                        crate::gate::seat_authority::current_grant_id().as_deref(),
+                    );
+                    eprintln!();
+                    // Mark setup ownership only after an actual spawn succeeds.
+                    // trace:STORY-2690 | ai:codex
+                    return crate::standalone_implementer::run_recorded(
+                        crate::standalone_implementer::Launch {
+                            project_root: &project_root,
+                            vendor: launch_vendor,
+                            prompt: &prompt,
+                            session_id: id,
+                            spec: &plan.scope,
+                            lease_id: &lease.id,
+                            branch: &lease.branch,
+                            contained,
+                            child_grant,
+                            host_main: host_main.as_deref(),
+                        },
+                        attempt.as_ref(),
+                        Some(&|| agent.starting()),
+                    );
+                }
+            }
+            // TASK-895: a Codex tab hosts a fresh interactive Codex session. Codex has
+            // no caller-minted session id / AIDA-addressable resume, and the interactive
+            // tab launch is never `--no-human` (the headless drain resolves its own
+            // vendor via STORY-683), so this branch handles only the interactive Codex
+            // launch and leaves the entire Claude `match launch` below byte-identical.
+            // trace:TASK-895 | ai:claude
+            if launch_vendor == session::HeadlessVendor::Codex && !no_human {
+                // BUG-743: queue/do's interactive Codex path used to ignore the
+                // STORY-495 `[agents] bypass` resolver and launch bare `codex
+                // /aida-pickup`, leaving operators in prompt-per-command posture even
+                // after opting the supervised fleet into bypass. Map the resolved
+                // uniform bypass posture to Codex's actual flag here; `None` and every
+                // non-bypass Claude permission mode keep Codex native.
+                let codex_bypass = permission_mode.as_deref() == Some("bypassPermissions");
+                // BUG-2394: `--plan-only` resolves to `plan`, which Codex has no
+                // permission-mode for — map it to the read-only sandbox instead of
+                // falling through to the ordinary write posture. A resumed plan
+                // lane keeps it too (BUG-2386).
+                // trace:BUG-2394 | ai:claude
+                let codex_read_only = session::codex_plan_read_only(permission_mode.as_deref());
+                // BUG-2386: `--resume` continues the recorded Codex thread instead
+                // of silently starting a fresh session. trace:BUG-2386 | ai:claude
+                if let QueueWorkLaunch::Resume(id) = &launch {
+                    let (_, thread) = match resume_target.clone() {
+                        Some(target) => target,
+                        None => crate::codex_resume::recorded_resume(
+                            &project_root,
+                            id,
+                            Some(lease.scope.as_str()),
+                        )?,
+                    };
+                    eprintln!(
+                        "{} {}",
+                        crate::glyph(crate::glyphs::Glyph::FlowActive)
+                            .green()
+                            .bold(),
+                        format!(
+                            "resuming codex session {} in {} ({})",
+                            &thread[..thread.len().min(8)],
+                            lease.worktree_path.display(),
+                            if codex_read_only {
+                                "read-only sandbox"
+                            } else if codex_bypass {
+                                "bypass"
+                            } else {
+                                "native"
+                            },
+                        )
+                        .cyan()
+                    );
+                    // trace:TASK-2712 | ai:claude — the resumed lane's own tree and role.
+                    return session::exec_codex_resume(
+                        &thread,
+                        codex_bypass,
+                        codex_read_only,
+                        child_grant_id.as_deref(),
+                        contained,
+                        session::CodexLane {
+                            tree: &lease.worktree_path,
+                            role: Some(&crate::canonical_role_name(&role)),
+                            // trace:TASK-2032 | ai:claude
+                            host_main: host_main.as_deref(),
+                        },
+                    );
+                }
                 eprintln!(
                     "{} {}",
                     crate::glyph(crate::glyphs::Glyph::FlowActive)
                         .green()
                         .bold(),
                     format!(
-                        "resuming codex session {} in {} ({})",
-                        &thread[..thread.len().min(8)],
+                        "launching codex in {} ({}, prompt `{}`)",
                         lease.worktree_path.display(),
                         if codex_read_only {
                             "read-only sandbox"
@@ -5783,343 +5869,347 @@ pub(crate) fn handle_queue_work(
                         } else {
                             "native"
                         },
-                    )
-                    .cyan()
-                );
-                // trace:TASK-2712 | ai:claude — the resumed lane's own tree and role.
-                return session::exec_codex_resume(
-                    &thread,
-                    codex_bypass,
-                    codex_read_only,
-                    child_grant_id.as_deref(),
-                    contained,
-                    session::CodexLane {
-                        tree: &lease.worktree_path,
-                        role: Some(&crate::canonical_role_name(&role)),
-                        // trace:TASK-2032 | ai:claude
-                        host_main: host_main.as_deref(),
-                    },
-                );
-            }
-            eprintln!(
-                "{} {}",
-                crate::glyph(crate::glyphs::Glyph::FlowActive)
-                    .green()
-                    .bold(),
-                format!(
-                    "launching codex in {} ({}, prompt `{}`)",
-                    lease.worktree_path.display(),
-                    if codex_read_only {
-                        "read-only sandbox"
-                    } else if codex_bypass {
-                        "bypass"
-                    } else {
-                        "native"
-                    },
-                    prompt
-                )
-                .cyan()
-            );
-            // trace:TASK-2712 | ai:claude — the lane's role picks its write set.
-            // trace:TASK-2032 | ai:claude — the host main pinned before the chdir.
-            return session::exec_codex_session(
-                host_main.as_deref(),
-                &prompt,
-                codex_bypass,
-                codex_read_only,
-                resolved_model.as_deref(),
-                child_grant_id.as_deref(),
-                Some(&crate::canonical_role_name(&role)),
-            );
-        }
-        // BUG-1607: an interactive Agy launch is now refused by
-        // `preflight_launch_vendor` above, BEFORE `session_start` minted the
-        // lease/worktree this function is already holding by this point — so
-        // `launch_vendor == Agy && !no_human` can no longer reach here. No
-        // per-arm Agy handling needed below either: `match launch` only spawns
-        // Claude.
-        debug_assert!(
-        !(launch_vendor == session::HeadlessVendor::Agy && !no_human),
-        "BUG-1607: preflight_launch_vendor must refuse an interactive Agy launch before this point"
-    );
-        match launch {
-            QueueWorkLaunch::Resume(id) => {
-                if no_human {
-                    let log_path = project_root
-                        .join(".aida")
-                        .join("headless-logs")
-                        .join(format!("{}-{}.jsonl", lease.branch, id));
-                    eprintln!(
-                        "{} {}",
-                        crate::glyph(crate::glyphs::Glyph::FlowActive)
-                            .green()
-                            .bold(),
-                        format!(
-                            "resuming {} headless session {} in {} ({}, prompt `{}`)",
-                            launch_vendor.as_str(),
-                            &id[..id.len().min(8)],
-                            lease.worktree_path.display(),
-                            match launch_vendor {
-                                session::HeadlessVendor::Codex => "codex exec resume".to_string(),
-                                _ => format!(
-                                    "claude -p, {}",
-                                    claude_posture_display(permission_mode.as_deref(), contained)
-                                ),
-                            },
-                            prompt
-                        )
-                        .cyan()
-                    );
-                    eprintln!(
-                        "  {} headless output → {}",
-                        crate::glyph(crate::glyphs::Glyph::InfoAlt).cyan(),
-                        log_path.display().to_string().dimmed()
-                    );
-                    // BUG-342: no-human resumes must use the same structural
-                    // AskUserQuestion denial as fresh headless launches. Plain
-                    // `claude --resume` bypasses `claude_headless_resume_args`.
-                    // trace:BUG-342 | ai:codex
-                    let tee_opts = headless_tee::TeeOptions::from_env_and_flag(false)
-                        .with_label(&lease.branch);
-                    // BUG-2386: resume on the recorded vendor — a Codex thread
-                    // resumes as `codex exec resume`. trace:BUG-2386 | ai:claude
-                    let (vendor, resume_id) = match resume_target.clone() {
-                        Some(target) => target,
-                        None => crate::codex_resume::recorded_resume(
-                            &project_root,
-                            &id,
-                            Some(lease.scope.as_str()),
-                        )?,
-                    };
-                    // Counted by `AgentLaunchMark` once the child spawned:
-                    // a failed spawn launched nobody. trace:TASK-2807 | ai:claude
-                    let status = run_queue_resume_to_exit(
-                        host_main.as_deref(),
-                        &session::HeadlessResume {
-                            vendor,
-                            session_id: &id,
-                            resume_id: &resume_id,
-                        },
-                        &prompt,
-                        &log_path,
-                        &lease.worktree_path,
-                        &tee_opts,
-                        contained,
-                        // trace:BUG-1808 | ai:claude — the seat the preflight validated.
-                        &crate::canonical_role_name(&role),
-                        (&project_root, &plan.scope, &lease.id),
-                        false,
-                    )?;
-                    std::process::exit(status.code().unwrap_or(1));
-                }
-                eprintln!(
-                    "{} {}",
-                    crate::glyph(crate::glyphs::Glyph::FlowActive)
-                        .green()
-                        .bold(),
-                    format!(
-                        "resuming claude session {} in {} ({})",
-                        &id[..id.len().min(8)],
-                        lease.worktree_path.display(),
-                        claude_posture_display(permission_mode.as_deref(), contained)
-                    )
-                    .cyan()
-                );
-                let mut cmd = session::build_claude_resume_exec_command(
-                    host_main.as_deref(),
-                    &id,
-                    permission_mode.as_deref(),
-                    contained,
-                    child_grant_id.as_deref(),
-                )?;
-                crate::launch::assign_seat(
-                    &mut cmd,
-                    aida_core::launch_policy::LaunchKind::Resume,
-                    crate::launch::SeatDecision::Child {
-                        role: &crate::canonical_role_name(&role),
-                        grant: child_grant_id.as_deref().unwrap_or(""),
-                    },
-                )?;
-                crate::launch::spawn::exec_agent(&mut cmd)
-            }
-            QueueWorkLaunch::Fresh(id) => {
-                let name = session::derive_session_name(&plan.scope, &lease.branch, &role);
-                if no_human {
-                    // STORY-263: headless launch — `claude -p`, single-turn,
-                    // exits on its own (no Ctrl+D). `bypassPermissions` is forced
-                    // (SPIKE-7 Q2 — `acceptEdits` leaves Bash gated); the
-                    // stream-json output goes to a log file the watchdog
-                    // (TASK-298) can tail. trace:STORY-263 | ai:claude
-                    let log_path = project_root
-                        .join(".aida")
-                        .join("headless-logs")
-                        .join(format!("{}-{}.jsonl", lease.branch, id));
-                    // BUG-705: the banner names the RESOLVED headless vendor —
-                    // before, it always said claude even when the drain was
-                    // routed to codex, hiding the unrouted-exec bug.
-                    let headless_vendor = headless_vendor
-                        .unwrap_or_else(|| crate::session::resolve_headless_vendor(&project_root));
-                    let launch_detail = match headless_vendor {
-                        crate::session::HeadlessVendor::Claude => format!(
-                            "claude -p, {}",
-                            claude_posture_display(permission_mode.as_deref(), contained)
-                        ),
-                        crate::session::HeadlessVendor::Codex => "codex exec".to_string(),
-                        // trace:TASK-1048 | ai:claude
-                        crate::session::HeadlessVendor::Agy => "agy -p".to_string(),
-                    };
-                    eprintln!(
-                        "{} {}",
-                        crate::glyph(crate::glyphs::Glyph::FlowActive)
-                            .green()
-                            .bold(),
-                        format!(
-                            "launching {} headless in {} ({}, prompt `{}`)",
-                            headless_vendor.as_str(),
-                            lease.worktree_path.display(),
-                            launch_detail,
-                            prompt
-                        )
-                        .cyan()
-                    );
-                    // BUG-1928: name the tree the session ACTUALLY runs in (the
-                    // lease's worktree — a warm-pool tree when the pool served
-                    // one) and the contained write boundary derived from it, so
-                    // the operator never sees only the orchestrator's requested
-                    // path. trace:BUG-1928 | ai:claude
-                    // BUG-1971: both lines come from one helper, so the
-                    // boundary line reads the launch's own roots.
-                    // trace:BUG-1971 | ai:claude
-                    let phase_env = std::env::var(crate::orchestrator::PHASE_ENV).ok();
-                    for line in crate::contained_boundary::queue_work_launch_lines(
-                        phase_env.as_deref(),
-                        &lease.worktree_path,
-                        &lease.branch,
-                        contained && headless_vendor == crate::session::HeadlessVendor::Claude,
-                    ) {
-                        eprintln!(
-                            "  {} {}",
-                            crate::glyph(crate::glyphs::Glyph::InfoAlt).cyan(),
-                            line
-                        );
-                    }
-                    eprintln!(
-                        "  {} headless output → {}",
-                        crate::glyph(crate::glyphs::Glyph::InfoAlt).cyan(),
-                        log_path.display().to_string().dimmed()
-                    );
-                    // TASK-307: tee high-signal events so the operator can
-                    // follow the headless run without opening a second terminal
-                    // to tail the JSONL. Disable with `--no-tee-headless` or
-                    // `AIDA_TEE_HEADLESS=0`; failure events stream regardless.
-                    // trace:TASK-307 | ai:claude
-                    let tee_opts = headless_tee::TeeOptions::from_env_and_flag(false)
-                        .with_label(&lease.branch);
-                    // trace:BUG-2139 | ai:claude
-                    let child_grant = headless_child_grant
-                        .as_ref()
-                        .expect("BUG-2139: a fresh headless launch minted its child authority");
-                    // `exec_vendor_headless` spawns and waits (it is not an
-                    // exec). trace:TASK-2807 | ai:claude
-                    agent.starting();
-                    return session::exec_vendor_headless(
-                        host_main.as_deref(),
-                        headless_vendor,
-                        &prompt,
-                        &id,
-                        &log_path,
-                        &tee_opts,
-                        contained,
-                        Some(&lease.id),
-                        &crate::canonical_role_name(&role),
-                        child_grant,
-                        // BUG-050: the lane's seat, for the resume safety net.
-                        // trace:BUG-B6B1278890774EF993D2EBC327862470-050 | ai:claude
-                        Some((&lease.worktree_path, &lease.branch)),
-                        preclaim_orchestrator_corroborated,
-                    );
-                }
-                eprintln!(
-                    "{} {}",
-                    crate::glyph(crate::glyphs::Glyph::FlowActive)
-                        .green()
-                        .bold(),
-                    format!(
-                        "launching claude in {} ({}, prompt `{}`)",
-                        lease.worktree_path.display(),
-                        claude_posture_display(permission_mode.as_deref(), contained),
                         prompt
                     )
                     .cyan()
                 );
-                let mut cmd = session::build_claude_exec_command(
+                // trace:TASK-2712 | ai:claude — the lane's role picks its write set.
+                // trace:TASK-2032 | ai:claude — the host main pinned before the chdir.
+                return session::exec_codex_session(
                     host_main.as_deref(),
-                    permission_mode.as_deref(),
-                    name.as_deref(),
-                    Some(&prompt),
-                    Some(&id),
-                    contained,
+                    &prompt,
+                    codex_bypass,
+                    codex_read_only,
                     resolved_model.as_deref(),
                     child_grant_id.as_deref(),
-                )?;
-                crate::launch::assign_seat(
-                    &mut cmd,
-                    aida_core::launch_policy::LaunchKind::Exec,
-                    crate::launch::SeatDecision::Child {
-                        role: &crate::canonical_role_name(&role),
-                        grant: child_grant_id.as_deref().unwrap_or(""),
-                    },
-                )?;
-                crate::launch::spawn::exec_agent(&mut cmd)
+                    Some(&crate::canonical_role_name(&role)),
+                );
             }
-        }
-    };
-    let (setup_result, rolled_back) = run_pickup_launch(&project_root, setup_receipt, launch_agent);
-    // BUG-2428 / TASK-2807: a launch that failed before any agent could start
-    // launched nobody, so `run_pickup_launch` rolled back everything this
-    // invocation's setup created (worktree, branch, lease, claim and status
-    // write), and neither the tree nor the lease blocks the next attempt with
-    // "held by worktree ... before pickup setup". Any other outcome kept it.
-    // trace:BUG-2428 TASK-2807 | ai:claude
-    if rolled_back {
-        eprintln!(
+            // BUG-1607: an interactive Agy launch is now refused by
+            // `preflight_launch_vendor` above, BEFORE `session_start` minted the
+            // lease/worktree this function is already holding by this point — so
+            // `launch_vendor == Agy && !no_human` can no longer reach here. No
+            // per-arm Agy handling needed below either: `match launch` only spawns
+            // Claude.
+            debug_assert!(
+        !(launch_vendor == session::HeadlessVendor::Agy && !no_human),
+        "BUG-1607: preflight_launch_vendor must refuse an interactive Agy launch before this point"
+    );
+            match launch {
+                QueueWorkLaunch::Resume(id) => {
+                    if no_human {
+                        let log_path = project_root
+                            .join(".aida")
+                            .join("headless-logs")
+                            .join(format!("{}-{}.jsonl", lease.branch, id));
+                        eprintln!(
+                            "{} {}",
+                            crate::glyph(crate::glyphs::Glyph::FlowActive)
+                                .green()
+                                .bold(),
+                            format!(
+                                "resuming {} headless session {} in {} ({}, prompt `{}`)",
+                                launch_vendor.as_str(),
+                                &id[..id.len().min(8)],
+                                lease.worktree_path.display(),
+                                match launch_vendor {
+                                    session::HeadlessVendor::Codex =>
+                                        "codex exec resume".to_string(),
+                                    _ => format!(
+                                        "claude -p, {}",
+                                        claude_posture_display(
+                                            permission_mode.as_deref(),
+                                            contained
+                                        )
+                                    ),
+                                },
+                                prompt
+                            )
+                            .cyan()
+                        );
+                        eprintln!(
+                            "  {} headless output → {}",
+                            crate::glyph(crate::glyphs::Glyph::InfoAlt).cyan(),
+                            log_path.display().to_string().dimmed()
+                        );
+                        // BUG-342: no-human resumes must use the same structural
+                        // AskUserQuestion denial as fresh headless launches. Plain
+                        // `claude --resume` bypasses `claude_headless_resume_args`.
+                        // trace:BUG-342 | ai:codex
+                        let tee_opts = headless_tee::TeeOptions::from_env_and_flag(false)
+                            .with_label(&lease.branch);
+                        // BUG-2386: resume on the recorded vendor — a Codex thread
+                        // resumes as `codex exec resume`. trace:BUG-2386 | ai:claude
+                        let (vendor, resume_id) = match resume_target.clone() {
+                            Some(target) => target,
+                            None => crate::codex_resume::recorded_resume(
+                                &project_root,
+                                &id,
+                                Some(lease.scope.as_str()),
+                            )?,
+                        };
+                        // Counted by `AgentLaunchMark` once the child spawned:
+                        // a failed spawn launched nobody. trace:TASK-2807 | ai:claude
+                        let status = run_queue_resume_to_exit(
+                            host_main.as_deref(),
+                            &session::HeadlessResume {
+                                vendor,
+                                session_id: &id,
+                                resume_id: &resume_id,
+                            },
+                            &prompt,
+                            &log_path,
+                            &lease.worktree_path,
+                            &tee_opts,
+                            contained,
+                            // trace:BUG-1808 | ai:claude — the seat the preflight validated.
+                            &crate::canonical_role_name(&role),
+                            (&project_root, &plan.scope, &lease.id),
+                            false,
+                        )?;
+                        std::process::exit(status.code().unwrap_or(1));
+                    }
+                    eprintln!(
+                        "{} {}",
+                        crate::glyph(crate::glyphs::Glyph::FlowActive)
+                            .green()
+                            .bold(),
+                        format!(
+                            "resuming claude session {} in {} ({})",
+                            &id[..id.len().min(8)],
+                            lease.worktree_path.display(),
+                            claude_posture_display(permission_mode.as_deref(), contained)
+                        )
+                        .cyan()
+                    );
+                    let mut cmd = session::build_claude_resume_exec_command(
+                        host_main.as_deref(),
+                        &id,
+                        permission_mode.as_deref(),
+                        contained,
+                        child_grant_id.as_deref(),
+                    )?;
+                    crate::launch::assign_seat(
+                        &mut cmd,
+                        aida_core::launch_policy::LaunchKind::Resume,
+                        crate::launch::SeatDecision::Child {
+                            role: &crate::canonical_role_name(&role),
+                            grant: child_grant_id.as_deref().unwrap_or(""),
+                        },
+                    )?;
+                    crate::launch::spawn::exec_agent(&mut cmd)
+                }
+                QueueWorkLaunch::Fresh(id) => {
+                    let name = session::derive_session_name(&plan.scope, &lease.branch, &role);
+                    if no_human {
+                        // STORY-263: headless launch — `claude -p`, single-turn,
+                        // exits on its own (no Ctrl+D). `bypassPermissions` is forced
+                        // (SPIKE-7 Q2 — `acceptEdits` leaves Bash gated); the
+                        // stream-json output goes to a log file the watchdog
+                        // (TASK-298) can tail. trace:STORY-263 | ai:claude
+                        let log_path = project_root
+                            .join(".aida")
+                            .join("headless-logs")
+                            .join(format!("{}-{}.jsonl", lease.branch, id));
+                        // BUG-705: the banner names the RESOLVED headless vendor —
+                        // before, it always said claude even when the drain was
+                        // routed to codex, hiding the unrouted-exec bug.
+                        let headless_vendor = headless_vendor.unwrap_or_else(|| {
+                            crate::session::resolve_headless_vendor(&project_root)
+                        });
+                        let launch_detail = match headless_vendor {
+                            crate::session::HeadlessVendor::Claude => format!(
+                                "claude -p, {}",
+                                claude_posture_display(permission_mode.as_deref(), contained)
+                            ),
+                            crate::session::HeadlessVendor::Codex => "codex exec".to_string(),
+                            // trace:TASK-1048 | ai:claude
+                            crate::session::HeadlessVendor::Agy => "agy -p".to_string(),
+                        };
+                        eprintln!(
+                            "{} {}",
+                            crate::glyph(crate::glyphs::Glyph::FlowActive)
+                                .green()
+                                .bold(),
+                            format!(
+                                "launching {} headless in {} ({}, prompt `{}`)",
+                                headless_vendor.as_str(),
+                                lease.worktree_path.display(),
+                                launch_detail,
+                                prompt
+                            )
+                            .cyan()
+                        );
+                        // BUG-1928: name the tree the session ACTUALLY runs in (the
+                        // lease's worktree — a warm-pool tree when the pool served
+                        // one) and the contained write boundary derived from it, so
+                        // the operator never sees only the orchestrator's requested
+                        // path. trace:BUG-1928 | ai:claude
+                        // BUG-1971: both lines come from one helper, so the
+                        // boundary line reads the launch's own roots.
+                        // trace:BUG-1971 | ai:claude
+                        let phase_env = std::env::var(crate::orchestrator::PHASE_ENV).ok();
+                        for line in crate::contained_boundary::queue_work_launch_lines(
+                            phase_env.as_deref(),
+                            &lease.worktree_path,
+                            &lease.branch,
+                            contained && headless_vendor == crate::session::HeadlessVendor::Claude,
+                        ) {
+                            eprintln!(
+                                "  {} {}",
+                                crate::glyph(crate::glyphs::Glyph::InfoAlt).cyan(),
+                                line
+                            );
+                        }
+                        eprintln!(
+                            "  {} headless output → {}",
+                            crate::glyph(crate::glyphs::Glyph::InfoAlt).cyan(),
+                            log_path.display().to_string().dimmed()
+                        );
+                        // TASK-307: tee high-signal events so the operator can
+                        // follow the headless run without opening a second terminal
+                        // to tail the JSONL. Disable with `--no-tee-headless` or
+                        // `AIDA_TEE_HEADLESS=0`; failure events stream regardless.
+                        // trace:TASK-307 | ai:claude
+                        let tee_opts = headless_tee::TeeOptions::from_env_and_flag(false)
+                            .with_label(&lease.branch);
+                        // trace:BUG-2139 | ai:claude
+                        let child_grant = headless_child_grant
+                            .as_ref()
+                            .expect("BUG-2139: a fresh headless launch minted its child authority");
+                        // `exec_vendor_headless` spawns and waits (it is not an
+                        // exec). trace:TASK-2807 | ai:claude
+                        agent.starting();
+                        return session::exec_vendor_headless(
+                            host_main.as_deref(),
+                            headless_vendor,
+                            &prompt,
+                            &id,
+                            &log_path,
+                            &tee_opts,
+                            contained,
+                            Some(&lease.id),
+                            &crate::canonical_role_name(&role),
+                            child_grant,
+                            // BUG-050: the lane's seat, for the resume safety net.
+                            // trace:BUG-B6B1278890774EF993D2EBC327862470-050 | ai:claude
+                            Some((&lease.worktree_path, &lease.branch)),
+                            preclaim_orchestrator_corroborated,
+                        );
+                    }
+                    eprintln!(
+                        "{} {}",
+                        crate::glyph(crate::glyphs::Glyph::FlowActive)
+                            .green()
+                            .bold(),
+                        format!(
+                            "launching claude in {} ({}, prompt `{}`)",
+                            lease.worktree_path.display(),
+                            claude_posture_display(permission_mode.as_deref(), contained),
+                            prompt
+                        )
+                        .cyan()
+                    );
+                    let mut cmd = session::build_claude_exec_command(
+                        host_main.as_deref(),
+                        permission_mode.as_deref(),
+                        name.as_deref(),
+                        Some(&prompt),
+                        Some(&id),
+                        contained,
+                        resolved_model.as_deref(),
+                        child_grant_id.as_deref(),
+                    )?;
+                    crate::launch::assign_seat(
+                        &mut cmd,
+                        aida_core::launch_policy::LaunchKind::Exec,
+                        crate::launch::SeatDecision::Child {
+                            role: &crate::canonical_role_name(&role),
+                            grant: child_grant_id.as_deref().unwrap_or(""),
+                        },
+                    )?;
+                    crate::launch::spawn::exec_agent(&mut cmd)
+                }
+            }
+        };
+        let (setup_result, rolled_back) =
+            run_pickup_launch(&project_root, setup_receipt, launch_agent);
+        // BUG-2428 / TASK-2807: a launch that failed before any agent could start
+        // launched nobody, so `run_pickup_launch` rolled back everything this
+        // invocation's setup created (worktree, branch, lease, claim and status
+        // write), and neither the tree nor the lease blocks the next attempt with
+        // "held by worktree ... before pickup setup". Any other outcome kept it.
+        // trace:BUG-2428 TASK-2807 | ai:claude
+        if rolled_back {
+            eprintln!(
             "  no agent was launched: rolled back the {} pickup setup (worktree, lease, claim; anything kept is named above)",
             plan.scope
         );
-        return setup_result;
+            return setup_result;
+        }
+        // Advisor comment 35: a reviewer launch refused at child-seat delegation
+        // launched nobody, so its PR-N lease would only block the next pickup
+        // until --force-claim. Release it. (A setup this invocation owned was
+        // rolled back above; this covers a re-entered lease.)
+        // trace:TASK-1955 | ai:claude (advisor comment 35)
+        if release_refused_review_lease(
+            &project_root,
+            plan.review_target.is_some(),
+            minted_lease_id.as_deref(),
+            &setup_result,
+        ) {
+            eprintln!(
+                "  released the {} review lease: no reviewer was launched",
+                plan.scope
+            );
+            return setup_result;
+        }
+        // A standalone implementer's outcome (punted, held, no PR) or a reviewer
+        // that recorded no verdict is a result, not a failed setup to continue
+        // by hand. trace:STORY-1662 | ai:claude
+        if setup_result
+            .as_ref()
+            .is_err_and(pickup_failure_offers_manual_continuation)
+        {
+            eprintln!(
+                "{}",
+                // The vendor actually launched (honours `[agents] enabled`),
+                // not the raw flag/default token. trace:BUG-2396 | ai:claude
+                queue_work_manual_continuation(&plan.anchor_display, guided, launch_vendor)
+            );
+        }
+        setup_result
+    })();
+    if let Some(attempt) = &attempt {
+        attempt.finish_result(&result)?;
     }
-    // Advisor comment 35: a reviewer launch refused at child-seat delegation
-    // launched nobody, so its PR-N lease would only block the next pickup
-    // until --force-claim. Release it. (A setup this invocation owned was
-    // rolled back above; this covers a re-entered lease.)
-    // trace:TASK-1955 | ai:claude (advisor comment 35)
-    if release_refused_review_lease(
-        &project_root,
-        plan.review_target.is_some(),
-        minted_lease_id.as_deref(),
-        &setup_result,
-    ) {
-        eprintln!(
-            "  released the {} review lease: no reviewer was launched",
-            plan.scope
-        );
-        return setup_result;
+    result
+}
+
+// Bind admission to the resolved role and scope, returning the decision for
+// launch to consume even when receipt capture is disabled (for example previews).
+// trace:STORY-2690 | ai:codex
+pub(crate) fn resolve_pickup_attempt(
+    attempt: &mut Option<crate::lane_result::Attempt>,
+    plan: &QueueWorkPlan,
+    role: &str,
+    no_human: bool,
+    branch: Option<&str>,
+) -> Result<bool> {
+    let implementer_route = crate::standalone_implementer::is_standalone_implementer(
+        role,
+        plan.review_target.is_none(),
+        no_human,
+    );
+    if !implementer_route {
+        if let Some(provisional) = attempt.take() {
+            provisional.discard()?;
+        }
     }
-    // A standalone implementer's outcome (punted, held, no PR) or a reviewer
-    // that recorded no verdict is a result, not a failed setup to continue
-    // by hand. trace:STORY-1662 | ai:claude
-    if setup_result
-        .as_ref()
-        .is_err_and(pickup_failure_offers_manual_continuation)
-    {
-        eprintln!(
-            "{}",
-            // The vendor actually launched (honours `[agents] enabled`),
-            // not the raw flag/default token. trace:BUG-2396 | ai:claude
-            queue_work_manual_continuation(&plan.anchor_display, guided, launch_vendor)
-        );
+    if let Some(attempt) = attempt {
+        attempt.resolve_scope(&plan.anchor_display, branch, None)?;
     }
-    setup_result
+    Ok(implementer_route)
 }
 
 /// Advisor comment 35: release the lease `lease_id` a failed pickup minted

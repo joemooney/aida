@@ -106,6 +106,10 @@ pub enum ReviewCommand {
     /// Record `--verdict approved` after a follow-up review to clear it.
     // trace:BUG-775 | ai:claude
     Record {
+        /// Keep this approval valid only for the exact reviewed head.
+        // trace:STORY-2696 | ai:codex
+        #[arg(long)]
+        no_carry: bool,
         /// Spec the verdict applies to.
         #[clap(value_parser = crate::spec_arg::spec_id)]
         spec: String,

@@ -347,20 +347,26 @@ pub(crate) fn carry_over_at(
     change: ChangeKey,
     approved: &str,
     head: &str,
+    carry_eligible: bool,
 ) -> Option<GateEvent> {
     use super::EventBody;
     let root = store_root(start).ok()?;
     events(&root, change).into_iter().rev().find(|e| {
-        let (a, h) = match &e.body {
-            EventBody::CarryOverProof { proof, .. } => (&proof.approved_sha, &proof.new_head),
+        let (a, h, eligible) = match &e.body {
+            EventBody::CarryOverProof {
+                proof,
+                carry_eligible,
+                ..
+            } => (&proof.approved_sha, &proof.new_head, *carry_eligible),
             EventBody::CarryOverRefused {
                 approved_sha,
                 new_head,
+                carry_eligible,
                 ..
-            } => (approved_sha, new_head),
+            } => (approved_sha, new_head, *carry_eligible),
             _ => return false,
         };
-        same_reviewed_sha(a, approved) && same_reviewed_sha(h, head)
+        eligible == carry_eligible && same_reviewed_sha(a, approved) && same_reviewed_sha(h, head)
     })
 }
 

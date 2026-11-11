@@ -212,7 +212,9 @@ pub(crate) fn command(action: &AdvisorLoopsCommand) -> Result<()> {
             } else {
                 "waiting-for-supervisor"
             };
-            print_status(status, Some(&state), &review_blockers(&dir)?, *json)?;
+            let mut blockers = review_blockers(&dir)?;
+            blockers.extend(retry_blockers(&root, &dir)?);
+            print_status(status, Some(&state), &blockers, *json)?;
             Ok(())
         }
         AdvisorLoopsCommand::Rebind { deputy } => {
@@ -677,6 +679,27 @@ fn review_blockers(dir: &Directory) -> Result<Vec<String>> {
                 .map(move |a| format!("{key}:{} ({:?})", a.token, a.phase))
         })
         .collect())
+}
+
+// Exhaustion is informational and must not retain retired grants.
+// trace:BUG-2518 | ai:codex
+pub(super) fn retry_blockers(root: &Path, dir: &Directory) -> Result<Vec<String>> {
+    let Some(bytes) = dir.read(STATE)? else {
+        return Ok(Vec::new());
+    };
+    let reviews: State = serde_json::from_slice(&bytes)?;
+    let store = Store::open(root, &reviews.repository)?;
+    let mut blockers = Vec::new();
+    for (key, entry) in &reviews.entries {
+        for attempt in &entry.attempts {
+            if let Some(reason) = no_verdict_blocker(attempt) {
+                if !store.history(key)?.contains(&attempt.head) {
+                    blockers.push(format!("{key}: {reason}"));
+                }
+            }
+        }
+    }
+    Ok(blockers)
 }
 
 // Reuse the ordinary reservation recovery while holding admission.lock. A
