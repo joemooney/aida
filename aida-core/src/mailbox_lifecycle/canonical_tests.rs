@@ -159,6 +159,7 @@ fn a_live_canonical_permit_keeps_retirement_waiting_then_refusing() {
     // waits for it and then completes.
     let root = dir.path().to_path_buf();
     let retirer = std::thread::spawn(move || {
+        super::activation::FRESH_SCAN.with(|f| f.set(true));
         let patient = RetireOptions {
             quiesce_timeout: Duration::from_secs(20),
             ..RetireOptions::default()
