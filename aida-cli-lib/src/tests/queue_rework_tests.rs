@@ -6,6 +6,13 @@
 //! trace:TASK-218 | ai:claude
 // trace:BUG-2017 | ai:codex — explicit positive global-ID fixture.
 use super::*;
+use crate::{
+    handle_queue_rework, loop_guard_park, queue_destination_details,
+    queue_mutation_destination_human, queue_mutation_destination_json, resolve_rework_findings,
+    rework_is_review_shelf, rework_smart_target, rework_target_for_mode, Storage,
+};
+use aida_core::DatabaseBackend;
+use aida_core::RequirementStatus;
 
 fn queue_entry_for_test(
     user_id: &str,

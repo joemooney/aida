@@ -2,7 +2,7 @@
 //! must then emit the BARE auto-eval hint (the `aida()` function evals
 //! the binary's stdout, so `eval "$(...)"` would double-eval). Without
 //! the wrapper, the `eval "$(...)"` form is required. trace:TASK-667
-use super::eval_subcommand_hint;
+use crate::eval_subcommand_hint;
 
 // Single test (not split) so the two branches mutate AIDA_SHELL_WRAPPER
 // sequentially — env vars are process-global and tests run in parallel. The

@@ -592,6 +592,66 @@ pub(crate) fn hold_release_admitted(
     })
 }
 
+/// CI matrix identity from the existing check snapshot. Summary and ancillary
+/// jobs (including Release) must never increase the shard denominator.
+// trace:TASK-3782 | ai:codex
+fn train_ci_is_shard(row: &crate::ci_gate::CheckRow) -> bool {
+    row.workflow == "CI" && row.name.starts_with("CI (") && row.name.ends_with(')')
+}
+
+/// Cosmetic progress from the same snapshot used for readiness. No forge reads.
+/// Shards are the CI workflow's matrix checks; Release and other checks are
+/// ancillary and never enter the shard denominator.
+// trace:TASK-3782 | ai:codex
+fn train_ci_wait_details(rows: &[crate::ci_gate::CheckRow]) -> Vec<String> {
+    let runs: std::collections::BTreeSet<_> =
+        rows.iter().filter_map(|r| r.run_id.as_deref()).collect();
+    runs.into_iter()
+        .map(|run| {
+            let checks: Vec<_> = rows
+                .iter()
+                .filter(|r| r.run_id.as_deref() == Some(run))
+                .collect();
+            let shards: Vec<_> = checks
+                .iter()
+                .copied()
+                .filter(|row| train_ci_is_shard(row))
+                .collect();
+            let passed = shards.iter().filter(|r| r.bucket == "pass").count();
+            let is_ci_run = checks.iter().any(|r| r.workflow == "CI");
+            let mut parts = if is_ci_run {
+                vec![format!(
+                    "run {run}: {passed}/{} shards passed",
+                    shards.len()
+                )]
+            } else {
+                vec![format!("run {run}")]
+            };
+            for row in checks {
+                if row.workflow == "CI"
+                    && crate::ci_gate::check_name_eq(&row.name, "Build (ubuntu-latest)")
+                {
+                    parts.push(format!("Build summary: {}", row.bucket));
+                } else if train_ci_is_shard(row) {
+                    parts.push(format!("{}: {}", row.name, row.bucket));
+                } else {
+                    parts.push(format!("ancillary {}: {}", row.name, row.bucket));
+                }
+            }
+            if is_ci_run
+                && !rows.iter().any(|r| {
+                    r.run_id.as_deref() == Some(run)
+                        && r.workflow == "CI"
+                        && crate::ci_gate::check_name_eq(&r.name, "Build (ubuntu-latest)")
+                })
+            {
+                parts.push("Build summary appears after all shards finish".into());
+            }
+            parts.join("; ")
+        })
+        .collect()
+}
+
 /// Required presence is checked before any informational or hold exception.
 // trace:BUG-2401 | ai:codex
 #[derive(Debug, PartialEq, Eq)]
@@ -649,7 +709,13 @@ fn train_ci_readiness(
             return TrainCiReadiness::Pending(
                 missing
                     .into_iter()
-                    .map(|n| format!("{n} (not registered yet)"))
+                    .map(|n| {
+                        if crate::ci_gate::check_name_eq(&n, "Build (ubuntu-latest)") {
+                            "Build summary appears after all shards finish".into()
+                        } else {
+                            format!("waiting for {n} to register")
+                        }
+                    })
                     .collect(),
             );
         }
@@ -784,7 +850,23 @@ fn wait_train_ci(
             }
             waiting => waiting,
         };
-        println!("  train PR #{pr} CI waiting: {waiting:?}");
+        // trace:TASK-3782 | ai:codex
+        match &waiting {
+            TrainCiReadiness::Pending(names) | TrainCiReadiness::Missing(names) => {
+                let display: Vec<_> = names
+                    .iter()
+                    .map(|name| {
+                        if crate::ci_gate::check_name_eq(name, "Build (ubuntu-latest)") {
+                            "Build summary appears after all shards finish".to_string()
+                        } else {
+                            name.clone()
+                        }
+                    })
+                    .collect();
+                println!("  train PR #{pr} CI waiting: {}", display.join("; "))
+            }
+            _ => println!("  train PR #{pr} CI waiting: checks have not registered"),
+        }
         // An empty row set is normal immediately after opening the PR.
         // trace:BUG-2423 | ai:codex
         if waiting == TrainCiReadiness::Unregistered {
@@ -2441,6 +2523,16 @@ impl LiveTrainForge<'_> {
         // trace:BUG-2401 | ai:claude
         let admitted = hold_release_admitted(&rows, cars, labels);
         let state = train_ci_readiness(&rows, required, &cfg, admitted);
+        // Detail is informational and cannot replace the pinned readiness proof.
+        // trace:TASK-3782 | ai:codex
+        if matches!(
+            state,
+            TrainCiReadiness::Pending(_) | TrainCiReadiness::Missing(_)
+        ) {
+            for detail in train_ci_wait_details(&rows) {
+                println!("  train PR #{} CI waiting: {detail}", change.id);
+            }
+        }
         assert_head()?;
         self.dispatch_check()?;
         Ok(state)
