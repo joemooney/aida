@@ -13777,8 +13777,8 @@ Commands:
             (missing, malformed, or revoked). No grant at all, or an implementer grant, is never
             refused
   status    Show this session's seat grant (seat, expiry, the processes it is bound to, and whether
-            and how this process may present it: by its session key or by process) and this
-            session's agent harness pid for `aida role enter <seat> --bind-pid`. Read-only; always
+            and how this process may present it: by its session key or by process), its
+            informational agent harness pid, and managed-agent renewal guidance. Read-only; always
             exits 0
   end       Deactivate the current role (state preserved). Outputs shell code: `eval "$(aida role
             end)"`
@@ -13850,7 +13850,9 @@ Options:
           shows a session's harness pid). Prints the grant id for that session to export and leaves
           this shell's role unchanged. Binds the process only: that session's hooks and MCP server
           can present the grant, but not its sandboxed tool calls, which need a session started from
-          a role shell
+          a role shell. The grant remains issued to the invoking user; this does not renew a managed
+          agent's child grant. Renew the parent role at the operator's terminal and relaunch through
+          the agent's launcher
 
       --format <FORMAT>
           Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
@@ -14077,8 +14079,8 @@ Options:
           Print help (see a summary with '-h')
 ===== aida role status
 Show this session's seat grant (seat, expiry, the processes it is bound to, and whether and how this
-process may present it: by its session key or by process) and this session's agent harness pid for
-`aida role enter <seat> --bind-pid`. Read-only; always exits 0
+process may present it: by its session key or by process), its informational agent harness pid, and
+managed-agent renewal guidance. Read-only; always exits 0
 
 Usage: aida role status [OPTIONS]
 
@@ -20620,7 +20622,7 @@ Commands:
   runtime-policy  Print the runtime descriptor embedded in this binary. No launch authority
   probe           Run the fixed, model-free filesystem/supervisor containment tracer. This does not
                   enable vendor launches or change permission policy
-  show            Show the resolved per-agent posture and diagnostics. Read-only
+  show            Show a compact per-agent permission summary. Read-only
   set             Apply a named agent permission posture to local or user config files. `bypass`
                   must be confirmed by a person at an interactive terminal; it is refused when stdin
                   or stdout is not a terminal
@@ -20727,13 +20729,16 @@ Options:
   -h, --help
           Print help (see a summary with '-h')
 ===== aida config permissions show
-Show the resolved per-agent posture and diagnostics. Read-only
+Show a compact per-agent permission summary. Read-only
 
 Usage: aida config permissions show [OPTIONS]
 
 Options:
       --json
           Emit machine-readable JSON
+
+  -v, --verbose
+          Include launch flags, scope, findings and full refusal diagnostics
 
       --format <FORMAT>
           Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
@@ -45749,7 +45754,7 @@ Working on aida itself
       {
         "name": "bind-pid",
         "takes_value": true,
-        "help": "Bind the grant to another running session instead of this terminal: the pid of that session's agent harness (claude, codex, agy) or shell, owned by you (`aida role status` shows a session's harness pid). Prints the grant id for that session to export and leaves this shell's role unchanged. Binds the process only: that session's hooks and MCP server can present the grant, but not its sandboxed tool calls, which need a session started from a role shell"
+        "help": "Bind the grant to another running session instead of this terminal: the pid of that session's agent harness (claude, codex, agy) or shell, owned by you (`aida role status` shows a session's harness pid). Prints the grant id for that session to export and leaves this shell's role unchanged. Binds the process only: that session's hooks and MCP server can present the grant, but not its sandboxed tool calls, which need a session started from a role shell. The grant remains issued to the invoking user; this does not renew a managed agent's child grant. Renew the parent role at the operator's terminal and relaunch through the agent's launcher"
       },
       {
         "name": "canonical-ids",
@@ -46027,7 +46032,7 @@ Working on aida itself
       "role",
       "status"
     ],
-    "about": "Show this session's seat grant (seat, expiry, the processes it is bound to, and whether and how this process may present it: by its session key or by process) and this session's agent harness pid for `aida role enter <seat> --bind-pid`. Read-only; always exits 0",
+    "about": "Show this session's seat grant (seat, expiry, the processes it is bound to, and whether and how this process may present it: by its session key or by process), its informational agent harness pid, and managed-agent renewal guidance. Read-only; always exits 0",
     "flags": [
       {
         "name": "canonical-ids",
@@ -52792,7 +52797,7 @@ Working on aida itself
       "permissions",
       "show"
     ],
-    "about": "Show the resolved per-agent posture and diagnostics. Read-only",
+    "about": "Show a compact per-agent permission summary. Read-only",
     "flags": [
       {
         "name": "canonical-ids",
@@ -52813,6 +52818,11 @@ Working on aida itself
         "name": "json",
         "takes_value": false,
         "help": "Emit machine-readable JSON"
+      },
+      {
+        "name": "verbose",
+        "takes_value": false,
+        "help": "Include launch flags, scope, findings and full refusal diagnostics"
       }
     ],
     "hidden": true
