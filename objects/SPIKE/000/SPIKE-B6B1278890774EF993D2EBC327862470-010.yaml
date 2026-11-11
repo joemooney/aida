@@ -13,12 +13,12 @@ description: |-
   Then summarise: counts per class; the first porcelain-views batch (the read-only commands with the fewest helper dependencies, about 20); which helpers block the most moves; and any command whose class surprised you (a 'read' that writes, such as a cache refresh or a usage log).
   Use rg to confirm any 'no callers' result from codegraph. Do this after TASK-3428 batch 5 (#3829) lands if possible, since glob imports hide edges; otherwise list the glob-importing files as lower-bound rows.
   Acceptance: (1) every REGISTRY entry has a row with class and evidence; (2) every core-write or authority row cites at least one writer or gate site; (3) the first porcelain batch is named with its blocking helpers; (4) the doc states its commit and method so it can be re-run.
-status: NeedsAttention
+status: Approved
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-11T05:40:53.335487241Z
-modified_at: 2026-11-11T06:40:08.395821339Z
+modified_at: 2026-11-11T06:43:55.610069277Z
 req_type: Spike
 tags:
 - architecture
@@ -49,6 +49,13 @@ comments:
     Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
   created_at: 2026-11-11T06:27:11.779552293Z
   modified_at: 2026-11-11T06:27:11.779552293Z
+  session_id: 01a1c87f-970d-7ce0-9351-e4e75a87731e
+  harness_version: 2.1.322 (Claude Code)
+- id: 01a1c959-4e5a-7a02-93f6-31479d64dc25
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Full sweep: SPIKE-714 AC1-AC3 unverified; AC4 verified by pinned source/method. SPIKE-714 (spike protocol): met (dated docs/spikes reports in diff). Closure truncation corrected; classification, dependency/placement audit and first batch remain incomplete. CI pending at review time.. It was punted on: missing-context: Round 2: accept, do not dispute, review items 1-3: all 167 classifications/writer-gate evidence, full dependency/visibility/stage/home analysis, and first porcelain batch remain incomplete. Required reviewed codegraph client /home/joe/ai/aida/.codegraph/proxy-state/bin/codegraph is absent; aida doctor check codegraph reports codegraph,missing. Host must deploy the reviewed client and supply its absolute path/shared main index. Advisor must clarify classification of direct cli-lib coordination/cache writers versus writes-through-core. Item 4 fixed: all three closure handlers retained in full, four Python regression tests pass; source-grounded partial evidence and recovery in docs/spikes/2026-11-11-command-inventory-round-2.md. Native seat leaves edits uncommitted; no completion or publication requested.. No triage reason was given.'
+  created_at: 2026-11-11T06:43:55.610065593Z
+  modified_at: 2026-11-11T06:43:55.610065593Z
   session_id: 01a1c87f-970d-7ce0-9351-e4e75a87731e
   harness_version: 2.1.322 (Claude Code)
 history:
@@ -140,6 +147,15 @@ history:
   author: joe
   timestamp: 2026-11-11T06:40:08.510268106Z
   changes: []
+- id: 01a1c959-4e5a-7a02-93f6-313aab985be4
+  author: joe
+  timestamp: 2026-11-11T06:43:55.610030493Z
+  session_id: 01a1c87f-970d-7ce0-9351-e4e75a87731e
+  harness_version: 2.1.322 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 execution_mode: drain
 filed_at:
   code_sha: eb1b39c30c9f9f6ce3f5ccf1c5ffd8966e5f8a23
@@ -150,17 +166,4 @@ filed_at:
   vendor: claude
   session: 01a1c87f-970d-7ce0-9351-e4e75a87731e
   harness_version: 2.1.322 (Claude Code)
-attention_reason:
-  category: missing-context
-  detail: 'Round 2: accept, do not dispute, review items 1-3: all 167 classifications/writer-gate evidence, full dependency/visibility/stage/home analysis, and first porcelain batch remain incomplete. Required reviewed codegraph client /home/joe/ai/aida/.codegraph/proxy-state/bin/codegraph is absent; aida doctor check codegraph reports codegraph,missing. Host must deploy the reviewed client and supply its absolute path/shared main index. Advisor must clarify classification of direct cli-lib coordination/cache writers versus writes-through-core. Item 4 fixed: all three closure handlers retained in full, four Python regression tests pass; source-grounded partial evidence and recovery in docs/spikes/2026-11-11-command-inventory-round-2.md. Native seat leaves edits uncommitted; no completion or publication requested.'
-  raised_by: implementer
-  raised_at: 2026-11-11T06:34:35.794120296Z
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: 'Full sweep: SPIKE-714 AC1-AC3 unverified; AC4 verified by pinned source/method. SPIKE-714 (spike protocol): met (dated docs/spikes reports in diff). Closure truncation corrected; classification, dependency/placement audit and first batch remain incomplete. CI pending at review time.'
-  recovery_hint: address the review findings, move SPIKE-714 back to In Progress, and clear the PR hold only after approval
-  shelved_by: reviewer
-  shelved_at: 2026-11-11T06:40:08.395821339Z
 human_only: true
