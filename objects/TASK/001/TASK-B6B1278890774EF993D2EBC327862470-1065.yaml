@@ -1,0 +1,21 @@
+id: 01a1ca8b-3f80-76c1-bca5-331c4c0e47e1
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-1065
+agreed_id: TASK-3785
+title: 'Crate-split PR8: gate downward-only dependency ratchet'
+description: 'Per SPIKE-713 (docs/plans/2026-11-07-aida-cli-lib-crate-split-deep-dive.md) section 7 row 8. Acceptance: (1) a Python ratchet shaped like scripts/check-exec-context.py counts gate -> {pr_cmd, session, seat_clone, queue_cmd, auto_complete, awaiting_you, orchestrator, pr_ship, pr_train, drain_lock, drain_state, store_sync, merge_hold} item edges with a checked-in ceiling at today''s count (about 144); (2) wired into make check-ci-fast and the CI Build job; (3) the ceiling can only decrease; (4) burn-down PRs that move functions into gate or behind traits are filed as children once the ratchet lands.'
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-11T12:18:05.824589631Z
+modified_at: 2026-11-11T12:18:05.824589631Z
+req_type: Task
+filed_at:
+  code_sha: 11b131dfe3341e6d9c7127d64370f91366094711
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 11b131dfe33
+  vendor: claude
+  session: 01a1ca83-fabb-7663-852c-12c78d4e097f
+  harness_version: 2.1.322 (Claude Code)
