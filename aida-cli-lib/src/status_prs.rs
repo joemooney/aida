@@ -1904,6 +1904,7 @@ pub(crate) fn parse_pr_head_state_snapshot(json: &str) -> Option<PrHeadStateSnap
 /// `?`. Counts FAILURE/CANCELLED/TIMED_OUT/ACTION_REQUIRED as fail,
 /// IN_PROGRESS/QUEUED/PENDING as pending; SUCCESS only when every check
 /// reports success.
+// trace:BUG-2492 | ai:codex
 pub(crate) fn summarize_status_check_rollup(checks: &[serde_json::Value]) -> String {
     if checks.is_empty() {
         return "?".to_string();
@@ -1917,6 +1918,7 @@ pub(crate) fn summarize_status_check_rollup(checks: &[serde_json::Value]) -> Str
         let conclusion = c
             .get("conclusion")
             .and_then(|v| v.as_str())
+            .or_else(|| c.get("state").and_then(|v| v.as_str()))
             .unwrap_or("")
             .to_uppercase();
         let status = c
@@ -1926,7 +1928,8 @@ pub(crate) fn summarize_status_check_rollup(checks: &[serde_json::Value]) -> Str
             .to_uppercase();
         match conclusion.as_str() {
             "SUCCESS" => passed += 1,
-            "FAILURE" | "CANCELLED" | "TIMED_OUT" | "ACTION_REQUIRED" => has_fail = true,
+            "FAILURE" | "ERROR" | "CANCELLED" | "TIMED_OUT" | "ACTION_REQUIRED" => has_fail = true,
+            "PENDING" | "EXPECTED" => has_pending = true,
             _ => {
                 if matches!(status.as_str(), "IN_PROGRESS" | "QUEUED" | "PENDING") {
                     has_pending = true;
@@ -4777,3 +4780,24 @@ pub(crate) fn work_spec_id_from_branch(branch: &str) -> Option<String> {
 #[cfg(test)]
 #[path = "tests/is_work_spec_branch_name_tests.rs"]
 mod is_work_spec_branch_name_tests;
+
+// trace:BUG-2492 | ai:codex
+#[cfg(test)]
+mod bug2492_status_context_tests {
+    #[test]
+    fn bug2492_status_context_rollup() {
+        for (state, expected) in [
+            ("SUCCESS", "pass"),
+            ("FAILURE", "fail"),
+            ("ERROR", "fail"),
+            ("PENDING", "pending"),
+            ("EXPECTED", "pending"),
+        ] {
+            let rows = vec![
+                serde_json::json!({"status":"COMPLETED","conclusion":"SUCCESS","name":"Build"}),
+                serde_json::json!({"__typename":"StatusContext","context":"merge-hold-gate","state":state}),
+            ];
+            assert_eq!(super::summarize_status_check_rollup(&rows), expected);
+        }
+    }
+}

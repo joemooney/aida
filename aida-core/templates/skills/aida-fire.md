@@ -288,13 +288,18 @@ to back on greens computed against an older main; train them.
 ### 6. Wait without polling
 
 For each PR in flight, start **one background watcher** that exits on a
-terminal state, then act on its notification. Do not loop `gh pr checks` in
+terminal state or a 540-second timeout, then act on its notification. Do not loop `gh pr checks` in
 the foreground:
 
 ```bash
 # run_in_background: true
-gh pr checks N --watch --fail-fast >/dev/null 2>&1; gh pr view N --json number,mergeStateStatus,statusCheckRollup --jq '{n:.number,state:.mergeStateStatus}'
+timeout 540 gh pr checks N --watch --fail-fast >/dev/null 2>&1; gh pr view N --json number,mergeStateStatus,statusCheckRollup --jq '{n:.number,state:.mergeStateStatus}'
 ```
+
+<!-- trace:BUG-2492 | ai:codex -->
+A timeout (exit 124) is a bounded snapshot, not CI failure. Inspect hold labels
+and the current checks; report a pending merge hold and stop for clearance.
+If ordinary CI is still running, start another bounded watcher.
 
 After every merge wave, also watch **main**:
 

@@ -1489,8 +1489,8 @@ fn interactive_claude_context(
         Some(cwd) => cwd,
         None => std::env::current_dir()?,
     };
-    Ok(crate::launch::LaunchContext::resolve(
-        crate::launch::LaunchRequest {
+    Ok({
+        let req = crate::launch::LaunchRequest {
             vendor: aida_core::launch_policy::LaunchVendor::Claude,
             kind,
             program: program.into(),
@@ -1500,8 +1500,11 @@ fn interactive_claude_context(
             cwd,
             set_cwd: false,
             host_main: host_main.map(Path::to_path_buf),
-        },
-    )?)
+        };
+        // trace:STORY-2538 | ai:codex
+        let exec = crate::session::capture_launch_exec(&req.cwd, req.host_main.as_deref())?;
+        crate::launch::LaunchContext::resolve(&exec, req)
+    }?)
 }
 
 /// BUG-2169 S2: an interactive contained `claude` runs inside the
@@ -2303,8 +2306,8 @@ pub(crate) fn headless_launch_context(
     args: Vec<String>,
     posture: ContainmentPosture,
 ) -> Result<crate::launch::LaunchContext> {
-    Ok(crate::launch::LaunchContext::resolve(
-        crate::launch::LaunchRequest {
+    Ok({
+        let req = crate::launch::LaunchRequest {
             vendor: crate::launch::context::launch_vendor(vendor),
             kind: aida_core::launch_policy::LaunchKind::Fresh,
             program: program.into(),
@@ -2315,8 +2318,11 @@ pub(crate) fn headless_launch_context(
             set_cwd: false,
             // trace:TASK-2032 | ai:claude
             host_main: host_main.map(Path::to_path_buf),
-        },
-    )?)
+        };
+        // trace:STORY-2538 | ai:codex
+        let exec = crate::session::capture_launch_exec(&req.cwd, req.host_main.as_deref())?;
+        crate::launch::LaunchContext::resolve(&exec, req)
+    }?)
 }
 
 /// End the registry row of the headless session `session_id`, which ran from
@@ -2850,20 +2856,25 @@ pub(crate) fn build_codex_session_command(
     model: Option<&str>,
     grant_id: Option<&str>,
 ) -> Result<std::process::Command> {
-    let ctx = crate::launch::LaunchContext::resolve(crate::launch::LaunchRequest {
-        vendor: aida_core::launch_policy::LaunchVendor::Codex,
-        kind: aida_core::launch_policy::LaunchKind::Exec,
-        program: "codex".into(),
-        // Launcher-owned posture switches; prompt/model are values, not a
-        // default_flags or operator template tail. trace:STORY-2326 | ai:codex
-        args: codex_interactive_session_args(initial_prompt, bypass, read_only, model),
-        tail: Vec::new(),
-        posture: ContainmentPosture::None,
-        cwd: std::env::current_dir()?,
-        set_cwd: false,
-        // Native/None constructors do not cross the AIDA boundary.
-        host_main: None,
-    })?;
+    let ctx = {
+        let req = crate::launch::LaunchRequest {
+            vendor: aida_core::launch_policy::LaunchVendor::Codex,
+            kind: aida_core::launch_policy::LaunchKind::Exec,
+            program: "codex".into(),
+            // Launcher-owned posture switches; prompt/model are values, not a
+            // default_flags or operator template tail. trace:STORY-2326 | ai:codex
+            args: codex_interactive_session_args(initial_prompt, bypass, read_only, model),
+            tail: Vec::new(),
+            posture: ContainmentPosture::None,
+            cwd: std::env::current_dir()?,
+            set_cwd: false,
+            // Native/None constructors do not cross the AIDA boundary.
+            host_main: None,
+        };
+        // trace:STORY-2538 | ai:codex
+        let exec = crate::session::capture_launch_exec(&req.cwd, req.host_main.as_deref())?;
+        crate::launch::LaunchContext::resolve(&exec, req)
+    }?;
     let mut cmd = crate::launch::spawn_agent(&ctx)?;
     crate::launch::assign_seat(
         &mut cmd,
@@ -2919,19 +2930,24 @@ pub fn exec_codex_session(
             args = codex_read_only_args(args);
         }
         // trace:STORY-2326 | ai:codex
-        let ctx = crate::launch::LaunchContext::resolve(crate::launch::LaunchRequest {
-            vendor: aida_core::launch_policy::LaunchVendor::Codex,
-            kind: aida_core::launch_policy::LaunchKind::Exec,
-            program: "codex".into(),
-            // Native sandbox/MCP flags and codex_session_args are generated
-            // here by trusted composers; no caller argv tail is accepted.
-            args,
-            tail: Vec::new(),
-            posture,
-            cwd: headless_worktree_root(),
-            set_cwd: false,
-            host_main: host_main.map(Path::to_path_buf),
-        })?;
+        let ctx = {
+            let req = crate::launch::LaunchRequest {
+                vendor: aida_core::launch_policy::LaunchVendor::Codex,
+                kind: aida_core::launch_policy::LaunchKind::Exec,
+                program: "codex".into(),
+                // Native sandbox/MCP flags and codex_session_args are generated
+                // here by trusted composers; no caller argv tail is accepted.
+                args,
+                tail: Vec::new(),
+                posture,
+                cwd: headless_worktree_root(),
+                set_cwd: false,
+                host_main: host_main.map(Path::to_path_buf),
+            };
+            // trace:STORY-2538 | ai:codex
+            let exec = crate::session::capture_launch_exec(&req.cwd, req.host_main.as_deref())?;
+            crate::launch::LaunchContext::resolve(&exec, req)
+        }?;
         let mut cmd = crate::launch::spawn_agent(&ctx)?;
         crate::launch::assign_seat(
             &mut cmd,
@@ -3314,18 +3330,23 @@ pub(crate) fn spawn_reviewer_launch_plan_granted(
     };
     // The boundary (the contained mailbox) is set up before the grant exists.
     // trace:STORY-2326 | ai:claude
-    let ctx = crate::launch::LaunchContext::resolve(crate::launch::LaunchRequest {
-        vendor: crate::launch::context::launch_vendor(plan.vendor),
-        kind: aida_core::launch_policy::LaunchKind::Fresh,
-        program: plan.program.clone().into(),
-        args: plan.args.clone(),
-        tail: Vec::new(),
-        posture,
-        cwd: std::env::current_dir()?,
-        set_cwd: false,
-        // trace:TASK-2032 | ai:claude
-        host_main: plan.host_main.clone(),
-    })?;
+    let ctx = {
+        let req = crate::launch::LaunchRequest {
+            vendor: crate::launch::context::launch_vendor(plan.vendor),
+            kind: aida_core::launch_policy::LaunchKind::Fresh,
+            program: plan.program.clone().into(),
+            args: plan.args.clone(),
+            tail: Vec::new(),
+            posture,
+            cwd: std::env::current_dir()?,
+            set_cwd: false,
+            // trace:TASK-2032 | ai:claude
+            host_main: plan.host_main.clone(),
+        };
+        // trace:STORY-2538 | ai:codex
+        let exec = crate::session::capture_launch_exec(&req.cwd, req.host_main.as_deref())?;
+        crate::launch::LaunchContext::resolve(&exec, req)
+    }?;
     let mut cmd = crate::launch::spawn_agent(&ctx)?;
     // A contained reviewer's tool calls run in a sandbox, where only a
     // keyring-held key presents its grant: refuse before the review is spent.
@@ -4192,6 +4213,53 @@ pub(crate) fn process_contained() -> bool {
         _ => current,
     };
     raw.is_some_and(|raw| parse_aida_contained(&raw.to_string_lossy()).unwrap_or(true))
+}
+
+/// Capture launch inputs before resolution. Preserve the parent's inherited
+/// containment when this process has exported a different child posture.
+// trace:STORY-2538 | ai:codex
+pub(crate) fn capture_launch_exec(
+    project_root: &Path,
+    authority_root: Option<&Path>,
+) -> Result<aida_core::exec_context::ExecContext> {
+    use aida_core::exec_context::{Environment, ExecContext, SystemClock, ToolPaths};
+    let environment = Environment::capture();
+    if let Some(raw) = environment.get("AIDA_CONTAINED") {
+        parse_aida_contained(&raw.to_string_lossy())?;
+    }
+    let current = environment
+        .get("AIDA_CONTAINED")
+        .map(std::ffi::OsStr::to_os_string);
+    let inherited = {
+        let applied = CONTAINED_ENV_APPLIED
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        match applied.as_ref() {
+            Some((inherited, set)) if *set == current => inherited.clone(),
+            _ => current,
+        }
+    };
+    // Match process_contained's legacy shared-test-process isolation. Production
+    // always uses the captured inherited marker above.
+    #[cfg(test)]
+    let inherited =
+        if !crate::test_env::holds_env_lock() && !crate::test_env::is_path_isolated_process() {
+            None
+        } else {
+            inherited
+        };
+    let tools = ToolPaths::new(
+        environment.get("PATH").map(std::ffi::OsStr::to_os_string),
+        [],
+    );
+    Ok(ExecContext::new(
+        environment.with_value("AIDA_CONTAINED", inherited),
+        crate::home_dir(),
+        project_root.to_path_buf(),
+        authority_root.unwrap_or(project_root).to_path_buf(),
+        tools,
+        std::sync::Arc::new(SystemClock::default()),
+    ))
 }
 
 /// The pure parse behind [`aida_contained_env`].

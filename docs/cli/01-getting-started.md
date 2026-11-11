@@ -14,6 +14,8 @@ A command reference for agents and operators: initialize the project, then captu
 
 **Reach for it when** — you're starting AIDA in a repo for the first time, *after* `git init` (AIDA's store needs a git repo to live in).
 
+From a workspace containing multiple projects, run `aida init my-project --git-init` to create a new project subdirectory and initialize there. The positional directory bootstrap creates the directory if absent, initializes its own Git repository and first commit, and runs AIDA setup inside it; it also accepts an existing empty directory. The workspace parent and neighboring projects are left alone. The positional bootstrap already implies Git initialization; `--git-init` also supports initialization in place when no directory is supplied. <!-- trace:STORY-2700 | ai:codex -->
+
 **Don't reach for it when** — you only want to inspect existing state or refresh installed template packs. Use the relevant read command or documented `--refresh` workflow. Before running setup in an existing clone, inspect its attachment and adoption mode; `--force` can overwrite files. The deprecated `--centralized` path is for legacy SQLite-canonical projects, not the default route.
 
 **Key options (rationale only).**
