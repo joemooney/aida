@@ -831,6 +831,7 @@ mod loop_tests {
 
     // Reap actual asynchronous children, rather than simulating record_failure calls.
     // trace:STORY-2691 | ai:codex
+    #[cfg(target_os = "linux")]
     #[test]
     fn story2691_failed_dispatch_children_raise_a_durable_alert() {
         let temp = tempfile::tempdir().unwrap();
