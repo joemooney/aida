@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-09T01:58:39.064485765Z
-modified_at: 2026-11-10T21:11:15.382732236Z
+modified_at: 2026-11-11T03:39:14.003015815Z
 req_type: Story
 tags:
 - area:orchestration
@@ -108,6 +108,21 @@ comments:
   modified_at: 2026-11-10T21:11:15.382732236Z
   session_id: 01a1c73c5e9e
   harness_version: codex-cli 0.167.0
+- id: 01a1c8b0-36d3-7fd1-98d8-996829315270
+  author: joe
+  content: |-
+    CI FAILURES at 19f4fc23aeff (run 42949134978). Fix exactly these before pushing; a push without a code change for them will fail again and must not be made:
+    error: test run failed
+            FAIL  aida-cli-lib status_sections::queue_work_tests::requeued_dependent_still_skipped_by_blocked_by_gate
+            FAIL  aida-cli::story_1662_queue_work_wiring cap_refusal_exits_34_and_leaves_no_lease_worktree_or_queue_row
+            FAIL  aida-cli::story_1662_queue_work_wiring live_legacy_slot_refuses_before_setup
+        thread 'cap_refusal_exits_34_and_leaves_no_lease_worktree_or_queue_row' (173297) panicked at aida-cli/tests/story_1662_queue_work_wiring.rs:209:5:
+        thread 'live_legacy_slot_refuses_before_setup' (175975) panicked at aida-cli/tests/story_1662_queue_work_wiring.rs:209:5:
+        thread 'status_sections::queue_work_tests::requeued_dependent_still_skipped_by_blocked_by_gate' (344984) panicked at aida-cli-lib/src/tests/queue_work_tests.rs:4072:6:
+  created_at: 2026-11-11T03:39:14.003015815Z
+  modified_at: 2026-11-11T03:39:14.003015815Z
+  session_id: 01a1c70f-d731-7b70-acf8-e9ab3d288fca
+  harness_version: 2.1.322 (Claude Code)
 history:
 - id: 01a1c5dd-0795-7ee0-b474-74b907f4c43a
   author: joe
