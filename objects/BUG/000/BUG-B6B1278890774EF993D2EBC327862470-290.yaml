@@ -3,13 +3,21 @@ spec_id: BUG-b6b1278890774ef993d2ebc327862470-290
 agreed_id: BUG-2525
 title: A WAITING review verdict on a merged Refs-only batch PR never closes, so the spec's next batch lane is refused
 description: 'Observed 2026-11-11 for TASK-3448 and TASK-3428 (crate split, delivered as Refs-only batches): ''aida queue work TASK-3448 --no-human'' refuses with ''TASK-3448: WAITING - ... WAITING on GitHub Actions CI run 42732867418 ... Resume with a fresh review at the current head'' although that batch''s PR merged long ago and no PR is open for the spec. Cause: queue_cmd/work.rs refuse_waiting_review admits only when verdict.is_closed() (closed_by_merge); close_verdict_on_merge runs only in db_reconcile when a spec flips Done->Completed, which a Refs-only batch never causes. Fix: when the verdict''s reviewed PR/head is merged (or closed), treat it as closed; close it at merge detection for Refs-only PRs too. Acceptance: a test where a spec''s WAITING verdict names a merged PR and no open PR exists, and queue work admits the next batch; the TASK-3448/TASK-3428 verdicts are closed by the fix. Blocks EPIC-613 crate-split completion.'
-status: Approved
+status: InProgress
 priority: High
-owner: ''
+owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-11T14:11:33.148855447Z
-modified_at: 2026-11-11T14:11:33.148855447Z
+modified_at: 2026-11-11T14:59:08.877543259Z
 req_type: Bug
+history:
+- id: 01a1cb1e-b1cd-7183-8b51-05e72f878612
+  author: aida-session-start
+  timestamp: 2026-11-11T14:59:08.877542393Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: 11b131dfe3341e6d9c7127d64370f91366094711
   branch: main
