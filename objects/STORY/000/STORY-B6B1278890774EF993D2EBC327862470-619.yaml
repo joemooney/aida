@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-09T23:18:35.052711129Z
-modified_at: 2026-11-11T04:24:43.141964836Z
+modified_at: 2026-11-11T04:30:57.015052782Z
 req_type: Story
 comments:
 - id: 01a1c5dc-7b38-79a0-b14b-a53401fc1b6e
@@ -246,6 +246,13 @@ comments:
   content: 'Round 4 sketch: retain displaced identified acts even for immediate semantic repeats, while preserving the idempotent recording outcome. This repairs append-identity supersession for stale aliases after a later carry policy change. Existing signed publication schema v2 and carry_eligible-aware proof-cache key remain unchanged; no new authority surface or schema bump is needed for this repair. Regression will persist A(no-carry), B(no-carry), C(eligible) and check stale A plus C in both orders for spec and PR keys.'
   created_at: 2026-11-11T04:24:43.141964836Z
   modified_at: 2026-11-11T04:24:43.141964836Z
+  session_id: 01a1c8d96e3b
+  harness_version: codex-cli 0.167.0
+- id: 01a1c8df-8ff7-7532-9483-070dbd6e83ed
+  author: dirtlab
+  content: 'Round 4 finding 1 addressed: attested semantic repeats retain the displaced act in append history, while record_outcome still reports Unchanged. The regression actually persists A(no-carry), B(no-carry with distinct timestamp/receipt), C(eligible), then verifies stale A plus C in both corpus orders for spec and PR source keys after a clean base merge. Validation: 14 STORY-2696 tests and 93 review_verdict_tests passed via lane runner. Changes remain uncommitted for host publication; reviewed codegraph client is absent at the supplied path.'
+  created_at: 2026-11-11T04:30:57.015052782Z
+  modified_at: 2026-11-11T04:30:57.015052782Z
   session_id: 01a1c8d96e3b
   harness_version: codex-cli 0.167.0
 history:
