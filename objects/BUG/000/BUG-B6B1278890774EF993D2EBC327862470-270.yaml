@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-09T03:00:45.690194532Z
-modified_at: 2026-11-11T14:14:24.012125329Z
+modified_at: 2026-11-11T14:40:23.285392343Z
 req_type: Bug
 tags:
 - area:cli
@@ -146,6 +146,12 @@ comments:
   content: 'Implementation approach per latest advisor brief: retain nonzero add refusals and route their diagnostics to stderr at the shared top-level error boundary, using the parsed canonical command so global flags and aliases are respected. Update the existing bug_2505 canonical-store regression to require stderr diagnostics and no new object, with additional validation refusals. Run targeted lane job, then make check-ci-fast; leave native-seat edits uncommitted and declare closing BUG-2505 publication subject.'
   created_at: 2026-11-11T14:14:24.012125329Z
   modified_at: 2026-11-11T14:14:24.012125329Z
+  session_id: 01a1caf478ac
+- id: 01a1cb0d-84f5-7c52-b7c8-73d15739678e
+  author: joe
+  content: 'Implemented the 2026-11-11 advisor brief. The shared error boundary now routes parsed aida add application errors to stderr in agent mode, preserving structured diagnostics and nonzero exits; human and Clap refusals remain on stderr. The canonical parsed command selects the policy before format, authority, storage and handler validation, so global flags and aliases are respected. Updated bug_2505_review_closeout_tag_add_outcomes_by_argv_shape to require stderr diagnostics, empty stdout and unchanged canonical object counts for whitespace/repeated tags, missing/blank titles, invalid types, and explicit human/TOON modes. Exact date-like tag and comma forms still create specs. Validation: lane job j20261111T141459268-2-0 executed 1 test, 1 passed, 0 failed; make check-ci-fast passed all 47 gates; formatting and git diff --check passed. Initial bounded fast-gate attempt timed out during dependency compilation; full retry passed. Changes are uncommitted in aida-cli-lib/src/lib_part1.rs and aida-cli/tests/bug_1770_tag_whitespace.rs under the native-seat contract. Host should publish as [AI:codex] fix(cli): send add refusal diagnostics to stderr (BUG-2505), using the closing trailer required by the newest advisor brief rather than the superseded Refs-only direction.'
+  created_at: 2026-11-11T14:40:23.285392343Z
+  modified_at: 2026-11-11T14:40:23.285392343Z
   session_id: 01a1caf478ac
 history:
 - id: 01a1beaa-5541-7fd1-9192-5cf255b115f3
