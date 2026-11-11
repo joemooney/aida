@@ -1,7 +1,47 @@
 //! Session/terminal/agent dispatchers, dispatch health, agent new/resume and tracked agent launch (STORY-1488 slice 1)
 // trace:STORY-1488 | ai:claude
 
-use crate::*;
+use crate::process_retry::RetryEtxtbsy;
+#[cfg(test)]
+use crate::{
+    alias, branch_exists_anywhere, cli, help, history, intent, lease_path, leases_dir,
+    leases_json_rows, process_probe, remove_session_lease_record_only, select_lease_listing,
+    worker, worktree_lease, DatabaseBackend, LeaseState, Requirement, RequirementStatus,
+    ScaffoldCommand,
+};
+// trace:TASK-3428 | ai:codex
+use crate::{
+    advance_backend, agent_describe, agent_gc, agent_launch_project_root_from, agent_launch_prompt,
+    agent_ls, agent_output_mode, agent_register, agent_registry, agent_rotation, agent_stop,
+    ahead_behind_vs_ref, aida_bin, aida_home_dir, apply_agent_default_flags,
+    apply_presentation_env_policy, assert_no_worktree_tangle, authority_stderr_is_terminal,
+    authority_stdin_is_terminal, authority_stdout_is_terminal, brief, build_agent_classify_context,
+    bypass_confirm, canonical_role_name, child_role_project_root, collect_agent_briefs_inner,
+    collect_pending_brief_counts, commit, compete, config_lookup, confirm, current_branch_at,
+    current_user_id, describe_presentation_env, detect_distributed_store_from, docs,
+    drain_mode_agent_new_guard, ensure_agent_launch_cwd_not_git_metadata, epic_agent_new_guard,
+    find_aida_project_root_from, find_executable_on_path, find_main_worktree_root,
+    focus_scope_guard_for_spec, forge, gate_agent_bypass, git_capture, handle_agent_list_roles,
+    init_cmd, install_child_signal_forwarder, launch, lease_blocks_agent_dispatch, leases,
+    list_leases, list_leases_strict, live_spec_claim_by_other, load_agents_bypass,
+    load_agents_contained, load_agents_mcp, load_agents_tool_bool, mail_wake, mailbox_store,
+    main_worktree_root_from, maintenance_schedule, merge_agent_views_with_lease_fallback,
+    orchestrator, parse_review_scope, pending_approval, queue_cmd, queue_role_fallback,
+    read_project_config_value, redact_secrets, render_mailbox_notice, resolve_child_role,
+    resolve_default_branch_ref, resolve_gh_binary, resolve_presentation_env_policy,
+    resolve_role_instance_for_launch, role, role_guidance_for, run, same_agent_role_view,
+    seat_occupancy, seats, session, session_gc, session_handoff_check, session_handoff_seat,
+    session_handoff_standing_orders, session_harness_worktree_register,
+    session_harness_worktree_release, session_leases, session_leases_prune_stale, session_manifest,
+    session_manifest_dispatch, session_prune, session_reap, session_show, session_start,
+    sh_single_quote, shell_join_display, spec_matches, terminal_cmd, truncate, upstream_ref_for,
+    worktree, BriefListEntry, Command, ResolvedClaudeLaunch, RoleInstanceKind, SessionLease,
+    StakeholderAction, Storage, TerminalCommand,
+};
+use anyhow::{Context, Result};
+use colored::Colorize;
+use std::io::IsTerminal;
+use uuid::Uuid;
 
 // trace:STORY-1728 | ai:claude
 #[path = "agent_launch_args.rs"]
@@ -8123,7 +8163,6 @@ fn run_agent(
     matches: &clap::ArgMatches,
     ctx: &crate::cmdkit::DispatchCtx,
 ) -> anyhow::Result<crate::cmdkit::Flow> {
-    use crate::*;
     let args = <AgentArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
     match &ctx.store {
         None => {
