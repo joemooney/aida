@@ -242,6 +242,25 @@ fn environment_alias_error_parity() {
                 assert_eq!(aliased.status.code(), expected.status.code());
                 assert_eq!(aliased.stdout, expected.stdout, "{alias}: {since}");
                 assert_eq!(aliased.stderr, expected.stderr, "{alias}: {since}");
+                // A recognized but conflicting environment pin must not
+                // override an explicit format, including across aliases.
+                let conflicting = if canonical == "human" {
+                    "agent"
+                } else {
+                    "table"
+                };
+                let overridden = run(
+                    name,
+                    conflicting,
+                    Some(canonical),
+                    agent,
+                    since,
+                    until,
+                    &selected_reader,
+                );
+                assert_eq!(overridden.status.code(), expected.status.code());
+                assert_eq!(overridden.stdout, expected.stdout);
+                assert_eq!(overridden.stderr, expected.stderr);
                 if code == 23 {
                     assert_eq!(aliased.stdout, b"reader-out");
                     assert_eq!(aliased.stderr, b"reader-err");
