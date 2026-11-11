@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-09T03:00:45.690194532Z
-modified_at: 2026-11-11T12:31:48.932504656Z
+modified_at: 2026-11-11T12:37:50.394501181Z
 req_type: Bug
 tags:
 - area:cli
@@ -134,6 +134,13 @@ comments:
   modified_at: 2026-11-10T00:41:35.021199982Z
   session_id: 01a1beff-fc3b-78e2-93e2-9b0c283b0339
   harness_version: 2.1.319 (Claude Code)
+- id: 01a1ca9d-52ba-7cb3-8165-65ae7c5a6ca6
+  author: joe
+  content: 'ADVISOR BRIEF (2026-11-11 05:35 MST): #3714 characterized the behaviour: the from:...-review-closeout tag adds fine; argv shapes carrying whitespace are refused with exit 1, but the refusal diagnostic goes to stdout, so a caller filtering stdout sees silent non-creation (the original observation). Fix: every ''aida add'' refusal that creates nothing prints its diagnostic on stderr and exits non-zero; update the bug_2505 test to assert stderr (not stdout) carries the diagnostic. Closing trailer (BUG-2505). LIGHT gate: the bug_2505 targeted test via the lane runner, then make check-ci-fast.'
+  created_at: 2026-11-11T12:37:50.394501181Z
+  modified_at: 2026-11-11T12:37:50.394501181Z
+  session_id: 01a1ca83-fabb-7663-852c-12c78d4e097f
+  harness_version: 2.1.322 (Claude Code)
 history:
 - id: 01a1beaa-5541-7fd1-9192-5cf255b115f3
   author: joe
