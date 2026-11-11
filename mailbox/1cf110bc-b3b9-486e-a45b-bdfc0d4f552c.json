@@ -1,0 +1,19 @@
+{
+  "id": "1cf110bc-b3b9-486e-a45b-bdfc0d4f552c",
+  "thread_id": "1cf110bc-b3b9-486e-a45b-bdfc0d4f552c",
+  "from": "dispatch",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1794403260490,
+  "body": "Dispatch request 9dc37e50-57de-4965-a551-d6ecfa452b4d (take PR #3832) done: accepted detached Codex take PR #3832 on branch story-2710-slice-1 (attempt ffc1bcaa-9fe6-4149-8b87-aed34d543b2d)\nlog: logs/9dc37e50-57de-4965-a551-d6ecfa452b4d.log",
+  "subject": "dispatch take PR #3832: done (9dc37e50)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "explicit",
+  "from_role": "dispatch"
+}

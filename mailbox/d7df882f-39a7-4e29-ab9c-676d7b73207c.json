@@ -1,0 +1,19 @@
+{
+  "id": "d7df882f-39a7-4e29-ab9c-676d7b73207c",
+  "thread_id": "d7df882f-39a7-4e29-ab9c-676d7b73207c",
+  "from": "dispatch",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1794403272145,
+  "body": "Dispatch request 6ae92294-9b12-4b42-b0b5-f68346ca267b (take PR #3824) done: accepted detached Codex take PR #3824 on branch story-b6b1278890774ef993d2ebc327862470-614 (attempt 7a2ae0d3-5835-46aa-8009-da6a6dd76f9d)\nlog: logs/6ae92294-9b12-4b42-b0b5-f68346ca267b.log",
+  "subject": "dispatch take PR #3824: done (6ae92294)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "explicit",
+  "from_role": "dispatch"
+}

@@ -1,0 +1,19 @@
+{
+  "id": "a38c2adf-fcdc-49f6-855e-7ae811e50e29",
+  "thread_id": "a38c2adf-fcdc-49f6-855e-7ae811e50e29",
+  "from": "dispatch",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1794403296098,
+  "body": "Dispatch request eb442226-eead-4ee3-b722-6eb6f346a2de (impl bug-2402 (BUG-2402)) done: accepted detached Codex impl bug-2402 (BUG-2402) on branch bug-2402-show-latency (attempt 93317cdc-73fc-4151-b4af-eb2d338bb22e)\nlog: logs/eb442226-eead-4ee3-b722-6eb6f346a2de.log",
+  "subject": "dispatch impl bug-2402 (BUG-2402): done (eb442226)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "explicit",
+  "from_role": "dispatch"
+}

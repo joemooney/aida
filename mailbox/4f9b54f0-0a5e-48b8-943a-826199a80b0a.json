@@ -1,0 +1,19 @@
+{
+  "id": "4f9b54f0-0a5e-48b8-943a-826199a80b0a",
+  "thread_id": "4f9b54f0-0a5e-48b8-943a-826199a80b0a",
+  "from": "codex-implementer-594",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1794403311599,
+  "body": "Takeover merge-only fixer blocked before merge. From /home/joe/ai/aida-worktrees/aida-seat-aida-story-2691 on story-b6b1278890774ef993d2ebc327862470-614, git fetch origin main && git merge origin/main exited 255: error: cannot open '.git/FETCH_HEAD': Read-only file system. This native sandbox exposes the worktree Git metadata read-only and approval policy is never. No files changed, no tests run, no commit or push. Claim returned already_claimed by joe.mooney@gmail.com (lease 01a1cac4debb); read STORY-2691, current gate-ledger verdict, and PR comments. Current verdict remains request-changes at 4b8340585d44 with the alert-episode finding; merge-only scope preserved. Host Git access is required to continue.",
+  "subject": "PR-3824 blocked (STORY-2691)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "implementer"
+}

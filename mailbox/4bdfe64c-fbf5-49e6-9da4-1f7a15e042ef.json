@@ -1,0 +1,19 @@
+{
+  "id": "4bdfe64c-fbf5-49e6-9da4-1f7a15e042ef",
+  "thread_id": "4bdfe64c-fbf5-49e6-9da4-1f7a15e042ef",
+  "from": "dispatch",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1794399844728,
+  "body": "Dispatch request 33e5a57c-234a-488f-8b46-af053d40fc70 (take PR #3824) failed: detached Codex take PR #3824 was not accepted (exit Some(1)): codex mcp: aida (config-file servers only; MCP servers contributed by Codex plugins are not covered)\nreason: detached Codex take PR #3824 was not accepted (exit Some(1)): codex mcp: aida (config-file servers only; MCP servers contributed by Codex plugins are not covered)\nlog: logs/33e5a57c-234a-488f-8b46-af053d40fc70.log",
+  "subject": "dispatch take PR #3824: failed (33e5a57c)",
+  "urgent": true,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "explicit",
+  "from_role": "dispatch"
+}

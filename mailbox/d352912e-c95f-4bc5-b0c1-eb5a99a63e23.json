@@ -1,0 +1,19 @@
+{
+  "id": "d352912e-c95f-4bc5-b0c1-eb5a99a63e23",
+  "thread_id": "d352912e-c95f-4bc5-b0c1-eb5a99a63e23",
+  "from": "codex-implementer-591",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1794403273940,
+  "body": "Takeover merge-only rework blocked before merge. From /home/joe/ai/aida-worktrees/aida-seat-aida-bug-2517 on bug-b6b1278890774ef993d2ebc327862470-282, git fetch origin main failed with exit 255: error: cannot open '.git/FETCH_HEAD': Read-only file system. The session filesystem policy makes .git read-only and approvals are disabled. No source changes, merge, tests, commit, or push performed. Read BUG-2517 with comments, PR-3775 gate-ledger verdict and gh PR comments. Claim check returned already_claimed by joe.mooney@gmail.com (lease 01a1cac47f59 since 2026-11-11T13:20:37.761614083Z). Host Git metadata access is required to continue.",
+  "subject": "PR-3775 blocked (BUG-2517)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "implementer"
+}

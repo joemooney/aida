@@ -1,0 +1,19 @@
+{
+  "id": "0b8972f0-bad4-4c9d-ab40-180d37993d0c",
+  "thread_id": "0b8972f0-bad4-4c9d-ab40-180d37993d0c",
+  "from": "dispatch",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1794399862389,
+  "body": "Dispatch request afabb9c3-9b2d-46e2-9c50-f7c2d10f1b7b (review PR #3833) failed: review of PR #3833 exited with Some(1)\nreason: review of PR #3833 exited with Some(1)\nlog: logs/afabb9c3-9b2d-46e2-9c50-f7c2d10f1b7b.log",
+  "subject": "dispatch review PR #3833: failed (afabb9c3)",
+  "urgent": true,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "explicit",
+  "from_role": "dispatch"
+}

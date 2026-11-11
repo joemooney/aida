@@ -1,0 +1,19 @@
+{
+  "id": "e4ca70bd-1949-4162-a965-62059863cfb8",
+  "thread_id": "e4ca70bd-1949-4162-a965-62059863cfb8",
+  "from": "dispatch",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1794403291001,
+  "body": "Dispatch request d0157c45-3206-4281-8ba0-a68a7b7d43c4 (impl bug-2505 (BUG-2505)) done: accepted detached Codex impl bug-2505 (BUG-2505) on branch bug-2505-stderr-refusal (attempt f0af6de5-05fa-4b86-be43-2ed441554da5)\nlog: logs/d0157c45-3206-4281-8ba0-a68a7b7d43c4.log",
+  "subject": "dispatch impl bug-2505 (BUG-2505): done (d0157c45)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "explicit",
+  "from_role": "dispatch"
+}

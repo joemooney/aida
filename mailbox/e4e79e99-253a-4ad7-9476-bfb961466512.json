@@ -1,0 +1,19 @@
+{
+  "id": "e4e79e99-253a-4ad7-9476-bfb961466512",
+  "thread_id": "e4e79e99-253a-4ad7-9476-bfb961466512",
+  "from": "dispatch",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1794403688037,
+  "body": "Dispatch request 8f376d8f-caa3-49d3-8db2-a306bd21ff42 (impl task-3428-b8 (TASK-3428)) failed: detached Codex impl task-3428-b8 (TASK-3428) was not accepted (exit Some(1)): codex mcp: aida (config-file servers only; MCP servers contributed by Codex plugins are not covered)\nreason: detached Codex impl task-3428-b8 (TASK-3428) was not accepted (exit Some(1)): codex mcp: aida (config-file servers only; MCP servers contributed by Codex plugins are not covered)\nlog: logs/8f376d8f-caa3-49d3-8db2-a306bd21ff42.log",
+  "subject": "dispatch impl task-3428-b8 (TASK-3428): failed (8f376d8f)",
+  "urgent": true,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "explicit",
+  "from_role": "dispatch"
+}

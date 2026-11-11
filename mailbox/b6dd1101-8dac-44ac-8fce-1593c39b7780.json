@@ -1,0 +1,19 @@
+{
+  "id": "b6dd1101-8dac-44ac-8fce-1593c39b7780",
+  "thread_id": "b6dd1101-8dac-44ac-8fce-1593c39b7780",
+  "from": "dispatch",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1794403249095,
+  "body": "Dispatch request 16fcb681-de3c-4fb1-9a54-7f157799ade6 (take PR #3830) done: accepted detached Codex take PR #3830 on branch bug-b6b1278890774ef993d2ebc327862470-287 (attempt d8681135-38b6-42e4-9f30-0dde5262dee3)\nlog: logs/16fcb681-de3c-4fb1-9a54-7f157799ade6.log",
+  "subject": "dispatch take PR #3830: done (16fcb681)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "explicit",
+  "from_role": "dispatch"
+}

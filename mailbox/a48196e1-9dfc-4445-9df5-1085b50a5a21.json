@@ -1,0 +1,19 @@
+{
+  "id": "a48196e1-9dfc-4445-9df5-1085b50a5a21",
+  "thread_id": "a48196e1-9dfc-4445-9df5-1085b50a5a21",
+  "from": "codex-implementer-595",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1794403400197,
+  "body": "BUG-2505 in /home/joe/ai/aida-worktrees/aida-seat-aida-bug-2505, branch bug-2505-stderr-refusal. Existing matching implementer lease 01a1cac539d2 confirmed. Implementation routes parsed add application errors to stderr in agent mode; regression now expects stderr for whitespace refusal and covers other validation refusals across human/toon/json. Changes are uncommitted; untested=true. Exact targeted command: aida lane job run -- cargo test --profile agent -p aida-cli --test bug_1770_tag_whitespace bug_2505. Refused before cargo ran: this session has no lane job runner (lease 01a1cac539d2 names no lane job runner). Only a headless implementer launched by aida queue work <SPEC> --no-human has one. Report the work as untested (untested=true). Help: aida queue work <SPEC> --no-human. Per brief, stopping; make check-ci-fast, commit, push and PR creation have not run.",
+  "subject": "BLOCKED: BUG-2505 lane runner unavailable",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "implementer"
+}

@@ -1,0 +1,19 @@
+{
+  "id": "4e56aaa7-910f-4bc0-95e8-7ec01b47f544",
+  "thread_id": "4e56aaa7-910f-4bc0-95e8-7ec01b47f544",
+  "from": "dispatch",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1794403242752,
+  "body": "Dispatch request 10e2b399-463b-474f-830b-7733e432d82e (take PR #3775) done: accepted detached Codex take PR #3775 on branch bug-b6b1278890774ef993d2ebc327862470-282 (attempt 4112e093-4c3c-4ea1-9d21-0981f089dffb)\nlog: logs/10e2b399-463b-474f-830b-7733e432d82e.log",
+  "subject": "dispatch take PR #3775: done (10e2b399)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "explicit",
+  "from_role": "dispatch"
+}
