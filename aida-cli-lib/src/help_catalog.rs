@@ -750,7 +750,6 @@ fn run_commands(
     matches: &clap::ArgMatches,
     _ctx: &crate::cmdkit::DispatchCtx,
 ) -> anyhow::Result<()> {
-    use crate::*;
     let args = <CommandsArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
     let CommandsArgs {
         flags,
