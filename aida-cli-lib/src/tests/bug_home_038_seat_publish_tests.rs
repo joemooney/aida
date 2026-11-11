@@ -2262,7 +2262,8 @@ fn bug_2456_clone_rework_publishes_through_host_and_never_runs_seat_hooks() {
             &clone,
             &["remote", "set-url", "origin", "/nonexistent/seat-origin"],
         );
-        let files = prepare_rework_merge(&fx.main, &clone, "feat", false).unwrap();
+        let files =
+            prepare_rework_merge(&fx.main, &clone, "feat", false, 3398, "test-lane").unwrap();
         let remote = git_ok(&fx.origin, &["rev-parse", "refs/heads/feat"]);
         let head = git_ok(&clone, &["rev-parse", "HEAD"]);
         if conflicts {
@@ -2299,7 +2300,25 @@ fn bug_2456_clone_rework_publishes_through_host_and_never_runs_seat_hooks() {
             assert_eq!(git_ok(&fx.origin, &["rev-parse", "refs/heads/feat"]), raced);
         }
         assert!(!sentinel.exists(), "seat hooks must never execute");
-        assert!(git_ok(&clone, &["status", "--porcelain"]).is_empty());
+        assert_eq!(
+            git_ok(&clone, &["status", "--porcelain"]).is_empty(),
+            !conflicts
+        );
+        if conflicts {
+            // The lane edits only files. Host staging consumes journal paths,
+            // completes the retained merge and ignores malicious seat hooks.
+            std::fs::write(clone.join("README.md"), "resolved\n").unwrap();
+            let tip = commit_pending(&fx.main, &clone, "feat", "fix: repair (Refs STORY-2710)")
+                .unwrap()
+                .unwrap();
+            assert_eq!(
+                git_ok(&clone, &["show", "-s", "--format=%P", &tip])
+                    .split_whitespace()
+                    .count(),
+                2
+            );
+            assert!(!sentinel.exists());
+        }
     }
 }
 
@@ -3521,7 +3540,8 @@ fn bug_2504_recovery_matches_recorded_tree_kind() {
             );
             std::fs::write(tree.join("pending"), "preserve me\n").unwrap();
             let head = git_ok(&tree, &["rev-parse", "HEAD"]);
-            let error = prepare_rework_merge(&fx.main, &tree, "feat", true).unwrap_err();
+            let error =
+                prepare_rework_merge(&fx.main, &tree, "feat", true, 3398, "test-lane").unwrap_err();
             let message = format!("{error:#}");
             assert!(message.contains("edits preserved"), "{message}");
             assert!(message.contains(tree.to_str().unwrap()), "{message}");
@@ -3542,7 +3562,8 @@ fn bug_2504_recovery_matches_recorded_tree_kind() {
                 std::fs::remove_file(tree.join("pending")).unwrap();
                 let message = format!(
                     "{:#}",
-                    prepare_rework_merge(&fx.main, &tree, "feat", false).unwrap_err()
+                    prepare_rework_merge(&fx.main, &tree, "feat", false, 3398, "test-lane")
+                        .unwrap_err()
                 );
                 assert!(
                     message.contains("retry pickup with its current head"),
@@ -3583,7 +3604,7 @@ fn bug_2504_rework_preflight_has_no_commit_recovery() {
     for branch in ["feat", "other"] {
         let message = format!(
             "{:#}",
-            prepare_rework_merge(&fx.main, &tree, branch, true).unwrap_err()
+            prepare_rework_merge(&fx.main, &tree, branch, true, 3398, "test-lane").unwrap_err()
         );
         assert!(
             message.contains(if branch == "feat" {
@@ -3626,9 +3647,11 @@ fn bug_2504_recorded_clone_admits_clean_main_advance() {
     std::fs::write(tree.join("pending"), "preserve me\n").unwrap();
     let head = git_ok(&tree, &["rev-parse", "HEAD"]);
     let status = git_ok(&tree, &["status", "--porcelain"]);
-    assert!(prepare_rework_merge(&fx.main, &tree, "feat", true)
-        .unwrap()
-        .is_empty());
+    assert!(
+        prepare_rework_merge(&fx.main, &tree, "feat", true, 3398, "test-lane")
+            .unwrap()
+            .is_empty()
+    );
     assert_eq!(git_ok(&tree, &["rev-parse", "HEAD"]), head);
     assert_eq!(git_ok(&tree, &["status", "--porcelain"]), status);
     assert_eq!(
@@ -4402,4 +4425,77 @@ fn bug_2488_punt_consumption_does_not_recreate_retired_workspace() {
     assert!(!punt.exists());
     assert!(!tree.exists());
     assert!(main.path().join(".aida/pr-holds").is_symlink());
+}
+
+// trace:STORY-2710 | ai:codex
+#[test]
+fn story_2710_host_regenerates_conflicted_outputs_with_read_only_git() {
+    if !bwrap_live_or_skip() {
+        return;
+    }
+    for cloned in [false, true] {
+        let fx = fixture();
+        std::fs::create_dir_all(fx.main.join("scripts")).unwrap();
+        let ledger = "scripts/exec-context-legacy.json";
+        std::fs::write(fx.main.join(ledger), "base\n").unwrap();
+        std::fs::write(
+            fx.main.join("scripts/check-exec-context.py"),
+            r#"import os, sys
+from pathlib import Path
+if '--write-ledger' in sys.argv:
+    for key in ('GIT_DIR', 'GIT_COMMON_DIR'):
+        try:
+            Path(os.environ[key], 'generator-escaped').write_text('must refuse')
+        except OSError:
+            pass
+        else:
+            raise RuntimeError('Git metadata was writable')
+    Path('scripts/exec-context-legacy.json').write_text('regenerated\n')
+"#,
+        )
+        .unwrap();
+        git_ok(&fx.main, &["add", "scripts"]);
+        git_ok(&fx.main, &["commit", "-qm", "register ledger fixture"]);
+        git_ok(&fx.main, &["checkout", "-qb", "feat"]);
+        std::fs::write(fx.main.join(ledger), "PR\n").unwrap();
+        git_ok(&fx.main, &["commit", "-qam", "PR ledger"]);
+        git_ok(&fx.main, &["push", "-q", "origin", "feat"]);
+        git_ok(&fx.main, &["checkout", "main"]);
+        std::fs::write(fx.main.join(ledger), "main\n").unwrap();
+        git_ok(&fx.main, &["commit", "-qam", "main ledger"]);
+        git_ok(&fx.main, &["push", "-q", "origin", "main"]);
+        let tree = if cloned {
+            let tree = leased_clone(&fx, "repair-regen", "c0ffee271001");
+            let pr_head = git_ok(&fx.main, &["rev-parse", "feat"]);
+            git_ok(&tree, &["reset", "--hard", &pr_head]);
+            tree
+        } else {
+            let tree = fx.root.join("linked-regen");
+            git_ok(
+                &fx.main,
+                &["worktree", "add", tree.to_str().unwrap(), "feat"],
+            );
+            tree
+        };
+        let head = git_ok(&tree, &["rev-parse", "HEAD"]);
+        let files =
+            prepare_rework_merge(&fx.main, &tree, "feat", false, 3813, "regen-lane").unwrap();
+        assert_eq!(files, [ledger]);
+        assert_eq!(
+            std::fs::read_to_string(tree.join(ledger)).unwrap(),
+            "regenerated\n"
+        );
+        assert_eq!(git_ok(&tree, &["rev-parse", "HEAD"]), head);
+        assert!(git_ok(&tree, &["diff", "--name-only", "--diff-filter=U"]).is_empty());
+        let base = git_ok(&tree, &["rev-parse", "MERGE_HEAD"]);
+        let journal = crate::repair_journal::RepairGuard::lock(&fx.main).unwrap();
+        assert_eq!(
+            journal
+                .for_tree(&tree, "feat", &head, &base)
+                .unwrap()
+                .original_conflict_paths,
+            [ledger]
+        );
+        assert!(!fx.main.join(".git/generator-escaped").exists());
+    }
 }

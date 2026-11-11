@@ -4438,49 +4438,29 @@ fn bug_1957_rework_match_hold_never_unmatches_the_specs_own_pr() {
 
 // trace:STORY-2475 | ai:codex
 #[test]
-fn story_2475_conflicts_notify_and_route_only_fresh_or_claude_threads() {
+fn story_2710_conflicts_keep_configured_vendor_and_resume() {
     use crate::session::HeadlessVendor;
-    use std::cell::Cell;
     for vendor in [HeadlessVendor::Codex, HeadlessVendor::Claude] {
         for resume in [false, true] {
-            let notified = Cell::new(false);
-            let result = rework_conflict_route(
+            let (actual, files) = rework_conflict_route(
                 Ok(vec!["src/conflict.rs".into()]),
                 vendor,
                 resume,
-                "STORY-2475",
-                3398,
+                "STORY-2710",
+                3813,
                 "rework",
-                |subject, body| {
-                    notified.set(true);
-                    assert!(subject.contains("Claude"));
-                    assert!(body.contains("src/conflict.rs"));
-                    assert!(body.contains("aborted"));
-                    assert!(body.contains("--vendor claude --fresh"));
-                    assert!(!body.contains("will not launch Codex"));
-                    Ok(())
-                },
-            );
-            assert!(notified.get());
-            if resume && vendor == HeadlessVendor::Codex {
-                assert!(result
-                    .unwrap_err()
-                    .to_string()
-                    .contains("fresh Claude lane"));
-            } else {
-                // Nonempty paths select the caller's Claude override before
-                // vendor/containment preflight and the eventual launch.
-                let (routed, files) = result.unwrap();
-                assert_eq!(routed, HeadlessVendor::Claude);
-                assert_eq!(files, vec!["src/conflict.rs"]);
-            }
+                |_, _| panic!("host-staged repair does not reroute or require mail"),
+            )
+            .unwrap();
+            assert_eq!(actual, vendor);
+            assert_eq!(files, ["src/conflict.rs"]);
         }
     }
 }
 
 // trace:STORY-2475 | ai:codex
 #[test]
-fn story_2475_preparation_or_mail_failure_cannot_admit_a_launch() {
+fn story_2710_preparation_failure_cannot_admit_a_launch() {
     use crate::session::HeadlessVendor;
     for why in ["fetch failed", "merge failed", "abort failed"] {
         let error = rework_conflict_route(
@@ -4496,16 +4476,6 @@ fn story_2475_preparation_or_mail_failure_cannot_admit_a_launch() {
         assert_eq!(error.to_string(), why);
     }
     assert!(rework_conflict_route(
-        Ok(vec!["conflict".into()]),
-        HeadlessVendor::Codex,
-        false,
-        "STORY-2475",
-        3398,
-        "rework",
-        |_, _| anyhow::bail!("mail unavailable"),
-    )
-    .is_err());
-    assert!(rework_conflict_route(
         Ok(vec![]),
         HeadlessVendor::Codex,
         false,
@@ -4519,20 +4489,12 @@ fn story_2475_preparation_or_mail_failure_cannot_admit_a_launch() {
     .is_empty());
 }
 
-/// STORY-2475 review: the `handle_queue_work` conflict wiring on real Git.
-/// The seat (a linked worktree on the PR head) and its lease exist before the
-/// host merge runs, as after `session_start`. A conflicting merge is aborted
-/// in place, the advisor is told the files, and a Codex pickup is relaunched
-/// as Claude in that same seat: vendor resolved and preflighted again, Codex
-/// model pin dropped, conflict task appended. Headless and interactive
-/// pickups take the same route (the interactive launch then starts
-/// interactive Claude). A clean merge is committed and keeps the planned
-/// launch. Boundary: clone seats run the same Git through
-/// `run_commit_sandboxed`, covered by the seat_clone and live bwrap tests.
+/// Real Git host preparation keeps the configured vendor/model, retains a
+/// conflicted merge and appends the host journal paths for both launch modes.
 // trace:STORY-2475 | ai:claude
 // trace:BUG-2456 | ai:codex
 #[test]
-fn bug_2456_host_publishes_clean_rework_or_routes_conflicts_before_launch() {
+fn story_2710_host_publishes_clean_rework_or_retains_conflicts_before_launch() {
     use crate::session::HeadlessVendor;
     use std::cell::Cell;
     // HOME is pinned to the fixture, so the test runs in its own process.
@@ -4562,7 +4524,7 @@ fn bug_2456_host_publishes_clean_rework_or_routes_conflicts_before_launch() {
         ("AIDA_HOME", Some(home.to_str().unwrap())),
         ("HOME", Some(home.to_str().unwrap())),
         ("AIDA_AGENT_CMD", Some(fake_claude.to_str().unwrap())),
-        ("AIDA_HEADLESS_VENDOR", None),
+        ("AIDA_HEADLESS_VENDOR", Some("codex")),
         ("AIDA_AGENT_MODEL", None),
     ]);
     let origin = root.join("origin.git");
@@ -4615,7 +4577,14 @@ fn bug_2456_host_publishes_clean_rework_or_routes_conflicts_before_launch() {
             let mut prompt = String::from("/aida-pickup STORY-2475");
             let mut model = Some("gpt-codex".to_string());
             let mailed = Cell::new(0);
-            let prepared = crate::seat_clone::prepare_rework_merge(&project, &seat, branch, false);
+            let prepared = crate::seat_clone::prepare_rework_merge(
+                &project,
+                &seat,
+                branch,
+                false,
+                3398,
+                "test-lane",
+            );
             let vendor = apply_rework_conflict_route(
                 &project,
                 prepared,
@@ -4637,27 +4606,29 @@ fn bug_2456_host_publishes_clean_rework_or_routes_conflicts_before_launch() {
                 },
             )
             .unwrap_or_else(|e| panic!("{branch} interactive={interactive}: {e:#}"));
-            // Either way the seat is left clean with no merge in progress.
-            assert!(git(&seat, &["status", "--porcelain"]).is_empty());
+            assert_eq!(
+                git(&seat, &["status", "--porcelain"]).is_empty(),
+                !conflicts
+            );
             let merging = crate::test_git::git_command()
                 .current_dir(&seat)
                 .args(["rev-parse", "-q", "--verify", "MERGE_HEAD"])
                 .output()
                 .unwrap();
-            assert!(!merging.status.success(), "no unfinished merge");
+            assert_eq!(merging.status.success(), conflicts);
             // Remote evidence must agree before a vendor can be started.
             let remote = git(&origin, &["rev-parse", &format!("refs/heads/{branch}")]);
             if conflicts {
                 assert_eq!(remote, head, "conflicts must not publish");
-                assert_eq!(vendor, HeadlessVendor::Claude);
-                assert_eq!(mailed.get(), 1);
-                assert_eq!(git(&seat, &["rev-parse", "HEAD"]), head, "merge aborted");
+                assert_eq!(vendor, HeadlessVendor::Codex);
+                assert_eq!(mailed.get(), 0);
+                assert_eq!(git(&seat, &["rev-parse", "HEAD"]), head, "merge retained");
                 assert!(prompt.contains("conflicting files: shared.rs"), "{prompt}");
-                assert_eq!(model, None);
-                assert!(std::env::var("AIDA_AGENT_MODEL").is_err());
+                assert_eq!(model.as_deref(), Some("gpt-codex"));
+                assert_eq!(std::env::var("AIDA_AGENT_MODEL").unwrap(), "gpt-codex");
                 assert_eq!(
                     crate::session::resolve_headless_vendor(&project),
-                    HeadlessVendor::Claude
+                    HeadlessVendor::Codex
                 );
             } else {
                 assert_eq!(

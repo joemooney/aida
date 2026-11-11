@@ -228,6 +228,21 @@ pub(crate) fn conflict_task(conflict: &MainConflict) -> String {
     )
 }
 
+/// The paths come from the shared host journal, after the merge was retained.
+// trace:STORY-2710 | ai:codex
+pub(crate) fn host_conflict_task(conflict: &MainConflict) -> String {
+    format!(
+        "FIRST TASK — resolve the host-staged merge for PR #{} (conflicting files: {}). \
+        Edit only working-tree files. The host retained MERGE_HEAD and the original \
+        conflict paths in the repair journal. Remove every opening and closing conflict \
+        marker in those paths. Leave Git metadata read-only; the host stages, commits \
+        and publishes after this lane exits. Declare Refs-only publication with aida ship. \
+        Overlapping behavior or ambiguous source repairs require aida punt.",
+        conflict.pr,
+        conflict.files.join(", ")
+    )
+}
+
 fn comment_block(label: &str, comment: &aida_core::Comment, scope: &str) -> String {
     format!(
         "{label} ({} by {}) — {scope}:\n{}",

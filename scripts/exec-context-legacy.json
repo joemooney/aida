@@ -1,5 +1,5 @@
 {
-  "ceiling": 1235,
+  "ceiling": 1234,
   "owner": "STORY-2538",
   "scope": "All Rust workspace members and tests/**/*.rs, tests/**/*.py; reads, all mutations and import bindings. Migration owner: R4 slices B-D.",
   "sites": {
@@ -415,7 +415,6 @@
     "aida-cli-lib/src/queue_cmd/work.rs:append_reviewer_prompt_suffixes_with:var:5e5f63a2b7a9290ae5d4": 1,
     "aida-cli-lib/src/queue_cmd/work.rs:append_standalone_reviewer_prompt_suffixes:var:ed34b008deec89e596e6": 1,
     "aida-cli-lib/src/queue_cmd/work.rs:append_untraced_criteria_prompt_block:var:d1b3d7a59e813096a69a": 1,
-    "aida-cli-lib/src/queue_cmd/work.rs:apply_rework_conflict_route:remove_var:92bf8e9061c555a7a562": 1,
     "aida-cli-lib/src/queue_cmd/work.rs:derive_queue_work_prompt_with_round:var:0f03044450414d9a97b4": 1,
     "aida-cli-lib/src/queue_cmd/work.rs:derive_queue_work_prompt_with_round:var:abeb96b4ae218d08abec": 1,
     "aida-cli-lib/src/queue_cmd/work.rs:derive_queue_work_prompt_with_round:var:d1b3d7a59e813096a69a": 1,
@@ -752,7 +751,7 @@
     "aida-cli-lib/src/tests/handle_pull_command_tests.rs:bug1780_concurrent_fetch_does_not_break_pull_code_leg:var:c2c7e032717fc5d2fa3f": 1,
     "aida-cli-lib/src/tests/markdown_render_tests.rs:assert_snapshot:var_os:859c7dfc4d1f25a6a95e": 1,
     "aida-cli-lib/src/tests/mcp_tests.rs:resolve_profile_prefers_override_then_config_then_default:var:eb6c18ec3c3e497f45c9": 1,
-    "aida-cli-lib/src/tests/queue_work_tests.rs:bug_2456_host_publishes_clean_rework_or_routes_conflicts_before_launch:var:53394bdfed1190e426dd": 1,
+    "aida-cli-lib/src/tests/queue_work_tests.rs:story_2710_host_publishes_clean_rework_or_retains_conflicts_before_launch:var:53394bdfed1190e426dd": 1,
     "aida-cli-lib/src/tests/real_phase_driver_wiring_tests.rs:story_1690_drain_merge_refuses_a_head_behind_its_base:var_os:dd727c4b59933866a12a": 1,
     "aida-cli-lib/src/tests/real_phase_driver_wiring_tests.rs:t1458_run_merge:var_os:dd727c4b59933866a12a": 1,
     "aida-cli-lib/src/tests/shell_wrapper_harness.rs:run_wrapper_in:var_os:dd727c4b59933866a12a": 1,

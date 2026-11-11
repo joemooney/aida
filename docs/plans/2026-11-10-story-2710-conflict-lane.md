@@ -203,3 +203,60 @@ publication declaration is recorded; the punt remains in force. The required
 host codegraph client was absent at its supplied absolute path; `aida doctor
 check codegraph` also reported the tool missing. Session-manifest writing was
 refused by the seat filesystem boundary; no permission expansion was attempted.
+
+## Round 5: slice-1 production foundation
+
+The host now reserves repairs in `.aida/repair-journal.json`, version 1, under
+one permanent, bounded sidecar lock with atomic journal replacement. Keys bind
+the main repository, PR and original head. Reservations retain actor, time,
+lane identity and unknown spawn state; an unknown outcome prevents another
+reservation. Validation and refusal-delivery records have explicit schema
+slots for the subsequent slices. Readers refuse invalid versions, duplicate
+keys, symlink files and unreadable evidence.
+
+Direct pickup retains actual conflicts in the seat rather than aborting them.
+It records the original paths before generated outputs can change the index.
+The brief reads that retained list and keeps the configured vendor and model.
+Publication matches repository/seat/branch/head/base evidence, checks the
+original paths before staging, then completes the pending merge. Failed repair
+commits retain the staged index for retry, with the same original path list;
+ordinary publication keeps its existing tree-snapshot restoration behavior.
+
+The embedded host regeneration table registers the exec-context ledger and
+tracked template mirrors, including command/skill/hook symlinks, portable skill
+pack and Markdown discipline copies. It excludes local extensions and unrelated
+Claude configuration. The host restores outputs from pinned main, then runs
+pinned Makefile/Python generators in its sandbox with Git metadata read-only.
+Toolchain locations use execution-input capture and EnvPolicy projection;
+downloads are disabled and host caches stay read-only. Authoritative source
+conflicts, unexpected writes, missing declared outputs, generator failures and
+ratchet growth refuse. Build artifacts under target are excluded from source
+output comparison. Linked worktrees expose only their private index directory during restoration;
+the common Git directory remains read-only. Generation makes the index
+read-only in both tree kinds.
+
+This is a Refs-only foundation for #3813. Watcher dispatch, spawn-receipt
+integration, exact-tree compile gating and refusal-notice delivery remain later
+slices. No full-story completion, merge authority or review authority is claimed.
+The seat leaves edits uncommitted for the host launcher.
+
+Round 5 validation:
+
+- Final lane job `j20261111T062416168-2-0`: `story_2710`, **6 passed**.
+  Real Git/bwrap fixtures cover clone and linked regeneration, denial of Git
+  metadata writes, journal reload after generated-output staging, configured
+  vendor/model retention, concurrent same-head reservation and marker refusal
+  after staged deletion/recreation as an untracked file.
+- Lane job `j20261111T060542167-2-0`: `bug_2456_clone_rework`, **1 passed**,
+  including journal-backed host commit completion and planted-hook denial.
+- Lane job `j20261111T060840583-2-0`: `bug_2504`, **5 passed**.
+- Lane job `j20261111T060847634-2-0`: vendor debt ratchet, **3 passed**.
+- Python regeneration fixtures: **5 passed**; writer inventory tests:
+  **55 passed**. Inventory reconciliation, exec-context ledger validation,
+  rustfmt and `git diff --check` pass. Retired vendor/env debt was pruned.
+
+The regeneration tests use small registered-generator fixtures; full-repository
+`make sync-templates` Cargo generation was not exercised. Its command remains
+sandboxed, offline and bounded; failures refuse launch. The required codegraph
+host client was absent at its supplied path, confirmed by doctor; navigation
+used rg. No local Git commit, push, PR creation or queue completion was run.

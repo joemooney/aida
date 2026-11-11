@@ -565,8 +565,8 @@ pub(crate) fn run_queue_resume_to_exit(
     Ok(status)
 }
 
-/// Resolve the host merge result before any vendor is launched. Successful
-/// conflicts require advisor delivery; an existing non-Claude thread refuses.
+/// Keep the configured vendor for a host-staged repair. Preparation failures
+/// still refuse before launch; notification delivery belongs to a later slice.
 // trace:STORY-2475 | ai:codex
 pub(crate) fn rework_conflict_route(
     prepared: Result<Vec<String>>,
@@ -581,22 +581,10 @@ pub(crate) fn rework_conflict_route(
     if files.is_empty() {
         return Ok((vendor, files));
     }
-    notify(
-        "Rework merge conflicts require Claude",
-        &format!(
-            "{scope} PR #{pr} conflicts with origin/main in: {}. The host aborted the merge. \
-         Conflict resolution requires Claude on branch {branch}. Fresh route: \
-         aida queue work {scope} --vendor claude --fresh --no-human.",
-            files.join(", ")
-        ),
-    )?;
-    if resume && vendor != session::HeadlessVendor::Claude {
-        anyhow::bail!(
-            "conflicting rework requires a fresh Claude lane: \
-            aida queue work {scope} --vendor claude --fresh --no-human"
-        );
-    }
-    Ok((session::HeadlessVendor::Claude, files))
+    // The host retained this merge and its original paths. Keep the configured
+    // vendor, including resumed Codex threads; no conflict-only mail prerequisite.
+    let _ = (resume, scope, pr, branch, notify);
+    Ok((vendor, files))
 }
 
 /// The launch facts [`apply_rework_conflict_route`] needs from the pickup.
@@ -611,15 +599,8 @@ pub(crate) struct ReworkConflictLaunch<'a> {
     pub(crate) branch: &'a str,
 }
 
-/// Apply the host merge result to a pickup whose seat (linked worktree or
-/// clone) and lease already exist. A clean merge keeps the planned vendor,
-/// model and prompt. A conflict reroutes the launch to Claude in the same
-/// seat: the override is installed, the vendor is resolved and preflighted
-/// again (binary, `[agents] enabled`, containment), the vendor-specific model
-/// pin is dropped, and the conflict task is appended to the prompt. An
-/// interactive pickup (`!no_human`) gets the same reroute: the launch below
-/// starts interactive Claude, not Codex. Any refusal returns before
-/// `agent.starting()`, so the BUG-2428 setup rollback releases the seat.
+/// Append the host-journal conflict paths without changing vendor or model.
+/// Vendor admission and containment have already been checked by pickup.
 // trace:STORY-2475 | ai:claude
 pub(crate) fn apply_rework_conflict_route(
     project_root: &Path,
@@ -641,15 +622,16 @@ pub(crate) fn apply_rework_conflict_route(
     if files.is_empty() {
         return Ok(launch.vendor);
     }
-    session::install_headless_vendor_override(route_vendor.as_str());
-    let vendor = session::resolve_enabled_headless_vendor(project_root)?;
-    session::preflight_launch_vendor(vendor, launch.interactive)?;
-    session::require_vendor_containment(vendor, launch.contained, "conflict rework")?;
-    std::env::remove_var("AIDA_AGENT_MODEL");
-    *resolved_model = None;
+    let _ = (
+        project_root,
+        resolved_model,
+        launch.interactive,
+        launch.contained,
+    );
+    let vendor = route_vendor;
     prompt.push_str(&format!(
         "\n\n{}",
-        crate::rework_direction::conflict_task(&crate::rework_direction::MainConflict {
+        crate::rework_direction::host_conflict_task(&crate::rework_direction::MainConflict {
             pr: launch.pr,
             base: "main".into(),
             files,
@@ -5313,6 +5295,8 @@ pub(crate) fn handle_queue_work(
                     &lease.worktree_path,
                     branch,
                     matches!(launch, Some(QueueWorkLaunch::Resume(_))),
+                    *pr,
+                    &lease.id,
                 );
                 launch_vendor = apply_rework_conflict_route(
                     &project_root,
