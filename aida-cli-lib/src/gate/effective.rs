@@ -379,10 +379,24 @@ fn approval_at_head(
             carried_over: false,
         };
     }
+    // trace:STORY-2696 | ai:codex — a cached proof cannot override reviewer policy.
+    if v.attestation.as_ref().is_some_and(|a| !a.carry_eligible) {
+        return Verdict::Stale {
+            seq,
+            reviewed: Some(reviewed.to_string()),
+            head: head.to_string(),
+            reason: "reviewer requires fresh review: approval is not carry-eligible".into(),
+        };
+    }
     let answer = change_events.iter().rev().find_map(|e| match &e.body {
-        EventBody::CarryOverProof { proof, .. }
-            if rv::same_reviewed_sha(&proof.approved_sha, reviewed)
-                && rv::same_reviewed_sha(&proof.new_head, head) =>
+        EventBody::CarryOverProof {
+            proof,
+            proof_version,
+            carry_eligible,
+        } if *carry_eligible
+            && *proof_version == super::review_carryover::PROOF_VERSION
+            && rv::same_reviewed_sha(&proof.approved_sha, reviewed)
+            && rv::same_reviewed_sha(&proof.new_head, head) =>
         {
             Some(Ok(()))
         }
@@ -390,8 +404,12 @@ fn approval_at_head(
             approved_sha,
             new_head,
             reason,
+            proof_version,
+            carry_eligible,
             ..
-        } if rv::same_reviewed_sha(approved_sha, reviewed)
+        } if *carry_eligible
+            && *proof_version == super::review_carryover::PROOF_VERSION
+            && rv::same_reviewed_sha(approved_sha, reviewed)
             && rv::same_reviewed_sha(new_head, head) =>
         {
             Some(Err(reason.clone()))

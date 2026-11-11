@@ -99,6 +99,9 @@ pub(crate) enum EventBody {
     CarryOverProof {
         proof: crate::gate::review_carryover::CarryOver,
         proof_version: u32,
+        // trace:STORY-2696 | ai:codex
+        #[serde(default = "crate::gate::review_verdict::carry_eligible_default")]
+        carry_eligible: bool,
     },
     /// AC4: the approval at `approved_sha` does NOT carry over to `new_head`,
     /// and `reason` says why (a changed patch identity, a non-merge commit,
@@ -110,6 +113,9 @@ pub(crate) enum EventBody {
         refusal: crate::gate::review_carryover::CarryOverRefusal,
         reason: String,
         proof_version: u32,
+        // trace:STORY-2696 | ai:codex
+        #[serde(default = "crate::gate::review_verdict::carry_eligible_default")]
+        carry_eligible: bool,
     },
 }
 

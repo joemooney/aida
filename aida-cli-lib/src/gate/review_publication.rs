@@ -157,6 +157,12 @@ struct Publisher {
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 #[serde(deny_unknown_fields)]
 struct Receipt {
+    // trace:STORY-2696 | ai:codex — omit true to preserve signed v1 bytes.
+    #[serde(
+        default = "rv::carry_eligible_default",
+        skip_serializing_if = "std::clone::Clone::clone"
+    )]
+    carry_eligible: bool,
     version: u32,
     node: String,
     publication: Uuid,
@@ -494,7 +500,7 @@ fn qualify(node: &str, identity: &[String]) -> Vec<String> {
 }
 fn verify(receipt: &Receipt, signed: &Signed, roster: &Roster) -> Result<()> {
     ensure!(
-        receipt.version == 1 && node_valid(&receipt.node),
+        matches!(receipt.version, 1 | 2) && node_valid(&receipt.node),
         "unsupported review receipt"
     );
     ensure!(
@@ -712,7 +718,11 @@ pub(crate) fn publish(
     let key = change.as_key();
     let spec_keys: Vec<SpecKey> = bound;
     let receipt = Receipt {
-        version: 1,
+        carry_eligible: verdict
+            .attestation
+            .as_ref()
+            .map_or(true, |a| a.carry_eligible),
+        version: 2,
         node: config.node.clone(),
         publication: Uuid::new_v4(),
         supersedes: load_receipts(root, &store, &tip, &key)?
@@ -846,6 +856,7 @@ fn parse_reference(id: &str) -> Option<(String, String, Uuid)> {
 }
 fn body(r: &Receipt) -> Result<String> {
     let att = rv::RecorderAttestation {
+        carry_eligible: r.carry_eligible,
         sha: r.head.clone(),
         seat: Some("review-publication".into()),
         human_at_tty: false,
@@ -1617,5 +1628,68 @@ mod story_2698_tests {
             .unwrap()
             .kind
             .approves());
+    }
+}
+
+// trace:STORY-2696 | ai:codex
+#[cfg(test)]
+mod story_2696_tests {
+    use super::*;
+
+    fn legacy() -> (Receipt, Signed, Roster) {
+        let signed: Signed =
+            serde_json::from_str(include_str!("tests/fixtures/story_2696/v1-signed.json")).unwrap();
+        let receipt: Receipt = serde_json::from_str(&signed.payload).unwrap();
+        let roster = Roster {
+            version: 1,
+            nodes: BTreeMap::from([(
+                "legacy-node".into(),
+                include_str!("tests/fixtures/story_2696/legacy-node.pub")
+                    .trim()
+                    .into(),
+            )]),
+        };
+        (receipt, signed, roster)
+    }
+
+    #[test]
+    fn story_2696_stored_real_v1_receipt_bytes_and_signature_survive() {
+        let (receipt, signed, roster) = legacy();
+        assert!(receipt.carry_eligible);
+        assert_eq!(
+            serde_json::to_string(&receipt).unwrap().as_bytes(),
+            signed.payload.as_bytes()
+        );
+        verify(&receipt, &signed, &roster).unwrap();
+        let projected = rv::parse_recorded_verdict(&body(&receipt).unwrap()).unwrap();
+        assert!(projected.attestation.unwrap().carry_eligible);
+        let mut tampered = receipt;
+        tampered.carry_eligible = false;
+        assert!(verify(&tampered, &signed, &roster).is_err());
+    }
+
+    #[test]
+    fn story_2696_v2_policy_roundtrip_and_malformed_refuse() {
+        let (mut receipt, signed, roster) = legacy();
+        receipt.version = 2;
+        for eligible in [true, false] {
+            receipt.carry_eligible = eligible;
+            let encoded = serde_json::to_string(&receipt).unwrap();
+            let restored: Receipt = serde_json::from_str(&encoded).unwrap();
+            assert_eq!(restored, receipt);
+            assert_eq!(
+                rv::parse_recorded_verdict(&body(&restored).unwrap())
+                    .unwrap()
+                    .attestation
+                    .unwrap()
+                    .carry_eligible,
+                eligible
+            );
+        }
+        let mut value = serde_json::to_value(&receipt).unwrap();
+        value["carry_eligible"] = "false".into();
+        assert!(serde_json::from_value::<Receipt>(value).is_err());
+        receipt.version = 3;
+        assert!(verify(&receipt, &signed, &roster).is_err());
     }
 }
