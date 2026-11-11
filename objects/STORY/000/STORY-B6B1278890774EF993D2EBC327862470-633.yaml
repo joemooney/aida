@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-10T22:04:54.061461738Z
-modified_at: 2026-11-11T05:50:30.979982910Z
+modified_at: 2026-11-11T05:50:32.390121217Z
 req_type: Story
 comments:
 - id: 01a1c781-4cf1-7c80-b086-89c5c5096ab6
@@ -242,6 +242,20 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Binding slice-1 acceptance is unimplemented: this head only adds inventory regression coverage. CI pending at review time.. No triage reason was given.'
   created_at: 2026-11-11T05:50:30.979975068Z
   modified_at: 2026-11-11T05:50:30.979975068Z
+  session_id: 01a1c87f-970d-7ce0-9351-e4e75a87731e
+  harness_version: 2.1.322 (Claude Code)
+- id: 01a1c928-6d2d-7ed3-b3a0-c3159dc9f90d
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (STORY-2710):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 19834b492934
+    Recorded: 2026-11-11T05:46:08.951425133+00:00
+    Findings:
+    1. [P1] tests/test_store_writer_inventory.py:30 and scripts/store-writers.toml:1805: Deliver the assigned slice-1 implementation before requesting slice-1 approval, or obtain an explicit advisor scope amendment for this inventory-only follow-up. The binding 19:00 MST slice plan and 05:21 UTC start instruction require a locked versioned repair journal with the approved repository/PR/original-head entries, host-staged merges retaining original conflict paths across retries, publication loading those paths, and a registered host regeneration table for exec-context/template outputs. This diff only adds an inventory fixture and changes an evidence reference. In particular, aida-cli-lib/src/seat_clone.rs:4133 still calls refuse_pending_conflict_markers with None, so pending merges refuse instead of consuming journal evidence. Implement and cover all four slice-1 deliverables, preserve read-only seat .git and Refs-only completion semantics; later-slice dispatch, compile gate and notice delivery are not requested in this finding.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-11T05:50:32.237748564Z
+  modified_at: 2026-11-11T05:50:32.237748564Z
   session_id: 01a1c87f-970d-7ce0-9351-e4e75a87731e
   harness_version: 2.1.322 (Claude Code)
 history:
