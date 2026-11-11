@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-09T01:58:46.910276326Z
-modified_at: 2026-11-11T02:26:46.666915030Z
+modified_at: 2026-11-11T02:44:16.291762261Z
 req_type: Story
 tags:
 - area:orchestration
@@ -76,6 +76,19 @@ comments:
   content: 'ADVISOR ADDENDUM 2 (2026-11-10 19:32 MST): merge-hold-gate arrives as a commit STATUS (GraphQL StatusContext: name in .context, result in .state), not a check run (.name/.conclusion). Match checks by (name or context) and read (conclusion or state). The 19:22 addendum''s filter on .name alone missed it, so held PRs still looked pending.'
   created_at: 2026-11-11T02:26:46.666915030Z
   modified_at: 2026-11-11T02:26:46.666915030Z
+  session_id: 01a1c70f-d731-7b70-acf8-e9ab3d288fca
+  harness_version: 2.1.322 (Claude Code)
+- id: 01a1c87d-e523-7f80-8d16-9d3bddf9cfb7
+  author: joe
+  content: |-
+    CI FAILURES at 636fdac8026e (run 42944346498). Fix exactly these before pushing; a push without a code change for them will fail again and must not be made:
+    error: test run failed
+            FAIL  aida-cli::bug_1502_format_json_audit checked_in_audit_catalog_matches_without_store_setup
+            FAIL  aida-cli::bug_1502_format_json_audit checked_in_audit_is_exhaustive_and_every_honoured_probe_parses
+        thread 'checked_in_audit_catalog_matches_without_store_setup' (25200) panicked at aida-cli/tests/bug_1502_format_json_audit.rs:512:5:
+        thread 'checked_in_audit_is_exhaustive_and_every_honoured_probe_parses' (25465) panicked at aida-cli/tests/bug_1502_format_json_audit.rs:512:5:
+  created_at: 2026-11-11T02:44:16.291762261Z
+  modified_at: 2026-11-11T02:44:16.291762261Z
   session_id: 01a1c70f-d731-7b70-acf8-e9ab3d288fca
   harness_version: 2.1.322 (Claude Code)
 history:
