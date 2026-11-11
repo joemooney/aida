@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-09T03:00:45.690194532Z
-modified_at: 2026-11-11T15:22:42.305318185Z
+modified_at: 2026-11-11T16:17:54.772227271Z
 req_type: Bug
 tags:
 - area:cli
@@ -173,6 +173,11 @@ comments:
   modified_at: 2026-11-11T15:12:18.221582900Z
   session_id: 01a1ca83-fabb-7663-852c-12c78d4e097f
   harness_version: 2.1.322 (Claude Code)
+- id: 01a1cb66-ce54-72a3-9a0a-e60c4a18582c
+  author: mcp
+  content: 'Addressed the latest advisor P1 on PR #3845: run_fn_body in aida-cli-lib/src/tests/story_1728_command_registry_tests.rs now locates the run function by its name/opening parenthesis, independent of its parameter list. Every early-dispatch assertion is unchanged. Retained the existing canonical-command routing flag: the shared error boundary covers add refusals before handler dispatch, and moving diagnostics into the add handler would miss format/authority/storage failures. Validation: lane job j20261111T153848599-2-0 executed run_dispatches_early_handlers_before_any_store_is_opened (1 passed, 0 failed); lane job j20261111T155414736-2-0 executed bug_2505_review_closeout_tag_add_outcomes_by_argv_shape (1 passed, 0 failed). Initial 900-second attempts timed out during compilation; longer 1800-second retries passed. make check-ci-fast passed all 47 gates; rustfmt --check and git diff --check passed. Only the test extractor file is changed, uncommitted under the native-seat contract. Host should commit and push to the same PR branch for #3845. The fixed host codegraph client is absent and doctor reports the index unreachable; navigation used rg without modifying the index.'
+  created_at: 2026-11-11T16:17:54.772211204Z
+  modified_at: 2026-11-11T16:17:54.772211204Z
 history:
 - id: 01a1beaa-5541-7fd1-9192-5cf255b115f3
   author: joe
