@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-10T10:24:49.978786902Z
-modified_at: 2026-11-11T04:33:14.165559171Z
+modified_at: 2026-11-11T04:39:41.293430910Z
 req_type: Bug
 comments:
 - id: 01a1c544-9448-77c1-a5a0-c8d1776ee831
@@ -128,6 +128,13 @@ comments:
   modified_at: 2026-11-11T04:31:15.454789550Z
   session_id: 01a1c87f-970d-7ce0-9351-e4e75a87731e
   harness_version: 2.1.322 (Claude Code)
+- id: 01a1c8e7-8fed-7400-98bb-d1475754502d
+  author: dirtlab
+  content: 'Round 5 finding addressed: separate local pre-claim failure proof from hub cancellation authority. mark_unclaimed_exit preserves the inherited no-verdict budget without a hub; reconcile_lost_dispatchers does likewise only for local reservations with a dead dispatcher and no identity, spawn markers, worker or reviewer. Distributed background recovery does not cancel hub claims. Added regressions for repeated pre-claim cancellations through both paths, successful readmission, exhaustion only after three claimed attempts, and live/ambiguous process gates. Validation: lane job j20261111T043431213-2-0 ran cargo test --profile agent -p aida-cli-lib --lib -- bug2518: 7 passed, 0 failed, including distributed Retry-edge validation. git diff --check passed. Native seat leaves edits uncommitted for host publication. Configured codegraph client is absent; doctor confirms missing tooling.'
+  created_at: 2026-11-11T04:39:41.293430910Z
+  modified_at: 2026-11-11T04:39:41.293430910Z
+  session_id: 01a1c8e1a14f
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1c4fe-25c9-7752-878d-7f4b5f4e9270
   author: joe
