@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-10T06:40:07.764479561Z
-modified_at: 2026-11-11T06:01:32.375566808Z
+modified_at: 2026-11-11T06:15:03.526002642Z
 req_type: Bug
 comments:
 - id: 01a1c4af-35ea-7243-ac9f-f3b9d11983b0
@@ -127,6 +127,17 @@ comments:
   modified_at: 2026-11-11T05:59:38.249331290Z
   session_id: 01a1c87f-970d-7ce0-9351-e4e75a87731e
   harness_version: 2.1.322 (Claude Code)
+- id: 01a1c93e-e066-7dc1-a773-5a6930a439e6
+  author: dirtlab
+  content: |
+    Round 3 findings addressed: explicitly spec-only change_binding=unbound verdicts remain readable under their spec but cannot bind to a later PR/MR or project into its member gate evidence. Unbound verdicts preserve every change review claim; resolved verdicts clear only their own claim. Effective gate reads reuse one bounded pinned discovery for the requested change and related indexed changes, including read-only historical mis-key filtering.
+    Regressions cover local waiting/approval, later binding of two changes sharing one spec, one-corpus-pass byte budget, actual local recording followed by binding attempts, and two-PR marker preservation with explicit single-PR cleanup.
+    Validation: lane j20261111T061033720-2-0 bug_2517: 9 passed; j20261111T061434171-2-0 gate::ledger::tests: 58 passed; j20261111T061443219-2-0 gate::effective::tests: 32 passed. Targeted rustfmt --check and git diff --check passed. Initial test build used an earlier fixture assertion counting the legacy-import event; corrected and rerun successfully. An initial invocation of aida-cli --lib failed because that package has no library; corrected to aida-cli-lib.
+    Eight source/test files changed; edits remain uncommitted for native host publication. No implementation or testing blockers. Host navigation client was absent at the configured absolute path; doctor reports missing codegraph, and rg supplied navigation. No git metadata writes, publication, queue completion, or review recording performed by this seat.
+  created_at: 2026-11-11T06:15:03.526002642Z
+  modified_at: 2026-11-11T06:15:03.526002642Z
+  session_id: 01a1c93272e7
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1c4af-45a0-7a32-8edf-55980e6f5825
   author: joe
