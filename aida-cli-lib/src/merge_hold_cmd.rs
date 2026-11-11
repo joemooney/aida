@@ -1312,7 +1312,7 @@ pub(crate) struct MergeLockArgs {
 // `aida ps`. trace:STORY-1171 | ai:claude
 fn run_merge_lock(
     matches: &clap::ArgMatches,
-    _ctx: &crate::command_registry::DispatchCtx,
+    _ctx: &crate::cmdkit::DispatchCtx,
 ) -> anyhow::Result<()> {
     let args = <MergeLockArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
     if let Some(path) = &args.check_file {
@@ -1327,19 +1327,18 @@ fn run_merge_lock(
 }
 
 // trace:STORY-1728 | ai:claude
-pub(crate) static MERGE_LOCK: crate::command_registry::CommandReg =
-    crate::command_registry::CommandReg {
-        name: "merge-lock",
-        help_after: "ps",
-        command: <MergeLockArgs as clap::CommandFactory>::command,
-        policy: |_| crate::command_registry::CmdPolicy {
-            stakeholder: crate::stakeholder_role::StakeholderAction::Write,
-            per_write_auto_push: false,
-            skip_role_restore_prompt: false,
-            team_identity_write: false,
-        },
-        run: crate::command_registry::Handler::Early(run_merge_lock),
-    };
+pub(crate) static MERGE_LOCK: crate::cmdkit::CommandReg = crate::cmdkit::CommandReg {
+    name: "merge-lock",
+    help_after: "ps",
+    command: <MergeLockArgs as clap::CommandFactory>::command,
+    policy: |_| crate::cmdkit::CmdPolicy {
+        stakeholder: crate::stakeholder_role::StakeholderAction::Write,
+        per_write_auto_push: false,
+        skip_role_restore_prompt: false,
+        team_identity_write: false,
+    },
+    run: crate::cmdkit::Handler::Early(run_merge_lock),
+};
 
 /// Inspect and clear supervised merge-hold markers (`.aida/merge-holds/`).
 ///
@@ -1364,7 +1363,7 @@ pub(crate) struct MergeHoldArgs {
 // trace:TASK-161 | ai:claude
 fn run_merge_hold(
     matches: &clap::ArgMatches,
-    _ctx: &crate::command_registry::DispatchCtx,
+    _ctx: &crate::cmdkit::DispatchCtx,
 ) -> anyhow::Result<()> {
     let args = <MergeHoldArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
     let MergeHoldArgs { action } = &args;
@@ -1372,19 +1371,18 @@ fn run_merge_hold(
 }
 
 // trace:STORY-1728 | ai:claude
-pub(crate) static MERGE_HOLD: crate::command_registry::CommandReg =
-    crate::command_registry::CommandReg {
-        name: "merge-hold",
-        help_after: "merge-lock",
-        command: <MergeHoldArgs as clap::CommandFactory>::command,
-        policy: |_| crate::command_registry::CmdPolicy {
-            stakeholder: crate::stakeholder_role::StakeholderAction::Write,
-            per_write_auto_push: false,
-            skip_role_restore_prompt: false,
-            team_identity_write: false,
-        },
-        run: crate::command_registry::Handler::Early(run_merge_hold),
-    };
+pub(crate) static MERGE_HOLD: crate::cmdkit::CommandReg = crate::cmdkit::CommandReg {
+    name: "merge-hold",
+    help_after: "merge-lock",
+    command: <MergeHoldArgs as clap::CommandFactory>::command,
+    policy: |_| crate::cmdkit::CmdPolicy {
+        stakeholder: crate::stakeholder_role::StakeholderAction::Write,
+        per_write_auto_push: false,
+        skip_role_restore_prompt: false,
+        team_identity_write: false,
+    },
+    run: crate::cmdkit::Handler::Early(run_merge_hold),
+};
 
 // trace:TASK-1951 | ai:claude
 #[cfg(test)]
