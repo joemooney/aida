@@ -1,0 +1,21 @@
+id: 01a1cb53-72ba-70c1-9485-44dccb25c79e
+spec_id: BUG-b6b1278890774ef993d2ebc327862470-291
+agreed_id: BUG-2526
+title: CI 'sudo apt-get update' can hang until the 40-minute job timeout, cancelling every PR's CI
+description: 'Observed 2026-11-11 14:59-15:39 UTC: every CI shard on PRs #3824 and #3844 sat in ''sudo apt-get update'' for 40 minutes and was killed by timeout-minutes: 40 (.github/workflows/ci.yml:43), so flow and train saw red CI and nothing landed. Fix: bound the apt step (timeout 180, -o Acquire::Retries=3 -o Acquire::http::Timeout=30), retry once, and skip apt when the packages are already on the runner image. Acceptance: a stalled mirror fails or skips the step within 5 minutes instead of consuming the job timeout.'
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-11T15:56:46.138811998Z
+modified_at: 2026-11-11T15:56:46.138811998Z
+req_type: Bug
+filed_at:
+  code_sha: 11b131dfe3341e6d9c7127d64370f91366094711
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 11b131dfe33
+  vendor: claude
+  session: 01a1ca83-fabb-7663-852c-12c78d4e097f
+  harness_version: 2.1.322 (Claude Code)
