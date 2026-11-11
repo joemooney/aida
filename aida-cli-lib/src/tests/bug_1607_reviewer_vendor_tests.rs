@@ -19,6 +19,10 @@
 //! the guard holds the shared `ENV_LOCK` for its whole lifetime and is not
 //! reentrant, so every key (`AIDA_AGENT_CMD` included) must be set together.
 use super::*;
+use crate::{
+    review_spec_launch_reviewer, review_spec_resolve_vendor, run_standalone_reviewer,
+    NoReviewVerdict, QueueWorkLaunch,
+};
 
 /// Write a trivial "vendor" mock at `dir/mock-agent.sh` that appends each of
 /// its argv[1..] to `capture`, NUL-delimited so multiline prompts stay one argument.
