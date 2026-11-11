@@ -3,12 +3,12 @@ spec_id: STORY-b6b1278890774ef993d2ebc327862470-614
 agreed_id: STORY-2691
 title: 'Supervised advisor loops: run review watch, train and rework as services that adopt a renewed grant and alert when dispatch fails'
 description: 'Problem: on 2026-11-08 every review dispatch failed with no-valid-parent-seat-grant after a grant renewal, and nothing raised it until a manual inventory; recovery meant hand-killing parent processes. STORY-2571 covers review-watch grant rotation only. Requirement: these loops run under a supervisor, adopt a renewed grant without manual restart, leave in-progress trains alone, and report repeated dispatch failure through an operator-visible alert. Acceptance: renewing the grant restores dispatch with no manual step; N consecutive dispatch failures produce one alert.'
-status: InProgress
+status: NeedsAttention
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-09T01:58:46.910276326Z
-modified_at: 2026-11-11T04:10:00.890663622Z
+modified_at: 2026-11-11T04:43:58.073268469Z
 req_type: Story
 tags:
 - area:orchestration
@@ -229,6 +229,13 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1c8eb-7af9-7802-b1cd-07b8c0efea53
+  author: aida-orchestrator
+  timestamp: 2026-11-11T04:43:58.073297250Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 filed_at:
   code_sha: a7a14984cec5533987dfeccb70d1f91aaebbf22a
   branch: main
@@ -237,3 +244,11 @@ filed_at:
   aida_build_sha: 8a4a909a967
   vendor: claude
   session: 20abb7c3-8f9b-4a5e-b326-404921f3b450
+failure_reason:
+  phase: reviewer
+  phase_index: 3
+  kind: verdict:request-changes
+  detail: 'Full sweep: three review-watch failure-accounting defects; 26 criteria reviewed; CI pending.'
+  recovery_hint: address the review findings, move STORY-2691 back to In Progress, and clear the PR hold only after approval
+  shelved_by: reviewer
+  shelved_at: 2026-11-11T04:43:58.073268469Z
