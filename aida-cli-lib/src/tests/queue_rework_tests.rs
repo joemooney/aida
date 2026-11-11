@@ -2364,10 +2364,12 @@ fn story_2690_rework_refuses_deferred_before_status_or_queue_mutation() {
     assert!(storage.queue_list("codex", true).unwrap().is_empty());
 }
 
-// Every shared human parking gate must refuse the projected return to flight
-// before status, comments, or queue rows change. trace:STORY-2690 | ai:codex
-#[test]
-fn story_2690_rework_refuses_all_human_parking_before_mutation() {
+// Keep the exhaustive normalization/status matrix independent of Git setup.
+// trace:STORY-2690 | ai:codex
+fn story_2690_human_parking_matrix() -> (
+    aida_core::RequirementsStore,
+    Vec<(String, Option<String>, bool)>,
+) {
     let tags = [
         "blocked",
         "needs-human-input",
@@ -2423,11 +2425,17 @@ fn story_2690_rework_refuses_all_human_parking_before_mutation() {
             checks.push((spec_id, tag.clone(), pending));
         }
     }
-    // Share the Git backend and enrollment across all variants. Each refusal
-    // still compares the entire store and checks that no queue row was added.
-    let (tmp, storage) = story_1429_fixture(requirements);
-    let _ambient = crate::test_env::AmbientGuard::hermetic_with_seat(tmp.path(), "advisor", &[]);
-    let before = storage.load().unwrap();
+    let mut store = aida_core::RequirementsStore::default();
+    store.requirements = requirements;
+    (store, checks)
+}
+
+// All 82 variants exercise the shared validator without filesystem or Git work.
+// trace:STORY-2690 | ai:codex
+#[test]
+fn story_2690_rework_validator_refuses_all_human_parking() {
+    let (before, checks) = story_2690_human_parking_matrix();
+    assert_eq!(checks.len(), 82);
     for (spec_id, tag, pending) in checks {
         let expected = if pending {
             "pending-decision"
@@ -2454,6 +2462,39 @@ fn story_2690_rework_refuses_all_human_parking_before_mutation() {
             "live {tag:?}: {live_err:#}"
         );
         assert_eq!(live_before, serde_json::to_value(live).unwrap());
+    }
+}
+
+// Command coverage for both statuses and every refusal reason. The pure test
+// above retains every spelling variant; these six cases check the mutation seam.
+// trace:STORY-2690 | ai:codex
+#[test]
+fn story_2690_rework_refuses_all_human_parking_before_mutation() {
+    let (mut store, checks) = story_2690_human_parking_matrix();
+    let checks: Vec<_> = checks
+        .into_iter()
+        .filter(|(_, tag, pending)| {
+            *pending || matches!(tag.as_deref(), Some("blocked" | "needs-human"))
+        })
+        .collect();
+    assert_eq!(checks.len(), 6);
+    store.requirements.retain(|req| {
+        checks
+            .iter()
+            .any(|(id, _, _)| req.spec_id.as_ref() == Some(id))
+    });
+    let (tmp, storage) = story_1429_fixture(store.requirements);
+    let _ambient = crate::test_env::AmbientGuard::hermetic_with_seat(tmp.path(), "advisor", &[]);
+    let before = storage.load().unwrap();
+    let before_requirements = serde_json::to_value(&before.requirements).unwrap();
+    for (spec_id, tag, pending) in checks {
+        let expected = if pending {
+            "pending-decision"
+        } else if tag.as_deref() == Some("needs-human") {
+            "needs-human"
+        } else {
+            "parking-tag"
+        };
         let err = rework_as(&storage, &spec_id, Some("retry"), true).unwrap_err();
         assert!(
             err.to_string().contains(&format!("reason={expected}:")),
@@ -2461,7 +2502,7 @@ fn story_2690_rework_refuses_all_human_parking_before_mutation() {
         );
         let after = storage.load().unwrap();
         assert_eq!(
-            serde_json::to_value(&before.requirements).unwrap(),
+            before_requirements,
             serde_json::to_value(&after.requirements).unwrap(),
             "{tag:?}"
         );
