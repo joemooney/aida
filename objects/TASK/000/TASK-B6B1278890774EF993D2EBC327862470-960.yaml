@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T23:39:41.575597Z
-modified_at: 2026-11-11T07:54:53.940528997Z
+modified_at: 2026-11-11T09:28:13.025580581Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -776,6 +776,13 @@ comments:
   content: 'ADVISOR BRIEF batch 6 (2026-11-11 00:55 MST, main 50853146bc6, after batch 5 #3829 landed; ledger 40 files): replace every ''use crate::*;'' (top-level AND inside inner or test modules) with explicit imports in EXACTLY these 20 files under aida-cli-lib/src/: {monitor_contract,review_cmd,driver_cmd,assign_cmd,import_export_cmd,manual,defer_cmd,graph_cmd,goal_cmd,do_dispatch,commit,metrics_cmd,comment_cmd,wiki,cache_cmd,user_alias,regen,help_catalog,trace_cmd,archive_cmd}.rs, and prune exactly those 20 keys from scripts/crate-globs-legacy.json in the same commit. Rules from batches 4-5 are binding: no new lease_state_for imports (qualify via crate::leases:: and list each in the PR body); where removing a glob drops a name a test needs, import it in the test file only; no renames, and list every qualified-call rewrite the compiler forced. Title and commit trailer ''(Refs TASK-3428)'', not completing. Fresh branch task-3428-batch-6. LIGHT gate: one ''cargo check --profile agent -p aida-cli-lib --tests'' plus ''make check-ci-fast''. Batch 7 (the remaining 19 + queue_cmd/rework.rs once #3809 lands) and the lib_part1..6 dissolution follow; only the dissolution PR completes TASK-3428.'
   created_at: 2026-11-11T07:53:27.458994295Z
   modified_at: 2026-11-11T07:53:27.458994295Z
+  session_id: 01a1c87f-970d-7ce0-9351-e4e75a87731e
+  harness_version: 2.1.322 (Claude Code)
+- id: 01a1c9ef-b7e1-7bc1-a5b9-7d657fb4d280
+  author: joe
+  content: 'ADVISOR BRIEF batch 7 (2026-11-11 02:30 MST, main efe4bf797ae, after batch 6 #3836 landed; ledger 20 files): replace every ''use crate::*;'' (top-level and inner/test modules) with explicit imports in EXACTLY these 19 files under aida-cli-lib/src/: {backlog,criteria,db_cmd,exposition,harvest,history,identity_gate,maintenance_schedule,mandate,notify,reconstitute,report_cmd,schema,shift,supervise_cmd,tail_cmd,terminal_cmd,usage_cmd,watch}.rs, and prune exactly those 19 keys from scripts/crate-globs-legacy.json in the same commit. queue_cmd/rework.rs stays (held by #3809); it moves to the final PR. Same binding rules as batches 4-6 (no new lease_state_for imports; test-only imports for test needs; no renames; list every forced qualified-call rewrite in the PR body). ''(Refs TASK-3428)''. Fresh branch task-3428-batch-7. LIGHT gate. The FINAL PR (completes TASK-3428) follows: queue_cmd/rework.rs''s glob, delete the now-empty ledger entry, and dissolve lib_part1..6.rs into their owning modules.'
+  created_at: 2026-11-11T09:28:13.025580581Z
+  modified_at: 2026-11-11T09:28:13.025580581Z
   session_id: 01a1c87f-970d-7ce0-9351-e4e75a87731e
   harness_version: 2.1.322 (Claude Code)
 history:
