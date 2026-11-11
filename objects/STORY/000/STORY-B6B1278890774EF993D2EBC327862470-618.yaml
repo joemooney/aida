@@ -28,12 +28,12 @@ description: |
   - Two jobs run concurrently without sharing a job directory or cache slot; the slot cap holds.
   - A test proves a PR job cannot write to the main/train cache.
   - Runbook updated. After activation, compare queue time and end-to-end run time against this baseline, and roll back the variable if wait increases.
-status: InProgress
+status: NeedsAttention
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-09T16:33:51.967266Z
-modified_at: 2026-11-10T22:01:04.367732083Z
+modified_at: 2026-11-11T01:16:48.566513195Z
 req_type: Story
 tags:
 - area:ci
@@ -268,6 +268,15 @@ history:
   author: joe
   timestamp: 2026-11-10T22:01:04.453333478Z
   changes: []
+- id: 01a1c82d-d236-70b1-88ef-c7d09698e8f0
+  author: aida-orchestrator
+  timestamp: 2026-11-11T01:16:48.566560529Z
+  session_id: 01a1c82b03fb
+  harness_version: 2.1.322 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 execution_mode: drain
 filed_at:
   code_sha: e4eee38238fa4cb8e8c85dadaa4ed07894cfbeea
@@ -282,7 +291,7 @@ failure_reason:
   phase: reviewer
   phase_index: 3
   kind: verdict:request-changes
-  detail: 'Docs-only sketch still misses four binding advisor changes: TRAIN admission, TRAIN/MAIN-only v1, S1-S3 boundaries, and eight-cold-lane CPU/memory budgeting; current-head CI remains queued.'
+  detail: 'S2 runner controller is well-fenced on trust (admission, gate, MAIN-only publish) but cannot run as written: source extraction refuses the repo''s 135 tracked symlinks, the gate kills legitimately assigned jobs because JIT labels do not pin the proposed job, routine outcomes wedge slots, and cache generations grow without bound. CI green at head.'
   recovery_hint: address the review findings, move STORY-2695 back to In Progress, and clear the PR hold only after approval
   shelved_by: reviewer
-  shelved_at: 2026-11-10T09:17:18.946425Z
+  shelved_at: 2026-11-11T01:16:48.566513195Z
