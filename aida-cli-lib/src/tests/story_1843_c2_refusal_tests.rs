@@ -4,8 +4,7 @@
 //! stamped ending-retained) where it ends a session, and reopens a retirement
 //! it could not consume.
 //!
-//! The refusal used throughout is QC1: the tree's mailbox holds mail and no
-//! activation is recorded. The failure used for "the step did not happen" is
+//! The refusal used throughout is missing canonical preservation. The failure used for "the step did not happen" is
 //! a held `index.lock`, which makes the reuse's `git checkout` / reset fail.
 //! trace:STORY-1843 | ai:claude
 
@@ -59,7 +58,10 @@ fn mailbox(tree: &Path) -> PathBuf {
 
 fn put_mail(tree: &Path, name: &str) {
     std::fs::create_dir_all(mailbox(tree)).unwrap();
-    std::fs::write(mailbox(tree).join(name), "{}").unwrap();
+    let id = name.trim_end_matches(".json");
+    let msg = serde_json::json!({"id": id, "thread_id": id, "from": "alice",
+        "to": {"kind": "agent", "agent": "bob"}, "timestamp": 1, "body": "mail"});
+    std::fs::write(mailbox(tree).join(name), serde_json::to_vec(&msg).unwrap()).unwrap();
 }
 
 fn mail_in(tree: &Path) -> Vec<String> {
@@ -76,30 +78,6 @@ fn mail_in(tree: &Path) -> Vec<String> {
         .unwrap_or_default();
     names.sort();
     names
-}
-
-/// Record an activation under `root`'s anchor, as `aida mailbox retention
-/// activate` does for an operator.
-fn activate(root: &Path) {
-    let common = PathBuf::from(git(
-        root,
-        &["rev-parse", "--path-format=absolute", "--git-common-dir"],
-    ));
-    let anchor = common.join("aida").join("mail-lifecycle");
-    std::os::unix::fs::DirBuilderExt::mode(std::fs::DirBuilder::new().recursive(true), 0o700)
-        .create(&anchor)
-        .unwrap();
-    // Only the source build that recorded an activation honours it: this
-    // test binary's, named as `main_entry` names it.
-    crate::upgrade_release::register_test_source_build();
-    let build = aida_core::mailbox_lifecycle::source_build().expect("a git build");
-    std::fs::write(
-        anchor.join("activation.json"),
-        format!(
-            r#"{{"schema":1,"all_writer_hosts_admitting":true,"recorded_at":"2026-10-27T00:00:00Z","source_build":"{build}"}}"#
-        ),
-    )
-    .unwrap();
 }
 
 /// Hold the worktree's `index.lock`, so `git checkout` / `reset` fail.
@@ -141,11 +119,12 @@ fn assert_ending_retained(file: &Path) {
     assert!(lease
         .ending_retained_reason
         .as_deref()
-        .is_some_and(|r| r.contains("write permit")));
+        .is_some_and(|r| r.contains("canonical preservation")));
 }
 
 #[test]
 fn a_refused_force_cleanup_keeps_the_session_and_its_grant_stays_revoked() {
+    let _scan = aida_core::mailbox_lifecycle::activation::test_writer_scan(true);
     let _trust = crate::test_env::EnvVarGuard::set("AIDA_TRUST_PID_NAMESPACE", "1");
     let repo = repo();
     let root = repo.path();
@@ -191,6 +170,7 @@ fn a_refused_force_cleanup_keeps_the_session_and_its_grant_stays_revoked() {
 
 #[test]
 fn a_refused_reap_keeps_the_session_ending_retained() {
+    let _scan = aida_core::mailbox_lifecycle::activation::test_writer_scan(true);
     let _trust = crate::test_env::EnvVarGuard::set("AIDA_TRUST_PID_NAMESPACE", "1");
     let repo = repo();
     let root = repo.path();
@@ -216,6 +196,7 @@ fn a_refused_reap_keeps_the_session_ending_retained() {
 
 #[test]
 fn a_refused_doctor_heal_keeps_the_orphan_tree() {
+    let _scan = aida_core::mailbox_lifecycle::activation::test_writer_scan(true);
     let _trust = crate::test_env::EnvVarGuard::set("AIDA_TRUST_PID_NAMESPACE", "1");
     let repo = repo();
     let root = repo.path();
@@ -236,6 +217,7 @@ fn a_refused_doctor_heal_keeps_the_orphan_tree() {
 
 #[test]
 fn a_lane_reuse_keeps_a_refused_tree_and_reopens_after_a_failed_checkout() {
+    let _scan = aida_core::mailbox_lifecycle::activation::test_writer_scan(true);
     let repo = repo();
     let root = repo.path();
     let wt = worktree(root, "lane-old");
@@ -249,7 +231,7 @@ fn a_lane_reuse_keeps_a_refused_tree_and_reopens_after_a_failed_checkout() {
     assert_eq!(git(&wt, &["rev-parse", "--abbrev-ref", "HEAD"]), "lane-old");
 
     // Retired, then the checkout fails: the mail is copied back.
-    activate(root);
+    crate::mail_retention::preserve_fixture_mail(root, &wt);
     let lock = hold_index_lock(&wt);
     let err =
         crate::dispatch::prepare_lane_worktree(root, &wt, "lane-new", "main", "main").unwrap_err();
@@ -268,6 +250,7 @@ fn a_lane_reuse_keeps_a_refused_tree_and_reopens_after_a_failed_checkout() {
 
 #[test]
 fn an_integrator_reuse_keeps_a_refused_tree_and_reopens_after_a_failed_reset() {
+    let _scan = aida_core::mailbox_lifecycle::activation::test_writer_scan(true);
     let repo = repo();
     let root = repo.path();
     let tree = aida_core::worktree_pool::acquire(
@@ -288,7 +271,7 @@ fn an_integrator_reuse_keeps_a_refused_tree_and_reopens_after_a_failed_reset() {
     );
     assert_eq!(mail_in(&tree), ["m.json"]);
 
-    activate(root);
+    crate::mail_retention::preserve_fixture_mail(root, &tree);
     let lock = hold_index_lock(&tree);
     assert!(crate::integrate_checkout::ensure_integrator_checkout(root).is_err());
     assert_eq!(
@@ -307,6 +290,7 @@ fn an_integrator_reuse_keeps_a_refused_tree_and_reopens_after_a_failed_reset() {
 
 #[test]
 fn a_refused_retirement_revokes_the_grant_and_a_second_stamp_keeps_it_revoked() {
+    let _scan = aida_core::mailbox_lifecycle::activation::test_writer_scan(true);
     // The s6 fixture for session end's ending, at the seam session end
     // calls: the lease and its keys stay, the grant is revoked and stays so.
     let tmp = tempfile::tempdir().unwrap();
@@ -326,8 +310,8 @@ fn a_refused_retirement_revokes_the_grant_and_a_second_stamp_keeps_it_revoked() 
     );
     let refusal = aida_core::mailbox_lifecycle::guard::RetentionRefusal {
         checkout: "/w".into(),
-        reason: "the mailbox holds mail, and not every mail writer takes a write permit".into(),
-        needs_activation: true,
+        reason: "canonical preservation not verified".into(),
+        needs_activation: false,
         retained_dir: None,
     };
     crate::mail_retention::keep_ending_retained(&file, &refusal);
@@ -362,6 +346,7 @@ fn late_mail_before_removal(tree: &Path, name: &'static str) {
 
 #[test]
 fn r3_f1_late_mail_before_a_force_cleanup_removal_keeps_the_lease_and_manifest() {
+    let _scan = aida_core::mailbox_lifecycle::activation::test_writer_scan(true);
     let _trust = crate::test_env::EnvVarGuard::set("AIDA_TRUST_PID_NAMESPACE", "1");
     let repo = repo();
     let root = repo.path();
@@ -386,6 +371,7 @@ fn r3_f1_late_mail_before_a_force_cleanup_removal_keeps_the_lease_and_manifest()
 
 #[test]
 fn r3_f1_late_mail_before_a_session_end_removal_keeps_the_session() {
+    let _scan = aida_core::mailbox_lifecycle::activation::test_writer_scan(true);
     let repo = repo();
     let root = repo.path();
     let wt = worktree(root, "late-end");
@@ -429,6 +415,7 @@ fn r3_f1_late_mail_before_a_session_end_removal_keeps_the_session() {
 
 #[test]
 fn r4_f3_a_locked_rebase_worktree_is_removed_through_the_guard() {
+    let _scan = aida_core::mailbox_lifecycle::activation::test_writer_scan(true);
     let repo = repo();
     let root = repo.path();
     // An empty mailbox and a locked worktree: main removed it, so the guarded
@@ -454,6 +441,7 @@ fn r4_f3_a_locked_rebase_worktree_is_removed_through_the_guard() {
 /// steps around it to a fresh path.
 #[test]
 fn r4_f3_a_leftover_directory_git_no_longer_knows_never_blocks_the_next_rebase() {
+    let _scan = aida_core::mailbox_lifecycle::activation::test_writer_scan(true);
     let repo = repo();
     let root = repo.path();
     let wt = crate::pr_rebase::temp_worktree_path(root, 77);
@@ -527,6 +515,7 @@ fn pool_entry_leased(root: &Path, tree: &Path) -> bool {
 /// lease stay, the tree is not reset, and no punt record is written (R4-F2).
 #[test]
 fn r4_f1_late_mail_before_a_session_end_pool_return_keeps_the_session() {
+    let _scan = aida_core::mailbox_lifecycle::activation::test_writer_scan(true);
     let repo = repo();
     let root = repo.path();
     let id = "0019f1843a06";
@@ -561,12 +550,13 @@ fn r4_f1_late_mail_before_a_session_end_pool_return_keeps_the_session() {
 /// manifest, since its mail was reopened into the tree.
 #[test]
 fn r4_f1_a_failed_pool_reset_at_session_end_keeps_the_session() {
+    let _scan = aida_core::mailbox_lifecycle::activation::test_writer_scan(true);
     let repo = repo();
     let root = repo.path();
-    activate(root);
     let id = "0019f1843a07";
     let (tree, file) = pooled_session(root, id);
     put_mail(&tree, "m.json");
+    crate::mail_retention::preserve_fixture_mail(root, &tree);
     let manifest = crate::session_manifest::manifest_path(root, id);
     std::fs::write(&manifest, "kept\n").unwrap();
     let _ambient = crate::test_env::AmbientGuard::hermetic_and(
@@ -599,12 +589,13 @@ fn r4_f1_a_failed_pool_reset_at_session_end_keeps_the_session() {
 /// [`RetentionRefusal`]: aida_core::mailbox_lifecycle::guard::RetentionRefusal
 #[test]
 fn r5_f3_a_late_reuse_failure_stays_a_typed_retention_refusal() {
+    let _scan = aida_core::mailbox_lifecycle::activation::test_writer_scan(true);
     use aida_core::mailbox_lifecycle::guard;
     let repo = repo();
     let root = repo.path();
-    activate(root);
     let wt = worktree(root, "reuse");
     put_mail(&wt, "m.json");
+    crate::mail_retention::preserve_fixture_mail(root, &wt);
     let retirement = guard::retire_checkout(&wt, "test")
         .unwrap()
         .expect("retired");
@@ -631,6 +622,7 @@ fn r5_f3_a_late_reuse_failure_stays_a_typed_retention_refusal() {
 
 #[test]
 fn r3_f4_the_report_says_an_activation_was_recorded_by_another_build() {
+    let _scan = aida_core::mailbox_lifecycle::activation::test_writer_scan(true);
     use aida_core::mailbox_lifecycle::activation::ActivationReport;
     let report = |recorded, other: Option<&str>| ActivationReport {
         dry_run: true,
@@ -664,6 +656,7 @@ fn r3_f4_the_report_says_an_activation_was_recorded_by_another_build() {
 #[cfg(unix)]
 #[test]
 fn leftovers_render_in_the_retention_report_and_agent_gc() {
+    let _scan = aida_core::mailbox_lifecycle::activation::test_writer_scan(true);
     use aida_core::mailbox_lifecycle::leftovers::Leftovers;
     let leftovers = Leftovers {
         stranded_tombs: vec!["/w/.aida/.mailbox-tomb-a".into()],
