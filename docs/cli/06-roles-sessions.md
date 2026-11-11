@@ -943,8 +943,39 @@ Service binding and controller receipts live in `review-watch/service.json`
 under the existing admission lock; controller diagnostics are in
 `review-watch/service.log`. If a spawn receipt is ambiguous or the initialized
 service receipt disappears, use the recovery procedure below. This service
-covers review-watch; rework, train and dispatch serve retain their existing
+covers review-watch and auto-train; rework and dispatch serve retain their existing
 interfaces.
+
+### Supervised automatic trains
+
+`aida advisor loops rebind --deputy NAME` binds both review-watch and auto-train
+through the same authenticated deputy operation. Advisor launch and rotation
+adopt the renewed grant for both services. `aida advisor loops train-status`
+(and `--json`) reports the train controller, binding, failures and alert.
+
+Auto-train checks open GitHub PRs every three minutes. It skips `train/` branches
+and requires an authorized APPROVED verdict recorded at the exact current head,
+green required CI at that head, and no merge hold. Approval carry-over and
+mandate hold release do not qualify for automatic admission. The ordinary train
+gates still apply, including their checks again before landing. Each pass logs
+landed and ejected members through the existing journaled train runner.
+
+The train service has independent receipts, admission lock and `service.log` in
+`.aida/auto-train/`. It runs the train in its controller process: rotation takes
+effect between passes and never kills a train in progress. An existing train's
+journal lock prevents duplicate execution; contention is a deferral rather than
+a dispatch failure. A restart uses ordinary train journal recovery.
+
+Three consecutive service failures persist one advisor mailbox alert per failure
+episode, with a stable message ID across delivery retries and restarts. A
+successful pass clears the episode; idle backoff does not. Status exposes the
+failure count and alert. Inspect the service log and authority binding when an
+alert arrives. Ambiguous controller spawns retain their receipt and require the
+same operator recovery as review-watch, using `.aida/auto-train/` for train
+controller files. Keep `.aida/train/` journals intact during service recovery.
+Rework and stale-review release remain separate slices.
+
+<!-- trace:STORY-2691 | ai:codex -->
 
 ### Review-watch service recovery
 

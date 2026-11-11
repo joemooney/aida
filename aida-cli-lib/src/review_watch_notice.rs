@@ -137,7 +137,12 @@ fn findings_due<'a>(
         .collect()
 }
 
-fn message(id: String, to: &str, subject: String, body: String) -> aida_core::mailbox::Message {
+pub(super) fn message(
+    id: String,
+    to: &str,
+    subject: String,
+    body: String,
+) -> aida_core::mailbox::Message {
     use aida_core::mailbox::{Intent, Message, Recipient, SenderSource};
     Message {
         id: id.clone(),

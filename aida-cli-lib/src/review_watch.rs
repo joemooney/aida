@@ -36,6 +36,11 @@ mod update;
 // trace:STORY-2571 | ai:codex
 #[path = "review_watch_service.rs"]
 pub(crate) mod service;
+#[path = "advisor_loop_train.rs"]
+mod train;
+#[allow(dead_code)] // Shared engine also contains review-watch-only entry points.
+#[path = "review_watch_train_service.rs"]
+pub(crate) mod train_service;
 
 #[derive(Args, Debug, Clone)]
 pub struct ReviewWatchArgs {
@@ -2428,11 +2433,12 @@ pub(crate) fn run_with_program(
         // One lazy classification per pass, rather than one /proc scan per PR.
         // trace:BUG-2442 | ai:codex
         let authors = update::AuthorLiveness::default();
+        let mut pass_failure = None;
         watch_changes(
             &store,
             reviewable_changes(changes, &mut reported_trains),
             |change| {
-                watch_change(
+                let result = watch_change(
                     &root,
                     &repo,
                     &store,
@@ -2441,9 +2447,16 @@ pub(crate) fn run_with_program(
                     &authors,
                     change,
                     program,
-                )
+                );
+                if let Err(error) = &result {
+                    if !is_busy(error) {
+                        pass_failure = Some(format!("{error:#}"));
+                    }
+                }
+                result
             },
         )?;
+        service::controller_pass(&root, pass_failure.as_deref())?;
         if args.once {
             return Ok(children.into_iter().map(|d| d.child).collect());
         }
@@ -3318,4 +3331,14 @@ pub(crate) fn fixture_admission_spawn_failure(
         "local capacity leaked after hub cancellation error"
     );
     Ok(())
+}
+
+// Automatic trains deliberately require an approval recorded on this exact
+// head. The train's ordinary member gate still checks all publication gates.
+// trace:STORY-2691 | ai:codex
+pub(crate) fn advisor_train_eligible(root: &Path, pr: u64) -> Result<String> {
+    let repo = forge::Repository::load(root)?;
+    let change = repo.change(root, pr)?;
+    train::eligible(&change, &ready::Live { root, repo: &repo })?;
+    Ok(change.head)
 }

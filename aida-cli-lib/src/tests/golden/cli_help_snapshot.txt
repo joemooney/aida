@@ -2509,7 +2509,7 @@ the queue, close delivered epics). Subcommands manage the live-advisor registrat
 Usage: aida advisor [OPTIONS] [COMMAND]
 
 Commands:
-  loops       Supervised advisor services (currently review-watch only)
+  loops       Supervised advisor services (review-watch and auto-train)
   register    Record the current Claude or Codex session as the live advisor — writes
               `~/.aida/advisor.toml`. With no `--uuid`, reads `CODEX_THREAD_ID` (a Codex thread,
               which `advisor watch` forks with `codex exec fork`), else `CLAUDE_CODE_SESSION_ID`
@@ -2558,14 +2558,15 @@ Options:
   -h, --help
           Print help (see a summary with '-h')
 ===== aida advisor loops
-Supervised advisor services (currently review-watch only)
+Supervised advisor services (review-watch and auto-train)
 
 Usage: aida advisor loops [OPTIONS] <COMMAND>
 
 Commands:
-  status  Show review-watch's persisted binding and controller receipt
-  rebind  Bind review-watch to this advisor grant through the operator's deputy
-  help    Print this message or the help of the given subcommand(s)
+  status        Show review-watch's persisted binding and controller receipt
+  rebind        Bind review-watch and auto-train to this advisor grant through the deputy
+  train-status  Show the supervised train service and any repeated-failure alert
+  help          Print this message or the help of the given subcommand(s)
 
 Options:
       --format <FORMAT>
@@ -2610,7 +2611,7 @@ Options:
   -h, --help
           Print help (see a summary with '-h')
 ===== aida advisor loops rebind
-Bind review-watch to this advisor grant through the operator's deputy
+Bind review-watch and auto-train to this advisor grant through the deputy
 
 Usage: aida advisor loops rebind [OPTIONS]
 
@@ -2620,6 +2621,51 @@ Options:
           
           [default: default]
 
+      --format <FORMAT>
+          Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
+          compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
+          piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)
+
+          Possible values:
+          - human: Human-readable tables / emoji (the interactive default at a TTY)
+          - toon:  Token-efficient TOON — the compact agent default when piped/captured
+          - json:  Machine JSON, for commands that support a JSON projection
+
+      --canonical-ids
+          Show node-local spec IDs in their canonical form instead of the node's friendly label (for
+          scripts). Also settable via AIDA_CANONICAL_IDS=1
+
+  -h, --help
+          Print help (see a summary with '-h')
+===== aida advisor loops train-status
+Show the supervised train service and any repeated-failure alert
+
+Usage: aida advisor loops train-status [OPTIONS]
+
+Options:
+      --json
+          Emit the persisted train service status as JSON
+
+      --format <FORMAT>
+          Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
+          compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
+          piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)
+
+          Possible values:
+          - human: Human-readable tables / emoji (the interactive default at a TTY)
+          - toon:  Token-efficient TOON — the compact agent default when piped/captured
+          - json:  Machine JSON, for commands that support a JSON projection
+
+      --canonical-ids
+          Show node-local spec IDs in their canonical form instead of the node's friendly label (for
+          scripts). Also settable via AIDA_CANONICAL_IDS=1
+
+  -h, --help
+          Print help (see a summary with '-h')
+===== aida advisor loops train-worker
+Usage: aida advisor loops train-worker [OPTIONS]
+
+Options:
       --format <FORMAT>
           Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
           compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
@@ -34267,7 +34313,7 @@ Working on aida itself
       "advisor",
       "loops"
     ],
-    "about": "Supervised advisor services (currently review-watch only)",
+    "about": "Supervised advisor services (review-watch and auto-train)",
     "flags": [
       {
         "name": "canonical-ids",
@@ -34326,7 +34372,7 @@ Working on aida itself
       "loops",
       "rebind"
     ],
-    "about": "Bind review-watch to this advisor grant through the operator's deputy",
+    "about": "Bind review-watch and auto-train to this advisor grant through the deputy",
     "flags": [
       {
         "name": "canonical-ids",
@@ -34350,6 +34396,65 @@ Working on aida itself
       }
     ],
     "hidden": false
+  },
+  {
+    "path": [
+      "aida",
+      "advisor",
+      "loops",
+      "train-status"
+    ],
+    "about": "Show the supervised train service and any repeated-failure alert",
+    "flags": [
+      {
+        "name": "canonical-ids",
+        "takes_value": false,
+        "help": "Show node-local spec IDs in their canonical form instead of the node's friendly label (for scripts). Also settable via AIDA_CANONICAL_IDS=1"
+      },
+      {
+        "name": "format",
+        "takes_value": true,
+        "help": "Pin the output format regardless of whether stdout is a terminal: human = tables, toon = compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)"
+      },
+      {
+        "name": "help",
+        "takes_value": false,
+        "help": "Print help (see more with '--help')"
+      },
+      {
+        "name": "json",
+        "takes_value": false,
+        "help": "Emit the persisted train service status as JSON"
+      }
+    ],
+    "hidden": false
+  },
+  {
+    "path": [
+      "aida",
+      "advisor",
+      "loops",
+      "train-worker"
+    ],
+    "about": "",
+    "flags": [
+      {
+        "name": "canonical-ids",
+        "takes_value": false,
+        "help": "Show node-local spec IDs in their canonical form instead of the node's friendly label (for scripts). Also settable via AIDA_CANONICAL_IDS=1"
+      },
+      {
+        "name": "format",
+        "takes_value": true,
+        "help": "Pin the output format regardless of whether stdout is a terminal: human = tables, toon = compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)"
+      },
+      {
+        "name": "help",
+        "takes_value": false,
+        "help": "Print help (see more with '--help')"
+      }
+    ],
+    "hidden": true
   },
   {
     "path": [

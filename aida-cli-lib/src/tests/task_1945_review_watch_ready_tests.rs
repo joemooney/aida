@@ -1249,3 +1249,54 @@ fn carried_approval_suppresses_both_dispatch_checks_but_not_ci_readiness() {
         Action::Dispatch(_)
     ));
 }
+
+// trace:STORY-2691 | ai:codex
+#[test]
+fn story2691_auto_train_requires_exact_head_green_ci_and_no_hold() {
+    let mut c = change(0, false);
+    c.head_branch = Some("feature/example".into());
+    assert!(train::eligible(&c, &Fake::ready()).is_ok());
+    let mut f = Fake::ready();
+    f.ci.as_mut()
+        .unwrap()
+        .checks
+        .push(check("informational", CheckOutcome::Failed));
+    assert!(train::eligible(&c, &f).is_ok());
+    f = Fake::ready();
+    f.ci.as_mut().unwrap().checks.clear();
+    assert!(train::eligible(&c, &f).is_err());
+    f = Fake::ready();
+    f.approval.as_mut().unwrap().reviewed = "old-head".into();
+    assert!(train::eligible(&c, &f).is_err());
+    f = Fake::ready();
+    f.approval.as_mut().unwrap().carried = Some("carried proof".into());
+    assert!(train::eligible(&c, &f).is_err());
+    f = Fake::ready();
+    f.hold = Ok(Some("active hold".into()));
+    assert!(train::eligible(&c, &f).is_err());
+    f = Fake::ready();
+    f.hold = Err("unreadable hold".into());
+    assert!(train::eligible(&c, &f).is_err());
+    for outcome in [
+        CheckOutcome::Pending,
+        CheckOutcome::Failed,
+        CheckOutcome::Skipped,
+    ] {
+        f = Fake::ready();
+        f.ci.as_mut().unwrap().checks[1].outcome = outcome;
+        assert!(train::eligible(&c, &f).is_err());
+    }
+    f = Fake::ready();
+    f.ci.as_mut().unwrap().sha = "other-head".into();
+    assert!(train::eligible(&c, &f).is_err());
+    f = Fake::ready();
+    f.head = Ok("moved-head".into());
+    assert!(train::eligible(&c, &f).is_err());
+    f = Fake::ready();
+    f.approval = Err("CHANGES REQUESTED".into());
+    assert!(train::eligible(&c, &f).is_err());
+    c.head_branch = Some("train/existing".into());
+    assert!(train::eligible(&c, &Fake::ready()).is_err());
+    c.head_branch = None;
+    assert!(train::eligible(&c, &Fake::ready()).is_err());
+}

@@ -159,7 +159,12 @@ pub(crate) fn handle_advisor_command(cmd: &crate::AdvisorCommand) -> anyhow::Res
     };
     match cmd {
         // trace:STORY-2571 | ai:codex
-        AdvisorCommand::Loops(action) => crate::review_watch::service::command(action),
+        AdvisorCommand::Loops(action) => match action {
+            AdvisorLoopsCommand::TrainStatus { .. } | AdvisorLoopsCommand::TrainWorker => {
+                crate::review_watch::train_service::command(action)
+            }
+            _ => crate::review_watch::service::command(action),
+        },
         AdvisorCommand::Register {
             uuid,
             vendor,
