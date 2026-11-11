@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-10T22:04:54.061461Z
-modified_at: 2026-11-11T15:23:26.045980025Z
+modified_at: 2026-11-11T16:01:50.407200075Z
 req_type: Story
 comments:
 - id: 01a1c781-4cf1-7c80-b086-89c5c5096ab6
@@ -347,6 +347,13 @@ comments:
   created_at: 2026-11-11T13:01:33.911319530Z
   modified_at: 2026-11-11T13:01:33.911319530Z
   session_id: 01a1ca83-fabb-7663-852c-12c78d4e097f
+  harness_version: 2.1.322 (Claude Code)
+- id: 01a1cb58-1747-78f2-b517-88f53d10bd1f
+  author: joe
+  content: 'Round 7 follow-up (cec3503, PR #3832). Merged origin/main first (work.rs conflict: took main''s re-indented block, re-applied the pr/lease args). F1: pack writes are now permitted (never required) when they map to a staged template master or the host-rendered inventory; removal of existing aida-* pack entries (renderer orphan cleanup) is allowed. Regression uses the real renderer: orphan removal, a merged-tree skill, and refusal without a staged master. F3: a refused, failed or timed-out generation now rolls every changed path back to the staged index inside the driver (git metadata stays read-only), and generators are bounded inside PROBE_TIMEOUT so the rollback runs. This closes the case where a later publication staged partial writes. F2: unchanged from 24dc37a (transfer at verified adoption plus the real adoption test). Python driver tests 9/9 pass; exec-context, store-writers and whitespace gates pass; Rust lane tests timed out compiling under slot contention.'
+  created_at: 2026-11-11T16:01:50.407200075Z
+  modified_at: 2026-11-11T16:01:50.407200075Z
+  session_id: 01a1cb34dff2
   harness_version: 2.1.322 (Claude Code)
 history:
 - id: 01a1c77f-ffdf-7ac3-a382-33d6a384e617
