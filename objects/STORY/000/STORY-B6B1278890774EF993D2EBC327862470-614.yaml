@@ -3,12 +3,12 @@ spec_id: STORY-b6b1278890774ef993d2ebc327862470-614
 agreed_id: STORY-2691
 title: 'Supervised advisor loops: run review watch, train and rework as services that adopt a renewed grant and alert when dispatch fails'
 description: 'Problem: on 2026-11-08 every review dispatch failed with no-valid-parent-seat-grant after a grant renewal, and nothing raised it until a manual inventory; recovery meant hand-killing parent processes. STORY-2571 covers review-watch grant rotation only. Requirement: these loops run under a supervisor, adopt a renewed grant without manual restart, leave in-progress trains alone, and report repeated dispatch failure through an operator-visible alert. Acceptance: renewing the grant restores dispatch with no manual step; N consecutive dispatch failures produce one alert.'
-status: NeedsAttention
+status: Approved
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-09T01:58:46.910276326Z
-modified_at: 2026-11-11T01:27:16.881561405Z
+modified_at: 2026-11-11T01:27:22.449020193Z
 req_type: Story
 tags:
 - area:orchestration
@@ -25,6 +25,13 @@ comments:
   content: 'ADVISOR RULING (2026-11-10 18:45 MST) on the missing-context punt: do NOT read or port the host scripts; they are advisor stopgaps outside the repo. Their behavior is the contract: auto-train: every few minutes, train open PRs whose recorded verdict is APPROVED at the exact head with green required CI and no merge hold, skipping train/ branches; log landed/ejected. auto-rework: for each open PR whose verdict is CHANGES REQUESTED at its exact head (only after its CI has settled), or whose CI failed at that head, run ''aida queue rework SPEC --for implementer'' once per head and dispatch an implementer lane; if the PR is CONFLICTING, merge main on the host first (BUG-2456); skip a spec with a live lane. stale-release: release the review attempt of a head with no verdict, no running reviewer, pushed more than 40 min ago (until BUG-2518 lands). Build these as supervised services alongside review-watch under ''aida advisor loops'' (same binding, grant adoption and alerting as review-watch), one slice per loop; slice 1 = train.'
   created_at: 2026-11-11T01:27:16.881561405Z
   modified_at: 2026-11-11T01:27:16.881561405Z
+  session_id: 01a1c70f-d731-7b70-acf8-e9ab3d288fca
+  harness_version: 2.1.322 (Claude Code)
+- id: 01a1c837-7e51-7cd3-b739-a2e2e7116512
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida edit --status`. It was punted on: missing-context: Current host auto-rework.sh and auto-train.sh sources and caller/service configuration are unavailable in this lane. Neither /home/dirtlab/.local/share/aida/ops/advisor-scripts nor /home/joe/.local/share/aida/ops/advisor-scripts supplies them. docs/internal/agents/advisor-script-inventory.md requires fresh hashes and caller enumeration before migration. The incident comment identifies guard writes after failed queue rework, but that implementation is outside the checkout. Need sanitized current scripts, supervisor/caller configuration, guard/attempt schema and active train ownership receipts to migrate without duplicate launches or interrupting trains. Existing review_watch_service.rs already implements STORY-2571 rotation; extend the signed-off STORY-2571 architecture, preserving dispatch requester authority, rather than adding a shell respawn service.. No triage reason was given.'
+  created_at: 2026-11-11T01:27:22.449009225Z
+  modified_at: 2026-11-11T01:27:22.449009225Z
   session_id: 01a1c70f-d731-7b70-acf8-e9ab3d288fca
   harness_version: 2.1.322 (Claude Code)
 history:
@@ -59,6 +66,15 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a1c837-7e50-7262-9687-8cc93cbab029
+  author: joe
+  timestamp: 2026-11-11T01:27:22.448987744Z
+  session_id: 01a1c70f-d731-7b70-acf8-e9ab3d288fca
+  harness_version: 2.1.322 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 filed_at:
   code_sha: a7a14984cec5533987dfeccb70d1f91aaebbf22a
   branch: main
@@ -67,9 +83,3 @@ filed_at:
   aida_build_sha: 8a4a909a967
   vendor: claude
   session: 20abb7c3-8f9b-4a5e-b326-404921f3b450
-attention_reason:
-  category: missing-context
-  detail: Current host auto-rework.sh and auto-train.sh sources and caller/service configuration are unavailable in this lane. Neither /home/dirtlab/.local/share/aida/ops/advisor-scripts nor /home/joe/.local/share/aida/ops/advisor-scripts supplies them. docs/internal/agents/advisor-script-inventory.md requires fresh hashes and caller enumeration before migration. The incident comment identifies guard writes after failed queue rework, but that implementation is outside the checkout. Need sanitized current scripts, supervisor/caller configuration, guard/attempt schema and active train ownership receipts to migrate without duplicate launches or interrupting trains. Existing review_watch_service.rs already implements STORY-2571 rotation; extend the signed-off STORY-2571 architecture, preserving dispatch requester authority, rather than adding a shell respawn service.
-  lean: Have the host provide sanitized current loop sources and service/caller inventory; migrate rework/train to fixed typed ticks through existing deputy/dispatch owners, persist success only on a verified launch receipt, and add durable deduplicated operator alerts. No service was stopped or modified.
-  raised_by: implementer
-  raised_at: 2026-11-10T22:17:34.470150800Z
