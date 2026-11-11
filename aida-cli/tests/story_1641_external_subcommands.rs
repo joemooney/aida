@@ -485,3 +485,136 @@ fn tarball_upgrade_replaces_pair_companion_and_link() {
         Path::new("aida-porcelain")
     );
 }
+
+// trace:STORY-2704 | ai:codex
+#[test]
+fn nested_external_dispatch_help_and_builtin_precedence() {
+    let fx = fixture(&[
+        ("aida-review-summary", RECORDING_STUB),
+        ("aida-review-record", MARKER_STUB),
+        ("aida-queue-summary", MARKER_STUB),
+        ("aida-agent-summary", MARKER_STUB),
+        ("aida-show-summary", MARKER_STUB),
+        ("aida-flow", RECORDING_STUB),
+        ("aida-flow-report", MARKER_STUB),
+    ]);
+    let out = aida(
+        &fx,
+        &fx.outside,
+        &["--format", "json", "review", "summary", "a b", "--flag"],
+        &[],
+    );
+    assert!(out.status.success(), "{}", text(&out));
+    assert!(
+        stdout(&out).contains("arg=[a b]\narg=[--flag]"),
+        "{}",
+        text(&out)
+    );
+    assert!(stdout(&out).contains("format=[json]"), "{}", text(&out));
+    let out = aida(
+        &fx,
+        &fx.outside,
+        &[
+            "review",
+            "--target-branch",
+            "summary",
+            "summary",
+            "--",
+            "--flag",
+        ],
+        &[],
+    );
+    assert!(out.status.success(), "{}", text(&out));
+    assert!(
+        stdout(&out).starts_with("arg=[--]\narg=[--flag]\n"),
+        "{}",
+        text(&out)
+    );
+    let out = aida(
+        &fx,
+        &fx.outside,
+        &["review", "summary", "--format", "extension-value"],
+        &[],
+    );
+    assert!(out.status.success(), "{}", text(&out));
+    assert!(
+        stdout(&out).starts_with("arg=[--format]\narg=[extension-value]\n"),
+        "{}",
+        text(&out)
+    );
+    for args in [
+        &["review", "summary", "--help"][..],
+        &["help", "review", "summary"][..],
+    ] {
+        let out = aida(&fx, &fx.outside, args, &[]);
+        assert!(out.status.success(), "{}", text(&out));
+        assert!(stdout(&out).starts_with("arg=[--help]\n"), "{}", text(&out));
+    }
+    for args in [&["review", "--help"][..], &["help", "review"][..]] {
+        let out = aida(&fx, &fx.outside, args, &[]);
+        assert!(out.status.success(), "{}", text(&out));
+        assert!(stdout(&out).contains("External commands"), "{}", text(&out));
+        assert!(
+            stdout(&out).contains(&fx.bin_dir.join("aida-review-summary").display().to_string()),
+            "{}",
+            text(&out)
+        );
+        assert!(
+            !stdout(&out).contains("aida-review-record"),
+            "{}",
+            text(&out)
+        );
+    }
+    for parent in ["queue", "agent"] {
+        let out = aida(&fx, &fx.outside, &[parent, "--help"], &[]);
+        assert!(out.status.success(), "{}", text(&out));
+        assert!(
+            !stdout(&out).contains(&format!("aida-{parent}-summary")),
+            "{}",
+            text(&out)
+        );
+    }
+    let out = aida(&fx, &fx.outside, &["alias", "list", "--json"], &[]);
+    assert!(
+        stdout(&out).contains("aida review summary"),
+        "{}",
+        text(&out)
+    );
+    assert!(
+        !stdout(&out).contains("aida-review-record"),
+        "{}",
+        text(&out)
+    );
+    // Known-child errors, invalid options, missing option values, positional
+    // operands and path-like words must never enter an extension.
+    for args in [
+        &["review", "record", "--invalid"][..],
+        &["review", "--invalid", "summary"][..],
+        &["--format", "review", "summary"][..],
+        &["review", "../summary"][..],
+        &["review", "--", "summary"][..],
+        &["review", "TASK-1", "summary"][..],
+        &["show", "summary"][..],
+    ] {
+        let out = aida(&fx, &fx.outside, args, &[]);
+        assert!(!out.status.success(), "{}", text(&out));
+        assert!(!text(&out).contains("STUB-RAN"), "{}", text(&out));
+        assert!(!stdout(&out).contains("arg="), "{}", text(&out));
+    }
+    // An external parent owns the remainder, without another lookup.
+    let out = aida(&fx, &fx.outside, &["flow", "report"], &[]);
+    assert!(stdout(&out).starts_with("arg=[report]\n"), "{}", text(&out));
+}
+
+// trace:STORY-2704 | ai:codex
+#[test]
+fn nested_missing_extension_preserves_clap_diagnostic() {
+    let fx = fixture(&[]);
+    let original = aida(&fx, &fx.outside, &["config", "nosuch"], &[]);
+    write_exec(&fx.bin_dir.join("aida-review-summary"), RECORDING_STUB);
+    let installed = aida(&fx, &fx.outside, &["config", "nosuch"], &[]);
+    assert_eq!(original.status.code(), Some(2), "{}", text(&original));
+    assert_eq!(original.status.code(), installed.status.code());
+    assert_eq!(original.stderr, installed.stderr);
+    assert!(String::from_utf8_lossy(&original.stderr).contains("unrecognized subcommand"));
+}

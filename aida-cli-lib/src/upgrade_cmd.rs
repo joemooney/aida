@@ -121,7 +121,7 @@ fn upgrade_running_binary(
     }
 
     match install {
-        InstallMethod::Cargo(_) => upgrade_via_cargo(&target_tag),
+        InstallMethod::Cargo(p) => upgrade_via_cargo(&target_tag, &p),
         InstallMethod::Binary(p) => upgrade_via_release_tarball(&p, &target_tag),
         InstallMethod::DeveloperBuild(_) => unreachable!(),
     }
@@ -189,7 +189,7 @@ fn upgrade_specific_binary(
     }
 
     match install {
-        InstallMethod::Cargo(_) => upgrade_via_cargo(&target_tag),
+        InstallMethod::Cargo(p) => upgrade_via_cargo(&target_tag, &p),
         InstallMethod::Binary(p) => upgrade_via_release_tarball(&p, &target_tag),
         InstallMethod::DeveloperBuild(_) => unreachable!(),
     }
@@ -300,7 +300,7 @@ pub(crate) fn upgrade_dev_mode_sibling_scan(
         }
         let install = classify_install_path(&path);
         let result = match install {
-            InstallMethod::Cargo(_) => upgrade_via_cargo(&target_tag),
+            InstallMethod::Cargo(p) => upgrade_via_cargo(&target_tag, &p),
             InstallMethod::Binary(_) => upgrade_via_release_tarball(&path, &target_tag),
             InstallMethod::DeveloperBuild(_) => {
                 eprintln!(
@@ -508,12 +508,34 @@ fn classify_install_path(path: &std::path::Path) -> InstallMethod {
 
 /// Re-run `cargo install --git ...` to refresh the binary. Pins to the
 /// requested tag so the install matches what the user asked for.
-fn upgrade_via_cargo(tag: &str) -> Result<()> {
-    println!(
-        "\nRunning: cargo install --git https://github.com/joemooney/aida.git --tag {} --force aida-cli",
-        tag
-    );
-    let status = std::process::Command::new("cargo")
+// trace:STORY-2704 | ai:codex
+fn upgrade_via_cargo(tag: &str, installed: &std::path::Path) -> Result<()> {
+    install_cargo_bundle(tag, installed, std::path::Path::new("cargo"))?;
+    println!("\n{}: upgraded to {}.", "OK".green(), tag);
+    Ok(())
+}
+
+// Keep Cargo's destination explicit: upgrading a selected installation must
+// install its companion beside that binary, even with another Cargo root set.
+fn install_cargo_bundle(
+    tag: &str,
+    installed: &std::path::Path,
+    cargo: &std::path::Path,
+) -> Result<()> {
+    let bin = installed.parent().context("Cargo binary has no parent")?;
+    let root = bin.parent().context("Cargo bin has no install root")?;
+    let alias = bin.join("aida-flow");
+    match std::fs::symlink_metadata(&alias) {
+        Ok(_) => anyhow::ensure!(
+            std::fs::read_link(&alias).ok().as_deref()
+                == Some(std::path::Path::new("aida-porcelain")),
+            "refusing to replace unrelated {}",
+            alias.display()
+        ),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+        Err(e) => return Err(e.into()),
+    }
+    let status = std::process::Command::new(cargo)
         .args([
             "install",
             "--git",
@@ -521,15 +543,58 @@ fn upgrade_via_cargo(tag: &str) -> Result<()> {
             "--tag",
             tag,
             "--force",
-            "aida-cli",
+            "--root",
         ])
+        .arg(root)
+        .args(["aida-cli", "aida-porcelain"])
         .status()
         .context("Failed to invoke cargo")?;
-    if !status.success() {
-        anyhow::bail!("cargo install failed");
+    anyhow::ensure!(status.success(), "cargo install failed");
+    anyhow::ensure!(
+        bin.join("aida-porcelain").is_file(),
+        "Cargo companion was not installed"
+    );
+    if std::fs::symlink_metadata(&alias).is_err() {
+        std::os::unix::fs::symlink("aida-porcelain", &alias)?;
     }
-    println!("\n{}: upgraded to {}.", "OK".green(), tag);
     Ok(())
+}
+
+#[cfg(test)]
+mod cargo_bundle_tests {
+    use super::*;
+    use std::os::unix::fs::PermissionsExt;
+
+    // Starts with a Cargo-only installation, without a companion or alias.
+    // trace:STORY-2704 | ai:codex
+    #[test]
+    fn cargo_upgrade_installs_matching_companion_and_relative_alias() {
+        let tmp = tempfile::tempdir().unwrap();
+        let bin = tmp.path().join("bin");
+        std::fs::create_dir(&bin).unwrap();
+        std::fs::write(bin.join("aida"), "old core").unwrap();
+        let cargo = tmp.path().join("cargo-fixture");
+        std::fs::write(&cargo, r#"#!/bin/sh
+[ "$1 $2 $3 $4 $5 $6 $7" = "install --git https://github.com/joemooney/aida.git --tag v1.2.3 --force --root" ] || exit 10
+[ "$9" = "aida-cli" ] && [ "${10}" = "aida-porcelain" ] || exit 11
+printf 'new core' > "$8/bin/aida"
+printf 'matching companion' > "$8/bin/aida-porcelain"
+"#).unwrap();
+        std::fs::set_permissions(&cargo, std::fs::Permissions::from_mode(0o755)).unwrap();
+        install_cargo_bundle("v1.2.3", &bin.join("aida"), &cargo).unwrap();
+        assert_eq!(
+            std::fs::read_to_string(bin.join("aida")).unwrap(),
+            "new core"
+        );
+        assert_eq!(
+            std::fs::read_link(bin.join("aida-flow")).unwrap(),
+            std::path::Path::new("aida-porcelain")
+        );
+        assert_eq!(
+            std::fs::read_to_string(bin.join("aida-flow")).unwrap(),
+            "matching companion"
+        );
+    }
 }
 
 /// Download the release tarball matching this platform, extract, and install

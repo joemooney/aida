@@ -465,7 +465,7 @@ Names resolve in a fixed order, and the first match wins:
 
 If nothing matches, you get the usual unrecognised-command error and exit code. When an installed extension has a similar name, a hint names it.
 
-The extension name must be the first argument: `aida deploy --format json` works, `aida --format json deploy` does not. On Windows, `aida-<name>.exe`, `.cmd` and `.bat` are found as well.
+For a top-level extension, the name must be the first argument: `aida deploy --format json` works, `aida --format json deploy` does not. On Windows, `aida-<name>.exe`, `.cmd` and `.bat` are found as well.
 
 The extension receives its context in the environment:
 - `AIDA_PROJECT_ROOT` — the project root, when run inside an AIDA project (unset otherwise).
@@ -477,6 +477,22 @@ The extension receives its context in the environment:
 Extensions should read and change project state through `"$AIDA_BIN" ... --json` (or another machine output format), never by writing to the store or cache files directly. That keeps validation, history and sync in one place.
 
 Installed extensions are listed in an "External commands" group in `aida help`, `aida help --all` and `aida alias list`, and `aida help <name>` runs `aida-<name> --help`.
+
+<!-- trace:STORY-2704 | ai:codex -->
+A built-in parent also admits one installed child extension: for example,
+`aida review summary` runs `aida-review-summary`, passing only the arguments
+after `summary`. Built-in children, their aliases, and existing built-in argv
+rewrites win. Clap validates global and parent options, including their values,
+before dispatch; required positional
+operands are never extension slots. Optional parent operands coexist with named
+children, as in `review [SPEC]`. External parents own all of their remaining
+arguments: `aida flow report` runs `aida-flow report`.
+
+`aida review --help` and `aida help review` list installed child extensions with
+their paths. `aida review summary --help` and `aida help review summary` delegate
+to the extension with `--help`. Top-level help and alias JSON show the full
+invocation (`aida review summary`), retaining the executable path. Discovery
+never executes a candidate. Missing extensions retain the usual parser result.
 
 ---
 

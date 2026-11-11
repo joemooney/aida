@@ -1,13 +1,15 @@
 //! Git-style external subcommands: an unrecognised `aida <name>` runs an
-//! executable `aida-<name>` found on `PATH`.
+//! executable `aida-<name>` found on `PATH`. A built-in parent also admits
+//! one installed child as `aida-<canonical-parent>-<child>`.
 //!
 //! This is the extension seat of the core/porcelain boundary: convenience
 //! composition can ship as a separate `aida-<name>` program without changing
 //! core. Resolution order is fixed — built-in subcommand, then built-in alias
 //! (clap aliases and the pre-clap argv rewrites), then user alias (interactive
 //! human callers only), then external. An external can never shadow anything
-//! earlier in that list: the dispatcher only consults `PATH` once argv has been
-//! through every earlier stage and its head is still not a real subcommand.
+//! earlier in that list. After the earlier rewrites, a top-level unknown name
+//! or an installed child in a built-in parent's child slot may dispatch;
+//! recognized built-in children retain their original parsing and handlers.
 //!
 //! The extension receives its context through the environment so it never has
 //! to rediscover it: `AIDA_PROJECT_ROOT`, `AIDA_STORE_PATH` (both removed when
@@ -46,7 +48,7 @@ pub(crate) const ENV_BIN: &str = "AIDA_BIN";
 // trace:STORY-1641 | ai:claude
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct External {
-    /// The name typed after `aida` (`hello` for `aida-hello`).
+    /// Invocation after `aida`: `hello`, or `review summary` in display discovery.
     pub name: String,
     /// The resolved executable (first match on `PATH`).
     pub path: PathBuf,
@@ -94,6 +96,175 @@ pub(crate) fn shadowed_names() -> HashSet<String> {
 pub(crate) fn dispatch_name<'a>(argv: &'a [String], shadowed: &HashSet<String>) -> Option<&'a str> {
     let head = argv.get(1)?.as_str();
     (is_valid_name(head) && !shadowed.contains(head)).then_some(head)
+}
+
+/// Required operands do not provide an unresolved child slot. Optional
+/// operands (such as `review [SPEC]`) coexist with named children, which have
+/// clap's subcommand precedence. Other operands retain their normal parsing.
+// trace:STORY-2704 | ai:codex
+fn nested_parent(cmd: &clap::Command) -> bool {
+    cmd.get_subcommands().next().is_some()
+        && !cmd.get_positionals().any(|arg| arg.is_required_set())
+}
+
+fn command_named<'a>(cmd: &'a clap::Command, name: &str) -> Option<&'a clap::Command> {
+    cmd.get_subcommands()
+        .find(|sub| sub.get_name() == name || sub.get_all_aliases().any(|a| a == name))
+}
+
+fn nested_entries(parent: &clap::Command, installed: &[External]) -> Vec<External> {
+    let prefix = format!("{}-", parent.get_name());
+    installed
+        .iter()
+        .filter_map(|entry| {
+            let child = entry.name.strip_prefix(&prefix)?;
+            let invocation = vec![
+                "aida".to_string(),
+                parent.get_name().to_string(),
+                child.to_string(),
+            ];
+            let (rewritten, _) = crate::builtin_alias_rewrites(&invocation);
+            (rewritten == invocation
+                && nested_parent(parent)
+                && is_valid_name(child)
+                && child != "help"
+                && !RESERVED_COMPANIONS.contains(&child)
+                && command_named(parent, child).is_none())
+            .then(|| External {
+                name: child.to_string(),
+                path: entry.path.clone(),
+            })
+        })
+        .collect()
+}
+
+/// Append discovery without executing a candidate or modifying the catalog.
+// trace:STORY-2704 | ai:codex
+pub(crate) fn append_parent_help(parent: &mut clap::Command) {
+    let installed = discover();
+    append_parent_help_from(parent, &installed);
+}
+
+fn append_parent_help_from(parent: &mut clap::Command, installed: &[External]) {
+    let entries = nested_entries(parent, installed);
+    if entries.is_empty() {
+        return;
+    }
+    let mut section = parent
+        .get_after_help()
+        .map(ToString::to_string)
+        .unwrap_or_default();
+    section.push_str("\nExternal commands\n");
+    for entry in entries {
+        section.push_str(&format!(
+            "  {}  external {}\n",
+            entry.name,
+            entry.path.display()
+        ));
+    }
+    *parent = parent.clone().after_help(section);
+}
+
+/// Parse a copy with installed external children at top-level built-in parent
+/// slots. Clap validates options before the child; the child owns its remaining
+/// argv. Failed parses and missing candidates fall through to the original tree.
+// trace:STORY-2704 | ai:codex
+fn maybe_dispatch_nested(argv: &[String]) -> Result<Option<i32>> {
+    let mut args = argv.to_vec();
+    if args.get(1).map(String::as_str) == Some("help") && args.len() == 4 {
+        args.remove(1);
+        args.push("--help".into());
+    }
+    let original = crate::command_registry::built_command();
+    let installed = discover();
+    let child_names: HashSet<String> = original
+        .get_subcommands()
+        .flat_map(|parent| nested_entries(parent, &installed))
+        .map(|entry| entry.name)
+        .collect();
+    if child_names.is_empty() {
+        return Ok(None);
+    }
+    let mut tree = original.clone();
+    for parent in tree.get_subcommands_mut() {
+        if nested_parent(parent) {
+            append_parent_help_from(parent, &installed);
+            for entry in nested_entries(parent, &installed) {
+                *parent = parent.clone().subcommand(
+                    clap::Command::new(entry.name)
+                        .disable_help_flag(true)
+                        .disable_help_subcommand(true)
+                        .arg(
+                            clap::Arg::new("external_args")
+                                .num_args(0..)
+                                .allow_hyphen_values(true)
+                                .trailing_var_arg(true),
+                        ),
+                );
+            }
+        }
+    }
+    // Parse only through the candidate child. Its remaining argv belongs to
+    // the extension, including literal `--` and flags also known to core.
+    // A same-spelled parent option value cannot become a child in this parse.
+    for at in 1..args.len() {
+        if !child_names.contains(&args[at]) {
+            continue;
+        }
+        let Ok(matches) = tree.clone().try_get_matches_from(&args[..=at]) else {
+            continue;
+        };
+        let Some((parent_name, parent_matches)) = matches.subcommand() else {
+            continue;
+        };
+        let Some(parent) = command_named(&original, parent_name).filter(|p| nested_parent(p))
+        else {
+            continue;
+        };
+        let Some(child) = parent_matches.subcommand_name() else {
+            continue;
+        };
+        if child != args[at]
+            || child == "help"
+            || command_named(parent, child).is_some()
+            || parent.get_positionals().any(|arg| {
+                parent_matches.value_source(arg.get_id().as_str())
+                    == Some(clap::parser::ValueSource::CommandLine)
+            })
+        {
+            continue;
+        }
+        let name = format!("{}-{child}", parent.get_name());
+        let Some(exe) = installed
+            .iter()
+            .find(|entry| entry.name == name)
+            .map(|entry| &entry.path)
+        else {
+            continue;
+        };
+        let mut ctx = current_context();
+        if let Some(format) = parent_matches.get_one::<crate::cli::OutputFormat>("format") {
+            ctx.output_format = match format {
+                crate::cli::OutputFormat::Human => "human",
+                crate::cli::OutputFormat::Toon => "toon",
+                crate::cli::OutputFormat::Json => "json",
+            };
+        }
+        return run_external_with_context(exe, &args[at + 1..], &ctx).map(Some);
+    }
+    // Direct parent help uses the same augmented tree as `help parent`.
+    // Other diagnostics are left to the original parser.
+    if args.iter().any(|arg| arg == "--help" || arg == "-h")
+        || args.get(1).map(String::as_str) == Some("help")
+    {
+        if let Err(error) = tree.try_get_matches_from(&args) {
+            if error.kind() == clap::error::ErrorKind::DisplayHelp {
+                error.print()?;
+                return Ok(Some(0));
+            }
+        }
+    }
+    Ok(None)
 }
 
 /// The file names `aida-<name>` may take on this platform, in lookup order.
@@ -188,10 +359,32 @@ pub(crate) fn discover_in(path_var: Option<&OsStr>, shadowed: &HashSet<String>) 
     out
 }
 
-/// Every installed external on the process `PATH`.
-// trace:STORY-1641 | ai:claude
 pub(crate) fn discover() -> Vec<External> {
     discover_in(std::env::var_os("PATH").as_deref(), &shadowed_names())
+}
+
+/// Every installed external on the process `PATH`.
+// trace:STORY-1641 | ai:claude
+pub(crate) fn discover_invocations() -> Vec<External> {
+    let installed = discover();
+    let tree = crate::command_registry::built_command();
+    installed
+        .iter()
+        .filter_map(|entry| {
+            for parent in tree.get_subcommands().filter(|p| nested_parent(p)) {
+                if entry.name.starts_with(&format!("{}-", parent.get_name())) {
+                    return nested_entries(parent, std::slice::from_ref(entry))
+                        .into_iter()
+                        .next()
+                        .map(|child| External {
+                            name: format!("{} {}", parent.get_name(), child.name),
+                            path: child.path,
+                        });
+                }
+            }
+            Some(entry.clone())
+        })
+        .collect()
 }
 
 /// The caller classification handed to an extension. Mirrors the user-alias
@@ -327,7 +520,7 @@ pub(crate) fn near_matches(name: &str, installed: &[External]) -> Vec<External> 
 pub(crate) fn maybe_dispatch(argv: &[String]) -> Result<Option<i32>> {
     let shadowed = shadowed_names();
     let Some(name) = dispatch_name(argv, &shadowed) else {
-        return Ok(None);
+        return maybe_dispatch_nested(argv);
     };
     let path_var = std::env::var_os("PATH");
     let Some(exe) = find_in(name, path_var.as_deref()) else {
@@ -347,9 +540,13 @@ pub(crate) fn maybe_dispatch(argv: &[String]) -> Result<Option<i32>> {
 /// Run an external with `args`, its context in the environment.
 // trace:STORY-1641 | ai:claude
 pub(crate) fn run_external(exe: &Path, args: &[String]) -> Result<i32> {
+    run_external_with_context(exe, args, &current_context())
+}
+
+fn run_external_with_context(exe: &Path, args: &[String], ctx: &ExtensionContext) -> Result<i32> {
     let mut cmd = std::process::Command::new(exe);
     cmd.args(args);
-    apply_context(&mut cmd, &current_context());
+    apply_context(&mut cmd, ctx);
     #[cfg(unix)]
     {
         use std::os::unix::process::CommandExt;
@@ -381,7 +578,7 @@ pub(crate) fn help_for(name: &str) -> Option<Result<i32>> {
 // trace:STORY-1641 | ai:claude
 pub(crate) fn print_help_section() {
     use colored::Colorize;
-    let installed = discover();
+    let installed = discover_invocations();
     if installed.is_empty() {
         return;
     }
