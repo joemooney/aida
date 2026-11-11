@@ -1,7 +1,17 @@
 //! Done-to-completed auto-bump, closure holds, stale-review flips and `aida db reconcile-status` (STORY-1488 slice 1)
 // trace:STORY-1488 | ai:claude
 
-use crate::*;
+use crate::{
+    brief, classify_commit_source, closure_criteria_label, commit_count, completion, criteria,
+    emit_nonblocking_findings_on_completion, events, extract_plan_followups,
+    extract_pr_number_from_commit_subject, extract_referenced_spec_ids_from_commit,
+    extract_spec_ids_from_commit, extract_status_changes_from_commits, forge, git_arg_guard, glyph,
+    is_plan_commit_subject, list_leases, network_retry, parse_review_story_pr_number, plural, punt,
+    reconcile_evidence, record_role_activity, req_type_from_orphan_path, reviewer_summary,
+    spec_id_from_orphan_path, warn_multi_repo_scan_limited, workspace_repo_slug, Requirement,
+    RequirementStatus, RequirementType, Result, StatusTransition, Storage,
+};
+use colored::Colorize;
 
 /// TASK-78: project-wide opt-out for the post-pull merge-gate. Defaults to
 /// on; set `AIDA_AUTO_MERGE_GATE=false` (or `0`, `no`, `off`) to disable.
