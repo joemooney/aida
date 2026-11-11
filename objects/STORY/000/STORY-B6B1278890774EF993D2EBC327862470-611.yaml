@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-09T01:57:49.197822183Z
-modified_at: 2026-11-11T09:48:09.055500505Z
+modified_at: 2026-11-11T09:55:15.966439570Z
 req_type: Story
 tags:
 - area:orchestration
@@ -125,6 +125,13 @@ comments:
   modified_at: 2026-11-11T09:48:02.760523024Z
   session_id: 01a1ca010208
   harness_version: codex-cli 0.167.0
+- id: 01a1ca08-7b7e-71a3-ad5c-300ba34768c4
+  author: joe
+  content: 'ADVISOR BRIEF (2026-11-11 02:55 MST) for SLICE 1. This SUPERSEDES the 2026-11-10 ''sketch-only'' brief: the sketch is signed off (see the 02:45 MST signoff with amendments 1 and 2), so this dispatch IMPLEMENTS. Build S1: a pr_state module with PrFacts collection and pure classify(PrFacts) -> PrDecision {state, next_action, owner, reason, evidence_key} using the signed enum and first-match precedence; a read-only ''aida pr state'' command (table and --format json) registered from its own module; amendment 1 (a no-verdict or WAITING-only attempt at the current head is not a verdict); amendment 2 (batched forge reads, under 10 s for 20 PRs). Table-driven tests for every state, every adjacent precedence pair, unknown/transient evidence, stale head/workflow, old-head verdicts and owner resolution. NO effects: no dispatch, no ledger, no loop changes (those are S2/S3). Subject ''(Refs STORY-2688)''. LIGHT gate: one ''cargo test -p aida-cli-lib pr_state'' plus ''make check-ci-fast''. Fresh branch story-2688-s1.'
+  created_at: 2026-11-11T09:55:15.966439570Z
+  modified_at: 2026-11-11T09:55:15.966439570Z
+  session_id: 01a1c87f-970d-7ce0-9351-e4e75a87731e
+  harness_version: 2.1.322 (Claude Code)
 history:
 - id: 01a1be07-037f-7533-9b8f-9af4ceb825a2
   author: joe
