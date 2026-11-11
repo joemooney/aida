@@ -962,8 +962,8 @@ fn bug2518_chain_accepts_only_no_verdict_terminal_retry_edge() {
 
 // trace:BUG-2518 | ai:codex
 #[test]
-fn bug2518_cancelled_retry_readmits_after_spawn_and_preflight_failures() {
-    for cancellation in 0..2 {
+fn bug2518_cancelled_retry_readmits_after_spawn_preflight_and_unclaimed_exits() {
+    for cancellation in 0..3 {
         let f = Fixture::new();
         let _env = f.environment();
         crate::review_watch::fixture_admission_exit(&f.a, false, false, || {}).unwrap();

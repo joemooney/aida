@@ -1517,10 +1517,12 @@ fn select_with_coverage(
         if history.contains(&change.head) { return Ok(Action::Skip("head already has a recorded review".into())); }
         if history.blocking() >= 2 { return Ok(Action::Skip("two-round review cap reached; route further work to the advisor".into())); }
         if total >= usize::from(max) { return Ok(Action::Skip(format!("global reviewer capacity ({max}) is held by {holders}; a running review frees its slot when it exits, and an ambiguous one (dispatcher lost) stays reserved until an operator confirms it ended: check its log in .aida/review-watch/logs/ and `aida session leases --all`"))); }
-        // Only Exited->Failed setup conversions carry a diagnostic. Preflight
-        // and spawn failures do not consume a retry; preserve an inherited one.
+        // Exited->Failed setup conversions have a claimed dispatcher identity
+        // and a diagnostic. Unclaimed cancellations retain diagnostics alone.
+        // Preflight and spawn failures preserve the inherited review budget.
+        // trace:BUG-2518 | ai:codex
         // trace:TASK-3112 | ai:codex
-        let setup_retry = entry.attempts.iter().any(|a| a.head == change.head && a.phase == Phase::Failed && (a.setup_retry || (!a.retryable_fetch && a.diagnostic.is_some())));
+        let setup_retry = entry.attempts.iter().any(|a| a.head == change.head && a.phase == Phase::Failed && (a.setup_retry || (!a.retryable_fetch && a.identity.is_some() && a.diagnostic.is_some())));
         let attempt = Attempt { no_verdict_attempts, no_verdict_retry_at: None, review_lease: None, admission_hub: None, setup_retry, retryable_fetch: false, fetch_failures, head: change.head.clone(), token: uuid::Uuid::new_v4().to_string(), vendor, phase: Phase::Reserved, identity: None, diagnostic: None, dispatcher: None, spawning: false, worker: None, reviewer_spawning: false, reviewer: None, pgid: None, supersede: None };
         // Nothing is active here, so earlier terminal attempts are history only:
         // durable verdicts carry the rounds. trace:TASK-1993 | ai:claude
@@ -2630,7 +2632,14 @@ fn mark_unclaimed_exit(store: &Store, key: &str, token: &str, status: &str) -> R
         ));
         match a.phase {
             Phase::Reserved => {
-                a.phase = Phase::Exited;
+                // A proven pre-claim cancellation never started a review. Keep
+                // its inherited budget, just like a dispatcher spawn failure.
+                // trace:BUG-2518 | ai:codex
+                a.phase = if can_cancel {
+                    Phase::Failed
+                } else {
+                    Phase::Exited
+                };
                 a.diagnostic = Some(diagnostic);
             }
             Phase::Superseding => {
@@ -3398,6 +3407,7 @@ pub(crate) fn fixture_admission_retry_cancel(
                     _ => anyhow::bail!("cancelled retry unexpectedly requested a notification"),
                 };
                 anyhow::ensure!(reserve_dispatch(root, &store, "PR-7", &mut attempt)?);
+                let inherited = attempt.no_verdict_attempts;
                 match mode {
                     0 => cancel_spawn_failure(
                         root,
@@ -3405,6 +3415,12 @@ pub(crate) fn fixture_admission_retry_cancel(
                         "PR-7",
                         &attempt,
                         "fixture missing executable",
+                    )?,
+                    2 => mark_unclaimed_exit(
+                        &store,
+                        "PR-7",
+                        &attempt.token,
+                        "fixture refused grant",
                     )?,
                     _ => {
                         let result = execute_reservation(
@@ -3427,6 +3443,12 @@ pub(crate) fn fixture_admission_retry_cancel(
                         anyhow::ensure!(result.is_err());
                     }
                 }
+                store.transaction("PR-7", |state| {
+                    let cancelled = attempt_mut(state, "PR-7", &attempt.token).unwrap();
+                    anyhow::ensure!(cancelled.phase == Phase::Failed);
+                    anyhow::ensure!(cancelled.no_verdict_attempts == inherited);
+                    Ok(())
+                })?;
             }
         }
         fixture_admission_exit(root, false, false, || {})?;
