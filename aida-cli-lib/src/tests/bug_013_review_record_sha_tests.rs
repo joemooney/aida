@@ -168,3 +168,95 @@ fn the_default_path_records_the_full_sha() {
     record_with(root.path(), None, Some(&pr_head[..10])).expect("the default path records");
     assert_eq!(recorded_sha(root.path()), Some(pr_head));
 }
+
+// trace:BUG-2522 | ai:codex
+#[test]
+fn native_launcher_refusal_records_without_placing_a_hold() {
+    let (root, head) = project();
+    let anchor = root.path().join(".aida/review-verdicts/PR-2522.json");
+    let root_str = root.path().to_str().unwrap();
+    let _env = crate::test_env::EnvVarsGuard::apply(&[
+        ("AIDA_PROJECT_ROOT", Some(root_str)),
+        ("AIDA_DRIVE_ROOT", Some(root_str)),
+        ("AIDA_REVIEW_VERDICT_FILE", Some(anchor.to_str().unwrap())),
+        ("AIDA_CONTAINED", None),
+        ("AIDA_FROM_PR_HEAD_SHA", Some(&head)),
+        (crate::gate::seat_authority::GRANT_ENV, None),
+    ]);
+    assert!(!crate::session::process_contained());
+    let result = handle_review_record_at(
+        root.path().to_path_buf(),
+        "PR-2522",
+        "request-changes",
+        Some(&head),
+        None,
+        Some("needs a fix"),
+        &[],
+        &[],
+        Some(2522),
+    );
+    // This minimal project has no spec store to park; that later failure
+    // must not hide the persisted refusal or attempt primary-side holding.
+    if let Err(error) = result {
+        assert!(error.to_string().contains("could not park"), "{error:#}");
+    }
+    let verdict =
+        crate::gate::review_verdict::read_recorded_verdict(root.path(), "PR-2522").unwrap();
+    assert!(verdict.kind.requires_changes());
+    assert!(crate::gate::merge_hold_core::read_hold_record(root.path(), 2522).is_none());
+    let collected = crate::gate::review_verdict::CollectedVerdict {
+        verdict,
+        spec_records: vec![],
+        collected_from_worktree: false,
+    };
+    assert!(crate::merge_hold::place_collected_refusal(root.path(), 2522, &collected).unwrap());
+    assert!(crate::gate::merge_hold_core::read_hold_record(root.path(), 2522).is_some());
+}
+
+// trace:BUG-2522 | ai:codex
+#[test]
+fn operator_hold_failure_preserves_both_verdict_records() {
+    let (root, head) = project();
+    let root_str = root.path().to_str().unwrap();
+    let _env = crate::test_env::EnvVarsGuard::apply(&[
+        ("AIDA_PROJECT_ROOT", Some(root_str)),
+        ("AIDA_DRIVE_ROOT", Some(root_str)),
+        ("AIDA_REVIEW_VERDICT_FILE", None),
+        ("AIDA_CONTAINED", None),
+        ("AIDA_FROM_PR_HEAD_SHA", Some(&head)),
+        (crate::gate::seat_authority::GRANT_ENV, None),
+    ]);
+    // A directory in place of the lock refuses hold placement, without
+    // preventing either verdict write in the same ledger directory.
+    std::fs::create_dir_all(crate::gate::merge_hold_core::hold_lock_path(
+        root.path(),
+        2522,
+    ))
+    .unwrap();
+    let error = handle_review_record_at(
+        root.path().to_path_buf(),
+        "BUG-2522",
+        "request-changes",
+        Some(&head),
+        None,
+        Some("needs a fix"),
+        &[],
+        &[],
+        Some(2522),
+    )
+    .unwrap_err();
+    assert!(
+        error
+            .to_string()
+            .contains("verdict recorded, but could not protect"),
+        "{error:#}"
+    );
+    for key in ["BUG-2522", "PR-2522"] {
+        assert!(
+            crate::gate::review_verdict::read_recorded_verdict(root.path(), key)
+                .unwrap()
+                .kind
+                .requires_changes()
+        );
+    }
+}
