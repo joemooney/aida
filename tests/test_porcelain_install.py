@@ -65,20 +65,28 @@ class ReleaseInstall(unittest.TestCase):
         self.assertTrue((self.dest / 'aida-server').is_file())
 
     def test_replacement_failure_rolls_back(self):
-        for name in ('aida', 'aida-server', 'aida-porcelain'):
-            (self.dest / name).write_text('old-' + name)
-        (self.dest / 'aida-flow').symlink_to('old-porcelain')
-        bin_dir = self.root / 'bin'
-        bin_dir.mkdir()
-        # Fail the third publication rename, but permit rollback renames.
-        stub = bin_dir / 'mv'
-        stub.write_text('#!/bin/sh\ncase "$2" in */new/aida-porcelain) exit 1;; esac\nexec /usr/bin/mv "$@"\n')
-        stub.chmod(0o755)
-        env = dict(self.env, PATH=str(bin_dir) + ':' + self.env['PATH'])
-        self.assertNotEqual(self.run_upgrade(env).returncode, 0)
-        for name in ('aida', 'aida-server', 'aida-porcelain'):
-            self.assertEqual((self.dest / name).read_text(), 'old-' + name)
-        self.assertEqual(os.readlink(self.dest / 'aida-flow'), 'old-porcelain')
+        # Exercise every publication boundary, including the link replacement
+        # after all three binaries have moved. trace:STORY-2704 | ai:codex
+        for failed_member in ('aida', 'aida-server', 'aida-porcelain', 'aida-flow'):
+            with self.subTest(failed_member=failed_member):
+                for name in ('aida', 'aida-server', 'aida-porcelain'):
+                    (self.dest / name).write_text('old-' + name)
+                link = self.dest / 'aida-flow'
+                link.unlink(missing_ok=True)
+                link.symlink_to('old-porcelain')
+                bin_dir = self.root / ('bin-' + failed_member)
+                bin_dir.mkdir()
+                # Fail only publication; rollback uses the old/ paths.
+                stub = bin_dir / 'mv'
+                stub.write_text('#!/bin/sh\ncase "$2" in */new/' + failed_member
+                                + ') exit 1;; esac\nexec /usr/bin/mv "$@"\n')
+                stub.chmod(0o755)
+                env = dict(self.env, PATH=str(bin_dir) + ':' + self.env['PATH'])
+                self.assertNotEqual(self.run_upgrade(env).returncode, 0)
+                for name in ('aida', 'aida-server', 'aida-porcelain'):
+                    self.assertEqual((self.dest / name).read_text(), 'old-' + name)
+                self.assertEqual(os.readlink(link), 'old-porcelain')
+                self.assertEqual(list(self.dest.glob('.aida-upgrade-*')), [])
 
     def test_release_archive_contains_multicall_link(self):
         workflow = (ROOT / '.github/workflows/release.yml').read_text()
