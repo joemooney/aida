@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-09T23:18:35.052711129Z
-modified_at: 2026-11-11T02:56:09.629005723Z
+modified_at: 2026-11-11T03:04:47.093621573Z
 req_type: Story
 comments:
 - id: 01a1c5dc-7b38-79a0-b14b-a53401fc1b6e
@@ -176,6 +176,13 @@ comments:
   content: 'Round 2 sketch: retain the existing signed publication schema v2 (bumped from v1 in the prior round), permanent carry_eligible with missing=true and mirrored local attestation. Retain carry_eligible in the proof-cache authority key. Extend recording identity with effective carry policy and pass incoming policy into the builder before round archival for spec and PR writes. Resolve effective corpus recordings before checking carry policy, so superseded no-carry artifacts cannot veto eligible successors. Regress both policy transitions and both corpus input orders. Host codegraph client /home/joe/ai/aida/.codegraph/proxy-state/bin/codegraph is absent; use rg for this repair.'
   created_at: 2026-11-11T02:56:09.629005723Z
   modified_at: 2026-11-11T02:56:09.629005723Z
+  session_id: 01a1c8882335
+  harness_version: codex-cli 0.167.0
+- id: 01a1c890-acf5-7f90-a96e-f9bc3ff112fb
+  author: dirtlab
+  content: 'Round 2 implemented both P2 findings. Recording identity now includes effective carry policy (legacy=true), spec and PR builders receive incoming policy before archival, and persisted watcher keys accept the legacy missing field. Corpus carry policy is evaluated only on effective append/supersession-selected evidence. Validation: lane job j20261111T025939646-2-0, cargo test --profile agent -p aida-cli-lib --lib -- story_2696: 13 executed, 13 passed. New regressions cover true-to-false/false-to-true at identical head/reviewer for spec/PR rounds and recorded outcome, legacy watcher keys, and superseded no-carry in both corpus orders after a clean merge. git diff --check passes. Edits remain uncommitted for native host publication.'
+  created_at: 2026-11-11T03:04:47.093621573Z
+  modified_at: 2026-11-11T03:04:47.093621573Z
   session_id: 01a1c8882335
   harness_version: codex-cli 0.167.0
 history:
