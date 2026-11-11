@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-10T22:04:54.061461738Z
-modified_at: 2026-11-11T01:33:28.537119444Z
+modified_at: 2026-11-11T01:46:17.350676583Z
 req_type: Story
 comments:
 - id: 01a1c781-4cf1-7c80-b086-89c5c5096ab6
@@ -168,6 +168,13 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida edit --status`. It was punted on: design-fork: Round 3 findings P1 and P2, reviewed f89e7ce27a76: I accept the reported implementation gaps and marker-scan regression. I dispute proceeding with production shared-state implementation or treating another partial safety slice as approved before the explicit ruling required by P1. The 22:22 UTC advisor ruling settles host-staged merge mechanics and read-only Codex .git, but does not select the shared dispatch-state contract. Please approve the versioned repair journal proposed in docs/plans/2026-11-10-story-2710-conflict-lane.md (repository/PR/head reservations shared by watcher and direct rework, ambiguous-spawn retention, host-recorded original conflict paths retained across staging retries, exact-tree validation evidence, per-head refusal delivery), or select the watcher-state alternative. P2 requires the retained host-recorded path list; the current changed-tracked-path scan is not an acceptable substitute. No separately tracked safety-slice scope has been authorized. Both findings remain open; no acceptance or completion is claimed. No source edits or tests performed this round; Git metadata remains read-only.. No triage reason was given.'
   created_at: 2026-11-11T01:28:47.826921874Z
   modified_at: 2026-11-11T01:28:47.826921874Z
+  session_id: 01a1c70f-d731-7b70-acf8-e9ab3d288fca
+  harness_version: 2.1.322 (Claude Code)
+- id: 01a1c848-cf86-7101-b8a6-4048eed058f8
+  author: joe
+  content: 'ADVISOR SLICE PLAN (2026-11-10 19:00 MST, binding). The story is too big for one lane run, so it lands in slices; each slice is its own PR with a ''(Refs STORY-2710)'' subject, and only slice 3''s PR completes the story. REVIEWERS: judge each PR against ITS slice''s acceptance only; the absence of later slices is not a finding. Slice 0 = PR #3813 as it stands at 1d0d1cbcdf: AC7 publication marker guard + the P2 ordinary-publication marker-example fix. Ship it on approval. Slice 1: the shared versioned repair journal (contract in the 18:50 ruling); host-staged merge that records the original conflict paths in the journal and survives staging retries; publication''s marker check reads the journal path list (P2 complete); registered regeneration table (exec-context ledger, template mirrors) applied by the host at staging. Slice 2: automatic dispatch from review-watch and direct rework on the project''s configured implementer vendor, with journal reservations and ambiguous-spawn retention; the lane brief lists the journal''s conflict paths. Slice 3: exact-tree compile gate (cargo check -p aida-cli-lib --tests on the merged tree before push), per-head refusal notices via advisor mail (one accepted notice per head), and the end-to-end Codex test with .git read-only (AC6). Commit subject for 3: (STORY-2710). Start slice 1 only after #3813 lands, on a fresh branch from main.'
+  created_at: 2026-11-11T01:46:17.350676583Z
+  modified_at: 2026-11-11T01:46:17.350676583Z
   session_id: 01a1c70f-d731-7b70-acf8-e9ab3d288fca
   harness_version: 2.1.322 (Claude Code)
 history:
