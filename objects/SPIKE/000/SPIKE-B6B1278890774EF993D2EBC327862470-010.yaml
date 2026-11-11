@@ -18,7 +18,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-11T05:40:53.335487241Z
-modified_at: 2026-11-11T07:18:06.501891591Z
+modified_at: 2026-11-11T07:18:07.972021462Z
 req_type: Spike
 tags:
 - architecture
@@ -79,6 +79,22 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Full sweep: SPIKE-714 AC1 unverified (167 unresolved class/evidence rows); AC2 unverified (reachable writer/gate audit incomplete); AC3 unverified (first batch absent); AC4 verified by pinned revisions and documented method in spike reports. SPIKE-714 (spike protocol): met (dated docs/spikes deliverables in diff). Three actionable acceptance/dependency gaps remain; CI pending at review time.. It was punted on: design-fork: Round 3: explicitly dispute finding 3 only insofar as it requires certification of about twenty invocation-level read-only commands before the advisor defines the effect boundary. New source-grounded evidence: normal schema/commands/help-all paths reach lib_part1.rs:2079 -> presence::auto_flip_if_interactive -> set_home -> write_presence_file, and successful returns reach lib_part1.rs:389 -> usage::append_event; four exact sink IDs verified in store-writers.toml. Handler-only versus full-invocation classification, direct CLI-owned writers under core-write, and mixed-family aggregation require advisor ruling. Accept findings 1 and 2; all 167 classifications, full dependency matrix/global ranking, and AC3 remain incomplete. Required reviewed host client /home/joe/ai/aida/.codegraph/proxy-state/bin/codegraph is still absent; doctor reports codegraph,missing. Recovery: advisor ruling plus host-deployed query client and indexed main revision, then complete audit. New report docs/spikes/2026-11-11-command-inventory-round-3.md adds exact production paths, decision alternatives, and dependencies/visibility blockers for schema, commands and help-all; four Python tests and ledger/denominator checks pass. Report left uncommitted per native-seat contract; no publication declaration or completion requested.. No triage reason was given.'
   created_at: 2026-11-11T07:18:06.501887235Z
   modified_at: 2026-11-11T07:18:06.501887235Z
+  session_id: 01a1c87f-970d-7ce0-9351-e4e75a87731e
+  harness_version: 2.1.322 (Claude Code)
+- id: 01a1c978-9ed2-7112-bf58-c6c557df9da5
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (SPIKE-714):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 4ec84acc04df
+    Recorded: 2026-11-11T07:13:39.224511052+00:00
+    Findings:
+    1. [P1] scripts/command-inventory.py:99-101 and scripts/command-inventory.toml: complete SPIKE-714 AC1/AC2 for all 167 REGISTRY entries. All classifications are unresolved and all classification_evidence fields are identical placeholders; same-file writer candidates do not prove reachability. Resolve the documented handler-versus-invocation/direct-writer taxonomy with the advisor, then supply each class and production-path evidence cross-checked against store-writers.toml, at least one reachable writer or gate for every core-write/authority row, and per-class totals.
+    2. [P1] scripts/command-inventory.py:97-101 and docs/spikes/2026-11-11-command-inventory-round-3.md:88-115: finish the required dependency/visibility/placement audit across all registrations. Every helpers_to_widen, move_stage and home_option field remains a placeholder; whole-file lexical crate roots do not identify called modules. Record actual external called modules, exact helper/type visibility blockers, move-now/after-leaf/after-family stage and home alternatives per command, and rank globally shared blockers. The bounded prose inspections do not cover the remaining registrations.
+    3. [P1] docs/spikes/2026-11-11-command-inventory-round-3.md:5-8 and 77-82: satisfy SPIKE-714 AC3 by naming the approximately twenty-command first porcelain-views batch, ranked by verified helper dependencies with each command's blocking helpers. Resolve the explicitly disputed invocation-versus-handler effect boundary with the advisor before certifying candidates; the three conditional candidates and recovery instructions are not the required batch.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-11T07:18:07.826773214Z
+  modified_at: 2026-11-11T07:18:07.826773214Z
   session_id: 01a1c87f-970d-7ce0-9351-e4e75a87731e
   harness_version: 2.1.322 (Claude Code)
 history:
