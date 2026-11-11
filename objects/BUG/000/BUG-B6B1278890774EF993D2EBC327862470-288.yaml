@@ -1,0 +1,21 @@
+id: 01a1ca2d-412f-7d52-b7bc-230c28064294
+spec_id: BUG-b6b1278890774ef993d2ebc327862470-288
+agreed_id: BUG-2523
+title: Lane brief selection follows the latest comment labelled 'ADVISOR BRIEF' even when a later advisor ruling supersedes it
+description: 'Observed 2026-11-11 02:47 MST: STORY-2688 had a 2026-11-10 ''ADVISOR BRIEF: sketch-only lane'' comment, then a 2026-11-11 02:45 ''ADVISOR SIGNOFF ... S1 now'' comment. The implementer lane''s prompt carried only the old sketch-only brief, so the lane punted in under a minute as a design fork (''this dispatch explicitly prohibits implementation''). A relaunch after posting a new comment labelled ''ADVISOR BRIEF'' worked. Expected: the pickup brief is the latest binding advisor instruction (BRIEF, RULING, SIGNOFF or AMENDMENT), or an advisor brief has an explicit supersedes field; a stale brief that a later ruling contradicts is never the sole instruction. Acceptance: (1) a spec whose newest advisor ruling post-dates its newest BRIEF puts that ruling in the lane prompt; (2) regression test with the STORY-2688 comment shape.'
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-11T10:35:25.871510628Z
+modified_at: 2026-11-11T10:35:25.871510628Z
+req_type: Bug
+filed_at:
+  code_sha: e9dd23fc0a92632eb0998559be21b53f375fa759
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: efe4bf797ae
+  vendor: claude
+  session: 01a1c87f-970d-7ce0-9351-e4e75a87731e
+  harness_version: 2.1.322 (Claude Code)
