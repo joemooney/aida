@@ -8,8 +8,16 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-11T13:37:45.305550937Z
-modified_at: 2026-11-11T13:37:45.305550937Z
+modified_at: 2026-11-11T17:13:49.127123582Z
 req_type: Story
+comments:
+- id: 01a1cb99-fd47-7380-a6d2-0b77e43e90db
+  author: joe
+  content: '2026-11-11 operator: /var/cache/aida-ci (GitLab runner cache on imac) reached 340G. Pre-v2 target, target-0 and target-1 (unused since Sept) were stale; only target-v2-$CI_CONCURRENT_ID is live. Operator prefers build speed while space suffices: the disk guard should report stale non-v2 target dirs under the runner cache and warn above a size threshold, not prune live slot caches.'
+  created_at: 2026-11-11T17:13:49.127123582Z
+  modified_at: 2026-11-11T17:13:49.127123582Z
+  session_id: 01a1cb56-f02b-7652-869e-3788560cbf1b
+  harness_version: 2.1.322 (Claude Code)
 filed_at:
   code_sha: 11b131dfe3341e6d9c7127d64370f91366094711
   branch: main
