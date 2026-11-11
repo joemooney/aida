@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-10T03:52:00.571796159Z
-modified_at: 2026-11-11T16:04:42.728460114Z
+modified_at: 2026-11-11T17:21:00.336105764Z
 req_type: Story
 comments:
 - id: 01a1c399-6840-7383-843e-9930f6eaa3f7
@@ -702,6 +702,12 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida edit --status`. It was shelved on: reviewer/verdict:request-changes: Full 17-file sweep: two CI-confirmed command inventory regressions, Cargo installs lose flow, and required nested resolution is absent.. No triage reason was given.'
   created_at: 2026-11-11T15:52:23.108762328Z
   modified_at: 2026-11-11T15:52:23.108762328Z
+- id: 01a1cba0-91b0-7702-afda-9e74b6f45a55
+  author: joe
+  content: 'Addressed the latest four PR #3842 findings: regenerated the flow-data audit without weakening exhaustive assertions; retained absolute reporting-bound classifications; upgraded Cargo installs with a matching-tag companion and relative flow alias plus source-install instructions; implemented nested built-in-parent resolution and help with child, alias and argv-rewrite precedence. Added regressions, including Cargo-only installation and companion-present discovery isolation. Validation: 51 targeted lane tests passed (14 time bounds, 14 JSON audit, 11 external helpers, 1 Cargo upgrade, 11 external CLI), companion build passed, and the final make check-ci-fast passed all 47 gates. Added the single Cargo symlink writer inventory row with no mediation authority. Native seat leaves changes uncommitted on story-2704-s3 for host publication to PR #3842 with its title preserved.'
+  created_at: 2026-11-11T17:21:00.336105764Z
+  modified_at: 2026-11-11T17:21:00.336105764Z
+  session_id: 01a1cb5aa456
 history:
 - id: 01a1c399-7102-7f81-9bb9-fd37379159d3
   author: joe
