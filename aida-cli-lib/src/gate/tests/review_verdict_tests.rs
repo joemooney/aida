@@ -2983,3 +2983,66 @@ fn story_2696_legacy_watcher_recording_key_defaults_eligible() {
     let value = serde_json::to_value(&key).unwrap();
     assert_eq!(value[4], true);
 }
+
+// trace:STORY-2696 | ai:codex
+#[test]
+fn story_2696_four_policy_toggles_preserve_distinct_acts() {
+    for id in ["STORY-2696", "PR-99"] {
+        let dir = TempDir::new().unwrap();
+        let path = verdict_path(dir.path(), id);
+        let sha = "4444444444444444444444444444444444444444";
+        let mut acts = Vec::new();
+        for (index, eligible) in [false, true, false, true].into_iter().enumerate() {
+            let mut current = build_verdict_object_with_policy(
+                dir.path(),
+                &path,
+                Some("approved"),
+                Some(sha),
+                None,
+                None,
+                &[],
+                "reviewer",
+                Some(eligible),
+            )
+            .unwrap();
+            current.insert(
+                "recorded_at".into(),
+                format!("2026-11-10T00:00:0{index}Z").into(),
+            );
+            current.insert(
+                ATTESTATION_KEY.into(),
+                serde_json::json!({
+                    "sha":sha, "seat":"reviewer", "carry_eligible":eligible,
+                    "receipt_id":format!("receipt-{index}")
+                }),
+            );
+            let rounds = current
+                .get("rounds")
+                .and_then(|v| v.as_array())
+                .cloned()
+                .unwrap_or_default();
+            assert_eq!(rounds, acts, "{id}: displaced acts at toggle {index}");
+            write_verdict_object(&path, &current).unwrap();
+            let mut repeat = build_verdict_object_with_policy(
+                dir.path(),
+                &path,
+                Some("approved"),
+                Some(sha),
+                None,
+                None,
+                &[],
+                "reviewer",
+                Some(eligible),
+            )
+            .unwrap();
+            repeat.insert(ATTESTATION_KEY.into(), current[ATTESTATION_KEY].clone());
+            assert_eq!(repeat.get("rounds"), current.get("rounds"));
+            assert_eq!(
+                record_outcome(Some(&current), &repeat),
+                RecordOutcome::Unchanged
+            );
+            current.remove("rounds");
+            acts.push(serde_json::Value::Object(current));
+        }
+    }
+}

@@ -1592,16 +1592,43 @@ fn story_2696_corpus_superseded_policy_cannot_veto_clean_merge() {
     record_corpus_verdict(repo, &format!("PR-{PR}"), "approved", &approved);
     corpus_gate(repo, &[], "main", &head).unwrap();
     let proof = proof_event(repo, &head).unwrap();
-    let old = serde_json::json!({"verdict":"approved", "reviewed_sha":approved,
-        "recorded_by":"reviewer", "recorder_attestation":{"sha":approved,
-        "seat":"reviewer", "carry_eligible":false}});
-    let mut new = old.clone();
-    new["recorder_attestation"]["carry_eligible"] = true.into();
-    new["rounds"] = serde_json::json!([old]);
+    let path = crate::gate::review_verdict::verdict_path(repo, "STORY-2696");
+    let mut stale_c = None;
+    let mut latest = None;
+    for (index, eligible) in [false, true, false, true].into_iter().enumerate() {
+        let mut act = crate::gate::review_verdict::build_verdict_object_with_policy(
+            repo,
+            &path,
+            Some("approved"),
+            Some(&approved),
+            None,
+            None,
+            &[],
+            "reviewer",
+            Some(eligible),
+        )
+        .unwrap();
+        act.insert(
+            "recorded_at".into(),
+            format!("2026-11-10T00:00:0{index}Z").into(),
+        );
+        act.insert(
+            "recorder_attestation".into(),
+            serde_json::json!({
+                "sha":approved, "seat":"reviewer", "carry_eligible":eligible,
+                "receipt_id":format!("receipt-{index}")
+            }),
+        );
+        crate::gate::review_verdict::write_verdict_object(&path, &act).unwrap();
+        if index == 2 {
+            stale_c = Some(serde_json::to_string(&act).unwrap());
+        }
+        latest = Some(serde_json::to_string(&act).unwrap());
+    }
     for reverse in [false, true] {
         let mut corpus = vec![
-            ("PR-7".into(), old.to_string()),
-            ("STORY-2696".into(), new.to_string()),
+            ("PR-7".into(), stale_c.clone().unwrap()),
+            ("STORY-2696".into(), latest.clone().unwrap()),
         ];
         if reverse {
             corpus.reverse();

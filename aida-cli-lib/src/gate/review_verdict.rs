@@ -897,9 +897,9 @@ pub(crate) fn recording_carry_eligible(m: &JsonObj) -> bool {
 }
 
 /// Everything about a round that carries review signal. Two rounds with equal
-/// keys are the same recording, so retaining the second adds nothing; any
-/// difference — a different reviewer above all — is signal that overwriting
-/// would destroy.
+/// keys are semantically identical for immediate re-record idempotence.
+/// Historical acts still have distinct identities (including receipts and
+/// timestamps), even when their semantic keys match.
 pub(crate) fn recording_key(m: &JsonObj) -> RecordingKey {
     let field = |k: &str| {
         m.get(k)
@@ -1617,8 +1617,8 @@ fn archive_current_round(
     let mut snapshot = obj.clone();
     snapshot.remove("rounds");
     snapshot.remove("unarchived_rounds");
-    // Retain iff something would otherwise be LOST. A byte-identical
-    // re-recording carries nothing new; anything else does — including a
+    // Retain iff something would otherwise be LOST. An immediately repeated
+    // semantic recording carries nothing new; anything else does — including a
     // second reviewer at the SAME commit, which is the collision this spec
     // exists for and the one case an is-it-the-same-head test cannot see.
     let key = recording_key(&snapshot);
@@ -1645,11 +1645,10 @@ fn archive_current_round(
         .get("rounds")
         .and_then(|v| v.as_array().cloned())
         .unwrap_or_default();
-    if rounds
-        .iter()
-        .filter_map(|r| r.as_object())
-        .any(|r| recording_key(r) == key)
-    {
+    // trace:STORY-2696 | ai:codex — repeated policy toggles can revisit a
+    // semantic key while displacing a distinct act. Preserve that act so stale
+    // aliases remain connected to the later recording by append evidence.
+    if rounds.iter().any(|r| r.as_object() == Some(&snapshot)) {
         return;
     }
     rounds.push(serde_json::Value::Object(snapshot));
