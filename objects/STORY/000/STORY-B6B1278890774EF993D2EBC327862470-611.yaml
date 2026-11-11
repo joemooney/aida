@@ -3,12 +3,12 @@ spec_id: STORY-b6b1278890774ef993d2ebc327862470-611
 agreed_id: STORY-2688
 title: 'PR reconciler: one tested command maps every open PR to one state, next action and owner, and performs the mechanical actions'
 description: 'Problem: on 2026-11-08 the PR control plane was untested bash loops (auto-train, auto-rework, review-watch-loop) plus advisor sweeps. A restart wiped auto-rework''s in-memory seen set and it re-reworked old heads. Requirement: derive each PR''s state from durable facts (open/closed, mergeable, head SHA, verdict at head, CI at head, hold state, lane running) into exactly one of a closed set of states, each with one next action and owner. Mechanical actions run idempotently from durable state; judgment states route to a named seat. Acceptance: table-driven tests cover every state; restart mid-pass repeats no action; the operator scripts can be retired. Architecture change: sketch and advisor signoff first.'
-status: InProgress
+status: NeedsAttention
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-09T01:57:49.197822183Z
-modified_at: 2026-11-11T09:47:07.712438498Z
+modified_at: 2026-11-11T09:48:09.055500505Z
 req_type: Story
 tags:
 - area:orchestration
@@ -89,6 +89,42 @@ comments:
   modified_at: 2026-11-11T09:38:37.706374746Z
   session_id: 01a1c87f-970d-7ce0-9351-e4e75a87731e
   harness_version: 2.1.322 (Claude Code)
+- id: 01a1ca01-df48-79b2-b73a-ab83a20e9c6c
+  author: dirtlab
+  content: |
+    Consolidated architecture sketch — sketch-only lane, 2026-11-11.
+
+    Scope: the invocation's binding 2026-11-10 brief requires a sketch and punt, with no source edits. The spec already contains joe's 2026-11-11 signoff authorizing S1. This comment preserves that signoff and its amendments; the punt requests reconciliation of the current sketch-only dispatch with that implementation authorization, not a claim that signoff is absent.
+
+    Derivation source of truth: one proposed cli-library pr_state module collects PrFacts and calls pure classify(PrFacts) -> PrDecision { state, next_action, owner, reason, evidence_key }. Both read-only `aida pr state` table/JSON and future reconciliation use this function. Derived state is neither stored lifecycle status nor permission to act. PrFacts combines forge/project/change identity, confirmed lifecycle, pinned head/base, mergeability and behind-base evidence, workflow digest, attested verdict/round at current head, classified required CI at that head, effective holds/punts/clearance, durable reservations, receipts and process-bound lane ownership. Reuse forge_observed, trusted verdict readers and existing gates. Preserve unknown/pending/transient facts; recheck head after collection and reject mixed-head snapshots. Old-head verdicts are diagnostic only. Batch forge collection by fact kind, not per PR; S1 performance acceptance is under 10 seconds for 20 open PRs.
+
+    Closed enum, first-match precedence; next action / owner:
+    1. Gone: confirmed closed/merged -> retire reconciler reservations after confirmation / reconciler (never terminate a live child implicitly).
+    2. EvidencePending: needed evidence pending, transient, moving, or reviewer retry backoff active -> bounded re-observation / reconciler. Persistent unsafe/corrupt evidence escalates to NeedsRuling.
+    3. Held: effective punt or uncleared hold -> request authorized clearance / concrete advisor seat; human-clear requirements retain human authority.
+    4. InFlight: accepted queued/running operation or ambiguous acceptance, including overlapping prior-head work -> observe operation receipt / recorded lane, reviewer or train owner.
+    5. NeedsRuling: judgment verdict, policy exhaustion, contradictory facts, draft/unsupported policy, missing or ambiguous owner -> request decision / concrete advisor seat; unavailable advisor routing is a visible refusal.
+    6. Conflict: confirmed conflict -> queue conflict resolution / concrete implementer seat.
+    7. BehindBase: mergeable but base/workflow freshness requires update -> request guarded update / concrete author or implementer seat.
+    8. NeedsRework: current-head findings permit mechanical rework -> enqueue findings-bound rework / concrete implementer seat.
+    9. RedCi: confirmed blocking CI failure without higher-priority findings -> route diagnosis / concrete implementer seat.
+    10. CiPendingThenVerdict: no valid current-head verdict, CI pending -> dispatch review now / concrete reviewer seat.
+    11. NeedsVerdict: no valid current-head verdict, CI green -> dispatch review / concrete reviewer seat.
+    12. ApprovedCiPending: valid current-head approval, CI pending or unregistered -> observe CI / reconciler.
+    13. ReadyForTrain: valid approval, green CI, known freshness/mergeability/eligibility -> nominate exact head / train controller.
+    All later rows exclude earlier predicates. Nondecisive facts remain diagnostics. A current-head reviewer exit without a verdict, or WAITING alone, supplies no verdict: expose attempt count; EvidencePending during BUG-2518 retry backoff, then NeedsVerdict/CiPendingThenVerdict when permitted. Exhausted retry policy routes NeedsRuling. Completed attempts alone must not permanently imply InFlight. CI need not finish before review dispatch.
+
+    Consumers: auto-train consumes ReadyForTrain nominations; `aida pr train` retains selection/batching, train CI, current gate checks, journal and merge authority. Auto-rework consumes NeedsRework using existing queue-rework with exact findings/round identity; RedCi/Conflict route diagnosis rather than blind retries. Review-watch consumes NeedsVerdict/CiPendingThenVerdict through its attested admission, shared concurrency reservations and prior-head overlap rules. ApprovedCiPending only observes. Loops become schedulers over the common output, not independent classifiers. Shadow mode is read-only; only one executor is enabled during migration. Retire auto-train/auto-rework predicates after parity; retain review-watch's runtime/admission machinery behind the shared decision boundary.
+
+    Durability: under shared project/change locking, refresh facts and reserve intent before effects. Operation key includes project/forge/change, head and action, plus findings/verdict-round for review/rework and target base/workflow for update/train. Persist owner, fingerprint, phase and destination receipt. Reuse downstream reservation/journal identities. Restart inspects destination acceptance before replay. Crash-after-effect requires stable downstream operation-ID deduplication or discoverable durable acceptance; a ledger alone cannot guarantee exactly-once effects. Ambiguous acceptance retains reservation/capacity and routes recovery; elapsed time cannot prove safe replay. Revalidate head, holds and authority at existing locked mutation boundaries. No automatic merge or clearance authority is added.
+
+    Proposed later implementation slices (not performed here): S1 pure classifier and read-only table/JSON; table-driven coverage for all states and precedence pairs, owner resolution, WAITING/no-verdict/backoff/exhaustion, stale evidence and batch latency. S2 durable ledger and dry-run with concurrency/crash-boundary tests. S3 effect adapters only after receipt contracts prove restart safety, then shadow parity and script retirement. Preserve advisor's approved S1 Refs-only publication and LIGHT gate requirements for a subsequent implementation dispatch.
+
+    Validation: read existing spec discussion and inspected review_watch.rs reservation/no-verdict retry interfaces plus queue_cmd/rework.rs interfaces using rg. Supplied host codegraph client /home/joe/ai/aida/.codegraph/proxy-state/bin/codegraph is absent; no index operations performed. No source edits; git status is clean. No Cargo tests apply to this sketch-only deliverable. Requested advisor decision: confirm the next dispatch may implement the already signed-off S1 despite this invocation's sketch-only brief.
+  created_at: 2026-11-11T09:48:02.760523024Z
+  modified_at: 2026-11-11T09:48:02.760523024Z
+  session_id: 01a1ca010208
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1be07-037f-7533-9b8f-9af4ceb825a2
   author: joe
@@ -136,6 +172,15 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1ca01-f7df-7fe2-8848-88064dffd914
+  author: dirtlab
+  timestamp: 2026-11-11T09:48:09.055509456Z
+  session_id: 01a1ca010208
+  harness_version: codex-cli 0.167.0
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 filed_at:
   code_sha: a7a14984cec5533987dfeccb70d1f91aaebbf22a
   branch: main
@@ -144,3 +189,9 @@ filed_at:
   aida_build_sha: 8a4a909a967
   vendor: claude
   session: 20abb7c3-8f9b-4a5e-b326-404921f3b450
+attention_reason:
+  category: design-fork
+  detail: Sketch-only deliverable posted per binding invocation brief; no source edits. Existing 2026-11-11 advisor signoff authorizes S1, but this dispatch explicitly prohibits implementation. Advisor should confirm next dispatch may implement the signed-off S1 and clear this scope gate.
+  lean: Retain existing architecture signoff and amendments; authorize S1 in a subsequent implementation dispatch.
+  raised_by: implementer
+  raised_at: 2026-11-11T09:48:09.055500505Z
