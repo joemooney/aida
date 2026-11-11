@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-09T01:58:46.910276326Z
-modified_at: 2026-11-11T01:48:59.223826411Z
+modified_at: 2026-11-11T02:05:53.535790783Z
 req_type: Story
 tags:
 - area:orchestration
@@ -34,6 +34,36 @@ comments:
   modified_at: 2026-11-11T01:27:22.449009225Z
   session_id: 01a1c70f-d731-7b70-acf8-e9ab3d288fca
   harness_version: 2.1.322 (Claude Code)
+- id: 01a1c85a-c1ff-7432-8870-252472b56bea
+  author: dirtlab
+  content: |
+    Implemented advisor-ruling slice 1 (train), leaving rework and stale-release for separate slices. No host stopgap scripts were read or ported.
+
+    Design: review-watch and auto-train instantiate one shared fixed service engine, with independent receipts/locks/logs under .aida/review-watch and .aida/auto-train. The existing authenticated deputy rebind operation accepts the same advisor grant for both; HostAuthority refresh/shutdown is shared. Auto-train runs every 180 seconds with exact-head authorized approval, head-bound green required CI, no hold, and train-branch exclusion. Strict eligibility also runs at the typed pre-land/recovery member gate and compares the admitted head. The existing train journal, ownership and merge gates remain authoritative. Rotation takes effect between passes and does not kill an active train. Three consecutive failures create one durable, idempotent advisor alert per episode; success clears the episode, backoff does not. Added advisor loops train-status and updated CLI help snapshot/manual.
+
+    Changed files:
+    aida-cli-lib/src/advisor_loop_service.rs
+    aida-cli-lib/src/advisor_loop_train.rs
+    aida-cli-lib/src/review_watch_train_service.rs
+    aida-cli-lib/src/review_watch_service.rs
+    aida-cli-lib/src/review_watch.rs
+    aida-cli-lib/src/review_watch_notice.rs
+    aida-cli-lib/src/pr_train.rs
+    aida-cli-lib/src/advisor_cmd_root.rs
+    aida-cli-lib/src/advisor_cmd_root_args.rs
+    aida-cli-lib/src/deputy_shell/runner.rs
+    aida-cli-lib/src/deputy_shell/socket.rs
+    aida-cli-lib/src/tests/task_1945_review_watch_ready_tests.rs
+    aida-cli-lib/src/tests/golden/cli_help_snapshot.txt
+    docs/cli/06-roles-sessions.md
+
+    Validation: lane runner cargo test --profile agent -p aida-cli-lib --lib filters story2691 (5 passed), story2571 (20 passed), pr_train::tests:: (124 passed), help_surface_matches_golden_snapshot (1 passed, regenerated then verified without update). Python guard suites test_exec_context_ratchet, test_crate_split_tools, test_store_writer_inventory, test_verify_manual: 103 passed. Store-writer inventory, execution-context and crate-glob ratchets, static manual check, rustfmt and git diff --check passed. Generic check-ci-fast was incomplete because it unexpectedly invoked direct Cargo; Rust validation was performed through the lane runner. No live forge merge/service deployment exercised. Configured host codegraph executable was absent; repository searches used instead.
+
+    Native handoff: edits intentionally uncommitted. Host must stage the three new source files along with modified files. Publication is Refs only; this does not complete the whole story. No implementation blocker remains for this slice.
+  created_at: 2026-11-11T02:05:53.535790783Z
+  modified_at: 2026-11-11T02:05:53.535790783Z
+  session_id: 01a1c84b4142
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1c5dd-0f8f-79d0-9864-f10de50286f7
   author: joe

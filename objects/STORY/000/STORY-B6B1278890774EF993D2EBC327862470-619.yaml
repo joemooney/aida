@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-09T23:18:35.052711129Z
-modified_at: 2026-11-11T01:34:23.799286140Z
+modified_at: 2026-11-11T02:03:08.595265454Z
 req_type: Story
 comments:
 - id: 01a1c5dc-7b38-79a0-b14b-a53401fc1b6e
@@ -137,6 +137,18 @@ comments:
   modified_at: 2026-11-11T01:27:19.576199963Z
   session_id: 01a1c70f-d731-7b70-acf8-e9ab3d288fca
   harness_version: 2.1.322 (Claude Code)
+- id: 01a1c858-3db3-7661-9406-451da036d1c2
+  author: dirtlab
+  content: |
+    Implemented the advisor-approved no-carry sketch on the existing branch. Signed publications now emit schema v2; legacy v1 canonical bytes and real stored OpenSSH signature verification remain unchanged. carry_eligible defaults true, is mirrored by recording attestations/human receipts, and --no-carry is approval-only. Policy is checked before carry-over cache/protected-base work, including corpus/rework/effective-state consumers. Proof v2 keys include eligibility; v1 proofs recompute. Authority keys distinguish differing receipt policies so valid siblings cannot lend authority to tampered projections.
+
+    Validation: 228 targeted aida-cli-lib tests passed (publication, carry-over, STORY-2696, effective state, release, registry and authority); standalone help snapshot verification passed without update mode. All 45 non-Cargo check-ci-fast gates passed with umask 077. Its final Cargo check was stopped and handed to the launcher to comply with this seat's runner contract; cargo check --profile agent -p aida-cli --no-default-features passed in lane job j20261111T020039396-2-0. Both exact-site inventories reconcile, preserving prior classifications; git diff --check is clean.
+
+    Full changed-file list and validation details: /tmp/STORY-2696-handoff.txt. Edits remain uncommitted for host publication. The reviewed codegraph executable remains unavailable; doctor reports missing codegraph, so source navigation used rg. No implementation blockers remain.
+  created_at: 2026-11-11T02:03:08.595265454Z
+  modified_at: 2026-11-11T02:03:08.595265454Z
+  session_id: 01a1c83de53f
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1c5dd-2088-7231-a4d0-43a9e3af8e19
   author: joe
