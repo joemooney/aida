@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-11T04:48:14.810158291Z
-modified_at: 2026-11-11T05:14:51.434201287Z
+modified_at: 2026-11-11T05:18:02.738508872Z
 req_type: Bug
 comments:
 - id: 01a1c8f4-40fe-74c3-b857-9092196269fb
@@ -32,6 +32,20 @@ comments:
   modified_at: 2026-11-11T05:00:25.943927052Z
   session_id: 01a1c8f1c9fd
   harness_version: codex-cli 0.167.0
+- id: 01a1c90a-ad7f-7581-ba2c-92c378bbce1a
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (BUG-2522):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 1fdb5ad5731e
+    Recorded: 2026-11-11T05:14:48.139601141+00:00
+    Findings:
+    1. [P1] aida-cli-lib/src/lib_part5.rs:3008-3011,3577: Do not treat every nonempty AIDA_REVIEW_VERDICT_FILE as proof that a launcher will arm the hold. handle_review_spec sets this variable at line 1421 for interactive aida review <SPEC>, but after spawning it only adopts/reads/re-records the verdict and never calls arm_collected_refusal. Consequently an uncontained interactive reviewer recording request-changes or rejected now skips place_hold and sync_label, and its parent never replaces those effects; the PR loses the Rework hold and forge merge-hold label that this path previously applied. Use an explicit collector-backed launch signal, or add verified refusal collection/hold arming to this parent path. Add regression coverage for interactive review refusal with a verdict anchor and no existing hold.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-11T05:18:02.623179247Z
+  modified_at: 2026-11-11T05:18:02.623179247Z
+  session_id: 01a1c87f-970d-7ce0-9351-e4e75a87731e
+  harness_version: 2.1.322 (Claude Code)
 history:
 - id: 01a1c8ef-b4bc-7b62-a163-3209968104a9
   author: joe
