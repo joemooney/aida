@@ -1,0 +1,27 @@
+id: 01a1cc9b-63e6-7a51-8102-8ff3b25ccd74
+spec_id: BUG-b6b1278890774ef993d2ebc327862470-294
+agreed_id: BUG-2529
+title: Script deputy died around 13:20 on 2026-11-11 and took review-watch with it; nothing reviewed or merged until the operator restarted it
+description: |-
+  Observed 2026-11-11: deputy job 01a1cc28 hit its --timeout 10m (rc 124); shortly after, 'aida deputy shell list' reported 'runner: NOT running' and the runner pid 3475439 was gone. review-watch runs as the deputy's child, so reviews also stopped. The deputy is serial, so 2h train jobs also block lane launches behind them. Unconfirmed whether the timeout killed the runner or the operator terminal closed.
+
+  ## Acceptance
+  - A job timeout never terminates the deputy runner (regression test).
+  - review-watch survives a deputy exit (separate supervisor) or the deputy restarts itself; 'aida awaiting' surfaces a dead deputy as an operator item.
+  - Train waits do not block unrelated short jobs (separate queue or async train).
+status: Draft
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-11T21:54:58.150187720Z
+modified_at: 2026-11-11T21:54:58.150187720Z
+req_type: Bug
+filed_at:
+  code_sha: d8b778daec2194bf3bc3e33e18479cce6a97a902
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: d8b778daec2
+  vendor: claude
+  session: 01a1cb56-f02b-7652-869e-3788560cbf1b
+  harness_version: 2.1.322 (Claude Code)
