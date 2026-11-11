@@ -33,7 +33,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-09T16:33:51.967266Z
-modified_at: 2026-11-11T08:24:57.420449045Z
+modified_at: 2026-11-11T08:27:33.370358743Z
 req_type: Story
 tags:
 - area:ci
@@ -244,6 +244,13 @@ comments:
   modified_at: 2026-11-11T08:22:41.846639072Z
   session_id: 01a1c87f-970d-7ce0-9351-e4e75a87731e
   harness_version: 2.1.322 (Claude Code)
+- id: 01a1c9b8-2e7a-7eb0-a2a0-1736e41c7a9d
+  author: dirtlab
+  content: 'Round 4: current HEAD already includes all four requested fixes from a56ed3e2bc. Added new regression evidence for fresh startup in either slot with umask 077, traversal validation before chmod and symlink refusal, preservation of the previous compatibility key on copy/manifest publication failures, and automatic CI-entry-point coverage of every controller test class (including RoundThree). Updated runner runbook with exact traversal and successful-MAIN-only retention rules. Validation: python3 -m unittest tests.test_self_hosted_runner passed 48 tests; git diff --check passed. make check-ci-fast failed in unrelated Codex mail wake fixtures (4 failures, 17 errors, health project directory must be owned without shared writes); log /tmp/story2695-fast.log. Native seat leaves changes uncommitted for host publication. S3 operator namespace acceptance remains separate; routing stays off.'
+  created_at: 2026-11-11T08:27:33.370358743Z
+  modified_at: 2026-11-11T08:27:33.370358743Z
+  session_id: 01a1c9b5c70b
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1c325-9cdb-7b81-a057-a76e1b9c8512
   author: joe
