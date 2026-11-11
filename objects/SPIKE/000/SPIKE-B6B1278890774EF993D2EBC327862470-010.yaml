@@ -18,7 +18,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-11T05:40:53.335487241Z
-modified_at: 2026-11-11T07:21:46.582740784Z
+modified_at: 2026-11-11T07:44:47.090935360Z
 req_type: Spike
 tags:
 - architecture
@@ -254,6 +254,12 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a1c991-065b-7482-a781-2aa79f43bcf1
+  author: joe
+  timestamp: 2026-11-11T07:44:47.195124292Z
+  session_id: 01a1c87f-970d-7ce0-9351-e4e75a87731e
+  harness_version: 2.1.322 (Claude Code)
+  changes: []
 execution_mode: drain
 filed_at:
   code_sha: eb1b39c30c9f9f6ce3f5ccf1c5ffd8966e5f8a23
@@ -269,4 +275,12 @@ attention_reason:
   detail: 'Round 4 explicit dispute: findings 1 and 3 require advisor resolution of handler-versus-invocation effects before classification/candidate certification; dispute proceeding past that decision gate without a ruling, not the missing acceptance deliverables. No ruling supplied in authoritative instructions or visible spec comments. Accept finding 2 and all substantive audit deficits: 167 unresolved rows, missing full dependency/visibility/stage/home matrix and global ranking, absent approximately twenty-command batch. Required reviewed client /home/joe/ai/aida/.codegraph/proxy-state/bin/codegraph remains absent; doctor reports codegraph,missing. Advisor must record effect boundary, direct-writer taxonomy and mixed-family aggregation; host must supply reviewed query client and indexed main revision. New dated source-grounded disposition: docs/spikes/2026-11-11-command-inventory-round-4.md. Four Python extraction tests pass; TOML confirms 167 unresolved rows. Native seat leaves report uncommitted; punt remains publication veto, no completion declaration.'
   raised_by: implementer
   raised_at: 2026-11-11T07:21:46.582740784Z
+failure_reason:
+  phase: reviewer
+  phase_index: 3
+  kind: verdict:request-changes
+  detail: 'Full sweep: SPIKE-714 AC1 unverified (167 unresolved class/evidence rows); AC2 unverified (reachable writer/gate audit incomplete); AC3 unverified (first batch absent); AC4 verified by pinned revisions and reproduction method in dated reports. SPIKE-714 (spike protocol): met (docs/spikes deliverables in diff). Three actionable gaps remain. No exact-head CI checks reported; no local tests/builds run.'
+  recovery_hint: address the review findings, move SPIKE-714 back to In Progress, and clear the PR hold only after approval
+  shelved_by: advisor
+  shelved_at: 2026-11-11T07:44:47.090935360Z
 human_only: true
