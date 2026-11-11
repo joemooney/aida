@@ -8,8 +8,20 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-11T12:17:47.476312683Z
-modified_at: 2026-11-11T12:17:47.476312683Z
+modified_at: 2026-11-11T12:17:53.802914237Z
 req_type: Task
+relationships:
+- rel_type: BlockedBy
+  target_id: 01a1ca8a-722c-79a0-b301-26e4d9948e37
+  created_at: 2026-11-11T12:17:53.802911480Z
+  created_by: joe
+history:
+- id: 01a1ca8b-157a-7c50-9f73-dc13d565bf63
+  author: joe
+  timestamp: 2026-11-11T12:17:55.066117236Z
+  session_id: 01a1ca83-fabb-7663-852c-12c78d4e097f
+  harness_version: 2.1.322 (Claude Code)
+  changes: []
 filed_at:
   code_sha: 11b131dfe3341e6d9c7127d64370f91366094711
   branch: main
