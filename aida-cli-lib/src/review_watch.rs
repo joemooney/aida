@@ -3510,3 +3510,77 @@ pub(crate) fn fixture_admission_spawn_failure(
     );
     Ok(())
 }
+
+/// Read the existing receipt store without acquiring a writer lock or creating it.
+// trace:STORY-2688 | ai:codex
+pub(crate) struct PrStateSnapshot(
+    Option<State>,
+    Vec<crate::agent_registry::AgentRegistryEntry>,
+);
+pub(crate) fn pr_state_snapshot(root: &Path) -> Result<PrStateSnapshot> {
+    let Some(runtime) = Directory::existing(&root.join(".aida"))? else {
+        return Ok(PrStateSnapshot(None, Vec::new()));
+    };
+    let Some(dir) = Directory::existing(&runtime.path().join("review-watch"))? else {
+        return Ok(PrStateSnapshot(None, Vec::new()));
+    };
+    let Some(bytes) = dir.read(STATE)? else {
+        return Ok(PrStateSnapshot(None, Vec::new()));
+    };
+    let state: State = serde_json::from_slice(&bytes)?;
+    anyhow::ensure!(state.version == 1, "unsupported review-watch state version");
+    Ok(PrStateSnapshot(
+        Some(state),
+        crate::agent_registry::load_live_identity_entries(root),
+    ))
+}
+// trace:STORY-2688 | ai:codex
+pub(crate) fn apply_pr_state_snapshot(
+    snapshot: &PrStateSnapshot,
+    facts: &mut crate::pr_state::PrFacts,
+) {
+    let Some(entry) = snapshot
+        .0
+        .as_ref()
+        .and_then(|s| s.entries.get(&format!("PR-{}", facts.number)))
+    else {
+        return;
+    };
+    for attempt in &entry.attempts {
+        if active(attempt)
+            || attempt.phase == Phase::RemoteHeld
+            || (!attempt.descendants_gone() || attempt.recorded().iter().any(|p| p.alive()))
+        {
+            // Resolve only complete process identities to a concrete registry owner.
+            let ids: std::collections::BTreeSet<_> = snapshot
+                .1
+                .iter()
+                .filter(|entry| {
+                    attempt.recorded().iter().any(|p| {
+                        p.process_identity().is_some()
+                            && p.process_identity() == entry.process_identity()
+                    })
+                })
+                .map(|entry| entry.id.clone())
+                .collect();
+            facts.observe_operation(if ids.len() == 1 {
+                ids.into_iter().next()
+            } else {
+                None
+            });
+        }
+        if attempt.head == facts.head {
+            facts.attempts = attempt.no_verdict_attempts;
+            facts.retry_exhausted = no_verdict_blocker(attempt).is_some();
+            facts.retry_backoff = attempt
+                .no_verdict_retry_at
+                .is_some_and(|at| chrono::Utc::now() < at);
+            if matches!(attempt.phase, Phase::Completed | Phase::Exited)
+                && attempt.no_verdict_retry_at.is_none()
+            {
+                facts.attempts = facts.attempts.max(1);
+                facts.retry_backoff = true; // watcher must establish the durable backoff first
+            }
+        }
+    }
+}
