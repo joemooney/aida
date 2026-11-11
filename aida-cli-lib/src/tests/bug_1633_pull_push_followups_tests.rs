@@ -6,6 +6,15 @@
 
 // trace:BUG-2017 | ai:codex — explicit positive global-ID fixture.
 use super::*;
+use crate::{
+    drain_pending_followups, extract_plan_followups, followup_filed_in_store, handle_pull_command,
+    handle_push_command, origin_push_url_matches_fetch, parse_extracted_plans_from_marker,
+    plan_rel_path, push_dry_run_legs, push_failure_summary, read_reconcile_state_lines,
+    reconcile_state_path, update_pending_followups, write_reconcile_state, CodeLegPlan,
+    PushLegOutcome, RequirementStatus, Storage, FOLLOWUPS_MARKER, FOLLOWUP_ADD_HOOK,
+    FOLLOWUP_SRC_TAG_PREFIX, PENDING_FOLLOWUPS_STATE, PENDING_RECONCILE_BASE_STATE,
+    PUSH_REMOTE_REFRESH_TIMEOUT,
+};
 use aida_core::db::DatabaseBackend;
 use std::cell::RefCell;
 use std::path::{Path, PathBuf};

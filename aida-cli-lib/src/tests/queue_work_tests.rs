@@ -6,6 +6,38 @@
 //! trace:STORY-42 | ai:claude
 // trace:BUG-2017 | ai:codex — explicit positive global-ID fixture.
 use super::*;
+use crate::{
+    append_reviewer_prompt_suffixes_with, apply_rework_conflict_route, auto_complete,
+    auto_complete_phase1_target_status, build_implementer_phase_args, build_resolved_entry,
+    canonical_review_story, classify_no_human_gate, derive_queue_work_prompt,
+    derive_scope_from_entry, derive_scope_from_req_id, drain_state, effective_auto_complete_role,
+    find_scope_lease_conflict, format_queue_work_not_queued_error, format_review_label,
+    guarded_execution_mode_drain_message, handle_queue_rework, handle_rework_entry,
+    headless_waiting_rule_suffix, held_resume_plan, held_resume_reentry_allowed,
+    infer_queue_work_role, latest_findings_block, leased_implementer_queue_head,
+    merge_current_spec_queue_entries, no_human_scope_line,
+    non_tty_interactive_implementer_preflight, orchestrator,
+    orchestrator_authorizes_explicit_queue_pickup_with_token, parse_review_scope,
+    pick_auto_complete_head_for_role, preflight_queue_work_branch,
+    prepare_auto_complete_phase1_status, prepare_registered_auto_complete_phase1, prepend_due_jobs,
+    queue_add_for_scope_routing, queue_add_hidden_view_reason, queue_drain_pickup_policy,
+    queue_fresh_pickup_policy, queue_fresh_pickup_reason_label,
+    queue_work_plan_wants_pr_head_branch, queue_work_role_mismatch, queued_review_story_for_pr,
+    read_behavior_permission_mode, refuse_waiting_pickup, resolve_auto_complete_head,
+    resolve_autonomy_mode, resolve_batch_members, resolve_batch_members_with_context,
+    resolve_drain_alias, resolve_next_n_head, resolve_queue_work_permission_mode,
+    resolve_queue_work_plan, resume_autocomplete_conflict_message, review_calibration_spec_ids,
+    review_calibration_spec_ids_in, review_pickup_hint, review_round_from_comments,
+    review_title_matches, reviewer_prompt_for_round, rework_conflict_route,
+    rework_findings_block_for_spec, rework_pickup_prompt, rework_pr_head_branch_from_lookup,
+    rework_pr_head_branch_override, rework_pr_head_matches_spec, rework_round_from_comments,
+    spec_matches, strip_toml_inline_comment, worktree_lease, AutoCompleteHeadCandidate,
+    AutonomyMode, Cli, NoHumanGate, OpenPrInfo, OrchestratorBadge, PrLookup, QueueCommand,
+    QueueFreshPickup, QueueWorkEntry, QueueWorkMode, QueueWorkPlan, RealNextNDriver,
+    RealPhaseDriver, RelationshipType, ReviewForge, ReviewStoryLookup, ReworkConflictLaunch,
+    ReworkFlags, Storage,
+};
+use aida_core::{DatabaseBackend, RequirementStatus};
 use aida_core::{QueueEntry, Relationship, Requirement, RequirementType};
 use uuid::Uuid;
 

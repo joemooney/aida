@@ -15,7 +15,19 @@ pub(crate) mod config_cmd_args;
 pub(crate) use config_cmd_args::*;
 
 use crate::cli::{ConfigPermissionTier, ConfigPermissionsCommand};
-use crate::*;
+use crate::{
+    aida_home_dir, config_lookup, config_path_for_project, confirm, find_project_root, findings,
+    glyph, intake, load_agents_contained, main_worktree_root_from, output_format_is_json,
+    parse_agents_toml, permissions, prompts, read_agents_bool_from_file,
+    read_agents_bypass_from_file, read_project_config_value, read_store_sync_config,
+    read_ultraplan_config, resolve_aida_exe, seats, store_sync_config_project_root,
+    strip_ansi_color, team, vendors, warn_if_periodic_auto_push, workflow_hints, DoctorFinding,
+    GlyphCommand, IdFormat, NumberingStrategy, ScaffoldConfig, Storage, StoreAutoPushMode,
+    UltraplanMode,
+};
+use crate::{config_cmd, ConfigCommand};
+use anyhow::Context;
+use std::io::IsTerminal;
 use toml_edit::{value, Array, DocumentMut, Item, Table};
 
 /// Handle ID configuration commands
@@ -6113,7 +6125,6 @@ fn run_config(
     matches: &clap::ArgMatches,
     ctx: &crate::cmdkit::DispatchCtx,
 ) -> anyhow::Result<crate::cmdkit::Flow> {
-    use crate::*;
     let args = <ConfigArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
     // The closed diagnostic needs no requirement-store/cache write access.
     // trace:TASK-2705 | ai:codex
