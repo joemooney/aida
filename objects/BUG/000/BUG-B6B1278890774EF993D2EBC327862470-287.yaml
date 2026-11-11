@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-11T04:48:14.810158291Z
-modified_at: 2026-11-11T05:00:25.943927052Z
+modified_at: 2026-11-11T05:14:51.434201287Z
 req_type: Bug
 comments:
 - id: 01a1c8f4-40fe-74c3-b857-9092196269fb
@@ -55,6 +55,10 @@ history:
   session_id: 01a1c8f1c9fd
   harness_version: codex-cli 0.167.0
   changes: []
+- id: 01a1c907-c325-7783-994d-55cc93a20088
+  author: joe
+  timestamp: 2026-11-11T05:14:51.557013126Z
+  changes: []
 filed_at:
   code_sha: 496312a2eabee394b741e459cbf47972c8947905
   branch: main
@@ -64,3 +68,11 @@ filed_at:
   vendor: claude
   session: 01a1c87f-970d-7ce0-9351-e4e75a87731e
   harness_version: 2.1.322 (Claude Code)
+failure_reason:
+  phase: reviewer
+  phase_index: 3
+  kind: verdict:request-changes
+  detail: 'Full sweep: BUG-2522 AC1 verified by native_launcher_refusal_records_without_placing_a_hold and standalone collector; AC2 verified by direct hold-placement branch; AC3 verified by operator_hold_failure_preserves_both_verdict_records and write ordering; AC4 verified by added native-launcher test. BUG-2522 bug protocol (touches a test file): met. One interactive-review hold regression; CI pending at review time. Focused test success is implementer-reported, not rerun.'
+  recovery_hint: address the review findings, move BUG-2522 back to In Progress, and clear the PR hold only after approval
+  shelved_by: reviewer
+  shelved_at: 2026-11-11T05:14:51.434201287Z
