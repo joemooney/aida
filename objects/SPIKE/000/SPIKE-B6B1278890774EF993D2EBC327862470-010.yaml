@@ -18,7 +18,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-11T05:40:53.335487241Z
-modified_at: 2026-11-11T06:27:10.401227194Z
+modified_at: 2026-11-11T06:27:11.922934506Z
 req_type: Spike
 tags:
 - architecture
@@ -35,6 +35,20 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Advisor relay of the codex reviewer''s verdict, lost to BUG-2522 (its fix #3830 is approved and awaiting train). Full text at https://github.com/joemooney/aida/pull/3833#issuecomment-6788426276. The PR is a baseline only: (1) all 167 command classifications and their writer/gate evidence are unresolved; (2) the dependency, visibility, move-stage and home-crate analysis is absent; (3) the first porcelain batch is missing; (4) closure-handler extraction truncates three entries. These are SPIKE-714 acceptance items 1-3; finish them in this PR.. No triage reason was given.'
   created_at: 2026-11-11T06:27:10.401224818Z
   modified_at: 2026-11-11T06:27:10.401224818Z
+  session_id: 01a1c87f-970d-7ce0-9351-e4e75a87731e
+  harness_version: 2.1.322 (Claude Code)
+- id: 01a1c949-fd23-7ae0-b7c6-9164450775e3
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (SPIKE-714):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 8d67d4ff8b52
+    Recorded: 2026-11-11T06:26:35.832759012+00:00
+    Findings:
+    1. Advisor relay of the codex reviewer's verdict, lost to BUG-2522 (its fix #3830 is approved and awaiting train). Full text at https://github.com/joemooney/aida/pull/3833#issuecomment-6788426276. The PR is a baseline only: (1) all 167 command classifications and their writer/gate evidence are unresolved; (2) the dependency, visibility, move-stage and home-crate analysis is absent; (3) the first porcelain batch is missing; (4) closure-handler extraction truncates three entries. These are SPIKE-714 acceptance items 1-3; finish them in this PR.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-11T06:27:11.779552293Z
+  modified_at: 2026-11-11T06:27:11.779552293Z
   session_id: 01a1c87f-970d-7ce0-9351-e4e75a87731e
   harness_version: 2.1.322 (Claude Code)
 history:
