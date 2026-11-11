@@ -70,6 +70,14 @@ fn fixture(stubs: &[(&str, &str)]) -> Fx {
     // the host). Project discovery still needs Git; shell stubs use /bin/sh.
     // trace:STORY-2704 | ai:codex
     std::os::unix::fs::symlink("/usr/bin/git", bin_dir.join("git")).unwrap();
+    // Startup prepends the running executable's directory to PATH. Execute a
+    // fixture-owned hard link (or copy across filesystems), so companions in
+    // Cargo's output directory cannot leak into discovery. A symlink would
+    // canonicalize back to that shared directory.
+    let aida_bin = bin_dir.join("aida");
+    if std::fs::hard_link(env!("CARGO_BIN_EXE_aida"), &aida_bin).is_err() {
+        std::fs::copy(env!("CARGO_BIN_EXE_aida"), &aida_bin).unwrap();
+    }
     for (name, body) in stubs {
         write_exec(&bin_dir.join(name), body);
     }
@@ -87,7 +95,7 @@ fn aida(fx: &Fx, dir: &Path, args: &[&str], env: &[(&str, &str)]) -> Output {
     // A stub written moments ago can still be held open by a sibling test's
     // fork; retry the rare "Text file busy" exec failure.
     for attempt in 0..5 {
-        let out = Command::new(env!("CARGO_BIN_EXE_aida"))
+        let out = Command::new(fx.bin_dir.join("aida"))
             .current_dir(dir)
             .env("HOME", &fx.home)
             .env("PATH", &path)
@@ -204,7 +212,7 @@ fn external_receives_context_env() {
     let fx = fixture(&[("aida-hello", RECORDING_STUB)]);
     let root = canon(&fx.proj);
     let store = format!("{root}/.aida-store");
-    let bin = canon(Path::new(env!("CARGO_BIN_EXE_aida")));
+    let bin = canon(&fx.bin_dir.join("aida"));
 
     for dir in [fx.proj.clone(), fx.proj.join("sub").join("deeper")] {
         let out = aida(&fx, &dir, &["hello"], &[]);
