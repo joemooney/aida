@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-10T22:45:07.512110557Z
-modified_at: 2026-11-11T05:58:18.169585895Z
+modified_at: 2026-11-11T06:08:58.815973662Z
 req_type: Task
 tags:
 - batch:fasttrack
@@ -156,6 +156,16 @@ comments:
   modified_at: 2026-11-11T05:58:18.169585895Z
   session_id: 01a1c87f-970d-7ce0-9351-e4e75a87731e
   harness_version: 2.1.322 (Claude Code)
+- id: 01a1c939-4fbf-79f2-bc3f-6a33baca9042
+  author: dirtlab
+  content: |
+    Round 5: both findings are implementable as written; neither is disputed. Inspected current HEAD: the extra ci_wait_details forge data path is already absent, and the existing reduced check-row fixture for run 42913999193 includes seven CI matrix jobs plus skipped Release. This round strengthens that implementation: readiness is now immutable and progress prints separately instead of appending diagnostic strings to Pending names. The formatter accepts only the already fetched CheckRow slice; no new forge/gh reads or GitLab-specific path. Extracted train_ci_is_shard (workflow CI + CI (...) check identity), shared by counting and rendering. Added same-run ancillary identity regression using the recorded-run fixture: skipped Release, CI-like name from a different workflow, helper job and Build summary never change the 7/7 denominator. Updated lifecycle docs.
+    Validation: aida lane job run -- cargo test --profile agent -p aida-cli-lib --lib -- train_ci_row_progress; job j20261111T055926840-2-0 exit 0, 5 executed tests passed. umask 077; make check-ci-fast exit 0, all 47 gates passed. Initial fast-gate attempt under inherited umask 0002 failed mail-wake fixture directory ownership checks; rerun with private umask passed. rustfmt checks and git diff --check passed. Reviewed codegraph executable /home/joe/ai/aida/.codegraph/proxy-state/bin/codegraph is missing; doctor confirms missing tool; rg used for navigation.
+    Changed files: aida-cli-lib/src/pr_train.rs; aida-cli-lib/src/tests/story_1690_train_tests.rs; docs/cli/04-git-lifecycle.md. Native-seat edits intentionally uncommitted; host launcher must commit/publish this round. CI and independent approval remain required before merge.
+  created_at: 2026-11-11T06:08:58.815973662Z
+  modified_at: 2026-11-11T06:08:58.815973662Z
+  session_id: 01a1c92fcdb2
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1c7a5-2ff2-70e0-9325-0f86de361dd1
   author: aida-session-start
