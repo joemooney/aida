@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T23:39:41.575597Z
-modified_at: 2026-11-11T05:20:54.539083933Z
+modified_at: 2026-11-11T05:21:21.792750850Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -1381,6 +1381,12 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a1c90d-b7f1-7b63-ae95-6fadd6d94962
+  author: joe
+  timestamp: 2026-11-11T05:21:21.905557449Z
+  session_id: 01a1c87f-970d-7ce0-9351-e4e75a87731e
+  harness_version: 2.1.322 (Claude Code)
+  changes: []
 test_coverage_notes: 'Round 14 validation passed: launcher command_registry suite 32 executed tests / 0 failures (j20261109T002347723-110306-0), launcher no-default-features aida-cli check exit 0 (j20261109T002353591-110846-0), 17 Python tooling fixtures, glob ratchet vs origin/main at 181, ExecContext 1239 sites, store-writer 3406 sinks / 293 mappings, 84 CI gate classifications, portability guard/growth, retained Rust formatting and diff hygiene. Prospective PR exactly 40 files; all 12 deferred modules match pre-batch contents. Reviewed-head CI at 4e32c5de630 passed all seven shards and aggregate Build; final published head still requires CI and independent re-review. Full make check-ci-fast remains host validation under runner-only Cargo policy. Codegraph unreachable. Handoff: /tmp/task-3428-round14-handoff.md.'
 implementation_summary: 'Round 14 scope correction restores the 12-module batch from 4e32c5de630 to pre-batch contents and restores its 12 ledger rows (18 imports), reducing PR #3695 to 40 files: 37 modules, two test files and ledger. Remaining glob debt is 181. Deferred changes remain in branch history and /tmp/task-3428-round14-deferred-imports.patch for a separate Refs PR, with import-source and module-trace polish required there. Removed code contains all findings 3-5. Corrected PR title to 37 modules. Refs host publication declaration recorded; no local commit, push, merge or queue completion. TASK-3428 remains In Progress; remaining imports and lib_part dissolution are later slices.'
 filed_at:
@@ -1398,3 +1404,11 @@ attention_reason:
   lean: Retain the exact eight-file production scope and matching ledger prune; reconcile or land preceding batches before declaring TASK-3428 complete.
   raised_by: implementer
   raised_at: 2026-11-11T04:52:10.022957281Z
+failure_reason:
+  phase: reviewer
+  phase_index: 3
+  kind: verdict:request-changes
+  detail: 'Advisor relay of the codex reviewer''s verdict at 86443475 (lost to BUG-2522); the later head only merges main, so both findings stand. Full text at https://github.com/joemooney/aida/pull/3829#issuecomment-6787542888. (1) Two new lease_state_for imports violate the ownership-liveness ratchet: qualify via crate::leases:: instead and list each in the PR body. (2) The title and commit trailer would complete TASK-3428, but 48 ledger files and the lib_part1..6 includes remain: use ''(Refs TASK-3428)''. See the advisor correction on TASK-3428 at 22:25 MST.'
+  recovery_hint: address the review findings, move TASK-3428 back to In Progress, and clear the PR hold only after approval
+  shelved_by: advisor
+  shelved_at: 2026-11-11T05:21:21.792750850Z
