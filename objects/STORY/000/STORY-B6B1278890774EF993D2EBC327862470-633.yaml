@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-10T22:04:54.061461738Z
-modified_at: 2026-11-11T01:46:17.350676583Z
+modified_at: 2026-11-11T02:29:54.490278655Z
 req_type: Story
 comments:
 - id: 01a1c781-4cf1-7c80-b086-89c5c5096ab6
@@ -175,6 +175,15 @@ comments:
   content: 'ADVISOR SLICE PLAN (2026-11-10 19:00 MST, binding). The story is too big for one lane run, so it lands in slices; each slice is its own PR with a ''(Refs STORY-2710)'' subject, and only slice 3''s PR completes the story. REVIEWERS: judge each PR against ITS slice''s acceptance only; the absence of later slices is not a finding. Slice 0 = PR #3813 as it stands at 1d0d1cbcdf: AC7 publication marker guard + the P2 ordinary-publication marker-example fix. Ship it on approval. Slice 1: the shared versioned repair journal (contract in the 18:50 ruling); host-staged merge that records the original conflict paths in the journal and survives staging retries; publication''s marker check reads the journal path list (P2 complete); registered regeneration table (exec-context ledger, template mirrors) applied by the host at staging. Slice 2: automatic dispatch from review-watch and direct rework on the project''s configured implementer vendor, with journal reservations and ambiguous-spawn retention; the lane brief lists the journal''s conflict paths. Slice 3: exact-tree compile gate (cargo check -p aida-cli-lib --tests on the merged tree before push), per-head refusal notices via advisor mail (one accepted notice per head), and the end-to-end Codex test with .git read-only (AC6). Commit subject for 3: (STORY-2710). Start slice 1 only after #3813 lands, on a fresh branch from main.'
   created_at: 2026-11-11T01:46:17.350676583Z
   modified_at: 2026-11-11T01:46:17.350676583Z
+  session_id: 01a1c70f-d731-7b70-acf8-e9ab3d288fca
+  harness_version: 2.1.322 (Claude Code)
+- id: 01a1c870-beba-7261-960c-bfd1ab098ab3
+  author: joe
+  content: |-
+    CI FAILURES at 1d0d1cbcdf17 (run 42940415391). Fix exactly these before pushing; a push without a code change for them will fail again and must not be made:
+    (no test lines extracted; open run 42940415391)
+  created_at: 2026-11-11T02:29:54.490278655Z
+  modified_at: 2026-11-11T02:29:54.490278655Z
   session_id: 01a1c70f-d731-7b70-acf8-e9ab3d288fca
   harness_version: 2.1.322 (Claude Code)
 history:
