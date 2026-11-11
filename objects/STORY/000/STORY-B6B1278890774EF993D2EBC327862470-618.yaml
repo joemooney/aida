@@ -33,7 +33,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-09T16:33:51.967266Z
-modified_at: 2026-11-11T02:33:04.042398389Z
+modified_at: 2026-11-11T02:33:05.309510168Z
 req_type: Story
 tags:
 - area:ci
@@ -194,6 +194,23 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: S2 runner controller is well-fenced on trust (admission, gate, MAIN-only publish) but cannot run as written: source extraction refuses the repo''s 135 tracked symlinks, the gate kills legitimately assigned jobs because JIT labels do not pin the proposed job, routine outcomes wedge slots, and cache generations grow without bound. CI green at head.. No triage reason was given.'
   created_at: 2026-11-11T02:33:04.042390657Z
   modified_at: 2026-11-11T02:33:04.042390657Z
+  session_id: 01a1c70f-d731-7b70-acf8-e9ab3d288fca
+  harness_version: 2.1.322 (Claude Code)
+- id: 01a1c873-a791-7df2-94a9-16d360dbd6c1
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (PR #3791):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: e7f8b2fa00fd
+    Recorded: 2026-11-11T01:16:47.720726258+00:00
+    Findings:
+    1. [P1] scripts/runner/controller.py:234 source_tree requires every archive member to be a dir or regular file, but the repository tracks 135 symlinks (git ls-files -s mode 120000, e.g. .claude/commands/*.md template mirrors). codeload tarballs carry them as symlink members, so every admitted MAIN/TRAIN launch raises "source archive link/special file" before the runner starts; tests/test_dell1_controller.py Source fixture codifies the refusal with a synthetic archive and never exercises a real-repo-shaped tree. Accept in-tree relative symlinks safely (create with os.symlink, refuse absolute/escaping targets), and when doing so make the os.walk chown at controller.py:412-415 use follow_symlinks=False and key_for (controller.py:171-175) skip/lstat links, otherwise root would chown or hash link targets chosen by unlanded train code.
+    2. [P1] scripts/runner/rearm.sh:21-25 + controller.py:421-427 job binding: the JIT runner carries only aida-dell1/<class>/<name> labels, so GitHub may hand it ANY queued same-class heavy job (the other slot family, another train shard), not the proposed envelope job. verify_job then sees the envelope job runner_name != name, refuse() stops the unit, the innocent legitimately routed job fails, and launch raises leaving a stale reservation (see next finding). With two slots and four train shards queued at once this is the expected case, not an edge case; the runbook (dell1-runner.md:56-63) acknowledges labels do not bind but treats every mismatch as hostile. Fix: at the gate, discover the job actually assigned to this runner name and run full admit() on it (repository/PR/SHA/branch/train record/workflow digest), seeding/keying/publishing for the actual shard, or otherwise bind job to runner; add a LaunchIntegration fixture where the runner picks a different valid queued job.
+    3. [P2] scripts/runner/controller.py:456-470 + rearm.sh:4,27-31 routine outcomes wedge a slot or stop its loop: (a) a MAIN job whose tests fail (JIT runner still exits 0) or whose forge job is not yet marked completed when the runner exits makes admit(completed=True) raise, so reservation.unlink() (outside the finally) is skipped and every later launch on that slot refuses "stale slot reservation" until manual reconciliation; (b) MAIN refused for TRAIN priority exits 1 and set -e/pipefail ends the rearm loop, after a JIT registration was already generated (orphaned); train_waiting (controller.py:324-335) counts queued train jobs of every shard, including the other slot family this slot never proposes, so MAIN on s0 is refused for s1 work. Treat failed-MAIN non-publication and priority deferral as normal outcomes (release reservation, exit a distinct code the loop continues on, generate JIT only after admission), restrict priority to jobs this slot can take, and assert reservation state in the LaunchIntegration failure fixtures.
+    4. [P2] scripts/runner/controller.py:197-219 publish never removes superseded generations, and controller.py:403 creates a new CACHE/slot/shard/KEY directory whenever any Cargo.toml, build.rs, .github or scripts/ file changes, with no pruning of old keys. Every successful main push writes a fresh full target+registry copy per heavy shard, so disk use grows without bound on a host shared with up to eight Codex lanes; the runbook (dell1-runner.md:159-160,216-217) leaves this to manual offline pruning with loops stopped. Since the slot lock serializes all readers of a slot cache, delete the previous generation after the manifest swap and bound/prune stale key directories, with a fixture asserting only the manifest generation remains.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-11T02:33:05.169040842Z
+  modified_at: 2026-11-11T02:33:05.169040842Z
   session_id: 01a1c70f-d731-7b70-acf8-e9ab3d288fca
   harness_version: 2.1.322 (Claude Code)
 history:
