@@ -3,12 +3,12 @@ spec_id: BUG-b6b1278890774ef993d2ebc327862470-285
 agreed_id: BUG-2520
 title: 'Script deputy refuses every job from a delegated advisor seat: grant issued to the seat handle, deputy runs as the operator'
 description: 'Since 2026-11-10 morning, ''aida deputy shell submit --file F --wait'' from the advisor seat (claude-advisor-111) is refused for every job, including a one-line echo probe (re-verified 2026-11-10 15:00 MST): refused:grant: Session grant 6205c611 (advisor) was rejected: it was issued to ''claude-advisor-111'' but this process runs as ''joe''. Restarting both deputies (09:14) did not help. Effect: no deputy hold clears, no local lanes, and operator-only acts (aida edit --mode, aida pr train for supervised specs) fall back to the operator by hand, which is exactly what the deputy exists to prevent. Expected: the deputy validates the grant''s delegation chain (principal joe -> advisor seat) rather than requiring the seat handle to equal the deputy process''s user. Acceptance: (1) a job submitted from a delegated advisor seat whose grant''s principal is the deputy''s user runs and returns its exit code; (2) a grant whose principal is a different user is still refused; (3) regression test covering both.'
-status: InProgress
+status: Completed
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-10T22:02:08.404275451Z
-modified_at: 2026-11-10T22:59:36.271394624Z
+modified_at: 2026-11-11T02:50:50.213158448Z
 req_type: Bug
 comments:
 - id: 01a1c7b0-34cf-7b31-ae89-70edaed48848
@@ -41,6 +41,20 @@ history:
   session_id: 01a1c7a7128a
   harness_version: codex-cli 0.167.0
   changes: []
+- id: 01a1c883-e7a0-7f12-9c48-b348a4725e23
+  author: aida-auto-bump
+  timestamp: 2026-11-11T02:50:50.144590730Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a1c883-e7e5-7d92-9402-a7461b1cfd6a
+  timestamp: 2026-11-11T02:50:50.213155976Z
+  agent: aida
+  commit_sha: c0f01ac5d8018a80469abe1a4a86b4089af46d96
+  summary: 'Full four-file sweep: no actionable defects. BUG-2520 AC1 verified by principal-validation source and exit-7 regression; AC2 verified by PrincipalMismatch and refusal-before-script assertions; AC3 verified by delegated_advisor_jobs_validate_operator_principal_and_chain (also parent revocation). BUG-2520 (bug protocol): met, two test files touched. CI pending at review time; no local tests run per review-watch policy.'
+  review_verdict: approved
 filed_at:
   code_sha: a3d2ba258e4015854c6f615c6481beb672b8798c
   branch: main
@@ -50,3 +64,7 @@ filed_at:
   vendor: claude
   session: 01a1c70f-d731-7b70-acf8-e9ab3d288fca
   harness_version: 2.1.322 (Claude Code)
+implementation_info:
+  implemented: false
+  completed_at: 2026-11-11T02:50:50.144124218Z
+  completion_sha: c0f01ac5d8018a80469abe1a4a86b4089af46d96
