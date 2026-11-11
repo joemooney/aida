@@ -1,7 +1,8 @@
 # Automatic conflict-resolution lane sketch
 
 Status: merge mechanics ruled by advisor on 2026-11-10 at 22:22 UTC.
-Shared dispatch-state design still proposed; story implementation is incomplete.
+Shared versioned repair journal approved by advisor on 2026-11-11 at 01:28 UTC.
+Story implementation is incomplete.
 <!-- trace:STORY-2710 | ai:codex -->
 
 The existing rework pickup already performs a host merge and routes fresh
@@ -81,7 +82,7 @@ when both sides remain intact and identifiers are unambiguous. Changes to the
 same behavior, contradictory documentation or overlapping declarations stop the
 lane. Preserve diagnostics and the original conflict paths for advisor triage.
 
-## Refusal delivery and state decision requiring sign-off
+## Approved shared repair journal
 
 Persist a refusal notice keyed by repository/PR/original head, including paths,
 reason, lane invocation and validation result. Deliver through ordinary advisor
@@ -90,12 +91,20 @@ Polling must not resend an accepted notice for that head; a new head may notify
 again. A send/receipt crash window has the mailbox protocol's existing semantics,
 so strict exactly-once delivery must not be claimed without an idempotent send.
 
-Approve extending shared watcher state for conflict dispatch reservations, or
-choose a separate shared repair journal usable by direct rework as well. The
-recommended choice is a shared repair journal with a versioned schema, while
-watcher state retains only its reference. This avoids making direct queue-work
-depend on the watcher's private state format. This is an orchestrator semantics
-and persisted-state change covered by the repository sketch-first gate.
+The binding advisor ruling selects one shared repair journal per repository
+under `.aida/`, with a schema `version` field and entries keyed by repository,
+PR and original head. Each entry retains the dispatch actor, timestamp and lane
+identity, ambiguous-spawn reservation, host-recorded original conflict paths,
+exact-tree validation evidence and refusal-notice delivery state. An unknown
+spawn outcome blocks redispatch for that head until its lane is proven dead.
+Watcher state holds only a reference; direct rework must not depend on the
+watcher's private state format. Writes use the store writer lock or a journal
+lock with the same discipline.
+
+Both the lane brief and publication marker gate must use those host-recorded
+original conflict paths, retained across staging retries. A changed-tracked-path
+scan is only an optional extra guard. No additional state-contract signoff is
+required. The production implementation remains outstanding.
 
 ## Validation after approval
 
@@ -140,3 +149,28 @@ text. `rustfmt --edition 2021 --check aida-cli-lib/src/seat_clone.rs` and
 Codex launch or host publication; AC6 remains unverified. The lane recorded a
 Refs-only native publication declaration and punted P1; the punt remains a
 publication veto pending triage. All checkout edits are left uncommitted.
+
+## Round 3 bounded regression fix and outstanding findings
+
+The marker probe now first checks `MERGE_HEAD`. Ordinary publication, including
+staged edits to tracked guides with pre-existing literal opening and closing
+marker examples, bypasses the conflict-only scan. Probe failures still refuse.
+The real Git fixture covers both unstaged and staged ordinary edits alongside
+its existing pending-merge and staged-retry refusals.
+
+This is not the approved production slice. P1 remains open in full: shared
+journal reservation and dispatch, configured-vendor rework, retained host merges,
+registered regeneration, exact-tree compile validation, refusal delivery and
+end-to-end read-only Codex evidence are not implemented. P2's original-path
+journal integration also remains open: pending merges still use the prior
+changed-path scan and cannot complete host staging through `write-tree`. This
+round fixes the ordinary-publication false positive only. The advisor ruling
+is accepted; no further approval of the state contract is requested. An explicit
+punt records the incomplete findings rather than requesting story completion.
+
+Round 3 validation: lane job `j20261111T013744670-2-0` executed
+`cargo test --profile agent -p aida-cli-lib --lib -- story_2710_marker_gate`:
+**1 passed, 0 failed, 0 ignored** against the final source. Rustfmt check and
+`git diff --check` pass. A Refs-only native publication declaration is recorded;
+`aida punt` succeeded for the unfinished P1 and P2 integration and remains a
+publication veto. No Git commit or push was performed in this seat.

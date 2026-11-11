@@ -3381,6 +3381,26 @@ mod rework_merge_tests {
         let fx = tests::fixture();
         let g = |args: &[&str]| tests::git_ok(&fx.main, args);
         let path = "conflict [literal]\n$(touch sentinel).rs";
+        // Existing documentation examples remain legitimate ordinary edits.
+        let guide = fx.main.join("conflict-guide.md");
+        std::fs::write(&guide, "<<<<<<< example\n>>>>>>> example\n").unwrap();
+        g(&["add", "conflict-guide.md"]);
+        g(&["commit", "-qm", "marker examples"]);
+        std::fs::write(&guide, "<<<<<<< example\n>>>>>>> example\nexplanation\n").unwrap();
+        let ordinary_probe = |program: &str, args: &[&std::ffi::OsStr]| -> Result<Vec<u8>> {
+            let out = std::process::Command::new(program)
+                .current_dir(&fx.main)
+                .args(args)
+                .output()?;
+            anyhow::ensure!(out.status.success(), "probe failed: {:?}", out);
+            Ok(out.stdout)
+        };
+        refuse_pending_conflict_markers(&ordinary_probe).unwrap();
+        g(&["add", "conflict-guide.md"]);
+        refuse_pending_conflict_markers(&ordinary_probe).unwrap();
+        g(&["commit", "-qm", "explain markers"]);
+        // Even absent a merge, an unreadable probe must fail closed.
+        assert!(refuse_pending_conflict_markers(&|_, _| anyhow::bail!("probe failed")).is_err());
         std::fs::write(fx.main.join(path), "base\n").unwrap();
         g(&["add", "--", path]);
         g(&["commit", "-qm", "base"]);
@@ -4203,7 +4223,10 @@ pub(crate) fn commit_pending(
     }
 }
 
-/// Inspect changed tracked paths through the existing read-only probe sandbox.
+/// Inspect pending merges through the existing read-only probe sandbox.
+/// Ordinary publications may contain literal marker examples. The changed-path
+/// scan below is only a temporary extra guard: pending-merge publication still
+/// refuses at write-tree until journal-backed host staging is implemented.
 /// Literal, NUL-delimited pathspecs preserve unusual names and prevent a path
 /// from selecting additional files. Deleted resolutions have no bytes to scan.
 /// Git grep does not follow worktree symlinks or run textconv filters. All
@@ -4214,6 +4237,21 @@ fn refuse_pending_conflict_markers(
 ) -> Result<()> {
     use std::ffi::{OsStr, OsString};
     use std::os::unix::ffi::OsStringExt;
+    // A missing MERGE_HEAD is ordinary publication, not conflict repair. Keep
+    // actual probe failures distinct from git's documented quiet no-ref exit.
+    // trace:STORY-2710 | ai:codex
+    let pending = execute(
+        "sh",
+        &[
+            OsStr::new("-c"),
+            OsStr::new(
+                r#"git rev-parse --verify --quiet MERGE_HEAD; result=$?; if [ "$result" -eq 1 ]; then exit 0; else exit "$result"; fi"#,
+            ),
+        ],
+    )?;
+    if pending.is_empty() {
+        return Ok(());
+    }
     let diff: Vec<&OsStr> = [
         "diff",
         "--name-only",
