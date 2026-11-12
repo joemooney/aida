@@ -5,10 +5,10 @@ last_by:
   session: 01a1beff-fc3b-78e2-93e2-9b0c283b0339
   vendor: claude
 result: done
-note: 'advisor: unread [request] from dirtlab, 2h10m old: Queue-work lane exited without changes'
+note: 'advisor: unread [request] from dirtlab, 4h08m old: Rework merge conflicts require Claude; advisor: unread [request] from review-watch, 52m old: PR-3894: ready to ship; advisor: unread [request] from review-watch, 52m old: PR-3885: ready to ship after its branch is updated; advisor: unread [request] from review-watch, 51m old: PR-3884: two-round review cap reached; advisor: unread [request] from review-watch, 51m old: PR-3872: ready to ship; advisor: unread [request] from review-watch, 51m old: PR-3859: ready to ship; advisor: unread [request] from review-watch, 50m old: PR-3846: ready to ship after its branch is updated; advisor: unread [request] from review-watch, 50m old: PR-3830: ready to ship after its branch is updated; advisor: unread [request] from review-watch, 50m old: PR-3775: two-round review cap reached; advisor: unread [request] from review-watch, 35m old: PR-3832: two-round review cap reached'
 due_since: 2026-11-09T10:53:52.591288010Z
 due_reason: on CronJobFired:mail-backlog-guard-route-advisor
 due_failure:
-  trip_id: mail-backlog-guard-route-advisor@2026-11-12T20:34:11Z
+  trip_id: mail-backlog-guard-route-advisor@2026-11-12T21:05:24Z
   job: mail-backlog
-  error: 'advisor: unread [request] from dirtlab, 2h10m old: Queue-work lane exited without changes'
+  error: 'advisor: unread [request] from dirtlab, 4h08m old: Rework merge conflicts require Claude; advisor: unread [request] from review-watch, 52m old: PR-3894: ready to ship; advisor: unread [request] from review-watch, 52m old: PR-3885: ready to ship after its branch is updated; advisor: unread [request] from review-watch, 51m old: PR-3884: two-round review cap reached; advisor: unread [request] from review-watch, 51m old: PR-3872: ready to ship; advisor: unread [request] from review-watch, 51m old: PR-3859: ready to ship; advisor: unread [request] from review-watch, 50m old: PR-3846: ready to ship after its branch is updated; advisor: unread [request] from review-watch, 50m old: PR-3830: ready to ship after its branch is updated; advisor: unread [request] from review-watch, 50m old: PR-3775: two-round review cap reached; advisor: unread [request] from review-watch, 35m old: PR-3832: two-round review cap reached'
