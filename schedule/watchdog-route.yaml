@@ -6,3 +6,9 @@ last_by:
   vendor: claude
 result: done
 note: 'Not a finding: the check timed out (exit 124) on 11-04 during host IO contention. No runaway seat observed today; the advisor runs no ad-hoc poll loops.'
+due_since: 2026-11-12T17:01:23.545020210Z
+due_reason: on CronJobFailed:watchdog
+due_failure:
+  trip_id: watchdog@2026-11-12T16:56:32.423727158Z
+  job: watchdog
+  error: 'exit 1: '
