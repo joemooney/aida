@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T23:39:41.575597Z
-modified_at: 2026-11-12T18:24:26.776703742Z
+modified_at: 2026-11-12T20:00:58.071020864Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -909,6 +909,13 @@ comments:
     Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
   created_at: 2026-11-12T18:12:10.708470411Z
   modified_at: 2026-11-12T18:12:10.708470411Z
+- id: 01a1d159-60d7-7fc3-a087-3df78e452817
+  author: joe
+  content: '[advisor 13:02] PR-3887 conflicts with PR-3884 (in integration) on aida-cli-lib/src/lib_part1.rs. Integration mode (STORY-2737): rebase this slice onto origin/integration, resolve, push; the advisor merges it into integration.'
+  created_at: 2026-11-12T20:00:58.071020864Z
+  modified_at: 2026-11-12T20:00:58.071020864Z
+  session_id: 01a1d0eb-22cc-7262-8f6c-7266e9cc1fbb
+  harness_version: 2.1.322 (Claude Code)
 history:
 - id: 01a1b862-2e0b-7a50-a4d0-25097c707b57
   author: joe
