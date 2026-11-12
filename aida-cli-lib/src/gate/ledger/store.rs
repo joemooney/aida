@@ -459,7 +459,8 @@ mod bug2530_tests {
     #[test]
     fn bug2530_reviewer_records_with_read_only_migration_lock() {
         const CHILD: &str = "AIDA_BUG2530_LOCK_CHILD";
-        if std::env::var_os(CHILD).is_some() {
+        let environment = aida_core::exec_context::Environment::capture();
+        if environment.get(CHILD).is_some() {
             let root = std::env::current_dir().unwrap();
             let home = ledger_dir(&root).join("home");
             let _env = crate::test_env::AmbientGuard::hermetic_and(
