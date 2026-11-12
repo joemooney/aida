@@ -62,7 +62,9 @@ esac
         before = snapshot()
         def invoke(exe, args, overrides=None):
             result = subprocess.run([exe, *args], cwd=root, env={**env, **(overrides or {})}, capture_output=True)
-            assert before == snapshot(), f"{exe} {args} changed fixture state"
+            after = snapshot()
+            changed = sorted(p for p in before.keys() | after.keys() if before.get(p) != after.get(p))
+            assert not changed, f"{exe} {args} changed fixture paths: {changed}; stdout={result.stdout!r}; stderr={result.stderr!r}"
             return result
 
         for suffix in [[], ["--json"], ["--format", "json"], ["--format", "human"], ["--format", "toon"]]:

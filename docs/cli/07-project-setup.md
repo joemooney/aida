@@ -487,6 +487,10 @@ before dispatch; required positional
 operands are never extension slots. Optional parent operands coexist with named
 children, as in `review [SPEC]`. External parents own all of their remaining
 arguments: `aida flow report` runs `aida-flow report`.
+Nested extensions currently refuse explicit `--project`/`-p`, `--file`,
+`--server`/`-s` and `--canonical-ids` before the child name: their context comes
+from the current directory. Arguments after the child name belong to the
+extension, including any same-spelled options.
 
 `aida review --help` and `aida help review` list installed child extensions with
 their paths. `aida review summary --help` and `aida help review summary` delegate

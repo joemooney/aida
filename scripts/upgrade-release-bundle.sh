@@ -23,6 +23,14 @@ else
         fi
     fi
 fi
+# Match Cargo bundle ownership: absence or our exact relative alias only.
+# Preflight before publishing any member. trace:STORY-2704 | ai:codex
+if [ -f "$src/aida-porcelain" ] && { [ -e "$dest/aida-flow" ] || [ -L "$dest/aida-flow" ]; }; then
+    if [ ! -L "$dest/aida-flow" ] || [ "$(readlink "$dest/aida-flow")" != aida-porcelain ]; then
+        echo "refusing to replace unrelated $dest/aida-flow" >&2
+        exit 1
+    fi
+fi
 stage=$(mktemp -d "$dest/.aida-upgrade-XXXXXX")
 changed=''
 cleanup() {

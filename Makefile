@@ -150,21 +150,33 @@ server: ## Build gRPC/REST server (aida-server binary)
 # binaries somewhere different from the companion link. trace:STORY-2704 | ai:codex
 AIDA_INSTALL_ROOT = $(if $(CARGO_INSTALL_ROOT),$(CARGO_INSTALL_ROOT),$(if $(CARGO_HOME),$(CARGO_HOME),$(HOME)/.cargo))
 
+# Refuse foreign aliases before Cargo replaces any installed member.
+# trace:STORY-2704 | ai:codex
+define AIDA_PREFLIGHT_FLOW_ALIAS
+@if [ -e "$(AIDA_INSTALL_ROOT)/bin/aida-flow" ] || [ -L "$(AIDA_INSTALL_ROOT)/bin/aida-flow" ]; then \
+    if [ ! -L "$(AIDA_INSTALL_ROOT)/bin/aida-flow" ] || [ "$$(readlink "$(AIDA_INSTALL_ROOT)/bin/aida-flow")" != aida-porcelain ]; then \
+        echo "refusing to replace unrelated $(AIDA_INSTALL_ROOT)/bin/aida-flow" >&2; exit 1; \
+    fi; \
+fi
+endef
+
 # AIDA developer install — overlays your in-repo dev build to Cargo's root.
 # Whether `aida` from your shell hits this or a released binary depends on
 # PATH ordering (run `aida status` to see which install is active).
 install: build-release ## Install in-repo dev build to ~/.cargo/bin (developer)
+	$(AIDA_PREFLIGHT_FLOW_ALIAS)
 	cargo install --path aida-cli --force --root "$(AIDA_INSTALL_ROOT)"
 	cargo install --path aida-server --force --root "$(AIDA_INSTALL_ROOT)"
 	# trace:STORY-2704 | ai:codex
 	cargo install --path aida-porcelain --force --root "$(AIDA_INSTALL_ROOT)"
-	ln -sfn aida-porcelain "$(AIDA_INSTALL_ROOT)/bin/aida-flow"
+	ln -sfnT aida-porcelain "$(AIDA_INSTALL_ROOT)/bin/aida-flow"
 
 install-cli: ## Install CLI and porcelain commands (developer, in-repo build)
+	$(AIDA_PREFLIGHT_FLOW_ALIAS)
 	cargo install --path aida-cli --force --root "$(AIDA_INSTALL_ROOT)"
 	# trace:STORY-2704 | ai:codex
 	cargo install --path aida-porcelain --force --root "$(AIDA_INSTALL_ROOT)"
-	ln -sfn aida-porcelain "$(AIDA_INSTALL_ROOT)/bin/aida-flow"
+	ln -sfnT aida-porcelain "$(AIDA_INSTALL_ROOT)/bin/aida-flow"
 
 install-server: ## Install server only (developer, in-repo build)
 	cargo install --path aida-server --force --root "$(AIDA_INSTALL_ROOT)"

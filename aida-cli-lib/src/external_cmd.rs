@@ -242,6 +242,21 @@ fn maybe_dispatch_nested(argv: &[String]) -> Result<Option<i32>> {
         else {
             continue;
         };
+        // Target resolution normally happens after this early dispatch. Until
+        // extensions can receive that resolved context, refuse explicit selectors
+        // instead of silently running against cwd's store.
+        // trace:STORY-2704 | ai:codex
+        for (id, flag) in [
+            ("project", "--project"),
+            ("file", "--file"),
+            ("server", "--server"),
+            ("canonical_ids", "--canonical-ids"),
+        ] {
+            anyhow::ensure!(
+                matches.value_source(id) != Some(clap::parser::ValueSource::CommandLine),
+                "{flag} is unsupported for nested external commands"
+            );
+        }
         let mut ctx = current_context();
         if let Some(format) = parent_matches.get_one::<crate::cli::OutputFormat>("format") {
             ctx.output_format = match format {

@@ -161,6 +161,15 @@ if [ -f "$tmpdir/aida-porcelain" ]; then
     done
 fi
 
+# Only the relative alias shipped by AIDA is owned. Check before any bundle
+# member is replaced, including dangling foreign links. trace:STORY-2704 | ai:codex
+if [ -f "$tmpdir/aida-porcelain" ] && { [ -e "$PREFIX/aida-flow" ] || [ -L "$PREFIX/aida-flow" ]; }; then
+    if [ ! -L "$PREFIX/aida-flow" ] || [ "$(readlink "$PREFIX/aida-flow")" != aida-porcelain ]; then
+        echo "error: refusing to replace unrelated $PREFIX/aida-flow" >&2
+        exit 1
+    fi
+fi
+
 mkdir -p "$PREFIX"
 
 # If the destination is not writable, escalate via sudo.
@@ -200,9 +209,9 @@ fi
 if [ -f "$tmpdir/aida-porcelain" ]; then
     "${install_cmd[@]}" "$tmpdir/aida-porcelain" "$PREFIX/aida-porcelain"
     if [ -w "$PREFIX" ]; then
-        ln -sfn aida-porcelain "$PREFIX/aida-flow"
+        ln -sfnT aida-porcelain "$PREFIX/aida-flow"
     else
-        sudo ln -sfn aida-porcelain "$PREFIX/aida-flow"
+        sudo ln -sfnT aida-porcelain "$PREFIX/aida-flow"
     fi
     echo "  installed $PREFIX/aida-porcelain and aida-flow"
 fi

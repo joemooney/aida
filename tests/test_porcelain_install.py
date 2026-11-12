@@ -41,8 +41,9 @@ class ReleaseInstall(unittest.TestCase):
         self.assertEqual(os.readlink(self.dest / 'aida-flow'), 'aida-porcelain')
 
     def test_upgrade_replaces_running_pair_and_companion(self):
-        for name in ('aida', 'aida-server', 'aida-porcelain', 'aida-flow'):
+        for name in ('aida', 'aida-server', 'aida-porcelain'):
             (self.dest / name).write_text('old-' + name)
+        (self.dest / 'aida-flow').symlink_to('aida-porcelain')
         # An open executable handle must keep the old inode, never truncation.
         with (self.dest / 'aida').open() as old:
             result = self.run_upgrade()
@@ -73,7 +74,7 @@ class ReleaseInstall(unittest.TestCase):
                     (self.dest / name).write_text('old-' + name)
                 link = self.dest / 'aida-flow'
                 link.unlink(missing_ok=True)
-                link.symlink_to('old-porcelain')
+                link.symlink_to('aida-porcelain')
                 bin_dir = self.root / ('bin-' + failed_member)
                 bin_dir.mkdir()
                 # Fail only publication; rollback uses the old/ paths.
@@ -85,8 +86,78 @@ class ReleaseInstall(unittest.TestCase):
                 self.assertNotEqual(self.run_upgrade(env).returncode, 0)
                 for name in ('aida', 'aida-server', 'aida-porcelain'):
                     self.assertEqual((self.dest / name).read_text(), 'old-' + name)
-                self.assertEqual(os.readlink(link), 'old-porcelain')
+                self.assertEqual(os.readlink(link), 'aida-porcelain')
                 self.assertEqual(list(self.dest.glob('.aida-upgrade-*')), [])
+
+    def test_alias_ownership_preflights_every_install_path(self):
+        # Every refusal preserves all old members, the alias and its target.
+        # trace:STORY-2704 | ai:codex
+        archive = self.root / 'release.tar.gz'
+        with tarfile.open(archive, 'w:gz') as tar:
+            for path in self.src.iterdir():
+                tar.add(path, arcname=path.name)
+        stubs = self.root / 'stubs'
+        stubs.mkdir()
+        (stubs / 'curl').write_text(
+            '#!/bin/sh\n[ "$1 $2" = "-fSL -o" ] || exit 2\ncp "$FIXTURE_ARCHIVE" "$3"\n')
+        (stubs / 'cargo').write_text(
+            '#!/bin/sh\n[ "$1 $2" = "install --path" ] || exit 2\n'
+            'case $3 in aida-cli) name=aida;; *) name=$3;; esac\n'
+            'mkdir -p "$6/bin"\ninstall -m 755 "$FIXTURE_BUNDLE/$name" "$6/bin/$name"\n')
+        for stub in stubs.iterdir():
+            stub.chmod(0o755)
+
+        def snapshot(directory):
+            return {str(p.relative_to(directory)):
+                    ('link', os.readlink(p)) if p.is_symlink() else
+                    ('dir',) if p.is_dir() else ('file', p.read_bytes(), p.stat().st_mode)
+                    for p in directory.rglob('*')}
+
+        for runner in ('upgrade', 'install.sh', 'install', 'install-cli'):
+            for alias in ('absent', 'owned', 'owned-dangling', 'directory', 'file', 'foreign-link', 'dangling-link'):
+                with self.subTest(runner=runner, alias=alias):
+                    case = self.root / (runner + '-' + alias)
+                    case.mkdir()
+                    self.dest = case / 'bin'
+                    self.dest.mkdir()
+                    for name in ('aida', 'aida-server', 'aida-porcelain'):
+                        (self.dest / name).write_text('old-' + name)
+                    foreign = case / 'foreign'
+                    foreign.write_text('unrelated')
+                    link = self.dest / 'aida-flow'
+                    if alias in ('owned', 'owned-dangling'):
+                        link.symlink_to('aida-porcelain')
+                        if alias == 'owned-dangling':
+                            (self.dest / 'aida-porcelain').unlink()
+                    elif alias == 'directory':
+                        link.mkdir()
+                        (link / 'keep').write_text('keep')
+                    elif alias == 'file':
+                        link.write_text('foreign file')
+                    elif alias == 'foreign-link':
+                        link.symlink_to(foreign)
+                    elif alias == 'dangling-link':
+                        link.symlink_to('missing-foreign')
+                    before = snapshot(case)
+                    env = dict(self.env, PATH=str(stubs) + ':' + self.env['PATH'],
+                               FIXTURE_ARCHIVE=str(archive), FIXTURE_BUNDLE=str(self.src),
+                               CARGO_INSTALL_ROOT=str(case))
+                    if runner == 'upgrade':
+                        result = self.run_upgrade(env)
+                    else:
+                        argv = (['bash', str(ROOT / 'scripts/install.sh'), '--version', 'v1.0.0',
+                                 '--prefix', str(self.dest)] if runner == 'install.sh' else
+                                ['make', '-o', 'build-release', runner])
+                        result = subprocess.run(argv, cwd=ROOT, env=env, capture_output=True)
+                    if alias in ('absent', 'owned', 'owned-dangling'):
+                        self.assertEqual(result.returncode, 0, result.stderr)
+                        self.assertEqual(os.readlink(link), 'aida-porcelain')
+                        self.assertEqual(subprocess.check_output([str(link)], env=self.env),
+                                         b'new-aida-porcelain\n')
+                    else:
+                        self.assertNotEqual(result.returncode, 0)
+                        self.assertIn(b'refusing to replace unrelated', result.stderr)
+                        self.assertEqual(snapshot(case), before)
 
     def test_release_archive_contains_multicall_link(self):
         workflow = (ROOT / '.github/workflows/release.yml').read_text()
@@ -114,7 +185,7 @@ class ReleaseInstall(unittest.TestCase):
                          '[ "$4 $5" = "--force --root" ] || exit 3\n'
                          'case $3 in aida-cli) name=aida;; *) name=$3;; esac\n'
                          'mkdir -p "$6/bin"\n'
-                         'cp "$FIXTURE_BUNDLE/$name" "$6/bin/$name"\n')
+                         'install -m 755 "$FIXTURE_BUNDLE/$name" "$6/bin/$name"\n')
         cargo.chmod(0o755)
         for target in ('install', 'install-cli'):
             for custom_root in (False, True):

@@ -455,7 +455,7 @@ fn installed_flow_resolves_externally_with_reader_parity() {
 fn tarball_upgrade_replaces_pair_companion_and_link() {
     let fx = fixture(&[]);
     for utility in [
-        "tar", "gzip", "sh", "install", "mktemp", "mkdir", "cp", "mv", "rm", "ln",
+        "tar", "gzip", "sh", "install", "mktemp", "mkdir", "cp", "mv", "rm", "ln", "readlink",
     ] {
         std::os::unix::fs::symlink(
             Path::new("/usr/bin").join(utility),
@@ -472,7 +472,7 @@ fn tarball_upgrade_replaces_pair_companion_and_link() {
         write_exec(&installed.join(name), "#!/bin/sh\necho 'aida 0.0.1'\n");
     }
     std::os::unix::fs::symlink("aida-porcelain", source.join("aida-flow")).unwrap();
-    write_exec(&installed.join("aida-flow"), "#!/bin/sh\necho old-flow\n");
+    std::os::unix::fs::symlink("aida-porcelain", installed.join("aida-flow")).unwrap();
     let archive = fx._tmp.path().join("release.tar.gz");
     assert!(Command::new("/usr/bin/tar")
         .arg("czf")
@@ -647,4 +647,91 @@ fn nested_missing_extension_preserves_clap_diagnostic() {
     assert_eq!(original.status.code(), installed.status.code());
     assert_eq!(original.stderr, installed.stderr);
     assert!(String::from_utf8_lossy(&original.stderr).contains("unrecognized subcommand"));
+}
+
+// trace:STORY-2704 | ai:codex
+#[test]
+fn nested_external_refuses_explicit_target_selectors() {
+    let fx = fixture(&[("aida-review-summary", RECORDING_STUB)]);
+    let other = fx._tmp.path().join("other");
+    std::fs::create_dir_all(other.join(".aida-store")).unwrap();
+    std::fs::create_dir_all(other.join(".aida")).unwrap();
+    std::fs::create_dir_all(other.join(".git")).unwrap();
+    std::fs::write(
+        other.join(".aida/config.toml"),
+        "store_path = \".aida-store\"\n",
+    )
+    .unwrap();
+    // Both cwd targets dispatch normally; selecting the other target must fail
+    // before the extension executes, for separate and equals option spellings.
+    for (cwd, target) in [(&fx.proj, &other), (&other, &fx.proj)] {
+        let normal = aida(&fx, cwd, &["review", "summary"], &[]);
+        assert!(normal.status.success(), "{}", text(&normal));
+        assert!(stdout(&normal).contains(&format!("root=[{}]", canon(cwd))));
+        for (flag, value) in [
+            ("--project", target.display().to_string()),
+            ("-p", target.display().to_string()),
+            ("--file", target.join(".aida-store").display().to_string()),
+            ("--server", "localhost:50051".into()),
+            ("-s", "localhost:50051".into()),
+        ] {
+            for args in [
+                vec![
+                    flag.to_string(),
+                    value.clone(),
+                    "review".into(),
+                    "summary".into(),
+                ],
+                vec![format!("{flag}={value}"), "review".into(), "summary".into()],
+            ] {
+                let args: Vec<&str> = args.iter().map(String::as_str).collect();
+                let out = aida(&fx, cwd, &args, &[]);
+                assert!(!out.status.success(), "{}", text(&out));
+                assert!(
+                    text(&out).contains("unsupported for nested external"),
+                    "{}",
+                    text(&out)
+                );
+                assert!(!stdout(&out).contains("root=["), "{}", text(&out));
+            }
+        }
+        for args in [
+            &["--canonical-ids", "review", "summary"][..],
+            &["review", "--canonical-ids", "summary"][..],
+        ] {
+            let out = aida(&fx, cwd, args, &[]);
+            assert!(!out.status.success(), "{}", text(&out));
+            assert!(
+                text(&out).contains("--canonical-ids is unsupported"),
+                "{}",
+                text(&out)
+            );
+            assert!(!stdout(&out).contains("root=["), "{}", text(&out));
+        }
+    }
+}
+
+// trace:STORY-2704 | ai:codex
+#[test]
+fn fixture_executable_keeps_its_isolated_directory() {
+    let fx = fixture(&[]);
+    let out = aida(&fx, &fx.outside, &["--path"], &[]);
+    assert!(out.status.success(), "{}", text(&out));
+    assert_eq!(stdout(&out).trim(), canon(&fx.bin_dir.join("aida")));
+    assert_ne!(
+        fx.bin_dir.canonicalize().unwrap(),
+        Path::new(env!("CARGO_BIN_EXE_aida"))
+            .parent()
+            .unwrap()
+            .canonicalize()
+            .unwrap()
+    );
+    assert!(!fx.bin_dir.join("aida-porcelain").exists());
+    let out = aida(&fx, &fx.outside, &["help", "--all"], &[]);
+    assert!(out.status.success(), "{}", text(&out));
+    assert!(
+        !stdout(&out).contains("External commands"),
+        "{}",
+        text(&out)
+    );
 }

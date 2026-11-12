@@ -826,7 +826,10 @@ companion and its alias; rolling forward restores them.
 Release archives, `install.sh`, `make install` and tarball upgrades include
 `aida-porcelain` and the relative `aida-flow` link. Upgrades stage the complete
 bundle before replacing binaries by atomic rename and restore the previous files
-if a replacement fails. Environment output-format aliases (`table` for `human`,
+if a replacement fails. Installers refuse an existing `aida-flow` directory,
+file or foreign symlink before replacing any bundle member. Only an absent path
+or the owned relative `aida-flow -> aida-porcelain` alias is accepted.
+Environment output-format aliases (`table` for `human`,
 `agent` for `toon`) use the same parser as core.
 
 <!-- trace:STORY-2699 | ai:codex -->
