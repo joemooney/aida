@@ -12,12 +12,12 @@ description: |
   2. The TASK-3425 measurement script, run on base and head, shows the largest SCC shrinks, and the doc records both numbers. The target is the plan's ~29-module reduction; a smaller result is acceptable if the doc names the edges that still hold modules in.
   3. make check-ci-fast passes; the command-registry ratchet tests pass; help output unchanged (Help-Golden: unchanged).
   4. Sequence: start after PR-3635 merges, and touch only import lines in files with no open PR, to avoid the SPIKE-713 conflict pattern.
-status: Approved
+status: InProgress
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-08T03:08:54.290380002Z
-modified_at: 2026-11-12T09:01:50.838978615Z
+modified_at: 2026-11-12T09:21:07.141369699Z
 req_type: Task
 tags:
 - area:architecture
@@ -325,6 +325,13 @@ history:
   - field_name: status
     old_value: NeedsAttention
     new_value: Approved
+- id: 01a1cf0f-9445-7fa3-af12-40ef79007048
+  author: aida-session-start
+  timestamp: 2026-11-12T09:21:07.141367606Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: 049e5206de120518bb94fae84bf359f789e76236
   branch: main
