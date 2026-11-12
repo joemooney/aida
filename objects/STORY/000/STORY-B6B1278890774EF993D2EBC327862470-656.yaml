@@ -1,0 +1,36 @@
+id: 01a1d0d5-064e-7ab0-942c-72e068e3f49d
+spec_id: STORY-b6b1278890774ef993d2ebc327862470-656
+agreed_id: STORY-2733
+title: 'Mandate --include-gate-paths: trains and ships under an operator-minted mandate take protected-path (gate/) PRs'
+description: |
+  Operator ruling 2026-11-12 10:35 MST: "let the train take protected-path PRs". Today a PR that touches GATE_PROTECTED_PATHS (aida-cli-lib/src/gate/, .aida/config.toml, the STORY-1888 ratchet test) is ejected from every mandate-covered train and ship (gate/mandate.rs gate_checks -> MandateRefusal::TouchesGates). Such PRs must ship one at a time by a human TTY ship, and every main move forces another full CI cycle because ship refuses a behind head. On 2026-11-12, #3859 and #3872 each paid repeated CI reruns this way.
+
+  ARCHITECTURE SKETCH (advisor-approved 2026-11-12 10:40 MST under the operator ruling):
+  - Keep R1 (agents cannot loosen their own gates): the opt-in lives on the MANDATE, which only a human at a terminal can mint. Add `--include-gate-paths` to `aida mandate start` (and to renew/extend, carried forward only when passed again). Store it on the mandate record (serde default false so existing mandates read as false). `aida mandate status` shows it.
+  - gate/mandate.rs gate_checks: when the covering mandate has include_gate_paths=true, a TouchesGates hit no longer refuses; it is recorded instead (the GateMatch path/entry/source goes into the ship/train audit line and the merge commit's audit trailer if one exists). ChangedPathsUnresolved still refuses (fail closed). HumanGated, holds, approval-at-head, independent-reviewer and authorship checks are unchanged.
+  - The floor list GATE_PROTECTED_PATHS and the STORY-1888 ratchet are unchanged; nothing about config layering changes.
+  - Train: protected-path members ride the train like any other member under such a mandate (the train's own CI on top of main replaces the per-PR rerun).
+
+  ACCEPTANCE:
+  1. Tests: a mandate without the flag still refuses TouchesGates (regression); with the flag, gate_checks admits a gate-path PR and the audit carries the GateMatch; ChangedPathsUnresolved still refuses with the flag; an old mandate record without the field deserializes as false.
+  2. `aida mandate start --include-gate-paths` is refused unless a human is at a terminal (same check as the existing mandate start), and help text states the effect.
+  3. Train member gate (pr_train.rs member_spec_policy_refusal / mandate cover) admits the member under the flag; a unit test covers it.
+  4. CLI help golden snapshot updated; docs/cli mandate section updated.
+  LIGHT gate: one targeted `cargo test -p aida-cli-lib mandate` filter + make check-ci-fast.
+  This PR itself touches gate/ (the floor), so it lands by a human ship (advisor submits via the operator's deputy) or the operator emergency path.
+status: Draft
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-12T17:36:24.142897628Z
+modified_at: 2026-11-12T17:36:24.142897628Z
+req_type: Story
+filed_at:
+  code_sha: ec5a35a7108475b421baf1101b26159a7aa0fab9
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: a447d559aaa
+  vendor: claude
+  session: 01a1d09a-4262-7d50-a00b-00a5a30f3934
+  harness_version: 2.1.322 (Claude Code)
