@@ -974,6 +974,10 @@ fn bug_2517_spec_only_never_binds_or_projects_and_related_changes_scan_once() {
         )
         .unwrap();
         assert!(view.unbound.is_empty());
+        assert!(view
+            .change_events
+            .iter()
+            .all(|e| e.change == format!("PR-{n}")));
         assert_eq!(
             view.change_events
                 .iter()
@@ -1049,6 +1053,7 @@ fn bug_2517_local_records_stay_unbound_through_open_record_and_collect() {
         ledger::record_verdict_at(&local_path, &local, Some(&spec)).unwrap();
         let unbound_path = root.path().join(".aida/gate-ledger/by-spec/BUG-2403.jsonl");
         let original = std::fs::read(&unbound_path).unwrap();
+        let mut previous_ledger = None;
         for n in [3185, 3194] {
             let change = ChangeKey::pr(n);
             ledger::bind_specs(root.path(), change, &[spec.clone()]);
@@ -1081,10 +1086,23 @@ fn bug_2517_local_records_stay_unbound_through_open_record_and_collect() {
                 3
             );
             assert!(events.iter().all(|e| !e.is_spec_only()));
-            assert!(load_view(root.path(), change, &set)
-                .unwrap()
-                .unbound
-                .is_empty());
+            let v = load_view(root.path(), change, &set).unwrap();
+            assert!(v.unbound.is_empty());
+            assert!(matches!(
+                effective_gate_state(HEAD_A, &set, &v, &drain()).verdict,
+                Verdict::Waiting { .. }
+            ));
+            if let Some(ref bytes) = previous_ledger {
+                assert_eq!(
+                    &std::fs::read(store::ledger_file(root.path(), ChangeKey::pr(3185)))
+                        .unwrap(),
+                    bytes,
+                    "recording and collecting the second PR must preserve the first ledger"
+                );
+            } else {
+                previous_ledger =
+                    Some(std::fs::read(store::ledger_file(root.path(), change)).unwrap());
+            }
             assert_eq!(std::fs::read(&unbound_path).unwrap(), original);
         }
     }
