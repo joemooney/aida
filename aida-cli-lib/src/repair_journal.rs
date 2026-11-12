@@ -51,6 +51,10 @@ pub(crate) struct RepairEntry {
     pub original_conflict_paths: Vec<String>,
     #[serde(default)]
     pub regeneration_success: Option<bool>,
+    // Successful publication regeneration is bound to the exact staged tree.
+    // Older boolean-only records cannot supply this evidence.
+    #[serde(default)]
+    pub regenerated_tree: Option<String>,
     // Preparation restores outputs from this entry's immutable base/head inputs.
     // Missing evidence (including journals from older hosts) fails closed.
     #[serde(default)]
@@ -69,6 +73,15 @@ impl RepairEntry {
                 && self.regeneration_success != Some(false)
                 && !self.original_conflict_paths.is_empty(),
             "repair preparation did not succeed; resume pickup to retry regeneration before publication"
+        );
+        Ok(())
+    }
+    pub fn require_regenerated_tree(&self, tree: &str) -> Result<()> {
+        self.require_prepared()?;
+        anyhow::ensure!(
+            self.regeneration_success == Some(true)
+                && self.regenerated_tree.as_deref() == Some(tree),
+            "staged repair tree changed or lacks successful regeneration; retry publication"
         );
         Ok(())
     }
@@ -186,6 +199,22 @@ impl RepairGuard {
         previous: &str,
         successor: &str,
     ) -> Result<()> {
+        let matching: Vec<_> = self
+            .journal
+            .entries
+            .iter()
+            .filter(|entry| {
+                entry.tree_path == tree
+                    && entry.branch == branch
+                    && entry.spawn != SpawnOutcome::ProvenDead
+            })
+            .collect();
+        anyhow::ensure!(
+            matching
+                .iter()
+                .all(|entry| entry.lane_id == previous || entry.lane_id == successor),
+            "repair belongs to a different lane; adoption refused"
+        );
         for entry in &mut self.journal.entries {
             if entry.tree_path == tree
                 && entry.branch == branch
@@ -205,6 +234,9 @@ impl RepairGuard {
             .find(|e| &e.key == key)
             .context("missing repair reservation")?;
         entry.preparation_success = Some(success);
+        if !success {
+            entry.regenerated_tree = None;
+        }
         self.save()
     }
     pub fn record_regeneration(&mut self, key: &RepairKey, success: bool) -> Result<()> {
@@ -215,6 +247,26 @@ impl RepairGuard {
             .find(|e| &e.key == key)
             .context("missing repair reservation")?;
         entry.regeneration_success = Some(success);
+        entry.regenerated_tree = None;
+        self.save()
+    }
+    pub fn record_regenerated_tree(&mut self, key: &RepairKey, tree: &str) -> Result<()> {
+        anyhow::ensure!(
+            tree.len() >= 40 && tree.bytes().all(|b| b.is_ascii_hexdigit()),
+            "invalid regenerated tree id"
+        );
+        let entry = self
+            .journal
+            .entries
+            .iter_mut()
+            .find(|e| &e.key == key)
+            .context("missing repair reservation")?;
+        anyhow::ensure!(
+            entry.preparation_success == Some(true),
+            "repair preparation did not succeed"
+        );
+        entry.regeneration_success = Some(true);
+        entry.regenerated_tree = Some(tree.to_owned());
         self.save()
     }
     pub fn for_tree(
@@ -269,6 +321,7 @@ mod tests {
             spawn: SpawnOutcome::Unknown,
             original_conflict_paths: vec![],
             regeneration_success: None,
+            regenerated_tree: None,
             preparation_success: None,
             validation: None,
             refusal_notice: None,
@@ -311,6 +364,43 @@ mod tests {
             .unwrap()
             .require_prepared()
             .unwrap();
+        drop(guard);
+        // A verified successor cannot steal another live lane's reservation.
+        let mut guard = RepairGuard::lock(main).unwrap();
+        assert!(guard
+            .transfer_adopted_lane(&entry.tree_path, "pr", "other", "new")
+            .is_err());
+        guard
+            .transfer_adopted_lane(&entry.tree_path, "pr", "lease-1", "new")
+            .unwrap();
+        guard
+            .transfer_adopted_lane(&entry.tree_path, "pr", "lease-1", "new")
+            .unwrap();
+        guard
+            .record_regenerated_tree(&key, &"c".repeat(40))
+            .unwrap();
+        drop(guard);
+        let mut guard = RepairGuard::lock(main).unwrap();
+        assert_eq!(
+            guard
+                .for_tree(&entry.tree_path, "pr", &key.original_head, &entry.base)
+                .unwrap()
+                .regenerated_tree
+                .as_deref(),
+            Some("c".repeat(40).as_str())
+        );
+        let loaded = guard
+            .for_tree(&entry.tree_path, "pr", &key.original_head, &entry.base)
+            .unwrap();
+        loaded.require_regenerated_tree(&"c".repeat(40)).unwrap();
+        assert!(loaded.require_regenerated_tree(&"d".repeat(40)).is_err());
+        // Failure/recovery invalidates any earlier exact-tree success.
+        guard.record_regeneration(&key, false).unwrap();
+        assert!(guard
+            .for_tree(&entry.tree_path, "pr", &key.original_head, &entry.base)
+            .unwrap()
+            .regenerated_tree
+            .is_none());
         drop(guard);
         // Two independent entry points racing the same head admit one owner.
         let mut dead = entry.clone();

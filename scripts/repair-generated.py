@@ -65,6 +65,7 @@ def expected_pack_outputs(staged, host_outputs):
     trace:STORY-2710 | ai:codex
     """
     outputs = set(host_outputs)
+    masters = {}
     for source in staged:
         if not source.startswith(TEMPLATES) or not source.endswith(".md"):
             continue
@@ -81,7 +82,13 @@ def expected_pack_outputs(staged, host_outputs):
         elif kind == "skills-portable":
             continue
         if name.startswith("aida-") and ".." not in helper.split("/"):
-            outputs.add(PACK + name + "/" + helper)
+            masters.setdefault(name, {}).setdefault(kind, set()).add(helper)
+    for name, kinds in masters.items():
+        # The real renderer requires an ordinary skill prompt. Portable-only
+        # overrides and helper-only directories do not create a skill.
+        ordinary = kinds.get("skills", set())
+        if "SKILL.md" in ordinary:
+            outputs.update(PACK + name + "/" + helper for helper in ordinary)
     return outputs
 
 

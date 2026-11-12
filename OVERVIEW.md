@@ -435,6 +435,31 @@ Snapshots grant no completion, review or publication authority. Codex remains
 disabled pending its trusted-hook test.
 <!-- trace:STORY-2662 | ai:codex -->
 
+### Conflict repair evidence
+
+Host-staged conflict repairs retain their original conflict paths in the shared,
+versioned `.aida/repair-journal.json`, protected by a permanent journal lock.
+Verified orphan adoption transfers ownership to the newly minted lease before
+removing its predecessor; setup rollback restores that ownership with the orphan.
+An unrelated lane cannot acquire the repair through adoption or resume.
+
+Preparation restores registered products while authoritative sources may still
+have conflicts. Publication stages resolved sources and runs full regeneration
+inside the sandbox. Failed preparation or regeneration retains the merge and
+refuses direct publication; resume must successfully retry the failed phase.
+Successful publication regeneration records the exact staged tree in the journal,
+and the commit gate requires that tree's evidence. Each publication attempt
+invalidates earlier generation evidence before executing a generator.
+
+The generator inventory includes the ignored `.agents/skills/aida-*` portable
+pack. Expected paths are frozen before generator execution from the host's real
+renderer inventory and staged template masters; helper-only directories and
+portable overrides without an ordinary skill prompt grant no new output paths.
+Fresh or stale ignored pack files therefore work without allowing arbitrary
+writes under `.agents/`. Original conflict paths remain the authority for the
+lane brief and marker gate across retries.
+<!-- trace:STORY-2710 | ai:codex -->
+
 ### Agent launch migration
 
 `aida-cli-lib/src/launch/` resolves launch policy into `LaunchContext` and

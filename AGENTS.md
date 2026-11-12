@@ -1,3 +1,10 @@
+Repair adoption transfers journal ownership at the verified successor-lease
+boundary. Pending-merge publication requires successful preparation, retries
+failed generation through resume, and records successful regeneration against
+the staged tree. Ignored portable-pack outputs come from a closed pre-run
+inventory of host paths and staged skill masters. See OVERVIEW.md.
+<!-- trace:STORY-2710 | ai:codex -->
+
 MCP transport and its store handler live in `aida-mcp`; the binary injects the
 handler into cli-lib's `mcp-serve` registration before parsing. Shared descriptors
 and claim naming stay below that boundary. CLI-local MCP tests include the

@@ -3576,6 +3576,7 @@ fn prepare_host_repair_with(
             spawn: SpawnOutcome::Unknown,
             original_conflict_paths: vec![],
             regeneration_success: None,
+            regenerated_tree: None,
             preparation_success: None,
             validation: None,
             refusal_notice: None,
@@ -3755,6 +3756,19 @@ mod rework_merge_tests {
         // Stage the actual renderer's template masters as well. An empty host
         // inventory then models a host older than the resolved template pack.
         for skill in aida_core::scaffolding::inventory::portable_skill_inventory(&config).values() {
+            // Portable overrides replace the body, but the renderer still
+            // requires the ordinary master to define the skill itself.
+            let templates = Path::new(env!("CARGO_MANIFEST_DIR")).join("../aida-core/templates");
+            let flat = format!("skills/{}.md", skill.name);
+            let folder = format!("skills/{}/SKILL.md", skill.name);
+            let master = if templates.join(&flat).is_file() {
+                flat
+            } else {
+                folder
+            };
+            let target = fx.main.join("aida-core/templates").join(&master);
+            std::fs::create_dir_all(target.parent().unwrap()).unwrap();
+            std::fs::copy(templates.join(master), target).unwrap();
             for file in &skill.files {
                 let source = Path::new(env!("CARGO_MANIFEST_DIR"))
                     .join("../aida-core/templates")
@@ -4802,6 +4816,31 @@ pub(crate) fn commit_pending(
         clone.display(),
         format!("{index_tree:?}")
     );
+    let unstage_marker = || -> Result<()> {
+        // Should the seat's exclude no longer ignore the marker, unstage it.
+        let staged_marker = probe_text(&[
+            os("diff"),
+            os("--cached"),
+            os("--name-only"),
+            os("--"),
+            os(aida_core::seat_clone_detect::MARKER_RELATIVE),
+        ])?;
+        if !staged_marker.is_empty() {
+            run_commit_sandboxed(
+                clone,
+                main,
+                &[
+                    os("reset"),
+                    os("-q"),
+                    os("--"),
+                    os(aida_core::seat_clone_detect::MARKER_RELATIVE),
+                ],
+                &identity,
+            )
+            .map_err(|failure| recovery("unstage the seat marker from", failure))?;
+        }
+        Ok(())
+    };
     let staged = (|| -> Result<String> {
         // Stage everything `.gitignore`/`info/exclude` allow. No explicit
         // marker exclude here: git refuses an add whose pathspec names an
@@ -4839,29 +4878,31 @@ pub(crate) fn commit_pending(
                 &identity,
             )
             .map_err(|failure| recovery("stage regenerated outputs", failure))?;
-            crate::repair_journal::RepairGuard::lock(main)?.record_regeneration(&key, true)?;
+            unstage_marker()?;
+            // Record exactly what successful generation produced, after staging.
+            let generated_tree = String::from_utf8(
+                run_commit_sandboxed(clone, main, &[os("write-tree")], &identity)
+                    .map_err(|failure| recovery("record regenerated tree", failure))?,
+            )?
+            .trim()
+            .to_owned();
+            crate::repair_journal::RepairGuard::lock(main)?
+                .record_regenerated_tree(&key, &generated_tree)?;
         }
-        // Should the seat's exclude no longer ignore the marker, unstage it.
-        let staged_marker = probe_text(&[
-            os("diff"),
-            os("--cached"),
-            os("--name-only"),
-            os("--"),
-            os(aida_core::seat_clone_detect::MARKER_RELATIVE),
-        ])?;
-        if !staged_marker.is_empty() {
-            run_commit_sandboxed(
-                clone,
-                main,
-                &[
-                    os("reset"),
-                    os("-q"),
-                    os("--"),
-                    os(aida_core::seat_clone_detect::MARKER_RELATIVE),
-                ],
-                &identity,
-            )
-            .map_err(|failure| recovery("unstage the seat marker from", failure))?;
+        if merge_base.is_none() {
+            unstage_marker()?;
+        }
+        if let Some(base) = merge_base.as_deref() {
+            let head = head_before.as_deref().context("missing repair head")?;
+            let staged_tree = String::from_utf8(
+                run_commit_sandboxed(clone, main, &[os("write-tree")], &identity)
+                    .map_err(|failure| recovery("verify regenerated tree", failure))?,
+            )?
+            .trim()
+            .to_owned();
+            let journal = crate::repair_journal::RepairGuard::lock(main)?;
+            let entry = journal.for_tree(clone, branch, head, base)?;
+            entry.require_regenerated_tree(&staged_tree)?;
         }
         ensure_dir_identity(clone, pinned)?;
         run_commit_sandboxed(

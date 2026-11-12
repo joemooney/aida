@@ -195,6 +195,30 @@ class RepairGenerationTests(unittest.TestCase):
             finally:
                 os.chdir(old)
 
+    def test_pack_inventory_requires_a_real_skill_prompt(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            old = os.getcwd()
+            os.chdir(tmp)
+            try:
+                sources = {
+                    'aida-core/templates/skills-portable/aida-override.md',
+                    'aida-core/templates/skills/aida-helper/examples/example.md',
+                }
+                for source in sources:
+                    path = Path(source)
+                    path.parent.mkdir(parents=True, exist_ok=True)
+                    path.write_text('template')
+                self.assertEqual(driver.expected_pack_outputs(sources, ()), set())
+                prompt = 'aida-core/templates/skills/aida-helper/SKILL.md'
+                Path(prompt).write_text('prompt')
+                sources.add(prompt)
+                self.assertEqual(driver.expected_pack_outputs(sources, ()), {
+                    '.agents/skills/aida-helper/SKILL.md',
+                    '.agents/skills/aida-helper/examples/example.md',
+                })
+            finally:
+                os.chdir(old)
+
     def test_pack_inventory_is_frozen_before_generator_writes(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

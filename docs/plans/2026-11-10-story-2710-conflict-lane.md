@@ -374,3 +374,38 @@ Follow-up validation/handoff (2026-11-11 MST):
   intent with subject `[AI:codex] fix(repair): freeze pack inventory and retain
   failed preparation gates (Refs STORY-2710)`. No commit, push, PR, queue-done,
   merge or review-record action was performed in this seat.
+
+## Round 7 exact-tree and inventory follow-through
+
+<!-- trace:STORY-2710 | ai:codex -->
+
+This follow-through builds on `46fa4873f73` and addresses the same three review
+findings without treating that earlier commit as this round's work:
+
+- Finding 1: staged pack masters must define an ordinary skill prompt before
+  helpers or a portable override can authorize new paths. The real renderer
+  fixture now stages those defining masters alongside portable overrides and
+  still exercises fresh/stale ignored packs with no host-known inventory.
+- Finding 2: journal adoption refuses an unrelated outstanding owner before
+  making any journal changes. Transfers remain idempotent for the verified
+  successor. The production orphan-adoption fixture checks unrelated refusal,
+  then successor resume and rollback to the original orphan.
+- Finding 3: successful publication regeneration stores its staged tree ID,
+  scoped by the journal's immutable repository/PR/head/base/tree identity.
+  Publication requires matching evidence before commit. Starting another
+  generation attempt clears that tree evidence; persisted failure still blocks
+  direct commit until resume successfully recovers. The sandbox regression
+  checks that successful evidence names the committed tree.
+
+Validation on this checkout: Python driver plus writer-inventory unit tests
+**66 passed** (11 regeneration tests, 55 writer-inventory tests). The exec-context
+guard reports **1234 exact sites, zero additions**. The store-writer guard reports
+**3548 reconciled sink sites** after classifying the new exact-tree journal
+writer. Changed-file rustfmt and whitespace checks pass. Rust job
+`j20261112T045617373-3105-0` is still queued behind two occupied build slots;
+no executed Rust result is claimed. At 2026-11-12 05:12 UTC it remains queued
+after more than 15 minutes of wall time; **Rust `untested=true`**. The configured
+900-second timeout has not produced a terminal status. The host must inspect or
+rerun this job; this handoff does not wait for a later callback. The reviewed
+Codegraph client remains missing at its configured absolute path; no indexing
+or synchronization was attempted.

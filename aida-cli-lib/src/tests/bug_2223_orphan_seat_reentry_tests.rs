@@ -334,11 +334,21 @@ fn story_2710_actual_orphan_adoption_transfers_pending_repair() {
             original_conflict_paths: vec!["README.md".into()],
             preparation_success: Some(false),
             regeneration_success: None,
+            regenerated_tree: None,
             validation: None,
             refusal_notice: None,
         })
         .unwrap();
     drop(journal);
+    assert!(crate::repair_journal::RepairGuard::lock(&fx.main)
+        .unwrap()
+        .transfer_adopted_lane(
+            tree,
+            &orphan.branch,
+            "unrelated-orphan",
+            "unrelated-successor"
+        )
+        .is_err());
     let receipt = adopt_receipt("TASK-2223", &orphan.branch, tree, true, true).unwrap();
     let failed_successor = lease_for(&fx.main, "TASK-2223");
     assert_ne!(failed_successor.id, orphan.id);

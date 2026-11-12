@@ -4576,6 +4576,14 @@ if '--write-ledger' in sys.argv:
                     .regeneration_success,
                 Some(true)
             );
+            assert_eq!(
+                guard
+                    .for_tree(&tree, "feat", &head, &base)
+                    .unwrap()
+                    .regenerated_tree
+                    .as_deref(),
+                Some(git_ok(&tree, &["rev-parse", "HEAD^{tree}"]).as_str())
+            );
             drop(guard);
             assert!(git_ok(
                 &tree,
