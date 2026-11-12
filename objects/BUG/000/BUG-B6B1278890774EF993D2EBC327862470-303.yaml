@@ -8,8 +8,16 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-12T18:26:43.321357044Z
-modified_at: 2026-11-12T18:30:07.833232359Z
+modified_at: 2026-11-12T18:54:50.031579400Z
 req_type: Bug
+comments:
+- id: 01a1d11c-d4af-7321-a627-ce8fdbc3162c
+  author: dirtlab
+  content: 'Validation follow-up for host triage: unchanged pr_train_journal_lock_contention_is_typed_and_releases_on_exit failed its immediate reacquisition assertion once during parallel pr_train:: tests (job j20261112T185020335-2-0, 193 passed / 1 failed), after passing in three earlier runs. A serial rerun is in progress. Concurrent child descriptor inheritance is only a possible cause. Draft finding could not be filed: MCP requires approval while policy is never; CLI allocation refused because this private clone has no AIDA node binding. No node acquisition or Git metadata mutation attempted. Failing output: /home/dirtlab/ai/aida/.aida/lane-jobs/01a1d105e1f3/j20261112T185020335-2-0.out.'
+  created_at: 2026-11-12T18:54:50.031579400Z
+  modified_at: 2026-11-12T18:54:50.031579400Z
+  session_id: 01a1d105e1f3
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1d105-e816-76c0-be87-791c522a799c
   author: aida-session-start
