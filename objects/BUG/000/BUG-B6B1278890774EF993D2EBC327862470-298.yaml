@@ -3,13 +3,23 @@ spec_id: BUG-b6b1278890774ef993d2ebc327862470-298
 agreed_id: BUG-2533
 title: bug2188_refused_launch_restores_approved_status_and_retry_succeeds flakes in CI lib-1 (status stays InProgress)
 description: 'agent_launch::bug_2002_launch_lease_tests::bug2188_refused_launch_restores_approved_status_and_retry_succeeds failed in CI (lib-1) on 2026-11-12: PR #3867 run 43186737131 and train PR #3873 run 43193488190 (main 298639c + #3866, an import-only change). Assertion: left InProgress, right Approved: after a refused launch the spec is not restored to Approved. Main at 298639c passed the same shard, and neither PR touches launch code, so this is nondeterministic (timing or ambient state). It ejected #3866 from a merge train. Fix the race or make restoration synchronous before the launch returns its error.'
-status: Draft
+status: Approved
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-12T10:03:08.698309086Z
-modified_at: 2026-11-12T10:03:08.698309086Z
+modified_at: 2026-11-12T16:13:41.637521806Z
 req_type: Bug
+history:
+- id: 01a1d089-4d85-7572-9578-4a9e5a97ffd2
+  author: joe
+  timestamp: 2026-11-12T16:13:41.637517538Z
+  session_id: 01a1ceeb-e827-7832-8991-e83d9eb95cef
+  harness_version: 2.1.322 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Approved
 filed_at:
   code_sha: 298639cb95018f3d580dc44cba3ce04e880064fd
   branch: main
