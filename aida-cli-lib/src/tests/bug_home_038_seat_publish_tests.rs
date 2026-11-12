@@ -4461,12 +4461,15 @@ if '--write-ledger' in sys.argv:
     poison = subprocess.run(['git', 'config', '--get', 'repair.seatPoison'], capture_output=True)
     assert poison.returncode == 1, 'generator consumed seat-controlled Git config'
     for key in ('GIT_DIR', 'GIT_COMMON_DIR'):
-        try:
-            Path(os.environ[key], 'generator-escaped').write_text('must refuse')
-        except OSError:
-            pass
-        else:
-            raise RuntimeError('Git metadata was writable')
+        # Both the parent metadata and the final sanitized config overlay
+        # must remain read-only, including linked worktree common/config.
+        for name in ('generator-escaped', 'config'):
+            try:
+                Path(os.environ[key], name).write_text('must refuse')
+            except OSError:
+                pass
+            else:
+                raise RuntimeError('Git metadata or sanitized config was writable')
     Path('scripts/exec-context-legacy.json').write_text('regenerated\n')
     if Path('introduce-markers').exists():
         Path('scripts/exec-context-legacy.json').write_text(Path('introduce-markers').read_text())
@@ -4578,6 +4581,13 @@ if '--write-ledger' in sys.argv:
                 ">>>>>>> generated\n",
                 "<<<<<<< generated\n",
             ] {
+                // Each retry starts clean: the first marker gate must pass,
+                // leaving the post-generation journal gate to refuse this run.
+                // trace:STORY-2710 | ai:codex
+                assert_eq!(
+                    std::fs::read_to_string(tree.join(ledger)).unwrap(),
+                    "regenerated\n"
+                );
                 std::fs::write(tree.join("introduce-markers"), markers).unwrap();
                 let why = commit_pending(&fx.main, &tree, "feat", "repair (Refs STORY-2710)")
                     .unwrap_err();
@@ -4587,6 +4597,11 @@ if '--write-ledger' in sys.argv:
                 );
                 assert_eq!(git_ok(&tree, &["rev-parse", "HEAD"]), head);
                 assert_eq!(git_ok(&tree, &["rev-parse", "MERGE_HEAD"]), base);
+                assert_eq!(std::fs::read_to_string(tree.join(ledger)).unwrap(), markers);
+                assert_eq!(
+                    git_ok(&tree, &["show", &format!(":{ledger}")]),
+                    "regenerated"
+                );
                 let guard = crate::repair_journal::RepairGuard::lock(&fx.main).unwrap();
                 let entry = guard.for_tree(&tree, "feat", &head, &base).unwrap();
                 assert_eq!(entry.original_conflict_paths, [ledger]);
