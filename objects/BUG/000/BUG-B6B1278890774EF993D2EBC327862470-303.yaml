@@ -3,13 +3,21 @@ spec_id: BUG-b6b1278890774ef993d2ebc327862470-303
 agreed_id: BUG-2538
 title: Train coverage proof embeds every rider review record twice and exceeds the 16 MiB evidence cap, so green trains fail to merge
 description: 'Observed 2026-11-12 11:24 MST: train PR #3888 (riders #3830, #3846) went green, then failed at merge with ''could not invoke gh pr merge: invalid train evidence file''. .aida/gate-ledger/PR-3888.jsonl is 23 MB: its single train-coverage event''s proof.sources[0].originals holds 215 entries (107 BUG-2522 + 108 PR-3830), each carrying the full review record (40 rounds) both as .record and as .ledger_reference.record. pr_train_verified.rs validate_ledger refuses any evidence file over 16 MiB (or nlink!=1), so any rider with a long review history (PR-3830''s own ledger is 4.4 MB, 183 lines) makes the train unmergeable after a full CI run. Acceptance: (1) the train-coverage proof references rider evidence by digest/seq (or embeds only the latest record per key, once), so its size is bounded independent of review-round count; (2) the train computes and checks evidence size BEFORE opening the train PR and running CI, ejecting or shipping-alone any rider that would exceed the cap, rather than failing after CI; (3) regression test: a rider with 40+ review rounds and 100+ ledger lines lands in a train.'
-status: Approved
+status: InProgress
 priority: High
-owner: ''
+owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-12T18:26:43.321357044Z
-modified_at: 2026-11-12T18:26:43.321357044Z
+modified_at: 2026-11-12T18:29:47.670825217Z
 req_type: Bug
+history:
+- id: 01a1d105-e816-76c0-be87-791c522a799c
+  author: aida-session-start
+  timestamp: 2026-11-12T18:29:47.670824035Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: 0d6c60e6d982aad0c2c4ad38214010289a267d92
   branch: main
