@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-11T04:08:39.262399078Z
-modified_at: 2026-11-12T01:54:50.919076889Z
+modified_at: 2026-11-12T06:25:19.613764555Z
 req_type: Bug
 comments:
 - id: 01a1cd5d-0264-7490-92b2-682ec579baba
@@ -48,6 +48,10 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a1ce6e-a3ad-7613-8334-c6ca74404e94
+  author: joe
+  timestamp: 2026-11-12T06:25:19.789157545Z
+  changes: []
 filed_at:
   code_sha: fec48a790424718b7cfc26c0c9e7d7667ab48beb
   branch: main
@@ -61,7 +65,7 @@ failure_reason:
   phase: reviewer
   phase_index: 3
   kind: verdict:request-changes
-  detail: 'Full sweep of six files: distributed WAITING selection can hide a conclusive same-head verdict (AC3). AC1 verified by retry source and bug2521_waiting_backoff_cap_and_new_head; AC2 verified by cap/concurrency guards and bug2521_waiting_preserves_capacity_and_changes_requested_gate; AC3 unverified (finding); AC4 verified by added regression test files. BUG-2521 (bug protocol): met. Source/CI review only; CI pending at review time.'
+  detail: 'Full diff reviewed: peer WAITING deadline can be bypassed. AC1 unverified; AC2 verified by counter/capacity source and regression inspection; AC3 verified by conclusive gate source and regression inspection; AC4 verified by two changed test files. BUG-2521 (bug protocol): met. CI pending at review time; no local builds/tests run.'
   recovery_hint: address the review findings, move BUG-2521 back to In Progress, and clear the PR hold only after approval
   shelved_by: reviewer
-  shelved_at: 2026-11-12T01:54:50.919076889Z
+  shelved_at: 2026-11-12T06:25:19.613764555Z
