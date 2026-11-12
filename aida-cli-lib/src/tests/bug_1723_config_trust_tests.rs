@@ -548,6 +548,36 @@ fn relocated_root_readers_preserve_their_trust_channels() {
     );
 }
 
+// trace:TASK-3428 | ai:codex
+#[test]
+fn guard_rejects_pre_move_root_inventory_against_current_sources() {
+    let root = workspace_root();
+    let text = std::fs::read_to_string(root.join(INVENTORY_RELPATH))
+        .expect("config trust inventory must exist");
+    let mut inventory = parse_inventory(&text);
+    for owner in ["argv_rewrite.rs", "review_helpers.rs"] {
+        assert!(inventory
+            .readers
+            .remove(&format!("aida-cli-lib/src/{owner}"))
+            .is_some());
+    }
+    inventory.readers.insert(
+        "aida-cli-lib/src/lib.rs".to_string(),
+        (vec!["probe".to_string(), "worktree".to_string()], 2),
+    );
+
+    // Recreate the reviewed defect without changing files or the detector.
+    let complaints = check(&detected_sites(&root, SCANNED_CRATES), &inventory);
+    assert_eq!(complaints.len(), 3, "{complaints:?}");
+    for owner in ["argv_rewrite.rs", "review_helpers.rs", "lib.rs"] {
+        let path = format!("aida-cli-lib/src/{owner}");
+        assert!(
+            complaints.iter().any(|complaint| complaint.contains(&path)),
+            "the pre-move inventory must refuse {path}: {complaints:?}"
+        );
+    }
+}
+
 /// AC3 control: the three `[agent_registry]` keys that exist today classify
 /// clean, exactly as inventoried.
 #[test]
