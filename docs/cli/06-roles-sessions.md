@@ -1057,17 +1057,21 @@ already held, or a launch-boundary revalidation failure), it records the
 attempt as exited with the last line of its log. That frees the slot, the head
 uses the existing bounded setup retry policy, and a later head dispatches normally.
 A review that ends without a verdict for its head retries after 60 seconds,
-then 120 seconds, with at most three attempts per head. Retry counts and
+then 120 seconds, with at most three attempts per head. A `WAITING` verdict
+also permits a fresh review after a 20-minute backoff, sharing that same
+three-attempt budget; approvals and change requests still consume the head.
+This bounded backoff permits re-review after CI or other external evidence
+changes without requiring a manual release. Retry counts and
 backoff deadlines survive watcher restarts; a new head resets them. Exhaustion
 names the change, head and last diagnostic in `aida advisor loops status`.
 Inspect the logs and use `aida review watch --release PR-N` (or `MR-N`) for
 operator recovery. Live or ambiguous descendants still prevent a retry.
 With a distributed admission hub, the stopped owner records a signed
-`Terminal` with `NoVerdict` evidence. Only that terminal permits the new `Retry`
-claim for the same head, and the hub independently caps started attempts at three.
-An active claim or a durable verdict refuses readmission; ordinary terminal
-records remain consumed. Local release does not reset the hub's attempt cap.
-<!-- trace:BUG-2518 | ai:codex -->
+`Terminal` with `NoVerdict` or `Inconclusive` (WAITING) evidence. Only that
+terminal permits the new `Retry` claim for the same head, and the hub independently caps started attempts at three.
+An active claim or a conclusive durable verdict refuses readmission; ordinary
+terminal records remain consumed. Local release does not reset the hub's attempt cap.
+<!-- trace:BUG-2518 trace:BUG-2521 | ai:codex -->
 
 The parent records each dispatcher's process identity; if a dispatcher exits before claiming its
 reservation (a refused grant, an unusable store, a timed-out claim), any

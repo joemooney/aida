@@ -192,9 +192,11 @@ fn active(state: &State) -> bool {
     matches!(state, State::Reserved | State::Retry | State::Running)
 }
 
-// Only a stopped, verdict-less attempt can authorize bounded same-head readmission.
+// Only a stopped attempt without a conclusive verdict can authorize bounded readmission.
 // trace:BUG-2518 | ai:codex
 pub(crate) const NO_VERDICT: &str = "NoVerdict: ";
+// trace:BUG-2521 | ai:codex
+pub(crate) const INCONCLUSIVE: &str = "Inconclusive: ";
 fn retry_allowed(history: &[Transition], head: &str) -> bool {
     // A cancelled pre-spawn Retry did not consume a started attempt. Peel only
     // those exact pairs; unrelated heads or reservations cannot borrow authority.
@@ -216,7 +218,7 @@ fn retry_allowed(history: &[Transition], head: &str) -> bool {
             && p.state == State::Terminal
             && p.evidence
                 .as_deref()
-                .is_some_and(|e| e.starts_with(NO_VERDICT))
+                .is_some_and(|e| e.starts_with(NO_VERDICT) || e.starts_with(INCONCLUSIVE))
     }) && history
         .iter()
         .filter(|p| p.head == head && p.state == State::Running)
@@ -483,8 +485,9 @@ fn admission_evidence(
         require_pinned(root, &Some(hub.clone()))?;
         if matches!(state, State::Reserved | State::Retry)
             && watcher_history(root, key)?.iter().any(|(body, _)| {
-                rv::parse_recorded_verdict(body)
-                    .is_some_and(|v| v.reviewed_sha.as_deref() == Some(head))
+                rv::parse_recorded_verdict(body).is_some_and(|v| {
+                    v.reviewed_sha.as_deref() == Some(head) && v.kind != rv::VerdictKind::Waiting
+                })
             })
         {
             return Ok(None);

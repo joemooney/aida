@@ -910,6 +910,9 @@ fn bug2518_chain_accepts_only_no_verdict_terminal_retry_edge() {
         (State::Running, "NoVerdict: stopped", false),
         (State::Terminal, "ordinary exit", false),
         (State::Terminal, "NoVerdict: stopped", true),
+        // trace:BUG-2521 | ai:codex
+        (State::Running, "Inconclusive: stopped", false),
+        (State::Terminal, "Inconclusive: stopped", true),
     ] {
         let mut records = base[..1].to_vec();
         let mut end = running.clone();

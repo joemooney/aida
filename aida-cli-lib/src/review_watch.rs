@@ -358,8 +358,8 @@ struct Attempt {
     // trace:STORY-2401 | ai:codex
     #[serde(default)]
     fetch_failures: u8,
-    // Bounded retries survive replacement and controller restarts.
-    // trace:BUG-2518 | ai:codex
+    // Missing-verdict and WAITING retries share a budget across replacements/restarts.
+    // trace:BUG-2518 trace:BUG-2521 | ai:codex
     #[serde(default)]
     no_verdict_attempts: u8,
     #[serde(default)]
@@ -989,7 +989,7 @@ impl Store {
             );
             let history = self.history(key)?;
             anyhow::ensure!(
-                !history.contains(&attempt.head),
+                !history.conclusive(&attempt.head),
                 "head already has a recorded review; route further work to the advisor"
             );
             let used = history.blocking();
@@ -1207,6 +1207,17 @@ impl History {
                 .is_some_and(|sha| crate::gate::review_verdict::same_reviewed_sha(sha, head))
         })
     }
+    // WAITING is provisional; every other recorded outcome consumes the head.
+    // trace:BUG-2521 | ai:codex
+    fn conclusive(&self, head: &str) -> bool {
+        self.keys.iter().any(|key| {
+            key.0
+                .as_deref()
+                .is_some_and(|sha| crate::gate::review_verdict::same_reviewed_sha(sha, head))
+                && crate::gate::review_verdict::VerdictKind::parse(&key.2)
+                    != crate::gate::review_verdict::VerdictKind::Waiting
+        })
+    }
     // The ordinary round (queue_cmd::review_round_from_comments) counts the
     // durable findings blocks, which the hand-off writes exactly for
     // verdicts that block done. Approvals never consume a round, so a head
@@ -1379,7 +1390,7 @@ fn no_verdict_blocker(attempt: &Attempt) -> Option<String> {
         && attempt.no_verdict_retry_at.is_some()
         && matches!(attempt.phase, Phase::Completed | Phase::Exited))
     .then(|| format!(
-        "head {} blocked: three review attempts ended without a verdict ({}); inspect logs and release to retry",
+        "head {} blocked: three review attempts ended without a conclusive verdict ({}); inspect logs and release to retry",
         attempt.head, attempt.diagnostic.as_deref().unwrap_or("no diagnostic")
     ))
 }
@@ -1500,17 +1511,17 @@ fn select_with_coverage(
             return Ok(Action::Skip(format!("fetch unavailable on three dispatches for this head; repair credentials/remote and retry with `aida review watch --release {key}`, or route to the advisor")));
         }
         // A terminal receipt proves process completion, not verdict publication.
-        // Preserve ordinary setup/fetch retry policy; retry actual review attempts.
+        // Preserve setup/fetch policy; retry actual reviews lacking a conclusive verdict.
         // trace:BUG-2518 | ai:codex
         let mut no_verdict_attempts = 0;
         let mut no_verdict_ready = false;
         if let Some(attempt) = entry.attempts.iter_mut().find(|a| a.head == change.head) {
-            if history.contains(&change.head) {
+            if history.conclusive(&change.head) {
                 attempt.no_verdict_retry_at = None;
             }
             no_verdict_attempts = attempt.no_verdict_attempts;
             if matches!(attempt.phase, Phase::Completed | Phase::Exited)
-                && !attempt.retryable_fetch && !history.contains(&change.head)
+                && !attempt.retryable_fetch && !history.conclusive(&change.head)
                 && !(attempt.setup_retry && !attempt.reviewer_spawning)
             {
                 no_verdict_attempts = no_verdict_attempts.max(1);
@@ -1518,13 +1529,17 @@ fn select_with_coverage(
                 if !attempt.descendants_gone() || attempt.recorded().iter().any(|p| p.alive()) {
                     return Ok(Action::Skip(format!("unfinished review processes still hold this head; inspect before `aida review watch --release {key}`")));
                 }
+                // WAITING may depend on evidence other than CI; use a bounded backoff.
+                // trace:BUG-2521 | ai:codex
                 let retry_at = *attempt.no_verdict_retry_at.get_or_insert_with(||
-                    chrono::Utc::now() + chrono::Duration::seconds(60 * i64::from(no_verdict_attempts)));
+                    chrono::Utc::now() + chrono::Duration::seconds(
+                        if history.contains(&change.head) { 20 * 60 }
+                        else { 60 * i64::from(no_verdict_attempts) }));
                 if let Some(reason) = no_verdict_blocker(attempt) {
                     return Ok(Action::Skip(reason));
                 }
                 if chrono::Utc::now() < retry_at {
-                    return Ok(Action::Skip(format!("review exited without a verdict; retry after {retry_at}")));
+                    return Ok(Action::Skip(format!("review ended without a conclusive verdict; retry after {retry_at}")));
                 }
                 no_verdict_attempts += 1;
                 no_verdict_ready = true;
@@ -1542,7 +1557,7 @@ fn select_with_coverage(
             return Ok(Action::Skip(format!("a review of an earlier head still holds this change ({holders}); it is superseded once the change is seen at a new head")));
         }
         if let Some(reason) = &carried { return Ok(Action::Skip(reason.clone())); }
-        if history.contains(&change.head) { return Ok(Action::Skip("head already has a recorded review".into())); }
+        if history.conclusive(&change.head) { return Ok(Action::Skip("head already has a recorded review".into())); }
         if history.blocking() >= 2 { return Ok(Action::Skip("two-round review cap reached; route further work to the advisor".into())); }
         if total >= usize::from(max) { return Ok(Action::Skip(format!("global reviewer capacity ({max}) is held by {holders}; a running review frees its slot when it exits, and an ambiguous one (dispatcher lost) stays reserved until an operator confirms it ended: check its log in .aida/review-watch/logs/ and `aida session leases --all`"))); }
         // Exited->Failed setup conversions have a claimed dispatcher identity
@@ -1611,7 +1626,7 @@ fn probe_unneeded_with_coverage(
         return Ok(Some(reason));
     }
     let history = store.history(&key)?;
-    if history.contains(head) {
+    if history.conclusive(head) {
         return Ok(Some("head already has a recorded review".into()));
     }
     if let Some((reason, true)) = recorded {
@@ -2169,16 +2184,21 @@ fn finish_admission(
             .flatten()
             .all(|p| p.observable() && !p.alive())
     {
-        let no_verdict = admission::Hub::load(root)?.is_some()
+        let inconclusive = admission::Hub::load(root)?.is_some()
             && !review_publication::watcher_history(root, key)?
                 .iter()
                 .any(|(body, _)| {
-                    crate::gate::review_verdict::parse_recorded_verdict(body)
-                        .is_some_and(|v| v.reviewed_sha.as_deref() == Some(head))
+                    crate::gate::review_verdict::parse_recorded_verdict(body).is_some_and(|v| {
+                        v.reviewed_sha.as_deref() == Some(head)
+                            && v.kind != crate::gate::review_verdict::VerdictKind::Waiting
+                    })
                 });
         admission::transition(root, key, head, token, admission::State::Terminal,
             format!("{}owner observed queue exit {status}; all recorded worker/reviewer identities stopped",
-                if no_verdict { admission::NO_VERDICT } else { "" }))?;
+                if inconclusive {
+                    if store.history(key)?.contains(head) { admission::INCONCLUSIVE }
+                    else { admission::NO_VERDICT }
+                } else { "" }))?;
     }
     Ok(())
 }
