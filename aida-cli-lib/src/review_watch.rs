@@ -1533,7 +1533,7 @@ fn select_with_coverage(
                 // trace:BUG-2521 | ai:codex
                 let retry_at = *attempt.no_verdict_retry_at.get_or_insert_with(||
                     chrono::Utc::now() + chrono::Duration::seconds(
-                        if history.contains(&change.head) { 20 * 60 }
+                        if history.contains(&change.head) { review_publication::WAITING_RETRY_SECS }
                         else { 60 * i64::from(no_verdict_attempts) }));
                 if let Some(reason) = no_verdict_blocker(attempt) {
                     return Ok(Action::Skip(reason));
@@ -1558,6 +1558,15 @@ fn select_with_coverage(
         }
         if let Some(reason) = &carried { return Ok(Action::Skip(reason.clone())); }
         if history.conclusive(&change.head) { return Ok(Action::Skip("head already has a recorded review".into())); }
+        // A synced WAITING sets one deadline for every watcher, local attempt or not.
+        // trace:BUG-2521 | ai:claude
+        if history.contains(&change.head) {
+            if let Some(retry_at) = review_publication::waiting_retry_at(&store.root, &key, &change.head)? {
+                if chrono::Utc::now() < retry_at {
+                    return Ok(Action::Skip(format!("review ended without a conclusive verdict; retry after {retry_at}")));
+                }
+            }
+        }
         if history.blocking() >= 2 { return Ok(Action::Skip("two-round review cap reached; route further work to the advisor".into())); }
         if total >= usize::from(max) { return Ok(Action::Skip(format!("global reviewer capacity ({max}) is held by {holders}; a running review frees its slot when it exits, and an ambiguous one (dispatcher lost) stays reserved until an operator confirms it ended: check its log in .aida/review-watch/logs/ and `aida session leases --all`"))); }
         // Exited->Failed setup conversions have a claimed dispatcher identity
@@ -2198,7 +2207,7 @@ fn finish_admission(
                 if inconclusive {
                     if store.history(key)?.contains(head) { admission::INCONCLUSIVE }
                     else { admission::NO_VERDICT }
-                } else { "" }))?;
+                } else { admission::VERDICT }))?;
     }
     Ok(())
 }

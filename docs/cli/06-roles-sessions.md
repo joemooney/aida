@@ -1069,9 +1069,15 @@ operator recovery. Live or ambiguous descendants still prevent a retry.
 With a distributed admission hub, the stopped owner records a signed
 `Terminal` with `NoVerdict` or `Inconclusive` (WAITING) evidence. Only that
 terminal permits the new `Retry` claim for the same head, and the hub independently caps started attempts at three.
-An active claim or a conclusive durable verdict refuses readmission; ordinary
-terminal records remain consumed. Local release does not reset the hub's attempt cap.
-<!-- trace:BUG-2518 trace:BUG-2521 | ai:codex -->
+An active claim or a conclusive durable verdict refuses readmission; a
+terminal recorded with a conclusive verdict (`Verdict` evidence) stays consumed.
+An unprefixed terminal written before this change is recoverable only while the
+head's synced outcome is `WAITING`. A conclusive publication from any node
+takes precedence over a peer's `WAITING` at the same head, so a peer approval
+ends the wait and a peer change request is never hidden. Every watcher, with or
+without a local attempt, honours the same 20-minute deadline measured from the
+signed `WAITING` publication. Local release does not reset the hub's attempt cap.
+<!-- trace:BUG-2518 trace:BUG-2521 | ai:codex ai:claude -->
 
 The parent records each dispatcher's process identity; if a dispatcher exits before claiming its
 reservation (a refused grant, an unusable store, a timed-out claim), any

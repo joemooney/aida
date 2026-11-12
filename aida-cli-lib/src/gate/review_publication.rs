@@ -63,6 +63,29 @@ pub(crate) fn watcher_history(root: &Path, change: &str) -> Result<Vec<(String, 
     Ok(history)
 }
 
+/// WAITING retry delay. Peers derive the deadline from the signed publication
+/// time, so a watcher with no local attempt cannot bypass the backoff.
+// trace:BUG-2521 | ai:claude
+pub(crate) const WAITING_RETRY_SECS: i64 = 20 * 60;
+pub(crate) fn waiting_retry_at(
+    root: &Path,
+    change: &str,
+    head: &str,
+) -> Result<Option<chrono::DateTime<chrono::Utc>>> {
+    Ok(watcher_history(root, change)?
+        .iter()
+        .filter_map(|(body, _)| rv::parse_recorded_verdict(body))
+        .filter(|v| {
+            v.kind == rv::VerdictKind::Waiting
+                && v.reviewed_sha
+                    .as_deref()
+                    .is_some_and(|sha| rv::same_reviewed_sha(sha, head))
+        })
+        .filter_map(|v| chrono::DateTime::parse_from_rfc3339(v.recorded_at.as_deref()?).ok())
+        .map(|t| t.with_timezone(&chrono::Utc) + chrono::Duration::seconds(WAITING_RETRY_SECS))
+        .max())
+}
+
 const ROSTER: &str = "reviews/v1/nodes.json";
 const CHANGES: &str = "reviews/v1/changes";
 const SPEC_INDEX: &str = "reviews/v1/specs";
@@ -1023,12 +1046,7 @@ fn select(
         // Every surviving publication reviewed another head: stale here.
         return Ok(None);
     }
-    relevant.sort_by(|(a, ..), (b, ..)| (&a.node, a.publication).cmp(&(&b.node, b.publication)));
-    let (receipt, _, rel) = relevant
-        .iter()
-        .find(|(r, ..)| r.decision != "approved")
-        .copied()
-        .unwrap_or(relevant[0]);
+    let (receipt, _, rel) = answering(relevant);
     let snapshot = Snapshot::at_head(root)
         .map_err(|e| anyhow::anyhow!(e.to_string()))?
         .context("missing canonical review snapshot")?;
@@ -1057,6 +1075,24 @@ fn select(
         "review roster changed during selection"
     );
     Ok(Some((receipt.clone(), rel.clone())))
+}
+
+/// The one publication that answers at a head (`relevant` is non-empty and
+/// already verified, unsuperseded and head-filtered). WAITING is provisional:
+/// any conclusive publication from any node answers instead, so a WAITING never
+/// hides a peer refusal or approval. A refusal still wins over approvals.
+// trace:BUG-2521 | ai:claude
+fn answering<'a, S, P>(mut relevant: Vec<&'a (Receipt, S, P)>) -> &'a (Receipt, S, P) {
+    let waiting = |r: &Receipt| rv::VerdictKind::parse(&r.decision) == rv::VerdictKind::Waiting;
+    if relevant.iter().any(|(r, ..)| !waiting(r)) {
+        relevant.retain(|(r, ..)| !waiting(r));
+    }
+    relevant.sort_by(|(a, ..), (b, ..)| (&a.node, a.publication).cmp(&(&b.node, b.publication)));
+    relevant
+        .iter()
+        .find(|(r, ..)| r.decision != "approved")
+        .copied()
+        .unwrap_or(relevant[0])
 }
 
 /// The change a spec-keyed read selects: of the changes whose receipts
