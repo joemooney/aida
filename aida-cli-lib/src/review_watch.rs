@@ -927,12 +927,6 @@ impl Store {
         .map_err(|error| anyhow::anyhow!("review history ledger unreadable: {error}"))?;
         for event in events {
             if let Some(record) = event.verdict_record() {
-                // A pending delivery barrier is not a finished review; its
-                // delivered twin (or nothing) is what counts as a round.
-                // trace:BUG-2534 | ai:claude
-                if record.get("sweep_pending").and_then(|v| v.as_bool()) == Some(true) {
-                    continue;
-                }
                 history.add(
                     &serde_json::to_vec(record)?,
                     &format!(".aida/gate-ledger/{key}.jsonl"),
@@ -1191,6 +1185,13 @@ impl History {
             let object = value
                 .as_object()
                 .context("invalid historical review round")?;
+            // A pending delivery barrier is not a finished review, whether it
+            // is the current object or archived inside `rounds`; its delivered
+            // twin (or nothing) is what counts as a round.
+            // trace:BUG-2534 | ai:claude
+            if object.get("sweep_pending").and_then(|v| v.as_bool()) == Some(true) {
+                continue;
+            }
             anyhow::ensure!(
                 object
                     .get("unarchived_rounds")
