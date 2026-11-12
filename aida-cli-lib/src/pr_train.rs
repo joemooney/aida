@@ -1727,10 +1727,35 @@ pub(crate) fn train_rider_refusal(
     None
 }
 
-/// A rider's Training phase is authoritative even if its train is absent from
-/// a forge listing. Only a proved ended owner or explicit release frees it.
+/// A missing listing retains a rider; confirmed terminal forge evidence can
+/// repair a stale ride even when legacy trains have no ownership record.
 // trace:STORY-2325 | ai:codex
-fn ownership_rider_refusal(root: &Path, pr: u64) -> Result<Option<String>> {
+fn ownership_rider_refusal(
+    root: &Path,
+    pr: u64,
+    dry_run: bool,
+    forge: &dyn crate::forge::Forge,
+) -> Result<Option<String>> {
+    ownership_rider_refusal_with(root, pr, dry_run, |train| {
+        let terminal = |m: &crate::forge::ChangeMetadata| {
+            matches!(
+                m.state,
+                crate::forge::ChangeState::Closed | crate::forge::ChangeState::Merged
+            )
+        };
+        matches!(crate::forge_confirmation::metadata_for(root, forge, train,
+            &mut crate::network_retry::NoopSink, terminal),
+            crate::forge_observed::Observed::Known(m) if terminal(&m))
+    })
+}
+
+// trace:BUG-2537 | ai:codex
+fn ownership_rider_refusal_with(
+    root: &Path,
+    pr: u64,
+    dry_run: bool,
+    closed: impl FnOnce(u64) -> bool,
+) -> Result<Option<String>> {
     let key = crate::ownership::WorkKey::Change {
         change: crate::ownership::dual::change(pr),
     };
@@ -1744,6 +1769,17 @@ fn ownership_rider_refusal(root: &Path, pr: u64) -> Result<Option<String>> {
         train: train.clone(),
     };
     if crate::ownership::reader::ended(root, &train_key)?.is_some() {
+        return Ok(None);
+    }
+    if closed(train.n) {
+        if !dry_run {
+            crate::ownership::dual::train_retired(
+                root,
+                train.n,
+                &[pr],
+                &format!("train #{} closed", train.n),
+            )?;
+        }
         return Ok(None);
     }
     Ok(Some(format!(
@@ -2040,6 +2076,21 @@ fn close_abandoned_train(
             )));
         }
     }
+    // A close command alone is not terminal evidence for releasing riders.
+    // trace:BUG-2537 | ai:codex
+    let closed = crate::forge_confirmation::metadata_for(
+        main_worktree,
+        forge.as_ref(),
+        train,
+        &mut crate::network_retry::NoopSink,
+        |_| true,
+    );
+    anyhow::ensure!(
+        matches!(closed, crate::forge_observed::Observed::Known(ref m)
+        if m.state == crate::forge::ChangeState::Closed && m.head_ref == branch),
+        "abandoned train closure unconfirmed; ownership retained"
+    );
+    crate::ownership::dual::train_retired(main_worktree, train, &[], "abandoned train closed")?;
     let _ = origin_git(
         main_worktree,
         &["push", "--quiet", "origin", "--delete", branch],
@@ -2788,6 +2839,32 @@ impl TrainForge for LiveTrainForge<'_> {
             eprintln!("  warning: could not close train PR #{}: {e:#}", change.id);
             return;
         }
+        // trace:BUG-2537 | ai:codex
+        let closed = crate::forge_confirmation::metadata_for(
+            &self.main_worktree,
+            self.forge,
+            change.id,
+            &mut crate::network_retry::NoopSink,
+            |_| true,
+        );
+        if !matches!(closed, crate::forge_observed::Observed::Known(ref m)
+            if m.state == crate::forge::ChangeState::Closed && m.head_ref == change.branch)
+        {
+            eprintln!(
+                "  warning: train PR #{} closure unconfirmed; ownership retained",
+                change.id
+            );
+            return;
+        }
+        if let Err(e) =
+            crate::ownership::dual::train_retired(&self.main_worktree, change.id, &[], why)
+        {
+            eprintln!(
+                "  warning: could not release train PR #{} riders: {e:#}",
+                change.id
+            );
+            return;
+        }
         let _ = origin_git(
             &self.main_worktree,
             &["push", "--quiet", "origin", "--delete", &change.branch],
@@ -2844,6 +2921,10 @@ impl TrainForge for LiveTrainForge<'_> {
                     && m.base_ref == change.base),
             "retired train closure unavailable or identity changed"
         );
+        // Release before branch deletion, which can fail after the PR closed.
+        // trace:BUG-2537 | ai:codex
+        let riders: Vec<_> = train.cars.iter().map(|car| car.member.pr).collect();
+        crate::ownership::dual::train_retired(&self.main_worktree, change.id, &riders, why)?;
         let reference = format!("refs/heads/{}", change.branch);
         journal::before("read retired train branch")?;
         if origin_git(
@@ -4044,7 +4125,8 @@ pub(crate) fn pr_train_handler_with_dispatch_ctx(
     let mut refused = Vec::new();
     for pr in candidates {
         crate::gate::dispatch_auth::checkpoint(dispatch_ctx, "pr train")?;
-        let ownership_refusal = ownership_rider_refusal(&main_worktree, pr)?;
+        let ownership_refusal =
+            ownership_rider_refusal(&main_worktree, pr, opts.dry_run, forge.as_ref())?;
         if let Some(reason) =
             ownership_refusal.or_else(|| train_rider_refusal(pr, &open_trains, &leased_trains))
         {

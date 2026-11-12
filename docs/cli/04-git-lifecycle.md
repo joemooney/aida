@@ -459,6 +459,14 @@ to Pending on this contention so a later serve pass can retry. Dry runs do not
 recover or write journals. Trains predating the journal retain the confirmed
 owner-liveness cleanup path.
 
+Train ownership starts when the train PR opens, before its CI wait or merge
+lease. Confirmed retirement or abandonment releases its riders even if no merge
+lease was taken. Admission also repairs legacy rides when the forge confirms the
+old train is closed or merged, recording the release in the ownership journal.
+Open trains and unknown forge evidence retain their riders; dry runs never write
+these repairs.
+<!-- trace:BUG-2537 | ai:codex -->
+
 Recovery does not inherit terminal consent from the new invocation: recovered
 supervised members still need a current mandate cover, even when a human names
 other PRs at a terminal. Previously green trains wait again if CI is pending;

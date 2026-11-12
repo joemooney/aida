@@ -724,21 +724,125 @@ pub(crate) fn train_opened(project_root: &Path, train: u64, riders: &[u64]) {
     let Some(store) = store_for(project_root) else {
         return;
     };
-    let steps = riders
-        .iter()
-        .map(|n| {
-            let key = WorkKey::Change { change: change(*n) };
-            let k = key.clone();
-            let t = change(train);
-            Step {
-                key,
-                op: "ride".to_string(),
-                expect: Expect::Any,
-                transition: Box::new(move |cur| ops::ride(cur, &k, &t)),
-            }
-        })
-        .collect();
+    // The CI wait precedes the merge lease: record its process now, together
+    // with the riders, so pre-lease retirement has an owner to end.
+    // trace:BUG-2537 | ai:codex
+    let key = WorkKey::Train {
+        train: change(train),
+    };
+    let writer = WriterFacts::here();
+    let pid = std::process::id();
+    let holder = Holder {
+        seat: "train".into(),
+        role: Role::Train,
+        session: merge_lease_session(pid),
+        tree: None,
+        witnesses: writer
+            .witness(
+                pid,
+                aida_core::liveness::process_start_identity(pid).as_deref(),
+                Utc::now(),
+            )
+            .into_iter()
+            .collect(),
+    };
+    let mut steps = vec![Step {
+        key: key.clone(),
+        op: "open-train".into(),
+        expect: Expect::Any,
+        transition: Box::new(move |cur| {
+            ops::acquire(
+                cur,
+                &key,
+                holder,
+                Phase::Training {
+                    train: change(train),
+                },
+            )
+        }),
+    }];
+    steps.extend(riders.iter().map(|n| {
+        let key = WorkKey::Change { change: change(*n) };
+        let k = key.clone();
+        let t = change(train);
+        Step {
+            key,
+            op: "ride".to_string(),
+            expect: Expect::Any,
+            transition: Box::new(move |cur| ops::ride(cur, &k, &t)),
+        }
+    }));
     if let Err(e) = store.update_all(steps) {
         report(&format!("the riders of train PR-{train}"), e);
     }
+}
+
+/// Confirmed terminal train cleanup also works for legacy trains without a
+/// train record. Rider transitions recheck the train under the writer lock.
+// trace:BUG-2537 | ai:codex
+pub(crate) fn train_retired(
+    project_root: &Path,
+    train: u64,
+    riders: &[u64],
+    reason: &str,
+) -> anyhow::Result<()> {
+    if !enabled() {
+        return Ok(());
+    }
+    let Some(store) = OwnershipStore::for_project(project_root)? else {
+        return Ok(());
+    };
+    let key = WorkKey::Train {
+        train: change(train),
+    };
+    let why = reason.to_string();
+    let k = key.clone();
+    let mut steps = vec![Step {
+        key,
+        op: "retire-train".into(),
+        expect: Expect::Any,
+        transition: Box::new(move |cur| {
+            let cur = cur?;
+            if matches!(cur.phase, Phase::Closed { .. }) && cur.holder.is_none() {
+                return None;
+            }
+            Some((
+                super::Ownership {
+                    key: k,
+                    generation: cur.generation,
+                    holder: None,
+                    phase: Phase::Closed { why: why.clone() },
+                },
+                Some(why),
+            ))
+        }),
+    }];
+    let (records, errors) = store.list();
+    anyhow::ensure!(
+        errors.is_empty(),
+        "train ownership inventory unreadable: {errors:?}"
+    );
+    let mut riders = riders.to_vec();
+    riders.extend(records.iter().filter_map(|r| match (&r.key, &r.phase) {
+        (WorkKey::Change { change: c }, Phase::Training { train: t }) if *t == change(train) => {
+            Some(c.n)
+        }
+        _ => None,
+    }));
+    riders.sort_unstable();
+    riders.dedup();
+    for n in &riders {
+        let key = WorkKey::Change { change: change(*n) };
+        let k = key.clone();
+        let t = change(train);
+        let why = reason.to_string();
+        steps.push(Step {
+            key,
+            op: "leave-train".into(),
+            expect: Expect::Any,
+            transition: Box::new(move |cur| ops::leave_train(cur, &k, &t, &why)),
+        });
+    }
+    store.update_all(steps)?;
+    Ok(())
 }
