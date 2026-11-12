@@ -614,24 +614,27 @@ fn index_serves_the_same_answer_as_the_git_walk_for_transition_filters() {
 
 #[test]
 fn cli_parses_to_from_opened_and_the_created_alias() {
-    let cli = crate::command_registry::try_parse_from([
-        "aida",
-        "history",
-        "--from",
-        "in-progress",
-        "--to",
-        "approved",
-        "--since",
-        "7d",
-    ])
-    .unwrap();
+    let cli = crate::TEST_CLI
+        .try_parse_from([
+            "aida",
+            "history",
+            "--from",
+            "in-progress",
+            "--to",
+            "approved",
+            "--since",
+            "7d",
+        ])
+        .unwrap();
     assert!(matches!(
         cli.command.registered::<crate::history::HistoryArgs>(),
         crate::history::HistoryArgs { to: Some(ref t), from: Some(ref f), .. }
             if t == "approved" && f == "in-progress"
     ));
     for flag in ["--opened", "--created"] {
-        let cli = crate::command_registry::try_parse_from(["aida", "history", flag]).unwrap();
+        let cli = crate::TEST_CLI
+            .try_parse_from(["aida", "history", flag])
+            .unwrap();
         assert!(
             matches!(
                 cli.command.registered::<crate::history::HistoryArgs>(),
@@ -641,10 +644,9 @@ fn cli_parses_to_from_opened_and_the_created_alias() {
         );
     }
     // Global, like the other filters: they parse after `events` too.
-    assert!(crate::command_registry::try_parse_from([
-        "aida", "history", "events", "--to", "approved"
-    ])
-    .is_ok());
+    assert!(crate::TEST_CLI
+        .try_parse_from(["aida", "history", "events", "--to", "approved"])
+        .is_ok());
     // `--kind` reads the local event feed, which has no transitions.
     for extra in [
         ["--to", "approved"],
@@ -653,40 +655,26 @@ fn cli_parses_to_from_opened_and_the_created_alias() {
     ] {
         let mut argv = vec!["aida", "history", "--kind", "gate-held"];
         argv.extend(extra);
-        assert!(
-            crate::command_registry::try_parse_from(&argv).is_err(),
-            "{argv:?}"
-        );
+        assert!(crate::TEST_CLI.try_parse_from(&argv).is_err(), "{argv:?}");
     }
     // `--shipped` is `--to completed`; combining it with --to or --opened
     // is refused rather than silently intersected.
-    assert!(crate::command_registry::try_parse_from([
-        "aida",
-        "history",
-        "--shipped",
-        "--to",
-        "approved"
-    ])
-    .is_err());
-    assert!(
-        crate::command_registry::try_parse_from(["aida", "history", "--shipped", "--opened"])
-            .is_err()
-    );
-    assert!(crate::command_registry::try_parse_from([
-        "aida",
-        "history",
-        "--shipped",
-        "--from",
-        "in-progress"
-    ])
-    .is_ok());
+    assert!(crate::TEST_CLI
+        .try_parse_from(["aida", "history", "--shipped", "--to", "approved"])
+        .is_err());
+    assert!(crate::TEST_CLI
+        .try_parse_from(["aida", "history", "--shipped", "--opened"])
+        .is_err());
+    assert!(crate::TEST_CLI
+        .try_parse_from(["aida", "history", "--shipped", "--from", "in-progress"])
+        .is_ok());
 }
 
 /// `--help` names the flags and carries no internal spec IDs.
 #[test]
 fn help_describes_the_flags_without_spec_ids() {
     use clap::CommandFactory;
-    let mut cmd = crate::command_registry::built_command();
+    let mut cmd = crate::TEST_CLI.built_command();
     let history = cmd
         .find_subcommand_mut("history")
         .expect("history subcommand");

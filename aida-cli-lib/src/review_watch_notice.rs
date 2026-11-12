@@ -184,15 +184,16 @@ fn findings_message(
     );
     // The current verdict file always holds the latest round; an archived
     // round file is named when this verdict was also read from one.
-    // Synced-only reviews have no local verdict file to point the author at.
+    // Synced and ledger-only reviews have no local verdict file to point at.
+    // trace:BUG-2534 | ai:codex
     // trace:STORY-2492 | ai:codex
-    let synced = history
+    let external = history
         .files
         .get(verdict)
         .into_iter()
         .flatten()
-        .any(|f| f.starts_with(".aida-store/"));
-    let mut files = if synced {
+        .any(|f| f.starts_with(".aida-store/") || f.starts_with(".aida/gate-ledger/"));
+    let mut files = if external {
         Vec::new()
     } else {
         vec![format!(
@@ -201,7 +202,7 @@ fn findings_message(
         )]
     };
     for file in history.files.get(verdict).into_iter().flatten() {
-        let path = if file.starts_with(".aida-store/") {
+        let path = if file.starts_with(".aida-store/") || file.starts_with(".aida/gate-ledger/") {
             file.clone()
         } else {
             format!(".aida/review-verdicts/{file}")

@@ -147,11 +147,37 @@ fn headless_env_launches_route_through_shared_argv_builders() {
             "{}\n{}\n{}\n{}\n{}\n{}\n{}",
             include_str!("../lib.rs"),
             include_str!("../lib_part1.rs"),
-            include_str!("../lib_part2.rs"),
+            concat!(
+                include_str!("../retire_legacy.rs"),
+                "\n",
+                include_str!("../glossary_render.rs"),
+                "\n",
+                include_str!("../role_file_helpers.rs"),
+                "\n",
+                include_str!("../mailbox_errors.rs"),
+                "\n",
+                include_str!("../human_route.rs"),
+                "\n",
+                include_str!("../store_drift.rs"),
+                "\n",
+                include_str!("../launch_defaults.rs"),
+                "\n",
+                include_str!("../merge_hold_output.rs"),
+                "\n",
+                include_str!("../history_reporting.rs")
+            ),
             include_str!("../lib_part3.rs"),
-            include_str!("../lib_part4.rs"),
+            concat!(concat!(
+                include_str!("../scoped_lease.rs"),
+                "\n",
+                include_str!("../pull_lines.rs")
+            )),
             include_str!("../lib_part5.rs"),
-            include_str!("../lib_part6.rs")
+            concat!(
+                include_str!("../regression_tests.rs"),
+                "\n",
+                include_str!("../text_truncate.rs")
+            )
         ),
     );
     // STORY-771: the queue-work launch machinery lives in queue_cmd/work.rs.
@@ -181,11 +207,37 @@ fn no_human_resume_paths_use_headless_resume_launcher() {
             "{}\n{}\n{}\n{}\n{}\n{}\n{}",
             include_str!("../lib.rs"),
             include_str!("../lib_part1.rs"),
-            include_str!("../lib_part2.rs"),
+            concat!(
+                include_str!("../retire_legacy.rs"),
+                "\n",
+                include_str!("../glossary_render.rs"),
+                "\n",
+                include_str!("../role_file_helpers.rs"),
+                "\n",
+                include_str!("../mailbox_errors.rs"),
+                "\n",
+                include_str!("../human_route.rs"),
+                "\n",
+                include_str!("../store_drift.rs"),
+                "\n",
+                include_str!("../launch_defaults.rs"),
+                "\n",
+                include_str!("../merge_hold_output.rs"),
+                "\n",
+                include_str!("../history_reporting.rs")
+            ),
             include_str!("../lib_part3.rs"),
-            include_str!("../lib_part4.rs"),
+            concat!(concat!(
+                include_str!("../scoped_lease.rs"),
+                "\n",
+                include_str!("../pull_lines.rs")
+            )),
             include_str!("../lib_part5.rs"),
-            include_str!("../lib_part6.rs")
+            concat!(
+                include_str!("../regression_tests.rs"),
+                "\n",
+                include_str!("../text_truncate.rs")
+            )
         ),
         // Keep the Work include explicit so test-touched still discovers this
         // guard, and scan all sibling modules for additional resume launches.

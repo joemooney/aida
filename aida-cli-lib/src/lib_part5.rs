@@ -966,7 +966,7 @@ pub(crate) fn review_spec_launch_reviewer(
     session_name: &str,
     prompt: &str,
     session_id: &str,
-) -> Result<std::process::ExitStatus> {
+) -> Result<(std::process::ExitStatus, String)> {
     // TASK-2032: `aida review` launches from the host project root.
     // trace:TASK-2032 | ai:claude
     let plan = session::interactive_reviewer_launch_plan(
@@ -983,7 +983,7 @@ pub(crate) fn review_spec_launch_reviewer(
     // resolved the same way every other authority check resolves it — not
     // whatever directory the process happens to sit in.
     // trace:STORY-1473 | ai:claude
-    session::spawn_reviewer_launch_plan(&plan, &find_project_root()?)
+    session::spawn_reviewer_launch_plan_granted(&plan, &find_project_root()?)
         .context("failed to launch the reviewer")
 }
 
@@ -1297,6 +1297,15 @@ pub(crate) fn handle_review_spec(
     } else {
         ReviewLeaseConflictMode::RefuseStaleNonInteractive
     };
+    // trace:BUG-2530 | ai:codex
+    if let Some(pr) = pr_number.filter(|_| !no_agent) {
+        let head = review_marker_head_best_effort(project_root, pr, &surface_branch);
+        crate::gate::review_marker::refuse_conclusive_head(
+            &main_worktree_root_from(project_root),
+            pr,
+            head.as_deref(),
+        )?;
+    }
     let _review_lease =
         acquire_review_lease_with_mode(project_root, &spec_id, &surface_branch, review_lease_mode)?;
     // STORY-1405: while the reviewer runs, PR-N is visibly under review to
@@ -1451,15 +1460,50 @@ pub(crate) fn handle_review_spec(
     // trace:BUG-1607 | ai:claude
     let vendor = review_vendor
         .expect("review_vendor is Some whenever no_agent is false (already returned above)");
+    // Pin the head before launching: collection must verify the original
+    // review target, even if the PR moves while the interactive child runs.
+    // trace:BUG-2522 | ai:codex
+    let review_head =
+        pr_number.and_then(|pr| crate::queue_cmd::standalone_review_pr_head(project_root, pr));
     let launched_at = std::time::SystemTime::now();
-    let status: std::process::ExitStatus =
-        review_spec_launch_reviewer(vendor, &name, &prompt, &session_id)?;
+    let launcher_grant = crate::gate::seat_authority::current_grant_id();
+    let (status, child_grant) = review_spec_launch_reviewer(vendor, &name, &prompt, &session_id)?;
     if !status.success() {
         eprintln!(
             "  {} the reviewer exited non-zero ({})",
             crate::glyph(crate::glyphs::Glyph::Warning).yellow(),
             status
         );
+    }
+
+    // An anchor delegates refusal holding to this parent, including native
+    // interactive reviewers. Collect before re-recording can stamp a new head
+    // or provenance onto the child's evidence. Refuse on unverifiable evidence.
+    // trace:BUG-2522 | ai:codex
+    if let Some(pr) = pr_number {
+        let current_head = crate::queue_cmd::standalone_review_pr_head(project_root, pr);
+        anyhow::ensure!(
+            review_head.is_some() && review_head == current_head,
+            "interactive review target for PR-{pr} changed or could not be verified; re-run the review"
+        );
+        let checks = crate::queue_cmd::StandaloneVerdictChecks {
+            project_root,
+            pr,
+            head_sha: review_head,
+            launcher_grant,
+            child_grant: Some(child_grant),
+        };
+        let collected = crate::gate::review_verdict::collect_interactive_review_refusal(
+            project_root,
+            pr,
+            &spec_id,
+            launched_at,
+            &checks,
+        )?;
+        // Keep hold/forge orchestration outside the protected decision kernel.
+        // trace:BUG-2522 | ai:codex
+        crate::merge_hold::arm_collected_refusal(project_root, pr, &collected)
+            .with_context(|| format!("verdict collected, but could not protect PR-{pr} with a merge hold; run `aida review stranded --fix`"))?;
     }
 
     // ---- Read + present the verdict (AGENT ANALYZES + RECOMMENDS) ----
@@ -2560,11 +2604,37 @@ mod story_1436_gate_held_tests {
             "{}\n{}\n{}\n{}\n{}\n{}\n{}\n{}",
             include_str!("lib.rs"),
             include_str!("lib_part1.rs"),
-            include_str!("lib_part2.rs"),
+            concat!(
+                include_str!("retire_legacy.rs"),
+                "\n",
+                include_str!("glossary_render.rs"),
+                "\n",
+                include_str!("role_file_helpers.rs"),
+                "\n",
+                include_str!("mailbox_errors.rs"),
+                "\n",
+                include_str!("human_route.rs"),
+                "\n",
+                include_str!("store_drift.rs"),
+                "\n",
+                include_str!("launch_defaults.rs"),
+                "\n",
+                include_str!("merge_hold_output.rs"),
+                "\n",
+                include_str!("history_reporting.rs")
+            ),
             include_str!("lib_part3.rs"),
-            include_str!("lib_part4.rs"),
+            concat!(concat!(
+                include_str!("scoped_lease.rs"),
+                "\n",
+                include_str!("pull_lines.rs")
+            )),
             include_str!("lib_part5.rs"),
-            include_str!("lib_part6.rs"),
+            concat!(
+                include_str!("regression_tests.rs"),
+                "\n",
+                include_str!("text_truncate.rs")
+            ),
             include_str!("merge_hold_cmd.rs")
         );
         let clear = src
@@ -2822,6 +2892,8 @@ pub(crate) fn handle_review_claim(
             .ok()
             .map(|info| info.head_oid)
         });
+    // trace:BUG-2530 | ai:codex
+    crate::gate::review_marker::refuse_conclusive_head(&root, pr, head.as_deref())?;
     if let Some(prev) = crate::gate::review_marker::read(&root, pr) {
         if crate::gate::review_marker::is_live_at(&root, &prev) {
             eprintln!(
@@ -3030,6 +3102,14 @@ pub(crate) fn handle_review_record_policy_at(
     pr: Option<u64>,
     no_carry: bool,
 ) -> Result<()> {
+    // The launcher's explicit verdict anchor routes collection independently
+    // of containment posture. This input grants no review authority.
+    // trace:BUG-2522 | ai:codex
+    let env = aida_core::exec_context::Environment::capture();
+    let launcher_collects_review = crate::session::process_contained()
+        || env
+            .get("AIDA_REVIEW_VERDICT_FILE")
+            .is_some_and(|p| !p.is_empty());
     // trace:STORY-1662 | ai:claude
     crate::standalone_implementer::refuse_under_marker("review record")?;
     #[cfg(test)]
@@ -3327,50 +3407,12 @@ pub(crate) fn handle_review_record_policy_at(
         );
     }
 
-    // A refusal is a protection event, not merely metadata. Arm the local
-    // merge chokepoint before publishing the verdict; mirroring the label also
-    // protects raw forge/UI merges when branch policy consumes it. The hold is
-    // later approval can release only an eligible Rework-only hold through
-    // the recorded release seam below; all other kinds keep human clear.
-    // trace:BUG-1452 trace:STORY-1687 | ai:codex
-    if kind.requires_changes() {
-        let n = pr.ok_or_else(|| {
-            anyhow::anyhow!(
-                "a refusing verdict must name `--pr <N>` so AIDA can protect the pull request"
-            )
-        })?;
-        // BUG-1536: exactly one root for the whole call — `project_root`, the
-        // parameter — so a hold and its label can never target a different
-        // tree than the verdict itself. STORY-1397 / BUG-1532 / BUG-1562: the
-        // hold is typed Rework, references this verdict record and states
-        // its release condition ([`refusal_hold`]).
-        // trace:BUG-1536 trace:STORY-1397 trace:BUG-1532 trace:BUG-1562 | ai:claude
-        //
-        // M1 slice 2: a contained reviewer cannot write the gate ledger; the
-        // launcher that started it arms this hold when it collects the
-        // verdict. trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
-        let hold = crate::gate::merge_hold_core::refusal_hold(
-            n,
-            spec,
-            kind.label(),
-            resolved_sha.clone(),
-            Some(recorded_by.clone()),
+    // Validate the refusal target before writing any record.
+    // trace:BUG-2522 | ai:codex
+    if kind.requires_changes() && pr.is_none() {
+        anyhow::bail!(
+            "a refusing verdict must name `--pr <N>` so AIDA can protect the pull request"
         );
-        if crate::session::process_contained() {
-            eprintln!(
-                "  {} PR-{n}'s merge hold is armed by the launcher when it collects this verdict",
-                crate::glyph(crate::glyphs::Glyph::Info).cyan(),
-            );
-        } else {
-            crate::gate::merge_hold_core::place_hold(&project_root, &hold)
-                .with_context(|| format!("could not protect PR-{n} with a merge hold"))?;
-            if let Err(err) = merge_hold::sync_label(&project_root, n, true) {
-                eprintln!(
-                    "  {} merge-hold label not applied on PR-{n}: {err} — the local merge chokepoint remains armed; run `aida merge-hold list --fix`",
-                    crate::glyph(crate::glyphs::Glyph::Warning).yellow(),
-                );
-            }
-        }
     }
     // STORY-1417: build + classify + one verified write — the same boundary
     // `record_verdict` uses, with the typed classes layered on before the
@@ -3470,45 +3512,6 @@ pub(crate) fn handle_review_record_policy_at(
                 Err(error) => eprintln!("  PR #{pr}: merge-hold remains armed: {error:#}"),
             }
         }
-    }
-    if kind.requires_changes() {
-        let detail = summary
-            .filter(|s| !s.trim().is_empty())
-            .unwrap_or_else(|| kind.label());
-        let recovery = format!(
-            "address the review findings, move {} back to In Progress, and clear the PR hold only after approval",
-            spec.to_ascii_uppercase()
-        );
-        match shelve_spec_on_failure(
-            &project_root,
-            spec,
-            "reviewer",
-            3,
-            match kind {
-                crate::gate::review_verdict::VerdictKind::RequestChanges => {
-                    "verdict:request-changes"
-                }
-                crate::gate::review_verdict::VerdictKind::Rejected => "verdict:rejected",
-                _ => unreachable!("blocks_done only covers refusing verdicts"),
-            },
-            detail,
-            &recovery,
-        )? {
-            Some(_) => println!(
-                "  {} {} parked in Needs Attention and surfaced by `aida awaiting`.",
-                crate::glyph(crate::glyphs::Glyph::SubArrow).dimmed(),
-                spec.to_ascii_uppercase()
-            ),
-            None => anyhow::bail!(
-                "recorded the refusal and merge hold, but could not park {} in Needs Attention",
-                spec.to_ascii_uppercase()
-            ),
-        }
-        println!(
-            "  {} `aida queue done {}` will refuse until the branch moves past that commit.",
-            crate::glyph(crate::glyphs::Glyph::SubArrow).dimmed(),
-            spec.to_ascii_uppercase()
-        );
     }
     println!(
         "  {} {}",
@@ -3618,7 +3621,8 @@ pub(crate) fn handle_review_record_policy_at(
                     err.kind(),
                     std::io::ErrorKind::PermissionDenied | std::io::ErrorKind::ReadOnlyFilesystem
                 );
-                let contained = refused && crate::session::process_contained();
+                // trace:BUG-2522 | ai:codex
+                let contained = refused && launcher_collects_review;
                 let Some(fallback) =
                     contained_handshake_fallback(&project_root, &handshake, contained)
                 else {
@@ -3662,6 +3666,87 @@ pub(crate) fn handle_review_record_policy_at(
             "  {} {} (phase-3 handshake — the orchestrator reads this to proceed)",
             "handshake:".dimmed(),
             handshake.display().to_string().dimmed()
+        );
+    }
+    // Both verdict artifacts are durable before hold or spec-state side effects.
+    // A failed hold must leave a collectable refusal behind.
+    // trace:BUG-2522 | ai:codex
+    if kind.requires_changes() {
+        let n = pr.ok_or_else(|| {
+            anyhow::anyhow!(
+                "a refusing verdict must name `--pr <N>` so AIDA can protect the pull request"
+            )
+        })?;
+        // BUG-1536: exactly one root for the whole call — `project_root`, the
+        // parameter — so a hold and its label can never target a different
+        // tree than the verdict itself. STORY-1397 / BUG-1532 / BUG-1562: the
+        // hold is typed Rework, references this verdict record and states
+        // its release condition ([`refusal_hold`]).
+        // trace:BUG-1536 trace:STORY-1397 trace:BUG-1532 trace:BUG-1562 | ai:claude
+        //
+        // M1 slice 2: a contained reviewer cannot write the gate ledger; the
+        // launcher that started it arms this hold when it collects the
+        // verdict. trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
+        let hold = crate::gate::merge_hold_core::refusal_hold(
+            n,
+            spec,
+            kind.label(),
+            resolved_sha.clone(),
+            Some(recorded_by.clone()),
+        );
+        if launcher_collects_review {
+            eprintln!(
+                "  {} PR-{n}'s merge hold is armed by the launcher when it collects this verdict",
+                crate::glyph(crate::glyphs::Glyph::Info).cyan(),
+            );
+        } else {
+            crate::gate::merge_hold_core::place_hold(&project_root, &hold)
+                .with_context(|| format!("verdict recorded, but could not protect PR-{n} with a merge hold; run `aida review stranded --fix`"))?;
+            if let Err(err) = merge_hold::sync_label(&project_root, n, true) {
+                eprintln!(
+                    "  {} merge-hold label not applied on PR-{n}: {err} — the local merge chokepoint remains armed; run `aida merge-hold list --fix`",
+                    crate::glyph(crate::glyphs::Glyph::Warning).yellow(),
+                );
+            }
+        }
+    }
+    if kind.requires_changes() {
+        let detail = summary
+            .filter(|s| !s.trim().is_empty())
+            .unwrap_or_else(|| kind.label());
+        let recovery = format!(
+            "address the review findings, move {} back to In Progress, and clear the PR hold only after approval",
+            spec.to_ascii_uppercase()
+        );
+        match shelve_spec_on_failure(
+            &project_root,
+            spec,
+            "reviewer",
+            3,
+            match kind {
+                crate::gate::review_verdict::VerdictKind::RequestChanges => {
+                    "verdict:request-changes"
+                }
+                crate::gate::review_verdict::VerdictKind::Rejected => "verdict:rejected",
+                _ => unreachable!("blocks_done only covers refusing verdicts"),
+            },
+            detail,
+            &recovery,
+        )? {
+            Some(_) => println!(
+                "  {} {} parked in Needs Attention and surfaced by `aida awaiting`.",
+                crate::glyph(crate::glyphs::Glyph::SubArrow).dimmed(),
+                spec.to_ascii_uppercase()
+            ),
+            None => anyhow::bail!(
+                "recorded the refusal, but could not park {} in Needs Attention",
+                spec.to_ascii_uppercase()
+            ),
+        }
+        println!(
+            "  {} `aida queue done {}` will refuse until the branch moves past that commit.",
+            crate::glyph(crate::glyphs::Glyph::SubArrow).dimmed(),
+            spec.to_ascii_uppercase()
         );
     }
     Ok(())

@@ -505,7 +505,8 @@ fn task_1562_reclaim_is_dry_run_by_default() {
     use crate::cli::{Cli, Command, WorktreeCommand};
     use clap::Parser;
 
-    let cli = crate::command_registry::try_parse_from(["aida", "worktree", "reclaim"])
+    let cli = crate::TEST_CLI
+        .try_parse_from(["aida", "worktree", "reclaim"])
         .expect("`aida worktree reclaim` should parse");
     match cli.command.registered::<crate::worktree_gc::WorktreeArgs>() {
         crate::worktree_gc::WorktreeArgs {
@@ -541,23 +542,24 @@ fn task_1562_reclaim_parses_every_rail_override() {
     use crate::cli::{Cli, Command, WorktreeCommand};
     use clap::Parser;
 
-    let cli = crate::command_registry::try_parse_from([
-        "aida",
-        "worktree",
-        "reclaim",
-        "--apply",
-        "--min-age-mins",
-        "180",
-        "--target-pct",
-        "80",
-        "--include-live",
-        "--include-open-prs",
-        "--json",
-        "--scratch-age-days",
-        "5",
-        "--no-scratch",
-    ])
-    .expect("every reclaim flag should parse");
+    let cli = crate::TEST_CLI
+        .try_parse_from([
+            "aida",
+            "worktree",
+            "reclaim",
+            "--apply",
+            "--min-age-mins",
+            "180",
+            "--target-pct",
+            "80",
+            "--include-live",
+            "--include-open-prs",
+            "--json",
+            "--scratch-age-days",
+            "5",
+            "--no-scratch",
+        ])
+        .expect("every reclaim flag should parse");
     match cli.command.registered::<crate::worktree_gc::WorktreeArgs>() {
         crate::worktree_gc::WorktreeArgs {
             inner:

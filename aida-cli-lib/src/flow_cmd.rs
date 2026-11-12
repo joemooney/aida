@@ -40,7 +40,8 @@ mod tests {
             .map(str::to_string)
             .collect();
             crate::json_capability_gate(&mut argv).unwrap();
-            let matches = crate::command_registry::built_command()
+            let matches = crate::TEST_CLI
+                .built_command()
                 .try_get_matches_from(argv)
                 .unwrap();
             let flow = matches.subcommand_matches("flow-data").unwrap();
@@ -52,7 +53,7 @@ mod tests {
     }
     #[test]
     fn flow_registered_read_only_args() {
-        let cmd = crate::command_registry::built_command();
+        let cmd = crate::TEST_CLI.built_command();
         let matches = cmd
             .try_get_matches_from([
                 "aida",

@@ -87,6 +87,13 @@ mod client;
 // trace:TASK-3448 | ai:codex
 pub mod cmdkit;
 pub mod command_registry;
+
+// Inject the production command tree at the composition root. Test consumers
+// use the leaf cmdkit helpers without importing the registry table.
+// trace:TASK-3448 | ai:codex
+#[cfg(test)]
+static TEST_CLI: cmdkit::testing::CliTestSupport<cli::Cli> = command_registry::test_support();
+
 mod comment_cmd;
 mod commit;
 mod compete;
@@ -270,6 +277,7 @@ mod remote_cmd;
 pub mod requirements_cli;
 mod review_cmd;
 mod review_gates;
+mod review_waiting;
 // trace:STORY-1742 | ai:claude
 #[cfg(unix)]
 mod sanitized_intake;
@@ -787,6 +795,52 @@ mod zen;
 mod zen_drive;
 mod zen_drive_root;
 
+// Named modules retain the existing crate-root helper paths.
+// trace:TASK-3428 | ai:codex
+mod retire_legacy;
+pub(crate) use retire_legacy::handle_retire_legacy_ids;
+mod glossary_render;
+pub(crate) use glossary_render::{find_uncovered_completed_specs, render_discipline_glossary};
+mod role_file_helpers;
+pub(crate) use role_file_helpers::{is_toml_kv_line, picker_terminal_width, ACTIVITY_MAX};
+mod human_route;
+mod mailbox_errors;
+pub(crate) use human_route::{
+    human_route_is_open, human_routed_spec_ids, is_human_route, HUMAN_ROUTE,
+};
+mod store_drift;
+pub(crate) use store_drift::{
+    current_store_head_sha, paired_store_sha_for_head, print_status_store_drift_section, short_sha,
+    store_drift_verdict, store_sha_is_ancestor, StoreDriftVerdict,
+};
+mod launch_defaults;
+pub(crate) use launch_defaults::{
+    apply_agent_default_flags, gate_agent_bypass, refuse_uncontainable_agent_tool,
+    ResolvedClaudeLaunch,
+};
+mod merge_hold_output;
+pub(crate) use merge_hold_output::print_merge_hold_no_forge;
+mod history_reporting;
+pub(crate) use history_reporting::{
+    ambiguous_id_in_chain, history_kind_report, record_ambiguous_id_refusal,
+};
+mod pull_lines;
+pub(crate) use pull_lines::{pull_code_start_line, pull_skip_warning, pull_store_start_line};
+mod text_truncate;
+#[cfg(test)]
+pub(crate) use launch_defaults::write_global_agents_posture;
+pub(crate) use text_truncate::truncate_str;
+#[cfg(test)]
+mod regression_tests;
+#[cfg(test)]
+mod role_picker_tests;
+#[cfg(test)]
+mod shell_quote_tests;
+pub mod worktree_dismiss;
+
+mod scoped_lease;
+pub(crate) use scoped_lease::spec_scoped_lease;
+
 use anyhow::{Context, Result};
 use clap::Parser;
 use colored::Colorize;
@@ -803,15 +857,11 @@ use uuid::Uuid;
 /// the migrated literal sites so it resolves uniformly from main-code and
 /// inline test-module scopes alike. Default (unicode) output is byte-for-byte
 /// identical to the raw literals it replaced.
-
 // SPLIT BY AI
 // trace:TASK-1538 | ai:antigravity
 include!("lib_part1.rs");
-include!("lib_part2.rs");
 include!("lib_part3.rs");
-include!("lib_part4.rs");
 include!("lib_part5.rs");
-include!("lib_part6.rs");
 
 #[cfg(test)]
 // trace:STORY-2539 | ai:codex
@@ -882,3 +932,16 @@ pub use rel_cards::load_dispenser;
 mod flow_cmd;
 
 mod flow_runtime;
+
+// BUG-1638: race seams for the self-reading status writers, the phase-1
+// restore outcome, zen's deleted-spec message, and the atomic findings
+// promote. trace:BUG-1638 | ai:claude
+#[cfg(test)]
+#[path = "tests/bug_1638_race_seam_tests.rs"]
+mod bug_1638_race_seam_tests;
+
+// Shared stale-cache fixture for the BUG-1664 / BUG-1670 / BUG-1606 suites.
+// trace:TASK-1526 | ai:claude
+#[cfg(test)]
+#[path = "tests/stale_cache_fixture.rs"]
+mod stale_cache_fixture;

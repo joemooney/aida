@@ -1485,7 +1485,9 @@ mod task_1222_cli_tests {
     use crate::worktree_gc::{WorktreeArgs, WorktreeCommand};
     #[test]
     fn task_1222_gc_cli_defaults_to_preview_and_rejects_apply_guard_combo() {
-        let cli = crate::command_registry::try_parse_from(["aida", "worktree", "gc"]).unwrap();
+        let cli = crate::TEST_CLI
+            .try_parse_from(["aida", "worktree", "gc"])
+            .unwrap();
         let WorktreeArgs {
             inner:
                 WorktreeCommand::Gc {
@@ -1501,24 +1503,14 @@ mod task_1222_cli_tests {
             panic!("expected gc");
         };
         assert!(!apply && !yes && !force && !fail_on_findings);
-        assert!(
-            crate::command_registry::try_parse_from(["aida", "worktree", "gc", "--apply"]).is_ok()
-        );
-        assert!(crate::command_registry::try_parse_from([
-            "aida",
-            "worktree",
-            "gc",
-            "--apply",
-            "--fail-on-findings"
-        ])
-        .is_err());
-        assert!(crate::command_registry::try_parse_from([
-            "aida",
-            "worktree",
-            "gc",
-            "--force",
-            "--fail-on-findings"
-        ])
-        .is_err());
+        assert!(crate::TEST_CLI
+            .try_parse_from(["aida", "worktree", "gc", "--apply"])
+            .is_ok());
+        assert!(crate::TEST_CLI
+            .try_parse_from(["aida", "worktree", "gc", "--apply", "--fail-on-findings"])
+            .is_err());
+        assert!(crate::TEST_CLI
+            .try_parse_from(["aida", "worktree", "gc", "--force", "--fail-on-findings"])
+            .is_err());
     }
 }

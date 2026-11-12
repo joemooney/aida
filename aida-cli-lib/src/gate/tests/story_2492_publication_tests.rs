@@ -1111,3 +1111,140 @@ fn story_2696_signed_no_carry_projection_and_supersession() {
     assert!(verdict.attestation.as_ref().unwrap().carry_eligible);
     assert!(!authority::verified_authority_keys(&f.a, &[verdict]).is_empty());
 }
+
+// trace:BUG-2525 | ai:codex
+#[test]
+fn bug_2525_synced_wait_closes_locally_without_rewriting_signed_review() {
+    if !available() {
+        return;
+    }
+    let f = Fixture::new();
+    {
+        let _env = env(&f.temp.path().join("home-b"));
+        let mut record = f.record("waiting", "reviewer-session");
+        record.remove("findings");
+        record.insert("summary".into(), "waiting for batch CI".into());
+        f.collect(&record).unwrap();
+    }
+    let _env = env(&f.temp.path().join("home-a"));
+    f.sync(&f.a);
+    assert!(!f.a.join(".aida/review-verdicts").exists());
+    assert!(rv::verdict_keys(&f.a).contains(&"PR-7".into()));
+    // Independent local ledger rounds differ from the effective signed source.
+    // They remain intact in raw projection while the signed wait closes locally.
+    for key in ["STORY-1", "PR-7"] {
+        let record = serde_json::json!({
+            "verdict":"request-changes", "reviewed_sha":f.sha,
+            "summary":"independent local findings", "findings":["local defect"]
+        });
+        let spec = (key == "STORY-1").then(|| crate::gate::ledger::GateSpec::resolve(&f.a, key));
+        let root = crate::gate::ledger::store_root(&f.a).unwrap();
+        crate::gate::ledger::store::append_one(
+            &root,
+            crate::gate::ledger::event::verdict_event(
+                &root,
+                ChangeKey::pr(7),
+                record.as_object().unwrap(),
+                spec.as_ref(),
+            ),
+        )
+        .unwrap();
+    }
+    let published = current(&f.a, &["STORY-1"]).unwrap().body;
+    let keys = vec!["STORY-1".into(), "PR-7".into()];
+    crate::review_waiting::reconcile_waiting_verdicts_with(&f.a, Some(&keys), |c| {
+        assert_eq!(c, ChangeKey::pr(7));
+        Some((crate::forge::ChangeState::Merged, f.sha.clone()))
+    });
+    for key in ["STORY-1", "PR-7"] {
+        let v = rv::read_recorded_verdict(&f.a, key).unwrap();
+        assert!(v.is_closed(), "{key}: {v:?}");
+        assert_eq!(v.kind, rv::VerdictKind::Waiting);
+    }
+    assert_eq!(current(&f.a, &["STORY-1"]).unwrap().body, published);
+    for key in ["STORY-1", "PR-7"] {
+        assert_eq!(
+            crate::gate::ledger::project::newest_verdict(&f.a, key).unwrap()["summary"],
+            "independent local findings"
+        );
+    }
+    crate::queue_cmd::refuse_waiting_review(&f.a, "STORY-1", "STORY-1", None).unwrap();
+    drop(_env);
+    {
+        let _env = env(&f.temp.path().join("home-b"));
+        let mut next = f.record("waiting", "reviewer-session");
+        next.remove("findings");
+        next.insert("summary".into(), "new independent evidence".into());
+        f.collect(&next).unwrap();
+    }
+    let _env = env(&f.temp.path().join("home-a"));
+    f.sync(&f.a);
+    for key in ["STORY-1", "PR-7"] {
+        let v = rv::read_recorded_verdict(&f.a, key).unwrap();
+        assert!(
+            !v.is_closed(),
+            "a new signed round invalidates the local annotation"
+        );
+        assert_eq!(v.summary.as_deref(), Some("new independent evidence"));
+    }
+}
+
+// trace:BUG-2530 | ai:codex
+#[test]
+fn bug2530_synced_verdict_controls_admission_and_redundant_claims() {
+    assert!(available(), "OpenSSH is required for this regression");
+    let f = Fixture::new();
+    for decision in ["approved", "request-changes"] {
+        let recorded_at = {
+            let _env = env(&f.temp.path().join("home-b"));
+            let record = f.record(decision, "reviewer-session");
+            let at = chrono::DateTime::parse_from_rfc3339(record["recorded_at"].as_str().unwrap())
+                .unwrap()
+                .timestamp() as u64;
+            f.collect(&record).unwrap();
+            at
+        };
+        let _env = env(&f.temp.path().join("home-a"));
+        f.sync(&f.a);
+        assert!(!f.a.join(".aida/review-verdicts").exists());
+        // A local nonconclusive opinion must not shadow the synced refusal.
+        if decision == "request-changes" {
+            let path = rv::verdict_path(&f.a, "PR-7");
+            std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+            std::fs::write(
+                path,
+                serde_json::json!({
+                    "verdict": "waiting", "reviewed_sha": f.sha,
+                })
+                .to_string(),
+            )
+            .unwrap();
+        }
+        let marker = super::super::review_marker::Marker {
+            started_at: recorded_at + 1,
+            pid: 0,
+            ..super::super::review_marker::Marker::for_this_process(
+                7,
+                Some(&f.sha),
+                None,
+                "duplicate",
+            )
+        };
+        super::super::review_marker::write(&f.a, &marker).unwrap();
+        assert!(
+            super::super::review_marker::refuse_conclusive_head(&f.a, 7, Some(&f.sha)).is_err()
+        );
+        assert!(super::super::review_marker::refuse_conclusive_head(
+            &f.a,
+            7,
+            Some(&"b".repeat(40))
+        )
+        .is_ok());
+        let gate = super::super::review_marker::merge_gate(&f.a, 7, || Some(f.sha.clone()));
+        assert_eq!(
+            gate == super::super::review_marker::MergeGate::Clear,
+            decision == "approved"
+        );
+        assert!(super::super::review_marker::read(&f.a, 7).is_some());
+    }
+}
