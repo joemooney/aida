@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-09T01:58:46.910276326Z
-modified_at: 2026-11-12T22:59:38.343363440Z
+modified_at: 2026-11-12T23:31:46.630750514Z
 req_type: Story
 tags:
 - area:orchestration
@@ -248,6 +248,13 @@ comments:
     Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
   created_at: 2026-11-12T18:07:14.928881998Z
   modified_at: 2026-11-12T18:07:14.928881998Z
+- id: 01a1d21a-6146-7f52-b997-4cb2456a7077
+  author: joe
+  content: 'Round 6: merged origin/main (resolved review_watch_service.rs; ported BUG-2518 history().conclusive into advisor_loop_service.rs retry_blockers). F1 fixed in fff7ba547e5: Failures.alert now holds only the current episode''s notice; unsent notices from earlier episodes move to a durable carried list (serde default, back-compatible) delivered oldest-first and persisted per delivery, so an unsent A no longer suppresses B''s threshold alert. Added regression story2691_outage_across_two_thresholds_delivers_both_notices (outage spans both thresholds, recovery+success delivers two distinct stable IDs, no 4th B failure). untested=true: two lane test jobs timed out at 900s while compiling aida-cli-lib after the main merge.'
+  created_at: 2026-11-12T23:31:46.630750514Z
+  modified_at: 2026-11-12T23:31:46.630750514Z
+  session_id: 01a1d1fcea89
+  harness_version: 2.1.323 (Claude Code)
 history:
 - id: 01a1c5dd-0f8f-79d0-9864-f10de50286f7
   author: joe
