@@ -195,7 +195,7 @@ mod bug_home_041_fail_fast_command_tests {
                 false,
             ),
         ] {
-            let cli = crate::command_registry::try_parse_from(argv).unwrap();
+            let cli = crate::TEST_CLI.try_parse_from(argv).unwrap();
             assert_eq!(
                 super::fail_fast_lock_command(cli.command.name(), cli.command.subcommand_name()),
                 expected,
