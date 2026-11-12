@@ -15,18 +15,18 @@
   for_role: reviewer
   added_by_machine: imac
 - user_id: claude-advisor-112
-  requirement_id: 01a1cade-b026-76c1-93e4-3211d05c259f
-  position: 5000
-  added_by: claude-advisor-112
-  note: auto-queue retry reused canonical review story; covers 0 specs
-  added_at: 2026-11-12T05:28:24.050057813Z
-  for_role: reviewer
-  added_by_machine: imac
-- user_id: claude-advisor-112
   requirement_id: 01a1cadc-1ae9-7bc2-b30a-74dcdea4b771
   position: 6000
   added_by: claude-advisor-112
   note: auto-queue retry reused canonical review story; covers 1 spec
   added_at: 2026-11-12T05:31:25.037917308Z
+  for_role: reviewer
+  added_by_machine: imac
+- user_id: claude-advisor-112
+  requirement_id: 01a1cade-b026-76c1-93e4-3211d05c259f
+  position: 7000
+  added_by: claude-advisor-112
+  note: auto-queue retry reused canonical review story; covers 0 specs
+  added_at: 2026-11-12T05:32:19.224531370Z
   for_role: reviewer
   added_by_machine: imac
