@@ -1,0 +1,21 @@
+id: 01a1d1c6-3f40-7603-8dc4-e7ee483f2dce
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-1072
+title: Nested lane Cargo fixture inherits an unavailable /dev/shm TMPDIR
+description: 'During BUG-2539 validation, lane job j20261112T213757568-2-0 executed the overlay suite: 21 passed, 1 failed. bug_2383_bwrap_real_cargo_test_job_reports_pass_and_fail_through_the_cli failed because nested rustc could not create /dev/shm/cargo-tmp-1000-1029904/rustc... (No such file or directory). The outer runner sets TMPDIR under /dev/shm, while the nested bwrap sandbox has a fresh /dev/shm. The same suite passed the live Fresh-dependency regression and the new-layout snapshot test. Investigate fixture TMPDIR projection separately from Cargo artifact layout. Full output: /home/joe/ai/aida/.aida/lane-jobs/01a1d1ad9eb0/j20261112T213757568-2-0.out'
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-11-12T21:59:52.896824799Z
+modified_at: 2026-11-12T21:59:52.896824799Z
+req_type: Task
+tags:
+- from-advisor:BUG-2539
+- kind:observation
+- linked:BUG-2539
+- severity:minor
+filed_at:
+  aida_version: 0.16.0
+  aida_build_sha: 0d6c60e6d98
+  vendor: codex
+  session: 01a1d1ad9eb0
