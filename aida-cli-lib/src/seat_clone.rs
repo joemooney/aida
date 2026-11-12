@@ -4994,13 +4994,19 @@ pub(crate) fn commit_pending(
     } else {
         None
     };
-    refuse_pending_conflict_markers(
-        &|program, args| {
-            run_sandboxed(clone, main, program, args, PROBE_OUTPUT_CAP)
-                .map_err(|why| anyhow::anyhow!("could not inspect conflict markers: {why}"))
-        },
-        repair_paths.as_deref(),
-    )?;
+    // Both gates use the same host-recorded paths, including after generators
+    // replace outputs whose template masters were never conflicted.
+    // trace:STORY-2710 | ai:codex
+    let check_repair_markers = || {
+        refuse_pending_conflict_markers(
+            &|program, args| {
+                run_sandboxed(clone, main, program, args, PROBE_OUTPUT_CAP)
+                    .map_err(|why| anyhow::anyhow!("could not inspect conflict markers: {why}"))
+            },
+            repair_paths.as_deref(),
+        )
+    };
+    check_repair_markers()?;
     let identity: [(&'static str, std::ffi::OsString); 4] = [
         ("GIT_AUTHOR_NAME", name.clone().into()),
         ("GIT_AUTHOR_EMAIL", email.clone().into()),
@@ -5098,13 +5104,7 @@ pub(crate) fn commit_pending(
             // Registered generators can reintroduce markers into a resolved
             // original conflict. Refuse before staging or recording success.
             // trace:STORY-2710 | ai:codex
-            refuse_pending_conflict_markers(
-                &|program, args| {
-                    run_sandboxed(clone, main, program, args, PROBE_OUTPUT_CAP)
-                        .map_err(|why| anyhow::anyhow!("could not inspect conflict markers: {why}"))
-                },
-                repair_paths.as_deref(),
-            )?;
+            check_repair_markers()?;
             run_commit_sandboxed(
                 clone,
                 main,

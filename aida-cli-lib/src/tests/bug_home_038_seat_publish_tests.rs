@@ -4447,10 +4447,31 @@ fn story_2710_host_regenerates_conflicted_outputs_with_read_only_git() {
     if !bwrap_live_or_skip() {
         return;
     }
-    for cloned in [false, true] {
+    for (cloned, ledger) in [
+        (false, "scripts/exec-context-legacy.json"),
+        (true, "scripts/exec-context-legacy.json"),
+        (true, ".aida/discipline/repair.md"),
+    ] {
         let fx = fixture();
         std::fs::create_dir_all(fx.main.join("scripts")).unwrap();
-        let ledger = "scripts/exec-context-legacy.json";
+        // Exercise the reported sync-templates copy case as well as the ledger.
+        // The resolved master is not an original conflict path.
+        // trace:STORY-2710 | ai:codex
+        if ledger.starts_with(".aida/") {
+            std::fs::create_dir_all(fx.main.join(".aida/discipline")).unwrap();
+            std::fs::create_dir_all(fx.main.join("aida-core/templates/.aida/discipline")).unwrap();
+            std::fs::write(
+                fx.main
+                    .join("aida-core/templates/.aida/discipline/repair.md"),
+                "regenerated\n",
+            )
+            .unwrap();
+            std::fs::write(
+                fx.main.join("Makefile"),
+                "sync-templates:\n\tpython3 scripts/check-exec-context.py --write-ledger\n",
+            )
+            .unwrap();
+        }
         std::fs::write(fx.main.join(ledger), "base\n").unwrap();
         std::fs::write(
             fx.main.join("scripts/check-exec-context.py"),
@@ -4470,16 +4491,20 @@ if '--write-ledger' in sys.argv:
                 pass
             else:
                 raise RuntimeError('Git metadata or sanitized config was writable')
-    Path('scripts/exec-context-legacy.json').write_text('regenerated\n')
+    output = Path('scripts/exec-context-legacy.json')
+    if Path('aida-core/templates/.aida/discipline/repair.md').exists():
+        output = Path('.aida/discipline/repair.md')
+    output.write_text(Path('aida-core/templates/.aida/discipline/repair.md').read_text()
+                      if output.suffix == '.md' else 'regenerated\n')
     if Path('introduce-markers').exists():
-        Path('scripts/exec-context-legacy.json').write_text(Path('introduce-markers').read_text())
+        output.write_text(Path('introduce-markers').read_text())
     if Path('reject-regeneration').exists():
         Path('partial-generator-write').write_text('partial')
         raise RuntimeError('failure after output write')
 "#,
         )
         .unwrap();
-        git_ok(&fx.main, &["add", "scripts"]);
+        git_ok(&fx.main, &["add", "."]);
         git_ok(&fx.main, &["commit", "-qm", "register ledger fixture"]);
         git_ok(&fx.main, &["checkout", "-qb", "feat"]);
         std::fs::write(fx.main.join(ledger), "PR\n").unwrap();
@@ -4588,7 +4613,12 @@ if '--write-ledger' in sys.argv:
                     std::fs::read_to_string(tree.join(ledger)).unwrap(),
                     "regenerated\n"
                 );
-                std::fs::write(tree.join("introduce-markers"), markers).unwrap();
+                let marker_source = if ledger.starts_with(".aida/") {
+                    "aida-core/templates/.aida/discipline/repair.md"
+                } else {
+                    "introduce-markers"
+                };
+                std::fs::write(tree.join(marker_source), markers).unwrap();
                 let why = commit_pending(&fx.main, &tree, "feat", "repair (Refs STORY-2710)")
                     .unwrap_err();
                 assert!(
@@ -4608,7 +4638,11 @@ if '--write-ledger' in sys.argv:
                 assert_eq!(entry.regeneration_success, Some(false));
                 assert!(entry.regenerated_tree.is_none());
                 drop(guard);
-                std::fs::remove_file(tree.join("introduce-markers")).unwrap();
+                if ledger.starts_with(".aida/") {
+                    std::fs::write(tree.join(marker_source), "regenerated\n").unwrap();
+                } else {
+                    std::fs::remove_file(tree.join(marker_source)).unwrap();
+                }
                 prepare_rework_merge(&fx.main, &tree, "feat", true, 3813, "regen-lane").unwrap();
             }
             std::fs::write(tree.join("reject-regeneration"), "reject").unwrap();
