@@ -1185,3 +1185,13 @@ fn task_3219_native_background_entry_keeps_bg_without_wrapper_opt_in() {
         assert!(!preview.contains("claude-bg-supervise"), "{preview}");
     }
 }
+
+// trace:STORY-2704 | ai:codex
+#[test]
+fn flow_data_audit_uses_substrate_spelling_for_parent_and_report() {
+    let audit = include_str!("../../docs/internal/cli-format-json-audit.md");
+    assert!(audit.contains("| `aida flow-data` | JSON not honoured |"));
+    assert!(audit.contains("| `aida flow-data report` | COULD NOT VERIFY |"));
+    assert!(!audit.contains("| `aida flow` |"));
+    assert!(!audit.contains("| `aida flow report` |"));
+}

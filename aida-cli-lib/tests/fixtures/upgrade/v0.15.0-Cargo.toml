@@ -1,0 +1,75 @@
+[workspace]
+resolver = "2"
+members = [
+    "aida-core",
+    "aida-cli",
+    "aida-cli-lib",
+    "aida-crate",
+    "aida-server",
+    "aida-generate-types",
+    "aida-tui",
+]
+
+[workspace.package]
+version = "0.15.0"
+edition = "2021"
+authors = ["Joe Mooney"]
+license = "MIT"
+repository = "https://github.com/joemooney/aida"
+homepage = "https://github.com/joemooney/aida"
+
+[workspace.dependencies]
+# Shared dependencies
+serde = { version = "1.0", features = ["derive"] }
+serde_yaml = "0.9"
+serde_json = "1.0"
+toml = "0.8"
+toml_edit = "0.22"  # Format-preserving TOML editor for config.toml writers (STORY-633)
+uuid = { version = "1.4", features = ["v4", "v7", "serde"] }
+chrono = { version = "0.4", features = ["serde"] }
+anyhow = "1.0"
+thiserror = "1.0"
+dirs = "5.0"
+fs2 = "0.4"  # Cross-platform file locking for multi-user support
+rusqlite = { version = "0.31", features = ["bundled"] }  # SQLite database support
+postgres = { version = "0.19", features = ["with-uuid-1", "with-chrono-0_4", "with-serde_json-1"] }  # PostgreSQL database support
+r2d2 = "0.8"  # Connection pooling
+r2d2_postgres = "0.18"  # PostgreSQL adapter for r2d2
+
+# CLI dependencies
+clap = { version = "4.4", features = ["derive", "wrap_help"] }
+inquire = { version = "0.9.1", features = ["editor"] }
+colored = "2.0"
+regex = "1.10"
+
+# TUI dependencies (EPIC-26 — aida-tui crate)
+ratatui = "0.30"
+crossterm = "0.29"
+portable-pty = "0.9"
+vt100 = "0.16"
+# SIGTERM/SIGINT + Windows CTRL_C/CTRL_BREAK so the TUI restores the
+# terminal before dying to a `kill <pid>`. Default features only catch
+# SIGINT/CTRL_C; `termination` adds SIGTERM + CTRL_BREAK. (BUG-110)
+ctrlc = { version = "3.4", features = ["termination"] }
+
+# gRPC/Protocol Buffers dependencies
+tonic = "0.12"
+tonic-build = "0.12"
+tonic-web = "0.12"
+prost = "0.13"
+prost-types = "0.13"
+# protox: pure-Rust protobuf compiler — lets build.rs skip the external `protoc`
+# binary (tonic-build still does the Rust codegen via compile_fds). trace:FR-0227
+protox = "0.7"
+tokio = { version = "1.0", features = ["full"] }
+tokio-stream = "0.1"
+
+# HTTP/REST dependencies
+axum = "0.7"
+tower = "0.5"
+tower-http = { version = "0.6", features = ["cors", "trace", "fs"] }
+http = "1.0"
+hyper = { version = "1.0", features = ["full"] }
+hyper-util = { version = "0.1", features = ["tokio", "server-auto"] }
+reqwest = { version = "0.12", features = ["json", "rustls-tls"], default-features = false }
+dotenvy = "0.15"

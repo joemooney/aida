@@ -90,10 +90,14 @@ def mutation_request(raw):
                     raise ValueError('comment')
             elif obj['op'] == 'spec_edit':
                 fields = data['fields']
-                if not isinstance(fields, dict) or not fields or not set(fields) <= {'title', 'description', 'priority', 'weight'}:
+                if not isinstance(fields, dict) or not fields or not set(fields) <= {'title', 'description', 'priority', 'weight', 'tags'}:
                     raise ValueError('fields')
-                if any(not isinstance(v, str) for k, v in fields.items() if k != 'weight'):
+                if any(not isinstance(v, str) for k, v in fields.items() if k not in ('weight', 'tags')):
                     raise ValueError('field value')
+                if 'tags' in fields:
+                    tags = fields['tags']
+                    if not isinstance(tags, list) or len(tags) > 256 or any(not isinstance(tag, str) or len(tag.encode()) > 512 or any(c.isspace() for c in tag.strip()) or any(ord(c) < 32 or 127 <= ord(c) <= 159 for c in tag) for tag in tags):
+                        raise ValueError('tags')
                 if 'weight' in fields and fields['weight'] is not None:
                     import math
                     weight = fields['weight']
