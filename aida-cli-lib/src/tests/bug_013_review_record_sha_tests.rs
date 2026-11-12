@@ -479,7 +479,10 @@ fn interactive_review_anchor_refusals_are_collected_and_held() {
                 crate::gate::merge_hold_core::LabelState::Unsynced("forge unavailable".into())
             );
         } else {
-            assert_eq!(label_state, crate::gate::merge_hold_core::LabelState::Synced);
+            assert_eq!(
+                label_state,
+                crate::gate::merge_hold_core::LabelState::Synced
+            );
         }
     }
 }
