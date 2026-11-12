@@ -1,3 +1,9 @@
+Cross-label gate-ledger discovery has a separate 128 MiB/200,000-attempt
+aggregate work ceiling, including unrelated payloads and torn retries; exhaustion
+refuses selection. Automatic archive retention and discovery limited to relevant
+changes remain unresolved. See docs/internal/testing/bug-2531-ledger-selection-budget.md.
+<!-- trace:BUG-2531 | ai:codex -->
+
 Repair adoption transfers journal ownership at the verified successor-lease
 boundary. Pending-merge publication requires successful preparation, retries
 failed generation through resume, and records successful regeneration against
