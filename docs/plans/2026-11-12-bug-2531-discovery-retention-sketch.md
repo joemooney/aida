@@ -83,3 +83,35 @@ scan on a normal selection.
 The round-2 cap regression measures actual reads and deserialization attempts
 with a small injected budget. It is safety evidence only, not evidence for any
 of the proposed completeness/retention guarantees above.
+
+## Round 3 disposition — reviewed head ade7de408c3b
+
+Both P2 findings are accepted and remain open. Requeueing the work without a
+triage reason is not recorded approval of this proposal or of a scope split.
+The disputed premise is that the existing partial remediation can satisfy
+BUG-2531; neither the safety ceiling nor Draft TASK-3098 does so.
+
+Finding 1 needs approval of the completeness mechanism and writer compatibility
+boundary above. At this head, `store::write_events` synchronizes events before
+calling `project::index_spec`; index failures only warn. Thus a missing binding
+is an ordinary supported state today, not proof of absence. A regression that
+passes by ignoring such a missing index would encode loss of refusal evidence.
+
+Finding 2 needs approval of the archive resolution, rotation and revival
+contract above. `store::read_file` resolves only `ledger_file`, and append
+derives the next sequence from that active history. Moving files alone can
+therefore make direct readers report absence and a reopened writer restart
+the sequence. Pruning indexes cannot fix either failure.
+
+The requested decision is concrete: approve the full completeness/version-fence
+and archive/read/revival contract, or explicitly approve a partial scope with
+both remaining requirements assigned and BUG-2531 completion withheld. Until
+then, retain the design-fork publication veto rather than launch another
+unchanged implementation/review round. This round changes only this decision
+record; no runtime behavior or retention regression is claimed.
+
+Navigation limitation: the configured host client
+`/home/joe/ai/aida/.codegraph/proxy-state/bin/codegraph` is absent. The host must
+deploy that reviewed client before indexed navigation is available. The
+`aida doctor check codegraph` invocation reported zero checks and did not
+establish client availability. Source observations above were checked directly.
