@@ -23,7 +23,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-12T17:36:24.142897628Z
-modified_at: 2026-11-12T18:20:39.486298568Z
+modified_at: 2026-11-12T18:53:45.813314757Z
 req_type: Story
 comments:
 - id: 01a1d0d5-5d1b-7c11-bbf5-fb95aee160fa
@@ -38,6 +38,55 @@ comments:
   content: 'Implementation prepared in native seat story-2733-gate-paths per the approved sketch: explicit human-minted include_gate_paths (legacy default false); renewal/revival resets unless re-passed; status/help/docs; shared protected-path cover with other refusals unchanged; structured GateMatch audits in ship/train release records and squash/merge/train commits. Train audit text persists through journal recovery and grants no authority. Added regressions for default refusal, opt-in and other gates, legacy records, human floor, renewal/revival, train policy/audit persistence, unusual paths, and forge merge-body propagation. Floor, config layering and STORY-1888 ratchet unchanged. Changed-file rustfmt and git diff --check pass. Validation incomplete: mandate j20261112T174941299-2980892-0 and help regeneration j20261112T175118894-2-0 each timed out after 900s during compilation with no executed tests and seed overlay-stale (primary rewrote generation agent-f847fffb5c80289c). Help snapshot manually updated; exact regeneration unverified. Final mandate j20261112T175206659-2993677-0 is running; fast gate j20261112T175223104-2995046-0 follows. Native edits remain uncommitted for host publication. Host CodeGraph client absent at supplied path; doctor reports unreachable, so navigation used rg.'
   created_at: 2026-11-12T18:20:39.486298568Z
   modified_at: 2026-11-12T18:20:39.486298568Z
+  session_id: 01a1d0dd083a
+- id: 01a1d11b-d9d5-7d40-b83b-fba54276e0ad
+  author: joe
+  content: |
+    Final native handoff. No implementer finding was filed because allocation was refused.
+
+    Protected-path PRs previously refused mandate coverage. A human can now opt in with --include-gate-paths at mandate start or renewal; omitting it at renewal/revival resets it. Legacy records default to false. Other refusal checks, protected-path floor and config layering remain in place.
+
+    The shared cover retains the GateMatch and writes one-line structured audit trailers into ships and train cars, with journal persistence. Ordinary merge backends retain the audit body. Final ship/train checks re-read the opt-in so a renewal can withdraw coverage without changing the mandate ID.
+
+    Validation: untested=true
+    - Changed-file rustfmt check passed for all 17 changed Rust files; git diff --check passed.
+    - Fast-gate retry j20261112T184135216-3512941-0 passed 46/47 gates, including all source guards, formatting and the TUI check. Its last no-default-features aida-cli compile check timed out at 600s. No complete make check-ci-fast pass is claimed.
+    - Two mandate-filter jobs and one help-regeneration job each timed out at 900s during compilation, with no executed Cargo tests: j20261112T174941299-2980892-0, j20261112T175118894-2-0, j20261112T175206659-2993677-0.
+    - These jobs reported overlay-stale: the primary rewrote a file in generation agent-f847fffb5c80289c. Host validation needs a fresh target/generation.
+    - The help snapshot was manually updated. Exact regeneration and the mandate regressions remain unverified.
+    - The first full fast-gate attempt failed a CodeGraph orphan-cleanup assertion; it passed in the retry and a separate ten-gate source batch.
+    - Draft validation-finding creation was refused by read-only requirement ID allocation; the MCP transport was closed. No finding object was written. The validation gap is recorded on the owning spec for host/advisor follow-up.
+    - The supplied host CodeGraph query client was absent and doctor reported unreachable; navigation used rg.
+
+    Host validation required:
+      AIDA_UPDATE_SNAPSHOTS=1 cargo test --profile agent -p aida-cli-lib --lib -- help_surface_matches_golden_snapshot
+      cargo test --profile agent -p aida-cli-lib --lib -- mandate
+      make check-ci-fast
+
+    Native handoff: all source changes remain uncommitted. The host launcher owns commit, push and PR publication, and queue completion follows publication. Preserve existing publication vetoes. The owning spec remains In Progress in this seat.
+
+    Changed files:
+    - aida-cli-lib/src/events.rs
+    - aida-cli-lib/src/forge.rs
+    - aida-cli-lib/src/gate/mandate.rs
+    - aida-cli-lib/src/gate/mandate_ship.rs
+    - aida-cli-lib/src/gate/tests/story_1697_attested_release_tests.rs
+    - aida-cli-lib/src/gate/tests/story_1698_mandate_tests.rs
+    - aida-cli-lib/src/gate/tests/story_1889_dispatch_authority_tests.rs
+    - aida-cli-lib/src/gate/tests/story_1917_dispatch_flow_schedule_tests.rs
+    - aida-cli-lib/src/mandate.rs
+    - aida-cli-lib/src/mandate_args.rs
+    - aida-cli-lib/src/pr_cmd.rs
+    - aida-cli-lib/src/pr_train.rs
+    - aida-cli-lib/src/pr_train_verified.rs
+    - aida-cli-lib/src/tests/bug2406_train_tests.rs
+    - aida-cli-lib/src/tests/golden/cli_help_snapshot.txt
+    - aida-cli-lib/src/tests/story_1690_train_tests.rs
+    - aida-cli-lib/src/tests/story_b6b_098_whoami_tests.rs
+    - aida-cli-lib/src/tests/task_1915_mandate_ship_failure_ledger_tests.rs
+    - docs/cli/04-git-lifecycle.md
+  created_at: 2026-11-12T18:53:45.813314757Z
+  modified_at: 2026-11-12T18:53:45.813314757Z
   session_id: 01a1d0dd083a
 history:
 - id: 01a1d0d5-4f50-78f1-be14-90e8c89718c8
