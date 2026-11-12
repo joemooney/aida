@@ -18,12 +18,12 @@ description: |
   (b) A spec state or label "landed-in-integration", set when its commit reaches integration, so the open list reflects real progress; completion still on main.
   (c) Lanes and autoland target integration: base branch from config `[landing] integration_branch = "integration"`.
   (d) `aida integrate promote` (or an autoland mode) opens and refreshes the promotion PR on the event-driven trigger, with config `[landing] promote = "event"|"schedule"`, `promote_min_interval`, `promote_cron`, `promote_min_batch`.
-status: Approved
+status: InProgress
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-12T19:11:56.371806442Z
-modified_at: 2026-11-12T20:31:45.248635874Z
+modified_at: 2026-11-12T20:41:27.708847404Z
 req_type: Story
 relationships:
 - rel_type:
@@ -46,6 +46,15 @@ history:
   session_id: 01a1d0eb-22cc-7262-8f6c-7266e9cc1fbb
   harness_version: 2.1.322 (Claude Code)
   changes: []
+- id: 01a1d17e-739c-7fc1-a063-62ca04bb772f
+  author: aida-pr-open
+  timestamp: 2026-11-12T20:41:27.708845832Z
+  session_id: 01a1d0eb-22cc-7262-8f6c-7266e9cc1fbb
+  harness_version: 2.1.322 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: 0d6c60e6d982aad0c2c4ad38214010289a267d92
   branch: main
