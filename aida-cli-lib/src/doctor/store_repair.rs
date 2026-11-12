@@ -193,7 +193,7 @@ pub(super) fn scan_store_objects(store_path: &std::path::Path) -> Vec<DoctorFind
 // trace:BUG-1505 | ai:claude
 pub(super) fn scan_review_verdicts(project_root: &std::path::Path) -> Vec<DoctorFinding> {
     let rows = crate::review_verdict_display::audit_verdict_dir(project_root);
-    let mut out = Vec::new();
+    let mut out = scan_gate_ledger_capacity(project_root);
     let mut drifted = Vec::new();
     for row in &rows {
         if row.kind == crate::gate::review_verdict::VerdictKind::Unknown && !row.raw.is_empty() {
@@ -2628,4 +2628,27 @@ pub(crate) fn doctor_contradictions(
     }
 
     Ok(())
+}
+
+/// Warn before historical change ledgers reach half a selection's byte budget.
+/// This remains useful after scoping selection: related histories still share
+/// that budget, and discovery must inspect every active change.
+// trace:BUG-2531 | ai:codex
+pub(super) fn scan_gate_ledger_capacity(project_root: &std::path::Path) -> Vec<DoctorFinding> {
+    use crate::gate::ledger::{self, checked};
+    let result = ledger::store_root(project_root)
+        .map_err(|e| e.to_string())
+        .and_then(|root| checked::active_bytes(&root).map_err(|e| e.to_string()));
+    let summary = match result {
+        Ok(bytes) if bytes < checked::MAX_SELECTION_BYTES / 2 => return vec![],
+        Ok(bytes) => format!("active gate-ledger change files occupy {bytes} bytes, at least 50% of the {} byte selection budget", checked::MAX_SELECTION_BYTES),
+        Err(e) => format!("cannot inspect active gate-ledger capacity: {e}"),
+    };
+    vec![DoctorFinding {
+        category: "review-verdicts".into(),
+        id: "gate-ledger-capacity".into(),
+        summary,
+        action: "inspect closed/merged change history and plan archival with its by-spec references preserved; do not delete indexed evidence".into(),
+        safe_heal: false,
+    }]
 }
