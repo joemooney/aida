@@ -1,0 +1,33 @@
+id: 01a1cf02-d0eb-7db1-8c87-ac08ce9c8684
+spec_id: STORY-b6b1278890774ef993d2ebc327862470-647
+agreed_id: STORY-2724
+title: 'Review PR-3865: [AI:codex] fix(review): refuse duplicate reviews of concluded heads (BUG-2530)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a1cec0`) for branch `bug-b6b1278890774ef993d2ebc327862470-295`.
+
+  - PR: <https://github.com/joemooney/aida/pull/3865>
+  - Branch: `bug-b6b1278890774ef993d2ebc327862470-295` → `main`
+
+  ## Covers
+
+  - BUG-2530
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 3865` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-12T09:07:10.699613826Z
+modified_at: 2026-11-12T09:07:10.699613826Z
+req_type: Story
+filed_at:
+  code_sha: 298639cb95018f3d580dc44cba3ce04e880064fd
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 296d1dd2958
+  session: 01a1cec0649b
