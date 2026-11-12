@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-11T14:11:33.148855447Z
-modified_at: 2026-11-12T07:55:27.173609336Z
+modified_at: 2026-11-12T08:31:22.277075512Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -148,6 +148,12 @@ history:
   author: joe
   timestamp: 2026-11-12T07:07:37.945274828Z
   changes: []
+- id: 01a1cee2-0beb-7d20-bffc-a9d8c5424a94
+  author: dirtlab
+  timestamp: 2026-11-12T08:31:23.115929562Z
+  session_id: 01a1cee18055
+  harness_version: codex-cli 0.167.0
+  changes: []
 filed_at:
   code_sha: 11b131dfe3341e6d9c7127d64370f91366094711
   branch: main
@@ -159,9 +165,9 @@ filed_at:
   harness_version: 2.1.322 (Claude Code)
 attention_reason:
   category: blocked-dependency
-  detail: 'Native implementer pickup refused: Needs Attention to InProgress requires advisor authority; no active role (last-used implementer). Existing punt remains a publication veto. No edits or tests performed. Host must triage the review request, authorize resumption, and deploy /home/joe/ai/aida/.codegraph/proxy-state/bin/codegraph; doctor reports stale index.'
+  detail: 'Pickup remains blocked: Needs Attention to InProgress refused because advisor authority is required; this session has no active validated role. Existing request-changes punt remains a publication veto. Reviewed host codegraph client is absent at /home/joe/ai/aida/.codegraph/proxy-state/bin/codegraph. Host advisor must triage and authorize resumption. No files changed or tests run.'
   raised_by: implementer
-  raised_at: 2026-11-12T06:51:53.164929101Z
+  raised_at: 2026-11-12T08:31:22.277075512Z
 failure_reason:
   phase: reviewer
   phase_index: 3
