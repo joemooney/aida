@@ -6,6 +6,7 @@
 // trace:STORY-1728 | ai:claude
 
 use super::*;
+use crate::cmdkit::{CmdPolicy, Handler, StoreCtx};
 use crate::stakeholder_role::StakeholderAction;
 use std::fmt::Write as _;
 

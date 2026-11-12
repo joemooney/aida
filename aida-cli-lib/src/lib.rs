@@ -87,6 +87,13 @@ mod client;
 // trace:TASK-3448 | ai:codex
 pub mod cmdkit;
 pub mod command_registry;
+
+// Inject the production command tree at the composition root. Test consumers
+// use the leaf cmdkit helpers without importing the registry table.
+// trace:TASK-3448 | ai:codex
+#[cfg(test)]
+static TEST_CLI: cmdkit::testing::CliTestSupport<cli::Cli> = command_registry::test_support();
+
 mod comment_cmd;
 mod commit;
 mod compete;

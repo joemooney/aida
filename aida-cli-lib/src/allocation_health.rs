@@ -392,7 +392,8 @@ mod tests {
     fn named_doctor_command_exists() {
         let cmd = aida_core::work_binding::DOCTOR_ALLOCATION_COMMAND;
         let args: Vec<&str> = cmd.split_whitespace().collect();
-        crate::command_registry::try_parse_from(args.clone())
+        crate::TEST_CLI
+            .try_parse_from(args.clone())
             .unwrap_or_else(|e| panic!("`{cmd}` does not parse: {e}"));
         assert_eq!(
             crate::doctor_root::normalize_doctor_category(args.last().unwrap()).unwrap(),

@@ -13,9 +13,10 @@ and the 2026-11-10 14:41 UTC brief supersede the single-slot runbook.
 ## Boundary and protocol
 
 Only `s0` and `s1` exist. Each has a root-owned `/run/aida-ci-sN.lock`, service
-`aida-ci-sN`, and private job root `/var/lib/aida-ci-jobs/sN/current` (0700).
-Parents are root-owned 0755 for .NET traversal. A global admission lock reserves
-run/job identities across both slots; execution uses independent slot locks.
+`aida-ci-sN`, and root-owned job parent `/var/lib/aida-ci-jobs/sN/current` (0755).
+All runner ancestors must allow directory enumeration as well as traversal;
+class work trees (`current/main` and `current/train`) remain private 0700.
+A global admission lock reserves run/job identities across both slots; execution uses independent slot locks.
 Reservations are released after confirmed cgroup shutdown, including failed tests and delayed forge completion. Failed shutdown retains the reservation for operator reconciliation.
 Stop/reconcile the previous service before reuse; failed stop or populated
 cgroup refuses deletion, class switching and publication. Entire cgroups die
@@ -188,10 +189,17 @@ unload host AppArmor; obtain narrow reviewed policy or use disposable VMs.
 ## Acceptance, recovery and rollback
 
 S2 tests use fake forge/systemd plus real filesystem/socket operations; they do
-not establish host isolation or measured warm-build equivalence. The ancestor
+not establish host isolation or measured warm-build equivalence. Launch integration
+also runs the kernel ancestor-enumeration check before simulated job pickup
+for both slots and classes, including umask 077. The ancestor
 regression also runs real directory enumeration in a non-root subprocess: each
 execute-only ancestor must fail, while 0755 permits startup enumeration with
-private work trees still 0700. At S3 installation, verify the actual service uid
+private work trees still 0700. At S3 installation, verify the service uid
+cannot enumerate the other class's private work tree even though it can list
+the names in `current`; startup enumeration does not require recursive access.
+The regression checks this denial for both class trees (non-root lane fixtures
+model a foreign owner's 0700 with mode 000).
+At S3 installation, verify the actual service uid
 can enumerate every runner ancestor, including `current`, before job pickup;
 merely testing `cd` does not cover Runner.Listener's startup check. S3 must retain
 positive private-cache writes plus direct/alias/symlink seed and sibling denial

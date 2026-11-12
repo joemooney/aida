@@ -403,7 +403,8 @@ mod tests {
                 json!({"id":"TASK-1","priority":"med"}),
             ),
         ] {
-            let matches = crate::command_registry::built_command()
+            let matches = crate::TEST_CLI
+                .built_command()
                 .try_get_matches_from(argv)
                 .unwrap();
             let (name, args) = matches.subcommand().unwrap();
@@ -438,7 +439,8 @@ mod tests {
             ],
             vec!["aida", "queue", "done", "TASK-1"],
         ] {
-            let matches = crate::command_registry::built_command()
+            let matches = crate::TEST_CLI
+                .built_command()
                 .try_get_matches_from(argv)
                 .unwrap();
             let (name, args) = matches.subcommand().unwrap();
@@ -452,7 +454,8 @@ mod tests {
         let path = tmp.path().join("body");
         let text = "literal `command` $(command)\n\tsecond line";
         std::fs::write(&path, text).unwrap();
-        let matches = crate::command_registry::built_command()
+        let matches = crate::TEST_CLI
+            .built_command()
             .try_get_matches_from(["aida", "comment", "add", "TASK-1", "--body-file", "body"])
             .unwrap();
         let (name, args) = matches.subcommand().unwrap();
@@ -482,7 +485,8 @@ mod tests {
             vec!["aida", "comment", "add", "TASK-1", "--stdin"],
             "add_comment",
         )] {
-            let matches = crate::command_registry::built_command()
+            let matches = crate::TEST_CLI
+                .built_command()
                 .try_get_matches_from(argv)
                 .unwrap();
             let (name, args) = matches.subcommand().unwrap();
@@ -534,7 +538,8 @@ mod tests {
         ] {
             let mut argv = vec!["aida", "comment", "add", "TASK-1", "--stdin"];
             argv.extend(extra);
-            let matches = crate::command_registry::built_command()
+            let matches = crate::TEST_CLI
+                .built_command()
                 .try_get_matches_from(argv)
                 .unwrap();
             let (name, args) = matches.subcommand().unwrap();
@@ -563,7 +568,8 @@ mod tests {
                 &id,
             ];
             argv.extend(extra);
-            let matches = crate::command_registry::built_command()
+            let matches = crate::TEST_CLI
+                .built_command()
                 .try_get_matches_from(argv)
                 .unwrap();
             let (name, args) = matches.subcommand().unwrap();

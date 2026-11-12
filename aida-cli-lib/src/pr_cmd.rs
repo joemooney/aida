@@ -8650,9 +8650,9 @@ pub(crate) struct PrArgs {
 // trace:TASK-1715 | ai:claude
 fn run_pr(
     matches: &clap::ArgMatches,
-    ctx: &crate::command_registry::DispatchCtx,
-) -> anyhow::Result<crate::command_registry::Flow> {
-    use crate::command_registry::{Flow, StoreCtx};
+    ctx: &crate::cmdkit::DispatchCtx,
+) -> anyhow::Result<crate::cmdkit::Flow> {
+    use crate::cmdkit::{Flow, StoreCtx};
     let args = <PrArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
     let PrCommand::Review { id } = &args.inner else {
         // Only the early point reaches here: non-review subcommands return.
@@ -8715,9 +8715,9 @@ fn review_queue_argv(change: &str) -> [&str; 4] {
 /// `pr review` answers the cross-cutting gates exactly as `queue work` does;
 /// every other subcommand keeps the `pr` policy.
 // trace:TASK-1715 | ai:claude
-fn pr_cli_policy(matches: &clap::ArgMatches) -> crate::command_registry::CmdPolicy {
+fn pr_cli_policy(matches: &clap::ArgMatches) -> crate::cmdkit::CmdPolicy {
     if matches.subcommand_name() == Some("state") {
-        return crate::command_registry::CmdPolicy {
+        return crate::cmdkit::CmdPolicy {
             stakeholder: crate::stakeholder_role::StakeholderAction::Read,
             per_write_auto_push: false,
             skip_role_restore_prompt: true,
@@ -8735,7 +8735,7 @@ fn pr_cli_policy(matches: &clap::ArgMatches) -> crate::command_registry::CmdPoli
         let root = crate::find_project_root()
             .unwrap_or_else(|_| std::env::current_dir().unwrap_or_default());
         let Ok(id) = review_change_id(&id, crate::forge::resolve_forge_kind(&root)) else {
-            return crate::command_registry::CmdPolicy {
+            return crate::cmdkit::CmdPolicy {
                 stakeholder: crate::stakeholder_role::StakeholderAction::Write,
                 per_write_auto_push: false,
                 skip_role_restore_prompt: false,
@@ -8748,7 +8748,7 @@ fn pr_cli_policy(matches: &clap::ArgMatches) -> crate::command_registry::CmdPoli
             return crate::queue_cmd::queue_cli_policy(&queue);
         }
     }
-    crate::command_registry::CmdPolicy {
+    crate::cmdkit::CmdPolicy {
         stakeholder: crate::stakeholder_role::StakeholderAction::Write,
         per_write_auto_push: false,
         skip_role_restore_prompt: false,
@@ -8757,12 +8757,12 @@ fn pr_cli_policy(matches: &clap::ArgMatches) -> crate::command_registry::CmdPoli
 }
 
 // trace:STORY-1728 | ai:claude
-pub(crate) static PR: crate::command_registry::CommandReg = crate::command_registry::CommandReg {
+pub(crate) static PR: crate::cmdkit::CommandReg = crate::cmdkit::CommandReg {
     name: "pr",
     help_after: "ship",
     command: <PrArgs as clap::CommandFactory>::command,
     policy: pr_cli_policy,
-    run: crate::command_registry::Handler::Store(run_pr),
+    run: crate::cmdkit::Handler::Store(run_pr),
 };
 
 /// The one-shot HUMAN-implementer finish. From inside a worktree where
@@ -8911,10 +8911,7 @@ pub(crate) fn ship_messages(
 // `aida` call (the finish tail reuses `pr_ship_handler`). The spec is
 // resolved from the branch / lease, not the requirement store.
 // trace:STORY-720 | ai:claude
-fn run_ship(
-    matches: &clap::ArgMatches,
-    _ctx: &crate::command_registry::DispatchCtx,
-) -> anyhow::Result<()> {
+fn run_ship(matches: &clap::ArgMatches, _ctx: &crate::cmdkit::DispatchCtx) -> anyhow::Result<()> {
     let args = <ShipArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
     let ShipArgs {
         spec,
@@ -8977,17 +8974,17 @@ fn run_ship(
 }
 
 // trace:STORY-1728 | ai:claude
-pub(crate) static SHIP: crate::command_registry::CommandReg = crate::command_registry::CommandReg {
+pub(crate) static SHIP: crate::cmdkit::CommandReg = crate::cmdkit::CommandReg {
     name: "ship",
     help_after: "triage",
     command: <ShipArgs as clap::CommandFactory>::command,
-    policy: |_| crate::command_registry::CmdPolicy {
+    policy: |_| crate::cmdkit::CmdPolicy {
         stakeholder: crate::stakeholder_role::StakeholderAction::BuildLoop,
         per_write_auto_push: false,
         skip_role_restore_prompt: false,
         team_identity_write: false,
     },
-    run: crate::command_registry::Handler::Early(run_ship),
+    run: crate::cmdkit::Handler::Early(run_ship),
 };
 
 #[cfg(test)]
@@ -9902,7 +9899,8 @@ mod story_1663_rebase_ship_tests {
     #[test]
     fn cli_parses_rebase_and_merge_method_and_rejects_final_slice_with_squash() {
         // trace:STORY-1663.ac5970a5 | ai:antigravity
-        let cli = crate::command_registry::try_parse_from(["aida", "pr", "ship", "42", "--rebase"])
+        let cli = crate::TEST_CLI
+            .try_parse_from(["aida", "pr", "ship", "42", "--rebase"])
             .expect("parses --rebase");
         match cli.command.registered::<crate::pr_cmd::PrArgs>() {
             crate::pr_cmd::PrArgs {
@@ -9927,16 +9925,17 @@ mod story_1663_rebase_ship_tests {
             other => panic!("unexpected command: {other:?}"),
         }
 
-        let cli2 = crate::command_registry::try_parse_from([
-            "aida",
-            "pr",
-            "ship",
-            "42",
-            "--merge-method",
-            "rebase",
-            "--final-slice",
-        ])
-        .expect("parses --merge-method rebase --final-slice");
+        let cli2 = crate::TEST_CLI
+            .try_parse_from([
+                "aida",
+                "pr",
+                "ship",
+                "42",
+                "--merge-method",
+                "rebase",
+                "--final-slice",
+            ])
+            .expect("parses --merge-method rebase --final-slice");
         match cli2.command.registered::<crate::pr_cmd::PrArgs>() {
             crate::pr_cmd::PrArgs {
                 inner:
@@ -9958,15 +9957,9 @@ mod story_1663_rebase_ship_tests {
             other => panic!("unexpected command: {other:?}"),
         }
 
-        let cli3 = crate::command_registry::try_parse_from([
-            "aida",
-            "pr",
-            "ship",
-            "42",
-            "--rebase",
-            "--complete-spec",
-        ])
-        .expect("parses --complete-spec alias");
+        let cli3 = crate::TEST_CLI
+            .try_parse_from(["aida", "pr", "ship", "42", "--rebase", "--complete-spec"])
+            .expect("parses --complete-spec alias");
         match cli3.command.registered::<crate::pr_cmd::PrArgs>() {
             crate::pr_cmd::PrArgs {
                 inner:
@@ -9983,16 +9976,17 @@ mod story_1663_rebase_ship_tests {
         }
 
         // Conflicting --rebase and --merge-method is rejected by clap.
-        assert!(crate::command_registry::try_parse_from([
-            "aida",
-            "pr",
-            "ship",
-            "42",
-            "--rebase",
-            "--merge-method",
-            "squash"
-        ])
-        .is_err());
+        assert!(crate::TEST_CLI
+            .try_parse_from([
+                "aida",
+                "pr",
+                "ship",
+                "42",
+                "--rebase",
+                "--merge-method",
+                "squash"
+            ])
+            .is_err());
 
         // --final-slice without --rebase or --merge-method rebase is rejected.
         let err = pr_ship::validate_ship_merge_method(false, None, true)
