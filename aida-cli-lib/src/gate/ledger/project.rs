@@ -230,6 +230,31 @@ pub(crate) fn newest_verdict_event(start: &Path, key: &str) -> Option<GateEvent>
     newest_of(verdict_events(&root, key))
 }
 
+/// Select a review round before applying lifecycle annotations. An annotation
+/// carries no independent ordering authority against a legacy file: the source
+/// round must first win ordinary selection, then the exact-source overlay applies.
+// trace:BUG-2525 | ai:codex
+pub(crate) fn newest_review_event(start: &Path, key: &str) -> Option<GateEvent> {
+    let root = store_root(start).ok()?;
+    newest_review_of(verdict_events(&root, key))
+}
+
+// Also used by the bounded alias reader with its already-checked snapshot.
+// Raw change projection keeps using newest_of so it retains valid closures.
+// trace:BUG-2525 | ai:codex
+pub(crate) fn newest_review_of(events: Vec<GateEvent>) -> Option<GateEvent> {
+    newest_of(
+        events
+            .into_iter()
+            .filter(|event| {
+                !event
+                    .verdict_record()
+                    .is_some_and(|record| record.contains_key("terminal_wait_source"))
+            })
+            .collect(),
+    )
+}
+
 /// The latest lifecycle annotation before raw-review projection. Its source
 /// must be checked against the effective legacy, signed, or ledger verdict.
 /// Raw projection deliberately rejects annotations of independent reviews.

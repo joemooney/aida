@@ -1061,14 +1061,27 @@ fn bug_2525_annotation_cannot_override_replaced_legacy_source() {
     assert!(rv::read_recorded_verdict(tmp.path(), "PR-4273")
         .unwrap()
         .is_closed());
-    body["summary"] = "replacement round at the same timestamp".into();
-    std::fs::write(&path, body.to_string()).unwrap();
-    let current = rv::read_recorded_verdict(tmp.path(), "PR-4273").unwrap();
-    assert!(!current.is_closed());
-    assert_eq!(
-        current.summary.as_deref(),
-        Some("replacement round at the same timestamp")
-    );
+    for timestamp in [
+        "2026-11-11T00:00:00Z",
+        "2026-01-01T00:00:00Z",
+        "2026-12-01T00:00:00Z",
+    ] {
+        body["summary"] = "replacement legacy round".into();
+        body["recorded_at"] = timestamp.into();
+        std::fs::write(&path, body.to_string()).unwrap();
+        let current = rv::read_recorded_verdict(tmp.path(), "PR-4273").unwrap();
+        assert!(!current.is_closed());
+        assert_eq!(current.summary.as_deref(), Some("replacement legacy round"));
+        let alias = rv::read_recorded_verdict_any(tmp.path(), &["PR-4273", "TASK-3448"]).unwrap();
+        assert!(!alias.is_closed());
+        assert!(crate::queue_cmd::refuse_waiting_review(
+            tmp.path(),
+            "PR-4273",
+            "PR-4273",
+            Some("PR-4273")
+        )
+        .is_err());
+    }
 }
 
 // trace:BUG-2525 | ai:codex
@@ -1332,6 +1345,77 @@ fn bug_2525_fresh_review_after_terminal_annotation_is_a_new_round() {
                     assert!(rework.contains("fresh code defect"));
                 }
             }
+        }
+    }
+}
+
+// trace:BUG-2525 | ai:codex
+#[test]
+fn bug_2525_closed_newer_ledger_wait_does_not_revive_older_legacy_verdict() {
+    let _env = crate::test_env::EnvVarsGuard::apply(&[("AIDA_CONTAINED", None)]);
+    for legacy_verdict in ["approved", "request-changes", "waiting"] {
+        for (key, same_timestamp) in [
+            ("TASK-3448", false),
+            ("PR-4273", false),
+            ("TASK-3448", true),
+            ("PR-4273", true),
+        ] {
+            let tmp = tempfile::tempdir().unwrap();
+            let root = tmp.path();
+            let path = rv::verdict_path(root, key);
+            std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+            let mut legacy = serde_json::json!({
+                "verdict": legacy_verdict, "reviewed_sha": HEAD,
+                "summary": "older legacy round A", "recorded_at": "2026-01-01T00:00:00Z"
+            });
+            std::fs::write(&path, legacy.to_string()).unwrap();
+            rv::record_verdict(
+                root,
+                key,
+                Some("waiting"),
+                Some(HEAD),
+                None,
+                Some(SUMMARY),
+                &[],
+                "reviewer",
+            )
+            .unwrap();
+            if same_timestamp {
+                let ledger = crate::gate::ledger::project::newest_verdict(root, key).unwrap();
+                legacy["recorded_at"] = ledger["recorded_at"].clone();
+                std::fs::write(&path, legacy.to_string()).unwrap();
+            }
+            let expected = rv::current_verdict(root, key).unwrap();
+            assert!(expected.source.is_ledger());
+            assert_eq!(
+                rv::parse_recorded_verdict(&expected.body)
+                    .unwrap()
+                    .summary
+                    .as_deref(),
+                Some(SUMMARY)
+            );
+            assert!(rv::close_terminal_wait(
+                root,
+                key,
+                crate::gate::ledger::ChangeKey::pr(4273),
+                &expected,
+            )
+            .unwrap());
+            let current = rv::current_verdict(root, key).unwrap();
+            assert!(current.source.is_ledger());
+            let single = rv::read_recorded_verdict(root, key).unwrap();
+            let alias = rv::read_recorded_verdict_any(root, &[key, "TASK-NATIVE-3448"]).unwrap();
+            for verdict in [single, alias] {
+                assert_eq!(verdict.kind, rv::VerdictKind::Waiting);
+                assert_eq!(verdict.summary.as_deref(), Some(SUMMARY));
+                assert!(verdict.is_closed());
+                assert!(!verdict.kind.approves());
+            }
+            let change = key.starts_with("PR-").then_some(key);
+            crate::queue_cmd::refuse_waiting_review(root, key, key, change).unwrap();
+            assert_eq!(resolve_rework_findings(root, key, key, change), Ok(None));
+            // Closure never rewrites the superseded file or grants approval.
+            assert_eq!(std::fs::read_to_string(&path).unwrap(), legacy.to_string());
         }
     }
 }

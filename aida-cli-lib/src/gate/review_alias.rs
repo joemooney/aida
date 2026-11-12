@@ -537,7 +537,9 @@ fn candidate(
         }
         selected
     };
-    let newest: Option<GateEvent> = ledger::project::newest_of(events);
+    // Lifecycle annotations cannot displace the source round in file ordering.
+    // trace:BUG-2525 | ai:codex
+    let newest: Option<GateEvent> = ledger::project::newest_review_of(events);
     if let Some(event) = newest.filter(|e| rv::ledger_supersedes(&path, parsed.as_ref(), e)) {
         let record = event
             .verdict_record()

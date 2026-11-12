@@ -1552,7 +1552,9 @@ fn choose_current(
         return file_body.map(from_file);
     }
     let parsed = parsed.flatten();
-    let ledger = crate::gate::ledger::project::newest_verdict_event(start, key)
+    // Order the source round against the file before applying its exact closure.
+    // trace:BUG-2525 | ai:codex
+    let ledger = crate::gate::ledger::project::newest_review_event(start, key)
         .filter(|event| ledger_supersedes(&path, parsed.as_ref(), event))
         .and_then(|event| {
             let body = serde_json::to_string(event.verdict_record()?).ok()?;
