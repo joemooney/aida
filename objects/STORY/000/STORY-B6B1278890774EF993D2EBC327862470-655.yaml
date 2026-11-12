@@ -1,0 +1,43 @@
+id: 01a1d0cc-9ce8-7630-913e-ef750d74d627
+spec_id: STORY-b6b1278890774ef993d2ebc327862470-655
+agreed_id: STORY-2732
+title: 'Operator emergency-land: ''aida pr emergency-land N'' lifts admin enforcement, admin-merges and always restores; /aida-emergency-fix skill drives it'
+description: |
+  Operator-invoked fast path that lands a small, urgent fix on main without waiting for review or CI, by briefly lifting admin enforcement on main's branch protection. Motivated by 2026-11-12 BUG-2532 (#3886): a one-line fix that was stalling the review queue had to wait 15-20 min of CI behind required checks; the advisor landed it by hand (back up protection, DELETE enforce_admins, gh pr merge --admin, POST enforce_admins, diff vs backup). That sequence is safe only when the restore is guaranteed, so it belongs in one command, not in model-followed skill prose.
+
+  ARCHITECTURE SKETCH (advisor-approved 2026-11-12 10:30 MST, operator-requested):
+
+  1. Command `aida pr emergency-land <N>` (module aida-cli-lib/src/pr_emergency_land.rs, clap args in pr_cmd_args.rs as a PrCommand variant; registered via the module registry, never the legacy cli.rs Command enum).
+     a. Preconditions (refuse with a clear message, nothing changed): PR open, base = the default branch, mergeable (not CONFLICTING/DIRTY); diff size <= --max-lines (default 200 changed lines) and <= 10 files unless --allow-large; invoked by a human: reuse the same human-only check `aida pr ship` applies to protected-path PRs (stdout is a TTY, no AIDA_HEADLESS, role is not implementer/reviewer). It is never callable from a lane, reviewer, review watch, autoland or the sweep.
+     b. Back up: GET repos/{o}/{r}/branches/{base}/protection, write it to .aida/emergency-land/<ts>-PR-<N>.protection.json.
+     c. Lift: if enforce_admins.enabled is true, DELETE .../protection/enforce_admins. If it was already false, do not touch it (and do not "restore" it to true).
+     d. Merge: gh pr merge <N> --squash --admin (subject = PR title, so the (SPEC-ID) trailer drives completion as usual).
+     e. Restore ALWAYS (a guard/Drop or explicit finally that runs on merge error, on Ctrl-C via the existing signal handling, and on panic): POST .../protection/enforce_admins when step c lifted it.
+     f. Verify: GET protection again and compare with the backup, ignoring url fields. Mismatch, or a failed restore, -> exit non-zero with a loud ERROR that prints the exact restore command (gh api -X POST repos/{o}/{r}/branches/{base}/protection/enforce_admins) and does not report success.
+     g. Audit: append a JSON line to .aida/emergency-land/audit.jsonl (ts, operator user, PR, head sha, merge sha, the skipped required checks with their state at merge time, restore result) and post an `aida comment add` on the PR's spec when the title names one.
+     h. Post-merge watch (default on; --no-watch to skip): poll CI on the merge commit on main (bounded, <= 30 min). If it goes red, print a ready-to-run revert command (git revert of the squash commit, through `aida pr emergency-land` on a revert PR); do not revert automatically.
+     i. --dry-run prints every step and the preconditions verdict without any API write.
+
+  2. Skill /aida-emergency-fix (template master aida-core/templates/, then make sync-templates). Operator-invoked only; the skill text says it must not be used from a sweep, a lane or on the model's own initiative. Steps: scratch worktree off origin/main; make the change; ONE targeted check that proves the fix (no full suite); commit with the normal [AI:tool] type(scope): summary (SPEC-ID) format; push a branch; gh pr create; `aida pr emergency-land N`; then record cause and fix on the spec.
+
+  ACCEPTANCE:
+  - Unit tests with a fake forge client: (1) the happy path lifts, merges, restores and verifies; (2) when the merge fails, enforce_admins is still restored and the command exits non-zero; (3) when enforce_admins was already off, it is never POSTed; (4) a restore failure or post-restore protection mismatch exits non-zero with the restore command printed; (5) the precondition refusals (not a human, headless, implementer/reviewer role, too large, conflicting) make no API writes.
+  - --dry-run makes no API writes (asserted on the fake).
+  - The skill template exists, is synced and passes make check-templates; the CLI help golden snapshot is updated.
+  - Docs: a short section in docs/cli/ for the command.
+status: Draft
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-12T17:27:12.872067622Z
+modified_at: 2026-11-12T17:27:12.872067622Z
+req_type: Story
+filed_at:
+  code_sha: ec5a35a7108475b421baf1101b26159a7aa0fab9
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: a447d559aaa
+  vendor: claude
+  session: 01a1d09a-4262-7d50-a00b-00a5a30f3934
+  harness_version: 2.1.322 (Claude Code)
