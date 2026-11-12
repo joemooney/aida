@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-10T22:04:54.061461Z
-modified_at: 2026-11-11T21:57:59.996091648Z
+modified_at: 2026-11-12T01:41:39.461352147Z
 req_type: Story
 comments:
 - id: 01a1c781-4cf1-7c80-b086-89c5c5096ab6
@@ -362,6 +362,12 @@ comments:
   modified_at: 2026-11-11T21:57:59.996091648Z
   session_id: 01a1cc9c-1eae-7a72-9a24-8ec1afc42772
   harness_version: 2.1.322 (Claude Code)
+- id: 01a1cd6a-ee05-7173-bfb8-89227b78f76c
+  author: joe
+  content: 'Round-7 follow-up: froze portable-pack inventory before generator execution (host-rendered paths plus staged masters), strengthened the real-renderer regression with an empty host inventory, added real successor-adoption failure/rollback/retry coverage, and made persisted preparation/regeneration failure refuse direct publication before staging. The renderer child now uses the shared executable resolver to fix the raw-lookup ratchet source violation. Python repair tests 10 passed; writer inventory tests 55 passed; exec-context/store-writer guards, changed Rust rustfmt and whitespace checks pass. Rust untested=true: j20261112T011730667-3321284-0 timed out compiling after 900s (exit 124), without test execution. At handoff j20261112T011834302-3324384-0 is compiling; lookup-ratchet job j20261112T012040682-3328744-0 and final repair job j20261112T012211339-3330395-0 are queued. Launch rollback CI failure is not claimed resolved. See the existing STORY-2710 plan for recovery job IDs and output paths. Seven files remain uncommitted; native Refs publication declaration accepted for the host. No findings disputed; no story completion claimed.'
+  created_at: 2026-11-12T01:41:39.461352147Z
+  modified_at: 2026-11-12T01:41:39.461352147Z
+  session_id: 01a1cd51e522
 history:
 - id: 01a1c77f-ffdf-7ac3-a382-33d6a384e617
   author: aida-session-start
