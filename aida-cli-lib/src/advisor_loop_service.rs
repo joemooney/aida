@@ -799,7 +799,13 @@ struct Failures {
     dispatch_pending: bool,
     count: u32,
     episode: String,
+    /// The current episode's threshold notice, sent or not.
     alert: Option<Notice>,
+    /// Undelivered notices from earlier episodes; each is an independent
+    /// obligation retried until delivered (never replaced by a later one).
+    // trace:STORY-2691 | ai:claude
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    carried: Vec<Notice>,
 }
 fn failure_state(root: &Path) -> Result<Failures> {
     let Some(dir) = directory(root, false)? else {
@@ -830,14 +836,16 @@ fn record_outcome(root: &Path, reason: Option<&str>, dispatched: Option<bool>) -
         }
         state.count = state.count.saturating_add(1);
         let id = format!("advisor-loop-{NAME}-{}", state.episode);
-        // A prior episode's notice carried across success is delivered first,
-        // then retired so it cannot suppress this episode's own alert.
+        // `alert` belongs only to the current episode. A notice from an earlier
+        // episode (e.g. a pre-upgrade file) is retired into `carried` if unsent,
+        // so it can never suppress this episode's own threshold alert.
         // trace:STORY-2691 | ai:claude
-        let open = state
-            .alert
-            .as_ref()
-            .is_none_or(|alert| alert.sent && alert.message.id != id);
-        if state.count >= 3 && open {
+        if state.alert.as_ref().is_some_and(|a| a.message.id != id) {
+            if let Some(old) = state.alert.take().filter(|a| !a.sent) {
+                state.carried.push(old);
+            }
+        }
+        if state.count >= 3 && state.alert.is_none() {
             state.alert = Some(Notice {
                 message: notice::message(id, "advisor",
                     format!("{NAME}: repeated service failure"),
@@ -846,17 +854,26 @@ fn record_outcome(root: &Path, reason: Option<&str>, dispatched: Option<bool>) -
             });
         }
     } else if !state.dispatch_pending {
-        // Success resets bookkeeping, but cannot discard an undelivered notice.
-        let pending = state.alert.take().filter(|alert| !alert.sent);
+        // Success resets bookkeeping, but cannot discard an undelivered notice:
+        // every episode's unsent alert stays an obligation of its own.
+        let mut carried = std::mem::take(&mut state.carried);
+        carried.extend(state.alert.take().filter(|alert| !alert.sent));
         state = Failures {
-            alert: pending,
+            carried,
             ..Failures::default()
         };
     }
-    if let Some(alert) = state.alert.as_mut() {
+    for alert in state.carried.iter_mut().chain(state.alert.as_mut()) {
         alert.message.from = NAME.into();
     }
     dir.write("failures.json", &serde_json::to_vec_pretty(&state)?)?;
+    // Oldest obligations first; each delivery is persisted on its own so a
+    // later failure never loses an earlier success (stable IDs dedupe retries).
+    while let Some(old) = state.carried.first() {
+        deliver(root, old)?;
+        state.carried.remove(0);
+        dir.write("failures.json", &serde_json::to_vec_pretty(&state)?)?;
+    }
     if let Some(alert) = state.alert.as_mut().filter(|a| !a.sent) {
         deliver(root, alert)?;
         alert.sent = true;
@@ -1100,6 +1117,58 @@ mod loop_tests {
         CONTROLLER.with(|id| *id.borrow_mut() = None);
     }
 
+    // An outage spanning two episodes' thresholds keeps both notices as
+    // independent obligations: recovery delivers two distinct stable IDs
+    // without a fourth failure in the second episode.
+    // trace:STORY-2691 | ai:claude
+    #[test]
+    fn story2691_outage_across_two_thresholds_delivers_both_notices() {
+        let temp = tempfile::tempdir().unwrap();
+        let root = temp.path();
+        CONTROLLER.with(|id| *id.borrow_mut() = Some("fixture".into()));
+        let mailbox = root.join(".aida/mailbox");
+        std::fs::create_dir_all(root.join(".aida")).unwrap();
+        std::fs::write(&mailbox, "temporarily unavailable").unwrap();
+        // Episode A reaches its threshold while the mailbox is unavailable.
+        controller_dispatch(root, Some("A"), false).unwrap();
+        controller_dispatch(root, Some("A"), false).unwrap();
+        assert!(controller_dispatch(root, Some("A"), false).is_err());
+        let a = failure_state(root).unwrap().alert.unwrap();
+        assert!(!a.sent);
+        // Success carries unsent A.
+        assert!(controller_dispatch(root, None, true).is_err());
+        // Episode B reaches its threshold, still during the outage.
+        for _ in 0..3 {
+            assert!(controller_dispatch(root, Some("B"), false).is_err());
+        }
+        let saved = failure_state(root).unwrap();
+        let b = saved.alert.clone().expect("B has its own durable notice");
+        assert_ne!(b.message.id, a.message.id);
+        assert_eq!(saved.carried.len(), 1);
+        assert_eq!(saved.carried[0].message.id, a.message.id);
+        // Mailbox recovers; the next observation is a success.
+        std::fs::remove_file(&mailbox).unwrap();
+        controller_dispatch(root, None, true).unwrap();
+        let saved = failure_state(root).unwrap();
+        assert!(saved.carried.is_empty());
+        assert!(saved.alert.is_none());
+        assert_eq!(saved.count, 0);
+        let mut ids: Vec<String> = std::fs::read_dir(&mailbox)
+            .unwrap()
+            .map(|entry| {
+                let value: serde_json::Value =
+                    serde_json::from_slice(&std::fs::read(entry.unwrap().path()).unwrap())
+                        .unwrap();
+                value["id"].as_str().unwrap().to_string()
+            })
+            .collect();
+        ids.sort();
+        let mut expected = vec![a.message.id, b.message.id];
+        expected.sort();
+        assert_eq!(ids, expected);
+        CONTROLLER.with(|id| *id.borrow_mut() = None);
+    }
+
     // trace:STORY-2691 | ai:codex
     #[test]
     fn story2691_unsent_alert_retries_after_restart_before_idle_or_success() {
@@ -1121,7 +1190,9 @@ mod loop_tests {
                 let saved = failure_state(root).unwrap();
                 assert_eq!(saved.count, 0);
                 assert!(!saved.dispatch_pending);
-                assert_eq!(saved.alert.unwrap().message.id, original.message.id);
+                assert!(saved.alert.is_none());
+                assert_eq!(saved.carried.len(), 1);
+                assert_eq!(saved.carried[0].message.id, original.message.id);
             }
             std::fs::remove_file(&mailbox).unwrap();
             if success {
