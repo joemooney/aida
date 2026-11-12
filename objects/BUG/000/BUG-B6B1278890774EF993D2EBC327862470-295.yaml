@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-12T06:22:01.808701892Z
-modified_at: 2026-11-12T07:23:22.506978708Z
+modified_at: 2026-11-12T07:33:30.021763729Z
 req_type: Bug
 comments:
 - id: 01a1ce73-8e57-74c1-9bd7-47adb97b7de6
@@ -18,6 +18,13 @@ comments:
   modified_at: 2026-11-12T06:30:42.007785730Z
   session_id: 01a1ce6d28cf
   harness_version: codex-cli 0.167.0
+- id: 01a1cead-0d25-7a90-ac0c-9daff6365588
+  author: joe
+  content: 'Root cause (advisor, 2026-11-12 00:35): reviewers post APPROVED/REQUEST CHANGES as PR comments, but ''aida review record'' fails with ''could not protect PR-N with a merge hold''. review watch counts that as ''exited without a verdict'', relaunches (the duplicate claim that blocks the train), and after 3 attempts blocks the head. Observed blocked: PR-3866, PR-3865, PR-3860, PR-3858 (three of them carry real APPROVED comments). Fix the record path (merge-hold protect failure) first; the duplicate claim is a symptom.'
+  created_at: 2026-11-12T07:33:30.021763729Z
+  modified_at: 2026-11-12T07:33:30.021763729Z
+  session_id: 01a1cc9c-1eae-7a72-9a24-8ec1afc42772
+  harness_version: 2.1.322 (Claude Code)
 history:
 - id: 01a1ce6b-e20b-7292-b292-11cde6834d42
   author: joe
