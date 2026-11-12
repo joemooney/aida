@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-12T06:22:01.808701892Z
-modified_at: 2026-11-12T12:11:43.500283715Z
+modified_at: 2026-11-12T12:20:38.190121692Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -128,6 +128,12 @@ comments:
   content: 'Round 4 finding 1 addressed in aida-cli-lib/src/gate/ledger/store.rs: split cfg(all(test, target_os = "linux")) into explicit cfg(test) plus cfg(target_os = "linux"), so the existing production scanner excludes the Linux-only regression while retaining identical compilation conditions. No test sentinel was added to production environment policy. rustfmt --check --edition 2021 on the changed file and git diff --check passed. untested=true: lane job j20261112T114034749-337807-0 (launch-input disposition test) and j20261112T114049455-339261-0 (read-only migration lock regression) both timed out compiling at 900s, before any tests executed. The latter additionally reported overlay-stale because the primary rewrote generation agent-cee25803bfe0fe34 in place. Extended launch-input retry j20261112T115802959-2-0 is running but its current output says queued for a Cargo build slot (2 in use). Host must collect that result and rerun the lock regression against a valid build target. Native seat leaves the one-file edit uncommitted for host publication. Attempt to mark InProgress was refused because NeedsAttention promotion requires advisor authority. Configured codegraph client is absent; source was inspected with rg.'
   created_at: 2026-11-12T12:11:43.500283715Z
   modified_at: 2026-11-12T12:11:43.500283715Z
+  session_id: 01a1cf8e2e77
+- id: 01a1cfb3-eeae-7280-a765-592f14e68d8c
+  author: joe
+  content: 'Fast-gate fix round: regenerated scripts/store-writers.toml and reviewed the diff: exactly the two stale bug2530_tests::bug2530_reviewer_records_with_read_only_migration_lock writer rows (OpenOptions::new and fs::create_dir_all) were removed, with zero additions. The explicit cfg(test) gate now excludes this regression from production inventory, so these rows must no longer be retained. Regeneration/check passed with 3537 sink sites reconciled; all 54 tests/test_store_writer_inventory.py mutation fixtures passed; git diff --check passed. Full make check-ci-fast was stopped at its initial TUI seam step when it invoked direct Cargo compilation, because native-seat Cargo must use the lane runner. No new Cargo validation claimed. Edits remain uncommitted for host publication; no punt/hold changed.'
+  created_at: 2026-11-12T12:20:38.190121692Z
+  modified_at: 2026-11-12T12:20:38.190121692Z
   session_id: 01a1cf8e2e77
 history:
 - id: 01a1ce6b-e20b-7292-b292-11cde6834d42
