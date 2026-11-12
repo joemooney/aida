@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-10T06:40:07.764479561Z
-modified_at: 2026-11-12T17:36:09.216722294Z
+modified_at: 2026-11-12T23:16:18.727755959Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -231,6 +231,13 @@ comments:
   modified_at: 2026-11-12T17:29:47.485790Z
   session_id: 01a1d0c9e5e5
   harness_version: codex-cli 0.167.0
+- id: 01a1d20c-38a7-7880-943b-bfb4ada5d9d2
+  author: joe
+  content: 'Round 4 (aa1f03e5): merged origin/main (BUG-2531 keys-only discovery) into PR #3775. Both round-4 findings were already fixed on the branch by ab60600/c9b9d38/96e26ed (fail-closed MiskeyOwners::fail_closed for the PR-keyed and spec-indexed readers when discovery is incomplete; one ownership index per discovery). The merge keeps that: MiskeyOwners is now built streaming inside main''s single discovery pass (add() per ledger, fingerprint bytes charged to the inventory budget) and reused by change_events/events_for/filter_miskeyed. Main''s BUG-2522 record tests now inject the checkout head via handle_review_record_fixture_at, since the record path re-reads the change''s current head.'
+  created_at: 2026-11-12T23:16:18.727755959Z
+  modified_at: 2026-11-12T23:16:18.727755959Z
+  session_id: 01a1d1fd0896
+  harness_version: 2.1.323 (Claude Code)
 history:
 - id: 01a1c4af-45a0-7a32-8edf-55980e6f5825
   author: joe

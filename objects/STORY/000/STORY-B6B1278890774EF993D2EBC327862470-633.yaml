@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-10T22:04:54.061461Z
-modified_at: 2026-11-12T21:46:30.948033059Z
+modified_at: 2026-11-12T23:17:11.576483363Z
 req_type: Story
 comments:
 - id: 01a1c781-4cf1-7c80-b086-89c5c5096ab6
@@ -460,6 +460,13 @@ comments:
   modified_at: 2026-11-12T18:44:51.645525441Z
   session_id: 01a1d10c48ce
   harness_version: codex-cli 0.167.0
+- id: 01a1d20d-0718-7cf2-ab17-e9fedbedecb9
+  author: joe
+  content: 'Round 10 (review of 862561e): merged origin/main into PR #3832 (AGENTS.md conflict: kept both BUG-2531 and STORY-2710 paragraphs), pushed a50b4a7998d. Both P2 findings were already addressed after the reviewed commit by fa7367fd (11:45 MST, after the 11:04 review) + follow-up tests: (1) seat_clone.rs:3430-3449 ro-binds clone/.git (and the linked common dir) THEN re-binds the sanitized host config over .git/config (main/.git/config for linked worktrees); regression story_2710_host_regenerates_conflicted_outputs_with_read_only_git injects repair.seatPoison + unsupported extension into the seat config and the generator asserts git config --get returns 1. (2) commit_pending re-runs the journal-backed check_repair_markers() after regenerate_repair_outputs and before add/record_regenerated_tree (seat_clone.rs:5104-5107); same test makes a registered generator (incl. sync-templates copy of an unconflicted discipline master) write opening/closing/CRLF markers into the original conflict path and asserts HEAD, MERGE_HEAD, staged blob, and journal (regeneration_success=false, no regenerated_tree) are unchanged.'
+  created_at: 2026-11-12T23:17:11.576483363Z
+  modified_at: 2026-11-12T23:17:11.576483363Z
+  session_id: 01a1d1fd727a
+  harness_version: 2.1.323 (Claude Code)
 history:
 - id: 01a1c77f-ffdf-7ac3-a382-33d6a384e617
   author: aida-session-start
