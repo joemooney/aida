@@ -1,0 +1,34 @@
+id: 01a1d0a4-7302-7d50-ae99-90aefe2e76e5
+spec_id: STORY-b6b1278890774ef993d2ebc327862470-653
+agreed_id: STORY-2730
+title: 'Review PR-3884: [AI:codex] refactor(crate-split): finish injected CLI helper migration (TASK-3448)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a1d08f`) for branch `task-3448-helpers-c`.
+
+  - PR: <https://github.com/joemooney/aida/pull/3884>
+  - Branch: `task-3448-helpers-c` → `main`
+
+  ## Covers
+
+  - TASK-3448
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 3884` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-12T16:43:20.706622241Z
+modified_at: 2026-11-12T16:43:20.706622241Z
+req_type: Story
+filed_at:
+  code_sha: 5a76ab9cff380e3546caf8acce90aebdbd8fde34
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: a447d559aaa
+  vendor: claude
+  session: 01a1d08f6cc4
