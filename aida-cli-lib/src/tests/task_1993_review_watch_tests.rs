@@ -3611,6 +3611,20 @@ fn bug2534_ledger_only_verdict_stops_retries_and_preserves_rounds() {
         )
         .unwrap();
         assert_eq!(store.history(&c.key()).unwrap().blocking(), 1);
+        // A pending delivery barrier left in the append-only ledger must not
+        // count as another refusing review round.
+        // trace:BUG-2534 | ai:claude
+        let mut barrier = verdict_json(&c.head, "request-changes")
+            .as_object()
+            .unwrap()
+            .clone();
+        barrier.insert("sweep_pending".into(), true.into());
+        crate::gate::ledger::store::append_one(
+            temp.path(),
+            GateEvent::new(key, EventBody::Verdict { record: barrier }),
+        )
+        .unwrap();
+        assert_eq!(store.history(&c.key()).unwrap().blocking(), 1);
         std::fs::write(
             temp.path()
                 .join(format!(".aida/gate-ledger/{}.jsonl", c.key())),
