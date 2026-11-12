@@ -1174,7 +1174,7 @@ fn include_supervised_defaults_on_with_drive() {
     assert!(!inc(true, false, true));
     assert!(!inc(false, false, false));
     assert!(inc(false, true, false));
-    let parse = |args: &[&str]| crate::command_registry::try_parse_from(args);
+    let parse = |args: &[&str]| crate::TEST_CLI.try_parse_from(args);
     assert!(parse(&["aida", "mandate", "start", "--drive"]).is_ok());
     assert!(parse(&[
         "aida",

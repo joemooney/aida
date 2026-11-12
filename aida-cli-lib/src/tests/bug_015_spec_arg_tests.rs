@@ -211,7 +211,8 @@ fn every_routed_spec_argument_parses_to_the_canonical_id() {
     let a = "STORY-HOME-080";
 
     // `aida review <SPEC>` (top-level) through the real registry.
-    let review = crate::command_registry::try_parse_from(["aida", "review", a])
+    let review = crate::TEST_CLI
+        .try_parse_from(["aida", "review", a])
         .unwrap()
         .command
         .registered::<crate::review_cmd::ReviewArgs>();
@@ -410,7 +411,7 @@ const NOT_A_SPEC_ID: &[(&str, &str)] = &[
 fn every_spec_named_argument_in_the_tree_resolves_aliases() {
     let _map = bind_home();
     let want = canonical_of("080");
-    let root = crate::command_registry::built_command();
+    let root = crate::TEST_CLI.built_command();
     let mut failures = Vec::new();
     walk_spec_args(&root, "", &want, &mut failures);
     assert!(

@@ -651,19 +651,20 @@ fn story2492_continuous_watcher_survives_a_sync_refusal() {
 // trace:TASK-3196 | ai:codex
 #[test]
 fn story2492_documented_recovery_command_parses_and_config_stays_opt_in() {
-    crate::command_registry::try_parse_from([
-        "aida",
-        "review",
-        "nodes",
-        "admission-reconcile",
-        "PR-123",
-        "--expected-tip",
-        &"a".repeat(40),
-        "--all-reviewers-stopped",
-        "--reason",
-        "owner and descendants stopped",
-    ])
-    .unwrap();
+    crate::TEST_CLI
+        .try_parse_from([
+            "aida",
+            "review",
+            "nodes",
+            "admission-reconcile",
+            "PR-123",
+            "--expected-tip",
+            &"a".repeat(40),
+            "--all-reviewers-stopped",
+            "--reason",
+            "owner and descendants stopped",
+        ])
+        .unwrap();
     let config: toml::Value = toml::from_str(include_str!(concat!(
         env!("CARGO_MANIFEST_DIR"),
         "/../.aida/config.toml"

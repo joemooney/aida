@@ -193,7 +193,8 @@ fn ready(f: Fake, pr: u64, head: &str) -> Fake {
 // trace:STORY-1887 | ai:claude
 #[test]
 fn t1_ship_batch_parses_in_order() {
-    let cli = crate::command_registry::try_parse_from(["aida", "pr", "ship-batch", "7", "3", "9"])
+    let cli = crate::TEST_CLI
+        .try_parse_from(["aida", "pr", "ship-batch", "7", "3", "9"])
         .unwrap();
     match cli.command.registered::<crate::pr_cmd::PrArgs>() {
         crate::pr_cmd::PrArgs {
@@ -210,22 +211,18 @@ fn t1_ship_batch_parses_in_order() {
         }
         _ => panic!("expected pr ship-batch"),
     }
-    let cli = crate::command_registry::try_parse_from([
-        "aida",
-        "pr",
-        "ship-batch",
-        "1",
-        "--review-timeout",
-        "2h",
-    ])
-    .unwrap();
+    let cli = crate::TEST_CLI
+        .try_parse_from(["aida", "pr", "ship-batch", "1", "--review-timeout", "2h"])
+        .unwrap();
     match cli.command.registered::<crate::pr_cmd::PrArgs>() {
         crate::pr_cmd::PrArgs {
             inner: crate::cli::PrCommand::ShipBatch { review_timeout, .. },
         } => assert_eq!(review_timeout, Some(7200)),
         _ => panic!("expected pr ship-batch"),
     }
-    assert!(crate::command_registry::try_parse_from(["aida", "pr", "ship-batch"]).is_err());
+    assert!(crate::TEST_CLI
+        .try_parse_from(["aida", "pr", "ship-batch"])
+        .is_err());
 }
 
 // C2: duplicates, more than 20, and an empty list are refused before
