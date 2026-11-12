@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-10T22:04:54.061461Z
-modified_at: 2026-11-12T10:00:51.827577404Z
+modified_at: 2026-11-12T15:17:26.326437587Z
 req_type: Story
 comments:
 - id: 01a1c781-4cf1-7c80-b086-89c5c5096ab6
@@ -397,6 +397,15 @@ comments:
   modified_at: 2026-11-12T09:13:10.217270468Z
   session_id: 01a1ceeb-e827-7832-8991-e83d9eb95cef
   harness_version: 2.1.322 (Claude Code)
+- id: 01a1d055-ccb6-7a23-b667-71c0ce83dfec
+  author: joe
+  content: |-
+    Round 8: addressed all four findings. Resolved staged masters now authorize new closed mirror paths; surviving tracked mirrors remain required and retired mirrors may disappear. Generator calls kill process groups and subreap escaped descendants before rollback. Rollback restores pre-run bytes, modes and links, including unstaged edits and untracked files, without following replacement directory links. Rework accepts only structured merge-tree conflict exits; failed probes leave no reservation and permit same-head recovery.
+
+    Validation: 17 Python fixture tests passed. Normal generation and late-writing escaped-descendant timeout rollback passed inside bubblewrap with read-only Git. Final-source launcher run j20261112T145919632-2-0 executed 10 story_2710 Rust tests, all passed, exit 0. Initial 900s build timed out before tests; retry with 1800s allowance completed. Launcher reported overlay-stale after success because the primary rewrote a target-generation file in place. Rustfmt and git diff --check passed. Required codegraph client missing; used rg. Status promotion refused for lack of advisor authority, so Needs Attention remains intact. Native edits left uncommitted for host publication; no queue completion, review verdict, or merge operation performed. MCP transport closed, so this note uses CLI fallback.
+  created_at: 2026-11-12T15:17:26.326437587Z
+  modified_at: 2026-11-12T15:17:26.326437587Z
+  session_id: 01a1d032b583
 history:
 - id: 01a1c77f-ffdf-7ac3-a382-33d6a384e617
   author: aida-session-start
