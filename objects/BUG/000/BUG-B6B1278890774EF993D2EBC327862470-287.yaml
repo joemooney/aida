@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-11T04:48:14.810158291Z
-modified_at: 2026-11-12T01:16:37.090011648Z
+modified_at: 2026-11-12T01:41:42.145475328Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -78,6 +78,18 @@ comments:
   content: 'Round 2 follow-up: retained the existing interactive parent collection fix (exact child-grant/live-head validation before hold arming and re-recording). Moved collect_interactive_review_refusal into protected gate/review_verdict.rs to satisfy the gate-authority floor ratchet, updated all call sites, and corrected the read-only-anchor regression to require native anchored reviewers as well as AIDA-contained reviewers to write the local handshake. Targeted lane jobs are running/queued; validation results will follow. Host codegraph client is absent and doctor reports the index unreachable; navigation used rg.'
   created_at: 2026-11-12T01:16:37.090011648Z
   modified_at: 2026-11-12T01:16:37.090011648Z
+  session_id: 01a1cd4faf79
+- id: 01a1cd61-24e6-7483-aba5-9331227d76a8
+  author: joe
+  content: 'Round 2 validation passed via lane runner: gate_authority_code_is_on_the_floor (1 passed, job j20261112T011250776-2-0); bug_013_review_record_sha_tests (9 passed, job j20261112T011339648-2-0), including anchored interactive request-changes/rejected with no initial hold, exact grant/head rejection and hold-failure recovery; story_1405_review_marker_tests (6 passed, job j20261112T012430239-2-0), including corrected native ledger versus contained handoff-file fallback assertions. Initial fallback assertion was corrected after its test failure; rerun passes. rustfmt --check on all four changed files and git diff --check passed. Changes left uncommitted for host publication as required by this native seat.'
+  created_at: 2026-11-12T01:30:58.150717803Z
+  modified_at: 2026-11-12T01:30:58.150717803Z
+  session_id: 01a1cd4faf79
+- id: 01a1cd6a-f881-71b0-884b-02377b841955
+  author: joe
+  content: 'Fast-gate fix round: updated scripts/store-writers.toml for the collector relocation into gate/review_verdict.rs and the newly qualified handle_review_spec caller edge; removed the stale lib_part5 collector row. Preserved the reviewed ledger lock, exact child-grant/live-head verification policy, blocked disposition and evidence tests on both current edges. Validation: python3 scripts/check-store-writers.py passes (3530 sink sites, 294 operation mappings); python3 -m unittest tests/test_store_writer_inventory.py passes (54 tests); git diff --check passes. Inventory-only edits remain uncommitted for host publication.'
+  created_at: 2026-11-12T01:41:42.145475328Z
+  modified_at: 2026-11-12T01:41:42.145475328Z
   session_id: 01a1cd4faf79
 history:
 - id: 01a1c8ef-b4bc-7b62-a163-3209968104a9
