@@ -513,6 +513,31 @@ fn every_config_toml_site_is_inventoried_and_every_worktree_key_is_policy() {
     );
 }
 
+// trace:TASK-3428 | ai:codex
+#[test]
+fn relocated_root_readers_preserve_their_trust_channels() {
+    let text = std::fs::read_to_string(workspace_root().join(INVENTORY_RELPATH))
+        .expect("config trust inventory must exist");
+    let inventory = parse_inventory(&text);
+    // The initialization shortcut only probes presence; review mode consumes
+    // branch-local policy. Moving either reader must not conflate those roles.
+    for (owner, channel) in [
+        ("argv_rewrite.rs", "probe"),
+        ("review_helpers.rs", "worktree"),
+    ] {
+        let path = format!("aida-cli-lib/src/{owner}");
+        assert_eq!(
+            inventory.readers.get(&path),
+            Some(&(vec![channel.to_string()], 1)),
+            "relocated reader {path} must retain its exact trust classification"
+        );
+    }
+    assert!(
+        !inventory.readers.contains_key("aida-cli-lib/src/lib.rs"),
+        "the crate root no longer owns either config reader"
+    );
+}
+
 /// AC3 control: the three `[agent_registry]` keys that exist today classify
 /// clean, exactly as inventoried.
 #[test]
