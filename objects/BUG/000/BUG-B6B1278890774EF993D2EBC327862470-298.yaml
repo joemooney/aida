@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-12T10:03:08.698309086Z
-modified_at: 2026-11-12T16:42:52.018093662Z
+modified_at: 2026-11-12T17:03:38.361038975Z
 req_type: Bug
 comments:
 - id: 01a1d089-5536-7983-af43-208f205f22fe
@@ -28,6 +28,11 @@ comments:
   content: 'First executed module run: 34 passed, 7 failed; the named BUG-2533 regression passed. All 7 sibling failures have the same unmocked writer-admission dependency (six rollback refusals plus a pool-return cleanup refusal after the live-holder assertion passed). Applied existing test_writer_scan(true) to those seven fixtures as well, retaining their assertions. Final module stability loop is rebuilding. make check-ci-fast reached mail-wake fixtures but failed because the lane''s shared-write umask made synthetic directories group-writable; rerunning under umask 077. No production changes.'
   created_at: 2026-11-12T16:42:52.018083549Z
   modified_at: 2026-11-12T16:42:52.018083549Z
+- id: 01a1d0b7-0779-7981-bfb7-4a328154d63e
+  author: mcp
+  content: 'Validation complete on final source: 20 consecutive launcher-run `cargo test --profile agent -p aida-cli-lib --lib -- bug_2002_launch_lease_tests` iterations passed, 41 executed tests each (820 passes, zero failures). `umask 077; PATH=/tmp/bug2533-bin:$PATH make check-ci-fast` exited 0: all 47 fast gates passed; temporary Cargo shim delegates build/check/test to aida lane job runner, with non-compiling cargo commands passed through. rustfmt --check and git diff --check passed. Only changed file: aida-cli-lib/src/tests/bug_2002_launch_lease_tests.rs. No production changes, retries, or sleeps. Root cause is ambient fresh mail-writer scan refusing synchronous receipt cleanup, confirmed at final retry drop in CI logs. Eight rollback fixtures now declare explicit writer admission using the existing scoped test seam. Edits left uncommitted for native host publication.'
+  created_at: 2026-11-12T17:03:38.361029478Z
+  modified_at: 2026-11-12T17:03:38.361029478Z
 history:
 - id: 01a1d089-4d85-7572-9578-4a9e5a97ffd2
   author: joe
