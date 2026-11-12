@@ -1,0 +1,21 @@
+id: 01a1d119-c9fe-75a1-b085-1fa1c57f7591
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-1070
+agreed_id: TASK-3789
+title: 'aida pr train: prefix train progress lines with a local HH:MM:SS timestamp'
+description: 'Operator request 2026-11-12 11:51: train progress lines (''  train PR #N CI waiting: ...'', ''opened'', ''is green'', ''is red'', ejections) carry no timestamp, so a deputy transcript cannot show when CI moved or how long a train waited. Acceptance: (1) every progress println in aida-cli-lib/src/pr_train.rs that starts with ''  train PR #'' (7 sites incl. lines ~866, 868, 2533, 2770, 3466, 3533, 3539) is prefixed with the local wall-clock time, e.g. ''  11:51:07 train PR #3891 CI waiting: ...'', via one shared helper; (2) existing tests asserting these strings are updated (match the time with a pattern, not a fixed value); (3) no other output format changes. FASTTRACK tier: one targeted cargo test (pr_train / story_1690_train_tests filter) + make check-ci-fast.'
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-12T18:51:30.686841073Z
+modified_at: 2026-11-12T18:51:30.686841073Z
+req_type: Task
+filed_at:
+  code_sha: 0d6c60e6d982aad0c2c4ad38214010289a267d92
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 0d6c60e6d98
+  vendor: claude
+  session: 01a1d0eb-22cc-7262-8f6c-7266e9cc1fbb
+  harness_version: 2.1.322 (Claude Code)
