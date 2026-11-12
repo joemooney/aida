@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-12T10:13:24.570585533Z
-modified_at: 2026-11-12T19:06:03.374115495Z
+modified_at: 2026-11-12T19:11:06.744829360Z
 req_type: Bug
 comments:
 - id: 01a1d0f6-5b68-71e2-8e14-7e40a9d8c6c4
@@ -38,6 +38,13 @@ comments:
   created_at: 2026-11-12T18:51:17.714662481Z
   modified_at: 2026-11-12T18:51:17.714662481Z
   session_id: 01a1d112a301
+  harness_version: codex-cli 0.167.0
+- id: 01a1d12b-bbf8-7412-aab6-efe171eac6ba
+  author: dirtlab
+  content: 'Reverified existing fix 7f4530ff8c; no source edits needed. Fresh lane job j20261112T190622023-2-0 executed bug2534_ledger_only_verdict_stops_retries_and_preserves_rounds: 1 passed, 0 failed. git diff --check clean and working tree clean. Prior advisor records PR #3890; queue completion remains with host under native-seat instructions. Prescribed codegraph client unavailable; doctor reports missing.'
+  created_at: 2026-11-12T19:11:06.744829360Z
+  modified_at: 2026-11-12T19:11:06.744829360Z
+  session_id: 01a1d126cac4
   harness_version: codex-cli 0.167.0
 history:
 - id: 01a1d0f5-cf33-7072-a087-c8f8bafc0d36
