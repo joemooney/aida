@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T23:39:41.575597Z
-modified_at: 2026-11-12T13:00:09.432189417Z
+modified_at: 2026-11-12T13:53:14.712082823Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -835,6 +835,15 @@ comments:
   modified_at: 2026-11-12T13:00:09.432189417Z
   session_id: 01a1ceeb-e827-7832-8991-e83d9eb95cef
   harness_version: 2.1.322 (Claude Code)
+- id: 01a1d008-b7d8-70f1-8ef7-8e14c261bf69
+  author: joe
+  content: |-
+    Slice A native handoff: acceptance item (3) only per 2026-11-12 advisor brief. Dissolved lib_part2/4/6 into 15 named modules, with explicit imports and crate-root compatibility re-exports. Updated path-keyed ledgers using relocate-ledger-paths.py plus split-owner mappings, source-text fixtures and test planner namespaces. Two liveness imports stay in the existing test file; zero production inventory growth. lib_part1/3 are byte-identical; lib_part5 has fixture wiring changes only. All 35 moved function bodies are unchanged modulo formatting commas.
+    Validation: final launcher check --profile agent -p aida-cli-lib --tests passed (j20261112T133921945-1167935-0); glossary_render_tests executed 4 passed / 0 failed (j20261112T133708628-2-0, after an initial 900s compile timeout); make check-ci-fast passed 47 gates, with compilation via lane jobs, a temporary root-read index for unstaged modules and reuse of the completed TUI receipt. ExecContext 1235 exact sites / zero additions, crate globs zero, ownership liveness and trace-header guards pass, diff hygiene clean. Codegraph client absent / doctor unreachable; used rg.
+    32 changed paths remain uncommitted. Refs host publication declaration recorded with Help-Golden: unchanged; no commit, push, PR, queue-done, merge or review record from this seat. Full inventory/results: /tmp/task3428-handoff.json; body: /tmp/task3428-commit-body.txt. Remaining lib_part1/3/5 dissolution belongs to later slices; TASK-3428 remains In Progress.
+  created_at: 2026-11-12T13:53:14.712082823Z
+  modified_at: 2026-11-12T13:53:14.712082823Z
+  session_id: 01a1cfe0a7ee
 history:
 - id: 01a1b862-2e0b-7a50-a4d0-25097c707b57
   author: joe
