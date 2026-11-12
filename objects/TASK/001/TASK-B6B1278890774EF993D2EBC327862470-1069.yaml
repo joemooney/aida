@@ -18,12 +18,20 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-12T17:38:36.583411920Z
-modified_at: 2026-11-12T17:39:34.193052580Z
+modified_at: 2026-11-12T17:39:37.166984390Z
 req_type: Task
 relationships:
 - rel_type: Child
   target_id: 01a1d0cc-9ce8-7630-913e-ef750d74d627
   created_at: 2026-11-12T17:38:49.193384288Z
+comments:
+- id: 01a1d0d7-f84e-78b0-ad2a-2bfa4eb4cbfd
+  author: joe
+  content: 'Advisor: inherits STORY-2732''s 10:50 amendment (deputy-run human presence; skill portable to Codex/Antigravity). Launch after STORY-2732 merges.'
+  created_at: 2026-11-12T17:39:37.166984390Z
+  modified_at: 2026-11-12T17:39:37.166984390Z
+  session_id: 01a1d09a-4262-7d50-a00b-00a5a30f3934
+  harness_version: 2.1.322 (Claude Code)
 history:
 - id: 01a1d0d7-43e6-7d03-b1da-4751bfeb71a0
   author: joe
