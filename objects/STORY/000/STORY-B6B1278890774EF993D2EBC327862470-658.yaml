@@ -28,7 +28,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-12T17:51:40.579097417Z
-modified_at: 2026-11-12T18:41:43.314853477Z
+modified_at: 2026-11-12T19:07:32.806653744Z
 req_type: Story
 comments:
 - id: 01a1d0e3-4323-7e02-b6e4-1502d815c506
@@ -49,6 +49,12 @@ comments:
   content: 'Validation checkpoint: make check-ci-fast passed all 46 gates (659.4 seconds summed local gate runtime); all 87 workflow guard steps are classified. CI-tier/GitLab/shard Python fixtures passed (60 tests), runner-security/tier fixtures passed (57 tests), rustfmt and trace-header checks passed. Hosted <=6-minute FAST timing remains unverified; local source gates exceeded it. Two targeted cargo test attempts reached the 900-second runner timeout during compilation without executing tests; a final-source retry is now running with the permitted AIDA_CARGO_TIMEOUT=3600 override. No Git publication or queue completion has been performed in the native seat.'
   created_at: 2026-11-12T18:41:43.314853477Z
   modified_at: 2026-11-12T18:41:43.314853477Z
+  session_id: 01a1d0efbbce
+- id: 01a1d128-7846-7da3-98ff-f342bd045baa
+  author: joe
+  content: 'Final validation: targeted Rust guard test executed and passed (1 passed, 0 failed, 13533 filtered out), lane job j20261112T184124051-2-0, using AIDA_CARGO_TIMEOUT=3600; compilation took 25m40s. Final CI policy/GitLab/shard Python rerun passed 60 tests. The FAST ripgrep dependency setup passed three smoke cases, including fail-closed apt failure. make check-ci-fast previously passed all 46 unchanged source gates; all 87 Build guards remain classified. Formatting, trace-header and whitespace checks passed. Edits remain uncommitted in the native seat. Host must publish with the approved subject and ci:full label; hosted FAST timing remains unverified (local gate runtime 659.4s), and GitLab remains full-only as documented.'
+  created_at: 2026-11-12T19:07:32.806653744Z
+  modified_at: 2026-11-12T19:07:32.806653744Z
   session_id: 01a1d0efbbce
 history:
 - id: 01a1d0e3-3615-7533-9c49-092ba133a6b5
