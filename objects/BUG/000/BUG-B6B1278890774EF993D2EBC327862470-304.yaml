@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-12T18:43:14.457201972Z
-modified_at: 2026-11-12T21:34:03.395620571Z
+modified_at: 2026-11-12T22:07:13.892693078Z
 req_type: Bug
 comments:
 - id: 01a1d119-6810-7f81-95b6-65589a91a298
@@ -39,6 +39,12 @@ comments:
   modified_at: 2026-11-12T21:11:00.517304192Z
   session_id: 01a1d0eb-22cc-7262-8f6c-7266e9cc1fbb
   harness_version: 2.1.322 (Claude Code)
+- id: 01a1d1cc-f9e4-7173-85b7-00c1e6cdf08f
+  author: joe
+  content: 'Rework implemented on top of 114d125bfd0: test_exec now recognizes legacy deps/<runner> and Cargo unit build/<package>/<hash>/out/<runner> paths, derives the matching CLI profile, and re-executes the exact current test image without ambient AIDA_BIN redirection. Updated doctor/error-channel, docs, node-inventory and fast-gate helpers; retained binary checkout/target ownership checks. Added layout regression covering custom profiles and rejected layouts. Existing overlay fix retained. Both this checkout and recorded origin/main already use rust-toolchain@stable and rustup default stable, with no 1.99.1 pin. Validation: lane job j20261112T215923101-1032314-0 executed 46 targeted tests, all passed, after matching CLI build j20261112T215908128-2-0 succeeded. Includes all reported failing fixture families and a second successful live Fresh-dependency execution; first live execution passed in overlay suite j20261112T213757568-2-0 (21 passed, 1 unrelated nested TMPDIR failure, filed as draft finding TASK-b6b1278890774ef993d2ebc327862470-1072). Initial single-test build j20261112T213408527-910421-0 timed out during compilation at 900s; preliminary targeted suite had 37 pass / 8 missing-CLI prerequisites before building the CLI. Final rustfmt checks on all six touched files and git diff --check pass. Actual Rust/Cargo 1.100 execution remains CI evidence; local synthetic new-layout coverage passes. Edits remain uncommitted for native host publication.'
+  created_at: 2026-11-12T22:07:13.892693078Z
+  modified_at: 2026-11-12T22:07:13.892693078Z
+  session_id: 01a1d1ad9eb0
 history:
 - id: 01a1d115-108b-7592-a01f-d749504387cd
   author: aida-session-start
