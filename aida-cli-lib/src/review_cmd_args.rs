@@ -135,7 +135,9 @@ pub enum ReviewCommand {
 
         /// Concrete review finding to hand to the rework implementer. Repeat
         /// for multiple findings; omitted findings preserve any existing
-        /// findings[] in the verdict record.
+        /// findings[] in the verdict record. Pass --finding "" to clear
+        /// carried findings once resolved before recording approved.
+        // trace:BUG-2527 | ai:codex
         // trace:TASK-1189 | ai:codex
         // Review findings routinely quote CLI flags. Treat the next argv as
         // prose even when it begins with `-`; later argv remain ordinary flags.

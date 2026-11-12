@@ -3193,6 +3193,15 @@ pub(crate) fn handle_review_record_with_head_at(
     // trace:STORY-2698 | ai:codex — decide hold/authority routing using the
     // same inherited evidence the builder will retain, before any mutation.
     let kind = review_record_kind(&path, verdict, findings)?;
+    // trace:BUG-2527 | ai:claude — refuse before the verdict is canonicalized
+    // to the disposition, so an explicit approval never silently becomes
+    // CHANGES REQUESTED.
+    anyhow::ensure!(
+        crate::gate::review_verdict::VerdictKind::parse(verdict)
+            != crate::gate::review_verdict::VerdictKind::Approved
+            || kind == crate::gate::review_verdict::VerdictKind::Approved,
+        crate::gate::review_verdict::EXPLICIT_APPROVAL_REFUSAL
+    );
     anyhow::ensure!(
         !no_carry || kind.approves(),
         "--no-carry requires an approved verdict"

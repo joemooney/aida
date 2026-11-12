@@ -22131,7 +22131,8 @@ Options:
 
       --finding <TEXT>
           Concrete review finding to hand to the rework implementer. Repeat for multiple findings;
-          omitted findings preserve any existing findings[] in the verdict record
+          omitted findings preserve any existing findings[] in the verdict record. Pass --finding ""
+          to clear carried findings once resolved before recording approved
 
       --finding-class <CLASS>
           Defect class for a finding, paired with `--finding` by position: the first
@@ -54312,7 +54313,7 @@ Working on aida itself
       {
         "name": "finding",
         "takes_value": true,
-        "help": "Concrete review finding to hand to the rework implementer. Repeat for multiple findings; omitted findings preserve any existing findings[] in the verdict record"
+        "help": "Concrete review finding to hand to the rework implementer. Repeat for multiple findings; omitted findings preserve any existing findings[] in the verdict record. Pass --finding \"\" to clear carried findings once resolved before recording approved"
       },
       {
         "name": "finding-class",
