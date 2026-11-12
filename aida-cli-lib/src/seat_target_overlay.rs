@@ -9,6 +9,8 @@
 //!   `build/` are hardlinked, `.fingerprint/` is really copied (cargo rewrites
 //!   fingerprints in place), `incremental/` is skipped. The snapshot is taken
 //!   under the primary's `.cargo-lock`, so it never sees a half-written build.
+//!   Cargo 1.100's unit layout stores fingerprints inside `build/`; snapshots
+//!   copy that entire directory to keep its mutable unit state off shared inodes.
 //! - **upper/work**: per lane, `<main>/target/lane-overlay/<lease>/{upper,work}`,
 //!   kept between jobs (the second job is warm) and discarded when the lane
 //!   moves to another generation. They live beside `lane-base/`, outside every
@@ -52,6 +54,8 @@ const GENERATION_RECORD: &str = "generation";
 const PINS: &str = ".pins";
 /// The (name, size, mtime) manifest of a generation's hardlinked `deps/`.
 const MANIFEST: &str = ".manifest.json";
+/// Recursive manifest for copied Cargo 1.100 unit state and outputs.
+const BUILD_MANIFEST: &str = ".build-manifest.json";
 /// The directories every complete generation holds.
 const REQUIRED_DIRS: &[&str] = &["deps", "build", ".fingerprint"];
 /// Hardlinked into a snapshot.
@@ -104,6 +108,61 @@ fn mtime_ns(m: &std::fs::Metadata) -> i64 {
 /// Fingerprint files at most this large are hashed by content.
 const HASHED_FINGERPRINT_BYTES: u64 = 64 * 1024;
 
+/// Cargo 1.100 stores each unit's fingerprints beside its outputs under
+/// build/<package>/<hash>/fingerprint instead of .fingerprint/<unit>.
+/// Keep this bounded to the two layout levels; never follow directory links.
+// trace:BUG-2539 | ai:codex
+fn build_fingerprints(src: &Path) -> Option<Vec<PathBuf>> {
+    let build = src.join("build");
+    if !build.exists() {
+        return Some(Vec::new());
+    }
+    let mut units = Vec::new();
+    for package in std::fs::read_dir(build).ok()? {
+        let package = package.ok()?;
+        if !package.file_type().ok()?.is_dir() {
+            continue;
+        }
+        for unit in std::fs::read_dir(package.path()).ok()? {
+            let unit = unit.ok()?;
+            if unit.file_type().ok()?.is_dir() {
+                let fingerprint = unit.path().join("fingerprint");
+                if std::fs::symlink_metadata(&fingerprint).is_ok_and(|m| m.is_dir()) {
+                    units.push(fingerprint);
+                }
+            }
+        }
+    }
+    units.sort();
+    Some(units)
+}
+
+/// Metadata of the new layout's outputs and mutable state. Unlike the legacy
+/// deps manifest this covers nested files, without following directory links.
+// trace:BUG-2539 | ai:codex
+fn build_manifest(root: &Path) -> Option<Vec<(String, u64, i64)>> {
+    let mut pending = vec![root.to_path_buf()];
+    let mut files = Vec::new();
+    while let Some(dir) = pending.pop() {
+        for entry in std::fs::read_dir(dir).ok()? {
+            let entry = entry.ok()?;
+            let path = entry.path();
+            let metadata = std::fs::symlink_metadata(&path).ok()?;
+            if metadata.is_dir() {
+                pending.push(path);
+            } else {
+                files.push((
+                    path.strip_prefix(root).ok()?.to_str()?.to_string(),
+                    metadata.len(),
+                    mtime_ns(&metadata),
+                ));
+            }
+        }
+    }
+    files.sort();
+    Some(files)
+}
+
 /// The generation id of `<main_target>/<profile>`, derived from what a
 /// snapshot would hold (BUG-2383 review r7, F1): the toolchain cargo
 /// recorded in `<main_target>/.rustc_info.json`, every fingerprint file's
@@ -111,23 +170,36 @@ const HASHED_FINGERPRINT_BYTES: u64 = 64 * 1024;
 /// [`deps_manifest`] of `deps/`. A rebuild that rewrites a fingerprint or an
 /// artifact, even in place within one second, yields a new id, so it never
 /// lands on a generation a live lane still uses. `None` when the profile
-/// has no fingerprints (nothing to warm from).
+/// has no fingerprints (nothing to warm from). The Cargo 1.100 layout also
+/// includes nested unit fingerprints and a recursive build/ metadata manifest.
 // trace:BUG-2383 | ai:claude
+// trace:BUG-2539 | ai:codex
 pub(crate) fn generation_id(main_target: &Path, profile: &str) -> Option<String> {
     let src = main_target.join(profile);
-    let mut units: Vec<_> = std::fs::read_dir(src.join(".fingerprint"))
-        .ok()?
-        .flatten()
-        .collect();
+    let mut units: Vec<PathBuf> = match std::fs::read_dir(src.join(".fingerprint")) {
+        Ok(entries) => entries
+            .map(|e| e.ok().map(|e| e.path()))
+            .collect::<Option<_>>()?,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Vec::new(),
+        Err(_) => return None,
+    };
+    let build_units = build_fingerprints(&src)?;
+    let new_layout = !build_units.is_empty();
+    units.extend(build_units);
     if units.is_empty() {
         return None;
     }
-    units.sort_by_key(|e| e.file_name());
+    units.sort();
     let mut h = Fnv::new();
     h.feed(&std::fs::read(main_target.join(".rustc_info.json")).unwrap_or_default());
     for unit in units {
-        h.feed(unit.file_name().as_encoded_bytes());
-        let mut files: Vec<_> = std::fs::read_dir(unit.path())
+        if unit.parent() == Some(src.join(".fingerprint").as_path()) {
+            // Preserve existing legacy generation identities and their live pins.
+            h.feed(unit.file_name()?.as_encoded_bytes());
+        } else {
+            h.feed(unit.strip_prefix(&src).ok()?.as_os_str().as_encoded_bytes());
+        }
+        let mut files: Vec<_> = std::fs::read_dir(&unit)
             .into_iter()
             .flatten()
             .flatten()
@@ -149,6 +221,14 @@ pub(crate) fn generation_id(main_target: &Path, profile: &str) -> Option<String>
         h.feed(name.as_bytes());
         h.feed(&len.to_le_bytes());
         h.feed(&mtime.to_le_bytes());
+    }
+    if new_layout {
+        h.feed(b"cargo-unit-layout-v1");
+        for (name, len, mtime) in build_manifest(&src.join("build"))? {
+            h.feed(name.as_bytes());
+            h.feed(&len.to_le_bytes());
+            h.feed(&mtime.to_le_bytes());
+        }
     }
     Some(format!("{profile}-{:016x}", h.0))
 }
@@ -225,10 +305,20 @@ fn deps_manifest(deps: &Path) -> Vec<(String, u64, i64)> {
 /// symlink) holding every [`REQUIRED_DIRS`] entry and a manifest that
 /// still matches its `deps/` ([`deps_manifest`]). A generation a collection
 /// removed half-way, one missing a dependency file, or any other leftover,
-/// is not.
+/// is not. Copied new-layout build/ state has its own recursive manifest.
 // trace:BUG-2383 | ai:claude
 fn complete(dir: &Path) -> bool {
-    std::fs::symlink_metadata(dir).is_ok_and(|m| m.is_dir())
+    // trace:BUG-2539 | ai:codex
+    let build_complete = if dir.join(BUILD_MANIFEST).exists() {
+        std::fs::read(dir.join(BUILD_MANIFEST))
+            .ok()
+            .and_then(|b| serde_json::from_slice::<Vec<(String, u64, i64)>>(&b).ok())
+            .is_some_and(|recorded| build_manifest(&dir.join("build")).as_ref() == Some(&recorded))
+    } else {
+        build_fingerprints(dir).is_some_and(|units| units.is_empty())
+    };
+    build_complete
+        && std::fs::symlink_metadata(dir).is_ok_and(|m| m.is_dir())
         && REQUIRED_DIRS
             .iter()
             .all(|d| std::fs::symlink_metadata(dir.join(d)).is_ok_and(|m| m.is_dir()))
@@ -336,13 +426,19 @@ pub(crate) fn snapshot(
     let generation = Generation { id: name, dir };
     let tmp = base.join(format!(".{}.tmp-{}", generation.id, std::process::id()));
     let _ = std::fs::remove_dir_all(&tmp);
+    // New-layout build/ contains fingerprints and other mutable unit state.
+    // Copy it all: hardlinking it would let a primary rebuild mutate a live lower.
+    // trace:BUG-2539 | ai:codex
+    let new_layout = !build_fingerprints(&src)
+        .ok_or_else(|| "cannot read build fingerprints".to_string())?
+        .is_empty();
     let built = (|| {
         std::fs::create_dir_all(&tmp).map_err(|e| format!("create {}: {e}", tmp.display()))?;
         for (dirs, link) in [(LINKED_DIRS, true), (COPIED_DIRS, false)] {
             for d in dirs {
                 let from = src.join(d);
                 if from.is_dir() {
-                    cp(&from, &tmp.join(d), link)?;
+                    cp(&from, &tmp.join(d), link && !(new_layout && *d == "build"))?;
                 }
             }
         }
@@ -354,6 +450,13 @@ pub(crate) fn snapshot(
         let manifest = serde_json::to_vec(&deps_manifest(&tmp.join("deps")))
             .map_err(|e| format!("manifest: {e}"))?;
         std::fs::write(tmp.join(MANIFEST), manifest).map_err(|e| format!("manifest: {e}"))?;
+        if new_layout {
+            let files = build_manifest(&tmp.join("build"))
+                .ok_or_else(|| "cannot read build snapshot".to_string())?;
+            let manifest = serde_json::to_vec(&files).map_err(|e| format!("manifest: {e}"))?;
+            std::fs::write(tmp.join(BUILD_MANIFEST), manifest)
+                .map_err(|e| format!("build manifest: {e}"))?;
+        }
         std::fs::create_dir_all(tmp.join(PINS)).map_err(|e| format!("pins: {e}"))
     })();
     drop(build_lock);
