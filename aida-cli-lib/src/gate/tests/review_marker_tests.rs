@@ -396,3 +396,71 @@ fn prc_only_the_markers_process_ownership_overrides_its_ttl() {
         "matching dead ownership ends the marker"
     );
 }
+
+// trace:BUG-2530 | ai:codex
+#[test]
+fn bug2530_duplicate_admission_and_redundant_claim() {
+    let dir = tempfile::tempdir().unwrap();
+    let head = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+    let m = claim(7, head, now_secs(), CLAIM_TTL_SECS);
+    write(dir.path(), &m).unwrap();
+    let path = super::super::review_verdict::verdict_path(dir.path(), "PR-7");
+    std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+    let mut record = serde_json::json!({
+        "verdict": "approved", "reviewed_sha": head,
+        "recorded_at": chrono::DateTime::from_timestamp((m.started_at - 10) as i64, 0).unwrap().to_rfc3339(),
+        "recorder_attestation": {"sha":head, "seat":"reviewer"}
+    });
+    for kind in [
+        "approved",
+        "request-changes",
+        "rejected",
+        "waiting",
+        "unknown",
+    ] {
+        record["verdict"] = kind.into();
+        std::fs::write(&path, record.to_string()).unwrap();
+        assert_eq!(
+            refuse_conclusive_head(dir.path(), 7, Some(head)).is_err(),
+            matches!(kind, "approved" | "request-changes" | "rejected")
+        );
+        assert!(refuse_conclusive_head(
+            dir.path(),
+            7,
+            Some("bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb")
+        )
+        .is_ok());
+        let gate = merge_gate(dir.path(), 7, || Some(head.into()));
+        assert_eq!(gate == MergeGate::Clear, kind == "approved");
+    }
+    record["verdict"] = "approved".into();
+    record["recorded_at"] = chrono::DateTime::from_timestamp((m.started_at + 10) as i64, 0)
+        .unwrap()
+        .to_rfc3339()
+        .into();
+    std::fs::write(&path, record.to_string()).unwrap();
+    assert!(matches!(
+        merge_gate(dir.path(), 7, || Some(head.into())),
+        MergeGate::UnderReview(_)
+    ));
+    record["recorded_at"] = "invalid".into();
+    std::fs::write(&path, record.to_string()).unwrap();
+    assert!(matches!(
+        merge_gate(dir.path(), 7, || Some(head.into())),
+        MergeGate::UnderReview(_)
+    ));
+    record["recorded_at"] = chrono::DateTime::from_timestamp((m.started_at - 10) as i64, 0)
+        .unwrap()
+        .to_rfc3339()
+        .into();
+    record
+        .as_object_mut()
+        .unwrap()
+        .remove("recorder_attestation");
+    std::fs::write(&path, record.to_string()).unwrap();
+    assert!(matches!(
+        merge_gate(dir.path(), 7, || Some(head.into())),
+        MergeGate::UnderReview(_)
+    ));
+    assert!(read(dir.path(), 7).is_some());
+}

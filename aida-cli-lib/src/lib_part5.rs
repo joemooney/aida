@@ -1297,6 +1297,15 @@ pub(crate) fn handle_review_spec(
     } else {
         ReviewLeaseConflictMode::RefuseStaleNonInteractive
     };
+    // trace:BUG-2530 | ai:codex
+    if let Some(pr) = pr_number.filter(|_| !no_agent) {
+        let head = review_marker_head_best_effort(project_root, pr, &surface_branch);
+        crate::gate::review_marker::refuse_conclusive_head(
+            &main_worktree_root_from(project_root),
+            pr,
+            head.as_deref(),
+        )?;
+    }
     let _review_lease =
         acquire_review_lease_with_mode(project_root, &spec_id, &surface_branch, review_lease_mode)?;
     // STORY-1405: while the reviewer runs, PR-N is visibly under review to
@@ -2822,6 +2831,8 @@ pub(crate) fn handle_review_claim(
             .ok()
             .map(|info| info.head_oid)
         });
+    // trace:BUG-2530 | ai:codex
+    crate::gate::review_marker::refuse_conclusive_head(&root, pr, head.as_deref())?;
     if let Some(prev) = crate::gate::review_marker::read(&root, pr) {
         if crate::gate::review_marker::is_live_at(&root, &prev) {
             eprintln!(

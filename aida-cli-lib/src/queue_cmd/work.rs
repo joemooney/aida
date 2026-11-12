@@ -4722,6 +4722,13 @@ pub(crate) fn handle_queue_work(
         if !no_launch && role == "reviewer" {
             if let Some(pr_n) = reviewer_preflight_pr_n(plan.review_target) {
                 if let Some(root) = project_root_for_config.as_deref() {
+                    // trace:BUG-2530 | ai:codex
+                    let head = standalone_review_pr_head(root, pr_n);
+                    crate::gate::review_marker::refuse_conclusive_head(
+                        &crate::main_worktree_root_from(root),
+                        pr_n,
+                        head.as_deref(),
+                    )?;
                     match preflight_stale_base_check(root, pr_n) {
                         Ok(pr_rebase::StaleBaseOutcome::Current) => {}
                         Ok(pr_rebase::StaleBaseOutcome::StaleNoOverlap { behind }) => {

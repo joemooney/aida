@@ -189,6 +189,51 @@ fn parse(pr: u64, body: &str) -> Marker {
     m
 }
 
+/// Refuse duplicate review admission only for a conclusive verdict at the
+/// exact head. Waiting remains eligible for the fresh review it requires.
+// trace:BUG-2530 | ai:codex
+pub(crate) fn refuse_conclusive_head(
+    root: &Path,
+    pr: u64,
+    head: Option<&str>,
+) -> anyhow::Result<()> {
+    if let Some(v) = conclusive_head(root, pr, head) {
+        anyhow::bail!("PR-{pr} already has a {} verdict at this exact head; a duplicate review is unnecessary", v.kind.label());
+    }
+    Ok(())
+}
+
+// trace:BUG-2530 | ai:codex
+fn conclusive_head(
+    root: &Path,
+    pr: u64,
+    head: Option<&str>,
+) -> Option<super::review_verdict::RecordedVerdict> {
+    let head = head.filter(|h| !h.trim().is_empty())?;
+    let v = super::review_verdict::read_verdict_for_sha(root, &format!("PR-{pr}"), head)?;
+    (v.reviewed_sha.as_deref() == Some(head) && (v.kind.approves() || v.kind.requires_changes()))
+        .then_some(v)
+}
+
+/// An already-approved head cannot acquire a new blocking review merely
+/// because an older launcher wrote a redundant claim. Leave the marker intact;
+/// the ordinary approval/hold gates still validate all merge authority.
+// trace:BUG-2530 | ai:codex
+fn redundant_claim(root: &Path, m: &Marker, head: Option<&str>) -> bool {
+    let Some(v) = conclusive_head(root, m.pr, head) else {
+        return false;
+    };
+    m.head_sha == head.unwrap_or_default()
+        && v.kind.approves()
+        && v.attestation
+            .as_ref()
+            .is_some_and(|a| a.authorizes(v.reviewed_sha.as_deref()))
+        && v.recorded_at
+            .as_deref()
+            .and_then(|at| chrono::DateTime::parse_from_rfc3339(at).ok())
+            .is_some_and(|at| at.timestamp() >= 0 && (at.timestamp() as u64) < m.started_at)
+}
+
 /// Write (or replace) the marker for `m.pr`.
 pub(crate) fn write(root: &Path, m: &Marker) -> std::io::Result<PathBuf> {
     std::fs::create_dir_all(markers_dir(root))?;
@@ -317,6 +362,9 @@ pub(crate) fn merge_gate(
         return MergeGate::ExpiredCleared(m, reason);
     }
     let head = current_head();
+    if redundant_claim(root, &m, head.as_deref()) {
+        return MergeGate::Clear;
+    }
     if covers_head(&m.head_sha, head.as_deref()) {
         MergeGate::UnderReview(m)
     } else {
@@ -328,7 +376,10 @@ pub(crate) fn merge_gate(
 /// `pr` covering `current_head`, else `None`. Never removes anything.
 pub(crate) fn live_description(root: &Path, pr: u64, current_head: Option<&str>) -> Option<String> {
     let m = read(root, pr)?;
-    (is_live_at(root, &m) && covers_head(&m.head_sha, current_head)).then(|| m.describe())
+    (is_live_at(root, &m)
+        && covers_head(&m.head_sha, current_head)
+        && !redundant_claim(root, &m, current_head))
+    .then(|| m.describe())
 }
 
 /// The refusal a merge surface prints for [`MergeGate::UnderReview`].
