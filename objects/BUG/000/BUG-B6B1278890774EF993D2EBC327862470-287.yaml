@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-11T04:48:14.810158291Z
-modified_at: 2026-11-12T12:55:36.416809614Z
+modified_at: 2026-11-12T13:03:01.200346691Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -217,6 +217,12 @@ comments:
   modified_at: 2026-11-12T12:32:18.931591203Z
   session_id: 01a1ceeb-e827-7832-8991-e83d9eb95cef
   harness_version: 2.1.322 (Claude Code)
+- id: 01a1cfda-bc50-72c1-944b-3c02a19252a8
+  author: joe
+  content: 'Round 3 finding 1: moved collect_interactive_review_refusal validation into protected gate/review_verdict.rs, returning CollectedVerdict. handle_review_spec keeps hold/forge orchestration outside the kernel and propagates hold failure before presentation/re-recording. Updated refusal regression call sites and ordering assertions; reconciled store writer inventory without changing ratchets. Inventory check, 54 inventory tests, rustfmt and whitespace checks pass. Lane jobs j20261112T125815829-825185-0 (boundary guards) and j20261112T125836861-2-0 (refusal regressions) pending. Native seat will leave edits for host commit/publication. Status promotion refused because Needs Attention requires advisor authority; status unchanged. Configured CodeGraph host client absent; call sites verified with rg.'
+  created_at: 2026-11-12T13:03:01.200346691Z
+  modified_at: 2026-11-12T13:03:01.200346691Z
+  session_id: 01a1cfd4b26e
 history:
 - id: 01a1c8ef-b4bc-7b62-a163-3209968104a9
   author: joe
