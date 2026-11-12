@@ -158,7 +158,13 @@ pub(crate) fn index_spec(root: &Path, spec: &str, change: ChangeKey) -> std::io:
 
 /// The change's events, in ledger order.
 pub(crate) fn events(root: &Path, change: ChangeKey) -> Vec<GateEvent> {
-    let events = store::read_file(root, change);
+    // Explicit spec-only evidence has no change authority even if discovery
+    // fails and this legacy reader falls back to its local ledger.
+    // trace:BUG-2517 | ai:codex
+    let events = store::read_file(root, change)
+        .into_iter()
+        .filter(|e| !e.is_spec_only())
+        .collect::<Vec<_>>();
     // trace:BUG-2517 | ai:codex
     super::checked::filter_miskeyed(root, events.clone(), &mut Default::default()).unwrap_or(events)
 }
@@ -181,6 +187,7 @@ fn verdict_events(root: &Path, key: &str) -> Vec<GateEvent> {
     let raw: Vec<GateEvent> = changes_for_spec(root, &spec)
         .into_iter()
         .flat_map(|change| store::read_file(root, change))
+        .filter(|e| !e.is_spec_only())
         .filter(|e| e.verdict_record().is_some() && e.spec.as_deref() == Some(spec.as_str()))
         .collect();
     let bound =

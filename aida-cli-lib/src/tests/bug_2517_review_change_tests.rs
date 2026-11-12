@@ -138,25 +138,30 @@ fn bug_2517_two_prs_one_spec_records_only_the_leased_change() {
         );
         crate::gate::review_marker::write(root, &marker).unwrap();
     }
-    handle_review_record_at(
-        root.to_path_buf(),
-        "BUG-2492",
-        "waiting",
-        Some(&head),
-        None,
-        Some("operator must run the local check; resume after its result"),
-        &[],
-        &[],
-        None,
-    )
-    .unwrap();
-    assert_eq!(rv::current_verdict_body_at(&first).unwrap(), before);
-    assert_eq!(
-        rv::current_verdict_body_at(&second_path).unwrap(),
-        second_before
-    );
-    for n in [3651, 3764] {
-        assert!(crate::gate::review_marker::read(root, n).is_some());
+    for word in ["waiting", "approved"] {
+        handle_review_record_at(
+            root.to_path_buf(),
+            "BUG-2492",
+            word,
+            Some(&head),
+            None,
+            Some("operator must run the local check; resume after its result"),
+            &[],
+            &[],
+            None,
+        )
+        .unwrap();
+        assert_eq!(rv::current_verdict_body_at(&first).unwrap(), before);
+        assert_eq!(
+            rv::current_verdict_body_at(&second_path).unwrap(),
+            second_before
+        );
+        for n in [3651, 3764] {
+            assert!(
+                crate::gate::review_marker::read(root, n).is_some(),
+                "{word}: PR-{n}"
+            );
+        }
     }
     // Opening/adopting or collecting either change must not adopt the local record.
     let spec = crate::gate::canon::GateSpec::with_key("BUG-2492", None);

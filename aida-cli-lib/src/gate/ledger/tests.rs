@@ -2658,3 +2658,44 @@ fn bug_2517_historical_spec_only_copy_has_no_change_authority() {
     );
     assert_eq!(std::fs::read(path).unwrap(), before);
 }
+
+// trace:BUG-2517 | ai:codex
+#[test]
+fn bug_2517_spec_only_copy_stays_local_when_discovery_refuses() {
+    let (_tmp, root) = root();
+    let _env = uncontained();
+    let spec = GateSpec::with_key("BUG-2517", None);
+    let change = ChangeKey::pr(2517);
+    let own = record("approved", &ts(1), None);
+    store::append_one(
+        &root,
+        event::verdict_event(&root, change, &own, Some(&spec)),
+    )
+    .unwrap();
+    let mut local = record("waiting", &ts(2), None);
+    local.insert("change_binding".into(), "unbound".into());
+    store::append_unbound(&root, &spec, &local).unwrap();
+    store::append_one(
+        &root,
+        event::verdict_event(&root, change, &local, Some(&spec)),
+    )
+    .unwrap();
+    // Force the legacy readers' fallback with unrelated malformed evidence.
+    std::fs::write(store::ledger_file(&root, ChangeKey::pr(9999)), b"invalid\n").unwrap();
+    assert!(checked::discover(&root, &mut Default::default()).is_err());
+    let path = store::ledger_file(&root, change);
+    let before = std::fs::read(&path).unwrap();
+    assert_eq!(project::newest_verdict(&root, "PR-2517"), Some(own));
+    assert!(project::events(&root, change)
+        .iter()
+        .all(|e| !e.is_spec_only()));
+    // The deliberately local record is still the spec's newest evidence.
+    assert_eq!(project::newest_verdict(&root, "BUG-2517"), Some(local));
+    assert_eq!(
+        project::newest_verdict_event(&root, "BUG-2517")
+            .unwrap()
+            .change,
+        "BUG-2517"
+    );
+    assert_eq!(std::fs::read(path).unwrap(), before);
+}

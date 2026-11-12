@@ -947,8 +947,13 @@ fn bug_2517_spec_only_never_binds_or_projects_and_related_changes_scan_once() {
             0
         );
     }
+    // Discovery must include unrelated corpus evidence once, too. Keep it
+    // unindexed so the hints budget below is exactly this member's reads.
+    let mut unrelated = verdict_ev(1, None, "waiting", HEAD_B);
+    unrelated.change = "PR-9000".into();
+    crate::gate::ledger::store::append_one(root.path(), unrelated).unwrap();
     let dir = root.path().join(".aida/gate-ledger");
-    let corpus: u64 = [3185, 3194]
+    let corpus: u64 = [3185, 3194, 9000]
         .iter()
         .map(|n| {
             std::fs::metadata(dir.join(format!("PR-{n}.jsonl")))
@@ -965,7 +970,7 @@ fn bug_2517_spec_only_never_binds_or_projects_and_related_changes_scan_once() {
             root.path(),
             ChangeKey::pr(n),
             &set,
-            Budget::with_limits(corpus + hints, 6),
+            Budget::with_limits(corpus + hints, 8),
         )
         .unwrap();
         assert!(view.unbound.is_empty());
@@ -982,7 +987,15 @@ fn bug_2517_spec_only_never_binds_or_projects_and_related_changes_scan_once() {
         root.path(),
         ChangeKey::pr(3185),
         &set,
-        Budget::with_limits(corpus + hints - 1, 6),
+        Budget::with_limits(corpus + hints - 1, 8),
+    )
+    .is_err());
+    // The one discovery also retains the aggregate event bound.
+    assert!(load_view_with_budget(
+        root.path(),
+        ChangeKey::pr(3185),
+        &set,
+        Budget::with_limits(corpus + hints, 7),
     )
     .is_err());
     assert_eq!(
