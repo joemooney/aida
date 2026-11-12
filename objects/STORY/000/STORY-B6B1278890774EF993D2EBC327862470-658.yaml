@@ -28,7 +28,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-12T17:51:40.579097417Z
-modified_at: 2026-11-12T19:29:04.278616027Z
+modified_at: 2026-11-12T19:41:20.630427943Z
 req_type: Story
 relationships:
 - rel_type:
@@ -62,6 +62,13 @@ comments:
   created_at: 2026-11-12T19:07:32.806653744Z
   modified_at: 2026-11-12T19:07:32.806653744Z
   session_id: 01a1d0efbbce
+- id: 01a1d147-6976-7c41-9184-66bb99027671
+  author: dirtlab
+  content: 'Pickup blocked in native implementer lane: aida edit STORY-2735 --status in-progress refused because Needs Attention promotion requires advisor authority. Active role query returned no role. Working tree is clean; no files changed and no tests run. Existing request-changes/hold remains in force. Advisor must triage/reapprove and restore authorized pickup before rework.'
+  created_at: 2026-11-12T19:41:20.630427943Z
+  modified_at: 2026-11-12T19:41:20.630427943Z
+  session_id: 01a1d146d44a
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1d0e3-3615-7533-9c49-092ba133a6b5
   author: joe
@@ -91,6 +98,12 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a1d147-63e2-7a62-b5cb-e5ff5ef34c9b
+  author: dirtlab
+  timestamp: 2026-11-12T19:41:19.202232170Z
+  session_id: 01a1d146d44a
+  harness_version: codex-cli 0.167.0
+  changes: []
 filed_at:
   code_sha: ec5a35a7108475b421baf1101b26159a7aa0fab9
   branch: main
@@ -100,6 +113,11 @@ filed_at:
   vendor: claude
   session: 01a1d09a-4262-7d50-a00b-00a5a30f3934
   harness_version: 2.1.322 (Claude Code)
+attention_reason:
+  category: blocked-dependency
+  detail: 'Native implementer pickup blocked: spec is Needs Attention (request-changes), and aida edit --status in-progress refuses without advisor authority. Advisor triage/reapproval is required before implementation can resume. No source changes or publication performed.'
+  raised_by: implementer
+  raised_at: 2026-11-12T19:41:18.409867967Z
 failure_reason:
   phase: reviewer
   phase_index: 3
