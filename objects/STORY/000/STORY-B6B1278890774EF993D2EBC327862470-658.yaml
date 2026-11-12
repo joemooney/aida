@@ -28,7 +28,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-12T17:51:40.579097417Z
-modified_at: 2026-11-12T18:05:40.139169489Z
+modified_at: 2026-11-12T18:12:07.269068653Z
 req_type: Story
 comments:
 - id: 01a1d0e3-4323-7e02-b6e4-1502d815c506
@@ -38,6 +38,12 @@ comments:
   modified_at: 2026-11-12T17:51:57.219762914Z
   session_id: 01a1d09a-4262-7d50-a00b-00a5a30f3934
   harness_version: 2.1.322 (Claude Code)
+- id: 01a1d0f5-b9e5-7060-80cd-b94a763468ed
+  author: joe
+  content: 'Implementation follows the signed-off sketch: FAST source gates plus workspace/tests cargo check, FULL seven-lane matrix on main/train/merge groups/manual/schedule or PR ci:full/repo variable; direct ship checks the tier marker against Build workflow-run identity. GitLab parity gap: handwritten .gitlab-ci.yml MR verify/test/bwrap jobs remain full-only. GDMA generated relay lanes remain full-only and accept only the exact reviewed upstream tier gate. Host publication must apply ci:full as ruled; native seat will leave edits uncommitted.'
+  created_at: 2026-11-12T18:12:07.269068653Z
+  modified_at: 2026-11-12T18:12:07.269068653Z
+  session_id: 01a1d0efbbce
 history:
 - id: 01a1d0e3-3615-7533-9c49-092ba133a6b5
   author: joe
