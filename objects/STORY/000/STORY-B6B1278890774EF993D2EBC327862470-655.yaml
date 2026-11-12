@@ -30,7 +30,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-12T17:27:12.872067622Z
-modified_at: 2026-11-12T17:34:32.624764010Z
+modified_at: 2026-11-12T17:39:31.221251976Z
 req_type: Story
 relationships:
 - rel_type: Parent
@@ -42,6 +42,13 @@ comments:
   content: 'ADVISOR SIGNOFF (2026-11-12 10:32 MST): architecture sketch in the description is approved as written (operator requested the feature at 10:25). Lane brief: implement exactly the sketch; LIGHT gate = one targeted ''cargo test -p aida-cli-lib pr_emergency_land'' plus make check-ci-fast (update the help golden snapshot, make sync-templates, make check-templates). Commit ''[AI:codex] feat(pr): operator emergency-land command and /aida-emergency-fix skill (STORY-2732)''. Push and open the PR; the operator has asked the advisor to land this PR via the emergency path once the targeted test passes.'
   created_at: 2026-11-12T17:27:42.159588118Z
   modified_at: 2026-11-12T17:27:42.159588118Z
+  session_id: 01a1d09a-4262-7d50-a00b-00a5a30f3934
+  harness_version: 2.1.322 (Claude Code)
+- id: 01a1d0d7-e115-7e02-906d-934de098d247
+  author: joe
+  content: 'ADVISOR AMENDMENT (2026-11-12 10:50 MST, operator asked ''will this work for codex / gitlab''): two binding changes to the sketch. (A) Human-presence precondition: an agent''s shell tool (Claude Bash, Codex exec) never has a TTY, so ''stdout is a TTY'' alone would refuse every agent-driven use. Accept EITHER a human at a terminal OR execution inside the operator''s script deputy job (the deputy''s attribution proves operator presence; reuse how ''aida pr ship'' recognizes deputy-run human-only ships). Still refuse when run directly from a lane/reviewer/review-watch/autoland or with AIDA_HEADLESS. The skill submits the command via ''aida deputy shell submit --file F --wait'' and branches on the exit code. (B) Vendor parity: register the skill in aida-core/templates/skill-inventory.toml so it is generated for Claude (.claude/skills) AND portable (skills-portable -> .agents/skills for Codex/Antigravity); vendor-neutral wording, no Claude-only tool names. Tests: deputy-attributed run is admitted; headless/lane run is refused. GitLab parity is TASK-3788 (child); keep lift/merge/restore/verify behind a per-forge seam so it slots in.'
+  created_at: 2026-11-12T17:39:31.221251976Z
+  modified_at: 2026-11-12T17:39:31.221251976Z
   session_id: 01a1d09a-4262-7d50-a00b-00a5a30f3934
   harness_version: 2.1.322 (Claude Code)
 history:
