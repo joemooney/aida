@@ -3,12 +3,12 @@ spec_id: BUG-b6b1278890774ef993d2ebc327862470-295
 agreed_id: BUG-2530
 title: Second reviewer seat claims an already-approved head and its claim blocks the merge train
 description: '2026-11-11 23:16 MST: PR-3862 (TASK-3223) was APPROVED at 03cfcce at 05:49Z with green CI. The train CI passed, but at merge the train refused: ''PR-3862 is under review — codex-reviewer started reviewing head 03cfcce 3m ago (claimed; expires in 27m)''. A reviewer must not be admitted on a head that already holds a conclusive verdict. And a review claim on an already-approved head must not block the train: it cost one full train cycle (~20 min). Fix: (1) review admission refuses when a conclusive verdict already exists at the exact head; (2) the train treats a claim opened after a conclusive verdict at the same head as non-blocking, or the merge-hold clear releases it.'
-status: InProgress
+status: NeedsAttention
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-12T06:22:01.808701892Z
-modified_at: 2026-11-12T10:45:58.803036674Z
+modified_at: 2026-11-12T10:59:56.238954506Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -223,6 +223,13 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1cf6a-0cce-7d93-a9a2-fef4a39ecf12
+  author: aida-orchestrator
+  timestamp: 2026-11-12T10:59:56.238984539Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 filed_at:
   code_sha: fd869101d5c06eac3eea99c1a376828d5706ebdb
   branch: main
@@ -232,3 +239,11 @@ filed_at:
   vendor: claude
   session: 01a1cc9c-1eae-7a72-9a24-8ec1afc42772
   harness_version: 2.1.322 (Claude Code)
+failure_reason:
+  phase: reviewer
+  phase_index: 3
+  kind: verdict:request-changes
+  detail: 'Full sweep of all 10 changed files. BUG-2530 AC1: verified by three admission call sites and local/synced/pickup fixtures. AC2: verified by precise ordering, conservative legacy handling and train integration fixtures. One actionable defect remains: the launch-input scanner still includes the Linux-only test sentinel. CI pending; no local builds/tests run under review-watch policy.'
+  recovery_hint: address the review findings, move BUG-2530 back to In Progress, and clear the PR hold only after approval
+  shelved_by: reviewer
+  shelved_at: 2026-11-12T10:59:56.238954506Z
