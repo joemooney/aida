@@ -912,6 +912,27 @@ impl Store {
             });
             history.synced_heads.insert(synced);
         }
+        // The collector may remove its handshake after appending to the shared
+        // ledger. Missing local files must not spend another review attempt.
+        // Use the strict reader so corrupt evidence cannot look like no review.
+        // trace:BUG-2534 | ai:codex
+        let ledger_root = crate::gate::ledger::store_root(&self.root)?;
+        let change = crate::gate::ledger::ChangeKey::parse(key)
+            .context("invalid review history change key")?;
+        let events = crate::gate::ledger::checked::read_change_events(
+            &ledger_root,
+            change,
+            &mut crate::gate::ledger::checked::Budget::default(),
+        )
+        .map_err(|error| anyhow::anyhow!("review history ledger unreadable: {error}"))?;
+        for event in events {
+            if let Some(record) = event.verdict_record() {
+                history.add(
+                    &serde_json::to_vec(record)?,
+                    &format!(".aida/gate-ledger/{key}.jsonl"),
+                )?;
+            }
+        }
         let Some(dir) = Directory::existing(&self.runtime.path().join("review-verdicts"))? else {
             return Ok(history);
         };

@@ -3352,3 +3352,65 @@ fn bug2518_local_reaped_exit_retains_ambiguous_descendant_gates() {
         ));
     }
 }
+
+// trace:BUG-2534 | ai:codex
+#[test]
+fn bug2534_ledger_only_verdict_stops_retries_and_preserves_rounds() {
+    use crate::gate::ledger::{ChangeKey, EventBody, GateEvent};
+    for gitlab in [false, true] {
+        let (temp, store) = fixture();
+        let mut c = change(1, 1, false);
+        c.gitlab = gitlab;
+        let attempt = dispatch(select(&store, &c, None, 2).unwrap());
+        complete(&store, &c, &attempt);
+        store
+            .transaction(&c.key(), |state| {
+                let attempt = &mut state.entries.get_mut(&c.key()).unwrap().attempts[0];
+                attempt.no_verdict_attempts = 3;
+                attempt.no_verdict_retry_at = Some(chrono::Utc::now());
+                Ok(())
+            })
+            .unwrap();
+        let key = ChangeKey::parse(&c.key()).unwrap();
+        let record = verdict_json(&c.head, "approved")
+            .as_object()
+            .unwrap()
+            .clone();
+        crate::gate::ledger::store::append_one(
+            temp.path(),
+            GateEvent::new(key, EventBody::Verdict { record }),
+        )
+        .unwrap();
+        assert!(!temp.path().join(".aida/review-verdicts").exists());
+        assert!(store.history(&c.key()).unwrap().contains(&c.head));
+        assert!(matches!(
+            select(&store, &c, None, 2).unwrap(),
+            Action::Skip(_)
+        ));
+        assert!(store.load().unwrap().entries[&c.key()].attempts[0]
+            .no_verdict_retry_at
+            .is_none());
+        assert!(service::retry_blockers(&store.root, &store.dir)
+            .unwrap()
+            .is_empty());
+        c.head = format!("{:040x}", 2);
+        dispatch(select(&store, &c, None, 2).unwrap());
+        let record = verdict_json(&c.head, "request-changes")
+            .as_object()
+            .unwrap()
+            .clone();
+        crate::gate::ledger::store::append_one(
+            temp.path(),
+            GateEvent::new(key, EventBody::Verdict { record }),
+        )
+        .unwrap();
+        assert_eq!(store.history(&c.key()).unwrap().blocking(), 1);
+        std::fs::write(
+            temp.path()
+                .join(format!(".aida/gate-ledger/{}.jsonl", c.key())),
+            b"broken\n",
+        )
+        .unwrap();
+        assert!(store.history(&c.key()).is_err());
+    }
+}
