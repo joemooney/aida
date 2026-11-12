@@ -2503,6 +2503,17 @@ fn bug_2517_foreign_copy_is_ignored_without_rewriting_history() {
     let mut distinct_events = vec![a];
     project::MiskeyOwners::new([&b]).filter(&mut distinct_events);
     assert_eq!(distinct_events.len(), 1);
+    // Exhaustion of either aggregate budget is unsafe, even though every
+    // individual ledger is valid. The strict reader must not return raw copies.
+    for mut budget in [
+        checked::Budget::with_limits(0, checked::MAX_SELECTION_EVENTS),
+        checked::Budget::with_limits(checked::MAX_SELECTION_BYTES, 0),
+    ] {
+        let raw = store::read_file(&root, first);
+        let error = checked::filter_miskeyed(&root, raw, &mut budget).unwrap_err();
+        assert!(error.0.contains("budget is exhausted"), "{error}");
+        assert_eq!(std::fs::read(&file).unwrap(), before);
+    }
     // An unrelated corrupt ledger must not resurrect the foreign WAITING
     // copy through either the PR-keyed or the spec-indexed legacy reader.
     project::index_spec(&root, "BUG-2492", first).unwrap();
@@ -2575,6 +2586,36 @@ fn bug_2517_foreign_copy_is_ignored_without_rewriting_history() {
 
 // trace:BUG-2517 | ai:codex
 #[test]
+fn bug_2517_disappearing_discovery_never_returns_raw_review_copies() {
+    let (_tmp, root) = root();
+    let _env = uncontained();
+    let spec = GateSpec::with_key("BUG-2517", None);
+    let rec = record("waiting", &ts(1), Some(&attestation("reviewer")));
+    let copy = event::verdict_event(&root, ChangeKey::pr(1), &rec, Some(&spec));
+    store::append_one(&root, copy).unwrap();
+    hold::append(
+        &root,
+        1,
+        EventBody::ReleaseWithdrawn {
+            reason: "head moved".into(),
+        },
+        None,
+        None,
+    )
+    .unwrap();
+    let raw = store::read_file(&root, ChangeKey::pr(1));
+    assert!(raw.iter().any(|e| e.verdict_record().is_some()));
+    // Simulate removal between the legacy input read and pinned discovery.
+    std::fs::remove_dir_all(ledger_dir(&root)).unwrap();
+    let filtered = checked::filter_miskeyed_or_fail_closed(&root, raw);
+    assert!(!filtered.iter().any(|e| e.verdict_record().is_some()));
+    assert!(filtered
+        .iter()
+        .any(|e| matches!(e.body, EventBody::ReleaseWithdrawn { .. })));
+}
+
+// trace:BUG-2517 | ai:codex
+#[test]
 fn bug_2517_ownership_index_visits_corpus_once_per_discovery() {
     let (_tmp, root) = root();
     let _env = uncontained();
@@ -2623,6 +2664,23 @@ fn bug_2517_ownership_index_visits_corpus_once_per_discovery() {
             1
         );
     }
+    // A misplaced copy must actually be removed by the cached ownership
+    // index, rather than merely retaining buckets of already-correct records.
+    // Use the owning event's spec and semantic record, changing only its PR.
+    let witness = discovery
+        .change_events(ChangeKey::pr(1))
+        .into_iter()
+        .find(|e| e.verdict_record().is_some())
+        .unwrap();
+    let mut copied_record = witness.verdict_record().unwrap().clone();
+    copied_record.remove("mode");
+    let copied_spec = GateSpec::with_key("BUG-1", None);
+    let misplaced =
+        event::verdict_event(&root, ChangeKey::pr(2), &copied_record, Some(&copied_spec));
+    let mut copies = vec![misplaced, witness];
+    discovery.filter_events(&mut copies);
+    assert_eq!(copies.len(), 1);
+    assert_eq!(copies[0].change, "PR-1");
     // Additional vectors reuse the pinned snapshot even if the on-disk
     // corpus becomes unreadable. No extra ownership visits are permitted.
     let unrelated = store::ledger_file(&root, ChangeKey::pr(9999));

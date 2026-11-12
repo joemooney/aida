@@ -489,9 +489,11 @@ pub(crate) fn filter_miskeyed_or_fail_closed(
 ) -> Vec<GateEvent> {
     let mut events = events;
     match discover(root, &mut Budget::default()) {
-        Ok(None) => {}
         Ok(Some(discovery)) => discovery.filter_events(&mut events),
-        Err(_) => super::project::MiskeyOwners::fail_closed(&mut events),
+        // The directory can disappear after a legacy reader has read its
+        // input vector. Absence then proves no ownership for those copies.
+        // trace:BUG-2517 | ai:codex
+        Ok(None) | Err(_) => super::project::MiskeyOwners::fail_closed(&mut events),
     }
     events
 }
