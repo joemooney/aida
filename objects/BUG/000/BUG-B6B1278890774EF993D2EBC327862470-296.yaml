@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-12T08:35:37.046532324Z
-modified_at: 2026-11-12T10:43:07.798744183Z
+modified_at: 2026-11-12T10:47:16.333191193Z
 req_type: Bug
 comments:
 - id: 01a1cf00-20ea-7c51-bbf5-a9927b13b042
@@ -42,6 +42,12 @@ comments:
   modified_at: 2026-11-12T10:04:08.534879239Z
   session_id: 01a1ceeb-e827-7832-8991-e83d9eb95cef
   harness_version: 2.1.322 (Claude Code)
+- id: 01a1cf5e-746d-7611-b1f3-26615d11c4a4
+  author: joe
+  content: 'Round 2: both review findings are accepted. Added an interim scan-wide 128 MiB/200000 parse-attempt ceiling (including unrelated files and torn retries), pre-read remaining-budget checks, and a regression counting actual read bytes/deserialization attempts. This mitigates the 64 GiB per-file-reset regression but is NOT relevant-only discovery or completion. Proposed the missing binding completeness and archive/revival contract in docs/plans/2026-11-12-bug-2531-discovery-retention-sketch.md. Approval is required by AGENTS.md Sketch-First Protocol for new file formats/lifecycle semantics; TASK-3098 remains Draft and is not an approved scope split. Finding 2 automatic rotation is not implemented. Test job j20261112T104457008-2-0 running; results to follow. No completion credit is claimed.'
+  created_at: 2026-11-12T10:47:16.333191193Z
+  modified_at: 2026-11-12T10:47:16.333191193Z
+  session_id: 01a1cf5a9ec0
 history:
 - id: 01a1cee6-975b-7d40-8689-d35e1f109d99
   author: joe
