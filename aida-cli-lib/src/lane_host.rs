@@ -1161,7 +1161,7 @@ mod tests {
             ] {
                 let mut argv = vec!["aida", "queue", "work"];
                 argv.extend(route);
-                let cli = crate::command_registry::try_parse_from(argv).unwrap();
+                let cli = crate::TEST_CLI.try_parse_from(argv).unwrap();
                 let args = cli.command.registered::<crate::queue_cmd::QueueArgs>();
                 let err = crate::queue_cmd::handle_queue_command(
                     &args.inner,
@@ -1183,15 +1183,9 @@ mod tests {
             }
         }
         for preview in ["--dry-run", "--no-launch", "--list-sessions"] {
-            let cli = crate::command_registry::try_parse_from([
-                "aida",
-                "queue",
-                "work",
-                "TASK-2642",
-                "--no-human",
-                preview,
-            ])
-            .unwrap();
+            let cli = crate::TEST_CLI
+                .try_parse_from(["aida", "queue", "work", "TASK-2642", "--no-human", preview])
+                .unwrap();
             let args = cli.command.registered::<crate::queue_cmd::QueueArgs>();
             if let Err(err) = crate::queue_cmd::handle_queue_command(
                 &args.inner,

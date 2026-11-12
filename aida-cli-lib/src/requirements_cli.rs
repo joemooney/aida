@@ -10373,7 +10373,7 @@ mod origin_prompt_tests {
         ] {
             let mut args = vec!["aida", "add", "--title", "Feature"];
             args.extend(extra);
-            assert!(crate::command_registry::try_parse_from(args).is_ok());
+            assert!(crate::TEST_CLI.try_parse_from(args).is_ok());
         }
         for extra in [
             vec!["--origin-prompt-file", "reviewed.txt", "--no-origin-prompt"],
@@ -10382,15 +10382,11 @@ mod origin_prompt_tests {
         ] {
             let mut args = vec!["aida", "add", "--title", "Feature"];
             args.extend(extra);
-            assert!(crate::command_registry::try_parse_from(args).is_err());
+            assert!(crate::TEST_CLI.try_parse_from(args).is_err());
         }
-        assert!(crate::command_registry::try_parse_from([
-            "aida",
-            "show",
-            "TASK-1",
-            "--origin-prompt"
-        ])
-        .is_ok());
+        assert!(crate::TEST_CLI
+            .try_parse_from(["aida", "show", "TASK-1", "--origin-prompt"])
+            .is_ok());
         let mut json_args = [
             "aida",
             "show",
@@ -10403,7 +10399,7 @@ mod origin_prompt_tests {
         .to_vec();
         crate::json_capability_gate(&mut json_args).unwrap();
         assert!(json_args.iter().any(|arg| arg == "--json"));
-        assert!(crate::command_registry::try_parse_from(json_args).is_ok());
+        assert!(crate::TEST_CLI.try_parse_from(json_args).is_ok());
         for mode in [
             "--card",
             "--tree",
@@ -10416,14 +10412,9 @@ mod origin_prompt_tests {
             "--brief",
             "--full",
         ] {
-            assert!(crate::command_registry::try_parse_from([
-                "aida",
-                "show",
-                "TASK-1",
-                "--origin-prompt",
-                mode
-            ])
-            .is_err());
+            assert!(crate::TEST_CLI
+                .try_parse_from(["aida", "show", "TASK-1", "--origin-prompt", mode])
+                .is_err());
         }
     }
 }

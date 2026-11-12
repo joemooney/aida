@@ -602,13 +602,14 @@ mod tests {
         }
         commit(store.path());
         let out = TempDir::new().unwrap();
-        let cli = crate::command_registry::try_parse_from([
-            std::ffi::OsString::from("aida"),
-            "regen".into(),
-            "corpus".into(),
-            out.path().as_os_str().to_owned(),
-        ])
-        .unwrap();
+        let cli = crate::TEST_CLI
+            .try_parse_from([
+                std::ffi::OsString::from("aida"),
+                "regen".into(),
+                "corpus".into(),
+                out.path().as_os_str().to_owned(),
+            ])
+            .unwrap();
         crate::store_sync::run_on_distributed_store(&cli.command, store.path(), None).unwrap();
         let manifest: serde_json::Value =
             serde_json::from_slice(&std::fs::read(out.path().join("manifest.json")).unwrap())
@@ -651,14 +652,9 @@ mod tests {
     #[test]
     fn corpus_cli_parses_override() {
         use clap::Parser;
-        let cli = crate::command_registry::try_parse_from([
-            "aida",
-            "regen",
-            "corpus",
-            "output",
-            "--allow-dirty",
-        ])
-        .unwrap();
+        let cli = crate::TEST_CLI
+            .try_parse_from(["aida", "regen", "corpus", "output", "--allow-dirty"])
+            .unwrap();
         assert!(matches!(
             cli.command.registered::<crate::regen::RegenArgs>(),
             crate::regen::RegenArgs {
@@ -691,7 +687,7 @@ mod tests {
             if let Some(family) = family {
                 args.extend(["--model-family", family]);
             }
-            let parsed = crate::command_registry::try_parse_from(args).unwrap();
+            let parsed = crate::TEST_CLI.try_parse_from(args).unwrap();
             match parsed.command.registered::<crate::regen::RegenArgs>() {
                 crate::regen::RegenArgs {
                     inner: RegenCommand::Score { model_family, .. },
