@@ -2694,7 +2694,7 @@ impl GitBackend {
 
     /// Plan canonical postimages without side effects, then durably decide and
     /// install them. Caller authorization runs inside the bounded writer lock.
-    /// Only title/description/priority/weight edits are admitted in this slice; lifecycle and
+    /// Only title/description/priority/weight and guarded tag edits are admitted in this slice; lifecycle and
     /// multi-root commands require their own policy-preserving typed handlers.
     // trace:TASK-3223 | ai:codex
     pub fn mutate_canonical(
@@ -2794,6 +2794,37 @@ impl GitBackend {
                                 new_value: weight.map(|w| w.to_string()).unwrap_or_default(),
                             });
                             next.weight = weight;
+                        }
+                    }
+                    // No lane force override: structural replacement requires a separate policy.
+                    // trace:TASK-3223 | ai:codex
+                    if let Some(tags) = &fields.tags {
+                        let tags: std::collections::HashSet<String> = tags
+                            .iter()
+                            .map(|tag| tag.trim())
+                            .filter(|tag| !tag.is_empty())
+                            .map(str::to_owned)
+                            .collect();
+                        anyhow::ensure!(
+                            super::canonical_mutation::dropped_structural_tags(
+                                &current.tags,
+                                &tags
+                            )
+                            .is_empty(),
+                            "InvalidRequest"
+                        );
+                        if tags != current.tags {
+                            let display = |set: &std::collections::HashSet<String>| {
+                                let mut tags: Vec<_> = set.iter().cloned().collect();
+                                tags.sort();
+                                tags.join(", ")
+                            };
+                            changes.push(crate::models::FieldChange {
+                                field_name: "tags".into(),
+                                old_value: display(&current.tags),
+                                new_value: display(&tags),
+                            });
+                            next.tags = tags;
                         }
                     }
                     next.record_change(author.into(), changes);
