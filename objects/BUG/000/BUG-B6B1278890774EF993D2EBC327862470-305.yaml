@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-12T19:41:04.965614772Z
-modified_at: 2026-11-12T21:32:46.097406881Z
+modified_at: 2026-11-12T21:36:15.197487305Z
 req_type: Bug
 comments:
 - id: 01a1d177-d927-79b2-ac05-55e90a72f21c
@@ -66,6 +66,13 @@ comments:
   created_at: 2026-11-12T21:32:46.097406881Z
   modified_at: 2026-11-12T21:32:46.097406881Z
   session_id: 668a34f6-c74a-4b58-b144-167acd9792ef
+- id: 01a1d1b0-9d5d-7740-84c5-0bceec34e956
+  author: joe
+  content: 'advisor 14:35: the operator''s integration session owns BUG-2540 (6dcad0b on integration). The dell1 lane''s PR #3903 duplicates it: excluded from main-seat integration merges (autoland-skip). The integration session decides whether to take anything from #3903 before it is closed.'
+  created_at: 2026-11-12T21:36:15.197487305Z
+  modified_at: 2026-11-12T21:36:15.197487305Z
+  session_id: 01a1d19e-9195-7853-815f-b54753ebd973
+  harness_version: 2.1.322 (Claude Code)
 history:
 - id: 01a1d188-9d4b-76d0-bc54-15d34358173a
   author: aida-session-start
