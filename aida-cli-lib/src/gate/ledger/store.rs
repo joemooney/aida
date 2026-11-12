@@ -98,7 +98,17 @@ pub(crate) fn with_lock<T>(
 ) -> std::io::Result<T> {
     use fs2::FileExt;
     let shared = if SHARED_DEPTH.with(|d| d.get()) == 0 {
-        let file = open_lock(&ledger_lock_file(root))?;
+        // trace:BUG-2530 | ai:codex — a native reviewer can write the
+        // ledger directory, but its permanent sibling lock is read-only.
+        // Linux flock needs no write access for a shared lock. Preserve the
+        // same inode/exclusive-migration protocol; only a missing lock needs
+        // the ordinary host-side creation path.
+        let path = ledger_lock_file(root);
+        let file = match std::fs::File::open(&path) {
+            Ok(file) => file,
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => open_lock(&path)?,
+            Err(e) => return Err(e),
+        };
         file.lock_shared()?;
         Some(LedgerLock { file })
     } else {
@@ -456,4 +466,93 @@ pub(crate) fn bind_unbound(
             .count())
     })
     .map_err(|e| named(&ledger_file(root, change), e))
+}
+
+// trace:BUG-2530 | ai:codex
+// Keep the test gate explicit so production-input scans exclude this module.
+#[cfg(test)]
+#[cfg(target_os = "linux")]
+mod bug2530_tests {
+    use super::*;
+    use fs2::FileExt;
+
+    #[test]
+    fn bug2530_reviewer_records_with_read_only_migration_lock() {
+        const CHILD: &str = "AIDA_BUG2530_LOCK_CHILD";
+        let environment = aida_core::exec_context::Environment::capture();
+        if environment.get(CHILD).is_some() {
+            let root = std::env::current_dir().unwrap();
+            let home = ledger_dir(&root).join("home");
+            let _env = crate::test_env::AmbientGuard::hermetic_and(
+                &root,
+                None,
+                &[
+                    ("AIDA_HOME", Some(home.to_str().unwrap())),
+                    ("AIDA_CONTAINED", None),
+                ],
+            );
+            assert!(
+                std::fs::OpenOptions::new()
+                    .write(true)
+                    .open(ledger_lock_file(&root))
+                    .is_err(),
+                "the migration lock must actually be read-only"
+            );
+            let hold = crate::gate::merge_hold_core::refusal_hold(
+                7,
+                "STORY-1",
+                "request-changes",
+                Some("a".repeat(40)),
+                Some("reviewer".into()),
+            );
+            crate::gate::merge_hold_core::place_hold(&root, &hold).unwrap();
+            let record =
+                serde_json::json!({"verdict":"request-changes", "reviewed_sha":"a".repeat(40),
+                "recorded_at":chrono::Utc::now().to_rfc3339()})
+                .as_object()
+                .unwrap()
+                .clone();
+            crate::gate::review_verdict::write_verdict_object(
+                &crate::gate::review_verdict::verdict_path(&root, "PR-7"),
+                &record,
+            )
+            .unwrap();
+            assert!(crate::gate::merge_hold_core::hold_is_open(&root, 7));
+            assert!(crate::gate::review_verdict::read_verdict_for_sha(
+                &root,
+                "PR-7",
+                &"a".repeat(40)
+            )
+            .unwrap()
+            .kind
+            .requires_changes());
+            return;
+        }
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path();
+        std::fs::create_dir_all(ledger_dir(root)).unwrap();
+        let exclusive = lock_ledger_exclusive(root).unwrap();
+        let reader = std::fs::File::open(ledger_lock_file(root)).unwrap();
+        assert!(
+            reader.try_lock_shared().is_err(),
+            "read-only readers still respect migration"
+        );
+        drop(exclusive);
+        reader.try_lock_shared().unwrap();
+        FileExt::unlock(&reader).unwrap();
+        let output = std::process::Command::new("bwrap")
+            .args(["--die-with-parent", "--ro-bind", "/", "/", "--bind"])
+            .arg(ledger_dir(root)).arg(ledger_dir(root))
+            .arg("--chdir").arg(root)
+            .arg(crate::aida_bin::current_executable_path().unwrap())
+            .args(["--exact", "gate::ledger::store::bug2530_tests::bug2530_reviewer_records_with_read_only_migration_lock", "--nocapture"])
+            .env(CHILD, "1").output().unwrap();
+        assert!(
+            output.status.success(),
+            "{}\n{}",
+            String::from_utf8_lossy(&output.stdout),
+            String::from_utf8_lossy(&output.stderr)
+        );
+        assert!(String::from_utf8_lossy(&output.stdout).contains("1 passed"));
+    }
 }

@@ -1188,3 +1188,63 @@ fn bug_2525_synced_wait_closes_locally_without_rewriting_signed_review() {
         assert_eq!(v.summary.as_deref(), Some("new independent evidence"));
     }
 }
+
+// trace:BUG-2530 | ai:codex
+#[test]
+fn bug2530_synced_verdict_controls_admission_and_redundant_claims() {
+    assert!(available(), "OpenSSH is required for this regression");
+    let f = Fixture::new();
+    for decision in ["approved", "request-changes"] {
+        let recorded_at = {
+            let _env = env(&f.temp.path().join("home-b"));
+            let record = f.record(decision, "reviewer-session");
+            let at = chrono::DateTime::parse_from_rfc3339(record["recorded_at"].as_str().unwrap())
+                .unwrap()
+                .timestamp() as u64;
+            f.collect(&record).unwrap();
+            at
+        };
+        let _env = env(&f.temp.path().join("home-a"));
+        f.sync(&f.a);
+        assert!(!f.a.join(".aida/review-verdicts").exists());
+        // A local nonconclusive opinion must not shadow the synced refusal.
+        if decision == "request-changes" {
+            let path = rv::verdict_path(&f.a, "PR-7");
+            std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+            std::fs::write(
+                path,
+                serde_json::json!({
+                    "verdict": "waiting", "reviewed_sha": f.sha,
+                })
+                .to_string(),
+            )
+            .unwrap();
+        }
+        let marker = super::super::review_marker::Marker {
+            started_at: recorded_at + 1,
+            pid: 0,
+            ..super::super::review_marker::Marker::for_this_process(
+                7,
+                Some(&f.sha),
+                None,
+                "duplicate",
+            )
+        };
+        super::super::review_marker::write(&f.a, &marker).unwrap();
+        assert!(
+            super::super::review_marker::refuse_conclusive_head(&f.a, 7, Some(&f.sha)).is_err()
+        );
+        assert!(super::super::review_marker::refuse_conclusive_head(
+            &f.a,
+            7,
+            Some(&"b".repeat(40))
+        )
+        .is_ok());
+        let gate = super::super::review_marker::merge_gate(&f.a, 7, || Some(f.sha.clone()));
+        assert_eq!(
+            gate == super::super::review_marker::MergeGate::Clear,
+            decision == "approved"
+        );
+        assert!(super::super::review_marker::read(&f.a, 7).is_some());
+    }
+}
