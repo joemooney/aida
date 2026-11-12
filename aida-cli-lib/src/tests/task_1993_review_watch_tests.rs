@@ -3352,3 +3352,209 @@ fn bug2518_local_reaped_exit_retains_ambiguous_descendant_gates() {
         ));
     }
 }
+
+// trace:BUG-2521 | ai:codex
+#[test]
+fn bug2521_waiting_backoff_cap_and_new_head() {
+    for phase in [Phase::Exited, Phase::Completed] {
+        let (_temp, store) = fixture();
+        let c = change(1, 1, false);
+        let mut attempt = dispatch(select(&store, &c, None, 2).unwrap());
+        let verdicts = Directory::open(&store.runtime.path().join("review-verdicts")).unwrap();
+        write_verdict(
+            &verdicts.path().join("PR-1.json"),
+            &verdict_json(&c.head, "WAITING"),
+        );
+        for count in 1..=3 {
+            store
+                .transaction("PR-1", |state| {
+                    let a = attempt_mut(state, "PR-1", &attempt.token).unwrap();
+                    a.phase = phase.clone();
+                    let mut dead = Identity::current()?;
+                    dead.boot = "previous-boot".into();
+                    a.identity = Some(dead);
+                    a.diagnostic = Some("reviewer ended without recording".into());
+                    Ok(())
+                })
+                .unwrap();
+            let Action::Skip(reason) = select(&store, &c, None, 2).unwrap() else {
+                panic!("retry must be delayed or capped");
+            };
+            if count == 3 {
+                assert!(reason.contains("three review attempts"), "{reason}");
+                let blockers = service::retry_blockers(&store.root, &store.dir).unwrap();
+                assert_eq!(blockers.len(), 1);
+                assert!(blockers[0].contains("PR-1:") && blockers[0].contains("reviewer ended"));
+                assert!(
+                    no_verdict_blocker(&store.load().unwrap().entries["PR-1"].attempts[0])
+                        .is_some()
+                );
+                break;
+            }
+            assert!(reason.contains("retry after"), "{reason}");
+            let deadline = store.load().unwrap().entries["PR-1"].attempts[0]
+                .no_verdict_retry_at
+                .unwrap();
+            assert!((deadline - chrono::Utc::now()).num_seconds() >= 1190);
+            assert!(probe_unneeded_with_coverage(&store, &c, || None)
+                .unwrap()
+                .is_none());
+            store
+                .transaction("PR-1", |state| {
+                    attempt_mut(state, "PR-1", &attempt.token)
+                        .unwrap()
+                        .no_verdict_retry_at =
+                        Some(chrono::Utc::now() - chrono::Duration::seconds(1));
+                    Ok(())
+                })
+                .unwrap();
+            let reopened = Store::open(&store.root, &store.load().unwrap().repository).unwrap();
+            attempt = dispatch(select(&reopened, &c, None, 2).unwrap());
+            assert_eq!(attempt.no_verdict_attempts, count + 1);
+            assert_eq!(reopened.round_for("PR-1", &attempt).unwrap(), 1);
+        }
+        let fresh = dispatch(select(&store, &change(1, 2, false), None, 2).unwrap());
+        assert_eq!(fresh.no_verdict_attempts, 0);
+    }
+}
+
+// trace:BUG-2521 | ai:codex
+#[test]
+fn bug2521_waiting_preserves_capacity_and_conclusive_verdict_gates() {
+    for verdict in ["APPROVED", "CHANGES REQUESTED"] {
+        for phase in [Phase::Exited, Phase::Completed] {
+            let (_temp, store) = fixture();
+            let c = change(1, 1, false);
+            let attempt = dispatch(select(&store, &c, None, 1).unwrap());
+            store
+                .transaction("PR-1", |state| {
+                    let a = attempt_mut(state, "PR-1", &attempt.token).unwrap();
+                    a.phase = Phase::Exited;
+                    a.no_verdict_retry_at = Some(chrono::Utc::now() - chrono::Duration::seconds(1));
+                    a.reviewer_spawning = true;
+                    Ok(())
+                })
+                .unwrap();
+            assert!(
+                matches!(select(&store, &c, None, 1).unwrap(), Action::Skip(reason)
+        if reason.contains("unfinished review processes"))
+            );
+            store
+                .transaction("PR-1", |state| {
+                    attempt_mut(state, "PR-1", &attempt.token)
+                        .unwrap()
+                        .reviewer_spawning = false;
+                    Ok(())
+                })
+                .unwrap();
+            let waiting = Directory::open(&store.runtime.path().join("review-verdicts")).unwrap();
+            write_verdict(
+                &waiting.path().join("PR-1.json"),
+                &verdict_json(&c.head, "WAITING"),
+            );
+            let other = change(2, 2, false);
+            let held = dispatch(select(&store, &other, None, 1).unwrap());
+            for _ in 0..3 {
+                assert!(
+                    matches!(select(&store, &c, None, 1).unwrap(), Action::Skip(reason)
+            if reason.contains("global reviewer capacity"))
+                );
+                assert_eq!(
+                    store.load().unwrap().entries["PR-1"].attempts[0].no_verdict_attempts,
+                    1
+                );
+            }
+            store
+                .transaction("PR-2", |state| {
+                    attempt_mut(state, "PR-2", &held.token).unwrap().phase = Phase::Failed;
+                    Ok(())
+                })
+                .unwrap();
+            let retried = dispatch(select(&store, &c, None, 1).unwrap());
+            assert_eq!(retried.no_verdict_attempts, 2);
+            let verdicts = Directory::open(&store.runtime.path().join("review-verdicts")).unwrap();
+            write_verdict(
+                &verdicts.path().join("PR-1.json"),
+                &verdict_json(&c.head, verdict),
+            );
+            store
+                .transaction("PR-1", |state| {
+                    let a = attempt_mut(state, "PR-1", &retried.token).unwrap();
+                    a.phase = phase.clone();
+                    let mut dead = Identity::current()?;
+                    dead.boot = "previous-boot".into();
+                    a.identity = Some(dead);
+                    Ok(())
+                })
+                .unwrap();
+            assert!(matches!(
+                select(&store, &c, None, 1).unwrap(),
+                Action::Skip(_)
+            ));
+            assert!(probe_unneeded_with_coverage(&store, &c, || None)
+                .unwrap()
+                .is_some());
+            assert_eq!(
+                store.load().unwrap().entries["PR-1"].attempts[0].no_verdict_attempts,
+                2
+            );
+        }
+    }
+}
+
+// Exercise real synced publications from the two-node signing fixture, with
+// either no local attempt or an elapsed local retry on the final shared try.
+// trace:BUG-2521 | ai:codex
+pub(crate) fn bug2521_assert_peer_waiting_backoff(
+    root: &Path,
+    deadline: chrono::DateTime<chrono::Utc>,
+) {
+    let store = Store::open(root, "github:github.com/owner/repo").unwrap();
+    let mut c = change(7, 1, false);
+    c.head = "a".repeat(40);
+    for elapsed_local in [false, true] {
+        if elapsed_local {
+            store
+                .transaction("PR-7", |state| {
+                    let mut a: Attempt = serde_json::from_value(serde_json::json!({
+                        "head": c.head, "token": uuid::Uuid::new_v4().to_string(),
+                        "phase": "exited"
+                    }))
+                    .unwrap();
+                    a.no_verdict_attempts = 2;
+                    a.no_verdict_retry_at = Some(chrono::Utc::now() - chrono::Duration::minutes(2));
+                    state
+                        .entries
+                        .entry("PR-7".into())
+                        .or_default()
+                        .attempts
+                        .push(a);
+                    Ok(())
+                })
+                .unwrap();
+        }
+        let attempts = |state: State| {
+            serde_json::to_value(
+                state
+                    .entries
+                    .get("PR-7")
+                    .map(|entry| &entry.attempts)
+                    .cloned()
+                    .unwrap_or_default(),
+            )
+            .unwrap()
+        };
+        let before = attempts(store.load().unwrap());
+        let action = select_with_coverage(&store, &c, None, 2, || None).unwrap();
+        assert!(
+            matches!(action, Action::Skip(ref reason) if reason.contains(&format!("retry after {deadline}"))),
+            "{action:?}"
+        );
+        let after = store.load().unwrap();
+        assert_eq!(
+            attempts(after),
+            before,
+            "backoff must not consume the final attempt"
+        );
+    }
+}
