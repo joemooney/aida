@@ -431,6 +431,7 @@ fn canonical_preimages_route_agreed_and_origin_ids_over_seqpacket() {
             origin
         );
         let fields = || aida_core::db::canonical_mutation::EditFields {
+            tags: None,
             weight: None,
             priority: Some("low".into()),
             title: Some("new title".into()),
