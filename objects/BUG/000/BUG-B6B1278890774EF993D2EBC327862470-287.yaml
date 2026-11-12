@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-11T04:48:14.810158291Z
-modified_at: 2026-11-12T09:59:09.271949377Z
+modified_at: 2026-11-12T10:06:51.057283373Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -170,6 +170,13 @@ comments:
   created_at: 2026-11-12T09:45:29.976978593Z
   modified_at: 2026-11-12T09:45:29.976978593Z
   session_id: 01a1cf193d27
+  harness_version: codex-cli 0.167.0
+- id: 01a1cf39-72b1-76e1-917b-f595c3ca5769
+  author: dirtlab
+  content: 'Round 2: retained the verified interactive-parent refusal collector already on this branch and added a regression guard connecting the TTY-only parent to that collector before verdict adoption/re-recording, with child-grant/head checks and propagated failure. Launcher cargo test --profile agent -p aida-cli-lib --lib -- interactive_review_: 2 executed tests passed, including anchor-only request-changes/rejected hold and forge-label coverage. rustfmt and git diff --check passed. Edits remain uncommitted for host publication.'
+  created_at: 2026-11-12T10:06:51.057283373Z
+  modified_at: 2026-11-12T10:06:51.057283373Z
+  session_id: 01a1cf33de82
   harness_version: codex-cli 0.167.0
 history:
 - id: 01a1c8ef-b4bc-7b62-a163-3209968104a9
