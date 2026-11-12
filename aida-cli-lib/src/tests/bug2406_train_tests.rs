@@ -101,12 +101,17 @@ if a[0]=='api':
     endpoint=next((x for x in a[1:] if x.startswith('repos/')),a[1])
     if '/check-runs' in endpoint:
         sha=endpoint.split('/commits/')[1].split('/')[0]
-        emit(dict(total_count=2,check_runs=[dict(name=n,head_sha=s.get('ci_sha',sha),status='completed',conclusion=s.get('ci','success')) for n in ['Build (ubuntu-latest)','merge-hold-gate']]))
+        # trace:BUG-2528 | ai:codex
+        pending=s.get('pending_ci_reads',0)>0
+        if pending:
+            s['pending_ci_reads']-=1
+            (r/'transport.json').write_text(json.dumps(s))
+        emit(dict(total_count=2,check_runs=[dict(name=n,head_sha=s.get('ci_sha',sha),status='in_progress' if pending and n=='merge-hold-gate' else 'completed',conclusion=None if pending and n=='merge-hold-gate' else s.get('ci','success')) for n in ['Build (ubuntu-latest)','merge-hold-gate']]))
     if endpoint.split('?',1)[0].endswith('/status'):
         sha=endpoint.split('/commits/')[1].split('/')[0]; emit(dict(sha=sha,total_count=0,statuses=[]))
     if '/pulls/' in endpoint: emit(meta(endpoint.split('/pulls/')[1].split('/')[0]))
     # trace:BUG-2401 | ai:claude — the train's required-check policy reads.
-    if endpoint.endswith('/branches/main/protection'): emit(dict(required_status_checks=dict(contexts=['Build (ubuntu-latest)'])))
+    if endpoint.endswith('/branches/main/protection'): emit(dict(required_status_checks=dict(contexts=['Build (ubuntu-latest)','merge-hold-gate'])))
     if '/rules/branches/main' in endpoint: emit([])
 if a[:2]==['repo','view']: emit(dict(nameWithOwner='fixture/train',defaultBranchRef=dict(name='main')))
 print('unexpected gh '+repr(a),file=sys.stderr); sys.exit(2)
@@ -1334,6 +1339,13 @@ fn bug2406_held_member_released_under_mandate_lands() {
     .unwrap();
     assert!(crate::gate::merge_hold_core::read_hold(f.root(), 11).is_none());
     train.cars[0].member.release = Some(cover);
+    // The release has re-run a context on this exact tip. The real final
+    // consumer must wait, then land instead of ejecting the member.
+    // trace:BUG-2528 | ai:codex
+    let mut state: Value =
+        serde_json::from_slice(&fs::read(f.root().join("transport.json")).unwrap()).unwrap();
+    state["pending_ci_reads"] = json!(1);
+    save(f.root(), &state);
     let lease = live.lease(change.id).unwrap();
     live.merge_verified(&change, &train, lease.as_ref())
         .unwrap();
@@ -1491,4 +1503,60 @@ fn task3112_rework_hint_retains_owning_spec_beside_refs_metadata() {
             .any(|(_, _, mode)| *mode == Some(aida_core::ExecutionMode::Operator)),
         "{policies:?}"
     );
+}
+
+// trace:BUG-2528 | ai:codex
+#[test]
+fn bug2528_exact_tip_ci_wait_is_bounded_and_fails_closed() {
+    use crate::forge::{CheckOutcome, CommitCheck, CommitChecks};
+    let checks = |sha: &str, outcome| CommitChecks {
+        sha: sha.into(),
+        checks: vec![CommitCheck {
+            name: "merge-hold-gate".into(),
+            outcome,
+        }],
+    };
+    let time = ExactTipCiClock::default();
+    let reads = std::cell::Cell::new(0);
+    let error = wait_exact_tip_ci(
+        "tip",
+        &["merge-hold-gate"],
+        180,
+        || {
+            reads.set(reads.get() + 1);
+            Ok(checks("tip", CheckOutcome::Pending))
+        },
+        || time.elapsed(),
+        || time.sleep(),
+    )
+    .unwrap_err();
+    assert!(error
+        .to_string()
+        .contains("still pending after 180s: merge-hold-gate"));
+    assert_eq!(time.elapsed(), 180);
+    assert_eq!(reads.get(), 19);
+    for (sha, outcome) in [
+        ("other", CheckOutcome::Passed),
+        ("tip", CheckOutcome::Failed),
+        ("tip", CheckOutcome::Skipped),
+    ] {
+        wait_exact_tip_ci(
+            "tip",
+            &["merge-hold-gate"],
+            180,
+            || Ok(checks(sha, outcome)),
+            || 0,
+            || panic!("must refuse immediately"),
+        )
+        .unwrap_err();
+    }
+    wait_exact_tip_ci(
+        "tip",
+        &["merge-hold-gate"],
+        180,
+        || anyhow::bail!("unreadable CI"),
+        || 0,
+        || panic!("must refuse immediately"),
+    )
+    .unwrap_err();
 }

@@ -221,6 +221,9 @@ const NON_VENDOR_SPELLINGS: &[&str] = &[
     "aida",
     "aida_bin",
     "bwrap",
+    // Injected Cargo executable in the release installer; never a vendor.
+    // trace:STORY-2704 | ai:codex
+    "cargo",
     "dev_bin",
     "exe",
     "fixture.gh",
@@ -288,7 +291,15 @@ fn vendor_program_arg(arg: &str) -> bool {
 fn calls<'a>(normalized: &'a str, name: &'a str) -> impl Iterator<Item = &'a str> + 'a {
     normalized.match_indices(name).filter_map(move |(at, _)| {
         let before = normalized[..at].chars().next_back();
-        let starts = !before.is_some_and(|c| c.is_alphanumeric() || c == '_');
+        // A fully qualified clap constructor builds CLI metadata, not a child.
+        // Keep unqualified and std/tokio constructors conservative.
+        // trace:STORY-2704 | ai:codex
+        let qualifier = normalized[..at]
+            .rsplit(|c: char| !(c.is_alphanumeric() || c == '_' || c == ':'))
+            .next()
+            .unwrap_or_default();
+        let clap = name == "Command::new(" && matches!(qualifier, "clap::" | "::clap::");
+        let starts = !clap && !before.is_some_and(|c| c.is_alphanumeric() || c == '_');
         starts.then(|| &normalized[at + name.len()..])
     })
 }
@@ -443,6 +454,25 @@ fn scanner_catches_every_mutant_spelling() {
     for src in clean {
         assert_eq!(markers(src), 0, "false positive: {src}");
     }
+}
+
+// trace:STORY-2704 | ai:codex
+#[test]
+fn scanner_distinguishes_clap_and_injected_cargo_from_vendor_launches() {
+    assert_eq!(markers("fn f() { clap::Command::new(entry.name); }"), 0);
+    assert_eq!(markers("fn f() { std::process::Command::new(cargo); }"), 0);
+    assert_eq!(markers("fn f() { fakeclap::Command::new(program); }"), 1);
+    assert_eq!(
+        markers("fn f() { vendor::clap::Command::new(program); }"),
+        1
+    );
+    assert_eq!(
+        markers(
+            "fn f() { clap::Command::new(entry.name); std::process::Command::new(entry.name); }"
+        ),
+        1
+    );
+    assert_eq!(markers("fn f() { clap::Command::new(entry.name); tokio::process::Command::new(vendor_cargo); }"), 1);
 }
 
 // Match identifiers as well as qualified calls so imports (including grouped
