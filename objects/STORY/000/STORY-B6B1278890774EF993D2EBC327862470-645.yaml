@@ -1,0 +1,33 @@
+id: 01a1ce97-5d1f-70b3-a5d1-dc9452c2137d
+spec_id: STORY-b6b1278890774ef993d2ebc327862470-645
+agreed_id: STORY-2722
+title: 'Review PR-3859: [AI:codex] fix(review): retry waiting verdicts with bounded backoff (BUG-2521)'
+description: |
+  Auto-filed by `aida session end` (backup trigger) (session `01a1ce86`) for branch `bug-b6b1278890774ef993d2ebc327862470-286`.
+
+  - PR: <https://github.com/joemooney/aida/pull/3859>
+  - Branch: `bug-b6b1278890774ef993d2ebc327862470-286` → `main`
+
+  ## Covers
+
+  - BUG-2521
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 3859` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-12T07:09:48.703056919Z
+modified_at: 2026-11-12T07:09:48.703056919Z
+req_type: Story
+filed_at:
+  code_sha: 296d1dd295804f61d32a6b8aa07ae1485b198c93
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 296d1dd2958
+  vendor: claude
