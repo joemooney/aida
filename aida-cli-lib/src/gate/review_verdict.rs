@@ -1991,6 +1991,10 @@ pub(crate) fn build_verdict_object_with_policy(
     obj.remove("release_grant");
     obj.remove("closed_by_merge");
     obj.remove("closed_at");
+    // A fresh review is not the lifecycle annotation it replaces.
+    // trace:BUG-2525 | ai:codex
+    obj.remove("terminal_wait_source");
+    obj.remove("terminal_wait_key");
     // BUG-1505: every writer persists the canonical spelling, produced by the
     // one shared function rather than by each writer agreeing to be careful.
     // When the caller supplies no verdict (the drain stamping provenance onto
@@ -3252,18 +3256,34 @@ pub(crate) fn terminal_wait_overlay(
     {
         return current;
     }
-    let Some(record) = crate::gate::ledger::project::terminal_wait_annotation(start, key) else {
-        return current;
-    };
-    let source = serde_json::from_str::<serde_json::Value>(&current.body).ok();
-    if record.get("terminal_wait_key").and_then(|v| v.as_str()) == Some(key)
-        && record.get("terminal_wait_source") == source.as_ref()
-    {
-        if let Ok(body) = serde_json::to_string(&record) {
+    if let Some(record) = crate::gate::ledger::project::terminal_wait_annotation(start, key) {
+        if let Some(body) = terminal_wait_overlay_body(key, &current.body, &record) {
             current.body = body;
         }
     }
     current
+}
+
+// Also used by the bounded alias reader with its already-checked events.
+// trace:BUG-2525 | ai:codex
+pub(crate) fn terminal_wait_overlay_body(
+    key: &str,
+    body: &str,
+    record: &JsonObj,
+) -> Option<String> {
+    if !parse_recorded_verdict(body)
+        .is_some_and(|v| v.kind == VerdictKind::Waiting && !v.is_closed())
+    {
+        return None;
+    }
+    let source = serde_json::from_str::<serde_json::Value>(body).ok();
+    if record.get("terminal_wait_key").and_then(|v| v.as_str()) == Some(key)
+        && record.get("terminal_wait_source") == source.as_ref()
+    {
+        serde_json::to_string(record).ok()
+    } else {
+        None
+    }
 }
 
 /// TASK-2135 on the gate ledger: an older binary closed the current file and

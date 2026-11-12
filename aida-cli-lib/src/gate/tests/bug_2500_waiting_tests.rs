@@ -1180,6 +1180,21 @@ fn bug_2525_newer_legacy_wait_closes_despite_independent_raw_ledger() {
                 .is_closed()
         );
         crate::queue_cmd::refuse_waiting_review(tmp.path(), key, key, None).unwrap();
+        if key == "TASK-3448" {
+            let ids = [key, "TASK-NATIVE-3448"];
+            let selected = super::select_verdict(tmp.path(), &ids);
+            let super::AliasSelection::Selected(selected) = selected else {
+                panic!("expected a selected closed legacy wait");
+            };
+            assert!(selected.verdict.is_closed());
+            assert!(rv::read_recorded_verdict_any(tmp.path(), &ids)
+                .unwrap()
+                .is_closed());
+            assert!(matches!(
+                rv::evaluate_review_verdict_gate(tmp.path(), ids[0], ids[1]).0,
+                rv::VerdictGate::Proceed
+            ));
+        }
         // The raw change projection retains independent code findings.
         let raw = crate::gate::ledger::project::newest_verdict(tmp.path(), key).unwrap();
         assert_eq!(raw["summary"], "old ledger findings");
@@ -1188,6 +1203,135 @@ fn bug_2525_newer_legacy_wait_closes_despite_independent_raw_ledger() {
         assert!(!rv::read_recorded_verdict(tmp.path(), key)
             .unwrap()
             .is_closed());
-        assert!(crate::queue_cmd::refuse_waiting_review(tmp.path(), key, key, None).is_err());
+        if key == "TASK-3448" {
+            let ids = [key, "TASK-NATIVE-3448"];
+            let selected = rv::read_recorded_verdict_any(tmp.path(), &ids).unwrap();
+            assert!(!selected.is_closed());
+            assert_eq!(
+                selected.summary.as_deref(),
+                Some("replacement wait at the same head and time")
+            );
+            assert!(matches!(
+                rv::evaluate_review_verdict_gate(tmp.path(), ids[0], ids[1]).0,
+                rv::VerdictGate::Refuse(_)
+            ));
+        }
+        let change = key.starts_with("PR-").then_some(key);
+        assert!(crate::queue_cmd::refuse_waiting_review(tmp.path(), key, key, change).is_err());
+        if key == "TASK-3448" {
+            // Restore the exact retired source before adding independent findings.
+            source["summary"] = SUMMARY.into();
+            std::fs::write(&path, source.to_string()).unwrap();
+            assert!(
+                rv::read_recorded_verdict_any(tmp.path(), &[key, "TASK-NATIVE-3448"])
+                    .unwrap()
+                    .is_closed()
+            );
+            rv::record_verdict(
+                tmp.path(),
+                "TASK-NATIVE-3448",
+                Some("request-changes"),
+                Some(HEAD),
+                None,
+                Some("independent alias findings"),
+                &["native alias defect".into()],
+                "reviewer",
+            )
+            .unwrap();
+            let rework = resolve_rework_findings(tmp.path(), key, "TASK-NATIVE-3448", None)
+                .unwrap()
+                .unwrap();
+            assert!(rework.contains("native alias defect"));
+        }
+    }
+}
+
+// trace:BUG-2525 | ai:codex
+#[test]
+fn bug_2525_fresh_review_after_terminal_annotation_is_a_new_round() {
+    let _env = crate::test_env::EnvVarsGuard::apply(&[("AIDA_CONTAINED", None)]);
+    for key in ["TASK-3448", "PR-4273"] {
+        for word in ["request-changes", "waiting"] {
+            for head in [HEAD, "2222222222222222222222222222222222222222"] {
+                let tmp = tempfile::tempdir().unwrap();
+                let root = tmp.path();
+                rv::record_verdict(
+                    root,
+                    key,
+                    Some("waiting"),
+                    Some(HEAD),
+                    None,
+                    Some(SUMMARY),
+                    &[],
+                    "reviewer",
+                )
+                .unwrap();
+                let source = rv::current_verdict(root, key).unwrap();
+                assert!(rv::close_terminal_wait(
+                    root,
+                    key,
+                    crate::gate::ledger::ChangeKey::pr(4273),
+                    &source
+                )
+                .unwrap());
+                assert!(rv::read_recorded_verdict(root, key).unwrap().is_closed());
+                let findings = if word == "request-changes" {
+                    vec!["fresh code defect".to_string()]
+                } else {
+                    vec![]
+                };
+                rv::record_verdict(
+                    root,
+                    key,
+                    Some(word),
+                    Some(head),
+                    None,
+                    Some("fresh round"),
+                    &findings,
+                    "fresh-reviewer",
+                )
+                .unwrap();
+                let body: serde_json::Value =
+                    serde_json::from_str(&rv::current_verdict(root, key).unwrap().body).unwrap();
+                assert!(body.get("terminal_wait_source").is_none());
+                assert!(body.get("terminal_wait_key").is_none());
+                let raw = crate::gate::ledger::project::newest_verdict(root, key).unwrap();
+                assert_eq!(raw["summary"], "fresh round");
+                assert_eq!(raw["reviewed_sha"], head);
+                assert_eq!(body, serde_json::Value::Object(raw));
+                let ids = if key.starts_with("PR-") {
+                    vec![key]
+                } else {
+                    vec![key, "TASK-NATIVE-3448"]
+                };
+                let selected = if key.starts_with("PR-") {
+                    rv::read_recorded_verdict(root, key)
+                } else {
+                    rv::read_recorded_verdict_any(root, &ids)
+                }
+                .unwrap();
+                assert_eq!(selected.raw, word);
+                assert!(!selected.is_closed());
+                assert!(matches!(
+                    rv::queue_done_verdict_gate(
+                        key,
+                        Some(&selected),
+                        rv::TipRelation::AtReviewedSha
+                    ),
+                    rv::VerdictGate::Refuse(_)
+                ));
+                let change = key.starts_with("PR-").then_some(key);
+                if word == "waiting" {
+                    assert!(
+                        crate::queue_cmd::refuse_waiting_review(root, key, key, change).is_err()
+                    );
+                } else {
+                    let rework = resolve_rework_findings(root, key, key, change)
+                        .unwrap()
+                        .unwrap();
+                    assert!(rework.contains("fresh code defect"));
+                }
+            }
+        }
     }
 }

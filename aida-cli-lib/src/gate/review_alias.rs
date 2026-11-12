@@ -513,6 +513,30 @@ fn candidate(
         })?),
         None => None,
     };
+    // Keep exact-source annotations from the checked snapshot even when raw
+    // projection retains an independent review instead of the annotation.
+    // trace:BUG-2525 | ai:codex
+    let annotation = events
+        .iter()
+        .rev()
+        .filter_map(|e| e.verdict_record())
+        .find(|r| {
+            r.get("terminal_wait_key").and_then(|v| v.as_str()) == Some(label)
+                && r.contains_key("terminal_wait_source")
+        })
+        .cloned();
+    let overlay = |mut selected: Selected| {
+        if let Some(body) = annotation
+            .as_ref()
+            .and_then(|r| rv::terminal_wait_overlay_body(label, &selected.body, r))
+        {
+            if let Some(verdict) = rv::parse_recorded_verdict(&body) {
+                selected.verdict = verdict;
+                selected.body = body;
+            }
+        }
+        selected
+    };
     let newest: Option<GateEvent> = ledger::project::newest_of(events);
     if let Some(event) = newest.filter(|e| rv::ledger_supersedes(&path, parsed.as_ref(), e)) {
         let record = event
@@ -526,7 +550,7 @@ fn candidate(
             ))
         })?;
         return Ok(Some(Candidate {
-            selected: Selected {
+            selected: overlay(Selected {
                 verdict,
                 body,
                 label: label.to_string(),
@@ -535,12 +559,12 @@ fn candidate(
                     file: ledger::project::event_file(store_root, &event),
                     seq: event.seq,
                 },
-            },
+            }),
         }));
     }
     Ok(match (parsed, file) {
         (Some(verdict), Some((body, mtime))) => Some(Candidate {
-            selected: Selected {
+            selected: overlay(Selected {
                 order_time: verdict
                     .recorded_at
                     .as_deref()
@@ -550,7 +574,7 @@ fn candidate(
                 body,
                 label: label.to_string(),
                 source: VerdictSource::File(path),
-            },
+            }),
         }),
         _ => None,
     })

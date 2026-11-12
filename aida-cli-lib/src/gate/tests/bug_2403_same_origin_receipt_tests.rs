@@ -522,8 +522,16 @@ fn bug_2525_phase3_effective_wait_closes_in_raw_and_effective_projections() {
         assert!(rv::close_terminal_wait(&root, key, pr, &source).unwrap());
         assert!(rv::read_recorded_verdict(&root, key).unwrap().is_closed());
         assert!(selected(&root, key).contains_key("closed_by_merge"));
-        crate::queue_cmd::refuse_waiting_review(&root, key, key, None).unwrap();
+        if key == SPEC {
+            assert!(
+                crate::queue_cmd::refuse_waiting_review(&root, SPEC, SPEC, Some("PR-3185"))
+                    .is_err()
+            );
+        }
     }
+    // The spec annotation intentionally leaves the independent PR scope open;
+    // queue pickup can proceed once both scopes have been closed.
+    crate::queue_cmd::refuse_waiting_review(&root, SPEC, SPEC, Some("PR-3185")).unwrap();
     append(&root, pr, SPEC, vec![origin("waiting", HEAD, &ts(0))]);
     for key in [SPEC, "PR-3185"] {
         assert!(!rv::read_recorded_verdict(&root, key).unwrap().is_closed());
