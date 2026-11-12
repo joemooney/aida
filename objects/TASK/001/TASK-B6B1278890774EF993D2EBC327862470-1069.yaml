@@ -1,0 +1,31 @@
+id: 01a1d0d7-0ba7-7393-9dd0-cb74bf0d205f
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-1069
+agreed_id: TASK-3788
+title: 'emergency-land GitLab parity: lift and restore ''Pipelines must succeed'' behind the Forge seam'
+description: |
+  GitLab parity for `aida pr emergency-land` (STORY-2732), operator question 2026-11-12 10:37 MST. STORY-2732 implements the GitHub path (DELETE/POST branches/{base}/protection/enforce_admins + gh pr merge --admin). GitLab has no enforce_admins; what blocks an early merge is the project merge setting "Pipelines must succeed".
+
+  SKETCH (advisor-approved 2026-11-12 10:45 MST):
+  - Put lift/merge/restore/verify behind the Forge seam in aida-cli-lib/src/forge.rs (ForgeKind / GitLabForge), e.g. a trait method set: backup_merge_policy, lift_merge_policy, merge_admin, restore_merge_policy, verify_merge_policy. If STORY-2732 already introduced the seam, implement the GitLab side; otherwise introduce it and move the GitHub calls behind it with no behavior change.
+  - GitLab: backup = `glab api projects/<enc-path>` (keep only_allow_merge_if_pipeline_succeeds, allow_merge_on_skipped_pipeline, only_allow_merge_if_all_discussions_are_resolved); lift = `glab api -X PUT projects/<enc-path> -f only_allow_merge_if_pipeline_succeeds=false` ONLY when it was true; merge = `glab mr merge <N> --squash --yes` (no auto-merge); restore ALWAYS when lifted (same guard as GitHub: merge error, Ctrl-C, panic); verify = re-read and compare the backed-up fields. Approval rules and protected-branch merge roles are never changed: if the MR still cannot merge (approvals missing, user lacks merge rights), restore and exit non-zero with GitLab's reason.
+  - Pure-git forge: refuse ("no forge-side protection to lift; push the fix normally").
+  - Same preconditions, audit, --dry-run and post-merge CI watch (glab ci status on the merge commit) as STORY-2732.
+
+  ACCEPTANCE: fake-forge unit tests for GitLab mirroring STORY-2732's five cases (happy path; merge failure still restores; setting already off is never touched; restore or verify failure exits non-zero and prints the restore command; refusals make no API writes); pure-git refusal test; docs/cli section notes GitLab behavior.
+  LIGHT gate: one targeted cargo test -p aida-cli-lib emergency_land + make check-ci-fast. Lands after STORY-2732.
+status: Draft
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-12T17:38:36.583411920Z
+modified_at: 2026-11-12T17:38:36.583411920Z
+req_type: Task
+filed_at:
+  code_sha: ec5a35a7108475b421baf1101b26159a7aa0fab9
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: a447d559aaa
+  vendor: claude
+  session: 01a1d09a-4262-7d50-a00b-00a5a30f3934
+  harness_version: 2.1.322 (Claude Code)
