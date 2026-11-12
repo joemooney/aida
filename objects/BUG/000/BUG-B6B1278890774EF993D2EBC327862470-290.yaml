@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-11T14:11:33.148855447Z
-modified_at: 2026-11-12T05:18:54.977317645Z
+modified_at: 2026-11-12T05:28:52.349853079Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -39,6 +39,12 @@ comments:
   content: 'Addressed the effective/raw source mismatch identified in review: effective verdict readers now validate terminal annotations against the selected legacy, signed, or ledger source before applying them, without discarding valid annotations through raw-review projection. Raw phase-3 projection recognizes the proved receipt-bearing origin, while independent raw findings and replaced rounds retain their standing. Added legacy and phase-3 regressions and strengthened the signed-publication regression with independent local findings. Five source/test files remain uncommitted. Rustfmt, diff hygiene, trace headers, store-writer inventory and the ExecContext zero-addition ratchet pass; ExecContext Python tests executed 19 tests, all passed. Rust validation is pending launcher job j20261112T045523219-4189182-0, waiting for a shared Cargo slot; untested=true until an executed Rust test result is available. The initial binary-crate --lib submission timed out in the slot queue without executing tests. Native Refs publication declaration is recorded with Help-Golden: unchanged. Live TASK-3448/TASK-3428 deployment, reconciliation and verification remain host follow-up. Promotion from Needs Attention to InProgress was refused for the implementer seat because advisor authority is required; status was left unchanged. The supplied codegraph client is missing, so rg navigation was used.'
   created_at: 2026-11-12T05:18:54.977317645Z
   modified_at: 2026-11-12T05:18:54.977317645Z
+  session_id: 01a1ce19f04e
+- id: 01a1ce3a-f37d-70d1-b0e7-b32a57b23e95
+  author: joe
+  content: 'Final validation update: corrected Rust test launcher job j20261112T045523219-4189182-0 exited 124 after 900 seconds waiting for a shared Cargo slot; no Rust tests executed, so untested=true. Its final diagnostic also marked overlay generation agent-c09246888d9a4f00 stale because the primary rewrote a generation file in place. Host follow-up needs an available Cargo slot and a fresh valid lane target/overlay before running cargo test --profile agent -p aida-cli-lib --lib -- bug_2525 (then the waiting/verdict/ledger regressions). Static validation and the 19 passing ExecContext Python tests stand. Five intended files remain uncommitted, with a native Refs publication declaration and Help-Golden: unchanged already recorded. No commit, push, PR creation, queue completion or protected live gate repair was performed from this seat. Live TASK-3448/TASK-3428 closure verification and advisor status triage remain outstanding.'
+  created_at: 2026-11-12T05:28:52.349853079Z
+  modified_at: 2026-11-12T05:28:52.349853079Z
   session_id: 01a1ce19f04e
 history:
 - id: 01a1cb1e-b1cd-7183-8b51-05e72f878612
