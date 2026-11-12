@@ -1,3 +1,9 @@
+Cross-label gate-ledger discovery has a separate 128 MiB/200,000-attempt
+aggregate work ceiling, including unrelated payloads and torn retries; exhaustion
+refuses selection. Automatic archive retention and discovery limited to relevant
+changes remain unresolved. See docs/internal/testing/bug-2531-ledger-selection-budget.md.
+<!-- trace:BUG-2531 | ai:codex -->
+
 MCP transport and its store handler live in `aida-mcp`; the binary injects the
 handler into cli-lib's `mcp-serve` registration before parsing. Shared descriptors
 and claim naming stay below that boundary. CLI-local MCP tests include the
