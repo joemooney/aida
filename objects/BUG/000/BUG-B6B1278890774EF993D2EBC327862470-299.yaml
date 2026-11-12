@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-12T10:13:24.570585533Z
-modified_at: 2026-11-12T18:14:40.761191222Z
+modified_at: 2026-11-12T18:21:26.496705837Z
 req_type: Bug
 comments:
 - id: 01a1d0f6-5b68-71e2-8e14-7e40a9d8c6c4
@@ -18,6 +18,13 @@ comments:
   modified_at: 2026-11-12T18:12:48.616070591Z
   session_id: 01a1d0eb-22cc-7262-8f6c-7266e9cc1fbb
   harness_version: 2.1.322 (Claude Code)
+- id: 01a1d0fe-4260-70f0-8fd1-6175d0280a92
+  author: dirtlab
+  content: 'Implemented ledger read-through in review-watch history using the existing strict bounded shared-ledger reader. Ledger-only approvals suppress no-verdict retries, ledger refusals retain round accounting, and findings notifications name the ledger artifact. Regression covers PR/MR ledger-only approval after retry exhaustion, new heads, blocking rounds and corrupt evidence. Validation: bug2534 regression 1 passed; review_watch:: suite 164 passed; git diff --check clean. Edits remain uncommitted for native host publication. Host codegraph client was unavailable; doctor reports missing.'
+  created_at: 2026-11-12T18:21:26.496705837Z
+  modified_at: 2026-11-12T18:21:26.496705837Z
+  session_id: 01a1d0f80a31
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1d0f5-cf33-7072-a087-c8f8bafc0d36
   author: joe
@@ -35,6 +42,12 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1d0f8-760f-7fc1-9bc9-f796096c90c9
+  author: dirtlab
+  timestamp: 2026-11-12T18:15:06.511485537Z
+  session_id: 01a1d0f80a31
+  harness_version: codex-cli 0.167.0
+  changes: []
 filed_at:
   code_sha: 298639cb95018f3d580dc44cba3ce04e880064fd
   branch: main
