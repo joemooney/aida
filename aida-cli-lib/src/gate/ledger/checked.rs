@@ -470,6 +470,25 @@ pub(crate) fn filter_miskeyed(
     Ok(events)
 }
 
+/// [`filter_miskeyed`] for the lossy single-label readers: when discovery is
+/// incomplete (an unrelated ledger is malformed, unreadable or over budget)
+/// every review copy a foreign change could own is withheld, while evidence
+/// no witness could disqualify — holds, carry-over proofs, phase-3 records —
+/// stays readable. Never presents raw foreign evidence; never rewrites.
+// trace:BUG-2517 | ai:claude
+pub(crate) fn filter_miskeyed_or_fail_closed(
+    root: &Path,
+    events: Vec<GateEvent>,
+) -> Vec<GateEvent> {
+    let mut events = events;
+    match discover(root, &mut Budget::default()) {
+        Ok(None) => {}
+        Ok(Some(discovery)) => discovery.owners.filter(&mut events),
+        Err(_) => super::project::MiskeyOwners::fail_closed(&mut events),
+    }
+    events
+}
+
 /// STORY-2324: every event on `change`'s ledger under `root`, read strictly
 /// (all kinds, not just verdicts); empty when the ledger or the file does
 /// not exist.

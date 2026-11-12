@@ -157,17 +157,17 @@ pub(crate) fn index_spec(root: &Path, spec: &str, change: ChangeKey) -> std::io:
 }
 
 /// The change's events, in ledger order. Incomplete ownership discovery
-/// yields no evidence; callers needing diagnostics use the checked reader.
+/// withholds every review copy a foreign change could own (historical foreign
+/// copies have no spec-only marker) but keeps holds and other evidence no
+/// witness can disqualify; callers needing diagnostics use the checked reader.
 pub(crate) fn events(root: &Path, change: ChangeKey) -> Vec<GateEvent> {
-    // An incomplete ownership discovery cannot safely expose raw change
-    // evidence: historical foreign copies have no spec-only marker.
     // trace:BUG-2517 | ai:codex
     let events = store::read_file(root, change)
         .into_iter()
         .filter(|e| !e.is_spec_only())
         .collect::<Vec<_>>();
-    // trace:BUG-2517 | ai:codex
-    super::checked::filter_miskeyed(root, events, &mut Default::default()).unwrap_or_default()
+    // trace:BUG-2517 | ai:claude
+    super::checked::filter_miskeyed_or_fail_closed(root, events)
 }
 
 /// Ledger verdict events for `key` — a change key, or a spec ID through the
@@ -191,10 +191,9 @@ fn verdict_events(root: &Path, key: &str) -> Vec<GateEvent> {
         .filter(|e| !e.is_spec_only())
         .filter(|e| e.verdict_record().is_some() && e.spec.as_deref() == Some(spec.as_str()))
         .collect();
-    // As for change-keyed reads, incomplete discovery supplies no bound
-    // evidence. Only explicitly unbound spec records remain readable.
-    let bound =
-        super::checked::filter_miskeyed(root, raw, &mut Default::default()).unwrap_or_default();
+    // As for change-keyed reads, incomplete discovery withholds every bound
+    // copy a foreign change could own. trace:BUG-2517 | ai:claude
+    let bound = super::checked::filter_miskeyed_or_fail_closed(root, raw);
     // An unbound record already bound to a change (AC2) is read once, from
     // the change. trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
     let unbound: Vec<GateEvent> = store::read_unbound(root, &spec)
@@ -461,26 +460,53 @@ impl MiskeyOwners {
     }
 
     pub(crate) fn filter(&self, events: &mut Vec<GateEvent>) {
-        events.retain(|event| {
-            if ChangeKey::parse(&event.change).is_none() {
-                return true;
-            }
-            // A copy made before spec-only isolation was enforced is still local
-            // evidence, never a change verdict or an ownership witness.
-            if event.is_spec_only() {
-                return false;
-            }
-            if event
-                .verdict_record()
-                .and_then(|r| r.get("mode"))
-                .and_then(|v| v.as_str())
-                == Some(PHASE3_MODE)
-            {
-                return true;
-            }
-            !review_fingerprint(event)
-                .and_then(|key| self.owners.get(&key))
-                .is_some_and(|changes| changes.iter().any(|change| change != &event.change))
+        events.retain(|event| match disqualifiable(event) {
+            Candidate::Keep => true,
+            Candidate::Drop => false,
+            Candidate::Fingerprint(key) => !self
+                .owners
+                .get(&key)
+                .is_some_and(|changes| changes.iter().any(|change| change != &event.change)),
         });
     }
+
+    /// Without a complete ownership index, keep exactly the events no witness
+    /// could disqualify: holds, carry-over proofs, phase-3 records and other
+    /// unfingerprintable evidence stay; every review copy that a foreign
+    /// change might own is withheld rather than presented as current. An
+    /// unrelated malformed ledger therefore neither resurrects a historical
+    /// foreign copy nor erases a change's hold state. Read-only.
+    // trace:BUG-2517 | ai:claude
+    pub(crate) fn fail_closed(events: &mut Vec<GateEvent>) {
+        events.retain(|event| matches!(disqualifiable(event), Candidate::Keep));
+    }
+}
+
+// trace:BUG-2517 | ai:claude
+enum Candidate {
+    Keep,
+    Drop,
+    Fingerprint(String),
+}
+
+/// Whether ownership witnesses can disqualify `event` as a misplaced copy.
+// trace:BUG-2517 | ai:claude
+fn disqualifiable(event: &GateEvent) -> Candidate {
+    if ChangeKey::parse(&event.change).is_none() {
+        return Candidate::Keep;
+    }
+    // A copy made before spec-only isolation was enforced is still local
+    // evidence, never a change verdict or an ownership witness.
+    if event.is_spec_only() {
+        return Candidate::Drop;
+    }
+    if event
+        .verdict_record()
+        .and_then(|r| r.get("mode"))
+        .and_then(|v| v.as_str())
+        == Some(PHASE3_MODE)
+    {
+        return Candidate::Keep;
+    }
+    review_fingerprint(event).map_or(Candidate::Keep, Candidate::Fingerprint)
 }

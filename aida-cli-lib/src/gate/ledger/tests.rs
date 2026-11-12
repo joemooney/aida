@@ -2507,13 +2507,43 @@ fn bug_2517_foreign_copy_is_ignored_without_rewriting_history() {
     // copy through either the PR-keyed or the spec-indexed legacy reader.
     project::index_spec(&root, "BUG-2492", first).unwrap();
     project::index_spec(&root, "BUG-2492", second).unwrap();
+    // trace:BUG-2517 | ai:claude — nor may it erase the change's hold state.
+    hold::append(
+        &root,
+        3651,
+        EventBody::ReleaseWithdrawn {
+            reason: "head moved".into(),
+        },
+        None,
+        None,
+    )
+    .unwrap();
+    let before = std::fs::read(&file).unwrap();
     let second_file = store::ledger_file(&root, second);
     let second_before = std::fs::read(&second_file).unwrap();
     std::fs::write(store::ledger_file(&root, ChangeKey::pr(9999)), b"invalid\n").unwrap();
     assert!(checked::discover(&root, &mut Default::default()).is_err());
-    for label in ["PR-3651", "PR-3764", "BUG-2492"] {
-        assert!(project::newest_verdict_event(&root, label).is_none());
-        assert!(project::verdict_records(&root, label).is_empty());
+    let is_foreign_waiting = |r: &JsonObj| r.get("verdict") == foreign.get("verdict");
+    // The first PR withholds every copy a foreign change could own...
+    assert!(project::newest_verdict_event(&root, "PR-3651").is_none());
+    assert!(project::verdict_records(&root, "PR-3651").is_empty());
+    assert!(!project::events(&root, first)
+        .iter()
+        .filter_map(|e| e.verdict_record())
+        .any(is_foreign_waiting));
+    // ...but keeps evidence no ownership witness can disqualify.
+    assert!(project::events(&root, first)
+        .iter()
+        .any(|e| matches!(e.body, EventBody::ReleaseWithdrawn { .. })));
+    // The owning PR's phase-3 record stays its own, and the spec-indexed
+    // reader answers with it, never with the first PR's foreign copy.
+    for label in ["PR-3764", "BUG-2492"] {
+        let newest = project::newest_verdict_event(&root, label).unwrap();
+        assert_eq!(newest.change, "PR-3764", "{label}");
+        assert_eq!(newest.verdict_record(), Some(&foreign), "{label}");
+        assert!(project::verdict_records(&root, label)
+            .iter()
+            .all(|r| r == &foreign));
     }
     assert_eq!(std::fs::read(second_file).unwrap(), second_before);
     assert_eq!(std::fs::read(file).unwrap(), before);
@@ -2757,7 +2787,10 @@ fn bug_2517_spec_only_copy_stays_local_when_discovery_refuses() {
     assert!(checked::discover(&root, &mut Default::default()).is_err());
     let path = store::ledger_file(&root, change);
     let before = std::fs::read(&path).unwrap();
-    assert!(project::newest_verdict(&root, "PR-2517").is_none());
+    // A record without review provenance cannot be a proven foreign copy,
+    // so incomplete discovery leaves it readable (BUG-2517 fail-closed only
+    // withholds fingerprintable copies). trace:BUG-2517 | ai:claude
+    assert_eq!(project::newest_verdict(&root, "PR-2517"), Some(own));
     assert!(project::events(&root, change)
         .iter()
         .all(|e| !e.is_spec_only()));
