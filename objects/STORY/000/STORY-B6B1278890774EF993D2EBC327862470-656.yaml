@@ -23,7 +23,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-12T17:36:24.142897628Z
-modified_at: 2026-11-12T20:43:23.601122491Z
+modified_at: 2026-11-12T21:15:41.614843398Z
 req_type: Story
 relationships:
 - rel_type:
@@ -105,6 +105,12 @@ comments:
   content: 'Rework validation update: P2 audit lifecycle regressions all passed in executed mandate job j20261112T193720381-3-0. Overall 366 passed, 6 failed, 1 ignored. Fixed the six failures: two stale source assertions, omission of false include_gate_paths for legacy record round-trips, and isolated-process history fixtures to prevent exclusion-ledger interference. Corrected mandate rerun j20261112T204046021-2-0 is running; final fast-gate retry j20261112T204157278-459576-0 is queued. Exact help regeneration j20261112T202335855-2-0 executed successfully (1 passed), correcting only flag ordering. Executed Cargo jobs reported overlay-stale for generation agent-fc27f64a15dee42e; host validation should use a fresh generation. The requested native publication subject is recorded; follow-up edits remain uncommitted.'
   created_at: 2026-11-12T20:43:23.601122491Z
   modified_at: 2026-11-12T20:43:23.601122491Z
+  session_id: 01a1d13f7835
+- id: 01a1d19d-caae-7e20-b423-74474ef8a01b
+  author: joe
+  content: 'Final native rework validation: mandate suite j20261112T204046021-2-0 passed 372 tests, 0 failed, 1 ignored. Exact help regeneration j20261112T202335855-2-0 passed 1 test. Feature-disabled aida-cli check j20261112T210604960-2-0 passed. Final make check-ci-fast j20261112T210812561-581979-0 passed all 47 gates. Formatting and git diff --check pass. Successful runs reported overlay-stale for generation agent-fc27f64a15dee42e, so host fresh-generation / CI validation remains required before merging. All seven rework files remain uncommitted; host owns publication to open PR #3896 and queue completion. Final publication declaration uses the exact requested subject. Status remains Needs Attention because this implementer seat cannot promote it without advisor authority.'
+  created_at: 2026-11-12T21:15:41.614843398Z
+  modified_at: 2026-11-12T21:15:41.614843398Z
   session_id: 01a1d13f7835
 history:
 - id: 01a1d0d5-4f50-78f1-be14-90e8c89718c8
