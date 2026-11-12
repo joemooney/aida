@@ -4458,6 +4458,8 @@ fn story_2710_host_regenerates_conflicted_outputs_with_read_only_git() {
 from pathlib import Path
 if '--write-ledger' in sys.argv:
     subprocess.run(['git', 'rev-parse', '--verify', 'HEAD'], check=True, capture_output=True)
+    poison = subprocess.run(['git', 'config', '--get', 'repair.seatPoison'], capture_output=True)
+    assert poison.returncode == 1, 'generator consumed seat-controlled Git config'
     for key in ('GIT_DIR', 'GIT_COMMON_DIR'):
         try:
             Path(os.environ[key], 'generator-escaped').write_text('must refuse')
@@ -4467,7 +4469,7 @@ if '--write-ledger' in sys.argv:
             raise RuntimeError('Git metadata was writable')
     Path('scripts/exec-context-legacy.json').write_text('regenerated\n')
     if Path('introduce-markers').exists():
-        Path('scripts/exec-context-legacy.json').write_text('<<<<<<< generated\n=======\n>>>>>>> generated\n')
+        Path('scripts/exec-context-legacy.json').write_text(Path('introduce-markers').read_text())
     if Path('reject-regeneration').exists():
         Path('partial-generator-write').write_text('partial')
         raise RuntimeError('failure after output write')
@@ -4524,6 +4526,21 @@ if '--write-ledger' in sys.argv:
         )
         .unwrap();
         if let Some(config) = original_config {
+            // A valid seat config must also stay hidden: merely tolerating a
+            // malformed file does not prove Git consumed the host overlay.
+            // trace:STORY-2710 | ai:codex
+            let mut poisoned = config.clone();
+            poisoned.extend_from_slice(b"\n[repair]\nseatPoison = visible\n");
+            std::fs::write(tree.join(".git/config"), poisoned).unwrap();
+            crate::seat_clone::regenerate_repair_outputs(
+                &tree,
+                &fx.main,
+                &base,
+                &[],
+                &aida_core::exec_context::Environment::default(),
+                false,
+            )
+            .unwrap();
             std::fs::write(tree.join(".git/config"), config).unwrap();
         }
         assert_eq!(
@@ -4543,20 +4560,27 @@ if '--write-ledger' in sys.argv:
         );
         drop(journal);
         if cloned {
-            std::fs::write(tree.join("introduce-markers"), "yes").unwrap();
-            let why =
-                commit_pending(&fx.main, &tree, "feat", "repair (Refs STORY-2710)").unwrap_err();
-            assert!(format!("{why:#}").contains("unresolved conflict markers"));
-            assert_eq!(git_ok(&tree, &["rev-parse", "HEAD"]), head);
-            assert_eq!(git_ok(&tree, &["rev-parse", "MERGE_HEAD"]), base);
-            let guard = crate::repair_journal::RepairGuard::lock(&fx.main).unwrap();
-            let entry = guard.for_tree(&tree, "feat", &head, &base).unwrap();
-            assert_eq!(entry.original_conflict_paths, [ledger]);
-            assert_eq!(entry.regeneration_success, Some(false));
-            assert!(entry.regenerated_tree.is_none());
-            drop(guard);
-            std::fs::remove_file(tree.join("introduce-markers")).unwrap();
-            prepare_rework_merge(&fx.main, &tree, "feat", true, 3813, "regen-lane").unwrap();
+            // An unmatched closing marker is also forbidden in an original
+            // conflict path after regeneration. trace:STORY-2710 | ai:codex
+            for markers in [
+                "<<<<<<< generated\n=======\n>>>>>>> generated\n",
+                ">>>>>>> generated\n",
+            ] {
+                std::fs::write(tree.join("introduce-markers"), markers).unwrap();
+                let why = commit_pending(&fx.main, &tree, "feat", "repair (Refs STORY-2710)")
+                    .unwrap_err();
+                assert!(format!("{why:#}").contains("unresolved conflict markers"));
+                assert_eq!(git_ok(&tree, &["rev-parse", "HEAD"]), head);
+                assert_eq!(git_ok(&tree, &["rev-parse", "MERGE_HEAD"]), base);
+                let guard = crate::repair_journal::RepairGuard::lock(&fx.main).unwrap();
+                let entry = guard.for_tree(&tree, "feat", &head, &base).unwrap();
+                assert_eq!(entry.original_conflict_paths, [ledger]);
+                assert_eq!(entry.regeneration_success, Some(false));
+                assert!(entry.regenerated_tree.is_none());
+                drop(guard);
+                std::fs::remove_file(tree.join("introduce-markers")).unwrap();
+                prepare_rework_merge(&fx.main, &tree, "feat", true, 3813, "regen-lane").unwrap();
+            }
             std::fs::write(tree.join("reject-regeneration"), "reject").unwrap();
             let why =
                 commit_pending(&fx.main, &tree, "feat", "repair (Refs STORY-2710)").unwrap_err();
