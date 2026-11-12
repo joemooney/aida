@@ -3,12 +3,12 @@ spec_id: BUG-b6b1278890774ef993d2ebc327862470-296
 agreed_id: BUG-2531
 title: Gate-ledger discovery reads every change ledger against a 64 MiB budget
 description: 'discover() in aida-cli-lib/src/gate/ledger/checked.rs reads every PR-*.jsonl in .aida/gate-ledger into one Budget (MAX_SELECTION_BYTES 64 MiB). When the ledger passed 64 MiB (82 MB, 2683 files, 2026-11-12) every verdict selection failed (''aggregate gate-ledger read budget is exhausted''). Effects: verdicts unreadable, review watch relaunched reviewers on approved heads whose claims blocked trains (BUG-2530), review record failed, the train ejected approved PR-3860. Workaround applied: archived 668 closed-PR ledgers >24h old to .aida/gate-ledger-archive, pruned 431 by-spec indexes (backup .aida/gate-ledger.bak-20261112T013508); now 17 MB. Fix: bound discovery to the changes the selection needs; rotate closed/merged change ledgers to the archive automatically; doctor warns at 50% of budget; regression test with an oversized unrelated closed ledger.'
-status: Approved
+status: InProgress
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-12T08:35:37.046532324Z
-modified_at: 2026-11-12T10:15:41.175364168Z
+modified_at: 2026-11-12T10:43:07.798744183Z
 req_type: Bug
 comments:
 - id: 01a1cf00-20ea-7c51-bbf5-a9927b13b042
@@ -113,6 +113,13 @@ history:
   author: joe
   timestamp: 2026-11-12T10:15:41.420837274Z
   changes: []
+- id: 01a1cf5a-a996-7670-bbee-6193cedd7732
+  author: aida-session-start
+  timestamp: 2026-11-12T10:43:07.798741976Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: 296d1dd295804f61d32a6b8aa07ae1485b198c93
   branch: main
