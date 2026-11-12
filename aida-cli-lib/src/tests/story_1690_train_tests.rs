@@ -72,6 +72,7 @@ fn pr_branch(r: &Path, name: &str, edit: impl FnOnce(&Path)) -> String {
 
 fn member(pr: u64, head: &str, subject: &str) -> Member {
     Member {
+        gate_audit: None,
         pr,
         head: head.to_string(),
         subject: subject.to_string(),
@@ -83,6 +84,7 @@ fn member(pr: u64, head: &str, subject: &str) -> Member {
 /// BUG-2214: the cover a fake gate hands a held member.
 fn fake_cover() -> crate::gate::mandate_ship::MandateCover {
     crate::gate::mandate_ship::MandateCover {
+        gate_match: None,
         id: "6f1c1d6e-0000-4000-8000-00000000fake".into(),
         principal: "joe".into(),
     }
@@ -1655,6 +1657,7 @@ fn a_car_keeps_the_head_commits_spec_id_when_ship_derives_no_subject() {
     let subject = member_squash_subject(returned, commit, "feat: X");
     assert_eq!(subject, "feat: X (STORY-1)");
     let car = car_message(&Member {
+        gate_audit: None,
         pr: 9,
         head: "a".repeat(40),
         subject,
@@ -3909,6 +3912,7 @@ fn pr_train_journal_completed_member_is_skipped_and_authority_is_not_restored() 
     let mut forge = FakeForge::mains(&["main"]);
     let mut m = member(1, "head1", "s");
     m.release = Some(crate::gate::mandate_ship::MandateCover {
+        gate_match: None,
         id: "not-authority".into(),
         principal: "operator".into(),
     });

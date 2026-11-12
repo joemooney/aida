@@ -12,6 +12,7 @@ fn a_failed_mandate_ship_is_ledgered_as_refused() {
     let root = tempfile::tempdir().unwrap();
     std::fs::create_dir_all(root.path().join(".aida")).unwrap();
     let cover = crate::gate::mandate_ship::MandateCover {
+        gate_match: None,
         id: "m-1".into(),
         principal: "joe".into(),
     };

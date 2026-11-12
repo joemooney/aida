@@ -7292,8 +7292,8 @@ Commands:
           terminal; a same-uid process that forges files in the AIDA home is outside the threat
           model (the same as session grants)
   renew   Extend the active mandate in place, or revive the latest expired one with a fresh ID.
-          Keeps scope, flags and reason. Stopped mandates stay stopped. Human at an interactive
-          terminal only
+          Keeps scope, supervised flag and reason. Protected paths require --include-gate-paths
+          again. Stopped mandates stay stopped. Human at an interactive terminal only
   stop    End the active mandate now. Human at an interactive terminal only
   status  Show the current mandate, if any
   help    Print this message or the help of the given subcommand(s)
@@ -7350,6 +7350,10 @@ Options:
           Also cover sensitive specs (security, containment, authority, guided, keystone).
           Operator-only specs are never covered
 
+      --include-gate-paths
+          Allow mandate ships and trains to take protected-path PRs. Requires a human at a terminal;
+          all other gates still apply
+
       --format <FORMAT>
           Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
           compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
@@ -7368,7 +7372,8 @@ Options:
           Print help (see a summary with '-h')
 ===== aida mandate renew
 Extend the active mandate in place, or revive the latest expired one with a fresh ID. Keeps scope,
-flags and reason. Stopped mandates stay stopped. Human at an interactive terminal only
+supervised flag and reason. Protected paths require --include-gate-paths again. Stopped mandates
+stay stopped. Human at an interactive terminal only
 
 Usage: aida mandate renew [OPTIONS]
 
@@ -7376,6 +7381,10 @@ Options:
       --for <DURATION>
           How long from now it lasts, e.g. `8h` or `90m` (default: the duration it was started with,
           at most 24h)
+
+      --include-gate-paths
+          Allow protected-path ships and trains for this renewal; omitted resets the opt-in.
+          Requires a human at a terminal
 
       --format <FORMAT>
           Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
@@ -39223,6 +39232,11 @@ Working on aida itself
         "help": "Print help (see more with '--help')"
       },
       {
+        "name": "include-gate-paths",
+        "takes_value": false,
+        "help": "Allow mandate ships and trains to take protected-path PRs. Requires a human at a terminal; all other gates still apply"
+      },
+      {
         "name": "include-supervised",
         "takes_value": false,
         "help": "Also cover sensitive specs (security, containment, authority, guided, keystone). Operator-only specs are never covered"
@@ -39256,7 +39270,7 @@ Working on aida itself
       "mandate",
       "renew"
     ],
-    "about": "Extend the active mandate in place, or revive the latest expired one with a fresh ID. Keeps scope, flags and reason. Stopped mandates stay stopped. Human at an interactive terminal only",
+    "about": "Extend the active mandate in place, or revive the latest expired one with a fresh ID. Keeps scope, supervised flag and reason. Protected paths require --include-gate-paths again. Stopped mandates stay stopped. Human at an interactive terminal only",
     "flags": [
       {
         "name": "canonical-ids",
@@ -39277,6 +39291,11 @@ Working on aida itself
         "name": "help",
         "takes_value": false,
         "help": "Print help (see more with '--help')"
+      },
+      {
+        "name": "include-gate-paths",
+        "takes_value": false,
+        "help": "Allow protected-path ships and trains for this renewal; omitted resets the opt-in. Requires a human at a terminal"
       }
     ],
     "hidden": false

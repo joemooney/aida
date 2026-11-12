@@ -1102,11 +1102,13 @@ fn task_2344_q2_mid_execution_authority_revocation_aborts_before_merge_and_rearm
         fn gate(&mut self, pr: u64) -> std::result::Result<crate::pr_train::Member, String> {
             self.ctx.reverify_now(true).map_err(|e| format!("{e:#}"))?;
             Ok(crate::pr_train::Member {
+                gate_audit: None,
                 pr,
                 head: "head602".into(),
                 subject: format!("feat: pr {pr} (TASK-100)"),
                 body: String::new(),
                 release: Some(crate::gate::mandate_ship::MandateCover {
+                    gate_match: None,
                     id: self.ctx.mandate_id().to_string(),
                     principal: self.principal.clone(),
                 }),
@@ -1828,6 +1830,7 @@ fn member(
     release: Option<crate::gate::mandate_ship::MandateCover>,
 ) -> crate::pr_train::Member {
     crate::pr_train::Member {
+        gate_audit: None,
         pr,
         head: "4ead000000000000000000000000000000000000".into(),
         subject: format!("feat: member {pr} (TASK-100)"),
@@ -1907,6 +1910,7 @@ fn story_1917_native_train_held_member_mandate_replaced_during_hold_gate_wait_ne
     let forge = NetForge::default();
     let (mdir, principal) = (f.mandate_dir.clone(), f.principal.clone());
     let cover = crate::gate::mandate_ship::MandateCover {
+        gate_match: None,
         id: mandate_a.id.clone(),
         principal: f.principal.clone(),
     };

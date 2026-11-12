@@ -260,6 +260,9 @@ pub enum EventKind {
         expires_at: String,
         #[serde(default)]
         include_supervised: bool,
+        // trace:STORY-2733 | ai:codex
+        #[serde(default)]
+        include_gate_paths: bool,
         #[serde(default, skip_serializing_if = "Option::is_none")]
         reason: Option<String>,
         /// Set only on a renewal (`aida mandate renew`): the expiry the

@@ -62,6 +62,10 @@ pub(crate) struct Member {
     pub head: String,
     pub subject: String,
     pub body: String,
+    /// Audit-only trailer retained across journal recovery; never grants cover.
+    // trace:STORY-2733 | ai:codex
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub gate_audit: Option<String>,
     /// BUG-2214: the mandate cover under which the land step releases this
     /// member's merge-hold, from the gate's most recent cover check (the
     /// pre-land re-gate refreshes it under the merge lease). `None` = no hold
@@ -154,7 +158,11 @@ pub(crate) fn car_message(m: &Member) -> String {
         format!("{subject} {suffix}")
     };
     let body = m.body.trim();
-    let trailer = format!("Aida-Train-Member: #{} at {}", m.pr, m.head);
+    let mut trailer = format!("Aida-Train-Member: #{} at {}", m.pr, m.head);
+    // trace:STORY-2733 | ai:codex
+    if let Some(audit) = &m.gate_audit {
+        trailer.push_str(&format!("\n{audit}"));
+    }
     if body.is_empty() {
         format!("{subject}\n\n{trailer}\n")
     } else {
@@ -1378,6 +1386,12 @@ fn typed_gate_member_with(
     // would release its hold; the release itself happens at land time, under
     // the merge lease, through ship's own release sequence.
     // trace:BUG-2214 | ai:claude
+    // Persist audit evidence separately from the live, non-serialized cover.
+    // trace:STORY-2733 | ai:codex
+    let gate_audit = cover_slot
+        .as_ref()
+        .and_then(|c| c.as_ref().ok())
+        .and_then(|c| c.gate_audit());
     let release = match &held {
         None => None,
         Some(reason) => {
@@ -1397,7 +1411,9 @@ fn typed_gate_member_with(
             }
         }
     };
+    let gate_audit = release.as_ref().and_then(|c| c.gate_audit()).or(gate_audit);
     Ok(Member {
+        gate_audit,
         pr,
         head,
         subject,
@@ -3136,8 +3152,11 @@ impl TrainForge for LiveTrainForge<'_> {
             })?;
         // STORY-1698 parity: the mandate is re-read from disk immediately
         // before the release that precedes the merge.
-        if !crate::gate::mandate_ship::mandate_still_active(&cover.id) {
-            return Err(format!("mandate {} is no longer active", cover.id));
+        if !crate::gate::mandate_ship::mandate_cover_still_active(cover) {
+            return Err(format!(
+                "mandate {} is no longer active or no longer covers protected paths",
+                cover.id
+            ));
         }
         let change = crate::forge::ChangeRef {
             id: member.pr,

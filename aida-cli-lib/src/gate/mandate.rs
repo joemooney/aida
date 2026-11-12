@@ -115,6 +115,10 @@ pub(crate) struct Mandate {
     /// Lifts the sensitive spec classes (never operator-only or decide).
     #[serde(default)]
     pub include_supervised: bool,
+    /// Human opt-in to ship protected-path PRs; renewed only explicitly.
+    // trace:STORY-2733 | ai:codex
+    #[serde(default)]
+    pub include_gate_paths: bool,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub reason: Option<String>,
     pub issued_at: DateTime<Utc>,
@@ -132,7 +136,7 @@ pub(crate) struct Mandate {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub kind: Option<String>,
     /// Every in-place renewal (`aida mandate renew`), oldest first: the
-    /// lineage of the record's expiry. The id, scopes and flags never change,
+    /// lineage of the record's expiry. The id and scopes never change,
     /// so grants that name this mandate's id stay valid across a renewal.
     // trace:STORY-B6B1278890774EF993D2EBC327862470-166 | ai:claude
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
@@ -547,6 +551,7 @@ pub(crate) fn start_as_human(
     drive: bool,
     include_supervised: bool,
     exclude_supervised: bool,
+    include_gate_paths: bool,
     requested_scopes: BTreeSet<Scope>,
     now: DateTime<Utc>,
 ) -> Result<Mandate> {
@@ -557,6 +562,7 @@ pub(crate) fn start_as_human(
         ttl,
         reason,
         drive_includes_supervised(drive, include_supervised, exclude_supervised),
+        include_gate_paths,
         drive,
         requested_scopes,
         now,
@@ -577,9 +583,17 @@ pub(crate) fn renew_as_human(
     dir: &Path,
     by: &str,
     ttl: Option<Duration>,
+    include_gate_paths: bool,
     now: DateTime<Utc>,
 ) -> Result<(Mandate, Renewal, Option<String>)> {
-    extend(dir, &require_mandate_human, by, ttl, now)
+    extend(
+        dir,
+        &require_mandate_human,
+        by,
+        ttl,
+        include_gate_paths,
+        now,
+    )
 }
 
 /// Test seam: [`renew_as_human`] with an injected `human` floor.
@@ -592,7 +606,7 @@ pub(crate) fn renew(
     ttl: Option<Duration>,
     now: DateTime<Utc>,
 ) -> Result<(Mandate, Renewal)> {
-    extend(dir, human, by, ttl, now).map(|(m, r, _)| (m, r))
+    extend(dir, human, by, ttl, false, now).map(|(m, r, _)| (m, r))
 }
 
 /// Test seam: [`renew`] that also returns the id a revival replaced.
@@ -605,12 +619,12 @@ pub(crate) fn renew_reporting_revival(
     ttl: Option<Duration>,
     now: DateTime<Utc>,
 ) -> Result<(Mandate, Renewal, Option<String>)> {
-    extend(dir, human, by, ttl, now)
+    extend(dir, human, by, ttl, false, now)
 }
 
-/// Renew the principal's mandate. Scopes, flags, principal and reason are
-/// always kept, and the expiry becomes `now + ttl` (default: the original
-/// duration, at most [`MAX_TTL`]).
+/// Renew the principal's mandate. Scopes, supervised flag, principal and reason
+/// are kept; protected paths require a fresh explicit opt-in. The expiry becomes
+/// `now + ttl` (default: the original duration, at most [`MAX_TTL`]).
 ///
 /// - An active mandate is extended in place: same id and issuance, and a
 ///   [`Renewal`] is appended to its lineage. The third value is `None`.
@@ -628,6 +642,7 @@ fn extend(
     human: &dyn Fn() -> Result<()>,
     by: &str,
     ttl: Option<Duration>,
+    include_gate_paths: bool,
     now: DateTime<Utc>,
 ) -> Result<(Mandate, Renewal, Option<String>)> {
     if let Err(err) = human() {
@@ -655,6 +670,8 @@ fn extend(
         previous_expires_at: m.expires_at,
         expires_at: now + ttl,
     };
+    // trace:STORY-2733 | ai:codex
+    m.include_gate_paths = include_gate_paths;
     m.expires_at = renewal.expires_at;
     let revived_from = if revive {
         // A new identity leaves expired grants and the old audit record alone.
@@ -751,6 +768,7 @@ pub(crate) fn start_with_scopes(
         ttl,
         reason,
         include_supervised,
+        false,
         drive,
         requested_scopes,
         now,
@@ -770,6 +788,7 @@ fn mint(
     ttl: Duration,
     reason: Option<String>,
     include_supervised: bool,
+    include_gate_paths: bool,
     drive: bool,
     requested_scopes: BTreeSet<Scope>,
     now: DateTime<Utc>,
@@ -806,6 +825,7 @@ fn mint(
         seat: MANDATE_SEAT.to_string(),
         scope: SCOPE_SHIP_HELD.to_string(),
         include_supervised,
+        include_gate_paths,
         reason: reason
             .map(|r| r.trim().to_string())
             .filter(|r| !r.is_empty()),
@@ -1168,8 +1188,8 @@ pub(crate) struct ShipCheck<'a> {
 }
 
 /// STORY-1700 (R1): the gate checks every mandate path runs before hold
-/// cover. A PR that touches the mandate or its gates, or whose files cannot
-/// be resolved, is never shipped nor released under a mandate; nor is any PR
+/// cover. Protected paths require the human-minted include_gate_paths opt-in;
+/// unresolved files always refuse. No PR ships or releases
 /// while one of `gates` (a human gate in force) names why.
 // trace:STORY-1700 | ai:claude
 fn gate_checks(
@@ -1181,7 +1201,10 @@ fn gate_checks(
         .ok_or(MandateRefusal::ChangedPathsUnresolved)?;
     // trace:STORY-1888 | ai:claude
     if let Some(hit) = crate::gate::mandate_gates::touches_gates(paths, c.protected) {
-        return Err(MandateRefusal::TouchesGates(hit));
+        // trace:STORY-2733 | ai:codex
+        if !matches!(c.state, MandateState::Active(m) if m.include_gate_paths) {
+            return Err(MandateRefusal::TouchesGates(hit));
+        }
     }
     if let Some(why) = gates.iter().find_map(|g| g.as_ref()) {
         return Err(MandateRefusal::HumanGated { why: why.clone() });

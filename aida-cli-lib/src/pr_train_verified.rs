@@ -290,9 +290,10 @@ fn collect(
     let mut all_specs = Vec::new();
     for car in &train.cars {
         if let Some(cover) = &car.member.release {
+            // trace:STORY-2733 | ai:codex
             anyhow::ensure!(
-                crate::gate::mandate_ship::mandate_still_active(&cover.id),
-                "train release mandate expired or was revoked"
+                crate::gate::mandate_ship::mandate_cover_still_active(cover),
+                "train release mandate expired, was revoked, or no longer covers protected paths"
             );
         }
         let fresh = live.gate(car.member.pr).map_err(anyhow::Error::msg)?;

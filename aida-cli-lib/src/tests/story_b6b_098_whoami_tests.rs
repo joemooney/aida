@@ -431,6 +431,7 @@ fn active_mandate() -> crate::gate::mandate::Mandate {
         seat: crate::gate::mandate::MANDATE_SEAT.into(),
         scope: crate::gate::mandate::SCOPE_SHIP_HELD.into(),
         include_supervised: false,
+        include_gate_paths: false,
         reason: None,
         issued_at: Utc::now() - chrono::Duration::hours(1),
         expires_at: Utc::now() + chrono::Duration::hours(2),

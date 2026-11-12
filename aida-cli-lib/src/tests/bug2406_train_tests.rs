@@ -589,6 +589,7 @@ fn bug2406_forged_build_refuses(fault: &str) {
         "base" => bad.base = bad.tip.clone(),
         "expired-release-cover" => {
             bad.cars[0].member.release = Some(crate::gate::mandate_ship::MandateCover {
+                gate_match: None,
                 id: uuid::Uuid::new_v4().to_string(),
                 principal: "fixture".into(),
             })
@@ -1328,6 +1329,7 @@ fn plant_mandate() -> crate::gate::mandate_ship::MandateCover {
         seat: mandate::MANDATE_SEAT.into(),
         scope: mandate::SCOPE_SHIP_HELD.into(),
         include_supervised: false,
+        include_gate_paths: false,
         reason: Some("fixture fire".into()),
         issued_at: chrono::Utc::now() - chrono::Duration::minutes(1),
         expires_at: chrono::Utc::now() + chrono::Duration::hours(1),
@@ -1346,6 +1348,7 @@ fn plant_mandate() -> crate::gate::mandate_ship::MandateCover {
     .unwrap();
     assert!(crate::gate::mandate_ship::mandate_still_active(&m.id));
     crate::gate::mandate_ship::MandateCover {
+        gate_match: None,
         id: m.id,
         principal,
     }

@@ -687,15 +687,14 @@ pub struct MergeOptions {
     /// Explicit squash/merge subject. `None` lets the forge default (gh: the PR
     /// title; pure-git: the branch head's subject).
     pub squash_subject: Option<String>,
-    /// Explicit squash body. `None` lets the forge build its default (gh:
+    /// Explicit squash/merge body. `None` lets the forge build its default (gh:
     /// the branch's commit messages plus auto-derived `Co-authored-by:`
     /// trailers). `aida pr ship` sets this when the default body would carry
     /// a non-allowlisted email (TASK-1330 identity hygiene): passing an
     /// explicit body both strips the offending trailers and suppresses the
-    /// forge's auto-derivation. GitHub-only today — gh passes it as
-    /// `--body`; the GitLab and pure-git merge paths ignore it (their squash
-    /// message comes from `squash_subject`, so they never auto-derive
-    /// co-author trailers in the first place).
+    /// forge's auto-derivation. GitHub passes it as `--body`; GitLab sends the
+    /// corresponding squash/merge commit message, and pure-git includes it
+    /// when creating the commit. Rebase creates no synthetic merge commit.
     // trace:TASK-1330 | ai:claude
     pub squash_body: Option<String>,
     /// Delete the source branch after a successful merge (forge-side).
@@ -825,6 +824,12 @@ pub(crate) fn github_merge_argv(id: u64, opts: &MergeOptions) -> Vec<String> {
             if let Some(subject) = &opts.squash_subject {
                 a.push("--subject".into());
                 a.push(subject.clone());
+            }
+            // trace:STORY-2733 | ai:codex — merge commits retain mandate audit bodies too.
+            if other == MergeMethod::Merge {
+                if let Some(body) = &opts.squash_body {
+                    a.extend(["--body".into(), body.clone()]);
+                }
             }
             if opts.delete_branch {
                 a.push("--delete-branch".into());
@@ -3771,19 +3776,24 @@ impl Forge for PureGitForge {
             }
             // `--no-edit` keeps the default merge message without opening an
             // editor (which would hang a non-interactive ship/drain).
-            MergeMethod::Merge => anyhow::ensure!(
-                git(&[
-                    "merge",
-                    "--no-ff",
-                    "--no-edit",
-                    crate::git_arg_guard::END_OF_OPTIONS,
-                    &c.branch
-                ])?
-                .status
-                .success(),
-                "pure-git merge: `git merge --no-ff {}` failed",
-                c.branch
-            ),
+            MergeMethod::Merge => {
+                let mut args = vec!["merge", "--no-ff", "--no-edit"];
+                let subject;
+                // trace:STORY-2733 | ai:codex
+                if let Some(body) = opts.squash_body.as_deref() {
+                    subject = opts
+                        .squash_subject
+                        .clone()
+                        .unwrap_or_else(|| format!("Merge {} into {}", c.branch, base));
+                    args.extend(["-m", &subject, "-m", body]);
+                }
+                args.extend([crate::git_arg_guard::END_OF_OPTIONS, &c.branch]);
+                anyhow::ensure!(
+                    git(&args)?.status.success(),
+                    "pure-git merge: `git merge --no-ff {}` failed",
+                    c.branch
+                );
+            }
             MergeMethod::Rebase => anyhow::ensure!(
                 git(&["rebase", crate::git_arg_guard::END_OF_OPTIONS, &c.branch])?
                     .status
@@ -4072,6 +4082,15 @@ fn gitlab_merge_api_shape(
     };
     if let Some(message) = message {
         fields.push(("squash_commit_message".into(), message));
+    }
+    // trace:STORY-2733 | ai:codex
+    if opts.method == MergeMethod::Merge {
+        if let Some(body) = &opts.squash_body {
+            fields.push((
+                "merge_commit_message".into(),
+                format!("{}\n\n{body}", subject.unwrap_or(mr_title)),
+            ));
+        }
     }
     GitLabMergeApiRequest {
         path: format!("{mr_path}/merge"),
@@ -6625,6 +6644,68 @@ mod tests {
         assert!(
             crate::db_reconcile::commit_declares_non_completing(&message),
             "{message}"
+        );
+    }
+
+    // trace:STORY-2733 | ai:codex
+    #[test]
+    fn mandate_audit_body_reaches_merge_commits_on_every_forge() {
+        let mut opts = MergeOptions::squash();
+        opts.method = MergeMethod::Merge;
+        let audit = "Aida-Mandate-Gate-Path: {\"path\":\"aida-cli-lib/src/gate/x.rs\"}";
+        opts.squash_body = Some(audit.into());
+        let argv = github_merge_argv(7, &opts);
+        assert!(argv
+            .windows(2)
+            .any(|pair| pair[0] == "--body" && pair[1] == audit));
+        let path = "projects/:id/merge_requests/7";
+        let shaped = gitlab_merge_api_shape(path, &opts, false, "abc123", "fix: slice one");
+        assert!(shaped.fields.contains(&(
+            "merge_commit_message".into(),
+            format!("fix: slice one\n\n{audit}")
+        )));
+
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        let g = |args: &[&str]| {
+            let out = crate::test_git::git_command()
+                .current_dir(root)
+                .args(args)
+                .output()
+                .unwrap();
+            assert!(out.status.success(), "git {args:?}");
+            String::from_utf8_lossy(&out.stdout).to_string()
+        };
+        g(&["init", "-q", "-b", "main"]);
+        g(&["config", "user.email", "t@t.t"]);
+        g(&["config", "user.name", "t"]);
+        std::fs::write(root.join("a"), "1").unwrap();
+        g(&["add", "."]);
+        g(&["commit", "-q", "-m", "base"]);
+        g(&["checkout", "-q", "-b", "feature"]);
+        std::fs::write(root.join("b"), "2").unwrap();
+        g(&["add", "."]);
+        g(&["commit", "-q", "-m", "feat: slice one"]);
+        g(&["checkout", "-q", "main"]);
+        let cref = ChangeRef {
+            id: 0,
+            url: String::new(),
+            branch: "feature".into(),
+            base: "main".into(),
+            title: None,
+        };
+        opts.squash_subject = None;
+        PureGitForge::new(root)
+            .merge_change(&cref, &opts, &mut crate::network_retry::NoopSink)
+            .unwrap();
+        let message = g(&["log", "-1", "--format=%B", "main"]);
+        assert!(message.contains(audit), "{message}");
+        assert_eq!(
+            g(&["rev-list", "--parents", "-n", "1", "main"])
+                .split_whitespace()
+                .count(),
+            3,
+            "a real merge commit carries the audit"
         );
     }
 

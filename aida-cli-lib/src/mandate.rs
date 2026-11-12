@@ -486,6 +486,7 @@ pub(crate) fn emit_renewed(project_root: &Path, mandate: &Mandate, renewal: &Ren
             principal: renewal.renewed_by.clone(),
             expires_at: renewal.expires_at.to_rfc3339(),
             include_supervised: mandate.include_supervised,
+            include_gate_paths: mandate.include_gate_paths,
             reason: mandate.reason.clone(),
             renewed_from: Some(renewal.previous_expires_at.to_rfc3339()),
         },
@@ -508,6 +509,7 @@ pub(crate) fn emit_revived(project_root: &Path, mandate: &Mandate, old_id: &str)
             principal: mandate.principal.clone(),
             expires_at: mandate.expires_at.to_rfc3339(),
             include_supervised: mandate.include_supervised,
+            include_gate_paths: mandate.include_gate_paths,
             reason: mandate.reason.clone(),
             renewed_from: Some(old_id.to_string()),
         },
@@ -521,12 +523,13 @@ pub(crate) fn emit_revived(project_root: &Path, mandate: &Mandate, old_id: &str)
 // trace:STORY-2346 | ai:claude
 pub(crate) fn revived_message(old_id: &str, m: &Mandate, receipt: &Renewal) -> String {
     format!(
-        "Revived mandate {old_id} (expired {}) as {} ({}, supervised: {}); active until {}. Scope, flags, protected paths and human gates are unchanged.",
+        "Revived mandate {old_id} (expired {}) as {} ({}, supervised: {}); active until {}. Scope, supervised flag and human gates retained; protected paths: {}.",
         receipt.previous_expires_at.to_rfc3339(),
         m.id,
         m.effective_scopes().iter().map(|s| s.as_str()).collect::<Vec<_>>().join(", "),
         m.include_supervised,
-        m.expires_at.to_rfc3339()
+        m.expires_at.to_rfc3339(),
+        m.include_gate_paths
     )
 }
 
@@ -542,6 +545,7 @@ pub(crate) fn emit_changed(project_root: &Path, mandate: &Mandate, active: bool)
             principal: mandate.principal.clone(),
             expires_at: mandate.expires_at.to_rfc3339(),
             include_supervised: mandate.include_supervised,
+            include_gate_paths: mandate.include_gate_paths,
             reason: mandate.reason.clone(),
             renewed_from: None,
         },
@@ -861,6 +865,7 @@ fn status_text(state: &MandateState, now: DateTime<Utc>) -> String {
                     "no"
                 }
             ),
+            format!("  includes protected paths: {}", m.include_gate_paths),
         ];
         if let Some(reason) = &m.reason {
             lines.push(format!("  reason:    {reason}"));
@@ -921,6 +926,7 @@ pub(crate) fn handle_mandate(action: &crate::cli::MandateAction) -> Result<()> {
             reason,
             include_supervised,
             exclude_supervised,
+            include_gate_paths,
         } => {
             let mut parsed_scopes = BTreeSet::new();
             if *ship_held {
@@ -947,6 +953,7 @@ pub(crate) fn handle_mandate(action: &crate::cli::MandateAction) -> Result<()> {
                 *drive,
                 *include_supervised,
                 *exclude_supervised,
+                *include_gate_paths,
                 parsed_scopes,
                 Utc::now(),
             )?;
@@ -991,11 +998,19 @@ pub(crate) fn handle_mandate(action: &crate::cli::MandateAction) -> Result<()> {
             Ok(())
         }
         // trace:STORY-B6B1278890774EF993D2EBC327862470-166 | ai:claude
-        crate::cli::MandateAction::Renew { duration } => {
+        crate::cli::MandateAction::Renew {
+            duration,
+            include_gate_paths,
+        } => {
             // Same grammar and 24h cap as `start --ttl`, named for this flag.
             let ttl = duration.as_deref().map(parse_renew_for).transpose()?;
-            let (m, renewal, revived_from) =
-                renew_as_human(&dir, &crate::current_user_id(None), ttl, Utc::now())?;
+            let (m, renewal, revived_from) = renew_as_human(
+                &dir,
+                &crate::current_user_id(None),
+                ttl,
+                *include_gate_paths,
+                Utc::now(),
+            )?;
             // trace:STORY-2346 | ai:claude
             if let Some(old_id) = revived_from {
                 if let Some(root) = &audit_root {
@@ -1008,10 +1023,11 @@ pub(crate) fn handle_mandate(action: &crate::cli::MandateAction) -> Result<()> {
                 emit_renewed(root, &m, &renewal);
             }
             println!(
-                "Mandate {} renewed until {} (was {}); its scope, flags and reason are unchanged (renewal {}).",
+                "Mandate {} renewed until {} (was {}); scope, supervised flag and reason retained; protected paths: {} (renewal {}).",
                 m.id,
                 renewal.expires_at.to_rfc3339(),
                 renewal.previous_expires_at.to_rfc3339(),
+                m.include_gate_paths,
                 m.renewals.len()
             );
             Ok(())
