@@ -17,7 +17,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-08T03:08:54.290380002Z
-modified_at: 2026-11-12T13:52:26.895711804Z
+modified_at: 2026-11-12T14:35:41.473076612Z
 req_type: Task
 tags:
 - area:architecture
@@ -208,6 +208,13 @@ comments:
   content: 'ADVISOR (06:55 MST): the task-3448-helpers lane exited with 31 uncommitted files (207 calls migrated, SCC still 367) because the local registry test compile timed out. Resume in the SAME clone and branch: commit the work as is, push, and open the PR (Refs TASK-3448). CI shards are the gate; do not rerun the timed-out local test job. Continue to the next directory only after the PR is open.'
   created_at: 2026-11-12T13:52:26.895711804Z
   modified_at: 2026-11-12T13:52:26.895711804Z
+  session_id: 01a1ceeb-e827-7832-8991-e83d9eb95cef
+  harness_version: 2.1.322 (Claude Code)
+- id: 01a1d02f-9421-7bc1-8742-4351a28e5cce
+  author: joe
+  content: 'ADVISOR BRIEF next slice (07:36 MST, after #3878 landed at a447d559aaa): migrate the REMAINING try_parse_from/built_command call sites (the ones #3878 left, i.e. outside the top-level callers it covered) to the injected leaf helpers, in a PR of at most ~40 files; split by directory if more. Then re-measure the SCC with the task-3425 script and record before/after. Commit and push as soon as the slice compiles (cargo check --profile agent -p aida-cli-lib --tests); CI shards are the gate, so do not wait on a long local registry test run. Trailer (Refs TASK-3448) unless the SCC reaches the spec target.'
+  created_at: 2026-11-12T14:35:41.473076612Z
+  modified_at: 2026-11-12T14:35:41.473076612Z
   session_id: 01a1ceeb-e827-7832-8991-e83d9eb95cef
   harness_version: 2.1.322 (Claude Code)
 history:
