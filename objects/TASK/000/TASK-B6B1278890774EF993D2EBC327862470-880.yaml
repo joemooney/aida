@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T13:39:53.442026Z
-modified_at: 2026-11-10T01:09:36.768757029Z
+modified_at: 2026-11-12T05:13:00.758535786Z
 req_type: Task
 tags:
 - architecture
@@ -1482,6 +1482,16 @@ comments:
   created_at: 2026-11-10T01:09:36.768757029Z
   modified_at: 2026-11-10T01:09:36.768757029Z
   session_id: 01a1c2ed8312
+  harness_version: codex-cli 0.167.0
+- id: 01a1ce2c-6e56-7f43-8061-833d6d6dd151
+  author: dirtlab
+  content: |-
+    Implemented the next staged metadata slice under the 2026-11-10 advisor ruling: CLI edit --tags and MCP update_requirement.tags route structurally guarded replacement through mediated spec_edit. Missing leaves tags unchanged; empty clears nonstructural tags; values normalize and deduplicate with bounded strict schemas. Host structural-tag protection shares the ordinary CLI policy, and permanent hypothesis locks survive tag removal. Added replacement/clear stale-base, concurrent mutation, persist-before-lost-reply/replay, structural atomic-refusal and hypothesis protection coverage. Production launch gate remains CLOSED. TASK-3223 stays open; other writer families and whole-operation blockers remain. No commit/push/PR/queue completion from this native seat. Host publication must use Refs-only subject and empty/Refs-only squash body, preserve holds and require green published-head CI plus independent approval.
+
+    Validation: 91 distinct targeted Rust tests passed through the lane runner: store_mutation (50, final rerun j20261112T051225945-2-0), canonical_mutation (2, j20261112T050529223-2-0), db::redo::tests (25, j20261112T050644319-2-0), mediated_profile (7 passed, one child fixture ignored, j20261112T050631826-2-0), tags_replace_warning_tests (7, j20261112T050858777-2-0). Python tests.test_store_mutation and tests.test_store_writer_inventory: 84 passed. check-store-writers.py: 3528 sink sites reconciled, 294 operation mappings still blocked. rustfmt --check on changed Rust files, git diff --check, and check-ci-gates.py --audit pass. Full check-ci-fast is incomplete: stopped when its supposedly no-build tier invoked Cargo directly, contrary to this seat's runner-only rule. Initial aida-cli --lib invocation selected a binary-only package; corrected to aida-cli-lib with executed passing tests. untested=false for this slice; full CI is not established.
+  created_at: 2026-11-12T05:13:00.758535786Z
+  modified_at: 2026-11-12T05:13:00.758535786Z
+  session_id: 01a1ce22dc2a
   harness_version: codex-cli 0.167.0
 history:
 - id: 01a1b116-742d-73c0-9064-1933f11e4c38
