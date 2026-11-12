@@ -3,13 +3,23 @@ spec_id: BUG-b6b1278890774ef993d2ebc327862470-299
 agreed_id: BUG-2534
 title: Review watch reports 'three attempts without a verdict' when the reviewer recorded an approval in the gate ledger
 description: '2026-11-12 03:10 MST: ''aida review watch --once'' blocked PR-3867 at f037d33 and PR-3866 at 340590c with ''three review attempts ended without a verdict (no diagnostic)''. The reviewer log (.aida/headless-logs/pr-3867-01a1cf33-*.jsonl) shows ''aida review record TASK-3448 --pr 3867 --sha f037d33 --verdict approved'' exiting 0 and the approval present in .aida/gate-ledger/PR-3867.jsonl. The record printed a phase-3 handshake path (aida-pr-3867/.aida/review-verdicts/PR-3867.json) that did not exist afterwards in either the review worktree or the primary. The watcher therefore burns reviewer capacity on repeat reviews and then blocks the head. Expected: the watcher reads the verdict from the gate ledger (the source of truth), or the record step writes the handshake reliably.'
-status: Draft
+status: Approved
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-12T10:13:24.570585533Z
-modified_at: 2026-11-12T10:13:24.570585533Z
+modified_at: 2026-11-12T18:12:12.723966974Z
 req_type: Bug
+history:
+- id: 01a1d0f5-cf33-7072-a087-c8f8bafc0d36
+  author: joe
+  timestamp: 2026-11-12T18:12:12.723956333Z
+  session_id: 01a1d0eb-22cc-7262-8f6c-7266e9cc1fbb
+  harness_version: 2.1.322 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Approved
 filed_at:
   code_sha: 298639cb95018f3d580dc44cba3ce04e880064fd
   branch: main
