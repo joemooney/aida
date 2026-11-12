@@ -1885,6 +1885,14 @@ pub(crate) fn build_verdict_object(
     )
 }
 
+// trace:BUG-2527 | ai:claude
+/// Refusal shown when an explicit `approved` would otherwise be recorded as a
+/// different verdict because blocking findings survive this round.
+pub(crate) const EXPLICIT_APPROVAL_REFUSAL: &str =
+    "cannot record approved: unresolved review findings require request-changes; \
+     to clear resolved carried findings, pass --finding \"\"; otherwise replace them \
+     with findings carrying explicit non-blocking dispositions";
+
 // trace:STORY-2696 | ai:codex
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn build_verdict_object_with_policy(
@@ -2079,6 +2087,17 @@ pub(crate) fn build_verdict_object_with_policy(
         );
     }
     let effective = disposition_verdict(&obj);
+    // trace:BUG-2527 | ai:codex
+    // An explicit approval must not silently become a refusal when findings
+    // (including legacy aliases) survive this round.
+    if verdict.is_some_and(|word| VerdictKind::parse(word) == VerdictKind::Approved)
+        && effective != VerdictKind::Approved
+    {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::InvalidInput,
+            EXPLICIT_APPROVAL_REFUSAL,
+        ));
+    }
     if matches!(
         effective,
         VerdictKind::Approved | VerdictKind::RequestChanges
@@ -4093,8 +4112,50 @@ mod story_2698_tests {
         );
     }
 
+    // trace:BUG-2527 | ai:codex
     #[test]
-    fn story_2698_explicit_empty_finding_clears_resolved_evidence() {
+    fn explicit_approval_refuses_legacy_and_new_blocking_findings() {
+        let tmp = tempfile::tempdir().unwrap();
+        let path = tmp.path().join("verdict.json");
+        for key in ["findings", "blocking_findings"] {
+            let prior = serde_json::json!({
+                "verdict": "request-changes", key: ["unresolved bug"],
+                "recorded_by": "reviewer",
+            });
+            std::fs::write(&path, prior.to_string()).unwrap();
+            for findings in [vec![], vec!["new blocking bug".to_string()]] {
+                let err = build_verdict_object(
+                    tmp.path(),
+                    &path,
+                    Some("APPROVED"),
+                    None,
+                    None,
+                    None,
+                    &findings,
+                    "reviewer",
+                )
+                .unwrap_err();
+                assert_eq!(err.kind(), std::io::ErrorKind::InvalidInput);
+                assert!(err.to_string().contains("--finding \"\""));
+                let refusal = build_verdict_object(
+                    tmp.path(),
+                    &path,
+                    Some("request-changes"),
+                    None,
+                    None,
+                    None,
+                    &findings,
+                    "reviewer",
+                )
+                .unwrap();
+                assert_eq!(refusal["verdict"], "request-changes");
+            }
+        }
+    }
+
+    // trace:BUG-2527 | ai:codex
+    #[test]
+    fn explicit_approval_refuses_carried_findings_until_explicitly_cleared() {
         let tmp = tempfile::tempdir().unwrap();
         let path = tmp.path().join("verdict.json");
         std::fs::write(&path, r#"{"verdict":"request-changes","findings":["fixed bug"],"reviewed_sha":"1111111111111111111111111111111111111111","recorded_by":"reviewer"}"#).unwrap();
@@ -4108,8 +4169,14 @@ mod story_2698_tests {
             &[],
             "reviewer",
         )
-        .unwrap();
-        assert_eq!(inherited["verdict"], "request-changes");
+        .unwrap_err();
+        assert_eq!(inherited.kind(), std::io::ErrorKind::InvalidInput);
+        assert!(inherited.to_string().contains("unresolved review findings"));
+        assert!(inherited.to_string().contains("--finding \"\""));
+        let unchanged: serde_json::Value =
+            serde_json::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
+        assert_eq!(unchanged["verdict"], "request-changes");
+        assert!(unchanged.get("rounds").is_none());
         let cleared = build_verdict_object(
             tmp.path(),
             &path,

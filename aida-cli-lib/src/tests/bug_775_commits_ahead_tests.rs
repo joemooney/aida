@@ -1146,3 +1146,36 @@ fn story_2696_no_carry_nonapproval_refuses_without_writing() {
         assert!(!tmp.path().join(".aida").exists());
     }
 }
+
+// trace:BUG-2527 | ai:claude
+#[test]
+fn bug_2527_handler_refuses_explicit_approval_over_blocking_findings() {
+    let tmp = tempfile::tempdir().unwrap();
+    let _env = crate::test_env::EnvVarsGuard::apply(&[("AIDA_STANDALONE_IMPLEMENTER", None)]);
+    let path = crate::gate::review_verdict::verdict_path(tmp.path(), "STORY-993");
+    std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+    let prior =
+        r#"{"verdict":"request-changes","findings":["unresolved bug"],"recorded_by":"reviewer"}"#;
+    std::fs::write(&path, prior).unwrap();
+    for findings in [vec![], vec!["new blocking bug".to_string()]] {
+        let err = crate::handle_review_record_policy_at(
+            tmp.path().into(),
+            "STORY-993",
+            "approved",
+            None,
+            None,
+            None,
+            &findings,
+            &[],
+            None,
+            false,
+        )
+        .unwrap_err();
+        assert!(
+            err.to_string().contains("cannot record approved"),
+            "{err:#}"
+        );
+        assert!(err.to_string().contains("--finding \"\""), "{err:#}");
+        assert_eq!(std::fs::read_to_string(&path).unwrap(), prior);
+    }
+}
