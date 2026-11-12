@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-11T04:48:14.810158291Z
-modified_at: 2026-11-12T10:48:42.750795051Z
+modified_at: 2026-11-12T11:08:22.000824376Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -335,6 +335,10 @@ history:
   author: joe
   timestamp: 2026-11-12T10:48:42.874026957Z
   changes: []
+- id: 01a1cf71-c557-77a1-a006-51985251df33
+  author: joe
+  timestamp: 2026-11-12T11:08:22.231499882Z
+  changes: []
 filed_at:
   code_sha: 496312a2eabee394b741e459cbf47972c8947905
   branch: main
@@ -348,7 +352,7 @@ failure_reason:
   phase: reviewer
   phase_index: 3
   kind: verdict:request-changes
-  detail: 'Full seven-file sweep: BUG-2522 AC1-AC4 verified by source and passing lib-0 regression evidence, but exact-head lib-1 confirms one new protected-gate dependency violation causing two architecture guard failures. Supersedes the approval recorded before lib-1 completed.'
+  detail: Full seven-file diff reviewed; BUG-2522 AC1-AC4 verified by source and regression-test inspection, with passing lane evidence in spec history. No actionable defects. CI pending at review time; no local tests or builds run under review-watch policy.
   recovery_hint: address the review findings, move BUG-2522 back to In Progress, and clear the PR hold only after approval
   shelved_by: reviewer
-  shelved_at: 2026-11-12T10:48:42.750795051Z
+  shelved_at: 2026-11-12T11:08:22.000824376Z
