@@ -8,8 +8,14 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-12T08:35:37.046532324Z
-modified_at: 2026-11-12T08:54:21.316375305Z
+modified_at: 2026-11-12T09:04:14.570754154Z
 req_type: Bug
+comments:
+- id: 01a1cf00-20ea-7c51-bbf5-a9927b13b042
+  author: mcp
+  content: 'Native-lane partial handoff: implemented a strict spec-to-change inventory that discards unrelated review payloads, then reads/caches only selected change ledgers against the unchanged aggregate selection budget. Missing/stale indexes still cannot hide refusals; per-file, line, directory, change-count and inventory limits remain. Added doctor review-verdicts capacity warning at 32 MiB and regressions for >64 MiB unrelated closed history, selected-history exhaustion, shared-ledger exact budget, and threshold boundaries. Changed checked.rs, review_alias.rs, doctor/store_repair.rs, gate/tests/bug_2403_alias_selection_tests.rs, tests/doctor_cmd_bug_1505_review_verdict_doctor_tests.rs, and docs/internal/testing/bug-2531-ledger-selection-budget.md. Formatting/diff checks passed. untested=true: lane job j20261112T084821116-2700781-0 timed out after 900s (exit 124) during slot wait/compilation, with no tests executed; alias-suite job j20261112T085138412-2729924-0 is pending a Cargo slot. Automatic archival is NOT implemented; discovery I/O still scales with all active files. Design-fork punt and finding SPEC-b6b1278890774ef993d2ebc327862470-026 record the missing archive-aware retention/read/revival contract. Refs declaration recorded; punt veto remains. Edits left uncommitted; no push, PR, queue completion or review/merge action.'
+  created_at: 2026-11-12T09:04:14.570744238Z
+  modified_at: 2026-11-12T09:04:14.570744238Z
 history:
 - id: 01a1cee6-975b-7d40-8689-d35e1f109d99
   author: joe
