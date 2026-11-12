@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-12T08:35:37.046532324Z
-modified_at: 2026-11-12T11:19:12.861695051Z
+modified_at: 2026-11-12T11:34:54.264865822Z
 req_type: Bug
 comments:
 - id: 01a1cf00-20ea-7c51-bbf5-a9927b13b042
@@ -144,6 +144,11 @@ history:
   author: joe
   timestamp: 2026-11-12T11:19:12.995584300Z
   changes: []
+- id: 01a1cf8a-107c-7353-bb40-b1bf3dfc0327
+  author: joe
+  timestamp: 2026-11-12T11:34:54.332849441Z
+  session_id: 01a1cf8935cf
+  changes: []
 filed_at:
   code_sha: 296d1dd295804f61d32a6b8aa07ae1485b198c93
   branch: main
@@ -155,10 +160,10 @@ filed_at:
   harness_version: 2.1.322 (Claude Code)
 attention_reason:
   category: design-fork
-  detail: 'Round 2 finding 1 and finding 2 are accepted, not disputed. Finding 1: supplied a scan-wide 128 MiB/200000-attempt safety bound with actual-read/parse and retry regressions, but relevant-only discovery still needs a completeness mechanism because by-spec hints may be missing after append. Finding 2: automatic closed/merged archival remains unimplemented; direct/indexed/audit/carry-over/import/append and reopen paths need an archive-aware retention contract. Proposed concrete write-ahead bindings, bootstrap/writer fence, and archive/revival locking in docs/plans/2026-11-12-bug-2531-discovery-retention-sketch.md. AGENTS.md Sketch-First Protocol requires master sign-off for new formats/lifecycle semantics; no approval or approved scope split exists and Draft TASK-3098 is not one. This is a terminal design-gate handoff, not a completion claim. bug_2531 lane job timed out during compilation after 900s (exit 124), no tests executed; alias job running with no executed result. untested=true. Native Refs declaration recorded and edits left uncommitted; punt veto must prevent publication.'
-  lean: Approve the full completeness-and-retention sketch with a writer compatibility fence before implementation; keep BUG-2531 open. The bounded-scan patch is only an interim safety mitigation.
+  detail: 'Round 2 authoritative findings 1 and 2 are both accepted, not disputed as defects. I dispute proceeding to implementation/publication without the master sign-off required by AGENTS.md Sketch-First Protocol: relevant-only discovery needs a complete durable binding inventory and legacy-writer fence; archive rotation needs archive-aware strict/direct readers, locking, revival and observed forge closure. The existing concrete proposal is docs/plans/2026-11-12-bug-2531-discovery-retention-sketch.md, still explicitly unapproved; TASK-3098 is Draft, not an approved scope split. Findings 1 and 2 remain blocked on approval of that full contract or explicit scope split. Do not complete BUG-2531 or publish the current partial slice as satisfying either finding.'
+  lean: Approve the full binding completeness and archive/revival proposal, then implement both findings together; retain BUG-2531 open until its regression criteria pass.
   raised_by: implementer
-  raised_at: 2026-11-12T11:01:00.865659480Z
+  raised_at: 2026-11-12T11:34:54.264865822Z
 failure_reason:
   phase: reviewer
   phase_index: 3
