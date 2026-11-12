@@ -1,0 +1,143 @@
+{
+  "schema_version": 1,
+  "spec": "STORY-2704",
+  "publishes": [
+    {
+      "at": "2026-11-12T09:01:37.825461478Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-11-10T10:48:53.102287876Z",
+      "spec": "STORY-2704",
+      "seat": "advisor",
+      "kind": {
+        "event": "SpecRequeued",
+        "via": "queue-rework",
+        "actor": "joe",
+        "from": "Needs Attention",
+        "to": "Approved"
+      }
+    },
+    {
+      "ts": "2026-11-10T14:19:30.582337214Z",
+      "spec": "STORY-2704",
+      "seat": "advisor",
+      "kind": {
+        "event": "SpecRequeued",
+        "via": "queue-rework",
+        "actor": "joe",
+        "from": "Needs Attention",
+        "to": "Approved"
+      }
+    },
+    {
+      "ts": "2026-11-10T15:21:30.607730493Z",
+      "spec": "STORY-2704",
+      "seat": "advisor",
+      "kind": {
+        "event": "SpecRequeued",
+        "via": "queue-rework",
+        "actor": "joe",
+        "from": "Needs Attention",
+        "to": "Approved"
+      }
+    },
+    {
+      "ts": "2026-11-10T16:17:17.638600403Z",
+      "spec": "STORY-2704",
+      "seat": "advisor",
+      "kind": {
+        "event": "SpecRequeued",
+        "via": "queue-rework",
+        "actor": "joe",
+        "from": "Needs Attention",
+        "to": "Approved"
+      }
+    },
+    {
+      "ts": "2026-11-11T05:10:10.716366635Z",
+      "spec": "STORY-2704",
+      "seat": "advisor",
+      "kind": {
+        "event": "SpecRequeued",
+        "via": "queue-rework",
+        "actor": "joe",
+        "from": "Needs Attention",
+        "to": "Approved"
+      }
+    },
+    {
+      "ts": "2026-11-11T07:20:33.983791696Z",
+      "spec": "STORY-2704",
+      "kind": {
+        "event": "UnshippedWorkDetected",
+        "spec": "STORY-2704",
+        "branch": "origin/story-2704-porcelain-s1b",
+        "first_seen": "2026-11-11T07:20:33.983729739+00:00"
+      }
+    },
+    {
+      "ts": "2026-11-11T19:49:38.890854360Z",
+      "spec": "STORY-2704",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 3842,
+        "verdict": "CHANGES REQUESTED",
+        "reviewed_sha": "3874c183cdc1bee5c505311134a24760c641a798"
+      }
+    },
+    {
+      "ts": "2026-11-11T19:49:40.942621103Z",
+      "spec": "STORY-2704",
+      "kind": {
+        "event": "SpecShelved",
+        "phase": "reviewer",
+        "kind": "verdict:request-changes",
+        "detail": "Recorded by advisor from codex reviewer (its own record failed: could not protect PR-3842 with a merge hold, BUG-2522). Findings as posted on the PR.",
+        "recovery_hint": "address the review findings, move STORY-2704 back to In Progress, and clear the PR hold only after approval"
+      }
+    },
+    {
+      "ts": "2026-11-12T08:55:12.388428185Z",
+      "spec": "STORY-2704",
+      "seat": "advisor",
+      "kind": {
+        "event": "PrMerged",
+        "pr": 3842
+      }
+    },
+    {
+      "ts": "2026-11-12T08:59:40.438739439Z",
+      "spec": "STORY-2704",
+      "kind": {
+        "event": "UnshippedWorkDetected",
+        "spec": "STORY-2704",
+        "branch": "pr-3842",
+        "first_seen": "2026-11-12T08:59:40.438672857+00:00"
+      }
+    },
+    {
+      "ts": "2026-11-12T08:59:40.510317943Z",
+      "spec": "STORY-2704",
+      "kind": {
+        "event": "UnshippedWorkDetected",
+        "spec": "STORY-2704",
+        "branch": "origin/story-2704-s3",
+        "first_seen": "2026-11-12T08:59:40.510149167+00:00"
+      }
+    },
+    {
+      "ts": "2026-11-12T09:01:37.454432648Z",
+      "spec": "STORY-2704",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "d5981f974cabb3b88ad53371f54c517a08cda0a5",
+        "pr": 3842,
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
