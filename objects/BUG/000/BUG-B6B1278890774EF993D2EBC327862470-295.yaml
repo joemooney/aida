@@ -3,12 +3,12 @@ spec_id: BUG-b6b1278890774ef993d2ebc327862470-295
 agreed_id: BUG-2530
 title: Second reviewer seat claims an already-approved head and its claim blocks the merge train
 description: '2026-11-11 23:16 MST: PR-3862 (TASK-3223) was APPROVED at 03cfcce at 05:49Z with green CI. The train CI passed, but at merge the train refused: ''PR-3862 is under review — codex-reviewer started reviewing head 03cfcce 3m ago (claimed; expires in 27m)''. A reviewer must not be admitted on a head that already holds a conclusive verdict. And a review claim on an already-approved head must not block the train: it cost one full train cycle (~20 min). Fix: (1) review admission refuses when a conclusive verdict already exists at the exact head; (2) the train treats a claim opened after a conclusive verdict at the same head as non-blocking, or the merge-hold clear releases it.'
-status: InProgress
+status: NeedsAttention
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-12T06:22:01.808701892Z
-modified_at: 2026-11-12T06:30:42.007785730Z
+modified_at: 2026-11-12T07:23:22.506978708Z
 req_type: Bug
 comments:
 - id: 01a1ce73-8e57-74c1-9bd7-47adb97b7de6
@@ -41,6 +41,13 @@ history:
   session_id: 01a1ce6d28cf
   harness_version: codex-cli 0.167.0
   changes: []
+- id: 01a1cea3-c80a-7e42-90d2-621a7175bc5b
+  author: aida-orchestrator
+  timestamp: 2026-11-12T07:23:22.507001846Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 filed_at:
   code_sha: fd869101d5c06eac3eea99c1a376828d5706ebdb
   branch: main
@@ -50,3 +57,11 @@ filed_at:
   vendor: claude
   session: 01a1cc9c-1eae-7a72-9a24-8ec1afc42772
   harness_version: 2.1.322 (Claude Code)
+failure_reason:
+  phase: reviewer
+  phase_index: 3
+  kind: verdict:request-changes
+  detail: 'Full sweep of dcc0b4e06fe2: request changes; four findings. BUG-2530 AC1 (refuse admission on an exact-head conclusive verdict): unverified — local helper coverage exists, but synced publication-only verdicts are omitted. BUG-2530 AC2 (a claim opened after an exact-head conclusive verdict must not block the train, or be released by hold clearance): unverified — older attested local approvals covered, but same-second later claims still block and train integration CI fails. BUG-2530 (bug protocol: touches a test file): met — gate/tests/review_marker_tests.rs. No local builds/tests run per review-watch policy.'
+  recovery_hint: address the review findings, move BUG-2530 back to In Progress, and clear the PR hold only after approval
+  shelved_by: reviewer
+  shelved_at: 2026-11-12T07:23:22.506978708Z
