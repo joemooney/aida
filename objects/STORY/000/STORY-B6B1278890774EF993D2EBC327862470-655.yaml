@@ -30,8 +30,16 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-12T17:27:12.872067622Z
-modified_at: 2026-11-12T17:27:39.433597183Z
+modified_at: 2026-11-12T17:27:42.159588118Z
 req_type: Story
+comments:
+- id: 01a1d0cd-0f4f-7a42-97ef-efe3f215cd8e
+  author: joe
+  content: 'ADVISOR SIGNOFF (2026-11-12 10:32 MST): architecture sketch in the description is approved as written (operator requested the feature at 10:25). Lane brief: implement exactly the sketch; LIGHT gate = one targeted ''cargo test -p aida-cli-lib pr_emergency_land'' plus make check-ci-fast (update the help golden snapshot, make sync-templates, make check-templates). Commit ''[AI:codex] feat(pr): operator emergency-land command and /aida-emergency-fix skill (STORY-2732)''. Push and open the PR; the operator has asked the advisor to land this PR via the emergency path once the targeted test passes.'
+  created_at: 2026-11-12T17:27:42.159588118Z
+  modified_at: 2026-11-12T17:27:42.159588118Z
+  session_id: 01a1d09a-4262-7d50-a00b-00a5a30f3934
+  harness_version: 2.1.322 (Claude Code)
 history:
 - id: 01a1d0cd-04a9-7122-9401-af6c90c9299a
   author: joe
