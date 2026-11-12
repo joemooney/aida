@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-12T08:35:37.046532324Z
-modified_at: 2026-11-12T13:12:00.394193926Z
+modified_at: 2026-11-12T13:13:03.784413369Z
 req_type: Bug
 comments:
 - id: 01a1cf00-20ea-7c51-bbf5-a9927b13b042
@@ -247,6 +247,10 @@ history:
   - field_name: status
     old_value: NeedsAttention
     new_value: Approved
+- id: 01a1cfe3-eef5-7790-ab1a-79ae8d7beb8b
+  author: joe
+  timestamp: 2026-11-12T13:13:03.989476071Z
+  changes: []
 filed_at:
   code_sha: 296d1dd295804f61d32a6b8aa07ae1485b198c93
   branch: main
@@ -256,3 +260,11 @@ filed_at:
   vendor: claude
   session: 01a1cc9c-1eae-7a72-9a24-8ec1afc42772
   harness_version: 2.1.322 (Claude Code)
+failure_reason:
+  phase: reviewer
+  phase_index: 3
+  kind: verdict:request-changes
+  detail: 'Full sweep: relevant-only discovery and automatic archival remain incomplete without an approved scope split. Safety cap, capacity warning and regressions verified; CI pending at review time.'
+  recovery_hint: address the review findings, move BUG-B6B1278890774EF993D2EBC327862470-296 back to In Progress, and clear the PR hold only after approval
+  shelved_by: reviewer
+  shelved_at: 2026-11-12T13:13:03.784413369Z
