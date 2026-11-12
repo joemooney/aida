@@ -17,7 +17,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-08T03:08:54.290380002Z
-modified_at: 2026-11-12T13:25:34.114558785Z
+modified_at: 2026-11-12T13:30:03.936763958Z
 req_type: Task
 tags:
 - area:architecture
@@ -196,6 +196,12 @@ comments:
     Validation so far: cargo check --profile agent -p aida-cli-lib --tests passed via launcher job j20261112T131100619-2-0; all 27 caller diffs reverse to the original source after formatting; changed-file rustfmt --check and git diff --check pass. Executed Rust tests are not yet established: registry/parser and workspace compile jobs are still in progress/queued. Final validation details will be attached to the host publication body. Full make check-ci-fast is not claimed; bounded non-Cargo batches are partial and some guards attempt read-only Git metadata writes. Exact make check-ci-compile cargo payload (cargo test --profile agent --workspace --no-run) is queued through the launcher.
   created_at: 2026-11-12T13:25:34.114558785Z
   modified_at: 2026-11-12T13:25:34.114558785Z
+  session_id: 01a1cfe00f1f
+- id: 01a1cff3-7f20-75d2-8829-ce07f2a187cb
+  author: joe
+  content: 'Final local validation for the 31-file top-level test-infrastructure slice: registry/ratchet/help launcher j20261112T131141212-2-0 timed out during compilation after 900 seconds (exit 124), with no executed tests; untested=true. Runner reports overlay-stale because the primary rewrote generation agent-fb3abc32bc5001f9 in place. At 13:29 UTC, parser job j20261112T131208863-935863-0 is running and workspace compile job j20261112T131209893-935902-0 is queued; neither counts as a pass. The earlier cargo check --profile agent -p aida-cli-lib --tests passed, as did changed-file rustfmt, git diff --check, and the 27-file reverse-mechanical comparison. Full make check-ci-fast and make check-ci-compile remain unestablished host/CI gates. SCC evidence remains 367 -> 367 with inline-test edges retained. Publication handoff uses Refs TASK-3448 and Help-Golden: unchanged. Details and pending job commands are in docs/internal/testing/task-3425-cmdkit-rework.md and /tmp/task-3448-handoff.txt. No completion is claimed.'
+  created_at: 2026-11-12T13:30:03.936763958Z
+  modified_at: 2026-11-12T13:30:03.936763958Z
   session_id: 01a1cfe00f1f
 history:
 - id: 01a1b921-d315-74a0-9c9a-0ca54df44ce6
