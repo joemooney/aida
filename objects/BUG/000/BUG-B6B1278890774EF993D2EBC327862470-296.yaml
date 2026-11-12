@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-12T08:35:37.046532324Z
-modified_at: 2026-11-12T10:04:02.542130143Z
+modified_at: 2026-11-12T10:04:08.658920530Z
 req_type: Bug
 comments:
 - id: 01a1cf00-20ea-7c51-bbf5-a9927b13b042
@@ -21,6 +21,25 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: No actionable defects in the explicitly partial Refs remediation; payload budget scoping and capacity warning reviewed. Full discovery I/O and automatic archival remain deferred; BUG-2531 is not complete. CI pending at review time.. It was punted on: design-fork: Budget-scoping and doctor-warning slice is implemented, but automatic closed/merged archival needs an archive-aware retention contract: strict selection refuses missing by-spec targets, and direct change/audit/carry-over/import/append readers assume active paths. Moving ledgers and pruning indexes can erase refusal evidence. Discovery still inspects all active files. See finding SPEC-b6b1278890774ef993d2ebc327862470-026 and docs/internal/testing/bug-2531-ledger-selection-budget.md. Targeted tests submitted to lane runner; results pending Cargo slot availability.. No triage reason was given.'
   created_at: 2026-11-12T10:04:02.542125842Z
   modified_at: 2026-11-12T10:04:02.542125842Z
+  session_id: 01a1ceeb-e827-7832-8991-e83d9eb95cef
+  harness_version: 2.1.322 (Claude Code)
+- id: 01a1cf36-f7d6-7780-8a7f-347ff749ed39
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (BUG-2531):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: baaa8e07e72b
+    Recorded: 2026-11-12T10:03:53.849419845+00:00
+    Findings:
+    1. [P2] aida-cli-lib/src/gate/ledger/checked.rs:348: Discovery resets Budget for every file and still reads/deserializes every unrelated payload before selection. With the allowed 4096 ledgers at 16 MiB each, a single verdict lookup can now read/parse 64 GiB instead of refusing after the former 64 MiB operation budget; inventory_budget charges only unique bindings and does not bound this work. Implement bounded discovery of relevant changes without trusting incomplete by-spec hints or hiding refusals, and add a regression that bounds unrelated payload I/O/parse work, rather than only proving that selection no longer exhausts its budget.
+    2. [P2] docs/internal/testing/bug-2531-ledger-selection-budget.md:31-36: The automatic closed/merged-ledger archival required by BUG-2531 is not implemented. Closed history therefore continues accumulating in the active directory until discover refuses globally at 4097 files, blocking even an unrelated small selection. Draft TASK-3098 documents the design fork but does not change the covered requirement. Implement archive-aware rotation with preserved indexed refusal evidence and reopened-change/direct-reader support, or obtain an explicit approved scope split before treating this PR as satisfying BUG-2531; add retention/rotation regressions.
+    Survived the previous round:
+    - [P2] aida-cli-lib/src/gate/ledger/checked.rs:348: Discovery resets Budget for every file and still reads/deserializes every unrelated payload before selection. With the allowed 4096 ledgers at 16 MiB each, a single verdict lookup can now read/parse 64 GiB instead of refusing after the former 64 MiB operation budget; inventory_budget charges only unique bindings and does not bound this work. Implement bounded discovery of relevant changes without trusting incomplete by-spec hints or hiding refusals, and add a regression that bounds unrelated payload I/O/parse work, rather than only proving that selection no longer exhausts its budget.
+    - [P2] docs/internal/testing/bug-2531-ledger-selection-budget.md:31-36: The automatic closed/merged-ledger archival required by BUG-2531 is not implemented. Closed history therefore continues accumulating in the active directory until discover refuses globally at 4097 files, blocking even an unrelated small selection. Draft TASK-3098 documents the design fork but does not change the covered requirement. Implement archive-aware rotation with preserved indexed refusal evidence and reopened-change/direct-reader support, or obtain an explicit approved scope split before treating this PR as satisfying BUG-2531; add retention/rotation regressions.
+    These were raised before and are unchanged. Restating them more firmly will not help: establish whether each can be done AS WRITTEN. Supply the missing mechanism (a constant, a helper, a terminating definition), split the finding into parts that can be done, or say explicitly that it is blocked and why.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-12T10:04:08.534879239Z
+  modified_at: 2026-11-12T10:04:08.534879239Z
   session_id: 01a1ceeb-e827-7832-8991-e83d9eb95cef
   harness_version: 2.1.322 (Claude Code)
 history:
