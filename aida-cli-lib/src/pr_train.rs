@@ -34,6 +34,11 @@ use anyhow::{Context, Result};
 use std::collections::VecDeque;
 use std::path::{Path, PathBuf};
 
+// trace:TASK-3789 | ai:codex
+fn train_progress(message: std::fmt::Arguments<'_>) -> String {
+    format!("  {} {message}", chrono::Local::now().format("%H:%M:%S"))
+}
+
 /// The forge adapter checkpoints active train intent before nested calls and
 /// retry attempts. Outside a journaled train this is a no-op.
 // trace:STORY-2401 | ai:codex
@@ -829,7 +834,7 @@ fn wait_train_ci(
             }
             Err(e) if e.downcast_ref::<TrainCiReadError>().is_some() => {
                 read_errors += 1;
-                println!("  train PR #{pr} CI read failed ({read_errors}/{TRAIN_CI_READ_ATTEMPTS}): {e:#}");
+                println!("{}", train_progress(format_args!("train PR #{pr} CI read failed ({read_errors}/{TRAIN_CI_READ_ATTEMPTS}): {e:#}")));
                 if read_errors >= TRAIN_CI_READ_ATTEMPTS
                     || (settle_limit != 0 && elapsed() >= settle_limit)
                 {
@@ -863,9 +868,20 @@ fn wait_train_ci(
                         }
                     })
                     .collect();
-                println!("  train PR #{pr} CI waiting: {}", display.join("; "))
+                println!(
+                    "{}",
+                    train_progress(format_args!(
+                        "train PR #{pr} CI waiting: {}",
+                        display.join("; ")
+                    ))
+                )
             }
-            _ => println!("  train PR #{pr} CI waiting: checks have not registered"),
+            _ => println!(
+                "{}",
+                train_progress(format_args!(
+                    "train PR #{pr} CI waiting: checks have not registered"
+                ))
+            ),
         }
         // An empty row set is normal immediately after opening the PR.
         // trace:BUG-2423 | ai:codex
@@ -1994,10 +2010,9 @@ fn close_abandoned_train(
     dry_run: bool,
 ) -> Result<()> {
     if dry_run {
-        println!(
-            "  train PR #{train} is abandoned (ownership generation {} ended); a real run closes it",
+        println!("{}", train_progress(format_args!("train PR #{train} is abandoned (ownership generation {} ended); a real run closes it",
             owner.generation
-        );
+        )));
         return Ok(());
     }
     // trace:STORY-2401 | ai:codex — a listing is not cleanup authority.
@@ -2530,7 +2545,10 @@ impl LiveTrainForge<'_> {
             TrainCiReadiness::Pending(_) | TrainCiReadiness::Missing(_)
         ) {
             for detail in train_ci_wait_details(&rows) {
-                println!("  train PR #{} CI waiting: {detail}", change.id);
+                println!(
+                    "{}",
+                    train_progress(format_args!("train PR #{} CI waiting: {detail}", change.id))
+                );
             }
         }
         assert_head()?;
@@ -2767,10 +2785,13 @@ impl TrainForge for LiveTrainForge<'_> {
                 });
                 if tolerated {
                     println!(
-                        "  train PR #{} is green except `{}` — explained by mandate-covered \
+                        "{}",
+                        train_progress(format_args!(
+                            "train PR #{} is green except `{}` — explained by mandate-covered \
                          member holds; the land step releases them",
-                        change.id,
-                        crate::ci_gate::HOLD_GATE_CHECK
+                            change.id,
+                            crate::ci_gate::HOLD_GATE_CHECK
+                        ))
                     );
                     CiVerdict::Green
                 } else {
@@ -3463,9 +3484,12 @@ impl Rails for ForgeRails<'_> {
             self.built.insert(change.id, t.clone());
             self.opened.push((t.tip.clone(), change.clone()));
             println!(
-                "  train PR #{} opened ({branch} at {})",
-                change.id,
-                short(&t.tip)
+                "{}",
+                train_progress(format_args!(
+                    "train PR #{} opened ({branch} at {})",
+                    change.id,
+                    short(&t.tip)
+                ))
             );
             changes.push(change);
         }
@@ -3530,13 +3554,19 @@ impl Rails for ForgeRails<'_> {
                 };
             }
             if let CiVerdict::Red(why) = &v {
-                println!("  train PR #{} is red: {why}", change.id);
+                println!(
+                    "{}",
+                    train_progress(format_args!("train PR #{} is red: {why}", change.id))
+                );
                 self.retire(
                     change,
                     &format!("Train CI red ({why}); the train reruns or bisects."),
                 )?;
             } else {
-                println!("  train PR #{} is green", change.id);
+                println!(
+                    "{}",
+                    train_progress(format_args!("train PR #{} is green", change.id))
+                );
             }
             verdicts.push(v);
         }

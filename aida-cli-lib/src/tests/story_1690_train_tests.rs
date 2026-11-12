@@ -8,6 +8,16 @@
 use super::*;
 use std::path::Path;
 
+// trace:TASK-3789 | ai:codex
+#[test]
+fn train_progress_prefixes_local_wall_clock_time() {
+    let line = train_progress(format_args!("train PR #{} is green", 901));
+    let pattern =
+        regex::Regex::new(r"^  ([0-1][0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9] train PR #901 is green$")
+            .unwrap();
+    assert!(pattern.is_match(&line), "unexpected progress line: {line}");
+}
+
 fn git(repo: &Path, args: &[&str]) -> String {
     let out = crate::test_git::git_command()
         .arg("-C")
