@@ -427,6 +427,7 @@ pub(crate) fn print_exact_command_help(path: &str) -> bool {
         };
         current = next;
     }
+    crate::external_cmd::append_parent_help(current);
     let _ = current.print_help();
     println!();
     true
