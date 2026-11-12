@@ -23,7 +23,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-12T17:36:24.142897628Z
-modified_at: 2026-11-12T21:36:09.713287193Z
+modified_at: 2026-11-12T23:06:13.641626742Z
 req_type: Story
 relationships:
 - rel_type:
@@ -112,6 +112,13 @@ comments:
   created_at: 2026-11-12T21:15:41.614843398Z
   modified_at: 2026-11-12T21:15:41.614843398Z
   session_id: 01a1d13f7835
+- id: 01a1d202-fd09-7f02-a495-db934810e7c1
+  author: joe
+  content: 'advisor 15:55: PR #3896 hit the 2-round cap with two genuine P2s at c3862c5 (pr_train_verified.rs:323 live mandate cover lost when a human-cleared hold leaves no release; forge.rs:4087 GitLab post-rebase /merge drops the GateMatch audit body). Head b523200 is only a main merge. Ruling: one more rework round fixing BOTH, then one fresh review; cap lifted for that round only.'
+  created_at: 2026-11-12T23:06:13.641626742Z
+  modified_at: 2026-11-12T23:06:13.641626742Z
+  session_id: 01a1d19e-9195-7853-815f-b54753ebd973
+  harness_version: 2.1.322 (Claude Code)
 history:
 - id: 01a1d0d5-4f50-78f1-be14-90e8c89718c8
   author: joe
