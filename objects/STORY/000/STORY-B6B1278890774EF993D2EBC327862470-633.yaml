@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-10T22:04:54.061461Z
-modified_at: 2026-11-12T20:43:15.056539758Z
+modified_at: 2026-11-12T21:06:10.197391881Z
 req_type: Story
 comments:
 - id: 01a1c781-4cf1-7c80-b086-89c5c5096ab6
@@ -911,6 +911,10 @@ history:
   author: joe
   timestamp: 2026-11-12T20:43:15.484022473Z
   changes: []
+- id: 01a1d195-1496-7a51-a183-cd342d791285
+  author: joe
+  timestamp: 2026-11-12T21:06:10.710822549Z
+  changes: []
 filed_at:
   code_sha: a3d2ba258e4015854c6f615c6481beb672b8798c
   branch: main
@@ -924,7 +928,7 @@ failure_reason:
   phase: reviewer
   phase_index: 3
   kind: verdict:request-changes
-  detail: Slice 1 runtime criteria satisfied; CLI guide still reverses preparation/publication behavior and incorrectly says authoritative source conflicts refuse launch. Exact-head CI is red on artifact-layout and overlay failures.
+  detail: Slice 1 runtime criteria satisfied; CLI guide incorrectly describes generation before launch and refusal of authoritative source conflicts. CI pending at review time.
   recovery_hint: address the review findings, move STORY-2710 back to In Progress, and clear the PR hold only after approval
   shelved_by: reviewer
-  shelved_at: 2026-11-12T20:43:15.056539758Z
+  shelved_at: 2026-11-12T21:06:10.197391881Z
