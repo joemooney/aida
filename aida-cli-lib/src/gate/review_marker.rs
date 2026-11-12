@@ -94,6 +94,8 @@ pub(crate) struct Marker {
     // trace:TASK-1750 | ai:claude
     pub pid_start: Option<String>,
     pub started_at: u64,
+    /// Subsecond ordering; absent on legacy markers, which remain conservative.
+    pub started_at_nanos: Option<u32>,
     pub ttl_secs: u64,
 }
 
@@ -105,6 +107,9 @@ impl Marker {
         spec: Option<&str>,
         by: &str,
     ) -> Self {
+        let now = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap_or_default();
         Marker {
             pr,
             head_sha: head_sha.unwrap_or("").trim().to_string(),
@@ -113,7 +118,8 @@ impl Marker {
             host: crate::coordination::hostname(),
             pid: std::process::id(),
             pid_start: aida_core::liveness::process_start_identity(std::process::id()),
-            started_at: now_secs(),
+            started_at: now.as_secs(),
+            started_at_nanos: Some(now.subsec_nanos()),
             ttl_secs: PID_BACKED_TTL_SECS,
         }
     }
@@ -143,7 +149,7 @@ impl Marker {
 
 fn serialize(m: &Marker) -> String {
     format!(
-        "pr={}\nhead_sha={}\nspec={}\nby={}\nhost={}\npid={}\npid_start={}\nstarted_at={}\nttl_secs={}\n",
+        "pr={}\nhead_sha={}\nspec={}\nby={}\nhost={}\npid={}\npid_start={}\nstarted_at={}\nstarted_at_nanos={}\nttl_secs={}\n",
         m.pr,
         m.head_sha,
         m.spec.as_deref().unwrap_or(""),
@@ -152,6 +158,7 @@ fn serialize(m: &Marker) -> String {
         m.pid,
         m.pid_start.as_deref().unwrap_or_default(),
         m.started_at,
+        m.started_at_nanos.map(|n| n.to_string()).unwrap_or_default(),
         m.ttl_secs,
     )
 }
@@ -168,6 +175,7 @@ fn parse(pr: u64, body: &str) -> Marker {
         pid: 0,
         pid_start: None,
         started_at: 0,
+        started_at_nanos: None,
         ttl_secs: CLAIM_TTL_SECS,
     };
     for line in body.lines() {
@@ -181,12 +189,80 @@ fn parse(pr: u64, body: &str) -> Marker {
                 "pid" => m.pid = v.parse().unwrap_or(0),
                 "pid_start" if !v.is_empty() => m.pid_start = Some(v.to_string()),
                 "started_at" => m.started_at = v.parse().unwrap_or(0),
+                "started_at_nanos" => {
+                    m.started_at_nanos = v.parse::<u32>().ok().filter(|n| *n < 1_000_000_000)
+                }
                 "ttl_secs" => m.ttl_secs = v.parse().unwrap_or(CLAIM_TTL_SECS),
                 _ => {}
             }
         }
     }
     m
+}
+
+/// Refuse duplicate review admission only for a conclusive verdict at the
+/// exact head. Waiting remains eligible for the fresh review it requires.
+// trace:BUG-2530 | ai:codex
+pub(crate) fn refuse_conclusive_head(
+    root: &Path,
+    pr: u64,
+    head: Option<&str>,
+) -> anyhow::Result<()> {
+    if let Some(v) = conclusive_head(root, pr, head) {
+        anyhow::bail!("PR-{pr} already has a {} verdict at this exact head; a duplicate review is unnecessary", v.kind.label());
+    }
+    Ok(())
+}
+
+// trace:BUG-2530 | ai:codex
+fn conclusive_head(
+    root: &Path,
+    pr: u64,
+    head: Option<&str>,
+) -> Option<super::review_verdict::RecordedVerdict> {
+    let head = head.filter(|h| !h.trim().is_empty())?;
+    let key = format!("PR-{pr}");
+    // Synced evidence has the same precedence as in the merge gates. In
+    // particular, a remote refusal must not fall back to a local approval.
+    let v = match super::review_publication::current_at_head(root, &[&key], head) {
+        Some(remote) => super::review_verdict::parse_recorded_verdict(&remote.body)?,
+        None => super::review_verdict::read_verdict_for_sha(root, &key, head)?,
+    };
+    let conclusive = v.kind.requires_changes()
+        || super::review_approval::independent_approval_authorized(
+            root,
+            &[key],
+            v.reviewed_branch.as_deref(),
+            &v,
+        );
+    (v.reviewed_sha.as_deref() == Some(head) && conclusive).then_some(v)
+}
+
+/// An already-approved head cannot acquire a new blocking review merely
+/// because an older launcher wrote a redundant claim. Leave the marker intact;
+/// the ordinary approval/hold gates still validate all merge authority.
+// trace:BUG-2530 | ai:codex
+fn redundant_claim(root: &Path, m: &Marker, head: Option<&str>) -> bool {
+    let Some(v) = conclusive_head(root, m.pr, head) else {
+        return false;
+    };
+    m.head_sha == head.unwrap_or_default()
+        && v.kind.approves()
+        && v.attestation
+            .as_ref()
+            .is_some_and(|a| a.authorizes(v.reviewed_sha.as_deref()))
+        // A legacy second identifies an interval, not an instant. Only a
+        // verdict strictly before that interval proves a redundant claim.
+        && v.recorded_at
+            .as_deref()
+            .and_then(|at| chrono::DateTime::parse_from_rfc3339(at).ok())
+            .is_some_and(|at| {
+                at.timestamp() >= 0 && match m.started_at_nanos {
+                    Some(nanos) => (at.timestamp() as u64, at.timestamp_subsec_nanos())
+                        < (m.started_at, nanos),
+                    None => (at.timestamp() as u64) < m.started_at,
+                }
+            })
 }
 
 /// Write (or replace) the marker for `m.pr`.
@@ -317,6 +393,9 @@ pub(crate) fn merge_gate(
         return MergeGate::ExpiredCleared(m, reason);
     }
     let head = current_head();
+    if redundant_claim(root, &m, head.as_deref()) {
+        return MergeGate::Clear;
+    }
     if covers_head(&m.head_sha, head.as_deref()) {
         MergeGate::UnderReview(m)
     } else {
@@ -328,7 +407,10 @@ pub(crate) fn merge_gate(
 /// `pr` covering `current_head`, else `None`. Never removes anything.
 pub(crate) fn live_description(root: &Path, pr: u64, current_head: Option<&str>) -> Option<String> {
     let m = read(root, pr)?;
-    (is_live_at(root, &m) && covers_head(&m.head_sha, current_head)).then(|| m.describe())
+    (is_live_at(root, &m)
+        && covers_head(&m.head_sha, current_head)
+        && !redundant_claim(root, &m, current_head))
+    .then(|| m.describe())
 }
 
 /// The refusal a merge surface prints for [`MergeGate::UnderReview`].

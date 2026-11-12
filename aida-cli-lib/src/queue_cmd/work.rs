@@ -4325,6 +4325,19 @@ pub(crate) fn handle_queue_work(
                 )?;
                 }
 
+                // trace:BUG-2530 | ai:codex — after sync, before any pickup mutation.
+                if !no_launch && role == "reviewer" {
+                    if let Some(pr_n) = reviewer_preflight_pr_n(plan.review_target) {
+                        // trace:BUG-2530 | ai:codex
+                        let head = standalone_review_pr_head(&project_root, pr_n);
+                        crate::gate::review_marker::refuse_conclusive_head(
+                            &crate::main_worktree_root_from(&project_root),
+                            pr_n,
+                            head.as_deref(),
+                        )?;
+                    }
+                }
+
                 // trace:STORY-2705 | ai:codex — before worktree/queue mutation.
                 if role == "reviewer" {
                     if let Some((forge, n)) = plan.review_target {

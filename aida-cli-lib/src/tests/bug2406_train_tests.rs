@@ -690,6 +690,26 @@ fixture_case!(
     77
 );
 fn bug2406_current_claim_refuses(pr: u64) {
+    bug2530_train_claim(pr, false);
+}
+
+// trace:BUG-2530 | ai:codex
+#[test]
+fn bug2530_post_approval_claim_allows_train() {
+    bug2530_train_claim(11, true);
+}
+
+// trace:BUG-2530 | ai:codex
+#[test]
+fn bug2530_post_approval_legacy_claim_allows_train() {
+    bug2530_train_claim_with_precision(11, true, false);
+}
+
+fn bug2530_train_claim(pr: u64, redundant: bool) {
+    bug2530_train_claim_with_precision(pr, redundant, true);
+}
+
+fn bug2530_train_claim_with_precision(pr: u64, redundant: bool, precise: bool) {
     if crate::test_env::run_path_isolated_test() {
         return;
     }
@@ -703,17 +723,35 @@ fn bug2406_current_claim_refuses(pr: u64) {
     } else {
         &train.cars[0].member.head
     };
-    let marker = crate::gate::review_marker::Marker::for_this_process(
+    let mut marker = crate::gate::review_marker::Marker::for_this_process(
         pr,
         Some(head),
         None,
         "fixture reviewer",
     );
+    // trace:BUG-2530 | ai:codex — keep this a pre-approval claim, independent
+    // of whether fixture setup and marker creation cross a clock second.
+    let approved_at =
+        chrono::DateTime::parse_from_rfc3339(f.records[0]["recorded_at"].as_str().unwrap())
+            .unwrap()
+            .timestamp() as u64;
+    marker.started_at = if redundant {
+        approved_at + 1
+    } else {
+        approved_at - 1
+    };
+    if !precise {
+        marker.started_at_nanos = None;
+    }
     crate::gate::review_marker::write(f.root(), &marker).unwrap();
-    assert!(live
-        .merge_verified(&change, &train, lease.as_ref())
-        .is_err());
-    assert!(calls(f.root()).is_empty());
+    let result = live.merge_verified(&change, &train, lease.as_ref());
+    if redundant {
+        result.unwrap();
+        assert_eq!(calls(f.root()).len(), 1);
+    } else {
+        assert!(result.is_err());
+        assert!(calls(f.root()).is_empty());
+    }
 }
 
 fixture_case!(
