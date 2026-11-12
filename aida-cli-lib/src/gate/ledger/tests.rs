@@ -2727,15 +2727,10 @@ fn bug_2517_local_review_survives_open_record_and_collect_without_binding() {
                 Some(&spec.label),
             )
             .unwrap();
-            super::record_collected_verdict(
-                &root,
-                change,
-                &own,
-                &[(spec.clone(), own.clone())],
-            )
-            .unwrap();
-            let events = checked::read_change_events(&root, change, &mut Default::default())
+            super::record_collected_verdict(&root, change, &own, &[(spec.clone(), own.clone())])
                 .unwrap();
+            let events =
+                checked::read_change_events(&root, change, &mut Default::default()).unwrap();
             assert!(events.iter().all(|e| e.verdict_record() != Some(&local)));
             assert!(events.iter().any(|e| e.verdict_record() == Some(&own)));
         }
