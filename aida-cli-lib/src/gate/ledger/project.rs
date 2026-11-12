@@ -161,7 +161,7 @@ fn verdict_events(root: &Path, key: &str) -> Vec<GateEvent> {
     if let Some(change) = ChangeKey::parse(key) {
         return events(root, change)
             .into_iter()
-            .filter(|e| e.verdict_record().is_some())
+            .filter(|e| e.verdict_record().is_some() && terminal_annotation_matches(e, key))
             .collect();
     }
     let Some(spec) = spec_key(key) else {
@@ -208,7 +208,18 @@ fn verdict_events(root: &Path, key: &str) -> Vec<GateEvent> {
     {
         out.push(streams[index].pop_front().unwrap());
     }
+    out.retain(|e| terminal_annotation_matches(e, key));
     out
+}
+
+// A spec-scoped closure cannot replace the PR review or another spec review.
+// trace:BUG-2525 | ai:codex
+fn terminal_annotation_matches(event: &GateEvent, key: &str) -> bool {
+    event
+        .verdict_record()
+        .and_then(|r| r.get("terminal_wait_key"))
+        .and_then(|v| v.as_str())
+        .is_none_or(|target| target.eq_ignore_ascii_case(key))
 }
 
 /// The newest verdict event the ledger holds for `key`, read from `start`
@@ -219,10 +230,77 @@ pub(crate) fn newest_verdict_event(start: &Path, key: &str) -> Option<GateEvent>
     newest_of(verdict_events(&root, key))
 }
 
+/// Select a review round before applying lifecycle annotations. An annotation
+/// carries no independent ordering authority against a legacy file: the source
+/// round must first win ordinary selection, then the exact-source overlay applies.
+// trace:BUG-2525 | ai:codex
+pub(crate) fn newest_review_event(start: &Path, key: &str) -> Option<GateEvent> {
+    let root = store_root(start).ok()?;
+    newest_review_of(verdict_events(&root, key))
+}
+
+// Also used by the bounded alias reader with its already-checked snapshot.
+// Raw change projection keeps using newest_of so it retains valid closures.
+// trace:BUG-2525 | ai:codex
+pub(crate) fn newest_review_of(events: Vec<GateEvent>) -> Option<GateEvent> {
+    newest_of(
+        events
+            .into_iter()
+            .filter(|event| {
+                !event
+                    .verdict_record()
+                    .is_some_and(|record| record.contains_key("terminal_wait_source"))
+            })
+            .collect(),
+    )
+}
+
+/// The latest lifecycle annotation before raw-review projection. Its source
+/// must be checked against the effective legacy, signed, or ledger verdict.
+/// Raw projection deliberately rejects annotations of independent reviews.
+// trace:BUG-2525 | ai:codex
+pub(crate) fn terminal_wait_annotation(start: &Path, key: &str) -> Option<JsonObj> {
+    let root = store_root(start).ok()?;
+    verdict_events(&root, key)
+        .into_iter()
+        .rev()
+        .filter_map(|event| event.verdict_record().cloned())
+        .find(|record| record.contains_key("terminal_wait_source"))
+}
+
 /// The answering event of one label's verdict events (oldest first): the
 /// last, or the ordinary origin a proved phase-3 overlay duplicates.
 // trace:BUG-2403 | ai:claude
 pub(crate) fn newest_of(mut events: Vec<GateEvent>) -> Option<GateEvent> {
+    // A lifecycle annotation is not a review of an independent ledger round.
+    // This also protects raw effective-gate projections, which partition the
+    // events themselves rather than reading one key through verdict_events.
+    // trace:BUG-2525 | ai:codex
+    while events.last().is_some_and(|event| {
+        let Some(source) = event
+            .verdict_record()
+            .and_then(|r| r.get("terminal_wait_source"))
+        else {
+            return false;
+        };
+        let mut preceding = events
+            .iter()
+            .rev()
+            .skip(1)
+            .filter(|e| e.verdict_record().is_some());
+        let prior = preceding.next();
+        // The writer observed the receipt-bearing origin when a proved
+        // phase-3 duplicate was the last raw event.
+        let prior = match (preceding.next(), prior) {
+            (Some(origin), Some(overlay)) if proved_phase3_origin(origin, overlay) => Some(origin),
+            (_, prior) => prior,
+        };
+        prior
+            .and_then(|event| event.verdict_record())
+            .is_some_and(|prior| source != &serde_json::Value::Object(prior.clone()))
+    }) {
+        events.pop();
+    }
     let newest = events.pop()?;
     // BUG-2403: a retained receipt-less phase-3 overlay answers with the
     // ordinary record it duplicates, when that pairing is proved.
