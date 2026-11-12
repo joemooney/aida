@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-10T06:40:07.764479561Z
-modified_at: 2026-11-11T21:57:56.524732862Z
+modified_at: 2026-11-12T01:41:20.008627661Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -158,6 +158,12 @@ comments:
   modified_at: 2026-11-11T21:57:56.524732862Z
   session_id: 01a1cc9c-1eae-7a72-9a24-8ec1afc42772
   harness_version: 2.1.322 (Claude Code)
+- id: 01a1cd6a-a208-7ff2-b439-863bd60b4e6d
+  author: joe
+  content: 'Round 3 follow-up: inherited fixes already prevent explicit spec-only binding and clear only resolved change markers. This lane additionally excludes explicit spec-only records from direct gate views and ignores historical change-bound copies without rewriting ledger history; local spec history remains readable. Member reads now use the same pinned Discovery by-spec directory and shared budget. Added real local-record/two-PR marker coverage, open/record/collect lifecycle regressions for local waiting and approval, pinned-directory replacement coverage, historical-copy isolation, and exact one-pass byte/event budgets with exhaustion refusal. Validation via lane runner: bug_2517 13 passed; gate::effective::tests 35 passed; gate::ledger:: 75 passed; story_1405_review_marker_tests 6 passed. Edited-file rustfmt checks and git diff --check passed. Initial 900-second build timed out before tests; final source passed after retry with 3600-second allowance. CodeGraph host client was absent; doctor reported unreachable, so navigation used rg. Native seat leaves six edited files uncommitted for host publication.'
+  created_at: 2026-11-12T01:41:20.008627661Z
+  modified_at: 2026-11-12T01:41:20.008627661Z
+  session_id: 01a1cd5097cb
 history:
 - id: 01a1c4af-45a0-7a32-8edf-55980e6f5825
   author: joe
