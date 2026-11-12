@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-11T04:48:14.810158291Z
-modified_at: 2026-11-12T16:51:21.308414038Z
+modified_at: 2026-11-12T16:54:55.981691958Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -234,6 +234,13 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Full eight-file diff reviewed; BUG-2522 AC1-AC4 verified by source and regression evidence. One actionable protected-floor violation fails exact-head CI; no local tests run under review-watch policy.. No triage reason was given.'
   created_at: 2026-11-12T16:51:21.308406201Z
   modified_at: 2026-11-12T16:51:21.308406201Z
+- id: 01a1d0af-0eed-75a0-a28c-f84690d490fe
+  author: joe
+  content: 'Advisor 09:55 MST: the ''CI (lib-1) red'' that triggered this rework was CI run 43257760348 at 9631364 being CANCELLED when head dc94cf1 (merge of main ec5a35a) superseded it, not a test failure. The rework lane has nothing to fix unless CI at dc94cf1 goes red; the approval carries to dc94cf1, so it ships when green.'
+  created_at: 2026-11-12T16:54:55.981691958Z
+  modified_at: 2026-11-12T16:54:55.981691958Z
+  session_id: 01a1d09a-4262-7d50-a00b-00a5a30f3934
+  harness_version: 2.1.322 (Claude Code)
 history:
 - id: 01a1c8ef-b4bc-7b62-a163-3209968104a9
   author: joe
