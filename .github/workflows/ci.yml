@@ -89,8 +89,14 @@ jobs:
       # docs-only guards"). Installing/pinning the toolchain is cheap
       # (seconds, no compilation), so this costs docs-only PRs little.
       # trace:TASK-1447 | ai:claude
+      # BUG-2539: pinned to 1.99.1. Rust 1.100.0 (stable 2026-11-12) breaks
+      # the live bwrap overlay test (seed: cold, target/agent has no
+      # fingerprints) on every head. Unpin when BUG-2539 lands.
+      # trace:TASK-3790 | ai:claude
       - name: Install Rust toolchain
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@1.99.1
+        with:
+          components: rustfmt, clippy
 
       # BUG-103: the macos-latest runner intermittently has a stale cache
       # where `cargo` resolves to `rustup-init`, breaking `cargo build`
@@ -104,7 +110,7 @@ jobs:
         shell: bash
         run: |
           mkdir -p target
-          rustup default stable
+          rustup default 1.99.1
           echo "cargo path: $(command -v cargo)"
           cargo --version
           cargo --version | grep -q '^cargo ' || {
@@ -1103,8 +1109,14 @@ jobs:
     steps:
       - uses: actions/checkout@v5
 
+      # BUG-2539: pinned to 1.99.1. Rust 1.100.0 (stable 2026-11-12) breaks
+      # the live bwrap overlay test (seed: cold, target/agent has no
+      # fingerprints) on every head. Unpin when BUG-2539 lands.
+      # trace:TASK-3790 | ai:claude
       - name: Install Rust toolchain
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@1.99.1
+        with:
+          components: rustfmt, clippy
 
       # BUG-103: the macos-latest runner intermittently has a stale cache
       # where `cargo` resolves to `rustup-init`, breaking `cargo build`
@@ -1117,7 +1129,7 @@ jobs:
       - name: Pin stable toolchain & verify cargo
         shell: bash
         run: |
-          rustup default stable
+          rustup default 1.99.1
           echo "cargo path: $(command -v cargo)"
           cargo --version
           cargo --version | grep -q '^cargo ' || {

@@ -599,6 +599,13 @@ process death from wall-clock age or a numeric PID absent in another view.
 
 **Gotchas.** A reviewer reads **code**, an advisor reads **commit messages** — when their verdicts conflict on whether to merge, trust the reviewer. The whole reason `review` runs the agent over the *diff* is that the diff is ground truth.
 
+Interactive PR review collects the child's original verdict using the current
+PR head and the exact reviewer grant issued by this launch before presenting or
+re-recording it. A `request-changes` or `rejected` result arms a Rework hold and
+synchronizes the forge merge-hold label. Failed collection or hold placement
+returns an error; a verdict anchor alone does not finish that protection.
+<!-- trace:BUG-2522 | ai:codex -->
+
 **Chains with** — the verdict either passes the spec toward merge, or sends it to `aida rework`.
 
 ---
