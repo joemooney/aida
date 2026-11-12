@@ -13,7 +13,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-11T19:01:48.884172712Z
-modified_at: 2026-11-12T06:14:26.698722606Z
+modified_at: 2026-11-12T06:20:18.780598253Z
 req_type: Bug
 comments:
 - id: 01a1cd53-4d58-7801-952c-3dc01ddd0f17
@@ -35,6 +35,13 @@ comments:
   content: 'Rework for request-changes: replaced the exact-tip final-gate wall-clock polling in unit tests with a cfg(test) logical clock. Production retains Instant elapsed time and 10-second sleeps; the same final-gate loop and 180-second bound run in tests. The deterministic timeout regression now exercises that shared clock. Status promotion was refused: Needs Attention requires advisor authority; existing review/hold signals remain intact. Lane validation is running.'
   created_at: 2026-11-12T06:14:26.698722606Z
   modified_at: 2026-11-12T06:14:26.698722606Z
+  session_id: 01a1ce62566a
+  harness_version: codex-cli 0.167.0
+- id: 01a1ce6a-0bdc-7153-9c7c-412a1d891c05
+  author: dirtlab
+  content: 'Rework validation complete: lane job j20261112T061311331-2-0 ran pr_train::verified::bug2406: 59 passed, 0 failed (31.32s test execution), including released-member pending-to-success landing and the timeout/fail-closed regression using ExactTipCiClock. rustfmt --check and git diff --check passed. Changed aida-cli-lib/src/pr_train_verified.rs and aida-cli-lib/src/tests/bug2406_train_tests.rs; edits remain uncommitted for the native host. Status remains Needs Attention because advisor authority is required to promote it; existing review holds were not cleared. Reviewed host Codegraph client is unavailable.'
+  created_at: 2026-11-12T06:20:18.780598253Z
+  modified_at: 2026-11-12T06:20:18.780598253Z
   session_id: 01a1ce62566a
   harness_version: codex-cli 0.167.0
 history:
