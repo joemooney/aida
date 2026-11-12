@@ -86,6 +86,43 @@ fn no_gate() -> crate::test_env::EnvVarsGuard {
     crate::test_env::EnvVarsGuard::apply(&[("AIDA_AGENT_GATE_NAME", None)])
 }
 
+// trace:BUG-2523 | ai:codex
+#[test]
+fn story_2688_signoff_supersedes_sketch_only_brief_in_lane_prompt() {
+    let _g = no_gate();
+    for header in [
+        "ADVISOR SIGNOFF 2026-11-11 02:45: implement S1 now",
+        "## Advisor amendment: implement S1 now",
+        "**ADVISOR RULING:** implement S1 now",
+    ] {
+        let mut brief = comment(1440, "ADVISOR BRIEF: sketch-only lane; no implementation");
+        brief.created_at = "2026-11-10T12:00:00Z".parse().unwrap();
+        let mut instruction = comment(5, header);
+        instruction.created_at = "2026-11-11T09:45:00Z".parse().unwrap();
+        // Storage order must not replace timestamp ordering.
+        let comments = vec![instruction, brief];
+        let prompt = assemble(&item_plan(), None, &comments, None);
+        assert!(prompt.starts_with("ADVISOR RULING ("), "{prompt}");
+        let brief_at = prompt.find("ADVISOR BRIEF (").unwrap();
+        assert!(prompt[..brief_at].contains(header), "{prompt}");
+        assert!(prompt[..brief_at].contains("binding"), "{prompt}");
+        assert!(
+            prompt[brief_at..].contains("EARLIER DIRECTION, superseded"),
+            "{prompt}"
+        );
+        assert!(!prompt[brief_at..].contains("binding"), "{prompt}");
+
+        let control = assemble(&item_plan(), None, &comments[1..], None);
+        assert!(control.starts_with("ADVISOR BRIEF ("), "{control}");
+    }
+    assert!(!crate::queue_cmd::is_ruling_comment(
+        "see the advisor signoff above"
+    ));
+    assert!(!crate::queue_cmd::is_ruling_comment(
+        "Implementation complete\nADVISOR AMENDMENT"
+    ));
+}
+
 #[test]
 fn brief_comments_are_advisor_direction() {
     assert!(is_brief_comment(
