@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-11T14:11:33.148855447Z
-modified_at: 2026-11-12T15:55:33.921183082Z
+modified_at: 2026-11-12T16:55:26.254501842Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -75,6 +75,13 @@ comments:
   content: 'Addressed the round-2 P1 finding against 405f4a937937. Corrected both invalid PR/spec alias fixtures in aida-cli-lib/src/gate/tests/bug_2500_waiting_tests.rs: PR cases retain single-key verdict reads, actual TASK fixtures exercise alias selection, and PR-only evidence explicitly returns None from spec-alias reads. Preserved same/earlier/later timestamp source-replacement coverage, older/equal-time legacy coverage, closed-wait/no-approval checks and queue assertions. No production selector changes. Lane job j20261112T154527157-1947627-0 executed all 17 bug_2525 tests: 17 passed, 0 failed. Separate reported train regression passed (1 test) in job j20261112T154539130-2-0; no train change was needed. Touched-file rustfmt, git diff --check, trace headers, store-writer inventory and ExecContext zero-addition ratchet passed. One file remains uncommitted for host publication; native declaration recorded as [AI:codex] test(review): correct PR and spec alias fixtures (Refs BUG-2525), with Help-Golden: unchanged. No commit/push/queue completion from this native seat. Broader historical TASK-3448/TASK-3428 live closure acceptance remains host follow-up. Needs Attention -> InProgress was refused for lack of advisor authority; status is unchanged. Supplied codegraph executable is missing and doctor reports unreachable; rg used for navigation.'
   created_at: 2026-11-12T15:55:33.921154843Z
   modified_at: 2026-11-12T15:55:33.921154843Z
+- id: 01a1d0af-852e-7152-86ef-a781fb188586
+  author: joe
+  content: 'Advisor 09:57 MST: PR #3846 now conflicts with main (ec5a35a, BUG-2530 landed); review-watch cannot update the branch. Rework scope: merge origin/main, resolve conflicts preserving both behaviors, LIGHT gate, push. No new scope.'
+  created_at: 2026-11-12T16:55:26.254501842Z
+  modified_at: 2026-11-12T16:55:26.254501842Z
+  session_id: 01a1d09a-4262-7d50-a00b-00a5a30f3934
+  harness_version: 2.1.322 (Claude Code)
 history:
 - id: 01a1cb1e-b1cd-7183-8b51-05e72f878612
   author: aida-session-start
