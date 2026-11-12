@@ -11,9 +11,9 @@ use anyhow::Result;
 use clap::{ArgMatches, CommandFactory, FromArgMatches};
 
 use crate::cli::{Cli, Command, GlobalArgs};
-// Preserve the existing framework import paths.
-// trace:TASK-3425 | ai:codex
-pub use crate::cmdkit::*;
+// Framework types live in cmdkit; consumers import them from there directly.
+// trace:TASK-3448 | ai:claude
+use crate::cmdkit::{CommandReg, DispatchCtx, Flow, Invocation};
 
 /// Every registered command, sorted by command name (byte order) so parallel
 /// additions rarely touch the same line.
