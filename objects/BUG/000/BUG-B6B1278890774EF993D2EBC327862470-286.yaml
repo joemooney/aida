@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-11T04:08:39.262399078Z
-modified_at: 2026-11-12T08:54:19.782004202Z
+modified_at: 2026-11-12T09:00:08.105676394Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -50,6 +50,13 @@ comments:
   content: 'Follow-up native lane: existing implementation already retries WAITING after a 20-minute backoff with a shared three-attempt budget and capacity/process guards. Expanded watcher regression to cover APPROVED and CHANGES REQUESTED following WAITING retries for both Exited and Completed receipts. Targeted lane-runner tests are in progress; edits remain uncommitted for host publication.'
   created_at: 2026-11-12T08:54:19.782004202Z
   modified_at: 2026-11-12T08:54:19.782004202Z
+  session_id: 01a1cef4e5e0
+  harness_version: codex-cli 0.167.0
+- id: 01a1cefc-5e29-7263-89e8-12f7481cb0b6
+  author: dirtlab
+  content: 'Validation complete: lane job j20261112T085846188-2-0 ran cargo test --profile agent -p aida-cli-lib --lib -- bug2521: 3 passed, 0 failed. Expanded regression covers APPROVED and CHANGES REQUESTED after WAITING retries across Exited and Completed receipts. Initial expanded fixture omitted the identity required for Completed; corrected using a previous-boot process receipt. rustfmt --check and git diff --check pass. Production fix was already present at lane entry. Native lane leaves the single test-file edit uncommitted for host publication.'
+  created_at: 2026-11-12T09:00:08.105676394Z
+  modified_at: 2026-11-12T09:00:08.105676394Z
   session_id: 01a1cef4e5e0
   harness_version: codex-cli 0.167.0
 history:
