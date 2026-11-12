@@ -3,12 +3,12 @@ spec_id: BUG-b6b1278890774ef993d2ebc327862470-288
 agreed_id: BUG-2523
 title: Lane brief selection follows the latest comment labelled 'ADVISOR BRIEF' even when a later advisor ruling supersedes it
 description: 'Observed 2026-11-11 02:47 MST: STORY-2688 had a 2026-11-10 ''ADVISOR BRIEF: sketch-only lane'' comment, then a 2026-11-11 02:45 ''ADVISOR SIGNOFF ... S1 now'' comment. The implementer lane''s prompt carried only the old sketch-only brief, so the lane punted in under a minute as a design fork (''this dispatch explicitly prohibits implementation''). A relaunch after posting a new comment labelled ''ADVISOR BRIEF'' worked. Expected: the pickup brief is the latest binding advisor instruction (BRIEF, RULING, SIGNOFF or AMENDMENT), or an advisor brief has an explicit supersedes field; a stale brief that a later ruling contradicts is never the sole instruction. Acceptance: (1) a spec whose newest advisor ruling post-dates its newest BRIEF puts that ruling in the lane prompt; (2) regression test with the STORY-2688 comment shape.'
-status: InProgress
+status: Completed
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-11T10:35:25.871510628Z
-modified_at: 2026-11-12T01:19:55.071343573Z
+modified_at: 2026-11-12T05:04:36.843617961Z
 req_type: Bug
 comments:
 - id: 01a1cd57-06bf-7fa0-bec3-dc37383a6fe7
@@ -41,6 +41,22 @@ history:
   session_id: 01a1cd4fc415
   harness_version: codex-cli 0.167.0
   changes: []
+- id: 01a1ce24-bd33-73c0-a4d6-1136ce1a66ca
+  author: aida-auto-bump
+  timestamp: 2026-11-12T05:04:36.659953252Z
+  session_id: 01a1cc9c-1eae-7a72-9a24-8ec1afc42772
+  harness_version: 2.1.322 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a1ce24-bdeb-7920-86d5-1b1818d1efcb
+  timestamp: 2026-11-12T05:04:36.843612690Z
+  agent: aida
+  commit_sha: fd869101d5c06eac3eea99c1a376828d5706ebdb
+  summary: 'Round 1 full sweep: AC1 verified by timestamp selection and prompt regression; AC2 verified by STORY-2688-shaped regression. BUG-2523 (bug protocol): met, test file changed. No actionable defects; exact-head CI green.'
+  review_verdict: approved
 filed_at:
   code_sha: e9dd23fc0a92632eb0998559be21b53f375fa759
   branch: main
@@ -50,3 +66,7 @@ filed_at:
   vendor: claude
   session: 01a1c87f-970d-7ce0-9351-e4e75a87731e
   harness_version: 2.1.322 (Claude Code)
+implementation_info:
+  implemented: false
+  completed_at: 2026-11-12T05:04:36.659754120Z
+  completion_sha: fd869101d5c06eac3eea99c1a376828d5706ebdb
