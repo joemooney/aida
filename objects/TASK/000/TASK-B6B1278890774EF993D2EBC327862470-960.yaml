@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T23:39:41.575597Z
-modified_at: 2026-11-12T16:38:05.716814895Z
+modified_at: 2026-11-12T17:29:09.905917628Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -883,6 +883,15 @@ comments:
   modified_at: 2026-11-12T16:38:05.716814895Z
   session_id: 01a1d09a-4262-7d50-a00b-00a5a30f3934
   harness_version: 2.1.322 (Claude Code)
+- id: 01a1d0ce-6611-7c00-94c3-c66ad43c30e9
+  author: joe
+  content: |-
+    Slice B of acceptance item (3) implemented per the 2026-11-12 binding advisor brief: dissolve lib_part1.rs/lib_part3.rs into 24 cohesive modules with explicit imports and crate-root compatibility re-exports. lib_part5.rs remains included for slice C; its only change is source-aggregation test input relocation. Updated source-inspection fixtures, test-touched real-tree cases, raw-forge ownership, and the execution-context/store-writer ledgers using the byte-identical relocation helper plus split-owner mappings. All 128 moved function bodies and 18 struct/enum/constant declarations retain identical tokens. Private cwd helper gains crate visibility; public APIs and the forge thread-local root path are retained.
+    Validation passed: launcher cargo check --profile agent -p aida-cli-lib --tests (j20261112T170121958-2-0); moved cli_entry test module 1/1 (j20261112T170023949-3-0); command-registry suite 21/21 (j20261112T170448009-2-0); TUI check and CLI no-default-features check passed through launcher jobs. make check-ci-fast passed all 47 gates in an isolated staged snapshot with launcher-managed builds; the snapshot was removed. Glob debt remains zero, ExecContext remains 1235 sites, writer inventory reconciles 3537 sinks / 294 mappings. Handoff and complete changed-file list: /tmp/task-3428-slice-b-handoff.md. Full fast-gate log: /tmp/task-3428-check-ci-fast-final.log.
+    Native-seat edits remain uncommitted for host publication. This is a Refs-only slice; TASK-3428 stays In Progress. No queue completion, merge or review recording performed.
+  created_at: 2026-11-12T17:29:09.905917628Z
+  modified_at: 2026-11-12T17:29:09.905917628Z
+  session_id: 01a1d0ae657d
 history:
 - id: 01a1b862-2e0b-7a50-a4d0-25097c707b57
   author: joe
