@@ -8,8 +8,16 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-12T19:41:04.965614772Z
-modified_at: 2026-11-12T19:41:04.965614772Z
+modified_at: 2026-11-12T20:34:14.951940899Z
 req_type: Bug
+comments:
+- id: 01a1d177-d927-79b2-ac05-55e90a72f21c
+  author: joe
+  content: '[advisor 13:36] Not a deadlock: strace of ''aida pr auto-queue-review --branch promote/integration-1'' (same queue-write path) completed in ~55 s with 545 subprocess launches, 416 of them ''git -c core.fsmonitor=false ...'' store calls plus 56 ''git -C repo'' (worktree list over ~100 .git/worktrees entries incl. stale hm* ones). At host load ~54 it exceeds the 120-180 s timeouts. Fix: batch the per-entry store git calls (one cat-file --batch / one ls-tree) and stop scanning every worktree; target < 2 s.'
+  created_at: 2026-11-12T20:34:14.951940899Z
+  modified_at: 2026-11-12T20:34:14.951940899Z
+  session_id: 01a1d0eb-22cc-7262-8f6c-7266e9cc1fbb
+  harness_version: 2.1.322 (Claude Code)
 filed_at:
   code_sha: 0d6c60e6d982aad0c2c4ad38214010289a267d92
   branch: main
