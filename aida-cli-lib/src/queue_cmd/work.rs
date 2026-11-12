@@ -2336,12 +2336,21 @@ pub(crate) fn latest_findings_block(comments: &[aida_core::Comment]) -> Option<&
 pub(crate) const RULING_TAG: &str = "Advisor ruling";
 
 /// Whether a comment is an advisor ruling: its first non-empty line starts
-/// with `Ruling` or `Advisor ruling` (any case, after markdown emphasis or a
-/// `[` bracket).
+/// with `Ruling`, `Advisor ruling`, `Advisor signoff` or `Advisor amendment`
+/// (any case, after markdown emphasis or a `[` bracket). Signoffs and
+/// amendments participate in the same timestamp ordering as rulings.
 // trace:BUG-B6B1278890774EF993D2EBC327862470-021 | ai:claude
+// trace:BUG-2523 | ai:codex
 pub(crate) fn is_ruling_comment(content: &str) -> bool {
     let first = crate::rework_direction::lead_line(content);
-    first.starts_with("ruling") || first.starts_with("advisor ruling")
+    [
+        "ruling",
+        "advisor ruling",
+        "advisor signoff",
+        "advisor amendment",
+    ]
+    .iter()
+    .any(|prefix| first.starts_with(prefix))
 }
 
 /// `--ruling` text as stored: tagged unless the caller already tagged it.
