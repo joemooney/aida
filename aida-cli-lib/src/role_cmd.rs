@@ -1697,14 +1697,9 @@ mod tests {
     // trace:STORY-994 | ai:codex
     #[test]
     fn parses_role_enter_no_title_flag() {
-        let cli = crate::command_registry::try_parse_from([
-            "aida",
-            "role",
-            "enter",
-            "advisor",
-            "--no-title",
-        ])
-        .expect("parse role enter");
+        let cli = crate::TEST_CLI
+            .try_parse_from(["aida", "role", "enter", "advisor", "--no-title"])
+            .expect("parse role enter");
         let crate::role_cmd::RoleArgs {
             inner:
                 RoleCommand::Enter {
@@ -1726,17 +1721,18 @@ mod tests {
     // trace:TASK-1592 | ai:antigravity
     #[test]
     fn parses_role_enter_delegate_seat() {
-        let cli = crate::command_registry::try_parse_from([
-            "aida",
-            "role",
-            "enter",
-            "advisor",
-            "--delegate-seat",
-            "implementer",
-            "--delegate-seat",
-            "reviewer",
-        ])
-        .expect("parse role enter");
+        let cli = crate::TEST_CLI
+            .try_parse_from([
+                "aida",
+                "role",
+                "enter",
+                "advisor",
+                "--delegate-seat",
+                "implementer",
+                "--delegate-seat",
+                "reviewer",
+            ])
+            .expect("parse role enter");
         let crate::role_cmd::RoleArgs {
             inner:
                 RoleCommand::Enter {
@@ -1759,10 +1755,9 @@ mod tests {
     // trace:TASK-1787 | ai:antigravity
     #[test]
     fn parses_role_enter_ttl() {
-        let cli = crate::command_registry::try_parse_from([
-            "aida", "role", "enter", "advisor", "--ttl", "72h",
-        ])
-        .expect("parse role enter --ttl");
+        let cli = crate::TEST_CLI
+            .try_parse_from(["aida", "role", "enter", "advisor", "--ttl", "72h"])
+            .expect("parse role enter --ttl");
         let crate::role_cmd::RoleArgs {
             inner: RoleCommand::Enter { name, ttl, .. },
         } = cli.command.registered::<crate::role_cmd::RoleArgs>()
