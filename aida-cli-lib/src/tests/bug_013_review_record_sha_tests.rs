@@ -268,6 +268,8 @@ fn interactive_review_anchor_refusals_are_collected_and_held() {
         return;
     }
     for disposition in ["request-changes", "rejected"] {
+        use std::os::unix::fs::PermissionsExt;
+
         let (root, head) = project();
         let home = root.path().join("home");
         std::fs::create_dir_all(&home).unwrap();
@@ -283,6 +285,38 @@ fn interactive_review_anchor_refusals_are_collected_and_held() {
             ("AIDA_FROM_PR_HEAD_SHA", Some(&head)),
             (crate::gate::seat_authority::GRANT_ENV, None),
         ]);
+        // Exercise the actual parent's forge-label side effect as well as
+        // its local hold. A pure-git fixture silently skips label sync.
+        // trace:BUG-2522 | ai:codex
+        assert!(crate::test_git::git_command()
+            .arg("-C")
+            .arg(root.path())
+            .args([
+                "remote",
+                "add",
+                "origin",
+                "git@github.com:fixture/review.git"
+            ])
+            .status()
+            .unwrap()
+            .success());
+        std::fs::write(
+            root.path().join(".aida/config.toml"),
+            "[forge]\nprovider = \"github\"\n",
+        )
+        .unwrap();
+        let bin = root.path().join("bin");
+        std::fs::create_dir(&bin).unwrap();
+        let gh = bin.join("gh");
+        std::fs::write(
+            &gh,
+            "#!/bin/sh\nif [ \"$1 $2\" = 'pr edit' ]; then\n  printf '%s\\n' \"$@\" >> .aida/label-calls\n  exit 0\nfi\nexit 1\n",
+        )
+        .unwrap();
+        std::fs::set_permissions(&gh, std::fs::Permissions::from_mode(0o755)).unwrap();
+        let path = format!("{}:{}", bin.display(), std::env::var("PATH").unwrap());
+        env.set_key("PATH", &path);
+        let label_calls = root.path().join(".aida/label-calls");
         let grant = crate::gate::seat_authority::test_support::mint_grant_for(
             root.path(),
             &crate::current_user_id(None),
@@ -307,6 +341,10 @@ fn interactive_review_anchor_refusals_are_collected_and_held() {
             assert!(error.to_string().contains("could not park"), "{error:#}");
         }
         assert!(crate::gate::merge_hold_core::read_hold_record(root.path(), 2522).is_none());
+        assert!(
+            !label_calls.exists(),
+            "the child must leave labeling to the parent"
+        );
         // Native record is ledger-only, under the SPEC anchor, not PR-2522.
         assert!(!anchor.exists());
         let mut checks = crate::queue_cmd::StandaloneVerdictChecks {
@@ -328,6 +366,10 @@ fn interactive_review_anchor_refusals_are_collected_and_held() {
             "another reviewer's grant must not collect"
         );
         assert!(crate::gate::merge_hold_core::read_hold_record(root.path(), 2522).is_none());
+        assert!(
+            !label_calls.exists(),
+            "an invalid grant must not label the PR"
+        );
         checks.child_grant = Some(grant);
         checks.head_sha = Some("0000000000000000000000000000000000000000".into());
         assert!(
@@ -342,6 +384,10 @@ fn interactive_review_anchor_refusals_are_collected_and_held() {
             "a different PR head must not collect"
         );
         assert!(crate::gate::merge_hold_core::read_hold_record(root.path(), 2522).is_none());
+        assert!(
+            !label_calls.exists(),
+            "a stale verdict must not label the PR"
+        );
         checks.head_sha = Some(head.clone());
         let lock = crate::gate::merge_hold_core::hold_lock_path(root.path(), 2522);
         std::fs::create_dir_all(&lock).unwrap();
@@ -354,6 +400,10 @@ fn interactive_review_anchor_refusals_are_collected_and_held() {
         )
         .unwrap_err();
         assert!(error.to_string().contains("could not protect"), "{error:#}");
+        assert!(
+            !label_calls.exists(),
+            "a failed hold must not attempt labeling"
+        );
         assert!(
             crate::gate::review_verdict::read_recorded_verdict(root.path(), "BUG-2522")
                 .unwrap()
@@ -375,5 +425,14 @@ fn interactive_review_anchor_refusals_are_collected_and_held() {
             crate::gate::merge_hold_core::HoldReasonKind::Rework
         );
         assert_eq!(hold.target_head_sha.as_deref(), Some(head.as_str()));
+        assert_eq!(
+            std::fs::read_to_string(label_calls).unwrap(),
+            "pr\nedit\n2522\n-R\nfixture/review\n--add-label\naida:merge-hold,aida:merge-hold-recorded\n--remove-label\naida:merge-hold-cleared\n",
+            "the interactive parent must apply the merge-hold labels exactly once"
+        );
+        assert_eq!(
+            crate::gate::merge_hold_core::read_label_state(root.path(), 2522),
+            crate::gate::merge_hold_core::LabelState::Synced
+        );
     }
 }
