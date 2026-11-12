@@ -1297,6 +1297,15 @@ pub(crate) fn handle_review_spec(
     } else {
         ReviewLeaseConflictMode::RefuseStaleNonInteractive
     };
+    // trace:BUG-2530 | ai:codex
+    if let Some(pr) = pr_number.filter(|_| !no_agent) {
+        let head = review_marker_head_best_effort(project_root, pr, &surface_branch);
+        crate::gate::review_marker::refuse_conclusive_head(
+            &main_worktree_root_from(project_root),
+            pr,
+            head.as_deref(),
+        )?;
+    }
     let _review_lease =
         acquire_review_lease_with_mode(project_root, &spec_id, &surface_branch, review_lease_mode)?;
     // STORY-1405: while the reviewer runs, PR-N is visibly under review to
@@ -2560,11 +2569,37 @@ mod story_1436_gate_held_tests {
             "{}\n{}\n{}\n{}\n{}\n{}\n{}\n{}",
             include_str!("lib.rs"),
             include_str!("lib_part1.rs"),
-            include_str!("lib_part2.rs"),
+            concat!(
+                include_str!("retire_legacy.rs"),
+                "\n",
+                include_str!("glossary_render.rs"),
+                "\n",
+                include_str!("role_file_helpers.rs"),
+                "\n",
+                include_str!("mailbox_errors.rs"),
+                "\n",
+                include_str!("human_route.rs"),
+                "\n",
+                include_str!("store_drift.rs"),
+                "\n",
+                include_str!("launch_defaults.rs"),
+                "\n",
+                include_str!("merge_hold_output.rs"),
+                "\n",
+                include_str!("history_reporting.rs")
+            ),
             include_str!("lib_part3.rs"),
-            include_str!("lib_part4.rs"),
+            concat!(concat!(
+                include_str!("scoped_lease.rs"),
+                "\n",
+                include_str!("pull_lines.rs")
+            )),
             include_str!("lib_part5.rs"),
-            include_str!("lib_part6.rs"),
+            concat!(
+                include_str!("regression_tests.rs"),
+                "\n",
+                include_str!("text_truncate.rs")
+            ),
             include_str!("merge_hold_cmd.rs")
         );
         let clear = src
@@ -2822,6 +2857,8 @@ pub(crate) fn handle_review_claim(
             .ok()
             .map(|info| info.head_oid)
         });
+    // trace:BUG-2530 | ai:codex
+    crate::gate::review_marker::refuse_conclusive_head(&root, pr, head.as_deref())?;
     if let Some(prev) = crate::gate::review_marker::read(&root, pr) {
         if crate::gate::review_marker::is_live_at(&root, &prev) {
             eprintln!(

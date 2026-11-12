@@ -300,13 +300,13 @@ class RealRepoTest(unittest.TestCase):
         p = self.run_plan(["aida-cli-lib/src/tests/role_identity_tests.rs"])
         self.assertEqual(p.commands, [BASE + ["-p", "aida-cli-lib", "--lib", "--", "role::role_identity_tests"]])
 
-    def test_path_declared_in_an_included_part_maps_to_the_crate_root(self):
-        # lib_part2.rs (include!d into lib.rs): #[path = "tests/glossary_render_tests.rs"]
+    def test_path_declared_in_a_named_module_maps_to_that_module(self):
+        # glossary_render.rs: #[path = "tests/glossary_render_tests.rs"]
         p = self.run_plan(["aida-cli-lib/src/tests/glossary_render_tests.rs"])
-        self.assertEqual(p.commands, [BASE + ["-p", "aida-cli-lib", "--lib", "--", "glossary_render_tests"]])
+        self.assertEqual(p.commands, [BASE + ["-p", "aida-cli-lib", "--lib", "--", "glossary_render::glossary_render_tests"]])
 
     def test_included_lib_parts_run_unfiltered_only_with_allow_full(self):
-        for n in range(1, 7):
+        for n in (1, 3, 5):
             with self.subTest(part=n):
                 p = self.run_plan([f"aida-cli-lib/src/lib_part{n}.rs"], allow_full=True)
                 self.assertEqual(p.commands, [BASE + ["-p", "aida-cli-lib", "--lib"]])
@@ -390,7 +390,7 @@ class RealRepoTest(unittest.TestCase):
         # story_1350_review_approach_tests.rs include_str!s the aida-pickup skill.
         p = self.run_plan(["aida-core/templates/skills/aida-pickup.md"])
         self.assertIn(BASE + ["-p", "aida-core", "--lib"], p.commands)
-        self.assertIn("story_1350_review_approach_tests", p.derived["aida-cli-lib"])
+        self.assertIn("regression_tests::story_1350_review_approach_tests", p.derived["aida-cli-lib"])
 
     def test_discipline_pack_change_runs_embedded_template_consumers(self):
         # #2671 round 1 broke these aida-cli-lib tests while aida-core's were green.
@@ -398,7 +398,7 @@ class RealRepoTest(unittest.TestCase):
         self.assertIn(BASE + ["-p", "aida-core", "--lib"], p.commands)
         cli = [c for c in p.commands if c[5] == "aida-cli-lib"]
         self.assertEqual(len(cli), 1)
-        self.assertIn("story_255_discipline_pack_tests", cli[0])
+        self.assertIn("regression_tests::story_255_discipline_pack_tests", cli[0])
         self.assertIn("scaffold_refresh", cli[0])  # reaches scaffold_refresh::tests
         self.assertIn("--", cli[0])
 
