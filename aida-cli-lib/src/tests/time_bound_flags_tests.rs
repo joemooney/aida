@@ -183,7 +183,7 @@ fn collect(cmd: &clap::Command, path: &str, out: &mut Vec<String>) {
 
 #[test]
 fn every_time_bound_flag_is_classified() {
-    let cmd = crate::command_registry::built_command();
+    let cmd = crate::TEST_CLI.built_command();
     let mut found = Vec::new();
     collect(&cmd, "aida", &mut found);
     found.sort();
@@ -522,7 +522,7 @@ fn ref_taking_cli_flags_refuse_option_like_values() {
     // covered too.
     let sink = tempfile::TempDir::new().unwrap();
     let bad = format!("--output={}", sink.path().join("pwned.txt").display());
-    let parse = |args: &[&str]| crate::command_registry::try_parse_from(args).unwrap();
+    let parse = |args: &[&str]| crate::TEST_CLI.try_parse_from(args).unwrap();
     // The `--flag=value` spelling: clap refuses a dash-led value given as a
     // separate argument, but takes it when fused.
     for flag in ["--since", "--until"] {

@@ -293,6 +293,13 @@ pub(crate) fn help_order<'a>(
     Ok(order)
 }
 
+/// Supply the production tree and decoder to the test composition root.
+// trace:TASK-3448 | ai:codex
+#[cfg(test)]
+pub(crate) const fn test_support() -> crate::cmdkit::testing::CliTestSupport<Cli> {
+    crate::cmdkit::testing::CliTestSupport::new(built_command, cli_from_matches)
+}
+
 /// Parse argv against [`built_command`]; clap's own error on failure.
 // trace:STORY-1728 | ai:claude
 pub(crate) fn try_parse_from<I, T>(argv: I) -> Result<Cli, clap::Error>

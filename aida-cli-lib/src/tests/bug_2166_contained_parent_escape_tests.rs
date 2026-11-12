@@ -296,7 +296,8 @@ fn plan_only_refuses_headless_launch_before_setup() {
             if sandbox {
                 args.push("--sandbox");
             }
-            let error = crate::command_registry::try_parse_from(args)
+            let error = crate::TEST_CLI
+                .try_parse_from(args)
                 .expect_err("headless/autonomous launch must not discard plan mode");
             assert_eq!(
                 error.kind(),
@@ -305,25 +306,20 @@ fn plan_only_refuses_headless_launch_before_setup() {
             );
         }
     }
-    assert!(crate::command_registry::try_parse_from([
-        "aida",
-        "queue",
-        "work",
-        "TASK-1",
-        "--plan-only",
-        "--sandbox",
-    ])
-    .is_ok());
-    assert!(
-        crate::command_registry::try_parse_from([
+    assert!(crate::TEST_CLI
+        .try_parse_from([
             "aida",
             "queue",
             "work",
             "TASK-1",
+            "--plan-only",
             "--sandbox",
-            "--no-human",
         ])
-        .is_ok(),
+        .is_ok());
+    assert!(
+        crate::TEST_CLI
+            .try_parse_from(["aida", "queue", "work", "TASK-1", "--sandbox", "--no-human",])
+            .is_ok(),
         "ordinary headless containment remains supported"
     );
 }
@@ -342,7 +338,8 @@ fn plan_prelude_session_argv_parses_for_headless_and_interactive() {
             };
             let args = crate::drain_gate::plan_session_args(&spec, headless);
             let argv = std::iter::once("aida".to_string()).chain(args.iter().cloned());
-            let cli = crate::command_registry::try_parse_from(argv)
+            let cli = crate::TEST_CLI
+                .try_parse_from(argv)
                 .unwrap_or_else(|e| panic!("headless={headless}: {args:?} rejected: {e}"));
             let crate::queue_cmd::QueueArgs {
                 inner:
@@ -369,29 +366,25 @@ fn plan_prelude_session_argv_parses_for_headless_and_interactive() {
 #[test]
 fn plan_phase_requires_headless_and_conflicts_with_other_lanes() {
     use clap::Parser;
-    let error = crate::command_registry::try_parse_from([
-        "aida",
-        "queue",
-        "work",
-        "TASK-1",
-        "--plan-phase",
-    ])
-    .expect_err("--plan-phase without --no-human must refuse");
+    let error = crate::TEST_CLI
+        .try_parse_from(["aida", "queue", "work", "TASK-1", "--plan-phase"])
+        .expect_err("--plan-phase without --no-human must refuse");
     assert_eq!(
         error.kind(),
         clap::error::ErrorKind::MissingRequiredArgument
     );
     for other in ["--plan-only", "--guided", "--auto-complete", "--drain"] {
-        let error = crate::command_registry::try_parse_from([
-            "aida",
-            "queue",
-            "work",
-            "TASK-1",
-            "--plan-phase",
-            "--no-human",
-            other,
-        ])
-        .expect_err("--plan-phase must conflict");
+        let error = crate::TEST_CLI
+            .try_parse_from([
+                "aida",
+                "queue",
+                "work",
+                "TASK-1",
+                "--plan-phase",
+                "--no-human",
+                other,
+            ])
+            .expect_err("--plan-phase must conflict");
         assert_eq!(
             error.kind(),
             clap::error::ErrorKind::ArgumentConflict,
