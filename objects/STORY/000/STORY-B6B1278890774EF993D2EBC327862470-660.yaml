@@ -23,7 +23,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-12T19:11:56.371806442Z
-modified_at: 2026-11-12T20:41:27.708847404Z
+modified_at: 2026-11-12T22:15:31.002791373Z
 req_type: Story
 relationships:
 - rel_type:
@@ -38,6 +38,13 @@ comments:
   created_at: 2026-11-12T20:07:42.054164119Z
   modified_at: 2026-11-12T20:07:42.054164119Z
   session_id: 01a1d0eb-22cc-7262-8f6c-7266e9cc1fbb
+  harness_version: 2.1.322 (Claude Code)
+- id: 01a1d1d4-8fba-7741-9435-9f95509fcf39
+  author: joe
+  content: 'advisor 15:20: promotion 1 #3901 merged (b569461) via deputy TTY ship. The squash title came out as ''(BUG-2521 BUG-2522 ...)'' without commas, and merge-time completion did not fire, so the 6 specs were completed by hand. Main recorded into integration with -s ours (verified: main tree == snapshot, integration contains both fix commits). Constituents #3894 #3859 #3885 #3830 #3872 #3846 #3890 closed. Promotion 2 = #3904 (snapshot e69e3fd): completing BUG-2537 BUG-2538 TASK-3789 TASK-3448; Refs STORY-2732 BUG-2540.'
+  created_at: 2026-11-12T22:15:31.002791373Z
+  modified_at: 2026-11-12T22:15:31.002791373Z
+  session_id: 01a1d19e-9195-7853-815f-b54753ebd973
   harness_version: 2.1.322 (Claude Code)
 history:
 - id: 01a1d175-992b-7501-a0fb-89a007208ac0
