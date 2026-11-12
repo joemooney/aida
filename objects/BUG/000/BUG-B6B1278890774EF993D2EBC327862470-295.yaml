@@ -3,12 +3,12 @@ spec_id: BUG-b6b1278890774ef993d2ebc327862470-295
 agreed_id: BUG-2530
 title: Second reviewer seat claims an already-approved head and its claim blocks the merge train
 description: '2026-11-11 23:16 MST: PR-3862 (TASK-3223) was APPROVED at 03cfcce at 05:49Z with green CI. The train CI passed, but at merge the train refused: ''PR-3862 is under review — codex-reviewer started reviewing head 03cfcce 3m ago (claimed; expires in 27m)''. A reviewer must not be admitted on a head that already holds a conclusive verdict. And a review claim on an already-approved head must not block the train: it cost one full train cycle (~20 min). Fix: (1) review admission refuses when a conclusive verdict already exists at the exact head; (2) the train treats a claim opened after a conclusive verdict at the same head as non-blocking, or the merge-hold clear releases it.'
-status: Approved
+status: InProgress
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-12T06:22:01.808701892Z
-modified_at: 2026-11-12T09:08:40.023396659Z
+modified_at: 2026-11-12T09:09:08.774892654Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -117,6 +117,14 @@ history:
   timestamp: 2026-11-12T09:08:51.136172313Z
   session_id: 01a1cec0649b
   changes: []
+- id: 01a1cf04-9e26-7202-aec4-72c7b89e3987
+  author: aida-pr-open
+  timestamp: 2026-11-12T09:09:08.774891495Z
+  session_id: 01a1cec0649b
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: fd869101d5c06eac3eea99c1a376828d5706ebdb
   branch: main
