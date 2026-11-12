@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-10T06:40:07.764479561Z
-modified_at: 2026-11-12T08:50:01.227376647Z
+modified_at: 2026-11-12T08:57:15.254980256Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -198,6 +198,13 @@ comments:
   modified_at: 2026-11-12T08:50:00.530103117Z
   session_id: 01a1ceeb-e827-7832-8991-e83d9eb95cef
   harness_version: 2.1.322 (Claude Code)
+- id: 01a1cef9-baf6-79e0-91d3-d1de2d4785df
+  author: dirtlab
+  content: 'Round 3 follow-up: verified the inherited fixes for all three findings and added a production-entry-point regression for explicit local waiting/approval records followed by two same-spec PR open, record, and collect paths. Local history remains unchanged and neither PR adopts those records. Clarified the legacy pre-change binding test name/comment. Lane job j20261112T085153829-2-0: 18 BUG-2517 tests passed. git diff --check passed. make check-ci-fast failed in unrelated Codex mail wake fixtures (health project directory ownership/shared-write refusal; 4 failures, 17 errors). Reviewed codegraph client absent; doctor confirms missing. Edits remain uncommitted for host publication.'
+  created_at: 2026-11-12T08:57:15.254980256Z
+  modified_at: 2026-11-12T08:57:15.254980256Z
+  session_id: 01a1cef3da80
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1c4af-45a0-7a32-8edf-55980e6f5825
   author: joe

@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-11T04:08:39.262399078Z
-modified_at: 2026-11-12T08:52:00.242452530Z
+modified_at: 2026-11-12T08:54:19.782004202Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -45,6 +45,13 @@ comments:
   modified_at: 2026-11-12T08:50:21.416645680Z
   session_id: 01a1ceeb-e827-7832-8991-e83d9eb95cef
   harness_version: 2.1.322 (Claude Code)
+- id: 01a1cef7-0d86-7b41-b131-e49393a37bbb
+  author: dirtlab
+  content: 'Follow-up native lane: existing implementation already retries WAITING after a 20-minute backoff with a shared three-attempt budget and capacity/process guards. Expanded watcher regression to cover APPROVED and CHANGES REQUESTED following WAITING retries for both Exited and Completed receipts. Targeted lane-runner tests are in progress; edits remain uncommitted for host publication.'
+  created_at: 2026-11-12T08:54:19.782004202Z
+  modified_at: 2026-11-12T08:54:19.782004202Z
+  session_id: 01a1cef4e5e0
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1ca89-967c-73d3-a05e-7a4c69efab87
   author: joe
@@ -144,6 +151,12 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1cef5-56e0-7492-8659-f2292ba95d79
+  author: dirtlab
+  timestamp: 2026-11-12T08:52:27.488554999Z
+  session_id: 01a1cef4e5e0
+  harness_version: codex-cli 0.167.0
+  changes: []
 filed_at:
   code_sha: fec48a790424718b7cfc26c0c9e7d7667ab48beb
   branch: main
