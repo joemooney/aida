@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T23:39:41.575597Z
-modified_at: 2026-11-12T06:40:25.838209995Z
+modified_at: 2026-11-12T13:00:09.432189417Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -827,6 +827,13 @@ comments:
   created_at: 2026-11-12T06:40:25.838209995Z
   modified_at: 2026-11-12T06:40:25.838209995Z
   session_id: 01a1cc9c-1eae-7a72-9a24-8ec1afc42772
+  harness_version: 2.1.322 (Claude Code)
+- id: 01a1cfd8-1d58-7661-a51a-be19cfaf37f7
+  author: joe
+  content: 'ADVISOR BRIEF slice A of lib_part dissolution (2026-11-12 06:05 MST, main bee6758fabe; glob ledger is zero). Acceptance item (3) only. Move lib_part4.rs (74 lines), lib_part6.rs (351) and lib_part2.rs (1100) out of include!() into real modules named for their content (e.g. pull_lines.rs, a test-module host for the lib_part6 ''mod ..._tests;'' declarations, retire_legacy.rs / glossary_render.rs), declared as ''mod X;'' in lib.rs with ''pub(crate) use X::{...};'' re-exports at the crate root so every existing crate::name path keeps compiling. Delete the three include!() lines (lib.rs:812,814,810). Pure moves, no behavior change; explicit imports only (the glob ratchet is at zero, so no use crate::*). Rewrite path-keyed ledgers with scripts/relocate-ledger-paths.py. Leave lib_part1/3/5 for slices B and C. Commit trailer (Refs TASK-3428). LIGHT gate: cargo check --profile agent -p aida-cli-lib --tests plus one targeted cargo test of a moved test module, then make check-ci-fast.'
+  created_at: 2026-11-12T13:00:09.432189417Z
+  modified_at: 2026-11-12T13:00:09.432189417Z
+  session_id: 01a1ceeb-e827-7832-8991-e83d9eb95cef
   harness_version: 2.1.322 (Claude Code)
 history:
 - id: 01a1b862-2e0b-7a50-a4d0-25097c707b57
