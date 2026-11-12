@@ -1,0 +1,35 @@
+id: 01a1cf0d-ec71-73f3-bb0d-e5cce3ed2f71
+spec_id: STORY-b6b1278890774ef993d2ebc327862470-648
+agreed_id: STORY-2725
+title: 'Review PR-3872: [AI:codex] fix(gate): scope selection payload budgets to relevant changes (Refs BUG-2531)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a1ceee`) for branch `bug-b6b1278890774ef993d2ebc327862470-296`.
+
+  - PR: <https://github.com/joemooney/aida/pull/3872>
+  - Branch: `bug-b6b1278890774ef993d2ebc327862470-296` → `main`
+
+  ## Slice of (Refs only — not completed by this PR)
+
+  Commit subjects carry `(Refs SPEC-ID)`: this PR is one slice of a spec that a later PR completes. Review this slice against that spec's acceptance criteria.
+
+  - BUG-2531
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 3872` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-12T09:19:18.641847974Z
+modified_at: 2026-11-12T09:19:18.641847974Z
+req_type: Story
+filed_at:
+  code_sha: 298639cb95018f3d580dc44cba3ce04e880064fd
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 298639cb950
+  session: 01a1ceee4861
