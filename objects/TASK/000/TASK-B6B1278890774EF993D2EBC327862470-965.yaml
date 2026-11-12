@@ -17,7 +17,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-08T03:08:54.290380002Z
-modified_at: 2026-11-12T08:33:03.392153610Z
+modified_at: 2026-11-12T08:40:50.982381657Z
 req_type: Task
 tags:
 - area:architecture
@@ -149,6 +149,12 @@ comments:
   modified_at: 2026-11-12T07:01:57.894163759Z
   session_id: 01a1cc9c-1eae-7a72-9a24-8ec1afc42772
   harness_version: 2.1.322 (Claude Code)
+- id: 01a1ceea-b626-7f81-9bc9-b8d92418bef9
+  author: joe
+  content: 'Round-2 finding 1 accepted. Prepared documentation-only correction in docs/internal/testing/task-3448-cmdkit-imports.md and recorded native Refs publication declaration with --commit-body-file /tmp/task3448-round2-publication-body.txt. Body contains standalone Help-Golden: unchanged and retains partial Refs TASK-3428 scope. Host must create a new commit preserving the body and rerun co-change and required CI at its published head. No Rust or snapshot edits; SCC remains advisor-recorded 367, no completion claim. Guard fixture tests and git diff --check pass. Actual committed-head guard reproduces missing-trailer failure. Bounded make check-ci-fast exited 124 at first TUI gate, which unexpectedly invokes Cargo directly; no full gate or Rust test pass claimed (untested=true for Rust). No commit, push, PR, queue done, ship merge, or review record performed by this seat.'
+  created_at: 2026-11-12T08:40:50.982381657Z
+  modified_at: 2026-11-12T08:40:50.982381657Z
+  session_id: 01a1cee8f003
 history:
 - id: 01a1b921-d315-74a0-9c9a-0ca54df44ce6
   author: joe
