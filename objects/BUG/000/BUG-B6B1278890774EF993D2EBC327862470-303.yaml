@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-12T18:26:43.321357044Z
-modified_at: 2026-11-12T20:06:14.712014481Z
+modified_at: 2026-11-12T20:26:43.113384861Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -37,6 +37,13 @@ comments:
   created_at: 2026-11-12T19:51:29.935823277Z
   modified_at: 2026-11-12T19:51:29.935823277Z
   session_id: 01a1d13f56a1
+- id: 01a1d170-f429-72a3-a984-ddda9c52d849
+  author: joe
+  content: '[advisor 13:27] PR #3895 merged into integration at 61aca71 (STORY-2737 integration mode); lands on main with promotion batch 2.'
+  created_at: 2026-11-12T20:26:43.113384861Z
+  modified_at: 2026-11-12T20:26:43.113384861Z
+  session_id: 01a1d0eb-22cc-7262-8f6c-7266e9cc1fbb
+  harness_version: 2.1.322 (Claude Code)
 history:
 - id: 01a1d105-e816-76c0-be87-791c522a799c
   author: aida-session-start
