@@ -1,0 +1,18 @@
+{
+  "id": "e00cad71-7920-496a-b831-d2025b079987",
+  "thread_id": "e00cad71-7920-496a-b831-d2025b079987",
+  "from": "joe",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1794473133852,
+  "body": "STORY-b6b1278890774ef993d2ebc327862470-618 PR #3869 conflicts with origin/main in: docs/internal/testing/dell1-runner.md, tests/test_dell1_controller.py. The host aborted the merge. Conflict resolution requires Claude on branch story-2695-s3. Fresh route: aida queue work STORY-b6b1278890774ef993d2ebc327862470-618 --vendor claude --fresh --no-human.",
+  "subject": "Rework merge conflicts require Claude",
+  "urgent": false,
+  "intent": "request",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "shell_user"
+}
