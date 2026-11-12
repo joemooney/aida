@@ -360,6 +360,20 @@ fn interactive_review_anchor_refusals_are_collected_and_held() {
             std::fs::create_dir_all(anchor.parent().unwrap()).unwrap();
             std::fs::write(&anchor, body).unwrap();
             assert!(anchor.is_file());
+            // Model a skill that writes only the interactive anchor, without
+            // running `review record`. Remove the fixture's seed ledger so
+            // collection cannot accidentally pass through ledger evidence.
+            // trace:BUG-2522 | ai:codex
+            let ledger_root = crate::gate::ledger::store_root(root.path()).unwrap();
+            assert_eq!(ledger_root, root.path());
+            let ledger_dir = crate::gate::ledger::ledger_dir(&ledger_root);
+            std::fs::remove_dir_all(&ledger_dir).unwrap();
+            assert!(!ledger_dir.exists());
+            assert!(
+                crate::gate::review_verdict::read_recorded_verdict(root.path(), "PR-2522")
+                    .is_none(),
+                "only the SPEC anchor may supply this interactive refusal"
+            );
         }
         let mut checks = crate::queue_cmd::StandaloneVerdictChecks {
             project_root: root.path(),
