@@ -9,6 +9,6 @@ note: 'Not a finding: the check timed out (exit 124) on 11-04 during host IO con
 due_since: 2026-11-12T17:01:23.545020210Z
 due_reason: on CronJobFailed:watchdog
 due_failure:
-  trip_id: watchdog@2026-11-12T18:03:13.026234128Z
+  trip_id: watchdog@2026-11-12T21:30:08.101077206Z
   job: watchdog
   error: 'exit 1: '
