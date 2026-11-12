@@ -10,6 +10,14 @@ feature: Uncategorized
 created_at: 2026-11-11T04:08:39.262399078Z
 modified_at: 2026-11-12T01:54:50.919076889Z
 req_type: Bug
+comments:
+- id: 01a1cd5d-0264-7490-92b2-682ec579baba
+  author: dirtlab
+  content: 'Implemented WAITING re-admission using a persisted 20-minute backoff and the existing three-attempt per-head budget. Early probe, reservation selection, queue-work round validation and retry-status reporting distinguish WAITING from conclusive verdicts. Capacity and live/ambiguous descendant checks remain enforced. Distributed stopped owners emit explicit Inconclusive retry evidence; old ordinary terminal hub receipts retain operator recovery. Validation: 66 review_watch::tests passed, signed admission-chain regression passed (1 test), touched-file rustfmt checks and git diff --check passed. Edits remain uncommitted for native host publication.'
+  created_at: 2026-11-12T01:26:27.172927499Z
+  modified_at: 2026-11-12T01:26:27.172927499Z
+  session_id: 01a1cd4f66ce
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1ca89-967c-73d3-a05e-7a4c69efab87
   author: joe

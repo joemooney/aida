@@ -8,8 +8,16 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-11T10:35:25.871510628Z
-modified_at: 2026-11-12T01:12:21.338708406Z
+modified_at: 2026-11-12T01:19:55.071343573Z
 req_type: Bug
+comments:
+- id: 01a1cd57-06bf-7fa0-bec3-dc37383a6fe7
+  author: dirtlab
+  content: 'Implemented: advisor SIGNOFF and AMENDMENT headers now participate in existing timestamp ordering alongside RULING and BRIEF. Regression reproduces STORY-2688 sketch-only brief followed by S1 signoff, checks the newer direction leads and the brief is superseded background, and covers amendment/ruling headers. Validation: lane job j20261112T011255485-2-0 ran 18 rework_direction tests, all passed; rustfmt check and git diff --check passed. Native seat edits remain uncommitted for host publication. Codegraph host client missing; doctor confirmed unavailable, used rg for navigation.'
+  created_at: 2026-11-12T01:19:55.071343573Z
+  modified_at: 2026-11-12T01:19:55.071343573Z
+  session_id: 01a1cd4fc415
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1ca89-9d37-73c3-8565-3c807ad4773a
   author: joe

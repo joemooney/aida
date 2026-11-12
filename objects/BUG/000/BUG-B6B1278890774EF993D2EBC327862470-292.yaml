@@ -16,6 +16,14 @@ feature: Uncategorized
 created_at: 2026-11-11T16:33:34.256595406Z
 modified_at: 2026-11-12T02:05:36.387724726Z
 req_type: Bug
+comments:
+- id: 01a1cd5e-49f0-70f3-891c-e89e352cc544
+  author: dirtlab
+  content: 'Implemented explicit approval refusal when unresolved findings would change the verdict. The error names --finding "" to clear resolved carried findings; --finding help and its golden snapshot now document clearing. Regression coverage includes carry-over, legacy aliases, new blockers, explicit clearing, and unchanged persisted evidence on refusal. Lane validation: review_verdict filter 122 passed; help_surface_matches_golden_snapshot 1 passed; git diff --check passed. Edits remain uncommitted for native host publication.'
+  created_at: 2026-11-12T01:27:51.024781732Z
+  modified_at: 2026-11-12T01:27:51.024781732Z
+  session_id: 01a1cd500746
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1cb75-60fe-7fa2-8d5e-0e867d684cb9
   author: joe
