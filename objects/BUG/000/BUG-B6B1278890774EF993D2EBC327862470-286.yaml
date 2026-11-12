@@ -3,12 +3,12 @@ spec_id: BUG-b6b1278890774ef993d2ebc327862470-286
 agreed_id: BUG-2521
 title: review-watch never re-reviews a head whose verdict was WAITING; the PR stalls until someone runs --release
 description: 'Observed 2026-11-10: PR-3801 (and earlier #3809, #3803, #3797, #3777) got a WAITING verdict while CI was pending. review-watch then records the head as ''already reserved (Completed)'' and never re-admits it after CI turns green, so the PR sits with no approval until the advisor runs ''aida review watch --release PR-N''. #3801 waited about 6 hours. STORY-2697 now tells reviewers to approve defect-free heads while CI is pending, so new WAITING verdicts should be rarer, but a reviewer can still return WAITING for independent evidence or a named test. Expected: a WAITING attempt does not consume the head. Re-admit the same head once the condition it waited on changes (CI settled, or a bounded backoff such as 20 min), capped like BUG-2518''s no-verdict retries. Acceptance: (1) a head with a WAITING verdict is re-admitted after its CI settles with no manual release; (2) re-admission is capped and respects max_concurrent; (3) APPROVED and CHANGES REQUESTED heads are never re-admitted at the same head; (4) regression test.'
-status: Approved
+status: InProgress
 priority: High
-owner: ''
+owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-11T04:08:39.262399078Z
-modified_at: 2026-11-11T12:16:17.020444264Z
+modified_at: 2026-11-12T01:11:36.957378034Z
 req_type: Bug
 history:
 - id: 01a1ca89-967c-73d3-a05e-7a4c69efab87
@@ -20,6 +20,13 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Approved
+- id: 01a1cd4f-6cfd-7ff1-8a2a-a9ce7c8b5751
+  author: aida-session-start
+  timestamp: 2026-11-12T01:11:36.957376034Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: fec48a790424718b7cfc26c0c9e7d7667ab48beb
   branch: main
