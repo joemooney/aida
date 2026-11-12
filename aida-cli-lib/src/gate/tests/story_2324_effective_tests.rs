@@ -1094,8 +1094,7 @@ fn bug_2517_local_records_stay_unbound_through_open_record_and_collect() {
             ));
             if let Some(ref bytes) = previous_ledger {
                 assert_eq!(
-                    &std::fs::read(store::ledger_file(root.path(), ChangeKey::pr(3185)))
-                        .unwrap(),
+                    &std::fs::read(store::ledger_file(root.path(), ChangeKey::pr(3185))).unwrap(),
                     bytes,
                     "recording and collecting the second PR must preserve the first ledger"
                 );
