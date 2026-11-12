@@ -410,6 +410,24 @@ class LaunchIntegration(unittest.TestCase):
             current.chmod(0o755)
             self.enumerate_runner_ancestors(runner, root, 10000)
 
+    @staticmethod
+    def kernel_enumerate_runner_ancestors(runner, run=subprocess.run):
+        # Capture the real subprocess runner before launch mocks systemd-run.
+        # trace:STORY-2695 | ai:codex
+        def unprivileged():
+            os.setgroups([])
+            os.setgid(65534)
+            os.setuid(65534)
+
+        return run(
+            ['/usr/bin/python3', '-c',
+             'import os, sys; from pathlib import Path\n'
+             'assert os.geteuid() != 0\n'
+             'for ancestor in Path(sys.argv[1]).parents:\n'
+             '    list(ancestor.iterdir())\n', str(runner)],
+            capture_output=True, text=True, timeout=5,
+            preexec_fn=unprivileged if os.getuid() == 0 else None)
+
     def test_kernel_enumeration_requires_readable_ancestors(self):
         # trace:STORY-2695 | ai:codex
         # Exercise actual readdir permission checks, independently of the mode
@@ -426,34 +444,19 @@ class LaunchIntegration(unittest.TestCase):
             work = current / 'main'
             work.mkdir(mode=0o700)
 
-            def unprivileged():
-                os.setgroups([])
-                os.setgid(65534)
-                os.setuid(65534)
-
-            def enumerate_ancestors():
-                return subprocess.run(
-                    ['/usr/bin/python3', '-c',
-                     'import os, sys; from pathlib import Path\n'
-                     'assert os.geteuid() != 0\n'
-                     'for ancestor in Path(sys.argv[1]).parents:\n'
-                     '    list(ancestor.iterdir())\n', str(runner)],
-                    capture_output=True, text=True, timeout=5,
-                    preexec_fn=unprivileged if os.geteuid() == 0 else None)
-
             for path in ancestors:
                 with self.subTest(ancestor=path.name):
                     # A lane owns its fixture: 0111 gives its uid the same
                     # execute-only access a service uid gets to root:root 0711.
                     path.chmod(0o711 if os.geteuid() == 0 else 0o111)
                     try:
-                        denied = enumerate_ancestors()
+                        denied = self.kernel_enumerate_runner_ancestors(runner)
                         self.assertNotEqual(denied.returncode, 0)
                         self.assertIn('PermissionError', denied.stderr)
                         self.assertIn(str(path), denied.stderr)
                     finally:
                         path.chmod(0o755)
-                    allowed = enumerate_ancestors()
+                    allowed = self.kernel_enumerate_runner_ancestors(runner)
                     self.assertEqual(allowed.returncode, 0, allowed.stderr)
                     self.assertEqual(stat.S_IMODE(work.stat().st_mode), 0o700)
 
@@ -462,6 +465,7 @@ class LaunchIntegration(unittest.TestCase):
         from types import SimpleNamespace
         with tempfile.TemporaryDirectory() as directory, ExitStack() as stack:
             root = Path(directory)
+            root.chmod(0o755)  # The runner also enumerates fixture ancestors.
             for name in ('jobs', 'cache', 'run', 'config', 'dist'):
                 (root / name).mkdir()
             (root / 'dist/run.sh').write_text('fixture runner')
@@ -520,6 +524,9 @@ class LaunchIntegration(unittest.TestCase):
                         self.assertEqual(stat.S_IMODE(path.stat().st_mode), mode)
                     self.enumerate_runner_ancestors(
                         root / f'jobs/{slot}/current/runner', root, account.pw_uid)
+                    startup = self.kernel_enumerate_runner_ancestors(
+                        root / f'jobs/{slot}/current/runner')
+                    self.assertEqual(startup.returncode, 0, startup.stderr)
                     forge.job['status'] = 'in_progress'
                     if alternate:
                         forge.job.update(id=21, name='CI (cli-0)')
@@ -605,8 +612,9 @@ class LaunchIntegration(unittest.TestCase):
 
     def test_fresh_single_slot_startup_with_restrictive_umask(self):
         for slot in c.SLOTS:
-            with self.subTest(slot=slot):
-                self.exercise('MAIN', restrictive_umask=True, slot=slot)
+            for kind in ('MAIN', 'TRAIN'):
+                with self.subTest(slot=slot, kind=kind):
+                    self.exercise(kind, restrictive_umask=True, slot=slot)
 
     def test_changed_key_train_preserves_previous_main(self):
         self.exercise('TRAIN', restrictive_umask=True)
