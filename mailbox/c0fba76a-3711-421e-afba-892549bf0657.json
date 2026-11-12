@@ -1,0 +1,18 @@
+{
+  "id": "c0fba76a-3711-421e-afba-892549bf0657",
+  "thread_id": "c0fba76a-3711-421e-afba-892549bf0657",
+  "from": "joe",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1794524416276,
+  "body": "STORY-b6b1278890774ef993d2ebc327862470-633 PR #3832 conflicts with origin/main in: AGENTS.md. The host aborted the merge. Conflict resolution requires Claude on branch story-2710-slice-1. Fresh route: aida queue work STORY-b6b1278890774ef993d2ebc327862470-633 --vendor claude --fresh --no-human.",
+  "subject": "Rework merge conflicts require Claude",
+  "urgent": false,
+  "intent": "request",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "shell_user"
+}

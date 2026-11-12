@@ -1,0 +1,18 @@
+{
+  "id": "29c35adc-15ca-4b12-9d50-74a940f20c48",
+  "thread_id": "29c35adc-15ca-4b12-9d50-74a940f20c48",
+  "from": "joe",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1794524386688,
+  "body": "BUG-b6b1278890774ef993d2ebc327862470-282 PR #3775 conflicts with origin/main in: aida-cli-lib/src/gate/ledger/checked.rs, aida-cli-lib/src/lib_part5.rs. The host aborted the merge. Conflict resolution requires Claude on branch bug-b6b1278890774ef993d2ebc327862470-282. Fresh route: aida queue work BUG-b6b1278890774ef993d2ebc327862470-282 --vendor claude --fresh --no-human.",
+  "subject": "Rework merge conflicts require Claude",
+  "urgent": false,
+  "intent": "request",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "shell_user"
+}
