@@ -72,11 +72,11 @@ fn classified_flags() -> Vec<(&'static str, Kind)> {
     vec![
         // trace:STORY-2699 | ai:codex
         (
-            "aida flow report --since",
+            "aida flow-data report --since",
             NotATimeBound("absolute RFC3339 or UTC calendar-date reporting boundary; preserves the advisor baseline window semantics"),
         ),
         (
-            "aida flow report --until",
+            "aida flow-data report --until",
             NotATimeBound("absolute RFC3339 or UTC calendar-date reporting boundary; preserves the advisor baseline window semantics"),
         ),
         ("aida approvals --since", Shared(shared)),
@@ -582,4 +582,19 @@ fn doc_coverage_since_refuses_option_like_values() {
         );
     }
     assert_nothing_written(sink.path(), "doc coverage --since");
+}
+
+// trace:STORY-2704 | ai:codex
+#[test]
+fn flow_data_bounds_retain_absolute_reporting_semantics() {
+    for flag in ["--since", "--until"] {
+        let name = format!("aida flow-data report {flag}");
+        let flags = classified_flags();
+        let (_, Kind::NotATimeBound(reason)) =
+            flags.iter().find(|(path, _)| *path == name).unwrap()
+        else {
+            panic!("{name} must retain its absolute boundary classification");
+        };
+        assert!(reason.contains("absolute RFC3339 or UTC calendar-date"));
+    }
 }

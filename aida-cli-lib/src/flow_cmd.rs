@@ -1,4 +1,4 @@
-//! Built-in compatibility registration (retained through slice 3).
+//! Hidden substrate JSON reader for the external flow renderer.
 // trace:STORY-2704 | ai:codex
 use clap::CommandFactory;
 #[path = "flow_cmd_args.rs"]
@@ -8,9 +8,9 @@ mod args;
 mod report;
 use args::*;
 pub(crate) static FLOW: crate::cmdkit::CommandReg = crate::cmdkit::CommandReg {
-    name: "flow",
+    name: "flow-data",
     help_after: "findings",
-    command: FlowArgs::command,
+    command: || FlowArgs::command().name("flow-data").hide(true),
     policy: |_| crate::cmdkit::CmdPolicy {
         stakeholder: crate::cmdkit::StakeholderAction::Read,
         per_write_auto_push: false,
@@ -28,16 +28,22 @@ mod tests {
     #[test]
     fn flow_json_projection_passes_dispatch_gate() {
         for spelling in ["--format=json", "--json"] {
-            let mut argv: Vec<String> =
-                ["aida", "flow", "report", "--since", "2026-11-09", spelling]
-                    .into_iter()
-                    .map(str::to_string)
-                    .collect();
+            let mut argv: Vec<String> = [
+                "aida",
+                "flow-data",
+                "report",
+                "--since",
+                "2026-11-09",
+                spelling,
+            ]
+            .into_iter()
+            .map(str::to_string)
+            .collect();
             crate::json_capability_gate(&mut argv).unwrap();
             let matches = crate::command_registry::built_command()
                 .try_get_matches_from(argv)
                 .unwrap();
-            let flow = matches.subcommand_matches("flow").unwrap();
+            let flow = matches.subcommand_matches("flow-data").unwrap();
             assert!(matches!(
                 FlowArgs::from_arg_matches(flow).unwrap().command,
                 FlowCommand::Report { json: true, .. }
@@ -50,7 +56,7 @@ mod tests {
         let matches = cmd
             .try_get_matches_from([
                 "aida",
-                "flow",
+                "flow-data",
                 "report",
                 "--since",
                 "2026-11-09",
@@ -58,7 +64,7 @@ mod tests {
                 "json",
             ])
             .unwrap();
-        let sub = matches.subcommand_matches("flow").unwrap();
+        let sub = matches.subcommand_matches("flow-data").unwrap();
         assert_eq!(
             (FLOW.policy)(sub).stakeholder,
             crate::cmdkit::StakeholderAction::Read
