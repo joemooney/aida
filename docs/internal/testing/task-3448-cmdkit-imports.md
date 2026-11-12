@@ -80,3 +80,33 @@ read-only measurement used `rg` and Git, without indexing from the lane.
   after committing the required `Help-Golden: unchanged` trailer. Mail-wake
   fixtures initially refused shared-write directories and passed with umask
   077. No production change was made for that environment issue.
+
+## PR #3867 round-2 publication correction
+
+<!-- trace:TASK-3448 | ai:codex -->
+
+Review of `411bbca35a3e` identified a missing commit-body declaration, not a
+help-surface change. The framework import migration and registry re-export
+removal change no command definitions, flags or help strings. The review reports
+that all six test lanes passed, including `help_surface_matches_golden_snapshot`;
+the `lane_fixture_fails` panic is an expected negative fixture. The failing
+CI gate is the help snapshot co-change guard.
+
+This round changes only this evidence note. The native publication declaration
+supplies a UTF-8 commit body containing the standalone line
+`Help-Golden: unchanged`. The host must preserve that body in the new commit
+and eventual squash, retain `Refs TASK-3448` and the partial `Refs TASK-3428`
+scope, and obtain fresh passing co-change and required CI checks at the
+published head. The unchanged snapshot is not regenerated.
+
+Local verification: `bash tests/test_check_help_golden_cochange.sh` passes.
+The actual guard against `origin/main` still exits 1 at the existing committed
+head, as expected until the host creates the new commit with the declaration.
+The full fast gate is not established locally: its first TUI seam gate invokes
+Cargo directly despite the fast-tier description; the bounded attempt cannot
+replace launcher-run Cargo validation or fresh published-head CI.
+
+The advisor's recorded measurement remains 610 modules / largest SCC 367
+before and after the import migration. This round does not re-measure or claim
+SCC reduction or spec completion. Moving the registry test helpers is a later
+slice, sequenced after #3867 lands; its measurement must retain inline-test edges.
