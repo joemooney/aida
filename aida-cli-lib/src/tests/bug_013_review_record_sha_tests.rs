@@ -267,7 +267,12 @@ fn interactive_review_anchor_refusals_are_collected_and_held() {
     if crate::test_env::run_path_isolated_test() {
         return;
     }
-    for disposition in ["request-changes", "rejected"] {
+    for (disposition, file_anchor) in [
+        ("request-changes", false),
+        ("rejected", false),
+        ("request-changes", true),
+        ("rejected", true),
+    ] {
         let (root, head) = project();
         let home = root.path().join("home");
         std::fs::create_dir_all(&home).unwrap();
@@ -343,6 +348,17 @@ fn interactive_review_anchor_refusals_are_collected_and_held() {
         );
         // Native record is ledger-only, under the SPEC anchor, not PR-2522.
         assert!(!anchor.exists());
+        // Interactive skills can also leave a file at the SPEC anchor. Keep
+        // the original child's grant/head/timestamp intact and exercise that
+        // collection route as well: an anchor file must not bypass holding.
+        // trace:BUG-2522 | ai:codex
+        if file_anchor {
+            let body = crate::gate::review_verdict::current_verdict_body_at(&anchor)
+                .expect("the child's original recording is readable");
+            std::fs::create_dir_all(anchor.parent().unwrap()).unwrap();
+            std::fs::write(&anchor, body).unwrap();
+            assert!(anchor.is_file());
+        }
         let mut checks = crate::queue_cmd::StandaloneVerdictChecks {
             project_root: root.path(),
             pr: 2522,
