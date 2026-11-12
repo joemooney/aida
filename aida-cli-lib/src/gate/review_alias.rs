@@ -586,8 +586,10 @@ pub(crate) fn select_verdict(project_root: &Path, ids: &[&str]) -> AliasSelectio
 
 /// Selections for many requirements in one operation (a list view): the
 /// gate ledger is discovered once, on the first multi-label selection, and
-/// every later selection reuses that discovery and the same aggregate
-/// budget, so no ledger file is read twice per operation.
+/// every later selection reuses that inventory. Selected ledger payloads share
+/// one aggregate budget and are cached; unrelated payloads are discarded during
+/// inventory discovery under independent per-file limits.
+// trace:BUG-2531 | ai:codex
 // trace:BUG-2403 | ai:claude
 pub(crate) struct Selector<'a> {
     project_root: &'a Path,
@@ -636,7 +638,7 @@ impl<'a> Selector<'a> {
         let discovery = self.discovery.get_or_insert_with(|| {
             let root = ledger::store_root(project_root)
                 .map_err(|e| Unsafe(format!("the gate ledger cannot be resolved: {e}")))?;
-            let found = checked::discover(&root, budget)?;
+            let found = checked::discover(&root)?;
             Ok((root, found))
         });
         let (store_root, found) = match discovery {

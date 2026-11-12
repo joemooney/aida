@@ -302,35 +302,32 @@ fn read_change(
     }
 }
 
-/// One bounded, strict discovery pass over a store's gate ledger: every
-/// change ledger in the pinned ledger directory read once, its verdict
-/// events grouped by the spec label each is bound to.
-///
-/// BUG-2403 (signoff amendments 6-7): the `by-spec` index is only a
-/// discovery hint — `store::write_events` appends before it indexes and only
-/// warns when indexing fails — so completeness is proved by DISCOVERY, not
-/// by index success. A caller selecting for many specs (a list view) builds
-/// one `Discovery` and asks it per spec, so no file is read twice per
-/// operation. Listing, file count and aggregate bytes/events are bounded;
-/// exhausting any bound refuses rather than answering from a partial read.
-// trace:BUG-2403 | ai:claude
+/// A bounded inventory of spec-to-change bindings, derived strictly from
+/// events rather than the fallible by-spec hints. Discovery retains no review
+/// payloads. Only ledgers needed by a selection consume its aggregate budget.
+// trace:BUG-2531 | ai:codex
 pub(crate) struct Discovery {
-    /// `None` when the ledger has no `by-spec` directory.
+    ledger: File,
     by_spec: Option<File>,
     discovered: Vec<String>,
-    /// Upper-cased spec label -> its change-bound verdict events.
-    bound: std::collections::HashMap<String, Vec<GateEvent>>,
+    bound: std::collections::HashMap<String, Vec<String>>,
+    /// Selected ledgers are read once across a list operation. Their total
+    /// retained payload is bounded by the caller's selection budget.
+    selected: std::collections::HashMap<String, Vec<GateEvent>>,
 }
 
 /// Discover the gate ledger under `root`; `Ok(None)` when it does not exist.
 // trace:BUG-2403 | ai:claude
-pub(crate) fn discover(root: &Path, budget: &mut Budget) -> Result<Option<Discovery>, Unsafe> {
+pub(crate) fn discover(root: &Path) -> Result<Option<Discovery>, Unsafe> {
     let Some((ledger, by_spec)) = ledger_dirs(root)? else {
         return Ok(None);
     };
     let ledger_path = super::ledger_dir(root);
     let mut discovered: Vec<String> = Vec::new();
-    let mut bound: std::collections::HashMap<String, Vec<GateEvent>> = Default::default();
+    let mut bound: std::collections::HashMap<String, Vec<String>> = Default::default();
+    // Inventory strings also have a finite aggregate budget, independent of
+    // the (potentially much larger) unrelated review payloads being inspected.
+    let mut inventory_budget = Budget::default();
     for name in list_pinned(&ledger, &ledger_path)? {
         let Some(change) = name
             .strip_suffix(".jsonl")
@@ -346,24 +343,31 @@ pub(crate) fn discover(root: &Path, budget: &mut Budget) -> Result<Option<Discov
         }
         let key = change.as_key();
         discovered.push(key.clone());
-        let Some(events) = read_change(&ledger, &name, &key, budget)? else {
+        // Each inspected file remains subject to all strict checks and finite
+        // byte/event limits. Do not debit unrelated payloads from a selection.
+        let Some(events) = read_change(&ledger, &name, &key, &mut Budget::default())? else {
             return Err(Unsafe(format!(
                 "refusing gate-ledger discovery: {name} vanished while it was read"
             )));
         };
         for e in events.into_iter().filter(|e| e.verdict_record().is_some()) {
             if let Some(spec) = e.spec.as_deref() {
-                bound
-                    .entry(spec.trim().to_ascii_uppercase())
-                    .or_default()
-                    .push(e);
+                let spec = spec.trim().to_ascii_uppercase();
+                let changes = bound.entry(spec.clone()).or_default();
+                if !changes.contains(&key) {
+                    inventory_budget.spend_event()?;
+                    inventory_budget.spend_bytes((spec.len() + key.len()) as u64)?;
+                    changes.push(key.clone());
+                }
             }
         }
     }
     Ok(Some(Discovery {
+        ledger,
         by_spec,
         discovered,
         bound,
+        selected: Default::default(),
     }))
 }
 
@@ -375,7 +379,7 @@ impl Discovery {
     /// change it names whose ledger is missing, or a malformed index, refuses.
     // trace:BUG-2403 | ai:claude
     pub(crate) fn events_for(
-        &self,
+        &mut self,
         labels: &[String],
         budget: &mut Budget,
     ) -> Result<Vec<(String, Vec<GateEvent>)>, Unsafe> {
@@ -383,7 +387,30 @@ impl Discovery {
         for label in labels {
             let spec =
                 spec_key(label).ok_or_else(|| Unsafe(format!("{label:?} is not a spec label")))?;
-            let mut events = self.bound.get(&spec).cloned().unwrap_or_default();
+            let mut events = Vec::new();
+            for key in self.bound.get(&spec).into_iter().flatten() {
+                if !self.selected.contains_key(key) {
+                    let name = format!("{key}.jsonl");
+                    let selected =
+                        read_change(&self.ledger, &name, key, budget)?.ok_or_else(|| {
+                            Unsafe(format!(
+                                "refusing gate-ledger selection: {name} vanished while it was read"
+                            ))
+                        })?;
+                    self.selected.insert(key.clone(), selected);
+                }
+                events.extend(
+                    self.selected[key]
+                        .iter()
+                        .filter(|e| {
+                            e.verdict_record().is_some()
+                                && e.spec
+                                    .as_deref()
+                                    .is_some_and(|s| s.trim().eq_ignore_ascii_case(&spec))
+                        })
+                        .cloned(),
+                );
+            }
             if let Some(by_spec) = &self.by_spec {
                 let index_name = format!("{spec}.json");
                 if let Some(body) = read_entry(by_spec, &index_name, MAX_INDEX_BYTES, budget)? {
@@ -486,4 +513,32 @@ pub(crate) fn read_spec_entries(
         }
     }
     Ok((unbound, changes))
+}
+
+/// Read-only capacity probe for doctor; no event payloads are read.
+// trace:BUG-2531 | ai:codex
+pub(crate) fn active_bytes(root: &Path) -> Result<u64, Unsafe> {
+    let Some((ledger, _)) = ledger_dirs(root)? else {
+        return Ok(0);
+    };
+    let mut bytes = 0u64;
+    for name in list_pinned(&ledger, &super::ledger_dir(root))? {
+        if !name
+            .strip_suffix(".jsonl")
+            .and_then(ChangeKey::parse)
+            .is_some_and(|c| format!("{}.jsonl", c.as_key()) == name)
+        {
+            continue;
+        }
+        let file = openat(&ledger, &name, 0)
+            .map_err(|e| Unsafe(format!("cannot inspect gate-ledger entry {name}: {e}")))?;
+        let meta = file.metadata().map_err(|e| Unsafe(e.to_string()))?;
+        if !meta.is_file() {
+            return Err(Unsafe(format!(
+                "gate-ledger entry {name} is not a regular file"
+            )));
+        }
+        bytes = bytes.saturating_add(meta.len());
+    }
+    Ok(bytes)
 }
