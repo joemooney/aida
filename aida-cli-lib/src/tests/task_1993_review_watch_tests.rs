@@ -3625,6 +3625,59 @@ fn bug2534_ledger_only_verdict_stops_retries_and_preserves_rounds() {
         )
         .unwrap();
         assert_eq!(store.history(&c.key()).unwrap().blocking(), 1);
+        // A failed delivery re-recorded at a later head archives the pending
+        // barrier inside `rounds`; nested barriers must not count either, while
+        // genuine archived refusals still do.
+        // trace:BUG-2534 | ai:claude
+        let pending_head = format!("{:040x}", 3);
+        let mut nested = verdict_json(&pending_head, "approved")
+            .as_object()
+            .unwrap()
+            .clone();
+        let mut archived_barrier = verdict_json(&pending_head, "request-changes")
+            .as_object()
+            .unwrap()
+            .clone();
+        archived_barrier.insert("sweep_pending".into(), true.into());
+        let other_barrier_head = format!("{:040x}", 4);
+        let mut other_barrier = verdict_json(&other_barrier_head, "request-changes")
+            .as_object()
+            .unwrap()
+            .clone();
+        other_barrier.insert("sweep_pending".into(), true.into());
+        nested.insert(
+            "rounds".into(),
+            serde_json::json!([archived_barrier, other_barrier]),
+        );
+        crate::gate::ledger::store::append_one(
+            temp.path(),
+            GateEvent::new(key, EventBody::Verdict { record: nested }),
+        )
+        .unwrap();
+        let history = store.history(&c.key()).unwrap();
+        assert_eq!(history.blocking(), 1);
+        assert!(history.contains(&pending_head));
+        assert!(!history.contains(&other_barrier_head));
+        let genuine_head = format!("{:040x}", 5);
+        let mut with_refusal = verdict_json(&genuine_head, "approved")
+            .as_object()
+            .unwrap()
+            .clone();
+        with_refusal.insert(
+            "rounds".into(),
+            serde_json::json!([verdict_json(&genuine_head, "request-changes")]),
+        );
+        crate::gate::ledger::store::append_one(
+            temp.path(),
+            GateEvent::new(
+                key,
+                EventBody::Verdict {
+                    record: with_refusal,
+                },
+            ),
+        )
+        .unwrap();
+        assert_eq!(store.history(&c.key()).unwrap().blocking(), 2);
         std::fs::write(
             temp.path()
                 .join(format!(".aida/gate-ledger/{}.jsonl", c.key())),
