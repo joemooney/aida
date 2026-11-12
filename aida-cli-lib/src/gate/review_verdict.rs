@@ -32,6 +32,31 @@
 
 use std::path::{Path, PathBuf};
 
+/// Validate and collect an interactive child's original verdict on the protected
+/// floor. The caller must arm a refusing disposition before presenting or
+/// re-recording it; hold placement and forge labels remain parent orchestration.
+// trace:BUG-2522 | ai:codex
+pub(crate) fn collect_interactive_review_refusal(
+    project_root: &Path,
+    pr: u64,
+    spec: &str,
+    launched_at: std::time::SystemTime,
+    checks: &dyn VerdictCollectionChecks,
+) -> anyhow::Result<CollectedVerdict> {
+    let canonical = verdict_path(project_root, &format!("PR-{pr}"));
+    crate::gate::review_verdict::collect_standalone_verdict(
+        project_root,
+        project_root,
+        &canonical,
+        &[spec.to_string()],
+        launched_at,
+        checks,
+    )
+    .map_err(|why| {
+        anyhow::anyhow!("interactive review verdict was not collected for PR-{pr}: {why}")
+    })
+}
+
 /// The verdict word, normalized from whatever the reviewer/skill wrote.
 ///
 /// BUG-1505: this enum is the CANONICAL verdict vocabulary and
@@ -3001,7 +3026,14 @@ pub fn collect_standalone_verdict(
     let canonical_in_place = fresh_candidate(canonical, since);
     candidates.extend(canonical_in_place.clone());
     for id in &spec_ids {
-        candidates.extend(fresh_candidate(&verdict_path(launcher_root, id), since));
+        let path = verdict_path(launcher_root, id);
+        // Interactive spec review anchors its native child's record by spec,
+        // so its original grant-bound evidence can be ledger-only too.
+        // trace:BUG-2522 | ai:codex
+        candidates.extend(
+            fresh_candidate(&path, since)
+                .or_else(|| fresh_ledger_candidate(launcher_root, &path, since)),
+        );
     }
     // An uncontained reviewer's `aida review record` writes the ledger, not a
     // file: its record for this change, appended after the reviewer started,
