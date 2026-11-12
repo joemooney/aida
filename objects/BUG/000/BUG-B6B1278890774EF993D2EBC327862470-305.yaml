@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-12T19:41:04.965614772Z
-modified_at: 2026-11-12T20:52:56.146916179Z
+modified_at: 2026-11-12T21:16:12.128671730Z
 req_type: Bug
 comments:
 - id: 01a1d177-d927-79b2-ac05-55e90a72f21c
@@ -18,6 +18,48 @@ comments:
   modified_at: 2026-11-12T20:34:14.951940899Z
   session_id: 01a1d0eb-22cc-7262-8f6c-7266e9cc1fbb
   harness_version: 2.1.322 (Claude Code)
+- id: 01a1d19e-0b07-7842-96e1-ce1e88174944
+  author: dirtlab
+  content: |
+    Partial fix for BUG-2540; leave In Progress and publish with Refs.
+
+    Changed files:
+    aida-cli-lib/src/queue_cmd/rework.rs
+    aida-cli-lib/src/queue_cmd/work.rs
+    aida-cli-lib/src/reconcile_evidence.rs
+    aida-cli-lib/src/tests/queue_rework_tests.rs
+    aida-cli-lib/src/tests/bug_1993_show_deadline_tests.rs
+    aida-cli-lib/src/worktree_gc.rs
+    aida-core/src/db/mod.rs
+    aida-core/src/db/store_lock.rs
+
+    Bound rework store-lock admission to five seconds with a caller-scoped deadline, released before chained worker launch. Bound GitHub open-change search subprocesses to three seconds and report timeout refusal before rework mutations. Reuse the open-change lookup for waiting/findings checks. Resolve ordinary linked-worktree primary roots through git-common-dir instead of enumerating the worktree registry; preserve unusual-layout fallback.
+
+    Validation through the launcher:
+    queue_rework_tests: 62 passed, job j20261112T210340080-2-0.
+    session_root_resolution_tests: 9 passed, job j20261112T210921232-2-0.
+    aida-core bug_2540: 1 passed, job j20261112T211033089-2-0.
+    aida-cli-lib bug_2540: 2 passed, job j20261112T211206779-2-0.
+    shared_resolvers_wait_out_a_slow_git_while_the_show_variant_times_out: 1 passed, job j20261112T211503222-2-0.
+    rustfmt --check and git diff --check passed.
+    Broader bug_2140 run: 1 passed and 1 failed at allocation-setting ownership setup before host-commit exercise. See the filed finding.
+    make check-ci-fast was interrupted after unexpectedly invoking direct Cargo; that gate remains incomplete.
+    untested=false
+
+    Blockers: the operator's 545-subprocess incident and two-second host target remain unverified. A diagnostic queue rework invocation from this seat refuses at the dispatch-authority gate; no authority bypass was attempted. The supplied codegraph client /home/joe/ai/aida/.codegraph/proxy-state/bin/codegraph is absent; doctor reports missing. Host deployment and final profiling remain necessary.
+
+    Edits remain uncommitted; no push, PR creation or queue completion was attempted.
+  created_at: 2026-11-12T21:15:58.087486457Z
+  modified_at: 2026-11-12T21:15:58.087486457Z
+  session_id: 01a1d18896a4
+  harness_version: codex-cli 0.167.0
+- id: 01a1d19e-41e0-7200-b6b2-d9fe6bad49c5
+  author: dirtlab
+  content: 'Handoff correction: filing the BUG-2140 fixture observation as a draft finding was refused because this clone has no AIDA node binding. No finding was created; the observation and full job path are retained in the handoff comment. The local handoff at /tmp/bug2540-handoff.txt is corrected.'
+  created_at: 2026-11-12T21:16:12.128671730Z
+  modified_at: 2026-11-12T21:16:12.128671730Z
+  session_id: 01a1d18896a4
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1d188-9d4b-76d0-bc54-15d34358173a
   author: aida-session-start
