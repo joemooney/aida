@@ -8,8 +8,16 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-12T10:13:24.570585533Z
-modified_at: 2026-11-12T18:12:12.723966974Z
+modified_at: 2026-11-12T18:12:48.616070591Z
 req_type: Bug
+comments:
+- id: 01a1d0f6-5b68-71e2-8e14-7e40a9d8c6c4
+  author: joe
+  content: '[advisor 2026-11-12 11:13] Promoted: hit again on PR-3859 (PASS at 11:06 reported as ''three attempts without verdict'') and PR-3824. Directly delays landing. Launching on dell1.'
+  created_at: 2026-11-12T18:12:48.616070591Z
+  modified_at: 2026-11-12T18:12:48.616070591Z
+  session_id: 01a1d0eb-22cc-7262-8f6c-7266e9cc1fbb
+  harness_version: 2.1.322 (Claude Code)
 history:
 - id: 01a1d0f5-cf33-7072-a087-c8f8bafc0d36
   author: joe
