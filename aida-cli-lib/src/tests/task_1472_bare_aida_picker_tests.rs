@@ -89,5 +89,7 @@ fn picker_shortcut_parses_as_agent_new() {
     // reaches the same picker (no tool given → the agent-type picker).
     let explicit = vec!["aida".to_string(), "agent".to_string(), "new".to_string()];
     assert_eq!(rewrite_agent_default_new(&argv), explicit);
-    crate::command_registry::try_parse_from(argv).expect("bare picker argv parses");
+    crate::TEST_CLI
+        .try_parse_from(argv)
+        .expect("bare picker argv parses");
 }

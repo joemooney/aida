@@ -5,8 +5,9 @@ use clap::Parser;
 #[test]
 fn show_comment_flags_parse_on_both_output_surfaces_and_conflict() {
     for flag in ["--comments", "--no-comments"] {
-        let cli =
-            crate::command_registry::try_parse_from(["aida", "show", "TASK-1", flag]).unwrap();
+        let cli = crate::TEST_CLI
+            .try_parse_from(["aida", "show", "TASK-1", flag])
+            .unwrap();
         match cli
             .command
             .registered::<crate::requirements_cli::ShowArgs>()
@@ -22,14 +23,9 @@ fn show_comment_flags_parse_on_both_output_surfaces_and_conflict() {
             other => panic!("unexpected command: {other:?}"),
         }
     }
-    assert!(crate::command_registry::try_parse_from([
-        "aida",
-        "show",
-        "TASK-1",
-        "--comments",
-        "--no-comments"
-    ])
-    .is_err());
+    assert!(crate::TEST_CLI
+        .try_parse_from(["aida", "show", "TASK-1", "--comments", "--no-comments"])
+        .is_err());
 }
 
 /// BUG-453: headless_log_len returns the byte length of the session's JSONL
@@ -234,7 +230,9 @@ fn pending_brief_sentinel_add_clear_lifecycle() {
 #[test]
 fn show_rels_flag_parses() {
     for arg in ["--rels", "--relations"] {
-        let cli = crate::command_registry::try_parse_from(["aida", "show", "TASK-1", arg]).unwrap();
+        let cli = crate::TEST_CLI
+            .try_parse_from(["aida", "show", "TASK-1", arg])
+            .unwrap();
         match cli
             .command
             .registered::<crate::requirements_cli::ShowArgs>()
@@ -246,7 +244,9 @@ fn show_rels_flag_parses() {
         }
     }
     // default: off
-    let cli = crate::command_registry::try_parse_from(["aida", "show", "TASK-1"]).unwrap();
+    let cli = crate::TEST_CLI
+        .try_parse_from(["aida", "show", "TASK-1"])
+        .unwrap();
     match cli
         .command
         .registered::<crate::requirements_cli::ShowArgs>()
@@ -486,19 +486,20 @@ fn last_findings_round_trip_and_noop() {
 /// onto `Add`, and `--blocked-by` / `--remove-blocked-by` onto `Edit`.
 #[test]
 fn blocked_by_flags_parse_on_add_and_edit() {
-    let add = crate::command_registry::try_parse_from([
-        "aida",
-        "add",
-        "--title",
-        "t",
-        "--type",
-        "task",
-        "--blocked-by",
-        "TASK-1",
-        "--depends-on",
-        "TASK-2",
-    ])
-    .unwrap();
+    let add = crate::TEST_CLI
+        .try_parse_from([
+            "aida",
+            "add",
+            "--title",
+            "t",
+            "--type",
+            "task",
+            "--blocked-by",
+            "TASK-1",
+            "--depends-on",
+            "TASK-2",
+        ])
+        .unwrap();
     match add.command.registered::<crate::requirements_cli::AddArgs>() {
         crate::requirements_cli::AddArgs { blocked_by, .. } => {
             assert_eq!(blocked_by, vec!["TASK-1".to_string(), "TASK-2".to_string()]);
@@ -506,16 +507,17 @@ fn blocked_by_flags_parse_on_add_and_edit() {
         other => panic!("unexpected command: {other:?}"),
     }
 
-    let edit = crate::command_registry::try_parse_from([
-        "aida",
-        "edit",
-        "TASK-9",
-        "--blocked-by",
-        "TASK-1",
-        "--remove-blocked-by",
-        "TASK-3",
-    ])
-    .unwrap();
+    let edit = crate::TEST_CLI
+        .try_parse_from([
+            "aida",
+            "edit",
+            "TASK-9",
+            "--blocked-by",
+            "TASK-1",
+            "--remove-blocked-by",
+            "TASK-3",
+        ])
+        .unwrap();
     match edit
         .command
         .registered::<crate::requirements_cli::EditArgs>()
@@ -534,10 +536,9 @@ fn blocked_by_flags_parse_on_add_and_edit() {
 
 #[test]
 fn brief_cli_parses_canonical_create_shape() {
-    let cli = crate::command_registry::try_parse_from([
-        "aida", "brief", "codex", "TASK-492", "--note", "ship it",
-    ])
-    .unwrap();
+    let cli = crate::TEST_CLI
+        .try_parse_from(["aida", "brief", "codex", "TASK-492", "--note", "ship it"])
+        .unwrap();
     match cli.command.registered::<crate::brief_cmd::BriefArgs>() {
         crate::brief_cmd::BriefArgs {
             agent,
@@ -561,15 +562,16 @@ fn brief_cli_parses_canonical_create_shape() {
         other => panic!("unexpected command: {other:?}"),
     }
 
-    let cli = crate::command_registry::try_parse_from([
-        "aida",
-        "brief",
-        "codex",
-        "TASK-493",
-        "--depends-on",
-        "TASK-492",
-    ])
-    .unwrap();
+    let cli = crate::TEST_CLI
+        .try_parse_from([
+            "aida",
+            "brief",
+            "codex",
+            "TASK-493",
+            "--depends-on",
+            "TASK-492",
+        ])
+        .unwrap();
     match cli.command.registered::<crate::brief_cmd::BriefArgs>() {
         crate::brief_cmd::BriefArgs { depends_on, .. } => {
             assert_eq!(depends_on.as_deref(), Some("TASK-492"));
@@ -582,15 +584,16 @@ fn brief_cli_parses_canonical_create_shape() {
 // trace:TASK-1140 | ai:claude
 #[test]
 fn brief_cli_parses_authorized_by_flag() {
-    let cli = crate::command_registry::try_parse_from([
-        "aida",
-        "brief",
-        "codex",
-        "TASK-492",
-        "--authorized-by",
-        "advisor-a",
-    ])
-    .unwrap();
+    let cli = crate::TEST_CLI
+        .try_parse_from([
+            "aida",
+            "brief",
+            "codex",
+            "TASK-492",
+            "--authorized-by",
+            "advisor-a",
+        ])
+        .unwrap();
     match cli.command.registered::<crate::brief_cmd::BriefArgs>() {
         crate::brief_cmd::BriefArgs { authorized_by, .. } => {
             assert_eq!(authorized_by.as_deref(), Some("advisor-a"));
@@ -599,8 +602,9 @@ fn brief_cli_parses_authorized_by_flag() {
     }
 
     // Omitted → None (the overwhelmingly common case).
-    let cli =
-        crate::command_registry::try_parse_from(["aida", "brief", "codex", "TASK-492"]).unwrap();
+    let cli = crate::TEST_CLI
+        .try_parse_from(["aida", "brief", "codex", "TASK-492"])
+        .unwrap();
     match cli.command.registered::<crate::brief_cmd::BriefArgs>() {
         crate::brief_cmd::BriefArgs { authorized_by, .. } => {
             assert_eq!(authorized_by, None);
@@ -611,15 +615,16 @@ fn brief_cli_parses_authorized_by_flag() {
 
 #[test]
 fn brief_cli_parses_list_and_ack_subcommands() {
-    let list = crate::command_registry::try_parse_from([
-        "aida",
-        "brief",
-        "list",
-        "--for-agent",
-        "codex",
-        "--include-acked",
-    ])
-    .unwrap();
+    let list = crate::TEST_CLI
+        .try_parse_from([
+            "aida",
+            "brief",
+            "list",
+            "--for-agent",
+            "codex",
+            "--include-acked",
+        ])
+        .unwrap();
     match list.command.registered::<crate::brief_cmd::BriefArgs>() {
         crate::brief_cmd::BriefArgs {
             cmd:
@@ -635,8 +640,9 @@ fn brief_cli_parses_list_and_ack_subcommands() {
         other => panic!("unexpected command: {other:?}"),
     }
 
-    let ack =
-        crate::command_registry::try_parse_from(["aida", "brief", "ack", "brief.md"]).unwrap();
+    let ack = crate::TEST_CLI
+        .try_parse_from(["aida", "brief", "ack", "brief.md"])
+        .unwrap();
     match ack.command.registered::<crate::brief_cmd::BriefArgs>() {
         crate::brief_cmd::BriefArgs {
             cmd: Some(BriefCommand::Ack { brief_file }),
