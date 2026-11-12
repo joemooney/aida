@@ -180,3 +180,27 @@ print('leaving current main SCC:', ', '.join(sorted(current_main-c)))
 print('leaving SCC from reviewed head:', ', '.join(sorted(b-c)))
 print('leaving SCC from base:', ', '.join(sorted(a-c)))
 ```
+
+## TASK-3448 repeated review finding: publication trailer handoff (2026-11-12)
+
+<!-- trace:TASK-3448 | ai:codex -->
+
+The new native-seat publication declaration supplies the standalone
+`Help-Golden: unchanged` body line again for finding 1. Preserve it verbatim in
+the host-created commit and eventual squash message. Keep Refs TASK-3448 and
+partial Refs TASK-3428 scope; neither spec completes with this correction.
+No CLI source or golden snapshot changes are necessary for this metadata fix.
+
+At local HEAD `44689c0547`, commit `280f913707` already contains the exact
+standalone trailer. `bash scripts/check-help-golden-cochange.sh origin/main`
+passes, and `bash tests/test_check_help_golden_cochange.sh` passes. These local
+results do not establish fresh published-head CI success or explain the earlier
+reported exact-head failure. The host must publish this new commit with the
+body preserved and obtain fresh passing co-change and required checks.
+
+`make check-ci-fast` reached the TUI seam guard, which invokes Cargo directly;
+that run did not complete within the tool lifetime. Full fast-gate validation
+remains incomplete under this seat's lane-runner-only Cargo policy. No Rust
+source changed and no new Rust test result is claimed (`untested=true`).
+The advisor's largest SCC remains 367; helper extraction and measurement with
+inline-test edges retained remain the next slice after #3867 lands.
