@@ -267,13 +267,22 @@ fn collect(
     // trace:STORY-2401 | ai:codex
     let ci_key =
         crate::ci_digest::CiEvidenceKey::read(&live.project_root, &train.tip, live.forge.kind())?;
-    let checks = live.forge.commit_checks(&ci_key.head_sha)?;
     let names: Vec<&str> = required.iter().map(String::as_str).collect();
-    anyhow::ensure!(
-        checks.sha == train.tip
-            && crate::forge::judge_commit_checks(&checks, &names) == crate::forge::CommitCi::Green,
-        "train exact-tip required CI is not green"
-    );
+    // Hold release can re-run a required context even after the PR-level
+    // wait passed. Every proof refresh must settle the exact commit too.
+    // trace:BUG-2528 | ai:codex
+    let clock = ExactTipCiClock::default();
+    wait_exact_tip_ci(
+        &ci_key.head_sha,
+        &names,
+        180,
+        || {
+            live.dispatch_check()?;
+            live.forge.commit_checks(&ci_key.head_sha)
+        },
+        || clock.elapsed(),
+        || clock.sleep(),
+    )?;
     let mut sources = Vec::new();
     let mut mapped = Vec::new();
     // trace:BUG-2438 | ai:claude
@@ -484,6 +493,81 @@ fn collect(
         "specs": all_specs, "bound_source_event": bound}),
         mapped,
     ))
+}
+
+// Keep integration tests on the real final-gate path without wall-clock polling.
+// The same polling loop and deadline apply; unit tests advance logical time.
+// trace:BUG-2528 | ai:codex
+struct ExactTipCiClock {
+    #[cfg(not(test))]
+    started: std::time::Instant,
+    #[cfg(test)]
+    seconds: std::cell::Cell<u64>,
+}
+
+impl Default for ExactTipCiClock {
+    fn default() -> Self {
+        Self {
+            #[cfg(not(test))]
+            started: std::time::Instant::now(),
+            #[cfg(test)]
+            seconds: std::cell::Cell::new(0),
+        }
+    }
+}
+
+impl ExactTipCiClock {
+    fn elapsed(&self) -> u64 {
+        #[cfg(not(test))]
+        {
+            self.started.elapsed().as_secs()
+        }
+        #[cfg(test)]
+        {
+            self.seconds.get()
+        }
+    }
+
+    fn sleep(&self) {
+        #[cfg(not(test))]
+        std::thread::sleep(std::time::Duration::from_secs(TRAIN_CI_POLL_SECS));
+        #[cfg(test)]
+        self.seconds.set(self.seconds.get() + TRAIN_CI_POLL_SECS);
+    }
+}
+
+/// Only an in-flight context may defer the final decision. Never substitute
+/// branch CI, an earlier green snapshot, or an unreadable observation.
+// trace:BUG-2528 | ai:codex
+fn wait_exact_tip_ci(
+    tip: &str,
+    required: &[&str],
+    limit_secs: u64,
+    mut snapshot: impl FnMut() -> Result<crate::forge::CommitChecks>,
+    mut elapsed: impl FnMut() -> u64,
+    mut sleep: impl FnMut(),
+) -> Result<()> {
+    loop {
+        let checks = snapshot()?;
+        anyhow::ensure!(checks.sha == tip, "train exact-tip CI SHA changed");
+        match crate::forge::judge_commit_checks(&checks, required) {
+            crate::forge::CommitCi::Green => return Ok(()),
+            crate::forge::CommitCi::Pending(names) => {
+                let seconds = elapsed();
+                anyhow::ensure!(
+                    seconds < limit_secs,
+                    "train exact-tip required CI still pending after {limit_secs}s: {}",
+                    names.join(", ")
+                );
+                println!(
+                    "  train exact-tip CI pending ({seconds}/{limit_secs}s): {}",
+                    names.join(", ")
+                );
+                sleep();
+            }
+            state => anyhow::bail!("train exact-tip required CI is not green: {state:?}"),
+        }
+    }
 }
 
 /// Verify the existing objects, without rebuilding timestamped commits. Exact
