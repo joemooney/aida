@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-10T06:40:07.764479561Z
-modified_at: 2026-11-12T23:16:18.727755959Z
+modified_at: 2026-11-12T23:20:34.423547844Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -238,6 +238,13 @@ comments:
   modified_at: 2026-11-12T23:16:18.727755959Z
   session_id: 01a1d1fd0896
   harness_version: 2.1.323 (Claude Code)
+- id: 01a1d210-1f77-7712-9214-80db4af53b16
+  author: joe
+  content: 'advisor 16:22: live instance: a review of PR-3895 (head 83a45ba, BUG-2538) was also recorded as PR-3904''s latest verdict (promotion 2, head 42edd50; ''aida review verdict PR-3904'' shows CHANGES REQUESTED against 83a45ba). The promotion''s review story covers BUG-2538, which is likely how it bound. The finding was real and is fixed in 618ce8a.'
+  created_at: 2026-11-12T23:20:34.423547844Z
+  modified_at: 2026-11-12T23:20:34.423547844Z
+  session_id: 01a1d19e-9195-7853-815f-b54753ebd973
+  harness_version: 2.1.322 (Claude Code)
 history:
 - id: 01a1c4af-45a0-7a32-8edf-55980e6f5825
   author: joe
