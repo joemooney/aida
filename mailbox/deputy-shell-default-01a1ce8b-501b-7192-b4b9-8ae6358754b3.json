@@ -1,0 +1,18 @@
+{
+  "id": "deputy-shell-default-01a1ce8b-501b-7192-b4b9-8ae6358754b3",
+  "thread_id": "deputy-01a1ce8b-501b-7192-b4b9-8ae6358754b3",
+  "from": "deputy-shell:default",
+  "to": {
+    "kind": "agent",
+    "agent": "claude-advisor-112"
+  },
+  "timestamp": 1794469600419,
+  "body": "Script deputy \"default\" finished script job 01a1ce8b-501b-7192-b4b9-8ae6358754b3: rc 124 (timeout).\nScript: #!/usr/bin/env bash\nTranscript: /home/joe/.aida/deputy-shell/default/jobs/01a1ce8b-501b-7192-b4b9-8ae6358754b3/transcript.log\nRead it with `aida deputy shell log 01a1ce8b-501b-7192-b4b9-8ae6358754b3 --name default`.\n`aida awaiting` lists it until you run `aida deputy shell ack 01a1ce8b-501b-7192-b4b9-8ae6358754b3 --name default`.\n",
+  "subject": "deputy script job 01a1ce8b FAILED: rc 124",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "explicit"
+}
