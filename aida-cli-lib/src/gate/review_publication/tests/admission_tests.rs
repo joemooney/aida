@@ -911,6 +911,22 @@ fn bug2518_chain_accepts_only_no_verdict_terminal_retry_edge() {
         (State::Running, "NoVerdict: stopped", false),
         (State::Terminal, "ordinary exit", false),
         (State::Terminal, "NoVerdict: stopped", true),
+        // trace:BUG-2521 | ai:codex
+        (State::Running, "Inconclusive: stopped", false),
+        (State::Terminal, "Inconclusive: stopped", true),
+        // A pre-upgrade unprefixed stop is structurally recoverable; admission
+        // separately requires a WAITING-only head. A new conclusive stop is not.
+        // trace:BUG-2521 | ai:claude
+        (
+            State::Terminal,
+            "owner observed queue exit exit status: 0; all recorded worker/reviewer identities stopped",
+            true,
+        ),
+        (
+            State::Terminal,
+            "Verdict: owner observed queue exit exit status: 0; all recorded worker/reviewer identities stopped",
+            false,
+        ),
     ] {
         let mut records = base[..1].to_vec();
         let mut end = running.clone();
@@ -1016,4 +1032,136 @@ fn bug2518_cancelled_retry_readmits_after_preflight_failure() {
 #[test]
 fn bug2518_cancelled_retry_readmits_after_unclaimed_exit() {
     assert_cancelled_retry_readmits(2);
+}
+
+// Commit a signed publication from `node` into node b's synced store.
+// trace:BUG-2521 | ai:claude
+fn publish_raw(f: &Fixture, node: &Path, change: &str, decision: &str, recorded_at: &str) {
+    let config = publisher(node).unwrap().unwrap();
+    let receipt = Receipt {
+        carry_eligible: true,
+        version: 1,
+        node: config.node.clone(),
+        publication: Uuid::new_v4(),
+        supersedes: Vec::new(),
+        repository: repository(&f.b).unwrap(),
+        change: change.into(),
+        head: "a".repeat(40),
+        specs: vec![SpecKey(Uuid::new_v4())],
+        blocking_finding_origin_ids: Vec::new(),
+        authors: vec![vec!["session:author".into()]],
+        reviewer_actor: format!("reviewer-{}", config.node),
+        reviewer_identity: vec![format!("session:reviewer-{}", config.node)],
+        decision: decision.into(),
+        recorded_at: recorded_at.into(),
+        branch: None,
+        summary: None,
+        findings: if decision == "approved" {
+            Vec::new()
+        } else {
+            vec!["finding".into()]
+        },
+        finding_dispositions: None,
+    };
+    let signed = sign(&config, &receipt).unwrap();
+    let store = f.b.join(".aida-store");
+    write(
+        &store,
+        &evidence_path(change, PUBLICATIONS, &receipt.node, receipt.publication),
+        serde_json::to_vec(&signed).unwrap(),
+    );
+    ok(&store, &["add", "."]);
+    ok(&store, &["commit", "-qm", "publication"]);
+}
+
+fn synced_kind(f: &Fixture, change: &str) -> Vec<rv::VerdictKind> {
+    watcher_history(&f.b, change)
+        .unwrap()
+        .iter()
+        .map(|(body, _)| rv::parse_recorded_verdict(body).unwrap().kind)
+        .collect()
+}
+
+// A peer's WAITING never hides a conclusive outcome at the same head, and a
+// pre-upgrade unprefixed WAITING stop is recoverable only while WAITING-only.
+// trace:BUG-2521 | ai:claude
+#[test]
+fn bug2521_two_publisher_conclusive_precedence_and_legacy_recovery() {
+    let f = Fixture::new();
+    let _env = f.environment();
+    let head = "a".repeat(40);
+    let at = "2026-11-09T00:00:00Z";
+    // Node a sorts first, so a WAITING from a used to answer for the head.
+    publish_raw(&f, &f.a, "PR-7", "waiting", at);
+    assert_eq!(synced_kind(&f, "PR-7"), [rv::VerdictKind::Waiting]);
+    let deadline = waiting_retry_at(&f.b, "PR-7", &head).unwrap().unwrap();
+    assert_eq!(
+        deadline,
+        chrono::DateTime::parse_from_rfc3339(at).unwrap()
+            + chrono::Duration::seconds(WAITING_RETRY_SECS)
+    );
+    publish_raw(&f, &f.b, "PR-7", "request-changes", at);
+    assert_eq!(synced_kind(&f, "PR-7"), [rv::VerdictKind::RequestChanges]);
+    assert!(waiting_retry_at(&f.b, "PR-7", &head).unwrap().is_none());
+    publish_raw(&f, &f.a, "PR-8", "waiting", at);
+    publish_raw(&f, &f.b, "PR-8", "approved", at);
+    assert_eq!(synced_kind(&f, "PR-8"), [rv::VerdictKind::Approved]);
+    assert!(waiting_retry_at(&f.b, "PR-8", &head).unwrap().is_none());
+
+    // A legacy unprefixed Terminal, as finish_admission wrote before BUG-2521.
+    let token = Uuid::new_v4();
+    let legacy =
+        "owner observed queue exit exit status: 0; all recorded worker/reviewer identities stopped";
+    for state in [State::Reserved, State::Running] {
+        assert!(f.step(&f.a, "PR-9", &head, token, state).unwrap());
+    }
+    assert!(update(
+        &f.a,
+        &f.hub,
+        "PR-9",
+        &head,
+        token,
+        State::Terminal,
+        Some(legacy.into())
+    )
+    .unwrap());
+    // No WAITING publication: the stop is consumed.
+    assert!(!f
+        .step(&f.b, "PR-9", &head, Uuid::new_v4(), State::Reserved)
+        .unwrap());
+    publish_raw(&f, &f.a, "PR-9", "waiting", at);
+    // WAITING-only: recovered as a bounded Retry, then a conclusive peer verdict
+    // refuses any further readmission.
+    let retry = Uuid::new_v4();
+    assert!(f.step(&f.b, "PR-9", &head, retry, State::Reserved).unwrap());
+    assert!(f
+        .step(&f.b, "PR-9", &head, retry, State::Cancelled)
+        .unwrap());
+    publish_raw(&f, &f.b, "PR-9", "approved", at);
+    assert!(!f
+        .step(&f.b, "PR-9", &head, Uuid::new_v4(), State::Reserved)
+        .unwrap());
+}
+
+// Node ordering picks a's older answer, but b's newer retry must delay every
+// watcher, including a fresh one and one whose local deadline already elapsed.
+// trace:BUG-2521 | ai:codex
+#[test]
+fn bug2521_two_publisher_latest_waiting_delays_absent_and_elapsed_attempts() {
+    let f = Fixture::new();
+    let _env = f.environment();
+    let now = chrono::Utc::now();
+    let older = now - chrono::Duration::minutes(22);
+    let newer = now - chrono::Duration::minutes(1);
+    publish_raw(&f, &f.a, "PR-7", "waiting", &older.to_rfc3339());
+    publish_raw(&f, &f.b, "PR-7", "waiting", &newer.to_rfc3339());
+    let deadline = newer + chrono::Duration::seconds(WAITING_RETRY_SECS);
+    assert_eq!(
+        waiting_retry_at(&f.b, "PR-7", &"a".repeat(40)).unwrap(),
+        Some(deadline)
+    );
+    assert!(waiting_retry_at(&f.b, "PR-7", &"b".repeat(40))
+        .unwrap()
+        .is_none());
+    crate::review_watch::bug2521_assert_peer_waiting_backoff(&f.b, deadline);
 }
