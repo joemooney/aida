@@ -4579,8 +4579,8 @@ if '--write-ledger' in sys.argv:
                 "<<<<<<< generated\n",
             ] {
                 std::fs::write(tree.join("introduce-markers"), markers).unwrap();
-                let why =
-                    commit_pending(&fx.main, &tree, "feat", "repair (Refs STORY-2710)").unwrap_err();
+                let why = commit_pending(&fx.main, &tree, "feat", "repair (Refs STORY-2710)")
+                    .unwrap_err();
                 assert!(
                     format!("{why:#}").contains("unresolved conflict markers"),
                     "{why:#}"
