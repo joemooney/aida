@@ -95,6 +95,8 @@ jobs:
       # trace:TASK-3790 | ai:claude
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@1.99.1
+        with:
+          components: rustfmt, clippy
 
       # BUG-103: the macos-latest runner intermittently has a stale cache
       # where `cargo` resolves to `rustup-init`, breaking `cargo build`
@@ -1113,6 +1115,8 @@ jobs:
       # trace:TASK-3790 | ai:claude
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@1.99.1
+        with:
+          components: rustfmt, clippy
 
       # BUG-103: the macos-latest runner intermittently has a stale cache
       # where `cargo` resolves to `rustup-init`, breaking `cargo build`
