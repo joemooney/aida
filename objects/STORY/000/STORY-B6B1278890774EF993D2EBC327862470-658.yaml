@@ -28,7 +28,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-12T17:51:40.579097417Z
-modified_at: 2026-11-12T19:41:20.630427943Z
+modified_at: 2026-11-12T20:28:08.528265226Z
 req_type: Story
 relationships:
 - rel_type:
@@ -104,6 +104,12 @@ history:
   session_id: 01a1d146d44a
   harness_version: codex-cli 0.167.0
   changes: []
+- id: 01a1d172-44f8-7ce3-9b56-ef83b3dd2784
+  author: dirtlab
+  timestamp: 2026-11-12T20:28:09.336228136Z
+  session_id: 01a1d171c77f
+  harness_version: codex-cli 0.167.0
+  changes: []
 filed_at:
   code_sha: ec5a35a7108475b421baf1101b26159a7aa0fab9
   branch: main
@@ -115,9 +121,9 @@ filed_at:
   harness_version: 2.1.322 (Claude Code)
 attention_reason:
   category: blocked-dependency
-  detail: 'Native implementer pickup blocked: spec is Needs Attention (request-changes), and aida edit --status in-progress refuses without advisor authority. Advisor triage/reapproval is required before implementation can resume. No source changes or publication performed.'
+  detail: 'Pickup refused: Needs Attention/request-changes requires advisor triage before promotion to In Progress. Existing publication veto retained; no source edits or publication declaration.'
   raised_by: implementer
-  raised_at: 2026-11-12T19:41:18.409867967Z
+  raised_at: 2026-11-12T20:28:08.528265226Z
 failure_reason:
   phase: reviewer
   phase_index: 3
