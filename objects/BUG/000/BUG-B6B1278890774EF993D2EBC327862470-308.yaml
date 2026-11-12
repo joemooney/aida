@@ -1,0 +1,20 @@
+id: 01a1d218-a536-7e31-b044-1e3d3b149af3
+spec_id: BUG-b6b1278890774ef993d2ebc327862470-308
+agreed_id: BUG-2543
+title: 'aida review list (and lane-liveness verdict shas) resolve every verdict key through git subprocesses: 300 s+ with ~2,800 keys'
+description: 'list_active_verdicts calls current_verdict for every key; each spawns git rev-parse/ls-tree (review_publication store_view/select) in a polling run_bounded. With ~2,800 keys in the primary checkout, ''aida review list'' did not finish in 300 s (2026-11-12). lane_liveness::recorded_verdict_shas uses the same path. BUG-2540 fixed the rework caller by resolving only bound keys; full listings still need it. Acceptance: resolve the publication store head/tree once per listing (snapshot), not per key; review list over 2,800 keys finishes in seconds; test asserts git is invoked O(1) per listing, not O(keys).'
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-12T23:29:52.950918801Z
+modified_at: 2026-11-12T23:29:52.950918801Z
+req_type: Bug
+filed_at:
+  code_sha: 618ce8ab39bf3a803800ba55a00b44a0e11745ff
+  branch: integration
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: b5694616d5a
+  vendor: claude
+  session: 668a34f6-c74a-4b58-b144-167acd9792ef
