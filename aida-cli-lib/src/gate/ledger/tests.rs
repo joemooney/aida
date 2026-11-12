@@ -2501,9 +2501,81 @@ fn bug_2517_foreign_copy_is_ignored_without_rewriting_history() {
     let a = event::verdict_event(&root, first, &distinct, Some(&spec));
     let b = event::verdict_event(&root, second, &foreign, Some(&spec));
     let mut distinct_events = vec![a];
-    project::filter_miskeyed_events(&mut distinct_events, &[b]);
+    project::MiskeyOwners::new([&b]).filter(&mut distinct_events);
     assert_eq!(distinct_events.len(), 1);
+    // An unrelated corrupt ledger must not resurrect the foreign WAITING
+    // copy through either the PR-keyed or the spec-indexed legacy reader.
+    project::index_spec(&root, "BUG-2492", first).unwrap();
+    project::index_spec(&root, "BUG-2492", second).unwrap();
+    let second_file = store::ledger_file(&root, second);
+    let second_before = std::fs::read(&second_file).unwrap();
+    std::fs::write(store::ledger_file(&root, ChangeKey::pr(9999)), b"invalid\n").unwrap();
+    assert!(checked::discover(&root, &mut Default::default()).is_err());
+    for label in ["PR-3651", "PR-3764", "BUG-2492"] {
+        assert!(project::newest_verdict_event(&root, label).is_none());
+        assert!(project::verdict_records(&root, label).is_empty());
+    }
+    assert_eq!(std::fs::read(second_file).unwrap(), second_before);
     assert_eq!(std::fs::read(file).unwrap(), before);
+}
+
+// trace:BUG-2517 | ai:codex
+#[test]
+fn bug_2517_ownership_index_visits_corpus_once_per_discovery() {
+    let (_tmp, root) = root();
+    let _env = uncontained();
+    const BUCKETS: usize = 12;
+    for n in 1..=BUCKETS {
+        let spec = GateSpec::with_key(&format!("BUG-{n}"), None);
+        let mut rec = record("waiting", &ts(n as i64), Some(&attestation("reviewer")));
+        rec.insert("mode".into(), serde_json::json!(project::PHASE3_MODE));
+        store::append_one(
+            &root,
+            event::verdict_event(&root, ChangeKey::pr(n as u64), &rec, Some(&spec)),
+        )
+        .unwrap();
+    }
+    project::OWNERSHIP_WORK.with(|work| work.set((0, 0)));
+    let discovery = checked::discover(&root, &mut Default::default())
+        .unwrap()
+        .unwrap();
+    for n in 1..=BUCKETS {
+        assert_eq!(
+            discovery
+                .change_events(ChangeKey::pr(n as u64))
+                .iter()
+                .filter(|e| e.verdict_record().is_some())
+                .count(),
+            1
+        );
+        assert_eq!(
+            discovery
+                .events_for(&[format!("BUG-{n}")], &mut Default::default())
+                .unwrap()[0]
+                .1
+                .len(),
+            1
+        );
+    }
+    assert_eq!(
+        project::OWNERSHIP_WORK.with(|work| work.get()),
+        (1, BUCKETS)
+    );
+    // Filtering another vector through discovery must reuse that same index.
+    project::OWNERSHIP_WORK.with(|work| work.set((0, 0)));
+    let raw = store::read_file(&root, ChangeKey::pr(1));
+    assert_eq!(
+        checked::filter_miskeyed(&root, raw, &mut Default::default())
+            .unwrap()
+            .iter()
+            .filter(|e| e.verdict_record().is_some())
+            .count(),
+        1
+    );
+    assert_eq!(
+        project::OWNERSHIP_WORK.with(|work| work.get()),
+        (1, BUCKETS)
+    );
 }
 
 // trace:STORY-2698 | ai:codex
@@ -2680,12 +2752,12 @@ fn bug_2517_spec_only_copy_stays_local_when_discovery_refuses() {
         event::verdict_event(&root, change, &local, Some(&spec)),
     )
     .unwrap();
-    // Force the legacy readers' fallback with unrelated malformed evidence.
+    // Force incomplete ownership discovery with unrelated malformed evidence.
     std::fs::write(store::ledger_file(&root, ChangeKey::pr(9999)), b"invalid\n").unwrap();
     assert!(checked::discover(&root, &mut Default::default()).is_err());
     let path = store::ledger_file(&root, change);
     let before = std::fs::read(&path).unwrap();
-    assert_eq!(project::newest_verdict(&root, "PR-2517"), Some(own));
+    assert!(project::newest_verdict(&root, "PR-2517").is_none());
     assert!(project::events(&root, change)
         .iter()
         .all(|e| !e.is_spec_only()));

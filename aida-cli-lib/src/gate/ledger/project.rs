@@ -102,8 +102,8 @@ pub(crate) fn all_verdict_events(start: &Path) -> Vec<GateEvent> {
     // trace:BUG-2517 | ai:codex
     // Corpus scans already have all witnesses: avoid rediscovering the full
     // ledger separately for every change.
-    let witnesses = events.clone();
-    filter_miskeyed_events(&mut events, &witnesses);
+    let owners = MiskeyOwners::new(events.iter());
+    owners.filter(&mut events);
     events
 }
 
@@ -156,17 +156,18 @@ pub(crate) fn index_spec(root: &Path, spec: &str, change: ChangeKey) -> std::io:
     })
 }
 
-/// The change's events, in ledger order.
+/// The change's events, in ledger order. Incomplete ownership discovery
+/// yields no evidence; callers needing diagnostics use the checked reader.
 pub(crate) fn events(root: &Path, change: ChangeKey) -> Vec<GateEvent> {
-    // Explicit spec-only evidence has no change authority even if discovery
-    // fails and this legacy reader falls back to its local ledger.
+    // An incomplete ownership discovery cannot safely expose raw change
+    // evidence: historical foreign copies have no spec-only marker.
     // trace:BUG-2517 | ai:codex
     let events = store::read_file(root, change)
         .into_iter()
         .filter(|e| !e.is_spec_only())
         .collect::<Vec<_>>();
     // trace:BUG-2517 | ai:codex
-    super::checked::filter_miskeyed(root, events.clone(), &mut Default::default()).unwrap_or(events)
+    super::checked::filter_miskeyed(root, events, &mut Default::default()).unwrap_or_default()
 }
 
 /// Ledger verdict events for `key` — a change key, or a spec ID through the
@@ -190,8 +191,10 @@ fn verdict_events(root: &Path, key: &str) -> Vec<GateEvent> {
         .filter(|e| !e.is_spec_only())
         .filter(|e| e.verdict_record().is_some() && e.spec.as_deref() == Some(spec.as_str()))
         .collect();
+    // As for change-keyed reads, incomplete discovery supplies no bound
+    // evidence. Only explicitly unbound spec records remain readable.
     let bound =
-        super::checked::filter_miskeyed(root, raw.clone(), &mut Default::default()).unwrap_or(raw);
+        super::checked::filter_miskeyed(root, raw, &mut Default::default()).unwrap_or_default();
     // An unbound record already bound to a change (AC2) is read once, from
     // the change. trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
     let unbound: Vec<GateEvent> = store::read_unbound(root, &spec)
@@ -409,47 +412,75 @@ fn review_fingerprint(event: &GateEvent) -> Option<String> {
 }
 
 // trace:BUG-2517 | ai:codex
-pub(crate) fn filter_miskeyed_events(events: &mut Vec<GateEvent>, witnesses: &[GateEvent]) {
-    let mut owners: std::collections::HashMap<String, std::collections::HashSet<String>> =
-        Default::default();
-    for witness in witnesses {
-        if ChangeKey::parse(&witness.change).is_none() || witness.is_spec_only() {
-            continue;
+#[derive(Default)]
+pub(crate) struct MiskeyOwners {
+    owners: std::collections::HashMap<String, std::collections::HashSet<String>>,
+}
+
+#[cfg(test)]
+thread_local! {
+    pub(super) static OWNERSHIP_WORK: std::cell::Cell<(usize, usize)> = const { std::cell::Cell::new((0, 0)) };
+}
+
+impl MiskeyOwners {
+    /// Build once from the complete corpus, then reuse for every bucket and
+    /// any additional event vector filtered through the same discovery.
+    pub(crate) fn new<'a>(witnesses: impl IntoIterator<Item = &'a GateEvent>) -> Self {
+        let mut index = Self::default();
+        #[cfg(test)]
+        OWNERSHIP_WORK.with(|work| {
+            let (builds, visits) = work.get();
+            work.set((builds + 1, visits));
+        });
+        for witness in witnesses {
+            #[cfg(test)]
+            OWNERSHIP_WORK.with(|work| {
+                let (builds, visits) = work.get();
+                work.set((builds, visits + 1));
+            });
+            if ChangeKey::parse(&witness.change).is_none() || witness.is_spec_only() {
+                continue;
+            }
+            if witness
+                .verdict_record()
+                .and_then(|r| r.get("mode"))
+                .and_then(|v| v.as_str())
+                != Some(PHASE3_MODE)
+            {
+                continue;
+            }
+            if let Some(key) = review_fingerprint(witness) {
+                index
+                    .owners
+                    .entry(key)
+                    .or_default()
+                    .insert(witness.change.clone());
+            }
         }
-        if witness
-            .verdict_record()
-            .and_then(|r| r.get("mode"))
-            .and_then(|v| v.as_str())
-            != Some(PHASE3_MODE)
-        {
-            continue;
-        }
-        if let Some(key) = review_fingerprint(witness) {
-            owners
-                .entry(key)
-                .or_default()
-                .insert(witness.change.clone());
-        }
+        index
     }
-    events.retain(|event| {
-        if ChangeKey::parse(&event.change).is_none() {
-            return true;
-        }
-        // A copy made before spec-only isolation was enforced is still local
-        // evidence, never a change verdict or an ownership witness.
-        if event.is_spec_only() {
-            return false;
-        }
-        if event
-            .verdict_record()
-            .and_then(|r| r.get("mode"))
-            .and_then(|v| v.as_str())
-            == Some(PHASE3_MODE)
-        {
-            return true;
-        }
-        !review_fingerprint(event)
-            .and_then(|key| owners.get(&key))
-            .is_some_and(|changes| changes.iter().any(|change| change != &event.change))
-    });
+
+    pub(crate) fn filter(&self, events: &mut Vec<GateEvent>) {
+        events.retain(|event| {
+            if ChangeKey::parse(&event.change).is_none() {
+                return true;
+            }
+            // A copy made before spec-only isolation was enforced is still local
+            // evidence, never a change verdict or an ownership witness.
+            if event.is_spec_only() {
+                return false;
+            }
+            if event
+                .verdict_record()
+                .and_then(|r| r.get("mode"))
+                .and_then(|v| v.as_str())
+                == Some(PHASE3_MODE)
+            {
+                return true;
+            }
+            !review_fingerprint(event)
+                .and_then(|key| self.owners.get(&key))
+                .is_some_and(|changes| changes.iter().any(|change| change != &event.change))
+        });
+    }
 }

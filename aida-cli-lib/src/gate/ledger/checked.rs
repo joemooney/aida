@@ -319,6 +319,7 @@ pub(crate) struct Discovery {
     by_spec: Option<File>,
     discovered: Vec<String>,
     changes: std::collections::HashMap<ChangeKey, Vec<GateEvent>>,
+    owners: super::project::MiskeyOwners,
     /// Upper-cased spec label -> its change-bound verdict events.
     bound: std::collections::HashMap<String, Vec<GateEvent>>,
 }
@@ -365,14 +366,15 @@ pub(crate) fn discover(root: &Path, budget: &mut Budget) -> Result<Option<Discov
         }
     }
     // trace:BUG-2517 | ai:codex
-    let witnesses: Vec<_> = bound.values().flatten().cloned().collect();
+    let owners = super::project::MiskeyOwners::new(bound.values().flatten());
     for events in bound.values_mut() {
-        super::project::filter_miskeyed_events(events, &witnesses);
+        owners.filter(events);
     }
     for events in changes.values_mut() {
-        super::project::filter_miskeyed_events(events, &witnesses);
+        owners.filter(events);
     }
     Ok(Some(Discovery {
+        owners,
         changes,
         by_spec,
         discovered,
@@ -463,9 +465,8 @@ pub(crate) fn filter_miskeyed(
     let Some(discovery) = discover(root, budget)? else {
         return Ok(events);
     };
-    let witnesses: Vec<_> = discovery.bound.into_values().flatten().collect();
     let mut events = events;
-    super::project::filter_miskeyed_events(&mut events, &witnesses);
+    discovery.owners.filter(&mut events);
     Ok(events)
 }
 
