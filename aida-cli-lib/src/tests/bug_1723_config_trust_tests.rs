@@ -521,11 +521,17 @@ fn relocated_root_readers_preserve_their_trust_channels() {
     let inventory = parse_inventory(&text);
     // The initialization shortcut only probes presence; review mode consumes
     // branch-local policy. Moving either reader must not conflate those roles.
+    let detected = detected_sites(&workspace_root(), &["aida-cli-lib"]);
     for (owner, channel) in [
         ("argv_rewrite.rs", "probe"),
         ("review_helpers.rs", "worktree"),
     ] {
         let path = format!("aida-cli-lib/src/{owner}");
+        assert_eq!(
+            detected.get(&path),
+            Some(&1),
+            "relocated reader {path} must own exactly one detected config site"
+        );
         assert_eq!(
             inventory.readers.get(&path),
             Some(&(vec![channel.to_string()], 1)),
@@ -535,6 +541,10 @@ fn relocated_root_readers_preserve_their_trust_channels() {
     assert!(
         !inventory.readers.contains_key("aida-cli-lib/src/lib.rs"),
         "the crate root no longer owns either config reader"
+    );
+    assert!(
+        !detected.contains_key("aida-cli-lib/src/lib.rs"),
+        "the source detector must agree that the crate root owns no config sites"
     );
 }
 
