@@ -18,12 +18,12 @@ description: |
   4. CLI help golden snapshot updated; docs/cli mandate section updated.
   LIGHT gate: one targeted `cargo test -p aida-cli-lib mandate` filter + make check-ci-fast.
   This PR itself touches gate/ (the floor), so it lands by a human ship (advisor submits via the operator's deputy) or the operator emergency path.
-status: Approved
+status: InProgress
 priority: High
-owner: ''
+owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-12T17:36:24.142897628Z
-modified_at: 2026-11-12T17:36:46.363719368Z
+modified_at: 2026-11-12T17:45:13.119439564Z
 req_type: Story
 comments:
 - id: 01a1d0d5-5d1b-7c11-bbf5-fb95aee160fa
@@ -43,6 +43,13 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Approved
+- id: 01a1d0dd-189f-7803-9be0-13d91b886c42
+  author: aida-session-start
+  timestamp: 2026-11-12T17:45:13.119438187Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: ec5a35a7108475b421baf1101b26159a7aa0fab9
   branch: main
