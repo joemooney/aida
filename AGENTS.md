@@ -4,6 +4,11 @@ and claim naming stay below that boundary. CLI-local MCP tests include the
 transport source to retain private fixtures. See OVERVIEW.md.
 <!-- trace:TASK-3429 | ai:codex -->
 
+Local spec-only reviews neither bind to changes nor settle their review claims.
+Effective gate reads share one pinned discovery and refuse indexes naming
+missing change ledgers. Legacy pre-change binding remains. See OVERVIEW.md.
+<!-- trace:BUG-2517 | ai:codex -->
+
 CI freshness compares pinned workflow content: the GitHub `.github/workflows`
 tree or GitLab `.gitlab-ci.yml` blob. Equal digests avoid stale-definition
 refusals, including edits followed by reverts; the separate behind-base gate

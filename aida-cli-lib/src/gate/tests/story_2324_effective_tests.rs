@@ -1035,6 +1035,73 @@ fn bug_2517_direct_gate_views_ignore_explicit_spec_only_records() {
 
 // trace:BUG-2517 | ai:codex
 #[test]
+fn bug_2517_cached_discovery_refuses_a_missing_related_change() {
+    let root = tempfile::tempdir().unwrap();
+    let r = subject();
+    let set = snapshot(&[r.clone()]).resolve(&["BUG-2403"]);
+    for n in [3185, 3194] {
+        let mut own = verdict_ev(1, Some("BUG-2403"), "approved", HEAD_A);
+        own.change = format!("PR-{n}");
+        own.spec_key = Some(SpecKey(r.id));
+        crate::gate::ledger::store::append_one(root.path(), own).unwrap();
+    }
+    // Keep the index's related change but remove its evidence. Reusing a
+    // discovery must refuse this just as the checked spec selector does.
+    std::fs::remove_file(crate::gate::ledger::store::ledger_file(
+        root.path(),
+        ChangeKey::pr(3194),
+    ))
+    .unwrap();
+    let err = load_view(root.path(), ChangeKey::pr(3185), &set).unwrap_err();
+    assert!(err.0.contains("PR-3194, whose ledger is missing"), "{err}");
+}
+
+// trace:BUG-2517 | ai:codex
+#[test]
+fn bug_2517_binding_keeps_legacy_prechange_reviews_distinct_from_local_reviews() {
+    use crate::gate::ledger::store;
+    let root = tempfile::tempdir().unwrap();
+    let r = subject();
+    let set = snapshot(&[r.clone()]).resolve(&["BUG-2403"]);
+    let spec = crate::gate::canon::GateSpec::with_key("BUG-2403", Some(SpecKey(r.id)));
+    let legacy = record("approved", HEAD_A, &at(1), &[]);
+    store::append_unbound(root.path(), &spec, &legacy).unwrap();
+    let mut local = record("waiting", HEAD_A, &at(2), &[]);
+    local.insert("change_binding".into(), "unbound".into());
+    store::append_unbound(root.path(), &spec, &local).unwrap();
+    let unbound = root.path().join(".aida/gate-ledger/by-spec/BUG-2403.jsonl");
+    let original = std::fs::read(&unbound).unwrap();
+    let change = ChangeKey::pr(3185);
+    let v = load_view(root.path(), change, &set).unwrap();
+    assert!(matches!(
+        effective_gate_state(HEAD_A, &set, &v, &drain()).verdict,
+        Verdict::Approved { .. }
+    ));
+    assert_eq!(store::bind_unbound(root.path(), &spec, change).unwrap(), 1);
+    let bound: Vec<_> = store::read_file(root.path(), change)
+        .into_iter()
+        .filter_map(|e| e.verdict_record().cloned())
+        .collect();
+    assert_eq!(bound, vec![legacy]);
+    let v = load_view(root.path(), change, &set).unwrap();
+    assert!(matches!(
+        effective_gate_state(HEAD_A, &set, &v, &drain()).verdict,
+        Verdict::Approved { .. }
+    ));
+    assert_eq!(
+        store::bind_unbound(root.path(), &spec, ChangeKey::pr(3194)).unwrap(),
+        0
+    );
+    let other = load_view(root.path(), ChangeKey::pr(3194), &set).unwrap();
+    assert_eq!(
+        effective_gate_state(HEAD_A, &set, &other, &drain()).verdict,
+        Verdict::Absent
+    );
+    assert_eq!(std::fs::read(unbound).unwrap(), original);
+}
+
+// trace:BUG-2517 | ai:codex
+#[test]
 fn bug_2517_local_records_stay_unbound_through_open_record_and_collect() {
     use crate::gate::ledger::{self, store};
     for word in ["waiting", "approved"] {

@@ -202,6 +202,89 @@ fn bug_2517_verdict_without_pr_preserves_all_change_markers() {
     assert!(crate::gate::review_marker::read(root.path(), 2).is_some());
 }
 
+// trace:BUG-2517 | ai:codex
+#[test]
+fn bug_2517_recording_local_verdict_preserves_two_pr_claims_and_ledgers() {
+    use crate::gate::ledger::{self, ChangeKey};
+    for word in ["waiting", "approved"] {
+        let root = tempdir_root();
+        let root_str = root.path().to_str().unwrap();
+        let _ambient = crate::test_env::AmbientGuard::hermetic_and(
+            root.path(),
+            None,
+            &[
+                ("AIDA_PROJECT_ROOT", Some(root_str)),
+                ("AIDA_DRIVE_ROOT", Some(root_str)),
+                ("AIDA_REVIEW_VERDICT_FILE", None),
+                ("AIDA_CONTAINED", None),
+                (crate::standalone_implementer::MARKER_ENV, None),
+            ],
+        );
+        let head = crate::test_git::commit_fixture(root.path());
+        let spec = crate::gate::canon::GateSpec::with_key("BUG-2517", None);
+        let mut before = Vec::new();
+        for n in [14054, 14055] {
+            // Both changes already exist and name the same spec. Their
+            // current heads even match the local review's SHA.
+            let record = serde_json::json!({
+                "verdict": "waiting", "reviewed_sha": head,
+                "recorded_at": "2026-11-10T00:00:00Z", "recorded_by": "other reviewer"
+            })
+            .as_object()
+            .unwrap()
+            .clone();
+            let path = crate::gate::review_verdict::verdict_path(root.path(), &format!("PR-{n}"));
+            ledger::record_verdict_at(&path, &record, Some(&spec)).unwrap();
+            let marker = crate::gate::review_marker::Marker::for_this_process(
+                n,
+                Some(&head),
+                Some("BUG-2517"),
+                "reviewer",
+            );
+            crate::gate::review_marker::write(root.path(), &marker).unwrap();
+            before.push(
+                std::fs::read(ledger::store::ledger_file(root.path(), ChangeKey::pr(n))).unwrap(),
+            );
+        }
+        let identity = crate::gate::review_authority::IdentitySource {
+            session_ids: vec!["local-independent-reviewer".into()],
+            ..Default::default()
+        };
+        crate::gate::review_authority::with_identity_source(identity, || {
+            handle_review_record_fixture_at(
+                root.path().to_path_buf(),
+                "BUG-2517",
+                word,
+                Some(&head),
+                None,
+                Some("CI owner resumes after settlement"),
+                &[],
+                &[],
+                None,
+            )
+        })
+        .unwrap();
+        let local = ledger::store::read_unbound(root.path(), "BUG-2517");
+        assert_eq!(local.len(), 1);
+        assert!(local[0].is_spec_only());
+        for (n, bytes) in [14054, 14055].into_iter().zip(before) {
+            assert!(
+                crate::gate::review_marker::read(root.path(), n).is_some(),
+                "{word}: PR-{n}"
+            );
+            assert!(matches!(
+                crate::gate::review_marker::merge_gate(root.path(), n, || Some(head.clone())),
+                crate::gate::review_marker::MergeGate::UnderReview(_)
+            ));
+            ledger::bind_specs(root.path(), ChangeKey::pr(n), &[spec.clone()]);
+            assert_eq!(
+                std::fs::read(ledger::store::ledger_file(root.path(), ChangeKey::pr(n))).unwrap(),
+                bytes
+            );
+        }
+    }
+}
+
 // TASK-1459: `aida review <SPEC>` prefers the forge's live PR head over
 // the local `origin/<branch>` tracking ref, falling back to that ref
 // when the forge can't be reached. A repo with no recognized forge

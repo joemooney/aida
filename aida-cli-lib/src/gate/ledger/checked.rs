@@ -517,11 +517,21 @@ impl Discovery {
                 )));
             }
             for c in &index.changes {
-                changes.push(ChangeKey::parse(c).ok_or_else(|| {
+                let change = ChangeKey::parse(c).ok_or_else(|| {
                     Unsafe(format!(
                         "refusing gate-ledger index {index_name}: {c:?} is not a change key"
                     ))
-                })?);
+                })?;
+                // trace:BUG-2517 | ai:codex
+                // A cached discovery must retain the strict reader's missing
+                // ledger refusal, rather than treating absent evidence as empty.
+                if !self.changes.contains_key(&change) {
+                    return Err(Unsafe(format!(
+                        "refusing gate-ledger index {index_name}: it names {}, whose ledger is missing",
+                        change.as_key()
+                    )));
+                }
+                changes.push(change);
             }
         }
         Ok((unbound, changes))
