@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-11T14:11:33.148855447Z
-modified_at: 2026-11-12T06:51:53.164929101Z
+modified_at: 2026-11-12T07:07:37.804537034Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -132,6 +132,10 @@ history:
   timestamp: 2026-11-12T06:51:53.234419803Z
   session_id: 01a1ce861b81
   changes: []
+- id: 01a1ce95-5e59-7e61-8980-0e55e0ad6ace
+  author: joe
+  timestamp: 2026-11-12T07:07:37.945274828Z
+  changes: []
 filed_at:
   code_sha: 11b131dfe3341e6d9c7127d64370f91366094711
   branch: main
@@ -150,7 +154,7 @@ failure_reason:
   phase: reviewer
   phase_index: 3
   kind: verdict:request-changes
-  detail: 'Full diff reviewed: fresh reviews inherit terminal annotation metadata and can be discarded, retaining a closed WAITING verdict. Historical TASK-3448/TASK-3428 host acceptance unverified; CI pending at review time.'
+  detail: 'Full diff reviewed: inherited terminal annotations can discard fresh reviews, and multi-alias selection can resurrect closed waits. Live TASK-3448/TASK-3428 closure unverified; CI pending at review time.'
   recovery_hint: address the review findings, move BUG-2525 back to In Progress, and clear the PR hold only after approval
   shelved_by: reviewer
-  shelved_at: 2026-11-12T05:52:04.846723999Z
+  shelved_at: 2026-11-12T07:07:37.804537034Z
