@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-12T06:22:01.808701892Z
-modified_at: 2026-11-12T09:01:12.493576371Z
+modified_at: 2026-11-12T09:01:17.339123674Z
 req_type: Bug
 comments:
 - id: 01a1ce73-8e57-74c1-9bd7-47adb97b7de6
@@ -48,6 +48,23 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Full sweep of dcc0b4e06fe2: request changes; four findings. BUG-2530 AC1 (refuse admission on an exact-head conclusive verdict): unverified — local helper coverage exists, but synced publication-only verdicts are omitted. BUG-2530 AC2 (a claim opened after an exact-head conclusive verdict must not block the train, or be released by hold clearance): unverified — older attested local approvals covered, but same-second later claims still block and train integration CI fails. BUG-2530 (bug protocol: touches a test file): met — gate/tests/review_marker_tests.rs. No local builds/tests run per review-watch policy.. No triage reason was given.'
   created_at: 2026-11-12T09:01:12.493570703Z
   modified_at: 2026-11-12T09:01:12.493570703Z
+  session_id: 01a1ceeb-e827-7832-8991-e83d9eb95cef
+  harness_version: 2.1.322 (Claude Code)
+- id: 01a1cefd-6b9f-7a01-b87c-ec5ef90ffcf3
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (BUG-2530):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: dcc0b4e06fe2
+    Recorded: 2026-11-12T07:23:15.599474601+00:00
+    Findings:
+    1. [P1] aida-cli-lib/src/gate/tests/review_marker_tests.rs:403 (and src/tests/bug2406_train_tests.rs:708): Update the existing train integration regression for the new redundant-claim policy. Exact-head CI job 131018899781 fails pr_train::verified::bug2406::bug2406_current_claim_refuses_11 because its fixture already has an attested approval before opening the claim, while it still asserts merge_verified must refuse. The new unit test does not reconcile this contradictory integration assertion, leaving required Build red. Preserve coverage that a claim preceding approval still blocks and add an integration case that a later redundant claim does not.
+    2. [P2] aida-cli-lib/src/gate/review_marker.rs:213: conclusive_head reads only local verdict files/archives and the local gate ledger via read_verdict_for_sha; that reader does not consult review_publication::current_at_head. A second enrolled node with only a verified synced exact-head receipt therefore admits a duplicate reviewer, and redundant_claim also misses that approval and continues blocking the train. Use the established publication-aware exact-head selection with synced-evidence precedence and cover receipt-only approvals/refusals.
+    3. [P2] aida-cli-lib/src/queue_cmd/work.rs:4726-4731: Move duplicate-review admission before pickup mutations (after the required store pull). This check currently runs after retire_idle_review_worktree at 4360, branch reclaim, implicit queue_add at 4378, and calibration writes at 4403 onward. A pickup of a concluded head can therefore retire its prior review checkout and write queue/spec state before returning the new refusal. Add entry-point coverage asserting refusal leaves the review checkout, queue and calibration unchanged.
+    4. [P2] aida-cli-lib/src/gate/review_marker.rs:234: Both Marker.started_at and at.timestamp() have whole-second precision, so an approval recorded at T+0.1s and a redundant claim opened at T+0.9s compare equal and remain UnderReview for the claim lifetime. This leaves the original merge-blocking bug for same-second claims from older/racing launchers. Retain sufficient ordering precision for new markers (with conservative legacy handling) and add a deterministic same-second ordering regression; do not simply use <=, which would also ignore a genuine earlier claim.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-12T09:01:17.087328749Z
+  modified_at: 2026-11-12T09:01:17.087328749Z
   session_id: 01a1ceeb-e827-7832-8991-e83d9eb95cef
   harness_version: 2.1.322 (Claude Code)
 history:
