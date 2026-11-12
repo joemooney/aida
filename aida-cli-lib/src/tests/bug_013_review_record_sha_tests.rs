@@ -263,6 +263,47 @@ fn operator_hold_failure_preserves_both_verdict_records() {
 
 // trace:BUG-2522 | ai:codex
 #[test]
+fn interactive_review_parent_collects_before_rewriting_child_evidence() {
+    // The behavioral test below exercises the real collector without a TTY.
+    // Also pin its connection to the TTY-only parent: an anchor alone cannot
+    // delegate holding unless this parent actually collects the child's result.
+    let source = include_str!("../lib_part5.rs");
+    let parent = source
+        .split_once("pub(crate) fn handle_review_spec(")
+        .unwrap()
+        .1;
+    let launch = parent
+        .find("let (status, child_grant) = review_spec_launch_reviewer(")
+        .unwrap();
+    let collect = parent
+        .find("crate::gate::review_verdict::collect_interactive_review_refusal(")
+        .unwrap();
+    let adopt = parent
+        .find("crate::gate::review_verdict::adopt_direct_write(")
+        .unwrap();
+    let record = parent
+        .find("crate::gate::review_verdict::record_verdict(")
+        .unwrap();
+    assert!(
+        launch < collect,
+        "collect the evidence returned by this child"
+    );
+    assert!(
+        collect < adopt,
+        "collect before adopting direct-write evidence"
+    );
+    assert!(collect < record, "collect before stamping new provenance");
+    let collection = &parent[launch..adopt];
+    assert!(collection.contains("child_grant: Some(child_grant)"));
+    assert!(collection.contains("review_head.is_some() && review_head == current_head"));
+    assert!(
+        collection.contains("&checks,\n        )?;"),
+        "collection failure must stop presentation and re-recording"
+    );
+}
+
+// trace:BUG-2522 | ai:codex
+#[test]
 fn interactive_review_anchor_refusals_are_collected_and_held() {
     if crate::test_env::run_path_isolated_test() {
         return;
