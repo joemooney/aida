@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Compare installed built-in and porcelain reports without network or writes.
+"""Compare the core reader, external flow and porcelain without network or writes.
 trace:STORY-2704 | ai:codex
 Usage: python3 tests/test_porcelain_flow_parity.py /path/to/aida /path/to/aida-porcelain
 """
@@ -13,7 +13,20 @@ import tempfile
 
 def main():
     builtin, porcelain = map(lambda s: str(Path(shutil.which(s) or s).resolve()), sys.argv[1:])
-    with tempfile.TemporaryDirectory() as tmp, tempfile.TemporaryDirectory() as home:
+    with tempfile.TemporaryDirectory() as tmp, tempfile.TemporaryDirectory() as home, tempfile.TemporaryDirectory() as installed:
+        # Exercise the shipped layout independently of Cargo's output directory
+        # and any host-installed companions. A symlink to aida would canonicalize
+        # back to the build directory during coordinating-bin discovery.
+        # trace:STORY-2704 | ai:codex
+        for source, name in [(builtin, "aida"), (porcelain, "aida-porcelain")]:
+            destination = Path(installed) / name
+            try:
+                os.link(source, destination)
+            except OSError:
+                shutil.copy2(source, destination)
+        (Path(installed) / "aida-flow").symlink_to("aida-porcelain")
+        builtin = str(Path(installed) / "aida")
+        porcelain = str(Path(installed) / "aida-porcelain")
         root = Path(tmp)
         # Inject fixture inputs explicitly; do not inherit agent credentials,
         # Git configuration or ambient output-format overrides.
@@ -49,7 +62,9 @@ esac
         before = snapshot()
         def invoke(exe, args, overrides=None):
             result = subprocess.run([exe, *args], cwd=root, env={**env, **(overrides or {})}, capture_output=True)
-            assert before == snapshot(), f"{exe} {args} changed fixture state"
+            after = snapshot()
+            changed = sorted(p for p in before.keys() | after.keys() if before.get(p) != after.get(p))
+            assert not changed, f"{exe} {args} changed fixture paths: {changed}; stdout={result.stdout!r}; stderr={result.stderr!r}"
             return result
 
         for suffix in [[], ["--json"], ["--format", "json"], ["--format", "human"], ["--format", "toon"]]:
@@ -58,6 +73,11 @@ esac
             for result in outputs:
                 assert result.returncode == 0, result.stderr.decode()
             assert outputs[0].stdout == outputs[1].stdout, [p.stdout.decode() for p in outputs]
+            # Keep an independent reference: comparing only public flow with
+            # porcelain would compare the same renderer against itself.
+            reference = invoke(builtin, ["flow-data", *args[1:]])
+            assert reference.returncode == 0, reference.stderr.decode()
+            assert outputs[0].stdout == reference.stdout, [outputs[0].stdout, reference.stdout]
         for bounds, message in [
             (["--since", "bad"], b"expected RFC3339"),
             (["--since", "2026-11-10", "--until", "2026-11-09"], b"since must not be later than until"),
@@ -82,7 +102,7 @@ esac
                 args = ["flow", "report", *bounds]
                 outputs = [invoke(exe, args, {"AIDA_OUTPUT_FORMAT": alias, "AIDA_AGENT_OUTPUT": agent})
                            for exe in [builtin, porcelain]]
-                expected = invoke(builtin, [*args, "--format", canonical])
+                expected = invoke(builtin, ["flow-data", *args[1:], "--format", canonical])
                 for result in outputs:
                     assert result.returncode == expected.returncode != 0
                     assert result.stdout == expected.stdout, [result.stdout, expected.stdout]
@@ -91,7 +111,7 @@ esac
                 # validation failures and failures returned by the reader.
                 opposite = "toon" if canonical == "human" else "human"
                 explicit_args = [*args, "--format", opposite]
-                expected = invoke(builtin, explicit_args)
+                expected = invoke(builtin, ["flow-data", *explicit_args[1:]])
                 for exe in [builtin, porcelain]:
                     result = invoke(exe, explicit_args,
                                     {"AIDA_OUTPUT_FORMAT": alias, "AIDA_AGENT_OUTPUT": agent})
@@ -112,7 +132,7 @@ esac
             assert outputs[0].stderr == outputs[1].stderr, [p.stderr for p in outputs]
         check_alias_errors(["--since", "2026-11-09"])
         assert before == snapshot(), "report changed fixture state"
-    print("PASS: built-in/porcelain text and JSON parity; fixture state unchanged")
+    print("PASS: core/external/porcelain text and JSON parity; fixture state unchanged")
 
 
 if __name__ == "__main__":
