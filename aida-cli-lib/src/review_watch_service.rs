@@ -693,7 +693,7 @@ pub(super) fn retry_blockers(root: &Path, dir: &Directory) -> Result<Vec<String>
     for (key, entry) in &reviews.entries {
         for attempt in &entry.attempts {
             if let Some(reason) = no_verdict_blocker(attempt) {
-                if !store.history(key)?.contains(&attempt.head) {
+                if !store.history(key)?.conclusive(&attempt.head) {
                     blockers.push(format!("{key}: {reason}"));
                 }
             }

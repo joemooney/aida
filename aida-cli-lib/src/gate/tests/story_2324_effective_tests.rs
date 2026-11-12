@@ -947,13 +947,25 @@ fn bug_2517_spec_only_never_binds_or_projects_and_related_changes_scan_once() {
             0
         );
     }
-    // Discovery must include unrelated corpus evidence once, too. Keep it
-    // unindexed so the hints budget below is exactly this member's reads.
+    // Discovery reads unrelated corpus evidence under its own work budget
+    // (BUG-2531); the view's budget bounds only the ledgers it selects. Keep
+    // the unrelated ledger unindexed so the hints below are this member's.
+    // trace:BUG-2517 trace:BUG-2531 | ai:claude
     let mut unrelated = verdict_ev(1, None, "waiting", HEAD_B);
     unrelated.change = "PR-9000".into();
     crate::gate::ledger::store::append_one(root.path(), unrelated).unwrap();
     let dir = root.path().join(".aida/gate-ledger");
-    let corpus: u64 = [3185, 3194, 9000]
+    let lines = |p: std::path::PathBuf| {
+        std::fs::read_to_string(p)
+            .unwrap()
+            .lines()
+            .filter(|l| !l.trim().is_empty())
+            .count()
+    };
+    let selected_events = lines(dir.join("PR-3185.jsonl"))
+        + lines(dir.join("PR-3194.jsonl"))
+        + lines(dir.join("by-spec/BUG-2403.jsonl"));
+    let corpus: u64 = [3185, 3194]
         .iter()
         .map(|n| {
             std::fs::metadata(dir.join(format!("PR-{n}.jsonl")))
@@ -970,7 +982,7 @@ fn bug_2517_spec_only_never_binds_or_projects_and_related_changes_scan_once() {
             root.path(),
             ChangeKey::pr(n),
             &set,
-            Budget::with_limits(corpus + hints, 8),
+            Budget::with_limits(corpus + hints, selected_events),
         )
         .unwrap();
         assert!(view.unbound.is_empty());
@@ -986,20 +998,19 @@ fn bug_2517_spec_only_never_binds_or_projects_and_related_changes_scan_once() {
             1
         );
     }
-    // Reusing discovery must not relax the operation's aggregate byte cap.
+    // Each selected ledger is read once: one byte or event less refuses.
     assert!(load_view_with_budget(
         root.path(),
         ChangeKey::pr(3185),
         &set,
-        Budget::with_limits(corpus + hints - 1, 8),
+        Budget::with_limits(corpus + hints - 1, selected_events),
     )
     .is_err());
-    // The one discovery also retains the aggregate event bound.
     assert!(load_view_with_budget(
         root.path(),
         ChangeKey::pr(3185),
         &set,
-        Budget::with_limits(corpus + hints, 7),
+        Budget::with_limits(corpus + hints, selected_events - 1),
     )
     .is_err());
     assert_eq!(

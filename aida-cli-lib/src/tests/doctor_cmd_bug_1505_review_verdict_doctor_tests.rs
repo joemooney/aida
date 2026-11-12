@@ -62,3 +62,25 @@ fn render_doctor_report_toon_includes_runaway_seats_still_tripped_table() {
         "TOON output must list still tripped finding: {rendered}"
     );
 }
+
+// trace:BUG-2531 | ai:codex
+#[test]
+fn bug_2531_doctor_warns_at_half_gate_ledger_budget() {
+    let tmp = tempfile::TempDir::new().unwrap();
+    let dir = tmp.path().join(".aida/gate-ledger");
+    std::fs::create_dir_all(&dir).unwrap();
+    let file = std::fs::File::create(dir.join("PR-1.jsonl")).unwrap();
+    let half = crate::gate::ledger::checked::MAX_SELECTION_BYTES / 2;
+    file.set_len(half - 1).unwrap();
+    assert!(scan_gate_ledger_capacity(tmp.path()).is_empty());
+    file.set_len(half).unwrap();
+    let findings = scan_gate_ledger_capacity(tmp.path());
+    assert_eq!(findings.len(), 1);
+    assert_eq!(findings[0].id, "gate-ledger-capacity");
+    assert!(!findings[0].safe_heal);
+    file.set_len(half + 1).unwrap();
+    assert_eq!(scan_gate_ledger_capacity(tmp.path()).len(), 1);
+    // Archived/non-change files do not contribute to active capacity.
+    std::fs::rename(dir.join("PR-1.jsonl"), dir.join("archived.jsonl")).unwrap();
+    assert!(scan_gate_ledger_capacity(tmp.path()).is_empty());
+}

@@ -2545,7 +2545,7 @@ fn bug_2517_foreign_copy_is_ignored_without_rewriting_history() {
                 .unwrap(),
             _ => unreachable!(),
         }
-        assert!(checked::discover(&root, &mut Default::default()).is_err());
+        assert!(checked::discover(&root).is_err());
         let is_foreign_waiting = |r: &JsonObj| r.get("verdict") == foreign.get("verdict");
         // The first PR withholds every copy a foreign change could own...
         assert!(project::newest_verdict_event(&root, "PR-3651").is_none());
@@ -2643,13 +2643,12 @@ fn bug_2517_ownership_index_visits_corpus_once_per_discovery() {
     )
     .unwrap();
     project::OWNERSHIP_WORK.with(|work| work.set((0, 0)));
-    let discovery = checked::discover(&root, &mut Default::default())
-        .unwrap()
-        .unwrap();
+    let mut discovery = checked::discover(&root).unwrap().unwrap();
     for n in 1..=BUCKETS {
         assert_eq!(
             discovery
-                .change_events(ChangeKey::pr(n as u64))
+                .change_events(ChangeKey::pr(n as u64), &mut Default::default())
+                .unwrap()
                 .iter()
                 .filter(|e| e.verdict_record().is_some())
                 .count(),
@@ -2668,7 +2667,8 @@ fn bug_2517_ownership_index_visits_corpus_once_per_discovery() {
     // index, rather than merely retaining buckets of already-correct records.
     // Use the owning event's spec and semantic record, changing only its PR.
     let witness = discovery
-        .change_events(ChangeKey::pr(1))
+        .change_events(ChangeKey::pr(1), &mut Default::default())
+        .unwrap()
         .into_iter()
         .find(|e| e.verdict_record().is_some())
         .unwrap();
@@ -2826,7 +2826,7 @@ fn bug_2517_discovery_keeps_spec_reads_on_the_pinned_directory() {
     let local = record("waiting", &ts(1), None);
     store::append_unbound(&root, &spec, &local).unwrap();
     let mut budget = checked::Budget::default();
-    let discovery = checked::discover(&root, &mut budget).unwrap().unwrap();
+    let discovery = checked::discover(&root).unwrap().unwrap();
     let by_spec = ledger_dir(&root).join("by-spec");
     std::fs::rename(&by_spec, ledger_dir(&root).join("old-by-spec")).unwrap();
     std::fs::create_dir(&by_spec).unwrap();
@@ -2837,9 +2837,7 @@ fn bug_2517_discovery_keeps_spec_reads_on_the_pinned_directory() {
     assert_eq!(events.len(), 1);
     assert_eq!(events[0].verdict_record(), Some(&local));
     assert!(changes.is_empty());
-    let fresh = checked::discover(&root, &mut checked::Budget::default())
-        .unwrap()
-        .unwrap();
+    let fresh = checked::discover(&root).unwrap().unwrap();
     assert!(fresh
         .spec_entries("BUG-2517", &mut checked::Budget::default())
         .is_err());
@@ -2905,7 +2903,7 @@ fn bug_2517_spec_only_copy_stays_local_when_discovery_refuses() {
     .unwrap();
     // Force incomplete ownership discovery with unrelated malformed evidence.
     std::fs::write(store::ledger_file(&root, ChangeKey::pr(9999)), b"invalid\n").unwrap();
-    assert!(checked::discover(&root, &mut Default::default()).is_err());
+    assert!(checked::discover(&root).is_err());
     let path = store::ledger_file(&root, change);
     let before = std::fs::read(&path).unwrap();
     // A record without review provenance cannot be a proven foreign copy,

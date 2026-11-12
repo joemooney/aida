@@ -696,14 +696,20 @@ fn load_view_with_budget(
     set: &CanonicalSet,
     mut budget: Budget,
 ) -> Result<LedgerView, Unsafe> {
-    let discovery = checked::discover(root, &mut budget)?;
-    let read_change = |key| {
-        discovery
-            .as_ref()
-            .map(|d| d.change_events(key))
-            .unwrap_or_default()
-    };
-    let change_events = read_change(change);
+    // trace:BUG-2531 | ai:codex — discovery spends its own work budget; the
+    // caller's budget bounds only the evidence this view selects.
+    let mut discovery = checked::discover(root)?;
+    fn read_change(
+        discovery: &mut Option<checked::Discovery>,
+        key: ChangeKey,
+        budget: &mut Budget,
+    ) -> Result<Vec<GateEvent>, Unsafe> {
+        match discovery.as_mut() {
+            Some(d) => d.change_events(key, budget),
+            None => Ok(Vec::new()),
+        }
+    }
+    let change_events = read_change(&mut discovery, change, &mut budget)?;
     let mut unbound = BTreeMap::new();
     let mut others: std::collections::HashMap<ChangeKey, Vec<GateEvent>> = Default::default();
     for m in &set.members {
@@ -725,7 +731,7 @@ fn load_view_with_budget(
         let mut bound_elsewhere: Vec<JsonObj> = Vec::new();
         for other in indexed.into_iter().filter(|c| *c != change) {
             if !others.contains_key(&other) {
-                let read = read_change(other);
+                let read = read_change(&mut discovery, other, &mut budget)?;
                 others.insert(other, read);
             }
             bound_elsewhere.extend(
