@@ -216,6 +216,36 @@ class RepairGenerationTests(unittest.TestCase):
                 self.assertFalse((root / mirror).exists())
                 self.assertEqual((root / mirror.replace('run', 'new')).read_text(), 'new master')
 
+    def test_generator_created_master_cannot_authorize_new_mirror(self):
+        # The legitimate addition must not widen the pre-run inventory to
+        # include a second master invented by the generator.
+        # trace:STORY-2710 | ai:codex
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            git, base = self.fixture(root)
+            self.assertEqual(self.run_driver(root, base, 'restore').returncode, 0)
+            master = root / 'aida-core/templates/commands/new.md'
+            master.parent.mkdir(parents=True)
+            master.write_text('staged master')
+            (root / 'Makefile').write_text(
+                'sync-templates:\n'
+                '\tmkdir -p .claude/commands\n'
+                '\tln -s ../../aida-core/templates/commands/new.md .claude/commands/new.md\n'
+                '\tcp aida-core/templates/commands/new.md aida-core/templates/commands/invented.md\n'
+                '\tln -s ../../aida-core/templates/commands/invented.md .claude/commands/invented.md\n')
+            git('add', 'aida-core/templates', 'Makefile')
+            before_index = git('ls-files', '-s').stdout
+            for _ in range(2):
+                result = self.run_driver(root, base, 'generate')
+                self.assertNotEqual(result.returncode, 0)
+                self.assertIn('unregistered outputs', result.stderr)
+                self.assertIn('.claude/commands/invented.md', result.stderr)
+                self.assertFalse((root / '.claude/commands/new.md').is_symlink())
+                self.assertFalse((root / '.claude/commands/invented.md').is_symlink())
+                self.assertFalse((master.parent / 'invented.md').exists())
+                self.assertEqual(master.read_text(), 'staged master')
+                self.assertEqual(git('ls-files', '-s').stdout, before_index)
+
     def test_staged_master_does_not_require_a_never_tracked_mirror(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

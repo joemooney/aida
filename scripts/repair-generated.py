@@ -17,7 +17,8 @@ import subprocess
 import sys
 import time
 
-# Outputs are enumerated from pinned main, never from a seat-authored registry.
+# The registry is host-owned. Mirror additions are enumerated from resolved
+# staged masters before generation, never from generator-created sources.
 REGISTRY = (
     ("exec-context", ("scripts/exec-context-legacy.json",),
      ("**/*.rs", "tests/**/*.py", "Cargo.toml", "scripts/check-exec-context.py"),
@@ -272,7 +273,7 @@ def main(base, phase, pack_outputs=(), budget=100.0):
         raise RuntimeError("regeneration requires resolved authoritative sources: " + repr(blockers))
     staged = {p: entries[0][0] for p, entries in index_entries().items()
               if len(entries) == 1 and entries[0][2] == "0"}
-    resolved_outputs = set(expected_mirrors(staged))
+    resolved_outputs = frozenset(expected_mirrors(staged))
     # Masters authorize new mirror paths. Require mirrors already tracked in
     # either tree only while their master survives; retired paths may disappear.
     allowed_outputs = outputs | resolved_outputs

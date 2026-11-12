@@ -3511,13 +3511,20 @@ fn regenerate_repair_outputs(
 // trace:STORY-2710 | ai:codex
 fn repair_merge_tree_paths(output: &str) -> Option<Vec<String>> {
     let (oid, rest) = output.split_once('\0')?;
-    let fields = rest.split('\0');
+    // Require the path-list terminator as well as the OID. Truncated probe
+    // output must not become positive conflict evidence.
+    let paths = if rest.is_empty() {
+        ""
+    } else {
+        rest.split_once("\0\0")?.0
+    };
     if ![40, 64].contains(&oid.len()) || !oid.bytes().all(|b| b.is_ascii_hexdigit()) {
         return None;
     }
     Some(
-        fields
-            .take_while(|p| !p.is_empty())
+        paths
+            .split('\0')
+            .filter(|p| !p.is_empty())
             .map(str::to_owned)
             .collect(),
     )
@@ -3975,6 +3982,8 @@ mod rework_merge_tests {
             "",
             "unknown option",
             "a tree without paths",
+            &format!("{}\0unterminated-path", "a".repeat(40)),
+            &format!("{}\0unterminated-list\0", "a".repeat(40)),
             &format!("{}\0", "a".repeat(40)),
         ] {
             assert!(!repair_merge_tree_conflict(
@@ -4087,10 +4096,13 @@ mod rework_merge_tests {
         // Failed observations happen before reservation or mutation. Recovery
         // on the same head must still reach the real conflict below.
         // trace:STORY-2710 | ai:codex
+        let index_before = g(&["ls-files", "--stage"]);
         for failure in [
             "probe timed out",
             "probe I/O failure",
             "unknown option: write-tree",
+            "fatal: unable to read tree",
+            "could not spawn git",
         ] {
             let failed_probe = |args: &[&str]| -> Result<String> {
                 if args.first() == Some(&"merge-tree") {
@@ -4114,6 +4126,7 @@ mod rework_merge_tests {
             assert!(format!("{why:#}").contains(failure));
             assert!(!fx.main.join(".aida/repair-journal.json").exists());
             assert_eq!(g(&["rev-parse", "HEAD"]), head);
+            assert_eq!(g(&["ls-files", "--stage"]), index_before);
             assert!(git_execute(&["rev-parse", "--verify", "MERGE_HEAD"]).is_err());
         }
         let files = prepare_host_repair_with(
