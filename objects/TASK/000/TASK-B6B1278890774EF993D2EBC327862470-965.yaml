@@ -17,7 +17,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-08T03:08:54.290380002Z
-modified_at: 2026-11-12T09:21:07.141369699Z
+modified_at: 2026-11-12T13:00:13.102768139Z
 req_type: Task
 tags:
 - area:architecture
@@ -177,6 +177,13 @@ comments:
     Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
   created_at: 2026-11-12T09:01:50.602368963Z
   modified_at: 2026-11-12T09:01:50.602368963Z
+  session_id: 01a1ceeb-e827-7832-8991-e83d9eb95cef
+  harness_version: 2.1.322 (Claude Code)
+- id: 01a1cfd8-2bae-7bb3-8f2e-bf15d61e18c9
+  author: joe
+  content: 'ADVISOR BRIEF next slice (2026-11-12 06:05 MST, main bee6758fabe after #3866/#3867 landed). Goal: shrink the 367-module SCC. 36 modules reach command_registry only through test helpers: try_parse_from (about 428 call sites) and built_command (about 45). Move those two helpers into a leaf test-support module that does NOT depend on command_registry (for example cmdkit::testing or test_cli.rs taking the built clap Command by injection, with command_registry providing it), repoint the call sites, and re-measure the SCC with the docs/internal/testing/task-3425-cmdkit-rework.md script. Record before/after in the PR body and a spec comment. Pure test-infra move, no behavior change. If over ~40 files, split by directory and keep each PR mechanical. Shared test infra: LIGHT gate plus make check-ci-compile. Trailer (Refs TASK-3448) unless the SCC drops to the spec''s target.'
+  created_at: 2026-11-12T13:00:13.102768139Z
+  modified_at: 2026-11-12T13:00:13.102768139Z
   session_id: 01a1ceeb-e827-7832-8991-e83d9eb95cef
   harness_version: 2.1.322 (Claude Code)
 history:
