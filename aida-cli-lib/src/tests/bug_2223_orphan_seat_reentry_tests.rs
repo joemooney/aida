@@ -332,14 +332,58 @@ fn story_2710_actual_orphan_adoption_transfers_pending_repair() {
             base: base.clone(),
             spawn: crate::repair_journal::SpawnOutcome::Unknown,
             original_conflict_paths: vec!["README.md".into()],
-            preparation_success: Some(false),
-            regeneration_success: None,
+            // Restoration succeeded, but a publication generator failed.
+            // Adoption must preserve this stronger requirement for a full retry.
+            preparation_success: Some(true),
+            regeneration_success: Some(false),
             regenerated_tree: None,
             validation: None,
             refusal_notice: None,
         })
         .unwrap();
     drop(journal);
+    let index_before = execute(&["ls-files", "--stage"]).unwrap();
+    // Keep the adoption regression usable without user namespaces; the live
+    // containment lane requires this direct publication assertion to execute.
+    let bwrap_live = std::process::Command::new("bwrap")
+        .args([
+            "--ro-bind",
+            "/",
+            "/",
+            "--dev",
+            "/dev",
+            "--proc",
+            "/proc",
+            "true",
+        ])
+        .output()
+        .is_ok_and(|out| out.status.success());
+    if bwrap_live {
+        let refused = crate::seat_clone::commit_pending(
+            &fx.main,
+            tree,
+            &orphan.branch,
+            "failed generation must not publish (Refs STORY-2710)",
+        )
+        .unwrap_err();
+        assert!(
+            refused
+                .to_string()
+                .contains("repair preparation did not succeed"),
+            "{refused:#}"
+        );
+    } else {
+        assert!(
+            aida_core::exec_context::Environment::capture()
+                .get("AIDA_REQUIRE_BWRAP_LIVE")
+                .is_none(),
+            "bwrap required"
+        );
+        eprintln!("SKIP direct repair commit refusal (bwrap unavailable)");
+    }
+    assert_eq!(execute(&["ls-files", "--stage"]).unwrap(), index_before);
+    assert_eq!(execute(&["rev-parse", "HEAD"]).unwrap(), head);
+    assert_eq!(execute(&["rev-parse", "MERGE_HEAD"]).unwrap(), base);
     assert!(crate::repair_journal::RepairGuard::lock(&fx.main)
         .unwrap()
         .transfer_adopted_lane(
@@ -361,11 +405,14 @@ fn story_2710_actual_orphan_adoption_transfers_pending_repair() {
         &orphan.branch,
         true,
         |_| panic!("failed preparation cannot publish"),
-        |_, _| anyhow::bail!("restoration still fails"),
+        |_, restore_only| {
+            assert!(!restore_only, "failed generation requires a full retry");
+            anyhow::bail!("generation still fails")
+        },
         || Ok((base.clone(), head.clone())),
     )
     .unwrap_err();
-    assert!(failure.to_string().contains("restoration still fails"));
+    assert!(failure.to_string().contains("generation still fails"));
     // Failed resume setup restores the orphan lease AND its journal identity.
     drop(receipt);
     let journal = crate::repair_journal::RepairGuard::lock(&fx.main).unwrap();
@@ -374,6 +421,8 @@ fn story_2710_actual_orphan_adoption_transfers_pending_repair() {
         .unwrap();
     assert_eq!(entry.lane_id, orphan.id);
     assert!(entry.require_prepared().is_err());
+    assert_eq!(entry.regeneration_success, Some(false));
+    assert_eq!(entry.original_conflict_paths, ["README.md"]);
     drop(journal);
     assert!(!crate::lease_path(&fx.main, &failed_successor.id).exists());
     adopt("TASK-2223", &orphan.branch, tree).unwrap();
@@ -391,7 +440,7 @@ fn story_2710_actual_orphan_adoption_transfers_pending_repair() {
             |_| panic!("pending conflicts cannot publish"),
             |input, restore_only| {
                 assert_eq!(input, base);
-                assert!(restore_only);
+                assert!(!restore_only, "successor must retry the failed generator");
                 Ok(())
             },
             || Ok((base.clone(), head.clone())),
@@ -406,6 +455,11 @@ fn story_2710_actual_orphan_adoption_transfers_pending_repair() {
         .unwrap();
     assert_eq!(entry.lane_id, successor.id);
     entry.require_prepared().unwrap();
+    assert_eq!(entry.original_conflict_paths, ["README.md"]);
+    assert_eq!(entry.regeneration_success, Some(true));
+    // Resume admission is not exact-tree publication evidence. Publication
+    // must regenerate and record its own staged tree even after this recovery.
+    assert!(entry.require_regenerated_tree(&"c".repeat(40)).is_err());
 }
 
 /// Binding 5b: a lease whose owner is alive is never adopted.

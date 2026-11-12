@@ -70,7 +70,9 @@ def expected_pack_outputs(staged, host_outputs):
         if not source.startswith(TEMPLATES) or not source.endswith(".md"):
             continue
         path = Path(source)
-        if path.is_symlink() or not path.is_file():
+        # A regular leaf through a replaced template directory is not a
+        # staged master. Do not let a symlinked ancestor expand this inventory.
+        if any(parent.is_symlink() for parent in (path, *path.parents)) or not path.is_file():
             continue
         rel = source[len(TEMPLATES):]
         kind, _, skill = rel.partition("/")

@@ -219,6 +219,23 @@ class RepairGenerationTests(unittest.TestCase):
             finally:
                 os.chdir(old)
 
+    def test_pack_inventory_refuses_masters_through_symlinked_directories(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            old = os.getcwd()
+            os.chdir(tmp)
+            try:
+                Path('outside').mkdir()
+                Path('outside/aida-linked.md').write_text('prompt')
+                Path('aida-core/templates').mkdir(parents=True)
+                Path('aida-core/templates/skills').symlink_to('../../outside')
+                staged = {'aida-core/templates/skills/aida-linked.md'}
+                self.assertEqual(driver.expected_pack_outputs(staged, ()), set())
+                # Host-known outputs remain valid independently of lane masters.
+                host = {'.agents/skills/aida-host/SKILL.md'}
+                self.assertEqual(driver.expected_pack_outputs(staged, host), host)
+            finally:
+                os.chdir(old)
+
     def test_pack_inventory_is_frozen_before_generator_writes(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
