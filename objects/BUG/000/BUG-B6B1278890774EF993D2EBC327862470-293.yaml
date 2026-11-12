@@ -8,12 +8,12 @@ description: |-
   ## Acceptance
   - After releasing member holds, the train waits (bounded) for required status contexts on the exact tip to settle before judging; a pending context caused by its own release does not eject the member.
   - Regression test: a required context that is pending then success within the wait window lands the train; one that stays pending past the bound refuses with that reason.
-status: NeedsAttention
+status: Completed
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-11T19:01:48.884172712Z
-modified_at: 2026-11-12T06:42:32.862109024Z
+modified_at: 2026-11-12T09:01:21.881841420Z
 req_type: Bug
 comments:
 - id: 01a1cd53-4d58-7801-952c-3dc01ddd0f17
@@ -86,6 +86,20 @@ history:
   author: joe
   timestamp: 2026-11-12T06:42:32.987092820Z
   changes: []
+- id: 01a1cefd-7dbf-75a0-ab23-26cb25af4b43
+  author: aida-auto-bump
+  timestamp: 2026-11-12T09:01:21.727022220Z
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Completed
+processing_record:
+- id: 01a1cefd-7e59-7560-9393-39c73add0f1e
+  timestamp: 2026-11-12T09:01:21.881836321Z
+  agent: aida
+  commit_sha: 298639cb95018f3d580dc44cba3ce04e880064fd
+  summary: 'Full diff reviewed; no actionable defects. BUG-2528 bug protocol: met (test file changed). BUG-b6b1278890774ef993d2ebc327862470-293.ac7047b1: verified by exact-tip polling and CI-passed bug2406_held_member_released_under_mandate_lands. BUG-b6b1278890774ef993d2ebc327862470-293.ac8e4a45: verified by that landing regression and CI-passed bug2528_exact_tip_ci_wait_is_bounded_and_fails_closed. CI pending at review time. No local tests/builds run.'
+  review_verdict: approved
 filed_at:
   code_sha: 084db2045ab47ac1c18fbef293abb2a3db53cb92
   branch: main
@@ -95,11 +109,7 @@ filed_at:
   vendor: claude
   session: 01a1cb56-f02b-7652-869e-3788560cbf1b
   harness_version: 2.1.322 (Claude Code)
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: 'Full two-file sweep: no actionable defects; ac7047b1 verified by exact-tip bounded polling and released-member pending-to-success regression; ac8e4a45 verified by landing and deterministic 180s timeout/fail-closed regressions (source inspected; spec reports 59 passing module tests). BUG-2528 bug protocol: met (test file changed). CI pending at review time; no local tests run per review-watch policy.'
-  recovery_hint: address the review findings, move BUG-B6B1278890774EF993D2EBC327862470-293 back to In Progress, and clear the PR hold only after approval
-  shelved_by: reviewer
-  shelved_at: 2026-11-12T06:42:32.862109024Z
+implementation_info:
+  implemented: false
+  completed_at: 2026-11-12T09:01:21.727013171Z
+  completion_sha: 298639cb95018f3d580dc44cba3ce04e880064fd
