@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T23:39:41.575597Z
-modified_at: 2026-11-12T14:11:00.358211970Z
+modified_at: 2026-11-12T14:18:49.291426847Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -844,6 +844,11 @@ comments:
   created_at: 2026-11-12T13:53:14.712082823Z
   modified_at: 2026-11-12T13:53:14.712082823Z
   session_id: 01a1cfe0a7ee
+- id: 01a1d020-224b-7d01-9d13-a74c8cbd68a4
+  author: mcp
+  content: 'Round 19 addresses review finding 1 at 00943aed26a9 (PR #3879): bug_1683_live_drain_lock::launch_aliases_delegate_to_the_tested_lock_boundaries now reads ps_integrate.rs and zen_drive_root.rs directly instead of concatenating lib.rs/lib_part1..6.rs. All dispatch-body assertions are retained, eliminating include_str! references to deleted lib_part2/4/6.rs. Validation: launcher job j20261112T141317340-1405997-0 compiled the aida-cli integration target and executed the exact targeted test: 1 passed, 0 failed, exit 0. rustfmt --check and git diff --check passed. make check-ci-fast attempted with a 50-second bound; timed out during TUI seam guard cargo check (exit 124), so full gate remains host validation. Codegraph fixed client missing; doctor reports unreachable, source locations confirmed with rg. Edits remain uncommitted under native-seat policy; host must produce the new round commit and publish. Partial TASK-3428 slice retains Refs trailer.'
+  created_at: 2026-11-12T14:18:49.291398959Z
+  modified_at: 2026-11-12T14:18:49.291398959Z
 history:
 - id: 01a1b862-2e0b-7a50-a4d0-25097c707b57
   author: joe
