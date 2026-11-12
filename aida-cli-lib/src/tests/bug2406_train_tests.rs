@@ -1516,7 +1516,7 @@ fn bug2528_exact_tip_ci_wait_is_bounded_and_fails_closed() {
             outcome,
         }],
     };
-    let time = std::cell::Cell::new(0);
+    let time = ExactTipCiClock::default();
     let reads = std::cell::Cell::new(0);
     let error = wait_exact_tip_ci(
         "tip",
@@ -1526,14 +1526,14 @@ fn bug2528_exact_tip_ci_wait_is_bounded_and_fails_closed() {
             reads.set(reads.get() + 1);
             Ok(checks("tip", CheckOutcome::Pending))
         },
-        || time.get(),
-        || time.set(time.get() + 10),
+        || time.elapsed(),
+        || time.sleep(),
     )
     .unwrap_err();
     assert!(error
         .to_string()
         .contains("still pending after 180s: merge-hold-gate"));
-    assert_eq!(time.get(), 180);
+    assert_eq!(time.elapsed(), 180);
     assert_eq!(reads.get(), 19);
     for (sha, outcome) in [
         ("other", CheckOutcome::Passed),

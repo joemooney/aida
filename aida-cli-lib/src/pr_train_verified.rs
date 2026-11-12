@@ -271,7 +271,7 @@ fn collect(
     // Hold release can re-run a required context even after the PR-level
     // wait passed. Every proof refresh must settle the exact commit too.
     // trace:BUG-2528 | ai:codex
-    let started = std::time::Instant::now();
+    let clock = ExactTipCiClock::default();
     wait_exact_tip_ci(
         &ci_key.head_sha,
         &names,
@@ -280,8 +280,8 @@ fn collect(
             live.dispatch_check()?;
             live.forge.commit_checks(&ci_key.head_sha)
         },
-        || started.elapsed().as_secs(),
-        || std::thread::sleep(std::time::Duration::from_secs(TRAIN_CI_POLL_SECS)),
+        || clock.elapsed(),
+        || clock.sleep(),
     )?;
     let mut sources = Vec::new();
     let mut mapped = Vec::new();
@@ -493,6 +493,47 @@ fn collect(
         "specs": all_specs, "bound_source_event": bound}),
         mapped,
     ))
+}
+
+// Keep integration tests on the real final-gate path without wall-clock polling.
+// The same polling loop and deadline apply; unit tests advance logical time.
+// trace:BUG-2528 | ai:codex
+struct ExactTipCiClock {
+    #[cfg(not(test))]
+    started: std::time::Instant,
+    #[cfg(test)]
+    seconds: std::cell::Cell<u64>,
+}
+
+impl Default for ExactTipCiClock {
+    fn default() -> Self {
+        Self {
+            #[cfg(not(test))]
+            started: std::time::Instant::now(),
+            #[cfg(test)]
+            seconds: std::cell::Cell::new(0),
+        }
+    }
+}
+
+impl ExactTipCiClock {
+    fn elapsed(&self) -> u64 {
+        #[cfg(not(test))]
+        {
+            self.started.elapsed().as_secs()
+        }
+        #[cfg(test)]
+        {
+            self.seconds.get()
+        }
+    }
+
+    fn sleep(&self) {
+        #[cfg(not(test))]
+        std::thread::sleep(std::time::Duration::from_secs(TRAIN_CI_POLL_SECS));
+        #[cfg(test)]
+        self.seconds.set(self.seconds.get() + TRAIN_CI_POLL_SECS);
+    }
 }
 
 /// Only an in-flight context may defer the final decision. Never substitute
