@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-11T14:11:33.148855447Z
-modified_at: 2026-11-12T16:55:26.254501842Z
+modified_at: 2026-11-12T17:06:44.142790470Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -80,6 +80,13 @@ comments:
   content: 'Advisor 09:57 MST: PR #3846 now conflicts with main (ec5a35a, BUG-2530 landed); review-watch cannot update the branch. Rework scope: merge origin/main, resolve conflicts preserving both behaviors, LIGHT gate, push. No new scope.'
   created_at: 2026-11-12T16:55:26.254501842Z
   modified_at: 2026-11-12T16:55:26.254501842Z
+  session_id: 01a1d09a-4262-7d50-a00b-00a5a30f3934
+  harness_version: 2.1.322 (Claude Code)
+- id: 01a1d0b9-dd2e-7b62-a160-0f05566b1b78
+  author: joe
+  content: 'Advisor 10:12 MST: hand-merged origin/main (ec5a35a) into PR #3846 as 4758baa: the only conflict was two new tests appended to gate/tests/story_2492_publication_tests.rs (BUG-2525''s and BUG-2530''s); kept both. dell1 cargo check --tests OK. RULING on the WAITING verdict: the acceptance item ''TASK-3448/TASK-3428 verdicts are closed by the fix'' is post-deploy verification by construction (the fix is what closes them), so it is accepted as a post-merge check, not a pre-merge blocker. Fresh review at 4758baa should judge the code; the advisor verifies the historical verdicts close after deploy.'
+  created_at: 2026-11-12T17:06:44.142790470Z
+  modified_at: 2026-11-12T17:06:44.142790470Z
   session_id: 01a1d09a-4262-7d50-a00b-00a5a30f3934
   harness_version: 2.1.322 (Claude Code)
 history:
