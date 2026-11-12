@@ -4017,6 +4017,32 @@ mod rework_merge_tests {
                 text.trim().to_owned()
             })
         };
+        // Failed observations never reserve this head, and a later successful
+        // probe can retry without requiring a dead-lane recovery operation.
+        // trace:STORY-2710 | ai:codex
+        for reason in ["probe timed out", "I/O failure", "unsupported option"] {
+            let failed_probe = |args: &[&str]| -> Result<String> {
+                if args.first() == Some(&"merge-tree") {
+                    anyhow::bail!("{reason}");
+                }
+                execute(args)
+            };
+            let error = prepare_host_repair_with(
+                &fx.main,
+                &fx.main,
+                3813,
+                "lease-1",
+                &failed_probe,
+                "repair",
+                false,
+                |_| panic!("failed probe must not publish"),
+                |_, _| panic!("failed probe must not regenerate"),
+                || Ok((head.clone(), head.clone())),
+            )
+            .unwrap_err();
+            assert!(format!("{error:#}").contains(reason));
+            assert!(!fx.main.join(".aida/repair-journal.json").exists());
+        }
         let paths = prepare_host_repair_with(
             &fx.main,
             &fx.main,

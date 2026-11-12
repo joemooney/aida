@@ -174,8 +174,10 @@ class RepairGenerationTests(unittest.TestCase):
             self.assertEqual(self.run_driver(root, base, 'restore').returncode, 0)
             mirrors = {
                 'commands/run.md': '.claude/commands/run.md',
+                'commands/nested/run.md': '.claude/commands/nested/run.md',
                 'skills/aida-run.md': '.claude/skills/aida-run/SKILL.md',
                 'hooks/run.sh': '.claude/hooks/run.sh',
+                'hooks/nested/run.sh': '.claude/hooks/nested/run.sh',
                 '.aida/discipline/run.md': '.aida/discipline/run.md',
             }
             for source, mirror in mirrors.items():
@@ -320,14 +322,50 @@ class RepairGenerationTests(unittest.TestCase):
                 'time.sleep(30)\n')
             (root / 'Makefile').write_text('sync-templates:\n\tpython3 spawn.py\n')
             git('add', '.')
+            # Resume can have newer unstaged bytes than the saved index.
+            (root / 'source.rs').write_bytes(b'newer resume edits\x00\xff')
+            before_index = git('ls-files', '-s').stdout
             result = subprocess.run(('python3', str(DRIVER), base, 'generate', '[]', '0.6'),
                                     cwd=root, capture_output=True, text=True, timeout=8)
             self.assertNotEqual(result.returncode, 0)
             self.assertIn('timed out', result.stderr)
             self.assertIn('rolled back', result.stderr)
-            self.assertEqual((root / 'source.rs').read_text(), 'base\n')
+            self.assertEqual((root / 'source.rs').read_bytes(), b'newer resume edits\x00\xff')
+            self.assertEqual(git('ls-files', '-s').stdout, before_index)
             time.sleep(1.6)
-            self.assertEqual((root / 'source.rs').read_text(), 'base\n')
+            self.assertEqual((root / 'source.rs').read_bytes(), b'newer resume edits\x00\xff')
+            self.assertEqual(git('ls-files', '-s').stdout, before_index)
+
+    def test_successful_generator_reaps_escaped_descendant_before_inspection(self):
+        # A successful make exit also needs descendant teardown, before the
+        # driver accepts its filesystem snapshot as final.
+        # trace:STORY-2710 | ai:codex
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            git, base = self.fixture(root)
+            self.assertEqual(self.run_driver(root, base, 'restore').returncode, 0)
+            late = ('from pathlib import Path; import time; '
+                    'Path("started").write_text("ready"); '
+                    'time.sleep(1); Path("source.rs").write_text("late corruption")')
+            (root / 'spawn.py').write_text(
+                'import subprocess, sys, time\nfrom pathlib import Path\n'
+                f'subprocess.Popen([sys.executable, "-c", {late!r}], start_new_session=True)\n'
+                'while not Path("started").exists(): time.sleep(0.01)\n')
+            (root / 'Makefile').write_text('sync-templates:\n\tpython3 spawn.py\n')
+            master = root / 'aida-core/templates/commands/run.md'
+            master.parent.mkdir(parents=True)
+            master.write_text('master')
+            git('add', '.')
+            (root / 'source.rs').write_text('unstaged resume edits')
+            result = subprocess.run(('python3', str(DRIVER), base, 'generate'),
+                                    cwd=root, capture_output=True, text=True, timeout=8)
+            # The readiness file is an unauthorized write; rollback must wait
+            # for the escaped process even though the recipe exited zero.
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn('unregistered outputs', result.stderr)
+            self.assertFalse((root / 'started').exists())
+            time.sleep(1.1)
+            self.assertEqual((root / 'source.rs').read_text(), 'unstaged resume edits')
 
     def test_pack_rule_is_closed_over_staged_masters(self):
         with tempfile.TemporaryDirectory() as tmp:
