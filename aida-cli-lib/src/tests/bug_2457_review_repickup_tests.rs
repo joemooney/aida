@@ -25,6 +25,14 @@ fn queue_work(storage: &crate::Storage) -> anyhow::Result<()> {
 }
 
 fn queue_work_launch(storage: &crate::Storage, no_launch: bool) -> anyhow::Result<()> {
+    queue_work_launch_sync(storage, no_launch, true)
+}
+
+fn queue_work_launch_sync(
+    storage: &crate::Storage,
+    no_launch: bool,
+    no_pull: bool,
+) -> anyhow::Result<()> {
     crate::queue_cmd::handle_queue_work(
         storage,
         None,
@@ -34,7 +42,7 @@ fn queue_work_launch(storage: &crate::Storage, no_launch: bool) -> anyhow::Resul
         false,
         /* no_launch */ no_launch,
         crate::queue_cmd::QueueWorkRoleInput::direct(Some("reviewer")),
-        /* no_pull */ true,
+        no_pull,
         None,
         None,
         None,
@@ -651,11 +659,6 @@ fn bug2530_concluded_pickup_preserves_checkout_queue_and_calibration() {
     ambient.set_key(crate::gate::seat_authority::GRANT_ENV, grant);
     let path = crate::gate::review_verdict::verdict_path(&fx.main, "PR-2457");
     std::fs::create_dir_all(path.parent().unwrap()).unwrap();
-    std::fs::write(
-        path,
-        serde_json::json!({"verdict":"request-changes", "reviewed_sha":sha}).to_string(),
-    )
-    .unwrap();
     let calibration = fx.main.join(".aida/complexity-calibration");
     let effort = fx.main.join(".aida/effort-calibration");
     // Remove setup's calibration so any attempted pickup write is visible.
@@ -664,19 +667,55 @@ fn bug2530_concluded_pickup_preserves_checkout_queue_and_calibration() {
             std::fs::remove_dir_all(dir).unwrap();
         }
     }
-    let error = queue_work_launch(&storage, false).unwrap_err();
-    assert!(
-        error
-            .to_string()
-            .contains("duplicate review is unnecessary"),
-        "{error:#}"
-    );
-    assert!(tree.join(".git").exists());
-    assert_eq!(git_ok(&tree, &["rev-parse", "HEAD"]), sha);
-    assert!(storage.queue_list(user, false).unwrap().is_empty());
-    assert_eq!(
-        serde_json::to_value(storage.load().unwrap()).unwrap(),
-        before
-    );
-    assert!(!calibration.exists() && !effort.exists());
+    let identity = vec!["session:independent-reviewer".to_owned()];
+    let receipt =
+        crate::gate::review_authority::write_human_receipt(&sha, "PR-2457", &identity, false, true)
+            .unwrap();
+    let branch_before = git_ok(&fx.main, &["show-ref"]);
+    let checkout_before = git_ok(&tree, &["status", "--porcelain"]);
+    // The pull child publishes evidence absent from the pre-pull view. This
+    // proves admission sees the synchronized verdict before touching resources.
+    let incoming = fx.root.join("incoming-verdict.json");
+    let pulled = fx.root.join("pull-observed");
+    let fake = fx.root.join("pull-aida");
+    crate::test_exec::write_executable(&fake, format!(
+        "#!/bin/sh\n[ \"$*\" = 'db sync --pull' ] || exit 42\ncp '{}' '{}' || exit 43\ntouch '{}'\n",
+        incoming.display(), path.display(), pulled.display(),
+    ));
+    let _exe = crate::kernel::test_aida_exe::set(fake);
+    for kind in ["request-changes", "rejected", "approved"] {
+        std::fs::write(
+            &incoming,
+            serde_json::json!({
+                "verdict":kind, "reviewed_sha":sha,
+                "recorded_at":chrono::Utc::now().to_rfc3339(),
+                "recorder_attestation": {
+                    "sha":sha, "human_at_tty":true, "receipt_id":receipt, "identity":identity
+                }
+            })
+            .to_string(),
+        )
+        .unwrap();
+        let _ = std::fs::remove_file(&path);
+        let _ = std::fs::remove_file(&pulled);
+        let error = queue_work_launch_sync(&storage, false, false).unwrap_err();
+        assert!(pulled.exists(), "required pull must precede refusal");
+        assert!(
+            error
+                .to_string()
+                .contains("duplicate review is unnecessary"),
+            "{kind}: {error:#}"
+        );
+        assert!(tree.join(".git").exists());
+        assert_eq!(git_ok(&tree, &["rev-parse", "HEAD"]), sha);
+        assert_eq!(git_ok(&tree, &["status", "--porcelain"]), checkout_before);
+        assert_eq!(git_ok(&fx.main, &["show-ref"]), branch_before);
+        assert!(crate::list_leases(&fx.main).is_empty());
+        assert!(storage.queue_list(user, false).unwrap().is_empty());
+        assert_eq!(
+            serde_json::to_value(storage.load().unwrap()).unwrap(),
+            before
+        );
+        assert!(!calibration.exists() && !effort.exists());
+    }
 }

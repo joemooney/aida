@@ -479,25 +479,39 @@ fn bug2530_duplicate_admission_and_redundant_claim() {
         merge_gate(dir.path(), 7, || Some(head.into())),
         MergeGate::UnderReview(_)
     ));
-    // Same second: preserve a real earlier claim and ignore a later one.
-    for claim_nanos in [
-        None,
-        Some(100_000_000),
-        Some(500_000_000),
-        Some(900_000_000),
+    // Exercise both orderings within one second, including the reported
+    // 0.1s claim / 0.9s approval race. Equal instants and legacy intervals
+    // cannot prove that a claim followed the approval.
+    for (claim_nanos, approval_nanos, redundant) in [
+        (None, 900_000_000, false),
+        (Some(100_000_000), 900_000_000, false),
+        (Some(900_000_000), 100_000_000, true),
+        (Some(500_000_000), 500_000_000, false),
     ] {
         let mut precise = m.clone();
         precise.started_at_nanos = claim_nanos;
         write(dir.path(), &precise).unwrap();
         assert_eq!(read(dir.path(), 7).unwrap(), precise);
-        record["recorded_at"] = chrono::DateTime::from_timestamp(m.started_at as i64, 500_000_000)
-            .unwrap()
-            .to_rfc3339()
-            .into();
+        record["recorded_at"] =
+            chrono::DateTime::from_timestamp(m.started_at as i64, approval_nanos)
+                .unwrap()
+                .to_rfc3339()
+                .into();
         std::fs::write(&path, record.to_string()).unwrap();
+        let gate = merge_gate(dir.path(), 7, || Some(head.into()));
+        if redundant {
+            assert_eq!(gate, MergeGate::Clear);
+        } else {
+            assert_eq!(gate, MergeGate::UnderReview(precise.clone()));
+        }
         assert_eq!(
-            merge_gate(dir.path(), 7, || Some(head.into())) == MergeGate::Clear,
-            claim_nanos == Some(900_000_000)
+            live_description(dir.path(), 7, Some(head)).is_none(),
+            redundant
+        );
+        assert_eq!(
+            read(dir.path(), 7).unwrap(),
+            precise,
+            "reads retain the claim"
         );
     }
     record["recorded_at"] = "invalid".into();
