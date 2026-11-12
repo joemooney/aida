@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-12T18:43:14.457201972Z
-modified_at: 2026-11-12T19:04:41.211798660Z
+modified_at: 2026-11-12T21:11:00.517304192Z
 req_type: Bug
 comments:
 - id: 01a1d119-6810-7f81-95b6-65589a91a298
@@ -30,6 +30,13 @@ comments:
   content: '[advisor 11:58] ROOT CAUSE: Rust 1.100.0 went stable today. Passing gates jobs ran rustc 1.99.1; every failing one (since 18:22Z) ran rustc 1.100.0. PR #3894 pins CI to 1.99.1 to unblock trains. The fix: make the overlay/fingerprint seeding work on cargo 1.100 (fingerprint layout change), then unpin ci.yml back to @stable in the same PR.'
   created_at: 2026-11-12T19:04:41.211798660Z
   modified_at: 2026-11-12T19:04:41.211798660Z
+  session_id: 01a1d0eb-22cc-7262-8f6c-7266e9cc1fbb
+  harness_version: 2.1.322 (Claude Code)
+- id: 01a1d199-80a5-7ab1-8cc6-f9eedae463fe
+  author: joe
+  content: '[advisor 14:15] Scope widened. PR #3902 (overlay fingerprint fix) is green on gates but red on lib-0/lib-1 under rustc 1.100: Cargo 1.100''s new build-dir layout puts test binaries under target/<profile>/build/<pkg>/<hash>/out/ instead of target/<profile>/deps/. Failing: bug_1745_error_channel_tests.rs:32 (expects .../deps), bug_1749_doctor_toon_tests.rs:61, codex_tool_env bug_2398 (test_env.rs:109/test_exec.rs:75), session spawn_and_resume_children_carry_their_own_vendor_harness_version. Rework #3902: make every test-runner/binary path lookup layout-agnostic (deps OR build/*/out), keep the overlay fix, and in the same PR remove the 1.99.1 pin from ci.yml so CI proves 1.100. Jobs: 131483598899, 131483598941.'
+  created_at: 2026-11-12T21:11:00.517304192Z
+  modified_at: 2026-11-12T21:11:00.517304192Z
   session_id: 01a1d0eb-22cc-7262-8f6c-7266e9cc1fbb
   harness_version: 2.1.322 (Claude Code)
 history:
