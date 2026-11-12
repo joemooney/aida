@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-11T04:48:14.810158291Z
-modified_at: 2026-11-12T13:03:01.200346691Z
+modified_at: 2026-11-12T13:09:49.087613421Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -222,6 +222,12 @@ comments:
   content: 'Round 3 finding 1: moved collect_interactive_review_refusal validation into protected gate/review_verdict.rs, returning CollectedVerdict. handle_review_spec keeps hold/forge orchestration outside the kernel and propagates hold failure before presentation/re-recording. Updated refusal regression call sites and ordering assertions; reconciled store writer inventory without changing ratchets. Inventory check, 54 inventory tests, rustfmt and whitespace checks pass. Lane jobs j20261112T125815829-825185-0 (boundary guards) and j20261112T125836861-2-0 (refusal regressions) pending. Native seat will leave edits for host commit/publication. Status promotion refused because Needs Attention requires advisor authority; status unchanged. Configured CodeGraph host client absent; call sites verified with rg.'
   created_at: 2026-11-12T13:03:01.200346691Z
   modified_at: 2026-11-12T13:03:01.200346691Z
+  session_id: 01a1cfd4b26e
+- id: 01a1cfe0-f59f-77c0-bce0-c069d2baf6a3
+  author: joe
+  content: 'Round 3 validation complete: lane job j20261112T125815829-825185-0 passed all 52 story_1888_gate_paths_tests, including gate_authority_code_is_on_the_floor, gate_kernels_reach_outside_only_through_listed_leaves and gate_dispatch_reaches_outside_only_through_the_facade_or_listed_leaves. Lane job j20261112T125836861-2-0 passed all 10 bug_013_review_record_sha_tests, including native-launcher refusal, operator hold-failure preservation, interactive parent ordering and interactive refusal collection/holding. Store-writer consistency check and 54 inventory tests passed; touched Rust files pass rustfmt --check; git diff --check clean. Finding 1 addressed without ratchet changes. Five files left uncommitted for native host publication.'
+  created_at: 2026-11-12T13:09:49.087613421Z
+  modified_at: 2026-11-12T13:09:49.087613421Z
   session_id: 01a1cfd4b26e
 history:
 - id: 01a1c8ef-b4bc-7b62-a163-3209968104a9
