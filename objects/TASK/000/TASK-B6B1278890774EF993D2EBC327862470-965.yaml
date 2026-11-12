@@ -17,7 +17,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-08T03:08:54.290380002Z
-modified_at: 2026-11-12T08:40:50.982381657Z
+modified_at: 2026-11-12T09:01:08.251873620Z
 req_type: Task
 tags:
 - area:architecture
@@ -288,6 +288,10 @@ history:
   session_id: 01a1cee3002b
   harness_version: codex-cli 0.167.0
   changes: []
+- id: 01a1cefd-4a2b-78d3-aa3e-8ca65c7316b2
+  author: joe
+  timestamp: 2026-11-12T09:01:08.523820416Z
+  changes: []
 filed_at:
   code_sha: 049e5206de120518bb94fae84bf359f789e76236
   branch: main
@@ -306,7 +310,7 @@ failure_reason:
   phase: reviewer
   phase_index: 3
   kind: verdict:request-changes
-  detail: 'Required help co-change guard fails: missing commit trailer.'
+  detail: Full six-file sweep found no actionable defects in advisor-authorized Refs slices; direct cmdkit imports and last-glob removal preserve behavior; Help-Golden declaration fixed. SCC remains 367 and both specs remain incomplete. CI pending at review time.
   recovery_hint: address the review findings, move TASK-3448 back to In Progress, and clear the PR hold only after approval
   shelved_by: reviewer
-  shelved_at: 2026-11-12T07:46:36.598921161Z
+  shelved_at: 2026-11-12T09:01:08.251873620Z
