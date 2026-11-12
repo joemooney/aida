@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-11T04:08:39.262399078Z
-modified_at: 2026-11-12T09:26:32.388608262Z
+modified_at: 2026-11-12T09:34:44.452027464Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -64,6 +64,12 @@ comments:
   content: 'Round 2: fixed the reported production defect by sharing the verified, unsuperseded head-filtered receipt set before the one-answer projection. WAITING retry deadlines now use the latest effective peer timestamp; conclusive receipts retain precedence. Added a signed two-publisher regression exercising fresh watchers and elapsed local attempts at the final shared try. Lane job j20261112T092340745-2-0 is compiling targeted tests. Status promotion was refused because Needs Attention requires advisor authority; status remains unchanged. Native seat edits remain uncommitted for host publication.'
   created_at: 2026-11-12T09:26:32.388608262Z
   modified_at: 2026-11-12T09:26:32.388608262Z
+  session_id: 01a1cf0fc8fb
+- id: 01a1cf1c-0ce4-7b40-92fe-240da89322ab
+  author: joe
+  content: 'Round 2 validation complete: lane job j20261112T092340745-2-0 executed cargo test --profile agent -p aida-cli-lib --lib -- bug2521: 4 passed, 0 failed. Includes the new signed two-publisher/different-timestamp regression through watcher selection with absent and elapsed local attempts, plus conclusive precedence and head filtering. Touched-file rustfmt --check and git diff --check pass. Production waiting_retry_at now reads all effective verified unsuperseded receipts before one-answer projection. Native host must commit and publish the four-file change; status remains Needs Attention after advisor-authority refusal.'
+  created_at: 2026-11-12T09:34:44.452027464Z
+  modified_at: 2026-11-12T09:34:44.452027464Z
   session_id: 01a1cf0fc8fb
 history:
 - id: 01a1ca89-967c-73d3-a05e-7a4c69efab87
