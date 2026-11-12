@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-11T04:48:14.810158291Z
-modified_at: 2026-11-12T07:56:05.603167942Z
+modified_at: 2026-11-12T08:11:46.610823566Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -122,6 +122,12 @@ comments:
   content: 'Round 2 finding 1: retained the existing interactive parent collector (exact child grant, launch/current PR head, then local Rework hold and forge labels before re-recording). Extended its regression to cover both ledger-only native records and file-backed interactive SPEC anchors for request-changes and rejected, all starting without a hold. Each route must reject wrong-grant, stale-launch and wrong-head evidence, preserve the refusal on hold failure, and arm the hold plus forge labels after recovery. Targeted lane validation is running.'
   created_at: 2026-11-12T07:56:05.603167942Z
   modified_at: 2026-11-12T07:56:05.603167942Z
+  session_id: 01a1cebffcee
+- id: 01a1ced0-1832-7682-aab3-45a6a22784dc
+  author: joe
+  content: 'Round 2 validation: rustfmt --check for aida-cli-lib/src/tests/bug_013_review_record_sha_tests.rs and git diff --check passed. Lane job j20261112T075557494-2-0 (cargo test --profile agent -p aida-cli-lib --lib -- bug_013_review_record_sha_tests) exited 124 after 900 seconds during compilation; no tests executed, untested=true. Host must rerun that filter before completion. Only the regression file changed: file-backed interactive SPEC anchors now join ledger-only request-changes/rejected cases, with no existing hold and verified parent hold/forge-label assertions. Existing production interactive collector retained. NeedsAttention status transition requires advisor authority and was refused; status remains unchanged. Edits remain uncommitted for native host publication.'
+  created_at: 2026-11-12T08:11:46.610823566Z
+  modified_at: 2026-11-12T08:11:46.610823566Z
   session_id: 01a1cebffcee
 history:
 - id: 01a1c8ef-b4bc-7b62-a163-3209968104a9
