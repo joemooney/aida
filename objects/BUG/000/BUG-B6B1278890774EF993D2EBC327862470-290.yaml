@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-11T14:11:33.148855447Z
-modified_at: 2026-11-12T18:27:04.698568259Z
+modified_at: 2026-11-12T18:41:04.335601724Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -94,6 +94,13 @@ comments:
   content: '[advisor 11:30] PR-3846 ejected from train #3888: conflicts with main or #3830. Rework: merge origin/main into the PR branch, resolve by hand, push.'
   created_at: 2026-11-12T18:27:04.698568259Z
   modified_at: 2026-11-12T18:27:04.698568259Z
+  session_id: 01a1d0eb-22cc-7262-8f6c-7266e9cc1fbb
+  harness_version: 2.1.322 (Claude Code)
+- id: 01a1d110-3b4f-74d0-baee-d2196e31cd6c
+  author: joe
+  content: '[advisor 11:43] PR-3846 is MERGEABLE/CLEAN vs main at 4758baa; the train ejection conflict is with PR-3830. Recheck after #3830 ships; rework only if it then conflicts. Note: dell1 holds stale lease 01a1d0b0c437 + clone for this branch (refuses force-claim).'
+  created_at: 2026-11-12T18:41:04.335601724Z
+  modified_at: 2026-11-12T18:41:04.335601724Z
   session_id: 01a1d0eb-22cc-7262-8f6c-7266e9cc1fbb
   harness_version: 2.1.322 (Claude Code)
 history:
