@@ -1,0 +1,37 @@
+id: 01a1cf37-c13d-7190-b036-3d57d556f2d4
+spec_id: STORY-b6b1278890774ef993d2ebc327862470-649
+agreed_id: STORY-2726
+title: 'Review PR-3869: [AI:codex] test(ci): exercise runner ancestor reads during launch (Refs STORY-2695)'
+description: |
+  Auto-filed by `aida session end` (backup trigger) (session `01a1ceee`) for branch `story-2695-s3`.
+
+  - PR: <https://github.com/joemooney/aida/pull/3869>
+  - Branch: `story-2695-s3` → `main`
+
+  ## Slice of (Refs only — not completed by this PR)
+
+  Commit subjects carry `(Refs SPEC-ID)`: this PR is one slice of a spec that a later PR completes. Review this slice against that spec's acceptance criteria.
+
+  - STORY-2695
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 3869` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-12T10:05:00.093380317Z
+modified_at: 2026-11-12T10:05:00.093380317Z
+req_type: Story
+filed_at:
+  code_sha: 298639cb95018f3d580dc44cba3ce04e880064fd
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 298639cb950
+  vendor: claude
+  session: 01a1ceeb-e827-7832-8991-e83d9eb95cef
+  harness_version: 2.1.322 (Claude Code)
