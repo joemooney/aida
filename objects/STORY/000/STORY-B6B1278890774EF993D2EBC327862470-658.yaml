@@ -28,7 +28,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-12T17:51:40.579097417Z
-modified_at: 2026-11-12T18:12:07.269068653Z
+modified_at: 2026-11-12T18:41:43.314853477Z
 req_type: Story
 comments:
 - id: 01a1d0e3-4323-7e02-b6e4-1502d815c506
@@ -43,6 +43,12 @@ comments:
   content: 'Implementation follows the signed-off sketch: FAST source gates plus workspace/tests cargo check, FULL seven-lane matrix on main/train/merge groups/manual/schedule or PR ci:full/repo variable; direct ship checks the tier marker against Build workflow-run identity. GitLab parity gap: handwritten .gitlab-ci.yml MR verify/test/bwrap jobs remain full-only. GDMA generated relay lanes remain full-only and accept only the exact reviewed upstream tier gate. Host publication must apply ci:full as ruled; native seat will leave edits uncommitted.'
   created_at: 2026-11-12T18:12:07.269068653Z
   modified_at: 2026-11-12T18:12:07.269068653Z
+  session_id: 01a1d0efbbce
+- id: 01a1d110-d392-7a71-8603-f813c8b84948
+  author: joe
+  content: 'Validation checkpoint: make check-ci-fast passed all 46 gates (659.4 seconds summed local gate runtime); all 87 workflow guard steps are classified. CI-tier/GitLab/shard Python fixtures passed (60 tests), runner-security/tier fixtures passed (57 tests), rustfmt and trace-header checks passed. Hosted <=6-minute FAST timing remains unverified; local source gates exceeded it. Two targeted cargo test attempts reached the 900-second runner timeout during compilation without executing tests; a final-source retry is now running with the permitted AIDA_CARGO_TIMEOUT=3600 override. No Git publication or queue completion has been performed in the native seat.'
+  created_at: 2026-11-12T18:41:43.314853477Z
+  modified_at: 2026-11-12T18:41:43.314853477Z
   session_id: 01a1d0efbbce
 history:
 - id: 01a1d0e3-3615-7533-9c49-092ba133a6b5
