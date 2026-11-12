@@ -11,7 +11,7 @@ fn ship_wait_cli_accepts_optional_seconds() {
     ] {
         let mut args = vec!["aida", "pr", "ship", "1602"];
         args.extend(flags);
-        let cli = crate::command_registry::try_parse_from(args).unwrap();
+        let cli = crate::TEST_CLI.try_parse_from(args).unwrap();
         match cli.command.registered::<crate::pr_cmd::PrArgs>() {
             crate::pr_cmd::PrArgs {
                 inner: crate::cli::PrCommand::Ship { wait, .. },
@@ -21,9 +21,9 @@ fn ship_wait_cli_accepts_optional_seconds() {
             _ => panic!("expected pr ship"),
         }
     }
-    assert!(
-        crate::command_registry::try_parse_from(["aida", "pr", "ship", "--wait", "bad"]).is_err()
-    );
+    assert!(crate::TEST_CLI
+        .try_parse_from(["aida", "pr", "ship", "--wait", "bad"])
+        .is_err());
 }
 
 #[test]
@@ -894,7 +894,7 @@ fn bug_1957_ship_cli_parses_no_complete() {
     for (flags, expected) in [(vec![], false), (vec!["--no-complete"], true)] {
         let mut args = vec!["aida", "pr", "ship", "1957"];
         args.extend(flags);
-        let cli = crate::command_registry::try_parse_from(args).unwrap();
+        let cli = crate::TEST_CLI.try_parse_from(args).unwrap();
         match cli.command.registered::<crate::pr_cmd::PrArgs>() {
             crate::pr_cmd::PrArgs {
                 inner: crate::cli::PrCommand::Ship { no_complete, .. },
