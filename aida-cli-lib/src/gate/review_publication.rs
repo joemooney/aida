@@ -1150,6 +1150,27 @@ fn spec_change(root: &Path, spec_ids: &[&str]) -> Result<Option<ChangeKey>> {
     Ok(newest)
 }
 
+// Enumerating committed names grants no trust; current() verifies every receipt.
+// trace:BUG-2525 | ai:codex
+pub(crate) fn recorded_change_keys(root: &Path) -> Vec<String> {
+    let Ok(Some((store, tip))) = store_view(root) else {
+        return Vec::new();
+    };
+    let Ok(paths) = list(&store, &tip, CHANGES) else {
+        return Vec::new();
+    };
+    let mut keys: Vec<String> = paths
+        .iter()
+        .filter_map(|path| {
+            let tail = path.strip_prefix(CHANGES)?.strip_prefix('/')?;
+            ChangeKey::parse(tail.split('/').next()?).map(|c| c.as_key())
+        })
+        .collect();
+    keys.sort();
+    keys.dedup();
+    keys
+}
+
 /// Change ids select their own change (spec ids are then coverage the
 /// approval must hold). Spec-only ids route through [`spec_change`].
 fn current_for(

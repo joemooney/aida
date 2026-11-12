@@ -1313,16 +1313,9 @@ fn surviving_against_previous_round(
 
 /// Read the recorded verdict for `spec`, if any.
 pub fn read_recorded_verdict(project_root: &Path, spec: &str) -> Option<RecordedVerdict> {
-    // trace:STORY-2492 | ai:codex
-    if let Some(remote) = super::review_publication::current(project_root, &[spec]) {
-        return parse_recorded_verdict(&remote.body);
-    }
-    let path = verdict_path(project_root, spec);
-    let legacy = read_verdict_body(&path)
-        .ok()
-        .and_then(|body| parse_recorded_verdict(&body));
-    let ledger = crate::gate::ledger::project::newest_verdict_event(project_root, spec);
-    newer_of(&path, legacy, ledger.as_ref())
+    // Read every source through the same effective-source annotation check.
+    // trace:BUG-2525 | ai:codex
+    parse_recorded_verdict(&current_verdict(project_root, spec)?.body)
 }
 
 /// A verdict record carried on the gate ledger, parsed like a file body.
@@ -1389,6 +1382,19 @@ pub(crate) fn ledger_supersedes(
             .is_some_and(|body| parse_recorded_verdict(&body).is_none());
         return !unparseable;
     };
+    // An annotation may retire only the exact legacy source it observed.
+    // Equal timestamps alone cannot retire a subsequently replaced record.
+    // trace:BUG-2525 | ai:codex
+    if let Some(source) = event
+        .verdict_record()
+        .and_then(|r| r.get("terminal_wait_source"))
+    {
+        return read_verdict_body(path)
+            .ok()
+            .and_then(|body| serde_json::from_str::<serde_json::Value>(&body).ok())
+            .as_ref()
+            == Some(source);
+    }
     if file.recorded_at.is_some() && file.recorded_at == led.recorded_at {
         return true;
     }
@@ -1552,7 +1558,7 @@ fn choose_current(
                 super::review_publication::report(report);
             }
         }
-        return Some(remote);
+        return Some(terminal_wait_overlay(start, key, remote));
     }
     // A current file that exists but the anchored reader refuses (unreadable,
     // or a linked file or directory) is not evidence, and the ledger must not
@@ -1571,7 +1577,9 @@ fn choose_current(
         return file_body.map(from_file);
     }
     let parsed = parsed.flatten();
-    let ledger = crate::gate::ledger::project::newest_verdict_event(start, key)
+    // Order the source round against the file before applying its exact closure.
+    // trace:BUG-2525 | ai:codex
+    let ledger = crate::gate::ledger::project::newest_review_event(start, key)
         .filter(|event| ledger_supersedes(&path, parsed.as_ref(), event))
         .and_then(|event| {
             let body = serde_json::to_string(event.verdict_record()?).ok()?;
@@ -1585,7 +1593,9 @@ fn choose_current(
                 },
             })
         });
-    ledger.or_else(|| file_body.map(from_file))
+    ledger
+        .or_else(|| file_body.map(from_file))
+        .map(|current| terminal_wait_overlay(start, key, current))
 }
 
 /// Read the recorded verdict of ONE requirement known by several labels (its
@@ -2016,6 +2026,10 @@ pub(crate) fn build_verdict_object_with_policy(
     obj.remove("release_grant");
     obj.remove("closed_by_merge");
     obj.remove("closed_at");
+    // A fresh review is not the lifecycle annotation it replaces.
+    // trace:BUG-2525 | ai:codex
+    obj.remove("terminal_wait_source");
+    obj.remove("terminal_wait_key");
     // BUG-1505: every writer persists the canonical spelling, produced by the
     // one shared function rather than by each writer agreeing to be careful.
     // When the caller supplies no verdict (the drain stamping provenance onto
@@ -3175,6 +3189,17 @@ pub fn close_verdict_on_merge(
     spec: &str,
     merge_ref: &str,
 ) -> std::io::Result<bool> {
+    close_verdict_on_merge_for_change(project_root, spec, merge_ref, None)
+}
+
+// A historical batch closes on its own change, never the spec's newest batch.
+// trace:BUG-2525 | ai:codex
+fn close_verdict_on_merge_for_change(
+    project_root: &Path,
+    spec: &str,
+    merge_ref: &str,
+    change: Option<crate::gate::ledger::ChangeKey>,
+) -> std::io::Result<bool> {
     let merge_ref = merge_ref.trim();
     if merge_ref.is_empty() {
         return Ok(false);
@@ -3210,8 +3235,108 @@ pub fn close_verdict_on_merge(
         serde_json::Value::String(chrono::Utc::now().to_rfc3339()),
     );
     refuse_unsafe_legacy_history(&path, round_sha(&obj).as_deref())?;
-    crate::gate::ledger::record_verdict_at(&path, &obj, None)?;
+    if let Some(change) = change.filter(|_| crate::gate::ledger::ChangeKey::parse(spec).is_none()) {
+        let binding = crate::gate::ledger::GateSpec::resolve(project_root, spec);
+        crate::gate::ledger::record_verdict_at(
+            &verdict_path(project_root, &change.as_key()),
+            &obj,
+            Some(&binding),
+        )?;
+    } else {
+        crate::gate::ledger::record_verdict_at(&path, &obj, None)?;
+    }
     Ok(true)
+}
+
+// A terminal annotation is scoped to one exact source, never a new review.
+// trace:BUG-2525 | ai:codex
+pub(crate) fn close_terminal_wait(
+    root: &Path,
+    key: &str,
+    change: crate::gate::ledger::ChangeKey,
+    expected: &CurrentVerdict,
+) -> std::io::Result<bool> {
+    use crate::gate::ledger::{self, store};
+    if ledger::contained() {
+        return Err(std::io::Error::other(
+            "a contained seat cannot close gate reviews",
+        ));
+    }
+    let store_root = ledger::store_root(root)?;
+    store::with_exclusive(&store_root, || {
+        let Some(current) = current_verdict(root, key) else {
+            return Ok(false);
+        };
+        if current.body != expected.body
+            || current.source != expected.source
+            || current.written_at != expected.written_at
+            || !parse_recorded_verdict(&current.body)
+                .is_some_and(|v| v.kind == VerdictKind::Waiting && !v.is_closed())
+        {
+            return Ok(false);
+        }
+        let mut obj: JsonObj =
+            serde_json::from_str(&current.body).map_err(std::io::Error::other)?;
+        refuse_unsafe_legacy_history(&verdict_path(root, key), round_sha(&obj).as_deref())?;
+        let source = serde_json::Value::Object(obj.clone());
+        obj.insert("terminal_wait_key".into(), key.into());
+        obj.insert("terminal_wait_source".into(), source);
+        obj.insert("closed_by_merge".into(), change.as_key().into());
+        obj.insert("closed_at".into(), chrono::Utc::now().to_rfc3339().into());
+        let spec = ledger::ChangeKey::parse(key)
+            .is_none()
+            .then(|| ledger::GateSpec::resolve(root, key));
+        // This local lifecycle annotation must not be published as a new signed review.
+        store::append_one(
+            &store_root,
+            ledger::event::verdict_event(&store_root, change, &obj, spec.as_ref()),
+        )?;
+        Ok(true)
+    })
+}
+
+// Apply the local annotation to its exact effective source, even when the
+// raw ledger holds an independent round. Signed publications stay immutable;
+// a different effective round automatically invalidates the annotation.
+// trace:BUG-2525 | ai:codex
+pub(crate) fn terminal_wait_overlay(
+    start: &Path,
+    key: &str,
+    mut current: CurrentVerdict,
+) -> CurrentVerdict {
+    if !parse_recorded_verdict(&current.body)
+        .is_some_and(|v| v.kind == VerdictKind::Waiting && !v.is_closed())
+    {
+        return current;
+    }
+    if let Some(record) = crate::gate::ledger::project::terminal_wait_annotation(start, key) {
+        if let Some(body) = terminal_wait_overlay_body(key, &current.body, &record) {
+            current.body = body;
+        }
+    }
+    current
+}
+
+// Also used by the bounded alias reader with its already-checked events.
+// trace:BUG-2525 | ai:codex
+pub(crate) fn terminal_wait_overlay_body(
+    key: &str,
+    body: &str,
+    record: &JsonObj,
+) -> Option<String> {
+    if !parse_recorded_verdict(body)
+        .is_some_and(|v| v.kind == VerdictKind::Waiting && !v.is_closed())
+    {
+        return None;
+    }
+    let source = serde_json::from_str::<serde_json::Value>(body).ok();
+    if record.get("terminal_wait_key").and_then(|v| v.as_str()) == Some(key)
+        && record.get("terminal_wait_source") == source.as_ref()
+    {
+        serde_json::to_string(record).ok()
+    } else {
+        None
+    }
 }
 
 /// TASK-2135 on the gate ledger: an older binary closed the current file and
@@ -3751,7 +3876,13 @@ pub(crate) fn verdict_keys(project_root: &Path) -> Vec<String> {
         .filter(|p| p.is_file() && p.extension().and_then(|e| e.to_str()) == Some("json"))
         .filter_map(|p| Some(p.file_stem()?.to_str()?.to_string()))
         .collect();
-    crate::gate::ledger::project::keys_with_ledger(project_root, file_keys)
+    let mut keys = crate::gate::ledger::project::keys_with_ledger(project_root, file_keys);
+    keys.extend(super::review_publication::recorded_change_keys(
+        project_root,
+    ));
+    keys.sort();
+    keys.dedup();
+    keys
 }
 
 // STORY-1889: moved from `queue_cmd.rs`.

@@ -60,6 +60,24 @@ pub(crate) fn lock_ledger_exclusive(root: &Path) -> std::io::Result<LedgerLock> 
     Ok(LedgerLock { file })
 }
 
+// Serialize the final source comparison and append against every ledger writer.
+// trace:BUG-2525 | ai:codex
+pub(crate) fn with_exclusive<T>(
+    root: &Path,
+    f: impl FnOnce() -> std::io::Result<T>,
+) -> std::io::Result<T> {
+    let _lock = lock_ledger_exclusive(root)?;
+    struct Depth;
+    impl Drop for Depth {
+        fn drop(&mut self) {
+            SHARED_DEPTH.with(|d| d.set(d.get().saturating_sub(1)));
+        }
+    }
+    SHARED_DEPTH.with(|d| d.set(d.get() + 1));
+    let _depth = Depth;
+    f()
+}
+
 thread_local! {
     /// How many [`with_lock`] frames this thread is inside: a nested writer
     /// (an append indexing its spec) already holds the shared lock.

@@ -1481,8 +1481,14 @@ canary), or a specific named test result needed for judgment, records `waiting`
 and resume condition, and no substantive findings. Code defects still require
 `request-changes`. Waiting blocks completion and merge without implementer
 rework, repeat-findings credit or a Rework hold. Existing holds remain intact.
-Only a fresh recorded review at the current head ends the wait; green CI or
-a changed head alone does not. There is no automatic resume service.
+A fresh recorded review at the current head ends an active change's wait;
+green CI or a changed head alone does not. There is no automatic resume service.
 
-Existing CI-only WAITING records are not migrated; they still resume through a
-fresh review at the current head.
+When the reviewed batch PR or MR is confirmed merged or closed, queue pickup
+and merge reconciliation retire that batch's wait even for a Refs-only batch
+whose spec remains in progress. A review URL must name this repository; an
+index-only association also needs a matching reviewed head. Unknown forge
+evidence retains the wait. Closure annotates the exact source round and key,
+preserves signed publications, and supplies neither approval nor spec completion.
+Independent findings and newer waits remain actionable.
+<!-- trace:BUG-2525 | ai:codex -->
