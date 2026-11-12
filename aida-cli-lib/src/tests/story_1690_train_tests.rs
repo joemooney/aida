@@ -3932,7 +3932,7 @@ fn pr_train_journal_completed_member_is_skipped_and_authority_is_not_restored() 
 // the killed writer could save its completion receipt.
 // trace:STORY-2401 | ai:codex
 #[test]
-fn pr_train_journal_live_cleanup_skips_closed_and_refuses_failed_or_moved() {
+fn bug2537_train_ownership_checked_cleanup_skips_closed_and_refuses_failed_or_moved() {
     let root = repo();
     let remote = tempfile::tempdir().unwrap();
     git(remote.path(), &["init", "--bare", "--quiet"]);
@@ -3966,7 +3966,29 @@ fn pr_train_journal_live_cleanup_skips_closed_and_refuses_failed_or_moved() {
         dispatch_ctx: None,
         dispatch_abort: None,
     };
+    // trace:BUG-2537 | ai:codex
+    crate::ownership::dual::enable_for_test();
+    crate::ownership::dual::train_opened(root.path(), change.id, &[1]);
     host.retire_checked(&change, &train, "retire").unwrap();
+    assert!(
+        ownership_rider_refusal_with(root.path(), 1, false, |_| panic!(
+            "retirement must end ownership"
+        ))
+        .unwrap()
+        .is_none()
+    );
+    assert_eq!(
+        crate::ownership::reader::load(
+            root.path(),
+            &crate::ownership::WorkKey::Change {
+                change: crate::ownership::dual::change(1),
+            }
+        )
+        .unwrap()
+        .unwrap()
+        .phase,
+        crate::ownership::Phase::Leased
+    );
     assert!(git(
         root.path(),
         &["ls-remote", "origin", "refs/heads/codex/task"]
@@ -3994,6 +4016,7 @@ fn pr_train_journal_live_cleanup_skips_closed_and_refuses_failed_or_moved() {
         "a completed close must not be replayed"
     );
     forge.metadata_state = crate::forge::ChangeState::Open;
+    crate::ownership::dual::train_opened(root.path(), change.id, &[1]);
     let mut host = LiveTrainForge {
         project_root: root.path().into(),
         main_worktree: root.path().into(),
@@ -4006,6 +4029,21 @@ fn pr_train_journal_live_cleanup_skips_closed_and_refuses_failed_or_moved() {
     // RecordingForge accepts the close but still reports Open. A successful
     // command without confirmed closure cannot authorize branch deletion.
     assert!(host.retire_checked(&change, &train, "retire").is_err());
+    assert!(
+        matches!(
+            crate::ownership::reader::load(
+                root.path(),
+                &crate::ownership::WorkKey::Change {
+                    change: crate::ownership::dual::change(1),
+                }
+            )
+            .unwrap()
+            .unwrap()
+            .phase,
+            crate::ownership::Phase::Training { .. }
+        ),
+        "unconfirmed close retains the rider"
+    );
     assert!(git(
         root.path(),
         &["ls-remote", "origin", "refs/heads/codex/task"]
@@ -4937,7 +4975,7 @@ fn pr_train_journal_lock_contention_is_typed_and_releases_on_exit() {
 
 // trace:STORY-2325 | ai:codex
 #[test]
-fn prc_rider_refuses_missing_unknown_and_live_train_but_releases_closed_or_dead() {
+fn bug2537_train_ownership_rider_refuses_missing_unknown_and_live_but_releases_closed_or_dead() {
     use crate::ownership::{
         dual,
         store::{Expect, OwnershipStore},
@@ -4946,7 +4984,9 @@ fn prc_rider_refuses_missing_unknown_and_live_train_but_releases_closed_or_dead(
     let dir = repo();
     let p = dir.path();
     let store = OwnershipStore::for_project(p).unwrap().unwrap();
-    assert!(ownership_rider_refusal(p, 9).unwrap().is_none());
+    assert!(ownership_rider_refusal_with(p, 9, false, |_| false)
+        .unwrap()
+        .is_none());
     let key = WorkKey::Change {
         change: dual::change(9),
     };
@@ -4967,7 +5007,9 @@ fn prc_rider_refuses_missing_unknown_and_live_train_but_releases_closed_or_dead(
         })
         .unwrap();
     assert!(
-        ownership_rider_refusal(p, 9).unwrap().is_some(),
+        ownership_rider_refusal_with(p, 9, false, |_| false)
+            .unwrap()
+            .is_some(),
         "missing train retains rider"
     );
     let key = WorkKey::Train { train };
@@ -5014,13 +5056,15 @@ fn prc_rider_refuses_missing_unknown_and_live_train_but_releases_closed_or_dead(
             })
             .unwrap();
         assert_eq!(
-            ownership_rider_refusal(p, 9).unwrap().is_some(),
+            ownership_rider_refusal_with(p, 9, false, |_| false)
+                .unwrap()
+                .is_some(),
             matches!(state, "unknown" | "alive"),
             "{state}"
         );
     }
     std::fs::write(store.path_for(&key), "malformed").unwrap();
-    assert!(ownership_rider_refusal(p, 9).is_err());
+    assert!(ownership_rider_refusal_with(p, 9, false, |_| false).is_err());
 }
 
 // trace:BUG-2492 | ai:codex
@@ -5180,4 +5224,168 @@ fn train_ci_row_progress_same_run_ancillary_identity() {
     assert!(text.contains("ancillary CI helper: pending"));
     assert!(text.contains("Build summary: pending"));
     assert!(!text.contains("appears after"));
+}
+
+// trace:BUG-2537 | ai:codex
+#[test]
+fn bug2537_train_ownership_open_retire_before_lease_and_readmit() {
+    use crate::ownership::{dual, store::OwnershipStore, Phase, WorkKey};
+    dual::enable_for_test();
+    let dir = repo();
+    let root = dir.path();
+    let store = OwnershipStore::for_project(root).unwrap().unwrap();
+    dual::train_opened(root, 50, &[11, 12]);
+    let key = WorkKey::Train {
+        train: dual::change(50),
+    };
+    let opened = store.load(&key).unwrap().unwrap();
+    assert_eq!(
+        opened.holder.unwrap().session,
+        dual::merge_lease_session(std::process::id())
+    );
+    assert!(matches!(opened.phase, Phase::Training { .. }));
+    assert!(store.journal().iter().any(|e| e.op == "open-train"));
+    assert!(ownership_rider_refusal_with(root, 11, false, |_| false)
+        .unwrap()
+        .is_some());
+    // A rider that moved to a different train must survive old-train cleanup.
+    dual::train_opened(root, 60, &[12]);
+    dual::train_retired(root, 50, &[11, 12], "retired before lease").unwrap();
+    assert!(matches!(
+        store.load(&key).unwrap().unwrap().phase,
+        Phase::Closed { .. }
+    ));
+    assert!(ownership_rider_refusal_with(root, 11, false, |_| panic!(
+        "ended train needs no forge read"
+    ))
+    .unwrap()
+    .is_none());
+    assert_eq!(
+        store
+            .load(&WorkKey::Change {
+                change: dual::change(11)
+            })
+            .unwrap()
+            .unwrap()
+            .phase,
+        Phase::Leased
+    );
+    assert_eq!(
+        store
+            .load(&WorkKey::Change {
+                change: dual::change(12)
+            })
+            .unwrap()
+            .unwrap()
+            .phase,
+        Phase::Training {
+            train: dual::change(60)
+        }
+    );
+    let journal = store.journal();
+    dual::train_retired(root, 50, &[11, 12], "retired before lease").unwrap();
+    assert_eq!(store.journal(), journal, "retirement is idempotent");
+    dual::train_opened(root, 70, &[11]);
+    assert_eq!(
+        store
+            .load(&WorkKey::Change {
+                change: dual::change(11)
+            })
+            .unwrap()
+            .unwrap()
+            .phase,
+        Phase::Training {
+            train: dual::change(70)
+        }
+    );
+}
+
+// trace:BUG-2537 | ai:codex
+#[test]
+fn bug2537_train_ownership_legacy_closed_self_heals_but_open_unknown_and_dry_run_retain() {
+    use crate::ownership::{
+        dual, ops,
+        store::{Expect, OwnershipStore},
+        Phase, WorkKey,
+    };
+    dual::enable_for_test();
+    let dir = repo();
+    let root = dir.path();
+    let store = OwnershipStore::for_project(root).unwrap().unwrap();
+    let key = WorkKey::Change {
+        change: dual::change(11),
+    };
+    store
+        .update(&key, "ride", Expect::Absent, |cur| {
+            ops::ride(cur, &key, &dual::change(50))
+        })
+        .unwrap();
+    assert!(store
+        .load(&WorkKey::Train {
+            train: dual::change(50)
+        })
+        .unwrap()
+        .is_none());
+    let journal = store.journal();
+    assert!(ownership_rider_refusal_with(root, 11, false, |_| false)
+        .unwrap()
+        .is_some());
+    assert!(ownership_rider_refusal_with(root, 11, true, |_| true)
+        .unwrap()
+        .is_none());
+    assert_eq!(store.journal(), journal, "dry run preserves the ride");
+    assert!(ownership_rider_refusal_with(root, 11, false, |n| {
+        assert_eq!(n, 50);
+        true
+    })
+    .unwrap()
+    .is_none());
+    assert_eq!(store.load(&key).unwrap().unwrap().phase, Phase::Leased);
+    assert!(store.journal().iter().any(|e| e.op == "leave-train"
+        && e.note
+            .as_deref()
+            .is_some_and(|n| n.contains("train #50 closed"))));
+}
+
+// Exercise the production confirmation boundary, including unreadable forge
+// evidence, rather than authorizing recovery from a list omission.
+// trace:BUG-2537 | ai:codex
+#[test]
+fn bug2537_train_ownership_forge_terminal_repair_and_unknown_refusal() {
+    use crate::forge::ChangeState;
+    use crate::ownership::{
+        dual, ops,
+        store::{Expect, OwnershipStore},
+        Phase, WorkKey,
+    };
+    dual::enable_for_test();
+    let dir = repo();
+    let root = dir.path();
+    let store = OwnershipStore::for_project(root).unwrap().unwrap();
+    let key = WorkKey::Change {
+        change: dual::change(11),
+    };
+    let mut forge = crate::forge::fake::RecordingForge::new();
+    for (state, unavailable, refused) in [
+        (ChangeState::Open, false, true),
+        (ChangeState::Closed, true, true),
+        (ChangeState::Closed, false, false),
+        (ChangeState::Merged, false, false),
+    ] {
+        store
+            .update(&key, "ride", Expect::Any, |cur| {
+                ops::ride(cur, &key, &dual::change(50))
+            })
+            .unwrap();
+        forge.metadata_state = state;
+        forge.metadata_error = unavailable.then(|| "unavailable".into());
+        assert_eq!(
+            ownership_rider_refusal(root, 11, false, &forge)
+                .unwrap()
+                .is_some(),
+            refused
+        );
+        let record = store.load(&key).unwrap().unwrap();
+        assert_eq!(matches!(record.phase, Phase::Training { .. }), refused);
+    }
 }
