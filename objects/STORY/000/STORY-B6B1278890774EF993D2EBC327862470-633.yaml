@@ -426,6 +426,15 @@ comments:
     Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
   created_at: 2026-11-12T17:13:17.152082854Z
   modified_at: 2026-11-12T17:13:17.152082854Z
+- id: 01a1d0c5-28f3-7a20-9fac-a325535735aa
+  author: dirtlab
+  content: |
+    Round 8: both requested fixes were already present in the starting checkout. Added a new reviewable hardening delta: freeze the staged-master mirror inventory explicitly; regression verifies generator-created command masters/mirrors refuse and roll back across repeated retries. Require a complete NUL-terminated merge-tree conflict path list; expand injected fatal/spawn failure coverage against prepare_host_repair_with and assert the index remains unchanged, alongside existing timeout and positive-conflict coverage.
+    Validation: all 18 tests in tests/test_repair_generated.py passed; lane job j20261112T171425382-2-0 executed all 10 story_2710 Rust tests successfully; rustfmt --check and git diff --check passed. Files: scripts/repair-generated.py, tests/test_repair_generated.py, aida-cli-lib/src/seat_clone.rs. Native seat leaves edits uncommitted for host publication. Codegraph client at the configured absolute path was unavailable; used rg navigation.
+  created_at: 2026-11-12T17:19:04.435143322Z
+  modified_at: 2026-11-12T17:19:04.435143322Z
+  session_id: 01a1d0c024ad
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1c77f-ffdf-7ac3-a382-33d6a384e617
   author: aida-session-start
