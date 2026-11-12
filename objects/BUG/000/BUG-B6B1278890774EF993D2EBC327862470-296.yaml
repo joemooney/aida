@@ -3,12 +3,12 @@ spec_id: BUG-b6b1278890774ef993d2ebc327862470-296
 agreed_id: BUG-2531
 title: Gate-ledger discovery reads every change ledger against a 64 MiB budget
 description: 'discover() in aida-cli-lib/src/gate/ledger/checked.rs reads every PR-*.jsonl in .aida/gate-ledger into one Budget (MAX_SELECTION_BYTES 64 MiB). When the ledger passed 64 MiB (82 MB, 2683 files, 2026-11-12) every verdict selection failed (''aggregate gate-ledger read budget is exhausted''). Effects: verdicts unreadable, review watch relaunched reviewers on approved heads whose claims blocked trains (BUG-2530), review record failed, the train ejected approved PR-3860. Workaround applied: archived 668 closed-PR ledgers >24h old to .aida/gate-ledger-archive, pruned 431 by-spec indexes (backup .aida/gate-ledger.bak-20261112T013508); now 17 MB. Fix: bound discovery to the changes the selection needs; rotate closed/merged change ledgers to the archive automatically; doctor warns at 50% of budget; regression test with an oversized unrelated closed ledger.'
-status: InProgress
+status: NeedsAttention
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-12T08:35:37.046532324Z
-modified_at: 2026-11-12T10:47:16.333191193Z
+modified_at: 2026-11-12T11:01:00.865659480Z
 req_type: Bug
 comments:
 - id: 01a1cf00-20ea-7c51-bbf5-a9927b13b042
@@ -47,6 +47,12 @@ comments:
   content: 'Round 2: both review findings are accepted. Added an interim scan-wide 128 MiB/200000 parse-attempt ceiling (including unrelated files and torn retries), pre-read remaining-budget checks, and a regression counting actual read bytes/deserialization attempts. This mitigates the 64 GiB per-file-reset regression but is NOT relevant-only discovery or completion. Proposed the missing binding completeness and archive/revival contract in docs/plans/2026-11-12-bug-2531-discovery-retention-sketch.md. Approval is required by AGENTS.md Sketch-First Protocol for new file formats/lifecycle semantics; TASK-3098 remains Draft and is not an approved scope split. Finding 2 automatic rotation is not implemented. Test job j20261112T104457008-2-0 running; results to follow. No completion credit is claimed.'
   created_at: 2026-11-12T10:47:16.333191193Z
   modified_at: 2026-11-12T10:47:16.333191193Z
+  session_id: 01a1cf5a9ec0
+- id: 01a1cf6a-8fc6-7cd3-85af-14bfebb71262
+  author: joe
+  content: 'Round 2 final validation: checked.rs rustfmt and git diff --check pass; CI gate classification audit passes (86 gates). make check-ci-fast was stopped when it started a direct Cargo check contrary to the lane runner rule. bug_2531 lane job j20261112T104457008-2-0 timed out after 900s during compilation, exit 124, no tests executed: untested=true. Alias-suite job j20261112T104910700-4051952-0 remains queued/running without executed results. Changed files: checked.rs, AGENTS.md, OVERVIEW.md, docs/internal/testing/bug-2531-ledger-selection-budget.md, docs/plans/2026-11-12-bug-2531-discovery-retention-sketch.md. Refs declaration recorded. Both findings accepted; neither the relevant-only discovery criterion nor automatic archival is complete. No approved scope split exists; design approval is requested for the concrete binding/retention sketch. Edits left uncommitted; host publication remains subject to the design-fork punt veto.'
+  created_at: 2026-11-12T11:00:29.766764178Z
+  modified_at: 2026-11-12T11:00:29.766764178Z
   session_id: 01a1cf5a9ec0
 history:
 - id: 01a1cee6-975b-7d40-8689-d35e1f109d99
@@ -126,6 +132,14 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1cf6b-0941-72f1-a1f0-f704c18e28cf
+  author: joe
+  timestamp: 2026-11-12T11:01:00.865694575Z
+  session_id: 01a1cf5a9ec0
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 filed_at:
   code_sha: 296d1dd295804f61d32a6b8aa07ae1485b198c93
   branch: main
@@ -135,6 +149,12 @@ filed_at:
   vendor: claude
   session: 01a1cc9c-1eae-7a72-9a24-8ec1afc42772
   harness_version: 2.1.322 (Claude Code)
+attention_reason:
+  category: design-fork
+  detail: 'Round 2 finding 1 and finding 2 are accepted, not disputed. Finding 1: supplied a scan-wide 128 MiB/200000-attempt safety bound with actual-read/parse and retry regressions, but relevant-only discovery still needs a completeness mechanism because by-spec hints may be missing after append. Finding 2: automatic closed/merged archival remains unimplemented; direct/indexed/audit/carry-over/import/append and reopen paths need an archive-aware retention contract. Proposed concrete write-ahead bindings, bootstrap/writer fence, and archive/revival locking in docs/plans/2026-11-12-bug-2531-discovery-retention-sketch.md. AGENTS.md Sketch-First Protocol requires master sign-off for new formats/lifecycle semantics; no approval or approved scope split exists and Draft TASK-3098 is not one. This is a terminal design-gate handoff, not a completion claim. bug_2531 lane job timed out during compilation after 900s (exit 124), no tests executed; alias job running with no executed result. untested=true. Native Refs declaration recorded and edits left uncommitted; punt veto must prevent publication.'
+  lean: Approve the full completeness-and-retention sketch with a writer compatibility fence before implementation; keep BUG-2531 open. The bounded-scan patch is only an interim safety mitigation.
+  raised_by: implementer
+  raised_at: 2026-11-12T11:01:00.865659480Z
 failure_reason:
   phase: reviewer
   phase_index: 3
