@@ -3420,76 +3420,84 @@ fn bug2521_waiting_backoff_cap_and_new_head() {
 
 // trace:BUG-2521 | ai:codex
 #[test]
-fn bug2521_waiting_preserves_capacity_and_changes_requested_gate() {
-    let (_temp, store) = fixture();
-    let c = change(1, 1, false);
-    let attempt = dispatch(select(&store, &c, None, 1).unwrap());
-    store
-        .transaction("PR-1", |state| {
-            let a = attempt_mut(state, "PR-1", &attempt.token).unwrap();
-            a.phase = Phase::Exited;
-            a.no_verdict_retry_at = Some(chrono::Utc::now() - chrono::Duration::seconds(1));
-            a.reviewer_spawning = true;
-            Ok(())
-        })
-        .unwrap();
-    assert!(
-        matches!(select(&store, &c, None, 1).unwrap(), Action::Skip(reason)
+fn bug2521_waiting_preserves_capacity_and_conclusive_verdict_gates() {
+    for verdict in ["APPROVED", "CHANGES REQUESTED"] {
+        for phase in [Phase::Exited, Phase::Completed] {
+            let (_temp, store) = fixture();
+            let c = change(1, 1, false);
+            let attempt = dispatch(select(&store, &c, None, 1).unwrap());
+            store
+                .transaction("PR-1", |state| {
+                    let a = attempt_mut(state, "PR-1", &attempt.token).unwrap();
+                    a.phase = Phase::Exited;
+                    a.no_verdict_retry_at = Some(chrono::Utc::now() - chrono::Duration::seconds(1));
+                    a.reviewer_spawning = true;
+                    Ok(())
+                })
+                .unwrap();
+            assert!(
+                matches!(select(&store, &c, None, 1).unwrap(), Action::Skip(reason)
         if reason.contains("unfinished review processes"))
-    );
-    store
-        .transaction("PR-1", |state| {
-            attempt_mut(state, "PR-1", &attempt.token)
-                .unwrap()
-                .reviewer_spawning = false;
-            Ok(())
-        })
-        .unwrap();
-    let waiting = Directory::open(&store.runtime.path().join("review-verdicts")).unwrap();
-    write_verdict(
-        &waiting.path().join("PR-1.json"),
-        &verdict_json(&c.head, "WAITING"),
-    );
-    let other = change(2, 2, false);
-    let held = dispatch(select(&store, &other, None, 1).unwrap());
-    for _ in 0..3 {
-        assert!(
-            matches!(select(&store, &c, None, 1).unwrap(), Action::Skip(reason)
+            );
+            store
+                .transaction("PR-1", |state| {
+                    attempt_mut(state, "PR-1", &attempt.token)
+                        .unwrap()
+                        .reviewer_spawning = false;
+                    Ok(())
+                })
+                .unwrap();
+            let waiting = Directory::open(&store.runtime.path().join("review-verdicts")).unwrap();
+            write_verdict(
+                &waiting.path().join("PR-1.json"),
+                &verdict_json(&c.head, "WAITING"),
+            );
+            let other = change(2, 2, false);
+            let held = dispatch(select(&store, &other, None, 1).unwrap());
+            for _ in 0..3 {
+                assert!(
+                    matches!(select(&store, &c, None, 1).unwrap(), Action::Skip(reason)
             if reason.contains("global reviewer capacity"))
-        );
-        assert_eq!(
-            store.load().unwrap().entries["PR-1"].attempts[0].no_verdict_attempts,
-            1
-        );
+                );
+                assert_eq!(
+                    store.load().unwrap().entries["PR-1"].attempts[0].no_verdict_attempts,
+                    1
+                );
+            }
+            store
+                .transaction("PR-2", |state| {
+                    attempt_mut(state, "PR-2", &held.token).unwrap().phase = Phase::Failed;
+                    Ok(())
+                })
+                .unwrap();
+            let retried = dispatch(select(&store, &c, None, 1).unwrap());
+            assert_eq!(retried.no_verdict_attempts, 2);
+            let verdicts = Directory::open(&store.runtime.path().join("review-verdicts")).unwrap();
+            write_verdict(
+                &verdicts.path().join("PR-1.json"),
+                &verdict_json(&c.head, verdict),
+            );
+            store
+                .transaction("PR-1", |state| {
+                    let a = attempt_mut(state, "PR-1", &retried.token).unwrap();
+                    a.phase = phase.clone();
+                    let mut dead = Identity::current()?;
+                    dead.boot = "previous-boot".into();
+                    a.identity = Some(dead);
+                    Ok(())
+                })
+                .unwrap();
+            assert!(matches!(
+                select(&store, &c, None, 1).unwrap(),
+                Action::Skip(_)
+            ));
+            assert!(probe_unneeded_with_coverage(&store, &c, || None)
+                .unwrap()
+                .is_some());
+            assert_eq!(
+                store.load().unwrap().entries["PR-1"].attempts[0].no_verdict_attempts,
+                2
+            );
+        }
     }
-    store
-        .transaction("PR-2", |state| {
-            attempt_mut(state, "PR-2", &held.token).unwrap().phase = Phase::Failed;
-            Ok(())
-        })
-        .unwrap();
-    let retried = dispatch(select(&store, &c, None, 1).unwrap());
-    assert_eq!(retried.no_verdict_attempts, 2);
-    let verdicts = Directory::open(&store.runtime.path().join("review-verdicts")).unwrap();
-    write_verdict(
-        &verdicts.path().join("PR-1.json"),
-        &verdict_json(&c.head, "CHANGES REQUESTED"),
-    );
-    store
-        .transaction("PR-1", |state| {
-            attempt_mut(state, "PR-1", &retried.token).unwrap().phase = Phase::Exited;
-            Ok(())
-        })
-        .unwrap();
-    assert!(matches!(
-        select(&store, &c, None, 1).unwrap(),
-        Action::Skip(_)
-    ));
-    assert!(probe_unneeded_with_coverage(&store, &c, || None)
-        .unwrap()
-        .is_some());
-    assert_eq!(
-        store.load().unwrap().entries["PR-1"].attempts[0].no_verdict_attempts,
-        2
-    );
 }
