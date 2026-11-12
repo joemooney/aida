@@ -2521,32 +2521,46 @@ fn bug_2517_foreign_copy_is_ignored_without_rewriting_history() {
     let before = std::fs::read(&file).unwrap();
     let second_file = store::ledger_file(&root, second);
     let second_before = std::fs::read(&second_file).unwrap();
-    std::fs::write(store::ledger_file(&root, ChangeKey::pr(9999)), b"invalid\n").unwrap();
-    assert!(checked::discover(&root, &mut Default::default()).is_err());
-    let is_foreign_waiting = |r: &JsonObj| r.get("verdict") == foreign.get("verdict");
-    // The first PR withholds every copy a foreign change could own...
-    assert!(project::newest_verdict_event(&root, "PR-3651").is_none());
-    assert!(project::verdict_records(&root, "PR-3651").is_empty());
-    assert!(!project::events(&root, first)
-        .iter()
-        .filter_map(|e| e.verdict_record())
-        .any(is_foreign_waiting));
-    // ...but keeps evidence no ownership witness can disqualify.
-    assert!(project::events(&root, first)
-        .iter()
-        .any(|e| matches!(e.body, EventBody::ReleaseWithdrawn { .. })));
-    // The owning PR's phase-3 record stays its own, and the spec-indexed
-    // reader answers with it, never with the first PR's foreign copy.
-    for label in ["PR-3764", "BUG-2492"] {
-        let newest = project::newest_verdict_event(&root, label).unwrap();
-        assert_eq!(newest.change, "PR-3764", "{label}");
-        assert_eq!(newest.verdict_record(), Some(&foreign), "{label}");
-        assert!(project::verdict_records(&root, label)
+    // Exercise distinct discovery refusals, including bounded-read failure.
+    // Sparse allocation keeps the oversized fixture cheap.
+    let unrelated = store::ledger_file(&root, ChangeKey::pr(9999));
+    for failure in ["malformed", "symlink", "oversized"] {
+        match failure {
+            "malformed" => std::fs::write(&unrelated, b"invalid\n").unwrap(),
+            "symlink" => std::os::unix::fs::symlink(&second_file, &unrelated).unwrap(),
+            "oversized" => std::fs::File::create(&unrelated)
+                .unwrap()
+                .set_len(checked::MAX_LEDGER_BYTES + 1)
+                .unwrap(),
+            _ => unreachable!(),
+        }
+        assert!(checked::discover(&root, &mut Default::default()).is_err());
+        let is_foreign_waiting = |r: &JsonObj| r.get("verdict") == foreign.get("verdict");
+        // The first PR withholds every copy a foreign change could own...
+        assert!(project::newest_verdict_event(&root, "PR-3651").is_none());
+        assert!(project::verdict_records(&root, "PR-3651").is_empty());
+        assert!(!project::events(&root, first)
             .iter()
-            .all(|r| r == &foreign));
+            .filter_map(|e| e.verdict_record())
+            .any(is_foreign_waiting));
+        // ...but keeps evidence no ownership witness can disqualify.
+        assert!(project::events(&root, first)
+            .iter()
+            .any(|e| matches!(e.body, EventBody::ReleaseWithdrawn { .. })));
+        // The owning PR's phase-3 record stays its own, and the spec-indexed
+        // reader answers with it, never with the first PR's foreign copy.
+        for label in ["PR-3764", "BUG-2492"] {
+            let newest = project::newest_verdict_event(&root, label).unwrap();
+            assert_eq!(newest.change, "PR-3764", "{label}");
+            assert_eq!(newest.verdict_record(), Some(&foreign), "{label}");
+            assert!(project::verdict_records(&root, label)
+                .iter()
+                .all(|r| r == &foreign));
+        }
+        assert_eq!(std::fs::read(&second_file).unwrap(), second_before);
+        assert_eq!(std::fs::read(&file).unwrap(), before);
+        std::fs::remove_file(&unrelated).unwrap();
     }
-    assert_eq!(std::fs::read(second_file).unwrap(), second_before);
-    assert_eq!(std::fs::read(file).unwrap(), before);
 }
 
 // trace:BUG-2517 | ai:codex
@@ -2587,6 +2601,17 @@ fn bug_2517_ownership_index_visits_corpus_once_per_discovery() {
             1
         );
     }
+    assert_eq!(
+        project::OWNERSHIP_WORK.with(|work| work.get()),
+        (1, BUCKETS)
+    );
+    // The legacy spec-indexed reader also performs only one discovery,
+    // even when one spec names every change bucket.
+    for n in 1..=BUCKETS {
+        project::index_spec(&root, "BUG-1", ChangeKey::pr(n as u64)).unwrap();
+    }
+    project::OWNERSHIP_WORK.with(|work| work.set((0, 0)));
+    assert_eq!(project::verdict_records(&root, "BUG-1").len(), 1);
     assert_eq!(
         project::OWNERSHIP_WORK.with(|work| work.get()),
         (1, BUCKETS)
