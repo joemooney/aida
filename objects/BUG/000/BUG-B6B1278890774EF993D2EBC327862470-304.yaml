@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-12T18:43:14.457201972Z
-modified_at: 2026-11-12T18:57:59.084935388Z
+modified_at: 2026-11-12T19:04:41.211798660Z
 req_type: Bug
 comments:
 - id: 01a1d119-6810-7f81-95b6-65589a91a298
@@ -25,6 +25,13 @@ comments:
   modified_at: 2026-11-12T18:57:59.084935388Z
   session_id: 01a1d1150582
   harness_version: codex-cli 0.167.0
+- id: 01a1d125-d9fb-7b52-8f70-0e171af04580
+  author: joe
+  content: '[advisor 11:58] ROOT CAUSE: Rust 1.100.0 went stable today. Passing gates jobs ran rustc 1.99.1; every failing one (since 18:22Z) ran rustc 1.100.0. PR #3894 pins CI to 1.99.1 to unblock trains. The fix: make the overlay/fingerprint seeding work on cargo 1.100 (fingerprint layout change), then unpin ci.yml back to @stable in the same PR.'
+  created_at: 2026-11-12T19:04:41.211798660Z
+  modified_at: 2026-11-12T19:04:41.211798660Z
+  session_id: 01a1d0eb-22cc-7262-8f6c-7266e9cc1fbb
+  harness_version: 2.1.322 (Claude Code)
 history:
 - id: 01a1d115-108b-7592-a01f-d749504387cd
   author: aida-session-start
