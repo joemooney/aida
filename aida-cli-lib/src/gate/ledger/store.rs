@@ -451,7 +451,9 @@ pub(crate) fn bind_unbound(
 }
 
 // trace:BUG-2530 | ai:codex
-#[cfg(all(test, target_os = "linux"))]
+// Keep the test gate explicit so production-input scans exclude this module.
+#[cfg(test)]
+#[cfg(target_os = "linux")]
 mod bug2530_tests {
     use super::*;
     use fs2::FileExt;
