@@ -427,7 +427,8 @@ mod tests {
         // clap `intake` alias reaches the Groom command (STORY-708: groom is
         // canonical; assess/intake are deprecated aliases)
         assert!(matches!(
-            crate::command_registry::try_parse_from(["aida", "intake"])
+            crate::TEST_CLI
+                .try_parse_from(["aida", "intake"])
                 .unwrap()
                 .command
                 .registered::<crate::autopilot_intake::GroomArgs>(),

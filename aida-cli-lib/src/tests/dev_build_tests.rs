@@ -1068,7 +1068,7 @@ fn live_status_notes_flag_differences_and_dirty_builds() {
 
 #[test]
 fn cli_parses_build_flags_and_rebuild_is_gone() {
-    let parse = |args: &[&str]| crate::command_registry::try_parse_from(args);
+    let parse = |args: &[&str]| crate::TEST_CLI.try_parse_from(args);
     let clean_of = |args: &[&str]| match parse(args)
         .unwrap()
         .command
@@ -1347,7 +1347,7 @@ fn refusal_says_the_gate_does_not_fetch() {
 
 #[test]
 fn cli_parses_rollback_flags() {
-    let parse = |args: &[&str]| crate::command_registry::try_parse_from(args);
+    let parse = |args: &[&str]| crate::TEST_CLI.try_parse_from(args);
     match parse(&["aida", "dev", "rollback", "--force"])
         .unwrap()
         .command

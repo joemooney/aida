@@ -2386,7 +2386,7 @@ mod local_intent_dispatch_tests {
             ],
             vec!["aida", "intent", "export", "--file", "must-not-be-read"],
         ] {
-            let cli = crate::command_registry::try_parse_from(args).unwrap();
+            let cli = crate::TEST_CLI.try_parse_from(args).unwrap();
             let crate::cli::Command::Registered(invocation) = cli.command;
             let ctx = crate::cmdkit::DispatchCtx {
                 globals: Some(&cli.globals),
