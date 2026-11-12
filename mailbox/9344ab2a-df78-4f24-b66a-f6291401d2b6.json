@@ -1,0 +1,18 @@
+{
+  "id": "9344ab2a-df78-4f24-b66a-f6291401d2b6",
+  "thread_id": "9344ab2a-df78-4f24-b66a-f6291401d2b6",
+  "from": "joe",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1794486530219,
+  "body": "Codex queue-work lane 01a1cfb1faf2 for BUG-b6b1278890774ef993d2ebc327862470-296 exited with no pending changes in /home/joe/ai/aida-worktrees/aida-seat-aida-bug-b6b1278890774ef993d2ebc327862470-296-4 (clean_exit=true). Check its existing PR and failing checks; a still-red PR needs a new rework assignment. Fast-gate settlement: Ok(())",
+  "subject": "Queue-work lane exited without changes",
+  "urgent": false,
+  "intent": "request",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "shell_user"
+}
