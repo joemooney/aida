@@ -14,7 +14,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-11T16:33:34.256595406Z
-modified_at: 2026-11-12T02:05:36.387724726Z
+modified_at: 2026-11-12T04:44:28.769474382Z
 req_type: Bug
 comments:
 - id: 01a1cd5e-49f0-70f3-891c-e89e352cc544
@@ -62,6 +62,12 @@ history:
   author: joe
   timestamp: 2026-11-12T02:05:36.511272183Z
   changes: []
+- id: 01a1ce12-51f0-7d12-9860-997baf1ad395
+  author: dirtlab
+  timestamp: 2026-11-12T04:44:29.552695904Z
+  session_id: 01a1ce11d6c9
+  harness_version: codex-cli 0.167.0
+  changes: []
 filed_at:
   code_sha: 11b131dfe3341e6d9c7127d64370f91366094711
   branch: main
@@ -71,6 +77,11 @@ filed_at:
   vendor: claude
   session: 01a1cb56-f02b-7652-869e-3788560cbf1b
   harness_version: 2.1.322 (Claude Code)
+attention_reason:
+  category: other
+  detail: 'Pickup refused: BUG-2527 is already Needs Attention with verdict:request-changes; promoting to InProgress requires advisor authority. Advisor triage is required before this implementer lane can proceed.'
+  raised_by: implementer
+  raised_at: 2026-11-12T04:44:28.769474382Z
 failure_reason:
   phase: reviewer
   phase_index: 3
