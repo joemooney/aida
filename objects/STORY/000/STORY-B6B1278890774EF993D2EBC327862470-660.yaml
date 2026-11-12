@@ -23,8 +23,16 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-12T19:11:56.371806442Z
-modified_at: 2026-11-12T19:11:56.371806442Z
+modified_at: 2026-11-12T20:07:42.054164119Z
 req_type: Story
+comments:
+- id: 01a1d15f-8ae6-70b0-9ff4-9f9212f789f4
+  author: joe
+  content: '[advisor 13:08] Prior art: EPIC-74 ''Feature lanes'' designed this as STORY-1482 (lane-targeted PRs: drains, aida pr/ship, reviewer and merge phases target the lane branch; spec goes Done tagged lane:EPIC-N, Completed only when the lane lands) and STORY-1483 (aida lane sync main->lane, drift warning, aida lane land = one reviewed lane->main PR). Both were rejected 2026-11-07 as obsolete in the regroup triage and never implemented. Slices (b)-(d) here should reuse their acceptance text: 1482 = slices (b)+(c), 1483 = slice (d).'
+  created_at: 2026-11-12T20:07:42.054164119Z
+  modified_at: 2026-11-12T20:07:42.054164119Z
+  session_id: 01a1d0eb-22cc-7262-8f6c-7266e9cc1fbb
+  harness_version: 2.1.322 (Claude Code)
 filed_at:
   code_sha: 0d6c60e6d982aad0c2c4ad38214010289a267d92
   branch: main
