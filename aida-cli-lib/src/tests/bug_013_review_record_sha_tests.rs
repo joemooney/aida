@@ -267,11 +267,13 @@ fn interactive_review_anchor_refusals_are_collected_and_held() {
     if crate::test_env::run_path_isolated_test() {
         return;
     }
-    for (disposition, file_anchor) in [
-        ("request-changes", false),
-        ("rejected", false),
-        ("request-changes", true),
-        ("rejected", true),
+    for (disposition, file_anchor, label_fails) in [
+        ("request-changes", false, false),
+        ("rejected", false, false),
+        ("request-changes", true, false),
+        ("rejected", true, false),
+        ("request-changes", true, true),
+        ("rejected", true, true),
     ] {
         let (root, head) = project();
         let home = root.path().join("home");
@@ -313,7 +315,7 @@ fn interactive_review_anchor_refusals_are_collected_and_held() {
         let gh = bin.join("gh");
         crate::test_exec::write_executable(
             &gh,
-            "#!/bin/sh\nif [ \"$1 $2\" = 'pr edit' ]; then\n  printf '%s\\n' \"$@\" >> .aida/label-calls\n  exit 0\nfi\nexit 1\n",
+            "#!/bin/sh\nif [ \"$1 $2\" = 'pr edit' ]; then\n  printf '%s\\n' \"$@\" >> .aida/label-calls\n  if [ -f .aida/refuse-label ]; then\n    echo 'forge unavailable' >&2\n    exit 1\n  fi\n  exit 0\nfi\nexit 1\n",
         );
         let path = format!("{}:{}", bin.display(), std::env::var("PATH").unwrap());
         env.set_key("PATH", &path);
@@ -443,6 +445,13 @@ fn interactive_review_anchor_refusals_are_collected_and_held() {
                 .requires_changes()
         );
         std::fs::remove_dir(&lock).unwrap();
+        // The interactive parent must keep the first refusal's local hold
+        // even when the forge cannot apply its label. Preserve the repair
+        // diagnostic rather than treating collection as an unprotected review.
+        // trace:BUG-2522 | ai:codex
+        if label_fails {
+            std::fs::write(root.path().join(".aida/refuse-label"), "").unwrap();
+        }
         crate::gate::review_verdict::collect_interactive_review_refusal(
             root.path(),
             2522,
@@ -457,14 +466,20 @@ fn interactive_review_anchor_refusals_are_collected_and_held() {
             crate::gate::merge_hold_core::HoldReasonKind::Rework
         );
         assert_eq!(hold.target_head_sha.as_deref(), Some(head.as_str()));
+        let label_call = "pr\nedit\n2522\n-R\nfixture/review\n--add-label\naida:merge-hold,aida:merge-hold-recorded\n--remove-label\naida:merge-hold-cleared\n";
         assert_eq!(
             std::fs::read_to_string(label_calls).unwrap(),
-            "pr\nedit\n2522\n-R\nfixture/review\n--add-label\naida:merge-hold,aida:merge-hold-recorded\n--remove-label\naida:merge-hold-cleared\n",
-            "the interactive parent must apply the merge-hold labels exactly once"
+            label_call.repeat(if label_fails { 2 } else { 1 }),
+            "the interactive parent must apply the labels, retrying a forge failure"
         );
-        assert_eq!(
-            crate::gate::merge_hold_core::read_label_state(root.path(), 2522),
-            crate::gate::merge_hold_core::LabelState::Synced
-        );
+        let label_state = crate::gate::merge_hold_core::read_label_state(root.path(), 2522);
+        if label_fails {
+            assert_eq!(
+                label_state,
+                crate::gate::merge_hold_core::LabelState::Unsynced("forge unavailable".into())
+            );
+        } else {
+            assert_eq!(label_state, crate::gate::merge_hold_core::LabelState::Synced);
+        }
     }
 }
