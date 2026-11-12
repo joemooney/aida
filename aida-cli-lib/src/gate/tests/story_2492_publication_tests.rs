@@ -1111,3 +1111,50 @@ fn story_2696_signed_no_carry_projection_and_supersession() {
     assert!(verdict.attestation.as_ref().unwrap().carry_eligible);
     assert!(!authority::verified_authority_keys(&f.a, &[verdict]).is_empty());
 }
+
+// trace:BUG-2530 | ai:codex
+#[test]
+fn bug2530_synced_verdict_controls_admission_and_redundant_claims() {
+    assert!(available(), "OpenSSH is required for this regression");
+    let f = Fixture::new();
+    for decision in ["approved", "request-changes"] {
+        let recorded_at = {
+            let _env = env(&f.temp.path().join("home-b"));
+            let record = f.record(decision, "reviewer-session");
+            let at = chrono::DateTime::parse_from_rfc3339(record["recorded_at"].as_str().unwrap())
+                .unwrap()
+                .timestamp() as u64;
+            f.collect(&record).unwrap();
+            at
+        };
+        let _env = env(&f.temp.path().join("home-a"));
+        f.sync(&f.a);
+        assert!(!f.a.join(".aida/review-verdicts").exists());
+        let marker = super::super::review_marker::Marker {
+            started_at: recorded_at,
+            pid: 0,
+            ..super::super::review_marker::Marker::for_this_process(
+                7,
+                Some(&f.sha),
+                None,
+                "duplicate",
+            )
+        };
+        super::super::review_marker::write(&f.a, &marker).unwrap();
+        assert!(
+            super::super::review_marker::refuse_conclusive_head(&f.a, 7, Some(&f.sha)).is_err()
+        );
+        assert!(super::super::review_marker::refuse_conclusive_head(
+            &f.a,
+            7,
+            Some(&"b".repeat(40))
+        )
+        .is_ok());
+        let gate = super::super::review_marker::merge_gate(&f.a, 7, || Some(f.sha.clone()));
+        assert_eq!(
+            gate == super::super::review_marker::MergeGate::Clear,
+            decision == "approved"
+        );
+        assert!(super::super::review_marker::read(&f.a, 7).is_some());
+    }
+}

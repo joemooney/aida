@@ -363,6 +363,25 @@ os.execv({exe:?}, [{exe:?}, '--exact', '--nocapture', '--test-threads=1', {test:
                 ("AIDA_HEADLESS", None),
             ],
         );
+        // trace:BUG-2530 | ai:codex — an older launcher may leave a claim
+        // in the approval's timestamp second. It must not block real train entry.
+        if decision == "approved" {
+            let verdict = f.candidates(&f.a, &h).pop().unwrap();
+            let at = chrono::DateTime::parse_from_rfc3339(verdict.recorded_at.as_deref().unwrap())
+                .unwrap()
+                .timestamp() as u64;
+            let marker = super::super::review_marker::Marker {
+                pid: 0,
+                started_at: at,
+                ..super::super::review_marker::Marker::for_this_process(
+                    7,
+                    Some(&h),
+                    None,
+                    "duplicate",
+                )
+            };
+            super::super::review_marker::write(&f.a, &marker).unwrap();
+        }
         let result = crate::pr_train::pr_train_handler(&crate::pr_train::TrainOptions {
             prs: &[7],
             all_ready: false,

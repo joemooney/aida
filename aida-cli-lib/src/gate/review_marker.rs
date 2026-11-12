@@ -210,9 +210,21 @@ fn conclusive_head(
     head: Option<&str>,
 ) -> Option<super::review_verdict::RecordedVerdict> {
     let head = head.filter(|h| !h.trim().is_empty())?;
-    let v = super::review_verdict::read_verdict_for_sha(root, &format!("PR-{pr}"), head)?;
-    (v.reviewed_sha.as_deref() == Some(head) && (v.kind.approves() || v.kind.requires_changes()))
-        .then_some(v)
+    let key = format!("PR-{pr}");
+    // Synced evidence has the same precedence as in the merge gates. In
+    // particular, a remote refusal must not fall back to a local approval.
+    let v = match super::review_publication::current_at_head(root, &[&key], head) {
+        Some(remote) => super::review_verdict::parse_recorded_verdict(&remote.body)?,
+        None => super::review_verdict::read_verdict_for_sha(root, &key, head)?,
+    };
+    let conclusive = v.kind.requires_changes()
+        || super::review_approval::independent_approval_authorized(
+            root,
+            &[key],
+            v.reviewed_branch.as_deref(),
+            &v,
+        );
+    (v.reviewed_sha.as_deref() == Some(head) && conclusive).then_some(v)
 }
 
 /// An already-approved head cannot acquire a new blocking review merely
@@ -228,10 +240,13 @@ fn redundant_claim(root: &Path, m: &Marker, head: Option<&str>) -> bool {
         && v.attestation
             .as_ref()
             .is_some_and(|a| a.authorizes(v.reviewed_sha.as_deref()))
+        // Markers record whole seconds; compare both timestamps at that
+        // precision so a redundant claim in the verdict's second cannot stall
+        // the train. Approval and hold gates still decide merge authority.
         && v.recorded_at
             .as_deref()
             .and_then(|at| chrono::DateTime::parse_from_rfc3339(at).ok())
-            .is_some_and(|at| at.timestamp() >= 0 && (at.timestamp() as u64) < m.started_at)
+            .is_some_and(|at| at.timestamp() >= 0 && (at.timestamp() as u64) <= m.started_at)
 }
 
 /// Write (or replace) the marker for `m.pr`.

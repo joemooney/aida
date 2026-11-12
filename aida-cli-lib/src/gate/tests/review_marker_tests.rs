@@ -401,15 +401,50 @@ fn prc_only_the_markers_process_ownership_overrides_its_ttl() {
 #[test]
 fn bug2530_duplicate_admission_and_redundant_claim() {
     let dir = tempfile::tempdir().unwrap();
-    let head = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
-    let m = claim(7, head, now_secs(), CLAIM_TTL_SECS);
+    let home = dir.path().join("home");
+    let _env = crate::test_env::AmbientGuard::hermetic_and(
+        dir.path(),
+        None,
+        &[
+            ("AIDA_HOME", Some(home.to_str().unwrap())),
+            ("AIDA_CONTAINED", None),
+        ],
+    );
+    let git = |args: &[&str]| {
+        let out = crate::test_git::git_command()
+            .current_dir(dir.path())
+            .args([
+                "-c",
+                "user.name=Fixture",
+                "-c",
+                "user.email=fixture@example.invalid",
+            ])
+            .args(args)
+            .output()
+            .unwrap();
+        assert!(
+            out.status.success(),
+            "{}",
+            String::from_utf8_lossy(&out.stderr)
+        );
+        String::from_utf8(out.stdout).unwrap().trim().to_owned()
+    };
+    git(&["init", "-q"]);
+    git(&["commit", "--allow-empty", "-qm", "reviewed change"]);
+    let sha = git(&["rev-parse", "HEAD"]);
+    let head = sha.as_str();
+    let identity = vec!["session:independent-reviewer".to_string()];
+    let receipt =
+        super::super::review_authority::write_human_receipt(head, "PR-7", &identity, false, true)
+            .unwrap();
+    let m = claim(7, head, now_secs() + 10, CLAIM_TTL_SECS);
     write(dir.path(), &m).unwrap();
     let path = super::super::review_verdict::verdict_path(dir.path(), "PR-7");
     std::fs::create_dir_all(path.parent().unwrap()).unwrap();
     let mut record = serde_json::json!({
         "verdict": "approved", "reviewed_sha": head,
         "recorded_at": chrono::DateTime::from_timestamp((m.started_at - 10) as i64, 0).unwrap().to_rfc3339(),
-        "recorder_attestation": {"sha":head, "seat":"reviewer"}
+        "recorder_attestation": {"sha":head, "human_at_tty":true, "receipt_id":receipt, "identity":identity}
     });
     for kind in [
         "approved",
@@ -443,6 +478,18 @@ fn bug2530_duplicate_admission_and_redundant_claim() {
         merge_gate(dir.path(), 7, || Some(head.into())),
         MergeGate::UnderReview(_)
     ));
+    for nanos in [0, 500_000_000, 999_999_999] {
+        record["recorded_at"] = chrono::DateTime::from_timestamp(m.started_at as i64, nanos)
+            .unwrap()
+            .to_rfc3339()
+            .into();
+        std::fs::write(&path, record.to_string()).unwrap();
+        assert_eq!(
+            merge_gate(dir.path(), 7, || Some(head.into())),
+            MergeGate::Clear
+        );
+        assert!(live_description(dir.path(), 7, Some(head)).is_none());
+    }
     record["recorded_at"] = "invalid".into();
     std::fs::write(&path, record.to_string()).unwrap();
     assert!(matches!(
@@ -462,5 +509,17 @@ fn bug2530_duplicate_admission_and_redundant_claim() {
         merge_gate(dir.path(), 7, || Some(head.into())),
         MergeGate::UnderReview(_)
     ));
+    assert!(
+        refuse_conclusive_head(dir.path(), 7, Some(head)).is_ok(),
+        "unattested approval must remain reviewable"
+    );
+    record["recorder_attestation"] = serde_json::json!({
+        "sha":head, "human_at_tty":true, "receipt_id":"missing", "identity":identity
+    });
+    std::fs::write(&path, record.to_string()).unwrap();
+    assert!(
+        refuse_conclusive_head(dir.path(), 7, Some(head)).is_ok(),
+        "invalid authority must remain reviewable"
+    );
     assert!(read(dir.path(), 7).is_some());
 }
