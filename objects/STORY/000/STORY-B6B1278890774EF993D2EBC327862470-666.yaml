@@ -30,12 +30,12 @@ description: |
   - Generate a structured review prompt with `aida review prompt --pr 3901` and verify each spec's acceptance criteria.
   - Approve and merge, or request changes by spec id.
   - Mark this story `completed` once the PR is merged.
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-12T20:30:51.059577546Z
-modified_at: 2026-11-12T20:41:17.242534321Z
+modified_at: 2026-11-12T22:08:16.901506181Z
 req_type: Story
 relationships:
 - rel_type:
@@ -83,6 +83,12 @@ relationships:
   target_id: 01a1cee5-ebd6-7ff3-944c-0748e54f0d84
   created_at: 2026-11-12T20:41:17.242518102Z
   created_by: joe
+comments:
+- id: 01a1d1cd-f005-78f0-acb7-961ab11684f6
+  author: aida-auto-bump
+  content: 'Auto-completed: PR #3901 is merged on the forge (its merge commit was outside the local scan window).'
+  created_at: 2026-11-12T22:08:16.901720485Z
+  modified_at: 2026-11-12T22:08:16.901720485Z
 history:
 - id: 01a1d175-799a-7421-9940-551d3a426a5b
   author: joe
@@ -138,6 +144,13 @@ history:
   session_id: 01a1d0eb-22cc-7262-8f6c-7266e9cc1fbb
   harness_version: 2.1.322 (Claude Code)
   changes: []
+- id: 01a1d1cd-f005-78f0-acb7-962c4d34af23
+  author: aida-auto-bump
+  timestamp: 2026-11-12T22:08:16.901724788Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
 filed_at:
   code_sha: 0d6c60e6d982aad0c2c4ad38214010289a267d92
   branch: main
@@ -147,3 +160,6 @@ filed_at:
   vendor: claude
   session: 01a1d0eb-22cc-7262-8f6c-7266e9cc1fbb
   harness_version: 2.1.322 (Claude Code)
+implementation_info:
+  implemented: false
+  completed_at: 2026-11-12T22:08:16.901719823Z
