@@ -198,3 +198,53 @@ fn same_binary_compares_resolved_paths() {
     assert!(same_binary(&a, &tmp.path().join(".").join("a")));
     assert!(!same_binary(&a, &tmp.path().join("b")));
 }
+
+// trace:STORY-2704 | ai:codex
+#[test]
+fn nested_discovery_respects_canonical_parents_and_hidden_child_aliases() {
+    let tree = clap::Command::new("aida").subcommand(
+        clap::Command::new("review").alias("rev").subcommand(
+            clap::Command::new("record")
+                .alias("save")
+                .visible_alias("write"),
+        ),
+    );
+    let parent = command_named(&tree, "rev").unwrap();
+    assert_eq!(parent.get_name(), "review");
+    let installed: Vec<External> = [
+        "record",
+        "save",
+        "write",
+        "summary",
+        "help",
+        "server",
+        "generate-types",
+    ]
+    .into_iter()
+    .map(|name| External {
+        name: format!("review-{name}"),
+        path: PathBuf::from(format!("/bin/aida-review-{name}")),
+    })
+    .collect();
+    let entries = nested_entries(parent, &installed);
+    assert_eq!(entries.len(), 1);
+    assert_eq!(entries[0].name, "summary");
+    assert_eq!(entries[0].path, PathBuf::from("/bin/aida-review-summary"));
+}
+
+// trace:STORY-2704 | ai:codex
+#[test]
+fn nested_discovery_hides_builtin_argv_rewrite_claims() {
+    let tree = crate::command_registry::built_command();
+    for name in ["queue", "agent"] {
+        let parent = command_named(&tree, name).unwrap();
+        let installed = [External {
+            name: format!("{name}-summary"),
+            path: PathBuf::from(format!("/bin/aida-{name}-summary")),
+        }];
+        assert!(
+            nested_entries(parent, &installed).is_empty(),
+            "{name} defaults claim the child before extension dispatch"
+        );
+    }
+}

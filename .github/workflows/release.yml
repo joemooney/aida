@@ -48,19 +48,21 @@ jobs:
           if [ "${{ matrix.target }}" = "aarch64-unknown-linux-gnu" ]; then
             export CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER=aarch64-linux-gnu-gcc
           fi
-          cargo build --release --target ${{ matrix.target }} -p aida-cli -p aida-server
+          cargo build --release --target ${{ matrix.target }} -p aida-cli -p aida-server -p aida-porcelain
 
       - name: Package Unix release tarball
         shell: bash
         run: |
-          # Stage both binaries under a per-target dir so the tarball
-          # contains aida + aida-server at the top level (not renamed).
+          # trace:STORY-2704 | ai:codex
+          # Stage the binaries and lexical multi-call link at the top level.
           # scripts/install.sh and `aida upgrade` look for these names.
           mkdir -p stage/${{ matrix.name }}
           cp target/${{ matrix.target }}/release/aida        stage/${{ matrix.name }}/aida
           cp target/${{ matrix.target }}/release/aida-server stage/${{ matrix.name }}/aida-server
-          chmod +x stage/${{ matrix.name }}/aida stage/${{ matrix.name }}/aida-server
-          tar czf ${{ matrix.name }}.tar.gz -C stage/${{ matrix.name }} aida aida-server
+          cp target/${{ matrix.target }}/release/aida-porcelain stage/${{ matrix.name }}/aida-porcelain
+          ln -s aida-porcelain stage/${{ matrix.name }}/aida-flow
+          chmod +x stage/${{ matrix.name }}/aida stage/${{ matrix.name }}/aida-server stage/${{ matrix.name }}/aida-porcelain
+          tar czf ${{ matrix.name }}.tar.gz -C stage/${{ matrix.name }} aida aida-server aida-porcelain aida-flow
 
       - name: Upload Unix artifact
         uses: actions/upload-artifact@v5
