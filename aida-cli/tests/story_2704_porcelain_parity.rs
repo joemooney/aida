@@ -1,6 +1,6 @@
 //! Built binary parity, with no installed AIDA dependency. trace:STORY-2704 | ai:codex
 #[test]
-fn builtin_porcelain_parity() {
+fn core_external_porcelain_parity() {
     let builtin = std::path::Path::new(env!("CARGO_BIN_EXE_aida"));
     let porcelain = builtin.with_file_name("aida-porcelain");
     assert!(
