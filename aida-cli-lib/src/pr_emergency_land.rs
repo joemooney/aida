@@ -388,15 +388,11 @@ fn watch(
             remaining,
         )?)?;
         let runs = runs.as_array().context("invalid CI run list")?;
-        if runs.iter().any(|r| {
-            matches!(
-                r["conclusion"].as_str(),
-                Some("failure" | "timed_out" | "cancelled" | "action_required")
-            )
-        }) {
+        let state = classify_ci_runs(runs);
+        if state == CiState::Red {
             bail!("Post-merge CI is red. Revert through a new PR: git fetch origin && git switch -c revert-emergency-{} origin/HEAD && git revert {} && git push -u origin HEAD && gh pr create --fill; then aida pr emergency-land <REVERT-PR>. No automatic revert was made.", &sha[..sha.len().min(12)], sha);
         }
-        if !runs.is_empty() && runs.iter().all(|r| r["status"] == "completed") {
+        if state == CiState::Green {
             println!("Merge-commit CI completed successfully.");
             return Ok(());
         }
@@ -413,9 +409,75 @@ fn watch(
     }
 }
 
+#[derive(Debug, PartialEq, Eq)]
+enum CiState {
+    Red,
+    Green,
+    Pending,
+}
+
+// Only an explicit success-like conclusion counts as green. A completed run
+// with any other conclusion (startup_failure, stale, unknown, null) is red, so
+// the skill never reports success without the revert guidance.
+// trace:STORY-2732 | ai:claude
+fn classify_ci_runs(runs: &[Value]) -> CiState {
+    let completed = |r: &&Value| r["status"] == "completed";
+    let ok = |r: &&Value| {
+        matches!(
+            r["conclusion"].as_str(),
+            Some("success" | "skipped" | "neutral")
+        )
+    };
+    if runs.iter().filter(completed).any(|r| !ok(&r)) {
+        CiState::Red
+    } else if !runs.is_empty() && runs.iter().all(|r| completed(&r)) {
+        CiState::Green
+    } else {
+        CiState::Pending
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    // trace:STORY-2732 | ai:claude
+    #[test]
+    fn pr_emergency_land_ci_watch_classifies_conclusions() {
+        let run = |status: &str, conclusion: Value| serde_json::json!({"status": status, "conclusion": conclusion});
+        let done = |c: &str| run("completed", Value::from(c));
+        assert_eq!(classify_ci_runs(&[]), CiState::Pending);
+        assert_eq!(
+            classify_ci_runs(&[done("success"), done("skipped"), done("neutral")]),
+            CiState::Green
+        );
+        assert_eq!(
+            classify_ci_runs(&[done("success"), run("in_progress", Value::Null)]),
+            CiState::Pending
+        );
+        for bad in [
+            "failure",
+            "timed_out",
+            "cancelled",
+            "action_required",
+            "startup_failure",
+            "stale",
+            "something_new",
+        ] {
+            assert_eq!(
+                classify_ci_runs(&[done("success"), done(bad)]),
+                CiState::Red,
+                "{bad}"
+            );
+        }
+        assert_eq!(
+            classify_ci_runs(&[run("completed", Value::Null)]),
+            CiState::Red
+        );
+        assert_eq!(
+            classify_ci_runs(&[run("completed", Value::Null), run("queued", Value::Null)]),
+            CiState::Red
+        );
+    }
     #[derive(Default)]
     struct Fake {
         calls: Vec<String>,
