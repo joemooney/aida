@@ -1,5 +1,6 @@
 id: 01a1cef2-8ef8-7a91-8bf5-8c355f47fe38
 spec_id: SPEC-b6b1278890774ef993d2ebc327862470-026
+agreed_id: TASK-3098
 title: Define archive-aware gate-ledger retention before automatic closed-change rotation
 description: 'BUG-2531 partial implementation scopes aggregate selection payloads to relevant change ledgers and adds a 50% capacity warning. Automatic closed/merged rotation is not implemented: checked selection refuses by-spec references to missing active ledgers; direct change, audit, carry-over, legacy import and append readers all assume the active path. Simply moving files and pruning indexes can hide older refusals and make reopened-change history disappear. Decide an archive-aware read/write and revival contract (including missing/stale index discovery, concurrency under the ledger-wide lock and retention/forge-closure evidence), then implement rotation with regressions. Current discovery still strictly inspects all active files under independent per-file caps; this slice isolates aggregate byte exhaustion, not discovery I/O growth.'
 status: Draft
@@ -13,6 +14,11 @@ tags:
 - from-implementer:BUG-2531
 - kind:design-choice
 - severity:major
+history:
+- id: 01a1cef8-4538-71c2-a07d-81406a7925d4
+  author: joe
+  timestamp: 2026-11-12T08:55:39.576258440Z
+  changes: []
 filed_at:
   aida_version: 0.16.0
   aida_build_sha: 296d1dd2958
