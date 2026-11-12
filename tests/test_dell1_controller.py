@@ -410,6 +410,53 @@ class LaunchIntegration(unittest.TestCase):
             current.chmod(0o755)
             self.enumerate_runner_ancestors(runner, root, 10000)
 
+    def test_kernel_enumeration_requires_readable_ancestors(self):
+        # trace:STORY-2695 | ai:codex
+        # Exercise actual readdir permission checks, independently of the mode
+        # model above. No root/systemd/chown prerequisite is needed in a lane.
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            root.chmod(0o755)
+            current = root / 'jobs/s0/current'
+            runner = current / 'runner'
+            runner.mkdir(parents=True)
+            ancestors = (root / 'jobs', root / 'jobs/s0', current)
+            for path in (*ancestors, runner):
+                path.chmod(0o755)
+            work = current / 'main'
+            work.mkdir(mode=0o700)
+
+            def unprivileged():
+                os.setgroups([])
+                os.setgid(65534)
+                os.setuid(65534)
+
+            def enumerate_ancestors():
+                return subprocess.run(
+                    ['/usr/bin/python3', '-c',
+                     'import os, sys; from pathlib import Path\n'
+                     'assert os.geteuid() != 0\n'
+                     'for ancestor in Path(sys.argv[1]).parents:\n'
+                     '    list(ancestor.iterdir())\n', str(runner)],
+                    capture_output=True, text=True, timeout=5,
+                    preexec_fn=unprivileged if os.geteuid() == 0 else None)
+
+            for path in ancestors:
+                with self.subTest(ancestor=path.name):
+                    # A lane owns its fixture: 0111 gives its uid the same
+                    # execute-only access a service uid gets to root:root 0711.
+                    path.chmod(0o711 if os.geteuid() == 0 else 0o111)
+                    try:
+                        denied = enumerate_ancestors()
+                        self.assertNotEqual(denied.returncode, 0)
+                        self.assertIn('PermissionError', denied.stderr)
+                        self.assertIn(str(path), denied.stderr)
+                    finally:
+                        path.chmod(0o755)
+                    allowed = enumerate_ancestors()
+                    self.assertEqual(allowed.returncode, 0, allowed.stderr)
+                    self.assertEqual(stat.S_IMODE(work.stat().st_mode), 0o700)
+
     def exercise(self, kind, *, unit_failure=False, stop_failure=False, gate_failure=False, alternate=False, pending=False, test_failure=False, priority=False, restrictive_umask=False, slot='s0'):
         from contextlib import ExitStack
         from types import SimpleNamespace
