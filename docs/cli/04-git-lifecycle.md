@@ -441,6 +441,16 @@ progress lines are printed separately from required-check names. Check rows do
 not distinguish runner queue time from execution time. No GitLab-specific
 progress lookup or runner queue timing is provided.
 
+<!-- trace:BUG-2538 | ai:codex -->
+Train coverage audits store digest summaries per review key, including a digest
+and sequence reference for the bound source event. Full review histories remain
+live gate inputs. Before publishing a train branch or opening its PR, the train
+budgets proof metadata and possible unbound verdict imports against the 16 MiB
+evidence cap, reserving space for gate events. Riders that exceed the build-time
+budget are ejected with a suggestion to ship separately. The budget is refreshed
+before publication, and the actual ledger plus audit size is checked before the
+audit is appended.
+
 A newly opened train waits up to 180 seconds for its first CI checks to
 register. After checks appear, pending lanes continue through the ordinary
 CI wait; a missing required check after the other lanes settle keeps its

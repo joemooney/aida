@@ -4203,7 +4203,13 @@ fn pr_train_journal_live_recover_reopens_ambiguity_and_pin_mismatches() {
         return;
     }
     let environment = aida_core::exec_context::Environment::capture();
-    let root = repo();
+    // trace:BUG-2538 | ai:codex — reopening now budgets real source evidence.
+    let root = repo_with_specs(&["TASK-9001"]);
+    write(
+        root.path(),
+        ".git/info/exclude",
+        ".aida-store/\n.aida/\ngh\nrows.json\ngh-calls\n",
+    );
     let r = root.path();
     let remote = tempfile::tempdir().unwrap();
     git(remote.path(), &["init", "--quiet", "--bare"]);
@@ -4227,9 +4233,12 @@ esac
         ("PATH", &path),
         ("AIDA_TEST_GH_BINARY", gh.to_str().unwrap()),
     ]);
-    let tip = git(r, &["rev-parse", "HEAD"]);
-    let mut train = train_of(&tip, &fms(&[1]));
-    train.tip = tip.clone();
+    let base = git(r, &["rev-parse", "HEAD"]);
+    let source = pr_branch(r, "source/task-9001", |r| write(r, "rider", "reviewed\n"));
+    let train = build(r, &base, &[member(1, &source, "fix: rider (TASK-9001)")]).unwrap();
+    write(r, ".aida/config.toml", "store_path = \".aida-store\"\n");
+    assert!(crate::load_store_for_lookup(r).is_some());
+    let tip = train.tip.clone();
     let entry = journal::Entry::new(train, "train/recover-1".into());
     let mut forge = crate::forge::fake::RecordingForge::new();
     forge.opens_as = Some(901);

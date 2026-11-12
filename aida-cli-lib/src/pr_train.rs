@@ -2639,7 +2639,26 @@ impl TrainForge for LiveTrainForge<'_> {
 
     fn build(&mut self, base: &str, members: &[Member]) -> Result<Built> {
         self.dispatch_check()?;
-        build(&self.main_worktree, base, members)
+        // trace:BUG-2538 | ai:codex
+        let mut accepted = Vec::new();
+        let mut dropped = Vec::new();
+        for member in members {
+            accepted.push(member.clone());
+            let candidate = build(&self.main_worktree, base, &accepted)?;
+            if let Err(error) = verified::preflight(self, &candidate, "train/preflight") {
+                if error.downcast_ref::<verified::EvidenceTooLarge>().is_none() {
+                    return Err(error);
+                }
+                accepted.pop();
+                dropped.push(Ejected {
+                    pr: member.pr,
+                    reason: error.to_string(),
+                });
+            }
+        }
+        let mut train = build(&self.main_worktree, base, &accepted)?;
+        train.dropped.extend(dropped);
+        Ok(train)
     }
 
     fn gate(&mut self, pr: u64) -> std::result::Result<Member, String> {
@@ -2695,6 +2714,8 @@ impl TrainForge for LiveTrainForge<'_> {
 
     fn open(&mut self, train: &Built, branch: &str) -> Result<crate::forge::ChangeRef> {
         self.dispatch_check()?;
+        // trace:BUG-2538 | ai:codex — refresh the budget before any publication.
+        verified::preflight(self, train, branch)?;
         origin_git(
             &self.main_worktree,
             &[
