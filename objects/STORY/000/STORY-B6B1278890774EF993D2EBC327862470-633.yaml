@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-10T22:04:54.061461Z
-modified_at: 2026-11-12T01:41:39.461352147Z
+modified_at: 2026-11-12T05:12:12.555545504Z
 req_type: Story
 comments:
 - id: 01a1c781-4cf1-7c80-b086-89c5c5096ab6
@@ -368,6 +368,13 @@ comments:
   created_at: 2026-11-12T01:41:39.461352147Z
   modified_at: 2026-11-12T01:41:39.461352147Z
   session_id: 01a1cd51e522
+- id: 01a1ce2b-b20b-7760-b33f-b2642a63d0a7
+  author: joe
+  content: |
+    Round 7 follow-through on 46fa4873f73: finding 1 now requires an ordinary defining skill prompt before staged helpers/portable overrides authorize new ignored-pack outputs; real-renderer fixture stages those masters. Finding 2 rejects unrelated journal owners during verified successor adoption while preserving idempotent transfers and rollback; production adoption fixture extended. Finding 3 persists successful publication regeneration against the exact staged tree, requires matching evidence before commit, and clears old evidence on new preparation/generation attempts. Updated writer inventory and project docs. Validation: 66 Python tests passed, exec-context guard 1234 sites with zero additions, store-writer guard 3548 reconciled sites, changed-file rustfmt and git diff --check pass. Rust untested=true: j20261112T045617373-3105-0 still queued behind two occupied slots at 05:12 UTC after more than 15 minutes; no executed-test result. Codegraph client missing. Edits remain uncommitted for the native host launcher; no commit/push/queue completion or review-record action from this seat.
+  created_at: 2026-11-12T05:12:12.555545504Z
+  modified_at: 2026-11-12T05:12:12.555545504Z
+  session_id: 01a1ce1c1867
 history:
 - id: 01a1c77f-ffdf-7ac3-a382-33d6a384e617
   author: aida-session-start
