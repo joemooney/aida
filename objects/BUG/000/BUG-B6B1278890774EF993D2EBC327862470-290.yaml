@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-11T14:11:33.148855447Z
-modified_at: 2026-11-12T15:02:09.967137827Z
+modified_at: 2026-11-12T15:03:28.186132797Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -63,6 +63,12 @@ comments:
   content: 'Addressed the current P1 review finding: single-key and bounded alias readers now select the underlying ledger review using ordinary legacy-versus-ledger ordering before applying the existing exact-source terminal closure overlay. The raw change projection retains its existing closure behavior. Added regression coverage for older/equal-time legacy approvals, change requests and waits across spec/PR single-key, alias and queue readers, plus replaced legacy sources with unchanged, earlier and later timestamps. Four files remain uncommitted in this native seat; the host publication declaration is recorded as [AI:codex] fix(review): retain closed ledger waits over legacy verdicts (Refs BUG-2525), with Help-Golden: unchanged. Rustfmt, git diff --check, trace headers, store-writer inventory and the ExecContext zero-addition ratchet pass. Rust validation is currently untested=true: launcher job j20261112T144618028-2-0 timed out after 900 seconds while compiling without executing tests and reported overlay-stale because primary rewrote generation agent-753703fc4bb95429 in place. Final-source retry j20261112T144855944-1591819-0 has started on that same generation and is waiting for a shared Cargo slot; related verdict/ledger/alias suite j20261112T145340845-1605924-0 remains queued. Host needs a valid target overlay and available Cargo slot to finish validation. Needs Attention to InProgress promotion was refused for lack of advisor authority; status is unchanged. The supplied codegraph executable is missing and doctor reports the index unreachable, so rg navigation was used. Earlier live TASK-3448/TASK-3428 deployment/reconciliation acceptance remains host follow-up.'
   created_at: 2026-11-12T15:02:09.967137827Z
   modified_at: 2026-11-12T15:02:09.967137827Z
+  session_id: 01a1d037d12c
+- id: 01a1d049-02ba-7842-99ee-0e0f75a3e090
+  author: joe
+  content: 'Final handoff update: retry j20261112T144855944-1591819-0 obtained a Cargo slot and is compiling aida-cli-lib on the same reported stale overlay generation; no executed-test result is available. Broader suite j20261112T145340845-1605924-0 remains queued. untested=true. Final rustfmt and diff-hygiene checks pass; the four intended source/test files remain uncommitted for host publication.'
+  created_at: 2026-11-12T15:03:28.186132797Z
+  modified_at: 2026-11-12T15:03:28.186132797Z
   session_id: 01a1d037d12c
 history:
 - id: 01a1cb1e-b1cd-7183-8b51-05e72f878612
