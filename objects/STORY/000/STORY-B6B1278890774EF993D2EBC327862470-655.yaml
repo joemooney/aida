@@ -32,6 +32,10 @@ feature: Uncategorized
 created_at: 2026-11-12T17:27:12.872067622Z
 modified_at: 2026-11-12T17:34:32.624764010Z
 req_type: Story
+relationships:
+- rel_type: Parent
+  target_id: 01a1d0d7-0ba7-7393-9dd0-cb74bf0d205f
+  created_at: 2026-11-12T17:38:49.193384288Z
 comments:
 - id: 01a1d0cd-0f4f-7a42-97ef-efe3f215cd8e
   author: joe
@@ -57,6 +61,12 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1d0d7-549f-7540-acd8-f5a9f9813a7f
+  author: joe
+  timestamp: 2026-11-12T17:38:55.263443132Z
+  session_id: 01a1d09a-4262-7d50-a00b-00a5a30f3934
+  harness_version: 2.1.322 (Claude Code)
+  changes: []
 filed_at:
   code_sha: ec5a35a7108475b421baf1101b26159a7aa0fab9
   branch: main
