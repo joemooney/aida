@@ -1,0 +1,21 @@
+id: 01a1d12b-76c3-7080-8d45-6d13d4ad8267
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-1071
+agreed_id: TASK-3790
+title: Pin CI Rust toolchain to 1.99.1 until BUG-2539 fixes the cargo 1.100 overlay fingerprint break
+description: 'Rust 1.100.0 (stable 2026-11-12) fails the live bwrap overlay gates test on every head and blocks all trains. Pin dtolnay/rust-toolchain and rustup default in ci.yml to 1.99.1. BUG-2539 unpins. PR #3894.'
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-12T19:10:49.027850777Z
+modified_at: 2026-11-12T19:10:49.027850777Z
+req_type: Task
+filed_at:
+  code_sha: 0d6c60e6d982aad0c2c4ad38214010289a267d92
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 0d6c60e6d98
+  vendor: claude
+  session: 01a1d0eb-22cc-7262-8f6c-7266e9cc1fbb
+  harness_version: 2.1.322 (Claude Code)
