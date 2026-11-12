@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-09T01:58:46.910276326Z
-modified_at: 2026-11-12T18:07:03.656637152Z
+modified_at: 2026-11-12T18:07:44.242430828Z
 req_type: Story
 tags:
 - area:orchestration
@@ -236,6 +236,18 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Full sweep: one cross-episode alert-loss defect; all 40 criterion statuses documented; exact-head CI green.. No triage reason was given.'
   created_at: 2026-11-12T18:07:03.656629429Z
   modified_at: 2026-11-12T18:07:03.656629429Z
+- id: 01a1d0f1-43f0-7e03-9489-6a158127286c
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (STORY-2691):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: f8dc39eceea7
+    Recorded: 2026-11-12T17:26:16.564257755+00:00
+    Findings:
+    1. F1 [P2] aida-cli-lib/src/advisor_loop_service.rs:836-854: Persist each failure episode threshold alert independently of an earlier unsent notice. With mailbox unavailable, fail A three times, observe success carrying unsent A, then fail B three times. At B threshold open=false because A is unsent, so B has no durable notification. Restore mailbox and observe success: reset discards B and delivers only A. Both services lose a threshold episode. Retain pending notices per episode or equivalent durable obligations; regress outage spanning both thresholds followed by recovery and success, proving two distinct stable-ID notices without a fourth B failure. Existing regression restores mailbox at B first failure and misses this case.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-12T18:07:14.928881998Z
+  modified_at: 2026-11-12T18:07:14.928881998Z
 history:
 - id: 01a1c5dd-0f8f-79d0-9864-f10de50286f7
   author: joe
