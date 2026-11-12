@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-11T04:48:14.810158291Z
-modified_at: 2026-11-12T12:32:14.244335375Z
+modified_at: 2026-11-12T12:32:19.111462204Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -201,6 +201,20 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Full eight-file diff reviewed; BUG-2522 AC1-AC4 verified by source/regression inspection. One actionable inventory mismatch blocks required CI; CI pending at review time. No local tests run under review-watch policy.. No triage reason was given.'
   created_at: 2026-11-12T12:32:14.244327333Z
   modified_at: 2026-11-12T12:32:14.244327333Z
+  session_id: 01a1ceeb-e827-7832-8991-e83d9eb95cef
+  harness_version: 2.1.322 (Claude Code)
+- id: 01a1cfbe-9ff3-74b2-80ae-eeec8d2ec4a5
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (BUG-2522):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: fd0e477c8f28
+    Recorded: 2026-11-12T12:19:59.191107118+00:00
+    Findings:
+    1. [P2] scripts/store-writers.toml:771,1104: Update the store-writer inventory after relocating collect_interactive_review_refusal to merge_hold.rs. The added rows still describe gate/review_verdict.rs|collect_interactive_review_refusal and handle_review_spec calling gate::review_verdict::collect_interactive_review_refusal, but the actual definition is merge_hold.rs:35 and caller is lib_part5.rs:1487 (crate::merge_hold::collect_interactive_review_refusal). scripts/check-store-writers.py:582-586 rejects stale rows and unclassified current sites; CI (gates) runs this guard at .github/workflows/ci.yml:992, so this head cannot pass required CI. Regenerate the inventory, review the moved wrapper/caller entries and affected operation mappings, preserve the reviewed lock/gate policy, and have CI validate the guard.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-12T12:32:18.931591203Z
+  modified_at: 2026-11-12T12:32:18.931591203Z
   session_id: 01a1ceeb-e827-7832-8991-e83d9eb95cef
   harness_version: 2.1.322 (Claude Code)
 history:
