@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-12T09:33:29.513516913Z
-modified_at: 2026-11-12T17:17:07.763703123Z
+modified_at: 2026-11-12T17:17:22.803767220Z
 req_type: Bug
 comments:
 - id: 01a1cf24-8eb1-7db1-9111-9e7c9b2b2fdc
@@ -23,6 +23,13 @@ comments:
   content: 'Advisor 10:20 MST: same root blocks REVIEWS, not just force-claim. pr_lease_takeover::check_pr_lease refuses to auto-end an exited implementer lease because its seat has one untracked ''.claude/settings.local.json'' (written by the harness, never work). Hit 3x today: PR-3824 (lease 01a1caf92759), PR-3832 (reviewer lease 01a1cf4df7e6), PR-3775 (01a1cf8df8e5); each needed a manual ''aida session end --force --discard-unpushed'' and ''review watch --release''. Fix scope: treat harness-owned untracked files (.claude/settings.local.json and the same allowlist used elsewhere) as clean in the lease-end dirtiness check. Priority raised: this silently stalls the review queue.'
   created_at: 2026-11-12T17:16:42.617730719Z
   modified_at: 2026-11-12T17:16:42.617730719Z
+  session_id: 01a1d09a-4262-7d50-a00b-00a5a30f3934
+  harness_version: 2.1.322 (Claude Code)
+- id: 01a1d0c3-9bf3-7ff1-9848-bf04b14f410c
+  author: joe
+  content: 'ADVISOR BRIEF (10:22 MST): one fix in the shared dirtiness check used by both pr_lease_takeover::check_pr_lease (review lease auto-end) and the force-claim path: ignore untracked harness-owned files (.claude/settings.local.json; reuse an existing allowlist if one exists, grep for settings.local.json first). Never ignore tracked changes or other untracked files. Tests: a seat with only that untracked file is SafeToEnd and force-claimable; a seat with another untracked file still refuses. LIGHT gate: one targeted cargo test -p aida-cli-lib <filter> + make check-ci-fast. Commit ''[AI:codex] fix(lease): treat harness settings.local.json as clean for lease end and force-claim (BUG-2532)''.'
+  created_at: 2026-11-12T17:17:22.803767220Z
+  modified_at: 2026-11-12T17:17:22.803767220Z
   session_id: 01a1d09a-4262-7d50-a00b-00a5a30f3934
   harness_version: 2.1.322 (Claude Code)
 history:
