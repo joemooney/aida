@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-12T18:26:43.321357044Z
-modified_at: 2026-11-12T18:57:59.002848873Z
+modified_at: 2026-11-12T19:33:33.210445172Z
 req_type: Bug
 comments:
 - id: 01a1d11c-d4af-7321-a627-ce8fdbc3162c
@@ -38,6 +38,11 @@ history:
   timestamp: 2026-11-12T18:30:08.656880284Z
   session_id: 01a1d105e1f3
   harness_version: codex-cli 0.167.0
+  changes: []
+- id: 01a1d140-4809-7060-9e08-1264265937ba
+  author: joe
+  timestamp: 2026-11-12T19:33:33.321637128Z
+  session_id: 01a1d13f56a1
   changes: []
 filed_at:
   code_sha: 0d6c60e6d982aad0c2c4ad38214010289a267d92
