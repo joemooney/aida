@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-12T06:22:01.808701892Z
-modified_at: 2026-11-12T11:14:03.244080495Z
+modified_at: 2026-11-12T11:22:12.004351641Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -234,6 +234,10 @@ history:
   author: joe
   timestamp: 2026-11-12T11:14:03.381569933Z
   changes: []
+- id: 01a1cf7e-6f24-7bd3-8062-065125b0d893
+  author: joe
+  timestamp: 2026-11-12T11:22:12.132276824Z
+  changes: []
 filed_at:
   code_sha: fd869101d5c06eac3eea99c1a376828d5706ebdb
   branch: main
@@ -247,7 +251,7 @@ failure_reason:
   phase: reviewer
   phase_index: 3
   kind: verdict:request-changes
-  detail: 'Full sweep of all 10 changed files: BUG-2530 AC1 verified by admission call sites and local/synced/pickup fixtures; AC2 verified by precise ordering and train fixtures. One unresolved launch-input ratchet defect. CI pending at review time; no local tests run per review-watch policy.'
+  detail: 'Full sweep of all 10 changed files: BUG-2530 AC1 verified by admission call sites and local/synced/pickup fixtures; AC2 verified by ordered marker and train fixtures. One actionable regression: exact-head CI lib-1 fails the launch-input ratchet. No local builds/tests run per review-watch policy.'
   recovery_hint: address the review findings, move BUG-2530 back to In Progress, and clear the PR hold only after approval
   shelved_by: reviewer
-  shelved_at: 2026-11-12T11:14:03.244080495Z
+  shelved_at: 2026-11-12T11:22:12.004351641Z
