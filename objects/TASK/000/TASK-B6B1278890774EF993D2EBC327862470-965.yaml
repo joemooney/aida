@@ -17,7 +17,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-08T03:08:54.290380002Z
-modified_at: 2026-11-12T14:48:36.064150742Z
+modified_at: 2026-11-12T15:52:45.036570913Z
 req_type: Task
 tags:
 - area:architecture
@@ -222,6 +222,13 @@ comments:
   content: 'Binding 2026-11-12 14:35 UTC brief implemented as a 40-file partial slice from a447d559aaa5a5634409cb5138dc58a95ab36d70: 39 Rust callers plus docs/internal/testing/task-3448-cmdkit-imports.md. Replaced 159 try_parse_from and 16 built_command references with the existing injected TEST_CLI methods in seven nested gate/regen callers and 32 non-story src/tests callers. Original TASK-3425 metric retained inline-test edges and filters: 610 modules, largest SCC 367 before and after; no SCC members leave. Nineteen story* test caller files and registry-owned unqualified helper calls remain for follow-up; nine top-level production registry users remain intentionally. Launcher cargo check --profile agent -p aida-cli-lib --tests job j20261112T144242514-2-0 passed, exit 0, 5m28s. Mechanical substitution-plus-rustfmt reconstruction, changed-file rustfmt, git diff --check and help co-change guard fixtures pass. No executed Rust tests (untested=true); newer brief delegates those gates to CI shards. Host codegraph client unavailable; doctor reports unreachable index. Edits remain uncommitted for native host publication with Refs TASK-3448 and Help-Golden: unchanged. Full changed-file inventory and SCC evidence are in the evidence doc.'
   created_at: 2026-11-12T14:48:36.064116026Z
   modified_at: 2026-11-12T14:48:36.064116026Z
+- id: 01a1d076-20ec-7df0-8cf2-f735d3318e88
+  author: joe
+  content: 'ADVISOR BRIEF slice C (08:55 MST, main d87c460e6f4 after #3881): about 30 files still reach command_registry for try_parse_from/built_command. Migrate all of them to the injected leaf helpers (split at ~40 files), then remove the helpers'' command_registry dependency entirely and re-measure the SCC. If the SCC is still 367 after zero callers remain, name the next edge that keeps those modules in the SCC in the PR body and a spec comment, so the next slice targets it. Push as soon as cargo check --profile agent -p aida-cli-lib --tests passes; CI is the gate. Trailer (Refs TASK-3448) unless the SCC target is met.'
+  created_at: 2026-11-12T15:52:45.036570913Z
+  modified_at: 2026-11-12T15:52:45.036570913Z
+  session_id: 01a1ceeb-e827-7832-8991-e83d9eb95cef
+  harness_version: 2.1.322 (Claude Code)
 history:
 - id: 01a1b921-d315-74a0-9c9a-0ca54df44ce6
   author: joe
