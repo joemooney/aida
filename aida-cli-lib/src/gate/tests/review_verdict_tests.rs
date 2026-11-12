@@ -1980,7 +1980,8 @@ fn a_fresh_approval_at_a_new_head_reports_a_new_round() {
         )
     );
     // The BUG-2136 scenario: an approval after a merge from main, at a new head.
-    let second = record_and_describe(dir.path(), "approved", sha2, &[]);
+    // trace:BUG-2527 | ai:codex — resolved findings must be cleared explicitly.
+    let second = record_and_describe(dir.path(), "approved", sha2, &[String::new()]);
     assert_eq!(
         second,
         format!(
@@ -2299,7 +2300,7 @@ fn pr_keyed_shaless_round_deduplicates_when_identical_and_counts_as_prior_round_
     let second_obj = build_verdict_object(
         dir.path(),
         &path,
-        Some("approved"),
+        Some("request-changes"),
         Some(sha),
         None,
         None,
@@ -2346,7 +2347,7 @@ fn per_sha_archive_carries_unarchived_rounds() {
         Some(SHA_R1),
         None,
         None,
-        &[],
+        &[String::new()],
         "y",
     )
     .unwrap();
