@@ -17,7 +17,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-08T03:08:54.290380002Z
-modified_at: 2026-11-12T07:01:34.465647309Z
+modified_at: 2026-11-12T07:01:57.894163759Z
 req_type: Task
 tags:
 - area:architecture
@@ -140,6 +140,13 @@ comments:
   content: 'Final slice PR #3867 (head 42343f8f8f1, stacked on #3866): framework-type imports in pr_cmd/rework moved to cmdkit; pub use crate::cmdkit::* removed from command_registry. SCC re-measured with the task-3425-cmdkit-rework.md script: before origin/main d8b778daec2 = 610 modules, largest SCC 367; after = 610, 367 (no change). 36 modules still reference command_registry for registry functions (try_parse_from x428, mostly inline tests; built_command x45), which keeps it in the cycle. Titled Refs, not completion. Shrinking it needs the test parse helpers moved to a leaf, or inline-test edges excluded from the measure.'
   created_at: 2026-11-12T07:01:34.465647309Z
   modified_at: 2026-11-12T07:01:34.465647309Z
+  session_id: 01a1cc9c-1eae-7a72-9a24-8ec1afc42772
+  harness_version: 2.1.322 (Claude Code)
+- id: 01a1ce90-2e06-7533-ae68-2b662c0fd3fa
+  author: joe
+  content: 'ADVISOR RULING (2026-11-12 00:02 MST): #3866 and #3867 land as Refs. The SCC is unchanged (367), because 36 modules still reach command_registry through test helpers (try_parse_from x428, built_command x45). Next slice (same spec): move try_parse_from/built_command into a leaf test-support module (e.g. aida-cli-lib/src/cmd_test_support.rs, which depends on command_registry; callers import it instead of command_registry). Then re-measure with docs/internal/testing/task-3425-cmdkit-rework.md and record. TASK-3448 completes when the largest SCC shrinks. Do NOT exclude inline-test edges from the measurement. Branch off #3867''s head once it lands. LIGHT gate: cargo check --profile agent -p aida-cli-lib --tests + command_registry tests + make check-ci-fast. Subject: [AI:codex] refactor(crate-split): move registry test helpers to a leaf module (TASK-3448).'
+  created_at: 2026-11-12T07:01:57.894163759Z
+  modified_at: 2026-11-12T07:01:57.894163759Z
   session_id: 01a1cc9c-1eae-7a72-9a24-8ec1afc42772
   harness_version: 2.1.322 (Claude Code)
 history:
