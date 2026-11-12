@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-10T06:40:07.764479561Z
-modified_at: 2026-11-12T06:04:12.183952017Z
+modified_at: 2026-11-12T08:26:22.103952067Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -170,6 +170,12 @@ comments:
   created_at: 2026-11-12T05:37:23.766885148Z
   modified_at: 2026-11-12T05:37:23.766885148Z
   session_id: 01a1ce32dba0
+- id: 01a1cedd-7417-7353-9fc7-7b0ebe931d85
+  author: joe
+  content: 'Round 3 follow-up on 6430d61092f: inherited fixes already honor spec-only binding/projection, preserve unbound change claims, and reuse one pinned discovery. This round retains strict evidence validation in that cached discovery: spec_entries now refuses an index naming a missing change ledger instead of silently projecting it as empty. New executed regressions record local waiting and approval while two same-spec PRs have matching heads and live claims; both claims and ledger bytes remain intact. Additional tests distinguish legacy pre-change approval from explicit local waiting before and after binding, and refuse missing related-change evidence. Existing open/record/collect isolation and exact one-pass byte/event budget regressions also pass. Changed files: AGENTS.md, OVERVIEW.md, aida-cli-lib/src/gate/ledger/checked.rs, aida-cli-lib/src/gate/tests/story_1405_review_marker_tests.rs, aida-cli-lib/src/gate/tests/story_2324_effective_tests.rs. Validation: lane job j20261112T081245407-2-0 executed 17 bug_2517 tests, all passed; targeted rustfmt --check and git diff --check pass. Earlier 900-second run timed out during compilation; 3600-second retry succeeded. Initial binary-package test invocation had no library target and was corrected to aida-cli-lib. No implementation/testing blockers. Configured host Codegraph client is absent; doctor reports unreachable; used rg. Edits remain uncommitted for native host publication; no commit, push, PR operation, queue completion or review recording performed.'
+  created_at: 2026-11-12T08:26:22.103952067Z
+  modified_at: 2026-11-12T08:26:22.103952067Z
+  session_id: 01a1cec01579
 history:
 - id: 01a1c4af-45a0-7a32-8edf-55980e6f5825
   author: joe
