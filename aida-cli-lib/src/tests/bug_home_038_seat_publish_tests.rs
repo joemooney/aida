@@ -4582,7 +4582,10 @@ if '--write-ledger' in sys.argv:
                 .unwrap();
                 // The trusted overlay must hide, rather than repair or replace,
                 // the seat's config. trace:STORY-2710 | ai:codex
-                assert_eq!(std::fs::read(tree.join(".git/config")).unwrap(), seat_config);
+                assert_eq!(
+                    std::fs::read(tree.join(".git/config")).unwrap(),
+                    seat_config
+                );
             }
             std::fs::write(tree.join(".git/config"), config).unwrap();
         }
