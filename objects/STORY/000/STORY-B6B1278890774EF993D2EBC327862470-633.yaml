@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-10T22:04:54.061461Z
-modified_at: 2026-11-12T18:11:22.705579386Z
+modified_at: 2026-11-12T18:11:31.473381012Z
 req_type: Story
 comments:
 - id: 01a1c781-4cf1-7c80-b086-89c5c5096ab6
@@ -440,6 +440,19 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Slice 1 has two publication defects: regeneration masks sanitized clone config and can reintroduce conflict markers after the marker gate. Exact-head CI is green.. No triage reason was given.'
   created_at: 2026-11-12T18:11:22.705570367Z
   modified_at: 2026-11-12T18:11:22.705570367Z
+- id: 01a1d0f5-2c99-7991-b0b4-dfaa5ab00fea
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (STORY-2710):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 862561eccd17
+    Recorded: 2026-11-12T18:04:44.509147953+00:00
+    Findings:
+    1. [P2] aida-cli-lib/src/seat_clone.rs:3430: Preserve the sanitized Git config overlay when making regeneration metadata read-only. commit_sandbox_args already binds the host-generated config over clone/.git/config, but the later --ro-bind of the entire clone/.git hides that child mount and exposes the original clone config again. The generation driver and its Git subprocesses consequently consume seat-controlled configuration; even a malformed or unsupported-extension clone config can now break regeneration although preparation/probes used the sanitized config successfully. Apply the metadata read-only mount before reapplying the sanitized config overlay (and keep common/config protected for linked worktrees). Add a clone regeneration regression with poisoned original config proving Git still sees only the sanitized host config.
+    2. [P2] aida-cli-lib/src/seat_clone.rs:5052-5076: Recheck original conflict paths for markers after generation and before recording success/committing. commit_pending scans the journal paths only at 4959, then runs generators that may overwrite those same registered paths and stages them without another scan. For example, a conflicted .aida/discipline guide restored cleanly from base can acquire opening/closing marker lines when sync-templates copies its resolved master, even if that master was not an original conflict path. The output is registered, so the driver accepts it and publication commits markers in an original conflict path, violating AC7. Run the same journal-backed marker gate after regeneration and add a regression where a registered generator introduces markers into an originally conflicted output; assert HEAD remains unchanged and MERGE_HEAD/journal remain recoverable.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-12T18:11:31.097070991Z
+  modified_at: 2026-11-12T18:11:31.097070991Z
 history:
 - id: 01a1c77f-ffdf-7ac3-a382-33d6a384e617
   author: aida-session-start
