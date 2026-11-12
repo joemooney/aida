@@ -321,6 +321,7 @@ fn weight_set_and_clear_persist_before_reply_replay_and_refuse_stale_bases() {
                 &redo::object_bytes(&route.root(), &route.origin).unwrap(),
             ),
             fields: aida_core::db::canonical_mutation::EditFields {
+                tags: None,
                 title: None,
                 description: None,
                 priority: None,
@@ -377,6 +378,7 @@ fn weight_competing_mutations_compare_the_same_preimage() {
                     spec_id: route.origin.clone(),
                     expected_revision: revision.clone(),
                     fields: aida_core::db::canonical_mutation::EditFields {
+                        tags: None,
                         title: None,
                         description: None,
                         priority: None,
@@ -394,4 +396,156 @@ fn weight_competing_mutations_compare_the_same_preimage() {
     assert_eq!(outcomes.iter().filter(|r| r.is_ok()).count(), 1);
     let error = outcomes.into_iter().find_map(Result::err).unwrap();
     assert!(format!("{error:#}").ends_with("Conflict"));
+}
+
+// trace:TASK-3223 | ai:codex
+#[test]
+fn tags_set_and_clear_persist_before_reply_replay_and_refuse_stale_bases() {
+    for tags in [vec!["alpha".to_owned(), "beta".to_owned()], vec![]] {
+        let route = Route::new(true);
+        if tags.is_empty() {
+            let mut row = route.row();
+            row.tags = ["old".to_owned()].into_iter().collect();
+            aida_core::object_store::write_object(&route.root().join("objects"), &row).unwrap();
+        }
+        let op = CanonicalOperation::SpecEdit {
+            spec_id: route.origin.clone(),
+            expected_revision: redo::hash(
+                &redo::object_bytes(&route.root(), &route.origin).unwrap(),
+            ),
+            fields: aida_core::db::canonical_mutation::EditFields {
+                weight: None,
+                title: None,
+                description: None,
+                priority: None,
+                tags: Some(tags.clone()),
+            },
+        };
+        let id = uuid::Uuid::new_v4();
+        let error = route.client().mutate(id, &op).unwrap_err();
+        assert!(format!("{error:#}").contains("OutcomeUnknown"));
+        let after = route.row();
+        assert_eq!(
+            after.tags,
+            tags.into_iter().collect(),
+            "persisted before lost reply"
+        );
+        let result = route.client().mutate(id, &op).unwrap();
+        assert_eq!(
+            result["revision"],
+            redo::hash(&redo::object_bytes(&route.root(), &route.origin).unwrap())
+        );
+        assert_eq!(route.client().mutate(id, &op).unwrap(), result);
+        let error = route
+            .client()
+            .mutate(uuid::Uuid::new_v4(), &op)
+            .unwrap_err();
+        assert!(format!("{error:#}").ends_with("Conflict"));
+        assert_eq!(route.row().history.len(), after.history.len());
+        let changes: Vec<_> = after
+            .history
+            .iter()
+            .flat_map(|entry| {
+                entry
+                    .changes
+                    .iter()
+                    .filter(|change| change.field_name == "tags")
+                    .map(move |change| (&entry.author, change))
+            })
+            .collect();
+        assert_eq!(changes.len(), 1);
+        assert_eq!(changes[0].0, "bound author");
+    }
+}
+
+// trace:TASK-3223 | ai:codex
+#[test]
+fn tags_competing_mutations_compare_the_same_preimage() {
+    let route = Route::new(false);
+    let mut row = route.row();
+    row.tags = ["old".to_owned()].into_iter().collect();
+    aida_core::object_store::write_object(&route.root().join("objects"), &row).unwrap();
+    let revision = redo::hash(&redo::object_bytes(&route.root(), &route.origin).unwrap());
+    let outcomes = std::thread::scope(|scope| {
+        let handles: Vec<_> = [vec!["alpha".to_owned()], vec![]]
+            .into_iter()
+            .map(|tags| {
+                let client = route.client();
+                let op = CanonicalOperation::SpecEdit {
+                    spec_id: route.origin.clone(),
+                    expected_revision: revision.clone(),
+                    fields: aida_core::db::canonical_mutation::EditFields {
+                        weight: None,
+                        title: None,
+                        description: None,
+                        priority: None,
+                        tags: Some(tags.clone()),
+                    },
+                };
+                scope.spawn(move || client.mutate(uuid::Uuid::new_v4(), &op))
+            })
+            .collect();
+        handles
+            .into_iter()
+            .map(|h| h.join().unwrap())
+            .collect::<Vec<_>>()
+    });
+    assert_eq!(outcomes.iter().filter(|r| r.is_ok()).count(), 1);
+    let error = outcomes.into_iter().find_map(Result::err).unwrap();
+    assert!(format!("{error:#}").ends_with("Conflict"));
+}
+
+// trace:TASK-3223 | ai:codex
+#[test]
+fn tags_replacement_protects_structural_tags_and_persistent_hypothesis_locks() {
+    let route = Route::new(false);
+    let mut row = route.row();
+    row.tags = ["batch:keep".into(), "old".into(), "hypothesis".into()]
+        .into_iter()
+        .collect();
+    row.hypothesis_lock = Some(aida_core::models::HypothesisLock {
+        locked_at: chrono::Utc::now(),
+        description_sha256: redo::hash(row.description.as_bytes()),
+    });
+    aida_core::object_store::write_object(&route.root().join("objects"), &row).unwrap();
+    let before = redo::object_bytes(&route.root(), &route.origin).unwrap();
+    let result = route.client().mcp(
+        &route.root(),
+        "update_requirement",
+        &serde_json::json!({
+            "id": route.origin, "title": "must not change", "tags": []
+        }),
+    );
+    assert!(format!("{:#}", result.unwrap_err()).ends_with("InvalidRequest"));
+    assert_eq!(
+        redo::object_bytes(&route.root(), &route.origin).unwrap(),
+        before
+    );
+    // Removing the hypothesis tag cannot erase the permanent description lock.
+    route
+        .client()
+        .mcp(
+            &route.root(),
+            "update_requirement",
+            &serde_json::json!({
+                "id": route.origin, "tags": ["batch:keep", "new"]
+            }),
+        )
+        .unwrap();
+    assert!(route.row().hypothesis_lock.is_some());
+    let before = redo::object_bytes(&route.root(), &route.origin).unwrap();
+    assert!(route
+        .client()
+        .mcp(
+            &route.root(),
+            "update_requirement",
+            &serde_json::json!({
+                "id": route.origin, "description": "cannot rewrite", "tags": ["batch:keep"]
+            })
+        )
+        .is_err());
+    assert_eq!(
+        redo::object_bytes(&route.root(), &route.origin).unwrap(),
+        before
+    );
 }
