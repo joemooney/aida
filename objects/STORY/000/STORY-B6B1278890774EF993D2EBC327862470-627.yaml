@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-10T03:52:00.571796159Z
-modified_at: 2026-11-12T00:51:28.257561673Z
+modified_at: 2026-11-12T05:25:52.309478324Z
 req_type: Story
 relationships:
 - rel_type:
@@ -733,6 +733,12 @@ comments:
   content: 'PR #3842 round 6: addressed all four open review items. The launch token scanner excludes fully qualified clap metadata constructors (with near-name/process mutant coverage) and explicitly classifies the injected Cargo executable; launch LEDGER and CEILING are unchanged. Make install/install-cli now resolve CARGO_INSTALL_ROOT then CARGO_HOME then HOME/.cargo and pass the same explicit --root for every Cargo install and the flow link; fake-Cargo fixtures cover distinct roots and spaces. Cargo upgrade fetches/parses the requested tag''s workspace manifest before installation and chooses core-only versus core+porcelain/link inventory. Regression uses the actual v0.15.0 Cargo.toml snapshot, the current bundle inventory, and invalid manifests. The fixture-owned executable isolation already existed at this checkout; added a regression requiring aida-porcelain beside the original executable, proving fixture binary identity and empty-extension help. Validation via lane runner: final launch ratchet job j20261112T001246717-2916066-0 (7 passed); upgrade job j20261112T000429342-2869498-0 (3 passed); core+porcelain build j20261112T000447294-2870080-0 passed; external-subcommand suite j20261112T000624206-2875205-0 (12 passed with companion present). Python install fixtures: 7 passed. make check-ci-fast: all 47 gates passed, with compilation checks routed through a temporary Cargo shim to lane jobs; Git refresh refusals from native read-only metadata fell back to local evidence. Full formatting and git diff --check passed. No help golden changes. Uncommitted changes are prepared for host publication under the native-seat workflow; no findings disputed.'
   created_at: 2026-11-12T00:36:31.275340297Z
   modified_at: 2026-11-12T00:36:31.275340297Z
+- id: 01a1ce38-3435-7ee2-a2b8-6f1e8459deae
+  author: joe
+  content: 'Round 6 edits address both current P2 findings: nested extensions refuse explicit project/file/server/canonical selectors; install.sh, both Make install targets and tarball upgrades preflight aida-flow ownership before replacing any member. Added two-target and executable-directory regressions plus 28 installer ownership cases; adjusted upgrade success/rollback fixtures to owned relative aliases. Lane build passed; Python installer suite (8 tests), direct parity against lane-built binaries, selector smoke checks, formatting/shell syntax/diff checks and 45 source-only fast gates passed. CI parity state mutation did not reproduce; failure diagnostics now name changed paths. untested=true for Rust integration: job j20261112T050025449-69876-0 timed out after 900s awaiting a shared Cargo slot without executing tests, and the runner reported overlay-stale after a primary generation rewrite. Full fast gate remains incomplete; host needs refreshed seed and a rerun. Edits remain uncommitted under native-seat policy; publication declaration uses Refs.'
+  created_at: 2026-11-12T05:25:52.309478324Z
+  modified_at: 2026-11-12T05:25:52.309478324Z
+  session_id: 01a1ce1b26fe
 history:
 - id: 01a1c399-7102-7f81-9bb9-fd37379159d3
   author: joe
