@@ -4301,3 +4301,8 @@ pub(crate) fn advisor_train_handler() -> Result<()> {
         no_pull: true,
     })
 }
+
+// trace:STORY-2688 | ai:codex
+pub(crate) fn pr_state_members(root: &Path) -> Result<Vec<u64>> {
+    journal::pr_state_members(&root.join(".aida/train"))
+}

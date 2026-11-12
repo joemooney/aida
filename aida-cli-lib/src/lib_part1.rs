@@ -283,7 +283,8 @@ pub fn main_entry() {
     // trace:TASK-69 | ai:claude
     // trace:TASK-1526 | ai:codex
     let cache_scope = aida_core::db::cache_refresh::CacheReadScope::new();
-    let exit_code: i32 = match run() {
+    let mut refusal_to_stderr = false;
+    let exit_code: i32 = match run(&mut refusal_to_stderr) {
         Ok(()) => 0,
         Err(err) if err.is::<aida_core::db::cache_refresh::AdvisoryCacheUnavailable>() => 0,
         Err(err) => {
@@ -304,7 +305,14 @@ pub fn main_entry() {
             if err.downcast_ref::<TypedPayloadEmitted>().is_some() {
                 // Print nothing on either channel. trace:BUG-1745 | ai:codex
             } else if agent_output_mode() {
-                println!("{}", agent_error_block(&err, &msg));
+                // Add refusals must survive stdout filters used to extract new
+                // spec IDs. Keep the structured diagnostic, on stderr.
+                // trace:BUG-2505 | ai:codex
+                if refusal_to_stderr {
+                    eprintln!("{}", agent_error_block(&err, &msg));
+                } else {
+                    println!("{}", agent_error_block(&err, &msg));
+                }
             } else if err.downcast_ref::<SoftSignpostShown>().is_some() {
                 // STORY-737 (delight #5): the command already rendered a soft,
                 // forward-pointing signpost to stderr — re-printing it as a red
@@ -1815,7 +1823,7 @@ pub(crate) fn parse_help_commands_args(args: &[String]) -> Result<(bool, bool, b
     Ok((flags, json, hidden))
 }
 
-pub(crate) fn run() -> Result<()> {
+pub(crate) fn run(refusal_to_stderr: &mut bool) -> Result<()> {
     // BUG-2221: anchor for the `argv` phase recorded below once dispatch
     // knows the command is `show`. trace:BUG-2221 | ai:claude
     let run_started = std::time::Instant::now();
@@ -1970,6 +1978,10 @@ pub(crate) fn run() -> Result<()> {
         std::process::exit(code);
     }
     let mut cli = crate::command_registry::parse_from(after_alias_rewrites.clone());
+    // Use the canonical parsed command, including aliases and global flags,
+    // before any format, authority, storage or add validation can refuse.
+    // trace:BUG-2505 | ai:codex
+    *refusal_to_stderr = cli.command.name() == "add";
 
     // STORY-764: install the explicit output-format pin before any handler
     // renders. `--format` wins; else `AIDA_OUTPUT_FORMAT`; else the TTY-based

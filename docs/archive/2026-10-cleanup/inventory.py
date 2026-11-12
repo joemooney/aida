@@ -61,6 +61,7 @@ def classify(p):
         ("docs/internal/release-notes/", "historical-release-notes"),
         ("docs/internal/research/", "historical-artifact"),
         ("docs/internal/spikes/", "historical-artifact"),
+        ("docs/spikes/", "historical-artifact"),  # trace:SPIKE-714 | ai:codex
         ("docs/internal/testing/", "historical-artifact"),
         ("docs/cli/", "maintained-manual"),
         ("docs/agents/", "maintained-agent-doc"),
@@ -103,7 +104,7 @@ def audience(p):
     # The two-host enrollment workflow is for operators, despite its agents path.
     if p.startswith("docs/advanced/") or p == "docs/agents/second-review-node.md":
         return "advanced"
-    if p.startswith(("docs/internal/", "docs/plans/", "docs/aida/")) or p == "docs/cli/11-dev.md":
+    if p.startswith(("docs/internal/", "docs/plans/", "docs/spikes/", "docs/aida/")) or p == "docs/cli/11-dev.md":
         return "internal"
     if p.startswith(("docs/cli/", "docs/agents/", "docs/showcase/", "docs/images/", "docs/tui/")) or p.removeprefix("docs/") in ADOPTER_PAGES:
         return "adopter"
