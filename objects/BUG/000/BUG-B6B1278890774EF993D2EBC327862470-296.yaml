@@ -3,12 +3,12 @@ spec_id: BUG-b6b1278890774ef993d2ebc327862470-296
 agreed_id: BUG-2531
 title: Gate-ledger discovery reads every change ledger against a 64 MiB budget
 description: 'discover() in aida-cli-lib/src/gate/ledger/checked.rs reads every PR-*.jsonl in .aida/gate-ledger into one Budget (MAX_SELECTION_BYTES 64 MiB). When the ledger passed 64 MiB (82 MB, 2683 files, 2026-11-12) every verdict selection failed (''aggregate gate-ledger read budget is exhausted''). Effects: verdicts unreadable, review watch relaunched reviewers on approved heads whose claims blocked trains (BUG-2530), review record failed, the train ejected approved PR-3860. Workaround applied: archived 668 closed-PR ledgers >24h old to .aida/gate-ledger-archive, pruned 431 by-spec indexes (backup .aida/gate-ledger.bak-20261112T013508); now 17 MB. Fix: bound discovery to the changes the selection needs; rotate closed/merged change ledgers to the archive automatically; doctor warns at 50% of budget; regression test with an oversized unrelated closed ledger.'
-status: InProgress
+status: NeedsAttention
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-12T08:35:37.046532324Z
-modified_at: 2026-11-12T12:40:01.368264122Z
+modified_at: 2026-11-12T12:41:14.338010076Z
 req_type: Bug
 comments:
 - id: 01a1cf00-20ea-7c51-bbf5-a9927b13b042
@@ -204,6 +204,14 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1cfc6-cb62-7ae3-80e3-8aeb62c75db8
+  author: joe
+  timestamp: 2026-11-12T12:41:14.338040044Z
+  session_id: 01a1cfc5a19f
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 filed_at:
   code_sha: 296d1dd295804f61d32a6b8aa07ae1485b198c93
   branch: main
@@ -213,6 +221,12 @@ filed_at:
   vendor: claude
   session: 01a1cc9c-1eae-7a72-9a24-8ec1afc42772
   harness_version: 2.1.322 (Claude Code)
+attention_reason:
+  category: design-fork
+  detail: 'Round 3, ade7de408c3b: finding 1 (checked.rs:378 relevant-only complete discovery) and finding 2 (automatic archive retention) are accepted and remain open. I dispute treating the existing partial cap remediation or Draft TASK-3098 as satisfying either finding. No approved scope split or master approval of the proposed completeness/version-fence and archive/read/revival contract is recorded. AGENTS.md Sketch-First Protocol requires master sign-off for new file formats and lifecycle semantics. The current writer syncs events before best-effort index updates; trusting missing hints can hide refusals. Active-only direct readers and sequence assignment make rotation alone unsafe. See the updated round-3 disposition in docs/plans/2026-11-12-bug-2531-discovery-retention-sketch.md. Approve that concrete contract or explicitly split the scope; do not claim BUG-2531 completion. No runtime changes or executed tests this round; native seat leaves the decision-record edit uncommitted. Punt remains a publication veto.'
+  lean: Approve the full proposed completeness and archive/revival contract; preserve refusal evidence and keep both findings open until implemented and tested.
+  raised_by: implementer
+  raised_at: 2026-11-12T12:41:14.338010076Z
 failure_reason:
   phase: reviewer
   phase_index: 3
