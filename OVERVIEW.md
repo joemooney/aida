@@ -1459,6 +1459,11 @@ later changes, affect their gates, or clear their review claims. Legacy
 pre-change reviews remain eligible for binding to one change. Effective gates
 reuse one pinned ledger discovery across related changes under one aggregate
 budget; an index naming a missing change ledger refuses as incomplete evidence.
+Historical foreign-copy isolation also fails closed when ownership discovery is
+incomplete: lossy verdict readers withhold potentially misplaced review copies
+while retaining holds and phase-3 ownership records. Each discovery builds one
+ownership index from its change corpus and reuses it across spec/change buckets
+and additional event vectors; these reads never rewrite ledger history.
 <!-- trace:BUG-2517 | ai:codex -->
 
 Verdict reads use a held `review-verdicts` directory descriptor and `openat`

@@ -366,7 +366,7 @@ pub(crate) fn discover(root: &Path, budget: &mut Budget) -> Result<Option<Discov
         }
     }
     // trace:BUG-2517 | ai:codex
-    let owners = super::project::MiskeyOwners::new(bound.values().flatten());
+    let owners = super::project::MiskeyOwners::new(changes.values().flatten());
     for events in bound.values_mut() {
         owners.filter(events);
     }
@@ -383,6 +383,13 @@ pub(crate) fn discover(root: &Path, budget: &mut Budget) -> Result<Option<Discov
 }
 
 impl Discovery {
+    /// Reuse the ownership snapshot for additional vectors without rescanning
+    /// witnesses or rebuilding their semantic fingerprints.
+    // trace:BUG-2517 | ai:codex
+    pub(crate) fn filter_events(&self, events: &mut Vec<GateEvent>) {
+        self.owners.filter(events);
+    }
+
     // trace:BUG-2517 | ai:codex
     pub(crate) fn change_events(&self, change: ChangeKey) -> Vec<GateEvent> {
         self.changes.get(&change).cloned().unwrap_or_default()
@@ -466,7 +473,7 @@ pub(crate) fn filter_miskeyed(
         return Ok(events);
     };
     let mut events = events;
-    discovery.owners.filter(&mut events);
+    discovery.filter_events(&mut events);
     Ok(events)
 }
 
@@ -483,7 +490,7 @@ pub(crate) fn filter_miskeyed_or_fail_closed(
     let mut events = events;
     match discover(root, &mut Budget::default()) {
         Ok(None) => {}
-        Ok(Some(discovery)) => discovery.owners.filter(&mut events),
+        Ok(Some(discovery)) => discovery.filter_events(&mut events),
         Err(_) => super::project::MiskeyOwners::fail_closed(&mut events),
     }
     events

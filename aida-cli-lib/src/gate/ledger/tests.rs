@@ -2560,6 +2560,16 @@ fn bug_2517_foreign_copy_is_ignored_without_rewriting_history() {
         assert_eq!(std::fs::read(&second_file).unwrap(), second_before);
         assert_eq!(std::fs::read(&file).unwrap(), before);
         std::fs::remove_file(&unrelated).unwrap();
+        // Recovery restores the first PR's own historical verdict, without
+        // restoring the foreign copy or persisting the conservative fallback.
+        assert_eq!(
+            project::newest_verdict_event(&root, "PR-3651")
+                .unwrap()
+                .verdict_record(),
+            Some(&old)
+        );
+        assert_eq!(std::fs::read(&file).unwrap(), before);
+        assert_eq!(std::fs::read(&second_file).unwrap(), second_before);
     }
 }
 
@@ -2579,6 +2589,18 @@ fn bug_2517_ownership_index_visits_corpus_once_per_discovery() {
         )
         .unwrap();
     }
+    // Ownership discovery visits the complete change corpus once, including
+    // binding events and the hold that must survive every filtering pass.
+    hold::append(
+        &root,
+        1,
+        EventBody::ReleaseWithdrawn {
+            reason: "head moved".into(),
+        },
+        None,
+        None,
+    )
+    .unwrap();
     project::OWNERSHIP_WORK.with(|work| work.set((0, 0)));
     let discovery = checked::discover(&root, &mut Default::default())
         .unwrap()
@@ -2601,9 +2623,25 @@ fn bug_2517_ownership_index_visits_corpus_once_per_discovery() {
             1
         );
     }
+    // Additional vectors reuse the pinned snapshot even if the on-disk
+    // corpus becomes unreadable. No extra ownership visits are permitted.
+    let unrelated = store::ledger_file(&root, ChangeKey::pr(9999));
+    std::fs::write(&unrelated, b"invalid\n").unwrap();
+    for n in 1..=BUCKETS {
+        let mut events = store::read_file(&root, ChangeKey::pr(n as u64));
+        discovery.filter_events(&mut events);
+        assert_eq!(
+            events
+                .iter()
+                .filter(|e| e.verdict_record().is_some())
+                .count(),
+            1
+        );
+    }
+    std::fs::remove_file(unrelated).unwrap();
     assert_eq!(
         project::OWNERSHIP_WORK.with(|work| work.get()),
-        (1, BUCKETS)
+        (1, 2 * BUCKETS + 1)
     );
     // The legacy spec-indexed reader also performs only one discovery,
     // even when one spec names every change bucket.
@@ -2614,7 +2652,7 @@ fn bug_2517_ownership_index_visits_corpus_once_per_discovery() {
     assert_eq!(project::verdict_records(&root, "BUG-1").len(), 1);
     assert_eq!(
         project::OWNERSHIP_WORK.with(|work| work.get()),
-        (1, BUCKETS)
+        (1, 2 * BUCKETS + 1)
     );
     // Filtering another vector through discovery must reuse that same index.
     project::OWNERSHIP_WORK.with(|work| work.set((0, 0)));
@@ -2629,7 +2667,7 @@ fn bug_2517_ownership_index_visits_corpus_once_per_discovery() {
     );
     assert_eq!(
         project::OWNERSHIP_WORK.with(|work| work.get()),
-        (1, BUCKETS)
+        (1, 2 * BUCKETS + 1)
     );
 }
 
