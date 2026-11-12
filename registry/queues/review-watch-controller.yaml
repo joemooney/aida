@@ -38,3 +38,11 @@
   added_at: 2026-11-12T13:51:00.246446340Z
   for_role: reviewer
   added_by_machine: imac
+- user_id: review-watch-controller
+  requirement_id: 01a1d012-2765-7ff2-8e81-ebcdcd702639
+  position: 6000
+  added_by: review-watch-controller
+  note: auto-queue retry reused canonical review story; covers 0 specs
+  added_at: 2026-11-12T14:08:20.444688551Z
+  for_role: reviewer
+  added_by_machine: imac
