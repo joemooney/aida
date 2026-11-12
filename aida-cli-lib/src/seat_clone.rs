@@ -3532,6 +3532,9 @@ fn prepare_host_repair_with(
                 RepairGuard::lock(main)?.record_regeneration(&key, true)?;
             }
         }
+        RepairGuard::lock(main)?
+            .for_tree(tree, branch, &head, &merge)?
+            .require_prepared()?;
         return Ok(paths);
     }
     let dirty = !execute(&["status", "--porcelain", "--untracked-files=all"])?.is_empty();
@@ -3749,9 +3752,21 @@ mod rework_merge_tests {
             "fixture",
         )
         .unwrap();
+        // Stage the actual renderer's template masters as well. An empty host
+        // inventory then models a host older than the resolved template pack.
+        for skill in aida_core::scaffolding::inventory::portable_skill_inventory(&config).values() {
+            for file in &skill.files {
+                let source = Path::new(env!("CARGO_MANIFEST_DIR"))
+                    .join("../aida-core/templates")
+                    .join(&file.source_key);
+                let target = fx.main.join("aida-core/templates").join(&file.source_key);
+                std::fs::create_dir_all(target.parent().unwrap()).unwrap();
+                std::fs::copy(source, target).unwrap();
+            }
+        }
         std::fs::write(fx.main.join("repair-generator-fixture"), "fixture").unwrap();
         std::fs::write(fx.main.join(".gitignore"), "/.agents/\n").unwrap();
-        let executable = std::env::current_exe().unwrap();
+        let executable = crate::aida_bin::current_executable_path().unwrap();
         let quoted = format!(
             "'{}'",
             executable.display().to_string().replace('\'', "'\"'\"'")
@@ -3777,7 +3792,7 @@ mod rework_merge_tests {
             &["ls-tree", "-r", "--name-only", &base, "--", ".agents"]
         )
         .is_empty());
-        let generate = || {
+        let generate = |inventory: &str| {
             std::process::Command::new("python3")
                 .current_dir(&fx.main)
                 .args([
@@ -3785,18 +3800,19 @@ mod rework_merge_tests {
                     include_str!("../../scripts/repair-generated.py"),
                     &base,
                     "generate",
-                    &inventory,
+                    inventory,
                 ])
                 .output()
                 .unwrap()
         };
-        // A fresh ignored pack, then byte drift in an existing pack.
-        for changed in [false, true] {
+        // Fresh and stale ignored packs also work with no host-known paths:
+        // their staged real masters form the closed expected inventory.
+        for (changed, inventory) in [(false, "[]"), (true, "[]"), (true, inventory.as_str())] {
             if changed {
                 std::fs::write(fx.main.join(expected.keys().next().unwrap()), "stale pack")
                     .unwrap();
             }
-            let out = generate();
+            let out = generate(inventory);
             assert!(
                 out.status.success(),
                 "{}",
@@ -3811,7 +3827,7 @@ mod rework_merge_tests {
         let retired = fx.main.join(".agents/skills/aida-retired/SKILL.md");
         std::fs::create_dir_all(retired.parent().unwrap()).unwrap();
         std::fs::write(&retired, "retired").unwrap();
-        let out = generate();
+        let out = generate(&inventory);
         assert!(
             out.status.success(),
             "{}",
@@ -3826,7 +3842,7 @@ mod rework_merge_tests {
             format!("{makefile}\tmkdir -p .agents/skills/aida-fixture\n\techo merged > {merged_skill}\n"),
         )
         .unwrap();
-        let out = generate();
+        let out = generate(&inventory);
         assert!(
             out.status.success(),
             "{}",
@@ -3850,7 +3866,7 @@ mod rework_merge_tests {
             ),
         )
         .unwrap();
-        let out = generate();
+        let out = generate(&inventory);
         assert!(!out.status.success());
         let stderr = String::from_utf8_lossy(&out.stderr);
         assert!(stderr.contains("unregistered outputs"), "{stderr}");
@@ -4729,8 +4745,7 @@ pub(crate) fn commit_pending(
         let original_head = probe_text(&[os("rev-parse"), os("HEAD")])?;
         let journal = crate::repair_journal::RepairGuard::lock(main)?;
         let entry = journal.for_tree(clone, branch, &original_head, base)?;
-        anyhow::ensure!(entry.preparation_success == Some(true),
-            "repair preparation did not succeed; resume pickup to retry regeneration before publication");
+        entry.require_prepared()?;
         Some(
             entry
                 .original_conflict_paths

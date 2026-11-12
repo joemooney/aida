@@ -56,45 +56,44 @@ def registered(path, mode, masters=None):
     return False
 
 
-def pack_master(path):
-    """The template master that authorizes one portable pack file.
+def expected_pack_outputs(staged, host_outputs):
+    """Freeze the closed pack inventory before running any checkout program.
 
-    The real renderer (make sync-agent-skills) is compiled from the resolved
-    sources, so a merged tree may add or retire skills the host binary does not
-    know. Each rendered file maps to one master shape (scaffolding inventory:
-    skills-portable/<name>.md, skills/<name>.md, skills/<name>/SKILL.md, or a
-    folder-form helper skills/<name>/<sub>.md); anything else is unregistered.
-    trace:STORY-2710 | ai:claude
+    Host-rendered paths cover the installed generator's inventory. Staged
+    template masters also cover skills added by the resolved source tree.
+    Generator-created masters cannot authorize additional output writes.
+    trace:STORY-2710 | ai:codex
     """
-    if not path.startswith(PACK):
-        return None
-    name, _, rel = path[len(PACK):].partition("/")
-    if not name.startswith("aida-") or not rel or ".." in rel.split("/"):
-        return None
-    if rel == "SKILL.md":
-        candidates = (TEMPLATES + "skills-portable/" + name + ".md",
-                      TEMPLATES + "skills/" + name + ".md",
-                      TEMPLATES + "skills/" + name + "/SKILL.md")
-    elif rel.endswith(".md"):
-        candidates = (TEMPLATES + "skills/" + name + "/" + rel,)
-    else:
-        return None
-    return [c for c in candidates if not Path(c).is_symlink() and Path(c).is_file()]
+    outputs = set(host_outputs)
+    for source in staged:
+        if not source.startswith(TEMPLATES) or not source.endswith(".md"):
+            continue
+        path = Path(source)
+        if path.is_symlink() or not path.is_file():
+            continue
+        rel = source[len(TEMPLATES):]
+        kind, _, skill = rel.partition("/")
+        if kind not in ("skills", "skills-portable"):
+            continue
+        name, sep, helper = skill.partition("/")
+        if not sep:
+            name, helper = name.removesuffix(".md"), "SKILL.md"
+        elif kind == "skills-portable":
+            continue
+        if name.startswith("aida-") and ".." not in helper.split("/"):
+            outputs.add(PACK + name + "/" + helper)
+    return outputs
 
 
-def pack_change_allowed(path, before, after, pack_outputs, staged):
-    """Closed rule for the ignored portable pack: regular-file writes whose
-    master is a staged (host-published) source or in the host-rendered
-    inventory, and removal of existing aida-* entries, which the real renderer
-    deletes as orphans when a skill retires or becomes Claude-only. Removing an
-    ignored file cannot reach the published tree. trace:STORY-2710 | ai:claude
+def pack_change_allowed(path, before, after, pack_outputs):
+    """Only frozen expected regular files and renderer orphan removals.
+    trace:STORY-2710 | ai:codex
     """
     if not path.startswith(PACK + "aida-"):
         return False
     if after is None:
         return before is not None and before[0] != "special"
-    expected = path in pack_outputs or any(m in staged for m in pack_master(path) or ())
-    return expected and isinstance(after[0], int)
+    return path in pack_outputs and isinstance(after[0], int)
 
 
 def snapshot():
@@ -188,8 +187,7 @@ def main(base, phase, pack_outputs=(), budget=100.0):
     blockers = sorted(unmerged - outputs)
     if blockers:
         raise RuntimeError("regeneration requires resolved authoritative sources: " + repr(blockers))
-    pack_outputs = set(pack_outputs)
-    staged = set(index_entries())
+    pack_outputs = expected_pack_outputs(set(index_entries()), pack_outputs)
     before = snapshot()
     deadline = time.monotonic() + budget
     try:
@@ -204,7 +202,7 @@ def main(base, phase, pack_outputs=(), budget=100.0):
         unexpected = sorted(
             p for p in before.keys() | after.keys()
             if before.get(p) != after.get(p) and p not in outputs
-            and not pack_change_allowed(p, before.get(p), after.get(p), pack_outputs, staged))
+            and not pack_change_allowed(p, before.get(p), after.get(p), pack_outputs))
         if unexpected:
             raise RuntimeError("generator wrote unregistered outputs: " + repr(unexpected))
         for path in outputs:

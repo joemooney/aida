@@ -58,6 +58,21 @@ pub(crate) struct RepairEntry {
     pub validation: Option<Validation>,
     pub refusal_notice: Option<RefusalNotice>,
 }
+impl RepairEntry {
+    // A recorded failure survives adoption and staging retries. Only successful
+    // preparation (and a full retry after generation failure) admits the lane.
+    // The entry lookup binds this evidence to original head, base and tree.
+    // trace:STORY-2710 | ai:codex
+    pub fn require_prepared(&self) -> Result<()> {
+        anyhow::ensure!(
+            self.preparation_success == Some(true)
+                && self.regeneration_success != Some(false)
+                && !self.original_conflict_paths.is_empty(),
+            "repair preparation did not succeed; resume pickup to retry regeneration before publication"
+        );
+        Ok(())
+    }
+}
 #[derive(Serialize, Deserialize)]
 struct Journal {
     version: u32,
@@ -272,6 +287,30 @@ mod tests {
         assert!(guard
             .for_tree(&entry.tree_path, "pr", "moved", &entry.base)
             .is_err());
+        drop(guard);
+        // Missing legacy evidence, recorded preparation failure, and a later
+        // generation failure all fail closed across a journal reload.
+        let mut guard = RepairGuard::lock(main).unwrap();
+        assert!(guard
+            .for_tree(&entry.tree_path, "pr", &key.original_head, &entry.base)
+            .unwrap()
+            .require_prepared()
+            .is_err());
+        guard.record_preparation(&key, true).unwrap();
+        guard.record_regeneration(&key, false).unwrap();
+        drop(guard);
+        let mut guard = RepairGuard::lock(main).unwrap();
+        assert!(guard
+            .for_tree(&entry.tree_path, "pr", &key.original_head, &entry.base)
+            .unwrap()
+            .require_prepared()
+            .is_err());
+        guard.record_regeneration(&key, true).unwrap();
+        guard
+            .for_tree(&entry.tree_path, "pr", &key.original_head, &entry.base)
+            .unwrap()
+            .require_prepared()
+            .unwrap();
         drop(guard);
         // Two independent entry points racing the same head admit one owner.
         let mut dead = entry.clone();

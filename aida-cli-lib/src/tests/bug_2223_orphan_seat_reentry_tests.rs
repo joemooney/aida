@@ -332,13 +332,40 @@ fn story_2710_actual_orphan_adoption_transfers_pending_repair() {
             base: base.clone(),
             spawn: crate::repair_journal::SpawnOutcome::Unknown,
             original_conflict_paths: vec!["README.md".into()],
-            preparation_success: Some(true),
+            preparation_success: Some(false),
             regeneration_success: None,
             validation: None,
             refusal_notice: None,
         })
         .unwrap();
     drop(journal);
+    let receipt = adopt_receipt("TASK-2223", &orphan.branch, tree, true, true).unwrap();
+    let failed_successor = lease_for(&fx.main, "TASK-2223");
+    assert_ne!(failed_successor.id, orphan.id);
+    let failure = prepare_host_repair_with(
+        &fx.main,
+        tree,
+        3813,
+        &failed_successor.id,
+        &execute,
+        &orphan.branch,
+        true,
+        |_| panic!("failed preparation cannot publish"),
+        |_, _| anyhow::bail!("restoration still fails"),
+        || Ok((base.clone(), head.clone())),
+    )
+    .unwrap_err();
+    assert!(failure.to_string().contains("restoration still fails"));
+    // Failed resume setup restores the orphan lease AND its journal identity.
+    drop(receipt);
+    let journal = crate::repair_journal::RepairGuard::lock(&fx.main).unwrap();
+    let entry = journal
+        .for_tree(tree, &orphan.branch, &head, &base)
+        .unwrap();
+    assert_eq!(entry.lane_id, orphan.id);
+    assert!(entry.require_prepared().is_err());
+    drop(journal);
+    assert!(!crate::lease_path(&fx.main, &failed_successor.id).exists());
     adopt("TASK-2223", &orphan.branch, tree).unwrap();
     let successor = lease_for(&fx.main, "TASK-2223");
     assert_ne!(successor.id, orphan.id);
@@ -352,13 +379,23 @@ fn story_2710_actual_orphan_adoption_transfers_pending_repair() {
             &orphan.branch,
             true,
             |_| panic!("pending conflicts cannot publish"),
-            |_, _| panic!("successful preparation must be retained"),
+            |input, restore_only| {
+                assert_eq!(input, base);
+                assert!(restore_only);
+                Ok(())
+            },
             || Ok((base.clone(), head.clone())),
         )
     };
     assert!(resume(&orphan.id).is_err());
     assert!(resume("unrelated-lane").is_err());
     assert_eq!(resume(&successor.id).unwrap(), ["README.md"]);
+    let journal = crate::repair_journal::RepairGuard::lock(&fx.main).unwrap();
+    let entry = journal
+        .for_tree(tree, &orphan.branch, &head, &base)
+        .unwrap();
+    assert_eq!(entry.lane_id, successor.id);
+    entry.require_prepared().unwrap();
 }
 
 /// Binding 5b: a lease whose owner is alive is never adopted.

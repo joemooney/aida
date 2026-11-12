@@ -178,18 +178,50 @@ class RepairGenerationTests(unittest.TestCase):
                 staged = {'aida-core/templates/skills/aida-x/SKILL.md',
                           'aida-core/templates/skills/aida-x/examples/e.md'}
                 new = (0o644, 'h')
+                inventory = driver.expected_pack_outputs(staged, ())
+                self.assertEqual(inventory, {
+                    ".agents/skills/aida-x/SKILL.md",
+                    ".agents/skills/aida-x/examples/e.md"})
                 allowed = driver.pack_change_allowed
-                self.assertTrue(allowed('.agents/skills/aida-x/SKILL.md', None, new, set(), staged))
-                self.assertTrue(allowed('.agents/skills/aida-x/examples/e.md', None, new, set(), staged))
-                self.assertFalse(allowed('.agents/skills/aida-x/SKILL.md', None, new, set(), set()))
-                self.assertFalse(allowed('.agents/skills/aida-x/run.sh', None, new, set(), staged))
-                self.assertFalse(allowed('.agents/skills/aida-x/SKILL.md', None, ('link', 'x'), set(), staged))
-                self.assertFalse(allowed('.agents/skills/other/SKILL.md', None, new, set(), staged))
-                self.assertTrue(allowed('.agents/skills/aida-old/SKILL.md', new, None, set(), staged))
+                self.assertTrue(allowed('.agents/skills/aida-x/SKILL.md', None, new, inventory))
+                self.assertTrue(allowed('.agents/skills/aida-x/examples/e.md', None, new, inventory))
+                self.assertFalse(allowed('.agents/skills/aida-x/SKILL.md', None, new, set()))
+                self.assertFalse(allowed('.agents/skills/aida-x/run.sh', None, new, inventory))
+                self.assertFalse(allowed('.agents/skills/aida-x/SKILL.md', None, ('link', 'x'), inventory))
+                self.assertFalse(allowed('.agents/skills/other/SKILL.md', None, new, inventory))
+                self.assertTrue(allowed('.agents/skills/aida-old/SKILL.md', new, None, inventory))
                 self.assertTrue(allowed('.agents/skills/aida-h/SKILL.md', None, new,
-                                        {'.agents/skills/aida-h/SKILL.md'}, set()))
+                                        {'.agents/skills/aida-h/SKILL.md'}))
             finally:
                 os.chdir(old)
+
+    def test_pack_inventory_is_frozen_before_generator_writes(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            git, base = self.fixture(root)
+            self.assertEqual(self.run_driver(root, base, 'restore').returncode, 0)
+            master = root / 'aida-core/templates/skills/aida-late.md'
+            master.parent.mkdir(parents=True)
+            master.write_text('staged master')
+            git('add', str(master.relative_to(root)))
+            # A missing working-tree master cannot authorize an output. The
+            # generator recreates the same staged bytes; the output inventory
+            # must not expand in response to that recreation.
+            master.unlink()
+            (root / 'Makefile').write_text(
+                'sync-templates:\n'
+                '\tmkdir -p .agents/skills/aida-late\n'
+                '\techo -n "staged master" > aida-core/templates/skills/aida-late.md\n'
+                '\techo generated > .agents/skills/aida-late/SKILL.md\n')
+            # Establish the absent master before generation; its recreation is
+            # itself refused as well as its unauthorized portable output.
+            git('add', 'Makefile')
+            git('commit', '-qm', 'staged generator')
+            base = git('rev-parse', 'HEAD').stdout.strip()
+            result = self.run_driver(root, base, 'generate')
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn('.agents/skills/aida-late/SKILL.md', result.stderr)
+            self.assertFalse((root / '.agents/skills/aida-late/SKILL.md').exists())
 
     def test_registry_excludes_local_extensions_and_unrelated_claude_files(self):
         self.assertTrue(driver.registered('.claude/skills/aida-test/SKILL.md', '120000'))
