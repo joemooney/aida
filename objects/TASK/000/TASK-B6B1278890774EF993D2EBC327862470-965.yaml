@@ -17,7 +17,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-08T03:08:54.290380002Z
-modified_at: 2026-11-12T13:00:13.102768139Z
+modified_at: 2026-11-12T13:25:34.114558785Z
 req_type: Task
 tags:
 - area:architecture
@@ -186,6 +186,17 @@ comments:
   modified_at: 2026-11-12T13:00:13.102768139Z
   session_id: 01a1ceeb-e827-7832-8991-e83d9eb95cef
   harness_version: 2.1.322 (Claude Code)
+- id: 01a1cfef-6122-7411-bab0-3e2896c69c96
+  author: joe
+  content: |
+    TASK-3448 next slice: injected generic cmdkit::testing::CliTestSupport<T> has no registry or CLI-type dependency. command_registry supplies the existing pristine clap tree and decoder at the crate-root test composition point. Repointed 192 parsing calls and 15 tree calls in 27 top-level caller files; 3 support files plus the existing evidence doc make 31 changed files. Nested directories remain a separate mechanical slice under the advisor file-count limit. Production parsing/tree-building is unchanged.
+
+    SCC measurement uses the exact docs/internal/testing/task-3425-cmdkit-rework.md function with HEAD/WORKTREE entrypoints, retaining inline-test edges and all original filters. Base bee6758fabe4048cfccd62d95bd57df896b74bd9: 610 modules, largest SCC 367, cmdkit outside it. Working tree: 610 modules, largest SCC 367, cmdkit outside it. No member leaves; cmdkit retains only spec_arg. Remaining path example: flow_cmd -> cli -> agent_launch -> command_registry (cli re-exports argument types; agent_launch uses the production tree). The SCC target is unmet; this slice must publish as Refs TASK-3448.
+
+    Validation so far: cargo check --profile agent -p aida-cli-lib --tests passed via launcher job j20261112T131100619-2-0; all 27 caller diffs reverse to the original source after formatting; changed-file rustfmt --check and git diff --check pass. Executed Rust tests are not yet established: registry/parser and workspace compile jobs are still in progress/queued. Final validation details will be attached to the host publication body. Full make check-ci-fast is not claimed; bounded non-Cargo batches are partial and some guards attempt read-only Git metadata writes. Exact make check-ci-compile cargo payload (cargo test --profile agent --workspace --no-run) is queued through the launcher.
+  created_at: 2026-11-12T13:25:34.114558785Z
+  modified_at: 2026-11-12T13:25:34.114558785Z
+  session_id: 01a1cfe00f1f
 history:
 - id: 01a1b921-d315-74a0-9c9a-0ca54df44ce6
   author: joe
