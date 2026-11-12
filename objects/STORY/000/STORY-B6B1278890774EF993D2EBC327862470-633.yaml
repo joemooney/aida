@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-10T22:04:54.061461Z
-modified_at: 2026-11-12T09:13:07.082503448Z
+modified_at: 2026-11-12T09:13:10.381489960Z
 req_type: Story
 comments:
 - id: 01a1c781-4cf1-7c80-b086-89c5c5096ab6
@@ -380,6 +380,21 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Slice 1 retains two defects: new tracked template mirrors are rejected and operational merge-tree failures create repair reservations. CI pending at review time.. No triage reason was given.'
   created_at: 2026-11-12T09:13:07.082495327Z
   modified_at: 2026-11-12T09:13:07.082495327Z
+  session_id: 01a1ceeb-e827-7832-8991-e83d9eb95cef
+  harness_version: 2.1.322 (Claude Code)
+- id: 01a1cf08-4d49-7992-8ef6-4b31e51ae2b8
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (STORY-2710):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: eba7e8f7aa6e
+    Recorded: 2026-11-12T07:03:43.902048219+00:00
+    Findings:
+    1. [P2] scripts/repair-generated.py:178,209-217: Derive expected tracked template outputs from resolved staged masters under the closed registry before generation. Only ignored pack outputs currently get staged-master enumeration; a new command/skill master whose mirror must be generated makes sync-templates create a legitimate .claude mirror outside pinned-main outputs, which is rejected and rolled back on every retry. Cover new command/skill mirrors while preserving unrelated-path refusal.
+    2. [P2] aida-cli-lib/src/seat_clone.rs:3561-3587: Distinguish confirmed merge-tree conflicts from fatal errors, spawn failures and timeouts before reserving or merging. is_err currently creates an Unknown reservation for operational failures and attempts a real merge; a clean merge then bails with conflict observation changed, leaving the head reserved. Operational failures must return without reservation/index mutation. Add injected fatal/timeout regressions against prepare_host_repair_with and retain positive-conflict coverage.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-12T09:13:10.217270468Z
+  modified_at: 2026-11-12T09:13:10.217270468Z
   session_id: 01a1ceeb-e827-7832-8991-e83d9eb95cef
   harness_version: 2.1.322 (Claude Code)
 history:
