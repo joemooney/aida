@@ -357,6 +357,103 @@ fn production_code_uses_only_the_built_command_tree() {
     );
 }
 
+/// The cmdkit framework names. They live in `cmdkit`; `command_registry`
+/// must neither re-export them nor be the path consumers import them through,
+/// or the main SCC regrows (TASK-3448).
+const CMDKIT_FRAMEWORK: &[&str] = &[
+    "OutputFormat",
+    "StakeholderAction",
+    "GlobalArgs",
+    "Handler",
+    "Flow",
+    "returned",
+    "StoreCtx",
+    "CmdPolicy",
+    "DispatchCtx",
+    "CommandReg",
+    "Invocation",
+    "CliSupport",
+];
+
+/// Boundary violations in one production source: a framework re-export from
+/// `command_registry.rs`, or any file naming a framework item through a
+/// `command_registry::` path (single item or brace group, across lines).
+// trace:TASK-3448.acf4f519 | ai:claude
+fn cmdkit_boundary_violations(name: &str, text: &str) -> Vec<String> {
+    let is_framework = |item: &str| {
+        let item = item.split(" as ").next().unwrap_or("").trim();
+        CMDKIT_FRAMEWORK.contains(&item)
+    };
+    let mut hits = Vec::new();
+    let lines = production_lines(text);
+    if name == "command_registry.rs" {
+        for (line_no, line) in &lines {
+            let t = line.trim_start();
+            if (t.starts_with("pub use") || t.starts_with("pub(crate) use"))
+                && (t.contains("cmdkit") || CMDKIT_FRAMEWORK.iter().any(|n| t.contains(n)))
+            {
+                hits.push(format!("{name}:{line_no}: re-export {}", t.trim()));
+            }
+        }
+    }
+    let body: String = lines.iter().map(|(_, l)| *l).collect::<Vec<_>>().join("\n");
+    let mut rest = body.as_str();
+    while let Some(at) = rest.find("command_registry::") {
+        rest = &rest[at + "command_registry::".len()..];
+        let items: Vec<&str> = if let Some(group) = rest.strip_prefix('{') {
+            group.split('}').next().unwrap_or("").split(',').collect()
+        } else {
+            let end = rest
+                .find(|c: char| !(c.is_alphanumeric() || c == '_'))
+                .unwrap_or(rest.len());
+            vec![&rest[..end]]
+        };
+        for item in items.into_iter().filter(|i| is_framework(i)) {
+            hits.push(format!("{name}: command_registry::{}", item.trim()));
+        }
+    }
+    hits
+}
+
+/// Consumers import the framework from `cmdkit`; `command_registry` keeps
+/// only its own registry items and the root callback injection.
+// trace:TASK-3448.acf4f519 | ai:claude
+#[test]
+fn cmdkit_framework_never_routes_through_command_registry() {
+    let src = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
+    let hits: Vec<String> = production_sources(&src)
+        .into_iter()
+        .flat_map(|path| {
+            let name = path.strip_prefix(&src).unwrap().display().to_string();
+            let text = std::fs::read_to_string(&path).unwrap();
+            cmdkit_boundary_violations(&name, &text)
+        })
+        .collect();
+    assert!(
+        hits.is_empty(),
+        "import cmdkit framework types from crate::cmdkit, never via command_registry:\n{}",
+        hits.join("\n")
+    );
+}
+
+// trace:TASK-3448.acf4f519 | ai:claude
+#[test]
+fn cmdkit_boundary_guard_rejects_restored_reexport_and_consumer_import() {
+    let reexport = "use crate::cmdkit::{CommandReg, Flow};\npub use crate::cmdkit::{DispatchCtx, Flow};\npub fn registry() {}\n";
+    assert_eq!(
+        cmdkit_boundary_violations("command_registry.rs", reexport).len(),
+        1
+    );
+    let single = "use crate::command_registry::Flow;\n";
+    assert_eq!(cmdkit_boundary_violations("pr_cmd.rs", single).len(), 1);
+    let grouped = "use crate::command_registry::{\n    REGISTRY,\n    DispatchCtx as Ctx,\n};\n";
+    assert_eq!(cmdkit_boundary_violations("pr_cmd.rs", grouped).len(), 1);
+    // Registry functions/statics and the private cmdkit import stay legal.
+    let legit = "use crate::cmdkit::{CommandReg, DispatchCtx, Flow, Invocation};\nuse crate::command_registry::{REGISTRY, lookup};\nfn f() { crate::command_registry::dispatch(); }\n";
+    assert!(cmdkit_boundary_violations("command_registry.rs", legit).is_empty());
+    assert!(cmdkit_boundary_violations("main_dispatch.rs", legit).is_empty());
+}
+
 /// Every `.rs` file below `dir`, recursively, except test modules (a
 /// `tests/` directory, `tests.rs`, or `*_tests.rs`).
 fn production_sources(dir: &std::path::Path) -> Vec<std::path::PathBuf> {
