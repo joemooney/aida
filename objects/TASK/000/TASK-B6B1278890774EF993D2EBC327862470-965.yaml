@@ -17,7 +17,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-08T03:08:54.290380002Z
-modified_at: 2026-11-11T12:19:50.685247794Z
+modified_at: 2026-11-12T07:01:34.465647309Z
 req_type: Task
 tags:
 - area:architecture
@@ -134,6 +134,13 @@ comments:
   created_at: 2026-11-11T12:19:50.685247794Z
   modified_at: 2026-11-11T12:19:50.685247794Z
   session_id: 01a1ca83-fabb-7663-852c-12c78d4e097f
+  harness_version: 2.1.322 (Claude Code)
+- id: 01a1ce8f-d281-74a0-9086-493ace868688
+  author: joe
+  content: 'Final slice PR #3867 (head 42343f8f8f1, stacked on #3866): framework-type imports in pr_cmd/rework moved to cmdkit; pub use crate::cmdkit::* removed from command_registry. SCC re-measured with the task-3425-cmdkit-rework.md script: before origin/main d8b778daec2 = 610 modules, largest SCC 367; after = 610, 367 (no change). 36 modules still reference command_registry for registry functions (try_parse_from x428, mostly inline tests; built_command x45), which keeps it in the cycle. Titled Refs, not completion. Shrinking it needs the test parse helpers moved to a leaf, or inline-test edges excluded from the measure.'
+  created_at: 2026-11-12T07:01:34.465647309Z
+  modified_at: 2026-11-12T07:01:34.465647309Z
+  session_id: 01a1cc9c-1eae-7a72-9a24-8ec1afc42772
   harness_version: 2.1.322 (Claude Code)
 history:
 - id: 01a1b921-d315-74a0-9c9a-0ca54df44ce6
