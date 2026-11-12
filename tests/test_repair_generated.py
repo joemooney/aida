@@ -6,6 +6,7 @@ import os
 from pathlib import Path
 import subprocess
 import tempfile
+import time
 import unittest
 
 DRIVER = Path(__file__).resolve().parents[1] / 'scripts/repair-generated.py'
@@ -63,8 +64,8 @@ class RepairGenerationTests(unittest.TestCase):
             result = self.run_driver(root, base, 'generate')
             self.assertNotEqual(result.returncode, 0)
             self.assertIn('unregistered outputs', result.stderr)
-            # The refused run's writes, registered or not, return to the index
-            # so no later publication attempt can stage them.
+            # The refused run restores the pre-run working tree, so no later
+            # publication attempt can stage the generator's partial writes.
             self.assertIn('rolled back', result.stderr)
             self.assertEqual((root / 'source.rs').read_text(), 'base\n')
             self.assertEqual((root / 'scripts/exec-context-legacy.json').read_text(), 'main\n')
@@ -165,6 +166,138 @@ class RepairGenerationTests(unittest.TestCase):
             self.assertIn('timed out', result.stderr)
             self.assertFalse((root / 'stray.txt').exists())
             self.assertEqual((root / 'scripts/exec-context-legacy.json').read_text(), 'main\n')
+
+    def test_resolved_mirrors_include_additions_and_allow_retirements(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            git, base = self.fixture(root)
+            self.assertEqual(self.run_driver(root, base, 'restore').returncode, 0)
+            mirrors = {
+                'commands/run.md': '.claude/commands/run.md',
+                'skills/aida-run.md': '.claude/skills/aida-run/SKILL.md',
+                'hooks/run.sh': '.claude/hooks/run.sh',
+                '.aida/discipline/run.md': '.aida/discipline/run.md',
+            }
+            for source, mirror in mirrors.items():
+                master = root / 'aida-core/templates' / source
+                master.parent.mkdir(parents=True, exist_ok=True)
+                master.write_text('old master')
+                target = root / mirror
+                target.parent.mkdir(parents=True, exist_ok=True)
+                if mirror.startswith('.claude/'):
+                    target.symlink_to(os.path.relpath(master, target.parent))
+                else:
+                    target.write_text('old master')
+            git('add', '.')
+            git('commit', '-qm', 'old mirrors')
+            base = git('rev-parse', 'HEAD').stdout.strip()
+            recipe = ['sync-templates:']
+            for source, mirror in mirrors.items():
+                (root / 'aida-core/templates' / source).unlink()
+                new_source = source.replace('run', 'new')
+                new_mirror = mirror.replace('run', 'new')
+                master = root / 'aida-core/templates' / new_source
+                master.write_text('new master')
+                recipe.append(f'\trm -f {mirror}')
+                recipe.append(f'\tmkdir -p {Path(new_mirror).parent}')
+                if mirror.startswith('.claude/'):
+                    target = os.path.relpath(master, (root / new_mirror).parent)
+                    recipe.append(f'\tln -s {target} {new_mirror}')
+                else:
+                    recipe.append(f'\tcp {master.relative_to(root)} {new_mirror}')
+            (root / 'Makefile').write_text('\n'.join(recipe) + '\n')
+            # Resolved sources are staged; new mirrors do not yet exist, and
+            # old mirrors remain tracked until the renderer removes them.
+            git('add', 'aida-core/templates', 'Makefile')
+            result = self.run_driver(root, base, 'generate')
+            self.assertEqual(result.returncode, 0, result.stderr)
+            for mirror in mirrors.values():
+                self.assertFalse((root / mirror).is_symlink())
+                self.assertFalse((root / mirror).exists())
+                self.assertEqual((root / mirror.replace('run', 'new')).read_text(), 'new master')
+
+    def test_staged_master_does_not_require_a_never_tracked_mirror(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            git, base = self.fixture(root)
+            self.assertEqual(self.run_driver(root, base, 'restore').returncode, 0)
+            master = root / 'aida-core/templates/skills/aida-new.md'
+            master.parent.mkdir(parents=True)
+            master.write_text('master')
+            (root / 'Makefile').write_text(
+                'sync-templates:\n\tmkdir -p .agents/skills/aida-new\n'
+                '\techo generated > .agents/skills/aida-new/SKILL.md\n')
+            git('add', 'aida-core/templates', 'Makefile')
+            result = self.run_driver(root, base, 'generate')
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertEqual((root / '.agents/skills/aida-new/SKILL.md').read_text(), 'generated\n')
+
+    def test_dirty_resume_failure_restores_prerun_bytes_modes_and_links(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            git, base = self.fixture(root,
+                '    Path("source.rs").write_text("generator corruption")\n'
+                '    Path("notes").write_text("generator corruption")\n'
+                '    Path("link").unlink()\n'
+                '    Path("link").symlink_to("other")\n')
+            self.assertEqual(self.run_driver(root, base, 'restore').returncode, 0)
+            (root / 'source.rs').write_bytes(b'newer unstaged edits\x00\xff')
+            (root / 'source.rs').chmod(0o751)
+            (root / 'notes').write_bytes(b'untracked user notes')
+            (root / 'link').symlink_to('source.rs')
+            before_index = git('ls-files', '-s').stdout
+            result = self.run_driver(root, base, 'generate')
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn('unregistered outputs', result.stderr)
+            self.assertEqual((root / 'source.rs').read_bytes(), b'newer unstaged edits\x00\xff')
+            self.assertEqual((root / 'source.rs').stat().st_mode & 0o777, 0o751)
+            self.assertEqual((root / 'notes').read_bytes(), b'untracked user notes')
+            self.assertEqual(os.readlink(root / 'link'), 'source.rs')
+            self.assertEqual(git('ls-files', '-s').stdout, before_index)
+
+    def test_rollback_does_not_follow_replaced_directory_symlink(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            git, base = self.fixture(root,
+                '    import shutil\n'
+                '    shutil.rmtree("source-dir")\n'
+                '    Path("source-dir").symlink_to("user-dir")\n')
+            self.assertEqual(self.run_driver(root, base, 'restore').returncode, 0)
+            for directory, content in [('source-dir', 'source edits'), ('user-dir', 'user edits')]:
+                (root / directory).mkdir()
+                (root / directory / 'file').write_text(content)
+            result = self.run_driver(root, base, 'generate')
+            self.assertNotEqual(result.returncode, 0)
+            self.assertEqual((root / 'source-dir/file').read_text(), 'source edits')
+            self.assertEqual((root / 'user-dir/file').read_text(), 'user edits')
+            self.assertFalse((root / 'source-dir').is_symlink())
+
+    def test_timeout_reaps_late_writing_recipe_descendant_before_rollback(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            git, base = self.fixture(root)
+            self.assertEqual(self.run_driver(root, base, 'restore').returncode, 0)
+            (root / 'aida-core/templates/commands').mkdir(parents=True)
+            (root / 'aida-core/templates/commands/run.md').write_text('master')
+            # The descendant escapes make's process group and would write
+            # after rollback unless the driver adopts, kills and reaps it.
+            late = ('from pathlib import Path; import time; '
+                    'Path("source.rs").write_text("partial"); '
+                    'time.sleep(1.5); Path("source.rs").write_text("late corruption")')
+            (root / 'spawn.py').write_text(
+                'import subprocess, time, sys\n'
+                f'subprocess.Popen([sys.executable, "-c", {late!r}], start_new_session=True)\n'
+                'time.sleep(30)\n')
+            (root / 'Makefile').write_text('sync-templates:\n\tpython3 spawn.py\n')
+            git('add', '.')
+            result = subprocess.run(('python3', str(DRIVER), base, 'generate', '[]', '0.6'),
+                                    cwd=root, capture_output=True, text=True, timeout=8)
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn('timed out', result.stderr)
+            self.assertIn('rolled back', result.stderr)
+            self.assertEqual((root / 'source.rs').read_text(), 'base\n')
+            time.sleep(1.6)
+            self.assertEqual((root / 'source.rs').read_text(), 'base\n')
 
     def test_pack_rule_is_closed_over_staged_masters(self):
         with tempfile.TemporaryDirectory() as tmp:

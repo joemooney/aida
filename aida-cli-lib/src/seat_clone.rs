@@ -1425,6 +1425,19 @@ fn run_sandboxed_as(
             Err(SandboxFailure::Truncated(out.stdout))
         }
         crate::BoundedCommandOutput::Completed(out) if out.status.success() => Ok(out.stdout),
+        crate::BoundedCommandOutput::Completed(out)
+            if program == "git"
+                && repair_merge_tree_conflict(
+                    &args
+                        .iter()
+                        .map(|arg| arg.to_str().unwrap_or(""))
+                        .collect::<Vec<_>>(),
+                    out.status.code(),
+                    &out.stdout,
+                ) =>
+        {
+            Ok(out.stdout)
+        }
         crate::BoundedCommandOutput::Completed(out) => Err(failed(format!(
             "the sandboxed {program} exited with {}: {}",
             out.status,
@@ -3070,7 +3083,10 @@ pub(crate) fn prepare_rework_merge(
             .stdin(std::process::Stdio::null());
             match crate::command_output_with_timeout_detail(cmd, std::time::Duration::from_secs(30))
             {
-                crate::BoundedCommandOutput::Completed(out) if out.status.success() => {
+                crate::BoundedCommandOutput::Completed(out)
+                    if out.status.success()
+                        || repair_merge_tree_conflict(args, out.status.code(), &out.stdout) =>
+                {
                     decode(args, out.stdout)
                 }
                 crate::BoundedCommandOutput::Completed(out) => anyhow::bail!(
@@ -3489,6 +3505,33 @@ fn regenerate_repair_outputs(
     )
 }
 
+// merge-tree -z emits a tree OID, then conflicted paths up to the empty
+// separator. Exit 1 is usable evidence only with this structured conflict list.
+// Other failures (including timeouts and unsupported options) never reserve.
+// trace:STORY-2710 | ai:codex
+fn repair_merge_tree_paths(output: &str) -> Option<Vec<String>> {
+    let (oid, rest) = output.split_once('\0')?;
+    let fields = rest.split('\0');
+    if ![40, 64].contains(&oid.len()) || !oid.bytes().all(|b| b.is_ascii_hexdigit()) {
+        return None;
+    }
+    Some(
+        fields
+            .take_while(|p| !p.is_empty())
+            .map(str::to_owned)
+            .collect(),
+    )
+}
+
+fn repair_merge_tree_conflict(args: &[&str], code: Option<i32>, stdout: &[u8]) -> bool {
+    args.starts_with(&["merge-tree", "--write-tree", "--name-only", "-z"])
+        && code == Some(1)
+        && std::str::from_utf8(stdout)
+            .ok()
+            .and_then(repair_merge_tree_paths)
+            .is_some_and(|paths| !paths.is_empty())
+}
+
 // Host-staged conflict preparation. The shared reservation precedes the merge;
 // any ambiguous failure keeps it. Only proof of lane death may release it.
 // trace:STORY-2710 | ai:codex
@@ -3559,7 +3602,18 @@ fn prepare_host_repair_with(
         original_head: before.clone(),
     };
     // Reserve only a positively observed conflict; merge-tree changes no index.
-    if execute(&["merge-tree", "--write-tree", "HEAD", &base]).is_err() {
+    let observation = execute(&[
+        "merge-tree",
+        "--write-tree",
+        "--name-only",
+        "-z",
+        "HEAD",
+        &base,
+    ])
+    .context("could not observe repair merge; no reservation created")?;
+    let observed_paths = repair_merge_tree_paths(&observation)
+        .context("invalid repair merge observation; no reservation created")?;
+    if !observed_paths.is_empty() {
         anyhow::ensure!(
             before == pr_head,
             "repair requires the exact original PR head; local commits preserved"
@@ -3574,7 +3628,7 @@ fn prepare_host_repair_with(
             branch: branch.into(),
             base: base.clone(),
             spawn: SpawnOutcome::Unknown,
-            original_conflict_paths: vec![],
+            original_conflict_paths: observed_paths,
             regeneration_success: None,
             regenerated_tree: None,
             preparation_success: None,
@@ -3893,6 +3947,84 @@ mod rework_merge_tests {
             .exists());
     }
 
+    // trace:STORY-2710 | ai:codex
+    #[test]
+    fn story_2710_merge_tree_requires_structured_conflict_exit() {
+        let args = [
+            "merge-tree",
+            "--write-tree",
+            "--name-only",
+            "-z",
+            "HEAD",
+            "base",
+        ];
+        let output = format!("{}\0path with\nnewline\0\0details\0", "a".repeat(40));
+        assert!(repair_merge_tree_conflict(
+            &args,
+            Some(1),
+            output.as_bytes()
+        ));
+        assert_eq!(
+            repair_merge_tree_paths(&output).unwrap(),
+            ["path with\nnewline"]
+        );
+        for code in [None, Some(0), Some(128), Some(129)] {
+            assert!(!repair_merge_tree_conflict(&args, code, output.as_bytes()));
+        }
+        for output in [
+            "",
+            "unknown option",
+            "a tree without paths",
+            &format!("{}\0", "a".repeat(40)),
+        ] {
+            assert!(!repair_merge_tree_conflict(
+                &args,
+                Some(1),
+                output.as_bytes()
+            ));
+        }
+        assert_eq!(
+            repair_merge_tree_paths(&format!("{}\0", "a".repeat(40))).unwrap(),
+            Vec::<String>::new()
+        );
+    }
+
+    // trace:STORY-2710 | ai:codex
+    #[test]
+    fn story_2710_clean_merge_probe_does_not_reserve() {
+        let fx = tests::fixture();
+        tests::git_ok(&fx.main, &["checkout", "-qb", "repair"]);
+        let head = tests::git_ok(&fx.main, &["rev-parse", "HEAD"]);
+        let execute = |args: &[&str]| -> Result<String> {
+            let out = crate::test_git::git_command()
+                .current_dir(&fx.main)
+                .args(args)
+                .output()?;
+            anyhow::ensure!(out.status.success(), "Git refused");
+            let text = String::from_utf8(out.stdout)?;
+            Ok(if args.contains(&"-z") {
+                text
+            } else {
+                text.trim().to_owned()
+            })
+        };
+        let paths = prepare_host_repair_with(
+            &fx.main,
+            &fx.main,
+            3813,
+            "lease-1",
+            &execute,
+            "repair",
+            false,
+            |_| panic!("unchanged tip must not publish"),
+            |_, _| panic!("clean merge must not regenerate"),
+            || Ok((head.clone(), head.clone())),
+        )
+        .unwrap();
+        assert!(paths.is_empty());
+        assert!(!fx.main.join(".aida/repair-journal.json").exists());
+    }
+
     // A real staged merge, with the index left untouched while the lane edits
     // files. This exercises the marker gate without requiring bubblewrap.
     // trace:STORY-2710 | ai:codex
@@ -3940,9 +4072,50 @@ mod rework_merge_tests {
                 .current_dir(&fx.main)
                 .args(args)
                 .output()?;
-            anyhow::ensure!(out.status.success(), "Git refused");
-            Ok(String::from_utf8(out.stdout)?.trim().to_owned())
+            anyhow::ensure!(
+                out.status.success()
+                    || repair_merge_tree_conflict(args, out.status.code(), &out.stdout),
+                "Git refused"
+            );
+            let text = String::from_utf8(out.stdout)?;
+            Ok(if args.contains(&"-z") {
+                text
+            } else {
+                text.trim().to_owned()
+            })
         };
+        // Failed observations happen before reservation or mutation. Recovery
+        // on the same head must still reach the real conflict below.
+        // trace:STORY-2710 | ai:codex
+        for failure in [
+            "probe timed out",
+            "probe I/O failure",
+            "unknown option: write-tree",
+        ] {
+            let failed_probe = |args: &[&str]| -> Result<String> {
+                if args.first() == Some(&"merge-tree") {
+                    anyhow::bail!("{failure}");
+                }
+                git_execute(args)
+            };
+            let why = prepare_host_repair_with(
+                &fx.main,
+                &fx.main,
+                3813,
+                "lease-1",
+                &failed_probe,
+                "repair",
+                false,
+                |_| panic!("failed probe cannot publish"),
+                |_, _| panic!("failed probe cannot regenerate"),
+                || Ok((base.clone(), head.clone())),
+            )
+            .unwrap_err();
+            assert!(format!("{why:#}").contains(failure));
+            assert!(!fx.main.join(".aida/repair-journal.json").exists());
+            assert_eq!(g(&["rev-parse", "HEAD"]), head);
+            assert!(git_execute(&["rev-parse", "--verify", "MERGE_HEAD"]).is_err());
+        }
         let files = prepare_host_repair_with(
             &fx.main,
             &fx.main,
