@@ -703,10 +703,6 @@ const WRITE_CHANNEL_EXEMPT: &[(&str, &str)] = &[
         "commits the file with git; never writes it",
     ),
     (
-        "aida-cli-lib/src/lib.rs",
-        "its one site (read_review_mode) only reads; config writes live in their modules",
-    ),
-    (
         "aida-core/src/adoption_projection.rs",
         "the projection itself, under its own ownership checks",
     ),
