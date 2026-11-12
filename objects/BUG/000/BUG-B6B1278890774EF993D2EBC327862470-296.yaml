@@ -3,12 +3,12 @@ spec_id: BUG-b6b1278890774ef993d2ebc327862470-296
 agreed_id: BUG-2531
 title: Gate-ledger discovery reads every change ledger against a 64 MiB budget
 description: 'discover() in aida-cli-lib/src/gate/ledger/checked.rs reads every PR-*.jsonl in .aida/gate-ledger into one Budget (MAX_SELECTION_BYTES 64 MiB). When the ledger passed 64 MiB (82 MB, 2683 files, 2026-11-12) every verdict selection failed (''aggregate gate-ledger read budget is exhausted''). Effects: verdicts unreadable, review watch relaunched reviewers on approved heads whose claims blocked trains (BUG-2530), review record failed, the train ejected approved PR-3860. Workaround applied: archived 668 closed-PR ledgers >24h old to .aida/gate-ledger-archive, pruned 431 by-spec indexes (backup .aida/gate-ledger.bak-20261112T013508); now 17 MB. Fix: bound discovery to the changes the selection needs; rotate closed/merged change ledgers to the archive automatically; doctor warns at 50% of budget; regression test with an oversized unrelated closed ledger.'
-status: InProgress
+status: NeedsAttention
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-12T08:35:37.046532324Z
-modified_at: 2026-11-12T13:13:13.887070717Z
+modified_at: 2026-11-12T13:14:35.982858759Z
 req_type: Bug
 comments:
 - id: 01a1cf00-20ea-7c51-bbf5-a9927b13b042
@@ -258,6 +258,14 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1cfe5-564e-7462-b6da-f0a90d98c48e
+  author: joe
+  timestamp: 2026-11-12T13:14:35.982892377Z
+  session_id: 01a1cfe4092c
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 filed_at:
   code_sha: 296d1dd295804f61d32a6b8aa07ae1485b198c93
   branch: main
@@ -267,6 +275,12 @@ filed_at:
   vendor: claude
   session: 01a1cc9c-1eae-7a72-9a24-8ec1afc42772
   harness_version: 2.1.322 (Claude Code)
+attention_reason:
+  category: design-fork
+  detail: 'Round 4 at 4e8514a2d59b: finding 1 (checked.rs:378, complete relevant-only discovery) and finding 2 (bug-2531-ledger-selection-budget.md:47, automatic archive rotation) are accepted as defects. I dispute proceeding with either finding through an unapproved new completeness/version-fence and archive/revival contract, or treating the existing cap as satisfying them. AGENTS.md Sketch-First Protocol requires master sign-off for file formats and cross-cutting lifecycle changes; BUG-2531 comments show requeues without a triage reason, not approval. The concrete proposal and validation matrix are in docs/plans/2026-11-12-bug-2531-discovery-retention-sketch.md. Source rechecked this round: store::write_events syncs events before best-effort index_spec; store::read_file resolves only the active ledger, and append_locked derives sequence from that history. Trusting hints or moving files alone can suppress refusals. Required disposition: explicitly approve that full contract, or approve a scope split retaining both open requirements and withholding BUG-2531 completion. No runtime edits, completion declaration, or executed tests this round. Native seat cannot commit; existing punt/hold remains a publication veto.'
+  lean: Approve the full write-ahead completeness/version-fence and archive-aware read/rotation/revival contract in the existing sketch, then dispatch implementation; do not repeat an unchanged implementation/review round.
+  raised_by: implementer
+  raised_at: 2026-11-12T13:14:35.982858759Z
 failure_reason:
   phase: reviewer
   phase_index: 3
