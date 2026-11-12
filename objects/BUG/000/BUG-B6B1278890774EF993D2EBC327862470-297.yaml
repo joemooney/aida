@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-12T09:33:29.513516913Z
-modified_at: 2026-11-12T09:44:01.969351339Z
+modified_at: 2026-11-12T17:16:42.617730719Z
 req_type: Bug
 comments:
 - id: 01a1cf24-8eb1-7db1-9111-9e7c9b2b2fdc
@@ -17,6 +17,13 @@ comments:
   created_at: 2026-11-12T09:44:01.969351339Z
   modified_at: 2026-11-12T09:44:01.969351339Z
   session_id: 01a1ceeb-e827-7832-8991-e83d9eb95cef
+  harness_version: 2.1.322 (Claude Code)
+- id: 01a1d0c2-fef9-7b32-80bc-d25e787d9ee0
+  author: joe
+  content: 'Advisor 10:20 MST: same root blocks REVIEWS, not just force-claim. pr_lease_takeover::check_pr_lease refuses to auto-end an exited implementer lease because its seat has one untracked ''.claude/settings.local.json'' (written by the harness, never work). Hit 3x today: PR-3824 (lease 01a1caf92759), PR-3832 (reviewer lease 01a1cf4df7e6), PR-3775 (01a1cf8df8e5); each needed a manual ''aida session end --force --discard-unpushed'' and ''review watch --release''. Fix scope: treat harness-owned untracked files (.claude/settings.local.json and the same allowlist used elsewhere) as clean in the lease-end dirtiness check. Priority raised: this silently stalls the review queue.'
+  created_at: 2026-11-12T17:16:42.617730719Z
+  modified_at: 2026-11-12T17:16:42.617730719Z
+  session_id: 01a1d09a-4262-7d50-a00b-00a5a30f3934
   harness_version: 2.1.322 (Claude Code)
 filed_at:
   code_sha: 298639cb95018f3d580dc44cba3ce04e880064fd
