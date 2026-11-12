@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-11T04:48:14.810158291Z
-modified_at: 2026-11-12T07:20:35.594435710Z
+modified_at: 2026-11-12T07:40:51.560861813Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -241,6 +241,10 @@ history:
   author: joe
   timestamp: 2026-11-12T07:20:35.726569921Z
   changes: []
+- id: 01a1ceb3-ca66-7423-81ad-0f9237418cfc
+  author: joe
+  timestamp: 2026-11-12T07:40:51.686678460Z
+  changes: []
 filed_at:
   code_sha: 496312a2eabee394b741e459cbf47972c8947905
   branch: main
@@ -254,7 +258,7 @@ failure_reason:
   phase: reviewer
   phase_index: 3
   kind: verdict:request-changes
-  detail: Full diff reviewed; BUG-2522 AC1-AC4 verified by source and regression coverage. No actionable defects. CI pending at review time; local tests prohibited by review-watch policy.
+  detail: 'Full sweep of all 7 files: BUG-2522 AC1-AC4 verified by source and passing lib-0 regression coverage; two introduced boundary/ratchet defects fail exact-head CI.'
   recovery_hint: address the review findings, move BUG-2522 back to In Progress, and clear the PR hold only after approval
   shelved_by: reviewer
-  shelved_at: 2026-11-12T07:20:35.594435710Z
+  shelved_at: 2026-11-12T07:40:51.560861813Z
