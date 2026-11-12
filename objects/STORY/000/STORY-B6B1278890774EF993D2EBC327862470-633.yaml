@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-10T22:04:54.061461Z
-modified_at: 2026-11-12T18:34:17.271540762Z
+modified_at: 2026-11-12T18:44:51.645525441Z
 req_type: Story
 comments:
 - id: 01a1c781-4cf1-7c80-b086-89c5c5096ab6
@@ -453,6 +453,13 @@ comments:
     Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
   created_at: 2026-11-12T18:11:31.097070991Z
   modified_at: 2026-11-12T18:11:31.097070991Z
+- id: 01a1d113-b33d-7b80-94c3-4cedf981847c
+  author: dirtlab
+  content: 'Round 10: addressed both P2 findings. Reapplied the sanitized host Git config overlay after read-only metadata mounts, including linked-worktree common/config. Added a journal-backed original-conflict marker scan after generation and before staging or success recording. Extended the live publication regression with malformed original clone config plus generator Git subprocess, generated conflict markers, unchanged HEAD/MERGE_HEAD and retained failed journal evidence, and successful resume/publication recovery. Validation: lane job j20261112T183741970-2-0 executed 1 Rust regression, passed; all 19 test_repair_generated.py tests passed; rustfmt and git diff --check passed. Host codegraph client missing at supplied path, confirmed by doctor; used rg. Edits left uncommitted for host publication.'
+  created_at: 2026-11-12T18:44:51.645525441Z
+  modified_at: 2026-11-12T18:44:51.645525441Z
+  session_id: 01a1d10c48ce
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1c77f-ffdf-7ac3-a382-33d6a384e617
   author: aida-session-start
