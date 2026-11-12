@@ -1,0 +1,21 @@
+id: 01a1d051-4e59-71a1-9319-9abb5743aa03
+spec_id: BUG-b6b1278890774ef993d2ebc327862470-301
+agreed_id: BUG-2536
+title: queue work reports 'no-new-published-head' after the implementer pushed and opened a PR
+description: 'Twice on 2026-11-12, ''aida queue work TASK-3448 --no-human --vendor codex --branch task-3448-helpers[-b]'' ended with ''implementer: failed-after-start ... reason=no-new-published-head pr=unknown'' and an error that the implementer exited without publishing a new head. In both cases the lane HAD pushed and opened a PR (#3878 at 06:43 MST, #3881 around 08:05 MST). fast_gate was skipped(timeout) both times. The false failure caused an advisor relaunch that was then refused (spec InProgress with no lease) and leaves the spec in a stale InProgress state. Expected: the result line detects the pushed head and PR on the lane''s branch.'
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-12T15:12:31.833974678Z
+modified_at: 2026-11-12T15:12:31.833974678Z
+req_type: Bug
+filed_at:
+  code_sha: a447d559aaa5a5634409cb5138dc58a95ab36d70
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: a447d559aaa
+  vendor: claude
+  session: 01a1ceeb-e827-7832-8991-e83d9eb95cef
+  harness_version: 2.1.322 (Claude Code)
