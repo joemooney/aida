@@ -310,6 +310,46 @@ fn collect(
             source.head_sha == fresh.head && member_metadata_refusal(&source, &live.base).is_none(),
             "source metadata moved during the train gate"
         );
+        // A released marker may make the fresh member gate skip mandate cover.
+        // Retain the under-lease cover, but bind its audit to today's protected
+        // set on every final refresh, including transport retries.
+        // trace:STORY-2733 | ai:codex
+        if fresh.gate_audit.is_some() {
+            anyhow::ensure!(
+                fresh.gate_audit == car.member.gate_audit,
+                "train protected-path mandate audit changed; rebuild the train"
+            );
+        }
+        if car.member.gate_audit.is_some() || car.member.release.is_some() {
+            let cover = fresh
+                .release
+                .as_ref()
+                .or(car.member.release.as_ref())
+                .context("train protected-path audit has no live mandate cover")?;
+            anyhow::ensure!(
+                crate::gate::mandate_ship::mandate_cover_still_active(cover)
+                    && cover.gate_audit() == car.member.gate_audit,
+                "train protected-path mandate audit changed; rebuild the train"
+            );
+            let evidence = crate::gate::mandate_traces::collect_pr(
+                &live.main_worktree,
+                &source.base_ref,
+                &fresh.head,
+                &source.head_sha,
+            )?;
+            let gates = crate::gate::mandate_gates::load_human_gates(&live.main_worktree)?;
+            let paths: Vec<_> = evidence.paths.into_iter().collect();
+            let current = crate::gate::mandate_ship::MandateCover::from_checked_paths(
+                cover.id.clone(),
+                cover.principal.clone(),
+                &paths,
+                &crate::gate::mandate_gates::ProtectedPaths::of(&Ok::<_, String>(gates)),
+            );
+            anyhow::ensure!(
+                current.gate_audit() == car.member.gate_audit,
+                "train protected-path mandate audit changed; rebuild the train"
+            );
+        }
         let metadata = json!({"state":format!("{:?}",source.state), "title":source.title,
             "author":source.author,"base":source.base_ref,"branch":source.head_ref,"head":source.head_sha,
             "draft":source.is_draft,"cross_repository":source.is_cross_repository,"repository":source.head_repo});

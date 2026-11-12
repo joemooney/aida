@@ -1321,6 +1321,13 @@ fn hold_on(pr: u64, head: &str) -> crate::gate::merge_hold_core::MergeHoldRecord
 
 /// An active ship-held mandate in the fixture's isolated HOME.
 fn plant_mandate() -> crate::gate::mandate_ship::MandateCover {
+    plant_mandate_with_gate_paths(false)
+}
+
+// trace:STORY-2733 | ai:codex
+fn plant_mandate_with_gate_paths(
+    include_gate_paths: bool,
+) -> crate::gate::mandate_ship::MandateCover {
     use crate::gate::mandate;
     let principal = crate::gate::kernel_deps::current_user_id(None);
     let m = mandate::Mandate {
@@ -1329,7 +1336,7 @@ fn plant_mandate() -> crate::gate::mandate_ship::MandateCover {
         seat: mandate::MANDATE_SEAT.into(),
         scope: mandate::SCOPE_SHIP_HELD.into(),
         include_supervised: false,
-        include_gate_paths: false,
+        include_gate_paths,
         reason: Some("fixture fire".into()),
         issued_at: chrono::Utc::now() - chrono::Duration::minutes(1),
         expires_at: chrono::Utc::now() + chrono::Duration::hours(1),
@@ -1396,6 +1403,103 @@ fn bug2406_held_member_released_under_mandate_lands() {
     let audit = ledger::project::events(f.root(), ledger::ChangeKey::pr(77));
     assert!(audit.iter().any(|e| matches!(&e.body,
         ledger::EventBody::TrainCoverage { proof } if !proof["cars"][0]["release_cover"].is_null())));
+}
+
+// trace:STORY-2733 | ai:codex
+fixture_case!(
+    mandate_train_final_audit_survives_hold_release,
+    mandate_final_audit,
+    "same"
+);
+fixture_case!(
+    mandate_train_final_audit_refuses_replacement,
+    mandate_final_audit,
+    "replacement"
+);
+fixture_case!(
+    mandate_train_final_audit_refuses_changed_paths,
+    mandate_final_audit,
+    "paths"
+);
+fixture_case!(
+    mandate_train_final_audit_refuses_new_protected_path,
+    mandate_final_audit,
+    "added"
+);
+fn mandate_final_audit(change_audit: &str) {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
+    let f = Fixture::new(true);
+    let forge = GitHubForge::new(f.root());
+    let mut live = f.live(&forge);
+    let mut cover = plant_mandate_with_gate_paths(true);
+    let dir = crate::gate::mandate::mandate_dir().unwrap();
+    let path = dir.join(format!("{}.json", cover.id));
+    let config = crate::gate::kernel_deps::aida_home_dir()
+        .unwrap()
+        .join(".aida/config.toml");
+    let protected_config = "[mandate.human_gates]\nprotected_paths = ['car11']\n";
+    fs::write(
+        &config,
+        if change_audit == "added" {
+            ""
+        } else {
+            protected_config
+        },
+    )
+    .unwrap();
+    let gates = crate::gate::mandate_gates::load_human_gates(f.root());
+    cover = crate::gate::mandate_ship::MandateCover::from_checked_paths(
+        cover.id,
+        cover.principal,
+        &["car11".into()],
+        &crate::gate::mandate_gates::ProtectedPaths::of(&gates.map_err(|e| e.to_string())),
+    );
+    let mut members: Vec<_> = [11, 12]
+        .into_iter()
+        .map(|pr| live.gate(pr).unwrap())
+        .collect();
+    members[0].gate_audit = cover.gate_audit();
+    assert_eq!(members[0].gate_audit.is_some(), change_audit != "added");
+    members[0].release = Some(cover.clone());
+    let base = live.fetch_main().unwrap();
+    let train = live.build(&base, &members).unwrap();
+    let change = live.open(&train, "train/mandate-audit").unwrap();
+    assert_eq!(live.wait_ci(&change, &train).unwrap(), CiVerdict::Green);
+    let hold = hold_on(11, &members[0].head);
+    crate::gate::merge_hold_core::place_hold(f.root(), &hold).unwrap();
+    crate::gate::merge_hold_core::release_hold_under_mandate(
+        f.root(),
+        &hold,
+        &cover.principal,
+        &cover.id,
+        None,
+    )
+    .unwrap();
+    match change_audit {
+        "replacement" => {
+            fs::remove_file(path).unwrap();
+            plant_mandate_with_gate_paths(true);
+        }
+        "paths" => fs::write(config, "[mandate.human_gates]\nprotected_paths = []\n").unwrap(),
+        "same" => {}
+        "added" => fs::write(config, protected_config).unwrap(),
+        _ => unreachable!(),
+    }
+    let lease = live.lease(change.id).unwrap();
+    let result = live.merge_verified(&change, &train, lease.as_ref());
+    if change_audit == "same" {
+        result.unwrap();
+        assert_eq!(calls(f.root()).len(), 1);
+    } else {
+        let error = format!("{:#}", result.unwrap_err());
+        assert!(
+            error.contains("audit changed") || error.contains("mandate expired"),
+            "{error}"
+        );
+        assert!(calls(f.root()).is_empty());
+    }
 }
 
 fixture_case!(

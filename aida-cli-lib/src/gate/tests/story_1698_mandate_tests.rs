@@ -592,7 +592,7 @@ fn pr_ship_consults_the_mandate_at_every_hold_gate_and_before_the_merge() {
     );
     let before_merge = handler.split(".merge_change(").next().expect("merge call");
     assert!(
-        before_merge.contains("mandate_still_active(&cover.id)"),
+        before_merge.contains("mandate_cover_still_active(cover)"),
         "the mandate is re-read immediately before the merge call"
     );
     let preflight = src
@@ -1067,7 +1067,7 @@ fn every_failure_after_a_mandate_release_re_arms_the_hold() {
     let merged = after.find("merged_this_run = true;").unwrap();
     let window = &after[..merged + 2000];
     assert!(window.contains("if mandate_release.is_some() {")); // }
-    assert!(window.contains("ended before the merge"));
+    assert!(window.contains("ended or no longer covers protected paths before the merge"));
     assert!(window.contains("re-arm a mandate-released hold on a failed merge"));
     assert_eq!(
         window.matches("rearm_after_mandate_failure(").count(),
@@ -1763,6 +1763,11 @@ fn task_1800_deleted_spec_with_history_is_judged_by_history() {
 // trace:TASK-1800 | ai:antigravity
 #[test]
 fn task_1800_aliased_id_resolves_through_alias_and_is_judged_normally() {
+    // Each fixture needs its own exclusion ledger, even in a broad mandate run.
+    // trace:STORY-2733 | ai:codex
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
     let tmp = tempfile::tempdir().unwrap();
     let root = tmp.path();
     let git_out = |dir: &Path, args: &[&str]| {
@@ -2094,6 +2099,10 @@ fn ship_tracing_deleted_agreed_id_spec(
 // trace:TASK-1800 | ai:claude
 #[test]
 fn task_1800_deleted_spec_named_by_its_agreed_id_is_judged_by_its_history() {
+    // trace:STORY-2733 | ai:codex
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
     let result = ship_tracing_deleted_agreed_id_spec(None);
     assert!(
         matches!(result, Err(MandateRefusal::Excluded { ref spec, .. }) if spec == "TASK-176"),
@@ -2108,6 +2117,10 @@ fn task_1800_deleted_spec_named_by_its_agreed_id_is_judged_by_its_history() {
 // trace:TASK-1800 | ai:claude
 #[test]
 fn task_1800_deleted_agreed_id_spec_at_a_non_canonical_path_refuses() {
+    // trace:STORY-2733 | ai:codex
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
     let result = ship_tracing_deleted_agreed_id_spec(Some("objects/TASK/001/TASK-1-152.yaml"));
     assert!(
         matches!(result, Err(MandateRefusal::HistoryUnreadable { ref spec, .. }) if spec == "TASK-176"),

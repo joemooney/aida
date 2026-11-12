@@ -117,7 +117,7 @@ pub(crate) struct Mandate {
     pub include_supervised: bool,
     /// Human opt-in to ship protected-path PRs; renewed only explicitly.
     // trace:STORY-2733 | ai:codex
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub include_gate_paths: bool,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub reason: Option<String>,

@@ -7350,10 +7350,6 @@ Options:
           Also cover sensitive specs (security, containment, authority, guided, keystone).
           Operator-only specs are never covered
 
-      --include-gate-paths
-          Allow mandate ships and trains to take protected-path PRs. Requires a human at a terminal;
-          all other gates still apply
-
       --format <FORMAT>
           Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
           compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
@@ -7363,6 +7359,10 @@ Options:
           - human: Human-readable tables / emoji (the interactive default at a TTY)
           - toon:  Token-efficient TOON — the compact agent default when piped/captured
           - json:  Machine JSON, for commands that support a JSON projection
+
+      --include-gate-paths
+          Allow mandate ships and trains to take protected-path PRs. Requires a human at a terminal;
+          all other gates still apply
 
       --canonical-ids
           Show node-local spec IDs in their canonical form instead of the node's friendly label (for

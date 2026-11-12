@@ -1965,6 +1965,54 @@ fn bug_2214_land_releases_covered_holds_then_merges() {
     assert!(f.rearmed.is_empty(), "{:?}", f.rearmed);
 }
 
+// trace:STORY-2733 | ai:codex
+#[test]
+fn mandate_train_rebuilds_changed_audit_before_releasing_holds() {
+    use crate::gate::mandate_gates::{GateMatch, PathSource};
+    let mut old = covered_member(7);
+    old.release.as_mut().unwrap().gate_match = Some(GateMatch {
+        path: "aida-cli-lib/src/gate/mandate.rs".into(),
+        entry: "aida-cli-lib/src/gate/".into(),
+        source: PathSource::BuiltIn,
+    });
+    old.gate_audit = old.release.as_ref().unwrap().gate_audit();
+    for change in ["mandate", "entry", "source", "removed"] {
+        let mut fresh = old.clone();
+        let cover = fresh.release.as_mut().unwrap();
+        match change {
+            "mandate" => cover.id = "replacement-mandate".into(),
+            "entry" => cover.gate_match.as_mut().unwrap().entry = "aida-cli-lib/".into(),
+            "source" => cover.gate_match.as_mut().unwrap().source = PathSource::Operator,
+            "removed" => cover.gate_match = None,
+            _ => unreachable!(),
+        }
+        fresh.gate_audit = cover.gate_audit();
+        let mut f = FakeForge::mains(&["base"]);
+        f.gates.insert(7, Ok(fresh.clone()));
+        f.gate_green = true;
+        let mut rails = ForgeRails::new(&mut f, "mandate-audit".into());
+        let built = rails.build("base", &[old.clone()]).unwrap();
+        assert_eq!(rails.test(&[built.clone()]).unwrap(), [CiVerdict::Green]);
+        assert!(
+            matches!(rails.land(&built).unwrap(), Landing::Refused(ref ejected)
+                if ejected.len() == 1 && ejected[0].reason.contains("mandate audit changed")),
+            "{change}"
+        );
+        drop(rails);
+        assert!(f.released.is_empty(), "{change}");
+        assert!(f.merged.is_empty(), "{change}");
+        let mut rails = ForgeRails::new(&mut f, "mandate-audit-rebuilt".into());
+        let rebuilt = rails.build("base", &[fresh]).unwrap();
+        rails.test(&[rebuilt.clone()]).unwrap();
+        assert!(
+            matches!(rails.land(&rebuilt).unwrap(), Landing::Landed(_)),
+            "{change}"
+        );
+        drop(rails);
+        assert_eq!(f.released, [7], "{change}");
+    }
+}
+
 // trace:BUG-2214.ac2ec1b2 | ai:claude
 #[test]
 fn bug_2214_a_failed_release_rearms_the_already_released_and_ejects() {
