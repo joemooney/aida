@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-12T06:22:01.808701892Z
-modified_at: 2026-11-12T09:28:26.257263821Z
+modified_at: 2026-11-12T09:43:32.489646390Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -73,6 +73,13 @@ comments:
   modified_at: 2026-11-12T09:01:17.087328749Z
   session_id: 01a1ceeb-e827-7832-8991-e83d9eb95cef
   harness_version: 2.1.322 (Claude Code)
+- id: 01a1cf24-1b89-7c41-827f-fa01501cbfaf
+  author: dirtlab
+  content: 'Round 2: moved exact-head duplicate reviewer admission immediately after required store sync, before review checkout retirement, branch reclaim, implicit queue insertion and calibration writes. New markers retain nanosecond ordering; legacy same-second timestamps conservatively retain the claim. Preserved pre-approval train refusal coverage, added legacy redundant-claim train coverage, strengthened synced-receipt precedence coverage, and added real pickup refusal checks for checkout/queue/spec/calibration preservation. Lane runner validation passed: bug2530 (6), bug2406_current_claim_refuses (2), marker lifecycle (6), direct marker unit suite (17), and two-node ship/watch/rework/train entry integration (1). cargo fmt --all -- --check and git diff --check passed. Native seat leaves seven files uncommitted for host publication. Configured codegraph executable is absent; used source search.'
+  created_at: 2026-11-12T09:43:32.489646390Z
+  modified_at: 2026-11-12T09:43:32.489646390Z
+  session_id: 01a1cf19ec06
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1ce6b-e20b-7292-b292-11cde6834d42
   author: joe
