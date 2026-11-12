@@ -23,12 +23,12 @@ description: |
   4. `aida pr ship` refuses a head whose CI ran FAST (unit test with a fake forge); `aida pr train` is unaffected.
   5. make check-ci-fast passes; CI-gate inventory/ratchets updated for the new jobs (the gate-classification count changes).
   LIGHT gate: one targeted cargo test for the ship guard + make check-ci-fast. The PR itself should run with label `ci:full` so the full tier is exercised once before merge.
-status: Approved
+status: InProgress
 priority: High
-owner: ''
+owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-12T17:51:40.579097417Z
-modified_at: 2026-11-12T17:51:57.219762914Z
+modified_at: 2026-11-12T18:05:40.139169489Z
 req_type: Story
 comments:
 - id: 01a1d0e3-4323-7e02-b6e4-1502d815c506
@@ -48,6 +48,13 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Approved
+- id: 01a1d0ef-d1ab-70c1-98bc-023f13ffbd3d
+  author: aida-session-start
+  timestamp: 2026-11-12T18:05:40.139168503Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: ec5a35a7108475b421baf1101b26159a7aa0fab9
   branch: main
