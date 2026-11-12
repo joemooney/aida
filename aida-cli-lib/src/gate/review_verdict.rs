@@ -32,6 +32,31 @@
 
 use std::path::{Path, PathBuf};
 
+/// Validate and collect an interactive child's original verdict on the protected
+/// floor. The caller must arm a refusing disposition before presenting or
+/// re-recording it; hold placement and forge labels remain parent orchestration.
+// trace:BUG-2522 | ai:codex
+pub(crate) fn collect_interactive_review_refusal(
+    project_root: &Path,
+    pr: u64,
+    spec: &str,
+    launched_at: std::time::SystemTime,
+    checks: &dyn VerdictCollectionChecks,
+) -> anyhow::Result<CollectedVerdict> {
+    let canonical = verdict_path(project_root, &format!("PR-{pr}"));
+    crate::gate::review_verdict::collect_standalone_verdict(
+        project_root,
+        project_root,
+        &canonical,
+        &[spec.to_string()],
+        launched_at,
+        checks,
+    )
+    .map_err(|why| {
+        anyhow::anyhow!("interactive review verdict was not collected for PR-{pr}: {why}")
+    })
+}
+
 /// The verdict word, normalized from whatever the reviewer/skill wrote.
 ///
 /// BUG-1505: this enum is the CANONICAL verdict vocabulary and

@@ -1484,13 +1484,17 @@ pub(crate) fn handle_review_spec(
             launcher_grant,
             child_grant: Some(child_grant),
         };
-        crate::merge_hold::collect_interactive_review_refusal(
+        let collected = crate::gate::review_verdict::collect_interactive_review_refusal(
             project_root,
             pr,
             &spec_id,
             launched_at,
             &checks,
         )?;
+        // Keep hold/forge orchestration outside the protected decision kernel.
+        // trace:BUG-2522 | ai:codex
+        crate::merge_hold::arm_collected_refusal(project_root, pr, &collected)
+            .with_context(|| format!("verdict collected, but could not protect PR-{pr} with a merge hold; run `aida review stranded --fix`"))?;
     }
 
     // ---- Read + present the verdict (AGENT ANALYZES + RECOMMENDS) ----

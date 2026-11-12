@@ -276,7 +276,10 @@ fn interactive_review_parent_collects_before_rewriting_child_evidence() {
         .find("let (status, child_grant) = review_spec_launch_reviewer(")
         .unwrap();
     let collect = parent
-        .find("crate::merge_hold::collect_interactive_review_refusal(")
+        .find("crate::gate::review_verdict::collect_interactive_review_refusal(")
+        .unwrap();
+    let hold = parent
+        .find("crate::merge_hold::arm_collected_refusal(")
         .unwrap();
     let adopt = parent
         .find("crate::gate::review_verdict::adopt_direct_write(")
@@ -293,6 +296,15 @@ fn interactive_review_parent_collects_before_rewriting_child_evidence() {
         "collect before adopting direct-write evidence"
     );
     assert!(collect < record, "collect before stamping new provenance");
+    assert!(
+        collect < hold && hold < adopt,
+        "protect collected evidence before presentation"
+    );
+    assert!(parent[hold..adopt].contains(".with_context("));
+    assert!(
+        parent[hold..adopt].contains("))?;"),
+        "hold failure must stop the parent"
+    );
     let collection = &parent[launch..adopt];
     assert!(collection.contains("child_grant: Some(child_grant)"));
     assert!(collection.contains("review_head.is_some() && review_head == current_head"));
@@ -300,6 +312,30 @@ fn interactive_review_parent_collects_before_rewriting_child_evidence() {
         collection.contains("&checks,\n        )?;"),
         "collection failure must stop presentation and re-recording"
     );
+}
+
+// Exercise the same protected collection followed by parent-side hold/label
+// orchestration as handle_review_spec, including failure between the two steps.
+// trace:BUG-2522 | ai:codex
+fn collect_and_protect_interactive_refusal(
+    root: &std::path::Path,
+    pr: u64,
+    spec: &str,
+    launched_at: std::time::SystemTime,
+    checks: &dyn crate::gate::review_verdict::VerdictCollectionChecks,
+) -> Result<()> {
+    let collected = crate::gate::review_verdict::collect_interactive_review_refusal(
+        root,
+        pr,
+        spec,
+        launched_at,
+        checks,
+    )?;
+    use anyhow::Context as _;
+    crate::merge_hold::arm_collected_refusal(root, pr, &collected).with_context(|| {
+        format!("verdict collected, but could not protect PR-{pr} with a merge hold")
+    })?;
+    Ok(())
 }
 
 // trace:BUG-2522 | ai:codex
@@ -426,7 +462,7 @@ fn interactive_review_anchor_refusals_are_collected_and_held() {
             child_grant: Some("other-reviewer".into()),
         };
         assert!(
-            crate::merge_hold::collect_interactive_review_refusal(
+            collect_and_protect_interactive_refusal(
                 root.path(),
                 2522,
                 "BUG-2522",
@@ -447,7 +483,7 @@ fn interactive_review_anchor_refusals_are_collected_and_held() {
         // trace:BUG-2522 | ai:codex
         let next_launch = std::time::SystemTime::now() + std::time::Duration::from_secs(60);
         assert!(
-            crate::merge_hold::collect_interactive_review_refusal(
+            collect_and_protect_interactive_refusal(
                 root.path(),
                 2522,
                 "BUG-2522",
@@ -464,7 +500,7 @@ fn interactive_review_anchor_refusals_are_collected_and_held() {
         );
         checks.head_sha = Some("0000000000000000000000000000000000000000".into());
         assert!(
-            crate::merge_hold::collect_interactive_review_refusal(
+            collect_and_protect_interactive_refusal(
                 root.path(),
                 2522,
                 "BUG-2522",
@@ -482,7 +518,7 @@ fn interactive_review_anchor_refusals_are_collected_and_held() {
         checks.head_sha = Some(head.clone());
         let lock = crate::gate::merge_hold_core::hold_lock_path(root.path(), 2522);
         std::fs::create_dir_all(&lock).unwrap();
-        let error = crate::merge_hold::collect_interactive_review_refusal(
+        let error = collect_and_protect_interactive_refusal(
             root.path(),
             2522,
             "BUG-2522",
@@ -509,7 +545,7 @@ fn interactive_review_anchor_refusals_are_collected_and_held() {
         if label_fails {
             std::fs::write(root.path().join(".aida/refuse-label"), "").unwrap();
         }
-        crate::merge_hold::collect_interactive_review_refusal(
+        collect_and_protect_interactive_refusal(
             root.path(),
             2522,
             "BUG-2522",
