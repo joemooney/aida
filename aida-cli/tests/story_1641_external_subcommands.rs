@@ -337,6 +337,36 @@ fn help_and_alias_list_show_externals() {
     }
 }
 
+// CI builds the companion in Cargo's directory. Prove the no-extension
+// fixture actually executes elsewhere and keeps that companion out of PATH.
+// trace:STORY-2704 | ai:codex
+#[test]
+fn fixture_executable_directory_excludes_built_companions() {
+    let original = Path::new(env!("CARGO_BIN_EXE_aida"));
+    assert!(
+        original.with_file_name("aida-porcelain").is_file(),
+        "build aida-porcelain beside aida first"
+    );
+    let fx = fixture(&[("aida-hello", RECORDING_STUB)]);
+    assert_ne!(canon(&fx.bin_dir), canon(original.parent().unwrap()));
+    assert!(!fx.bin_dir.join("aida-porcelain").exists());
+    let out = aida(&fx, &fx.outside, &["hello"], &[]);
+    assert!(out.status.success(), "{}", text(&out));
+    assert!(
+        stdout(&out).contains(&format!("bin=[{}]", canon(&fx.bin_dir.join("aida")))),
+        "{}",
+        text(&out)
+    );
+    let empty = fixture(&[]);
+    let out = aida(&empty, &empty.outside, &["--help"], &[]);
+    assert!(out.status.success(), "{}", text(&out));
+    assert!(
+        !stdout(&out).contains("External commands"),
+        "{}",
+        text(&out)
+    );
+}
+
 // trace:STORY-1641 | ai:claude
 #[test]
 fn help_for_external_delegates_to_its_help() {

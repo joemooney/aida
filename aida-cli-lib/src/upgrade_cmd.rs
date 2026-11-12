@@ -510,9 +510,59 @@ fn classify_install_path(path: &std::path::Path) -> InstallMethod {
 /// requested tag so the install matches what the user asked for.
 // trace:STORY-2704 | ai:codex
 fn upgrade_via_cargo(tag: &str, installed: &std::path::Path) -> Result<()> {
-    install_cargo_bundle(tag, installed, std::path::Path::new("cargo"))?;
+    // Inspect the selected release before Cargo can replace any installed file.
+    // Older supported releases contain only the core CLI.
+    let manifest = std::process::Command::new("curl")
+        .args([
+            "-fSL",
+            "--connect-timeout",
+            "15",
+            "--max-time",
+            "30",
+            "--",
+            &format!("https://raw.githubusercontent.com/joemooney/aida/{tag}/Cargo.toml"),
+        ])
+        .output()
+        .context("Failed to fetch release package inventory")?;
+    anyhow::ensure!(
+        manifest.status.success(),
+        "Could not fetch release package inventory for {tag}"
+    );
+    let manifest = String::from_utf8(manifest.stdout).context("Release manifest is not UTF-8")?;
+    let packages = cargo_release_packages(&manifest)?;
+    install_cargo_bundle(tag, installed, std::path::Path::new("cargo"), packages)?;
     println!("\n{}: upgraded to {}.", "OK".green(), tag);
     Ok(())
+}
+
+// Select from the actual tag's workspace, rather than guessing a version cutoff.
+// Missing/invalid inventories refuse before any installation mutation.
+// trace:STORY-2704 | ai:codex
+fn cargo_release_packages(manifest: &str) -> Result<&'static [&'static str]> {
+    let manifest: toml::Value =
+        toml::from_str(manifest).context("Invalid release Cargo manifest")?;
+    let members = manifest
+        .get("workspace")
+        .and_then(|workspace| workspace.get("members"))
+        .and_then(toml::Value::as_array)
+        .context("Release Cargo manifest has no workspace members")?;
+    let members: Vec<&str> = members
+        .iter()
+        .map(|member| {
+            member
+                .as_str()
+                .context("Release workspace member is not a string")
+        })
+        .collect::<Result<_>>()?;
+    anyhow::ensure!(
+        members.contains(&"aida-cli"),
+        "Release workspace has no aida-cli package"
+    );
+    Ok(if members.contains(&"aida-porcelain") {
+        &["aida-cli", "aida-porcelain"]
+    } else {
+        &["aida-cli"]
+    })
 }
 
 // Keep Cargo's destination explicit: upgrading a selected installation must
@@ -521,19 +571,23 @@ fn install_cargo_bundle(
     tag: &str,
     installed: &std::path::Path,
     cargo: &std::path::Path,
+    packages: &[&str],
 ) -> Result<()> {
     let bin = installed.parent().context("Cargo binary has no parent")?;
     let root = bin.parent().context("Cargo bin has no install root")?;
     let alias = bin.join("aida-flow");
-    match std::fs::symlink_metadata(&alias) {
-        Ok(_) => anyhow::ensure!(
-            std::fs::read_link(&alias).ok().as_deref()
-                == Some(std::path::Path::new("aida-porcelain")),
-            "refusing to replace unrelated {}",
-            alias.display()
-        ),
-        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
-        Err(e) => return Err(e.into()),
+    let porcelain = packages.contains(&"aida-porcelain");
+    if porcelain {
+        match std::fs::symlink_metadata(&alias) {
+            Ok(_) => anyhow::ensure!(
+                std::fs::read_link(&alias).ok().as_deref()
+                    == Some(std::path::Path::new("aida-porcelain")),
+                "refusing to replace unrelated {}",
+                alias.display()
+            ),
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+            Err(e) => return Err(e.into()),
+        }
     }
     let status = std::process::Command::new(cargo)
         .args([
@@ -546,16 +600,18 @@ fn install_cargo_bundle(
             "--root",
         ])
         .arg(root)
-        .args(["aida-cli", "aida-porcelain"])
-        .status()
+        .args(packages)
+        .status_retrying_etxtbsy()
         .context("Failed to invoke cargo")?;
     anyhow::ensure!(status.success(), "cargo install failed");
-    anyhow::ensure!(
-        bin.join("aida-porcelain").is_file(),
-        "Cargo companion was not installed"
-    );
-    if std::fs::symlink_metadata(&alias).is_err() {
-        std::os::unix::fs::symlink("aida-porcelain", &alias)?;
+    if porcelain {
+        anyhow::ensure!(
+            bin.join("aida-porcelain").is_file(),
+            "Cargo companion was not installed"
+        );
+        if std::fs::symlink_metadata(&alias).is_err() {
+            std::os::unix::fs::symlink("aida-porcelain", &alias)?;
+        }
     }
     Ok(())
 }
@@ -563,7 +619,6 @@ fn install_cargo_bundle(
 #[cfg(test)]
 mod cargo_bundle_tests {
     use super::*;
-    use std::os::unix::fs::PermissionsExt;
 
     // Starts with a Cargo-only installation, without a companion or alias.
     // trace:STORY-2704 | ai:codex
@@ -574,14 +629,18 @@ mod cargo_bundle_tests {
         std::fs::create_dir(&bin).unwrap();
         std::fs::write(bin.join("aida"), "old core").unwrap();
         let cargo = tmp.path().join("cargo-fixture");
-        std::fs::write(&cargo, r#"#!/bin/sh
+        crate::test_exec::write_executable(
+            &cargo,
+            r#"#!/bin/sh
 [ "$1 $2 $3 $4 $5 $6 $7" = "install --git https://github.com/joemooney/aida.git --tag v1.2.3 --force --root" ] || exit 10
 [ "$9" = "aida-cli" ] && [ "${10}" = "aida-porcelain" ] || exit 11
 printf 'new core' > "$8/bin/aida"
 printf 'matching companion' > "$8/bin/aida-porcelain"
-"#).unwrap();
-        std::fs::set_permissions(&cargo, std::fs::Permissions::from_mode(0o755)).unwrap();
-        install_cargo_bundle("v1.2.3", &bin.join("aida"), &cargo).unwrap();
+"#,
+        );
+        let packages = cargo_release_packages(include_str!("../../Cargo.toml")).unwrap();
+        assert_eq!(packages, ["aida-cli", "aida-porcelain"]);
+        install_cargo_bundle("v1.2.3", &bin.join("aida"), &cargo, packages).unwrap();
         assert_eq!(
             std::fs::read_to_string(bin.join("aida")).unwrap(),
             "new core"
@@ -594,6 +653,52 @@ printf 'matching companion' > "$8/bin/aida-porcelain"
             std::fs::read_to_string(bin.join("aida-flow")).unwrap(),
             "matching companion"
         );
+    }
+    // This is the committed v0.15.0 workspace manifest, not a synthetic version
+    // boundary. Even an unrelated existing flow command must remain untouched.
+    // trace:STORY-2704 | ai:codex
+    #[test]
+    fn historical_cargo_release_installs_only_core_without_touching_alias() {
+        let packages =
+            cargo_release_packages(include_str!("../tests/fixtures/upgrade/v0.15.0-Cargo.toml"))
+                .unwrap();
+        assert_eq!(packages, ["aida-cli"]);
+        let tmp = tempfile::tempdir().unwrap();
+        let bin = tmp.path().join("bin");
+        std::fs::create_dir(&bin).unwrap();
+        std::fs::write(bin.join("aida"), "old core").unwrap();
+        std::fs::write(bin.join("aida-flow"), "unrelated command").unwrap();
+        let cargo = tmp.path().join("cargo-fixture");
+        crate::test_exec::write_executable(
+            &cargo,
+            r#"#!/bin/sh
+[ "$1 $2 $3 $4 $5 $6 $7" = "install --git https://github.com/joemooney/aida.git --tag v0.15.0 --force --root" ] || exit 10
+[ "$#" = 9 ] && [ "$9" = "aida-cli" ] || exit 11
+printf 'historical core' > "$8/bin/aida"
+"#,
+        );
+        install_cargo_bundle("v0.15.0", &bin.join("aida"), &cargo, packages).unwrap();
+        assert_eq!(
+            std::fs::read_to_string(bin.join("aida")).unwrap(),
+            "historical core"
+        );
+        assert_eq!(
+            std::fs::read_to_string(bin.join("aida-flow")).unwrap(),
+            "unrelated command"
+        );
+        assert!(!bin.join("aida-porcelain").exists());
+    }
+
+    #[test]
+    fn invalid_release_inventory_refuses() {
+        for manifest in [
+            "not toml",
+            "[workspace]",
+            "[workspace]\nmembers = [42]",
+            "[workspace]\nmembers = [\"other\"]",
+        ] {
+            assert!(cargo_release_packages(manifest).is_err(), "{manifest}");
+        }
     }
 }
 

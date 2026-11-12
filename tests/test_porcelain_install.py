@@ -106,22 +106,36 @@ class ReleaseInstall(unittest.TestCase):
             self.assertTrue(tar.getmember('aida-flow').issym())
             self.assertEqual(tar.getmember('aida-flow').linkname, 'aida-porcelain')
 
-    def test_make_install_temp_cargo_home(self):
+    def test_make_install_roots(self):
         bin_dir = self.root / 'bin'
         bin_dir.mkdir()
         cargo = bin_dir / 'cargo'
-        cargo.write_text("#!/bin/sh\n[ \"$1 $2\" = \"install --path\" ] || exit 2\n"
-                         "case $3 in aida-cli) name=aida;; *) name=$3;; esac\n"
-                         "mkdir -p \"$CARGO_HOME/bin\"\n"
-                         "cp \"$FIXTURE_BUNDLE/$name\" \"$CARGO_HOME/bin/$name\"\n")
+        cargo.write_text('#!/bin/sh\n[ "$1 $2" = "install --path" ] || exit 2\n'
+                         '[ "$4 $5" = "--force --root" ] || exit 3\n'
+                         'case $3 in aida-cli) name=aida;; *) name=$3;; esac\n'
+                         'mkdir -p "$6/bin"\n'
+                         'cp "$FIXTURE_BUNDLE/$name" "$6/bin/$name"\n')
         cargo.chmod(0o755)
-        env = dict(self.env, PATH=str(bin_dir) + ':' + self.env['PATH'],
-                   CARGO_HOME=str(self.root / 'cargo'), FIXTURE_BUNDLE=str(self.src))
-        result = subprocess.run(['make', '-o', 'build-release', 'install'], cwd=ROOT,
-                                env=env, capture_output=True)
-        self.assertEqual(result.returncode, 0, result.stderr)
-        self.dest = self.root / 'cargo/bin'
-        self.assert_bundle()
+        for target in ('install', 'install-cli'):
+            for custom_root in (False, True):
+                with self.subTest(target=target, custom_root=custom_root):
+                    home = self.root / (target + str(custom_root)) / 'cargo home'
+                    root = home.parent / 'custom root' if custom_root else home
+                    env = dict(self.env, PATH=str(bin_dir) + ':' + self.env['PATH'],
+                               CARGO_HOME=str(home), FIXTURE_BUNDLE=str(self.src))
+                    if custom_root:
+                        env['CARGO_INSTALL_ROOT'] = str(root)
+                    result = subprocess.run(['make', '-o', 'build-release', target],
+                                            cwd=ROOT, env=env, capture_output=True)
+                    self.assertEqual(result.returncode, 0, result.stderr)
+                    self.dest = root / 'bin'
+                    self.assertEqual(os.readlink(self.dest / 'aida-flow'), 'aida-porcelain')
+                    for name in ('aida', 'aida-porcelain', 'aida-flow'):
+                        self.assertTrue((self.dest / name).is_file())
+                    if target == 'install':
+                        self.assert_bundle()
+                    if custom_root:
+                        self.assertFalse(home.exists())
 
     def test_install_script_temp_prefix(self):
         archive = self.root / 'release.tar.gz'
