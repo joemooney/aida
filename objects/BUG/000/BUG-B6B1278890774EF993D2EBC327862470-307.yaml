@@ -1,0 +1,20 @@
+id: 01a1d218-0ec5-7573-9028-ee2288894d61
+spec_id: BUG-b6b1278890774ef993d2ebc327862470-307
+agreed_id: BUG-2542
+title: One oversized change ledger refuses gate-ledger discovery for every spec, with no doctor remedy
+description: 'Observed 2026-11-12: a failed train''s .aida/gate-ledger/PR-3888.jsonl reached 23 MB (> MAX_LEDGER_BYTES 16 MiB). checked.rs discover_with_budget then refused discovery globally, so review selection became ''unavailable'' for every spec from ~11:12 to 16:23 (triggered BUG-2540''s slow path; quarantined by hand). The whole ledger is 57 MB against the 128 MiB MAX_DISCOVERY_BYTES budget and PR-3870.jsonl is already 6 MB, so the aggregate cap is next. Acceptance: (1) aida doctor detects an over-cap or budget-threatening change ledger and prescribes a quarantine/compaction fix; (2) the refusal message names the offending file and the fix; (3) closed/merged change ledgers are compacted or archived so total size stays well under the discovery budget.'
+status: Draft
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-12T23:29:14.437520729Z
+modified_at: 2026-11-12T23:29:14.437520729Z
+req_type: Bug
+filed_at:
+  code_sha: 618ce8ab39bf3a803800ba55a00b44a0e11745ff
+  branch: integration
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: b5694616d5a
+  vendor: claude
+  session: 668a34f6-c74a-4b58-b144-167acd9792ef
