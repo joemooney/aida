@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-12T10:03:08.698309086Z
-modified_at: 2026-11-12T16:23:06.105895199Z
+modified_at: 2026-11-12T16:42:52.018093662Z
 req_type: Bug
 comments:
 - id: 01a1d089-5536-7983-af43-208f205f22fe
@@ -23,6 +23,11 @@ comments:
   content: 'Root cause confirmed from CI run 43193488190 logs: assertion at line 1639 is after drop(receipt) on the retry, not after launch returns Err. Immediately preceding log: `launch cleanup kept ...: mail retention refused ... the fresh writer-admission scan could not verify every mail writer`. SessionStartCleanup::drop synchronously calls release_tree before reverting the claim; retention refusal intentionally keeps tree/lease/claim. The test depended on machine-wide /proc writer inventory, which varies with parallel CI processes. Fix uses existing thread-scoped test_writer_scan(true) inside the PATH-isolated child, covering refused foreground/background launches and retry receipt drop. Also assert intended spawn/exit-73 errors. No production guard weakened and no retries/sleeps added. Validation in progress.'
   created_at: 2026-11-12T16:23:06.105861006Z
   modified_at: 2026-11-12T16:23:06.105861006Z
+- id: 01a1d0a4-02f2-7502-a213-70459c355fd8
+  author: mcp
+  content: 'First executed module run: 34 passed, 7 failed; the named BUG-2533 regression passed. All 7 sibling failures have the same unmocked writer-admission dependency (six rollback refusals plus a pool-return cleanup refusal after the live-holder assertion passed). Applied existing test_writer_scan(true) to those seven fixtures as well, retaining their assertions. Final module stability loop is rebuilding. make check-ci-fast reached mail-wake fixtures but failed because the lane''s shared-write umask made synthetic directories group-writable; rerunning under umask 077. No production changes.'
+  created_at: 2026-11-12T16:42:52.018083549Z
+  modified_at: 2026-11-12T16:42:52.018083549Z
 history:
 - id: 01a1d089-4d85-7572-9578-4a9e5a97ffd2
   author: joe
