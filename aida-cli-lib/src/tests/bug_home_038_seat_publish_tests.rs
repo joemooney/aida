@@ -4450,6 +4450,7 @@ fn story_2710_host_regenerates_conflicted_outputs_with_read_only_git() {
     for (cloned, ledger) in [
         (false, "scripts/exec-context-legacy.json"),
         (true, "scripts/exec-context-legacy.json"),
+        (false, ".aida/discipline/repair.md"),
         (true, ".aida/discipline/repair.md"),
     ] {
         let fx = fixture();
@@ -4494,10 +4495,10 @@ if '--write-ledger' in sys.argv:
     output = Path('scripts/exec-context-legacy.json')
     if Path('aida-core/templates/.aida/discipline/repair.md').exists():
         output = Path('.aida/discipline/repair.md')
-    output.write_text(Path('aida-core/templates/.aida/discipline/repair.md').read_text()
-                      if output.suffix == '.md' else 'regenerated\n')
+    output.write_bytes(Path('aida-core/templates/.aida/discipline/repair.md').read_bytes()
+                       if output.suffix == '.md' else b'regenerated\n')
     if Path('introduce-markers').exists():
-        output.write_text(Path('introduce-markers').read_text())
+        output.write_bytes(Path('introduce-markers').read_bytes())
     if Path('reject-regeneration').exists():
         Path('partial-generator-write').write_text('partial')
         raise RuntimeError('failure after output write')
@@ -4569,7 +4570,7 @@ if '--write-ledger' in sys.argv:
             .as_bytes()
             .to_vec();
             for seat_config in [poisoned, unsupported] {
-                std::fs::write(tree.join(".git/config"), seat_config).unwrap();
+                std::fs::write(tree.join(".git/config"), &seat_config).unwrap();
                 crate::seat_clone::regenerate_repair_outputs(
                     &tree,
                     &fx.main,
@@ -4579,6 +4580,9 @@ if '--write-ledger' in sys.argv:
                     false,
                 )
                 .unwrap();
+                // The trusted overlay must hide, rather than repair or replace,
+                // the seat's config. trace:STORY-2710 | ai:codex
+                assert_eq!(std::fs::read(tree.join(".git/config")).unwrap(), seat_config);
             }
             std::fs::write(tree.join(".git/config"), config).unwrap();
         }
@@ -4605,6 +4609,7 @@ if '--write-ledger' in sys.argv:
                 "<<<<<<< generated\n=======\n>>>>>>> generated\n",
                 ">>>>>>> generated\n",
                 "<<<<<<< generated\n",
+                "<<<<<<< generated\r\n=======\r\n>>>>>>> generated\r\n",
             ] {
                 // Each retry starts clean: the first marker gate must pass,
                 // leaving the post-generation journal gate to refuse this run.
