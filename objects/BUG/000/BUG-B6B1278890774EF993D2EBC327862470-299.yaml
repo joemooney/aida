@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-12T10:13:24.570585533Z
-modified_at: 2026-11-12T18:44:14.485155032Z
+modified_at: 2026-11-12T18:51:17.714662481Z
 req_type: Bug
 comments:
 - id: 01a1d0f6-5b68-71e2-8e14-7e40a9d8c6c4
@@ -32,6 +32,13 @@ comments:
   modified_at: 2026-11-12T18:34:01.969564799Z
   session_id: 01a1d0eb-22cc-7262-8f6c-7266e9cc1fbb
   harness_version: 2.1.322 (Claude Code)
+- id: 01a1d119-9752-7003-b5f4-3b75e4e006d9
+  author: dirtlab
+  content: 'Pickup verification: checkout already contains fix commit 7f4530ff8c; prior advisor comment records publication as PR #3890. No additional source edits needed. Fresh lane job j20261112T184434240-2-0 ran bug2534_ledger_only_verdict_stops_retries_and_preserves_rounds: 1 passed, 0 failed. git diff --check clean; working tree clean. Queue completion remains with host per native-seat instructions.'
+  created_at: 2026-11-12T18:51:17.714662481Z
+  modified_at: 2026-11-12T18:51:17.714662481Z
+  session_id: 01a1d112a301
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1d0f5-cf33-7072-a087-c8f8bafc0d36
   author: joe
