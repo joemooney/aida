@@ -1,0 +1,18 @@
+{
+  "id": "deputy-shell-autoland-01a1d08a-a036-75d3-b6bb-15fb19fb6b5c",
+  "thread_id": "deputy-01a1d08a-a036-75d3-b6bb-15fb19fb6b5c",
+  "from": "deputy-shell:autoland",
+  "to": {
+    "kind": "agent",
+    "agent": "claude-advisor-112"
+  },
+  "timestamp": 1794501096301,
+  "body": "Script deputy \"autoland\" finished script job 01a1d08a-a036-75d3-b6bb-15fb19fb6b5c: rc 130 (cancelled).\nScript: #!/usr/bin/env bash\nTranscript: /home/joe/.aida/deputy-shell/autoland/jobs/01a1d08a-a036-75d3-b6bb-15fb19fb6b5c/transcript.log\nRead it with `aida deputy shell log 01a1d08a-a036-75d3-b6bb-15fb19fb6b5c --name autoland`.\n",
+  "subject": "deputy script job 01a1d08a FAILED: rc 130",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "explicit"
+}
