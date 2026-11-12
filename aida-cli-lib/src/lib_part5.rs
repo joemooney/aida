@@ -1002,35 +1002,6 @@ pub(crate) fn review_spec_verdict(
         .and_then(|current| reviewer_summary::parse_verdict_file(&current.body))
 }
 
-/// Collect the interactive child's original evidence with the same head and
-/// grant checks as standalone review, then protect any refusing disposition.
-/// Keeping this before presentation/re-recording prevents either from hiding a
-/// failed hold or manufacturing collectable provenance.
-// trace:BUG-2522 | ai:codex
-pub(crate) fn collect_interactive_review_refusal(
-    project_root: &std::path::Path,
-    pr: u64,
-    spec: &str,
-    launched_at: std::time::SystemTime,
-    checks: &dyn crate::gate::review_verdict::VerdictCollectionChecks,
-) -> Result<()> {
-    let canonical = crate::gate::review_verdict::verdict_path(project_root, &format!("PR-{pr}"));
-    let collected = crate::gate::review_verdict::collect_standalone_verdict(
-        project_root,
-        project_root,
-        &canonical,
-        &[spec.to_string()],
-        launched_at,
-        checks,
-    )
-    .map_err(|why| {
-        anyhow::anyhow!("interactive review verdict was not collected for PR-{pr}: {why}")
-    })?;
-    crate::merge_hold::arm_collected_refusal(project_root, pr, &collected)
-        .with_context(|| format!("verdict collected, but could not protect PR-{pr} with a merge hold; run `aida review stranded --fix`"))?;
-    Ok(())
-}
-
 /// trace:STORY-553 | ai:claude — `aida review <SPEC>`: the human-review
 /// counterpart to `aida queue work`. Resolves the spec's review surface,
 /// runs the existing headless reviewer tier (`/aida-review`) over the diff
@@ -1503,7 +1474,13 @@ pub(crate) fn handle_review_spec(
             launcher_grant,
             child_grant: Some(child_grant),
         };
-        collect_interactive_review_refusal(project_root, pr, &spec_id, launched_at, &checks)?;
+        crate::gate::review_verdict::collect_interactive_review_refusal(
+            project_root,
+            pr,
+            &spec_id,
+            launched_at,
+            &checks,
+        )?;
     }
 
     // ---- Read + present the verdict (AGENT ANALYZES + RECOMMENDS) ----

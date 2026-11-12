@@ -317,7 +317,7 @@ fn interactive_review_anchor_refusals_are_collected_and_held() {
             child_grant: Some("other-reviewer".into()),
         };
         assert!(
-            crate::collect_interactive_review_refusal(
+            crate::gate::review_verdict::collect_interactive_review_refusal(
                 root.path(),
                 2522,
                 "BUG-2522",
@@ -331,7 +331,7 @@ fn interactive_review_anchor_refusals_are_collected_and_held() {
         checks.child_grant = Some(grant);
         checks.head_sha = Some("0000000000000000000000000000000000000000".into());
         assert!(
-            crate::collect_interactive_review_refusal(
+            crate::gate::review_verdict::collect_interactive_review_refusal(
                 root.path(),
                 2522,
                 "BUG-2522",
@@ -345,7 +345,7 @@ fn interactive_review_anchor_refusals_are_collected_and_held() {
         checks.head_sha = Some(head.clone());
         let lock = crate::gate::merge_hold_core::hold_lock_path(root.path(), 2522);
         std::fs::create_dir_all(&lock).unwrap();
-        let error = crate::collect_interactive_review_refusal(
+        let error = crate::gate::review_verdict::collect_interactive_review_refusal(
             root.path(),
             2522,
             "BUG-2522",
@@ -361,7 +361,7 @@ fn interactive_review_anchor_refusals_are_collected_and_held() {
                 .requires_changes()
         );
         std::fs::remove_dir(&lock).unwrap();
-        crate::collect_interactive_review_refusal(
+        crate::gate::review_verdict::collect_interactive_review_refusal(
             root.path(),
             2522,
             "BUG-2522",
