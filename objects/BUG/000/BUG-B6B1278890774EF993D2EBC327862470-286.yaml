@@ -3,12 +3,12 @@ spec_id: BUG-b6b1278890774ef993d2ebc327862470-286
 agreed_id: BUG-2521
 title: review-watch never re-reviews a head whose verdict was WAITING; the PR stalls until someone runs --release
 description: 'Observed 2026-11-10: PR-3801 (and earlier #3809, #3803, #3797, #3777) got a WAITING verdict while CI was pending. review-watch then records the head as ''already reserved (Completed)'' and never re-admits it after CI turns green, so the PR sits with no approval until the advisor runs ''aida review watch --release PR-N''. #3801 waited about 6 hours. STORY-2697 now tells reviewers to approve defect-free heads while CI is pending, so new WAITING verdicts should be rarer, but a reviewer can still return WAITING for independent evidence or a named test. Expected: a WAITING attempt does not consume the head. Re-admit the same head once the condition it waited on changes (CI settled, or a bounded backoff such as 20 min), capped like BUG-2518''s no-verdict retries. Acceptance: (1) a head with a WAITING verdict is re-admitted after its CI settles with no manual release; (2) re-admission is capped and respects max_concurrent; (3) APPROVED and CHANGES REQUESTED heads are never re-admitted at the same head; (4) regression test.'
-status: NeedsAttention
+status: Approved
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-11T04:08:39.262399078Z
-modified_at: 2026-11-12T08:45:21.624213434Z
+modified_at: 2026-11-12T08:50:15.193521339Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -24,6 +24,13 @@ comments:
   modified_at: 2026-11-12T01:26:27.172927499Z
   session_id: 01a1cd4f66ce
   harness_version: codex-cli 0.167.0
+- id: 01a1cef3-5219-7213-b8cf-f4a1ece5f6af
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Full sweep: one distributed WAITING backoff defect; exact-head CI passed.. It was punted on: other: Pickup refused: Needs Attention to InProgress requires advisor authority; this native implementer session has no active role. Existing request-changes verdict and punt remain publication vetoes. Advisor triage is required before implementation can resume. No files changed, tests run, or publication declaration made.. No triage reason was given.'
+  created_at: 2026-11-12T08:50:15.193518778Z
+  modified_at: 2026-11-12T08:50:15.193518778Z
+  session_id: 01a1ceeb-e827-7832-8991-e83d9eb95cef
+  harness_version: 2.1.322 (Claude Code)
 history:
 - id: 01a1ca89-967c-73d3-a05e-7a4c69efab87
   author: joe
@@ -107,6 +114,15 @@ history:
   author: joe
   timestamp: 2026-11-12T08:45:21.772550302Z
   changes: []
+- id: 01a1cef3-5219-7213-b8cf-f494f0d7ec0a
+  author: joe
+  timestamp: 2026-11-12T08:50:15.193495413Z
+  session_id: 01a1ceeb-e827-7832-8991-e83d9eb95cef
+  harness_version: 2.1.322 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 filed_at:
   code_sha: fec48a790424718b7cfc26c0c9e7d7667ab48beb
   branch: main
@@ -116,16 +132,3 @@ filed_at:
   vendor: claude
   session: 01a1c87f-970d-7ce0-9351-e4e75a87731e
   harness_version: 2.1.322 (Claude Code)
-attention_reason:
-  category: other
-  detail: 'Pickup refused: Needs Attention to InProgress requires advisor authority; this native implementer session has no active role. Existing request-changes verdict and punt remain publication vetoes. Advisor triage is required before implementation can resume. No files changed, tests run, or publication declaration made.'
-  raised_by: implementer
-  raised_at: 2026-11-12T08:24:52.183204927Z
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: 'Full sweep: one distributed WAITING backoff defect; exact-head CI passed.'
-  recovery_hint: address the review findings, move BUG-2521 back to In Progress, and clear the PR hold only after approval
-  shelved_by: reviewer
-  shelved_at: 2026-11-12T08:45:21.624213434Z
