@@ -28,8 +28,16 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-12T17:51:40.579097417Z
-modified_at: 2026-11-12T17:51:53.877411209Z
+modified_at: 2026-11-12T17:51:57.219762914Z
 req_type: Story
+comments:
+- id: 01a1d0e3-4323-7e02-b6e4-1502d815c506
+  author: joe
+  content: 'ADVISOR SIGNOFF (2026-11-12 10:58 MST): sketch approved as written under operator ruling 10:50 (''do both; trade-offs configurable''). Commit ''[AI:codex] ci: fast PR tier with full train/main runs, configurable (STORY-2735)''. Open the PR with label ci:full.'
+  created_at: 2026-11-12T17:51:57.219762914Z
+  modified_at: 2026-11-12T17:51:57.219762914Z
+  session_id: 01a1d09a-4262-7d50-a00b-00a5a30f3934
+  harness_version: 2.1.322 (Claude Code)
 history:
 - id: 01a1d0e3-3615-7533-9c49-092ba133a6b5
   author: joe
