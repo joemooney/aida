@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-11T14:11:33.148855447Z
-modified_at: 2026-11-12T22:14:15.477639483Z
+modified_at: 2026-11-12T22:51:09.995737329Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -20,6 +20,11 @@ relationships:
     custom: implemented-by
   target_id: 01a1d174-bcb3-7183-b515-cfd8b7898dd3
   created_at: 2026-11-12T20:41:05.972126860Z
+  created_by: joe
+- rel_type:
+    custom: implemented-by
+  target_id: 01a1d1f3-f26f-7c53-bcfd-a076bb1358c7
+  created_at: 2026-11-12T22:51:09.995734489Z
   created_by: joe
 comments:
 - id: 01a1cb39-d707-7bb0-9099-8dcb38800944
@@ -249,6 +254,12 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: Completed
+- id: 01a1d1f5-383e-7613-b9da-ecf2f2fc7a52
+  author: joe
+  timestamp: 2026-11-12T22:51:11.294296065Z
+  session_id: 01a1d19e-9195-7853-815f-b54753ebd973
+  harness_version: 2.1.322 (Claude Code)
+  changes: []
 filed_at:
   code_sha: 11b131dfe3341e6d9c7127d64370f91366094711
   branch: main
