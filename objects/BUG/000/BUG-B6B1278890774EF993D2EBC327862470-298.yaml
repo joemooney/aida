@@ -8,8 +8,16 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-12T10:03:08.698309086Z
-modified_at: 2026-11-12T16:13:41.637521806Z
+modified_at: 2026-11-12T16:13:43.606287769Z
 req_type: Bug
+comments:
+- id: 01a1d089-5536-7983-af43-208f205f22fe
+  author: joe
+  content: 'ADVISOR BRIEF (09:20 MST): make agent_launch::bug_2002_launch_lease_tests::bug2188_refused_launch_restores_approved_status_and_retry_succeeds deterministic. Failures: CI lib-1 runs 43186737131 and 43193488190 (status InProgress where Approved expected after a refused launch). First find WHY the restore is not observed: the refused child path (background=false uses a nonexistent interpreter; background=true exits 73) may restore status asynchronously, on a different store handle, or only on receipt drop. Fix the production path so a refused launch restores Approved before returning Err (preferred), or, if the test is wrong, fix the test''s observation point. Do not add retries or sleeps to the test. Gate: LIGHT (one targeted cargo test of bug_2002_launch_lease_tests, run it 20 times in a loop to show it is stable, plus make check-ci-fast). Trailer (BUG-2533).'
+  created_at: 2026-11-12T16:13:43.606287769Z
+  modified_at: 2026-11-12T16:13:43.606287769Z
+  session_id: 01a1ceeb-e827-7832-8991-e83d9eb95cef
+  harness_version: 2.1.322 (Claude Code)
 history:
 - id: 01a1d089-4d85-7572-9578-4a9e5a97ffd2
   author: joe
