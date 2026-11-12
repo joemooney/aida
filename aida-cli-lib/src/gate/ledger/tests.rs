@@ -428,14 +428,14 @@ fn a_pr_keyed_verdict_write_lands_on_the_change_and_a_spec_keyed_one_on_the_spec
     assert!(store::unbound_file(&root, "STORY-8").is_file());
 }
 
-/// STORY-080 AC2 (slice 3): a spec-only verdict recorded before any change
-/// existed binds to the change when it opens. It then reads under the change
+/// STORY-080 AC2 (slice 3): a legacy pre-change verdict without an explicit
+/// spec-only marker binds to the change when it opens. It reads under the change
 /// and, once, under the spec; the unbound ledger keeps its line (binding
 /// never deletes evidence); a later spec record lands on the change after
 /// it; and binding twice adds nothing.
 // trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
 #[test]
-fn a_spec_only_verdict_binds_to_the_change_when_it_opens() {
+fn a_legacy_pre_change_verdict_binds_to_the_change_when_it_opens() {
     let _env = uncontained();
     let (_tmp, root) = root();
     let a = attestation("reviewer");
@@ -2698,4 +2698,51 @@ fn bug_2517_spec_only_copy_stays_local_when_discovery_refuses() {
         "BUG-2517"
     );
     assert_eq!(std::fs::read(path).unwrap(), before);
+}
+
+// trace:BUG-2517 | ai:codex
+#[test]
+fn bug_2517_local_review_survives_open_record_and_collect_without_binding() {
+    let (_tmp, root) = root();
+    let _env = uncontained();
+    let spec = GateSpec::with_key("BUG-2517", None);
+    for word in ["waiting", "approved"] {
+        let mut local = record(word, &ts(1), None);
+        local.insert("change_binding".into(), "unbound".into());
+        rv::write_verdict_object(&rv::verdict_path(&root, &spec.label), &local).unwrap();
+        let unbound_path = ledger_dir(&root).join("by-spec/BUG-2517.jsonl");
+        let before = std::fs::read(&unbound_path).unwrap();
+
+        // Exercise the production entry points, not just the binder they share.
+        for change in [ChangeKey::pr(3651), ChangeKey::pr(3764)] {
+            super::bind_specs(&root, change, std::slice::from_ref(&spec));
+            assert!(project::events(&root, change)
+                .iter()
+                .all(|e| e.verdict_record() != Some(&local)));
+
+            let own = record("request-changes", &ts(2), None);
+            rv::write_verdict_object_for_spec(
+                &rv::verdict_path(&root, &change.as_key()),
+                &own,
+                Some(&spec.label),
+            )
+            .unwrap();
+            super::record_collected_verdict(
+                &root,
+                change,
+                &own,
+                &[(spec.clone(), own.clone())],
+            )
+            .unwrap();
+            let events = checked::read_change_events(&root, change, &mut Default::default())
+                .unwrap();
+            assert!(events.iter().all(|e| e.verdict_record() != Some(&local)));
+            assert!(events.iter().any(|e| e.verdict_record() == Some(&own)));
+        }
+        // Binding is append-only even for ignored local records.
+        assert_eq!(std::fs::read(unbound_path).unwrap(), before);
+        assert!(store::read_unbound(&root, &spec.label)
+            .iter()
+            .any(|e| e.verdict_record() == Some(&local)));
+    }
 }
