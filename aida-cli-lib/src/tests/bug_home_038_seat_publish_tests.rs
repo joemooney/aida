@@ -4531,16 +4531,27 @@ if '--write-ledger' in sys.argv:
             // trace:STORY-2710 | ai:codex
             let mut poisoned = config.clone();
             poisoned.extend_from_slice(b"\n[repair]\nseatPoison = visible\n");
-            std::fs::write(tree.join(".git/config"), poisoned).unwrap();
-            crate::seat_clone::regenerate_repair_outputs(
-                &tree,
-                &fx.main,
-                &base,
-                &[],
-                &aida_core::exec_context::Environment::default(),
-                false,
+            // Unsupported repository extensions must remain hidden as well.
+            // Git rejects this config before running ordinary commands.
+            // trace:STORY-2710 | ai:codex
+            let unsupported = concat!(
+                "[core]\nrepositoryFormatVersion = 1\n",
+                "[extensions]\naidaUnsupported = true\n",
             )
-            .unwrap();
+            .as_bytes()
+            .to_vec();
+            for seat_config in [poisoned, unsupported] {
+                std::fs::write(tree.join(".git/config"), seat_config).unwrap();
+                crate::seat_clone::regenerate_repair_outputs(
+                    &tree,
+                    &fx.main,
+                    &base,
+                    &[],
+                    &aida_core::exec_context::Environment::default(),
+                    false,
+                )
+                .unwrap();
+            }
             std::fs::write(tree.join(".git/config"), config).unwrap();
         }
         assert_eq!(
@@ -4565,11 +4576,15 @@ if '--write-ledger' in sys.argv:
             for markers in [
                 "<<<<<<< generated\n=======\n>>>>>>> generated\n",
                 ">>>>>>> generated\n",
+                "<<<<<<< generated\n",
             ] {
                 std::fs::write(tree.join("introduce-markers"), markers).unwrap();
-                let why = commit_pending(&fx.main, &tree, "feat", "repair (Refs STORY-2710)")
-                    .unwrap_err();
-                assert!(format!("{why:#}").contains("unresolved conflict markers"));
+                let why =
+                    commit_pending(&fx.main, &tree, "feat", "repair (Refs STORY-2710)").unwrap_err();
+                assert!(
+                    format!("{why:#}").contains("unresolved conflict markers"),
+                    "{why:#}"
+                );
                 assert_eq!(git_ok(&tree, &["rev-parse", "HEAD"]), head);
                 assert_eq!(git_ok(&tree, &["rev-parse", "MERGE_HEAD"]), base);
                 let guard = crate::repair_journal::RepairGuard::lock(&fx.main).unwrap();
