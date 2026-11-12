@@ -13,7 +13,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-11T19:01:48.884172712Z
-modified_at: 2026-11-12T06:20:18.780598253Z
+modified_at: 2026-11-12T06:42:32.862109024Z
 req_type: Bug
 comments:
 - id: 01a1cd53-4d58-7801-952c-3dc01ddd0f17
@@ -82,6 +82,10 @@ history:
   author: joe
   timestamp: 2026-11-12T02:20:04.306061557Z
   changes: []
+- id: 01a1ce7e-679b-7953-9be3-2fbcd088d216
+  author: joe
+  timestamp: 2026-11-12T06:42:32.987092820Z
+  changes: []
 filed_at:
   code_sha: 084db2045ab47ac1c18fbef293abb2a3db53cb92
   branch: main
@@ -95,7 +99,7 @@ failure_reason:
   phase: reviewer
   phase_index: 3
   kind: verdict:request-changes
-  detail: 'Full sweep: BUG-2528 bug protocol met (test file changed). BUG-b6b1278890774ef993d2ebc327862470-293.ac7047b1 verified by exact-tip polling and passing hold-release integration test; .ac8e4a45 verified by pending-to-success integration and deterministic 180s timeout/refusal test. One defect: added real polling sleep breaks CI test-time budget.'
-  recovery_hint: address the review findings, move BUG-2528 back to In Progress, and clear the PR hold only after approval
+  detail: 'Full two-file sweep: no actionable defects; ac7047b1 verified by exact-tip bounded polling and released-member pending-to-success regression; ac8e4a45 verified by landing and deterministic 180s timeout/fail-closed regressions (source inspected; spec reports 59 passing module tests). BUG-2528 bug protocol: met (test file changed). CI pending at review time; no local tests run per review-watch policy.'
+  recovery_hint: address the review findings, move BUG-B6B1278890774EF993D2EBC327862470-293 back to In Progress, and clear the PR hold only after approval
   shelved_by: reviewer
-  shelved_at: 2026-11-12T02:20:04.178841108Z
+  shelved_at: 2026-11-12T06:42:32.862109024Z
