@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-12T09:33:29.513516913Z
-modified_at: 2026-11-12T17:17:22.803767220Z
+modified_at: 2026-11-12T17:22:23.848464328Z
 req_type: Bug
 comments:
 - id: 01a1cf24-8eb1-7db1-9111-9e7c9b2b2fdc
@@ -30,6 +30,13 @@ comments:
   content: 'ADVISOR BRIEF (10:22 MST): one fix in the shared dirtiness check used by both pr_lease_takeover::check_pr_lease (review lease auto-end) and the force-claim path: ignore untracked harness-owned files (.claude/settings.local.json; reuse an existing allowlist if one exists, grep for settings.local.json first). Never ignore tracked changes or other untracked files. Tests: a seat with only that untracked file is SafeToEnd and force-claimable; a seat with another untracked file still refuses. LIGHT gate: one targeted cargo test -p aida-cli-lib <filter> + make check-ci-fast. Commit ''[AI:codex] fix(lease): treat harness settings.local.json as clean for lease end and force-claim (BUG-2532)''.'
   created_at: 2026-11-12T17:17:22.803767220Z
   modified_at: 2026-11-12T17:17:22.803767220Z
+  session_id: 01a1d09a-4262-7d50-a00b-00a5a30f3934
+  harness_version: 2.1.322 (Claude Code)
+- id: 01a1d0c8-33e8-7861-9cf1-6fdbbc6ebd00
+  author: joe
+  content: 'Advisor 10:30 MST, operator-directed fast fix: root cause is that .claude/settings.local.json was ignored only by the operator''s GLOBAL git excludes (~/.config/git/ignore); lanes/reviewers run git without it, so the file reads as untracked work. Fix = repo .gitignore entry, PR #3886 (auto-merge on; branch protection still requires Build + merge-hold-gate, admin merge refused). Immediate mitigation: same entry added to .git/info/exclude on the primary (covers every linked worktree) and on dell1. The brief''s code-level allowlist is no longer needed; the codex lane was stopped.'
+  created_at: 2026-11-12T17:22:23.848464328Z
+  modified_at: 2026-11-12T17:22:23.848464328Z
   session_id: 01a1d09a-4262-7d50-a00b-00a5a30f3934
   harness_version: 2.1.322 (Claude Code)
 history:
