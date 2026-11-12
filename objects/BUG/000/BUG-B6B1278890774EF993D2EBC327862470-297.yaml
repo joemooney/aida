@@ -8,8 +8,16 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-12T09:33:29.513516913Z
-modified_at: 2026-11-12T09:33:29.513516913Z
+modified_at: 2026-11-12T09:44:01.969351339Z
 req_type: Bug
+comments:
+- id: 01a1cf24-8eb1-7db1-9111-9e7c9b2b2fdc
+  author: joe
+  content: 'Recurred locally 02:19 and 02:37 MST (clone ...-618-2, lease 01a1ceeef7ad): every autoland relaunch of STORY-2695 refused for the same generated file. Hit both hosts; moved aside by hand.'
+  created_at: 2026-11-12T09:44:01.969351339Z
+  modified_at: 2026-11-12T09:44:01.969351339Z
+  session_id: 01a1ceeb-e827-7832-8991-e83d9eb95cef
+  harness_version: 2.1.322 (Claude Code)
 filed_at:
   code_sha: 298639cb95018f3d580dc44cba3ce04e880064fd
   branch: main
