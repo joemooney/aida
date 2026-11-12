@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-11T04:48:14.810158291Z
-modified_at: 2026-11-12T08:45:26.572217161Z
+modified_at: 2026-11-12T08:50:09.368019120Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -134,6 +134,13 @@ comments:
   content: 'Round 2: the current branch already collects interactive review refusals with pinned head, child grant and launch freshness before presentation/re-recording. Expanded regression coverage for request-changes and rejected with file-backed anchors and no existing hold: forge label failure must retain the Rework hold and record Unsynced diagnostics; successful sync still applies both hold labels. Targeted lane test pending. Status promotion to InProgress refused by advisor-authority gate; leaving Needs Attention unchanged.'
   created_at: 2026-11-12T08:45:26.572217161Z
   modified_at: 2026-11-12T08:45:26.572217161Z
+  session_id: 01a1ceed78e6
+  harness_version: codex-cli 0.167.0
+- id: 01a1cef3-3b58-7d12-9721-0d8546551beb
+  author: dirtlab
+  content: 'Round 2 validation passed: lane job j20261112T084504670-2-0 ran cargo test --profile agent -p aida-cli-lib --lib -- interactive_review_anchor_refusals_are_collected_and_held; 1 executed test passed, 0 failures. Six scenarios cover request-changes/rejected, ledger/file anchors, successful label sync and failed forge sync retaining the local Rework hold plus Unsynced diagnostic. git diff --check passed. New test edits remain uncommitted for host publication under the native seat contract.'
+  created_at: 2026-11-12T08:50:09.368019120Z
+  modified_at: 2026-11-12T08:50:09.368019120Z
   session_id: 01a1ceed78e6
   harness_version: codex-cli 0.167.0
 history:
