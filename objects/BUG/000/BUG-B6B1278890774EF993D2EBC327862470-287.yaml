@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-11T04:48:14.810158291Z
-modified_at: 2026-11-12T05:39:24.733599951Z
+modified_at: 2026-11-12T06:10:08.372684489Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -103,6 +103,20 @@ comments:
   created_at: 2026-11-12T05:16:37.184939415Z
   modified_at: 2026-11-12T05:16:37.184939415Z
   session_id: 01a1ce1d13d2
+- id: 01a1ce5c-dd5a-7fe1-9777-58892fc511c3
+  author: dirtlab
+  content: 'Round 2 finding 1: confirmed the branch already collects interactive refusal evidence before presentation/re-recording and arms the local Rework hold plus forge labels. Tightened collection to require the PR head pinned before launch to remain current, and extended the no-existing-hold regression for request-changes and rejected to reject earlier-launch evidence without hold or label side effects. Targeted lane-runner validation is in progress; edits remain uncommitted for host publication.'
+  created_at: 2026-11-12T06:05:54.906375739Z
+  modified_at: 2026-11-12T06:05:54.906375739Z
+  session_id: 01a1ce59aeff
+  harness_version: codex-cli 0.167.0
+- id: 01a1ce60-bb74-7c50-95de-ca3e58c7703c
+  author: dirtlab
+  content: 'Round 2 validation complete: lane job j20261112T060807085-2-0 ran cargo test --profile agent -p aida-cli-lib --lib -- bug_013_review_record_sha_tests against final source: 9 passed, 0 failed, including interactive request-changes/rejected collection with local Rework hold and forge labels. Earlier focused regression also passed (1 executed test). rustfmt --check and git diff --check pass. Two code/test files remain uncommitted for host publication. Codegraph navigation unavailable: configured host client missing and doctor reports missing.'
+  created_at: 2026-11-12T06:10:08.372684489Z
+  modified_at: 2026-11-12T06:10:08.372684489Z
+  session_id: 01a1ce59aeff
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1c8ef-b4bc-7b62-a163-3209968104a9
   author: joe
