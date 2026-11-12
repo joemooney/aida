@@ -23,35 +23,11 @@
   added_at: 2026-11-05T02:57:13.316633961Z
   for_role: advisor
 - user_id: joe
-  requirement_id: 01a1ce97-5d1f-70b3-a5d1-dc9452c2137d
-  position: 479000
-  added_by: joe
-  note: auto-queue retry reused canonical review story; covers 1 spec
-  added_at: 2026-11-12T09:48:23.700735733Z
-  for_role: reviewer
-  added_by_machine: imac
-- user_id: joe
   requirement_id: 01a1cad9-80fe-7eb1-8f90-97c280413920
   position: 480000
   added_by: joe
   note: auto-queue retry reused canonical review story; covers 1 spec
   added_at: 2026-11-12T10:13:28.738630589Z
-  for_role: reviewer
-  added_by_machine: imac
-- user_id: joe
-  requirement_id: 01a1cadc-1ae9-7bc2-b30a-74dcdea4b771
-  position: 488000
-  added_by: joe
-  note: auto-queue retry reused canonical review story; covers 1 spec
-  added_at: 2026-11-12T13:25:20.793075850Z
-  for_role: reviewer
-  added_by_machine: imac
-- user_id: joe
-  requirement_id: 01a1cf0d-ec71-73f3-bb0d-e5cce3ed2f71
-  position: 491000
-  added_by: joe
-  note: auto-queue retry reused canonical review story; covers 0 specs
-  added_at: 2026-11-12T13:54:28.128453067Z
   for_role: reviewer
   added_by_machine: imac
 - user_id: joe
@@ -63,27 +39,11 @@
   for_role: reviewer
   added_by_machine: imac
 - user_id: joe
-  requirement_id: 01a1cb46-3929-7171-87b0-8e68a0d4fb14
-  position: 497000
-  added_by: joe
-  note: auto-queue retry reused canonical review story; covers 1 spec
-  added_at: 2026-11-12T16:08:31.134182998Z
-  for_role: reviewer
-  added_by_machine: imac
-- user_id: joe
   requirement_id: 01a1d0a4-7302-7d50-ae99-90aefe2e76e5
   position: 498000
   added_by: joe
   note: auto-queued by `aida pr` (01a1d08f); covers 1 spec
   added_at: 2026-11-12T16:43:58.210422036Z
-  for_role: reviewer
-  added_by_machine: imac
-- user_id: joe
-  requirement_id: 01a1d0c2-d5bc-70d1-8578-13df53909668
-  position: 499000
-  added_by: joe
-  note: auto-queued by `aida pr` (01a1d08e); covers 1 spec
-  added_at: 2026-11-12T17:17:25.258424809Z
   for_role: reviewer
   added_by_machine: imac
 - user_id: joe
