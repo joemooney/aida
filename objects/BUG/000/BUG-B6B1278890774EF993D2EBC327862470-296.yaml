@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-12T08:35:37.046532324Z
-modified_at: 2026-11-12T12:41:14.338010076Z
+modified_at: 2026-11-12T13:03:42.901535890Z
 req_type: Bug
 comments:
 - id: 01a1cf00-20ea-7c51-bbf5-a9927b13b042
@@ -212,6 +212,10 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a1cfdb-6012-7be1-a14c-6b2763262213
+  author: joe
+  timestamp: 2026-11-12T13:03:43.122577969Z
+  changes: []
 filed_at:
   code_sha: 296d1dd295804f61d32a6b8aa07ae1485b198c93
   branch: main
@@ -231,7 +235,7 @@ failure_reason:
   phase: reviewer
   phase_index: 3
   kind: verdict:request-changes
-  detail: 'Full sweep: safety cap, doctor warning and regression are present; relevant-only discovery and automatic archival remain incomplete without an approved scope split. CI pending at review time.'
-  recovery_hint: address the review findings, move BUG-B6B1278890774EF993D2EBC327862470-296 back to In Progress, and clear the PR hold only after approval
+  detail: 'Full sweep: relevant-only discovery and automatic archival remain incomplete without an approved scope split. Aggregate safety cap and doctor warning inspected; CI pending at review time.'
+  recovery_hint: address the review findings, move BUG-2531 back to In Progress, and clear the PR hold only after approval
   shelved_by: reviewer
-  shelved_at: 2026-11-12T12:39:55.773923013Z
+  shelved_at: 2026-11-12T13:03:42.901535890Z
