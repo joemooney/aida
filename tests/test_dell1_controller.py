@@ -411,8 +411,9 @@ class LaunchIntegration(unittest.TestCase):
             self.enumerate_runner_ancestors(runner, root, 10000)
 
     @staticmethod
-    def kernel_enumerate_runner_ancestors(runner, run=subprocess.run):
-        # Capture the real subprocess runner before launch mocks systemd-run.
+    def kernel_enumerate_runner_ancestors(runner, run=subprocess.run, geteuid=os.geteuid):
+        # Capture real process operations before launch mocks systemd-run and
+        # controller root admission; a mocked uid must never trigger setuid.
         # trace:STORY-2695 | ai:codex
         def unprivileged():
             os.setgroups([])
@@ -426,7 +427,7 @@ class LaunchIntegration(unittest.TestCase):
              'for ancestor in Path(sys.argv[1]).parents:\n'
              '    list(ancestor.iterdir())\n', str(runner)],
             capture_output=True, text=True, timeout=5,
-            preexec_fn=unprivileged if os.geteuid() == 0 else None)
+            preexec_fn=unprivileged if geteuid() == 0 else None)
 
     def test_kernel_enumeration_requires_readable_ancestors(self):
         # trace:STORY-2695 | ai:codex
@@ -459,6 +460,40 @@ class LaunchIntegration(unittest.TestCase):
                     allowed = self.kernel_enumerate_runner_ancestors(runner)
                     self.assertEqual(allowed.returncode, 0, allowed.stderr)
                     self.assertEqual(stat.S_IMODE(work.stat().st_mode), 0o700)
+
+    def test_readable_current_does_not_expose_private_class_contents(self):
+        # trace:STORY-2695 | ai:codex
+        # Listener startup enumerates ancestor entries, not their descendants.
+        # Keep both class trees private while allowing that exact startup read.
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            root.chmod(0o755)
+            current = root / 'current'
+            runner = current / 'runner'
+            runner.mkdir(parents=True)
+            current.chmod(0o755)
+            runner.chmod(0o755)
+            for kind in ('main', 'train'):
+                work = current / kind
+                work.mkdir(mode=0o700)
+                (work / 'private-artifact').write_text('class-private')
+            startup = self.kernel_enumerate_runner_ancestors(runner)
+            self.assertEqual(startup.returncode, 0, startup.stderr)
+            for kind in ('main', 'train'):
+                with self.subTest(kind=kind):
+                    work = current / kind
+                    self.assertEqual(stat.S_IMODE(work.stat().st_mode), 0o700)
+                    # Non-root lanes own their fixtures. Mode 000 models the
+                    # zero other-user access of a different service uid's 0700.
+                    if os.geteuid() != 0:
+                        work.chmod(0o000)
+                    try:
+                        denied = self.kernel_enumerate_runner_ancestors(work / 'probe')
+                        self.assertNotEqual(denied.returncode, 0)
+                        self.assertIn('PermissionError', denied.stderr)
+                        self.assertIn(str(work), denied.stderr)
+                    finally:
+                        work.chmod(0o700)
 
     def exercise(self, kind, *, unit_failure=False, stop_failure=False, gate_failure=False, alternate=False, pending=False, test_failure=False, priority=False, restrictive_umask=False, slot='s0'):
         from contextlib import ExitStack

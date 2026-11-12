@@ -194,7 +194,12 @@ also runs the kernel ancestor-enumeration check before simulated job pickup
 for both slots and classes, including umask 077. The ancestor
 regression also runs real directory enumeration in a non-root subprocess: each
 execute-only ancestor must fail, while 0755 permits startup enumeration with
-private work trees still 0700. At S3 installation, verify the actual service uid
+private work trees still 0700. At S3 installation, verify the service uid
+cannot enumerate the other class's private work tree even though it can list
+the names in `current`; startup enumeration does not require recursive access.
+The regression checks this denial for both class trees (non-root lane fixtures
+model a foreign owner's 0700 with mode 000).
+At S3 installation, verify the actual service uid
 can enumerate every runner ancestor, including `current`, before job pickup;
 merely testing `cd` does not cover Runner.Listener's startup check. S3 must retain
 positive private-cache writes plus direct/alias/symlink seed and sibling denial
