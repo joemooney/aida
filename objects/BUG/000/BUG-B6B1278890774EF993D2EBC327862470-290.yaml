@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-11T14:11:33.148855447Z
-modified_at: 2026-11-12T17:06:44.142790470Z
+modified_at: 2026-11-12T18:27:04.698568259Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -88,6 +88,13 @@ comments:
   created_at: 2026-11-12T17:06:44.142790470Z
   modified_at: 2026-11-12T17:06:44.142790470Z
   session_id: 01a1d09a-4262-7d50-a00b-00a5a30f3934
+  harness_version: 2.1.322 (Claude Code)
+- id: 01a1d103-6b7a-7a12-ab6c-0fe51f4995ec
+  author: joe
+  content: '[advisor 11:30] PR-3846 ejected from train #3888: conflicts with main or #3830. Rework: merge origin/main into the PR branch, resolve by hand, push.'
+  created_at: 2026-11-12T18:27:04.698568259Z
+  modified_at: 2026-11-12T18:27:04.698568259Z
+  session_id: 01a1d0eb-22cc-7262-8f6c-7266e9cc1fbb
   harness_version: 2.1.322 (Claude Code)
 history:
 - id: 01a1cb1e-b1cd-7183-8b51-05e72f878612
