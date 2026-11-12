@@ -1,0 +1,21 @@
+id: 01a1d1bb-ef5b-7c23-8280-a602e3dcb485
+spec_id: BUG-b6b1278890774ef993d2ebc327862470-306
+agreed_id: BUG-2541
+title: session end cannot retire a contained seat clone whose host binding is unverified (mail retention refuses even with --force)
+description: 'dell1 2026-11-12: seat clone aida-seat-aida-bug-...-304 (lease 01a1d1150582, branch bug-overlay-fingerprint-flake). Its 202 tracked files were deleted (interrupted teardown?). After restoring them, ''aida session end --branch B --yes|--force'' refuses: ''mail retention refused ... the seat clone has no verified host binding to its main checkout, so its mail cannot be fenced and retained; the tree was kept''. Running it from inside the clone refuses too: ''marker, alternates and lease do not agree on a main checkout''. Every pickup on the branch stays blocked (''held by a contained seat private clone''). Expected: an operator path that salvages the mail (or confirms it is empty) and ends the lease.'
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-12T21:48:37.083633477Z
+modified_at: 2026-11-12T21:48:37.083633477Z
+req_type: Bug
+filed_at:
+  code_sha: 0d6c60e6d982aad0c2c4ad38214010289a267d92
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 0d6c60e6d98
+  vendor: claude
+  session: 01a1d19e-9195-7853-815f-b54753ebd973
+  harness_version: 2.1.322 (Claude Code)
