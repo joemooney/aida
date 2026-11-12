@@ -31,8 +31,13 @@ pub(crate) enum EvidenceUnavailable {
     MissingExecutable(&'static str),
     /// The forge CLI could not be started.
     Spawn(String),
+    // trace:BUG-2540 | ai:codex
+    TimedOut,
     /// The forge CLI exited unsuccessfully.
-    Exit { code: Option<i32>, stderr: String },
+    Exit {
+        code: Option<i32>,
+        stderr: String,
+    },
     /// The output was not JSON.
     Undecodable,
     /// The output was JSON but not an array of rows.
@@ -59,6 +64,10 @@ impl std::fmt::Display for EvidenceUnavailable {
             Self::ForgeQuery(why) => write!(f, "open-change query unavailable: {why}"),
             Self::MissingExecutable(cli) => write!(f, "`{cli}` executable not found"),
             Self::Spawn(e) => write!(f, "could not run `gh`: {e}"),
+            Self::TimedOut => write!(
+                f,
+                "gh pr list timed out after 3s; retry when the forge is available"
+            ),
             Self::Exit { code, stderr } => {
                 match code {
                     Some(code) => write!(f, "`gh pr list` exited with status {code}")?,
@@ -221,7 +230,8 @@ fn confirm_clear(
 }
 
 fn query_open_change_once(gh: &Path, project_root: &Path, spec_id: &str) -> OpenChangeCheck {
-    let out = match std::process::Command::new(gh)
+    let mut command = std::process::Command::new(gh);
+    command
         .current_dir(project_root)
         // BUG-2134: GitHub search is token-fuzzy and also matches review
         // comments, so the first hit is not necessarily a PR that names the
@@ -242,15 +252,21 @@ fn query_open_change_once(gh: &Path, project_root: &Path, spec_id: &str) -> Open
             // filter, which goes through GitHub's lagging search index.
             // trace:BUG-2163 | ai:claude
             "number,title,body,headRefName,state",
-        ])
-        .output_retrying_etxtbsy()
-    {
-        Ok(out) => out,
-        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
-            return OpenChangeCheck::Unavailable(EvidenceUnavailable::MissingExecutable("gh"))
-        }
-        Err(e) => return OpenChangeCheck::Unavailable(EvidenceUnavailable::Spawn(e.to_string())),
-    };
+        ]);
+    // Rework calls this before any visible mutation. A stuck gh request
+    // must return unknown evidence promptly. trace:BUG-2540 | ai:codex
+    let out =
+        match crate::command_output_with_timeout_detail(command, crate::FORGE_CLI_CALL_TIMEOUT) {
+            crate::BoundedCommandOutput::Completed(out) => out,
+            crate::BoundedCommandOutput::TimedOut => {
+                return OpenChangeCheck::Unavailable(EvidenceUnavailable::TimedOut);
+            }
+            crate::BoundedCommandOutput::SpawnFailed => {
+                return OpenChangeCheck::Unavailable(EvidenceUnavailable::Spawn(
+                    "could not start gh pr list".into(),
+                ))
+            }
+        };
     if !out.status.success() {
         return OpenChangeCheck::Unavailable(exit_failure(&out));
     }
@@ -752,6 +768,26 @@ pub(crate) fn required_unavailable_error(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    // trace:BUG-2540 | ai:codex
+    #[cfg(unix)]
+    #[test]
+    fn bug_2540_stalled_open_change_query_returns_timeout_evidence() {
+        use std::os::unix::fs::PermissionsExt;
+        let dir = tempfile::tempdir().unwrap();
+        let gh = dir.path().join("gh-stalled");
+        std::fs::write(&gh, "#!/bin/sh\nexec /bin/sleep 30\n").unwrap();
+        std::fs::set_permissions(&gh, std::fs::Permissions::from_mode(0o700)).unwrap();
+        let started = std::time::Instant::now();
+        assert_eq!(
+            query_open_change_once(&gh, dir.path(), "BUG-2540"),
+            OpenChangeCheck::Unavailable(EvidenceUnavailable::TimedOut)
+        );
+        assert!(started.elapsed() < std::time::Duration::from_secs(8));
+        assert!(EvidenceUnavailable::TimedOut
+            .to_string()
+            .contains("timed out after 3s"));
+    }
 
     #[test]
     fn open_change_rows_require_a_complete_valid_array() {

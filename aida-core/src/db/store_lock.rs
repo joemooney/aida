@@ -36,6 +36,9 @@ pub(crate) const STORE_WRITE_LOCK_FILE: &str = "store-write.lock";
 thread_local! {
     /// Per-thread hold count by canonical store root (re-entrancy).
     static HELD: RefCell<HashMap<PathBuf, usize>> = RefCell::new(HashMap::new());
+    // Caller-scoped admission deadline; never changes process environment.
+    // trace:BUG-2540 | ai:codex
+    static WAIT_DEADLINE: std::cell::Cell<Option<Instant>> = const { std::cell::Cell::new(None) };
 }
 
 /// Process-wide count of `try_lock_exclusive` contention events (`EWOULDBLOCK`)
@@ -102,7 +105,43 @@ fn timeout() -> Duration {
         .ok()
         .and_then(|v| v.parse::<u64>().ok())
         .unwrap_or(DEFAULT_TIMEOUT_SECS);
-    Duration::from_secs(secs)
+    let configured = Duration::from_secs(secs);
+    WAIT_DEADLINE.with(|cell| {
+        cell.get().map_or(configured, |deadline| {
+            configured.min(deadline.saturating_duration_since(Instant::now()))
+        })
+    })
+}
+
+/// Bound store-lock admission for one command without holding a
+/// lock across its forge probes or child launch. Nested writers retain the
+/// ordinary lock order and reentrancy. trace:BUG-2540 | ai:codex
+pub fn with_store_write_wait<T>(budget: Duration, f: impl FnOnce() -> T) -> T {
+    let _restore = limit_store_write_wait(budget);
+    f()
+}
+
+/// Caller-scoped wait policy; dropping it restores the enclosing policy.
+// trace:BUG-2540 | ai:codex
+pub struct StoreWriteWait(Option<Instant>);
+
+impl Drop for StoreWriteWait {
+    fn drop(&mut self) {
+        WAIT_DEADLINE.with(|cell| cell.set(self.0));
+    }
+}
+
+/// Install a deadline without holding a store lock across external work.
+// trace:BUG-2540 | ai:codex
+#[must_use]
+pub fn limit_store_write_wait(budget: Duration) -> StoreWriteWait {
+    let deadline = Instant::now() + budget;
+    let previous = WAIT_DEADLINE.with(|cell| {
+        let previous = cell.get();
+        cell.set(Some(previous.map_or(deadline, |old| old.min(deadline))));
+        previous
+    });
+    StoreWriteWait(previous)
 }
 
 /// Store roots whose lock exclusion is already confirmed in this process.
@@ -408,6 +447,38 @@ pub(crate) fn held_by_this_thread(root: &Path) -> bool {
 mod tests {
     use super::*;
     use std::sync::mpsc;
+
+    // trace:BUG-2540 | ai:codex
+    #[test]
+    fn bug_2540_scoped_wait_refuses_contention_and_restores_policy() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path().to_path_buf();
+        let holder = acquire(&root).unwrap();
+        let contender_root = root.clone();
+        let (elapsed, error) = std::thread::spawn(move || {
+            let start = Instant::now();
+            let error = with_store_write_wait(Duration::from_millis(100), || {
+                acquire(&contender_root).map(|_| ())
+            })
+            .unwrap_err();
+            assert!(WAIT_DEADLINE.with(|cell| cell.get().is_none()));
+            (start.elapsed(), error.to_string())
+        })
+        .join()
+        .unwrap();
+        assert!(elapsed < Duration::from_secs(2), "{elapsed:?}");
+        assert!(error.contains("store write lock"), "{error}");
+        assert!(error.contains("retry"), "{error}");
+        drop(holder);
+        assert!(acquire(&root).is_ok());
+        with_store_write_wait(Duration::ZERO, || {
+            let outer = acquire(&root).unwrap();
+            let inner = acquire(&root).unwrap();
+            drop(inner);
+            assert!(store_write_lock_held(&root));
+            drop(outer);
+        });
+    }
 
     #[test]
     fn lock_is_reentrant_on_one_thread() {

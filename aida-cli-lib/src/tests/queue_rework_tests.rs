@@ -2512,3 +2512,29 @@ fn story_2690_rework_refuses_all_human_parking_before_mutation() {
         );
     }
 }
+
+// trace:BUG-2540 | ai:codex
+#[test]
+fn bug_2540_rework_refuses_contended_store_without_status_or_queue_mutation() {
+    let context = tempfile::tempdir().unwrap();
+    let _env = crate::test_env::AmbientGuard::hermetic(context.path(), None);
+    let (_tmp, storage) =
+        story_1429_fixture(vec![req_for_test("BUG-2540", RequirementStatus::Done)]);
+    let path = aida_core::db::store_write_lock_path(storage.path());
+    std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+    let holder = std::fs::OpenOptions::new()
+        .create(true)
+        .truncate(false)
+        .write(true)
+        .open(&path)
+        .unwrap();
+    fs2::FileExt::try_lock_exclusive(&holder).unwrap();
+    let started = std::time::Instant::now();
+    let error = rework_as(&storage, "BUG-2540", None, false).unwrap_err();
+    assert!(started.elapsed() < std::time::Duration::from_secs(10));
+    let message = format!("{error:#}");
+    assert!(message.contains("store write lock"), "{message}");
+    assert!(message.contains("retry"), "{message}");
+    assert_eq!(status_of(&storage, "BUG-2540"), RequirementStatus::Done);
+    assert!(storage.queue_list("codex", true).unwrap().is_empty());
+}

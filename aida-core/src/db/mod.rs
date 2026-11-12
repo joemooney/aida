@@ -87,9 +87,10 @@ pub(crate) use store_lock::acquire as acquire_store_write_lock;
 // trace:TASK-1717 | ai:claude
 #[cfg(feature = "native")]
 pub use store_lock::{
-    any_store_write_lock_held, hold_store_write, store_write_lock_contended_count,
-    store_write_lock_contended_for, store_write_lock_held, store_write_lock_path,
-    with_store_write_lock, with_store_write_lock_bounded, StoreWriteHold,
+    any_store_write_lock_held, hold_store_write, limit_store_write_wait,
+    store_write_lock_contended_count, store_write_lock_contended_for, store_write_lock_held,
+    store_write_lock_path, with_store_write_lock, with_store_write_lock_bounded,
+    with_store_write_wait, StoreWriteHold, StoreWriteWait,
 };
 pub use traits::{BackendType, DatabaseBackend, DatabaseConfig, UpdateResult, VersionConflict};
 #[cfg(feature = "native")]

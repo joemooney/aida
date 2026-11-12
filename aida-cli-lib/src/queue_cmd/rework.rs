@@ -553,6 +553,10 @@ pub(crate) fn handle_queue_rework(
     no_pull: bool,
     user: Option<&str>,
 ) -> Result<()> {
+    // Dispatch must not consume an autoland heartbeat waiting on a busy
+    // store. Scope the wait policy, rather than holding a lock while probing
+    // the forge or launching a worker. trace:BUG-2540 | ai:codex
+    let _wait = aida_core::db::limit_store_write_wait(std::time::Duration::from_secs(5));
     refuse_retired_steal(steal)?;
     // `--resume` chains through to `aida queue work --resume` (TASK-112,
     // shipped). It implies `--work` — there is nothing to resume without
@@ -620,11 +624,23 @@ pub(crate) fn handle_queue_rework(
             .or_else(|| Some("implementer".to_string())),
     };
 
+    // Resolve once and reuse for waiting and findings checks. A timeout
+    // refuses before status, comments or queue mutation. trace:BUG-2540 | ai:codex
+    let project_root = find_project_root().ok();
+    let open_change = project_root
+        .as_deref()
+        .map(|root| {
+            super::work::spec_open_change_key_checked(
+                root,
+                &[display_id.as_str(), spec_id.as_str()],
+            )
+        })
+        .transpose()?
+        .flatten();
     // trace:BUG-2500 | ai:codex — refuse before status, comments or queue writes.
     if for_role_resolved.as_deref() != Some("reviewer") {
-        if let Ok(root) = find_project_root() {
-            let open = spec_open_change_key(&root, &[display_id.as_str(), spec_id.as_str()]);
-            refuse_waiting_review(&root, &display_id, &spec_id, open.as_deref())
+        if let Some(root) = project_root.as_deref() {
+            refuse_waiting_review(root, &display_id, &spec_id, open_change.as_deref())
                 .map_err(|why| anyhow::anyhow!(why))?;
         }
     }
@@ -772,10 +788,7 @@ pub(crate) fn handle_queue_rework(
     // rework pickup. Persist it onto the spec before queueing so every later
     // pickup surface sees the same blocking context. trace:BUG-814 | ai:codex
     let mut pending_findings = None;
-    if let Ok(root) = find_project_root() {
-        // BUG-2430: a review keyed by the spec's open PR counts too.
-        // trace:BUG-2430 | ai:claude
-        let open_change = spec_open_change_key(&root, &[display_id.as_str(), spec_id.as_str()]);
+    if let Some(root) = project_root.as_ref() {
         let findings = match resolve_rework_findings(
             &root,
             &display_id,
@@ -1130,6 +1143,10 @@ pub(crate) fn handle_queue_rework(
             drain_running_notice(&requeue_project_root(storage))
         );
     }
+
+    // The dispatch deadline does not govern the worker's own session.
+    // trace:BUG-2540 | ai:codex
+    drop(_wait);
 
     // Optional --work chain. We don't run this in a sub-process — call
     // `handle_queue_work` directly with the same storage handle so any

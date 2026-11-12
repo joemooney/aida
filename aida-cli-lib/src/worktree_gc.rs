@@ -795,6 +795,29 @@ pub(crate) fn main_worktree_root_from(start: &std::path::Path) -> std::path::Pat
         }
         crate::seat_clone::MainFor::NotAClone => {}
     }
+    // Ordinary linked worktrees share <primary>/.git. Resolve that directly
+    // instead of enumerating every live and stale worktree. Verify the .git
+    // identity before using its parent; unusual layouts retain the fallback.
+    // trace:BUG-2540 | ai:codex
+    let mut query = std::process::Command::new("git");
+    query
+        .arg("-C")
+        .arg(start)
+        .args(["rev-parse", "--path-format=absolute", "--git-common-dir"]);
+    if let Some(out) = crate::command_output_with_timeout(query, std::time::Duration::from_secs(3))
+    {
+        if out.status.success() {
+            let common = std::path::PathBuf::from(String::from_utf8_lossy(&out.stdout).trim());
+            if let Some(main) = common.parent().filter(|main| {
+                common.file_name().is_some_and(|name| name == ".git")
+                    && main.join(".git").canonicalize().ok() == common.canonicalize().ok()
+                    && common.is_dir()
+            }) {
+                aida_core::seat_clone_detect::note_host_main(main);
+                return main.to_path_buf();
+            }
+        }
+    }
     let out = std::process::Command::new("git")
         .arg("-C")
         .arg(start)

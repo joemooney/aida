@@ -82,8 +82,8 @@ fn slow_git_on_path(tmp: &Path, slow: &[&str], secs: f64) -> crate::test_env::En
     crate::test_env::EnvVarGuard::set("PATH", std::env::join_paths(paths).unwrap())
 }
 
-/// The shared resolvers have no deadline: a slow `git worktree list` /
-/// `git symbolic-ref` still yields the main root and `origin/main`. The
+/// The shared resolvers preserve the main root and `origin/main` even
+/// when worktree enumeration or `git symbolic-ref` is slow. The
 /// show-only resolver, whose deadline passes while the slow call is in
 /// flight, returns the distinct timeout instead of a fallback value.
 #[cfg(unix)]
@@ -108,12 +108,10 @@ fn shared_resolvers_wait_out_a_slow_git_while_the_show_variant_times_out() {
     );
     let _path = slow_git_on_path(tmp.path(), &["worktree", "symbolic-ref"], 1.5);
 
-    let started = Instant::now();
+    // The common-directory fast path need not enumerate worktrees at all.
+    // Root identity, rather than paying for that scan, is the contract here.
+    // trace:BUG-2540 | ai:codex
     let root = crate::main_worktree_root_from(&linked);
-    assert!(
-        started.elapsed() >= Duration::from_millis(1500),
-        "the shim ran"
-    );
     assert_eq!(
         root.canonicalize().unwrap(),
         repo.canonicalize().unwrap(),

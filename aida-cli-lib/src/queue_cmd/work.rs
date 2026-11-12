@@ -2512,17 +2512,34 @@ pub(crate) fn rework_findings_block_for_spec(
 /// still answer, and an unknown PR never binds a review to the spec.
 // trace:BUG-2430 | ai:claude
 pub fn spec_open_change_key(project_root: &std::path::Path, ids: &[&str]) -> Option<String> {
+    spec_open_change_key_checked(project_root, ids)
+        .ok()
+        .flatten()
+}
+
+// Rework must report a stalled forge before mutating, rather than silently
+// proceeding without its review binding. Other Option callers retain their
+// existing unavailable-evidence policy. trace:BUG-2540 | ai:codex
+pub(super) fn spec_open_change_key_checked(
+    project_root: &Path,
+    ids: &[&str],
+) -> Result<Option<String>> {
+    use crate::reconcile_evidence::{check_open_changes, EvidenceUnavailable, OpenChangeCheck};
     let forge = Ok(crate::forge::resolve_forge_kind(project_root));
     let mut ids: Vec<String> = ids.iter().map(|s| s.trim().to_string()).collect();
     ids.dedup();
-    crate::reconcile_evidence::check_open_changes(project_root, &forge, ids, false)
-        .into_iter()
-        .find_map(|(_, check)| match check {
-            crate::reconcile_evidence::OpenChangeCheck::Open(n) => {
-                Some(crate::gate::ledger::ChangeKey::pr(n).as_key())
+    for (_, check) in check_open_changes(project_root, &forge, ids, false) {
+        match check {
+            OpenChangeCheck::Open(n) => {
+                return Ok(Some(crate::gate::ledger::ChangeKey::pr(n).as_key()))
             }
-            _ => None,
-        })
+            OpenChangeCheck::Unavailable(EvidenceUnavailable::TimedOut) => {
+                anyhow::bail!("rework preflight: {}", EvidenceUnavailable::TimedOut);
+            }
+            _ => {}
+        }
+    }
+    Ok(None)
 }
 
 /// BUG-2430: the time a verdict was recorded, for ordering a spec-keyed
