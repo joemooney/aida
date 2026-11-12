@@ -28,7 +28,7 @@ fn reader(env: &aida_core::exec_context::Environment) -> PathBuf {
     }
     PathBuf::from("aida")
 }
-/// Read the built-in's public JSON report; never resolve or execute a forge CLI.
+/// Read the substrate JSON report; never resolve or execute a forge CLI.
 pub(crate) fn report(
     since: chrono::DateTime<chrono::Utc>,
     until: chrono::DateTime<chrono::Utc>,
@@ -37,7 +37,7 @@ pub(crate) fn report(
     let env = aida_core::exec_context::Environment::capture();
     let mut cmd = Command::new(reader(&env));
     cmd.args([
-        "flow",
+        "flow-data",
         "report",
         "--since",
         &since.to_rfc3339(),
