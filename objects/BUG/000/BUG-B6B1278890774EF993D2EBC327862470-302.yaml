@@ -18,13 +18,18 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-12T17:56:12.887901799Z
-modified_at: 2026-11-12T20:26:40.838883125Z
+modified_at: 2026-11-12T22:50:25.132226949Z
 req_type: Bug
 relationships:
 - rel_type:
     custom: implemented-by
   target_id: 01a1d136-ab03-73e0-a874-5ab7fd070bcd
   created_at: 2026-11-12T19:23:34.107076323Z
+  created_by: joe
+- rel_type:
+    custom: implemented-by
+  target_id: 01a1d1f3-f26f-7c53-bcfd-a076bb1358c7
+  created_at: 2026-11-12T22:50:25.132224439Z
   created_by: joe
 comments:
 - id: 01a1d0e7-536c-7ad2-b218-1057d89db7e5
@@ -74,6 +79,12 @@ history:
   timestamp: 2026-11-12T19:57:54.230745611Z
   session_id: 01a1d15616ec
   harness_version: codex-cli 0.167.0
+  changes: []
+- id: 01a1d1f4-88fa-78b0-a437-8fbe8a739326
+  author: joe
+  timestamp: 2026-11-12T22:50:26.426241928Z
+  session_id: 01a1d19e-9195-7853-815f-b54753ebd973
+  harness_version: 2.1.322 (Claude Code)
   changes: []
 filed_at:
   code_sha: ec5a35a7108475b421baf1101b26159a7aa0fab9
