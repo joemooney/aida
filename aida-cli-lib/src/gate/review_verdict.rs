@@ -1877,6 +1877,14 @@ pub(crate) fn build_verdict_object(
     )
 }
 
+// trace:BUG-2527 | ai:claude
+/// Refusal shown when an explicit `approved` would otherwise be recorded as a
+/// different verdict because blocking findings survive this round.
+pub(crate) const EXPLICIT_APPROVAL_REFUSAL: &str =
+    "cannot record approved: unresolved review findings require request-changes; \
+     to clear resolved carried findings, pass --finding \"\"; otherwise replace them \
+     with findings carrying explicit non-blocking dispositions";
+
 // trace:STORY-2696 | ai:codex
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn build_verdict_object_with_policy(
@@ -2075,9 +2083,7 @@ pub(crate) fn build_verdict_object_with_policy(
     {
         return Err(std::io::Error::new(
             std::io::ErrorKind::InvalidInput,
-            "cannot record approved: unresolved review findings require request-changes; \
-             to clear resolved carried findings, pass --finding \"\"; otherwise replace them \
-             with findings carrying explicit non-blocking dispositions",
+            EXPLICIT_APPROVAL_REFUSAL,
         ));
     }
     if matches!(
