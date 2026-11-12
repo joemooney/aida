@@ -699,6 +699,14 @@ The native desktop and WASM clients (egui-based) were extracted to a separate re
 
 ### Canonical gate ledger
 
+Cross-label discovery uses a scan-wide 128 MiB read ceiling and a 200,000
+JSON-parse-attempt ceiling, independently of the 64 MiB selection budget.
+Unrelated payloads and torn retries count; exhausting discovery refuses the
+lookup. This is an interim safety cap: relevant-only discovery and automatic
+archive retention still need the completeness and revival design described in
+[the proposed sketch](docs/plans/2026-11-12-bug-2531-discovery-retention-sketch.md).
+<!-- trace:BUG-2531 | ai:codex -->
+
 The gate architecture is **effective gate state = f(head SHA, canonical IDs,
 ledger)**. `gate::canon` resolves a change's spec labels against one committed
 store snapshot to immutable requirement UUIDs (`SpecKey`); native, agreed,
