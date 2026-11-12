@@ -1,5 +1,6 @@
 id: 01a1d154-44ea-7a10-9ecd-2f6603b78a27
 spec_id: SPEC-b6b1278890774ef993d2ebc327862470-027
+agreed_id: TASK-3100
 title: Native lane fixed fast-gate timeout prevents complete LIGHT validation
 description: 'STORY-2733 rework native lane job j20261112T193343614-4121331-0 (make check-ci-fast) was terminated with exit 124 at its fixed 600-second limit. Completed formatting and source guards passed; the output tail ended during ExecContext environment ratchet fixtures, so no full fast-gate pass is claimed. aida-cli-lib/src/lane_job.rs timeout_for fixes make check-ci-fast to 600s independently of AIDA_CARGO_TIMEOUT; raising the Cargo override cannot complete this gate. Host should run the full fast gate with sufficient time before publication/merge. Mandate/help Cargo validation is being tracked separately on the owning spec. State snapshot (aida state-snapshot --spec STORY-2733 --json): spec Needs Attention; branch null; PR state none; no orchestrator. Separate read-only git/forge inspection identified existing implementation commit 8519a00a71edf00274db4fa4caa3427270e5ae91 and open PR #3896. Follow-up native edits remain uncommitted; no gate timeout policy changes were made.'
 status: Draft
@@ -20,6 +21,11 @@ comments:
   created_at: 2026-11-12T21:15:55.856611240Z
   modified_at: 2026-11-12T21:15:55.856611240Z
   session_id: 01a1d13f7835
+history:
+- id: 01a1d1cd-386d-7c51-9eaf-8a2957dae6a1
+  author: joe
+  timestamp: 2026-11-12T22:07:29.901925157Z
+  changes: []
 filed_at:
   aida_version: 0.16.0
   aida_build_sha: 0d6c60e6d98
