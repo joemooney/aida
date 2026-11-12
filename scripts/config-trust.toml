@@ -283,6 +283,7 @@ sites = 1
 
 # project_is_aida_initialized only tests whether
 # .aida/config.toml exists (bare `aida` picker shortcut); nothing is parsed.
+# Split from the former lib.rs entry: this site retains only its probe channel.
 # trace:TASK-1472 | ai:claude
 # trace:TASK-3428 | ai:codex
 [readers."aida-cli-lib/src/argv_rewrite.rs"]
@@ -290,6 +291,8 @@ channels = ["probe"]
 sites = 1
 
 # read_review_mode reads the project's [review].mode policy value.
+# Split from the former lib.rs entry: this site retains only its worktree
+# channel. The local-mode fallback does not turn this policy read into a probe.
 # trace:TASK-3428 | ai:codex
 [readers."aida-cli-lib/src/review_helpers.rs"]
 channels = ["worktree"]
