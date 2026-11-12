@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-11T04:48:14.810158291Z
-modified_at: 2026-11-12T11:24:12.242620929Z
+modified_at: 2026-11-12T11:41:48.629547884Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -178,6 +178,12 @@ comments:
   modified_at: 2026-11-12T10:06:51.057283373Z
   session_id: 01a1cf33de82
   harness_version: codex-cli 0.167.0
+- id: 01a1cf90-62d5-7be3-9738-32beab1f6d12
+  author: joe
+  content: 'Round 2 addresses review finding 1 (P1): move interactive refusal collection/hold orchestration out of gate/review_verdict.rs to merge_hold.rs, alongside the existing forge/hold plumbing. Protected collect_standalone_verdict retains all head/grant/freshness validation; the interactive parent still collects before adoption/re-recording. Existing refusal recovery/label regressions now call the relocated helper. No gate allow-list expansion. Targeted lane tests pending. Spec status remains Needs Attention because the implementer status transition requires advisor authority.'
+  created_at: 2026-11-12T11:41:48.629547884Z
+  modified_at: 2026-11-12T11:41:48.629547884Z
+  session_id: 01a1cf8de7c6
 history:
 - id: 01a1c8ef-b4bc-7b62-a163-3209968104a9
   author: joe
