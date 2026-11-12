@@ -1057,3 +1057,34 @@ and waits for `go`; it refuses duplicate PR numbers and more than 20 PRs.
 project. Each batch, PR outcome and stop is logged to
 `.aida/advisor-activity.jsonl`.
 <!-- trace:STORY-1887 | ai:claude -->
+
+### `aida pr emergency-land`
+
+<!-- trace:STORY-2732 | ai:codex -->
+`aida pr emergency-land N` is a GitHub-only escape hatch for an explicitly
+operator-requested urgent fix. It uses the same human-presence floor as `pr ship`: a human terminal or
+an operator-attributed script-deputy job. Captured stdout is allowed. It refuses
+headless, direct lane and implementer/reviewer sessions. The PR must be open,
+non-draft, known mergeable and target the default branch. Defaults cap the diff
+at 200 added/deleted lines and ten files; `--max-lines N` changes the line cap,
+and `--allow-large` overrides both size limits.
+
+The command saves protection under `.aida/emergency-land/`, lifts admin
+enforcement only when originally enabled, and admin squash-merges using the PR
+title. It restores enforcement on failure, interruption and panic, then compares
+protection with the backup ignoring URL fields. A restoration failure or mismatch
+exits nonzero and prints the exact recovery command. Check that command and the
+backup immediately. An already disabled setting is left disabled.
+
+`audit.jsonl` records the operator, PR/head/squash SHA, skipped required checks
+and restoration result; title spec trailers receive an audit comment. The default
+watch polls squash-commit CI for up to 30 minutes. Red CI prints a revert PR
+recipe without reverting automatically. `--no-watch` skips the watch;
+`--dry-run` prints the plan and validates preconditions without writes.
+`/aida-emergency-fix` guides the operator-requested fix through one targeted check,
+PR creation, operator-attributed emergency landing and a cause/fix record on the
+spec. The skill submits the landing script with
+`aida deputy shell submit --file F --wait` and checks the job exit code;
+exit 75 means the job is still pending, not a successful landing. Claude,
+Codex and Antigravity receive the skill through the shared template inventory.
+GitLab support remains a separate follow-up; this command currently refuses it.

@@ -10,6 +10,9 @@ use std::path::PathBuf;
 // trace:STORY-90 trace:TASK-2251 | ai:claude
 #[derive(Subcommand, Debug)]
 pub enum PrCommand {
+    /// Operator-only emergency squash merge with verified protection restoration.
+    // trace:STORY-2732 | ai:codex
+    EmergencyLand(crate::pr_emergency_land::EmergencyLandArgs),
     /// Derive PR states, next actions and owners without performing actions.
     // trace:STORY-2688 | ai:codex
     State(crate::pr_state::StateArgs),
