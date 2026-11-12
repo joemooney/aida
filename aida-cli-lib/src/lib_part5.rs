@@ -1484,7 +1484,7 @@ pub(crate) fn handle_review_spec(
             launcher_grant,
             child_grant: Some(child_grant),
         };
-        crate::gate::review_verdict::collect_interactive_review_refusal(
+        crate::merge_hold::collect_interactive_review_refusal(
             project_root,
             pr,
             &spec_id,

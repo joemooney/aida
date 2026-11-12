@@ -276,7 +276,7 @@ fn interactive_review_parent_collects_before_rewriting_child_evidence() {
         .find("let (status, child_grant) = review_spec_launch_reviewer(")
         .unwrap();
     let collect = parent
-        .find("crate::gate::review_verdict::collect_interactive_review_refusal(")
+        .find("crate::merge_hold::collect_interactive_review_refusal(")
         .unwrap();
     let adopt = parent
         .find("crate::gate::review_verdict::adopt_direct_write(")
@@ -426,7 +426,7 @@ fn interactive_review_anchor_refusals_are_collected_and_held() {
             child_grant: Some("other-reviewer".into()),
         };
         assert!(
-            crate::gate::review_verdict::collect_interactive_review_refusal(
+            crate::merge_hold::collect_interactive_review_refusal(
                 root.path(),
                 2522,
                 "BUG-2522",
@@ -447,7 +447,7 @@ fn interactive_review_anchor_refusals_are_collected_and_held() {
         // trace:BUG-2522 | ai:codex
         let next_launch = std::time::SystemTime::now() + std::time::Duration::from_secs(60);
         assert!(
-            crate::gate::review_verdict::collect_interactive_review_refusal(
+            crate::merge_hold::collect_interactive_review_refusal(
                 root.path(),
                 2522,
                 "BUG-2522",
@@ -464,7 +464,7 @@ fn interactive_review_anchor_refusals_are_collected_and_held() {
         );
         checks.head_sha = Some("0000000000000000000000000000000000000000".into());
         assert!(
-            crate::gate::review_verdict::collect_interactive_review_refusal(
+            crate::merge_hold::collect_interactive_review_refusal(
                 root.path(),
                 2522,
                 "BUG-2522",
@@ -482,7 +482,7 @@ fn interactive_review_anchor_refusals_are_collected_and_held() {
         checks.head_sha = Some(head.clone());
         let lock = crate::gate::merge_hold_core::hold_lock_path(root.path(), 2522);
         std::fs::create_dir_all(&lock).unwrap();
-        let error = crate::gate::review_verdict::collect_interactive_review_refusal(
+        let error = crate::merge_hold::collect_interactive_review_refusal(
             root.path(),
             2522,
             "BUG-2522",
@@ -509,7 +509,7 @@ fn interactive_review_anchor_refusals_are_collected_and_held() {
         if label_fails {
             std::fs::write(root.path().join(".aida/refuse-label"), "").unwrap();
         }
-        crate::gate::review_verdict::collect_interactive_review_refusal(
+        crate::merge_hold::collect_interactive_review_refusal(
             root.path(),
             2522,
             "BUG-2522",
