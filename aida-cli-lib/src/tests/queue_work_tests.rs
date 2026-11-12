@@ -2481,14 +2481,14 @@ fn not_queued_falls_back_when_role_unknown() {
 /// caller opts out.
 #[test]
 fn queue_work_quiet_flag_parses() {
-    let on = crate::command_registry::try_parse_from([
-        "aida", "queue", "work", "PR-65", "--role", "reviewer", "--quiet",
-    ])
-    .expect("--quiet parses");
-    let off = crate::command_registry::try_parse_from([
-        "aida", "queue", "work", "PR-65", "--role", "reviewer",
-    ])
-    .expect("no --quiet parses");
+    let on = crate::TEST_CLI
+        .try_parse_from([
+            "aida", "queue", "work", "PR-65", "--role", "reviewer", "--quiet",
+        ])
+        .expect("--quiet parses");
+    let off = crate::TEST_CLI
+        .try_parse_from(["aida", "queue", "work", "PR-65", "--role", "reviewer"])
+        .expect("no --quiet parses");
     let quiet_of = |c: &Cli| match &c.command.registered::<crate::queue_cmd::QueueArgs>() {
         crate::queue_cmd::QueueArgs {
             inner: QueueCommand::Work { quiet, .. },
@@ -2504,15 +2504,16 @@ fn queue_work_quiet_flag_parses() {
 // of clap's terse "cannot be used with". trace:TASK-560
 #[test]
 fn queue_work_resume_plus_auto_complete_parses_for_handler_rejection() {
-    let cli = crate::command_registry::try_parse_from([
-        "aida",
-        "queue",
-        "work",
-        "STORY-465",
-        "--resume",
-        "--auto-complete",
-    ])
-    .expect("--resume + --auto-complete should parse (handler rejects, not clap)");
+    let cli = crate::TEST_CLI
+        .try_parse_from([
+            "aida",
+            "queue",
+            "work",
+            "STORY-465",
+            "--resume",
+            "--auto-complete",
+        ])
+        .expect("--resume + --auto-complete should parse (handler rejects, not clap)");
     match cli.command.registered::<crate::queue_cmd::QueueArgs>() {
         crate::queue_cmd::QueueArgs {
             inner:
@@ -2549,14 +2550,9 @@ fn resume_autocomplete_conflict_message_explains_and_recovers() {
 
 #[test]
 fn queue_work_force_claim_flag_parses() {
-    let cli = crate::command_registry::try_parse_from([
-        "aida",
-        "queue",
-        "work",
-        "TASK-559",
-        "--force-claim",
-    ])
-    .expect("--force-claim parses on queue work");
+    let cli = crate::TEST_CLI
+        .try_parse_from(["aida", "queue", "work", "TASK-559", "--force-claim"])
+        .expect("--force-claim parses on queue work");
     match cli.command.registered::<crate::queue_cmd::QueueArgs>() {
         crate::queue_cmd::QueueArgs {
             inner: QueueCommand::Work { force_claim, .. },

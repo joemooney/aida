@@ -663,9 +663,9 @@ fn task_1556_injected_sixth_pattern_is_appended_when_first_five_exist() {
 // trace:STORY-2660 | ai:codex
 #[test]
 fn host_capacity_doctor_flags_parse_and_refuse_mutation() {
-    let cli =
-        crate::command_registry::try_parse_from(["aida", "doctor", "--lane-capacity", "--json"])
-            .unwrap();
+    let cli = crate::TEST_CLI
+        .try_parse_from(["aida", "doctor", "--lane-capacity", "--json"])
+        .unwrap();
     let DoctorArgs {
         lane_capacity,
         json,
@@ -676,28 +676,25 @@ fn host_capacity_doctor_flags_parse_and_refuse_mutation() {
     };
     assert!(lane_capacity && json);
     for flag in ["--heal", "--fix-sandbox", "--contradictions"] {
-        assert!(crate::command_registry::try_parse_from([
-            "aida",
-            "doctor",
-            "--lane-capacity",
-            flag
-        ])
-        .is_err());
+        assert!(crate::TEST_CLI
+            .try_parse_from(["aida", "doctor", "--lane-capacity", flag])
+            .is_err());
     }
 }
 
 #[test]
 fn doctor_default_flags_parse_without_subcommand() {
-    let cli = crate::command_registry::try_parse_from([
-        "aida",
-        "doctor",
-        "--heal",
-        "--yes",
-        "--category",
-        "stale-leases",
-        "--json",
-    ])
-    .unwrap();
+    let cli = crate::TEST_CLI
+        .try_parse_from([
+            "aida",
+            "doctor",
+            "--heal",
+            "--yes",
+            "--category",
+            "stale-leases",
+            "--json",
+        ])
+        .unwrap();
     let crate::doctor_cmd::DoctorArgs {
         heal,
         yes,
@@ -728,16 +725,17 @@ fn doctor_default_flags_parse_without_subcommand() {
 // trace:BUG-B6B1278890774EF993D2EBC327862470-046.ac602938 | ai:claude
 #[test]
 fn doctor_fix_id_collisions_flags_parse_and_require_fix() {
-    let cli = crate::command_registry::try_parse_from([
-        "aida",
-        "doctor",
-        "--fix",
-        "id-collisions",
-        "--dry-run",
-        "--mapping",
-        "m.tsv",
-    ])
-    .unwrap();
+    let cli = crate::TEST_CLI
+        .try_parse_from([
+            "aida",
+            "doctor",
+            "--fix",
+            "id-collisions",
+            "--dry-run",
+            "--mapping",
+            "m.tsv",
+        ])
+        .unwrap();
     let crate::doctor_cmd::DoctorArgs {
         fix,
         dry_run,
@@ -757,7 +755,7 @@ fn doctor_fix_id_collisions_flags_parse_and_require_fix() {
         &["aida", "doctor", "--fix", "id-collisions", "--tree-only"],
     ] {
         assert!(
-            crate::command_registry::try_parse_from(bad.iter().copied()).is_err(),
+            crate::TEST_CLI.try_parse_from(bad.iter().copied()).is_err(),
             "{bad:?}"
         );
     }
@@ -1782,15 +1780,9 @@ hostname = "localhost"
 
 #[test]
 fn doctor_check_and_heal_subcommands_parse() {
-    let check = crate::command_registry::try_parse_from([
-        "aida",
-        "doctor",
-        "check",
-        "OBE-briefs",
-        "--json",
-        "--all",
-    ])
-    .unwrap();
+    let check = crate::TEST_CLI
+        .try_parse_from(["aida", "doctor", "check", "OBE-briefs", "--json", "--all"])
+        .unwrap();
     let crate::doctor_cmd::DoctorArgs {
         cmd:
             Some(cli::DoctorCommand::Check {
@@ -1808,16 +1800,17 @@ fn doctor_check_and_heal_subcommands_parse() {
     assert!(all);
     assert!(json);
 
-    let heal = crate::command_registry::try_parse_from([
-        "aida",
-        "doctor",
-        "heal",
-        "orphan-branches",
-        "--yes",
-        "--force",
-        "--all",
-    ])
-    .unwrap();
+    let heal = crate::TEST_CLI
+        .try_parse_from([
+            "aida",
+            "doctor",
+            "heal",
+            "orphan-branches",
+            "--yes",
+            "--force",
+            "--all",
+        ])
+        .unwrap();
     let crate::doctor_cmd::DoctorArgs {
         cmd:
             Some(cli::DoctorCommand::Heal {
@@ -2347,7 +2340,9 @@ fn parse_codex_semver_accepts_common_banners() {
 
 #[test]
 fn legacy_doctor_subcommands_still_parse() {
-    let cli = crate::command_registry::try_parse_from(["aida", "doctor", "fsck"]).unwrap();
+    let cli = crate::TEST_CLI
+        .try_parse_from(["aida", "doctor", "fsck"])
+        .unwrap();
     let crate::doctor_cmd::DoctorArgs {
         cmd: Some(cli::DoctorCommand::Fsck),
         ..
@@ -2365,21 +2360,24 @@ fn legacy_doctor_subcommands_still_parse() {
 fn task_956_hidden_top_level_parents_still_dispatch() {
     // punts / worker / headless are hidden from `aida --help` but still parse.
     assert!(matches!(
-        crate::command_registry::try_parse_from(["aida", "punts", "analyze"])
+        crate::TEST_CLI
+            .try_parse_from(["aida", "punts", "analyze"])
             .unwrap()
             .command
             .registered::<crate::punt_done::PuntsArgs>(),
         crate::punt_done::PuntsArgs { inner: _ }
     ));
     assert!(matches!(
-        crate::command_registry::try_parse_from(["aida", "worker", "directives"])
+        crate::TEST_CLI
+            .try_parse_from(["aida", "worker", "directives"])
             .unwrap()
             .command
             .registered::<crate::queue_misc::WorkerArgs>(),
         crate::queue_misc::WorkerArgs { inner: _ }
     ));
     assert!(matches!(
-        crate::command_registry::try_parse_from(["aida", "headless", "tail"])
+        crate::TEST_CLI
+            .try_parse_from(["aida", "headless", "tail"])
             .unwrap()
             .command
             .registered::<crate::queue_misc::HeadlessArgs>(),
@@ -2392,15 +2390,11 @@ fn task_956_hidden_top_level_parents_still_dispatch() {
 fn task_956_hidden_subcommands_still_dispatch() {
     // doctor verify-relationships — hidden under `doctor`, still parses.
     assert!(matches!(
-        crate::command_registry::try_parse_from([
-            "aida",
-            "doctor",
-            "verify-relationships",
-            "--repair"
-        ])
-        .unwrap()
-        .command
-        .registered::<crate::doctor_cmd::DoctorArgs>(),
+        crate::TEST_CLI
+            .try_parse_from(["aida", "doctor", "verify-relationships", "--repair"])
+            .unwrap()
+            .command
+            .registered::<crate::doctor_cmd::DoctorArgs>(),
         crate::doctor_cmd::DoctorArgs {
             cmd: Some(cli::DoctorCommand::VerifyRelationships { repair: true, .. }),
             ..
@@ -2408,7 +2402,8 @@ fn task_956_hidden_subcommands_still_dispatch() {
     ));
     // queue load — hidden under `queue`, still parses.
     assert!(matches!(
-        crate::command_registry::try_parse_from(["aida", "queue", "load"])
+        crate::TEST_CLI
+            .try_parse_from(["aida", "queue", "load"])
             .unwrap()
             .command
             .registered::<crate::queue_cmd::QueueArgs>(),
@@ -2418,7 +2413,8 @@ fn task_956_hidden_subcommands_still_dispatch() {
     ));
     // role repair — hidden under `role`, still parses.
     assert!(matches!(
-        crate::command_registry::try_parse_from(["aida", "role", "repair"])
+        crate::TEST_CLI
+            .try_parse_from(["aida", "role", "repair"])
             .unwrap()
             .command
             .registered::<crate::role_cmd::RoleArgs>(),
@@ -2437,23 +2433,19 @@ fn task_956_merged_twins_still_dispatch_their_own_logic() {
     // changelog generate — hidden, but keeps its stdout/range surface
     // distinct from the canonical `changelog refresh`.
     assert!(matches!(
-        crate::command_registry::try_parse_from([
-            "aida",
-            "changelog",
-            "generate",
-            "--since",
-            "v0.7.0"
-        ])
-        .unwrap()
-        .command
-        .registered::<crate::changelog_cmd::ChangelogArgs>(),
+        crate::TEST_CLI
+            .try_parse_from(["aida", "changelog", "generate", "--since", "v0.7.0"])
+            .unwrap()
+            .command
+            .registered::<crate::changelog_cmd::ChangelogArgs>(),
         crate::changelog_cmd::ChangelogArgs {
             inner: cli::ChangelogCommand::Generate { since: Some(_), .. }
         }
     ));
     // The canonical `changelog refresh` is unchanged and still parses.
     assert!(matches!(
-        crate::command_registry::try_parse_from(["aida", "changelog", "refresh"])
+        crate::TEST_CLI
+            .try_parse_from(["aida", "changelog", "refresh"])
             .unwrap()
             .command
             .registered::<crate::changelog_cmd::ChangelogArgs>(),
@@ -2464,7 +2456,8 @@ fn task_956_merged_twins_still_dispatch_their_own_logic() {
     // doctor fsck — hidden, but keeps its own full-suite logic distinct
     // from the canonical `doctor check` (which requires a category arg).
     assert!(matches!(
-        crate::command_registry::try_parse_from(["aida", "doctor", "fsck"])
+        crate::TEST_CLI
+            .try_parse_from(["aida", "doctor", "fsck"])
             .unwrap()
             .command
             .registered::<crate::doctor_cmd::DoctorArgs>(),

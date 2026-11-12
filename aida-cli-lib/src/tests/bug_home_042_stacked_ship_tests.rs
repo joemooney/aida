@@ -182,14 +182,9 @@ fn github_argv_for_retarget_and_empty_commit() {
 
 #[test]
 fn ship_cli_parses_allow_stacked_base() {
-    let cli = crate::command_registry::try_parse_from([
-        "aida",
-        "pr",
-        "ship",
-        "3097",
-        "--allow-stacked-base",
-    ])
-    .expect("parses --allow-stacked-base");
+    let cli = crate::TEST_CLI
+        .try_parse_from(["aida", "pr", "ship", "3097", "--allow-stacked-base"])
+        .expect("parses --allow-stacked-base");
     match cli.command.registered::<crate::pr_cmd::PrArgs>() {
         crate::pr_cmd::PrArgs {
             inner:
