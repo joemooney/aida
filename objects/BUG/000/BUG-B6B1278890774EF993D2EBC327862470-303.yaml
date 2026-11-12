@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-12T18:26:43.321357044Z
-modified_at: 2026-11-12T23:19:05.393486471Z
+modified_at: 2026-11-12T23:29:11.345666320Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -49,6 +49,12 @@ comments:
   modified_at: 2026-11-12T20:26:43.113384861Z
   session_id: 01a1d0eb-22cc-7262-8f6c-7266e9cc1fbb
   harness_version: 2.1.322 (Claude Code)
+- id: 01a1d218-02b1-7f92-8aa8-2ca5d8052340
+  author: joe
+  content: 'Integration session 16:23: code fix already on integration via PR #3895 (61aca71). Live residue fixed by hand: the failed train''s 23 MB .aida/gate-ledger/PR-3888.jsonl (train closed; 2 events, spec:null, not in by-spec index) still made gate-ledger discovery refuse for every spec. Moved to .aida/gate-ledger-quarantine/PR-3888.jsonl.2026-11-12-oversize; ''aida review verdict'' resolves ledger records again. Undo: mv it back.'
+  created_at: 2026-11-12T23:29:11.345666320Z
+  modified_at: 2026-11-12T23:29:11.345666320Z
+  session_id: 668a34f6-c74a-4b58-b144-167acd9792ef
 history:
 - id: 01a1d105-e816-76c0-be87-791c522a799c
   author: aida-session-start
