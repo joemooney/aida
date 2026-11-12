@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-12T08:35:37.046532324Z
-modified_at: 2026-11-12T11:34:54.264865822Z
+modified_at: 2026-11-12T11:51:25.121404789Z
 req_type: Bug
 comments:
 - id: 01a1cf00-20ea-7c51-bbf5-a9927b13b042
@@ -149,6 +149,10 @@ history:
   timestamp: 2026-11-12T11:34:54.332849441Z
   session_id: 01a1cf8935cf
   changes: []
+- id: 01a1cf99-3163-7493-a961-f8f254a26f22
+  author: joe
+  timestamp: 2026-11-12T11:51:25.795852845Z
+  changes: []
 filed_at:
   code_sha: 296d1dd295804f61d32a6b8aa07ae1485b198c93
   branch: main
@@ -168,7 +172,7 @@ failure_reason:
   phase: reviewer
   phase_index: 3
   kind: verdict:request-changes
-  detail: Scan-wide cap fixes unbounded discovery work, but relevant-only discovery and automatic archival remain unimplemented without an approved scope split. CI pending at review time.
+  detail: 'Full sweep: aggregate discovery safety is improved, but relevant-only discovery and automatic archival remain incomplete with no approved scope split. CI pending at review time.'
   recovery_hint: address the review findings, move BUG-B6B1278890774EF993D2EBC327862470-296 back to In Progress, and clear the PR hold only after approval
   shelved_by: reviewer
-  shelved_at: 2026-11-12T11:19:12.861695051Z
+  shelved_at: 2026-11-12T11:51:25.121404789Z
