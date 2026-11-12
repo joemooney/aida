@@ -1,0 +1,36 @@
+id: 01a1ced3-b8fe-7ec2-b14d-bf6c397e9151
+spec_id: STORY-b6b1278890774ef993d2ebc327862470-646
+agreed_id: STORY-2723
+title: 'Review PR-3867: [AI:claude] refactor(crate-split): finish cmdkit imports and drop command_registry re-exports (Refs TASK-3448)'
+description: |
+  Auto-filed by `aida session end` (backup trigger) (session `01a1cec0`) for branch `task-3448-final`.
+
+  - PR: <https://github.com/joemooney/aida/pull/3867>
+  - Branch: `task-3448-final` → `main`
+
+  ## Slice of (Refs only — not completed by this PR)
+
+  Commit subjects carry `(Refs SPEC-ID)`: this PR is one slice of a spec that a later PR completes. Review this slice against that spec's acceptance criteria.
+
+  - TASK-3448
+  - TASK-3428
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 3867` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-12T08:15:44.382959191Z
+modified_at: 2026-11-12T08:15:44.382959191Z
+req_type: Story
+filed_at:
+  code_sha: 296d1dd295804f61d32a6b8aa07ae1485b198c93
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 296d1dd2958
+  session: 01a1cec06834
