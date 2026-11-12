@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-11T04:08:39.262399078Z
-modified_at: 2026-11-12T06:25:19.613764555Z
+modified_at: 2026-11-12T06:30:09.797867251Z
 req_type: Bug
 comments:
 - id: 01a1cd5d-0264-7490-92b2-682ec579baba
@@ -52,6 +52,12 @@ history:
   author: joe
   timestamp: 2026-11-12T06:25:19.789157545Z
   changes: []
+- id: 01a1ce73-1cf6-7ac2-8f7d-a2fa7a9dfd51
+  author: dirtlab
+  timestamp: 2026-11-12T06:30:12.982547882Z
+  session_id: 01a1ce724878
+  harness_version: codex-cli 0.167.0
+  changes: []
 filed_at:
   code_sha: fec48a790424718b7cfc26c0c9e7d7667ab48beb
   branch: main
@@ -61,6 +67,11 @@ filed_at:
   vendor: claude
   session: 01a1c87f-970d-7ce0-9351-e4e75a87731e
   harness_version: 2.1.322 (Claude Code)
+attention_reason:
+  category: other
+  detail: 'Pickup refused: BUG-2521 is Needs Attention (verdict:request-changes); promoting to InProgress requires advisor authority. Existing WAITING retry implementation and follow-up fixes are already in lane HEAD. Advisor must triage and authorize rework before implementer resumes. No source edits or publication declaration made.'
+  raised_by: implementer
+  raised_at: 2026-11-12T06:30:09.797867251Z
 failure_reason:
   phase: reviewer
   phase_index: 3
