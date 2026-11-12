@@ -4454,9 +4454,10 @@ fn story_2710_host_regenerates_conflicted_outputs_with_read_only_git() {
         std::fs::write(fx.main.join(ledger), "base\n").unwrap();
         std::fs::write(
             fx.main.join("scripts/check-exec-context.py"),
-            r#"import os, sys
+            r#"import os, sys, subprocess
 from pathlib import Path
 if '--write-ledger' in sys.argv:
+    subprocess.run(['git', 'rev-parse', '--verify', 'HEAD'], check=True, capture_output=True)
     for key in ('GIT_DIR', 'GIT_COMMON_DIR'):
         try:
             Path(os.environ[key], 'generator-escaped').write_text('must refuse')
@@ -4465,6 +4466,8 @@ if '--write-ledger' in sys.argv:
         else:
             raise RuntimeError('Git metadata was writable')
     Path('scripts/exec-context-legacy.json').write_text('regenerated\n')
+    if Path('introduce-markers').exists():
+        Path('scripts/exec-context-legacy.json').write_text('<<<<<<< generated\n=======\n>>>>>>> generated\n')
     if Path('reject-regeneration').exists():
         Path('partial-generator-write').write_text('partial')
         raise RuntimeError('failure after output write')
@@ -4505,6 +4508,12 @@ if '--write-ledger' in sys.argv:
         // Preparation restores safely; only the publication phase executes
         // source-dependent generators with metadata read-only.
         let base = git_ok(&tree, &["rev-parse", "MERGE_HEAD"]);
+        // Preparation used the trusted overlay. Generation must keep it even
+        // after making the parent metadata mount read-only.
+        let original_config = cloned.then(|| std::fs::read(tree.join(".git/config")).unwrap());
+        if cloned {
+            std::fs::write(tree.join(".git/config"), "[invalid config\n").unwrap();
+        }
         crate::seat_clone::regenerate_repair_outputs(
             &tree,
             &fx.main,
@@ -4514,6 +4523,9 @@ if '--write-ledger' in sys.argv:
             false,
         )
         .unwrap();
+        if let Some(config) = original_config {
+            std::fs::write(tree.join(".git/config"), config).unwrap();
+        }
         assert_eq!(
             std::fs::read_to_string(tree.join(ledger)).unwrap(),
             "regenerated\n"
@@ -4531,6 +4543,20 @@ if '--write-ledger' in sys.argv:
         );
         drop(journal);
         if cloned {
+            std::fs::write(tree.join("introduce-markers"), "yes").unwrap();
+            let why =
+                commit_pending(&fx.main, &tree, "feat", "repair (Refs STORY-2710)").unwrap_err();
+            assert!(format!("{why:#}").contains("unresolved conflict markers"));
+            assert_eq!(git_ok(&tree, &["rev-parse", "HEAD"]), head);
+            assert_eq!(git_ok(&tree, &["rev-parse", "MERGE_HEAD"]), base);
+            let guard = crate::repair_journal::RepairGuard::lock(&fx.main).unwrap();
+            let entry = guard.for_tree(&tree, "feat", &head, &base).unwrap();
+            assert_eq!(entry.original_conflict_paths, [ledger]);
+            assert_eq!(entry.regeneration_success, Some(false));
+            assert!(entry.regenerated_tree.is_none());
+            drop(guard);
+            std::fs::remove_file(tree.join("introduce-markers")).unwrap();
+            prepare_rework_merge(&fx.main, &tree, "feat", true, 3813, "regen-lane").unwrap();
             std::fs::write(tree.join("reject-regeneration"), "reject").unwrap();
             let why =
                 commit_pending(&fx.main, &tree, "feat", "repair (Refs STORY-2710)").unwrap_err();

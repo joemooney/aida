@@ -3435,6 +3435,18 @@ fn regenerate_repair_outputs(
             clone_git.into(),
         ]);
     }
+    // Parent metadata mounts hide earlier child mounts. Restore the trusted
+    // config last, including the common config used by linked worktrees.
+    // trace:STORY-2710 | ai:codex
+    sandbox.extend([
+        "--ro-bind".into(),
+        config.path().into(),
+        if linked_git {
+            main.join(".git/config").into()
+        } else {
+            tree.join(".git/config").into()
+        },
+    ]);
     let trusted = tempfile::tempdir()?;
     for (i, path) in [
         "Makefile",
@@ -5082,6 +5094,16 @@ pub(crate) fn commit_pending(
                 &identity,
                 &aida_core::exec_context::Environment::capture(),
                 false,
+            )?;
+            // Registered generators can reintroduce markers into a resolved
+            // original conflict. Refuse before staging or recording success.
+            // trace:STORY-2710 | ai:codex
+            refuse_pending_conflict_markers(
+                &|program, args| {
+                    run_sandboxed(clone, main, program, args, PROBE_OUTPUT_CAP)
+                        .map_err(|why| anyhow::anyhow!("could not inspect conflict markers: {why}"))
+                },
+                repair_paths.as_deref(),
             )?;
             run_commit_sandboxed(
                 clone,
