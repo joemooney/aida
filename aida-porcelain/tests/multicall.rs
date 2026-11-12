@@ -38,7 +38,7 @@ fn report_multicall_parity_and_no_writes() {
     let git = bin.join("git");
     fs::write(&git,"#!/bin/sh\n[ \"$1\" = log ] || exit 19\nprintf '2026-11-09T04:00:00Z\\tsubject (#42)\\n'\n").unwrap();
     let reader = bin.join("aida");
-    fs::write(&reader, "#!/bin/sh\n[ \"$1 $2\" = \"flow report\" ] || exit 19\necho '{\"prs\":[{\"open_hours\":4.0,\"ledger_present\":false}],\"aggregate\":{},\"notes\":[]}'\n").unwrap();
+    fs::write(&reader, "#!/bin/sh\n[ \"$1 $2\" = \"flow-data report\" ] || exit 19\necho '{\"prs\":[{\"open_hours\":4.0,\"ledger_present\":false}],\"aggregate\":{},\"notes\":[]}'\n").unwrap();
     for path in [&git, &reader] {
         fs::set_permissions(path, fs::Permissions::from_mode(0o755)).unwrap();
     }

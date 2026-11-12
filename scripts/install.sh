@@ -152,6 +152,24 @@ fi
 
 # ---- Install ---------------------------------------------------------------
 
+# Modern bundles must be complete before installing the first binary.
+# Historical single-binary and two-binary releases retain built-in flow.
+# trace:STORY-2704 | ai:codex
+if [ -f "$tmpdir/aida-porcelain" ]; then
+    for member in aida aida-server; do
+        [ -f "$tmpdir/$member" ] || { echo "error: release bundle missing $member" >&2; exit 1; }
+    done
+fi
+
+# Only the relative alias shipped by AIDA is owned. Check before any bundle
+# member is replaced, including dangling foreign links. trace:STORY-2704 | ai:codex
+if [ -f "$tmpdir/aida-porcelain" ] && { [ -e "$PREFIX/aida-flow" ] || [ -L "$PREFIX/aida-flow" ]; }; then
+    if [ ! -L "$PREFIX/aida-flow" ] || [ "$(readlink "$PREFIX/aida-flow")" != aida-porcelain ]; then
+        echo "error: refusing to replace unrelated $PREFIX/aida-flow" >&2
+        exit 1
+    fi
+fi
+
 mkdir -p "$PREFIX"
 
 # If the destination is not writable, escalate via sudo.
@@ -186,6 +204,16 @@ if [ -f "$tmpdir/aida-server" ]; then
     "${install_cmd[@]}" "$tmpdir/aida-server" "$PREFIX/aida-server"
     echo "  installed $PREFIX/aida-server"
     installed_any=1
+fi
+# trace:STORY-2704 | ai:codex
+if [ -f "$tmpdir/aida-porcelain" ]; then
+    "${install_cmd[@]}" "$tmpdir/aida-porcelain" "$PREFIX/aida-porcelain"
+    if [ -w "$PREFIX" ]; then
+        ln -sfnT aida-porcelain "$PREFIX/aida-flow"
+    else
+        sudo ln -sfnT aida-porcelain "$PREFIX/aida-flow"
+    fi
+    echo "  installed $PREFIX/aida-porcelain and aida-flow"
 fi
 if [ -f "$tmpdir/aida.exe" ]; then
     "${install_cmd[@]}" "$tmpdir/aida.exe" "$PREFIX/aida.exe"
