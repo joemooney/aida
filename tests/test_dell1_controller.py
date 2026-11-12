@@ -426,7 +426,7 @@ class LaunchIntegration(unittest.TestCase):
              'for ancestor in Path(sys.argv[1]).parents:\n'
              '    list(ancestor.iterdir())\n', str(runner)],
             capture_output=True, text=True, timeout=5,
-            preexec_fn=unprivileged if os.getuid() == 0 else None)
+            preexec_fn=unprivileged if os.geteuid() == 0 else None)
 
     def test_kernel_enumeration_requires_readable_ancestors(self):
         # trace:STORY-2695 | ai:codex

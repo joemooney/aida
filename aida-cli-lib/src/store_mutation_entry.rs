@@ -186,7 +186,7 @@ fn translate_with_reader(
         "edit" => {
             explicit_fields(
                 args,
-                &["id", "title", "description", "priority", "weight"],
+                &["id", "title", "description", "priority", "weight", "tags"],
                 command,
             )?;
             let id = args.get_one::<String>("id").context("InvalidRequest")?;
@@ -195,6 +195,9 @@ fn translate_with_reader(
                 if let Some(value) = args.get_one::<String>(field) {
                     payload[field] = json!(value);
                 }
+            }
+            if let Some(value) = args.get_one::<String>("tags") {
+                payload["tags"] = json!(crate::requirements_cli::parse_tag_list(value)?);
             }
             if let Some(value) = args.get_one::<String>("weight") {
                 payload["weight"] = if value.trim().is_empty() {
@@ -365,6 +368,16 @@ mod tests {
     fn closed_cli_translation_preserves_content_and_rejects_semantic_downgrades() {
         for (argv, tool, payload) in [
             (
+                vec!["aida", "edit", "TASK-1", "--tags", "alpha, beta,alpha"],
+                "update_requirement",
+                json!({"id":"TASK-1", "tags":["alpha", "beta", "alpha"]}),
+            ),
+            (
+                vec!["aida", "edit", "TASK-1", "--tags", ""],
+                "update_requirement",
+                json!({"id":"TASK-1", "tags":[]}),
+            ),
+            (
                 vec!["aida", "comment", "add", "TASK-1", "text"],
                 "add_comment",
                 json!({"id":"TASK-1","text":"text"}),
@@ -400,6 +413,9 @@ mod tests {
             );
         }
         for argv in [
+            vec!["aida", "edit", "TASK-1", "--tags", "a b"],
+            vec!["aida", "edit", "TASK-1", "--tags", "a", "--force"],
+            vec!["aida", "edit", "TASK-1", "--add-tag", "a"],
             vec![
                 "aida", "comment", "add", "TASK-1", "text", "--author", "spoof",
             ],
