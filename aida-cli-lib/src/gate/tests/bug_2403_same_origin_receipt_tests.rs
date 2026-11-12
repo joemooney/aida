@@ -507,3 +507,33 @@ fn bug_2403_record_pr_handshake_ignores_a_concurrent_origin_replacement() {
         .iter()
         .any(|r| r.get("recorded_by") == Some(&json!("concurrent-reviewer"))));
 }
+
+// trace:BUG-2525 | ai:codex
+#[test]
+fn bug_2525_phase3_effective_wait_closes_in_raw_and_effective_projections() {
+    let (_tmp, root) = root();
+    let _env = uncontained();
+    let pr = ChangeKey::pr(3185);
+    let o = origin("waiting", HEAD, &ts(-5));
+    append(&root, pr, SPEC, vec![o.clone(), overlay_of(&o)]);
+    for key in [SPEC, "PR-3185"] {
+        let source = rv::current_verdict(&root, key).unwrap();
+        assert_eq!(serde_json::from_str::<JsonObj>(&source.body).unwrap(), o);
+        assert!(rv::close_terminal_wait(&root, key, pr, &source).unwrap());
+        assert!(rv::read_recorded_verdict(&root, key).unwrap().is_closed());
+        assert!(selected(&root, key).contains_key("closed_by_merge"));
+        if key == SPEC {
+            assert!(
+                crate::queue_cmd::refuse_waiting_review(&root, SPEC, SPEC, Some("PR-3185"))
+                    .is_err()
+            );
+        }
+    }
+    // The spec annotation intentionally leaves the independent PR scope open;
+    // queue pickup can proceed once both scopes have been closed.
+    crate::queue_cmd::refuse_waiting_review(&root, SPEC, SPEC, Some("PR-3185")).unwrap();
+    append(&root, pr, SPEC, vec![origin("waiting", HEAD, &ts(0))]);
+    for key in [SPEC, "PR-3185"] {
+        assert!(!rv::read_recorded_verdict(&root, key).unwrap().is_closed());
+    }
+}

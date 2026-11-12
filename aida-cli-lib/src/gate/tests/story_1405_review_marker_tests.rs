@@ -132,8 +132,10 @@ fn record_with_anchor(
 // BUG-2201 / TASK-2040: a contained reviewer whose launcher anchor sits
 // in a read-only directory (the primary checkout, outside its write
 // boundary) writes the handshake into its own worktree for the launcher
-// to collect, and leaves the anchor alone. Uncontained, the same refusal
-// is still an error. trace:BUG-2201 | ai:claude
+// to collect, and leaves the anchor alone. Native reviewers use the same
+// anchored collection without claiming AIDA containment.
+// trace:BUG-2201 | ai:claude
+// trace:BUG-2522 | ai:codex
 #[cfg(unix)]
 #[test]
 fn contained_record_falls_back_to_worktree_when_anchor_is_read_only() {
@@ -164,13 +166,20 @@ fn contained_record_falls_back_to_worktree_when_anchor_is_read_only() {
     let anchor = anchor_dir.join("PR-14053.json");
     let fallback = worktree.join(".aida/review-verdicts/PR-14053.json");
 
-    let uncontained = record_with_anchor(&worktree, &anchor, None);
-    assert!(format!(
-        "{:#}",
-        uncontained.expect_err("uncontained refusal is an error")
-    )
-    .contains("handshake was NOT written"),);
-    assert!(!fallback.exists(), "uncontained never falls back");
+    record_with_anchor(&worktree, &anchor, None)
+        .expect("native anchored record falls back for launcher collection");
+    let native = crate::gate::review_verdict::read_recorded_verdict(&worktree, "PR-14053")
+        .expect("native reviewer records its local handshake on the gate ledger");
+    assert_eq!(native.reviewed_sha.as_deref(), Some(head.as_str()));
+    assert_eq!(
+        native.kind,
+        crate::gate::review_verdict::VerdictKind::Approved
+    );
+    assert!(!fallback.exists(), "native recording remains ledger-only");
+    assert!(
+        !anchor.exists(),
+        "native reviewer leaves the anchor untouched"
+    );
 
     record_with_anchor(&worktree, &anchor, Some("1"))
         .expect("contained record falls back instead of failing");

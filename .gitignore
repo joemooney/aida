@@ -213,3 +213,8 @@ scripts/split-lib/golden/
 # GitLab adapter copies reports outside target for artifact upload.
 # trace:STORY-2606 | ai:codex
 /.ci-artifacts/
+
+# Per-user Claude Code overrides (MCP trust, personal settings); never committed.
+# Lanes and reviewers run git without the operator's global excludes, so this must
+# be repo-level or an exited seat reads as dirty and blocks lease cleanup. trace:BUG-2532
+.claude/settings.local.json
