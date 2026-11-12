@@ -23,7 +23,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-12T17:36:24.142897628Z
-modified_at: 2026-11-12T17:45:13.119439564Z
+modified_at: 2026-11-12T18:20:39.486298568Z
 req_type: Story
 comments:
 - id: 01a1d0d5-5d1b-7c11-bbf5-fb95aee160fa
@@ -33,6 +33,12 @@ comments:
   modified_at: 2026-11-12T17:36:46.363719368Z
   session_id: 01a1d09a-4262-7d50-a00b-00a5a30f3934
   harness_version: 2.1.322 (Claude Code)
+- id: 01a1d0fd-8abe-7ac3-99cf-d1ccc5fd91a7
+  author: joe
+  content: 'Implementation prepared in native seat story-2733-gate-paths per the approved sketch: explicit human-minted include_gate_paths (legacy default false); renewal/revival resets unless re-passed; status/help/docs; shared protected-path cover with other refusals unchanged; structured GateMatch audits in ship/train release records and squash/merge/train commits. Train audit text persists through journal recovery and grants no authority. Added regressions for default refusal, opt-in and other gates, legacy records, human floor, renewal/revival, train policy/audit persistence, unusual paths, and forge merge-body propagation. Floor, config layering and STORY-1888 ratchet unchanged. Changed-file rustfmt and git diff --check pass. Validation incomplete: mandate j20261112T174941299-2980892-0 and help regeneration j20261112T175118894-2-0 each timed out after 900s during compilation with no executed tests and seed overlay-stale (primary rewrote generation agent-f847fffb5c80289c). Help snapshot manually updated; exact regeneration unverified. Final mandate j20261112T175206659-2993677-0 is running; fast gate j20261112T175223104-2995046-0 follows. Native edits remain uncommitted for host publication. Host CodeGraph client absent at supplied path; doctor reports unreachable, so navigation used rg.'
+  created_at: 2026-11-12T18:20:39.486298568Z
+  modified_at: 2026-11-12T18:20:39.486298568Z
+  session_id: 01a1d0dd083a
 history:
 - id: 01a1d0d5-4f50-78f1-be14-90e8c89718c8
   author: joe
