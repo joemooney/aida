@@ -1,0 +1,33 @@
+id: 01a1d0c2-d5bc-70d1-8578-13df53909668
+spec_id: STORY-b6b1278890774ef993d2ebc327862470-654
+agreed_id: STORY-2731
+title: 'Review PR-3885: [AI:codex] test(launch): make rollback writer admission deterministic (BUG-2533)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a1d08e`) for branch `bug-b6b1278890774ef993d2ebc327862470-298`.
+
+  - PR: <https://github.com/joemooney/aida/pull/3885>
+  - Branch: `bug-b6b1278890774ef993d2ebc327862470-298` → `main`
+
+  ## Covers
+
+  - BUG-2533
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 3885` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-12T17:16:32.060009013Z
+modified_at: 2026-11-12T17:16:32.060009013Z
+req_type: Story
+filed_at:
+  code_sha: ec5a35a7108475b421baf1101b26159a7aa0fab9
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: a447d559aaa
+  session: 01a1d08ec465
