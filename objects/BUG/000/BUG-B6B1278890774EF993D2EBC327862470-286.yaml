@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-11T04:08:39.262399078Z
-modified_at: 2026-11-12T08:17:28.199354046Z
+modified_at: 2026-11-12T08:24:52.183204927Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -91,6 +91,12 @@ history:
   session_id: 01a1ced4da7b
   harness_version: codex-cli 0.167.0
   changes: []
+- id: 01a1cedc-17f0-7cb1-a0ee-a7f9688736fa
+  author: dirtlab
+  timestamp: 2026-11-12T08:24:52.977003008Z
+  session_id: 01a1cedb97bc
+  harness_version: codex-cli 0.167.0
+  changes: []
 filed_at:
   code_sha: fec48a790424718b7cfc26c0c9e7d7667ab48beb
   branch: main
@@ -104,7 +110,7 @@ attention_reason:
   category: other
   detail: 'Pickup refused: Needs Attention to InProgress requires advisor authority; this native implementer session has no active role. Existing request-changes verdict and punt remain publication vetoes. Advisor triage is required before implementation can resume. No files changed, tests run, or publication declaration made.'
   raised_by: implementer
-  raised_at: 2026-11-12T08:17:28.199354046Z
+  raised_at: 2026-11-12T08:24:52.183204927Z
 failure_reason:
   phase: reviewer
   phase_index: 3
