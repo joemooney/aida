@@ -3556,6 +3556,9 @@ pub(crate) fn bug2521_assert_peer_waiting_backoff(
             before,
             "backoff must not consume the final attempt"
         );
+    }
+}
+
 // trace:BUG-2534 | ai:codex
 #[test]
 fn bug2534_ledger_only_verdict_stops_retries_and_preserves_rounds() {
