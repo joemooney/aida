@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-12T18:43:14.457201972Z
-modified_at: 2026-11-12T18:51:05.616030767Z
+modified_at: 2026-11-12T18:57:59.084935388Z
 req_type: Bug
 comments:
 - id: 01a1d119-6810-7f81-95b6-65589a91a298
@@ -16,6 +16,13 @@ comments:
   content: 'Root cause: failing GitHub job 131398695557 upgraded stable from rustc 1.99.1 to 1.100.0 on 2026-11-12. Its verbose cargo output puts dependencies under agent/build/fixture-dep/<hash>/out, with unit fingerprints under build/<package>/<hash>/fingerprint, while generation_id only recognized agent/.fingerprint. This is a toolchain rollout/layout incompatibility, not a cold-seed race. Implementing recognition of both layouts and copied new-layout build state; lane-runner validation pending (host currently 1.99.1).'
   created_at: 2026-11-12T18:51:05.616030767Z
   modified_at: 2026-11-12T18:51:05.616030767Z
+  session_id: 01a1d1150582
+  harness_version: codex-cli 0.167.0
+- id: 01a1d11f-b72c-7063-a992-04648113db43
+  author: dirtlab
+  content: 'Implementation ready for host publication: seat_target_overlay.rs recognizes legacy and Cargo 1.100 unit fingerprints, preserves legacy generation IDs, hashes new unit state/output metadata, copies new-layout build/ to avoid mutable shared inodes, and validates a recursive build manifest before reuse. Regression verifies new layout without legacy fingerprints, no shared fingerprint/output inodes, reuse, primary rewrites, and damaged-generation retention. Added early primary-build fingerprint assertion to the live fixture. Validation via lane runner: j20261112T185003494-2-0 passed all 22 overlay tests with no skips; live Fresh-dependency regression passed three executions total (j20261112T184727692-2-0, suite job, j20261112T185544869-2-0), including two on final edits. rustfmt --check and git diff --check pass. Host has Rust 1.99.1: actual Cargo 1.100 live execution remains for CI; synthetic new-layout coverage passed. New-layout snapshots trade additional disk/I/O for copied mutable unit state. Edits intentionally uncommitted; host completes publication and queue.'
+  created_at: 2026-11-12T18:57:59.084935388Z
+  modified_at: 2026-11-12T18:57:59.084935388Z
   session_id: 01a1d1150582
   harness_version: codex-cli 0.167.0
 history:

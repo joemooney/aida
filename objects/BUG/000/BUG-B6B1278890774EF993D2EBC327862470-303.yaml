@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-12T18:26:43.321357044Z
-modified_at: 2026-11-12T18:54:50.031579400Z
+modified_at: 2026-11-12T18:57:59.002848873Z
 req_type: Bug
 comments:
 - id: 01a1d11c-d4af-7321-a627-ce8fdbc3162c
@@ -16,6 +16,13 @@ comments:
   content: 'Validation follow-up for host triage: unchanged pr_train_journal_lock_contention_is_typed_and_releases_on_exit failed its immediate reacquisition assertion once during parallel pr_train:: tests (job j20261112T185020335-2-0, 193 passed / 1 failed), after passing in three earlier runs. A serial rerun is in progress. Concurrent child descriptor inheritance is only a possible cause. Draft finding could not be filed: MCP requires approval while policy is never; CLI allocation refused because this private clone has no AIDA node binding. No node acquisition or Git metadata mutation attempted. Failing output: /home/dirtlab/ai/aida/.aida/lane-jobs/01a1d105e1f3/j20261112T185020335-2-0.out.'
   created_at: 2026-11-12T18:54:50.031579400Z
   modified_at: 2026-11-12T18:54:50.031579400Z
+  session_id: 01a1d105e1f3
+  harness_version: codex-cli 0.167.0
+- id: 01a1d11f-b6da-7ce1-b9cb-256dbd86fc97
+  author: dirtlab
+  content: 'Implemented bounded train coverage audits: ordered SHA-256 summaries per review key plus compact answering-event sequence/digest references replace embedded review records; live authority checks and invocation-local full bodies remain. Conservative build-time byte preflight ejects oversized riders before publication, refreshes before branch push/PR open, and rechecks actual ledger plus serialized audit size before append. Regression covers 41 review rounds and 110 distinct ledger entries landing with proof under 32 KiB, plus oversized-import ejection before publication. Updated recovery fixtures for real cars and configured store discovery. Validation: lane job j20261112T185328514-2-0, cargo test --profile agent -p aida-cli-lib --lib -- pr_train:: --test-threads=1: 194 passed, 0 failed (257.18s); targeted rustfmt checks and git diff --check pass. Parallel run hit the separately recorded intermittent unchanged lock-release test failure; serial run passes it. Edits remain uncommitted for host publication.'
+  created_at: 2026-11-12T18:57:59.002848873Z
+  modified_at: 2026-11-12T18:57:59.002848873Z
   session_id: 01a1d105e1f3
   harness_version: codex-cli 0.167.0
 history:
