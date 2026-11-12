@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-09T01:58:46.910276326Z
-modified_at: 2026-11-12T17:06:00.738444698Z
+modified_at: 2026-11-12T17:26:22.461221045Z
 req_type: Story
 tags:
 - area:orchestration
@@ -493,6 +493,10 @@ history:
   author: joe
   timestamp: 2026-11-12T17:06:00.899240717Z
   changes: []
+- id: 01a1d0cb-d8ac-7133-8f1a-724ec4cb072b
+  author: joe
+  timestamp: 2026-11-12T17:26:22.636466809Z
+  changes: []
 filed_at:
   code_sha: a7a14984cec5533987dfeccb70d1f91aaebbf22a
   branch: main
@@ -505,7 +509,7 @@ failure_reason:
   phase: reviewer
   phase_index: 3
   kind: verdict:request-changes
-  detail: 'Full sweep: one cross-episode alert-loss defect; 40 criterion statuses documented; required CI green.'
-  recovery_hint: address the review findings, move STORY-B6B1278890774EF993D2EBC327862470-614 back to In Progress, and clear the PR hold only after approval
+  detail: 'Full sweep: one cross-episode alert-loss defect; all 40 criterion statuses documented; exact-head CI green.'
+  recovery_hint: address the review findings, move STORY-2691 back to In Progress, and clear the PR hold only after approval
   shelved_by: reviewer
-  shelved_at: 2026-11-12T17:06:00.738444698Z
+  shelved_at: 2026-11-12T17:26:22.461221045Z
