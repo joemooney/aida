@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-10T22:04:54.061461Z
-modified_at: 2026-11-12T18:44:51.645525441Z
+modified_at: 2026-11-12T19:39:05.765757573Z
 req_type: Story
 comments:
 - id: 01a1c781-4cf1-7c80-b086-89c5c5096ab6
@@ -903,6 +903,10 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a1d145-5bf4-7361-a0ba-152edcbd95d6
+  author: joe
+  timestamp: 2026-11-12T19:39:06.100335899Z
+  changes: []
 filed_at:
   code_sha: a3d2ba258e4015854c6f615c6481beb672b8798c
   branch: main
@@ -916,7 +920,7 @@ failure_reason:
   phase: reviewer
   phase_index: 3
   kind: verdict:request-changes
-  detail: 'Slice 1 retains two publication defects: regeneration masks sanitized clone config and generated conflict markers bypass the final commit gate. CI pending at review time.'
+  detail: Slice 1 source and regression coverage satisfy the scoped contract; correct the CLI guide’s reversed preparation/publication behavior. CI pending at review time.
   recovery_hint: address the review findings, move STORY-2710 back to In Progress, and clear the PR hold only after approval
   shelved_by: reviewer
-  shelved_at: 2026-11-12T18:34:17.271540762Z
+  shelved_at: 2026-11-12T19:39:05.765757573Z
