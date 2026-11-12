@@ -1,0 +1,41 @@
+id: 01a1d0e3-0223-7202-b2ca-c259639ea762
+spec_id: STORY-b6b1278890774ef993d2ebc327862470-658
+agreed_id: STORY-2735
+title: 'CI tiers: PR pushes run fast gates + compile by default; full shards on train/main; configurable via ci:full label and AIDA_PR_CI_TIER'
+description: |
+  Operator ruling 2026-11-12 10:50 MST: batch regression testing into train CI and make the trade-off configurable. Today every push to a PR branch (implementer pushes, reworks, merge-with-main, forge update-branch) runs the full CI: 7 shards (cli-0/1, lib-0/1, contracts, gates, rest) plus the aggregate Build, about 15-20 min of runner time, before the PR may ride a train. The train (`aida pr train`) then runs the full suite AGAIN on top of main, and bisects a red batch. Per-PR full runs fill the runners, so train CI queues behind them. Autoland v3 (2026-11-12) already trains approved PRs without waiting for their own CI (AIDA_AUTOLAND_TRAIN_ON=pending).
+
+  ARCHITECTURE SKETCH (advisor-approved 2026-11-12 10:58 MST under the operator ruling):
+  - CI tiers in .github/workflows/ci.yml (and the GitLab adapter equivalent if the same gates are generated there; otherwise note the gap on the spec):
+    - FAST tier: the gates `make check-ci-fast` runs (no build) plus one `cargo check --profile <ci profile> --workspace --tests` compile job. Target <= 6 min wall time.
+    - FULL tier: today's full job set, unchanged.
+  - Tier selection, evaluated once in a small `tier` job whose output gates the shard jobs (`if: needs.tier.outputs.full == 'true'`):
+    - push to main, push to train/** branches, merge_group, schedule/workflow_dispatch -> FULL always.
+    - pull_request -> FULL if the PR has label `ci:full`, else the repo variable `vars.AIDA_PR_CI_TIER` (`fast` | `full`; unset = `fast`).
+  - The required status `Build (ubuntu-latest)` must still be reported on every PR and train head: the aggregate Build job depends on whichever tier ran and fails if any job that ran failed. Shard jobs skipped by the tier report `skipped`, which the aggregate treats as not-run (not failure). merge-hold-gate is unchanged.
+  - Ship guard: `aida pr ship` (single-PR, non-train) must not land a PR whose last CI was FAST: when the head's Build ran in the fast tier, ship refuses with a message to use `aida pr train` (or to add `ci:full` and wait). The train is the path to main for FAST-tier PRs. The check reads the tier from the tier job's output or a check-run name/summary marker the tier job emits (e.g. a `ci-tier: fast|full` check), whichever is cheaper to read via the forge seam.
+  - `make check-ci-list` and docs (docs/cli or docs/advanced CI page) document the tiers, the label and the variable.
+
+  ACCEPTANCE:
+  1. A PR without the label, variable unset: only the fast jobs and aggregate Build run; Build passes when they pass.
+  2. Label `ci:full` (or vars.AIDA_PR_CI_TIER=full): the full shard set runs on the PR.
+  3. train/** and main pushes always run the full set (verify with the workflow's tier logic unit-tested via a small script test, or an actionlint-checked expression plus a tests/ fixture that evaluates the tier selection for each event).
+  4. `aida pr ship` refuses a head whose CI ran FAST (unit test with a fake forge); `aida pr train` is unaffected.
+  5. make check-ci-fast passes; CI-gate inventory/ratchets updated for the new jobs (the gate-classification count changes).
+  LIGHT gate: one targeted cargo test for the ship guard + make check-ci-fast. The PR itself should run with label `ci:full` so the full tier is exercised once before merge.
+status: Draft
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-12T17:51:40.579097417Z
+modified_at: 2026-11-12T17:51:40.579097417Z
+req_type: Story
+filed_at:
+  code_sha: ec5a35a7108475b421baf1101b26159a7aa0fab9
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: a447d559aaa
+  vendor: claude
+  session: 01a1d09a-4262-7d50-a00b-00a5a30f3934
+  harness_version: 2.1.322 (Claude Code)
