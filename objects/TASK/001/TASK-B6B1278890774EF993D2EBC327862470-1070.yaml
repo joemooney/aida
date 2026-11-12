@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-12T18:51:30.686841073Z
-modified_at: 2026-11-12T20:03:46.941090572Z
+modified_at: 2026-11-12T20:26:45.361737037Z
 req_type: Task
 comments:
 - id: 01a1d125-d94d-7a71-a9c6-31bf880c24ac
@@ -39,6 +39,13 @@ comments:
   modified_at: 2026-11-12T20:03:46.941090572Z
   session_id: 01a1d1546ff2
   harness_version: codex-cli 0.167.0
+- id: 01a1d170-fcf1-78c2-bf23-f1c631d67754
+  author: joe
+  content: '[advisor 13:27] PR #3897 merged into integration at 61aca71 (STORY-2737 integration mode); lands on main with promotion batch 2.'
+  created_at: 2026-11-12T20:26:45.361737037Z
+  modified_at: 2026-11-12T20:26:45.361737037Z
+  session_id: 01a1d0eb-22cc-7262-8f6c-7266e9cc1fbb
+  harness_version: 2.1.322 (Claude Code)
 history:
 - id: 01a1d11c-5f8a-7930-97fe-d240d265e56f
   author: aida-session-start
