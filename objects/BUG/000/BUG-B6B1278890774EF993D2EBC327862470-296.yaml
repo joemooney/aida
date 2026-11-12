@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-12T08:35:37.046532324Z
-modified_at: 2026-11-12T21:10:02.596048729Z
+modified_at: 2026-11-12T22:13:49.650914879Z
 req_type: Bug
 comments:
 - id: 01a1cf00-20ea-7c51-bbf5-a9927b13b042
@@ -133,6 +133,13 @@ comments:
   created_at: 2026-11-12T21:10:02.596048729Z
   modified_at: 2026-11-12T21:10:02.596048729Z
   session_id: 01a1d0eb-22cc-7262-8f6c-7266e9cc1fbb
+  harness_version: 2.1.322 (Claude Code)
+- id: 01a1d1d3-03d2-7801-aff7-deb3a1e378b5
+  author: joe
+  content: 'advisor 15:15: safety-cap slice (#3872) landed on main via promotion #3901 (b569461). Relevant-only discovery and automatic archival remain open; spec stays approved.'
+  created_at: 2026-11-12T22:13:49.650914879Z
+  modified_at: 2026-11-12T22:13:49.650914879Z
+  session_id: 01a1d19e-9195-7853-815f-b54753ebd973
   harness_version: 2.1.322 (Claude Code)
 history:
 - id: 01a1cee6-975b-7d40-8689-d35e1f109d99
