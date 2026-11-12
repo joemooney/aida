@@ -317,7 +317,9 @@ fn interactive_review_anchor_refusals_are_collected_and_held() {
             &gh,
             "#!/bin/sh\nif [ \"$1 $2\" = 'pr edit' ]; then\n  printf '%s\\n' \"$@\" >> .aida/label-calls\n  if [ -f .aida/refuse-label ]; then\n    echo 'forge unavailable' >&2\n    exit 1\n  fi\n  exit 0\nfi\nexit 1\n",
         );
-        let path = format!("{}:{}", bin.display(), std::env::var("PATH").unwrap());
+        // trace:BUG-2522 | ai:codex
+        let inputs = aida_core::exec_context::Environment::capture();
+        let path = format!("{}:{}", bin.display(), inputs.var("PATH").unwrap());
         env.set_key("PATH", &path);
         let label_calls = root.path().join(".aida/label-calls");
         let grant = crate::gate::seat_authority::test_support::mint_grant_for(
