@@ -3,12 +3,12 @@ spec_id: BUG-b6b1278890774ef993d2ebc327862470-286
 agreed_id: BUG-2521
 title: review-watch never re-reviews a head whose verdict was WAITING; the PR stalls until someone runs --release
 description: 'Observed 2026-11-10: PR-3801 (and earlier #3809, #3803, #3797, #3777) got a WAITING verdict while CI was pending. review-watch then records the head as ''already reserved (Completed)'' and never re-admits it after CI turns green, so the PR sits with no approval until the advisor runs ''aida review watch --release PR-N''. #3801 waited about 6 hours. STORY-2697 now tells reviewers to approve defect-free heads while CI is pending, so new WAITING verdicts should be rarer, but a reviewer can still return WAITING for independent evidence or a named test. Expected: a WAITING attempt does not consume the head. Re-admit the same head once the condition it waited on changes (CI settled, or a bounded backoff such as 20 min), capped like BUG-2518''s no-verdict retries. Acceptance: (1) a head with a WAITING verdict is re-admitted after its CI settles with no manual release; (2) re-admission is capped and respects max_concurrent; (3) APPROVED and CHANGES REQUESTED heads are never re-admitted at the same head; (4) regression test.'
-status: InProgress
+status: Completed
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-11T04:08:39.262399078Z
-modified_at: 2026-11-12T22:13:56.718702226Z
+modified_at: 2026-11-12T22:14:02.641615278Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -214,6 +214,15 @@ history:
   - field_name: status
     old_value: NeedsAttention
     new_value: InProgress
+- id: 01a1d1d3-3691-7900-8bf1-e76a6af22dab
+  author: joe
+  timestamp: 2026-11-12T22:14:02.641608532Z
+  session_id: 01a1d19e-9195-7853-815f-b54753ebd973
+  harness_version: 2.1.322 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
 filed_at:
   code_sha: fec48a790424718b7cfc26c0c9e7d7667ab48beb
   branch: main
@@ -223,3 +232,6 @@ filed_at:
   vendor: claude
   session: 01a1c87f-970d-7ce0-9351-e4e75a87731e
   harness_version: 2.1.322 (Claude Code)
+implementation_info:
+  implemented: false
+  completed_at: 2026-11-12T22:14:02.641592490Z
