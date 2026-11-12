@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-11T04:48:14.810158291Z
-modified_at: 2026-11-12T16:58:15.519132349Z
+modified_at: 2026-11-12T18:27:07.381120713Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -240,6 +240,13 @@ comments:
   created_at: 2026-11-12T16:54:55.981691958Z
   modified_at: 2026-11-12T16:54:55.981691958Z
   session_id: 01a1d09a-4262-7d50-a00b-00a5a30f3934
+  harness_version: 2.1.322 (Claude Code)
+- id: 01a1d103-75f5-7a70-8d33-99faebd4bd6d
+  author: joe
+  content: '[advisor 11:30] Train #3888 failed at merge (BUG-2538: coverage proof 23 MB from this PR''s 40-round review history). Shipping PR-3830 alone via deputy.'
+  created_at: 2026-11-12T18:27:07.381120713Z
+  modified_at: 2026-11-12T18:27:07.381120713Z
+  session_id: 01a1d0eb-22cc-7262-8f6c-7266e9cc1fbb
   harness_version: 2.1.322 (Claude Code)
 history:
 - id: 01a1c8ef-b4bc-7b62-a163-3209968104a9
