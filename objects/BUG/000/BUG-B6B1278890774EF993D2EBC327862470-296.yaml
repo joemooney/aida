@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-12T08:35:37.046532324Z
-modified_at: 2026-11-12T12:32:40.863719303Z
+modified_at: 2026-11-12T12:32:45.313217709Z
 req_type: Bug
 comments:
 - id: 01a1cf00-20ea-7c51-bbf5-a9927b13b042
@@ -59,6 +59,21 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Full sweep: aggregate discovery safety is improved, but relevant-only discovery and automatic archival remain incomplete with no approved scope split. CI pending at review time.. It was punted on: design-fork: Review of 2a12573d8fa8: finding 1 (checked.rs:373 relevant-only complete discovery) and finding 2 (automatic archive retention) are both accepted and remain blocked, not disputed. Existing by-spec index updates run AFTER ledger sync and failures only warn (store.rs::write_events), so hints cannot certify absence; removing full scans can hide refusals. Rotation alone removes evidence from active-only strict and lossy readers and permits reopened append to restart seq. Both require the new completeness/version-fence and archive/read/revival contract proposed in docs/plans/2026-11-12-bug-2531-discovery-retention-sketch.md. AGENTS.md Sketch-First Protocol requires master sign-off for these new formats/lifecycle semantics; no approval or approved scope split is recorded in BUG-2531 comments. Native seat cannot create the requested commit. No completion or publication is authorized while this punt remains.. No triage reason was given.'
   created_at: 2026-11-12T12:32:40.863717758Z
   modified_at: 2026-11-12T12:32:40.863717758Z
+  session_id: 01a1ceeb-e827-7832-8991-e83d9eb95cef
+  harness_version: 2.1.322 (Claude Code)
+- id: 01a1cfbf-05d9-74b1-bb8e-c0f74eeba08f
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (BUG-2531):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 2a12573d8fa8
+    Recorded: 2026-11-12T11:51:17.979025171+00:00
+    Findings:
+    1. [P2] aida-cli-lib/src/gate/ledger/checked.rs:373: Discovery still reads and parses every active change ledger. The new 128 MiB/200000-event ceiling safely bounds work but still makes unrelated history exhaust the operation and blocks a small relevant verdict selection. Implement complete relevant-only discovery without trusting lossy by-spec hints, or obtain an explicit approved scope split; add a regression proving relevant selection survives unrelated history beyond the discovery ceiling while missing/stale hints cannot hide refusals.
+    2. [P2] docs/internal/testing/bug-2531-ledger-selection-budget.md:41: Automatic closed/merged-ledger archival required by BUG-2531 is absent. Active closed history still accumulates to the 4096-change limit and globally refuses discovery. Implement archive-aware automatic rotation preserving indexed refusal evidence, direct readers and reopened-change append/revival, with retention regressions, or obtain an explicit approved scope split. The proposed sketch and Draft TASK-3098 do not approve that split.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-12T12:32:45.017595719Z
+  modified_at: 2026-11-12T12:32:45.017595719Z
   session_id: 01a1ceeb-e827-7832-8991-e83d9eb95cef
   harness_version: 2.1.322 (Claude Code)
 history:
