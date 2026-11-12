@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-12T10:13:24.570585533Z
-modified_at: 2026-11-12T19:32:58.133850032Z
+modified_at: 2026-11-12T19:51:06.252959447Z
 req_type: Bug
 comments:
 - id: 01a1d0f6-5b68-71e2-8e14-7e40a9d8c6c4
@@ -46,6 +46,12 @@ comments:
   modified_at: 2026-11-12T19:11:06.744829360Z
   session_id: 01a1d126cac4
   harness_version: codex-cli 0.167.0
+- id: 01a1d150-590c-72c1-b93d-6bf18c213c16
+  author: joe
+  content: 'Pickup verification: checkout already contains fix commit 7f4530ff8ce; prior advisor comment records PR #3890 and the queue displays approval for that head. No source edits needed. Fresh lane job j20261112T193554689-4136141-0 targeted bug2534_ledger_only_verdict_stops_retries_and_preserves_rounds in aida-cli-lib, but timed out after 900s following build-slot waiting and compilation; no tests executed, untested=true for this session. Earlier attempt selected aida-cli, which has no library target. Prior passing regression evidence remains in earlier comments. git diff --check clean; working tree clean. Prescribed host codegraph client missing and doctor reports index unreachable. Queue completion remains with host under native-seat instructions.'
+  created_at: 2026-11-12T19:51:06.252959447Z
+  modified_at: 2026-11-12T19:51:06.252959447Z
+  session_id: 01a1d13f2934
 history:
 - id: 01a1d0f5-cf33-7072-a087-c8f8bafc0d36
   author: joe
