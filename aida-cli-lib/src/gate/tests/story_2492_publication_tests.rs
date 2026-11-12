@@ -1130,6 +1130,26 @@ fn bug_2525_synced_wait_closes_locally_without_rewriting_signed_review() {
     f.sync(&f.a);
     assert!(!f.a.join(".aida/review-verdicts").exists());
     assert!(rv::verdict_keys(&f.a).contains(&"PR-7".into()));
+    // Independent local ledger rounds differ from the effective signed source.
+    // They remain intact in raw projection while the signed wait closes locally.
+    for key in ["STORY-1", "PR-7"] {
+        let record = serde_json::json!({
+            "verdict":"request-changes", "reviewed_sha":f.sha,
+            "summary":"independent local findings", "findings":["local defect"]
+        });
+        let spec = (key == "STORY-1").then(|| crate::gate::ledger::GateSpec::resolve(&f.a, key));
+        let root = crate::gate::ledger::store_root(&f.a).unwrap();
+        crate::gate::ledger::store::append_one(
+            &root,
+            crate::gate::ledger::event::verdict_event(
+                &root,
+                ChangeKey::pr(7),
+                record.as_object().unwrap(),
+                spec.as_ref(),
+            ),
+        )
+        .unwrap();
+    }
     let published = current(&f.a, &["STORY-1"]).unwrap().body;
     let keys = vec!["STORY-1".into(), "PR-7".into()];
     crate::review_waiting::reconcile_waiting_verdicts_with(&f.a, Some(&keys), |c| {
@@ -1142,6 +1162,12 @@ fn bug_2525_synced_wait_closes_locally_without_rewriting_signed_review() {
         assert_eq!(v.kind, rv::VerdictKind::Waiting);
     }
     assert_eq!(current(&f.a, &["STORY-1"]).unwrap().body, published);
+    for key in ["STORY-1", "PR-7"] {
+        assert_eq!(
+            crate::gate::ledger::project::newest_verdict(&f.a, key).unwrap()["summary"],
+            "independent local findings"
+        );
+    }
     crate::queue_cmd::refuse_waiting_review(&f.a, "STORY-1", "STORY-1", None).unwrap();
     drop(_env);
     {

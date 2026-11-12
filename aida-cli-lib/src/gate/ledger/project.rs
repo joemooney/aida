@@ -230,6 +230,19 @@ pub(crate) fn newest_verdict_event(start: &Path, key: &str) -> Option<GateEvent>
     newest_of(verdict_events(&root, key))
 }
 
+/// The latest lifecycle annotation before raw-review projection. Its source
+/// must be checked against the effective legacy, signed, or ledger verdict.
+/// Raw projection deliberately rejects annotations of independent reviews.
+// trace:BUG-2525 | ai:codex
+pub(crate) fn terminal_wait_annotation(start: &Path, key: &str) -> Option<JsonObj> {
+    let root = store_root(start).ok()?;
+    verdict_events(&root, key)
+        .into_iter()
+        .rev()
+        .filter_map(|event| event.verdict_record().cloned())
+        .find(|record| record.contains_key("terminal_wait_source"))
+}
+
 /// The answering event of one label's verdict events (oldest first): the
 /// last, or the ordinary origin a proved phase-3 overlay duplicates.
 // trace:BUG-2403 | ai:claude
@@ -245,11 +258,20 @@ pub(crate) fn newest_of(mut events: Vec<GateEvent>) -> Option<GateEvent> {
         else {
             return false;
         };
-        events
+        let mut preceding = events
             .iter()
             .rev()
             .skip(1)
-            .find_map(|e| e.verdict_record())
+            .filter(|e| e.verdict_record().is_some());
+        let prior = preceding.next();
+        // The writer observed the receipt-bearing origin when a proved
+        // phase-3 duplicate was the last raw event.
+        let prior = match (preceding.next(), prior) {
+            (Some(origin), Some(overlay)) if proved_phase3_origin(origin, overlay) => Some(origin),
+            (_, prior) => prior,
+        };
+        prior
+            .and_then(|event| event.verdict_record())
             .is_some_and(|prior| source != &serde_json::Value::Object(prior.clone()))
     }) {
         events.pop();

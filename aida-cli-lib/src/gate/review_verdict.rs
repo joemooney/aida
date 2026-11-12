@@ -1288,16 +1288,9 @@ fn surviving_against_previous_round(
 
 /// Read the recorded verdict for `spec`, if any.
 pub fn read_recorded_verdict(project_root: &Path, spec: &str) -> Option<RecordedVerdict> {
-    // trace:STORY-2492 | ai:codex
-    if let Some(remote) = super::review_publication::current(project_root, &[spec]) {
-        return parse_recorded_verdict(&terminal_wait_overlay(project_root, spec, remote).body);
-    }
-    let path = verdict_path(project_root, spec);
-    let legacy = read_verdict_body(&path)
-        .ok()
-        .and_then(|body| parse_recorded_verdict(&body));
-    let ledger = crate::gate::ledger::project::newest_verdict_event(project_root, spec);
-    newer_of(&path, legacy, ledger.as_ref())
+    // Read every source through the same effective-source annotation check.
+    // trace:BUG-2525 | ai:codex
+    parse_recorded_verdict(&current_verdict(project_root, spec)?.body)
 }
 
 /// A verdict record carried on the gate ledger, parsed like a file body.
@@ -1573,7 +1566,9 @@ fn choose_current(
                 },
             })
         });
-    ledger.or_else(|| file_body.map(from_file))
+    ledger
+        .or_else(|| file_body.map(from_file))
+        .map(|current| terminal_wait_overlay(start, key, current))
 }
 
 /// Read the recorded verdict of ONE requirement known by several labels (its
@@ -3243,22 +3238,26 @@ pub(crate) fn close_terminal_wait(
     })
 }
 
-// A signed publication remains immutable. Apply only a local annotation of
-// that exact source; a later signed round automatically invalidates it.
+// Apply the local annotation to its exact effective source, even when the
+// raw ledger holds an independent round. Signed publications stay immutable;
+// a different effective round automatically invalidates the annotation.
 // trace:BUG-2525 | ai:codex
 pub(crate) fn terminal_wait_overlay(
     start: &Path,
     key: &str,
     mut current: CurrentVerdict,
 ) -> CurrentVerdict {
-    let Some(record) = crate::gate::ledger::project::newest_verdict(start, key) else {
+    if !parse_recorded_verdict(&current.body)
+        .is_some_and(|v| v.kind == VerdictKind::Waiting && !v.is_closed())
+    {
+        return current;
+    }
+    let Some(record) = crate::gate::ledger::project::terminal_wait_annotation(start, key) else {
         return current;
     };
     let source = serde_json::from_str::<serde_json::Value>(&current.body).ok();
     if record.get("terminal_wait_key").and_then(|v| v.as_str()) == Some(key)
         && record.get("terminal_wait_source") == source.as_ref()
-        && parse_recorded_verdict(&current.body)
-            .is_some_and(|v| v.kind == VerdictKind::Waiting && !v.is_closed())
     {
         if let Ok(body) = serde_json::to_string(&record) {
             current.body = body;

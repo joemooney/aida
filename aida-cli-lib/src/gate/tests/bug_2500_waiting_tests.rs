@@ -1134,3 +1134,60 @@ fn bug_2525_closed_alias_wait_cannot_hide_active_alias_findings() {
         .unwrap();
     assert!(findings.contains("repair the code defect"));
 }
+
+// trace:BUG-2525 | ai:codex
+#[test]
+fn bug_2525_newer_legacy_wait_closes_despite_independent_raw_ledger() {
+    let _env = crate::test_env::EnvVarsGuard::apply(&[("AIDA_CONTAINED", None)]);
+    for key in ["TASK-3448", "PR-4273"] {
+        let tmp = tempfile::tempdir().unwrap();
+        rv::record_verdict(
+            tmp.path(),
+            key,
+            Some("request-changes"),
+            Some(HEAD),
+            None,
+            Some("old ledger findings"),
+            &["old defect".into()],
+            "reviewer",
+        )
+        .unwrap();
+        let path = rv::verdict_path(tmp.path(), key);
+        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+        let mut source = serde_json::json!({
+            "verdict":"waiting", "reviewed_sha":HEAD, "summary":SUMMARY,
+            "recorded_at": (chrono::Utc::now() + chrono::Duration::seconds(5)).to_rfc3339()
+        });
+        std::fs::write(&path, source.to_string()).unwrap();
+        let expected = rv::current_verdict(tmp.path(), key).unwrap();
+        assert_eq!(
+            serde_json::from_str::<serde_json::Value>(&expected.body).unwrap(),
+            source
+        );
+        assert!(rv::close_terminal_wait(
+            tmp.path(),
+            key,
+            crate::gate::ledger::ChangeKey::pr(4273),
+            &expected
+        )
+        .unwrap());
+        assert!(rv::read_recorded_verdict(tmp.path(), key)
+            .unwrap()
+            .is_closed());
+        assert!(
+            rv::parse_recorded_verdict(&rv::current_verdict(tmp.path(), key).unwrap().body)
+                .unwrap()
+                .is_closed()
+        );
+        crate::queue_cmd::refuse_waiting_review(tmp.path(), key, key, None).unwrap();
+        // The raw change projection retains independent code findings.
+        let raw = crate::gate::ledger::project::newest_verdict(tmp.path(), key).unwrap();
+        assert_eq!(raw["summary"], "old ledger findings");
+        source["summary"] = "replacement wait at the same head and time".into();
+        std::fs::write(&path, source.to_string()).unwrap();
+        assert!(!rv::read_recorded_verdict(tmp.path(), key)
+            .unwrap()
+            .is_closed());
+        assert!(crate::queue_cmd::refuse_waiting_review(tmp.path(), key, key, None).is_err());
+    }
+}
