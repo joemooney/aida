@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-10T06:40:07.764479561Z
-modified_at: 2026-11-12T09:59:18.688031736Z
+modified_at: 2026-11-12T12:12:59.048240727Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -217,6 +217,13 @@ comments:
   created_at: 2026-11-12T09:59:18.688031736Z
   modified_at: 2026-11-12T09:59:18.688031736Z
   session_id: 01a1cf1fc6a2
+- id: 01a1cfac-ed28-73e0-8df1-59b192ceb729
+  author: joe
+  content: 'Round 4 (4a220acd084): merged origin/main (resolved lib_part5.rs: kept change-keyed review_record_kind plus main''s BUG-2527 explicit-approval guard). F1: when ownership discovery is incomplete, the readers now drop only review copies a foreign PR could own (fingerprinted, not phase-3); holds, carry-over proofs, phase-3 and unfingerprinted records stay. Before this, the round-3 unwrap_or_default dropped every event, holds included. Regression test extended: an unrelated malformed ledger, checked through both the PR-keyed and spec-indexed readers. F2: the single ownership index per discovery from 11ed2b2 is kept, with its one-pass coverage test. untested=true: the lane runner timed out at 900s twice while compiling.'
+  created_at: 2026-11-12T12:12:59.048240727Z
+  modified_at: 2026-11-12T12:12:59.048240727Z
+  session_id: 01a1cf8df8e5
+  harness_version: 2.1.322 (Claude Code)
 history:
 - id: 01a1c4af-45a0-7a32-8edf-55980e6f5825
   author: joe
