@@ -268,8 +268,6 @@ fn interactive_review_anchor_refusals_are_collected_and_held() {
         return;
     }
     for disposition in ["request-changes", "rejected"] {
-        use std::os::unix::fs::PermissionsExt;
-
         let (root, head) = project();
         let home = root.path().join("home");
         std::fs::create_dir_all(&home).unwrap();
@@ -308,12 +306,10 @@ fn interactive_review_anchor_refusals_are_collected_and_held() {
         let bin = root.path().join("bin");
         std::fs::create_dir(&bin).unwrap();
         let gh = bin.join("gh");
-        std::fs::write(
+        crate::test_exec::write_executable(
             &gh,
             "#!/bin/sh\nif [ \"$1 $2\" = 'pr edit' ]; then\n  printf '%s\\n' \"$@\" >> .aida/label-calls\n  exit 0\nfi\nexit 1\n",
-        )
-        .unwrap();
-        std::fs::set_permissions(&gh, std::fs::Permissions::from_mode(0o755)).unwrap();
+        );
         let path = format!("{}:{}", bin.display(), std::env::var("PATH").unwrap());
         env.set_key("PATH", &path);
         let label_calls = root.path().join(".aida/label-calls");
