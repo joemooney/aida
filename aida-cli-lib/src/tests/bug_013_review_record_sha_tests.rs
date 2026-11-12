@@ -371,6 +371,26 @@ fn interactive_review_anchor_refusals_are_collected_and_held() {
             "an invalid grant must not label the PR"
         );
         checks.child_grant = Some(grant);
+        // A matching head/grant from an earlier round is still not this
+        // interactive child's verdict. It must leave both hold surfaces clear.
+        // trace:BUG-2522 | ai:codex
+        let next_launch = std::time::SystemTime::now() + std::time::Duration::from_secs(60);
+        assert!(
+            crate::gate::review_verdict::collect_interactive_review_refusal(
+                root.path(),
+                2522,
+                "BUG-2522",
+                next_launch,
+                &checks,
+            )
+            .is_err(),
+            "a verdict recorded before this launch must not collect"
+        );
+        assert!(crate::gate::merge_hold_core::read_hold_record(root.path(), 2522).is_none());
+        assert!(
+            !label_calls.exists(),
+            "an earlier round must not label the PR"
+        );
         checks.head_sha = Some("0000000000000000000000000000000000000000".into());
         assert!(
             crate::gate::review_verdict::collect_interactive_review_refusal(

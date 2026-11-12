@@ -1451,6 +1451,11 @@ pub(crate) fn handle_review_spec(
     // trace:BUG-1607 | ai:claude
     let vendor = review_vendor
         .expect("review_vendor is Some whenever no_agent is false (already returned above)");
+    // Pin the head before launching: collection must verify the original
+    // review target, even if the PR moves while the interactive child runs.
+    // trace:BUG-2522 | ai:codex
+    let review_head =
+        pr_number.and_then(|pr| crate::queue_cmd::standalone_review_pr_head(project_root, pr));
     let launched_at = std::time::SystemTime::now();
     let launcher_grant = crate::gate::seat_authority::current_grant_id();
     let (status, child_grant) = review_spec_launch_reviewer(vendor, &name, &prompt, &session_id)?;
@@ -1467,10 +1472,15 @@ pub(crate) fn handle_review_spec(
     // or provenance onto the child's evidence. Refuse on unverifiable evidence.
     // trace:BUG-2522 | ai:codex
     if let Some(pr) = pr_number {
+        let current_head = crate::queue_cmd::standalone_review_pr_head(project_root, pr);
+        anyhow::ensure!(
+            review_head.is_some() && review_head == current_head,
+            "interactive review target for PR-{pr} changed or could not be verified; re-run the review"
+        );
         let checks = crate::queue_cmd::StandaloneVerdictChecks {
             project_root,
             pr,
-            head_sha: crate::queue_cmd::standalone_review_pr_head(project_root, pr),
+            head_sha: review_head,
             launcher_grant,
             child_grant: Some(child_grant),
         };
