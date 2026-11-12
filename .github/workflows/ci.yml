@@ -92,7 +92,7 @@ jobs:
       # BUG-2539: pinned to 1.99.1. Rust 1.100.0 (stable 2026-11-12) breaks
       # the live bwrap overlay test (seed: cold, target/agent has no
       # fingerprints) on every head. Unpin when BUG-2539 lands.
-      # trace:BUG-2539 | ai:claude
+      # trace:TASK-3790 | ai:claude
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@1.99.1
 
@@ -1110,7 +1110,7 @@ jobs:
       # BUG-2539: pinned to 1.99.1. Rust 1.100.0 (stable 2026-11-12) breaks
       # the live bwrap overlay test (seed: cold, target/agent has no
       # fingerprints) on every head. Unpin when BUG-2539 lands.
-      # trace:BUG-2539 | ai:claude
+      # trace:TASK-3790 | ai:claude
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@1.99.1
 
