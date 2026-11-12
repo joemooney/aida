@@ -1,3 +1,63 @@
+use crate::{
+    dead_queue_entries, merged_pr_review_entries, queue_json_rows, queue_list_json_requested,
+    review_summaries_pending_merge_check, OutputFormat, StakeholderAction, StaleLeaseRecovery,
+};
+// trace:TASK-3428 | ai:codex
+use crate::{
+    active_worktree_paths, add_aida_gitignore_entries, advisor, agent_registry, alias,
+    append_implementer_approach, apply_session_env_to_process, auto_complete, backlog,
+    blocking_rework_verdict, branch_ahead_of, branch_head_commit_message,
+    branch_unshipped_patch_count_default, brief, build_ci_fix_prompt, build_processing_record,
+    build_scaffolded_memory, canonical_review_story, capture_test_plan_disabled,
+    cascade_rebase_stacked_branches, claim, clamp_resume_start_phase,
+    classify_rebase_subprocess_exit, classify_rework_head_change, classify_unreenterable_leases,
+    classify_worktree_target, cli, collect_branch_ahead_of, collect_local_branch_commit_times,
+    collect_remote_branch_name_set, command_line_runs_aida_pr_ship, command_registry, commit,
+    commits_behind_default, compute_memory_drift_into, compute_trailer_floor, confirm, containment,
+    criteria, cross_role_queue_waiting, decide_shelve_attribution, decide_test_plan_capture,
+    detect_distributed_store_from, detect_store_path, dev_cmd, dispatch,
+    dispatch_lease_brief_conflict, docs, doctor_cmd, drain_caps, ensure_discipline_pack_scaffold,
+    ensure_ecosystem_watch_scaffold, ensure_epic_worktree_core, ensure_project_manifest_scaffold,
+    ensure_spec_worktree_core, ensure_worktree_on_disk, enter_cd_line, enter_shell_payload,
+    evaluator, events, exit_code_for_error, exposition, extract_implementer_approach, fetch_branch,
+    file_drafted_thought, filing_drift_hint, find_orchestrated_lease, find_project_root_from,
+    findings, focus, force_cleanup_lease, forge, frontmatter_field, gate, generate_review_prompt,
+    git_diff_name_only, handle_doc_suggest, handle_trace_coverage, handle_trace_gate, harvest,
+    help, hostname, human, implementer_retry_predecessor_recovery, init_cmd, intent,
+    is_linked_worktree, kernel, latest_brief_for_spec, launch, lease_id_matches, lease_ids_in,
+    lease_is_dead, lease_minted_by_returned_phase_child, lease_path, leases, leases_dir,
+    load_dispenser, load_review_story_inventory, local_main_already_at_origin, looks_like_lease_id,
+    looks_like_spec_id, main_entry, manual, measure_completed_headless_logs, memory_matches_focus,
+    memory_refresh_disposition, network_retry, normalize_doctor_category,
+    orchestrated_lease_owner_alive, orchestrator, parse_pr_number_from_url,
+    parse_worktree_branches, phase_heartbeat_line, plural, pr_attribution_disagreement, pr_cmd,
+    pr_number_from_scope, pr_open_spec_guard_violation, pr_publication_spec_guard_violation,
+    pr_rebase, prepare_graded_review, probe_lease_death_facts, probe_resume_facts, process_probe,
+    prompts, pull_noop_warning, punt, questions, queue_cmd, read_commits_in_range,
+    read_diff_for_range, read_drain_config, recent_files_for_branch,
+    reclaim_implementer_retry_predecessor, reclaim_implementer_retry_predecessor_with,
+    reconcile_orchestrated_branch, redact_secrets, release_dead_leases_for_resume,
+    release_dead_phase_predecessor_leases, release_unmerged_pr_warning, remote_create,
+    render_drafted_thought_preview, render_session_env_file, require_review_handoff,
+    resolve_completed_since_cutoff_at, resolve_queue_work_launch, resolve_resume_id,
+    resume_command_with_cwd, review_prompt_test_commands_section, rework_no_op_message, role, run,
+    run_pr_open_spec_guard, run_zen_drive, salvage_worktree_patch, scaffold_memory_pack_into,
+    schema, scope_conflict_lease_failure, scoped_worktree_for_exit, session,
+    session_end_cross_role_warning, session_env_eval_lines, session_env_unset_names,
+    session_harness_worktree_register, session_manifest, shell_single_quote, ship,
+    specs_referenced_in_range, split_md_frontmatter, stacks, stakeholder_action_allowed,
+    stakeholder_cli_action, stale_base_file_overlap, stale_base_note, store_cmd, swapped_branch,
+    tail_bounded, team, test_env, test_exec, test_git, trace, trusted_session_env,
+    unrecognized_usage_diagnostic, unreenterable_lease_message, update_lease_branch, usage,
+    validate_trailer_references, vendor_activity, watch, watchdog_progress_signal_for_phase, wiki,
+    worktree, worktree_gc, worktree_porcelain, wrapper_marker_has_cap,
+    write_discipline_pack_entries, zen, zen_drive, AutoQueueOutcome, BriefListEntry,
+    DisciplinePackScaffoldReport, HashSet, LeaseDeathFacts, MemoryDisposition, MemoryDriftState,
+    PhaseWatchdog, QueueWorkLaunch, RealPhaseDriver, RequirementStatus, RequirementType,
+    RequirementsStore, ReviewForge, ReworkHeadChange, SessionLease, ShelveAttribution,
+    SpecResolution, StaleLeaseRecoveryReport, Storage, TestPlanCapture, UnreenterableLeases, Uuid,
+    WatchdogProgressSignal, WorktreeTarget, IMPLEMENTER_APPROACH_MARKER,
+};
 #[cfg(test)]
 #[path = "tests/queue_work_resume_tests.rs"]
 mod queue_work_resume_tests;
@@ -20,14 +80,6 @@ mod bug_013_review_record_sha_tests;
 #[cfg(test)]
 #[path = "tests/drain_reliability_wiring_tests.rs"]
 mod drain_reliability_wiring_tests;
-
-pub(crate) fn truncate_str(s: &str, max: usize) -> String {
-    if s.len() <= max {
-        s.to_string()
-    } else {
-        format!("{}...", &s[..max.saturating_sub(3)])
-    }
-}
 
 #[cfg(test)]
 #[path = "tests/story_255_discipline_pack_tests.rs"]
@@ -256,8 +308,6 @@ mod bug_1670_stale_cache_callers_tests;
 #[path = "tests/bug_1799_carry_forward_tests.rs"]
 mod bug_1799_carry_forward_tests;
 
-pub mod worktree_dismiss;
-
 #[cfg(test)]
 #[path = "tests/bug_1800_worktree_undecidable_cache_tests.rs"]
 mod bug_1800_worktree_undecidable_cache_tests;
@@ -282,10 +332,9 @@ mod bug_1807_handoff_tests {
     #[test]
     fn reviewer_pickup_commands_parse_for_both_forges() {
         for label in ["MR-35", "PR-35"] {
-            assert!(crate::command_registry::try_parse_from([
-                "aida", "queue", "work", label, "--role", "reviewer"
-            ])
-            .is_ok());
+            assert!(crate::TEST_CLI
+                .try_parse_from(["aida", "queue", "work", label, "--role", "reviewer"])
+                .is_ok());
         }
     }
 

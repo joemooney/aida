@@ -363,9 +363,9 @@ aida-cli-lib/src/launch/profile.rs|impl(VendorProfile:)::finalize|typed:Codex	1
 aida-cli-lib/src/launch/profile.rs|impl(VendorProfile:)::finalize|typed:LaunchVendor	3
 aida-cli-lib/src/launch/profile.rs|impl(VendorProfile:)::for_vendor|typed:LaunchVendor	1
 aida-cli-lib/src/launch/profile.rs|use|typed:LaunchVendor	1
-aida-cli-lib/src/lib_part2.rs|apply_agent_default_flags|literal:claude	6
-aida-cli-lib/src/lib_part2.rs|apply_agent_default_flags|literal:codex	1
-aida-cli-lib/src/lib_part2.rs|refuse_uncontainable_agent_tool|typed:HeadlessVendor	1
+aida-cli-lib/src/launch_defaults.rs|apply_agent_default_flags|literal:claude	6
+aida-cli-lib/src/launch_defaults.rs|apply_agent_default_flags|literal:codex	1
+aida-cli-lib/src/launch_defaults.rs|refuse_uncontainable_agent_tool|typed:HeadlessVendor	1
 aida-cli-lib/src/lib_part5.rs|handle_derisk_command|typed:Agy	1
 aida-cli-lib/src/lib_part5.rs|handle_derisk_command|typed:Claude	1
 aida-cli-lib/src/lib_part5.rs|handle_derisk_command|typed:Codex	1

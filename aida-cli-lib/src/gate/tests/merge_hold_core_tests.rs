@@ -265,11 +265,37 @@ fn label_only_clear_is_recorded_as_the_human_principal() {
         "{}\n{}\n{}\n{}\n{}\n{}\n{}\n{}",
         include_str!("../../lib.rs"),
         include_str!("../../lib_part1.rs"),
-        include_str!("../../lib_part2.rs"),
+        concat!(
+            include_str!("../../retire_legacy.rs"),
+            "\n",
+            include_str!("../../glossary_render.rs"),
+            "\n",
+            include_str!("../../role_file_helpers.rs"),
+            "\n",
+            include_str!("../../mailbox_errors.rs"),
+            "\n",
+            include_str!("../../human_route.rs"),
+            "\n",
+            include_str!("../../store_drift.rs"),
+            "\n",
+            include_str!("../../launch_defaults.rs"),
+            "\n",
+            include_str!("../../merge_hold_output.rs"),
+            "\n",
+            include_str!("../../history_reporting.rs")
+        ),
         include_str!("../../lib_part3.rs"),
-        include_str!("../../lib_part4.rs"),
+        concat!(concat!(
+            include_str!("../../scoped_lease.rs"),
+            "\n",
+            include_str!("../../pull_lines.rs")
+        )),
         include_str!("../../lib_part5.rs"),
-        include_str!("../../lib_part6.rs"),
+        concat!(
+            include_str!("../../regression_tests.rs"),
+            "\n",
+            include_str!("../../text_truncate.rs")
+        ),
         include_str!("../../merge_hold_cmd.rs")
     );
     let clear = lib_source
@@ -333,11 +359,37 @@ fn list_surfaces_a_tampered_pr_and_its_empty_state_cannot_swallow_it() {
         "{}\n{}\n{}\n{}\n{}\n{}\n{}\n{}",
         include_str!("../../lib.rs"),
         include_str!("../../lib_part1.rs"),
-        include_str!("../../lib_part2.rs"),
+        concat!(
+            include_str!("../../retire_legacy.rs"),
+            "\n",
+            include_str!("../../glossary_render.rs"),
+            "\n",
+            include_str!("../../role_file_helpers.rs"),
+            "\n",
+            include_str!("../../mailbox_errors.rs"),
+            "\n",
+            include_str!("../../human_route.rs"),
+            "\n",
+            include_str!("../../store_drift.rs"),
+            "\n",
+            include_str!("../../launch_defaults.rs"),
+            "\n",
+            include_str!("../../merge_hold_output.rs"),
+            "\n",
+            include_str!("../../history_reporting.rs")
+        ),
         include_str!("../../lib_part3.rs"),
-        include_str!("../../lib_part4.rs"),
+        concat!(concat!(
+            include_str!("../../scoped_lease.rs"),
+            "\n",
+            include_str!("../../pull_lines.rs")
+        )),
         include_str!("../../lib_part5.rs"),
-        include_str!("../../lib_part6.rs"),
+        concat!(
+            include_str!("../../regression_tests.rs"),
+            "\n",
+            include_str!("../../text_truncate.rs")
+        ),
         include_str!("../../merge_hold_cmd.rs")
     );
     let list = lib_source
@@ -1143,11 +1195,37 @@ fn explicit_reconciliation_refreshes_routes_and_render_stays_read_only() {
         "{}\n{}\n{}\n{}\n{}\n{}\n{}\n{}\n{}",
         include_str!("../../lib.rs"),
         include_str!("../../lib_part1.rs"),
-        include_str!("../../lib_part2.rs"),
+        concat!(
+            include_str!("../../retire_legacy.rs"),
+            "\n",
+            include_str!("../../glossary_render.rs"),
+            "\n",
+            include_str!("../../role_file_helpers.rs"),
+            "\n",
+            include_str!("../../mailbox_errors.rs"),
+            "\n",
+            include_str!("../../human_route.rs"),
+            "\n",
+            include_str!("../../store_drift.rs"),
+            "\n",
+            include_str!("../../launch_defaults.rs"),
+            "\n",
+            include_str!("../../merge_hold_output.rs"),
+            "\n",
+            include_str!("../../history_reporting.rs")
+        ),
         include_str!("../../lib_part3.rs"),
-        include_str!("../../lib_part4.rs"),
+        concat!(concat!(
+            include_str!("../../scoped_lease.rs"),
+            "\n",
+            include_str!("../../pull_lines.rs")
+        )),
         include_str!("../../lib_part5.rs"),
-        include_str!("../../lib_part6.rs"),
+        concat!(
+            include_str!("../../regression_tests.rs"),
+            "\n",
+            include_str!("../../text_truncate.rs")
+        ),
         include_str!("../../merge_hold_cmd.rs"),
         include_str!("../../status_awaiting.rs")
     )
