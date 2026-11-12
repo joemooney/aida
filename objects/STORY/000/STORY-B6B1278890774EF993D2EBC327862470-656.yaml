@@ -23,7 +23,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-12T17:36:24.142897628Z
-modified_at: 2026-11-12T19:16:08.474391428Z
+modified_at: 2026-11-12T19:38:56.290841536Z
 req_type: Story
 relationships:
 - rel_type:
@@ -94,6 +94,12 @@ comments:
   created_at: 2026-11-12T18:53:45.813314757Z
   modified_at: 2026-11-12T18:53:45.813314757Z
   session_id: 01a1d0dd083a
+- id: 01a1d145-35a2-70a3-945f-2776aa1c522d
+  author: joe
+  content: 'Rework approach for PR #3896: address the reviewer P2 audit-lifecycle finding in pr_train.rs and pr_train_verified.rs, with lifecycle coverage in story_1690_train_tests.rs and bug2406_train_tests.rs. Unit lifecycle test proves an audit change requires rebuild before hold release; real-builder/final-consumer fixtures prove retained audit validation after marker removal, for unchanged evidence, replacement mandate and changed protected paths. Exact help snapshot regeneration is queued to fix the CI ordering mismatch. LIGHT validation via lane jobs: mandate filter and make check-ci-fast, plus help golden test. No contract ambiguity or new design fork. This native seat cannot promote Needs Attention to InProgress: CLI requires advisor authority despite the binding advisor ruling in the launch prompt; leaving status unchanged rather than elevating roles.'
+  created_at: 2026-11-12T19:38:56.290841536Z
+  modified_at: 2026-11-12T19:38:56.290841536Z
+  session_id: 01a1d13f7835
 history:
 - id: 01a1d0d5-4f50-78f1-be14-90e8c89718c8
   author: joe
