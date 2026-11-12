@@ -225,7 +225,8 @@ fn pr_state_twenty_rows_classify_within_budget() {
 }
 #[test]
 fn pr_state_cli_registration() {
-    let cli = crate::command_registry::try_parse_from(["aida", "pr", "state", "--format", "json"])
+    let cli = crate::TEST_CLI
+        .try_parse_from(["aida", "pr", "state", "--format", "json"])
         .unwrap();
     assert!(matches!(
         cli.globals.format,
@@ -233,10 +234,14 @@ fn pr_state_cli_registration() {
     ));
     let args = cli.command.registered::<crate::pr_cmd::PrArgs>();
     assert!(matches!(args.inner, crate::pr_cmd::PrCommand::State(_)));
-    let cli = crate::command_registry::try_parse_from(["aida", "pr", "state", "--json"]).unwrap();
+    let cli = crate::TEST_CLI
+        .try_parse_from(["aida", "pr", "state", "--json"])
+        .unwrap();
     let args = cli.command.registered::<crate::pr_cmd::PrArgs>();
     assert!(matches!(&args.inner, crate::pr_cmd::PrCommand::State(args) if args.json));
-    assert!(crate::command_registry::try_parse_from(["aida", "pr", "state", "--execute"]).is_err());
+    assert!(crate::TEST_CLI
+        .try_parse_from(["aida", "pr", "state", "--execute"])
+        .is_err());
 }
 
 fn row(n: u64) -> serde_json::Value {

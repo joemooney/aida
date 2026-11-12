@@ -175,14 +175,9 @@ mod tests {
 
     #[test]
     fn story1673_cli_parses_only_explicit_constraints_command() {
-        let cli = crate::command_registry::try_parse_from([
-            "aida",
-            "verify",
-            "constraints",
-            "--json",
-            "--fail-on-drift",
-        ])
-        .unwrap();
+        let cli = crate::TEST_CLI
+            .try_parse_from(["aida", "verify", "constraints", "--json", "--fail-on-drift"])
+            .unwrap();
         assert!(matches!(
             cli.command.registered::<crate::verify_cmd::VerifyArgs>(),
             crate::verify_cmd::VerifyArgs {
@@ -205,7 +200,7 @@ mod tests {
                 "touch sentinel",
             ],
         ] {
-            assert!(crate::command_registry::try_parse_from(args).is_err());
+            assert!(crate::TEST_CLI.try_parse_from(args).is_err());
         }
     }
 
@@ -274,28 +269,21 @@ mod tests {
         assert!(!fails_on_unknown(&rows, true));
         // --fail-on-unknown is opt-in on top of --fail-on-drift.
         // trace:TASK-1954 | ai:claude  trace:TASK-1796 | ai:claude
-        assert!(crate::command_registry::try_parse_from([
-            "aida",
-            "verify",
-            "constraints",
-            "--fail-on-unknown"
-        ])
-        .is_err());
-        assert!(crate::command_registry::try_parse_from([
-            "aida",
-            "verify",
-            "constraints",
-            "--fail-on-drift",
-            "--fail-on-unknown"
-        ])
-        .is_ok());
-        assert!(crate::command_registry::try_parse_from([
-            "aida",
-            "verify",
-            "constraints",
-            "--verbose"
-        ])
-        .is_ok());
+        assert!(crate::TEST_CLI
+            .try_parse_from(["aida", "verify", "constraints", "--fail-on-unknown"])
+            .is_err());
+        assert!(crate::TEST_CLI
+            .try_parse_from([
+                "aida",
+                "verify",
+                "constraints",
+                "--fail-on-drift",
+                "--fail-on-unknown"
+            ])
+            .is_ok());
+        assert!(crate::TEST_CLI
+            .try_parse_from(["aida", "verify", "constraints", "--verbose"])
+            .is_ok());
     }
 }
 

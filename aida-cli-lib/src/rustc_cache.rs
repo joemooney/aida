@@ -204,8 +204,9 @@ mod tests {
 
     #[test]
     fn task_2324_cli_requires_explicit_fix() {
-        let parsed =
-            crate::command_registry::try_parse_from(["aida", "doctor", "rustc-cache"]).unwrap();
+        let parsed = crate::TEST_CLI
+            .try_parse_from(["aida", "doctor", "rustc-cache"])
+            .unwrap();
         let args = parsed.command.registered::<crate::doctor_cmd::DoctorArgs>();
         assert!(matches!(
             args.cmd,

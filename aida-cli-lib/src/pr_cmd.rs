@@ -9899,7 +9899,8 @@ mod story_1663_rebase_ship_tests {
     #[test]
     fn cli_parses_rebase_and_merge_method_and_rejects_final_slice_with_squash() {
         // trace:STORY-1663.ac5970a5 | ai:antigravity
-        let cli = crate::command_registry::try_parse_from(["aida", "pr", "ship", "42", "--rebase"])
+        let cli = crate::TEST_CLI
+            .try_parse_from(["aida", "pr", "ship", "42", "--rebase"])
             .expect("parses --rebase");
         match cli.command.registered::<crate::pr_cmd::PrArgs>() {
             crate::pr_cmd::PrArgs {
@@ -9924,16 +9925,17 @@ mod story_1663_rebase_ship_tests {
             other => panic!("unexpected command: {other:?}"),
         }
 
-        let cli2 = crate::command_registry::try_parse_from([
-            "aida",
-            "pr",
-            "ship",
-            "42",
-            "--merge-method",
-            "rebase",
-            "--final-slice",
-        ])
-        .expect("parses --merge-method rebase --final-slice");
+        let cli2 = crate::TEST_CLI
+            .try_parse_from([
+                "aida",
+                "pr",
+                "ship",
+                "42",
+                "--merge-method",
+                "rebase",
+                "--final-slice",
+            ])
+            .expect("parses --merge-method rebase --final-slice");
         match cli2.command.registered::<crate::pr_cmd::PrArgs>() {
             crate::pr_cmd::PrArgs {
                 inner:
@@ -9955,15 +9957,9 @@ mod story_1663_rebase_ship_tests {
             other => panic!("unexpected command: {other:?}"),
         }
 
-        let cli3 = crate::command_registry::try_parse_from([
-            "aida",
-            "pr",
-            "ship",
-            "42",
-            "--rebase",
-            "--complete-spec",
-        ])
-        .expect("parses --complete-spec alias");
+        let cli3 = crate::TEST_CLI
+            .try_parse_from(["aida", "pr", "ship", "42", "--rebase", "--complete-spec"])
+            .expect("parses --complete-spec alias");
         match cli3.command.registered::<crate::pr_cmd::PrArgs>() {
             crate::pr_cmd::PrArgs {
                 inner:
@@ -9980,16 +9976,17 @@ mod story_1663_rebase_ship_tests {
         }
 
         // Conflicting --rebase and --merge-method is rejected by clap.
-        assert!(crate::command_registry::try_parse_from([
-            "aida",
-            "pr",
-            "ship",
-            "42",
-            "--rebase",
-            "--merge-method",
-            "squash"
-        ])
-        .is_err());
+        assert!(crate::TEST_CLI
+            .try_parse_from([
+                "aida",
+                "pr",
+                "ship",
+                "42",
+                "--rebase",
+                "--merge-method",
+                "squash"
+            ])
+            .is_err());
 
         // --final-slice without --rebase or --merge-method rebase is rejected.
         let err = pr_ship::validate_ship_merge_method(false, None, true)
