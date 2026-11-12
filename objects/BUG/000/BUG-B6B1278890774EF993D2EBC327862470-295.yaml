@@ -8,8 +8,16 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-12T06:22:01.808701892Z
-modified_at: 2026-11-12T06:24:07.006856101Z
+modified_at: 2026-11-12T06:30:42.007785730Z
 req_type: Bug
+comments:
+- id: 01a1ce73-8e57-74c1-9bd7-47adb97b7de6
+  author: dirtlab
+  content: 'Implemented exact-head conclusive-verdict refusal for reviewer queue pickup, direct review launch and manual claims. Shared marker merge/readiness gates ignore a claim opened strictly after an attested approval at the same head, retaining the marker and ordinary approval/hold gates. Waiting/unknown verdicts remain reviewable. Changed gate/review_marker.rs, gate/tests/review_marker_tests.rs, lib_part5.rs and queue_cmd/work.rs. Validation: lane job j20261112T062542973-2-0 ran cargo test --profile agent -p aida-cli-lib --lib -- review_marker: 25 passed; rustfmt --check on all changed Rust files and git diff --check passed. Native seat leaves edits uncommitted for host publication. Supplied codegraph client is missing; doctor confirms missing tool, so navigation used rg.'
+  created_at: 2026-11-12T06:30:42.007785730Z
+  modified_at: 2026-11-12T06:30:42.007785730Z
+  session_id: 01a1ce6d28cf
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1ce6b-e20b-7292-b292-11cde6834d42
   author: joe
