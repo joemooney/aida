@@ -1470,21 +1470,7 @@ pub(crate) fn dropped_structural_tags(
     old_tags: &HashSet<String>,
     new_tags: &HashSet<String>,
 ) -> Vec<String> {
-    const PREFIXES: &[&str] = &[
-        "parent:",
-        "batch:",
-        "lane:",
-        "severity:",
-        "lifecycle:",
-        "aida:",
-    ];
-    let mut dropped: Vec<String> = old_tags
-        .difference(new_tags)
-        .filter(|tag| PREFIXES.iter().any(|prefix| tag.starts_with(prefix)))
-        .cloned()
-        .collect();
-    dropped.sort();
-    dropped
+    aida_core::db::canonical_mutation::dropped_structural_tags(old_tags, new_tags)
 }
 
 pub fn enforce_structural_tag_replacement(
