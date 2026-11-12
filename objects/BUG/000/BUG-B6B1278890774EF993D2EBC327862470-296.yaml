@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-12T08:35:37.046532324Z
-modified_at: 2026-11-12T13:42:30.708671866Z
+modified_at: 2026-11-12T13:51:56.422636650Z
 req_type: Bug
 comments:
 - id: 01a1cf00-20ea-7c51-bbf5-a9927b13b042
@@ -118,6 +118,13 @@ comments:
     Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
   created_at: 2026-11-12T13:42:30.478735289Z
   modified_at: 2026-11-12T13:42:30.478735289Z
+  session_id: 01a1ceeb-e827-7832-8991-e83d9eb95cef
+  harness_version: 2.1.322 (Claude Code)
+- id: 01a1d007-8606-7973-8f7a-2f68c138c7d4
+  author: joe
+  content: 'ADVISOR RULING (2026-11-12 06:52 MST): after 4 review rounds, split. PR #3872 lands as slice 1 with a (Refs BUG-2531) trailer: the raised discovery budget/ceiling is a real mitigation, and the two P2 findings of the 13:30Z review (checked.rs:378 discovery still parses every active ledger; no automatic closed/merged-ledger archival) are ACCEPTED for this slice and become slice 2 of the same spec, not new drafts. Reviewers: judge #3872 only on slice-1 correctness (no regressions, budget enforced, tests). Implementer: change the PR''s trailer to Refs, state the split in the PR body, and do not grow #3872. Slice 2 (next lane, new branch): selection reads only ledgers relevant to the requested change/spec, and merge/close archives the change''s ledger automatically (the manual 2026-11-12 01:35 archival must never be needed again).'
+  created_at: 2026-11-12T13:51:56.422636650Z
+  modified_at: 2026-11-12T13:51:56.422636650Z
   session_id: 01a1ceeb-e827-7832-8991-e83d9eb95cef
   harness_version: 2.1.322 (Claude Code)
 history:
