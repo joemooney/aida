@@ -1,0 +1,34 @@
+id: 01a1d128-e549-7ce3-a4bc-7265b7549346
+spec_id: STORY-b6b1278890774ef993d2ebc327862470-659
+agreed_id: STORY-2736
+title: 'Review PR-3896: [AI:codex] feat(mandate): --include-gate-paths lets mandate trains take protected-path PRs (STORY-2733)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a1d0dd`) for branch `story-2733-gate-paths`.
+
+  - PR: <https://github.com/joemooney/aida/pull/3896>
+  - Branch: `story-2733-gate-paths` → `main`
+
+  ## Covers
+
+  - STORY-2733
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 3896` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-12T19:08:00.713440741Z
+modified_at: 2026-11-12T19:08:00.713440741Z
+req_type: Story
+filed_at:
+  code_sha: 0d6c60e6d982aad0c2c4ad38214010289a267d92
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 0d6c60e6d98
+  vendor: claude
+  session: 01a1d0dd083a
