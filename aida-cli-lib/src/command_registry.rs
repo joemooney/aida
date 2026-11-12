@@ -11,9 +11,9 @@ use anyhow::Result;
 use clap::{ArgMatches, CommandFactory, FromArgMatches};
 
 use crate::cli::{Cli, Command, GlobalArgs};
-// Preserve the existing framework import paths.
-// trace:TASK-3425 | ai:codex
-pub use crate::cmdkit::*;
+// Framework types live in cmdkit; consumers import them from there directly.
+// trace:TASK-3448 | ai:claude
+use crate::cmdkit::{CommandReg, DispatchCtx, Flow, Invocation};
 
 /// Every registered command, sorted by command name (byte order) so parallel
 /// additions rarely touch the same line.
@@ -291,6 +291,13 @@ pub(crate) fn help_order<'a>(
         }
     }
     Ok(order)
+}
+
+/// Supply the production tree and decoder to the test composition root.
+// trace:TASK-3448 | ai:codex
+#[cfg(test)]
+pub(crate) const fn test_support() -> crate::cmdkit::testing::CliTestSupport<Cli> {
+    crate::cmdkit::testing::CliTestSupport::new(built_command, cli_from_matches)
 }
 
 /// Parse argv against [`built_command`]; clap's own error on failure.
