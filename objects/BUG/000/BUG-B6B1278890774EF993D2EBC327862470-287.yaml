@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-11T04:48:14.810158291Z
-modified_at: 2026-11-12T11:41:48.629547884Z
+modified_at: 2026-11-12T11:59:19.012813281Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -183,6 +183,12 @@ comments:
   content: 'Round 2 addresses review finding 1 (P1): move interactive refusal collection/hold orchestration out of gate/review_verdict.rs to merge_hold.rs, alongside the existing forge/hold plumbing. Protected collect_standalone_verdict retains all head/grant/freshness validation; the interactive parent still collects before adoption/re-recording. Existing refusal recovery/label regressions now call the relocated helper. No gate allow-list expansion. Targeted lane tests pending. Spec status remains Needs Attention because the implementer status transition requires advisor authority.'
   created_at: 2026-11-12T11:41:48.629547884Z
   modified_at: 2026-11-12T11:41:48.629547884Z
+  session_id: 01a1cf8de7c6
+- id: 01a1cfa0-69e4-7740-be5a-56f5275e89bf
+  author: joe
+  content: 'Round 2 source fix ready, left uncommitted for native host publication. Four files: gate/review_verdict.rs (remove orchestration helper), merge_hold.rs (relocate it), lib_part5.rs (update caller), tests/bug_013_review_record_sha_tests.rs (retain regressions at the new orchestration boundary). rustfmt --check for all changed files and git diff --check passed. untested=true: dispatch-boundary run j20261112T114015144-2-0 timed out compiling after 900s, exit 124, no tests executed. Kernel-boundary j20261112T114103753-340451-0 remains compiling; review-record suite j20261112T114109757-340857-0 and longer dispatch retry j20261112T115606267-2-0 remain queued. Host must finish validation before completion. No finding disputed. Codegraph host client missing. Needs Attention status retained following advisor-authority refusal.'
+  created_at: 2026-11-12T11:59:19.012813281Z
+  modified_at: 2026-11-12T11:59:19.012813281Z
   session_id: 01a1cf8de7c6
 history:
 - id: 01a1c8ef-b4bc-7b62-a163-3209968104a9
