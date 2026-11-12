@@ -965,7 +965,7 @@ fn bug_2517_spec_only_never_binds_or_projects_and_related_changes_scan_once() {
             root.path(),
             ChangeKey::pr(n),
             &set,
-            Budget::with_limits(corpus + hints, 100),
+            Budget::with_limits(corpus + hints, 6),
         )
         .unwrap();
         assert!(view.unbound.is_empty());
@@ -977,10 +977,104 @@ fn bug_2517_spec_only_never_binds_or_projects_and_related_changes_scan_once() {
             1
         );
     }
+    // Reusing discovery must not relax the operation's aggregate byte cap.
+    assert!(load_view_with_budget(
+        root.path(),
+        ChangeKey::pr(3185),
+        &set,
+        Budget::with_limits(corpus + hints - 1, 6),
+    )
+    .is_err());
     assert_eq!(
         crate::gate::ledger::store::read_unbound(root.path(), "BUG-2403").len(),
         2
     );
+}
+
+// trace:BUG-2517 | ai:codex
+#[test]
+fn bug_2517_direct_gate_views_ignore_explicit_spec_only_records() {
+    let r = subject();
+    for word in ["waiting", "approved"] {
+        let mut local = verdict_ev(1, Some("BUG-2403"), word, HEAD_A);
+        if let EventBody::Verdict { record } = &mut local.body {
+            record.insert("change_binding".into(), "unbound".into());
+        }
+        // Both the original spec sequence and a copy made by an older binder
+        // must have no effect on the named change, even at its exact head.
+        for copied in [false, true] {
+            let mut v = view(Vec::new());
+            if copied {
+                v.change_events.push(local.clone());
+            } else {
+                v.unbound.insert(SpecKey(r.id), vec![local.clone()]);
+            }
+            let s = state(&[r.clone()], &["BUG-2403"], &v, HEAD_A);
+            assert_eq!(s.verdict, Verdict::Absent, "{word}, copied={copied}");
+            assert!(refusals(&s).contains(&Refusal::NoApproval));
+        }
+    }
+}
+
+// trace:BUG-2517 | ai:codex
+#[test]
+fn bug_2517_local_records_stay_unbound_through_open_record_and_collect() {
+    use crate::gate::ledger::{self, store};
+    for word in ["waiting", "approved"] {
+        let root = tempfile::tempdir().unwrap();
+        let _ambient = crate::test_env::AmbientGuard::hermetic_and(
+            root.path(),
+            None,
+            &[("AIDA_CONTAINED", None)],
+        );
+        let r = subject();
+        let set = snapshot(&[r.clone()]).resolve(&["BUG-2403"]);
+        let spec = crate::gate::canon::GateSpec::with_key("BUG-2403", Some(SpecKey(r.id)));
+        let local_path = crate::gate::review_verdict::verdict_path(root.path(), "BUG-2403");
+        let mut local = record(word, HEAD_A, &at(1), &[]);
+        local.insert("change_binding".into(), "unbound".into());
+        ledger::record_verdict_at(&local_path, &local, Some(&spec)).unwrap();
+        let unbound_path = root.path().join(".aida/gate-ledger/by-spec/BUG-2403.jsonl");
+        let original = std::fs::read(&unbound_path).unwrap();
+        for n in [3185, 3194] {
+            let change = ChangeKey::pr(n);
+            ledger::bind_specs(root.path(), change, &[spec.clone()]);
+            assert!(!store::ledger_file(root.path(), change).exists());
+            let v = load_view(root.path(), change, &set).unwrap();
+            assert!(v.unbound.is_empty());
+            assert_eq!(
+                effective_gate_state(HEAD_A, &set, &v, &drain()).verdict,
+                Verdict::Absent
+            );
+
+            let own = record("request-changes", HEAD_A, &at(2), &["own defect"]);
+            let change_path =
+                crate::gate::review_verdict::verdict_path(root.path(), &change.as_key());
+            ledger::record_verdict_at(&change_path, &own, Some(&spec)).unwrap();
+            let collected = record("waiting", HEAD_A, &at(3), &[]);
+            ledger::record_collected_verdict(
+                root.path(),
+                change,
+                &collected,
+                &[(spec.clone(), collected.clone())],
+            )
+            .unwrap();
+            let events = store::read_file(root.path(), change);
+            assert_eq!(
+                events
+                    .iter()
+                    .filter(|e| e.verdict_record().is_some())
+                    .count(),
+                3
+            );
+            assert!(events.iter().all(|e| !e.is_spec_only()));
+            assert!(load_view(root.path(), change, &set)
+                .unwrap()
+                .unbound
+                .is_empty());
+            assert_eq!(std::fs::read(&unbound_path).unwrap(), original);
+        }
+    }
 }
 
 // trace:STORY-2696 | ai:codex

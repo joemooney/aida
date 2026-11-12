@@ -2594,3 +2594,67 @@ fn review_risk_is_ledger_metadata_not_verdict_authority() {
         .risk
         .is_none());
 }
+
+// trace:BUG-2517 | ai:codex
+#[test]
+fn bug_2517_discovery_keeps_spec_reads_on_the_pinned_directory() {
+    let (_tmp, root) = root();
+    let spec = GateSpec::with_key("BUG-2517", None);
+    let local = record("waiting", &ts(1), None);
+    store::append_unbound(&root, &spec, &local).unwrap();
+    let mut budget = checked::Budget::default();
+    let discovery = checked::discover(&root, &mut budget).unwrap().unwrap();
+    let by_spec = ledger_dir(&root).join("by-spec");
+    std::fs::rename(&by_spec, ledger_dir(&root).join("old-by-spec")).unwrap();
+    std::fs::create_dir(&by_spec).unwrap();
+    // Replacement evidence must not enter a gate operation already reading
+    // through the old directory. A fresh operation must still refuse it.
+    std::fs::write(by_spec.join("BUG-2517.jsonl"), b"torn replacement").unwrap();
+    let (events, changes) = discovery.spec_entries("BUG-2517", &mut budget).unwrap();
+    assert_eq!(events.len(), 1);
+    assert_eq!(events[0].verdict_record(), Some(&local));
+    assert!(changes.is_empty());
+    let fresh = checked::discover(&root, &mut checked::Budget::default())
+        .unwrap()
+        .unwrap();
+    assert!(fresh
+        .spec_entries("BUG-2517", &mut checked::Budget::default())
+        .is_err());
+}
+
+// trace:BUG-2517 | ai:codex
+#[test]
+fn bug_2517_historical_spec_only_copy_has_no_change_authority() {
+    let (_tmp, root) = root();
+    let _env = uncontained();
+    let spec = GateSpec::with_key("BUG-2517", None);
+    let change = ChangeKey::pr(2517);
+    let own = record("approved", &ts(1), None);
+    store::append_one(
+        &root,
+        event::verdict_event(&root, change, &own, Some(&spec)),
+    )
+    .unwrap();
+    let mut local = record("waiting", &ts(2), None);
+    local.insert("change_binding".into(), "unbound".into());
+    store::append_unbound(&root, &spec, &local).unwrap();
+    // Model an old binder's copy, without granting the marker new authority.
+    store::append_one(
+        &root,
+        event::verdict_event(&root, change, &local, Some(&spec)),
+    )
+    .unwrap();
+    let path = store::ledger_file(&root, change);
+    let before = std::fs::read(&path).unwrap();
+    assert_eq!(project::newest_verdict(&root, "PR-2517"), Some(own));
+    assert_eq!(project::newest_verdict(&root, "BUG-2517"), Some(local));
+    assert_eq!(
+        checked::read_change_events(&root, change, &mut Default::default())
+            .unwrap()
+            .iter()
+            .filter(|e| e.verdict_record().is_some())
+            .count(),
+        1
+    );
+    assert_eq!(std::fs::read(path).unwrap(), before);
+}

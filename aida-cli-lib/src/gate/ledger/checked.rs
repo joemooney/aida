@@ -483,44 +483,47 @@ pub(crate) fn read_change_events(
         .unwrap_or_default())
 }
 
-/// STORY-2324: the `by-spec` entries for one spec `label` under `root`, read
-/// strictly: its unbound verdict events and the changes its index names.
-/// Both empty when absent.
-// trace:STORY-2324 | ai:claude
-pub(crate) fn read_spec_entries(
-    root: &Path,
-    label: &str,
-    budget: &mut Budget,
-) -> Result<(Vec<GateEvent>, Vec<ChangeKey>), Unsafe> {
-    let spec = spec_key(label).ok_or_else(|| Unsafe(format!("{label:?} is not a spec label")))?;
-    let Some((_, Some(by_spec))) = ledger_dirs(root)? else {
-        return Ok((Vec::new(), Vec::new()));
-    };
-    let unbound_name = format!("{spec}.jsonl");
-    let unbound = match read_entry(&by_spec, &unbound_name, MAX_LEDGER_BYTES, budget)? {
-        Some(body) => parse_events(&unbound_name, &body, &spec, budget)?
-            .into_iter()
-            .filter(|e| e.verdict_record().is_some())
-            .collect(),
-        None => Vec::new(),
-    };
-    let index_name = format!("{spec}.json");
-    let mut changes = Vec::new();
-    if let Some(body) = read_entry(&by_spec, &index_name, MAX_INDEX_BYTES, budget)? {
-        let index: SpecIndex = serde_json::from_slice(&body)
-            .map_err(|e| Unsafe(format!("refusing gate-ledger index {index_name}: {e}")))?;
-        if index.changes.len() > MAX_CHANGES_PER_SPEC {
-            return Err(Unsafe(format!(
-                "refusing gate-ledger index {index_name}: it names more than {MAX_CHANGES_PER_SPEC} changes"
-            )));
+impl Discovery {
+    /// Read a member's unbound evidence and index through this operation's pinned
+    /// by-spec directory, sharing the same budget as the change discovery.
+    // trace:STORY-2324 | ai:claude
+    // trace:BUG-2517 | ai:codex
+    pub(crate) fn spec_entries(
+        &self,
+        label: &str,
+        budget: &mut Budget,
+    ) -> Result<(Vec<GateEvent>, Vec<ChangeKey>), Unsafe> {
+        let spec =
+            spec_key(label).ok_or_else(|| Unsafe(format!("{label:?} is not a spec label")))?;
+        let Some(by_spec) = &self.by_spec else {
+            return Ok((Vec::new(), Vec::new()));
+        };
+        let unbound_name = format!("{spec}.jsonl");
+        let unbound = match read_entry(by_spec, &unbound_name, MAX_LEDGER_BYTES, budget)? {
+            Some(body) => parse_events(&unbound_name, &body, &spec, budget)?
+                .into_iter()
+                .filter(|e| e.verdict_record().is_some())
+                .collect(),
+            None => Vec::new(),
+        };
+        let index_name = format!("{spec}.json");
+        let mut changes = Vec::new();
+        if let Some(body) = read_entry(by_spec, &index_name, MAX_INDEX_BYTES, budget)? {
+            let index: SpecIndex = serde_json::from_slice(&body)
+                .map_err(|e| Unsafe(format!("refusing gate-ledger index {index_name}: {e}")))?;
+            if index.changes.len() > MAX_CHANGES_PER_SPEC {
+                return Err(Unsafe(format!(
+                    "refusing gate-ledger index {index_name}: it names more than {MAX_CHANGES_PER_SPEC} changes"
+                )));
+            }
+            for c in &index.changes {
+                changes.push(ChangeKey::parse(c).ok_or_else(|| {
+                    Unsafe(format!(
+                        "refusing gate-ledger index {index_name}: {c:?} is not a change key"
+                    ))
+                })?);
+            }
         }
-        for c in &index.changes {
-            changes.push(ChangeKey::parse(c).ok_or_else(|| {
-                Unsafe(format!(
-                    "refusing gate-ledger index {index_name}: {c:?} is not a change key"
-                ))
-            })?);
-        }
+        Ok((unbound, changes))
     }
-    Ok((unbound, changes))
 }

@@ -480,7 +480,9 @@ pub(crate) fn effective_gate_state(
     let verdict_events: Vec<&GateEvent> = view
         .change_events
         .iter()
-        .filter(|e| e.verdict_record().is_some())
+        // trace:BUG-2517 | ai:codex — callers can supply a view directly;
+        // spec-only evidence has no authority even if an older writer copied it.
+        .filter(|e| e.verdict_record().is_some() && !e.is_spec_only())
         .collect();
     // Persisted identities must not share a sequence through a reused label.
     // Unstamped events retain their normalized label partition.
@@ -557,7 +559,7 @@ pub(crate) fn effective_gate_state(
             .flatten()
             // A label can rebind. Its former owner's unbound events are
             // unrelated to this member and were never recorded on this change.
-            .filter(|u| u.spec_key.is_none_or(|key| key == m.key))
+            .filter(|u| !u.is_spec_only() && u.spec_key.is_none_or(|key| key == m.key))
             .filter(|u| {
                 !verdict_events
                     .iter()
@@ -711,7 +713,10 @@ fn load_view_with_budget(
             if crate::gate::ledger::project::spec_key(label).is_none() {
                 continue;
             }
-            let (u, c) = checked::read_spec_entries(root, label, &mut budget)?;
+            let (u, c) = match &discovery {
+                Some(d) => d.spec_entries(label, &mut budget)?,
+                None => (Vec::new(), Vec::new()),
+            };
             events.extend(u);
             indexed.extend(c);
         }

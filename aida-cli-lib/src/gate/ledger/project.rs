@@ -183,8 +183,8 @@ fn verdict_events(root: &Path, key: &str) -> Vec<GateEvent> {
         .flat_map(|change| store::read_file(root, change))
         .filter(|e| e.verdict_record().is_some() && e.spec.as_deref() == Some(spec.as_str()))
         .collect();
-    let bound = super::checked::filter_miskeyed(root, raw.clone(), &mut Default::default())
-        .unwrap_or(raw);
+    let bound =
+        super::checked::filter_miskeyed(root, raw.clone(), &mut Default::default()).unwrap_or(raw);
     // An unbound record already bound to a change (AC2) is read once, from
     // the change. trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
     let unbound: Vec<GateEvent> = store::read_unbound(root, &spec)
@@ -406,7 +406,7 @@ pub(crate) fn filter_miskeyed_events(events: &mut Vec<GateEvent>, witnesses: &[G
     let mut owners: std::collections::HashMap<String, std::collections::HashSet<String>> =
         Default::default();
     for witness in witnesses {
-        if ChangeKey::parse(&witness.change).is_none() {
+        if ChangeKey::parse(&witness.change).is_none() || witness.is_spec_only() {
             continue;
         }
         if witness
@@ -427,6 +427,11 @@ pub(crate) fn filter_miskeyed_events(events: &mut Vec<GateEvent>, witnesses: &[G
     events.retain(|event| {
         if ChangeKey::parse(&event.change).is_none() {
             return true;
+        }
+        // A copy made before spec-only isolation was enforced is still local
+        // evidence, never a change verdict or an ownership witness.
+        if event.is_spec_only() {
+            return false;
         }
         if event
             .verdict_record()

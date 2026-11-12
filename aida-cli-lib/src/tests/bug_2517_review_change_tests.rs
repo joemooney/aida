@@ -128,6 +128,16 @@ fn bug_2517_two_prs_one_spec_records_only_the_leased_change() {
     std::fs::remove_file(file).unwrap();
     let second_path = rv::verdict_path(root, "PR-3764");
     let second_before = rv::current_verdict_body_at(&second_path).unwrap();
+    // A real local record settles neither of the two live change claims.
+    for n in [3651, 3764] {
+        let marker = crate::gate::review_marker::Marker::for_this_process(
+            n,
+            Some(&head),
+            Some("BUG-2492"),
+            "reviewer",
+        );
+        crate::gate::review_marker::write(root, &marker).unwrap();
+    }
     handle_review_record_at(
         root.to_path_buf(),
         "BUG-2492",
@@ -145,6 +155,9 @@ fn bug_2517_two_prs_one_spec_records_only_the_leased_change() {
         rv::current_verdict_body_at(&second_path).unwrap(),
         second_before
     );
+    for n in [3651, 3764] {
+        assert!(crate::gate::review_marker::read(root, n).is_some());
+    }
     // Opening/adopting or collecting either change must not adopt the local record.
     let spec = crate::gate::canon::GateSpec::with_key("BUG-2492", None);
     for n in [3651, 3764] {
