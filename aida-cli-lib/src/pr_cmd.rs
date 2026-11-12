@@ -3387,6 +3387,13 @@ pub(crate) fn pr_ship_with_method_and_dispatch_ctx(
     // log for the merge step was already recorded as Skipped above, and the
     // idempotent pull + cleanup below still run. trace:BUG-574 | ai:claude
     let mut merged_this_run = false;
+    // trace:STORY-2735 | ai:codex
+    if !already_merged {
+        crate::ci_gate::require_full_ship_ci(
+            crate::forge::forge_for(&project_root).as_ref(),
+            &gate_change,
+        )?;
+    }
     // STORY-1171 / TASK-1243: hold the branch merge-lease across check→merge→pull
     // (ADR-38) so no two same-machine mergers race to this branch. Keyed on the
     // PR's base branch, held on the MAIN clone (all mergers resolve here), and
@@ -3419,6 +3426,12 @@ pub(crate) fn pr_ship_with_method_and_dispatch_ctx(
         }
     }
     if !already_merged {
+        // Re-read under the merge lease; no hold release or merge on FAST CI.
+        // trace:STORY-2735 | ai:codex
+        crate::ci_gate::require_full_ship_ci(
+            crate::forge::forge_for(&project_root).as_ref(),
+            &gate_change,
+        )?;
         ship_preflight_gates(
             &project_root,
             &main_worktree,

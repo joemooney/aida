@@ -50,12 +50,16 @@ are retained with recovery instructions; failed children revoke only the grant
 issued for that launch. See [session launch behavior](docs/cli/06-roles-sessions.md).
 <!-- trace:BUG-2188 BUG-2168 | ai:codex -->
 
-CI fan-out keeps libtest: two CLI-library unit halves, two deterministic
-CLI-integration halves, remaining workspace tests/doctests, and two gate lanes
-run on seven parallel Linux runners. The aggregate `Build (ubuntu-latest)` fails unless all
-lanes succeed. Test timing budgets remain per binary, and each test lane checks
-for untracked root entries. See [CI fan-out](docs/internal/testing/ci-test-shards.md).
-<!-- trace:TASK-1949 | ai:codex -->
+GitHub CI defaults ordinary PRs to FAST source gates and a parallel workspace/test
+compile check. The `ci:full` label or Actions variable `AIDA_PR_CI_TIER=full`
+selects FULL; main/train, merge groups, scheduled and manual runs always use
+FULL. Seven full lanes cover two CLI-library unit halves, two deterministic
+CLI-integration halves, remaining workspace tests/doctests, and two gate lanes.
+The aggregate `Build (ubuntu-latest)` requires every selected job to succeed.
+Direct ship refuses FAST CI; the train remains its route to main. Test timing
+budgets and untracked-root hygiene remain per full test lane. GitLab relay/MR
+pipelines remain full-only. See [CI tiers](docs/internal/testing/ci-test-shards.md).
+<!-- trace:TASK-1949 STORY-2735 | ai:codex -->
 
 `aida agent new` supplies the selected executable's reported `--version` to
 foreground/background children as `AIDA_HARNESS_VERSION`. Failed, empty or

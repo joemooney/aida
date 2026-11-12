@@ -676,6 +676,9 @@ def main(argv: list[str] | None = None) -> int:
             print(f"SKIP  {name}\n        not in the {args.tier} tier (it is {tiers[name]})")
 
     if args.list:
+        # trace:STORY-2735 | ai:codex
+        print("CI scheduling: PR=fast by default; ci:full or AIDA_PR_CI_TIER=full selects full. "
+              "Main/train/merge-group/schedule/manual runs are always full.")
         for name, command in plan:
             # Print the reshaped command itself: it is not always `cargo test`. trace:TASK-1979 | ai:claude
             reshaped = f"  (local: {command})" if command != dict(steps)[name] else ""

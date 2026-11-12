@@ -364,6 +364,14 @@ preserves the title without adding a trailer. Existing constituent commit
 trailers in squash bodies remain landing evidence for the auto-bump scanner.
 <!-- trace:TASK-1600 | ai:codex -->
 
+<!-- trace:STORY-2735 | ai:codex -->
+For tiered GitHub CI, direct ship requires FULL CI for the current Build run.
+FAST PRs should use `aida pr train`, or add the `ci:full` label and wait for a
+FULL run before shipping. The repository Actions variable `AIDA_PR_CI_TIER=full`
+opts ordinary PRs into FULL by default; unset or `fast` selects FAST. Train,
+main, merge-group, scheduled and manually dispatched runs always use FULL.
+See [CI tiers and lane policy](../internal/testing/ci-test-shards.md).
+
 **Rebase merge mode (`--rebase` / `--merge-method rebase`).** `aida pr ship [N]
 --rebase` runs the identical preflight, CI, independent review/approval,
 stale-head, and merge-hold gates as squash, pins the merge with

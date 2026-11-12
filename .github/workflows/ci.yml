@@ -3,9 +3,13 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    branches: [main, 'train/**']
+  workflow_dispatch:
+  schedule:
+    - cron: '23 9 * * 1'
   pull_request:
     branches: [main]
+    types: [opened, synchronize, reopened, labeled, unlabeled]
   merge_group:
 
 # Superseded PR heads must not starve merge-train CI.
@@ -23,7 +27,67 @@ permissions:
   pull-requests: read
 
 jobs:
+  # One selection feeds scheduling and the forge-readable check name.
+  # trace:STORY-2735 | ai:codex
+  tier:
+    name: "ci-tier: ${{ (github.event_name != 'pull_request' || startsWith(github.head_ref, 'train/') || contains(github.event.pull_request.labels.*.name, 'ci:full') || vars.AIDA_PR_CI_TIER == 'full') && 'full' || 'fast' }}"
+    runs-on: ubuntu-latest
+    outputs:
+      full: ${{ steps.select.outputs.full }}
+    steps:
+      - name: Select CI tier
+        id: select
+        env:
+          FULL: ${{ github.event_name != 'pull_request' || startsWith(github.head_ref, 'train/') || contains(github.event.pull_request.labels.*.name, 'ci:full') || vars.AIDA_PR_CI_TIER == 'full' }}
+        run: echo "full=$FULL" >> "$GITHUB_OUTPUT"
+
+  fast-gates:
+    name: CI (fast gates)
+    needs: tier
+    if: needs.tier.outputs.full != 'true'
+    runs-on: ubuntu-latest
+    # Keep the six-minute target separate from fixture/runner hang protection.
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt
+      - name: Install source guard dependencies
+        timeout-minutes: 5
+        run: |
+          if ! command -v rg >/dev/null 2>&1; then
+            sudo apt-get -o Acquire::Retries=1 -o Acquire::http::Timeout=15 -o Acquire::https::Timeout=15 update
+            sudo apt-get -o Acquire::Retries=1 -o Acquire::http::Timeout=15 -o Acquire::https::Timeout=15 install -y ripgrep
+          fi
+          python3 -m pip install PyYAML
+      - run: make check-ci-fast
+
+  fast-compile:
+    name: CI (fast compile)
+    needs: tier
+    if: needs.tier.outputs.full != 'true'
+    runs-on: ubuntu-latest
+    # Six minutes is the warm-cache target; retain cold-build headroom.
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v5
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Install compile dependencies
+        timeout-minutes: 5
+        run: |
+          sudo apt-get -o Acquire::Retries=1 -o Acquire::http::Timeout=15 -o Acquire::https::Timeout=15 update
+          sudo apt-get -o Acquire::Retries=1 -o Acquire::http::Timeout=15 -o Acquire::https::Timeout=15 install -y protobuf-compiler libxcb-render0-dev libxcb-shape0-dev libxcb-xfixes0-dev libxkbcommon-dev libssl-dev libgtk-3-dev
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: ci-dev-profile-fast-check
+      - run: cargo check --profile dev --workspace --tests
+
   build:
+    needs: tier
+    if: needs.tier.outputs.full == 'true'
     name: CI (${{ matrix.shard }})
     # Opt in only after operator provisioning and independent gate review.
     # Forks and merge groups always use hosted capacity. Disabling the variable
@@ -180,7 +244,7 @@ jobs:
 
       # Check the feature-disabled stubs separately: a workspace build can
       # unify the TUI feature back in and hide errors in those branches.
-      # Check-only keeps this guard in the fast tier. trace:TASK-1601 | ai:codex
+      # This feature-specific check stays in FULL CI. trace:TASK-1601 STORY-2735 | ai:codex
       - name: Check aida-cli without default features
         if: ${{ matrix.shard == 'gates' && (steps.changes.outputs.full_ci == 'true') }}
         run: cargo check -p aida-cli --no-default-features
@@ -1055,6 +1119,11 @@ jobs:
           python3 scripts/check-trace-headers.py
           python3 -m unittest tests/test_check_trace_headers.py
 
+      # trace:STORY-2735 | ai:codex
+      - name: CI tier policy fixtures
+        if: matrix.shard == 'gates'
+        run: python3 -m unittest tests/test_ci_tiers.py
+
       # trace:STORY-2672 | ai:codex
       - name: Self-hosted routing security fixtures
         if: matrix.shard == 'gates'
@@ -1075,14 +1144,28 @@ jobs:
   # trace:TASK-1949 | ai:codex
   build-result:
     name: Build (ubuntu-latest)
-    needs: build
+    needs: [tier, build, fast-gates, fast-compile]
     if: ${{ always() }}
     runs-on: ubuntu-latest
     steps:
       - name: Require every CI lane
         env:
-          RESULT: ${{ needs.build.result }}
-        run: test "$RESULT" = success
+          TIER: ${{ needs.tier.result }}
+          FULL: ${{ needs.tier.outputs.full }}
+          BUILD: ${{ needs.build.result }}
+          GATES: ${{ needs.fast-gates.result }}
+          COMPILE: ${{ needs.fast-compile.result }}
+        run: |
+          test "$TIER" = success
+          if [ "$FULL" = true ]; then
+            test "$BUILD" = success
+            test "$GATES" = skipped && test "$COMPILE" = skipped
+          elif [ "$FULL" = false ]; then
+            test "$BUILD" = skipped
+            test "$GATES" = success && test "$COMPILE" = success
+          else
+            exit 1
+          fi
 
   # Create release artifacts for tags
   release:

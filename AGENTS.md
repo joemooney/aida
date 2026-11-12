@@ -93,11 +93,13 @@ set; counter migration refuses newly active unconfirmed blocks. See the
 [writer inventory](docs/plans/2026-10-19-store-writer-inventory.md).
 <!-- trace:TASK-1981 | ai:codex -->
 
-CI runs four test lanes plus separate guards and binary-contract lanes; the aggregate
-`Build (ubuntu-latest)` remains the required check. CLI halves use committed
-main-run timings; each shard keeps its timing budget and root hygiene check.
-See [CI fan-out](docs/internal/testing/ci-test-shards.md).
-<!-- trace:TASK-1949 | ai:codex -->
+Ordinary GitHub PRs default to FAST source guards plus workspace/test compilation.
+`ci:full` or `AIDA_PR_CI_TIER=full` selects FULL; main/train, merge groups and
+scheduled/manual runs always use FULL's seven lanes. The required aggregate
+`Build (ubuntu-latest)` validates the selected tier. Direct ship requires FULL;
+FAST PRs use the train. Each full test shard retains its timing and root hygiene
+checks. See [CI tiers](docs/internal/testing/ci-test-shards.md).
+<!-- trace:TASK-1949 STORY-2735 | ai:codex -->
 
 Rust mandate exclusions also add module comments outside fn/impl ranges and
 inline-module headers, including traces between items and at EOF. Leading
