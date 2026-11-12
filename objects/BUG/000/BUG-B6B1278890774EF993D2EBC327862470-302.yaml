@@ -18,8 +18,16 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-12T17:56:12.887901799Z
-modified_at: 2026-11-12T17:56:21.568288728Z
+modified_at: 2026-11-12T17:56:23.532445208Z
 req_type: Bug
+comments:
+- id: 01a1d0e7-536c-7ad2-b218-1057d89db7e5
+  author: joe
+  content: 'ADVISOR SIGNOFF 11:05 MST: sketch approved. Commit ''[AI:codex] fix(train): release riders when a train closes before the merge lease (BUG-2537)''.'
+  created_at: 2026-11-12T17:56:23.532445208Z
+  modified_at: 2026-11-12T17:56:23.532445208Z
+  session_id: 01a1d09a-4262-7d50-a00b-00a5a30f3934
+  harness_version: 2.1.322 (Claude Code)
 history:
 - id: 01a1d0e7-4bc0-7643-a54b-504f3e1e4d30
   author: joe
