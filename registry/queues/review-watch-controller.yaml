@@ -6,3 +6,11 @@
   added_at: 2026-11-12T06:57:26.169939613Z
   for_role: reviewer
   added_by_machine: imac
+- user_id: review-watch-controller
+  requirement_id: 01a1ce97-5d1f-70b3-a5d1-dc9452c2137d
+  position: 2000
+  added_by: review-watch-controller
+  note: auto-queued by `session end` (01a1ce86); covers 1 spec
+  added_at: 2026-11-12T07:10:09.290532380Z
+  for_role: reviewer
+  added_by_machine: imac
