@@ -13,7 +13,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-11T19:01:48.884172712Z
-modified_at: 2026-11-12T02:20:04.178841108Z
+modified_at: 2026-11-12T06:14:26.698722606Z
 req_type: Bug
 comments:
 - id: 01a1cd53-4d58-7801-952c-3dc01ddd0f17
@@ -29,6 +29,13 @@ comments:
   created_at: 2026-11-12T01:23:27.988979940Z
   modified_at: 2026-11-12T01:23:27.988979940Z
   session_id: 01a1cd505369
+  harness_version: codex-cli 0.167.0
+- id: 01a1ce64-ac8a-73e1-b045-8228ff1d32dc
+  author: dirtlab
+  content: 'Rework for request-changes: replaced the exact-tip final-gate wall-clock polling in unit tests with a cfg(test) logical clock. Production retains Instant elapsed time and 10-second sleeps; the same final-gate loop and 180-second bound run in tests. The deterministic timeout regression now exercises that shared clock. Status promotion was refused: Needs Attention requires advisor authority; existing review/hold signals remain intact. Lane validation is running.'
+  created_at: 2026-11-12T06:14:26.698722606Z
+  modified_at: 2026-11-12T06:14:26.698722606Z
+  session_id: 01a1ce62566a
   harness_version: codex-cli 0.167.0
 history:
 - id: 01a1cbfd-0cbf-7c33-beb0-0acd69b1d6f6
