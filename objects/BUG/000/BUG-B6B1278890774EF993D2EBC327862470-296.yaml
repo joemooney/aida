@@ -100,6 +100,15 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1cf40-adbd-7562-b3c0-ffba46738e0d
+  author: dirtlab
+  timestamp: 2026-11-12T10:14:44.925544360Z
+  session_id: 01a1cf3f3861
+  harness_version: codex-cli 0.167.0
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 - id: 01a1cf41-8a6c-7840-985c-2280230b9680
   author: joe
   timestamp: 2026-11-12T10:15:41.420837274Z
