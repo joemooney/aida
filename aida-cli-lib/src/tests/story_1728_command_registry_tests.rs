@@ -33,7 +33,8 @@ fn collect_paths(cmd: &clap::Command, prefix: &[String], out: &mut Vec<Vec<Strin
 }
 
 fn render_help_snapshot() -> String {
-    let mut root = built_command()
+    let mut root = crate::TEST_CLI
+        .built_command()
         .term_width(100)
         .color(clap::ColorChoice::Never);
     root.build();
@@ -164,7 +165,7 @@ fn every_top_level_name_has_exactly_one_owner() {
         .get_subcommands()
         .map(|sub| sub.get_name().to_string())
         .collect();
-    let built = built_command();
+    let built = crate::TEST_CLI.built_command();
     for sub in built.get_subcommands() {
         let name = sub.get_name();
         let owners = legacy.iter().filter(|n| *n == name).count()
@@ -201,7 +202,9 @@ fn every_registered_command_parses_through_the_registry_path() {
         (vec!["aida", "home"], "home"),
         (vec!["aida", "_bg-fetch", "fixture-store"], "_bg-fetch"),
     ] {
-        let cli = try_parse_from(&argv).unwrap_or_else(|err| panic!("{argv:?}: {err}"));
+        let cli = crate::TEST_CLI
+            .try_parse_from(&argv)
+            .unwrap_or_else(|err| panic!("{argv:?}: {err}"));
         let Command::Registered(invocation) = &cli.command;
         assert_eq!(invocation.reg.name, name);
         let _ = invocation.policy();
@@ -209,7 +212,9 @@ fn every_registered_command_parses_through_the_registry_path() {
     // Every registration is reachable by name; `--help` short-circuits any
     // required arguments.
     for reg in REGISTRY {
-        let err = try_parse_from(["aida", reg.name, "--help"]).expect_err("help exits");
+        let err = crate::TEST_CLI
+            .try_parse_from(["aida", reg.name, "--help"])
+            .expect_err("help exits");
         assert_eq!(
             err.kind(),
             clap::error::ErrorKind::DisplayHelp,
@@ -228,7 +233,7 @@ fn migrated_commands_keep_their_legacy_policy() {
         vec!["aida", "home"],
         vec!["aida", "_bg-fetch", "fixture-store"],
     ] {
-        let cli = try_parse_from(&argv).unwrap();
+        let cli = crate::TEST_CLI.try_parse_from(&argv).unwrap();
         assert_eq!(
             crate::stakeholder_cli_action(&cli.command),
             StakeholderAction::Write,
@@ -242,14 +247,18 @@ fn migrated_commands_keep_their_legacy_policy() {
 // trace:STORY-1728 | ai:claude
 #[test]
 fn bg_fetch_handler_receives_its_positional() {
-    let cli = try_parse_from(["aida", "_bg-fetch", "fixture-store"]).unwrap();
+    let cli = crate::TEST_CLI
+        .try_parse_from(["aida", "_bg-fetch", "fixture-store"])
+        .unwrap();
     let Command::Registered(invocation) = &cli.command;
     let args = <crate::session_misc_cmd::BgFetchArgs as FromArgMatches>::from_arg_matches(
         &invocation.matches,
     )
     .unwrap();
     assert_eq!(args.store_path, std::path::PathBuf::from("fixture-store"));
-    assert!(try_parse_from(["aida", "_bg-fetch"]).is_err());
+    assert!(crate::TEST_CLI
+        .try_parse_from(["aida", "_bg-fetch"])
+        .is_err());
 }
 
 // Top-level options reach both dispatch paths, before or after the command.
@@ -261,14 +270,16 @@ fn global_args_reach_registered_and_legacy_commands() {
         vec!["aida", "--format", "toon", "away"],
         vec!["aida", "away", "--format", "toon"],
     ] {
-        let cli = try_parse_from(&argv).unwrap();
+        let cli = crate::TEST_CLI.try_parse_from(&argv).unwrap();
         assert!(matches!(cli.command, Command::Registered(_)), "{argv:?}");
         assert!(
             matches!(cli.globals.format, Some(OutputFormat::Toon)),
             "{argv:?}"
         );
     }
-    let cli = try_parse_from(["aida", "-p", "demo", "--format", "json", "list"]).unwrap();
+    let cli = crate::TEST_CLI
+        .try_parse_from(["aida", "-p", "demo", "--format", "json", "list"])
+        .unwrap();
     assert!(matches!(
         cli.command
             .registered::<crate::requirements_cli::ListArgs>(),
@@ -276,7 +287,9 @@ fn global_args_reach_registered_and_legacy_commands() {
     ));
     assert!(matches!(cli.globals.format, Some(OutputFormat::Json)));
     assert_eq!(cli.globals.project.as_deref(), Some("demo"));
-    let cli = try_parse_from(["aida", "--file", "r.yaml", "home"]).unwrap();
+    let cli = crate::TEST_CLI
+        .try_parse_from(["aida", "--file", "r.yaml", "home"])
+        .unwrap();
     assert_eq!(cli.globals.file.as_deref(), Some("r.yaml"));
 }
 
@@ -306,7 +319,7 @@ fn registered_commands_shadow_path_extensions() {
     );
 }
 
-/// Production code reaches the clap tree only through this module, so no
+/// Production code reaches the clap tree through the injected support, so no
 /// consumer can miss a registered command. Test modules may still use the
 /// derived `Cli` parser directly.
 // trace:STORY-1728.aca82bf2 | ai:claude
@@ -339,7 +352,7 @@ fn production_code_uses_only_the_built_command_tree() {
     }
     assert!(
         hits.is_empty(),
-        "use crate::command_registry::{{built_command, parse_from, try_parse_from}}:\n{}",
+        "use crate::CLI_SUPPORT for the registered tree and parser:\n{}",
         hits.join("\n")
     );
 }
@@ -415,14 +428,18 @@ fn per_verb_stakeholder_policy_matches_the_legacy_table() {
         (vec!["aida", "punts", "list"], Read),
         (vec!["aida", "punts", "analyze"], Write),
     ] {
-        let cli = try_parse_from(&argv).unwrap_or_else(|err| panic!("{argv:?}: {err}"));
+        let cli = crate::TEST_CLI
+            .try_parse_from(&argv)
+            .unwrap_or_else(|err| panic!("{argv:?}: {err}"));
         assert_eq!(
             crate::stakeholder_cli_action(&cli.command),
             want,
             "{argv:?}"
         );
     }
-    let cli = try_parse_from(["aida", "role", "list"]).unwrap();
+    let cli = crate::TEST_CLI
+        .try_parse_from(["aida", "role", "list"])
+        .unwrap();
     assert!(crate::role::role_restore_prompt_should_skip(&cli.command));
 }
 
@@ -433,7 +450,9 @@ fn per_verb_stakeholder_policy_matches_the_legacy_table() {
 fn task118_retention_prune_is_a_write_and_its_dry_run_a_read() {
     use crate::stakeholder_role::stakeholder_action_allowed;
     let action = |argv: &[&str]| {
-        let cli = try_parse_from(argv).unwrap_or_else(|err| panic!("{argv:?}: {err}"));
+        let cli = crate::TEST_CLI
+            .try_parse_from(argv)
+            .unwrap_or_else(|err| panic!("{argv:?}: {err}"));
         crate::stakeholder_cli_action(&cli.command)
     };
     for argv in [
@@ -494,7 +513,10 @@ fn synthetic_invocation(run: Handler) -> Invocation {
 // trace:STORY-1728.ac394c52 | ai:claude
 #[test]
 fn early_handlers_run_without_a_store_and_continue_reaches_the_store_phase() {
-    let globals = try_parse_from(["aida", "status"]).unwrap().globals;
+    let globals = crate::TEST_CLI
+        .try_parse_from(["aida", "status"])
+        .unwrap()
+        .globals;
     SEEN.with(|seen| seen.borrow_mut().clear());
 
     let early = synthetic_invocation(Handler::Early(|_, ctx| {
@@ -695,7 +717,9 @@ fn team_identity_write_matches_mains_is_write_command_for_every_verb() {
         (vec!["aida", "status"], false),
         (vec!["aida", "team"], false),
     ] {
-        let cli = try_parse_from(&argv).unwrap_or_else(|err| panic!("{argv:?}: {err}"));
+        let cli = crate::TEST_CLI
+            .try_parse_from(&argv)
+            .unwrap_or_else(|err| panic!("{argv:?}: {err}"));
         assert_eq!(
             crate::status_awaiting::is_write_command(&cli.command),
             want,
