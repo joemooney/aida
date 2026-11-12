@@ -1,0 +1,66 @@
+{
+  "schema_version": 1,
+  "spec": "BUG-2530",
+  "publishes": [
+    {
+      "at": "2026-11-12T16:47:46.558678084Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-11-12T09:01:14.989384931Z",
+      "spec": "BUG-2530",
+      "seat": "advisor",
+      "kind": {
+        "event": "SpecRequeued",
+        "via": "queue-rework",
+        "actor": "joe",
+        "from": "Needs Attention",
+        "to": "Approved"
+      }
+    },
+    {
+      "ts": "2026-11-12T09:51:12.523371190Z",
+      "spec": "BUG-2530",
+      "seat": "advisor",
+      "kind": {
+        "event": "SpecRequeued",
+        "via": "queue-rework",
+        "actor": "joe",
+        "from": "Needs Attention",
+        "to": "Approved"
+      }
+    },
+    {
+      "ts": "2026-11-12T10:32:40.467975808Z",
+      "spec": "BUG-2530",
+      "seat": "advisor",
+      "kind": {
+        "event": "SpecRequeued",
+        "via": "queue-rework",
+        "actor": "joe",
+        "from": "Needs Attention",
+        "to": "Approved"
+      }
+    },
+    {
+      "ts": "2026-11-12T16:46:38.667879645Z",
+      "spec": "BUG-2530",
+      "seat": "advisor",
+      "kind": {
+        "event": "PrMerged",
+        "pr": 3865
+      }
+    },
+    {
+      "ts": "2026-11-12T16:47:46.124243420Z",
+      "spec": "BUG-2530",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "ec5a35a7108475b421baf1101b26159a7aa0fab9",
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
