@@ -130,3 +130,33 @@ class LauncherRefusals(unittest.TestCase):
 # Keep the existing CI fixture entry point; S2 adds no workflow/routing edit.
 # trace:STORY-2695 | ai:codex
 from tests.test_dell1_controller import Admission, Cache, GateAndShell, LaunchIntegration, Selection, Rearm, Source, RoundThree  # noqa: E402,F401
+
+
+class AptBounds(unittest.TestCase):
+    """BUG-2526: a hosted apt mirror/DNS outage must fail a step within five
+    minutes instead of holding every shard to the 40-minute job timeout.
+    trace:BUG-2526 | ai:claude
+    """
+
+    def steps(self):
+        workflow = yaml.safe_load((ROOT / '.github/workflows/ci.yml').read_text())
+        for job_name, job in workflow['jobs'].items():
+            for step in job.get('steps', []):
+                if 'apt-get' in step.get('run', ''):
+                    yield job_name, step
+
+    def test_every_apt_step_is_bounded_to_five_minutes(self):
+        steps = list(self.steps())
+        self.assertTrue(steps, 'expected apt steps in ci.yml')
+        for job_name, step in steps:
+            limit = step.get('timeout-minutes')
+            self.assertIsNotNone(limit, f'{job_name}: {step["name"]} has no step timeout')
+            self.assertLessEqual(int(limit), 5, f'{job_name}: {step["name"]}')
+
+    def test_every_apt_call_sets_fetch_timeouts(self):
+        for job_name, step in self.steps():
+            for line in step['run'].splitlines():
+                if 'apt-get' in line and not line.lstrip().startswith('#'):
+                    for option in ('Acquire::http::Timeout=', 'Acquire::https::Timeout=',
+                                   'Acquire::Retries='):
+                        self.assertIn(option, line, f'{job_name}: {step["name"]}: {line.strip()}')

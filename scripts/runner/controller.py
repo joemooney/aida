@@ -457,6 +457,7 @@ def launch(slot, envelope):
             shutil.rmtree(state)
         # Runner.Listener enumerates every ancestor before parsing arguments.
         # Root-owned current must permit service-uid reads as well as traversal.
+        # 0711 permits chdir but fails that startup enumeration (STORY-2695).
         traversal_directory(state, 0o755)
         gate = None
         try:
