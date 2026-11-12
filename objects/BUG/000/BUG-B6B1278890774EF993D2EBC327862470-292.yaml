@@ -9,12 +9,12 @@ description: |-
   - An explicit --verdict approved never records a different verdict silently: either refuse with the reason and the exact fix (--finding "" or a disposition flag), or record approved with the carried findings marked accepted.
   - --help for --finding documents how to clear carried findings.
   - Regression test: approved over a prior request-changes with findings and no --finding produces the refusal/explicit outcome, not a silent request-changes.
-status: NeedsAttention
+status: Completed
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-11T16:33:34.256595406Z
-modified_at: 2026-11-12T04:44:28.769474382Z
+modified_at: 2026-11-12T10:50:06.335847908Z
 req_type: Bug
 comments:
 - id: 01a1cd5e-49f0-70f3-891c-e89e352cc544
@@ -68,6 +68,20 @@ history:
   session_id: 01a1ce11d6c9
   harness_version: codex-cli 0.167.0
   changes: []
+- id: 01a1cf61-0c39-7ed2-8933-a48942827bdc
+  author: aida-auto-bump
+  timestamp: 2026-11-12T10:50:06.265258118Z
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Completed
+processing_record:
+- id: 01a1cf61-0c7f-71b3-a8a2-6587ed64bdbf
+  timestamp: 2026-11-12T10:50:06.335843089Z
+  agent: aida
+  commit_sha: a1fcc33e2febf356c98b0dae0908b250678cd56b
+  summary: 'Full sweep PASS: ac84a90e, ac612973, ac0bc9ec verified by source, regression tests and exact-head CI; BUG-2527 bug protocol met (test files changed). No actionable defects. Build green; merge-hold-gate pending.'
+  review_verdict: approved
 filed_at:
   code_sha: 11b131dfe3341e6d9c7127d64370f91366094711
   branch: main
@@ -77,16 +91,12 @@ filed_at:
   vendor: claude
   session: 01a1cb56-f02b-7652-869e-3788560cbf1b
   harness_version: 2.1.322 (Claude Code)
+implementation_info:
+  implemented: false
+  completed_at: 2026-11-12T10:50:06.265251771Z
+  completion_sha: a1fcc33e2febf356c98b0dae0908b250678cd56b
 attention_reason:
   category: other
   detail: 'Pickup refused: BUG-2527 is already Needs Attention with verdict:request-changes; promoting to InProgress requires advisor authority. Advisor triage is required before this implementer lane can proceed.'
   raised_by: implementer
   raised_at: 2026-11-12T04:44:28.769474382Z
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: 'Full sweep: CLI pre-normalization bypasses explicit-approval refusal; existing inherited-finding test fails exact-head CI. Type protocol BUG-2527 met (test files touched).'
-  recovery_hint: address the review findings, move BUG-2527 back to In Progress, and clear the PR hold only after approval
-  shelved_by: reviewer
-  shelved_at: 2026-11-12T02:05:36.387724726Z
