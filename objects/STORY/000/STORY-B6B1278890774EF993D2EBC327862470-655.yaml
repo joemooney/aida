@@ -30,7 +30,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-12T17:27:12.872067622Z
-modified_at: 2026-11-12T17:39:31.221251976Z
+modified_at: 2026-11-12T18:06:41.509432346Z
 req_type: Story
 relationships:
 - rel_type: Parent
@@ -51,6 +51,11 @@ comments:
   modified_at: 2026-11-12T17:39:31.221251976Z
   session_id: 01a1d09a-4262-7d50-a00b-00a5a30f3934
   harness_version: 2.1.322 (Claude Code)
+- id: 01a1d0f0-c165-7a52-9aef-6051c2cddb33
+  author: mcp
+  content: 'Native implementation lane: added emergency-land command/args/dispatch, guarded restore and protection verification, local audit/spec comment, bounded merge-commit CI watch, operator-only emergency-fix skill template + Claude link, CLI docs, and six reviewed host-only writer-inventory sites. Concrete gh client stays inside forge.rs to preserve the existing raw-gh boundary. Initial launcher targeted run executed 5 tests, all passed; final-code help-golden update and targeted rerun are queued/running, followed by final make check-ci-fast. Initial fast gate exposed the writer inventory addition (corrected; standalone inventory check now passes); its launcher rerun hit the 600s limit at the inventory step after completed checks passed and reported a changed shared build seed. make check-templates passed. make sync-templates created the Claude link but its portable-pack step is refused by this native seat''s read-only .agents directory; host must finish that sync. Edits remain uncommitted; no push/PR/queue-done/merge attempted from this seat.'
+  created_at: 2026-11-12T18:06:41.509395605Z
+  modified_at: 2026-11-12T18:06:41.509395605Z
 history:
 - id: 01a1d0cd-04a9-7122-9401-af6c90c9299a
   author: joe
