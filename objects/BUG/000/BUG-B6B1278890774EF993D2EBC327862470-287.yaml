@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-11T04:48:14.810158291Z
-modified_at: 2026-11-12T02:35:19.536313193Z
+modified_at: 2026-11-12T05:00:06.475467417Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -91,6 +91,12 @@ comments:
   created_at: 2026-11-12T01:41:42.145475328Z
   modified_at: 2026-11-12T01:41:42.145475328Z
   session_id: 01a1cd4faf79
+- id: 01a1ce20-9dcb-7772-8d0d-bc8d05df6dee
+  author: joe
+  content: Current rework extends the existing verified interactive parent collector regression to use an isolated fake GitHub CLI. Both request-changes and rejected start with an uncontained reviewer, a verdict anchor and no existing hold; the test now requires the parent to apply the pinned PR merge-hold and recorded labels exactly once and persist Synced state. Wrong grants, wrong heads and failed local hold writes must produce no forge-label writes. Targeted lane validation is running. The existing production collector already checks exact child grant and live head before hold arming and re-recording; this round changes its regression coverage.
+  created_at: 2026-11-12T05:00:06.475467417Z
+  modified_at: 2026-11-12T05:00:06.475467417Z
+  session_id: 01a1ce1d13d2
 history:
 - id: 01a1c8ef-b4bc-7b62-a163-3209968104a9
   author: joe
