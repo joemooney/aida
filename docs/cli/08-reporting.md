@@ -808,21 +808,29 @@ current working directory, as they would for a shell lookup.
 ## Flow report
 
 <!-- trace:STORY-2704 | ai:codex -->
-Development builds also provide `aida-porcelain flow report ...` and
+Installations provide `aida flow report ...`, `aida-porcelain flow report ...` and
 `aida-flow report ...`, with the same text/JSON report and window flags.
 `aida dev build --install-links` installs the companion and the relative
-`aida-flow -> aida-porcelain` alias. The built-in `aida flow` retains precedence.
-The companion renders the built-in's public JSON report. It selects the reader
+`aida-flow -> aida-porcelain` alias. `aida flow` resolves that external alias;
+there is no built-in `flow` registration.
+The companion renders the hidden `aida flow-data report` substrate JSON reader. It selects the reader
 from `AIDA_BIN`, then `aida` beside the running companion, then `aida` on `PATH`.
 An explicit selection is authoritative: execution failures do not try another
-reader. There is no additional report timeout; the built-in owns query budgets.
+reader. There is no additional report timeout; the substrate reader owns query budgets.
 Child failures preserve stdout, stderr and exit code (signals use 128 + signal).
 The companion does not open a mutable store, refresh caches, acquire leases or
 update the queue.
 Development promotion and rollback restore each generation’s binary and alias
 inventory. Rolling back to a generation predating porcelain removes the
 companion and its alias; rolling forward restores them.
-Release archives, `install.sh` and upgrade support remain follow-up work.
+Release archives, `install.sh`, `make install` and tarball upgrades include
+`aida-porcelain` and the relative `aida-flow` link. Upgrades stage the complete
+bundle before replacing binaries by atomic rename and restore the previous files
+if a replacement fails. Installers refuse an existing `aida-flow` directory,
+file or foreign symlink before replacing any bundle member. Only an absent path
+or the owned relative `aida-flow -> aida-porcelain` alias is accepted.
+Environment output-format aliases (`table` for `human`,
+`agent` for `toon`) use the same parser as core.
 
 <!-- trace:STORY-2699 | ai:codex -->
 `aida flow report --since 2026-11-09 --until 2026-11-10 --format json`
