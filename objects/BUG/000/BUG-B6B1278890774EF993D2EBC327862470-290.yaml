@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-11T14:11:33.148855447Z
-modified_at: 2026-11-12T15:03:28.186132797Z
+modified_at: 2026-11-12T15:37:47.333314645Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -176,6 +176,10 @@ history:
   author: joe
   timestamp: 2026-11-12T14:42:03.827038842Z
   changes: []
+- id: 01a1d068-6ec7-7e53-8b3b-c734b017b106
+  author: joe
+  timestamp: 2026-11-12T15:37:47.463167374Z
+  changes: []
 filed_at:
   code_sha: 11b131dfe3341e6d9c7127d64370f91366094711
   branch: main
@@ -194,7 +198,7 @@ failure_reason:
   phase: reviewer
   phase_index: 3
   kind: verdict:request-changes
-  detail: 'Full 14-file sweep: terminal closure can resurrect a superseded legacy verdict; historical TASK-3448/TASK-3428 closure by this fix remains unverified. CI pending at review time.'
+  detail: 'Full 14-file sweep: two new regression tests misuse PR keys as spec aliases and fail exact-head CI; historical TASK-3448/TASK-3428 closure acceptance remains unverified.'
   recovery_hint: address the review findings, move BUG-2525 back to In Progress, and clear the PR hold only after approval
   shelved_by: reviewer
-  shelved_at: 2026-11-12T14:42:03.694136669Z
+  shelved_at: 2026-11-12T15:37:47.333314645Z
