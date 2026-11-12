@@ -1,0 +1,31 @@
+id: 01a1d0e7-29d7-77f2-a99d-cfc26c9f4e31
+spec_id: BUG-b6b1278890774ef993d2ebc327862470-302
+agreed_id: BUG-2537
+title: 'Train retired before merge lease strands its riders: ''already riding train PR #T; ownership live or unknown'' until operator release'
+description: |
+  A train retired or abandoned before it takes the merge lease strands every rider: later trains refuse them with "#N not eligible: it is already riding train PR #T; its ownership is live or unknown" until an operator runs per-rider `aida own release`. Seen 2026-11-09..12 on trains #3733, #3739, #3847, #3873 (#3866 was refused across 7 train attempts, 91 min). Journal: 358 ride vs 338 leave-train events.
+
+  Cause (verified in code 2026-11-12): ownership/dual.rs train_opened (line ~723) writes op "ride" (Phase::Training{train}) on each rider's WorkKey::Change but never creates WorkKey::Train; the train record is created only by dual::train_lease_taken inside merge_lock::acquire, after the CI wait. pr_train.rs retire_checked (~2800) and close_abandoned_train (~1989) make no ownership calls, and train_release_steps early-returns when WorkKey::Train is absent. ownership_rider_refusal (pr_train.rs:1733) admits a rider only when reader::ended(train) is Some, so a missing train record means refused forever.
+
+  FIX (advisor sketch, 2026-11-12 11:05 MST):
+  1. Create the train's ownership record when the train PR opens: dual::train_opened writes WorkKey::Train (op "open-train", held by the train process) in the same step as the rides; train_lease_taken then updates it instead of creating it.
+  2. Add dual::train_retired(root, train, riders, reason) and call it from retire_checked, close_abandoned_train and every other path that closes a train PR without merging: end the train record and move each rider out of Phase::Training (op "leave-train", reason retired/abandoned).
+  3. Self-heal in ownership_rider_refusal: when the train record is absent or not ended BUT the forge reports train PR #T CLOSED or MERGED, do not refuse; release the stale ride (op "leave-train", reason "train #T closed") and admit. Keep refusing while #T is OPEN and its owner is live.
+  4. One-time repair is unnecessary once (3) lands (it heals on the next train).
+  ACCEPTANCE: tests for (a) open then retire before lease: riders leave Training and the next train admits them; (b) a legacy stranded rider whose train PR is closed is admitted by (3) and the journal records the release; (c) a rider of a live open train is still refused. LIGHT gate: one targeted cargo test -p aida-cli-lib <train ownership filter> + make check-ci-fast.
+status: Draft
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-12T17:56:12.887901799Z
+modified_at: 2026-11-12T17:56:12.887901799Z
+req_type: Bug
+filed_at:
+  code_sha: ec5a35a7108475b421baf1101b26159a7aa0fab9
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: a447d559aaa
+  vendor: claude
+  session: 01a1d09a-4262-7d50-a00b-00a5a30f3934
+  harness_version: 2.1.322 (Claude Code)
