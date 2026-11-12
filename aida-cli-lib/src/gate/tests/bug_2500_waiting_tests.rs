@@ -1044,43 +1044,52 @@ fn bug_2525_writer_refuses_changed_source_at_same_head() {
 #[test]
 fn bug_2525_annotation_cannot_override_replaced_legacy_source() {
     let _env = crate::test_env::EnvVarsGuard::apply(&[("AIDA_CONTAINED", None)]);
-    let tmp = tempfile::tempdir().unwrap();
-    let dir = tmp.path().join(".aida/review-verdicts");
-    std::fs::create_dir_all(&dir).unwrap();
-    let path = dir.join("PR-4273.json");
-    let mut body = serde_json::json!({"verdict":"waiting", "reviewed_sha":HEAD, "summary":SUMMARY, "recorded_at":"2026-11-11T00:00:00Z"});
-    std::fs::write(&path, body.to_string()).unwrap();
-    let old = rv::current_verdict(tmp.path(), "PR-4273").unwrap();
-    rv::close_terminal_wait(
-        tmp.path(),
-        "PR-4273",
-        crate::gate::ledger::ChangeKey::pr(4273),
-        &old,
-    )
-    .unwrap();
-    assert!(rv::read_recorded_verdict(tmp.path(), "PR-4273")
-        .unwrap()
-        .is_closed());
-    for timestamp in [
-        "2026-11-11T00:00:00Z",
-        "2026-01-01T00:00:00Z",
-        "2026-12-01T00:00:00Z",
-    ] {
-        body["summary"] = "replacement legacy round".into();
-        body["recorded_at"] = timestamp.into();
+    for key in ["PR-4273", "TASK-3448"] {
+        let tmp = tempfile::tempdir().unwrap();
+        let dir = tmp.path().join(".aida/review-verdicts");
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = rv::verdict_path(tmp.path(), key);
+        let mut body = serde_json::json!({"verdict":"waiting", "reviewed_sha":HEAD, "summary":SUMMARY, "recorded_at":"2026-11-11T00:00:00Z"});
         std::fs::write(&path, body.to_string()).unwrap();
-        let current = rv::read_recorded_verdict(tmp.path(), "PR-4273").unwrap();
-        assert!(!current.is_closed());
-        assert_eq!(current.summary.as_deref(), Some("replacement legacy round"));
-        let alias = rv::read_recorded_verdict_any(tmp.path(), &["PR-4273", "TASK-3448"]).unwrap();
-        assert!(!alias.is_closed());
-        assert!(crate::queue_cmd::refuse_waiting_review(
+        let old = rv::current_verdict(tmp.path(), key).unwrap();
+        rv::close_terminal_wait(
             tmp.path(),
-            "PR-4273",
-            "PR-4273",
-            Some("PR-4273")
+            key,
+            crate::gate::ledger::ChangeKey::pr(4273),
+            &old,
         )
-        .is_err());
+        .unwrap();
+        assert!(rv::read_recorded_verdict(tmp.path(), key)
+            .unwrap()
+            .is_closed());
+        for timestamp in [
+            "2026-11-11T00:00:00Z",
+            "2026-01-01T00:00:00Z",
+            "2026-12-01T00:00:00Z",
+        ] {
+            body["summary"] = "replacement legacy round".into();
+            body["recorded_at"] = timestamp.into();
+            std::fs::write(&path, body.to_string()).unwrap();
+            let current = rv::read_recorded_verdict(tmp.path(), key).unwrap();
+            assert!(!current.is_closed());
+            assert_eq!(current.summary.as_deref(), Some("replacement legacy round"));
+            if key == "TASK-3448" {
+                let alias =
+                    rv::read_recorded_verdict_any(tmp.path(), &[key, "TASK-NATIVE-3448"]).unwrap();
+                assert!(!alias.is_closed());
+                assert_eq!(alias.summary.as_deref(), Some("replacement legacy round"));
+            } else {
+                // Change keys are never spec aliases, even beside a spec label.
+                assert!(rv::read_recorded_verdict_any(tmp.path(), &[key, "TASK-3448"]).is_none());
+            }
+            assert!(crate::queue_cmd::refuse_waiting_review(
+                tmp.path(),
+                key,
+                key,
+                key.starts_with("PR-").then_some(key)
+            )
+            .is_err());
+        }
     }
 }
 
@@ -1404,8 +1413,14 @@ fn bug_2525_closed_newer_ledger_wait_does_not_revive_older_legacy_verdict() {
             let current = rv::current_verdict(root, key).unwrap();
             assert!(current.source.is_ledger());
             let single = rv::read_recorded_verdict(root, key).unwrap();
-            let alias = rv::read_recorded_verdict_any(root, &[key, "TASK-NATIVE-3448"]).unwrap();
-            for verdict in [single, alias] {
+            let mut verdicts = vec![single];
+            if key == "TASK-3448" {
+                verdicts
+                    .push(rv::read_recorded_verdict_any(root, &[key, "TASK-NATIVE-3448"]).unwrap());
+            } else {
+                assert!(rv::read_recorded_verdict_any(root, &[key, "TASK-NATIVE-3448"]).is_none());
+            }
+            for verdict in verdicts {
                 assert_eq!(verdict.kind, rv::VerdictKind::Waiting);
                 assert_eq!(verdict.summary.as_deref(), Some(SUMMARY));
                 assert!(verdict.is_closed());
