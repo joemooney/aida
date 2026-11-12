@@ -36,6 +36,12 @@ pub(crate) const MAX_SELECTION_BYTES: u64 = 64 * 1024 * 1024;
 /// Aggregate events one selection may parse across every label.
 pub(crate) const MAX_SELECTION_EVENTS: usize = 200_000;
 
+/// Aggregate discovery I/O, including unrelated payloads and torn retries.
+/// This safety ceiling is independent of selected evidence, not a completeness
+/// mechanism: crossing it refuses the entire lookup.
+// trace:BUG-2531 | ai:codex
+pub(crate) const MAX_DISCOVERY_BYTES: u64 = 128 * 1024 * 1024;
+
 /// Evidence the checked reader refused: the selector must not answer past it.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct Unsafe(pub String);
@@ -162,10 +168,21 @@ fn read_entry(
             "refusing gate-ledger entry {name}: it must be a singly linked regular file of at most {cap} bytes"
         )));
     }
+    // Bound actual I/O before reading, including growth after metadata. One
+    // sentinel byte detects overflow; the operation then refuses immediately.
+    // trace:BUG-2531 | ai:codex
+    if meta.len() > budget.bytes {
+        return Err(Unsafe(
+            "the aggregate gate-ledger read budget is exhausted".into(),
+        ));
+    }
+    let read_cap = cap.min(budget.bytes);
     let mut body = Vec::new();
-    file.take(cap + 1)
+    file.take(read_cap + 1)
         .read_to_end(&mut body)
         .map_err(|e| Unsafe(format!("refusing gate-ledger entry {name}: {e}")))?;
+    #[cfg(test)]
+    discovery_work_tests::READ_BYTES.with(|n| n.set(n.get() + body.len() as u64));
     if body.len() as u64 > cap {
         return Err(Unsafe(format!(
             "refusing gate-ledger entry {name}: it grew past {cap} bytes while read"
@@ -209,6 +226,8 @@ fn parse_events(
             )));
         }
         budget.spend_event()?;
+        #[cfg(test)]
+        discovery_work_tests::PARSE_ATTEMPTS.with(|n| n.set(n.get() + 1));
         let event: GateEvent =
             serde_json::from_str(line).map_err(|e| bad(&format!("does not parse ({e})")))?;
         if event.v == 0 || event.v > EVENT_VERSION {
@@ -304,7 +323,7 @@ fn read_change(
 
 /// A bounded inventory of spec-to-change bindings, derived strictly from
 /// events rather than the fallible by-spec hints. Discovery retains no review
-/// payloads. Only ledgers needed by a selection consume its aggregate budget.
+/// payloads. Discovery and selection each have an aggregate work budget.
 // trace:BUG-2531 | ai:codex
 pub(crate) struct Discovery {
     ledger: File,
@@ -319,6 +338,17 @@ pub(crate) struct Discovery {
 /// Discover the gate ledger under `root`; `Ok(None)` when it does not exist.
 // trace:BUG-2403 | ai:claude
 pub(crate) fn discover(root: &Path) -> Result<Option<Discovery>, Unsafe> {
+    discover_with_budget(
+        root,
+        &mut Budget {
+            bytes: MAX_DISCOVERY_BYTES,
+            events: MAX_SELECTION_EVENTS,
+        },
+    )
+}
+
+// trace:BUG-2531 | ai:codex
+fn discover_with_budget(root: &Path, work: &mut Budget) -> Result<Option<Discovery>, Unsafe> {
     let Some((ledger, by_spec)) = ledger_dirs(root)? else {
         return Ok(None);
     };
@@ -343,9 +373,11 @@ pub(crate) fn discover(root: &Path) -> Result<Option<Discovery>, Unsafe> {
         }
         let key = change.as_key();
         discovered.push(key.clone());
-        // Each inspected file remains subject to all strict checks and finite
-        // byte/event limits. Do not debit unrelated payloads from a selection.
-        let Some(events) = read_change(&ledger, &name, &key, &mut Budget::default())? else {
+        // One budget for the entire scan, including retries. Never reset this
+        // per file: 4096 individually legal files can otherwise cost 64 GiB.
+        let Some(events) = read_change(&ledger, &name, &key, work)
+            .map_err(|e| Unsafe(format!("refusing gate-ledger discovery: {e}")))?
+        else {
             return Err(Unsafe(format!(
                 "refusing gate-ledger discovery: {name} vanished while it was read"
             )));
@@ -541,4 +573,85 @@ pub(crate) fn active_bytes(root: &Path) -> Result<u64, Unsafe> {
         bytes = bytes.saturating_add(meta.len());
     }
     Ok(bytes)
+}
+
+#[cfg(test)]
+// trace:BUG-2531 | ai:codex
+mod discovery_work_tests {
+    use super::*;
+    use std::cell::Cell;
+    thread_local! {
+        pub(super) static READ_BYTES: Cell<u64> = const { Cell::new(0) };
+        pub(super) static PARSE_ATTEMPTS: Cell<usize> = const { Cell::new(0) };
+    }
+
+    fn fixture() -> (tempfile::TempDir, usize) {
+        let root = tempfile::tempdir().unwrap();
+        let dir = super::super::ledger_dir(root.path());
+        std::fs::create_dir_all(&dir).unwrap();
+        let mut size = 0;
+        for n in 100..120 {
+            let mut event = GateEvent::new(
+                ChangeKey::pr(n),
+                super::super::event::EventBody::Verdict {
+                    record: serde_json::from_value(serde_json::json!({
+                        "verdict": "request_changes", "findings": ["x".repeat(4096)]
+                    }))
+                    .unwrap(),
+                },
+            );
+            event.spec = Some("STORY-UNRELATED-1".into());
+            event.seq = 1;
+            event.at = "2026-11-12T00:00:00Z".into();
+            let body = format!("{}\n", serde_json::to_string(&event).unwrap());
+            size = body.len();
+            std::fs::write(dir.join(format!("PR-{n}.jsonl")), body).unwrap();
+        }
+        // No by-spec index: it must neither skip refusals nor permit unbounded
+        // work to prove absence for a different label.
+        (root, size)
+    }
+
+    #[test]
+    fn bug_2531_discovery_bounds_actual_unrelated_reads_and_parses() {
+        let (root, size) = fixture();
+        READ_BYTES.with(|n| n.set(0));
+        PARSE_ATTEMPTS.with(|n| n.set(0));
+        let mut budget = Budget::with_limits((size * 3) as u64, 100);
+        let err = discover_with_budget(root.path(), &mut budget)
+            .err()
+            .unwrap();
+        assert!(err.0.contains("discovery"), "{err}");
+        assert!(err.0.contains("read budget"), "{err}");
+        assert_eq!(READ_BYTES.with(Cell::get), (size * 3) as u64);
+        assert_eq!(PARSE_ATTEMPTS.with(Cell::get), 3);
+
+        READ_BYTES.with(|n| n.set(0));
+        PARSE_ATTEMPTS.with(|n| n.set(0));
+        let mut budget = Budget::with_limits((size * 20) as u64, 2);
+        let err = discover_with_budget(root.path(), &mut budget)
+            .err()
+            .unwrap();
+        assert!(err.0.contains("event budget"), "{err}");
+        assert_eq!(READ_BYTES.with(Cell::get), (size * 3) as u64);
+        assert_eq!(PARSE_ATTEMPTS.with(Cell::get), 2);
+    }
+
+    #[test]
+    fn bug_2531_torn_retries_share_the_discovery_read_budget() {
+        let root = tempfile::tempdir().unwrap();
+        let dir = super::super::ledger_dir(root.path());
+        std::fs::create_dir_all(&dir).unwrap();
+        let body = b"{\"torn\":true";
+        std::fs::write(dir.join("PR-100.jsonl"), body).unwrap();
+        READ_BYTES.with(|n| n.set(0));
+        PARSE_ATTEMPTS.with(|n| n.set(0));
+        let mut budget = Budget::with_limits((body.len() * 2) as u64, 100);
+        let err = discover_with_budget(root.path(), &mut budget)
+            .err()
+            .unwrap();
+        assert!(err.0.contains("read budget"), "{err}");
+        assert_eq!(READ_BYTES.with(Cell::get), (body.len() * 2) as u64);
+        assert_eq!(PARSE_ATTEMPTS.with(Cell::get), 0);
+    }
 }
