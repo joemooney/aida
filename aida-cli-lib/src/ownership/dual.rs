@@ -754,17 +754,20 @@ pub(crate) fn train_opened(project_root: &Path, train: u64, riders: &[u64]) {
     };
     let writer = WriterFacts::here();
     let pid = std::process::id();
+    // The start identity comes from the canonical proc_identity capture, not
+    // a legacy probe; `witness` still enforces host/boot/namespace admission.
+    // trace:BUG-2537 | ai:claude
+    let start = aida_core::proc_identity::HolderRecord::capture(pid)
+        .validate()
+        .ok()
+        .map(|identity| identity.legacy_ticks_start());
     let holder = Holder {
         seat: "train".into(),
         role: Role::Train,
         session: train_open_session(pid, train),
         tree: None,
         witnesses: writer
-            .witness(
-                pid,
-                aida_core::liveness::process_start_identity(pid).as_deref(),
-                Utc::now(),
-            )
+            .witness(pid, start.as_deref(), Utc::now())
             .into_iter()
             .collect(),
     };
