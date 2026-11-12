@@ -33,7 +33,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-09T16:33:51.967266Z
-modified_at: 2026-11-11T18:34:36.006477509Z
+modified_at: 2026-11-12T09:26:15.583635792Z
 req_type: Story
 tags:
 - area:ci
@@ -298,6 +298,13 @@ comments:
   created_at: 2026-11-11T18:34:36.006477509Z
   modified_at: 2026-11-11T18:34:36.006477509Z
   session_id: 01a1cbe100f7
+- id: 01a1cf14-491f-73b2-9834-7bf2993a9a44
+  author: joe
+  content: 'Advisor diagnosis 2026-11-12 02:30 MST for #3869 red CI (gates, ''Self-hosted routing security fixtures''): 13 errors in tests/test_dell1_controller.py LaunchIntegration. CI runs the fixture as ROOT (os.geteuid()==0), so subprocess.run(..., preexec_fn=unprivileged) runs, and ''unprivileged'' raises inside the child (SubprocessError: Exception occurred in preexec_fn). Locally/dell1 you are not root so the branch never runs, which is why the previous lanes reported nothing to fix. Fix: make ''unprivileged'' work in the CI container (e.g. call os.setgroups([]) before setgid/setuid, use an existing uid such as 65534 and handle missing CAP_SETUID by skipTest), or run that fixture via a pre-dropped user. Reproduce locally with: sudo -E python3 -m unittest tests.test_dell1_controller.LaunchIntegration. Log: gh run view 43185760473 --job 131072381103 --log-failed'
+  created_at: 2026-11-12T09:26:15.583635792Z
+  modified_at: 2026-11-12T09:26:15.583635792Z
+  session_id: 01a1ceeb-e827-7832-8991-e83d9eb95cef
+  harness_version: 2.1.322 (Claude Code)
 history:
 - id: 01a1c325-9cdb-7b81-a057-a76e1b9c8512
   author: joe
