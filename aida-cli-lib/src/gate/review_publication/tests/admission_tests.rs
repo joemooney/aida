@@ -1105,6 +1105,7 @@ fn bug2521_two_publisher_conclusive_precedence_and_legacy_recovery() {
     publish_raw(&f, &f.a, "PR-8", "waiting", at);
     publish_raw(&f, &f.b, "PR-8", "approved", at);
     assert_eq!(synced_kind(&f, "PR-8"), [rv::VerdictKind::Approved]);
+    assert!(waiting_retry_at(&f.b, "PR-8", &head).unwrap().is_none());
 
     // A legacy unprefixed Terminal, as finish_admission wrote before BUG-2521.
     let token = Uuid::new_v4();
@@ -1139,4 +1140,27 @@ fn bug2521_two_publisher_conclusive_precedence_and_legacy_recovery() {
     assert!(!f
         .step(&f.b, "PR-9", &head, Uuid::new_v4(), State::Reserved)
         .unwrap());
+}
+
+// Node ordering picks a's older answer, but b's newer retry must delay every
+// watcher, including a fresh one and one whose local deadline already elapsed.
+// trace:BUG-2521 | ai:codex
+#[test]
+fn bug2521_two_publisher_latest_waiting_delays_absent_and_elapsed_attempts() {
+    let f = Fixture::new();
+    let _env = f.environment();
+    let now = chrono::Utc::now();
+    let older = now - chrono::Duration::minutes(22);
+    let newer = now - chrono::Duration::minutes(1);
+    publish_raw(&f, &f.a, "PR-7", "waiting", &older.to_rfc3339());
+    publish_raw(&f, &f.b, "PR-7", "waiting", &newer.to_rfc3339());
+    let deadline = newer + chrono::Duration::seconds(WAITING_RETRY_SECS);
+    assert_eq!(
+        waiting_retry_at(&f.b, "PR-7", &"a".repeat(40)).unwrap(),
+        Some(deadline)
+    );
+    assert!(waiting_retry_at(&f.b, "PR-7", &"b".repeat(40))
+        .unwrap()
+        .is_none());
+    crate::review_watch::bug2521_assert_peer_waiting_backoff(&f.b, deadline);
 }

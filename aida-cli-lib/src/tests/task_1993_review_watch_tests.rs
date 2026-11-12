@@ -3501,3 +3501,60 @@ fn bug2521_waiting_preserves_capacity_and_conclusive_verdict_gates() {
         }
     }
 }
+
+// Exercise real synced publications from the two-node signing fixture, with
+// either no local attempt or an elapsed local retry on the final shared try.
+// trace:BUG-2521 | ai:codex
+pub(crate) fn bug2521_assert_peer_waiting_backoff(
+    root: &Path,
+    deadline: chrono::DateTime<chrono::Utc>,
+) {
+    let store = Store::open(root, "github:github.com/owner/repo").unwrap();
+    let mut c = change(7, 1, false);
+    c.head = "a".repeat(40);
+    for elapsed_local in [false, true] {
+        if elapsed_local {
+            store
+                .transaction("PR-7", |state| {
+                    let mut a: Attempt = serde_json::from_value(serde_json::json!({
+                        "head": c.head, "token": uuid::Uuid::new_v4().to_string(),
+                        "phase": "exited"
+                    }))
+                    .unwrap();
+                    a.no_verdict_attempts = 2;
+                    a.no_verdict_retry_at = Some(chrono::Utc::now() - chrono::Duration::minutes(2));
+                    state
+                        .entries
+                        .entry("PR-7".into())
+                        .or_default()
+                        .attempts
+                        .push(a);
+                    Ok(())
+                })
+                .unwrap();
+        }
+        let attempts = |state: State| {
+            serde_json::to_value(
+                state
+                    .entries
+                    .get("PR-7")
+                    .map(|entry| &entry.attempts)
+                    .cloned()
+                    .unwrap_or_default(),
+            )
+            .unwrap()
+        };
+        let before = attempts(store.load().unwrap());
+        let action = select_with_coverage(&store, &c, None, 2, || None).unwrap();
+        assert!(
+            matches!(action, Action::Skip(ref reason) if reason.contains(&format!("retry after {deadline}"))),
+            "{action:?}"
+        );
+        let after = store.load().unwrap();
+        assert_eq!(
+            attempts(after),
+            before,
+            "backoff must not consume the final attempt"
+        );
+    }
+}

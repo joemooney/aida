@@ -3234,6 +3234,7 @@ mod tests;
 #[cfg(test)]
 pub(crate) use tests::{
     bug2498_confirm_superseded, bug2498_review_worktree_release_allows_one_watch_setup_retry,
+    bug2521_assert_peer_waiting_backoff,
 };
 
 // Real process fixtures: Linux only. trace:TASK-1945 | ai:claude
