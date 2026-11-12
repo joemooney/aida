@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-11T04:08:39.262399078Z
-modified_at: 2026-11-12T08:50:15.193521339Z
+modified_at: 2026-11-12T08:50:21.688528090Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -29,6 +29,20 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Full sweep: one distributed WAITING backoff defect; exact-head CI passed.. It was punted on: other: Pickup refused: Needs Attention to InProgress requires advisor authority; this native implementer session has no active role. Existing request-changes verdict and punt remain publication vetoes. Advisor triage is required before implementation can resume. No files changed, tests run, or publication declaration made.. No triage reason was given.'
   created_at: 2026-11-12T08:50:15.193518778Z
   modified_at: 2026-11-12T08:50:15.193518778Z
+  session_id: 01a1ceeb-e827-7832-8991-e83d9eb95cef
+  harness_version: 2.1.322 (Claude Code)
+- id: 01a1cef3-6a68-7100-81dd-a63c10010adb
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (BUG-2521):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 63cddfbe4ea4
+    Recorded: 2026-11-12T08:45:13.361363481+00:00
+    Findings:
+    1. [P2] aida-cli-lib/src/gate/review_publication.rs:75-86: Compute the shared WAITING retry deadline from all effective verified, unsuperseded WAITING publications at the head, preserving conclusive precedence. watcher_history already projects one receipt per head via answering, which sorts by node/publication rather than recorded_at, so max() cannot see a newer peer WAITING. If node a records WAITING at 00:00 and node b retries and records WAITING at 00:21, a fresh watcher (or a with its local deadline elapsed) at 00:22 computes 00:20 instead of 00:41 and can consume the third shared attempt before evidence changes. Add a two-publisher/different-timestamp regression covering absent and elapsed local attempts.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-12T08:50:21.416645680Z
+  modified_at: 2026-11-12T08:50:21.416645680Z
   session_id: 01a1ceeb-e827-7832-8991-e83d9eb95cef
   harness_version: 2.1.322 (Claude Code)
 history:
