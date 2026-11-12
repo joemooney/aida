@@ -18,7 +18,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-12T17:56:12.887901799Z
-modified_at: 2026-11-12T18:10:34.573296569Z
+modified_at: 2026-11-12T19:09:42.202248204Z
 req_type: Bug
 comments:
 - id: 01a1d0e7-536c-7ad2-b218-1057d89db7e5
@@ -28,6 +28,12 @@ comments:
   modified_at: 2026-11-12T17:56:23.532445208Z
   session_id: 01a1d09a-4262-7d50-a00b-00a5a30f3934
   harness_version: 2.1.322 (Claude Code)
+- id: 01a1d12a-71ba-7611-a084-3cfb1dd61653
+  author: joe
+  content: 'Implementation and validation complete in the native lane. Train PR opening atomically records open-train ownership with its rides; taking the merge lease updates that record. Confirmed retirement/abandonment ends ownership and releases matching riders before branch cleanup, preserving riders moved to another train. Admission repairs legacy rides only from confirmed CLOSED/MERGED forge evidence and journals leave-train; open/unknown evidence retains the ride and dry runs write no repair. Changed files: aida-cli-lib/src/ownership/dual.rs, aida-cli-lib/src/pr_train.rs, aida-cli-lib/src/tests/story_1690_train_tests.rs, docs/cli/04-git-lifecycle.md. Validation: lane cargo test --profile agent -p aida-cli-lib --lib -- bug2537_train_ownership executed 5 tests, all passed; make check-ci-fast passed all 47 gates with Cargo checks delegated through the lane runner; formatting and git diff --check passed. The initial 900-second test job timed out during compilation; the successful retry used AIDA_CARGO_TIMEOUT=1800 and finished compiling in 22m05s. Navigation limitation: the supplied host codegraph client /home/joe/ai/aida/.codegraph/proxy-state/bin/codegraph is absent; doctor reports a stale index, so navigation used rg. No implementation blockers. Edits left uncommitted; native host publication and queue completion remain with the launcher.'
+  created_at: 2026-11-12T19:09:42.202248204Z
+  modified_at: 2026-11-12T19:09:42.202248204Z
+  session_id: 01a1d0f4116e
 history:
 - id: 01a1d0e7-4bc0-7643-a54b-504f3e1e4d30
   author: joe
