@@ -659,6 +659,16 @@ pub(crate) fn merge_lease_session(pid: u32) -> String {
     format!("merge-lease:{pid}")
 }
 
+/// The session a train records under after it opens and before it takes its
+/// merge lease. It is per train, so releasing this process's merge lease
+/// (which ends every record held under [`merge_lease_session`]) never closes
+/// a sibling train still waiting for its own lease. The `merge-lease:` prefix
+/// keeps the merge-lease lifecycle rules.
+// trace:BUG-2537 | ai:claude
+pub(crate) fn train_open_session(pid: u32, train: u64) -> String {
+    format!("{}:train-{train}", merge_lease_session(pid))
+}
+
 /// The train for PR `train` took its merge lease in this process.
 // trace:STORY-2325 | ai:claude
 // trace:TASK-3364 | ai:codex
@@ -667,19 +677,31 @@ pub(crate) fn train_lease_taken(
     train: u64,
     lease: &crate::merge_lock::Holder,
 ) {
+    let witnesses = crate::merge_lock::holder_witness(lease, Utc::now())
+        .into_iter()
+        .collect();
+    train_lease_taken_with(project_root, train, witnesses);
+}
+
+/// [`train_lease_taken`] with the lease holder's witnesses already resolved:
+/// the train's record moves from its per-train open session to this
+/// process's merge-lease session.
+// trace:BUG-2537 | ai:claude
+pub(crate) fn train_lease_taken_with(
+    project_root: &Path,
+    train: u64,
+    witnesses: Vec<super::types::Witness>,
+) {
     let Some(store) = store_for(project_root) else {
         return;
     };
-    let now = Utc::now();
     let pid = std::process::id();
     let holder = Holder {
         seat: "train".to_string(),
         role: Role::Train,
         session: merge_lease_session(pid),
         tree: None,
-        witnesses: crate::merge_lock::holder_witness(lease, now)
-            .into_iter()
-            .collect(),
+        witnesses,
     };
     let key = WorkKey::Train {
         train: change(train),
@@ -735,7 +757,7 @@ pub(crate) fn train_opened(project_root: &Path, train: u64, riders: &[u64]) {
     let holder = Holder {
         seat: "train".into(),
         role: Role::Train,
-        session: merge_lease_session(pid),
+        session: train_open_session(pid, train),
         tree: None,
         witnesses: writer
             .witness(

@@ -5245,6 +5245,59 @@ fn train_ci_row_progress_same_run_ancillary_identity() {
     assert!(!text.contains("appears after"));
 }
 
+// Two trains opened by one process: releasing A's merge lease must leave B,
+// still waiting for its own lease, Training with its rider refused.
+// trace:BUG-2537 | ai:claude
+#[test]
+fn bug2537_lease_release_keeps_sibling_open_train() {
+    use crate::ownership::{dual, store::OwnershipStore, Phase, WorkKey};
+    dual::enable_for_test();
+    let dir = repo();
+    let root = dir.path();
+    let store = OwnershipStore::for_project(root).unwrap().unwrap();
+    dual::train_opened(root, 70, &[21]);
+    dual::train_opened(root, 80, &[22]);
+    dual::train_lease_taken_with(root, 70, Vec::new());
+    let train = |n| WorkKey::Train {
+        train: dual::change(n),
+    };
+    let rider = |n| WorkKey::Change {
+        change: dual::change(n),
+    };
+    assert_eq!(
+        store
+            .load(&train(70))
+            .unwrap()
+            .unwrap()
+            .holder
+            .unwrap()
+            .session,
+        dual::merge_lease_session(std::process::id())
+    );
+    dual::train_lease_released(root);
+    assert!(matches!(
+        store.load(&train(70)).unwrap().unwrap().phase,
+        Phase::Closed { .. }
+    ));
+    assert_eq!(
+        store.load(&rider(21)).unwrap().unwrap().phase,
+        Phase::Leased
+    );
+    let b = store.load(&train(80)).unwrap().unwrap();
+    assert!(matches!(b.phase, Phase::Training { .. }));
+    assert_eq!(
+        b.holder.unwrap().session,
+        dual::train_open_session(std::process::id(), 80)
+    );
+    assert!(matches!(
+        store.load(&rider(22)).unwrap().unwrap().phase,
+        Phase::Training { .. }
+    ));
+    assert!(ownership_rider_refusal_with(root, 22, false, |_| false)
+        .unwrap()
+        .is_some());
+}
+
 // trace:BUG-2537 | ai:codex
 #[test]
 fn bug2537_train_ownership_open_retire_before_lease_and_readmit() {
@@ -5260,7 +5313,7 @@ fn bug2537_train_ownership_open_retire_before_lease_and_readmit() {
     let opened = store.load(&key).unwrap().unwrap();
     assert_eq!(
         opened.holder.unwrap().session,
-        dual::merge_lease_session(std::process::id())
+        dual::train_open_session(std::process::id(), 50)
     );
     assert!(matches!(opened.phase, Phase::Training { .. }));
     assert!(store.journal().iter().any(|e| e.op == "open-train"));
