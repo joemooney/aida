@@ -339,3 +339,20 @@ The native seat leaves edits uncommitted and declares host publication with a
 completing TASK-3448 subject because the SCC shrinks under the spec's explicit
 smaller-reduction allowance. Preserve the standalone `Help-Golden: unchanged`
 body trailer in the host commit and eventual squash message.
+
+### Merged-head revalidation (2026-11-12, HEAD `6203d89bbc`)
+
+The slice C implementation is already committed as `df320cc77d`; this native
+seat adds only this validation record. After merging the subsequent main
+changes, the unchanged measurement script reports 622 owners and a largest SCC
+of 350 for both HEAD and the working tree. `cmdkit` still reaches only
+`spec_arg`. Repository-wide searches confirm that the only external registry
+parser/tree-helper reference is the crate-root tree-provider injection.
+
+`cargo check --profile agent -p aida-cli-lib --tests` passed again through
+launcher job `j20261112T170312292-2-0` (exit 0, 1m 48s). The help co-change
+guard against `origin/main` and `git diff --check` passed. The implementation
+commit already contains the standalone `Help-Golden: unchanged` trailer.
+No Rust tests executed in this revalidation (`untested=true`); CI remains the
+gate under the binding advisor brief. The reviewed Codegraph executable is
+still absent at the supplied absolute path; navigation used `rg`.
