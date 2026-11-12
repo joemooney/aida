@@ -536,15 +536,15 @@ fn early_handlers_run_without_a_store_and_continue_reaches_the_store_phase() {
     });
 }
 
-/// The body of `fn run()` in `lib_part1.rs`, up to its closing brace.
+/// The body of `fn run()` in `cli_entry.rs`, up to its closing brace.
 fn run_fn_body() -> String {
-    let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src/lib_part1.rs");
+    let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src/cli_entry.rs");
     let text = std::fs::read_to_string(path).unwrap();
     // Match the function name without coupling this invariant to its parameters.
     // trace:BUG-2505 | ai:codex
     let start = text
         .find("\npub(crate) fn run(")
-        .expect("lib_part1.rs defines run()");
+        .expect("cli_entry.rs defines run()");
     let end = start + text[start..].find("\n}\n").expect("run() closes");
     text[start..end].to_string()
 }
@@ -597,7 +597,7 @@ fn run_dispatches_early_handlers_before_any_store_is_opened() {
         }
         let text = std::fs::read_to_string(&path).unwrap();
         for (_, line) in production_lines(&text) {
-            if line.contains("invocation.run_early(") && name != "lib_part1.rs" {
+            if line.contains("invocation.run_early(") && name != "cli_entry.rs" {
                 sites.push(format!("{name}: early"));
             }
             if line.contains("invocation.run_store(") {
@@ -608,7 +608,7 @@ fn run_dispatches_early_handlers_before_any_store_is_opened() {
     sites.sort();
     assert_eq!(
         sites,
-        ["git_backend_cmd.rs", "lib_part1.rs", "store_sync.rs"],
+        ["cli_entry.rs", "git_backend_cmd.rs", "store_sync.rs"],
         "one store dispatch per stage: git-backend, legacy, distributed"
     );
     let store_sync =

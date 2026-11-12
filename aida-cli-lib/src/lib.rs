@@ -848,18 +848,526 @@ use std::collections::HashSet;
 use std::io::IsTerminal;
 use uuid::Uuid;
 
-// trace:TASK-840 | ai:claude
-/// Render a registry [`crate::glyphs::Glyph`] honoring the active glyph profile
-/// (`AIDA_GLYPHS` env / `[ui] glyphs` config / default unicode). The crate-root
-/// twin of the module-local `glyph()` helpers in `auto_complete.rs`,
-/// `status_cleanup.rs`, etc. Called fully-qualified (`crate::glyph(...)`) from
-/// the migrated literal sites so it resolves uniformly from main-code and
-/// inline test-module scopes alike. Default (unicode) output is byte-for-byte
-/// identical to the raw literals it replaced.
-// SPLIT BY AI
-// trace:TASK-1538 | ai:antigravity
-include!("lib_part1.rs");
-include!("lib_part3.rs");
+// Named modules retain the existing crate-root helper paths.
+// trace:TASK-3428 | ai:codex
+mod glyph_render;
+pub(crate) use glyph_render::glyph;
+mod cli_entry;
+pub use cli_entry::main_entry;
+pub(crate) use cli_entry::{install_sigpipe_handler, run, SoftSignpostShown, TypedPayloadEmitted};
+mod history_filter;
+pub(crate) use history_filter::history_should_exclude_meta;
+mod output_policy;
+pub(crate) use output_policy::{
+    apply_color_mode, enforce_json_format_capability, json_capability_gate,
+    non_interactive_confirm, non_interactive_confirm_from, resolve_agent_mode,
+    review_may_launch_reviewer,
+};
+mod list_render;
+pub use list_render::format_weight;
+pub(crate) use list_render::{
+    agent_list_default_cap, agent_list_truncation_header, build_list_fields_lines,
+    build_list_fields_lines_with, empty_list_hint_line, list_field_header, list_fields_help,
+    list_hidden_hint_lines, render_search_fields, resolve_agent_list_limit, resolve_list_sort,
+    search_fields_help, toon_status_token, TOON_LIST_DEFAULT_FIELDS, TOON_LIST_FIELD_ALIASES,
+    TOON_LIST_KNOWN_FIELDS,
+};
+mod agent_errors;
+pub(crate) use agent_errors::{
+    agent_error_block, agent_error_summary_help, extract_aida_suggestion,
+};
+mod cast_recording;
+pub(crate) use cast_recording::{
+    asciinema_available, asciinema_command_slug, default_cast_title, derive_semantic_title,
+    derive_spec_aware_slug, maybe_run_asciinema_wrapper, resolve_cast_output_path,
+    shell_command_for_asciinema, shell_quote, slugify_str, strip_asciinema_wrapper_args,
+    truncate_asciinema_slug,
+};
+mod argv_rewrite;
+pub(crate) use argv_rewrite::{
+    bare_aida_action, bare_aida_picker_argv, builtin_alias_rewrites,
+    cwd_in_initialized_aida_project, parse_help_commands_args, project_is_aida_initialized,
+    rewrite_advisor_assess, rewrite_agent_default_new, rewrite_groom_alias, rewrite_list_alias,
+    rewrite_personal_view_alias, rewrite_queue_default_list, rewrite_type_alias, BareAidaAction,
+    ListLensAlias, LIST_LENS_ALIASES,
+};
+mod review_helpers;
+pub(crate) use review_helpers::{parse_review_mode, pr_head_sha_best_effort, read_review_mode};
+mod finding_queue;
+#[cfg(test)]
+pub(crate) use finding_queue::queue_promoted_finding;
+mod gitignore_entries;
+pub(crate) use gitignore_entries::add_aida_gitignore_entries;
+mod store_write_policy;
+pub(crate) use store_write_policy::command_triggers_per_write_auto_push;
+mod status_policy;
+pub(crate) use status_policy::{
+    approval_forbidden_for_type, manual_epic_status_edit_forbidden, queue_at_filing_refusal,
+    resolve_human_only, status_requires_advisor_authority, validate_status_input_for_type,
+    zen_auto_approve_authorized, QueueAtFilingRefusal, VALID_STATUS_INPUTS,
+};
+pub use status_policy::{
+    queue_done_lifecycle_refusal, queue_done_lifecycle_refusal_message,
+    status_advance_requires_advisor_authority, QueueDoneLifecycleRefusal,
+};
+mod ci_staleness;
+pub(crate) use ci_staleness::{
+    classify_changed_files, is_script_path, is_test_path, is_workflow_path, pr_stale_check,
+    pr_stale_check_warning, pr_triggered_workflow_files, script_referenced_by_pr_workflows,
+    stale_check_branch_ref, workflow_is_pr_triggered, StaleCheckWarning,
+};
+mod ci_watch;
+pub(crate) use ci_watch::watch_ci_terminal;
+mod bounded_process;
+pub(crate) use bounded_process::{
+    command_output_with_timeout_capped, command_output_with_timeout_detail,
+    command_output_with_timeout_forwarding, kill_process_group, BoundedCommandOutput,
+    FORGE_CLI_CALL_TIMEOUT,
+};
+mod forge_lookup;
+pub(crate) use forge_lookup::{
+    forge_lookup_output, resolve_glab_binary, with_forge_lookup_timeout, FORGE_LOOKUP_TIMED_OUT,
+    FORGE_LOOKUP_TIMEOUT,
+};
+mod store_lookup;
+pub(crate) use store_lookup::load_store_for_lookup;
+mod statusline_counts;
+pub(crate) use statusline_counts::{
+    cross_user_role_routed_depth, read_draft_backlog_depth, read_queue_depth,
+    read_urgent_unread_count, read_urgent_unread_count_for,
+};
+mod session_warnings;
+pub(crate) use session_warnings::{
+    active_reviewer_unmerged_pr, cross_role_queue_waiting, local_main_already_at_origin,
+    pr_number_from_scope, pull_noop_warning, read_queue_role_counts, release_unmerged_pr_warning,
+    session_end_cross_role_warning,
+};
+mod default_branch;
+mod orchestrator_badge;
+pub(crate) use default_branch::{
+    resolve_default_branch_ref, resolve_default_branch_ref_until, DefaultBranchResolveTimedOut,
+};
+mod plan_structure;
+pub(crate) use plan_structure::ULTRAPLAN_STRUCTURE;
+mod worktree_dirty;
+pub(crate) use worktree_dirty::working_tree_is_dirty;
+
+use aida_core::{
+    check_migration_status,
+    check_scaffold_status,
+    determine_requirements_path,
+    forbidden_attention_transition,
+    merge_agents_md_aida_block,
+    seed_meta_requirements,
+    // trace:TASK-331 — shared atomic-write util, promoted from BUG-228's local copy
+    write_atomic,
+    AgentsMdBlockMerge,
+    AttentionReason,
+    Comment,
+    DatabaseBackend,
+    FieldChange,
+    FileStatus,
+    // GitLab integration
+    GitLabClient,
+    GitLabConfig,
+    IdFormat,
+    IssueFilter,
+    IssueState,
+    MigrationCheck,
+    NumberingStrategy,
+    RelationshipType,
+    Requirement,
+    RequirementPriority,
+    RequirementStatus,
+    RequirementType,
+    RequirementsStore,
+    ScaffoldConfig,
+    Scaffolder,
+    Storage,
+};
+
+use crate::cli::{
+    AdvisorCommand, AgentCommand, AgentNewCommand, ApprovalCommand, BacklogCommand, BlockCommand,
+    BriefCommand, CacheCommand, Cli, Command, CommentCommand, ConfigCommand, DbCommand,
+    DepsCommand, DevCommand, DrainCommand, FindingsCommand, FocusCommand, GitHubCommand,
+    GitLabCommand, GlyphCommand, GraphCommand, HeadlessCommand, HistoryCommand, IdentityCommand,
+    JiraCommand, LoadCommand, MailboxCommand, McpCommand, MemoriesCommand, NodeCommand,
+    OrchestratorCommand, OutputFormat, PlanCommand, PrCommand, PuntsCommand, QuestionsCommand,
+    QueueCommand, RelationshipCommand, ReleaseCommand, ReviewCommand, RoleCommand,
+    RolePromptCommand, RoleScopeCommand, ScaffoldCommand, SessionCommand, SessionManifestCommand,
+    SkillCommand, SoloAction, SpecCommand, StackCommand, TeamCommand, TerminalCommand,
+    TraceCommand, UpgradeCommand, UsageCommand, WorkerCommand, WorktreeCommand,
+    WorktreePoolCommand, ZenCommand,
+};
+
+// trace:BUG-1745 | ai:codex
+#[cfg(test)]
+#[path = "tests/bug_1745_error_channel_tests.rs"]
+mod bug_1745_error_channel_tests;
+#[cfg(test)]
+#[path = "tests/bug_1749_doctor_toon_tests.rs"]
+mod bug_1749_doctor_toon_tests;
+#[cfg(test)]
+#[path = "tests/story_737_delight_tests.rs"]
+mod story_737_delight_tests;
+// trace:TASK-1555 | ai:claude
+#[cfg(test)]
+#[path = "tests/task_1555_ci_gate_tiers_tests.rs"]
+mod task_1555_ci_gate_tiers_tests;
+// trace:TASK-2238 | ai:claude
+#[cfg(test)]
+#[path = "tests/task_2238_review_sweep_tests.rs"]
+mod task_2238_review_sweep_tests;
+// trace:TASK-1562 | ai:claude
+#[cfg(test)]
+#[path = "tests/task_1562_worktree_reclaim_tests.rs"]
+mod task_1562_worktree_reclaim_tests;
+// trace:BUG-1723 | ai:claude
+#[cfg(test)]
+#[path = "tests/bug_1723_config_trust_tests.rs"]
+mod bug_1723_config_trust_tests;
+// trace:TASK-1472 | ai:claude
+#[cfg(test)]
+#[path = "tests/task_1472_bare_aida_picker_tests.rs"]
+mod task_1472_bare_aida_picker_tests;
+
+#[cfg(test)]
+#[path = "tests/bug_783_list_hidden_hints_tests.rs"]
+mod bug_783_list_hidden_hints_tests;
+
+#[cfg(test)]
+#[path = "tests/story_1644_list_sort_cap_tests.rs"]
+mod story_1644_list_sort_cap_tests;
+
+#[cfg(test)]
+#[path = "tests/task_1486_store_refusal_tests.rs"]
+mod task_1486_store_refusal_tests;
+
+#[cfg(test)]
+#[path = "tests/task_1487_store_polish_tests.rs"]
+mod task_1487_store_polish_tests;
+
+#[cfg(test)]
+#[path = "tests/story_423_asciinema_tests.rs"]
+mod story_423_asciinema_tests;
+
+// trace:BUG-588 | ai:claude
+#[cfg(test)]
+#[path = "tests/bug_588_history_id_resolves_uuid_tests.rs"]
+mod bug_588_history_id_resolves_uuid_tests;
+
+// trace:TASK-1480 | ai:claude
+#[cfg(test)]
+#[path = "tests/task_1480_history_id_alias_tests.rs"]
+mod task_1480_history_id_alias_tests;
+
+// trace:TASK-1507 | ai:claude
+#[cfg(test)]
+#[path = "tests/task_1507_history_cache_tests.rs"]
+mod task_1507_history_cache_tests;
+
+// trace:TASK-1508 | ai:claude
+#[cfg(test)]
+#[path = "tests/task_1508_history_source_tests.rs"]
+mod task_1508_history_source_tests;
+
+// trace:STORY-1650 | ai:claude
+#[cfg(test)]
+#[path = "tests/story_1650_history_flow_tests.rs"]
+mod story_1650_history_flow_tests;
+
+// trace:BUG-1631 | ai:claude
+#[cfg(test)]
+#[path = "tests/bug_1631_history_spec_id_tests.rs"]
+mod bug_1631_history_spec_id_tests;
+
+// trace:BUG-1635 | ai:claude
+#[cfg(test)]
+#[path = "tests/bug_1635_history_event_modes_tests.rs"]
+mod bug_1635_history_event_modes_tests;
+
+// trace:TASK-1512 | ai:claude
+#[cfg(test)]
+#[path = "tests/task_1512_history_transition_filters_tests.rs"]
+mod task_1512_history_transition_filters_tests;
+
+/// Classification of an `AIDA_STORE` value: either it resolves to a usable
+/// store, or it's set-but-unusable with a specific reason. Lets the
+/// resolution core stay pure/unit-testable while the env wrapper decides
+/// whether to print the BUG-567 fall-through notice. Re-exported from
+/// `aida-core::store_locate`, the canonical resolver both this CLI and
+/// `aida-tui` route through.
+// trace:BUG-567 trace:TASK-1141 | ai:claude
+use aida_core::store_locate::StoreOverride;
+
+#[cfg(test)]
+#[path = "tests/delegated_reviewer_tests.rs"]
+mod delegated_reviewer_tests;
+
+#[cfg(test)]
+#[path = "tests/story_569_review_brief_tests.rs"]
+mod story_569_review_brief_tests;
+
+#[cfg(test)]
+#[path = "tests/task_760_intake_config_section_tests.rs"]
+mod task_760_intake_config_section_tests;
+
+#[cfg(test)]
+#[path = "tests/task_1021_autopilot_config_section_tests.rs"]
+mod task_1021_autopilot_config_section_tests;
+
+#[cfg(test)]
+#[path = "tests/task_304_ultraplan_cadence_tests.rs"]
+mod task_304_ultraplan_cadence_tests;
+
+#[cfg(test)]
+#[path = "tests/story_760_store_mirror_tests.rs"]
+mod story_760_store_mirror_tests;
+
+#[cfg(test)]
+#[path = "tests/story_441_archive_config_tests.rs"]
+mod story_441_archive_config_tests;
+
+#[cfg(test)]
+#[path = "tests/story_284_store_sync_tests.rs"]
+mod story_284_store_sync_tests;
+
+#[cfg(test)]
+#[path = "tests/bug_1468_stale_check_tests.rs"]
+mod bug_1468_stale_check_tests;
+
+#[cfg(test)]
+#[path = "tests/forge_binary_resolution_tests.rs"]
+mod forge_binary_resolution_tests;
+
+// ───────────────────────────────────────────────────────────────────
+// STORY-79 — background fetch from statusline (auto-freshness)
+// ───────────────────────────────────────────────────────────────────
+
+/// Pure source-label resolver for `aida whoami`'s user-id line. Mirrors
+/// `current_user_id`'s resolution order (`AIDA_USER` → `USER` → `USERNAME` →
+/// default) over already-read env values, so the printed source label can never
+/// drift from the value `current_user_id` actually returned. Each arg is the
+/// env var's value as `Option`, where an empty string counts as unset (matching
+/// the `is_ok_and(|v| !v.is_empty())` checks the resolver uses).
+/// trace:TASK-784
+#[cfg(test)]
+#[path = "tests/statusline_tests.rs"]
+mod statusline_tests;
+
+// trace:TASK-1479 | ai:claude
+#[cfg(test)]
+#[path = "tests/statusline_client_adapters_integration_tests.rs"]
+mod statusline_client_adapters_integration_tests;
+
+#[cfg(test)]
+#[path = "tests/bug_88_pr_lookup_parse_tests.rs"]
+mod bug_88_pr_lookup_parse_tests;
+
+/// BUG-257: `gh_stderr_is_network_error` classifies a `gh` stderr line as a
+/// transient network error vs. an auth/parse/other failure. The split powers
+/// the `PrLookup::GhUnreachable` variant so the orchestrator can report
+/// *Inconclusive* (drain pauses) instead of conflating "no PR" with "can't
+/// reach the API". trace:BUG-257 | ai:claude
+#[cfg(test)]
+#[path = "tests/bug_257_gh_stderr_network_classifier_tests.rs"]
+mod bug_257_gh_stderr_network_classifier_tests;
+
+/// BUG-266: `claude_log_indicates_api_outage` classifies the headless
+/// implementer's JSONL log as evidence the upstream Anthropic API took the
+/// session out (a transient outage), rather than the implementer attempting
+/// the work and failing. The orchestrator flips that phase from *failed* to
+/// *Inconclusive* (the BUG-257 path), so a 529 / 5xx / stream-timeout no
+/// longer marks a spec failed-by-implementer. trace:BUG-266 | ai:claude
+#[cfg(test)]
+#[path = "tests/bug_266_anthropic_api_outage_classifier_tests.rs"]
+mod bug_266_anthropic_api_outage_classifier_tests;
+
+#[cfg(test)]
+#[path = "tests/bug_354_text_question_classifier_tests.rs"]
+mod bug_354_text_question_classifier_tests;
+
+#[cfg(test)]
+#[path = "tests/bug_87_queue_filter_tests.rs"]
+mod bug_87_queue_filter_tests;
+
+/// BUG-231: `aida findings promote` flipped status to Approved and printed
+/// "joins the work queue" but never called `queue add` — the finding ended
+/// up Approved and in no queue (a silent half-success). These cover the
+/// fixed `queue_promoted_finding` helper: it routes to a real queue, honors
+/// `--for`, and surfaces a queue-add failure as an error.
+#[cfg(test)]
+#[path = "tests/bug_231_findings_promote_tests.rs"]
+mod bug_231_findings_promote_tests;
+#[cfg(test)]
+#[path = "tests/cr_8_filing_provenance_tests.rs"]
+mod cr_8_filing_provenance_tests;
+#[cfg(test)]
+#[path = "tests/story_1428_gate_promote_tests.rs"]
+mod story_1428_gate_promote_tests;
+
+/// BUG-574: reliability papercuts — spurious non-zero exits on the idempotent
+/// re-entry paths of `aida session start` (re-running for a scope this clone
+/// already leases) and `aida pr ship` (re-running on an already-merged PR).
+/// Both are benign no-ops that completed, so they must exit 0 — reserving
+/// non-zero for real failures — exactly like the BUG-573 read-only contract.
+/// These tests pin the pure decision points that drive the exit-0 behavior.
+/// trace:BUG-574 | ai:claude
+#[cfg(test)]
+#[path = "tests/bug_574_spurious_exit_tests.rs"]
+mod bug_574_spurious_exit_tests;
+
+#[cfg(test)]
+#[path = "tests/lease_enforcement_tests.rs"]
+mod lease_enforcement_tests;
+
+#[cfg(test)]
+#[path = "tests/scope_fallback_tests.rs"]
+mod scope_fallback_tests;
+
+#[cfg(test)]
+#[path = "tests/store_walkup_tests.rs"]
+mod store_walkup_tests;
+
+#[cfg(test)]
+#[path = "tests/session_end_resolution_tests.rs"]
+mod session_end_resolution_tests;
+
+#[cfg(test)]
+#[path = "tests/terminal_status_guard_tests.rs"]
+mod terminal_status_guard_tests;
+
+/// TASK-292 — `aida queue work --auto-complete` with no positional SPEC id
+/// inherits the no-arg "pick the queue head" semantics. These cover the pure
+/// pickup-order resolver: drivable-status classification, skipping in-flight
+/// heads, and the empty-vs-all-in-flight error split.
+#[cfg(test)]
+#[path = "tests/auto_complete_head_tests.rs"]
+mod auto_complete_head_tests;
+
+/// TASK-293 — the `next` / `nextN` keyword parser. Covers every named form
+/// in the acceptance criteria (`next`, `next1`, `next 1`, `next3`, `next 3`)
+/// plus the malformed-input edge cases. The drain machinery itself
+/// (empty-queue, N > queue-length) is the already-tested `drain_batch` /
+/// `pick_auto_complete_head` — this module only covers the pure parse.
+/// trace:TASK-293 | ai:claude
+#[cfg(test)]
+#[path = "tests/next_keyword_tests.rs"]
+mod next_keyword_tests;
+
+/// STORY-86 — env-flag opt-out + colorize_status coverage for the new
+/// `Done` variant. Integration coverage (set up git+store, exercise the
+/// helper end-to-end) lives in the verification script in the plan; the
+/// unit slice here protects the bits that are pure functions.
+/// trace:STORY-86 | ai:claude
+#[cfg(test)]
+#[path = "tests/auto_bump_done_tests.rs"]
+mod auto_bump_done_tests;
+
+/// BUG-95: regression coverage for the claim that `aida pull --code-only`
+/// skips the Done → Completed auto-bump. The bug-as-filed asserted the
+/// conditional was nested in the wrong branch; the current structure has
+/// the auto-bump correctly inside the code-pull block (gated by
+/// `!store_only`), so `--code-only` (code_only=true, store_only=false)
+/// reaches it. This test exercises that path end-to-end via
+/// `handle_pull_command` and verifies the bump fires.
+/// trace:BUG-95 | ai:claude
+#[cfg(test)]
+#[path = "tests/handle_pull_command_tests.rs"]
+mod handle_pull_command_tests;
+
+/// TASK-106: coverage for the `aida push` / `aida pull` scope flags —
+/// all four combinations (default / --code-only / --store-only / both)
+/// at the clap-parse layer, the `AIDA_PUSH_DEFAULT` env-var override,
+/// and the mutual-exclusion guard. trace:TASK-106 | ai:claude
+#[cfg(test)]
+#[path = "tests/push_pull_scope_tests.rs"]
+mod push_pull_scope_tests;
+
+/// TASK-234 / TASK-241: integration coverage for the git-state
+/// classifiers behind `aida queue list`'s "Done — awaiting merge"
+/// section and `aida show`'s git-linkage section. Both extracted
+/// helpers (`classify_in_flight_specs`, `collect_git_linkage`) are
+/// gh-free — they only run `git` — so a temp repo with hand-built
+/// commits exercises every branch without a GitHub round-trip.
+/// trace:TASK-234 TASK-241 | ai:claude
+#[cfg(test)]
+#[path = "tests/in_flight_linkage_integration_tests.rs"]
+mod in_flight_linkage_integration_tests;
+
+/// TASK-241: coverage for the squash-merge PR-number parser that
+/// `aida show`'s git-linkage section uses to point shipped specs at
+/// their merged PR. trace:TASK-241 | ai:claude
+#[cfg(test)]
+#[path = "tests/git_linkage_tests.rs"]
+mod git_linkage_tests;
+
+/// STORY-511: coverage for the forge-aware change-request (PR/MR) linkage
+/// formatter that `aida show`'s git-linkage section renders. Fully
+/// isolated — no git repo, no `gh`/`glab` on PATH, no I/O — the rendering
+/// is a pure function of (ForgeKind, ChangeLinkageState). EPIC-35 slice 5.
+/// trace:STORY-511 | ai:claude
+#[cfg(test)]
+#[path = "tests/change_linkage_format_tests.rs"]
+mod change_linkage_format_tests;
+
+/// TASK-1475 (CR-8 acceptance 6 follow-up): coverage for `filing_drift_hint`
+/// — the filing-provenance staleness signal `aida show` / `aida why`
+/// render. Pure git, no `gh`/`glab` on PATH.
+// trace:TASK-1475 | ai:claude
+#[cfg(test)]
+#[path = "tests/task_1475_filing_drift_tests.rs"]
+mod task_1475_filing_drift_tests;
+
+/// TASK-238: coverage for the queue-list tag surfacing — the inline
+/// chip formatter and the `--by-batch` group key. trace:TASK-238
+#[cfg(test)]
+#[path = "tests/queue_tag_tests.rs"]
+mod queue_tag_tests;
+
+/// TASK-107: regression coverage for `aida fetch`. The behaviors we
+/// pin: (1) code-leg fetch updates origin/<branch> without touching the
+/// worktree, (2) cache-invalidation hook fires after the store leg
+/// (best-effort, off the real `~/.aida` since `AIDA_HOME` overrides it
+/// for tests), (3) `--code-only` / `--store-only` route correctly,
+/// (4) the auto-bump does NOT fire on fetch — that's a pull-only
+/// behavior. trace:TASK-107 | ai:claude
+#[cfg(test)]
+#[path = "tests/handle_fetch_command_tests.rs"]
+mod handle_fetch_command_tests;
+
+#[cfg(test)]
+#[path = "tests/derive_parent_epic_label_tests.rs"]
+mod derive_parent_epic_label_tests;
+
+#[cfg(test)]
+#[path = "tests/format_review_story_display_tests.rs"]
+mod format_review_story_display_tests;
+
+#[cfg(test)]
+#[path = "tests/auto_branch_tests.rs"]
+mod auto_branch_tests;
+
+#[cfg(test)]
+#[path = "tests/worktree_dirty_entries_tests.rs"]
+mod worktree_dirty_entries_tests;
+
+#[cfg(test)]
+#[path = "tests/add_aida_gitignore_entries_tests.rs"]
+mod add_aida_gitignore_entries_tests;
+
+#[cfg(test)]
+#[path = "tests/recent_files_for_branch_tests.rs"]
+mod recent_files_for_branch_tests;
+
+#[cfg(test)]
+#[path = "tests/branch_behind_main_tests.rs"]
+mod branch_behind_main_tests;
+
+#[cfg(test)]
+#[path = "tests/session_root_resolution_tests.rs"]
+mod session_root_resolution_tests;
+
 include!("lib_part5.rs");
 
 #[cfg(test)]
