@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-12T06:22:01.808701892Z
-modified_at: 2026-11-12T10:32:14.933230176Z
+modified_at: 2026-11-12T10:32:41.877477085Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -107,6 +107,20 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Full sweep of all 10 changed files: BUG-2530 AC1 verified by admission call sites and local/synced/pickup fixtures; AC2 verified by ordered marker and train fixtures. One actionable regression: exact-head CI lib-1 fails the launch-input ratchet. No local builds/tests run; other CI pending.. No triage reason was given.'
   created_at: 2026-11-12T10:32:14.933221226Z
   modified_at: 2026-11-12T10:32:14.933221226Z
+  session_id: 01a1ceeb-e827-7832-8991-e83d9eb95cef
+  harness_version: 2.1.322 (Claude Code)
+- id: 01a1cf51-1bee-7e80-8c6a-9629a1a9eb09
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (BUG-2530):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 1ffb4a0e9072
+    Recorded: 2026-11-12T10:25:31.030550674+00:00
+    Findings:
+    1. [P2] aida-cli-lib/src/gate/ledger/store.rs:454-461: Keep the new Linux-only test module out of the production launch-input scan. Exact-head CI job 131106546356 fails launch::story_2326_launch_ratchet_tests::story_2326_ambient_aida_inputs_have_a_disposition with "unclassified production input AIDA_BUG2530_LOCK_CHILD in aida-cli-lib/src/gate/ledger/store.rs". The inline cfg(all(test, target_os = "linux")) module is not excluded by the existing production scanner. Move the regression into an excluded test file/module layout or correctly teach the scanner to exclude compound test-only modules, without adding a test sentinel to production environment policy. Validate with cargo test -p aida-cli-lib story_2326_ambient_aida_inputs_have_a_disposition and cargo test -p aida-cli-lib bug2530_reviewer_records_with_read_only_migration_lock.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-12T10:32:41.710542647Z
+  modified_at: 2026-11-12T10:32:41.710542647Z
   session_id: 01a1ceeb-e827-7832-8991-e83d9eb95cef
   harness_version: 2.1.322 (Claude Code)
 history:
