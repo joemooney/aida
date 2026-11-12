@@ -350,6 +350,7 @@ untouched_factor = 3
 "aida-cli-lib pr_train::verified::bug2406::bug2438_old_head_spec_keyed_refusal_is_superseded_by_current_head_approval" = 15  # max 5.750s, median 5.057s over 9 runs
 "aida-cli-lib pr_train::verified::bug2406::bug2441_rework_branch_with_resolved_commit_trailer_trains" = 15  # max 5.864s, median 5.155s over 9 runs
 "aida-cli-lib pr_train::verified::bug2406::bug2441_rework_branch_with_resolved_title_trains" = 15  # max 5.833s, median 5.109s over 9 runs
+"aida-cli-lib pr_train::verified::bug2406::bug2538_long_review_history_trains_with_compact_audit" = 85  # BUG-2538: 41-round / 100+-line review history is the regression itself; measured 41.162s in CI job 131528928601, x2 rounded up
 "aida-cli-lib regen::consensus::tests::completed_rejected_or_archived_gap_allows_a_new_investigation" = 15  # max 6.811s, median 5.469s over 9 runs
 "aida-cli-lib regen::consensus::tests::explicit_file_is_idempotent_and_report_default_does_not_write" = 15  # max 6.004s, median 5.017s over 9 runs
 "aida-cli-lib requirements_cli::tags_replace_warning_tests::doctor_detects_and_heals_all_thirteen_incident_specs" = 15  # max 6.671s, median 5.321s over 9 runs
