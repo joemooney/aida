@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T23:39:41.575597Z
-modified_at: 2026-11-12T15:25:29.824693033Z
+modified_at: 2026-11-12T16:38:05.716814895Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -876,6 +876,13 @@ comments:
   created_at: 2026-11-12T15:25:29.824693033Z
   modified_at: 2026-11-12T15:25:29.824693033Z
   session_id: 01a1d032a66e
+- id: 01a1d09f-a494-7883-8ae0-1ebad64ea8db
+  author: joe
+  content: 'ADVISOR BRIEF slice B of lib_part dissolution (2026-11-12 09:45 MST, main 5a76ab9cff3; slice A #3879 merged). Acceptance item (3) only, same shape as slice A. Move lib_part1.rs (2758 lines) and lib_part3.rs (1966) out of include!() into real modules named for their content (split by cohesive area, one module per area; follow the naming used for slice A''s 15 modules), declared ''mod X;'' in lib.rs with ''pub(crate) use X::{...};'' re-exports at the crate root so every crate::name path keeps compiling. Delete include!("lib_part1.rs") and include!("lib_part3.rs") (lib.rs:861-862). Pure moves, no behavior change; explicit imports only (glob ratchet stays zero). Rewrite path-keyed ledgers with scripts/relocate-ledger-paths.py (plus split-owner mappings as in slice A). Leave lib_part5.rs for slice C. Do NOT mark TASK-3428 done: commit/PR title ''[AI:codex] refactor(cli): dissolve lib_part1/3 into named modules (Refs TASK-3428)''. LIGHT gate: cargo check --profile agent -p aida-cli-lib --tests plus one targeted cargo test of a moved test module, then make check-ci-fast; push and open the PR.'
+  created_at: 2026-11-12T16:38:05.716814895Z
+  modified_at: 2026-11-12T16:38:05.716814895Z
+  session_id: 01a1d09a-4262-7d50-a00b-00a5a30f3934
+  harness_version: 2.1.322 (Claude Code)
 history:
 - id: 01a1b862-2e0b-7a50-a4d0-25097c707b57
   author: joe
