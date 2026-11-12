@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-10T06:40:07.764479561Z
-modified_at: 2026-11-12T08:49:55.478482716Z
+modified_at: 2026-11-12T08:50:01.227376647Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -181,6 +181,21 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Full sweep: historical foreign verdicts reappear on discovery failure, and discovery rebuilds the corpus witness index per spec/change. CI pending at review time; no local tests run.. No triage reason was given.'
   created_at: 2026-11-12T08:49:55.478474397Z
   modified_at: 2026-11-12T08:49:55.478474397Z
+  session_id: 01a1ceeb-e827-7832-8991-e83d9eb95cef
+  harness_version: 2.1.322 (Claude Code)
+- id: 01a1cef3-18d2-7d23-83ca-d35b1638850a
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (BUG-2517):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 9e85bf20a2b2
+    Recorded: 2026-11-12T06:04:06.897462588+00:00
+    Findings:
+    1. [P2] Preserve historical foreign-copy isolation when discovery fails (aida-cli-lib/src/gate/ledger/project.rs:169 and :194). Both readers use unwrap_or(raw events), so the existing valid two-PR foreign-copy fixture starts returning the misplaced WAITING verdict again if any unrelated change ledger is malformed, unreadable, or exceeds the discovery budget. Filtering change_binding=unbound does not remove the original BUG-2517 records, which have no such marker. Propagate an unsafe/incomplete result or use a bounded trustworthy fallback that still filters the foreign copy; do not present raw foreign evidence as a current verdict. Extend bug_2517_foreign_copy_is_ignored_without_rewriting_history with an unrelated malformed ledger and cover both PR-keyed and spec-indexed readers without rewriting history.
+    2. [P2] Build the mis-key ownership index once per discovery (aida-cli-lib/src/gate/ledger/checked.rs:368-373; project.rs:412-433). Each bound/spec bucket and each change bucket calls filter_miskeyed_events, which rescans all witnesses, serializes their semantic records and recreates the complete owners map. This makes every discovery quadratic in corpus buckets times witness count despite one-pass IO. A read-only inventory of the current corpus found 699 change files, 443 spec labels and 666 phase-3 witnesses: 1,142 complete map rebuilds, roughly 1.17 GB of repeated semantic serialization per discovery. These discoveries also run during record building and verdict reads. Construct the fingerprint-to-owner map once and reuse it for all event vectors, including filter_miskeyed; add coverage that bounds witness processing to one corpus pass.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-12T08:50:00.530103117Z
+  modified_at: 2026-11-12T08:50:00.530103117Z
   session_id: 01a1ceeb-e827-7832-8991-e83d9eb95cef
   harness_version: 2.1.322 (Claude Code)
 history:
