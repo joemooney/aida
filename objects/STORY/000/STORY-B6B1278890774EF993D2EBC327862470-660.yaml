@@ -1,0 +1,36 @@
+id: 01a1d12c-7dd3-7d00-ad46-ee0c6b9c143b
+spec_id: STORY-b6b1278890774ef993d2ebc327862470-660
+agreed_id: STORY-2737
+title: 'Integration branch: fast local landing on integration, main as the batched formal-verification checkpoint'
+description: |
+  Operator decision 2026-11-12 12:11 MST: adopt a local `integration` branch for AIDA's inner loop; `main` becomes the formal-verification checkpoint.
+
+  Why: on 2026-11-12 nothing landed on main from 10:40 to 12:10 although several PRs were approved. Each stall was in the landing machinery (BUG-2538 train evidence cap, BUG-2539 Rust 1.100 gates break, BUG-2534 false no-verdict, queue rework hangs), and fixes to that machinery must land through the same path.
+
+  Sketch (advisor, operator-approved):
+  1. Branch `integration` on origin and gitlab, created from main. Approved PRs merge into it with `git merge --no-ff`, gated by `make check-ci-fast` plus `cargo check --profile agent -p aida-cli-lib --tests` (on dell1). No GitHub CI, no train.
+  2. The live `aida` binary is built from `integration` (worktree build + `aida dev activate`), so tooling fixes take effect at once; `aida dev rollback` is the safety net.
+  3. Promotion integration -> main: one PR, full CI, one review of the combined diff. The trigger is configurable and EVENT-DRIVEN by default: promote whenever integration is ahead of main, no promotion is in flight and the last promotion is at least N minutes old (default 60). A cron schedule and a minimum batch size are optional knobs. A red promotion is bisected locally on dell1, not through trains.
+  4. Per-PR attestation still holds on main through the promotion PR's own review.
+
+  Follow-up slices:
+  (a) `aida dev build` promotes from a clean `integration` == origin/integration as well as main.
+  (b) A spec state or label "landed-in-integration", set when its commit reaches integration, so the open list reflects real progress; completion still on main.
+  (c) Lanes and autoland target integration: base branch from config `[landing] integration_branch = "integration"`.
+  (d) `aida integrate promote` (or an autoland mode) opens and refreshes the promotion PR on the event-driven trigger, with config `[landing] promote = "event"|"schedule"`, `promote_min_interval`, `promote_cron`, `promote_min_batch`.
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-12T19:11:56.371806442Z
+modified_at: 2026-11-12T19:11:56.371806442Z
+req_type: Story
+filed_at:
+  code_sha: 0d6c60e6d982aad0c2c4ad38214010289a267d92
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 0d6c60e6d98
+  vendor: claude
+  session: 01a1d0eb-22cc-7262-8f6c-7266e9cc1fbb
+  harness_version: 2.1.322 (Claude Code)
