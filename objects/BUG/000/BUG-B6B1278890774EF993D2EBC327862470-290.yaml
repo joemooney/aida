@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-11T14:11:33.148855447Z
-modified_at: 2026-11-12T05:52:04.846723999Z
+modified_at: 2026-11-12T06:12:10.077948713Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -115,6 +115,12 @@ history:
   author: joe
   timestamp: 2026-11-12T05:52:05.044599100Z
   changes: []
+- id: 01a1ce62-9a01-7c40-90dd-3e8919dcd815
+  author: dirtlab
+  timestamp: 2026-11-12T06:12:10.881727971Z
+  session_id: 01a1ce62086b
+  harness_version: codex-cli 0.167.0
+  changes: []
 filed_at:
   code_sha: 11b131dfe3341e6d9c7127d64370f91366094711
   branch: main
@@ -124,6 +130,11 @@ filed_at:
   vendor: claude
   session: 01a1ca83-fabb-7663-852c-12c78d4e097f
   harness_version: 2.1.322 (Claude Code)
+attention_reason:
+  category: blocked-dependency
+  detail: 'Pickup refused: Needs Attention to InProgress requires advisor authority. Prior rework is present in the clean checkout, but Rust execution and live TASK-3448/TASK-3428 closure verification remain outstanding. Advisor triage is required before further implementation or publication.'
+  raised_by: implementer
+  raised_at: 2026-11-12T06:12:10.077948713Z
 failure_reason:
   phase: reviewer
   phase_index: 3
