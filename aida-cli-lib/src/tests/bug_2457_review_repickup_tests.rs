@@ -21,14 +21,18 @@ fn git_ok(repo: &std::path::Path, args: &[&str]) -> String {
 }
 
 fn queue_work(storage: &crate::Storage) -> anyhow::Result<()> {
+    queue_work_launch(storage, true)
+}
+
+fn queue_work_launch(storage: &crate::Storage, no_launch: bool) -> anyhow::Result<()> {
     crate::queue_cmd::handle_queue_work(
         storage,
         None,
         crate::test_env::HERMETIC_TEST_USER,
-        Some("PR-2457"),
+        Some(if no_launch { "PR-2457" } else { "STORY-2457" }),
         None,
         false,
-        /* no_launch */ true,
+        /* no_launch */ no_launch,
         crate::queue_cmd::QueueWorkRoleInput::direct(Some("reviewer")),
         /* no_pull */ true,
         None,
@@ -51,9 +55,9 @@ fn queue_work(storage: &crate::Storage) -> anyhow::Result<()> {
         false,
         false,
         false,
+        (!no_launch).then_some(crate::complexity_calibration::ComplexityLevel::High),
         None,
-        None,
-        None,
+        (!no_launch).then_some(crate::effort_calibration::EffortBucket::OneDay),
         false,
         false,
         false,
@@ -609,4 +613,70 @@ fn bug_2469_dead_review_reclaimed_only_when_new_head_covers_recorded_and_actual_
     assert_eq!(new_lease.worktree_path, tree);
     assert_eq!(git_ok(&tree, &["rev-parse", "HEAD"]), next_head);
     assert!(git_ok(&fx.main, &["for-each-ref", "refs/aida/review-coverage"]).is_empty());
+}
+
+// trace:BUG-2530 | ai:codex
+#[test]
+fn bug2530_concluded_pickup_preserves_checkout_queue_and_calibration() {
+    let fx = fixture();
+    let mut ambient = crate::test_env::AmbientGuard::hermetic_with_seat(&fx.main, "reviewer", &[]);
+    ambient.set_key("AIDA_TRUST_PID_NAMESPACE", "1");
+    let gh = fx.root.join("fake-gh");
+    crate::test_exec::write_executable(&gh, "#!/bin/sh\nexit 1\n");
+    ambient.set_key("AIDA_TEST_GH_BINARY", &gh);
+    git_ok(&fx.main, &["init", "-q", ".aida-store"]);
+    let (storage, status) = review_story(&fx.main);
+    git_ok(
+        &fx.main,
+        &["push", "-q", "origin", "HEAD:refs/pull/2457/head"],
+    );
+    queue_work(&storage).unwrap();
+    let lease = crate::list_leases(&fx.main).remove(0);
+    let tree = lease.worktree_path;
+    std::fs::remove_file(crate::lease_path(&fx.main, &lease.id)).unwrap();
+    status(aida_core::RequirementStatus::Approved);
+    let user = crate::test_env::HERMETIC_TEST_USER;
+    for row in storage.queue_list(user, false).unwrap() {
+        storage.queue_remove(user, &row.requirement_id).unwrap();
+    }
+    let before = serde_json::to_value(storage.load().unwrap()).unwrap();
+    let sha = git_ok(&tree, &["rev-parse", "HEAD"]);
+    ambient.set_key("AIDA_TEST_PR_HEAD_SHA", &sha);
+    let grant = crate::gate::seat_authority::test_support::mint_grant_for(
+        &fx.main,
+        user,
+        "advisor",
+        &["reviewer"],
+    );
+    ambient.set_key(crate::gate::seat_authority::GRANT_ENV, grant);
+    let path = crate::gate::review_verdict::verdict_path(&fx.main, "PR-2457");
+    std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+    std::fs::write(
+        path,
+        serde_json::json!({"verdict":"request-changes", "reviewed_sha":sha}).to_string(),
+    )
+    .unwrap();
+    let calibration = fx.main.join(".aida/complexity-calibration");
+    let effort = fx.main.join(".aida/effort-calibration");
+    // Remove setup's calibration so any attempted pickup write is visible.
+    for dir in [&calibration, &effort] {
+        if dir.exists() {
+            std::fs::remove_dir_all(dir).unwrap();
+        }
+    }
+    let error = queue_work_launch(&storage, false).unwrap_err();
+    assert!(
+        error
+            .to_string()
+            .contains("duplicate review is unnecessary"),
+        "{error:#}"
+    );
+    assert!(tree.join(".git").exists());
+    assert_eq!(git_ok(&tree, &["rev-parse", "HEAD"]), sha);
+    assert!(storage.queue_list(user, false).unwrap().is_empty());
+    assert_eq!(
+        serde_json::to_value(storage.load().unwrap()).unwrap(),
+        before
+    );
+    assert!(!calibration.exists() && !effort.exists());
 }

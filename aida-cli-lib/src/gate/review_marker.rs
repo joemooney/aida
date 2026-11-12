@@ -94,6 +94,8 @@ pub(crate) struct Marker {
     // trace:TASK-1750 | ai:claude
     pub pid_start: Option<String>,
     pub started_at: u64,
+    /// Subsecond ordering; absent on legacy markers, which remain conservative.
+    pub started_at_nanos: Option<u32>,
     pub ttl_secs: u64,
 }
 
@@ -105,6 +107,9 @@ impl Marker {
         spec: Option<&str>,
         by: &str,
     ) -> Self {
+        let now = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap_or_default();
         Marker {
             pr,
             head_sha: head_sha.unwrap_or("").trim().to_string(),
@@ -113,7 +118,8 @@ impl Marker {
             host: crate::coordination::hostname(),
             pid: std::process::id(),
             pid_start: aida_core::liveness::process_start_identity(std::process::id()),
-            started_at: now_secs(),
+            started_at: now.as_secs(),
+            started_at_nanos: Some(now.subsec_nanos()),
             ttl_secs: PID_BACKED_TTL_SECS,
         }
     }
@@ -143,7 +149,7 @@ impl Marker {
 
 fn serialize(m: &Marker) -> String {
     format!(
-        "pr={}\nhead_sha={}\nspec={}\nby={}\nhost={}\npid={}\npid_start={}\nstarted_at={}\nttl_secs={}\n",
+        "pr={}\nhead_sha={}\nspec={}\nby={}\nhost={}\npid={}\npid_start={}\nstarted_at={}\nstarted_at_nanos={}\nttl_secs={}\n",
         m.pr,
         m.head_sha,
         m.spec.as_deref().unwrap_or(""),
@@ -152,6 +158,7 @@ fn serialize(m: &Marker) -> String {
         m.pid,
         m.pid_start.as_deref().unwrap_or_default(),
         m.started_at,
+        m.started_at_nanos.map(|n| n.to_string()).unwrap_or_default(),
         m.ttl_secs,
     )
 }
@@ -168,6 +175,7 @@ fn parse(pr: u64, body: &str) -> Marker {
         pid: 0,
         pid_start: None,
         started_at: 0,
+        started_at_nanos: None,
         ttl_secs: CLAIM_TTL_SECS,
     };
     for line in body.lines() {
@@ -181,6 +189,9 @@ fn parse(pr: u64, body: &str) -> Marker {
                 "pid" => m.pid = v.parse().unwrap_or(0),
                 "pid_start" if !v.is_empty() => m.pid_start = Some(v.to_string()),
                 "started_at" => m.started_at = v.parse().unwrap_or(0),
+                "started_at_nanos" => {
+                    m.started_at_nanos = v.parse::<u32>().ok().filter(|n| *n < 1_000_000_000)
+                }
                 "ttl_secs" => m.ttl_secs = v.parse().unwrap_or(CLAIM_TTL_SECS),
                 _ => {}
             }
@@ -240,13 +251,18 @@ fn redundant_claim(root: &Path, m: &Marker, head: Option<&str>) -> bool {
         && v.attestation
             .as_ref()
             .is_some_and(|a| a.authorizes(v.reviewed_sha.as_deref()))
-        // Markers record whole seconds; compare both timestamps at that
-        // precision so a redundant claim in the verdict's second cannot stall
-        // the train. Approval and hold gates still decide merge authority.
+        // A legacy second identifies an interval, not an instant. Only a
+        // verdict strictly before that interval proves a redundant claim.
         && v.recorded_at
             .as_deref()
             .and_then(|at| chrono::DateTime::parse_from_rfc3339(at).ok())
-            .is_some_and(|at| at.timestamp() >= 0 && (at.timestamp() as u64) <= m.started_at)
+            .is_some_and(|at| {
+                at.timestamp() >= 0 && match m.started_at_nanos {
+                    Some(nanos) => (at.timestamp() as u64, at.timestamp_subsec_nanos())
+                        < (m.started_at, nanos),
+                    None => (at.timestamp() as u64) < m.started_at,
+                }
+            })
 }
 
 /// Write (or replace) the marker for `m.pr`.

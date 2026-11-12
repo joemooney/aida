@@ -10,6 +10,7 @@ fn claim(pr: u64, head: &str, started_at: u64, ttl: u64) -> Marker {
         pid: 0,
         pid_start: None,
         started_at,
+        started_at_nanos: None,
         ttl_secs: ttl,
     }
 }
@@ -478,17 +479,26 @@ fn bug2530_duplicate_admission_and_redundant_claim() {
         merge_gate(dir.path(), 7, || Some(head.into())),
         MergeGate::UnderReview(_)
     ));
-    for nanos in [0, 500_000_000, 999_999_999] {
-        record["recorded_at"] = chrono::DateTime::from_timestamp(m.started_at as i64, nanos)
+    // Same second: preserve a real earlier claim and ignore a later one.
+    for claim_nanos in [
+        None,
+        Some(100_000_000),
+        Some(500_000_000),
+        Some(900_000_000),
+    ] {
+        let mut precise = m.clone();
+        precise.started_at_nanos = claim_nanos;
+        write(dir.path(), &precise).unwrap();
+        assert_eq!(read(dir.path(), 7).unwrap(), precise);
+        record["recorded_at"] = chrono::DateTime::from_timestamp(m.started_at as i64, 500_000_000)
             .unwrap()
             .to_rfc3339()
             .into();
         std::fs::write(&path, record.to_string()).unwrap();
         assert_eq!(
-            merge_gate(dir.path(), 7, || Some(head.into())),
-            MergeGate::Clear
+            merge_gate(dir.path(), 7, || Some(head.into())) == MergeGate::Clear,
+            claim_nanos == Some(900_000_000)
         );
-        assert!(live_description(dir.path(), 7, Some(head)).is_none());
     }
     record["recorded_at"] = "invalid".into();
     std::fs::write(&path, record.to_string()).unwrap();

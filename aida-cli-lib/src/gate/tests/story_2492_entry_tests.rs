@@ -364,7 +364,7 @@ os.execv({exe:?}, [{exe:?}, '--exact', '--nocapture', '--test-threads=1', {test:
             ],
         );
         // trace:BUG-2530 | ai:codex — an older launcher may leave a claim
-        // in the approval's timestamp second. It must not block real train entry.
+        // after approval. It must not block real train entry.
         if decision == "approved" {
             let verdict = f.candidates(&f.a, &h).pop().unwrap();
             let at = chrono::DateTime::parse_from_rfc3339(verdict.recorded_at.as_deref().unwrap())
@@ -372,7 +372,7 @@ os.execv({exe:?}, [{exe:?}, '--exact', '--nocapture', '--test-threads=1', {test:
                 .timestamp() as u64;
             let marker = super::super::review_marker::Marker {
                 pid: 0,
-                started_at: at,
+                started_at: at + 1,
                 ..super::super::review_marker::Marker::for_this_process(
                     7,
                     Some(&h),

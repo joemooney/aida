@@ -699,7 +699,17 @@ fn bug2530_post_approval_claim_allows_train() {
     bug2530_train_claim(11, true);
 }
 
+// trace:BUG-2530 | ai:codex
+#[test]
+fn bug2530_post_approval_legacy_claim_allows_train() {
+    bug2530_train_claim_with_precision(11, true, false);
+}
+
 fn bug2530_train_claim(pr: u64, redundant: bool) {
+    bug2530_train_claim_with_precision(pr, redundant, true);
+}
+
+fn bug2530_train_claim_with_precision(pr: u64, redundant: bool, precise: bool) {
     if crate::test_env::run_path_isolated_test() {
         return;
     }
@@ -730,6 +740,9 @@ fn bug2530_train_claim(pr: u64, redundant: bool) {
     } else {
         approved_at - 1
     };
+    if !precise {
+        marker.started_at_nanos = None;
+    }
     crate::gate::review_marker::write(f.root(), &marker).unwrap();
     let result = live.merge_verified(&change, &train, lease.as_ref());
     if redundant {

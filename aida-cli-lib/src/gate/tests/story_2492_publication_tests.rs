@@ -1130,8 +1130,21 @@ fn bug2530_synced_verdict_controls_admission_and_redundant_claims() {
         let _env = env(&f.temp.path().join("home-a"));
         f.sync(&f.a);
         assert!(!f.a.join(".aida/review-verdicts").exists());
+        // A local nonconclusive opinion must not shadow the synced refusal.
+        if decision == "request-changes" {
+            let path = rv::verdict_path(&f.a, "PR-7");
+            std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+            std::fs::write(
+                path,
+                serde_json::json!({
+                    "verdict": "waiting", "reviewed_sha": f.sha,
+                })
+                .to_string(),
+            )
+            .unwrap();
+        }
         let marker = super::super::review_marker::Marker {
-            started_at: recorded_at,
+            started_at: recorded_at + 1,
             pid: 0,
             ..super::super::review_marker::Marker::for_this_process(
                 7,
