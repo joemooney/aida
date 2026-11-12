@@ -23,7 +23,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-12T17:36:24.142897628Z
-modified_at: 2026-11-12T19:38:56.290841536Z
+modified_at: 2026-11-12T20:04:03.970254555Z
 req_type: Story
 relationships:
 - rel_type:
@@ -129,6 +129,12 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a1d15c-3d91-78d3-bbd0-a603bc8eab1b
+  author: dirtlab
+  timestamp: 2026-11-12T20:04:05.649242306Z
+  session_id: 01a1d15b830e
+  harness_version: codex-cli 0.167.0
+  changes: []
 filed_at:
   code_sha: ec5a35a7108475b421baf1101b26159a7aa0fab9
   branch: main
@@ -138,6 +144,11 @@ filed_at:
   vendor: claude
   session: 01a1d09a-4262-7d50-a00b-00a5a30f3934
   harness_version: 2.1.322 (Claude Code)
+attention_reason:
+  category: other
+  detail: 'Native implementer pickup refused: Needs Attention to InProgress requires advisor authority. Existing request-changes verdict and publication veto remain in place; advisor triage/reapproval is required before this seat can pick up rework.'
+  raised_by: implementer
+  raised_at: 2026-11-12T20:04:03.970254555Z
 failure_reason:
   phase: reviewer
   phase_index: 3
