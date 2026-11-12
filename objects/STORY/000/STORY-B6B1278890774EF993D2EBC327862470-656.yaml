@@ -23,7 +23,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-12T17:36:24.142897628Z
-modified_at: 2026-11-12T20:04:03.970254555Z
+modified_at: 2026-11-12T20:43:23.601122491Z
 req_type: Story
 relationships:
 - rel_type:
@@ -99,6 +99,12 @@ comments:
   content: 'Rework approach for PR #3896: address the reviewer P2 audit-lifecycle finding in pr_train.rs and pr_train_verified.rs, with lifecycle coverage in story_1690_train_tests.rs and bug2406_train_tests.rs. Unit lifecycle test proves an audit change requires rebuild before hold release; real-builder/final-consumer fixtures prove retained audit validation after marker removal, for unchanged evidence, replacement mandate and changed protected paths. Exact help snapshot regeneration is queued to fix the CI ordering mismatch. LIGHT validation via lane jobs: mandate filter and make check-ci-fast, plus help golden test. No contract ambiguity or new design fork. This native seat cannot promote Needs Attention to InProgress: CLI requires advisor authority despite the binding advisor ruling in the launch prompt; leaving status unchanged rather than elevating roles.'
   created_at: 2026-11-12T19:38:56.290841536Z
   modified_at: 2026-11-12T19:38:56.290841536Z
+  session_id: 01a1d13f7835
+- id: 01a1d180-3851-7833-9b64-d04a5f680c9d
+  author: joe
+  content: 'Rework validation update: P2 audit lifecycle regressions all passed in executed mandate job j20261112T193720381-3-0. Overall 366 passed, 6 failed, 1 ignored. Fixed the six failures: two stale source assertions, omission of false include_gate_paths for legacy record round-trips, and isolated-process history fixtures to prevent exclusion-ledger interference. Corrected mandate rerun j20261112T204046021-2-0 is running; final fast-gate retry j20261112T204157278-459576-0 is queued. Exact help regeneration j20261112T202335855-2-0 executed successfully (1 passed), correcting only flag ordering. Executed Cargo jobs reported overlay-stale for generation agent-fc27f64a15dee42e; host validation should use a fresh generation. The requested native publication subject is recorded; follow-up edits remain uncommitted.'
+  created_at: 2026-11-12T20:43:23.601122491Z
+  modified_at: 2026-11-12T20:43:23.601122491Z
   session_id: 01a1d13f7835
 history:
 - id: 01a1d0d5-4f50-78f1-be14-90e8c89718c8
