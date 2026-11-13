@@ -278,16 +278,17 @@ fn history_cli_dispatch_skips_requirements_cache_and_busy_exits_zero() {
     use clap::Parser;
     let _env = crate::test_env::EnvVarGuard::set("AIDA_HISTORY_CACHE", "1");
     let fx = Fixture::new();
-    let cli = crate::command_registry::try_parse_from([
-        "aida",
-        "cache",
-        "refresh",
-        "--history",
-        "--if-behind",
-        "--store",
-        fx.store.to_str().unwrap(),
-    ])
-    .unwrap();
+    let cli = crate::TEST_CLI
+        .try_parse_from([
+            "aida",
+            "cache",
+            "refresh",
+            "--history",
+            "--if-behind",
+            "--store",
+            fx.store.to_str().unwrap(),
+        ])
+        .unwrap();
     let lock = test_support::hold_lock(&fx.db);
     crate::cache_cmd::early_refresh(&cli.command)
         .unwrap()
@@ -298,7 +299,7 @@ fn history_cli_dispatch_skips_requirements_cache_and_busy_exits_zero() {
         vec!["aida", "cache", "refresh", "--if-behind"],
         vec!["aida", "cache", "refresh", "--history", "--worker"],
     ] {
-        assert!(crate::command_registry::try_parse_from(args).is_err());
+        assert!(crate::TEST_CLI.try_parse_from(args).is_err());
     }
 }
 

@@ -16,8 +16,13 @@ Contained-seat acceptance remains outstanding. See the
 [deployment and acceptance guide](scripts/codegraph/README.md).
 <!-- trace:STORY-2630 | ai:codex -->
 
+`cmdkit::CliSupport<T>` provides tree building and parsing over callbacks injected
+by the crate root's `CLI_SUPPORT` (`TEST_CLI` in tests). The registry supplies its
+cached pristine tree and matches decoder at that boundary; consumers and the
+leaf helper do not import the registry. <!-- trace:TASK-3448 | ai:codex -->
+
 `cmdkit` holds the command-framework types and shared output/stakeholder vocabulary;
-existing CLI, registry and stakeholder paths re-export them.
+existing CLI and stakeholder paths re-export them.
 <!-- trace:TASK-3425 | ai:codex -->
 
 Mailbox delivery resolves named agents against current registry liveness,

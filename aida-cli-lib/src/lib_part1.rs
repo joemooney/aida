@@ -444,7 +444,7 @@ pub(crate) fn enforce_json_format_capability(argv: &mut Vec<String>) -> Result<(
 
 /// [`enforce_json_format_capability`] once JSON has been requested.
 pub(crate) fn json_capability_gate(argv: &mut Vec<String>) -> Result<()> {
-    let root = crate::command_registry::built_command();
+    let root = crate::CLI_SUPPORT.built_command();
     let matches = root.clone().try_get_matches_from(argv.clone())?;
     let mut command = &root;
     let mut selected = &matches;
