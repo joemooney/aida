@@ -1,0 +1,21 @@
+id: 01a1d2e6-3ee2-76c1-9301-d86cc8a606aa
+spec_id: STORY-b6b1278890774ef993d2ebc327862470-671
+agreed_id: STORY-2748
+title: 'Live fleet view: vendor hooks heartbeat agent activity into the event log; aida ps shows every host'
+description: 'Operator 2026-11-12 20:13: wants a snappy view of what every agent/subagent is doing per open spec. Today ''aida ps'' is host-local (dell1 lanes show as orphaned/idle on the primary) and its activity column is ''unknown''. Want: AC1 Claude Code (PostToolUse/Stop/SubagentStop hooks) and Codex (notify/session events) append a bounded heartbeat (lease id, spec, role, vendor, host, tool, path, one-line summary, ts) to the AIDA event log, rate-limited; AC2 heartbeats from other hosts reach the primary through the existing store/mail sync; AC3 ''aida ps'' shows one row per live session across hosts with last activity and age, and flags a lease with no heartbeat for >10 min; AC4 ''aida ps --watch'' refreshes in place; AC5 subagents appear nested under their parent session. Template-managed hooks (aida-core/templates) so every seat gets them.'
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-13T03:14:27.170658789Z
+modified_at: 2026-11-13T03:14:27.170658789Z
+req_type: Story
+filed_at:
+  code_sha: 0558a9e06aac10a087327ade1e1ab0a0c3d4ad50
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 5b9a248a1be
+  vendor: claude
+  session: 01a1d240-c397-7b61-b29f-bb337c138943
+  harness_version: 2.1.323 (Claude Code)
