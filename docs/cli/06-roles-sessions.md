@@ -810,19 +810,43 @@ Publication failures (including a non-fast-forward rejection) stop
 the launch.
 <!-- trace:BUG-2456 | ai:codex -->
 
-The host never resolves conflicts. It lists the conflicting files, aborts
-the merge, sends the advisor a request, and routes a fresh launch to Claude.
-A conflicting Codex resume refuses with a fresh Claude launch command;
-a Codex thread cannot resume under another vendor. Fetch, merge, abort,
-mail, or vendor-preflight failures stop the launch. A resume with pending
-edits preserves them and fetches both heads. After verifying the PR head is
+Conflicts at the exact PR head retain `MERGE_HEAD`, the unmerged index and
+working-tree markers. A locked version-1 `.aida/repair-journal.json` records
+repository, PR, original head, lane reservation and original conflict paths.
+Unknown spawn outcomes block another reservation for that head until the lane
+is proven dead. The configured vendor and model remain selected; Codex Git
+metadata remains read-only.
+
+Preparation (before launch) only restores conflicted registered exec-context
+and template outputs from the pinned main commit; it runs no generator.
+Conflicts in authoritative sources (template masters, Rust sources and other
+generator inputs) are admitted: resolving them is the lane's task, not a failed
+launch. A failed restore still refuses launch.
+
+Generation runs at publication, after the lane exits and the host has staged
+its resolved files. The registered generators (the exec-context ledger and
+`make sync-templates`) run in the host sandbox with Git metadata read-only,
+compiler wrappers disabled, Cargo offline and the seat's own recorded build
+target, within one bounded regeneration budget that covers every phase.
+Still-unresolved authoritative inputs, generator failure or timeout, or
+unexpected output writes refuse publication; generator writes are rolled back
+and the merge and journal are retained for a retry. The lane brief and host
+publication marker gate both consume the journal's original paths, including
+after a staging retry. Missing or mismatched evidence refuses pending-merge
+publication. The host completes the merge after generation; a failed commit
+retains the staged repair for retry.
+Watcher dispatch, exact-tree compile gating and refusal-notice delivery are
+subsequent slices; this foundation does not establish full automatic repair.
+<!-- trace:STORY-2710 | ai:codex -->
+
+A resume with pending edits preserves them and fetches both heads. After verifying the PR head is
 incorporated, the host probes committed trees with `git merge-tree --write-tree`.
 A clean probe admits pending work even when main has advanced. A conflicting or
 failed probe refuses without changing the index, HEAD or pending files.
 The preservation commands below apply only after branch and unfinished-merge
 preflight checks pass. A wrong-branch refusal requires restoring the recorded
-branch; an unfinished merge requires inspection and resolution or abort before
-retrying. Do not stage unresolved files or commit pending work on the wrong branch.
+branch; an unfinished merge without matching host journal evidence requires inspection
+and recovery before retrying. Do not stage unresolved files or commit pending work on the wrong branch.
 Never run host Git inside a seat clone: its configuration and hooks are
 seat-controlled. After the lane exits, inspect `aida session leases --all`
 for the recorded path and scope. For recorded clones, preserve and publish pending work through
@@ -836,30 +860,30 @@ then `git -C PATH fetch origin`, `git -C PATH merge origin/BRANCH` and
 and retry pickup with `--resume`. The clone-only `ship --from-seat` command
 does not support linked worktrees.
 If a probe fails without reporting conflicts, diagnose its error before retrying.
-For confirmed conflicts, once publication succeeds, start a fresh `aida queue work SPEC --vendor claude --fresh --no-human`
-for conflict resolution. A clean seat behind the PR head needs a fresh pickup
+After successful publication, use a fresh pickup from the current PR head. A clean seat behind the PR head needs a fresh pickup
 from the current head, without a pending-work commit or `--resume`.
 A failed adopted-seat launch restores its orphan lease so that retry can adopt
 the same tree. Host preparation is required for native children because their
 sandbox makes Git metadata read-only.
-An unfinished merge still refuses. Clean resumes use the normal merge and
-conflict checks.
+An unfinished merge needs matching host journal evidence and the original lane
+identity to resume. Clean resumes use the normal merge and conflict checks.
 <!-- trace:BUG-2504 | ai:codex -->
 
 The conflict check runs after session setup has provisioned the seat and minted
 its lease, inside the pickup's launch rollback boundary. Conflicts preserve the
-selected vendor, model, seat and lease. Before launch, pickup notifies the
-advisor, repeats vendor and containment preflight, and appends the conflict
-resolution task to the prompt. A refusal before spawn uses the ordinary setup
-rollback. The same routing applies to interactive implementer pickups.
+selected vendor, model, seat and lease. Before launch, pickup repeats vendor and
+containment preflight and appends the retained original paths to the prompt. A
+refusal before spawn uses the ordinary setup rollback. The same routing applies
+to interactive implementer pickups.
 
 An explicit resume uses the vendor that recorded the session and prints that
 reason before launch; configuration cannot move an existing thread to another
 vendor. Guided, plan-only and `--no-launch` pickups skip automatic preparation.
-Automated coverage exercises clean and conflicting PR branches with a configured
-Codex vendor, including interactive and headless routing. It does not exercise
-the complete pickup through vendor execution.
+Fixtures cover retained merges, journal reloads after staging, configured-vendor
+prompts for interactive and headless routing, and host commit completion; full
+automatic dispatch and end-to-end vendor acceptance remain later work.
 <!-- trace:BUG-2553 | ai:codex -->
+<!-- trace:STORY-2710 | ai:claude -->
 
 After a contained Codex headless implementer exits, its host commits pending
 seat edits and publishes through `ship --from-seat`, updating the existing
