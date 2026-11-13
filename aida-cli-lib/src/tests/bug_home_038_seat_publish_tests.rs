@@ -4482,6 +4482,9 @@ if '--write-ledger' in sys.argv:
     subprocess.run(['git', 'rev-parse', '--verify', 'HEAD'], check=True, capture_output=True)
     poison = subprocess.run(['git', 'config', '--get', 'repair.seatPoison'], capture_output=True)
     assert poison.returncode == 1, 'generator consumed seat-controlled Git config'
+    assert subprocess.check_output(['git', 'config', '--get', 'core.bare']).strip() == b'false'
+    subprocess.run(['git', 'show', 'HEAD:scripts/check-exec-context.py'],
+                   check=True, capture_output=True)
     for key in ('GIT_DIR', 'GIT_COMMON_DIR'):
         # Both the parent metadata and the final sanitized config overlay
         # must remain read-only, including linked worktree common/config.
@@ -4569,7 +4572,16 @@ if '--write-ledger' in sys.argv:
             )
             .as_bytes()
             .to_vec();
-            for seat_config in [poisoned, unsupported] {
+            // An include must stay hidden too: its target is readable inside
+            // the sandbox, so only the overlay prevents Git loading it.
+            // trace:STORY-2710 | ai:codex
+            let included_config = tree.join("seat-config-include");
+            std::fs::write(&included_config, "[repair]\nseatPoison = included\n").unwrap();
+            let mut with_include = config.clone();
+            with_include.extend_from_slice(
+                format!("\n[include]\npath = {}\n", included_config.display()).as_bytes(),
+            );
+            for seat_config in [poisoned, unsupported, with_include] {
                 std::fs::write(tree.join(".git/config"), &seat_config).unwrap();
                 crate::seat_clone::regenerate_repair_outputs(
                     &tree,
@@ -4588,6 +4600,7 @@ if '--write-ledger' in sys.argv:
                 );
             }
             std::fs::write(tree.join(".git/config"), config).unwrap();
+            std::fs::remove_file(included_config).unwrap();
         }
         assert_eq!(
             std::fs::read_to_string(tree.join(ledger)).unwrap(),
@@ -4646,6 +4659,18 @@ if '--write-ledger' in sys.argv:
                 assert_eq!(entry.regeneration_success, Some(false));
                 assert!(entry.regenerated_tree.is_none());
                 drop(guard);
+                // A failed post-generation gate must invalidate publication
+                // even after the operator removes the markers. Resume owns
+                // restoring preparation credit; direct retry cannot reuse it.
+                // trace:STORY-2710 | ai:codex
+                std::fs::write(tree.join(ledger), "regenerated\n").unwrap();
+                let index_before_retry = git_ok(&tree, &["ls-files", "--stage"]);
+                let retry = commit_pending(&fx.main, &tree, "feat", "repair (Refs STORY-2710)")
+                    .unwrap_err();
+                assert!(format!("{retry:#}").contains("preparation did not succeed"));
+                assert_eq!(git_ok(&tree, &["ls-files", "--stage"]), index_before_retry);
+                assert_eq!(git_ok(&tree, &["rev-parse", "HEAD"]), head);
+                assert_eq!(git_ok(&tree, &["rev-parse", "MERGE_HEAD"]), base);
                 if ledger.starts_with(".aida/") {
                     std::fs::write(tree.join(marker_source), "regenerated\n").unwrap();
                 } else {
