@@ -3,12 +3,12 @@ spec_id: STORY-b6b1278890774ef993d2ebc327862470-323
 agreed_id: STORY-2325
 title: One ownership and liveness record per piece of work (lease, PR, train, reviewer, mailbox scope)
 description: 'Regroup target 2, 2026-11-02. One typed ownership record with a single liveness rule: pid plus start identity, a heartbeat, or ''the seat HEAD is already in the PR''. Ownership passes from lease to PR when the PR opens. Dead owners are reclaimed by rule, never with --force. Trains, reviewers and relaunches query it. Mail retention is checked against message state, not the build id. Evidence: STORY-2315, BUG-2412, BUG-2220, BUG-2411, BUG-2327, TASK-1715, TASK-2021, BUG-2138, STORY-1665. Sketch-first; advisor signoff required.'
-status: InProgress
+status: Approved
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-02T19:20:50.092491662Z
-modified_at: 2026-11-11T12:18:35.006214528Z
+modified_at: 2026-11-13T02:57:19.128381371Z
 req_type: Story
 tags:
 - architecture
@@ -732,6 +732,13 @@ comments:
   created_at: 2026-11-08T03:44:45.089370411Z
   modified_at: 2026-11-08T03:44:45.089370411Z
   session_id: 01a1b923f3c3
+- id: 01a1d2d6-8f18-7091-a163-b49bbec01b85
+  author: joe
+  content: 'advisor 19:58 (operator-approved): reset In Progress -> Approved. No lease on primary or dell1 and no open PR held it (orphaned after a lane exit). Dispatching to dell1. trace:STORY-2737'
+  created_at: 2026-11-13T02:57:19.128381371Z
+  modified_at: 2026-11-13T02:57:19.128381371Z
+  session_id: 01a1d240-c397-7b61-b29f-bb337c138943
+  harness_version: 2.1.323 (Claude Code)
 history:
 - id: 01a19ed2-508b-7401-9865-70193fa0d0af
   author: joe
@@ -1073,6 +1080,15 @@ history:
   session_id: 01a1ca83-fabb-7663-852c-12c78d4e097f
   harness_version: 2.1.322 (Claude Code)
   changes: []
+- id: 01a1d2d6-83d7-7822-a275-c67f1b2c00ef
+  author: joe
+  timestamp: 2026-11-13T02:57:16.247542380Z
+  session_id: 01a1d240-c397-7b61-b29f-bb337c138943
+  harness_version: 2.1.323 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Approved
 filed_at:
   code_sha: 1b678fd5059046ff02bfb3b87c1f10d3162efda6
   branch: main
