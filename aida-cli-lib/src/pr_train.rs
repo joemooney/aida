@@ -2468,11 +2468,15 @@ pub(crate) struct LiveTrainForge<'a> {
 }
 
 impl LiveTrainForge<'_> {
-    // A journal persists intent, never a previous terminal's consent. Naming a
-    // different PR now cannot authorize any recovered member.
+    // A journal persists intent, never a previous terminal's consent. Recovery
+    // resumes only a journal whose member set is exactly the PRs named now
+    // (BUG-2547), so a human at a terminal who named them consents again; a
+    // PR named for a different train never authorizes a recovered member,
+    // and an `--all-ready` sweep never consents.
     // trace:STORY-2401 | ai:codex
-    fn for_recovery(mut self) -> Self {
-        self.named = false;
+    // trace:BUG-2556 | ai:claude
+    fn for_recovery(mut self, opts: &TrainOptions) -> Self {
+        self.named = prs_named_on_command_line(opts);
         self
     }
 
@@ -4148,7 +4152,7 @@ pub(crate) fn pr_train_handler_with_dispatch_ctx(
             dispatch_ctx,
             dispatch_abort: None,
         }
-        .for_recovery();
+        .for_recovery(opts);
         ForgeRails::new(&mut ports, uuid::Uuid::new_v4().to_string())
             .with_journal(&journal_dir)
             .resume_for(Some(&candidates))?
