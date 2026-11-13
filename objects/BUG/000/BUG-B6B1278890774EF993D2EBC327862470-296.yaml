@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-12T08:35:37.046532324Z
-modified_at: 2026-11-13T04:07:04.791337337Z
+modified_at: 2026-11-13T05:31:52.034111254Z
 req_type: Bug
 tags:
 - track:integration
@@ -163,6 +163,12 @@ comments:
   modified_at: 2026-11-13T03:37:46.021054529Z
   session_id: 01a1d2e6-f5db-7f33-9b74-3ae5fdaf9e0c
   harness_version: 2.1.323 (Claude Code)
+- id: 01a1d364-0d62-7801-846f-c2e5f080a2fe
+  author: joe
+  content: 'integration seat 22:45: PR #3910 closed as superseded. Its content is already on integration (fe5592a/79f5d9b/4e8514a); the only net delta rewrote a test to expect refusal. Slice 2 (relevant-only discovery + automatic archival) is still unimplemented and needs an approved sketch on docs/plans/2026-11-12-bug-2531-discovery-retention-sketch.md before any lane (gate/ is protected; not taken by integration seat).'
+  created_at: 2026-11-13T05:31:52.034111254Z
+  modified_at: 2026-11-13T05:31:52.034111254Z
+  session_id: 92a24ff6-1324-4fe1-a02b-b2601f384b4b
 history:
 - id: 01a1cee6-975b-7d40-8689-d35e1f109d99
   author: joe
