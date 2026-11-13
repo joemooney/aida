@@ -67,6 +67,10 @@ pub(crate) struct Member {
     pub head: String,
     pub subject: String,
     pub body: String,
+    /// Audit-only trailer retained across journal recovery; never grants cover.
+    // trace:STORY-2733 | ai:codex
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub gate_audit: Option<String>,
     /// BUG-2214: the mandate cover under which the land step releases this
     /// member's merge-hold, from the gate's most recent cover check (the
     /// pre-land re-gate refreshes it under the merge lease). `None` = no hold
@@ -74,6 +78,33 @@ pub(crate) struct Member {
     // trace:BUG-2214 | ai:claude
     #[serde(skip)]
     pub release: Option<crate::gate::mandate_ship::MandateCover>,
+    /// The live mandate cover that admitted this member's spec policy, kept
+    /// apart from `release`: a supervised member with no hold left to release
+    /// (a human-cleared one) still lands under this cover. Never journaled —
+    /// every gate run, including after journal recovery, re-reads it.
+    // trace:STORY-2733 | ai:claude
+    #[serde(skip)]
+    pub cover: Option<crate::gate::mandate_ship::MandateCover>,
+}
+
+impl Member {
+    /// The live mandate cover a protected-path audit lands under: the policy
+    /// cover, else the hold-release cover. `None` = no live mandate cover.
+    // trace:STORY-2733 | ai:claude
+    pub(crate) fn live_cover(&self) -> Option<&crate::gate::mandate_ship::MandateCover> {
+        self.cover.as_ref().or(self.release.as_ref())
+    }
+}
+
+/// The live mandate cover the final train refresh binds a member's audit to:
+/// today's fresh gate first, else the cover held since the build. A
+/// human-cleared hold leaves no release cover, so the policy cover counts.
+// trace:STORY-2733 | ai:claude
+pub(crate) fn final_live_cover<'a>(
+    fresh: &'a Member,
+    built: &'a Member,
+) -> Option<&'a crate::gate::mandate_ship::MandateCover> {
+    fresh.live_cover().or_else(|| built.live_cover())
 }
 
 /// A member left off main, and why.
@@ -159,7 +190,11 @@ pub(crate) fn car_message(m: &Member) -> String {
         format!("{subject} {suffix}")
     };
     let body = m.body.trim();
-    let trailer = format!("Aida-Train-Member: #{} at {}", m.pr, m.head);
+    let mut trailer = format!("Aida-Train-Member: #{} at {}", m.pr, m.head);
+    // trace:STORY-2733 | ai:codex
+    if let Some(audit) = &m.gate_audit {
+        trailer.push_str(&format!("\n{audit}"));
+    }
     if body.is_empty() {
         format!("{subject}\n\n{trailer}\n")
     } else {
@@ -1394,6 +1429,10 @@ fn typed_gate_member_with(
     // would release its hold; the release itself happens at land time, under
     // the merge lease, through ship's own release sequence.
     // trace:BUG-2214 | ai:claude
+    // Persist audit evidence separately from the live, non-serialized cover.
+    // trace:STORY-2733 | ai:codex
+    let policy_cover = cover_slot.as_ref().and_then(|c| c.as_ref().ok()).cloned();
+    let gate_audit = policy_cover.as_ref().and_then(|c| c.gate_audit());
     let release = match &held {
         None => None,
         Some(reason) => {
@@ -1413,12 +1452,17 @@ fn typed_gate_member_with(
             }
         }
     };
+    let gate_audit = release.as_ref().and_then(|c| c.gate_audit()).or(gate_audit);
+    // trace:STORY-2733 | ai:claude
+    let cover = policy_cover.or_else(|| release.clone());
     Ok(Member {
+        gate_audit,
         pr,
         head,
         subject,
         body,
         release,
+        cover,
     })
 }
 
@@ -2468,11 +2512,17 @@ pub(crate) struct LiveTrainForge<'a> {
 }
 
 impl LiveTrainForge<'_> {
-    // A journal persists intent, never a previous terminal's consent. Naming a
-    // different PR now cannot authorize any recovered member.
+    // A journal persists intent, never a previous terminal's consent: consent
+    // comes only from the current invocation. Recovery resumes only a journal
+    // whose member set is exactly the PRs explicitly named now (BUG-2547), so
+    // current TTY authority over that exact, named set consents for its
+    // recovered supervised members without a mandate. An `--all-ready` sweep
+    // and a non-TTY recovery never consent (a supervised member then needs a
+    // mandate cover), and a PR named for a different train never resumes it.
     // trace:STORY-2401 | ai:codex
-    fn for_recovery(mut self) -> Self {
-        self.named = false;
+    // trace:BUG-2556 | ai:claude
+    fn for_recovery(mut self, opts: &TrainOptions) -> Self {
+        self.named = prs_named_on_command_line(opts);
         self
     }
 
@@ -3259,8 +3309,11 @@ impl TrainForge for LiveTrainForge<'_> {
             })?;
         // STORY-1698 parity: the mandate is re-read from disk immediately
         // before the release that precedes the merge.
-        if !crate::gate::mandate_ship::mandate_still_active(&cover.id) {
-            return Err(format!("mandate {} is no longer active", cover.id));
+        if !crate::gate::mandate_ship::mandate_cover_still_active(cover) {
+            return Err(format!(
+                "mandate {} is no longer active or no longer covers protected paths",
+                cover.id
+            ));
         }
         let change = crate::forge::ChangeRef {
             id: member.pr,
@@ -3726,7 +3779,17 @@ impl Rails for ForgeRails<'_> {
             };
             match gate {
                 crate::forge_observed::Observed::Known(Ok(m)) if m.head == car.member.head => {
-                    fresh.push(m)
+                    // The audit is already baked into the tested car commit.
+                    // Refreshing only the live cover cannot update that commit.
+                    // trace:STORY-2733 | ai:codex
+                    if m.gate_audit != car.member.gate_audit {
+                        refused.push(Ejected {
+                            pr,
+                            reason: "its protected-path mandate audit changed after the train was built; re-train with fresh coverage".into(),
+                        });
+                    } else {
+                        fresh.push(m)
+                    }
                 }
                 crate::forge_observed::Observed::Known(Ok(m)) => {
                     if !self.ports.confirm_member_head(pr, &m.head) {
@@ -4120,23 +4183,7 @@ pub(crate) fn pr_train_handler_with_dispatch_ctx(
     } else {
         Some(journal::lock(&journal_dir)?)
     };
-    let recovered = if opts.dry_run {
-        Outcome::default()
-    } else {
-        let mut ports = LiveTrainForge {
-            project_root: project_root.clone(),
-            main_worktree: main_worktree.clone(),
-            base: base.clone(),
-            forge: forge.as_ref(),
-            named: false,
-            dispatch_ctx,
-            dispatch_abort: None,
-        }
-        .for_recovery();
-        ForgeRails::new(&mut ports, uuid::Uuid::new_v4().to_string())
-            .with_journal(&journal_dir)
-            .resume()?
-    };
+    // Resolve the requested set before journal recovery. trace:BUG-2547 | ai:codex
     let mut candidates: Vec<u64> = if opts.all_ready {
         let mut ids: Vec<u64> = forge
             .list_changes(crate::forge::ChangeFilter {
@@ -4151,6 +4198,23 @@ pub(crate) fn pr_train_handler_with_dispatch_ctx(
         ids
     } else {
         opts.prs.to_vec()
+    };
+    let recovered = if opts.dry_run {
+        Outcome::default()
+    } else {
+        let mut ports = LiveTrainForge {
+            project_root: project_root.clone(),
+            main_worktree: main_worktree.clone(),
+            base: base.clone(),
+            forge: forge.as_ref(),
+            named: false,
+            dispatch_ctx,
+            dispatch_abort: None,
+        }
+        .for_recovery(opts);
+        ForgeRails::new(&mut ports, uuid::Uuid::new_v4().to_string())
+            .with_journal(&journal_dir)
+            .resume_for(Some(&candidates))?
     };
     filter_recovered_candidates(&mut candidates, &recovered)?;
     if let Some(why) = explicit_over_max_refusal(candidates.len(), opts.max, opts.all_ready) {
@@ -4361,4 +4425,11 @@ mod tests;
 // trace:STORY-2688 | ai:codex
 pub(crate) fn pr_state_members(root: &Path) -> Result<Vec<u64>> {
     journal::pr_state_members(&root.join(".aida/train"))
+}
+
+// trace:BUG-2547 | ai:codex
+pub(crate) fn abandon_journal(name: &str) -> Result<()> {
+    let root = crate::find_project_root()?;
+    let main = crate::main_worktree_root_from(&root);
+    journal::abandon(&main.join(".aida/train"), name)
 }

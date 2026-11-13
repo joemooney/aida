@@ -466,7 +466,11 @@ the same train. If CI never starts or stays unreadable, the command exits
 non-zero and leaves the train PR open for inspection, with its members still
 eligible. Retry the same command to resume: before admitting riders, a non-dry
 train reads its intent journals under the main worktree's `.aida/train/` and
-reconciles the pinned heads with fresh forge confirmation. A completed merge is
+resumes only journals whose member PR set equals the requested PR set (order does
+not matter). `--all-ready` uses the discovered open PR set. Nonmatching journals
+are reported and retained while the requested train starts fresh. Matching journals
+reconcile pinned heads with fresh forge confirmation.
+<!-- trace:BUG-2547 | ai:codex --> A completed merge is
 not repeated; remaining member closes finish from forge state. Recorded retirement
 decisions are confirmed again before closure. Unknown evidence stops admission and
 retains the PR and journal for inspection. A permanent run lock serializes whole
@@ -484,15 +488,25 @@ Open trains and unknown forge evidence retain their riders; dry runs never write
 these repairs.
 <!-- trace:BUG-2537 | ai:codex -->
 
-Recovery does not inherit terminal consent from the new invocation: recovered
-supervised members still need a current mandate cover, even when a human names
-other PRs at a terminal. Previously green trains wait again if CI is pending;
+Recovery never inherits consent from the run that wrote the journal; consent
+comes only from the current invocation. A journal resumes only when the PRs
+named now are exactly its member set, so a human at a terminal who explicitly
+names that same set consents for its recovered supervised members, with no
+mandate needed. An `--all-ready` sweep or a recovery without a terminal never
+consents: recovered supervised members then still need a current mandate
+cover. Previously green trains wait again if CI is pending;
 confirmed red CI retires the train through the normal non-landing confirmation.
 Completed entries are fsynced and removed; startup also prunes valid old Done
 receipts. Unreadable journals, ambiguous lookups and changed head/base/branch
 pins stop admission and name the evidence to inspect.
 
-**Inspecting and discarding a blocked journal.** From the main worktree, open an
+**Inspecting and discarding a blocked journal.** Run
+`aida pr train --abandon <id>.json` to discard one local recovery journal. This
+acquires the train run lock and leaves forge PRs, branches and members unchanged.
+It also accepts malformed journals so they can be cleared after inspection.
+<!-- trace:BUG-2547 | ai:codex -->
+
+For manual inspection from the main worktree, open an
 operator shell holding the same permanent lock as train recovery:
 
 ```bash
@@ -851,18 +865,19 @@ as `dispatch` (`aida mandate start --ship-held --scope dispatch`), and
 `--drive` starts a drive mandate covering all scopes. `--include-supervised`
 also covers sensitive specs (security, containment, review or merge authority,
 guided, keystone); with `--drive`, `--exclude-supervised` keeps sensitive
-specs human-only.
+specs human-only. `--include-gate-paths` also covers protected-path PRs in
+ships and trains; all other gates still apply.
 
 **Renewing.** `aida mandate renew [--for <duration>]` extends the active
-mandate in place, so you do not retype its flags. Its scope, flags, reason and
-id stay the same, and anything already acting under it (queued dispatches, the
+mandate in place. Its scope, supervised flag, reason and id stay the same, and anything already acting under it (queued dispatches, the
 drive tick, a running `aida deputy`) keeps working. The new expiry is now plus the duration: by default
 the duration it was started with, at most `24h`. Like start and stop, it needs
 a human at an interactive terminal. If the latest mandate expired, renew
-re-mints its scope, flags and reason with a fresh ID and TTL, and prints when
+re-mints its scope, supervised flag and reason with a fresh ID and TTL, and prints when
 the old mandate expired. Old derived grants stay expired. Stopped mandates
 stay stopped. With no prior mandate, run `aida mandate start --ship-held`.
-Protected paths and human gates keep their existing policy.
+Protected paths require `--include-gate-paths` again on every renewal or revival;
+omitting it resets the opt-in. Human gates keep their existing policy.
 
 During the last 60 minutes, the status/hook banner shows
 `MANDATE expires in Nm, run: aida mandate renew`. A deduplicated mail notice
@@ -997,11 +1012,21 @@ ops = ["ship"]   # any of: ship, sketch-signoff, dispatch, hold-clear, relay-res
   `~/.aida/config.toml`, never from the working tree. Each layer can only add
   gates, so a branch cannot remove one.
 - If the committed layer cannot be read, every action is gated.
-- A PR that changes `.aida/config.toml` or the mandate code
-  (`dispatch.rs`, `mandate_drive.rs`, `mandate_traces.rs`, `relay_launch.rs`,
-  `pr_ship_batch.rs`, and everything under
-  `aida-cli-lib/src/gate/`) never ships under a mandate, and a mandate never
-  releases its rework hold either.
+- A PR that changes `.aida/config.toml`, anything under
+  `aida-cli-lib/src/gate/`, or the gate-path ratchet
+  `aida-cli-lib/src/tests/story_1888_gate_paths_tests.rs` requires a human merge
+  by default. A human at a
+  terminal can opt in with `aida mandate start --drive --include-gate-paths`
+  (or `--ship-held --include-gate-paths`). Such a mandate lets ships and trains
+  take protected-path PRs and release their eligible holds. Train CI on top of
+  main replaces each member's CI rerun. The matched path, protected entry and
+  source are recorded in release audit lines and commit audit trailers.
+  `aida mandate status` shows the opt-in. Existing records default to false;
+  `aida mandate renew --include-gate-paths` must pass it again, including when
+  reviving an expired mandate. Omitting it resets the opt-in. Unresolved changed
+  paths still refuse, and human gates, holds, approval at head, independent
+  review and authorship checks still apply. The protected floor and config
+  layering are unchanged.
   Listing `ship` or `hold-clear` stops mandate rework releases too.
 - You can protect more paths. Entries are exact paths, or directory prefixes
   that end in `/` (`gate/` matches `gate/x.rs`, never `gateway/x.rs`):

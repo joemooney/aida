@@ -119,20 +119,26 @@ pub(crate) fn handle_pr_command(cmd: &PrCommand) -> Result<()> {
             )
         }
         PrCommand::Train {
+            abandon,
             prs,
             all_ready,
             dry_run,
             local_ci,
             max,
             no_pull,
-        } => crate::pr_train::pr_train_handler(&crate::pr_train::TrainOptions {
-            prs,
-            all_ready: *all_ready,
-            dry_run: *dry_run,
-            local_ci: local_ci.as_deref(),
-            max: *max,
-            no_pull: *no_pull,
-        }),
+        } => {
+            if let Some(name) = abandon {
+                return crate::pr_train::abandon_journal(name);
+            }
+            crate::pr_train::pr_train_handler(&crate::pr_train::TrainOptions {
+                prs,
+                all_ready: *all_ready,
+                dry_run: *dry_run,
+                local_ci: local_ci.as_deref(),
+                max: *max,
+                no_pull: *no_pull,
+            })
+        }
         // trace:STORY-1887 | ai:claude
         PrCommand::ShipBatch {
             prs,
@@ -3687,6 +3693,16 @@ pub(crate) fn pr_ship_with_method_and_dispatch_ctx(
         )?;
         let sanitized_squash_body =
             ship_squash_body(merge_method, declares_non_completing, checked_squash_body);
+        // trace:STORY-2733 | ai:codex
+        let sanitized_squash_body =
+            if let Some(audit) = mandate_cover.as_ref().ok().and_then(|c| c.gate_audit()) {
+                Some(format!(
+                    "{}\n\n{audit}",
+                    sanitized_squash_body.unwrap_or_default()
+                ))
+            } else {
+                sanitized_squash_body
+            };
         let mut merge_opts = crate::forge::MergeOptions {
             method: merge_method,
             squash_subject: explicit_squash_subject.clone(),
@@ -4016,13 +4032,16 @@ pub(crate) fn pr_ship_with_method_and_dispatch_ctx(
         let dispatch_err = dispatch_ship_checkpoint(dispatch_ctx, ShipCheckpoint::PreMerge).err();
         let lapsed = mandate_release
             .as_ref()
-            .filter(|cover| !mandate_still_active(&cover.id));
+            .filter(|cover| !mandate_cover_still_active(cover));
         if dispatch_err.is_some() || lapsed.is_some() {
             let cause = match (&dispatch_err, lapsed) {
                 (Some(err), _) => {
                     format!("its dispatch request no longer has authority to merge ({err:#})")
                 }
-                (None, Some(cover)) => format!("mandate {} ended before the merge", cover.id),
+                (None, Some(cover)) => format!(
+                    "mandate {} ended or no longer covers protected paths before the merge",
+                    cover.id
+                ),
                 (None, None) => String::new(),
             };
             let rearm = if mandate_release.is_some() {
@@ -4183,7 +4202,7 @@ pub(crate) fn pr_ship_with_method_and_dispatch_ctx(
                 &cover.id,
                 pr_number,
                 crate::gate::dispatch_types::Outcome::Done,
-                None,
+                cover.gate_audit(),
             );
         }
     }
@@ -6981,6 +7000,7 @@ pub(crate) fn dispatch_ledger_cover(
     ctx: &crate::gate::dispatch_auth::DispatchExecutionContext,
 ) -> MandateCover {
     MandateCover {
+        gate_match: None,
         id: ctx.mandate_id().to_string(),
         principal: ctx.principal().to_string(),
     }
@@ -7003,7 +7023,10 @@ pub(crate) fn ledger_mandate_ship_failure(
             &cover.id,
             pr,
             crate::gate::dispatch_types::Outcome::Refused,
-            Some(why.to_string()),
+            Some(match cover.gate_audit() {
+                Some(audit) => format!("{why}\n{audit}"),
+                None => why.to_string(),
+            }),
         );
     }
 }

@@ -1002,7 +1002,7 @@ fast_check = "python3 -m unittest discover"
 
 Lane launch prompts name `format` and `test`. The host runs `fast_check` via
 `/bin/sh -c` in the lane's existing fast-gate sandbox before publication, with
-network and host IPC isolated and a ten-minute timeout. Commands run from the
+network and host IPC isolated and a one-hour timeout. Commands run from the
 seat checkout. A failing check retains the existing single repair round.
 Missing or blank `fast_check` skips the gate with `skipped(unconfigured)` and a
 stated reason; no Makefile or Rust toolchain is assumed. Malformed configuration
