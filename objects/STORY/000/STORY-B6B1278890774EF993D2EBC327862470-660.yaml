@@ -23,8 +23,10 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-12T19:11:56.371806442Z
-modified_at: 2026-11-13T03:44:14.360798811Z
+modified_at: 2026-11-13T04:01:31.457353384Z
 req_type: Story
+tags:
+- operator-held
 relationships:
 - rel_type:
     custom: implemented-by
@@ -111,6 +113,15 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a1d311-5802-7ce0-a3e5-05b4d9817aad
+  author: joe
+  timestamp: 2026-11-13T04:01:31.650601631Z
+  session_id: 668a34f6-c74a-4b58-b144-167acd9792ef
+  changes: []
+deferred: true
+deferred_at: 2026-11-13T04:01:31.457353384Z
+deferred_until: manual:integration
+deferred_reason: context ceiling
 filed_at:
   code_sha: 0d6c60e6d982aad0c2c4ad38214010289a267d92
   branch: main
