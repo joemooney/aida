@@ -1,0 +1,33 @@
+id: 01a1d750-9996-7ae1-a35f-e78d193ee1e0
+spec_id: STORY-b6b1278890774ef993d2ebc327862470-700
+agreed_id: STORY-2777
+title: 'Review PR-3972: [AI:claude] feat(now): aida now, one screen of what is in flight (STORY-2768)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `(no-sess`) for branch `story-2768-s1b-now`.
+
+  - PR: <https://github.com/joemooney/aida/pull/3972>
+  - Branch: `story-2768-s1b-now` → `integration`
+
+  ## Covers
+
+  - STORY-2768
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 3972` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-13T23:49:06.070324275Z
+modified_at: 2026-11-13T23:49:06.070324275Z
+req_type: Story
+filed_at:
+  code_sha: 4ac4c1d8ab080f7bdf96157582c0934171c2a73c
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 4ac4c1d8ab0
+  vendor: claude
