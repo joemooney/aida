@@ -813,6 +813,10 @@ exit 1
         &[
             "-c",
             "core.hooksPath=/dev/null",
+            "-c",
+            "maintenance.auto=false",
+            "-c",
+            "gc.auto=0",
             "commit",
             "--allow-empty",
             "-qm",
@@ -845,6 +849,10 @@ fn bug_2549_detached_worktree_exit_captures_actual_head() {
         &[
             "-c",
             "core.hooksPath=/dev/null",
+            "-c",
+            "maintenance.auto=false",
+            "-c",
+            "gc.auto=0",
             "commit",
             "--allow-empty",
             "-qm",
