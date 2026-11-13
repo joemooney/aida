@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-13T01:54:48.391951523Z
-modified_at: 2026-11-13T21:19:22.125997400Z
+modified_at: 2026-11-13T21:27:56.991095401Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -147,6 +147,20 @@ comments:
   modified_at: 2026-11-13T21:17:37.894072960Z
   session_id: 01a1d684-8599-70e0-a01c-714f54d2f8de
   harness_version: 2.1.323 (Claude Code)
+- id: 01a1d6c8-ca7b-7fc3-b306-b031322bba78
+  author: dirtlab
+  content: 'Round 5 approach: AC1/AC3 stop/runtime evidence will use bounded raw local handoff/ledger selection, bypassing signed effective projections only for stopping. Add a publisher-enabled signed fixture regression preserving pending, freshness and child-grant checks. Collector acceptance is unchanged. Expected files: reviewer_completion.rs, gate/review_verdict.rs, gate/tests/story_2492_publication_tests.rs. Ambiguities/conflicts: None; advisor scope is exclusively the blocking finding.'
+  created_at: 2026-11-13T21:20:45.691801942Z
+  modified_at: 2026-11-13T21:20:45.691801942Z
+  session_id: 01a1d6c77d8c
+  harness_version: codex-cli 0.167.0
+- id: 01a1d6cf-5f3f-7ca1-b43a-c39674c54d85
+  author: dirtlab
+  content: 'Round 5 implemented only the blocking publisher shadowing defect. Stop-only discovery now reads bounded raw local file/ledger evidence, preserving delivery_pending, timestamp, SHA and child-grant matching; effective publication/collector acceptance remains unchanged. Publisher-enabled signed-fixture regression passes with a grant-less signed projection plus pending, wrong-grant, stale and completed local records. Validation: lane job j20261113T212724705-2-0: 8 passed, 0 failed (bug2546 filter excluding interactive resume process fixtures). rustfmt --check and git diff --check pass. Wider initial filter: same 8 passed, 2 interactive fixtures failed for missing matching CLI binary. make check-ci-fast stops in unrelated Codex mail-wake fixtures on shared-write health-project permissions. Native seat leaves 3 source/test files uncommitted for host publication. No additional implementer findings filed.'
+  created_at: 2026-11-13T21:27:56.991095401Z
+  modified_at: 2026-11-13T21:27:56.991095401Z
+  session_id: 01a1d6c77d8c
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1d29d-880a-7201-8b91-ded826a703b0
   author: joe
