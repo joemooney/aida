@@ -57,6 +57,15 @@ pub(crate) struct GateEvent {
     pub body: EventBody,
 }
 
+// trace:BUG-2517 | ai:codex
+impl GateEvent {
+    /// Explicit local reviews never acquire change authority through later binding.
+    pub(crate) fn is_spec_only(&self) -> bool {
+        self.verdict_record()
+            .is_some_and(|r| r.get("change_binding").and_then(|v| v.as_str()) == Some("unbound"))
+    }
+}
+
 /// What happened. Slice 1 carried verdicts; slice 2 adds holds, their
 /// releases and label syncs; slice 3 adds carry-over proofs.
 // trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
