@@ -1943,6 +1943,12 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
                     }
                 }
             }
+            Err(e) if e.is::<crate::gate::review_freshness::NeedsRework>() => {
+                return Err(auto_complete::PhaseFailure::of(
+                    auto_complete::FailureKind::StaleBaseConflict,
+                    e.to_string(),
+                ));
+            }
             Err(e) => {
                 eprintln!(
                     "  {} pre-flight stale-base check failed ({e}); proceeding with reviewer",

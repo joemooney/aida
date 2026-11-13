@@ -651,6 +651,25 @@ const CONFIG_KNOBS: &[KnobSpec] = &[
         },
     },
     // --- [review]. trace:STORY-1415 | ai:claude ---
+    // trace:STORY-2763 | ai:codex
+    KnobSpec {
+        section: "review",
+        key: "freshness",
+        doc: "Review freshness assurance: fast or strict (trusted default-branch configuration).",
+        default: "fast",
+        edit: EditSafety::ReadOnly {
+            reason: "protected review policy — operator edits default-branch config deliberately",
+        },
+    },
+    KnobSpec {
+        section: "review",
+        key: "freshness_strict_paths",
+        doc: "Path globs that force strict review freshness even under fast policy.",
+        default: "[]",
+        edit: EditSafety::ReadOnly {
+            reason: "protected review policy — operator edits default-branch config deliberately",
+        },
+    },
     KnobSpec {
         section: "review",
         key: "mass_change_mode",

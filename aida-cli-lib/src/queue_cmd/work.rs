@@ -4884,6 +4884,9 @@ pub(crate) fn handle_queue_work(
                                 anyhow::bail!(msg);
                             }
                         }
+                        Err(e) if e.is::<crate::gate::review_freshness::NeedsRework>() => {
+                            return Err(e);
+                        }
                         Err(e) => {
                             eprintln!(
                                 "  {} pre-flight stale-base check for PR-{pr_n} failed \
@@ -6618,6 +6621,9 @@ pub(crate) fn run_standalone_reviewer(
     refuse_unpresentable_contained_reviewer(contained)?;
     let watch_prompt = crate::review_watch::reviewer_launch_prompt(project_root, pr, prompt)?;
     let prompt = watch_prompt.as_deref().unwrap_or(prompt);
+    // trace:STORY-2763 | ai:codex
+    let freshness_prompt = crate::gate::review_freshness::review_prompt(project_root, pr, prompt)?;
+    let prompt = freshness_prompt.as_deref().unwrap_or(prompt);
     // Keep a recoverable final draft even if a tool refuses the recording.
     // No command from the draft is automatically replayed by this launcher.
     // Headless only: an interactive reviewer has a human watching, and its

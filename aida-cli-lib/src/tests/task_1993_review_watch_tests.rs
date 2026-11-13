@@ -2263,7 +2263,7 @@ fn retained_rounds_are_capped_on_write() {
             true,
         )
     });
-    store.retain("PR-1", keys).unwrap();
+    store.retain("PR-1", keys, false).unwrap();
     assert_eq!(store.retained("PR-1").unwrap().len(), RETAINED_ROUNDS);
 }
 
@@ -3686,4 +3686,53 @@ fn bug2534_ledger_only_verdict_stops_retries_and_preserves_rounds() {
         .unwrap();
         assert!(store.history(&c.key()).is_err());
     }
+}
+
+// trace:STORY-2763 | ai:codex
+#[test]
+fn review_watch_fast_rounds_count_patch_changes_and_strict_counts_heads() {
+    use crate::gate::review_carryover::tests as carry;
+    let _env = crate::test_env::EnvVarsGuard::apply(&[("AIDA_CONTAINED", None)]);
+    let (fixture, approved) = carry::fixture();
+    let root = fixture.path();
+    carry::git(root, &["merge", "--quiet", "--no-edit", "main"]);
+    let merged = carry::head(root);
+    let store = Store::open(root, "github:github.com/owner/repo").unwrap();
+    let dir = root.join(".aida/review-verdicts");
+    std::fs::create_dir_all(&dir).unwrap();
+    write_verdict(
+        &dir.join("PR-42.json"),
+        &serde_json::json!({
+            "reviewed_sha": merged, "recorded_by": "reviewer", "recorded_at": "2026-11-13T00:01:00Z", "verdict": "FAIL",
+            "rounds": [{"reviewed_sha": approved, "recorded_by": "reviewer", "recorded_at": "2026-11-13T00:00:00Z", "verdict": "FAIL"}]
+        }),
+    );
+    assert_eq!(store.history("PR-42").unwrap().blocking(), 2);
+    assert_eq!(
+        store.history_for_head("PR-42", &merged).unwrap().blocking(),
+        1
+    );
+    // A genuine new patch still consumes a distinct round.
+    carry::write(root, "new.txt", "new patch content\n");
+    let changed = carry::commit(root, "own patch changed");
+    let mut history = store.history_for_head("PR-42", &changed).unwrap();
+    history
+        .add(
+            &serde_json::to_vec(&verdict_json(&changed, "FAIL")).unwrap(),
+            "new.json",
+        )
+        .unwrap();
+    assert_eq!(history.blocking(), 2);
+    carry::git(root, &["checkout", "--quiet", "main"]);
+    carry::write(
+        root,
+        ".aida/config.toml",
+        "[review]\nfreshness = 'strict'\n",
+    );
+    let strict = carry::commit(root, "strict policy");
+    carry::git(root, &["update-ref", "refs/remotes/origin/main", &strict]);
+    assert_eq!(
+        store.history_for_head("PR-42", &merged).unwrap().blocking(),
+        2
+    );
 }

@@ -72,6 +72,13 @@ impl GateEvent {
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 #[serde(tag = "kind", rename_all = "kebab-case")]
 pub(crate) enum EventBody {
+    /// Freshness evidence only. Never grants review or merge authority.
+    // trace:STORY-2763 | ai:codex
+    FreshnessDecision {
+        policy: String,
+        decision: String,
+        proof: serde_json::Value,
+    },
     /// Advisory escalation only; grants no review or merge authority.
     // trace:BUG-2548 | ai:codex
     ManualReviewRequested {

@@ -1502,3 +1502,39 @@ evidence retains the wait. Closure annotates the exact source round and key,
 preserves signed publications, and supplies neither approval nor spec completion.
 Independent findings and newer waits remain actionable.
 <!-- trace:BUG-2525 | ai:codex -->
+
+### Review freshness assurance
+
+<!-- trace:STORY-2763 | ai:codex -->
+The trusted default-branch `.aida/config.toml` controls review freshness:
+
+```toml
+[review]
+freshness = "fast"
+freshness_strict_paths = []
+```
+
+`fast` reviews the diff of an automatic merge into the current protected base,
+without updating the PR branch. The verdict still names the original PR head.
+A textual conflict routes the work back to the implementer before review.
+An existing authorized approval survives only when the shared gate proves clean
+base merges and unchanged patch identity; CI at the current head is still required.
+A resolved conflict or edited merge requires a delta review of the resolution or
+manual edits, with current-base context. Blocking rounds with identical patch IDs
+count once. Unknown old patch evidence retains the original round count.
+
+`strict` requires a fresh review for each head, retains stale-base overlap
+refusals, and counts every blocking head toward the review cap. To force strict
+assurance on selected paths even under fast policy, use for example
+`freshness_strict_paths = ["aida-cli-lib/src/gate/**"]`. Patterns support literal
+paths, `*`, `**`, and `?`; unsupported syntax refuses fast assurance. Renames
+consider both old and new paths. This repository uses fast with no overrides.
+
+These keys are protected operator configuration: `aida config set` refuses them.
+Change them deliberately on the trusted default branch; an agent's branch-local
+copy cannot lower assurance. Missing or unreadable trusted configuration and
+invalid policy select strict. In a readable config, omitted keys default to fast
+with no path overrides. Raising policy to strict also disables historical cached
+carry-over proofs. The gate ledger retains carry-over, delta-admission, conflict
+routing and skipped-round evidence; `aida gate state` names the current policy
+and the applicable carry-over proof event.
