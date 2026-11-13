@@ -3,12 +3,12 @@ spec_id: BUG-b6b1278890774ef993d2ebc327862470-323
 agreed_id: BUG-2558
 title: 'Codex native-seat conflict reworks always punt: the host aborts the merge of main and the lane''s read-only Git cannot record one, so CONFLICTING PRs loop'
 description: '2026-11-13 05:2x: dell1 Codex lanes for BUG-2501 (#3920), STORY-2325 (#3940) and STORY-2593 (#3938), all CONFLICTING with main, punted. The host attempts ''merge origin/main'', aborts on conflict, and hands the lane a clean tree with ''conflict resolution continues with codex''. The native seat''s Git is read-only, so the lane can only write a patch to /tmp and punt (''the host must merge main first''). Each relaunch burns a lane slot. Want: the host leaves the conflicted merge in place (MERGE_HEAD plus conflict markers) for the lane to resolve in the working tree; the host verifies no markers remain, records the merge commit, runs the fast gate and pushes. Or the host records a merge that keeps conflict markers on a scratch branch. Until then the advisor hand-merges small additive conflicts (done for #3920 at 4a191e3); large ones (#3940: 8 files including ratchet baselines) stay parked.'
-status: Approved
+status: InProgress
 priority: High
-owner: ''
+owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-13T12:51:33.706851654Z
-modified_at: 2026-11-13T14:04:11.404586904Z
+modified_at: 2026-11-13T14:58:51.482524615Z
 req_type: Bug
 tags:
 - lanes
@@ -38,6 +38,13 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Approved
+- id: 01a1d56b-25da-75c1-a920-d6ea653fdd09
+  author: aida-session-start
+  timestamp: 2026-11-13T14:58:51.482523822Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: 76c12135362bc1f87985a5eb1ebff051f16bc212
   branch: main
