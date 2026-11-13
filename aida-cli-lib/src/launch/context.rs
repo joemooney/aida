@@ -125,6 +125,9 @@ impl LaunchContext {
         Self::resolve_inputs(exec, req, parent_contained, agent_cmd)
     }
 
+    /// Parent execution inputs used to construct the child command. Keep this
+    /// accessor distinct from process `exec`, which the spawn builder forbids.
+    // trace:STORY-2538 | ai:codex
     pub(crate) fn exec_context(&self) -> &ExecContext {
         &self.exec
     }
