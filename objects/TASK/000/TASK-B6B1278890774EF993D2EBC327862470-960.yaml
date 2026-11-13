@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T23:39:41.575597Z
-modified_at: 2026-11-12T20:00:58.071020864Z
+modified_at: 2026-11-13T00:53:41.513740229Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -916,6 +916,13 @@ comments:
   modified_at: 2026-11-12T20:00:58.071020864Z
   session_id: 01a1d0eb-22cc-7262-8f6c-7266e9cc1fbb
   harness_version: 2.1.322 (Claude Code)
+- id: 01a1d265-6009-7d73-9a04-a74149c81571
+  author: joe
+  content: 'Round 21: merged origin/main (9968a8ab4ec) as 3f1085abd17. Resolved the lib_part1.rs modify/delete conflict by keeping the deletion and moving main''s json_capability_gate change (CLI_SUPPORT.built_command) into output_policy.rs. The P1 config-trust finding was already fixed on the branch: in scripts/config-trust.toml the lib.rs entry is replaced by argv_rewrite.rs (probe, sites=1) and review_helpers.rs (worktree, sites=1). bug_1723_config_trust_tests pass 12/12 at the merged head. make check-ci-fast stops at ''Codex mail wake fixtures'' because the seat''s project directory allows shared writes; this branch does not touch that code. The format, store-writer, exec-context and glob ratchets pass.'
+  created_at: 2026-11-13T00:53:41.513740229Z
+  modified_at: 2026-11-13T00:53:41.513740229Z
+  session_id: 01a1d258738f
+  harness_version: 2.1.323 (Claude Code)
 history:
 - id: 01a1b862-2e0b-7a50-a4d0-25097c707b57
   author: joe
