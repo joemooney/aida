@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-13T01:54:48.391951523Z
-modified_at: 2026-11-13T21:17:33.933556374Z
+modified_at: 2026-11-13T21:17:38.111486882Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -131,6 +131,20 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Corrected final full sweep: AC1/AC3 unverified on publisher-enabled nodes because signed projections hide local child-grant completion evidence; AC2 verified by policy and launch tests. One blocking defect; all test CI passed. Supersedes initial mistaken approval.. No triage reason was given.'
   created_at: 2026-11-13T21:17:33.933548233Z
   modified_at: 2026-11-13T21:17:33.933548233Z
+  session_id: 01a1d684-8599-70e0-a01c-714f54d2f8de
+  harness_version: 2.1.323 (Claude Code)
+- id: 01a1d6c5-ece6-7ba3-adf8-0e5d1f04355c
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (BUG-2546):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 3ea584f2a575
+    Recorded: 2026-11-13T20:43:37.374660154+00:00
+    Findings:
+    1. [P2] aida-cli-lib/src/reviewer_completion.rs:119-131: Read raw local child-grant completion evidence rather than the effective published verdict. current_verdict calls choose_current (gate/review_verdict.rs:1589), which prefers review_publication::current; review_publication::body (review_publication.rs:884-894) constructs an attestation without grant_id, so matches rejects that projection. Publisher-enabled record_verdict_at_inner publishes before returning (gate/ledger/mod.rs:286-287), allowing publication before polling to hide the completed local record; an existing signed same-head review can also shadow a contained child before collection. The reviewer can linger indefinitely and post_verdict_runtime_ms stays unknown, violating BUG-2546 AC1/AC3. Use bounded raw local handoff/ledger reads for the stop-only signal, preserving delivery_pending, freshness and child-grant checks; keep acceptance in the collector. Add a publisher-enabled regression with a completed local verdict and signed projection lacking grant_id.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-13T21:17:37.894072960Z
+  modified_at: 2026-11-13T21:17:37.894072960Z
   session_id: 01a1d684-8599-70e0-a01c-714f54d2f8de
   harness_version: 2.1.323 (Claude Code)
 history:
