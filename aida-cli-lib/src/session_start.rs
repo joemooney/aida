@@ -1451,6 +1451,27 @@ impl SessionStartReceipt {
         }
         self.cleanup = None;
     }
+    /// Drop is conservative: verify the lease artifact before reporting success.
+    // trace:BUG-2548 | ai:codex
+    pub(crate) fn rollback(mut self) -> Result<()> {
+        let lease = self.cleanup.as_ref().and_then(|cleanup| {
+            cleanup
+                .lease_id
+                .as_deref()
+                .map(|id| lease_path(&cleanup.root, id))
+        });
+        drop(self.cleanup.take());
+        if let Some(path) = lease {
+            match std::fs::symlink_metadata(&path) {
+                Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+                result => anyhow::bail!(
+                    "pickup rollback retained lease {}; inspect `aida session leases --all` ({result:?})",
+                    path.display()
+                ),
+            }
+        }
+        Ok(())
+    }
     /// STORY-2254: make this receipt's rollback conditional on a durable
     /// ownership record. Its destructive Drop runs only while `still_owner`
     /// confirms this invocation still owns the setup, so a crash or early

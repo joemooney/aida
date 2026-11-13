@@ -123,6 +123,7 @@ fn review_story(main: &std::path::Path) -> (crate::Storage, impl Fn(aida_core::R
 
 #[test]
 fn bug_2457_two_heads_through_queue_pickup_preserve_holds_and_refuse_unsafe_trees() {
+    let _scan = aida_core::mailbox_lifecycle::activation::test_writer_scan(true);
     let fx = fixture();
     let mut ambient = crate::test_env::AmbientGuard::hermetic_with_seat(&fx.main, "reviewer", &[]);
     // Every holder of these fresh private fixtures is in this test's PID
@@ -154,6 +155,18 @@ fn bug_2457_two_heads_through_queue_pickup_preserve_holds_and_refuse_unsafe_tree
     status(aida_core::RequirementStatus::Approved);
     let err = queue_work(&storage).unwrap_err().to_string();
     assert!(err.contains("held by worktree"), "{err}");
+    // trace:BUG-2548 | ai:codex — a broken store remote must never be
+    // consulted when this local branch already refuses pickup.
+    let store_root = fx.main.join(".aida-store");
+    git_ok(
+        &store_root,
+        &["remote", "add", "origin", "/nonexistent/bug-2548-store"],
+    );
+    let err = queue_work_launch_sync(&storage, true, false)
+        .unwrap_err()
+        .to_string();
+    assert!(err.contains("held by worktree"), "{err}");
+    git_ok(&store_root, &["remote", "remove", "origin"]);
     std::fs::remove_file(crate::lease_path(&fx.main, &lease.id)).unwrap();
 
     std::fs::write(tree.join("review-notes"), "keep me").unwrap();
@@ -224,6 +237,7 @@ fn bug_2457_two_heads_through_queue_pickup_preserve_holds_and_refuse_unsafe_tree
 // trace:TASK-b6b1278890774ef993d2ebc327862470-900 | ai:codex
 #[test]
 fn bug_2469_dead_review_reclaimed_only_when_new_head_covers_recorded_and_actual_heads() {
+    let _scan = aida_core::mailbox_lifecycle::activation::test_writer_scan(true);
     let fx = fixture();
     let mut ambient = crate::test_env::AmbientGuard::hermetic_with_seat(&fx.main, "reviewer", &[]);
     ambient.set_key("AIDA_TRUST_PID_NAMESPACE", "1");
@@ -626,6 +640,7 @@ fn bug_2469_dead_review_reclaimed_only_when_new_head_covers_recorded_and_actual_
 // trace:BUG-2530 | ai:codex
 #[test]
 fn bug2530_concluded_pickup_preserves_checkout_queue_and_calibration() {
+    let _scan = aida_core::mailbox_lifecycle::activation::test_writer_scan(true);
     let fx = fixture();
     let mut ambient = crate::test_env::AmbientGuard::hermetic_with_seat(&fx.main, "reviewer", &[]);
     ambient.set_key("AIDA_TRUST_PID_NAMESPACE", "1");

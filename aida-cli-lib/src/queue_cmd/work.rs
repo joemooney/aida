@@ -3228,6 +3228,18 @@ pub(crate) fn retire_idle_review_worktree(
     forge: ReviewForge,
     n: u64,
 ) -> Result<()> {
+    review_worktree_retirement(root, forge, n, true).map(|_| ())
+}
+
+// trace:BUG-2548 | ai:codex
+// Before pull, prove eligibility without removing a checkout that freshly
+// synchronized verdicts may require us to retain. Retirement rechecks all facts.
+fn review_worktree_retirement(
+    root: &std::path::Path,
+    forge: ReviewForge,
+    n: u64,
+    retire: bool,
+) -> Result<Option<std::path::PathBuf>> {
     let branch = forge.local_branch_for(n);
     let path = crate::session_start::pickup_worktree_path(root, &branch)?;
     let output = aida_core::git_ops::host_git_command(root)
@@ -3246,7 +3258,7 @@ pub(crate) fn retire_idle_review_worktree(
                     == crate::worktree::canonical_or_self(&path)
         });
     if !candidate {
-        return Ok(());
+        return Ok(None);
     }
     // A finished review may already have released ownership; a crashed one
     // needs positive death proof. Only one exact reviewer lease is eligible.
@@ -3266,7 +3278,7 @@ pub(crate) fn retire_idle_review_worktree(
         {
             Some(lease)
         }
-        _ => return preflight_queue_work_branch(root, Some(&branch)),
+        _ => return preflight_queue_work_branch(root, Some(&branch)).map(|_| None),
     };
     let locked = inventory.split("\n\n").any(|record| {
         record
@@ -3284,7 +3296,7 @@ pub(crate) fn retire_idle_review_worktree(
         || working_tree_clean(&path) != Some(true)
         || aida_core::worktree_holders::check_worktree_removal(&path).is_err()
     {
-        return preflight_queue_work_branch(root, Some(&branch));
+        return preflight_queue_work_branch(root, Some(&branch)).map(|_| None);
     }
     // Require both the recorded review head and every actual seat commit to
     // survive at the fresh forge head. Force-pushes and local fixes retain it.
@@ -3334,6 +3346,9 @@ pub(crate) fn retire_idle_review_worktree(
     } else {
         None
     };
+    if !retire {
+        return Ok(Some(path));
+    }
     // Collect a legacy hold before removal, even if it predates this pickup.
     // Unknown markers and unreadable directories retain the checkout.
     let markers = path.join(".aida/merge-holds");
@@ -3356,7 +3371,7 @@ pub(crate) fn retire_idle_review_worktree(
                 "review merge-hold directory is not a directory"
             );
             if std::fs::read_dir(&markers)?.next().transpose()?.is_some() {
-                return preflight_queue_work_branch(root, Some(&branch));
+                return preflight_queue_work_branch(root, Some(&branch)).map(|_| None);
             }
         }
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
@@ -3406,7 +3421,7 @@ pub(crate) fn retire_idle_review_worktree(
             lease.id
         );
     }
-    Ok(())
+    Ok(Some(path))
 }
 
 /// [`preflight_queue_work_branch`], except that the orphan's tree `adopting`
@@ -4372,7 +4387,40 @@ pub(crate) fn handle_queue_work(
                         crate::gate::seat_authority::preflight_sandboxed_child_key(&child_seat)?;
                     }
                 }
-                // Pull after read-only launch preflights and before session setup
+                // trace:STORY-1662 | ai:claude
+                // trace:STORY-2660 | ai:codex
+                if standalone_implementer {
+                    _standalone_slot = Some(crate::standalone_implementer::acquire_slot(
+                        &project_root,
+                        &plan.scope,
+                        crate::standalone_implementer::configured_cap(&project_root)?,
+                    )?);
+                }
+                // trace:BUG-2548 | ai:codex — refuse conflicts before store I/O.
+                let review_retirement = if role == "reviewer"
+                    && adopt_orphan.is_none()
+                    && session_branch_override.is_none()
+                    && path_override.is_none()
+                {
+                    match plan.review_target {
+                        Some((forge, n)) => {
+                            review_worktree_retirement(&project_root, forge, n, false)?
+                        }
+                        None => None,
+                    }
+                } else {
+                    None
+                };
+                preflight_queue_work_branch_reclaiming(
+                    &project_root,
+                    session_branch_override.or(review_branch.as_deref()),
+                    adopt_orphan
+                        .as_ref()
+                        .map(|l| l.worktree_path.as_path())
+                        .or(review_retirement.as_deref()),
+                    force_claim,
+                )?;
+                // Pull after launch and occupancy preflights and before session setup
                 // or store writes. A stale view cannot authorize pickup after failure.
                 // trace:BUG-2490 | ai:codex
                 if !no_pull {
@@ -4408,24 +4456,10 @@ pub(crate) fn handle_queue_work(
                     }
                 }
 
-                // trace:STORY-1662 | ai:claude
-                // trace:STORY-2660 | ai:codex
-                if standalone_implementer {
-                    _standalone_slot = Some(crate::standalone_implementer::acquire_slot(
-                        &project_root,
-                        &plan.scope,
-                        crate::standalone_implementer::configured_cap(&project_root)?,
-                    )?);
-                }
-                // Force-claim may retire a dead clone, so delegation and launch
-                // capacity must succeed before this preflight mutates anything.
-                // trace:BUG-2455 | ai:codex
-                // trace:BUG-2457 | ai:codex
-                if role == "reviewer"
-                    && adopt_orphan.is_none()
-                    && session_branch_override.is_none()
-                    && path_override.is_none()
-                {
+                // Retire only after refreshed conclusive/deferred checks, then
+                // recheck occupancy in case a holder arrived during the pull.
+                // trace:BUG-2548 | ai:codex
+                if review_retirement.is_some() {
                     if let Some((forge, n)) = plan.review_target {
                         retire_idle_review_worktree(&project_root, forge, n)?;
                     }
@@ -6425,7 +6459,16 @@ pub(crate) fn run_pickup_launch(
     };
     if launch_refused_before_agent(&result, mark.started()) && receipt.owns_setup() {
         leave_setup_tree(project_root, &receipt);
-        drop(receipt);
+        // trace:BUG-2548 | ai:codex — never claim success with a retained lease.
+        if let Err(error) = receipt.rollback() {
+            return (
+                Err(error.context(format!(
+                    "pre-agent launch failed: {:#}",
+                    result.as_ref().unwrap_err()
+                ))),
+                false,
+            );
+        }
         return (result, true);
     }
     receipt.disarm();

@@ -1280,7 +1280,11 @@ The same pass sends two more notices, each once:
 - **Round cap.** When a change has used both review rounds and its head has
   no review, the watcher starts none, and mails the advisor once for the
   change. The mail names the reviewed heads, the unreviewed head, and the
-  findings file.
+  findings file. Before delivery, it appends a `manual-review-requested`
+  event to the change's gate ledger, binding the request ID, recipient and
+  unreviewed head. Retries retain one ledger request and one mailbox request;
+  this advisory event grants no review or merge authority.
+  <!-- trace:BUG-2548 | ai:codex -->
 
 Like the ready wake, each notice has a deterministic ID and is recorded as
 sent only after delivery. A failed delivery is retried on a later pass and
@@ -1297,6 +1301,14 @@ instructions. Shared claims carry optional invocation IDs; rollback compares the
 exact acquired claim under the store lock and publishes outside that lock.
 Legacy claims remain readable and are never adopted as rollback authority.
 <!-- trace:BUG-2188 | ai:codex -->
+
+Pickup checks branch/worktree ownership before pulling the spec store. A clean
+review worktree with proven ended ownership can be retired automatically after
+its commits are confirmed covered by the forge head and its merge holds are
+preserved. Live, unknown, dirty, locked or unpublished work remains protected.
+A refused launch reports successful rollback only after its lease file is gone;
+retained ownership instead produces a cleanup error naming the lease.
+<!-- trace:BUG-2548 | ai:codex -->
 
 ### Pipeline stall alarms
 

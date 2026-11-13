@@ -63,6 +63,12 @@ pub(crate) struct GateEvent {
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 #[serde(tag = "kind", rename_all = "kebab-case")]
 pub(crate) enum EventBody {
+    /// Advisory escalation only; grants no review or merge authority.
+    // trace:BUG-2548 | ai:codex
+    ManualReviewRequested {
+        request_id: String,
+        recipient: String,
+    },
     /// Invocation evidence only. Never deserialized into merge authorization.
     // trace:BUG-b6b1278890774ef993d2ebc327862470-179 | ai:codex
     TrainCoverage { proof: serde_json::Value },
