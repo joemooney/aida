@@ -3,12 +3,12 @@ spec_id: BUG-b6b1278890774ef993d2ebc327862470-303
 agreed_id: BUG-2538
 title: Train coverage proof embeds every rider review record twice and exceeds the 16 MiB evidence cap, so green trains fail to merge
 description: 'Observed 2026-11-12 11:24 MST: train PR #3888 (riders #3830, #3846) went green, then failed at merge with ''could not invoke gh pr merge: invalid train evidence file''. .aida/gate-ledger/PR-3888.jsonl is 23 MB: its single train-coverage event''s proof.sources[0].originals holds 215 entries (107 BUG-2522 + 108 PR-3830), each carrying the full review record (40 rounds) both as .record and as .ledger_reference.record. pr_train_verified.rs validate_ledger refuses any evidence file over 16 MiB (or nlink!=1), so any rider with a long review history (PR-3830''s own ledger is 4.4 MB, 183 lines) makes the train unmergeable after a full CI run. Acceptance: (1) the train-coverage proof references rider evidence by digest/seq (or embeds only the latest record per key, once), so its size is bounded independent of review-round count; (2) the train computes and checks evidence size BEFORE opening the train PR and running CI, ejecting or shipping-alone any rider that would exceed the cap, rather than failing after CI; (3) regression test: a rider with 40+ review rounds and 100+ ledger lines lands in a train.'
-status: NeedsAttention
+status: Completed
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-12T18:26:43.321357044Z
-modified_at: 2026-11-12T23:29:11.345666320Z
+modified_at: 2026-11-13T00:42:19.689803891Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -55,6 +55,13 @@ comments:
   created_at: 2026-11-12T23:29:11.345666320Z
   modified_at: 2026-11-12T23:29:11.345666320Z
   session_id: 668a34f6-c74a-4b58-b144-167acd9792ef
+- id: 01a1d25a-f3ad-7771-ae1b-86c892b910e9
+  author: joe
+  content: 'Returned from NeedsAttention to In Progress via `aida edit --status`. It was shelved on: reviewer/verdict:request-changes: BUG-2538 acceptance criteria verified; new regression exceeds CI timing budget and fails required Build.. No triage reason was given.'
+  created_at: 2026-11-13T00:42:18.413218188Z
+  modified_at: 2026-11-13T00:42:18.413218188Z
+  session_id: 01a1d240-c397-7b61-b29f-bb337c138943
+  harness_version: 2.1.323 (Claude Code)
 history:
 - id: 01a1d105-e816-76c0-be87-791c522a799c
   author: aida-session-start
@@ -92,6 +99,24 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a1d25a-f3ad-7771-ae1b-86b603a035d2
+  author: joe
+  timestamp: 2026-11-13T00:42:18.413210214Z
+  session_id: 01a1d240-c397-7b61-b29f-bb337c138943
+  harness_version: 2.1.323 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: InProgress
+- id: 01a1d25a-f8a9-72b3-bc01-26e940b756e9
+  author: joe
+  timestamp: 2026-11-13T00:42:19.689796713Z
+  session_id: 01a1d240-c397-7b61-b29f-bb337c138943
+  harness_version: 2.1.323 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
 filed_at:
   code_sha: 0d6c60e6d982aad0c2c4ad38214010289a267d92
   branch: main
@@ -101,11 +126,6 @@ filed_at:
   vendor: claude
   session: 01a1d0eb-22cc-7262-8f6c-7266e9cc1fbb
   harness_version: 2.1.322 (Claude Code)
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: BUG-2538 acceptance criteria verified; new regression exceeds CI timing budget and fails required Build.
-  recovery_hint: address the review findings, move BUG-2538 back to In Progress, and clear the PR hold only after approval
-  shelved_by: reviewer
-  shelved_at: 2026-11-12T23:19:05.393486471Z
+implementation_info:
+  implemented: false
+  completed_at: 2026-11-13T00:42:19.689771461Z

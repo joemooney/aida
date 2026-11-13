@@ -1,0 +1,103 @@
+{
+  "schema_version": 1,
+  "spec": "TASK-B6B1278890774EF993D2EBC327862470-965",
+  "publishes": [
+    {
+      "at": "2026-11-13T00:42:54.915809105Z",
+      "closed_by": "edit"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-11-08T16:02:13.217795614Z",
+      "spec": "TASK-b6b1278890774ef993d2ebc327862470-965",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Needs Attention",
+        "after": "Needs Attention"
+      }
+    },
+    {
+      "ts": "2026-11-09T00:26:05.953395123Z",
+      "spec": "TASK-b6b1278890774ef993d2ebc327862470-965",
+      "seat": "advisor",
+      "kind": {
+        "event": "SpecRequeued",
+        "via": "edit",
+        "actor": "joe",
+        "from": "Needs Attention",
+        "to": "Approved"
+      }
+    },
+    {
+      "ts": "2026-11-09T00:26:05.974125774Z",
+      "spec": "TASK-b6b1278890774ef993d2ebc327862470-965",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Needs Attention",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-11-10T00:25:38.793620314Z",
+      "spec": "TASK-b6b1278890774ef993d2ebc327862470-965",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Approved",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-11-12T07:55:47.790023759Z",
+      "spec": "TASK-b6b1278890774ef993d2ebc327862470-965",
+      "kind": {
+        "event": "PuntFiled",
+        "spec": "TASK-b6b1278890774ef993d2ebc327862470-965"
+      }
+    },
+    {
+      "ts": "2026-11-13T00:42:48.475414913Z",
+      "spec": "TASK-b6b1278890774ef993d2ebc327862470-965",
+      "seat": "advisor",
+      "kind": {
+        "event": "SpecRequeued",
+        "via": "edit",
+        "actor": "joe",
+        "from": "Needs Attention",
+        "to": "In Progress"
+      }
+    },
+    {
+      "ts": "2026-11-13T00:42:48.476940512Z",
+      "spec": "TASK-b6b1278890774ef993d2ebc327862470-965",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Needs Attention",
+        "after": "In Progress"
+      }
+    },
+    {
+      "ts": "2026-11-13T00:42:54.789509668Z",
+      "spec": "TASK-b6b1278890774ef993d2ebc327862470-965",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "In Progress",
+        "after": "Completed"
+      }
+    },
+    {
+      "ts": "2026-11-13T00:42:54.791005093Z",
+      "spec": "TASK-b6b1278890774ef993d2ebc327862470-965",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "",
+        "closed_by": "edit"
+      }
+    }
+  ]
+}

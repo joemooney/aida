@@ -28,7 +28,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-12T17:51:40.579097417Z
-modified_at: 2026-11-13T00:43:24.120777239Z
+modified_at: 2026-11-13T00:43:33.788015309Z
 req_type: Story
 relationships:
 - rel_type:
@@ -69,6 +69,13 @@ comments:
   modified_at: 2026-11-12T19:41:20.630427943Z
   session_id: 01a1d146d44a
   harness_version: codex-cli 0.167.0
+- id: 01a1d25c-1a1c-7831-9fea-0e4f8ec12f0e
+  author: joe
+  content: 'Advisor 17:44: PR #3898 CHANGES REQUESTED at head e434410 (FAST CI omits ratchet base inputs; ci:full validation setup absent). Queued rework via autoland spool. trace:STORY-2737'
+  created_at: 2026-11-13T00:43:33.788015309Z
+  modified_at: 2026-11-13T00:43:33.788015309Z
+  session_id: 01a1d240-c397-7b61-b29f-bb337c138943
+  harness_version: 2.1.323 (Claude Code)
 history:
 - id: 01a1d0e3-3615-7533-9c49-092ba133a6b5
   author: joe

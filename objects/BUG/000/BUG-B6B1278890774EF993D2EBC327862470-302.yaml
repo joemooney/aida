@@ -13,12 +13,12 @@ description: |
   3. Self-heal in ownership_rider_refusal: when the train record is absent or not ended BUT the forge reports train PR #T CLOSED or MERGED, do not refuse; release the stale ride (op "leave-train", reason "train #T closed") and admit. Keep refusing while #T is OPEN and its owner is live.
   4. One-time repair is unnecessary once (3) lands (it heals on the next train).
   ACCEPTANCE: tests for (a) open then retire before lease: riders leave Training and the next train admits them; (b) a legacy stranded rider whose train PR is closed is admitted by (3) and the journal records the release; (c) a rider of a live open train is still refused. LIGHT gate: one targeted cargo test -p aida-cli-lib <train ownership filter> + make check-ci-fast.
-status: NeedsAttention
+status: Completed
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-12T17:56:12.887901799Z
-modified_at: 2026-11-12T23:31:02.328270585Z
+modified_at: 2026-11-13T00:42:10.771995018Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -52,6 +52,13 @@ comments:
   modified_at: 2026-11-12T20:26:40.838883125Z
   session_id: 01a1d0eb-22cc-7262-8f6c-7266e9cc1fbb
   harness_version: 2.1.322 (Claude Code)
+- id: 01a1d25a-cedc-7932-b330-81a9f2f62573
+  author: joe
+  content: 'Returned from NeedsAttention to In Progress via `aida edit --status`. It was shelved on: reviewer/verdict:request-changes: Full sweep: BUG-2537 acceptance cases are covered, but exact-head CI confirms two introduced regressions: legacy identity ratchet expansion and a retirement fixture panic.. No triage reason was given.'
+  created_at: 2026-11-13T00:42:08.988228353Z
+  modified_at: 2026-11-13T00:42:08.988228353Z
+  session_id: 01a1d240-c397-7b61-b29f-bb337c138943
+  harness_version: 2.1.323 (Claude Code)
 history:
 - id: 01a1d0e7-4bc0-7643-a54b-504f3e1e4d30
   author: joe
@@ -93,6 +100,24 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a1d25a-cedc-7932-b330-819cbbc6be9d
+  author: joe
+  timestamp: 2026-11-13T00:42:08.988220405Z
+  session_id: 01a1d240-c397-7b61-b29f-bb337c138943
+  harness_version: 2.1.323 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: InProgress
+- id: 01a1d25a-d5d3-75c2-8d11-e6bac58293ad
+  author: joe
+  timestamp: 2026-11-13T00:42:10.771990760Z
+  session_id: 01a1d240-c397-7b61-b29f-bb337c138943
+  harness_version: 2.1.323 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
 filed_at:
   code_sha: ec5a35a7108475b421baf1101b26159a7aa0fab9
   branch: main
@@ -102,11 +127,6 @@ filed_at:
   vendor: claude
   session: 01a1d09a-4262-7d50-a00b-00a5a30f3934
   harness_version: 2.1.322 (Claude Code)
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: 'Full sweep: BUG-2537 acceptance cases are covered, but exact-head CI confirms two introduced regressions: legacy identity ratchet expansion and a retirement fixture panic.'
-  recovery_hint: address the review findings, move BUG-2537 back to In Progress, and clear the PR hold only after approval
-  shelved_by: reviewer
-  shelved_at: 2026-11-12T23:31:02.328270585Z
+implementation_info:
+  implemented: false
+  completed_at: 2026-11-13T00:42:10.771970342Z
