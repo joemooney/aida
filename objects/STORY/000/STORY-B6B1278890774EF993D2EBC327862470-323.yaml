@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-02T19:20:50.092491662Z
-modified_at: 2026-11-13T10:01:55.514710794Z
+modified_at: 2026-11-13T10:08:47.455416671Z
 req_type: Story
 tags:
 - architecture
@@ -763,6 +763,21 @@ comments:
     Native Refs publication declaration recorded: [AI:codex] fix(ownership): remove retired steal from phase launch arguments (Refs STORY-2325). Five changed files, uncommitted. Host must rebase (local branch 146 commits behind origin/main), commit, publish a new PR as directed in advisor comment 48, and verify every CI lane at that resulting head for finding 6. Existing merge hold remains; no clearance or bypass claimed. No Git metadata mutation, push, PR creation, queue done, review record or merge from this seat. Full handoff: /tmp/story2325-native-handoff.md. Turn ended after handoff; no ongoing work claimed.
   created_at: 2026-11-13T10:01:55.514710794Z
   modified_at: 2026-11-13T10:01:55.514710794Z
+  session_id: 01a1d44d1a3a
+  harness_version: codex-cli 0.167.0
+- id: 01a1d461-955f-7631-b5a6-962896f3ad31
+  author: dirtlab
+  content: |
+    STORY-2325 one fast-gate fix round
+
+    Changed file: tests/test_bug_2135_sccache_tmpdir.py (uncommitted).
+    Both synthetic-proc fixture classes now clear inherited AIDA_SCCACHE_PIDS and AIDA_SCCACHE_DISABLE after saving the environment, and restore the original environment in tearDown. Host/lane controls must not select real PIDs or opt the fake server out. No production code changed.
+
+    Reproduced the exact three reported failures with AIDA_SCCACHE_PIDS=987654 AIDA_SCCACHE_DISABLE=1 before editing.
+    After editing, all 22 module tests pass under those same controls and under the ordinary seat environment. git diff --check passes.
+    Full configured fast-check not rerun here because it invokes Cargo outside the lane runner; host should rerun its sandboxed configured command. Existing punt/hold instructions remain binding; no clearance, publication, merge or queue completion claimed.
+  created_at: 2026-11-13T10:08:47.455416671Z
+  modified_at: 2026-11-13T10:08:47.455416671Z
   session_id: 01a1d44d1a3a
   harness_version: codex-cli 0.167.0
 history:
