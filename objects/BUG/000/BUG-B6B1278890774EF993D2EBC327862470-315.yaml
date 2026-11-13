@@ -3,13 +3,23 @@ spec_id: BUG-b6b1278890774ef993d2ebc327862470-315
 agreed_id: BUG-2550
 title: Merge-time auto-bump runs twice for one merge; duplicate completions conflict on store pull and block every reviewer pickup
 description: '2026-11-12 20:27 MST: #3775 merged as 2a62f92. Two auto-bump runs ~70s apart (03:28 origin, 03:29 local) each completed BUG-2517 and STORY-2712 and appended timings/*.json. The rebase conflicted on the timings JSON (non-mergeable path) and on the spec YAMLs. ''aida db sync --pull'' failed, and every ''aida queue work PR-N --role reviewer'' then refused at pre-pickup pull (review deputy stalled ~25 min). Fixed by hand: rebase, union-merge of timings publishes/events, keep upstream for the duplicate bump. Fix: make the auto-bump idempotent per (spec, completion_sha), so the second run no-ops when the spec is already Completed at that sha; make timings/*.json union-mergeable (merge driver or per-event files). Related: review-watch mailed ''PR-3907 ready to ship'' while the train refused it because its approval was bound to 109b770 (another PR''s head).'
-status: Draft
+status: Approved
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-13T03:56:52.002540842Z
-modified_at: 2026-11-13T03:56:52.002540842Z
+modified_at: 2026-11-13T05:29:54.617365825Z
 req_type: Bug
+history:
+- id: 01a1d362-42b9-70b2-b1e5-f78dd238c0d3
+  author: joe
+  timestamp: 2026-11-13T05:29:54.617359857Z
+  session_id: 01a1d2e6-f5db-7f33-9b74-3ae5fdaf9e0c
+  harness_version: 2.1.323 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Approved
 filed_at:
   code_sha: 2a62f92c2a200b58e0d95446df07e355e062ab49
   branch: main
