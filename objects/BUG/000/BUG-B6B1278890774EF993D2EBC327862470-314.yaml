@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-13T03:10:47.302266912Z
-modified_at: 2026-11-13T19:18:13.974104315Z
+modified_at: 2026-11-13T19:18:16.766467296Z
 req_type: Bug
 tags:
 - track:dell1
@@ -46,6 +46,20 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: BUG-2549: canonical resumption, exit recovery and Refs recovery have source regression coverage, but the new raw Git builder violates the lease-tree safety contract and fails exact-head CI. BUG-2549 (bug protocol): met; test files changed.. It was punted on: other: Native implementer pickup refused: spec is Needs Attention with request-changes verdict; CLI requires advisor authority to promote to In Progress. No source edits or tests performed. Advisor triage is required before relaunch.. No triage reason was given.'
   created_at: 2026-11-13T19:18:13.974100034Z
   modified_at: 2026-11-13T19:18:13.974100034Z
+  session_id: 01a1d5f7-27ab-7543-8808-b0ec6c271689
+  harness_version: 2.1.323 (Claude Code)
+- id: 01a1d658-a721-70d2-b108-a2fe8f658607
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (BUG-2549):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 461674de85c7
+    Recorded: 2026-11-13T11:17:11.129511535+00:00
+    Findings:
+    1. [P1] aida-cli-lib/src/lane_recovery.rs:213-221: exit_head introduces std::process::Command::new("git") in a module reading lease worktree_path, bypassing the required host_git_command clone detection and hardening boundary. Exact-head CI job 131836024430 deterministically fails seat_clone::clone_git_ratchet_tests::task_2143_no_new_raw_git_where_a_lease_tree_is_read with this new builder as its sole violation; required Build fails as a consequence. Construct the non-clone lookup with aida_core::git_ops::host_git_command(root), retain the sandboxed clone probe, and obtain passing CI for the ratchet. Do not increase its raw-Git allowance.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-13T19:18:16.609731619Z
+  modified_at: 2026-11-13T19:18:16.609731619Z
   session_id: 01a1d5f7-27ab-7543-8808-b0ec6c271689
   harness_version: 2.1.323 (Claude Code)
 history:
