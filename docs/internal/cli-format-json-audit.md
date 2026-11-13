@@ -46,8 +46,8 @@ hermetic audit. `JSON not honoured` means unsupported and explicitly rejected.
 | `aida findings promote` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
 | `aida findings calibration` | COULD NOT VERIFY | Dedicated --json exists; needs command-specific state or external service |
 | `aida findings calibration annotate` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
-| `aida flow` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
-| `aida flow report` | COULD NOT VERIFY | Dedicated --json exists; needs command-specific state or external service |
+| `aida flow-data` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
+| `aida flow-data report` | COULD NOT VERIFY | Dedicated --json exists; needs command-specific state or external service |
 | `aida questions` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
 | `aida questions list` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
 | `aida questions sweep` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
@@ -451,6 +451,8 @@ hermetic audit. `JSON not honoured` means unsupported and explicitly rejected.
 | `aida triage status` | COULD NOT VERIFY | Dedicated --json exists; needs command-specific state or external service |
 | `aida ship` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
 | `aida pr` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
+| `aida pr emergency-land` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
+| `aida pr state` | COULD NOT VERIFY | Dedicated --json exists; needs command-specific state or external service |
 | `aida pr post-ship-cleanup` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
 | `aida pr auto-queue-review` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
 | `aida pr review` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |

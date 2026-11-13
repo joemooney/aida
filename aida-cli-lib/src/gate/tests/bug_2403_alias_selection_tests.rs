@@ -694,3 +694,78 @@ fn bug_2507_rework_imports_large_ledger_findings_and_refuses_over_limit() {
     assert!(why.contains("oversized"), "{why}");
     assert!(why.contains("limit 8388608"), "{why}");
 }
+
+// trace:BUG-2531 | ai:codex
+#[test]
+fn bug_2531_unrelated_closed_history_does_not_exhaust_selection() {
+    let (_tmp, root, _) = two_label_fixture();
+    let _env = uncontained();
+    // Ten valid files below the per-file/line caps, together above 64 MiB.
+    // Neither the index nor closed_by_merge is trusted to skip discovery.
+    let large = "x".repeat(7 * 1024 * 1024);
+    let mut total = 0;
+    for n in 1..=10 {
+        let change = ChangeKey::pr(n);
+        let mut rec = record("approved", OLD_HEAD, &ts(-600), &[&large]);
+        rec.insert("closed_by_merge".into(), json!(OLD_HEAD));
+        let mut event = GateEvent::new(change, EventBody::Verdict { record: rec });
+        event.spec = Some("STORY-UNRELATED-1".into());
+        event.seq = 1;
+        let body = format!("{}\n", serde_json::to_string(&event).unwrap());
+        total += body.len() as u64;
+        std::fs::write(store::ledger_file(&root, change), body).unwrap();
+    }
+    assert!(total > crate::gate::ledger::checked::MAX_SELECTION_BYTES);
+    // Missing index must still discover the selected requirement's refusal.
+    let index = crate::gate::ledger::ledger_dir(&root).join("by-spec");
+    std::fs::remove_file(index.join(format!("{NATIVE}.json"))).unwrap();
+    assert_eq!(
+        selected(select_verdict(&root, &[FRIENDLY, NATIVE])).raw,
+        "request_changes"
+    );
+    // Relevant history still consumes the finite selection budget.
+    let sel = select_verdict(&root, &["STORY-UNRELATED-1", "STORY-UNRELATED-2"]);
+    assert!(matches!(sel, AliasSelection::Unsafe { .. }), "{sel:?}");
+}
+
+// trace:BUG-2531 | ai:codex
+#[test]
+fn bug_2531_selected_payload_is_charged_once_across_labels() {
+    let (_tmp, root) = root();
+    let _env = uncontained();
+    let change = ChangeKey::pr(1);
+    append(
+        &root,
+        change,
+        FRIENDLY,
+        record("approved", OLD_HEAD, &ts(-600), &[]),
+    );
+    append(
+        &root,
+        change,
+        NATIVE,
+        record("request_changes", NEW_HEAD, &ts(-60), &[]),
+    );
+    let path = store::ledger_file(&root, change);
+    let ledger_bytes = std::fs::metadata(&path).unwrap().len();
+    let by_spec = crate::gate::ledger::ledger_dir(&root).join("by-spec");
+    let index_bytes = [FRIENDLY, NATIVE]
+        .iter()
+        .map(|label| {
+            std::fs::metadata(by_spec.join(format!("{label}.json")))
+                .unwrap()
+                .len()
+        })
+        .sum::<u64>();
+    let labels = [FRIENDLY.to_string(), NATIVE.to_string()];
+    let mut budget = Budget::with_limits(ledger_bytes + index_bytes, 3);
+    assert_eq!(
+        selected(across(&root, &labels, &mut budget)).raw,
+        "request_changes"
+    );
+    let mut budget = Budget::with_limits(ledger_bytes + index_bytes - 1, 3);
+    assert!(matches!(
+        across(&root, &labels, &mut budget),
+        AliasSelection::Unsafe { .. }
+    ));
+}

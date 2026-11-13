@@ -2,6 +2,7 @@
 resolver = "2"
 members = [
     "aida-core",
+    "aida-porcelain",
     "aida-cli",
     "aida-cli-lib",
     "aida-mcp",

@@ -191,17 +191,12 @@ fn story2402_s4_cli_and_schedule() {
         ],
         vec!["aida", "defer", "TASK-1", "--until", "date:2026-12-01"],
     ] {
-        crate::command_registry::try_parse_from(args).unwrap();
+        crate::TEST_CLI.try_parse_from(args).unwrap();
     }
-    assert!(crate::command_registry::try_parse_from(["aida", "defer"]).is_err());
-    assert!(crate::command_registry::try_parse_from([
-        "aida",
-        "defer",
-        "resurface",
-        "--reason",
-        "bypass"
-    ])
-    .is_err());
+    assert!(crate::TEST_CLI.try_parse_from(["aida", "defer"]).is_err());
+    assert!(crate::TEST_CLI
+        .try_parse_from(["aida", "defer", "resurface", "--reason", "bypass"])
+        .is_err());
     let value: toml::Value = toml::from_str(include_str!("../../../.aida/config.toml")).unwrap();
     let jobs = value["schedule"]["jobs"].as_array().unwrap();
     let job = jobs
@@ -683,24 +678,25 @@ fn story2402_s5_handoff_cli_requires_write_and_spec() {
             "date:2026-01-01",
         ],
     ] {
-        assert!(crate::command_registry::try_parse_from(args).is_err());
+        assert!(crate::TEST_CLI.try_parse_from(args).is_err());
     }
-    assert!(crate::command_registry::try_parse_from([
-        "aida",
-        "session",
-        "handoff",
-        "--seat",
-        "advisor",
-        "--write",
-        "-",
-        "--spec",
-        "TASK-1",
-        "--until",
-        "manual:joe",
-        "--reason",
-        "review needed",
-    ])
-    .is_ok());
+    assert!(crate::TEST_CLI
+        .try_parse_from([
+            "aida",
+            "session",
+            "handoff",
+            "--seat",
+            "advisor",
+            "--write",
+            "-",
+            "--spec",
+            "TASK-1",
+            "--until",
+            "manual:joe",
+            "--reason",
+            "review needed",
+        ])
+        .is_ok());
     assert!(crate::condition_cmd::canonical_condition(Some("if it stalls"), None).is_err());
 }
 
@@ -724,7 +720,7 @@ fn story2402_s5_conditional_handoff_auto_pushes() {
     ] {
         let mut argv = vec!["aida", "session", "handoff"];
         argv.extend(args);
-        let cli = crate::command_registry::try_parse_from(argv).unwrap();
+        let cli = crate::TEST_CLI.try_parse_from(argv).unwrap();
         assert_eq!(
             crate::command_triggers_per_write_auto_push(&cli.command),
             expected
@@ -833,15 +829,16 @@ fn story2402_s5_implementer_cannot_set_holds() {
     // Exercise the registered policy through the same guard as store dispatch.
     // Refusal must precede both the recurrence increment and deferral write.
     // trace:STORY-2402 | ai:codex
-    let cli = crate::command_registry::try_parse_from([
-        "aida",
-        "findings",
-        "recur",
-        id,
-        "--until",
-        "date:2026-01-01",
-    ])
-    .unwrap();
+    let cli = crate::TEST_CLI
+        .try_parse_from([
+            "aida",
+            "findings",
+            "recur",
+            id,
+            "--until",
+            "date:2026-01-01",
+        ])
+        .unwrap();
     let recur = || {
         crate::status_awaiting::maybe_team_identity_guard(&path, &cli.command)?;
         crate::findings_gate::handle_findings_recur(

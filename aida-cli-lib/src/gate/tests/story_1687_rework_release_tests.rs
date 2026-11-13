@@ -476,22 +476,16 @@ fn new_artifact_writer_cannot_inherit_release_grant() {
 #[test]
 fn auto_release_cli_supports_one_or_all_and_has_no_override() {
     use clap::Parser;
-    assert!(
-        crate::command_registry::try_parse_from(["aida", "merge-hold", "auto-release"]).is_ok()
-    );
-    assert!(
-        crate::command_registry::try_parse_from(["aida", "merge-hold", "auto-release", "37"])
-            .is_ok()
-    );
+    assert!(crate::TEST_CLI
+        .try_parse_from(["aida", "merge-hold", "auto-release"])
+        .is_ok());
+    assert!(crate::TEST_CLI
+        .try_parse_from(["aida", "merge-hold", "auto-release", "37"])
+        .is_ok());
     for flag in ["--force", "--override", "--yes"] {
-        assert!(crate::command_registry::try_parse_from([
-            "aida",
-            "merge-hold",
-            "auto-release",
-            "37",
-            flag
-        ])
-        .is_err());
+        assert!(crate::TEST_CLI
+            .try_parse_from(["aida", "merge-hold", "auto-release", "37", flag])
+            .is_err());
     }
 }
 

@@ -86,7 +86,6 @@ fn run_contract(
     matches: &clap::ArgMatches,
     _ctx: &crate::cmdkit::DispatchCtx,
 ) -> anyhow::Result<()> {
-    use crate::*;
     let args = <ContractArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
     let ContractArgs { json: _ } = &args;
     return self::print_json();

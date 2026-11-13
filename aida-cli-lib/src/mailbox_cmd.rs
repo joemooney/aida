@@ -2016,7 +2016,8 @@ mod tests {
     // trace:BUG-1297 | ai:codex
     #[test]
     fn mailbox_read_cli_accepts_a_message_prefix() {
-        let cli = crate::command_registry::try_parse_from(["aida", "mailbox", "read", "0fa629d6"])
+        let cli = crate::TEST_CLI
+            .try_parse_from(["aida", "mailbox", "read", "0fa629d6"])
             .unwrap();
         match cli.command.registered::<crate::mailbox_cmd::MailboxArgs>() {
             crate::mailbox_cmd::MailboxArgs {
@@ -2372,18 +2373,19 @@ mod tests {
     // trace:TASK-1250 | ai:codex
     #[test]
     fn mailbox_send_cli_accepts_file_or_stdin_without_positional_body() {
-        let from_file = crate::command_registry::try_parse_from([
-            "aida",
-            "mailbox",
-            "send",
-            "--to",
-            "codex",
-            "--body-file",
-            "mail.txt",
-            "--subject",
-            "Review requested",
-        ])
-        .unwrap();
+        let from_file = crate::TEST_CLI
+            .try_parse_from([
+                "aida",
+                "mailbox",
+                "send",
+                "--to",
+                "codex",
+                "--body-file",
+                "mail.txt",
+                "--subject",
+                "Review requested",
+            ])
+            .unwrap();
         match from_file
             .command
             .registered::<crate::mailbox_cmd::MailboxArgs>()
@@ -2404,14 +2406,9 @@ mod tests {
             other => panic!("expected mailbox send, got {other:?}"),
         }
 
-        let from_stdin = crate::command_registry::try_parse_from([
-            "aida",
-            "mailbox",
-            "send",
-            "--broadcast",
-            "--stdin",
-        ])
-        .unwrap();
+        let from_stdin = crate::TEST_CLI
+            .try_parse_from(["aida", "mailbox", "send", "--broadcast", "--stdin"])
+            .unwrap();
         match from_stdin
             .command
             .registered::<crate::mailbox_cmd::MailboxArgs>()

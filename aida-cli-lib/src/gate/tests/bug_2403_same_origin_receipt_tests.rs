@@ -395,7 +395,7 @@ fn record_pr(
     crate::AFTER_SPEC_RECORD_HOOK.with(|h| *h.borrow_mut() = between);
     let result = crate::with_review_pr_subject(subject, || {
         crate::gate::review_authority::with_identity_source(reviewer, || {
-            crate::handle_review_record_at(
+            crate::handle_review_record_fixture_at(
                 root.clone(),
                 spec,
                 "approved",
@@ -447,9 +447,9 @@ fn bug_2403_record_pr_handshake_keeps_origin_release_receipt() {
     assert_eq!(pr_current.get("release_grant"), Some(&receipt));
 }
 
-/// Review finding 4b: on a GitLab-origin project the `--pr` handshake keeps
-/// its existing mapping contract (the orchestrator's `PR-N` anchor; no
-/// `MR-N` record is invented) and the same-origin receipt.
+/// A GitLab change records its ordinary verdict and handshake under MR-N,
+/// preserving its same-origin receipt without touching the PR-N ledger.
+// trace:BUG-2517 | ai:codex
 #[test]
 fn bug_2403_gitlab_record_pr_handshake_keeps_mapping_and_receipt() {
     let (_tmp, root, _env) = record_pr(
@@ -464,10 +464,10 @@ fn bug_2403_gitlab_record_pr_handshake_keeps_mapping_and_receipt() {
     );
     let spec_record = selected(&root, "BUG-24032");
     let receipt = spec_record.get("release_grant").cloned().unwrap();
-    let handshake = handshake_of(&root, "PR-24032");
+    let handshake = handshake_of(&root, "MR-24032");
     assert_eq!(handshake.get("release_grant"), Some(&receipt));
     assert!(
-        project::verdict_records(&root, "MR-24032").is_empty(),
+        project::verdict_records(&root, "PR-24032").is_empty(),
         "PR-N and MR-N stay distinct changes"
     );
 }
@@ -506,4 +506,34 @@ fn bug_2403_record_pr_handshake_ignores_a_concurrent_origin_replacement() {
     assert!(project::verdict_records(&root, "BUG-24033")
         .iter()
         .any(|r| r.get("recorded_by") == Some(&json!("concurrent-reviewer"))));
+}
+
+// trace:BUG-2525 | ai:codex
+#[test]
+fn bug_2525_phase3_effective_wait_closes_in_raw_and_effective_projections() {
+    let (_tmp, root) = root();
+    let _env = uncontained();
+    let pr = ChangeKey::pr(3185);
+    let o = origin("waiting", HEAD, &ts(-5));
+    append(&root, pr, SPEC, vec![o.clone(), overlay_of(&o)]);
+    for key in [SPEC, "PR-3185"] {
+        let source = rv::current_verdict(&root, key).unwrap();
+        assert_eq!(serde_json::from_str::<JsonObj>(&source.body).unwrap(), o);
+        assert!(rv::close_terminal_wait(&root, key, pr, &source).unwrap());
+        assert!(rv::read_recorded_verdict(&root, key).unwrap().is_closed());
+        assert!(selected(&root, key).contains_key("closed_by_merge"));
+        if key == SPEC {
+            assert!(
+                crate::queue_cmd::refuse_waiting_review(&root, SPEC, SPEC, Some("PR-3185"))
+                    .is_err()
+            );
+        }
+    }
+    // The spec annotation intentionally leaves the independent PR scope open;
+    // queue pickup can proceed once both scopes have been closed.
+    crate::queue_cmd::refuse_waiting_review(&root, SPEC, SPEC, Some("PR-3185")).unwrap();
+    append(&root, pr, SPEC, vec![origin("waiting", HEAD, &ts(0))]);
+    for key in [SPEC, "PR-3185"] {
+        assert!(!rv::read_recorded_verdict(&root, key).unwrap().is_closed());
+    }
 }

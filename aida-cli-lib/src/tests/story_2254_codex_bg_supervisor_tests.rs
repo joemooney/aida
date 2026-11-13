@@ -919,7 +919,7 @@ fn story_2254_bg_launch_status_and_recover_launch_cli() {
     let h = harness("TASK-2266");
     std::env::set_current_dir(h.root()).unwrap();
     let dispatch = |args: &[&str]| {
-        let cli = crate::command_registry::try_parse_from(args).unwrap();
+        let cli = crate::TEST_CLI.try_parse_from(args).unwrap();
         let AgentArgs { inner } = cli.command.registered::<AgentArgs>();
         handle_agent_command(&inner)
     };

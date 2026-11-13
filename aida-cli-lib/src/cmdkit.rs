@@ -308,3 +308,35 @@ impl Invocation {
         }
     }
 }
+
+/// Parsing over an injected command tree and matches decoder.
+/// The composition root supplies both callbacks without coupling consumers to
+/// the registry table or coupling this helper to a concrete CLI type.
+// trace:TASK-3448 | ai:codex
+pub(crate) struct CliSupport<T> {
+    command: fn() -> clap::Command,
+    decode: fn(&mut clap::ArgMatches) -> Result<T, clap::Error>,
+}
+
+impl<T> CliSupport<T> {
+    pub(crate) const fn new(
+        command: fn() -> clap::Command,
+        decode: fn(&mut clap::ArgMatches) -> Result<T, clap::Error>,
+    ) -> Self {
+        Self { command, decode }
+    }
+
+    pub(crate) fn built_command(&self) -> clap::Command {
+        (self.command)()
+    }
+
+    pub(crate) fn try_parse_from<I, A>(&self, argv: I) -> Result<T, clap::Error>
+    where
+        I: IntoIterator<Item = A>,
+        A: Into<std::ffi::OsString> + Clone,
+    {
+        let mut root = self.built_command();
+        let mut matches = root.try_get_matches_from_mut(argv)?;
+        (self.decode)(&mut matches).map_err(|err| err.format(&mut root))
+    }
+}

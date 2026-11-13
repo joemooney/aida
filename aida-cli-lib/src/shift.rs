@@ -3836,7 +3836,7 @@ fn run_shift(
     matches: &clap::ArgMatches,
     ctx: &crate::cmdkit::DispatchCtx,
 ) -> anyhow::Result<crate::cmdkit::Flow> {
-    use crate::*;
+    // trace:TASK-3428 | ai:codex
     let args = <ShiftArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
     match &ctx.store {
         None => Ok(crate::cmdkit::Flow::Continue),

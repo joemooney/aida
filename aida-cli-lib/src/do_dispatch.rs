@@ -490,7 +490,8 @@ fn run_do(
     matches: &clap::ArgMatches,
     ctx: &crate::cmdkit::DispatchCtx,
 ) -> anyhow::Result<crate::cmdkit::Flow> {
-    use crate::*;
+    use crate::zen_drive_root::run_do_drive;
+    use aida_core::Storage;
     let args = <DoArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
     match &ctx.store {
         None => Ok(crate::cmdkit::Flow::Continue),

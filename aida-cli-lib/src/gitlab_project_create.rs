@@ -801,24 +801,21 @@ esac
 
     #[test]
     fn gitlab_ci_flags_require_explicit_gitlab_target() {
-        assert!(crate::command_registry::try_parse_from([
-            "aida",
-            "init",
-            "demo",
-            "--gitlab",
-            "gitlab.example.test/group",
-            "--gitlab-enable-ci",
-            "--gitlab-runner-tags",
-            "linux,docker"
-        ])
-        .is_ok());
-        assert!(crate::command_registry::try_parse_from([
-            "aida",
-            "init",
-            "demo",
-            "--gitlab-enable-ci"
-        ])
-        .is_err());
+        assert!(crate::TEST_CLI
+            .try_parse_from([
+                "aida",
+                "init",
+                "demo",
+                "--gitlab",
+                "gitlab.example.test/group",
+                "--gitlab-enable-ci",
+                "--gitlab-runner-tags",
+                "linux,docker"
+            ])
+            .is_ok());
+        assert!(crate::TEST_CLI
+            .try_parse_from(["aida", "init", "demo", "--gitlab-enable-ci"])
+            .is_err());
     }
 
     #[test]

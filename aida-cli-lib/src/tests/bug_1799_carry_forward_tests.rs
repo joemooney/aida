@@ -23,11 +23,28 @@ fn bug_1799_carry_forward_sweep_skips_inherited_findings() {
     .unwrap();
     write_verdict_object(&file, &obj1).unwrap();
 
-    // 2. Approve at sha B with no finding flags
-    let obj2 = build_verdict_object(
+    // trace:BUG-2527 | ai:claude
+    // 2a. An explicit approval over the inherited blocking finding is refused
+    //     rather than silently recorded as request-changes.
+    let refused = build_verdict_object(
         root,
         &file,
         Some("approved"),
+        Some("bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"),
+        None,
+        None,
+        &[],
+        "me",
+    )
+    .unwrap_err();
+    assert_eq!(refused.kind(), std::io::ErrorKind::InvalidInput);
+
+    // 2b. Re-record request-changes at sha B with no finding flags; F is
+    //     inherited, not newly filed.
+    let obj2 = build_verdict_object(
+        root,
+        &file,
+        Some("request-changes"),
         Some("bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"),
         None,
         None,

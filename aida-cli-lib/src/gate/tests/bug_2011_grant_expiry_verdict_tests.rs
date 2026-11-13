@@ -23,14 +23,9 @@ fn role_expiry_cli_child() {
         stdout_is_terminal: false,
         stderr_is_terminal: false,
     }));
-    let cli = crate::command_registry::try_parse_from([
-        "aida",
-        "role",
-        "expiry",
-        "--refuse-within",
-        "1h",
-    ])
-    .unwrap();
+    let cli = crate::TEST_CLI
+        .try_parse_from(["aida", "role", "expiry", "--refuse-within", "1h"])
+        .unwrap();
     let command = cli.command.registered::<crate::role_cmd::RoleArgs>().inner;
     std::fs::write(root.join("entered-expiry-handler"), "entered").unwrap();
     crate::role_cmd::handle_role_command(&command).unwrap();

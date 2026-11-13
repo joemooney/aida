@@ -155,12 +155,14 @@ class StoreMutationTests(unittest.TestCase):
                           ('spec_edit', {'fields': {'priority': 'HIGH'}}),
                           ('spec_edit', {'fields': {'priority': 'med'}}),
                           ('spec_edit', {'fields': {'weight': 0.75}}),
-                          ('spec_edit', {'fields': {'weight': None}})]:
+                          ('spec_edit', {'fields': {'weight': None}}),
+                          ('spec_edit', {'fields': {'tags': []}}),
+                          ('spec_edit', {'fields': {'tags': ['alpha', ' beta ', 'alpha']}})]:
             data = dict(spec_id='TASK-1', expected_revision='a' * 64, **extra)
             self.assertEqual(parse(self.wire(self.request(op, data)))['data'], data)
             for field in ('author', 'path', 'status', 'grant', 'replacement'):
                 self.refuses('InvalidRequest', self.request(op, dict(data, **{field: 'x'})))
-        for fields in ({'weight': True}, {'weight': '42'}, {'weight': 1e100}, {'weight': float('inf')}, {'priority': 'urgent'}, {'priority': None}, {'priority': 1},
+        for fields in ({'tags': None}, {'tags': 'one,two'}, {'tags': [1]}, {'tags': ['one two']}, {'tags': ['x' * 513]}, {'tags': ['x'] * 257}, {'tags': ['x\x7f']}, {'weight': True}, {'weight': '42'}, {'weight': 1e100}, {'weight': float('inf')}, {'priority': 'urgent'}, {'priority': None}, {'priority': 1},
                        {'status': 'Completed'}, {}, {'title': None}, {'title': ''},
                        {'title': None, 'description': 'text'},
                        {'title': 'title', 'description': None}):

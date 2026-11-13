@@ -532,6 +532,12 @@ pub fn supervised_merge_holds(
 // trace:TASK-1448 | ai:claude
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum ApprovalHeadRefusal {
+    /// Reviewer permits only the exact reviewed head.
+    // trace:STORY-2696 | ai:codex
+    NoCarry {
+        reviewed_sha: String,
+        head_sha: String,
+    },
     /// The approval was recorded at a commit the head has since moved past.
     Moved {
         reviewed_sha: String,
@@ -599,6 +605,16 @@ pub(crate) fn approval_head_refusal(
         | PrReviewRow::ReworkReady { reviewed_sha, .. } => reviewed_sha.trim().to_string(),
     };
     Some(match row {
+        PrReviewRow::Stale { .. }
+            if newest_approval(&approvals)
+                .and_then(|v| v.attestation.as_ref())
+                .is_some_and(|a| !a.carry_eligible) =>
+        {
+            ApprovalHeadRefusal::NoCarry {
+                reviewed_sha,
+                head_sha,
+            }
+        }
         PrReviewRow::Stale { .. } => ApprovalHeadRefusal::Moved {
             reviewed_sha,
             head_sha,
@@ -932,7 +948,11 @@ pub(crate) fn approval_authority_refusal_message(
 // trace:TASK-1458 | ai:claude
 pub(crate) fn approval_head_refusal_shas(refusal: &ApprovalHeadRefusal) -> (String, String) {
     match refusal {
-        ApprovalHeadRefusal::Moved {
+        ApprovalHeadRefusal::NoCarry {
+            reviewed_sha,
+            head_sha,
+        }
+        | ApprovalHeadRefusal::Moved {
             reviewed_sha,
             head_sha,
         }
@@ -979,6 +999,10 @@ pub(crate) fn format_stale_approval_override_event(
 pub(crate) fn approval_head_refusal_message(pr: u64, refusal: &ApprovalHeadRefusal) -> String {
     let short = |s: &str| crate::gate::review_verdict::short_sha(s).to_string();
     let why = match refusal {
+        ApprovalHeadRefusal::NoCarry { reviewed_sha, head_sha } => format!(
+            "the reviewer marked the approval at {} as not carry-eligible; fresh review of head {} is required",
+            short(reviewed_sha), short(head_sha)
+        ),
         ApprovalHeadRefusal::Moved {
             reviewed_sha,
             head_sha,

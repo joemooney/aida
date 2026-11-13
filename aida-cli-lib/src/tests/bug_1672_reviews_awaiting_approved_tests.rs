@@ -11,8 +11,8 @@
 //! no durable authority; BUG-2398 keeps them awaiting independent review.
 // trace:BUG-1672 | ai:claude
 
-use super::{latest_review_comment_verdict, review_comment_verdict, spec_review_approved};
 use crate::gate::review_verdict::VerdictKind;
+use crate::{latest_review_comment_verdict, review_comment_verdict, spec_review_approved};
 use aida_core::{Comment, Requirement};
 use chrono::{Duration, Utc};
 use tempfile::TempDir;
@@ -401,7 +401,7 @@ fn equal_review_times_preserve_blocker_in_any_source_order() {
 // trace:BUG-1672 | ai:codex
 #[test]
 fn missing_times_cannot_clear_a_blocker() {
-    use super::review_candidates_approved;
+    use crate::review_candidates_approved;
     let at = Utc::now();
     for candidates in [
         vec![(true, Some(at)), (false, None)],

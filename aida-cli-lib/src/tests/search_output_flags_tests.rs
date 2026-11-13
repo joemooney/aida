@@ -5,7 +5,8 @@ use clap::Parser;
 #[test]
 fn search_short_and_aliases_parse() {
     for flag in ["--short", "-q", "--ids-only", "--quiet"] {
-        let cli = crate::command_registry::try_parse_from(["aida", "search", "auth", flag])
+        let cli = crate::TEST_CLI
+            .try_parse_from(["aida", "search", "auth", flag])
             .unwrap_or_else(|e| panic!("`{flag}` should parse: {e}"));
         match cli
             .command
@@ -22,8 +23,9 @@ fn search_short_and_aliases_parse() {
 
 #[test]
 fn search_json_parses() {
-    let cli =
-        crate::command_registry::try_parse_from(["aida", "search", "auth", "--json"]).unwrap();
+    let cli = crate::TEST_CLI
+        .try_parse_from(["aida", "search", "auth", "--json"])
+        .unwrap();
     match cli
         .command
         .registered::<crate::requirements_cli::SearchArgs>()
@@ -40,12 +42,14 @@ fn search_json_parses() {
 fn search_short_and_json_are_mutually_exclusive() {
     // Mirrors `aida list`'s --short ⊥ --json. clap rejects the combo.
     assert!(
-        crate::command_registry::try_parse_from(["aida", "search", "auth", "--short", "--json"])
+        crate::TEST_CLI
+            .try_parse_from(["aida", "search", "auth", "--short", "--json"])
             .is_err(),
         "--short and --json must be mutually exclusive"
     );
     assert!(
-        crate::command_registry::try_parse_from(["aida", "search", "auth", "-q", "--json"])
+        crate::TEST_CLI
+            .try_parse_from(["aida", "search", "auth", "-q", "--json"])
             .is_err(),
         "-q and --json must be mutually exclusive"
     );

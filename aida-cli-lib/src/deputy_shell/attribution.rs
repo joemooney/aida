@@ -119,8 +119,9 @@ impl Probes {
     /// The real world, for the runner.
     pub(crate) fn live() -> Self {
         Self {
+            // trace:BUG-2520 | ai:codex
             grant: Arc::new(|root, id| {
-                crate::gate::seat_authority::grant_check_for(
+                crate::gate::seat_authority::grant_check_for_principal(
                     root,
                     id,
                     &crate::gate::kernel_deps::current_user_id(None),

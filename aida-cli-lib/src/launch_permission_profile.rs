@@ -396,7 +396,7 @@ mod tests {
                 "--verbose",
             ],
         ] {
-            let cli = crate::command_registry::try_parse_from(args).unwrap();
+            let cli = crate::TEST_CLI.try_parse_from(args).unwrap();
             let AgentArgs {
                 inner: AgentCommand::New { git_read_only, .. },
             } = cli.command.registered::<AgentArgs>()
@@ -638,28 +638,17 @@ mod tests {
     fn stakeholder_preview_is_read_but_real_launch_remains_refused() {
         for vendor in ["claude", "codex", "antigravity"] {
             for seat in ["guest", "requester"] {
-                let mut preview = crate::command_registry::try_parse_from([
-                    "aida",
-                    "agent",
-                    "new",
-                    vendor,
-                    "--no-exec",
-                    "--verbose",
-                ])
-                .unwrap();
+                let mut preview = crate::TEST_CLI
+                    .try_parse_from(["aida", "agent", "new", vendor, "--no-exec", "--verbose"])
+                    .unwrap();
                 crate::stakeholder_role::enforce_stakeholder_role_capabilities_for_role(
                     &mut preview.command,
                     seat,
                 )
                 .unwrap();
-                let mut launch = crate::command_registry::try_parse_from([
-                    "aida",
-                    "agent",
-                    "new",
-                    vendor,
-                    "--verbose",
-                ])
-                .unwrap();
+                let mut launch = crate::TEST_CLI
+                    .try_parse_from(["aida", "agent", "new", vendor, "--verbose"])
+                    .unwrap();
                 assert!(
                     crate::stakeholder_role::enforce_stakeholder_role_capabilities_for_role(
                         &mut launch.command,

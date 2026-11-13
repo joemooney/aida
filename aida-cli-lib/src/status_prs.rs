@@ -1,7 +1,20 @@
 //! status in-flight buckets, open-PR and PR head-state snapshots, unshipped-work detection (STORY-1488 slice 1)
 // trace:STORY-1488 | ai:claude
 
-use crate::*;
+use crate::process_retry::RetryEtxtbsy;
+use crate::{
+    auto_bump_evidence_is_stale, awaiting_you, branch_unshipped_patch_count_probe,
+    change_lookup_for_branch, ci_probe_with_forge, command_output_with_timeout,
+    detect_default_branch_ref, detect_distributed_store_from, doctor_cmd, events,
+    extract_spec_ids_from_commit, forge, git_arg_guard, git_output_checked, humanize_relative,
+    is_review_session_branch, leases, list_leases, load_dispenser, network_retry,
+    parse_review_scope, parse_review_story_pr_number, parse_squash_pr_number, plural, pr_cmd,
+    pr_has_local_verdict, pr_has_merge_hold, process_probe, resolve_default_branch_ref,
+    resolve_gh_binary, status_cleanup, try_auto_queue_pr_review, AutoQueueOrigin, AutoQueueStatus,
+    CiProbe, LeaseState, OpenPrInfo, PatchCountProbe, RequirementStatus, Result, ReviewForge,
+    SessionLease, FORGE_CLI_CALL_TIMEOUT,
+};
+use colored::Colorize;
 
 /// TASK-234: the three in-flight buckets, split out of
 /// [`render_in_flight_grouped`] so the classification — which only ever
@@ -1252,6 +1265,10 @@ pub(crate) fn orphaned_review_is_claimable(
 #[cfg(test)]
 mod bug_1291_orphan_sweep_tests {
     use super::*;
+    use crate::{
+        aida_subcmd_queue_add_for_reviewer_using, auto_complete, local_suppressed_prs,
+        pr_review_rows, AutonomyMode, RealPhaseDriver,
+    };
 
     fn write_verdict(root: &std::path::Path, verdict: &str) {
         let dir = root.join(".aida/review-verdicts");
@@ -2547,7 +2564,12 @@ pub(crate) fn collect_unshipped_work_items_bounded(
     let leases = list_leases(project_root);
     let live_leases: Vec<SessionLease> = leases
         .iter()
-        .filter(|l| matches!(lease_state_for(l, &live, now), LeaseState::Live))
+        .filter(|l| {
+            matches!(
+                crate::leases::lease_state_for(l, &live, now),
+                LeaseState::Live
+            )
+        })
         .cloned()
         .collect();
     let live_scopes: std::collections::HashSet<String> = live_leases
@@ -3302,6 +3324,7 @@ pub(crate) fn record_unshipped_work_detected(
 #[cfg(test)]
 mod story_1043_unshipped_work_tests {
     use super::*;
+    use crate::{branch_unshipped_patch_count_default, hostname, lease_path, leases_dir, slugify};
 
     fn git(root: &std::path::Path, args: &[&str]) {
         let output = crate::test_git::git_command()

@@ -14,6 +14,16 @@ update this file in the same change so the two don't drift.
 
 ---
 
+## Shared output formats
+
+<!-- trace:STORY-2704 | ai:codex -->
+
+`output_format::{OutputFormat, parse_output_format}` is the public pure format
+vocabulary and environment-pin parser shared by CLI-lib and porcelain. Parsing
+trims whitespace, ignores case, accepts `table` as human and `agent` as TOON,
+and returns `None` for unset or unknown values. It performs no environment reads.
+CLI-lib maps the result to its clap-facing enum.
+
 ## Execution input foundation (internal workspace API)
 
 <!-- trace:STORY-2538 | ai:codex -->
@@ -221,3 +231,14 @@ remain in one workspace. The contract is enforced by *convention + this
 document* (the crate-root re-export list is the public set) rather than by the
 compiler. If `aida-core` is ever published or split out, this document is the
 checklist for what must stay `pub` and what can be sealed.
+
+<!-- trace:STORY-2704 | ai:codex -->
+### Observational gate ledger
+
+`gate_ledger_read` is an intended public, no-write report API:
+`store_root(start)` resolves the shared evidence root without subprocesses;
+`read_pr(shared, pr)` returns raw event values plus evidence presence;
+`train_members(shared)` maps member PR numbers to train PRs from coverage.
+Missing ledgers remain unknown, while unreadable/malformed evidence returns
+an error. These functions never create files, locks, cache projections or
+store handles. Raw events preserve additive ledger fields for report readers.

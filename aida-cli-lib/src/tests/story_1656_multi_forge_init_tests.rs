@@ -128,43 +128,42 @@ fn gitlab_target_of_url_splits_namespace_and_name() {
 #[test]
 fn init_gitlab_flag_parses_alongside_github_and_conflicts_with_remote() {
     use clap::Parser;
-    assert!(crate::command_registry::try_parse_from([
-        "aida",
-        "init",
-        "proj",
-        "--github",
-        "--gitlab",
-        "gitlab.example.test/ai",
-        "--public"
-    ])
-    .is_ok());
-    assert!(crate::command_registry::try_parse_from([
-        "aida",
-        "init",
-        "proj",
-        "--gitlab",
-        "gitlab.example.test/ai",
-        "--public"
-    ])
-    .is_ok());
-    assert!(crate::command_registry::try_parse_from([
-        "aida",
-        "init",
-        "proj",
-        "--gitlab",
-        "gitlab.example.test/ai",
-        "--remote",
-        "git@x:y.git"
-    ])
-    .is_err());
-    assert!(
-        crate::command_registry::try_parse_from([
+    assert!(crate::TEST_CLI
+        .try_parse_from([
             "aida",
             "init",
+            "proj",
+            "--github",
             "--gitlab",
-            "gitlab.example.test"
+            "gitlab.example.test/ai",
+            "--public"
         ])
-        .is_err(),
+        .is_ok());
+    assert!(crate::TEST_CLI
+        .try_parse_from([
+            "aida",
+            "init",
+            "proj",
+            "--gitlab",
+            "gitlab.example.test/ai",
+            "--public"
+        ])
+        .is_ok());
+    assert!(crate::TEST_CLI
+        .try_parse_from([
+            "aida",
+            "init",
+            "proj",
+            "--gitlab",
+            "gitlab.example.test/ai",
+            "--remote",
+            "git@x:y.git"
+        ])
+        .is_err());
+    assert!(
+        crate::TEST_CLI
+            .try_parse_from(["aida", "init", "--gitlab", "gitlab.example.test"])
+            .is_err(),
         "--gitlab needs the positional DIR"
     );
 }

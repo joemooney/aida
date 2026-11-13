@@ -128,6 +128,8 @@ mod recover;
 pub(crate) use recover::{handle_queue_recover, recover_action_label, recover_push_branch};
 mod remove_move;
 mod rework;
+#[cfg(test)]
+pub(crate) use rework::require_rework_pickable;
 pub(crate) use rework::{
     current_queue_route, drain_running, drain_running_notice, handle_queue_rework,
     handle_rework_entry, loop_guard_park, needs_attention_parks, park_reason_line,
@@ -194,7 +196,7 @@ pub(crate) use work::{
 };
 #[cfg(test)]
 pub(crate) use work::{
-    derive_queue_work_prompt, latest_ruling_comment, prepend_ruling,
+    derive_queue_work_prompt, latest_ruling_comment, prepend_ruling, resolve_pickup_attempt,
     rework_pr_head_branch_from_lookup,
 };
 pub use work::{refuse_waiting_review, spec_open_change_key};

@@ -263,7 +263,9 @@ mod stakeholder_cli_policy_tests {
     use super::*;
 
     fn guest_refusal(args: &[&str]) -> anyhow::Error {
-        let mut cli = crate::command_registry::try_parse_from(args).expect("valid CLI command");
+        let mut cli = crate::TEST_CLI
+            .try_parse_from(args)
+            .expect("valid CLI command");
         enforce_stakeholder_role_capabilities_for_role(&mut cli.command, "guest")
             .expect_err("guest command must be refused")
     }
@@ -292,7 +294,9 @@ mod stakeholder_cli_policy_tests {
             &["aida", "queue", "list"][..],
             &["aida", "mailbox", "inbox", "--peek"][..],
         ] {
-            let mut cli = crate::command_registry::try_parse_from(args).expect("valid CLI command");
+            let mut cli = crate::TEST_CLI
+                .try_parse_from(args)
+                .expect("valid CLI command");
             enforce_stakeholder_role_capabilities_for_role(&mut cli.command, "guest")
                 .unwrap_or_else(|err| panic!("guest read {args:?} was refused: {err}"));
         }
@@ -306,7 +310,9 @@ mod stakeholder_cli_policy_tests {
     }
 
     fn add_matches(args: &[&str]) -> clap::ArgMatches {
-        let cli = crate::command_registry::try_parse_from(args).expect("valid CLI command");
+        let cli = crate::TEST_CLI
+            .try_parse_from(args)
+            .expect("valid CLI command");
         let Command::Registered(invocation) = cli.command;
         assert_eq!(invocation.reg.name, "add");
         invocation.matches
@@ -371,10 +377,11 @@ mod stakeholder_cli_policy_tests {
     fn requester_cli_rejects_every_shared_forbidden_intake_field() {
         for field in REQUESTER_INTAKE_FORBIDDEN_FIELDS {
             let flag = format!("--{field}");
-            let mut cli = crate::command_registry::try_parse_from([
-                "aida", "add", "--title", "request", "--type", "bug", &flag, "EPIC-5",
-            ])
-            .expect("valid CLI command");
+            let mut cli = crate::TEST_CLI
+                .try_parse_from([
+                    "aida", "add", "--title", "request", "--type", "bug", &flag, "EPIC-5",
+                ])
+                .expect("valid CLI command");
             let err = enforce_stakeholder_role_capabilities_for_role(&mut cli.command, "requester")
                 .expect_err("shared requester intake field must be refused");
             assert!(

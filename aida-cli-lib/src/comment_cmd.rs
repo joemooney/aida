@@ -414,7 +414,8 @@ fn run_comment(
     matches: &clap::ArgMatches,
     ctx: &crate::cmdkit::DispatchCtx,
 ) -> anyhow::Result<crate::cmdkit::Flow> {
-    use crate::*;
+    use crate::{mention_snippet, not_found, record_role_activity, resolve_comment_uuid};
+    use aida_core::DatabaseBackend;
     let args = <CommentArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
     match &ctx.store {
         None => Ok(crate::cmdkit::Flow::Continue),

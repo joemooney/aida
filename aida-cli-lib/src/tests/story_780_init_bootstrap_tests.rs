@@ -220,55 +220,56 @@ fn bootstrap_flags_require_the_positional_dir() {
     use clap::Parser;
     // --lang without DIR must be a parse error, keeping bare `aida init`
     // byte-identical to its pre-STORY-780 behavior.
-    assert!(crate::command_registry::try_parse_from(["aida", "init", "--lang", "rust"]).is_err());
-    assert!(crate::command_registry::try_parse_from(["aida", "init", "--github"]).is_err());
+    assert!(crate::TEST_CLI
+        .try_parse_from(["aida", "init", "--lang", "rust"])
+        .is_err());
+    assert!(crate::TEST_CLI
+        .try_parse_from(["aida", "init", "--github"])
+        .is_err());
     // --public rides on --github, not on DIR alone.
-    assert!(crate::command_registry::try_parse_from(["aida", "init", "proj", "--public"]).is_err());
+    assert!(crate::TEST_CLI
+        .try_parse_from(["aida", "init", "proj", "--public"])
+        .is_err());
     // --github conflicts with --remote: one remote authority at a time.
-    assert!(crate::command_registry::try_parse_from([
-        "aida",
-        "init",
-        "proj",
-        "--github",
-        "--remote",
-        "git@x:y.git"
-    ])
-    .is_err());
-    assert!(crate::command_registry::try_parse_from([
-        "aida",
-        "init",
-        "proj",
-        "--remote",
-        "git@x:y.git",
-        "--public"
-    ])
-    .is_err());
+    assert!(crate::TEST_CLI
+        .try_parse_from([
+            "aida",
+            "init",
+            "proj",
+            "--github",
+            "--remote",
+            "git@x:y.git"
+        ])
+        .is_err());
+    assert!(crate::TEST_CLI
+        .try_parse_from([
+            "aida",
+            "init",
+            "proj",
+            "--remote",
+            "git@x:y.git",
+            "--public"
+        ])
+        .is_err());
     // --github conflicts with --forge too.
-    assert!(crate::command_registry::try_parse_from([
-        "aida", "init", "proj", "--github", "--forge", "home"
-    ])
-    .is_err());
+    assert!(crate::TEST_CLI
+        .try_parse_from(["aida", "init", "proj", "--github", "--forge", "home"])
+        .is_err());
     // The full happy shape parses.
-    assert!(crate::command_registry::try_parse_from([
-        "aida", "init", "proj", "--lang", "rust", "--github", "--public"
-    ])
-    .is_ok());
-    assert!(crate::command_registry::try_parse_from([
-        "aida",
-        "init",
-        "proj",
-        "--forge",
-        "home-gitlab",
-        "--public"
-    ])
-    .is_ok());
+    assert!(crate::TEST_CLI
+        .try_parse_from(["aida", "init", "proj", "--lang", "rust", "--github", "--public"])
+        .is_ok());
+    assert!(crate::TEST_CLI
+        .try_parse_from(["aida", "init", "proj", "--forge", "home-gitlab", "--public"])
+        .is_ok());
 }
 
 // trace:STORY-2700 | ai:codex
 #[test]
 fn story_2700_bootstrap_child_preserves_workspace() {
     use clap::Parser;
-    crate::command_registry::try_parse_from(["aida", "init", "my-project", "--git-init"])
+    crate::TEST_CLI
+        .try_parse_from(["aida", "init", "my-project", "--git-init"])
         .expect("the workspace refusal's suggested command must parse");
     let _guard = crate::test_env::EnvVarsGuard::set(&[
         ("GIT_AUTHOR_NAME", "aida-test"),

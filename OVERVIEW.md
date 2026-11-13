@@ -16,8 +16,13 @@ Contained-seat acceptance remains outstanding. See the
 [deployment and acceptance guide](scripts/codegraph/README.md).
 <!-- trace:STORY-2630 | ai:codex -->
 
+`cmdkit::CliSupport<T>` provides tree building and parsing over callbacks injected
+by the crate root's `CLI_SUPPORT` (`TEST_CLI` in tests). The registry supplies its
+cached pristine tree and matches decoder at that boundary; consumers and the
+leaf helper do not import the registry. <!-- trace:TASK-3448 | ai:codex -->
+
 `cmdkit` holds the command-framework types and shared output/stakeholder vocabulary;
-existing CLI, registry and stakeholder paths re-export them.
+existing CLI and stakeholder paths re-export them.
 <!-- trace:TASK-3425 | ai:codex -->
 
 Mailbox delivery resolves named agents against current registry liveness,
@@ -693,6 +698,14 @@ constituent commit trailers still participate in the landing scan.
 The native desktop and WASM clients (egui-based) were extracted to a separate repo on 2026-05-02. The React dashboard's keyboard navigation (`j/k`, `g+key` chords, quick pickers) covers the vi-feel use case.
 
 ### Canonical gate ledger
+
+Cross-label discovery uses a scan-wide 128 MiB read ceiling and a 200,000
+JSON-parse-attempt ceiling, independently of the 64 MiB selection budget.
+Unrelated payloads and torn retries count; exhausting discovery refuses the
+lookup. This is an interim safety cap: relevant-only discovery and automatic
+archive retention still need the completeness and revival design described in
+[the proposed sketch](docs/plans/2026-11-12-bug-2531-discovery-retention-sketch.md).
+<!-- trace:BUG-2531 | ai:codex -->
 
 The gate architecture is **effective gate state = f(head SHA, canonical IDs,
 ledger)**. `gate::canon` resolves a change's spec labels against one committed
@@ -1447,6 +1460,24 @@ Verdict collection validates metadata and reads bytes from the same opened
 regular-file handle, with `O_NOFOLLOW | O_NONBLOCK` and a bounded read. The FIFO
 regression runs under an exact-test subprocess watchdog.
 <!-- trace:TASK-1786 | ai:codex -->
+
+Review recording resolves the reviewer's leased `PR-N` or `MR-N` before
+inheriting findings or choosing approval/hold routing. Both classification and
+the verdict builder read that change's record; a shared spec does not select
+another change's findings. An explicit `AIDA_REVIEW_VERDICT_FILE` remains the
+exact handshake destination, including gate suffixes. Standalone launch and
+contained artifact collection use the same forge-qualified change filename.
+Explicit local spec-only verdicts retain their local history but never bind to
+later changes, affect their gates, or clear their review claims. Legacy
+pre-change reviews remain eligible for binding to one change. Effective gates
+reuse one pinned ledger discovery across related changes under one aggregate
+budget; an index naming a missing change ledger refuses as incomplete evidence.
+Historical foreign-copy isolation also fails closed when ownership discovery is
+incomplete: lossy verdict readers withhold potentially misplaced review copies
+while retaining holds and phase-3 ownership records. Each discovery builds one
+ownership index from its change corpus and reuses it across spec/change buckets
+and additional event vectors; these reads never rewrite ledger history.
+<!-- trace:BUG-2517 | ai:codex -->
 
 Verdict reads use a held `review-verdicts` directory descriptor and `openat`
 with `O_DIRECTORY|O_NOFOLLOW` for archive descent. File opens use

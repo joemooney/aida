@@ -191,16 +191,17 @@ mod task_190_comment_source_parser_tests {
     // trace:BUG-1534 | ai:claude
     #[test]
     fn comment_add_accepts_relayed_from() {
-        let cli = crate::command_registry::try_parse_from([
-            "aida",
-            "comment",
-            "add",
-            "TASK-1",
-            "tally is 902",
-            "--relayed-from",
-            "claude-reviewer-1",
-        ])
-        .unwrap();
+        let cli = crate::TEST_CLI
+            .try_parse_from([
+                "aida",
+                "comment",
+                "add",
+                "TASK-1",
+                "tally is 902",
+                "--relayed-from",
+                "claude-reviewer-1",
+            ])
+            .unwrap();
         match cli.command.registered::<crate::comment_cmd::CommentArgs>() {
             crate::comment_cmd::CommentArgs {
                 inner: super::CommentCommand::Add { relayed_from, .. },
@@ -214,60 +215,58 @@ mod task_190_comment_source_parser_tests {
 
     #[test]
     fn positional_comment_conflicts_with_body_file_and_stdin() {
-        assert!(crate::command_registry::try_parse_from([
-            "aida",
-            "comment",
-            "add",
-            "TASK-1",
-            "positional",
-            "--body-file",
-            "body.md",
-        ])
-        .is_err());
-        assert!(crate::command_registry::try_parse_from([
-            "aida",
-            "comment",
-            "add",
-            "TASK-1",
-            "positional",
-            "--stdin",
-        ])
-        .is_err());
+        assert!(crate::TEST_CLI
+            .try_parse_from([
+                "aida",
+                "comment",
+                "add",
+                "TASK-1",
+                "positional",
+                "--body-file",
+                "body.md",
+            ])
+            .is_err());
+        assert!(crate::TEST_CLI
+            .try_parse_from(["aida", "comment", "add", "TASK-1", "positional", "--stdin",])
+            .is_err());
     }
 
     #[test]
     fn hidden_content_conflicts_with_body_file_and_stdin() {
-        assert!(crate::command_registry::try_parse_from([
-            "aida",
-            "comment",
-            "add",
-            "TASK-1",
-            "positional",
-            "--content",
-            "legacy",
-        ])
-        .is_err());
-        assert!(crate::command_registry::try_parse_from([
-            "aida",
-            "comment",
-            "add",
-            "TASK-1",
-            "--content",
-            "legacy",
-            "--body-file",
-            "body.md",
-        ])
-        .is_err());
-        assert!(crate::command_registry::try_parse_from([
-            "aida",
-            "comment",
-            "add",
-            "TASK-1",
-            "--content",
-            "legacy",
-            "--stdin",
-        ])
-        .is_err());
+        assert!(crate::TEST_CLI
+            .try_parse_from([
+                "aida",
+                "comment",
+                "add",
+                "TASK-1",
+                "positional",
+                "--content",
+                "legacy",
+            ])
+            .is_err());
+        assert!(crate::TEST_CLI
+            .try_parse_from([
+                "aida",
+                "comment",
+                "add",
+                "TASK-1",
+                "--content",
+                "legacy",
+                "--body-file",
+                "body.md",
+            ])
+            .is_err());
+        assert!(crate::TEST_CLI
+            .try_parse_from([
+                "aida",
+                "comment",
+                "add",
+                "TASK-1",
+                "--content",
+                "legacy",
+                "--stdin",
+            ])
+            .is_err());
     }
 
     #[test]
@@ -281,7 +280,7 @@ mod task_190_comment_source_parser_tests {
             let mut args = vec!["aida", "comment", "add", "TASK-1"];
             args.extend(tail);
             args.push("--interactive");
-            assert!(crate::command_registry::try_parse_from(args).is_err());
+            assert!(crate::TEST_CLI.try_parse_from(args).is_err());
         }
 
         for tail in [
@@ -300,7 +299,7 @@ mod task_190_comment_source_parser_tests {
             ];
             args.extend(tail);
             args.push("--interactive");
-            assert!(crate::command_registry::try_parse_from(args).is_err());
+            assert!(crate::TEST_CLI.try_parse_from(args).is_err());
         }
     }
 }
@@ -398,14 +397,14 @@ mod tests {
     // reproduce the exact crash path. trace:BUG-1141 | ai:claude
     #[test]
     fn cli_arg_tree_has_no_definition_conflicts() {
-        crate::command_registry::built_command().debug_assert();
+        crate::TEST_CLI.built_command().debug_assert();
     }
 
     // trace:STORY-1693 | ai:claude
     #[test]
     fn session_handoff_standing_orders_parses_add_and_list() {
         let so = |args: &[&str]| -> Option<Vec<String>> {
-            let cli = crate::command_registry::try_parse_from(args).unwrap();
+            let cli = crate::TEST_CLI.try_parse_from(args).unwrap();
             match cli.command.registered::<crate::agent_launch::SessionArgs>() {
                 crate::agent_launch::SessionArgs {
                     inner:
@@ -426,16 +425,16 @@ mod tests {
         let list = [&base[..], &["--standing-orders", "list"]].concat();
         assert_eq!(so(&list), Some(vec!["list".to_string()]));
         let both = [&base[..], &["--show", "--standing-orders", "list"]].concat();
-        assert!(crate::command_registry::try_parse_from(both).is_err());
+        assert!(crate::TEST_CLI.try_parse_from(both).is_err());
     }
 
     #[test]
     fn digest_parses_without_format_collision() {
         // Previously panicked at parse. Bare invocation + the renamed flag.
-        assert!(crate::command_registry::try_parse_from(["aida", "digest"]).is_ok());
-        let cli =
-            crate::command_registry::try_parse_from(["aida", "digest", "--digest-format", "json"])
-                .unwrap();
+        assert!(crate::TEST_CLI.try_parse_from(["aida", "digest"]).is_ok());
+        let cli = crate::TEST_CLI
+            .try_parse_from(["aida", "digest", "--digest-format", "json"])
+            .unwrap();
         assert!(matches!(
             cli.command.registered::<crate::digest_cmd::DigestArgs>(),
             crate::digest_cmd::DigestArgs {
@@ -444,9 +443,9 @@ mod tests {
             }
         ));
         // The global --format still parses alongside the digest subcommand.
-        assert!(
-            crate::command_registry::try_parse_from(["aida", "--format", "json", "digest"]).is_ok()
-        );
+        assert!(crate::TEST_CLI
+            .try_parse_from(["aida", "--format", "json", "digest"])
+            .is_ok());
     }
 
     // trace:TASK-1055 | ai:claude — `--slower-than` accepts a bare number
@@ -471,9 +470,9 @@ mod tests {
     // trace:TASK-157 | ai:codex
     #[test]
     fn remote_mirror_push_hook_plumbing_parses() {
-        let cli =
-            crate::command_registry::try_parse_from(["aida", "remote", "mirror-push", "origin"])
-                .unwrap();
+        let cli = crate::TEST_CLI
+            .try_parse_from(["aida", "remote", "mirror-push", "origin"])
+            .unwrap();
         assert!(matches!(
             cli.command.registered::<crate::remote_cmd::RemoteArgs>(),
             crate::remote_cmd::RemoteArgs { inner: RemoteCommand::MirrorPush { pushed_remote, dry_run, .. }, .. }
@@ -487,14 +486,9 @@ mod tests {
     // parse error).
     #[test]
     fn slower_than_flag_accepts_ms_suffix() {
-        let cli = crate::command_registry::try_parse_from([
-            "aida",
-            "usage",
-            "--slower-than",
-            "500ms",
-            "events",
-        ])
-        .expect("`--slower-than 500ms` must parse");
+        let cli = crate::TEST_CLI
+            .try_parse_from(["aida", "usage", "--slower-than", "500ms", "events"])
+            .expect("`--slower-than 500ms` must parse");
         match cli.command.registered::<crate::usage_cmd::UsageArgs>() {
             crate::usage_cmd::UsageArgs { slower_than, .. } => {
                 assert_eq!(slower_than, Some(500));
@@ -506,7 +500,8 @@ mod tests {
     // trace:TASK-1228 | ai:codex
     #[test]
     fn autonomy_overview_parses_as_bare_command() {
-        let cli = crate::command_registry::try_parse_from(["aida", "autonomy"])
+        let cli = crate::TEST_CLI
+            .try_parse_from(["aida", "autonomy"])
             .expect("bare `aida autonomy` should print the overview");
         assert!(matches!(
             cli.command
@@ -514,7 +509,9 @@ mod tests {
             crate::autonomy_cmd::AutonomyArgs { command: None, .. }
         ));
 
-        let cli = crate::command_registry::try_parse_from(["aida", "autonomy", "report"]).unwrap();
+        let cli = crate::TEST_CLI
+            .try_parse_from(["aida", "autonomy", "report"])
+            .unwrap();
         assert!(matches!(
             cli.command
                 .registered::<crate::autonomy_cmd::AutonomyArgs>(),
@@ -528,36 +525,38 @@ mod tests {
     // trace:TASK-1209 | ai:codex
     #[test]
     fn drain_tail_parses_same_streaming_flags_as_tail_drain() {
-        let tail = crate::command_registry::try_parse_from([
-            "aida",
-            "tail",
-            "drain",
-            "--json",
-            "--lines",
-            "25",
-            "--since",
-            "10m",
-            "--no-follow",
-            "--with-tools",
-            "--no-timestamp",
-            "--annotate",
-        ])
-        .expect("`aida tail drain` should parse");
-        let drain_tail = crate::command_registry::try_parse_from([
-            "aida",
-            "drain",
-            "tail",
-            "--json",
-            "--lines",
-            "25",
-            "--since",
-            "10m",
-            "--no-follow",
-            "--with-tools",
-            "--no-timestamp",
-            "--annotate",
-        ])
-        .expect("`aida drain tail` should parse");
+        let tail = crate::TEST_CLI
+            .try_parse_from([
+                "aida",
+                "tail",
+                "drain",
+                "--json",
+                "--lines",
+                "25",
+                "--since",
+                "10m",
+                "--no-follow",
+                "--with-tools",
+                "--no-timestamp",
+                "--annotate",
+            ])
+            .expect("`aida tail drain` should parse");
+        let drain_tail = crate::TEST_CLI
+            .try_parse_from([
+                "aida",
+                "drain",
+                "tail",
+                "--json",
+                "--lines",
+                "25",
+                "--since",
+                "10m",
+                "--no-follow",
+                "--with-tools",
+                "--no-timestamp",
+                "--annotate",
+            ])
+            .expect("`aida drain tail` should parse");
 
         let crate::tail_cmd::TailArgs {
             target,
@@ -610,32 +609,33 @@ mod tests {
     // trace:STORY-1130 | ai:codex
     #[test]
     fn drain_start_and_stop_parse_lifecycle_flags() {
-        let cli = crate::command_registry::try_parse_from([
-            "aida",
-            "drain",
-            "start",
-            "next3",
-            "--project",
-            "/tmp/aida",
-            "--no-human",
-            "both",
-            "--role",
-            "implementer",
-            "--max-failures",
-            "2",
-            "--max-iterations",
-            "3",
-            "--max-runtime",
-            "45m",
-            "--max-tokens",
-            "1000",
-            "--vendor",
-            "codex",
-            "--model",
-            "gpt-5",
-            "--json",
-        ])
-        .expect("`aida drain start` should parse");
+        let cli = crate::TEST_CLI
+            .try_parse_from([
+                "aida",
+                "drain",
+                "start",
+                "next3",
+                "--project",
+                "/tmp/aida",
+                "--no-human",
+                "both",
+                "--role",
+                "implementer",
+                "--max-failures",
+                "2",
+                "--max-iterations",
+                "3",
+                "--max-runtime",
+                "45m",
+                "--max-tokens",
+                "1000",
+                "--vendor",
+                "codex",
+                "--model",
+                "gpt-5",
+                "--json",
+            ])
+            .expect("`aida drain start` should parse");
         match cli.command.registered::<crate::drain_cmd::DrainArgs>() {
             crate::drain_cmd::DrainArgs {
                 inner:
@@ -674,8 +674,9 @@ mod tests {
             other => panic!("expected Drain::Start command, got {other:?}"),
         }
 
-        let cli =
-            crate::command_registry::try_parse_from(["aida", "drain", "stop", "--now"]).unwrap();
+        let cli = crate::TEST_CLI
+            .try_parse_from(["aida", "drain", "stop", "--now"])
+            .unwrap();
         assert!(matches!(
             cli.command.registered::<crate::drain_cmd::DrainArgs>(),
             crate::drain_cmd::DrainArgs {
@@ -688,7 +689,8 @@ mod tests {
     // trace:TASK-1155 trace:ADR-11 | ai:codex
     #[test]
     fn do_command_parses_spec_positional() {
-        let cli = crate::command_registry::try_parse_from(["aida", "do", "TASK-1155"])
+        let cli = crate::TEST_CLI
+            .try_parse_from(["aida", "do", "TASK-1155"])
             .expect("`aida do <spec>` should parse");
         match cli.command.registered::<crate::do_dispatch::DoArgs>() {
             crate::do_dispatch::DoArgs {
@@ -705,15 +707,9 @@ mod tests {
     // trace:STORY-776 | ai:claude
     #[test]
     fn do_command_parses_mode_override_and_force() {
-        let cli = crate::command_registry::try_parse_from([
-            "aida",
-            "do",
-            "TASK-1155",
-            "--mode",
-            "guided",
-            "--force",
-        ])
-        .expect("`aida do <spec> --mode <m> --force` should parse");
+        let cli = crate::TEST_CLI
+            .try_parse_from(["aida", "do", "TASK-1155", "--mode", "guided", "--force"])
+            .expect("`aida do <spec> --mode <m> --force` should parse");
         match cli.command.registered::<crate::do_dispatch::DoArgs>() {
             crate::do_dispatch::DoArgs {
                 spec, mode, force, ..
@@ -729,10 +725,9 @@ mod tests {
     // trace:TASK-1145 | ai:codex
     #[test]
     fn worktree_gc_parses_destructive_heal_flags() {
-        let cli = crate::command_registry::try_parse_from([
-            "aida", "worktree", "gc", "--yes", "--force", "--json",
-        ])
-        .expect("`aida worktree gc` should parse");
+        let cli = crate::TEST_CLI
+            .try_parse_from(["aida", "worktree", "gc", "--yes", "--force", "--json"])
+            .expect("`aida worktree gc` should parse");
         match cli.command.registered::<crate::worktree_gc::WorktreeArgs>() {
             crate::worktree_gc::WorktreeArgs {
                 inner:
@@ -835,7 +830,7 @@ mod tests {
     #[test]
     fn help_text_carries_no_trace_markers() {
         let mut leaks = Vec::new();
-        collect_leaks(&crate::command_registry::built_command(), "", &mut leaks);
+        collect_leaks(&crate::TEST_CLI.built_command(), "", &mut leaks);
         assert!(
             leaks.is_empty(),
             "SPEC-ID trace markers leaked into `--help` output — demote the \
@@ -1138,7 +1133,9 @@ mod tests {
     // command's `shortcut` field; `--status` still parses into `status`.
     #[test]
     fn list_positional_status_shortcut_parses() {
-        let cli = crate::command_registry::try_parse_from(["aida", "list", "approved"]).unwrap();
+        let cli = crate::TEST_CLI
+            .try_parse_from(["aida", "list", "approved"])
+            .unwrap();
         match cli
             .command
             .registered::<crate::requirements_cli::ListArgs>()
@@ -1152,8 +1149,9 @@ mod tests {
             other => panic!("expected List, got {other:?}"),
         }
 
-        let cli =
-            crate::command_registry::try_parse_from(["aida", "list", "--status", "open"]).unwrap();
+        let cli = crate::TEST_CLI
+            .try_parse_from(["aida", "list", "--status", "open"])
+            .unwrap();
         match cli
             .command
             .registered::<crate::requirements_cli::ListArgs>()
@@ -1171,15 +1169,16 @@ mod tests {
     // trace:BUG-1498 | ai:codex
     #[test]
     fn bug_1498_list_machine_drafts_flag_requires_explicit_draft_status() {
-        let cli = crate::command_registry::try_parse_from([
-            "aida",
-            "list",
-            "--status",
-            "draft",
-            "--machine-drafts",
-            "--short",
-        ])
-        .unwrap();
+        let cli = crate::TEST_CLI
+            .try_parse_from([
+                "aida",
+                "list",
+                "--status",
+                "draft",
+                "--machine-drafts",
+                "--short",
+            ])
+            .unwrap();
         match cli
             .command
             .registered::<crate::requirements_cli::ListArgs>()
@@ -1196,9 +1195,9 @@ mod tests {
             }
             other => panic!("expected List, got {other:?}"),
         }
-        assert!(
-            crate::command_registry::try_parse_from(["aida", "list", "--machine-drafts"]).is_err()
-        );
+        assert!(crate::TEST_CLI
+            .try_parse_from(["aida", "list", "--machine-drafts"])
+            .is_err());
     }
 
     // trace:STORY-662 — the `--user <name>` flag parses, and the positional
@@ -1207,8 +1206,9 @@ mod tests {
     #[test]
     fn list_user_flag_and_positional_parse() {
         // --user flag.
-        let cli =
-            crate::command_registry::try_parse_from(["aida", "list", "--user", "joe"]).unwrap();
+        let cli = crate::TEST_CLI
+            .try_parse_from(["aida", "list", "--user", "joe"])
+            .unwrap();
         match cli
             .command
             .registered::<crate::requirements_cli::ListArgs>()
@@ -1221,7 +1221,9 @@ mod tests {
         }
 
         // Positional `me`.
-        let cli = crate::command_registry::try_parse_from(["aida", "list", "me"]).unwrap();
+        let cli = crate::TEST_CLI
+            .try_parse_from(["aida", "list", "me"])
+            .unwrap();
         match cli
             .command
             .registered::<crate::requirements_cli::ListArgs>()
@@ -1234,7 +1236,9 @@ mod tests {
         }
 
         // Positional `user:<name>`.
-        let cli = crate::command_registry::try_parse_from(["aida", "list", "user:alice"]).unwrap();
+        let cli = crate::TEST_CLI
+            .try_parse_from(["aida", "list", "user:alice"])
+            .unwrap();
         match cli
             .command
             .registered::<crate::requirements_cli::ListArgs>()
@@ -1253,15 +1257,9 @@ mod tests {
     #[test]
     fn list_recursive_requires_parent() {
         // --recursive + --parent + a status positional: parses, recursive=true.
-        let cli = crate::command_registry::try_parse_from([
-            "aida",
-            "list",
-            "open",
-            "--parent",
-            "EPIC-51",
-            "--recursive",
-        ])
-        .unwrap();
+        let cli = crate::TEST_CLI
+            .try_parse_from(["aida", "list", "open", "--parent", "EPIC-51", "--recursive"])
+            .unwrap();
         match cli
             .command
             .registered::<crate::requirements_cli::ListArgs>()
@@ -1280,14 +1278,9 @@ mod tests {
         }
 
         // The `--subtree` alias resolves to the same `recursive` field.
-        let cli = crate::command_registry::try_parse_from([
-            "aida",
-            "list",
-            "--parent",
-            "EPIC-51",
-            "--subtree",
-        ])
-        .unwrap();
+        let cli = crate::TEST_CLI
+            .try_parse_from(["aida", "list", "--parent", "EPIC-51", "--subtree"])
+            .unwrap();
         match cli
             .command
             .registered::<crate::requirements_cli::ListArgs>()
@@ -1297,8 +1290,9 @@ mod tests {
         }
 
         // --recursive WITHOUT --parent errors (the requires-parent guard).
-        let err =
-            crate::command_registry::try_parse_from(["aida", "list", "--recursive"]).unwrap_err();
+        let err = crate::TEST_CLI
+            .try_parse_from(["aida", "list", "--recursive"])
+            .unwrap_err();
         let msg = err.to_string();
         assert!(
             msg.contains("--parent"),
@@ -1310,7 +1304,9 @@ mod tests {
     // `aida list --human` sets the flag; both route to the human-attention view.
     #[test]
     fn list_human_positional_and_flag_parse() {
-        let cli = crate::command_registry::try_parse_from(["aida", "list", "human"]).unwrap();
+        let cli = crate::TEST_CLI
+            .try_parse_from(["aida", "list", "human"])
+            .unwrap();
         match cli
             .command
             .registered::<crate::requirements_cli::ListArgs>()
@@ -1324,7 +1320,9 @@ mod tests {
             other => panic!("expected List, got {other:?}"),
         }
 
-        let cli = crate::command_registry::try_parse_from(["aida", "list", "--human"]).unwrap();
+        let cli = crate::TEST_CLI
+            .try_parse_from(["aida", "list", "--human"])
+            .unwrap();
         match cli
             .command
             .registered::<crate::requirements_cli::ListArgs>()
@@ -1339,8 +1337,9 @@ mod tests {
         }
 
         // Composes with `--short`.
-        let cli =
-            crate::command_registry::try_parse_from(["aida", "list", "human", "--short"]).unwrap();
+        let cli = crate::TEST_CLI
+            .try_parse_from(["aida", "list", "human", "--short"])
+            .unwrap();
         match cli
             .command
             .registered::<crate::requirements_cli::ListArgs>()
@@ -1359,13 +1358,12 @@ mod tests {
         }
 
         // `--human` conflicts with `--status` / `--json` / `--tree` at the clap layer.
-        assert!(
-            crate::command_registry::try_parse_from(["aida", "list", "--human", "--json"]).is_err()
-        );
-        assert!(crate::command_registry::try_parse_from([
-            "aida", "list", "--human", "--status", "draft"
-        ])
-        .is_err());
+        assert!(crate::TEST_CLI
+            .try_parse_from(["aida", "list", "--human", "--json"])
+            .is_err());
+        assert!(crate::TEST_CLI
+            .try_parse_from(["aida", "list", "--human", "--status", "draft"])
+            .is_err());
     }
 
     // trace:TASK-900 — `aida list --limit N` parses into the optional
@@ -1374,7 +1372,7 @@ mod tests {
     #[test]
     fn list_limit_flag_parses() {
         // Absent → None (no cap).
-        let cli = crate::command_registry::try_parse_from(["aida", "list"]).unwrap();
+        let cli = crate::TEST_CLI.try_parse_from(["aida", "list"]).unwrap();
         match cli
             .command
             .registered::<crate::requirements_cli::ListArgs>()
@@ -1384,8 +1382,9 @@ mod tests {
         }
 
         // Present → Some(N).
-        let cli =
-            crate::command_registry::try_parse_from(["aida", "list", "--limit", "5"]).unwrap();
+        let cli = crate::TEST_CLI
+            .try_parse_from(["aida", "list", "--limit", "5"])
+            .unwrap();
         match cli
             .command
             .registered::<crate::requirements_cli::ListArgs>()
@@ -1395,10 +1394,9 @@ mod tests {
         }
 
         // Composes with other filters.
-        let cli = crate::command_registry::try_parse_from([
-            "aida", "list", "--status", "open", "--limit", "3",
-        ])
-        .unwrap();
+        let cli = crate::TEST_CLI
+            .try_parse_from(["aida", "list", "--status", "open", "--limit", "3"])
+            .unwrap();
         match cli
             .command
             .registered::<crate::requirements_cli::ListArgs>()
@@ -1411,10 +1409,9 @@ mod tests {
         }
 
         // Non-numeric value is a parse error.
-        assert!(
-            crate::command_registry::try_parse_from(["aida", "list", "--limit", "notanumber"])
-                .is_err()
-        );
+        assert!(crate::TEST_CLI
+            .try_parse_from(["aida", "list", "--limit", "notanumber"])
+            .is_err());
     }
 
     // trace:TASK-900 — the truncation semantics the list handler relies on:
@@ -1450,7 +1447,9 @@ mod tests {
             ("presence", "presence"),
             ("status", "status"),
         ] {
-            let cli = crate::command_registry::try_parse_from(["aida", "human", word]).unwrap();
+            let cli = crate::TEST_CLI
+                .try_parse_from(["aida", "human", word])
+                .unwrap();
             match cli.command.registered::<crate::human_cmd::HumanArgs>() {
                 crate::human_cmd::HumanArgs {
                     short: false,
@@ -1481,9 +1480,9 @@ mod tests {
     // trace:STORY-818 | ai:codex
     #[test]
     fn human_review_guided_short_flag_parses() {
-        let cli =
-            crate::command_registry::try_parse_from(["aida", "human", "review", "TASK-123", "-g"])
-                .unwrap();
+        let cli = crate::TEST_CLI
+            .try_parse_from(["aida", "human", "review", "TASK-123", "-g"])
+            .unwrap();
         match cli.command.registered::<crate::human_cmd::HumanArgs>() {
             crate::human_cmd::HumanArgs {
                 command: Some(HumanCommand::Review { spec, guided, .. }),
@@ -1500,16 +1499,17 @@ mod tests {
     // requires an autonomous drain, and conflicts with `--single-branch`.
     #[test]
     fn sequential_flag_parses_with_batch_and_autonomous() {
-        let cli = crate::command_registry::try_parse_from([
-            "aida",
-            "queue",
-            "work",
-            "--batch",
-            "tui",
-            "--auto-complete",
-            "--sequential",
-        ])
-        .unwrap();
+        let cli = crate::TEST_CLI
+            .try_parse_from([
+                "aida",
+                "queue",
+                "work",
+                "--batch",
+                "tui",
+                "--auto-complete",
+                "--sequential",
+            ])
+            .unwrap();
         match cli.command.registered::<crate::queue_cmd::QueueArgs>() {
             crate::queue_cmd::QueueArgs {
                 inner:
@@ -1533,15 +1533,9 @@ mod tests {
     // `--auto-complete` (or `--drain`) clap rejects it via `requires`.
     #[test]
     fn sequential_requires_autonomous_drain() {
-        let err = crate::command_registry::try_parse_from([
-            "aida",
-            "queue",
-            "work",
-            "--batch",
-            "tui",
-            "--sequential",
-        ])
-        .unwrap_err();
+        let err = crate::TEST_CLI
+            .try_parse_from(["aida", "queue", "work", "--batch", "tui", "--sequential"])
+            .unwrap_err();
         assert!(
             err.to_string().contains("autonomous")
                 || err.to_string().contains("auto-complete")
@@ -1554,17 +1548,18 @@ mod tests {
     // (one accumulating branch) are mutually exclusive drive shapes.
     #[test]
     fn sequential_conflicts_with_single_branch() {
-        let err = crate::command_registry::try_parse_from([
-            "aida",
-            "queue",
-            "work",
-            "--batch",
-            "tui",
-            "--auto-complete",
-            "--sequential",
-            "--single-branch",
-        ])
-        .unwrap_err();
+        let err = crate::TEST_CLI
+            .try_parse_from([
+                "aida",
+                "queue",
+                "work",
+                "--batch",
+                "tui",
+                "--auto-complete",
+                "--sequential",
+                "--single-branch",
+            ])
+            .unwrap_err();
         assert!(
             err.to_string().contains("cannot be used with")
                 || err.to_string().contains("single-branch"),
@@ -1596,7 +1591,7 @@ mod tests {
     // trace:TASK-185 | ai:claude
     #[test]
     fn sequential_help_does_not_claim_concurrency_is_pinned() {
-        let mut cmd = crate::command_registry::built_command();
+        let mut cmd = crate::TEST_CLI.built_command();
         let help = find_subcommand_help(&mut cmd, &["queue", "work"]);
         // clap wraps long help at the terminal width, so flatten runs of
         // whitespace before matching any multi-word phrase — a line break in
@@ -1623,7 +1618,7 @@ mod tests {
     // trace:BUG-1552 | ai:claude
     #[test]
     fn doctor_help_names_fail_on_findings_gate() {
-        let mut cmd = crate::command_registry::built_command();
+        let mut cmd = crate::TEST_CLI.built_command();
         let help = find_subcommand_help(&mut cmd, &["doctor"]);
         let flat = help.split_whitespace().collect::<Vec<_>>().join(" ");
         assert!(
@@ -1635,7 +1630,7 @@ mod tests {
     // trace:TASK-200 | ai:codex
     #[test]
     fn agent_new_help_discloses_foreground_blocking_behavior() {
-        let mut cmd = crate::command_registry::built_command();
+        let mut cmd = crate::TEST_CLI.built_command();
         let help = find_subcommand_help(&mut cmd, &["agent", "new"]);
         let flat = help.split_whitespace().collect::<Vec<_>>().join(" ");
         assert!(
@@ -1650,7 +1645,7 @@ mod tests {
     // trace:BUG-1920 | ai:claude
     #[test]
     fn edit_type_help_lists_faq() {
-        let cmd = crate::command_registry::built_command();
+        let cmd = crate::TEST_CLI.built_command();
         let edit = cmd
             .get_subcommands()
             .find(|s| s.get_name() == "edit")
@@ -1692,83 +1687,144 @@ mod tests {
     // trace:TASK-1214 | ai:codex
     #[test]
     fn retired_mode_flags_refuse_and_subcommands_parse() {
-        assert!(crate::command_registry::try_parse_from(["aida", "usage", "--slowest"]).is_err());
-        assert!(
-            crate::command_registry::try_parse_from(["aida", "usage", "--unused", "30d"]).is_err()
-        );
-        assert!(crate::command_registry::try_parse_from(["aida", "usage", "--errors"]).is_err());
-        assert!(crate::command_registry::try_parse_from(["aida", "usage", "--events"]).is_err());
-        assert!(
-            crate::command_registry::try_parse_from(["aida", "usage", "--auto-complete"]).is_err()
-        );
-        assert!(crate::command_registry::try_parse_from(["aida", "usage", "--health"]).is_err());
-        assert!(crate::command_registry::try_parse_from(["aida", "usage", "--failures"]).is_err());
-        assert!(crate::command_registry::try_parse_from(["aida", "usage", "--pattern"]).is_err());
-        assert!(
-            crate::command_registry::try_parse_from(["aida", "graph", "--blocked-by"]).is_err()
-        );
-        assert!(crate::command_registry::try_parse_from(["aida", "graph", "--blocks"]).is_err());
-        assert!(crate::command_registry::try_parse_from(["aida", "graph", "--tree"]).is_err());
-        assert!(crate::command_registry::try_parse_from(["aida", "graph", "--impact"]).is_err());
-        assert!(crate::command_registry::try_parse_from(["aida", "release", "--patch"]).is_err());
-        assert!(crate::command_registry::try_parse_from(["aida", "release", "--minor"]).is_err());
-        assert!(crate::command_registry::try_parse_from(["aida", "release", "--major"]).is_err());
-        assert!(crate::command_registry::try_parse_from(["aida", "release", "--check"]).is_err());
-        assert!(crate::command_registry::try_parse_from(["aida", "focus", "--clear"]).is_err());
-        assert!(crate::command_registry::try_parse_from(["aida", "focus", "--show"]).is_err());
-        assert!(crate::command_registry::try_parse_from(["aida", "upgrade", "--check"]).is_err());
-        assert!(crate::command_registry::try_parse_from(["aida", "upgrade", "--diff"]).is_err());
-        assert!(
-            crate::command_registry::try_parse_from(["aida", "statusline", "--title"]).is_err()
-        );
-        assert!(crate::command_registry::try_parse_from(["aida", "history", "--events"]).is_err());
-        assert!(crate::command_registry::try_parse_from(["aida", "usage", "slowest"]).is_ok());
-        assert!(
-            crate::command_registry::try_parse_from(["aida", "usage", "unused", "30d"]).is_ok()
-        );
-        assert!(crate::command_registry::try_parse_from(["aida", "usage", "errors"]).is_ok());
-        assert!(crate::command_registry::try_parse_from(["aida", "usage", "events"]).is_ok());
-        assert!(crate::command_registry::try_parse_from(["aida", "usage", "timeline"]).is_ok());
-        assert!(
-            crate::command_registry::try_parse_from(["aida", "usage", "drains", "--pattern"])
-                .is_ok()
-        );
-        assert!(
-            crate::command_registry::try_parse_from(["aida", "usage", "drains", "--failures"])
-                .is_ok()
-        );
-        assert!(crate::command_registry::try_parse_from(["aida", "usage", "health"]).is_ok());
-        assert!(crate::command_registry::try_parse_from(["aida", "release", "patch"]).is_ok());
-        assert!(crate::command_registry::try_parse_from(["aida", "release", "minor"]).is_ok());
-        assert!(crate::command_registry::try_parse_from(["aida", "release", "major"]).is_ok());
-        assert!(crate::command_registry::try_parse_from(["aida", "release", "check"]).is_ok());
-        assert!(crate::command_registry::try_parse_from(["aida", "focus", "clear"]).is_ok());
-        assert!(crate::command_registry::try_parse_from(["aida", "focus", "show"]).is_ok());
-        assert!(crate::command_registry::try_parse_from(["aida", "upgrade", "check"]).is_ok());
-        assert!(crate::command_registry::try_parse_from(["aida", "upgrade", "diff"]).is_ok());
-        assert!(crate::command_registry::try_parse_from(["aida", "statusline", "title"]).is_ok());
-        assert!(crate::command_registry::try_parse_from(["aida", "history", "events"]).is_ok());
-        assert!(crate::command_registry::try_parse_from([
-            "aida",
-            "graph",
-            "blocked-by",
-            "STORY-1"
-        ])
-        .is_ok());
-        assert!(
-            crate::command_registry::try_parse_from(["aida", "graph", "blocks", "STORY-1"]).is_ok()
-        );
-        assert!(
-            crate::command_registry::try_parse_from(["aida", "graph", "tree", "STORY-1"]).is_ok()
-        );
-        assert!(
-            crate::command_registry::try_parse_from(["aida", "graph", "impact", "STORY-1"]).is_ok()
-        );
-        assert!(crate::command_registry::try_parse_from(["aida", "drain", "clear"]).is_ok());
-        assert!(
-            crate::command_registry::try_parse_from(["aida", "drain", "status", "--clear"])
-                .is_err()
-        );
+        assert!(crate::TEST_CLI
+            .try_parse_from(["aida", "usage", "--slowest"])
+            .is_err());
+        assert!(crate::TEST_CLI
+            .try_parse_from(["aida", "usage", "--unused", "30d"])
+            .is_err());
+        assert!(crate::TEST_CLI
+            .try_parse_from(["aida", "usage", "--errors"])
+            .is_err());
+        assert!(crate::TEST_CLI
+            .try_parse_from(["aida", "usage", "--events"])
+            .is_err());
+        assert!(crate::TEST_CLI
+            .try_parse_from(["aida", "usage", "--auto-complete"])
+            .is_err());
+        assert!(crate::TEST_CLI
+            .try_parse_from(["aida", "usage", "--health"])
+            .is_err());
+        assert!(crate::TEST_CLI
+            .try_parse_from(["aida", "usage", "--failures"])
+            .is_err());
+        assert!(crate::TEST_CLI
+            .try_parse_from(["aida", "usage", "--pattern"])
+            .is_err());
+        assert!(crate::TEST_CLI
+            .try_parse_from(["aida", "graph", "--blocked-by"])
+            .is_err());
+        assert!(crate::TEST_CLI
+            .try_parse_from(["aida", "graph", "--blocks"])
+            .is_err());
+        assert!(crate::TEST_CLI
+            .try_parse_from(["aida", "graph", "--tree"])
+            .is_err());
+        assert!(crate::TEST_CLI
+            .try_parse_from(["aida", "graph", "--impact"])
+            .is_err());
+        assert!(crate::TEST_CLI
+            .try_parse_from(["aida", "release", "--patch"])
+            .is_err());
+        assert!(crate::TEST_CLI
+            .try_parse_from(["aida", "release", "--minor"])
+            .is_err());
+        assert!(crate::TEST_CLI
+            .try_parse_from(["aida", "release", "--major"])
+            .is_err());
+        assert!(crate::TEST_CLI
+            .try_parse_from(["aida", "release", "--check"])
+            .is_err());
+        assert!(crate::TEST_CLI
+            .try_parse_from(["aida", "focus", "--clear"])
+            .is_err());
+        assert!(crate::TEST_CLI
+            .try_parse_from(["aida", "focus", "--show"])
+            .is_err());
+        assert!(crate::TEST_CLI
+            .try_parse_from(["aida", "upgrade", "--check"])
+            .is_err());
+        assert!(crate::TEST_CLI
+            .try_parse_from(["aida", "upgrade", "--diff"])
+            .is_err());
+        assert!(crate::TEST_CLI
+            .try_parse_from(["aida", "statusline", "--title"])
+            .is_err());
+        assert!(crate::TEST_CLI
+            .try_parse_from(["aida", "history", "--events"])
+            .is_err());
+        assert!(crate::TEST_CLI
+            .try_parse_from(["aida", "usage", "slowest"])
+            .is_ok());
+        assert!(crate::TEST_CLI
+            .try_parse_from(["aida", "usage", "unused", "30d"])
+            .is_ok());
+        assert!(crate::TEST_CLI
+            .try_parse_from(["aida", "usage", "errors"])
+            .is_ok());
+        assert!(crate::TEST_CLI
+            .try_parse_from(["aida", "usage", "events"])
+            .is_ok());
+        assert!(crate::TEST_CLI
+            .try_parse_from(["aida", "usage", "timeline"])
+            .is_ok());
+        assert!(crate::TEST_CLI
+            .try_parse_from(["aida", "usage", "drains", "--pattern"])
+            .is_ok());
+        assert!(crate::TEST_CLI
+            .try_parse_from(["aida", "usage", "drains", "--failures"])
+            .is_ok());
+        assert!(crate::TEST_CLI
+            .try_parse_from(["aida", "usage", "health"])
+            .is_ok());
+        assert!(crate::TEST_CLI
+            .try_parse_from(["aida", "release", "patch"])
+            .is_ok());
+        assert!(crate::TEST_CLI
+            .try_parse_from(["aida", "release", "minor"])
+            .is_ok());
+        assert!(crate::TEST_CLI
+            .try_parse_from(["aida", "release", "major"])
+            .is_ok());
+        assert!(crate::TEST_CLI
+            .try_parse_from(["aida", "release", "check"])
+            .is_ok());
+        assert!(crate::TEST_CLI
+            .try_parse_from(["aida", "focus", "clear"])
+            .is_ok());
+        assert!(crate::TEST_CLI
+            .try_parse_from(["aida", "focus", "show"])
+            .is_ok());
+        assert!(crate::TEST_CLI
+            .try_parse_from(["aida", "upgrade", "check"])
+            .is_ok());
+        assert!(crate::TEST_CLI
+            .try_parse_from(["aida", "upgrade", "diff"])
+            .is_ok());
+        assert!(crate::TEST_CLI
+            .try_parse_from(["aida", "statusline", "title"])
+            .is_ok());
+        assert!(crate::TEST_CLI
+            .try_parse_from(["aida", "history", "events"])
+            .is_ok());
+        assert!(crate::TEST_CLI
+            .try_parse_from(["aida", "graph", "blocked-by", "STORY-1"])
+            .is_ok());
+        assert!(crate::TEST_CLI
+            .try_parse_from(["aida", "graph", "blocks", "STORY-1"])
+            .is_ok());
+        assert!(crate::TEST_CLI
+            .try_parse_from(["aida", "graph", "tree", "STORY-1"])
+            .is_ok());
+        assert!(crate::TEST_CLI
+            .try_parse_from(["aida", "graph", "impact", "STORY-1"])
+            .is_ok());
+        assert!(crate::TEST_CLI
+            .try_parse_from(["aida", "drain", "clear"])
+            .is_ok());
+        assert!(crate::TEST_CLI
+            .try_parse_from(["aida", "drain", "status", "--clear"])
+            .is_err());
     }
 
     // trace:TASK-1214 | ai:codex
@@ -1777,16 +1833,17 @@ mod tests {
         // TASK-1481: `timeline` is subcommand-only (no legacy `--timeline`
         // flag), and composes with the shared --cmd/--slower-than/--limit
         // flags the same way `events` does.
-        let cli = crate::command_registry::try_parse_from([
-            "aida",
-            "usage",
-            "--cmd",
-            "queue list",
-            "--slower-than",
-            "500ms",
-            "timeline",
-        ])
-        .unwrap();
+        let cli = crate::TEST_CLI
+            .try_parse_from([
+                "aida",
+                "usage",
+                "--cmd",
+                "queue list",
+                "--slower-than",
+                "500ms",
+                "timeline",
+            ])
+            .unwrap();
         match cli.command.registered::<crate::usage_cmd::UsageArgs>() {
             crate::usage_cmd::UsageArgs {
                 action: Some(UsageCommand::Timeline),
@@ -1801,33 +1858,31 @@ mod tests {
         }
 
         // trace:TASK-1479 | ai:claude
-        let cli = crate::command_registry::try_parse_from(["aida", "statusline"]).unwrap();
+        let cli = crate::TEST_CLI
+            .try_parse_from(["aida", "statusline"])
+            .unwrap();
         assert!(matches!(
             cli.command
                 .registered::<crate::statusline_cmd::StatuslineArgs>(),
             crate::statusline_cmd::StatuslineArgs { client: None, .. }
         ));
-        let cli =
-            crate::command_registry::try_parse_from(["aida", "statusline", "--client", "claude"])
-                .unwrap();
+        let cli = crate::TEST_CLI
+            .try_parse_from(["aida", "statusline", "--client", "claude"])
+            .unwrap();
         assert!(matches!(
             cli.command.registered::<crate::statusline_cmd::StatuslineArgs>(),
             crate::statusline_cmd::StatuslineArgs { client: Some(ref c), .. } if c == "claude"
         ));
-        let cli =
-            crate::command_registry::try_parse_from(["aida", "statusline", "--client", "agy"])
-                .unwrap();
+        let cli = crate::TEST_CLI
+            .try_parse_from(["aida", "statusline", "--client", "agy"])
+            .unwrap();
         assert!(matches!(
             cli.command.registered::<crate::statusline_cmd::StatuslineArgs>(),
             crate::statusline_cmd::StatuslineArgs { client: Some(ref c), .. } if c == "agy"
         ));
-        assert!(crate::command_registry::try_parse_from([
-            "aida",
-            "statusline",
-            "--client",
-            "codex"
-        ])
-        .is_err());
+        assert!(crate::TEST_CLI
+            .try_parse_from(["aida", "statusline", "--client", "codex"])
+            .is_err());
     }
 
     // BUG-1474: CLAUDE.md documents `aida history events [--id <spec-id|uuid>]`
@@ -1839,10 +1894,9 @@ mod tests {
     // trace:BUG-1474 | ai:claude
     #[test]
     fn history_filters_parse_after_events_subcommand() {
-        let cli = crate::command_registry::try_parse_from([
-            "aida", "history", "events", "--id", "BUG-1474",
-        ])
-        .unwrap();
+        let cli = crate::TEST_CLI
+            .try_parse_from(["aida", "history", "events", "--id", "BUG-1474"])
+            .unwrap();
         assert!(matches!(
             cli.command.registered::<crate::history::HistoryArgs>(),
             crate::history::HistoryArgs {
@@ -1853,10 +1907,9 @@ mod tests {
         ));
 
         // Still parses in the pre-existing before-the-subcommand order.
-        let cli = crate::command_registry::try_parse_from([
-            "aida", "history", "--id", "BUG-1474", "events",
-        ])
-        .unwrap();
+        let cli = crate::TEST_CLI
+            .try_parse_from(["aida", "history", "--id", "BUG-1474", "events"])
+            .unwrap();
         assert!(matches!(
             cli.command.registered::<crate::history::HistoryArgs>(),
             crate::history::HistoryArgs {
@@ -1868,15 +1921,16 @@ mod tests {
 
         // A second documented filter (--status-changes) also parses after
         // `events`, not just --id.
-        let cli = crate::command_registry::try_parse_from([
-            "aida",
-            "history",
-            "events",
-            "--id",
-            "BUG-1474",
-            "--status-changes",
-        ])
-        .unwrap();
+        let cli = crate::TEST_CLI
+            .try_parse_from([
+                "aida",
+                "history",
+                "events",
+                "--id",
+                "BUG-1474",
+                "--status-changes",
+            ])
+            .unwrap();
         assert!(matches!(
             cli.command.registered::<crate::history::HistoryArgs>(),
             crate::history::HistoryArgs {
@@ -1895,8 +1949,9 @@ mod tests {
     // trace:TASK-1480 | ai:claude
     #[test]
     fn history_positional_spec_id_parses() {
-        let cli =
-            crate::command_registry::try_parse_from(["aida", "history", "TASK-1480"]).unwrap();
+        let cli = crate::TEST_CLI
+            .try_parse_from(["aida", "history", "TASK-1480"])
+            .unwrap();
         assert!(matches!(
             cli.command.registered::<crate::history::HistoryArgs>(),
             crate::history::HistoryArgs {
@@ -1908,9 +1963,9 @@ mod tests {
         ));
 
         // Composes with other flags in either order.
-        let cli =
-            crate::command_registry::try_parse_from(["aida", "history", "TASK-1480", "--oneline"])
-                .unwrap();
+        let cli = crate::TEST_CLI
+            .try_parse_from(["aida", "history", "TASK-1480", "--oneline"])
+            .unwrap();
         assert!(matches!(
             cli.command.registered::<crate::history::HistoryArgs>(),
             crate::history::HistoryArgs {
@@ -1919,9 +1974,9 @@ mod tests {
                 ..
             } if s == "TASK-1480"
         ));
-        let cli =
-            crate::command_registry::try_parse_from(["aida", "history", "--full", "TASK-1480"])
-                .unwrap();
+        let cli = crate::TEST_CLI
+            .try_parse_from(["aida", "history", "--full", "TASK-1480"])
+            .unwrap();
         assert!(matches!(
             cli.command.registered::<crate::history::HistoryArgs>(),
             crate::history::HistoryArgs {
@@ -1934,7 +1989,9 @@ mod tests {
         // Bare `events` still resolves to the subcommand, not a spec named
         // "events" — no real spec id is shaped like that, and the
         // subcommand keeps priority.
-        let cli = crate::command_registry::try_parse_from(["aida", "history", "events"]).unwrap();
+        let cli = crate::TEST_CLI
+            .try_parse_from(["aida", "history", "events"])
+            .unwrap();
         assert!(matches!(
             cli.command.registered::<crate::history::HistoryArgs>(),
             crate::history::HistoryArgs {
@@ -1946,28 +2003,17 @@ mod tests {
 
         // Passing both the positional and --id is refused, not silently
         // resolved one way or the other.
-        assert!(crate::command_registry::try_parse_from([
-            "aida",
-            "history",
-            "TASK-1480",
-            "--id",
-            "TASK-9"
-        ])
-        .is_err());
+        assert!(crate::TEST_CLI
+            .try_parse_from(["aida", "history", "TASK-1480", "--id", "TASK-9"])
+            .is_err());
     }
 
     // trace:TASK-1427 | ai:codex
     #[test]
     fn token_ledger_usage_subcommands_parse() {
-        let cli = crate::command_registry::try_parse_from([
-            "aida",
-            "usage",
-            "rebuild",
-            "--project",
-            "project",
-            "--json",
-        ])
-        .unwrap();
+        let cli = crate::TEST_CLI
+            .try_parse_from(["aida", "usage", "rebuild", "--project", "project", "--json"])
+            .unwrap();
         assert!(matches!(
             cli.command.registered::<crate::usage_cmd::UsageArgs>(),
             crate::usage_cmd::UsageArgs {
@@ -1976,16 +2022,17 @@ mod tests {
             }
         ));
 
-        let cli = crate::command_registry::try_parse_from([
-            "aida",
-            "usage",
-            "show",
-            "TASK-1427",
-            "--group-by",
-            "phase,vendor",
-            "--cost",
-        ])
-        .unwrap();
+        let cli = crate::TEST_CLI
+            .try_parse_from([
+                "aida",
+                "usage",
+                "show",
+                "TASK-1427",
+                "--group-by",
+                "phase,vendor",
+                "--cost",
+            ])
+            .unwrap();
         assert!(matches!(
             cli.command.registered::<crate::usage_cmd::UsageArgs>(),
             crate::usage_cmd::UsageArgs {
@@ -2006,9 +2053,9 @@ mod tests {
     // trace:BUG-1294 | ai:claude
     #[test]
     fn add_title_accepts_leading_single_hyphen() {
-        let cli =
-            crate::command_registry::try_parse_from(["aida", "add", "--title", "-not-a-flag"])
-                .unwrap();
+        let cli = crate::TEST_CLI
+            .try_parse_from(["aida", "add", "--title", "-not-a-flag"])
+            .unwrap();
         match cli.command.registered::<crate::requirements_cli::AddArgs>() {
             crate::requirements_cli::AddArgs { title, .. } => {
                 assert_eq!(title.as_deref(), Some("-not-a-flag"))
@@ -2019,13 +2066,14 @@ mod tests {
 
     #[test]
     fn add_title_accepts_leading_double_hyphen() {
-        let cli = crate::command_registry::try_parse_from([
-            "aida",
-            "add",
-            "--title",
-            "--format json returns human text on aida status",
-        ])
-        .unwrap();
+        let cli = crate::TEST_CLI
+            .try_parse_from([
+                "aida",
+                "add",
+                "--title",
+                "--format json returns human text on aida status",
+            ])
+            .unwrap();
         match cli.command.registered::<crate::requirements_cli::AddArgs>() {
             crate::requirements_cli::AddArgs { title, .. } => assert_eq!(
                 title.as_deref(),
@@ -2039,10 +2087,9 @@ mod tests {
     fn add_title_accepts_value_matching_an_existing_flag_name() {
         // "--force" is itself a real flag on `aida add`; the value must still
         // bind to --title rather than being parsed as the --force flag.
-        let cli = crate::command_registry::try_parse_from([
-            "aida", "add", "--title", "--force", "--type", "bug",
-        ])
-        .unwrap();
+        let cli = crate::TEST_CLI
+            .try_parse_from(["aida", "add", "--title", "--force", "--type", "bug"])
+            .unwrap();
         match cli.command.registered::<crate::requirements_cli::AddArgs>() {
             crate::requirements_cli::AddArgs {
                 title,
@@ -2058,15 +2105,16 @@ mod tests {
 
     #[test]
     fn add_description_accepts_leading_hyphen() {
-        let cli = crate::command_registry::try_parse_from([
-            "aida",
-            "add",
-            "--title",
-            "probe",
-            "--description",
-            "--foo does the wrong thing",
-        ])
-        .unwrap();
+        let cli = crate::TEST_CLI
+            .try_parse_from([
+                "aida",
+                "add",
+                "--title",
+                "probe",
+                "--description",
+                "--foo does the wrong thing",
+            ])
+            .unwrap();
         match cli.command.registered::<crate::requirements_cli::AddArgs>() {
             crate::requirements_cli::AddArgs { description, .. } => {
                 assert_eq!(description.as_deref(), Some("--foo does the wrong thing"))
@@ -2077,14 +2125,15 @@ mod tests {
 
     #[test]
     fn edit_title_accepts_leading_hyphen() {
-        let cli = crate::command_registry::try_parse_from([
-            "aida",
-            "edit",
-            "BUG-1",
-            "--title",
-            "--foo does the wrong thing",
-        ])
-        .unwrap();
+        let cli = crate::TEST_CLI
+            .try_parse_from([
+                "aida",
+                "edit",
+                "BUG-1",
+                "--title",
+                "--foo does the wrong thing",
+            ])
+            .unwrap();
         match cli
             .command
             .registered::<crate::requirements_cli::EditArgs>()
@@ -2098,14 +2147,9 @@ mod tests {
 
     #[test]
     fn edit_description_accepts_leading_hyphen() {
-        let cli = crate::command_registry::try_parse_from([
-            "aida",
-            "edit",
-            "BUG-1",
-            "--description",
-            "-1 line summary",
-        ])
-        .unwrap();
+        let cli = crate::TEST_CLI
+            .try_parse_from(["aida", "edit", "BUG-1", "--description", "-1 line summary"])
+            .unwrap();
         match cli
             .command
             .registered::<crate::requirements_cli::EditArgs>()
@@ -2119,10 +2163,9 @@ mod tests {
 
     #[test]
     fn edit_title_accepts_value_matching_an_existing_flag_name() {
-        let cli = crate::command_registry::try_parse_from([
-            "aida", "edit", "BUG-1", "--title", "--force",
-        ])
-        .unwrap();
+        let cli = crate::TEST_CLI
+            .try_parse_from(["aida", "edit", "BUG-1", "--title", "--force"])
+            .unwrap();
         match cli
             .command
             .registered::<crate::requirements_cli::EditArgs>()
@@ -2140,7 +2183,8 @@ mod tests {
         // allow_hyphen_values only widens what --title/--description accept
         // as their OWN value; it must not swallow an unrelated mistyped
         // flag that was never bound as a value.
-        let err = crate::command_registry::try_parse_from(["aida", "add", "--titel", "probe"])
+        let err = crate::TEST_CLI
+            .try_parse_from(["aida", "add", "--titel", "probe"])
             .unwrap_err();
         let msg = err.to_string();
         assert!(
@@ -2151,9 +2195,9 @@ mod tests {
 
     #[test]
     fn edit_still_rejects_a_genuinely_mistyped_flag() {
-        let err =
-            crate::command_registry::try_parse_from(["aida", "edit", "BUG-1", "--titel", "probe"])
-                .unwrap_err();
+        let err = crate::TEST_CLI
+            .try_parse_from(["aida", "edit", "BUG-1", "--titel", "probe"])
+            .unwrap_err();
         let msg = err.to_string();
         assert!(
             msg.contains("unexpected argument") || msg.contains("unrecognized"),
@@ -2165,21 +2209,22 @@ mod tests {
     // like a real review-record flag. trace:TASK-182 | ai:codex
     #[test]
     fn review_record_finding_accepts_flag_like_prose_and_later_real_flags() {
-        let cli = crate::command_registry::try_parse_from([
-            "aida",
-            "review",
-            "record",
-            "TASK-182",
-            "--verdict",
-            "approved",
-            "--finding",
-            "--pr N was quoted in the diagnostic",
-            "--pr",
-            "999",
-            "--finding",
-            "--yes must remain inert finding text",
-        ])
-        .unwrap();
+        let cli = crate::TEST_CLI
+            .try_parse_from([
+                "aida",
+                "review",
+                "record",
+                "TASK-182",
+                "--verdict",
+                "approved",
+                "--finding",
+                "--pr N was quoted in the diagnostic",
+                "--pr",
+                "999",
+                "--finding",
+                "--yes must remain inert finding text",
+            ])
+            .unwrap();
 
         match cli.command.registered::<crate::review_cmd::ReviewArgs>() {
             crate::review_cmd::ReviewArgs {
@@ -2209,19 +2254,20 @@ mod tests {
     // trace:STORY-1417 | ai:claude
     #[test]
     fn review_record_accepts_finding_classes_and_classes_parses() {
-        let cli = crate::command_registry::try_parse_from([
-            "aida",
-            "review",
-            "record",
-            "TASK-1",
-            "--verdict",
-            "request-changes",
-            "--finding",
-            "left a sibling",
-            "--finding-class",
-            "incomplete-fix",
-        ])
-        .unwrap();
+        let cli = crate::TEST_CLI
+            .try_parse_from([
+                "aida",
+                "review",
+                "record",
+                "TASK-1",
+                "--verdict",
+                "request-changes",
+                "--finding",
+                "left a sibling",
+                "--finding-class",
+                "incomplete-fix",
+            ])
+            .unwrap();
         match cli.command.registered::<crate::review_cmd::ReviewArgs>() {
             crate::review_cmd::ReviewArgs {
                 cmd: Some(ReviewCommand::Record { finding_class, .. }),
@@ -2229,10 +2275,9 @@ mod tests {
             } => assert_eq!(finding_class, vec!["incomplete-fix".to_string()]),
             other => panic!("expected review record command, got {other:?}"),
         }
-        let cli = crate::command_registry::try_parse_from([
-            "aida", "findings", "classes", "--since", "7d",
-        ])
-        .unwrap();
+        let cli = crate::TEST_CLI
+            .try_parse_from(["aida", "findings", "classes", "--since", "7d"])
+            .unwrap();
         match cli
             .command
             .registered::<crate::findings_gate::FindingsArgs>()
@@ -2246,10 +2291,9 @@ mod tests {
             }
             other => panic!("expected findings classes command, got {other:?}"),
         }
-        let cli = crate::command_registry::try_parse_from([
-            "aida", "review", "classes", "--since", "30d", "--json",
-        ])
-        .unwrap();
+        let cli = crate::TEST_CLI
+            .try_parse_from(["aida", "review", "classes", "--since", "30d", "--json"])
+            .unwrap();
         match cli.command.registered::<crate::review_cmd::ReviewArgs>() {
             crate::review_cmd::ReviewArgs {
                 cmd: Some(ReviewCommand::Classes { since, json, .. }),
@@ -2264,17 +2308,18 @@ mod tests {
 
     #[test]
     fn review_record_still_rejects_an_unbound_mistyped_flag() {
-        let err = crate::command_registry::try_parse_from([
-            "aida",
-            "review",
-            "record",
-            "TASK-182",
-            "--verdict",
-            "approved",
-            "--findng",
-            "probe",
-        ])
-        .unwrap_err();
+        let err = crate::TEST_CLI
+            .try_parse_from([
+                "aida",
+                "review",
+                "record",
+                "TASK-182",
+                "--verdict",
+                "approved",
+                "--findng",
+                "probe",
+            ])
+            .unwrap_err();
         let msg = err.to_string();
         assert!(
             msg.contains("unexpected argument") || msg.contains("unrecognized"),
@@ -2285,10 +2330,9 @@ mod tests {
     // trace:TASK-1307 | ai:claude
     #[test]
     fn review_stranded_parses_json_and_fix_flags() {
-        let cli = crate::command_registry::try_parse_from([
-            "aida", "review", "stranded", "--json", "--fix",
-        ])
-        .unwrap();
+        let cli = crate::TEST_CLI
+            .try_parse_from(["aida", "review", "stranded", "--json", "--fix"])
+            .unwrap();
         match cli.command.registered::<crate::review_cmd::ReviewArgs>() {
             crate::review_cmd::ReviewArgs {
                 cmd: Some(ReviewCommand::Stranded { json, fix, age, .. }),
@@ -2305,10 +2349,9 @@ mod tests {
     // trace:TASK-1423 | ai:claude
     #[test]
     fn review_stranded_parses_age_flag() {
-        let cli = crate::command_registry::try_parse_from([
-            "aida", "review", "stranded", "--age", "--json",
-        ])
-        .unwrap();
+        let cli = crate::TEST_CLI
+            .try_parse_from(["aida", "review", "stranded", "--age", "--json"])
+            .unwrap();
         match cli.command.registered::<crate::review_cmd::ReviewArgs>() {
             crate::review_cmd::ReviewArgs {
                 cmd: Some(ReviewCommand::Stranded { json, fix, age, .. }),
@@ -2325,10 +2368,9 @@ mod tests {
     // trace:TASK-1423 | ai:claude
     #[test]
     fn review_stranded_age_and_fix_are_mutually_exclusive() {
-        let err = crate::command_registry::try_parse_from([
-            "aida", "review", "stranded", "--age", "--fix",
-        ])
-        .unwrap_err();
+        let err = crate::TEST_CLI
+            .try_parse_from(["aida", "review", "stranded", "--age", "--fix"])
+            .unwrap_err();
         let msg = err.to_string();
         assert!(
             msg.contains("cannot be used with") || msg.contains("conflicts"),
@@ -2339,16 +2381,9 @@ mod tests {
     // trace:STORY-1415 | ai:claude
     #[test]
     fn review_mode_mass_change_parses() {
-        let cli = crate::command_registry::try_parse_from([
-            "aida",
-            "review",
-            "mode",
-            "mass-change",
-            "on",
-            "--days",
-            "5",
-        ])
-        .unwrap();
+        let cli = crate::TEST_CLI
+            .try_parse_from(["aida", "review", "mode", "mass-change", "on", "--days", "5"])
+            .unwrap();
         match cli.command.registered::<crate::review_cmd::ReviewArgs>() {
             crate::review_cmd::ReviewArgs {
                 cmd:
@@ -2367,20 +2402,17 @@ mod tests {
             }
             other => panic!("expected review mode mass-change, got {other:?}"),
         }
-        assert!(crate::command_registry::try_parse_from([
-            "aida",
-            "review",
-            "mode",
-            "mass-change",
-            "maybe"
-        ])
-        .is_err());
+        assert!(crate::TEST_CLI
+            .try_parse_from(["aida", "review", "mode", "mass-change", "maybe"])
+            .is_err());
     }
 
     // trace:TASK-1307 | ai:claude
     #[test]
     fn review_stranded_defaults_to_read_only() {
-        let cli = crate::command_registry::try_parse_from(["aida", "review", "stranded"]).unwrap();
+        let cli = crate::TEST_CLI
+            .try_parse_from(["aida", "review", "stranded"])
+            .unwrap();
         match cli.command.registered::<crate::review_cmd::ReviewArgs>() {
             crate::review_cmd::ReviewArgs {
                 cmd: Some(ReviewCommand::Stranded { json, fix, age, .. }),
@@ -2403,7 +2435,7 @@ mod seat_help_tests {
     // trace:TASK-1607 | ai:codex
     #[test]
     fn session_seat_generated_help_contains_no_internal_spec_ids() {
-        let mut cli = crate::command_registry::built_command();
+        let mut cli = crate::TEST_CLI.built_command();
         let session = cli.find_subcommand_mut("session").unwrap();
         let seat = session.find_subcommand_mut("seat").unwrap();
         let help = seat.render_long_help().to_string();

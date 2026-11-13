@@ -15,7 +15,19 @@ pub(crate) mod config_cmd_args;
 pub(crate) use config_cmd_args::*;
 
 use crate::cli::{ConfigPermissionTier, ConfigPermissionsCommand};
-use crate::*;
+use crate::{
+    aida_home_dir, config_lookup, config_path_for_project, confirm, find_project_root, findings,
+    glyph, intake, load_agents_contained, main_worktree_root_from, output_format_is_json,
+    parse_agents_toml, permissions, prompts, read_agents_bool_from_file,
+    read_agents_bypass_from_file, read_project_config_value, read_store_sync_config,
+    read_ultraplan_config, resolve_aida_exe, seats, store_sync_config_project_root,
+    strip_ansi_color, team, vendors, warn_if_periodic_auto_push, workflow_hints, DoctorFinding,
+    GlyphCommand, IdFormat, NumberingStrategy, ScaffoldConfig, Storage, StoreAutoPushMode,
+    UltraplanMode,
+};
+use crate::{config_cmd, ConfigCommand};
+use anyhow::Context;
+use std::io::IsTerminal;
 use toml_edit::{value, Array, DocumentMut, Item, Table};
 
 /// Handle ID configuration commands
@@ -5948,12 +5960,66 @@ mod bug_1667_bypass_gate_tests {
         let lib_src = format!(
             "{}\n{}\n{}\n{}\n{}\n{}\n{}",
             include_str!("lib.rs"),
-            include_str!("lib_part1.rs"),
-            include_str!("lib_part2.rs"),
-            include_str!("lib_part3.rs"),
-            include_str!("lib_part4.rs"),
+            concat!(
+                include_str!("glyph_render.rs"),
+                include_str!("cli_entry.rs"),
+                include_str!("history_filter.rs"),
+                include_str!("output_policy.rs"),
+                include_str!("list_render.rs"),
+                include_str!("agent_errors.rs"),
+                include_str!("cast_recording.rs"),
+                include_str!("argv_rewrite.rs"),
+                include_str!("review_helpers.rs"),
+                include_str!("finding_queue.rs"),
+                include_str!("gitignore_entries.rs"),
+                include_str!("store_write_policy.rs"),
+                include_str!("status_policy.rs")
+            ),
+            concat!(
+                include_str!("retire_legacy.rs"),
+                "\n",
+                include_str!("glossary_render.rs"),
+                "\n",
+                include_str!("role_file_helpers.rs"),
+                "\n",
+                include_str!("mailbox_errors.rs"),
+                "\n",
+                include_str!("human_route.rs"),
+                "\n",
+                include_str!("store_drift.rs"),
+                "\n",
+                include_str!("launch_defaults.rs"),
+                "\n",
+                include_str!("merge_hold_output.rs"),
+                "\n",
+                include_str!("history_reporting.rs")
+            ),
+            concat!(
+                include_str!("ci_staleness.rs"),
+                include_str!("ci_watch.rs"),
+                include_str!("bounded_process.rs"),
+                include_str!("forge_lookup.rs"),
+                include_str!("store_lookup.rs"),
+                include_str!("output_policy.rs"),
+                include_str!("statusline_counts.rs"),
+                include_str!("session_warnings.rs"),
+                include_str!("status_policy.rs"),
+                include_str!("orchestrator_badge.rs"),
+                include_str!("default_branch.rs"),
+                include_str!("plan_structure.rs"),
+                include_str!("worktree_dirty.rs")
+            ),
+            concat!(concat!(
+                include_str!("scoped_lease.rs"),
+                "\n",
+                include_str!("pull_lines.rs")
+            )),
             include_str!("lib_part5.rs"),
-            include_str!("lib_part6.rs")
+            concat!(
+                include_str!("regression_tests.rs"),
+                "\n",
+                include_str!("text_truncate.rs")
+            )
         );
         for (name, source) in [
             (
@@ -6113,7 +6179,6 @@ fn run_config(
     matches: &clap::ArgMatches,
     ctx: &crate::cmdkit::DispatchCtx,
 ) -> anyhow::Result<crate::cmdkit::Flow> {
-    use crate::*;
     let args = <ConfigArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
     // The closed diagnostic needs no requirement-store/cache write access.
     // trace:TASK-2705 | ai:codex

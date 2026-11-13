@@ -271,9 +271,14 @@ fn eligible_with_coverage(
         head.len() == 40
             && crate::gate::kernel_deps::is_hex_sha(head)
             && (sha == head
-                || coverage.as_ref().is_some_and(|proof| proof.pr == hold.pr
-                    && proof.approved_sha == sha
-                    && proof.new_head == head)),
+                // trace:STORY-2696 | ai:codex — cached coverage obeys the recording policy.
+                || (body
+                    .get("recorder_attestation")
+                    .is_none_or(|v| serde_json::from_value::<rv::RecorderAttestation>(v.clone())
+                        .is_ok_and(|a| a.carry_eligible))
+                    && coverage.as_ref().is_some_and(|proof| proof.pr == hold.pr
+                        && proof.approved_sha == sha
+                        && proof.new_head == head))),
         "approval is at a stale or unverifiable head"
     );
     let grant = match authority {

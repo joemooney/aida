@@ -1220,7 +1220,11 @@ pub(crate) struct WatchArgs {
 // code, and wakes only on actionable verbs. It touches no store/backend, so
 // dispatch early like `aida ps`. trace:TASK-990 | ai:claude
 fn run_watch(matches: &clap::ArgMatches, _ctx: &crate::cmdkit::DispatchCtx) -> anyhow::Result<()> {
-    use crate::*;
+    // trace:TASK-3428 | ai:codex
+    use crate::kernel::find_project_root;
+    use crate::notify;
+    use crate::output_format::output_format_is_json;
+    use crate::watch;
     let args = <WatchArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
     let WatchArgs {
         emit_wakes: _,
