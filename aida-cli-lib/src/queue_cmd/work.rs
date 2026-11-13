@@ -241,14 +241,14 @@ pub(crate) fn operator_track_headless_refusal(
             anyhow::anyhow!(
                 "{} is on the `{OPERATOR_TRACK}` track: supervised work never runs headless. \
              Drop --no-human and drive it at the keyboard.",
-                req.display_id()
+                req.friendly_id()
             )
         } else {
             let reason = queue_fresh_pickup_reason_label(&refusal)
                 .unwrap_or_else(|| "on another track".into());
             anyhow::anyhow!(
                 "{} cannot be picked up headless: {reason}",
-                req.display_id()
+                req.friendly_id()
             )
         },
     )
