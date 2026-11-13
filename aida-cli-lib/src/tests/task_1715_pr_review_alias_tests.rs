@@ -7,7 +7,9 @@ use crate::cmdkit::{DispatchCtx, Flow};
 use crate::forge::ForgeKind;
 
 fn parsed_review_id(argv: &[&str]) -> String {
-    let cli = crate::command_registry::try_parse_from(argv.iter().copied()).unwrap();
+    let cli = crate::TEST_CLI
+        .try_parse_from(argv.iter().copied())
+        .unwrap();
     match cli.command.registered::<PrArgs>() {
         PrArgs {
             inner: PrCommand::Review { id },
@@ -18,14 +20,9 @@ fn parsed_review_id(argv: &[&str]) -> String {
 
 /// What `aida queue work <change> --auto-complete` parses to, from the full CLI.
 fn direct_queue_work(change: &str) -> String {
-    let cli = crate::command_registry::try_parse_from([
-        "aida",
-        "queue",
-        "work",
-        change,
-        "--auto-complete",
-    ])
-    .unwrap();
+    let cli = crate::TEST_CLI
+        .try_parse_from(["aida", "queue", "work", change, "--auto-complete"])
+        .unwrap();
     format!(
         "{:?}",
         cli.command.registered::<crate::queue_cmd::QueueArgs>()
@@ -38,7 +35,9 @@ fn pr_review_parses_number_and_explicit_change_ids() {
     for id in ["42", "PR-42", "MR-7", "pr-42"] {
         assert_eq!(parsed_review_id(&["aida", "pr", "review", id]), id);
     }
-    assert!(crate::command_registry::try_parse_from(["aida", "pr", "review"]).is_err());
+    assert!(crate::TEST_CLI
+        .try_parse_from(["aida", "pr", "review"])
+        .is_err());
 }
 
 // trace:TASK-1715.ac56fdab | ai:claude

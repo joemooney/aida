@@ -26,7 +26,7 @@ use crate::{
     drive_robustness, dup_pickup_recheck, effective_role, effort_calibration, enforce_team_gate,
     entry_matches_role_filter, entry_scope_session_match, epic_descendant_uuid_set, event_wait,
     extract_plan_followups, extract_referenced_spec_ids_from_commit, extract_spec_ids_from_commit,
-    fetch_pr_ship_metadata_via_gh, filter_entries_by_descendant_set, find_lease_by_id_prefix,
+    fetch_pr_ship_metadata_via_forge, filter_entries_by_descendant_set, find_lease_by_id_prefix,
     find_lease_by_spec, find_main_worktree_root, find_project_root, findings, first_run, focus,
     focus_scope_guard_for_spec, for_target_requires_dispatch_authority, forecast_rebase_onto,
     forge, format_review_label, format_review_story_display, format_tag_chip, get_default_author,
@@ -128,6 +128,8 @@ mod recover;
 pub(crate) use recover::{handle_queue_recover, recover_action_label, recover_push_branch};
 mod remove_move;
 mod rework;
+#[cfg(test)]
+pub(crate) use rework::require_rework_pickable;
 pub(crate) use rework::{
     current_queue_route, drain_running, drain_running_notice, handle_queue_rework,
     handle_rework_entry, loop_guard_park, needs_attention_parks, park_reason_line,
@@ -194,7 +196,7 @@ pub(crate) use work::{
 };
 #[cfg(test)]
 pub(crate) use work::{
-    derive_queue_work_prompt, latest_ruling_comment, prepend_ruling,
+    derive_queue_work_prompt, latest_ruling_comment, prepend_ruling, resolve_pickup_attempt,
     rework_pr_head_branch_from_lookup,
 };
 pub use work::{refuse_waiting_review, spec_open_change_key};

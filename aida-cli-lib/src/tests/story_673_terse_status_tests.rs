@@ -1,4 +1,5 @@
 use super::*;
+use crate::requirement_breakdown_summary_line;
 
 fn breakdown(pairs: &[(&str, usize)]) -> std::collections::BTreeMap<String, usize> {
     pairs

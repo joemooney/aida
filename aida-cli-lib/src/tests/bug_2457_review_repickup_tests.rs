@@ -21,16 +21,37 @@ fn git_ok(repo: &std::path::Path, args: &[&str]) -> String {
 }
 
 fn queue_work(storage: &crate::Storage) -> anyhow::Result<()> {
+    queue_work_launch(storage, true)
+}
+
+fn queue_work_launch(storage: &crate::Storage, no_launch: bool) -> anyhow::Result<()> {
+    queue_work_launch_sync(storage, no_launch, true)
+}
+
+fn queue_work_launch_sync(
+    storage: &crate::Storage,
+    no_launch: bool,
+    no_pull: bool,
+) -> anyhow::Result<()> {
+    queue_work_sync_force(storage, no_launch, no_pull, false)
+}
+
+fn queue_work_sync_force(
+    storage: &crate::Storage,
+    no_launch: bool,
+    no_pull: bool,
+    force_claim: bool,
+) -> anyhow::Result<()> {
     crate::queue_cmd::handle_queue_work(
         storage,
         None,
         crate::test_env::HERMETIC_TEST_USER,
-        Some("PR-2457"),
+        Some(if no_launch { "PR-2457" } else { "STORY-2457" }),
         None,
         false,
-        /* no_launch */ true,
+        /* no_launch */ no_launch,
         crate::queue_cmd::QueueWorkRoleInput::direct(Some("reviewer")),
-        /* no_pull */ true,
+        no_pull,
         None,
         None,
         None,
@@ -39,7 +60,7 @@ fn queue_work(storage: &crate::Storage) -> anyhow::Result<()> {
         false,
         false,
         false,
-        /* force_claim */ false,
+        /* force_claim */ force_claim,
         None,
         false,
         false,
@@ -51,9 +72,9 @@ fn queue_work(storage: &crate::Storage) -> anyhow::Result<()> {
         false,
         false,
         false,
+        (!no_launch).then_some(crate::complexity_calibration::ComplexityLevel::High),
         None,
-        None,
-        None,
+        (!no_launch).then_some(crate::effort_calibration::EffortBucket::OneDay),
         false,
         false,
         false,
@@ -111,6 +132,7 @@ fn review_story(main: &std::path::Path) -> (crate::Storage, impl Fn(aida_core::R
 
 #[test]
 fn bug_2457_two_heads_through_queue_pickup_preserve_holds_and_refuse_unsafe_trees() {
+    let _scan = aida_core::mailbox_lifecycle::activation::test_writer_scan(true);
     let fx = fixture();
     let mut ambient = crate::test_env::AmbientGuard::hermetic_with_seat(&fx.main, "reviewer", &[]);
     // Every holder of these fresh private fixtures is in this test's PID
@@ -142,6 +164,18 @@ fn bug_2457_two_heads_through_queue_pickup_preserve_holds_and_refuse_unsafe_tree
     status(aida_core::RequirementStatus::Approved);
     let err = queue_work(&storage).unwrap_err().to_string();
     assert!(err.contains("held by worktree"), "{err}");
+    // trace:BUG-2548 | ai:codex — a broken store remote must never be
+    // consulted when this local branch already refuses pickup.
+    let store_root = fx.main.join(".aida-store");
+    git_ok(
+        &store_root,
+        &["remote", "add", "origin", "/nonexistent/bug-2548-store"],
+    );
+    let err = queue_work_launch_sync(&storage, true, false)
+        .unwrap_err()
+        .to_string();
+    assert!(err.contains("held by worktree"), "{err}");
+    git_ok(&store_root, &["remote", "remove", "origin"]);
     std::fs::remove_file(crate::lease_path(&fx.main, &lease.id)).unwrap();
 
     std::fs::write(tree.join("review-notes"), "keep me").unwrap();
@@ -212,6 +246,7 @@ fn bug_2457_two_heads_through_queue_pickup_preserve_holds_and_refuse_unsafe_tree
 // trace:TASK-b6b1278890774ef993d2ebc327862470-900 | ai:codex
 #[test]
 fn bug_2469_dead_review_reclaimed_only_when_new_head_covers_recorded_and_actual_heads() {
+    let _scan = aida_core::mailbox_lifecycle::activation::test_writer_scan(true);
     let fx = fixture();
     let mut ambient = crate::test_env::AmbientGuard::hermetic_with_seat(&fx.main, "reviewer", &[]);
     ambient.set_key("AIDA_TRUST_PID_NAMESPACE", "1");
@@ -609,4 +644,388 @@ fn bug_2469_dead_review_reclaimed_only_when_new_head_covers_recorded_and_actual_
     assert_eq!(new_lease.worktree_path, tree);
     assert_eq!(git_ok(&tree, &["rev-parse", "HEAD"]), next_head);
     assert!(git_ok(&fx.main, &["for-each-ref", "refs/aida/review-coverage"]).is_empty());
+}
+
+// trace:BUG-2530 | ai:codex
+#[test]
+fn bug2530_concluded_pickup_preserves_checkout_queue_and_calibration() {
+    let _scan = aida_core::mailbox_lifecycle::activation::test_writer_scan(true);
+    let fx = fixture();
+    let mut ambient = crate::test_env::AmbientGuard::hermetic_with_seat(&fx.main, "reviewer", &[]);
+    ambient.set_key("AIDA_TRUST_PID_NAMESPACE", "1");
+    let gh = fx.root.join("fake-gh");
+    crate::test_exec::write_executable(&gh, "#!/bin/sh\nexit 1\n");
+    ambient.set_key("AIDA_TEST_GH_BINARY", &gh);
+    git_ok(&fx.main, &["init", "-q", ".aida-store"]);
+    let (storage, status) = review_story(&fx.main);
+    git_ok(
+        &fx.main,
+        &["push", "-q", "origin", "HEAD:refs/pull/2457/head"],
+    );
+    queue_work(&storage).unwrap();
+    let lease = crate::list_leases(&fx.main).remove(0);
+    let tree = lease.worktree_path;
+    std::fs::remove_file(crate::lease_path(&fx.main, &lease.id)).unwrap();
+    status(aida_core::RequirementStatus::Approved);
+    let user = crate::test_env::HERMETIC_TEST_USER;
+    for row in storage.queue_list(user, false).unwrap() {
+        storage.queue_remove(user, &row.requirement_id).unwrap();
+    }
+    let before = serde_json::to_value(storage.load().unwrap()).unwrap();
+    let sha = git_ok(&tree, &["rev-parse", "HEAD"]);
+    ambient.set_key("AIDA_TEST_PR_HEAD_SHA", &sha);
+    let grant = crate::gate::seat_authority::test_support::mint_grant_for(
+        &fx.main,
+        user,
+        "advisor",
+        &["reviewer"],
+    );
+    ambient.set_key(crate::gate::seat_authority::GRANT_ENV, grant);
+    let path = crate::gate::review_verdict::verdict_path(&fx.main, "PR-2457");
+    std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+    let calibration = fx.main.join(".aida/complexity-calibration");
+    let effort = fx.main.join(".aida/effort-calibration");
+    // Remove setup's calibration so any attempted pickup write is visible.
+    for dir in [&calibration, &effort] {
+        if dir.exists() {
+            std::fs::remove_dir_all(dir).unwrap();
+        }
+    }
+    let identity = vec!["session:independent-reviewer".to_owned()];
+    let receipt =
+        crate::gate::review_authority::write_human_receipt(&sha, "PR-2457", &identity, false, true)
+            .unwrap();
+    let branch_before = git_ok(&fx.main, &["show-ref"]);
+    let checkout_before = git_ok(&tree, &["status", "--porcelain"]);
+    // The pull child publishes evidence absent from the pre-pull view. This
+    // proves admission sees the synchronized verdict before touching resources.
+    let incoming = fx.root.join("incoming-verdict.json");
+    let pulled = fx.root.join("pull-observed");
+    let fake = fx.root.join("pull-aida");
+    crate::test_exec::write_executable(&fake, format!(
+        "#!/bin/sh\n[ \"$*\" = 'db sync --pull' ] || exit 42\ncp '{}' '{}' || exit 43\ntouch '{}'\n",
+        incoming.display(), path.display(), pulled.display(),
+    ));
+    let _exe = crate::kernel::test_aida_exe::set(fake);
+    for kind in ["request-changes", "rejected", "approved"] {
+        std::fs::write(
+            &incoming,
+            serde_json::json!({
+                "verdict":kind, "reviewed_sha":sha,
+                "recorded_at":chrono::Utc::now().to_rfc3339(),
+                "recorder_attestation": {
+                    "sha":sha, "human_at_tty":true, "receipt_id":receipt, "identity":identity
+                }
+            })
+            .to_string(),
+        )
+        .unwrap();
+        let _ = std::fs::remove_file(&path);
+        let _ = std::fs::remove_file(&pulled);
+        let error = queue_work_launch_sync(&storage, false, false).unwrap_err();
+        assert!(pulled.exists(), "required pull must precede refusal");
+        assert!(
+            error
+                .to_string()
+                .contains("duplicate review is unnecessary"),
+            "{kind}: {error:#}"
+        );
+        assert!(tree.join(".git").exists());
+        assert_eq!(git_ok(&tree, &["rev-parse", "HEAD"]), sha);
+        assert_eq!(git_ok(&tree, &["status", "--porcelain"]), checkout_before);
+        assert_eq!(git_ok(&fx.main, &["show-ref"]), branch_before);
+        assert!(crate::list_leases(&fx.main).is_empty());
+        assert!(storage.queue_list(user, false).unwrap().is_empty());
+        assert_eq!(
+            serde_json::to_value(storage.load().unwrap()).unwrap(),
+            before
+        );
+        assert!(!calibration.exists() && !effort.exists());
+    }
+}
+
+// trace:BUG-2548 | ai:codex
+#[test]
+fn bug2548_force_claim_preserves_clone_on_failed_pull_and_refreshed_refusals() {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
+    use super::bug_2455_force_claim_clone_tests::{dead_pid, set_owner};
+    let _scan = aida_core::mailbox_lifecycle::activation::test_writer_scan(true);
+    let fx = fixture();
+    let mut ambient = crate::test_env::AmbientGuard::hermetic_with_seat(&fx.main, "reviewer", &[]);
+    ambient.set_key("AIDA_TRUST_PID_NAMESPACE", "1");
+    ambient.set_key("AIDA_HEADLESS", "1");
+    let bin = fx.root.join("bin");
+    std::fs::create_dir_all(&bin).unwrap();
+    let gh = bin.join("gh");
+    crate::test_exec::write_executable(
+        &gh,
+        r#"#!/bin/sh
+case "$*" in
+  *'--json headRefName -q'*) echo feature-2457 ;;
+  *) echo '{"title":"fix (STORY-2457)","headRefName":"feature-2457","headRefOid":"abc","baseRefName":"main","baseRefOid":"def"}' ;;
+esac
+"#,
+    );
+    let environment = aida_core::exec_context::Environment::capture();
+    let mut paths = vec![bin.clone()];
+    paths.extend(std::env::split_paths(
+        environment.get("PATH").unwrap_or_default(),
+    ));
+    ambient.set_key("PATH", std::env::join_paths(paths).unwrap());
+    ambient.set_key("AIDA_TEST_GH_BINARY", &gh);
+    git_ok(&fx.main, &["init", "-q", ".aida-store"]);
+    let (storage, _) = review_story(&fx.main);
+    let clone = super::s4_host_git_tests::leased_clone_on(&fx, "2548", "2548c1", "pr-2457");
+    git_ok(
+        &clone,
+        &[
+            "push",
+            fx.origin.to_str().unwrap(),
+            "HEAD:refs/heads/pr-2457",
+        ],
+    );
+    git_ok(
+        &clone,
+        &[
+            "push",
+            fx.origin.to_str().unwrap(),
+            "HEAD:refs/pull/2457/head",
+        ],
+    );
+    set_owner(&fx.main, Some(dead_pid()));
+    let lease = crate::list_leases(&fx.main).remove(0);
+    let lease_path = crate::lease_path(&fx.main, &lease.id);
+    let lease_before = std::fs::read(&lease_path).unwrap();
+    let sha = git_ok(&clone, &["rev-parse", "HEAD"]);
+    // Remote coverage inspection may refresh tracking refs; local branches and
+    // the clone's retention pin must survive every admission refusal unchanged.
+    let refs_before = git_ok(
+        &fx.main,
+        &[
+            "for-each-ref",
+            "--format=%(objectname) %(refname)",
+            "refs/heads",
+            "refs/aida/seats",
+        ],
+    );
+    let store_before = serde_json::to_value(storage.load().unwrap()).unwrap();
+    let queue_before = serde_json::to_value(
+        storage
+            .queue_list(crate::test_env::HERMETIC_TEST_USER, false)
+            .unwrap(),
+    )
+    .unwrap();
+    ambient.set_key("AIDA_TEST_PR_HEAD_SHA", &sha);
+    let grant = crate::gate::seat_authority::test_support::mint_grant_for(
+        &fx.main,
+        crate::test_env::HERMETIC_TEST_USER,
+        "advisor",
+        &["reviewer"],
+    );
+    ambient.set_key(crate::gate::seat_authority::GRANT_ENV, grant);
+    let incoming = fx.root.join("incoming");
+    let target_file = fx.root.join("sync-target");
+    let pulled = fx.root.join("pulled");
+    let fake = fx.root.join("pull-aida");
+    crate::test_exec::write_executable(&fake, format!(
+        "#!/bin/sh\n[ \"$*\" = 'db sync --pull' ] || exit 42\ntouch '{}'\n[ -f '{}' ] || exit 44\ncp '{}' \"$(cat '{}')\"\n",
+        pulled.display(), incoming.display(), incoming.display(), target_file.display(),
+    ));
+    let _exe = crate::kernel::test_aida_exe::set(fake);
+    let verdict = crate::gate::review_verdict::verdict_path(&fx.main, "PR-2457");
+    std::fs::create_dir_all(verdict.parent().unwrap()).unwrap();
+    let claim = crate::coordination::claim_path(&fx.main.join(".aida-store"), "STORY-2457");
+    std::fs::create_dir_all(claim.parent().unwrap()).unwrap();
+    for mode in ["failed", "conclusive", "deferred"] {
+        let _ = std::fs::remove_file(&incoming);
+        let _ = std::fs::remove_file(&verdict);
+        let _ = std::fs::remove_file(&claim);
+        let _ = std::fs::remove_file(&pulled);
+        if mode == "conclusive" {
+            let identity = vec!["session:independent-reviewer".to_owned()];
+            let receipt = crate::gate::review_authority::write_human_receipt(
+                &sha, "PR-2457", &identity, false, true,
+            )
+            .unwrap();
+            std::fs::write(&incoming, serde_json::json!({
+                "verdict":"approved", "reviewed_sha":sha,
+                "recorded_at":chrono::Utc::now().to_rfc3339(),
+                "recorder_attestation":{"sha":sha,"human_at_tty":true,"receipt_id":receipt,"identity":identity}
+            }).to_string()).unwrap();
+            std::fs::write(&target_file, verdict.to_str().unwrap()).unwrap();
+        } else if mode == "deferred" {
+            let now = chrono::Utc::now().to_rfc3339();
+            let holder: crate::coordination::Claim = serde_json::from_value(serde_json::json!({
+                "scope":"STORY-2457","node_id":"remote-node","claim_id":"remote-implementer",
+                "clone_path":"/remote","host":"remote-fixture-host","pid":1,"agent":"implementer",
+                "started_at":now,"heartbeat_at":now,"ttl_secs":3600
+            }))
+            .unwrap();
+            std::fs::write(&incoming, toml::to_string(&holder).unwrap()).unwrap();
+            std::fs::write(&target_file, claim.to_str().unwrap()).unwrap();
+        }
+        let err = queue_work_sync_force(&storage, false, false, true).unwrap_err();
+        let expected = match mode {
+            "failed" => "pre-pickup pull failed",
+            "conclusive" => "duplicate review is unnecessary",
+            _ => "deferred: implementer lane live",
+        };
+        assert!(pulled.exists(), "{mode}: pull was never reached: {err:#}");
+        assert!(err.to_string().contains(expected), "{mode}: {err:#}");
+        assert!(clone.join(".git").exists());
+        assert_eq!(git_ok(&clone, &["rev-parse", "HEAD"]), sha);
+        assert_eq!(std::fs::read(&lease_path).unwrap(), lease_before);
+        assert_eq!(
+            git_ok(
+                &fx.main,
+                &[
+                    "for-each-ref",
+                    "--format=%(objectname) %(refname)",
+                    "refs/heads",
+                    "refs/aida/seats"
+                ]
+            ),
+            refs_before
+        );
+        assert_eq!(
+            serde_json::to_value(storage.load().unwrap()).unwrap(),
+            store_before
+        );
+        assert_eq!(
+            serde_json::to_value(
+                storage
+                    .queue_list(crate::test_env::HERMETIC_TEST_USER, false)
+                    .unwrap()
+            )
+            .unwrap(),
+            queue_before
+        );
+    }
+    // Positive control: the same eligible clone is reclaimed after all gates pass.
+    std::fs::remove_file(&claim).unwrap();
+    queue_work_sync_force(&storage, true, true, true).unwrap();
+    assert!(!clone.exists());
+    assert!(!lease_path.exists());
+}
+
+// trace:BUG-2548 | ai:codex
+#[test]
+fn bug2548_source_lease_refuses_before_broken_store_remote_without_mutation() {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
+    let fx = fixture();
+    let mut ambient = crate::test_env::AmbientGuard::hermetic_with_seat(&fx.main, "reviewer", &[]);
+    ambient.set_key("AIDA_HEADLESS", "1");
+    let bin = fx.root.join("bin");
+    std::fs::create_dir_all(&bin).unwrap();
+    let gh = bin.join("gh");
+    crate::test_exec::write_executable(
+        &gh,
+        r#"#!/bin/sh
+case "$*" in
+  *'--json headRefName -q'*) echo feature-2457 ;;
+  *) echo '{"title":"fix (STORY-2457)","headRefName":"feature-2457","headRefOid":"abc","baseRefName":"main","baseRefOid":"def","state":"OPEN","isDraft":false}' ;;
+esac
+"#,
+    );
+    let environment = aida_core::exec_context::Environment::capture();
+    let mut paths = vec![bin.clone()];
+    paths.extend(std::env::split_paths(
+        environment.get("PATH").unwrap_or_default(),
+    ));
+    ambient.set_key("PATH", std::env::join_paths(paths).unwrap());
+    ambient.set_key("AIDA_TEST_GH_BINARY", &gh);
+    git_ok(&fx.main, &["init", "-q", ".aida-store"]);
+    let (storage, _) = review_story(&fx.main);
+    git_ok(
+        &fx.main.join(".aida-store"),
+        &[
+            "remote",
+            "add",
+            "origin",
+            "/nonexistent/bug-2548-source-lease-store",
+        ],
+    );
+    let pulled = fx.root.join("source-store-pull-observed");
+    let fake = fx.root.join("pull-aida");
+    crate::test_exec::write_executable(&fake, format!(
+        "#!/bin/sh\n[ \"$*\" = 'db sync --pull' ] || exit 42\ntouch '{}'\nexec git -C '{}' ls-remote origin\n",
+        pulled.display(), fx.main.join(".aida-store").display(),
+    ));
+    let _exe = crate::kernel::test_aida_exe::set(fake);
+    let path = crate::lease_path(&fx.main, "2548source");
+    std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+    let pid = std::process::id();
+    let mut lease: crate::SessionLease = serde_json::from_value(serde_json::json!({
+        "id":"2548source","scope":uuid::Uuid::new_v4().to_string(),"slug":"holder","owner":"fixture",
+        "branch":"feature-2457","worktree_path":fx.main,"started_at":chrono::Utc::now(),
+        "hostname":crate::coordination::hostname(),"role":"reviewer","active_pid":pid,
+        "active_pid_start_time":crate::process_probe::process_start_identity(pid),
+        "pid_namespace":crate::agent_registry::current_pid_namespace(),
+        "holder_record":serde_json::to_string(&aida_core::proc_identity::HolderRecord::capture(pid)).unwrap()
+    })).unwrap();
+    let before_store = serde_json::to_value(storage.load().unwrap()).unwrap();
+    let before_refs = git_ok(&fx.main, &["show-ref"]);
+    for live in [true, false] {
+        if !live {
+            // A foreign namespace with no durable owner cannot establish death.
+            lease.pid_namespace = Some(1);
+            lease.active_pid = None;
+            lease.active_pid_start_time = None;
+            lease.holder_record = None;
+        }
+        std::fs::write(&path, toml::to_string(&lease).unwrap()).unwrap();
+        assert!(crate::ownership::reader::lease_retained(&fx.main, &lease));
+        let before = std::fs::read(&path).unwrap();
+        let err = queue_work_launch_sync(&storage, true, false).unwrap_err();
+        assert!(
+            !pulled.exists(),
+            "conflicting source lease must precede store access"
+        );
+        assert!(
+            err.to_string().contains("before store pull"),
+            "live={live}: {err:#}"
+        );
+        assert!(err.to_string().contains("feature-2457"), "{err:#}");
+        assert_eq!(std::fs::read(&path).unwrap(), before);
+        assert_eq!(git_ok(&fx.main, &["show-ref"]), before_refs);
+        assert_eq!(
+            serde_json::to_value(storage.load().unwrap()).unwrap(),
+            before_store
+        );
+        assert!(
+            !crate::session_start::pickup_worktree_path(&fx.main, "pr-2457")
+                .unwrap()
+                .exists()
+        );
+    }
+    // Explicit, credited implementer coexistence still passes preflight: the
+    // broken remote is reached, proving the admission check is not overbroad.
+    lease.role = Some("implementer".into());
+    lease.pid_namespace = crate::agent_registry::current_pid_namespace();
+    lease.active_pid = Some(pid);
+    lease.active_pid_start_time = crate::process_probe::process_start_identity(pid);
+    lease.holder_record =
+        Some(serde_json::to_string(&aida_core::proc_identity::HolderRecord::capture(pid)).unwrap());
+    std::fs::write(&path, toml::to_string(&lease).unwrap()).unwrap();
+    let grant = crate::gate::seat_authority::test_support::mint_grant_for(
+        &fx.main,
+        crate::test_env::HERMETIC_TEST_USER,
+        "advisor",
+        &["reviewer"],
+    );
+    ambient.set_key(crate::gate::seat_authority::GRANT_ENV, grant);
+    let err = queue_work_launch_sync(&storage, false, false).unwrap_err();
+    assert!(
+        err.to_string().contains("pre-pickup pull failed"),
+        "{err:#}"
+    );
+    assert!(
+        pulled.exists(),
+        "coexistence must allow the store preflight"
+    );
+    assert!(path.exists());
 }

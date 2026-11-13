@@ -628,7 +628,7 @@ mod tests {
             vec!["/trial"],
         ] {
             let argv: Vec<_> = [vec!["aida", "regen", "score"], middle, suffix.to_vec()].concat();
-            assert!(crate::command_registry::try_parse_from(argv).is_ok());
+            assert!(crate::TEST_CLI.try_parse_from(argv).is_ok());
         }
         for middle in [
             vec![],
@@ -636,7 +636,7 @@ mod tests {
             vec!["/caller", "--control", "reference"],
         ] {
             let argv: Vec<_> = [vec!["aida", "regen", "score"], middle, suffix.to_vec()].concat();
-            assert!(crate::command_registry::try_parse_from(argv).is_err());
+            assert!(crate::TEST_CLI.try_parse_from(argv).is_err());
         }
     }
     // trace:TASK-2842 | ai:codex

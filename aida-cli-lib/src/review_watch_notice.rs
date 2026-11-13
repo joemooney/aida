@@ -81,6 +81,28 @@ pub(super) fn send(
         }
         Ok(pending)
     })?;
+    // trace:BUG-2548 | ai:codex
+    // Record even an already-delivered cap notice (upgrade/recovery). A failed
+    // append leaves delivery pending; the ledger deduplicates by request ID.
+    if cap {
+        let notice = store
+            .transaction(&key, |state| {
+                Ok(state.entries.get(&key).and_then(|entry| entry.cap.clone()))
+            })?
+            .context("review cap receipt disappeared")?;
+        let change_key =
+            crate::gate::ledger::ChangeKey::parse(&key).context("invalid review change key")?;
+        let mut event = crate::gate::ledger::GateEvent::new(
+            change_key,
+            crate::gate::ledger::EventBody::ManualReviewRequested {
+                request_id: notice.message.id.clone(),
+                recipient: "advisor".into(),
+            },
+        );
+        event.head = Some(change.head.clone());
+        let ledger_root = crate::gate::ledger::store_root(root)?;
+        crate::gate::ledger::store::append(&ledger_root, change_key, vec![event])?;
+    }
     for notice in pending {
         deliver(root, &notice)?;
         store.transaction(&key, |state| {
@@ -179,15 +201,16 @@ fn findings_message(
     );
     // The current verdict file always holds the latest round; an archived
     // round file is named when this verdict was also read from one.
-    // Synced-only reviews have no local verdict file to point the author at.
+    // Synced and ledger-only reviews have no local verdict file to point at.
+    // trace:BUG-2534 | ai:codex
     // trace:STORY-2492 | ai:codex
-    let synced = history
+    let external = history
         .files
         .get(verdict)
         .into_iter()
         .flatten()
-        .any(|f| f.starts_with(".aida-store/"));
-    let mut files = if synced {
+        .any(|f| f.starts_with(".aida-store/") || f.starts_with(".aida/gate-ledger/"));
+    let mut files = if external {
         Vec::new()
     } else {
         vec![format!(
@@ -196,7 +219,7 @@ fn findings_message(
         )]
     };
     for file in history.files.get(verdict).into_iter().flatten() {
-        let path = if file.starts_with(".aida-store/") {
+        let path = if file.starts_with(".aida-store/") || file.starts_with(".aida/gate-ledger/") {
             file.clone()
         } else {
             format!(".aida/review-verdicts/{file}")
@@ -262,7 +285,7 @@ fn cap_message(
         .join(", ");
     let body = format!(
         "{key} reached the two-round review cap: the reviews of {shas} each blocked done. \
-         Its head {head} has no review, and the watcher will not start another. Decide the next \
+         Its head {head} has no review, and the watcher will not start another. Manual review requested. Decide the next \
          step: review the head by hand, or re-scope or close the change. Its findings are in \
          `.aida/review-verdicts/{file}`.",
         head = change.head,

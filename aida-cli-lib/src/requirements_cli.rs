@@ -1470,21 +1470,7 @@ pub(crate) fn dropped_structural_tags(
     old_tags: &HashSet<String>,
     new_tags: &HashSet<String>,
 ) -> Vec<String> {
-    const PREFIXES: &[&str] = &[
-        "parent:",
-        "batch:",
-        "lane:",
-        "severity:",
-        "lifecycle:",
-        "aida:",
-    ];
-    let mut dropped: Vec<String> = old_tags
-        .difference(new_tags)
-        .filter(|tag| PREFIXES.iter().any(|prefix| tag.starts_with(prefix)))
-        .cloned()
-        .collect();
-    dropped.sort();
-    dropped
+    aida_core::db::canonical_mutation::dropped_structural_tags(old_tags, new_tags)
 }
 
 pub fn enforce_structural_tag_replacement(
@@ -10387,7 +10373,7 @@ mod origin_prompt_tests {
         ] {
             let mut args = vec!["aida", "add", "--title", "Feature"];
             args.extend(extra);
-            assert!(crate::command_registry::try_parse_from(args).is_ok());
+            assert!(crate::TEST_CLI.try_parse_from(args).is_ok());
         }
         for extra in [
             vec!["--origin-prompt-file", "reviewed.txt", "--no-origin-prompt"],
@@ -10396,15 +10382,11 @@ mod origin_prompt_tests {
         ] {
             let mut args = vec!["aida", "add", "--title", "Feature"];
             args.extend(extra);
-            assert!(crate::command_registry::try_parse_from(args).is_err());
+            assert!(crate::TEST_CLI.try_parse_from(args).is_err());
         }
-        assert!(crate::command_registry::try_parse_from([
-            "aida",
-            "show",
-            "TASK-1",
-            "--origin-prompt"
-        ])
-        .is_ok());
+        assert!(crate::TEST_CLI
+            .try_parse_from(["aida", "show", "TASK-1", "--origin-prompt"])
+            .is_ok());
         let mut json_args = [
             "aida",
             "show",
@@ -10417,7 +10399,7 @@ mod origin_prompt_tests {
         .to_vec();
         crate::json_capability_gate(&mut json_args).unwrap();
         assert!(json_args.iter().any(|arg| arg == "--json"));
-        assert!(crate::command_registry::try_parse_from(json_args).is_ok());
+        assert!(crate::TEST_CLI.try_parse_from(json_args).is_ok());
         for mode in [
             "--card",
             "--tree",
@@ -10430,14 +10412,9 @@ mod origin_prompt_tests {
             "--brief",
             "--full",
         ] {
-            assert!(crate::command_registry::try_parse_from([
-                "aida",
-                "show",
-                "TASK-1",
-                "--origin-prompt",
-                mode
-            ])
-            .is_err());
+            assert!(crate::TEST_CLI
+                .try_parse_from(["aida", "show", "TASK-1", "--origin-prompt", mode])
+                .is_err());
         }
     }
 }

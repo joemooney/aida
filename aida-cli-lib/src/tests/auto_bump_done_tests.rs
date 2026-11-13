@@ -381,17 +381,22 @@ fn open_pr_for_same_spec_defers_auto_bump() {
     assert_eq!(req.status, RequirementStatus::Done);
 }
 
-/// BUG-1454 F1: on a NON-GitHub forge the open-PR lookup cannot be performed.
-/// That is the unknown case, and the unknown case must preserve — the function
-/// previously returned `Some(empty)`, which asserts "the lookup ran and nothing
-/// is open" and auto-bumped every candidate on GitLab and pure-git projects.
-///
-/// This repo's CI runs against GitHub only, so no green build reaches this
-/// path; the regression is only visible from a test that sets the remote.
-// trace:BUG-1454 | ai:claude
+/// An unreadable GitLab query must preserve the candidate, even though its
+/// completion trailer is on the default branch.
+// trace:BUG-1454 BUG-2516 | ai:codex
 #[test]
-fn non_github_forge_defers_rather_than_completing() {
+fn gitlab_unavailable_forge_defers_rather_than_completing() {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
     let (_tmp, project_root, store_path) = init_test_project();
+    let bin = project_root.join("bin");
+    std::fs::create_dir(&bin).unwrap();
+    crate::test_exec::write_executable(
+        &bin.join("glab"),
+        "#!/bin/sh\nif [ \"$1\" = --version ]; then echo glab-test; exit 0; fi\nexit 1\n",
+    );
+    let _path = crate::test_env::EnvVarGuard::prepend_path(&bin);
     seed_spec_at(&store_path, "BUG-1456", "Done");
     run_git(
         &project_root,
@@ -5145,4 +5150,341 @@ fn slice_subject_exclusion_is_scoped_to_rebased_commits() {
     assert!(has_flip(&flips, "TASK-9302"), "flips: {flips:?}");
     assert!(!has_flip(&flips, "TASK-9303"), "flips: {flips:?}");
     assert!(!has_flip(&flips, "TASK-9304"), "flips: {flips:?}");
+}
+
+// Fake GitLab search deliberately excludes source_branch, as the REST API does.
+// trace:BUG-2516 | ai:codex
+fn bug_2516_write_glab(bin: &std::path::Path, rows: &[serde_json::Value]) {
+    bug_2516_write_glab_pages(bin, rows, false);
+}
+
+// trace:BUG-2516 | ai:codex
+fn bug_2516_write_glab_pages(bin: &std::path::Path, rows: &[serde_json::Value], fail_second: bool) {
+    let rows = serde_json::to_string(rows).unwrap();
+    let fail_second = if fail_second { "True" } else { "False" };
+    crate::test_exec::write_executable(
+        &bin.join("glab"),
+        format!(
+            r#"#!/usr/bin/python3
+import json, sys
+from pathlib import Path
+if sys.argv[1:] == ['--version']:
+    print('glab-test')
+    sys.exit(0)
+if 'state=opened' not in sys.argv or 'per_page=100' not in sys.argv:
+    sys.exit(1)
+rows = json.loads('{rows}')
+for arg in sys.argv[1:]:
+    if arg.startswith('search='):
+        term = arg.split('=', 1)[1].lower()
+        rows = [r for r in rows if term in (r.get('title', '') + ' ' + (r.get('description') or '')).lower()]
+page = int(next(arg.split('=', 1)[1] for arg in sys.argv if arg.startswith('page=')))
+with Path(__file__).with_suffix('.pages').open('a') as log:
+    print(page, file=log)
+if page == 2 and {fail_second}:
+    print('second page failed', file=sys.stderr)
+    sys.exit(1)
+print(json.dumps(rows[(page - 1) * 100:page * 100]))
+"#
+        ),
+    );
+}
+
+// trace:BUG-2516 | ai:codex
+#[test]
+fn bug_2516_gitlab_pull_completion_trailers() {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
+    let (_tmp, root, store_path) = init_test_project();
+    let remote = root.join("remote.git");
+    run_git(
+        &root,
+        &[
+            "clone",
+            "--bare",
+            root.to_str().unwrap(),
+            remote.to_str().unwrap(),
+        ],
+    );
+    run_git(
+        &root,
+        &["remote", "add", "origin", remote.to_str().unwrap()],
+    );
+    std::fs::create_dir_all(root.join(".aida")).unwrap();
+    std::fs::write(
+        root.join(".aida/config.toml"),
+        "[forge]\nprovider = \"gitlab\"\n",
+    )
+    .unwrap();
+    let bin = root.join("bin");
+    std::fs::create_dir(&bin).unwrap();
+    bug_2516_write_glab(&bin, &{
+        let mut rows = vec![
+            serde_json::json!({
+                "iid": 2, "title": "unrelated", "description": "",
+                "source_branch": "other", "state": "opened"
+            });
+            99
+        ];
+        rows.push(serde_json::json!({
+            "iid": 3, "title": "follow-up", "description": "",
+            "source_branch": "fix/bug-2518-rework", "state": "opened"
+        }));
+        rows
+    });
+    let _path = crate::test_env::EnvVarGuard::prepend_path(&bin);
+    seed_spec_at(&store_path, "BUG-2516", "InProgress");
+    seed_spec_at(&store_path, "BUG-2517", "InProgress");
+    seed_spec_at(&store_path, "BUG-2518", "InProgress");
+    let pre = run_git(&root, &["rev-parse", "HEAD"]);
+    run_git(
+        &root,
+        &[
+            "commit",
+            "--allow-empty",
+            "-m",
+            "fix: completing squash (BUG-2516, BUG-2518)",
+        ],
+    );
+    let completing_sha = run_git(&root, &["rev-parse", "HEAD"]);
+    run_git(
+        &root,
+        &[
+            "commit",
+            "--allow-empty",
+            "-m",
+            "fix: partial squash (Refs BUG-2517)",
+        ],
+    );
+    let storage = Storage::new(&store_path);
+    run_git(&root, &["push", "origin", "main"]);
+    run_git(&root, &["reset", "--hard", &pre]);
+    crate::store_push_pull::handle_pull_command(&store_path, false, false, true, true, false)
+        .unwrap();
+    let store = storage.load().unwrap();
+    let completed = store.get_requirement_by_spec_id("BUG-2516").unwrap();
+    assert_eq!(completed.status, RequirementStatus::Completed);
+    assert_eq!(
+        completed
+            .implementation_info
+            .as_ref()
+            .unwrap()
+            .completion_sha
+            .as_deref(),
+        Some(completing_sha.as_str())
+    );
+    assert_eq!(
+        store.get_requirement_by_spec_id("BUG-2517").unwrap().status,
+        RequirementStatus::InProgress
+    );
+    assert_eq!(
+        store.get_requirement_by_spec_id("BUG-2518").unwrap().status,
+        RequirementStatus::InProgress,
+        "branch-only open MR must prevent completion after pull"
+    );
+}
+
+// trace:BUG-2516 | ai:codex
+#[test]
+fn bug_2516_gitlab_open_or_unreadable_changes_preserve() {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
+    let (_tmp, root, _store_path) = init_test_project();
+    std::fs::create_dir_all(root.join(".aida")).unwrap();
+    std::fs::write(
+        root.join(".aida/config.toml"),
+        "[forge]\nprovider = \"gitlab\"\n",
+    )
+    .unwrap();
+    let bin = root.join("bin");
+    std::fs::create_dir(&bin).unwrap();
+    let _path = crate::test_env::EnvVarGuard::prepend_path(&bin);
+    for response in [
+        "exit 1",
+        "printf ''",
+        "echo garbage",
+        "echo '{}'",
+        "echo '[{}]'",
+        "echo '[{\"iid\":0}]'",
+    ] {
+        crate::test_exec::write_executable(&bin.join("glab"), format!("#!/bin/sh\nif [ \"$1\" = --version ]; then echo glab-test; exit 0; fi\n{response}\n"));
+        assert_eq!(
+            specs_with_open_prs(&root, ["BUG-2516".into()]),
+            None,
+            "{response}"
+        );
+    }
+    crate::test_exec::write_executable(
+        &bin.join("glab"),
+        "#!/bin/sh\nif [ \"$1\" = --version ]; then echo glab-test; exit 0; fi\necho '[{\"iid\":2,\"title\":\"another deliverable (BUG-2516)\",\"description\":null,\"source_branch\":\"other\"}]'\n",
+    );
+    assert_eq!(
+        specs_with_open_prs(&root, ["BUG-2516".into()]),
+        Some(std::collections::BTreeMap::from([("BUG-2516".into(), 2)]))
+    );
+}
+
+// trace:BUG-2516 | ai:codex
+#[test]
+fn bug_2516_gitlab_search_contains_spec_across_whole_page() {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
+    let (_tmp, root, _store_path) = init_test_project();
+    std::fs::create_dir_all(root.join(".aida")).unwrap();
+    std::fs::write(
+        root.join(".aida/config.toml"),
+        "[forge]\nprovider = \"gitlab\"\n",
+    )
+    .unwrap();
+    let bin = root.join("bin");
+    std::fs::create_dir(&bin).unwrap();
+    let _path = crate::test_env::EnvVarGuard::prepend_path(&bin);
+    let miss = serde_json::json!({
+        "iid": 2, "title": "follow-up from TASK-999",
+        "description": "follow-up from TASK-999", "source_branch": "task-999",
+        "state": "opened"
+    });
+    let check = |rows: Vec<serde_json::Value>, expected| {
+        bug_2516_write_glab(&bin, &rows);
+        assert_eq!(specs_with_open_prs(&root, ["BUG-2516".into()]), expected);
+    };
+    check(vec![miss.clone()], Some(std::collections::BTreeMap::new()));
+    for (title, description, branch) in [
+        ("follow-up for bUg-2516", "", "follow-up"),
+        ("fix (TASK-999)", "follow-up for bug-2516", "other"),
+        ("fix (TASK-999)", "", "prefixbug-2516suffix"),
+    ] {
+        check(
+            vec![
+                miss.clone(),
+                serde_json::json!({
+                    "iid": 3, "title": title, "description": description,
+                    "source_branch": branch, "state": "opened"
+                }),
+            ],
+            Some(std::collections::BTreeMap::from([("BUG-2516".into(), 3)])),
+        );
+    }
+    // Missing or malformed evidence must preserve status, even after a match.
+    for field in ["description", "source_branch"] {
+        for invalid in [
+            None,
+            Some(serde_json::json!(42)),
+            Some(serde_json::json!({})),
+            Some(serde_json::Value::Null),
+        ] {
+            if field == "description" && invalid == Some(serde_json::Value::Null) {
+                continue;
+            }
+            let mut incomplete = miss.clone();
+            incomplete.as_object_mut().unwrap().remove(field);
+            if let Some(value) = invalid {
+                incomplete[field] = value;
+            }
+            check(vec![incomplete.clone()], None);
+            check(
+                vec![
+                    serde_json::json!({
+                        "iid": 3, "title": "BUG-2516", "description": "",
+                        "source_branch": "other", "state": "opened"
+                    }),
+                    incomplete,
+                ],
+                None,
+            );
+        }
+    }
+    let mut null_description = miss.clone();
+    null_description["description"] = serde_json::Value::Null;
+    check(
+        vec![null_description.clone()],
+        Some(std::collections::BTreeMap::new()),
+    );
+    null_description["source_branch"] = serde_json::json!("BUG-2516");
+    check(
+        vec![null_description],
+        Some(std::collections::BTreeMap::from([("BUG-2516".into(), 2)])),
+    );
+    // A full nonmatching page needs the empty second page to establish clear.
+    check(
+        vec![miss.clone(); 100],
+        Some(std::collections::BTreeMap::new()),
+    );
+    let mut rows = vec![miss; 100];
+    rows.push(serde_json::json!({
+        "iid": 3, "title": "follow-up", "description": "",
+        "source_branch": "fix/bug-2516-rework", "state": "opened"
+    }));
+    check(
+        rows.clone(),
+        Some(std::collections::BTreeMap::from([("BUG-2516".into(), 3)])),
+    );
+    bug_2516_write_glab_pages(&bin, &rows, true);
+    assert_eq!(specs_with_open_prs(&root, ["BUG-2516".into()]), None);
+}
+
+// trace:BUG-2516 | ai:codex
+#[test]
+fn bug_2516_gitlab_pagination_requires_readable_final_page() {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
+    let (_tmp, root, _store_path) = init_test_project();
+    let bin = root.join("bin");
+    std::fs::create_dir(&bin).unwrap();
+    let _path = crate::test_env::EnvVarGuard::prepend_path(&bin);
+    let rows: Vec<_> = (1..=100)
+        .map(|iid| {
+            serde_json::json!({
+                "iid": iid, "title": "unrelated", "description": "",
+                "source_branch": format!("task-{iid}"), "state": "opened"
+            })
+        })
+        .collect();
+    use crate::forge::{ChangeLookup, Forge, GitLabForge};
+    let provider = GitLabForge::new(&root);
+    let log = bin.join("glab.pages");
+    let assert_pages = || {
+        assert_eq!(std::fs::read_to_string(&log).unwrap(), "1\n2\n");
+        std::fs::remove_file(&log).unwrap();
+    };
+    bug_2516_write_glab(&bin, &rows);
+    assert!(matches!(
+        provider.change_for_spec("BUG-2516").unwrap(),
+        ChangeLookup::NoChange
+    ));
+    assert_pages();
+
+    let mut owning = rows.clone();
+    owning.push(serde_json::json!({
+        "iid": 101, "title": "unrelated", "description": "",
+        "source_branch": "fix/bug-2516-rework", "state": "opened"
+    }));
+    bug_2516_write_glab(&bin, &owning);
+    assert!(
+        matches!(provider.change_for_spec("BUG-2516").unwrap(), ChangeLookup::Found(change) if change.id == 101)
+    );
+    assert_pages();
+
+    bug_2516_write_glab_pages(&bin, &rows, true);
+    assert!(matches!(
+        provider.change_for_spec("BUG-2516").unwrap(),
+        ChangeLookup::CliFailed(_)
+    ));
+    assert_pages();
+
+    // Exit success with a truncated page is still unknown, never absence.
+    let script = std::fs::read_to_string(bin.join("glab")).unwrap().replace(
+        "print('second page failed', file=sys.stderr)\n    sys.exit(1)",
+        "print('[{')\n    sys.exit(0)",
+    );
+    crate::test_exec::write_executable(&bin.join("glab"), script);
+    assert!(matches!(
+        provider.change_for_spec("BUG-2516").unwrap(),
+        ChangeLookup::CliFailed(_)
+    ));
+    assert_pages();
 }

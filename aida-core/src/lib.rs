@@ -446,3 +446,9 @@ pub use templates::{
 };
 #[cfg(feature = "native")]
 pub use user_prefs::UserPreferences;
+
+/// Observational gate-ledger API; never creates files, locks or caches.
+pub mod gate_ledger_read;
+
+// trace:STORY-2704 | ai:codex
+pub mod output_format;

@@ -913,6 +913,28 @@ pub trait Forge {
     /// `gh pr view` status (state + mergeable + review + head sha).
     fn change_status(&self, c: &ChangeRef) -> Result<ChangeStatus>;
 
+    /// Active/recorded/cleared labels for pending merge-hold classification.
+    /// Reuse the pinned repository reader; failed reads never mean no hold.
+    // trace:BUG-2492 | ai:codex
+    fn recorded_hold_labels(
+        &self,
+        project_root: &Path,
+        c: &ChangeRef,
+    ) -> Result<(bool, bool, bool)> {
+        Ok(
+            crate::merge_hold::fetch_pinned_change(project_root, self.kind(), c.id)
+                .map_err(anyhow::Error::msg)?
+                .map(|change| {
+                    (
+                        change.hold_label,
+                        change.recorded_label,
+                        change.cleared_label,
+                    )
+                })
+                .unwrap_or((false, false, false)),
+        )
+    }
+
     /// STORY-621 Slice 2: the change's scalar metadata (state / title / refs /
     /// head SHA / draft / cross-repo) in one read — the consolidation point for
     /// the drain-reconcile and reviewer pre-flight `gh pr view --json` sites.
@@ -929,6 +951,12 @@ pub trait Forge {
         id: u64,
         sink: &mut dyn crate::network_retry::RetrySink,
     ) -> Result<ChangeMetadata>;
+
+    /// Title and description used by ship's trailer and completion-marker checks.
+    // trace:BUG-2515 | ai:codex
+    fn change_title_and_body(&self, _id: u64) -> Result<(String, String)> {
+        anyhow::bail!("change title and body unavailable for this forge")
+    }
 
     /// Login of the account authenticated by this forge CLI. Ownership-sensitive
     /// operations must fail closed when this identity cannot be resolved.
@@ -2031,6 +2059,7 @@ impl GitHubForge {
             .context("could not invoke `gh` — is the GitHub CLI installed?")
     }
 
+    // trace:BUG-2492 | ai:codex — retain hold labels for coarse pending classification.
     fn ci_probe_evidence(&self, branch: &str) -> CiProbeEvidence {
         let out = self.gh(&[
             "pr",
@@ -2040,7 +2069,7 @@ impl GitHubForge {
             "--state",
             "open",
             "--json",
-            "number,headRefOid,statusCheckRollup",
+            "number,headRefOid,statusCheckRollup,labels",
             "--limit",
             "1",
         ]);
@@ -2114,6 +2143,7 @@ impl Forge for GitHubForge {
     fn ci_progress_snapshot(&self, branch: &str) -> String {
         crate::ci_rollup_json_for_branch(branch)
     }
+
     fn supports_delegated_review(&self) -> bool {
         true
     }
@@ -2365,6 +2395,24 @@ impl Forge for GitHubForge {
             ]).stdin(std::process::Stdio::null());
             crate::command_output_with_timeout(cmd, std::time::Duration::from_secs(15))
         })
+    }
+
+    // trace:BUG-2515 | ai:codex
+    fn change_title_and_body(&self, id: u64) -> Result<(String, String)> {
+        let out = self.gh(&["pr", "view", &id.to_string(), "--json", "title,body"])?;
+        anyhow::ensure!(
+            out.status.success(),
+            "{} metadata read failed: {}",
+            self.cli_name(),
+            String::from_utf8_lossy(&out.stderr).trim()
+        );
+        let json: serde_json::Value =
+            serde_json::from_slice(&out.stdout).context("could not parse change title and body")?;
+        anyhow::ensure!(json.is_object(), "expected a change object");
+        Ok((
+            json["title"].as_str().unwrap_or_default().to_string(),
+            json["body"].as_str().unwrap_or_default().to_string(),
+        ))
     }
 
     fn change_metadata(
@@ -2898,6 +2946,7 @@ impl Forge for GitLabForge {
             .map(|out| String::from_utf8_lossy(&out.stdout).to_string());
         glab_ci_progress_snapshot(&pipelines, jobs.as_deref())
     }
+
     fn kind(&self) -> ForgeKind {
         ForgeKind::GitLab
     }
@@ -2977,16 +3026,28 @@ impl Forge for GitLabForge {
     }
 
     fn change_for_spec(&self, spec: &str) -> Result<ChangeLookup> {
-        // STORY-509: the BUG-223 fallback — find the open MR whose title/body
-        // references `spec` when the branch-keyed lookup misses (branch swapped).
-        // BUG-639: via REST (`…?search=<spec>&state=opened`). The branch label is
-        // unknown from a spec search; the parser fills it from the MR's own
-        // source_branch. trace:STORY-509 trace:BUG-223 trace:BUG-639 | ai:claude
-        let out = self.glab_api_get(
-            "projects/:id/merge_requests",
-            &[("search", spec), ("state", "opened")],
-        );
-        Ok(glab_lookup_from_list_output(out, ""))
+        // GitLab search omits source_branch. Enumerate open MRs to exhaustion
+        // and match title/description/branch locally; any failed page is unknown.
+        // trace:BUG-2516 | ai:codex
+        for page in 1u64.. {
+            let page = page.to_string();
+            let out = self.glab_api_get(
+                "projects/:id/merge_requests",
+                &[("state", "opened"), ("per_page", "100"), ("page", &page)],
+            );
+            let count = out.as_ref().ok().and_then(|out| {
+                serde_json::from_slice::<serde_json::Value>(&out.stdout)
+                    .ok()
+                    .and_then(|rows| rows.as_array().map(Vec::len))
+            });
+            match glab_spec_lookup_from_list_output(out, spec) {
+                ChangeLookup::NoChange if count.is_some_and(|count| count >= 100) => continue,
+                answer => return Ok(answer),
+            }
+        }
+        Ok(ChangeLookup::CliFailed(
+            "GitLab pagination exhausted".into(),
+        ))
     }
 
     fn merged_change_for_branch(&self, branch: &str) -> Result<ChangeLookup> {
@@ -3045,6 +3106,24 @@ impl Forge for GitLabForge {
             Ok(m)
         })();
         Observed::from_result(result).map(Ok)
+    }
+
+    // trace:BUG-2515 | ai:codex
+    fn change_title_and_body(&self, id: u64) -> Result<(String, String)> {
+        let out = self.glab_api_get(&format!("projects/:id/merge_requests/{id}"), &[])?;
+        anyhow::ensure!(
+            out.status.success(),
+            "{} metadata read failed: {}",
+            self.cli_name(),
+            String::from_utf8_lossy(&out.stderr).trim()
+        );
+        let json: serde_json::Value =
+            serde_json::from_slice(&out.stdout).context("could not parse change title and body")?;
+        anyhow::ensure!(json.is_object(), "expected a change object");
+        Ok((
+            json["title"].as_str().unwrap_or_default().to_string(),
+            json["description"].as_str().unwrap_or_default().to_string(),
+        ))
     }
 
     fn change_metadata(
@@ -3860,6 +3939,57 @@ fn glab_lookup_from_list_output(
         Ok(_) => ChangeLookup::CliFailed("glab mr list JSON was not an array".to_string()),
         Err(e) => ChangeLookup::CliFailed(format!("could not parse glab mr list JSON: {e}")),
     }
+}
+
+/// Enumerate open MR ownership using case-insensitive spec-ID containment in
+/// title, description or source_branch (binding advisor ruling PR-3774 round 2).
+/// Every row must retain all ownership evidence; only an explicit null description
+/// means an empty body. The caller follows full pages before declaring absence.
+// trace:BUG-2516 | ai:codex
+fn glab_spec_lookup_from_list_output(
+    out: Result<std::process::Output>,
+    spec: &str,
+) -> ChangeLookup {
+    let out = match out {
+        Ok(out) if out.status.success() => out,
+        other => return glab_lookup_from_list_output(other, ""),
+    };
+    let rows = match serde_json::from_slice::<serde_json::Value>(&out.stdout) {
+        Ok(serde_json::Value::Array(rows)) => rows,
+        _ => return ChangeLookup::CliFailed("invalid GitLab search response".into()),
+    };
+    let spec = spec.to_ascii_lowercase();
+    let mut first = None;
+    for row in &rows {
+        let field = |name: &str| row.get(name).and_then(|v| v.as_str());
+        let description = match row.get("description") {
+            Some(serde_json::Value::Null) => Some(""),
+            Some(value) => value.as_str(),
+            None => None,
+        };
+        let (Some(_id), Some(title), Some(description), Some(branch)) = (
+            row.get("iid").and_then(|v| v.as_u64()).filter(|id| *id > 0),
+            field("title"),
+            description,
+            field("source_branch"),
+        ) else {
+            return ChangeLookup::CliFailed(
+                "GitLab search could not establish open-change evidence: incomplete ownership fields".into(),
+            );
+        };
+        if field("state").is_some_and(|state| !state.eq_ignore_ascii_case("opened")) {
+            continue;
+        }
+        if !spec.is_empty()
+            && [title, description, branch]
+                .iter()
+                .any(|text| text.to_ascii_lowercase().contains(&spec))
+            && first.is_none()
+        {
+            first = change_ref_from_glab_mr(row, "");
+        }
+    }
+    first.map_or(ChangeLookup::NoChange, ChangeLookup::Found)
 }
 
 /// Heuristic: does a `glab` stderr indicate a *transient* network/API outage
@@ -5416,6 +5546,7 @@ mod story_1689_commit_ci_status_tests;
 
 #[cfg(test)]
 mod tests {
+
     use super::*;
 
     // trace:BUG-2494 | ai:codex
@@ -7818,6 +7949,524 @@ pub(crate) fn flow_report_read(root: &Path, args: &[&str]) -> Result<serde_json:
         Observed::Known(body) => Ok(serde_json::from_str(&body)?),
         Observed::Pending(why) | Observed::Transient(why) => {
             anyhow::bail!("flow forge evidence unavailable: {why}")
+        }
+    }
+}
+
+/// One bounded, repository-pinned read for all open PRs. No per-PR forge calls.
+// trace:STORY-2688 | ai:codex
+pub(crate) fn pr_state_batch(
+    root: &Path,
+    timeout: std::time::Duration,
+) -> Result<Vec<serde_json::Value>> {
+    let (host, project) = pr_state_repository(root)?;
+    let mut cmd = Command::new("gh");
+    pr_state_pin(&mut cmd, root, &host);
+    cmd.args(["pr", "list", "--repo", &format!("{host}/{project}"), "--state", "open", "--limit", "1000", "--json",
+        "number,url,title,state,headRefOid,headRefName,baseRefOid,baseRefName,mergeable,mergeStateStatus,isDraft,labels,statusCheckRollup"]);
+    let out = crate::command_output_with_timeout(cmd, timeout)
+        .context("PR state probe failed or timed out")?;
+    anyhow::ensure!(
+        out.status.success(),
+        "PR state forge observation failed: {}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    anyhow::ensure!(
+        out.stdout.len() <= 8 * 1024 * 1024,
+        "PR state snapshot too large"
+    );
+    let rows: Vec<serde_json::Value> = serde_json::from_slice(&out.stdout)?;
+    anyhow::ensure!(rows.len() < 1000, "PR state snapshot truncated at 1000 PRs");
+    Ok(rows)
+}
+// trace:STORY-2688 | ai:codex
+fn pr_state_repository(root: &Path) -> Result<(String, String)> {
+    let mut git = Command::new("git");
+    git.current_dir(root).args(["remote", "get-url", "origin"]);
+    let out = crate::command_output_with_timeout(git, std::time::Duration::from_millis(500))
+        .context("repository probe failed or timed out")?;
+    anyhow::ensure!(out.status.success(), "cannot resolve PR state repository");
+    let remote = String::from_utf8(out.stdout)?;
+    anyhow::ensure!(detect_forge_kind(remote.trim()) == ForgeKind::GitHub,
+        "PR state batch collection currently supports GitHub; unsupported forge requires advisor routing");
+    Ok((
+        forge_host_of(remote.trim()).context("missing forge host")?,
+        project_path_of(remote.trim()).context("missing forge project")?,
+    ))
+}
+fn pr_state_pin(cmd: &mut Command, root: &Path, host: &str) {
+    cmd.current_dir(root)
+        .stdin(std::process::Stdio::null())
+        .env("GH_HOST", host);
+    for key in [
+        "GH_REPO",
+        "GIT_DIR",
+        "GIT_WORK_TREE",
+        "GIT_COMMON_DIR",
+        "GIT_INDEX_FILE",
+        "GIT_NAMESPACE",
+        "GIT_CONFIG_COUNT",
+        "GIT_CONFIG_PARAMETERS",
+    ] {
+        cmd.env_remove(key);
+    }
+}
+/// Workflow tree OIDs for every pinned head and base in one GraphQL request.
+// trace:STORY-2688 | ai:codex
+pub(crate) fn pr_state_workflows(
+    root: &Path,
+    rows: &[serde_json::Value],
+    timeout: std::time::Duration,
+) -> Result<serde_json::Value> {
+    let (host, project) = pr_state_repository(root)?;
+    let (owner, name) = project.split_once('/').context("invalid repository path")?;
+    let mut fields = String::new();
+    for (i, row) in rows.iter().enumerate() {
+        let number = row["number"].as_u64().context("missing PR number")?;
+        fields.push_str(&format!(" r{i}: pullRequest(number: {number}) {{ baseRef {{ branchProtectionRule {{ requiredStatusCheckContexts }} }} }}"));
+        for (suffix, field) in [("h", "headRefOid"), ("b", "baseRefOid")] {
+            let sha = row[field].as_str().context("missing pinned SHA")?;
+            anyhow::ensure!(
+                (40..=64).contains(&sha.len()) && sha.bytes().all(|b| b.is_ascii_hexdigit()),
+                "invalid pinned SHA"
+            );
+            fields.push_str(&format!(
+                " p{i}{suffix}: object(expression: \"{sha}:.github/workflows\") {{ oid }}"
+            ));
+        }
+    }
+    let query = format!(
+        "query {{ repository(owner: {}, name: {}) {{ {fields} }} }}",
+        serde_json::to_string(owner)?,
+        serde_json::to_string(name)?
+    );
+    let mut cmd = Command::new("gh");
+    pr_state_pin(&mut cmd, root, &host);
+    cmd.args([
+        "api",
+        "graphql",
+        "--hostname",
+        &host,
+        "-f",
+        &format!("query={query}"),
+    ]);
+    let out = crate::command_output_with_timeout(cmd, timeout)
+        .context("PR state probe failed or timed out")?;
+    anyhow::ensure!(out.status.success(), "workflow batch observation failed");
+    let body: serde_json::Value = serde_json::from_slice(&out.stdout)?;
+    anyhow::ensure!(
+        body.get("errors").is_none(),
+        "workflow batch returned GraphQL errors"
+    );
+    Ok(body["data"]["repository"].clone())
+}
+
+// Concrete client for the operator emergency command. Keeping process effects
+// here preserves the forge boundary; lifecycle and restoration policy stay in
+// pr_emergency_land, whose tests inject a fake client.
+// trace:STORY-2732 | ai:codex
+pub(crate) mod emergency_land {
+    use super::ForgeKind;
+    use crate::pr_emergency_land::Forge;
+    use anyhow::{bail, ensure, Context, Result};
+    use serde_json::Value;
+    use std::cell::{Cell, RefCell};
+    use std::io::{Read, Seek};
+    use std::os::unix::process::CommandExt;
+    use std::path::PathBuf;
+    use std::time::{Duration, Instant};
+    // trace:TASK-3788 | ai:codex
+    pub(crate) fn supported(kind: ForgeKind) -> Result<()> {
+        ensure!(
+            kind != ForgeKind::None,
+            "no forge-side protection to lift; push the fix normally"
+        );
+        Ok(())
+    }
+    pub(crate) fn policy(project: &Value) -> Result<Value> {
+        let mut saved = serde_json::Map::new();
+        for field in [
+            "only_allow_merge_if_pipeline_succeeds",
+            "allow_merge_on_skipped_pipeline",
+            "only_allow_merge_if_all_discussions_are_resolved",
+        ] {
+            // GitLab documents null for the skipped-pipeline setting. Missing
+            // evidence and null in either required boolean still refuse.
+            // trace:TASK-3788 | ai:codex
+            let value = project
+                .get(field)
+                .with_context(|| format!("missing merge policy field {field}"))?;
+            ensure!(
+                value.is_boolean()
+                    || (field == "allow_merge_on_skipped_pipeline" && value.is_null()),
+                "invalid merge policy field {field}"
+            );
+            saved.insert(field.into(), value.clone());
+        }
+        Ok(Value::Object(saved))
+    }
+    // Normalize only settled, non-conflicting GitLab observations. The CI,
+    // approval and discussion gates may still refuse the actual merge.
+    // trace:TASK-3788 | ai:codex
+    pub(crate) fn gitlab_change(mr: &Value) -> Result<Value> {
+        ensure!(
+            mr["overflow"] == false,
+            "GitLab diff is incomplete or overflow is unknown"
+        );
+        ensure!(
+            mr["sha"].as_str().is_some_and(|s| !s.is_empty())
+                && mr["diff_refs"]["head_sha"] == mr["sha"],
+            "MR diff does not match its current head"
+        );
+        let changes = mr["changes"].as_array().context("missing MR changes")?;
+        let count = mr["changes_count"]
+            .as_str()
+            .context("missing MR change count")?
+            .parse::<usize>()
+            .context("GitLab diff count is incomplete")?;
+        ensure!(
+            count == changes.len(),
+            "GitLab diff count differs from returned changes"
+        );
+        let mut additions = 0u64;
+        let mut deletions = 0u64;
+        for change in changes {
+            ensure!(
+                change["too_large"] != true && change["collapsed"] != true,
+                "GitLab diff is truncated"
+            );
+            for line in change["diff"].as_str().context("missing MR diff")?.lines() {
+                if line.starts_with('+') {
+                    additions += 1;
+                }
+                if line.starts_with('-') {
+                    deletions += 1;
+                }
+            }
+        }
+        let settled = matches!(
+            mr["detailed_merge_status"].as_str(),
+            Some(
+                "mergeable"
+                    | "ci_must_pass"
+                    | "ci_still_running"
+                    | "not_approved"
+                    | "discussions_not_resolved"
+            )
+        );
+        let draft = mr
+            .get("draft")
+            .or_else(|| mr.get("work_in_progress"))
+            .context("missing draft state")?;
+        ensure!(draft.is_boolean(), "invalid draft state");
+        Ok(serde_json::json!({
+            "state": if mr["state"] == "opened" { "OPEN" } else { "CLOSED" },
+            "baseRefName": mr["target_branch"],
+            "mergeable": if settled && mr["has_conflicts"] == false { "MERGEABLE" } else { "UNKNOWN" },
+            "mergeStateStatus": "CLEAN", "isDraft": draft,
+            "additions": additions, "deletions": deletions, "changedFiles": changes.len(),
+            "headRefOid": mr["sha"], "title": mr["title"],
+            "required_checks": [{"name":"Pipelines must succeed", "state":mr["head_pipeline"]}]
+        }))
+    }
+    pub(crate) struct Client {
+        pub(crate) kind: ForgeKind,
+        #[cfg(test)]
+        fake: Option<Box<dyn Fn(&[&str]) -> Result<String>>>,
+        root: PathBuf,
+        forge_cli: PathBuf,
+        critical: bool,
+        signals: RefCell<crate::forwarded_signals::Forwarding>,
+        interrupted: Cell<bool>,
+    }
+    impl Client {
+        pub(crate) fn new(root: PathBuf, kind: ForgeKind) -> Result<Self> {
+            supported(kind)?;
+            let cli = crate::resolve_forge_cli(kind).context("forge CLI is required")?;
+            Ok(Self {
+                kind,
+                #[cfg(test)]
+                fake: None,
+                root,
+                forge_cli: cli.into(),
+                critical: false,
+                signals: RefCell::new(crate::forwarded_signals::Forwarding::install()?),
+                interrupted: Cell::new(false),
+            })
+        }
+
+        #[cfg(test)]
+        pub(crate) fn fake(
+            kind: ForgeKind,
+            fake: impl Fn(&[&str]) -> Result<String> + 'static,
+        ) -> Self {
+            Self {
+                kind,
+                fake: Some(Box::new(fake)),
+                root: PathBuf::new(),
+                forge_cli: PathBuf::new(),
+                critical: false,
+                signals: RefCell::new(crate::forwarded_signals::Forwarding::install().unwrap()),
+                interrupted: Cell::new(false),
+            }
+        }
+
+        // trace:TASK-3788 | ai:codex
+        pub(crate) fn prepare_gitlab(&mut self, n: u64) -> Result<(Value, String, Value, String)> {
+            let project = self.api("GET", "projects/:id")?;
+            let path = project["path_with_namespace"]
+                .as_str()
+                .context("missing GitLab project path")?;
+            let scope = format!("projects/{}", crate::pr_emergency_land::encode(path));
+            let base = project["default_branch"]
+                .as_str()
+                .context("missing default branch")?
+                .to_owned();
+            let mut mr = self.api("GET", &format!("{scope}/merge_requests/{n}"))?;
+            let changes = self.api("GET", &format!("{scope}/merge_requests/{n}/changes"))?;
+            ensure!(
+                changes["sha"] == mr["sha"],
+                "MR head changed while reading its diff"
+            );
+            mr["changes"] = changes["changes"].clone();
+            mr["overflow"] = changes["overflow"].clone();
+            ensure!(
+                changes["changes_count"] == mr["changes_count"],
+                "MR diff count changed"
+            );
+            ensure!(
+                mr["target_project_id"] == project["id"] && project["id"].is_u64(),
+                "MR targets another project"
+            );
+            Ok((gitlab_change(&mr)?, scope, policy(&project)?, base))
+        }
+
+        fn interrupted(&self) -> bool {
+            if self.signals.borrow_mut().take().is_some() {
+                self.interrupted.set(true);
+            }
+            self.interrupted.get()
+        }
+        /// Files avoid pipe deadlocks; a per-call deadline bounds hung forge children.
+        pub(crate) fn command(&self, args: &[&str]) -> Result<String> {
+            self.command_with_budget(args, Duration::from_secs(45))
+        }
+        pub(crate) fn command_with_budget(
+            &self,
+            args: &[&str],
+            budget: Duration,
+        ) -> Result<String> {
+            #[cfg(test)]
+            if let Some(fake) = &self.fake {
+                return fake(args);
+            }
+            let restoring = self.critical
+                && args.first() == Some(&"api")
+                && (args.get(2) == Some(&"POST")
+                    || (self.kind == ForgeKind::GitLab
+                        && args.get(2) == Some(&"PUT")
+                        && args.last() == Some(&"only_allow_merge_if_pipeline_succeeds=true"))
+                    || (self.kind == ForgeKind::GitLab && args.get(2) == Some(&"GET"))
+                    || args
+                        .last()
+                        .is_some_and(|s| s.ends_with("/protection") || s.contains("/pulls/")));
+            ensure!(
+                restoring || !self.interrupted(),
+                "emergency forge call interrupted"
+            );
+            let mut stdout = tempfile::tempfile()?;
+            let mut stderr = tempfile::tempfile()?;
+            let mut child = std::process::Command::new(&self.forge_cli)
+                .current_dir(&self.root)
+                .args(args)
+                .process_group(0)
+                .stdout(stdout.try_clone()?)
+                .stderr(stderr.try_clone()?)
+                .spawn()?;
+            let deadline = Instant::now() + budget.min(Duration::from_secs(45));
+            let status = loop {
+                if let Some(status) = child.try_wait()? {
+                    break status;
+                }
+                if (!restoring && self.interrupted()) || Instant::now() >= deadline {
+                    crate::forwarded_signals::signal_child_tree(child.id(), &[], libc::SIGKILL);
+                    let _ = child.wait();
+                    bail!("forge call interrupted or timed out: {}", args.join(" "));
+                }
+                std::thread::sleep(Duration::from_millis(100));
+            };
+            ensure!(
+                restoring || !self.interrupted(),
+                "emergency forge call interrupted"
+            );
+            stdout.rewind()?;
+            stderr.rewind()?;
+            let mut output = String::new();
+            let mut error = String::new();
+            stdout.read_to_string(&mut output)?;
+            stderr.read_to_string(&mut error)?;
+            ensure!(status.success(), "forge {} failed: {error}", args.join(" "));
+            Ok(output)
+        }
+        // Read actual parents rather than inferring topology from squash mode:
+        // GitLab can squash and still create a two-parent merge commit.
+        // trace:TASK-3788 | ai:codex
+        pub(crate) fn revert_command(&self, scope: &str, sha: &str) -> Result<String> {
+            if self.kind != ForgeKind::GitLab {
+                return Ok(format!("git revert {sha}"));
+            }
+            let commit = self.json(&[
+                "api",
+                "-X",
+                "GET",
+                &format!("{scope}/repository/commits/{sha}"),
+            ])?;
+            crate::pr_emergency_land::gitlab_revert_command(&commit, sha)
+        }
+
+        pub(crate) fn json(&self, args: &[&str]) -> Result<Value> {
+            Ok(serde_json::from_str(&self.command(args)?)?)
+        }
+    }
+    impl Forge for Client {
+        fn api(&mut self, method: &str, endpoint: &str) -> Result<Value> {
+            if method == "DELETE" && endpoint.ends_with("/enforce_admins") {
+                self.critical = true;
+            }
+            let output = self.command(&["api", "-X", method, endpoint])?;
+            if output.trim().is_empty() {
+                Ok(Value::Null)
+            } else {
+                Ok(serde_json::from_str(&output)?)
+            }
+        }
+        fn needs_lift(&self, backup: &Value) -> Result<bool> {
+            if self.kind == ForgeKind::GitLab {
+                return policy(backup)?["only_allow_merge_if_pipeline_succeeds"]
+                    .as_bool()
+                    .context("missing pipeline policy");
+            }
+            backup["enforce_admins"]["enabled"]
+                .as_bool()
+                .context("missing enforce_admins.enabled in protection backup")
+        }
+        fn lift(&mut self, scope: &str) -> Result<()> {
+            if self.kind == ForgeKind::GitLab {
+                self.critical = true;
+                self.command(&[
+                    "api",
+                    "-X",
+                    "PUT",
+                    scope,
+                    "-f",
+                    "only_allow_merge_if_pipeline_succeeds=false",
+                ])?;
+                return Ok(());
+            }
+            self.api("DELETE", &format!("{scope}/enforce_admins"))?;
+            Ok(())
+        }
+        fn restore_protection(&mut self, scope: &str) -> Result<()> {
+            if self.kind == ForgeKind::GitLab {
+                self.command(&[
+                    "api",
+                    "-X",
+                    "PUT",
+                    scope,
+                    "-f",
+                    "only_allow_merge_if_pipeline_succeeds=true",
+                ])?;
+                return Ok(());
+            }
+            self.api("POST", &format!("{scope}/enforce_admins"))?;
+            Ok(())
+        }
+        fn verify_protection(&mut self, scope: &str, backup: &Value) -> Result<()> {
+            use crate::pr_emergency_land::without_urls;
+            let after = self.api("GET", scope)?;
+            if self.kind == ForgeKind::GitLab {
+                ensure!(
+                    policy(&after)? == policy(backup)?,
+                    "merge policy differs from backup"
+                );
+                return Ok(());
+            }
+            ensure!(
+                without_urls(after) == without_urls(backup.clone()),
+                "protection differs from backup"
+            );
+            Ok(())
+        }
+        fn recovery_command(&self, scope: &str, backup: &Value) -> String {
+            if self.kind == ForgeKind::GitLab {
+                return format!(
+                    "glab api -X PUT {scope} -f only_allow_merge_if_pipeline_succeeds={}",
+                    backup["only_allow_merge_if_pipeline_succeeds"]
+                );
+            }
+            format!("gh api -X POST {scope}/enforce_admins")
+        }
+        fn merge_sha(&mut self, scope: &str, n: u64) -> Result<String> {
+            if self.kind == ForgeKind::GitLab {
+                let info = self.api("GET", &format!("{scope}/merge_requests/{n}"))?;
+                return Ok(if info["state"] == "merged" {
+                    info["merge_commit_sha"]
+                        .as_str()
+                        .or_else(|| info["squash_commit_sha"].as_str())
+                        .unwrap_or("")
+                        .to_owned()
+                } else {
+                    String::new()
+                });
+            }
+            let repo = scope
+                .split("/branches/")
+                .next()
+                .context("missing protection scope")?;
+            let info = self.api("GET", &format!("{repo}/pulls/{n}"))?;
+            Ok(if info["merged"] == true {
+                info["merge_commit_sha"].as_str().unwrap_or("").to_owned()
+            } else {
+                String::new()
+            })
+        }
+        fn merge(&mut self, n: u64, title: &str, head: &str) -> Result<()> {
+            self.critical = true;
+            if self.kind == ForgeKind::GitLab {
+                self.command(&[
+                    // Use the server merge endpoint directly: glab mr merge's
+                    // MRCheckErrors rejects already-armed MRs behind running/red CI.
+                    // Server approval and protected-branch checks still apply.
+                    // trace:TASK-3788 | ai:codex
+                    "api",
+                    "-X",
+                    "PUT",
+                    &format!("projects/:id/merge_requests/{n}/merge"),
+                    "-f",
+                    "squash=true",
+                    "-f",
+                    "auto_merge=false",
+                    "-f",
+                    "merge_when_pipeline_succeeds=false",
+                    "-f",
+                    &format!("sha={head}"),
+                    "-f",
+                    &format!("squash_commit_message={title}"),
+                ])?;
+                return Ok(());
+            }
+            self.command(&[
+                "pr",
+                "merge",
+                &n.to_string(),
+                "--squash",
+                "--admin",
+                "--subject",
+                title,
+                "--match-head-commit",
+                head,
+            ])?;
+            Ok(())
         }
     }
 }

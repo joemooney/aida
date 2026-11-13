@@ -1203,7 +1203,7 @@ fn fetch_open_prs_from_gh(project_root: &Path) -> Result<String, String> {
 /// When every check in a head's `statusCheckRollup` passed, the time the last
 /// one finished. `None` while any check is pending or failing, or when the
 /// head has no checks at all (no readiness signal). With `skip_hold_gate`,
-/// the `merge-hold-gate` check, red at every head while a hold's label is on
+/// the `merge-hold-gate` status, pending (or legacy red) while a hold's label is on
 /// the PR, is left out.
 ///
 /// `required` is the base branch's required status-check set. When it names
@@ -1234,7 +1234,10 @@ fn rollup_green_at(
     let mut latest: Option<DateTime<Utc>> = None;
     for check in rollup {
         let field = |k: &str| check.get(k).and_then(|v| v.as_str()).unwrap_or("");
-        if skip_hold_gate && field("name") == MERGE_HOLD_GATE_CHECK {
+        // trace:BUG-2492 | ai:codex — StatusContext names live in context.
+        if skip_hold_gate
+            && crate::ci_gate::check_name_eq(&check_name(check), MERGE_HOLD_GATE_CHECK)
+        {
             continue;
         }
         if required.is_some_and(|r| !r.contains(&check_name(check))) {
@@ -1330,7 +1333,7 @@ fn load_open_prs(
         }
         let head = pr.head_ref_oid.as_str();
         // A rework push past a reviewer refusal's head awaits re-review; the
-        // hold's own gate check stays red until that review, so it is not a
+        // hold's own gate stays pending until that review, so it is not a
         // readiness signal there.
         let reworked_past_refusal =
             crate::gate::merge_hold_core::read_hold_record(project_root, pr.number).is_some_and(

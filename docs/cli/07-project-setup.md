@@ -10,6 +10,20 @@ The one-time and once-in-a-while plumbing: the commands that *establish* an AIDA
 
 *(Covered deeply in [Chapter 1](01-getting-started.md#aida-init).)* The one-time bootstrap that turns a git repo into an AIDA project — store + cache + selected agent scaffolding, plus first-machine-global defaults. MCP registration is explicit opt-in with `--with-mcp`; the CLI is the default surface for CLI-capable agents. See the [operator route](../operator-setup.md) for adopted projects and sibling-store setup. Everything else in this chapter either *re-runs a slice* of what `init` set up (`scaffold`, `memories`, `statusline`) or *configures* it after the fact (`config`, `type`, `feature`, `node`). If you're reading Chapter 7 to set up a project, start there.
 
+`aida init DIR --gitlab HOST/GROUP` checks project CI/CD after publication.
+Disabled CI/CD requires an affirmative terminal answer or explicit
+`--gitlab-enable-ci`; headless runs never prompt or enable it implicitly.
+A missing `.gitlab-ci.yml` receives a starter test job for detected Python,
+Rust or Node projects, with `--gitlab-runner-tags linux,docker` selecting tags.
+Existing pipelines are preserved. Review the generated dependency and test
+commands; a new project may still need tests or a lockfile before CI passes.
+The runner check requires an online, unpaused runner matching the selected tags;
+permission errors, policy restrictions and unknown availability are reported as
+incomplete setup. It does not register runners or change group/instance policy.
+After enabling previously disabled CI/CD, start a pipeline for the pushed branch
+in GitLab. On a resumed repository, commit and push any newly generated pipeline.
+<!-- trace:STORY-2701 | ai:codex -->
+
 ---
 
 ### `aida remote`
@@ -451,7 +465,7 @@ Names resolve in a fixed order, and the first match wins:
 
 If nothing matches, you get the usual unrecognised-command error and exit code. When an installed extension has a similar name, a hint names it.
 
-The extension name must be the first argument: `aida deploy --format json` works, `aida --format json deploy` does not. On Windows, `aida-<name>.exe`, `.cmd` and `.bat` are found as well.
+For a top-level extension, the name must be the first argument: `aida deploy --format json` works, `aida --format json deploy` does not. On Windows, `aida-<name>.exe`, `.cmd` and `.bat` are found as well.
 
 The extension receives its context in the environment:
 - `AIDA_PROJECT_ROOT` — the project root, when run inside an AIDA project (unset otherwise).
@@ -463,6 +477,26 @@ The extension receives its context in the environment:
 Extensions should read and change project state through `"$AIDA_BIN" ... --json` (or another machine output format), never by writing to the store or cache files directly. That keeps validation, history and sync in one place.
 
 Installed extensions are listed in an "External commands" group in `aida help`, `aida help --all` and `aida alias list`, and `aida help <name>` runs `aida-<name> --help`.
+
+<!-- trace:STORY-2704 | ai:codex -->
+A built-in parent also admits one installed child extension: for example,
+`aida review summary` runs `aida-review-summary`, passing only the arguments
+after `summary`. Built-in children, their aliases, and existing built-in argv
+rewrites win. Clap validates global and parent options, including their values,
+before dispatch; required positional
+operands are never extension slots. Optional parent operands coexist with named
+children, as in `review [SPEC]`. External parents own all of their remaining
+arguments: `aida flow report` runs `aida-flow report`.
+Nested extensions currently refuse explicit `--project`/`-p`, `--file`,
+`--server`/`-s` and `--canonical-ids` before the child name: their context comes
+from the current directory. Arguments after the child name belong to the
+extension, including any same-spelled options.
+
+`aida review --help` and `aida help review` list installed child extensions with
+their paths. `aida review summary --help` and `aida help review summary` delegate
+to the extension with `--help`. Top-level help and alias JSON show the full
+invocation (`aida review summary`), retaining the executable path. Discovery
+never executes a candidate. Missing extensions retain the usual parser result.
 
 ---
 
@@ -639,6 +673,14 @@ live hub hook or automatic forwarding is provided.
 
 #### Per-vendor containment posture
 
+`aida config permissions show` prints one row per vendor with its tier,
+configured/refused launch state, and net effect. This is a configuration view,
+not a live launch probe. Use `aida config permissions show --verbose` (or
+`aida config permissions show -v`) for launch flags, scope, sandbox details,
+findings, and full refusal explanations. `aida config permissions show --json`
+retains the complete structured report regardless of verbosity.
+<!-- trace:TASK-3779 | ai:codex -->
+
 With containment enabled, opt Codex into its native sandbox in the trusted
 default-branch `.aida/config.toml` (the committed `origin/<default>` copy read
 through `trusted_config`; local default branch only when no remote ref exists):
@@ -647,6 +689,17 @@ through `trusted_config`; local default branch only when no remote ref exists):
 [contained.vendors]
 codex = "native"
 ```
+
+Interactive `aida init` offers this opt-in when Codex is selected (including
+`--agent codex`). The separate consent defaults to no and warns that native
+sandboxing is weaker than AIDA containment. Existing vendor settings are preserved.
+Non-interactive init and `aida init --no-agent-config` do not grant the opt-in.
+
+`aida config permissions show` reports each vendor's configured containment-policy
+launch readiness separately from permission consistency: `ready` or `refused`
+with the reason and a fix command. JSON includes `launch_readiness` and
+`launch_fix` on each agent row. Readiness here does not verify credentials,
+installed executables, or launch-surface prerequisites.
 
 Branch-local edits cannot grant this opt-in. Merge the configuration into the
 default branch before launching Codex under containment. Missing or unreadable
@@ -949,7 +1002,7 @@ fast_check = "python3 -m unittest discover"
 
 Lane launch prompts name `format` and `test`. The host runs `fast_check` via
 `/bin/sh -c` in the lane's existing fast-gate sandbox before publication, with
-network and host IPC isolated and a ten-minute timeout. Commands run from the
+network and host IPC isolated and a one-hour timeout. Commands run from the
 seat checkout. A failing check retains the existing single repair round.
 Missing or blank `fast_check` skips the gate with `skipped(unconfigured)` and a
 stated reason; no Makefile or Rust toolchain is assumed. Malformed configuration

@@ -84,7 +84,7 @@ impl Client {
         let object = args.as_object().context("InvalidRequest")?;
         let allowed: &[&str] = match name {
             "add_comment" => &["id", "text"],
-            "update_requirement" => &["id", "title", "description", "priority", "weight"],
+            "update_requirement" => &["id", "title", "description", "priority", "weight", "tags"],
             _ => anyhow::bail!("UnsupportedOperation"),
         };
         ensure!(

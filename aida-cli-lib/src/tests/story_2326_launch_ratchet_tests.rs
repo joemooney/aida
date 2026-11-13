@@ -13,7 +13,11 @@ use std::path::{Path, PathBuf};
 const CRATES: &[&str] = &["aida-mcp", "aida-core", "aida-cli-lib", "aida-tui"];
 
 /// Modules that are the launcher itself.
-const LAUNCHER: &[&str] = &["aida-cli-lib/src/launch/", "aida-core/src/launch_policy.rs"];
+const LAUNCHER: &[&str] = &[
+    "aida-cli-lib/src/launch/",
+    "aida-cli-lib/src/vendors/profile.rs",
+    "aida-core/src/launch_policy.rs",
+];
 
 /// (file, markers, why it is not converted yet). Exact counts; the total
 /// may only fall (see [`CEILING`]).
@@ -27,7 +31,7 @@ const LEDGER: &[(&str, usize, &str)] = &[
     ("aida-cli-lib/src/agent_launch.rs", 6, "slice C: Codex grant/finalize writes; slice D: the harness version probe"),
     ("aida-cli-lib/src/agent_registry.rs", 2, "not a vendor child: terminal title restore and probe"),
     ("aida-cli-lib/src/claude_agents.rs", 1, "slice D: vendor query (agents list)"),
-    ("aida-cli-lib/src/codex_tool_env.rs", 2, "Codex probe and cfg(test) tool shell constructor; finalization moved into launch/profile.rs"),
+    ("aida-cli-lib/src/codex_tool_env.rs", 2, "Codex probe and cfg(test) tool shell constructor; finalization moved into vendors/profile.rs"),
     ("aida-cli-lib/src/compete_cmd.rs", 2, "slice C: remaining compete grant/finalize markers (vendor construction migrated in B)"),
     ("aida-cli-lib/src/containment/supervisor.rs", 3, "STORY-2238: the containment supervisor, a permitted constructor module"),
     ("aida-cli-lib/src/criteria_red_run.rs", 1, "generic helper: runs a criteria command"),
@@ -221,6 +225,9 @@ const NON_VENDOR_SPELLINGS: &[&str] = &[
     "aida",
     "aida_bin",
     "bwrap",
+    // Injected Cargo executable in the release installer; never a vendor.
+    // trace:STORY-2704 | ai:codex
+    "cargo",
     "dev_bin",
     "exe",
     "fixture.gh",
@@ -247,6 +254,9 @@ const NON_VENDOR_SPELLINGS: &[&str] = &[
     "pr_ship_post_merge_aida_exe",
     "resolve_aida_exe",
     "self.aida_exe",
+    // Emergency-land's gh/glab, resolved only by crate::resolve_forge_cli.
+    // trace:TASK-3788 | ai:codex
+    "self.forge_cli",
     "std::env::current_exe",
 ];
 
@@ -288,7 +298,15 @@ fn vendor_program_arg(arg: &str) -> bool {
 fn calls<'a>(normalized: &'a str, name: &'a str) -> impl Iterator<Item = &'a str> + 'a {
     normalized.match_indices(name).filter_map(move |(at, _)| {
         let before = normalized[..at].chars().next_back();
-        let starts = !before.is_some_and(|c| c.is_alphanumeric() || c == '_');
+        // A fully qualified clap constructor builds CLI metadata, not a child.
+        // Keep unqualified and std/tokio constructors conservative.
+        // trace:STORY-2704 | ai:codex
+        let qualifier = normalized[..at]
+            .rsplit(|c: char| !(c.is_alphanumeric() || c == '_' || c == ':'))
+            .next()
+            .unwrap_or_default();
+        let clap = name == "Command::new(" && matches!(qualifier, "clap::" | "::clap::");
+        let starts = !clap && !before.is_some_and(|c| c.is_alphanumeric() || c == '_');
         starts.then(|| &normalized[at + name.len()..])
     })
 }
@@ -445,6 +463,25 @@ fn scanner_catches_every_mutant_spelling() {
     }
 }
 
+// trace:STORY-2704 | ai:codex
+#[test]
+fn scanner_distinguishes_clap_and_injected_cargo_from_vendor_launches() {
+    assert_eq!(markers("fn f() { clap::Command::new(entry.name); }"), 0);
+    assert_eq!(markers("fn f() { std::process::Command::new(cargo); }"), 0);
+    assert_eq!(markers("fn f() { fakeclap::Command::new(program); }"), 1);
+    assert_eq!(
+        markers("fn f() { vendor::clap::Command::new(program); }"),
+        1
+    );
+    assert_eq!(
+        markers(
+            "fn f() { clap::Command::new(entry.name); std::process::Command::new(entry.name); }"
+        ),
+        1
+    );
+    assert_eq!(markers("fn f() { clap::Command::new(entry.name); tokio::process::Command::new(vendor_cargo); }"), 1);
+}
+
 // Match identifiers as well as qualified calls so imports (including grouped
 // imports and aliases) cannot hide the backend behind a bare call.
 // trace:STORY-2326 | ai:codex
@@ -497,7 +534,7 @@ fn story_2326_profile_and_grant_issuance_have_one_owner() {
             continue;
         }
         let src = production(&std::fs::read_to_string(&file).unwrap());
-        if rel != "launch/profile.rs" {
+        if rel != "vendors/profile.rs" {
             assert!(
                 !src.contains("fn prepare_launch("),
                 "private profile finalizer escaped into {rel}"
@@ -518,7 +555,7 @@ fn story_2326_profile_and_grant_issuance_have_one_owner() {
             "legacy launch issuer in {rel}"
         );
     }
-    let profile = std::fs::read_to_string(root.join("launch/profile.rs")).unwrap();
+    let profile = std::fs::read_to_string(root.join("vendors/profile.rs")).unwrap();
     assert!(profile.contains("fn prepare_launch("));
     assert!(!profile.contains("pub(crate) fn prepare_launch("));
 }

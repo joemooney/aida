@@ -1749,13 +1749,24 @@ mod tests {
 
     // trace:STORY-b6b1278890774ef993d2ebc327862470-563.ac486725 | ai:codex
     #[test]
-    fn exact_make_job_has_fixed_timeout_and_never_counts_as_cargo_tests() {
+    fn exact_make_job_has_bounded_timeout_and_never_counts_as_cargo_tests() {
         let mut job = JobRequest {
             argv: vec!["make".into(), "check-ci-fast".into()],
             env: BTreeMap::new(),
         };
         assert!(lane_job::validate(&job).is_ok());
-        assert_eq!(lane_job::timeout_for(&job, true), Duration::from_secs(600));
+        // trace:TASK-3100 | ai:codex
+        for cold in [false, true] {
+            assert_eq!(lane_job::timeout_for(&job, cold), Duration::from_secs(3600));
+        }
+        let shell_job = JobRequest {
+            argv: vec!["/bin/sh".into(), "-c".into(), "make check-ci-fast".into()],
+            env: BTreeMap::new(),
+        };
+        assert_eq!(
+            lane_job::timeout_for(&shell_job, false),
+            Duration::from_secs(3600)
+        );
         assert!(!lane_job::runs_tests(&job));
         let tally = lane_job::Tally::default();
         tally.record_exit(&job, "test result: ok. 1 passed; 0 failed;".as_bytes());

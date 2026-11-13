@@ -2,8 +2,16 @@
 //! Upgrade and release: mode normalisation, SHA match classification, release/dev-release handlers, workspace version and install method (STORY-1488 slice 1)
 // trace:STORY-1488 | ai:claude
 
-use crate::*;
+use crate::process_retry::RetryEtxtbsy;
+use crate::{
+    agent_registry, aida_exe_path, auto_complete, build_sha_short, cli, collect_open_prs,
+    current_branch_at, detect_store_path, forge, is_aida_repo, poll_until_published, pr_ship,
+    release_unmerged_pr_warning, upgrade_cmd, ReleaseCommand, Requirement, Result, Storage,
+    UpgradeCommand, UsageCommand,
+};
 use aida_core::git_ops::RemoteCredentialsExt as _;
+use anyhow::Context;
+use colored::Colorize;
 
 // trace:STORY-1728 | ai:claude
 #[path = "upgrade_release_args.rs"]
@@ -344,12 +352,66 @@ mod task_1244_drain_merge_lease_tests {
         let src = format!(
             "{}\n{}\n{}\n{}\n{}\n{}\n{}\n{}\n{}",
             include_str!("lib.rs"),
-            include_str!("lib_part1.rs"),
-            include_str!("lib_part2.rs"),
-            include_str!("lib_part3.rs"),
-            include_str!("lib_part4.rs"),
+            concat!(
+                include_str!("glyph_render.rs"),
+                include_str!("cli_entry.rs"),
+                include_str!("history_filter.rs"),
+                include_str!("output_policy.rs"),
+                include_str!("list_render.rs"),
+                include_str!("agent_errors.rs"),
+                include_str!("cast_recording.rs"),
+                include_str!("argv_rewrite.rs"),
+                include_str!("review_helpers.rs"),
+                include_str!("finding_queue.rs"),
+                include_str!("gitignore_entries.rs"),
+                include_str!("store_write_policy.rs"),
+                include_str!("status_policy.rs")
+            ),
+            concat!(
+                include_str!("retire_legacy.rs"),
+                "\n",
+                include_str!("glossary_render.rs"),
+                "\n",
+                include_str!("role_file_helpers.rs"),
+                "\n",
+                include_str!("mailbox_errors.rs"),
+                "\n",
+                include_str!("human_route.rs"),
+                "\n",
+                include_str!("store_drift.rs"),
+                "\n",
+                include_str!("launch_defaults.rs"),
+                "\n",
+                include_str!("merge_hold_output.rs"),
+                "\n",
+                include_str!("history_reporting.rs")
+            ),
+            concat!(
+                include_str!("ci_staleness.rs"),
+                include_str!("ci_watch.rs"),
+                include_str!("bounded_process.rs"),
+                include_str!("forge_lookup.rs"),
+                include_str!("store_lookup.rs"),
+                include_str!("output_policy.rs"),
+                include_str!("statusline_counts.rs"),
+                include_str!("session_warnings.rs"),
+                include_str!("status_policy.rs"),
+                include_str!("orchestrator_badge.rs"),
+                include_str!("default_branch.rs"),
+                include_str!("plan_structure.rs"),
+                include_str!("worktree_dirty.rs")
+            ),
+            concat!(concat!(
+                include_str!("scoped_lease.rs"),
+                "\n",
+                include_str!("pull_lines.rs")
+            )),
             include_str!("lib_part5.rs"),
-            include_str!("lib_part6.rs"),
+            concat!(
+                include_str!("regression_tests.rs"),
+                "\n",
+                include_str!("text_truncate.rs")
+            ),
             include_str!("burndown_run.rs"),
             include_str!("phase_driver_trait.rs")
         );
@@ -380,6 +442,7 @@ mod task_1244_drain_merge_lease_tests {
 #[cfg(all(test, unix))]
 mod bug_1265_finish_ci_tests {
     use super::*;
+    use crate::{AutonomyMode, RealPhaseDriver};
 
     struct Fixture {
         _temp: tempfile::TempDir,
@@ -743,6 +806,7 @@ exit 2
 #[cfg(test)]
 mod bug_1205_ci_phase_fallthrough_tests {
     use super::*;
+    use crate::{lease_conflict_decision, LeaseConflictDecision};
 
     #[test]
     fn headless_lease_conflict_is_decided_from_the_substrate() {
@@ -773,12 +837,66 @@ mod bug_1205_ci_phase_fallthrough_tests {
         let src = format!(
             "{}\n{}\n{}\n{}\n{}\n{}\n{}\n{}",
             include_str!("lib.rs"),
-            include_str!("lib_part1.rs"),
-            include_str!("lib_part2.rs"),
-            include_str!("lib_part3.rs"),
-            include_str!("lib_part4.rs"),
+            concat!(
+                include_str!("glyph_render.rs"),
+                include_str!("cli_entry.rs"),
+                include_str!("history_filter.rs"),
+                include_str!("output_policy.rs"),
+                include_str!("list_render.rs"),
+                include_str!("agent_errors.rs"),
+                include_str!("cast_recording.rs"),
+                include_str!("argv_rewrite.rs"),
+                include_str!("review_helpers.rs"),
+                include_str!("finding_queue.rs"),
+                include_str!("gitignore_entries.rs"),
+                include_str!("store_write_policy.rs"),
+                include_str!("status_policy.rs")
+            ),
+            concat!(
+                include_str!("retire_legacy.rs"),
+                "\n",
+                include_str!("glossary_render.rs"),
+                "\n",
+                include_str!("role_file_helpers.rs"),
+                "\n",
+                include_str!("mailbox_errors.rs"),
+                "\n",
+                include_str!("human_route.rs"),
+                "\n",
+                include_str!("store_drift.rs"),
+                "\n",
+                include_str!("launch_defaults.rs"),
+                "\n",
+                include_str!("merge_hold_output.rs"),
+                "\n",
+                include_str!("history_reporting.rs")
+            ),
+            concat!(
+                include_str!("ci_staleness.rs"),
+                include_str!("ci_watch.rs"),
+                include_str!("bounded_process.rs"),
+                include_str!("forge_lookup.rs"),
+                include_str!("store_lookup.rs"),
+                include_str!("output_policy.rs"),
+                include_str!("statusline_counts.rs"),
+                include_str!("session_warnings.rs"),
+                include_str!("status_policy.rs"),
+                include_str!("orchestrator_badge.rs"),
+                include_str!("default_branch.rs"),
+                include_str!("plan_structure.rs"),
+                include_str!("worktree_dirty.rs")
+            ),
+            concat!(concat!(
+                include_str!("scoped_lease.rs"),
+                "\n",
+                include_str!("pull_lines.rs")
+            )),
             include_str!("lib_part5.rs"),
-            include_str!("lib_part6.rs"),
+            concat!(
+                include_str!("regression_tests.rs"),
+                "\n",
+                include_str!("text_truncate.rs")
+            ),
             include_str!("phase_driver_trait.rs")
         );
         // BUG-1265 added drain-level test harnesses that also `impl PhaseDriver`,
@@ -823,6 +941,7 @@ mod bug_1205_ci_phase_fallthrough_tests {
 #[cfg(test)]
 mod bug_1195_review_story_lookup_tests {
     use super::*;
+    use crate::{classify_review_story_lookup, RequirementsStore, ReviewForge, ReviewStoryLookup};
 
     fn story(title: &str, status: aida_core::RequirementStatus) -> aida_core::Requirement {
         let mut r = aida_core::Requirement::new(title.to_string(), String::new());
@@ -902,12 +1021,66 @@ mod bug_1195_review_story_lookup_tests {
         let src = format!(
             "{}\n{}\n{}\n{}\n{}\n{}\n{}\n{}",
             include_str!("lib.rs"),
-            include_str!("lib_part1.rs"),
-            include_str!("lib_part2.rs"),
-            include_str!("lib_part3.rs"),
-            include_str!("lib_part4.rs"),
+            concat!(
+                include_str!("glyph_render.rs"),
+                include_str!("cli_entry.rs"),
+                include_str!("history_filter.rs"),
+                include_str!("output_policy.rs"),
+                include_str!("list_render.rs"),
+                include_str!("agent_errors.rs"),
+                include_str!("cast_recording.rs"),
+                include_str!("argv_rewrite.rs"),
+                include_str!("review_helpers.rs"),
+                include_str!("finding_queue.rs"),
+                include_str!("gitignore_entries.rs"),
+                include_str!("store_write_policy.rs"),
+                include_str!("status_policy.rs")
+            ),
+            concat!(
+                include_str!("retire_legacy.rs"),
+                "\n",
+                include_str!("glossary_render.rs"),
+                "\n",
+                include_str!("role_file_helpers.rs"),
+                "\n",
+                include_str!("mailbox_errors.rs"),
+                "\n",
+                include_str!("human_route.rs"),
+                "\n",
+                include_str!("store_drift.rs"),
+                "\n",
+                include_str!("launch_defaults.rs"),
+                "\n",
+                include_str!("merge_hold_output.rs"),
+                "\n",
+                include_str!("history_reporting.rs")
+            ),
+            concat!(
+                include_str!("ci_staleness.rs"),
+                include_str!("ci_watch.rs"),
+                include_str!("bounded_process.rs"),
+                include_str!("forge_lookup.rs"),
+                include_str!("store_lookup.rs"),
+                include_str!("output_policy.rs"),
+                include_str!("statusline_counts.rs"),
+                include_str!("session_warnings.rs"),
+                include_str!("status_policy.rs"),
+                include_str!("orchestrator_badge.rs"),
+                include_str!("default_branch.rs"),
+                include_str!("plan_structure.rs"),
+                include_str!("worktree_dirty.rs")
+            ),
+            concat!(concat!(
+                include_str!("scoped_lease.rs"),
+                "\n",
+                include_str!("pull_lines.rs")
+            )),
             include_str!("lib_part5.rs"),
-            include_str!("lib_part6.rs"),
+            concat!(
+                include_str!("regression_tests.rs"),
+                "\n",
+                include_str!("text_truncate.rs")
+            ),
             include_str!("pr_lookup.rs")
         );
         let start = src
@@ -933,12 +1106,66 @@ mod bug_1173_detection_hold_tests {
         let src = format!(
             "{}\n{}\n{}\n{}\n{}\n{}\n{}\n{}",
             include_str!("lib.rs"),
-            include_str!("lib_part1.rs"),
-            include_str!("lib_part2.rs"),
-            include_str!("lib_part3.rs"),
-            include_str!("lib_part4.rs"),
+            concat!(
+                include_str!("glyph_render.rs"),
+                include_str!("cli_entry.rs"),
+                include_str!("history_filter.rs"),
+                include_str!("output_policy.rs"),
+                include_str!("list_render.rs"),
+                include_str!("agent_errors.rs"),
+                include_str!("cast_recording.rs"),
+                include_str!("argv_rewrite.rs"),
+                include_str!("review_helpers.rs"),
+                include_str!("finding_queue.rs"),
+                include_str!("gitignore_entries.rs"),
+                include_str!("store_write_policy.rs"),
+                include_str!("status_policy.rs")
+            ),
+            concat!(
+                include_str!("retire_legacy.rs"),
+                "\n",
+                include_str!("glossary_render.rs"),
+                "\n",
+                include_str!("role_file_helpers.rs"),
+                "\n",
+                include_str!("mailbox_errors.rs"),
+                "\n",
+                include_str!("human_route.rs"),
+                "\n",
+                include_str!("store_drift.rs"),
+                "\n",
+                include_str!("launch_defaults.rs"),
+                "\n",
+                include_str!("merge_hold_output.rs"),
+                "\n",
+                include_str!("history_reporting.rs")
+            ),
+            concat!(
+                include_str!("ci_staleness.rs"),
+                include_str!("ci_watch.rs"),
+                include_str!("bounded_process.rs"),
+                include_str!("forge_lookup.rs"),
+                include_str!("store_lookup.rs"),
+                include_str!("output_policy.rs"),
+                include_str!("statusline_counts.rs"),
+                include_str!("session_warnings.rs"),
+                include_str!("status_policy.rs"),
+                include_str!("orchestrator_badge.rs"),
+                include_str!("default_branch.rs"),
+                include_str!("plan_structure.rs"),
+                include_str!("worktree_dirty.rs")
+            ),
+            concat!(concat!(
+                include_str!("scoped_lease.rs"),
+                "\n",
+                include_str!("pull_lines.rs")
+            )),
             include_str!("lib_part5.rs"),
-            include_str!("lib_part6.rs"),
+            concat!(
+                include_str!("regression_tests.rs"),
+                "\n",
+                include_str!("text_truncate.rs")
+            ),
             include_str!("phase_driver.rs")
         );
         // build the needle from split pieces so this test's own source cannot self-match
@@ -1212,6 +1439,29 @@ pub(crate) fn preview_next_version(current: &str, bump: &str) -> Option<String> 
     })
 }
 
+// trace:BUG-2492 | ai:codex
+pub(crate) fn after_pr_ci_budget(root: &std::path::Path) -> std::time::Duration {
+    std::time::Duration::from_secs(crate::ci_idle_timeout::ci_absolute_ceiling_secs(root))
+}
+
+// trace:BUG-2492 | ai:codex
+pub(crate) fn wait_after_pr_ci(
+    root: &std::path::Path,
+    forge: &dyn crate::forge::Forge,
+    change: &crate::forge::ChangeRef,
+    budget: std::time::Duration,
+) -> anyhow::Result<crate::gate::dispatch_types::CiState> {
+    crate::ci_gate::wait_for_ship_ci(
+        root,
+        forge,
+        change,
+        false,
+        false,
+        Some(budget),
+        std::time::Duration::from_secs(2),
+    )
+}
+
 pub(crate) fn handle_release(
     patch: bool,
     minor: bool,
@@ -1318,7 +1568,13 @@ pub(crate) fn handle_release(
             "{} waiting for {change_noun} #{n}'s checks…",
             crate::glyph(crate::glyphs::Glyph::Arrow).cyan().bold()
         );
-        match forge.watch_ci(&change_ref) {
+        // trace:BUG-2492 | ai:codex — a held status never settles by itself.
+        match wait_after_pr_ci(
+            &merge_root,
+            forge.as_ref(),
+            &change_ref,
+            after_pr_ci_budget(&merge_root),
+        ) {
             Ok(
                 crate::gate::dispatch_types::CiState::Success
                 | crate::gate::dispatch_types::CiState::None,
@@ -1329,8 +1585,9 @@ pub(crate) fn handle_release(
             Ok(state) => anyhow::bail!(
                 "{change_noun} #{n}'s checks did not pass ({state:?}) — not merging or releasing."
             ),
+            // trace:BUG-2492 | ai:codex — holds and red CI are refusals too.
             Err(e) => anyhow::bail!(
-                "could not watch {change_noun} #{n}'s checks via forge provider: {e:#}"
+                "{change_noun} #{n}'s checks did not pass — not merging or releasing: {e:#}"
             ),
         }
 
@@ -2007,7 +2264,7 @@ pub(crate) struct ReleaseArgs {
 // early like `dev`. trace:STORY-472 | ai:claude
 fn run_release(
     matches: &clap::ArgMatches,
-    _ctx: &crate::command_registry::DispatchCtx,
+    _ctx: &crate::cmdkit::DispatchCtx,
 ) -> anyhow::Result<()> {
     let args = <ReleaseArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
     let ReleaseArgs {
@@ -2020,19 +2277,18 @@ fn run_release(
 }
 
 // trace:STORY-1728 | ai:claude
-pub(crate) static RELEASE: crate::command_registry::CommandReg =
-    crate::command_registry::CommandReg {
-        name: "release",
-        help_after: "rebase",
-        command: <ReleaseArgs as clap::CommandFactory>::command,
-        policy: |_| crate::command_registry::CmdPolicy {
-            stakeholder: crate::stakeholder_role::StakeholderAction::Write,
-            per_write_auto_push: false,
-            skip_role_restore_prompt: false,
-            team_identity_write: false,
-        },
-        run: crate::command_registry::Handler::Early(run_release),
-    };
+pub(crate) static RELEASE: crate::cmdkit::CommandReg = crate::cmdkit::CommandReg {
+    name: "release",
+    help_after: "rebase",
+    command: <ReleaseArgs as clap::CommandFactory>::command,
+    policy: |_| crate::cmdkit::CmdPolicy {
+        stakeholder: crate::stakeholder_role::StakeholderAction::Write,
+        per_write_auto_push: false,
+        skip_role_restore_prompt: false,
+        team_identity_write: false,
+    },
+    run: crate::cmdkit::Handler::Early(run_release),
+};
 
 #[cfg(test)]
 mod task_1981_publication_tests {

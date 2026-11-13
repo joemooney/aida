@@ -15,7 +15,19 @@ pub(crate) mod config_cmd_args;
 pub(crate) use config_cmd_args::*;
 
 use crate::cli::{ConfigPermissionTier, ConfigPermissionsCommand};
-use crate::*;
+use crate::{
+    aida_home_dir, config_lookup, config_path_for_project, confirm, find_project_root, findings,
+    glyph, intake, load_agents_contained, main_worktree_root_from, output_format_is_json,
+    parse_agents_toml, permissions, prompts, read_agents_bool_from_file,
+    read_agents_bypass_from_file, read_project_config_value, read_store_sync_config,
+    read_ultraplan_config, resolve_aida_exe, seats, store_sync_config_project_root,
+    strip_ansi_color, team, vendors, warn_if_periodic_auto_push, workflow_hints, DoctorFinding,
+    GlyphCommand, IdFormat, NumberingStrategy, ScaffoldConfig, Storage, StoreAutoPushMode,
+    UltraplanMode,
+};
+use crate::{config_cmd, ConfigCommand};
+use anyhow::Context;
+use std::io::IsTerminal;
 use toml_edit::{value, Array, DocumentMut, Item, Table};
 
 /// Handle ID configuration commands
@@ -1004,6 +1016,9 @@ pub(crate) struct PermissionPostureRow {
     pub network: String,
     pub writable_roots: Vec<String>,
     pub net_effect: String,
+    // trace:BUG-2513 | ai:codex
+    pub launch_readiness: String,
+    pub launch_fix: Option<String>,
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub findings: Vec<PermissionPostureFinding>,
 }
@@ -1072,13 +1087,13 @@ pub(crate) fn handle_config_permissions_command(cmd: &ConfigPermissionsCommand) 
                 anyhow::bail!("containment probe did not pass: {}", report.cause);
             }
         }
-        ConfigPermissionsCommand::Show { json } => {
+        ConfigPermissionsCommand::Show { json, verbose } => {
             let project_root = main_worktree_root_from(&find_project_root()?);
             let report = permission_posture_report(&project_root);
             if *json || output_format_is_json() || aida_agent_output_truthy() {
                 println!("{}", serde_json::to_string_pretty(&report)?);
             } else {
-                render_permission_posture_report(&report);
+                render_permission_posture_report(&report, *verbose);
             }
         }
         ConfigPermissionsCommand::Set { tier, user, local } => {
@@ -1520,6 +1535,54 @@ pub(crate) fn scan_permission_posture_findings(
         .collect()
 }
 
+// trace:BUG-2513 | ai:codex
+pub(crate) fn offer_init_codex_native(
+    project_root: &std::path::Path,
+    selected: bool,
+    interactive: bool,
+    consent: impl FnOnce() -> Result<bool>,
+) -> Result<bool> {
+    if !selected || !interactive {
+        return Ok(false);
+    }
+    let path = crate::config_path_for_project(project_root);
+    let mut doc = load_edit_doc(&path)?;
+    if let Some(contained) = doc.get("contained") {
+        anyhow::ensure!(
+            contained.is_table(),
+            "[contained] must be a table; leaving config unchanged"
+        );
+        if let Some(vendors) = contained.get("vendors") {
+            anyhow::ensure!(
+                vendors.is_table() || vendors.is_inline_table(),
+                "[contained.vendors] must be a table; leaving config unchanged"
+            );
+        }
+    }
+    if doc
+        .get("contained")
+        .and_then(|v| v.get("vendors"))
+        .and_then(|v| v.get(crate::vendors::native_setup::KEY))
+        .is_some()
+    {
+        return Ok(false);
+    }
+    if !consent()? {
+        return Ok(false);
+    }
+    let contained = ensure_root_table(&mut doc, "contained");
+    if !contained.contains_key("vendors") {
+        contained.insert("vendors", Item::Table(Table::new()));
+    }
+    contained["vendors"]
+        .as_table_like_mut()
+        .expect("validated table")
+        .insert(crate::vendors::native_setup::KEY, value("native"));
+    save_edit_doc(&path, &doc)?;
+    eprintln!("  {}", crate::vendors::native_setup::WRITTEN);
+    Ok(true)
+}
+
 // trace:TASK-1233 | ai:codex
 pub(crate) fn maybe_offer_permission_posture_fix(project_root: &std::path::Path) -> Result<()> {
     let report = permission_posture_report(project_root);
@@ -1609,36 +1672,42 @@ pub(crate) fn permission_posture_report(project_root: &std::path::Path) -> Permi
     }
 }
 
-fn render_permission_posture_report(report: &PermissionPostureReport) {
+// trace:TASK-3779 | ai:codex
+fn render_permission_posture_report(report: &PermissionPostureReport, verbose: bool) {
     println!("{}", "Permission Posture:".blue().bold());
+    if verbose {
+        println!(
+            "  Confirm bypass: {} ({})",
+            report.confirm_bypass, report.confirm_bypass_source
+        );
+    }
     println!(
-        "  {}",
-        "Read-only view of AIDA agent launch defaults and native Codex sandbox config.".dimmed()
-    );
-    println!(
-        "  Confirm bypass: {} ({})",
-        report.confirm_bypass, report.confirm_bypass_source
-    );
-    println!();
-    println!(
-        "  {:<12} {:<10} {:<24} {:<12} {:<12} {}",
+        "  {:<12} {:<10} {:<12} {}",
         "agent".cyan(),
         "tier".cyan(),
-        "flags".cyan(),
-        "prompts".cyan(),
-        "sandbox".cyan(),
+        "launch".cyan(),
         "net effect".cyan()
     );
     for row in &report.agents {
+        println!("{}", permission_summary_row(row));
+        if !verbose {
+            continue;
+        }
         println!(
-            "  {:<12} {:<10} {:<24} {:<12} {:<12} {}",
-            row.agent,
-            row.tier,
-            truncate_middle(&row.flags.join(" "), 24),
+            "    flags={} · prompts={} · sandbox={}",
+            row.flags.join(" "),
             row.prompts,
-            row.sandboxed,
-            row.net_effect
+            row.sandboxed
         );
+        println!("    effect: {}", row.net_effect);
+        // trace:BUG-2513 | ai:codex
+        println!(
+            "    launch readiness (configured containment policy): {}",
+            row.launch_readiness
+        );
+        if let Some(fix) = &row.launch_fix {
+            println!("    fix: {fix}");
+        }
         println!(
             "    launch: interactive flags={} prompts={} · headless flags={} prompts={}",
             truncate_middle(&row.interactive_flags.join(" "), 72).dimmed(),
@@ -1672,13 +1741,26 @@ fn render_permission_posture_report(report: &PermissionPostureReport) {
             );
         }
     }
-    if report.findings.is_empty() {
+    if verbose && report.findings.is_empty() {
         println!();
         println!(
-            "  {} no dangerous permission-posture inconsistencies detected",
-            crate::glyph(crate::glyphs::Glyph::Check).green()
+            "  {}Consistency check: no dangerous permission-posture inconsistencies detected (see launch readiness above)",
+            crate::glyphs::terminal_marker(crate::glyph(crate::glyphs::Glyph::Check)).green()
         );
     }
+}
+
+// trace:TASK-3779 | ai:codex
+fn permission_summary_row(row: &PermissionPostureRow) -> String {
+    let (readiness, effect) = if row.refused_under_containment {
+        ("refused", "launch blocked by containment policy")
+    } else {
+        ("configured", row.net_effect.as_str())
+    };
+    format!(
+        "  {:<12} {:<10} {:<12} {}",
+        row.agent, row.tier, readiness, effect
+    )
 }
 
 fn truncate_middle(s: &str, max: usize) -> String {
@@ -1946,7 +2028,24 @@ fn permission_posture_for_agent(
         "tool native defaults".to_string()
     };
 
+    // trace:BUG-2513 | ai:codex
+    let launch_readiness = match &boundary {
+        Err(error) => format!("refused: {error}"),
+        Ok(posture) => format!(
+            "ready: {} (launch prerequisites still apply)",
+            posture.label()
+        ),
+    };
+    let launch_fix = boundary.as_ref().err().map(|_| {
+        if agent == crate::vendors::native_setup::KEY {
+            crate::vendors::native_setup::FIX.to_string()
+        } else {
+            crate::vendors::native_setup::OTHER_FIX.to_string()
+        }
+    });
     PermissionPostureRow {
+        launch_readiness,
+        launch_fix,
         agent: agent.to_string(),
         tier,
         tier_source,
@@ -4645,6 +4744,26 @@ mod bug_533_config_show_tests {
         assert_eq!(value_for("antigravity"), "disabled");
     }
 
+    // trace:TASK-3779 | ai:codex
+    #[test]
+    fn permission_summary_row_keeps_refusal_compact() {
+        let dir = tempfile::tempdir().unwrap();
+        let report = permission_posture_report(dir.path());
+        let mut row = report.agents[0].clone();
+        row.refused_under_containment = true;
+        row.net_effect = "refused under containment: lengthy private diagnostic".into();
+        let summary = permission_summary_row(&row);
+        assert_eq!(summary.lines().count(), 1);
+        assert!(summary.contains("refused"));
+        assert!(summary.contains("launch blocked by containment policy"));
+        assert!(!summary.contains("private diagnostic"));
+        row.refused_under_containment = false;
+        row.net_effect = "native sandbox".into();
+        let summary = permission_summary_row(&row);
+        assert!(summary.contains("configured"));
+        assert!(summary.contains("native sandbox"));
+    }
+
     #[test]
     fn permission_posture_flags_full_access_without_codex_sandbox_table() {
         let dir = tempfile::tempdir().unwrap();
@@ -4866,6 +4985,80 @@ mod bug_533_config_show_tests {
         );
     }
 
+    // trace:BUG-2513 | ai:codex
+    #[test]
+    fn bug_2513_init_native_requires_consent_and_preserves_policy() {
+        let root = tempfile::tempdir().unwrap();
+        let path = root.path().join(".aida/config.toml");
+        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+        let original =
+            "# retain comment\n[contained]\nenable = true\n[contained.vendors]\nclaude = 'aida'\n";
+        std::fs::write(&path, original).unwrap();
+        for (selected, interactive) in [(false, true), (true, false)] {
+            assert!(
+                !offer_init_codex_native(root.path(), selected, interactive, || panic!(
+                    "must not prompt"
+                ))
+                .unwrap()
+            );
+            assert_eq!(std::fs::read_to_string(&path).unwrap(), original);
+        }
+        assert!(!offer_init_codex_native(root.path(), true, true, || Ok(false)).unwrap());
+        assert_eq!(std::fs::read_to_string(&path).unwrap(), original);
+        assert!(offer_init_codex_native(root.path(), true, true, || Ok(true)).unwrap());
+        let written = std::fs::read_to_string(&path).unwrap();
+        let parsed: toml::Value = toml::from_str(&written).unwrap();
+        assert_eq!(
+            parsed["contained"]["vendors"]["codex"].as_str(),
+            Some("native")
+        );
+        assert_eq!(
+            parsed["contained"]["vendors"]["claude"].as_str(),
+            Some("aida")
+        );
+        assert!(written.starts_with("# retain comment"));
+        for policy in ["native", "aida", "invalid"] {
+            let body = format!("[contained.vendors]\ncodex = '{policy}'\n");
+            std::fs::write(&path, &body).unwrap();
+            assert!(!offer_init_codex_native(root.path(), true, true, || panic!(
+                "existing policy"
+            ))
+            .unwrap());
+            assert_eq!(std::fs::read_to_string(&path).unwrap(), body);
+        }
+    }
+
+    // trace:BUG-2513 | ai:codex
+    #[test]
+    fn bug_2513_init_native_preserves_inline_tables_and_refuses_malformed_policy() {
+        let root = tempfile::tempdir().unwrap();
+        let path = root.path().join(".aida/config.toml");
+        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+        std::fs::write(&path, "[contained]\nvendors = { claude = 'aida' }\n").unwrap();
+        assert!(offer_init_codex_native(root.path(), true, true, || Ok(true)).unwrap());
+        let parsed: toml::Value = toml::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
+        assert_eq!(
+            parsed["contained"]["vendors"]["claude"].as_str(),
+            Some("aida")
+        );
+        assert_eq!(
+            parsed["contained"]["vendors"]["codex"].as_str(),
+            Some("native")
+        );
+        for body in [
+            "contained = false\n",
+            "[contained]\nvendors = 'invalid'\n",
+            "[contained\n",
+        ] {
+            std::fs::write(&path, body).unwrap();
+            assert!(
+                offer_init_codex_native(root.path(), true, true, || panic!("invalid policy"))
+                    .is_err()
+            );
+            assert_eq!(std::fs::read_to_string(&path).unwrap(), body);
+        }
+    }
+
     // trace:BUG-b6b1278890774ef993d2ebc327862470-028 | ai:claude
     #[test]
     fn permission_posture_marks_uncontainable_vendors_refused_under_containment() {
@@ -4889,9 +5082,24 @@ mod bug_533_config_show_tests {
         let row = |agent: &str| report.agents.iter().find(|r| r.agent == agent).unwrap();
 
         assert!(!row("claude").refused_under_containment);
+        // trace:BUG-2513 | ai:codex
+        assert!(row("claude").launch_readiness.starts_with("ready:"));
+        assert!(row("claude").launch_fix.is_none());
+        assert!(row("codex")
+            .launch_fix
+            .as_deref()
+            .unwrap()
+            .contains("aida init --agent codex"));
+        assert!(
+            serde_json::to_value(row("codex")).unwrap()["launch_readiness"]
+                .as_str()
+                .unwrap()
+                .starts_with("refused:")
+        );
         for agent in ["codex", "antigravity"] {
             assert!(row(agent).refused_under_containment, "{:?}", row(agent));
             assert_eq!(row(agent).sandboxed, "refused");
+            assert!(row(agent).launch_readiness.starts_with("refused:"));
             assert!(row(agent)
                 .net_effect
                 .starts_with("refused under containment"));
@@ -5752,12 +5960,66 @@ mod bug_1667_bypass_gate_tests {
         let lib_src = format!(
             "{}\n{}\n{}\n{}\n{}\n{}\n{}",
             include_str!("lib.rs"),
-            include_str!("lib_part1.rs"),
-            include_str!("lib_part2.rs"),
-            include_str!("lib_part3.rs"),
-            include_str!("lib_part4.rs"),
+            concat!(
+                include_str!("glyph_render.rs"),
+                include_str!("cli_entry.rs"),
+                include_str!("history_filter.rs"),
+                include_str!("output_policy.rs"),
+                include_str!("list_render.rs"),
+                include_str!("agent_errors.rs"),
+                include_str!("cast_recording.rs"),
+                include_str!("argv_rewrite.rs"),
+                include_str!("review_helpers.rs"),
+                include_str!("finding_queue.rs"),
+                include_str!("gitignore_entries.rs"),
+                include_str!("store_write_policy.rs"),
+                include_str!("status_policy.rs")
+            ),
+            concat!(
+                include_str!("retire_legacy.rs"),
+                "\n",
+                include_str!("glossary_render.rs"),
+                "\n",
+                include_str!("role_file_helpers.rs"),
+                "\n",
+                include_str!("mailbox_errors.rs"),
+                "\n",
+                include_str!("human_route.rs"),
+                "\n",
+                include_str!("store_drift.rs"),
+                "\n",
+                include_str!("launch_defaults.rs"),
+                "\n",
+                include_str!("merge_hold_output.rs"),
+                "\n",
+                include_str!("history_reporting.rs")
+            ),
+            concat!(
+                include_str!("ci_staleness.rs"),
+                include_str!("ci_watch.rs"),
+                include_str!("bounded_process.rs"),
+                include_str!("forge_lookup.rs"),
+                include_str!("store_lookup.rs"),
+                include_str!("output_policy.rs"),
+                include_str!("statusline_counts.rs"),
+                include_str!("session_warnings.rs"),
+                include_str!("status_policy.rs"),
+                include_str!("orchestrator_badge.rs"),
+                include_str!("default_branch.rs"),
+                include_str!("plan_structure.rs"),
+                include_str!("worktree_dirty.rs")
+            ),
+            concat!(concat!(
+                include_str!("scoped_lease.rs"),
+                "\n",
+                include_str!("pull_lines.rs")
+            )),
             include_str!("lib_part5.rs"),
-            include_str!("lib_part6.rs")
+            concat!(
+                include_str!("regression_tests.rs"),
+                "\n",
+                include_str!("text_truncate.rs")
+            )
         );
         for (name, source) in [
             (
@@ -5917,7 +6179,6 @@ fn run_config(
     matches: &clap::ArgMatches,
     ctx: &crate::cmdkit::DispatchCtx,
 ) -> anyhow::Result<crate::cmdkit::Flow> {
-    use crate::*;
     let args = <ConfigArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
     // The closed diagnostic needs no requirement-store/cache write access.
     // trace:TASK-2705 | ai:codex

@@ -22,7 +22,7 @@ ts-rs = { version = "12.0.1", features = ["uuid-impl", "chrono-impl", "no-serde-
 reqwest = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
-clap = { workspace = true }
+clap = { workspace = true, features = ["string"] }
 inquire = { workspace = true }
 nucleo-matcher = "0.3.1"
 colored = { workspace = true }
@@ -88,6 +88,8 @@ remote = ["tonic", "prost", "tonic-build", "protox"]
 tui = ["aida-tui"]
 
 [dev-dependencies]
+# trace:TASK-3420 | ai:codex
+aida-core = { path = "../aida-core", features = ["mailbox-test-support"] }
 # Raw platform probe used only by the hermetic HOME fence. trace:TASK-3325 | ai:codex
 etcetera = { workspace = true }
 # STORY-2324: property tests for the canonical gate state.

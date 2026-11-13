@@ -2,7 +2,20 @@
 //! Role State and Activities (STORY-1488 slice 1)
 // trace:STORY-1488 | ai:claude
 
-use crate::*;
+#[cfg(test)]
+use crate::{advisor, human_route_is_open, is_human_route, role};
+// trace:TASK-3428 | ai:codex
+use crate::{
+    active_lease_for_cwd, agent_launch_views, agent_output_mode, agent_registry,
+    append_session_activity, canonical_role_name, current_user_id, find_aida_project_root_from,
+    find_main_worktree_root, find_project_root, humanize_relative, is_toml_kv_line, leases,
+    list_leases, load_session_activity, main_worktree_root_from, orchestrator, permissions,
+    picker_terminal_width, process_probe, prompt_yes_no, queue_cmd, statusline_project_root, team,
+    truncate, write_atomic, Command, LeaseState, ACTIVITY_MAX,
+};
+use anyhow::{Context, Result};
+use colored::Colorize;
+use std::io::IsTerminal;
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub(crate) struct RoleState {
@@ -1189,7 +1202,8 @@ pub(crate) fn default_role_guidance(role: &str) -> String {
         // writing JSON omits the provenance that makes approval enforceable.
         // trace:BUG-1467 | ai:codex
         // trace:BUG-2508 | ai:codex
-        "reviewer" => "You are reviewing. Inspect the PR and linked spec, prioritize correctness/regression risks, run targeted tests when useful, and produce a clear verdict/finding rather than taking over implementation. Record the result through `aida review record <SPEC> --pr <N> --verdict approved|request-changes|rejected|waiting --summary \"<why>\"` (repeat `--finding` as needed); never hand-write verdict JSON. Use waiting for external CI or host evidence only, with a summary naming the dependency, responsible actor and resume condition, and no substantive findings. A red merge-hold-gate or supervised human/advisor clearance that this review's own fresh APPROVED verdict can release is not external evidence: record approved when required CI is otherwise green and there are no actionable defects. Approval does not release the hold or authorize merge; leave clearance to the authorized actor. Outstanding independent evidence, such as an operator-only canary, still requires waiting even on a held PR. Resume requires a fresh review at the current head; code defects require request-changes.".to_string(),
+        // trace:STORY-2697 | ai:codex
+        "reviewer" => "You are reviewing. Inspect the PR and linked spec, prioritize correctness/regression risks, run targeted tests when useful, and produce a clear verdict/finding rather than taking over implementation. Record the result through `aida review record <SPEC> --pr <N> --verdict approved|request-changes|rejected|waiting --summary \"<why>\"` (repeat `--finding` as needed); never hand-write verdict JSON. When there are no actionable defects, record APPROVED even if CI is pending or running; state \"CI pending at review time\" in the rationale. CI alone is not a reason for WAITING: readiness still requires exact-head CI, and landing still requires ship CI or stacked-tip CI. WAITING is reserved for independent external evidence (such as an operator-only canary), or a specific named test result on which the reviewer's judgment depends. Name the dependency, responsible actor and resume condition, with no substantive findings. A red merge-hold-gate or supervised human/advisor clearance that this review's own fresh APPROVED verdict can release is not external evidence: record approved when there are no actionable defects. Approval does not release the hold or authorize merge; leave clearance to the authorized actor. Outstanding independent evidence, such as an operator-only canary, still requires waiting even on a held PR. Resume requires a fresh review at the current head; code defects require request-changes.".to_string(),
         // The integrator seat's role-context prompt, mirroring the arms above.
         // Mechanical merge cascade only; escalate anything that turns on judgment.
         "integrator" => "You are integrating. Land finished work (Done specs with an open PR) on the default branch one PR at a time in dependency order: rebase stale branches, resolve MECHANICAL conflicts only, watch CI, squash-merge the green-and-reviewed PRs, delete merged branches, and run `aida pull` to auto-bump. Never make a design call — escalate design-judgment conflicts to the advisor and route missing-verdict PRs to the reviewer.".to_string(),
@@ -1275,7 +1289,7 @@ pub(crate) fn validate_registered_agent_role(raw: &str) -> Result<String> {
 /// BUG-511: like [`in_flight_lease_scopes`] but keeps each live lease's
 /// role, so the open-spec explainer can say *what kind* of work holds the
 /// spec ("being reviewed" vs the generic in-flight line). Same liveness
-/// rules: [`lease_state_for`] over every lease, keep the `Live` ones.
+/// rules: [`crate::leases::lease_state_for`] over every lease, keep the `Live` ones.
 /// trace:BUG-511 | ai:claude
 pub(crate) fn in_flight_lease_role_map(
     project_root: &std::path::Path,
@@ -1288,7 +1302,7 @@ pub(crate) fn in_flight_lease_role_map(
     let live = process_probe::probe_live_claude_sessions();
     leases
         .iter()
-        .filter_map(|l| match lease_state_for(l, &live, now) {
+        .filter_map(|l| match crate::leases::lease_state_for(l, &live, now) {
             LeaseState::Live => Some((l.scope.to_ascii_lowercase(), l.role.clone())),
             _ => None,
         })

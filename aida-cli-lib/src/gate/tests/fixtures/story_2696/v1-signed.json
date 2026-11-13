@@ -1,0 +1,4 @@
+{
+  "payload": "{\"version\":1,\"node\":\"legacy-node\",\"publication\":\"00000000-0000-0000-0000-000000000001\",\"supersedes\":[],\"repository\":\"github.com/fixture/review\",\"change\":\"PR-7\",\"head\":\"1111111111111111111111111111111111111111\",\"specs\":[\"00000000-0000-0000-0000-000000000002\"],\"blocking_finding_origin_ids\":[],\"authors\":[[\"session:author\"]],\"reviewer_actor\":\"legacy reviewer\",\"reviewer_identity\":[\"session:reviewer\"],\"decision\":\"approved\",\"recorded_at\":\"2026-11-09T00:00:00Z\",\"branch\":null,\"summary\":null,\"findings\":[]}",
+  "sshsig": "-----BEGIN SSH SIGNATURE-----\nU1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAgLg9+pCb55C0Z4I9a4scveT9THO\nKAtqk0P6TO789cKgoAAAATYWlkYS1yZXZpZXctcmVjZWlwdAAAAAAAAAAGc2hhNTEyAAAA\nUwAAAAtzc2gtZWQyNTUxOQAAAECykGauHabHqSE9em0vi/lzpPDYpX2SAfHpDSpAy/6Drz\n+5gw9qb5QiwXYw9cqrCSp03qAWSAMc2u9gsIIQVJEH\n-----END SSH SIGNATURE-----\n"
+}

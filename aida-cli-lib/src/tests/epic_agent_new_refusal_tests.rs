@@ -3,7 +3,7 @@
 //! worktree) instead of routing into the Draft "transition to Approved"
 //! gate, whose advice an epic can't follow (its status is a read-only
 //! rollup). Non-epic types fall through untouched.
-use super::epic_agent_new_refusal;
+use crate::epic_agent_new_refusal;
 use aida_core::RequirementType;
 
 #[test]

@@ -5,7 +5,8 @@
 //! project (`aida init` code repo plus its `.aida-store` store) under a fake
 //! HOME/XDG tree with a cleared environment. `gh` is a fixture script pinned
 //! through the existing forge-binary override, so no test can reach a real
-//! forge; `glab` and vendor CLIs are tripwires that must never run.
+//! forge; vendor CLIs are tripwires. GitLab classification tests explicitly
+//! install a failing `glab` fixture to exercise unavailable query evidence.
 //!
 //! The scan-to-apply barrier is real: the open-PR lookup happens after the
 //! scan snapshot and before the store write, so a fixture `gh` that mutates
@@ -1112,13 +1113,19 @@ fn multi_candidate_failure_is_conservative_and_truthful() {
     fx.assert_no_tripwire();
 }
 
-/// Group 6: unknown is never empty. Unsupported, unrecognized and
+/// Group 6: unknown is never empty. Unavailable, unrecognized and
 /// unclassifiable forges refuse without touching config; a stale pure-git
 /// config with a GitHub origin is classified as GitHub WITHOUT being
 /// rewritten; real pure git (no origin, or a non-forge origin) completes.
 #[test]
 fn unavailable_forge_classification_is_not_empty() {
     let fx = Fx::new(Forge::PureGit);
+    // GitLab is supported; a failed query must still preserve the candidate.
+    // trace:BUG-2516 | ai:codex
+    write_exec(
+        &fx.bin.join("glab"),
+        "#!/bin/sh\nif [ \"$1\" = --version ]; then echo glab-fixture; exit 0; fi\necho 'fixture GitLab query denied' >&2\nexit 1\n",
+    );
     fx.seed("TASK-95", "TASK-95", "Done", "");
     fx.commit("fix: shipped (TASK-95)", "2026-09-10T00:00:00Z");
 
@@ -1146,7 +1153,7 @@ fn unavailable_forge_classification_is_not_empty() {
     refuse(
         "gitlab",
         Some("https://gitlab.com/acme/reconcile-fixture.git"),
-        "the configured forge `gitlab` has no supported open-change query",
+        "fixture GitLab query denied",
     );
     refuse(
         "bitbucket",
@@ -1205,6 +1212,12 @@ fn unavailable_forge_classification_is_not_empty() {
 #[test]
 fn configured_forge_is_read_from_any_toml_spelling() {
     let fx = Fx::new(Forge::PureGit);
+    // GitLab is supported; a failed query must still preserve the candidate.
+    // trace:BUG-2516 | ai:codex
+    write_exec(
+        &fx.bin.join("glab"),
+        "#!/bin/sh\nif [ \"$1\" = --version ]; then echo glab-fixture; exit 0; fi\necho 'fixture GitLab query denied' >&2\nexit 1\n",
+    );
     fx.seed("TASK-96", "TASK-96", "Done", "");
     fx.seed("TASK-98", "TASK-98", "Completed", "");
     fx.commit("fix: shipped (TASK-96) (TASK-98)", "2026-09-10T00:00:00Z");
@@ -1212,12 +1225,9 @@ fn configured_forge_is_read_from_any_toml_spelling() {
     let cases: [(&str, &str); 5] = [
         (
             "forge = { provider = \"gitlab\" }",
-            "the configured forge `gitlab` has no supported open-change query",
+            "fixture GitLab query denied",
         ),
-        (
-            "forge.provider = \"gitlab\"",
-            "the configured forge `gitlab` has no supported open-change query",
-        ),
+        ("forge.provider = \"gitlab\"", "fixture GitLab query denied"),
         (
             "forge = { provider = 7 }",
             "`[forge] provider` is not a string",
@@ -1248,7 +1258,18 @@ fn configured_forge_is_read_from_any_toml_spelling() {
             "{line}:\n{}",
             text(&out)
         );
-        assert!(stderr(&out).contains(want), "{line}:\n{}", text(&out));
+        // The Completed sweep remains diagnostic-only and does not yet
+        // support GitLab; required candidate checks above use its provider.
+        let diagnostic_want = if want == "fixture GitLab query denied" {
+            "the configured forge `gitlab` has no supported open-change query"
+        } else {
+            want
+        };
+        assert!(
+            stderr(&out).contains(diagnostic_want),
+            "{line}:\n{}",
+            text(&out)
+        );
         assert_same(&fx.snapshot(), &before, line);
     }
     // A config the strict reader cannot parse at all is a refusal through the

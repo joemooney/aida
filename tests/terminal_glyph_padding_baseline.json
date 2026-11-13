@@ -1,0 +1,11 @@
+{
+  "aida-cli-lib/src/brief_cmd.rs": 1,
+  "aida-cli-lib/src/drain_state.rs": 1,
+  "aida-cli-lib/src/leases.rs": 1,
+  "aida-cli-lib/src/mailbox_cmd.rs": 1,
+  "aida-cli-lib/src/phase_driver_trait.rs": 1,
+  "aida-cli-lib/src/queue_cmd/recover.rs": 1,
+  "aida-cli-lib/src/session.rs": 2,
+  "aida-cli-lib/src/status_cmd.rs": 1,
+  "aida-cli-lib/src/status_sections.rs": 1
+}

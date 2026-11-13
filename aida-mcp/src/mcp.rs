@@ -7548,14 +7548,20 @@ fn mediated_mcp_response(
                 } else {
                     // trace:TASK-3223 | ai:codex
                     tool["description"] = json!(
-                        "Update an owned requirement's title, description, priority or weight through the mediated store service. At least one edit field is required."
+                        "Update an owned requirement's title, description, priority, weight or nonstructural tags through the mediated store service. At least one edit field is required."
                     );
-                    &["id", "title", "description", "priority", "weight"]
+                    &["id", "title", "description", "priority", "weight", "tags"]
                 };
                 tool["inputSchema"]["properties"]
                     .as_object_mut()
                     .unwrap()
                     .retain(|key, _| fields.contains(&key.as_str()));
+                if tool["name"] == "update_requirement" {
+                    tool["inputSchema"]["properties"]["tags"]["description"] = json!(
+                        "Replace nonstructural tags; structural tags must be retained. Empty array clears nonstructural tags. At most 256 strings, 512 UTF-8 bytes each; values are trimmed, empty values discarded, no internal whitespace or control characters. Force overrides are unsupported."
+                    );
+                    tool["inputSchema"]["properties"]["tags"]["maxItems"] = json!(256);
+                }
                 tool["inputSchema"]["additionalProperties"] = json!(false);
             }
             JsonRpcResponse::success(id, json!({"tools":tools}))

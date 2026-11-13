@@ -85,7 +85,11 @@ fn a_launching_pickup_runs_its_launch_under_the_rollback() {
         .find("crate::session_start::session_start_with_receipt(")
         .expect("setup boundary");
     assert!(
-        work[setup..].contains("/* rollback_failed_setup */\n            !no_launch,"),
+        work[setup..]
+            .split_whitespace()
+            .collect::<Vec<_>>()
+            .join(" ")
+            .contains("/* rollback_failed_setup */ !no_launch,"),
         "a launching pickup arms the setup rollback"
     );
     let launch = work
@@ -98,9 +102,8 @@ fn a_launching_pickup_runs_its_launch_under_the_rollback() {
     );
 }
 
-/// TASK-2807: the implementer runners that spawn outside
-/// `reviewer_status_on_spawn` are marked first; the resume and reviewer
-/// runners are counted at their spawn (a failed spawn launched nobody), and
+/// TASK-2807: exec-style headless launch is marked first. Standalone,
+/// resume and reviewer runners mark from successful spawn callbacks, and
 /// the bare execs are not marked (a failed exec launched nobody).
 #[test]
 fn every_spawning_launch_is_marked_and_no_exec_is() {
@@ -112,10 +115,7 @@ fn every_spawning_launch_is_marked_and_no_exec_is() {
         .find("run_pickup_launch(&project_root, setup_receipt, launch_agent)")
         .expect("the launch runs under run_pickup_launch");
     let body = &work[start..end];
-    for runner in [
-        "crate::standalone_implementer::run(",
-        "session::exec_vendor_headless(",
-    ] {
+    for runner in ["session::exec_vendor_headless("] {
         let at = body.find(runner).unwrap_or_else(|| panic!("{runner}"));
         let marked = body[..at].rfind("agent.starting();").expect("a mark");
         assert!(
@@ -123,16 +123,18 @@ fn every_spawning_launch_is_marked_and_no_exec_is() {
             "{runner} is marked in its own block"
         );
     }
+    // The standalone implementer marks from its actual spawn hook, too.
+    // trace:STORY-2690 | ai:codex
+    assert!(body.contains("Some(&|| agent.starting())"));
+    let standalone = include_str!("../standalone_implementer.rs");
+    assert!(standalone.contains("if let Some(on_started) = on_started"));
     // Counted at the spawn, not pre-marked: a failed spawn rolls back.
     let resume = body
         .find("run_queue_resume_to_exit(")
         .expect("the implementer resume");
-    let last_mark = body[..resume]
-        .rfind("agent.starting();")
-        .expect("an earlier arm's mark");
     assert!(
-        body[last_mark..resume].contains('}'),
-        "the resume is not pre-marked"
+        !body[..resume].contains("agent.starting();"),
+        "standalone and resume arms mark only from actual spawn callbacks"
     );
     // The publication wrapper must leave counting to the actual spawn.
     // trace:STORY-2475 TASK-2807 | ai:codex
@@ -167,12 +169,11 @@ fn every_spawning_launch_is_marked_and_no_exec_is() {
     ] {
         let at = body.find(exec).unwrap_or_else(|| panic!("{exec}"));
         let before = &body[..at];
-        let last_mark = before
-            .rfind("agent.starting();")
-            .expect("an earlier arm's mark");
-        assert!(
-            before[last_mark..].contains('}'),
-            "{exec} is not marked: a failed exec launched nobody"
-        );
+        if let Some(last_mark) = before.rfind("agent.starting();") {
+            assert!(
+                before[last_mark..].contains('}'),
+                "{exec} is not marked: a failed exec launched nobody"
+            );
+        }
     }
 }

@@ -47,7 +47,7 @@ fn owned_ops(cmd: &std::process::Command) -> BTreeMap<String, Option<String>> {
 // Assignment-only snapshots are valid only after proving inheritance is off.
 // trace:STORY-2326 | ai:codex
 fn cleared_owned_ops(cmd: &mut std::process::Command) -> BTreeMap<String, Option<String>> {
-    assert!(super::profile::environment_is_cleared(cmd));
+    assert!(crate::vendors::profile::environment_is_cleared(cmd));
     owned_ops(cmd)
 }
 
@@ -1726,7 +1726,7 @@ fn story_2326_cleared_claude_advisor_transports_current_grant() {
             false,
         )
         .unwrap();
-        assert!(crate::launch::profile::environment_is_cleared(&mut cmd));
+        assert!(crate::vendors::profile::environment_is_cleared(&mut cmd));
         let env = cmd.get_envs().collect::<BTreeMap<_, _>>();
         assert_eq!(
             env.get(OsStr::new("AIDA_SESSION_GRANT")),
@@ -1764,7 +1764,7 @@ fn story_2326_cleared_claude_compete_has_no_parent_seat() {
         "claude",
     )
     .unwrap();
-    assert!(crate::launch::profile::environment_is_cleared(&mut cmd));
+    assert!(crate::vendors::profile::environment_is_cleared(&mut cmd));
     for key in [
         "AIDA_SESSION_ROLE",
         "AIDA_SESSION_GRANT",
@@ -1942,7 +1942,7 @@ fn story_2326_resource_env_unsandboxed_launch_preserves_wrapper() {
                 let ctx = LaunchContext::resolve_under(req, false).unwrap();
                 let cmd = spawn_agent(&ctx).unwrap();
                 let env: BTreeMap<_, _> = cmd.get_envs().collect();
-                if super::profile::VendorProfile::for_vendor(vendor).clears_environment() {
+                if crate::vendors::profile::VendorProfile::for_vendor(vendor).clears_environment() {
                     assert_eq!(
                         env.get(OsStr::new("RUSTC_WRAPPER")),
                         Some(&Some(OsStr::new("/operator/sccache")))

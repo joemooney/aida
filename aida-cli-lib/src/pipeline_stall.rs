@@ -873,7 +873,7 @@ fn observe_prs(
             train.push(train_pr_running(root, pr.number, &mut s.details));
             continue;
         }
-        let ready = if hold_gate_failed(row) {
+        let ready = if hold_gate_blocking(row) {
             Some(false)
         } else {
             pr_ready(root, pr)
@@ -1007,10 +1007,31 @@ fn ci_checks(row: &serde_json::Value) -> Vec<&serde_json::Value> {
         .filter(|c| check_name(c) != Some("merge-hold-gate"))
         .collect()
 }
-fn hold_gate_failed(row: &serde_json::Value) -> bool {
+fn hold_gate_has_hold_evidence(row: &serde_json::Value) -> bool {
+    // trace:BUG-2492 | ai:codex — inspection pending alone is not a hold.
+    let has = |name: &str| {
+        row["labels"].as_array().is_some_and(|labels| {
+            labels
+                .iter()
+                .any(|label| label["name"].as_str() == Some(name))
+        })
+    };
+    has("aida:merge-hold") || (has("aida:merge-hold-recorded") && !has("aida:merge-hold-cleared"))
+}
+fn hold_gate_blocking(row: &serde_json::Value) -> bool {
     latest_checks(row)
         .into_iter()
-        .any(|c| check_name(c) == Some("merge-hold-gate") && check_failed(c))
+        // trace:BUG-2492 | ai:codex — commit statuses replaced failed hold jobs.
+        .any(|c| {
+            check_name(c).is_some_and(|name| {
+                crate::ci_gate::check_name_eq(name, crate::ci_gate::HOLD_GATE_CHECK)
+            }) && (check_failed(c)
+                || c["state"] == "PENDING"
+                || matches!(
+                    c["status"].as_str(),
+                    Some("PENDING" | "QUEUED" | "IN_PROGRESS")
+                ))
+        })
 }
 fn check_failed(check: &serde_json::Value) -> bool {
     matches!(
@@ -1128,7 +1149,9 @@ fn pr_digest(
     if pr.is_draft {
         blockers.push(format!("draft; gh pr ready {n}"));
     }
-    if crate::pr_has_merge_hold(root, pr) || hold_gate_failed(row) {
+    if crate::pr_has_merge_hold(root, pr)
+        || (hold_gate_has_hold_evidence(row) && hold_gate_blocking(row))
+    {
         blockers.push(format!("merge hold; aida merge-hold auto-release {n} (eligible Rework approval) or human/advisor: aida merge-hold clear {n}"));
     }
     // trace:BUG-2500 | ai:codex — waiting is distinct from missing review.
@@ -1569,6 +1592,46 @@ mod tests {
         assert!(!digest.contains("queue rework"));
         assert!(!digest.contains("red CI"));
         assert!(failure_details(&[(42, row)], &mut |_| panic!("hold log fetched")).is_empty());
+    }
+
+    // trace:BUG-2492 | ai:codex
+    #[test]
+    fn bug2492_pending_hold_status_blocks_readiness_without_red_ci_or_logs() {
+        let t = tempfile::tempdir().unwrap();
+        for labels in [
+            serde_json::json!([]),
+            serde_json::json!([{"name":"aida:merge-hold"}]),
+            serde_json::json!([{"name":"aida:merge-hold-recorded"}]),
+            serde_json::json!([{"name":"aida:merge-hold-recorded"},{"name":"aida:merge-hold-cleared"}]),
+        ] {
+            for state in ["PENDING", "FAILURE", "SUCCESS"] {
+                let row = serde_json::json!({
+                    "number":42,"title":"work","headRefName":"topic",
+                    "headRefOid":"abcdef1234","mergeable":"MERGEABLE","isDraft":false,
+                    "labels":labels,
+                    "statusCheckRollup":[
+                        {"__typename":"StatusContext","context":"merge-hold-gate","state":state},
+                        {"name":"Build","status":"COMPLETED","conclusion":"SUCCESS"}]
+                });
+                assert_eq!(hold_gate_blocking(&row), state != "SUCCESS");
+                let raw = vec![row.clone()];
+                let prs = parse_stall_prs(&raw, Some(&["merge-hold-gate".into(), "Build".into()]));
+                assert_eq!(prs.by_branch["topic"].ci_rollup.as_deref(), Some("pass"));
+                let mut s = idle();
+                observe_prs(t.path(), Some(t.path()), &prs, &raw, &mut s);
+                if state != "SUCCESS" {
+                    assert_eq!(s.ready, Some(false));
+                    assert_eq!(
+                        s.details.join("\n").contains("merge hold"),
+                        hold_gate_has_hold_evidence(&row)
+                    );
+                }
+                assert!(s.failed_jobs.is_empty());
+                assert!(
+                    failure_details(&[(42, row)], &mut |_| panic!("hold log fetched")).is_empty()
+                );
+            }
+        }
     }
 
     // trace:TASK-3112 | ai:codex

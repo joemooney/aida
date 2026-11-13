@@ -25,7 +25,7 @@ trap 'rm -rf "$work"' EXIT
 
 fail() {
   echo "FAIL: $*" >&2
-  exit 1
+  exit 99
 }
 
 # Extract the first literal block scalar that follows a key on/after $2 out of
@@ -59,6 +59,17 @@ PY
 [ -f "$github_workflow" ] || fail "missing $github_workflow"
 [ -f "$gitlab_template" ] || fail "missing $gitlab_template"
 
+# The publisher must not emit a successful check with the required status name,
+# and fork events must execute only trusted base workflow code.
+grep -Fq '  pull_request:' "$github_workflow" || fail 'transition bootstrap trigger missing'
+grep -Fq "github.event.pull_request.head.repo.full_name == github.repository" "$github_workflow" || fail 'bootstrap must exclude fork PR events'
+grep -Fq '  pull_request_target:' "$github_workflow" || fail 'fork status token unavailable'
+grep -Fq '  statuses: write' "$github_workflow" || fail 'status permission missing'
+grep -Fq '  cancel-in-progress: false' "$github_workflow" || fail 'publisher can be cancelled mid-write'
+if grep -Eq '^  merge-hold-gate:|uses:.*checkout' "$github_workflow"; then
+  fail 'publisher shadows the required context or checks out PR code'
+fi
+
 extract_block "$github_workflow" 'run: |' >"$work/github-gate.sh"
 extract_block "$gitlab_template" '- |' >"$work/gitlab-gate.sh"
 
@@ -70,10 +81,73 @@ for gate in "$work/github-gate.sh" "$work/gitlab-gate.sh"; do
   done
 done
 
+# trace:BUG-2492 | ai:codex
+# Fake only the API boundary; execute the shipped evaluator and publisher.
+mkdir -p "$work/bin"
+cat >"$work/bin/gh" <<'GH'
+#!/usr/bin/env bash
+set -eu
+[ "$1" = api ] || exit 2
+shift
+if [ "$1" = --method ]; then
+  [ "${STATUS_FAIL:-0}" = 0 ] || exit 1
+  printf '%s\n' "$*" >>"$STATUS_LOG"
+  exit 0
+fi
+case "$1" in
+  repos/o/r/pulls/1)
+    jq -n --arg labels "${LABELS:-}" --arg ref "${HEAD_REF:-feature/x}" --arg body "${PR_BODY:-}" \
+      '{head:{sha:"abc123456789",ref:$ref},labels:($labels|split(",")|map(select(length>0)|{name:.})),body:$body}'
+    exit ;;
+esac
+n=$(printf '%s' "$1" | sed -n 's#^repos/[^/]*/[^/]*/issues/\([0-9][0-9]*\)/labels$#\1#p')
+[ -n "$n" ] || exit 2
+var="MEMBER_LABELS_$n"
+[ "${!var+set}" = set ] || exit 1
+printf '%s\n' "${!var}"
+GH
+chmod +x "$work/bin/gh"
+export PATH="$work/bin:$PATH" REPO=o/r PR_NUMBER=1
+export HEAD_SHA=abc123456789
+export GITHUB_SERVER_URL=https://github.com GITHUB_RUN_ID=123
+export STATUS_LOG="$work/statuses"
+
+# Fixture evidence only: live merge enforcement, label-event scheduling and mail
+# observation still require the operator cutover procedure.
+# trace:BUG-b6b1278890774ef993d2ebc327862470-257.ac4be33b | ai:codex
+# trace:BUG-b6b1278890774ef993d2ebc327862470-257.ac24a24e | ai:codex
+# Pending holds succeed as Actions jobs but continue to block required status.
+# Translate the final commit status into the existing pass/block fixture result.
+echo "Test 1: required status state and Actions exit fixtures (not live enforcement)"
+github_gate() {
+  : >"$STATUS_LOG"
+  local result=0 state
+  bash -e -o pipefail "$work/github-gate.sh" >/dev/null 2>&1 || result=$?
+  state=$(tail -n 1 "$STATUS_LOG")
+  [[ "$state" == *'repos/o/r/statuses/abc123456789'* ]] || fail 'status must target PR head SHA'
+  [[ "$state" == *'context=merge-hold-gate'* ]] || fail 'required context changed'
+  if [ -n "${WANT_STATE:-}" ]; then
+    [[ "$state" == *"state=$WANT_STATE "* ]] || fail "expected $WANT_STATE status, got $state"
+  fi
+  if [[ "$state" == *'state=pending'* ]]; then
+    [ "$result" = 0 ] || fail 'ordinary hold failed the Actions job'
+    return 1
+  elif [[ "$state" == *'state=failure'* ]]; then
+    [ "$result" != 0 ] || fail 'invalid evidence did not fail the Actions job'
+    return 1
+  fi
+  [[ "$state" == *'state=success'* ]] || fail 'missing final status'
+  [ "$result" = 0 ] || fail 'passing labels failed the Actions job'
+}
+
 # Run a shipped gate with the label set a forge would hand it.
 # $1 = gate script, $2 = env var name the gate reads, $3 = comma-joined labels.
 gate() {
-  env "$2=$3" bash -e -o pipefail "$1" >/dev/null 2>&1
+  if [ "$2" = LABELS ]; then
+    LABELS="$3" github_gate
+  else
+    env "$2=$3" bash -e -o pipefail "$1" >/dev/null 2>&1
+  fi
 }
 
 # Each case is "labels|expected exit|description".
@@ -82,6 +156,7 @@ cases=(
   'aida:merge-hold|1|an active hold fails even before the recorded label exists'
   'aida:merge-hold-recorded|1|dropping the active label by hand leaves history without clearance'
   'aida:merge-hold-recorded,aida:merge-hold-cleared|0|a recorded clearance releases a previously held PR'
+  'aida:merge-hold,aida:merge-hold-cleared|1|active hold with orphan clearance blocks'
   '|0|a PR that was never held passes'
   'aida:merge-hold-cleared|1|a clearance label with no recorded hold is forged and fails'
   'aida:merge-hold,aida:merge-hold-recorded,aida:merge-hold-cleared|1|a clearance label cannot release a still-active hold'
@@ -96,35 +171,41 @@ for spec in "${cases[@]}"; do
     script=$work/${target%%:*}
     var=${target#*:}
     got=0
+    WANT_STATE=success
+    if [ "$want" = 1 ]; then
+      WANT_STATE=pending
+      if [[ ",$labels," == *',aida:merge-hold-cleared,'* && ",$labels," != *',aida:merge-hold-recorded,'* ]]; then
+        WANT_STATE=failure
+      fi
+    fi
     gate "$script" "$var" "$labels" || got=$?
+    unset WANT_STATE
     [ "$got" = "$want" ] || fail "${target%%:*} with labels '$labels': expected exit $want, got $got ($desc)"
   done
 done
+
+# A status API error must fail the job instead of reporting successful publication.
+if STATUS_FAIL=1 LABELS= bash -e -o pipefail "$work/github-gate.sh" >/dev/null 2>&1; then
+  fail 'status API refusal was ignored'
+fi
 
 # STORY-1690 train mode (GitHub gate): a `train/*` PR passes only when its
 # body names its members and every member passes the same label rules. A fake
 # `gh` answers `gh api repos/<repo>/issues/<n>/labels` from MEMBER_LABELS_<n>
 # (unset = the API call fails).
 # trace:STORY-1690 | ai:claude
-mkdir -p "$work/bin"
-cat >"$work/bin/gh" <<'GH'
-#!/usr/bin/env bash
-[ "$1" = api ] || exit 2
-n=$(printf '%s' "$2" | sed -n 's#^repos/[^/]*/[^/]*/issues/\([0-9][0-9]*\)/labels$#\1#p')
-[ -n "$n" ] || exit 2
-var="MEMBER_LABELS_$n"
-[ "${!var+set}" = set ] || exit 1
-printf '%s\n' "${!var}"
-GH
-chmod +x "$work/bin/gh"
 grep -Fq 'aida-train-members:' "$work/github-gate.sh" || fail "extracted GitHub gate has no train mode"
 
+# trace:BUG-2492 | ai:codex — assert status state as well as pass/block in train mode.
 # $1 = head ref, $2 = PR body, then MEMBER_LABELS_<n>=... assignments.
 train_gate() {
   local ref=$1 body=$2
   shift 2
-  env PATH="$work/bin:$PATH" LABELS= HEAD_REF="$ref" PR_BODY="$body" REPO=o/r "$@" \
-    bash -e -o pipefail "$work/github-gate.sh" >/dev/null 2>&1
+  (
+    export LABELS= HEAD_REF="$ref" PR_BODY="$body"
+    for assignment in "$@"; do export "$assignment"; done
+    github_gate
+  )
 }
 
 a40=$(printf 'a%.0s' $(seq 40))
@@ -134,31 +215,31 @@ two="Train.
 aida-train-members: 11@$a40,12@$b40"
 train_cases=0
 expect_train() {
-  local want=$1 desc=$2
-  shift 2
+  local want=$1 WANT_STATE=$2 desc=$3
+  shift 3
   local got=0
   train_gate "$@" || got=$?
   [ "$got" = "$want" ] || fail "train gate: expected exit $want, got $got ($desc)"
   train_cases=$((train_cases + 1))
 }
-expect_train 0 'two clear members pass' train/x "$two" MEMBER_LABELS_11= MEMBER_LABELS_12=
-expect_train 0 'a member with a recorded clearance passes' train/x "$two" \
+expect_train 0 success 'two clear members pass' train/x "$two" MEMBER_LABELS_11= MEMBER_LABELS_12=
+expect_train 0 success 'a member with a recorded clearance passes' train/x "$two" \
   MEMBER_LABELS_11=aida:merge-hold-recorded,aida:merge-hold-cleared MEMBER_LABELS_12=
-expect_train 1 'a held member fails the train' train/x "$two" \
+expect_train 1 pending 'a held member keeps the train pending' train/x "$two" \
   MEMBER_LABELS_11= MEMBER_LABELS_12=aida:merge-hold,aida:merge-hold-recorded
-expect_train 1 'a member held before without clearance fails the train' train/x "$two" \
+expect_train 1 pending 'a member held before without clearance keeps the train pending' train/x "$two" \
   MEMBER_LABELS_11=aida:merge-hold-recorded MEMBER_LABELS_12=
-expect_train 1 'a member with a forged clearance fails the train' train/x "$two" \
+expect_train 1 failure 'a member with a forged clearance fails the train' train/x "$two" \
   MEMBER_LABELS_11=aida:merge-hold-cleared MEMBER_LABELS_12=
-expect_train 1 'an unreadable member fails closed' train/x "$two" MEMBER_LABELS_11=
-expect_train 1 'a train PR with no members line fails' train/x 'no members here'
-expect_train 1 'a malformed member entry fails' train/x "aida-train-members: x@$a40"
-expect_train 1 'a member entry with no @sha fails' train/x "aida-train-members: 11" MEMBER_LABELS_11=
-expect_train 1 'a member entry with a non-hex sha fails' train/x "aida-train-members: 11@zzzzzzz" MEMBER_LABELS_11=
-expect_train 1 'a member entry with a sha under 7 chars fails' train/x "aida-train-members: 11@abc12" MEMBER_LABELS_11=
-expect_train 0 'a 7-char hex sha passes' train/x "aida-train-members: 11@abc1234" MEMBER_LABELS_11=
-expect_train 0 'a non-train PR ignores a members line' feature/x "$two"
-expect_train 0 'a CRLF body (a web edit) still parses' train/x \
+expect_train 1 failure 'an unreadable member fails closed' train/x "$two" MEMBER_LABELS_11=
+expect_train 1 failure 'a train PR with no members line fails' train/x 'no members here'
+expect_train 1 failure 'a malformed member entry fails' train/x "aida-train-members: x@$a40"
+expect_train 1 failure 'a member entry with no @sha fails' train/x "aida-train-members: 11" MEMBER_LABELS_11=
+expect_train 1 failure 'a member entry with a non-hex sha fails' train/x "aida-train-members: 11@zzzzzzz" MEMBER_LABELS_11=
+expect_train 1 failure 'a member entry with a sha under 7 chars fails' train/x "aida-train-members: 11@abc12" MEMBER_LABELS_11=
+expect_train 0 success 'a 7-char hex sha passes' train/x "aida-train-members: 11@abc1234" MEMBER_LABELS_11=
+expect_train 0 success 'a non-train PR ignores a members line' feature/x "$two"
+expect_train 0 success 'a CRLF body (a web edit) still parses' train/x \
   "$(printf 'Train.\r\n\r\naida-train-members: 11@%s\r\n' "$a40")" MEMBER_LABELS_11=
 
 # The members-line cases shared with the Rust parser (pr_train
@@ -168,7 +249,9 @@ shared_cases=0
 while IFS=$'\t' read -r want value; do
   case "$want" in '' | '#'*) continue ;; esac
   value=${value//<CR>/$'\r'}
-  expect_train "$want" "shared members line '$value'" train/x "Train.
+  state=success
+  [ "$want" = 0 ] || state=failure
+  expect_train "$want" "$state" "shared members line '$value'" train/x "Train.
 
 aida-train-members: $value" MEMBER_LABELS_11= MEMBER_LABELS_12=
   shared_cases=$((shared_cases + 1))
@@ -176,3 +259,6 @@ done <"$members_fixture"
 [ "$shared_cases" -ge 10 ] || fail "shared members-line fixture read only $shared_cases cases"
 
 echo "merge-hold gate fixtures passed (${#cases[@]} label states x 2 shipped gates, $train_cases train-mode cases)"
+
+# trace:BUG-2492 | ai:codex — also exercise the status display projection.
+python3 "$repo_root/tests/test_merge_hold_status_rollup.py"
