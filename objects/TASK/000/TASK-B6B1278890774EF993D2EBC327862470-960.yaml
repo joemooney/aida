@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T23:39:41.575597Z
-modified_at: 2026-11-13T08:58:42.486614078Z
+modified_at: 2026-11-13T09:26:44.351625537Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -951,6 +951,12 @@ comments:
   modified_at: 2026-11-13T08:58:42.486614078Z
   session_id: 01a1d3ee-83e8-71b3-a2c5-aed5baed6fdc
   harness_version: 2.1.323 (Claude Code)
+- id: 01a1d43b-157f-7860-9b66-11851c022c6a
+  author: joe
+  content: 'Round 21: addressed all three authoritative PR #3916 review findings. Stale-cache scanner positive control now reads worker_gc.rs explicitly and still requires run_worker_gc.list_summaries_strict. Raw-Git debt split review_commands.rs=3 plus review_git_evidence.rs=3 (aggregate six unchanged); evidence module always scanned, with new real-source injected-fourth-builder regression proving rejection without worktree_path. Only two test files changed. rustfmt and diff checks pass; 44 non-Cargo fast gates pass. Mail-wake gate fails with health project directory ownership/shared-write refusals (4 failures, 17 errors; checkout mode 0775). Raw-Git targeted launcher job j20261113T090946460-2-0 timed out compiling after 900s with no executed tests (untested=true). Stale-cache j20261113T091005510-2838959-0 compiling; TUI check j20261113T091105308-2842628-0 and no-default-features check j20261113T091110944-2842994-0 queued. Final validation remains host work; no local commit/push/merge/queue completion. Handoff /tmp/task-3428-round21-handoff.md.'
+  created_at: 2026-11-13T09:26:44.351625537Z
+  modified_at: 2026-11-13T09:26:44.351625537Z
+  session_id: 01a1d42aaa1c
 history:
 - id: 01a1b862-2e0b-7a50-a4d0-25097c707b57
   author: joe
