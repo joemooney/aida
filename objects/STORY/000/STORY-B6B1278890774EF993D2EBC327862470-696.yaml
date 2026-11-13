@@ -1,0 +1,33 @@
+id: 01a1d668-b6bf-7370-99ef-e78fa171f296
+spec_id: STORY-b6b1278890774ef993d2ebc327862470-696
+agreed_id: STORY-2773
+title: 'Review PR-3961: [AI:claude] feat(mandate): renew takes --ttl and the start flags as overrides (STORY-2771)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `(no-sess`) for branch `story-2771-mandate-renew-overrides`.
+
+  - PR: <https://github.com/joemooney/aida/pull/3961>
+  - Branch: `story-2771-mandate-renew-overrides` → `integration`
+
+  ## Covers
+
+  - STORY-2771
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 3961` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-13T19:35:49.183572978Z
+modified_at: 2026-11-13T19:35:49.183572978Z
+req_type: Story
+filed_at:
+  code_sha: 91fe1e337894199f15365d3f8ecfaf81366f8291
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 91fe1e33789
+  vendor: claude
