@@ -1117,13 +1117,18 @@ On GitLab, `N` is the MR IID. The backup contains the project's
 `only_allow_merge_if_pipeline_succeeds`, `allow_merge_on_skipped_pipeline` and
 `only_allow_merge_if_all_discussions_are_resolved` settings. Only the first
 setting is temporarily disabled, and only when originally enabled.
-The command uses `glab mr merge --squash --yes --auto-merge=false`, pins the
-reviewed head SHA and uses the MR title as its squash message. Approval rules
+The command uses `glab api` to PUT the MR merge endpoint with squash enabled,
+auto-merge disabled, the reviewed head SHA and the MR title as its squash
+message. This also handles MRs with auto-merge already armed behind running
+or failed CI. The nullable skipped-pipeline setting is preserved and compared
+without writing it. Approval rules
 and protected-branch merge roles remain enforced; a merge refusal preserves
 GitLab's reason after restoring the pipeline requirement. Restoration runs on
 failure, interruption and panic, and all three saved settings are compared.
 Incomplete or unknown diff/mergeability evidence refuses before writes.
 The CI watch queries GitLab pipelines by the actual default-branch merge SHA
 (falling back to the squash SHA for fast-forward merges), rather than
-`glab ci status`'s current branch pipeline. Pure-git projects refuse:
+`glab ci status`'s current branch pipeline. On red CI, the suggested revert
+reads the commit's parents and uses `git revert -m 1` for a merge commit,
+or ordinary `git revert` for a single-parent commit. Pure-git projects refuse:
 there is no forge-side protection to lift; push the fix normally.

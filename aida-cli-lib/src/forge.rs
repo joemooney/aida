@@ -8090,11 +8090,18 @@ pub(crate) mod emergency_land {
             "allow_merge_on_skipped_pipeline",
             "only_allow_merge_if_all_discussions_are_resolved",
         ] {
+            // GitLab documents null for the skipped-pipeline setting. Missing
+            // evidence and null in either required boolean still refuse.
+            // trace:TASK-3788 | ai:codex
+            let value = project
+                .get(field)
+                .with_context(|| format!("missing merge policy field {field}"))?;
             ensure!(
-                project[field].is_boolean(),
-                "missing or invalid merge policy field {field}"
+                value.is_boolean()
+                    || (field == "allow_merge_on_skipped_pipeline" && value.is_null()),
+                "invalid merge policy field {field}"
             );
-            saved.insert(field.into(), project[field].clone());
+            saved.insert(field.into(), value.clone());
         }
         Ok(Value::Object(saved))
     }
@@ -8167,7 +8174,7 @@ pub(crate) mod emergency_land {
         #[cfg(test)]
         fake: Option<Box<dyn Fn(&[&str]) -> Result<String>>>,
         root: PathBuf,
-        cli: PathBuf,
+        forge_cli: PathBuf,
         critical: bool,
         signals: RefCell<crate::forwarded_signals::Forwarding>,
         interrupted: Cell<bool>,
@@ -8181,7 +8188,7 @@ pub(crate) mod emergency_land {
                 #[cfg(test)]
                 fake: None,
                 root,
-                cli: cli.into(),
+                forge_cli: cli.into(),
                 critical: false,
                 signals: RefCell::new(crate::forwarded_signals::Forwarding::install()?),
                 interrupted: Cell::new(false),
@@ -8197,7 +8204,7 @@ pub(crate) mod emergency_land {
                 kind,
                 fake: Some(Box::new(fake)),
                 root: PathBuf::new(),
-                cli: PathBuf::new(),
+                forge_cli: PathBuf::new(),
                 critical: false,
                 signals: RefCell::new(crate::forwarded_signals::Forwarding::install().unwrap()),
                 interrupted: Cell::new(false),
@@ -8269,7 +8276,7 @@ pub(crate) mod emergency_land {
             );
             let mut stdout = tempfile::tempfile()?;
             let mut stderr = tempfile::tempfile()?;
-            let mut child = std::process::Command::new(&self.cli)
+            let mut child = std::process::Command::new(&self.forge_cli)
                 .current_dir(&self.root)
                 .args(args)
                 .process_group(0)
@@ -8301,6 +8308,22 @@ pub(crate) mod emergency_land {
             ensure!(status.success(), "forge {} failed: {error}", args.join(" "));
             Ok(output)
         }
+        // Read actual parents rather than inferring topology from squash mode:
+        // GitLab can squash and still create a two-parent merge commit.
+        // trace:TASK-3788 | ai:codex
+        pub(crate) fn revert_command(&self, scope: &str, sha: &str) -> Result<String> {
+            if self.kind != ForgeKind::GitLab {
+                return Ok(format!("git revert {sha}"));
+            }
+            let commit = self.json(&[
+                "api",
+                "-X",
+                "GET",
+                &format!("{scope}/repository/commits/{sha}"),
+            ])?;
+            crate::pr_emergency_land::gitlab_revert_command(&commit, sha)
+        }
+
         pub(crate) fn json(&self, args: &[&str]) -> Result<Value> {
             Ok(serde_json::from_str(&self.command(args)?)?)
         }
@@ -8411,16 +8434,24 @@ pub(crate) mod emergency_land {
             self.critical = true;
             if self.kind == ForgeKind::GitLab {
                 self.command(&[
-                    "mr",
-                    "merge",
-                    &n.to_string(),
-                    "--squash",
-                    "--yes",
-                    "--auto-merge=false",
-                    "--sha",
-                    head,
-                    "--squash-message",
-                    title,
+                    // Use the server merge endpoint directly: glab mr merge's
+                    // MRCheckErrors rejects already-armed MRs behind running/red CI.
+                    // Server approval and protected-branch checks still apply.
+                    // trace:TASK-3788 | ai:codex
+                    "api",
+                    "-X",
+                    "PUT",
+                    &format!("projects/:id/merge_requests/{n}/merge"),
+                    "-f",
+                    "squash=true",
+                    "-f",
+                    "auto_merge=false",
+                    "-f",
+                    "merge_when_pipeline_succeeds=false",
+                    "-f",
+                    &format!("sha={head}"),
+                    "-f",
+                    &format!("squash_commit_message={title}"),
                 ])?;
                 return Ok(());
             }
