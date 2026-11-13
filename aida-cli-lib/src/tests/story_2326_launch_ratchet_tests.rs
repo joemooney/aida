@@ -13,7 +13,11 @@ use std::path::{Path, PathBuf};
 const CRATES: &[&str] = &["aida-mcp", "aida-core", "aida-cli-lib", "aida-tui"];
 
 /// Modules that are the launcher itself.
-const LAUNCHER: &[&str] = &["aida-cli-lib/src/launch/", "aida-core/src/launch_policy.rs"];
+const LAUNCHER: &[&str] = &[
+    "aida-cli-lib/src/launch/",
+    "aida-cli-lib/src/vendors/profile.rs",
+    "aida-core/src/launch_policy.rs",
+];
 
 /// (file, markers, why it is not converted yet). Exact counts; the total
 /// may only fall (see [`CEILING`]).
@@ -27,7 +31,7 @@ const LEDGER: &[(&str, usize, &str)] = &[
     ("aida-cli-lib/src/agent_launch.rs", 6, "slice C: Codex grant/finalize writes; slice D: the harness version probe"),
     ("aida-cli-lib/src/agent_registry.rs", 2, "not a vendor child: terminal title restore and probe"),
     ("aida-cli-lib/src/claude_agents.rs", 1, "slice D: vendor query (agents list)"),
-    ("aida-cli-lib/src/codex_tool_env.rs", 2, "Codex probe and cfg(test) tool shell constructor; finalization moved into launch/profile.rs"),
+    ("aida-cli-lib/src/codex_tool_env.rs", 2, "Codex probe and cfg(test) tool shell constructor; finalization moved into vendors/profile.rs"),
     ("aida-cli-lib/src/compete_cmd.rs", 2, "slice C: remaining compete grant/finalize markers (vendor construction migrated in B)"),
     ("aida-cli-lib/src/containment/supervisor.rs", 3, "STORY-2238: the containment supervisor, a permitted constructor module"),
     ("aida-cli-lib/src/criteria_red_run.rs", 1, "generic helper: runs a criteria command"),
@@ -530,7 +534,7 @@ fn story_2326_profile_and_grant_issuance_have_one_owner() {
             continue;
         }
         let src = production(&std::fs::read_to_string(&file).unwrap());
-        if rel != "launch/profile.rs" {
+        if rel != "vendors/profile.rs" {
             assert!(
                 !src.contains("fn prepare_launch("),
                 "private profile finalizer escaped into {rel}"
@@ -551,7 +555,7 @@ fn story_2326_profile_and_grant_issuance_have_one_owner() {
             "legacy launch issuer in {rel}"
         );
     }
-    let profile = std::fs::read_to_string(root.join("launch/profile.rs")).unwrap();
+    let profile = std::fs::read_to_string(root.join("vendors/profile.rs")).unwrap();
     assert!(profile.contains("fn prepare_launch("));
     assert!(!profile.contains("pub(crate) fn prepare_launch("));
 }
