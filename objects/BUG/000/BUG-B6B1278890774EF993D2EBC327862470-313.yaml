@@ -3,12 +3,12 @@ spec_id: BUG-b6b1278890774ef993d2ebc327862470-313
 agreed_id: BUG-2548
 title: 'Reviewer pickup: rollback leaks its lease, conflict checks run after the store pull, and the two-round cap stops reviews silently'
 description: '2026-11-12 evening, review relaunches failed repeatedly: (1) ''no agent was launched: rolled back the PR-3896 pickup setup (worktree, lease, claim...)'' yet lease 01a1d2701cdf survived and blocked the next pickup (''ownership reclaim could not end lease ... holder records no witness''). (2) ''aida queue work PR-N --role reviewer'' pulls the orphan store (~1 min) BEFORE refusing on ''branch pr-N is held by worktree'' / existing lease, so each refusal costs a pull; stale reviewer worktrees (#3775, #3887, #3896, #3902) each blocked one launch. (3) The review-watch two-round cap only sends a mailbox request; the PR then sits with an unreviewed head indefinitely. Acceptance: AC1 rollback removes every artifact it reports rolling back (lease file included), with a regression test; AC2 pickup checks branch/worktree/lease conflicts before any store pull or setup, and auto-reclaims a reviewer worktree+lease whose holder process is dead and whose worktree is clean (merge-hold markers copied first, per BUG-2176); AC3 hitting the cap queues one manual-review request and records it on the PR''s gate ledger, so autoland/advisor tooling can see it.'
-status: Approved
+status: InProgress
 priority: Medium
-owner: ''
+owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-13T02:45:43.305350105Z
-modified_at: 2026-11-13T02:46:03.181698917Z
+modified_at: 2026-11-13T02:47:31.607774001Z
 req_type: Bug
 history:
 - id: 01a1d2cc-3ead-77d2-bdac-92a7b8f80dc0
@@ -20,6 +20,13 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Approved
+- id: 01a1d2cd-9817-7f72-8158-303b78bdc775
+  author: aida-session-start
+  timestamp: 2026-11-13T02:47:31.607771192Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: 0558a9e06aac10a087327ade1e1ab0a0c3d4ad50
   branch: main
