@@ -1,0 +1,18 @@
+{
+  "id": "review-watch-8aa16c54d7918bb2bdb3d4be4b4322b64d0b19fc8c1fed94d190d9bcaec2dcac",
+  "thread_id": "review-watch-8aa16c54d7918bb2bdb3d4be4b4322b64d0b19fc8c1fed94d190d9bcaec2dcac",
+  "from": "review-watch",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1794536504120,
+  "body": "PR-3887 at 3f1085abd177e19d5afec55b32a11ac9039ab6bf is ready to ship: an authorized approval of 3f1085abd177e19d5afec55b32a11ac9039ab6bf covers the head, every CI check on 3f1085abd177e19d5afec55b32a11ac9039ab6bf passed, it is 1 commit(s) behind `main` on paths it does not touch, and no merge hold or review in progress is recorded. Update the branch with `gh pr update-branch 3887`, then run `aida pr ship 3887` once CI on the new head is green. The watcher only reports; it did not merge or update the branch.",
+  "subject": "PR-3887: ready to ship after its branch is updated",
+  "urgent": false,
+  "intent": "request",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "explicit"
+}
