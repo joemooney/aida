@@ -1,0 +1,30 @@
+id: 01a1d5c3-ff9b-7923-a95c-f281855a9b0a
+spec_id: STORY-b6b1278890774ef993d2ebc327862470-690
+agreed_id: STORY-2767
+title: 'Seat mail follow-ups: cohort ownership after retirement, MCP sender seat, thread provenance'
+description: |
+  Follow-up slice from the #3950 review (STORY-2745 seat mail), split out by the advisor ruling of 2026-11-13.
+
+  Acceptance:
+  1. (F4) Seat mail keeps cohort and queued ownership after the sending worktree retires. Seat addresses are delivery-bearing keys in ResolvedAudience, so retained-sidecar discovery and missing-sidecar fail-closed treat them like role keys. Regressions cover retirement and a missing sidecar.
+  2. (F6) MCP `send_message` records `from_seat` through the shared sender-seat resolver (AIDA_ROTATION_SEAT). A fixture covers an MCP send, then sender rotation, then a CLI reply delivered to the seat.
+  3. (Stretch, F7) Thread and history views show the durable sender seat or role and the vendor, recorded at send time, including after the sender rotates or exits. Includes an output fixture.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-13T16:35:54.395394278Z
+modified_at: 2026-11-13T16:35:54.395394278Z
+req_type: Story
+tags:
+- mailbox
+- track:integration
+filed_at:
+  code_sha: 5652ea465a222e7d3ade2cadb967ddd30a6b6b44
+  branch: integration
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 3631f7ca055
+  vendor: claude
+  session: 01a1d544-f5ad-79c2-97f9-6fbd19ddbd45
+  harness_version: 2.1.323 (Claude Code)
