@@ -8,7 +8,7 @@ priority: Low
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-10T03:07:15.181924Z
-modified_at: 2026-11-13T05:32:49.122694721Z
+modified_at: 2026-11-13T08:56:40.433020111Z
 req_type: Task
 comments:
 - id: 01a1c674-cd0d-76a2-8159-4728d6fffd38
@@ -109,6 +109,13 @@ comments:
   created_at: 2026-11-13T02:58:54.918868013Z
   modified_at: 2026-11-13T02:58:54.918868013Z
   session_id: 01a1d240-c397-7b61-b29f-bb337c138943
+  harness_version: 2.1.323 (Claude Code)
+- id: 01a1d41f-8ef1-7da3-9848-1a691f4d2e51
+  author: joe
+  content: 'Advisor 01:58: rework blocked by BUG-2553. Open-PR rework continuations launch the Claude implementer despite --vendor codex, and Claude dies on dell1 for lack of socat. Paused in ~/.aida/autoland-skip; remove the entry when BUG-2553 lands.'
+  created_at: 2026-11-13T08:56:40.433020111Z
+  modified_at: 2026-11-13T08:56:40.433020111Z
+  session_id: 01a1d3ee-83e8-71b3-a2c5-aed5baed6fdc
   harness_version: 2.1.323 (Claude Code)
 history:
 - id: 01a1c5dc-eeb2-7bf0-b31e-daf1c2b86eee
