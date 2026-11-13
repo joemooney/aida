@@ -3,12 +3,12 @@ spec_id: BUG-b6b1278890774ef993d2ebc327862470-322
 agreed_id: BUG-2557
 title: 'No supported re-review at the same head after the review contract changes: BUG-2530 refuses a duplicate review, so the advisor must push an empty commit (and pay a full CI run)'
 description: '2026-11-13 04:50: promotion #3922 had CHANGES REQUESTED at c8bc6df only because review story STORY-2750 listed an inherited, already-completed TASK-3448 under Covers. After the advisor corrected the coverage, ''aida queue work PR-3922 --role reviewer --fresh'' refused (''already has a CHANGES REQUESTED verdict at this exact head; a duplicate review is unnecessary'', review_marker.rs refuse_conclusive_head). Workaround: an empty commit, which costs a full CI run. Want: an advisor-only ''--rereview <reason>'' that admits one fresh review at the same head when the review story changed after the verdict, recorded in the gate ledger. A related defect: auto-queue-review re-adds inherited, completed specs to a promotion''s Covers list.'
-status: InProgress
+status: NeedsAttention
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-13T11:44:39.422508821Z
-modified_at: 2026-11-13T23:23:18.469528241Z
+modified_at: 2026-11-13T23:23:50.704907013Z
 req_type: Bug
 tags:
 - track:integration
@@ -18,6 +18,19 @@ comments:
   content: Commit b39fded312 references this requirement
   created_at: 2026-11-13T23:23:18.469528241Z
   modified_at: 2026-11-13T23:23:18.469528241Z
+  session_id: 01a1d729a0e1
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a1d739-477b-7e31-a26d-6af28fd943ac
+  author: dirtlab
+  content: |-
+    ## Implementer notes (findings could not be filed: aida add refused — primary .git/aida-work-dispenser.toml is mode 0664)
+
+    - **Shipped:** `aida queue work PR-N --role reviewer --rereview <reason>` (advisor seat only). Records a `rereview-admitted` gate-ledger event (head, reason, admitter, superseded verdict kind + recorded_at). The BUG-2530 duplicate-review refusal yields while that exact verdict is still the head's newest, so the next recorded verdict spends the admission. Grants no review/merge authority. Contained seats cannot write the ledger.
+    - **Deviation:** the related defect (auto-queue-review re-adding inherited, completed specs to a promotion's Covers list) is NOT fixed here; needs its own spec.
+    - **Design choice:** the "review story changed after the verdict" condition is not checked mechanically; the gate is advisor role + non-empty reason + a conclusive verdict carrying recorded_at.
+    - **Compat:** binaries older than this change fail closed on the unknown ledger event kind (same posture as BUG-2548's manual-review-requested).
+  created_at: 2026-11-13T23:23:37.723233665Z
+  modified_at: 2026-11-13T23:23:37.723233665Z
   session_id: 01a1d729a0e1
   harness_version: 2.1.319 (Claude Code)
 history:
@@ -37,6 +50,15 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1d739-7a30-7933-ae16-ba93d040ca22
+  author: dirtlab
+  timestamp: 2026-11-13T23:23:50.704914222Z
+  session_id: 01a1d729a0e1
+  harness_version: 2.1.319 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 filed_at:
   code_sha: 11bf5e9a018e0a304ec1af0d43435c1886b4328f
   branch: main
@@ -46,3 +68,9 @@ filed_at:
   vendor: claude
   session: 01a1d4aa-9c99-76c2-ac94-7f0795f8a7f9
   harness_version: 2.1.323 (Claude Code)
+attention_reason:
+  category: other
+  detail: 'work complete locally but unable to publish: git push to https://github.com failed in the seat sandbox (no credentials: could not read Username). Commit b39fded312 on branch bug-b6b1278890774ef993d2ebc327862470-322; targeted tests pass (33 passed incl. bug2557).'
+  lean: branch is ready; publish from the host (e.g. aida ship BUG-2557 --no-merge from a credentialed shell, then aida pr auto-queue-review)
+  raised_by: implementer
+  raised_at: 2026-11-13T23:23:50.704907013Z
