@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T23:39:41.575597Z
-modified_at: 2026-11-13T09:26:44.351625537Z
+modified_at: 2026-11-13T13:31:28.855095549Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -957,6 +957,13 @@ comments:
   created_at: 2026-11-13T09:26:44.351625537Z
   modified_at: 2026-11-13T09:26:44.351625537Z
   session_id: 01a1d42aaa1c
+- id: 01a1d51b-26d7-7222-9d34-6dab84f10274
+  author: joe
+  content: 'Advisor 06:35: COMPLETED. Verified on main dc53b3a (#3916, slice C1): AC1 zero glob crate imports (check-crate-globs: 0 remaining); AC2 ratchet wired in CI (ci.yml:987); AC3 no lib_part*.rs remain and lib.rs has no lib_part include (the only include! left is review_commands.rs, which is not in the AC3 list); AC4 relocate-ledger-paths.py plus tests/test_crate_split_tools.py; AC5 CI green on the train. Slice C2 is not needed.'
+  created_at: 2026-11-13T13:31:28.855095549Z
+  modified_at: 2026-11-13T13:31:28.855095549Z
+  session_id: 01a1d4aa-9c99-76c2-ac94-7f0795f8a7f9
+  harness_version: 2.1.323 (Claude Code)
 history:
 - id: 01a1b862-2e0b-7a50-a4d0-25097c707b57
   author: joe
