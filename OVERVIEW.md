@@ -16,8 +16,13 @@ Contained-seat acceptance remains outstanding. See the
 [deployment and acceptance guide](scripts/codegraph/README.md).
 <!-- trace:STORY-2630 | ai:codex -->
 
+`cmdkit::CliSupport<T>` provides tree building and parsing over callbacks injected
+by the crate root's `CLI_SUPPORT` (`TEST_CLI` in tests). The registry supplies its
+cached pristine tree and matches decoder at that boundary; consumers and the
+leaf helper do not import the registry. <!-- trace:TASK-3448 | ai:codex -->
+
 `cmdkit` holds the command-framework types and shared output/stakeholder vocabulary;
-existing CLI, registry and stakeholder paths re-export them.
+existing CLI and stakeholder paths re-export them.
 <!-- trace:TASK-3425 | ai:codex -->
 
 Mailbox delivery resolves named agents against current registry liveness,
@@ -693,6 +698,14 @@ constituent commit trailers still participate in the landing scan.
 The native desktop and WASM clients (egui-based) were extracted to a separate repo on 2026-05-02. The React dashboard's keyboard navigation (`j/k`, `g+key` chords, quick pickers) covers the vi-feel use case.
 
 ### Canonical gate ledger
+
+Cross-label discovery uses a scan-wide 128 MiB read ceiling and a 200,000
+JSON-parse-attempt ceiling, independently of the 64 MiB selection budget.
+Unrelated payloads and torn retries count; exhausting discovery refuses the
+lookup. This is an interim safety cap: relevant-only discovery and automatic
+archive retention still need the completeness and revival design described in
+[the proposed sketch](docs/plans/2026-11-12-bug-2531-discovery-retention-sketch.md).
+<!-- trace:BUG-2531 | ai:codex -->
 
 The gate architecture is **effective gate state = f(head SHA, canonical IDs,
 ledger)**. `gate::canon` resolves a change's spec labels against one committed

@@ -441,6 +441,16 @@ progress lines are printed separately from required-check names. Check rows do
 not distinguish runner queue time from execution time. No GitLab-specific
 progress lookup or runner queue timing is provided.
 
+<!-- trace:BUG-2538 | ai:codex -->
+Train coverage audits store digest summaries per review key, including a digest
+and sequence reference for the bound source event. Full review histories remain
+live gate inputs. Before publishing a train branch or opening its PR, the train
+budgets proof metadata and possible unbound verdict imports against the 16 MiB
+evidence cap, reserving space for gate events. Riders that exceed the build-time
+budget are ejected with a suggestion to ship separately. The budget is refreshed
+before publication, and the actual ledger plus audit size is checked before the
+audit is appended.
+
 A newly opened train waits up to 180 seconds for its first CI checks to
 register. After checks appear, pending lanes continue through the ordinary
 CI wait; a missing required check after the other lanes settle keeps its
@@ -458,6 +468,14 @@ refuse with a retry diagnostic. Dispatch flow/train fallback returns its request
 to Pending on this contention so a later serve pass can retry. Dry runs do not
 recover or write journals. Trains predating the journal retain the confirmed
 owner-liveness cleanup path.
+
+Train ownership starts when the train PR opens, before its CI wait or merge
+lease. Confirmed retirement or abandonment releases its riders even if no merge
+lease was taken. Admission also repairs legacy rides when the forge confirms the
+old train is closed or merged, recording the release in the ownership journal.
+Open trains and unknown forge evidence retain their riders; dry runs never write
+these repairs.
+<!-- trace:BUG-2537 | ai:codex -->
 
 Recovery does not inherit terminal consent from the new invocation: recovered
 supervised members still need a current mandate cover, even when a human names
@@ -590,6 +608,13 @@ process death from wall-clock age or a numeric PID absent in another view.
 - the `classes` subcommand — counts recorded findings per class across every verdict, archived rounds included, optionally limited to a recent window. It answers "how often does this defect class recur?" without a keyword sweep that cannot tell an approval from a refusal. Findings recorded before classes existed stay unclassified; nothing is back-filled.
 
 **Gotchas.** A reviewer reads **code**, an advisor reads **commit messages** — when their verdicts conflict on whether to merge, trust the reviewer. The whole reason `review` runs the agent over the *diff* is that the diff is ground truth.
+
+Interactive PR review collects the child's original verdict using the current
+PR head and the exact reviewer grant issued by this launch before presenting or
+re-recording it. A `request-changes` or `rejected` result arms a Rework hold and
+synchronizes the forge merge-hold label. Failed collection or hold placement
+returns an error; a verdict anchor alone does not finish that protection.
+<!-- trace:BUG-2522 | ai:codex -->
 
 **Chains with** — the verdict either passes the spec toward merge, or sends it to `aida rework`.
 
@@ -1057,3 +1082,34 @@ and waits for `go`; it refuses duplicate PR numbers and more than 20 PRs.
 project. Each batch, PR outcome and stop is logged to
 `.aida/advisor-activity.jsonl`.
 <!-- trace:STORY-1887 | ai:claude -->
+
+### `aida pr emergency-land`
+
+<!-- trace:STORY-2732 | ai:codex -->
+`aida pr emergency-land N` is a GitHub-only escape hatch for an explicitly
+operator-requested urgent fix. It uses the same human-presence floor as `pr ship`: a human terminal or
+an operator-attributed script-deputy job. Captured stdout is allowed. It refuses
+headless, direct lane and implementer/reviewer sessions. The PR must be open,
+non-draft, known mergeable and target the default branch. Defaults cap the diff
+at 200 added/deleted lines and ten files; `--max-lines N` changes the line cap,
+and `--allow-large` overrides both size limits.
+
+The command saves protection under `.aida/emergency-land/`, lifts admin
+enforcement only when originally enabled, and admin squash-merges using the PR
+title. It restores enforcement on failure, interruption and panic, then compares
+protection with the backup ignoring URL fields. A restoration failure or mismatch
+exits nonzero and prints the exact recovery command. Check that command and the
+backup immediately. An already disabled setting is left disabled.
+
+`audit.jsonl` records the operator, PR/head/squash SHA, skipped required checks
+and restoration result; title spec trailers receive an audit comment. The default
+watch polls squash-commit CI for up to 30 minutes. Red CI prints a revert PR
+recipe without reverting automatically. `--no-watch` skips the watch;
+`--dry-run` prints the plan and validates preconditions without writes.
+`/aida-emergency-fix` guides the operator-requested fix through one targeted check,
+PR creation, operator-attributed emergency landing and a cause/fix record on the
+spec. The skill submits the landing script with
+`aida deputy shell submit --file F --wait` and checks the job exit code;
+exit 75 means the job is still pending, not a successful landing. Claude,
+Codex and Antigravity receive the skill through the shared template inventory.
+GitLab support remains a separate follow-up; this command currently refuses it.

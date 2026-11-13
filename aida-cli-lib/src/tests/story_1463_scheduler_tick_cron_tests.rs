@@ -29,8 +29,9 @@ use std::path::Path;
 
 #[test]
 fn schedule_install_cron_and_uninstall_cron_parse() {
-    let cli =
-        crate::command_registry::try_parse_from(["aida", "schedule", "install-cron"]).unwrap();
+    let cli = crate::TEST_CLI
+        .try_parse_from(["aida", "schedule", "install-cron"])
+        .unwrap();
     assert!(matches!(
         cli.command
             .registered::<crate::maintenance_schedule::ScheduleArgs>(),
@@ -39,8 +40,9 @@ fn schedule_install_cron_and_uninstall_cron_parse() {
         }
     ));
 
-    let cli =
-        crate::command_registry::try_parse_from(["aida", "schedule", "uninstall-cron"]).unwrap();
+    let cli = crate::TEST_CLI
+        .try_parse_from(["aida", "schedule", "uninstall-cron"])
+        .unwrap();
     assert!(matches!(
         cli.command
             .registered::<crate::maintenance_schedule::ScheduleArgs>(),
@@ -50,7 +52,9 @@ fn schedule_install_cron_and_uninstall_cron_parse() {
     ));
 
     // The `aida cron` visible alias still reaches the same subcommands.
-    let cli = crate::command_registry::try_parse_from(["aida", "cron", "install-cron"]).unwrap();
+    let cli = crate::TEST_CLI
+        .try_parse_from(["aida", "cron", "install-cron"])
+        .unwrap();
     assert!(matches!(
         cli.command
             .registered::<crate::maintenance_schedule::ScheduleArgs>(),
@@ -67,8 +71,9 @@ fn schedule_install_cron_and_uninstall_cron_parse() {
 // trace:BUG-1600 | ai:claude
 #[test]
 fn schedule_tick_hook_and_timer_shapes_parse() {
-    let cli =
-        crate::command_registry::try_parse_from(["aida", "schedule", "tick", "--hook"]).unwrap();
+    let cli = crate::TEST_CLI
+        .try_parse_from(["aida", "schedule", "tick", "--hook"])
+        .unwrap();
     assert!(matches!(
         cli.command
             .registered::<crate::maintenance_schedule::ScheduleArgs>(),
@@ -78,7 +83,9 @@ fn schedule_tick_hook_and_timer_shapes_parse() {
     ));
 
     // The timer/cron shape: no --hook.
-    let cli = crate::command_registry::try_parse_from(["aida", "schedule", "tick"]).unwrap();
+    let cli = crate::TEST_CLI
+        .try_parse_from(["aida", "schedule", "tick"])
+        .unwrap();
     assert!(matches!(
         cli.command
             .registered::<crate::maintenance_schedule::ScheduleArgs>(),
@@ -97,7 +104,7 @@ fn schedule_tick_hook_and_timer_shapes_parse() {
 #[test]
 fn schedule_tick_has_no_json_capability() {
     use clap::CommandFactory;
-    let root = crate::command_registry::built_command();
+    let root = crate::TEST_CLI.built_command();
     let schedule = root
         .get_subcommands()
         .find(|c| c.get_name() == "schedule")
@@ -114,14 +121,16 @@ fn schedule_tick_has_no_json_capability() {
 
 #[test]
 fn init_no_schedule_flag_parses() {
-    let cli = crate::command_registry::try_parse_from(["aida", "init", "--no-schedule"]).unwrap();
+    let cli = crate::TEST_CLI
+        .try_parse_from(["aida", "init", "--no-schedule"])
+        .unwrap();
     let crate::init_cmd::InitArgs { no_schedule, .. } =
         cli.command.registered::<crate::init_cmd::InitArgs>();
     assert!(no_schedule);
 
     // Default (no flag) is false — a bare `aida init` still only OFFERS at a
     // TTY; the flag exists to skip the offer entirely.
-    let cli = crate::command_registry::try_parse_from(["aida", "init"]).unwrap();
+    let cli = crate::TEST_CLI.try_parse_from(["aida", "init"]).unwrap();
     let crate::init_cmd::InitArgs { no_schedule, .. } =
         cli.command.registered::<crate::init_cmd::InitArgs>();
     assert!(!no_schedule);
