@@ -1,0 +1,25 @@
+id: 01a1d4a9-add3-7b93-9195-d196b3fd6fcf
+spec_id: BUG-b6b1278890774ef993d2ebc327862470-320
+agreed_id: BUG-2555
+title: Work dispenser file is re-created group-writable under umask 002, then every ID allocation refuses as 'unsafe WORK allocation state'
+description: 'Observed on dell1 2026-11-13 01:28 and 01:57 (advisor): .git/aida-work-dispenser.toml came back at mode 0664 after a chmod go-w, because the dell1 shells run with umask 0002. Each time, aida add and the auto-queue review story fail with ''requirement ID allocation failed: unsafe WORK allocation state ... group- or other-writable (mode 0664)''. Acceptance: (1) the writer creates and replaces the dispenser with an explicit 0600/0644 mode regardless of umask (write to a temp file, fchmod, then rename); (2) a regression under umask 0002 shows the file stays non-group-writable across allocations; (3) the existing refusal stays for a file someone else made writable.'
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-13T11:27:32.307973679Z
+modified_at: 2026-11-13T11:27:32.307973679Z
+req_type: Bug
+tags:
+- dell1
+- store
+- track:integration
+filed_at:
+  code_sha: 11bf5e9a018e0a304ec1af0d43435c1886b4328f
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 11bf5e9a018
+  vendor: claude
+  session: 01a1d3ee-83e8-71b3-a2c5-aed5baed6fdc
+  harness_version: 2.1.323 (Claude Code)
