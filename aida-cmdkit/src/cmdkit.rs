@@ -267,6 +267,10 @@ impl std::fmt::Debug for CommandReg {
 pub struct Invocation {
     pub reg: &'static CommandReg,
     pub matches: ArgMatches,
+    /// Caller-owned initialization, shared with its spec argument parsers.
+    /// Test consumers supply their explicit no-op boundary here too.
+    // trace:TASK-3783 | ai:codex
+    pub initialize_aliases: fn(),
 }
 
 impl Invocation {
@@ -287,7 +291,7 @@ impl Invocation {
         if matches!(self.reg.run, Handler::Early(_))
             && !matches!(self.reg.name, "statusline" | "statusbar")
         {
-            crate::spec_arg::ensure_alias_map();
+            (self.initialize_aliases)();
         }
         match self.reg.run {
             Handler::Early(run) => run(&self.matches, &ctx).map(|()| Flow::Return),
@@ -394,6 +398,7 @@ mod tests {
         let globals = globals();
         assert_eq!(globals.format, Some(OutputFormat::Json));
         let invocation = Invocation {
+            initialize_aliases: crate::spec_arg::ensure_alias_map,
             reg: &EARLY,
             matches: (EARLY.command)().get_matches_from(["statusline"]),
         };
@@ -401,9 +406,33 @@ mod tests {
         assert_eq!(invocation.run_early(&globals).unwrap(), Flow::Return);
     }
 
+    // trace:TASK-3783 | ai:codex
+    #[test]
+    fn early_dispatch_uses_the_callers_initializer_except_for_prompt_renderers() {
+        use std::sync::atomic::{AtomicUsize, Ordering};
+        static CALLS: AtomicUsize = AtomicUsize::new(0);
+        static ORDINARY: CommandReg = CommandReg {
+            name: "example",
+            ..EARLY
+        };
+        let initialize_aliases = || {
+            CALLS.fetch_add(1, Ordering::SeqCst);
+        };
+        for (reg, expected) in [(&EARLY, 0), (&ORDINARY, 1), (&STORE, 1)] {
+            let invocation = Invocation {
+                reg,
+                matches: (reg.command)().get_matches_from([reg.name]),
+                initialize_aliases,
+            };
+            invocation.run_early(&globals()).unwrap();
+            assert_eq!(CALLS.load(Ordering::SeqCst), expected);
+        }
+    }
+
     #[test]
     fn store_handler_defers_until_a_store_is_supplied() {
         let invocation = Invocation {
+            initialize_aliases: crate::spec_arg::ensure_alias_map,
             reg: &STORE,
             matches: (STORE.command)().get_matches_from(["example"]),
         };

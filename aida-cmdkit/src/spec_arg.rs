@@ -27,7 +27,14 @@ pub fn ensure_alias_map() {
 /// alias form — a canonical id, a UUID, `PR-14`, `batch:NAME`, an unknown
 /// label — comes back unchanged, so a not-found still names what was typed.
 pub fn canonical(id: &str) -> String {
-    ensure_alias_map();
+    canonical_with(id, ensure_alias_map)
+}
+
+/// Resolve using the caller's initialization boundary. Unit-test consumers
+/// can supply a no-op while retaining their explicitly installed maps.
+// trace:TASK-3783 | ai:codex
+pub fn canonical_with(id: &str, initialize_aliases: fn()) -> String {
+    initialize_aliases();
     aida_core::node_alias::expand_or_keep(id)
 }
 
@@ -42,11 +49,17 @@ pub fn spec_id(raw: &str) -> Result<String, String> {
 /// [`spec_id`] for a comma-separated list argument: each entry resolves,
 /// spacing around unchanged entries is kept.
 pub fn spec_id_csv(raw: &str) -> Result<String, String> {
+    spec_id_csv_with(raw, ensure_alias_map)
+}
+
+/// CSV counterpart of [`canonical_with`].
+// trace:TASK-3783 | ai:codex
+pub fn spec_id_csv_with(raw: &str, initialize_aliases: fn()) -> Result<String, String> {
     Ok(raw
         .split(',')
         .map(|part| {
             let trimmed = part.trim();
-            match canonical(trimmed) {
+            match canonical_with(trimmed, initialize_aliases) {
                 same if same == trimmed => part.to_string(),
                 expanded => expanded,
             }

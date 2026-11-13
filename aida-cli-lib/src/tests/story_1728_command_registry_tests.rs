@@ -598,6 +598,7 @@ fn synthetic_reg(run: Handler) -> &'static CommandReg {
 fn synthetic_invocation(run: Handler) -> Invocation {
     let reg = synthetic_reg(run);
     Invocation {
+        initialize_aliases: crate::spec_arg::ensure_alias_map,
         reg,
         matches: (reg.command)().get_matches_from(["synthetic"]),
     }
