@@ -21,7 +21,7 @@ fn git_ok(dir: &Path, args: &[&str]) {
     );
 }
 
-fn set_owner(main: &Path, pid: Option<u32>) {
+pub(super) fn set_owner(main: &Path, pid: Option<u32>) {
     let mut lease = crate::list_leases(main).into_iter().next().unwrap();
     lease.pid_namespace = crate::agent_registry::current_pid_namespace();
     lease.active_pid = pid;
@@ -77,7 +77,7 @@ fn seed_owner(main: &Path, lease: &crate::SessionLease) {
     crate::ownership::dual::lease_written(main, &lease);
 }
 
-fn dead_pid() -> u32 {
+pub(super) fn dead_pid() -> u32 {
     let mut child = std::process::Command::new("true").spawn().unwrap();
     let pid = child.id();
     child.wait().unwrap();
@@ -116,6 +116,7 @@ fn bug_2491_bwrap_force_claim_retires_unreachable_slice_tags() {
     if !bwrap_live() {
         return;
     }
+    let _scan = aida_core::mailbox_lifecycle::activation::test_writer_scan(true);
     let fx = fixture();
     let _env = crate::test_env::AmbientGuard::hermetic_and(
         &fx.main,
@@ -194,6 +195,7 @@ fn bug_2455_bwrap_force_claim_retires_clean_pushed_dead_clone_and_lease() {
     if !bwrap_live() {
         return;
     }
+    let _scan = aida_core::mailbox_lifecycle::activation::test_writer_scan(true);
     let fx = fixture();
     let _env = crate::test_env::AmbientGuard::hermetic_and(
         &fx.main,

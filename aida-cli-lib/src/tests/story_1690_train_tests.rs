@@ -4104,34 +4104,50 @@ fn bug2537_train_ownership_checked_cleanup_skips_closed_and_refuses_failed_or_mo
 }
 
 // trace:STORY-2401 | ai:codex
+// trace:BUG-2556 | ai:claude
 #[test]
-fn pr_train_journal_recovery_has_no_terminal_consent_for_old_members() {
+fn pr_train_journal_recovery_consents_only_for_the_named_train() {
     let dir = tempfile::tempdir().unwrap();
     let recording = crate::forge::fake::RecordingForge::new();
-    // The current command names #50; the old train carries supervised #41.
-    let opts = TrainOptions {
-        prs: &[50],
-        all_ready: false,
+    let opts = |prs: &'static [u64], all_ready: bool| TrainOptions {
+        prs,
+        all_ready,
         dry_run: false,
         local_ci: None,
         max: 10,
         no_pull: true,
     };
-    let host = LiveTrainForge {
-        project_root: dir.path().into(),
-        main_worktree: dir.path().into(),
-        base: "main".into(),
-        forge: &recording,
-        named: prs_named_on_command_line(&opts),
-        dispatch_ctx: None,
-        dispatch_abort: None,
-    }
-    .for_recovery();
+    let recovery_host = |opts: &TrainOptions| {
+        LiveTrainForge {
+            project_root: dir.path().into(),
+            main_worktree: dir.path().into(),
+            base: "main".into(),
+            forge: &recording,
+            named: false,
+            dispatch_ctx: None,
+            dispatch_abort: None,
+        }
+        .for_recovery(opts)
+        .named
+    };
+    // BUG-2556: the human at the terminal named exactly the recovered train's
+    // members, so its supervised member #41 keeps their consent.
+    let named = recovery_host(&opts(&[41], false));
+    assert!(
+        named,
+        "a recovered train named on the command line keeps consent"
+    );
     let mut checks = FakeChecks::shipping("TASK-9", &[], Some(aida_core::ExecutionMode::Guided));
-    checks.tty = tty_consents(true, host.named);
+    checks.tty = tty_consents(true, named);
+    gate_member_with(&mut checks, "main", 41).expect("named recovered member gates");
+    // An `--all-ready` sweep never consents for a supervised member.
+    let mut checks = FakeChecks::shipping("TASK-9", &[], Some(aida_core::ExecutionMode::Guided));
+    checks.tty = tty_consents(true, recovery_host(&opts(&[41], true)));
     let refusal = gate_member_with(&mut checks, "main", 41).unwrap_err();
     assert!(refusal.contains("TASK-9 is marked"), "{refusal}");
     assert!(checks.calls.contains(&"mandate"));
+    // Naming #50 never authorizes the old train carrying #41: recovery does
+    // not resume it at all (BUG-2547), so nothing gates or merges.
     let train = train_of("main", &fms(&[41]));
     let mut entry = journal::Entry::new(train, "train/old-all-ready-1".into());
     entry.change_id = Some(901);
@@ -4141,7 +4157,8 @@ fn pr_train_journal_recovery_has_no_terminal_consent_for_old_members() {
     let mut forge = FakeForge::mains(&["main"]);
     forge.gates.insert(41, Err(refusal));
     let mut rails = ForgeRails::new(&mut forge, "new".into()).with_journal(dir.path());
-    assert_eq!(rails.resume_for(Some(&[41])).unwrap().ejected[0].pr, 41);
+    let out = rails.resume_for(Some(&[50])).unwrap();
+    assert!(out.ejected.is_empty() && out.landed.is_empty());
     drop(rails);
     assert!(forge.merged.is_empty());
 }

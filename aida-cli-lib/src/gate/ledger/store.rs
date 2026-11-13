@@ -248,12 +248,20 @@ fn append_locked(
     let existing = read_file(root, change);
     let mut pending: Vec<GateEvent> = Vec::new();
     for event in events {
-        let known = event.verdict_record().is_some_and(|record| {
-            existing
-                .iter()
-                .chain(pending.iter())
-                .any(|e| e.verdict_record() == Some(record) && e.spec == event.spec)
-        });
+        // trace:BUG-2548 | ai:codex — retries keep one durable escalation.
+        let manual_known = match &event.body {
+            EventBody::ManualReviewRequested { request_id, .. } => existing.iter().chain(pending.iter()).any(|e| {
+                matches!(&e.body, EventBody::ManualReviewRequested { request_id: known, .. } if known == request_id)
+            }),
+            _ => false,
+        };
+        let known = manual_known
+            || event.verdict_record().is_some_and(|record| {
+                existing
+                    .iter()
+                    .chain(pending.iter())
+                    .any(|e| e.verdict_record() == Some(record) && e.spec == event.spec)
+            });
         if !known {
             pending.push(event);
         }
