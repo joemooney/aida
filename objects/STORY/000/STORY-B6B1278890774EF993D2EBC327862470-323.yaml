@@ -3,12 +3,12 @@ spec_id: STORY-b6b1278890774ef993d2ebc327862470-323
 agreed_id: STORY-2325
 title: One ownership and liveness record per piece of work (lease, PR, train, reviewer, mailbox scope)
 description: 'Regroup target 2, 2026-11-02. One typed ownership record with a single liveness rule: pid plus start identity, a heartbeat, or ''the seat HEAD is already in the PR''. Ownership passes from lease to PR when the PR opens. Dead owners are reclaimed by rule, never with --force. Trains, reviewers and relaunches query it. Mail retention is checked against message state, not the build id. Evidence: STORY-2315, BUG-2412, BUG-2220, BUG-2411, BUG-2327, TASK-1715, TASK-2021, BUG-2138, STORY-1665. Sketch-first; advisor signoff required.'
-status: NeedsAttention
+status: InProgress
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-02T19:20:50.092491662Z
-modified_at: 2026-11-13T03:07:18.636449038Z
+modified_at: 2026-11-13T09:40:26.879708868Z
 req_type: Story
 tags:
 - architecture
@@ -739,6 +739,13 @@ comments:
   modified_at: 2026-11-13T02:57:19.128381371Z
   session_id: 01a1d240-c397-7b61-b29f-bb337c138943
   harness_version: 2.1.323 (Claude Code)
+- id: 01a1d447-a27f-7142-9b2d-90d43bde7732
+  author: joe
+  content: 'Returned from NeedsAttention to In Progress via `aida edit --status`. It was punted on: missing-context: Final round PR-3619 cannot be applied to the supplied checkout: HEAD is c96961696b, while the authoritative round-8 review is for 321f9f100f9c. Findings 1, 2, 3, 4 and 5 assume earlier-round changes absent here: --steal is still implemented, journal_reclaim and covered_without_pr are absent, and OVERVIEW has no PR-D ownership recovery limits section. I dispute applying those findings against this base, not their validity against the reviewed head. Reconstructing earlier rounds would violate the binding final-round scope. Finding 6 also cannot be satisfied before host publication and CI at the resulting head. Host must relaunch on the reviewed PR branch (321f9f100f9c or its intended successor), preserving the merge hold. Codegraph doctor additionally reports the required reviewed host client missing; host must supply its absolute deployed path. No source edits or tests performed; working tree remains clean.. No triage reason was given.'
+  created_at: 2026-11-13T09:40:26.879697187Z
+  modified_at: 2026-11-13T09:40:26.879697187Z
+  session_id: 01a1d3ee-83e8-71b3-a2c5-aed5baed6fdc
+  harness_version: 2.1.323 (Claude Code)
 history:
 - id: 01a19ed2-508b-7401-9865-70193fa0d0af
   author: joe
@@ -1105,6 +1112,15 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a1d447-a27f-7142-9b2d-90c94f592dbc
+  author: joe
+  timestamp: 2026-11-13T09:40:26.879670116Z
+  session_id: 01a1d3ee-83e8-71b3-a2c5-aed5baed6fdc
+  harness_version: 2.1.323 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: InProgress
 filed_at:
   code_sha: 1b678fd5059046ff02bfb3b87c1f10d3162efda6
   branch: main
@@ -1113,8 +1129,3 @@ filed_at:
   aida_build_sha: 6a3f67671a9
   vendor: claude
   session: ee0bf351-6b17-486f-a38e-cfbb1343c426
-attention_reason:
-  category: missing-context
-  detail: 'Final round PR-3619 cannot be applied to the supplied checkout: HEAD is c96961696b, while the authoritative round-8 review is for 321f9f100f9c. Findings 1, 2, 3, 4 and 5 assume earlier-round changes absent here: --steal is still implemented, journal_reclaim and covered_without_pr are absent, and OVERVIEW has no PR-D ownership recovery limits section. I dispute applying those findings against this base, not their validity against the reviewed head. Reconstructing earlier rounds would violate the binding final-round scope. Finding 6 also cannot be satisfied before host publication and CI at the resulting head. Host must relaunch on the reviewed PR branch (321f9f100f9c or its intended successor), preserving the merge hold. Codegraph doctor additionally reports the required reviewed host client missing; host must supply its absolute deployed path. No source edits or tests performed; working tree remains clean.'
-  raised_by: implementer
-  raised_at: 2026-11-13T03:07:18.636449038Z
