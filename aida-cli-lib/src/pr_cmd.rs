@@ -48,6 +48,7 @@ pub(crate) fn handle_pr_command(cmd: &PrCommand) -> Result<()> {
         // trace:BUG-2384 | ai:codex
         // trace:BUG-2535 | ai:codex
         PrCommand::PostShipSweep => {
+            let _lock = verify_post_ship_sweep_handoff()?;
             run_post_ship_sweep();
             Ok(())
         }
@@ -4723,7 +4724,9 @@ fn post_ship_cleanup_worker(args: PostShipCleanupArgs<'_>) -> Result<()> {
     if args.sweep {
         let mut cmd = std::process::Command::new(pr_ship_post_merge_aida_exe());
         cmd.current_dir(&main).args(["pr", "post-ship-sweep"]);
-        if let Err(error) = run_post_ship_sweep_bounded(cmd, doctor_cmd::POST_SHIP_GC_BUDGET) {
+        if let Err(error) =
+            run_post_ship_sweep_bounded(cmd, doctor_cmd::POST_SHIP_GC_BUDGET, cleanup_lock)
+        {
             eprintln!(
                 "  post-merge cleanup deferred: {error:#}; run `aida doctor` to inspect and retry"
             );
@@ -4733,6 +4736,88 @@ fn post_ship_cleanup_worker(args: PostShipCleanupArgs<'_>) -> Result<()> {
         anyhow::bail!(failure);
     }
     Ok(())
+}
+
+// The inherited open file description retains the flock even if the supervisor
+// exits while SIGKILL is pending in uninterruptible I/O.
+// trace:BUG-2535 | ai:codex
+const SWEEP_LOCK_FD: std::os::fd::RawFd = 198;
+
+// trace:BUG-2535 | ai:codex
+fn verify_post_ship_sweep_handoff() -> Result<std::fs::File> {
+    let main = main_worktree_root_from(&find_project_root()?);
+    verify_sweep_lock(&main.join(".aida/post-ship-cleanup.lock"))
+}
+
+// trace:BUG-2535 | ai:codex
+fn verify_sweep_lock(path: &std::path::Path) -> Result<std::fs::File> {
+    use fs2::FileExt;
+    use std::os::{fd::FromRawFd, unix::fs::MetadataExt};
+    anyhow::ensure!(
+        std::env::var("AIDA_SWEEP_PARENT").ok().as_deref()
+            == Some(unsafe { libc::getppid() }.to_string().as_str()),
+        "post-ship-sweep requires a supervisor lock handoff"
+    );
+    let fd = unsafe { libc::fcntl(SWEEP_LOCK_FD, libc::F_DUPFD_CLOEXEC, 3) };
+    anyhow::ensure!(fd >= 0, "missing inherited cleanup lock");
+    let inherited = unsafe { std::fs::File::from_raw_fd(fd) };
+    let independent = std::fs::OpenOptions::new()
+        .read(true)
+        .write(true)
+        .open(path)?;
+    let actual = inherited.metadata()?;
+    let expected = independent.metadata()?;
+    anyhow::ensure!(
+        actual.is_file() && actual.dev() == expected.dev() && actual.ino() == expected.ino(),
+        "cleanup lock identity mismatch"
+    );
+    // A new description must conflict while the inherited description must
+    // already own the exclusive lock. This also refuses an unlocked fd.
+    anyhow::ensure!(
+        matches!(independent.try_lock_exclusive(), Err(e)
+        if e.kind() == std::io::ErrorKind::WouldBlock),
+        "cleanup lock is not held"
+    );
+    inherited
+        .try_lock_exclusive()
+        .context("cleanup lock handoff does not own the lock")?;
+    // Only the sweep itself needs the descriptor, not its exec descendants.
+    unsafe {
+        libc::close(SWEEP_LOCK_FD);
+    }
+    Ok(inherited)
+}
+
+// Bound the caller's termination wait. A separate reaper owns both resources
+// until wait confirms exit; the sweep's inherited descriptor additionally keeps
+// serialization intact if this supervisor process exits first.
+// trace:BUG-2535 | ai:codex
+fn reap_sweep_bounded(
+    mut child: std::process::Child,
+    lock: std::fs::File,
+    budget: std::time::Duration,
+    mut poll: impl FnMut(&mut std::process::Child) -> std::io::Result<Option<std::process::ExitStatus>>,
+) {
+    let started = std::time::Instant::now();
+    loop {
+        if matches!(poll(&mut child), Ok(Some(_))) {
+            return;
+        }
+        if started.elapsed() >= budget {
+            break;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(10));
+    }
+    std::thread::spawn(move || {
+        let _lock = lock;
+        // Never release ownership on an observation error.
+        loop {
+            if child.wait().is_ok() {
+                break;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(100));
+        }
+    });
 }
 
 // trace:BUG-2535 | ai:codex
@@ -4762,8 +4847,22 @@ fn run_post_ship_sweep() {
 fn run_post_ship_sweep_bounded(
     mut cmd: std::process::Command,
     budget: std::time::Duration,
+    cleanup_lock: std::fs::File,
 ) -> Result<()> {
-    use std::os::unix::process::CommandExt;
+    use std::os::{fd::AsRawFd, unix::process::CommandExt};
+    let lock_fd = cleanup_lock.as_raw_fd();
+    cmd.env("AIDA_SWEEP_PARENT", std::process::id().to_string());
+    unsafe {
+        cmd.pre_exec(move || {
+            if libc::dup2(lock_fd, SWEEP_LOCK_FD) < 0 {
+                return Err(std::io::Error::last_os_error());
+            }
+            if libc::fcntl(SWEEP_LOCK_FD, libc::F_SETFD, 0) < 0 {
+                return Err(std::io::Error::last_os_error());
+            }
+            Ok(())
+        });
+    }
     cmd.process_group(0);
     let mut forwarding = crate::forwarded_signals::Forwarding::install()?;
     let started = std::time::Instant::now();
@@ -4790,7 +4889,12 @@ fn run_post_ship_sweep_bounded(
                 crate::forwarded_signals::signal_child_tree(child.id(), &tree, libc::SIGKILL);
                 crate::kill_process_group(child.id());
                 let _ = child.kill();
-                let _ = child.wait();
+                reap_sweep_bounded(
+                    child,
+                    cleanup_lock,
+                    std::time::Duration::from_millis(200),
+                    |child| child.try_wait(),
+                );
                 if let Some(signal) = signal {
                     drop(forwarding);
                     crate::forwarded_signals::reraise(signal);
@@ -4800,7 +4904,7 @@ fn run_post_ship_sweep_bounded(
                     return Err(error.into());
                 }
                 anyhow::bail!(
-                    "cleanup sweep exceeded its {}s budget; cleanup interrupted; inspect remaining work",
+                    "cleanup sweep exceeded its {}s budget; termination requested; cleanup lock retained until exit; inspect remaining work",
                     budget.as_secs()
                 );
             }
@@ -10641,50 +10745,6 @@ mod bug_2384_cleanup_tests {
 mod bug_2515_gitlab_ship_tests;
 
 // trace:BUG-2535 | ai:codex
-#[cfg(test)]
-#[cfg(target_os = "linux")]
-mod bug_2535_tests {
-    use super::run_post_ship_sweep_bounded;
-    use std::{
-        process::Command,
-        time::{Duration, Instant},
-    };
-
-    #[test]
-    fn bug_2535_sweep_success_and_failure_are_preserved() {
-        let mut ok = Command::new("sh");
-        ok.args(["-c", "exit 0"]);
-        assert!(run_post_ship_sweep_bounded(ok, Duration::from_secs(2)).is_ok());
-        let mut failed = Command::new("sh");
-        failed.args(["-c", "exit 7"]);
-        let error = run_post_ship_sweep_bounded(failed, Duration::from_secs(2)).unwrap_err();
-        assert!(error.to_string().contains("exited with"), "{error}");
-    }
-
-    #[test]
-    fn bug_2535_stalled_scan_and_separate_group_descendant_stop_at_budget() {
-        let temp = tempfile::tempdir().unwrap();
-        let marker = temp.path().join("survived");
-        let ready = temp.path().join("ready");
-        let mut cmd = Command::new("sh");
-        // Model a probe that creates a fresh process group, then would mutate
-        // after the sweep has timed out. All paths are positional arguments.
-        cmd.args([
-            "-c",
-            r#"setsid sh -c 'touch "$2"; sleep 2; touch "$1"' sh "$1" "$2" & wait"#,
-            "sh",
-        ])
-        .arg(&marker)
-        .arg(&ready);
-        let start = Instant::now();
-        let error = run_post_ship_sweep_bounded(cmd, Duration::from_millis(500)).unwrap_err();
-        assert!(error.to_string().contains("budget"), "{error}");
-        assert!(start.elapsed() < Duration::from_secs(2));
-        assert!(
-            ready.exists(),
-            "descendant must have started before timeout"
-        );
-        std::thread::sleep(Duration::from_secs(2));
-        assert!(!marker.exists(), "timed-out descendant continued cleanup");
-    }
-}
+#[cfg(all(test, target_os = "linux"))]
+#[path = "tests/bug_2535_tests.rs"]
+mod bug_2535_tests;

@@ -254,8 +254,11 @@ The worker records the final lease-end outcome in the ship activity log, even
 when it finishes after ship has returned. `--no-cleanup` skips the worker.
 Step 6 (reap plus merged-worktree pruning) runs under one supervised 60-second
 wall-clock budget, including clone probe setup and scans. On expiry the sweep
-and its observed descendants are stopped, and cleanup reports an interruption
-with `aida doctor` recovery advice. Earlier cleanup actions may already have
+and its observed descendants receive SIGKILL. Termination confirmation waits at
+most 200ms before handing off to a reaper; the sweep retains its inherited
+cleanup lock until it exits, including while kernel I/O delays termination.
+Direct sweep entry requires the supervisor’s verified lock handoff. Cleanup
+reports an interruption with `aida doctor` recovery advice. Earlier cleanup actions may already have
 applied; inspect before retrying. Lease end (step 5) is outside this budget.
 <!-- trace:BUG-2535 | ai:codex -->
 
