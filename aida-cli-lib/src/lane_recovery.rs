@@ -5,6 +5,47 @@ use anyhow::Result;
 use std::path::Path;
 
 pub(crate) fn reconcile(root: &Path, spec: &str, branch: &str, head: Option<&str>) -> Result<()> {
+    let storage = storage_for(root)?;
+    reconcile_in(root, &storage, spec, branch, head)
+}
+
+// Queue callers already selected their store (including an explicit --file).
+// trace:BUG-2549 | ai:codex
+pub(crate) fn reconcile_in(
+    root: &Path,
+    storage: &Storage,
+    spec: &str,
+    branch: &str,
+    head: Option<&str>,
+) -> Result<()> {
+    let leases = crate::leases::list_leases_strict_all(root).map_err(anyhow::Error::msg)?;
+    let observed_head = match head {
+        Some(head) => Some(head.to_owned()),
+        None => exit_head(root, branch, &leases)?,
+    };
+    reconcile_observed_in(root, storage, spec, branch, observed_head.as_deref())
+}
+
+// An explicit unknown head must stay unknown after the source tree is gone.
+// trace:BUG-2549 | ai:codex
+pub(crate) fn reconcile_observed(
+    root: &Path,
+    spec: &str,
+    branch: &str,
+    head: Option<&str>,
+) -> Result<()> {
+    let storage = storage_for(root)?;
+    reconcile_observed_in(root, &storage, spec, branch, head)
+}
+
+// trace:BUG-2549 | ai:codex
+fn reconcile_observed_in(
+    root: &Path,
+    storage: &Storage,
+    spec: &str,
+    branch: &str,
+    head: Option<&str>,
+) -> Result<()> {
     let forge = crate::forge::forge_for_open_change(root);
     // Failed/unknown forge observations must never be treated as absence.
     if !forge.open_changes_for_spec(spec)?.is_empty()
@@ -15,33 +56,8 @@ pub(crate) fn reconcile(root: &Path, spec: &str, branch: &str, head: Option<&str
     {
         return Ok(());
     }
-    let path =
-        crate::detect_distributed_store_from(root).unwrap_or_else(|| root.join(".aida-store"));
-    let storage = Storage::new(path);
-    let leases = crate::leases::list_leases_strict_all(root).map_err(anyhow::Error::msg)?;
     let veto = crate::punt::signal_path(root, spec).try_exists()?
         || crate::punt::hold_signal_path(root, spec).try_exists()?;
-    let tree = leases
-        .iter()
-        .find(|lease| lease.branch == branch)
-        .map(|lease| lease.worktree_path.as_path())
-        .unwrap_or(root);
-    let observed_head = head.map(str::to_owned).or_else(|| {
-        let output = std::process::Command::new("git")
-            .arg("-C")
-            .arg(tree)
-            .args([
-                "rev-parse",
-                "--verify",
-                &format!("refs/heads/{branch}^{{commit}}"),
-            ])
-            .output()
-            .ok()?;
-        output
-            .status
-            .success()
-            .then(|| String::from_utf8_lossy(&output.stdout).trim().to_owned())
-    });
     storage.update_atomically(|store| {
         // Re-read under the store writer lock: a new launch persists its lease
         // before claiming In Progress, so a completed claim cannot be reset
@@ -53,7 +69,8 @@ pub(crate) fn reconcile(root: &Path, spec: &str, branch: &str, head: Option<&str
                 return;
             }
         };
-        let held = veto
+        let held = shared_claim_holds(root, storage, store, spec).unwrap_or(true)
+            || veto
             || leases.iter().any(|lease| {
                 lease.branch == branch
                     || store
@@ -63,7 +80,7 @@ pub(crate) fn reconcile(root: &Path, spec: &str, branch: &str, head: Option<&str
                     || lease.scope.eq_ignore_ascii_case(spec)
             });
         if let Ok(Some(req)) = store.get_requirement_unambiguous_mut(spec) {
-            apply(req, branch, observed_head.as_deref(), held);
+            apply(req, branch, head, held);
         }
     })?;
     Ok(())
@@ -73,9 +90,7 @@ pub(crate) fn reconcile(root: &Path, spec: &str, branch: &str, head: Option<&str
 // already deleted. Record the merge evidence without inventing a branch/head.
 // trace:BUG-2549 | ai:codex
 pub(crate) fn reconcile_reference(root: &Path, spec: &str, merge: &str) -> Result<()> {
-    let storage = Storage::new(
-        crate::detect_distributed_store_from(root).unwrap_or_else(|| root.join(".aida-store")),
-    );
+    let storage = storage_for(root)?;
     reconcile_reference_in(root, &storage, spec, merge)
 }
 
@@ -112,7 +127,7 @@ pub(crate) fn reconcile_reference_in(
                 return;
             }
         };
-        let held = veto || leases.iter().any(|lease| lease.scope.eq_ignore_ascii_case(spec)
+        let held = shared_claim_holds(root, storage, store, spec).unwrap_or(true) || veto || leases.iter().any(|lease| lease.scope.eq_ignore_ascii_case(spec)
             || store.get_requirement_by_spec_id(&lease.scope).is_some_and(|r| r.id == id));
         if let Ok(Some(req)) = store.get_requirement_unambiguous_mut(spec) {
             if req.status == RequirementStatus::InProgress && !held {
@@ -123,6 +138,91 @@ pub(crate) fn reconcile_reference_in(
         }
     })?;
     Ok(())
+}
+
+// Use the root-scoped legacy resolver; a missing store must not create a new
+// .aida-store beside an existing YAML/SQLite store.
+// trace:BUG-2549 | ai:codex
+fn storage_for(root: &Path) -> Result<Storage> {
+    let path = match crate::detect_distributed_store_from(root) {
+        Some(path) => path,
+        None => aida_core::resolve_requirements_path_in(root, None, None, Path::new(""))?,
+    };
+    Ok(Storage::new(path))
+}
+
+// Recovery is deliberately conservative about cross-clone claims: even an old
+// claim must be released/reconciled before we advertise its work as Approved.
+// Read every claim so display/origin aliases and malformed records fail safe.
+// trace:BUG-2549 | ai:codex
+fn shared_claim_holds(
+    root: &Path,
+    storage: &Storage,
+    store: &aida_core::RequirementsStore,
+    spec: &str,
+) -> Result<bool> {
+    let store_root = crate::detect_distributed_store_from(root).unwrap_or_else(|| {
+        if storage.path().is_dir() {
+            storage.path().to_path_buf()
+        } else {
+            root.join(".aida-store")
+        }
+    });
+    let dir = store_root.join("coordination/leases");
+    let entries = match std::fs::read_dir(&dir) {
+        Ok(entries) => entries,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(false),
+        Err(error) => return Err(error.into()),
+    };
+    let wanted = store.get_requirement_unambiguous(spec)?.map(|r| r.id);
+    for entry in entries {
+        let path = entry?.path();
+        if path.extension().and_then(|s| s.to_str()) != Some("toml") {
+            continue;
+        }
+        let claim: crate::coordination::Claim = toml::from_str(&std::fs::read_to_string(path)?)?;
+        if claim.scope.eq_ignore_ascii_case(spec)
+            || wanted.is_some_and(|id| {
+                store
+                    .get_requirement_by_spec_id(&claim.scope)
+                    .is_some_and(|r| r.id == id)
+            })
+        {
+            return Ok(true);
+        }
+    }
+    Ok(false)
+}
+
+// Never execute host Git against seat-controlled config. The existing probe
+// contains Git and its descendants; an unreadable clone leaves head unknown.
+// trace:BUG-2549 | ai:codex
+pub(crate) fn exit_head(
+    root: &Path,
+    branch: &str,
+    leases: &[crate::SessionLease],
+) -> Result<Option<String>> {
+    if let Some(lease) = leases.iter().find(|lease| lease.branch == branch) {
+        if lease.tree_kind == crate::seat_clone::TreeKind::Clone {
+            return Ok(match crate::seat_clone::probe(root, &lease.worktree_path) {
+                crate::seat_clone::Probe::Known(facts) => facts.head,
+                _ => None,
+            });
+        }
+    }
+    let output = std::process::Command::new("git")
+        .arg("-C")
+        .arg(root)
+        .args([
+            "rev-parse",
+            "--verify",
+            &format!("refs/heads/{branch}^{{commit}}"),
+        ])
+        .output()?;
+    Ok(output
+        .status
+        .success()
+        .then(|| String::from_utf8_lossy(&output.stdout).trim().to_owned()))
 }
 
 fn apply(req: &mut aida_core::Requirement, branch: &str, head: Option<&str>, held: bool) {

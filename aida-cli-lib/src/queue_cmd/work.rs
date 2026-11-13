@@ -4490,8 +4490,9 @@ pub(crate) fn handle_queue_work(
                 )?;
                 // trace:BUG-2549 | ai:codex — known PR-less, unleased branch.
                 if canonical_resume.is_some() && !dry_run {
-                    crate::lane_recovery::reconcile(
+                    crate::lane_recovery::reconcile_in(
                         &project_root,
+                        storage,
                         &plan.scope,
                         session_branch_override.unwrap(),
                         None,

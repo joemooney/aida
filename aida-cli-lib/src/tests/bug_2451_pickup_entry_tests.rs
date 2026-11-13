@@ -451,13 +451,23 @@ fn bug_2501_burndown_residual_refuses_failed_pull() {
     );
 }
 
+// Recovery exercises ordinary configured store discovery, unlike setup-only
+// pickup fixtures which intentionally pass an unattached store explicitly.
+// trace:BUG-2549 | ai:codex
+fn recovery_forge_fixture(main: &Path, root: &Path) -> std::path::PathBuf {
+    let gh = forge_fixture(main, root, "");
+    std::fs::write(main.join(".aida/config.toml"),
+        "[forge]\nprovider = \"github\"\n[deployment]\nmode = \"distributed\"\nstore_path = \".aida-store\"\n").unwrap();
+    gh
+}
+
 // trace:BUG-2549 | ai:codex
 #[test]
 fn bug_2549_queue_resumes_prless_canonical_head_without_force() {
     let fx = fixture();
     let mut ambient =
         crate::test_env::AmbientGuard::hermetic_with_seat(&fx.main, "implementer", &[]);
-    let gh = forge_fixture(&fx.main, &fx.root, "");
+    let gh = recovery_forge_fixture(&fx.main, &fx.root);
     ambient.set_key("AIDA_TEST_GH_BINARY", &gh);
     git_ok(&fx.main, &["checkout", "-qb", "bug-2451"]);
     std::fs::write(fx.main.join("unfinished"), "keep this implementation\n").unwrap();
@@ -512,7 +522,7 @@ fn bug_2549_queue_refuses_dirty_canonical_worktree_without_status_mutation() {
     let fx = fixture();
     let mut ambient =
         crate::test_env::AmbientGuard::hermetic_with_seat(&fx.main, "implementer", &[]);
-    let gh = forge_fixture(&fx.main, &fx.root, "");
+    let gh = recovery_forge_fixture(&fx.main, &fx.root);
     ambient.set_key("AIDA_TEST_GH_BINARY", &gh);
     let held = fx.root.join("held");
     git_ok(
@@ -545,7 +555,7 @@ fn bug_2549_reference_merge_returns_unheld_spec_and_preserves_open_pr_claims() {
     let fx = fixture();
     let mut ambient =
         crate::test_env::AmbientGuard::hermetic_with_seat(&fx.main, "implementer", &[]);
-    let gh = forge_fixture(&fx.main, &fx.root, "");
+    let gh = recovery_forge_fixture(&fx.main, &fx.root);
     ambient.set_key("AIDA_TEST_GH_BINARY", &gh);
     let (storage, set_status) = super::orphan_reentry_tests::queued_scope(&fx.main, "BUG-2451");
     set_status(aida_core::RequirementStatus::InProgress);
@@ -588,7 +598,7 @@ fn bug_2549_prless_lane_records_lease_head_then_resets_after_release() {
     let fx = fixture();
     let mut ambient =
         crate::test_env::AmbientGuard::hermetic_with_seat(&fx.main, "implementer", &[]);
-    let gh = forge_fixture(&fx.main, &fx.root, "");
+    let gh = recovery_forge_fixture(&fx.main, &fx.root);
     ambient.set_key("AIDA_TEST_GH_BINARY", &gh);
     let (storage, set_status) = super::orphan_reentry_tests::queued_scope(&fx.main, "BUG-2451");
     queue_work(&storage, false).unwrap();
@@ -633,7 +643,7 @@ fn bug_2549_canonical_branch_with_foreign_lease_refuses() {
     let fx = fixture();
     let mut ambient =
         crate::test_env::AmbientGuard::hermetic_with_seat(&fx.main, "implementer", &[]);
-    let gh = forge_fixture(&fx.main, &fx.root, "");
+    let gh = recovery_forge_fixture(&fx.main, &fx.root);
     ambient.set_key("AIDA_TEST_GH_BINARY", &gh);
     let (storage, _) = super::orphan_reentry_tests::queued_scope(&fx.main, "BUG-2451");
     queue_work(&storage, false).unwrap();
@@ -649,4 +659,117 @@ fn bug_2549_canonical_branch_with_foreign_lease_refuses() {
         .to_string();
     assert!(error.contains("still has a lease"), "{error}");
     assert_eq!(crate::list_leases(&fx.main)[0].scope, "BUG-9999");
+}
+
+// trace:BUG-2549 | ai:codex
+#[test]
+fn bug_2549_shared_claim_and_corrupt_registry_retain_in_progress() {
+    let fx = fixture();
+    let mut ambient =
+        crate::test_env::AmbientGuard::hermetic_with_seat(&fx.main, "implementer", &[]);
+    let gh = recovery_forge_fixture(&fx.main, &fx.root);
+    ambient.set_key("AIDA_TEST_GH_BINARY", &gh);
+    let (storage, set_status) = super::orphan_reentry_tests::queued_scope(&fx.main, "BUG-2451");
+    let dir = fx.main.join(".aida-store/coordination/leases");
+    std::fs::create_dir_all(&dir).unwrap();
+    let path = dir.join("foreign.toml");
+    for body in [
+        "scope = 'BUG-2451'\nnode_id = 'foreign'\nclone_path = '/foreign/clone'\nhost = 'other-host'\npid = 1\nagent = 'implementer'\nstarted_at = '2026-11-13T00:00:00Z'\nheartbeat_at = '2026-11-13T00:00:00Z'\nttl_secs = 1800\n",
+        "torn = ",
+    ] {
+        std::fs::write(&path, body).unwrap();
+        set_status(aida_core::RequirementStatus::InProgress);
+        crate::lane_recovery::reconcile_observed(&fx.main, "BUG-2451", "bug-2451", Some("exit-head")).unwrap();
+        crate::lane_recovery::reconcile_reference(&fx.main, "BUG-2451", "merge").unwrap();
+        let store = storage.load().unwrap();
+        let req = store.get_requirement_by_spec_id("BUG-2451").unwrap();
+        assert_eq!(req.status, aida_core::RequirementStatus::InProgress);
+        assert!(req.comments.iter().any(|c| c.content.contains("exit-head")));
+    }
+    std::fs::remove_file(path).unwrap();
+    crate::lane_recovery::reconcile_reference(&fx.main, "BUG-2451", "merge").unwrap();
+    assert_eq!(
+        storage
+            .load()
+            .unwrap()
+            .get_requirement_by_spec_id("BUG-2451")
+            .unwrap()
+            .status,
+        aida_core::RequirementStatus::Approved
+    );
+}
+
+// trace:BUG-2549 | ai:codex
+#[test]
+fn bug_2549_exit_and_reference_recovery_use_legacy_store() {
+    for file in ["requirements.yaml", "requirements.db", "selected.yaml"] {
+        let fx = fixture();
+        let mut ambient =
+            crate::test_env::AmbientGuard::hermetic_with_seat(&fx.main, "implementer", &[]);
+        let gh = forge_fixture(&fx.main, &fx.root, "");
+        ambient.set_key("AIDA_TEST_GH_BINARY", &gh);
+        std::fs::remove_dir_all(fx.main.join(".aida-store")).unwrap();
+        let storage = aida_core::Storage::new(fx.main.join(file));
+        let mut store = aida_core::RequirementsStore::default();
+        let mut req = aida_core::Requirement::new("retry".into(), String::new());
+        req.spec_id = Some("BUG-2451".into());
+        req.status = aida_core::RequirementStatus::InProgress;
+        store.requirements.push(req);
+        storage.save(&store).unwrap();
+        if file == "selected.yaml" {
+            crate::lane_recovery::reconcile_in(
+                &fx.main,
+                &storage,
+                "BUG-2451",
+                "deleted-branch",
+                Some("captured-before-removal"),
+            )
+            .unwrap();
+        } else {
+            crate::lane_recovery::reconcile_observed(
+                &fx.main,
+                "BUG-2451",
+                "deleted-branch",
+                Some("captured-before-removal"),
+            )
+            .unwrap();
+        }
+        let recovered = storage.load().unwrap();
+        let req = recovered.get_requirement_by_spec_id("BUG-2451").unwrap();
+        assert_eq!(req.status, aida_core::RequirementStatus::Approved);
+        assert!(req
+            .comments
+            .iter()
+            .any(|c| c.content.contains("captured-before-removal")));
+        storage
+            .update_atomically(|store| {
+                store
+                    .get_requirement_by_spec_id_mut("BUG-2451")
+                    .unwrap()
+                    .status = aida_core::RequirementStatus::InProgress
+            })
+            .unwrap();
+        if file == "selected.yaml" {
+            crate::lane_recovery::reconcile_reference_in(
+                &fx.main,
+                &storage,
+                "BUG-2451",
+                "legacy-merge",
+            )
+            .unwrap();
+        } else {
+            crate::lane_recovery::reconcile_reference(&fx.main, "BUG-2451", "legacy-merge")
+                .unwrap();
+        }
+        assert_eq!(
+            storage
+                .load()
+                .unwrap()
+                .get_requirement_by_spec_id("BUG-2451")
+                .unwrap()
+                .status,
+            aida_core::RequirementStatus::Approved
+        );
+        assert!(!fx.main.join(".aida-store").exists());
+    }
 }

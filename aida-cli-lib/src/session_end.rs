@@ -1207,6 +1207,14 @@ pub(crate) fn session_end_with_discard_unpushed(
         None
     };
 
+    // Capture while the clone/worktree still exists, before pool return or removal.
+    // trace:BUG-2549 | ai:codex
+    let recovery_head = if is_clone {
+        clone_facts.as_ref().and_then(|facts| facts.head.clone())
+    } else {
+        crate::lane_recovery::exit_head(&project_root, &target.branch, &leases)?
+    };
+
     // --force concerns uncommitted files only. Never destroy the only copy
     // of a commit, including side branches with no upstream configured.
     // trace:BUG-2450 | ai:codex
@@ -2131,16 +2139,6 @@ pub(crate) fn session_end_with_discard_unpushed(
             );
         }
     }
-    // trace:BUG-2549 | ai:codex — a retained sibling lease or open PR keeps
-    // the spec claimed; the last PR-less lease returns unfinished work.
-    if let Err(error) =
-        crate::lane_recovery::reconcile(&project_root, &target.scope, &target.branch, None)
-    {
-        eprintln!(
-            "warning: lane recovery for {} needs retry: {error:#}",
-            target.scope
-        );
-    }
     // The lease file's real home is `<main>/.aida/sessions/`, which outlives a
     // removed worktree. trace:STORY-2325 | ai:claude
     let ownership_root = lease_target
@@ -2202,6 +2200,19 @@ pub(crate) fn session_end_with_discard_unpushed(
         &target.scope,
         &project_root,
     );
+    // trace:BUG-2549 | ai:codex — a retained sibling lease or open PR keeps
+    // the spec claimed; the last PR-less lease returns unfinished work.
+    if let Err(error) = crate::lane_recovery::reconcile_observed(
+        &project_root,
+        &target.scope,
+        &target.branch,
+        recovery_head.as_deref(),
+    ) {
+        eprintln!(
+            "warning: lane recovery for {} needs retry: {error:#}",
+            target.scope
+        );
+    }
 
     // STORY-564: drop this session's `--zen` needs-human marker, if any, so a
     // future session that reuses the (time-ordered, effectively-unique) id
