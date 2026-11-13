@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-12T23:29:52.950918801Z
-modified_at: 2026-11-13T11:26:04.139915552Z
+modified_at: 2026-11-13T11:28:23.432622486Z
 req_type: Bug
 tags:
 - track:integration
@@ -44,6 +44,13 @@ comments:
   content: 'Round-3 (PR #3932 @ ed8cc0f317d): all 4 round-2 findings FIXED per advisor exception ruling. Pinned corpus (store::read_listed + checked::pinned_len), ls-tree -z (nul_names), fold charged to discovery limits (OwnersSnapshot::fold), Snapshot::of_store_at pinned tip. Tests: bug_2543_witness_on_another_ledger_after_discovery_stays_out_of_the_listing, bug_2543_folded_append_over_a_line_limit_rediscovers, bug_2543_quoted_publication_name_refuses_in_listing_and_single_key, bug_2543_listing_snapshot_reads_the_pinned_tip, bug_2551_own_appends_fold_and_foreign_growth_stays_pinned.'
   created_at: 2026-11-13T11:26:04.139915552Z
   modified_at: 2026-11-13T11:26:04.139915552Z
+  session_id: 01a1d418-ebf0-79b3-844f-d0ab8bed7682
+  harness_version: 2.1.323 (Claude Code)
+- id: 01a1d4aa-7588-7161-b8df-02749eb38e03
+  author: joe
+  content: 'Correction: the round-3 head is b08afd08722 (the previous comment''s ed8cc0f was the round-2 head, the commit had been refused by the doc-comment trace hook). Code identical to the described fixes; check-ci-fast 47/47 green, dell1 98 targeted tests green.'
+  created_at: 2026-11-13T11:28:23.432622486Z
+  modified_at: 2026-11-13T11:28:23.432622486Z
   session_id: 01a1d418-ebf0-79b3-844f-d0ab8bed7682
   harness_version: 2.1.323 (Claude Code)
 history:
