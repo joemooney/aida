@@ -59,7 +59,9 @@ fn store_track_label(storage: &Storage, scope: &str) -> String {
 /// The track this launcher runs: `AIDA_TRACK`, or `main` when unset.
 // trace:STORY-2749 | ai:claude
 pub(crate) fn launcher_track() -> String {
-    std::env::var("AIDA_TRACK")
+    // Read through the ExecContext capture boundary, not a raw env site.
+    aida_core::exec_context::Environment::capture()
+        .var("AIDA_TRACK")
         .ok()
         .map(|t| t.trim().to_ascii_lowercase())
         .filter(|t| !t.is_empty())
