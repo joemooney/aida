@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-11T12:17:13.260009028Z
-modified_at: 2026-11-13T14:32:22.002938444Z
+modified_at: 2026-11-13T15:26:57.795998565Z
 req_type: Task
 relationships:
 - rel_type: BlockedBy
@@ -48,6 +48,12 @@ comments:
   modified_at: 2026-11-13T14:06:34.804827788Z
   session_id: 01a1d51f8e0e
   harness_version: codex-cli 0.167.0
+- id: 01a1d584-e104-76b0-a685-b47a33898fcc
+  author: joe
+  content: 'Round 2 finding 1: restored the cli-lib-owned cfg(test) initialization boundary through explicit parser and early-dispatch initializer injection. Added isolated parsing-first and early-dispatch-first regressions checking alias maps, ID widths and literal lookup, with an ambient-store positive control. All 5 aida-cmdkit unit tests passed (lane job j20261113T150828907-1937356-0). Initial cli-lib build timed out at 900 seconds without test execution; corrected regression run j20261113T151410526-1987644-0 is running, and related command-registry validation j20261113T152544191-2-0 is queued with a 3600-second timeout. Edits remain uncommitted for native host publication. Codegraph client is absent and doctor reports an unreachable index; navigation used rg.'
+  created_at: 2026-11-13T15:26:57.795998565Z
+  modified_at: 2026-11-13T15:26:57.795998565Z
+  session_id: 01a1d570ae96
 history:
 - id: 01a1ca8a-8ee7-7991-b976-a941a11ff32c
   author: joe
