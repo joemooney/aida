@@ -8,10 +8,17 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-13T03:56:52.002540842Z
-modified_at: 2026-11-13T05:36:50.296225215Z
+modified_at: 2026-11-13T05:36:55.960283925Z
 req_type: Bug
 tags:
 - track:integration
+comments:
+- id: 01a1d368-b098-7d70-aae5-f0920e698f4c
+  author: joe
+  content: 'integration seat claimed 22:40 MST: implementing on branch bug-2550-idempotent-autobump off integration.'
+  created_at: 2026-11-13T05:36:55.960283925Z
+  modified_at: 2026-11-13T05:36:55.960283925Z
+  session_id: 92a24ff6-1324-4fe1-a02b-b2601f384b4b
 history:
 - id: 01a1d362-42b9-70b2-b1e5-f78dd238c0d3
   author: joe
