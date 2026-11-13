@@ -31,6 +31,11 @@ relationships:
   created_at: 2026-11-13T05:52:15.039468432Z
   created_by: joe
 comments:
+- id: 01a1d71d-a898-7000-835f-6f134e9f8d3e
+  author: aida-auto-bump
+  content: 'Auto-completed: PR #3909 merged without a reviewer session (the review story was never queued past Draft).'
+  created_at: 2026-11-13T22:53:27.576695810Z
+  modified_at: 2026-11-13T22:53:27.576695810Z
 - id: 01a1d71d-b89d-7192-9441-c40fa64fea30
   author: aida-auto-bump
   content: 'Auto-completed: PR #3909 is merged on the forge (its merge commit was outside the local scan window).'
@@ -42,6 +47,13 @@ history:
   timestamp: 2026-11-13T05:52:16.822666815Z
   session_id: 01a1d361619d
   changes: []
+- id: 01a1d71d-a898-7000-835f-6f017a2f51ea
+  author: aida-auto-bump
+  timestamp: 2026-11-13T22:53:27.576682440Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Completed
 - id: 01a1d71d-b89d-7192-9441-c41ef4174fad
   author: aida-auto-bump
   timestamp: 2026-11-13T22:53:31.677820830Z
