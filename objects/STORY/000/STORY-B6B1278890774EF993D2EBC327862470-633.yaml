@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-10T22:04:54.061461Z
-modified_at: 2026-11-12T23:17:11.576483363Z
+modified_at: 2026-11-13T05:23:55.834262653Z
 req_type: Story
 comments:
 - id: 01a1c781-4cf1-7c80-b086-89c5c5096ab6
@@ -467,6 +467,13 @@ comments:
   modified_at: 2026-11-12T23:17:11.576483363Z
   session_id: 01a1d1fd727a
   harness_version: 2.1.323 (Claude Code)
+- id: 01a1d35c-c93a-77c2-a314-3d8cf166fce3
+  author: dirtlab
+  content: 'Round 10: the current branch already contains the final sanitized-config overlay after read-only metadata mounts and the journal-backed post-regeneration marker gate. Added regression coverage proving a readable seat config include stays hidden, sanitized Git reads committed objects, and removing generated markers cannot bypass failed preparation credit via direct retry (index, HEAD and MERGE_HEAD unchanged). Validation: lane job j20261113T051836303-2-0, cargo test --profile agent -p aida-cli-lib --lib -- story_2710_host_regenerates_conflicted_outputs_with_read_only_git: 1 passed, 0 failed; rustfmt --check and git diff --check pass. Native seat leaves changes uncommitted for host publication. Configured host codegraph client is unavailable; doctor reports missing.'
+  created_at: 2026-11-13T05:23:55.834262653Z
+  modified_at: 2026-11-13T05:23:55.834262653Z
+  session_id: 01a1d356c1f7
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1c77f-ffdf-7ac3-a382-33d6a384e617
   author: aida-session-start
