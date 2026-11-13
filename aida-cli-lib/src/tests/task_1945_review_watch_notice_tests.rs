@@ -198,8 +198,31 @@ fn round_cap_wakes_the_advisor_once() {
     for _ in 0..3 {
         report(root, &store, &c, &Unapproved).unwrap();
     }
+    // trace:BUG-2548 | ai:codex — repeated polls persist one visible request.
+    let events = crate::gate::ledger::store::read_file(root, crate::gate::ledger::ChangeKey::pr(7));
+    let requests: Vec<_> = events
+        .iter()
+        .filter(|event| {
+            matches!(
+                event.body,
+                crate::gate::ledger::EventBody::ManualReviewRequested { .. }
+            )
+        })
+        .collect();
+    assert_eq!(requests.len(), 1);
+    assert_eq!(requests[0].head.as_deref(), Some(c.head.as_str()));
     let mail = mailbox(root);
     assert_eq!(mail.len(), 1, "{mail:#?}");
+    match &requests[0].body {
+        crate::gate::ledger::EventBody::ManualReviewRequested {
+            request_id,
+            recipient,
+        } => {
+            assert_eq!(request_id, &mail[0].id);
+            assert_eq!(recipient, "advisor");
+        }
+        _ => unreachable!(),
+    }
     assert_eq!(mail[0].to, agent("advisor"));
     assert_eq!(
         mail[0].subject.as_deref(),
