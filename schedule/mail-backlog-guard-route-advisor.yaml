@@ -5,10 +5,10 @@ last_by:
   session: 01a1beff-fc3b-78e2-93e2-9b0c283b0339
   vendor: claude
 result: done
-note: 'advisor: unread [request] from dirtlab, 42m old: Rework merge conflicts require Claude; advisor: unread [request] from review-watch, 39m old: PR-3929: ready to ship after its branch is updated; advisor: unread [request] from dirtlab, 34m old: Rework merge conflicts require Claude'
+note: 'advisor: unread [request] from review-watch, 65m old: PR-3925: ready to ship; advisor: unread [request] from dirtlab, 58m old: Rework merge conflicts require Claude; advisor: unread [request] from dirtlab, 57m old: Rework merge conflicts require Claude; advisor: unread [request] from dirtlab, 57m old: Rework merge conflicts require Claude; advisor: unread [request] from review-watch, 43m old: PR-3925: ready to ship after its branch is updated; advisor: unread [request] from dirtlab, 39m old: Rework merge conflicts require Claude; advisor: unread [request] from review-watch, 34m old: PR-3925: ready to ship after its branch is updated; advisor: unread [request] from dirtlab, 31m old: Rework merge conflicts require Claude'
 due_since: 2026-11-09T10:53:52.591288010Z
 due_reason: on CronJobFired:mail-backlog-guard-route-advisor
 due_failure:
-  trip_id: mail-backlog-guard-route-advisor@2026-11-13T08:47:19Z
+  trip_id: mail-backlog-guard-route-advisor@2026-11-13T09:30:34Z
   job: mail-backlog
-  error: 'advisor: unread [request] from dirtlab, 42m old: Rework merge conflicts require Claude; advisor: unread [request] from review-watch, 39m old: PR-3929: ready to ship after its branch is updated; advisor: unread [request] from dirtlab, 34m old: Rework merge conflicts require Claude'
+  error: 'advisor: unread [request] from review-watch, 65m old: PR-3925: ready to ship; advisor: unread [request] from dirtlab, 58m old: Rework merge conflicts require Claude; advisor: unread [request] from dirtlab, 57m old: Rework merge conflicts require Claude; advisor: unread [request] from dirtlab, 57m old: Rework merge conflicts require Claude; advisor: unread [request] from review-watch, 43m old: PR-3925: ready to ship after its branch is updated; advisor: unread [request] from dirtlab, 39m old: Rework merge conflicts require Claude; advisor: unread [request] from review-watch, 34m old: PR-3925: ready to ship after its branch is updated; advisor: unread [request] from dirtlab, 31m old: Rework merge conflicts require Claude'
