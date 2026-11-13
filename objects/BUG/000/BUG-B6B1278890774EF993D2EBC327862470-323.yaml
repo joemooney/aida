@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-13T12:51:33.706851654Z
-modified_at: 2026-11-13T23:31:01.094727704Z
+modified_at: 2026-11-13T23:38:12.278571475Z
 req_type: Bug
 tags:
 - lanes
@@ -92,6 +92,13 @@ comments:
   modified_at: 2026-11-13T23:01:53.103103662Z
   session_id: 01a1d684-8599-70e0-a01c-714f54d2f8de
   harness_version: 2.1.323 (Claude Code)
+- id: 01a1d746-9fb6-7093-946b-073b8eb04bac
+  author: dirtlab
+  content: 'Round 2 finding 1 addressed: queue work now delegates native host-publication policy to vendors/profile.rs using the existing launch_vendor conversion; no shrink-only vendor ratchet allowances changed. Lane runner executed and passed story_2539_vendor_literal_ratchet (3 tests), bug_2558 (2 tests), and bug_2553 (2 tests). rustfmt check and git diff --check pass. Edits remain uncommitted under the native-seat finish contract. Required first fetch/merge was attempted but failed opening .git/FETCH_HEAD: Read-only file system; host must merge current main, resolve PR #3953 conflicts, commit and push before publication can complete. Reviewed codegraph client path is absent; doctor reports codegraph missing.'
+  created_at: 2026-11-13T23:38:12.278571475Z
+  modified_at: 2026-11-13T23:38:12.278571475Z
+  session_id: 01a1d73ff6c5
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1d4f7-f92d-7a61-af83-4ceb9af49f3d
   author: joe
