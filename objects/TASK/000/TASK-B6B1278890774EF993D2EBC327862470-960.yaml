@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T23:39:41.575597Z
-modified_at: 2026-11-13T06:35:39.399745077Z
+modified_at: 2026-11-13T08:58:42.486614078Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -943,6 +943,13 @@ comments:
   created_at: 2026-11-13T03:32:32.958425149Z
   modified_at: 2026-11-13T03:32:32.958425149Z
   session_id: 01a1d2e6-f5db-7f33-9b74-3ae5fdaf9e0c
+  harness_version: 2.1.323 (Claude Code)
+- id: 01a1d421-6bb6-7702-ab65-6092bd74a782
+  author: joe
+  content: 'Advisor 02:02: #3916 at 0fdaaa6 is red on lib-0/lib-1/Build. Two ratchet tests fail: seat_clone::clone_git_ratchet_tests::task_2143_no_new_raw_git_where_a_lease_tree_is_read (task_2143_clone_git_ratchet_tests.rs:433) and regression_tests::bug_1670_stale_cache_callers_tests::destructive_callers_do_not_use_tolerant_cache_reads (bug_1670_stale_cache_callers_tests.rs:675). Most likely the moved modules changed the paths these ratchets scan or allow-list. Update their path lists or baselines to the new module locations; do not add new debt. Reproduce with one targeted run: cargo test -p aida-cli-lib task_2143_no_new_raw_git bug_1670_stale_cache_callers.'
+  created_at: 2026-11-13T08:58:42.486614078Z
+  modified_at: 2026-11-13T08:58:42.486614078Z
+  session_id: 01a1d3ee-83e8-71b3-a2c5-aed5baed6fdc
   harness_version: 2.1.323 (Claude Code)
 history:
 - id: 01a1b862-2e0b-7a50-a4d0-25097c707b57
