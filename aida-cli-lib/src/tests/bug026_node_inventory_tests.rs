@@ -235,15 +235,8 @@ fn node_inventory_unions_every_source_and_keeps_roles_separate() {
 fn node_inventory_worker_dispatch_lists_other_nodes_without_allocating() {
     let fixture = Fixture::populated();
     let before = snapshot(fixture.root.path());
-    let runner = crate::resolve_aida_exe();
-    assert_eq!(
-        runner
-            .parent()
-            .and_then(|deps| deps.file_name())
-            .and_then(|name| name.to_str()),
-        Some("deps"),
-        "expected this build's runner under target/<profile>/deps; an ambient AIDA_BIN redirects the resolver"
-    );
+    // trace:BUG-2539 | ai:codex
+    let runner = crate::test_exec::current_test_runner();
     let out = std::process::Command::new(runner)
         .args([
             "--ignored",

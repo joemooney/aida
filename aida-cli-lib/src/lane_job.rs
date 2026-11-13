@@ -2384,11 +2384,15 @@ mod fast_gate_job_tests {
         // The primary target is read-only here; attempting to reflink it needs
         // a writable Cargo lock and silently produced cold validation before.
         // Derive the target from the running image without ambient env reads.
-        let executable = crate::aida_bin::current_executable_path().expect("test executable");
-        let profile = executable.parent().unwrap().parent().unwrap();
+        // trace:BUG-2539 | ai:codex
+        let executable = crate::test_exec::current_test_runner();
+        let profile = crate::test_exec::test_profile_dir(&executable).unwrap();
         assert_eq!(profile.file_name().unwrap(), "agent");
         let target = profile.parent().unwrap();
-        assert!(profile.join("deps").is_dir(), "test target must be warm");
+        assert!(
+            crate::seat_target_overlay::generation_id(target, "agent").is_some(),
+            "test target must be warm"
+        );
         eprintln!("real-main warm test target: {}", target.display());
         let mut lane = LaneJobs::for_lease(&tmp.path().join("host"), &seat, "real-main");
         // Preserve the production cache wrapper while replacing only its target.
