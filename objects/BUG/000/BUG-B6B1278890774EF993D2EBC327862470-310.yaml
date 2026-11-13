@@ -3,12 +3,12 @@ spec_id: BUG-b6b1278890774ef993d2ebc327862470-310
 agreed_id: BUG-2545
 title: 'Integration canary PR blocks single-PR trains: ''already has open change'' for every spec merged into integration'
 description: '2026-11-12 18:11: ''aida pr train 3902'' (BUG-2539, approved at head, green) stopped early: ''BUG-2539 already has open change #3905 on integration; refusing a second change''. #3905 is the never-merged draft canary (integration->main) that runs full CI on every integration push (STORY-2737 throughput rule 2). Because the canary carries every integration commit, any spec merged into integration can no longer land as a single PR via train, which contradicts throughput rule 4 (approved green single PR ships straight to main). ''aida pr ship'' does not apply the guard (promotion #3904 shipped with #3905 open). Want: the one-open-change-per-spec guard ignores draft canary PRs (e.g. a canary label or base/head integration->main draft), or treats a change already on integration as compatible with landing the original PR.'
-status: Approved
+status: InProgress
 priority: Medium
-owner: ''
+owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-13T01:16:21.435486098Z
-modified_at: 2026-11-13T01:54:46.406289196Z
+modified_at: 2026-11-13T01:58:45.157842239Z
 req_type: Bug
 history:
 - id: 01a1d29d-4c06-7bf1-a965-fe4c244dd002
@@ -20,6 +20,13 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Approved
+- id: 01a1d2a0-f0a5-7600-948c-ad6260fd7e8d
+  author: aida-session-start
+  timestamp: 2026-11-13T01:58:45.157840551Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: 9968a8ab4ec2b4110f24d64122a7e60ab755a95b
   branch: main
