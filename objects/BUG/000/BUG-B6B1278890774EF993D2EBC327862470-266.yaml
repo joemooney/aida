@@ -17,6 +17,8 @@ feature: Uncategorized
 created_at: 2026-11-08T19:27:28.525198886Z
 modified_at: 2026-11-13T12:03:37.488530293Z
 req_type: Bug
+tags:
+- track:dell1
 comments:
 - id: 01a1bcd8-beaf-7582-aa0b-006077ac5867
   author: dirtlab
@@ -559,6 +561,12 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1d4cc-2a8c-7cf3-b8eb-d0172b3e30b6
+  author: joe
+  timestamp: 2026-11-13T12:05:12.460547175Z
+  session_id: 01a1d4aa-9c99-76c2-ac94-7f0795f8a7f9
+  harness_version: 2.1.323 (Claude Code)
+  changes: []
 filed_at:
   code_sha: db2eb4c39e46704132705ccb2b8300574ead41a6
   branch: main
