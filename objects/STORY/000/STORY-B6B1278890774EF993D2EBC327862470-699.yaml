@@ -1,0 +1,33 @@
+id: 01a1d721-3dad-76b3-b979-6f4cb20805f9
+spec_id: STORY-b6b1278890774ef993d2ebc327862470-699
+agreed_id: STORY-2776
+title: 'Review PR-3968: [AI:codex] test(review): verify publisher-enabled reviewer child shutdown (BUG-2546)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a1d706`) for branch `bug-b6b1278890774ef993d2ebc327862470-311`.
+
+  - PR: <https://github.com/joemooney/aida/pull/3968>
+  - Branch: `bug-b6b1278890774ef993d2ebc327862470-311` → `main`
+
+  ## Covers
+
+  - BUG-2546
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 3968` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-13T22:57:22.349619625Z
+modified_at: 2026-11-13T22:57:22.349619625Z
+req_type: Story
+filed_at:
+  code_sha: 4ac4c1d8ab080f7bdf96157582c0934171c2a73c
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 97d2f9fda08
+  session: 01a1d70650a6
