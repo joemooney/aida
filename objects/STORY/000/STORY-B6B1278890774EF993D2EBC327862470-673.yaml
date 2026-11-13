@@ -43,7 +43,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-13T05:04:38.638688628Z
-modified_at: 2026-11-13T11:21:51.808809270Z
+modified_at: 2026-11-13T11:21:57.926037144Z
 req_type: Story
 relationships:
 - rel_type:
@@ -137,6 +137,13 @@ comments:
   content: 'Advisor ruling 02:58 on the PR-3922 review at 8724e83. Finding 1 (P2, integration-sync-main.sh:58 exits 141 on long main history): accepted as a real defect. The integration seat fixes it at the producer (git log -n 20, no pipe to head) on integration with a regression; then promote/integration-4 is fast-forwarded and gets a delta re-review. Finding 2 (TASK-3448 criterion tracing): accepted as non-blocking. TASK-3448 completed and landed before this promotion, which changes none of its files; its evidence lives on TASK-3448. Covering it is the checklist generator''s over-inclusion from ancestry, as the reviewer itself notes. No change requested.'
   created_at: 2026-11-13T09:57:43.133630721Z
   modified_at: 2026-11-13T09:57:43.133630721Z
+  session_id: 01a1d3ee-83e8-71b3-a2c5-aed5baed6fdc
+  harness_version: 2.1.323 (Claude Code)
+- id: 01a1d4a4-93a6-7521-b838-d8feb481cdc8
+  author: joe
+  content: 'Advisor 04:25: removed the inherited implements link STORY-2750 -> TASK-3448, the remedy review finding 1 at c8bc6df offers (''correct the promotion review coverage/checklist to exclude inherited specs''). TASK-3448 is Completed; its implementation reached main before this promotion; this diff touches none of its files (the reviewer confirms: no new import churn or SCC claim needed). The link came from (TASK-3448) trailers on commits whose content is already on main. The other inherited specs stay linked; the reviewer judged them N/A. Re-review at the same head c8bc6df follows.'
+  created_at: 2026-11-13T11:21:57.926037144Z
+  modified_at: 2026-11-13T11:21:57.926037144Z
   session_id: 01a1d3ee-83e8-71b3-a2c5-aed5baed6fdc
   harness_version: 2.1.323 (Claude Code)
 history:
