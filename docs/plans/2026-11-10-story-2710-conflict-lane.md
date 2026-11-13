@@ -203,3 +203,209 @@ publication declaration is recorded; the punt remains in force. The required
 host codegraph client was absent at its supplied absolute path; `aida doctor
 check codegraph` also reported the tool missing. Session-manifest writing was
 refused by the seat filesystem boundary; no permission expansion was attempted.
+
+## Round 5: slice-1 production foundation
+
+The host now reserves repairs in `.aida/repair-journal.json`, version 1, under
+one permanent, bounded sidecar lock with atomic journal replacement. Keys bind
+the main repository, PR and original head. Reservations retain actor, time,
+lane identity and unknown spawn state; an unknown outcome prevents another
+reservation. Validation and refusal-delivery records have explicit schema
+slots for the subsequent slices. Readers refuse invalid versions, duplicate
+keys, symlink files and unreadable evidence.
+
+Direct pickup retains actual conflicts in the seat rather than aborting them.
+It records the original paths before generated outputs can change the index.
+The brief reads that retained list and keeps the configured vendor and model.
+Publication matches repository/seat/branch/head/base evidence, checks the
+original paths before staging, then completes the pending merge. Failed repair
+commits retain the staged index for retry, with the same original path list;
+ordinary publication keeps its existing tree-snapshot restoration behavior.
+
+The embedded host regeneration table registers the exec-context ledger and
+tracked template mirrors, including command/skill/hook symlinks, portable skill
+pack and Markdown discipline copies. It excludes local extensions and unrelated
+Claude configuration. The host restores outputs from pinned main, then runs
+pinned Makefile/Python generators in its sandbox with Git metadata read-only.
+Toolchain locations use execution-input capture and EnvPolicy projection;
+downloads are disabled and host caches stay read-only. Authoritative source
+conflicts, unexpected writes, missing declared outputs, generator failures and
+ratchet growth refuse. Build artifacts under target are excluded from source
+output comparison. Linked worktrees expose only their private index directory during restoration;
+the common Git directory remains read-only. Generation makes the index
+read-only in both tree kinds.
+
+This is a Refs-only foundation for #3813. Watcher dispatch, spawn-receipt
+integration, exact-tree compile gating and refusal-notice delivery remain later
+slices. No full-story completion, merge authority or review authority is claimed.
+The seat leaves edits uncommitted for the host launcher.
+
+Round 5 validation:
+
+- Final lane job `j20261111T062416168-2-0`: `story_2710`, **6 passed**.
+  Real Git/bwrap fixtures cover clone and linked regeneration, denial of Git
+  metadata writes, journal reload after generated-output staging, configured
+  vendor/model retention, concurrent same-head reservation and marker refusal
+  after staged deletion/recreation as an untracked file.
+- Lane job `j20261111T060542167-2-0`: `bug_2456_clone_rework`, **1 passed**,
+  including journal-backed host commit completion and planted-hook denial.
+- Lane job `j20261111T060840583-2-0`: `bug_2504`, **5 passed**.
+- Lane job `j20261111T060847634-2-0`: vendor debt ratchet, **3 passed**.
+- Python regeneration fixtures: **5 passed**; writer inventory tests:
+  **55 passed**. Inventory reconciliation, exec-context ledger validation,
+  rustfmt and `git diff --check` pass. Retired vendor/env debt was pruned.
+
+The regeneration tests use small registered-generator fixtures; full-repository
+`make sync-templates` Cargo generation was not exercised. Its command remains
+sandboxed, offline and bounded; failures refuse launch. The required codegraph
+host client was absent at its supplied path, confirmed by doctor; navigation
+used rg. No local Git commit, push, PR creation or queue completion was run.
+
+Round 6 partial repair (publication vetoed by explicit punt):
+
+- Preparation now restores only conflicted registered products and does not run
+  source-dependent generators. Authoritative source conflicts can reach the lane.
+- Host pending-merge publication stages resolved sources, invalidates persisted
+  regeneration success, reruns the pinned generators without restoring products,
+  stages their results and records success only after both steps succeed. Each
+  publication retry repeats generation, even when the index is already resolved.
+- The journal's additive `regeneration_success` field defaults to absent for old
+  records; absence and failure never substitute for executing generation.
+- Findings 2, 4 and 5 remain open: authorized successor lease handoff, post-merge
+  template product inventory, and typed merge-tree conflict/probe-failure evidence.
+  These findings are not disputed. STORY-2710 was explicitly punted; these edits
+  do not claim production readiness or story completion.
+- Python fixtures cover a real authoritative-source merge conflict with registered
+  generation, plus generator failure after writing a product and a fresh retry.
+  Rust coverage exercises failed host publication, persisted failure, preserved
+  MERGE_HEAD, and a successful publication retry for a clone.
+
+Round 6 validation result:
+
+- Final lane job `j20261111T075915879-2-0`: `story_2710`, **6 passed**,
+  including clone publication failure after an output write and successful retry.
+- Python regeneration fixtures: **7 passed**. Writer inventory tests: **55 passed**.
+- Execution-context ledger: **zero additions**. Writer checker: **3510 sites
+  reconciled**, with the new journal save classified under existing discipline.
+- Rustfmt and `git diff --check` pass. The first Rust run used the old
+  preparation expectation (5 passed, 1 failed); the final run includes the
+  updated phase assertions and passes all six tests.
+- Required codegraph client is absent at the supplied absolute path; doctor
+  confirms the tool is missing. Navigation used rg. Edits remain uncommitted.
+
+## Round 7 repair evidence corrections
+
+<!-- trace:STORY-2710 | ai:codex -->
+
+The ignored portable skill pack is enumerated by the trusted host's shared
+`rendered_portable_pack` renderer and default scaffold configuration, then
+passed as a closed inventory to the embedded driver. It no longer depends on
+`.agents/` appearing in the pinned Git tree. The regression invokes the real
+portable renderer for fresh and stale packs and rejects an additional pack write.
+
+Verified orphan adoption transfers the journal's lane identity from the retired
+lease to its newly minted successor under the journal lock, before removing the
+orphan lease. Setup rollback transfers it back before removing the successor.
+Neither a stale lease nor an unrelated lane can resume the retained merge.
+
+The additive `preparation_success` field defaults to absent and fails closed.
+It records restoration against the journal entry's immutable original head and
+base inputs, separately from publication's full `regeneration_success` result.
+Preparation is invalidated before each retry and only successful completion
+permits admission or host staging. A failed full generation also requires a
+successful full-generation retry on resume. Every publication still reruns full
+generation before exact-tree validation; the preparation flag cannot replace it.
+
+Round-7 validation: the final lane-runner `story_2710 --nocapture` run executed
+**8 passing tests**, with no sandbox skips reported. Python driver tests:
+**7 passed**. Writer-inventory tests: **55 passed**. The writer guard reconciled
+3514 sites; the exec-context ratchet reported zero additions. Changed Rust files
+pass rustfmt and the diff passes whitespace checks.
+
+The broader `seat_clone::orphan_reentry_tests` run executed **22 passing tests
+and 1 failure**. The existing
+`queue_work_reclaims_dead_clean_lane_without_an_origin_branch` failure reproduced
+alone: mail retention's fresh writer-admission scan refused teardown before the
+repair-adoption path. That broader suite is not green in this lane; no mail
+retention policy was weakened. The initial broader filter matched zero tests
+and is excluded from validation evidence.
+
+## Round 7 retained-evidence follow-up
+
+<!-- trace:STORY-2710 | ai:codex -->
+
+The portable-pack inventory is now frozen before invoking any checkout-authored
+program. The trusted host renderer supplies its installed paths; staged template
+masters add the closed paths of skills introduced by the resolved sources. A
+master created during generation cannot authorize a new pack output. The real
+renderer regression exercises fresh and stale ignored packs with an empty host
+inventory, deriving every allowed path from the staged real masters instead.
+
+A shared preparation gate requires successful restoration evidence, nonempty
+host-recorded conflict paths, and no outstanding generation failure. Both resume
+and direct pending-merge publication use it. Direct publication refuses an
+outstanding failure before staging, even after its triggering input is repaired;
+resume must first retry the failed generation successfully. Every publication
+continues to execute full generation again before committing.
+
+The actual successor-adoption regression now also fails preparation after
+adoption, drops the setup receipt, verifies the journal identity returns to the
+original orphan, and successfully adopts and resumes again. Old and unrelated
+lease IDs still refuse. The renderer child uses the shared executable resolver
+to comply with the existing raw-executable-lookup CI ratchet.
+
+Follow-up validation/handoff (2026-11-11 MST):
+
+- Python regeneration driver: **10 passed**; writer inventory: **55 passed**.
+- Exec-context ledger: **1234 exact sites, zero additions**. Store writer guard:
+  **3547 sink sites reconciled**. Changed-file rustfmt and whitespace checks pass.
+- Rust `untested=true`: job `j20261112T011730667-3321284-0` timed out after
+  **900 seconds compiling**, exit 124, before any executed-test result.
+- At handoff, `j20261112T011834302-3324384-0` (the existing launch rollback CI
+  regression) is compiling `aida-cli-lib` after reporting build-slot contention.
+  `j20261112T012040682-3328744-0` (executable lookup ratchet) and
+  `j20261112T012211339-3330395-0` (final `story_2710` regressions) remain queued.
+  No Rust pass or resolution of the launch rollback CI failure is claimed.
+  Runner output is under the primary checkout's
+  `.aida/lane-jobs/01a1cd51e522/<job-id>.out`.
+- The host Codegraph client is still missing at its configured absolute path;
+  source navigation used `rg`. No index initialization or synchronization ran.
+- Seven changed files remain uncommitted. The native host accepted publication
+  intent with subject `[AI:codex] fix(repair): freeze pack inventory and retain
+  failed preparation gates (Refs STORY-2710)`. No commit, push, PR, queue-done,
+  merge or review-record action was performed in this seat.
+
+## Round 7 exact-tree and inventory follow-through
+
+<!-- trace:STORY-2710 | ai:codex -->
+
+This follow-through builds on `46fa4873f73` and addresses the same three review
+findings without treating that earlier commit as this round's work:
+
+- Finding 1: staged pack masters must define an ordinary skill prompt before
+  helpers or a portable override can authorize new paths. The real renderer
+  fixture now stages those defining masters alongside portable overrides and
+  still exercises fresh/stale ignored packs with no host-known inventory.
+- Finding 2: journal adoption refuses an unrelated outstanding owner before
+  making any journal changes. Transfers remain idempotent for the verified
+  successor. The production orphan-adoption fixture checks unrelated refusal,
+  then successor resume and rollback to the original orphan.
+- Finding 3: successful publication regeneration stores its staged tree ID,
+  scoped by the journal's immutable repository/PR/head/base/tree identity.
+  Publication requires matching evidence before commit. Starting another
+  generation attempt clears that tree evidence; persisted failure still blocks
+  direct commit until resume successfully recovers. The sandbox regression
+  checks that successful evidence names the committed tree.
+
+Validation on this checkout: Python driver plus writer-inventory unit tests
+**66 passed** (11 regeneration tests, 55 writer-inventory tests). The exec-context
+guard reports **1234 exact sites, zero additions**. The store-writer guard reports
+**3548 reconciled sink sites** after classifying the new exact-tree journal
+writer. Changed-file rustfmt and whitespace checks pass. Rust job
+`j20261112T045617373-3105-0` is still queued behind two occupied build slots;
+no executed Rust result is claimed. At 2026-11-12 05:12 UTC it remains queued
+after more than 15 minutes of wall time; **Rust `untested=true`**. The configured
+900-second timeout has not produced a terminal status. The host must inspect or
+rerun this job; this handoff does not wait for a later callback. The reviewed
+Codegraph client remains missing at its configured absolute path; no indexing
+or synchronization was attempted.
