@@ -23,7 +23,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-12T19:11:56.371806442Z
-modified_at: 2026-11-13T14:13:02.897140720Z
+modified_at: 2026-11-13T14:20:01.212981368Z
 req_type: Story
 tags:
 - operator-held
@@ -171,6 +171,13 @@ comments:
   content: 'Advisor 06:45: train for #3916 landed at 06:29, but its post-merge ''aida pull'' has spent 14+ min in ''git reflog expire --all'' store maintenance, holding deputy default. Promotion #3922 (approved at 3d3917f, CI green) waits behind it. More evidence for BUG-2543 / BUG-2554: post-merge housekeeping should not block the ship queue.'
   created_at: 2026-11-13T13:43:42.763461520Z
   modified_at: 2026-11-13T13:43:42.763461520Z
+  session_id: 01a1d4aa-9c99-76c2-ac94-7f0795f8a7f9
+  harness_version: 2.1.323 (Claude Code)
+- id: 01a1d547-973c-7f10-928f-83f02be3d51b
+  author: joe
+  content: 'Advisor 07:22: the promotion 4 train (#3947) was EJECTED after green CI because the retry resumed a journal (BUG-2556: recovery drops TTY consent) and the mandate had expired. Resubmitted as a fresh train (journal cleared). BUG-2556''s fix is #3944, awaiting delta review.'
+  created_at: 2026-11-13T14:20:01.212981368Z
+  modified_at: 2026-11-13T14:20:01.212981368Z
   session_id: 01a1d4aa-9c99-76c2-ac94-7f0795f8a7f9
   harness_version: 2.1.323 (Claude Code)
 history:
