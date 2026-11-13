@@ -4,12 +4,12 @@ agreed_id: STORY-2539
 title: 'Vendor profile as data beyond spawn: one VendorProfile registry (regroup R5)'
 description: |
   Regroup R5: a VendorProfile registry (argv, prompt expansion, hook layout, sandbox posture including today's agy outer-only ruling, mail-wake support, hint text, resume semantics); vendor-name literals allowed only in vendors/; user hints rendered from the profile. Evidence: about 70 vendor commits in 14 days, 430 non-test "claude" literals, STORY-782 and BUG-2390 (both fold here). Trigger: STORY-2326 PR-B merged (the spawn half and its posture tables exist). Sketch-first.
-status: NeedsAttention
+status: InProgress
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T00:18:06.619162338Z
-modified_at: 2026-11-13T10:09:08.507433317Z
+modified_at: 2026-11-13T10:09:17.752520162Z
 req_type: Story
 tags:
 - architecture
@@ -561,6 +561,13 @@ comments:
   modified_at: 2026-11-13T10:09:08.507433317Z
   session_id: 01a1d3ee-83e8-71b3-a2c5-aed5baed6fdc
   harness_version: 2.1.323 (Claude Code)
+- id: 01a1d462-0bb8-7410-b03d-765a520de45e
+  author: joe
+  content: 'Returned from NeedsAttention to In Progress via `aida edit --status`. It was punted on: missing-context: Round 4 blocked by stale native-seat source: HEAD 8ddf1a7891bd is the sketch-only branch; reviewed head 5b80f2744967 and prerequisite vendors registry/store-writer scanner are absent from checkout. Local main 0558a9e06aac already contains the prior Round 4 fixes for findings 1-6 (pure vendors/hooks helpers, scaffolding HookBackend installers, restored init wrapper inventory, per-file live/dangling symlink tests, layout parser and docs). No findings disputed. Finding 7 remains unverified: this seat cannot establish green CI on the published rework head. Git metadata is read-only; host must reconcile the already-shipped PR #3645 and relaunch current-main source with the intended remaining scope, plus deploy/supply the reviewed absolute codegraph proxy client path (doctor reports missing). No code changes or tests executed; untested=true.. No triage reason was given.'
+  created_at: 2026-11-13T10:09:17.752511360Z
+  modified_at: 2026-11-13T10:09:17.752511360Z
+  session_id: 01a1d3ee-83e8-71b3-a2c5-aed5baed6fdc
+  harness_version: 2.1.323 (Claude Code)
 history:
 - id: 01a1ae38-c1a4-7913-9856-03e3793500ff
   author: joe
@@ -756,6 +763,15 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a1d462-0bb8-7410-b03d-764bdec56587
+  author: joe
+  timestamp: 2026-11-13T10:09:17.752482374Z
+  session_id: 01a1d3ee-83e8-71b3-a2c5-aed5baed6fdc
+  harness_version: 2.1.323 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: InProgress
 execution_mode: drain
 filed_at:
   code_sha: 71c43691a10a62c49185808eb45d25b209f987c2
@@ -765,8 +781,3 @@ filed_at:
   aida_build_sha: bdeb8f49978
   vendor: claude
   session: 688fbe55-f92b-4b09-a8d1-2ca064cb7e25
-attention_reason:
-  category: missing-context
-  detail: 'Round 4 blocked by stale native-seat source: HEAD 8ddf1a7891bd is the sketch-only branch; reviewed head 5b80f2744967 and prerequisite vendors registry/store-writer scanner are absent from checkout. Local main 0558a9e06aac already contains the prior Round 4 fixes for findings 1-6 (pure vendors/hooks helpers, scaffolding HookBackend installers, restored init wrapper inventory, per-file live/dangling symlink tests, layout parser and docs). No findings disputed. Finding 7 remains unverified: this seat cannot establish green CI on the published rework head. Git metadata is read-only; host must reconcile the already-shipped PR #3645 and relaunch current-main source with the intended remaining scope, plus deploy/supply the reviewed absolute codegraph proxy client path (doctor reports missing). No code changes or tests executed; untested=true.'
-  raised_by: implementer
-  raised_at: 2026-11-13T03:09:10.994089546Z
