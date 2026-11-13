@@ -1,0 +1,18 @@
+{
+  "id": "review-lease-0758699350c160a99af7d68ca9bcba8ba34fd53da73d35c755b6159e941f9e9c",
+  "thread_id": "review-lease-0758699350c160a99af7d68ca9bcba8ba34fd53da73d35c755b6159e941f9e9c",
+  "from": "review-launch",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1794589960732,
+  "body": "lease 01a1d318ac50 (implementer, seat /home/joe/ai/aida-worktrees/aida-seat-aida-bug-b6b1278890774ef993d2ebc327862470-266) holds branch `bug-b6b1278890774ef993d2ebc327862470-266` and its session has exited, but it was not ended automatically: its tree has 156 uncommitted change(s): ? aida-cli-lib/src/agent_errors.rs; ? aida-cli-lib/src/argv_rewrite.rs; ? aida-cli-lib/src/bounded_process.rs; ? aida-cli-lib/src/cast_recording.rs; ? aida-cli-lib/src/ci_staleness.rs, … (+151 more). Commit and push the work on its branch, or discard it with `aida session end 01a1d318ac50 --force --discard-unpushed`, then retry To keep its tree and work: `aida queue work BUG-b6b1278890774ef993d2ebc327862470-266 --resume --sandbox` re-enters it in place, contained, since it is a seat's private clone (a new session starts there when none was recorded), or `aida session end 01a1d318ac50 --force` discards it.",
+  "subject": "Review blocked by retained lease 01a1d318ac50",
+  "urgent": false,
+  "intent": "request",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "explicit"
+}
