@@ -1,0 +1,18 @@
+{
+  "id": "1241ff58-ba98-4b17-a819-823a2ff03bbe",
+  "thread_id": "1241ff58-ba98-4b17-a819-823a2ff03bbe",
+  "from": "joe",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1794547751043,
+  "body": "TASK-b6b1278890774ef993d2ebc327862470-960 PR #3916 conflicts with origin/main in: scripts/exec-context-legacy.json, scripts/store-writers.toml. The host aborted the merge. Conflict resolution requires Claude on branch task-3428-slice-c. Fresh route: aida queue work TASK-b6b1278890774ef993d2ebc327862470-960 --vendor claude --fresh --no-human.",
+  "subject": "Rework merge conflicts require Claude",
+  "urgent": false,
+  "intent": "request",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "shell_user"
+}
