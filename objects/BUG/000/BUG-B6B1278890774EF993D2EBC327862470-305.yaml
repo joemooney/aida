@@ -3,12 +3,12 @@ spec_id: BUG-b6b1278890774ef993d2ebc327862470-305
 agreed_id: BUG-2540
 title: aida queue rework hangs until killed (180s) since ~11:12 MST 2026-11-12, so autoland reworks never queue
 description: 'Autoland''s dispatch loop runs ''timeout 180 aida queue rework SPEC --for implementer'' from the operator deputy (with grant). Up to 11:12 MST it printed ''Queued SPEC''; since then 10 consecutive calls printed nothing and were killed at 180s (BUG-2525, BUG-2534, TASK-3428 x3, BUG-2538, STORY-2733, ...). The advisor''s own call for BUG-2525 also hung (killed at 120s). Each hang stalls the dispatch loop (heartbeat goes stale; reviews queue behind it). Suspect store-write lock or cache-refresh contention (''refreshing: worker_running'', ''stale: true'' seen on every command). Acceptance: (1) find the blocking wait (lock, network, prompt) and fix it; (2) queue rework fails fast with a clear message after a bounded wait instead of hanging; (3) regression test for the contended case.'
-status: InProgress
+status: Completed
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-12T19:41:04.965614772Z
-modified_at: 2026-11-13T01:14:30.266313633Z
+modified_at: 2026-11-13T02:20:27.331827460Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -84,6 +84,13 @@ comments:
   modified_at: 2026-11-12T21:36:15.197487305Z
   session_id: 01a1d19e-9195-7853-815f-b54753ebd973
   harness_version: 2.1.322 (Claude Code)
+- id: 01a1d2b4-cf43-7472-bd52-d1670752d9c0
+  author: joe
+  content: 'advisor 19:20 (operator-approved): fix 6dcad0b landed on main via promotion 2 (#3904 9968a8a); duplicate PR #3903 closed. trace:STORY-2737'
+  created_at: 2026-11-13T02:20:27.331827460Z
+  modified_at: 2026-11-13T02:20:27.331827460Z
+  session_id: 01a1d240-c397-7b61-b29f-bb337c138943
+  harness_version: 2.1.323 (Claude Code)
 history:
 - id: 01a1d188-9d4b-76d0-bc54-15d34358173a
   author: aida-session-start
@@ -110,6 +117,15 @@ history:
   session_id: 01a1d240-c397-7b61-b29f-bb337c138943
   harness_version: 2.1.323 (Claude Code)
   changes: []
+- id: 01a1d2b4-af4b-7163-b002-2d17a9a0d732
+  author: joe
+  timestamp: 2026-11-13T02:20:19.147893800Z
+  session_id: 01a1d240-c397-7b61-b29f-bb337c138943
+  harness_version: 2.1.323 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
 filed_at:
   code_sha: 0d6c60e6d982aad0c2c4ad38214010289a267d92
   branch: main
@@ -119,3 +135,6 @@ filed_at:
   vendor: claude
   session: 01a1d0eb-22cc-7262-8f6c-7266e9cc1fbb
   harness_version: 2.1.322 (Claude Code)
+implementation_info:
+  implemented: false
+  completed_at: 2026-11-13T02:20:19.147874090Z
