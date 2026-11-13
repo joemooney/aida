@@ -912,6 +912,41 @@ fn state_mandate(state: &MandateState) -> Option<&Mandate> {
     }
 }
 
+/// The overrides `aida mandate renew`'s flags ask for. An absent flag asks
+/// for nothing, so the renewed mandate keeps that value.
+// trace:STORY-2771 | ai:claude
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn renew_overrides(
+    ship_held: bool,
+    scopes: &[String],
+    drive: bool,
+    include_supervised: bool,
+    exclude_supervised: bool,
+    include_gate_paths: bool,
+    exclude_gate_paths: bool,
+    reason: Option<String>,
+) -> Result<crate::gate::mandate::RenewOverrides> {
+    let mut add_scopes = BTreeSet::new();
+    if ship_held {
+        add_scopes.insert(Scope::ShipHeld);
+    }
+    for raw in scopes {
+        add_scopes.insert(Scope::parse(raw)?);
+    }
+    let flag = |on: bool, off: bool| match (on, off) {
+        (true, _) => Some(true),
+        (_, true) => Some(false),
+        _ => None,
+    };
+    Ok(crate::gate::mandate::RenewOverrides {
+        drive,
+        add_scopes,
+        include_supervised: flag(include_supervised, exclude_supervised),
+        include_gate_paths: flag(include_gate_paths, exclude_gate_paths),
+        reason,
+    })
+}
+
 /// `aida mandate start|renew|stop|status`.
 // trace:STORY-1698 | ai:claude
 pub(crate) fn handle_mandate(action: &crate::cli::MandateAction) -> Result<()> {
@@ -1000,17 +1035,38 @@ pub(crate) fn handle_mandate(action: &crate::cli::MandateAction) -> Result<()> {
         // trace:STORY-B6B1278890774EF993D2EBC327862470-166 | ai:claude
         crate::cli::MandateAction::Renew {
             duration,
+            ship_held,
+            scopes,
+            drive,
+            include_supervised,
+            exclude_supervised,
             include_gate_paths,
+            exclude_gate_paths,
+            reason,
         } => {
             // Same grammar and 24h cap as `start --ttl`, named for this flag.
             let ttl = duration.as_deref().map(parse_renew_for).transpose()?;
+            // trace:STORY-2771 | ai:claude
+            let overrides = renew_overrides(
+                *ship_held,
+                scopes,
+                *drive,
+                *include_supervised,
+                *exclude_supervised,
+                *include_gate_paths,
+                *exclude_gate_paths,
+                reason.clone(),
+            )?;
             let (m, renewal, revived_from) = renew_as_human(
                 &dir,
                 &crate::gate::mandate::operator_principal(),
                 ttl,
-                *include_gate_paths,
+                &overrides,
                 Utc::now(),
             )?;
+            for change in &renewal.changes {
+                println!("{change}");
+            }
             // trace:STORY-2346 | ai:claude
             if let Some(old_id) = revived_from {
                 if let Some(root) = &audit_root {
@@ -1023,10 +1079,15 @@ pub(crate) fn handle_mandate(action: &crate::cli::MandateAction) -> Result<()> {
                 emit_renewed(root, &m, &renewal);
             }
             println!(
-                "Mandate {} renewed until {} (was {}); scope, supervised flag and reason retained; protected paths: {} (renewal {}).",
+                "Mandate {} renewed until {} (was {}); {}; protected paths: {} (renewal {}).",
                 m.id,
                 renewal.expires_at.to_rfc3339(),
                 renewal.previous_expires_at.to_rfc3339(),
+                if renewal.changes.is_empty() {
+                    "scope, supervised flag and reason retained"
+                } else {
+                    "everything else retained"
+                },
                 m.include_gate_paths,
                 m.renewals.len()
             );
