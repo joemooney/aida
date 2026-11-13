@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-13T03:10:47.302266912Z
-modified_at: 2026-11-13T11:17:27.546275599Z
+modified_at: 2026-11-13T17:40:01.216931377Z
 req_type: Bug
 tags:
 - track:dell1
@@ -103,6 +103,12 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a1d5fe-b576-7081-aeeb-75b73bd28924
+  author: dirtlab
+  timestamp: 2026-11-13T17:40:02.038130820Z
+  session_id: 01a1d5fe0a03
+  harness_version: codex-cli 0.167.0
+  changes: []
 filed_at:
   code_sha: 0558a9e06aac10a087327ade1e1ab0a0c3d4ad50
   branch: main
@@ -112,6 +118,11 @@ filed_at:
   vendor: claude
   session: 01a1d240-c397-7b61-b29f-bb337c138943
   harness_version: 2.1.323 (Claude Code)
+attention_reason:
+  category: other
+  detail: 'Native implementer pickup refused: spec is Needs Attention with request-changes verdict; CLI requires advisor authority to promote to In Progress. No source edits or tests performed. Advisor triage is required before relaunch.'
+  raised_by: implementer
+  raised_at: 2026-11-13T17:40:01.216931377Z
 failure_reason:
   phase: reviewer
   phase_index: 3
