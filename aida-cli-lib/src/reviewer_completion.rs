@@ -232,13 +232,13 @@ mod tests {
     }
 
     // A pending barrier must keep the actual wait loop alive beyond its grace,
-    // including a WAITING disposition. The completed twin must then reap it.
+    // for every terminal disposition. The completed twin must then reap it.
     // trace:BUG-2546 | ai:codex
     #[cfg(unix)]
     #[test]
     fn bug2546_wait_loop_preserves_pending_child_and_reaps_completed_twin() {
         use crate::gate::review_verdict::verdict_path;
-        for kind in ["APPROVED", "WAITING"] {
+        for kind in ["APPROVED", "REQUEST_CHANGES", "REJECTED", "WAITING"] {
             let tmp = tempfile::tempdir().unwrap();
             let _scope = Scope::new(tmp.path(), tmp.path(), 7, &[]);
             bind_grant("child");
@@ -277,10 +277,17 @@ mod tests {
                 !crate::gate::review_verdict::delivery_pending(&raw),
                 "{kind}"
             );
+            let verdict = crate::gate::review_verdict::read_recorded_verdict(tmp.path(), "PR-7")
+                .expect("completed delivery remains readable by the collector");
+            assert_eq!(verdict.kind.approves(), kind == "APPROVED", "{kind}");
             WATCH.with(|w| {
                 let slot = w.borrow();
                 let w = slot.as_ref().unwrap();
-                assert!(w.recorded_at.is_some(), "{kind}");
+                let recorded_at =
+                    chrono::DateTime::parse_from_rfc3339(body["recorded_at"].as_str().unwrap())
+                        .unwrap()
+                        .with_timezone(&chrono::Utc);
+                assert_eq!(w.recorded_at, Some(recorded_at), "{kind}");
             });
         }
     }

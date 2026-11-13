@@ -308,6 +308,14 @@ fn assert_interactive_resume_policy(vendor: crate::session::HeadlessVendor) {
     assert!(prompt.contains("do not run Cargo or local test/build commands unless explicitly requested by the operator"), "{argv:?}");
     assert!(prompt.contains("exit immediately"), "{argv:?}");
     assert!(
+        prompt.contains("Use source and existing CI evidence"),
+        "{argv:?}"
+    );
+    assert!(
+        prompt.contains("After successfully recording your verdict"),
+        "{argv:?}"
+    );
+    assert!(
         !prompt.contains("If recording the verdict fails"),
         "{argv:?}"
     );
