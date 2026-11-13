@@ -857,14 +857,20 @@ identity to resume. Clean resumes use the normal merge and conflict checks.
 <!-- trace:BUG-2504 | ai:codex -->
 
 The conflict check runs after session setup has provisioned the seat and minted
-its lease, inside the pickup's launch rollback boundary. The host appends the
-retained original paths to the prompt without changing vendor or model. A
-refusal before spawn uses the ordinary setup rollback.
+its lease, inside the pickup's launch rollback boundary. Conflicts preserve the
+selected vendor, model, seat and lease. Before launch, pickup repeats vendor and
+containment preflight and appends the retained original paths to the prompt. A
+refusal before spawn uses the ordinary setup rollback. The same routing applies
+to interactive implementer pickups.
 
-Interactive implementer pickups use the same preparation. Guided, plan-only
-and `--no-launch` pickups skip it. Fixtures cover retained merges, journal
-reloads after staging, configured-vendor prompts and host commit completion;
-full automatic dispatch and end-to-end vendor acceptance remain later work.
+An explicit resume uses the vendor that recorded the session and prints that
+reason before launch; configuration cannot move an existing thread to another
+vendor. Guided, plan-only and `--no-launch` pickups skip automatic preparation.
+Fixtures cover retained merges, journal reloads after staging, configured-vendor
+prompts for interactive and headless routing, and host commit completion; full
+automatic dispatch and end-to-end vendor acceptance remain later work.
+<!-- trace:BUG-2553 | ai:codex -->
+<!-- trace:STORY-2710 | ai:claude -->
 
 After a contained Codex headless implementer exits, its host commits pending
 seat edits and publishes through `ship --from-seat`, updating the existing

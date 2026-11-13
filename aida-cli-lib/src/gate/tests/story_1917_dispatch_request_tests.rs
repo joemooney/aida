@@ -123,8 +123,12 @@ impl Fixture {
         write_spec(&store, "TASK-100", &plain_req("TASK-100"));
         write_spec(&store, "STORY-1917", &plain_req("STORY-1917"));
 
-        let ambient =
-            crate::test_env::AmbientGuard::hermetic_with_seat(&root, "advisor", delegable);
+        let ambient = crate::test_env::AmbientGuard::hermetic_with_seat_and(
+            &root,
+            "advisor",
+            delegable,
+            &[("USER", Some(crate::test_env::HERMETIC_TEST_USER))],
+        );
         let principal = crate::current_user_id(None);
         let mandate_dir = tmp.path().join("mandates");
         std::fs::create_dir_all(&mandate_dir).unwrap();

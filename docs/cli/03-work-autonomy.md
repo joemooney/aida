@@ -243,7 +243,9 @@ The same recipe is embedded in every phase-failure comment, so the reader who de
 
 ### `aida lane`
 
-The host runs each lane's `make check-ci-fast` in the lane-job sandbox.
+The host runs each lane's `make check-ci-fast` in the lane-job sandbox with a
+one-hour timeout, independent of seat Cargo timeout overrides.
+<!-- trace:TASK-3100 | ai:codex -->
 A source failure gets one repair round; a timeout reports
 `fast_gate=skipped(timeout)` without consuming that round. A retry that times out
 retains an earlier `fast_gate=fail`. Gate jobs reuse the lane target seed and

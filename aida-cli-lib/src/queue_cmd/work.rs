@@ -567,11 +567,12 @@ pub(crate) fn run_queue_resume_to_exit(
 
 /// Keep the configured vendor for a host-staged repair. Preparation failures
 /// still refuse before launch; notification delivery belongs to a later slice.
+// trace:BUG-2553 | ai:codex
 // trace:STORY-2475 | ai:codex
 pub(crate) fn rework_conflict_route(
     prepared: Result<Vec<String>>,
     vendor: session::HeadlessVendor,
-    resume: bool,
+    _resume: bool,
     scope: &str,
     pr: u64,
     branch: &str,
@@ -583,7 +584,7 @@ pub(crate) fn rework_conflict_route(
     }
     // The host retained this merge and its original paths. Keep the configured
     // vendor, including resumed Codex threads; no conflict-only mail prerequisite.
-    let _ = (resume, scope, pr, branch, notify);
+    let _ = (scope, pr, branch, notify);
     Ok((vendor, files))
 }
 
@@ -600,14 +601,15 @@ pub(crate) struct ReworkConflictLaunch<'a> {
 }
 
 /// Append the host-journal conflict paths without changing vendor or model.
-/// Vendor admission and containment have already been checked by pickup.
+/// Launch admission and containment are rechecked before any child starts.
 // trace:STORY-2475 | ai:claude
+// trace:BUG-2553 | ai:codex
 pub(crate) fn apply_rework_conflict_route(
-    project_root: &Path,
+    _project_root: &Path,
     prepared: Result<Vec<String>>,
     launch: ReworkConflictLaunch<'_>,
     prompt: &mut String,
-    resolved_model: &mut Option<String>,
+    _resolved_model: &mut Option<String>,
     notify: impl FnOnce(&str, &str) -> Result<()>,
 ) -> Result<session::HeadlessVendor> {
     let (route_vendor, files) = rework_conflict_route(
@@ -622,13 +624,9 @@ pub(crate) fn apply_rework_conflict_route(
     if files.is_empty() {
         return Ok(launch.vendor);
     }
-    let _ = (
-        project_root,
-        resolved_model,
-        launch.interactive,
-        launch.contained,
-    );
     let vendor = route_vendor;
+    session::preflight_launch_vendor(vendor, launch.interactive)?;
+    session::require_vendor_containment(vendor, launch.contained, "conflict rework")?;
     prompt.push_str(&format!(
         "\n\n{}",
         crate::rework_direction::host_conflict_task(&crate::rework_direction::MainConflict {
@@ -4104,6 +4102,11 @@ pub(crate) fn handle_queue_work(
                     let (recorded, resume_id) =
                         crate::codex_resume::recorded_resume(&root, id, Some(plan.scope.as_str()))?;
                     session::require_resume_vendor(&root, recorded)?;
+                    // trace:BUG-2553 | ai:codex
+                    eprintln!(
+                        "  resume: using recorded vendor `{}` for session `{id}`; configured vendor does not replace an existing thread",
+                        recorded.as_str()
+                    );
                     resume_target = Some((recorded, resume_id));
                     Some(recorded)
                 }

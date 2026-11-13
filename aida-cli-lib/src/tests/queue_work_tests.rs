@@ -4465,7 +4465,7 @@ fn bug_1957_rework_match_hold_never_unmatches_the_specs_own_pr() {
     ));
 }
 
-// trace:STORY-2475 | ai:codex
+// trace:STORY-2475 BUG-2553 | ai:codex
 #[test]
 fn story_2710_conflicts_keep_configured_vendor_and_resume() {
     use crate::session::HeadlessVendor;
@@ -4520,6 +4520,7 @@ fn story_2710_preparation_failure_cannot_admit_a_launch() {
 
 /// Real Git host preparation keeps the configured vendor/model, retains a
 /// conflicted merge and appends the host journal paths for both launch modes.
+// trace:BUG-2553 | ai:codex
 // trace:STORY-2475 | ai:claude
 // trace:BUG-2456 | ai:codex
 #[test]
@@ -4545,15 +4546,15 @@ fn story_2710_host_publishes_clean_rework_or_retains_conflicts_before_launch() {
         );
         String::from_utf8_lossy(&out.stdout).trim().to_string()
     };
-    let fake_claude = root.join("fake-claude");
-    crate::test_exec::write_executable(&fake_claude, "#!/bin/sh\nexit 0\n");
+    let fake_agent = root.join("fake-agent");
+    crate::test_exec::write_executable(&fake_agent, "#!/bin/sh\nexit 0\n");
     let home = root.join("home");
     std::fs::create_dir_all(&home).unwrap();
     let mut env = crate::test_env::EnvVarsGuard::apply(&[
         ("AIDA_HOME", Some(home.to_str().unwrap())),
         ("HOME", Some(home.to_str().unwrap())),
-        ("AIDA_AGENT_CMD", Some(fake_claude.to_str().unwrap())),
-        ("AIDA_HEADLESS_VENDOR", Some("codex")),
+        ("AIDA_AGENT_CMD", Some(fake_agent.to_str().unwrap())),
+        ("AIDA_HEADLESS_VENDOR", None),
         ("AIDA_AGENT_MODEL", None),
     ]);
     let origin = root.join("origin.git");
@@ -4561,6 +4562,12 @@ fn story_2710_host_publishes_clean_rework_or_retains_conflicts_before_launch() {
     git(root, &["init", "-q", "--bare", origin.to_str().unwrap()]);
     git(root, &["init", "-q", project.to_str().unwrap()]);
     git(&project, &["symbolic-ref", "HEAD", "refs/heads/main"]);
+    std::fs::create_dir_all(project.join(".aida")).unwrap();
+    std::fs::write(
+        project.join(".aida/agents.toml"),
+        "[agents]\nvendor = \"codex\"\n",
+    )
+    .unwrap();
     git(
         &project,
         &["remote", "add", "origin", origin.to_str().unwrap()],
@@ -4618,7 +4625,7 @@ fn story_2710_host_publishes_clean_rework_or_retains_conflicts_before_launch() {
                 &project,
                 prepared,
                 ReworkConflictLaunch {
-                    vendor: HeadlessVendor::Codex,
+                    vendor: crate::session::resolve_enabled_headless_vendor(&project).unwrap(),
                     resume: false,
                     interactive,
                     contained: false,
