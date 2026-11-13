@@ -1301,8 +1301,16 @@ fn bug2546_publisher_projection_does_not_hide_local_child_completion() {
         rv::parse_recorded_verdict(&raw.body).unwrap().recorded_at,
         Some(recorded_at.to_rfc3339())
     );
-    std::thread::sleep(std::time::Duration::from_millis(2100));
-    assert!(crate::reviewer_completion::should_stop());
+    // Exercise the headless wait path with publication enabled, including
+    // reaping a vendor that keeps running after recording its local verdict.
+    let mut child = Command::new("sleep").arg("30").spawn().unwrap();
+    assert!(crate::reviewer_completion::wait(&mut child)
+        .unwrap()
+        .success());
+    assert!(
+        !child.try_wait().unwrap().unwrap().success(),
+        "the completion watcher must terminate the lingering reviewer"
+    );
     // Stopping neither replaces the signed projection nor accepts this local
     // synthetic child record; the ordinary collector still owns acceptance.
     assert_eq!(
