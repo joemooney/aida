@@ -332,6 +332,13 @@ comments:
   modified_at: 2026-11-13T22:12:15.916486820Z
   session_id: 01a1d684-8599-70e0-a01c-714f54d2f8de
   harness_version: 2.1.323 (Claude Code)
+- id: 01a1d730-e296-7fe0-b3d4-585d0a0c556d
+  author: dirtlab
+  content: 'Round 3 (PR #3921): merged origin/main as 5c19c31ead using a three-way merge on 47bfb18596, the main snapshot squashed in by 0ee74bb9c0. One real conflict (sccache fixtures): took main''s BUG-2501 fix. Dropped stale lib_part4/6. dc335bf362 rewraps the cap docs. Findings 1-4 had already been fixed on the branch (namespace-aware slot liveness, --lane-capacity split from --lane-host, project-local stall label, unused params and ratchet entry). host_capacity tests 10/10 pass. Push from the seat failed (no GitHub credentials); the host must publish.'
+  created_at: 2026-11-13T23:14:27.606022091Z
+  modified_at: 2026-11-13T23:14:27.606022091Z
+  session_id: 01a1d729480b
+  harness_version: 2.1.319 (Claude Code)
 - id: 01a1d732-40fd-7cb2-b2d3-5128ad47e04b
   author: joe
   content: 'Advisor 15:50: operator freed Claude capacity (excess weekly credits, expire 2026-11-15). This conflict merge goes to a Claude implementer lane on dell1 (--vendor claude), because a Codex native seat cannot record the merge of main. Scope: REAL merge of origin/main into the open PR branch (no rebase, no force push), resolving conflicts to keep main''s behaviour plus this spec''s change, then targeted tests and check-ci-fast, then push. Nothing else.'
