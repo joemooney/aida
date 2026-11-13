@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-13T04:07:35.213330891Z
-modified_at: 2026-11-13T14:13:24.321183202Z
+modified_at: 2026-11-13T14:15:46.790517872Z
 req_type: Story
 tags:
 - track:integration
@@ -44,6 +44,17 @@ comments:
   content: 'ADVISOR 04:48: #3935 round 2 CR at 0b16548 (5 defects + failing identity test). Ruling: fix all in one push; round 3 authorized; escalate before round 4.'
   created_at: 2026-11-13T11:47:32.832265349Z
   modified_at: 2026-11-13T11:47:32.832265349Z
+  session_id: 01a1d4aa-9c99-76c2-ac94-7f0795f8a7f9
+  harness_version: 2.1.323 (Claude Code)
+- id: 01a1d543-b566-72d0-a350-de9fd2f7e8e3
+  author: joe
+  content: |-
+    ADVISOR RULING 07:17 (#3935 round 3 CR at ab570be; the round cap is reached). Round 4 is authorized with a FIXED scope, and nothing outside it blocks the ship:
+    (1) MUST: the P1 operator-track bypass. A track:operator spec must be refused at every unattended admission (direct 'queue work --no-human' without --auto-complete, drain, and auto-complete head selection), even for a matching AIDA_TRACK=operator launcher. One shared check, applied before any setup, with regressions for each path.
+    (2) MUST (cheap): the missing CLI manual entry for 'aida integration tags'.
+    (3) ACCEPTED as one follow-up spec, not this PR: completeness of landing evidence (Done, alias and origin trailer resolution), direct-agent admission of foreign-track work, AIDA_TRACK propagation across the child boundary, ambiguous multi-track tags, role scope in integration tags, and foreign-work suggestions. Reason: none is fail-open for main; they are correctness gaps in integration-track tooling that the integration seat owns. Round 4 reviews only (1) and (2), against this ruling.
+  created_at: 2026-11-13T14:15:46.790517872Z
+  modified_at: 2026-11-13T14:15:46.790517872Z
   session_id: 01a1d4aa-9c99-76c2-ac94-7f0795f8a7f9
   harness_version: 2.1.323 (Claude Code)
 history:
