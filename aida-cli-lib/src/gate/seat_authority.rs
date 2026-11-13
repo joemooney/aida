@@ -2302,11 +2302,12 @@ pub(crate) fn validate_child_delegation(
 ) -> Result<SeatGrant> {
     // BUG-2544: name why the parent grant failed instead of a bare refusal.
     // trace:BUG-2544 | ai:claude
+    // trace:BUG-2544 | ai:codex
     let parent = match grant_check(project_root) {
         GrantCheck::Valid(parent) => parent,
-        GrantCheck::Absent => {
-            bail!("no valid parent seat grant is active: this process exports no `{GRANT_ENV}`")
-        }
+        GrantCheck::Absent => bail!(
+            "no valid parent seat grant is active: {GRANT_ENV} is absent; re-enter your role at a terminal before launching children"
+        ),
         GrantCheck::Rejected { id, reason, .. } => bail!("{}", parent_grant_refusal(&id, &reason)),
     };
     if !parent
