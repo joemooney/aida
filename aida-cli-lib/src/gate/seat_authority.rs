@@ -2269,13 +2269,46 @@ pub(crate) fn widen_delegation_command(
     command
 }
 
+/// Why a launch cannot use the grant it exports as the parent of a child
+/// grant. A presenter refusal usually means the launch outlived the shell
+/// that holds the grant: a launch started with `&`, `setsid` or `nohup` from a
+/// deputy job (or any shell) that then exits is re-parented away from the
+/// grant's process, so only launches still running inside that shell may
+/// delegate (BUG-2544).
+// trace:BUG-2544 | ai:claude
+pub(crate) fn parent_grant_refusal(id: &str, reason: &GrantRejection) -> String {
+    let short: String = id.chars().take(8).collect();
+    let mut message =
+        format!("no valid parent seat grant is active: grant {short} is refused because {reason}");
+    if matches!(
+        reason,
+        GrantRejection::PresenterNotBound { .. } | GrantRejection::KeyringUnavailable { .. }
+    ) {
+        message.push_str(
+            ". A launch started in the background (`&`, `setsid`, `nohup`) loses the grant once \
+             the shell that holds it exits, as a deputy job does when its script ends; run each \
+             launch in the foreground, one after another, or `wait` for background launches \
+             before the script exits",
+        );
+    }
+    message
+}
+
 /// Read-only launch preflight; issuance repeats this validation after setup.
 // trace:TASK-1337 | ai:codex
 pub(crate) fn validate_child_delegation(
     project_root: &Path,
     requested_seat: &str,
 ) -> Result<SeatGrant> {
-    let parent = current_grant(project_root).context("no valid parent seat grant is active")?;
+    // BUG-2544: name why the parent grant failed instead of a bare refusal.
+    // trace:BUG-2544 | ai:claude
+    let parent = match grant_check(project_root) {
+        GrantCheck::Valid(parent) => parent,
+        GrantCheck::Absent => {
+            bail!("no valid parent seat grant is active: this process exports no `{GRANT_ENV}`")
+        }
+        GrantCheck::Rejected { id, reason, .. } => bail!("{}", parent_grant_refusal(&id, &reason)),
+    };
     if !parent
         .delegable_seats
         .iter()
