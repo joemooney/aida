@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-13T02:45:43.305350105Z
-modified_at: 2026-11-13T03:03:29.310261640Z
+modified_at: 2026-11-13T03:09:08.227411867Z
 req_type: Bug
 comments:
 - id: 01a1d2dc-351e-78f3-89d7-7e2ecb290f14
@@ -16,6 +16,13 @@ comments:
   content: 'Implemented native-seat handoff: pickup validates branch/worktree ownership before store sync, with read-only stale-review retirement eligibility and revalidation after refreshed conclusive/deferred gates. Existing death proof, forge-head coverage and merge-hold preservation remain mandatory. Pre-agent rollback now verifies the actual lease record is absent before reporting success; retained ownership returns an explicit cleanup error. Round-cap advisor requests are deduplicated in the gate ledger by mailbox request ID. Validation through lane runner: pickup_launch_rollback_tests 10 passed; seat_clone::review_repickup_tests 3 passed; review_watch::notice_tests 7 passed; gate::ledger::tests 57 passed. rustfmt check and git diff --check pass. Initial fixture failures corrected using local forge ref and explicit test writer inventory. No commit/push/PR/queue completion performed; host publication follows exit.'
   created_at: 2026-11-13T03:03:29.310261640Z
   modified_at: 2026-11-13T03:03:29.310261640Z
+  session_id: 01a1d2cd919f
+  harness_version: codex-cli 0.167.0
+- id: 01a1d2e1-6103-71e1-8418-7f3ebfb33770
+  author: dirtlab
+  content: 'Fast-gate fix round: reconciled the two store-writer inventory sink rows moved from retire_idle_review_worktree to review_worktree_retirement, preserving all existing lock/gate/disposition/blocker metadata. Validation: python3 scripts/check-store-writers.py passes (3544 sink sites); python3 -m unittest discover -s tests -p test_store_writer_inventory.py passes (54 tests); git diff --check passes. Only scripts/store-writers.toml changed in this fix round; edits remain uncommitted for host publication.'
+  created_at: 2026-11-13T03:09:08.227411867Z
+  modified_at: 2026-11-13T03:09:08.227411867Z
   session_id: 01a1d2cd919f
   harness_version: codex-cli 0.167.0
 history:
