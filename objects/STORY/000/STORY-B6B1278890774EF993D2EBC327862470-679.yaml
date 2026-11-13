@@ -1,0 +1,35 @@
+id: 01a1d3fd-aa3e-7db1-87e7-c528ce26c386
+spec_id: STORY-b6b1278890774ef993d2ebc327862470-679
+agreed_id: STORY-2756
+title: 'Review PR-3931: [AI:claude] fix(store): store pull union-merges conflicting timing records (BUG-2550)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `(no-sess`) for branch `bug-2550-idempotent-autobump`.
+
+  - PR: <https://github.com/joemooney/aida/pull/3931>
+  - Branch: `bug-2550-idempotent-autobump` → `integration`
+
+  ## Covers
+
+  - BUG-2550
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 3931` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-13T08:19:39.198827639Z
+modified_at: 2026-11-13T08:19:39.198827639Z
+req_type: Story
+filed_at:
+  code_sha: b125e261e19955f1aaeed39bb36a696d5bed6060
+  branch: integration
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 599d6d1a1e5
+  vendor: claude
+  session: 01a1d394-b764-7e21-a752-015032d87411
+  harness_version: 2.1.323 (Claude Code)
