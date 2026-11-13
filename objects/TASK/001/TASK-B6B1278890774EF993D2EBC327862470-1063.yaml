@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-11T12:17:13.260009028Z
-modified_at: 2026-11-13T15:42:52.369572862Z
+modified_at: 2026-11-13T18:56:42.241745960Z
 req_type: Task
 relationships:
 - rel_type: BlockedBy
@@ -60,6 +60,13 @@ comments:
   created_at: 2026-11-13T15:42:52.369572862Z
   modified_at: 2026-11-13T15:42:52.369572862Z
   session_id: 01a1d570ae96
+- id: 01a1d644-e701-7870-8242-f5458f58a66b
+  author: joe
+  content: '[advisor 11:57] AC5 timings on dell1 (20 cores, profile agent, cargo build -p aida-cli, separate target dirs, sequential): BEFORE main ee8dd4b: clean 212s, one-line edit (aida-cli-lib/src/lib.rs) 21s. AFTER PR-3949 head 6411144: clean 258s, one-line edit 19s. Load avg 11-15 during the runs (other lanes active), so treat the numbers as indicative. Clean build +22% from the extra crates; edit-rebuild of aida-cli-lib -10%. Recorded for AC5; the reviewer''s WAITING condition is met.'
+  created_at: 2026-11-13T18:56:42.241745960Z
+  modified_at: 2026-11-13T18:56:42.241745960Z
+  session_id: 01a1d5f7-27ab-7543-8808-b0ec6c271689
+  harness_version: 2.1.323 (Claude Code)
 history:
 - id: 01a1ca8a-8ee7-7991-b976-a941a11ff32c
   author: joe
