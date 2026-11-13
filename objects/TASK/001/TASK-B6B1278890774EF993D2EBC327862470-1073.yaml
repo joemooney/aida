@@ -9,23 +9,46 @@ description: |
   ### finding-hash:2c7ae2ea
 
   [P3] .github/workflows/ci.yml:45,77: FAST check names match pr_train.rs:638 train_ci_is_shard, so seven passing FULL shards and two skipped FAST jobs display 7/9 shards passed. Readiness is unaffected. Future cleanup can rename the checks or narrow the filter and extend its fixture.
+
+
+  ## Findings from PR-3971
+  Reviewed sha: b39fded312b778b4a692c5a1716981b402f8c84e
+
+  ### finding-hash:55e0cbfe
+
+  Advisor-only gate for --rereview (work.rs check_rereview_target) trusts the AIDA_SESSION_ROLE env var rather than a verified advisor grant; any seat that sets AIDA_SESSION_ROLE=advisor can admit a re-review. Impact is limited to lifting the BUG-2530 duplicate-review refusal (no review/merge authority granted, admission is ledger-audited).
+
+  ### finding-hash:f238ea37
+
+  BUG-2557 asks that the admission apply when the review story changed after the verdict; the implementation does not check this mechanically (advisor judgment plus a required reason), and the related auto-queue-review Covers defect (inherited completed specs re-added) is not fixed. Both disclosed by the implementer; the Covers defect needs its own spec.
 status: Draft
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-13T20:01:56.623034248Z
-modified_at: 2026-11-13T20:01:56.676227554Z
+modified_at: 2026-11-13T23:48:10.842093242Z
 req_type: Task
 tags:
+- carried-finding:PR-3971:55e0cbfe
+- carried-finding:PR-3971:f238ea37
 - carried-finding:STORY-2735:2c7ae2ea
+- carried-from:PR-3971
 - carried-from:STORY-2735
 - finding-hash:2c7ae2ea
+- finding-hash:55e0cbfe
+- finding-hash:f238ea37
+- from-review:PR-3971
 - from-review:STORY-2735
 - kind:finding-sweep
 history:
 - id: 01a1d6a2-101a-76b0-8f1a-90d0013071f2
   author: joe
   timestamp: 2026-11-13T20:38:27.610350526Z
+  changes: []
+- id: 01a1d74f-c78e-7153-8411-db05819def31
+  author: joe
+  timestamp: 2026-11-13T23:48:12.302895715Z
+  session_id: 01a1d74e5ce2
   changes: []
 filed_at:
   code_sha: 91fe1e337894199f15365d3f8ecfaf81366f8291
