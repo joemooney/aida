@@ -1,0 +1,54 @@
+id: 01a1d34b-20ee-7702-86da-8e23d0c11309
+spec_id: STORY-b6b1278890774ef993d2ebc327862470-673
+agreed_id: STORY-2750
+title: 'Review PR-3922: [AI:claude] chore(integration): promote integration batch 4 to main (BUG-2545)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `(no-sess`) for branch `promote/integration-4`.
+
+  - PR: <https://github.com/joemooney/aida/pull/3922>
+  - Branch: `promote/integration-4` → `main`
+
+  ## Covers
+
+  - BUG-2545
+  - STORY-2737
+  - BUG-2539
+  - BUG-2540
+  - BUG-2534
+  - TASK-3790
+  - BUG-2537
+  - TASK-3789
+  - BUG-2538
+  - TASK-3448
+  - BUG-2533
+  - BUG-2522
+  - BUG-2521
+  - BUG-2525
+
+  ## Slice of (Refs only — not completed by this PR)
+
+  Commit subjects carry `(Refs SPEC-ID)`: this PR is one slice of a spec that a later PR completes. Review this slice against that spec's acceptance criteria.
+
+  - BUG-2544
+  - STORY-2732
+  - BUG-2531
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 3922` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-13T05:04:38.638688628Z
+modified_at: 2026-11-13T05:04:38.638688628Z
+req_type: Story
+filed_at:
+  code_sha: 2a62f92c2a200b58e0d95446df07e355e062ab49
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 2a62f92c2a2
+  vendor: claude
