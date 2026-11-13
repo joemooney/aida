@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-11T12:18:05.824589631Z
-modified_at: 2026-11-13T21:43:15.663284724Z
+modified_at: 2026-11-13T21:46:21.443333517Z
 req_type: Task
 relationships:
 - rel_type: BlockedBy
@@ -32,6 +32,13 @@ comments:
   modified_at: 2026-11-13T21:43:15.663284724Z
   session_id: 01a1d684-8599-70e0-a01c-714f54d2f8de
   harness_version: 2.1.323 (Claude Code)
+- id: 01a1d6e0-3983-77f2-8de6-6b2c29396e99
+  author: dirtlab
+  content: 'Addressed advisor P1 only: fast-gates now supplies GATE_DEPENDENCIES_BASE using the same trusted event expression as the other ratchets and requires it before make check-ci-fast. Extended the actual FAST invocation regression to cover clean execution, missing/empty/unavailable bases, and matching source-plus-ledger growth with a no-base positive control. Validation: 41 tests passed across tests.test_ci_tiers, tests.test_gate_dependency_ratchet, tests.test_ci_test_shards; all 88 CI gates classified; gate dependency ratchet --base HEAD passes at unchanged 150 edges; git diff --check passes. P2 remains deferred per ruling. Codegraph fixed client absent and doctor reports missing tool; used rg. aida claim refused with Read-only file system. Two changed files remain uncommitted for native host publication.'
+  created_at: 2026-11-13T21:46:21.443333517Z
+  modified_at: 2026-11-13T21:46:21.443333517Z
+  session_id: 01a1d6df1346
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1ca8b-5bd3-72f3-ba77-ef84ca4ec31e
   author: joe
