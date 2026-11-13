@@ -3,12 +3,12 @@ spec_id: STORY-b6b1278890774ef993d2ebc327862470-419
 agreed_id: STORY-2493
 title: 'Cross-machine review from an untrusted (work) node: verdict and finding envelopes over the aida-intent channel'
 description: 'Deferred (operator 2026-11-04: do the trusted-node case STORY-2492 first). When the reviewing node must not write to the home store, findings come back as content, not IDs. Add kind=review-verdict (fixed fields: PR, head SHA, decision, blocking finding digests, reviewer node; no free text, automatic) and kind=finding (severity, blocking, title, body, home file/line; free text, so it passes the validator and sensitive-pattern check and needs operator sign-off at work) to the STORY-2479 envelope format, carried over the STORY-2480 return channel. Home processes findings into specs and receipts map digest → home ID. Merge stays blocked while a blocking digest is unprocessed or open. Depends on STORY-2479, STORY-2480, STORY-2492.'
-status: InProgress
+status: NeedsAttention
 priority: Low
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-05T04:41:25.538710401Z
-modified_at: 2026-11-13T03:31:42.968516144Z
+modified_at: 2026-11-13T03:32:46.062462235Z
 req_type: Story
 relationships:
 - rel_type: Supersedes
@@ -745,6 +745,15 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1d2f7-036e-73f2-b759-0fc3bf8547fc
+  author: dirtlab
+  timestamp: 2026-11-13T03:32:46.062473644Z
+  session_id: 01a1d2f5fea7
+  harness_version: codex-cli 0.167.0
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 filed_at:
   code_sha: d561213a36febec31d45921d3d43d4dc7590135e
   branch: main
@@ -753,3 +762,9 @@ filed_at:
   aida_build_sha: e1fc3f06903
   vendor: claude
   session: 5bf140f7-38b2-4a04-9e8c-ccf69b1258f8
+attention_reason:
+  category: blocked-dependency
+  detail: Round 8 F1 is accepted, not disputed, but this seat HEAD 8290289631 lacks aida-cli-lib/src/review_envelope.rs and the reviewed intake integration. Reviewed commit 9c49b85e0ae9 exists but is not an ancestor of HEAD. Cannot apply or execute the requested regression on this checkout without restoring prior PR implementation; Git metadata is read-only here. Proposed narrow fix and generation/parse regressions are in /tmp/story-2493-round8-f1.patch. Host must restore reviewed PR implementation then re-run this round. untested=true. Publication veto retained.
+  lean: Restore reviewed PR head and apply the F1 patch; pass each real string as both helper arguments to preserve regex validation without a synthetic empty match.
+  raised_by: implementer
+  raised_at: 2026-11-13T03:32:46.062462235Z
