@@ -121,19 +121,24 @@ fn story2402_pr_probe_requires_a_known_state_and_bounds_the_process() {
 
 #[test]
 fn story2402_registered_check_parses_and_global_json_is_available() {
-    let cli = crate::command_registry::try_parse_from([
-        "aida",
-        "--format",
-        "json",
-        "condition",
-        "check",
-        "manual:joe",
-    ])
-    .unwrap();
+    let cli = crate::TEST_CLI
+        .try_parse_from([
+            "aida",
+            "--format",
+            "json",
+            "condition",
+            "check",
+            "manual:joe",
+        ])
+        .unwrap();
     assert!(matches!(cli.command.registered::<ConditionArgs>().inner,
         ConditionCommand::Check { ref condition, json: false } if condition == "manual:joe"));
-    assert!(crate::command_registry::try_parse_from(["aida", "condition"]).is_err());
-    assert!(crate::command_registry::try_parse_from(["aida", "condition", "run"]).is_err());
+    assert!(crate::TEST_CLI
+        .try_parse_from(["aida", "condition"])
+        .is_err());
+    assert!(crate::TEST_CLI
+        .try_parse_from(["aida", "condition", "run"])
+        .is_err());
 }
 
 // Exercise the real Git adapter without changing PATH or requiring store data.

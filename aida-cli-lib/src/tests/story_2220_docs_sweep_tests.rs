@@ -6,7 +6,7 @@
 use super::*;
 
 fn cli() -> clap::Command {
-    let mut root = crate::command_registry::built_command();
+    let mut root = crate::TEST_CLI.built_command();
     root.build();
     root
 }
