@@ -19,6 +19,9 @@ and `merge_hold`.
 The scanner reuses the ExecContext Rust tokenizer and grouped-use parser. It
 ignores comments and literals, expands import aliases, counts item imports and
 qualified references, and refuses crate-root and watched-module glob imports.
+Ancestor-only module imports such as `use super::super as root` and grouped
+`use super::super::{self as root}` also refuse: the scanner has no source-module
+context to retain those bindings safely. Use an explicit `crate::` path instead.
 Alias bindings are conservatively unioned across a file, so shadowing can
 increase the count. This is a source ratchet, not Rust name resolution: macro
 expansions, root re-exports under unrelated names, generated/out-of-tree sources

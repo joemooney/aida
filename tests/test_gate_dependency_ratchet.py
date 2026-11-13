@@ -53,6 +53,19 @@ class GateDependencies(unittest.TestCase):
         }}
         '''), {'crate::pr_ship::ShipStep'})
 
+    def test_unresolved_ancestor_module_aliases_refuse(self):
+        # trace:TASK-3785 | ai:codex
+        for imported in ('super::super as root',
+                         'super::super::{self as root}',
+                         'super::{super::{self as root}}',
+                         'super::{self as root}'):
+            with self.subTest(imported=imported), self.assertRaisesRegex(
+                    ValueError, 'unresolved ancestor-module path'):
+                gate.edges(f'use {imported}; fn f() {{ root::session::new_item(); }}')
+
+    def test_ancestor_visibility_is_not_an_import_binding(self):
+        self.assertEqual(gate.edges('pub(super) fn f() {}'), set())
+
     def test_globs_cannot_hide_items(self):
         for source in ('use crate::*;', 'use crate::session::*;',
                        'use crate::pr_cmd as p; use p::*;'):
@@ -99,6 +112,22 @@ class GateDependencies(unittest.TestCase):
                 git('add', '.')
                 git('-c', 'user.name=fixture', '-c', 'user.email=fixture@example.com', 'commit', '-qm', 'ledger')
                 saved = (root / gate.LEDGER).read_text()
+                # An alias added to an existing file must refuse with the old
+                # ledger, including --base checks and attempted ledger writes.
+                for imported in ('super::super as root',
+                                 'super::super::{self as root}',
+                                 'super::{super::{self as root}}'):
+                    path.write_text('fn a() { crate::session::launch(); }\n'
+                                    f'use {imported}; fn f() {{ root::session::new_item(); }}')
+                    for write in (False, True):
+                        args = ['ratchet', '--base', 'HEAD'] + (['--write-ledger'] if write else [])
+                        with self.subTest(imported=imported, write=write), \
+                                mock.patch.object(gate, 'ROOT', root), \
+                                mock.patch.object(gate, 'scan', lambda: gate.scan_original(root)), \
+                                mock.patch('sys.argv', args), \
+                                self.assertRaisesRegex(ValueError, 'unresolved ancestor-module path'):
+                            gate.main()
+                        self.assertEqual((root / gate.LEDGER).read_text(), saved)
                 path.write_text('fn a() { crate::session::launch(); crate::session::extra(); }')
                 with self.assertRaises(ValueError):
                     run()

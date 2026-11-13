@@ -28,7 +28,8 @@ def edges(source):
     for i, token in enumerate(ts):
         if token == 'use':
             end = ts.index(';', i)
-            imports.extend((alias, normalize(path)) for alias, path in lexer.use_paths(ts[i + 1:end]))
+            imports.extend((alias, normalize(path, import_binding=True))
+                           for alias, path in lexer.use_paths(ts[i + 1:end]))
             excluded.update(range(i, end + 1))
     aliases = {name: {(name,)} for name in TARGETS | {'crate'}}
     for _ in range(len(imports) + 1):
@@ -68,10 +69,18 @@ def edges(source):
     return found
 
 
-def normalize(path):
+def normalize(path, *, import_binding=False):
     # Relative ancestor paths into a watched root module are also upward edges.
+    original = path
     while path and path[0] in {'self', 'super'}:
         path = path[1:]
+    # trace:TASK-3785 | ai:codex
+    # Without source-module context an ancestor-only path has no canonical
+    # identity. Dropping it would lose aliases (also grouped `self as name`)
+    # and hide every subsequent item reference through that binding.
+    if import_binding and not path and 'super' in original:
+        raise ValueError('unresolved ancestor-module path ' + '::'.join(original)
+                         + '; use an explicit crate:: path')
     if path and path[0] in TARGETS:
         path = ('crate',) + path
     return path
