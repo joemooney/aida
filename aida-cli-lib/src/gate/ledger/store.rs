@@ -291,11 +291,14 @@ fn write_events(
         lines.push('\n');
     }
     let mut file = open_append(&ledger_file(root, change))?;
+    let before = file.metadata().map(|m| m.len()).ok();
     file.write_all(lines.as_bytes())?;
     file.sync_data()?;
-    // A listing that writes must not filter later keys with a stale index.
-    // trace:BUG-2551 | ai:claude
-    crate::gate::listing_scope::ledger_written();
+    // A listing that writes keeps its ownership index current instead of
+    // rediscovering once per closed round. trace:BUG-2551 | ai:claude
+    if let Some(before) = before {
+        super::checked::note_append(root, change, before, before + lines.len() as u64, pending);
+    }
     for event in pending.iter() {
         if let Some(spec) = event.spec.as_deref() {
             if let Err(e) = super::project::index_spec(root, spec, change) {
@@ -401,8 +404,6 @@ pub(crate) fn append_unbound_expected(
         let mut out = open_append(&file)?;
         out.write_all(line.as_bytes())?;
         out.sync_data()?;
-        // trace:BUG-2551 | ai:claude
-        crate::gate::listing_scope::ledger_written();
         Ok(Delivered::Appended)
     })
     .map_err(|e| named(&file, e))

@@ -306,6 +306,17 @@ fn read_change(
     change: &str,
     budget: &mut Budget,
 ) -> Result<Option<Vec<GateEvent>>, Unsafe> {
+    Ok(read_change_sized(ledger, name, change, budget)?.map(|(events, _)| events))
+}
+
+/// [`read_change`], plus the byte length of the body it parsed.
+// trace:BUG-2543 | ai:claude
+fn read_change_sized(
+    ledger: &File,
+    name: &str,
+    change: &str,
+    budget: &mut Budget,
+) -> Result<Option<(Vec<GateEvent>, u64)>, Unsafe> {
     let mut attempt = 0;
     loop {
         let Some(body) = read_entry(ledger, name, MAX_LEDGER_BYTES, budget)? else {
@@ -317,7 +328,8 @@ fn read_change(
             std::thread::sleep(std::time::Duration::from_millis(20));
             continue;
         }
-        return parse_events(name, &body, change, budget).map(Some);
+        let len = body.len() as u64;
+        return parse_events(name, &body, change, budget).map(|events| Some((events, len)));
     }
 }
 
@@ -335,6 +347,9 @@ pub(crate) struct Discovery {
     by_spec: Option<File>,
     discovered: Vec<String>,
     owners: super::project::MiskeyOwners,
+    /// Change key -> bytes of its ledger this discovery indexed.
+    // trace:BUG-2543 | ai:claude
+    lengths: std::collections::HashMap<String, u64>,
     bound: std::collections::HashMap<String, Vec<String>>,
     /// Selected ledgers are read once across a list operation. Their total
     /// retained payload is bounded by the caller's selection budget.
@@ -369,6 +384,7 @@ pub(crate) fn discover_with_budget(
     let mut inventory_budget = Budget::default();
     // trace:BUG-2517 | ai:claude
     let mut owners = super::project::MiskeyOwners::new(std::iter::empty());
+    let mut lengths: std::collections::HashMap<String, u64> = Default::default();
     for name in list_pinned(&ledger, &ledger_path)? {
         let Some(change) = name
             .strip_suffix(".jsonl")
@@ -386,13 +402,14 @@ pub(crate) fn discover_with_budget(
         discovered.push(key.clone());
         // One budget for the entire scan, including retries. Never reset this
         // per file: 4096 individually legal files can otherwise cost 64 GiB.
-        let Some(events) = read_change(&ledger, &name, &key, work)
+        let Some((events, len)) = read_change_sized(&ledger, &name, &key, work)
             .map_err(|e| Unsafe(format!("refusing gate-ledger discovery: {e}")))?
         else {
             return Err(Unsafe(format!(
                 "refusing gate-ledger discovery: {name} vanished while it was read"
             )));
         };
+        lengths.insert(key.clone(), len);
         // trace:BUG-2517 | ai:claude
         inventory_budget.spend_bytes(owners.add(&events))?;
         for e in events.into_iter().filter(|e| e.verdict_record().is_some()) {
@@ -410,6 +427,7 @@ pub(crate) fn discover_with_budget(
     Ok(Some(Discovery {
         ledger,
         owners,
+        lengths,
         by_spec,
         discovered,
         bound,
@@ -573,28 +591,129 @@ pub(crate) fn filter_miskeyed_or_fail_closed(
     events: Vec<GateEvent>,
 ) -> Vec<GateEvent> {
     let mut events = events;
-    // A listing discovers once and filters every key against that index.
+    if !crate::gate::listing_scope::active() {
+        match discover(root) {
+            Ok(Some(discovery)) => discovery.filter_events(&mut events),
+            // The directory can disappear after a legacy reader has read its
+            // input vector. Absence then proves no ownership for those copies.
+            // trace:BUG-2517 | ai:codex
+            Ok(None) | Err(_) => super::project::MiskeyOwners::fail_closed(&mut events),
+        }
+        return events;
+    }
+    // A listing discovers once and filters every key against that index,
+    // unless a ledger behind `events` changed since: then it rediscovers.
     // trace:BUG-2543 | ai:claude
-    let root_key = root.to_path_buf();
-    let owners = crate::gate::listing_scope::get(|m| m.owners.get(&root_key).cloned())
-        .unwrap_or_else(|| {
-            let owners = std::rc::Rc::new(match discover(root) {
-                Ok(Some(discovery)) => Some(discovery.owners),
-                // The directory can disappear after a legacy reader has read its
-                // input vector. Absence then proves no ownership for those copies.
-                // trace:BUG-2517 | ai:codex
-                Ok(None) | Err(_) => None,
-            });
-            crate::gate::listing_scope::put(|m| {
-                m.owners.insert(root_key, owners.clone());
-            });
-            owners
+    let fresh = crate::gate::listing_scope::get(|m| {
+        m.owners
+            .get(root)
+            .map(|snapshot| snapshot.covers(root, &events))
+    })
+    .unwrap_or(false);
+    if !fresh {
+        let snapshot = OwnersSnapshot::discover(root);
+        crate::gate::listing_scope::put(|m| {
+            m.owners.insert(root.to_path_buf(), snapshot);
         });
-    match owners.as_ref() {
-        Some(owners) => owners.filter(&mut events),
-        None => super::project::MiskeyOwners::fail_closed(&mut events),
+    }
+    let filtered = crate::gate::listing_scope::get(|m| {
+        m.owners.get(root).map(|snapshot| match &snapshot.owners {
+            Some(owners) => owners.filter(&mut events),
+            None => super::project::MiskeyOwners::fail_closed(&mut events),
+        })
+    });
+    if filtered.is_none() {
+        // Unreachable while the scope is active; never return raw copies.
+        super::project::MiskeyOwners::fail_closed(&mut events);
     }
     events
+}
+
+/// One listing's mis-key ownership index plus the ledger lengths it covers
+/// (BUG-2543). A key's events are filtered against it only while every
+/// ledger they came from is exactly as long as when it was indexed: a ledger
+/// another writer grew meanwhile could carry a copy whose owner's witness
+/// the index has not seen, so the listing rediscovers instead. Appends this
+/// thread makes inside the listing are folded in, not rediscovered
+/// (BUG-2551).
+// trace:BUG-2543 BUG-2551 | ai:claude
+pub(crate) struct OwnersSnapshot {
+    /// `None`: discovery failed or found no ledger; every vector fails closed.
+    owners: Option<super::project::MiskeyOwners>,
+    lengths: std::collections::HashMap<String, u64>,
+}
+
+impl OwnersSnapshot {
+    fn discover(root: &Path) -> Self {
+        match discover(root) {
+            Ok(Some(discovery)) => Self {
+                owners: Some(discovery.owners),
+                lengths: discovery.lengths,
+            },
+            // trace:BUG-2517 | ai:codex
+            Ok(None) | Err(_) => Self {
+                owners: None,
+                lengths: Default::default(),
+            },
+        }
+    }
+
+    /// Whether this index answers for `events` as a fresh discovery would.
+    /// A fail-closed index already withholds every copy it cannot vouch for,
+    /// so it stays valid: rediscovering per key would repeat the same
+    /// failure (and its full scan) for every key.
+    fn covers(&self, root: &Path, events: &[GateEvent]) -> bool {
+        if self.owners.is_none() {
+            return true;
+        }
+        let mut checked: Vec<&str> = Vec::new();
+        for event in events {
+            if checked.contains(&event.change.as_str()) {
+                continue;
+            }
+            checked.push(&event.change);
+            let Some(change) = ChangeKey::parse(&event.change) else {
+                continue;
+            };
+            let now = std::fs::symlink_metadata(super::store::ledger_file(root, change))
+                .map(|m| m.len())
+                .unwrap_or(0);
+            if self.lengths.get(&event.change).copied().unwrap_or(0) != now {
+                return false;
+            }
+        }
+        true
+    }
+}
+
+/// This thread appended `events` to `change`'s ledger, growing it from
+/// `before` to `after` bytes. Inside a listing, fold them into the memoized
+/// ownership index instead of discarding it, so a listing that closes K
+/// rounds still discovers once (BUG-2551). When the ledger was not exactly
+/// as long as indexed (another writer appended), drop the index instead.
+// trace:BUG-2551 | ai:claude
+pub(crate) fn note_append(
+    root: &Path,
+    change: ChangeKey,
+    before: u64,
+    after: u64,
+    events: &[GateEvent],
+) {
+    let key = change.as_key();
+    crate::gate::listing_scope::put(|m| {
+        let Some(snapshot) = m.owners.get_mut(root) else {
+            return;
+        };
+        let Some(owners) = snapshot.owners.as_mut() else {
+            return;
+        };
+        if snapshot.lengths.get(&key).copied().unwrap_or(0) == before {
+            owners.add(events);
+            snapshot.lengths.insert(key, after);
+        } else {
+            m.owners.remove(root);
+        }
+    });
 }
 
 /// STORY-2324: every event on `change`'s ledger under `root`, read strictly

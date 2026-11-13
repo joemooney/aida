@@ -3034,11 +3034,12 @@ fn bug_2543_listing_discovers_once_and_matches_single_key_reads() {
     assert!(project::OWNERSHIP_WORK.with(|work| work.get()).0 >= CHANGES);
 }
 
-// BUG-2551: a ledger write inside a listing drops the memoized ownership
-// index, so the next key is filtered against a fresh discovery.
-// trace:BUG-2551 | ai:claude
+// BUG-2551: this thread's own appends inside a listing are folded into the
+// memoized ownership index (no rediscovery per closed round); a ledger that
+// another writer grew is rediscovered before its events are admitted.
+// trace:BUG-2551 BUG-2543 | ai:claude
 #[test]
-fn bug_2551_ledger_write_inside_listing_rediscovers() {
+fn bug_2551_own_appends_fold_and_foreign_growth_rediscovers() {
     let (_tmp, root) = root();
     let _env = uncontained();
     let spec = GateSpec::with_key("BUG-1", None);
@@ -3050,15 +3051,112 @@ fn bug_2551_ledger_write_inside_listing_rediscovers() {
     .unwrap();
     let _scope = crate::gate::listing_scope::ListingScope::enter();
     project::OWNERSHIP_WORK.with(|work| work.set((0, 0)));
-    let _ = checked::filter_miskeyed_or_fail_closed(&root, Vec::new());
-    let _ = checked::filter_miskeyed_or_fail_closed(&root, Vec::new());
-    assert_eq!(project::OWNERSHIP_WORK.with(|work| work.get()).0, 1);
-    let rec = record("request_changes", &ts(2), Some(&attestation("reviewer")));
-    store::append_one(
-        &root,
-        event::verdict_event(&root, ChangeKey::pr(2), &rec, Some(&spec)),
-    )
-    .unwrap();
-    let _ = checked::filter_miskeyed_or_fail_closed(&root, Vec::new());
-    assert_eq!(project::OWNERSHIP_WORK.with(|work| work.get()).0, 2);
+    let builds = || project::OWNERSHIP_WORK.with(|work| work.get()).0;
+    let _ = project::events(&root, ChangeKey::pr(1));
+    let _ = project::events(&root, ChangeKey::pr(1));
+    assert_eq!(builds(), 1);
+    for n in 2..=8 {
+        let rec = record("request_changes", &ts(n), Some(&attestation("reviewer")));
+        store::append_one(
+            &root,
+            event::verdict_event(&root, ChangeKey::pr(n as u64), &rec, Some(&spec)),
+        )
+        .unwrap();
+        assert!(!project::events(&root, ChangeKey::pr(n as u64)).is_empty());
+    }
+    assert_eq!(builds(), 1, "own appends fold into the listing's index");
+    // Another writer (raw append, not through this thread) grows PR-1.
+    let line = std::fs::read_to_string(store::ledger_file(&root, ChangeKey::pr(1))).unwrap();
+    let mut file = std::fs::OpenOptions::new()
+        .append(true)
+        .open(store::ledger_file(&root, ChangeKey::pr(1)))
+        .unwrap();
+    let mut next: serde_json::Value = serde_json::from_str(line.lines().last().unwrap()).unwrap();
+    next["seq"] = serde_json::json!(next["seq"].as_u64().unwrap() + 1);
+    std::io::Write::write_all(&mut file, format!("{next}\n").as_bytes()).unwrap();
+    let _ = project::events(&root, ChangeKey::pr(1));
+    assert_eq!(builds(), 2, "a ledger grown by another writer rediscovers");
+}
+
+// BUG-2543 (review P1): a listing never admits a foreign copy whose owner's
+// witness another writer appended after the listing discovered the ledger;
+// it answers what a fresh read answers once the writer finished.
+// trace:BUG-2543 | ai:claude
+#[test]
+fn bug_2543_listing_sees_witness_written_after_discovery() {
+    let (_tmp, root) = root();
+    let _env = uncontained();
+    let spec = GateSpec::resolve(&root, "BUG-2492");
+    let first = ChangeKey::pr(3651);
+    let second = ChangeKey::pr(3764);
+    let old = record("request_changes", &ts(1), Some(&attestation("reviewer")));
+    store::append_one(&root, event::verdict_event(&root, first, &old, Some(&spec))).unwrap();
+    let scope = crate::gate::listing_scope::ListingScope::enter();
+    assert_eq!(
+        project::newest_verdict_event(&root, "PR-3651")
+            .unwrap()
+            .verdict_record(),
+        Some(&old)
+    );
+    let writer = {
+        let root = root.clone();
+        let spec = spec.clone();
+        std::thread::spawn(move || {
+            let mut foreign = record("approved", &ts(2), Some(&attestation("reviewer")));
+            foreign.insert("reviewed_sha".into(), serde_json::json!(OTHER_HEAD));
+            store::append_one(
+                &root,
+                event::verdict_event(&root, first, &foreign, Some(&spec)),
+            )
+            .unwrap();
+            foreign.insert("mode".into(), serde_json::json!(project::PHASE3_MODE));
+            store::append_one(
+                &root,
+                event::verdict_event(&root, second, &foreign, Some(&spec)),
+            )
+            .unwrap();
+        })
+    };
+    writer.join().unwrap();
+    let listed = project::newest_verdict_event(&root, "PR-3651").unwrap();
+    drop(scope);
+    let fresh = project::newest_verdict_event(&root, "PR-3651").unwrap();
+    assert_eq!(fresh.verdict_record(), Some(&old));
+    assert_eq!(listed.verdict_record(), fresh.verdict_record());
+}
+
+// BUG-2551 (review P2): pull reconciliation that closes K terminal waits
+// discovers the ledger once, not once per closure.
+// trace:BUG-2551 | ai:claude
+#[test]
+fn bug_2551_reconciling_many_waits_discovers_once() {
+    let (_tmp, root) = root();
+    let _env = uncontained();
+    const WAITS: u64 = 8;
+    let keys: Vec<String> = (1..=WAITS).map(|n| format!("PR-{n}")).collect();
+    for key in &keys {
+        rv::record_verdict(
+            &root,
+            key,
+            Some("waiting"),
+            Some(HEAD),
+            None,
+            Some("waiting for batch CI"),
+            &[],
+            "reviewer",
+        )
+        .unwrap();
+    }
+    project::OWNERSHIP_WORK.with(|work| work.set((0, 0)));
+    crate::review_waiting::reconcile_waiting_verdicts_with(&root, Some(&keys), |_| {
+        Some((crate::forge::ChangeState::Merged, HEAD.into()))
+    });
+    let (builds, _) = project::OWNERSHIP_WORK.with(|work| work.get());
+    for key in &keys {
+        assert!(
+            rv::read_recorded_verdict(&root, key).unwrap().is_closed(),
+            "{key}"
+        );
+    }
+    assert_eq!(builds, 1, "one discovery for {WAITS} closures");
 }

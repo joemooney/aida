@@ -10,7 +10,9 @@
 //! one listing: the first key computes them, every later key reuses them.
 //! Outside a scope nothing is memoized, so single-key gate reads keep their
 //! exact fresh-read semantics. Failures are never memoized except the
-//! ownership index's fail-closed answer, which is what every key would get.
+//! ownership index's fail-closed answer, which is what every key would get,
+//! and an over-budget aggregate listing, whose memo only routes each key
+//! back to its own bounded per-directory read.
 // trace:BUG-2543 | ai:claude
 
 use std::cell::RefCell;
@@ -21,13 +23,19 @@ use std::rc::Rc;
 /// The per-root answers one listing shares.
 #[derive(Default)]
 pub(crate) struct Memo {
-    /// Ledger root -> mis-key ownership index (`None`: discovery failed or
-    /// found no ledger, so every vector fails closed).
-    pub(crate) owners: HashMap<PathBuf, Rc<Option<super::ledger::project::MiskeyOwners>>>,
+    /// Ledger root -> mis-key ownership index and the ledger lengths it
+    /// covers; revalidated per key (see `ledger::checked::OwnersSnapshot`).
+    pub(crate) owners: HashMap<PathBuf, super::ledger::checked::OwnersSnapshot>,
     /// Project root -> publication store and its pinned tip.
     pub(crate) store_view: HashMap<PathBuf, Option<(PathBuf, String)>>,
-    /// (store, tip) -> every committed name under the spec index.
-    pub(crate) spec_index: HashMap<(PathBuf, String), Rc<Vec<String>>>,
+    /// (store, tip, top) -> every committed name under `top`, sorted;
+    /// `None` when that aggregate read failed or exceeded its budget, so
+    /// each directory is read on its own exactly as a single-key read does.
+    pub(crate) aggregate: HashMap<(PathBuf, String, &'static str), Option<Rc<Vec<String>>>>,
+    /// Project root -> its hashed origin (publication repository identity).
+    pub(crate) repository: HashMap<PathBuf, String>,
+    /// (store, tip) -> the review node roster committed there.
+    pub(crate) roster: HashMap<(PathBuf, String), Rc<super::review_publication::Roster>>,
     /// Project root -> canonical snapshot at the store head.
     pub(crate) snapshot: HashMap<PathBuf, Rc<super::canon::Snapshot>>,
 }
@@ -77,14 +85,6 @@ pub(crate) fn put(write: impl FnOnce(&mut Memo)) {
             write(memo);
         }
     });
-}
-
-/// A ledger append inside a scope drops the memoized ownership index, so a
-/// listing that also writes (waiting-review reconciliation closes rounds as
-/// it goes) never filters a later key against a pre-write index.
-// trace:BUG-2551 | ai:claude
-pub(crate) fn ledger_written() {
-    put(|memo| memo.owners.clear());
 }
 
 /// Whether a scope is active on this thread.

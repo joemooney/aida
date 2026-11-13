@@ -98,6 +98,9 @@ const AUTHORSHIPS: &str = "authorship";
 const NAMESPACE: &str = "aida-review-receipt";
 const CONFIG: &str = ".aida/review-publisher.json";
 const CAP: usize = 1024 * 1024;
+/// Output budget of one listing-wide tree read (BUG-2543): above it the
+/// listing falls back to per-directory reads, each bounded by [`CAP`].
+const AGGREGATE_CAP: usize = 16 * CAP;
 /// Per-change read budget. A change that exceeds it refuses only itself.
 const MAX_PER_CHANGE: usize = 256;
 
@@ -168,7 +171,7 @@ pub enum NodeCommand {
 
 #[derive(Default, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
-struct Roster {
+pub(crate) struct Roster {
     version: u32,
     nodes: BTreeMap<String, String>,
 }
@@ -225,9 +228,12 @@ fn node_valid(node: &str) -> bool {
             .bytes()
             .all(|b| b.is_ascii_alphanumeric() || b == b'-' || b == b'_')
 }
-fn run(mut cmd: Command) -> Result<Vec<u8>> {
+fn run(cmd: Command) -> Result<Vec<u8>> {
+    run_capped(cmd, CAP)
+}
+fn run_capped(mut cmd: Command, cap: usize) -> Result<Vec<u8>> {
     cmd.env("GIT_TERMINAL_PROMPT", "0");
-    let out = super::kernel_deps::bounded_review_output(cmd, Duration::from_secs(10), CAP as u64)
+    let out = super::kernel_deps::bounded_review_output(cmd, Duration::from_secs(10), cap as u64)
         .context("review publication command failed or timed out")?;
     ensure!(
         out.status.success(),
@@ -235,15 +241,35 @@ fn run(mut cmd: Command) -> Result<Vec<u8>> {
         String::from_utf8_lossy(&out.stderr)
     );
     ensure!(
-        out.stdout.len() <= CAP,
+        out.stdout.len() <= cap,
         "review publication command exceeded output budget"
     );
     Ok(out.stdout)
 }
 fn git(root: &Path, args: &[&str]) -> Result<Vec<u8>> {
+    git_capped(root, args, CAP)
+}
+fn git_capped(root: &Path, args: &[&str], cap: usize) -> Result<Vec<u8>> {
+    #[cfg(test)]
+    GIT_CALLS.with(|n| n.set(n.get() + 1));
     let mut cmd = Command::new("git");
     cmd.current_dir(root).args(args);
-    run(cmd)
+    run_capped(cmd, cap)
+}
+
+// Git subprocesses this thread spawned for review publications, and a
+// test-only aggregate budget (BUG-2543).
+#[cfg(test)]
+thread_local! {
+    pub(crate) static GIT_CALLS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+    static AGGREGATE_CAP_OVERRIDE: std::cell::Cell<Option<usize>> = const { std::cell::Cell::new(None) };
+}
+fn aggregate_cap() -> usize {
+    #[cfg(test)]
+    if let Some(cap) = AGGREGATE_CAP_OVERRIDE.with(std::cell::Cell::get) {
+        return cap;
+    }
+    AGGREGATE_CAP
 }
 fn text(bytes: Vec<u8>) -> Result<String> {
     Ok(String::from_utf8(bytes)?.trim().to_string())
@@ -264,6 +290,18 @@ fn blob(store: &Path, head: &str, rel: &str) -> Result<Option<Vec<u8>>> {
         "review evidence is not a regular committed blob: {rel}"
     );
     Ok(Some(git(store, &["show", &format!("{head}:{rel}")])?))
+}
+/// The roster at `head`; one read per listing. trace:BUG-2543 | ai:claude
+fn roster_at(store: &Path, head: &str) -> Result<std::rc::Rc<Roster>> {
+    let key = (store.to_path_buf(), head.to_string());
+    if let Some(hit) = super::listing_scope::get(|m| m.roster.get(&key).cloned()) {
+        return Ok(hit);
+    }
+    let value = std::rc::Rc::new(roster(store, head)?);
+    super::listing_scope::put(|m| {
+        m.roster.insert(key, value.clone());
+    });
+    Ok(value)
 }
 fn roster(store: &Path, head: &str) -> Result<Roster> {
     let Some(bytes) = blob(store, head, ROSTER)? else {
@@ -293,6 +331,17 @@ fn public_key_valid(key: &str) -> bool {
         && parts[1]
             .bytes()
             .all(|b| b.is_ascii_alphanumeric() || matches!(b, b'+' | b'/' | b'='))
+}
+/// [`repository`], once per listing. trace:BUG-2543 | ai:claude
+fn repository_cached(root: &Path) -> Result<String> {
+    if let Some(hit) = super::listing_scope::get(|m| m.repository.get(root).cloned()) {
+        return Ok(hit);
+    }
+    let value = repository(root)?;
+    super::listing_scope::put(|m| {
+        m.repository.insert(root.to_path_buf(), value.clone());
+    });
+    Ok(value)
 }
 fn repository(root: &Path) -> Result<String> {
     // Hash the exact configured origin: no embedded credentials enter the store.
@@ -816,11 +865,12 @@ fn load_receipts(
     tip: &str,
     change: &str,
 ) -> Result<Vec<(Receipt, Signed, String)>> {
-    let names = list(store, tip, &evidence_dir(change, PUBLICATIONS))?;
+    // trace:BUG-2543 | ai:claude
+    let names = scoped_list(store, tip, CHANGES, &evidence_dir(change, PUBLICATIONS))?;
     if names.is_empty() {
         return Ok(Vec::new());
     }
-    let repository = repository(root)?;
+    let repository = repository_cached(root)?;
     let mut out = Vec::new();
     let mut total = 0;
     let started = std::time::Instant::now();
@@ -1001,7 +1051,7 @@ fn select_effective(
     if all.is_empty() {
         return Ok(Vec::new());
     }
-    let roster = roster(&store, &tip)?;
+    let roster = roster_at(&store, &tip)?; // trace:BUG-2543 | ai:claude
     let mut relevant: Vec<_> = all
         .iter()
         .filter(|(r, ..)| roster.nodes.contains_key(&r.node))
@@ -1102,8 +1152,11 @@ fn select_effective(
             "synced blocking finding origin is missing"
         );
     }
+    // A listing reads every key at its one pinned tip, a commit that cannot
+    // change under it: a roster that lands mid-listing answers the next one.
+    // trace:BUG-2543 | ai:claude
     ensure!(
-        head(&store)? == tip,
+        super::listing_scope::active() || head(&store)? == tip,
         "review roster changed during selection"
     );
     Ok(relevant.into_iter().cloned().collect())
@@ -1144,43 +1197,56 @@ fn snapshot_at_head(root: &Path) -> Result<std::rc::Rc<Snapshot>> {
     Ok(snapshot)
 }
 
-/// The committed names under the spec index directory `dir` at `tip`,
-/// bounded per change like [`list`]. Inside a listing the whole index is
-/// listed once and filtered here.
+/// Every committed name under `top` at `tip`, sorted, read once per
+/// listing. `None` outside a listing, and when the aggregate read fails or
+/// exceeds [`AGGREGATE_CAP`]: callers then read each directory on its own,
+/// exactly as a single-key read does, so an oversized unrelated namespace
+/// never refuses a directory that is itself within budget.
 // trace:BUG-2543 | ai:claude
-fn spec_index_list(store: &Path, tip: &str, dir: &str) -> Result<Vec<String>> {
+fn aggregate_names(store: &Path, tip: &str, top: &'static str) -> Option<std::rc::Rc<Vec<String>>> {
     if !super::listing_scope::active() {
-        return list(store, tip, dir);
+        return None;
     }
-    let all = spec_index_names(store, tip)?;
+    let key = (store.to_path_buf(), tip.to_string(), top);
+    if let Some(hit) = super::listing_scope::get(|m| m.aggregate.get(&key).cloned()) {
+        return hit;
+    }
+    let names = git_capped(
+        store,
+        &["ls-tree", "-r", "--name-only", tip, "--", top],
+        aggregate_cap(),
+    )
+    .ok()
+    .and_then(|bytes| String::from_utf8(bytes).ok())
+    .map(|text| {
+        let mut names: Vec<String> = text.lines().map(str::to_string).collect();
+        names.sort_unstable();
+        std::rc::Rc::new(names)
+    });
+    super::listing_scope::put(|m| {
+        m.aggregate.insert(key, names.clone());
+    });
+    names
+}
+
+/// [`list`] of `dir` (a directory under `top`), answered from the listing's
+/// aggregate read when there is one. Same per-directory bound either way.
+// trace:BUG-2543 | ai:claude
+fn scoped_list(store: &Path, tip: &str, top: &'static str, dir: &str) -> Result<Vec<String>> {
+    let Some(all) = aggregate_names(store, tip, top) else {
+        return list(store, tip, dir);
+    };
     let prefix = format!("{dir}/");
-    let names: Vec<String> = all
+    let from = all.partition_point(|n| n.as_str() < prefix.as_str());
+    let names: Vec<String> = all[from..]
         .iter()
-        .filter(|n| n.starts_with(&prefix))
+        .take_while(|n| n.starts_with(&prefix))
         .cloned()
         .collect();
     ensure!(
         names.len() <= MAX_PER_CHANGE,
         "review evidence read budget exhausted for {dir}"
     );
-    Ok(names)
-}
-
-/// Every committed name under [`SPEC_INDEX`] at `tip`, once per listing.
-// trace:BUG-2543 | ai:claude
-fn spec_index_names(store: &Path, tip: &str) -> Result<std::rc::Rc<Vec<String>>> {
-    let key = (store.to_path_buf(), tip.to_string());
-    if let Some(hit) = super::listing_scope::get(|m| m.spec_index.get(&key).cloned()) {
-        return Ok(hit);
-    }
-    let names = String::from_utf8(git(
-        store,
-        &["ls-tree", "-r", "--name-only", tip, "--", SPEC_INDEX],
-    )?)?;
-    let names = std::rc::Rc::new(names.lines().map(str::to_string).collect::<Vec<_>>());
-    super::listing_scope::put(|m| {
-        m.spec_index.insert(key, names.clone());
-    });
     Ok(names)
 }
 
@@ -1192,10 +1258,9 @@ fn spec_change(root: &Path, spec_ids: &[&str]) -> Result<Option<ChangeKey>> {
         return Ok(None);
     };
     // trace:BUG-2543 | ai:claude
-    let index_empty = if super::listing_scope::active() {
-        spec_index_names(&store, &tip)?.is_empty()
-    } else {
-        git(&store, &["ls-tree", &tip, "--", SPEC_INDEX])?.is_empty()
+    let index_empty = match aggregate_names(&store, &tip, SPEC_INDEX) {
+        Some(all) => all.is_empty(),
+        None => git(&store, &["ls-tree", &tip, "--", SPEC_INDEX])?.is_empty(),
     };
     if index_empty {
         return Ok(None);
@@ -1204,7 +1269,7 @@ fn spec_change(root: &Path, spec_ids: &[&str]) -> Result<Option<ChangeKey>> {
     let mut newest: Option<ChangeKey> = None;
     for member in snapshot.resolve(spec_ids).members {
         let dir = format!("{SPEC_INDEX}/{}", member.key);
-        for name in spec_index_list(&store, &tip, &dir)? {
+        for name in scoped_list(&store, &tip, SPEC_INDEX, &dir)? {
             let Some(change) = name
                 .rsplit('/')
                 .next()

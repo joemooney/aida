@@ -1248,3 +1248,82 @@ fn bug2530_synced_verdict_controls_admission_and_redundant_claims() {
         assert!(super::super::review_marker::read(&f.a, 7).is_some());
     }
 }
+
+// BUG-2543 (review P2): a listing's publication Git work does not grow with
+// keys that hold no publications, and answers what single-key reads answer.
+// trace:BUG-2543 | ai:claude
+#[test]
+fn bug_2543_listing_publication_git_is_constant_in_keys() {
+    if !available() {
+        return;
+    }
+    let f = Fixture::new();
+    {
+        let _env = env(&f.temp.path().join("home-b"));
+        let record = f.record("approved", "reviewer-session");
+        f.collect(&record).unwrap();
+    }
+    let _env = env(&f.temp.path().join("home-a"));
+    f.sync(&f.a);
+    let listing = |keys: Vec<String>| {
+        GIT_CALLS.with(|n| n.set(0));
+        let listed = rv::active_verdicts_for(&f.a, keys);
+        (GIT_CALLS.with(|n| n.get()), listed)
+    };
+    let base = vec!["PR-7".to_string(), "STORY-1".to_string()];
+    let (few, small) = listing(base.clone());
+    let mut keys = base;
+    keys.extend((100..140).map(|n| format!("PR-{n}")));
+    let (many, large) = listing(keys);
+    assert!(few > 0, "the fixture reads a real publication store");
+    assert_eq!(many, few, "40 publication-free keys add no Git work");
+    assert_eq!(format!("{small:?}"), format!("{large:?}"));
+    let single = rv::current_verdict(&f.a, "PR-7").unwrap().body;
+    let single = rv::parse_recorded_verdict(&single).unwrap();
+    let listed = small.iter().find(|(k, _)| k == "PR-7").unwrap();
+    assert_eq!(format!("{:?}", listed.1), format!("{single:?}"));
+    assert_eq!(single.kind, rv::VerdictKind::Approved);
+}
+
+// BUG-2543 (review P2): an aggregate tree read over its budget never
+// refuses a directory that is itself within budget; each directory is then
+// read on its own, exactly as a single-key read does.
+// trace:BUG-2543 | ai:claude
+#[test]
+fn bug_2543_oversized_aggregate_falls_back_per_directory() {
+    let tmp = tempfile::tempdir().unwrap();
+    let store = tmp.path();
+    git_ok(store, &["init", "-q"]);
+    for spec in 0..20 {
+        for change in 0..50 {
+            write(store, &format!("{SPEC_INDEX}/S-{spec}/PR-{change}"), "");
+        }
+    }
+    write(store, &format!("{SPEC_INDEX}/TARGET/PR-1"), "");
+    for change in 0..=MAX_PER_CHANGE {
+        write(store, &format!("{SPEC_INDEX}/BIG/PR-{change}"), "");
+    }
+    git_ok(store, &["add", "-A"]);
+    git_ok(store, &["commit", "-qm", "index"]);
+    let tip = git_ok(store, &["rev-parse", "HEAD"]);
+    let target = format!("{SPEC_INDEX}/TARGET");
+    let big = format!("{SPEC_INDEX}/BIG");
+    let single = list(store, &tip, &target).unwrap();
+    assert_eq!(single, vec![format!("{target}/PR-1")]);
+    assert!(list(store, &tip, &big).is_err());
+    for (cap, aggregated) in [(AGGREGATE_CAP, true), (4096, false)] {
+        AGGREGATE_CAP_OVERRIDE.with(|c| c.set(Some(cap)));
+        let _scope = super::super::listing_scope::ListingScope::enter();
+        assert_eq!(
+            aggregate_names(store, &tip, SPEC_INDEX).is_some(),
+            aggregated,
+            "cap {cap}"
+        );
+        assert_eq!(
+            scoped_list(store, &tip, SPEC_INDEX, &target).unwrap(),
+            single
+        );
+        assert!(scoped_list(store, &tip, SPEC_INDEX, &big).is_err());
+    }
+    AGGREGATE_CAP_OVERRIDE.with(|c| c.set(None));
+}
