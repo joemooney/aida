@@ -22,12 +22,12 @@ description: |
   6. Evidence run: an advisor session under --permission-mode auto completes one full sweep (rebind loops, dispatch, host-merge, ship) with zero permission prompts and no bypass. Record the prompts it did hit.
 
   Non-goals: no new authority for the advisor, no waiving gates, no generic shell deputy beyond the existing script-deputy contract.
-status: InProgress
+status: NeedsAttention
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T16:51:02.535818Z
-modified_at: 2026-11-13T03:22:12.546693048Z
+modified_at: 2026-11-13T03:23:04.734476715Z
 req_type: Story
 tags:
 - area:advisor
@@ -1171,6 +1171,15 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1d2ee-249e-7b72-b99f-ef1189eb1bb6
+  author: dirtlab
+  timestamp: 2026-11-13T03:23:04.734489749Z
+  session_id: 01a1d2ed4985
+  harness_version: codex-cli 0.167.0
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 execution_mode: drain
 filed_at:
   code_sha: 8dcb86ca85da4826cec197aeb85269210e910403
@@ -1180,3 +1189,9 @@ filed_at:
   aida_build_sha: 8dcb86ca85d
   vendor: claude
   session: b0a84e34-277c-4df6-b53c-43f4bbe2e84d
+attention_reason:
+  category: blocked-dependency
+  detail: 'Round 10 blocked by incorrect lane base: HEAD 14bc7fc526 is the old sketch-only story-b6b1278890774ef993d2ebc327862470-494 branch; aida-cli-lib/src/review_watch_service.rs does not exist. Reviewed commit 2e8e517c123b and existing follow-up fix 4f3deec108 are both absent from lane ancestry. Findings 1 (retired key retention), 2 (ordinary watcher supersede after authority loss), 3 (foreign namespace unknown status), and 4 (pre-spawn cleanup/backoff) are not disputed. Host must prepare a writable lane based on the current PR/runtime branch before new runtime edits and executed tests can be produced. Existing 4f3deec108 already changes all four areas and adds regression tests, so inspect current PR state before repeating it. Git metadata is read-only in this seat; no checkout, merge, commit, or publication attempted. Codegraph doctor reports client missing; host must supply reviewed absolute client path.'
+  lean: 'Recreate lane from current PR #3640 runtime tip, retain existing round fixes, then verify remaining gaps and run targeted story2571 tests through lane job runner.'
+  raised_by: implementer
+  raised_at: 2026-11-13T03:23:04.734476715Z
