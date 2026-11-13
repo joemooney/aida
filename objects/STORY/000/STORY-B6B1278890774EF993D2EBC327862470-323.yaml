@@ -3,12 +3,12 @@ spec_id: STORY-b6b1278890774ef993d2ebc327862470-323
 agreed_id: STORY-2325
 title: One ownership and liveness record per piece of work (lease, PR, train, reviewer, mailbox scope)
 description: 'Regroup target 2, 2026-11-02. One typed ownership record with a single liveness rule: pid plus start identity, a heartbeat, or ''the seat HEAD is already in the PR''. Ownership passes from lease to PR when the PR opens. Dead owners are reclaimed by rule, never with --force. Trains, reviewers and relaunches query it. Mail retention is checked against message state, not the build id. Evidence: STORY-2315, BUG-2412, BUG-2220, BUG-2411, BUG-2327, TASK-1715, TASK-2021, BUG-2138, STORY-1665. Sketch-first; advisor signoff required.'
-status: NeedsAttention
+status: Approved
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-02T19:20:50.092491662Z
-modified_at: 2026-11-13T12:53:07.529590917Z
+modified_at: 2026-11-13T21:14:20.169376011Z
 req_type: Story
 tags:
 - architecture
@@ -802,6 +802,13 @@ comments:
   modified_at: 2026-11-13T12:53:07.529590917Z
   session_id: 01a1d4aa-9c99-76c2-ac94-7f0795f8a7f9
   harness_version: 2.1.323 (Claude Code)
+- id: 01a1d6c2-e889-7bc1-9322-54f625b4f185
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was punted on: blocked-dependency: Mandatory first task is to fetch origin/main, merge conflicts for PR #3940, commit the merge and push before any other work. This standalone native implementer seat explicitly has read-only Git metadata and prohibits commits and pushes. Checkout is clean at ca1c836a04; locally recorded HEAD...origin/main divergence is 12 ahead / 148 behind. Host must perform and publish the merge, then relaunch this lane for the bounded final round-9 findings. No finding is disputed; work is blocked on the merge-first prerequisite. Host must also supply the reviewed codegraph query client absolute path before code navigation.. No triage reason was given.'
+  created_at: 2026-11-13T21:14:20.169366258Z
+  modified_at: 2026-11-13T21:14:20.169366258Z
+  session_id: 01a1d684-8599-70e0-a01c-714f54d2f8de
+  harness_version: 2.1.323 (Claude Code)
 history:
 - id: 01a19ed2-508b-7401-9865-70193fa0d0af
   author: joe
@@ -1215,6 +1222,15 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a1d6c2-e889-7bc1-9322-54eeb3db1967
+  author: joe
+  timestamp: 2026-11-13T21:14:20.169351108Z
+  session_id: 01a1d684-8599-70e0-a01c-714f54d2f8de
+  harness_version: 2.1.323 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 filed_at:
   code_sha: 1b678fd5059046ff02bfb3b87c1f10d3162efda6
   branch: main
@@ -1223,9 +1239,3 @@ filed_at:
   aida_build_sha: 6a3f67671a9
   vendor: claude
   session: ee0bf351-6b17-486f-a38e-cfbb1343c426
-attention_reason:
-  category: blocked-dependency
-  detail: 'Mandatory first task is to fetch origin/main, merge conflicts for PR #3940, commit the merge and push before any other work. This standalone native implementer seat explicitly has read-only Git metadata and prohibits commits and pushes. Checkout is clean at ca1c836a04; locally recorded HEAD...origin/main divergence is 12 ahead / 148 behind. Host must perform and publish the merge, then relaunch this lane for the bounded final round-9 findings. No finding is disputed; work is blocked on the merge-first prerequisite. Host must also supply the reviewed codegraph query client absolute path before code navigation.'
-  lean: Have the host resolve and publish the main merge, then relaunch the final-round implementation.
-  raised_by: implementer
-  raised_at: 2026-11-13T12:27:17.037558175Z
