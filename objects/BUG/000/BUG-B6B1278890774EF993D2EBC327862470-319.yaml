@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-13T11:08:09.225798765Z
-modified_at: 2026-11-13T11:17:38.642282071Z
+modified_at: 2026-11-13T11:31:09.888953147Z
 req_type: Bug
 tags:
 - mandate
@@ -22,6 +22,25 @@ comments:
   created_at: 2026-11-13T11:17:38.642282071Z
   modified_at: 2026-11-13T11:17:38.642282071Z
   session_id: 01a1d3ee-83e8-71b3-a2c5-aed5baed6fdc
+  harness_version: 2.1.323 (Claude Code)
+- id: 01a1d4ac-ffc0-7750-b92c-f4de5011a127
+  author: joe
+  content: |-
+    SKETCH (claude-implementer-1042): incremental store-history index for the mandate gate.
+
+    Problem: both gate walks (StoreHistoryBatch::read's `git log --all --name-only -- <tops>` and store_history_alias_map's `git log --all -p -G` ) re-walk ALL store history on every train gate.
+
+    Design: one persisted, append-only index in the store's git common dir (`<git-common-dir>/aida/mandate-history-index.json`, not tracked, never pushed), owned by mandate.rs:
+    - `tips`: the commit set already indexed (all ref tips at last refresh).
+    - `versions`: object path -> [commit sha] for every A/C/M/R/T touch under objects/ (exactly what the name-only walk lists today, newest first).
+    - `aliases`: upper ID -> stems whose YAML carried it as spec_id/agreed_id in any version (from a `-G'^(spec_id|agreed_id):'` patch walk with the same rename attribution as today), plus per-ID non-canonical hits recorded as refusals (TASK-1800 c24 / TASK-2238 kept).
+    Refresh on every read: list ref tips; walk only `--all --not <indexed tips>` (new commits since last gate: usually a handful). Name-only + -G walks over that range, merged in. Atomic write (tmp+rename, shared-lock guarded). Rebuild from scratch when the file is missing/corrupt/version-skewed or any indexed tip no longer exists (gc'd rewrite) — that is the only full walk, still under AIDA_STORE_HISTORY_TIMEOUT_SECS, refusing as HistoryUnreadable on timeout (AC3).
+    Readers: StoreHistoryBatch::read takes `<sha>:<path>` lists from the index then one cat-file --batch as today; store_history_alias_map answers from `aliases`. No behaviour change in what is judged: the index is a superset-equal of what the walks return (every version reachable from any ref ever indexed); BUG-2179 deleted-by-agreed_id case still resolves.
+    AC2: a gate with an up-to-date index walks only the new-commit range (no full-history walk); AC4 regression: build index, add commits, assert the refresh walk is bounded (`--not` range used, counted via a test hook) and results equal the full-walk results on a long-history fixture.
+    Risk: stale index after a ref rewrite + gc -> handled by the missing-tip rebuild. Unreachable-but-not-gc'd versions stay indexed (stricter; same "what the remote saw" intent).
+  created_at: 2026-11-13T11:31:09.888953147Z
+  modified_at: 2026-11-13T11:31:09.888953147Z
+  session_id: 01a1d4ab-2dc9-7493-b77d-07f578345e59
   harness_version: 2.1.323 (Claude Code)
 history:
 - id: 01a1d498-3f5e-76e0-8686-02d176a4d628
