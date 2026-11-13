@@ -25741,6 +25741,12 @@ Options:
           Force a cold launch even when prior `claude` sessions exist for this scope — suppresses
           the default resume prompt
 
+      --rereview <REASON>
+          Advisor only: admit one fresh review of `PR-<N>` at a head that already has a conclusive
+          verdict, because the review contract (for example the review story's coverage) changed
+          after that verdict. Records the reason on the change's gate ledger; the next recorded
+          verdict ends the admission. Use with `--role reviewer`
+
       --list-sessions
           List the recorded `claude` sessions for this scope (most recent first) and exit without
           launching a session
@@ -58267,6 +58273,11 @@ Working on aida itself
         "name": "require-head",
         "takes_value": false,
         "help": "Refuse to launch the drain unless this dev build of aida matches (or is ahead of) the default branch HEAD. Without it, a stale dev build only prints a one-line warning and the wave runs it. Also enabled by `[drain] require_head = true` in `.aida/config.toml`. Released binaries are never checked"
+      },
+      {
+        "name": "rereview",
+        "takes_value": true,
+        "help": "Advisor only: admit one fresh review of `PR-<N>` at a head that already has a conclusive verdict, because the review contract (for example the review story's coverage) changed after that verdict. Records the reason on the change's gate ledger; the next recorded verdict ends the admission. Use with `--role reviewer`"
       },
       {
         "name": "resume",
