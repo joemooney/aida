@@ -3,12 +3,12 @@ spec_id: STORY-b6b1278890774ef993d2ebc327862470-672
 agreed_id: STORY-2749
 title: 'track:integration tag: every lane launcher refuses a main-track lane on an integration-track spec'
 description: 'Operator 2026-11-12 20:59 (emergency): one track per spec, enforced by the spec tag ''track:integration'' instead of the hand-kept ~/.aida/autoland-skip. Done in ops (20:10): ~/bin/aida-autoland.sh launch_lane skips tagged specs. Remaining (product): ''aida queue work SPEC --role implementer'' refuses a tagged spec unless the launch targets the integration branch; the launch preflight lists the track; the integration agent tags a spec when it first merges one of its commits; a promotion that completes the spec removes the tag. Retire ~/.aida/autoland-skip after that.'
-status: InProgress
+status: NeedsAttention
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-13T04:07:35.213330891Z
-modified_at: 2026-11-13T08:19:05.004454782Z
+modified_at: 2026-11-13T08:45:03.990435799Z
 req_type: Story
 tags:
 - track:integration
@@ -56,6 +56,13 @@ history:
   session_id: 01a1d394-b764-7e21-a752-015032d87411
   harness_version: 2.1.323 (Claude Code)
   changes: []
+- id: 01a1d414-ee76-7753-a233-1d19bc22ae75
+  author: aida-orchestrator
+  timestamp: 2026-11-13T08:45:03.990464901Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 filed_at:
   code_sha: 2a62f92c2a200b58e0d95446df07e355e062ab49
   branch: main
@@ -65,3 +72,11 @@ filed_at:
   vendor: claude
   session: 01a1d2e6-f5db-7f33-9b74-3ae5fdaf9e0c
   harness_version: 2.1.323 (Claude Code)
+failure_reason:
+  phase: reviewer
+  phase_index: 3
+  kind: verdict:request-changes
+  detail: 'Full sweep: five defects in child track propagation, ambiguous ownership, landing identity resolution, scoped tag discovery, and operator-track headless admission.'
+  recovery_hint: address the review findings, move STORY-2749 back to In Progress, and clear the PR hold only after approval
+  shelved_by: reviewer
+  shelved_at: 2026-11-13T08:45:03.990435799Z
