@@ -8,7 +8,7 @@ priority: Low
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-10T03:07:15.181924Z
-modified_at: 2026-11-13T12:05:08.752014599Z
+modified_at: 2026-11-13T12:05:32.811280590Z
 req_type: Task
 tags:
 - track:dell1
@@ -124,6 +124,13 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida edit --status`. It was shelved on: reviewer/verdict:request-changes: The manual flag citation defect persists unchanged and breaks required contracts CI; compact permissions and ratchet changes otherwise inspect coherently, broad glyph migration remains deferred, and current CI is pending.. It was punted on: blocked-dependency: Round 3: the required merge of origin/main (2a62f92c2a2) into PR #3919 cannot be committed from this lane. git merge aborts with ''unable to create symlink .claude/skills/aida-emergency-fix: Read-only file system'' (.claude/skills is write-denied by the seat sandbox), and building the merge commit through git plumbing (temporary index / mktree) is denied by the session permission policy. The only conflict is docs/cli/07-project-setup.md, ''Per-vendor containment posture'' paragraph: resolve it by taking origin/main''s hunk. Verified with docs/cli/verify-manual.py parse_chapters on the resolved text: every --verbose/--json citation on those lines resolves to ''config permissions show'' (none bare); verify-manual.py --static passes; ''aida config permissions show --help'' lists --json and -v/--verbose. The P2 finding (bare citations) was already fixed on branch head 9b38b6b, and main carries the same full invocations. Needs a seat that can write .claude/skills, or an operator, to run: git merge origin/main, take theirs for that hunk, then push.. No triage reason was given.'
   created_at: 2026-11-13T12:05:04.807419398Z
   modified_at: 2026-11-13T12:05:04.807419398Z
+  session_id: 01a1d4aa-9c99-76c2-ac94-7f0795f8a7f9
+  harness_version: 2.1.323 (Claude Code)
+- id: 01a1d4cc-7a0b-7fb2-8b63-1d4199467828
+  author: joe
+  content: 'Advisor 05:06: BUG-2553 landed (#3936). Reset to Approved; rework of #3919 relaunched on dell1 as Codex. track:dell1.'
+  created_at: 2026-11-13T12:05:32.811280590Z
+  modified_at: 2026-11-13T12:05:32.811280590Z
   session_id: 01a1d4aa-9c99-76c2-ac94-7f0795f8a7f9
   harness_version: 2.1.323 (Claude Code)
 history:
