@@ -7294,8 +7294,9 @@ Commands:
           terminal; a same-uid process that forges files in the AIDA home is outside the threat
           model (the same as session grants)
   renew   Extend the active mandate in place, or revive the latest expired one with a fresh ID.
-          Keeps scope, supervised flag and reason. Protected paths require --include-gate-paths
-          again. Stopped mandates stay stopped. Human at an interactive terminal only
+          Everything not named on the command line is kept: scope, supervised flag, protected paths
+          and reason. The start flags change the renewed mandate; each change is recorded with the
+          renewal. Stopped mandates stay stopped. Human at an interactive terminal only
   stop    End the active mandate now. Human at an interactive terminal only
   status  Show the current mandate, if any
   help    Print this message or the help of the given subcommand(s)
@@ -7373,9 +7374,10 @@ Options:
   -h, --help
           Print help (see a summary with '-h')
 ===== aida mandate renew
-Extend the active mandate in place, or revive the latest expired one with a fresh ID. Keeps scope,
-supervised flag and reason. Protected paths require --include-gate-paths again. Stopped mandates
-stay stopped. Human at an interactive terminal only
+Extend the active mandate in place, or revive the latest expired one with a fresh ID. Everything not
+named on the command line is kept: scope, supervised flag, protected paths and reason. The start
+flags change the renewed mandate; each change is recorded with the renewal. Stopped mandates stay
+stopped. Human at an interactive terminal only
 
 Usage: aida mandate renew [OPTIONS]
 
@@ -7383,10 +7385,31 @@ Options:
       --for <DURATION>
           How long from now it lasts, e.g. `8h` or `90m` (default: the duration it was started with,
           at most 24h)
+          
+          [aliases: --ttl]
+
+      --ship-held
+          Also cover shipping held PRs
+
+      --scope <SCOPE>
+          Scopes to add (e.g. `--scope dispatch`). Renewal never removes a scope: stop the mandate
+          and start a narrower one for that
+
+      --drive
+          Make it a drive mandate (every scope and the drive tick). The supervised flag is kept
+          unless --include-supervised or --exclude-supervised says otherwise
+
+      --include-supervised
+          Also cover sensitive specs from now on
+
+      --exclude-supervised
+          Keep sensitive specs human-only from now on
 
       --include-gate-paths
-          Allow protected-path ships and trains for this renewal; omitted resets the opt-in.
-          Requires a human at a terminal
+          Allow protected-path ships and trains from now on
+
+      --exclude-gate-paths
+          Stop allowing protected-path ships and trains
 
       --format <FORMAT>
           Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
@@ -7401,6 +7424,9 @@ Options:
       --canonical-ids
           Show node-local spec IDs in their canonical form instead of the node's friendly label (for
           scripts). Also settable via AIDA_CANONICAL_IDS=1
+
+      --reason <REASON>
+          Replace the recorded reason
 
   -h, --help
           Print help (see a summary with '-h')
@@ -39373,12 +39399,27 @@ Working on aida itself
       "mandate",
       "renew"
     ],
-    "about": "Extend the active mandate in place, or revive the latest expired one with a fresh ID. Keeps scope, supervised flag and reason. Protected paths require --include-gate-paths again. Stopped mandates stay stopped. Human at an interactive terminal only",
+    "about": "Extend the active mandate in place, or revive the latest expired one with a fresh ID. Everything not named on the command line is kept: scope, supervised flag, protected paths and reason. The start flags change the renewed mandate; each change is recorded with the renewal. Stopped mandates stay stopped. Human at an interactive terminal only",
     "flags": [
       {
         "name": "canonical-ids",
         "takes_value": false,
         "help": "Show node-local spec IDs in their canonical form instead of the node's friendly label (for scripts). Also settable via AIDA_CANONICAL_IDS=1"
+      },
+      {
+        "name": "drive",
+        "takes_value": false,
+        "help": "Make it a drive mandate (every scope and the drive tick). The supervised flag is kept unless --include-supervised or --exclude-supervised says otherwise"
+      },
+      {
+        "name": "exclude-gate-paths",
+        "takes_value": false,
+        "help": "Stop allowing protected-path ships and trains"
+      },
+      {
+        "name": "exclude-supervised",
+        "takes_value": false,
+        "help": "Keep sensitive specs human-only from now on"
       },
       {
         "name": "for",
@@ -39398,7 +39439,27 @@ Working on aida itself
       {
         "name": "include-gate-paths",
         "takes_value": false,
-        "help": "Allow protected-path ships and trains for this renewal; omitted resets the opt-in. Requires a human at a terminal"
+        "help": "Allow protected-path ships and trains from now on"
+      },
+      {
+        "name": "include-supervised",
+        "takes_value": false,
+        "help": "Also cover sensitive specs from now on"
+      },
+      {
+        "name": "reason",
+        "takes_value": true,
+        "help": "Replace the recorded reason"
+      },
+      {
+        "name": "scope",
+        "takes_value": true,
+        "help": "Scopes to add (e.g. `--scope dispatch`). Renewal never removes a scope: stop the mandate and start a narrower one for that"
+      },
+      {
+        "name": "ship-held",
+        "takes_value": false,
+        "help": "Also cover shipping held PRs"
       }
     ],
     "hidden": false
