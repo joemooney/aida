@@ -1,0 +1,34 @@
+id: 01a1d2cd-8ecb-7cb3-b305-1769302b5623
+spec_id: STORY-b6b1278890774ef993d2ebc327862470-670
+agreed_id: STORY-2747
+title: 'Review PR-3911: [AI:codex] feat(forge): support GitLab emergency landing (TASK-3788)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a1d2a4`) for branch `task-b6b1278890774ef993d2ebc327862470-1069`.
+
+  - PR: <https://github.com/joemooney/aida/pull/3911>
+  - Branch: `task-b6b1278890774ef993d2ebc327862470-1069` → `main`
+
+  ## Covers
+
+  - TASK-3788
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 3911` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-13T02:47:29.227268181Z
+modified_at: 2026-11-13T02:47:29.227268181Z
+req_type: Story
+filed_at:
+  code_sha: 0558a9e06aac10a087327ade1e1ab0a0c3d4ad50
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 5b9a248a1be
+  vendor: claude
+  session: 01a1d2a421d6
