@@ -8,10 +8,18 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-13T02:23:10.508038872Z
-modified_at: 2026-11-13T05:35:55.775606364Z
+modified_at: 2026-11-13T05:51:32.706717333Z
 req_type: Bug
 tags:
 - track:dell1
+comments:
+- id: 01a1d376-1162-7382-b9a1-1670ff643a98
+  author: dirtlab
+  content: 'Implemented PR-set-scoped train journal recovery: resolve requested PRs before recovery, resume only equal member sets, and report/retain nonmatching journals while admitting fresh work. Added locked local-only pr train --abandon <filename>.json, including malformed-journal cleanup, CLI conflicts, help snapshot and recovery docs. Validation via lane runner: BUG-2547 regressions 2 passed; final train suite plus help snapshot 138 passed, 0 failed. git diff --check passed. Seven changed files remain uncommitted for native host publication; queue completion is deferred to host publication.'
+  created_at: 2026-11-13T05:51:32.706717333Z
+  modified_at: 2026-11-13T05:51:32.706717333Z
+  session_id: 01a1d36737c6
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1d364-b1f3-72b3-be8a-aedbb4cb2d95
   author: joe
