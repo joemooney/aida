@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-13T02:45:43.305350105Z
-modified_at: 2026-11-13T05:40:15.288838966Z
+modified_at: 2026-11-13T05:46:28.688532770Z
 req_type: Bug
 comments:
 - id: 01a1d2dc-351e-78f3-89d7-7e2ecb290f14
@@ -24,6 +24,13 @@ comments:
   created_at: 2026-11-13T03:09:08.227411867Z
   modified_at: 2026-11-13T03:09:08.227411867Z
   session_id: 01a1d2cd919f
+  harness_version: codex-cli 0.167.0
+- id: 01a1d371-6dd0-78f2-8ded-d33568b82acc
+  author: dirtlab
+  content: 'Pickup blocked before edits: queue head is Needs Attention and card reports Shelved (verdict:request-changes). aida edit --status in-progress refused because advisor authority is required. Existing prior implementation comments were read; this seat made no source changes and ran no tests. Supplied host codegraph client /home/joe/ai/aida/.codegraph/proxy-state/bin/codegraph is absent. Advisor triage is required; publication veto preserved.'
+  created_at: 2026-11-13T05:46:28.688532770Z
+  modified_at: 2026-11-13T05:46:28.688532770Z
+  session_id: 01a1d3707d97
   harness_version: codex-cli 0.167.0
 history:
 - id: 01a1d2cc-3ead-77d2-bdac-92a7b8f80dc0
@@ -55,6 +62,12 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a1d371-5c03-7b92-8cc0-44843adb99a4
+  author: dirtlab
+  timestamp: 2026-11-13T05:46:24.131656111Z
+  session_id: 01a1d3707d97
+  harness_version: codex-cli 0.167.0
+  changes: []
 filed_at:
   code_sha: 0558a9e06aac10a087327ade1e1ab0a0c3d4ad50
   branch: main
@@ -64,6 +77,11 @@ filed_at:
   vendor: claude
   session: 01a1d240-c397-7b61-b29f-bb337c138943
   harness_version: 2.1.323 (Claude Code)
+attention_reason:
+  category: blocked-dependency
+  detail: 'Native implementer pickup refused: Needs Attention to InProgress requires advisor authority; existing request-changes shelving remains a publication veto. Advisor triage is required before implementation can resume.'
+  raised_by: implementer
+  raised_at: 2026-11-13T05:46:22.586707237Z
 failure_reason:
   phase: reviewer
   phase_index: 3
