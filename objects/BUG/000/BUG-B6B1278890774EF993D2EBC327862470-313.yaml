@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-13T02:45:43.305350105Z
-modified_at: 2026-11-13T05:55:05.427691105Z
+modified_at: 2026-11-13T06:37:31.315620113Z
 req_type: Bug
 comments:
 - id: 01a1d2dc-351e-78f3-89d7-7e2ecb290f14
@@ -32,6 +32,12 @@ comments:
   modified_at: 2026-11-13T05:46:28.688532770Z
   session_id: 01a1d3707d97
   harness_version: codex-cli 0.167.0
+- id: 01a1d3a0-2933-7d33-87be-d66fcd81db0f
+  author: joe
+  content: 'Round 2: addressing both AC2 findings. Pre-pull force-claim now only inspects eligibility; reclamation stays behind successful sync and refreshed verdict/deferral gates with owner revalidation. Added read-only source-branch lease admission using the existing resolver/coexistence policy, plus a post-sync check and existing setup recheck. Regression validation is running through the lane job runner. Native seat leaves code edits uncommitted for host publication.'
+  created_at: 2026-11-13T06:37:31.315620113Z
+  modified_at: 2026-11-13T06:37:31.315620113Z
+  session_id: 01a1d39b2d92
 history:
 - id: 01a1d2cc-3ead-77d2-bdac-92a7b8f80dc0
   author: joe
