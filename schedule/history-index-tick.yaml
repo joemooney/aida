@@ -1,13 +1,10 @@
 job: history-index-tick
-last_run: 2026-11-13T02:16:50.961899673Z
+last_run: 2026-11-13T02:46:52.716858380Z
 last_by:
   seat: substrate
   vendor: tick
 result: failed:1
 failure_trips:
-- trip_id: history-index-tick@2026-11-12T18:03:13.026234128Z
-  at: 2026-11-12T18:03:13.026234128Z
-  status: 1
 - trip_id: history-index-tick@2026-11-12T18:28:30.989215930Z
   at: 2026-11-12T18:28:30.989215930Z
   status: 1
@@ -64,4 +61,7 @@ failure_trips:
   status: 1
 - trip_id: history-index-tick@2026-11-13T02:16:50.961899673Z
   at: 2026-11-13T02:16:50.961899673Z
+  status: 1
+- trip_id: history-index-tick@2026-11-13T02:46:52.716858380Z
+  at: 2026-11-13T02:46:52.716858380Z
   status: 1
