@@ -23,7 +23,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-12T19:11:56.371806442Z
-modified_at: 2026-11-13T18:07:06.291349069Z
+modified_at: 2026-11-13T18:43:53.427120846Z
 req_type: Story
 tags:
 - operator-held
@@ -209,6 +209,13 @@ comments:
   content: '[advisor 11:07] Operator ruling 11:06: review-after-merge on integration for low-risk specs (standing order). Config option filed as STORY-2772; first case STORY-2771.'
   created_at: 2026-11-13T18:07:06.291349069Z
   modified_at: 2026-11-13T18:07:06.291349069Z
+  session_id: 01a1d5f7-27ab-7543-8808-b0ec6c271689
+  harness_version: 2.1.323 (Claude Code)
+- id: 01a1d639-2bd3-7c80-9d6d-5ff4e094ea3e
+  author: joe
+  content: '[advisor 11:44] Gap: main unmoved 10:35 -> 11:43 (68 min). Causes: (1) the #3824+#3832 deputy train job deadlocked waiting for every check on #3824 while merge-hold-gate stayed pending until the hold it would clear itself (~25 min); (2) autoland cannot clear holds (no TTY), so the operator cleared it at 11:00; (3) train #3960 CI ~25 min, merge step ~8 min. Fixes: rubberstamp mode (advisor clears met holds via TTY deputies); deputy wait loops must exclude merge-hold-gate/publish-merge-hold-status.'
+  created_at: 2026-11-13T18:43:53.427120846Z
+  modified_at: 2026-11-13T18:43:53.427120846Z
   session_id: 01a1d5f7-27ab-7543-8808-b0ec6c271689
   harness_version: 2.1.323 (Claude Code)
 history:
