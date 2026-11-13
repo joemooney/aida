@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-13T01:16:21.435486098Z
-modified_at: 2026-11-13T11:17:34.208075938Z
+modified_at: 2026-11-13T13:46:35.981125349Z
 req_type: Bug
 tags:
 - track:integration
@@ -39,6 +39,13 @@ comments:
   created_at: 2026-11-13T02:50:38.920352637Z
   modified_at: 2026-11-13T02:50:38.920352637Z
   session_id: 668a34f6-c74a-4b58-b144-167acd9792ef
+- id: 01a1d528-fe4d-7741-865d-4c72747a6e6c
+  author: joe
+  content: 'Advisor 06:48: hit live. Promotion #3922''s train refused to open (''BUG-2545 already has open change #3905 on integration''). Workaround in use: close canary #3905 for the train''s duration and reopen it afterwards (deputy job, .aida/tmp/train-3922b.sh). The fix ships inside #3922.'
+  created_at: 2026-11-13T13:46:35.981125349Z
+  modified_at: 2026-11-13T13:46:35.981125349Z
+  session_id: 01a1d4aa-9c99-76c2-ac94-7f0795f8a7f9
+  harness_version: 2.1.323 (Claude Code)
 history:
 - id: 01a1d29d-4c06-7bf1-a965-fe4c244dd002
   author: joe
