@@ -4120,6 +4120,22 @@ pub(crate) fn pr_train_handler_with_dispatch_ctx(
     } else {
         Some(journal::lock(&journal_dir)?)
     };
+    // Resolve the requested set before journal recovery. trace:BUG-2547 | ai:codex
+    let mut candidates: Vec<u64> = if opts.all_ready {
+        let mut ids: Vec<u64> = forge
+            .list_changes(crate::forge::ChangeFilter {
+                base: Some(base.clone()),
+                open_only: true,
+            })?
+            .into_iter()
+            .filter(|c| !c.branch.starts_with(BRANCH_PREFIX))
+            .map(|c| c.id)
+            .collect();
+        ids.sort_unstable();
+        ids
+    } else {
+        opts.prs.to_vec()
+    };
     let recovered = if opts.dry_run {
         Outcome::default()
     } else {
@@ -4135,22 +4151,7 @@ pub(crate) fn pr_train_handler_with_dispatch_ctx(
         .for_recovery();
         ForgeRails::new(&mut ports, uuid::Uuid::new_v4().to_string())
             .with_journal(&journal_dir)
-            .resume()?
-    };
-    let mut candidates: Vec<u64> = if opts.all_ready {
-        let mut ids: Vec<u64> = forge
-            .list_changes(crate::forge::ChangeFilter {
-                base: Some(base.clone()),
-                open_only: true,
-            })?
-            .into_iter()
-            .filter(|c| !c.branch.starts_with(BRANCH_PREFIX))
-            .map(|c| c.id)
-            .collect();
-        ids.sort_unstable();
-        ids
-    } else {
-        opts.prs.to_vec()
+            .resume_for(Some(&candidates))?
     };
     filter_recovered_candidates(&mut candidates, &recovered)?;
     if let Some(why) = explicit_over_max_refusal(candidates.len(), opts.max, opts.all_ready) {
@@ -4361,4 +4362,11 @@ mod tests;
 // trace:STORY-2688 | ai:codex
 pub(crate) fn pr_state_members(root: &Path) -> Result<Vec<u64>> {
     journal::pr_state_members(&root.join(".aida/train"))
+}
+
+// trace:BUG-2547 | ai:codex
+pub(crate) fn abandon_journal(name: &str) -> Result<()> {
+    let root = crate::find_project_root()?;
+    let main = crate::main_worktree_root_from(&root);
+    journal::abandon(&main.join(".aida/train"), name)
 }
