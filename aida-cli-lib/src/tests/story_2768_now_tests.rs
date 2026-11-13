@@ -31,6 +31,7 @@ fn row(pr: u64, state: State, action: Action, actor: Option<&str>) -> Row {
         since: None,
         reason: "the reason".into(),
         actor: actor.map(str::to_string),
+        ci: None,
     }
 }
 
@@ -94,6 +95,7 @@ fn every_open_change_is_an_item_in_exactly_one_stage() {
             change(4, "BUG-4"),
             change(5, "BUG-5"),
             change(6, "BUG-6"),
+            change(7, "BUG-7"),
         ],
         vec![
             row(1, State::NeedsReview, Action::LaunchReview, None),
@@ -124,6 +126,7 @@ fn every_open_change_is_an_item_in_exactly_one_stage() {
             (1, Stage::Reviewing),
             (2, Stage::Reviewing),
             (3, Stage::Reworking),
+            (7, Stage::WaitingCi),
             (4, Stage::Ready),
             (5, Stage::Shipping),
             (6, Stage::Blocked),
@@ -134,7 +137,7 @@ fn every_open_change_is_an_item_in_exactly_one_stage() {
     assert_eq!(snapshot.items[1].actor, "reviewer@home");
     assert_eq!(snapshot.queues.awaiting_review, 1);
     assert_eq!(snapshot.queues.awaiting_rework, 1);
-    assert_eq!(snapshot.open_prs, 6);
+    assert_eq!(snapshot.open_prs, 7);
 }
 
 #[test]

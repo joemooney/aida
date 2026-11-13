@@ -428,6 +428,10 @@ Commands:
   lane          Run cargo builds and tests through the launcher of a headless lane
   land          The landing reconciler: every open change's state, derived from the forge, the gate
                 ledger and git on each run, and the one action each state calls for
+  now           What is being worked on right now: every in-flight spec by stage with its actor,
+                change, age and next action, the queues, and everything that needs attention with
+                its reason and owner. Reads the snapshot the landing reconciler writes; refresh it
+                with `aida land status`
   adoption      Adopt AIDA without product-branch files: shared settings and guidance live in
                 `adoption/` on the aida-store branch and are projected into this worktree's
                 git-ignored `.aida/`
@@ -31339,6 +31343,36 @@ dispatched, cleared or merged
 Usage: aida land status [OPTIONS]
 
 Options:
+      --format <FORMAT>
+          Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
+          compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
+          piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)
+
+          Possible values:
+          - human: Human-readable tables / emoji (the interactive default at a TTY)
+          - toon:  Token-efficient TOON — the compact agent default when piped/captured
+          - json:  Machine JSON, for commands that support a JSON projection
+
+      --canonical-ids
+          Show node-local spec IDs in their canonical form instead of the node's friendly label (for
+          scripts). Also settable via AIDA_CANONICAL_IDS=1
+
+  -h, --help
+          Print help (see a summary with '-h')
+===== aida now
+What is being worked on right now: every in-flight spec by stage with its actor, change, age and
+next action, the queues, and everything that needs attention with its reason and owner. Reads the
+snapshot the landing reconciler writes; refresh it with `aida land status`
+
+Usage: aida now [OPTIONS]
+
+Options:
+      --watch
+          Re-render every 10 seconds until interrupted
+
+      --json
+          Print the snapshot itself
+
       --format <FORMAT>
           Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
           compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
@@ -63558,6 +63592,41 @@ Working on aida itself
         "name": "help",
         "takes_value": false,
         "help": "Print help (see more with '--help')"
+      }
+    ],
+    "hidden": false
+  },
+  {
+    "path": [
+      "aida",
+      "now"
+    ],
+    "about": "What is being worked on right now: every in-flight spec by stage with its actor, change, age and next action, the queues, and everything that needs attention with its reason and owner. Reads the snapshot the landing reconciler writes; refresh it with `aida land status`",
+    "flags": [
+      {
+        "name": "canonical-ids",
+        "takes_value": false,
+        "help": "Show node-local spec IDs in their canonical form instead of the node's friendly label (for scripts). Also settable via AIDA_CANONICAL_IDS=1"
+      },
+      {
+        "name": "format",
+        "takes_value": true,
+        "help": "Pin the output format regardless of whether stdout is a terminal: human = tables, toon = compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)"
+      },
+      {
+        "name": "help",
+        "takes_value": false,
+        "help": "Print help (see more with '--help')"
+      },
+      {
+        "name": "json",
+        "takes_value": false,
+        "help": "Print the snapshot itself"
+      },
+      {
+        "name": "watch",
+        "takes_value": false,
+        "help": "Re-render every 10 seconds until interrupted"
       }
     ],
     "hidden": false

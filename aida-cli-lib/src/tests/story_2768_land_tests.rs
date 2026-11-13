@@ -218,22 +218,27 @@ fn red_ci_sends_the_head_to_rework_before_any_review_or_landing() {
 }
 
 #[test]
-fn an_unreviewed_head_waits_for_running_ci_but_an_approved_one_is_ready() {
-    let fake = Fake {
-        ci: Ok(Ci::Pending),
-        ..Fake::default()
-    };
-    assert_eq!(decided(fake), (State::WaitingCi, Action::Wait));
+fn running_ci_gates_the_landing_and_never_the_review() {
+    for ci in [Ci::Pending, Ci::None, Ci::Green] {
+        let fake = Fake {
+            ci: Ok(ci.clone()),
+            ..Fake::default()
+        };
+        assert_eq!(decided(fake), (State::NeedsReview, Action::LaunchReview));
+        let fake = Fake {
+            ci: Ok(ci),
+            ..approved()
+        };
+        assert_eq!(decided(fake), (State::Ready, Action::Train));
+    }
     let fake = Fake {
         ci: Ok(Ci::Pending),
         ..approved()
     };
-    assert_eq!(decided(fake), (State::Ready, Action::Train));
-    let fake = Fake {
-        ci: Ok(Ci::None),
-        ..Fake::default()
-    };
-    assert_eq!(decided(fake), (State::NeedsReview, Action::LaunchReview));
+    assert_eq!(
+        derive(&pr("main", "feature"), &fake).ci.as_deref(),
+        Some("pending")
+    );
 }
 
 #[test]

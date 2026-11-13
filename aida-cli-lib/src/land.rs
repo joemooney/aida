@@ -85,8 +85,6 @@ pub(crate) enum State {
     CiFailed,
     Ready,
     ChangesRequested,
-    /// Unreviewed, with CI still running on the head.
-    WaitingCi,
     NeedsReview,
     Blocked,
     /// Evidence could not be read this pass; the next pass asks again.
@@ -97,7 +95,6 @@ impl State {
     pub(crate) fn label(&self) -> &'static str {
         match self {
             State::CiFailed => "CI-FAILED",
-            State::WaitingCi => "WAITING-CI",
             State::Landing => "LANDING",
             State::Conflict => "CONFLICT",
             State::Reviewing => "REVIEWING",
@@ -204,6 +201,10 @@ pub(crate) struct Row {
     /// Who is working the change now: a reviewer or a lane.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub actor: Option<String>,
+    /// CI on the head, once the derivation read it. CI gates the landing,
+    /// never the review: only a red head changes the state.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub ci: Option<String>,
 }
 
 pub(crate) fn track_of(pr: &Pr) -> Track {
@@ -219,6 +220,7 @@ pub(crate) fn track_of(pr: &Pr) -> Track {
 // trace:STORY-2768 | ai:claude
 pub(crate) fn derive(pr: &Pr, evidence: &dyn Evidence) -> Row {
     let track = track_of(pr);
+    let ci_read: std::cell::RefCell<Option<String>> = std::cell::RefCell::new(None);
     let row = |state: State, action: Action, since: Option<String>, reason: String| Row {
         pr: pr.id,
         track,
@@ -227,6 +229,7 @@ pub(crate) fn derive(pr: &Pr, evidence: &dyn Evidence) -> Row {
         since,
         reason,
         actor: None,
+        ci: ci_read.borrow().clone(),
     };
     let unknown = |what: &str, why: String| {
         row(
@@ -283,6 +286,7 @@ pub(crate) fn derive(pr: &Pr, evidence: &dyn Evidence) -> Row {
         Ok(ci) => ci,
         Err(why) => return unknown("CI", why),
     };
+    *ci_read.borrow_mut() = Some(ci.label());
     if let Ci::Red(failed) = &ci {
         return rework(
             State::CiFailed,
@@ -342,14 +346,6 @@ pub(crate) fn derive(pr: &Pr, evidence: &dyn Evidence) -> Row {
                 "changes requested at this content (round {})",
                 rounds.content_rounds
             ),
-        );
-    }
-    if ci == Ci::Pending {
-        return row(
-            State::WaitingCi,
-            Action::Wait,
-            None,
-            "unreviewed; CI is still running on the head".into(),
         );
     }
     row(State::NeedsReview, Action::LaunchReview, None, refusal)

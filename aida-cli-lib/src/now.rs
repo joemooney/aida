@@ -126,12 +126,13 @@ pub(crate) struct Snapshot {
     pub attention: Vec<Attention>,
 }
 
-fn stage_of(state: &State) -> Stage {
+fn stage_of(state: &State, ci: Option<&str>) -> Stage {
     match state {
+        // Approved, with the checks that gate its landing still running.
+        State::Ready if ci == Some("pending") => Stage::WaitingCi,
         State::Landing => Stage::Shipping,
         State::Conflict | State::CiFailed | State::ChangesRequested => Stage::Reworking,
         State::Reviewing | State::NeedsReview => Stage::Reviewing,
-        State::WaitingCi => Stage::WaitingCi,
         State::Ready => Stage::Ready,
         State::Blocked | State::Unknown => Stage::Blocked,
     }
@@ -260,7 +261,7 @@ pub(crate) fn assemble(
             continue;
         };
         let spec = crate::land::specs_of(pr).into_iter().next();
-        let stage = stage_of(&row.state);
+        let stage = stage_of(&row.state, row.ci.as_deref());
         match (&row.state, &row.action) {
             (State::NeedsReview, _) => queues.awaiting_review += 1,
             (_, Action::DispatchRework) => queues.awaiting_rework += 1,
