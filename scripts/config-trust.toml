@@ -140,6 +140,7 @@ sites = 3
 
 [readers."aida-cli-lib/src/glyph_config.rs"]
 channels = ["worktree", "home", "write"]
+# Project and user scopes share config_path_for's single config.toml literal.
 sites = 1
 
 [readers."aida-cli-lib/src/glyphs.rs"]
