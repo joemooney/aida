@@ -912,6 +912,18 @@ fn state_mandate(state: &MandateState) -> Option<&Mandate> {
     }
 }
 
+/// The line a renewal or revival prints when it carries the protected-path
+/// opt-in forward unchanged, so a kept opt-in is never silent.
+// trace:STORY-2771 | ai:claude
+pub(crate) fn kept_gate_paths_line(m: &Mandate, renewal: &Renewal) -> Option<String> {
+    let changed = renewal
+        .changes
+        .iter()
+        .any(|change| change.starts_with("include-gate-paths:"));
+    (m.include_gate_paths && !changed)
+        .then(|| "includes protected paths: KEPT (pass --exclude-gate-paths to drop)".to_string())
+}
+
 /// The overrides `aida mandate renew`'s flags ask for. An absent flag asks
 /// for nothing, so the renewed mandate keeps that value.
 // trace:STORY-2771 | ai:claude
@@ -1066,6 +1078,9 @@ pub(crate) fn handle_mandate(action: &crate::cli::MandateAction) -> Result<()> {
             )?;
             for change in &renewal.changes {
                 println!("{change}");
+            }
+            if let Some(kept) = kept_gate_paths_line(&m, &renewal) {
+                println!("{kept}");
             }
             // trace:STORY-2346 | ai:claude
             if let Some(old_id) = revived_from {

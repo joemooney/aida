@@ -322,3 +322,28 @@ fn the_flags_map_to_overrides_and_absent_flags_ask_for_nothing() {
         }
     );
 }
+
+#[test]
+fn a_kept_protected_path_opt_in_is_printed_and_a_changed_or_absent_one_is_not() {
+    let tmp = tempfile::tempdir().unwrap();
+    ship_held(tmp.path());
+    let gate_paths = |include| RenewOverrides {
+        include_gate_paths: Some(include),
+        ..RenewOverrides::default()
+    };
+    let at = |hours| t0() + Duration::hours(hours);
+    let renewed = |overrides: &RenewOverrides, hours| {
+        let (m, renewal, _) =
+            renew_with(tmp.path(), &human_ok, "joe", None, overrides, at(hours)).unwrap();
+        crate::mandate::kept_gate_paths_line(&m, &renewal)
+    };
+    let keep = RenewOverrides::default();
+    assert_eq!(renewed(&keep, 1), None);
+    assert_eq!(renewed(&gate_paths(true), 2), None);
+    let kept = Some("includes protected paths: KEPT (pass --exclude-gate-paths to drop)".into());
+    assert_eq!(renewed(&keep, 3), kept);
+    assert_eq!(renewed(&gate_paths(true), 4), kept);
+    // A revival keeps it too, and says so.
+    assert_eq!(renewed(&keep, 20), kept);
+    assert_eq!(renewed(&gate_paths(false), 21), None);
+}
