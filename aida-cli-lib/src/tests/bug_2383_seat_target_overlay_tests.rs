@@ -1339,7 +1339,10 @@ fn bug_2383_bwrap_real_cargo_test_job_reports_pass_and_fail_through_the_cli() {
     // Reproduce an outer runner's TMPDIR hidden by the nested sandbox's /dev.
     // Keep this injected into the fixture, without changing the test process env.
     // trace:TASK-3099 | ai:codex
-    host_env.push(("TMPDIR".into(), "/dev/shm/aida-unavailable-outer-tmp".into()));
+    host_env.push((
+        "TMPDIR".into(),
+        "/dev/shm/aida-unavailable-outer-tmp".into(),
+    ));
     host_env.push(("PATH".into(), path));
     host_env.push(("XDG_RUNTIME_DIR".into(), runtime.display().to_string()));
     host_env.push(("CARGO_TERM_COLOR".into(), "never".into()));
