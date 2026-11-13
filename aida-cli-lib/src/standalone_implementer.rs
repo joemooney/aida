@@ -1910,6 +1910,41 @@ mod host_capacity_tests {
         assert_eq!(slot_liveness(&visible, observer, |_, _| true), Some(true));
     }
 
+    // trace:STORY-2660 | ai:codex
+    #[test]
+    fn host_capacity_acquisition_stamps_namespace_and_foreign_observer_retains_slot() {
+        let tmp = tempfile::tempdir().unwrap();
+        let guard = acquire_slot_in(tmp.path().into(), "STORY-2660", 1, 500, |_, _| true).unwrap();
+        let path = tmp.path().join("500.json");
+        let slot = read_slot(&path).unwrap().unwrap();
+        assert_eq!(
+            slot.pid_namespace,
+            aida_core::pid_observer::current_pid_namespace()
+        );
+        // A non-isolated reader in a different namespace also cannot establish
+        // that this owner is dead. Never consult its local process table.
+        let observer = aida_core::pid_observer::PidObserver {
+            namespace: Some(slot.pid_namespace.unwrap_or(0).wrapping_add(1)),
+            isolated: false,
+        };
+        let probe = |_, _: Option<&str>| panic!("foreign namespace must not probe PIDs");
+        let status = observe_host_slots_from(
+            tmp.path().into(),
+            resolve_host_capacity(None, None, 2).unwrap(),
+            probe,
+            observer,
+        )
+        .unwrap();
+        assert_eq!((status.occupied, status.free), (1, 0));
+        assert_eq!(status.reservations[0].state, "unknown");
+        assert!(
+            acquire_slot_in_from(tmp.path().into(), "STORY-OTHER", 1, 501, probe, observer)
+                .is_err()
+        );
+        assert!(path.exists());
+        drop(guard);
+    }
+
     #[test]
     fn host_capacity_released_directory_entry_is_absent() {
         let tmp = tempfile::tempdir().unwrap();
