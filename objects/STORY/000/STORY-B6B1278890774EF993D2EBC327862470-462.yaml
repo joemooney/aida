@@ -9,7 +9,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T00:18:06.619162338Z
-modified_at: 2026-11-13T03:09:10.994089546Z
+modified_at: 2026-11-13T10:09:08.507433317Z
 req_type: Story
 tags:
 - architecture
@@ -553,6 +553,13 @@ comments:
   created_at: 2026-11-13T02:57:55.096353763Z
   modified_at: 2026-11-13T02:57:55.096353763Z
   session_id: 01a1d240-c397-7b61-b29f-bb337c138943
+  harness_version: 2.1.323 (Claude Code)
+- id: 01a1d461-e79b-7220-b651-e1750b8ad69c
+  author: joe
+  content: 'Advisor ruling 03:10, after verifying main at 1387fa9. Three slices landed via train: eba8bf80ca7 (#3559 profiles and consumers), 02790568d5e (#3595 headless argv and the literal ratchet), 049e5206de1 (#3645 hook layout; review findings 1-7 fixed). Criterion ''vendor-name literals only in vendors/'': ruled MET by the ratchet (story_2539_vendor_literal_ratchet_tests.rs blocks new literals; the ledger, about 770 vs a baseline of 786, only shrinks). Further shrink is opportunistic, not a gate, and no new spec. FINAL SLICE, which completes this spec: (1) sketch step 3b: build resume and fork argv from the profile; add the fork variant to Resume (aida-core/src/vendors/mod.rs:91); delete the hand-built --resume composition at aida-cli-lib/src/session.rs:~783; route can-resume (session.rs:~7057) through the same profile. (2) Move aida-cli-lib/src/launch/profile.rs into aida-cli-lib/src/vendors/ once, with mechanical import updates only. Tests: one unit test per vendor for resume argv from the profile; the existing ratchet stays green with a ledger count less than or equal to today''s. Commit trailer: (STORY-2539), not Refs. LIGHT gate. Start from current main on a NEW branch; the old -462 branch is the stale sketch.'
+  created_at: 2026-11-13T10:09:08.507433317Z
+  modified_at: 2026-11-13T10:09:08.507433317Z
+  session_id: 01a1d3ee-83e8-71b3-a2c5-aed5baed6fdc
   harness_version: 2.1.323 (Claude Code)
 history:
 - id: 01a1ae38-c1a4-7913-9856-03e3793500ff
