@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-12T11:10:55.183396177Z
-modified_at: 2026-11-13T21:55:44.270368157Z
+modified_at: 2026-11-13T21:55:47.646646424Z
 req_type: Bug
 tags:
 - track:dell1
@@ -78,6 +78,20 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: BUG-2535 AC1 unverified: focused runtime tests did not execute during cold build; BUG-2535 (bug protocol): met (new test file). Three forbidden ambient environment reads violate ExecContext policy and fail exact-head CI.. No triage reason was given.'
   created_at: 2026-11-13T21:55:44.270366462Z
   modified_at: 2026-11-13T21:55:44.270366462Z
+  session_id: 01a1d684-8599-70e0-a01c-714f54d2f8de
+  harness_version: 2.1.323 (Claude Code)
+- id: 01a1d6e8-dca1-7de3-bd33-af062288f25e
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (BUG-2535):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 96e914822898
+    Recorded: 2026-11-13T21:35:35.674915440+00:00
+    Findings:
+    1. [P2] aida-cli-lib/src/pr_cmd.rs:4770 and aida-cli-lib/src/tests/bug_2535_tests.rs:105,107: the new std::env::var(AIDA_SWEEP_PARENT) and two std::env::var_os calls add forbidden ambient readers. python3 scripts/check-exec-context.py fails locally with exactly these three new sites, matching CI (fast gates) job 132164556719; the required Build job fails as its aggregate consequence. Route supervisor handoff input through explicit arguments or an injected ExecContext snapshot, and use explicit immutable execution inputs for the child-test selectors. Do not expand the legacy ledger or hide these reads through aliases/FFI. Rerun python3 scripts/check-exec-context.py --base origin/main and python3 -m unittest tests.test_exec_context_ratchet plus the focused BUG-2535 tests.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-13T21:55:47.489916790Z
+  modified_at: 2026-11-13T21:55:47.489916790Z
   session_id: 01a1d684-8599-70e0-a01c-714f54d2f8de
   harness_version: 2.1.323 (Claude Code)
 history:
