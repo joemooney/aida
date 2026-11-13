@@ -2402,18 +2402,33 @@ fn bug_2179_history_for_many_specs_runs_a_bounded_number_of_gits() {
     assert_eq!(batch.versions("TASK-1").unwrap().len(), 3);
     store_history_alias_map(store.path(), &ids).unwrap();
     let calls = std::fs::read_to_string(&log).unwrap();
-    let walks = calls.lines().filter(|l| l.contains(" log ")).count();
-    // One history walk and one object read for 40 specs, plus one alias walk.
+    let walks = calls.lines().filter(|l| l.starts_with("log ")).count();
+    // BUG-2554: the first read builds the store-history index with one
+    // version walk and one alias walk; the alias search then answers from
+    // it. One object read serves all 40 specs.
     assert_eq!(walks, 2, "{calls}");
     // The history walk is limited by the objects directory, not by one
     // pathspec per spec (git checks every pathspec against every commit).
     assert!(
-        calls
-            .lines()
-            .any(|l| l.contains(" log ") && l.ends_with("--name-only -- objects")),
+        calls.lines().any(|l| l.starts_with("log ")
+            && l.contains("--name-only")
+            && l.ends_with("-- objects")),
         "{calls}"
     );
-    assert_eq!(calls.lines().count(), 3, "{calls}");
+    assert_eq!(
+        calls
+            .lines()
+            .filter(|l| l.starts_with("cat-file --batch ") || *l == "cat-file --batch")
+            .count(),
+        1,
+        "{calls}"
+    );
+    // A later gate over an unchanged store walks no history at all.
+    std::fs::write(&log, "").unwrap();
+    StoreHistoryBatch::read(store.path(), &ids).unwrap();
+    store_history_alias_map(store.path(), &ids).unwrap();
+    let calls = std::fs::read_to_string(&log).unwrap();
+    assert!(!calls.lines().any(|l| l.starts_with("log ")), "{calls}");
 }
 
 /// TASK-1662: a store-history walk that outlives its deadline is an error
@@ -3336,4 +3351,160 @@ fn bug_2524_unknown_operator_does_not_fall_back_to_seat_or_default() {
     assert_eq!(operator_principal_from(&env), "");
     let env = env.with_value("USER", Some("  joe  ".into()));
     assert_eq!(operator_principal_from(&env), "joe");
+}
+
+/// BUG-2554: a long store history with renames, agreed IDs, deletions and
+/// a side branch, built in `rounds` batches of commits so a test can index
+/// part of it and then add the rest.
+// trace:BUG-2554 | ai:claude
+fn bug_2554_grow_store(root: &Path, from: usize, to: usize) {
+    let write = |id: &str, agreed: Option<&str>, tag: Option<&str>, title: &str| {
+        let rel = aida_core::object_store::relative_object_path(id).unwrap();
+        let path = root.join(rel);
+        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+        let mut req = plain();
+        req.spec_id = Some(id.into());
+        req.agreed_id = agreed.map(str::to_string);
+        req.title = title.into();
+        if let Some(tag) = tag {
+            req.tags.insert(tag.into());
+        }
+        std::fs::write(path, serde_yaml::to_string(&req).unwrap()).unwrap();
+    };
+    let remove = |id: &str| {
+        let _ = std::fs::remove_file(
+            root.join(aida_core::object_store::relative_object_path(id).unwrap()),
+        );
+    };
+    for n in from..to {
+        let task = format!("TASK-{}", 10 + n % 7);
+        let tag = (n % 5 == 0).then_some("security");
+        write(&task, None, tag, &format!("round {n}"));
+        // A legacy object that carries an agreed ID, later deleted: the
+        // BUG-2179 case (a deleted spec named by its agreed_id).
+        if n % 4 == 1 {
+            let legacy = format!("TASK-1-{}", 100 + n);
+            let agreed = format!("TASK-{}", 200 + n);
+            write(&legacy, Some(&agreed), tag, "legacy");
+        }
+        if n % 4 == 3 {
+            remove(&format!("TASK-1-{}", 100 + n - 2));
+        }
+        git(root, &["add", "-A"]);
+        git(root, &["commit", "-qm", &format!("round {n}")]);
+        if n % 6 == 5 {
+            git(root, &["checkout", "-q", "-b", &format!("side-{n}")]);
+            write(&format!("TASK-{}", 300 + n), None, Some("security"), "side");
+            git(root, &["add", "-A"]);
+            git(root, &["commit", "-qm", &format!("side {n}")]);
+            git(root, &["checkout", "-q", "main"]);
+        }
+    }
+}
+
+/// The IDs a BUG-2554 equality check asks about after `rounds` rounds.
+fn bug_2554_ids(rounds: usize) -> Vec<String> {
+    let mut ids: Vec<String> = (10..17).map(|n| format!("TASK-{n}")).collect();
+    for n in 0..rounds {
+        ids.push(format!("TASK-{}", 200 + n));
+        ids.push(format!("TASK-1-{}", 100 + n));
+        ids.push(format!("TASK-{}", 300 + n));
+    }
+    ids
+}
+
+fn bug_2554_assert_index_equals_full_walk(root: &Path, ids: &[String]) {
+    let indexed = StoreHistoryBatch::read(root, ids).unwrap();
+    let walked = StoreHistoryBatch::read_full_walk(root, ids).unwrap();
+    let yaml = |batch: &StoreHistoryBatch, id: &str| -> Vec<String> {
+        batch
+            .versions(id)
+            .unwrap()
+            .iter()
+            .map(|v| serde_yaml::to_string(v).unwrap())
+            .collect()
+    };
+    for id in ids {
+        assert_eq!(yaml(&indexed, id), yaml(&walked, id), "versions of {id}");
+    }
+    assert_eq!(
+        store_history_alias_map(root, ids).unwrap(),
+        crate::mandate::store_history_alias_map_full_walk(root, ids).unwrap(),
+        "aliases"
+    );
+}
+
+/// BUG-2554 AC4: on a long history the index answers exactly what the full
+/// walks answer, after its first build, after an incremental refresh and
+/// after a rebuild from a corrupt file; an unchanged store walks nothing,
+/// and new commits are walked incrementally, never the whole history again.
+// trace:BUG-2554 | ai:claude
+#[test]
+fn bug_2554_history_index_equals_the_full_walk_and_refreshes_incrementally() {
+    use crate::mandate::history_index::{Refresh, REFRESHES};
+    let tmp = tempfile::tempdir().unwrap();
+    let root = tmp.path();
+    git(root, &["init", "-q", "-b", "main"]);
+    bug_2554_grow_store(root, 0, 40);
+    let take = || REFRESHES.with(|r| std::mem::take(&mut *r.borrow_mut()));
+    take();
+    bug_2554_assert_index_equals_full_walk(root, &bug_2554_ids(40));
+    assert_eq!(take().first(), Some(&Refresh::Rebuild));
+    // The deleted spec named by its agreed ID resolves to its object.
+    let map = store_history_alias_map(root, &["TASK-201".to_string()]).unwrap();
+    assert_eq!(map["TASK-201"], vec!["TASK-1-101".to_string()]);
+    assert_eq!(
+        take(),
+        vec![Refresh::Current],
+        "an unchanged store walks nothing"
+    );
+
+    bug_2554_grow_store(root, 40, 60);
+    bug_2554_assert_index_equals_full_walk(root, &bug_2554_ids(60));
+    let refreshes = take();
+    assert_eq!(
+        refreshes.first(),
+        Some(&Refresh::Incremental),
+        "{refreshes:?}"
+    );
+    assert!(!refreshes.contains(&Refresh::Rebuild), "{refreshes:?}");
+
+    // A corrupt index fails closed to a full rebuild, never "no history".
+    let common = git_stdout(root, &["rev-parse", "--git-common-dir"]);
+    let index = root
+        .join(common.trim())
+        .join("aida")
+        .join("mandate-history-index.json");
+    assert!(index.is_file(), "the index lives in the git common dir");
+    std::fs::write(&index, b"{ not json").unwrap();
+    bug_2554_assert_index_equals_full_walk(root, &bug_2554_ids(60));
+    assert_eq!(take().first(), Some(&Refresh::Rebuild));
+    // It is never tracked: the store's own status stays clean.
+    assert!(git_stdout(root, &["status", "--porcelain"])
+        .trim()
+        .is_empty());
+}
+
+/// BUG-2554: an indexed tip that no longer exists (a rewritten, collected
+/// ref) rebuilds the index, so no stale version is ever read.
+// trace:BUG-2554 | ai:claude
+#[test]
+fn bug_2554_a_vanished_indexed_tip_rebuilds() {
+    use crate::mandate::history_index::{Refresh, REFRESHES};
+    let tmp = tempfile::tempdir().unwrap();
+    let root = tmp.path();
+    git(root, &["init", "-q", "-b", "main"]);
+    bug_2554_grow_store(root, 0, 12);
+    let ids = bug_2554_ids(12);
+    bug_2554_assert_index_equals_full_walk(root, &ids);
+    // Drop a side branch and collect its commits.
+    git(root, &["branch", "-D", "side-5"]);
+    git(root, &["reflog", "expire", "--expire=now", "--all"]);
+    git(root, &["gc", "-q", "--prune=now"]);
+    REFRESHES.with(|r| r.borrow_mut().clear());
+    bug_2554_assert_index_equals_full_walk(root, &ids);
+    assert_eq!(
+        REFRESHES.with(|r| r.borrow().first().copied()),
+        Some(Refresh::Rebuild)
+    );
 }
