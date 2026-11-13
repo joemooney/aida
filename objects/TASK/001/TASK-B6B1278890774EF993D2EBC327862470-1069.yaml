@@ -18,7 +18,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-12T17:38:36.583411920Z
-modified_at: 2026-11-13T02:18:44.892857027Z
+modified_at: 2026-11-13T02:37:26.346307752Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -37,6 +37,12 @@ comments:
   content: 'Implemented GitLab emergency-land behind the existing forge client seam: backs up three merge-policy booleans; lifts only pipeline-success requirement when enabled; immediate squash merge pins the inspected SHA; existing finally guard restores on failure/panic/interruption and verifies the saved policy. Added fake-command regressions, fail-closed MR/diff normalization, pure-git refusal and docs/help snapshot updates. CI watch uses exact merge-SHA plus default-branch pipeline filtering because glab ci status is branch-scoped; --auto-merge=false explicitly disables glab''s default auto-merge. Validation is in progress through lane jobs; final results will follow. Changes remain uncommitted for host publication.'
   created_at: 2026-11-13T02:18:44.892857027Z
   modified_at: 2026-11-13T02:18:44.892857027Z
+  session_id: 01a1d2a421d6
+- id: 01a1d2c4-5bca-7b61-ae4f-2d2dedb861e3
+  author: joe
+  content: 'Validation complete: lane job j20261113T021215304-3309779-0 executed 15 emergency_land tests, all passed; j20261113T021216469-3310017-0 executed the help-snapshot test, passed. TUI all-targets check and aida-cli --no-default-features check passed through lane jobs. All 44 fast source gates passed (maintenance-ratchet false positive corrected by using an actual SHA-style fixture); workspace Rust target-root formatting and git diff --check passed. Literal make check-ci-fast was split into source gates and launcher build checks to honor the native-seat prohibition on local Cargo builds. Initial test build timed out at 900 seconds; the final-source rerun passed after 12m15s compilation. Reviewed codegraph client is absent and doctor reports unreachable; navigation used rg. Four files changed, edits uncommitted; ready for host publication.'
+  created_at: 2026-11-13T02:37:26.346307752Z
+  modified_at: 2026-11-13T02:37:26.346307752Z
   session_id: 01a1d2a421d6
 history:
 - id: 01a1d0d7-43e6-7d03-b1da-4751bfeb71a0
