@@ -2262,7 +2262,8 @@ fn bug_2456_clone_rework_publishes_through_host_and_never_runs_seat_hooks() {
             &clone,
             &["remote", "set-url", "origin", "/nonexistent/seat-origin"],
         );
-        let files = prepare_rework_merge(&fx.main, &clone, "feat", false).unwrap();
+        let files =
+            prepare_rework_merge(&fx.main, &clone, "feat", false, 3398, "test-lane").unwrap();
         let remote = git_ok(&fx.origin, &["rev-parse", "refs/heads/feat"]);
         let head = git_ok(&clone, &["rev-parse", "HEAD"]);
         if conflicts {
@@ -2299,7 +2300,25 @@ fn bug_2456_clone_rework_publishes_through_host_and_never_runs_seat_hooks() {
             assert_eq!(git_ok(&fx.origin, &["rev-parse", "refs/heads/feat"]), raced);
         }
         assert!(!sentinel.exists(), "seat hooks must never execute");
-        assert!(git_ok(&clone, &["status", "--porcelain"]).is_empty());
+        assert_eq!(
+            git_ok(&clone, &["status", "--porcelain"]).is_empty(),
+            !conflicts
+        );
+        if conflicts {
+            // The lane edits only files. Host staging consumes journal paths,
+            // completes the retained merge and ignores malicious seat hooks.
+            std::fs::write(clone.join("README.md"), "resolved\n").unwrap();
+            let tip = commit_pending(&fx.main, &clone, "feat", "fix: repair (Refs STORY-2710)")
+                .unwrap()
+                .unwrap();
+            assert_eq!(
+                git_ok(&clone, &["show", "-s", "--format=%P", &tip])
+                    .split_whitespace()
+                    .count(),
+                2
+            );
+            assert!(!sentinel.exists());
+        }
     }
 }
 
@@ -3535,7 +3554,8 @@ fn bug_2504_recovery_matches_recorded_tree_kind() {
             );
             std::fs::write(tree.join("pending"), "preserve me\n").unwrap();
             let head = git_ok(&tree, &["rev-parse", "HEAD"]);
-            let error = prepare_rework_merge(&fx.main, &tree, "feat", true).unwrap_err();
+            let error =
+                prepare_rework_merge(&fx.main, &tree, "feat", true, 3398, "test-lane").unwrap_err();
             let message = format!("{error:#}");
             assert!(message.contains("edits preserved"), "{message}");
             assert!(message.contains(tree.to_str().unwrap()), "{message}");
@@ -3556,7 +3576,8 @@ fn bug_2504_recovery_matches_recorded_tree_kind() {
                 std::fs::remove_file(tree.join("pending")).unwrap();
                 let message = format!(
                     "{:#}",
-                    prepare_rework_merge(&fx.main, &tree, "feat", false).unwrap_err()
+                    prepare_rework_merge(&fx.main, &tree, "feat", false, 3398, "test-lane")
+                        .unwrap_err()
                 );
                 assert!(
                     message.contains("retry pickup with its current head"),
@@ -3597,7 +3618,7 @@ fn bug_2504_rework_preflight_has_no_commit_recovery() {
     for branch in ["feat", "other"] {
         let message = format!(
             "{:#}",
-            prepare_rework_merge(&fx.main, &tree, branch, true).unwrap_err()
+            prepare_rework_merge(&fx.main, &tree, branch, true, 3398, "test-lane").unwrap_err()
         );
         assert!(
             message.contains(if branch == "feat" {
@@ -3640,9 +3661,11 @@ fn bug_2504_recorded_clone_admits_clean_main_advance() {
     std::fs::write(tree.join("pending"), "preserve me\n").unwrap();
     let head = git_ok(&tree, &["rev-parse", "HEAD"]);
     let status = git_ok(&tree, &["status", "--porcelain"]);
-    assert!(prepare_rework_merge(&fx.main, &tree, "feat", true)
-        .unwrap()
-        .is_empty());
+    assert!(
+        prepare_rework_merge(&fx.main, &tree, "feat", true, 3398, "test-lane")
+            .unwrap()
+            .is_empty()
+    );
     assert_eq!(git_ok(&tree, &["rev-parse", "HEAD"]), head);
     assert_eq!(git_ok(&tree, &["status", "--porcelain"]), status);
     assert_eq!(
@@ -4416,4 +4439,521 @@ fn bug_2488_punt_consumption_does_not_recreate_retired_workspace() {
     assert!(!punt.exists());
     assert!(!tree.exists());
     assert!(main.path().join(".aida/pr-holds").is_symlink());
+}
+
+// trace:STORY-2710 | ai:codex
+#[test]
+fn story_2710_host_regenerates_conflicted_outputs_with_read_only_git() {
+    if !bwrap_live_or_skip() {
+        return;
+    }
+    for (cloned, ledger) in [
+        (false, "scripts/exec-context-legacy.json"),
+        (true, "scripts/exec-context-legacy.json"),
+        (false, ".aida/discipline/repair.md"),
+        (true, ".aida/discipline/repair.md"),
+    ] {
+        let fx = fixture();
+        std::fs::create_dir_all(fx.main.join("scripts")).unwrap();
+        // Exercise the reported sync-templates copy case as well as the ledger.
+        // The resolved master is not an original conflict path.
+        // trace:STORY-2710 | ai:codex
+        if ledger.starts_with(".aida/") {
+            std::fs::create_dir_all(fx.main.join(".aida/discipline")).unwrap();
+            std::fs::create_dir_all(fx.main.join("aida-core/templates/.aida/discipline")).unwrap();
+            std::fs::write(
+                fx.main
+                    .join("aida-core/templates/.aida/discipline/repair.md"),
+                "regenerated\n",
+            )
+            .unwrap();
+            std::fs::write(
+                fx.main.join("Makefile"),
+                "sync-templates:\n\tpython3 scripts/check-exec-context.py --write-ledger\n",
+            )
+            .unwrap();
+        }
+        std::fs::write(fx.main.join(ledger), "base\n").unwrap();
+        std::fs::write(
+            fx.main.join("scripts/check-exec-context.py"),
+            r#"import os, sys, subprocess
+from pathlib import Path
+if '--write-ledger' in sys.argv:
+    subprocess.run(['git', 'rev-parse', '--verify', 'HEAD'], check=True, capture_output=True)
+    poison = subprocess.run(['git', 'config', '--get', 'repair.seatPoison'], capture_output=True)
+    assert poison.returncode == 1, 'generator consumed seat-controlled Git config'
+    assert subprocess.check_output(['git', 'config', '--get', 'core.bare']).strip() == b'false'
+    # Git's lock-and-rename writer must also fail, not just direct file writes.
+    # trace:STORY-2710 | ai:codex
+    write_config = subprocess.run(['git', 'config', '--local', 'repair.seatPoison', 'written'],
+                                  capture_output=True)
+    assert write_config.returncode != 0, 'generator rewrote protected Git config'
+    assert subprocess.run(['git', 'config', '--get', 'repair.seatPoison'],
+                          capture_output=True).returncode == 1
+    subprocess.run(['git', 'show', 'HEAD:scripts/check-exec-context.py'],
+                   check=True, capture_output=True)
+    for key in ('GIT_DIR', 'GIT_COMMON_DIR'):
+        # Both the parent metadata and the final sanitized config overlay
+        # must remain read-only, including linked worktree common/config.
+        for name in ('generator-escaped', 'config'):
+            try:
+                Path(os.environ[key], name).write_text('must refuse')
+            except OSError:
+                pass
+            else:
+                raise RuntimeError('Git metadata or sanitized config was writable')
+    output = Path('scripts/exec-context-legacy.json')
+    if Path('aida-core/templates/.aida/discipline/repair.md').exists():
+        output = Path('.aida/discipline/repair.md')
+    output.write_bytes(Path('aida-core/templates/.aida/discipline/repair.md').read_bytes()
+                       if output.suffix == '.md' else b'regenerated\n')
+    if Path('introduce-markers').exists():
+        output.write_bytes(Path('introduce-markers').read_bytes())
+    if Path('reject-regeneration').exists():
+        Path('partial-generator-write').write_text('partial')
+        raise RuntimeError('failure after output write')
+"#,
+        )
+        .unwrap();
+        git_ok(&fx.main, &["add", "."]);
+        git_ok(&fx.main, &["commit", "-qm", "register ledger fixture"]);
+        git_ok(&fx.main, &["checkout", "-qb", "feat"]);
+        std::fs::write(fx.main.join(ledger), "PR\n").unwrap();
+        git_ok(&fx.main, &["commit", "-qam", "PR ledger"]);
+        git_ok(&fx.main, &["push", "-q", "origin", "feat"]);
+        git_ok(&fx.main, &["checkout", "main"]);
+        std::fs::write(fx.main.join(ledger), "main\n").unwrap();
+        git_ok(&fx.main, &["commit", "-qam", "main ledger"]);
+        git_ok(&fx.main, &["push", "-q", "origin", "main"]);
+        let tree = if cloned {
+            let tree = leased_clone(&fx, "repair-regen", "c0ffee271001");
+            let pr_head = git_ok(&fx.main, &["rev-parse", "feat"]);
+            git_ok(&tree, &["reset", "--hard", &pr_head]);
+            tree
+        } else {
+            let tree = fx.root.join("linked-regen");
+            git_ok(
+                &fx.main,
+                &["worktree", "add", tree.to_str().unwrap(), "feat"],
+            );
+            tree
+        };
+        let head = git_ok(&tree, &["rev-parse", "HEAD"]);
+        let files =
+            prepare_rework_merge(&fx.main, &tree, "feat", false, 3813, "regen-lane").unwrap();
+        assert_eq!(files, [ledger]);
+        assert_eq!(
+            std::fs::read_to_string(tree.join(ledger)).unwrap(),
+            "main\n"
+        );
+        // Preparation restores safely; only the publication phase executes
+        // source-dependent generators with metadata read-only.
+        let base = git_ok(&tree, &["rev-parse", "MERGE_HEAD"]);
+        // Preparation used the trusted overlay. Generation must keep it even
+        // after making the parent metadata mount read-only.
+        let original_config = cloned.then(|| std::fs::read(tree.join(".git/config")).unwrap());
+        if cloned {
+            std::fs::write(tree.join(".git/config"), "[invalid config\n").unwrap();
+        }
+        crate::seat_clone::regenerate_repair_outputs(
+            &tree,
+            &fx.main,
+            &base,
+            &[],
+            &aida_core::exec_context::Environment::default(),
+            false,
+        )
+        .unwrap();
+        if let Some(config) = original_config {
+            // A valid seat config must also stay hidden: merely tolerating a
+            // malformed file does not prove Git consumed the host overlay.
+            // trace:STORY-2710 | ai:codex
+            let mut poisoned = config.clone();
+            poisoned.extend_from_slice(b"\n[repair]\nseatPoison = visible\n");
+            // Unsupported repository extensions must remain hidden as well.
+            // Git rejects this config before running ordinary commands.
+            // trace:STORY-2710 | ai:codex
+            let unsupported = concat!(
+                "[core]\nrepositoryFormatVersion = 1\n",
+                "[extensions]\naidaUnsupported = true\n",
+            )
+            .as_bytes()
+            .to_vec();
+            // An include must stay hidden too: its target is readable inside
+            // the sandbox, so only the overlay prevents Git loading it.
+            // trace:STORY-2710 | ai:codex
+            let included_config = tree.join("seat-config-include");
+            std::fs::write(&included_config, "[repair]\nseatPoison = included\n").unwrap();
+            let mut with_include = config.clone();
+            with_include.extend_from_slice(
+                format!("\n[include]\npath = {}\n", included_config.display()).as_bytes(),
+            );
+            for seat_config in [poisoned, unsupported, with_include] {
+                std::fs::write(tree.join(".git/config"), &seat_config).unwrap();
+                crate::seat_clone::regenerate_repair_outputs(
+                    &tree,
+                    &fx.main,
+                    &base,
+                    &[],
+                    &aida_core::exec_context::Environment::default(),
+                    false,
+                )
+                .unwrap();
+                // The trusted overlay must hide, rather than repair or replace,
+                // the seat's config. trace:STORY-2710 | ai:codex
+                assert_eq!(
+                    std::fs::read(tree.join(".git/config")).unwrap(),
+                    seat_config
+                );
+            }
+            std::fs::write(tree.join(".git/config"), config).unwrap();
+            std::fs::remove_file(included_config).unwrap();
+        }
+        assert_eq!(
+            std::fs::read_to_string(tree.join(ledger)).unwrap(),
+            "regenerated\n"
+        );
+        assert_eq!(git_ok(&tree, &["rev-parse", "HEAD"]), head);
+        assert!(git_ok(&tree, &["diff", "--name-only", "--diff-filter=U"]).is_empty());
+        let base = git_ok(&tree, &["rev-parse", "MERGE_HEAD"]);
+        let journal = crate::repair_journal::RepairGuard::lock(&fx.main).unwrap();
+        assert_eq!(
+            journal
+                .for_tree(&tree, "feat", &head, &base)
+                .unwrap()
+                .original_conflict_paths,
+            [ledger]
+        );
+        drop(journal);
+        if cloned {
+            // An unmatched closing marker is also forbidden in an original
+            // conflict path after regeneration. trace:STORY-2710 | ai:codex
+            for markers in [
+                "<<<<<<< generated\n=======\n>>>>>>> generated\n",
+                ">>>>>>> generated\n",
+                "<<<<<<< generated\n",
+                "<<<<<<< generated\r\n=======\r\n>>>>>>> generated\r\n",
+                // Diff3 output from a template master must hit the same gate.
+                // trace:STORY-2710 | ai:codex
+                "<<<<<<< generated\nours\n||||||| base\nbase\n=======\ntheirs\n>>>>>>> generated\n",
+            ] {
+                // Each retry starts clean: the first marker gate must pass,
+                // leaving the post-generation journal gate to refuse this run.
+                // trace:STORY-2710 | ai:codex
+                assert_eq!(
+                    std::fs::read_to_string(tree.join(ledger)).unwrap(),
+                    "regenerated\n"
+                );
+                let marker_source = if ledger.starts_with(".aida/") {
+                    "aida-core/templates/.aida/discipline/repair.md"
+                } else {
+                    "introduce-markers"
+                };
+                std::fs::write(tree.join(marker_source), markers).unwrap();
+                let why = commit_pending(&fx.main, &tree, "feat", "repair (Refs STORY-2710)")
+                    .unwrap_err();
+                assert!(
+                    format!("{why:#}").contains("unresolved conflict markers"),
+                    "{why:#}"
+                );
+                assert_eq!(git_ok(&tree, &["rev-parse", "HEAD"]), head);
+                assert_eq!(git_ok(&tree, &["rev-parse", "MERGE_HEAD"]), base);
+                assert_eq!(std::fs::read_to_string(tree.join(ledger)).unwrap(), markers);
+                assert_eq!(
+                    git_ok(&tree, &["show", &format!(":{ledger}")]),
+                    "regenerated"
+                );
+                let guard = crate::repair_journal::RepairGuard::lock(&fx.main).unwrap();
+                let entry = guard.for_tree(&tree, "feat", &head, &base).unwrap();
+                assert_eq!(entry.original_conflict_paths, [ledger]);
+                assert_eq!(entry.regeneration_success, Some(false));
+                assert!(entry.regenerated_tree.is_none());
+                drop(guard);
+                // A failed post-generation gate must invalidate publication
+                // even after the operator removes the markers. Resume owns
+                // restoring preparation credit; direct retry cannot reuse it.
+                // trace:STORY-2710 | ai:codex
+                std::fs::write(tree.join(ledger), "regenerated\n").unwrap();
+                let index_before_retry = git_ok(&tree, &["ls-files", "--stage"]);
+                let retry = commit_pending(&fx.main, &tree, "feat", "repair (Refs STORY-2710)")
+                    .unwrap_err();
+                assert!(format!("{retry:#}").contains("preparation did not succeed"));
+                assert_eq!(git_ok(&tree, &["ls-files", "--stage"]), index_before_retry);
+                assert_eq!(git_ok(&tree, &["rev-parse", "HEAD"]), head);
+                assert_eq!(git_ok(&tree, &["rev-parse", "MERGE_HEAD"]), base);
+                if ledger.starts_with(".aida/") {
+                    std::fs::write(tree.join(marker_source), "regenerated\n").unwrap();
+                } else {
+                    std::fs::remove_file(tree.join(marker_source)).unwrap();
+                }
+                prepare_rework_merge(&fx.main, &tree, "feat", true, 3813, "regen-lane").unwrap();
+            }
+            std::fs::write(tree.join("reject-regeneration"), "reject").unwrap();
+            let why =
+                commit_pending(&fx.main, &tree, "feat", "repair (Refs STORY-2710)").unwrap_err();
+            assert!(format!("{why:#}").contains("failure after output write"));
+            assert_eq!(git_ok(&tree, &["rev-parse", "HEAD"]), head);
+            assert_eq!(git_ok(&tree, &["rev-parse", "MERGE_HEAD"]), base);
+            // The refused run's write is rolled back, so no later attempt can
+            // stage it. trace:STORY-2710 | ai:claude
+            assert!(!tree.join("partial-generator-write").exists());
+            let guard = crate::repair_journal::RepairGuard::lock(&fx.main).unwrap();
+            assert_eq!(
+                guard
+                    .for_tree(&tree, "feat", &head, &base)
+                    .unwrap()
+                    .regeneration_success,
+                Some(false)
+            );
+            drop(guard);
+            // Even fixed generator inputs cannot bypass persisted failure via
+            // direct publication. Refuse before staging; resume owns recovery.
+            std::fs::remove_file(tree.join("reject-regeneration")).unwrap();
+            let index_before_refusal = git_ok(&tree, &["ls-files", "--stage"]);
+            let why =
+                commit_pending(&fx.main, &tree, "feat", "repair (Refs STORY-2710)").unwrap_err();
+            assert!(format!("{why:#}").contains("preparation did not succeed"));
+            assert_eq!(
+                git_ok(&tree, &["ls-files", "--stage"]),
+                index_before_refusal
+            );
+            assert_eq!(git_ok(&tree, &["rev-parse", "HEAD"]), head);
+            assert_eq!(git_ok(&tree, &["rev-parse", "MERGE_HEAD"]), base);
+            prepare_rework_merge(&fx.main, &tree, "feat", true, 3813, "regen-lane").unwrap();
+            assert!(
+                commit_pending(&fx.main, &tree, "feat", "repair (Refs STORY-2710)")
+                    .unwrap()
+                    .is_some()
+            );
+            let guard = crate::repair_journal::RepairGuard::lock(&fx.main).unwrap();
+            assert_eq!(
+                guard
+                    .for_tree(&tree, "feat", &head, &base)
+                    .unwrap()
+                    .regeneration_success,
+                Some(true)
+            );
+            assert_eq!(
+                guard
+                    .for_tree(&tree, "feat", &head, &base)
+                    .unwrap()
+                    .regenerated_tree
+                    .as_deref(),
+                Some(git_ok(&tree, &["rev-parse", "HEAD^{tree}"]).as_str())
+            );
+            drop(guard);
+            assert!(git_ok(
+                &tree,
+                &[
+                    "ls-tree",
+                    "-r",
+                    "--name-only",
+                    "HEAD",
+                    "--",
+                    "partial-generator-write"
+                ]
+            )
+            .is_empty());
+        }
+        assert!(!fx.main.join(".git/generator-escaped").exists());
+    }
+}
+
+/// Review round 10 (P1/P2): the registered `make sync-templates` builds its
+/// renderer with real Cargo. A configured `build.rustc-wrapper` (sccache on
+/// the operator host) must be disabled by a fixed decision rather than
+/// reaching an unwritable host cache, and the build must land in the seat's
+/// own lease-recorded target instead of a fresh checkout-local one.
+// trace:STORY-2710 | ai:claude
+#[test]
+fn story_2710_cargo_backed_regeneration_disables_wrapper_and_uses_seat_target() {
+    if !bwrap_live_or_skip() {
+        return;
+    }
+    let cargo_ok = std::process::Command::new("cargo")
+        .arg("--version")
+        .output()
+        .is_ok_and(|out| out.status.success());
+    if !cargo_ok {
+        eprintln!("skipping: cargo unavailable");
+        return;
+    }
+    let fx = fixture();
+    let ledger = ".aida/discipline/repair.md";
+    for dir in [
+        ".aida/discipline",
+        "aida-core/templates/.aida/discipline",
+        "renderer/src",
+        ".cargo",
+    ] {
+        std::fs::create_dir_all(fx.main.join(dir)).unwrap();
+    }
+    std::fs::write(
+        fx.main
+            .join("aida-core/templates/.aida/discipline/repair.md"),
+        "regenerated\n",
+    )
+    .unwrap();
+    // A wrapper that cannot run: without the fixed RUSTC_WRAPPER decision the
+    // build fails exactly as the host's sccache did on a read-only cache.
+    std::fs::write(
+        fx.main.join(".cargo/config.toml"),
+        "[build]\nrustc-wrapper = \"/nonexistent/aida-test-sccache\"\n",
+    )
+    .unwrap();
+    std::fs::write(
+        fx.main.join("renderer/Cargo.toml"),
+        "[package]\nname = \"renderer\"\nversion = \"0.1.0\"\nedition = \"2021\"\n\n[workspace]\n",
+    )
+    .unwrap();
+    std::fs::write(
+        fx.main.join("renderer/Cargo.lock"),
+        "version = 3\n\n[[package]]\nname = \"renderer\"\nversion = \"0.1.0\"\n",
+    )
+    .unwrap();
+    std::fs::write(
+        fx.main.join("renderer/src/main.rs"),
+        "fn main() {\n    let master = \
+         std::fs::read(\"aida-core/templates/.aida/discipline/repair.md\").unwrap();\n    \
+         std::fs::write(\".aida/discipline/repair.md\", master).unwrap();\n}\n",
+    )
+    .unwrap();
+    std::fs::write(
+        fx.main.join("Makefile"),
+        "sync-templates:\n\tcargo run --offline --locked --quiet --manifest-path renderer/Cargo.toml\n",
+    )
+    .unwrap();
+    std::fs::write(fx.main.join(ledger), "base\n").unwrap();
+    git_ok(&fx.main, &["add", "."]);
+    git_ok(
+        &fx.main,
+        &["commit", "-qm", "register cargo renderer fixture"],
+    );
+    git_ok(&fx.main, &["checkout", "-qb", "feat"]);
+    std::fs::write(fx.main.join(ledger), "PR\n").unwrap();
+    git_ok(&fx.main, &["commit", "-qam", "PR mirror"]);
+    git_ok(&fx.main, &["push", "-q", "origin", "feat"]);
+    git_ok(&fx.main, &["checkout", "main"]);
+    std::fs::write(fx.main.join(ledger), "main\n").unwrap();
+    git_ok(&fx.main, &["commit", "-qam", "main mirror"]);
+    git_ok(&fx.main, &["push", "-q", "origin", "main"]);
+
+    let id = "c0ffee271010";
+    let tree = leased_clone(&fx, "repair-cargo", id);
+    git_ok(
+        &tree,
+        &["reset", "--hard", &git_ok(&fx.main, &["rev-parse", "feat"])],
+    );
+    // Record the seat's own target, as session start does for a seeded seat.
+    let target = fx
+        .main
+        .canonicalize()
+        .unwrap()
+        .join("target/worktrees")
+        .join(tree.file_name().unwrap());
+    std::fs::create_dir_all(&target).unwrap();
+    let lease = crate::lease_path(&fx.main, id);
+    let mut body = std::fs::read_to_string(&lease).unwrap();
+    body.push_str(&format!(
+        "cargo_target_dir = {}\n",
+        aida_core::toml_quote::toml_string(&target.display().to_string())
+    ));
+    std::fs::write(&lease, body).unwrap();
+    assert_eq!(
+        crate::seat_clone::repair_seat_target(&fx.main, &tree).as_deref(),
+        Some(target.as_path())
+    );
+
+    // Negative control: the fixture's wrapper really breaks an unguarded build.
+    let control_target = tempfile::tempdir().unwrap();
+    let control = std::process::Command::new("cargo")
+        .current_dir(&tree)
+        .args([
+            "build",
+            "--offline",
+            "--locked",
+            "--quiet",
+            "--manifest-path",
+            "renderer/Cargo.toml",
+        ])
+        .env_remove("RUSTC_WRAPPER")
+        .env_remove("RUSTC_WORKSPACE_WRAPPER")
+        .env("CARGO_TARGET_DIR", control_target.path())
+        .output()
+        .unwrap();
+    assert!(
+        !control.status.success(),
+        "the poisoned wrapper fixture must fail without the fixed decision"
+    );
+
+    let files = prepare_rework_merge(&fx.main, &tree, "feat", false, 3813, "cargo-lane").unwrap();
+    assert_eq!(files, [ledger]);
+    let base = git_ok(&tree, &["rev-parse", "MERGE_HEAD"]);
+    crate::seat_clone::regenerate_repair_outputs(
+        &tree,
+        &fx.main,
+        &base,
+        &[],
+        &aida_core::exec_context::Environment::capture(),
+        false,
+    )
+    .unwrap_or_else(|e| panic!("cargo-backed regeneration: {e:#}"));
+    assert_eq!(
+        std::fs::read_to_string(tree.join(ledger)).unwrap(),
+        "regenerated\n"
+    );
+    // The renderer was built in the seat's recorded target, not the checkout.
+    assert!(target.join("debug/renderer").is_file());
+    assert!(!tree.join("renderer/target").exists());
+    assert!(git_ok(&tree, &["diff", "--name-only", "--diff-filter=U"]).is_empty());
+}
+
+/// A linked worktree's lease target is accepted only at the host-owned
+/// `<main>/target/worktrees/<dir>` location, as a real directory.
+// trace:STORY-2710 | ai:claude
+#[test]
+fn story_2710_repair_seat_target_rejects_foreign_or_symlinked_targets() {
+    let fx = fixture();
+    let tree = fx.root.join("linked-target");
+    git_ok(
+        &fx.main,
+        &["worktree", "add", "-q", tree.to_str().unwrap(), "-b", "lt"],
+    );
+    let main = fx.main.canonicalize().unwrap();
+    let expected = main.join("target/worktrees/linked-target");
+    let write_lease = |dir: &Path| {
+        let path = crate::lease_path(&fx.main, "c0ffee271011");
+        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+        std::fs::write(
+            path,
+            format!(
+                "id = \"c0ffee271011\"\nscope = \"STORY-2710\"\nslug = \"story-2710\"\n\
+                 owner = \"test\"\nworktree_path = {}\nbranch = \"lt\"\n\
+                 started_at = \"2026-11-13T00:00:00Z\"\nhostname = \"h\"\n\
+                 cargo_target_dir = {}\n",
+                aida_core::toml_quote::toml_string(&tree.display().to_string()),
+                aida_core::toml_quote::toml_string(&dir.display().to_string()),
+            ),
+        )
+        .unwrap();
+    };
+    // Missing directory: no target.
+    write_lease(&expected);
+    assert_eq!(crate::seat_clone::repair_seat_target(&fx.main, &tree), None);
+    // A foreign directory (for example a shared host cache) is refused.
+    let foreign = fx.root.join("shared-cache");
+    std::fs::create_dir_all(&foreign).unwrap();
+    write_lease(&foreign);
+    assert_eq!(crate::seat_clone::repair_seat_target(&fx.main, &tree), None);
+    // A symlink at the expected place would grant its target: refused.
+    std::fs::create_dir_all(expected.parent().unwrap()).unwrap();
+    std::os::unix::fs::symlink(&foreign, &expected).unwrap();
+    write_lease(&expected);
+    assert_eq!(crate::seat_clone::repair_seat_target(&fx.main, &tree), None);
+    std::fs::remove_file(&expected).unwrap();
+    std::fs::create_dir_all(&expected).unwrap();
+    assert_eq!(
+        crate::seat_clone::repair_seat_target(&fx.main, &tree),
+        Some(expected)
+    );
 }
