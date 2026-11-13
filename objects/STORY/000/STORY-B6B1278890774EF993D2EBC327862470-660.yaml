@@ -23,7 +23,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-12T19:11:56.371806442Z
-modified_at: 2026-11-13T01:14:17.487164294Z
+modified_at: 2026-11-13T02:34:38.099087571Z
 req_type: Story
 relationships:
 - rel_type:
@@ -63,6 +63,13 @@ comments:
   modified_at: 2026-11-12T23:26:35.171849791Z
   session_id: 01a1d19e-9195-7853-815f-b54753ebd973
   harness_version: 2.1.322 (Claude Code)
+- id: 01a1d2c1-ca93-7c52-86d9-a1ebe6a43b8a
+  author: joe
+  content: 'advisor 19:35 GAP CHECK (main unmoved ~60 min since promotion 3 at 18:36): cause = nothing approved at head between 18:36 and 19:20. Review supply was the bottleneck: 7 PRs had unreviewed heads and one review lane (stale leases/worktrees blocked 3 relaunches, BUG-2544/2546/2547 filed). First approval (#3887, 19:20) is on train #3908, CI 5/10, ETA ~19:45. #3775 approved 19:33, train queued behind it. Mitigations: preflight-before-launch order, second deputy ''review'', gap alarm in autoland loop. trace:STORY-2737'
+  created_at: 2026-11-13T02:34:38.099087571Z
+  modified_at: 2026-11-13T02:34:38.099087571Z
+  session_id: 01a1d240-c397-7b61-b29f-bb337c138943
+  harness_version: 2.1.323 (Claude Code)
 history:
 - id: 01a1d175-992b-7501-a0fb-89a007208ac0
   author: joe
