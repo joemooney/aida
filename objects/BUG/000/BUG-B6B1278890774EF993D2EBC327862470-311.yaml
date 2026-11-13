@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-13T01:54:48.391951523Z
-modified_at: 2026-11-13T05:52:20.305402910Z
+modified_at: 2026-11-13T11:36:58.420761007Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -77,6 +77,13 @@ comments:
   created_at: 2026-11-13T05:45:42.265475335Z
   modified_at: 2026-11-13T05:45:42.265475335Z
   session_id: 01a1d361619d
+- id: 01a1d4b2-5134-7520-92a9-780a367d9e7c
+  author: joe
+  content: 'ADVISOR 04:45: round 3 authorized (round cap reached; fix pushes newer than the last review). Branch updated with main, review queued on deputy review. Escalate before a round 4.'
+  created_at: 2026-11-13T11:36:58.420761007Z
+  modified_at: 2026-11-13T11:36:58.420761007Z
+  session_id: 01a1d4aa-9c99-76c2-ac94-7f0795f8a7f9
+  harness_version: 2.1.323 (Claude Code)
 history:
 - id: 01a1d29d-880a-7201-8b91-ded826a703b0
   author: joe
