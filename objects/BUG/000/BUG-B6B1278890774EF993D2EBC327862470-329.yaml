@@ -1,0 +1,50 @@
+id: 01a1d61f-d766-7760-939c-ed30c65234de
+spec_id: BUG-b6b1278890774ef993d2ebc327862470-329
+agreed_id: BUG-2564
+title: 'Headless reviewer verdicts lost: ''aida review record'' inside the vendor sandbox has no bindable identity (10-16% of reviews)'
+description: |
+  Headless reviewers complete the review, then lose the verdict: `aida review record` run from inside the vendor's (Codex) command sandbox is refused with
+    error: "refused: this session has no identity AIDA can bind an approval to (no agent session id and no process ancestry) — record the approval from a reviewer seat or a terminal session"
+  The launcher then reports "verdict: UNKNOWN (no verdict file)" and the PR goes back to needs-review.
+
+  Frequency (headless-logs containing the refusal): 11-09: 9, 11-10: 25 (~245 reviewer logs), 11-11: 21 (~129), 11-12: 30 (~194), 11-13: 4 so far, so 10-16% of reviewer runs. Each loss costs 30-50 min of reviewer time plus landing delay. Example: PR-3935, .aida/headless-logs/pr-3935-01a1d5e8-3895-7a63-8822-285835e01925.jsonl. The reviewer drafted APPROVED with findings [] at d3dc479 and wrote .aida/review-report-pr-3935.md; the record was refused, and 48 min were lost. The launch was the bound kind, from a deputy, not setsid.
+
+  Cause: the vendor's tool calls run in their own sandbox and process namespace, so the ancestry walk to the reviewer lease breaks. No agent-session id reaches that environment.
+
+  Proposed fix (choose in the sketch):
+  (a) The `aida queue work PR-N --role reviewer` parent is the identity-bound process. After the child exits, it collects the reviewer's structured verdict (a report/verdict file in the review worktree, at an exact SHA) and records it under the reviewer lease. The child then never has to bind.
+  (b) Pass a lease-scoped, single-use verdict capability (env or fd) into the vendor sandbox, so that `aida review record` binds to it.
+  (a) needs no change at the vendor boundary.
+
+  Acceptance: a reviewer whose in-sandbox record is refused still lands its verdict at the exact head via the parent. Test with a stub reviewer that writes the verdict file and has no ancestry. Afterwards, the headless-logs refusal count goes to 0 over 24h.
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-13T18:16:13.414258365Z
+modified_at: 2026-11-13T18:16:18.509873392Z
+req_type: Bug
+tags:
+- effort:open:4h
+- landing
+- review
+- track:integration
+history:
+- id: 01a1d61f-eb4d-71d0-b47b-e58778f2e2fc
+  author: joe
+  timestamp: 2026-11-13T18:16:18.509864495Z
+  session_id: 01a1d5f7-27ab-7543-8808-b0ec6c271689
+  harness_version: 2.1.323 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Approved
+filed_at:
+  code_sha: ee8dd4b2bdf1495f699357a3f2f40f9bf3802983
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: '82650579646'
+  vendor: claude
+  session: 01a1d5f7-27ab-7543-8808-b0ec6c271689
+  harness_version: 2.1.323 (Claude Code)
