@@ -43,7 +43,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-13T16:52:56.270142081Z
-modified_at: 2026-11-13T18:29:17.136257301Z
+modified_at: 2026-11-13T18:34:27.231177129Z
 req_type: Story
 tags:
 - architecture
@@ -90,6 +90,13 @@ comments:
   created_at: 2026-11-13T17:25:47.235212634Z
   modified_at: 2026-11-13T17:25:47.235212634Z
   session_id: 01a1d54b-060a-7951-aa40-7f0fd928126f
+  harness_version: 2.1.323 (Claude Code)
+- id: 01a1d630-881f-7552-a1e3-783315fe62a2
+  author: joe
+  content: '[advisor 11:36 ruling, 11:27 triage order] PR-3959 (S1, aida land status, read-only) round-1 findings: all 12 are ACCEPTED as non-blocking for S1, because S1 takes no landing action. They are S2 ENTRY CRITERIA: S2 (aida land run) must not act on any row until every P1 here is fixed and tested (typed UNKNOWN for unreadable approval/ledger/marker evidence, the real hold-clearance decision, per-pass pinned refs with git routing hygiene). The P2s (content identity fallback, drafts in discovery, GitLab MR keys, BLOCKED since, sweep_pending rounds, legacy round history) are fixed in S2 or recorded as known limits. Next S1 review: scoped re-review that records these dispositions and approves if nothing new is found.'
+  created_at: 2026-11-13T18:34:27.231177129Z
+  modified_at: 2026-11-13T18:34:27.231177129Z
+  session_id: 01a1d5f7-27ab-7543-8808-b0ec6c271689
   harness_version: 2.1.323 (Claude Code)
 history:
 - id: 01a1d5d3-fe28-7cc2-a7e3-638454ed4798
