@@ -750,7 +750,7 @@
     "aida-cli-lib/src/tests/handle_pull_command_tests.rs:bug1780_concurrent_fetch_does_not_break_pull_code_leg:var:c2c7e032717fc5d2fa3f": 1,
     "aida-cli-lib/src/tests/markdown_render_tests.rs:assert_snapshot:var_os:859c7dfc4d1f25a6a95e": 1,
     "aida-cli-lib/src/tests/mcp_tests.rs:resolve_profile_prefers_override_then_config_then_default:var:eb6c18ec3c3e497f45c9": 1,
-    "aida-cli-lib/src/tests/queue_work_tests.rs:bug_2553_configured_vendor_survives_open_pr_rework_preparation:var:53394bdfed1190e426dd": 1,
+    "aida-cli-lib/src/tests/queue_work_tests.rs:story_2710_host_publishes_clean_rework_or_retains_conflicts_before_launch:var:53394bdfed1190e426dd": 1,
     "aida-cli-lib/src/tests/real_phase_driver_wiring_tests.rs:story_1690_drain_merge_refuses_a_head_behind_its_base:var_os:dd727c4b59933866a12a": 1,
     "aida-cli-lib/src/tests/real_phase_driver_wiring_tests.rs:t1458_run_merge:var_os:dd727c4b59933866a12a": 1,
     "aida-cli-lib/src/tests/shell_wrapper_harness.rs:run_wrapper_in:var_os:dd727c4b59933866a12a": 1,
