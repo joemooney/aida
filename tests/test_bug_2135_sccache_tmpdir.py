@@ -34,6 +34,11 @@ spec.loader.exec_module(check_ci)
 class TestSccacheTmpdirDetection(unittest.TestCase):
     def setUp(self):
         self.env_backup = dict(os.environ)
+        # Lane server controls describe real host PIDs and opt-outs, not this
+        # fixture's proc tree or fake server. Restore them in tearDown.
+        # trace:STORY-2325 | ai:codex
+        os.environ.pop("AIDA_SCCACHE_PIDS", None)
+        os.environ.pop("AIDA_SCCACHE_DISABLE", None)
 
     def tearDown(self):
         os.environ.clear()
@@ -231,6 +236,10 @@ class TestTask2772BoundedServerStart(unittest.TestCase):
 
     def setUp(self):
         self.saved_env = dict(os.environ)
+        # The timeout fixtures also own a synthetic proc tree.
+        # trace:STORY-2325 | ai:codex
+        os.environ.pop("AIDA_SCCACHE_PIDS", None)
+        os.environ.pop("AIDA_SCCACHE_DISABLE", None)
         self.saved_timeouts = (check_ci.SCCACHE_SERVER_TIMEOUT, check_ci.SCCACHE_PROBE_TIMEOUT)
 
     def tearDown(self):
