@@ -51,6 +51,11 @@ class CiTiers(unittest.TestCase):
         for job in ('fast-gates', 'fast-compile'):
             self.assertEqual(JOBS[job]['needs'], 'tier')
             self.assertEqual(JOBS[job]['if'], "needs.tier.outputs.full != 'true'")
+        checkout = next(step for step in JOBS['fast-gates']['steps']
+                        if step.get('uses', '').startswith('actions/checkout@'))
+        # Both ratchets compare against the trusted PR base, including when
+        # the base is older than the shallow checkout's immediate parent.
+        self.assertEqual(checkout['with']['fetch-depth'], 0)
         self.assertTrue(any(step.get('run') == 'make check-ci-fast' for step in JOBS['fast-gates']['steps']))
         self.assertIn({'run': 'cargo check --profile dev --workspace --tests'},
                       JOBS['fast-compile']['steps'])
@@ -142,6 +147,14 @@ class CiTiers(unittest.TestCase):
                         capture_output=True, text=True, timeout=25)
                 clean = run()
                 self.assertEqual(clean.returncode, 0, clean.stdout + clean.stderr)
+                # Missing trusted evidence must refuse even on a clean tree.
+                # Use a local origin so this exercises fetch failure without
+                # network access or relying on an unavailable external server.
+                unavailable = dict(env, **{variable: '1' * 40})
+                missing = run(unavailable)
+                self.assertNotEqual(missing.returncode, 0,
+                                    missing.stdout + missing.stderr)
+                self.assertIn('not our ref', missing.stdout + missing.stderr)
                 if variable == 'EXEC_CONTEXT_BASE':
                     write('aida-core/src/legacy.rs', 'fn f() { std::env::var("NEW"); }')
                     # Capture a matching expanded ledger without a base check.
