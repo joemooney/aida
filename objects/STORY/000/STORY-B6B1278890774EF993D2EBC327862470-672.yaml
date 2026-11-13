@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-13T04:07:35.213330891Z
-modified_at: 2026-11-13T20:06:24.092881738Z
+modified_at: 2026-11-13T20:18:17.856433253Z
 req_type: Story
 tags:
 - track:integration
@@ -70,6 +70,13 @@ comments:
   created_at: 2026-11-13T20:06:24.092881738Z
   modified_at: 2026-11-13T20:06:24.092881738Z
   session_id: 01a1d681-a431-7ee0-8826-638d9544977f
+  harness_version: 2.1.323 (Claude Code)
+- id: 01a1d68f-9a80-7333-bc28-34b9e8ad9c90
+  author: joe
+  content: 'Advisor ruling 13:18 MST: #3963 (bug_1502 audit rows, merged into integration under review-after-merge) is reviewed by the promotion-6 review at the exact integration head 108bf93. That review is a superset of #3963''s diff, so #3963 gets no separate review.'
+  created_at: 2026-11-13T20:18:17.856433253Z
+  modified_at: 2026-11-13T20:18:17.856433253Z
+  session_id: 01a1d684-8599-70e0-a01c-714f54d2f8de
   harness_version: 2.1.323 (Claude Code)
 history:
 - id: 01a1d363-eb51-78a2-b07a-6155c944bf86
