@@ -1002,6 +1002,7 @@ fn with_live_io<T>(
             },
         },
     )
+    .map(Some)
 }
 
 /// The auto-release label step failed. The marker is still armed (labels run
