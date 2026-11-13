@@ -206,6 +206,13 @@ fn bug2546_interactive_claude_resume_receives_current_reviewer_policy() {
 
 #[cfg(unix)]
 fn assert_interactive_resume_policy(vendor: crate::session::HeadlessVendor) {
+    // This helper changes the process cwd. Keep its isolation requirement
+    // explicit as well as guarding each caller, so the hygiene scanner and
+    // future callers cannot accidentally run it in the shared test process.
+    // trace:BUG-2546 | ai:codex
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
     let tmp = tempfile::tempdir().unwrap();
     let (home, project) = codex_only_project(tmp.path());
     std::fs::write(
