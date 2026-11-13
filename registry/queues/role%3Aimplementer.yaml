@@ -23,12 +23,6 @@
   added_at: 2026-11-13T21:55:48.671947753Z
   for_role: implementer
 - user_id: role:implementer
-  requirement_id: 01a1ca8a-722c-79a0-b301-26e4d9948e37
-  position: -717000
-  added_by: role:implementer
-  added_at: 2026-11-13T21:45:12.318002135Z
-  for_role: implementer
-- user_id: role:implementer
   requirement_id: 01a1d29d-53c7-7ea3-9804-ff40a33200f2
   position: -716000
   added_by: role:implementer
@@ -539,6 +533,16 @@
     mergeable=CONFLICTING: resolve the merge conflicts
     Address these blockers, commit and push. If disputing a finding, use `aida punt` and name that finding.
   added_at: 2026-11-13T12:15:17.325584311Z
+  for_role: implementer
+- user_id: role:implementer
+  requirement_id: 01a1ca8a-722c-79a0-b301-26e4d9948e37
+  position: 0
+  added_by: empty-rework
+  note: |-
+    Empty rework of PR-3949 at c7f175496c3328db7e609533808003f41d8cfdaf: no new pushed commit.
+    mergeable=CONFLICTING: resolve the merge conflicts
+    Address these blockers, commit and push. If disputing a finding, use `aida punt` and name that finding.
+  added_at: 2026-11-13T21:55:49.742659636Z
   for_role: implementer
 - user_id: role:implementer
   requirement_id: 01a1965c-3483-70e3-af35-1caaf7df3f96
