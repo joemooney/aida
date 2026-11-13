@@ -2402,7 +2402,7 @@ fn bug_2179_history_for_many_specs_runs_a_bounded_number_of_gits() {
     assert_eq!(batch.versions("TASK-1").unwrap().len(), 3);
     store_history_alias_map(store.path(), &ids).unwrap();
     let calls = std::fs::read_to_string(&log).unwrap();
-    let walks = calls.lines().filter(|l| l.starts_with("log ")).count();
+    let walks = calls.lines().filter(|l| l.contains(" log ")).count();
     // BUG-2554: the first read builds the store-history index with one
     // version walk and one alias walk; the alias search then answers from
     // it. One object read serves all 40 specs.
@@ -2410,15 +2410,15 @@ fn bug_2179_history_for_many_specs_runs_a_bounded_number_of_gits() {
     // The history walk is limited by the objects directory, not by one
     // pathspec per spec (git checks every pathspec against every commit).
     assert!(
-        calls.lines().any(|l| l.starts_with("log ")
-            && l.contains("--name-only")
-            && l.ends_with("-- objects")),
+        calls
+            .lines()
+            .any(|l| l.contains(" log ") && l.contains("--name-only") && l.ends_with("-- objects")),
         "{calls}"
     );
     assert_eq!(
         calls
             .lines()
-            .filter(|l| l.starts_with("cat-file --batch ") || *l == "cat-file --batch")
+            .filter(|l| l.contains(" cat-file --batch") && !l.contains("--batch-check"))
             .count(),
         1,
         "{calls}"
@@ -2428,7 +2428,7 @@ fn bug_2179_history_for_many_specs_runs_a_bounded_number_of_gits() {
     StoreHistoryBatch::read(store.path(), &ids).unwrap();
     store_history_alias_map(store.path(), &ids).unwrap();
     let calls = std::fs::read_to_string(&log).unwrap();
-    assert!(!calls.lines().any(|l| l.starts_with("log ")), "{calls}");
+    assert!(!calls.lines().any(|l| l.contains(" log ")), "{calls}");
 }
 
 /// TASK-1662: a store-history walk that outlives its deadline is an error
@@ -3416,20 +3416,28 @@ fn bug_2554_ids(rounds: usize) -> Vec<String> {
 fn bug_2554_assert_index_equals_full_walk(root: &Path, ids: &[String]) {
     let indexed = StoreHistoryBatch::read(root, ids).unwrap();
     let walked = StoreHistoryBatch::read_full_walk(root, ids).unwrap();
+    // Versions and aliases are judged as sets ("any version"); git orders
+    // commits with equal timestamps differently in a full and a ranged walk.
     let yaml = |batch: &StoreHistoryBatch, id: &str| -> Vec<String> {
-        batch
+        let mut out: Vec<String> = batch
             .versions(id)
             .unwrap()
             .iter()
             .map(|v| serde_yaml::to_string(v).unwrap())
-            .collect()
+            .collect();
+        out.sort();
+        out
+    };
+    let sorted = |mut map: std::collections::BTreeMap<String, Vec<String>>| {
+        map.values_mut().for_each(|v| v.sort());
+        map
     };
     for id in ids {
         assert_eq!(yaml(&indexed, id), yaml(&walked, id), "versions of {id}");
     }
     assert_eq!(
-        store_history_alias_map(root, ids).unwrap(),
-        crate::mandate::store_history_alias_map_full_walk(root, ids).unwrap(),
+        sorted(store_history_alias_map(root, ids).unwrap()),
+        sorted(crate::mandate::store_history_alias_map_full_walk(root, ids).unwrap()),
         "aliases"
     );
 }
