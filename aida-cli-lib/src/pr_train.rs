@@ -2468,11 +2468,13 @@ pub(crate) struct LiveTrainForge<'a> {
 }
 
 impl LiveTrainForge<'_> {
-    // A journal persists intent, never a previous terminal's consent. Recovery
-    // resumes only a journal whose member set is exactly the PRs named now
-    // (BUG-2547), so a human at a terminal who named them consents again; a
-    // PR named for a different train never authorizes a recovered member,
-    // and an `--all-ready` sweep never consents.
+    // A journal persists intent, never a previous terminal's consent: consent
+    // comes only from the current invocation. Recovery resumes only a journal
+    // whose member set is exactly the PRs explicitly named now (BUG-2547), so
+    // current TTY authority over that exact, named set consents for its
+    // recovered supervised members without a mandate. An `--all-ready` sweep
+    // and a non-TTY recovery never consent (a supervised member then needs a
+    // mandate cover), and a PR named for a different train never resumes it.
     // trace:STORY-2401 | ai:codex
     // trace:BUG-2556 | ai:claude
     fn for_recovery(mut self, opts: &TrainOptions) -> Self {
