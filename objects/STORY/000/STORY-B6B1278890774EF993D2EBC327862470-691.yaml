@@ -43,7 +43,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-13T16:52:56.270142081Z
-modified_at: 2026-11-13T23:35:46.270563978Z
+modified_at: 2026-11-13T23:41:03.946580666Z
 req_type: Story
 tags:
 - architecture
@@ -145,6 +145,38 @@ comments:
   created_at: 2026-11-13T23:35:46.270563978Z
   modified_at: 2026-11-13T23:35:46.270563978Z
   session_id: 01a1d73b-e31c-7f33-b2fe-cee145ddc6fb
+  harness_version: 2.1.325 (Claude Code)
+- id: 01a1d749-3e4a-7ba0-8761-d063a4a9a365
+  author: joe
+  content: |-
+    S2 sketch: `aida land run [--once]` (branch story-2768-s2-run, off the S2 entry head 26486e2). Needs advisor signoff before I implement; questions for a ruling are at the end.
+
+    Shape. `aida land run [--once] [--interval SECS=120] [--dry-run] [--vendor V]`. One pass = `live_pass` (the same derivation as `land status`), then `act(rows)`, then the now.json snapshot. All side effects go through one `Acts` trait (launch_review, dispatch_rework, release_hold, train, plus child liveness), so tests drive `act` with a fake and assert exactly one action per row. `--dry-run` prints the actions and takes none. One instance per clone: flock on `.aida/cache/land-run.lock`; a second `run` refuses.
+
+    Authority. At start `run` calls `seat_authority::validate_child_delegation(root, "reviewer")` and refuses with the fix if the process holds no grant delegating reviewer. It is meant to run in the operator's deputy terminal. Every reviewer and lane is its child, so verdicts bind through process ancestry.
+
+    Actions (one per row, nothing else):
+    1. LaunchReview: spawn `aida queue work PR-N --role reviewer --no-human --fresh [--vendor V]` in its own process group, log to `.aida/land/logs/`. No review-watch reservation or hub admission is used. Cap `[land] max_reviews` (default 2), counted over live children plus the REVIEWING rows the pass derived. A launch that fails or exits without a verdict leaves the row NEEDS-REVIEW, so the next pass retries; there is no failed phase.
+    2. DispatchRework (CONFLICT, CI-FAILED, CHANGES-REQUESTED with no live lane): for the change's spec run `aida queue rework SPEC --for implementer` with a 60s bound (BUG-2540 hangs), then spawn `aida queue work SPEC --role implementer --user role:implementer --no-human --fresh --force-claim [--vendor V]` as a child. Cap `[land] max_lanes` (default 2). Local children only; dell1 lanes stay out of S2.
+    3. ClearHoldAndLand (hold Met or READY-PENDING-COVER): call `rework_hold_release::auto_release(root, pr)` in-process. It decides again for itself, including the mandate's cover. Nothing else happens to that change in the same pass; the next pass derives READY from the facts or shows the refusal.
+    4. Train: all READY main-track rows go to ONE child `aida pr train N...` (max 10), only when `.aida/train/run.lock` is free and no train child of ours is alive. The train's member gate and its CI stay the final check.
+    5. ReportToIntegration and AdvisorRuling: no act; they are in `land status` and the now.json attention list with their owner.
+
+    Child liveness. Children are held in memory by the loop and also written to `.aida/cache/land-children.json` as {pr or spec, head, kind, ProcIdentity, started_at, relaunches}, so `--once` passes and a restarted loop see them. The record is a fact about a process, checked with `proc_identity::observe` on every read; a dead or foreign entry is dropped. `Evidence::reviewing` and `lane` consult it before the marker, lease and claim readers, which closes the gap between spawn and the reviewer writing its marker. A reviewer alive past 45 min is killed (process group) and relaunched once for that head; a second timeout at the same head derives BLOCKED(reviewer timed out twice). `relaunches` at a head is the only stored counter.
+
+    Coexistence. `land run` is started with autoland and the review-watch loop stopped (the S2 acceptance says so). If they are still running, their reviewers show as REVIEWING through the marker, so the worst case is the short race before a marker exists; `run` prints a warning when it sees a live `review watch` or autoland process, and does not refuse.
+
+    Config. `[land] max_reviews`, `max_lanes`, `review_timeout_secs` (2700), with `KnobSpec`s and config-trust entries; the existing `[land] wip_max` gets its missing trust entry in the same change.
+
+    Tests (fake Acts + fake Evidence): one action per row and none for Wait rows; caps hold with children counted; no second launch while a child for the head is alive; timeout kills and relaunches once, then BLOCKED; release calls auto_release and does not train the change in the same pass; one train with every READY main row, none while the train lock is held; `--dry-run` calls nothing. Not covered by tests: the live acceptance (approved, made stale by a landing, ships with no human), which I run by hand and report.
+
+    Rulings I need:
+    (a) Stale base at review pickup. `queue work` refuses a reviewer on an overlapping stale base unless `--allow-stale-base`, and STORY-2763 (review against the merge-tree, `[review] freshness`) is not on integration. Proposal: pass `--allow-stale-base` only when this pass's pinned merge-tree of the head into the base is clean; the approval then still has to pass the carry-over proof before READY. Without this, stale heads sit in NEEDS-REVIEW with a retry every pass.
+    (b) Rework goes through `queue rework` + `queue work --force-claim` as autoland does today, not through `aida dispatch request take` (which needs a frozen brief). OK?
+    (c) Default vendor for reviewers and lanes when `--vendor` is absent: `queue work`'s normal selection. OK, or pin one?
+  created_at: 2026-11-13T23:41:03.946580666Z
+  modified_at: 2026-11-13T23:41:03.946580666Z
+  session_id: 01a1d72e-0d28-76e0-890c-867fba05abcf
   harness_version: 2.1.325 (Claude Code)
 history:
 - id: 01a1d5d3-fe28-7cc2-a7e3-638454ed4798
