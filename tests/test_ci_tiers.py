@@ -179,8 +179,9 @@ class CiTiers(unittest.TestCase):
                 without_base = {key: value for key, value in env.items()
                                 if key not in guards.values()}
                 # Local Make remains usable without a PR event, but CI must
-                # fail closed if event resolution supplied an empty base.
-                for absent in ('', None):
+                # fail closed if event resolution supplied an empty or null
+                # base. Guard bodies otherwise treat the null SHA as no base.
+                for absent in ('', None, '0' * 40):
                     incomplete = dict(env)
                     if absent is None:
                         incomplete.pop(variable)

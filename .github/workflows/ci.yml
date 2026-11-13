@@ -69,6 +69,13 @@ jobs:
           : "${EXEC_CONTEXT_BASE:?FAST requires a trusted base for the environment ratchet}"
           : "${CRATE_GLOBS_BASE:?FAST requires a trusted base for the crate-glob ratchet}"
           : "${GATE_DEPENDENCIES_BASE:?FAST requires a trusted base for the gate-dependency ratchet}"
+          # Guard bodies treat Git's null SHA as no base; CI must refuse it.
+          for base in "$EXEC_CONTEXT_BASE" "$CRATE_GLOBS_BASE" "$GATE_DEPENDENCIES_BASE"; do
+            if [ "$base" = "0000000000000000000000000000000000000000" ]; then
+              echo "FAST requires a trusted base; Git's null SHA is not a revision" >&2
+              exit 1
+            fi
+          done
           make check-ci-fast
         env:
           EXEC_CONTEXT_BASE: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha || github.event.before }}
