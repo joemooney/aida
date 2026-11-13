@@ -15,12 +15,12 @@ description: |
   Acceptance (draft): with dell1 registered at 6 slots and the primary at 4, a burst of 8 queued reworks lands 6 on dell1 and 2 locally with no advisor script; `aida session leases` and the "lane running" check show the dell1 lanes; an unreachable pool host is skipped with a visible reason, never counted as free; vendor pins (e.g. BUG-2487 Codex 0.166) are checked per host before placement.
 
   Related: STORY-2571 (operator plumbing into AIDA), STORY-2642 (lane-host readiness), FAQ-151.
-status: NeedsAttention
+status: Approved
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-08T02:56:36.206726Z
-modified_at: 2026-11-13T13:07:10.369326827Z
+modified_at: 2026-11-13T20:45:38.414529596Z
 req_type: Story
 tags:
 - architecture
@@ -318,6 +318,13 @@ comments:
   modified_at: 2026-11-13T13:07:10.369326827Z
   session_id: 01a1d4aa-9c99-76c2-ac94-7f0795f8a7f9
   harness_version: 2.1.323 (Claude Code)
+- id: 01a1d6a8-a2ee-75f3-8879-1197b8e26f9d
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was punted on: blocked-dependency: Merge of origin/main (PR #3921 conflicts) cannot be committed from this seat: ''git merge origin/main'' fails because the sandbox makes .claude/hooks, .claude/skills and aida-core/templates/settings.json unwritable (Read-only file system / Device busy), and the permission layer denies a scratch worktree and a temporary-index commit-tree. Conflicts are RESOLVED in this seat''s working tree (doctor_cmd.rs, standalone_implementer.rs, cli_help_snapshot.txt, story_1662_queue_work_wiring.rs, docs/cli/03-work-autonomy.md, docs/cli/07-project-setup.md, scripts/store-writers.toml); queue_cmd.rs must take main''s deletion (main''s queue_cmd/work.rs already has configured_cap(..)?). ~156 untracked files are leftovers of the failed checkout and equal main''s content. Host: run the merge outside the sandbox, then take these 7 working-tree files as the resolutions and git rm aida-cli-lib/src/queue_cmd.rs.. No triage reason was given.'
+  created_at: 2026-11-13T20:45:38.414520911Z
+  modified_at: 2026-11-13T20:45:38.414520911Z
+  session_id: 01a1d684-8599-70e0-a01c-714f54d2f8de
+  harness_version: 2.1.323 (Claude Code)
 history:
 - id: 01a1b91a-2eb5-7142-b252-8d3eb8d49b14
   author: joe
@@ -466,6 +473,15 @@ history:
   session_id: 01a1d4aa-9c99-76c2-ac94-7f0795f8a7f9
   harness_version: 2.1.323 (Claude Code)
   changes: []
+- id: 01a1d6a8-a2ee-75f3-8879-1188ce855d28
+  author: joe
+  timestamp: 2026-11-13T20:45:38.414499373Z
+  session_id: 01a1d684-8599-70e0-a01c-714f54d2f8de
+  harness_version: 2.1.323 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 filed_at:
   code_sha: dc41ee8da2f44f88178936fc1a8e6cb7168a3de7
   branch: main
@@ -475,9 +491,3 @@ filed_at:
   vendor: claude
   session: 01a1b8be-8170-7fb2-89ab-ecb4c6eee98c
   harness_version: 2.1.319 (Claude Code)
-attention_reason:
-  category: blocked-dependency
-  detail: 'Merge of origin/main (PR #3921 conflicts) cannot be committed from this seat: ''git merge origin/main'' fails because the sandbox makes .claude/hooks, .claude/skills and aida-core/templates/settings.json unwritable (Read-only file system / Device busy), and the permission layer denies a scratch worktree and a temporary-index commit-tree. Conflicts are RESOLVED in this seat''s working tree (doctor_cmd.rs, standalone_implementer.rs, cli_help_snapshot.txt, story_1662_queue_work_wiring.rs, docs/cli/03-work-autonomy.md, docs/cli/07-project-setup.md, scripts/store-writers.toml); queue_cmd.rs must take main''s deletion (main''s queue_cmd/work.rs already has configured_cap(..)?). ~156 untracked files are leftovers of the failed checkout and equal main''s content. Host: run the merge outside the sandbox, then take these 7 working-tree files as the resolutions and git rm aida-cli-lib/src/queue_cmd.rs.'
-  lean: Host completes the merge with the staged resolutions; review round-3 items look already addressed on HEAD/main (Slot.pid_namespace + PidObserver guard, --lane-capacity distinct from --lane-host) — re-verify items 3 and 4 after merge.
-  raised_by: implementer
-  raised_at: 2026-11-13T04:10:31.430285185Z
