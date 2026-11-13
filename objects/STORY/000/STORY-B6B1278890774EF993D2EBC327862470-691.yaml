@@ -43,7 +43,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-13T16:52:56.270142081Z
-modified_at: 2026-11-13T17:11:53.651861896Z
+modified_at: 2026-11-13T17:25:47.235212634Z
 req_type: Story
 tags:
 - architecture
@@ -65,6 +65,25 @@ comments:
   content: '[advisor signoff 2026-11-13 09:58] Architecture approved by the advisor seat on operator instruction (09:51). Integration track: the integration seat implements S1 to S3 in order, and each merge reaches the live binary. Overrides the landing-process freeze of 2026-11-12 18:54 (operator asked for this now). STORY-2763 (dell1 lane) supplies the carry-over, merge-tree review and round rules this loop calls; coordinate on the interfaces, without duplicating them. BUG-2561 and BUG-2562 are superseded by S2''s ''no terminal failed state'' and are not to be implemented separately.'
   created_at: 2026-11-13T16:53:28.346632595Z
   modified_at: 2026-11-13T16:53:28.346632595Z
+  session_id: 01a1d54b-060a-7951-aa40-7f0fd928126f
+  harness_version: 2.1.323 (Claude Code)
+- id: 01a1d5f1-aa63-7090-b8cc-b35fc26430ad
+  author: joe
+  content: |-
+    [advisor amendment 2026-11-13 10:28, operator request: "I need something that tells me what we are doing right now"] Add slice S1b, `aida now`, the single human status view, built on S1's derivation and not as a new collector.
+
+    Operator's complaints: `aida ps` takes minutes and is not human-friendly; `aida list` shows `NeedsAttention · last activity 2d ago` with no sign that anyone owns it; many half-built status surfaces already exist (status, ps, awaiting, watch, health, fleet, tui, React dashboard :5173, hub :8092, REST :8080).
+
+    Design:
+    1. **Snapshot producer.** Every reconciler pass (and `aida land status` when run by hand) writes `.aida/cache/now.json` (atomic rename) with: generated_at; every in-flight item with {spec, title, stage, actor (seat/vendor/host/pid or 'none'), PR, head, since, last_progress_at, next_action, blocked_by}; per-stage queues; and an ATTENTION list. Stages: DESIGNING (sketch or plan open, awaiting signoff), IMPLEMENTING (live lane), REVIEWING (live reviewer), REWORKING (changes requested plus live lane), WAITING-CI, READY, SHIPPING (in a train or promotion), BLOCKED(reason). Lane liveness across hosts comes from the lease plus heartbeat files the lanes already write (dell1 is reachable through the mirrored store or ssh probe results cached in the snapshot), never by probing processes at render time.
+    2. **`aida now`.** It reads only the snapshot. Target under 200 ms, so it never runs git, gh or ps. Default screen: a header line (snapshot age, main last merge and age, merges today, open PRs vs. WIP limit); then one block per stage with rows `SPEC  title  actor  PR  age-in-stage  next action`; then the per-stage queue counts (Approved not started, awaiting review, awaiting rework); then ATTENTION. `--watch` re-renders every 10 s. `--json` emits the snapshot. If the snapshot is older than 10 min, it says so in red and names the reconciler as down.
+    3. **ATTENTION is never silent.** Any spec in NeedsAttention, parked, or a non-terminal stage with no live actor for more than 2 h appears with: age, why (its blocker chain if blocked-by, else 'unowned'), and the single next action plus its owner (reconciler auto-action, advisor ruling, or operator). An item may only leave ATTENTION by getting an owner or a resolution. This replaces reading `NeedsAttention · 2d ago` in `aida list` with no explanation.
+    4. **Consolidation, not addition.** `aida ps` and `aida status` gain a one-line pointer to `aida now`; S3 makes `ps` default to the snapshot (with `--probe` for the slow live scan). Web dashboards may later read now.json; no new server.
+
+    Acceptance (S1b): with the reconciler (or a cron'd `aida land status --write-snapshot`) running, `aida now` renders in under 200 ms on this repo; it shows every live lane on primary and dell1 and every open PR in exactly one stage; every NeedsAttention spec appears in ATTENTION with a reason and an owner; a snapshot older than 10 min is flagged.
+    Order: S1 (status derivation) → S1b (snapshot + `aida now`) → S2 (act) → S3. Until S2, run `aida land status --write-snapshot` every 2 min from the autoland deputy loop so the view is live immediately.
+  created_at: 2026-11-13T17:25:47.235212634Z
+  modified_at: 2026-11-13T17:25:47.235212634Z
   session_id: 01a1d54b-060a-7951-aa40-7f0fd928126f
   harness_version: 2.1.323 (Claude Code)
 history:
