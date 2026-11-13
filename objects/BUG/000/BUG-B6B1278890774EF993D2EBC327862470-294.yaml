@@ -14,10 +14,29 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-11T21:54:58.150187720Z
-modified_at: 2026-11-13T05:42:56.927541599Z
+modified_at: 2026-11-13T05:44:54.245502625Z
 req_type: Bug
 tags:
 - track:dell1
+comments:
+- id: 01a1d36f-fce5-7852-a4c2-30e7eebd5b5e
+  author: dirtlab
+  content: |
+    BUG-2529 investigation and architecture sketch (advisor approval requested)
+
+    The current Rust script runner creates a new session with setsid before exec and signals only the job process group on timeout. Existing coverage checked rc 124 only. This lane adds a regression with a TERM-ignoring shell/child and a second queued job, verifying the same runner persists the timeout result and then executes the second job. This does not establish the cause of the historical runner death; the original report also allows terminal closure.
+
+    Remaining acceptance requires architecture approval under CLAUDE.md. review_watch_service::Supervisor is owned by the deputy runner, and its host freshness/authority checks deliberately block dispatch without the deputy. Simply detaching it would break that authority contract. Proposed design: an operator-started external supervisor restarts the deputy under its existing validated grant policy, retains service binding and review reservations, and stops on authority expiry/revocation rather than renewing on its own. The operator must approve restart/terminal ownership policy. Alternatively a separate review supervisor needs an explicitly approved grant/refresh owner.
+
+    For train waits, prefer a distinct operator-started named train deputy queue using the existing single-runner lock and submission attribution, rather than concurrent jobs relaying one terminal. Decide routing and operator startup/recovery UX before implementing; automatic script inspection or backgrounding arbitrary scripts is not safe routing.
+
+    Add read-only awaiting evidence for configured expected deputies whose runner is proven dead, preserving Unknown for hidden/foreign process namespaces. Missing configuration or an intentionally stopped deputy must not become an automatic restart grant. Test dead/live/unknown and intentional-stop cases plus timeout/supervisor recovery and a train wait concurrent with a short job on the other queue.
+
+    The prescribed /home/joe/ai/aida/.codegraph/proxy-state/bin/codegraph is absent; aida doctor check codegraph reports missing tooling. Host deployment is still needed. No codegraph index mutation was attempted.
+  created_at: 2026-11-13T05:44:54.245502625Z
+  modified_at: 2026-11-13T05:44:54.245502625Z
+  session_id: 01a1d36d96b6
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1d364-37aa-7721-9c72-4c286332849a
   author: joe
