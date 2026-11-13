@@ -1,0 +1,24 @@
+id: 01a1d5de-053f-7ad2-a940-f0be0ec960c5
+spec_id: BUG-b6b1278890774ef993d2ebc327862470-328
+agreed_id: BUG-2563
+title: verify-manual.py checks flags against the live aida on PATH, so a branch adding a command fails its own manual check
+description: 'Observed 2026-11-13 on #3935: docs/cli/verify-manual.py shells out to plain ''aida'' (live binary). A branch that adds a subcommand (aida integration tags) fails ''flags'' (--dry-run cited under aida integration) until the binary is promoted; running with PATH pointing at the branch build passes. Want: the checker uses the worktree''s built binary (or AIDA_BIN override) and says which binary it checked.'
+status: Draft
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-13T17:04:19.775562217Z
+modified_at: 2026-11-13T17:04:19.775562217Z
+req_type: Bug
+tags:
+- docs
+- track:integration
+filed_at:
+  code_sha: de8ddb0ee6ad36eb19103f8a60a4c66f26cfc037
+  branch: integration
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 3631f7ca055
+  vendor: claude
+  session: 01a1d544-f5ad-79c2-97f9-6fbd19ddbd45
+  harness_version: 2.1.323 (Claude Code)
