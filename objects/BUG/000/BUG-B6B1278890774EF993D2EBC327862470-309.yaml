@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-13T01:11:24.623933148Z
-modified_at: 2026-11-13T02:01:32.018010577Z
+modified_at: 2026-11-13T02:07:26.446206248Z
 req_type: Bug
 comments:
 - id: 01a1d2a3-7c72-7e80-b0bd-9782eb1d7277
@@ -16,6 +16,13 @@ comments:
   content: 'Diagnostic slice: validate_child_delegation now retains the shared grant_check rejection sentence rather than discarding it through current_grant/Option. Adds regression coverage for absent, wrong-subject and revoked parents, plus two live sibling reviewer grants and independent child revocation. Original deputy concurrency failure is not reproduced: referenced review-3896.log is absent here. No authority relaxation or parent-lifecycle change. Follow-up requires retrying the original parallel deputy launches with the diagnostic build and inspecting the actual rejection reason. Targeted lane job j20261113T020009228-2-0 is running.'
   created_at: 2026-11-13T02:01:32.018010577Z
   modified_at: 2026-11-13T02:01:32.018010577Z
+  session_id: 01a1d2a09ff0
+  harness_version: codex-cli 0.167.0
+- id: 01a1d2a8-e4ee-7092-8add-ba9dcbb8629e
+  author: dirtlab
+  content: 'Validation complete: lane job j20261113T020009228-2-0 ran cargo test --profile agent -p aida-cli-lib --lib -- bug_2544; 2 tests passed, 0 failed. git diff --check passed. Native publication declaration recorded: [AI:codex] fix(grants): preserve child delegation refusal evidence (Refs BUG-2544). Edits remain uncommitted for host publication; bug stays open pending original deputy concurrency reproduction.'
+  created_at: 2026-11-13T02:07:26.446206248Z
+  modified_at: 2026-11-13T02:07:26.446206248Z
   session_id: 01a1d2a09ff0
   harness_version: codex-cli 0.167.0
 history:

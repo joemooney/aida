@@ -8,8 +8,16 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-13T01:16:21.435486098Z
-modified_at: 2026-11-13T01:59:05.916998195Z
+modified_at: 2026-11-13T02:08:02.604770138Z
 req_type: Bug
+comments:
+- id: 01a1d2a9-722c-7b03-b94f-05dd67dbb2bd
+  author: dirtlab
+  content: 'Implemented a narrow ownership exception for draft integration -> main canary PRs in complete GitHub spec association enumeration. Other drafts, ready integration PRs, missing metadata, real duplicates, raw saturation limits, and single-change inspection retain existing behavior. Changed pr_lookup.rs and bug_2400_exact_pr_association_tests.rs. Validation: lane cargo test bug_2545 passed (1 test); lane cargo test bug_2400 passed (10 tests); rustfmt and git diff --check passed. Reviewed host codegraph client was missing; doctor confirmed unavailable, so navigation used rg. Edits remain uncommitted for host publication.'
+  created_at: 2026-11-13T02:08:02.604770138Z
+  modified_at: 2026-11-13T02:08:02.604770138Z
+  session_id: 01a1d2a0ea19
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1d29d-4c06-7bf1-a965-fe4c244dd002
   author: joe
