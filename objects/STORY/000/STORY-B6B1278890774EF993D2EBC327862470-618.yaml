@@ -28,12 +28,12 @@ description: |
   - Two jobs run concurrently without sharing a job directory or cache slot; the slot cap holds.
   - A test proves a PR job cannot write to the main/train cache.
   - Runbook updated. After activation, compare queue time and end-to-end run time against this baseline, and roll back the variable if wait increases.
-status: InProgress
+status: NeedsAttention
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-09T16:33:51.967266Z
-modified_at: 2026-11-13T03:15:58.658305517Z
+modified_at: 2026-11-13T03:16:58.687942523Z
 req_type: Story
 tags:
 - area:ci
@@ -555,6 +555,15 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1d2e8-8ebf-7be3-8c50-93011cabcee1
+  author: dirtlab
+  timestamp: 2026-11-13T03:16:58.687966236Z
+  session_id: 01a1d2e78a00
+  harness_version: codex-cli 0.167.0
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 execution_mode: drain
 filed_at:
   code_sha: e4eee38238fa4cb8e8c85dadaa4ed07894cfbeea
@@ -565,3 +574,8 @@ filed_at:
   vendor: claude
   session: 01a1beff-fc3b-78e2-93e2-9b0c283b0339
   harness_version: 2.1.319 (Claude Code)
+attention_reason:
+  category: blocked-dependency
+  detail: 'Round 5 P1 finding at scripts/runner/controller.py:458 is accepted, not disputed. This native seat is on sketch HEAD b39d82ae3c, where controller.py and tests/test_dell1_controller.py do not exist. Reviewed ba579362b4cc is on origin/story-2695-s2; that ref now points to d56bf76071 (fix(ci): allow runner startup ancestor enumeration). Git metadata is read-only in this seat. Re-launch against the current S2 PR branch so a new round-specific change can be made and tested without importing the implementation into the obsolete sketch branch. No production edits or publication declaration made; untested=true.'
+  raised_by: implementer
+  raised_at: 2026-11-13T03:16:58.687942523Z
