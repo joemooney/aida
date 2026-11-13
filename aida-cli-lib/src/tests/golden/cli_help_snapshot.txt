@@ -12288,9 +12288,10 @@ Commands:
               incremental `--profile agent` workspace build, then a smoke test of the new `aida` /
               `aida-server`, then an atomic promote into the live directory (default
               `~/.local/share/aida/live`, outside target/), keeping the previous pair in
-              `live/prev/`. Promotes only from the primary checkout on a clean `main` that matches
-              `origin/main` (the local remote-tracking ref; it does not fetch, so run `git fetch`
-              first); in a worktree it builds and smoke-tests only
+              `live/prev/`. Promotes only from a clean `main` in the primary checkout that matches
+              `origin/main`, or a clean `integration` in any checkout that matches
+              `origin/integration` (local remote-tracking refs; it does not fetch, so run `git
+              fetch` first); in any other worktree it builds and smoke-tests only
   rollback    Swap the previous live binaries (`live/prev/`) back in, in one step. Running it again
               rolls forward. Refuses while a live drain wave is pinned to the live binary unless
               --after-wave or --force
@@ -12380,9 +12381,10 @@ Options:
 Build, smoke-test and promote the live dev binary. The one build command: an incremental `--profile
 agent` workspace build, then a smoke test of the new `aida` / `aida-server`, then an atomic promote
 into the live directory (default `~/.local/share/aida/live`, outside target/), keeping the previous
-pair in `live/prev/`. Promotes only from the primary checkout on a clean `main` that matches
-`origin/main` (the local remote-tracking ref; it does not fetch, so run `git fetch` first); in a
-worktree it builds and smoke-tests only
+pair in `live/prev/`. Promotes only from a clean `main` in the primary checkout that matches
+`origin/main`, or a clean `integration` in any checkout that matches `origin/integration` (local
+remote-tracking refs; it does not fetch, so run `git fetch` first); in any other worktree it builds
+and smoke-tests only
 
 Usage: aida dev build [OPTIONS]
 
@@ -12399,8 +12401,8 @@ Options:
           Build and smoke-test only; never promote
 
       --allow-dirty
-          Promote even when the checkout is dirty, off `main`, or not at `origin/main` (`aida dev
-          status` then shows the dirty SHA)
+          Promote even when the checkout is dirty, off `main`/`integration`, or not at its `origin/`
+          branch (`aida dev status` then shows the dirty SHA)
 
       --install-links
           Point `~/.local/bin/aida` and `~/.local/bin/aida-server` at the live directory, showing
@@ -44407,7 +44409,7 @@ Working on aida itself
       "dev",
       "build"
     ],
-    "about": "Build, smoke-test and promote the live dev binary. The one build command: an incremental `--profile agent` workspace build, then a smoke test of the new `aida` / `aida-server`, then an atomic promote into the live directory (default `~/.local/share/aida/live`, outside target/), keeping the previous pair in `live/prev/`. Promotes only from the primary checkout on a clean `main` that matches `origin/main` (the local remote-tracking ref; it does not fetch, so run `git fetch` first); in a worktree it builds and smoke-tests only",
+    "about": "Build, smoke-test and promote the live dev binary. The one build command: an incremental `--profile agent` workspace build, then a smoke test of the new `aida` / `aida-server`, then an atomic promote into the live directory (default `~/.local/share/aida/live`, outside target/), keeping the previous pair in `live/prev/`. Promotes only from a clean `main` in the primary checkout that matches `origin/main`, or a clean `integration` in any checkout that matches `origin/integration` (local remote-tracking refs; it does not fetch, so run `git fetch` first); in any other worktree it builds and smoke-tests only",
     "flags": [
       {
         "name": "after-wave",
@@ -44417,7 +44419,7 @@ Working on aida itself
       {
         "name": "allow-dirty",
         "takes_value": false,
-        "help": "Promote even when the checkout is dirty, off `main`, or not at `origin/main` (`aida dev status` then shows the dirty SHA)"
+        "help": "Promote even when the checkout is dirty, off `main`/`integration`, or not at its `origin/` branch (`aida dev status` then shows the dirty SHA)"
       },
       {
         "name": "autopromote-child",
