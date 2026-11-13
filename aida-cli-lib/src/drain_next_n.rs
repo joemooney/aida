@@ -209,7 +209,7 @@ pub(crate) fn drivable_queued_count(
                     .unwrap_or(true)
                     && auto_complete_head_drivable(&candidate.status)
                     // trace:STORY-2749 | ai:claude
-                    && crate::queue_cmd::track_refusal(&candidate.tags, &candidate.status)
+                    && crate::queue_cmd::track_refusal(&candidate.tags, &candidate.status, true)
                         .is_none()
             })
             .count(),

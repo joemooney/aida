@@ -148,7 +148,7 @@ pub(crate) fn queue_fresh_pickup_policy(
     if req.archived {
         return QueueFreshPickup::Archived;
     }
-    if let Some(refusal) = track_refusal(&req.tags, &req.status) {
+    if let Some(refusal) = track_refusal(&req.tags, &req.status, false) {
         return refusal;
     }
     if matches!(req.status, RequirementStatus::Done) {
@@ -184,10 +184,16 @@ pub(crate) fn queue_fresh_pickup_policy(
 /// here: the one track check every pickup surface shares, from single-spec
 /// pickup to the queue-wide auto-complete head and its projections. A
 /// terminal spec reports its terminal state, not a stale track.
+///
+/// `unattended` marks an admission with nobody at the keyboard: a
+/// `--no-human` pickup, a drain, or the auto-complete head. A
+/// `track:operator` spec is supervised work, so every such admission refuses
+/// it, even on a matching `AIDA_TRACK=operator` launcher.
 // trace:STORY-2749 | ai:claude
 pub(crate) fn track_refusal<'a>(
     tags: impl IntoIterator<Item = &'a String>,
     status: &RequirementStatus,
+    unattended: bool,
 ) -> Option<QueueFreshPickup> {
     if is_terminal_status(status) {
         return None;
@@ -195,6 +201,9 @@ pub(crate) fn track_refusal<'a>(
     match tags_track(tags) {
         SpecTrack::Free => None,
         SpecTrack::Ambiguous(owners) => Some(QueueFreshPickup::AmbiguousTrack(owners)),
+        SpecTrack::Owner(owner) if unattended && owner == OPERATOR_TRACK => Some(
+            QueueFreshPickup::NeedsGuidedOrOperatorSession(aida_core::ExecutionMode::Operator),
+        ),
         SpecTrack::Owner(owner) => {
             let launcher = launcher_track();
             (owner != launcher).then_some(QueueFreshPickup::OtherTrack { owner, launcher })
@@ -202,33 +211,74 @@ pub(crate) fn track_refusal<'a>(
     }
 }
 
-/// The skip reason a queue projection shows for a spec [`track_refusal`]
-/// refuses.
+/// The skip reason the auto-complete head and its drain projections show for
+/// a spec [`track_refusal`] refuses. Both are unattended admissions.
 // trace:STORY-2749 | ai:claude
 fn track_skip_reason<'a>(
     tags: impl IntoIterator<Item = &'a String>,
     status: &RequirementStatus,
 ) -> Option<String> {
-    track_refusal(tags, status).map(|refusal| {
+    track_refusal(tags, status, true).map(|refusal| {
         queue_fresh_pickup_reason_label(&refusal).unwrap_or_else(|| "on another track".into())
     })
 }
 
-/// STORY-2749 review: a `track:operator` spec is supervised work, so a
-/// headless (`--no-human`) pickup refuses it even on an operator launcher,
-/// before any setup, status or lease change; at the keyboard it proceeds.
+/// STORY-2749 review: an unattended (`--no-human`) pickup applies the
+/// unattended [`track_refusal`] to a spec before any setup, status or lease
+/// change, so a `track:operator` spec never runs headless even on an operator
+/// launcher. At the keyboard it proceeds.
 // trace:STORY-2749 | ai:claude
 pub(crate) fn operator_track_headless_refusal(
     req: &aida_core::Requirement,
     no_human: bool,
 ) -> Option<anyhow::Error> {
-    (no_human && spec_track(req) == SpecTrack::Owner(OPERATOR_TRACK.into())).then(|| {
-        anyhow::anyhow!(
-            "{} is on the `{OPERATOR_TRACK}` track: supervised work never runs headless. \
+    if !no_human {
+        return None;
+    }
+    let refusal = track_refusal(&req.tags, &req.status, true)?;
+    Some(
+        if spec_track(req) == SpecTrack::Owner(OPERATOR_TRACK.into()) {
+            anyhow::anyhow!(
+                "{} is on the `{OPERATOR_TRACK}` track: supervised work never runs headless. \
              Drop --no-human and drive it at the keyboard.",
-            req.display_id()
-        )
-    })
+                req.display_id()
+            )
+        } else {
+            let reason = queue_fresh_pickup_reason_label(&refusal)
+                .unwrap_or_else(|| "on another track".into());
+            anyhow::anyhow!(
+                "{} cannot be picked up headless: {reason}",
+                req.display_id()
+            )
+        },
+    )
+}
+
+/// The unattended admission for a whole resolved pickup plan: the anchor and
+/// every member, before any setup. `None` at the keyboard.
+// trace:STORY-2749 | ai:claude
+pub(crate) fn headless_plan_refusal(
+    plan: &QueueWorkPlan,
+    store: &aida_core::RequirementsStore,
+    no_human: bool,
+) -> Option<anyhow::Error> {
+    if !no_human {
+        return None;
+    }
+    let anchor = store
+        .requirements
+        .iter()
+        .find(|r| spec_matches(r, &plan.anchor_display));
+    let members = plan.entries.iter().filter_map(|entry| {
+        store
+            .requirements
+            .iter()
+            .find(|r| r.id == entry.queue.requirement_id)
+    });
+    anchor
+        .into_iter()
+        .chain(members)
+        .find_map(|req| operator_track_headless_refusal(req, no_human))
 }
 
 pub(crate) fn queue_fresh_pickup_reason_label(policy: &QueueFreshPickup) -> Option<String> {
@@ -325,9 +375,13 @@ pub(crate) fn queue_drain_pickup_policy(
     {
         return QueueFreshPickup::NeedsReleaseOperatorSession;
     }
-    // trace:BUG-1120 | ai:codex
-    // A `track:operator` spec is supervised whatever it groomed to.
+    // A drain is unattended: the shared track check refuses a
+    // `track:operator` spec whatever it groomed to, on any launcher.
     // trace:STORY-2749 | ai:claude
+    if let Some(refusal) = track_refusal(&req.tags, &req.status, true) {
+        return refusal;
+    }
+    // trace:BUG-1120 | ai:codex
     if let Some(mode) = queued_supervised_mode(req) {
         return QueueFreshPickup::NeedsGuidedOrOperatorSession(mode);
     }
@@ -4178,10 +4232,10 @@ pub(crate) fn handle_queue_work(
         // Recheck the resolved anchor, including no-argument queue-head pickup.
         // This runs before launch resolution, calibration, worktree creation, or
         // lease acquisition, so held work cannot be picked indirectly. trace:BUG-1793
-        if let Some(req) = storage
-            .load()?
+        let store = storage.load()?;
+        if let Some(req) = store
             .requirements
-            .into_iter()
+            .iter()
             .find(|r| spec_matches(r, &plan.anchor_display))
         {
             let display = req.spec_id.as_deref().unwrap_or(&plan.anchor_display);
@@ -4193,10 +4247,12 @@ pub(crate) fn handle_queue_work(
             ) {
                 return Err(refusal);
             }
-            // trace:STORY-2749 | ai:claude
-            if let Some(refusal) = operator_track_headless_refusal(&req, no_human) {
-                return Err(refusal);
-            }
+        }
+        // Unattended admission covers the anchor AND every resolved member:
+        // a free cluster parent must not carry a `track:operator` child into
+        // a headless session. trace:STORY-2749 | ai:claude
+        if let Some(refusal) = headless_plan_refusal(&plan, &store, no_human) {
+            return Err(refusal);
         }
 
         // TASK-304: on a no-arg head pickup, surface the ultraplan suggestion
