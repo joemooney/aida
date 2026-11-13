@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-12T11:10:55.183396177Z
-modified_at: 2026-11-13T06:05:29.365671770Z
+modified_at: 2026-11-13T06:12:22.091533808Z
 req_type: Bug
 tags:
 - track:dell1
@@ -25,6 +25,13 @@ comments:
     The configured host Codegraph executable is missing; aida doctor check codegraph confirms missing tooling, so navigation used rg. No implementation blocker remains. Edits are uncommitted for native host publication; no commit, push, PR, merge or queue completion was performed by this seat.
   created_at: 2026-11-13T06:05:29.365671770Z
   modified_at: 2026-11-13T06:05:29.365671770Z
+  session_id: 01a1d369294f
+  harness_version: codex-cli 0.167.0
+- id: 01a1d389-21cb-74d0-b9c4-8cbc702dc3e4
+  author: dirtlab
+  content: 'Fast-gate fix round: added #[cfg(target_os = "linux")] to bug_2535_tests, matching its POSIX shell and setsid assumptions. scripts/check-portability.sh now exits 0; rustfmt --check and git diff --check pass. Broader make check-ci-fast stops earlier at Codex mail wake fixtures with health project directory ownership/shared-write refusals (4 failures, 17 errors). No mail-wake files were changed. The one-line Rust edit remains uncommitted for host publication; existing publication declaration and punt/hold state are unchanged.'
+  created_at: 2026-11-13T06:12:22.091533808Z
+  modified_at: 2026-11-13T06:12:22.091533808Z
   session_id: 01a1d369294f
   harness_version: codex-cli 0.167.0
 history:
