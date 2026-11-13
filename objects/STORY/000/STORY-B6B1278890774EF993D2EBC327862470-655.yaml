@@ -30,7 +30,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-12T17:27:12.872067622Z
-modified_at: 2026-11-12T20:26:48.021261892Z
+modified_at: 2026-11-13T00:04:17.793704605Z
 req_type: Story
 relationships:
 - rel_type: Parent
@@ -104,6 +104,10 @@ history:
   author: joe
   timestamp: 2026-11-12T19:29:37.829216916Z
   changes: []
+- id: 01a1d238-27d7-71b0-bfe4-4322d61b3579
+  author: joe
+  timestamp: 2026-11-13T00:04:18.007687353Z
+  changes: []
 filed_at:
   code_sha: ec5a35a7108475b421baf1101b26159a7aa0fab9
   branch: main
@@ -123,7 +127,7 @@ failure_reason:
   phase: reviewer
   phase_index: 3
   kind: verdict:request-changes
-  detail: 'Two post-merge CI watch false-success paths: missing registration barrier and incomplete/unsafe CI classification; CI pending at review time.'
+  detail: 'Full sweep found one actionable exact-head defect: emergency-land gh constructor breaks the required launch-site ratchet; all other prior findings resolved.'
   recovery_hint: address the review findings, move STORY-2732 back to In Progress, and clear the PR hold only after approval
   shelved_by: reviewer
-  shelved_at: 2026-11-12T19:29:37.672407685Z
+  shelved_at: 2026-11-13T00:04:17.793704605Z
