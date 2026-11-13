@@ -3,12 +3,12 @@ spec_id: BUG-b6b1278890774ef993d2ebc327862470-313
 agreed_id: BUG-2548
 title: 'Reviewer pickup: rollback leaks its lease, conflict checks run after the store pull, and the two-round cap stops reviews silently'
 description: '2026-11-12 evening, review relaunches failed repeatedly: (1) ''no agent was launched: rolled back the PR-3896 pickup setup (worktree, lease, claim...)'' yet lease 01a1d2701cdf survived and blocked the next pickup (''ownership reclaim could not end lease ... holder records no witness''). (2) ''aida queue work PR-N --role reviewer'' pulls the orphan store (~1 min) BEFORE refusing on ''branch pr-N is held by worktree'' / existing lease, so each refusal costs a pull; stale reviewer worktrees (#3775, #3887, #3896, #3902) each blocked one launch. (3) The review-watch two-round cap only sends a mailbox request; the PR then sits with an unreviewed head indefinitely. Acceptance: AC1 rollback removes every artifact it reports rolling back (lease file included), with a regression test; AC2 pickup checks branch/worktree/lease conflicts before any store pull or setup, and auto-reclaims a reviewer worktree+lease whose holder process is dead and whose worktree is clean (merge-hold markers copied first, per BUG-2176); AC3 hitting the cap queues one manual-review request and records it on the PR''s gate ledger, so autoland/advisor tooling can see it.'
-status: NeedsAttention
+status: Completed
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-13T02:45:43.305350105Z
-modified_at: 2026-11-13T08:02:24.417146884Z
+modified_at: 2026-11-13T12:47:27.228615759Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -97,6 +97,20 @@ history:
   timestamp: 2026-11-13T08:02:26.363029215Z
   session_id: 01a1d39b2d92
   changes: []
+- id: 01a1d4f2-d4ef-7423-b752-f0038a288969
+  author: aida-auto-bump
+  timestamp: 2026-11-13T12:47:26.447256170Z
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Completed
+processing_record:
+- id: 01a1d4f2-d7fc-78b1-9ddf-7297176dc90c
+  timestamp: 2026-11-13T12:47:27.228610762Z
+  agent: aida
+  commit_sha: edc7651005713294d7779c89786b5506b1665e6c
+  summary: 'BUG-2548 AC1-AC3 pass: rollback verifies lease removal; read-only occupancy/source-lease admission precedes sync and reclamation follows refreshed gates; capped review requests are durable and deduplicated. Exact-head CI green; merge-hold clearance remains separate.'
+  review_verdict: approved
 filed_at:
   code_sha: 0558a9e06aac10a087327ade1e1ab0a0c3d4ad50
   branch: main
@@ -106,16 +120,12 @@ filed_at:
   vendor: claude
   session: 01a1d240-c397-7b61-b29f-bb337c138943
   harness_version: 2.1.323 (Claude Code)
+implementation_info:
+  implemented: false
+  completed_at: 2026-11-13T12:47:26.447250033Z
+  completion_sha: edc7651005713294d7779c89786b5506b1665e6c
 attention_reason:
   category: blocked-dependency
   detail: 'Native implementer pickup refused: Needs Attention to InProgress requires advisor authority. Existing request-changes shelving and punt remain publication vetoes; advisor triage is required before implementation resumes.'
   raised_by: implementer
   raised_at: 2026-11-13T05:55:05.427691105Z
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: 'BUG-2548: AC1 and AC3 verified by exact-head CI; AC2 unverified: force-claim mutates before refreshed gates and source-branch lease conflicts still follow pull. BUG-2548 (bug protocol): met (test files touched).'
-  recovery_hint: address the review findings, move BUG-2548 back to In Progress, and clear the PR hold only after approval
-  shelved_by: reviewer
-  shelved_at: 2026-11-13T05:40:15.288838966Z
