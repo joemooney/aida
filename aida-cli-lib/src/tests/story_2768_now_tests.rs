@@ -104,6 +104,11 @@ fn every_open_change_is_an_item_in_exactly_one_stage() {
             row(4, State::Ready, Action::Train, None),
             row(5, State::Landing, Action::Wait, None),
             row(6, State::Blocked, Action::AdvisorRuling, None),
+            // Approved, with CI still running on the head.
+            Row {
+                ci: Some("pending".into()),
+                ..row(7, State::Ready, Action::Wait, None)
+            },
         ],
         Vec::new(),
     );
