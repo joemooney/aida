@@ -1,0 +1,18 @@
+{
+  "id": "64f8f014-3568-44c4-8e13-f087fb30a1da",
+  "thread_id": "64f8f014-3568-44c4-8e13-f087fb30a1da",
+  "from": "dirtlab",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1794558737317,
+  "body": "TASK-b6b1278890774ef993d2ebc327862470-1059 PR #3919 conflicts with origin/main in: docs/cli/07-project-setup.md. The host aborted the merge. Conflict resolution requires Claude on branch task-b6b1278890774ef993d2ebc327862470-1059. Fresh route: aida queue work TASK-b6b1278890774ef993d2ebc327862470-1059 --vendor claude --fresh --no-human.",
+  "subject": "Rework merge conflicts require Claude",
+  "urgent": false,
+  "intent": "request",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "shell_user"
+}
