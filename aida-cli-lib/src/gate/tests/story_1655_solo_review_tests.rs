@@ -279,7 +279,7 @@ fn solo_self_approval_recorded_through_the_cli_carries_solo_and_clears_the_ship_
     let record = |answer: &str| {
         crate::with_review_pr_subject(subject.clone(), || {
             with_test_human_terminal(answer, || {
-                crate::handle_review_record_at(
+                crate::handle_review_record_fixture_at(
                     root.path().to_path_buf(),
                     SPEC,
                     "approved",
