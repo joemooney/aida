@@ -2624,15 +2624,21 @@ pub(crate) fn resolve_rework_review(
     // Refs-only batches do not complete the spec, but their terminal reviews
     // must not block the next batch. Reconcile only this spec's proved keys.
     // trace:BUG-2525 | ai:codex
+    // BUG-2540: the keys bound to this spec, computed once. Resolving a key's
+    // current verdict costs git subprocesses, so the readers below resolve
+    // only these instead of every key in the store (thousands: 180 s+).
+    // trace:BUG-2540 | ai:claude
+    let all_keys = crate::gate::review_verdict::verdict_keys(project_root);
+    let (bound_keys, rest): (Vec<String>, Vec<String>) = all_keys
+        .into_iter()
+        .partition(|key| change_verdict_bound_to(project_root, key, &labels));
+    let open_keys: Vec<String> = rest
+        .into_iter()
+        .filter(|key| open_change.is_some_and(|open| open.eq_ignore_ascii_case(key)))
+        .collect();
     let mut review_keys = labels.clone();
-    review_keys.extend(
-        crate::gate::review_verdict::verdict_keys(project_root)
-            .into_iter()
-            .filter(|key| {
-                change_verdict_bound_to(project_root, key, &labels)
-                    || open_change.is_some_and(|open| open.eq_ignore_ascii_case(key))
-            }),
-    );
+    review_keys.extend(bound_keys.iter().cloned());
+    review_keys.extend(open_keys.iter().cloned());
     crate::review_waiting::reconcile_waiting_verdicts(project_root, Some(&review_keys));
     let shown = labels
         .first()
@@ -2679,13 +2685,10 @@ pub(crate) fn resolve_rework_review(
                         }
                     }
                 }
-                for (key, v) in crate::gate::review_verdict::list_active_verdicts(project_root) {
-                    if change_verdict_bound_to(project_root, &key, &labels)
-                        || open_change.is_some_and(|change| change.eq_ignore_ascii_case(&key))
-                    {
-                        candidates.push((key, v));
-                    }
-                }
+                candidates.extend(crate::gate::review_verdict::active_verdicts_for(
+                    project_root,
+                    bound_keys.iter().chain(&open_keys).cloned(),
+                ));
                 if candidates.iter().any(|(_, v)| {
                     !v.is_closed() && v.kind == crate::gate::review_verdict::VerdictKind::Waiting
                 }) {
@@ -2756,11 +2759,11 @@ pub(crate) fn resolve_rework_review(
             // as the gates weigh it.
             // trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
             // trace:TASK-1191 | ai:codex
-            let mut bound = crate::gate::review_verdict::list_active_verdicts(project_root)
-                .into_iter()
-                .filter(|(_, verdict)| verdict.kind.blocks_done() && !verdict.is_closed())
-                .filter(|(key, _)| change_verdict_bound_to(project_root, key, &labels))
-                .collect::<Vec<_>>();
+            let mut bound =
+                crate::gate::review_verdict::active_verdicts_for(project_root, bound_keys.clone())
+                    .into_iter()
+                    .filter(|(_, verdict)| verdict.kind.blocks_done() && !verdict.is_closed())
+                    .collect::<Vec<_>>();
             // A wait cannot hide actionable findings in another bound change.
             // trace:BUG-2500 | ai:codex
             if bound.len() > 1
