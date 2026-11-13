@@ -1,0 +1,21 @@
+id: 01a1d255-23d5-7b33-88ea-ad2d8dfcbe59
+spec_id: STORY-b6b1278890774ef993d2ebc327862470-668
+agreed_id: STORY-2745
+title: Peer-agent coordination messages reach any vendor and are recorded in AIDA (mailbox as the vendor-neutral channel)
+description: 'Operator 2026-11-12 17:35: keep the ability to message between Codex, Claude and other agent sessions. On 2026-11-12 the advisor (Claude) and the integration agent (Claude) coordinated the integration-writer protocol via Claude Code SendMessage. It worked, but that channel is Claude-only: a Codex integration agent could not receive it, and the exchange is not recorded in the AIDA substrate. Want: role-to-role coordination (e.g. ''promotion N landed, sync main''; ''integration pushed at SHA'') sent through aida mailbox so any vendor''s session receives it (Codex via its inbox hook or poll), with optional live delivery to a Claude session via SendMessage as a fast path. Acceptance: (1) an advisor can message the integration seat by role, whichever vendor holds it; (2) the message and reply appear in aida mailbox history; (3) a Codex session sees an unread message before its next turn.'
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-13T00:35:57.525111678Z
+modified_at: 2026-11-13T00:35:57.525111678Z
+req_type: Story
+filed_at:
+  code_sha: 9968a8ab4ec2b4110f24d64122a7e60ab755a95b
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: b5694616d5a
+  vendor: claude
+  session: 01a1d240-c397-7b61-b29f-bb337c138943
+  harness_version: 2.1.323 (Claude Code)
