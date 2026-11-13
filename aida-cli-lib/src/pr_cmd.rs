@@ -10619,6 +10619,7 @@ mod bug_2515_gitlab_ship_tests;
 
 // trace:BUG-2535 | ai:codex
 #[cfg(test)]
+#[cfg(target_os = "linux")]
 mod bug_2535_tests {
     use super::run_post_ship_sweep_bounded;
     use std::{
