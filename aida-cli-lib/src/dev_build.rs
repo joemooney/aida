@@ -181,7 +181,8 @@ pub(crate) struct CheckoutState {
 pub(crate) enum BuildOnlyReason {
     /// `--no-promote` was passed.
     NoPromote,
-    /// Built in a linked worktree; worktree builds never promote.
+    /// Built in a linked worktree that is not on `integration`; such builds
+    /// never promote.
     Worktree,
 }
 
@@ -595,7 +596,8 @@ pub(crate) fn run_dev_build(
             match reason {
                 BuildOnlyReason::Worktree => writeln!(
                     out,
-                    "Not promoted: this is a worktree, and worktree builds never replace the live binary.\n\
+                    "Not promoted: this worktree is not on `integration`, and only `integration` \
+                     worktree builds replace the live binary.\n\
                      Try this build in your shell: cd {} && aida dev activate auto\n\
                      Or run it directly: {}",
                     layout.repo.display(),
@@ -638,9 +640,18 @@ pub(crate) fn run_dev_build(
             // The build and smoke test can take minutes; re-check that the
             // checkout still qualifies before replacing the live pair.
             let state = steps.probe(&layout.repo)?;
-            if let PromotionPlan::Refuse { reasons } =
-                plan_promotion(&state, false, opts.allow_dirty)
-            {
+            // Anything but `Promote` refuses: a linked worktree that left
+            // `integration` during the build plans `BuildOnly`, not `Refuse`.
+            // trace:STORY-2737 | ai:claude
+            let recheck = match plan_promotion(&state, false, opts.allow_dirty) {
+                PromotionPlan::Promote { .. } => None,
+                PromotionPlan::Refuse { reasons } => Some(reasons),
+                PromotionPlan::BuildOnly(_) => Some(vec![format!(
+                    "this linked worktree is no longer on `{INTEGRATION_BRANCH}`; \
+                     worktree builds promote only from `{INTEGRATION_BRANCH}`"
+                )]),
+            };
+            if let Some(reasons) = recheck {
                 let _ = std::fs::remove_dir_all(&incoming);
                 // trace:STORY-1689 | ai:claude
                 return Err(PromotionRefused(format!(

@@ -741,6 +741,34 @@ fn checkout_change_during_build_blocks_promotion() {
     assert_eq!(read(&f.layout.live("aida")), "OLD-aida");
 }
 
+// A linked integration worktree that leaves `integration` while building plans
+// `BuildOnly`, not `Refuse`, at the promote-time re-check; it must still not
+// promote, even with --allow-dirty.
+// trace:STORY-2737 | ai:claude
+#[test]
+fn story_2737_integration_worktree_leaving_branch_during_build_blocks_promotion() {
+    for allow_dirty in [false, true] {
+        let f = fixture();
+        put_live(&f.layout, "OLD");
+        let mut steps = FakeSteps::new(clean_integration_worktree());
+        steps.states.push(CheckoutState {
+            branch: Some("feature".into()),
+            ..clean_integration_worktree()
+        });
+        let opts = DevBuildOptions {
+            allow_dirty,
+            ..Default::default()
+        };
+        let (r, _) = run(&f, &opts, &mut steps);
+        let err = format!("{:#}", r.unwrap_err());
+        assert!(
+            err.contains("changed during the build") && err.contains("no longer on `integration`"),
+            "{err}"
+        );
+        assert_eq!(read(&f.layout.live("aida")), "OLD-aida");
+    }
+}
+
 #[test]
 fn worktree_build_smoke_tests_but_never_promotes() {
     let f = fixture();
