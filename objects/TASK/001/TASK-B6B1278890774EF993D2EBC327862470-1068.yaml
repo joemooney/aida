@@ -3,12 +3,12 @@ spec_id: TASK-b6b1278890774ef993d2ebc327862470-1068
 agreed_id: TASK-3097
 title: Review verdict selection exhausts aggregate gate-ledger read budget for live specs
 description: 'Observed 2026-11-11 in the BUG-2525 native lane: both aida review verdict TASK-3448 and TASK-3428 warn that the selection aggregate gate-ledger read budget is exhausted, then report no review verdict recorded / actionability needs-review. Historical verdict entries and spec-to-PR indices exist in the host ledger. This prevents verifying the requested live repair through the installed CLI. Investigate bounded targeted selection rather than increasing admission authority or treating unreadable evidence as approval.'
-status: Draft
+status: Approved
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-11T15:12:41.373866976Z
-modified_at: 2026-11-11T15:12:41.373866976Z
+modified_at: 2026-11-13T05:31:20.090090357Z
 req_type: Task
 tags:
 - from-advisor:BUG-2525
@@ -17,11 +17,21 @@ tags:
 - linked:TASK-3428
 - linked:TASK-3448
 - severity:major
+- track:integration
 history:
 - id: 01a1cbbd-93e6-7c83-bc9f-be4e77855c59
   author: joe
   timestamp: 2026-11-11T17:52:41.446728737Z
   changes: []
+- id: 01a1d363-909a-7a62-bc25-d16059a0b75b
+  author: joe
+  timestamp: 2026-11-13T05:31:20.090074617Z
+  session_id: 01a1d2e6-f5db-7f33-9b74-3ae5fdaf9e0c
+  harness_version: 2.1.323 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Approved
 filed_at:
   aida_version: 0.16.0
   aida_build_sha: 11b131dfe33
