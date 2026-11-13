@@ -7,8 +7,8 @@ use crate::{pr_stale_check_warning, StaleCheckWarning};
 
 /// The stale-definition gate's own predicate: PR `pr_number`'s base branch
 /// and the staleness warning its ship branch carries against it. A warning
-/// with `definition_files` is exactly what [`ship_behind_base_gate`]
-/// refuses, so `aida pr ship-batch` reads this, never a re-implementation.
+/// carries head/base workflow digests for [`ship_behind_base_gate`], so
+/// `aida pr ship-batch` reads this, never a re-implementation.
 // trace:STORY-1887 | ai:claude
 pub(crate) fn ship_stale_definition_warning(
     project_root: &std::path::Path,
@@ -29,6 +29,7 @@ pub(crate) fn ship_stale_definition_warning(
 /// head lands through `aida pr train N`, which tests it on the current base.
 // trace:TASK-1606 | ai:codex
 // trace:STORY-1690 | ai:claude
+// trace:STORY-2401 | ai:codex
 pub(crate) fn stale_gate_decision(
     pr_number: u64,
     base_branch: &str,
@@ -38,7 +39,7 @@ pub(crate) fn stale_gate_decision(
     let Some(warning) = warning else {
         return Ok(());
     };
-    let definition = if warning.definition_files.is_empty() {
+    let definition = if warning.head_digest == warning.base_digest {
         String::new()
     } else {
         format!(
@@ -64,8 +65,9 @@ pub(crate) fn stale_gate_decision(
 /// The behind-base gate's outcome for PR `pr_number`: `staleness` is the
 /// fail-closed [`crate::pr_stale_check`] result (or the fetch error). A head
 /// behind its base refuses as `BehindBase`, or `StaleDefinition` when a CI
-/// definition also changed; staleness that cannot be computed refuses too.
+/// definition digest differs; staleness that cannot be computed refuses too.
 // trace:STORY-1690 | ai:claude
+// trace:STORY-2401 | ai:codex
 pub(crate) fn behind_base_refusal(
     pr_number: u64,
     base_branch: &str,
@@ -85,7 +87,7 @@ pub(crate) fn behind_base_refusal(
     })?;
     let kind = if warning
         .as_ref()
-        .is_some_and(|w| !w.definition_files.is_empty())
+        .is_some_and(|w| w.head_digest != w.base_digest)
     {
         ShipRefusal::StaleDefinition
     } else {

@@ -203,7 +203,8 @@ opens its PR and stops: `aida pr ship` and `aida review record` refuse inside
 it. The launcher waits and ends with one `implementer:` result line and an
 exit code the caller branches on: 0 PR opened, 31 no PR, 32 punted, 33 held,
 34 refused at the concurrency cap (`[queue] standalone_implementer_cap`,
-default 3). See `docs/cli/03-work-autonomy.md`.
+host-wide; `~/.aida/host.toml` overrides project config, default
+`max(1, floor(nproc/2))`). See `docs/cli/03-work-autonomy.md`.
 
 ### worktree
 

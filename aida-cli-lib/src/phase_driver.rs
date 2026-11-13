@@ -1,8 +1,31 @@
 //! phase driver: DrainConfigToml and read_drain_config, RealPhaseDriver with its config, agent gates and inherent impls, ci-fix prompt and AutonomyMode (STORY-1488 slice 1; Q9 split)
 // trace:STORY-1488 | ai:claude
 
-use crate::*;
+use crate::process_retry::RetryEtxtbsy;
+use crate::{
+    advisor, agent_seat_for_phase, auto_complete, auto_complete_telemetry, branch_exists_anywhere,
+    build_auto_punt_args, build_phase3_auto_rebase_args, change_lookup_from_pr_lookup_for_branch,
+    classify_rebase_subprocess_exit, current_branch_at, detect_merged_pr_for_branch_via_forge,
+    dispatched_branch_head_sha, drain_state, ensure_implementer_branch_pushed, events, exit_signal,
+    find_main_worktree_root, find_orchestrated_lease, implementer_preflight, lease_ids_in,
+    list_leases, load_store_for_lookup, local_commits_not_on_branch, lost_child_state_reason,
+    merged_at_satisfies_latest_reopen, network_retry, orchestrated_lease_receipt_path,
+    pending_text_question_from_headless_log, phase1_advanced_to_finished_during_run,
+    phase1_branch_race_reason, phase1_fresh_branch_raced, phase1_lost_child_retry_allowed,
+    phase1_spec_status_text, pr_credit_match_with_sink, pr_head_branch, pr_head_sha_best_effort,
+    pr_is_merged_with_sink, pr_lookup_from_change_lookup, probe_branch_on_origin, punt,
+    read_headless_log_for_session, read_orchestrated_lease_receipt, read_project_config_value,
+    resolve_aida_exe, resolve_gh_binary, scope_conflict_lease_failure, session,
+    spec_latest_reopen_transition_at, spec_status, strip_toml_inline_comment,
+    take_orchestrated_child_refusal, try_open_orchestrator_pr_for_no_pr_worktree,
+    unattended_git_mutation_refusal, unique_worktree_on_branch, worktree_is_locked,
+    worktree_is_unleased, zen, AdvisorPass, BranchOriginProbe, DrainTuning, OpenPrInfo,
+    Phase1Workspace, PrCreditMatch, PrLookup, PHASE1_LOST_CHILD_STATE_CAUSE,
+};
 use aida_core::git_ops::RemoteCredentialsExt as _;
+use aida_core::RequirementStatus;
+use anyhow::{Context, Result};
+use colored::Colorize;
 
 /// Run `git -C <worktree> <args>` and capture trimmed stdout, or `None` on any
 /// spawn / non-zero / decode error. trace:BUG-420 | ai:claude
@@ -172,6 +195,16 @@ pub(crate) struct RealPhaseDriver {
     // trace:STORY-2326 | ai:codex
     #[cfg(test)]
     pub(crate) aida_exe: std::path::PathBuf,
+    // Keep real retry/watchdog control flow in tests without production waits.
+    // trace:TASK-3608 | ai:codex
+    #[cfg(test)]
+    pub(crate) retry_wait: Option<std::time::Duration>,
+    #[cfg(test)]
+    pub(crate) watchdog_poll: Option<std::time::Duration>,
+    // Synchronize the receipt/watchdog fixture with child lease publication.
+    // trace:TASK-3749 | ai:codex
+    #[cfg(test)]
+    pub(crate) watchdog_ready: Option<std::path::PathBuf>,
     /// STORY-263: headless mode. `Some` → the reviewer phase is launched
     /// headless (`claude -p`); the implementer phase stays interactive in
     /// this cut (STORY-276 wires it). `None` → fully interactive.
@@ -671,6 +704,12 @@ impl RealPhaseDriver {
             ci_terminal_green: None,
             #[cfg(test)]
             aida_exe: resolve_aida_exe(),
+            #[cfg(test)]
+            retry_wait: None,
+            #[cfg(test)]
+            watchdog_poll: None,
+            #[cfg(test)]
+            watchdog_ready: None,
             no_human,
             autonomy_mode,
             exit_cfg: exit_signal::ExitSignalConfig::from_env(),
@@ -2335,7 +2374,7 @@ impl RealPhaseDriver {
                 .env(crate::gate::seat_authority::GRANT_ENV, &grant.id)
                 .env("AIDA_USER", crate::current_user_id(None))
                 .env("AIDA_PROJECT_ROOT", &self.project_root);
-            if let Err(error) = crate::launch::profile::finalize_codex(&mut child_cmd) {
+            if let Err(error) = crate::vendors::profile::finalize_codex(&mut child_cmd) {
                 session::revoke_headless_child_grant(&grant.id);
                 return Err(PhaseFailure::of(
                     FailureKind::Spawn,
@@ -2520,30 +2559,45 @@ pub(crate) fn build_phase_driver_advisor_command(
         }
         cmd
     } else {
-        let ctx = crate::launch::LaunchContext::resolve(crate::launch::LaunchRequest {
-            vendor: crate::launch::context::launch_vendor(vendor),
-            kind: aida_core::launch_policy::LaunchKind::Fresh,
-            program: program.into(),
-            // Trusted output of session::advisor_tier_program_and_args_with_posture
-            // and contained_child_program_and_args (including
-            // posture flags and a prompt), not a default_flags/template tail.
-            // Caller configuration flags must be validated before this builder.
-            args: headless_vendor_args.to_vec(),
-            tail: Vec::new(),
-            posture,
-            cwd: project_root.to_path_buf(),
-            set_cwd: true,
-            // Native/None constructors do not cross the AIDA boundary.
-            host_main: None,
-        })?;
+        let ctx = {
+            let req = crate::launch::LaunchRequest {
+                vendor: crate::launch::context::launch_vendor(vendor),
+                kind: aida_core::launch_policy::LaunchKind::Fresh,
+                program: program.into(),
+                // Trusted output of session::advisor_tier_program_and_args_with_posture
+                // and contained_child_program_and_args (including
+                // posture flags and a prompt), not a default_flags/template tail.
+                // Caller configuration flags must be validated before this builder.
+                args: headless_vendor_args.to_vec(),
+                tail: Vec::new(),
+                posture,
+                cwd: project_root.to_path_buf(),
+                set_cwd: true,
+                // Native/None constructors do not cross the AIDA boundary.
+                host_main: None,
+            };
+            // trace:STORY-2538 | ai:codex
+            let exec = crate::session::capture_launch_exec(&req.cwd, req.host_main.as_deref())?;
+            crate::launch::LaunchContext::resolve(&exec, req)
+        }?;
         crate::launch::spawn_agent(&ctx)?
     };
-    // Intentionally inherits the drain launcher's grant because the consult runs at the launcher's own advisor authority.
+    // The consult uses the launcher's advisor authority. Transport its selector
+    // explicitly even when Claude clears the parent environment; the Codex
+    // caller replaces it with its delegated advisor grant before spawning.
+    // trace:STORY-2326 | ai:codex
+    crate::launch::assign_seat(
+        &mut cmd,
+        aida_core::launch_policy::LaunchKind::Fresh,
+        crate::launch::SeatDecision::Child {
+            role: "advisor",
+            grant: &crate::gate::seat_authority::current_grant_id().unwrap_or_default(),
+        },
+    )?;
     cmd.current_dir(project_root)
         .env("AIDA_HEADLESS", "1")
         .env(punt::REQUEST_FILE_ENV, request_path)
         .env(punt::RESPONSE_FILE_ENV, response_path)
-        .env("AIDA_SESSION_ROLE", "advisor")
         .envs(crate::headless_wait_envs(ceiling_key, ceiling_value));
     session::scrub_launcher_session_env(&mut cmd);
     Ok(cmd)
@@ -2590,6 +2644,23 @@ impl RealPhaseDriver {
             );
         }
         ensure_implementer_branch_pushed(worktree, branch, self.json)
+    }
+
+    // Cleanup cannot turn confirmed no-change into NeedsAttention.
+    // Retain the lease identifier when manual recovery is needed.
+    // trace:TASK-3608 | ai:codex
+    pub(crate) fn end_no_change_session(&mut self) {
+        match self.end_implementer_session() {
+            Ok(()) => self.implementer_lease = None,
+            Err(e) => {
+                if !self.json {
+                    eprintln!(
+                        "no-change confirmed, but ending the implementer session failed ({}); release it manually: aida session end",
+                        e.reason
+                    );
+                }
+            }
+        }
     }
 
     /// End the implementer session: `aida session end <lease> --yes --skip-ci`.
@@ -2790,6 +2861,15 @@ impl RealPhaseDriver {
     /// fallback and the BUG-257 `git ls-remote` narrowing. Mutates `self.branch`
     /// when the spec-id search recovers a swapped branch. trace:TASK-136
     pub(crate) fn detect_phase1_pr(&mut self, branch: &str) -> Phase1PrResolve {
+        self.detect_phase1_pr_after_exit(branch, false)
+    }
+
+    // trace:TASK-3608 | ai:codex
+    pub(crate) fn detect_phase1_pr_after_exit(
+        &mut self,
+        branch: &str,
+        native_no_change: bool,
+    ) -> Phase1PrResolve {
         // STORY-516: forge-routed branch lookup (view op). The inner spec-id
         // search (detect_open_pr_for_spec) is the LIST op — routed in a later
         // slice — so it stays PrLookup here. The BUG-444/BUG-257 narrowing
@@ -2837,6 +2917,20 @@ impl RealPhaseDriver {
                         );
                         Phase1PrResolve::Found(pr)
                     }
+                    // No publication occurred, so empty open-PR observations
+                    // cannot be a race with this seat creating a new PR.
+                    // trace:TASK-3608 | ai:codex
+                    PrLookup::NoOpenPr if native_no_change => Phase1PrResolve::NoPr,
+                    // Failed spec searches cannot exclude a PR on a swapped branch.
+                    // trace:TASK-3608 | ai:codex
+                    ref other if native_no_change => Phase1PrResolve::Retry(match other {
+                        PrLookup::GhFailed(why) | PrLookup::GhUnreachable(why) => {
+                            format!("could not confirm an empty spec PR search: {why}")
+                        }
+                        _ => "could not confirm an empty spec PR search: forge CLI unavailable"
+                            .into(),
+                    }),
+
                     // BUG-444: both the `--head` and `--search` lookups returned
                     // empty-BUT-SUCCESSFUL. These are eventually-consistent GitHub
                     // LIST queries (`--search` hits the search index, which lags PR
@@ -2897,6 +2991,18 @@ impl RealPhaseDriver {
                 Phase1PrResolve::Fail(auto_complete::PhaseFailure::of(
                     auto_complete::FailureKind::MissingTool,
                     "`gh` is not on PATH — auto-complete needs it to track the PR",
+                ))
+            }
+            // A receipt proves no publication by this seat, not the absence
+            // of an existing PR (possibly on a swapped branch). Never narrow
+            // a failed lookup to NoPr using origin presence in this case.
+            // trace:TASK-3608 | ai:codex
+            crate::forge::ChangeLookup::CliFailed(why)
+            | crate::forge::ChangeLookup::Unreachable(why)
+                if native_no_change =>
+            {
+                Phase1PrResolve::Retry(format!(
+                    "could not confirm an empty branch PR lookup for `{branch}`: {why}"
                 ))
             }
             crate::forge::ChangeLookup::CliFailed(why) => {

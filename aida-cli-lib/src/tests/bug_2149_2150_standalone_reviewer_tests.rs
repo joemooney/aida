@@ -12,6 +12,13 @@
 //!   on the same PR is still refused.
 // trace:BUG-2017 | ai:codex — explicit positive global-ID fixture.
 use super::*;
+use crate::{
+    find_scope_lease_conflict, infer_queue_work_role, resolve_queue_work_plan,
+    review_source_branch_conflict_decision, reviewer_pickup_keeps_pr_scope,
+    run_standalone_reviewer, standalone_review_plan, LeaseConflictDecision, QueueWorkLaunch,
+    RequirementStatus, ReviewForge, Storage, NO_REVIEW_VERDICT_EXIT_CODE,
+};
+use aida_core::DatabaseBackend;
 // trace:BUG-2476 | ai:codex
 
 const HEAD: &str = "0123456789abcdef0123456789abcdef01234567";
@@ -533,6 +540,10 @@ fn standalone_reviewer_reaps_its_finished_review_once_the_verdict_is_collected()
     if crate::test_env::run_path_isolated_test() {
         return;
     }
+    // Cleanup runs on this thread and requires fresh writer admission even
+    // for an empty mailbox. Keep the evidence scoped to the isolated child.
+    // trace:TASK-3420 | ai:codex
+    let _scan = aida_core::mailbox_lifecycle::activation::test_writer_scan(true);
     let tmp = tempfile::tempdir().unwrap();
     let worktree = tmp.path().join("reviewer-worktree");
     let (result, project) =
@@ -541,9 +552,10 @@ fn standalone_reviewer_reaps_its_finished_review_once_the_verdict_is_collected()
         });
     result.expect("a verified review verdict must succeed");
 
+    let leases = crate::list_leases(&project);
     assert!(
-        crate::list_leases(&project).is_empty(),
-        "review lease retained: dirty={}, removal check={:?}",
+        leases.is_empty(),
+        "review lease retained: leases={leases:?}, dirty={}, removal check={:?}",
         crate::session_reap::worktree_status_dirty(&worktree),
         aida_core::worktree_holders::check_worktree_removal(&worktree)
     );
@@ -1082,6 +1094,7 @@ fn bug2187_granted_reviewer_resume_sets_identity() {
         None,
         false,
         Some("grant-id"),
+        None,
     )
     .unwrap();
     assert!(status.success(), "the resumed reviewer saw no identity");
@@ -1093,12 +1106,14 @@ fn bug2187_granted_reviewer_resume_sets_identity() {
 // trace:TASK-1801 | ai:codex
 #[test]
 fn rework_work_dispatch_uses_intent_preserving_adapter() {
-    let source = include_str!("../queue_cmd.rs");
-    let handler = source
-        .split("pub(crate) fn handle_queue_rework(")
-        .nth(1)
-        .unwrap();
-    let body = handler.split("/// Keep route inheritance").next().unwrap();
+    // trace:TASK-3426 | ai:codex
+    let source = include_str!("../queue_cmd/rework.rs");
+    let (_, handler) = source
+        .split_once("pub(crate) fn handle_queue_rework(")
+        .expect("the rework module must contain its handler");
+    let (body, _) = handler
+        .split_once("/// Top-level alias for `aida queue rework SPEC`")
+        .expect("the rework handler must end before the top-level alias");
     assert!(body.contains("rework_role_input(for_role, for_role_resolved.as_deref())"));
     assert!(!body.contains("QueueWorkRoleInput::direct("));
 }

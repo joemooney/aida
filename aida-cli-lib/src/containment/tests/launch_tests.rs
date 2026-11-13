@@ -51,7 +51,7 @@ fn skip_under(required: bool, reason: &str) -> bool {
     eprintln!("SKIP: {reason}");
     false
 }
-fn skip(reason: &str) -> bool {
+pub(super) fn skip(reason: &str) -> bool {
     skip_under(live_required(), reason)
 }
 fn live_available() -> bool {
@@ -545,7 +545,7 @@ print('seat_grant_valid=true expected_seat=true')
 fn task_2707_posture_without_receipt_refuses_unhandled_launch() {
     let mut cmd = Command::new("codex");
     cmd.env("AIDA_CONTAINMENT_POSTURE", "aida");
-    assert!(crate::launch::profile::finalize_codex(&mut cmd)
+    assert!(crate::vendors::profile::finalize_codex(&mut cmd)
         .unwrap_err()
         .to_string()
         .contains("receipt-owning headless launch boundary"));
@@ -591,6 +591,10 @@ fn task_3048_runtime_argv_accepts_only_the_site_prompt() {
             .count(),
         1
     );
+    assert_eq!(
+        args[args.iter().position(|a| a == "--settings").unwrap() + 1],
+        runtime.join("settings.json").to_string_lossy()
+    );
     for original in [
         vec![],
         vec!["-p"],
@@ -630,9 +634,10 @@ fn task_3048_outer_only_candidate_requires_live_accepted_receipt() {
             .count(),
         1
     );
-    assert!(args
-        .windows(2)
-        .any(|a| a[0] == "--settings" && Path::new(&a[1]) == runtime.join("settings.json")));
+    assert_eq!(
+        args[args.iter().position(|a| a == "--settings").unwrap() + 1],
+        runtime.join("settings.json").to_string_lossy()
+    );
     assert!(!args.iter().any(|a| a == "--sandbox" || a == "--mode"));
     assert!(crate::launch::agy::AGY
         .candidate_argv(Path::new("/"), prompt, Some(run.receipt()))
@@ -1510,11 +1515,10 @@ fn task_2708_claude_prepare_fake_home() {
         .env("AIDA_HEADLESS", "1")
         .env("AIDA_SESSION_GRANT", "")
         .env("AIDA_SESSION_ROLE", "companion");
-    let prepare = || PreparedLaunch::prepare(&child, root.path(), None);
     // Synthetic foreign-owner seam: exercise the same prepare path with a
     // mismatching issuer uid, without requiring host chown authority.
     assert!(PreparedLaunch::prepare_for_owner(
-        &child,
+        &mut child,
         root.path(),
         None,
         unsafe { libc::getuid() } + 1
@@ -1523,7 +1527,8 @@ fn task_2708_claude_prepare_fake_home() {
     .unwrap()
     .to_string()
     .contains("credentials identity refused"));
-    let plan = prepare().unwrap_or_else(|e| panic!("prepare: {e:#}"));
+    let plan = PreparedLaunch::prepare(&mut child, root.path(), None)
+        .unwrap_or_else(|e| panic!("prepare: {e:#}"));
     let cfg: serde_json::Value =
         serde_json::from_str(&plan.command.get_args().nth(5).unwrap().to_string_lossy()).unwrap();
     let vendor = ContainedVendor::for_program(std::ffi::OsStr::new("claude")).unwrap();
@@ -1632,7 +1637,7 @@ print('Claude prepare live mounts ok')
     let saved = config.join("saved");
     std::fs::rename(&path, &saved).unwrap();
     std::os::unix::fs::symlink(&saved, &path).unwrap();
-    assert!(prepare()
+    assert!(PreparedLaunch::prepare(&mut child, root.path(), None)
         .err()
         .unwrap()
         .to_string()
@@ -1640,20 +1645,20 @@ print('Claude prepare live mounts ok')
     std::fs::remove_file(&path).unwrap();
     std::fs::rename(&saved, &path).unwrap();
     std::fs::hard_link(&path, &saved).unwrap();
-    assert!(prepare()
+    assert!(PreparedLaunch::prepare(&mut child, root.path(), None)
         .err()
         .unwrap()
         .to_string()
         .contains("credentials identity refused"));
     std::fs::remove_file(&saved).unwrap();
     std::fs::write(&path, "not json").unwrap();
-    assert!(prepare()
+    assert!(PreparedLaunch::prepare(&mut child, root.path(), None)
         .err()
         .unwrap()
         .to_string()
         .contains("CLAUDE_CREDENTIALS_INVALID"));
     credentials_expiring_in(&config, -60);
-    assert!(prepare()
+    assert!(PreparedLaunch::prepare(&mut child, root.path(), None)
         .err()
         .unwrap()
         .to_string()
@@ -2164,20 +2169,24 @@ print('signal storm exactly once and SIGPIPE ok')
 // trace:TASK-2708 | ai:codex
 #[test]
 fn task_2708_live_host_udp_named_send_refused() {
-    if !live_available() {
-        return;
-    }
+    // trace:STORY-2695 | ai:codex
+    assert!(
+        live_available(),
+        "UDP containment precondition unmet: live sandbox unavailable"
+    );
     let script = r#"
 import socket,os,array,errno,signal
 signal.alarm(15)
 with socket.socket(socket.AF_UNIX,socket.SOCK_STREAM) as ipc:
     ipc.connect(os.environ['HOME']+'/host-fd.sock')
     port,anc,_,_=ipc.recvmsg(64,socket.CMSG_SPACE(4))
-    assert len(anc)==1
+    assert len(anc)==1, "UDP control precondition unmet: missing SCM_RIGHTS"
     level,kind,data=anc[0]
     assert (level,kind)==(socket.SOL_SOCKET,socket.SCM_RIGHTS)
     fds=array.array('i');fds.frombytes(data)
+    assert len(fds)==1, 'UDP control precondition unmet: expected one descriptor'
     with socket.socket(fileno=fds[0]) as host:
+        assert host.type==socket.SOCK_DGRAM and host.getsockname()[1]!=0, 'UDP control precondition unmet: descriptor is not bound UDP'
         try:
             host.sendto(b'bypass',('127.0.0.1',int(port)))
             raise AssertionError('host netns named send allowed')
@@ -2191,6 +2200,7 @@ import socket,array,sys,signal
 signal.alarm(20)
 with socket.socket(socket.AF_UNIX,socket.SOCK_STREAM) as ipc, socket.socket(socket.AF_INET,socket.SOCK_DGRAM) as sender, socket.socket(socket.AF_INET,socket.SOCK_DGRAM) as receiver:
     ipc.bind(sys.argv[1]);ipc.listen(1)
+    sender.bind(('127.0.0.1',0))
     receiver.bind(('127.0.0.1',0));receiver.settimeout(0.3)
     port=receiver.getsockname()[1]
     sender.sendto(b'control',('127.0.0.1',port));assert receiver.recv(64)==b'control'
@@ -2216,7 +2226,14 @@ with socket.socket(socket.AF_UNIX,socket.SOCK_STREAM) as ipc, socket.socket(sock
     std::io::BufReader::new(host.stdout.take().unwrap())
         .read_line(&mut ready)
         .unwrap();
-    assert_eq!(ready, "ready\n");
+    if ready != "ready\n" {
+        let result = host.wait_with_output().unwrap();
+        panic!(
+            "UDP positive control precondition unmet (bind/send/receive): {}: {}",
+            result.status,
+            String::from_utf8_lossy(&result.stderr)
+        );
+    }
     let mut output = tempfile::tempfile().unwrap();
     plan.command.stderr(output.try_clone().unwrap());
     let mut run = plan.spawn(output.try_clone().unwrap().into()).unwrap();
@@ -2269,7 +2286,7 @@ fn task_3194_receipt_diagnostic_pins_harness_line() {
 // No model calls or real credentials: exercise the shared filesystem inputs.
 // trace:TASK-3048 | ai:codex
 #[test]
-fn task_3048_private_runtime_pins_only_the_credential_leaf() {
+fn task_3048_private_runtime_pins_settings_and_credential_leaves() {
     use std::os::unix::fs::symlink;
     let home = tempfile::tempdir().unwrap();
     let state = tempfile::tempdir().unwrap();
@@ -2286,8 +2303,11 @@ fn task_3048_private_runtime_pins_only_the_credential_leaf() {
     let source = state.path().join("vendor-runtime");
     assert_eq!(std::fs::metadata(&source).unwrap().mode() & 0o777, 0o700);
     assert_eq!(
-        std::fs::read_to_string(source.join("settings.json")).unwrap(),
-        "{}"
+        serde_json::from_slice::<serde_json::Value>(
+            &std::fs::read(source.join("settings.json")).unwrap()
+        )
+        .unwrap(),
+        runtime_tool_settings(&policy)
     );
     assert!(std::fs::read(source.join(&policy.credential))
         .unwrap()
@@ -2299,12 +2319,16 @@ fn task_3048_private_runtime_pins_only_the_credential_leaf() {
     assert!(profile.mounts[0].writable);
     assert_eq!(profile.mounts[0].path, host);
     assert!(!profile.mounts[1].writable);
-    assert_eq!(profile.mounts[1].path, token);
+    assert_eq!(profile.mounts[1].path, source.join("settings.json"));
+    assert!(!profile.mounts[2].writable);
+    assert_eq!(profile.mounts[2].path, runtime.join("settings.json"));
+    assert!(!profile.mounts[3].writable);
+    assert_eq!(profile.mounts[3].path, token);
     // Mount pins the original inode, even if the host replaces the pathname.
     std::fs::rename(&token, host.join("old-token")).unwrap();
     std::fs::write(&token, "replacement").unwrap();
     let mut pinned = String::new();
-    profile.mounts[1]
+    profile.mounts[3]
         .file
         .try_clone()
         .unwrap()
@@ -2364,6 +2388,19 @@ fn task_3048_runtime_policy_fails_closed_before_launch() {
     policy = crate::containment::runtime_policy("agy").unwrap();
     policy.raw_store_writes = true;
     assert!(policy.validate().is_err());
+    for denies in [
+        vec![],
+        vec!["read_url(*)", "mcp(*)", "execute_url(*)"],
+        vec!["mcp(*)", "read_url(*)"],
+    ] {
+        policy = crate::containment::runtime_policy("agy").unwrap();
+        policy.tool_denies = denies.into_iter().map(String::from).collect();
+        assert!(policy
+            .validate()
+            .unwrap_err()
+            .to_string()
+            .contains("requires MCP, URL and browser tool denies"));
+    }
 }
 
 // Uses the actual common process boundary with synthetic credentials, not AGY
@@ -2372,6 +2409,7 @@ fn task_3048_runtime_policy_fails_closed_before_launch() {
 // trace:TASK-3048 | ai:codex
 #[test]
 fn task_3048_live_private_runtime_preserves_read_only_credential() {
+    use std::os::unix::net::{UnixListener, UnixStream};
     if !live_available() {
         return;
     }
@@ -2383,13 +2421,51 @@ fn task_3048_live_private_runtime_preserves_read_only_credential() {
     std::fs::write(runtime.join("host-plugin"), "host-plugin").unwrap();
     let token = runtime.join(&policy.credential);
     std::fs::write(&token, "synthetic-credential").unwrap();
+    // Real reachable host endpoints and writable canaries establish that
+    // descendant refusals come from the common boundary, not absent targets.
+    let ipc = home.path().join("host-tool.sock");
+    let listener = UnixListener::bind(&ipc).unwrap();
+    let _control = UnixStream::connect(&ipc).unwrap();
+    listener.accept().unwrap();
+    let tcp = std::net::TcpListener::bind(("127.0.0.1", 0)).unwrap();
+    let address = tcp.local_addr().unwrap();
+    let _control = std::net::TcpStream::connect(address).unwrap();
+    tcp.accept().unwrap();
+    let protected: Vec<_> = ["outside", "git", "store"]
+        .map(|name| {
+            let path = home.path().join(name);
+            std::fs::write(&path, "host-canary").unwrap();
+            path
+        })
+        .into();
+    let workspace = tempfile::tempdir().unwrap();
+    let settings_json = runtime_tool_settings(&policy).to_string();
     let runtime_json = serde_json::to_string(&runtime).unwrap();
     let leaf_json = serde_json::to_string(&policy.credential).unwrap();
+    let protected_json = serde_json::to_string(&protected).unwrap();
+    let ipc_json = serde_json::to_string(&ipc).unwrap();
     let script = format!(
         r#"
-import pathlib,errno,subprocess,sys
+import pathlib,errno,subprocess,sys,json,os
 runtime=pathlib.Path({runtime_json})
-assert (runtime/'settings.json').read_text()=='{{}}'
+assert json.loads((runtime/'settings.json').read_text())=={settings_json}
+for settings in (runtime/'settings.json', pathlib.Path.home()/'vendor-runtime/settings.json'):
+    try:
+        settings.write_text('{{}}')
+        raise AssertionError(f'settings writable: {{settings}}')
+    except OSError as e:
+        assert e.errno in (errno.EACCES,errno.EPERM,errno.EROFS),e
+    # Writable parent directories must not allow replacing the pinned controls.
+    replacement=settings.parent/'replacement-settings.json'
+    replacement.write_text('{{}}')
+    for mutate in (settings.unlink, lambda: replacement.replace(settings)):
+        try:
+            mutate()
+            raise AssertionError(f'settings replaceable: {{settings}}')
+        except OSError as e:
+            assert e.errno in (errno.EACCES,errno.EPERM,errno.EROFS,errno.EBUSY),e
+        assert json.loads(settings.read_text())=={settings_json}
+    replacement.unlink()
 assert not (runtime/'host-plugin').exists()
 token=runtime/{leaf_json}
 assert token.read_text()=='synthetic-credential'
@@ -2401,7 +2477,57 @@ except OSError as e:
 # An exec descendant uses the same runtime mount, with no native permission layer.
 subprocess.run([sys.executable,'-c',"import pathlib,sys; pathlib.Path(sys.argv[1]).write_text('private')",str(runtime/'child-state')],check=True)
 assert (runtime/'child-state').read_text()=='private'
-"#
+# Exercise external tool processes without a native permission monitor. Each
+# tool uses the same interpreter but a different invocation/transport: a file
+# helper, a URL helper and a long-lived stdio request server. This is boundary
+# inheritance evidence, not evidence that AGY invokes or disables these tools.
+probe = '''
+import pathlib,socket,errno,os
+def probe(request):
+    runtime=pathlib.Path(request['runtime'])
+    (runtime/request['name']).write_text('private-tool-state')
+    for path in request['protected']:
+        assert pathlib.Path(path).read_text()=='host-canary'
+        try:
+            pathlib.Path(path).write_text('escape')
+            raise AssertionError('tool escaped filesystem boundary')
+        except OSError as error:
+            assert error.errno in (errno.EACCES,errno.EPERM,errno.EROFS),error
+    with socket.socket(socket.AF_UNIX) as client:
+        try:
+            client.connect(request['ipc'])
+            raise AssertionError('tool reached host IPC')
+        except OSError as error:
+            assert error.errno==errno.EACCES,error
+    try:
+        socket.create_connection(('127.0.0.1',request['port']),timeout=2)
+        raise AssertionError('tool reached host TCP')
+    except OSError as error:
+        assert error.errno==errno.ECONNREFUSED,error
+    # The inherited relay remains usable; denial is not a broken socket API.
+    port=int(os.environ['HTTP_PROXY'].rsplit(':',1)[1])
+    with socket.create_connection(('127.0.0.1',port),timeout=2) as client:
+        client.sendall(b'GET / HTTP/1.1\\r\\n\\r\\n')
+        assert b'405 Method Not Allowed' in client.recv(4096)
+'''
+request=dict(runtime=str(runtime),protected={protected_json},ipc={ipc_json},port={port})
+for name in ('file-helper','url-helper','stdio-server'):
+    request['name']=name
+    if name=='stdio-server':
+        program=probe+'\nimport sys,json\nfor line in sys.stdin:\n probe(json.loads(line));print("ok",flush=True)'
+        tool=subprocess.Popen([sys.executable,'-I','-S','-c',program],stdin=subprocess.PIPE,stdout=subprocess.PIPE,text=True)
+        try:
+            stdout,_=tool.communicate(json.dumps(request)+'\n',timeout=10)
+            assert tool.returncode==0 and stdout.strip()=='ok'
+        finally:
+            if tool.poll() is None:
+                tool.kill();tool.wait(timeout=5)
+    else:
+        program=probe+'\nimport json,sys\nprobe(json.loads(sys.argv[1]))'
+        subprocess.run([sys.executable,'-I','-S','-c',program,json.dumps(request)],check=True,timeout=10)
+    assert (runtime/name).read_text()=='private-tool-state'
+"#,
+        port = address.port()
     );
     let mut plan = fixture(&script, "print('seat_grant_valid=true expected_seat=true')");
     plan.profile.add(home.path(), false).unwrap();
@@ -2440,6 +2566,12 @@ assert (runtime/'child-state').read_text()=='private'
     run.release().unwrap();
     assert!(run.child.wait().unwrap().success());
     assert!(!runtime.join("child-state").exists());
+    for name in ["file-helper", "url-helper", "stdio-server"] {
+        assert!(!runtime.join(name).exists());
+    }
+    for path in protected {
+        assert_eq!(std::fs::read_to_string(path).unwrap(), "host-canary");
+    }
     assert_eq!(
         std::fs::read_to_string(&token).unwrap(),
         "synthetic-credential"
@@ -2470,7 +2602,7 @@ fn task_3225_service_required_refuses_absent_and_empty_binding_before_setup() {
         if let Some(grant) = grant {
             command.env(crate::gate::seat_authority::GRANT_ENV, grant);
         }
-        let error = match PreparedLaunch::prepare(&command, root.path(), None) {
+        let error = match PreparedLaunch::prepare(&mut command, root.path(), None) {
             Ok(_) => panic!("service admitted missing binding"),
             Err(error) => error,
         };
@@ -3260,9 +3392,10 @@ fn task_3219_interactive_native_generation_and_early_refusals() {
     ] {
         let mut cmd = Command::new("claude");
         cmd.arg(flag);
-        let error = PreparedLaunch::prepare_interactive(&cmd, Path::new("/nonexistent/3219"), None)
-            .err()
-            .expect("unsupported surface");
+        let error =
+            PreparedLaunch::prepare_interactive(&mut cmd, Path::new("/nonexistent/3219"), None)
+                .err()
+                .expect("unsupported surface");
         assert!(
             error.to_string().contains(if flag == "--bg" {
                 "supervisor"
@@ -3310,4 +3443,1246 @@ print('bounded version cases: 6 passed')
         String::from_utf8_lossy(&output.stderr)
     );
     assert!(String::from_utf8_lossy(&output.stdout).contains("6 passed"));
+}
+
+// trace:BUG-2487 | ai:codex
+fn bug_2487_codex_env() -> BTreeMap<String, String> {
+    TOOL_NET_ENV
+        .iter()
+        .chain(TOOL_BUILD_ENV)
+        .map(|name| ((*name).into(), String::new()))
+        .chain([
+            ("AIDA_SESSION_GRANT".into(), String::new()),
+            ("AIDA_ROLE_INSTANCE".into(), "companion".into()),
+        ])
+        .collect()
+}
+
+#[test]
+// trace:TASK-3015 | ai:codex
+// trace:TASK-3736 | ai:codex
+fn task_3736_task_3015_codex_config_refuses_posture_overrides() {
+    for config in [
+        "approval_policy=\"on-request\"",
+        " approval_policy =\"never\"",
+        "sandbox_mode=\"danger-full-access\"",
+        "sandbox_workspace_write.network_access=true",
+        "shell_environment_policy.inherit=\"all\"",
+        "permissions.aida.network.enabled=true",
+        "default_permissions=\"other\"",
+        // trace:TASK-3736 | ai:codex
+        "profile=\"other\"",
+        "profiles.other.sandbox_mode=\"danger-full-access\"",
+    ] {
+        for flags in [
+            vec!["-c".to_string(), config.to_string()],
+            vec!["--config".to_string(), config.to_string()],
+            vec![format!("--config={config}")],
+            vec![format!("-c{config}")],
+            vec![format!("-c={config}")],
+        ] {
+            let original = [vec!["exec".into()], flags, vec!["prompt".into()]].concat();
+            let error = codex_argv(
+                Path::new("/fixture/codex"),
+                &bug_2487_codex_env(),
+                &original,
+                true,
+            )
+            .unwrap_err();
+            assert!(
+                error.to_string().contains("posture config override"),
+                "{error}"
+            );
+        }
+    }
+}
+
+#[test]
+// trace:TASK-3015 | ai:codex
+fn task_3015_codex_config_preserves_ordinary_overrides() {
+    for flags in [
+        vec!["-c", "model=\"example\""],
+        vec!["--config", "model=\"example\""],
+        vec!["--config=model=\"example\""],
+        vec!["-c=model=\"example\""],
+    ] {
+        let original: Vec<String> = ["exec"]
+            .into_iter()
+            .chain(flags)
+            .chain(["prompt"])
+            .map(String::from)
+            .collect();
+        let (args, _) = codex_argv(
+            Path::new("/fixture/codex"),
+            &bug_2487_codex_env(),
+            &original,
+            true,
+        )
+        .unwrap();
+        assert!(args.ends_with(&original));
+    }
+}
+
+#[test]
+// trace:TASK-3015 | ai:codex
+fn task_3015_codex_sandbox_checks_split_and_inline_values() {
+    for flag in ["--sandbox", "-s"] {
+        for value in ["workspace-write", "danger-full-access", "read-only", ""] {
+            for flags in [
+                vec![flag.to_string(), value.to_string()],
+                vec![format!("{flag}={value}")],
+            ] {
+                let original = [vec!["exec".into()], flags, vec!["prompt".into()]].concat();
+                let result = codex_argv(
+                    Path::new("/fixture/codex"),
+                    &bug_2487_codex_env(),
+                    &original,
+                    true,
+                );
+                if value == "workspace-write" {
+                    let (args, _) = result.unwrap();
+                    assert!(args.ends_with(&["exec".into(), "prompt".into()]));
+                } else {
+                    assert!(result.unwrap_err().to_string().contains("sandbox policy"));
+                }
+            }
+        }
+    }
+}
+
+#[test]
+// trace:TASK-3015 | ai:codex
+fn task_3015_codex_config_preserves_prompt_after_terminator() {
+    for prompt in [
+        "-c",
+        "--config=approval_policy notes",
+        "--ask-for-approval",
+        "-P",
+        "--sandbox=danger-full-access",
+        "-s=danger-full-access",
+    ] {
+        let original = vec!["exec".into(), "--".into(), prompt.into()];
+        let (args, _) = codex_argv(
+            Path::new("/fixture/codex"),
+            &bug_2487_codex_env(),
+            &original,
+            true,
+        )
+        .unwrap();
+        assert!(args.ends_with(&original));
+    }
+}
+
+#[test]
+// trace:BUG-2487 | ai:codex
+fn bug_2487_pinned_help_checks_production_argv_and_scopes() {
+    let recorded: serde_json::Value =
+        serde_json::from_str(include_str!("../../launch/codex_0167_help.json")).unwrap();
+    assert_eq!(
+        recorded["sha256"],
+        codex_auth::PROGRAM_SHA256,
+        "pin changed: re-record exec/sandbox help from the newly probed binary"
+    );
+    assert_eq!(recorded["version"], "codex-cli 0.167.0");
+    let original = aida_core::vendors::profile(aida_core::vendors::LaunchVendor::Codex)
+        .headless_args(
+            "prompt containing -P and --unknown-flag",
+            "",
+            Some("fixture-model"),
+            Some("high"),
+            // trace:BUG-2495 | ai:codex — pair the real site posture with
+            // the pinned exec help, including its top-level approval flag.
+            Some(
+                crate::codex_native_sandbox::CODEX_NATIVE_POSTURE
+                    .into_iter()
+                    .map(String::from)
+                    .collect(),
+            ),
+        )
+        .unwrap();
+    let (args, preflight) = codex_argv(
+        Path::new("/fixture/codex"),
+        &bug_2487_codex_env(),
+        &original,
+        true,
+    )
+    .unwrap();
+    assert!(args
+        .windows(2)
+        .any(|v| v == ["-c", "default_permissions=\"aida\""]));
+    assert!(!args
+        .iter()
+        .any(|v| v == "-P" || v == "--permission-profile"));
+    assert!(preflight.windows(2).any(|v| v == ["-P", "aida"]));
+    assert!(preflight.iter().any(|v| v == "--include-managed-config"));
+    validate_codex_flags(&args, "exec").unwrap();
+    validate_codex_flags(&preflight[1..preflight.len() - 1], "sandbox").unwrap();
+    for unsupported in ["-P", "--permission-profile", "--future-unknown"] {
+        let injected = vec!["exec".into(), unsupported.into(), "aida".into()];
+        let error = validate_codex_flags(&injected, "exec")
+            .unwrap_err()
+            .to_string();
+        assert!(error.contains(unsupported), "{error}");
+    }
+    let error = codex_argv(
+        Path::new("/fixture/codex"),
+        &bug_2487_codex_env(),
+        &["exec".into(), "--future-unknown".into(), "prompt".into()],
+        true,
+    )
+    .unwrap_err()
+    .to_string();
+    assert!(error.contains("--future-unknown"), "{error}");
+    assert!(validate_codex_flags(&["sandbox".into(), "--json".into()], "sandbox").is_err());
+}
+
+#[test]
+// trace:TASK-3000 | ai:codex
+fn task_3000_unpinned_codex_checks_its_own_help_before_launch() {
+    let dir = tempfile::tempdir().unwrap();
+    let program = dir.path().join("codex");
+    let calls = dir.path().join("codex.calls");
+    let fixture: serde_json::Value =
+        serde_json::from_str(include_str!("../../launch/codex_0167_help.json")).unwrap();
+    let root = dir.path().join("root.help");
+    let exec = dir.path().join("exec.help");
+    let sandbox = dir.path().join("sandbox.help");
+    std::fs::write(&root, "Options:\n  -c, --config <key=value>\n").unwrap();
+    std::fs::write(&exec, fixture["exec"].as_str().unwrap()).unwrap();
+    std::fs::write(&sandbox, fixture["sandbox"].as_str().unwrap()).unwrap();
+    std::fs::write(
+        &program,
+        format!(
+            "#!/bin/sh\n\
+             echo \"$*\" >> \"$0.calls\"\n\
+             test -z \"$OPENAI_API_KEY$AIDA_SESSION_GRANT\" || exit 91\n\
+             case \"$*\" in\n\
+             --version) echo 'codex-cli 0.167.0';;\n\
+             --help) /bin/cat {root:?};;\n\
+             'exec --help') /bin/cat {exec:?};;\n\
+             'sandbox --help') /bin/cat {sandbox:?};;\n\
+             *) exit 92;;\nesac\n"
+        ),
+    )
+    .unwrap();
+    std::fs::set_permissions(&program, std::fs::Permissions::from_mode(0o700)).unwrap();
+    let mut env = bug_2487_codex_env();
+    env.insert("OPENAI_API_KEY".into(), "must-not-reach-host-probe".into());
+    env.insert(
+        "AIDA_SESSION_GRANT".into(),
+        "11111111-1111-4111-8111-111111111111".into(),
+    );
+    let original = vec!["exec".into(), "--json".into(), "prompt".into()];
+    codex_argv(&program, &env, &original, false).unwrap();
+    assert_eq!(
+        std::fs::read_to_string(&calls).unwrap(),
+        "--version\n--help\nexec --help\nsandbox --help\n"
+    );
+    for missing in [&root, &exec] {
+        let saved = std::fs::read(missing).unwrap();
+        // Mentioning -c in prose must not count as an option declaration.
+        std::fs::write(
+            missing,
+            "Options:\n  -h, --help\nExample: -c default_permissions=aida\n",
+        )
+        .unwrap();
+        let error = format!(
+            "{:#}",
+            codex_argv(&program, &env, &original, false).unwrap_err()
+        );
+        assert!(error.contains(&program.display().to_string()), "{error}");
+        assert!(error.contains("codex-cli 0.167.0"), "{error}");
+        assert!(error.contains("default_permissions"), "{error}");
+        assert!(error.contains("help lacks -c"), "{error}");
+        std::fs::write(missing, saved).unwrap();
+    }
+    // Exec-only unsupported flags are checked against the live help as well.
+    std::fs::write(&exec, "Options:\n  -c, --config <key=value>\n").unwrap();
+    let error = format!(
+        "{:#}",
+        codex_argv(&program, &env, &original, false).unwrap_err()
+    );
+    assert!(error.contains("--json"), "{error}");
+    assert!(error.contains("0.167.0"), "{error}");
+
+    // Pinned callers retain fixture-only validation, with no vendor execution.
+    std::fs::remove_file(&calls).unwrap();
+    std::fs::write(&program, "#!/bin/sh\nexit 93\n").unwrap();
+    let error = format!(
+        "{:#}",
+        codex_argv(&program, &env, &original, false).unwrap_err()
+    );
+    assert!(error.contains("version unavailable"), "{error}");
+    assert!(error.contains(&program.display().to_string()), "{error}");
+    codex_argv(&program, &env, &original, true).unwrap();
+    assert!(!calls.exists());
+}
+
+#[test]
+// trace:BUG-2495 | ai:codex
+fn bug_2495_codex_approval_flags_use_exec_config() {
+    for approval in [
+        vec!["--ask-for-approval", "never"],
+        vec!["--ask-for-approval=never"],
+        vec!["-a", "never"],
+    ] {
+        let original: Vec<String> = ["exec", "--sandbox", "workspace-write"]
+            .into_iter()
+            .chain(approval)
+            .chain(["prompt containing --ask-for-approval on-request"])
+            .map(String::from)
+            .collect();
+        let (args, preflight) = codex_argv(
+            Path::new("/fixture/codex"),
+            &bug_2487_codex_env(),
+            &original,
+            true,
+        )
+        .unwrap();
+        assert!(args
+            .windows(2)
+            .any(|v| v == ["-c", "approval_policy=\"never\""]));
+        assert!(!args.iter().any(|v| v == "-a"
+            || v == "--ask-for-approval"
+            || v.starts_with("--ask-for-approval=")));
+        assert_eq!(args.last(), original.last());
+        validate_codex_flags(&args, "exec").unwrap();
+        validate_codex_flags(&preflight[1..preflight.len() - 1], "sandbox").unwrap();
+    }
+}
+
+#[test]
+// trace:BUG-2495 | ai:codex
+fn bug_2495_codex_approval_flags_refuse_other_or_missing_values() {
+    for value in ["on-request", "untrusted", "on-failure", "", "unknown"] {
+        for approval in [
+            vec!["--ask-for-approval".into(), value.into()],
+            vec![format!("--ask-for-approval={value}")],
+            vec!["-a".into(), value.into()],
+        ] {
+            let original = ["exec".into()]
+                .into_iter()
+                .chain(approval)
+                .chain(["prompt".into()])
+                .collect::<Vec<String>>();
+            let error = codex_argv(
+                Path::new("/fixture/codex"),
+                &bug_2487_codex_env(),
+                &original,
+                true,
+            )
+            .unwrap_err()
+            .to_string();
+            assert!(error.contains("approval policy must be never"), "{error}");
+        }
+    }
+    for flag in ["--ask-for-approval", "-a"] {
+        let error = codex_argv(
+            Path::new("/fixture/codex"),
+            &bug_2487_codex_env(),
+            &["exec".into(), flag.into()],
+            true,
+        )
+        .unwrap_err()
+        .to_string();
+        assert!(error.contains("approval flag requires a value"), "{error}");
+    }
+}
+
+#[test]
+// trace:BUG-2487 | ai:codex
+fn bug_2487_installed_exec_honours_builder_profile() {
+    if !installed_codex_required() {
+        eprintln!("SKIP: set AIDA_REQUIRE_CODEX_INSTALLED_LIVE=1 for pinned exec write probe");
+        return;
+    }
+    let program = resolve_program(
+        &Command::new("codex"),
+        &BTreeMap::from([(
+            "PATH".into(),
+            aida_core::exec_context::Environment::capture()
+                .var("PATH")
+                .unwrap()
+                .into(),
+        )]),
+    )
+    .unwrap();
+    let program = codex_auth::resolve_native_program(&program).unwrap();
+    codex_auth::require_program(&program, codex_auth::PROGRAM_SHA256).unwrap();
+    let (args, preflight) = codex_argv(
+        &program,
+        &bug_2487_codex_env(),
+        &[
+            "exec".into(),
+            "--skip-git-repo-check".into(),
+            "--json".into(),
+            "--sandbox".into(),
+            "workspace-write".into(),
+            "Run the fixture tool call.".into(),
+        ],
+        true,
+    )
+    .unwrap();
+    let output = Command::new("/usr/bin/python3")
+        .args(["-I", "-S"])
+        .arg(
+            Path::new(env!("CARGO_MANIFEST_DIR"))
+                .join("src/containment/tests/codex_exec_profile_probe.py"),
+        )
+        .arg(program)
+        .arg(serde_json::to_string(&args).unwrap())
+        .arg(serde_json::to_string(&preflight).unwrap())
+        .output()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "{}\n{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    eprintln!("{}", String::from_utf8_lossy(&output.stdout));
+}
+
+// trace:STORY-2326 | ai:codex
+#[test]
+fn story_2326_wrapper_environment_keeps_ambient_values_implicit() {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
+    use crate::launch::context::{LaunchContext, LaunchRequest};
+    use aida_core::launch_policy::{LaunchKind, LaunchVendor};
+    let _env = crate::test_env::EnvVarsGuard::apply(&[
+        ("PATH", Some("/parent/bin:/usr/bin:/bin")),
+        ("AIDA_SESSION_ID", Some("parent-session")),
+        ("AIDA_ROTATION_HANDOFF", Some("parent-handoff")),
+        ("AIDA_AGENT_CMD", None),
+    ]);
+    let req = LaunchRequest {
+        vendor: LaunchVendor::Claude,
+        kind: LaunchKind::Fresh,
+        program: "claude".into(),
+        args: vec![],
+        tail: vec![],
+        posture: crate::session::ContainmentPosture::Aida,
+        cwd: std::env::temp_dir(),
+        set_cwd: false,
+        host_main: None,
+    };
+    let ctx = LaunchContext::resolve_under(req, false)
+        .unwrap()
+        .with_wrapper_environment(true);
+    let mut cmd = crate::launch::spawn_agent(&ctx).unwrap();
+    let env = selected_environment(&cmd);
+    for key in ["PATH", "AIDA_SESSION_ID", "AIDA_ROTATION_HANDOFF"] {
+        assert!(
+            !env.contains_key(key),
+            "ambient {key} crossed wrapper selection"
+        );
+        assert!(explicit(&cmd, key).is_none());
+    }
+    cmd.env("PATH", "/site/bin")
+        .env("AIDA_SESSION_ID", "child-session")
+        .env("AIDA_ROTATION_HANDOFF", "child-handoff")
+        .env("AIDA_REVIEW_VERDICT_FILE", "/site/verdict.json");
+    assert_eq!(selected_environment(&cmd)["PATH"], "/site/bin");
+    assert_eq!(
+        selected_environment(&cmd)["AIDA_SESSION_ID"],
+        "child-session"
+    );
+    assert_eq!(
+        explicit(&cmd, "AIDA_ROTATION_HANDOFF").as_deref(),
+        Some("child-handoff")
+    );
+    assert_eq!(
+        selected_environment(&cmd)["AIDA_REVIEW_VERDICT_FILE"],
+        "/site/verdict.json"
+    );
+}
+
+/// Exercise both callers of the shared command builder under real trusted
+/// wrapper policy, rather than setting LaunchContext's flag in the test.
+// trace:STORY-2326 | ai:codex
+#[test]
+fn story_2326_wrapper_headless_builders_keep_parent_context_out_of_selection() {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
+    use crate::session::{self, HeadlessVendor};
+    use aida_core::agents_config::AgentSeat;
+    let root = tempfile::tempdir().unwrap();
+    trusted_policy(root.path(), "claude = \"aida\"");
+    let _cwd = session::contained_cwd_seam::pin(root.path());
+    let _env = crate::test_env::AmbientGuard::hermetic_and(
+        root.path(),
+        None,
+        &[
+            ("AIDA_CONTAINED", None),
+            ("AIDA_AGENT_CMD", None),
+            ("AIDA_SESSION_ID", Some("parent-session")),
+            ("AIDA_HARNESS_VERSION", Some("parent-harness")),
+            ("AIDA_ROTATION_HANDOFF", Some("parent-handoff")),
+            ("AIDA_AGENT_CONTEXT_FILE", Some("/parent/context")),
+        ],
+    );
+    let coordinator = session::build_coordinator_headless_command(
+        None,
+        HeadlessVendor::Claude,
+        "prompt",
+        "dontAsk",
+        AgentSeat::Advisor,
+        "",
+        true,
+        false,
+    )
+    .unwrap();
+    let exec = {
+        let _composition = session::ClaudeWrapperComposition::enter();
+        session::build_exec_vendor_headless_command(
+            None,
+            HeadlessVendor::Claude,
+            "prompt",
+            "child-session",
+            true,
+            None,
+            None,
+            "implementer",
+            "",
+        )
+        .unwrap()
+    };
+    for mut cmd in [coordinator, exec] {
+        let env = selected_environment(&cmd);
+        for key in [
+            "AIDA_SESSION_ID",
+            "AIDA_ROTATION_HANDOFF",
+            "AIDA_AGENT_CONTEXT_FILE",
+        ] {
+            assert!(
+                explicit(&cmd, key).is_none(),
+                "ambient {key} became explicit"
+            );
+            assert!(
+                !env.contains_key(key),
+                "ambient {key} crossed wrapper selection"
+            );
+        }
+        assert_ne!(
+            env.get("AIDA_HARNESS_VERSION").map(String::as_str),
+            Some("parent-harness")
+        );
+        // A child lease assigned by the owner remains transportable.
+        cmd.env("AIDA_SESSION_ID", "child-lease");
+        assert_eq!(selected_environment(&cmd)["AIDA_SESSION_ID"], "child-lease");
+    }
+}
+
+// Both wrapper entrypoints reject an accidental env_clear/projection before
+// touching the root, credentials, store or broker. This protects future sites
+// that omit LaunchContext's wrapper_environment decision.
+// trace:STORY-2326 | ai:codex
+#[test]
+fn story_2326_wrapper_refuses_projected_commands_before_io() {
+    for interactive in [false, true] {
+        let mut cmd = Command::new("claude");
+        cmd.env_clear().env("AIDA_SESSION_ID", "projected-parent");
+        let result = if interactive {
+            PreparedLaunch::prepare_interactive(&mut cmd, Path::new("/nonexistent/2326"), None)
+        } else {
+            PreparedLaunch::prepare(&mut cmd, Path::new("/nonexistent/2326"), None)
+        };
+        let error = result.err().expect("projected command must refuse");
+        assert!(
+            error
+                .to_string()
+                .contains("unprojected command environment"),
+            "{error:#}"
+        );
+    }
+}
+
+// trace:TASK-3048 | ai:codex
+#[test]
+fn task_3048_diagnostic_hosts_do_not_open_production_admission() {
+    let policy = crate::containment::runtime_policy("agy").unwrap();
+    let mut approved = policy.auth_hosts.clone();
+    approved.push("allow.fixture.test".into());
+    let relay = runtime_relay_hosts(&policy, &approved, true).unwrap();
+    for host in &policy.auth_hosts {
+        assert!(relay.contains(host));
+    }
+    assert!(runtime_relay_hosts(&policy, &approved, false)
+        .unwrap_err()
+        .to_string()
+        .contains("inventory is incomplete"));
+    assert!(runtime_relay_hosts(&policy, &[], true)
+        .unwrap_err()
+        .to_string()
+        .contains("AGY_AUTH_HOST_UNAPPROVED"));
+    assert!(
+        crate::session::preflight_launch_vendor(crate::session::HeadlessVendor::Agy, false)
+            .unwrap_err()
+            .to_string()
+            .contains("fresh all-tool conformance")
+    );
+}
+
+// No DNS or real egress: exercise the actual host refusal and typed reply.
+// trace:TASK-3048 | ai:codex
+#[test]
+fn task_3048_unlisted_host_is_named_before_dns() {
+    let test = r#"
+a,b=socket.socketpair(socket.AF_UNIX,socket.SOCK_SEQPACKET)
+request=dict(version=1,method='CONNECT',host='unknown.fixture.test',port=443,
+             host_header='unknown.fixture.test:443',protocol='tcp')
+def no_dns(*args,**kwargs):
+    raise AssertionError('DNS attempted for unlisted host')
+socket.getaddrinfo=no_dns
+proxy_request(json.dumps(request).encode(),[b.detach()],{('oauth2.googleapis.com',443)},None)
+assert a.recv(128)==b'denied-v1'
+"#;
+    let output = Command::new("/usr/bin/python3")
+        .args(["-I", "-S", "-c", &format!("{COMMON}\n{HOST}\n{test}")])
+        .output()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert!(String::from_utf8_lossy(&output.stderr)
+        .contains("CONTAINED_EGRESS_HOST_UNLISTED unknown.fixture.test"));
+}
+
+// Record only successfully connected destinations, never vendor log text.
+// trace:TASK-3048 | ai:codex
+#[test]
+fn task_3048_host_egress_bitmap_requires_successful_host_connection() {
+    let test = r#"
+import tempfile
+with tempfile.TemporaryFile() as evidence:
+    evidence.write(b'000')
+    evidence.flush()
+    listener=socket.socket()
+    listener.bind(('127.0.0.1',0))
+    listener.listen(1)
+    port=listener.getsockname()[1]
+    hosts=('allow.fixture.test','oauth2.googleapis.com')
+    for requested_port in (1,port):
+        a,b=socket.socketpair(socket.AF_UNIX,socket.SOCK_SEQPACKET)
+        request=dict(version=1,method='CONNECT',host=hosts[0],port=requested_port,
+                     host_header=hosts[0]+':'+str(requested_port),protocol='tcp')
+        proxy_request(json.dumps(request).encode(),[b.detach()],{(hosts[0],port)},
+                      (hosts[0],port,'127.0.0.1'),egress_fd=evidence.fileno(),egress_hosts=hosts)
+        if requested_port != port:
+            assert a.recv(128)==b'denied-v1'
+            assert os.pread(evidence.fileno(),3,0)==b'000'
+        else:
+            data,fds=receive(a)
+            assert data==b'tunnel-v1'
+            for fd in fds: os.close(fd)
+            assert os.pread(evidence.fileno(),3,0)==b'010'
+        a.close()
+    listener.close()
+"#;
+    let output = Command::new("/usr/bin/python3")
+        .args(["-I", "-S", "-c", &format!("{COMMON}\n{HOST}\n{test}")])
+        .output()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert!(String::from_utf8_lossy(&output.stderr)
+        .contains("CONTAINED_EGRESS_HOST_UNLISTED allow.fixture.test:"));
+}
+
+// The actual prepare API, with a fake vendor and token. Never executes AGY.
+// trace:TASK-3048 | ai:codex
+#[test]
+fn task_3048_diagnostic_prepare_uses_common_wrapper_and_keeps_production_closed() {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
+    if let Err(error) = host_prerequisites() {
+        skip_under(live_required(), &format!("{error:#}"));
+        return;
+    }
+    let home = crate::home_dir().unwrap();
+    let root = tempfile::tempdir().unwrap();
+    let policy = crate::containment::runtime_policy("agy").unwrap();
+    trusted_policy(root.path(), "agy = \"aida\"");
+    let config = root.path().join(".aida/config.toml");
+    let text = std::fs::read_to_string(&config).unwrap().replace(
+        "[contained]\n",
+        &format!(
+            "[contained]\nallowed_hosts = {}\n",
+            serde_json::to_string(&policy.auth_hosts).unwrap()
+        ),
+    );
+    std::fs::write(&config, text).unwrap();
+    for args in [
+        vec!["add", ".aida/config.toml"],
+        vec!["commit", "-qm", "fixture auth approval"],
+        vec!["update-ref", "refs/remotes/origin/main", "HEAD"],
+    ] {
+        assert!(crate::test_git::git_command()
+            .arg("-C")
+            .arg(root.path())
+            .args(args)
+            .status()
+            .unwrap()
+            .success());
+    }
+    for path in crate::contained_boundary::contained_store_write_paths(root.path()) {
+        std::fs::create_dir_all(path).unwrap();
+    }
+    let runtime = home.join(&policy.relative);
+    std::fs::create_dir_all(&runtime).unwrap();
+    let source_home = tempfile::tempdir().unwrap();
+    let source = source_home.path().join(&policy.relative);
+    std::fs::create_dir_all(&source).unwrap();
+    let credential = source.join(&policy.credential);
+    std::fs::write(&credential, "synthetic-only").unwrap();
+    let bin = home.join("bin");
+    std::fs::create_dir_all(&bin).unwrap();
+    let program = bin.join("agy");
+    std::fs::write(&program, "#!/bin/sh\nexit 99\n").unwrap();
+    std::fs::set_permissions(&program, std::fs::Permissions::from_mode(0o700)).unwrap();
+    let mut child = Command::new(program);
+    child
+        .args(["-p", "fixture only"])
+        .env("AIDA_HEADLESS", "1")
+        .env("AIDA_SESSION_GRANT", "")
+        .env("AIDA_SESSION_ROLE", "companion")
+        .env("OPENAI_API_KEY", "must-not-reach-agy");
+    let refusal = PreparedLaunch::prepare(&mut child, root.path(), None)
+        .err()
+        .unwrap();
+    assert!(refusal.to_string().contains("inventory is incomplete"));
+    // Neither absence in origin/main nor a working-tree-only opt-in grants
+    // the diagnostic permission bypass. No plan may escape either refusal.
+    // trace:TASK-3048 | ai:codex
+    let approved_text = std::fs::read_to_string(&config).unwrap();
+    trusted_policy(root.path(), "");
+    for working_tree_opt_in in [false, true] {
+        if working_tree_opt_in {
+            std::fs::write(&config, &approved_text).unwrap();
+        }
+        let error =
+            PreparedLaunch::prepare_runtime_diagnostic(&mut child, root.path(), &credential)
+                .err()
+                .expect("untrusted posture returned a launch plan");
+        assert!(
+            format!("{error:#}").contains("requires trusted policy"),
+            "{error:#}"
+        );
+    }
+    trusted_policy(root.path(), "agy = \"aida\"");
+    std::fs::write(&config, &approved_text).unwrap();
+    for args in [
+        vec!["add", ".aida/config.toml"],
+        vec!["commit", "-qm", "restore approved hosts"],
+        vec!["update-ref", "refs/remotes/origin/main", "HEAD"],
+    ] {
+        assert!(crate::test_git::git_command()
+            .arg("-C")
+            .arg(root.path())
+            .args(args)
+            .status()
+            .unwrap()
+            .success());
+    }
+    // Retained siblings must survive the private extension mask as pinned,
+    // read-only mounts, including ordinary files alongside skill directories.
+    // trace:TASK-3048 | ai:codex
+    let skills = root.path().join(".agents/skills");
+    std::fs::create_dir_all(&skills).unwrap();
+    std::fs::write(skills.join("SKILL.md"), "fixture skill").unwrap();
+    let sibling = root.path().join(".agents/notes.txt");
+    std::fs::write(&sibling, "fixture notes").unwrap();
+    let plan = PreparedLaunch::prepare_runtime_diagnostic(&mut child, root.path(), &credential)
+        .unwrap_or_else(|e| panic!("diagnostic prepare: {e:#}"));
+    assert!(!plan
+        .command
+        .get_envs()
+        .any(|(k, v)| k == "OPENAI_API_KEY" && v.is_some()));
+    let cfg: serde_json::Value =
+        serde_json::from_str(&plan.command.get_args().nth(5).unwrap().to_string_lossy()).unwrap();
+    for host in &policy.auth_hosts {
+        assert!(cfg["allowed"]
+            .as_array()
+            .unwrap()
+            .contains(&serde_json::json!(host)));
+    }
+    let argv = cfg["argv"].as_array().unwrap();
+    assert!(argv.contains(&serde_json::json!("--dangerously-skip-permissions")));
+    assert!(!argv.contains(&serde_json::json!("--sandbox")));
+    let settings = argv.iter().position(|a| a == "--settings").unwrap();
+    assert_eq!(
+        argv[settings + 1].as_str().unwrap(),
+        runtime.join("settings.json").to_string_lossy()
+    );
+    let bound = plan
+        .profile
+        .mounts
+        .iter()
+        .find(|m| m.path == runtime.join(&policy.credential))
+        .unwrap();
+    assert!(!bound.writable);
+    assert_eq!(
+        bound.file.metadata().unwrap().ino(),
+        std::fs::metadata(&credential).unwrap().ino()
+    );
+    assert!(plan
+        .profile
+        .mounts
+        .iter()
+        .any(|m| m.path == source_home.path().join(".gemini") && !m.writable));
+    for name in [".agents/mcp_config.json", ".agents/hooks.json", ".mcp.json"] {
+        let mount = plan
+            .profile
+            .mounts
+            .iter()
+            .find(|m| m.path == root.path().join(name) && m.file.metadata().unwrap().len() == 2)
+            .unwrap();
+        let mut bytes = [0; 2];
+        mount.file.read_exact_at(&mut bytes, 0).unwrap();
+        assert_eq!(&bytes, b"{}");
+        assert!(!mount.writable);
+    }
+    for name in [
+        ".agents/mcp_config.json",
+        ".agents/hooks.json",
+        ".agents/plugins",
+    ] {
+        assert!(
+            !root.path().join(name).exists(),
+            "mask leaked host path: {name}"
+        );
+    }
+    for path in [&skills, &sibling] {
+        let mount = plan
+            .profile
+            .mounts
+            .iter()
+            .find(|m| m.path == *path)
+            .unwrap();
+        assert!(!mount.writable);
+        assert_eq!(
+            mount.file.metadata().unwrap().ino(),
+            std::fs::metadata(path).unwrap().ino()
+        );
+    }
+    drop(plan);
+    // A symlink sibling must refuse preparation, even when its target is a
+    // valid retained directory. No launch plan may escape this validation.
+    std::os::unix::fs::symlink(&skills, root.path().join(".agents/linked-skills")).unwrap();
+    let error = PreparedLaunch::prepare_runtime_diagnostic(&mut child, root.path(), &credential)
+        .err()
+        .expect("symlink sibling returned a launch plan");
+    assert!(
+        format!("{error:#}").contains("unsafe mount identity"),
+        "{error:#}"
+    );
+    assert!(crate::launch::agy::AGY.require_conformance().is_err());
+}
+
+/// S3 runs the real supervisor behind a dispatcher that exits, using synthetic
+/// credentials and Claude. It retains the same attested wrapper and seat gates.
+// trace:TASK-3219 | ai:codex
+#[test]
+#[cfg(target_os = "linux")]
+fn task_3219_live_claude_background_supervisor() {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
+    if !live_available() {
+        return;
+    }
+    use crate::agent_launch::{
+        agent_claude_background, AgentLaunchConfig, AgentLaunchPlan, AgentPromptStyle,
+    };
+    use crate::gate::seat_authority as authority;
+    // The runner may inherit a revoked session ring from another fixture.
+    // Own a fresh synthetic ring before issuing a real child key; do not
+    // let a proc-only fallback masquerade as wrapper key possession.
+    assert!(
+        unsafe {
+            libc::syscall(
+                libc::SYS_keyctl,
+                1 as libc::c_long,
+                0 as libc::c_long,
+                0 as libc::c_long,
+                0 as libc::c_long,
+                0 as libc::c_long,
+            )
+        } >= 0,
+        "live background regression requires an anonymous session keyring"
+    );
+    let root = tempfile::tempdir().unwrap();
+    trusted_policy(root.path(), "claude = \"aida\"");
+    let _cwd = crate::session::contained_cwd_seam::pin(root.path());
+    for p in crate::contained_boundary::contained_store_write_paths(root.path()) {
+        std::fs::create_dir_all(p).unwrap();
+    }
+    std::fs::write(
+        root.path().join("host-net"),
+        std::fs::read_link("/proc/self/ns/net")
+            .unwrap()
+            .to_str()
+            .unwrap(),
+    )
+    .unwrap();
+    let home = crate::home_dir().unwrap();
+    let config_home = home.join(".claude");
+    std::fs::create_dir_all(&config_home).unwrap();
+    credentials_expiring_in(&config_home, 8 * 3600);
+    let bin = root.path().join("bin");
+    std::fs::create_dir(&bin).unwrap();
+    let program = bin.join("claude");
+    std::fs::write(
+        &program,
+        r#"#!/usr/bin/python3
+import os,sys,errno,time,json,socket
+from pathlib import Path
+if '--version' in sys.argv:
+    print('synthetic-3219-bg');sys.exit(0)
+assert '--bg' not in sys.argv and '--print' in sys.argv
+assert os.environ['AIDA_HEADLESS']=='1'
+assert os.environ['AIDA_SESSION_ROLE']=='implementer'
+assert os.environ['AIDA_CONTAINMENT_POSTURE']=='aida'
+assert os.environ['AIDA_USER']=='bg-3219'
+assert Path('preflight-ran').exists()
+assert os.readlink('/proc/self/ns/net')!=Path('host-net').read_text()
+assert '--mcp-config' not in sys.argv and '--strict-mcp-config' not in sys.argv
+for leaf in ['.git/config', '.aida/config.toml']:
+    try: Path(leaf).write_text('escape');raise AssertionError('write escaped: '+leaf)
+    except OSError as e: assert e.errno in (errno.EROFS,errno.EACCES,errno.EPERM)
+try:
+    s=socket.socket(socket.AF_INET,socket.SOCK_STREAM);s.settimeout(.2)
+    s.connect(('1.1.1.1',443));raise AssertionError('network escaped')
+except OSError: pass
+# /tmp outside the bound project is private scratch, never the host parent.
+Path('../outside-write').write_text('private scratch')
+Path('worker.json').write_text(json.dumps({'grant':os.environ['AIDA_SESSION_GRANT']}))
+print('BACKGROUND-READY',flush=True)
+end=time.monotonic()+20
+while not Path('finish').exists() and time.monotonic()<end: time.sleep(.05)
+assert Path('finish').exists()
+print('BACKGROUND-EXIT',flush=True)
+"#,
+    )
+    .unwrap();
+    let aida = bin.join("aida");
+    std::fs::write(
+        &aida,
+        "#!/bin/sh\nprintf yes > preflight-ran\necho 'seat_grant_valid=true expected_seat=true'\n",
+    )
+    .unwrap();
+    for p in [&program, &aida] {
+        std::fs::set_permissions(p, std::fs::Permissions::from_mode(0o700)).unwrap();
+    }
+    let _aida = crate::kernel::test_aida_exe::set(aida);
+    let path = format!("{}:/usr/bin:/bin", bin.display());
+    let mut env = crate::test_env::AmbientGuard::hermetic_and(
+        root.path(),
+        None,
+        &[
+            ("PATH", Some(&path)),
+            ("AIDA_CONTAINED", None),
+            ("AIDA_AGENT_CMD", None),
+            ("AIDA_OS_WRAP", Some("1")),
+            ("CLAUDE_CONFIG_DIR", Some(config_home.to_str().unwrap())),
+        ],
+    );
+    env.set_key("AIDA_USER", "bg-parent");
+    let parent = authority::test_support::mint_grant_for_with_ttl(
+        root.path(),
+        "bg-parent",
+        "advisor",
+        &["implementer"],
+        Some(chrono::Duration::hours(1)),
+    );
+    env.set_key(authority::GRANT_ENV, &parent);
+    let flags = {
+        let _scope = crate::session::ClaudeWrapperComposition::enter();
+        crate::session::claude_contained_flags_for(None, root.path()).unwrap()
+    };
+    let config = AgentLaunchConfig {
+        agent_type: "claude",
+        binary: "claude",
+        default_args: flags,
+        prompt_style: AgentPromptStyle::Positional,
+        contained: true,
+        delegate_seats: vec![],
+    };
+    let plan = AgentLaunchPlan {
+        project_root: root.path().into(),
+        launch_cwd: root.path().into(),
+        role: Some("implementer".into()),
+        role_instance: crate::role::RoleInstanceKind::Driver,
+        current_spec: None,
+        name: "bg-3219".into(),
+        lease_id: None,
+        native_session_id: None,
+        resumed_from: None,
+    };
+    agent_claude_background::tests::dispatch_via_exiting_process(&program, &config, &plan).unwrap();
+    let attempts = root.path().join(".aida/claude-background");
+    let dir = std::fs::read_dir(&attempts)
+        .unwrap()
+        .next()
+        .unwrap()
+        .unwrap()
+        .path();
+    let wait_for = |leaf: &Path| {
+        let end = Instant::now() + Duration::from_secs(25);
+        while !leaf.exists() && Instant::now() < end {
+            std::thread::sleep(Duration::from_millis(20));
+        }
+        assert!(
+            leaf.exists(),
+            "missing {}: {}",
+            leaf.display(),
+            std::fs::read_to_string(dir.join("output.log")).unwrap_or_default()
+        );
+    };
+    wait_for(&root.path().join("worker.json"));
+    let (supervisor, dispatcher): (
+        crate::agent_launch::codex_bg_receipt::ProcId,
+        crate::agent_launch::codex_bg_receipt::ProcId,
+    ) = serde_json::from_slice(&std::fs::read(dir.join("supervisor.json")).unwrap()).unwrap();
+    assert!(supervisor.is_live());
+    // Wait until its original dispatcher is gone (reparented), while the
+    // actual model remains alive inside the wrapper.
+    let end = Instant::now() + Duration::from_secs(5);
+    loop {
+        let stat = std::fs::read_to_string(format!("/proc/{}/stat", supervisor.pid)).unwrap();
+        let ppid = stat
+            .rsplit_once(')')
+            .unwrap()
+            .1
+            .split_whitespace()
+            .nth(1)
+            .unwrap()
+            .to_string();
+        if ppid != dispatcher.pid.to_string() {
+            break;
+        }
+        assert!(Instant::now() < end, "dispatcher has not exited: {stat}");
+        std::thread::sleep(Duration::from_millis(20));
+    }
+    let worker: serde_json::Value =
+        serde_json::from_slice(&std::fs::read(root.path().join("worker.json")).unwrap()).unwrap();
+    let child_id = worker["grant"].as_str().unwrap();
+    let child = authority::read_grant(child_id).unwrap();
+    assert_eq!(child.parent_grant_id.as_deref(), Some(parent.as_str()));
+    assert_eq!(child.subject, "bg-3219");
+    assert!(child.revoked_at.is_none());
+    assert!(child
+        .binding
+        .iter()
+        .filter_map(|b| authority::binding_process(b))
+        .any(|(pid, _, _)| pid != supervisor.pid && pid != std::process::id()));
+    assert!(std::fs::read_to_string(dir.join("output.log"))
+        .unwrap()
+        .contains("BACKGROUND-READY"));
+    std::fs::write(root.path().join("finish"), "yes").unwrap();
+    wait_for(&dir.join("ended"));
+    assert!(authority::read_grant(child_id)
+        .unwrap()
+        .revoked_at
+        .is_some());
+    assert!(std::fs::read_to_string(dir.join("output.log"))
+        .unwrap()
+        .contains("BACKGROUND-EXIT"));
+    assert!(!root.path().join("../outside-write").exists());
+    assert!(authority::read_grant(&parent).unwrap().revoked_at.is_none());
+
+    // Closed handoff under the CLI's SIG_DFL must unwind, revoke the issued
+    // child grant and close the registry row, even before the vendor runs.
+    std::fs::remove_file(root.path().join("worker.json")).unwrap();
+    let mut cancelled = plan.clone();
+    cancelled.name = "bg-cancelled".into();
+    let cancelled_dir =
+        agent_claude_background::tests::cancel_during_prepare(&program, &config, &cancelled)
+            .unwrap();
+    assert!(cancelled_dir.join("ended").exists());
+    assert!(!root.path().join("worker.json").exists());
+    let grants: Vec<authority::SeatGrant> = std::fs::read_dir(authority::grant_dir().unwrap())
+        .unwrap()
+        .map(|entry| entry.unwrap().path())
+        .filter(|path| path.extension().and_then(|s| s.to_str()) == Some("json"))
+        .map(|path| serde_json::from_slice(&std::fs::read(path).unwrap()).unwrap())
+        .filter(|grant: &authority::SeatGrant| grant.subject == "bg-cancelled")
+        .collect();
+    assert_eq!(grants.len(), 1);
+    assert!(grants[0].revoked_at.is_some());
+    let rows = crate::agent_registry::load_entries(root.path());
+    let row = rows
+        .iter()
+        .find(|(_, row)| row.name.as_deref() == Some("bg-cancelled"))
+        .unwrap();
+    assert!(row.1.ended_at.is_some());
+
+    // A refused seat preflight must never release a second vendor.
+    std::fs::remove_file(root.path().join("finish")).unwrap();
+    std::fs::write(bin.join("aida"), "#!/bin/sh\nexit 1\n").unwrap();
+    let mut refused = plan.clone();
+    refused.name = "bg-refused".into();
+    assert!(
+        agent_claude_background::dispatch(&program, &config, &refused, None, &[], None, || {})
+            .is_err()
+    );
+    assert!(!root.path().join("worker.json").exists());
+    eprintln!("LIVE: background supervisor passed (1 live regression)");
+}
+
+// trace:TASK-3219 | ai:codex
+#[test]
+fn task_3219_background_attach_argv_refuses_subcommand_preserves_prompt() {
+    let args = |a: &[&str]| a.iter().map(|s| s.to_string()).collect::<Vec<_>>();
+    let err =
+        claude_argv(&args(&["attach", "session-id", "--settings", "{}"]), 1, &[]).unwrap_err();
+    assert!(err.to_string().contains("aida agent attach <attempt>"));
+    // Real composition prepends generated flags before --extra-flag values.
+    let composed = args(&[
+        "--setting-sources",
+        "project",
+        "--settings",
+        "{}",
+        "--permission-mode",
+        "dontAsk",
+        "--model",
+        "sonnet",
+        "attach",
+        "session-id",
+        "--session-id",
+        "uuid",
+        "--print",
+    ]);
+    let err = claude_argv(&composed, 1, &[]).unwrap_err();
+    assert!(err.to_string().contains("aida agent attach <attempt>"));
+    for input in [
+        args(&["--settings", "{}", "attach"]),
+        args(&["attach", "--settings", "{}"]),
+        args(&["--settings", "{}", "--", "attach"]),
+    ] {
+        assert!(claude_argv(&input, 1, &[]).is_ok());
+    }
+}
+
+// Exercise the production entry point, with invalid requests deliberately
+// refusing before executable discovery, claims, worktrees or setup receipts.
+// trace:TASK-3219 | ai:codex
+#[test]
+fn task_3219_background_entry_refuses_before_setup_and_native_argv() {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
+    use crate::agent_launch::*;
+    use crate::{session, RoleInstanceKind};
+    let root = tempfile::tempdir().unwrap();
+    trusted_policy(root.path(), "claude = \"aida\"");
+    let _cwd = session::contained_cwd_seam::pin(root.path());
+    let mut env = crate::test_env::AmbientGuard::hermetic_and(
+        root.path(),
+        None,
+        &[("AIDA_CONTAINED", None), ("AIDA_OS_WRAP", Some("1"))],
+    );
+    let config = || AgentLaunchConfig {
+        delegate_seats: vec![],
+        agent_type: "claude",
+        binary: "/missing/claude",
+        default_args: vec![],
+        prompt_style: AgentPromptStyle::Positional,
+        contained: true,
+    };
+    for (rotate, resume, prompt, expected) in [
+        (true, None, Some("work"), "--rotate"),
+        (false, Some("session"), Some("work"), "resume waits"),
+        (false, None, None, "need a prompt"),
+    ] {
+        let err = agent_new_bg_dispatch(
+            config(),
+            Some("implementer".into()),
+            Some("TASK-3219".into()),
+            false,
+            Some(root.path()),
+            AgentContextOptions::new(false, false),
+            false,
+            false,
+            false,
+            false,
+            // No explicit prompt still enables auto-prompt unless --no-prompt is set.
+            AgentPromptOptions::new(prompt.map(str::to_owned), prompt.is_none()),
+            AgentResumeOptions::new(true, resume.map(str::to_owned), false, true),
+            AgentDefaultFlagOptions::new(false, vec![], None).rotating(rotate),
+            None,
+            None,
+            true,
+        )
+        .unwrap_err();
+        assert!(format!("{err:#}").contains(expected), "{err:#}");
+        let files: Vec<_> = std::fs::read_dir(root.path().join(".aida"))
+            .unwrap()
+            .map(|e| e.unwrap().file_name())
+            .collect();
+        assert_eq!(files, vec![std::ffi::OsString::from("config.toml")]);
+    }
+    trusted_policy(root.path(), "");
+    let mut cfg = config();
+    cfg.default_args = vec!["--bg".into(), "--model".into(), "sonnet".into()];
+    let plan = AgentLaunchPlan {
+        project_root: root.path().into(),
+        launch_cwd: root.path().into(),
+        role: None,
+        role_instance: RoleInstanceKind::Driver,
+        current_spec: None,
+        name: "native".into(),
+        lease_id: None,
+        native_session_id: None,
+        resumed_from: None,
+    };
+    // Native os_wrap is disabled as on the historical daemon path.
+    env.set_key("AIDA_OS_WRAP", "0");
+    let cmd = build_agent_new_bg_command(
+        Path::new("/bin/echo"),
+        &cfg,
+        &plan,
+        &["attach".into(), "prompt with spaces".into()],
+        None,
+    )
+    .unwrap();
+    assert_eq!(cmd.get_program(), "/bin/echo");
+    assert_eq!(
+        cmd.get_args().collect::<Vec<_>>(),
+        ["--bg", "--model", "sonnet", "attach", "prompt with spaces"].map(std::ffi::OsStr::new)
+    );
+}
+
+// trace:TASK-3736 | ai:codex
+#[test]
+fn task_3736_contained_codex_refuses_profile_flags() {
+    for flag in [
+        vec!["-p", "other"],
+        vec!["--profile", "other"],
+        vec!["--profile=other"],
+        vec!["-pother"],
+        vec!["-p=other"],
+    ] {
+        let original: Vec<String> = ["exec"].into_iter().chain(flag).map(String::from).collect();
+        let error = codex_argv(
+            Path::new("/fixture/codex"),
+            &bug_2487_codex_env(),
+            &original,
+            true,
+        )
+        .unwrap_err();
+        assert!(
+            error.to_string().contains("config profile override"),
+            "{error}"
+        );
+    }
 }

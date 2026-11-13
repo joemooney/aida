@@ -12,6 +12,12 @@ use clap::Subcommand;
 // trace:BUG-2383 | ai:claude
 #[derive(Subcommand, Debug, Clone)]
 pub enum LaneCommand {
+    /// Release a host fast-gate review hold without granting publication authority.
+    // trace:STORY-2640 | ai:codex
+    FastGateRelease {
+        /// Exact lane branch whose receipt should be settled.
+        branch: String,
+    },
     /// Hand cargo runs to the lane's launcher, outside the tool-call time limit.
     #[clap(subcommand)]
     Job(LaneJobCommand),

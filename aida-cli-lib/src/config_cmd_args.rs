@@ -109,6 +109,25 @@ pub enum ConfigCommand {
 // trace:STORY-1127 | ai:codex
 #[derive(Subcommand, Debug)]
 pub enum ConfigPermissionsCommand {
+    /// Run the closed AGY conformance fixture through the shared AIDA wrapper.
+    /// Diagnostic only: does not enable production AGY admission.
+    // trace:TASK-3048 | ai:codex
+    #[clap(hide = true)]
+    ConformanceLaunch {
+        /// Fresh conformance fixture containing workspace, repository and payload.
+        #[clap(long)]
+        fixture_root: PathBuf,
+        /// Absolute path to the existing AGY OAuth credential leaf.
+        #[clap(long)]
+        credential: PathBuf,
+    },
+    /// Print the runtime descriptor embedded in this binary. No launch authority.
+    // trace:TASK-3048 | ai:codex
+    RuntimePolicy {
+        /// Vendor whose embedded runtime descriptor to inspect.
+        #[clap(long)]
+        vendor: String,
+    },
     /// Run the fixed, model-free filesystem/supervisor containment tracer.
     /// This does not enable vendor launches or change permission policy.
     // trace:TASK-2705 | ai:codex
@@ -121,11 +140,15 @@ pub enum ConfigPermissionsCommand {
         #[clap(long)]
         json: bool,
     },
-    /// Show the resolved per-agent posture and diagnostics. Read-only.
+    /// Show a compact per-agent permission summary. Read-only.
+    // trace:TASK-3779 | ai:codex
     Show {
         /// Emit machine-readable JSON.
         #[clap(long)]
         json: bool,
+        /// Include launch flags, scope, findings and full refusal diagnostics.
+        #[clap(long, short)]
+        verbose: bool,
     },
 
     /// Apply a named agent permission posture to local or user config files.

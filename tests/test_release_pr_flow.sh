@@ -23,6 +23,10 @@ export GIT_CONFIG_COUNT=2 GIT_CONFIG_KEY_0=maintenance.auto GIT_CONFIG_VALUE_0=f
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 RELEASE="$PROJECT_ROOT/scripts/release.sh"
+# Shared judge is exercised through the newly built CLI, including in env -i fixtures.
+# trace:TASK-3364 | ai:codex
+MERGE_JUDGE="${AIDA_TEST_BIN:-$PROJECT_ROOT/target/debug/aida}"
+[ -x "$MERGE_JUDGE" ] || { echo "Build aida first (or set AIDA_TEST_BIN)" >&2; exit 1; }
 TEST_DIR=$(mktemp -d)
 
 GREEN='\033[0;32m'
@@ -46,6 +50,8 @@ git config --global advice.detachedHead false
 # ─── fake gh / cargo ──────────────────────────────────────────────────────
 FAKE_BIN="$TEST_DIR/bin"
 mkdir -p "$FAKE_BIN"
+printf '#!/usr/bin/env bash\nexec %q "$@"\n' "$MERGE_JUDGE" > "$FAKE_BIN/aida"
+chmod +x "$FAKE_BIN/aida"
 cat > "$FAKE_BIN/cargo" <<'EOF'
 #!/usr/bin/env bash
 # `cargo check` passes; `cargo run … changelog` is unavailable (non-fatal).
@@ -295,7 +301,29 @@ grep -q "PR #42" <<<"$out" || fail "refusal does not name the ship's PR: $out"
 [ -z "$(git -C "$F4/work" status --porcelain)" ] || fail "refused release modified the tree"
 [ ! -s "$F4/state/calls" ] || fail "refused release called gh"
 grep -q "pid=$$" "$F4/work/.aida/merge-locks/main" || fail "refused release disturbed the ship's lease"
+grep -q '"holder_verdict":"ForeignUnknown"' <<<"$out" || fail "legacy refusal lacks verdict: $out"
+grep -q '"repair_hint":' <<<"$out" || fail "legacy refusal lacks repair: $out"
+grep -qF 'aida merge-lock --migrate-legacy' <<<"$out" || fail "legacy refusal lacks migration: $out"
 pass "live ship lease refuses the release before anything changes"
+
+# trace:TASK-3364 | ai:codex
+info "Test 4-helper: older or failed helpers refuse without claiming a live holder"
+cp "$FAKE_BIN/aida" "$FAKE_BIN/aida.saved"
+for helper_error in 'unexpected argument --check-file' 'fixture helper read failed'; do
+    printf '#!/usr/bin/env bash\nprintf "%%s\\n" %q >&2\nexit 2\n' "$helper_error" > "$FAKE_BIN/aida"
+    before=$(cat "$F4/work/.aida/merge-locks/main")
+    if out=$(run_release "$F4" patch --yes --skip-docs-check 2>&1); then
+        fail "release started with failed helper"
+    fi
+    grep -qF "$helper_error" <<<"$out" || fail "helper error hidden: $out"
+    grep -qF 'helper unavailable or failed' <<<"$out" || fail "helper failure mislabeled: $out"
+    if grep -qF 'holds the' <<<"$out"; then fail "helper failure called a live holder: $out"; fi
+    [ "$(cat "$F4/work/.aida/merge-locks/main")" = "$before" ] || fail "failed helper changed lease"
+    [ -z "$(git -C "$F4/work" status --porcelain)" ] || fail "failed helper changed tree"
+    [ ! -s "$F4/state/calls" ] || fail "failed helper called gh"
+done
+mv "$FAKE_BIN/aida.saved" "$FAKE_BIN/aida"
+pass "helper failures retain lease and preserve actionable errors"
 
 info "Test 4a: --dry-run warns about a live ship lease instead of refusing"
 out=$(run_release "$F4" patch --dry-run 2>&1) || fail "dry run refused under a live lease: $out"
@@ -303,25 +331,88 @@ grep -q "would refuse to start" <<<"$out" || fail "dry run did not warn about th
 grep -qF "gh pr create" <<<"$out" || fail "dry run under a lease printed no plan: $out"
 pass "--dry-run warns and still prints the plan"
 
-info "Test 4b: a dead or expired holder does not block"
+# trace:TASK-3364 | ai:codex
+info "Test 4b: incomplete identity never authorizes shell reclamation"
 sleep 0 & dead_pid=$!; wait "$dead_pid"
-write_lease "$dead_pid" "$(date +%s)"
-run_release "$F4" patch --dry-run >/dev/null 2>&1 || fail "dead-pid lease blocked the release"
-write_lease "$$" "$(( $(date +%s) - 4000 ))"
-run_release "$F4" patch --dry-run >/dev/null 2>&1 || fail "expired lease blocked the release"
-pass "stale leases (dead pid, past TTL) are not treated as an in-flight ship"
-
-info "Test 4b1: a dead pid from another PID namespace is TTL-only (BUG-2417)"
-for ns in 1 ""; do
-    write_lease "$dead_pid" "$(date +%s)" "$ns"
-    if out=$(run_release "$F4" patch --yes --skip-docs-check 2>&1); then
-        fail "a fresh lease with pid_ns='$ns' was judged dead by pid"
-    fi
-    grep -q "merge-lease" <<<"$out" || fail "pid_ns='$ns': refusal does not name the merge-lease: $out"
+for pid in "$dead_pid" "$$"; do
+    for ns in 1 "" "$(readlink /proc/self/ns/pid | tr -cd '0-9')"; do
+        write_lease "$pid" "$(( $(date +%s) - 4000 ))" "$ns"
+        if out=$(run_release "$F4" patch --yes --skip-docs-check 2>&1); then
+            fail "legacy dead/expired/foreign holder was reclaimed by shell"
+        fi
+        grep -q "merge-lease" <<<"$out" || fail "missing lease refusal: $out"
+        out=$(run_release "$F4" patch --dry-run 2>&1) || fail "preview failed: $out"
+        grep -q "would refuse to start" <<<"$out" || fail "preview hid retained unknown holder"
+    done
 done
-write_lease "$dead_pid" "$(( $(date +%s) - 4000 ))" 1
-run_release "$F4" patch --dry-run >/dev/null 2>&1 || fail "expired foreign-namespace lease blocked the release"
-pass "a foreign or unrecorded namespace holder blocks until its TTL"
+pass "shell retains old/foreign/reused PID records without a private probe"
+
+# Synthetic persisted admitted-generation fixture: the shared judge must prove
+# Dead, rather than using the script's numeric-PID or wall-time checks.
+info "Test 4b0: release reclaims a Rust holder proved Dead by the shared judge"
+FD="$TEST_DIR/dead-rust"; make_fixture "$FD"
+mkdir -p "$FD/work/.aida/merge-locks"
+boot=$(cat /proc/sys/kernel/random/boot_id)
+ns=$(readlink /proc/self/ns/pid | tr -cd '0-9')
+node=$(cat /etc/machine-id)
+cat > "$FD/work/.aida/merge-locks/main" <<EOF
+process={"version":1,"node_id":"$node","identity":{"boot_id":"$boot","pidns_inode":$ns,"pid":$dead_pid,"starttime":0},"generation":"dead-rust-fixture","refusal":null}
+host=test
+pid=$dead_pid
+pid_start=linux-starttime:0
+pid_ns=proc-identity-v1:$ns
+boot=$boot
+note=rust merger
+acquired_at=0
+ttl_secs=9223372036854775807
+EOF
+view=$("$MERGE_JUDGE" merge-lock --check-file "$FD/work/.aida/merge-locks/main" --json)
+grep -q '"holder_verdict":"Dead"' <<< "$view" || fail "shared judge did not prove Dead: $view"
+out=$(run_release "$FD" patch --yes --skip-docs-check 2>&1) || fail "dead Rust holder blocked release: $out"
+[ ! -e "$FD/work/.aida/merge-locks/main" ] || fail "dead Rust lease retained"
+pass "release reclaims a shared-judge Dead Rust holder"
+
+info "Test 4b0-live: live text verdict has no empty parentheses"
+# Synthetic admitted record for this fixture's still-running shell.
+stat=$(cat "/proc/$$/stat")
+read -ra stat_fields <<< "${stat##*)}"
+starttime=${stat_fields[19]}
+write_lease "$$" "$(date +%s)"
+sed "s/^pid_start=$/pid_start=linux-starttime:$starttime/" "$F4/work/.aida/merge-locks/main" > "$F4/work/.aida/merge-locks/main.tmp" &&
+    mv "$F4/work/.aida/merge-locks/main.tmp" "$F4/work/.aida/merge-locks/main"
+printf 'process={"version":1,"node_id":"%s","identity":{"boot_id":"%s","pidns_inode":%s,"pid":%s,"starttime":%s},"generation":"live-text-fixture","refusal":null}\n' \
+    "$node" "$boot" "$ns" "$$" "$starttime" >> "$F4/work/.aida/merge-locks/main"
+view=$(cd "$F4/work" && "$MERGE_JUDGE" merge-lock)
+grep -q 'holder_verdict=Alive;' <<<"$view" || fail "live verdict missing or has empty parentheses: $view"
+pass "live text verdict omits empty reason"
+
+
+info "Test 4b0a: text and JSON status report legacy verdict and repair"
+write_lease "$dead_pid" "$(date +%s)" "1"
+view=$(cd "$F4/work" && "$MERGE_JUDGE" merge-lock --json)
+grep -q '"holder_verdict":"ForeignUnknown"' <<< "$view" || fail "JSON lacks legacy verdict: $view"
+grep -q '"reason":"MissingIdentity"' <<< "$view" || fail "JSON lacks reason: $view"
+grep -q '"repair_hint":' <<< "$view" || fail "JSON lacks repair: $view"
+view=$(cd "$F4/work" && "$MERGE_JUDGE" merge-lock)
+grep -q 'holder_verdict=ForeignUnknown(MissingIdentity)' <<< "$view" || fail "text lacks legacy verdict: $view"
+grep -q 'repair:.*merge-locks/main' <<< "$view" || fail "text lacks concrete repair: $view"
+pass "text and JSON expose legacy verdict, reason and operator repair"
+
+info "Test 4b0b: explicit legacy upgrade is one-time and preserves unknown admission"
+view=$(cd "$F4/work" && "$MERGE_JUDGE" merge-lock --migrate-legacy --json)
+grep -q '"holder_verdict":"ForeignUnknown"' <<< "$view" || fail "migration fabricated admission: $view"
+grep -q '^deadline_boottime=[0-9]' "$F4/work/.aida/merge-locks/main" || fail "migration did not arm deadline"
+before=$(cat "$F4/work/.aida/merge-locks/main")
+(cd "$F4/work" && "$MERGE_JUDGE" merge-lock --migrate-legacy --json) >/dev/null
+[ "$(cat "$F4/work/.aida/merge-locks/main")" = "$before" ] || fail "migration extended deadline"
+pass "explicit legacy migration arms a deadline exactly once"
+
+info "Test 4b1: shared judge reclaims an expired unadmitted script record"
+write_lease "$dead_pid" "$(date +%s)" "1"
+printf 'deadline_boot=%s\ndeadline_boottime=0\n' "$(cat /proc/sys/kernel/random/boot_id)" >> "$F4/work/.aida/merge-locks/main"
+out=$(run_release "$F4" patch --dry-run 2>&1) || fail "expired script record refused: $out"
+if grep -q "would refuse to start" <<< "$out"; then fail "expired boot deadline retained"; fi
+pass "shell uses the shared expiry verdict"
 
 info "Test 4b2: an empty, just-created lease blocks; an old empty one does not"
 # trace:TASK-1955 | ai:claude (TASK-1-421)
@@ -332,6 +423,9 @@ fi
 [ -e "$F4/work/.aida/merge-locks/main" ] && [ ! -s "$F4/work/.aida/merge-locks/main" ] \
     || fail "release stole or rewrote a fresh empty lease"
 touch -d "@$(( $(date +%s) - 120 ))" "$F4/work/.aida/merge-locks/main"
+view=$("$MERGE_JUDGE" merge-lock --check-file "$F4/work/.aida/merge-locks/main" --json)
+grep -q '"lease_state":"Incomplete"' <<<"$view" || fail "old partial record mislabeled: $view"
+grep -q '"reclaimable":true' <<<"$view" || fail "old partial record not reclaimable: $view"
 run_release "$F4" patch --dry-run >/dev/null 2>&1 || fail "an empty lease past its grace blocked the release"
 pass "a fresh empty lease reads live; past its grace it is stale"
 # --dry-run only warns about a live lease, so read its warning.
@@ -341,6 +435,25 @@ if printf '%s' "$out" | grep -q "would refuse to start"; then
     fail "an empty lease with a far-future mtime read live: $out"
 fi
 pass "an empty lease with a far-future mtime is stale, not live forever"
+
+info "Test 4b3: EXIT guard contention warns with exact recovery path"
+(
+    # Load only production guard/release functions, without running a release.
+    source <(sed -n '/^lease_guard_lock()/,/^lease_describe()/p' "$RELEASE" | sed '$d')
+    source <(sed -n '/^lease_release()/,/^trap lease_release EXIT/p' "$RELEASE" | sed '$d')
+    lease_file="$TEST_DIR/contended-lease"
+    lease_tmp= lease_held=1 lease_guard_fd= lease_record=ours
+    echo ours > "$lease_file"
+    flock -x "$TEST_DIR/.guard-contended-lease" bash -c 'touch "$1"; sleep 7' bash "$TEST_DIR/guard-ready" &
+    blocker=$!
+    while [ ! -e "$TEST_DIR/guard-ready" ]; do sleep 0.05; done
+    if out=$(lease_release 2>&1); then fail "contended release unexpectedly succeeded"; fi
+    grep -qF "$lease_file" <<< "$out" || fail "missing exact recovery path: $out"
+    grep -q 'timed out' <<< "$out" || fail "missing timeout warning: $out"
+    [ -e "$lease_file" ] || fail "contended lease removed"
+    wait "$blocker"
+)
+pass "EXIT guard timeout is bounded and reports recovery"
 
 info "Test 4c: the release holds the lease while it mutates the checkout"
 F5="$TEST_DIR/f5"; make_fixture "$F5"
@@ -361,6 +474,8 @@ chmod +x "$TEST_DIR/bin-lease/cargo"
 ) || fail "release with lease probe failed"
 grep -q "note=scripts/release.sh v0.15.1" "$F5/state/lease-during-check" 2>/dev/null \
     || fail "the main merge-lease was not held during cargo check"
+grep -q '^deadline_boot=' "$F5/state/lease-during-check" || fail "shell record lacks boot domain"
+grep -q '^deadline_boottime=[0-9]' "$F5/state/lease-during-check" || fail "shell record lacks boot deadline"
 pass "release.sh holds the main merge-lease during the bump"
 grep -q "note=scripts/release.sh v0.15.1" "$F5/state/lease-at-commit" 2>/dev/null \
     || fail "the main merge-lease was not retaken for the release commit"
@@ -385,9 +500,10 @@ pty_release() {
     local runner=$! step seen=0
     exec 9>"$fifo"
     for step in "$@"; do
-        local prompt=${step%%|*} probe=${step#*|} i
+        local prompt=${step%%|*} probe=${step#*|} i count
         for i in $(seq 1 600); do
-            [ "$(grep -cF -- "$prompt" "$log" 2>/dev/null || true)" -gt "$seen" ] && break
+            count=$(grep -cF -- "$prompt" "$log" 2>/dev/null || true)
+            [ "${count:-0}" -gt "$seen" ] && break
             kill -0 "$runner" 2>/dev/null || break
             sleep 0.1
         done
@@ -442,7 +558,7 @@ mkdir -p "$F9/work/.aida/merge-locks"
 run_release "$F9" patch --yes --skip-docs-check >/dev/null 2>&1 || fail "release under the lease watcher failed"
 touch "$F9/state/stop-watch"; wait "$watcher"
 [ ! -e "$F9/state/partial-lease" ] || fail "a reader saw an empty or partial lease"
-[ -z "$(ls -A "$F9/work/.aida/merge-locks/" 2>/dev/null)" ] || fail "lease temp files left behind: $(ls -A "$F9/work/.aida/merge-locks/")"
+[ "$(ls -A "$F9/work/.aida/merge-locks/" 2>/dev/null)" = ".guard-main" ] || fail "lease temp files left behind: $(ls -A "$F9/work/.aida/merge-locks/")"
 pass "a concurrent reader never sees a partial lease; no temp files remain"
 
 # ─── 4f. the base moves while the confirmation prompt waits (TASK-1688) ───

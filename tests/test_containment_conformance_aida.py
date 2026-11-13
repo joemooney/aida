@@ -44,7 +44,10 @@ class AidaProductionBoundaryTests(unittest.TestCase):
                 result = c.subprocess.run([c.sys.executable, str(Path(c.__file__).resolve()),
                                            "--vendor", "codex", "--boundary", "aida", "--output", str(output)],
                                           env=env, stdin=terminal, stderr=terminal,
-                                          stdout=c.subprocess.PIPE, text=True, timeout=45)
+                                          # Authority records must be private even when the
+                                          # invoking shell uses a collaborative umask.
+                                          stdout=c.subprocess.PIPE, text=True, timeout=45,
+                                          umask=0o077)
                 os.set_blocking(master, False)
                 diagnostics = bytearray()
                 while True:
@@ -92,7 +95,7 @@ class AidaProductionBoundaryTests(unittest.TestCase):
             self.assertEqual(parsed["agents"]["vendor"], "codex")
             self.assertEqual(parsed["contained"]["vendors"]["codex"], "aida")
             self.assertEqual(parsed["contained"]["allowed_hosts"],
-                             ["api.openai.com", "allow.fixture.test"])
+                             ["api.openai.com", "chatgpt.com", "allow.fixture.test"])
             self.assertTrue((repo / ".aida-store/objects").is_dir())
             roster = (repo / ".aida-store/registry/team.toml").read_text()
             self.assertIn("fixture-operator", roster)

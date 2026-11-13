@@ -27,6 +27,7 @@
 //! trace:BUG-1929 | ai:claude
 
 // trace:BUG-2017 | ai:codex — explicit positive global-ID fixture.
+// trace:TASK-3429 | ai:codex
 use super::*;
 use std::path::{Path, PathBuf};
 
@@ -1087,7 +1088,13 @@ fn bug_1929_store_git_guard() {
         .filter(|src| src.is_dir() && src.parent().unwrap().join("Cargo.toml").is_file())
         .collect();
     crate_srcs.sort();
-    for required in ["aida-core", "aida-cli-lib", "aida-cli", "aida-server"] {
+    for required in [
+        "aida-mcp",
+        "aida-core",
+        "aida-cli-lib",
+        "aida-cli",
+        "aida-server",
+    ] {
         assert!(
             crate_srcs.contains(&workspace.join(required).join("src")),
             "the guard must scan {required}: {crate_srcs:?}"
@@ -1347,6 +1354,7 @@ fn bug_1985_host_status_guard() {
         .collect();
     crate_srcs.sort();
     for required in [
+        "aida-mcp",
         "aida-core",
         "aida-cli-lib",
         "aida-cli",

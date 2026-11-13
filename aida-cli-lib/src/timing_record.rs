@@ -344,6 +344,78 @@ pub(crate) fn load_published(store_root: &Path, spec_id: &str) -> (Vec<Event>, V
     }
 }
 
+/// Merge the two sides of a store-pull conflict on one timing record
+/// (BUG-2550: two clones auto-bump the same merge and both publish). Both
+/// sides must be records this binary reads losslessly: the production
+/// `TimingRecord` at [`SCHEMA_VERSION`], every event and publish typed, and
+/// no field the typed record would drop. Anything else refuses, so the pull
+/// falls back to manual resolution with both sides untouched. The result is
+/// the union of events and publishes (exact-duplicate free, time ordered),
+/// written as the publisher writes it. Returns the text and how many
+/// entries their side added. Installed into aida-core by the CLI entry.
+// trace:BUG-2550 | ai:claude
+pub(crate) fn merge_conflicted(
+    ours: Option<&str>,
+    theirs: Option<&str>,
+) -> anyhow::Result<(String, usize)> {
+    fn read(side: &str, text: &str) -> anyhow::Result<TimingRecord> {
+        let raw: serde_json::Value = serde_json::from_str(text)
+            .map_err(|e| anyhow::anyhow!("{side} timing record does not parse: {e}"))?;
+        let record: TimingRecord = serde_json::from_value(raw.clone())
+            .map_err(|e| anyhow::anyhow!("{side} timing record is not readable: {e}"))?;
+        anyhow::ensure!(
+            record.schema_version == SCHEMA_VERSION,
+            "{side} timing record has schema_version {}; this binary reads {SCHEMA_VERSION}",
+            record.schema_version
+        );
+        anyhow::ensure!(
+            serde_json::to_value(&record)? == raw,
+            "{side} timing record carries content this binary would not preserve"
+        );
+        Ok(record)
+    }
+    fn render(record: &TimingRecord) -> anyhow::Result<String> {
+        Ok(serde_json::to_string_pretty(record)?)
+    }
+    let (mut merged, theirs) = match (ours, theirs) {
+        (Some(o), Some(t)) => (read("our", o)?, read("their", t)?),
+        (Some(one), None) | (None, Some(one)) => return Ok((render(&read("the", one)?)?, 0)),
+        (None, None) => anyhow::bail!("neither side has the timing record"),
+    };
+    anyhow::ensure!(
+        merged.spec == theirs.spec,
+        "timing record sides name different specs ({} vs {})",
+        merged.spec,
+        theirs.spec
+    );
+    let mut added = 0;
+    let mut seen: BTreeSet<String> = merged
+        .events
+        .iter()
+        .map(serde_json::to_string)
+        .collect::<Result<_, _>>()?;
+    for event in theirs.events {
+        if seen.insert(serde_json::to_string(&event)?) {
+            merged.events.push(event);
+            added += 1;
+        }
+    }
+    let mut seen: BTreeSet<String> = merged
+        .publishes
+        .iter()
+        .map(serde_json::to_string)
+        .collect::<Result<_, _>>()?;
+    for stamp in theirs.publishes {
+        if seen.insert(serde_json::to_string(&stamp)?) {
+            merged.publishes.push(stamp);
+            added += 1;
+        }
+    }
+    merged.events.sort_by(|a, b| a.ts.cmp(&b.ts));
+    merged.publishes.sort_by(|a, b| a.at.cmp(&b.at));
+    Ok((render(&merged)?, added))
+}
+
 fn node_identity(project_root: &Path) -> (Option<String>, Option<String>) {
     let path = project_root.join(".aida").join("node.toml");
     match aida_core::node::NodeConfig::load(&path) {
@@ -657,6 +729,38 @@ mod tests {
         )
     }
 
+    // trace:BUG-2490 | ai:codex
+    #[test]
+    fn bug_2490_timing_commit_preserves_unmerged_index() {
+        let (_g, _project, store) = git_fixture("BUG-9");
+        let rel = "timings/conflicted.json";
+        std::fs::create_dir_all(store.join("timings")).unwrap();
+        std::fs::write(store.join(rel), "<<<<<<< unresolved\n").unwrap();
+        let hash = store_git(&store, &["rev-parse", "HEAD:metadata.yaml"]);
+        let mut child = aida_core::git_ops::host_git_command(&store)
+            .args(["update-index", "--index-info"])
+            .stdin(std::process::Stdio::piped())
+            .spawn()
+            .unwrap();
+        use std::io::Write;
+        writeln!(
+            child.stdin.take().unwrap(),
+            "100644 {} 2\t{rel}",
+            hash.trim()
+        )
+        .unwrap();
+        assert!(child.wait().unwrap().success());
+        let before = store_git(&store, &["ls-files", "--unmerged"]);
+        let head = store_git(&store, &["rev-parse", "HEAD"]);
+        let error = commit_record(&store, "BUG-9", rel, "test").unwrap_err();
+        assert!(
+            error.to_string().contains("unmerged store paths"),
+            "{error:#}"
+        );
+        assert_eq!(store_git(&store, &["ls-files", "--unmerged"]), before);
+        assert_eq!(store_git(&store, &["rev-parse", "HEAD"]), head);
+    }
+
     // trace:BUG-2178 | ai:claude
     #[test]
     fn bug_2178_completion_leaves_store_worktree_clean() {
@@ -772,5 +876,247 @@ mod tests {
             porcelain(&store).contains(&rel),
             "record left uncommitted for the next sync"
         );
+    }
+
+    // ---- BUG-2550: store-pull conflict merge ----------------------------
+
+    fn completed(ts: &str, by: &str) -> Event {
+        ev(
+            ts,
+            "BUG-9",
+            EventKind::SpecCompleted {
+                commit: "abc123".into(),
+                pr: Some(42),
+                closed_by: by.into(),
+            },
+        )
+    }
+
+    fn stamp(at: &str, by: &str) -> PublishStamp {
+        PublishStamp {
+            at: DateTime::parse_from_rfc3339(at)
+                .unwrap()
+                .with_timezone(&Utc),
+            closed_by: by.into(),
+            node_id: Some("node-1".into()),
+            hostname: None,
+        }
+    }
+
+    /// A record exactly as the publisher writes it.
+    fn record_text(events: Vec<Event>, publishes: Vec<PublishStamp>) -> String {
+        serde_json::to_string_pretty(&TimingRecord {
+            schema_version: SCHEMA_VERSION,
+            spec: "BUG-9".into(),
+            publishes,
+            events,
+        })
+        .unwrap()
+    }
+
+    fn two_machines() -> (String, String) {
+        let done = ev("2026-11-12T03:00:00Z", "BUG-9", EventKind::RunStarted);
+        let ours = record_text(
+            vec![done.clone(), completed("2026-11-12T03:29:10Z", "auto-bump")],
+            vec![
+                stamp("2026-11-12T03:00:01Z", "queue-done"),
+                stamp("2026-11-12T03:29:11Z", "auto-bump"),
+            ],
+        );
+        let theirs = record_text(
+            vec![done, completed("2026-11-12T03:28:00Z", "auto-bump")],
+            vec![
+                stamp("2026-11-12T03:00:01Z", "queue-done"),
+                stamp("2026-11-12T03:28:01Z", "auto-bump"),
+            ],
+        );
+        (ours, theirs)
+    }
+
+    // trace:BUG-2550 | ai:claude
+    #[test]
+    fn bug_2550_merge_unions_production_records_readable_by_load_published() {
+        let (ours, theirs) = two_machines();
+        let (merged, added) = merge_conflicted(Some(&ours), Some(&theirs)).unwrap();
+        assert_eq!(added, 2, "their completion and their publish");
+        let (_g, _project, store) = fixture();
+        let rel = aida_core::object_store::relative_timing_record_path("BUG-9").unwrap();
+        std::fs::create_dir_all(store.join(&rel).parent().unwrap()).unwrap();
+        std::fs::write(store.join(&rel), &merged).unwrap();
+        let (events, notes) = load_published(&store, "BUG-9");
+        assert!(notes.is_empty(), "{notes:?}");
+        let stamps: Vec<String> = events.iter().map(|e| e.ts.to_rfc3339()).collect();
+        assert_eq!(
+            stamps,
+            [
+                "2026-11-12T03:00:00+00:00",
+                "2026-11-12T03:28:00+00:00",
+                "2026-11-12T03:29:10+00:00"
+            ]
+        );
+        let record: TimingRecord = serde_json::from_str(&merged).unwrap();
+        assert_eq!(record.publishes.len(), 3);
+        assert!(record.publishes.windows(2).all(|w| w[0].at <= w[1].at));
+        // Idempotent: merging the result with either side adds nothing.
+        assert_eq!(merge_conflicted(Some(&merged), Some(&theirs)).unwrap().1, 0);
+    }
+
+    // trace:BUG-2550 | ai:claude
+    #[test]
+    fn bug_2550_merge_refuses_what_the_reader_would_not_keep() {
+        let (ours, theirs) = two_machines();
+        let edit = |text: &str, f: &dyn Fn(&mut serde_json::Value)| {
+            let mut v: serde_json::Value = serde_json::from_str(text).unwrap();
+            f(&mut v);
+            serde_json::to_string_pretty(&v).unwrap()
+        };
+        let refuses = |o: Option<&str>, t: Option<&str>, why: &str| {
+            let err = merge_conflicted(o, t).expect_err(why);
+            eprintln!("{why}: {err:#}");
+        };
+        // A null or untyped entry (the legacy fixture shape) is unreadable.
+        let null_event = edit(&ours, &|v: &mut serde_json::Value| {
+            v["events"]
+                .as_array_mut()
+                .unwrap()
+                .push(serde_json::Value::Null)
+        });
+        refuses(Some(&null_event), Some(&theirs), "events:[null]");
+        let untyped = edit(&ours, &|v: &mut serde_json::Value| {
+            v["events"][0]["kind"] = serde_json::json!({"type": "spec_done"})
+        });
+        refuses(Some(&untyped), Some(&theirs), "kind without `event`");
+        let bad_publish = edit(&theirs, &|v: &mut serde_json::Value| {
+            v["publishes"][0] = serde_json::json!({"closed_by": "x"})
+        });
+        refuses(Some(&ours), Some(&bad_publish), "publish without `at`");
+        // Missing required fields.
+        let no_spec = edit(&ours, &|v: &mut serde_json::Value| {
+            v.as_object_mut().unwrap().remove("spec");
+        });
+        let no_spec_theirs = edit(&theirs, &|v: &mut serde_json::Value| {
+            v.as_object_mut().unwrap().remove("spec");
+        });
+        refuses(
+            Some(&no_spec),
+            Some(&no_spec_theirs),
+            "both sides lack `spec`",
+        );
+        let no_version = edit(&ours, &|v: &mut serde_json::Value| {
+            v.as_object_mut().unwrap().remove("schema_version");
+        });
+        refuses(Some(&no_version), Some(&theirs), "missing schema_version");
+        // The same unsupported version on both sides is still unsupported.
+        let v2 = |t: &str| {
+            edit(t, &|v: &mut serde_json::Value| {
+                v["schema_version"] = serde_json::json!(2)
+            })
+        };
+        refuses(Some(&v2(&ours)), Some(&v2(&theirs)), "both at schema 2");
+        // A field this binary would drop on rewrite.
+        let extra = edit(&theirs, &|v: &mut serde_json::Value| {
+            v["provenance"] = serde_json::json!("future")
+        });
+        refuses(Some(&ours), Some(&extra), "unknown top-level field");
+        let extra_publish = edit(&theirs, &|v: &mut serde_json::Value| {
+            v["publishes"][0]["signature"] = serde_json::json!("s")
+        });
+        refuses(Some(&ours), Some(&extra_publish), "unknown publish field");
+        // Different specs, and garbage.
+        let other = edit(&theirs, &|v: &mut serde_json::Value| {
+            v["spec"] = serde_json::json!("BUG-10")
+        });
+        refuses(Some(&ours), Some(&other), "different specs");
+        refuses(Some(&ours), Some("<<<<<<< not json"), "conflict markers");
+        refuses(None, None, "neither side");
+        // One-sided conflicts (modify/delete) validate the surviving side too.
+        refuses(Some(&null_event), None, "one-sided unreadable ours");
+        refuses(None, Some(&extra), "one-sided unknown field theirs");
+        let (kept, added) = merge_conflicted(None, Some(&theirs)).unwrap();
+        assert_eq!((kept.as_str(), added), (theirs.as_str(), 0));
+    }
+
+    fn git(dir: &Path, args: &[&str]) {
+        let out = std::process::Command::new("git")
+            .arg("-C")
+            .arg(dir)
+            .args(["-c", "user.name=T", "-c", "user.email=t@example.com"])
+            .args([
+                "-c",
+                "commit.gpgsign=false",
+                "-c",
+                "core.hooksPath=/dev/null",
+            ])
+            .args(["-c", "maintenance.auto=false", "-c", "gc.auto=0"])
+            .args(args)
+            .output()
+            .unwrap();
+        assert!(
+            out.status.success(),
+            "git {args:?}: {}",
+            String::from_utf8_lossy(&out.stderr)
+        );
+    }
+
+    /// BUG-2550 end to end: two clones auto-bump the same merge about 70 s
+    /// apart and both publish the record. The second clone's store pull
+    /// unions them through the installed typed merger, and the production
+    /// reader sees every event.
+    // trace:BUG-2550 | ai:claude
+    #[test]
+    fn bug_2550_store_pull_unions_duplicate_auto_bump_records() {
+        aida_core::git_ops::install_timing_record_merger(merge_conflicted);
+        let dir = tempfile::tempdir().unwrap();
+        let hub = dir.path().join("hub.git");
+        let (m1, m2) = (dir.path().join("m1"), dir.path().join("m2"));
+        std::fs::create_dir_all(&hub).unwrap();
+        git(&hub, &["init", "-q", "--bare", "-b", "aida-store"]);
+        std::fs::create_dir_all(&m1).unwrap();
+        git(&m1, &["init", "-q", "-b", "aida-store"]);
+        let rel = aida_core::object_store::relative_timing_record_path("BUG-9").unwrap();
+        let put = |root: &Path, text: &str, msg: &str| {
+            std::fs::create_dir_all(root.join(&rel).parent().unwrap()).unwrap();
+            std::fs::write(root.join(&rel), text).unwrap();
+            git(root, &["add", &rel]);
+            git(root, &["commit", "-q", "-m", msg]);
+        };
+        let seed = record_text(
+            vec![ev("2026-11-12T03:00:00Z", "BUG-9", EventKind::RunStarted)],
+            vec![stamp("2026-11-12T03:00:01Z", "queue-done")],
+        );
+        put(&m1, &seed, "seed");
+        git(&m1, &["remote", "add", "origin", hub.to_str().unwrap()]);
+        git(&m1, &["push", "-q", "origin", "aida-store"]);
+        git(
+            dir.path(),
+            &[
+                "clone",
+                "-q",
+                "-b",
+                "aida-store",
+                hub.to_str().unwrap(),
+                "m2",
+            ],
+        );
+        let (ours, theirs) = two_machines();
+        put(&m1, &theirs, "auto-bump on machine 1");
+        git(&m1, &["push", "-q", "origin", "aida-store"]);
+        git(&m2, &["config", "user.name", "T"]);
+        git(&m2, &["config", "user.email", "t@example.com"]);
+        git(&m2, &["config", "commit.gpgsign", "false"]);
+        put(&m2, &ours, "auto-bump on machine 2");
+
+        let outcome = aida_core::git_ops::pull_rebase_auto_merge(&m2, "origin", "aida-store")
+            .expect("duplicate auto-bump timing records must auto-merge");
+        match outcome {
+            aida_core::git_ops::StorePullOutcome::AutoMerged { notes } => assert!(
+                notes.iter().any(|n| n.contains("timing record")),
+                "{notes:?}"
+            ),
+            other => panic!("expected an auto-merge, got {other:?}"),
+        }
+        let (events, notes) = load_published(&m2, "BUG-9");
+        assert!(notes.is_empty(), "{notes:?}");
+        assert_eq!(events.len(), 3, "both machines' completions survive");
     }
 }

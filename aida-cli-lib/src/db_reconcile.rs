@@ -1,7 +1,17 @@
 //! Done-to-completed auto-bump, closure holds, stale-review flips and `aida db reconcile-status` (STORY-1488 slice 1)
 // trace:STORY-1488 | ai:claude
 
-use crate::*;
+use crate::{
+    brief, classify_commit_source, closure_criteria_label, commit_count, completion, criteria,
+    emit_nonblocking_findings_on_completion, events, extract_plan_followups,
+    extract_pr_number_from_commit_subject, extract_referenced_spec_ids_from_commit,
+    extract_spec_ids_from_commit, extract_status_changes_from_commits, forge, git_arg_guard, glyph,
+    is_plan_commit_subject, list_leases, network_retry, parse_review_story_pr_number, plural, punt,
+    reconcile_evidence, record_role_activity, req_type_from_orphan_path, reviewer_summary,
+    spec_id_from_orphan_path, warn_multi_repo_scan_limited, workspace_repo_slug, Requirement,
+    RequirementStatus, RequirementType, Result, StatusTransition, Storage,
+};
+use colored::Colorize;
 
 /// TASK-78: project-wide opt-out for the post-pull merge-gate. Defaults to
 /// on; set `AIDA_AUTO_MERGE_GATE=false` (or `0`, `no`, `off`) to disable.
@@ -481,24 +491,9 @@ pub(crate) struct AutoBumpFlip {
     pub(crate) prior_status: RequirementStatus,
 }
 
-/// BUG-1454: return the candidate specs that still have an open GitHub PR.
-///
-/// A completion trailer proves that *some* work landed, but an open PR naming
-/// the same spec is stronger evidence that the spec has another deliverable in
-/// flight. Keep those specs at Done until the final PR closes. One search is
-/// made per candidate because GitHub's PR search covers title, body, and
-/// comments without downloading every open PR in a large repository.
-///
-/// `None` means the GitHub lookup was unavailable or failed. Callers
-/// default-to-preserve in that ambiguous case; hiding unfinished work is more
-/// damaging than leaving shipped work visible for another pass.
-///
-/// Compatibility wrapper over the checked lookup in [`reconcile_evidence`],
-/// which owns the forge query and response validation (a non-array or
-/// malformed response is unavailable, never empty). The pure-git positive
-/// and GitLab-is-unknown rules are documented there.
-// trace:BUG-1454 | ai:codex
-// trace:TASK-1335 | ai:claude
+/// Return candidate specs with an open forge change. Unknown evidence preserves
+/// the current status; default-branch trailers supply completion evidence.
+// trace:BUG-1454 TASK-1335 BUG-2516 | ai:codex
 pub(crate) fn specs_with_open_prs(
     project_root: &std::path::Path,
     spec_ids: impl IntoIterator<Item = String>,
@@ -2138,6 +2133,11 @@ pub(crate) fn auto_bump_done_to_completed_with(
     if current.as_deref() != Some(default_branch.as_str()) {
         return Ok((Vec::new(), false));
     }
+
+    // A Refs-only merge never enters the completion flips below. Close its
+    // waiting review even when there are no specs eligible for completion.
+    // trace:BUG-2525 | ai:codex
+    crate::review_waiting::reconcile_waiting_verdicts(project_root, None);
 
     // BUG-568: this scan only walks the LOCAL repo's default branch. If the
     // store is shared across multiple repos, a spec landed in a sibling repo
@@ -4675,6 +4675,7 @@ pub(crate) fn print_pull_summary(store_path: &std::path::Path, pre_sha: &str) {
     }
     println!(
         "  {}",
-        "Run `aida history --since \"5 min ago\" --events` for the full event stream.".dimmed()
+        // trace:TASK-1214 | ai:codex
+        "Run `aida history events --since \"5 min ago\"` for the full event stream.".dimmed()
     );
 }

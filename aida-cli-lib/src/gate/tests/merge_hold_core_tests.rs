@@ -38,7 +38,10 @@ fn task_1582_release_met_next_action_names_clear_before_ship() {
     assert!(clear < ship, "clear must come first: {line}");
     assert!(line.contains("APPROVED for TASK-1 at abc1234"), "{line}");
     assert!(line.contains("still armed"), "{line}");
-    assert!(line.contains("pins the merge to abc1234"), "{line}");
+    assert!(
+        line.contains("pins the merge to the covered current head"),
+        "{line}"
+    );
     assert!(!line.contains("may now `aida pr ship"), "{line}");
 }
 
@@ -261,12 +264,66 @@ fn label_only_clear_is_recorded_as_the_human_principal() {
     let lib_source = format!(
         "{}\n{}\n{}\n{}\n{}\n{}\n{}\n{}",
         include_str!("../../lib.rs"),
-        include_str!("../../lib_part1.rs"),
-        include_str!("../../lib_part2.rs"),
-        include_str!("../../lib_part3.rs"),
-        include_str!("../../lib_part4.rs"),
-        include_str!("../../lib_part5.rs"),
-        include_str!("../../lib_part6.rs"),
+        concat!(
+            include_str!("../../glyph_render.rs"),
+            include_str!("../../cli_entry.rs"),
+            include_str!("../../history_filter.rs"),
+            include_str!("../../output_policy.rs"),
+            include_str!("../../list_render.rs"),
+            include_str!("../../agent_errors.rs"),
+            include_str!("../../cast_recording.rs"),
+            include_str!("../../argv_rewrite.rs"),
+            include_str!("../../review_helpers.rs"),
+            include_str!("../../finding_queue.rs"),
+            include_str!("../../gitignore_entries.rs"),
+            include_str!("../../store_write_policy.rs"),
+            include_str!("../../status_policy.rs")
+        ),
+        concat!(
+            include_str!("../../retire_legacy.rs"),
+            "\n",
+            include_str!("../../glossary_render.rs"),
+            "\n",
+            include_str!("../../role_file_helpers.rs"),
+            "\n",
+            include_str!("../../mailbox_errors.rs"),
+            "\n",
+            include_str!("../../human_route.rs"),
+            "\n",
+            include_str!("../../store_drift.rs"),
+            "\n",
+            include_str!("../../launch_defaults.rs"),
+            "\n",
+            include_str!("../../merge_hold_output.rs"),
+            "\n",
+            include_str!("../../history_reporting.rs")
+        ),
+        concat!(
+            include_str!("../../ci_staleness.rs"),
+            include_str!("../../ci_watch.rs"),
+            include_str!("../../bounded_process.rs"),
+            include_str!("../../forge_lookup.rs"),
+            include_str!("../../store_lookup.rs"),
+            include_str!("../../output_policy.rs"),
+            include_str!("../../statusline_counts.rs"),
+            include_str!("../../session_warnings.rs"),
+            include_str!("../../status_policy.rs"),
+            include_str!("../../orchestrator_badge.rs"),
+            include_str!("../../default_branch.rs"),
+            include_str!("../../plan_structure.rs"),
+            include_str!("../../worktree_dirty.rs")
+        ),
+        concat!(concat!(
+            include_str!("../../scoped_lease.rs"),
+            "\n",
+            include_str!("../../pull_lines.rs")
+        )),
+        include_str!("../../review_commands.rs"),
+        concat!(
+            include_str!("../../regression_tests.rs"),
+            "\n",
+            include_str!("../../text_truncate.rs")
+        ),
         include_str!("../../merge_hold_cmd.rs")
     );
     let clear = lib_source
@@ -329,12 +386,66 @@ fn list_surfaces_a_tampered_pr_and_its_empty_state_cannot_swallow_it() {
     let lib_source = format!(
         "{}\n{}\n{}\n{}\n{}\n{}\n{}\n{}",
         include_str!("../../lib.rs"),
-        include_str!("../../lib_part1.rs"),
-        include_str!("../../lib_part2.rs"),
-        include_str!("../../lib_part3.rs"),
-        include_str!("../../lib_part4.rs"),
-        include_str!("../../lib_part5.rs"),
-        include_str!("../../lib_part6.rs"),
+        concat!(
+            include_str!("../../glyph_render.rs"),
+            include_str!("../../cli_entry.rs"),
+            include_str!("../../history_filter.rs"),
+            include_str!("../../output_policy.rs"),
+            include_str!("../../list_render.rs"),
+            include_str!("../../agent_errors.rs"),
+            include_str!("../../cast_recording.rs"),
+            include_str!("../../argv_rewrite.rs"),
+            include_str!("../../review_helpers.rs"),
+            include_str!("../../finding_queue.rs"),
+            include_str!("../../gitignore_entries.rs"),
+            include_str!("../../store_write_policy.rs"),
+            include_str!("../../status_policy.rs")
+        ),
+        concat!(
+            include_str!("../../retire_legacy.rs"),
+            "\n",
+            include_str!("../../glossary_render.rs"),
+            "\n",
+            include_str!("../../role_file_helpers.rs"),
+            "\n",
+            include_str!("../../mailbox_errors.rs"),
+            "\n",
+            include_str!("../../human_route.rs"),
+            "\n",
+            include_str!("../../store_drift.rs"),
+            "\n",
+            include_str!("../../launch_defaults.rs"),
+            "\n",
+            include_str!("../../merge_hold_output.rs"),
+            "\n",
+            include_str!("../../history_reporting.rs")
+        ),
+        concat!(
+            include_str!("../../ci_staleness.rs"),
+            include_str!("../../ci_watch.rs"),
+            include_str!("../../bounded_process.rs"),
+            include_str!("../../forge_lookup.rs"),
+            include_str!("../../store_lookup.rs"),
+            include_str!("../../output_policy.rs"),
+            include_str!("../../statusline_counts.rs"),
+            include_str!("../../session_warnings.rs"),
+            include_str!("../../status_policy.rs"),
+            include_str!("../../orchestrator_badge.rs"),
+            include_str!("../../default_branch.rs"),
+            include_str!("../../plan_structure.rs"),
+            include_str!("../../worktree_dirty.rs")
+        ),
+        concat!(concat!(
+            include_str!("../../scoped_lease.rs"),
+            "\n",
+            include_str!("../../pull_lines.rs")
+        )),
+        include_str!("../../review_commands.rs"),
+        concat!(
+            include_str!("../../regression_tests.rs"),
+            "\n",
+            include_str!("../../text_truncate.rs")
+        ),
         include_str!("../../merge_hold_cmd.rs")
     );
     let list = lib_source
@@ -1139,12 +1250,66 @@ fn explicit_reconciliation_refreshes_routes_and_render_stays_read_only() {
     let lib_source = format!(
         "{}\n{}\n{}\n{}\n{}\n{}\n{}\n{}\n{}",
         include_str!("../../lib.rs"),
-        include_str!("../../lib_part1.rs"),
-        include_str!("../../lib_part2.rs"),
-        include_str!("../../lib_part3.rs"),
-        include_str!("../../lib_part4.rs"),
-        include_str!("../../lib_part5.rs"),
-        include_str!("../../lib_part6.rs"),
+        concat!(
+            include_str!("../../glyph_render.rs"),
+            include_str!("../../cli_entry.rs"),
+            include_str!("../../history_filter.rs"),
+            include_str!("../../output_policy.rs"),
+            include_str!("../../list_render.rs"),
+            include_str!("../../agent_errors.rs"),
+            include_str!("../../cast_recording.rs"),
+            include_str!("../../argv_rewrite.rs"),
+            include_str!("../../review_helpers.rs"),
+            include_str!("../../finding_queue.rs"),
+            include_str!("../../gitignore_entries.rs"),
+            include_str!("../../store_write_policy.rs"),
+            include_str!("../../status_policy.rs")
+        ),
+        concat!(
+            include_str!("../../retire_legacy.rs"),
+            "\n",
+            include_str!("../../glossary_render.rs"),
+            "\n",
+            include_str!("../../role_file_helpers.rs"),
+            "\n",
+            include_str!("../../mailbox_errors.rs"),
+            "\n",
+            include_str!("../../human_route.rs"),
+            "\n",
+            include_str!("../../store_drift.rs"),
+            "\n",
+            include_str!("../../launch_defaults.rs"),
+            "\n",
+            include_str!("../../merge_hold_output.rs"),
+            "\n",
+            include_str!("../../history_reporting.rs")
+        ),
+        concat!(
+            include_str!("../../ci_staleness.rs"),
+            include_str!("../../ci_watch.rs"),
+            include_str!("../../bounded_process.rs"),
+            include_str!("../../forge_lookup.rs"),
+            include_str!("../../store_lookup.rs"),
+            include_str!("../../output_policy.rs"),
+            include_str!("../../statusline_counts.rs"),
+            include_str!("../../session_warnings.rs"),
+            include_str!("../../status_policy.rs"),
+            include_str!("../../orchestrator_badge.rs"),
+            include_str!("../../default_branch.rs"),
+            include_str!("../../plan_structure.rs"),
+            include_str!("../../worktree_dirty.rs")
+        ),
+        concat!(concat!(
+            include_str!("../../scoped_lease.rs"),
+            "\n",
+            include_str!("../../pull_lines.rs")
+        )),
+        include_str!("../../review_commands.rs"),
+        concat!(
+            include_str!("../../regression_tests.rs"),
+            "\n",
+            include_str!("../../text_truncate.rs")
+        ),
         include_str!("../../merge_hold_cmd.rs"),
         include_str!("../../status_awaiting.rs")
     )

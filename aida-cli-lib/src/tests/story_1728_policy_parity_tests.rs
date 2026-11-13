@@ -13,6 +13,14 @@
 //! Rows corrected by hand after capture, each a deliberate policy change:
 //! - `session leases --prune-stale`: Read → Session. It releases stale
 //!   leases, including other clones' claims (TASK-1939).
+//! - Conditional session handoffs auto-push their spec deferral; conditional
+//!   recurrence requires a distinct team identity like `defer` (STORY-2402).
+//! - `agent new <vendor> --no-exec`: Write → Read. Side-effect-free launch
+//!   declarations are available to stakeholder seats (STORY-1486).
+//!
+//! Rows removed by hand after capture:
+//! - Twenty retired STORY-1028 mode-flag variants (TASK-1214).
+// trace:TASK-1214 | ai:codex
 // trace:STORY-1728 | ai:claude
 
 use super::*;
@@ -78,7 +86,7 @@ fn synthesize(node: &clap::Command, path: &[String], probe: Option<&clap::Arg>) 
         for (arg, pick) in args.iter().zip(&picks) {
             spell(arg, &candidates(arg)[*pick], &mut argv);
         }
-        let parsed = std::panic::catch_unwind(|| crate::command_registry::try_parse_from(&argv));
+        let parsed = std::panic::catch_unwind(|| crate::TEST_CLI.try_parse_from(&argv));
         let err = match parsed {
             Ok(Ok(_)) => return Some(argv[1..].join(" ")),
             Ok(Err(err)) => err,
@@ -99,7 +107,9 @@ fn synthesize(node: &clap::Command, path: &[String], probe: Option<&clap::Arg>) 
 fn answers(argv: &str) -> String {
     let mut full = vec!["aida"];
     full.extend(argv.split(' '));
-    let cli = crate::command_registry::try_parse_from(&full).expect("synthesized argv parses");
+    let cli = crate::TEST_CLI
+        .try_parse_from(&full)
+        .expect("synthesized argv parses");
     format!(
         "{:?}\t{}\t{}\t{}",
         crate::stakeholder_role::stakeholder_cli_action(&cli.command),
@@ -113,7 +123,7 @@ fn answers(argv: &str) -> String {
 /// for every command path and every single-flag variant of it that parses,
 /// sorted.
 fn policy_rows() -> Vec<String> {
-    let mut root = crate::command_registry::built_command();
+    let mut root = crate::TEST_CLI.built_command();
     root.build();
     let mut paths = Vec::new();
     collect_paths(&root, &[], &mut paths);
@@ -185,7 +195,7 @@ fn registered_policy_matches_mains_legacy_tables_for_every_verb() {
         full.extend(argv.split(' '));
         // Main's argv must still parse here (the golden help snapshot pins
         // the surface), so a parse failure is itself a divergence.
-        if crate::command_registry::try_parse_from(&full).is_err() {
+        if crate::TEST_CLI.try_parse_from(&full).is_err() {
             diverged.push(format!("aida {argv}: no longer parses"));
             continue;
         }
@@ -204,4 +214,28 @@ fn registered_policy_matches_mains_legacy_tables_for_every_verb() {
         diverged.join("\n")
     );
     assert_eq!(checked, want.len());
+}
+
+// trace:STORY-2402 | ai:codex
+const S5_POLICY_INVOCATIONS: &[&str] = &[
+    "findings recur --until date:2026-01-01 TASK-1",
+    "findings recur --reason hold --until manual:joe TASK-1",
+    "session handoff --until date:2026-01-01 --write TASK-1 --spec TASK-1",
+    "session handoff --spec TASK-1 --write TASK-1 --until date:2026-01-01",
+    "session handoff --reason hold --until manual:joe --spec TASK-1 --write TASK-1",
+];
+
+#[test]
+fn story2402_s5_policy_fixture_covers_conditional_writers() {
+    let fixture = std::fs::read_to_string(fixture_path()).unwrap();
+    for argv in S5_POLICY_INVOCATIONS {
+        // Parse the CLI once per invocation, not once per fixture line.
+        // CI run 42588996930 measured 53.980s with the repeated parsing.
+        // trace:STORY-2402 | ai:codex
+        let expected = format!("{argv}\t{}", answers(argv));
+        assert!(
+            fixture.lines().any(|line| line == expected),
+            "missing S5 policy: {argv}"
+        );
+    }
 }

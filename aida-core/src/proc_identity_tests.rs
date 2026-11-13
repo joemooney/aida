@@ -206,3 +206,33 @@ fn proc_identity_cooperative_worker_and_subreaper() {
         .validate()
         .is_err());
 }
+
+// trace:TASK-3365 | ai:codex
+#[cfg(target_os = "linux")]
+#[test]
+fn proc_identity_retained_child_can_be_recorded_after_exit() {
+    let mut child = std::process::Command::new("/bin/true").spawn().unwrap();
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+    loop {
+        if matches!(
+            read_stat(Path::new("/proc"), child.id()),
+            Ok(StatRead::Found { state: 'Z', .. })
+        ) {
+            break;
+        }
+        assert!(std::time::Instant::now() < deadline, "child did not exit");
+        std::thread::sleep(std::time::Duration::from_millis(5));
+    }
+    assert!(
+        ProcIdentity::capture(child.id()).is_err(),
+        "ordinary capture still requires liveness"
+    );
+    let id = ProcIdentity::capture_child(&child).unwrap();
+    assert_eq!(id.pid, child.id());
+    assert_eq!(observe(&id, true), Verdict::Dead(DeadReason::Exited));
+    assert!(child.wait().unwrap().success());
+    assert!(
+        ProcIdentity::capture_child(&child).is_err(),
+        "reaped child is not recordable"
+    );
+}

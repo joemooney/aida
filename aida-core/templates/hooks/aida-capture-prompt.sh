@@ -22,6 +22,12 @@ set -u
 # Read JSON input from stdin (silently no-op on error)
 input="$(cat 2>/dev/null || echo '{}')"
 
+# trace:STORY-2653 | ai:codex — notify the launcher before any Stop reminder.
+# The response has finished; goal hooks cannot veto the launcher's rotation.
+if [ -n "${AIDA_ROTATION_GENERATION:-}" ] && command -v timeout >/dev/null 2>&1; then
+    AIDA_HOOK_EVENT=Stop AIDA_HOOK_PAYLOAD="$input" timeout 4 aida awaiting --notice >/dev/null 2>&1 || true
+fi
+
 # Need jq for parsing; if unavailable, no-op
 if ! command -v jq >/dev/null 2>&1; then
     exit 0

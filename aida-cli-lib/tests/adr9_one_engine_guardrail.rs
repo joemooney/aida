@@ -150,6 +150,15 @@ fn precise_production_calls(src: &str) -> usize {
         }
     }
     let parsed = syn::parse_file(src).expect("guarded source must parse as Rust");
+    // trace:TASK-3424 | ai:codex
+    // Out-of-line test suites carry their cfg on the file, rather than on
+    // an inline module. Keep their engine calls out of the production count.
+    if parsed.attrs.iter().any(|attr| {
+        attr.path().is_ident("cfg")
+            && requires_test(&attr.parse_args::<syn::Meta>().expect("valid cfg"))
+    }) {
+        return 0;
+    }
     let mut calls = Calls(0);
     calls.visit_file(&parsed);
     calls.0
@@ -179,6 +188,18 @@ fn any_file_with_test_only_engine_calls_is_not_an_offender() {
         mod tests { fn harness() { auto_complete::orchestrate_with_resume(); } }
     "#;
     assert_eq!(offending_calls("src/some_future_file.rs", src), 0);
+    // trace:TASK-3424 | ai:codex
+    for cfg in [
+        "test",
+        "all(test, unix)",
+        "all(unix, all(test, feature = \"x\"))",
+    ] {
+        let src =
+            format!("#![cfg({cfg})]\nfn harness() {{ auto_complete::orchestrate_with_resume(); }}");
+        assert_eq!(offending_calls("src/tests/future_tests.rs", &src), 0);
+    }
+    let src = "#![cfg(unix)]\nfn run() { auto_complete::orchestrate_with_resume(); }";
+    assert_eq!(offending_calls("src/some_future_file.rs", src), 1);
     let src = "fn run() { auto_complete::orchestrate_with_resume(); }";
     assert_eq!(offending_calls("src/some_future_file.rs", src), 1);
 }

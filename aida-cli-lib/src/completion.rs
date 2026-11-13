@@ -1,3 +1,4 @@
+// trace:TASK-3429 | ai:codex
 //! The into-Completed seam (STORY-1418).
 //!
 //! Every CLI path that moves a spec into `Completed` goes through this module:
@@ -165,7 +166,7 @@ pub(crate) fn clear_completed_at_on_reopen(req: &mut Requirement, prior: &Requir
 /// for BUG-410, clear the stale completion date, and fence off all code evidence
 /// already present at reopen time. Done -> Completed is forward progress.
 // trace:TASK-1600 | ai:codex
-pub(crate) fn record_reopen(
+pub fn record_reopen(
     req: &mut Requirement,
     prior: &RequirementStatus,
     project_root: Option<&std::path::Path>,

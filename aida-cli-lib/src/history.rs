@@ -1,3 +1,4 @@
+// trace:TASK-3429 | ai:codex
 //! `aida history` — project event timeline decoded from the orphan branch.
 //!
 //! Walks `git log` on the `aida-store` orphan branch via shell-out,
@@ -228,7 +229,7 @@ fn transition_matches(from: &str, to: &str, opts: &HistoryOpts) -> bool {
 /// message starts with `invalid combination:` so MCP reports it as an
 /// invalid argument.
 // trace:TASK-1512 | ai:claude
-pub(crate) fn validate_transition_pair(
+pub fn validate_transition_pair(
     from: Option<&str>,
     to: Option<&str>,
     from_flag: &str,
@@ -251,7 +252,7 @@ pub(crate) fn validate_transition_pair(
 /// `in_progress`, `InProgress`, any case), plus `accepted` for Approved
 /// (the ADR spelling). An unknown value is an error naming the valid set.
 // trace:TASK-1512 | ai:claude
-pub(crate) fn resolve_status_filter(flag: &str, raw: &str) -> Result<String> {
+pub fn resolve_status_filter(flag: &str, raw: &str) -> Result<String> {
     if raw.trim().eq_ignore_ascii_case("accepted") {
         return Ok("Approved".to_string());
     }
@@ -1226,7 +1227,7 @@ pub fn collect_event_records(store_path: &Path, opts: &HistoryOpts) -> Result<Ev
 }
 
 // trace:STORY-1477 | ai:codex
-pub(crate) fn render_template_alias(
+pub fn render_template_alias(
     store_path: &Path,
     opts: &HistoryOpts,
     oneline: bool,
@@ -2810,7 +2811,7 @@ pub(crate) fn events_json(
 /// The history JSON document for already-built records; shared by the CLI
 /// (`--json`) and the MCP history tool so the two cannot drift.
 // trace:BUG-1631 | ai:claude
-pub(crate) fn records_json(
+pub fn records_json(
     records: &[HistoryEventRecord],
     window_exhausted: bool,
     source: &HistorySource,
@@ -4879,6 +4880,7 @@ mod tests {
 // trace:BUG-1635 | ai:claude
 // trace:TASK-1480 | ai:claude
 // trace:TASK-1512 | ai:claude
+// trace:TASK-1214 | ai:codex
 #[derive(clap::Parser, Debug)]
 #[clap(name = "history")]
 pub(crate) struct HistoryArgs {
@@ -4898,7 +4900,7 @@ pub(crate) struct HistoryArgs {
     /// priority is Added/PriorityChange; otherwise empty. Comment is a count/summary,
     /// never a body. No literal newlines; max 4096 bytes, rendered line 16384 bytes.
     // trace:STORY-1477 | ai:codex
-    #[clap(long, global = true, conflicts_with_all = ["fields", "oneline", "full", "events", "kind"])]
+    #[clap(long, global = true, conflicts_with_all = ["fields", "oneline", "full", "kind"])]
     pub template: Option<String>,
 
     /// Ordered event columns: commit,date,author,id,type,priority,title,kind,event,
@@ -4936,16 +4938,6 @@ pub(crate) struct HistoryArgs {
     #[clap(long, global = true)]
     pub max_commits: Option<usize>,
 
-    /// Switch to per-event chronological mode — each commit's YAML
-    /// diff is decoded into one event line per change (status
-    /// transitions, comments added, tags edited, etc.). Slower than
-    /// digest because it shells out to `git show` per file per
-    /// commit; useful for inspecting one requirement closely with
-    /// --id, less useful as a general overview. `--full` is the more
-    /// discoverable spelling of the same mode.
-    #[clap(long, hide = true, global = true)]
-    pub events: bool,
-
     /// The complete edit/event trail — every status change, comment,
     /// tag edit, and field edit, chronological newest-first.
     /// Equivalent to the `events` subcommand, but composes naturally
@@ -4965,7 +4957,7 @@ pub(crate) struct HistoryArgs {
     #[clap(
         long,
         conflicts_with_all = [
-            "spec", "id", "full", "events", "timeline", "status_changes",
+            "spec", "id", "full", "timeline", "status_changes",
             "comments", "oneline", "shipped", "to", "from", "opened",
             "template", "fields", "kind",
         ]
@@ -5163,10 +5155,11 @@ pub(crate) struct HistoryArgs {
     /// windowing and event-selector flags are refused rather than
     /// silently producing partial totals that read as complete.
     // trace:STORY-1478 | ai:claude — plain `//` keeps the marker out of `--help`.
+    // trace:TASK-1214 | ai:codex — conflicts name arguments, not retired mode flags.
     #[clap(
         long,
         conflicts_with_all = [
-            "full", "events", "status_changes", "comments", "oneline",
+            "full", "status_changes", "comments", "oneline",
             "shipped", "opened", "to", "from", "kind", "since", "until",
             "max_commits", "type", "author", "all", "archived", "deferred",
         ]
@@ -5185,16 +5178,17 @@ pub(crate) struct HistoryArgs {
 
 fn run_history(
     matches: &clap::ArgMatches,
-    ctx: &crate::command_registry::DispatchCtx,
-) -> anyhow::Result<crate::command_registry::Flow> {
-    use crate::*;
+    ctx: &crate::cmdkit::DispatchCtx,
+) -> anyhow::Result<crate::cmdkit::Flow> {
+    // trace:TASK-3428 | ai:codex
+    use crate::config_init::effective_history_limit;
+    use crate::rel_cards::resolve_history_id_filter;
+    use crate::{history, history_kind_report, history_should_exclude_meta, history_timeline};
     let args = <HistoryArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
     match &ctx.store {
-        None => Ok(crate::command_registry::Flow::Continue),
-        Some(crate::command_registry::StoreCtx::Distributed { .. }) => {
-            Ok(crate::command_registry::Flow::Continue)
-        }
-        Some(crate::command_registry::StoreCtx::Git {
+        None => Ok(crate::cmdkit::Flow::Continue),
+        Some(crate::cmdkit::StoreCtx::Distributed { .. }) => Ok(crate::cmdkit::Flow::Continue),
+        Some(crate::cmdkit::StoreCtx::Git {
             store_path,
             backend,
         }) => {
@@ -5209,7 +5203,6 @@ fn run_history(
                     force,
                     limit,
                     max_commits,
-                    events,
                     full,
                     digest,
                     id,
@@ -5272,7 +5265,7 @@ fn run_history(
                             }
                             None => print!("{}", templates.list()),
                         }
-                        return crate::command_registry::returned(Ok(()));
+                        return crate::cmdkit::returned(Ok(()));
                     }
                     // STORY-1664: the list-shaped views share only the window, type,
                     // limit, author and archive flags with the rest of `history`;
@@ -5283,7 +5276,7 @@ fn run_history(
                             ("a SPEC-ID", spec.is_some() || id.is_some()),
                             ("--template", template.is_some()),
                             ("--fields", fields.is_some()),
-                            ("--full", *full || *events),
+                            ("--full", *full),
                             ("--digest", *digest),
                             ("--status-changes", *status_changes),
                             ("--kind", kind.is_some()),
@@ -5346,7 +5339,7 @@ fn run_history(
                             },
                         };
                         let json = *json || args.json || crate::output_format_is_json();
-                        return crate::command_registry::returned(crate::history_views::run(
+                        return crate::cmdkit::returned(crate::history_views::run(
                             backend, store_path, view, &query, json,
                         ));
                     }
@@ -5396,7 +5389,7 @@ fn run_history(
                             "`aida history --kind` has no JSON projection; use `--format human` or `--format toon`"
                         );
                         }
-                        return crate::command_registry::returned(crate::history_kind_report(
+                        return crate::cmdkit::returned(crate::history_kind_report(
                             kind,
                             since.as_deref(),
                             until.as_deref(),
@@ -5410,15 +5403,9 @@ fn run_history(
                         // trace:STORY-1664 | ai:claude — the list views returned above.
                         Some(_) => unreachable!(),
                         None => {
-                            if *events {
-                                note_hidden_alias(
-                                    concat!("aida history ", "--events"),
-                                    "aida history events",
-                                );
-                            }
                             // trace:TASK-1480 | ai:claude — `--full` is the
                             // discoverable, non-hidden spelling of the same mode.
-                            *events || *full || matches!(layout, Some(Layout::Full)) || custom_feed
+                            *full || matches!(layout, Some(Layout::Full)) || custom_feed
                         }
                     };
                     // TASK-1512: `--to`/`--from` take the status spellings `aida
@@ -5638,7 +5625,7 @@ fn run_history(
                             .ok()
                             .filter(|v| !v.trim().is_empty() && v != "0")
                             .is_none();
-                        return crate::command_registry::returned(history_timeline::run(
+                        return crate::cmdkit::returned(history_timeline::run(
                             store_path,
                             spec_id,
                             output,
@@ -5718,9 +5705,9 @@ fn run_history(
                     }
                 }
             }
-            Ok(crate::command_registry::Flow::Continue)
+            Ok(crate::cmdkit::Flow::Continue)
         }
-        Some(crate::command_registry::StoreCtx::Legacy {
+        Some(crate::cmdkit::StoreCtx::Legacy {
             storage,
             requirements_path,
         }) => {
@@ -5755,22 +5742,21 @@ fn run_history(
                     );
                 }
             }
-            Ok(crate::command_registry::Flow::Continue)
+            Ok(crate::cmdkit::Flow::Continue)
         }
     }
 }
 
 // trace:STORY-1728 | ai:claude
-pub(crate) static HISTORY: crate::command_registry::CommandReg =
-    crate::command_registry::CommandReg {
-        name: "history",
-        help_after: "search",
-        command: <HistoryArgs as clap::CommandFactory>::command,
-        policy: |_| crate::command_registry::CmdPolicy {
-            stakeholder: crate::stakeholder_role::StakeholderAction::Read,
-            per_write_auto_push: false,
-            skip_role_restore_prompt: false,
-            team_identity_write: false,
-        },
-        run: crate::command_registry::Handler::Store(run_history),
-    };
+pub(crate) static HISTORY: crate::cmdkit::CommandReg = crate::cmdkit::CommandReg {
+    name: "history",
+    help_after: "search",
+    command: <HistoryArgs as clap::CommandFactory>::command,
+    policy: |_| crate::cmdkit::CmdPolicy {
+        stakeholder: crate::stakeholder_role::StakeholderAction::Read,
+        per_write_auto_push: false,
+        skip_role_restore_prompt: false,
+        team_identity_write: false,
+    },
+    run: crate::cmdkit::Handler::Store(run_history),
+};

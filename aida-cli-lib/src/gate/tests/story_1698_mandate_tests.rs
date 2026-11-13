@@ -34,6 +34,7 @@ fn active(include_supervised: bool) -> Mandate {
         seat: MANDATE_SEAT.into(),
         scope: SCOPE_SHIP_HELD.into(),
         include_supervised,
+        include_gate_paths: false,
         reason: Some("fire".into()),
         issued_at: now() - Duration::hours(1),
         expires_at: now() + Duration::hours(7),
@@ -148,7 +149,11 @@ impl Case {
     }
 
     fn decide(&self) -> std::result::Result<String, MandateRefusal> {
-        ship_decision(&ShipCheck {
+        ship_decision(&self.check())
+    }
+
+    fn check(&self) -> ShipCheck<'_> {
+        ShipCheck {
             state: &self.state,
             now: self.now,
             grant: self.grant,
@@ -165,7 +170,7 @@ impl Case {
             protected: crate::gate::mandate_gates::ProtectedPaths::floor_ref(),
             ship_gate: None,
             hold_clear_gate: None,
-        })
+        }
     }
 }
 
@@ -587,7 +592,7 @@ fn pr_ship_consults_the_mandate_at_every_hold_gate_and_before_the_merge() {
     );
     let before_merge = handler.split(".merge_change(").next().expect("merge call");
     assert!(
-        before_merge.contains("mandate_still_active(&cover.id)"),
+        before_merge.contains("mandate_cover_still_active(cover)"),
         "the mandate is re-read immediately before the merge call"
     );
     let preflight = src
@@ -1062,7 +1067,7 @@ fn every_failure_after_a_mandate_release_re_arms_the_hold() {
     let merged = after.find("merged_this_run = true;").unwrap();
     let window = &after[..merged + 2000];
     assert!(window.contains("if mandate_release.is_some() {")); // }
-    assert!(window.contains("ended before the merge"));
+    assert!(window.contains("ended or no longer covers protected paths before the merge"));
     assert!(window.contains("re-arm a mandate-released hold on a failed merge"));
     assert_eq!(
         window.matches("rearm_after_mandate_failure(").count(),
@@ -1153,7 +1158,11 @@ fn task_1790_exclusions_require_private_owned_regular_file() {
     assert!(exclusion_metadata_check(&meta, meta.uid().wrapping_add(1))
         .unwrap_err()
         .contains("owned by uid"));
-    for mode in [0o644, 0o660, 0o400, 0o4600] {
+    // trace:STORY-2695 | ai:codex
+    assert!(exclusion_mode_check(0o4600)
+        .unwrap_err()
+        .contains("not 600"));
+    for mode in [0o644, 0o660, 0o400] {
         std::fs::set_permissions(&path, std::fs::Permissions::from_mode(mode)).unwrap();
         let ledger = read_exclusions(tmp.path());
         assert!(
@@ -1262,6 +1271,7 @@ fn start_and_stop_as_human_refuse_off_a_terminal() {
         true,
         false,
         false,
+        true, // protected paths never bypass the human floor
         std::collections::BTreeSet::new(),
         Utc::now(),
     )
@@ -1422,17 +1432,19 @@ fn exclusion_writer_refuses_invalid_ledger_without_appending() {
     let seen = vec![("TASK-2".into(), "guided".into(), false)];
     record_exclusions(tmp.path(), &seen, now()).unwrap();
     let before = std::fs::read(&path).unwrap();
-    for mode in [0o644, 0o4600] {
-        std::fs::set_permissions(&path, std::fs::Permissions::from_mode(mode)).unwrap();
-        assert!(private_file_check(&path).is_err());
-        assert!(record_exclusions(
-            tmp.path(),
-            &[("TASK-3".into(), "guided".into(), false)],
-            now()
-        )
-        .is_err());
-        assert_eq!(std::fs::read(&path).unwrap(), before);
-    }
+    // trace:STORY-2695 | ai:codex
+    assert!(exclusion_mode_check(0o4600)
+        .unwrap_err()
+        .contains("not 600"));
+    std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o644)).unwrap();
+    assert!(private_file_check(&path).is_err());
+    assert!(record_exclusions(
+        tmp.path(),
+        &[("TASK-3".into(), "guided".into(), false)],
+        now()
+    )
+    .is_err());
+    assert_eq!(std::fs::read(&path).unwrap(), before);
     std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o600)).unwrap();
     std::fs::write(&path, b"malformed\n").unwrap();
     assert!(record_exclusions(tmp.path(), &seen, now()).is_err());
@@ -1540,6 +1552,7 @@ fn mandate_ship_cover_passes_committed_trace_ids_to_the_decision() {
         &[],
         &[
             ("AIDA_HOME", Some(home.to_str().unwrap())),
+            ("USER", Some(crate::test_env::HERMETIC_TEST_USER)),
             ("AIDA_TEST_GH_BINARY", Some(gh.to_str().unwrap())),
         ],
     );
@@ -1751,6 +1764,11 @@ fn task_1800_deleted_spec_with_history_is_judged_by_history() {
 // trace:TASK-1800 | ai:antigravity
 #[test]
 fn task_1800_aliased_id_resolves_through_alias_and_is_judged_normally() {
+    // Each fixture needs its own exclusion ledger, even in a broad mandate run.
+    // trace:STORY-2733 | ai:codex
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
     let tmp = tempfile::tempdir().unwrap();
     let root = tmp.path();
     let git_out = |dir: &Path, args: &[&str]| {
@@ -1848,7 +1866,10 @@ fn task_1800_aliased_id_resolves_through_alias_and_is_judged_normally() {
         root,
         "advisor",
         &[],
-        &[("AIDA_TEST_GH_BINARY", Some(gh.to_str().unwrap()))],
+        &[
+            ("USER", Some(crate::test_env::HERMETIC_TEST_USER)),
+            ("AIDA_TEST_GH_BINARY", Some(gh.to_str().unwrap())),
+        ],
     );
     git_out(&store, &["add", "-A"]);
     git_out(
@@ -2034,7 +2055,10 @@ fn ship_tracing_deleted_agreed_id_spec(
         root,
         "advisor",
         &[],
-        &[("AIDA_TEST_GH_BINARY", Some(gh.to_str().unwrap()))],
+        &[
+            ("USER", Some(crate::test_env::HERMETIC_TEST_USER)),
+            ("AIDA_TEST_GH_BINARY", Some(gh.to_str().unwrap())),
+        ],
     );
     git_out(&store, &["add", "-A"]);
     git_out(
@@ -2082,6 +2106,10 @@ fn ship_tracing_deleted_agreed_id_spec(
 // trace:TASK-1800 | ai:claude
 #[test]
 fn task_1800_deleted_spec_named_by_its_agreed_id_is_judged_by_its_history() {
+    // trace:STORY-2733 | ai:codex
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
     let result = ship_tracing_deleted_agreed_id_spec(None);
     assert!(
         matches!(result, Err(MandateRefusal::Excluded { ref spec, .. }) if spec == "TASK-176"),
@@ -2096,6 +2124,10 @@ fn task_1800_deleted_spec_named_by_its_agreed_id_is_judged_by_its_history() {
 // trace:TASK-1800 | ai:claude
 #[test]
 fn task_1800_deleted_agreed_id_spec_at_a_non_canonical_path_refuses() {
+    // trace:STORY-2733 | ai:codex
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
     let result = ship_tracing_deleted_agreed_id_spec(Some("objects/TASK/001/TASK-1-152.yaml"));
     assert!(
         matches!(result, Err(MandateRefusal::HistoryUnreadable { ref spec, .. }) if spec == "TASK-176"),
@@ -3313,4 +3345,222 @@ fn task_2314_completed_and_shipped_on_main_expires() {
         Ok(active(false).id),
         "Completed and shipped operator-only traces expire"
     );
+}
+
+// trace:STORY-2733 | ai:codex
+#[test]
+fn mandate_include_gate_paths_preserves_other_gates_and_audits_train_member() {
+    use crate::gate::mandate_gates::{GateMatch, PathSource, ProtectedPaths};
+    use crate::gate::mandate_ship::MandateCover;
+    let paths = vec!["aida-cli-lib/src/gate/mandate.rs".to_owned()];
+    let hit = GateMatch {
+        path: paths[0].clone(),
+        entry: "aida-cli-lib/src/gate/".into(),
+        source: PathSource::BuiltIn,
+    };
+    let mut case = Case::ok();
+    let mut c = case.check();
+    c.changed_paths = Some(&paths);
+    assert_eq!(
+        ship_decision(&c),
+        Err(MandateRefusal::TouchesGates(hit.clone()))
+    );
+    if let MandateState::Active(m) = &mut case.state {
+        m.include_gate_paths = true;
+    }
+    let mut c = case.check();
+    c.changed_paths = Some(&paths);
+    assert_eq!(gate_checks(&c, &[&c.ship_gate]), Ok(()));
+    let id = ship_decision(&c).unwrap();
+    let cover =
+        MandateCover::from_checked_paths(id, "joe".into(), &paths, ProtectedPaths::floor_ref());
+    assert_eq!(cover.gate_match, Some(hit));
+    let audit = cover.gate_audit().unwrap();
+    let evidence: serde_json::Value =
+        serde_json::from_str(audit.strip_prefix("Aida-Mandate-Gate-Path: ").unwrap()).unwrap();
+    assert_eq!(evidence["path"], paths[0]);
+    assert_eq!(evidence["entry"], "aida-cli-lib/src/gate/");
+    assert_eq!(evidence["source"], "built-in");
+    let records = || {
+        vec![(
+            "TASK-1".into(),
+            Vec::new(),
+            Some(aida_core::ExecutionMode::Guided),
+        )]
+    };
+    assert!(
+        crate::pr_train::member_spec_policy_refusal(records(), false, || {
+            ship_decision(&c)
+                .map(|_| ())
+                .map_err(|e| Some(e.message(7)))
+        })
+        .is_none()
+    );
+    assert!(
+        crate::pr_train::member_spec_policy_refusal(records(), false, || Err(Some(
+            "protected paths".into()
+        )))
+        .is_some()
+    );
+    let member = crate::pr_train::Member {
+        gate_audit: Some(audit.clone()),
+        cover: None,
+        pr: 7,
+        head: HEAD.into(),
+        subject: "work".into(),
+        body: String::new(),
+        release: Some(cover),
+    };
+    let message = crate::pr_train::car_message(&member);
+    assert!(message.contains(&audit));
+    let restored: crate::pr_train::Member =
+        serde_json::from_value(serde_json::to_value(&member).unwrap()).unwrap();
+    assert!(
+        restored.release.is_none(),
+        "live authority is never journaled"
+    );
+    assert_eq!(crate::pr_train::car_message(&restored), message);
+    c.changed_paths = None;
+    assert_eq!(
+        ship_decision(&c),
+        Err(MandateRefusal::ChangedPathsUnresolved)
+    );
+    c.changed_paths = Some(&paths);
+    c.ship_gate = Some("operator gate".into());
+    assert!(matches!(
+        ship_decision(&c),
+        Err(MandateRefusal::HumanGated { .. })
+    ));
+    c.ship_gate = None;
+    c.override_stale_approval = true;
+    assert_eq!(ship_decision(&c), Err(MandateRefusal::OverrideStale));
+}
+
+// trace:STORY-2733 | ai:codex
+#[test]
+fn mandate_legacy_record_defaults_gate_paths_false() {
+    let mut value = serde_json::to_value(active(false)).unwrap();
+    value.as_object_mut().unwrap().remove("include_gate_paths");
+    let old: Mandate = serde_json::from_value(value).unwrap();
+    assert!(!old.include_gate_paths);
+    let mut m = old;
+    m.include_gate_paths = true;
+    let report =
+        crate::mandate::status_report(&MandateState::Active(m.clone()), now(), None, false);
+    assert!(report.contains("includes protected paths: true"));
+    let json: serde_json::Value = serde_json::from_str(&crate::mandate::status_report(
+        &MandateState::Active(m),
+        now(),
+        None,
+        true,
+    ))
+    .unwrap();
+    assert_eq!(json["mandate"]["include_gate_paths"], true);
+}
+
+// trace:STORY-2733 | ai:codex
+#[test]
+fn mandate_renew_requires_fresh_gate_paths_opt_in_including_revival() {
+    let tmp = tempfile::tempdir().unwrap();
+    let m = mint(
+        tmp.path(),
+        &human_ok,
+        "joe",
+        DEFAULT_TTL,
+        None,
+        false,
+        true,
+        false,
+        BTreeSet::new(),
+        now(),
+    )
+    .unwrap();
+    assert!(load_valid(tmp.path(), "joe", now()).0[0].include_gate_paths);
+    let (renewed, _, _) = extend(
+        tmp.path(),
+        &human_ok,
+        "joe",
+        None,
+        false,
+        now() + Duration::hours(1),
+    )
+    .unwrap();
+    assert!(!renewed.include_gate_paths);
+    let (renewed, _, _) = extend(
+        tmp.path(),
+        &human_ok,
+        "joe",
+        None,
+        true,
+        now() + Duration::hours(2),
+    )
+    .unwrap();
+    assert!(renewed.include_gate_paths);
+    let (revived, _, old) = extend(
+        tmp.path(),
+        &human_ok,
+        "joe",
+        None,
+        false,
+        now() + Duration::hours(12),
+    )
+    .unwrap();
+    assert!(!revived.include_gate_paths);
+    assert_eq!(old.as_deref(), Some(m.id.as_str()));
+    assert!(extend(
+        tmp.path(),
+        &no_tty,
+        "joe",
+        None,
+        true,
+        now() + Duration::hours(13)
+    )
+    .is_err());
+}
+
+// trace:STORY-2733 | ai:codex
+#[test]
+fn mandate_gate_audit_keeps_unusual_paths_on_one_physical_line() {
+    let path = "aida-cli-lib/src/gate/odd\npath.rs".to_owned();
+    let cover = crate::gate::mandate_ship::MandateCover::from_checked_paths(
+        "mandate".into(),
+        "joe".into(),
+        std::slice::from_ref(&path),
+        crate::gate::mandate_gates::ProtectedPaths::floor_ref(),
+    );
+    let audit = cover.gate_audit().unwrap();
+    assert_eq!(audit.lines().count(), 1);
+    let evidence: serde_json::Value =
+        serde_json::from_str(audit.strip_prefix("Aida-Mandate-Gate-Path: ").unwrap()).unwrap();
+    assert_eq!(evidence["path"], path);
+}
+
+// trace:STORY-2733 | ai:codex
+#[test]
+fn mandate_cover_rechecks_withdrawn_gate_path_opt_in_before_merge() {
+    use crate::gate::mandate_ship::{cover_active_in, MandateCover};
+    let mut m = active(false);
+    m.include_gate_paths = true;
+    let mut cover = MandateCover::from_checked_paths(
+        m.id.clone(),
+        m.principal.clone(),
+        &["aida-cli-lib/src/gate/x.rs".into()],
+        crate::gate::mandate_gates::ProtectedPaths::floor_ref(),
+    );
+    assert!(cover_active_in(&cover, &MandateState::Active(m.clone())));
+    m.include_gate_paths = false;
+    assert!(!cover_active_in(&cover, &MandateState::Active(m.clone())));
+    cover.gate_match = None;
+    assert!(cover_active_in(&cover, &MandateState::Active(m.clone())));
+    assert!(!cover_active_in(&cover, &MandateState::Expired(m)));
+}
+
+// trace:BUG-2524 | ai:codex
+#[test]
+fn bug_2524_unknown_operator_does_not_fall_back_to_seat_or_default() {
+    use aida_core::exec_context::Environment;
+    let env = Environment::from_pairs([("AIDA_USER".into(), "advisor-seat".into())]);
+    assert_eq!(operator_principal_from(&env), "");
+    let env = env.with_value("USER", Some("  joe  ".into()));
+    assert_eq!(operator_principal_from(&env), "joe");
 }

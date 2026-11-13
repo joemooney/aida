@@ -1,5 +1,4 @@
-"""Fixed read-only v1 service. Embedded only in the trusted host helper.
-No listener, filesystem writer, subprocess dispatcher or mutation handler.
+"""Typed v1 broker. Canonical writes run only in the trusted Rust host.
 trace:TASK-3225 | ai:codex
 """
 import hashlib
@@ -8,7 +7,13 @@ import uuid
 # Linux UAPI: a kernel-held sender pidfd closes the queued-packet PID reuse race.
 SO_PASSPIDFD, SCM_PIDFD = 76, 4
 MUTATION_LIMIT = 65536
+# Compatibility sessions retain the read-only S1 contract. The launch owner
+# supplies the selected profile over private configuration, never a request.
+# Production mediated admission remains gated until the routing audit and
+# Git/oplog publication are complete.
 MUTATION_VERBS = ('session_probe', 'request_status')
+CANONICAL_VERBS = ('comment_add', 'spec_edit')
+# trace:TASK-3223 | ai:codex
 MUTATION_ERRORS = frozenset(('InvalidRequest', 'UnsupportedVersion', 'UnsupportedOperation',
                             'Unauthorized', 'Expired', 'Revoked', 'Conflict', 'Busy',
                             'Unavailable', 'OutcomeUnknown'))
@@ -35,7 +40,7 @@ def mutation_request(raw):
         if depth > 16:
             raise ValueError('depth')
         if isinstance(value, str):
-            if len(value.encode('utf-8')) > 16384 or any(ord(c) < 32 or 127 <= ord(c) <= 159 for c in value):
+            if len(value.encode('utf-8')) > 16384 or any((ord(c) < 32 or 127 <= ord(c) <= 159) and c not in '\n\t' for c in value):
                 raise ValueError('string bounds')
         elif isinstance(value, dict):
             for k, v in value.items():
@@ -59,15 +64,49 @@ def mutation_request(raw):
         # Closed schemas also exclude paths, authority selectors and replacement objects.
         if obj['version'] != 1:
             raise MutationRefusal('UnsupportedVersion')
-        if obj['op'] not in MUTATION_VERBS:
+        if obj['op'] not in MUTATION_VERBS + CANONICAL_VERBS:
             raise MutationRefusal('UnsupportedOperation')
         if obj['op'] == 'session_probe':
             if set(obj['data']) != {'challenge'} or not isinstance(obj['data']['challenge'], str) or len(obj['data']['challenge'].encode()) > 128:
                 raise ValueError('challenge')
-        else:
+        elif obj['op'] == 'request_status':
             if set(obj['data']) != {'request_id'}:
                 raise ValueError('status')
             mutation_uuid(obj['data']['request_id'])
+        else:
+            data = obj['data']
+            keys = {'spec_id', 'expected_revision'}
+            if obj['op'] == 'comment_add':
+                keys.add('content')
+            if obj['op'] == 'spec_edit':
+                keys.add('fields')
+            if set(data) != keys or not isinstance(data['spec_id'], str) or not 1 <= len(data['spec_id']) <= 128:
+                raise ValueError('target')
+            revision = data['expected_revision']
+            if not isinstance(revision, str) or len(revision) != 64 or any(c not in '0123456789abcdef' for c in revision):
+                raise ValueError('revision')
+            if obj['op'] == 'comment_add':
+                if not isinstance(data['content'], str) or not data['content'].strip():
+                    raise ValueError('comment')
+            elif obj['op'] == 'spec_edit':
+                fields = data['fields']
+                if not isinstance(fields, dict) or not fields or not set(fields) <= {'title', 'description', 'priority', 'weight', 'tags'}:
+                    raise ValueError('fields')
+                if any(not isinstance(v, str) for k, v in fields.items() if k not in ('weight', 'tags')):
+                    raise ValueError('field value')
+                if 'tags' in fields:
+                    tags = fields['tags']
+                    if not isinstance(tags, list) or len(tags) > 256 or any(not isinstance(tag, str) or len(tag.encode()) > 512 or any(c.isspace() for c in tag.strip()) or any(ord(c) < 32 or 127 <= ord(c) <= 159 for c in tag) for tag in tags):
+                        raise ValueError('tags')
+                if 'weight' in fields and fields['weight'] is not None:
+                    import math
+                    weight = fields['weight']
+                    if isinstance(weight, bool) or not isinstance(weight, (int, float)) or not math.isfinite(weight) or abs(weight) > 3.4028234663852886e38:
+                        raise ValueError('weight')
+                if 'priority' in fields and fields['priority'].lower() not in ('high', 'medium', 'med', 'low'):
+                    raise ValueError('priority')
+                if 'title' in fields and (not fields['title'] or len(fields['title'].encode()) > 512):
+                    raise ValueError('title')
         return obj
     except (ValueError, TypeError, RecursionError, OverflowError):
         raise MutationRefusal('InvalidRequest') from None
@@ -102,6 +141,41 @@ class MutationAuthority:
             pass
         self.channel.close()
         return 'Unavailable'
+
+
+    # Framed, correlated host RPC. A lost reply has unknown outcome: never
+    # reconnect or fall back to direct persistence. trace:TASK-3223 | ai:codex
+    def operation(self, request):
+        if self.failed:
+            raise MutationRefusal('Unavailable')
+        wire = json.dumps(request, separators=(',', ':')).encode()
+        def receive(size):
+            value = b''
+            while len(value) < size:
+                chunk = self.channel.recv(size - len(value))
+                if not chunk:
+                    raise OSError('host closed')
+                value += chunk
+            return value
+        try:
+            self.channel.sendall(b'M' + struct.pack('!I', len(wire)) + wire)
+            size = struct.unpack('!I', receive(4))[0]
+            if not 0 < size <= MUTATION_LIMIT:
+                raise ValueError('host frame')
+            response = json.loads(receive(size))
+            if response['request_id'] != request['request_id'] or response['launch_epoch'] != request['launch_epoch']:
+                raise ValueError('host correlation')
+        except (OSError, ValueError, KeyError):
+            self.failed = True
+            try:
+                self.channel.shutdown(socket.SHUT_RDWR)
+            except OSError:
+                pass
+            self.channel.close()
+            raise MutationRefusal('OutcomeUnknown') from None
+        if response.get('error'):
+            raise MutationRefusal(response['error'] if response['error'] in MUTATION_ERRORS else 'OutcomeUnknown')
+        return response['result']
 
 
 class MutationIdentity:
@@ -160,9 +234,13 @@ class MutationIdentity:
 class StoreMutationSession:
     """Single event-loop owner: at most one dispatch and eight connections.
     Authorization runs before replay as well as immediately before acceptance.
-    S1 dedupe is memory-only because both verbs are read-only.
+    Read-only dedupe is local; mutation decisions and retries belong to Rust.
     """
     def __init__(self, binding, identity, authorize):
+        profile = binding.get('store_profile', 'compatibility')
+        if profile not in ('compatibility', 'mediated'):
+            raise MutationRefusal('InvalidRequest')
+        self.permitted_verbs = MUTATION_VERBS + (CANONICAL_VERBS if profile == 'mediated' else ())
         self.epoch = mutation_uuid(binding['epoch'])
         self.address = ('/run/aida-mutation/%s/service' % self.epoch).encode()
         self.binding = binding
@@ -206,6 +284,8 @@ class StoreMutationSession:
         if not self.identity.check(*credentials, sender_fd=sender_fd):
             raise MutationRefusal('Unauthorized')
         request = mutation_request(raw)
+        if request['op'] not in self.permitted_verbs:
+            raise MutationRefusal('UnsupportedOperation')
         if request['launch_epoch'] != self.epoch:
             raise MutationRefusal('Unauthorized')
         key = request['request_id']
@@ -215,22 +295,33 @@ class StoreMutationSession:
         self.live()
         if not self.identity.check(*credentials, sender_fd=sender_fd):
             raise MutationRefusal('Unauthorized')
-        if previous:
-            if digest != previous[0]:
-                raise MutationRefusal('Conflict')
+        if previous and digest != previous[0]:
+            raise MutationRefusal('Conflict')
+        if previous and request['op'] in ('session_probe', 'request_status'):
             return previous[1]
-        if len(self.accepted) >= 4096:
+        if previous is None and len(self.accepted) >= 4096:
             raise MutationRefusal('Busy')
         if request['op'] == 'session_probe':
             result = dict(challenge=request['data']['challenge'], specs=self.binding['specs'],
-                          role=self.binding['role'], permitted_verbs=list(MUTATION_VERBS))
+                          role=self.binding['role'], permitted_verbs=list(self.permitted_verbs))
             self.probed = True
+        elif request['op'] == 'request_status':
+            if request['data']['request_id'] in self.accepted:
+                result = dict(state='completed')
+            elif hasattr(self.authorize, 'operation'):
+                result = self.authorize.operation(request)
+            else:
+                result = dict(state='unknown')
         else:
-            result = dict(state='completed' if request['data']['request_id'] in self.accepted else 'unknown')
+            if not hasattr(self.authorize, 'operation'):
+                raise MutationRefusal('Unavailable')
+            result = self.authorize.operation(request)
         response = dict(version=1, launch_epoch=self.epoch, request_id=key, outcome='success', result=result)
         wire = json.dumps(response, separators=(',', ':')).encode()
         if len(wire) > MUTATION_LIMIT:
-            raise MutationRefusal('Unavailable')
+            # The host operation has already returned and may have committed.
+            # A reply we cannot deliver is not a definite pre-write refusal.
+            raise MutationRefusal('OutcomeUnknown')
         self.accepted[key] = (digest, wire)
         return wire
 
@@ -264,8 +355,16 @@ class StoreMutationSession:
                     raise MutationRefusal('InvalidRequest')
                 response = self.dispatch(raw, credentials[0], sender_fds[0])
             except MutationRefusal as error:
-                # Refusals never echo unvalidated input or host diagnostics.
-                response = json.dumps(dict(version=1, launch_epoch=self.epoch, request_id=None,
+                # Correlate only a fully validated same-epoch request. Parsing
+                # here is data-only; it neither authorizes nor retries dispatch.
+                request_id = None
+                try:
+                    request = mutation_request(raw)
+                    if request['launch_epoch'] == self.epoch:
+                        request_id = request['request_id']
+                except MutationRefusal:
+                    pass
+                response = json.dumps(dict(version=1, launch_epoch=self.epoch, request_id=request_id,
                                            outcome='error', error=str(error))).encode()
             except EOFError:
                 response = None

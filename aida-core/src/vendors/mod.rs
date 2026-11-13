@@ -48,6 +48,25 @@ impl LaunchVendor {
     }
 }
 
+/// Values supplied by an effectful adapter, selected by the registry's closed
+/// identity. Keeps adapter configuration local without duplicating vendor arms.
+// trace:STORY-2326 | ai:codex
+pub struct VendorValues<T> {
+    pub claude: T,
+    pub codex: T,
+    pub agy: T,
+}
+
+impl<T> VendorValues<T> {
+    pub fn get(self, vendor: LaunchVendor) -> T {
+        match vendor {
+            LaunchVendor::Claude => self.claude,
+            LaunchVendor::Codex => self.codex,
+            LaunchVendor::Agy => self.agy,
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SkillSyntax {
     Slash,
@@ -70,7 +89,7 @@ pub enum MailWake {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Resume {
-    RecordedSession,
+    RecordedSessionWithFork,
     RecordedThread,
     Unsupported,
 }
@@ -91,8 +110,20 @@ pub enum SandboxSupport {
     OuterOnlyPendingConformance,
 }
 
+/// Installation policy; shared settings remain owned by the full scaffolder.
+// trace:STORY-2539 | ai:codex
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum HookBackend {
+    Settings,
+    Standalone,
+    NamedEntries,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct HookLayout {
+    pub backend: HookBackend,
+    pub template: &'static str,
+    pub events: &'static [&'static str],
     pub wiring: &'static str,
     pub handlers: &'static str,
 }
@@ -124,12 +155,25 @@ pub static PROFILES: [VendorProfile; 3] = [
         executable: "claude",
         interactive_prompt: PromptTransport::Positional,
         hooks: HookLayout {
+            backend: HookBackend::Settings,
+            template: "settings.json",
+            events: &[
+                "PreToolUse",
+                "PostToolUse",
+                "PreCompact", // STORY-2662: Claude only; Codex trusted-hook test pending.
+                "SessionStart",
+                "UserPromptSubmit",
+                "Notification",
+                "SubagentStart",
+                "SubagentStop",
+                "Stop",
+            ],
             wiring: ".claude/settings.json",
             handlers: ".claude/hooks",
         },
         sandbox: SandboxSupport::LegacyAndShared,
         mail_wake: MailWake::PerTurnHooks,
-        resume: Resume::RecordedSession,
+        resume: Resume::RecordedSessionWithFork,
         background: Background::DaemonHandoff,
         skill_syntax: SkillSyntax::Slash,
     },
@@ -141,6 +185,17 @@ pub static PROFILES: [VendorProfile; 3] = [
         executable: "codex",
         interactive_prompt: PromptTransport::Positional,
         hooks: HookLayout {
+            backend: HookBackend::Standalone,
+            template: "codex-hooks.json",
+            events: &[
+                "PreToolUse",
+                "PostToolUse",
+                "SessionStart",
+                "UserPromptSubmit",
+                "SubagentStart",
+                "SubagentStop",
+                "Stop",
+            ],
             wiring: ".codex/hooks.json",
             handlers: ".codex/hooks",
         },
@@ -158,6 +213,9 @@ pub static PROFILES: [VendorProfile; 3] = [
         executable: "agy",
         interactive_prompt: PromptTransport::Flag("--prompt-interactive"),
         hooks: HookLayout {
+            backend: HookBackend::NamedEntries,
+            template: "antigravity-hooks.json",
+            events: &["PreInvocation", "SessionStart"],
             wiring: ".agents/hooks.json",
             handlers: ".agents/hooks",
         },
@@ -189,7 +247,73 @@ impl PromptTransport {
 }
 
 impl VendorProfile {
+    /// Resume or fork an interactive recorded conversation. This describes argv
+    /// only; admission and runtime support checks remain with the caller.
+    // trace:STORY-2539 | ai:codex
+    pub fn resume_args(&self, id: &str, fork: bool) -> Option<Vec<String>> {
+        match self.resume {
+            Resume::RecordedSessionWithFork => {
+                let mut args = vec!["--resume".into(), id.into()];
+                if fork {
+                    args.push("--fork-session".into());
+                }
+                Some(args)
+            }
+            Resume::RecordedThread => {
+                Some(vec![if fork { "fork" } else { "resume" }.into(), id.into()])
+            }
+            Resume::Unsupported => None,
+        }
+    }
+
     pub fn interactive_prompt_args(&self, prompt: &str) -> Vec<String> {
         self.interactive_prompt.expand(prompt.into())
+    }
+}
+
+mod headless;
+pub mod headless_posture;
+
+pub mod hooks;
+
+// Closed diagnostic selector; identity alone never grants admission.
+// trace:TASK-3048 | ai:codex
+pub const AGY_EXECUTABLE: &str = profile(LaunchVendor::Agy).executable;
+
+#[cfg(test)]
+mod resume_tests {
+    use super::*;
+
+    // trace:STORY-2539 | ai:codex
+    #[test]
+    fn story_2539_claude_resume_argv() {
+        let p = profile(LaunchVendor::Claude);
+        assert_eq!(
+            p.resume_args("--opaque id", false).unwrap(),
+            ["--resume", "--opaque id"]
+        );
+        assert_eq!(
+            p.resume_args("id", true).unwrap(),
+            ["--resume", "id", "--fork-session"]
+        );
+    }
+
+    // trace:STORY-2539 | ai:codex
+    #[test]
+    fn story_2539_codex_resume_argv() {
+        let p = profile(LaunchVendor::Codex);
+        assert_eq!(
+            p.resume_args("--opaque id", false).unwrap(),
+            ["resume", "--opaque id"]
+        );
+        assert_eq!(p.resume_args("id", true).unwrap(), ["fork", "id"]);
+    }
+
+    // trace:STORY-2539 | ai:codex
+    #[test]
+    fn story_2539_agy_resume_argv() {
+        let p = profile(LaunchVendor::Agy);
+        assert_eq!(p.resume_args("id", false), None);
+        assert_eq!(p.resume_args("id", true), None);
     }
 }

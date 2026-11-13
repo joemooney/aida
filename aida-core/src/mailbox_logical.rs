@@ -1786,6 +1786,43 @@ impl PinnedDir {
             .map_err(|_| SourceErrorCode::Unreadable)
     }
 
+    /// Make the exact canonical bytes used for retirement durable. Atomic
+    /// publication alone does not fsync either the file or its directory.
+    // trace:TASK-3420 | ai:codex
+    fn sync_verified_message(
+        &self,
+        name: &OsStr,
+        expected: &str,
+        budget: &mut Budget,
+    ) -> Result<(), SourceErrorCode> {
+        let fd = openat(Some(&self.fd), name, libc::O_RDONLY).map_err(|e| errno_code(&e))?;
+        let mut file = File::from(fd);
+        let meta = file.metadata().map_err(|_| SourceErrorCode::Unreadable)?;
+        if !meta.is_file() || meta.nlink() != 1 || !owned_ok(&meta) {
+            return Err(SourceErrorCode::UnsafeEntry);
+        }
+        if budget.expired() || meta.len() > budget.max_message_bytes {
+            return Err(SourceErrorCode::OverBudget);
+        }
+        let mut bytes = Vec::new();
+        (&mut file)
+            .take(budget.max_message_bytes + 1)
+            .read_to_end(&mut bytes)
+            .map_err(|_| SourceErrorCode::Unreadable)?;
+        budget.take(bytes.len())?;
+        if fingerprint(&bytes) != expected {
+            return Err(SourceErrorCode::SourceChanged);
+        }
+        file.sync_all().map_err(|_| SourceErrorCode::Unreadable)?;
+        File::from(
+            self.fd
+                .try_clone()
+                .map_err(|_| SourceErrorCode::Unreadable)?,
+        )
+        .sync_all()
+        .map_err(|_| SourceErrorCode::Unreadable)
+    }
+
     /// Read regular file `name` (owned, single link, at most `limit` bytes).
     /// `Ok(None)` when it does not exist.
     fn read_file(&self, name: &OsStr, limit: u64) -> Result<Option<Vec<u8>>, SourceErrorCode> {
@@ -2407,6 +2444,99 @@ fn read_binding(
 }
 
 // ── Reconciliation ───────────────────────────────────────────────────────────
+
+/// Retirement requires readable canonical messages and durable UUID ACKs for
+/// every local original or handover delivery. Canonical digest copies carry
+/// messages only, so retiring unacked sidecars would lose delivery ownership.
+/// Use the same bounded, no-follow readers as an inbox snapshot. This runs
+/// after fencing and outside Lifecycle/Store; the final admission scan runs
+/// under Lifecycle afterwards.
+// trace:TASK-3420 | ai:codex
+pub(crate) fn retirement_message_state(common: &Path, mailbox: &Path) -> Result<(), String> {
+    let check = || -> Result<(), SourceErrorCode> {
+        let mut budget = Budget::new(&ReadLimits::explicit_read());
+        let Some(local) = read_source(mailbox, &[], &mut budget)? else {
+            return Ok(());
+        };
+        let ctx = MailboxContext {
+            requested_checkout: CheckoutRoot(mailbox.to_path_buf()),
+            repository: Some(VerifiedCommonGit(common.to_path_buf())),
+            canonical: CanonicalCoverage::NotConfigured,
+        };
+        // Any unacked local delivery keeps the source alive, including private
+        // relay handles that cannot recover ownership from retained sidecars.
+        // Queued deliveries must first have a durable recipient binding.
+        // trace:TASK-3420 | ai:codex
+        for delivery in local
+            .deliveries
+            .iter()
+            .flat_map(|sidecar| &sidecar.deliveries)
+            .chain(&local.handovers)
+        {
+            if budget.expired() {
+                return Err(SourceErrorCode::OverBudget);
+            }
+            let recipient = match &delivery.recipient_uuid {
+                Some(recipient) => recipient.clone(),
+                None if delivery.queued_for_role => {
+                    read_binding(&ctx, &delivery.delivery_id, &mut budget)?
+                        .ok_or(SourceErrorCode::SourceChanged)?
+                }
+                None => return Err(SourceErrorCode::CorruptReceipt),
+            };
+            let (ledger, size) = read_ledger_sized(common, &recipient.receipt_key())?
+                .ok_or(SourceErrorCode::SourceChanged)?;
+            budget.take(size)?;
+            if !ledger.receipts.contains_key(&delivery.message_id) {
+                return Err(SourceErrorCode::SourceChanged);
+            }
+        }
+        if local.messages.is_empty() {
+            return Ok(());
+        }
+        let worktrees = parse_worktree_porcelain_z(&list_worktrees(common, &mut budget)?)?;
+        let stores: Vec<_> = worktrees
+            .iter()
+            .filter(|w| w.branch.as_deref() == Some(STORE_BRANCH) && !w.bare)
+            .collect();
+        if stores.len() != 1 || common_git_of(&stores[0].path)? != common {
+            return Err(SourceErrorCode::WorktreeMissing);
+        }
+        let canonical = read_source(&stores[0].path, &["mailbox"], &mut budget)?
+            .ok_or(SourceErrorCode::WorktreeMissing)?;
+        let mut canonical_by_id = HashMap::new();
+        for observed in &canonical.messages {
+            if canonical_by_id
+                .insert(&observed.message.id, observed)
+                .is_some()
+            {
+                return Err(SourceErrorCode::CorruptMessage);
+            }
+        }
+        for observed in &local.messages {
+            // Exact equality protects audience, payload and state markers, not
+            // just the ID. No ACK is inferred by preserving the message.
+            let preserved = canonical_by_id
+                .get(&observed.message.id)
+                .filter(|c| c.message == observed.message)
+                .ok_or(SourceErrorCode::CorruptMessage)?;
+            canonical.mailbox.sync_verified_message(
+                OsStr::new(&format!("{}.json", observed.message.id)),
+                &preserved.fingerprint,
+                &mut budget,
+            )?;
+        }
+        // Persist creation of the canonical mailbox directory as well.
+        let store = PinnedDir::open_root(&stores[0].path)?;
+        File::from(store.fd)
+            .sync_all()
+            .map_err(|_| SourceErrorCode::Unreadable)?;
+        Ok(())
+    };
+    check().map_err(|code| {
+        format!("queued/undelivered mail, delivery acknowledgement or canonical preservation not verified ({code:?}); deliver queued mail, acknowledge all local deliveries and digest messages to the canonical store before retrying")
+    })
+}
 
 /// Fields that never change across state markers; replicas must agree.
 fn audience_tuple(m: &Message) -> (&str, &str, &Recipient, i64, Option<&str>) {

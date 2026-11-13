@@ -61,6 +61,16 @@ fn adopt(owns: &str, branch: &str, path: &Path) -> anyhow::Result<()> {
 
 /// [`adopt`], from a contained (`contained`) or uncontained launch.
 fn adopt_as(owns: &str, branch: &str, path: &Path, contained: bool) -> anyhow::Result<()> {
+    adopt_receipt(owns, branch, path, contained, false).map(|mut receipt| receipt.disarm())
+}
+
+fn adopt_receipt(
+    owns: &str,
+    branch: &str,
+    path: &Path,
+    contained: bool,
+    rollback: bool,
+) -> anyhow::Result<crate::session_start::SessionStartReceipt> {
     crate::session_start::session_start_with_receipt(
         owns,
         Some(branch),
@@ -81,11 +91,10 @@ fn adopt_as(owns: &str, branch: &str, path: &Path, contained: bool) -> anyhow::R
         /* self_claim */ true,
         /* review_coexistence */ None,
         /* contained_seat */ contained,
-        /* rollback_failed_setup */ false,
+        /* rollback_failed_setup */ rollback,
         crate::session_start::PathReentry::AdoptOrphan,
         None,
     )
-    .map(|mut receipt| receipt.disarm())
 }
 
 fn write_lease(main: &Path, lease: &crate::SessionLease) {
@@ -110,6 +119,30 @@ fn set_owner(main: &Path, lease: &crate::SessionLease, pid: u32) {
     lease.active_pid = Some(pid);
     lease.active_pid_start_time = crate::process_probe::process_start_identity(pid);
     write_lease(main, &lease);
+    // Model the canonical ownership write independently of the legacy PID
+    // fields, so adoption fixtures exercise the production reader.
+    // trace:TASK-3420 | ai:codex
+    use aida_core::db::DatabaseBackend as _;
+    let backend = crate::test_env::home_fixture_backend(&main.join(".aida-store")).unwrap();
+    let store = backend.load().unwrap();
+    let req = store
+        .requirements
+        .into_iter()
+        .find(|r| r.spec_id.as_deref() == Some(&lease.scope))
+        .unwrap_or_else(|| {
+            let mut req = aida_core::Requirement::new("Adoption fixture".into(), String::new());
+            req.spec_id = Some(lease.scope.clone());
+            req.status = aida_core::RequirementStatus::Approved;
+            backend.add_requirement(req).unwrap()
+        });
+    crate::ownership::reader::seed_lease_heartbeat(
+        main,
+        &lease,
+        crate::ownership::WorkKey::Spec {
+            spec: crate::gate::canon::SpecKey(req.id),
+        },
+        pid == std::process::id(),
+    );
 }
 
 /// A pid that has exited: the orphaned worker.
@@ -212,6 +245,221 @@ fn an_orphaned_clone_with_uncommitted_work_is_re_entered_in_place() {
         fx.main,
         "the re-entered clone still verifies against main"
     );
+}
+
+// trace:STORY-2710 | ai:codex
+#[test]
+fn story_2710_actual_orphan_adoption_transfers_pending_repair() {
+    let fx = fixture();
+    clone_config(&fx.main, &fx.root);
+    let _ambient = crate::test_env::AmbientGuard::hermetic_with_seat(&fx.main, "implementer", &[]);
+    let orphan = orphaned_clone(&fx.main, "TASK-2223");
+    let tree = &orphan.worktree_path;
+    git_ok(tree, &["add", "-A"]);
+    git_ok(
+        tree,
+        &[
+            "-c",
+            "user.name=T",
+            "-c",
+            "user.email=t@example.com",
+            "-c",
+            "maintenance.auto=false",
+            "-c",
+            "gc.auto=0",
+            "commit",
+            "-qm",
+            "PR edits",
+        ],
+    );
+    let head = git_ok(tree, &["rev-parse", "HEAD"]);
+    std::fs::write(fx.main.join("README.md"), "competing main edit\n").unwrap();
+    git_ok(
+        &fx.main,
+        &[
+            "-c",
+            "maintenance.auto=false",
+            "-c",
+            "gc.auto=0",
+            "commit",
+            "-qam",
+            "main edit",
+        ],
+    );
+    let base = git_ok(&fx.main, &["rev-parse", "HEAD"]);
+    git_ok(
+        tree,
+        &[
+            "-c",
+            "maintenance.auto=false",
+            "-c",
+            "gc.auto=0",
+            "fetch",
+            "--no-write-fetch-head",
+            fx.main.to_str().unwrap(),
+            "main",
+        ],
+    );
+    let execute = |args: &[&str]| -> anyhow::Result<String> {
+        let out = crate::test_git::git_command()
+            .current_dir(tree)
+            .args(["-c", "user.name=T", "-c", "user.email=t@example.com"])
+            .args(args)
+            .output()?;
+        anyhow::ensure!(
+            out.status.success(),
+            "Git refused: {}",
+            String::from_utf8_lossy(&out.stderr)
+        );
+        Ok(String::from_utf8(out.stdout)?.trim().to_owned())
+    };
+    assert!(execute(&["merge", "--no-edit", &base]).is_err());
+    assert_eq!(execute(&["rev-parse", "MERGE_HEAD"]).unwrap(), base);
+    let key = crate::repair_journal::RepairKey {
+        repository: fx.main.clone(),
+        pr: 3813,
+        original_head: head.clone(),
+    };
+    let mut journal = crate::repair_journal::RepairGuard::lock(&fx.main).unwrap();
+    journal
+        .reserve(crate::repair_journal::RepairEntry {
+            key: key.clone(),
+            dispatched_by: "direct-rework".into(),
+            reserved_at: "now".into(),
+            lane_id: orphan.id.clone(),
+            tree_path: tree.clone(),
+            branch: orphan.branch.clone(),
+            base: base.clone(),
+            spawn: crate::repair_journal::SpawnOutcome::Unknown,
+            original_conflict_paths: vec!["README.md".into()],
+            // Restoration succeeded, but a publication generator failed.
+            // Adoption must preserve this stronger requirement for a full retry.
+            preparation_success: Some(true),
+            regeneration_success: Some(false),
+            regenerated_tree: None,
+            validation: None,
+            refusal_notice: None,
+        })
+        .unwrap();
+    drop(journal);
+    let index_before = execute(&["ls-files", "--stage"]).unwrap();
+    // Keep the adoption regression usable without user namespaces; the live
+    // containment lane requires this direct publication assertion to execute.
+    let bwrap_live = std::process::Command::new("bwrap")
+        .args([
+            "--ro-bind",
+            "/",
+            "/",
+            "--dev",
+            "/dev",
+            "--proc",
+            "/proc",
+            "true",
+        ])
+        .output()
+        .is_ok_and(|out| out.status.success());
+    if bwrap_live {
+        let refused = crate::seat_clone::commit_pending(
+            &fx.main,
+            tree,
+            &orphan.branch,
+            "failed generation must not publish (Refs STORY-2710)",
+        )
+        .unwrap_err();
+        assert!(
+            refused
+                .to_string()
+                .contains("repair preparation did not succeed"),
+            "{refused:#}"
+        );
+    } else {
+        assert!(
+            aida_core::exec_context::Environment::capture()
+                .get("AIDA_REQUIRE_BWRAP_LIVE")
+                .is_none(),
+            "bwrap required"
+        );
+        eprintln!("SKIP direct repair commit refusal (bwrap unavailable)");
+    }
+    assert_eq!(execute(&["ls-files", "--stage"]).unwrap(), index_before);
+    assert_eq!(execute(&["rev-parse", "HEAD"]).unwrap(), head);
+    assert_eq!(execute(&["rev-parse", "MERGE_HEAD"]).unwrap(), base);
+    assert!(crate::repair_journal::RepairGuard::lock(&fx.main)
+        .unwrap()
+        .transfer_adopted_lane(
+            tree,
+            &orphan.branch,
+            "unrelated-orphan",
+            "unrelated-successor"
+        )
+        .is_err());
+    let receipt = adopt_receipt("TASK-2223", &orphan.branch, tree, true, true).unwrap();
+    let failed_successor = lease_for(&fx.main, "TASK-2223");
+    assert_ne!(failed_successor.id, orphan.id);
+    let failure = prepare_host_repair_with(
+        &fx.main,
+        tree,
+        3813,
+        &failed_successor.id,
+        &execute,
+        &orphan.branch,
+        true,
+        |_| panic!("failed preparation cannot publish"),
+        |_, restore_only| {
+            assert!(!restore_only, "failed generation requires a full retry");
+            anyhow::bail!("generation still fails")
+        },
+        || Ok((base.clone(), head.clone())),
+    )
+    .unwrap_err();
+    assert!(failure.to_string().contains("generation still fails"));
+    // Failed resume setup restores the orphan lease AND its journal identity.
+    drop(receipt);
+    let journal = crate::repair_journal::RepairGuard::lock(&fx.main).unwrap();
+    let entry = journal
+        .for_tree(tree, &orphan.branch, &head, &base)
+        .unwrap();
+    assert_eq!(entry.lane_id, orphan.id);
+    assert!(entry.require_prepared().is_err());
+    assert_eq!(entry.regeneration_success, Some(false));
+    assert_eq!(entry.original_conflict_paths, ["README.md"]);
+    drop(journal);
+    assert!(!crate::lease_path(&fx.main, &failed_successor.id).exists());
+    adopt("TASK-2223", &orphan.branch, tree).unwrap();
+    let successor = lease_for(&fx.main, "TASK-2223");
+    assert_ne!(successor.id, orphan.id);
+    let resume = |lane: &str| {
+        prepare_host_repair_with(
+            &fx.main,
+            tree,
+            3813,
+            lane,
+            &execute,
+            &orphan.branch,
+            true,
+            |_| panic!("pending conflicts cannot publish"),
+            |input, restore_only| {
+                assert_eq!(input, base);
+                assert!(!restore_only, "successor must retry the failed generator");
+                Ok(())
+            },
+            || Ok((base.clone(), head.clone())),
+        )
+    };
+    assert!(resume(&orphan.id).is_err());
+    assert!(resume("unrelated-lane").is_err());
+    assert_eq!(resume(&successor.id).unwrap(), ["README.md"]);
+    let journal = crate::repair_journal::RepairGuard::lock(&fx.main).unwrap();
+    let entry = journal
+        .for_tree(tree, &orphan.branch, &head, &base)
+        .unwrap();
+    assert_eq!(entry.lane_id, successor.id);
+    entry.require_prepared().unwrap();
+    assert_eq!(entry.original_conflict_paths, ["README.md"]);
+    assert_eq!(entry.regeneration_success, Some(true));
+    // Resume admission is not exact-tree publication evidence. Publication
+    // must regenerate and record its own staged tree even after this recovery.
+    assert!(entry.require_regenerated_tree(&"c".repeat(40)).is_err());
 }
 
 /// Binding 5b: a lease whose owner is alive is never adopted.
@@ -360,6 +608,10 @@ fn the_conflict_hint_offers_resume_only_when_resume_adopts() {
     no_pid.creator_pid = None;
     no_pid.creator_pid_start_time = None;
     write_lease(&fx.main, &no_pid);
+    // Legacy production holder without an ownership witness, rather than the
+    // dead synthetic heartbeat the initial orphan fixture installed.
+    // trace:TASK-3420 | ai:codex
+    std::fs::remove_dir_all(fx.main.join(".aida/ownership")).unwrap();
     let refusal = crate::leases::lease_adoption_refusal(&fx.main, &no_pid);
     assert!(
         refusal.is_some_and(|why| why.contains("no owning process")),
@@ -398,6 +650,10 @@ fn adopting_an_orphan_still_refuses_a_live_lease_on_the_scope() {
     std::fs::create_dir_all(&live.worktree_path).unwrap();
     write_lease(&fx.main, &live);
     set_owner(&fx.main, &live, std::process::id());
+    // Both legacy sessions predate ownership admission. A single canonical
+    // record cannot represent two different session holders of the same spec.
+    // trace:TASK-3420 | ai:codex
+    std::fs::remove_dir_all(fx.main.join(".aida/ownership")).unwrap();
 
     assert_eq!(
         crate::leases::adoptable_orphan_lease(&fx.main, scope).map(|l| l.id),
@@ -567,6 +823,7 @@ fn queue_work_as(
 ) -> anyhow::Result<()> {
     crate::queue_cmd::handle_queue_work(
         storage,
+        None,
         crate::test_env::HERMETIC_TEST_USER,
         Some(scope),
         None,
@@ -613,6 +870,15 @@ pub(super) fn queued_scope(
 ) -> (crate::Storage, impl Fn(aida_core::RequirementStatus)) {
     let store_root = main.join(".aida-store");
     let backend = crate::test_env::home_fixture_backend(&store_root).unwrap();
+    // Match allocation authority's file contract under the lane's shared-write umask.
+    // trace:BUG-2504 | ai:codex
+    use std::os::unix::fs::PermissionsExt;
+    let common = aida_core::allocation_authority::common_dir(&store_root).unwrap();
+    std::fs::set_permissions(
+        common.join(aida_core::allocation_authority::CONFIG_FILE),
+        std::fs::Permissions::from_mode(0o600),
+    )
+    .unwrap();
     let storage = crate::Storage::new(&store_root);
     std::fs::create_dir_all(store_root.join("registry")).unwrap();
     std::fs::write(
@@ -664,6 +930,24 @@ pub(super) fn queued_scope(
 #[test]
 fn queue_work_resume_adopts_the_orphan_end_to_end() {
     let fx = fixture();
+    // Keep synthetic store writes in a separate repository; inheriting the
+    // parent code remote would turn config setup into a dirty-store refusal.
+    // trace:BUG-2501 | ai:codex
+    aida_core::git_ops::init(&fx.main.join(".aida-store")).unwrap();
+    aida_core::git_ops::configure_user(&fx.main.join(".aida-store"), "Test", "test@example.com")
+        .unwrap();
+    let store = fx.main.join(".aida-store");
+    crate::test_env::enroll_synthetic_home(&store).unwrap();
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let common = aida_core::allocation_authority::common_dir(&store).unwrap();
+        std::fs::set_permissions(
+            common.join(aida_core::allocation_authority::CONFIG_FILE),
+            std::fs::Permissions::from_mode(0o600),
+        )
+        .unwrap();
+    }
     let _ambient = crate::test_env::AmbientGuard::hermetic_with_seat_and(
         &fx.main,
         "implementer",
@@ -728,7 +1012,9 @@ fn queue_work_releases_a_dead_gone_tree_lease_without_force_claim() {
         &[],
     );
     let scope = "TASK-922710";
+    git_ok(&fx.main, &["init", "-q", ".aida-store"]);
     let (storage, set_status) = queued_scope(&fx.main, scope);
+    crate::test_env::write_project_config_fixture(&fx.main, "store_path = \".aida-store\"\n");
     let mut dead = orphaned_worktree(&fx.main, scope);
     // A review lease holds a PR scope, which has no spec status to gate on.
     set_status(aida_core::RequirementStatus::Approved);
@@ -742,9 +1028,39 @@ fn queue_work_releases_a_dead_gone_tree_lease_without_force_claim() {
         }
     );
 
+    // Recordless and live ownership both retain the lease without a journal attempt.
+    // Remove the ownership evidence seeded by orphaned_worktree explicitly.
+    // trace:TASK-3420 | ai:codex
+    std::fs::remove_dir_all(fx.main.join(".aida/ownership")).unwrap();
+    let error = queue_work(&storage, scope, Some("task-922710-next"), None, None).unwrap_err();
+    assert!(
+        format!("{error:#}").contains("aida own migrate --execute"),
+        "{error:#}"
+    );
+    assert!(crate::lease_path(&fx.main, &dead.id).exists());
+    let req = storage
+        .load()
+        .unwrap()
+        .requirements
+        .into_iter()
+        .find(|r| r.spec_id.as_deref() == Some(scope))
+        .unwrap();
+    let key = crate::ownership::WorkKey::Spec {
+        spec: crate::gate::canon::SpecKey(req.id),
+    };
+    crate::ownership::reader::seed_lease_heartbeat(&fx.main, &dead, key.clone(), true);
+    let error = queue_work(&storage, scope, Some("task-922710-next"), None, None).unwrap_err();
+    assert!(
+        format!("{error:#}").contains("ownership holder is alive"),
+        "{error:#}"
+    );
+    assert!(crate::lease_path(&fx.main, &dead.id).exists());
+    crate::ownership::reader::seed_lease_heartbeat(&fx.main, &dead, key, false);
     // `--branch` steps past the separate leftover-branch guard; the sweep is
     // what is under test.
     queue_work(&storage, scope, Some("task-922710-next"), None, None).unwrap();
+    let journal = std::fs::read_to_string(fx.main.join(".aida/ownership/journal.jsonl")).unwrap();
+    assert!(journal.contains("reclaim_attempt"), "{journal}");
     assert!(!crate::lease_path(&fx.main, &dead.id).exists());
     let lease = lease_for(&fx.main, scope);
     assert_ne!(lease.id, dead.id);
@@ -853,4 +1169,339 @@ fn adopting_an_orphan_refuses_a_lease_of_unknown_liveness_on_the_scope() {
     want.sort();
     assert_eq!(ids, want, "both leases are left as they were");
     assert_work_intact(&clone, &orphan.branch, &head);
+}
+
+/// A positive death proof journals only an attempt: ordinary teardown may
+/// still refuse a different process holding the tree, retaining the lease.
+// trace:STORY-2325 | ai:codex
+#[test]
+fn queue_work_reclaim_attempt_keeps_lease_when_session_end_refuses() {
+    let fx = fixture();
+    let _ambient = crate::test_env::AmbientGuard::hermetic_with_seat_and(
+        &fx.main,
+        "implementer",
+        &["implementer"],
+        &[],
+    );
+    let scope = "TASK-922711";
+    git_ok(&fx.main, &["init", "-q", ".aida-store"]);
+    let (storage, set_status) = queued_scope(&fx.main, scope);
+    crate::test_env::write_project_config_fixture(&fx.main, "store_path = \".aida-store\"\n");
+    let dead = orphaned_worktree(&fx.main, scope);
+    set_status(aida_core::RequirementStatus::Approved);
+    std::fs::remove_file(dead.worktree_path.join("wip.txt")).unwrap();
+    git_ok(
+        &dead.worktree_path,
+        &[
+            "-c",
+            "maintenance.auto=false",
+            "-c",
+            "gc.auto=0",
+            "push",
+            "origin",
+            &dead.branch,
+        ],
+    );
+    let req = storage
+        .load()
+        .unwrap()
+        .requirements
+        .into_iter()
+        .find(|r| r.spec_id.as_deref() == Some(scope))
+        .unwrap();
+    crate::ownership::reader::seed_lease_heartbeat(
+        &fx.main,
+        &dead,
+        crate::ownership::WorkKey::Spec {
+            spec: crate::gate::canon::SpecKey(req.id),
+        },
+        false,
+    );
+    struct Child(std::process::Child);
+    impl Drop for Child {
+        fn drop(&mut self) {
+            let _ = self.0.kill();
+            let _ = self.0.wait();
+        }
+    }
+    let _child = Child(
+        std::process::Command::new("/usr/bin/sleep")
+            .arg("60")
+            .current_dir(&dead.worktree_path)
+            .spawn()
+            .unwrap(),
+    );
+    let error = queue_work(&storage, scope, Some("task-922711-next"), None, None).unwrap_err();
+    let error = format!("{error:#}");
+    assert!(
+        error.contains("ownership reclaim could not end lease"),
+        "{error}"
+    );
+    assert!(crate::lease_path(&fx.main, &dead.id).exists(), "{error}");
+    let journal = std::fs::read_to_string(fx.main.join(".aida/ownership/journal.jsonl")).unwrap();
+    assert!(journal.contains("reclaim_attempt"), "{error}\n{journal}");
+    assert!(!journal.contains("\"op\":\"reclaim\""), "{journal}");
+}
+
+/// trace:STORY-2325 | ai:codex — BUG-307: a clean lane can die before
+/// its first push, with HEAD already covered by origin/main.
+#[test]
+fn queue_work_reclaims_dead_clean_lane_without_an_origin_branch() {
+    let fx = fixture();
+    let _ambient = crate::test_env::AmbientGuard::hermetic_with_seat_and(
+        &fx.main,
+        "implementer",
+        &["implementer"],
+        &[],
+    );
+    let scope = "TASK-922712";
+    git_ok(&fx.main, &["init", "-q", ".aida-store"]);
+    let (storage, set_status) = queued_scope(&fx.main, scope);
+    crate::test_env::write_project_config_fixture(&fx.main, "store_path = \".aida-store\"\n");
+    let dead = orphaned_worktree(&fx.main, scope);
+    set_status(aida_core::RequirementStatus::Approved);
+    std::fs::remove_file(dead.worktree_path.join("wip.txt")).unwrap();
+    assert!(!std::process::Command::new("git")
+        .arg("-C")
+        .arg(&fx.main)
+        .args([
+            "show-ref",
+            "--verify",
+            &format!("refs/remotes/origin/{}", dead.branch)
+        ])
+        .output()
+        .unwrap()
+        .status
+        .success());
+    assert_eq!(
+        crate::session_end::remote_missing_commits_for_lease(&fx.main, &dead).unwrap(),
+        0
+    );
+    let req = storage
+        .load()
+        .unwrap()
+        .requirements
+        .into_iter()
+        .find(|r| r.spec_id.as_deref() == Some(scope))
+        .unwrap();
+    crate::ownership::reader::seed_lease_heartbeat(
+        &fx.main,
+        &dead,
+        crate::ownership::WorkKey::Spec {
+            spec: crate::gate::canon::SpecKey(req.id),
+        },
+        false,
+    );
+    let result = queue_work(&storage, scope, Some("task-922712-next"), None, None);
+    assert!(result.is_ok(), "{result:?}");
+    assert!(!crate::lease_path(&fx.main, &dead.id).exists());
+    let journal = std::fs::read_to_string(fx.main.join(".aida/ownership/journal.jsonl")).unwrap();
+    assert!(journal.contains("reclaim_attempt"));
+}
+
+// trace:STORY-2325 | ai:codex
+#[test]
+fn queue_recover_dry_run_inspects_live_and_unknown_ownership_without_mutation() {
+    let fx = fixture();
+    let _ambient = crate::test_env::AmbientGuard::hermetic_with_seat(&fx.main, "implementer", &[]);
+    let scope = "TASK-922713";
+    git_ok(&fx.main, &["init", "-q", ".aida-store"]);
+    let (storage, _) = queued_scope(&fx.main, scope);
+    crate::test_env::write_project_config_fixture(&fx.main, "store_path = \".aida-store\"\n");
+    let lease = orphaned_worktree(&fx.main, scope);
+    // With no WIP, execution takes EndAndRequeue, which really ends a lease.
+    std::fs::remove_file(lease.worktree_path.join("wip.txt")).unwrap();
+    let req = storage
+        .load()
+        .unwrap()
+        .requirements
+        .into_iter()
+        .find(|r| r.spec_id.as_deref() == Some(scope))
+        .unwrap();
+    let key = crate::ownership::WorkKey::Spec {
+        spec: crate::gate::canon::SpecKey(req.id),
+    };
+    crate::ownership::reader::seed_lease_heartbeat(&fx.main, &lease, key, true);
+    let before = std::fs::read(crate::lease_path(&fx.main, &lease.id)).unwrap();
+    for unknown in [false, true] {
+        if unknown {
+            std::fs::remove_dir_all(fx.main.join(".aida/ownership")).unwrap();
+        }
+        crate::queue_cmd::handle_queue_recover(
+            &storage,
+            crate::test_env::HERMETIC_TEST_USER,
+            scope,
+            true,
+            true,
+        )
+        .unwrap();
+        assert_eq!(
+            std::fs::read(crate::lease_path(&fx.main, &lease.id)).unwrap(),
+            before
+        );
+        let error = crate::queue_cmd::handle_queue_recover(
+            &storage,
+            crate::test_env::HERMETIC_TEST_USER,
+            scope,
+            false,
+            true,
+        )
+        .unwrap_err();
+        assert!(format!("{error:#}").contains(&lease.id));
+    }
+}
+
+// trace:STORY-2325 | ai:codex
+#[test]
+fn queue_recover_parks_wip_with_live_and_unknown_ownership_without_reclaim() {
+    for unknown in [false, true] {
+        let fx = fixture();
+        let _ambient =
+            crate::test_env::AmbientGuard::hermetic_with_seat(&fx.main, "implementer", &[]);
+        let scope = "TASK-922714";
+        git_ok(&fx.main, &["init", "-q", ".aida-store"]);
+        let (storage, _) = queued_scope(&fx.main, scope);
+        crate::test_env::write_project_config_fixture(&fx.main, "store_path = \".aida-store\"\n");
+        let lease = orphaned_worktree(&fx.main, scope);
+        let req = storage
+            .load()
+            .unwrap()
+            .requirements
+            .into_iter()
+            .find(|r| r.spec_id.as_deref() == Some(scope))
+            .unwrap();
+        crate::ownership::reader::seed_lease_heartbeat(
+            &fx.main,
+            &lease,
+            crate::ownership::WorkKey::Spec {
+                spec: crate::gate::canon::SpecKey(req.id),
+            },
+            true,
+        );
+        if unknown {
+            std::fs::remove_dir_all(fx.main.join(".aida/ownership")).unwrap();
+        }
+        let lease_before = std::fs::read(crate::lease_path(&fx.main, &lease.id)).unwrap();
+        let journal = fx.main.join(".aida/ownership/journal.jsonl");
+        let journal_before = std::fs::read(&journal).ok();
+        let head_before = git_ok(&lease.worktree_path, &["rev-parse", "HEAD"]);
+        // Execute WipCommitPark with --auto: commit the WIP without ending or
+        // relaunching the owner. Neither live nor missing evidence may gate it.
+        crate::queue_cmd::handle_queue_recover(
+            &storage,
+            crate::test_env::HERMETIC_TEST_USER,
+            scope,
+            false,
+            true,
+        )
+        .unwrap();
+        assert_ne!(
+            git_ok(&lease.worktree_path, &["rev-parse", "HEAD"]),
+            head_before
+        );
+        assert_eq!(
+            git_ok(&lease.worktree_path, &["show", "HEAD:wip.txt"]),
+            "untracked work"
+        );
+        assert_eq!(
+            std::fs::read(crate::lease_path(&fx.main, &lease.id)).unwrap(),
+            lease_before
+        );
+        assert_eq!(std::fs::read(&journal).ok(), journal_before);
+    }
+}
+
+// trace:TASK-3420 | ai:codex
+#[test]
+fn task_3420_orphan_adoption_requires_matching_owner_death() {
+    let fx = fixture();
+    clone_config(&fx.main, &fx.root);
+    let _ambient = crate::test_env::AmbientGuard::hermetic_with_seat(&fx.main, "implementer", &[]);
+    let mut lease = orphaned_clone(&fx.main, "TASK-3420");
+    // A change scope has a stable ownership key without a spec-store fixture.
+    lease.scope = "PR-3420".into();
+    write_lease(&fx.main, &lease);
+    let key = crate::ownership::WorkKey::Change {
+        change: crate::ownership::ChangeId {
+            forge: "origin".into(),
+            n: 3420,
+        },
+    };
+    let adopt = || {
+        crate::session_start::orphan_lease_to_adopt(
+            &fx.main,
+            &lease.worktree_path,
+            &lease.scope,
+            &lease.branch,
+            true,
+        )
+    };
+    assert_eq!(
+        adopt().unwrap().unwrap().id,
+        lease.id,
+        "crashed legacy holder remains adoptable"
+    );
+    crate::ownership::reader::seed_lease_heartbeat(&fx.main, &lease, key.clone(), true);
+    assert!(adopt().is_err(), "live ownership must retain the clone");
+    crate::ownership::reader::seed_lease_heartbeat(&fx.main, &lease, key.clone(), false);
+    assert_eq!(adopt().unwrap().unwrap().id, lease.id);
+    let mut replacement = lease.clone();
+    replacement.id = "replacement".into();
+    crate::ownership::reader::seed_lease_heartbeat(&fx.main, &replacement, key, false);
+    assert!(
+        adopt().is_err(),
+        "a replacement's death cannot release this clone"
+    );
+}
+
+// trace:BUG-2504 | ai:codex
+#[test]
+fn bug_2504_refused_adopted_dirty_launch_is_retryable() {
+    for orphan_still_present in [false, true] {
+        let fx = fixture();
+        clone_config(&fx.main, &fx.root);
+        let _ambient =
+            crate::test_env::AmbientGuard::hermetic_with_seat(&fx.main, "implementer", &[]);
+        let orphan = orphaned_clone(&fx.main, "TASK-2504");
+        let head = git_ok(&orphan.worktree_path, &["rev-parse", "HEAD"]);
+        let receipt = adopt_receipt(
+            "TASK-2504",
+            &orphan.branch,
+            &orphan.worktree_path,
+            true,
+            true,
+        )
+        .unwrap();
+        assert!(!crate::lease_path(&fx.main, &orphan.id).exists());
+        // Simulate adoption's warned removal failure: rollback must recognize the
+        // original record and still remove its successor and release its claim.
+        if orphan_still_present {
+            std::fs::write(
+                crate::lease_path(&fx.main, &orphan.id),
+                format!(
+                    "# older writer formatting\n{}",
+                    toml::to_string(&orphan).unwrap()
+                ),
+            )
+            .unwrap();
+        }
+        let (result, rolled_back) = crate::queue_cmd::run_pickup_launch(&fx.main, receipt, |_| {
+            anyhow::bail!("dirty resume merge admission refused before vendor launch")
+        });
+        assert!(result
+            .unwrap_err()
+            .to_string()
+            .contains("admission refused"));
+        assert!(rolled_back);
+        let remaining = crate::list_leases(&fx.main);
+        assert_eq!(remaining.len(), 1, "successor lease must be removed");
+        assert_eq!(remaining[0].id, orphan.id);
+        assert_eq!(
+            crate::leases::adoptable_orphan_lease(&fx.main, "TASK-2504").map(|l| l.id),
+            Some(orphan.id.clone())
+        );
+        assert_work_intact(&orphan.worktree_path, &orphan.branch, &head);
+        adopt("TASK-2504", &orphan.branch, &orphan.worktree_path).unwrap();
+        assert_work_intact(&orphan.worktree_path, &orphan.branch, &head);
+    }
 }

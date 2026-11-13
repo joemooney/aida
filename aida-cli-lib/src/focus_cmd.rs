@@ -246,20 +246,15 @@ mod bug_678_focus_rollup_tally_tests {
 /// surfaced on the statusline so it is never silently active. Precedence:
 /// `AIDA_FOCUS` env > `.aida/focus` > none.
 // — plain `//` keeps the marker out of `--help`.
+// trace:TASK-1214 | ai:codex
 #[derive(clap::Parser, Debug)]
 #[clap(name = "focus")]
 pub(crate) struct FocusArgs {
     /// The epic or spec to focus on (SPEC-ID / agreed id). Omit to show
     /// the current focus.
     // trace:BUG-B6B1278890774EF993D2EBC327862470-015 | ai:claude
-    #[clap(value_name = "SPEC", conflicts_with = "clear", value_parser = crate::spec_arg::spec_id)]
+    #[clap(value_name = "SPEC", value_parser = crate::spec_arg::spec_id)]
     pub target: Option<String>,
-    /// Clear the current focus (remove `.aida/focus`).
-    #[clap(long, hide = true)]
-    pub clear: bool,
-    /// Show the current focus (the default when no SPEC is given).
-    #[clap(long, hide = true)]
-    pub show: bool,
 
     /// Focus action.
     // trace:STORY-1028 | ai:codex
@@ -269,16 +264,15 @@ pub(crate) struct FocusArgs {
 
 fn run_focus(
     matches: &clap::ArgMatches,
-    ctx: &crate::command_registry::DispatchCtx,
-) -> anyhow::Result<crate::command_registry::Flow> {
-    use crate::*;
+    ctx: &crate::cmdkit::DispatchCtx,
+) -> anyhow::Result<crate::cmdkit::Flow> {
+    // trace:TASK-3428 | ai:codex
+    use crate::FocusCommand;
     let args = <FocusArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
     match &ctx.store {
-        None => Ok(crate::command_registry::Flow::Continue),
-        Some(crate::command_registry::StoreCtx::Distributed { .. }) => {
-            Ok(crate::command_registry::Flow::Continue)
-        }
-        Some(crate::command_registry::StoreCtx::Git {
+        None => Ok(crate::cmdkit::Flow::Continue),
+        Some(crate::cmdkit::StoreCtx::Distributed { .. }) => Ok(crate::cmdkit::Flow::Continue),
+        Some(crate::cmdkit::StoreCtx::Git {
             store_path,
             backend,
         }) => {
@@ -286,32 +280,13 @@ fn run_focus(
             let (store_path, backend) = (*store_path, *backend);
             match &args {
                 // — `aida focus` set/show/clear.
-                FocusArgs {
-                    target,
-                    clear,
-                    show,
-                    cmd,
-                } => {
+                FocusArgs { target, cmd } => {
                     let (clear, show) = match cmd {
                         Some(FocusCommand::Clear) => (true, false),
                         Some(FocusCommand::Show) => (false, true),
-                        None => {
-                            if *clear {
-                                note_hidden_alias(
-                                    concat!("aida focus ", "--clear"),
-                                    "aida focus clear",
-                                );
-                            }
-                            if *show {
-                                note_hidden_alias(
-                                    concat!("aida focus ", "--show"),
-                                    "aida focus show",
-                                );
-                            }
-                            (*clear, *show)
-                        }
+                        None => (false, false),
                     };
-                    return crate::command_registry::returned(self::handle_focus_command(
+                    return crate::cmdkit::returned(self::handle_focus_command(
                         target.as_deref(),
                         clear,
                         show,
@@ -319,9 +294,9 @@ fn run_focus(
                     ));
                 }
             }
-            Ok(crate::command_registry::Flow::Continue)
+            Ok(crate::cmdkit::Flow::Continue)
         }
-        Some(crate::command_registry::StoreCtx::Legacy {
+        Some(crate::cmdkit::StoreCtx::Legacy {
             storage,
             requirements_path,
         }) => {
@@ -336,22 +311,21 @@ fn run_focus(
                     );
                 }
             }
-            Ok(crate::command_registry::Flow::Continue)
+            Ok(crate::cmdkit::Flow::Continue)
         }
     }
 }
 
 // trace:STORY-1728 | ai:claude
-pub(crate) static FOCUS: crate::command_registry::CommandReg =
-    crate::command_registry::CommandReg {
-        name: "focus",
-        help_after: "wiki",
-        command: <FocusArgs as clap::CommandFactory>::command,
-        policy: |_| crate::command_registry::CmdPolicy {
-            stakeholder: crate::stakeholder_role::StakeholderAction::Write,
-            per_write_auto_push: false,
-            skip_role_restore_prompt: false,
-            team_identity_write: false,
-        },
-        run: crate::command_registry::Handler::Store(run_focus),
-    };
+pub(crate) static FOCUS: crate::cmdkit::CommandReg = crate::cmdkit::CommandReg {
+    name: "focus",
+    help_after: "wiki",
+    command: <FocusArgs as clap::CommandFactory>::command,
+    policy: |_| crate::cmdkit::CmdPolicy {
+        stakeholder: crate::stakeholder_role::StakeholderAction::Write,
+        per_write_auto_push: false,
+        skip_role_restore_prompt: false,
+        team_identity_write: false,
+    },
+    run: crate::cmdkit::Handler::Store(run_focus),
+};

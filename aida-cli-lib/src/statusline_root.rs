@@ -1,9 +1,10 @@
+// trace:TASK-3429 | ai:codex
 //! Statusline helper logic (STORY-1488 slice 1)
 // trace:STORY-1488 | ai:claude
 
-use crate::*;
+use crate::{strip_toml_inline_comment, BASE_BEHIND_STATUSLINE_THRESHOLD};
 
-pub(crate) fn statusline_project_root() -> std::path::PathBuf {
+pub fn statusline_project_root() -> std::path::PathBuf {
     let cwd = std::env::current_dir().unwrap_or_else(|_| ".".into());
     statusline_project_root_from_with_roots(&cwd, &aida_core::store_locate::real_temp_roots())
 }

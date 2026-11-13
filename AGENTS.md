@@ -1,7 +1,43 @@
+Cross-label gate-ledger discovery has a separate 128 MiB/200,000-attempt
+aggregate work ceiling, including unrelated payloads and torn retries; exhaustion
+refuses selection. Automatic archive retention and discovery limited to relevant
+changes remain unresolved. See docs/internal/testing/bug-2531-ledger-selection-budget.md.
+<!-- trace:BUG-2531 | ai:codex -->
+
+Repair adoption transfers journal ownership at the verified successor-lease
+boundary. Pending-merge publication requires successful preparation, retries
+failed generation through resume, and records successful regeneration against
+the staged tree. Ignored portable-pack outputs come from a closed pre-run
+inventory of host paths and staged skill masters. See OVERVIEW.md.
+<!-- trace:STORY-2710 | ai:codex -->
+
+MCP transport and its store handler live in `aida-mcp`; the binary injects the
+handler into cli-lib's `mcp-serve` registration before parsing. Shared descriptors
+and claim naming stay below that boundary. CLI-local MCP tests include the
+transport source to retain private fixtures. See OVERVIEW.md.
+<!-- trace:TASK-3429 | ai:codex -->
+
+Local spec-only reviews neither bind to changes nor settle their review claims.
+Effective gate reads share one pinned discovery and refuse indexes naming
+missing change ledgers. Legacy pre-change binding remains. See OVERVIEW.md.
+<!-- trace:BUG-2517 | ai:codex -->
+
+CI freshness compares pinned workflow content: the GitHub `.github/workflows`
+tree or GitLab `.gitlab-ci.yml` blob. Equal digests avoid stale-definition
+refusals, including edits followed by reverts; the separate behind-base gate
+still applies. Train CI proofs bind head SHA plus workflow digest. See OVERVIEW.md.
+<!-- trace:STORY-2401 | ai:codex -->
+
 Question parking with an empty consequence preserves an existing deferral trigger
 and timestamp; without a trigger it defaults to the resolver's manual condition,
 without an empty comment. See docs/cli/02-specs.md.
 <!-- trace:STORY-2402 | ai:codex -->
+
+AGY runtime regressions exercise external tool descendants against filesystem,
+network and host-IPC denials with positive controls. This is synthetic shared
+wrapper evidence; admission still needs auth/refresh inventory and integrated
+AGY all-tool conformance. See docs/internal/testing/containment-conformance.md.
+<!-- trace:TASK-3048 | ai:codex -->
 
 Queue completion requires readable branch ownership evidence even with
 `--skip-pr-check`. Branch lookup errors refuse before mutation; `--force`
@@ -14,8 +50,9 @@ Claude retains AIDA containment. Missing non-Claude vendor keys still refuse;
 unsupported native vendors refuse. See OVERVIEW.md.
 <!-- trace:TASK-2631 | ai:codex -->
 
-Native `aida ship -m '<subject> (Refs ID)'` records a lease-bound publication
-declaration for the host; failed exits stay Refs and punt/hold vetoes apply first.
+Native `aida ship -m '<subject> (Refs ID)'` records a
+lease-bound publication declaration for the host; failed exits stay Refs and
+punt/hold vetoes apply first. See the [publication handshake](docs/cli/04-git-lifecycle.md#aida-ship).
 <!-- trace:TASK-2902 | ai:codex -->
 
 `aida pr hold` preserves Git lookup diagnostics instead of calling every
@@ -74,11 +111,13 @@ set; counter migration refuses newly active unconfirmed blocks. See the
 [writer inventory](docs/plans/2026-10-19-store-writer-inventory.md).
 <!-- trace:TASK-1981 | ai:codex -->
 
-CI runs four test lanes plus separate guards and binary-contract lanes; the aggregate
-`Build (ubuntu-latest)` remains the required check. CLI halves use committed
-main-run timings; each shard keeps its timing budget and root hygiene check.
-See [CI fan-out](docs/internal/testing/ci-test-shards.md).
-<!-- trace:TASK-1949 | ai:codex -->
+Ordinary GitHub PRs default to FAST source guards plus workspace/test compilation.
+`ci:full` or `AIDA_PR_CI_TIER=full` selects FULL; main/train, merge groups and
+scheduled/manual runs always use FULL's seven lanes. The required aggregate
+`Build (ubuntu-latest)` validates the selected tier. Direct ship requires FULL;
+FAST PRs use the train. Each full test shard retains its timing and root hygiene
+checks. See [CI tiers](docs/internal/testing/ci-test-shards.md).
+<!-- trace:TASK-1949 STORY-2735 | ai:codex -->
 
 Rust mandate exclusions also add module comments outside fn/impl ranges and
 inline-module headers, including traces between items and at EOF. Leading
@@ -423,9 +462,9 @@ commits while fetching and pushing origin's SHA. See
 [git lifecycle](docs/cli/04-git-lifecycle.md#aida-pull).
 <!-- trace:BUG-1803 | ai:codex -->
 
-The project schedule runs a read-only merged-worktree guard every 30 days and
-routes failures to the advisor. The operator reviews `aida worktree gc` and
-runs `aida worktree gc --yes --force` at a TTY; forced cleanup stays outside
+The project schedule runs a weekly read-only lifecycle GC report and
+routes findings and partial scans to the advisor. The operator reviews `aida worktree gc` and
+runs `aida worktree gc --apply` at a TTY; cleanup stays outside
 scheduled and headless jobs.
 <!-- trace:TASK-1596 | ai:codex -->
 
@@ -457,6 +496,9 @@ next agent.
 
 ## Project Orientation
 
+For code navigation, use the reviewed host client `/home/joe/ai/aida/.codegraph/proxy-state/bin/codegraph callers <symbol>` (or `callees <symbol>` / `impact <symbol>` with that same absolute executable) against the shared primary-checkout index (main, not your lane branch); confirm “no callers” with `rg`, since large or unindexed files can be absent. Never run `codegraph init`, `index` or `sync` from a lane. Use `aida doctor check codegraph` to diagnose missing tools or unreachable/stale indexes. The host must deploy this fixed client path before use; do not derive an executable from the seat’s `.codegraph` link. AIDA-contained and AF_UNIX-denied seats still require separate admission and acceptance.
+<!-- trace:STORY-2630 | ai:codex -->
+
 AIDA is an agent-collaboration substrate: stable spec IDs, typed
 requirement relationships, code-to-spec trace comments, an autonomous
 queue/orchestrator, and an MCP server that exposes the same graph to
@@ -467,9 +509,12 @@ context, and `docs/advanced/session-communication.md` for Claude/Codex/
 Antigravity session communication semantics.
 
 Launch adapters and the shared grant issuer live under `aida-cli-lib/src/launch/`.
-Pure vendor descriptors live in `aida-core/src/vendors/`; `launch_policy`
-re-exports the existing key. `aida-cli-lib/src/vendors/` renders hints from that
-registry; `launch/profile.rs` keeps effectful finalization. Capability lookup
+Pure vendor descriptors and headless argv/settings composition live in
+`aida-core/src/vendors/`; `launch_policy` re-exports the existing key. The
+STORY-2539 token ratchet inventories remaining vendor literals and typed
+references outside `vendors/` by path and enclosing item; its ledger only shrinks.
+Test-only exclusions include compound `cfg(all(test, ...))` and qualified test attributes.
+`aida-cli-lib/src/vendors/` renders hints from that registry; `vendors/profile.rs` keeps effectful finalization. Capability lookup
 never grants launch admission or containment credit.
 <!-- trace:STORY-2539 | ai:codex -->
 
@@ -612,6 +657,13 @@ refuse with direct-spelling guidance before performing observation I/O. Enrolled
 index, refs and lock under the clone-common `aida-intake/` directory. Full history
 validation precedes fast-forward acceptance; create/comment processing uses
 ordinary authorized CLI writers with durable operation journals and receipts.
+Opt-in profile v2 (`enroll --role producer|processor`) separates
+`aida-feedback-<producer-id>` observations from the enrolled
+`aida-feedback-receipts-<processor-id>` receipt history. S1 supports one producer
+and one processor; protection remains unverified, receipt identity/status and
+relay alignment remain later slices. Enrollment without `--role` keeps legacy
+flat transport. See [per-writer intake](docs/cli/02-specs.md#native-per-writer-intake-first-round-trip-slice).
+<!-- trace:STORY-2652 | ai:codex -->
 <!-- trace:STORY-2479 trace:TASK-3096 | ai:codex -->
 <!-- trace:TASK-3114 | ai:codex -->
 
@@ -943,3 +995,9 @@ starting the session.
    `--pr` mode; write a `## Acceptance` section in every STORY/BUG so
    there's something to lift. Detail: same discipline doc.
 <!-- AIDA-AUTOGEN-END -->
+
+Hook init iterates VendorProfile layouts/backends; event contract validation and
+handler parsing are pure. Effectful installers remain in scaffolding, with
+per-file symlink skip-and-warn checks including ancestors and dangling links.
+See OVERVIEW.md.
+<!-- trace:STORY-2539 | ai:codex -->

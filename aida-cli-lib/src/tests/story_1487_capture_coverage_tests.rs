@@ -630,3 +630,27 @@ fn story_1487_auto_drafted_rule_accepts_vec_and_set_tags() {
         "  Auto-drafted by `aida queue work` ..."
     ));
 }
+
+// trace:STORY-1486 | ai:codex
+#[test]
+fn criterion_git_grep_preserves_labels_and_rejects_filenames() {
+    let tmp = tempfile::tempdir().unwrap();
+    init_repo(tmp.path());
+    commit_file(
+        tmp.path(),
+        "src/lib.rs",
+        "// trace:STORY-1.generated_profile_preserves_approval_prompts\n// trace:STORY-1.Vendor-neutral\n// trace:STORY-1.Durability\n// trace:STORY-1.AC123\n// trace:STORY-1.my_module.rs\n",
+        "trace fixture",
+    );
+    let tokens = collect_trace_tokens(tmp.path());
+    assert!(tokens.source.contains("git"));
+    assert_eq!(
+        tokens.criterion_tokens,
+        vec![
+            "STORY-1.GENERATED_PROFILE_PRESERVES_APPROVAL_PROMPTS",
+            "STORY-1.VENDOR-NEUTRAL",
+            "STORY-1.DURABILITY",
+            "STORY-1.AC123",
+        ]
+    );
+}

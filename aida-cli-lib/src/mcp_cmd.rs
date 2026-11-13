@@ -4,7 +4,8 @@
 //! `mcp.rs`.
 // trace:STORY-771 | ai:claude
 
-use crate::*;
+use crate::{find_project_root, lint_skills, resolve_aida_exe, McpCommand, SkillCommand};
+use anyhow::{Context, Result};
 
 // trace:STORY-1728 | ai:claude
 #[path = "mcp_cmd_args.rs"]
@@ -76,7 +77,7 @@ pub(crate) fn register_mcp_agent(name: &str, print_only: bool, force: bool) -> R
         println!("{}", serde_json::to_string_pretty(&pretty)?);
         println!();
         println!("Tools exposed:");
-        let descriptors = mcp::tool_descriptors();
+        let descriptors = crate::mcp_schema::tool_descriptors();
         if let Some(arr) = descriptors.as_array() {
             for tool in arr {
                 let n = tool.get("name").and_then(|v| v.as_str()).unwrap_or("?");
@@ -208,16 +209,14 @@ pub(crate) struct McpArgs {
 
 fn run_mcp(
     matches: &clap::ArgMatches,
-    ctx: &crate::command_registry::DispatchCtx,
-) -> anyhow::Result<crate::command_registry::Flow> {
-    use crate::*;
+    ctx: &crate::cmdkit::DispatchCtx,
+) -> anyhow::Result<crate::cmdkit::Flow> {
+    use crate::{handle_mcp_command, McpArgs};
     let args = <McpArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
     match &ctx.store {
-        None => Ok(crate::command_registry::Flow::Continue),
-        Some(crate::command_registry::StoreCtx::Distributed { .. }) => {
-            Ok(crate::command_registry::Flow::Continue)
-        }
-        Some(crate::command_registry::StoreCtx::Git {
+        None => Ok(crate::cmdkit::Flow::Continue),
+        Some(crate::cmdkit::StoreCtx::Distributed { .. }) => Ok(crate::cmdkit::Flow::Continue),
+        Some(crate::cmdkit::StoreCtx::Git {
             store_path,
             backend,
         }) => {
@@ -226,12 +225,12 @@ fn run_mcp(
             match &args {
                 McpArgs { inner: mcp_cmd } => {
                     // trace:STORY-361 | ai:claude
-                    return crate::command_registry::returned(handle_mcp_command(mcp_cmd));
+                    return crate::cmdkit::returned(handle_mcp_command(mcp_cmd));
                 }
             }
-            Ok(crate::command_registry::Flow::Continue)
+            Ok(crate::cmdkit::Flow::Continue)
         }
-        Some(crate::command_registry::StoreCtx::Legacy {
+        Some(crate::cmdkit::StoreCtx::Legacy {
             storage,
             requirements_path,
         }) => {
@@ -242,21 +241,21 @@ fn run_mcp(
                     handle_mcp_command(mcp_cmd)?;
                 }
             }
-            Ok(crate::command_registry::Flow::Continue)
+            Ok(crate::cmdkit::Flow::Continue)
         }
     }
 }
 
 // trace:STORY-1728 | ai:claude
-pub(crate) static MCP: crate::command_registry::CommandReg = crate::command_registry::CommandReg {
+pub(crate) static MCP: crate::cmdkit::CommandReg = crate::cmdkit::CommandReg {
     name: "mcp",
     help_after: "mcp-serve",
     command: <McpArgs as clap::CommandFactory>::command,
-    policy: |_| crate::command_registry::CmdPolicy {
+    policy: |_| crate::cmdkit::CmdPolicy {
         stakeholder: crate::stakeholder_role::StakeholderAction::Write,
         per_write_auto_push: false,
         skip_role_restore_prompt: false,
         team_identity_write: false,
     },
-    run: crate::command_registry::Handler::Store(run_mcp),
+    run: crate::cmdkit::Handler::Store(run_mcp),
 };

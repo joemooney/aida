@@ -404,9 +404,9 @@ mod tests {
         let capture = tmp.path().join("capture");
         crate::test_exec::write_executable(
             &fake,
-            concat!(
-                "#!/bin/sh\n",
-                "printf '%s\\n' \"$AIDA_CONTAINED\" \"$@\" > \"$AIDA_TEST_CAPTURE\"\n",
+            &format!(
+                "#!/bin/sh\nprintf '%s\\n' \"$AIDA_CONTAINED\" \"$@\" > '{}'\n",
+                capture.display()
             ),
         );
         let path = std::env::join_paths(std::iter::once(bin).chain(std::env::split_paths(
@@ -464,9 +464,9 @@ mod tests {
         let capture = tmp.path().join("capture");
         crate::test_exec::write_executable(
             &fake,
-            concat!(
-                "#!/bin/sh\n",
-                "printf '%s\\n' \"$AIDA_CONTAINED\" \"$@\" > \"$AIDA_TEST_CAPTURE\"\n",
+            &format!(
+                "#!/bin/sh\nprintf '%s\\n' \"$AIDA_CONTAINED\" \"$@\" > '{}'\n",
+                capture.display()
             ),
         );
         let _ambient = crate::test_env::AmbientGuard::hermetic_with_seat_and(

@@ -1,3 +1,4 @@
+// trace:TASK-3429 | ai:codex
 //! Worker-directive file (TASK-294) — `.aida/worker.cmd`.
 //!
 //! # The problem
@@ -52,14 +53,14 @@ use serde::Serialize;
 const WORKER_CMD_FILE: &str = "worker.cmd";
 
 /// Path of the worker-directive file under `project_root`.
-pub(crate) fn worker_cmd_path(project_root: &Path) -> PathBuf {
+pub fn worker_cmd_path(project_root: &Path) -> PathBuf {
     project_root.join(".aida").join(WORKER_CMD_FILE)
 }
 
 /// One parsed directive line.
 // trace:TASK-714
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, ts_rs::TS)]
-pub(crate) struct Directive {
+pub struct Directive {
     /// First whitespace-separated word of the line — `drain`, `pause`,
     /// `exit`, or any other word (defensively treated as `pause` by the
     /// worker).
@@ -108,7 +109,7 @@ pub(crate) fn post_directive_line(project_root: &Path, line: &str) -> std::io::R
 /// Parse `.aida/worker.cmd` into a list of directives in file order.
 /// Blank lines and `#`-prefixed comments are skipped. An absent file (or any
 /// read error) is treated as no directives — fails safe to "queue empty".
-pub(crate) fn parse_directives(path: &Path) -> Vec<Directive> {
+pub fn parse_directives(path: &Path) -> Vec<Directive> {
     let body = match std::fs::read_to_string(path) {
         Ok(b) => b,
         Err(_) => return Vec::new(),
@@ -203,7 +204,7 @@ pub(crate) fn gc_directives_body(body: &str, is_dead_spec: &dyn Fn(&str) -> bool
 /// string when there is nothing pending — the caller prints "No pending
 /// directives." in that case so the empty-state copy is consistent across the
 /// command and the status-line surfacing.
-pub(crate) fn render_human(directives: &[Directive]) -> String {
+pub fn render_human(directives: &[Directive]) -> String {
     if directives.is_empty() {
         return String::new();
     }

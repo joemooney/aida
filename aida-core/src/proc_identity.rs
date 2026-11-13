@@ -48,6 +48,27 @@ pub struct ObserverFacts<'a> {
     pub complete_procfs: bool,
 }
 
+/// Registry wire-version boundary. Older mail readers compare the persisted
+/// ID verbatim with the filename and refuse this prefix, including session-ID
+/// selection paths that did not inspect process evidence. In-memory IDs and
+/// filenames remain stable; legacy unprefixed rows remain readable as unknown.
+// trace:TASK-3366 | ai:codex
+pub fn registry_wire_id(id: &str) -> String {
+    format!("proc-identity-v1:{id}")
+}
+pub fn deserialize_registry_id<'de, D: serde::Deserializer<'de>>(
+    deserializer: D,
+) -> Result<String, D::Error> {
+    let id = String::deserialize(deserializer)?;
+    if let Some(id) = id.strip_prefix("proc-identity-v1:") {
+        return Ok(id.to_owned());
+    }
+    // Preserve unsupported versions verbatim: strict filename checks refuse
+    // them, while registry retention readers must keep an unknown row rather
+    // than silently dropping it as a parse failure.
+    Ok(id)
+}
+
 fn valid_boot_id(boot: &str) -> bool {
     uuid::Uuid::parse_str(boot).is_ok_and(|id| id.hyphenated().to_string() == boot)
 }
@@ -67,6 +88,38 @@ impl ProcIdentity {
         }
     }
 
+    /// Capture a retained child, including its unreaped exited state. The Child
+    /// must not have been waited on: its zombie pins the PID until the caller
+    /// records the receipt. This is observation, never holder admission.
+    // trace:TASK-3365 | ai:codex
+    pub fn capture_child(child: &std::process::Child) -> Result<Self, String> {
+        let view = LocalView::read()?;
+        let pid = child.id();
+        let root = Path::new("/proc");
+        let boot = boot_id(root)?;
+        let StatRead::Found {
+            start_ticks, ppid, ..
+        } = read_stat(root, pid)?
+        else {
+            return Err("retained child is absent".into());
+        };
+        if ppid != std::process::id() {
+            return Err("process is not our retained child".into());
+        }
+        let id = Self::from_record(
+            &ProcessIdentity {
+                pid,
+                start: format!("linux:{boot}:{start_ticks}"),
+            },
+            Some(view.namespace),
+        )
+        .ok_or("incomplete child identity")?;
+        match observe(&id, true) {
+            Verdict::Alive | Verdict::Dead(DeadReason::Exited) => Ok(id),
+            verdict => Err(format!("child identity unavailable: {verdict:?}")),
+        }
+    }
+
     /// Read an existing exact record; never recapture today's process at an old PID.
     pub fn from_record(id: &ProcessIdentity, namespace: Option<u64>) -> Option<Self> {
         let (boot, ticks) = crate::process_probe::parse_start_identity(&id.start)?;
@@ -82,11 +135,81 @@ impl ProcIdentity {
         })
     }
 
+    /// Decode an existing registry record without probing or upgrading its PID.
+    // trace:TASK-3366 | ai:codex
+    pub fn from_registry(pid: u32, start: Option<&str>, namespace: Option<u64>) -> Option<Self> {
+        Self::from_record(
+            &ProcessIdentity {
+                pid,
+                start: start?.to_owned(),
+            },
+            namespace,
+        )
+    }
+
+    /// Raw-tick transport for existing grant, lease and display adapters.
+    // trace:TASK-3366 | ai:codex
+    pub fn legacy_ticks_start(&self) -> String {
+        format!("linux-starttime:{}", self.starttime)
+    }
+
     pub fn legacy(&self) -> ProcessIdentity {
         ProcessIdentity {
             pid: self.pid,
             start: format!("linux:{}:{}", self.boot_id, self.starttime),
         }
+    }
+}
+
+/// Advisory compatibility evidence for incomplete local registry rows.
+/// This never supplies a full identity or authorizes a reader. Namespace
+/// admission and a verified procfs view precede absence/start-time checks.
+// trace:TASK-3366 | ai:codex
+pub fn observe_legacy_registry(pid: u32, start: Option<&str>, namespace: Option<u64>) -> Verdict {
+    let unknown = || Verdict::ForeignUnknown(UnknownReason::MissingIdentity);
+    // These values cannot name a Linux process in any namespace.
+    if pid == 0 || pid > i32::MAX as u32 {
+        return Verdict::Dead(DeadReason::Absent);
+    }
+    if !crate::pid_observer::PidObserver::current().can_observe(namespace) {
+        return Verdict::ForeignUnknown(UnknownReason::NamespaceMismatch);
+    }
+    if LocalView::read().is_err() {
+        return Verdict::ForeignUnknown(UnknownReason::IncompleteProcfs);
+    }
+    let root = Path::new("/proc");
+    match read_stat(root, pid) {
+        Ok(StatRead::Missing) => Verdict::Dead(DeadReason::Absent),
+        Ok(StatRead::Found { state, .. }) if is_exited(state) => Verdict::Dead(DeadReason::Exited),
+        Ok(StatRead::Found { start_ticks, .. }) => {
+            if let Some(recorded) = start {
+                if let Some((boot, ticks)) = crate::process_probe::parse_start_identity(recorded) {
+                    if !valid_boot_id(boot) {
+                        return unknown();
+                    }
+                    let Ok(current) = boot_id(root) else {
+                        return unknown();
+                    };
+                    if current != boot {
+                        return Verdict::Dead(DeadReason::Reboot);
+                    }
+                    if ticks != start_ticks {
+                        return Verdict::Dead(DeadReason::Reused);
+                    }
+                    return Verdict::Alive;
+                } else if let Some(ticks) = recorded
+                    .strip_prefix("linux-starttime:")
+                    .and_then(|ticks| ticks.parse::<u64>().ok())
+                {
+                    if ticks != start_ticks {
+                        return Verdict::Dead(DeadReason::Reused);
+                    }
+                    return Verdict::Alive;
+                }
+            }
+            unknown()
+        }
+        Err(why) => Verdict::ForeignUnknown(UnknownReason::Unreadable(why)),
     }
 }
 

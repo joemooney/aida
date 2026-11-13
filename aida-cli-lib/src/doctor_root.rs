@@ -1,7 +1,21 @@
 //! `aida doctor` findings collection, completed-without-commit scan and GC headers (STORY-1488 slice 1)
 // trace:STORY-1488 | ai:claude
 
-use crate::*;
+use crate::LeaseState;
+use crate::{
+    agent_registry, branch_behind_main, branch_exists_anywhere, brief, cli, collect_agent_briefs,
+    collect_cleanup_report, config_lookup, current_user_id, detect_default_branch_ref,
+    detect_merged_pr_for_branch_via_forge, distributed_mode_declared_from, external_import_bleed,
+    findings, humanize_duration_secs, init_cmd, is_plan_commit_subject, leases, list_leases,
+    list_worktrees, maintenance_schedule, parse_trace_id_token, process_probe,
+    read_project_config_value, resolve_completed_since_cutoff, resolve_default_branch_ref, role,
+    schedule, vendors, PrLookup,
+};
+
+use crate::cli::{Cli, Command};
+use aida_core::{RequirementStatus, RequirementType, Storage};
+use anyhow::Result;
+use colored::Colorize;
 
 /// How long an uncommitted new spec (one a contained session filed, or a host
 /// add whose commit did not run) may wait for a host commit before `aida doctor` reports it (`store-queued-specs`).
@@ -777,6 +791,16 @@ pub(crate) fn collect_doctor_findings_at(
         }
     };
 
+    // trace:STORY-2630 | ai:codex
+    if filter
+        .as_deref()
+        .is_none_or(|category| category == crate::codegraph::CATEGORY)
+    {
+        for finding in crate::codegraph::scan(project_root) {
+            push(finding);
+        }
+    }
+
     // A parent edge is canonical; parent:* tags are a denormalized query aid.
     // Surface either direction of drift without touching the graph.
     // trace:BUG-1252 | ai:codex
@@ -1056,7 +1080,7 @@ pub(crate) fn collect_doctor_findings_at(
     for lease in &leases {
         let worktree_exists = lease.worktree_path.exists();
         // BUG-511: review-verb leases classify by creator PID, not worktree.
-        let state = lease_state_for(lease, &live_sessions, now);
+        let state = crate::leases::lease_state_for(lease, &live_sessions, now);
         let pid_dead = lease
             .creator_pid
             .is_some_and(|pid| !process_probe::pid_is_alive(pid));
@@ -1499,6 +1523,8 @@ pub(crate) fn which_binary(binary: &str) -> Option<std::path::PathBuf> {
 /// the normalizer) is structurally impossible now.
 // trace:BUG-1554 | ai:claude
 pub(crate) static DOCTOR_CATEGORY_ALIASES: &[(&[&str], &str)] = &[
+    // trace:BUG-2490 | ai:codex
+    (&["store-objects"], "store-objects"),
     (
         &["merge-hold", "merge-hold-integrity"],
         "merge-hold-integrity",
@@ -1827,6 +1853,8 @@ pub(crate) static DOCTOR_CATEGORY_ALIASES: &[(&[&str], &str)] = &[
     ),
     // trace:TASK-2347 | ai:codex
     (&["codex-mail-wake"], "codex-mail-wake"),
+    // trace:STORY-2630 | ai:codex
+    (&["codegraph", "code-graph"], "codegraph"),
     // STORY-HOME-128: unread requests/handoffs older than the threshold
     // addressed to a live agent or a role it holds. trace:STORY-HOME-128 | ai:claude
     (

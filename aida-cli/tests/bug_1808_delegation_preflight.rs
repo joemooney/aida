@@ -24,6 +24,8 @@ fn aida(repo: &Path, home: &Path, bin_dir: &Path) -> Command {
     cmd.env("HOME", home);
     cmd.env("AIDA_HOME", home);
     cmd.env("AIDA_TELEMETRY", "0");
+    cmd.env_remove("AIDA_OS_WRAP");
+    cmd.env_remove("AIDA_CONTAINED");
     let path = std::env::join_paths(
         std::iter::once(bin_dir.to_path_buf())
             .chain(std::env::split_paths(&std::env::var_os("PATH").unwrap())),
@@ -79,6 +81,7 @@ fn fixture(for_role: &str) -> Fixture {
     for dir in [&repo, &home, &bin] {
         std::fs::create_dir_all(dir).unwrap();
     }
+    support::contained_lane_host(&home, &bin);
     let claude = bin.join("claude");
     std::fs::write(&claude, "#!/bin/sh\nexit 97\n").unwrap();
     std::fs::set_permissions(&claude, std::fs::Permissions::from_mode(0o755)).unwrap();
@@ -391,10 +394,13 @@ fn headless_standalone_reviewer_without_reviewer_delegation_is_refused_without_m
     assert!(settle.status.success(), "{settle:?}");
     let grant = support::grant_seat(&fx.home, &fx.repo, "advisor", &["implementer"]);
     let before = snapshot(&fx);
-    let (ok, text) = run(
-        &fx,
-        &grant,
-        &[
+    // The dispatcher and pickup share one host admission for the same vendor.
+    // Keep its probe log outside the state snapshot. trace:STORY-2642 | ai:codex
+    let probes = tempfile::NamedTempFile::new().unwrap();
+    let out = aida(&fx.repo, &fx.home, &fx.bin)
+        .env("AIDA_SESSION_GRANT", &grant)
+        .env("AIDA_FIXTURE_BWRAP_LOG", probes.path())
+        .args([
             "queue",
             "work",
             "PR-7",
@@ -403,9 +409,23 @@ fn headless_standalone_reviewer_without_reviewer_delegation_is_refused_without_m
             "--no-human",
             "--fresh",
             "--no-pull",
-        ],
+        ])
+        .output()
+        .unwrap();
+    let text = format!(
+        "{}{}",
+        String::from_utf8_lossy(&out.stdout),
+        String::from_utf8_lossy(&out.stderr)
     );
-    assert!(!ok, "{text}");
+    assert!(!out.status.success(), "{text}");
+    assert_eq!(
+        std::fs::read_to_string(probes.path())
+            .unwrap()
+            .lines()
+            .count(),
+        1,
+        "one host preflight before delegation refusal: {text}"
+    );
     assert!(text.contains("child-seat delegation refused"), "{text}");
     assert!(text.contains("does not delegate `reviewer`"), "{text}");
     assert!(

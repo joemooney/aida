@@ -591,7 +591,10 @@ pub(crate) fn seat_exclude_body(existing: &str, primary: &str) -> String {
     if !body.is_empty() && !body.ends_with('\n') {
         body.push('\n');
     }
-    body.push_str("# AIDA runtime state (BUG-2169 seat clone)\n/.aida/*\n.aida-store\n");
+    // trace:STORY-2630 | ai:codex
+    body.push_str(
+        "# AIDA runtime state (BUG-2169 seat clone)\n/.aida/*\n.aida-store\n.codegraph\n",
+    );
     let mut present: std::collections::HashSet<String> =
         body.lines().map(|l| l.trim().to_string()).collect();
     let inherited: Vec<&str> = primary
@@ -1027,6 +1030,8 @@ pub(crate) struct ProbeFacts {
     /// Commits reachable from any ref or stash entry that are on no
     /// `origin/*` ref, not in the clone's base and not reachable from a ref of
     /// the main checkout.
+    // Clean, published heads exempt slice checkpoint tags; teardown salvages them.
+    // trace:BUG-2491 | ai:codex
     pub(crate) unpushed: u64,
     /// The refs those commits are on, as `<count> commit(s) on <ref>` lines
     /// (seat-written names, escaped for display), for the refusal message.
@@ -1397,11 +1402,6 @@ fn run_sandboxed_as(
                 .map_err(|e| failed(format!("{e:#}")))?
         }
     };
-    let mut cmd = std::process::Command::new("bwrap");
-    cmd.args(sandbox)
-        .arg(program)
-        .args(args)
-        .stdin(std::process::Stdio::null());
     let timeout = deadline
         .map(|end| {
             end.saturating_duration_since(std::time::Instant::now())
@@ -1411,12 +1411,33 @@ fn run_sandboxed_as(
     if timeout.is_zero() {
         return Err(failed("the clone scan deadline elapsed".into()));
     }
-    match crate::command_output_with_timeout_capped(cmd, timeout, cap) {
+    let output = retry_readonly_mount_race(commit_identity.is_none(), timeout, |remaining| {
+        let mut cmd = std::process::Command::new("bwrap");
+        cmd.args(&sandbox)
+            .arg(program)
+            .args(args)
+            .stdin(std::process::Stdio::null());
+        crate::command_output_with_timeout_capped(cmd, remaining, cap)
+    });
+    match output {
         crate::BoundedCommandOutput::Completed(mut out) if out.stdout.len() as u64 > cap => {
             out.stdout.truncate(cap as usize);
             Err(SandboxFailure::Truncated(out.stdout))
         }
         crate::BoundedCommandOutput::Completed(out) if out.status.success() => Ok(out.stdout),
+        crate::BoundedCommandOutput::Completed(out)
+            if program == "git"
+                && repair_merge_tree_conflict(
+                    &args
+                        .iter()
+                        .map(|arg| arg.to_str().unwrap_or(""))
+                        .collect::<Vec<_>>(),
+                    out.status.code(),
+                    &out.stdout,
+                ) =>
+        {
+            Ok(out.stdout)
+        }
         crate::BoundedCommandOutput::Completed(out) => Err(failed(format!(
             "the sandboxed {program} exited with {}: {}",
             out.status,
@@ -1429,6 +1450,43 @@ fn run_sandboxed_as(
             "the sandboxed {program} did not finish within {timeout:?}"
         ))),
     }
+}
+
+// Bubblewrap can race a disappearing systemd credentials mount while making
+// the root bind read-only. Retry setup only, with the original time budget;
+// commit runs and arbitrary command failures must never be replayed.
+// trace:STORY-2493 | ai:codex
+fn retry_readonly_mount_race(
+    readonly: bool,
+    timeout: std::time::Duration,
+    mut run: impl FnMut(std::time::Duration) -> crate::BoundedCommandOutput,
+) -> crate::BoundedCommandOutput {
+    let start = std::time::Instant::now();
+    for attempt in 0..3 {
+        let remaining = timeout.saturating_sub(start.elapsed());
+        if remaining.is_zero() {
+            return crate::BoundedCommandOutput::TimedOut;
+        }
+        let output = run(remaining);
+        let retry = match &output {
+            crate::BoundedCommandOutput::Completed(out) if readonly && out.stdout.is_empty() => {
+                // Bubblewrap exposes this pre-exec mount failure only through stderr.
+                // external-prose-classifier: seat_clone::retry_readonly_mount_race
+                let stderr = String::from_utf8_lossy(&out.stderr);
+                out.status.code() == Some(1)
+                    && stderr.starts_with("bwrap: Can't bind mount /oldroot/ on /newroot/:")
+                    && stderr.contains(
+                        "Unable to apply mount flags: remount \"/newroot/run/credentials/",
+                    )
+                    && stderr.trim_end().ends_with("No such file or directory")
+            }
+            _ => false,
+        };
+        if !retry || attempt == 2 {
+            return output;
+        }
+    }
+    unreachable!()
 }
 
 /// [`run_sandboxed`] for a probe: text, at most [`PROBE_OUTPUT_CAP`].
@@ -1502,6 +1560,51 @@ pub(crate) fn head_has_unpushed_commits(main: &Path, clone: &Path) -> Option<boo
     Some(!out.is_empty())
 }
 
+/// Whether the leased branch contains work beyond the host-pinned seat base.
+// trace:BUG-2488 | ai:codex
+pub(crate) fn has_commits_beyond_base(main: &Path, clone: &Path) -> Result<bool> {
+    let root = clone.canonicalize()?;
+    let lease = crate::list_leases(main)
+        .into_iter()
+        .find(|lease| {
+            lease.tree_kind == TreeKind::Clone
+                && lease
+                    .worktree_path
+                    .canonicalize()
+                    .is_ok_and(|path| path == root)
+        })
+        .context("could not read seat branch lease")?;
+    let seat = host_recorded_clone(main, clone).context("could not validate seat clone")?;
+    branch_has_commits_beyond_base(&seat, &lease.branch)
+}
+
+// trace:BUG-2488 | ai:codex
+pub(crate) fn branch_has_commits_beyond_base(
+    seat: &HostRecordedClone,
+    branch: &str,
+) -> Result<bool> {
+    let main = &seat.main;
+    let clone = &seat.root;
+    let base = pinned_base(main, clone).context("could not read seat base pin")?;
+    let branch = format!("refs/heads/{branch}");
+    let out = run_sandboxed_until(
+        clone,
+        main,
+        "git",
+        &[
+            "rev-list".as_ref(),
+            "--max-count=1".as_ref(),
+            branch.as_ref(),
+            "--not".as_ref(),
+            base.as_ref(),
+        ],
+        PROBE_OUTPUT_CAP,
+        Some(std::time::Instant::now() + std::time::Duration::from_secs(5)),
+    )
+    .map_err(|why| anyhow::anyhow!("could not inspect seat commits: {why}"))?;
+    Ok(!out.is_empty())
+}
+
 /// Count commits held by the seat but by no remote: HEAD and the lease branch
 /// for worktrees, all local branches for private clones. Unlike salvage
 /// accounting, a local host ref or base pin never excuses a commit.
@@ -1530,6 +1633,23 @@ pub(crate) fn remote_missing_commits_with_review_head(
         !is_clone || review_head.is_none(),
         "review coverage requires a linked worktree"
     );
+    remote_missing_commits_via(main, seat, is_clone, lease_branch, review_head, "--remotes")
+}
+
+/// GC requires origin coverage, rather than a secondary backup remote.
+// trace:TASK-1222 | ai:codex
+pub(crate) fn origin_missing_commits(main: &Path, seat: &Path, branch: &str) -> Result<u64> {
+    remote_missing_commits_via(main, seat, true, branch, None, "--remotes=origin")
+}
+
+fn remote_missing_commits_via(
+    main: &Path,
+    seat: &Path,
+    is_clone: bool,
+    lease_branch: &str,
+    review_head: Option<&str>,
+    remotes: &str,
+) -> Result<u64> {
     let deadline = Some(std::time::Instant::now() + std::time::Duration::from_secs(30));
     // A remote tip absent from the clone cannot excuse anything there. Git
     // failures (including a broken HEAD) refuse rather than guessing zero.
@@ -1551,6 +1671,51 @@ if [ "$#" -gt 0 ]; then
 fi
 printf '%s\n' "$negative" | git rev-list --stdin --count $head --branches --not --remotes
 "#;
+    let script = if remotes == "--remotes=origin" {
+        // Inherited host tags are not seat work. Exclude only an exact
+        // name/object match from positive roots, never from negative coverage:
+        // a seat branch at the same unpublished commit must still retain it.
+        // trace:TASK-1222 | ai:codex
+        let mut tags = aida_core::git_ops::host_git_command(main);
+        tags.args([
+            "for-each-ref",
+            "--format=%(objectname) %(refname)",
+            "refs/tags/",
+        ]);
+        let host_tags = run_bounded(tags, "", deadline).context("cannot read host tags")?;
+        let host_tags = host_tags.replace('\'', "'\"'\"'");
+        let positives = format!(
+            r#"host_tags='{host_tags}'
+positives=''
+refs=$(git for-each-ref --format='%(objectname) %(refname)')
+while read -r oid name; do
+  [ -n "$oid" ] || continue
+  case "$name" in
+    refs/tags/*)
+      if printf '%s\n' "$host_tags" | grep -Fqx -- "$oid $name"; then continue; fi ;;
+  esac
+  positives="$positives $oid"
+done <<EOF
+$refs
+EOF
+"#
+        );
+        // Preserve seat-created/moved tags, other refs and every stash entry.
+        // Secondary remotes never grant origin coverage to GC.
+        format!(
+            "set -eu\n{}\n{}\n{}",
+            GC_STASH_ENTRIES,
+            positives,
+            script
+                .replace("--branches", "$positives $s")
+                // Clone tracking refs are seat-writable. Only the negative
+                // OIDs corroborated through host origin refs/advertisement
+                // above may excuse a commit in the GC path.
+                .replace("--not --remotes", "")
+        )
+    } else {
+        script.to_string()
+    };
     let output = if is_clone {
         let out = run_sandboxed_until(
             seat,
@@ -1563,12 +1728,8 @@ printf '%s\n' "$negative" | git rev-list --stdin --count $head --branches --not 
         .map_err(|error| anyhow::anyhow!("{error}"))?;
         let out = String::from_utf8_lossy(&out);
         let (tips, candidates) = split_tips(&out);
-        let remote_tips = main_reachable_commits_via(
-            main,
-            tips.into_iter().chain(candidates),
-            deadline,
-            "--remotes",
-        );
+        let remote_tips =
+            main_reachable_commits_via(main, tips.into_iter().chain(candidates), deadline, remotes);
         let count_with = |tips: &[String]| -> Result<String> {
             let mut args: Vec<&std::ffi::OsStr> = vec![
                 "-c".as_ref(),
@@ -1591,7 +1752,12 @@ printf '%s\n' "$negative" | git rev-list --stdin --count $head --branches --not 
             let remaining = deadline
                 .unwrap()
                 .saturating_duration_since(std::time::Instant::now());
-            let heads = origin_head_oids(main, (remaining / 2).min(ORIGIN_REFRESH_CAP));
+            let timeout = (remaining / 2).min(ORIGIN_REFRESH_CAP);
+            let heads = if remotes == "--remotes=origin" {
+                origin_gc_oids(main, timeout)
+            } else {
+                origin_head_oids(main, timeout)
+            };
             if heads.is_empty() {
                 first
             } else {
@@ -1641,7 +1807,7 @@ printf '%s\n' "$negative" | git rev-list --stdin --count $head --branches --not 
         if has_head {
             cmd.arg("HEAD");
         }
-        cmd.args(["--not", "--remotes"]);
+        cmd.args(["--not", remotes]);
         if let Some(head) = review_head {
             cmd.arg(head);
         }
@@ -1813,6 +1979,11 @@ pub(crate) fn probe_until(
             "--branch".as_ref(),
             "--untracked-files=all".as_ref(),
             "--ignore-submodules=none".as_ref(),
+            // Match commit_pending: the host marker is never seat work.
+            // trace:TASK-3749 | ai:codex
+            "--".as_ref(),
+            ".".as_ref(),
+            format!(":(exclude){MARKER_RELATIVE}").as_ref(),
         ],
         "git",
     ) {
@@ -1828,9 +1999,9 @@ pub(crate) fn probe_until(
     }
     // The session's runtime links and build/cache output are not work.
     // trace:BUG-B6B1278890774EF993D2EBC327862470-051 | ai:claude
-    facts
-        .dirty
-        .retain(|line| !is_runtime_noise_entry(clone, line));
+    facts.dirty.retain(|line| {
+        !is_runtime_noise_entry(clone, line) && !is_mirrored_handshake_entry(main, clone, line)
+    });
     let base = pinned_base_until(main, clone, deadline).unwrap_or_default();
     // BUG-2224: a seat clone inherits refs (tags, `wip/*` branches) whose
     // commits the main checkout already holds; removing the clone loses none
@@ -1861,6 +2032,12 @@ pub(crate) fn probe_until(
             "-c".as_ref(),
             UNPUSHED_COUNT_SCRIPT.as_ref(),
             "aida-seat-unpushed".as_ref(),
+            if facts.dirty.is_empty() {
+                "ignore-slice"
+            } else {
+                "keep-slice"
+            }
+            .as_ref(),
             base.as_ref(),
         ]
         .into_iter()
@@ -1970,19 +2147,66 @@ pub(crate) fn describe_status_entry(line: &str) -> String {
     described.unwrap_or_else(|| line.escape_debug().to_string())
 }
 
-/// Whether a probe `git status` entry is the session's runtime state or
-/// build/cache output rather than work: the `.aida-store` link to the
-/// primary's store, `.aida/cache-db` (and legacy `.aida/cache.db*`),
-/// `.aida/agents`, and `target/`. Only
-/// untracked entries qualify; `.aida-store` only while it is a symlink (read
-/// with metadata only; nothing in the clone is opened).
+/// Whether an untracked probe entry is disposable runtime state: shared
+/// store/codegraph links, agent/cache/build output, Python bytecode, notice
+/// markers, empty sandbox placeholders, Claude runtime links, session-env.sh,
+/// and the sessions symlink or direct regular `*.toml` lease files. Other
+/// session files remain work; tracked entries never qualify.
 // trace:BUG-B6B1278890774EF993D2EBC327862470-051 | ai:claude
 pub(crate) fn is_runtime_noise_entry(clone: &Path, line: &str) -> bool {
     let Some(path) = line.strip_prefix("? ") else {
         return false;
     };
     let path = path.trim_end_matches('/');
-    if path == ".aida-store" {
+    // Only known runtime links/caches and empty sandbox placeholders qualify.
+    // Genuine ignored state (holds, verdicts, credentials, notes) stays work.
+    // trace:TASK-1222 | ai:codex
+    // Python bytecode is regenerated by the gates. Keep arbitrary files even
+    // inside __pycache__, and never excuse tracked status entries (above).
+    if path.split('/').any(|part| part == "__pycache__") && path.ends_with(".pyc") {
+        return true;
+    }
+    // Presentation/onboarding receipts are disposable; brief.md and events.jsonl
+    // carry work context/audit evidence and intentionally remain protected.
+    if matches!(
+        path,
+        ".aida/team-onboarded"
+            | ".aida/upstream-report-notice-version"
+            | ".aida/.format-hint-shown"
+    ) {
+        return true;
+    }
+    if matches!(path, ".bashrc" | ".gitconfig" | ".gitmodules") {
+        return std::fs::symlink_metadata(clone.join(path))
+            .is_ok_and(|m| m.is_file() && m.len() == 0);
+    }
+    if path.starts_with(".claude/") {
+        let mut component = clone.join(path);
+        while component != clone.join(".claude") {
+            if std::fs::symlink_metadata(&component).is_ok_and(|m| m.is_symlink()) {
+                return true;
+            }
+            if !component.pop() {
+                break;
+            }
+        }
+    }
+    if path == ".aida/session-env.sh" {
+        return true;
+    }
+    // A real sessions directory can contain operator notes. Only the shared
+    // link or direct regular lease files are disposable; unknown state stays.
+    // trace:TASK-1222 | ai:codex
+    if path == ".aida/sessions" {
+        return std::fs::symlink_metadata(clone.join(path)).is_ok_and(|meta| meta.is_symlink());
+    }
+    if let Some(lease) = path.strip_prefix(".aida/sessions/") {
+        return !lease.contains('/')
+            && lease.ends_with(".toml")
+            && std::fs::symlink_metadata(clone.join(path)).is_ok_and(|meta| meta.is_file());
+    }
+    // trace:STORY-2630 | ai:codex
+    if matches!(path, ".aida-store" | ".codegraph") {
         return std::fs::symlink_metadata(clone.join(path))
             .is_ok_and(|meta| meta.file_type().is_symlink());
     }
@@ -1994,6 +2218,52 @@ pub(crate) fn is_runtime_noise_entry(clone: &Path, line: &str) -> bool {
         || path.starts_with(".aida/agents/")
         || path == "target"
         || path.starts_with("target/")
+}
+
+/// Handshakes are disposable only when the host already retains their evidence.
+// trace:BUG-2488 | ai:codex
+pub(crate) fn is_mirrored_handshake_entry(main: &Path, clone: &Path, line: &str) -> bool {
+    let Some(path) = line.strip_prefix("? ") else {
+        return false;
+    };
+    if path != ".aida/punts.jsonl"
+        && !path.starts_with(".aida/punt-signals/")
+        && !path.starts_with(".aida/pr-holds/")
+    {
+        return false;
+    }
+    // Keep cleanup probes bounded even if a seat swaps a FIFO or symlink.
+    let read = aida_core::seat_clone_detect::read_regular_file;
+    let Ok(Some(text)) = crate::punt::seat_handshake_text(clone, &clone.join(path)) else {
+        return false;
+    };
+    if path.starts_with(".aida/punt-signals/") || path.starts_with(".aida/pr-holds/") {
+        let Some(spec) = Path::new(path).file_stem().and_then(|s| s.to_str()) else {
+            return false;
+        };
+        let host = if path.starts_with(".aida/punt-signals/") {
+            crate::punt::signal_path(main, spec)
+        } else {
+            crate::punt::hold_signal_path(main, spec)
+        };
+        return read(&host).is_some_and(|host| host == text);
+    }
+    let Ok(host) = std::fs::read_to_string(crate::punt::ledger_path(main)) else {
+        return text.is_empty();
+    };
+    let existing: Vec<crate::punt::PuntRecord> = host
+        .lines()
+        .filter_map(|line| serde_json::from_str(line).ok())
+        .collect();
+    text.lines().all(|line| {
+        serde_json::from_str::<crate::punt::PuntRecord>(line).is_ok_and(|record| {
+            existing.iter().any(|r| {
+                r.spec.eq_ignore_ascii_case(&record.spec)
+                    && r.timestamp == record.timestamp
+                    && r.category == record.category
+            })
+        })
+    })
 }
 
 /// Bring origin's copy of `branch` into `main`'s `refs/remotes/origin/<branch>`
@@ -2132,6 +2402,40 @@ const ORIGIN_HEADS_CAP: usize = 5_000;
 /// more than [`ORIGIN_HEADS_CAP`] branches.
 // trace:BUG-2415 | ai:claude
 pub(crate) fn origin_head_oids(main: &Path, timeout: std::time::Duration) -> Vec<String> {
+    origin_oids(
+        main,
+        timeout,
+        &["ls-remote", "--heads", "origin"],
+        ORIGIN_HEADS_CAP,
+    )
+}
+
+/// GC may corroborate a published source head through origin's PR/MR refs
+/// after squash-merge branch deletion. These are host-observed advertisements,
+/// never clone-written tracking refs; the separate lifecycle gate still applies.
+// trace:TASK-1222 | ai:codex
+fn origin_gc_oids(main: &Path, timeout: std::time::Duration) -> Vec<String> {
+    origin_oids(
+        main,
+        timeout,
+        &[
+            "ls-remote",
+            "--refs",
+            "origin",
+            "refs/heads/*",
+            "refs/pull/*/head",
+            "refs/merge-requests/*/head",
+        ],
+        50_000,
+    )
+}
+
+fn origin_oids(
+    main: &Path,
+    timeout: std::time::Duration,
+    args: &[&str],
+    cap: usize,
+) -> Vec<String> {
     if timeout.is_zero() {
         return Vec::new();
     }
@@ -2143,7 +2447,7 @@ pub(crate) fn origin_head_oids(main: &Path, timeout: std::time::Duration) -> Vec
             crate::forge::batch_mode_ssh_command(main),
         )
         .stdin(std::process::Stdio::null())
-        .args(["ls-remote", "--heads", "origin"]);
+        .args(args);
     let Some(out) = crate::command_output_with_timeout(cmd, timeout) else {
         return Vec::new();
     };
@@ -2158,7 +2462,7 @@ pub(crate) fn origin_head_oids(main: &Path, timeout: std::time::Duration) -> Vec
         .collect();
     oids.sort_unstable();
     oids.dedup();
-    if oids.len() > ORIGIN_HEADS_CAP {
+    if oids.len() > cap {
         return Vec::new();
     }
     oids
@@ -2367,6 +2671,10 @@ exit 0
 /// too: each one main reaches is excused, and with it its ancestors.
 // trace:BUG-2224 | ai:claude
 // trace:BUG-B6B1278890774EF993D2EBC327862470-051 | ai:claude
+// Clean, published branch heads may retire lane checkpoint tags even when
+// pre-squash checkpoints are unreachable from origin. Salvage still counts
+// every ref so those checkpoints are bundled before teardown.
+// trace:BUG-2491 | ai:codex
 const REF_TIPS_SCRIPT: &str = concat!(
     "set -u\n",
     "git for-each-ref --format='%(if)%(*objectname)%(then)%(*objectname)%(else)%(objectname)%(end)' || exit 1\n",
@@ -2378,10 +2686,13 @@ const REF_TIPS_SCRIPT: &str = concat!(
 /// candidate commits.
 const TIPS_SEPARATOR: &str = "--";
 
+// trace:TASK-1222 | ai:codex
+const GC_STASH_ENTRIES: &str = stash_entries_sh!();
+
 /// Inside the probe sandbox: how many commits the clone holds that origin
 /// does not: reachable from ANY ref (every branch, tag, HEAD) or stash entry,
-/// and not from `origin/*`, the pinned base (`$1`, or empty) or an excused
-/// head (`$2...`, full hex ids: a shipped head, or a tip main reaches; one the
+/// and not from `origin/*`, the pinned base (first positional argument, or empty) or an excused
+/// head (remaining full hex ids: a shipped head, or a tip main reaches; one the
 /// clone lacks is skipped). Submodules are not counted: [`probe`] keeps any
 /// clone that has one. The total is the first line; then, when it is not 0,
 /// `<count> <ref>` for each ref (a detached HEAD, every ref outside
@@ -2394,15 +2705,31 @@ const UNPUSHED_COUNT_SCRIPT: &str = concat!(
     // revisions; absent objects and tags never excuse work. Keep the large set
     // on stdin to rev-list rather than expanding it into each process's argv.
     // trace:BUG-2384 | ai:codex
+    // Only the clean-tree probe requests this exemption; salvage keeps all refs.
+    // trace:BUG-2491 | ai:codex
+    "ignore_slice=0\nslice_only=0\ncase $1 in ignore-slice) ignore_slice=1; shift;; keep-slice) shift;; slice-only) slice_only=1; shift;; esac\n",
     "base=$1\nshift\nshipped=''\n",
     "if [ \"$#\" -gt 0 ]; then\n",
     "  objects=$(printf '%s\\n' \"$@\" | git cat-file --batch-check='%(objectname) %(objecttype)') || exit 1\n",
     "  shipped=$(printf '%s\\n' \"$objects\" | awk '$2 == \"commit\" {print \"^\" $1}') || exit 1\n",
     "fi\n",
-    "total=$(printf '%s\\n' \"$shipped\" | git rev-list --stdin --count --all $s --not --remotes=origin ${base:+\"$base\"}) || exit 1\n",
+    "refs=$(git for-each-ref --format='%(refname)') || exit 1\n",
+    "head=\"\"\nif git rev-parse -q --verify HEAD^{commit} >/dev/null; then head=HEAD; fi\n",
+    "if [ \"$ignore_slice\" -eq 1 ] && [ -n \"$head\" ]; then\n",
+    "  n=$(printf '%s\\n' \"$shipped\" | git rev-list --stdin --count HEAD --not --remotes=origin ${base:+\"$base\"}) || exit 1\n",
+    "  if [ \"$n\" -eq 0 ]; then refs=$(printf '%s\\n' \"$refs\" | awk 'index($0, \"refs/tags/slice-\") != 1') || exit 1; fi\n",
+    "fi\n",
+    // Teardown only needs salvage for checkpoint history not already published.
+    // trace:BUG-2491 | ai:codex
+    "if [ \"$slice_only\" -eq 1 ]; then\n",
+    "  refs=$(printf '%s\\n' \"$refs\" | awk 'index($0, \"refs/tags/slice-\") == 1') || exit 1\n",
+    "  head=''; s=''\nfi\n",
+    // Blank lines terminate rev-list stdin, including an unborn HEAD.
+    // trace:BUG-2491 | ai:codex
+    "revisions=$(printf '%s\\n' \"$head\" \"$refs\" \"$shipped\" | sed '/^$/d') || exit 1\n",
+    "total=$(printf '%s\\n' \"$revisions\" | git rev-list --stdin --count $s --not --remotes=origin ${base:+\"$base\"}) || exit 1\n",
     "printf '%s\\n' \"$total\"\n",
     "if [ \"$total\" -eq 0 ]; then exit 0; fi\n",
-    "refs=$(git for-each-ref --format='%(refname)') || exit 1\n",
     "if ! git symbolic-ref -q HEAD >/dev/null && git rev-parse -q --verify HEAD >/dev/null; then\n",
     "  refs=\"HEAD\n$refs\"\n",
     "fi\n",
@@ -2457,6 +2784,78 @@ pub(crate) fn merged_pr_heads_with_timeout(
         .filter(|oid| is_full_oid(oid))
         .map(str::to_string)
         .collect()
+}
+
+#[cfg(test)]
+// trace:STORY-2493 | ai:codex
+mod mount_race_tests {
+    use super::*;
+    use crate::BoundedCommandOutput::{Completed, TimedOut};
+    use std::os::unix::process::ExitStatusExt;
+    use std::time::Duration;
+
+    const RACE: &str = "bwrap: Can't bind mount /oldroot/ on /newroot/: Unable to apply mount flags: remount \"/newroot/run/credentials/systemd-tmpfiles-clean.service\": No such file or directory\n";
+
+    fn output(code: i32, stdout: &[u8], stderr: &str) -> crate::BoundedCommandOutput {
+        Completed(std::process::Output {
+            status: std::process::ExitStatus::from_raw(code << 8),
+            stdout: stdout.to_vec(),
+            stderr: stderr.as_bytes().to_vec(),
+        })
+    }
+
+    #[test]
+    fn readonly_mount_race_retries_setup_with_shared_budget() {
+        let mut calls = 0;
+        let mut previous = Duration::from_secs(1);
+        let result = retry_readonly_mount_race(true, previous, |remaining| {
+            assert!(remaining <= previous);
+            previous = remaining;
+            calls += 1;
+            if calls == 1 {
+                output(1, b"", RACE)
+            } else {
+                output(0, b"probe facts", "")
+            }
+        });
+        assert_eq!(calls, 2);
+        assert!(
+            matches!(result, Completed(out) if out.status.success() && out.stdout == b"probe facts")
+        );
+    }
+
+    #[test]
+    fn readonly_mount_race_is_bounded_and_retains_failure() {
+        let mut calls = 0;
+        let result = retry_readonly_mount_race(true, Duration::from_secs(1), |_| {
+            calls += 1;
+            output(1, b"", RACE)
+        });
+        assert_eq!(calls, 3);
+        assert!(matches!(result, Completed(out) if out.stderr == RACE.as_bytes()));
+        let result = retry_readonly_mount_race(true, Duration::ZERO, |_| {
+            panic!("expired budget must not spawn")
+        });
+        assert!(matches!(result, TimedOut));
+    }
+
+    #[test]
+    fn mount_race_never_replays_commits_or_other_failures() {
+        for (readonly, code, stdout, stderr) in [
+            (false, 1, b"".as_slice(), RACE),
+            (true, 1, b"command ran".as_slice(), RACE),
+            (true, 2, b"".as_slice(), RACE),
+            (true, 1, b"".as_slice(), "bwrap: permission denied"),
+            (true, 1, b"".as_slice(), "git: command failed"),
+        ] {
+            let mut calls = 0;
+            let _ = retry_readonly_mount_race(readonly, Duration::from_secs(1), |_| {
+                calls += 1;
+                output(code, stdout, stderr)
+            });
+            assert_eq!(calls, 1, "{readonly}: {stderr}");
+        }
+    }
 }
 
 /// Inside the probe sandbox: a git bundle of every commit
@@ -2627,15 +3026,18 @@ fn salvage_capped(main: &Path, clone: &Path, cap: u64) -> Result<PathBuf> {
 
 /// Host preparation of a rework. Clone Git runs only in AIDA's writable
 /// sandbox with the host identity; ordinary linked worktrees use host Git.
-/// The host never resolves a conflict: collect its paths and abort it.
+/// Conflicts retain MERGE_HEAD and journaled paths; the lane edits files only.
 // trace:STORY-2475 | ai:codex
 pub(crate) fn prepare_rework_merge(
     main: &Path,
     tree: &Path,
     branch: &str,
     resume: bool,
+    pr: u64,
+    lane_id: &str,
 ) -> Result<Vec<String>> {
     use std::ffi::{OsStr, OsString};
+    let execution_environment = aida_core::exec_context::Environment::capture();
     let clone = host_recorded_clone(main, tree);
     let pinned = dir_identity(tree)?;
     let host_value = |key: &str| -> Result<String> {
@@ -2653,13 +3055,21 @@ pub(crate) fn prepare_rework_merge(
         ("GIT_COMMITTER_NAME", name.into()),
         ("GIT_COMMITTER_EMAIL", email.into()),
     ];
+    let decode = |args: &[&str], bytes: Vec<u8>| -> Result<String> {
+        let text = String::from_utf8(bytes).context("rework Git returned non-UTF-8 evidence")?;
+        Ok(if args.contains(&"-z") {
+            text
+        } else {
+            text.trim().to_owned()
+        })
+    };
     let execute = |args: &[&str]| -> Result<String> {
         ensure_dir_identity(tree, pinned)?;
         if clone.is_some() {
-            let args: Vec<&OsStr> = args.iter().map(OsStr::new).collect();
-            run_commit_sandboxed(tree, main, &args, &identity)
-                .map(|out| String::from_utf8_lossy(&out).trim().to_string())
+            let os_args: Vec<&OsStr> = args.iter().map(OsStr::new).collect();
+            run_commit_sandboxed(tree, main, &os_args, &identity)
                 .map_err(|why| anyhow::anyhow!("rework Git failed: {why}"))
+                .and_then(|out| decode(args, out))
         } else {
             let mut cmd = aida_core::git_ops::host_git_command(tree);
             cmd.args([
@@ -2673,8 +3083,11 @@ pub(crate) fn prepare_rework_merge(
             .stdin(std::process::Stdio::null());
             match crate::command_output_with_timeout_detail(cmd, std::time::Duration::from_secs(30))
             {
-                crate::BoundedCommandOutput::Completed(out) if out.status.success() => {
-                    Ok(String::from_utf8_lossy(&out.stdout).trim().to_string())
+                crate::BoundedCommandOutput::Completed(out)
+                    if out.status.success()
+                        || repair_merge_tree_conflict(args, out.status.code(), &out.stdout) =>
+                {
+                    decode(args, out.stdout)
                 }
                 crate::BoundedCommandOutput::Completed(out) => anyhow::bail!(
                     "rework Git failed: {}",
@@ -2684,11 +3097,33 @@ pub(crate) fn prepare_rework_merge(
             }
         }
     };
-    prepare_rework_merge_with(
+    // Preflight refusals must never recommend staging unresolved files or
+    // committing pending work onto a branch other than the recorded PR branch.
+    // trace:BUG-2504 | ai:codex
+    anyhow::ensure!(
+        execute(&["symbolic-ref", "--short", "HEAD"])? == branch,
+        "rework seat {} is not on the PR head branch {branch}; inspect `aida session leases --all` and restore the recorded branch through the appropriate seat recovery path before retrying",
+        tree.display()
+    );
+    if let Ok(base) = execute(&["rev-parse", "-q", "--verify", "MERGE_HEAD"]) {
+        let head = execute(&["rev-parse", "HEAD"])?;
+        let journal = crate::repair_journal::RepairGuard::lock(main)?;
+        journal
+            .for_tree(tree, branch, &head, &base)
+            .context("unfinished merge lacks host repair evidence; preserve it for recovery")?;
+    }
+    // Recovery depends on the host's recorded tree kind, never seat configuration.
+    // trace:BUG-2504 | ai:codex
+    let pending_resume = resume
+        && execute(&["status", "--porcelain", "--untracked-files=all"])
+            .is_ok_and(|status| !status.is_empty());
+    prepare_host_repair_with(
+        main, tree, pr, lane_id,
         &execute,
         branch,
         resume,
         |tip| publish_rework_merge(main, tree, branch, tip),
+        |base, restore_only| regenerate_repair_outputs(tree, main, base, &identity, &execution_environment, restore_only),
         || {
             // Fetch in the trusted host, never through a seat-controlled origin.
             let mut fetch = aida_core::git_ops::host_remote_git_command(main, "origin");
@@ -2720,6 +3155,43 @@ pub(crate) fn prepare_rework_merge(
             Ok((base, pr_head))
         },
     )
+    .map_err(|error| {
+        let recovery = if pending_resume {
+            if clone.is_some() {
+                format!(
+                    "After the lane exits, preserve pending work through AIDA's sandboxed \
+                     `aida ship --from-seat {} --commit-pending 'fix: preserve rework (Refs SPEC-ID)'`. \
+                     Do not run host Git in the seat clone. After successful publication, retry \
+                     a fresh pickup from branch {branch}",
+                    tree.display()
+                )
+            } else {
+                format!(
+                    "After the lane exits, preserve pending work in the linked worktree with \
+                     `git -C {0} add -A` and \
+                     `git -C {0} commit -m 'fix: preserve rework (Refs SPEC-ID)'`; then run \
+                     `git -C {0} fetch origin`, `git -C {0} merge origin/{branch}` and \
+                     `git -C {0} merge origin/main`. Resolve any reported conflicts, commit \
+                     the resolution, and retry pickup with --resume",
+                    tree.display()
+                )
+            }
+        } else {
+            String::new()
+        };
+        let recovery = if recovery.is_empty() {
+            String::new()
+        } else {
+            format!(" {recovery}.")
+        };
+        error.context(format!(
+            "rework preparation for seat {} on branch {branch}; inspect its scope with \
+             `aida session leases --all` before recovery.{recovery} \
+             If a probe failed without reporting conflicts, diagnose that failure before retrying; \
+             retained conflicts require their host journal evidence before a resume",
+            tree.display()
+        ))
+    })
 }
 
 /// Publish the prepared tip using only the trusted host origin. Clone objects
@@ -2839,9 +3311,453 @@ fn merge_publication_head_with(
     Ok(())
 }
 
+/// Restore with host Git, then run pinned generators with Git metadata read-only.
+/// The generator driver is embedded in the host image; command implementations
+/// come from the pinned base, not lane edits. No host process executes seat code.
+// trace:STORY-2710 | ai:codex
+fn regenerate_repair_outputs(
+    tree: &Path,
+    main: &Path,
+    base: &str,
+    identity: &[(&'static str, std::ffi::OsString)],
+    parent: &aida_core::exec_context::Environment,
+    restore_only: bool,
+) -> Result<()> {
+    use std::ffi::OsStr;
+    // Repositories without registered outputs need no generator (including
+    // minimal worktree fixtures). Inspect the pinned host object, not the seat.
+    let mut inventory = git(main);
+    inventory.args([
+        "ls-tree",
+        "-r",
+        "--name-only",
+        base,
+        "--",
+        "scripts/exec-context-legacy.json",
+        ".claude/skills",
+        ".claude/commands",
+        ".claude/hooks",
+        ".agents/skills",
+        ".aida/discipline",
+        "aida-core/templates/skills",
+    ]);
+    if run(inventory, "inspect pinned regeneration outputs")?.is_empty() {
+        return Ok(());
+    }
+    let pack_outputs = serde_json::to_string(
+        &aida_core::scaffolding::agent_pack::rendered_portable_pack(
+            aida_core::scaffolding::inventory::PORTABLE_PACK,
+            &aida_core::scaffolding::ScaffoldConfig::default(),
+        )
+        .keys()
+        .map(|p| p.to_string_lossy().into_owned())
+        .collect::<Vec<_>>(),
+    )?;
+    let driver = include_str!("../../scripts/repair-generated.py");
+    let restore = [
+        OsStr::new("-c"),
+        OsStr::new(driver),
+        OsStr::new(base),
+        OsStr::new("restore"),
+        OsStr::new(&pack_outputs),
+    ];
+    let config = tempfile::NamedTempFile::new()?;
+    std::fs::write(config.path(), probe_repo_config(main, tree))?;
+    let mut sandbox = commit_sandbox_args(
+        tree,
+        main,
+        &crate::session::contained_read_allowlist(main),
+        config.path(),
+        identity,
+    )?;
+    sandbox.pop(); // append mounts before the command separator
+    let clone_git = tree.join(".git");
+    let git_dir = if host_recorded_clone(main, tree).is_some() {
+        clone_git.clone()
+    } else {
+        // Only this accessor may run host Git in a linked worktree. Its index
+        // lives outside the worktree, under main's otherwise read-only .git.
+        let mut cmd = aida_core::git_ops::host_git_command(tree);
+        cmd.args(["rev-parse", "--absolute-git-dir"]);
+        PathBuf::from(run(cmd, "locate linked repair index")?)
+    };
+    let linked_git = git_dir != clone_git;
+    if linked_git {
+        let common = main.join(".git");
+        let clone_config = clone_git.join("config");
+        for arg in &mut sandbox {
+            if *arg == clone_git.as_os_str() {
+                *arg = git_dir.clone().into();
+            } else if *arg == clone_config.as_os_str() {
+                *arg = common.join("config").into();
+            }
+        }
+        // GIT_DIR selects the private linked index; GIT_COMMON_DIR selects
+        // the trusted common objects/config. Neither may be inferred by Git.
+        for i in 0..sandbox.len().saturating_sub(2) {
+            if sandbox[i] == "--setenv" && sandbox[i + 1] == "GIT_COMMON_DIR" {
+                sandbox[i + 2] = common.clone().into();
+            }
+        }
+        sandbox.extend([
+            "--bind".into(),
+            git_dir.clone().into(),
+            git_dir.clone().into(),
+        ]);
+    }
+    let execute_driver = |sandbox: &[std::ffi::OsString],
+                          args: &[&OsStr],
+                          timeout: std::time::Duration|
+     -> Result<()> {
+        let mut cmd = std::process::Command::new("bwrap");
+        cmd.args(sandbox)
+            .arg("--")
+            .arg("python3")
+            .args(args)
+            .stdin(std::process::Stdio::null());
+        match crate::command_output_with_timeout_capped(cmd, timeout, PROBE_OUTPUT_CAP) {
+            crate::BoundedCommandOutput::Completed(out) if out.status.success() => Ok(()),
+            crate::BoundedCommandOutput::Completed(out) => anyhow::bail!(
+                "repair regeneration refused: {}",
+                String::from_utf8_lossy(&out.stderr)
+            ),
+            _ => {
+                anyhow::bail!("repair regeneration failed or timed out; merge and journal retained")
+            }
+        }
+    };
+    // The embedded restore driver runs no checkout-authored programs.
+    if restore_only {
+        return execute_driver(&sandbox, &restore, PROBE_TIMEOUT);
+    }
+    sandbox.extend(["--ro-bind".into(), git_dir.clone().into(), git_dir.into()]);
+    if linked_git {
+        sandbox.extend([
+            "--ro-bind".into(),
+            clone_git.clone().into(),
+            clone_git.into(),
+        ]);
+    }
+    // Parent metadata mounts hide earlier child mounts. Restore the trusted
+    // config last, including the common config used by linked worktrees.
+    // trace:STORY-2710 | ai:codex
+    sandbox.extend([
+        "--ro-bind".into(),
+        config.path().into(),
+        if linked_git {
+            main.join(".git/config").into()
+        } else {
+            tree.join(".git/config").into()
+        },
+    ]);
+    let trusted = tempfile::tempdir()?;
+    for (i, path) in [
+        "Makefile",
+        "scripts/check-exec-context.py",
+        "scripts/check-template-hooks.py",
+    ]
+    .iter()
+    .enumerate()
+    {
+        let mut cmd = git(main);
+        cmd.args(["show", &format!("{base}:{path}")]);
+        let out = crate::command_output_with_timeout(cmd, std::time::Duration::from_secs(10))
+            .context("cannot read pinned generator")?;
+        // Small fixture repositories may have no registered outputs or generators.
+        if !out.status.success() {
+            continue;
+        }
+        let file = trusted.path().join(i.to_string());
+        std::fs::write(&file, out.stdout)?;
+        sandbox.extend(["--ro-bind".into(), file.into(), tree.join(path).into()]);
+    }
+    // Locate installed toolchains explicitly while HOME remains private and
+    // all host caches remain read-only. Downloads are forbidden in this phase.
+    use aida_core::launch_policy::{EnvPolicy, EnvRecipient, LaunchKind};
+    let mut tools = parent.clone();
+    for (key, leaf) in [("CARGO_HOME", ".cargo"), ("RUSTUP_HOME", ".rustup")] {
+        if tools.get(key).is_none() {
+            if let Some(home) = parent.get("HOME") {
+                tools = tools.with_value(key, Some(Path::new(home).join(leaf).into()));
+            }
+        }
+    }
+    tools = tools
+        .with_value("CARGO_NET_OFFLINE", Some("true".into()))
+        .with_value("PYTHONDONTWRITEBYTECODE", Some("1".into()));
+    let policy = EnvPolicy::new(
+        crate::session::resolve_headless_vendor(main).launch_vendor(),
+        LaunchKind::Fresh,
+        EnvRecipient::ToolShell,
+        [
+            "CARGO_HOME",
+            "RUSTUP_HOME",
+            "CARGO_NET_OFFLINE",
+            "PYTHONDONTWRITEBYTECODE",
+        ]
+        .map(Into::into),
+    )?;
+    // Fixed build decisions, as in `seat_build_env`: an empty RUSTC_WRAPPER
+    // overrides a CARGO_HOME or repository `build.rustc-wrapper` (sccache),
+    // whose shared cache is never writable here. The renderer builds into the
+    // seat's own validated target (writable, outside host caches) so a
+    // fresh-seat regeneration reuses the seeded artifacts; without one, cargo
+    // falls back to a checkout-local target within the same bounded budget.
+    // trace:STORY-2710 | ai:claude
+    let seat_target = repair_seat_target(main, tree);
+    if let Some(dir) = &seat_target {
+        sandbox.extend(["--bind".into(), dir.clone().into(), dir.clone().into()]);
+    }
+    let decisions = [
+        ("RUSTC_WRAPPER".into(), Some(std::ffi::OsString::new())),
+        (
+            "CARGO_TARGET_DIR".into(),
+            seat_target.map(std::ffi::OsString::from),
+        ),
+    ];
+    for (key, value) in policy.project(&tools, decisions)?.pairs() {
+        sandbox.extend(["--setenv".into(), key.to_owned(), value.to_owned()]);
+    }
+    // The driver bounds every generation phase (ledger, template renderer
+    // build and run, final ledger validation) inside one budget below the
+    // host's kill bound, so a slow or refused run rolls its own writes back.
+    // trace:STORY-2710 | ai:claude
+    let budget = REPAIR_GENERATION_TIMEOUT
+        .saturating_sub(std::time::Duration::from_secs(20))
+        .as_secs()
+        .to_string();
+    execute_driver(
+        &sandbox,
+        &[
+            OsStr::new("-c"),
+            OsStr::new(driver),
+            OsStr::new(base),
+            OsStr::new("generate"),
+            OsStr::new(&pack_outputs),
+            OsStr::new(&budget),
+        ],
+        REPAIR_GENERATION_TIMEOUT,
+    )
+}
+
+/// The host kill bound for publication-time regeneration. Unlike a Git probe,
+/// it may build the pinned template renderer from a cold or partly seeded
+/// target, so it is sized like a warm lane build rather than [`PROBE_TIMEOUT`].
+/// One budget covers every generation phase.
+// trace:STORY-2710 | ai:claude
+pub(crate) const REPAIR_GENERATION_TIMEOUT: std::time::Duration =
+    std::time::Duration::from_secs(900);
+
+/// The seat's own cargo target for repair regeneration: the host-recorded
+/// clone's validated target, else the linked worktree lease's target. Either
+/// is accepted only at `<main>/target/worktrees/<seat dir>` as a real
+/// directory (never a symlink), so the writable bind cannot reach host caches.
+// trace:STORY-2710 | ai:claude
+pub(crate) fn repair_seat_target(main: &Path, tree: &Path) -> Option<PathBuf> {
+    if let Some(clone) = host_recorded_clone(main, tree) {
+        return clone.cargo_target_dir;
+    }
+    let main = main.canonicalize().ok()?;
+    let tree = tree.canonicalize().ok()?;
+    let expected = main
+        .join("target")
+        .join("worktrees")
+        .join(tree.file_name()?);
+    crate::list_leases(&main)
+        .into_iter()
+        .find(|lease| {
+            lease.tree_kind != TreeKind::Clone
+                && lease.worktree_path.canonicalize().is_ok_and(|p| p == tree)
+        })?
+        .cargo_target_dir
+        .filter(|dir| {
+            std::fs::symlink_metadata(dir).is_ok_and(|m| m.file_type().is_dir())
+                && dir.canonicalize().is_ok_and(|real| real == expected)
+        })
+        .map(|_| expected)
+}
+
+// merge-tree -z emits a tree OID, then conflicted paths up to the empty
+// separator. Exit 1 is usable evidence only with this structured conflict list.
+// Other failures (including timeouts and unsupported options) never reserve.
+// trace:STORY-2710 | ai:codex
+fn repair_merge_tree_paths(output: &str) -> Option<Vec<String>> {
+    let (oid, rest) = output.split_once('\0')?;
+    // Require the path-list terminator as well as the OID. Truncated probe
+    // output must not become positive conflict evidence.
+    let paths = if rest.is_empty() {
+        ""
+    } else {
+        rest.split_once("\0\0")?.0
+    };
+    if ![40, 64].contains(&oid.len()) || !oid.bytes().all(|b| b.is_ascii_hexdigit()) {
+        return None;
+    }
+    Some(
+        paths
+            .split('\0')
+            .filter(|p| !p.is_empty())
+            .map(str::to_owned)
+            .collect(),
+    )
+}
+
+fn repair_merge_tree_conflict(args: &[&str], code: Option<i32>, stdout: &[u8]) -> bool {
+    args.starts_with(&["merge-tree", "--write-tree", "--name-only", "-z"])
+        && code == Some(1)
+        && std::str::from_utf8(stdout)
+            .ok()
+            .and_then(repair_merge_tree_paths)
+            .is_some_and(|paths| !paths.is_empty())
+}
+
+// Host-staged conflict preparation. The shared reservation precedes the merge;
+// any ambiguous failure keeps it. Only proof of lane death may release it.
+// trace:STORY-2710 | ai:codex
+fn prepare_host_repair_with(
+    main: &Path,
+    tree: &Path,
+    pr: u64,
+    lane_id: &str,
+    execute: &dyn Fn(&[&str]) -> Result<String>,
+    branch: &str,
+    resume: bool,
+    publish: impl FnOnce(&str) -> Result<()>,
+    regenerate: impl FnOnce(&str, bool) -> Result<()>,
+    fetch_heads: impl FnOnce() -> Result<(String, String)>,
+) -> Result<Vec<String>> {
+    use crate::repair_journal::{RepairEntry, RepairGuard, RepairKey, SpawnOutcome};
+    anyhow::ensure!(
+        execute(&["symbolic-ref", "--short", "HEAD"])? == branch,
+        "rework branch changed"
+    );
+    let (base, pr_head) = fetch_heads()?;
+    if execute(&["rev-parse", "-q", "--verify", "MERGE_HEAD"]).is_ok() {
+        let head = execute(&["rev-parse", "HEAD"])?;
+        let merge = execute(&["rev-parse", "MERGE_HEAD"])?;
+        let guard = RepairGuard::lock(main)?;
+        let entry = guard.for_tree(tree, branch, &head, &merge)?;
+        anyhow::ensure!(
+            resume && entry.lane_id == lane_id && pr_head == head,
+            "pending repair belongs to a different lane or head"
+        );
+        let paths = entry.original_conflict_paths.clone();
+        let key = entry.key.clone();
+        let prepared = entry.preparation_success == Some(true);
+        let failed_generation = entry.regeneration_success == Some(false);
+        drop(guard);
+        if !prepared || failed_generation {
+            RepairGuard::lock(main)?.record_preparation(&key, false)?;
+            regenerate(&merge, !failed_generation)?;
+            RepairGuard::lock(main)?.record_preparation(&key, true)?;
+            if failed_generation {
+                RepairGuard::lock(main)?.record_regeneration(&key, true)?;
+            }
+        }
+        RepairGuard::lock(main)?
+            .for_tree(tree, branch, &head, &merge)?
+            .require_prepared()?;
+        return Ok(paths);
+    }
+    let dirty = !execute(&["status", "--porcelain", "--untracked-files=all"])?.is_empty();
+    anyhow::ensure!(
+        resume || !dirty,
+        "rework seat has pending changes; merge refused"
+    );
+    execute(&["merge-base", "--is-ancestor", &pr_head, "HEAD"]).context(if resume && dirty {
+        "seated rework branch is behind the PR head; edits preserved"
+    } else {
+        "seated rework branch is behind the PR head; retry pickup with its current head"
+    })?;
+    if dirty {
+        execute(&["merge-tree", "--write-tree", "HEAD", &base])
+            .context("could not prove clean merge for dirty resume; edits preserved")?;
+        return Ok(vec![]);
+    }
+    let before = execute(&["rev-parse", "HEAD"])?;
+    let key = RepairKey {
+        repository: main.into(),
+        pr,
+        original_head: before.clone(),
+    };
+    // Reserve only a positively observed conflict; merge-tree changes no index.
+    let observation = execute(&[
+        "merge-tree",
+        "--write-tree",
+        "--name-only",
+        "-z",
+        "HEAD",
+        &base,
+    ])
+    .context("could not observe repair merge; no reservation created")?;
+    let observed_paths = repair_merge_tree_paths(&observation)
+        .context("invalid repair merge observation; no reservation created")?;
+    if !observed_paths.is_empty() {
+        anyhow::ensure!(
+            before == pr_head,
+            "repair requires the exact original PR head; local commits preserved"
+        );
+        let mut journal = RepairGuard::lock(main)?;
+        journal.reserve(RepairEntry {
+            key: key.clone(),
+            dispatched_by: "direct-rework".into(),
+            reserved_at: chrono::Utc::now().to_rfc3339(),
+            lane_id: lane_id.into(),
+            tree_path: tree.into(),
+            branch: branch.into(),
+            base: base.clone(),
+            spawn: SpawnOutcome::Unknown,
+            original_conflict_paths: observed_paths,
+            regeneration_success: None,
+            regenerated_tree: None,
+            preparation_success: None,
+            validation: None,
+            refusal_notice: None,
+        })?;
+        drop(journal);
+        match execute(&["merge", "--no-edit", "--no-verify", &base]) {
+            Ok(_) => {
+                anyhow::bail!("conflict observation changed; reservation retained for recovery")
+            }
+            Err(why) => {
+                execute(&["rev-parse", "--verify", "MERGE_HEAD"])
+                    .context("merge failed without retained MERGE_HEAD")?;
+                let paths = execute(&["diff", "--name-only", "--diff-filter=U", "-z"])?;
+                let paths: Vec<String> = paths
+                    .split('\0')
+                    .filter(|p| !p.is_empty())
+                    .map(str::to_owned)
+                    .collect();
+                anyhow::ensure!(!paths.is_empty(), "merge failed without conflicts: {why:#}");
+                RepairGuard::lock(main)?.record_paths(&key, &paths)?;
+                RepairGuard::lock(main)?.record_preparation(&key, false)?;
+                regenerate(&base, true)?;
+                RepairGuard::lock(main)?.record_preparation(&key, true)?;
+                // Return the persisted list, including generated files already staged.
+                let journal = RepairGuard::lock(main)?;
+                Ok(journal
+                    .for_tree(tree, branch, &before, &base)?
+                    .original_conflict_paths
+                    .clone())
+            }
+        }
+    } else {
+        execute(&["merge", "--no-edit", "--no-verify", &base])?;
+        let tip = execute(&["rev-parse", "HEAD"])?;
+        if tip != before && before == pr_head {
+            let parents = execute(&["show", "-s", "--format=%P", &tip])?;
+            if parents.split_whitespace().collect::<Vec<_>>() == [pr_head.as_str(), base.as_str()] {
+                publish(&tip)?;
+            }
+        }
+        Ok(vec![])
+    }
+}
+
 // Keep launch admission and the Git operations together: any failed fetch,
 // ancestry check, merge or abort propagates before the vendor can start.
 // trace:STORY-2475 | ai:codex
+#[cfg(test)]
 fn prepare_rework_merge_with(
     execute: &dyn Fn(&[&str]) -> Result<String>,
     branch: &str,
@@ -2858,16 +3774,27 @@ fn prepare_rework_merge_with(
         "rework seat already has an unfinished merge"
     );
     let dirty = !execute(&["status", "--porcelain", "--untracked-files=all"])?.is_empty();
-    // Resume preserves the existing lane's edits. A clean resume still gets
-    // the normal preparation and conflict refusal before launching.
+    anyhow::ensure!(
+        resume || !dirty,
+        "rework seat has pending changes; merge refused"
+    );
+    let (base, pr_head) = fetch_heads()?;
+    // Dirty seats need preservation; clean/fresh pickups need only a current head.
+    // trace:BUG-2504 | ai:codex
+    execute(&["merge-base", "--is-ancestor", &pr_head, "HEAD"]).context(if resume && dirty {
+        "seated rework branch is behind the PR head; edits preserved"
+    } else {
+        "seated rework branch is behind the PR head; retry pickup with its current head"
+    })?;
+    // Probe committed trees without touching pending edits, the index or HEAD.
+    // A clean merge needs no host preparation before continuing pending work.
+    // trace:BUG-2504 | ai:codex
     if resume && dirty {
+        execute(&["merge-tree", "--write-tree", "HEAD", &base]).context(
+            "could not prove a clean main merge for the dirty rework resume; edits preserved",
+        )?;
         return Ok(Vec::new());
     }
-    anyhow::ensure!(!dirty, "rework seat has pending changes; merge refused");
-    let (base, pr_head) = fetch_heads()?;
-    execute(&["merge-base", "--is-ancestor", &pr_head, "HEAD"]).context(
-        "seated rework branch is behind the PR head; retry pickup with its current head",
-    )?;
     let before = execute(&["rev-parse", "HEAD"])?;
     let files = finish_rework_merge(execute, &base)?;
     // Only publish the host-created merge of the fetched PR head and base.
@@ -2888,6 +3815,7 @@ fn prepare_rework_merge_with(
 }
 
 // trace:STORY-2475 | ai:codex
+#[cfg(test)]
 fn finish_rework_merge(
     execute: &dyn Fn(&[&str]) -> Result<String>,
     base: &str,
@@ -2921,6 +3849,556 @@ fn finish_rework_merge(
 #[cfg(test)]
 mod rework_merge_tests {
     use super::*;
+    // Run the actual registered library renderer in a child selected by the
+    // fixture Makefile. No Cargo, fake symlinks, or handwritten pack layout.
+    // trace:STORY-2710 | ai:codex
+    #[test]
+    #[ignore = "child generator entry point; invoked by the real portable renderer regression"]
+    fn portable_renderer_child() {
+        assert!(Path::new("repair-generator-fixture").is_file());
+        aida_core::scaffolding::agent_pack::sync_portable_pack(
+            Path::new("."),
+            aida_core::scaffolding::inventory::PORTABLE_PACK,
+            &aida_core::scaffolding::ScaffoldConfig::default(),
+        )
+        .unwrap();
+    }
+
+    #[test]
+    fn story_2710_real_portable_renderer_outputs_are_registered() {
+        let fx = tests::fixture();
+        let config = aida_core::scaffolding::ScaffoldConfig::default();
+        let expected = aida_core::scaffolding::agent_pack::rendered_portable_pack(
+            aida_core::scaffolding::inventory::PORTABLE_PACK,
+            &config,
+        );
+        assert!(expected.len() > 10);
+        let inventory = serde_json::to_string(
+            &expected
+                .keys()
+                .map(|p| p.to_string_lossy().into_owned())
+                .collect::<Vec<_>>(),
+        )
+        .unwrap();
+        std::fs::create_dir_all(fx.main.join("aida-core/templates/skills")).unwrap();
+        std::fs::write(
+            fx.main.join("aida-core/templates/skills/aida-fixture.md"),
+            "fixture",
+        )
+        .unwrap();
+        // Stage the actual renderer's template masters as well. An empty host
+        // inventory then models a host older than the resolved template pack.
+        for skill in aida_core::scaffolding::inventory::portable_skill_inventory(&config).values() {
+            // Portable overrides replace the body, but the renderer still
+            // requires the ordinary master to define the skill itself.
+            let templates = Path::new(env!("CARGO_MANIFEST_DIR")).join("../aida-core/templates");
+            let flat = format!("skills/{}.md", skill.name);
+            let folder = format!("skills/{}/SKILL.md", skill.name);
+            let master = if templates.join(&flat).is_file() {
+                flat
+            } else {
+                folder
+            };
+            let target = fx.main.join("aida-core/templates").join(&master);
+            std::fs::create_dir_all(target.parent().unwrap()).unwrap();
+            std::fs::copy(templates.join(master), target).unwrap();
+            for file in &skill.files {
+                let source = Path::new(env!("CARGO_MANIFEST_DIR"))
+                    .join("../aida-core/templates")
+                    .join(&file.source_key);
+                let target = fx.main.join("aida-core/templates").join(&file.source_key);
+                std::fs::create_dir_all(target.parent().unwrap()).unwrap();
+                std::fs::copy(source, target).unwrap();
+            }
+        }
+        std::fs::write(fx.main.join("repair-generator-fixture"), "fixture").unwrap();
+        std::fs::write(fx.main.join(".gitignore"), "/.agents/\n").unwrap();
+        let executable = crate::aida_bin::current_executable_path().unwrap();
+        let quoted = format!(
+            "'{}'",
+            executable.display().to_string().replace('\'', "'\"'\"'")
+        );
+        let makefile = format!("sync-templates:\n\t{quoted} --exact seat_clone::rework_merge_tests::portable_renderer_child --ignored\n");
+        std::fs::write(fx.main.join("Makefile"), &makefile).unwrap();
+        tests::git_ok(&fx.main, &["add", "."]);
+        tests::git_ok(
+            &fx.main,
+            &[
+                "-c",
+                "maintenance.auto=false",
+                "-c",
+                "gc.auto=0",
+                "commit",
+                "-qm",
+                "registered real renderer fixture",
+            ],
+        );
+        let base = tests::git_ok(&fx.main, &["rev-parse", "HEAD"]);
+        assert!(tests::git_ok(
+            &fx.main,
+            &["ls-tree", "-r", "--name-only", &base, "--", ".agents"]
+        )
+        .is_empty());
+        let generate = |inventory: &str| {
+            std::process::Command::new("python3")
+                .current_dir(&fx.main)
+                .args([
+                    "-c",
+                    include_str!("../../scripts/repair-generated.py"),
+                    &base,
+                    "generate",
+                    inventory,
+                ])
+                .output()
+                .unwrap()
+        };
+        // Fresh and stale ignored packs also work with no host-known paths:
+        // their staged real masters form the closed expected inventory.
+        for (changed, inventory) in [(false, "[]"), (true, "[]"), (true, inventory.as_str())] {
+            if changed {
+                std::fs::write(fx.main.join(expected.keys().next().unwrap()), "stale pack")
+                    .unwrap();
+            }
+            let out = generate(inventory);
+            assert!(
+                out.status.success(),
+                "{}",
+                String::from_utf8_lossy(&out.stderr)
+            );
+            for (path, body) in &expected {
+                assert_eq!(std::fs::read_to_string(fx.main.join(path)).unwrap(), *body);
+            }
+        }
+        // The real renderer removes a retired skill's orphaned pack files.
+        // trace:STORY-2710 | ai:claude
+        let retired = fx.main.join(".agents/skills/aida-retired/SKILL.md");
+        std::fs::create_dir_all(retired.parent().unwrap()).unwrap();
+        std::fs::write(&retired, "retired").unwrap();
+        let out = generate(&inventory);
+        assert!(
+            out.status.success(),
+            "{}",
+            String::from_utf8_lossy(&out.stderr)
+        );
+        assert!(!retired.exists());
+        // A renderer compiled from merged sources may ship a skill this host
+        // binary does not know; its staged master authorizes the pack file.
+        let merged_skill = ".agents/skills/aida-fixture/SKILL.md";
+        std::fs::write(
+            fx.main.join("Makefile"),
+            format!("{makefile}\tmkdir -p .agents/skills/aida-fixture\n\techo merged > {merged_skill}\n"),
+        )
+        .unwrap();
+        let out = generate(&inventory);
+        assert!(
+            out.status.success(),
+            "{}",
+            String::from_utf8_lossy(&out.stderr)
+        );
+        assert!(fx.main.join(merged_skill).is_file());
+        // The closed inventory still catches an extra write under the pack,
+        // including one whose would-be master is not a staged source, and the
+        // refused run leaves none of its writes behind.
+        std::fs::write(
+            fx.main.join("aida-core/templates/skills/aida-unstaged.md"),
+            "unstaged",
+        )
+        .unwrap();
+        std::fs::write(
+            fx.main.join("Makefile"),
+            format!(
+                "{makefile}\techo unexpected > .agents/skills/aida-invented.md\n\
+                 \tmkdir -p .agents/skills/aida-unstaged\n\
+                 \techo unexpected > .agents/skills/aida-unstaged/SKILL.md\n"
+            ),
+        )
+        .unwrap();
+        let out = generate(&inventory);
+        assert!(!out.status.success());
+        let stderr = String::from_utf8_lossy(&out.stderr);
+        assert!(stderr.contains("unregistered outputs"), "{stderr}");
+        assert!(stderr.contains("aida-unstaged/SKILL.md"), "{stderr}");
+        assert!(stderr.contains("rolled back"), "{stderr}");
+        assert!(!fx.main.join(".agents/skills/aida-invented.md").exists());
+        assert!(!fx
+            .main
+            .join(".agents/skills/aida-unstaged/SKILL.md")
+            .exists());
+    }
+
+    // trace:STORY-2710 | ai:codex
+    #[test]
+    fn story_2710_merge_tree_requires_structured_conflict_exit() {
+        let args = [
+            "merge-tree",
+            "--write-tree",
+            "--name-only",
+            "-z",
+            "HEAD",
+            "base",
+        ];
+        let output = format!("{}\0path with\nnewline\0\0details\0", "a".repeat(40));
+        assert!(repair_merge_tree_conflict(
+            &args,
+            Some(1),
+            output.as_bytes()
+        ));
+        assert_eq!(
+            repair_merge_tree_paths(&output).unwrap(),
+            ["path with\nnewline"]
+        );
+        for code in [None, Some(0), Some(128), Some(129)] {
+            assert!(!repair_merge_tree_conflict(&args, code, output.as_bytes()));
+        }
+        for output in [
+            "",
+            "unknown option",
+            "a tree without paths",
+            &format!("{}\0unterminated-path", "a".repeat(40)),
+            &format!("{}\0unterminated-list\0", "a".repeat(40)),
+            &format!("{}\0", "a".repeat(40)),
+        ] {
+            assert!(!repair_merge_tree_conflict(
+                &args,
+                Some(1),
+                output.as_bytes()
+            ));
+        }
+        assert_eq!(
+            repair_merge_tree_paths(&format!("{}\0", "a".repeat(40))).unwrap(),
+            Vec::<String>::new()
+        );
+    }
+
+    // trace:STORY-2710 | ai:codex
+    #[test]
+    fn story_2710_clean_merge_probe_does_not_reserve() {
+        let fx = tests::fixture();
+        tests::git_ok(&fx.main, &["checkout", "-qb", "repair"]);
+        let head = tests::git_ok(&fx.main, &["rev-parse", "HEAD"]);
+        let execute = |args: &[&str]| -> Result<String> {
+            let out = crate::test_git::git_command()
+                .current_dir(&fx.main)
+                .args(args)
+                .output()?;
+            anyhow::ensure!(out.status.success(), "Git refused");
+            let text = String::from_utf8(out.stdout)?;
+            Ok(if args.contains(&"-z") {
+                text
+            } else {
+                text.trim().to_owned()
+            })
+        };
+        // Failed observations never reserve this head, and a later successful
+        // probe can retry without requiring a dead-lane recovery operation.
+        // trace:STORY-2710 | ai:codex
+        for reason in ["probe timed out", "I/O failure", "unsupported option"] {
+            let failed_probe = |args: &[&str]| -> Result<String> {
+                if args.first() == Some(&"merge-tree") {
+                    anyhow::bail!("{reason}");
+                }
+                execute(args)
+            };
+            let error = prepare_host_repair_with(
+                &fx.main,
+                &fx.main,
+                3813,
+                "lease-1",
+                &failed_probe,
+                "repair",
+                false,
+                |_| panic!("failed probe must not publish"),
+                |_, _| panic!("failed probe must not regenerate"),
+                || Ok((head.clone(), head.clone())),
+            )
+            .unwrap_err();
+            assert!(format!("{error:#}").contains(reason));
+            assert!(!fx.main.join(".aida/repair-journal.json").exists());
+        }
+        let paths = prepare_host_repair_with(
+            &fx.main,
+            &fx.main,
+            3813,
+            "lease-1",
+            &execute,
+            "repair",
+            false,
+            |_| panic!("unchanged tip must not publish"),
+            |_, _| panic!("clean merge must not regenerate"),
+            || Ok((head.clone(), head.clone())),
+        )
+        .unwrap();
+        assert!(paths.is_empty());
+        assert!(!fx.main.join(".aida/repair-journal.json").exists());
+    }
+
+    // A real staged merge, with the index left untouched while the lane edits
+    // files. This exercises the marker gate without requiring bubblewrap.
+    // trace:STORY-2710 | ai:codex
+    #[test]
+    fn story_2710_marker_gate_refuses_unmerged_and_staged_resolutions() {
+        let fx = tests::fixture();
+        let g = |args: &[&str]| tests::git_ok(&fx.main, args);
+        let path = "conflict [literal]\n$(touch sentinel).rs";
+        // Existing documentation examples remain legitimate ordinary edits.
+        let guide = fx.main.join("conflict-guide.md");
+        std::fs::write(&guide, "<<<<<<< example\n>>>>>>> example\n").unwrap();
+        g(&["add", "conflict-guide.md"]);
+        g(&["commit", "-qm", "marker examples"]);
+        std::fs::write(&guide, "<<<<<<< example\n>>>>>>> example\nexplanation\n").unwrap();
+        let ordinary_probe = |program: &str, args: &[&std::ffi::OsStr]| -> Result<Vec<u8>> {
+            let out = std::process::Command::new(program)
+                .current_dir(&fx.main)
+                .args(args)
+                .output()?;
+            anyhow::ensure!(out.status.success(), "probe failed: {:?}", out);
+            Ok(out.stdout)
+        };
+        refuse_pending_conflict_markers(&ordinary_probe, None).unwrap();
+        g(&["add", "conflict-guide.md"]);
+        refuse_pending_conflict_markers(&ordinary_probe, None).unwrap();
+        g(&["commit", "-qm", "explain markers"]);
+        // Even absent a merge, an unreadable probe must fail closed.
+        assert!(
+            refuse_pending_conflict_markers(&|_, _| anyhow::bail!("probe failed"), None).is_err()
+        );
+        std::fs::write(fx.main.join(path), "base\n").unwrap();
+        g(&["add", "--", path]);
+        g(&["commit", "-qm", "base"]);
+        g(&["checkout", "-qb", "repair"]);
+        std::fs::write(fx.main.join(path), "lane\n").unwrap();
+        g(&["commit", "-qam", "lane"]);
+        let head = g(&["rev-parse", "HEAD"]);
+        g(&["checkout", "main"]);
+        std::fs::write(fx.main.join(path), "main\n").unwrap();
+        g(&["commit", "-qam", "main"]);
+        g(&["checkout", "repair"]);
+        let base = g(&["rev-parse", "main"]);
+        let git_execute = |args: &[&str]| -> Result<String> {
+            let out = crate::test_git::git_command()
+                .current_dir(&fx.main)
+                .args(args)
+                .output()?;
+            anyhow::ensure!(
+                out.status.success()
+                    || repair_merge_tree_conflict(args, out.status.code(), &out.stdout),
+                "Git refused"
+            );
+            let text = String::from_utf8(out.stdout)?;
+            Ok(if args.contains(&"-z") {
+                text
+            } else {
+                text.trim().to_owned()
+            })
+        };
+        // Failed observations happen before reservation or mutation. Recovery
+        // on the same head must still reach the real conflict below.
+        // trace:STORY-2710 | ai:codex
+        let index_before = g(&["ls-files", "--stage"]);
+        for failure in [
+            "probe timed out",
+            "probe I/O failure",
+            "unknown option: write-tree",
+            "fatal: unable to read tree",
+            "could not spawn git",
+        ] {
+            let failed_probe = |args: &[&str]| -> Result<String> {
+                if args.first() == Some(&"merge-tree") {
+                    anyhow::bail!("{failure}");
+                }
+                git_execute(args)
+            };
+            let why = prepare_host_repair_with(
+                &fx.main,
+                &fx.main,
+                3813,
+                "lease-1",
+                &failed_probe,
+                "repair",
+                false,
+                |_| panic!("failed probe cannot publish"),
+                |_, _| panic!("failed probe cannot regenerate"),
+                || Ok((base.clone(), head.clone())),
+            )
+            .unwrap_err();
+            assert!(format!("{why:#}").contains(failure));
+            assert!(!fx.main.join(".aida/repair-journal.json").exists());
+            assert_eq!(g(&["rev-parse", "HEAD"]), head);
+            assert_eq!(g(&["ls-files", "--stage"]), index_before);
+            assert!(git_execute(&["rev-parse", "--verify", "MERGE_HEAD"]).is_err());
+        }
+        let files = prepare_host_repair_with(
+            &fx.main,
+            &fx.main,
+            3813,
+            "lease-1",
+            &git_execute,
+            "repair",
+            false,
+            |_| panic!("conflicts must not publish"),
+            |_, _| anyhow::bail!("generator timeout after partial write"),
+            || Ok((base.clone(), head.clone())),
+        );
+        assert!(files.is_err());
+        // Preparation failure retains the merge, but neither resume nor direct
+        // publication may infer success from the retained original path list.
+        let journal = crate::repair_journal::RepairGuard::lock(&fx.main).unwrap();
+        assert_eq!(
+            journal
+                .for_tree(&fx.main, "repair", &head, &base)
+                .unwrap()
+                .preparation_success,
+            Some(false)
+        );
+        drop(journal);
+        let resumed = prepare_host_repair_with(
+            &fx.main,
+            &fx.main,
+            3813,
+            "lease-1",
+            &git_execute,
+            "repair",
+            true,
+            |_| panic!("failed preparation cannot publish"),
+            |_, _| anyhow::bail!("generator still fails"),
+            || Ok((base.clone(), head.clone())),
+        );
+        assert!(resumed.is_err());
+        // This is the same transfer the verified session-start orphan adoption
+        // performs after writing its freshly minted successor lease.
+        crate::repair_journal::RepairGuard::lock(&fx.main)
+            .unwrap()
+            .transfer_adopted_lane(&fx.main, "repair", "lease-1", "successor-lease")
+            .unwrap();
+        assert!(prepare_host_repair_with(
+            &fx.main,
+            &fx.main,
+            3813,
+            "unrelated-lease",
+            &git_execute,
+            "repair",
+            true,
+            |_| panic!("unrelated lane cannot publish"),
+            |_, _| panic!("unrelated lane cannot regenerate"),
+            || Ok((base.clone(), head.clone())),
+        )
+        .is_err());
+        let files = prepare_host_repair_with(
+            &fx.main,
+            &fx.main,
+            3813,
+            "successor-lease",
+            &git_execute,
+            "repair",
+            true,
+            |_| panic!("conflicts cannot publish"),
+            |_, restore_only| {
+                assert!(restore_only);
+                Ok(())
+            },
+            || Ok((base.clone(), head.clone())),
+        )
+        .unwrap();
+        assert_eq!(files, [path]);
+        let execute = |program: &str, args: &[&std::ffi::OsStr]| -> Result<Vec<u8>> {
+            let mut command = if program == "git" {
+                crate::test_git::git_command()
+            } else {
+                std::process::Command::new(program)
+            };
+            let out = command.current_dir(&fx.main).args(args).output()?;
+            anyhow::ensure!(
+                out.status.success(),
+                "{}",
+                String::from_utf8_lossy(&out.stderr)
+            );
+            Ok(out.stdout)
+        };
+        let journal = crate::repair_journal::RepairGuard::lock(&fx.main).unwrap();
+        let original_paths: Vec<std::ffi::OsString> = journal
+            .for_tree(&fx.main, "repair", &head, &base)
+            .unwrap()
+            .original_conflict_paths
+            .iter()
+            .map(Into::into)
+            .collect();
+        drop(journal);
+        let index = g(&["ls-files", "--stage"]);
+        let merge_head = g(&["rev-parse", "MERGE_HEAD"]);
+        for contents in [
+            "<<<<<<< HEAD\nlane\n=======\nmain\n>>>>>>> main\n",
+            "resolved except opening\n<<<<<<< HEAD\n",
+            "resolved except closing\n>>>>>>> main\n",
+        ] {
+            std::fs::write(fx.main.join(path), contents).unwrap();
+            let why = refuse_pending_conflict_markers(&execute, Some(&original_paths))
+                .unwrap_err()
+                .to_string();
+            assert!(why.contains("refusing to publish"), "{why}");
+            assert!(why.contains("conflict [literal]"), "{why}");
+            assert_eq!(g(&["ls-files", "--stage"]), index);
+            assert_eq!(g(&["rev-parse", "HEAD"]), head);
+            assert_eq!(g(&["rev-parse", "MERGE_HEAD"]), merge_head);
+        }
+        // A failed prior host commit may have staged the resolution: scan it
+        // on retry as well, rather than trusting absence of unmerged entries.
+        g(&["add", "--", path]);
+        assert!(g(&["ls-files", "--unmerged"]).is_empty());
+        let resumed = prepare_host_repair_with(
+            &fx.main,
+            &fx.main,
+            3813,
+            "successor-lease",
+            &git_execute,
+            "repair",
+            true,
+            |_| panic!("retry must not publish"),
+            |_, _| panic!("retry must not overwrite evidence"),
+            || Ok((base.clone(), head.clone())),
+        )
+        .unwrap();
+        assert_eq!(resumed, [path]);
+        assert!(refuse_pending_conflict_markers(&execute, Some(&original_paths)).is_err());
+        // A failed staging attempt may have removed the path from the index.
+        // Recreated/untracked working-tree bytes still belong to the original
+        // host conflict list and must not bypass the gate.
+        g(&["rm", "--cached", "-f", "--", path]);
+        assert!(refuse_pending_conflict_markers(&execute, Some(&original_paths)).is_err());
+        g(&["add", "--", path]);
+        // Unrelated changed files may contain marker examples even during a
+        // repair. They were never in the host's original conflict list.
+        std::fs::write(
+            &guide,
+            "<<<<<<< example\n>>>>>>> example\nmore explanation\n",
+        )
+        .unwrap();
+        std::fs::write(fx.main.join(path), "lane and main\n").unwrap();
+        refuse_pending_conflict_markers(&execute, Some(&original_paths)).unwrap();
+        g(&["add", "--", path, "conflict-guide.md"]);
+        refuse_pending_conflict_markers(&execute, Some(&original_paths)).unwrap();
+        // Missing evidence must not fall back to a changed-path/index scan.
+        let why = refuse_pending_conflict_markers(&execute, None)
+            .unwrap_err()
+            .to_string();
+        assert!(
+            why.contains("host-recorded original conflict paths"),
+            "{why}"
+        );
+        assert!(refuse_pending_conflict_markers(&execute, Some(&[])).is_err());
+        for invalid in ["", "../outside", "/absolute", "a/../../outside"] {
+            assert!(refuse_pending_conflict_markers(&execute, Some(&[invalid.into()])).is_err());
+        }
+        assert!(!fx.main.join("sentinel").exists());
+        // A deletion is also a valid resolution; no file must be opened.
+        std::fs::remove_file(fx.main.join(path)).unwrap();
+        refuse_pending_conflict_markers(&execute, Some(&original_paths)).unwrap();
+        assert!(refuse_pending_conflict_markers(
+            &|_, _| anyhow::bail!("read failed"),
+            Some(&original_paths)
+        )
+        .is_err());
+    }
+
     // trace:BUG-2456 | ai:codex
     #[test]
     fn bug_2456_publication_failure_refuses_launch_and_current_head_skips_push() {
@@ -3144,13 +4622,15 @@ mod rework_merge_tests {
         )
         .unwrap_err();
         assert!(why.to_string().contains("pending changes"));
-        // The same dirty seat resumes without touching the edits or fetching.
+        // A dirty resume still checks fresh remote heads before admission.
+        // trace:BUG-2504 | ai:codex
+        let current = execute(&["rev-parse", "HEAD"]).unwrap();
         assert!(prepare_rework_merge_with(
             &execute,
             "main",
             true,
             |_| panic!("must not publish"),
-            no_fetch
+            || Ok((current.clone(), current.clone())),
         )
         .unwrap()
         .is_empty());
@@ -3186,6 +4666,8 @@ mod rework_merge_tests {
         )
         .unwrap_err();
         assert!(why.to_string().contains("behind the PR head"));
+        assert!(!why.to_string().contains("commit-pending"));
+        assert!(!why.to_string().contains("--resume"));
         assert_eq!(execute(&["rev-parse", "HEAD"]).unwrap(), before);
         let why = prepare_rework_merge_with(
             &execute,
@@ -3197,6 +4679,90 @@ mod rework_merge_tests {
         .unwrap_err();
         assert_eq!(why.to_string(), "fetch refused");
         assert!(!fx.main.join(".git/MERGE_HEAD").exists());
+    }
+
+    // trace:BUG-2504 | ai:codex
+    #[test]
+    fn bug_2504_dirty_resume_checks_fetched_heads_without_touching_edits() {
+        let fx = tests::fixture();
+        let execute = |args: &[&str]| -> Result<String> {
+            let out = crate::test_git::git_command()
+                .current_dir(&fx.main)
+                .args(args)
+                .output()?;
+            anyhow::ensure!(
+                out.status.success(),
+                "{}",
+                String::from_utf8_lossy(&out.stderr)
+            );
+            Ok(String::from_utf8_lossy(&out.stdout).trim().to_string())
+        };
+        let head = execute(&["rev-parse", "HEAD"]).unwrap();
+        execute(&["checkout", "-b", "new-main"]).unwrap();
+        std::fs::write(fx.main.join("main-update"), "main\n").unwrap();
+        execute(&["add", "."]).unwrap();
+        execute(&["commit", "-m", "main moved"]).unwrap();
+        let base = execute(&["rev-parse", "HEAD"]).unwrap();
+        execute(&["checkout", "main"]).unwrap();
+        std::fs::write(fx.main.join("pending"), "keep these edits\n").unwrap();
+        let status = execute(&["status", "--porcelain"]).unwrap();
+        prepare_rework_merge_with(
+            &execute,
+            "main",
+            true,
+            |_| panic!("must not publish"),
+            || Ok((base.clone(), head.clone())),
+        )
+        .expect("non-conflicting main advance admits pending work");
+        {
+            let why = prepare_rework_merge_with(
+                &execute,
+                "main",
+                true,
+                |_| panic!("must not publish"),
+                || Ok((head.clone(), base.clone())),
+            )
+            .unwrap_err();
+            assert!(format!("{why:#}").contains("behind the PR head"), "{why:#}");
+            assert_eq!(execute(&["rev-parse", "HEAD"]).unwrap(), head);
+            assert_eq!(execute(&["status", "--porcelain"]).unwrap(), status);
+            assert_eq!(
+                std::fs::read_to_string(fx.main.join("pending")).unwrap(),
+                "keep these edits\n"
+            );
+            assert!(execute(&["rev-parse", "-q", "--verify", "MERGE_HEAD"]).is_err());
+        }
+        let why = prepare_rework_merge_with(
+            &execute,
+            "main",
+            true,
+            |_| panic!("must not publish"),
+            || anyhow::bail!("fetch unavailable"),
+        )
+        .unwrap_err();
+        assert!(why.to_string().contains("fetch unavailable"));
+        std::fs::write(fx.main.join("main-update"), "PR change\n").unwrap();
+        execute(&["add", "main-update"]).unwrap();
+        execute(&["commit", "-m", "conflicting PR change"]).unwrap();
+        let pr_head = execute(&["rev-parse", "HEAD"]).unwrap();
+        let status = execute(&["status", "--porcelain"]).unwrap();
+        let why = prepare_rework_merge_with(
+            &execute,
+            "main",
+            true,
+            |_| panic!("must not publish"),
+            || Ok((base, pr_head.clone())),
+        )
+        .unwrap_err();
+        let guidance = format!("{why:#}");
+        assert!(guidance.contains("edits preserved"));
+        assert_eq!(execute(&["rev-parse", "HEAD"]).unwrap(), pr_head);
+        assert_eq!(execute(&["status", "--porcelain"]).unwrap(), status);
+        assert_eq!(
+            std::fs::read_to_string(fx.main.join("pending")).unwrap(),
+            "keep these edits\n"
+        );
+        assert!(execute(&["rev-parse", "-q", "--verify", "MERGE_HEAD"]).is_err());
     }
 
     // trace:STORY-2475 | ai:codex
@@ -3462,9 +5028,45 @@ pub(crate) fn commit_pending(
     ];
     status_args.extend(pathspec);
     let status = probe_text(&status_args)?;
-    if status.is_empty() {
+    if status.is_empty()
+        && probe_text(&[os("rev-parse"), os("-q"), os("--verify"), os("MERGE_HEAD")]).is_err()
+    {
         return Ok(None);
     }
+    // The lane cannot update the index: resolved files still have unmerged
+    // entries until this host stages them. Check working-tree bytes first,
+    // including staged resolutions on a retry, before any index mutation.
+    // trace:STORY-2710 | ai:codex
+    let merge_base =
+        probe_text(&[os("rev-parse"), os("-q"), os("--verify"), os("MERGE_HEAD")]).ok();
+    let repair_paths = if let Some(base) = merge_base.as_deref() {
+        let original_head = probe_text(&[os("rev-parse"), os("HEAD")])?;
+        let journal = crate::repair_journal::RepairGuard::lock(main)?;
+        let entry = journal.for_tree(clone, branch, &original_head, base)?;
+        entry.require_prepared()?;
+        Some(
+            entry
+                .original_conflict_paths
+                .iter()
+                .map(std::ffi::OsString::from)
+                .collect::<Vec<_>>(),
+        )
+    } else {
+        None
+    };
+    // Both gates use the same host-recorded paths, including after generators
+    // replace outputs whose template masters were never conflicted.
+    // trace:STORY-2710 | ai:codex
+    let check_repair_markers = || {
+        refuse_pending_conflict_markers(
+            &|program, args| {
+                run_sandboxed(clone, main, program, args, PROBE_OUTPUT_CAP)
+                    .map_err(|why| anyhow::anyhow!("could not inspect conflict markers: {why}"))
+            },
+            repair_paths.as_deref(),
+        )
+    };
+    check_repair_markers()?;
     let identity: [(&'static str, std::ffi::OsString); 4] = [
         ("GIT_AUTHOR_NAME", name.clone().into()),
         ("GIT_AUTHOR_EMAIL", email.clone().into()),
@@ -3486,29 +5088,25 @@ pub(crate) fn commit_pending(
     let head_before = probe_text(&[os("rev-parse"), os("--verify"), os("HEAD")]).ok();
     // The index as it is now, so a failure after staging can put it back.
     ensure_dir_identity(clone, pinned)?;
-    let index_tree = run_commit_sandboxed(clone, main, &[os("write-tree")], &identity)
-        .map(|out| String::from_utf8_lossy(&out).trim().to_string())
-        .map_err(|failure| recovery("snapshot the index before staging", failure))?;
+    let index_tree = if merge_base.is_some() {
+        None
+    } else {
+        Some(
+            run_commit_sandboxed(clone, main, &[os("write-tree")], &identity)
+                .map(|out| String::from_utf8_lossy(&out).trim().to_string())
+                .map_err(|failure| recovery("snapshot the index before staging", failure))?,
+        )
+    };
     anyhow::ensure!(
-        index_tree.len() >= 40 && index_tree.bytes().all(|b| b.is_ascii_hexdigit()),
+        index_tree
+            .as_ref()
+            .is_none_or(|tree| tree.len() >= 40 && tree.bytes().all(|b| b.is_ascii_hexdigit())),
         "refusing to commit the seat's pending work: `git write-tree` in {} printed `{}`, not \
          a tree id. Nothing was committed",
         clone.display(),
-        index_tree.escape_debug()
+        format!("{index_tree:?}")
     );
-    let staged = (|| -> Result<String> {
-        // Stage everything `.gitignore`/`info/exclude` allow. No explicit
-        // marker exclude here: git refuses an add whose pathspec names an
-        // ignored path ("paths are ignored"), and the marker normally IS
-        // ignored. Never `-f`.
-        // trace:TASK-2712 | ai:claude
-        run_commit_sandboxed(
-            clone,
-            main,
-            &[os("add"), os("-A"), os("--"), os(".")],
-            &identity,
-        )
-        .map_err(|failure| recovery("stage", failure))?;
+    let unstage_marker = || -> Result<()> {
         // Should the seat's exclude no longer ignore the marker, unstage it.
         let staged_marker = probe_text(&[
             os("diff"),
@@ -3531,6 +5129,75 @@ pub(crate) fn commit_pending(
             )
             .map_err(|failure| recovery("unstage the seat marker from", failure))?;
         }
+        Ok(())
+    };
+    let staged = (|| -> Result<String> {
+        // Stage everything `.gitignore`/`info/exclude` allow. No explicit
+        // marker exclude here: git refuses an add whose pathspec names an
+        // ignored path ("paths are ignored"), and the marker normally IS
+        // ignored. Never `-f`.
+        // trace:TASK-2712 | ai:claude
+        run_commit_sandboxed(
+            clone,
+            main,
+            &[os("add"), os("-A"), os("--"), os(".")],
+            &identity,
+        )
+        .map_err(|failure| recovery("stage", failure))?;
+        if let Some(base) = merge_base.as_deref() {
+            let head = head_before.as_deref().context("missing repair head")?;
+            let key = crate::repair_journal::RepairGuard::lock(main)?
+                .for_tree(clone, branch, head, base)?
+                .key
+                .clone();
+            // Invalidate prior success before any generator can write. Every
+            // publication attempt regenerates; stale success never grants credit.
+            crate::repair_journal::RepairGuard::lock(main)?.record_regeneration(&key, false)?;
+            regenerate_repair_outputs(
+                clone,
+                main,
+                base,
+                &identity,
+                &aida_core::exec_context::Environment::capture(),
+                false,
+            )?;
+            // Registered generators can reintroduce markers into a resolved
+            // original conflict. Refuse before staging or recording success.
+            // trace:STORY-2710 | ai:codex
+            check_repair_markers()?;
+            run_commit_sandboxed(
+                clone,
+                main,
+                &[os("add"), os("-A"), os("--"), os(".")],
+                &identity,
+            )
+            .map_err(|failure| recovery("stage regenerated outputs", failure))?;
+            unstage_marker()?;
+            // Record exactly what successful generation produced, after staging.
+            let generated_tree = String::from_utf8(
+                run_commit_sandboxed(clone, main, &[os("write-tree")], &identity)
+                    .map_err(|failure| recovery("record regenerated tree", failure))?,
+            )?
+            .trim()
+            .to_owned();
+            crate::repair_journal::RepairGuard::lock(main)?
+                .record_regenerated_tree(&key, &generated_tree)?;
+        }
+        if merge_base.is_none() {
+            unstage_marker()?;
+        }
+        if let Some(base) = merge_base.as_deref() {
+            let head = head_before.as_deref().context("missing repair head")?;
+            let staged_tree = String::from_utf8(
+                run_commit_sandboxed(clone, main, &[os("write-tree")], &identity)
+                    .map_err(|failure| recovery("verify regenerated tree", failure))?,
+            )?
+            .trim()
+            .to_owned();
+            let journal = crate::repair_journal::RepairGuard::lock(main)?;
+            let entry = journal.for_tree(clone, branch, head, base)?;
+            entry.require_regenerated_tree(&staged_tree)?;
+        }
         ensure_dir_identity(clone, pinned)?;
         run_commit_sandboxed(
             clone,
@@ -3538,6 +5205,8 @@ pub(crate) fn commit_pending(
             &[
                 os("commit"),
                 os("--no-verify"),
+                // trace:BUG-2493 | ai:codex
+                os("--cleanup=verbatim"),
                 os("-q"),
                 os("-m"),
                 message.as_ref(),
@@ -3550,6 +5219,9 @@ pub(crate) fn commit_pending(
     match staged {
         Ok(tip) => Ok(Some(tip)),
         Err(error) => {
+            let Some(index_tree) = index_tree else {
+                return Err(error.context("pending repair merge retained with its staged index; retry uses the same host-recorded original conflict paths"));
+            };
             // Put the index back exactly, but only while HEAD has not moved:
             // after a commit that landed, the index matches the new HEAD and
             // rolling it back would stage a reversal. Never touch the tree.
@@ -3581,6 +5253,78 @@ pub(crate) fn commit_pending(
             }
         }
     }
+}
+
+/// Scan only the host-recorded original conflicts, including on staged retries.
+/// The caller must obtain these from the shared repair journal, never reconstruct
+/// them from changed paths or the current index. Missing evidence refuses pending
+/// merge publication; ordinary publication needs no journal entry.
+/// Literal pathspecs preserve unusual names without selecting additional files.
+/// Deleted resolutions have no bytes to scan. Git grep does not follow worktree
+/// symlinks or run textconv filters. Probe errors refuse publication.
+// trace:STORY-2710 | ai:codex
+fn refuse_pending_conflict_markers(
+    execute: &dyn Fn(&str, &[&std::ffi::OsStr]) -> Result<Vec<u8>>,
+    original_conflict_paths: Option<&[std::ffi::OsString]>,
+) -> Result<()> {
+    use std::ffi::{OsStr, OsString};
+    use std::os::unix::ffi::OsStringExt;
+    // A missing MERGE_HEAD is ordinary publication, not conflict repair. Keep
+    // actual probe failures distinct from git's documented quiet no-ref exit.
+    // trace:STORY-2710 | ai:codex
+    let pending = execute(
+        "sh",
+        &[
+            OsStr::new("-c"),
+            OsStr::new(
+                r#"git rev-parse --verify --quiet MERGE_HEAD; result=$?; if [ "$result" -eq 1 ]; then exit 0; else exit "$result"; fi"#,
+            ),
+        ],
+    )?;
+    if pending.is_empty() {
+        return Ok(());
+    }
+    let original = original_conflict_paths.context(
+        "refusing to publish a pending merge: host-recorded original conflict paths are unavailable; shared repair journal integration is required; nothing was staged or committed",
+    )?;
+    anyhow::ensure!(
+        !original.is_empty(),
+        "refusing to publish a pending merge: host-recorded conflict path list is empty"
+    );
+    let paths: Vec<OsString> = original
+        .iter()
+        .map(|p| {
+            use std::os::unix::ffi::OsStrExt;
+            anyhow::ensure!(
+                !p.is_empty()
+                    && !p.as_bytes().contains(&0)
+                    && std::path::Path::new(p)
+                        .components()
+                        .all(|c| matches!(c, std::path::Component::Normal(_))),
+                "refusing to publish: invalid host-recorded conflict path {p:?}"
+            );
+            let mut literal = b":(literal)".to_vec();
+            literal.extend_from_slice(p.as_bytes());
+            Ok(OsString::from_vec(literal))
+        })
+        .collect::<Result<_>>()?;
+    // grep's 1 means no matches; every other failure remains a failure. The
+    // shell program is fixed, with filenames passed only as argv, never code.
+    let mut args: Vec<&OsStr> = [
+        "-c",
+        "git grep --no-index --no-textconv -a -l -z -e '^<<<<<<<' -e '^>>>>>>>' -- \"$@\"; result=$?; if [ \"$result\" -eq 1 ]; then exit 0; else exit \"$result\"; fi",
+        "aida-conflict-marker-scan",
+    ].iter().map(OsStr::new).collect();
+    args.extend(paths.iter().map(OsString::as_os_str));
+    let matches = execute("sh", &args)?;
+    anyhow::ensure!(
+        matches.is_empty(),
+        "refusing to publish: unresolved conflict markers in {}; resolve <<<<<<< / >>>>>>> markers before retrying; nothing was staged or committed",
+        matches.split(|b| *b == 0).filter(|p| !p.is_empty())
+            .map(|p| format!("{:?}", String::from_utf8_lossy(p)))
+            .collect::<Vec<_>>().join(", ")
+    );
+    Ok(())
 }
 
 /// [`commit_pending`]'s failure path may roll the index back only when HEAD
@@ -3845,7 +5589,40 @@ fn destroy_inner(
                 });
             }
         }
-        if facts.unshipped() {
+        // Unpublished checkpoint history needs a recoverable bundle before removal.
+        // Probe inside the same sandbox; unreadable evidence retains the clone.
+        // trace:BUG-2491 | ai:codex
+        let base = pinned_base(main, clone).unwrap_or_default();
+        let checkpoint_args: Vec<&std::ffi::OsStr> = [
+            "-c".as_ref(),
+            UNPUSHED_COUNT_SCRIPT.as_ref(),
+            "aida-seat-checkpoints".as_ref(),
+            "slice-only".as_ref(),
+            base.as_ref(),
+        ]
+        .into_iter()
+        .chain(
+            shipped
+                .iter()
+                .filter(|oid| is_full_oid(oid))
+                .map(|oid| oid.as_ref()),
+        )
+        .collect();
+        let checkpoints = match probe_run(clone, main, &checkpoint_args, "sh").and_then(|out| {
+            parse_unpushed_count(&out)
+                .map(|(n, _)| n > 0)
+                .ok_or_else(|| "invalid checkpoint count".to_string())
+        }) {
+            Ok(unpublished) => unpublished,
+            Err(why) => {
+                return Ok(Destroyed::Kept {
+                    reason: format!("checkpoint refs could not be read ({why})"),
+                    salvage: None,
+                    retention: None,
+                })
+            }
+        };
+        if facts.unshipped() || checkpoints {
             // A salvage that failed or was cut off keeps the clone: removing
             // it would lose what the patch does not hold.
             // trace:TASK-2053 | ai:claude
@@ -3859,7 +5636,7 @@ fn destroy_inner(
                     })
                 }
             }
-            if mode == DestroyMode::KeepUnshipped {
+            if mode == DestroyMode::KeepUnshipped && facts.unshipped() {
                 return Ok(Destroyed::Kept {
                     reason: unshipped_reason(&facts),
                     salvage: salvaged,

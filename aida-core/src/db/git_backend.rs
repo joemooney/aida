@@ -2692,6 +2692,187 @@ impl GitBackend {
         )?))
     }
 
+    /// Plan canonical postimages without side effects, then durably decide and
+    /// install them. Caller authorization runs inside the bounded writer lock.
+    /// Only title/description/priority/weight and guarded tag edits are admitted in this slice; lifecycle and
+    /// multi-root commands require their own policy-preserving typed handlers.
+    // trace:TASK-3223 | ai:codex
+    pub fn mutate_canonical(
+        &self,
+        binding: &str,
+        epoch: uuid::Uuid,
+        request_id: uuid::Uuid,
+        author: &str,
+        operation: &super::canonical_mutation::CanonicalOperation,
+        mut authorize: impl FnMut() -> Result<()>,
+    ) -> Result<serde_json::Value> {
+        use super::{canonical_mutation::CanonicalOperation, redo};
+        operation
+            .validate()
+            .map_err(|_| anyhow::anyhow!("InvalidRequest"))?;
+        super::with_store_write_lock_bounded(&self.root, || {
+            // Recovery of an accepted decision precedes authorization of a new
+            // request. Revocation cannot cancel an already durable decision.
+            authorize()?;
+            #[cfg(unix)]
+            crate::transport_policy::refuse_unsupported(&self.root)?;
+            let digest = redo::hash(&serde_json::to_vec(operation)?);
+            if let Some(result) = redo::lookup(&self.root, binding, epoch, request_id, &digest)? {
+                return Ok(result);
+            }
+            let (sid, revision) = operation.target();
+            object_store::object_path(&self.objects_root, sid)?;
+            let before = redo::object_bytes(&self.root, sid)?;
+            anyhow::ensure!(redo::hash(&before) == revision, "Conflict");
+            let current: Requirement = serde_yaml::from_slice(&before)?;
+            anyhow::ensure!(
+                current
+                    .spec_id
+                    .as_deref()
+                    .is_some_and(|stored| stored.eq_ignore_ascii_case(sid)),
+                "Conflict"
+            );
+            let mut next = current.clone();
+            let context = crate::provenance::WriteContext {
+                session_id: Some(epoch.to_string()),
+                harness_version: None,
+            };
+            let mut comment_id = None;
+            match operation {
+                CanonicalOperation::CommentAdd { content, .. } => {
+                    let mut c = crate::models::Comment::new(author.into(), content.clone());
+                    c.session_id = context.session_id.clone();
+                    comment_id = Some(c.id);
+                    next.add_comment(c);
+                }
+                CanonicalOperation::SpecEdit { fields, .. } => {
+                    let mut changes = Vec::new();
+                    if let Some(title) = fields
+                        .title
+                        .as_ref()
+                        .filter(|title| **title != current.title)
+                    {
+                        changes.push(crate::models::FieldChange {
+                            field_name: "title".into(),
+                            old_value: current.title.clone(),
+                            new_value: title.clone(),
+                        });
+                        next.title = title.clone();
+                    }
+                    if let Some(description) = fields
+                        .description
+                        .as_ref()
+                        .filter(|description| **description != current.description)
+                    {
+                        changes.push(crate::models::FieldChange {
+                            field_name: "description".into(),
+                            old_value: current.description.clone(),
+                            new_value: description.clone(),
+                        });
+                        next.description = description.clone();
+                    }
+                    // trace:TASK-3223 | ai:codex
+                    if let Some(priority) = fields.parsed_priority()? {
+                        if priority != current.priority {
+                            changes.push(crate::models::FieldChange {
+                                field_name: "priority".into(),
+                                old_value: current.priority.to_string(),
+                                new_value: priority.to_string(),
+                            });
+                            next.priority = priority;
+                        }
+                    }
+                    // trace:TASK-3223 | ai:codex
+                    if let Some(weight) = fields.weight {
+                        if weight != current.weight {
+                            changes.push(crate::models::FieldChange {
+                                field_name: "weight".into(),
+                                old_value: current
+                                    .weight
+                                    .map(|w| w.to_string())
+                                    .unwrap_or_default(),
+                                new_value: weight.map(|w| w.to_string()).unwrap_or_default(),
+                            });
+                            next.weight = weight;
+                        }
+                    }
+                    // No lane force override: structural replacement requires a separate policy.
+                    // trace:TASK-3223 | ai:codex
+                    if let Some(tags) = &fields.tags {
+                        let tags: std::collections::HashSet<String> = tags
+                            .iter()
+                            .map(|tag| tag.trim())
+                            .filter(|tag| !tag.is_empty())
+                            .map(str::to_owned)
+                            .collect();
+                        anyhow::ensure!(
+                            super::canonical_mutation::dropped_structural_tags(
+                                &current.tags,
+                                &tags
+                            )
+                            .is_empty(),
+                            "InvalidRequest"
+                        );
+                        if tags != current.tags {
+                            let display = |set: &std::collections::HashSet<String>| {
+                                let mut tags: Vec<_> = set.iter().cloned().collect();
+                                tags.sort();
+                                tags.join(", ")
+                            };
+                            changes.push(crate::models::FieldChange {
+                                field_name: "tags".into(),
+                                old_value: display(&current.tags),
+                                new_value: display(&tags),
+                            });
+                            next.tags = tags;
+                        }
+                    }
+                    next.record_change(author.into(), changes);
+                }
+            }
+            let mut planned = vec![next];
+            self.prepare_hypothesis_updates(&mut planned, &[])?;
+            let mut images = Vec::new();
+            let mut target_revision = String::new();
+            for row in planned {
+                let sid = row
+                    .spec_id
+                    .as_deref()
+                    .context("missing canonical identity")?;
+                let bytes = redo::object_bytes(&self.root, sid)?;
+                let old: Requirement = serde_yaml::from_slice(&bytes)?;
+                let (stamped, _, _) =
+                    crate::provenance::with_write_actor(author, context.clone(), || {
+                        Self::prepare_requirement_update(&row, Some(&old), &context)
+                    })?;
+                let after = serde_yaml::to_string(&stamped)?;
+                if row.id == current.id {
+                    target_revision = redo::hash(after.as_bytes());
+                }
+                images.push(redo::Image {
+                    spec_id: sid.into(),
+                    before: redo::hash(&bytes),
+                    after,
+                });
+            }
+            // Planning can scan the hypothesis graph; recheck the live grant
+            // immediately before the durable acceptance decision.
+            authorize()?;
+            redo::commit(
+                &self.root,
+                redo::Decision {
+                    version: 1,
+                    binding: binding.into(),
+                    epoch,
+                    request_id,
+                    digest,
+                    images,
+                    result: serde_json::json!({"spec_id":current.spec_id,"revision":target_revision,"comment_id":comment_id}),
+                },
+            )
+        })
+    }
+
     /// Compare-and-swap check: the object at `path` must still hold `before`.
     // trace:BUG-1612 | ai:claude
     fn ensure_object_unchanged(&self, spec_id: &str, path: &Path, before: &[u8]) -> Result<()> {
@@ -3771,6 +3952,54 @@ mod tests {
         crate::allocation_authority::home_fixture_backend(root)
     }
     use super::*;
+
+    // trace:BUG-2490 | ai:codex
+    #[test]
+    fn bug_2490_backend_save_preserves_unmerged_index() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path().join(".aida-store");
+        let backend = home_fixture_backend(&root).unwrap().with_auto_commit(true);
+        crate::git_ops::init(&root).unwrap();
+        crate::git_ops::configure_user(&root, "fixture", "fixture@localhost").unwrap();
+        let store = backend.load().unwrap();
+        backend.save(&store).unwrap();
+        let run = |args: &[&str]| {
+            let out = crate::git_ops::host_git_command(&root)
+                .args(args)
+                .output()
+                .unwrap();
+            assert!(out.status.success(), "{args:?}: {:?}", out);
+            out.stdout
+        };
+        // A surviving non-object conflict must fence even an unrelated save.
+        let hash = String::from_utf8(run(&["rev-parse", "HEAD:metadata.yaml"])).unwrap();
+        let mut child = crate::git_ops::host_git_command(&root)
+            .args(["update-index", "--index-info"])
+            .stdin(std::process::Stdio::piped())
+            .spawn()
+            .unwrap();
+        use std::io::Write;
+        writeln!(
+            child.stdin.take().unwrap(),
+            "100644 {} 2\toplog.yaml",
+            hash.trim()
+        )
+        .unwrap();
+        assert!(child.wait().unwrap().success());
+        let before = run(&["ls-files", "--unmerged"]);
+        let head = run(&["rev-parse", "HEAD"]);
+        for error in [
+            crate::git_ops::add(&root, &["metadata.yaml"]).unwrap_err(),
+            crate::git_ops::add_all(&root, "metadata.yaml").unwrap_err(),
+        ] {
+            assert!(error.to_string().contains("oplog.yaml"), "{error:#}");
+        }
+        let mut store = store;
+        store.name = "pending change".into();
+        backend.save(&store).unwrap(); // Writes remain pending on auto-commit refusal.
+        assert_eq!(run(&["ls-files", "--unmerged"]), before);
+        assert_eq!(run(&["rev-parse", "HEAD"]), head);
+    }
 
     #[test]
     fn test_git_backend_create_and_load_empty() {

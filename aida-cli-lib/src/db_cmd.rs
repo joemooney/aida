@@ -347,6 +347,10 @@ pub(crate) fn handle_db_command(
                 "!".yellow()
             );
         }
+        // trace:STORY-2402 | ai:codex
+        DbCommand::MigrateDeferConditions(_) => {
+            anyhow::bail!("db migrate-defer-conditions only applies to git-backed stores.");
+        }
         // trace:BUG-2017 | ai:claude
         DbCommand::AuditIds(_) => {
             anyhow::bail!("db audit-ids only applies to git-backed stores.");
@@ -495,12 +499,14 @@ pub(crate) fn db_sync_push_leg(
         Ok(false) => {
             println!("  Push rejected. Pulling and retrying...");
             let sha = aida_core::db::with_store_write_lock(store_path, || {
-                aida_core::git_ops::pull_rebase(store_path, &upstream, branch).map_err(|e| {
-                    anyhow::anyhow!(
-                        "Pull failed: {}",
-                        crate::store_pull_failure_hint(store_path, &e.to_string())
-                    )
-                })?;
+                // trace:BUG-2490 | ai:codex — preserve pending changes during publication retry.
+                aida_core::git_ops::pull_rebase_store_retry(store_path, &upstream, branch)
+                    .map_err(|e| {
+                        anyhow::anyhow!(
+                            "Pull failed: {}",
+                            crate::store_pull_failure_hint(store_path, &e)
+                        )
+                    })?;
                 crate::ensure_no_spec_id_collisions_canonical(store_path)?;
                 aida_core::git_ops::head_sha(store_path)
             })?;
@@ -539,24 +545,34 @@ pub(crate) fn db_sync_push_leg(
 
 fn run_db(
     matches: &clap::ArgMatches,
-    ctx: &crate::command_registry::DispatchCtx,
-) -> anyhow::Result<crate::command_registry::Flow> {
-    use crate::*;
+    ctx: &crate::cmdkit::DispatchCtx,
+) -> anyhow::Result<crate::cmdkit::Flow> {
+    // trace:TASK-3428 | ai:codex
+    use crate::db_block::{handle_block_command, handle_db_check_collisions};
+    use crate::db_reconcile::{
+        auto_bump_done_to_completed, auto_bump_enabled, handle_db_reconcile_status,
+        print_auto_bump_summary,
+    };
+    use crate::output_format::output_format_is_json;
+    use crate::rel_cards::load_dispenser;
+    use crate::role::enforce_team_gate;
+    use crate::{handle_retire_legacy_ids, permissions};
+    use aida_core::Storage;
     let args = <DbArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
     match &ctx.store {
-        None => Ok(crate::command_registry::Flow::Continue),
+        None => Ok(crate::cmdkit::Flow::Continue),
         // The audit reads committed trees from the store path alone, before any
         // backend opens. trace:BUG-2017 | ai:claude
-        Some(crate::command_registry::StoreCtx::Distributed { store_path, .. }) => match &args {
+        Some(crate::cmdkit::StoreCtx::Distributed { store_path, .. }) => match &args {
             DbArgs {
                 inner: DbCommand::AuditIds(audit),
             } => {
                 crate::db_audit_ids::run(store_path, audit)?;
-                Ok(crate::command_registry::Flow::Return)
+                Ok(crate::cmdkit::Flow::Return)
             }
-            _ => Ok(crate::command_registry::Flow::Continue),
+            _ => Ok(crate::cmdkit::Flow::Continue),
         },
-        Some(crate::command_registry::StoreCtx::Git {
+        Some(crate::cmdkit::StoreCtx::Git {
             store_path,
             backend,
         }) => {
@@ -887,6 +903,22 @@ fn run_db(
                 } => {
                     crate::db_audit_ids::run(store_path, audit)?;
                 }
+                // trace:STORY-2402 | ai:codex
+                DbArgs {
+                    inner: DbCommand::MigrateDeferConditions(args),
+                } => {
+                    let outcome = crate::defer_condition_migration::run_migration(
+                        backend, store_path, args.apply,
+                    )?;
+                    if args.json || output_format_is_json() {
+                        println!("{}", crate::cache_output::json_pretty(&outcome)?);
+                    } else {
+                        print!(
+                            "{}",
+                            crate::defer_condition_migration::render_outcome(&outcome)
+                        );
+                    }
+                }
                 // trace:TASK-1426 | ai:claude
                 DbArgs {
                     inner: DbCommand::MigrateRelatedEdges { dry_run, json },
@@ -936,9 +968,9 @@ fn run_db(
                 }
                 _ => crate::git_backend_cmd::exit_unsupported_on_git_backend(),
             }
-            Ok(crate::command_registry::Flow::Continue)
+            Ok(crate::cmdkit::Flow::Continue)
         }
-        Some(crate::command_registry::StoreCtx::Legacy {
+        Some(crate::cmdkit::StoreCtx::Legacy {
             storage,
             requirements_path,
         }) => {
@@ -948,29 +980,29 @@ fn run_db(
                     self::handle_db_command(db_cmd, &requirements_path.to_path_buf())?;
                 }
             }
-            Ok(crate::command_registry::Flow::Continue)
+            Ok(crate::cmdkit::Flow::Continue)
         }
     }
 }
 
 // trace:STORY-1728 | ai:claude
-pub(crate) static DB: crate::command_registry::CommandReg = crate::command_registry::CommandReg {
+pub(crate) static DB: crate::cmdkit::CommandReg = crate::cmdkit::CommandReg {
     name: "db",
     help_after: "feature",
     command: <DbArgs as clap::CommandFactory>::command,
     policy: db_cli_policy,
-    run: crate::command_registry::Handler::Store(run_db),
+    run: crate::cmdkit::Handler::Store(run_db),
 };
 
 // Per-verb policy, carried over from the legacy stakeholder and per-write
 // auto-push tables. An unparseable invocation gets the fail-closed answer.
 // trace:STORY-1728 | ai:claude
-fn db_cli_policy(matches: &clap::ArgMatches) -> crate::command_registry::CmdPolicy {
+fn db_cli_policy(matches: &clap::ArgMatches) -> crate::cmdkit::CmdPolicy {
     use crate::cli::{BlockCommand, DbCommand};
     use crate::stakeholder_role::StakeholderAction as SA;
     let args = <DbArgs as clap::FromArgMatches>::from_arg_matches(matches).ok();
     let inner = args.as_ref().map(|args| &args.inner);
-    crate::command_registry::CmdPolicy {
+    crate::cmdkit::CmdPolicy {
         stakeholder: match inner {
             Some(
                 DbCommand::Path

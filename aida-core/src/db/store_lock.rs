@@ -137,14 +137,18 @@ fn ensure_lock_excluded(root: &Path) {
 /// Acquire the store write lock for the git store rooted at `root`.
 // trace:BUG-1612 | ai:claude
 pub(crate) fn acquire(root: &Path) -> Result<StoreWriteGuard> {
-    acquire_until(root, crate::io_pressure::fail_fast_lock_deadline())
+    acquire_until(root, crate::io_pressure::fail_fast_lock_deadline(), None)
 }
 
 /// [`acquire`] with the fail-fast deadline as a parameter: past `deadline`,
 /// a wait whose holder is blocked (saturated disk, or a cache holder in
 /// another PID namespace) gives up with the IO-pressure message instead of
 /// running the full timeout. trace:BUG-HOME-041 | ai:claude
-fn acquire_until(root: &Path, deadline: Option<std::time::SystemTime>) -> Result<StoreWriteGuard> {
+fn acquire_until(
+    root: &Path,
+    deadline: Option<std::time::SystemTime>,
+    budget: Option<Duration>,
+) -> Result<StoreWriteGuard> {
     let key = lock_key(root);
     let reentrant = HELD.with(|held| {
         let mut held = held.borrow_mut();
@@ -193,7 +197,7 @@ fn acquire_until(root: &Path, deadline: Option<std::time::SystemTime>) -> Result
         .with_context(|| format!("Failed to open store write lock {}", path.display()))?;
 
     let start = Instant::now();
-    let limit = timeout();
+    let limit = budget.unwrap_or_else(timeout);
     let mut recorded_contention = false;
     let mut notice = crate::io_pressure::LockWaitNotice::new();
     let mut waits = 0u32;
@@ -222,6 +226,10 @@ fn acquire_until(root: &Path, deadline: Option<std::time::SystemTime>) -> Result
                     }
                 }
                 if start.elapsed() >= limit {
+                    // trace:TASK-3223 | ai:codex — bounded service admission
+                    if budget.is_some() {
+                        anyhow::bail!("Busy");
+                    }
                     // On a saturated disk the holder is waiting on the device,
                     // not stuck: say so. trace:BUG-HOME-041 | ai:claude
                     if let Some(disk) = crate::io_pressure::observe_disk_saturation(None) {
@@ -275,10 +283,12 @@ fn acquire_until(root: &Path, deadline: Option<std::time::SystemTime>) -> Result
     }
 
     HELD.with(|held| held.borrow_mut().insert(key.clone(), 1));
-    Ok(StoreWriteGuard {
+    let guard = StoreWriteGuard {
         key,
         file: Some(file),
-    })
+    };
+    super::redo::recover(root)?;
+    Ok(guard)
 }
 
 // trace:TASK-1526 | ai:codex
@@ -318,6 +328,17 @@ pub fn with_store_write_lock<T>(root: &Path, f: impl FnOnce() -> Result<T>) -> R
     // A refused host hook profile is not a detached/missing repository.
     // Validate it before state probes so its plain-language refusal survives.
     // trace:BUG-1929 | ai:codex
+    if guard.is_outermost() {
+        crate::git_ops::ensure_store_hooks_supported(root)?;
+    }
+    crate::git_ops::ensure_store_write_safe(root)?;
+    f()
+}
+
+/// Explicit mediated admission budget, without process-global environment changes.
+// trace:TASK-3223 | ai:codex
+pub fn with_store_write_lock_bounded<T>(root: &Path, f: impl FnOnce() -> Result<T>) -> Result<T> {
+    let guard = acquire_until(root, None, Some(Duration::from_secs(5)))?;
     if guard.is_outermost() {
         crate::git_ops::ensure_store_hooks_supported(root)?;
     }
@@ -503,14 +524,15 @@ mod tests {
         };
         std::fs::write(&lock_info, serde_json::to_string(&info).unwrap()).unwrap();
 
-        let _held = acquire_until(&root, None).unwrap();
+        let _held = acquire_until(&root, None, None).unwrap();
         let r2 = root.clone();
         let started = Instant::now();
-        let err =
-            std::thread::spawn(move || acquire_until(&r2, Some(std::time::UNIX_EPOCH)).map(|_| ()))
-                .join()
-                .unwrap()
-                .expect_err("a blocked holder past the deadline gives up");
+        let err = std::thread::spawn(move || {
+            acquire_until(&r2, Some(std::time::UNIX_EPOCH), None).map(|_| ())
+        })
+        .join()
+        .unwrap()
+        .expect_err("a blocked holder past the deadline gives up");
         assert!(started.elapsed() < Duration::from_secs(1));
         let text = err.to_string();
         assert!(text.contains("fail-fast deadline"), "{text}");

@@ -4,10 +4,10 @@
 //! (`Advisor ruling …`, BUG-021) and briefs (`ADVISOR BRIEF …`,
 //! `ADVISOR REWORK BRIEF round N …` /
 //! `REWORK BRIEF …`). The newest brief written after the last review verdict
-//! is the current task, whatever rulings came before or after it. The prompt
-//! puts it first and marks the older verdict's findings as superseded
-//! context. A brief recorded before the last verdict is shown as context
-//! that defers to the newer findings. Before this, a lane re-ran the old
+//! supersedes the older verdict's findings. The newest advisor brief or
+//! ruling leads; earlier advisor direction is labelled superseded background.
+//! A brief recorded before the last verdict is shown as context that defers
+//! to the newer findings. Before this, a lane re-ran the old
 //! verdict's work and skipped the merge-only brief. A rework PR that
 //! conflicts with main gets a "resolve conflicts first" task above
 //! everything else.
@@ -83,10 +83,12 @@ fn parse_recorded_line(findings: &str) -> Option<DateTime<Utc>> {
 /// When the last review verdict landed: the live findings block's
 /// `Recorded:` time. Only when the block has no usable `Recorded:` line does
 /// the newest findings block recorded as a spec comment stand in. That
-/// comment is written by `aida queue rework`, usually after the advisor's
+/// comment uses its own `Recorded:` time when available, otherwise its creation
+/// time. It is written by `aida queue rework`, usually after the advisor's
 /// brief, so it must never push the cut-off past a real `Recorded:` time.
 /// `None` when neither gives a time.
 // trace:BUG-B6B1278890774EF993D2EBC327862470-057 | ai:claude
+// trace:BUG-2509 | ai:codex
 pub(crate) fn last_verdict_at(
     findings: Option<&str>,
     comments: &[aida_core::Comment],
@@ -95,7 +97,7 @@ pub(crate) fn last_verdict_at(
         flatten(comments)
             .into_iter()
             .filter(|c| crate::review_verdict_display::is_findings_block(&c.content))
-            .map(|c| c.created_at)
+            .map(|c| parse_recorded_line(&c.content).unwrap_or(c.created_at))
             .max()
     })
 }
@@ -114,8 +116,9 @@ pub(crate) enum BriefStanding {
 }
 
 /// The advisor direction a rework pickup leads with: the newest brief and
-/// the newest ruling, chosen independently, so a ruling recorded after a
-/// post-verdict brief does not hide the brief.
+/// the newest ruling. Their timestamps determine which leads; the older
+/// comment remains visible only as superseded background. Brief standing
+/// against review findings is resolved independently of advisor ordering.
 #[derive(Debug, Clone, Copy, Default)]
 pub(crate) struct AdvisorDirection<'a> {
     pub brief: Option<(&'a aida_core::Comment, BriefStanding)>,
@@ -139,10 +142,12 @@ pub(crate) fn resolve_direction<'a>(
 ) -> AdvisorDirection<'a> {
     let ruling = latest_matching(comments, crate::queue_cmd::is_ruling_comment);
     let brief = latest_matching(comments, is_brief_comment).map(|b| {
-        let standing = if review_findings.is_none() {
+        // trace:BUG-2509 | ai:codex
+        let verdict_at = last_verdict_at(review_findings, comments);
+        let standing = if review_findings.is_none() && verdict_at.is_none() {
             BriefStanding::Binding
         } else {
-            match last_verdict_at(review_findings, comments) {
+            match verdict_at {
                 Some(at) if b.created_at > at => BriefStanding::SupersedesVerdict,
                 _ => BriefStanding::PredatesVerdict,
             }
@@ -223,6 +228,21 @@ pub(crate) fn conflict_task(conflict: &MainConflict) -> String {
     )
 }
 
+/// The paths come from the shared host journal, after the merge was retained.
+// trace:STORY-2710 | ai:codex
+pub(crate) fn host_conflict_task(conflict: &MainConflict) -> String {
+    format!(
+        "FIRST TASK — resolve the host-staged merge for PR #{} (conflicting files: {}). \
+        Edit only working-tree files. The host retained MERGE_HEAD and the original \
+        conflict paths in the repair journal. Remove every opening and closing conflict \
+        marker in those paths. Leave Git metadata read-only; the host stages, commits \
+        and publishes after this lane exits. Declare Refs-only publication with aida ship. \
+        Overlapping behavior or ambiguous source repairs require aida punt.",
+        conflict.pr,
+        conflict.files.join(", ")
+    )
+}
+
 fn comment_block(label: &str, comment: &aida_core::Comment, scope: &str) -> String {
     format!(
         "{label} ({} by {}) — {scope}:\n{}",
@@ -259,23 +279,34 @@ fn ruling_block(ruling: &aida_core::Comment) -> String {
     )
 }
 
+/// Earlier advisor direction retains its history without granting it task authority.
+// trace:BUG-2489 | ai:codex
+fn superseded_direction_block(label: &str, comment: &aida_core::Comment) -> String {
+    comment_block(
+        label,
+        comment,
+        "EARLIER DIRECTION, superseded by the newer advisor direction above. Background \
+         only; do not act on it where it differs from that direction",
+    )
+}
+
 /// Older review findings, shown for context only.
 fn superseded_block(findings: &str) -> String {
     format!(
-        "SUPERSEDED CONTEXT — older review verdict, recorded before the advisor brief above. \
-         Do not act on it where it differs from the brief:\n{}",
+        "SUPERSEDED CONTEXT — older review verdict, superseded by a later advisor brief. \
+         Follow the current advisor direction above where it differs from these findings:\n{}",
         findings.trim()
     )
 }
 
-/// Lead a pickup prompt with what the lane must do first: a conflict with
-/// main; then a post-verdict (or binding) brief; then the newest ruling;
-/// then, when a brief supersedes the verdict, the old findings as
-/// superseded context; then the pickup prompt. A pre-verdict brief is not a
-/// lead: it goes after the pickup prompt's authoritative findings, as older
-/// context, just above the final skill line, which stays last.
+/// Lead with a conflict with main, then the newest advisor direction.
+/// Older advisor direction is superseded background below the pickup body.
+/// A pre-verdict brief still defers to the findings and follows the body;
+/// a post-verdict brief still supersedes the findings even if a later ruling
+/// supersedes that brief. The final skill line stays last.
 /// Agent gates have a stricter verdict contract and get the prompt as-is.
 // trace:BUG-B6B1278890774EF993D2EBC327862470-057 | ai:claude
+// trace:BUG-2489 | ai:codex
 pub(crate) fn lead_rework_prompt(
     prompt: String,
     direction: &AdvisorDirection<'_>,
@@ -289,24 +320,38 @@ pub(crate) fn lead_rework_prompt(
     if let Some(c) = conflict {
         blocks.push(conflict_task(c));
     }
-    let leading_brief = direction
-        .brief
-        .filter(|(_, s)| *s != BriefStanding::PredatesVerdict);
-    if let Some((b, s)) = leading_brief {
-        blocks.push(brief_block(b, s));
+    let mut background = Vec::new();
+    // Equal timestamps prefer the ruling deterministically; never emit two
+    // binding advisor blocks for one pickup.
+    let ruling_leads = match (direction.brief, direction.ruling) {
+        (Some((brief, _)), Some(ruling)) => ruling.created_at >= brief.created_at,
+        (None, Some(_)) => true,
+        _ => false,
+    };
+    if ruling_leads {
+        blocks.push(ruling_block(direction.ruling.unwrap()));
     }
-    if let Some(r) = direction.ruling {
-        blocks.push(ruling_block(r));
+    if let Some((brief, standing)) = direction.brief {
+        if ruling_leads {
+            background.push(superseded_direction_block("ADVISOR BRIEF", brief));
+        } else if standing == BriefStanding::PredatesVerdict {
+            background.push(brief_block(brief, standing));
+        } else {
+            blocks.push(brief_block(brief, standing));
+        }
+    }
+    if !ruling_leads {
+        if let Some(ruling) = direction.ruling {
+            background.push(superseded_direction_block("ADVISOR RULING", ruling));
+        }
     }
     if let Some(f) = superseded_findings.filter(|_| direction.supersedes_verdict()) {
         blocks.push(superseded_block(f));
     }
-    let prompt = match direction.brief {
-        Some((b, s @ BriefStanding::PredatesVerdict)) => {
-            append_before_skill_line(prompt, &brief_block(b, s))
-        }
-        _ => prompt,
-    };
+    let mut prompt = prompt;
+    for block in background {
+        prompt = append_before_skill_line(prompt, &block);
+    }
     if blocks.is_empty() {
         return prompt;
     }
@@ -329,6 +374,32 @@ fn append_before_skill_line(prompt: String, block: &str) -> String {
     }
 }
 
+/// Distinguish absent evidence from a review that authoritatively cleared findings.
+// trace:BUG-2509 | ai:codex
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum ReviewResult<T> {
+    Available(T),
+    ClearedByApproval,
+    Unavailable,
+}
+
+impl ReviewResult<String> {
+    pub(crate) fn as_deref(&self) -> ReviewResult<&str> {
+        match self {
+            Self::Available(value) => ReviewResult::Available(value.as_str()),
+            Self::ClearedByApproval => ReviewResult::ClearedByApproval,
+            Self::Unavailable => ReviewResult::Unavailable,
+        }
+    }
+
+    pub(crate) fn findings(&self) -> Option<&str> {
+        match self {
+            Self::Available(value) => Some(value),
+            _ => None,
+        }
+    }
+}
+
 /// Everything the queue-work pickup prompt is built from, gathered by
 /// `handle_queue_work`.
 pub(crate) struct PickupInputs<'a> {
@@ -336,8 +407,8 @@ pub(crate) struct PickupInputs<'a> {
     pub role: &'a str,
     pub plan_only: bool,
     pub guided: bool,
-    /// The live review findings block, if the spec is in rework.
-    pub review_findings: Option<&'a str>,
+    /// Local review evidence; only Unavailable permits durable-comment fallback.
+    pub review_findings: ReviewResult<&'a str>,
     /// The spec's comments (replies included in the tree).
     pub spec_comments: &'a [aida_core::Comment],
     /// The rework PR's conflict with main, if any.
@@ -353,6 +424,18 @@ pub(crate) struct PickupInputs<'a> {
 /// implementer item pickup.
 // trace:BUG-B6B1278890774EF993D2EBC327862470-057 | ai:claude
 pub(crate) fn assemble_pickup_prompt(inputs: &PickupInputs<'_>) -> String {
+    // Remote lanes may have no host gate ledger. Keep the durable hand-off
+    // visible as well as using it to order advisor direction.
+    // trace:BUG-2509 | ai:codex
+    let review_findings = match inputs.review_findings {
+        ReviewResult::Available(findings) => Some(findings),
+        ReviewResult::ClearedByApproval => None,
+        ReviewResult::Unavailable => latest_matching(
+            inputs.spec_comments,
+            crate::review_verdict_display::is_findings_block,
+        )
+        .map(|comment| comment.content.as_str()),
+    };
     let implementer_item = !inputs.role.eq_ignore_ascii_case("reviewer")
         && !inputs.plan_only
         && !inputs.guided
@@ -360,7 +443,14 @@ pub(crate) fn assemble_pickup_prompt(inputs: &PickupInputs<'_>) -> String {
     // Agent gates keep the findings in the base prompt: they get no lead.
     let gate = std::env::var("AIDA_AGENT_GATE_NAME").is_ok();
     let direction = if implementer_item && !gate {
-        resolve_direction(inputs.spec_comments, inputs.review_findings)
+        let mut direction = resolve_direction(inputs.spec_comments, review_findings);
+        // A local clearance also retires the historical verdict timestamp.
+        if matches!(inputs.review_findings, ReviewResult::ClearedByApproval) {
+            if let Some((_, standing)) = &mut direction.brief {
+                *standing = BriefStanding::Binding;
+            }
+        }
+        direction
     } else {
         AdvisorDirection::default()
     };
@@ -370,8 +460,8 @@ pub(crate) fn assemble_pickup_prompt(inputs: &PickupInputs<'_>) -> String {
         inputs.role,
         inputs.plan_only,
         inputs.guided,
-        inputs.review_findings.filter(|_| !supersedes),
-        if inputs.review_findings.is_some() {
+        review_findings.filter(|_| !supersedes),
+        if review_findings.is_some() {
             inputs.spec_comments
         } else {
             &[][..]
@@ -382,14 +472,22 @@ pub(crate) fn assemble_pickup_prompt(inputs: &PickupInputs<'_>) -> String {
         Some(section) => format!("{}\n\n{prompt}", section.trim_end()),
         None => prompt,
     };
-    if !implementer_item {
-        return prompt;
-    }
-    lead_rework_prompt(
-        prompt,
-        &direction,
-        inputs.review_findings.filter(|_| supersedes),
-        inputs.conflict,
+    let prompt = if implementer_item {
+        lead_rework_prompt(
+            prompt,
+            &direction,
+            review_findings.filter(|_| supersedes),
+            inputs.conflict,
+        )
+    } else {
+        prompt
+    };
+    // Preserve leading slash invocations for native expansion and skill inlining.
+    // Append after assembly so existing rework context ordering is unchanged.
+    // trace:STORY-2630 | ai:codex
+    format!(
+        "{prompt}\n\n{}",
+        include_str!("../../aida-core/templates/dispatch/code-navigation.md").trim()
     )
 }
 

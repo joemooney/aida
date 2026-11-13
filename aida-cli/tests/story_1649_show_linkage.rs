@@ -154,7 +154,8 @@ fn commit_on_main(fixture: &Fixture, file: &str, subject: &str) -> String {
 }
 
 fn toon_show(fixture: &Fixture, args: &[&str]) -> String {
-    let mut full = vec!["show"];
+    // trace:BUG-2466 | ai:codex — linkage is opt-in.
+    let mut full = vec!["show", "--full"];
     full.extend_from_slice(args);
     let (stdout, _) = ok(
         "aida show (toon)",

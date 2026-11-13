@@ -220,6 +220,19 @@ pub(crate) fn emit_action(root: &std::path::Path, mandate_id: &str, actor: &str,
 // trace:TASK-b6b1278890774ef993d2ebc327862470-013 | trace:TASK-b6b1278890774ef993d2ebc327862470-024 | ai:claude
 #[cfg(test)]
 pub(crate) const FACADE_EXTERNAL_LEAVES: &[(&str, &str)] = &[
+    // trace:BUG-2524 | ai:codex
+    (
+        "aida_core::exec_context::Environment",
+        "shared execution-input snapshot type used on the kernel floor to resolve the mandate operator independently of the queue identity",
+    ),
+    (
+        "aida_core::exec_context::Environment::capture",
+        "shared environment capture boundary for the kernel floor's mandate operator lookup; avoids a second ambient reader",
+    ),
+    // trace:TASK-3366 | ai:codex
+    ("aida_core::proc_identity::ProcIdentity::capture", "verified local process capture; feeds authority"),
+    ("aida_core::proc_identity::observe", "namespace-qualified process observation; feeds authority"),
+    ("aida_core::proc_identity::Verdict::Alive", "positive process evidence comparison; feeds authority"),
     // trace:STORY-2492 | ai:codex — bounded execution transport, no decision authority.
     ("crate::command_output_with_timeout_capped", "existing bounded process transport for OpenSSH receipt signing/verification and Git blob reads"),
     ("crate::BoundedCommandOutput::Completed", "bounded process transport result; receipt trust decisions remain in gate/"),
@@ -394,6 +407,17 @@ pub(crate) const FACADE_EXTERNAL_LEAVES: &[(&str, &str)] = &[
         "contained-worker receipt, re-exported on the floor (kernel_deps); \
          its accepted worker pid is the only pid a launch grant binds to",
     ),
+    // trace:STORY-2325 | ai:codex
+    ("aida_core::local_boot_id", "bind review-marker process evidence to this boot"),
+    ("crate::ownership::store::OwnershipStore", "shared ownership storage for review-marker observations"),
+    ("crate::ownership::store::OwnershipStore::for_project", "locate the shared ownership store for this marker"),
+    ("crate::ownership::WorkKey", "typed key selecting reviews for a PR head"),
+    ("crate::ownership::WorkKey::Review", "select review records, excluding other ownership kinds"),
+    ("crate::ownership::WitnessKind", "recorded evidence binding a marker to its review"),
+    ("crate::ownership::WitnessKind::Process", "bind review evidence to the marker's exact process"),
+    ("crate::ownership::dual::change", "canonical forge change key"),
+    ("crate::ownership::dual::identity_from_record", "normalize the marker's legacy process start identity"),
+    ("crate::ownership::reader::ended_record", "shared ownership end/death observation"),
     (
         "crate::coordination::hostname",
         "host label on the review marker",

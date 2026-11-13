@@ -373,6 +373,10 @@ fn awaiting_notice_tracks_real_lease_through_session_end() {
         text(&held)
     );
 
+    // trace:BUG-2490 | ai:codex — session end syncs pending objects; the
+    // invalid read-only probe must not be offered to the commit boundary.
+    std::fs::remove_file(poison_dir.join("BUG-999999.yaml")).unwrap();
+
     run(
         {
             let mut cmd = aida(&worktree, &p.home);
@@ -524,4 +528,45 @@ fn protocol_seed_dispatch_adds_four_and_is_idempotent() {
         "{}",
         text(&second)
     );
+}
+
+// trace:BUG-2490 | ai:codex
+#[test]
+fn bug_2490_doctor_reports_conflict_file_without_aborting() {
+    let _guard = TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let p = Project::new();
+    let path = p.repo.join(".aida-store/objects/BUG/999/BUG-999999.yaml");
+    std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+    std::fs::write(
+        &path,
+        "<<<<<<< Updated upstream\ntitle: one\n=======\ntitle: two\n>>>>>>> Stashed changes\n",
+    )
+    .unwrap();
+    let report = run(
+        {
+            let mut cmd = aida(&p.repo, &p.home);
+            cmd.args(["doctor", "check", "store-objects", "--json"]);
+            cmd
+        },
+        "doctor reports conflict object",
+    );
+    let report: serde_json::Value = serde_json::from_slice(&report.stdout).unwrap();
+    let findings = report["findings"].as_array().unwrap();
+    assert!(
+        findings.iter().any(|f| f["category"] == "store-objects"
+            && f["id"].as_str().unwrap().contains("BUG-999999.yaml")
+            && f["summary"].as_str().unwrap().contains("conflict markers")
+            && f["action"].as_str().unwrap().contains("BUG-999999.yaml")),
+        "{report}"
+    );
+    // A different category also continues with the damaged object present.
+    run(
+        {
+            let mut cmd = aida(&p.repo, &p.home);
+            cmd.args(["doctor", "check", "parent-tag-drift", "--json"]);
+            cmd
+        },
+        "doctor continues other category",
+    );
+    assert!(std::fs::read_to_string(path).unwrap().contains("<<<<<<<"));
 }

@@ -91,14 +91,20 @@ pub(crate) fn all_verdict_events(start: &Path) -> Vec<GateEvent> {
     let Ok(root) = store_root(start) else {
         return Vec::new();
     };
-    recorded_keys(&root)
+    let mut events: Vec<_> = recorded_keys(&root)
         .into_iter()
         .flat_map(|k| match ChangeKey::parse(&k) {
-            Some(change) => events(&root, change),
+            Some(change) => store::read_file(&root, change),
             None => store::read_unbound(&root, &k),
         })
         .filter(|e| e.verdict_record().is_some())
-        .collect()
+        .collect();
+    // trace:BUG-2517 | ai:codex
+    // Corpus scans already have all witnesses: avoid rediscovering the full
+    // ledger separately for every change.
+    let owners = MiskeyOwners::new(events.iter());
+    owners.filter(&mut events);
+    events
 }
 
 /// The ledger file `event` was read from under the store root `root`: its
@@ -150,9 +156,18 @@ pub(crate) fn index_spec(root: &Path, spec: &str, change: ChangeKey) -> std::io:
     })
 }
 
-/// The change's events, in ledger order.
+/// The change's events, in ledger order. Incomplete ownership discovery
+/// withholds every review copy a foreign change could own (historical foreign
+/// copies have no spec-only marker) but keeps holds and other evidence no
+/// witness can disqualify; callers needing diagnostics use the checked reader.
 pub(crate) fn events(root: &Path, change: ChangeKey) -> Vec<GateEvent> {
-    store::read_file(root, change)
+    // trace:BUG-2517 | ai:codex
+    let events = store::read_file(root, change)
+        .into_iter()
+        .filter(|e| !e.is_spec_only())
+        .collect::<Vec<_>>();
+    // trace:BUG-2517 | ai:claude
+    super::checked::filter_miskeyed_or_fail_closed(root, events)
 }
 
 /// Ledger verdict events for `key` — a change key, or a spec ID through the
@@ -161,17 +176,24 @@ fn verdict_events(root: &Path, key: &str) -> Vec<GateEvent> {
     if let Some(change) = ChangeKey::parse(key) {
         return events(root, change)
             .into_iter()
-            .filter(|e| e.verdict_record().is_some())
+            .filter(|e| e.verdict_record().is_some() && terminal_annotation_matches(e, key))
             .collect();
     }
     let Some(spec) = spec_key(key) else {
         return Vec::new();
     };
-    let bound: Vec<GateEvent> = changes_for_spec(root, &spec)
+    // trace:BUG-2517 | ai:codex
+    // One pinned discovery filters every related change: per-change
+    // rediscovery would rescan the whole ledger once for each PR.
+    let raw: Vec<GateEvent> = changes_for_spec(root, &spec)
         .into_iter()
-        .flat_map(|change| events(root, change))
+        .flat_map(|change| store::read_file(root, change))
+        .filter(|e| !e.is_spec_only())
         .filter(|e| e.verdict_record().is_some() && e.spec.as_deref() == Some(spec.as_str()))
         .collect();
+    // As for change-keyed reads, incomplete discovery withholds every bound
+    // copy a foreign change could own. trace:BUG-2517 | ai:claude
+    let bound = super::checked::filter_miskeyed_or_fail_closed(root, raw);
     // An unbound record already bound to a change (AC2) is read once, from
     // the change. trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
     let unbound: Vec<GateEvent> = store::read_unbound(root, &spec)
@@ -208,7 +230,18 @@ fn verdict_events(root: &Path, key: &str) -> Vec<GateEvent> {
     {
         out.push(streams[index].pop_front().unwrap());
     }
+    out.retain(|e| terminal_annotation_matches(e, key));
     out
+}
+
+// A spec-scoped closure cannot replace the PR review or another spec review.
+// trace:BUG-2525 | ai:codex
+fn terminal_annotation_matches(event: &GateEvent, key: &str) -> bool {
+    event
+        .verdict_record()
+        .and_then(|r| r.get("terminal_wait_key"))
+        .and_then(|v| v.as_str())
+        .is_none_or(|target| target.eq_ignore_ascii_case(key))
 }
 
 /// The newest verdict event the ledger holds for `key`, read from `start`
@@ -219,10 +252,77 @@ pub(crate) fn newest_verdict_event(start: &Path, key: &str) -> Option<GateEvent>
     newest_of(verdict_events(&root, key))
 }
 
+/// Select a review round before applying lifecycle annotations. An annotation
+/// carries no independent ordering authority against a legacy file: the source
+/// round must first win ordinary selection, then the exact-source overlay applies.
+// trace:BUG-2525 | ai:codex
+pub(crate) fn newest_review_event(start: &Path, key: &str) -> Option<GateEvent> {
+    let root = store_root(start).ok()?;
+    newest_review_of(verdict_events(&root, key))
+}
+
+// Also used by the bounded alias reader with its already-checked snapshot.
+// Raw change projection keeps using newest_of so it retains valid closures.
+// trace:BUG-2525 | ai:codex
+pub(crate) fn newest_review_of(events: Vec<GateEvent>) -> Option<GateEvent> {
+    newest_of(
+        events
+            .into_iter()
+            .filter(|event| {
+                !event
+                    .verdict_record()
+                    .is_some_and(|record| record.contains_key("terminal_wait_source"))
+            })
+            .collect(),
+    )
+}
+
+/// The latest lifecycle annotation before raw-review projection. Its source
+/// must be checked against the effective legacy, signed, or ledger verdict.
+/// Raw projection deliberately rejects annotations of independent reviews.
+// trace:BUG-2525 | ai:codex
+pub(crate) fn terminal_wait_annotation(start: &Path, key: &str) -> Option<JsonObj> {
+    let root = store_root(start).ok()?;
+    verdict_events(&root, key)
+        .into_iter()
+        .rev()
+        .filter_map(|event| event.verdict_record().cloned())
+        .find(|record| record.contains_key("terminal_wait_source"))
+}
+
 /// The answering event of one label's verdict events (oldest first): the
 /// last, or the ordinary origin a proved phase-3 overlay duplicates.
 // trace:BUG-2403 | ai:claude
 pub(crate) fn newest_of(mut events: Vec<GateEvent>) -> Option<GateEvent> {
+    // A lifecycle annotation is not a review of an independent ledger round.
+    // This also protects raw effective-gate projections, which partition the
+    // events themselves rather than reading one key through verdict_events.
+    // trace:BUG-2525 | ai:codex
+    while events.last().is_some_and(|event| {
+        let Some(source) = event
+            .verdict_record()
+            .and_then(|r| r.get("terminal_wait_source"))
+        else {
+            return false;
+        };
+        let mut preceding = events
+            .iter()
+            .rev()
+            .skip(1)
+            .filter(|e| e.verdict_record().is_some());
+        let prior = preceding.next();
+        // The writer observed the receipt-bearing origin when a proved
+        // phase-3 duplicate was the last raw event.
+        let prior = match (preceding.next(), prior) {
+            (Some(origin), Some(overlay)) if proved_phase3_origin(origin, overlay) => Some(origin),
+            (_, prior) => prior,
+        };
+        prior
+            .and_then(|event| event.verdict_record())
+            .is_some_and(|prior| source != &serde_json::Value::Object(prior.clone()))
+    }) {
+        events.pop();
+    }
     let newest = events.pop()?;
     // BUG-2403: a retained receipt-less phase-3 overlay answers with the
     // ordinary record it duplicates, when that pairing is proved.
@@ -339,19 +439,169 @@ pub(crate) fn carry_over_at(
     change: ChangeKey,
     approved: &str,
     head: &str,
+    carry_eligible: bool,
 ) -> Option<GateEvent> {
     use super::EventBody;
     let root = store_root(start).ok()?;
     events(&root, change).into_iter().rev().find(|e| {
-        let (a, h) = match &e.body {
-            EventBody::CarryOverProof { proof, .. } => (&proof.approved_sha, &proof.new_head),
+        let (a, h, eligible) = match &e.body {
+            EventBody::CarryOverProof {
+                proof,
+                carry_eligible,
+                ..
+            } => (&proof.approved_sha, &proof.new_head, *carry_eligible),
             EventBody::CarryOverRefused {
                 approved_sha,
                 new_head,
+                carry_eligible,
                 ..
-            } => (approved_sha, new_head),
+            } => (approved_sha, new_head, *carry_eligible),
             _ => return false,
         };
-        same_reviewed_sha(a, approved) && same_reviewed_sha(h, head)
+        eligible == carry_eligible && same_reviewed_sha(a, approved) && same_reviewed_sha(h, head)
     })
+}
+
+/// Fingerprint the act of review, omitting only the documented handshake
+/// overlay fields. Missing provenance never proves a misplaced copy.
+// trace:BUG-2517 | ai:codex
+fn review_fingerprint(event: &GateEvent) -> Option<String> {
+    let record = event.verdict_record()?;
+    // Matching numbers or payloads on different forges are not one change.
+    let forge = match ChangeKey::parse(&event.change)?.forge {
+        super::ChangeForge::Pr => "PR",
+        super::ChangeForge::Mr => "MR",
+    };
+    let spec = event.spec.as_deref()?;
+    let head = event.head.as_deref()?;
+    if !REQUIRED_FIELDS
+        .iter()
+        .all(|k| record.get(*k).is_some_and(|v| !v.is_null()))
+    {
+        return None;
+    }
+    // Borrow payloads while constructing the canonical fingerprint: the
+    // discovery owns only its serialized key, not a second review-body clone.
+    // A sorted map preserves the existing JSON object's canonical key order.
+    let semantic: std::collections::BTreeMap<&str, &serde_json::Value> = record
+        .iter()
+        .filter(|(k, _)| !OVERLAY_ONLY_FIELDS.contains(&k.as_str()))
+        .map(|(k, v)| (k.as_str(), v))
+        .collect();
+    serde_json::to_string(&(forge, spec, head, semantic)).ok()
+}
+
+// trace:BUG-2517 | ai:codex
+#[derive(Default)]
+pub(crate) struct MiskeyOwners {
+    owners: std::collections::HashMap<String, std::collections::HashSet<String>>,
+}
+
+#[cfg(test)]
+thread_local! {
+    pub(super) static OWNERSHIP_WORK: std::cell::Cell<(usize, usize)> = const { std::cell::Cell::new((0, 0)) };
+}
+
+impl MiskeyOwners {
+    /// Build once from the complete corpus, then reuse for every bucket and
+    /// any additional event vector filtered through the same discovery.
+    pub(crate) fn new<'a>(witnesses: impl IntoIterator<Item = &'a GateEvent>) -> Self {
+        let mut index = Self::default();
+        #[cfg(test)]
+        OWNERSHIP_WORK.with(|work| {
+            let (builds, visits) = work.get();
+            work.set((builds + 1, visits));
+        });
+        index.add(witnesses);
+        index
+    }
+
+    /// Fold more witnesses into this index (a streaming discovery adds each
+    /// ledger as it is read, retaining no payloads). Returns the bytes newly
+    /// retained, so the caller can charge them to its inventory budget.
+    // trace:BUG-2517 | ai:claude
+    pub(crate) fn add<'a>(&mut self, witnesses: impl IntoIterator<Item = &'a GateEvent>) -> u64 {
+        let mut retained = 0u64;
+        for witness in witnesses {
+            #[cfg(test)]
+            OWNERSHIP_WORK.with(|work| {
+                let (builds, visits) = work.get();
+                work.set((builds, visits + 1));
+            });
+            if ChangeKey::parse(&witness.change).is_none() || witness.is_spec_only() {
+                continue;
+            }
+            if witness
+                .verdict_record()
+                .and_then(|r| r.get("mode"))
+                .and_then(|v| v.as_str())
+                != Some(PHASE3_MODE)
+            {
+                continue;
+            }
+            if let Some(key) = review_fingerprint(witness) {
+                let len = (key.len() + witness.change.len()) as u64;
+                if self
+                    .owners
+                    .entry(key)
+                    .or_default()
+                    .insert(witness.change.clone())
+                {
+                    retained += len;
+                }
+            }
+        }
+        retained
+    }
+
+    pub(crate) fn filter(&self, events: &mut Vec<GateEvent>) {
+        events.retain(|event| match disqualifiable(event) {
+            Candidate::Keep => true,
+            Candidate::Drop => false,
+            Candidate::Fingerprint(key) => !self
+                .owners
+                .get(&key)
+                .is_some_and(|changes| changes.iter().any(|change| change != &event.change)),
+        });
+    }
+
+    /// Without a complete ownership index, keep exactly the events no witness
+    /// could disqualify: holds, carry-over proofs, phase-3 records and other
+    /// unfingerprintable evidence stay; every review copy that a foreign
+    /// change might own is withheld rather than presented as current. An
+    /// unrelated malformed ledger therefore neither resurrects a historical
+    /// foreign copy nor erases a change's hold state. Read-only.
+    // trace:BUG-2517 | ai:claude
+    pub(crate) fn fail_closed(events: &mut Vec<GateEvent>) {
+        events.retain(|event| matches!(disqualifiable(event), Candidate::Keep));
+    }
+}
+
+// trace:BUG-2517 | ai:claude
+enum Candidate {
+    Keep,
+    Drop,
+    Fingerprint(String),
+}
+
+/// Whether ownership witnesses can disqualify `event` as a misplaced copy.
+// trace:BUG-2517 | ai:claude
+fn disqualifiable(event: &GateEvent) -> Candidate {
+    if ChangeKey::parse(&event.change).is_none() {
+        return Candidate::Keep;
+    }
+    // A copy made before spec-only isolation was enforced is still local
+    // evidence, never a change verdict or an ownership witness.
+    if event.is_spec_only() {
+        return Candidate::Drop;
+    }
+    if event
+        .verdict_record()
+        .and_then(|r| r.get("mode"))
+        .and_then(|v| v.as_str())
+        == Some(PHASE3_MODE)
+    {
+        return Candidate::Keep;
+    }
+    review_fingerprint(event).map_or(Candidate::Keep, Candidate::Fingerprint)
 }

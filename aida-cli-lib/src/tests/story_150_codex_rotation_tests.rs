@@ -139,9 +139,17 @@ fn field<'a>(line: &'a str, key: &str) -> &'a str {
 }
 
 fn write_lease(project: &std::path::Path, id: &str) {
+    // trace:STORY-2325 | ai:codex — rotation observes its ownership record.
+    assert!(crate::test_git::git_command()
+        .args(["init", "-q", "-b", "main"])
+        .arg(project)
+        .status()
+        .unwrap()
+        .success());
+    crate::ownership::dual::enable_for_test();
     std::fs::create_dir_all(leases_dir(project)).unwrap();
     let lease: SessionLease = serde_json::from_value(serde_json::json!({
-        "id": id, "scope": "STORY-ROT-CODEX", "slug": "rotation",
+        "id": id, "scope": "00000000-0000-0000-0000-000000000150", "slug": "rotation",
         "owner": "tester", "worktree_path": project, "branch": "story-rotation",
         "started_at": chrono::Utc::now().to_rfc3339(),
         "hostname": crate::coordination::hostname(), "role": "implementer"

@@ -12,6 +12,7 @@
 //! `aida init` (which also acquires a node) and stay in `main.rs`, reached
 //! via `crate::`.
 
+use crate::hostname;
 use anyhow::Result;
 use colored::Colorize;
 
@@ -28,7 +29,12 @@ mod node_inventory;
 #[path = "node_hub.rs"]
 mod node_hub;
 
-use crate::*;
+use crate::{
+    auto_allocate_initial_blocks, current_user_id, find_project_root_from, read_id_format_policy,
+    resolve_node_name, session_misc_cmd, team_cmd, NodeCommand, TeamCommand,
+};
+use anyhow::Context;
+use std::io::IsTerminal;
 
 /// Handle `aida node` subcommands. Operates on the orphan-store worktree
 /// at `store_path` (typically `.aida-store/`).
@@ -1159,16 +1165,13 @@ pub(crate) struct NodeArgs {
 
 fn run_node(
     matches: &clap::ArgMatches,
-    ctx: &crate::command_registry::DispatchCtx,
-) -> anyhow::Result<crate::command_registry::Flow> {
-    use crate::*;
+    ctx: &crate::cmdkit::DispatchCtx,
+) -> anyhow::Result<crate::cmdkit::Flow> {
     let args = <NodeArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
     match &ctx.store {
-        None => Ok(crate::command_registry::Flow::Continue),
-        Some(crate::command_registry::StoreCtx::Distributed { .. }) => {
-            Ok(crate::command_registry::Flow::Continue)
-        }
-        Some(crate::command_registry::StoreCtx::Git {
+        None => Ok(crate::cmdkit::Flow::Continue),
+        Some(crate::cmdkit::StoreCtx::Distributed { .. }) => Ok(crate::cmdkit::Flow::Continue),
+        Some(crate::cmdkit::StoreCtx::Git {
             store_path,
             backend,
         }) => {
@@ -1176,14 +1179,14 @@ fn run_node(
             let (store_path, backend) = (*store_path, *backend);
             match &args {
                 NodeArgs { inner: node_cmd } => {
-                    return crate::command_registry::returned(self::handle_node_command(
+                    return crate::cmdkit::returned(self::handle_node_command(
                         node_cmd, store_path,
                     ));
                 }
             }
-            Ok(crate::command_registry::Flow::Continue)
+            Ok(crate::cmdkit::Flow::Continue)
         }
-        Some(crate::command_registry::StoreCtx::Legacy {
+        Some(crate::cmdkit::StoreCtx::Legacy {
             storage,
             requirements_path,
         }) => {
@@ -1196,23 +1199,23 @@ fn run_node(
                 );
                 }
             }
-            Ok(crate::command_registry::Flow::Continue)
+            Ok(crate::cmdkit::Flow::Continue)
         }
     }
 }
 
 // trace:STORY-1728 | ai:claude
-pub(crate) static NODE: crate::command_registry::CommandReg = crate::command_registry::CommandReg {
+pub(crate) static NODE: crate::cmdkit::CommandReg = crate::cmdkit::CommandReg {
     name: "node",
     help_after: "mailbox",
     command: <NodeArgs as clap::CommandFactory>::command,
-    policy: |_| crate::command_registry::CmdPolicy {
+    policy: |_| crate::cmdkit::CmdPolicy {
         stakeholder: crate::stakeholder_role::StakeholderAction::Write,
         per_write_auto_push: false,
         skip_role_restore_prompt: false,
         team_identity_write: false,
     },
-    run: crate::command_registry::Handler::Store(run_node),
+    run: crate::cmdkit::Handler::Store(run_node),
 };
 
 #[cfg(test)]

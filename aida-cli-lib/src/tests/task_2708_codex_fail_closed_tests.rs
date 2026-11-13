@@ -29,7 +29,11 @@ const CODEX_SPAWN_PATHS: &[(&str, &str, Guard)] = &[
     // `aida agent new codex` registry-launched bg child.
     ("agent_launch.rs", "agent_new_bg_dispatch", Guard::Finalizer),
     // Interactive `aida agent new codex` (foreground tracked child).
-    ("agent_launch.rs", "run_agent_generation", Guard::Finalizer),
+    (
+        "agent_launch.rs",
+        "run_agent_generation_with_io",
+        Guard::Finalizer,
+    ),
     (
         "compete_cmd.rs",
         "build_compete_arm_command",
@@ -82,7 +86,7 @@ const CODEX_SPAWN_PATHS: &[(&str, &str, Guard)] = &[
 /// agent new codex --bg` launch, guarded by `build_worker_exec`'s finalizer.
 const DISPATCH_CODEX_LANE: &str = "build_codex_lane_command";
 
-const FINALIZER_CALL: &str = "crate::launch::profile::finalize_codex(";
+const FINALIZER_CALL: &str = "crate::vendors::profile::finalize_codex(";
 const RECEIPT_CALL: &str = "crate::containment::launch::PreparedLaunch::prepare(";
 
 fn sources(dir: &Path, out: &mut Vec<PathBuf>) {
@@ -176,7 +180,7 @@ fn task_2708_every_codex_spawn_path_is_inventoried_and_guarded() {
     // S2 adds a separately named Claude interactive preparation seam. Codex
     // still finalizes before it could reach that arm; the selection is Claude-only.
     let agent = std::fs::read_to_string(src.join("agent_launch.rs")).unwrap();
-    let generation = fn_body(&agent, "run_agent_generation");
+    let generation = fn_body(&agent, "run_agent_generation_with_io");
     let selection = generation
         .find("let wrapper = config.agent_type == \"claude\"")
         .unwrap();
@@ -190,6 +194,14 @@ fn task_2708_every_codex_spawn_path_is_inventoried_and_guarded() {
     );
     assert!(generation[interactive..].contains("Some(run.receipt())"));
 
+    // S3's foreground-print preparation is in the same Claude-only wrapper
+    // arm. It must bind the attested worker before any release socket is used.
+    let background = generation.find(RECEIPT_CALL).unwrap();
+    assert!(selection < finalize && finalize < background && background < interactive);
+    assert!(
+        generation[background..].contains("bind_contained_launch_worker(grant, run.receipt())?")
+    );
+    expected.get_mut("agent_launch.rs").unwrap().1 += 1;
     assert_eq!(
         found, expected,
         "a Codex spawn path was added or removed: audit it for the AIDA posture \
@@ -234,7 +246,7 @@ fn task_2708_every_codex_spawn_path_is_inventoried_and_guarded() {
          finalize it through prepare_launch and record it in CODEX_SPAWN_PATHS"
     );
     // The refusal is the finalizer's first statement, before any rebuild.
-    let finalizer = fn_body(include_str!("../launch/profile.rs"), "prepare_launch");
+    let finalizer = fn_body(include_str!("../vendors/profile.rs"), "prepare_launch");
     assert!(finalizer
         .trim_start_matches(|c: char| c != '{')
         .trim_start_matches('{')
@@ -303,7 +315,7 @@ const SPAWN_AGENT_BUILDERS: &[(&str, &str, SpawnAgentGuard)] = &[
     ),
     (
         "agent_launch.rs",
-        "run_agent_generation",
+        "run_agent_generation_with_io",
         SpawnAgentGuard::Itself,
     ),
     (
@@ -471,7 +483,7 @@ fn task_2708_trusted_aida_refuses_unwired_codex_whatever_the_stamp() {
                 }
                 cmd
             };
-            let error = crate::launch::profile::finalize_codex(&mut build(aida.path()))
+            let error = crate::vendors::profile::finalize_codex(&mut build(aida.path()))
                 .unwrap_err()
                 .to_string();
             assert!(

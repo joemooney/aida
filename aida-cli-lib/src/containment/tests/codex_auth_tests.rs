@@ -21,7 +21,7 @@ fn host_auth(home: &Path, exp: i64) -> serde_json::Value {
     value
 }
 fn prepare_auth(home: &Path, ttl: i64) -> Result<codex_auth::Credential> {
-    codex_auth::prepare(home, unsafe { libc::getuid() }, ttl)
+    codex_auth::prepare(home, unsafe { libc::getuid() }, ttl, 1800)
 }
 fn error(home: &Path) -> String {
     match prepare_auth(home, 3600) {
@@ -29,6 +29,78 @@ fn error(home: &Path) -> String {
         Err(e) => format!("{e:#}"),
     }
 }
+// trace:BUG-2484 | ai:codex
+fn npm_wrapper(root: &Path, layout: &str) -> (PathBuf, PathBuf) {
+    let package = root.join("lib/node_modules/@openai/codex");
+    let wrapper = package.join("bin/codex.js");
+    std::fs::create_dir_all(wrapper.parent().unwrap()).unwrap();
+    let sentinel = root.join("wrapper-executed");
+    std::fs::write(
+        &wrapper,
+        format!("#!/bin/sh\ntouch '{}'\n", sentinel.display()),
+    )
+    .unwrap();
+    std::fs::set_permissions(&wrapper, std::fs::Permissions::from_mode(0o700)).unwrap();
+    let (platform, target) = match std::env::consts::ARCH {
+        "x86_64" => ("codex-linux-x64", "x86_64-unknown-linux-musl"),
+        "aarch64" => ("codex-linux-arm64", "aarch64-unknown-linux-musl"),
+        _ => panic!("unsupported test architecture"),
+    };
+    let vendor = match layout {
+        "nested" => package.join("node_modules/@openai").join(platform),
+        "hoisted" => package.parent().unwrap().join(platform),
+        "bundled" => package.clone(),
+        _ => panic!("unknown fixture layout"),
+    };
+    let native = vendor.join(format!("vendor/{target}/bin/codex"));
+    std::fs::create_dir_all(native.parent().unwrap()).unwrap();
+    std::fs::write(&native, b"synthetic native executable").unwrap();
+    std::fs::set_permissions(&native, std::fs::Permissions::from_mode(0o700)).unwrap();
+    let command = root.join("bin/codex");
+    std::fs::create_dir_all(command.parent().unwrap()).unwrap();
+    std::os::unix::fs::symlink(wrapper, &command).unwrap();
+    (command, native)
+}
+
+#[test]
+fn bug_2484_npm_layouts_resolve_without_execution_and_keep_pin() {
+    use sha2::{Digest, Sha256};
+    for layout in ["nested", "hoisted", "bundled"] {
+        let root = tempfile::tempdir().unwrap();
+        let (wrapper, native) = npm_wrapper(root.path(), layout);
+        let env = BTreeMap::from([(
+            "PATH".into(),
+            root.path().join("bin").to_str().unwrap().into(),
+        )]);
+        let selected = resolve_program(&Command::new("codex"), &env).unwrap();
+        let resolved = codex_auth::resolve_native_program(&selected).unwrap();
+        assert_eq!(resolved, std::fs::canonicalize(&native).unwrap());
+        assert_eq!(
+            codex_auth::resolve_native_program(&native).unwrap(),
+            resolved
+        );
+        let pin = format!("{:x}", Sha256::digest(std::fs::read(&native).unwrap()));
+        codex_auth::require_program(&resolved, &pin).unwrap();
+        assert!(codex_auth::require_program(&resolved, codex_auth::PROGRAM_SHA256).is_err());
+        let diagnostic = crate::vendors::codex_binary_diagnostic(&wrapper);
+        assert!(
+            diagnostic.contains(resolved.to_str().unwrap()),
+            "{diagnostic}"
+        );
+        assert!(diagnostic.contains("re-probe this codex binary"));
+        std::fs::write(&native, "different executable").unwrap();
+        assert!(codex_auth::require_program(&resolved, &pin).is_err());
+        std::fs::set_permissions(&native, std::fs::Permissions::from_mode(0o600)).unwrap();
+        assert!(codex_auth::resolve_native_program(&wrapper).is_err());
+        std::fs::remove_file(&native).unwrap();
+        assert!(codex_auth::resolve_native_program(&wrapper)
+            .unwrap_err()
+            .to_string()
+            .contains("native executable missing"));
+        assert!(!root.path().join("wrapper-executed").exists());
+    }
+}
+
 #[test]
 fn story_2593_binary_pin_never_executes_host_code() {
     use sha2::{Digest, Sha256};
@@ -36,7 +108,7 @@ fn story_2593_binary_pin_never_executes_host_code() {
     let program = root.path().join("codex");
     let sentinel = root.path().join("executed");
     let script = format!(
-        "#!/bin/sh\ntouch '{}'\necho 'codex-cli 0.166.0'\n",
+        "#!/bin/sh\ntouch '{}'\necho 'codex-cli 0.167.0'\n",
         sentinel.display()
     );
     std::fs::write(&program, &script).unwrap();
@@ -103,9 +175,11 @@ fn story_2593_reduced_sealed_leaf_and_lifetime() {
         before,
         std::fs::read(home.path().join("auth.json")).unwrap()
     );
-    assert!(prepare_auth(home.path(), 7200).is_err());
+    assert!(
+        prepare_auth(home.path(), 7200).unwrap().deadline <= chrono::Utc::now().timestamp() + 6900
+    );
     assert!(prepare_auth(home.path(), i64::MAX).is_err());
-    for exp in [0, chrono::Utc::now().timestamp() + 3601] {
+    for exp in [0, chrono::Utc::now().timestamp() + 1800] {
         host_auth(home.path(), exp);
         assert!(error(home.path()).contains("relaunch"));
     }
@@ -116,9 +190,13 @@ fn story_2593_credential_identity_schema_and_redaction() {
     let path = home.path().join("auth.json");
     assert!(error(home.path()).contains("keyring"));
     host_auth(home.path(), chrono::Utc::now().timestamp() + 7200);
-    assert!(
-        codex_auth::prepare(home.path(), unsafe { libc::getuid() }.wrapping_add(1), 3600).is_err()
-    );
+    assert!(codex_auth::prepare(
+        home.path(),
+        unsafe { libc::getuid() }.wrapping_add(1),
+        3600,
+        1800
+    )
+    .is_err());
     std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o644)).unwrap();
     assert!(error(home.path()).contains("permissions"));
     std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o600)).unwrap();
@@ -487,19 +565,19 @@ fn story_2593_production_prepare_uses_private_chatgpt_leaf() {
     std::fs::write(home.join(".codex/host-sentinel"), "default-secret").unwrap();
     let bin = home.join("bin");
     std::fs::create_dir_all(&bin).unwrap();
-    let program = bin.join("codex");
+    let (wrapper, program) = npm_wrapper(&home, "nested");
     let sentinel = home.join("host-vendor-executed");
     std::fs::write(
         &program,
         format!(
-            "#!/bin/sh\ntouch '{}'\necho 'codex-cli 0.166.0'\n",
+            "#!/bin/sh\ntouch '{}'\necho 'codex-cli 0.167.0'\n",
             sentinel.display()
         ),
     )
     .unwrap();
     std::fs::set_permissions(&program, std::fs::Permissions::from_mode(0o700)).unwrap();
     let _env = crate::test_env::EnvVarsGuard::set(&[("CODEX_HOME", relocated.to_str().unwrap())]);
-    let mut child = Command::new(&program);
+    let mut child = Command::new(&wrapper);
     child
         .args(["exec", "synthetic"])
         .env("AIDA_HEADLESS", "1")
@@ -512,12 +590,13 @@ fn story_2593_production_prepare_uses_private_chatgpt_leaf() {
     use sha2::{Digest, Sha256};
     let pin = format!("{:x}", Sha256::digest(std::fs::read(&program).unwrap()));
     let plan = PreparedLaunch::prepare_with_io(
-        &child,
+        &mut child,
         root.path(),
         None,
         unsafe { libc::getuid() },
         LaunchIo::Headless,
         &pin,
+        None,
     )
     .unwrap();
     assert!(plan.chatgpt_deadline.is_some());
@@ -538,7 +617,7 @@ fn story_2593_production_prepare_uses_private_chatgpt_leaf() {
         .mounts
         .iter()
         .any(|m| m.path == private.join("auth.json") && !m.writable));
-    for path in [home.join(".codex"), relocated] {
+    for path in [home.join(".codex"), relocated.clone()] {
         let mount = plan.profile.mounts.iter().find(|m| m.path == path).unwrap();
         assert!(!mount.writable);
         assert!(
@@ -550,6 +629,12 @@ fn story_2593_production_prepare_uses_private_chatgpt_leaf() {
     }
     let args: Vec<_> = plan.command.get_args().collect();
     let cfg: serde_json::Value = serde_json::from_str(args[5].to_str().unwrap()).unwrap();
+    // trace:BUG-2484 | ai:codex
+    assert_eq!(
+        cfg["argv"][0],
+        std::fs::canonicalize(&program).unwrap().to_str().unwrap()
+    );
+    assert!(!home.join("wrapper-executed").exists());
     assert_eq!(cfg["chatgpt_deadline"].as_i64(), plan.chatgpt_deadline);
     assert_eq!(
         cfg["oauth_hosts"],
@@ -565,8 +650,66 @@ fn story_2593_production_prepare_uses_private_chatgpt_leaf() {
         assert!(!diagnostic.contains(secret));
     }
     drop(plan);
+    // trace:BUG-2486 | ai:codex — production preparation persists the cap and
+    // refuses a below-floor token before changing the delegated grant.
+    use crate::gate::seat_authority as authority;
+    let parent_id = authority::test_support::mint_grant_for(
+        root.path(),
+        "credential-fixture",
+        "advisor",
+        &["reviewer"],
+    );
+    let parent = authority::read_grant(&parent_id).unwrap();
+    let mut delegated = parent.clone();
+    delegated.id = uuid::Uuid::new_v4().to_string();
+    delegated.parent_grant_id = Some(parent_id.clone());
+    let path = authority::grant_dir()
+        .unwrap()
+        .join(format!("{}.json", delegated.id));
+    std::fs::write(&path, serde_json::to_vec(&delegated).unwrap()).unwrap();
+    child.env("AIDA_SESSION_GRANT", &delegated.id);
+    let exp = codex_auth::token_expiry(&relocated, unsafe { libc::getuid() }).unwrap();
+    let capped = PreparedLaunch::prepare_with_io(
+        &mut child,
+        root.path(),
+        None,
+        unsafe { libc::getuid() },
+        LaunchIo::Headless,
+        &pin,
+        None,
+    )
+    .unwrap();
+    assert_eq!(capped.chatgpt_deadline, Some(exp - 300));
+    assert_eq!(
+        authority::read_grant(&delegated.id)
+            .unwrap()
+            .expires_at
+            .timestamp(),
+        exp - 300
+    );
+    assert_eq!(
+        authority::read_grant(&parent_id).unwrap().expires_at,
+        parent.expires_at
+    );
+    drop(capped);
+    let before = std::fs::read(&path).unwrap();
+    host_auth(&relocated, chrono::Utc::now().timestamp() + 1900);
+    let refused = PreparedLaunch::prepare_with_io(
+        &mut child,
+        root.path(),
+        None,
+        unsafe { libc::getuid() },
+        LaunchIo::Headless,
+        &pin,
+        None,
+    );
+    assert!(match refused {
+        Ok(_) => false,
+        Err(e) => e.to_string().contains("codex login"),
+    });
+    assert_eq!(std::fs::read(&path).unwrap(), before);
     std::fs::write(&program, "#!/bin/sh\necho 'codex-cli 0.166.1'\n").unwrap();
-    let result = PreparedLaunch::prepare(&child, root.path(), None);
+    let result = PreparedLaunch::prepare(&mut child, root.path(), None);
     assert!(match result {
         Ok(_) => false,
         Err(e) => format!("{e:#}").contains("re-probe this codex binary"),
@@ -582,6 +725,7 @@ fn story_2593_installed_codex_exact_leaf_probe() {
     let environment = aida_core::exec_context::Environment::capture();
     let env = BTreeMap::from([("PATH".into(), environment.var("PATH").unwrap().into())]);
     let program = resolve_program(&Command::new("codex"), &env).unwrap();
+    let program = codex_auth::resolve_native_program(&program).unwrap();
     let host = tempfile::tempdir().unwrap();
     host_auth(host.path(), 4102444800);
     let credential = prepare_auth(host.path(), 3600).unwrap();
@@ -635,5 +779,94 @@ fn story_2593_fifo_refusal_has_watchdog() {
             panic!("FIFO credential open blocked");
         }
         std::thread::sleep(Duration::from_millis(10));
+    }
+}
+
+// trace:BUG-2486 | ai:codex
+#[test]
+fn bug_2486_capped_floor_and_ample_lifetimes() {
+    let now = 1_800_000_000;
+    assert_eq!(
+        codex_auth::grant_deadline(now, now + 10 * 3600, 86400, 1800).unwrap(),
+        now + 10 * 3600 - 300
+    );
+    assert_eq!(
+        codex_auth::grant_deadline(now, now + 90000, 86400, 1800).unwrap(),
+        now + 86400
+    );
+    assert_eq!(
+        codex_auth::grant_deadline(now, now + 2100, 86400, 1800).unwrap(),
+        now + 1800
+    );
+    for exp in [0, now - 1, now + 2099] {
+        let error = codex_auth::grant_deadline(now, exp, 86400, 1800)
+            .unwrap_err()
+            .to_string();
+        assert!(error.contains(&exp.to_string()) && error.contains("codex login"));
+    }
+    assert!(codex_auth::grant_deadline(now, now + 4000, 86400, 4000).is_err());
+    assert!(codex_auth::grant_deadline(now, now + 4000, 86400, 0).is_err());
+    assert_eq!(
+        codex_auth::grant_deadline(now, now + 7200, 0, 1800).unwrap(),
+        now + 3600
+    );
+    // A short inherited grant is allowed when the token does not shorten it,
+    // including equality at the token's safe deadline.
+    for exp in [now + 86400, now + 900] {
+        assert_eq!(
+            codex_auth::grant_deadline(now, exp, 600, 1800).unwrap(),
+            now + 600
+        );
+    }
+    let home = tempfile::tempdir().unwrap();
+    let exp = chrono::Utc::now().timestamp() + 36000;
+    host_auth(home.path(), exp);
+    assert_eq!(
+        codex_auth::token_expiry(home.path(), unsafe { libc::getuid() }).unwrap(),
+        exp
+    );
+    assert_eq!(
+        prepare_auth(home.path(), 86400).unwrap().deadline,
+        exp - 300
+    );
+}
+
+// trace:BUG-2486 | ai:codex
+#[test]
+fn bug_2486_trusted_floor_policy_and_launch_diagnostic() {
+    let default: toml::Value = toml::from_str("").unwrap();
+    assert_eq!(codex_auth::minimum_grant(&default).unwrap(), 1800);
+    let policy: toml::Value = toml::from_str("[contained]\ncodex_min_grant_secs = 600").unwrap();
+    let floor = codex_auth::minimum_grant(&policy).unwrap();
+    assert_eq!(floor, 600);
+    let home = tempfile::tempdir().unwrap();
+    let exp = chrono::Utc::now().timestamp() + 1200;
+    host_auth(home.path(), exp);
+    assert!(prepare_auth(home.path(), 86400).is_err());
+    let auth = codex_auth::prepare(home.path(), unsafe { libc::getuid() }, 86400, floor).unwrap();
+    assert_eq!(auth.deadline, exp - 300);
+    let now = chrono::Utc::now().timestamp();
+    let (effective, diagnostic) = auth.launch_lifetime(86400, now);
+    assert!(effective > 600 && effective <= 900);
+    assert_eq!(effective, auth.deadline - now);
+    assert_eq!(diagnostic,
+        format!("contained Codex ChatGPT grant: requested 86400s, effective {effective}s, deadline {} (Unix seconds), token expiry {exp} (300s margin)", exp - 300));
+    // Exercise the same argument computation PreparedLaunch uses when the token
+    // is ample: the diagnostic deadline must be the grant's, not the token cap.
+    let exp = now + 90000;
+    host_auth(home.path(), exp);
+    let auth = codex_auth::prepare(home.path(), unsafe { libc::getuid() }, 3600, floor).unwrap();
+    let (effective, diagnostic) = auth.launch_lifetime(3600, now);
+    assert_eq!(effective, auth.deadline - now);
+    assert!(auth.deadline < exp - codex_auth::MARGIN);
+    assert_eq!(diagnostic,
+        format!("contained Codex ChatGPT grant: requested 3600s, effective {effective}s, deadline {} (Unix seconds), token expiry {exp} (300s margin)", auth.deadline));
+    for value in ["0", "-1", "1.5", "\"600\"", "true"] {
+        let policy: toml::Value =
+            toml::from_str(&format!("[contained]\ncodex_min_grant_secs = {value}")).unwrap();
+        assert_eq!(
+            codex_auth::minimum_grant(&policy).unwrap_err().to_string(),
+            crate::vendors::codex_auth_hints::MIN_GRANT_INVALID
+        );
     }
 }

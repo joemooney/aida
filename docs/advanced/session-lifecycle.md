@@ -215,7 +215,7 @@ This is what makes the **fixup loop cheap.** Without resume, every fixup pays th
 | Artifact | Lifetime | How to recover |
 |---|---|---|
 | Code commits on PR branch | Until branch deleted or force-pushed | `git checkout <branch>` |
-| AIDA session lease | Until `aida session end` (or `--steal` from another session) | New lease on same scope replaces |
+| AIDA session lease | Until `aida session end` or automatic ownership reclaim | New lease on same scope replaces |
 | AIDA session manifest | Persists in `.aida-store/` | `aida session show <id>` (historical) |
 | Claude conversation JSONL | Persists indefinitely on local disk | `claude --resume <id>` — wired via TASK-112 |
 | Worktree directory | Configurable; may persist after `aida session end` | Recreated on `aida queue work` (with same branch) |

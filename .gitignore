@@ -202,8 +202,19 @@ __pycache__/
 /.agents/
 
 # codegraph index (local tooling, not part of the repo)
+# Shared primary-index links in lane worktrees (trace:STORY-2630 | ai:codex)
+.codegraph
 .codegraph/
 scripts/split-lib/golden/
 
 # Generated `aida why --plain` cache. trace:STORY-1651 | ai:codex
 /docs/plain/
+
+# GitLab adapter copies reports outside target for artifact upload.
+# trace:STORY-2606 | ai:codex
+/.ci-artifacts/
+
+# Per-user Claude Code overrides (MCP trust, personal settings); never committed.
+# Lanes and reviewers run git without the operator's global excludes, so this must
+# be repo-level or an exited seat reads as dirty and blocks lease cleanup. trace:BUG-2532
+.claude/settings.local.json

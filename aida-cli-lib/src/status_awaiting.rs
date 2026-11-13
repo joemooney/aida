@@ -1,7 +1,51 @@
 //! Cleanup and awaiting reports, status hygiene/identity, fast status and dev-context CI lines (STORY-1488 slice 1)
 // trace:STORY-1488 | ai:claude
 
-use crate::*;
+#[cfg(test)]
+use crate::pending_decision_request_count;
+use crate::{
+    agent_output_mode, agent_registry, awaiting_you, branch_ahead_of, build_banner,
+    canonical_role_name, check_template_symlinks, collect_agent_briefs_inner,
+    collect_all_pr_head_branches, collect_blocked_seat_items, collect_branch_ahead_of,
+    collect_branch_facts, collect_doctor_findings, collect_local_branch_commit_times,
+    collect_open_prs, collect_orphan_project_dirs, collect_pr_attribution_disagreements,
+    collect_pr_facts, collect_recently_merged_prs, collect_remote_branch_name_set,
+    collect_unshipped_work_items_bounded, collect_user_context, coordination, criteria_coverage,
+    current_branch_at, current_user_id, detect_default_branch_ref, detect_distributed_store_from,
+    effective_role_resolved, find_aida_project_root_from, find_main_worktree_root,
+    find_project_root, findings, gather_running_work, gh_pr_is_merged, git_commits_since_tag,
+    git_describe_latest_tag, humanize_duration_secs, insert_summary_statuses, is_ancestor_commit,
+    is_standing_artifact_type, is_work_spec_branch_name, last_drain, leases, list_leases,
+    list_local_branches, list_worktrees, live_owned_branches, local_suppressed_prs,
+    mailbox_latency_warning, mailbox_store, main_worktree_root_from, maintenance_schedule,
+    orphaned_in_progress_items, output_format_is_json, parse_pr_scope,
+    parse_review_story_pr_number, pr_has_local_verdict, pr_has_merge_hold, pr_review_rows_routed,
+    pr_ship, presence, print_tiered_help, probe_clone_seat_trees, process_probe, protocol_cmd,
+    read_queue_depth, read_workspace_version, referenced_spec_ids_on_default_branch,
+    resolve_effective_role, reviewer_queue_story_ids, reviewer_route_for_pr,
+    reviewer_row_actionability, scan_completed_without_commit,
+    scan_default_branch_for_spec_landings, seat_rotation, status_cleanup, status_cmd, team,
+    truncate, worker, worktree_dirty_entries, worktree_lease, Command, MailIdentityFacts,
+    SessionLease, UserStatusContext, AGENT_BARE_QUEUE_TOPN, CLONE_PROBE_BUDGET,
+};
+use crate::{
+    empty_list_hint_line, events, git_backend_cmd, hostname, intent, is_terminal_status,
+    is_terminal_status_str, mail_wake, merge_agent_views_with_lease_fallback,
+    nearest_standard_rel_type, next_n_rework_idle_message, parse_status, questions, queue_cmd,
+    rel_type_label, relationship_phrase, resolve_queue_rework_needed, role, session,
+    status_display, terminal_why_text, toon_list_cell, validate_status_input,
+    why_headline_prefix_for, worktree, write_status_presence_consumers, QueueRow,
+    STANDARD_REL_TYPES,
+};
+use aida_core::liveness::LeaseState;
+use aida_core::DatabaseBackend;
+use aida_core::Storage;
+use aida_core::{write_atomic, RequirementStatus, RequirementType};
+use anyhow::Result;
+use colored::Colorize;
+use serde::{Deserialize, Serialize};
+use std::io::IsTerminal;
+use uuid::Uuid;
 
 /// Build the full `CleanupReport` from the live project state. Each
 /// detector is independent — when one fails (gh missing, git invocation
@@ -35,7 +79,7 @@ pub(crate) fn collect_cleanup_report_until(
     let lease_states: Vec<(SessionLease, LeaseState)> = leases
         .iter()
         // BUG-511: review-verb leases classify by creator PID, not worktree.
-        .map(|l| (l.clone(), lease_state_for(l, &live_sessions, now)))
+        .map(|l| (l.clone(), leases::lease_state_for(l, &live_sessions, now)))
         .collect();
 
     // TASK-1056: batch the per-branch git probes the detectors below need into
@@ -1219,6 +1263,8 @@ pub(crate) fn collect_awaiting_report_with_mail_facts(
 
     awaiting_you::AwaitingReport {
         idle_eligible,
+        // trace:TASK-3452 | ai:codex
+        ci_relay_skipped: crate::ci_relay::awaiting_skipped(project_root),
         // trace:BUG-2426 | ai:claude
         review_watch_skipped: awaiting_you::WatchSkippedItem::from_watcher(project_root),
         mergeable_prs,
@@ -1372,11 +1418,51 @@ fn arm_launch_mail_wake(
 /// outlives this process. Missing or malformed hook metadata simply renders the
 /// time line with no session key. Fail-open throughout.
 pub(crate) fn emit_notice_time_line() {
+    // trace:STORY-2653 | ai:codex — a Stop relay is not human input and
+    // must not refresh presence, turn clocks, mandate activity or notices.
+    let event = std::env::var("AIDA_HOOK_EVENT").ok();
+    let mut hook_payload = aida_core::exec_context::Environment::capture()
+        .var("AIDA_HOOK_PAYLOAD")
+        .unwrap_or_default()
+        .to_string();
+    // The managed Stop relay names its event even on harness versions that
+    // omit hook_event_name from the payload.
+    if event.as_deref() == Some("Stop") {
+        if let Ok(mut value) = serde_json::from_str::<serde_json::Value>(&hook_payload) {
+            if let Some(object) = value.as_object_mut() {
+                object.insert("hook_event_name".into(), serde_json::json!("Stop"));
+                hook_payload = value.to_string();
+            }
+        }
+    }
+    if serde_json::from_str::<serde_json::Value>(&hook_payload)
+        .ok()
+        .and_then(|v| {
+            v.get("hook_event_name")
+                .and_then(|e| e.as_str())
+                .map(str::to_string)
+        })
+        .as_deref()
+        == Some("Stop")
+    {
+        if let (Ok(root), Ok(seat)) = (
+            find_project_root(),
+            crate::session_misc::resolve_handoff_seat(None),
+        ) {
+            let _ = crate::agent_rotation::hook_turn(
+                &main_worktree_root_from(&root),
+                &seat,
+                &hook_payload,
+                false,
+                &seat_rotation::HandoffWriter::from_env(false),
+            );
+        }
+        return;
+    }
     // trace:BUG-1239 | ai:codex
     // trace:TASK-2253 | ai:claude — an agy relay names the event in env.
-    let event = std::env::var("AIDA_HOOK_EVENT").ok();
     let (session_id, is_session_start) = notice_hook_session(
-        &std::env::var("AIDA_HOOK_PAYLOAD").unwrap_or_default(),
+        &hook_payload,
         event.as_deref(),
         std::env::current_dir().ok().as_deref(),
     );
@@ -1393,12 +1479,24 @@ pub(crate) fn emit_notice_time_line() {
     // crossed the context ceiling, tell the seat to hand off and restart.
     // Tail-read of the hook's transcript only; silent below the ceiling.
     // trace:STORY-1464 | ai:claude
-    if let Ok(payload) = std::env::var("AIDA_HOOK_PAYLOAD") {
+    if !hook_payload.is_empty() {
+        let payload = &hook_payload;
         // The same seat resolver the handoff commands use, so a rotation
         // supervisor's seat wins. trace:STORY-B6B1278890774EF993D2EBC327862470-101 | ai:claude
         let seat = crate::session_misc::resolve_handoff_seat(None)
             .unwrap_or_else(|_| "<seat>".to_string());
-        if let Some(line) = seat_rotation::notice_from_hook_payload(&payload, &seat) {
+        let line = seat_rotation::notice_from_hook_payload(&payload, &seat);
+        // trace:STORY-2653 | ai:codex — only supervised generations stamp rotation state.
+        if let Ok(root) = find_project_root() {
+            let _ = crate::agent_rotation::hook_turn(
+                &main_worktree_root_from(&root),
+                &seat,
+                &payload,
+                line.is_some(),
+                &seat_rotation::HandoffWriter::from_env(false),
+            );
+        }
+        if let Some(line) = line {
             println!("{line}");
         }
     }
@@ -1806,6 +1904,12 @@ pub(crate) fn maybe_team_identity_guard(
         return Ok(());
     }
 
+    team_identity_write_guard(store_path, is_write_command(command))
+}
+
+// Early handoff dispatch must enforce the same opt-in identity policy.
+// trace:STORY-2402 | ai:codex
+pub(crate) fn team_identity_write_guard(store_path: &std::path::Path, writes: bool) -> Result<()> {
     let our_clone = team::our_clone_path(store_path);
     let registry = team::load_roster(store_path);
     let team_context = team::is_team_context(&registry, &our_clone);
@@ -1845,7 +1949,6 @@ pub(crate) fn maybe_team_identity_guard(
         let require = std::env::var("AIDA_TEAM_REQUIRE_USER")
             .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
             .unwrap_or(false);
-        let writes = is_write_command(command);
         eprintln!(
             "{} This is a shared (team) store, but no distinct identity is set — you are \
              the BUG-89 '{}' fallback. A shared '{}' id collides queues + commit \
@@ -3875,9 +3978,12 @@ pub(crate) struct AwaitingArgs {
 
 fn run_awaiting(
     matches: &clap::ArgMatches,
-    ctx: &crate::command_registry::DispatchCtx,
-) -> anyhow::Result<crate::command_registry::Flow> {
-    use crate::*;
+    ctx: &crate::cmdkit::DispatchCtx,
+) -> anyhow::Result<crate::cmdkit::Flow> {
+    use crate::{
+        arm_notice_deadline, emit_notice_time_line, handle_awaiting_command, output_format_is_json,
+        AwaitingArgs,
+    };
     let args = <AwaitingArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
     match &ctx.store {
         None => {
@@ -3901,12 +4007,10 @@ fn run_awaiting(
                 arm_notice_deadline();
                 emit_notice_time_line();
             }
-            Ok(crate::command_registry::Flow::Continue)
+            Ok(crate::cmdkit::Flow::Continue)
         }
-        Some(crate::command_registry::StoreCtx::Distributed { .. }) => {
-            Ok(crate::command_registry::Flow::Continue)
-        }
-        Some(crate::command_registry::StoreCtx::Git {
+        Some(crate::cmdkit::StoreCtx::Distributed { .. }) => Ok(crate::cmdkit::Flow::Continue),
+        Some(crate::cmdkit::StoreCtx::Git {
             store_path,
             backend,
         }) => {
@@ -3925,7 +4029,7 @@ fn run_awaiting(
                     no_ci,
                 } => {
                     // trace:BUG-1289 | ai:claude
-                    return crate::command_registry::returned(handle_awaiting_command(
+                    return crate::cmdkit::returned(handle_awaiting_command(
                         *notice,
                         *json || output_format_is_json(),
                         *verbose,
@@ -3934,9 +4038,9 @@ fn run_awaiting(
                     ));
                 }
             }
-            Ok(crate::command_registry::Flow::Continue)
+            Ok(crate::cmdkit::Flow::Continue)
         }
-        Some(crate::command_registry::StoreCtx::Legacy {
+        Some(crate::cmdkit::StoreCtx::Legacy {
             storage,
             requirements_path,
         }) => {
@@ -3951,25 +4055,24 @@ fn run_awaiting(
                     );
                 }
             }
-            Ok(crate::command_registry::Flow::Continue)
+            Ok(crate::cmdkit::Flow::Continue)
         }
     }
 }
 
 // trace:STORY-1728 | ai:claude
-pub(crate) static AWAITING: crate::command_registry::CommandReg =
-    crate::command_registry::CommandReg {
-        name: "awaiting",
-        help_after: "status",
-        command: <AwaitingArgs as clap::CommandFactory>::command,
-        policy: |_| crate::command_registry::CmdPolicy {
-            stakeholder: crate::stakeholder_role::StakeholderAction::Read,
-            per_write_auto_push: false,
-            skip_role_restore_prompt: false,
-            team_identity_write: false,
-        },
-        run: crate::command_registry::Handler::Store(run_awaiting),
-    };
+pub(crate) static AWAITING: crate::cmdkit::CommandReg = crate::cmdkit::CommandReg {
+    name: "awaiting",
+    help_after: "status",
+    command: <AwaitingArgs as clap::CommandFactory>::command,
+    policy: |_| crate::cmdkit::CmdPolicy {
+        stakeholder: crate::stakeholder_role::StakeholderAction::Read,
+        per_write_auto_push: false,
+        skip_role_restore_prompt: false,
+        team_identity_write: false,
+    },
+    run: crate::cmdkit::Handler::Store(run_awaiting),
+};
 
 /// TASK-2253: an Antigravity SessionStart reaches the notice's session-start
 /// branch and ends a dead agy registry row with no manual `aida agent gc`.

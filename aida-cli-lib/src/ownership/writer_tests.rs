@@ -238,6 +238,7 @@ fn acquire_is_idempotent_and_names_a_replaced_holder() {
         Phase::InPr {
             change: dual::change(5),
             handed_off_at: now(),
+            handed_off_by: None,
             head: "abc".into(),
         },
     );
@@ -519,7 +520,7 @@ fn q2_handoff_check_refuses_a_dirty_or_unpushed_seat() {
     assert!(err.contains("is not the head"), "{err}");
     // A seat that fails the check records nothing.
     dual::enable_for_test();
-    dual::handed_off(p, p, "main", "", 9);
+    dual::handed_off(p, p, "main", "", 9).unwrap();
     assert!(!p.join(".aida").join(store::DIR).exists());
 }
 
@@ -860,7 +861,15 @@ fn a_contained_process_writes_no_ownership_record() {
     let _env = crate::test_env::EnvVarsGuard::apply(&[("AIDA_CONTAINED", Some("1"))]);
     let id = uuid::Uuid::from_u128(92);
     dual::lease_written(dir.path(), &lease("s", &id.to_string(), ""));
-    dual::train_lease_taken(dir.path(), 5);
+    // trace:TASK-3364 | ai:codex
+    let _merge = crate::merge_lock::acquire(
+        dir.path(),
+        "main",
+        Some(5),
+        crate::pr_train::TRAIN_LEASE_NOTE,
+        std::time::Duration::ZERO,
+    )
+    .unwrap();
     dual::handed_off_from_seat(dir.path(), &id.to_string(), "tip", 7);
     let own = dir.path().join(".aida").join(store::DIR);
     assert!(
@@ -1018,6 +1027,7 @@ fn compare_names_every_expected_difference_and_flags_the_rest() {
         Phase::InPr {
             change: dual::change(1),
             handed_off_at: now(),
+            handed_off_by: None,
             head: "h".into(),
         },
     );
@@ -1068,8 +1078,9 @@ fn proc_identity_migration_is_pinned_and_preserves_legacy_evidence() {
         })
         .unwrap();
     let original = store.load(&key).unwrap().unwrap();
+    let unresolved = facts(lease("worker-session", "unresolved", ""), None);
     let mut plan = migrate::plan(
-        &[],
+        &[unresolved],
         &[],
         Default::default(),
         vec![],
@@ -1136,4 +1147,754 @@ fn proc_identity_lease_selects_worker_never_creator() {
         judge_owner(&refused, &facts, now()),
         OwnerVerdict::Unknown { .. }
     ));
+}
+
+// trace:STORY-2325 | ai:codex
+#[test]
+fn prc_staging_failure_does_not_publish_any_record_or_journal() {
+    let (_dir, store) = store();
+    store
+        .update(&spec(1), "seed", Expect::Absent, |_| {
+            Some((rec(spec(1), Some(holder("owner")), Phase::Leased), None))
+        })
+        .unwrap();
+    let journal = std::fs::read(store.journal_path()).unwrap();
+    let error = store
+        .update_all_checked(
+            vec![Step {
+                key: spec(1),
+                op: "handoff".into(),
+                expect: Expect::Generation(1),
+                transition: Box::new(|current| ops::release(current, "owner", "ended")),
+            }],
+            || anyhow::bail!("injected staging refusal"),
+        )
+        .unwrap_err();
+    assert!(error.to_string().contains("staging refusal"));
+    assert_eq!(
+        store
+            .load(&spec(1))
+            .unwrap()
+            .unwrap()
+            .holder
+            .unwrap()
+            .session,
+        "owner"
+    );
+    assert_eq!(std::fs::read(store.journal_path()).unwrap(), journal);
+    assert!(!store.dir().join(".pending.json").exists());
+}
+
+// trace:STORY-2325 | ai:codex
+#[test]
+fn prc_pending_batch_recovery_is_complete_and_idempotent() {
+    let (_dir, store) = store();
+    store
+        .update(&spec(1), "seed", Expect::Absent, |_| {
+            Some((rec(spec(1), None, Phase::Leased), None))
+        })
+        .unwrap();
+    let mut first = rec(spec(1), Some(holder("new")), Phase::Leased);
+    first.generation = 2;
+    let mut second = rec(spec(2), Some(holder("new")), Phase::Leased);
+    second.generation = 1;
+    // Crash after the first record was applied, before the second and journal.
+    std::fs::write(
+        store.path_for(&spec(1)),
+        serde_json::to_vec(&first).unwrap(),
+    )
+    .unwrap();
+    let journal = std::fs::read_to_string(store.journal_path()).unwrap();
+    std::fs::write(
+        store.dir().join(".pending.json"),
+        serde_json::to_vec(&serde_json::json!({
+            "records": [first, second], "journal": journal,
+        }))
+        .unwrap(),
+    )
+    .unwrap();
+    let all = store.list();
+    assert!(all.1.is_empty());
+    assert_eq!(all.0.len(), 2);
+    assert!(all
+        .0
+        .iter()
+        .all(|r| r.holder.as_ref().unwrap().session == "new"));
+    assert!(!store.dir().join(".pending.json").exists());
+    assert_eq!(store.load(&spec(1)).unwrap().unwrap().generation, 2);
+    assert_eq!(store.load(&spec(2)).unwrap().unwrap().generation, 1);
+}
+
+// trace:STORY-2325 | ai:codex
+#[test]
+fn prc_unrecoverable_batch_refuses_all_readers() {
+    let (_dir, store) = store();
+    store
+        .update(&spec(1), "seed", Expect::Absent, |_| {
+            Some((rec(spec(1), None, Phase::Leased), None))
+        })
+        .unwrap();
+    let record = rec(spec(2), None, Phase::Leased);
+    std::fs::create_dir_all(store.path_for(&spec(2))).unwrap();
+    std::fs::write(
+        store.dir().join(".pending.json"),
+        serde_json::to_vec(&serde_json::json!({
+            "records": [record], "journal": "",
+        }))
+        .unwrap(),
+    )
+    .unwrap();
+    assert!(store.load(&spec(1)).is_err());
+    let (records, errors) = store.list();
+    assert!(records.is_empty());
+    assert_eq!(errors.len(), 1);
+    assert!(store.dir().join(".pending.json").exists());
+}
+
+// trace:STORY-2325 | ai:codex
+#[test]
+fn prc_handoff_detaches_only_the_owner_at_the_pushed_head() {
+    let dir = repo();
+    let p = dir.path();
+    git(p, &["update-ref", "refs/remotes/origin/main", "HEAD"]);
+    std::fs::write(p.join(".git/info/exclude"), ".aida/\n").unwrap();
+    let store = OwnershipStore::at(p.join(".aida/ownership"));
+    let mut h = holder("owner");
+    h.tree = Some(SeatTree {
+        path: p.to_path_buf(),
+        kind: TreeKind::Worktree,
+        branch: Some("main".into()),
+    });
+    store
+        .update(&spec(1), "seed", Expect::Absent, |_| {
+            Some((rec(spec(1), Some(h), Phase::Leased), None))
+        })
+        .unwrap();
+    assert!(dual::handoff_seat(&store, p, "main", Some(spec_key(1)), 9, "intruder").is_err());
+    let output = crate::test_git::git_command()
+        .arg("-C")
+        .arg(p)
+        .args(["symbolic-ref", "HEAD"])
+        .output()
+        .unwrap();
+    assert_eq!(
+        String::from_utf8_lossy(&output.stdout).trim(),
+        "refs/heads/main"
+    );
+    std::fs::write(p.join("untracked"), "salvage").unwrap();
+    assert!(dual::handoff_seat(&store, p, "main", Some(spec_key(1)), 9, "owner").is_err());
+    std::fs::remove_file(p.join("untracked")).unwrap();
+    dual::handoff_seat(&store, p, "main", Some(spec_key(1)), 9, "owner").unwrap();
+    let output = crate::test_git::git_command()
+        .arg("-C")
+        .arg(p)
+        .args(["symbolic-ref", "-q", "HEAD"])
+        .output()
+        .unwrap();
+    assert!(
+        !output.status.success(),
+        "the handed-off branch must be free"
+    );
+    for key in [
+        spec(1),
+        WorkKey::Change {
+            change: dual::change(9),
+        },
+    ] {
+        let record = store.load(&key).unwrap().unwrap();
+        assert!(record.holder.is_none());
+        assert!(matches!(record.phase, Phase::InPr { .. }));
+    }
+}
+
+// trace:STORY-2325 | ai:codex
+#[test]
+fn prc_readers_do_not_infer_death_from_absence_or_elapsed_time() {
+    let dir = repo();
+    let key = WorkKey::Train {
+        train: dual::change(9),
+    };
+    assert!(reader::ended(dir.path(), &key).unwrap().is_none());
+    let store = OwnershipStore::for_project(dir.path()).unwrap().unwrap();
+    store
+        .update(&key, "seed", Expect::Absent, |_| {
+            Some((
+                rec(
+                    key.clone(),
+                    Some(holder("unknown")),
+                    Phase::Training {
+                        train: dual::change(9),
+                    },
+                ),
+                None,
+            ))
+        })
+        .unwrap();
+    assert!(reader::ended(dir.path(), &key).unwrap().is_none());
+    store
+        .update(&key, "release", Expect::Generation(1), |current| {
+            ops::release(current, "unknown", "explicit release")
+        })
+        .unwrap();
+    assert_eq!(
+        reader::ended(dir.path(), &key).unwrap(),
+        Some("explicit release".into())
+    );
+}
+
+// trace:STORY-2325 | ai:codex
+#[test]
+fn prc_delta_journal_recovers_partial_append_without_duplicates() {
+    let (_d, store) = store();
+    store
+        .update_all(vec![acquire_step(spec(1), "old", Expect::Absent)])
+        .unwrap();
+    let original = std::fs::read(store.journal_path()).unwrap();
+    let next = rec(spec(2), None, Phase::Leased);
+    let line = "{\"interrupted-batch\":true}\n";
+    std::fs::write(
+        store.dir().join(".pending.json"),
+        serde_json::to_vec(&serde_json::json!({
+            "records": [next], "journal": line, "journal_offset": original.len()
+        }))
+        .unwrap(),
+    )
+    .unwrap();
+    use std::io::Write;
+    std::fs::OpenOptions::new()
+        .append(true)
+        .open(store.journal_path())
+        .unwrap()
+        .write_all(b"{\"interrupted-")
+        .unwrap();
+    assert!(store.load(&spec(2)).unwrap().is_some());
+    assert!(store.load(&spec(2)).unwrap().is_some());
+    let journal = std::fs::read_to_string(store.journal_path()).unwrap();
+    assert_eq!(journal, String::from_utf8(original).unwrap() + line);
+}
+
+// trace:STORY-2325 | ai:codex
+#[test]
+fn prc_handoff_restores_branch_when_staging_cannot_publish() {
+    use std::os::unix::fs::PermissionsExt;
+    let dir = repo();
+    let p = dir.path();
+    git(p, &["update-ref", "refs/remotes/origin/main", "HEAD"]);
+    std::fs::write(p.join(".git/info/exclude"), ".aida/\n").unwrap();
+    let store = repo_store(p);
+    let alias_dir = tempfile::tempdir().unwrap();
+    let alias = alias_dir.path().join("seat-link");
+    std::os::unix::fs::symlink(p, &alias).unwrap();
+    let mut h = holder("owner");
+    h.tree = Some(SeatTree {
+        path: alias.clone(),
+        kind: TreeKind::Worktree,
+        branch: Some("main".into()),
+    });
+    store
+        .update(&spec(1), "seed", Expect::Absent, |_| {
+            Some((rec(spec(1), Some(h), Phase::Leased), None))
+        })
+        .unwrap();
+    std::fs::create_dir_all(store.dir().join("change")).unwrap();
+    std::fs::set_permissions(store.dir(), std::fs::Permissions::from_mode(0o500)).unwrap();
+    let result = dual::handoff_seat(&store, p, "main", Some(spec_key(1)), 9, "owner");
+    std::fs::set_permissions(store.dir(), std::fs::Permissions::from_mode(0o700)).unwrap();
+    assert!(result.is_err(), "staging must fail");
+    let head = crate::test_git::git_command()
+        .arg("-C")
+        .arg(p)
+        .args(["symbolic-ref", "HEAD"])
+        .output()
+        .unwrap();
+    assert_eq!(
+        String::from_utf8_lossy(&head.stdout).trim(),
+        "refs/heads/main"
+    );
+    assert!(matches!(
+        store.load(&spec(1)).unwrap().unwrap().phase,
+        Phase::Leased
+    ));
+    // The differently spelled seat path resolves to the same canonical seat.
+    dual::handoff_seat(&store, &alias, "main", Some(spec_key(1)), 9, "owner").unwrap();
+}
+
+// trace:STORY-2325 | ai:codex
+#[test]
+fn prc_post_open_handoff_refusals_never_fail_ship_or_drop_the_lease() {
+    let dir = repo();
+    let p = dir.path();
+    let mut ambient = crate::test_env::AmbientGuard::hermetic(p, None);
+    dual::enable_for_test();
+    git(p, &["update-ref", "refs/remotes/origin/main", "HEAD"]);
+    std::fs::write(p.join(".git/info/exclude"), ".aida/\n").unwrap();
+    // Direct operator ship has no session, then a session without a lease.
+    dual::handed_off(p, p, "main", "", 9).unwrap();
+    ambient.set_key("AIDA_SESSION_ID", "owner");
+    dual::handed_off(p, p, "main", "", 9).unwrap();
+    let mut lease = lease("owner", &spec_key(1).0.to_string(), "");
+    lease.worktree_path = p.to_path_buf();
+    lease.branch = "main".into();
+    let path = crate::lease_path(p, "owner");
+    std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+    let body = toml::to_string(&lease).unwrap();
+    std::fs::write(&path, &body).unwrap();
+    // Unresolvable scope, then canonical scope with a missing ownership record.
+    dual::handed_off(p, p, "main", "", 9).unwrap();
+    dual::handed_off(p, p, "main", &lease.scope, 9).unwrap();
+    let store = repo_store(p);
+    let mut h = holder("owner");
+    h.tree = Some(SeatTree {
+        path: p.to_path_buf(),
+        kind: TreeKind::Worktree,
+        branch: Some("other".into()),
+    });
+    store
+        .update(&spec(1), "seed", Expect::Absent, |_| {
+            Some((rec(spec(1), Some(h), Phase::Leased), None))
+        })
+        .unwrap();
+    dual::handed_off(p, p, "main", &lease.scope, 9).unwrap();
+    store
+        .update(&spec(1), "fix-tree", Expect::Any, |cur| {
+            let mut r = cur.unwrap().clone();
+            r.holder.as_mut().unwrap().tree.as_mut().unwrap().branch = Some("main".into());
+            Some((r, None))
+        })
+        .unwrap();
+    std::fs::write(p.join("untracked"), "keep me").unwrap();
+    dual::handed_off(p, p, "main", &lease.scope, 9).unwrap();
+    assert_eq!(std::fs::read_to_string(&path).unwrap(), body);
+    assert!(matches!(
+        store.load(&spec(1)).unwrap().unwrap().phase,
+        Phase::Leased
+    ));
+    let head = crate::test_git::git_command()
+        .arg("-C")
+        .arg(p)
+        .args(["symbolic-ref", "HEAD"])
+        .output()
+        .unwrap();
+    assert_eq!(
+        String::from_utf8_lossy(&head.stdout).trim(),
+        "refs/heads/main"
+    );
+}
+
+// trace:STORY-2325 | ai:codex
+#[test]
+fn prd_reentry_and_rotation_use_only_the_exact_ownership_holder() {
+    let dir = repo();
+    let id = uuid::Uuid::from_u128(2325);
+    // The legacy lease deliberately names a live process. It cannot override
+    // an expired ownership heartbeat or repair absent ownership evidence.
+    let lease = lease(
+        "rotation",
+        &id.to_string(),
+        &format!("active_pid = {}\n", std::process::id()),
+    );
+    let sessions = dir.path().join(".aida/sessions");
+    std::fs::create_dir_all(&sessions).unwrap();
+    std::fs::write(
+        sessions.join("rotation.toml"),
+        toml::to_string(&lease).unwrap(),
+    )
+    .unwrap();
+    let store = repo_store(dir.path());
+    let key = spec(2325);
+    assert!(matches!(
+        reader::lease_owner(dir.path(), &lease),
+        OwnerVerdict::Unknown { .. }
+    ));
+    assert!(reader::require_rotation_owner(dir.path(), "rotation").is_err());
+    for (session, beat, expected) in [
+        ("rotation", Utc::now(), "alive"),
+        ("rotation", Utc::now() - chrono::Duration::days(2), "dead"),
+        (
+            "replacement",
+            Utc::now() - chrono::Duration::days(2),
+            "unknown",
+        ),
+    ] {
+        let mut holder = holder(session);
+        holder.witnesses.push(Witness {
+            admission: None,
+            kind: WitnessKind::Heartbeat {
+                at: beat,
+                every_secs: 10,
+            },
+            recorded_at: beat,
+        });
+        store
+            .update(&key, "test", Expect::Any, |_| {
+                Some((rec(key.clone(), Some(holder), Phase::Leased), None))
+            })
+            .unwrap();
+        let actual = reader::lease_owner(dir.path(), &lease);
+        assert!(
+            matches!(
+                (&actual, expected),
+                (OwnerVerdict::Alive { .. }, "alive")
+                    | (OwnerVerdict::Dead { .. }, "dead")
+                    | (OwnerVerdict::Unknown { .. }, "unknown")
+            ),
+            "{actual:?}"
+        );
+        assert_eq!(
+            reader::require_rotation_owner(dir.path(), "rotation").is_ok(),
+            expected == "alive"
+        );
+        let before = store.journal().len();
+        assert_eq!(
+            reader::journal_reclaim(dir.path(), &lease).is_ok(),
+            expected == "dead"
+        );
+        assert_eq!(
+            store.journal().len(),
+            before + usize::from(expected == "dead")
+        );
+        if expected == "dead" {
+            assert_eq!(store.journal().last().unwrap().op, "reclaim_attempt");
+            assert_eq!(
+                store
+                    .load(&key)
+                    .unwrap()
+                    .unwrap()
+                    .holder
+                    .as_ref()
+                    .unwrap()
+                    .session,
+                "rotation"
+            );
+        }
+    }
+    store
+        .update(&key, "handoff", Expect::Any, |current| {
+            ops::handoff(current, &key, &dual::change(2325), "head", Utc::now())
+        })
+        .unwrap();
+    assert!(
+        reader::require_rotation_owner(dir.path(), "rotation").is_err(),
+        "a handed-off owner may not rotate even if its old lease PID is alive"
+    );
+    std::fs::write(store.path_for(&key), "not JSON").unwrap();
+    assert!(matches!(
+        reader::lease_owner(dir.path(), &lease),
+        OwnerVerdict::Unknown { .. }
+    ));
+    assert!(reader::require_rotation_owner(dir.path(), "rotation").is_err());
+}
+
+/// Pickup preserves the legacy lease rule while admitted production witnesses
+/// retain exact-generation and namespace safety.
+// trace:TASK-3420 | ai:codex
+#[test]
+fn task_3420_pickup_retains_unknown_and_releases_only_matching_dead_owner() {
+    let tmp = tempfile::tempdir().unwrap();
+    let root = tmp.path();
+    let _ambient = crate::test_env::AmbientGuard::hermetic_with_seat(root, "implementer", &[]);
+    assert!(std::process::Command::new("git")
+        .args(["init", "-q"])
+        .current_dir(root)
+        .status()
+        .unwrap()
+        .success());
+    let mut item = lease("pickup", "PR-3420", "");
+    item.active_pid = Some(u32::MAX);
+    let key = WorkKey::Change {
+        change: dual::change(3420),
+    };
+    assert!(
+        !super::reader::lease_retained(root, &item),
+        "crashed legacy holder releases"
+    );
+    let store = OwnershipStore::for_project(root).unwrap().unwrap();
+    let legacy = dual::holder_for_lease(&item, &WriterFacts::here(), Utc::now());
+    assert!(legacy.witnesses.is_empty());
+    store
+        .update(&key, "legacy", Expect::Any, |_| {
+            Some((
+                Ownership {
+                    key: key.clone(),
+                    generation: 0,
+                    holder: Some(legacy),
+                    phase: Phase::Leased,
+                },
+                None,
+            ))
+        })
+        .unwrap();
+    assert!(
+        !super::reader::lease_retained(root, &item),
+        "legacy holder without witnesses uses the old lease rule"
+    );
+
+    let mut command = std::process::Command::new("sleep");
+    command.arg("30");
+    let capture = aida_core::proc_identity::prepare_command(&mut command).unwrap();
+    let mut child = command.spawn().unwrap();
+    let admission = capture.finish(&mut child);
+    admission.validate().unwrap();
+    item.active_pid = Some(child.id());
+    item.active_pid_start_time = crate::process_probe::process_start_identity(child.id());
+    item.hostname = crate::coordination::hostname();
+    item.pid_namespace = aida_core::process_probe::ProbeSource::system()
+        .pid_namespace(child.id())
+        .ok();
+    item.holder_record = Some(serde_json::to_string(&admission).unwrap());
+    let holder = dual::holder_for_lease(&item, &WriterFacts::here(), Utc::now());
+    assert!(
+        holder.witnesses.iter().any(|w| w.admission.is_some()),
+        "production witness must be admitted"
+    );
+    store
+        .update(&key, "test", Expect::Any, |_| {
+            Some((
+                Ownership {
+                    key: key.clone(),
+                    generation: 0,
+                    holder: Some(holder),
+                    phase: Phase::Leased,
+                },
+                None,
+            ))
+        })
+        .unwrap();
+    assert!(super::reader::lease_retained(root, &item));
+    child.kill().unwrap();
+    child.wait().unwrap();
+    assert!(!super::reader::lease_retained(root, &item));
+    item.worktree_path = root.to_path_buf();
+    item.tree_kind = crate::seat_clone::TreeKind::Clone;
+    assert!(
+        crate::leases::lease_adoption_refusal(root, &item).is_none(),
+        "dead hint and adoption agree"
+    );
+    store
+        .update(&key, "namespace", Expect::Any, |current| {
+            let mut changed = current.unwrap().clone();
+            let witness = &mut changed.holder.as_mut().unwrap().witnesses[0];
+            let mut admission = serde_json::to_value(witness.admission.as_ref().unwrap()).unwrap();
+            admission["identity"]["pidns_inode"] = serde_json::json!(1);
+            witness.admission = Some(serde_json::from_value(admission).unwrap());
+            if let WitnessKind::Process { pid_ns, .. } = &mut witness.kind {
+                *pid_ns = Some(1);
+            }
+            Some((changed, None))
+        })
+        .unwrap();
+    assert!(
+        matches!(super::reader::lease_owner(root, &item), OwnerVerdict::Unknown { why } if why.contains("NamespaceMismatch"))
+    );
+    assert!(super::reader::lease_retained(root, &item));
+    assert!(
+        crate::leases::lease_adoption_refusal(root, &item).is_some(),
+        "unknown hint and adoption agree"
+    );
+    std::fs::write(store.path_for(&key), "corrupt").unwrap();
+    assert!(super::reader::lease_retained(root, &item));
+}
+
+/// Each migrated observation preserves its own legacy rule; ownership Unknown
+/// from absent admission must never make a live or unrecorded owner adoptable.
+// trace:TASK-3420 | ai:codex
+#[test]
+fn task_3420_legacy_rules_preserve_adoption_and_dormant_observations() {
+    use super::reader::{LeaseReader, LegacyRule};
+    let tmp = tempfile::tempdir().unwrap();
+    let root = tmp.path();
+    let _ambient = crate::test_env::AmbientGuard::hermetic_with_seat(root, "implementer", &[]);
+    assert!(std::process::Command::new("git")
+        .args(["init", "-q"])
+        .current_dir(root)
+        .status()
+        .unwrap()
+        .success());
+    let mut item = lease("legacy", "PR-3421", "");
+    item.started_at = Utc::now();
+    item.hostname = crate::coordination::hostname();
+    item.worktree_path = root.join("tree");
+    std::fs::create_dir(&item.worktree_path).unwrap();
+    item.tree_kind = crate::seat_clone::TreeKind::Clone;
+    item.active_pid = None;
+    item.active_pid_start_time = None;
+    item.creator_pid = None;
+    item.creator_pid_start_time = None;
+    let reader = LeaseReader::new(root);
+    for creator in [None, Some(std::process::id())] {
+        item.creator_pid = creator;
+        item.creator_pid_start_time =
+            creator.and_then(crate::process_probe::process_start_identity);
+        assert!(!matches!(
+            reader.pickup_owner(&item, LegacyRule::Adoption),
+            OwnerVerdict::Dead { .. }
+        ));
+        assert!(crate::leases::lease_adoption_refusal(root, &item).is_some());
+        assert!(!matches!(
+            reader.pickup_owner(&item, LegacyRule::NonStale),
+            OwnerVerdict::Dead { .. }
+        ));
+        assert!(!matches!(
+            reader.pickup_owner(&item, LegacyRule::Review),
+            OwnerVerdict::Dead { .. }
+        ));
+    }
+    item.creator_pid = Some(u32::MAX);
+    item.creator_pid_start_time = None;
+    let key = WorkKey::Change {
+        change: dual::change(3421),
+    };
+    let mut holder = dual::holder_for_lease(&item, &WriterFacts::here(), Utc::now());
+    // Production legacy process envelope: identity recorded, admission absent.
+    holder.witnesses = vec![Witness {
+        admission: None,
+        kind: WitnessKind::Process {
+            host: crate::coordination::hostname(),
+            id: ProcessIdentity {
+                pid: u32::MAX,
+                start: format!("linux:{BOOT}:9"),
+            },
+            pid_ns: WriterFacts::here().pid_ns,
+        },
+        recorded_at: Utc::now(),
+    }];
+    OwnershipStore::for_project(root)
+        .unwrap()
+        .unwrap()
+        .update(&key, "test", Expect::Any, |_| {
+            Some((
+                Ownership {
+                    key: key.clone(),
+                    generation: 0,
+                    holder: Some(holder),
+                    phase: Phase::Leased,
+                },
+                None,
+            ))
+        })
+        .unwrap();
+    assert!(matches!(
+        reader::lease_owner(root, &item),
+        OwnerVerdict::Unknown { .. }
+    ));
+    assert!(matches!(
+        reader.pickup_owner(&item, LegacyRule::Adoption),
+        OwnerVerdict::Dead { .. }
+    ));
+    // Adoption preserves dirty contents and commits lacking an origin.
+    let git = |args: &[&str]| {
+        let out = crate::test_git::git_command()
+            .args(args)
+            .current_dir(&item.worktree_path)
+            .output()
+            .unwrap();
+        assert!(
+            out.status.success(),
+            "{}",
+            String::from_utf8_lossy(&out.stderr)
+        );
+        out.stdout
+    };
+    git(&["init", "-q"]);
+    std::fs::write(item.worktree_path.join("committed"), "unpushed").unwrap();
+    git(&["add", "committed"]);
+    git(&[
+        "-c",
+        "user.name=Test",
+        "-c",
+        "user.email=test@example.com",
+        "-c",
+        "core.hooksPath=/dev/null",
+        "commit",
+        "-qm",
+        "local only",
+    ]);
+    let head = git(&["rev-parse", "HEAD"]);
+    std::fs::write(item.worktree_path.join("dirty"), "keep me").unwrap();
+    assert!(crate::leases::lease_adoption_refusal(root, &item).is_none());
+    assert_eq!(git(&["rev-parse", "HEAD"]), head);
+    assert_eq!(
+        std::fs::read_to_string(item.worktree_path.join("dirty")).unwrap(),
+        "keep me"
+    );
+}
+
+// Production handoff removes the holder. Refused captures are also legacy,
+// both before the ownership row exists and after the writer persists it.
+// trace:TASK-3420 | ai:codex
+#[test]
+fn task_3420_handoff_and_refused_capture_preserve_legacy_rules() {
+    use super::reader::{LeaseReader, LegacyRule};
+    let tmp = tempfile::tempdir().unwrap();
+    let root = tmp.path();
+    let _ambient = crate::test_env::AmbientGuard::hermetic_with_seat(root, "implementer", &[]);
+    assert!(crate::test_git::git_command()
+        .args(["init", "-q"])
+        .current_dir(root)
+        .status()
+        .unwrap()
+        .success());
+    let store = OwnershipStore::for_project(root).unwrap().unwrap();
+    for refused in [false, true] {
+        for shape in 0..3 {
+            let n = 3430 + u64::from(refused) * 3 + shape;
+            let mut item = lease("legacy", &format!("PR-{n}"), "");
+            item.hostname = crate::coordination::hostname();
+            item.started_at = Utc::now() - chrono::Duration::days(2);
+            item.holder_record = refused.then(|| {
+                serde_json::to_string(&aida_core::proc_identity::HolderRecord::refused(
+                    aida_core::proc_identity::HolderRefusal::EvidenceUnavailable(
+                        "capture unavailable".into(),
+                    ),
+                ))
+                .unwrap()
+            });
+            let key = WorkKey::Change {
+                change: dual::change(n),
+            };
+            for alive in [false, true] {
+                item.active_pid = Some(if alive { std::process::id() } else { u32::MAX });
+                item.active_pid_start_time = item
+                    .active_pid
+                    .and_then(crate::process_probe::process_start_identity);
+                item.creator_pid = item.active_pid;
+                item.creator_pid_start_time = item.active_pid_start_time.clone();
+                if shape != 0 {
+                    let holder = (shape == 1)
+                        .then(|| dual::holder_for_lease(&item, &WriterFacts::here(), Utc::now()));
+                    store
+                        .update(&key, "test", Expect::Any, |_| {
+                            Some((
+                                Ownership {
+                                    key: key.clone(),
+                                    generation: 0,
+                                    holder,
+                                    phase: Phase::InPr {
+                                        change: dual::change(n),
+                                        handed_off_at: Utc::now(),
+                                        handed_off_by: Some(item.id.clone()),
+                                        head: "head".into(),
+                                    },
+                                },
+                                None,
+                            ))
+                        })
+                        .unwrap();
+                }
+                let reader = LeaseReader::new(root);
+                for rule in [
+                    LegacyRule::Pickup,
+                    LegacyRule::Adoption,
+                    LegacyRule::NonStale,
+                    LegacyRule::Review,
+                ] {
+                    assert_eq!(
+                        matches!(reader.pickup_owner(&item, rule), OwnerVerdict::Dead { .. }),
+                        !alive,
+                        "refused={refused} shape={shape} alive={alive}"
+                    );
+                }
+            }
+        }
+    }
 }

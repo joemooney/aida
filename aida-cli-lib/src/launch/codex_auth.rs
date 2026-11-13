@@ -2,27 +2,77 @@
 //! host cache or refresh material into the lane, argv, environment or receipts.
 // trace:STORY-2593 | ai:codex
 use super::{Mount, WriteProfile};
+use crate::vendors::codex_auth_hints as hints;
 use anyhow::{Context, Result};
 use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine};
 use std::fs::File;
 use std::io::{Seek, Write};
 use std::os::fd::{AsRawFd, FromRawFd};
 use std::os::unix::fs::{FileExt, MetadataExt, OpenOptionsExt};
-use std::path::Path;
+use std::path::{Path, PathBuf};
+
+/// Resolve only the shipped npm package layout, without evaluating its JS.
+/// Layout discovery supplies no trust: ChatGPT admission still hashes the leaf.
+// trace:BUG-2484 | ai:codex
+pub(crate) fn resolve_native_program(program: &Path) -> Result<PathBuf> {
+    let program = std::fs::canonicalize(program)?;
+    if !program.ends_with("@openai/codex/bin/codex.js") {
+        return Ok(program);
+    }
+    let package = program.parent().unwrap().parent().unwrap();
+    let (platform, target) = match std::env::consts::ARCH {
+        "x86_64" => ("codex-linux-x64", "x86_64-unknown-linux-musl"),
+        "aarch64" => ("codex-linux-arm64", "aarch64-unknown-linux-musl"),
+        _ => anyhow::bail!("contained Codex npm wrapper architecture unsupported"),
+    };
+    let leaf = format!("vendor/{target}/bin/codex");
+    // npm optional dependency, hoisted dependency, then older bundled layout.
+    let candidates = [
+        package
+            .join("node_modules/@openai")
+            .join(platform)
+            .join(&leaf),
+        package.parent().unwrap().join(platform).join(&leaf),
+        package.join(&leaf),
+    ];
+    for candidate in candidates {
+        match std::fs::metadata(&candidate) {
+            Ok(md) => {
+                anyhow::ensure!(
+                    md.is_file() && md.mode() & 0o111 != 0,
+                    "contained Codex npm native executable refused: {}",
+                    candidate.display()
+                );
+                return std::fs::canonicalize(candidate)
+                    .context("contained Codex npm native executable unavailable");
+            }
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+            Err(error) => {
+                return Err(error).context("contained Codex npm native executable unavailable")
+            }
+        }
+    }
+    anyhow::bail!(
+        "contained Codex npm native executable missing under {}; reinstall the Codex package",
+        package.display()
+    )
+}
 
 pub(super) const RELAUNCH: &str =
     "contained ChatGPT authentication unavailable or expired; reauthenticate on the host, then relaunch";
-const MARGIN: i64 = 300;
+pub(super) const MARGIN: i64 = 300;
 const BASELINE: i64 = 3600;
+pub(crate) const DEFAULT_MIN_GRANT_SECS: i64 = 1800;
 const BOUND: usize = 65536;
-pub(super) const PROGRAM_SHA256: &str =
-    "b8a11fedf24b2dfb59a70c9e52b030f9a508dcd49cd2dd0d41956f4c785156b8";
+// trace:TASK-3463 | ai:codex — exact 0.167.0 musl executable and help fixture.
+pub(crate) const PROGRAM_SHA256: &str =
+    "cdcb45aaa01d0f14e298985e09465aebccd47f64ecd298aea44814af7b62bbda";
 
 /// Pin the probed interface without executing lane-selected code on the host.
 /// The actual vendor execution still happens only within the contained lane.
 /// Hash each launch: unchanged device/inode/size/mtime can conceal rewritten
 /// bytes, so that metadata tuple alone is insufficient for a cached admission.
-pub(super) fn require_program(program: &Path, expected_sha256: &str) -> Result<()> {
+pub(crate) fn require_program(program: &Path, expected_sha256: &str) -> Result<()> {
     use sha2::{Digest, Sha256};
     use std::io::Read;
     let mut file = std::fs::OpenOptions::new()
@@ -51,7 +101,7 @@ pub(super) fn require_program(program: &Path, expected_sha256: &str) -> Result<(
     }
     anyhow::ensure!(
         format!("{:x}", digest.finalize()) == expected_sha256,
-        "contained ChatGPT auth refused: re-probe this codex binary (supported: codex-cli 0.166.0 SHA-256 {PROGRAM_SHA256}); put the probed native codex binary first on PATH"
+        "contained ChatGPT auth refused: re-probe this codex binary (supported: codex-cli 0.167.0 SHA-256 {PROGRAM_SHA256}); put the probed native codex binary first on PATH"
     );
     Ok(())
 }
@@ -66,6 +116,18 @@ pub(super) const OAUTH_HOSTS: [&str; 4] = [
 pub(super) struct Credential {
     pub file: File,
     pub deadline: i64,
+    pub expires_at: i64,
+}
+
+// trace:BUG-2486 | ai:codex
+impl Credential {
+    /// Keep the lane TTL and its launch diagnostic bound to the same deadline.
+    pub(super) fn launch_lifetime(&self, requested: i64, now: i64) -> (i64, String) {
+        let effective = self.deadline.saturating_sub(now);
+        let diagnostic =
+            hints::launch_lifetime(requested, effective, self.deadline, self.expires_at);
+        (effective, diagnostic)
+    }
 }
 
 /// No endpoint-level TLS inspection exists in the CONNECT broker. Deny the
@@ -85,8 +147,9 @@ fn claims(token: &str) -> Result<serde_json::Value> {
     serde_json::from_slice(&bytes).map_err(|_| anyhow::anyhow!("ChatGPT token claims invalid"))
 }
 
-// Executable compatibility is enforced by require_program before this reader.
-pub(super) fn prepare(home: &Path, owner: u32, ttl: i64) -> Result<Credential> {
+// Launch callers enforce executable compatibility before this reader; doctor
+// reads the same bounded metadata without executing or admitting the vendor.
+fn read_credentials(home: &Path, owner: u32) -> Result<serde_json::Value> {
     let file = std::fs::OpenOptions::new().read(true)
         .custom_flags(libc::O_NOFOLLOW | libc::O_NONBLOCK | libc::O_CLOEXEC)
         .open(home.join("auth.json"))
@@ -112,6 +175,57 @@ pub(super) fn prepare(home: &Path, owner: u32, ttl: i64) -> Result<Credential> {
         value.get("auth_mode").and_then(|v| v.as_str()) == Some("chatgpt"),
         "ChatGPT file login required; keyring and other auth modes unsupported"
     );
+    Ok(value)
+}
+
+// trace:BUG-2486 | ai:codex
+pub(crate) fn token_expiry(home: &Path, owner: u32) -> Result<i64> {
+    access_expiry(&read_credentials(home, owner)?)
+}
+
+fn access_expiry(value: &serde_json::Value) -> Result<i64> {
+    let access = value
+        .pointer("/tokens/access_token")
+        .and_then(|v| v.as_str())
+        .context("ChatGPT access token missing")?;
+    claims(access)?
+        .get("exp")
+        .and_then(|v| v.as_i64())
+        .context("ChatGPT access-token expiry missing")
+}
+
+// trace:BUG-2486 | ai:codex — resolve only the caller's pinned trusted policy.
+pub(super) fn minimum_grant(policy: &toml::Value) -> Result<i64> {
+    policy
+        .get("contained")
+        .and_then(|c| c.get(hints::MIN_GRANT_KEY))
+        .map(|v| {
+            v.as_integer()
+                .filter(|n| *n > 0)
+                .context(hints::MIN_GRANT_INVALID)
+        })
+        .transpose()
+        .map(|floor| floor.unwrap_or(DEFAULT_MIN_GRANT_SECS))
+}
+
+// trace:BUG-2486 | ai:codex
+pub(super) fn grant_deadline(now: i64, exp: i64, ttl: i64, floor: i64) -> Result<i64> {
+    anyhow::ensure!(floor > 0, "{}", hints::MIN_GRANT_INVALID);
+    let requested = now
+        .checked_add(if ttl > 0 { ttl } else { BASELINE })
+        .context("ChatGPT deadline invalid")?;
+    let cap = exp.saturating_sub(MARGIN);
+    let deadline = requested.min(cap);
+    anyhow::ensure!(
+        cap >= requested || deadline.saturating_sub(now) >= floor,
+        "{}",
+        hints::floor_refusal(exp, exp.saturating_sub(now), floor)
+    );
+    Ok(deadline)
+}
+
+pub(super) fn prepare(home: &Path, owner: u32, ttl: i64, floor: i64) -> Result<Credential> {
+    let value = read_credentials(home, owner)?;
     let tokens = value.get("tokens").context("ChatGPT tokens missing")?;
     let access = tokens
         .get("access_token")
@@ -138,19 +252,9 @@ pub(super) fn prepare(home: &Path, owner: u32, ttl: i64) -> Result<Credential> {
             .is_none_or(|v| v == account),
         "ChatGPT account routing mismatch"
     );
-    let exp = claims(access)?
-        .get("exp")
-        .and_then(|v| v.as_i64())
-        .context("ChatGPT access-token expiry missing")?;
+    let exp = access_expiry(&value)?;
     let now = chrono::Utc::now().timestamp();
-    let lifetime = if ttl > 0 { ttl } else { BASELINE };
-    let deadline = now
-        .checked_add(lifetime)
-        .context("ChatGPT deadline invalid")?;
-    anyhow::ensure!(
-        exp.saturating_sub(deadline) >= MARGIN,
-        "{RELAUNCH} (grant plus 300s margin required)"
-    );
+    let deadline = grant_deadline(now, exp, ttl, floor)?;
     // No other host-cache fields are copied. Codex needs explicit account
     // routing and a recent cache timestamp to avoid its refresh path. Derive
     // routing from the approved ID token and stamp this leaf's delivery time;
@@ -183,6 +287,7 @@ pub(super) fn prepare(home: &Path, owner: u32, ttl: i64) -> Result<Credential> {
     Ok(Credential {
         file: leaf,
         deadline,
+        expires_at: exp,
     })
 }
 

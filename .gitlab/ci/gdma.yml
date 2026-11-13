@@ -1,0 +1,68 @@
+# Seven literal jobs preserve the matrix display names for the closed relay
+# inventory. Shell commands remain owned by .github/workflows/ci.yml.
+# trace:STORY-2606 | ai:codex
+.gdma-job:
+  image: "$GDMA_CI_IMAGE"
+  tags: ["$GDMA_RUNNER_TAG"]
+  stage: test
+  interruptible: true
+  timeout: 40m
+  # Do not inherit the default GitLab pipeline's host-specific preparation.
+  before_script: []
+  variables:
+    GIT_STRATEGY: clone
+    GIT_DEPTH: "0"
+    CARGO_TARGET_DIR: "$CI_PROJECT_DIR/target"
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "push" && $GDMA_CI_IMAGE && $GDMA_RUNNER_TAG && $CI_COMMIT_BRANCH =~ /^ci\/[1-9][0-9]*$/'
+  script:
+    - |
+      if [ "${GDMA_CHECK_SOURCES:-0}" = 1 ]; then
+        python3 ci/gdma/check-sources.py
+      fi
+    - git fetch --no-tags origin "+refs/heads/$CI_DEFAULT_BRANCH:refs/remotes/origin/$CI_DEFAULT_BRANCH"
+    - python3 ci/gdma/run-upstream.py --lane "$GDMA_LANE"
+  after_script:
+    - python3 ci/gdma/run-upstream.py --collect
+  artifacts:
+    when: always
+    expire_in: 14 days
+    name: "ci-$GDMA_LANE-$CI_COMMIT_SHORT_SHA"
+    paths: [.ci-artifacts/]
+    reports:
+      junit: .ci-artifacts/nextest/ci/junit-*.xml
+
+"gdma-ci: [lib-0]":
+  extends: .gdma-job
+  variables:
+    GDMA_LANE: lib-0
+
+"gdma-ci: [lib-1]":
+  extends: .gdma-job
+  variables:
+    GDMA_LANE: lib-1
+
+"gdma-ci: [cli-0]":
+  extends: .gdma-job
+  variables:
+    GDMA_LANE: cli-0
+
+"gdma-ci: [cli-1]":
+  extends: .gdma-job
+  variables:
+    GDMA_LANE: cli-1
+
+"gdma-ci: [rest]":
+  extends: .gdma-job
+  variables:
+    GDMA_LANE: rest
+
+"gdma-ci: [gates]":
+  extends: .gdma-job
+  variables:
+    GDMA_LANE: gates
+
+"gdma-ci: [contracts]":
+  extends: .gdma-job
+  variables:
+    GDMA_LANE: contracts

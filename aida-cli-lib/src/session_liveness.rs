@@ -55,6 +55,9 @@ pub enum Liveness {
     /// The transcript was written in the last five minutes but no process
     /// could be resolved — the old `●`, now unverified.
     FileTouched,
+    /// A covering lease has insufficient ownership evidence.
+    // trace:STORY-2325 | ai:codex
+    Unknown,
     /// Neither.
     #[default]
     None,
@@ -67,6 +70,7 @@ impl Liveness {
             Liveness::Spinning => "spinning",
             Liveness::FileTouched => "file-touched",
             Liveness::None => "none",
+            Liveness::Unknown => "unknown",
         }
     }
 }

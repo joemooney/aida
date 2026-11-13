@@ -1,7 +1,16 @@
 //! Advisor command handlers (handoff, register, dashboard), AdvisorPass and calibration mode (STORY-1488 slice 1)
 // trace:STORY-1488 | ai:claude
 
-use crate::*;
+use crate::{
+    advisor, advisor_watch, brief_generated_by, collect_decision_requests, current_user_id,
+    find_project_root, findings, handle_advisor_worklist, is_standing_artifact_type, list_leases,
+    locate_for_status, main_worktree_root_from, process_probe, queued_requirement_ids,
+    resolve_burndown_sets, schedule_cmd, yaml_scalar, AdvisorCommand,
+};
+use aida_core::DatabaseBackend;
+use aida_core::{RequirementStatus, Storage};
+use anyhow::{Context, Result};
+use colored::Colorize;
 
 // trace:STORY-1728 | ai:claude
 #[path = "advisor_cmd_root_args.rs"]
@@ -144,8 +153,18 @@ pub(crate) fn render_advisor_handoff(
 ///     trace:STORY-360 | ai:claude
 // trace:STORY-1728 | ai:claude
 pub(crate) fn handle_advisor_command(cmd: &crate::AdvisorCommand) -> anyhow::Result<()> {
-    use crate::*;
+    use crate::{
+        advisor, advisor_watch, find_project_root, handle_advisor_handoff, handle_advisor_register,
+        handle_advisor_registration_status, main_worktree_root_from, AdvisorCommand,
+    };
     match cmd {
+        // trace:STORY-2571 | ai:codex
+        AdvisorCommand::Loops(action) => match action {
+            AdvisorLoopsCommand::TrainStatus { .. } | AdvisorLoopsCommand::TrainWorker => {
+                crate::review_watch::train_service::command(action)
+            }
+            _ => crate::review_watch::service::command(action),
+        },
         AdvisorCommand::Register {
             uuid,
             vendor,
@@ -888,9 +907,12 @@ pub(crate) struct AdvisorArgs {
 
 fn run_advisor(
     matches: &clap::ArgMatches,
-    ctx: &crate::command_registry::DispatchCtx,
-) -> anyhow::Result<crate::command_registry::Flow> {
-    use crate::*;
+    ctx: &crate::cmdkit::DispatchCtx,
+) -> anyhow::Result<crate::cmdkit::Flow> {
+    use crate::{
+        handle_advisor_command, handle_advisor_dashboard, handle_advisor_worklist, schedule_cmd,
+        AdvisorArgs, AdvisorCommand,
+    };
     let args = <AdvisorArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
     match &ctx.store {
         None => {
@@ -926,16 +948,14 @@ fn run_advisor(
                 };
                 if !needs_store {
                     if let Some(c) = command {
-                        return crate::command_registry::returned(handle_advisor_command(c));
+                        return crate::cmdkit::returned(handle_advisor_command(c));
                     }
                 }
             }
-            Ok(crate::command_registry::Flow::Continue)
+            Ok(crate::cmdkit::Flow::Continue)
         }
-        Some(crate::command_registry::StoreCtx::Distributed { .. }) => {
-            Ok(crate::command_registry::Flow::Continue)
-        }
-        Some(crate::command_registry::StoreCtx::Git {
+        Some(crate::cmdkit::StoreCtx::Distributed { .. }) => Ok(crate::cmdkit::Flow::Continue),
+        Some(crate::cmdkit::StoreCtx::Git {
             store_path,
             backend,
         }) => {
@@ -954,7 +974,7 @@ fn run_advisor(
                         // STORY-618: bare `aida advisor` → the advisor's actionable
                         // worklist (the mirror of bare `aida human`).
                         None => {
-                            return crate::command_registry::returned(handle_advisor_worklist(
+                            return crate::cmdkit::returned(handle_advisor_worklist(
                                 *short, backend, store_path,
                             ));
                         }
@@ -963,19 +983,17 @@ fn run_advisor(
                                 .parent()
                                 .map(|p| p.to_path_buf())
                                 .unwrap_or_else(|| std::env::current_dir().unwrap_or_default());
-                            return crate::command_registry::returned(
-                                schedule_cmd::handle_schedule_command(
-                                    sched_cmd,
-                                    &project_root,
-                                    store_path,
-                                ),
-                            );
+                            return crate::cmdkit::returned(schedule_cmd::handle_schedule_command(
+                                sched_cmd,
+                                &project_root,
+                                store_path,
+                            ));
                         }
                         Some(AdvisorCommand::Status {
                             json,
                             registration: false,
                         }) => {
-                            return crate::command_registry::returned(handle_advisor_dashboard(
+                            return crate::cmdkit::returned(handle_advisor_dashboard(
                                 *json, backend, store_path,
                             ));
                         }
@@ -985,9 +1003,9 @@ fn run_advisor(
                     }
                 }
             }
-            Ok(crate::command_registry::Flow::Continue)
+            Ok(crate::cmdkit::Flow::Continue)
         }
-        Some(crate::command_registry::StoreCtx::Legacy {
+        Some(crate::cmdkit::StoreCtx::Legacy {
             storage,
             requirements_path,
         }) => {
@@ -1004,22 +1022,21 @@ fn run_advisor(
                     unreachable!("Command::Advisor dispatched before legacy storage init");
                 }
             }
-            Ok(crate::command_registry::Flow::Continue)
+            Ok(crate::cmdkit::Flow::Continue)
         }
     }
 }
 
 // trace:STORY-1728 | ai:claude
-pub(crate) static ADVISOR: crate::command_registry::CommandReg =
-    crate::command_registry::CommandReg {
-        name: "advisor",
-        help_after: "research",
-        command: <AdvisorArgs as clap::CommandFactory>::command,
-        policy: |_| crate::command_registry::CmdPolicy {
-            stakeholder: crate::stakeholder_role::StakeholderAction::Write,
-            per_write_auto_push: false,
-            skip_role_restore_prompt: false,
-            team_identity_write: false,
-        },
-        run: crate::command_registry::Handler::Store(run_advisor),
-    };
+pub(crate) static ADVISOR: crate::cmdkit::CommandReg = crate::cmdkit::CommandReg {
+    name: "advisor",
+    help_after: "research",
+    command: <AdvisorArgs as clap::CommandFactory>::command,
+    policy: |_| crate::cmdkit::CmdPolicy {
+        stakeholder: crate::stakeholder_role::StakeholderAction::Write,
+        per_write_auto_push: false,
+        skip_role_restore_prompt: false,
+        team_identity_write: false,
+    },
+    run: crate::cmdkit::Handler::Store(run_advisor),
+};

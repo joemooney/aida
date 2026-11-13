@@ -2212,3 +2212,98 @@ fn status_recovers_claim_window_and_bounds_interrupted_claims() {
     result.unwrap();
     assert!(String::from_utf8(out).unwrap().contains(": queued"));
 }
+
+// The fixed service operation shares the real kernel-attested socket; merely
+// naming a valid advisor or its registration cannot replace the binding.
+// trace:STORY-2571 | ai:codex
+#[test]
+fn story2571_service_socket_authenticates_rotation_and_refuses_stale_binding() {
+    let f = Fixture::new("t");
+    let _ambient = crate::test_env::AmbientGuard::hermetic_with_seat(
+        f.root(),
+        "advisor",
+        &["advisor", "reviewer"],
+    );
+    let first = crate::gate::seat_authority::grant_check(f.root())
+        .into_valid()
+        .unwrap();
+    let cfg = f.default_cfg();
+    let host = crate::review_watch::service::HostAuthority::new(&cfg);
+    let _server =
+        socket::serve_service(&f.q, real_probes(&[]), system_clock(), Some(host)).unwrap();
+    let send = |g: &SeatGrant, project: &Path| {
+        socket::request(
+            &f.q,
+            &socket::Request::ReviewWatchRebind {
+                project: project.to_path_buf(),
+                grant: g.id.clone(),
+            },
+        )
+        .unwrap()
+    };
+    assert!(send(&first, f.root()).ok);
+    let next_id = crate::gate::seat_authority::test_support::mint_grant_for(
+        f.root(),
+        &first.subject,
+        "advisor",
+        &["advisor", "reviewer"],
+    );
+    let next = crate::gate::seat_authority::read_grant(&next_id).unwrap();
+    assert!(send(&next, f.root()).ok);
+    let stale = send(&first, f.root());
+    assert!(!stale.ok);
+    assert!(stale.why.unwrap().contains("stale"));
+    assert!(!send(&next, &f.root().join("other")).ok);
+    crate::gate::seat_authority::revoke_by_id(&next.id).unwrap();
+    assert!(!send(&next, f.root()).ok);
+}
+
+// trace:BUG-2520 | ai:codex
+#[test]
+fn delegated_advisor_jobs_validate_operator_principal_and_chain() {
+    use crate::gate::seat_authority as authority;
+    let f = Fixture::new("t");
+    let _ambient =
+        crate::test_env::AmbientGuard::hermetic_with_seat(f.root(), "advisor", &["advisor"]);
+    let parent = authority::grant_check(f.root()).into_valid().unwrap();
+    let child = authority::issue_child_from(parent.clone(), "advisor", "claude-advisor-111", false)
+        .unwrap();
+    let foreign_id = authority::test_support::mint_grant_for(
+        f.root(),
+        "another-operator",
+        "advisor",
+        &["advisor"],
+    );
+    let foreign_parent = authority::read_grant(&foreign_id).unwrap();
+    let foreign =
+        authority::issue_child_from(foreign_parent, "advisor", "claude-advisor-222", false)
+            .unwrap();
+    let p = Probes::live();
+    let enqueue = |g: &SeatGrant| {
+        let mut s = submitter(g, &g.binding[0], f.root(), "session");
+        s.host = p.host.clone();
+        f.submit_as("exit 7", s)
+    };
+    let accepted = enqueue(&child);
+    let refused = enqueue(&foreign);
+    let mut cfg = f.cfg(p.clone());
+    cfg.max_jobs = Some(2);
+    run(&f.q, &cfg);
+    assert_eq!(f.state(&accepted.id).rc, Some(7));
+    assert_eq!(
+        f.state(&refused.id).reason.as_deref(),
+        Some("refused:grant")
+    );
+    assert!(!f.q.script_path(&refused.id).exists());
+    assert!(f.transcript(&refused.id).contains("principal"));
+
+    // A matching principal cannot rescue a revoked delegation chain.
+    authority::revoke_by_id(&parent.id).unwrap();
+    let revoked = enqueue(&child);
+    run(&f.q, &f.cfg(p));
+    assert_eq!(
+        f.state(&revoked.id).reason.as_deref(),
+        Some("refused:grant")
+    );
+    assert!(!f.q.script_path(&revoked.id).exists());
+}

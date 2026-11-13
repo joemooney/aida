@@ -82,6 +82,9 @@ pub(crate) fn handoff(
             phase: Phase::InPr {
                 change: change.clone(),
                 handed_off_at: now,
+                handed_off_by: current
+                    .and_then(|c| c.holder.as_ref())
+                    .map(|h| h.session.clone()),
                 head: head.to_string(),
             },
         },

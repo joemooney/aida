@@ -46,9 +46,15 @@ pub enum MandateAction {
         /// guided, keystone). Operator-only specs are never covered.
         #[clap(long)]
         include_supervised: bool,
+        /// Allow mandate ships and trains to take protected-path PRs. Requires
+        /// a human at a terminal; all other gates still apply.
+        // trace:STORY-2733 | ai:codex
+        #[clap(long)]
+        include_gate_paths: bool,
     },
     /// Extend the active mandate in place, or revive the latest expired one
-    /// with a fresh ID. Keeps scope, flags and reason. Stopped mandates stay
+    /// with a fresh ID. Keeps scope, supervised flag and reason. Protected paths
+    /// require --include-gate-paths again. Stopped mandates stay
     /// stopped. Human at an interactive terminal only.
     // trace:STORY-B6B1278890774EF993D2EBC327862470-166 | ai:claude
     Renew {
@@ -56,6 +62,10 @@ pub enum MandateAction {
         /// duration it was started with, at most 24h).
         #[clap(long = "for", value_name = "DURATION")]
         duration: Option<String>,
+        /// Allow protected-path ships and trains for this renewal; omitted
+        /// resets the opt-in. Requires a human at a terminal.
+        #[clap(long)]
+        include_gate_paths: bool,
     },
     /// End the active mandate now. Human at an interactive terminal only.
     Stop,

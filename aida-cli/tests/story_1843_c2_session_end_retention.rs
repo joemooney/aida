@@ -235,11 +235,7 @@ fn a_refused_session_end_ends_nothing_and_a_retry_ends_it() {
     assert!(!out.status.success(), "the end must refuse: {}", show(&out));
     let stderr = String::from_utf8_lossy(&out.stderr);
     assert!(stderr.contains("was NOT ended"), "{}", show(&out));
-    assert!(
-        stderr.contains("aida mailbox retention activate"),
-        "{}",
-        show(&out)
-    );
+    assert!(stderr.contains("canonical preservation"), "{}", show(&out));
 
     // Nothing that ends the session ran.
     let lease_file = sessions.join(format!("{}.toml", lease.id));

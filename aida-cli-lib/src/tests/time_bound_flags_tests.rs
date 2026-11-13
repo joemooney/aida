@@ -1,5 +1,5 @@
 //! Every time-bound flag in the CLI (`--since`, `--until`, `--older-than`,
-//! `--unused` and the `aida usage unused <DURATION>` positional) either runs
+//! and the `aida usage unused <DURATION>` positional) either runs
 //! through the shared time-bound grammar in `parse_since_arg_at`, or is
 //! listed below as deliberately NOT a time bound (a git ref, a tag, a
 //! free-text condition, an integer day count).
@@ -36,7 +36,7 @@ fn history_until(raw: &str, now: DateTime<Utc>, tz: &FixedOffset) -> Result<Date
 }
 
 /// `parse_days_arg` (usage, health, metrics) and the labeled lookbacks
-/// (mailbox `--older-than`, usage `--unused`) all resolve through
+/// (mailbox `--older-than`, usage `unused <DURATION>`) all resolve through
 /// `parse_lookback_at`.
 fn lookback(raw: &str, now: DateTime<Utc>, tz: &FixedOffset) -> Result<DateTime<Utc>, String> {
     parse_lookback_at(raw, "--since", now, tz)
@@ -70,6 +70,15 @@ fn doctor(raw: &str, now: DateTime<Utc>, tz: &FixedOffset) -> Result<DateTime<Ut
 fn classified_flags() -> Vec<(&'static str, Kind)> {
     use Kind::*;
     vec![
+        // trace:STORY-2699 | ai:codex
+        (
+            "aida flow-data report --since",
+            NotATimeBound("absolute RFC3339 or UTC calendar-date reporting boundary; preserves the advisor baseline window semantics"),
+        ),
+        (
+            "aida flow-data report --until",
+            NotATimeBound("absolute RFC3339 or UTC calendar-date reporting boundary; preserves the advisor baseline window semantics"),
+        ),
         ("aida approvals --since", Shared(shared)),
         ("aida approvals --until", Shared(shared)),
         ("aida findings classes --since", Shared(shared)),
@@ -93,9 +102,7 @@ fn classified_flags() -> Vec<(&'static str, Kind)> {
             NotATimeBound("absolute RFC3339 response deadline per the disposition contract; no relative/lookback grammar"),
         ),
         ("aida usage --since", Shared(lookback)),
-        // Split so the retired-flag lint (scripts/check-removed-flags.sh),
-        // which matches the joined spelling, doesn't flag this label.
-        (concat!("aida usage", " --unused"), Shared(lookback)),
+        // trace:TASK-1214 | ai:codex — only the retained positional is classified.
         ("aida usage unused <duration>", Shared(lookback)),
         ("aida metrics agent-lift --since", Shared(lookback)),
         // trace:STORY-1479 | ai:claude — cycle-time resolves both bounds
@@ -109,7 +116,16 @@ fn classified_flags() -> Vec<(&'static str, Kind)> {
         ("aida doctor --since", Shared(doctor)),
         (
             "aida defer --until",
-            NotATimeBound("free-text revisit condition, not a time"),
+            NotATimeBound("typed revisit condition, not a shared time bound"),
+        ),
+        // trace:STORY-2402 | ai:codex
+        (
+            "aida findings recur --until",
+            NotATimeBound("typed revisit condition, not a shared time bound"),
+        ),
+        (
+            "aida session handoff --until",
+            NotATimeBound("typed revisit condition, not a shared time bound"),
         ),
         (
             "aida db reconcile-status --since",
@@ -167,7 +183,7 @@ fn collect(cmd: &clap::Command, path: &str, out: &mut Vec<String>) {
 
 #[test]
 fn every_time_bound_flag_is_classified() {
-    let cmd = crate::command_registry::built_command();
+    let cmd = crate::TEST_CLI.built_command();
     let mut found = Vec::new();
     collect(&cmd, "aida", &mut found);
     found.sort();
@@ -506,7 +522,7 @@ fn ref_taking_cli_flags_refuse_option_like_values() {
     // covered too.
     let sink = tempfile::TempDir::new().unwrap();
     let bad = format!("--output={}", sink.path().join("pwned.txt").display());
-    let parse = |args: &[&str]| crate::command_registry::try_parse_from(args).unwrap();
+    let parse = |args: &[&str]| crate::TEST_CLI.try_parse_from(args).unwrap();
     // The `--flag=value` spelling: clap refuses a dash-led value given as a
     // separate argument, but takes it when fused.
     for flag in ["--since", "--until"] {
@@ -566,4 +582,19 @@ fn doc_coverage_since_refuses_option_like_values() {
         );
     }
     assert_nothing_written(sink.path(), "doc coverage --since");
+}
+
+// trace:STORY-2704 | ai:codex
+#[test]
+fn flow_data_bounds_retain_absolute_reporting_semantics() {
+    for flag in ["--since", "--until"] {
+        let name = format!("aida flow-data report {flag}");
+        let flags = classified_flags();
+        let (_, Kind::NotATimeBound(reason)) =
+            flags.iter().find(|(path, _)| *path == name).unwrap()
+        else {
+            panic!("{name} must retain its absolute boundary classification");
+        };
+        assert!(reason.contains("absolute RFC3339 or UTC calendar-date"));
+    }
 }

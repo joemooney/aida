@@ -224,6 +224,23 @@ fn an_unreadable_seat_clone_fails_reentry_and_salvage_closed() {
     let (shim_dir, log, _) = git_shim(&fx);
     let _path = crate::test_env::EnvVarGuard::prepend_path(&shim_dir);
 
+    // trace:STORY-2325 | ai:codex — reach the tree probe with proven-dead ownership.
+    crate::test_env::write_project_config_fixture(&fx.main, "store_path = \".aida-store\"\n");
+    let mut store = aida_core::RequirementsStore::default();
+    let mut req = aida_core::Requirement::new("host git fixture".into(), "".into());
+    req.spec_id = Some("TASK-2053".into());
+    let key = crate::ownership::WorkKey::Spec {
+        spec: crate::gate::canon::SpecKey(req.id),
+    };
+    store.requirements.push(req);
+    crate::test_env::home_fixture_storage(fx.main.join(".aida-store"))
+        .save(&store)
+        .unwrap();
+    let lease = crate::list_leases(&fx.main)
+        .into_iter()
+        .find(|l| l.worktree_path == clone)
+        .unwrap();
+    crate::ownership::reader::seed_lease_heartbeat(&fx.main, &lease, key, false);
     let error = crate::agent_launch::preflight_agent_launch_lease(
         &fx.main,
         None,
@@ -292,6 +309,23 @@ fn task_2053_bwrap_a_submodule_clone_fails_reentry_and_salvage_closed() {
     )
     .unwrap();
 
+    // trace:STORY-2325 | ai:codex — reach the tree probe with proven-dead ownership.
+    crate::test_env::write_project_config_fixture(&fx.main, "store_path = \".aida-store\"\n");
+    let mut store = aida_core::RequirementsStore::default();
+    let mut req = aida_core::Requirement::new("host git fixture".into(), "".into());
+    req.spec_id = Some("TASK-2053".into());
+    let key = crate::ownership::WorkKey::Spec {
+        spec: crate::gate::canon::SpecKey(req.id),
+    };
+    store.requirements.push(req);
+    crate::test_env::home_fixture_storage(fx.main.join(".aida-store"))
+        .save(&store)
+        .unwrap();
+    let lease = crate::list_leases(&fx.main)
+        .into_iter()
+        .find(|l| l.worktree_path == clone)
+        .unwrap();
+    crate::ownership::reader::seed_lease_heartbeat(&fx.main, &lease, key, false);
     let error = crate::agent_launch::preflight_agent_launch_lease(
         &fx.main,
         None,
@@ -378,4 +412,69 @@ fn task_2053_bwrap_an_empty_gitmodules_placeholder_does_not_block_salvage() {
     assert!(crate::list_leases(&fx.main)
         .iter()
         .all(|l| l.id != lease.id));
+}
+
+// trace:BUG-2536 | ai:codex
+#[cfg(target_os = "linux")]
+#[test]
+fn bug_2536_clone_launch_head_allows_published_result() {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
+    let fx = fixture();
+    let _namespace = crate::test_env::EnvVarGuard::set("AIDA_TRUST_PID_NAMESPACE", "1");
+    let clone = leased_clone(&fx, "published", "c0ffee002536");
+    let expected = super::tests::git_ok(&fx.main, &["rev-parse", "origin/main"]);
+    // Negative control: the former launch read deliberately refuses this tree.
+    assert_eq!(crate::headless_background::seat_head(&clone), None);
+    let head = crate::standalone_implementer::implementer_launch_head(&fx.main, &clone);
+    assert_eq!(head.as_deref(), Some(expected.as_str()));
+    assert_eq!(
+        crate::standalone_implementer::implementer_launch_head(&fx.main, &fx.main),
+        Some(super::tests::git_ok(&fx.main, &["rev-parse", "HEAD"]))
+    );
+    let attempt = crate::lane_result::Attempt::begin(&fx.main, "BUG-2536", Some("feat")).unwrap();
+    attempt
+        .bind("BUG-2536", "feat", None, head.as_deref())
+        .unwrap();
+    attempt.started(123);
+    super::tests::git_ok(&clone, &["config", "user.email", "test@example.com"]);
+    super::tests::git_ok(&clone, &["config", "user.name", "AIDA Test"]);
+    for args in [
+        ["commit", "--allow-empty", "-qm", "lane work"],
+        ["push", "-q", "origin", "HEAD:feat"],
+    ] {
+        let output = crate::test_git::git_command()
+            .current_dir(&clone)
+            .args(args)
+            .output()
+            .unwrap();
+        assert!(
+            output.status.success(),
+            "git {args:?}: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+    }
+    let published = crate::headless_background::SeatState::read(&clone, "feat");
+    let new_head = published.pushed_head().expect("published clone head");
+    assert_ne!(head.as_deref(), Some(new_head));
+    assert_eq!(
+        attempt
+            .finish_outcome(
+                &crate::standalone_implementer::Outcome::PrOpened {
+                    pr: 42,
+                    head: Some(new_head.into()),
+                },
+                true,
+                false,
+                false,
+            )
+            .unwrap(),
+        crate::lane_result::Kind::Pushed
+    );
+    let line = attempt.line().unwrap();
+    assert!(
+        line.contains(&format!("reason=new-published-head pr=42 head={new_head}")),
+        "{line}"
+    );
 }

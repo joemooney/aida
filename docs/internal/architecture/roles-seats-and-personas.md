@@ -41,7 +41,7 @@ A persona is activated only through `AIDA_SESSION_ROLE=guest|requester`. It has
 no role file, role history, queue route, lease, or singleton seat. The persona
 check in `aida-cli-lib/src/permissions.rs` runs before role/roster resolution so
 a roster or permissive fallback cannot grant it build authority.
-`role_is_stakeholder_only` in `aida-cli-lib/src/queue_cmd.rs` keeps personas out
+`role_is_stakeholder_only` in `aida-cli-lib/src/queue_cmd/add.rs` keeps personas out
 of queue routing. `print_stakeholder_personas` and the picker machinery in
 `aida-cli-lib/src/role_cmd.rs` and `aida-cli-lib/src/lib.rs` make them
 discoverable without creating role files.

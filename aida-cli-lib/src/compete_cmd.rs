@@ -7,7 +7,13 @@
 // trace:SPIKE-78 | ai:claude
 
 use crate::process_retry::RetryEtxtbsy;
-use crate::*;
+use crate::{
+    assemble_ultraplan_prompt, build_reusable_helpers_section, compete, create_agent_brief,
+    find_project_root, glyph, load_store_for_lookup, read_reserved_paths, session,
+    working_tree_is_dirty,
+};
+use anyhow::{Context, Result};
+use colored::Colorize;
 
 /// Assemble the implementer brief a compete arm hands to a vendor: the rich
 /// spec context (reusing the AIDA planning-prompt assembly) wrapped in compete-specific
@@ -1150,28 +1156,36 @@ pub(crate) fn build_compete_arm_command(
             || posture != session::ContainmentPosture::Aida,
         crate::codex_tool_env::UNWIRED_AIDA_POSTURE
     );
-    let ctx = crate::launch::LaunchContext::resolve(crate::launch::LaunchRequest {
-        vendor: vendor_profile,
-        kind: aida_core::launch_policy::LaunchKind::Fresh,
-        program: program.into(),
-        args,
-        tail: Vec::new(),
-        posture,
-        cwd: worktree_dir.to_path_buf(),
-        set_cwd: true,
-        host_main: host_main.map(std::path::Path::to_path_buf),
-    })?;
+    let ctx = {
+        let req = crate::launch::LaunchRequest {
+            vendor: vendor_profile,
+            kind: aida_core::launch_policy::LaunchKind::Fresh,
+            program: program.into(),
+            args,
+            tail: Vec::new(),
+            posture,
+            cwd: worktree_dir.to_path_buf(),
+            set_cwd: true,
+            host_main: host_main.map(std::path::Path::to_path_buf),
+        };
+        // trace:STORY-2538 | ai:codex
+        let exec = crate::session::capture_launch_exec(&req.cwd, req.host_main.as_deref())?;
+        crate::launch::LaunchContext::resolve(&exec, req)
+    }?;
     let mut cmd = crate::launch::spawn_agent(&ctx)?;
     // BUG-050: belt and braces alongside the `--settings` env.
     // trace:BUG-B6B1278890774EF993D2EBC327862470-050 | ai:claude
     if vendor == "claude" {
+        // No delegated seat: Claude's cleared projection deliberately drops
+        // parent role/grant/purpose. Compete does not become the parent session.
+        // trace:STORY-2326 | ai:codex
         cmd.env(session::DISABLE_BACKGROUND_TASKS_ENV, "1");
     }
     if vendor == "codex" {
         // Compete arms and judges do not receive a delegated seat.
         // trace:BUG-2398 | ai:codex
         compete_codex_environment(&mut cmd, worktree_dir);
-        crate::launch::profile::finalize_codex(&mut cmd)?;
+        crate::vendors::profile::finalize_codex(&mut cmd)?;
     }
     // Finalize after the Codex adapter, which rebuilds the Command.
     crate::launch::parent::bind_child_to_parent(&mut cmd);
@@ -1958,7 +1972,9 @@ mod containment_tests {
             false,
         )
         .is_err());
-        assert!(session::spawn_claude_resume_with_grant(None, "sid", None, true, None).is_err());
+        assert!(
+            session::spawn_claude_resume_with_grant(None, "sid", None, true, None, None).is_err()
+        );
         assert!(handle_compete_command(
             "TASK-1",
             &["claude".into()],
@@ -2067,7 +2083,7 @@ pub(crate) struct CompeteArgs {
 // handle. trace:STORY-659 | ai:claude
 fn run_compete(
     matches: &clap::ArgMatches,
-    _ctx: &crate::command_registry::DispatchCtx,
+    _ctx: &crate::cmdkit::DispatchCtx,
 ) -> anyhow::Result<()> {
     let args = <CompeteArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
     let CompeteArgs {
@@ -2089,19 +2105,18 @@ fn run_compete(
 }
 
 // trace:STORY-1728 | ai:claude
-pub(crate) static COMPETE: crate::command_registry::CommandReg =
-    crate::command_registry::CommandReg {
-        name: "compete",
-        help_after: "brief",
-        command: <CompeteArgs as clap::CommandFactory>::command,
-        policy: |_| crate::command_registry::CmdPolicy {
-            stakeholder: crate::stakeholder_role::StakeholderAction::Write,
-            per_write_auto_push: false,
-            skip_role_restore_prompt: false,
-            team_identity_write: false,
-        },
-        run: crate::command_registry::Handler::Early(run_compete),
-    };
+pub(crate) static COMPETE: crate::cmdkit::CommandReg = crate::cmdkit::CommandReg {
+    name: "compete",
+    help_after: "brief",
+    command: <CompeteArgs as clap::CommandFactory>::command,
+    policy: |_| crate::cmdkit::CmdPolicy {
+        stakeholder: crate::stakeholder_role::StakeholderAction::Write,
+        per_write_auto_push: false,
+        skip_role_restore_prompt: false,
+        team_identity_write: false,
+    },
+    run: crate::cmdkit::Handler::Early(run_compete),
+};
 
 #[cfg(test)]
 mod bug2396_judge_vendor_tests {

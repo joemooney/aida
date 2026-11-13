@@ -31,6 +31,47 @@ thread_local! {
 /// assigns the seat with [`assign_seat`].
 pub(crate) fn spawn_agent(ctx: &LaunchContext) -> Result<Command> {
     let mut cmd = Command::new(ctx.program());
+    // Claude is the first vendor cutover. The explicit uncontained fixture
+    // override keeps integration harness inputs, never contained launches.
+    // trace:STORY-2326 | ai:codex
+    let profile = crate::vendors::profile::VendorProfile::for_vendor(ctx.vendor());
+    // trace:STORY-2641 | ai:codex
+    let resources = if ctx.fixture_override() || ctx.wrapper_environment() {
+        None
+    } else {
+        super::resources::SandboxResources::for_seat(
+            ctx.exec_context(),
+            ctx.host_main(),
+            ctx.cwd(),
+        )?
+    };
+    if profile.clears_environment() && !ctx.fixture_override() && !ctx.wrapper_environment() {
+        let env = profile.child_env(
+            ctx.kind(),
+            ctx.exec_context().environment(),
+            resources.as_ref(),
+        )?;
+        cmd.env_clear().envs(env.pairs());
+    }
+    // Vendors that retain parent env still receive the seat-owned build values.
+    // trace:STORY-2641 | ai:codex
+    if !profile.clears_environment() {
+        if let Some(resources) = &resources {
+            cmd.envs(resources.cargo_env());
+        }
+    }
+    // A seat without a target must still override Cargo config and inherited
+    // wrappers, so it cannot connect to an operator cache server.
+    // trace:STORY-2641 | ai:codex
+    let isolated_seat = ctx.posture() != ContainmentPosture::None
+        || ctx.parent_contained()
+        || ctx
+            .host_main()
+            .is_some_and(|host| crate::seat_clone::host_recorded_clone(host, ctx.cwd()).is_some());
+    if resources.is_none() && isolated_seat && !ctx.fixture_override() && !ctx.wrapper_environment()
+    {
+        cmd.env("RUSTC_WRAPPER", "");
+    }
     cmd.args(ctx.argv());
     if ctx.sets_cwd() {
         cmd.current_dir(ctx.cwd());
@@ -110,6 +151,27 @@ pub(crate) fn assign_seat(
             "a background hand-off cannot carry a seat; the session takes its seat from its lane lease"
         );
     }
+    // The reviewer handshake is a deliberate reviewer-only transport, never
+    // general ambient configuration. Both standalone entrypoints establish it
+    // before choosing fresh/resume or interactive/headless launch paths.
+    // trace:STORY-2326 | ai:codex
+    let parent = aida_core::exec_context::Environment::capture();
+    let reviewer = match seat {
+        SeatDecision::Child { role, .. } => role == "reviewer",
+        SeatDecision::Lane { role, .. } => role == Some("reviewer"),
+        SeatDecision::ThisSession { .. } => {
+            parent.get(ROLE_ENV).is_some_and(|role| role == "reviewer")
+        }
+    };
+    if reviewer
+        && !cmd
+            .get_envs()
+            .any(|(key, _)| key == "AIDA_REVIEW_VERDICT_FILE")
+    {
+        if let Some(path) = parent.get("AIDA_REVIEW_VERDICT_FILE") {
+            cmd.env("AIDA_REVIEW_VERDICT_FILE", path);
+        }
+    }
     match seat {
         SeatDecision::Child { role, grant } => {
             cmd.env(ROLE_ENV, role)
@@ -130,6 +192,24 @@ pub(crate) fn assign_seat(
             cmd.env_remove(PURPOSE_ENV);
         }
         SeatDecision::ThisSession { grant } => {
+            // Exec retains this validated session's selectors after env_clear;
+            // new child and lane decisions above always replace them.
+            // trace:STORY-2326 | ai:codex
+            if crate::vendors::profile::environment_is_cleared(cmd) {
+                for key in [
+                    ROLE_ENV,
+                    PURPOSE_ENV,
+                    STANDALONE_MARKER_ENV,
+                    LANE_MARKER_ENV,
+                ] {
+                    if let Some(value) = parent.get(key) {
+                        cmd.env(key, value);
+                    }
+                }
+                if let Some(selector) = crate::gate::seat_authority::current_grant_id() {
+                    cmd.env(GRANT_ENV, selector);
+                }
+            }
             if let Some(grant) = grant {
                 cmd.env(GRANT_ENV, grant);
             }

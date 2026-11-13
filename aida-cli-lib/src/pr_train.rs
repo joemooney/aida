@@ -24,6 +24,8 @@
 #[path = "pr_train_journal.rs"]
 mod journal;
 pub(crate) use journal::TrainJournalBusy;
+#[path = "pr_train_overlap.rs"]
+mod overlap;
 #[path = "pr_train_verified.rs"]
 mod verified;
 pub(crate) use verified::VerifiedTrainMerge;
@@ -31,6 +33,11 @@ pub(crate) use verified::VerifiedTrainMerge;
 use anyhow::{Context, Result};
 use std::collections::VecDeque;
 use std::path::{Path, PathBuf};
+
+// trace:TASK-3789 | ai:codex
+fn train_progress(message: std::fmt::Arguments<'_>) -> String {
+    format!("  {} {message}", chrono::Local::now().format("%H:%M:%S"))
+}
 
 /// The forge adapter checkpoints active train intent before nested calls and
 /// retry attempts. Outside a journaled train this is a no-op.
@@ -60,6 +67,10 @@ pub(crate) struct Member {
     pub head: String,
     pub subject: String,
     pub body: String,
+    /// Audit-only trailer retained across journal recovery; never grants cover.
+    // trace:STORY-2733 | ai:codex
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub gate_audit: Option<String>,
     /// BUG-2214: the mandate cover under which the land step releases this
     /// member's merge-hold, from the gate's most recent cover check (the
     /// pre-land re-gate refreshes it under the merge lease). `None` = no hold
@@ -67,6 +78,33 @@ pub(crate) struct Member {
     // trace:BUG-2214 | ai:claude
     #[serde(skip)]
     pub release: Option<crate::gate::mandate_ship::MandateCover>,
+    /// The live mandate cover that admitted this member's spec policy, kept
+    /// apart from `release`: a supervised member with no hold left to release
+    /// (a human-cleared one) still lands under this cover. Never journaled —
+    /// every gate run, including after journal recovery, re-reads it.
+    // trace:STORY-2733 | ai:claude
+    #[serde(skip)]
+    pub cover: Option<crate::gate::mandate_ship::MandateCover>,
+}
+
+impl Member {
+    /// The live mandate cover a protected-path audit lands under: the policy
+    /// cover, else the hold-release cover. `None` = no live mandate cover.
+    // trace:STORY-2733 | ai:claude
+    pub(crate) fn live_cover(&self) -> Option<&crate::gate::mandate_ship::MandateCover> {
+        self.cover.as_ref().or(self.release.as_ref())
+    }
+}
+
+/// The live mandate cover the final train refresh binds a member's audit to:
+/// today's fresh gate first, else the cover held since the build. A
+/// human-cleared hold leaves no release cover, so the policy cover counts.
+// trace:STORY-2733 | ai:claude
+pub(crate) fn final_live_cover<'a>(
+    fresh: &'a Member,
+    built: &'a Member,
+) -> Option<&'a crate::gate::mandate_ship::MandateCover> {
+    fresh.live_cover().or_else(|| built.live_cover())
 }
 
 /// A member left off main, and why.
@@ -152,7 +190,11 @@ pub(crate) fn car_message(m: &Member) -> String {
         format!("{subject} {suffix}")
     };
     let body = m.body.trim();
-    let trailer = format!("Aida-Train-Member: #{} at {}", m.pr, m.head);
+    let mut trailer = format!("Aida-Train-Member: #{} at {}", m.pr, m.head);
+    // trace:STORY-2733 | ai:codex
+    if let Some(audit) = &m.gate_audit {
+        trailer.push_str(&format!("\n{audit}"));
+    }
     if body.is_empty() {
         format!("{subject}\n\n{trailer}\n")
     } else {
@@ -566,7 +608,7 @@ pub(crate) fn hold_gate_tolerance(
 /// The member half of [`hold_gate_tolerance`], without its "every other row
 /// is green" half: a non-pass hold gate is explained by admitted held members
 /// whose live labels agree with the member gate. The train's readiness poll
-/// uses this while lanes still run (the hold gate fails within seconds, long
+/// uses this while lanes still run (the hold gate becomes pending within seconds, long
 /// before the lanes settle); readiness still needs every other row to settle
 /// green before it reports Green. Unreadable labels fail closed.
 // trace:BUG-2401 | ai:claude
@@ -588,6 +630,66 @@ pub(crate) fn hold_release_admitted(
         Ok(Some(c)) => member_label_refusal(&c, car.member.release.is_some()).is_none(),
         _ => false,
     })
+}
+
+/// CI matrix identity from the existing check snapshot. Summary and ancillary
+/// jobs (including Release) must never increase the shard denominator.
+// trace:TASK-3782 | ai:codex
+fn train_ci_is_shard(row: &crate::ci_gate::CheckRow) -> bool {
+    row.workflow == "CI" && row.name.starts_with("CI (") && row.name.ends_with(')')
+}
+
+/// Cosmetic progress from the same snapshot used for readiness. No forge reads.
+/// Shards are the CI workflow's matrix checks; Release and other checks are
+/// ancillary and never enter the shard denominator.
+// trace:TASK-3782 | ai:codex
+fn train_ci_wait_details(rows: &[crate::ci_gate::CheckRow]) -> Vec<String> {
+    let runs: std::collections::BTreeSet<_> =
+        rows.iter().filter_map(|r| r.run_id.as_deref()).collect();
+    runs.into_iter()
+        .map(|run| {
+            let checks: Vec<_> = rows
+                .iter()
+                .filter(|r| r.run_id.as_deref() == Some(run))
+                .collect();
+            let shards: Vec<_> = checks
+                .iter()
+                .copied()
+                .filter(|row| train_ci_is_shard(row))
+                .collect();
+            let passed = shards.iter().filter(|r| r.bucket == "pass").count();
+            let is_ci_run = checks.iter().any(|r| r.workflow == "CI");
+            let mut parts = if is_ci_run {
+                vec![format!(
+                    "run {run}: {passed}/{} shards passed",
+                    shards.len()
+                )]
+            } else {
+                vec![format!("run {run}")]
+            };
+            for row in checks {
+                if row.workflow == "CI"
+                    && crate::ci_gate::check_name_eq(&row.name, "Build (ubuntu-latest)")
+                {
+                    parts.push(format!("Build summary: {}", row.bucket));
+                } else if train_ci_is_shard(row) {
+                    parts.push(format!("{}: {}", row.name, row.bucket));
+                } else {
+                    parts.push(format!("ancillary {}: {}", row.name, row.bucket));
+                }
+            }
+            if is_ci_run
+                && !rows.iter().any(|r| {
+                    r.run_id.as_deref() == Some(run)
+                        && r.workflow == "CI"
+                        && crate::ci_gate::check_name_eq(&r.name, "Build (ubuntu-latest)")
+                })
+            {
+                parts.push("Build summary appears after all shards finish".into());
+            }
+            parts.join("; ")
+        })
+        .collect()
 }
 
 /// Required presence is checked before any informational or hold exception.
@@ -647,7 +749,13 @@ fn train_ci_readiness(
             return TrainCiReadiness::Pending(
                 missing
                     .into_iter()
-                    .map(|n| format!("{n} (not registered yet)"))
+                    .map(|n| {
+                        if crate::ci_gate::check_name_eq(&n, "Build (ubuntu-latest)") {
+                            "Build summary appears after all shards finish".into()
+                        } else {
+                            format!("waiting for {n} to register")
+                        }
+                    })
                     .collect(),
             );
         }
@@ -761,7 +869,7 @@ fn wait_train_ci(
             }
             Err(e) if e.downcast_ref::<TrainCiReadError>().is_some() => {
                 read_errors += 1;
-                println!("  train PR #{pr} CI read failed ({read_errors}/{TRAIN_CI_READ_ATTEMPTS}): {e:#}");
+                println!("{}", train_progress(format_args!("train PR #{pr} CI read failed ({read_errors}/{TRAIN_CI_READ_ATTEMPTS}): {e:#}")));
                 if read_errors >= TRAIN_CI_READ_ATTEMPTS
                     || (settle_limit != 0 && elapsed() >= settle_limit)
                 {
@@ -782,7 +890,34 @@ fn wait_train_ci(
             }
             waiting => waiting,
         };
-        println!("  train PR #{pr} CI waiting: {waiting:?}");
+        // trace:TASK-3782 | ai:codex
+        match &waiting {
+            TrainCiReadiness::Pending(names) | TrainCiReadiness::Missing(names) => {
+                let display: Vec<_> = names
+                    .iter()
+                    .map(|name| {
+                        if crate::ci_gate::check_name_eq(name, "Build (ubuntu-latest)") {
+                            "Build summary appears after all shards finish".to_string()
+                        } else {
+                            name.clone()
+                        }
+                    })
+                    .collect();
+                println!(
+                    "{}",
+                    train_progress(format_args!(
+                        "train PR #{pr} CI waiting: {}",
+                        display.join("; ")
+                    ))
+                )
+            }
+            _ => println!(
+                "{}",
+                train_progress(format_args!(
+                    "train PR #{pr} CI waiting: checks have not registered"
+                ))
+            ),
+        }
         // An empty row set is normal immediately after opening the PR.
         // trace:BUG-2423 | ai:codex
         if waiting == TrainCiReadiness::Unregistered {
@@ -1203,6 +1338,17 @@ fn typed_gate_member_with(
             "its head could not be read from the forge; failing closed".to_string(),
         ));
     }
+    // Apply at the typed gate too: recovery and pre-land confirmations use it
+    // directly. Compare the strict evidence with this metadata snapshot.
+    // trace:STORY-2691 | ai:codex
+    if ADVISOR_LOOP.with(std::cell::Cell::get) {
+        let observed = crate::review_watch::advisor_train_eligible(checks.marker_root(), pr)?;
+        if observed != head {
+            return Err(MemberGateError::Unavailable(
+                "head moved during automatic train admission".into(),
+            ));
+        }
+    }
     // TASK-1602: ship's in-drive ownership gate. trace:STORY-1690 | ai:claude
     if let Some(detail) = checks.drive_block(pr) {
         return Err(MemberGateError::Refused(format!(
@@ -1294,6 +1440,10 @@ fn typed_gate_member_with(
     // would release its hold; the release itself happens at land time, under
     // the merge lease, through ship's own release sequence.
     // trace:BUG-2214 | ai:claude
+    // Persist audit evidence separately from the live, non-serialized cover.
+    // trace:STORY-2733 | ai:codex
+    let policy_cover = cover_slot.as_ref().and_then(|c| c.as_ref().ok()).cloned();
+    let gate_audit = policy_cover.as_ref().and_then(|c| c.gate_audit());
     let release = match &held {
         None => None,
         Some(reason) => {
@@ -1313,12 +1463,17 @@ fn typed_gate_member_with(
             }
         }
     };
+    let gate_audit = release.as_ref().and_then(|c| c.gate_audit()).or(gate_audit);
+    // trace:STORY-2733 | ai:claude
+    let cover = policy_cover.or_else(|| release.clone());
     Ok(Member {
+        gate_audit,
         pr,
         head,
         subject,
         body,
         release,
+        cover,
     })
 }
 
@@ -1454,7 +1609,7 @@ impl MemberChecks for LiveChecks<'_> {
         let ship_meta = if self.forge.kind() == crate::forge::ForgeKind::GitHub {
             // trace:STORY-2401 | ai:codex
             journal::before("read member title and body").map_err(|e| format!("{e:#}"))?;
-            crate::pr_cmd::fetch_pr_ship_metadata_via_gh(self.project_root, pr)
+            crate::pr_cmd::fetch_pr_ship_metadata_via_forge(self.project_root, pr)
                 .map_err(|e| format!("its title and body could not be read ({e:#})"))?
         } else {
             crate::pr_cmd::PrShipMetadata {
@@ -1597,6 +1752,31 @@ pub(crate) fn tty_consents(interactive_tty: bool, named: bool) -> bool {
 // Recovery settles riders before admission, including an invocation whose only
 // candidates were just recovered. It must not schedule those members again.
 // trace:STORY-2401 | ai:codex
+fn automatic_idle(all_ready: bool, candidates: &[u64]) -> bool {
+    all_ready && candidates.is_empty() && ADVISOR_LOOP.with(std::cell::Cell::get)
+}
+
+// Recovery can close the last open rider before discovery. Report those
+// outcomes even though this automatic pass has no new train to run.
+// trace:STORY-2691 | ai:codex
+fn report_automatic_idle(
+    all_ready: bool,
+    candidates: &[u64],
+    recovered: &Outcome,
+    mut output: impl std::io::Write,
+) -> Result<bool> {
+    if !automatic_idle(all_ready, candidates) {
+        return Ok(false);
+    }
+    for (pr, commit) in &recovered.landed {
+        writeln!(output, "  landed #{pr} ({})", short(commit))?;
+    }
+    for e in &recovered.ejected {
+        writeln!(output, "  ejected #{}: {}", e.pr, e.reason)?;
+    }
+    Ok(true)
+}
+
 fn filter_recovered_candidates(candidates: &mut Vec<u64>, recovered: &Outcome) -> Result<()> {
     let mut seen = std::collections::BTreeSet::new();
     candidates.retain(|n| seen.insert(*n));
@@ -1643,14 +1823,77 @@ pub(crate) fn train_rider_refusal(
     None
 }
 
+/// A missing listing retains a rider; confirmed terminal forge evidence can
+/// repair a stale ride even when legacy trains have no ownership record.
+// trace:STORY-2325 | ai:codex
+fn ownership_rider_refusal(
+    root: &Path,
+    pr: u64,
+    dry_run: bool,
+    forge: &dyn crate::forge::Forge,
+) -> Result<Option<String>> {
+    ownership_rider_refusal_with(root, pr, dry_run, |train| {
+        let terminal = |m: &crate::forge::ChangeMetadata| {
+            matches!(
+                m.state,
+                crate::forge::ChangeState::Closed | crate::forge::ChangeState::Merged
+            )
+        };
+        matches!(crate::forge_confirmation::metadata_for(root, forge, train,
+            &mut crate::network_retry::NoopSink, terminal),
+            crate::forge_observed::Observed::Known(m) if terminal(&m))
+    })
+}
+
+// trace:BUG-2537 | ai:codex
+fn ownership_rider_refusal_with(
+    root: &Path,
+    pr: u64,
+    dry_run: bool,
+    closed: impl FnOnce(u64) -> bool,
+) -> Result<Option<String>> {
+    let key = crate::ownership::WorkKey::Change {
+        change: crate::ownership::dual::change(pr),
+    };
+    let Some(record) = crate::ownership::reader::load(root, &key)? else {
+        return Ok(None);
+    };
+    let crate::ownership::Phase::Training { train } = record.phase else {
+        return Ok(None);
+    };
+    let train_key = crate::ownership::WorkKey::Train {
+        train: train.clone(),
+    };
+    if crate::ownership::reader::ended(root, &train_key)?.is_some() {
+        return Ok(None);
+    }
+    if closed(train.n) {
+        if !dry_run {
+            crate::ownership::dual::train_retired(
+                root,
+                train.n,
+                &[pr],
+                &format!("train #{} closed", train.n),
+            )?;
+        }
+        return Ok(None);
+    }
+    Ok(Some(format!(
+        "it is already riding train PR #{}; its ownership is live or unknown",
+        train.n
+    )))
+}
+
 /// The train PR body line naming the process that opened the train:
 /// `aida-train-owner: host=<host> pid=<pid> start=<kernel start identity>
 /// pidns=<pid namespace inode> boot=<boot id>`. A later train reads it to
 /// tell a live train from one whose process died.
 // trace:BUG-2412 | ai:claude
+#[cfg(test)]
 pub(crate) const OWNER_LINE: &str = "aida-train-owner:";
 
 /// The process that opened a train PR, as its body records it.
+#[cfg(test)]
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct TrainOwner {
     pub host: String,
@@ -1668,6 +1911,7 @@ pub(crate) struct TrainOwner {
 
 /// The owner line for this process.
 // trace:BUG-2412 | ai:claude
+#[cfg(test)]
 pub(crate) fn owner_line_for_self() -> String {
     let pid = std::process::id();
     owner_line(&TrainOwner {
@@ -1681,6 +1925,7 @@ pub(crate) fn owner_line_for_self() -> String {
 
 /// The owner line for `owner`.
 // trace:BUG-2412 | ai:claude
+#[cfg(test)]
 pub(crate) fn owner_line(owner: &TrainOwner) -> String {
     format!(
         "{OWNER_LINE} host={} pid={} start={} pidns={} boot={}",
@@ -1695,6 +1940,7 @@ pub(crate) fn owner_line(owner: &TrainOwner) -> String {
 /// The owner a train PR body records, or `None` when it has no well-formed
 /// owner line (a train opened before BUG-2412, or a hand-edited body).
 // trace:BUG-2412 | ai:claude
+#[cfg(test)]
 pub(crate) fn parse_owner_line(body: &str) -> Option<TrainOwner> {
     let rest = body
         .lines()
@@ -1728,6 +1974,7 @@ pub(crate) fn parse_owner_line(body: &str) -> Option<TrainOwner> {
 /// boot id, or a missing, foreign or unresolvable PID namespace (a pid probed
 /// across namespaces names an unrelated process, or none).
 // trace:BUG-2412 | ai:claude
+#[cfg(test)]
 pub(crate) fn train_abandoned(
     body: &str,
     our_host: &str,
@@ -1765,7 +2012,7 @@ fn live_trains(
 ) -> Result<(
     Vec<(u64, Option<Vec<(u64, String)>>)>,
     Vec<(u64, Option<Vec<(u64, String)>>)>,
-    Vec<(u64, String, TrainOwner)>,
+    Vec<(u64, String, crate::ownership::Ownership)>,
 )> {
     #[derive(serde::Deserialize)]
     struct Row {
@@ -1790,29 +2037,37 @@ fn live_trains(
         ],
     )?;
     let rows: Vec<Row> = serde_json::from_str(&raw).context("could not parse `gh pr list` JSON")?;
-    let our_host = crate::coordination::hostname();
     let leases: Vec<crate::merge_lock::Holder> = crate::merge_lock::live_status(main_worktree)
         .into_iter()
         .map(|(_, holder)| holder)
         .filter(|holder| holder.note == TRAIN_LEASE_NOTE && holder.pr.is_some())
         .collect();
     let mut open: Vec<(u64, Option<Vec<(u64, String)>>)> = Vec::new();
-    let mut abandoned: Vec<(u64, String, TrainOwner)> = Vec::new();
+    let mut abandoned: Vec<(u64, String, crate::ownership::Ownership)> = Vec::new();
     for r in rows
         .into_iter()
         .filter(|r| r.head_ref.starts_with(BRANCH_PREFIX))
     {
-        match train_abandoned(
-            &r.body,
-            &our_host,
-            aida_core::liveness::process_identity_is_alive,
-        ) {
-            // A live train lease on this PR means a train is still landing
-            // it: never close it.
-            Some(owner) if !leases.iter().any(|h| h.pr == Some(r.number)) => {
-                abandoned.push((r.number, r.head_ref, owner))
-            }
-            _ => open.push((r.number, parse_members_line(&r.body))),
+        let key = crate::ownership::WorkKey::Train {
+            train: crate::ownership::dual::change(r.number),
+        };
+        let record = crate::ownership::reader::load(main_worktree, &key).unwrap_or_else(|error| {
+            // Unreadable evidence retains this train; other trains remain observable.
+            // trace:STORY-2325 | ai:codex
+            eprintln!("ownership: retaining train PR-{}: {error:#}", r.number);
+            None
+        });
+        let ended = record.as_ref().is_some_and(|rec| {
+            matches!(rec.phase, crate::ownership::Phase::Closed { .. })
+                || matches!(
+                    crate::ownership::reader::owner(rec),
+                    crate::ownership::OwnerVerdict::Dead { .. }
+                )
+        });
+        if ended && !leases.iter().any(|h| h.pr == Some(r.number)) {
+            abandoned.push((r.number, r.head_ref, record.unwrap()));
+        } else {
+            open.push((r.number, parse_members_line(&r.body)));
         }
     }
     let mut leased: Vec<(u64, Option<Vec<(u64, String)>>)> = Vec::new();
@@ -1850,6 +2105,7 @@ fn live_trains(
 
 /// Why an abandoned train PR is closed, as its closing comment says.
 // trace:BUG-2412 | ai:claude
+#[cfg(test)]
 pub(crate) fn abandoned_train_note(owner: &TrainOwner) -> String {
     format!(
         "Closed by a later `aida pr train`: the train that opened this PR (pid {} on {}) \
@@ -1866,15 +2122,13 @@ fn close_abandoned_train(
     main_worktree: &Path,
     train: u64,
     branch: &str,
-    owner: &TrainOwner,
+    owner: &crate::ownership::Ownership,
     dry_run: bool,
 ) -> Result<()> {
     if dry_run {
-        println!(
-            "  train PR #{train} is abandoned (its owner pid {} is gone); \
-             a real run closes it",
-            owner.pid
-        );
+        println!("{}", train_progress(format_args!("train PR #{train} is abandoned (ownership generation {} ended); a real run closes it",
+            owner.generation
+        )));
         return Ok(());
     }
     // trace:STORY-2401 | ai:codex — a listing is not cleanup authority.
@@ -1891,34 +2145,25 @@ fn close_abandoned_train(
     {
         anyhow::bail!("train PR #{train} cleanup unconfirmed; PR, branch and members retained; inspect before retrying");
     }
-    let owner_confirmed = crate::forge_observed::confirm_snapshot(
-        || crate::forge::observe_train_body(main_worktree, train),
-        |body| {
-            crate::forge_observed::Observed::Known(
-                train_abandoned(
-                    body,
-                    &crate::coordination::hostname(),
-                    aida_core::liveness::process_identity_is_alive,
-                )
-                .as_ref()
-                    == Some(owner),
-            )
-        },
-        crate::forge_confirmation::backoff,
-    );
-    if !owner_confirmed.is_settled() {
+    // Re-read the authoritative generation immediately before cleanup. Forge
+    // body edits supply no process evidence. Unknown observations retain it.
+    // trace:STORY-2325 | ai:codex
+    let current = crate::ownership::reader::load(main_worktree, &owner.key)?;
+    if current.as_ref() != Some(owner)
+        || crate::ownership::reader::ended(main_worktree, &owner.key)?.is_none()
+    {
         anyhow::bail!(
             "train PR #{train} owner changed or is unconfirmed; cleanup and new admission deferred"
         );
     }
-    let note = abandoned_train_note(owner);
+    let note = "Closed by a later `aida pr train`: its ownership record proves the train ended. Its members ride the next train.";
     match gh_stdout(
         main_worktree,
         &["pr", "close", &train.to_string(), "--comment", &note],
     ) {
         Ok(_) => println!(
-            "  closed abandoned train PR #{train} (its owner pid {} is gone)",
-            owner.pid
+            "  closed abandoned train PR #{train} (ownership generation {} ended)",
+            owner.generation
         ),
         Err(e) => {
             return Err(e.context(format!(
@@ -1926,6 +2171,21 @@ fn close_abandoned_train(
             )));
         }
     }
+    // A close command alone is not terminal evidence for releasing riders.
+    // trace:BUG-2537 | ai:codex
+    let closed = crate::forge_confirmation::metadata_for(
+        main_worktree,
+        forge.as_ref(),
+        train,
+        &mut crate::network_retry::NoopSink,
+        |_| true,
+    );
+    anyhow::ensure!(
+        matches!(closed, crate::forge_observed::Observed::Known(ref m)
+        if m.state == crate::forge::ChangeState::Closed && m.head_ref == branch),
+        "abandoned train closure unconfirmed; ownership retained"
+    );
+    crate::ownership::dual::train_retired(main_worktree, train, &[], "abandoned train closed")?;
     let _ = origin_git(
         main_worktree,
         &["push", "--quiet", "origin", "--delete", branch],
@@ -2137,7 +2397,7 @@ pub(crate) trait TrainForge {
     }
     /// Push `train`'s tip to `branch` and open its train PR.
     fn open(&mut self, train: &Built, branch: &str) -> Result<crate::forge::ChangeRef>;
-    /// BUG-2214: `train` lets the live wait tolerate a merge-hold-gate red
+    /// BUG-2214: `train` lets the live wait tolerate a merge-hold-gate blocker
     /// that is fully explained by admitted held members the mandate covers.
     fn wait_ci(&mut self, change: &crate::forge::ChangeRef, train: &Built) -> Result<CiVerdict>;
     // trace:STORY-2401 | ai:codex
@@ -2288,11 +2548,17 @@ pub(crate) struct LiveTrainForge<'a> {
 }
 
 impl LiveTrainForge<'_> {
-    // A journal persists intent, never a previous terminal's consent. Naming a
-    // different PR now cannot authorize any recovered member.
+    // A journal persists intent, never a previous terminal's consent: consent
+    // comes only from the current invocation. Recovery resumes only a journal
+    // whose member set is exactly the PRs explicitly named now (BUG-2547), so
+    // current TTY authority over that exact, named set consents for its
+    // recovered supervised members without a mandate. An `--all-ready` sweep
+    // and a non-TTY recovery never consent (a supervised member then needs a
+    // mandate cover), and a PR named for a different train never resumes it.
     // trace:STORY-2401 | ai:codex
-    fn for_recovery(mut self) -> Self {
-        self.named = false;
+    // trace:BUG-2556 | ai:claude
+    fn for_recovery(mut self, opts: &TrainOptions) -> Self {
+        self.named = prs_named_on_command_line(opts);
         self
     }
 
@@ -2402,13 +2668,26 @@ impl LiveTrainForge<'_> {
         }
         let cfg = crate::ci_gate::read_ci_gate_config(&self.project_root);
         // Only the existing, live member-label proof may tolerate a hold. The
-        // hold gate fails seconds after the train opens, while lanes still
+        // hold gate becomes pending seconds after the train opens, while lanes still
         // run: admission is decided from the members' live labels alone, and
         // readiness still waits for every other row to settle green before
         // Green (BUG-2214's tolerance, decided once the others settle).
         // trace:BUG-2401 | ai:claude
         let admitted = hold_release_admitted(&rows, cars, labels);
         let state = train_ci_readiness(&rows, required, &cfg, admitted);
+        // Detail is informational and cannot replace the pinned readiness proof.
+        // trace:TASK-3782 | ai:codex
+        if matches!(
+            state,
+            TrainCiReadiness::Pending(_) | TrainCiReadiness::Missing(_)
+        ) {
+            for detail in train_ci_wait_details(&rows) {
+                println!(
+                    "{}",
+                    train_progress(format_args!("train PR #{} CI waiting: {detail}", change.id))
+                );
+            }
+        }
         assert_head()?;
         self.dispatch_check()?;
         Ok(state)
@@ -2464,7 +2743,26 @@ impl TrainForge for LiveTrainForge<'_> {
 
     fn build(&mut self, base: &str, members: &[Member]) -> Result<Built> {
         self.dispatch_check()?;
-        build(&self.main_worktree, base, members)
+        // trace:BUG-2538 | ai:codex
+        let mut accepted = Vec::new();
+        let mut dropped = Vec::new();
+        for member in members {
+            accepted.push(member.clone());
+            let candidate = build(&self.main_worktree, base, &accepted)?;
+            if let Err(error) = verified::preflight(self, &candidate, "train/preflight") {
+                if error.downcast_ref::<verified::EvidenceTooLarge>().is_none() {
+                    return Err(error);
+                }
+                accepted.pop();
+                dropped.push(Ejected {
+                    pr: member.pr,
+                    reason: error.to_string(),
+                });
+            }
+        }
+        let mut train = build(&self.main_worktree, base, &accepted)?;
+        train.dropped.extend(dropped);
+        Ok(train)
     }
 
     fn gate(&mut self, pr: u64) -> std::result::Result<Member, String> {
@@ -2520,6 +2818,8 @@ impl TrainForge for LiveTrainForge<'_> {
 
     fn open(&mut self, train: &Built, branch: &str) -> Result<crate::forge::ChangeRef> {
         self.dispatch_check()?;
+        // trace:BUG-2538 | ai:codex — refresh the budget before any publication.
+        verified::preflight(self, train, branch)?;
         origin_git(
             &self.main_worktree,
             &[
@@ -2549,9 +2849,9 @@ impl TrainForge for LiveTrainForge<'_> {
                 branch: branch.to_string(),
                 base: self.base.clone(),
                 title: format!("[train] land {}", prs.join(", ")),
-                // BUG-2412: record the owner so a later train can tell this
-                // train died. trace:BUG-2412 | ai:claude
-                body: format!("{}{}\n", train_pr_body(train), owner_line_for_self()),
+                // Ownership lives in the local record, never in forge prose.
+                // trace:STORY-2325 | ai:codex
+                body: train_pr_body(train),
                 draft: false,
             },
             &specs,
@@ -2624,7 +2924,7 @@ impl TrainForge for LiveTrainForge<'_> {
         Ok(match ci_state {
             CiState::Success => CiVerdict::Green,
             other => {
-                // BUG-2214: ship tolerates a merge-hold-gate red while the
+                // BUG-2214: ship tolerates a merge-hold-gate blocker while the
                 // hold it will release is still armed (BUG-1180); the train
                 // does the same for admitted held members, re-verifying every
                 // member's live labels. trace:BUG-2214 | ai:claude
@@ -2643,10 +2943,13 @@ impl TrainForge for LiveTrainForge<'_> {
                 });
                 if tolerated {
                     println!(
-                        "  train PR #{} is green except `{}` — explained by mandate-covered \
+                        "{}",
+                        train_progress(format_args!(
+                            "train PR #{} is green except `{}` — explained by mandate-covered \
                          member holds; the land step releases them",
-                        change.id,
-                        crate::ci_gate::HOLD_GATE_CHECK
+                            change.id,
+                            crate::ci_gate::HOLD_GATE_CHECK
+                        ))
                     );
                     CiVerdict::Green
                 } else {
@@ -2662,6 +2965,32 @@ impl TrainForge for LiveTrainForge<'_> {
     fn retire(&mut self, change: &crate::forge::ChangeRef, why: &str) {
         if let Err(e) = self.forge.close_change(change, why) {
             eprintln!("  warning: could not close train PR #{}: {e:#}", change.id);
+            return;
+        }
+        // trace:BUG-2537 | ai:codex
+        let closed = crate::forge_confirmation::metadata_for(
+            &self.main_worktree,
+            self.forge,
+            change.id,
+            &mut crate::network_retry::NoopSink,
+            |_| true,
+        );
+        if !matches!(closed, crate::forge_observed::Observed::Known(ref m)
+            if m.state == crate::forge::ChangeState::Closed && m.head_ref == change.branch)
+        {
+            eprintln!(
+                "  warning: train PR #{} closure unconfirmed; ownership retained",
+                change.id
+            );
+            return;
+        }
+        if let Err(e) =
+            crate::ownership::dual::train_retired(&self.main_worktree, change.id, &[], why)
+        {
+            eprintln!(
+                "  warning: could not release train PR #{} riders: {e:#}",
+                change.id
+            );
             return;
         }
         let _ = origin_git(
@@ -2720,6 +3049,10 @@ impl TrainForge for LiveTrainForge<'_> {
                     && m.base_ref == change.base),
             "retired train closure unavailable or identity changed"
         );
+        // Release before branch deletion, which can fail after the PR closed.
+        // trace:BUG-2537 | ai:codex
+        let riders: Vec<_> = train.cars.iter().map(|car| car.member.pr).collect();
+        crate::ownership::dual::train_retired(&self.main_worktree, change.id, &riders, why)?;
         let reference = format!("refs/heads/{}", change.branch);
         journal::before("read retired train branch")?;
         if origin_git(
@@ -3012,8 +3345,11 @@ impl TrainForge for LiveTrainForge<'_> {
             })?;
         // STORY-1698 parity: the mandate is re-read from disk immediately
         // before the release that precedes the merge.
-        if !crate::gate::mandate_ship::mandate_still_active(&cover.id) {
-            return Err(format!("mandate {} is no longer active", cover.id));
+        if !crate::gate::mandate_ship::mandate_cover_still_active(cover) {
+            return Err(format!(
+                "mandate {} is no longer active or no longer covers protected paths",
+                cover.id
+            ));
         }
         let change = crate::forge::ChangeRef {
             id: member.pr,
@@ -3339,9 +3675,12 @@ impl Rails for ForgeRails<'_> {
             self.built.insert(change.id, t.clone());
             self.opened.push((t.tip.clone(), change.clone()));
             println!(
-                "  train PR #{} opened ({branch} at {})",
-                change.id,
-                short(&t.tip)
+                "{}",
+                train_progress(format_args!(
+                    "train PR #{} opened ({branch} at {})",
+                    change.id,
+                    short(&t.tip)
+                ))
             );
             changes.push(change);
         }
@@ -3406,13 +3745,19 @@ impl Rails for ForgeRails<'_> {
                 };
             }
             if let CiVerdict::Red(why) = &v {
-                println!("  train PR #{} is red: {why}", change.id);
+                println!(
+                    "{}",
+                    train_progress(format_args!("train PR #{} is red: {why}", change.id))
+                );
                 self.retire(
                     change,
                     &format!("Train CI red ({why}); the train reruns or bisects."),
                 )?;
             } else {
-                println!("  train PR #{} is green", change.id);
+                println!(
+                    "{}",
+                    train_progress(format_args!("train PR #{} is green", change.id))
+                );
             }
             verdicts.push(v);
         }
@@ -3470,7 +3815,17 @@ impl Rails for ForgeRails<'_> {
             };
             match gate {
                 crate::forge_observed::Observed::Known(Ok(m)) if m.head == car.member.head => {
-                    fresh.push(m)
+                    // The audit is already baked into the tested car commit.
+                    // Refreshing only the live cover cannot update that commit.
+                    // trace:STORY-2733 | ai:codex
+                    if m.gate_audit != car.member.gate_audit {
+                        refused.push(Ejected {
+                            pr,
+                            reason: "its protected-path mandate audit changed after the train was built; re-train with fresh coverage".into(),
+                        });
+                    } else {
+                        fresh.push(m)
+                    }
                 }
                 crate::forge_observed::Observed::Known(Ok(m)) => {
                     if !self.ports.confirm_member_head(pr, &m.head) {
@@ -3864,23 +4219,7 @@ pub(crate) fn pr_train_handler_with_dispatch_ctx(
     } else {
         Some(journal::lock(&journal_dir)?)
     };
-    let recovered = if opts.dry_run {
-        Outcome::default()
-    } else {
-        let mut ports = LiveTrainForge {
-            project_root: project_root.clone(),
-            main_worktree: main_worktree.clone(),
-            base: base.clone(),
-            forge: forge.as_ref(),
-            named: false,
-            dispatch_ctx,
-            dispatch_abort: None,
-        }
-        .for_recovery();
-        ForgeRails::new(&mut ports, uuid::Uuid::new_v4().to_string())
-            .with_journal(&journal_dir)
-            .resume()?
-    };
+    // Resolve the requested set before journal recovery. trace:BUG-2547 | ai:codex
     let mut candidates: Vec<u64> = if opts.all_ready {
         let mut ids: Vec<u64> = forge
             .list_changes(crate::forge::ChangeFilter {
@@ -3896,6 +4235,31 @@ pub(crate) fn pr_train_handler_with_dispatch_ctx(
     } else {
         opts.prs.to_vec()
     };
+    let recovered = if opts.dry_run {
+        Outcome::default()
+    } else {
+        let mut ports = LiveTrainForge {
+            project_root: project_root.clone(),
+            main_worktree: main_worktree.clone(),
+            base: base.clone(),
+            forge: forge.as_ref(),
+            named: false,
+            dispatch_ctx,
+            dispatch_abort: None,
+        }
+        .for_recovery(opts);
+        ForgeRails::new(&mut ports, uuid::Uuid::new_v4().to_string())
+            .with_journal(&journal_dir)
+            .resume_for(Some(&candidates))?
+    };
+    if report_automatic_idle(
+        opts.all_ready,
+        &candidates,
+        &recovered,
+        std::io::stdout().lock(),
+    )? {
+        return Ok(());
+    }
     filter_recovered_candidates(&mut candidates, &recovered)?;
     if let Some(why) = explicit_over_max_refusal(candidates.len(), opts.max, opts.all_ready) {
         anyhow::bail!(why);
@@ -3918,36 +4282,80 @@ pub(crate) fn pr_train_handler_with_dispatch_ctx(
     }
     let mut members = Vec::new();
     let mut refused = Vec::new();
-    let mut waiting = Vec::new();
     for pr in candidates {
         crate::gate::dispatch_auth::checkpoint(dispatch_ctx, "pr train")?;
-        if members.len() >= opts.max.max(1) {
-            waiting.push(pr);
-            continue;
-        }
-        if let Some(reason) = train_rider_refusal(pr, &open_trains, &leased_trains) {
+        let ownership_refusal =
+            ownership_rider_refusal(&main_worktree, pr, opts.dry_run, forge.as_ref())?;
+        if let Some(reason) =
+            ownership_refusal.or_else(|| train_rider_refusal(pr, &open_trains, &leased_trains))
+        {
             println!("  ✗ #{pr} not eligible: {reason}");
             refused.push(Ejected { pr, reason });
             continue;
         }
-        match gate_member(
-            &project_root,
-            &main_worktree,
-            forge.as_ref(),
+        match typed_gate_member_with(
+            &mut LiveChecks {
+                project_root: &project_root,
+                main_worktree: &main_worktree,
+                forge: forge.as_ref(),
+                base: &base,
+                named: prs_named_on_command_line(opts),
+            },
             &base,
             pr,
-            prs_named_on_command_line(opts),
         ) {
             Ok(m) => {
                 println!("  ✓ #{pr} ready at {}: {}", short(&m.head), m.subject);
                 members.push(m);
             }
-            Err(reason) => {
+            Err(MemberGateError::Unavailable(reason))
+                if ADVISOR_LOOP.with(std::cell::Cell::get) =>
+            {
+                anyhow::bail!("PR #{pr} admission evidence unavailable: {reason}");
+            }
+            Err(error) => {
+                let reason = error.reason();
                 println!("  ✗ #{pr} not eligible: {reason}");
                 refused.push(Ejected { pr, reason });
             }
         }
     }
+    // Gate all candidates before choosing a bounded train: waiting approved
+    // PRs must contribute to the overlap cost. trace:STORY-2693 | ai:codex
+    let main = fetch_base(&main_worktree, &base)?;
+    let mut files = std::collections::BTreeMap::new();
+    for member in &members {
+        let changed = git_raw(
+            &main_worktree,
+            &[
+                "diff",
+                "--no-renames",
+                "--name-only",
+                "-z",
+                &format!("{main}...{}", member.head),
+                "--",
+            ],
+        )?;
+        anyhow::ensure!(
+            changed.status.success(),
+            "could not read changed files for PR #{}: {}",
+            member.pr,
+            String::from_utf8_lossy(&changed.stderr)
+        );
+        files.insert(
+            member.pr,
+            changed
+                .stdout
+                .split(|b| *b == 0)
+                .filter(|p| !p.is_empty())
+                .map(|p| p.to_vec())
+                .collect(),
+        );
+    }
+    let order = overlap::order(&files);
+    members.sort_by_key(|m| order.iter().position(|pr| *pr == m.pr).unwrap());
+    let waiting: Vec<u64> = members.iter().skip(opts.max.max(1)).map(|m| m.pr).collect();
+    members.truncate(opts.max.max(1));
     if !waiting.is_empty() {
         let list: Vec<String> = waiting.iter().map(|p| format!("#{p}")).collect();
         println!(
@@ -3957,7 +4365,6 @@ pub(crate) fn pr_train_handler_with_dispatch_ctx(
             list.join(", ")
         );
     }
-    let main = fetch_base(&main_worktree, &base)?;
     let mut warnings = Vec::new();
     let mut dispatch_abort: Option<String> = None;
     let mut outcome = if opts.dry_run {
@@ -4067,3 +4474,39 @@ pub(crate) fn pr_train_handler_with_dispatch_ctx(
 #[cfg(test)]
 #[path = "tests/story_1690_train_tests.rs"]
 mod tests;
+
+// Automatic services use a stricter member contract than explicit trains:
+// exact-head approvals and no mandate hold release or approval carry-over.
+// The guard is scoped to this thread and cleared even on error/unwind.
+// trace:STORY-2691 | ai:codex
+thread_local! { static ADVISOR_LOOP: std::cell::Cell<bool> = const { std::cell::Cell::new(false) }; }
+pub(crate) fn advisor_train_handler() -> Result<()> {
+    struct Reset;
+    impl Drop for Reset {
+        fn drop(&mut self) {
+            ADVISOR_LOOP.with(|v| v.set(false));
+        }
+    }
+    ADVISOR_LOOP.with(|v| v.set(true));
+    let _reset = Reset;
+    pr_train_handler(&TrainOptions {
+        prs: &[],
+        all_ready: true,
+        dry_run: false,
+        local_ci: None,
+        max: 10,
+        no_pull: true,
+    })
+}
+
+// trace:STORY-2688 | ai:codex
+pub(crate) fn pr_state_members(root: &Path) -> Result<Vec<u64>> {
+    journal::pr_state_members(&root.join(".aida/train"))
+}
+
+// trace:BUG-2547 | ai:codex
+pub(crate) fn abandon_journal(name: &str) -> Result<()> {
+    let root = crate::find_project_root()?;
+    let main = crate::main_worktree_root_from(&root);
+    journal::abandon(&main.join(".aida/train"), name)
+}

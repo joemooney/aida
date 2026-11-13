@@ -1,3 +1,4 @@
+// trace:TASK-3429 | ai:codex
 //! Session-bound role grants. `AIDA_SESSION_ROLE` is retained for display and
 //! routing only; authorization comes from a validated local grant record.
 // trace:STORY-1473 | ai:codex
@@ -589,6 +590,11 @@ pub(crate) enum GrantRejection {
         grant_subject: String,
         caller: String,
     },
+    // trace:BUG-2520 | ai:codex
+    PrincipalMismatch {
+        principal: String,
+        caller: String,
+    },
     /// The team roster no longer allows the principal this seat.
     RosterDenied {
         principal: String,
@@ -639,6 +645,10 @@ impl std::fmt::Display for GrantRejection {
             } => write!(
                 f,
                 "it was issued to `{grant_subject}` but this process runs as `{caller}`"
+            ),
+            Self::PrincipalMismatch { principal, caller } => write!(
+                f,
+                "its principal is `{principal}` but this deputy runs as `{caller}`"
             ),
             Self::RosterDenied { principal, seat } => write!(
                 f,
@@ -1010,8 +1020,10 @@ fn own_process_token() -> Option<String> {
 // trace:BUG-1934 | ai:claude
 // trace:BUG-2419 | ai:claude
 fn pid_binding_token(pid: u32) -> Option<String> {
-    let start =
-        aida_core::liveness::process_start_identity(pid).filter(|s| !s.trim().is_empty())?;
+    // Keep the established grant-token wire format; only its observation
+    // input changes in this slice. trace:TASK-3366 | ai:codex
+    let identity = aida_core::proc_identity::ProcIdentity::capture(pid).ok()?;
+    let start = identity.legacy_ticks_start();
     Some(crate::gate::review_authority::author_process_token(
         "proc",
         pid,
@@ -1147,6 +1159,28 @@ fn grant_check_for_at(
     caller: &str,
     now: DateTime<Utc>,
 ) -> GrantCheck {
+    grant_check_identity_at(project_root, id, caller, now, false)
+}
+
+/// Validate a deputy submitter against the operator principal, retaining the
+/// complete grant-chain checks. Peer presentation is checked by the deputy.
+// trace:BUG-2520 | ai:codex
+pub(crate) fn grant_check_for_principal(
+    project_root: &Path,
+    id: &str,
+    principal: &str,
+) -> GrantCheck {
+    grant_check_identity_at(project_root, id, principal, Utc::now(), true)
+}
+
+// trace:BUG-2520 | ai:codex
+fn grant_check_identity_at(
+    project_root: &Path,
+    id: &str,
+    caller: &str,
+    now: DateTime<Utc>,
+    principal: bool,
+) -> GrantCheck {
     let rejected = |seat: Option<String>, reason| GrantCheck::Rejected {
         id: id.to_string(),
         seat,
@@ -1157,10 +1191,15 @@ fn grant_check_for_at(
         Err(reason) => return rejected(None, reason),
     };
     // Checks run in the order `current_grant` always used: revoked, expired,
-    // subject, roster; then the parent's revoked, expired, principal,
+    // subject (or deputy principal), roster; then the parent's revoked, expired, principal,
     // roster, delegable.
     let own = check_lifetime(&grant, now).and_then(|()| {
-        if grant.subject == caller {
+        if principal && grant.principal != caller {
+            Err(GrantRejection::PrincipalMismatch {
+                principal: grant.principal.clone(),
+                caller: caller.to_string(),
+            })
+        } else if principal || grant.subject == caller {
             check_roster(project_root, &grant)
         } else {
             Err(GrantRejection::SubjectMismatch {
@@ -1236,7 +1275,7 @@ pub(crate) fn validated_grant(
     grant_check_for_at(project_root, id, subject, now).into_valid()
 }
 
-pub(crate) fn current_seat(project_root: &Path) -> Option<String> {
+pub fn current_seat(project_root: &Path) -> Option<String> {
     current_grant(project_root).map(|grant| grant.seat)
 }
 
@@ -1798,6 +1837,26 @@ pub(crate) fn issue_direct(
     ttl: Option<Duration>,
     bind_pid: Option<u32>,
 ) -> Result<IssuedGrant> {
+    issue_direct_with_probe(
+        project_root,
+        seat,
+        delegable_seats,
+        ttl,
+        bind_pid,
+        probe_bind_target,
+    )
+}
+
+// Explicit probe injection exercises replacement refusal through the issuance path.
+// trace:TASK-3366 | ai:codex
+fn issue_direct_with_probe(
+    project_root: &Path,
+    seat: &str,
+    delegable_seats: Vec<String>,
+    ttl: Option<Duration>,
+    bind_pid: Option<u32>,
+    mut probe: impl FnMut(u32) -> Option<BindTarget>,
+) -> Result<IssuedGrant> {
     require_direct_human()?;
     // SKETCH v2: a grant for THIS terminal is also bound to a session-key
     // secret where the kernel offers a session keyring (elsewhere it stays
@@ -1815,15 +1874,33 @@ pub(crate) fn issue_direct(
     // BUG-1934: bind before anything is written; an unbindable grant is
     // never minted. trace:BUG-1934 | ai:claude
     let caller = presenter_source();
+    let binding_identity = bind_pid
+        .map(aida_core::proc_identity::ProcIdentity::capture)
+        .transpose()
+        .map_err(anyhow::Error::msg)?;
     let mut binding = match bind_pid {
         None => direct_issue_binding(&caller)?,
         Some(pid) => vec![check_bind_target(
             pid,
-            probe_bind_target(pid).as_ref(),
+            probe(pid).as_ref(),
             &caller,
             current_uid(),
         )?],
     };
+    if let Some(pid) = bind_pid {
+        let checked = check_bind_target(pid, probe(pid).as_ref(), &caller, current_uid())?;
+        anyhow::ensure!(
+            binding == [checked],
+            "binding target changed before grant issuance"
+        );
+    }
+    if let Some(identity) = &binding_identity {
+        anyhow::ensure!(
+            aida_core::proc_identity::observe(identity, true)
+                == aida_core::proc_identity::Verdict::Alive,
+            "binding target identity changed before grant issuance"
+        );
+    }
     binding.extend(key_secret.as_deref().map(|k| key_token(k.as_bytes())));
     let grant = mint_direct(
         project_root,
@@ -2119,6 +2196,10 @@ pub(crate) fn check_bind_target(
 /// Live probe behind `--bind-pid`: one single-pid refresh, never a table scan.
 // trace:BUG-1934 | ai:claude
 fn probe_bind_target(pid: u32) -> Option<BindTarget> {
+    // Identity evidence comes from the shared coordinate-verified observer.
+    // Keep the existing token transport for presenter compatibility.
+    // trace:TASK-3366 | ai:codex
+    let identity = aida_core::proc_identity::ProcIdentity::capture(pid).ok()?;
     use sysinfo::{ProcessRefreshKind, System, UpdateKind};
     let spid = sysinfo::Pid::from_u32(pid);
     let mut sys = System::new();
@@ -2133,12 +2214,17 @@ fn probe_bind_target(pid: u32) -> Option<BindTarget> {
     let uid = proc.user_id().map(|u| **u);
     #[cfg(not(unix))]
     let uid = None;
+    if aida_core::proc_identity::observe(&identity, true)
+        != aida_core::proc_identity::Verdict::Alive
+    {
+        return None;
+    }
     Some(BindTarget {
         entry: crate::gate::review_authority::ProcEntry {
             pid,
             name: proc.name().to_string(),
             cmd: proc.cmd().to_vec(),
-            start: aida_core::liveness::process_start_identity(pid),
+            start: Some(identity.legacy_ticks_start()),
         },
         uid,
     })
@@ -2183,13 +2269,47 @@ pub(crate) fn widen_delegation_command(
     command
 }
 
+/// Why a launch cannot use the grant it exports as the parent of a child
+/// grant. A presenter refusal usually means the launch outlived the shell
+/// that holds the grant: a launch started with `&`, `setsid` or `nohup` from a
+/// deputy job (or any shell) that then exits is re-parented away from the
+/// grant's process, so only launches still running inside that shell may
+/// delegate (BUG-2544).
+// trace:BUG-2544 | ai:claude
+pub(crate) fn parent_grant_refusal(id: &str, reason: &GrantRejection) -> String {
+    let short: String = id.chars().take(8).collect();
+    let mut message =
+        format!("no valid parent seat grant is active: grant {short} is refused because {reason}");
+    if matches!(
+        reason,
+        GrantRejection::PresenterNotBound { .. } | GrantRejection::KeyringUnavailable { .. }
+    ) {
+        message.push_str(
+            ". A launch started in the background (`&`, `setsid`, `nohup`) loses the grant once \
+             the shell that holds it exits, as a deputy job does when its script ends; run each \
+             launch in the foreground, one after another, or `wait` for background launches \
+             before the script exits",
+        );
+    }
+    message
+}
+
 /// Read-only launch preflight; issuance repeats this validation after setup.
 // trace:TASK-1337 | ai:codex
 pub(crate) fn validate_child_delegation(
     project_root: &Path,
     requested_seat: &str,
 ) -> Result<SeatGrant> {
-    let parent = current_grant(project_root).context("no valid parent seat grant is active")?;
+    // BUG-2544: name why the parent grant failed instead of a bare refusal.
+    // trace:BUG-2544 | ai:claude
+    // trace:BUG-2544 | ai:codex
+    let parent = match grant_check(project_root) {
+        GrantCheck::Valid(parent) => parent,
+        GrantCheck::Absent => bail!(
+            "no valid parent seat grant is active: {GRANT_ENV} is absent; re-enter your role at a terminal before launching children"
+        ),
+        GrantCheck::Rejected { id, reason, .. } => bail!("{}", parent_grant_refusal(&id, &reason)),
+    };
     if !parent
         .delegable_seats
         .iter()
@@ -2937,6 +3057,46 @@ pub(crate) fn revoke_by_id(id: &str) -> Result<bool> {
     Ok(revoked)
 }
 
+/// Only shorten a delegated grant minted by this launcher. Preserve every other
+/// field under the existing stamp/revocation lock. Direct session grants stay
+/// unchanged: their contained lane is bounded by the effective credential TTL.
+// trace:BUG-2486 | ai:codex
+pub(crate) fn cap_launch_child_expiry(id: &str, deadline: i64) -> Result<()> {
+    let at = DateTime::<Utc>::from_timestamp(deadline, 0).context("invalid child deadline")?;
+    anyhow::ensure!(at > Utc::now(), "child grant deadline is already expired");
+    // An ample token needs no mutation, including for a direct session grant.
+    let grant = read_grant(id)?;
+    // A direct session grant is not owned by this launch. The caller supplies
+    // the credential-capped TTL to the lane without changing session authority.
+    if grant.parent_grant_id.is_none() || grant.expires_at <= at {
+        return Ok(());
+    }
+    let launcher = own_process_token().context("launcher identity unavailable")?;
+    let eligible = |g: &SeatGrant| {
+        g.parent_grant_id.is_some()
+            && g.binding.contains(&launcher)
+            && g.revoked_at.is_none()
+            && g.expires_at > Utc::now()
+    };
+    update_grant(
+        id,
+        |g| {
+            if !eligible(g) || g.expires_at <= at {
+                return false;
+            }
+            g.expires_at = at;
+            true
+        },
+        |g| g.expires_at <= at,
+    )?;
+    let current = read_grant(id)?;
+    anyhow::ensure!(
+        eligible(&current) && current.expires_at <= at,
+        "cannot cap ChatGPT child grant: requires this launcher's live delegated grant"
+    );
+    Ok(())
+}
+
 /// BUG-1934 (C4): bind grant `id` to live process `pid` as well: a launcher
 /// stamps the worker it detached (setsid, nohup, a new terminal), which no
 /// longer descends from the launcher the grant was minted bound to. Locked
@@ -3257,3 +3417,30 @@ mod bug_2209_roster_leak_tests;
 #[cfg(test)]
 #[path = "tests/story_2215_inline_grant_tests.rs"]
 mod story_2215_inline_grant_tests;
+
+/// Fixed host service issuance after socket peer attribution. Revalidate the
+/// entire advisor chain and narrow the controller to reviewer delegation.
+// trace:STORY-2571 | ai:codex
+pub(crate) fn issue_review_watch_child(
+    project: &Path,
+    id: &str,
+    subject: &str,
+) -> Result<SeatGrant> {
+    let parent = validated_grant(project, id, subject, Utc::now())
+        .context("review-watch parent authority ended")?;
+    anyhow::ensure!(
+        parent.seat == "advisor"
+            && parent.delegable_seats.iter().any(|s| s == "advisor")
+            && parent.delegable_seats.iter().any(|s| s == "reviewer"),
+        "review-watch requires advisor and reviewer delegation"
+    );
+    roster_check(project, &parent.principal, "advisor")
+        .map_err(|r| anyhow::anyhow!(r.describe("review-watch controller refused")))?;
+    issue_child_from_with_delegation(
+        parent,
+        "advisor",
+        "review-watch-controller",
+        false,
+        &["reviewer".into()],
+    )
+}

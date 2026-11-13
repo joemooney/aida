@@ -1,7 +1,26 @@
-//! Vendor-facing rendering over the core registry. No process construction,
-//! admission decisions or grant issuance belongs in this module.
+//! Vendor-facing rendering and effectful launch adapters over the core registry.
 // trace:STORY-2539 | ai:codex
+pub(crate) mod profile;
+
 use aida_core::vendors::{Background, SkillSyntax, VendorProfile};
+
+// Read-only projection for declaration rendering and preview classification.
+// trace:STORY-1486 | ai:codex
+pub(crate) struct LaunchPreviewOptions<'a> {
+    pub cwd: &'a Option<std::path::PathBuf>,
+    pub noexec: &'a bool,
+}
+
+// trace:STORY-1486 | ai:codex
+pub(crate) fn launch_preview_options(
+    command: &crate::agent_launch::AgentNewCommand,
+) -> LaunchPreviewOptions<'_> {
+    use crate::agent_launch::AgentNewCommand;
+    let (AgentNewCommand::Claude { cwd, noexec, .. }
+    | AgentNewCommand::Codex { cwd, noexec, .. }
+    | AgentNewCommand::Antigravity { cwd, noexec, .. }) = command;
+    LaunchPreviewOptions { cwd, noexec }
+}
 
 fn with_args(head: String, args: &str) -> String {
     match args.trim() {
@@ -54,6 +73,17 @@ pub(crate) fn launch_with_skill(
     }
 }
 
+// trace:TASK-3219 | ai:codex
+pub(crate) fn supervised_background_name() -> &'static str {
+    aida_core::vendors::profile(aida_core::vendors::LaunchVendor::Claude).launch_name
+}
+pub(crate) fn supervised_background_hint(attempt: &str) -> String {
+    format!("AIDA background attempt {attempt}\n  logs: aida agent logs {attempt}\n  attach: aida agent attach {attempt}\n  claude attach is unavailable for AIDA-supervised sessions.")
+}
+pub(crate) fn background_attach_refusal() -> &'static str {
+    "claude attach is unavailable under the AIDA wrapper; use aida agent attach <attempt> or aida agent logs <attempt>"
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -77,7 +107,7 @@ mod tests {
                 ".claude/settings.json",
                 ".claude/hooks",
                 MailWake::PerTurnHooks,
-                Resume::RecordedSession,
+                Resume::RecordedSessionWithFork,
                 Background::DaemonHandoff,
                 SkillSyntax::Slash,
                 SandboxSupport::LegacyAndShared,
@@ -162,6 +192,118 @@ mod tests {
                 }
             }
         }
+        // Headless argv and settings remain profile-owned data composition.
+        // Golden vectors preserve option ordering and flag-shaped prompt data.
+        for prompt in ["--settings", "'quoted' $value\nnext", ""] {
+            let args = profile(LaunchVendor::Codex)
+                .headless_args(prompt, "sid", Some("model"), Some("high"), None)
+                .unwrap();
+            assert_eq!(
+                args,
+                [
+                    "exec",
+                    "--json",
+                    "--dangerously-bypass-approvals-and-sandbox",
+                    "--model",
+                    "model",
+                    "-c",
+                    "model_reasoning_effort=high",
+                    prompt
+                ]
+            );
+            let native = profile(LaunchVendor::Codex)
+                .headless_args(
+                    prompt,
+                    "sid",
+                    None,
+                    None,
+                    Some(vec!["--sandbox".into(), "workspace-write".into()]),
+                )
+                .unwrap();
+            assert_eq!(
+                native,
+                ["--sandbox", "workspace-write", "exec", "--json", prompt]
+            );
+            let agy = profile(LaunchVendor::Agy)
+                .headless_args(prompt, "ignored", Some("ignored"), Some("high"), None)
+                .unwrap();
+            assert_eq!(
+                agy,
+                [
+                    "--dangerously-skip-permissions",
+                    "--output-format",
+                    "stream-json",
+                    "--effort",
+                    "high",
+                    "-p",
+                    prompt
+                ]
+            );
+            for contained in [false, true] {
+                let flags = contained.then(|| vec!["--setting-sources".into(), "project".into(),
+                    "--settings".into(), r#"{"sandbox":{"enabled":true},"env":{"KEEP":"yes"},"permissions":{"deny":["existing"]}}"#.into()]);
+                let args = profile(LaunchVendor::Claude)
+                    .headless_args(prompt, "sid", Some("model"), Some("high"), flags)
+                    .unwrap();
+                crate::session::assert_headless_posture(&args, contained, "profile");
+                let at = args.iter().position(|a| a == "--settings").unwrap();
+                let settings: serde_json::Value = serde_json::from_str(&args[at + 1]).unwrap();
+                if contained {
+                    assert_eq!(settings["env"]["KEEP"], "yes");
+                    assert!(settings["permissions"]["deny"]
+                        .as_array()
+                        .unwrap()
+                        .iter()
+                        .any(|r| r == "existing"));
+                }
+                let mut expected: Vec<String> = [
+                    "-p",
+                    "--permission-mode",
+                    if contained {
+                        "dontAsk"
+                    } else {
+                        "bypassPermissions"
+                    },
+                ]
+                .into_iter()
+                .map(str::to_string)
+                .collect();
+                if contained {
+                    expected.extend(["--setting-sources".into(), "project".into()]);
+                }
+                expected.extend(
+                    [
+                        "--settings",
+                        &settings.to_string(),
+                        "--disallowed-tools",
+                        "AskUserQuestion",
+                        "Monitor",
+                        "--output-format",
+                        "stream-json",
+                        "--verbose",
+                        "--session-id",
+                        "sid",
+                        "--model",
+                        "model",
+                        "--effort",
+                        "high",
+                        prompt,
+                    ]
+                    .into_iter()
+                    .map(str::to_string),
+                );
+                assert_eq!(args, expected);
+            }
+        }
+        assert!(profile(LaunchVendor::Claude)
+            .headless_args(
+                "p",
+                "sid",
+                None,
+                None,
+                Some(vec!["--settings".into(), "invalid JSON".into()])
+            )
+            .is_err());
         for refused in ["", "bash", "gemini", "opencode", "claude-code"] {
             assert!(LaunchVendor::parse(refused).is_err());
             assert!(HeadlessVendor::parse(refused).is_none());
@@ -225,4 +367,93 @@ mod tests {
             profile(LaunchVendor::Agy).hooks.handlers
         );
     }
+}
+
+pub(crate) mod headless;
+
+// trace:BUG-2486 | ai:codex
+pub(crate) mod codex_auth_hints;
+
+// trace:BUG-2484 | ai:codex
+pub(crate) fn installed_codex_binary_diagnostic() -> Option<String> {
+    let path = crate::which_binary(aida_core::vendors::LaunchVendor::Codex.as_str())?;
+    Some(codex_binary_diagnostic(&path))
+}
+// trace:BUG-2484 | ai:codex
+pub(crate) fn codex_binary_diagnostic(path: &std::path::Path) -> String {
+    use crate::launch::contained::codex_auth;
+    match codex_auth::resolve_native_program(path) {
+        Ok(program) => {
+            let pin = match codex_auth::require_program(&program, codex_auth::PROGRAM_SHA256) {
+                Ok(()) => "ChatGPT SHA-256 pin matches".to_string(),
+                Err(error) => format!("ChatGPT pin unavailable: {error:#}"),
+            };
+            format!("Codex resolved binary: {} ({pin})", program.display())
+        }
+        Err(error) => format!(
+            "Codex binary resolution refused for {}: {error:#}",
+            path.display()
+        ),
+    }
+}
+
+// trace:STORY-2642 | ai:codex
+pub(crate) mod host_diagnostics;
+
+/// Render a runnable unattended review pickup, including its launch vendor.
+// trace:BUG-2514 | ai:codex
+pub(crate) fn review_pickup_cmd(
+    profile: Option<&VendorProfile>,
+    noun: &str,
+    number: u64,
+) -> String {
+    let profile = profile
+        .unwrap_or_else(|| aida_core::vendors::profile(aida_core::vendors::LaunchVendor::Claude));
+    format!(
+        "aida queue work {noun}-{number} --role reviewer --vendor {} --no-human --strict",
+        profile.session_name
+    )
+}
+
+// trace:BUG-2513 | ai:codex
+pub(crate) mod native_setup {
+    pub const KEY: &str = "codex";
+    pub const PROMPT: &str = "  Opt Codex into its native sandbox? This is weaker than AIDA containment (native sandbox, not AIDA-contained). Write [contained.vendors] codex = \"native\"? [y/N]: ";
+    pub const WRITTEN: &str = "Codex native sandbox opt-in written. Commit .aida/config.toml to the trusted default branch before launching; native sandbox, not AIDA-contained.";
+    pub const FIX: &str = "aida init --agent codex (interactive opt-in for missing policy), or edit .aida/config.toml to set and commit [contained.vendors] codex = \"native\" to the trusted default branch";
+    pub const OTHER_FIX: &str = "use a supported vendor: aida agent new claude";
+}
+
+/// Preserve historical diagnostic spelling without granting unsupported resume.
+// trace:STORY-2539 | ai:codex
+pub(crate) fn resume_command(agent: &str, id: &str) -> (String, Vec<String>) {
+    let vendor = aida_core::vendors::LaunchVendor::parse(agent)
+        .unwrap_or(aida_core::vendors::LaunchVendor::Claude);
+    let p = aida_core::vendors::profile(vendor);
+    (
+        p.launch_name.into(),
+        p.resume_args(id, false)
+            .unwrap_or_else(|| vec!["resume".into(), id.into()]),
+    )
+}
+
+// trace:STORY-2539 STORY-2255 | ai:codex
+pub(crate) fn fork_thread_args(mut args: Vec<String>, thread: &str) -> anyhow::Result<Vec<String>> {
+    let thread = thread.trim();
+    anyhow::ensure!(!thread.is_empty(), "cannot fork an empty codex thread id");
+    let exec = args
+        .iter()
+        .position(|a| a == "exec")
+        .ok_or_else(|| anyhow::anyhow!("codex argv has no `exec` subcommand to fork"))?;
+    anyhow::ensure!(
+        args.len() > exec + 1,
+        "codex argv has no prompt after `exec`"
+    );
+    let operation = aida_core::vendors::profile(aida_core::vendors::LaunchVendor::Codex)
+        .resume_args(thread, true)
+        .expect("recorded-thread fork syntax");
+    args.insert(exec + 1, operation[0].clone());
+    let prompt_at = args.len() - 1;
+    args.insert(prompt_at, thread.to_string());
+    Ok(args)
 }

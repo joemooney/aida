@@ -1,8 +1,28 @@
 //! `aida session start` and its preflight, pool and dirty-tree gates (STORY-1488 slice 1)
 // trace:STORY-1488 | ai:claude
 
-use crate::*;
+use crate::process_retry::RetryEtxtbsy;
+#[cfg(test)]
+use crate::{distributed_mode_declared_from, validate_session_start_args, Requirement};
+// trace:TASK-3428 | ai:codex
+use crate::{
+    active_lease_for_cwd, agent_registry, aggregate_session_activity_into_roles,
+    apply_session_env_to_process, change_lookup_for_branch, claim, cli, coordination,
+    current_branch_at, detect_cargo_target_dir, detect_default_branch_ref,
+    detect_merged_pr_for_branch_via_forge, events, existing_lease_for_scope,
+    find_main_worktree_root, find_project_root, forge, git_arg_guard, hostname, humanize_relative,
+    isolate_cargo_target_dir, launch, lease_covers_cwd, lease_path, leases, leases_dir,
+    link_worktree_runtime_state, list_leases, live_spec_claim_by_other, main_worktree_root_from,
+    orchestrator, process_probe, queue_cmd, recent_files_for_branch,
+    remove_session_lease_record_only, review_source_branch_conflict_decision, role, session,
+    sh_single_quote, slugify, worktree, worktree_config_init_submodules,
+    worktree_pool_config_lease_ttl_secs, worktree_pool_config_max_trees,
+    worktree_pool_config_worktree_parent, worktree_pool_global_hooks, write_session_env_file, zen,
+    LeaseConflictDecision, PrLookup, RequirementStatus, SessionLease, Storage,
+};
 use aida_core::git_ops::RemoteCredentialsExt as _;
+use anyhow::{Context, Result};
+use colored::Colorize;
 
 /// STORY-61: forge-specific PR/MR scope. When `aida session start
 /// --owns PR-1` or `--owns MR-42` is invoked, we route through a
@@ -124,6 +144,52 @@ pub(crate) fn review_pickup_conflict_decision(
             review_anchor_matches_change(store, id, &title, source_branch).then_some(id)
         });
     decide(backing)
+}
+
+/// Read-only queue admission uses the same source-branch resolver and
+/// coexistence rules as setup. Do not use review_branch_conflicts here: it can
+/// release dead leases. Setup retains its full conflict and cleanup recheck.
+// trace:BUG-2548 | ai:codex
+pub(crate) fn preflight_review_source_leases(
+    root: &std::path::Path,
+    forge: ReviewForge,
+    number: u64,
+    branch: &str,
+    review_coexistence: Option<(&str, &str)>,
+    store: Option<&aida_core::RequirementsStore>,
+) -> Result<()> {
+    let Some(source) = query_pr_source_branch(forge, number, root) else {
+        return Ok(());
+    };
+    for lease in list_leases(root)
+        .into_iter()
+        .filter(|l| l.branch == source || l.branch == branch)
+    {
+        let decision = review_pickup_conflict_decision(
+            // Admission cannot prompt or end ownership before refreshed gates.
+            // Setup still uses its ordinary terminal-aware conflict decision.
+            true,
+            crate::ownership::reader::lease_retained(root, &lease),
+            lease.role.as_deref(),
+            review_coexistence,
+            store,
+            &source,
+            || {
+                crate::forge::forge_for_kind(root, forge.forge_kind())
+                    .change_metadata(number, &mut crate::network_retry::NoopSink)
+                    .map(|meta| meta.title)
+            },
+        );
+        anyhow::ensure!(
+            decision != LeaseConflictDecision::Refuse,
+            "review is blocked by LIVE or unprovably-dead lease {} on `{}` ({}, worktree {}) before store pull; end that session or wait for it, then retry",
+            lease.id,
+            lease.branch,
+            lease.role.as_deref().unwrap_or("(unset)"),
+            lease.worktree_path.display()
+        );
+    }
+    Ok(())
 }
 
 /// STORY-71: PR/MR head + base metadata captured at session-start time.
@@ -996,7 +1062,9 @@ pub(crate) fn orphan_lease_to_adopt(
             ));
         }
     }
-    if let Some(why) = orphan_adoption_refusal(&stale_lease_recovery_for_lease(&lease)) {
+    // The resume hint and actual adoption share both ownership and tree gates.
+    // trace:TASK-3420 | ai:codex
+    if let Some(why) = crate::leases::lease_adoption_refusal(project_root, &lease) {
         return refuse(format!("lease {id} is not orphaned: {why}"));
     }
     Ok(Some(lease))
@@ -1429,6 +1497,27 @@ impl SessionStartReceipt {
         }
         self.cleanup = None;
     }
+    /// Drop is conservative: verify the lease artifact before reporting success.
+    // trace:BUG-2548 | ai:codex
+    pub(crate) fn rollback(mut self) -> Result<()> {
+        let lease = self.cleanup.as_ref().and_then(|cleanup| {
+            cleanup
+                .lease_id
+                .as_deref()
+                .map(|id| lease_path(&cleanup.root, id))
+        });
+        drop(self.cleanup.take());
+        if let Some(path) = lease {
+            match std::fs::symlink_metadata(&path) {
+                Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+                result => anyhow::bail!(
+                    "pickup rollback retained lease {}; inspect `aida session leases --all` ({result:?})",
+                    path.display()
+                ),
+            }
+        }
+        Ok(())
+    }
     /// STORY-2254: make this receipt's rollback conditional on a durable
     /// ownership record. Its destructive Drop runs only while `still_owner`
     /// confirms this invocation still owns the setup, so a crash or early
@@ -1454,6 +1543,9 @@ pub(crate) struct SessionStartCleanup {
     clone: Option<crate::seat_clone::CreatedClone>,
     clone_git_identity: Option<(u64, u64)>,
     lease_id: Option<String>,
+    // Restore adopted ownership if admission fails after the lease swap.
+    // trace:BUG-2504 | ai:codex
+    adopted_orphan: Option<SessionLease>,
     // The exact status/owner write this invocation owns, including owner-only changes.
     // trace:BUG-2188 TASK-2326 | ai:codex
     claim_write: Option<crate::claim::ClaimStatusChange>,
@@ -1475,6 +1567,7 @@ impl SessionStartCleanup {
             clone: None,
             clone_git_identity: None,
             lease_id: None,
+            adopted_orphan: None,
             claim_write: None,
             armed: true,
             owner_check: None,
@@ -1632,6 +1725,46 @@ impl Drop for SessionStartCleanup {
         }
         if !self.release_tree() {
             return;
+        }
+        // Restore before deleting the successor: a refusal must remain retryable.
+        // trace:BUG-2504 | ai:codex
+        if let Some(orphan) = &self.adopted_orphan {
+            let path = lease_path(&self.root, &orphan.id);
+            let restored = (|| -> Result<()> {
+                // Publish a complete record without replacing any concurrent record.
+                use std::io::Write;
+                let mut pending =
+                    tempfile::NamedTempFile::new_in(path.parent().context("orphan lease parent")?)?;
+                pending.write_all(toml::to_string_pretty(orphan)?.as_bytes())?;
+                pending.as_file().sync_all()?;
+                // Removal may have failed during adoption. The same lease identity
+                // already on disk is restored regardless of writer formatting.
+                // trace:BUG-2504 | ai:codex
+                if let Err(error) = pending.persist_noclobber(&path) {
+                    if error.error.kind() != std::io::ErrorKind::AlreadyExists || {
+                        let existing: SessionLease =
+                            toml::from_str(&std::fs::read_to_string(&path)?)?;
+                        existing.id != orphan.id || existing.worktree_path != orphan.worktree_path
+                    } {
+                        return Err(error.into());
+                    }
+                }
+                // trace:STORY-2710 | ai:codex
+                if let Some(successor) = &self.lease_id {
+                    crate::repair_journal::RepairGuard::lock(&self.root)?.transfer_adopted_lane(
+                        &orphan.worktree_path,
+                        &orphan.branch,
+                        successor,
+                        &orphan.id,
+                    )?;
+                }
+                crate::ownership::dual::lease_written(&self.root, orphan);
+                Ok(())
+            })();
+            if let Err(error) = restored {
+                eprintln!("launch cleanup retained successor lease: could not restore adopted lease: {error:#}; inspect `aida session leases --all`");
+                return;
+            }
         }
         if let Some(id) = &self.lease_id {
             if !remove_session_lease_record_only(&self.root, id) {
@@ -2268,22 +2401,23 @@ pub(crate) fn session_start_with_receipt(
         );
     }
     // ...and so does any other lease on the scope whose owner is still alive,
-    // with or without a live linked worktree: adoption bypasses the BUG-637
-    // live-claim gate's claude-process probe, so it checks owners itself.
-    // An owner whose liveness cannot be determined (no recorded pid) is
-    // treated as alive, the same rule queue work's conflict sweep applies.
+    // with or without a linked worktree. Adoption checks the recorded owner;
+    // unknown evidence retains ownership, as in the ordinary pickup gate.
     // trace:BUG-2223, TASK-b6b1278890774ef993d2ebc327862470-004 | ai:claude
     if let Some(orphan) = &adopted_orphan {
         let held = list_leases(&project_root).into_iter().find_map(|l| {
             if l.id == orphan.id || !l.scope.eq_ignore_ascii_case(owns) {
                 return None;
             }
-            match stale_lease_recovery_for_lease(&l).base_verdict {
-                StaleLeaseRecovery::Live => Some((l, "live session")),
-                StaleLeaseRecovery::UnknownLiveness => {
+            // trace:TASK-3420 | ai:codex
+            match crate::ownership::reader::LeaseReader::new(&project_root)
+                .pickup_owner(&l, crate::ownership::reader::LegacyRule::Adoption)
+            {
+                crate::ownership::OwnerVerdict::Dead { .. } => None,
+                crate::ownership::OwnerVerdict::Alive { .. } => Some((l, "live session")),
+                crate::ownership::OwnerVerdict::Unknown { .. } => {
                     Some((l, "session whose owner cannot be proven gone"))
                 }
-                _ => None,
             }
         });
         if let Some((live, what)) = held {
@@ -2332,6 +2466,58 @@ pub(crate) fn session_start_with_receipt(
         }
     }
 
+    // STORY-65 + TASK-67: role resolution by INTENT, not blind env
+    // inheritance. Order:
+    //   1. --role <name>             explicit override always wins
+    //   2. scope-derived default     PR-N/MR-N → reviewer; else → implementer
+    //   3. $AIDA_SESSION_ROLE        env fallback when no scope default fires
+    //                                (which currently never happens — every
+    //                                scope shape has a default — but kept as
+    //                                a safety net for future scope kinds)
+    //   4. None                      no role recorded
+    //
+    // The earlier (pre-TASK-67) behavior was step 3 only: a reviewer shell
+    // starting an EPIC session recorded reviewer, which then misrouted the
+    // queue/activity surfaces while real implementer work happened inside.
+    // When the env and scope-default disagree we warn (don't fail) — the
+    // user might genuinely want the env's role (e.g. an architect shell
+    // starting an EPIC; the implementer default would be wrong for them).
+    // Resolve once before publishing the shared claim; the lease below uses
+    // this same effective role. trace:STORY-2705 | ai:codex
+    // trace:TASK-67 | ai:claude
+    let env_role = std::env::var("AIDA_SESSION_ROLE")
+        .ok()
+        .filter(|s| !s.trim().is_empty());
+    let scope_default_role: Option<&'static str> = if review_target.is_some() {
+        Some("reviewer")
+    } else {
+        Some("implementer")
+    };
+    let (inherited_role, role_origin) = if let Some(r) = launch_role.as_ref() {
+        (Some(r.clone()), "--role flag")
+    } else if let Some(d) = scope_default_role {
+        // Warn when env-role disagrees with the scope default — the user
+        // probably wanted the scope default but might have meant otherwise.
+        if let Some(env) = env_role.as_ref() {
+            if !env.eq_ignore_ascii_case(d) {
+                eprintln!(
+                    "{} active role {} doesn't match this scope's default {}.\n  \
+                     Recording: {} (scope-derived). Pass --role {} to override.",
+                    crate::glyph(crate::glyphs::Glyph::Warning).yellow().bold(),
+                    format!("({})", env).cyan(),
+                    format!("({})", d).cyan(),
+                    d.cyan().bold(),
+                    env.cyan(),
+                );
+            }
+        }
+        (Some(d.to_string()), "scope-derived")
+    } else if let Some(env) = env_role.clone() {
+        (Some(env), "inherited")
+    } else {
+        (None, "")
+    };
+
     let mut rollback = rollback_failed_setup.then(|| SessionStartCleanup::new(&project_root, owns));
 
     // STORY-637: cross-clone lease claim on the shared store. The intra-clone
@@ -2345,15 +2531,11 @@ pub(crate) fn session_start_with_receipt(
     {
         let store_root = project_root.join(".aida-store");
         let orchestrated = orchestrator::detect(&project_root).is_orchestrated();
-        let claim_role = launch_role
-            .clone()
-            .or_else(|| std::env::var("AIDA_SESSION_ROLE").ok())
-            .unwrap_or_default();
         match coordination::acquire_claim_receipted(
             &store_root,
             owns,
             &project_root,
-            &claim_role,
+            inherited_role.as_deref().unwrap_or_default(),
             /* review_verb */ is_review_session,
             force_claim || orchestrated,
         ) {
@@ -2467,21 +2649,19 @@ pub(crate) fn session_start_with_receipt(
             let self_lease = std::env::current_dir()
                 .ok()
                 .and_then(|cwd| active_lease_for_cwd(&project_root, &cwd));
-            let now = chrono::Utc::now();
-            let live = process_probe::probe_live_claude_sessions();
-            if let Some(claim) = live_spec_claim_by_other(
-                &leases,
-                self_lease.as_ref(),
-                &[owns],
-                lease_is_live(&live, now),
-            ) {
+            // trace:TASK-3420 | ai:codex
+            if let Some(claim) =
+                live_spec_claim_by_other(&leases, self_lease.as_ref(), &[owns], |lease| {
+                    crate::ownership::reader::lease_retained(&project_root, lease)
+                })
+            {
                 let claim_id_short: String = claim.id.chars().take(8).collect();
                 let started = claim
                     .started_at
                     .with_timezone(&chrono::Local)
                     .format("%H:%M");
                 anyhow::bail!(
-                    "`{owns}` is already claimed by session {claim_id_short} (live, started \
+                    "`{owns}` is already claimed by session {claim_id_short} (ownership retained, started \
                      {started}) — skipping to avoid duplicate work.\n  \
                      worktree: {}\n  \
                      If that session is wrong/abandoned, end it (`aida session end \
@@ -2677,8 +2857,8 @@ pub(crate) fn session_start_with_receipt(
                 // trace:BUG-1205 | ai:claude
                 let headless = std::env::var_os("AIDA_HEADLESS").is_some()
                     || !std::io::IsTerminal::is_terminal(&std::io::stdin());
-                let live_sessions = process_probe::probe_live_claude_sessions();
-                let is_live = lease_is_live(&live_sessions, chrono::Utc::now())(l);
+                // trace:TASK-3420 | ai:codex
+                let is_live = crate::ownership::reader::lease_retained(&project_root, l);
                 // BUG-2150: an explicit reviewer pickup coexists with the
                 // implementer's lease; another reviewer's lease still conflicts.
                 // trace:BUG-2150 | ai:claude
@@ -2720,18 +2900,15 @@ pub(crate) fn session_start_with_receipt(
                             l.branch,
                             n
                         );
-                        // STORY-2315: a dead lease whose seat is clean and
-                        // whose HEAD is already in the PR loses nothing to
-                        // `--force`; plain `session end` refused it. The
-                        // verdict-to-action mapping is shared with `queue
-                        // work --steal` (pr_lease_takeover::end_action).
-                        // trace:STORY-2315 | ai:claude
-                        let force = match crate::pr_lease_takeover::plan_lease_end(
+                        // Ownership proof permits guarded cleanup, never a
+                        // dirty-tree or live-process override.
+                        // trace:STORY-2325 | ai:codex
+                        match crate::pr_lease_takeover::plan_lease_end(
                             &project_root,
                             l,
                             Some(&source_branch),
                         ) {
-                            crate::pr_lease_takeover::LeaseEndAction::ForceEnd => true,
+                            crate::pr_lease_takeover::LeaseEndAction::SafeEnd => {}
                             crate::pr_lease_takeover::LeaseEndAction::Bail(message) => {
                                 // trace:BUG-2450 | ai:codex
                                 crate::pr_lease_takeover::notify_advisor(
@@ -2742,13 +2919,8 @@ pub(crate) fn session_start_with_receipt(
                                 .with_context(|| message.clone())?;
                                 anyhow::bail!("{}", message)
                             }
-                            crate::pr_lease_takeover::LeaseEndAction::PlainEnd => false,
                         };
-                        let mut end_args =
-                            vec!["session", "end", l.id.as_str(), "--yes", "--skip-ci"];
-                        if force {
-                            end_args.push("--force");
-                        }
+                        let end_args = ["session", "end", l.id.as_str(), "--yes", "--skip-ci"];
                         let ended = std::process::Command::new(crate::aida_exe_path())
                             .current_dir(&project_root)
                             .args(&end_args)
@@ -3271,56 +3443,6 @@ pub(crate) fn session_start_with_receipt(
             .or_else(|| std::env::var("USER").ok())
             .unwrap_or_else(|| "unknown".to_string())
     };
-    // STORY-65 + TASK-67: role resolution by INTENT, not blind env
-    // inheritance. Order:
-    //   1. --role <name>             explicit override always wins
-    //   2. scope-derived default     PR-N/MR-N → reviewer; else → implementer
-    //   3. $AIDA_SESSION_ROLE        env fallback when no scope default fires
-    //                                (which currently never happens — every
-    //                                scope shape has a default — but kept as
-    //                                a safety net for future scope kinds)
-    //   4. None                      no role recorded
-    //
-    // The earlier (pre-TASK-67) behavior was step 3 only: a reviewer shell
-    // starting an EPIC session recorded reviewer, which then misrouted the
-    // queue/activity surfaces while real implementer work happened inside.
-    // When the env and scope-default disagree we warn (don't fail) — the
-    // user might genuinely want the env's role (e.g. an architect shell
-    // starting an EPIC; the implementer default would be wrong for them).
-    // trace:TASK-67 | ai:claude
-    let env_role = std::env::var("AIDA_SESSION_ROLE")
-        .ok()
-        .filter(|s| !s.trim().is_empty());
-    let scope_default_role: Option<&'static str> = if review_target.is_some() {
-        Some("reviewer")
-    } else {
-        Some("implementer")
-    };
-    let (inherited_role, role_origin) = if let Some(r) = launch_role.as_ref() {
-        (Some(r.clone()), "--role flag")
-    } else if let Some(d) = scope_default_role {
-        // Warn when env-role disagrees with the scope default — the user
-        // probably wanted the scope default but might have meant otherwise.
-        if let Some(env) = env_role.as_ref() {
-            if !env.eq_ignore_ascii_case(d) {
-                eprintln!(
-                    "{} active role {} doesn't match this scope's default {}.\n  \
-                     Recording: {} (scope-derived). Pass --role {} to override.",
-                    crate::glyph(crate::glyphs::Glyph::Warning).yellow().bold(),
-                    format!("({})", env).cyan(),
-                    format!("({})", d).cyan(),
-                    d.cyan().bold(),
-                    env.cyan(),
-                );
-            }
-        }
-        (Some(d.to_string()), "scope-derived")
-    } else if let Some(env) = env_role.clone() {
-        (Some(env), "inherited")
-    } else {
-        (None, "")
-    };
-
     // STORY-73: capture the parent shell PID so `aida session end` (without
     // an arg) can resolve the right lease from the shell that ran `start`,
     // even when cwd doesn't help. Best effort — if PPID isn't set / process
@@ -3329,10 +3451,10 @@ pub(crate) fn session_start_with_receipt(
     let (creator_pid, creator_pid_start_time, active_pid, active_pid_start_time) =
         if let Some(ref agent) = session_agent {
             let pid = agent.pid;
-            let start = agent
-                .pid_start
-                .clone()
-                .or_else(|| process_probe::process_start_identity(pid));
+            // Registry v1 identity is boot-qualified; leases retain their
+            // existing raw-tick transport plus separate HolderRecord.
+            // trace:TASK-3366 | ai:codex
+            let start = agent.process_identity().map(|id| id.legacy_ticks_start());
             (Some(pid), start.clone(), Some(pid), start)
         } else {
             let creator_pid = creator_shell_pid();
@@ -3444,6 +3566,18 @@ pub(crate) fn session_start_with_receipt(
     // is written, so the tree is never unleased; the tree itself stays.
     // trace:BUG-2223 | ai:claude
     if let Some(orphan) = &adopted_orphan {
+        if let Some(cleanup) = rollback.as_mut() {
+            cleanup.adopted_orphan = Some(orphan.clone());
+        }
+        // Transfer only at the verified adoption boundary, before removing the
+        // original lease. The shared journal remains independent of watcher state.
+        // trace:STORY-2710 | ai:codex
+        crate::repair_journal::RepairGuard::lock(&project_root)?.transfer_adopted_lane(
+            &lease.worktree_path,
+            &lease.branch,
+            &orphan.id,
+            &lease.id,
+        )?;
         aggregate_session_activity_into_roles(&project_root, &orphan.id);
         if !remove_session_lease_record_only(&project_root, &orphan.id) {
             // Not `aida session end`: that would tear down the adopted tree.
@@ -3743,19 +3877,21 @@ pub(crate) fn session_start_with_receipt(
             explicit_name
                 .or_else(|| session::derive_session_name(owns, &branch_name, &role_for_name))
         };
-        return session::new_session_for_vendor(
-            host_main.as_deref(),
-            launch_vendor,
-            Some(owns.to_string()),
-            launch_title,
-            launch_permission_mode,
-            // trace:TASK-2742 | ai:claude
-            codex_child_role.or(launch_role),
-            derived_name,
-            launch_contained,
-            launch_set_title,
-        )
-        .map(|_| SessionStartReceipt::existing(None));
+        return crate::agent_launch::dispatch_fresh_session(&id, || {
+            session::new_session_for_vendor(
+                host_main.as_deref(),
+                launch_vendor,
+                Some(owns.to_string()),
+                launch_title,
+                launch_permission_mode,
+                // trace:TASK-2742 | ai:claude
+                codex_child_role.or(launch_role),
+                derived_name,
+                launch_contained,
+                launch_set_title,
+            )
+            .map(|_| SessionStartReceipt::existing(None))
+        });
     }
 
     if std::env::var_os("AIDA_SUPPRESS_SESSION_NEXT").is_none() {

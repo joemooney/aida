@@ -11,7 +11,11 @@
 //! and the `git_describe_latest_tag` / `git_commits_since_tag` repo probes.
 
 use crate::process_retry::RetryEtxtbsy;
-use crate::*;
+use crate::{
+    build_banner, confirm, current_version, detect_install_method, find_aida_repo_above,
+    git_commits_since_tag, git_describe_latest_tag, normalize_upgrade_mode, release_target,
+    strip_v, InstallMethod,
+};
 use anyhow::{Context, Result};
 use colored::Colorize;
 
@@ -100,7 +104,7 @@ fn upgrade_running_binary(
 
     if check {
         println!(
-            "\n{}: an upgrade is available. Run `aida upgrade` (without --check) to install.",
+            "\n{}: an upgrade is available. Run `aida upgrade` to install.",
             "INFO".blue()
         );
         return Ok(());
@@ -117,7 +121,7 @@ fn upgrade_running_binary(
     }
 
     match install {
-        InstallMethod::Cargo(_) => upgrade_via_cargo(&target_tag),
+        InstallMethod::Cargo(p) => upgrade_via_cargo(&target_tag, &p),
         InstallMethod::Binary(p) => upgrade_via_release_tarball(&p, &target_tag),
         InstallMethod::DeveloperBuild(_) => unreachable!(),
     }
@@ -166,7 +170,7 @@ fn upgrade_specific_binary(
 
     if check {
         println!(
-            "\n{}: upgrade available for {}. Re-run without --check to install.",
+            "\n{}: upgrade available for {}. Run `aida upgrade` to install.",
             "INFO".blue(),
             target_path.display()
         );
@@ -185,7 +189,7 @@ fn upgrade_specific_binary(
     }
 
     match install {
-        InstallMethod::Cargo(_) => upgrade_via_cargo(&target_tag),
+        InstallMethod::Cargo(p) => upgrade_via_cargo(&target_tag, &p),
         InstallMethod::Binary(p) => upgrade_via_release_tarball(&p, &target_tag),
         InstallMethod::DeveloperBuild(_) => unreachable!(),
     }
@@ -264,7 +268,7 @@ pub(crate) fn upgrade_dev_mode_sibling_scan(
             print_unreleased_dev_hint(&exe, &target_tag, diff);
         } else {
             println!(
-                "{}: {} sibling install(s) are stale. Re-run without --check to upgrade.",
+                "{}: {} sibling install(s) are stale. Run `aida upgrade` to upgrade.",
                 "INFO".blue(),
                 stale.len()
             );
@@ -296,7 +300,7 @@ pub(crate) fn upgrade_dev_mode_sibling_scan(
         }
         let install = classify_install_path(&path);
         let result = match install {
-            InstallMethod::Cargo(_) => upgrade_via_cargo(&target_tag),
+            InstallMethod::Cargo(p) => upgrade_via_cargo(&target_tag, &p),
             InstallMethod::Binary(_) => upgrade_via_release_tarball(&path, &target_tag),
             InstallMethod::DeveloperBuild(_) => {
                 eprintln!(
@@ -435,8 +439,8 @@ fn print_unreleased_dev_hint(exe: &std::path::Path, target_tag: &str, with_diff:
         println!();
     } else {
         println!(
-            "      Pass {} to see the unreleased commits before shipping.",
-            "--diff".cyan()
+            "      Run {} to see the unreleased commits before shipping.",
+            "aida upgrade diff".cyan()
         );
     }
 
@@ -504,12 +508,88 @@ fn classify_install_path(path: &std::path::Path) -> InstallMethod {
 
 /// Re-run `cargo install --git ...` to refresh the binary. Pins to the
 /// requested tag so the install matches what the user asked for.
-fn upgrade_via_cargo(tag: &str) -> Result<()> {
-    println!(
-        "\nRunning: cargo install --git https://github.com/joemooney/aida.git --tag {} --force aida-cli",
-        tag
+// trace:STORY-2704 | ai:codex
+fn upgrade_via_cargo(tag: &str, installed: &std::path::Path) -> Result<()> {
+    // Inspect the selected release before Cargo can replace any installed file.
+    // Older supported releases contain only the core CLI.
+    let manifest = std::process::Command::new("curl")
+        .args([
+            "-fSL",
+            "--connect-timeout",
+            "15",
+            "--max-time",
+            "30",
+            "--",
+            &format!("https://raw.githubusercontent.com/joemooney/aida/{tag}/Cargo.toml"),
+        ])
+        .output()
+        .context("Failed to fetch release package inventory")?;
+    anyhow::ensure!(
+        manifest.status.success(),
+        "Could not fetch release package inventory for {tag}"
     );
-    let status = std::process::Command::new("cargo")
+    let manifest = String::from_utf8(manifest.stdout).context("Release manifest is not UTF-8")?;
+    let packages = cargo_release_packages(&manifest)?;
+    install_cargo_bundle(tag, installed, std::path::Path::new("cargo"), packages)?;
+    println!("\n{}: upgraded to {}.", "OK".green(), tag);
+    Ok(())
+}
+
+// Select from the actual tag's workspace, rather than guessing a version cutoff.
+// Missing/invalid inventories refuse before any installation mutation.
+// trace:STORY-2704 | ai:codex
+fn cargo_release_packages(manifest: &str) -> Result<&'static [&'static str]> {
+    let manifest: toml::Value =
+        toml::from_str(manifest).context("Invalid release Cargo manifest")?;
+    let members = manifest
+        .get("workspace")
+        .and_then(|workspace| workspace.get("members"))
+        .and_then(toml::Value::as_array)
+        .context("Release Cargo manifest has no workspace members")?;
+    let members: Vec<&str> = members
+        .iter()
+        .map(|member| {
+            member
+                .as_str()
+                .context("Release workspace member is not a string")
+        })
+        .collect::<Result<_>>()?;
+    anyhow::ensure!(
+        members.contains(&"aida-cli"),
+        "Release workspace has no aida-cli package"
+    );
+    Ok(if members.contains(&"aida-porcelain") {
+        &["aida-cli", "aida-porcelain"]
+    } else {
+        &["aida-cli"]
+    })
+}
+
+// Keep Cargo's destination explicit: upgrading a selected installation must
+// install its companion beside that binary, even with another Cargo root set.
+fn install_cargo_bundle(
+    tag: &str,
+    installed: &std::path::Path,
+    cargo: &std::path::Path,
+    packages: &[&str],
+) -> Result<()> {
+    let bin = installed.parent().context("Cargo binary has no parent")?;
+    let root = bin.parent().context("Cargo bin has no install root")?;
+    let alias = bin.join("aida-flow");
+    let porcelain = packages.contains(&"aida-porcelain");
+    if porcelain {
+        match std::fs::symlink_metadata(&alias) {
+            Ok(_) => anyhow::ensure!(
+                std::fs::read_link(&alias).ok().as_deref()
+                    == Some(std::path::Path::new("aida-porcelain")),
+                "refusing to replace unrelated {}",
+                alias.display()
+            ),
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+            Err(e) => return Err(e.into()),
+        }
+    }
+    let status = std::process::Command::new(cargo)
         .args([
             "install",
             "--git",
@@ -517,15 +597,109 @@ fn upgrade_via_cargo(tag: &str) -> Result<()> {
             "--tag",
             tag,
             "--force",
-            "aida-cli",
+            "--root",
         ])
-        .status()
+        .arg(root)
+        .args(packages)
+        .status_retrying_etxtbsy()
         .context("Failed to invoke cargo")?;
-    if !status.success() {
-        anyhow::bail!("cargo install failed");
+    anyhow::ensure!(status.success(), "cargo install failed");
+    if porcelain {
+        anyhow::ensure!(
+            bin.join("aida-porcelain").is_file(),
+            "Cargo companion was not installed"
+        );
+        if std::fs::symlink_metadata(&alias).is_err() {
+            std::os::unix::fs::symlink("aida-porcelain", &alias)?;
+        }
     }
-    println!("\n{}: upgraded to {}.", "OK".green(), tag);
     Ok(())
+}
+
+#[cfg(test)]
+mod cargo_bundle_tests {
+    use super::*;
+
+    // Starts with a Cargo-only installation, without a companion or alias.
+    // trace:STORY-2704 | ai:codex
+    #[test]
+    fn cargo_upgrade_installs_matching_companion_and_relative_alias() {
+        let tmp = tempfile::tempdir().unwrap();
+        let bin = tmp.path().join("bin");
+        std::fs::create_dir(&bin).unwrap();
+        std::fs::write(bin.join("aida"), "old core").unwrap();
+        let cargo = tmp.path().join("cargo-fixture");
+        crate::test_exec::write_executable(
+            &cargo,
+            r#"#!/bin/sh
+[ "$1 $2 $3 $4 $5 $6 $7" = "install --git https://github.com/joemooney/aida.git --tag v1.2.3 --force --root" ] || exit 10
+[ "$9" = "aida-cli" ] && [ "${10}" = "aida-porcelain" ] || exit 11
+printf 'new core' > "$8/bin/aida"
+printf 'matching companion' > "$8/bin/aida-porcelain"
+"#,
+        );
+        let packages = cargo_release_packages(include_str!("../../Cargo.toml")).unwrap();
+        assert_eq!(packages, ["aida-cli", "aida-porcelain"]);
+        install_cargo_bundle("v1.2.3", &bin.join("aida"), &cargo, packages).unwrap();
+        assert_eq!(
+            std::fs::read_to_string(bin.join("aida")).unwrap(),
+            "new core"
+        );
+        assert_eq!(
+            std::fs::read_link(bin.join("aida-flow")).unwrap(),
+            std::path::Path::new("aida-porcelain")
+        );
+        assert_eq!(
+            std::fs::read_to_string(bin.join("aida-flow")).unwrap(),
+            "matching companion"
+        );
+    }
+    // This is the committed v0.15.0 workspace manifest, not a synthetic version
+    // boundary. Even an unrelated existing flow command must remain untouched.
+    // trace:STORY-2704 | ai:codex
+    #[test]
+    fn historical_cargo_release_installs_only_core_without_touching_alias() {
+        let packages =
+            cargo_release_packages(include_str!("../tests/fixtures/upgrade/v0.15.0-Cargo.toml"))
+                .unwrap();
+        assert_eq!(packages, ["aida-cli"]);
+        let tmp = tempfile::tempdir().unwrap();
+        let bin = tmp.path().join("bin");
+        std::fs::create_dir(&bin).unwrap();
+        std::fs::write(bin.join("aida"), "old core").unwrap();
+        std::fs::write(bin.join("aida-flow"), "unrelated command").unwrap();
+        let cargo = tmp.path().join("cargo-fixture");
+        crate::test_exec::write_executable(
+            &cargo,
+            r#"#!/bin/sh
+[ "$1 $2 $3 $4 $5 $6 $7" = "install --git https://github.com/joemooney/aida.git --tag v0.15.0 --force --root" ] || exit 10
+[ "$#" = 9 ] && [ "$9" = "aida-cli" ] || exit 11
+printf 'historical core' > "$8/bin/aida"
+"#,
+        );
+        install_cargo_bundle("v0.15.0", &bin.join("aida"), &cargo, packages).unwrap();
+        assert_eq!(
+            std::fs::read_to_string(bin.join("aida")).unwrap(),
+            "historical core"
+        );
+        assert_eq!(
+            std::fs::read_to_string(bin.join("aida-flow")).unwrap(),
+            "unrelated command"
+        );
+        assert!(!bin.join("aida-porcelain").exists());
+    }
+
+    #[test]
+    fn invalid_release_inventory_refuses() {
+        for manifest in [
+            "not toml",
+            "[workspace]",
+            "[workspace]\nmembers = [42]",
+            "[workspace]\nmembers = [\"other\"]",
+        ] {
+            assert!(cargo_release_packages(manifest).is_err(), "{manifest}");
+        }
+    }
 }
 
 /// Download the release tarball matching this platform, extract, and install
@@ -573,73 +747,25 @@ fn upgrade_via_release_tarball(current_exe: &std::path::Path, tag: &str) -> Resu
         .ok_or_else(|| anyhow::anyhow!("Could not determine install directory"))?;
     let needs_sudo = !dest_writable(dest_dir);
 
-    let install_from = |src: &std::path::Path, dst_name: &str| -> Result<()> {
-        let dst = dest_dir.join(dst_name);
-        let mut cmd = if needs_sudo {
-            let mut c = std::process::Command::new("sudo");
-            c.arg("install");
-            c
-        } else {
-            std::process::Command::new("install")
-        };
-        cmd.args(["-m", "755"]).arg(src).arg(&dst);
-        let s = cmd
-            .status()
-            .with_context(|| format!("Failed to install {}", dst.display()))?;
-        if !s.success() {
-            anyhow::bail!("install failed for {}", dst.display());
-        }
-        println!("  {} {}", "Installed".green(), dst.display());
-        Ok(())
+    // All files are staged on the destination filesystem before per-file atomic
+    // renames, with rollback if a replacement fails. trace:STORY-2704 | ai:codex
+    let mut command = if needs_sudo {
+        let mut command = std::process::Command::new("sudo");
+        command.arg("sh");
+        command
+    } else {
+        std::process::Command::new("sh")
     };
-
-    // Find binaries in the extracted tarball. The release workflow has
-    // shipped two layouts at different times:
-    //   v0.4.0 era: a single file named `aida-${target}` (the renamed
-    //               aida binary; no aida-server).
-    //   future:     two files `aida` and `aida-server` at top level.
-    // Handle both.
-    let mut installed_any = false;
-
-    let single = temp_dir.join(format!("aida-{}", target));
-    if single.is_file() {
-        install_from(&single, "aida")?;
-        installed_any = true;
-    }
-
-    let aida_top = temp_dir.join("aida");
-    if aida_top.is_file() {
-        install_from(&aida_top, "aida")?;
-        installed_any = true;
-    }
-
-    let server_top = temp_dir.join("aida-server");
-    if server_top.is_file() {
-        install_from(&server_top, "aida-server")?;
-        installed_any = true;
-    }
-
-    if !installed_any {
-        // Surface what WAS in the tarball so the user can debug, instead
-        // of the previous silent "OK: upgraded" lie.
-        let mut entries: Vec<String> = std::fs::read_dir(&temp_dir)
-            .map(|rd| {
-                rd.flatten()
-                    .map(|e| e.file_name().to_string_lossy().into_owned())
-                    .collect()
-            })
-            .unwrap_or_default();
-        entries.sort();
-        anyhow::bail!(
-            "Extracted tarball at {} contains no aida binary I recognize.\n\
-             Expected one of: aida-{}, aida.\n\
-             Tarball contents: {:?}\n\
-             This is an aida bug — please report.",
-            temp_dir.display(),
-            target,
-            entries
-        );
-    }
+    let status = command
+        .arg("-c")
+        .arg(include_str!("../../scripts/upgrade-release-bundle.sh"))
+        .arg("aida-upgrade")
+        .arg(&temp_dir)
+        .arg(dest_dir)
+        .arg(target)
+        .status()
+        .context("Failed to install release bundle")?;
+    anyhow::ensure!(status.success(), "release bundle installation failed");
 
     let _ = std::fs::remove_dir_all(&temp_dir);
     println!("\n{}: upgraded to {}.", "OK".green(), tag);
@@ -662,13 +788,10 @@ fn dest_writable(dir: &std::path::Path) -> bool {
 /// the matching upgrade strategy. From a developer build with no
 /// --target, scans common install locations and offers to upgrade
 /// any stale sibling installs.
+// trace:TASK-1214 | ai:codex
 #[derive(clap::Parser, Debug)]
 #[clap(name = "upgrade")]
 pub(crate) struct UpgradeArgs {
-    /// Compare current/sibling versions to latest release; report only, don't install.
-    #[clap(long)]
-    pub check: bool,
-
     /// Install a specific version instead of latest. Format: `v0.4.0`.
     #[clap(long)]
     pub version: Option<String>,
@@ -682,12 +805,6 @@ pub(crate) struct UpgradeArgs {
     #[clap(long)]
     pub target: Option<String>,
 
-    /// When the dev build is ahead of the latest release tag, print a
-    /// `git log --stat` of the unreleased commits so you can vet what
-    /// `aida dev patch` would ship.
-    #[clap(long, hide = true)]
-    pub diff: bool,
-
     /// Upgrade action.
     // trace:STORY-1028 | ai:codex
     #[clap(subcommand)]
@@ -698,32 +815,29 @@ pub(crate) struct UpgradeArgs {
 // trace:EPIC-1-001 | ai:claude
 fn run_upgrade(
     matches: &clap::ArgMatches,
-    _ctx: &crate::command_registry::DispatchCtx,
+    _ctx: &crate::cmdkit::DispatchCtx,
 ) -> anyhow::Result<()> {
     let args = <UpgradeArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
     let UpgradeArgs {
-        check,
         version,
         yes,
         target,
-        diff,
         cmd,
     } = &args;
-    let (check, diff) = normalize_upgrade_mode(*check, *diff, cmd.as_ref());
+    let (check, diff) = normalize_upgrade_mode(cmd.as_ref());
     return self::handle_upgrade_command(check, version.as_deref(), *yes, target.as_deref(), diff);
 }
 
 // trace:STORY-1728 | ai:claude
-pub(crate) static UPGRADE: crate::command_registry::CommandReg =
-    crate::command_registry::CommandReg {
-        name: "upgrade",
-        help_after: "_bg-fetch",
-        command: <UpgradeArgs as clap::CommandFactory>::command,
-        policy: |_| crate::command_registry::CmdPolicy {
-            stakeholder: crate::stakeholder_role::StakeholderAction::Write,
-            per_write_auto_push: false,
-            skip_role_restore_prompt: false,
-            team_identity_write: false,
-        },
-        run: crate::command_registry::Handler::Early(run_upgrade),
-    };
+pub(crate) static UPGRADE: crate::cmdkit::CommandReg = crate::cmdkit::CommandReg {
+    name: "upgrade",
+    help_after: "_bg-fetch",
+    command: <UpgradeArgs as clap::CommandFactory>::command,
+    policy: |_| crate::cmdkit::CmdPolicy {
+        stakeholder: crate::stakeholder_role::StakeholderAction::Write,
+        per_write_auto_push: false,
+        skip_role_restore_prompt: false,
+        team_identity_write: false,
+    },
+    run: crate::cmdkit::Handler::Early(run_upgrade),
+};

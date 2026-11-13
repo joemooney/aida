@@ -3,7 +3,7 @@
 #![cfg(target_os = "linux")]
 
 use super::*;
-use crate::launch::profile::finalize_codex as prepare_launch;
+use crate::vendors::profile::finalize_codex as prepare_launch;
 use std::path::Path;
 
 // trace:BUG-b6b1278890774ef993d2ebc327862470-172.ac7d6a3b | ai:claude
@@ -503,6 +503,14 @@ enum Finalization {
 /// launches would have been caught.
 // trace:BUG-b6b1278890774ef993d2ebc327862470-172.ac022c22 | ai:claude
 const LAUNCH_INVENTORY: &[(&str, usize, Finalization)] = &[
+    // trace:TASK-3048 | ai:codex — closed AGY fixture, shared wrapper only.
+    (
+        "launch/agy.rs",
+        1,
+        Finalization::NotACodexLaunch(
+            "closed AGY diagnostic; vendor selector validated before grant issuance",
+        ),
+    ),
     // STORY-2326: the fg/bg seat writes moved into launch::assign_seat; the
     // 2 grant writes plus 6 launcher calls (2 spawn_agent, 4 assign_seat).
     // TASK-3219: the extra seat assignment is Claude-wrapper-only; Codex
@@ -548,10 +556,13 @@ const LAUNCH_INVENTORY: &[(&str, usize, Finalization)] = &[
         ),
     ),
     // trace:STORY-2326 | ai:claude — the one seat writer; its Codex callers
-    // finalize at their own (inventoried) sites.
+    // finalize at their own (inventoried) sites. Four grant writes cover
+    // Child, Lane and ThisSession's restored/current or explicit selector.
+    // The restoration branch requires an already cleared environment and
+    // obtains only the validated current grant; it creates no authority.
     (
         "launch/spawn.rs",
-        3,
+        4,
         Finalization::NotACodexLaunch(
             "launch::assign_seat, the seat writer every converted site calls",
         ),
@@ -561,16 +572,19 @@ const LAUNCH_INVENTORY: &[(&str, usize, Finalization)] = &[
     // trace:STORY-2326 | ai:codex
     (
         "launch/grant.rs",
-        1,
+        2,
         Finalization::NotACodexLaunch(
-            "advisor seat builder only; intake/questions finalize via coordinator spawn",
+            "advisor builders: intake/questions finalize via coordinator spawn; review-watch executes only the fixed AIDA control worker",
         ),
     ),
-    ("phase_driver.rs", 2, Finalization::PrepareLaunch(1)),
+    // Explicit advisor assignment transports the launcher's selector for Claude;
+    // the Codex caller replaces it with a delegated grant before finalization.
+    // trace:STORY-2326 | ai:codex
+    ("phase_driver.rs", 3, Finalization::PrepareLaunch(1)),
     ("phase_driver_trait.rs", 2, Finalization::PrepareLaunch(1)),
     ("questions.rs", 2, Finalization::CoordinatorSpawn),
     (
-        "queue_cmd.rs",
+        "queue_cmd/work.rs",
         4,
         Finalization::NotACodexLaunch(
             "explicit Claude exec seats; Codex uses finalized session constructors",
@@ -887,7 +901,7 @@ fn bug_2398_final_spawn_boundary_ratchet() {
             .unwrap_or_else(|| panic!("stale LAUNCH_INVENTORY entry {rel}"));
         match how {
             Finalization::PrepareLaunch(n) => assert!(
-                text.matches("crate::launch::profile::finalize_codex(")
+                text.matches("crate::vendors::profile::finalize_codex(")
                     .count()
                     >= *n,
                 "{rel}: a managed Codex spawn path lost finalization"
@@ -921,7 +935,7 @@ fn bug_2398_final_spawn_boundary_ratchet() {
                         );
                     }
                 }
-                assert!(!text.contains("crate::launch::profile::finalize_codex("));
+                assert!(!text.contains("crate::vendors::profile::finalize_codex("));
             }
             Finalization::NotACodexLaunch(reason) => assert!(!reason.is_empty()),
         }
@@ -937,7 +951,7 @@ fn bug_2398_final_spawn_boundary_ratchet() {
         .split("\n}\n")
         .next()
         .unwrap()
-        .contains("crate::launch::profile::finalize_codex(cmd)"));
+        .contains("crate::vendors::profile::finalize_codex(cmd)"));
     let spawn = session
         .split("fn coordinator_status_with_handle_guard(")
         .nth(1)
@@ -950,7 +964,7 @@ fn bug_2398_final_spawn_boundary_ratchet() {
         at("finalize_coordinator_launch(vendor, cmd, project_root)?") < at("cmd.stdout(stdout)")
     );
     assert!(at("cmd.stdout(stdout)") < at("spawn_retrying_etxtbsy()"));
-    let queue = include_str!("../queue_cmd.rs");
+    let queue = include_str!("../queue_cmd/work.rs");
     assert!(queue.contains("session::exec_codex_session("));
     // Pure composers stay pure; caller-side customization precedes finalization.
     let session = include_str!("../session.rs");
@@ -960,7 +974,7 @@ fn bug_2398_final_spawn_boundary_ratchet() {
         .unwrap();
     assert!(
         run.find("customize(&mut child_cmd)").unwrap()
-            < run.find("crate::launch::profile::finalize_codex").unwrap()
+            < run.find("crate::vendors::profile::finalize_codex").unwrap()
     );
 }
 
@@ -1281,7 +1295,7 @@ fn bug_2398_actual_recorder_artifacts_require_durable_independent_authority() {
     );
     let head = crate::test_git::commit_fixture(root);
     let record = || {
-        crate::handle_review_record_at(
+        crate::handle_review_record_fixture_at(
             root.to_path_buf(),
             "TASK-1",
             "approved",
@@ -1727,7 +1741,7 @@ fn bug_2403_bug_2398_recorder_artifacts_hold_through_remapped_selectors() {
     .unwrap();
     std::thread::sleep(std::time::Duration::from_millis(15));
     let record = || {
-        crate::handle_review_record_at(
+        crate::handle_review_record_fixture_at(
             root.to_path_buf(),
             NATIVE,
             "approved",
@@ -1793,6 +1807,8 @@ enum RoleRoute {
     /// A Codex launch that does not finalize yet; the reason names the
     /// follow-up. Moving an entry out of here is the fix, not editing it.
     KnownGap(&'static str),
+    /// Closed vendor diagnostic whose selector excludes Codex.
+    NotACodexLaunch(&'static str),
     /// `launch::assign_seat`, the one seat writer: it launches nothing
     /// itself, and every caller is counted at its own site.
     // trace:STORY-2326 | ai:claude
@@ -1828,6 +1844,12 @@ fn role_flagged_as_unlisted(rel: &str, src: &str) -> bool {
 /// here until it is audited for Codex finalization and recorded.
 // trace:BUG-2395 | ai:claude
 const ROLE_LAUNCH_SITES: &[(&str, usize, RoleRoute)] = &[
+    // trace:TASK-3048 | ai:codex
+    (
+        "launch/agy.rs",
+        1,
+        RoleRoute::NotACodexLaunch("AGY-only diagnostic uses shared wrapper and child grant"),
+    ),
     // STORY-2254: the detached Codex worker finalizes via prepare_launch.
     ("agent_codex_background.rs", 1, RoleRoute::LaunchInventory),
     // STORY-2326: the fg/bg lane seats, through 2 spawn_agent and 4
@@ -1851,11 +1873,11 @@ const ROLE_LAUNCH_SITES: &[(&str, usize, RoleRoute)] = &[
     // The two `.env(ROLE_ENV, ..)` writes of assign_seat (Child, Lane).
     ("launch/spawn.rs", 2, RoleRoute::SeatWriter),
     // Shared advisor builder only; callers finalize via coordinator spawn.
-    ("launch/grant.rs", 1, RoleRoute::SeatWriter),
+    ("launch/grant.rs", 2, RoleRoute::SeatWriter),
     ("phase_driver.rs", 2, RoleRoute::LaunchInventory),
     ("questions.rs", 1, RoleRoute::LaunchInventory),
     (
-        "queue_cmd.rs",
+        "queue_cmd/work.rs",
         4,
         RoleRoute::AidaChild("Claude exec seats; Codex finalizes in session.rs"),
     ),
@@ -1914,7 +1936,9 @@ fn bug_2395_every_role_launch_site_is_inventoried() {
                     )),
                 "{rel} claims LAUNCH_INVENTORY finalization but is not finalized there"
             ),
-            RoleRoute::AidaChild(why) | RoleRoute::KnownGap(why) => assert!(!why.is_empty()),
+            RoleRoute::AidaChild(why)
+            | RoleRoute::KnownGap(why)
+            | RoleRoute::NotACodexLaunch(why) => assert!(!why.is_empty()),
             // The seat writer's callers are the launch sites: at least one
             // other inventoried file must call the launcher.
             RoleRoute::SeatWriter => assert!(

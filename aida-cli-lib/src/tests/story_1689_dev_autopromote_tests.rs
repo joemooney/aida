@@ -743,7 +743,7 @@ fn the_child_argv_is_the_hidden_flag_and_parses() {
         .chain(child_argv(TARGET))
         .collect();
     let args: Vec<&str> = argv.iter().map(String::as_str).collect();
-    let parsed = crate::command_registry::try_parse_from(&args).unwrap();
+    let parsed = crate::TEST_CLI.try_parse_from(&args).unwrap();
     match parsed.command.registered::<crate::dev_cmd::DevArgs>().inner {
         crate::cli::DevCommand::Build {
             autopromote_child, ..
@@ -761,19 +761,12 @@ fn if_main_green_refuses_the_manual_build_flags() {
         "--clean",
         "--after-wave",
     ] {
-        let r = crate::command_registry::try_parse_from(&[
-            "aida",
-            "dev",
-            "build",
-            "--if-main-green",
-            flag,
-        ]);
+        let r = crate::TEST_CLI.try_parse_from(&["aida", "dev", "build", "--if-main-green", flag]);
         assert!(r.is_err(), "{flag} must conflict with --if-main-green");
     }
-    assert!(
-        crate::command_registry::try_parse_from(&["aida", "dev", "build", "--if-main-green"])
-            .is_ok()
-    );
+    assert!(crate::TEST_CLI
+        .try_parse_from(&["aida", "dev", "build", "--if-main-green"])
+        .is_ok());
 }
 
 // --- review round 1 -------------------------------------------------------

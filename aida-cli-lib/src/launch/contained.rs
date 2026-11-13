@@ -10,7 +10,7 @@ use std::collections::BTreeMap;
 use std::fs::File;
 use std::io::{Read, Write};
 use std::os::fd::{AsRawFd, FromRawFd};
-use std::os::unix::fs::{FileExt, MetadataExt, OpenOptionsExt, PermissionsExt};
+use std::os::unix::fs::{DirBuilderExt, FileExt, MetadataExt, OpenOptionsExt, PermissionsExt};
 use std::os::unix::process::CommandExt;
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
@@ -20,9 +20,13 @@ use std::time::{Duration, Instant};
 pub(crate) mod pty;
 #[path = "../store_mutation/mod.rs"]
 mod store_mutation;
+// Shared real-broker fixture for the MCP success-envelope regression.
+// trace:TASK-3223 | ai:codex
+#[cfg(test)]
+pub(crate) use store_mutation::routed_tests::Route as MediatedTestRoute;
 
 #[path = "codex_auth.rs"]
-mod codex_auth;
+pub(crate) mod codex_auth;
 
 // trace:TASK-3219 | ai:codex
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -55,6 +59,7 @@ const ENV: &[&str] = &[
     "AIDA_AGENT_TYPE",
     "AIDA_SESSION_ID",
     "AIDA_SESSION_SCOPE",
+    "AIDA_REVIEW_VERDICT_FILE",
     "AIDA_PROJECT_ROOT",
     "AIDA_AGENT_CONTEXT_FILE",
     "AIDA_CONTAINMENT_POSTURE",
@@ -200,6 +205,60 @@ struct WriteProfile {
 impl WriteProfile {
     fn new() -> Self {
         Self { mounts: Vec::new() }
+    }
+    /// Seal after every ordinary grant, including seat-clone and cache grants.
+    /// Pin resolved targets as well as protecting their writable ancestors:
+    /// removing grants alone would leave primary-checkout launches writable.
+    /// Returns a fresh cache location for explicitly routed derived readers;
+    /// it is never mounted over the shared cache or populated from its bytes.
+    // trace:TASK-3223 | ai:codex
+    fn seal_mediated_store(&mut self, root: &Path, main: &Path, state: &Path) -> Result<PathBuf> {
+        let mut protected = Vec::new();
+        for base in [root, main] {
+            for path in [
+                base.join(".aida-store"),
+                base.join(".aida"),
+                aida_core::db::cache_dir_in(&base.join(".aida")),
+                base.join(".git"),
+            ] {
+                // Absence is not safe under a writable ancestor: require the
+                // host to provision mountpoints before admitting this profile.
+                let path = std::fs::canonicalize(&path).with_context(|| {
+                    format!("mediated protected path unavailable: {}", path.display())
+                })?;
+                if !protected.contains(&path) {
+                    protected.push(path);
+                }
+            }
+            let gitdir = aida_core::git_ops::worktree_gitdir_path(base);
+            anyhow::ensure!(
+                !base.join(".git").is_file() || gitdir.is_some(),
+                "mediated Git metadata target unavailable"
+            );
+            if let Some(gitdir) = gitdir {
+                let gitdir = std::fs::canonicalize(gitdir)?;
+                if !protected.contains(&gitdir) {
+                    protected.push(gitdir);
+                }
+            }
+        }
+        let state = std::fs::canonicalize(state)?;
+        anyhow::ensure!(
+            !protected.iter().any(|path| state.starts_with(path)),
+            "private cache overlaps protected store state"
+        );
+        // Parent mounts first; otherwise rebinding a parent hides a previously
+        // protected child mount (notably a cache symlink's external target).
+        protected.sort_by_key(|path| path.components().count());
+        for path in protected {
+            self.add(&path, false)?;
+        }
+        let cache = state.join("derived-cache");
+        // This is launch-private even when the caller's state directory or
+        // umask is permissive. Never adopt a previous launch's cache.
+        std::fs::DirBuilder::new().mode(0o700).create(&cache)?;
+        self.add(&cache, true)?;
+        Ok(cache.join(aida_core::db::CACHE_FILE_NAME))
     }
     fn add(&mut self, path: &Path, writable: bool) -> Result<()> {
         let file = std::fs::OpenOptions::new()
@@ -397,7 +456,7 @@ pub(crate) fn validate_allowed_host(host: &str) -> Result<()> {
 
 /// Install a private writable runtime at the descriptor's conventional path.
 /// The whole host vendor parent was masked first; only this runtime is reopened.
-/// Credentials are bound separately and never copied into writable state.
+/// Settings are pinned read-only; credentials are bound separately by handle.
 // trace:TASK-3048 | ai:codex
 fn install_private_runtime(
     profile: &mut WriteProfile,
@@ -414,8 +473,11 @@ fn install_private_runtime(
     let source = state.join("vendor-runtime");
     ensure_dir(&source)?;
     std::fs::set_permissions(&source, std::fs::Permissions::from_mode(0o700))?;
-    // An empty settings document inherits no host plugins, MCP or hooks.
-    std::fs::write(source.join("settings.json"), "{}")?;
+    // Private settings inherit no host plugins, MCP or hooks.
+    std::fs::write(
+        source.join("settings.json"),
+        serde_json::to_vec(&runtime_tool_settings(policy))?,
+    )?;
     std::fs::write(source.join(&policy.credential), "")?;
     profile.add(&source, true)?;
     profile
@@ -423,6 +485,16 @@ fn install_private_runtime(
         .last_mut()
         .context("runtime mount missing")?
         .path = destination.clone();
+    // Pin mandatory controls over writable runtime state. A terminal or file
+    // tool must not remove denies for a later settings read or child process.
+    // The launch-state source is also visible: seal both aliases of the inode.
+    profile.add(&source.join("settings.json"), false)?;
+    profile.add(&source.join("settings.json"), false)?;
+    profile
+        .mounts
+        .last_mut()
+        .context("runtime settings mount missing")?
+        .path = destination.join("settings.json");
     Ok(destination)
 }
 
@@ -445,6 +517,51 @@ fn bind_runtime_credential(
     Ok(())
 }
 
+// Private runtime settings carry the mandatory tool controls.
+// No native sandbox or filesystem permission allow rules are supplied.
+// trace:TASK-3048 | ai:codex
+fn runtime_tool_settings(policy: &crate::containment::RuntimePolicy) -> serde_json::Value {
+    serde_json::json!({"permissions": {"deny": policy.tool_denies}})
+}
+
+// The diagnostic uses the same transport inputs as ordinary shared launches.
+// trace:TASK-3048 | ai:codex
+pub(crate) fn apply_transport_inputs(
+    child: &mut Command,
+    parent: &aida_core::exec_context::Environment,
+) {
+    for name in ENV {
+        if let Some(value) = parent.get(name) {
+            child.env(name, value);
+        }
+    }
+}
+
+/// Production requires a measured inventory; the explicit diagnostic entry may
+/// measure the candidate list, but never widens trusted operator approval.
+// trace:TASK-3048 | ai:codex
+fn runtime_relay_hosts(
+    policy: &crate::containment::RuntimePolicy,
+    approved: &[String],
+    diagnostic: bool,
+) -> Result<Vec<String>> {
+    policy.validate()?;
+    if !diagnostic {
+        policy.require_auth_policy(approved)?;
+    }
+    for host in &policy.auth_hosts {
+        anyhow::ensure!(
+            approved.contains(host),
+            "AGY_AUTH_HOST_UNAPPROVED: {host} requires trusted contained.allowed_hosts approval"
+        );
+    }
+    let mut hosts = policy.auth_hosts.clone();
+    hosts.extend_from_slice(approved);
+    hosts.sort();
+    hosts.dedup();
+    Ok(hosts)
+}
+
 /// Only the common wrapper may prepare argv before receipt acceptance; it
 /// cannot release exec until spawn accepts a live receipt and checks the row.
 // trace:TASK-3048 | ai:codex
@@ -461,7 +578,11 @@ fn wrapped_outer_only_argv(
     let mut args = policy.argv_prefix.clone();
     args.extend([
         "--settings".into(),
-        runtime.join("settings.json").to_string_lossy().into(),
+        runtime.join("settings.json").to_string_lossy().into_owned(),
+    ]);
+    args.extend([
+        // The exec barrier verifies applied evidence before releasing this argv.
+        "--dangerously-skip-permissions".into(),
         "-p".into(),
         prompt.into(),
     ]);
@@ -723,10 +844,26 @@ fn pipe() -> Result<(File, File)> {
 // trace:TASK-3225 | ai:codex
 pub(crate) fn require_store_service_surface(child: &Command, wrapped: bool) -> Result<()> {
     anyhow::ensure!(
-        wrapped || explicit(child, "AIDA_STORE_MUTATION_REQUIRED").is_none(),
+        wrapped
+            || (explicit(child, "AIDA_STORE_MUTATION_REQUIRED").is_none()
+                && explicit(child, "AIDA_STORE_MUTATION_PROFILE").is_none()),
         "required store service is unavailable outside the shared contained headless launcher"
     );
     Ok(())
+}
+
+/// An explicit child selection is input, not admission. Do not infer this
+/// profile from the read-only S1 service requirement or inherited environment.
+// trace:TASK-3223 | ai:codex
+fn selected_store_profile(child: &Command) -> Result<crate::contained_boundary::StoreWriteProfile> {
+    use crate::contained_boundary::StoreWriteProfile;
+    match explicit(child, "AIDA_STORE_MUTATION_PROFILE").as_deref() {
+        None | Some("compatibility") => Ok(StoreWriteProfile::Compatibility),
+        Some("mediated") => anyhow::bail!(
+            "mediated store profile is gated pending CLI/MCP routing, durable publication and boundary validation"
+        ),
+        Some(_) => anyhow::bail!("invalid explicit store mutation profile"),
+    }
 }
 
 pub(crate) struct PreparedLaunch {
@@ -744,7 +881,7 @@ pub(crate) struct PreparedLaunch {
     chatgpt_deadline: Option<i64>,
     /// Unlinked host-only evidence; never mounted or passed to the lane.
     oauth_denial: File,
-    outer_only: Option<&'static str>,
+    outer_only: Option<(&'static str, PathBuf, String)>,
     mutation: Option<store_mutation::Session>,
     io: LaunchIo,
 }
@@ -753,11 +890,15 @@ impl PreparedLaunch {
     /// `host_main` is the launcher's main checkout, resolved once at the
     /// launch entry point (TASK-2032); `None` recognises no seat clone.
     // trace:TASK-2708 TASK-2032 | ai:claude
-    pub(crate) fn prepare(child: &Command, root: &Path, host_main: Option<&Path>) -> Result<Self> {
+    pub(crate) fn prepare(
+        child: &mut Command,
+        root: &Path,
+        host_main: Option<&Path>,
+    ) -> Result<Self> {
         Self::prepare_for_owner(child, root, host_main, unsafe { libc::getuid() })
     }
     fn prepare_for_owner(
-        child: &Command,
+        child: &mut Command,
         root: &Path,
         host_main: Option<&Path>,
         credential_owner: u32,
@@ -769,10 +910,11 @@ impl PreparedLaunch {
             credential_owner,
             LaunchIo::Headless,
             codex_auth::PROGRAM_SHA256,
+            None,
         )
     }
     pub(crate) fn prepare_interactive(
-        child: &Command,
+        child: &mut Command,
         root: &Path,
         host_main: Option<&Path>,
     ) -> Result<Self> {
@@ -783,18 +925,54 @@ impl PreparedLaunch {
             unsafe { libc::getuid() },
             LaunchIo::Interactive,
             codex_auth::PROGRAM_SHA256,
+            None,
         )
     }
-    // trace:STORY-2593 | ai:codex — inject the binary pin while keeping
-    // ambient reads under their existing ExecContext ledger owner.
+    // Explicit diagnostic API; no production caller opts into the unmeasured
+    // inventory. All mounts, credentials, grants and exec barriers stay shared.
+    // trace:TASK-3048 | ai:codex
+    pub(crate) fn prepare_runtime_diagnostic(
+        child: &mut Command,
+        root: &Path,
+        credential: &Path,
+    ) -> Result<Self> {
+        anyhow::ensure!(
+            ContainedVendor::for_program(child.get_program())?.auth
+                == VendorAuth::RuntimeCredentialsFile,
+            "runtime diagnostic requires an outer-only runtime descriptor"
+        );
+        Self::prepare_with_io(
+            child,
+            root,
+            None,
+            unsafe { libc::getuid() },
+            LaunchIo::Headless,
+            codex_auth::PROGRAM_SHA256,
+            Some(credential),
+        )
+    }
+
+    // Shared preparation pins the Codex auth executable to the supplied digest.
+    // Production supplies the shipped pin; tests may inject a fixture digest.
+    // trace:STORY-2593 | ai:codex
     fn prepare_with_io(
-        child: &Command,
+        child: &mut Command,
         root: &Path,
         host_main: Option<&Path>,
         credential_owner: u32,
         io: LaunchIo,
         codex_sha256: &str,
+        diagnostic_credential: Option<&Path>,
     ) -> Result<Self> {
+        // Projection turns ambient values into explicit pairs, which this
+        // wrapper would mistake for site decisions. All wrapper entrypoints
+        // must receive an unprojected command, including future launch sites.
+        // trace:STORY-2326 | ai:codex
+        anyhow::ensure!(
+            !crate::vendors::profile::environment_is_cleared(child),
+            "contained wrapper requires an unprojected command environment"
+        );
+        let store_profile = selected_store_profile(child)?;
         // trace:TASK-2708 | ai:claude — the vendor is data selected by the
         // child's program; everything below is the one shared boundary.
         let required = explicit(child, "AIDA_STORE_MUTATION_REQUIRED");
@@ -806,6 +984,7 @@ impl PreparedLaunch {
             Some(store_mutation::Session::prepare(
                 child,
                 &std::fs::canonicalize(root)?,
+                store_profile,
             )?)
         } else {
             None
@@ -881,7 +1060,7 @@ impl PreparedLaunch {
         // trace:TASK-3048 | ai:codex
         let runtime_policy = if vendor.auth == VendorAuth::RuntimeCredentialsFile {
             let policy = crate::containment::runtime_policy(vendor.key)?;
-            policy.require_auth_policy(&allowed)?;
+            allowed = runtime_relay_hosts(&policy, &allowed, diagnostic_credential.is_some())?;
             Some(policy)
         } else {
             None
@@ -901,13 +1080,16 @@ impl PreparedLaunch {
             .unwrap_or_else(|| host_home.join(".claude"));
         let grant = explicit(child, crate::gate::seat_authority::GRANT_ENV)
             .context("contained child requires explicit grant decision")?;
-        let ttl = if grant.is_empty() {
+        let mut ttl = if grant.is_empty() {
             0
         } else {
             (crate::gate::seat_authority::read_grant(&grant)?.expires_at - chrono::Utc::now())
                 .num_seconds()
                 .max(1)
         };
+        // Retain the checked path so verification and execution use one leaf.
+        // trace:BUG-2484 | ai:codex
+        let mut pinned_program = None;
         // Credentials resolve BEFORE any mount or state: a missing or
         // unusable one is a named refusal, never a lane without it.
         let auth = match vendor.auth {
@@ -917,8 +1099,22 @@ impl PreparedLaunch {
                 match std::fs::symlink_metadata(codex_home.join("auth.json")) {
                     Ok(_) => {
                         let program = resolve_program(child, &selected_environment(child))?;
+                        let program = codex_auth::resolve_native_program(&program)?;
                         codex_auth::require_program(&program, codex_sha256)?;
-                        let auth = codex_auth::prepare(&codex_home, credential_owner, ttl)?;
+                        pinned_program = Some(program);
+                        // trace:BUG-2486 | ai:codex — pinned trusted policy only.
+                        let floor = codex_auth::minimum_grant(&policy)?;
+                        let auth = codex_auth::prepare(&codex_home, credential_owner, ttl, floor)?;
+                        if !grant.is_empty() {
+                            crate::gate::seat_authority::cap_launch_child_expiry(
+                                &grant,
+                                auth.expires_at.saturating_sub(codex_auth::MARGIN),
+                            )?;
+                        }
+                        let (effective, diagnostic) =
+                            auth.launch_lifetime(ttl, chrono::Utc::now().timestamp());
+                        eprintln!("{diagnostic}");
+                        ttl = effective;
                         codex_auth::exclude_oauth_hosts(&mut allowed);
                         Auth::ChatGpt(auth)
                     }
@@ -937,14 +1133,20 @@ impl PreparedLaunch {
             }
             VendorAuth::RuntimeCredentialsFile => {
                 let policy = runtime_policy.as_ref().context("runtime policy missing")?;
-                Auth::RuntimeFile(host_home.join(&policy.relative).join(&policy.credential))
+                Auth::RuntimeFile(
+                    diagnostic_credential
+                        .map(Path::to_path_buf)
+                        .unwrap_or_else(|| {
+                            host_home.join(&policy.relative).join(&policy.credential)
+                        }),
+                )
             }
         };
         let mut profile = WriteProfile::new();
         profile.add(&root, true)?;
         let main = crate::main_worktree_root_from(&root);
         crate::session::verify_linked_worktree_main(host_main, &root, &main)?;
-        for p in crate::contained_boundary::contained_store_write_paths(&main) {
+        for p in crate::contained_boundary::contained_store_write_paths_for(&main, store_profile) {
             let p =
                 std::fs::canonicalize(p).context("required store/cache directory unavailable")?;
             profile.add(&p, runtime_policy.is_none())?;
@@ -982,6 +1184,19 @@ impl PreparedLaunch {
         if let Ok(relocated) = std::fs::canonicalize(&claude_home) {
             if !masks.contains(&relocated) {
                 masks.push(relocated);
+            }
+        }
+        // Relocated fixture authority HOME must not expose the real credential
+        // parent or inherit its plugins/config. The leaf is rebound by handle.
+        // trace:TASK-3048 | ai:codex
+        if let Some(source) = diagnostic_credential {
+            let parent = source
+                .parent()
+                .and_then(Path::parent)
+                .context("diagnostic credential parent missing")?;
+            let parent = std::fs::canonicalize(parent)?;
+            if !masks.contains(&parent) {
+                masks.push(parent);
             }
         }
         let empty_file = state.path().join("empty-file");
@@ -1045,6 +1260,78 @@ impl PreparedLaunch {
                 profile.add(&p, false)?;
             }
         }
+        if runtime_policy.is_some() {
+            let disabled_extensions = state.path().join("disabled-extensions.json");
+            std::fs::write(&disabled_extensions, "{}")?;
+            profile.add(&disabled_extensions, false)?;
+            for (index, base) in [&root, &main].into_iter().enumerate() {
+                // Stage mountpoints privately so preparation never leaves new
+                // MCP/hooks/plugins files in either Git checkout.
+                // trace:TASK-3048 | ai:codex
+                let extensions = state.path().join(format!("disabled-agents-{index}"));
+                ensure_dir(&extensions)?;
+                let original = base.join(".agents");
+                let mut retained = Vec::new();
+                if original.exists() {
+                    for entry in std::fs::read_dir(&original)? {
+                        let entry = entry?;
+                        let name = entry.file_name();
+                        if ["mcp_config.json", "hooks.json", "plugins"]
+                            .iter()
+                            .any(|n| name == *n)
+                        {
+                            continue;
+                        }
+                        let source = entry.path();
+                        let placeholder = extensions.join(&name);
+                        if source.is_dir() {
+                            ensure_dir(&placeholder)?;
+                        } else {
+                            std::fs::write(&placeholder, "")?;
+                        }
+                        retained.push(source);
+                    }
+                }
+                for name in ["mcp_config.json", "hooks.json"] {
+                    std::fs::write(extensions.join(name), "{}")?;
+                }
+                ensure_dir(&extensions.join("plugins"))?;
+                profile.add(&extensions, false)?;
+                profile.mounts.push(Mount {
+                    data: false,
+                    file: File::open(&extensions)?,
+                    path: original.clone(),
+                    writable: false,
+                });
+                for source in retained {
+                    // Reuse the non-symlink regular-file/directory validation;
+                    // an unexpected FIFO must refuse rather than block setup.
+                    profile.add(&source, false)?;
+                }
+                // Explicit leaves remain pinned even when a retained sibling
+                // points back to the private tree.
+                for name in ["mcp_config.json", "hooks.json"] {
+                    profile.mounts.push(Mount {
+                        data: false,
+                        file: File::open(&disabled_extensions)?,
+                        path: original.join(name),
+                        writable: false,
+                    });
+                }
+                profile.mounts.push(Mount {
+                    data: false,
+                    file: File::open(&empty)?,
+                    path: original.join("plugins"),
+                    writable: false,
+                });
+                profile.mounts.push(Mount {
+                    data: false,
+                    file: File::open(&disabled_extensions)?,
+                    path: base.join(".mcp.json"),
+                    writable: false,
+                });
+            }
+        }
         for p in crate::contained_boundary::contained_store_deny_write_paths(
             &crate::contained_boundary::contained_store_write_paths(&main),
         ) {
@@ -1067,6 +1354,11 @@ impl PreparedLaunch {
             let notices = crate::grant_expiry_notice::notice_leaf(&grant)?;
             ensure_dir(&notices)?;
             profile.add(&notices, true)?;
+        }
+        if store_profile == crate::contained_boundary::StoreWriteProfile::Mediated {
+            // Admission above remains closed until callers use this explicit
+            // cache path and canonical verbs provide durable publication.
+            let _cache = profile.seal_mediated_store(&root, &main, state.path())?;
         }
         // HOME remains the issuer's canonical AIDA home (read-only). Core
         // tool filtering retains HOME but not AIDA_HOME; relocating HOME would
@@ -1136,6 +1428,14 @@ impl PreparedLaunch {
             other => Some(other),
         };
         let mut env = selected_environment(child);
+        if runtime_policy.is_some() {
+            // The opaque runtime leaf is this row's only credential. Do not
+            // forward a diagnostic caller's unrelated Codex auth or state.
+            // trace:TASK-3048 | ai:codex
+            for name in ["CODEX_HOME", "CODEX_SQLITE_HOME"] {
+                env.remove(name);
+            }
+        }
         // A ChatGPT lane must not inherit an alternate API credential.
         env.remove("OPENAI_API_KEY");
         env.insert(
@@ -1223,7 +1523,20 @@ impl PreparedLaunch {
                 service.endpoint.clone(),
             );
         }
-        let program = resolve_program(child, &env)?;
+        // API-key lanes share npm discovery, while only ChatGPT requires the pin.
+        // trace:BUG-2484 | ai:codex
+        let program_is_pinned = pinned_program.is_some();
+        let program = match pinned_program {
+            Some(program) => program,
+            None => {
+                let program = resolve_program(child, &env)?;
+                if vendor.auth == VendorAuth::OpenAiApiKey {
+                    codex_auth::resolve_native_program(&program)?
+                } else {
+                    program
+                }
+            }
+        };
         let original: Vec<_> = child
             .get_args()
             .map(|v| v.to_string_lossy().into_owned())
@@ -1231,7 +1544,7 @@ impl PreparedLaunch {
         // trace:TASK-2708 | ai:claude — the vendor finishes only its own argv;
         // the requested-seat probe that follows is shared.
         let (args, mut preflight) = match vendor.auth {
-            VendorAuth::OpenAiApiKey => codex_argv(&program, &env, &original)?,
+            VendorAuth::OpenAiApiKey => codex_argv(&program, &env, &original, program_is_pinned)?,
             VendorAuth::ClaudeCredentialsFile => {
                 (claude_argv(&original, port, &allowed)?, Vec::new())
             }
@@ -1264,11 +1577,15 @@ impl PreparedLaunch {
         if let Some(service) = &mutation {
             cfg["mutation"] = service.config.clone();
         }
+        if diagnostic_credential.is_some() {
+            cfg["egress_hosts"] = serde_json::json!(runtime_policy.as_ref().unwrap().auth_hosts);
+        }
         let mut prepared = Self::from_config(profile, state, sha, cfg, env, &root)?;
         prepared.mutation = mutation;
         prepared.credentials = credentials;
         prepared.chatgpt_deadline = codex_deadline;
-        prepared.outer_only = runtime_policy.map(|_| vendor.key);
+        prepared.outer_only =
+            runtime_policy.map(|_| (vendor.key, private_home, original[1].clone()));
         prepared.io = io;
         Ok(prepared)
     }
@@ -1290,7 +1607,7 @@ fn runtime_argv(
     wrapped_outer_only_argv(policy, runtime, &original[1])
 }
 
-/// Codex's argv: the tool-env and native-profile overrides, then the site's
+/// Codex's argv: the tool-env and exec-compatible profile config, then the site's
 /// argv minus anything that would replace the generated profile. Its seat
 /// probe runs through Codex's own sandbox as well (`codex sandbox ... --`).
 // trace:TASK-2707 TASK-2708 | ai:claude
@@ -1298,6 +1615,7 @@ fn codex_argv(
     program: &Path,
     env: &BTreeMap<String, String>,
     original: &[String],
+    program_is_pinned: bool,
 ) -> Result<(Vec<String>, Vec<String>)> {
     let mut final_child = Command::new(program);
     final_child.env_clear().envs(env);
@@ -1320,7 +1638,8 @@ fn codex_argv(
             ),
         ]);
     }
-    args.extend(["-P".into(), "aida".into()]);
+    // trace:BUG-2487 | ai:codex — -P belongs only to `codex sandbox`.
+    args.extend(["-c".into(), "default_permissions=\"aida\"".into()]);
     if let Some(at) = original.iter().position(|a| a == "exec") {
         anyhow::ensure!(
             !original
@@ -1331,31 +1650,288 @@ fn codex_argv(
     }
     let mut i = 0;
     while i < original.len() {
-        if original[i] == "--sandbox"
-            && original.get(i + 1).map(String::as_str) == Some("workspace-write")
-        {
-            i += 2;
+        // trace:TASK-3015 | ai:codex — the option terminator makes the
+        // remaining prompt opaque, including text that resembles config flags.
+        if original[i] == "--" {
+            args.extend_from_slice(&original[i..]);
+            break;
+        }
+        // trace:TASK-3015 | ai:codex — site config must not replace the
+        // generated posture; match the background launch's protected keys.
+        let config = match original[i].as_str() {
+            "-c" | "--config" => Some(
+                original
+                    .get(i + 1)
+                    .context("contained Codex config flag requires a value")?
+                    .as_str(),
+            ),
+            arg => arg.strip_prefix("--config=").or_else(|| {
+                arg.strip_prefix("-c")
+                    .filter(|v| !v.is_empty())
+                    .map(|v| v.strip_prefix('=').unwrap_or(v))
+            }),
+        };
+        if let Some(config) = config {
+            let key = config.split('=').next().unwrap_or("").trim();
+            anyhow::ensure!(
+                ![
+                    "sandbox",
+                    "approval",
+                    "default_permissions",
+                    "shell_environment_policy",
+                    "permissions",
+                    // trace:TASK-3736 | ai:codex
+                    "profile"
+                ]
+                .iter()
+                .any(|prefix| key.starts_with(prefix)),
+                "contained Codex refuses posture config override `{key}`"
+            );
+            // Consume the value as data, even if it resembles another flag.
+            let consumed = if matches!(original[i].as_str(), "-c" | "--config") {
+                2
+            } else {
+                1
+            };
+            args.extend_from_slice(&original[i..i + consumed]);
+            i += consumed;
             continue;
         }
+        // Profiles can replace posture through their layered config.
+        // trace:TASK-3736 | ai:codex
+        anyhow::ensure!(
+            !(original[i] == "--profile"
+                || original[i].starts_with("--profile=")
+                || original[i].starts_with("-p")),
+            "contained launch refuses config profile override"
+        );
+        // trace:BUG-2495 | ai:codex — approval flags are top-level only in
+        // the pinned CLI; exec accepts the equivalent config override.
+        let approval = if matches!(original[i].as_str(), "--ask-for-approval" | "-a") {
+            let value = original
+                .get(i + 1)
+                .context("contained Codex approval flag requires a value")?;
+            Some((value.as_str(), 2))
+        } else {
+            original[i]
+                .strip_prefix("--ask-for-approval=")
+                .map(|value| (value, 1))
+        };
+        if let Some((value, consumed)) = approval {
+            anyhow::ensure!(
+                value == "never",
+                "contained Codex approval policy must be never"
+            );
+            args.extend(["-c".into(), "approval_policy=\"never\"".into()]);
+            i += consumed;
+            continue;
+        }
+        // trace:TASK-3015 | ai:codex — inline sandbox values must pass
+        // the same posture check as split values before flag validation.
+        let sandbox = if matches!(original[i].as_str(), "--sandbox" | "-s") {
+            Some((
+                original
+                    .get(i + 1)
+                    .context("contained Codex sandbox flag requires a value")?
+                    .as_str(),
+                2,
+            ))
+        } else {
+            original[i]
+                .strip_prefix("--sandbox=")
+                .or_else(|| original[i].strip_prefix("-s="))
+                .map(|value| (value, 1))
+        };
+        if let Some((value, consumed)) = sandbox {
+            anyhow::ensure!(
+                value == "workspace-write",
+                "contained Codex sandbox policy must be workspace-write"
+            );
+            i += consumed;
+            continue;
+        }
+        // Sandbox flags were consumed and validated above.
+        // trace:TASK-3735 | ai:codex
         anyhow::ensure!(
             !matches!(
                 original[i].as_str(),
                 "--dangerously-bypass-approvals-and-sandbox"
                     | "--full-auto"
-                    | "--sandbox"
-                    | "-s"
                     | "-P"
                     | "--permission-profile"
             ),
-            "contained Codex cannot override its generated native profile"
+            "contained Codex cannot override its generated native profile with {}",
+            original[i]
         );
         args.push(original[i].clone());
         i += 1;
     }
+    validate_codex_flags(&args, "exec")?;
+    let mut sandbox = crate::codex_tool_env::sandbox_args_for_contained(&args)?;
+    // The model-free seat preflight retains the same explicit profile.
+    sandbox.extend([
+        "-P".into(),
+        "aida".into(),
+        "--include-managed-config".into(),
+    ]);
+    validate_codex_flags(&sandbox, "sandbox")?;
     let mut preflight = vec![program.to_string_lossy().into_owned()];
-    preflight.extend(crate::codex_tool_env::sandbox_args_for_contained(&args)?);
+    preflight.extend(sandbox);
     preflight.push("--".into());
+    // trace:TASK-3000 | ai:codex — only the verified auth pin may use
+    // recorded help alone. API-key lanes must check the executable they run.
+    if !program_is_pinned {
+        validate_live_codex_flags(program, &args, &preflight[1..preflight.len() - 1])?;
+    }
     Ok((args, preflight))
+}
+
+/// Validate against recorded help from the exact auth pin, without executing
+/// lane-selected vendor code on the host. Parse option declarations only;
+/// option values and text within the terminal prompt are opaque. The recorded
+/// help lives beside this production consumer, not under a tests directory.
+// trace:BUG-2487 | ai:codex
+fn validate_codex_flags(args: &[String], scope: &str) -> Result<()> {
+    let fixture: serde_json::Value = serde_json::from_str(include_str!("codex_0167_help.json"))?;
+    anyhow::ensure!(
+        fixture["sha256"] == codex_auth::PROGRAM_SHA256,
+        "contained Codex help fixture differs from executable pin; re-record help before launch"
+    );
+    let help = fixture[scope]
+        .as_str()
+        .context("missing pinned Codex help")?;
+    validate_codex_flags_with_help(args, scope, help, "pinned codex-cli 0.167.0")
+}
+
+// trace:TASK-3000 | ai:codex
+fn codex_help_options(help: &str) -> BTreeMap<&str, bool> {
+    let mut options = BTreeMap::new();
+    for line in help
+        .lines()
+        .map(str::trim)
+        .filter(|line| line.starts_with('-'))
+    {
+        let declaration = line.split("  ").next().unwrap();
+        let takes_value = declaration.contains('<');
+        for flag in declaration
+            .split_whitespace()
+            .take_while(|word| !word.starts_with('<'))
+        {
+            options.insert(flag.trim_end_matches(','), takes_value);
+        }
+    }
+    options
+}
+
+// trace:TASK-3000 | ai:codex
+fn validate_live_codex_flags(program: &Path, args: &[String], sandbox: &[String]) -> Result<()> {
+    // Do not project lane credentials, grants or tool environment into host
+    // help probes. Use private state and a bounded, model-free invocation.
+    let home = tempfile::tempdir()?;
+    let probe = |argv: &[&str]| -> Result<String> {
+        let mut command = Command::new(program);
+        command
+            .args(argv)
+            .env_clear()
+            .env("HOME", home.path())
+            .env("CODEX_HOME", home.path())
+            .current_dir(home.path())
+            .stdin(Stdio::null());
+        let crate::BoundedCommandOutput::Completed(output) =
+            crate::command_output_with_timeout_capped(command, Duration::from_secs(5), 128 * 1024)
+        else {
+            anyhow::bail!("Codex interface probe failed or timed out");
+        };
+        anyhow::ensure!(
+            output.status.success()
+                && output.stdout.len() <= 128 * 1024
+                && output.stderr.len() <= 128 * 1024,
+            "Codex interface probe failed or exceeded output limit"
+        );
+        Ok(String::from_utf8(output.stdout)?)
+    };
+    let version = probe(&["--version"])
+        .ok()
+        .filter(|v| v.trim().len() <= 256 && v.trim().lines().count() == 1)
+        .map(|v| v.trim().to_owned())
+        .filter(|v| !v.is_empty())
+        .unwrap_or_else(|| "version unavailable".into());
+    let identity = format!("{} ({version})", program.display());
+    let check = || -> Result<()> {
+        anyhow::ensure!(
+            version != "version unavailable",
+            "Codex version probe failed"
+        );
+        let root_help = probe(&["--help"])?;
+        let exec_help = probe(&["exec", "--help"])?;
+        // `default_permissions` is a config key, not a standalone flag.
+        // Both command surfaces must declare the value-taking -c override.
+        for (scope, help) in [("root", &root_help), ("exec", &exec_help)] {
+            let options = codex_help_options(help);
+            anyhow::ensure!(
+                options.get("-c") == Some(&true) && options.get("--config") == Some(&true),
+                "{scope} help lacks -c / --config <key=value> for default_permissions"
+            );
+        }
+        validate_codex_flags_with_help(args, "exec", &exec_help, &identity)?;
+        let sandbox_help = probe(&["sandbox", "--help"])?;
+        validate_codex_flags_with_help(sandbox, "sandbox", &sandbox_help, &identity)
+    };
+    check().with_context(|| {
+        format!(
+            "contained Codex refused: {identity}: cannot validate -c default_permissions surface"
+        )
+    })
+}
+
+// trace:TASK-3000 | ai:codex
+fn validate_codex_flags_with_help(
+    args: &[String],
+    scope: &str,
+    help: &str,
+    identity: &str,
+) -> Result<()> {
+    let options = codex_help_options(help);
+    let mut command_seen = false;
+    let mut i = 0;
+    while i < args.len() {
+        let arg = &args[i];
+        if arg == "--" {
+            break;
+        }
+        if arg == scope && !command_seen {
+            command_seen = true;
+            i += 1;
+            continue;
+        }
+        if !arg.starts_with('-') {
+            anyhow::ensure!(
+                command_seen && scope == "exec" && i + 1 == args.len(),
+                "contained Codex requires a fresh exec with one terminal prompt"
+            );
+            break;
+        }
+        let (flag, inline) = arg
+            .split_once('=')
+            .map_or((arg.as_str(), false), |(f, _)| (f, true));
+        let takes_value = options.get(flag).with_context(|| {
+            format!("contained Codex {scope} flag {flag} is unsupported by {identity}")
+        })?;
+        anyhow::ensure!(
+            !inline || *takes_value,
+            "contained Codex {scope} flag {flag} takes no value"
+        );
+        if *takes_value && !inline {
+            anyhow::ensure!(
+                i + 1 < args.len(),
+                "contained Codex {scope} flag {flag} requires a value"
+            );
+            i += 1;
+        }
+        i += 1;
+    }
+    anyhow::ensure!(command_seen, "contained Codex requires {scope}");
+    Ok(())
 }
 
 /// Claude's argv: the site's argv with its one generated `--settings`
@@ -1367,6 +1943,11 @@ fn codex_argv(
 /// filter: the Bash sandbox wraps tool calls, not the vendor process.
 // trace:TASK-2708 | ai:claude
 fn claude_argv(original: &[String], port: u16, allowed: &[String]) -> Result<Vec<String>> {
+    // trace:TASK-3219 | ai:codex
+    anyhow::ensure!(
+        !crate::agent_launch::agent_claude_background::is_attach_subcommand(original),
+        crate::vendors::background_attach_refusal()
+    );
     let mut args = Vec::with_capacity(original.len());
     let mut settings_seen = 0;
     let mut i = 0;
@@ -1464,6 +2045,13 @@ impl PreparedLaunch {
         oauth_denial.write_at(b"0", 0)?;
         if cfg.get("chatgpt_deadline").is_some() {
             cfg["oauth_denial_fd"] = oauth_denial.as_raw_fd().into();
+        }
+        // A bounded host-only bitmap shares the unlinked evidence handle.
+        // Offset zero remains reserved for the OAuth-denial flag.
+        // trace:TASK-3048 | ai:codex
+        if let Some(hosts) = cfg.get("egress_hosts").and_then(|v| v.as_array()) {
+            oauth_denial.write_at(&vec![b'0'; hosts.len()], 1)?;
+            cfg["egress_fd"] = oauth_denial.as_raw_fd().into();
         }
         let (reader, writer) = pipe()?;
         let (accept_reader, accept_writer) = pipe()?;
@@ -1590,8 +2178,10 @@ impl PreparedLaunch {
         receipt.validate(&self.policy_sha)?;
         validate_service_receipt(&receipt, run.mutation.as_ref().map(|s| s.epoch.as_str()))?;
         receipt.accepted = true;
-        if let Some(vendor) = self.outer_only {
-            require_outer_only_receipt(vendor, Some(&receipt))?;
+        if let Some((vendor, runtime, prompt)) = &self.outer_only {
+            // Re-enter the public candidate gate using the live accepted receipt
+            // while exec is still blocked. Serialized/config receipts cannot pass.
+            outer_only_argv(vendor, runtime, prompt, Some(&receipt))?;
         }
         // Host-side evidence only: never export the private receipt or grant.
         // trace:TASK-3131 | ai:codex
@@ -1645,6 +2235,23 @@ pub(crate) struct ContainedChild {
     _state: tempfile::TempDir,
 }
 impl ContainedChild {
+    // The helper alone receives this descriptor; no lane-visible log is evidence.
+    // trace:TASK-3048 | ai:codex
+    pub(crate) fn observed_egress_hosts(&self, hosts: &[String]) -> Result<Vec<String>> {
+        let mut flags = vec![0; hosts.len()];
+        self.oauth_denial.read_exact_at(&mut flags, 1)?;
+        anyhow::ensure!(
+            flags.iter().all(|v| matches!(v, b'0' | b'1')),
+            "invalid host egress evidence"
+        );
+        Ok(hosts
+            .iter()
+            .zip(flags)
+            .filter(|(_, flag)| *flag == b'1')
+            .map(|(host, _)| host.clone())
+            .collect())
+    }
+
     /// Preserve vendor exits unless a failed ChatGPT lane expired or the host
     /// denied an OAuth CONNECT. Neither refusal permits a writable retry.
     // trace:TASK-2708 | ai:claude
@@ -1698,3 +2305,7 @@ impl Drop for ContainedChild {
 #[cfg(test)]
 #[path = "../containment/tests/launch_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "../containment/tests/mediated_store_tests.rs"]
+mod mediated_store_tests;

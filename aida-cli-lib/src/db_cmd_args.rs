@@ -188,6 +188,11 @@ pub enum DbCommand {
         json: bool,
     },
 
+    /// Migrate legacy deferral prose and deferred:<x> tags to typed conditions.
+    /// Reports only unless --apply is supplied; preserves original input in a comment.
+    // trace:STORY-2402 | ai:codex
+    MigrateDeferConditions(crate::defer_condition_migration::args::MigrateDeferConditionsArgs),
+
     /// Audit allocation claims for conflicts, read-only. Reads the store's
     /// committed HEAD plus every `--against` ref (already-local commits only;
     /// nothing is fetched) and all their merge bases, and reports every

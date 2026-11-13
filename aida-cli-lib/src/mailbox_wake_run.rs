@@ -677,9 +677,32 @@ fn watch_row(
     if aida_core::mailbox_identity::normalize_agent_type(&entry.agent_type) != "codex" {
         bail!("unsupported: only Codex sessions have a live wake primitive");
     }
+    // Pin the row only during audience verification; external I/O must never
+    // hold the project-wide handle allocator lock.
+    // trace:TASK-3366 | ai:codex
+    let _namespace =
+        crate::agent_handle::lock_namespace_within(&opts.project, Duration::from_secs(2))?;
     let thread = row_thread(entry).context("the session has no Codex thread yet")?;
+    // Bind audience and thread to the same row generation. Replacements never
+    // reuse the old snapshot's thread with a successor's private audience.
+    // trace:TASK-3366 | ai:codex
+    let current: AgentRegistryEntry = toml::from_str(
+        &aida_core::mailbox_identity::read_bounded_regular(path)
+            .context("registry row is not a bounded readable regular file")?,
+    )?;
+    if !crate::agent_registry::same_registry_process(entry, &current) || current != *entry {
+        bail!("registry row changed before mail wake; retry on the next pass");
+    }
     let handle = entry.name.clone().unwrap_or_default();
     let audience = crate::mailbox_wake::audience_for_recipient(own, &handle, Some((lock, path)))?;
+    let verified: AgentRegistryEntry = toml::from_str(
+        &aida_core::mailbox_identity::read_bounded_regular(path)
+            .context("registry row is not a bounded readable regular file")?,
+    )?;
+    if verified != *entry {
+        bail!("registry row changed while verifying mail audience; retry on the next pass");
+    }
+    drop(_namespace);
     let inbox = Inbox::from_audience(&handle, &audience, entry.role.as_deref());
     let state = ThreadState::open(&opts.state_root, &thread)?;
     let mut ledger = match state.load()? {
@@ -705,7 +728,21 @@ fn watch_row(
         &crate::mailbox_view::explicit_limits(),
     )?;
     let mut persist = |l: &Ledger| state.write(l, now);
-    tick(
+    let validate_generation = || -> Result<()> {
+        let _guard =
+            crate::agent_handle::lock_namespace_within(&opts.project, Duration::from_secs(2))?;
+        let current: AgentRegistryEntry = toml::from_str(
+            &aida_core::mailbox_identity::read_bounded_regular(path)
+                .context("unreadable registry row")?,
+        )?;
+        anyhow::ensure!(
+            current == *entry,
+            "registry row changed during mail wake; retry on next pass"
+        );
+        Ok(())
+    };
+    validate_generation()?;
+    let result = tick(
         &mut ledger,
         snapshot.scan(),
         &inbox,
@@ -713,7 +750,9 @@ fn watch_row(
         opts.batch_seconds,
         queue,
         &mut persist,
-    )
+    );
+    validate_generation()?;
+    result
 }
 
 /// `--recover <thread> --accepted|--retry`.

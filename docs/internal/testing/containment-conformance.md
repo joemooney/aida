@@ -60,7 +60,7 @@ A private vendor runtime is bind-mounted over the normal runtime directory;
 this overlay is **not** the tested enforcement boundary. Host filesystem and
 device access otherwise remain unchanged. AGY gets `--sandbox`, a session-local
 exact payload-command permission and a `write_file` permission
-for only the canonical fixture workspace (AGY uses that permission for native
+for only `<canonical fixture workspace>/**` (AGY uses that permission for native
 writes and edits). These two rules live in `conformance-settings.json` in the
 private runtime; `--settings` points at its overlay path. The command executes
 only the immutable sibling payload and manifest, with its requested Cwd set to
@@ -68,7 +68,7 @@ the fixture workspace. The payload intentionally attempts negative operations
 on disposable fixture siblings; this permission is probe admission, not proof
 of a shell write boundary. No arbitrary command prefix, outside file-tool
 grant, or `--dangerously-skip-permissions` is provided. AGY has read-only mounts
-of its existing token and operator settings. Codex gets AIDA's
+of its existing token only; operator settings are not inherited. Codex gets AIDA's
 workspace-write/never/network-enabled
 preset and disposable equivalents of the TASK-2712 store/cache/mail/deputy
 write grants. Credentials are opened with `O_PATH` and mounted read-only,
@@ -92,18 +92,25 @@ provides and independently proves the selected adapter.
 ### AGY shared-boundary adapter preparation
 
 <!-- trace:TASK-3048 | ai:codex -->
+An AIDA-boundary refusal clears `whole_lane_pass`,
+`production_launcher_credit` and `shared_boundary_credit`, including a late
+refusal after receipt acceptance. Individual observations remain available for
+diagnosis; a report with `unsupported_reason` cannot earn whole-lane credit.
+
 The binding 2026-11-05 12:20 MST advisor ruling supersedes the earlier native
-permission experiment: AGY is **outer-only**. Its default-mode tool-safety
-monitor rejects `write_file` before fixture permissions can admit it, and auto
-mode is unavailable on the measured account. The shipped `vendors.toml` row
+permission experiment: AGY is **outer-only**. The 2026-11-07 advisor ruling supplies newer AGY 1.5.3 evidence: default-mode
+headless workspace writes can succeed when private settings allow the target.
+Neither the adapter nor the fixture depends on `--mode auto`. The shipped `vendors.toml` row
 records `native_layer = "none"`; omitted declarations retain a required native
 layer, so Claude, Codex and unverified OpenCode receive no outer-only opt-in.
 The advisor owns fresh host measurements. The common wrapper's `RuntimeCredentialsFile` mechanism now consumes the
 `[vendor.agy.runtime]` data in `containment/vendors.toml`. It provisions a mode
 0700 runtime under launch-owned state and binds it at the vendor's conventional
 `~/.gemini/antigravity-cli` path. The host `.gemini` tree is masked first; the
-runtime starts with empty settings, without inherited plugins, MCP servers,
-hooks, logs or daemon endpoints. The OAuth token is opened with the common
+runtime starts with private `settings.json` denying MCP, `read_url` and
+`execute_url` tools, without a native sandbox profile or workspace permission
+glob. Plugins, MCP servers, hooks, logs and daemon endpoints are not inherited.
+The OAuth token is opened with the common
 non-following regular-file/owner/single-link checks and bound read-only by
 handle, never copied into writable state. Refresh and expiry behavior of this
 opaque credential remains unverified; this mechanism does not adopt Claude's
@@ -118,18 +125,33 @@ supply a mediated-writer positive control. The same bwrap process tree, network
 namespace, relay, broker, grant keyring and exec barrier cover every tool and
 exec descendant. No AGY containment engine is added.
 
-The data records only the host-evidenced endpoint
-`daily-cloudcode-pa.googleapis.com`, with `auth_inventory_complete = false`.
+The live private-runtime regression also starts external file and URL helpers
+and a stdio request server inside that same boundary. Each must write private
+runtime state while refusing writes to readable host canaries, direct host TCP
+and a reachable host UNIX socket; each must still reach the inherited relay.
+The parent establishes host positive controls and checks that tool state never
+appears in the host runtime. These synthetic processes test inherited boundary
+mechanics, not AGY tool invocation, real browser/MCP behavior or C0–C4 acceptance.
+Set `AIDA_REQUIRE_BWRAP_LIVE=1` when running the regression to turn missing live
+prerequisites into failures rather than skips.
+
+The data records the measured inference endpoint
+`daily-cloudcode-pa.googleapis.com` and candidate refresh endpoint
+`oauth2.googleapis.com`, with `auth_inventory_complete = false`. The refresh
+endpoint comes from the installed binary; no refresh traffic has been measured.
 Inventory entries are requirements on the pinned trusted
 `contained.allowed_hosts`, never automatic additions to it. Missing or malformed
-hosts and incomplete inventories refuse before runtime creation or credential
-access. Completing the inventory requires advisor-owned refresh/login evidence;
+hosts refuse before runtime creation or credential access. An incomplete
+inventory also refuses ordinary production preparation; the explicit diagnostic
+entry may measure the candidate hosts with trusted approval. Completing the inventory requires advisor-owned refresh/login evidence;
 this change does not assume that a Google wildcard is safe or sufficient.
 
 Options precede the final `-p <prompt>`. The shipped argv omits both `--sandbox`
-and the unavailable `--mode auto`. Candidate permission-bypass argv still
-requires a host-accepted `ContainmentReceipt`; deserialized or missing receipts
-refuse. Within the common wrapper, argv preparation stays behind its exec
+and the unavailable `--mode auto`. Candidate argv includes
+`--dangerously-skip-permissions` only with a
+host-accepted `ContainmentReceipt`; deserialized or missing receipts refuse.
+`--settings` names the private runtime settings file. Within the common wrapper,
+argv preparation stays behind its exec
 barrier, and receipt acceptance checks the outer-only descriptor before exec
 can be released. Extra caller options are refused in the runtime-file arm.
 
@@ -146,8 +168,9 @@ remain available.
 
 Production AGY admission remains closed in `launch/agy.rs`, and direct wrapper
 preparation also refuses its incomplete auth inventory. Trusted `agy = "aida"`
-or `"native"` settings cannot unlock it. The native diagnostic retains the old
-auto request as a historical measurement, never adds permission bypass, and
+or `"native"` settings cannot unlock it. The native diagnostic uses default mode with a fixture-scoped
+`write_file(<workspace>/**)` allow rule and an exact frozen runner command,
+never adds permission bypass, and
 reports bounded stream/stderr/private-log tool-safety diagnostics as
 `unsupported_reason` on the report and each C0–C4 check. Measured violations
 remain failures.
@@ -155,10 +178,37 @@ remain failures.
 This is a **Refs-only S2 slice**, continuing merged PR #3518 and the common
 wrapper from #3449. Remaining acceptance: finish the auth/refresh inventory,
 validate credential refresh/expiry with the private read-only token, demonstrate
-mediated-write positive controls, wire and run the production all-tool AGY
-conformance path, then change the admission gate only with fresh passing host
-evidence. The shared-boundary harness still refuses AGY by name; native fixture
-or model-free wrapper tests cannot substitute for that integrated host run.
+mediated-write positive controls and run the integrated all-tool AGY
+conformance path, then change the production admission gate in a separate step
+only with fresh passing host evidence. The AIDA-boundary harness selects the
+explicit `conformance-launch` diagnostic entry, preserving the shared grant,
+receipt and seat barriers while ordinary production launches still refuse.
+Native fixture or model-free wrapper tests cannot substitute for that
+integrated host run.
+
+### 2026-11-07 workspace-only permission rerun
+
+<!-- trace:TASK-3048 | ai:codex -->
+The fresh [AGY 1.5.3 report](containment-conformance-agy-2026-11-07.json)
+was produced with:
+
+```bash
+python3 scripts/containment/conformance.py --vendor agy \
+  --output /home/joe/.aida/conformance-agy-task3048-20261107-seat786-isolated --timeout 600
+```
+
+C0–C4 remain **unknown**, with no verified terminal receipt and no whole-lane
+or production-launcher credit. The terminal's completed event reports
+`sandbox configuration error: readwrite <workspace>/**: globs not supported`.
+The reporter names this configuration failure ahead of the tool-safety monitor
+flag; the later LLM monitor can allow flagged workspace writes. The workspace
+file-tool sentinel was not created either. The fixture retains `--sandbox` for
+its native diagnostic measurement, the requested workspace-only recursive rule,
+and the exact runner command; it never grants host paths, canaries or blanket
+permission bypass. Full stdout, stderr and private logs remain beside the host
+report. The production shared-boundary AGY gate remains closed. This evidence
+does not justify completion of TASK-3048 or resolve the remaining integrated
+all-tool, auth/refresh inventory and mediated-write positive-control work.
 
 ### Non-completing adapter handoff
 
@@ -343,15 +393,28 @@ stdout remains a private captured eval block. The shell continuation receives
 that block through its own stdin pipe, then restores the inherited terminal stdin
 from a passed descriptor before evaluating it. Successful eval blocks never enter
 argv, environment variables, reports or files. Both seat transitions retain the
-operator's terminal session and the supervised timeout cleanup.
+operator's terminal session and the supervised timeout cleanup. Each role entry
+announces that it is waiting for the operator and allows five minutes for prompts,
+including the advisor delegation question (whose default remains no). The harness
+lends terminal foreground ownership to each continuation before releasing its
+script, so implementer prompts can read the controlling terminal. Supervisors
+return foreground ownership after nested cleanup, blocking SIGTTOU while
+reclaiming it. Attribute restoration runs only in the foreground group; the outer
+supervisor restores attributes after continuation exit and timeout or SIGTERM
+cleanup. While a continuation owns the foreground, Ctrl+C reaches that group;
+both implementer setup and vendor-run continuations record
+`harness-interrupted: SIGINT` before exiting, and the supervisors reclaim the
+terminal without replacing that reason with a generic launch refusal. Top-level SIGTERM
+reports `harness-terminated: SIGTERM`, distinct from continuation timeout cleanup.
+<!-- trace:BUG-2485 | ai:codex -->
 <!-- trace:BUG-2460 trace:BUG-2465 | ai:codex -->
 
 The advisor setup seat requests no child delegation; only the implementer seat
 requests `--delegate-seat implementer`. Closed inherited stdin refuses with
 `fixture-terminal-stdin-unavailable` before starting a continuation. The outer
-continuation budget is the vendor timeout plus 330 seconds: four 30-second setup
-calls, the inner timeout's 180-second overhead, and 30 seconds for inner cleanup
-and reporting. On interruption the outer supervisor allows 25 seconds for setup
+continuation budget is the vendor timeout plus 600 seconds: three 30-second setup
+calls, five minutes for implementer entry, the inner timeout's 180-second overhead,
+and 30 seconds for inner cleanup and reporting. On interruption the outer supervisor allows 25 seconds for setup
 cleanup, exceeding the inner supervisor's 10-second SIGTERM grace and 5-second
 SIGKILL reap budget so the inner group is killed before setup is killed.
 <!-- trace:TASK-2941 | ai:codex -->
@@ -384,6 +447,19 @@ Payload files live outside the workspace on the production read-only host view.
 Native file-tool attempts remain separate observations. The command does not
 request the auto-complete pipeline, CI, PR publication, or queue completion.
 
+The disposable Codex policy allows `api.openai.com`, `chatgpt.com` and
+`allow.fixture.test` only; authentication hosts and `deny.fixture.test` remain
+excluded. After launch acceptance and containment-receipt validation, a Codex
+invocation without a `turn.completed` event in `.aida/headless-logs/*.jsonl` produces
+`run_status: "invalid-run"`, reason `vendor-turn-not-completed`, and a nonzero
+harness exit. A vendor log over 4 MiB instead produces reason
+`vendor-log-oversize`; its completion evidence cannot be inspected within the cap.
+Earlier launch or receipt refusals exit nonzero with `unsupported_reason` and
+may have no `run_status` field. AGY requires a completed exact-command payload receipt. Reports
+retain measured failures and unknown checks for diagnosis; an invalid run earns
+no production-launch credit.
+<!-- trace:BUG-2497 | ai:codex -->
+
 Reports name `boundary=aida`, the fixture policy commit (`trusted_policy_sha`),
 the AIDA binary SHA256 (`aida_binary_sha256`), and the SHA256 of the serialized,
 host-validated `ContainmentReceipt` (`containment_receipt_sha256`). The launcher
@@ -412,3 +488,55 @@ The offline test gives the harness an idle PTY on stdin and stderr and verifies 
 fixture initialization and roster provisioning reach the expected managed-agent role refusal without
 executing the fake vendor. This test terminal grants no authority; managed-agent
 identity remains set throughout.
+
+### AGY outer-only follow-up (2026-11-07 ruling)
+
+The native `agy --sandbox` experiment is diagnostic only. Its report always
+retains `production_launcher_credit=false` and `whole_lane_pass=false`; a native
+sandbox result cannot admit the outer-only vendor.
+
+The AIDA fixture accepts `--vendor agy --boundary aida`, pins the fixture
+vendor selection and queries the selected binary's runtime policy. AGY uses
+`aida config permissions conformance-launch --fixture-root <run> --credential
+<original-home>/.gemini/antigravity-cli/antigravity-oauth-token`, a hidden,
+explicit diagnostic entry; it does not go through the refusing queue-work
+production admission path. Codex retains queue work. The diagnostic issues a
+normal contained child grant and uses the common bwrap, relay, broker, seat
+preflight and live receipt/exec barrier. The unmeasured inventory exception is
+local to this explicit entry and never relaxes trusted allowed-host approval.
+`Adapter::require_conformance` and ordinary wrapper preparation remain closed.
+
+The credential source is retained before authority HOME relocation; only its
+checked leaf handle is mounted read-only. Both the relocated and original
+`.gemini` parents are masked. Runtime state is private and writable except for the credential and mandatory
+`settings.json` leaves, which are pinned read-only by handle. The settings source
+path in launch state is also pinned read-only to prevent writes through that alias. Workspace
+MCP configuration, hooks and plugins are masked too. The private runtime
+`settings.json`, selected by `--settings <path>`, carries `permissions.deny = ["mcp(*)", "read_url(*)", "execute_url(*)"]`, covering
+MCP, URL reads and browser actuation; these controls are seeded before vendor
+execution. These are documented [AGY tool actions](https://antigravity.google/docs/permissions/).
+There is no native `--sandbox` or native permissions-profile file. Candidate
+and wrapper argv share the controls and terminal `-p <prompt>` order. Only the
+accepted-receipt barrier permits permission-bypass execution. Model-free tests
+assert configuration and wrapper behavior; the advisor must verify AGY honors
+the controls during the live run.
+
+Runtime `auth_hosts` feeds the common relay allow-set after trusted approval.
+Missing approval names `AGY_AUTH_HOST_UNAPPROVED`; an unlisted requested host
+is denied before DNS and logged as `CONTAINED_EGRESS_HOST_UNLISTED <host>:<port>`.
+Successful auth-host metadata is recorded in a bounded host-only bitmap on an
+unlinked descriptor that is never passed to bwrap. After the vendor exits, the
+host launcher writes `host-egress.json` outside the writable workspace; only
+this channel supplies `observed_egress_hosts`. Vendor stderr is diagnostic only;
+this is traffic evidence, not proof that refresh occurred. AGY reports distinguish
+`shared_boundary_credit` from production admission, which stays `closed` with
+`production_launcher_credit=false`. Whole-lane success stays conservative until
+the complete C0–C4 evidence (including the existing unmeasured controls) exists.
+
+The host-observed inventory remains `daily-cloudcode-pa.googleapis.com` only.
+`oauth2.googleapis.com` is an additional candidate refresh host: the installed
+AGY binary contains `https://oauth2.googleapis.com/token`. This static evidence
+is not a refresh measurement; `auth_inventory_complete` stays false. The advisor
+must measure refresh and attach fresh AIDA-boundary C0–C4 evidence before the
+separate production-admission change.
+<!-- trace:TASK-3048 | ai:codex -->

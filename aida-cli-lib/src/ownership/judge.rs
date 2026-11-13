@@ -128,6 +128,17 @@ fn describe(witness: &Witness) -> String {
     }
 }
 
+/// PR-C0: an unadmitted legacy holder loses work ownership when its session
+/// has no lease. This releases only the record, never the seat or its tree.
+/// Admitted (including refused) identities and merge-lease holders retain
+/// their own lifecycle rules.
+// trace:STORY-2325 | ai:codex
+pub(crate) fn legacy_release_by_rule(holder: &Holder, has_lease: bool) -> bool {
+    !has_lease
+        && !holder.session.starts_with("merge-lease:")
+        && holder.witnesses.iter().all(|w| w.admission.is_none())
+}
+
 /// Admitted records select one process generation. Legacy rows retain their
 /// heartbeat policy; activity cannot rehabilitate an admitted dead worker.
 // trace:STORY-2537 trace:BUG-2458 | ai:codex
@@ -220,16 +231,17 @@ pub(crate) fn judge(
         (_, OwnerVerdict::Unknown { why }) => {
             Reclaim::Keep(format!("the holder cannot be proven gone: {why}"))
         }
-        (_, OwnerVerdict::Dead { .. }) => reclaim_dead_tree(tree, pr_head, is_ancestor),
+        (_, OwnerVerdict::Dead { .. }) => reclaim_dead_tree(tree, pr_head, false, is_ancestor),
     };
     Verdict { owner, reclaim }
 }
 
 /// A dead holder's tree: ended by rule only when it holds nothing the PR
 /// lacks. Today's `pr_lease_takeover::classify`, plus a non-git path.
-fn reclaim_dead_tree(
+pub(crate) fn reclaim_dead_tree(
     tree: &TreeReading,
     pr_head: Option<&str>,
+    covered_non_pr_implementer: bool,
     is_ancestor: &dyn Fn(&str, &str) -> bool,
 ) -> Reclaim {
     let (dirty, unpushed, head) = match tree {
@@ -266,6 +278,11 @@ fn reclaim_dead_tree(
         return Reclaim::EndBySafeRule;
     };
     let Some(pr_head) = pr_head else {
+        // trace:STORY-2325 | ai:codex — clean dead lanes before their first
+        // branch push can already be fully covered by another origin ref.
+        if covered_non_pr_implementer {
+            return Reclaim::EndBySafeRule;
+        }
         return Reclaim::Keep(
             "there is no PR head on origin to compare its tree against".to_string(),
         );

@@ -531,7 +531,9 @@ impl Drop for MarkerGuard {
 // trace:STORY-1662.AC6 | ai:claude
 #[test]
 fn pr_ship_refuses_under_the_marker() {
-    let cli = crate::command_registry::try_parse_from(["aida", "pr", "ship", "42"]).unwrap();
+    let cli = crate::TEST_CLI
+        .try_parse_from(["aida", "pr", "ship", "42"])
+        .unwrap();
     let args = cli.command.registered::<crate::pr_cmd::PrArgs>();
     let _marker = MarkerGuard::set();
     let err = crate::pr_cmd::handle_pr_command(&args.inner).unwrap_err();
@@ -656,7 +658,7 @@ fn write_slot(dir: &std::path::Path, pid: u32, spec: &str) {
     std::fs::create_dir_all(dir).unwrap();
     std::fs::write(
         dir.join(format!("{pid}.json")),
-        format!(r#"{{"pid":{pid},"start":"t","spec":"{spec}"}}"#),
+        serde_json::json!({"pid":pid,"start":"t","spec":spec,"pid_namespace":aida_core::pid_observer::current_pid_namespace()}).to_string(),
     )
     .unwrap();
 }
@@ -717,7 +719,7 @@ fn cap_ignores_a_launcher_whose_child_logged_its_final_result() {
     let slot_with_log = |pid: u32, spec: &str, log: &std::path::Path| {
         std::fs::write(
             dir.join(format!("{pid}.json")),
-            serde_json::json!({"pid": pid, "start": "t", "spec": spec, "log": log}).to_string(),
+            serde_json::json!({"pid": pid, "start": "t", "spec": spec, "log": log, "pid_namespace":aida_core::pid_observer::current_pid_namespace()}).to_string(),
         )
         .unwrap();
     };
@@ -742,26 +744,7 @@ fn cap_ignores_a_launcher_whose_child_logged_its_final_result() {
     assert!(format!("{err:#}").contains("STORY-3"));
 }
 
-// trace:STORY-1662.AC7 | ai:claude
-#[test]
-fn cap_comes_from_config_with_a_default_of_three() {
-    let tmp = tempfile::tempdir().unwrap();
-    std::fs::create_dir_all(tmp.path().join(".aida")).unwrap();
-    assert_eq!(configured_cap(tmp.path()), DEFAULT_CAP);
-    assert_eq!(DEFAULT_CAP, 3);
-    std::fs::write(
-        tmp.path().join(".aida/config.toml"),
-        "[queue]\nstandalone_implementer_cap = 5\n",
-    )
-    .unwrap();
-    assert_eq!(configured_cap(tmp.path()), 5);
-    std::fs::write(
-        tmp.path().join(".aida/config.toml"),
-        "[queue]\nstandalone_implementer_cap = 0\n",
-    )
-    .unwrap();
-    assert_eq!(configured_cap(tmp.path()), DEFAULT_CAP);
-}
+// Capacity precedence and invalid host policy are covered beside the resolver.
 
 // ── Authorship and the Q1 ledger note ─────────────────────────────────────
 
@@ -991,7 +974,7 @@ fn stub_vendor_that_punts_exits_32_as_a_live_implementer_lane_with_no_grant_leak
 
     let result = std::thread::scope(|scope| {
         let launch = scope.spawn(|| {
-            run(Launch {
+            run_for_test(Launch {
                 project_root: &project,
                 vendor: crate::session::HeadlessVendor::Claude,
                 prompt: "/aida-pickup STORY-9",
@@ -1061,6 +1044,19 @@ fn stub_vendor_that_punts_exits_32_as_a_live_implementer_lane_with_no_grant_leak
         result
     });
     let err = result.expect_err("a punted run is not an open PR");
+    // Real child spawn and punt must agree with the durable terminal result.
+    // trace:STORY-2690 | ai:codex
+    let receipts: Vec<_> = std::fs::read_dir(project.join(".aida/lane-results"))
+        .unwrap()
+        .map(|e| e.unwrap().path())
+        .collect();
+    assert_eq!(receipts.len(), 1);
+    let receipt: serde_json::Value =
+        serde_json::from_slice(&std::fs::read(&receipts[0]).unwrap()).unwrap();
+    assert_eq!(receipt["result"], "punted");
+    assert_eq!(receipt["started"], true);
+    assert!(receipt["child_pid"].as_u64().is_some());
+
     assert_eq!(
         crate::exit_code_for_error(&err),
         PUNTED_EXIT_CODE,
@@ -1106,4 +1102,36 @@ fn task_2879_native_stop_hands_pending_work_to_host() {
     }
     assert!(!NATIVE_STOP_CONTRACT.contains("when your PR is open"));
     assert!(STOP_CONTRACT.contains("when your PR is open"));
+}
+
+// trace:BUG-2493 | ai:codex
+#[cfg(unix)]
+#[test]
+fn bug_2493_native_prompts_name_safe_body_file_surface() {
+    assert!(NATIVE_STOP_CONTRACT
+        .contains("Omit `--commit-body-file <file>` when no body trailers are needed."));
+    assert!(NATIVE_STOP_CONTRACT.contains(
+        "aida ship -m \"[AI:codex] type(scope): subject (Refs SPEC-ID)\" --commit-body-file <file>"
+    ));
+    assert!(NATIVE_STOP_CONTRACT.contains(
+        "aida ship -m \"[AI:codex] type(scope): subject (SPEC-ID)\" --commit-body-file <file>"
+    ));
+    assert!(
+        include_str!("../../../aida-core/templates/commands/aida-pickup.md")
+            .contains("aida ship -m '[AI:codex] type(scope): subject (ID)'")
+    );
+    // trace:TASK-3735 | ai:codex
+    assert!(
+        include_str!("../../../aida-core/templates/commands/aida-pickup.md")
+            .contains("Omit `--commit-body-file <UTF-8-file>` when no body trailers are needed.")
+    );
+    for text in [
+        NATIVE_STOP_CONTRACT,
+        include_str!("../../../aida-core/templates/skills/aida-pickup.md"),
+        include_str!("../../../aida-core/templates/commands/aida-pickup.md"),
+    ] {
+        assert!(text.contains("--commit-body-file"));
+        assert!(text.contains("/tmp"));
+        assert!(text.contains("Help-Golden: unchanged"));
+    }
 }

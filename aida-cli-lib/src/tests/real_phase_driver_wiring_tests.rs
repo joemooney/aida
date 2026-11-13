@@ -1488,6 +1488,40 @@ fn post_push_pr_recovery_completes_when_the_recorded_worktree_is_gone() {
     assert_eq!(pr, 4242, "the PR number must come from the forge call");
 }
 
+// trace:BUG-2483 | ai:codex
+#[cfg(unix)]
+#[test]
+fn post_push_pr_recovery_accepts_refs_only_drained_slice_without_completion() {
+    let (_tmp, work, _remote) = repo_with_pushed_branch_ahead_of_origin_default();
+    git(
+        &work,
+        &[
+            "commit",
+            "--amend",
+            "-m",
+            "fix: drained slice (Refs BUG-878)",
+        ],
+    );
+    git(&work, &["push", "-q", "--force", "origin", "bug-878"]);
+    assert!(
+        crate::trace::ensure_pr_open_spec_attribution(&work, "origin/bug-878", "BUG-878").is_err()
+    );
+    let gone = work.parent().unwrap().join("torn-down-worktree");
+    let fake_gh = fake_gh_that_opens_pr(work.parent().unwrap(), 4242);
+    let _env =
+        crate::test_env::EnvVarsGuard::set(&[("AIDA_TEST_GH_BINARY", fake_gh.to_str().unwrap())]);
+    assert_eq!(
+        try_open_orchestrator_pr_for_no_pr_worktree(
+            &work,
+            &gone,
+            "bug-878",
+            crate::forge::ForgeKind::GitHub,
+            "BUG-878"
+        ),
+        Some((1, 4242))
+    );
+}
+
 /// The complement, without which the test above is satisfied by a fix that
 /// always reports success: when the branch was never pushed there is genuinely
 /// nothing to recover, and recovery must still decline rather than invent a PR.
@@ -3108,10 +3142,12 @@ fn bug_2185_project_with_store(
 /// The store writes a BUG-2185 child makes: a lease release (a deletion,
 /// which has no modification time) and a new object.
 // trace:BUG-2185 | ai:claude
+// trace:BUG-2490 | ai:codex — committed fixtures use valid requirement YAML.
 fn bug_2185_child_store_writes(store_root: &std::path::Path) -> String {
     format!(
-        "rm '{s}/coordination/leases/held.toml'\nmkdir -p '{s}/objects'\nprintf 'n: 1\\n' > '{s}/objects/new.yaml'\n",
-        s = store_root.display()
+        "rm '{s}/coordination/leases/held.toml'\nmkdir -p '{s}/objects'\nprintf '%s' '{object}' > '{s}/objects/new.yaml'\n",
+        s = store_root.display(),
+        object = serde_yaml::to_string(&aida_core::Requirement::new("child".into(), String::new())).unwrap().replace("'", "'\"'\"'")
     )
 }
 

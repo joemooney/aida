@@ -1,8 +1,31 @@
 //! Orchestrated phase-1 workspace, lease receipts and child refusals, implementer phase args, implementer branch push and orchestrator PR open (STORY-1488 slice 1)
 // trace:STORY-1488 | ai:claude
 
-use crate::*;
+use crate::probe_branch_on_origin;
+use crate::process_retry::RetryEtxtbsy;
+use crate::BranchOriginProbe;
+use crate::{
+    acceptance_command_policy_global, aida_bin, auto_complete, branch_commits_ahead_main,
+    capture_review_calibration_for_spec, drain_next_n, drain_signal,
+    enrich_no_verdict_with_headless_diagnostic, ensure_pr_publication_spec_attribution, evaluator,
+    exit_signal, external_cmd, find_scope_lease_conflict, git_arg_guard, graded_review,
+    humanize_secs_short, implementer_preflight, lease_path, leases_dir, list_leases,
+    load_store_for_lookup, orchestrator, phase3_head_archive_fallback, pr_head_sha_best_effort,
+    pr_rebase, pr_ship, process_probe, queue_cmd, release_dead_phase_predecessor_leases,
+    repo_review_optin_present, resolve_default_branch_ref, resolve_pickup_workspace,
+    sanitize_gate_file_token, session, session_manifest, sibling_verdict_sweep_for_phase3,
+    spec_verdict_fallback_for_phase3, AgentGateConfig, AutonomyMode, LeasePeek, Phase1PrResolve,
+    PhaseWatchdog, RealPhaseDriver, SessionLease,
+};
+use crate::{
+    aida_exe_path, forge, leases, pr_ship_post_merge_aida_exe, resolve_aida_exe, run, worktree,
+    write_implementer_complete_banner, OpenPrInfo,
+};
 use aida_core::git_ops::RemoteCredentialsExt as _;
+use aida_core::Storage;
+use aida_core::{write_atomic, RequirementStatus};
+use anyhow::{Context, Result};
+use colored::Colorize;
 
 /// BUG-1629: the workspace phase 1 launches. `fresh` marks a branch the
 /// pickup resolver chose as free that has not been launched yet; see
@@ -763,7 +786,7 @@ mod bug_376_implementer_exit_directive_tests;
 /// state discovered as phases run (branch, lease id, PR number).
 /// trace:STORY-246 | ai:claude
 /// BUG-311: build the argv for the orchestrator's phase-1 `aida queue work`
-/// subprocess. Pure helper so the steal-threading + headless flag rules are
+/// subprocess. Pure helper so compatibility + headless flag rules are
 /// pinnable by unit test without spawning a process. The orchestrator always
 /// sets `--session-id` (so it can locate the phase's lease via
 /// `claude_session_id`), and conditionally appends `--steal`, `--no-human`,
@@ -786,10 +809,9 @@ pub(crate) fn build_implementer_phase_args(
         "--session-id".into(),
         session_uuid.into(),
     ];
-    // BUG-311: the user's outer `--steal` is threaded so phase 1's
-    // `handle_queue_work` can clear a dormant lease on this scope instead of
-    // bailing with the canned "pass --steal" message — which was the BUG-311
-    // symptom (the flag was passed but the inner subprocess never saw it).
+    // Compatibility-only plumbing: production queue-work entry refuses steal=true
+    // before orchestrator dispatch. This arm is unreachable in production.
+    // trace:STORY-2325 | ai:codex
     if steal {
         args.push("--steal".into());
     }
@@ -1382,7 +1404,8 @@ pub(crate) fn open_orchestrator_pr_for_implementer_worktree(
     // TASK-1442 follow-up (containment for BUG-1510): before opening the PR,
     // verify the branch actually carries a commit trailered for the spec
     // this drive is for.
-    ensure_pr_open_spec_attribution(worktree, branch, spec)?;
+    // trace:BUG-2483 | ai:codex
+    ensure_pr_publication_spec_attribution(worktree, branch, spec)?;
     // TASK-1443: a concurrent drive may have already opened a PR for this
     // head between the push above and this point — adopt it rather than
     // opening a second one. trace:TASK-1443 | ai:claude
@@ -1734,7 +1757,8 @@ pub(crate) fn open_orchestrator_pr_for_pushed_branch(
     // TASK-1442 follow-up (containment for BUG-1510): before opening the PR,
     // verify the pushed branch actually carries a commit trailered for the
     // spec this drive is for.
-    ensure_pr_open_spec_attribution(project_root, &branch_ref, spec)?;
+    // trace:BUG-2483 | ai:codex
+    ensure_pr_publication_spec_attribution(project_root, &branch_ref, spec)?;
     // TASK-1443: adopt an already-open PR for this head instead of opening a
     // second one (see `existing_open_pr_for_branch` above). trace:TASK-1443 | ai:claude
     let commit_msg = head_commit_message(project_root, &branch_ref)?;

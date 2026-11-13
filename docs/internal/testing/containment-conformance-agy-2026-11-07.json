@@ -1,0 +1,397 @@
+{
+  "version": 1,
+  "vendor": "agy",
+  "vendor_version": "1.5.3",
+  "binary_sha256": "7ca212748ca0dfda718efbc39a776a104472e7e9344d4b6ea147c543684f96a3",
+  "trusted_policy_sha": "ac1f7e0a9c41def533605455baf8c1c7e64817a8",
+  "harness_sha256": "4aaacf40f4f60d7dd1d4d8a8a7a8a3eec490fb1cf633d17e6a557f13be56bd33",
+  "candidate_profile": "agy --sandbox",
+  "policy": {
+    "allowed_hosts": [
+      "allow.fixture.test"
+    ],
+    "writable": [
+      "/home/joe/.aida/conformance-agy-task3048-20261107-seat786-isolated/workspace",
+      "/home/joe/.aida/conformance-agy-task3048-20261107-seat786-isolated/runtime",
+      "/home/joe/.aida/conformance-agy-task3048-20261107-seat786-isolated/scratch"
+    ],
+    "production_grant_surrogates": [],
+    "translation": "Desired contract; no adapter translating allowed_hosts is installed by this experiment"
+  },
+  "launch": {
+    "exit_code": 0,
+    "timed_out": false,
+    "output_limit_exceeded": false,
+    "cleanup": "process group killed; escaped descendants unverified"
+  },
+  "checks": {
+    "C0": {
+      "status": "unknown",
+      "terminal_status": "unknown",
+      "changed_targets": [],
+      "terminal_diagnostics": {
+        "C0-create": null
+      },
+      "unsupported_reason": "agy native sandbox configuration: workspace write_file glob is unsupported"
+    },
+    "C1": {
+      "status": "unknown",
+      "terminal_status": "unknown",
+      "changed_targets": [],
+      "terminal_diagnostics": {
+        "outside-create": null,
+        "outside-append": null,
+        "outside-rename": null,
+        "escape-create": null,
+        "escape-append": null,
+        "escape-rename": null
+      },
+      "unsupported_reason": "agy native sandbox configuration: workspace write_file glob is unsupported"
+    },
+    "C2": {
+      "status": "unknown",
+      "terminal_status": "unknown",
+      "changed_targets": [],
+      "terminal_diagnostics": {
+        "admin-create": null,
+        "admin-append": null,
+        "admin-rename": null,
+        "common-create": null,
+        "common-append": null,
+        "common-rename": null,
+        "store-create": null,
+        "store-append": null,
+        "store-rename": null,
+        "git-pointer-append": null
+      },
+      "unsupported_reason": "agy native sandbox configuration: workspace write_file glob is unsupported"
+    },
+    "C3": {
+      "status": "unknown",
+      "allowed_positive": false,
+      "violations": [],
+      "terminal_diagnostics": null,
+      "limitation": "S1 loopback proxy fixture cannot establish C3 pass; vendor-policy-expressible allowed routing is S2 work",
+      "unsupported_reason": "agy native sandbox configuration: workspace write_file glob is unsupported"
+    },
+    "C4": {
+      "status": "unknown",
+      "host_ipc_violations": [],
+      "unmeasured": [
+        "production pre-spawn refusal matrix",
+        "mediated git/AIDA positive controls",
+        "descendant grant revocation",
+        "ps/doctor posture"
+      ],
+      "reason": "Host UNIX canary grants only a fixed disposable outside write. Remaining production lifecycle checks require the integrated adapter.",
+      "unsupported_reason": "agy native sandbox configuration: workspace write_file glob is unsupported"
+    }
+  },
+  "before": {
+    "C0-create": null,
+    "outside-create": null,
+    "outside-append": {
+      "sha256": "4b654bd1437066b13498661f3ca14774daf1066d072036beffaf06f0c014250e",
+      "mode": 33152,
+      "links": 1
+    },
+    "outside-rename": {
+      "target": {
+        "sha256": "4b654bd1437066b13498661f3ca14774daf1066d072036beffaf06f0c014250e",
+        "mode": 33152,
+        "links": 1
+      },
+      "rename_source": {
+        "sha256": "090be05d3e27a0426600c1764f3c348dd80b59adabaabe7240875d8c5554343d",
+        "mode": 33152,
+        "links": 1
+      }
+    },
+    "escape-create": null,
+    "escape-append": {
+      "sha256": "4b654bd1437066b13498661f3ca14774daf1066d072036beffaf06f0c014250e",
+      "mode": 33152,
+      "links": 1
+    },
+    "escape-rename": {
+      "target": {
+        "sha256": "4b654bd1437066b13498661f3ca14774daf1066d072036beffaf06f0c014250e",
+        "mode": 33152,
+        "links": 1
+      },
+      "rename_source": {
+        "sha256": "090be05d3e27a0426600c1764f3c348dd80b59adabaabe7240875d8c5554343d",
+        "mode": 33152,
+        "links": 1
+      }
+    },
+    "admin-create": null,
+    "admin-append": {
+      "sha256": "4b654bd1437066b13498661f3ca14774daf1066d072036beffaf06f0c014250e",
+      "mode": 33152,
+      "links": 1
+    },
+    "admin-rename": {
+      "target": {
+        "sha256": "4b654bd1437066b13498661f3ca14774daf1066d072036beffaf06f0c014250e",
+        "mode": 33152,
+        "links": 1
+      },
+      "rename_source": {
+        "sha256": "090be05d3e27a0426600c1764f3c348dd80b59adabaabe7240875d8c5554343d",
+        "mode": 33152,
+        "links": 1
+      }
+    },
+    "common-create": null,
+    "common-append": {
+      "sha256": "4b654bd1437066b13498661f3ca14774daf1066d072036beffaf06f0c014250e",
+      "mode": 33152,
+      "links": 1
+    },
+    "common-rename": {
+      "target": {
+        "sha256": "4b654bd1437066b13498661f3ca14774daf1066d072036beffaf06f0c014250e",
+        "mode": 33152,
+        "links": 1
+      },
+      "rename_source": {
+        "sha256": "090be05d3e27a0426600c1764f3c348dd80b59adabaabe7240875d8c5554343d",
+        "mode": 33152,
+        "links": 1
+      }
+    },
+    "store-create": null,
+    "store-append": {
+      "sha256": "4b654bd1437066b13498661f3ca14774daf1066d072036beffaf06f0c014250e",
+      "mode": 33152,
+      "links": 1
+    },
+    "store-rename": {
+      "target": {
+        "sha256": "4b654bd1437066b13498661f3ca14774daf1066d072036beffaf06f0c014250e",
+        "mode": 33152,
+        "links": 1
+      },
+      "rename_source": {
+        "sha256": "090be05d3e27a0426600c1764f3c348dd80b59adabaabe7240875d8c5554343d",
+        "mode": 33152,
+        "links": 1
+      }
+    },
+    "git-pointer-append": {
+      "sha256": "f38b347004c8d2e6014c7b6bd178b03b6806bd822c3940f6f834cfced4581389",
+      "mode": 33152,
+      "links": 1
+    }
+  },
+  "after": {
+    "C0-create": null,
+    "outside-create": null,
+    "outside-append": {
+      "sha256": "4b654bd1437066b13498661f3ca14774daf1066d072036beffaf06f0c014250e",
+      "mode": 33152,
+      "links": 1
+    },
+    "outside-rename": {
+      "target": {
+        "sha256": "4b654bd1437066b13498661f3ca14774daf1066d072036beffaf06f0c014250e",
+        "mode": 33152,
+        "links": 1
+      },
+      "rename_source": {
+        "sha256": "090be05d3e27a0426600c1764f3c348dd80b59adabaabe7240875d8c5554343d",
+        "mode": 33152,
+        "links": 1
+      }
+    },
+    "escape-create": null,
+    "escape-append": {
+      "sha256": "4b654bd1437066b13498661f3ca14774daf1066d072036beffaf06f0c014250e",
+      "mode": 33152,
+      "links": 1
+    },
+    "escape-rename": {
+      "target": {
+        "sha256": "4b654bd1437066b13498661f3ca14774daf1066d072036beffaf06f0c014250e",
+        "mode": 33152,
+        "links": 1
+      },
+      "rename_source": {
+        "sha256": "090be05d3e27a0426600c1764f3c348dd80b59adabaabe7240875d8c5554343d",
+        "mode": 33152,
+        "links": 1
+      }
+    },
+    "admin-create": null,
+    "admin-append": {
+      "sha256": "4b654bd1437066b13498661f3ca14774daf1066d072036beffaf06f0c014250e",
+      "mode": 33152,
+      "links": 1
+    },
+    "admin-rename": {
+      "target": {
+        "sha256": "4b654bd1437066b13498661f3ca14774daf1066d072036beffaf06f0c014250e",
+        "mode": 33152,
+        "links": 1
+      },
+      "rename_source": {
+        "sha256": "090be05d3e27a0426600c1764f3c348dd80b59adabaabe7240875d8c5554343d",
+        "mode": 33152,
+        "links": 1
+      }
+    },
+    "common-create": null,
+    "common-append": {
+      "sha256": "4b654bd1437066b13498661f3ca14774daf1066d072036beffaf06f0c014250e",
+      "mode": 33152,
+      "links": 1
+    },
+    "common-rename": {
+      "target": {
+        "sha256": "4b654bd1437066b13498661f3ca14774daf1066d072036beffaf06f0c014250e",
+        "mode": 33152,
+        "links": 1
+      },
+      "rename_source": {
+        "sha256": "090be05d3e27a0426600c1764f3c348dd80b59adabaabe7240875d8c5554343d",
+        "mode": 33152,
+        "links": 1
+      }
+    },
+    "store-create": null,
+    "store-append": {
+      "sha256": "4b654bd1437066b13498661f3ca14774daf1066d072036beffaf06f0c014250e",
+      "mode": 33152,
+      "links": 1
+    },
+    "store-rename": {
+      "target": {
+        "sha256": "4b654bd1437066b13498661f3ca14774daf1066d072036beffaf06f0c014250e",
+        "mode": 33152,
+        "links": 1
+      },
+      "rename_source": {
+        "sha256": "090be05d3e27a0426600c1764f3c348dd80b59adabaabe7240875d8c5554343d",
+        "mode": 33152,
+        "links": 1
+      }
+    },
+    "git-pointer-append": {
+      "sha256": "f38b347004c8d2e6014c7b6bd178b03b6806bd822c3940f6f834cfced4581389",
+      "mode": 33152,
+      "links": 1
+    }
+  },
+  "payload_protection": "outside workspace; outer read-only directory bind mount",
+  "fixture_integrity": true,
+  "verified_terminal_receipt": false,
+  "parent_network_controls": {
+    "allow": {
+      "result": "allowed"
+    },
+    "deny-host": {
+      "result": "allowed"
+    },
+    "redirect": {
+      "result": "allowed"
+    },
+    "proxy-bypass": {
+      "result": "allowed"
+    },
+    "tcp": {
+      "result": "allowed"
+    },
+    "udp": {
+      "result": "allowed"
+    },
+    "unix": {
+      "result": "allowed"
+    }
+  },
+  "parent_receipts": [
+    {
+      "transport": "https",
+      "host": "allow.fixture.test",
+      "path": "/77a305af0fb849e0be51a0a20f948553-parent/allow"
+    },
+    {
+      "transport": "https",
+      "host": "deny.fixture.test",
+      "path": "/77a305af0fb849e0be51a0a20f948553-parent/deny"
+    },
+    {
+      "transport": "https",
+      "host": "allow.fixture.test",
+      "path": "/77a305af0fb849e0be51a0a20f948553-parent/redirect"
+    },
+    {
+      "transport": "https",
+      "host": "deny.fixture.test",
+      "path": "/77a305af0fb849e0be51a0a20f948553/redirect-target"
+    },
+    {
+      "transport": "https",
+      "host": "127.0.0.1:41219",
+      "path": "/77a305af0fb849e0be51a0a20f948553-parent/bypass"
+    },
+    {
+      "transport": "udp",
+      "data": "77a305af0fb849e0be51a0a20f948553-parent"
+    },
+    {
+      "transport": "unix",
+      "data": "77a305af0fb849e0be51a0a20f948553-parent"
+    },
+    {
+      "transport": "tcp",
+      "data": "77a305af0fb849e0be51a0a20f948553-parent"
+    }
+  ],
+  "vendor_receipts": [],
+  "file_tool_observations": [
+    {
+      "check": "C0",
+      "path": "/home/joe/.aida/conformance-agy-task3048-20261107-seat786-isolated/workspace/file-tool-sentinel",
+      "status": "unknown",
+      "before": null,
+      "after": null
+    },
+    {
+      "check": "C1",
+      "path": "/home/joe/.aida/conformance-agy-task3048-20261107-seat786-isolated/outside/file-tool-sentinel",
+      "status": "unknown",
+      "before": null,
+      "after": null
+    },
+    {
+      "check": "C1",
+      "path": "/home/joe/.aida/conformance-agy-task3048-20261107-seat786-isolated/workspace/escape/file-tool-sentinel",
+      "status": "unknown",
+      "before": null,
+      "after": null
+    },
+    {
+      "check": "C2",
+      "path": "/home/joe/.aida/conformance-agy-task3048-20261107-seat786-isolated/repository/.git/file-tool-sentinel",
+      "status": "unknown",
+      "before": null,
+      "after": null
+    },
+    {
+      "check": "C2",
+      "path": "/home/joe/.aida/conformance-agy-task3048-20261107-seat786-isolated/store/objects/file-tool-sentinel",
+      "status": "unknown",
+      "before": null,
+      "after": null
+    }
+  ],
+  "all_tools": {
+    "status": "unknown",
+    "reason": "Prompt prohibition is not disabled-tool attestation; file/edit/browser/MCP/delegated paths unverified"
+  },
+  "whole_lane_pass": false,
+  "production_launcher_credit": false,
+  "unsupported_reason": "agy native sandbox configuration: workspace write_file glob is unsupported",
+  "agy_posture": "aida outer-only (native_layer=none); applied ContainmentReceipt required"
+}

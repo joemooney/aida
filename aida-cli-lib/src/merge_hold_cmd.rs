@@ -1,7 +1,12 @@
 //! `aida merge-hold`/`merge-lock` handlers and stale-hold partitioning (STORY-1488 slice 1)
 // trace:STORY-1488 | ai:claude
 
-use crate::*;
+use crate::{
+    all_requirement_summaries, collect_open_prs, current_user_id, events, find_main_worktree_root,
+    find_project_root, forge, leases, merge_hold, merge_lock, network_retry, pr_claim_surface,
+    pr_is_merged_with_sink, print_merge_hold_no_forge, spec_status, Result,
+};
+use colored::Colorize;
 
 // trace:STORY-1728 | ai:claude
 #[path = "merge_hold_cmd_args.rs"]
@@ -31,6 +36,7 @@ pub(crate) fn slugify(s: &str) -> String {
 /// don't use git_ops::is_git_repo here because we need the *path*, not
 /// just a yes/no.
 // trace:STORY-1171 | ai:claude
+// trace:TASK-3364 | ai:codex
 pub(crate) fn handle_merge_lock_status(json: bool) -> Result<()> {
     let root = find_project_root()?;
     let leases = merge_lock::status(&root);
@@ -39,17 +45,22 @@ pub(crate) fn handle_merge_lock_status(json: bool) -> Result<()> {
         .map(|d| d.as_secs())
         .unwrap_or(0);
     if json {
-        let items: Vec<String> = leases
+        let items: Vec<_> = leases
             .iter()
             .map(|(b, h)| {
-                let pr = h.pr.map(|p| p.to_string()).unwrap_or_else(|| "null".to_string());
-                format!(
-                    "{{\"branch\":{b:?},\"pr\":{pr},\"host\":{:?},\"pid\":{},\"acquired_at\":{},\"age_secs\":{},\"note\":{:?}}}",
-                    h.host, h.pid, h.acquired_at, now.saturating_sub(h.acquired_at), h.note
-                )
+                let path = merge_lock::lock_path(&root, b);
+                let mut item = merge_lock::inspect_file(&path);
+                item["branch"] = b.clone().into();
+                item["pr"] = h.pr.into();
+                item["host"] = h.host.clone().into();
+                item["pid"] = h.pid.into();
+                item["acquired_at"] = h.acquired_at.into();
+                item["age_secs"] = now.saturating_sub(h.acquired_at).into();
+                item["note"] = h.note.clone().into();
+                item
             })
             .collect();
-        println!("{{\"merge_locks\":[{}]}}", items.join(","));
+        println!("{}", serde_json::json!({"merge_locks": items}));
         return Ok(());
     }
     if leases.is_empty() {
@@ -61,6 +72,8 @@ pub(crate) fn handle_merge_lock_status(json: bool) -> Result<()> {
         let pr =
             h.pr.map(|p| p.to_string())
                 .unwrap_or_else(|| "-".to_string());
+        let path = merge_lock::lock_path(&root, &branch);
+        let (verdict, reason) = merge_lock::diagnostic(&h);
         println!(
             "  {branch}  pr={pr}  host={}  pid={}  age={}s  {}",
             h.host,
@@ -68,6 +81,18 @@ pub(crate) fn handle_merge_lock_status(json: bool) -> Result<()> {
             now.saturating_sub(h.acquired_at),
             h.note
         );
+        let detail = if reason.is_empty() {
+            verdict.clone()
+        } else {
+            format!("{verdict}({reason})")
+        };
+        println!(
+            "    holder_verdict={detail}; lease={}",
+            merge_lock::stale_reason(&h, "").unwrap_or_else(|| "retained".into())
+        );
+        if verdict != "Alive" {
+            println!("    repair: {}", merge_lock::repair_hint(&path));
+        }
     }
     Ok(())
 }
@@ -178,7 +203,7 @@ struct ClearTail<'a> {
 /// The forge half of `aida merge-hold clear N`, after the clearance is
 /// recorded and the marker removed. Returns the lines to print. A label that
 /// could not be dropped is never reported as dropped: the hold label keeps
-/// merge-hold-gate failing, so that is an error (non-zero exit) naming the
+/// merge-hold-gate blocking, so that is an error (non-zero exit) naming the
 /// retry. The forge calls and the release event are injected so each branch
 /// is testable.
 // trace:TASK-1951 trace:TASK-2152 | ai:claude
@@ -214,7 +239,7 @@ fn finish_clear(
         }
         if let Err(err) = &unlabel {
             anyhow::bail!(
-                "Removed the merge-hold marker on PR #{pr} and recorded the clearance, but the `aida:merge-hold` label could not be dropped ({err}); merge-hold-gate keeps failing until it is. Re-run `aida merge-hold clear {pr}` when the forge is reachable, or drop the label by hand."
+                "Removed the merge-hold marker on PR #{pr} and recorded the clearance, but the `aida:merge-hold` label could not be dropped ({err}); merge-hold-gate keeps blocking until it is. Re-run `aida merge-hold clear {pr}` when the forge is reachable, or drop the label by hand."
             );
         }
         lines.push(format!(
@@ -1278,6 +1303,13 @@ pub(crate) struct MergeLockArgs {
     /// Machine-readable JSON output.
     #[clap(long)]
     pub json: bool,
+    /// Inspect one lease with the shared judge (read-only; for shell consumers).
+    // trace:TASK-3364 | ai:codex
+    #[clap(long, conflicts_with = "migrate_legacy")]
+    pub check_file: Option<std::path::PathBuf>,
+    /// Explicitly arm a boot-clock deadline on complete pre-upgrade records once.
+    #[clap(long)]
+    pub migrate_legacy: bool,
 }
 
 // `aida merge-lock` shows active branch merge-leases (STORY-1171). Read-only
@@ -1285,27 +1317,33 @@ pub(crate) struct MergeLockArgs {
 // `aida ps`. trace:STORY-1171 | ai:claude
 fn run_merge_lock(
     matches: &clap::ArgMatches,
-    _ctx: &crate::command_registry::DispatchCtx,
+    _ctx: &crate::cmdkit::DispatchCtx,
 ) -> anyhow::Result<()> {
     let args = <MergeLockArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
-    let MergeLockArgs { json } = &args;
-    return handle_merge_lock_status(*json);
+    if let Some(path) = &args.check_file {
+        println!("{}", merge_lock::inspect_file(path));
+        return Ok(());
+    }
+    if args.migrate_legacy {
+        let changed = merge_lock::migrate_legacy(&find_project_root()?)?;
+        eprintln!("Migrated {changed} merge-lease deadline(s); no legacy process was rebound.");
+    }
+    handle_merge_lock_status(args.json)
 }
 
 // trace:STORY-1728 | ai:claude
-pub(crate) static MERGE_LOCK: crate::command_registry::CommandReg =
-    crate::command_registry::CommandReg {
-        name: "merge-lock",
-        help_after: "ps",
-        command: <MergeLockArgs as clap::CommandFactory>::command,
-        policy: |_| crate::command_registry::CmdPolicy {
-            stakeholder: crate::stakeholder_role::StakeholderAction::Write,
-            per_write_auto_push: false,
-            skip_role_restore_prompt: false,
-            team_identity_write: false,
-        },
-        run: crate::command_registry::Handler::Early(run_merge_lock),
-    };
+pub(crate) static MERGE_LOCK: crate::cmdkit::CommandReg = crate::cmdkit::CommandReg {
+    name: "merge-lock",
+    help_after: "ps",
+    command: <MergeLockArgs as clap::CommandFactory>::command,
+    policy: |_| crate::cmdkit::CmdPolicy {
+        stakeholder: crate::stakeholder_role::StakeholderAction::Write,
+        per_write_auto_push: false,
+        skip_role_restore_prompt: false,
+        team_identity_write: false,
+    },
+    run: crate::cmdkit::Handler::Early(run_merge_lock),
+};
 
 /// Inspect and clear supervised merge-hold markers (`.aida/merge-holds/`).
 ///
@@ -1330,7 +1368,7 @@ pub(crate) struct MergeHoldArgs {
 // trace:TASK-161 | ai:claude
 fn run_merge_hold(
     matches: &clap::ArgMatches,
-    _ctx: &crate::command_registry::DispatchCtx,
+    _ctx: &crate::cmdkit::DispatchCtx,
 ) -> anyhow::Result<()> {
     let args = <MergeHoldArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
     let MergeHoldArgs { action } = &args;
@@ -1338,19 +1376,18 @@ fn run_merge_hold(
 }
 
 // trace:STORY-1728 | ai:claude
-pub(crate) static MERGE_HOLD: crate::command_registry::CommandReg =
-    crate::command_registry::CommandReg {
-        name: "merge-hold",
-        help_after: "merge-lock",
-        command: <MergeHoldArgs as clap::CommandFactory>::command,
-        policy: |_| crate::command_registry::CmdPolicy {
-            stakeholder: crate::stakeholder_role::StakeholderAction::Write,
-            per_write_auto_push: false,
-            skip_role_restore_prompt: false,
-            team_identity_write: false,
-        },
-        run: crate::command_registry::Handler::Early(run_merge_hold),
-    };
+pub(crate) static MERGE_HOLD: crate::cmdkit::CommandReg = crate::cmdkit::CommandReg {
+    name: "merge-hold",
+    help_after: "merge-lock",
+    command: <MergeHoldArgs as clap::CommandFactory>::command,
+    policy: |_| crate::cmdkit::CmdPolicy {
+        stakeholder: crate::stakeholder_role::StakeholderAction::Write,
+        per_write_auto_push: false,
+        skip_role_restore_prompt: false,
+        team_identity_write: false,
+    },
+    run: crate::cmdkit::Handler::Early(run_merge_hold),
+};
 
 // trace:TASK-1951 | ai:claude
 #[cfg(test)]

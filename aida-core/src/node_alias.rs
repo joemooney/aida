@@ -903,7 +903,8 @@ pub fn mutate_cas(
     for attempt in 0..MAX_RETRIES {
         let committed = crate::db::with_store_write_lock(store_root, || {
             if attempt > 0 && !local_only {
-                git_ops::pull_rebase(store_root, "origin", &branch)?;
+                // trace:BUG-2490 | ai:codex
+                git_ops::pull_rebase_store_retry(store_root, "origin", &branch)?;
             }
             let mut map = NodeAliasMap::load_strict(store_root)?;
             let before = map.clone();

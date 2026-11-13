@@ -1,22 +1,49 @@
-//! Declared launch resources. Sccache is always off. PR-B adds fail-closed
+//! Declared launch resources. Agent seats keep sccache off; lane test jobs
+//! may declare a separate cache and Unix socket. PR-B adds fail-closed
 //! slot, target and generated-settings validation; backend renderers in the
 //! following slice consume these checks. No helper creates or widens a slot.
 // trace:STORY-2326 | ai:claude
+// trace:STORY-2538 | ai:codex
 
+use aida_core::exec_context::ExecContext;
 use std::path::PathBuf;
 
-/// The compile cache a lane may use. There is one value: off.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// The compile cache declaration; lane caches never select the operator server.
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum Sccache {
     Off,
+    // trace:STORY-2641 | ai:codex
+    Lane {
+        wrapper: String,
+        cache: PathBuf,
+        socket: PathBuf,
+    },
 }
 
 impl Sccache {
     /// The `RUSTC_WRAPPER` value that enforces it.
-    pub(crate) fn rustc_wrapper(self) -> &'static str {
+    pub(crate) fn rustc_wrapper(&self) -> &str {
         match self {
             Self::Off => "",
+            Self::Lane { wrapper, .. } => wrapper,
         }
+    }
+
+    // trace:STORY-2641 | ai:codex
+    pub(crate) fn env(&self) -> Vec<(&'static str, std::ffi::OsString)> {
+        let mut env = vec![("RUSTC_WRAPPER", self.rustc_wrapper().into())];
+        if let Self::Lane { cache, socket, .. } = self {
+            env.extend([
+                ("SCCACHE_DIR", cache.as_os_str().to_owned()),
+                // Ignore operator remote backends; lane jobs use only their disk cache.
+                ("SCCACHE_CONF", "/dev/null".into()),
+                ("SCCACHE_SERVER_UDS", socket.as_os_str().to_owned()),
+                // Unsupported UDS clients must never fall back to the operator's TCP server.
+                ("SCCACHE_SERVER_PORT", "0".into()),
+                ("SCCACHE_IDLE_TIMEOUT", "60".into()),
+            ]);
+        }
+        env
     }
 }
 
@@ -41,24 +68,66 @@ pub(crate) struct SandboxResources {
 }
 
 impl SandboxResources {
-    /// The cargo env every renderer applies: the cache is off and builds land
-    /// in the seat's own target directory.
-    pub(crate) fn cargo_env(&self) -> [(&'static str, std::ffi::OsString); 2] {
-        [
-            ("RUSTC_WRAPPER", self.cargo.sccache.rustc_wrapper().into()),
-            (
-                "CARGO_TARGET_DIR",
-                self.cargo.target_dir.clone().into_os_string(),
-            ),
-        ]
+    /// Resolve the seat declaration from host evidence, never forwarded build env.
+    // trace:STORY-2641 | ai:codex
+    pub(crate) fn for_seat(
+        exec: &ExecContext,
+        host: Option<&std::path::Path>,
+        seat: &std::path::Path,
+    ) -> anyhow::Result<Option<Self>> {
+        let Some(host) = host else {
+            return Ok(None);
+        };
+        let Some(clone) = crate::seat_clone::host_recorded_clone(host, seat) else {
+            return Ok(None);
+        };
+        // Fresh/non-Rust clones and targets removed by host cargo clean have
+        // no build resources to override. Their ordinary launches still work.
+        let Some(target) = clone.cargo_target_dir.as_deref() else {
+            return Ok(None);
+        };
+        Ok(Some(Self {
+            write_roots: crate::seat_clone::seat_extra_write_paths(&clone),
+            store_paths: vec![],
+            deny: vec![],
+            cargo: CargoResources::resolve(exec, host, seat, target)?,
+        }))
+    }
+
+    /// Project declared cargo overrides through the same complete environment
+    /// policy as vendor launches, rather than ambient inheritance.
+    // trace:STORY-2326 | ai:codex
+    pub(crate) fn child_env(
+        &self,
+        policy: &aida_core::launch_policy::EnvPolicy,
+        parent: &aida_core::exec_context::Environment,
+    ) -> Result<aida_core::launch_policy::ChildEnv, aida_core::launch_policy::EnvPolicyRefusal>
+    {
+        policy.project(
+            parent,
+            self.cargo_env()
+                .into_iter()
+                .map(|(key, value)| (key.into(), Some(value))),
+        )
+    }
+
+    /// Every renderer applies the declared cache and seat-private target.
+    // trace:STORY-2641 | ai:codex
+    pub(crate) fn cargo_env(&self) -> Vec<(&'static str, std::ffi::OsString)> {
+        let mut env = self.cargo.sccache.env();
+        env.push((
+            "CARGO_TARGET_DIR",
+            self.cargo.target_dir.clone().into_os_string(),
+        ));
+        env
     }
 }
 
 /// Resolve only an existing, private slot directory. Never create it or
 /// broaden its permissions. Symlinks are refused rather than followed.
 // trace:STORY-2326 | ai:codex
-pub(crate) fn cargo_slot_dir() -> Option<PathBuf> {
-    let runtime = std::env::var_os("XDG_RUNTIME_DIR")?;
+pub(crate) fn cargo_slot_dir(exec: &ExecContext) -> Option<PathBuf> {
+    let runtime = exec.environment().get("XDG_RUNTIME_DIR")?;
     let uid = unsafe { libc::geteuid() };
     checked_slot_dir(
         PathBuf::from(runtime).join(format!("cargo-slots-{uid}")),
@@ -79,6 +148,7 @@ impl CargoResources {
     /// The caller supplies an existing target (no mkdir here).
     // trace:STORY-2326 | ai:codex
     pub(crate) fn resolve(
+        exec: &ExecContext,
         authority_root: &std::path::Path,
         seat_root: &std::path::Path,
         target_dir: &std::path::Path,
@@ -102,7 +172,7 @@ impl CargoResources {
         );
         Ok(Self {
             target_dir: target,
-            slot_dir: cargo_slot_dir(),
+            slot_dir: cargo_slot_dir(exec),
             sccache: Sccache::Off,
         })
     }
@@ -159,6 +229,34 @@ mod story_2326_resources_tests {
     use super::*;
     use std::os::unix::fs::{symlink, PermissionsExt};
 
+    fn fixture(runtime: Option<&std::path::Path>) -> ExecContext {
+        use aida_core::exec_context::{Environment, SystemClock, ToolPaths};
+        ExecContext::new(
+            Environment::from_pairs(
+                runtime.map(|path| ("XDG_RUNTIME_DIR".into(), path.as_os_str().to_owned())),
+            ),
+            None,
+            "/seat".into(),
+            "/host".into(),
+            ToolPaths::default(),
+            std::sync::Arc::new(SystemClock::default()),
+        )
+    }
+
+    #[test]
+    fn runtime_slot_uses_only_explicit_context() {
+        let tmp = tempfile::tempdir().unwrap();
+        let path = tmp
+            .path()
+            .join(format!("cargo-slots-{}", unsafe { libc::geteuid() }));
+        let exec = fixture(Some(tmp.path()));
+        assert_eq!(cargo_slot_dir(&exec), None);
+        std::fs::create_dir(&path).unwrap();
+        std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o700)).unwrap();
+        assert_eq!(cargo_slot_dir(&exec), Some(path));
+        assert_eq!(cargo_slot_dir(&fixture(None)), None);
+    }
+
     #[test]
     fn slot_directory_requires_existing_owned_mode_0700() {
         let tmp = tempfile::tempdir().unwrap();
@@ -185,12 +283,16 @@ mod story_2326_resources_tests {
         for root in [&host, &seat, &other] {
             std::fs::create_dir_all(root.join("target")).unwrap();
         }
-        assert!(CargoResources::resolve(&host, &seat, &seat.join("target")).is_ok());
+        assert!(
+            CargoResources::resolve(&fixture(None), &host, &seat, &seat.join("target")).is_ok()
+        );
         for target in [host.join("target"), other.join("target"), seat.clone()] {
-            assert!(CargoResources::resolve(&host, &seat, &target).is_err());
+            assert!(CargoResources::resolve(&fixture(None), &host, &seat, &target).is_err());
         }
         symlink(other.join("target"), seat.join("alias")).unwrap();
-        assert!(CargoResources::resolve(&host, &seat, &seat.join("alias")).is_err());
+        assert!(
+            CargoResources::resolve(&fixture(None), &host, &seat, &seat.join("alias")).is_err()
+        );
     }
 
     #[test]

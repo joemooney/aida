@@ -38,9 +38,9 @@ fn fixture(agents_toml: Option<&str>) -> Fixture {
     let capture = tmp.path().join("capture");
     crate::test_exec::write_executable(
         &fake,
-        concat!(
-            "#!/bin/sh\n",
-            "printf '%s\\n' \"$AIDA_CONTAINED\" \"$@\" > \"$AIDA_TEST_CAPTURE\"\n",
+        &format!(
+            "#!/bin/sh\nprintf '%s\\n' \"$AIDA_CONTAINED\" \"$@\" > '{}'\n",
+            capture.display()
         ),
     );
     Fixture {

@@ -6,13 +6,18 @@
 //! when the last slice lands. A new site, in any crate, fails here.
 // trace:STORY-2326 | ai:claude
 
+// trace:TASK-3429 | ai:codex
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
-const CRATES: &[&str] = &["aida-core", "aida-cli-lib", "aida-tui"];
+const CRATES: &[&str] = &["aida-mcp", "aida-core", "aida-cli-lib", "aida-tui"];
 
 /// Modules that are the launcher itself.
-const LAUNCHER: &[&str] = &["aida-cli-lib/src/launch/", "aida-core/src/launch_policy.rs"];
+const LAUNCHER: &[&str] = &[
+    "aida-cli-lib/src/launch/",
+    "aida-cli-lib/src/vendors/profile.rs",
+    "aida-core/src/launch_policy.rs",
+];
 
 /// (file, markers, why it is not converted yet). Exact counts; the total
 /// may only fall (see [`CEILING`]).
@@ -26,7 +31,7 @@ const LEDGER: &[(&str, usize, &str)] = &[
     ("aida-cli-lib/src/agent_launch.rs", 6, "slice C: Codex grant/finalize writes; slice D: the harness version probe"),
     ("aida-cli-lib/src/agent_registry.rs", 2, "not a vendor child: terminal title restore and probe"),
     ("aida-cli-lib/src/claude_agents.rs", 1, "slice D: vendor query (agents list)"),
-    ("aida-cli-lib/src/codex_tool_env.rs", 2, "Codex probe and cfg(test) tool shell constructor; finalization moved into launch/profile.rs"),
+    ("aida-cli-lib/src/codex_tool_env.rs", 2, "Codex probe and cfg(test) tool shell constructor; finalization moved into vendors/profile.rs"),
     ("aida-cli-lib/src/compete_cmd.rs", 2, "slice C: remaining compete grant/finalize markers (vendor construction migrated in B)"),
     ("aida-cli-lib/src/containment/supervisor.rs", 3, "STORY-2238: the containment supervisor, a permitted constructor module"),
     ("aida-cli-lib/src/criteria_red_run.rs", 1, "generic helper: runs a criteria command"),
@@ -34,7 +39,7 @@ const LEDGER: &[(&str, usize, &str)] = &[
     ("aida-cli-lib/src/deputy_shell/runner.rs", 3, "not a vendor child: STORY-2338's script deputy runs bash under the operator's grant (the grant write), with a pre_exec process group (from main)"),
     ("aida-cli-lib/src/dev_build.rs", 2, "not a vendor child: the built aida binary smoke test"),
     ("aida-cli-lib/src/dev_cmd.rs", 1, "not a vendor child: resolved dev tool"),
-    ("aida-cli-lib/src/doctor_cmd.rs", 1, "slice D: vendor query (codex version)"),
+    ("aida-cli-lib/src/scaffold_cmd.rs", 1, "slice D: vendor query (codex version)"),
     ("aida-cli-lib/src/external_cmd.rs", 1, "not a vendor child: exec of an external aida-* subcommand"),
     ("aida-cli-lib/src/forge.rs", 1, "not a vendor child: forge CLI (gh/glab)"),
     ("aida-cli-lib/src/gate/rework_hold_release.rs", 1, "not a vendor child: forge CLI"),
@@ -45,15 +50,15 @@ const LEDGER: &[(&str, usize, &str)] = &[
     ("aida-cli-lib/src/kernel.rs", 2, "not a vendor child: gh binary probe"),
     ("aida-cli-lib/src/lane_env.rs", 1, "the in-process lane seat correction (Q2), not a spawn"),
     ("aida-cli-lib/src/lane_job.rs", 1, "not a vendor child: BUG-2383's sandboxed lane job runner (a cargo job, from main)"),
-    ("aida-cli-lib/src/lib_part5.rs", 1, "slice D: vendor adapter command"),
+    ("aida-cli-lib/src/review_commands.rs", 1, "slice D: vendor adapter command"),
     ("aida-cli-lib/src/mail_wake.rs", 1, "not a vendor child: the mail-wake helper binary"),
     ("aida-cli-lib/src/mailbox_wake_run.rs", 1, "slice C: Codex thread submit"),
     ("aida-cli-lib/src/mandate_drive.rs", 1, "generic helper: scrubbed_command"),
     ("aida-cli-lib/src/manual.rs", 1, "not a vendor child: pager"),
-    ("aida-cli-lib/src/mcp.rs", 1, "not a vendor child: exec of the aida MCP server"),
+    ("aida-mcp/src/mcp.rs", 1, "not a vendor child: exec of the aida MCP server"),
     ("aida-cli-lib/src/merge_hold.rs", 3, "not a vendor child: forge CLI"),
     ("aida-cli-lib/src/pane_host.rs", 1, "not a vendor child: pane host argv"),
-    ("aida-cli-lib/src/phase_driver.rs", 5, "slice C: phase advisor and auto-punt control child"),
+    ("aida-cli-lib/src/phase_driver.rs", 4, "slice C: phase advisor and auto-punt control child"),
     ("aida-cli-lib/src/phase_driver_trait.rs", 3, "slice C: CI-fix launch"),
     ("aida-cli-lib/src/pr_cmd.rs", 1, "not a vendor child: pre_exec process group"),
     ("aida-cli-lib/src/regen/score.rs", 2, "not a vendor child: scoring sandbox (argv, pre_exec)"),
@@ -220,6 +225,9 @@ const NON_VENDOR_SPELLINGS: &[&str] = &[
     "aida",
     "aida_bin",
     "bwrap",
+    // Injected Cargo executable in the release installer; never a vendor.
+    // trace:STORY-2704 | ai:codex
+    "cargo",
     "dev_bin",
     "exe",
     "fixture.gh",
@@ -246,6 +254,9 @@ const NON_VENDOR_SPELLINGS: &[&str] = &[
     "pr_ship_post_merge_aida_exe",
     "resolve_aida_exe",
     "self.aida_exe",
+    // Emergency-land's gh/glab, resolved only by crate::resolve_forge_cli.
+    // trace:TASK-3788 | ai:codex
+    "self.forge_cli",
     "std::env::current_exe",
 ];
 
@@ -287,7 +298,15 @@ fn vendor_program_arg(arg: &str) -> bool {
 fn calls<'a>(normalized: &'a str, name: &'a str) -> impl Iterator<Item = &'a str> + 'a {
     normalized.match_indices(name).filter_map(move |(at, _)| {
         let before = normalized[..at].chars().next_back();
-        let starts = !before.is_some_and(|c| c.is_alphanumeric() || c == '_');
+        // A fully qualified clap constructor builds CLI metadata, not a child.
+        // Keep unqualified and std/tokio constructors conservative.
+        // trace:STORY-2704 | ai:codex
+        let qualifier = normalized[..at]
+            .rsplit(|c: char| !(c.is_alphanumeric() || c == '_' || c == ':'))
+            .next()
+            .unwrap_or_default();
+        let clap = name == "Command::new(" && matches!(qualifier, "clap::" | "::clap::");
+        let starts = !clap && !before.is_some_and(|c| c.is_alphanumeric() || c == '_');
         starts.then(|| &normalized[at + name.len()..])
     })
 }
@@ -444,9 +463,65 @@ fn scanner_catches_every_mutant_spelling() {
     }
 }
 
+// trace:STORY-2704 | ai:codex
+#[test]
+fn scanner_distinguishes_clap_and_injected_cargo_from_vendor_launches() {
+    assert_eq!(markers("fn f() { clap::Command::new(entry.name); }"), 0);
+    assert_eq!(markers("fn f() { std::process::Command::new(cargo); }"), 0);
+    assert_eq!(markers("fn f() { fakeclap::Command::new(program); }"), 1);
+    assert_eq!(
+        markers("fn f() { vendor::clap::Command::new(program); }"),
+        1
+    );
+    assert_eq!(
+        markers(
+            "fn f() { clap::Command::new(entry.name); std::process::Command::new(entry.name); }"
+        ),
+        1
+    );
+    assert_eq!(markers("fn f() { clap::Command::new(entry.name); tokio::process::Command::new(vendor_cargo); }"), 1);
+}
+
+// Match identifiers as well as qualified calls so imports (including grouped
+// imports and aliases) cannot hide the backend behind a bare call.
+// trace:STORY-2326 | ai:codex
+fn has_legacy_child_issuer(src: &str) -> bool {
+    let backend = src.replace("crate::launch::issue_launch_child_with_delegation", "");
+    backend
+        .split(|c: char| !c.is_ascii_alphanumeric() && c != '_')
+        .any(|word| {
+            matches!(
+                word,
+                "issue_launch_child_with_delegation" | "issue_child_from" | "issue_child"
+            )
+        })
+}
+
+#[test]
+fn story_2326_grant_owner_mutants() {
+    for mutant in [
+        "seat_authority::issue_launch_child_with_delegation(root)",
+        "use crate::gate::seat_authority::issue_launch_child_with_delegation; issue_launch_child_with_delegation(root)",
+        "use crate::gate::seat_authority::issue_launch_child_with_delegation as mint; mint(root)",
+        "use crate::gate::seat_authority::{issue_launch_child_with_delegation as mint}; mint(root)",
+        "use crate::gate::seat_authority::issue_child_from as mint; mint(root)",
+        "seat_authority::issue_child(root)",
+        "use crate::gate::seat_authority::issue_child; issue_child(root)",
+        "use crate::gate::seat_authority::issue_child as mint; mint(root)",
+        "use crate::gate::seat_authority::{issue_child as mint}; mint(root)",
+    ] {
+        assert!(has_legacy_child_issuer(mutant), "escaped: {mutant}");
+    }
+    for allowed in [
+        "crate::launch::issue_launch_child(root)",
+        "crate::launch::issue_launch_child_with_delegation(root)",
+    ] {
+        assert!(!has_legacy_child_issuer(allowed), "valid facade: {allowed}");
+    }
+}
+
 /// Finalization and grant issuance remain owned by the launch layer even for
-/// the inventoried builders awaiting conversion. A new direct backend caller
-/// cannot bypass those entry points unnoticed.
+/// the inventoried builders awaiting conversion.
 // trace:STORY-2326 | ai:codex
 #[test]
 fn story_2326_profile_and_grant_issuance_have_one_owner() {
@@ -459,19 +534,19 @@ fn story_2326_profile_and_grant_issuance_have_one_owner() {
             continue;
         }
         let src = production(&std::fs::read_to_string(&file).unwrap());
-        if rel != "launch/profile.rs" {
+        if rel != "vendors/profile.rs" {
             assert!(
                 !src.contains("fn prepare_launch("),
                 "private profile finalizer escaped into {rel}"
             );
         }
-        if rel != "launch/grant.rs" && rel != "gate/seat_authority.rs" {
+        if !rel.starts_with("launch/") && rel != "gate/seat_authority.rs" {
             assert!(
                 !src.contains("issue_child_for("),
                 "direct grant backend caller in {rel}"
             );
             assert!(
-                !src.contains("seat_authority::issue_child("),
+                !has_legacy_child_issuer(&src),
                 "legacy child issuer in {rel}"
             );
         }
@@ -480,7 +555,7 @@ fn story_2326_profile_and_grant_issuance_have_one_owner() {
             "legacy launch issuer in {rel}"
         );
     }
-    let profile = std::fs::read_to_string(root.join("launch/profile.rs")).unwrap();
+    let profile = std::fs::read_to_string(root.join("vendors/profile.rs")).unwrap();
     assert!(profile.contains("fn prepare_launch("));
     assert!(!profile.contains("pub(crate) fn prepare_launch("));
 }
@@ -526,4 +601,36 @@ fn story_2326_control_env_users_are_checked_aida_constructors() {
         ]),
         "control_env must only run inside checked AIDA control constructors"
     );
+}
+
+/// Inventory every literal production AIDA name, conservatively including
+/// writes as well as reads. New inputs require an explicit disposition.
+// trace:STORY-2326 | ai:codex
+#[test]
+fn story_2326_ambient_aida_inputs_have_a_disposition() {
+    use aida_core::launch_policy::{AMBIENT_AIDA_KEYS, DROPPED_AIDA_KEYS, OWNED_KEYS};
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
+    let names = regex::Regex::new(r#""(AIDA_[A-Z][A-Z0-9_]+)""#).unwrap();
+    for (path, source) in crate::seat_clone::clone_git_ratchet_tests::workspace_sources(root) {
+        let src = production(&source);
+        for captures in names.captures_iter(&src) {
+            let key = &captures[1];
+            assert!(
+                OWNED_KEYS.iter().any(|(name, _)| *name == key)
+                    || AMBIENT_AIDA_KEYS.contains(&key)
+                    || DROPPED_AIDA_KEYS.contains(&key),
+                "unclassified production input {key} in {path}"
+            );
+        }
+    }
+    for key in AMBIENT_AIDA_KEYS {
+        assert!(
+            !key.starts_with("AIDA_TEST_")
+                && !key.starts_with("AIDA_REQUIRE_")
+                && !key.contains("TOKEN")
+                && !key.contains("API_KEY")
+                && *key != "AIDA_AGENT_CMD"
+        );
+        assert!(!DROPPED_AIDA_KEYS.contains(key));
+    }
 }

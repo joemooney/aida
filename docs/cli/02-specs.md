@@ -230,17 +230,9 @@ spec doesn't uniquely identify which comment you mean. Run `aida comment list
 - you're wiring CI provenance gates — `trace gate`, `trace coverage`, and `trace check` are the three checks.
 - you suspect *existing* trace comments have gone stale (a spec was deleted, renumbered by the merge-gate, or rejected) — `trace check` scans the inline `// trace:SPEC-ID` markers already in the tree, resolves each against the live graph, and flags the dead links so a rotted trace goes red like a failing type.
 
-**Don't reach for it when** — you just want to *see* what code exists for a spec — `aida show <ID>` already renders the git linkage (commits/files/branch/PR) without you running `trace list`. And don't conflate the two CI checks: `gate` asks "do the cited spec-ids exist and aren't rejected?"; `coverage` asks "is the changed code actually traced?" — different failure modes.
+**Don't reach for it when** — you just want to *see* what code exists for a spec — `aida show <ID> --full` renders the git linkage (commits/files/branch/PR) without you running `trace list`. And don't conflate the two CI checks: `gate` asks "do the cited spec-ids exist and aren't rejected?"; `coverage` asks "is the changed code actually traced?" — different failure modes.
 
-`show` reads the requested spec from canonical YAML without opening the ID
-allocator. Cache-refresh hints use a nonblocking lock on this path; contention
-serves the committed snapshot with a `deferred` stale label. Optional Git linkage
-has a shared 1.2-second deadline and reports partial or unknown evidence when it
-expires. Usage events split backend opening into `open.backend`, `open.location`
-and `open.cache` sub-spans for diagnosing remaining latency.
-<!-- trace:BUG-2466 | ai:codex -->
-
-**How `aida show` keeps the no-commits case fast.** Finding the commits that reference a spec means searching the message of every commit reachable from every ref, and proving that *none* do is the expensive case. `aida show` remembers, per spec and per worktree, which commits have already been checked, in a small local cache under the repository's git directory (`aida-cache/show-negative-v1`; never in the store and never tracked). A spec's first `show` runs the full search as before and, if it finds nothing, notes that. The next `show` runs the full search once more, this time recording exactly which commits it covered. Later shows only check commits that are new since then, so a spec with no commits answers without searching history again. A spec that has commits always runs the full search, with no extra work in front of it. If the previous answer cannot be reused — refs moved while it was being checked, the history is shallow or uses grafts or replace refs, the git configuration changed, or the cache is missing, locked by another process or corrupt — `show` runs the full search, or reports the commit list as incomplete (shipped state unknown) while the check finishes over the next few shows. It never reports "no commits" without that proof. Deleting the cache directory only costs speed. The `files` part of linkage (`trace:` comments in the source tree) has a time limit covering the whole walk, including listing directories; a symlink loop, a link that points outside the project, or an unreadable directory marks the file list incomplete instead of silently skipping it. <!-- trace:BUG-2221 | ai:claude -->
+**How explicit show linkage keeps the no-commits case fast.** Finding the commits that reference a spec means searching the message of every commit reachable from every ref, and proving that *none* do is the expensive case. `aida show` remembers, per spec and per worktree, which commits have already been checked, in a small local cache under the repository's git directory (`aida-cache/show-negative-v1`; never in the store and never tracked). A spec's first explicit linkage request runs the full search and, if it finds nothing, notes that. The next explicit linkage request runs the full search once more, this time recording exactly which commits it covered. Later linkage requests only check commits that are new since then, so a spec with no commits answers without searching history again. A spec that has commits always runs the full search, with no extra work in front of it. If the previous answer cannot be reused — refs moved while it was being checked, the history is shallow or uses grafts or replace refs, the git configuration changed, or the cache is missing, locked by another process or corrupt — `show` runs the full search, or reports the commit list as incomplete (shipped state unknown) while the check finishes over the next few shows. It never reports "no commits" without that proof. Deleting the cache directory only costs speed. The `files` part of linkage (`trace:` comments in the source tree) has a time limit covering the whole walk, including listing directories; a symlink loop, a link that points outside the project, or an unreadable directory marks the file list incomplete instead of silently skipping it. <!-- trace:BUG-2221 | ai:claude -->
 
 **Linked documentation in `aida show`.** The human view lists a **Documentation** section when any Doc entry is linked to the spec, whether the spec references the Doc or the Doc was filed about the spec with `aida doc add --about`; archived, Rejected and Superseded Docs are omitted. Each entry shows its ID, title, audience, scenario and tags, how it is linked, and the `aida doc show <DOC-ID>` command that prints it. Entries are grouped by authorship as recorded in their tags: `human` marks a human-authored explanation, `generated` or `ai-generated` marks generated prose, and anything else is listed as documentation whose authorship is not recorded. Nothing is written to the spec, and the TOON and JSON output are unchanged. The section is absent when no eligible Doc is linked. <!-- trace:TASK-1471 | ai:claude ai:codex -->
 
@@ -336,7 +328,7 @@ and `open.cache` sub-spans for diagnosing remaining latency.
 
 **Gotchas.** Because defer is a view-flag, a deferred spec keeps its status — a deferred Approved spec is still Approved, just hidden. And like archive, it won't show in default `list` until you `undefer` (or pass `--deferred`/`--all`) — the same "where did my spec go?" surprise, so reach for `--all` when something's missing.
 
-Supplied triggers must use `spec:<spec-id>=completed`, `pr:<number>=merged`, `release:>=<version>`, `date:<YYYY-MM-DD>`, `query:<filters> count<op><n>`, or `manual:<who>`. Free text is refused. A manual condition requires a non-empty `--reason`; the existing product/advisor/operator authority gate still applies to reasoned holds. A bare re-deferral preserves the previous trigger and timestamp. Existing free-text triggers remain readable pending migration. Question answers that park work store typed consequences canonically; prose consequences become `manual:<resolver>` with the original text retained in a comment. An empty or whitespace-only consequence preserves an existing trigger, or defaults to `manual:<resolver>` if none exists, without adding an empty comment. Resolver identities that cannot form a valid manual condition (for example, empty names or names with internal whitespace) use the parseable fallback `manual:operator`; any prose comment retains its original author. In the TUI, blank condition input issues a bare defer, and rejected conditions show the CLI diagnostic in the status line.
+Supplied triggers must use `spec:<spec-id>=completed`, `pr:<number>=merged`, `release:>=<version>`, `date:<YYYY-MM-DD>`, `query:<filters> count<op><n>`, or `manual:<who>`. Free text is refused. A manual condition requires a non-empty `--reason`; the existing product/advisor/operator authority gate still applies to reasoned holds. A bare re-deferral preserves the previous trigger and timestamp. The one-time free-text trigger migration has been applied; any remaining unparseable trigger stays parked for repair. Question answers that park work store typed consequences canonically; prose consequences become `manual:<resolver>` with the original text retained in a comment. An empty or whitespace-only consequence preserves an existing trigger, or defaults to `manual:<resolver>` if none exists, without adding an empty comment. Resolver identities that cannot form a valid manual condition (for example, empty names or names with internal whitespace) use the parseable fallback `manual:operator`; any prose comment retains its original author. In the TUI, blank condition input issues a bare defer, and rejected conditions show the CLI diagnostic in the status line.
 
 **Chains with** — `defer --until` parks it; `undefer` or the hourly `defer resurface` sweep brings it back to the ready set.
 
@@ -345,20 +337,23 @@ Supplied triggers must use `spec:<spec-id>=completed`, `pr:<number>=merged`, `re
 Evaluates typed conditions on deferred/parked specs without changing lifecycle
 status. A met condition clears a plain deferral and records the observation in
 an audit comment. Met operator holds go to `aida human` for a decision and stay
-held. Manual conditions older than 14 days also route to that queue;
+held. Manual conditions on deferrals older than 14 days also route to that queue;
+changing the trigger preserves the original deferral timestamp, so replacing an
+older trigger with a manual condition may route it on the next hourly sweep.
 `--manual-age-days N` changes the threshold. Existing queue rows are not duplicated.
 Removing a queue row without lifting the hold or changing the condition allows
 it to be routed again on the next sweep. Missing timestamps or triggers
-stay parked, and archived specs are skipped. Use `--dry-run` to preview actions
+stay parked. A condition naming an unknown spec ID also stays parked as Unknown;
+store read failures still fail the sweep. Archived specs are skipped. Use `--dry-run` to preview actions
 without writing specs or queues.
 
 Unknown observations (including failed forge/release probes) are reported and
 left parked, with a successful exit. Free-text and unparseable triggers are
 also Unknown and remain unchanged, including invalid typed syntax such as
-`spec:` or `date:bad`; the run reports `N deferrals awaiting typed-condition
-migration` as information. A store containing only these unmigrated triggers
-exits successfully without writing objects or queues. Only real evaluation errors
-(such as a spec condition naming a spec that does not exist) and store/internal errors
+`spec:` or `date:bad`; the run reports `N deferrals with unparseable triggers
+requiring repair` as information. A store containing only these triggers
+exits successfully without writing objects or queues. Unknown spec IDs also stay
+parked successfully. Only real evaluation errors and store/internal errors
 produce a nonzero exit after the remaining specs are checked. Concurrently edited specs
 are retained for a later sweep. This repository registers the sweep hourly as
 the timer-only `defer-resurface` job and routes job failures to the advisor.
@@ -509,9 +504,235 @@ These local commands do not publish. Enrolled intake transport is described
 below; backup-comment recovery remains a separate slice.
 <!-- doc-intent: shaped by STORY-2479 -->
 
-### `aida intent enroll`, `publish`, `pull`, `list`, and `process`
+### Untrusted review returns
 
-Intake transport uses a separately enrolled destination and policy. It works in a
+<!-- trace:STORY-2493 | ai:codex -->
+`aida intent review-return --file input.json` generates an explicit finding or
+pending verdict without discovering a store, identity, logs or local paths.
+Input has exactly `version`, `kind`, `payload`, and an empty `checksum`; generation
+fills the checksum. `validate` and `export` also accept these closed envelopes.
+For example:
+
+```json
+{"version":1,"kind":"finding","payload":{"severity":"major","blocking":true,"title":"Missing error handling","body":"The failure is ignored.","file":"src/lib.rs","line":12},"checksum":""}
+```
+
+Finding severity uses the canonical values `major`, `minor`, `cosmetic`,
+`observation` or `note`. The file must
+be an explicit home-relative path with no empty, dot or parent components,
+backslashes, colons or control characters; the line is a positive 32-bit integer.
+Title/body limits match observations; paths are bounded at 4096 bytes.
+
+A `review-verdict` payload contains exactly `pr` (positive integer), `head_sha`
+(40 lowercase hex characters), `decision` (`approved`, `request-changes`,
+`rejected` or `waiting`), `blocking_findings` (at most 256 unique full lowercase
+SHA-256 digests), and `reviewer_node` (32 lowercase hex characters). Verdict
+publication requires per-writer enrollment: the node must match the enrolled
+producer writer ID. This match labels the source; it does not authenticate a
+reviewer or confer authority. Legacy enrollment still supports findings.
+
+The checksum hashes compact JSON fields `version`, `kind`, `payload`, in that
+order, excluding `checksum`. Finding payload fields hash in the example's order;
+verdict fields hash in the order listed above. Strings are not normalized.
+Unknown, duplicate, missing or mismatched fields refuse. Reads remain bounded
+regular-file reads, and every decoded string field is scanned against explicit
+reviewed deny patterns, including paths, enums, node IDs and digest strings.
+
+Publish with `aida intent publish --file envelope.json --reviewed`; findings
+require work-side operator review before this confirmation. Fixed-field verdicts
+can publish without `--reviewed`. Enrolled policy is
+rechecked before publication and on pull in quarantine. The independent transport
+retains immutable `findings/<digest>.json` and `review-verdicts/<digest>.json`
+paths; work operations never write canonical store refs.
+
+At home, pull and inspect with `intent list`, then explicitly run
+`aida intent process <full-digest> --action create`. Findings become draft tasks
+with canonical review-finding, severity, blocking and digest tags. The description
+retains the explicit home location. Receipts map the full digest and journal
+operation to the home UUID. Retry the same command after a receipt-push failure;
+the journal recovers the existing finding without filing it again. Imported
+findings support `pending` and `create`, not comment or transport dismissal.
+
+Verdicts remain pending data, with no processing action or merge-gate credit.
+Blocking-digest projection and home operator-attested approval are later slices;
+receiving an imported verdict currently neither adds a merge block nor approves
+merge. Existing review and merge gates continue to apply.
+
+### Native per-writer intake (first-round-trip slice)
+
+<!-- trace:STORY-2652 | ai:codex -->
+Opt into independent histories by supplying `enroll --role`. Enrollment without
+`--role` retains the legacy flat transport described below; existing profiles
+are never silently converted. Use separate clones for the producer and processor:
+
+```bash
+# Work clone: publish observations, read only the named processor's receipts.
+aida intent enroll --remote ssh://git@example.org/intake.git --reviewed \
+  --role producer --writer-id aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa \
+  --receipt-writer bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
+# Home clone: read that producer, write only this processor's receipts.
+aida intent enroll --remote ssh://git@example.org/intake.git --reviewed \
+  --role processor --writer-id bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb \
+  --producer-id aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+```
+
+Replace these example IDs with the agreed 32-character lowercase hex identities.
+Without `--writer-id`, enrollment uses the existing WORK binding if present,
+otherwise a new UUID saved only in the clone-local profile; it never acquires a
+store node. Repeating enrollment retains that identity. Remote, deny policy,
+role, identity and branch mappings are pinned; changes require another clone.
+`--producer-id` is required for processors. A producer defaults to its own ID.
+The current slice supports one producer and at most one authorized processor
+per enrollment; processors cannot enroll another processor's receipt branch.
+
+Profile v2 pins `producer_branch` to `refs/heads/aida-feedback-<producer-id>` and
+`receipt_branches` to the explicitly authorized
+`refs/heads/aida-feedback-receipts-<processor-id>`. A producer uses `publish`;
+a processor uses `process`. Both use `pull` then `list --all --json` to see the
+combined validated view. Only observations are admitted to producer histories,
+and only version-1 processing receipts to receipt histories. Each branch has its
+own parentless, linear, immutable history. V2 histories currently receive full
+validation on every read, without the legacy checkpoint optimization. Receipt
+validation is standalone:
+a receipt for an observation not yet fetched is valid audit data, not a reason
+to import an observation or write the store. Listing shows local observations.
+`pull --json` reports receipt digests for absent observations under
+`receipts_for_unknown_observations`; a receipt alone does not manufacture a
+listing row. Envelope JSON and its hash contract are unchanged. Processing retains the operation journal and store
+markers: retry the same command after a failed receipt push, without a second
+requirement or comment write.
+
+This is the approved S1 slice. Enrollment JSON reports `protection: unverified`;
+configure and verify forge writer restrictions independently. IDs, fixed commit
+authors and branch names are labels, not credentials. The protection probe and
+own-branch foreign-write refusal remain S2 work. Receipt v2 store/producer/
+processor identities and richer unknown/unavailable status remain S3 work;
+version-1 receipts must not be treated as cross-store identity evidence. There
+is no global exactly-once guarantee. CI relay remains on explicitly enrolled
+legacy profiles until S4; per-writer profiles refuse CI commands. Ordinary
+workspace sync never publishes either intake family. Keep archived flat intake
+outcomes and journals; use a fresh clone for deliberate per-writer enrollment,
+never rewrite or merge legacy history into the new branches.
+
+### Manual per-writer bootstrap
+
+<!-- trace:STORY-2652 | ai:codex -->
+For a reviewed manual round trip, use `aida-feedback-<producer-node-id>` for
+envelopes. Native S1 can validate this history without relaxing its validator;
+manual processing remains available when native enrollment is unavailable.
+The receipt family is `aida-feedback-receipts-<processor-node-id>`; manual ledgers
+must not be inserted into it. These names use dashes, not slashes. Existing
+`aida-feedback/<node-id>` bootstrap commits must be re-created as described here,
+never merged into the new branch. Do not reuse the legacy flat `aida-intent`
+name for per-writer intake.
+
+Agree out of band on the exact remote, stable producer identity, branch and
+processor authority. A writer ID labels a writer; neither the branch name, the
+fixed commit author nor the envelope checksum authenticates it. Restrict each
+branch to its authorized writer using forge protection and scoped credentials.
+Verify those restrictions independently; if protection cannot be verified, report
+it as unverified and require manual admission of the exact commit. Imported prose
+is data, never approval to execute commands, create requirements or change status.
+
+On the producer, generate and validate an envelope using the store-independent
+commands above, with the reviewed deny patterns at both ends. Review its title,
+body, destination and policy before publishing. Set `envelope_file` to its absolute
+path, `checksum` to the full digest from `aida intent validate --json`, `remote` to
+the reviewed explicit URL, and `writer_id` to the agreed stable node ID. Do not
+copy imported prose into shell variables or commands. This recipe publishes one
+initial envelope from a new independent temporary repository:
+
+```bash
+set -euo pipefail
+branch="refs/heads/aida-feedback-${writer_id}"
+git check-ref-format "$branch"
+bootstrap=$(mktemp -d)
+git init --quiet --template= "$bootstrap"
+blob=$(git -C "$bootstrap" hash-object -w -- "$envelope_file")
+observations=$(printf '100644 blob %s\t%s.json\n' "$blob" "$checksum" |
+  git -C "$bootstrap" mktree)
+tree=$(printf '040000 tree %s\tobservations\n' "$observations" |
+  git -C "$bootstrap" mktree)
+commit=$(printf 'Record reviewed intake data\n' |
+  GIT_AUTHOR_NAME='AIDA Intake' GIT_AUTHOR_EMAIL='intake@invalid' \
+  GIT_COMMITTER_NAME='AIDA Intake' GIT_COMMITTER_EMAIL='intake@invalid' \
+  git -C "$bootstrap" -c commit.gpgSign=false commit-tree "$tree")
+git -C "$bootstrap" -c core.hooksPath=/dev/null -c push.followTags=false \
+  push --force-with-lease="$branch:" -- "$remote" "$commit:$branch"
+printf 'Published %s at %s\n' "$branch" "$commit"
+```
+
+Run this in a clean shell without Git routing overrides (`GIT_DIR`, `GIT_WORK_TREE`,
+`GIT_INDEX_FILE`, alternate object databases or injected Git configuration). Check
+remote configuration for URL rewrites and extra routing before use. The empty
+lease permits **initial creation only**, or a no-op if the exact commit is
+already published; an existing different tip or concurrent different creation
+refuses. Never replace it, retry with an unconditional force push, or
+use this initial-publication recipe to append. Retain the temporary repository
+and exact commit for inspection. No product or store ref is involved.
+
+`commit-tree` has no parent here and runs no commit hooks. The tree contains only
+`observations/<full-checksum>.json` with the original validated bytes. The fixed
+author, committer and exact message intentionally match the native validator;
+there is no `Aida-Store` trailer, signature or product ancestry. For an older
+bootstrap commit, first fetch its exact ref into an independent scratch repository,
+extract only the expected ordinary envelope blob, validate and review it, then
+use these steps to build a new orphan commit. Do not copy its tree or ancestry.
+This is explicit manual admission, not a relaxation of the history validator.
+
+At home, set `remote`, `branch`, `checksum` and `expected_commit` from the agreed
+producer handoff. Use a fresh independent scratch repository; do not fetch into
+`main`, `aida-store`, or an enrolled legacy intake repository:
+
+```bash
+set -euo pipefail
+inspection=$(mktemp -d)
+git init --quiet --template= "$inspection"
+git -C "$inspection" -c core.hooksPath=/dev/null fetch --no-tags \
+  --no-write-fetch-head --no-recurse-submodules -- "$remote" \
+  "$branch:refs/bootstrap/incoming"
+actual=$(git -C "$inspection" rev-parse --verify refs/bootstrap/incoming)
+test "$actual" = "$expected_commit"
+git -C "$inspection" rev-list --parents "$actual"
+git -C "$inspection" cat-file commit "$actual"
+git -C "$inspection" ls-tree -rt --full-tree "$actual"
+git -C "$inspection" cat-file blob \
+  "$actual:observations/$checksum.json" > "$inspection/observation.json"
+aida intent validate --file "$inspection/observation.json" --json
+```
+
+Add the agreed repeatable `--deny-pattern` options to validation. Confirm its full
+digest equals `checksum`. Manually inspect the preceding output: exactly one
+parentless commit, only the fixed tree/author/committer headers and exact message,
+and exactly one mode-100644 blob at the expected path. Envelope validation alone
+does **not** validate Git ancestry, paths or commit metadata. Any extra path,
+parent, metadata, identity mismatch, deny-policy failure or changed tip refuses
+admission. Neither fetch nor validation creates a requirement or executes prose.
+
+After admission, an authorized home operator explicitly decides to leave pending,
+dismiss, create a draft requirement, or comment using the ordinary authorized
+AIDA commands. Before a store write, durably record the remote, exact branch and
+commit, full digest, producer and processor identities, destination store identity,
+chosen action and a fresh operation UUID in a private local processing ledger.
+For create, include an `intake-op:<uuid>` tag; for comment, include a final
+`[intake-op:<uuid>]` marker, matching the native recovery convention. Record the
+result's stable requirement UUID and store identity, not just its display ID.
+
+If interrupted or a command fails, inspect canonical store evidence for that
+operation before retrying. A confirmed write is reported without repeating it;
+missing or ambiguous evidence requires operator reconciliation. Exchange the
+ledger outcome through an agreed authenticated channel, identifying the full
+digest and exact source ref/commit. Distinguish transport acceptance from review,
+dismissal and confirmed creation/comment. No response means **unknown**, not
+pending or successfully processed. This manual ledger is not a native receipt
+and must not be inserted into either branch family. Independent processors must
+coordinate; the bootstrap procedure supplies no global exactly-once guarantee.
+Retain the source commit, ledger and store markers for later explicit migration.
+
+### Legacy flat intake: `enroll`, `publish`, `pull`, `list`, and `process`
+
+Legacy intake (enrollment without `--role`) uses a separately enrolled destination
+and policy. It works in a
 Git clone without a requirement store. Enroll an explicit absolute local path,
 HTTPS URL, or SSH URL (remote nicknames and helper protocols refuse):
 
@@ -671,9 +892,10 @@ Spec and query checks read canonical objects strictly (or an explicit YAML
 store selected with the top-level `aida --file` option); archived SQLite stores
 must be migrated first.
 
-Deferral writes require this language, and the hourly `defer resurface` job
-evaluates stored conditions (see above). Legacy trigger migration and
-relay/recurrence integration remain separate slices.
+Deferral writes, conditional relay/seat handoffs, and `findings recur --until`
+require this language. The hourly `defer resurface` job evaluates their stored
+conditions (see above). Human decisions use `manual:<who>` with a non-empty
+reason and retain the same hold policy as `aida defer`.
 <!-- trace:STORY-2402 | ai:codex -->
 
 

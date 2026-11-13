@@ -1,8 +1,17 @@
+// trace:TASK-3429 | ai:codex
 //! Upgrade and release: mode normalisation, SHA match classification, release/dev-release handlers, workspace version and install method (STORY-1488 slice 1)
 // trace:STORY-1488 | ai:claude
 
-use crate::*;
+use crate::process_retry::RetryEtxtbsy;
+use crate::{
+    agent_registry, aida_exe_path, auto_complete, build_sha_short, cli, collect_open_prs,
+    current_branch_at, detect_store_path, forge, is_aida_repo, poll_until_published, pr_ship,
+    release_unmerged_pr_warning, upgrade_cmd, ReleaseCommand, Requirement, Result, Storage,
+    UpgradeCommand, UsageCommand,
+};
 use aida_core::git_ops::RemoteCredentialsExt as _;
+use anyhow::Context;
+use colored::Colorize;
 
 // trace:STORY-1728 | ai:claude
 #[path = "upgrade_release_args.rs"]
@@ -82,7 +91,7 @@ pub(crate) const DEFAULT_MAX_FAILURES: usize = 5;
 // Requester intake must remain a standalone Draft. Both the CLI and MCP gates
 // consume this list so relationship and grooming-field policy cannot drift.
 // trace:BUG-1211 | ai:codex
-pub(crate) const REQUESTER_INTAKE_FORBIDDEN_FIELDS: &[&str] = &["parent", "feature", "owner"];
+pub const REQUESTER_INTAKE_FORBIDDEN_FIELDS: &[&str] = &["parent", "feature", "owner"];
 
 // TASK-970: default row cap for a bare `aida list` in AGENT MODE. ~925
 // unbounded rows is a token blowout when an agent reads the listing as
@@ -111,89 +120,27 @@ pub(crate) const LIST_SORT_VALUES: &[&str] =
 // lists beneath the status snapshot. trace:TASK-970
 pub(crate) const AGENT_BARE_QUEUE_TOPN: usize = 5;
 
-// trace:STORY-1028 | ai:codex
-pub(crate) fn note_hidden_alias(old: &str, new: &str) {
-    eprintln!("note: {old} is now {new}");
-}
-
-// trace:STORY-1028 | ai:codex
-pub(crate) fn normalize_release_mode(
-    patch: bool,
-    minor: bool,
-    major: bool,
-    check: bool,
-    cmd: Option<&ReleaseCommand>,
-) -> (bool, bool, bool, bool) {
+// trace:TASK-1214 | ai:codex
+pub(crate) fn normalize_release_mode(cmd: Option<&ReleaseCommand>) -> (bool, bool, bool, bool) {
     match cmd {
-        Some(ReleaseCommand::Patch) => (true, false, false, false),
+        Some(ReleaseCommand::Patch) | None => (true, false, false, false),
         Some(ReleaseCommand::Minor) => (false, true, false, false),
         Some(ReleaseCommand::Major) => (false, false, true, false),
         Some(ReleaseCommand::Check) => (false, false, false, true),
-        None => {
-            if patch {
-                note_hidden_alias(concat!("aida release ", "--patch"), "aida release patch");
-            }
-            if minor {
-                note_hidden_alias(concat!("aida release ", "--minor"), "aida release minor");
-            }
-            if major {
-                note_hidden_alias(concat!("aida release ", "--major"), "aida release major");
-            }
-            if check {
-                note_hidden_alias(concat!("aida release ", "--check"), "aida release check");
-            }
-            (patch, minor, major, check)
-        }
     }
 }
 
-// trace:STORY-1028 | ai:codex
-pub(crate) fn normalize_upgrade_mode(
-    check: bool,
-    diff: bool,
-    cmd: Option<&UpgradeCommand>,
-) -> (bool, bool) {
-    match cmd {
-        Some(UpgradeCommand::Check) => (true, false),
-        Some(UpgradeCommand::Diff) => (false, true),
-        None => {
-            if check {
-                note_hidden_alias(concat!("aida upgrade ", "--check"), "aida upgrade check");
-            }
-            if diff {
-                note_hidden_alias(concat!("aida upgrade ", "--diff"), "aida upgrade diff");
-            }
-            (check, diff)
-        }
-    }
-}
-
-/// The replacement command named in the deprecation note for the hidden
-/// `--unused <window>` alias of `aida usage`. `aida usage unused` errors
-/// without its DURATION positional, so the hint carries the window the old
-/// flag was given, shell-quoted so a multi-word window (`24 hours ago`) is
-/// pasted as one argument. A window that does not parse is not echoed back;
-/// the hint shows the `<window>` placeholder instead.
-// trace:BUG-1973 | ai:claude
-pub(crate) fn usage_unused_alias_target(window: &str) -> String {
-    let window = window.trim();
-    if window.is_empty() || crate::queue_cmd::parse_lookback(window, "--unused").is_err() {
-        return "aida usage unused <window>".to_string();
-    }
-    format!("aida usage unused {}", shell_quote(window))
+// trace:TASK-1214 | ai:codex
+pub(crate) fn normalize_upgrade_mode(cmd: Option<&UpgradeCommand>) -> (bool, bool) {
+    (
+        matches!(cmd, Some(UpgradeCommand::Check)),
+        matches!(cmd, Some(UpgradeCommand::Diff)),
+    )
 }
 
 // trace:STORY-1028 | ai:codex
 #[allow(clippy::type_complexity)]
 pub(crate) fn normalize_usage_mode<'a>(
-    unused: Option<&'a str>,
-    errors: bool,
-    auto_complete: bool,
-    failures: bool,
-    pattern: bool,
-    health: bool,
-    slowest: bool,
-    events: bool,
     action: Option<&'a UsageCommand>,
 ) -> (
     Option<&'a str>,
@@ -236,46 +183,7 @@ pub(crate) fn normalize_usage_mode<'a>(
             None, false, true, *failures, *pattern, false, false, false, false,
         ),
         Some(UsageCommand::Health) => (None, false, false, false, false, true, false, false, false),
-        None => {
-            if slowest {
-                note_hidden_alias(concat!("aida usage ", "--slowest"), "aida usage slowest");
-            }
-            if let Some(window) = unused {
-                // `unused` requires its DURATION positional, so carry the
-                // window the old flag was given into the suggested command.
-                // trace:BUG-1973 | ai:claude
-                note_hidden_alias(
-                    concat!("aida usage ", "--unused"),
-                    &usage_unused_alias_target(window),
-                );
-            }
-            if errors {
-                note_hidden_alias(concat!("aida usage ", "--errors"), "aida usage errors");
-            }
-            if events {
-                note_hidden_alias(concat!("aida usage ", "--events"), "aida usage events");
-            }
-            if auto_complete {
-                note_hidden_alias(
-                    concat!("aida usage ", "--auto-complete"),
-                    "aida usage drains",
-                );
-            }
-            if health {
-                note_hidden_alias(concat!("aida usage ", "--health"), "aida usage health");
-            }
-            (
-                unused,
-                errors,
-                auto_complete,
-                failures,
-                pattern,
-                health,
-                slowest,
-                events,
-                false,
-            )
-        }
+        None => (None, false, false, false, false, false, false, false, false),
     }
 }
 
@@ -353,60 +261,6 @@ pub(crate) fn classify_drain_merge_failure(
         "{merge_tool} merge failed for {}-{pr}: {detail}",
         forge.change_noun()
     ))
-}
-
-#[cfg(test)]
-mod bug_1973_usage_unused_hint_tests {
-    // trace:BUG-1973 | ai:claude
-    use super::usage_unused_alias_target;
-    use clap::Parser;
-
-    #[test]
-    fn hint_carries_the_duration_from_the_old_flag() {
-        assert_eq!(usage_unused_alias_target("60d"), "aida usage unused 60d");
-        assert_eq!(usage_unused_alias_target(" 2w "), "aida usage unused 2w");
-    }
-
-    #[test]
-    fn multi_word_window_is_shell_quoted() {
-        assert_eq!(
-            usage_unused_alias_target("24 hours ago"),
-            "aida usage unused '24 hours ago'"
-        );
-    }
-
-    #[test]
-    fn empty_or_invalid_window_shows_the_placeholder() {
-        assert_eq!(usage_unused_alias_target(""), "aida usage unused <window>");
-        assert_eq!(
-            usage_unused_alias_target("not a window; rm -rf"),
-            "aida usage unused <window>"
-        );
-    }
-
-    #[test]
-    fn hinted_command_parses_while_bare_form_does_not() {
-        for window in ["30d", "90d", "2w", "24 hours ago"] {
-            let hint = usage_unused_alias_target(window);
-            assert!(
-                hint.ends_with(&format!(" {}", crate::shell_quote(window))),
-                "hint must name the window as one shell word: {hint}"
-            );
-            assert!(
-                crate::command_registry::try_parse_from(["aida", "usage", "unused", window])
-                    .is_ok(),
-                "hinted command must parse for window {window:?}"
-            );
-        }
-        assert!(
-            usage_unused_alias_target("24 hours ago").contains("'24 hours ago'"),
-            "a multi-word window must be quoted in the hint"
-        );
-        assert!(
-            crate::command_registry::try_parse_from(["aida", "usage", "unused"]).is_err(),
-            "bare `aida usage unused` requires DURATION"
-        );
-    }
 }
 
 #[cfg(test)]
@@ -498,12 +352,70 @@ mod task_1244_drain_merge_lease_tests {
         let src = format!(
             "{}\n{}\n{}\n{}\n{}\n{}\n{}\n{}\n{}",
             include_str!("lib.rs"),
-            include_str!("lib_part1.rs"),
-            include_str!("lib_part2.rs"),
-            include_str!("lib_part3.rs"),
-            include_str!("lib_part4.rs"),
-            include_str!("lib_part5.rs"),
-            include_str!("lib_part6.rs"),
+            concat!(
+                include_str!("glyph_render.rs"),
+                include_str!("cli_entry.rs"),
+                include_str!("history_filter.rs"),
+                include_str!("output_policy.rs"),
+                include_str!("list_render.rs"),
+                include_str!("agent_errors.rs"),
+                include_str!("cast_recording.rs"),
+                include_str!("argv_rewrite.rs"),
+                include_str!("review_helpers.rs"),
+                include_str!("finding_queue.rs"),
+                include_str!("gitignore_entries.rs"),
+                include_str!("store_write_policy.rs"),
+                include_str!("status_policy.rs")
+            ),
+            concat!(
+                include_str!("retire_legacy.rs"),
+                "\n",
+                include_str!("glossary_render.rs"),
+                "\n",
+                include_str!("role_file_helpers.rs"),
+                "\n",
+                include_str!("mailbox_errors.rs"),
+                "\n",
+                include_str!("human_route.rs"),
+                "\n",
+                include_str!("store_drift.rs"),
+                "\n",
+                include_str!("launch_defaults.rs"),
+                "\n",
+                include_str!("merge_hold_output.rs"),
+                "\n",
+                include_str!("history_reporting.rs")
+            ),
+            concat!(
+                include_str!("ci_staleness.rs"),
+                include_str!("ci_watch.rs"),
+                include_str!("bounded_process.rs"),
+                include_str!("forge_lookup.rs"),
+                include_str!("store_lookup.rs"),
+                include_str!("output_policy.rs"),
+                include_str!("statusline_counts.rs"),
+                include_str!("session_warnings.rs"),
+                include_str!("status_policy.rs"),
+                include_str!("orchestrator_badge.rs"),
+                include_str!("default_branch.rs"),
+                include_str!("plan_structure.rs"),
+                include_str!("worktree_dirty.rs")
+            ),
+            concat!(concat!(
+                include_str!("scoped_lease.rs"),
+                "\n",
+                include_str!("pull_lines.rs")
+            )),
+            concat!(
+                include_str!("review_commands.rs"),
+                include_str!("review_advisor_launch.rs"),
+                include_str!("review_prompt.rs")
+            ),
+            concat!(
+                include_str!("regression_tests.rs"),
+                "\n",
+                include_str!("text_truncate.rs")
+            ),
             include_str!("burndown_run.rs"),
             include_str!("phase_driver_trait.rs")
         );
@@ -534,6 +446,7 @@ mod task_1244_drain_merge_lease_tests {
 #[cfg(all(test, unix))]
 mod bug_1265_finish_ci_tests {
     use super::*;
+    use crate::{AutonomyMode, RealPhaseDriver};
 
     struct Fixture {
         _temp: tempfile::TempDir,
@@ -897,6 +810,7 @@ exit 2
 #[cfg(test)]
 mod bug_1205_ci_phase_fallthrough_tests {
     use super::*;
+    use crate::{lease_conflict_decision, LeaseConflictDecision};
 
     #[test]
     fn headless_lease_conflict_is_decided_from_the_substrate() {
@@ -927,12 +841,70 @@ mod bug_1205_ci_phase_fallthrough_tests {
         let src = format!(
             "{}\n{}\n{}\n{}\n{}\n{}\n{}\n{}",
             include_str!("lib.rs"),
-            include_str!("lib_part1.rs"),
-            include_str!("lib_part2.rs"),
-            include_str!("lib_part3.rs"),
-            include_str!("lib_part4.rs"),
-            include_str!("lib_part5.rs"),
-            include_str!("lib_part6.rs"),
+            concat!(
+                include_str!("glyph_render.rs"),
+                include_str!("cli_entry.rs"),
+                include_str!("history_filter.rs"),
+                include_str!("output_policy.rs"),
+                include_str!("list_render.rs"),
+                include_str!("agent_errors.rs"),
+                include_str!("cast_recording.rs"),
+                include_str!("argv_rewrite.rs"),
+                include_str!("review_helpers.rs"),
+                include_str!("finding_queue.rs"),
+                include_str!("gitignore_entries.rs"),
+                include_str!("store_write_policy.rs"),
+                include_str!("status_policy.rs")
+            ),
+            concat!(
+                include_str!("retire_legacy.rs"),
+                "\n",
+                include_str!("glossary_render.rs"),
+                "\n",
+                include_str!("role_file_helpers.rs"),
+                "\n",
+                include_str!("mailbox_errors.rs"),
+                "\n",
+                include_str!("human_route.rs"),
+                "\n",
+                include_str!("store_drift.rs"),
+                "\n",
+                include_str!("launch_defaults.rs"),
+                "\n",
+                include_str!("merge_hold_output.rs"),
+                "\n",
+                include_str!("history_reporting.rs")
+            ),
+            concat!(
+                include_str!("ci_staleness.rs"),
+                include_str!("ci_watch.rs"),
+                include_str!("bounded_process.rs"),
+                include_str!("forge_lookup.rs"),
+                include_str!("store_lookup.rs"),
+                include_str!("output_policy.rs"),
+                include_str!("statusline_counts.rs"),
+                include_str!("session_warnings.rs"),
+                include_str!("status_policy.rs"),
+                include_str!("orchestrator_badge.rs"),
+                include_str!("default_branch.rs"),
+                include_str!("plan_structure.rs"),
+                include_str!("worktree_dirty.rs")
+            ),
+            concat!(concat!(
+                include_str!("scoped_lease.rs"),
+                "\n",
+                include_str!("pull_lines.rs")
+            )),
+            concat!(
+                include_str!("review_commands.rs"),
+                include_str!("review_advisor_launch.rs"),
+                include_str!("review_prompt.rs")
+            ),
+            concat!(
+                include_str!("regression_tests.rs"),
+                "\n",
+                include_str!("text_truncate.rs")
+            ),
             include_str!("phase_driver_trait.rs")
         );
         // BUG-1265 added drain-level test harnesses that also `impl PhaseDriver`,
@@ -977,6 +949,7 @@ mod bug_1205_ci_phase_fallthrough_tests {
 #[cfg(test)]
 mod bug_1195_review_story_lookup_tests {
     use super::*;
+    use crate::{classify_review_story_lookup, RequirementsStore, ReviewForge, ReviewStoryLookup};
 
     fn story(title: &str, status: aida_core::RequirementStatus) -> aida_core::Requirement {
         let mut r = aida_core::Requirement::new(title.to_string(), String::new());
@@ -1056,12 +1029,70 @@ mod bug_1195_review_story_lookup_tests {
         let src = format!(
             "{}\n{}\n{}\n{}\n{}\n{}\n{}\n{}",
             include_str!("lib.rs"),
-            include_str!("lib_part1.rs"),
-            include_str!("lib_part2.rs"),
-            include_str!("lib_part3.rs"),
-            include_str!("lib_part4.rs"),
-            include_str!("lib_part5.rs"),
-            include_str!("lib_part6.rs"),
+            concat!(
+                include_str!("glyph_render.rs"),
+                include_str!("cli_entry.rs"),
+                include_str!("history_filter.rs"),
+                include_str!("output_policy.rs"),
+                include_str!("list_render.rs"),
+                include_str!("agent_errors.rs"),
+                include_str!("cast_recording.rs"),
+                include_str!("argv_rewrite.rs"),
+                include_str!("review_helpers.rs"),
+                include_str!("finding_queue.rs"),
+                include_str!("gitignore_entries.rs"),
+                include_str!("store_write_policy.rs"),
+                include_str!("status_policy.rs")
+            ),
+            concat!(
+                include_str!("retire_legacy.rs"),
+                "\n",
+                include_str!("glossary_render.rs"),
+                "\n",
+                include_str!("role_file_helpers.rs"),
+                "\n",
+                include_str!("mailbox_errors.rs"),
+                "\n",
+                include_str!("human_route.rs"),
+                "\n",
+                include_str!("store_drift.rs"),
+                "\n",
+                include_str!("launch_defaults.rs"),
+                "\n",
+                include_str!("merge_hold_output.rs"),
+                "\n",
+                include_str!("history_reporting.rs")
+            ),
+            concat!(
+                include_str!("ci_staleness.rs"),
+                include_str!("ci_watch.rs"),
+                include_str!("bounded_process.rs"),
+                include_str!("forge_lookup.rs"),
+                include_str!("store_lookup.rs"),
+                include_str!("output_policy.rs"),
+                include_str!("statusline_counts.rs"),
+                include_str!("session_warnings.rs"),
+                include_str!("status_policy.rs"),
+                include_str!("orchestrator_badge.rs"),
+                include_str!("default_branch.rs"),
+                include_str!("plan_structure.rs"),
+                include_str!("worktree_dirty.rs")
+            ),
+            concat!(concat!(
+                include_str!("scoped_lease.rs"),
+                "\n",
+                include_str!("pull_lines.rs")
+            )),
+            concat!(
+                include_str!("review_commands.rs"),
+                include_str!("review_advisor_launch.rs"),
+                include_str!("review_prompt.rs")
+            ),
+            concat!(
+                include_str!("regression_tests.rs"),
+                "\n",
+                include_str!("text_truncate.rs")
+            ),
             include_str!("pr_lookup.rs")
         );
         let start = src
@@ -1087,12 +1118,70 @@ mod bug_1173_detection_hold_tests {
         let src = format!(
             "{}\n{}\n{}\n{}\n{}\n{}\n{}\n{}",
             include_str!("lib.rs"),
-            include_str!("lib_part1.rs"),
-            include_str!("lib_part2.rs"),
-            include_str!("lib_part3.rs"),
-            include_str!("lib_part4.rs"),
-            include_str!("lib_part5.rs"),
-            include_str!("lib_part6.rs"),
+            concat!(
+                include_str!("glyph_render.rs"),
+                include_str!("cli_entry.rs"),
+                include_str!("history_filter.rs"),
+                include_str!("output_policy.rs"),
+                include_str!("list_render.rs"),
+                include_str!("agent_errors.rs"),
+                include_str!("cast_recording.rs"),
+                include_str!("argv_rewrite.rs"),
+                include_str!("review_helpers.rs"),
+                include_str!("finding_queue.rs"),
+                include_str!("gitignore_entries.rs"),
+                include_str!("store_write_policy.rs"),
+                include_str!("status_policy.rs")
+            ),
+            concat!(
+                include_str!("retire_legacy.rs"),
+                "\n",
+                include_str!("glossary_render.rs"),
+                "\n",
+                include_str!("role_file_helpers.rs"),
+                "\n",
+                include_str!("mailbox_errors.rs"),
+                "\n",
+                include_str!("human_route.rs"),
+                "\n",
+                include_str!("store_drift.rs"),
+                "\n",
+                include_str!("launch_defaults.rs"),
+                "\n",
+                include_str!("merge_hold_output.rs"),
+                "\n",
+                include_str!("history_reporting.rs")
+            ),
+            concat!(
+                include_str!("ci_staleness.rs"),
+                include_str!("ci_watch.rs"),
+                include_str!("bounded_process.rs"),
+                include_str!("forge_lookup.rs"),
+                include_str!("store_lookup.rs"),
+                include_str!("output_policy.rs"),
+                include_str!("statusline_counts.rs"),
+                include_str!("session_warnings.rs"),
+                include_str!("status_policy.rs"),
+                include_str!("orchestrator_badge.rs"),
+                include_str!("default_branch.rs"),
+                include_str!("plan_structure.rs"),
+                include_str!("worktree_dirty.rs")
+            ),
+            concat!(concat!(
+                include_str!("scoped_lease.rs"),
+                "\n",
+                include_str!("pull_lines.rs")
+            )),
+            concat!(
+                include_str!("review_commands.rs"),
+                include_str!("review_advisor_launch.rs"),
+                include_str!("review_prompt.rs")
+            ),
+            concat!(
+                include_str!("regression_tests.rs"),
+                "\n",
+                include_str!("text_truncate.rs")
+            ),
             include_str!("phase_driver.rs")
         );
         // build the needle from split pieces so this test's own source cannot self-match
@@ -1119,182 +1208,6 @@ mod bug_1173_detection_hold_tests {
         assert!(
             body.contains("merge-hold list --fix"),
             "a label sync failure must be surfaced with the repair hint, never swallowed"
-        );
-    }
-}
-
-#[cfg(test)]
-mod story_1028_mode_alias_tests {
-    use super::*;
-
-    // trace:STORY-1028 | ai:codex
-    #[test]
-    fn release_hidden_flags_normalize_like_subcommands() {
-        assert_eq!(
-            normalize_release_mode(true, false, false, false, None),
-            normalize_release_mode(false, false, false, false, Some(&ReleaseCommand::Patch))
-        );
-        assert_eq!(
-            normalize_release_mode(false, true, false, false, None),
-            normalize_release_mode(false, false, false, false, Some(&ReleaseCommand::Minor))
-        );
-        assert_eq!(
-            normalize_release_mode(false, false, true, false, None),
-            normalize_release_mode(false, false, false, false, Some(&ReleaseCommand::Major))
-        );
-        assert_eq!(
-            normalize_release_mode(false, false, false, true, None),
-            normalize_release_mode(false, false, false, false, Some(&ReleaseCommand::Check))
-        );
-    }
-
-    // trace:STORY-1028 | ai:codex
-    #[test]
-    fn upgrade_hidden_flags_normalize_like_subcommands() {
-        assert_eq!(
-            normalize_upgrade_mode(true, false, None),
-            normalize_upgrade_mode(false, false, Some(&UpgradeCommand::Check))
-        );
-        assert_eq!(
-            normalize_upgrade_mode(false, true, None),
-            normalize_upgrade_mode(false, false, Some(&UpgradeCommand::Diff))
-        );
-    }
-
-    // trace:STORY-1028 | ai:codex
-    #[test]
-    fn usage_hidden_flags_normalize_like_subcommands() {
-        assert_eq!(
-            normalize_usage_mode(None, false, false, false, false, false, true, false, None),
-            normalize_usage_mode(
-                None,
-                false,
-                false,
-                false,
-                false,
-                false,
-                false,
-                false,
-                Some(&UsageCommand::Slowest)
-            )
-        );
-        assert_eq!(
-            normalize_usage_mode(
-                Some("30d"),
-                false,
-                false,
-                false,
-                false,
-                false,
-                false,
-                false,
-                None
-            ),
-            normalize_usage_mode(
-                None,
-                false,
-                false,
-                false,
-                false,
-                false,
-                false,
-                false,
-                Some(&UsageCommand::Unused {
-                    duration: "30d".to_string()
-                })
-            )
-        );
-        assert_eq!(
-            normalize_usage_mode(None, true, false, false, false, false, false, false, None),
-            normalize_usage_mode(
-                None,
-                false,
-                false,
-                false,
-                false,
-                false,
-                false,
-                false,
-                Some(&UsageCommand::Errors)
-            )
-        );
-        assert_eq!(
-            normalize_usage_mode(None, false, false, false, false, false, false, true, None),
-            normalize_usage_mode(
-                None,
-                false,
-                false,
-                false,
-                false,
-                false,
-                false,
-                false,
-                Some(&UsageCommand::Events)
-            )
-        );
-        assert_eq!(
-            normalize_usage_mode(None, false, true, true, false, false, false, false, None),
-            normalize_usage_mode(
-                None,
-                false,
-                false,
-                false,
-                false,
-                false,
-                false,
-                false,
-                Some(&UsageCommand::Drains {
-                    failures: true,
-                    pattern: false
-                })
-            )
-        );
-        assert_eq!(
-            normalize_usage_mode(None, false, true, false, true, false, false, false, None),
-            normalize_usage_mode(
-                None,
-                false,
-                false,
-                false,
-                false,
-                false,
-                false,
-                false,
-                Some(&UsageCommand::Drains {
-                    failures: false,
-                    pattern: true
-                })
-            )
-        );
-        assert_eq!(
-            normalize_usage_mode(None, false, false, false, false, true, false, false, None),
-            normalize_usage_mode(
-                None,
-                false,
-                false,
-                false,
-                false,
-                false,
-                false,
-                false,
-                Some(&UsageCommand::Health)
-            )
-        );
-        // TASK-1481: `timeline` is subcommand-only (no legacy flag predates
-        // it) — assert it flips only the new 9th (timeline) slot.
-        assert_eq!(
-            normalize_usage_mode(
-                None,
-                false,
-                false,
-                false,
-                false,
-                false,
-                false,
-                false,
-                Some(&UsageCommand::Timeline)
-            ),
-            (None, false, false, false, false, false, false, false, true)
         );
     }
 }
@@ -1508,7 +1421,7 @@ pub(crate) fn eval_subcommand_hint(subcommand: &str) -> String {
 }
 
 /// STORY-472: resolve the bump kind from the mutually-exclusive
-/// `--patch`/`--minor`/`--major` flags. None set → "patch" (smallest, safe
+/// patch/minor/major modes. None set → "patch" (smallest, safe
 /// default); more than one set → a clean error. trace:STORY-472 | ai:claude
 pub(crate) fn resolve_release_bump(
     patch: bool,
@@ -1516,10 +1429,10 @@ pub(crate) fn resolve_release_bump(
     major: bool,
 ) -> Result<&'static str, String> {
     match (patch, minor, major) {
-        (_, false, false) => Ok("patch"), // explicit --patch or nothing
+        (_, false, false) => Ok("patch"), // explicit patch or nothing
         (false, true, false) => Ok("minor"),
         (false, false, true) => Ok("major"),
-        _ => Err("specify only one of --patch / --minor / --major".to_string()),
+        _ => Err("specify only one of patch / minor / major".to_string()),
     }
 }
 
@@ -1540,6 +1453,29 @@ pub(crate) fn preview_next_version(current: &str, bump: &str) -> Option<String> 
         "major" => format!("{}.0.0", maj + 1),
         _ => format!("{maj}.{min}.{}", pat + 1),
     })
+}
+
+// trace:BUG-2492 | ai:codex
+pub(crate) fn after_pr_ci_budget(root: &std::path::Path) -> std::time::Duration {
+    std::time::Duration::from_secs(crate::ci_idle_timeout::ci_absolute_ceiling_secs(root))
+}
+
+// trace:BUG-2492 | ai:codex
+pub(crate) fn wait_after_pr_ci(
+    root: &std::path::Path,
+    forge: &dyn crate::forge::Forge,
+    change: &crate::forge::ChangeRef,
+    budget: std::time::Duration,
+) -> anyhow::Result<crate::gate::dispatch_types::CiState> {
+    crate::ci_gate::wait_for_ship_ci(
+        root,
+        forge,
+        change,
+        false,
+        false,
+        Some(budget),
+        std::time::Duration::from_secs(2),
+    )
 }
 
 pub(crate) fn handle_release(
@@ -1648,7 +1584,13 @@ pub(crate) fn handle_release(
             "{} waiting for {change_noun} #{n}'s checks…",
             crate::glyph(crate::glyphs::Glyph::Arrow).cyan().bold()
         );
-        match forge.watch_ci(&change_ref) {
+        // trace:BUG-2492 | ai:codex — a held status never settles by itself.
+        match wait_after_pr_ci(
+            &merge_root,
+            forge.as_ref(),
+            &change_ref,
+            after_pr_ci_budget(&merge_root),
+        ) {
             Ok(
                 crate::gate::dispatch_types::CiState::Success
                 | crate::gate::dispatch_types::CiState::None,
@@ -1659,8 +1601,9 @@ pub(crate) fn handle_release(
             Ok(state) => anyhow::bail!(
                 "{change_noun} #{n}'s checks did not pass ({state:?}) — not merging or releasing."
             ),
+            // trace:BUG-2492 | ai:codex — holds and red CI are refusals too.
             Err(e) => anyhow::bail!(
-                "could not watch {change_noun} #{n}'s checks via forge provider: {e:#}"
+                "{change_noun} #{n}'s checks did not pass — not merging or releasing: {e:#}"
             ),
         }
 
@@ -1979,7 +1922,8 @@ fn capture_dev_release_store(store: &std::path::Path, tag: &str) -> Result<(Stri
 // trace:TASK-1981 | ai:codex
 fn rebase_dev_release_store_snapshot(store: &std::path::Path, branch: &str) -> Result<String> {
     aida_core::db::with_store_write_lock(store, || {
-        aida_core::git_ops::pull_rebase(store, "origin", branch)?;
+        // trace:BUG-2490 | ai:codex — preserve pending changes during publication retry.
+        aida_core::git_ops::pull_rebase_store_retry(store, "origin", branch)?;
         aida_core::git_ops::head_sha(store)
     })
 }
@@ -2305,6 +2249,7 @@ where
 
 // trace:STORY-472 | ai:claude
 // trace:TASK-1721 | ai:claude
+// trace:TASK-1214 | ai:codex
 /// One-verb release: sync the store, run the version bump through a release PR
 /// and tag the merged commit, wait for the published tarballs, and upgrade sibling installs. Wraps the
 /// whole sequence so you don't have to remember it. Use `release check` first to
@@ -2312,19 +2257,6 @@ where
 #[derive(clap::Parser, Debug)]
 #[clap(name = "release")]
 pub(crate) struct ReleaseArgs {
-    /// Bump the patch version (default if no level is given).
-    #[clap(long, hide = true)]
-    pub patch: bool,
-    /// Bump the minor version.
-    #[clap(long, hide = true)]
-    pub minor: bool,
-    /// Bump the major version.
-    #[clap(long, hide = true)]
-    pub major: bool,
-    /// Preview the planned release (current → target version + the step
-    /// sequence + repo/branch/tree state) without acting.
-    #[clap(long, hide = true)]
-    pub check: bool,
     /// Land an in-flight PR first: wait for PR-<N>'s checks, merge it
     /// (--squash --delete-branch), and sync local main before releasing.
     /// Refuses if the PR's checks fail.
@@ -2348,37 +2280,31 @@ pub(crate) struct ReleaseArgs {
 // early like `dev`. trace:STORY-472 | ai:claude
 fn run_release(
     matches: &clap::ArgMatches,
-    _ctx: &crate::command_registry::DispatchCtx,
+    _ctx: &crate::cmdkit::DispatchCtx,
 ) -> anyhow::Result<()> {
     let args = <ReleaseArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
     let ReleaseArgs {
-        patch,
-        minor,
-        major,
-        check,
         after_pr,
         skip_xplat_check,
         cmd,
     } = &args;
-    let (patch, minor, major, check) =
-        normalize_release_mode(*patch, *minor, *major, *check, cmd.as_ref());
+    let (patch, minor, major, check) = normalize_release_mode(cmd.as_ref());
     return handle_release(patch, minor, major, check, *after_pr, *skip_xplat_check);
 }
 
 // trace:STORY-1728 | ai:claude
-pub(crate) static RELEASE: crate::command_registry::CommandReg =
-    crate::command_registry::CommandReg {
-        name: "release",
-        help_after: "rebase",
-        command: <ReleaseArgs as clap::CommandFactory>::command,
-        policy: |_| crate::command_registry::CmdPolicy {
-            stakeholder: crate::stakeholder_role::StakeholderAction::Write,
-            per_write_auto_push: false,
-            skip_role_restore_prompt: false,
-            team_identity_write: false,
-        },
-        run: crate::command_registry::Handler::Early(run_release),
-    };
+pub(crate) static RELEASE: crate::cmdkit::CommandReg = crate::cmdkit::CommandReg {
+    name: "release",
+    help_after: "rebase",
+    command: <ReleaseArgs as clap::CommandFactory>::command,
+    policy: |_| crate::cmdkit::CmdPolicy {
+        stakeholder: crate::stakeholder_role::StakeholderAction::Write,
+        per_write_auto_push: false,
+        skip_role_restore_prompt: false,
+        team_identity_write: false,
+    },
+    run: crate::cmdkit::Handler::Early(run_release),
+};
 
 #[cfg(test)]
 mod task_1981_publication_tests {
@@ -2403,7 +2329,16 @@ mod task_1981_publication_tests {
         let seeded = fixture.advance("seed.txt");
         assert!(git_ops::push(&fixture.store, "origin", "main").unwrap());
         assert_eq!(fixture.remote_head(), seeded);
-        std::fs::write(fixture.store.join("objects/pending.yaml"), "pending").unwrap();
+        // trace:BUG-2490 | ai:codex — committed fixtures use valid requirement YAML.
+        std::fs::write(
+            fixture.store.join("objects/pending.yaml"),
+            serde_yaml::to_string(&aida_core::Requirement::new(
+                "pending".into(),
+                String::new(),
+            ))
+            .unwrap(),
+        )
+        .unwrap();
         seeded
     }
 

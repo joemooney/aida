@@ -1,4 +1,5 @@
 use super::*;
+use crate::{parse_open_pr_snapshot, warm_status_network_probes};
 
 /// Regression for BUG-560: on a non-GitHub forge, `collect_pr_facts` must
 /// return `NotGitHub` WITHOUT spawning `gh` — otherwise a GitLab/pure-git

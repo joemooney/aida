@@ -10,6 +10,8 @@
 // trace:BUG-2476 | ai:codex
 
 use super::*;
+// trace:TASK-3428 | ai:codex
+use crate::leases::lease_state_for;
 use aida_core::liveness::{process_provably_dead_with, recorded_lease_owner, RecordedLeaseOwner};
 use std::collections::{BTreeMap, HashSet};
 use std::path::{Path, PathBuf};

@@ -6,10 +6,9 @@
 //! Slice A converts the Claude contained launch paths. PR-B converts fresh
 //! Codex session/exec, compete and dispatch plus Native/None phase builders.
 //! Vendor profiles finalize commands after seat and identity setup.
-//! Resume paths, resource renderers and the per-vendor environment allowlist
-//! are later slices; unconverted sites are listed in the ratchet ledger
-//! (`tests/story_2326_launch_ratchet_tests.rs`). TASK-1749 C1: nothing here
-//! clears the environment.
+//! Claude children now receive a cleared, projected environment. Other vendor
+//! cutovers, resume paths and resource renderers remain later slices; the
+//! ratchet ledger inventories unconverted sites.
 // trace:STORY-2326 | ai:claude
 
 // TASK-2708: the contained (AIDA bubblewrap) headless launch. trace:TASK-2708 | ai:claude
@@ -20,10 +19,10 @@ pub(crate) mod agy;
 pub(crate) mod context;
 pub(crate) mod control;
 mod grant;
-pub(crate) mod profile;
 pub(crate) use control::control_child;
 pub(crate) use grant::{
     assign_advisor_child, issue_launch_child, issue_launch_child_with_delegation,
+    review_watch_controller,
 };
 pub(crate) mod parent;
 // Consumed by slice C's renderers. trace:STORY-2326 | ai:claude

@@ -422,6 +422,40 @@ pub fn merge_spec_three_way(
     merged
 }
 
+/// Pull policy: upstream owns scalars; append-only evidence survives from all
+/// snapshots. This is separate from the symmetric reconciliation policy.
+// trace:BUG-2501 | ai:codex
+pub fn merge_spec_upstream(
+    base: &Requirement,
+    upstream: &Requirement,
+    local: &Requirement,
+) -> Requirement {
+    let mut merged = upstream.clone();
+    merged.history = union_history(&[&base.history, &upstream.history, &local.history]);
+    merged.comments = union_comments(&[&upstream.comments, &local.comments, &base.comments]);
+    merged.processing_record = union_processing_records(&[
+        &base.processing_record,
+        &upstream.processing_record,
+        &local.processing_record,
+    ]);
+    // Set additions survive and removals win against retention, as in reconciliation.
+    // trace:BUG-2501 | ai:codex
+    merged.tags = merge_string_set_three_way(&base.tags, &upstream.tags, &local.tags);
+    merged.relationships = merge_relationships_three_way(
+        &base.relationships,
+        &upstream.relationships,
+        &local.relationships,
+    );
+    merged.dependencies = merge_dependencies_three_way(
+        &base.dependencies,
+        &upstream.dependencies,
+        &local.dependencies,
+    );
+    // Pre-registration evidence remains monotonic across every merge policy.
+    crate::hypothesis::preserve_merge(Some(base), upstream, local, &mut merged);
+    merged
+}
+
 /// History authors that sign automated (machine-derived) status transitions:
 /// the merge-driven Done→Completed / Draft→Done auto-bump and the
 /// `reconcile-status` sweep. A status change authored by anyone else — a
@@ -732,7 +766,30 @@ fn union_comments(sources: &[&Vec<crate::models::Comment>]) -> Vec<crate::models
     let mut by_id: HashMap<Uuid, crate::models::Comment> = HashMap::new();
     for src in sources {
         for c in src.iter() {
-            by_id.entry(c.id).or_insert_with(|| c.clone());
+            match by_id.entry(c.id) {
+                std::collections::hash_map::Entry::Vacant(entry) => {
+                    entry.insert(c.clone());
+                }
+                std::collections::hash_map::Entry::Occupied(mut entry) => {
+                    let current = entry.get_mut();
+                    current.replies = union_comments(&[&current.replies, &c.replies]);
+                    for reaction in &c.reactions {
+                        if !current
+                            .reactions
+                            .iter()
+                            .any(|r| r.reaction == reaction.reaction && r.author == reaction.author)
+                        {
+                            current.reactions.push(reaction.clone());
+                        }
+                    }
+                    current.reactions.sort_by(|a, b| {
+                        a.added_at
+                            .cmp(&b.added_at)
+                            .then(a.reaction.cmp(&b.reaction))
+                            .then(a.author.cmp(&b.author))
+                    });
+                }
+            }
         }
     }
     let mut out: Vec<_> = by_id.into_values().collect();
@@ -1207,6 +1264,110 @@ mod tests {
                 new_value: "approved".to_string(),
             }],
         }
+    }
+
+    // trace:BUG-2501 | ai:codex
+    #[test]
+    fn pull_merge_upstream_scalars_and_ordered_evidence() {
+        let mut base = make_req("base", "Draft");
+        base.history.push(hist("base", "2026-01-01T00:00:00Z"));
+        let mut upstream = base.clone();
+        upstream.title = "upstream".into();
+        upstream
+            .history
+            .push(hist("remote", "2026-01-03T00:00:00Z"));
+        let mut local = base.clone();
+        local.title = "local".into();
+        local.modified_at = upstream.modified_at + chrono::Duration::days(1);
+        local.history.push(hist("local", "2026-01-02T00:00:00Z"));
+        let a = Comment::new("remote".into(), "earlier".into());
+        let mut b = Comment::new("local".into(), "later".into());
+        b.created_at = a.created_at + chrono::Duration::seconds(1);
+        upstream.comments = vec![a.clone()];
+        local.comments = vec![b.clone(), a.clone()];
+        base.tags = ["removed".into()].into_iter().collect();
+        upstream.tags = base.tags.clone();
+        local.tags = ["local".into()].into_iter().collect();
+        let target = uuid::Uuid::new_v4();
+        local.relationships = vec![rel(RelationshipType::BlockedBy, target)];
+        local.dependencies = vec![target];
+        let merged = merge_spec_upstream(&base, &upstream, &local);
+        assert_eq!(merged.tags, local.tags);
+        assert_eq!(merged.relationships, local.relationships);
+        assert_eq!(merged.dependencies, local.dependencies);
+        assert_eq!(merged.title, "upstream");
+        assert_eq!(merged.modified_at, upstream.modified_at);
+        assert_eq!(merged.history.len(), 3);
+        assert_eq!(merged.history[1].author, "local");
+        assert_eq!(merged.comments.len(), 2);
+        assert_eq!(merged.comments[0].id, a.id);
+        assert_eq!(merged.comments[1].id, b.id);
+    }
+
+    // trace:BUG-2501 | ai:codex
+    #[test]
+    fn pull_merge_preserves_nested_replies_reactions_and_upstream_edits() {
+        let mut base = make_req("base", "Draft");
+        let mut comment = Comment::new("author".into(), "original".into());
+        let reply = Comment::new("author".into(), "reply".into());
+        comment.replies.push(reply);
+        base.comments.push(comment);
+        let mut upstream = base.clone();
+        let mut local = base.clone();
+        upstream.comments[0].content = "upstream edit".into();
+        local.comments[0].content = "local edit".into();
+        upstream.comments[0].replies[0].content = "upstream reply edit".into();
+        upstream.comments[0].replies[0]
+            .replies
+            .push(Comment::new("remote".into(), "nested remote".into()));
+        local.comments[0].replies[0]
+            .replies
+            .push(Comment::new("local".into(), "nested local".into()));
+        upstream.comments[0]
+            .reactions
+            .push(crate::models::CommentReaction::new("like", "remote"));
+        local.comments[0]
+            .reactions
+            .push(crate::models::CommentReaction::new("like", "local"));
+        let merged = merge_spec_upstream(&base, &upstream, &local);
+        assert_eq!(merged.comments.len(), 1);
+        let comment = &merged.comments[0];
+        assert_eq!(comment.content, "upstream edit");
+        assert_eq!(comment.reactions.len(), 2);
+        assert_eq!(comment.replies[0].content, "upstream reply edit");
+        assert_eq!(comment.replies[0].replies.len(), 2);
+        assert_eq!(
+            merge_spec_upstream(&base, &upstream, &merged).comments,
+            merged.comments
+        );
+    }
+
+    // trace:BUG-2501 | ai:codex
+    #[test]
+    fn pull_merge_two_hosts_recording_same_completion_retains_both_audit_events() {
+        let base = make_req("base", "Approved");
+        let mut upstream = base.clone();
+        let mut local = base.clone();
+        upstream.set_status_from_str("Completed");
+        local.set_status_from_str("Completed");
+        let mut remote_event = hist("host-a", "2026-01-01T00:00:00Z");
+        remote_event.changes[0].old_value = "approved".into();
+        remote_event.changes[0].new_value = "completed".into();
+        let mut local_event = remote_event.clone();
+        local_event.id = uuid::Uuid::new_v4();
+        local_event.author = "host-b".into();
+        upstream.history.push(remote_event.clone());
+        local.history.push(local_event.clone());
+        let merged = merge_spec_upstream(&base, &upstream, &local);
+        assert_eq!(merged.status, upstream.status);
+        // Distinct writes retain their provenance; replaying either event deduplicates by id.
+        assert_eq!(merged.history.len(), 2);
+        assert!(merged.history.contains(&remote_event));
+        assert!(merged.history.contains(&local_event));
+        assert_eq!(
+            merge_spec_upstream(&base, &upstream, &merged).history,
+            merged.history
+        );
     }
 
     // trace:STORY-641 — concurrent same-spec history appends union by id.

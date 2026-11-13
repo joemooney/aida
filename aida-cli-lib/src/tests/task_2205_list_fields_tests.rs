@@ -4,6 +4,8 @@
 
 use super::task970_agent_output_tests::fields_summary;
 use super::*;
+// trace:TASK-3428 | ai:codex
+use crate::{build_list_fields_lines, list_fields_help, search_fields_help};
 
 #[test]
 fn fields_split_on_commas_and_or_whitespace() {
@@ -78,7 +80,7 @@ fn unknown_field_still_errors_with_valid_list() {
 /// the parser accepts — every known field, every alias, nothing else.
 #[test]
 fn list_fields_help_matches_parser_set() {
-    let cmd = crate::command_registry::built_command();
+    let cmd = crate::TEST_CLI.built_command();
     let list = cmd
         .get_subcommands()
         .find(|s| s.get_name() == "list")
@@ -136,7 +138,7 @@ fn task_2003_human_fields_table_renders_review_lens() {
 // trace:TASK-2238 | ai:claude
 #[test]
 fn search_fields_help_matches_parser_set() {
-    let cmd = crate::command_registry::built_command();
+    let cmd = crate::TEST_CLI.built_command();
     let search = cmd
         .get_subcommands()
         .find(|s| s.get_name() == "search")

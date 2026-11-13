@@ -1,7 +1,21 @@
+// trace:TASK-3429 | ai:codex
 //! git linkage, trailer gate, trace check, diff coverage, and doc suggest (STORY-1488 slice 1)
 // trace:STORY-1488 | ai:claude
 
-use crate::*;
+use crate::{
+    awaiting_you, change_lookup_for_branch, command_output_with_timeout,
+    command_output_with_timeout_detail, criterion_trace_suffix, detect_distributed_store_from,
+    drain_state, extract_referenced_spec_ids_from_commit, extract_spec_ids_from_commit,
+    extract_trace_line_spec_ids, find_project_root, git_arg_guard, is_plan_commit_subject,
+    list_leases, load_store_for_lookup, parse_squash_pr_number, resolve_default_branch_ref,
+    resolve_default_branch_ref_until, warn_multi_repo_scan_limited, with_forge_lookup_timeout,
+    workspace_repo_slug, BoundedCommandOutput, DefaultBranchResolveTimedOut,
+    FORGE_CLI_CALL_TIMEOUT, FORGE_LOOKUP_TIMED_OUT,
+};
+use aida_core::{RelationshipType, RequirementStatus, RequirementType, Storage};
+use anyhow::Result;
+use colored::Colorize;
+use std::collections::HashSet;
 
 /// Parse the spec id out of a `git grep -o` hit on the trace regex. The line is
 /// the matched text (`trace:SPEC-ID`), possibly carrying a `ref:file:` prefix
@@ -33,7 +47,13 @@ pub(crate) fn parse_trace_id_token(line: &str) -> Option<String> {
             .find(|c: char| !(c.is_ascii_alphanumeric() || c == '-' || c == '_'))
             .unwrap_or(suffix_rest.len());
         let suffix = &suffix_rest[..suffix_end];
-        if criterion_trace_suffix(suffix) {
+        // A dotted filename must not become a truncated criterion label.
+        // trace:STORY-1486 | ai:codex
+        if !suffix_rest[suffix_end..]
+            .strip_prefix('.')
+            .is_some_and(|tail| tail.starts_with(|c: char| c.is_ascii_alphanumeric()))
+            && criterion_trace_suffix(suffix)
+        {
             return Some(format!("{spec}.{suffix}").to_ascii_uppercase());
         }
     }
@@ -637,56 +657,56 @@ pub(crate) fn format_change_linkage(
 // trace:STORY-82 | ai:claude — `pub(crate)` so the MCP `show_requirement`
 // tool can reuse the same git-linkage collection `aida show` renders.
 #[derive(Debug)]
-pub(crate) struct GitLinkage {
+pub struct GitLinkage {
     /// (full_sha, short_sha, subject), newest first.
-    pub(crate) commits: Vec<(String, String, String)>,
+    pub commits: Vec<(String, String, String)>,
     /// (file, symbol) per trace comment — deduped and sorted.
-    pub(crate) files: Vec<(String, Option<String>)>,
+    pub files: Vec<(String, Option<String>)>,
     /// The newest referencing commit is an ancestor of main.
-    pub(crate) shipped: bool,
+    pub shipped: bool,
     /// Feature branch holding the work (in-flight case only).
-    pub(crate) branch: Option<String>,
+    pub branch: Option<String>,
     /// BUG-1528: other branches (besides `branch`) whose name matches the
     /// spec id and that also carry a referencing commit — a branch-crossing
     /// signal (e.g. `bug-1420-work` + `bug-1420-round2` both open). Rendered
     /// as a note so a reviewer sees the fan-out instead of one branch picked
     /// silently. Empty in the common single-branch case.
     // trace:BUG-1528 | ai:claude
-    pub(crate) other_branches: Vec<String>,
+    pub other_branches: Vec<String>,
     /// BUG-1594: `Some((scanned, total))` when the in-flight branch search
     /// stopped before walking every referencing commit (commit cap or wall-
     /// clock budget hit), so `branch`/`other_branches` may be incomplete.
     /// Rendered as an explicit note — partial linkage is never shown as
     /// complete (PRIN-5). `None` when the search covered every commit.
     // trace:BUG-1594 | ai:claude
-    pub(crate) branch_scan_truncated: Option<(usize, usize)>,
+    pub branch_scan_truncated: Option<(usize, usize)>,
     /// BUG-1594: the trace-comment walk hit its time budget, so `files` may
     /// be missing entries. Rendered as an explicit note (PRIN-5).
     // trace:BUG-1594 | ai:claude
-    pub(crate) files_scan_incomplete: bool,
+    pub files_scan_incomplete: bool,
     /// BUG-1993: the referencing-commit `git log --all` hit its time budget,
     /// so `commits` is empty and the shipped state is unknown. Rendered as an
     /// explicit note (PRIN-5), never as "no commits" or "not shipped".
     // trace:BUG-1993 | ai:claude
-    pub(crate) commits_scan_incomplete: bool,
+    pub commits_scan_incomplete: bool,
     /// BUG-1993: the shipped state is unknown — the commit scan or the
     /// `merge-base --is-ancestor` check did not finish in budget. `shipped`
     /// is `false` then, but renderers must read it as "unknown".
     // trace:BUG-1993 | ai:claude
-    pub(crate) shipped_unknown: bool,
+    pub shipped_unknown: bool,
     /// BUG-1993: the `git worktree list --porcelain` probe hit its time
     /// budget, so `worktree` is unknown rather than absent (PRIN-5).
     // trace:BUG-1993 | ai:antigravity
-    pub(crate) worktree_scan_incomplete: bool,
+    pub worktree_scan_incomplete: bool,
     /// Worktree path checked out at `branch`, if any.
-    pub(crate) worktree: Option<String>,
+    pub worktree: Option<String>,
     /// PR number parsed from a squash-merge subject (shipped case only).
-    pub(crate) shipped_pr: Option<u64>,
+    pub shipped_pr: Option<u64>,
     /// Workspace repo slug this linkage was scanned from (ADR-12 D5: the
     /// `origin.repo` join key qualifying commits/branch/PR). `None` in the
     /// single-repo case — rendering stays unqualified, unchanged.
     // trace:STORY-634 | ai:claude
-    pub(crate) repo: Option<String>,
+    pub repo: Option<String>,
 }
 
 impl GitLinkage {
@@ -694,7 +714,7 @@ impl GitLinkage {
     /// order. Empty when every scan finished, so `is_empty()` is the
     /// "linkage is complete" test the JSON and Markdown surfaces share.
     // trace:BUG-1993 | ai:claude
-    pub(crate) fn incomplete_notes(&self) -> Vec<String> {
+    pub fn incomplete_notes(&self) -> Vec<String> {
         let mut notes = Vec::new();
         if self.commits_scan_incomplete {
             notes.push(LINKAGE_COMMIT_SCAN_INCOMPLETE_NOTE.to_string());
@@ -719,7 +739,7 @@ impl GitLinkage {
     /// walk). Review-surface classifiers read this so a timed-out scan is
     /// "unknown", never "never pushed" (PRIN-5).
     // trace:BUG-1993 | ai:claude
-    pub(crate) fn unknown_reason(&self) -> Option<&'static str> {
+    pub fn unknown_reason(&self) -> Option<&'static str> {
         if self.shipped {
             return None;
         }
@@ -793,8 +813,7 @@ pub(crate) const LINKAGE_WORKTREE_LIST_TIMEOUT: std::time::Duration =
 // Four seconds of optional linkage alone exhausted the five-second response
 // ceiling under contention. Leave room for canonical lookup and cache context;
 // expired probes keep the existing partial/unknown evidence labels.
-pub(crate) const SHOW_LINKAGE_DEADLINE: std::time::Duration =
-    std::time::Duration::from_millis(1200);
+pub const SHOW_LINKAGE_DEADLINE: std::time::Duration = std::time::Duration::from_millis(1200);
 
 /// BUG-1993: what is left of a show linkage `deadline`, at most `cap`.
 // trace:BUG-1993 | ai:claude
@@ -1014,7 +1033,7 @@ fn filing_drift_hint_inner(
 /// branch/worktree/shipped state. gh-free by design: the in-flight
 /// open-PR lookup happens later, in [`print_git_linkage`].
 /// trace:TASK-241 | ai:claude
-pub(crate) fn collect_git_linkage(project_root: &std::path::Path, ids: &[String]) -> GitLinkage {
+pub fn collect_git_linkage(project_root: &std::path::Path, ids: &[String]) -> GitLinkage {
     collect_git_linkage_opts(project_root, ids, true)
 }
 
@@ -1025,7 +1044,7 @@ pub(crate) fn collect_git_linkage(project_root: &std::path::Path, ids: &[String]
 /// linkage unknown. Non-show callers use [`collect_git_linkage_opts`], which
 /// keeps the shared resolvers unbounded.
 // trace:BUG-1993 | ai:claude
-pub(crate) fn collect_git_linkage_until(
+pub fn collect_git_linkage_until(
     project_root: &std::path::Path,
     ids: &[String],
     deadline: std::time::Instant,
@@ -2548,6 +2567,44 @@ pub(crate) fn pr_open_spec_guard_violation(
     Some(other_ids)
 }
 
+/// Publication attribution accepts completing and Refs trailers. Keep this
+/// separate from completion evidence: a Refs slice does not complete its spec.
+// trace:BUG-2483 | ai:codex
+pub(crate) fn pr_publication_spec_guard_violation(
+    commits: &[(String, String)],
+    expected_spec: &str,
+    store: Option<&aida_core::RequirementsStore>,
+) -> Option<Vec<String>> {
+    let resolve = |id: &str| store.and_then(|s| s.resolve_unambiguous_index(id).ok().flatten());
+    let expected = store.map(|s| s.resolve_unambiguous_index(expected_spec));
+    let mut other_ids = Vec::new();
+    for (_, subject) in commits {
+        if is_plan_commit_subject(subject) {
+            continue;
+        }
+        for id in extract_spec_ids_from_commit(subject).into_iter().chain(
+            crate::pr_ship::extract_trailing_refs_spec_ids_from_subject(subject),
+        ) {
+            let matches = match &expected {
+                Some(Ok(Some(index))) => resolve(&id) == Some(*index),
+                // A stale store may not contain the leased spec yet.
+                Some(Ok(None)) | None => id.eq_ignore_ascii_case(expected_spec),
+                Some(Err(_)) => false,
+            };
+            if matches {
+                return None;
+            }
+            if !other_ids
+                .iter()
+                .any(|s: &String| s.eq_ignore_ascii_case(&id))
+            {
+                other_ids.push(id);
+            }
+        }
+    }
+    Some(other_ids)
+}
+
 /// Which spec a reviewer-verdict shelve should be recorded against.
 // trace:TASK-1444 | ai:claude
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -2659,7 +2716,8 @@ pub(crate) fn collect_pr_attribution_disagreements(
 }
 
 /// Refuse (exit 1) to open a PR when no commit the branch adds over the
-/// default branch carries a `(SPEC-ID)` trailer naming `expected_spec`. A
+/// default branch carries a `(SPEC-ID)` or `(Refs SPEC-ID)` trailer naming
+/// `expected_spec` (including an unambiguous store alias). A
 /// no-op when the commit range can't be read (soft warning — a git hiccup
 /// shouldn't block shipping) or when the branch has no commits to ship.
 // trace:TASK-1442 | ai:claude
@@ -2684,21 +2742,26 @@ pub(crate) fn run_pr_open_spec_guard(
         return;
     }
 
-    let other_ids = match pr_open_spec_guard_violation(&commits, expected_spec) {
-        None => return,
-        Some(ids) => ids,
-    };
+    let store = load_store_for_lookup(project_root);
+    let other_ids =
+        match pr_publication_spec_guard_violation(&commits, expected_spec, store.as_ref()) {
+            None => return,
+            Some(ids) => ids,
+        };
 
     eprintln!(
         "{} pr ship: refusing to open a PR — branch `{}` is leased for {} but no commit on \
-         it carries a `({})` trailer.",
+         it carries a `({})` or `(Refs {})` trailer.",
         crate::glyph(crate::glyphs::Glyph::Cross),
         branch,
+        expected_spec,
         expected_spec,
         expected_spec
     );
     if other_ids.is_empty() {
-        eprintln!("  no commit on this branch carries a (SPEC-ID) trailer at all.");
+        eprintln!(
+            "  no commit on this branch carries a (SPEC-ID) or (Refs SPEC-ID) trailer at all."
+        );
     } else {
         eprintln!(
             "  commit trailer(s) instead name: {} — a mismatch against the leased spec {}.",
@@ -2748,33 +2811,39 @@ pub(crate) fn classify_branch_swap_attribution(
     decide_shelve_attribution(&commits, expected_spec)
 }
 
-/// TASK-1442 follow-up: the same PR-spec attribution check as
-/// `run_pr_open_spec_guard`, but as a `Result` instead of an exiting side
-/// effect. `run_pr_open_spec_guard` is only safe at `aida pr ship`'s own
-/// top level; the autonomous drain's PR-open recovery paths
-/// (`open_orchestrator_pr_for_implementer_worktree`,
-/// `open_orchestrator_pr_for_pushed_branch`) run INSIDE the orchestrator
-/// process, where `std::process::exit` would kill the whole drain instead of
-/// failing just the one phase. `repo` is the directory to run git in (the
-/// implementer worktree, or the main project root for a pushed branch);
-/// `branch_ref` is whatever ref names the branch's commits from there (a
-/// local branch name or `origin/<branch>`). A no-op when the default branch
-/// or commit range can't be resolved (soft — a git hiccup shouldn't block
-/// recovery) or when there are no commits to check.
-///
-/// TASK-1457: this collapses `Reattributed` and `Uncertain` (see
-/// `classify_branch_swap_attribution` above) into the same `Err` — a
-/// deliberate, kept decision for THIS gate. `ensure_spec_done_after_pr`
-/// (its only status-writing caller) must not flip a spec to Done on
-/// EITHER absent or contrary trailer evidence; per PRIN-5, "cannot
-/// determine" is not license to proceed on a Done write any more than
-/// "determined otherwise" is. The two PR-open recovery callers
-/// (`open_orchestrator_pr_for_implementer_worktree`,
-/// `open_orchestrator_pr_for_pushed_branch`) inherit the same fail-safe
-/// for the same reason: opening a PR under an unconfirmed identity is a
-/// second write worth refusing on absent evidence too. Only the
-/// branch-swap seam needs the finer three-way split, because only it has
-/// to tell an operator whether to look for a swap or a missing trailer.
+/// Result-returning publication guard for drain PR-open recovery. Refs and
+/// unambiguous aliases establish publication attribution, never completion.
+// trace:BUG-2483 | ai:codex
+pub(crate) fn ensure_pr_publication_spec_attribution(
+    repo: &std::path::Path,
+    branch_ref: &str,
+    expected_spec: &str,
+) -> Result<()> {
+    let Some(default_ref) = resolve_default_branch_ref(repo) else {
+        return Ok(());
+    };
+    let range = format!("{default_ref}..{branch_ref}");
+    let Ok(commits) = read_commits_in_range(repo, &range) else {
+        return Ok(());
+    };
+    if commits.is_empty() {
+        return Ok(());
+    }
+    let store = load_store_for_lookup(repo);
+    if let Some(other_ids) =
+        pr_publication_spec_guard_violation(&commits, expected_spec, store.as_ref())
+    {
+        anyhow::bail!(
+            "refusing to open a PR for {expected_spec} on `{branch_ref}` — no commit on it \
+             carries a `({expected_spec})` or `(Refs {expected_spec})` trailer; other IDs: {}",
+            other_ids.join(", ")
+        );
+    }
+    Ok(())
+}
+
+/// Completion-only attribution for Done writes and phase handshakes.
+/// Missing default/range evidence retains the existing soft recovery behavior.
 // trace:TASK-1442 trace:TASK-1457 | ai:claude
 pub(crate) fn ensure_pr_open_spec_attribution(
     repo: &std::path::Path,
@@ -3749,12 +3818,13 @@ pub(crate) fn mcp_tool_name_in_line(line: &str) -> Option<&str> {
 }
 
 /// Classify a single ADDED diff line as new public surface, or `None`. PURE —
-/// the `file` path only selects the MCP-tool probe (limited to `mcp.rs`).
+/// the `file` path only selects the MCP-tool probe (`mcp.rs` or `mcp_schema.rs`).
 // trace:TASK-939 | ai:claude
+// trace:TASK-3429 | ai:codex
 pub(crate) fn classify_surface_line(file: &str, line: &str) -> Option<PublicSurfaceKind> {
-    // MCP tool descriptor — only in the MCP surface file. The server-name line
+    // MCP tool descriptor — in the transport or shared schema. The server-name line
     // (`"name": "aida"`) is excluded so it never reads as a new tool.
-    if file.ends_with("mcp.rs") {
+    if file.ends_with("mcp.rs") || file.ends_with("mcp_schema.rs") {
         if let Some(name) = mcp_tool_name_in_line(line) {
             if name != "aida" {
                 return Some(PublicSurfaceKind::McpTool);

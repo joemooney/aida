@@ -1,7 +1,9 @@
 //! Scaffolded memory-pack refresh, drift reporting and markdown frontmatter helpers (STORY-1488 slice 1)
 // trace:STORY-1488 | ai:claude
 
-use crate::*;
+use crate::process_probe;
+use anyhow::{Context, Result};
+use colored::Colorize;
 
 /// FNV-1a 64-bit hash, lowercase hex. Used as the starter memory pack's
 /// "edited since scaffold?" fingerprint — deterministic across releases and

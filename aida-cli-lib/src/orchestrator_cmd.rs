@@ -3,7 +3,13 @@
 //! (SPIKE-78 / STORY-771; pure movement, no behavior change).
 // trace:STORY-771 | ai:claude
 
-use crate::*;
+use crate::{
+    active_lease_for_cwd, ahead_behind_vs_ref, change_lookup_for_branch, current_branch_at,
+    drain_state, find_main_worktree_root, orchestrator, session_manifest, state_snapshot,
+    upstream_ref_for, OrchestratorCommand,
+};
+use anyhow::Result;
+use colored::Colorize;
 
 // trace:STORY-1728 | ai:claude
 #[path = "orchestrator_cmd_args.rs"]
@@ -261,7 +267,7 @@ pub(crate) struct OrchestratorArgs {
 // trace:BUG-233 trace:TASK-336 | ai:claude
 fn run_orchestrator(
     matches: &clap::ArgMatches,
-    _ctx: &crate::command_registry::DispatchCtx,
+    _ctx: &crate::cmdkit::DispatchCtx,
 ) -> anyhow::Result<()> {
     let args = <OrchestratorArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
     let orch_cmd = &args.inner;
@@ -269,19 +275,18 @@ fn run_orchestrator(
 }
 
 // trace:STORY-1728 | ai:claude
-pub(crate) static ORCHESTRATOR: crate::command_registry::CommandReg =
-    crate::command_registry::CommandReg {
-        name: "orchestrator",
-        help_after: "pr",
-        command: <OrchestratorArgs as clap::CommandFactory>::command,
-        policy: |_| crate::command_registry::CmdPolicy {
-            stakeholder: crate::stakeholder_role::StakeholderAction::Write,
-            per_write_auto_push: false,
-            skip_role_restore_prompt: false,
-            team_identity_write: false,
-        },
-        run: crate::command_registry::Handler::Early(run_orchestrator),
-    };
+pub(crate) static ORCHESTRATOR: crate::cmdkit::CommandReg = crate::cmdkit::CommandReg {
+    name: "orchestrator",
+    help_after: "pr",
+    command: <OrchestratorArgs as clap::CommandFactory>::command,
+    policy: |_| crate::cmdkit::CmdPolicy {
+        stakeholder: crate::stakeholder_role::StakeholderAction::Write,
+        per_write_auto_push: false,
+        skip_role_restore_prompt: false,
+        team_identity_write: false,
+    },
+    run: crate::cmdkit::Handler::Early(run_orchestrator),
+};
 
 /// Emit the seven-row finish-state preamble (Spec / Branch / PR / Drain
 /// / Tests / Fmt / Plan) deterministically. One source of truth for
@@ -318,16 +323,14 @@ pub(crate) struct StateSnapshotArgs {
 
 fn run_state_snapshot(
     matches: &clap::ArgMatches,
-    ctx: &crate::command_registry::DispatchCtx,
-) -> anyhow::Result<crate::command_registry::Flow> {
-    use crate::*;
+    ctx: &crate::cmdkit::DispatchCtx,
+) -> anyhow::Result<crate::cmdkit::Flow> {
+    use crate::{handle_state_snapshot_command, StateSnapshotArgs};
     let args = <StateSnapshotArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
     match &ctx.store {
-        None => Ok(crate::command_registry::Flow::Continue),
-        Some(crate::command_registry::StoreCtx::Distributed { .. }) => {
-            Ok(crate::command_registry::Flow::Continue)
-        }
-        Some(crate::command_registry::StoreCtx::Git {
+        None => Ok(crate::cmdkit::Flow::Continue),
+        Some(crate::cmdkit::StoreCtx::Distributed { .. }) => Ok(crate::cmdkit::Flow::Continue),
+        Some(crate::cmdkit::StoreCtx::Git {
             store_path,
             backend,
         }) => {
@@ -343,9 +346,9 @@ fn run_state_snapshot(
                     handle_state_snapshot_command(backend, store_path, spec, tests, fmt, *json)?;
                 }
             }
-            Ok(crate::command_registry::Flow::Continue)
+            Ok(crate::cmdkit::Flow::Continue)
         }
-        Some(crate::command_registry::StoreCtx::Legacy {
+        Some(crate::cmdkit::StoreCtx::Legacy {
             storage,
             requirements_path,
         }) => {
@@ -361,22 +364,21 @@ fn run_state_snapshot(
                     );
                 }
             }
-            Ok(crate::command_registry::Flow::Continue)
+            Ok(crate::cmdkit::Flow::Continue)
         }
     }
 }
 
 // trace:STORY-1728 | ai:claude
-pub(crate) static STATE_SNAPSHOT: crate::command_registry::CommandReg =
-    crate::command_registry::CommandReg {
-        name: "state-snapshot",
-        help_after: "agent",
-        command: <StateSnapshotArgs as clap::CommandFactory>::command,
-        policy: |_| crate::command_registry::CmdPolicy {
-            stakeholder: crate::stakeholder_role::StakeholderAction::Write,
-            per_write_auto_push: false,
-            skip_role_restore_prompt: false,
-            team_identity_write: false,
-        },
-        run: crate::command_registry::Handler::Store(run_state_snapshot),
-    };
+pub(crate) static STATE_SNAPSHOT: crate::cmdkit::CommandReg = crate::cmdkit::CommandReg {
+    name: "state-snapshot",
+    help_after: "agent",
+    command: <StateSnapshotArgs as clap::CommandFactory>::command,
+    policy: |_| crate::cmdkit::CmdPolicy {
+        stakeholder: crate::stakeholder_role::StakeholderAction::Write,
+        per_write_auto_push: false,
+        skip_role_restore_prompt: false,
+        team_identity_write: false,
+    },
+    run: crate::cmdkit::Handler::Store(run_state_snapshot),
+};

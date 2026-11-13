@@ -205,6 +205,8 @@ impl Scaffolder {
             ));
         }
 
+        // trace:STORY-2662 | ai:codex
+        hooks.push(r#"    "PreCompact": [{"hooks": [{"type": "command", "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/aida-precompact-handoff.sh", "timeout": 15}]}]"#.to_string());
         // SessionStart: role-context hook surfaces (role:<name>) state when
         // a Claude Code session starts. trace:TASK-20 | ai:claude
         if self.config.include_role_context_hook {
@@ -218,10 +220,16 @@ impl Scaffolder {
             "timeout": 5
           }
         ]
-      }
+      },
+      {"hooks": [{"type": "command", "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/aida-precompact-handoff.sh", "timeout": 15}]}
     ]"#
                 .to_string(),
             );
+        }
+
+        // trace:STORY-2662 | ai:codex
+        if !self.config.include_role_context_hook {
+            hooks.push(r#"    "SessionStart": [{"hooks": [{"type": "command", "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/aida-precompact-handoff.sh", "timeout": 15}]}]"#.to_string());
         }
 
         // UserPromptSubmit: clears the pending-approval marker (the other
@@ -365,6 +373,48 @@ mod tests {
     fn parse_json(s: &str) -> serde_json::Value {
         serde_json::from_str(s)
             .unwrap_or_else(|e| panic!("settings.json output is not valid JSON: {}\n\n{}", e, s))
+    }
+
+    // trace:STORY-2662 | ai:codex
+    #[test]
+    fn precompact_handoff_is_claude_only_and_managed() {
+        for include_role_context_hook in [true, false] {
+            let settings = parse_json(&build(ScaffoldConfig {
+                include_role_context_hook,
+                ..ScaffoldConfig::default()
+            }));
+            let hook = &settings["hooks"]["PreCompact"][0]["hooks"][0];
+            assert!(hook["command"]
+                .as_str()
+                .unwrap()
+                .contains("aida-precompact-handoff.sh"));
+            assert_eq!(hook["timeout"], 15);
+            assert!(settings["hooks"]["SessionStart"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .any(|entry| entry["hooks"][0]["command"]
+                    .as_str()
+                    .unwrap()
+                    .contains("aida-precompact-handoff.sh")));
+        }
+        assert!(
+            super::super::managed_merge::slots_for_file(std::path::Path::new(
+                ".claude/settings.json"
+            ))
+            .contains(&"/hooks/PreCompact")
+        );
+        for vendor in [
+            crate::vendors::LaunchVendor::Claude,
+            crate::vendors::LaunchVendor::Codex,
+        ] {
+            let layout = crate::vendors::profile(vendor).hooks;
+            assert_eq!(
+                layout.events.contains(&"PreCompact"),
+                vendor == crate::vendors::LaunchVendor::Claude
+            );
+            crate::vendors::hooks::hook_template(layout).unwrap();
+        }
     }
 
     // trace:BUG-2392 | ai:codex
@@ -518,20 +568,21 @@ mod tests {
         assert_eq!(entries[0]["hooks"][0]["timeout"], 5);
     }
 
-    /// Disabling the role-context flag drops the SessionStart block
-    /// entirely (no empty array left behind). trace:TASK-20 | ai:claude
+    /// Disabling role context retains only compaction recovery.
+    /// trace:TASK-20 STORY-2662 | ai:codex
     #[test]
-    fn session_start_omitted_when_role_context_hook_disabled() {
+    fn session_start_retains_compact_recovery_when_role_context_hook_disabled() {
         let config = ScaffoldConfig {
             include_role_context_hook: false,
             ..Default::default()
         };
         let json = build(config);
         let v = parse_json(&json);
-        assert!(
-            v["hooks"]["SessionStart"].is_null(),
-            "SessionStart should be absent when the flag is off"
-        );
+        let entries = v["hooks"]["SessionStart"].as_array().unwrap();
+        assert_eq!(entries.len(), 1);
+        let command = entries[0]["hooks"][0]["command"].as_str().unwrap();
+        assert!(command.ends_with("/aida-precompact-handoff.sh"));
+        assert!(!json.contains("aida-role-context.sh"));
     }
 
     /// SubagentStart/Stop hooks capture harness worktree leases.

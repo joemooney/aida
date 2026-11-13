@@ -134,6 +134,25 @@ pub(crate) fn path_deny_rules(path: &Path) -> Vec<String> {
 /// missing cache directory is not granted and shows up as a doctor gap.
 // trace:BUG-1929 trace:TASK-2707 | ai:claude
 pub(crate) fn contained_store_write_paths(main: &Path) -> Vec<PathBuf> {
+    contained_store_write_paths_for(main, StoreWriteProfile::Compatibility)
+}
+
+/// Selecting mediation never inherits the legacy canonical-store/cache grants.
+/// Production admission stays closed until writer routing and publication pass.
+// trace:TASK-3223 | ai:codex
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum StoreWriteProfile {
+    Compatibility,
+    Mediated,
+}
+
+pub(crate) fn contained_store_write_paths_for(
+    main: &Path,
+    profile: StoreWriteProfile,
+) -> Vec<PathBuf> {
+    if profile == StoreWriteProfile::Mediated {
+        return Vec::new();
+    }
     let mut paths = Vec::new();
     for base in contained_write_roots(main) {
         paths.push(base.join(".aida-store"));
