@@ -8,11 +8,19 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-13T12:55:11.090557357Z
-modified_at: 2026-11-13T12:56:05.059153136Z
+modified_at: 2026-11-13T15:10:50.103019289Z
 req_type: Bug
 tags:
 - store
 - track:integration
+comments:
+- id: 01a1d576-1cf7-7aa1-9340-4ecfe95e8434
+  author: joe
+  content: '[advisor 2026-11-13 08:10] Recurred on primary right after promotion 4 (#3922) landed: 6 auto-bump timing commits (BUG-2545, BUG-2550, BUG-310, BUG-315, STORY-660, STORY-673) were published by both hosts, so aida pull --store-only failed on timings/BUG/002/BUG-2545.json and every store write/pickup here was at risk. Manual recovery that worked: backup ref, ''git rebase -i <merge-base>'' dropping ONLY the local ''timing: publish ... (auto-bump)'' commits whose path origin also changed, then ''aida pull --store-only && aida push''. Every promotion landing will hit this until fixed: make timing publish idempotent (first writer wins, skip if origin has the record) or treat timings/* as take-theirs on pull.'
+  created_at: 2026-11-13T15:10:50.103019289Z
+  modified_at: 2026-11-13T15:10:50.103019289Z
+  session_id: 01a1d54b-060a-7951-aa40-7f0fd928126f
+  harness_version: 2.1.323 (Claude Code)
 history:
 - id: 01a1d4fa-bec3-7eb0-99df-a2b3f6d93859
   author: joe
