@@ -3,12 +3,12 @@ spec_id: TASK-b6b1278890774ef993d2ebc327862470-1059
 agreed_id: TASK-3779
 title: 'Usability sweep: compact ''aida config permissions show'' and pad emoji glyphs in terminal output'
 description: 'Reported from operator''s work machine (Codex, GitLab project hello-work-0x), 2026-11-09. (1) ''aida config permissions show'' is too noisy: one summary row per vendor (tier, launch readiness, net effect) by default; the launch/scope detail lines and long refusal prose move under --verbose. (2) Where output prints an emoji or wide symbol, terminals often swallow the next character; always follow such glyphs with a space (two where the glyph is double-width ambiguous), via one shared helper, with a ratchet test over CLI output strings.'
-status: InProgress
+status: Completed
 priority: Low
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-10T03:07:15.181924Z
-modified_at: 2026-11-13T13:10:18.923002378Z
+modified_at: 2026-11-13T20:39:31.300298377Z
 req_type: Task
 tags:
 - track:dell1
@@ -316,6 +316,20 @@ history:
   author: joe
   timestamp: 2026-11-13T13:10:21.649492615Z
   changes: []
+- id: 01a1d6a3-06c3-7d93-be83-ce2066ddd133
+  author: aida-auto-bump
+  timestamp: 2026-11-13T20:39:30.755839633Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a1d6a3-08e4-7211-b749-ad22b681b929
+  timestamp: 2026-11-13T20:39:31.300293665Z
+  agent: aida
+  commit_sha: 9849b3c898fb6662d3707375c7d4d545a9ae0cb1
+  summary: Manual flag-citation rework verified against real CLI help; 17 focused tests and static manual guard pass; broader glyph migration remains explicitly deferred. CI pending at review time.
+  review_verdict: approved
 execution_mode: drain
 filed_at:
   code_sha: 838f14c3c2811c6b63da5d465700cff773c36190
@@ -326,3 +340,7 @@ filed_at:
   vendor: claude
   session: 01a1beff-fc3b-78e2-93e2-9b0c283b0339
   harness_version: 2.1.319 (Claude Code)
+implementation_info:
+  implemented: false
+  completed_at: 2026-11-13T20:39:30.755833223Z
+  completion_sha: 9849b3c898fb6662d3707375c7d4d545a9ae0cb1
