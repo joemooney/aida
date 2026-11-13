@@ -30,7 +30,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-13T15:54:08.931576118Z
-modified_at: 2026-11-13T22:06:23.738885158Z
+modified_at: 2026-11-13T22:06:28.284745040Z
 req_type: Story
 tags:
 - architecture
@@ -104,6 +104,23 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Full sweep: current-base evidence bypassed by orchestrator, carried approvals rejected by automatic trains, stale conflict receipts block admission, and required workflow regressions are missing.. No triage reason was given.'
   created_at: 2026-11-13T22:06:23.738879297Z
   modified_at: 2026-11-13T22:06:23.738879297Z
+  session_id: 01a1d684-8599-70e0-a01c-714f54d2f8de
+  harness_version: 2.1.323 (Claude Code)
+- id: 01a1d6f2-a310-7852-9640-2c237ea49c42
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (STORY-2763):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 3d3bec888fa4
+    Recorded: 2026-11-13T21:38:46.135247819+00:00
+    Findings:
+    1. [P1] Apply current-base/delta evidence to orchestrator reviewer launches (AC2; queue_cmd/work.rs:6619). review_freshness::review_prompt is only called from run_standalone_reviewer and handle_review_spec. RealPhaseDriver::run_reviewer sets AIDA_REVIEW_VERDICT_FILE before queue work, so is_standalone_reviewer (work.rs:3057) is false and that launch bypasses the new evidence entirely. Fast preflight now allows stale overlapping branches, so this normal phase-3 reviewer is launched on the old branch without the landed-tree diff or delta scope. Compose the evidence in the common reviewer launch path and test a phase-3 launch with this environment set.
+    2. [P1] Permit proved fast carry-over at automatic train admission (AC1; advisor_loop_train.rs:36-40, reached via pr_train.rs:1345 and review_watch.rs::advisor_train_eligible). eligible still requires approval.reviewed == change.head AND approval.carried.is_none(). Thus a clean base merge can suppress the watcher review but is then categorically rejected by the automatic train, despite a valid carry-over proof. Honor authoritative fast-policy carry-over here while retaining strict behavior and destination-head CI; test that the automatically selected train accepts it.
+    3. [P2] Re-probe conflicts when the protected base changes (AC2; review_watch.rs:2960-2973 and gate/review_freshness.rs:347-368). A rework-routed receipt is keyed only by PR/head, and the watcher returns before probing the current base whenever that receipt exists. If main later reverts the conflicting change or otherwise resolves the conflict, the unchanged PR head remains permanently skipped although it now merges cleanly. Bind the receipt to the pinned base tip or use it only to deduplicate dispatch after a fresh conflict probe; test conflict -> base-only repair -> review admission at the same head.
+    4. [P2] Add the required acceptance-level workflow regressions (AC1/2/4/5/6; tests/task_1993_review_watch_tests.rs:3693 and gate/review_freshness.rs tests). The supplied untraced-criteria list requires these cases, but the added tests exercise policy/glob, merge-tree/delta, proof revocation, effective-state and history helpers only. None drives the AC6 approved A / overlapping B / clean base merge through real watcher admission and shipping/train eligibility under fast versus strict, or asserts actual conflict-resolution delta launch and implementer routing. Also add protected-policy lowering/path-override integration and ledger-decision/gate-state output assertions for AC4/5. Assert zero review launches plus successful gate acceptance under fast, full admission under strict, and delta evidence under fast conflict/evil merge; helper success alone misses the integration defects above.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-13T22:06:28.112868960Z
+  modified_at: 2026-11-13T22:06:28.112868960Z
   session_id: 01a1d684-8599-70e0-a01c-714f54d2f8de
   harness_version: 2.1.323 (Claude Code)
 history:
