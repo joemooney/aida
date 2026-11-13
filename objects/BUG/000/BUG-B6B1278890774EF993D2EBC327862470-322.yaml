@@ -3,12 +3,12 @@ spec_id: BUG-b6b1278890774ef993d2ebc327862470-322
 agreed_id: BUG-2557
 title: 'No supported re-review at the same head after the review contract changes: BUG-2530 refuses a duplicate review, so the advisor must push an empty commit (and pay a full CI run)'
 description: '2026-11-13 04:50: promotion #3922 had CHANGES REQUESTED at c8bc6df only because review story STORY-2750 listed an inherited, already-completed TASK-3448 under Covers. After the advisor corrected the coverage, ''aida queue work PR-3922 --role reviewer --fresh'' refused (''already has a CHANGES REQUESTED verdict at this exact head; a duplicate review is unnecessary'', review_marker.rs refuse_conclusive_head). Workaround: an empty commit, which costs a full CI run. Want: an advisor-only ''--rereview <reason>'' that admits one fresh review at the same head when the review story changed after the verdict, recorded in the gate ledger. A related defect: auto-queue-review re-adds inherited, completed specs to a promotion''s Covers list.'
-status: Approved
+status: InProgress
 priority: Medium
-owner: ''
+owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-13T11:44:39.422508821Z
-modified_at: 2026-11-13T11:44:47.520188054Z
+modified_at: 2026-11-13T22:54:22.869326698Z
 req_type: Bug
 tags:
 - track:integration
@@ -22,6 +22,13 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Approved
+- id: 01a1d71e-8095-7702-8ca5-585b865e0d02
+  author: aida-session-start
+  timestamp: 2026-11-13T22:54:22.869324444Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: 11bf5e9a018e0a304ec1af0d43435c1886b4328f
   branch: main
