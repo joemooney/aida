@@ -3,12 +3,12 @@ spec_id: TASK-b6b1278890774ef993d2ebc327862470-1059
 agreed_id: TASK-3779
 title: 'Usability sweep: compact ''aida config permissions show'' and pad emoji glyphs in terminal output'
 description: 'Reported from operator''s work machine (Codex, GitLab project hello-work-0x), 2026-11-09. (1) ''aida config permissions show'' is too noisy: one summary row per vendor (tier, launch readiness, net effect) by default; the launch/scope detail lines and long refusal prose move under --verbose. (2) Where output prints an emoji or wide symbol, terminals often swallow the next character; always follow such glyphs with a space (two where the glyph is double-width ambiguous), via one shared helper, with a ratchet test over CLI output strings.'
-status: NeedsAttention
+status: Approved
 priority: Low
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-10T03:07:15.181924Z
-modified_at: 2026-11-13T08:56:40.433020111Z
+modified_at: 2026-11-13T12:05:04.807427390Z
 req_type: Task
 comments:
 - id: 01a1c674-cd0d-76a2-8159-4728d6fffd38
@@ -116,6 +116,13 @@ comments:
   created_at: 2026-11-13T08:56:40.433020111Z
   modified_at: 2026-11-13T08:56:40.433020111Z
   session_id: 01a1d3ee-83e8-71b3-a2c5-aed5baed6fdc
+  harness_version: 2.1.323 (Claude Code)
+- id: 01a1d4cc-0ca7-79b2-b4d0-0128bd0c7178
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida edit --status`. It was shelved on: reviewer/verdict:request-changes: The manual flag citation defect persists unchanged and breaks required contracts CI; compact permissions and ratchet changes otherwise inspect coherently, broad glyph migration remains deferred, and current CI is pending.. It was punted on: blocked-dependency: Round 3: the required merge of origin/main (2a62f92c2a2) into PR #3919 cannot be committed from this lane. git merge aborts with ''unable to create symlink .claude/skills/aida-emergency-fix: Read-only file system'' (.claude/skills is write-denied by the seat sandbox), and building the merge commit through git plumbing (temporary index / mktree) is denied by the session permission policy. The only conflict is docs/cli/07-project-setup.md, ''Per-vendor containment posture'' paragraph: resolve it by taking origin/main''s hunk. Verified with docs/cli/verify-manual.py parse_chapters on the resolved text: every --verbose/--json citation on those lines resolves to ''config permissions show'' (none bare); verify-manual.py --static passes; ''aida config permissions show --help'' lists --json and -v/--verbose. The P2 finding (bare citations) was already fixed on branch head 9b38b6b, and main carries the same full invocations. Needs a seat that can write .claude/skills, or an operator, to run: git merge origin/main, take theirs for that hunk, then push.. No triage reason was given.'
+  created_at: 2026-11-13T12:05:04.807419398Z
+  modified_at: 2026-11-13T12:05:04.807419398Z
+  session_id: 01a1d4aa-9c99-76c2-ac94-7f0795f8a7f9
   harness_version: 2.1.323 (Claude Code)
 history:
 - id: 01a1c5dc-eeb2-7bf0-b31e-daf1c2b86eee
@@ -268,6 +275,15 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a1d4cc-0ca7-79b2-b4d0-011c965eae41
+  author: joe
+  timestamp: 2026-11-13T12:05:04.807398681Z
+  session_id: 01a1d4aa-9c99-76c2-ac94-7f0795f8a7f9
+  harness_version: 2.1.323 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 execution_mode: drain
 filed_at:
   code_sha: 838f14c3c2811c6b63da5d465700cff773c36190
@@ -278,17 +294,3 @@ filed_at:
   vendor: claude
   session: 01a1beff-fc3b-78e2-93e2-9b0c283b0339
   harness_version: 2.1.319 (Claude Code)
-attention_reason:
-  category: blocked-dependency
-  detail: 'Round 3: the required merge of origin/main (2a62f92c2a2) into PR #3919 cannot be committed from this lane. git merge aborts with ''unable to create symlink .claude/skills/aida-emergency-fix: Read-only file system'' (.claude/skills is write-denied by the seat sandbox), and building the merge commit through git plumbing (temporary index / mktree) is denied by the session permission policy. The only conflict is docs/cli/07-project-setup.md, ''Per-vendor containment posture'' paragraph: resolve it by taking origin/main''s hunk. Verified with docs/cli/verify-manual.py parse_chapters on the resolved text: every --verbose/--json citation on those lines resolves to ''config permissions show'' (none bare); verify-manual.py --static passes; ''aida config permissions show --help'' lists --json and -v/--verbose. The P2 finding (bare citations) was already fixed on branch head 9b38b6b, and main carries the same full invocations. Needs a seat that can write .claude/skills, or an operator, to run: git merge origin/main, take theirs for that hunk, then push.'
-  lean: Take origin/main's version of the conflicting hunk; no other change is needed for the P2 finding.
-  raised_by: implementer
-  raised_at: 2026-11-13T05:32:49.122694721Z
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: The manual flag citation defect persists unchanged and breaks required contracts CI; compact permissions and ratchet changes otherwise inspect coherently, broad glyph migration remains deferred, and current CI is pending.
-  recovery_hint: address the review findings, move TASK-3779 back to In Progress, and clear the PR hold only after approval
-  shelved_by: reviewer
-  shelved_at: 2026-11-10T20:23:11.421181381Z
