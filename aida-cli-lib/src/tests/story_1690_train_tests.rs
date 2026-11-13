@@ -83,6 +83,7 @@ fn pr_branch(r: &Path, name: &str, edit: impl FnOnce(&Path)) -> String {
 fn member(pr: u64, head: &str, subject: &str) -> Member {
     Member {
         gate_audit: None,
+        cover: None,
         pr,
         head: head.to_string(),
         subject: subject.to_string(),
@@ -1092,6 +1093,52 @@ fn live_gate_refuses_a_supervised_spec_without_a_human_or_a_mandate() {
     }
 }
 
+// A headless supervised protected-path member whose hold a human cleared is
+// admitted by the mandate's policy cover alone (no hold left to release).
+// The final train refresh must still find that live cover — from the fresh
+// gate, and after journal recovery dropped every live cover — and bind the
+// audit to it, instead of refusing for want of a release cover.
+// trace:STORY-2733 | ai:claude
+#[test]
+fn live_gate_keeps_policy_cover_for_human_cleared_protected_path_member() {
+    use crate::gate::mandate_gates::{GateMatch, PathSource};
+    let mut c = FakeChecks::shipping("TASK-9", &[], Some(aida_core::ExecutionMode::Guided));
+    c.hold = None; // a human cleared it: no marker remains
+    c.mandate_active = true;
+    let mut cover = fake_cover();
+    cover.gate_match = Some(GateMatch {
+        path: "aida-cli-lib/src/gate/mandate.rs".into(),
+        entry: "aida-cli-lib/src/gate/".into(),
+        source: PathSource::BuiltIn,
+    });
+    c.mandate = Ok(cover.clone());
+    let built = gate_member_with(&mut c, "main", 41).unwrap();
+    assert!(built.release.is_none(), "no hold left to release");
+    assert_eq!(built.cover.as_ref(), Some(&cover));
+    assert!(built.gate_audit.is_some());
+    assert_eq!(cover.gate_audit(), built.gate_audit);
+    // Journal recovery: live covers are never serialized.
+    let restored: Member = serde_json::from_value(serde_json::to_value(&built).unwrap()).unwrap();
+    assert!(restored.cover.is_none() && restored.release.is_none());
+    assert_eq!(restored.gate_audit, built.gate_audit);
+    // The final refresh re-gates the member; its fresh policy cover binds.
+    let mut again = FakeChecks::shipping("TASK-9", &[], Some(aida_core::ExecutionMode::Guided));
+    again.mandate_active = true;
+    again.mandate = Ok(cover.clone());
+    let fresh = gate_member_with(&mut again, "main", 41).unwrap();
+    for car in [&built, &restored] {
+        let live = crate::pr_train::final_live_cover(&fresh, car).expect("live cover");
+        assert_eq!(live.gate_audit(), car.gate_audit);
+    }
+    // Without the fresh gate, the build-time cover still counts in-process.
+    assert_eq!(
+        crate::pr_train::final_live_cover(&restored, &built),
+        Some(&cover)
+    );
+    // No live cover anywhere fails closed.
+    assert!(crate::pr_train::final_live_cover(&restored, &restored).is_none());
+}
+
 #[test]
 fn live_gate_lands_a_drain_spec_unattended() {
     let mut c = FakeChecks::shipping("TASK-9", &[], Some(aida_core::ExecutionMode::Drain));
@@ -1668,6 +1715,7 @@ fn a_car_keeps_the_head_commits_spec_id_when_ship_derives_no_subject() {
     assert_eq!(subject, "feat: X (STORY-1)");
     let car = car_message(&Member {
         gate_audit: None,
+        cover: None,
         pr: 9,
         head: "a".repeat(40),
         subject,

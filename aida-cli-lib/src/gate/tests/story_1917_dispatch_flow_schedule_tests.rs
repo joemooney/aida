@@ -1107,6 +1107,7 @@ fn task_2344_q2_mid_execution_authority_revocation_aborts_before_merge_and_rearm
             self.ctx.reverify_now(true).map_err(|e| format!("{e:#}"))?;
             Ok(crate::pr_train::Member {
                 gate_audit: None,
+                cover: None,
                 pr,
                 head: "head602".into(),
                 subject: format!("feat: pr {pr} (TASK-100)"),
@@ -1870,6 +1871,7 @@ fn member(
 ) -> crate::pr_train::Member {
     crate::pr_train::Member {
         gate_audit: None,
+        cover: None,
         pr,
         head: "4ead000000000000000000000000000000000000".into(),
         subject: format!("feat: member {pr} (TASK-100)"),

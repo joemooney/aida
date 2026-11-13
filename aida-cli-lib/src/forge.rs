@@ -4083,8 +4083,11 @@ fn gitlab_merge_api_shape(
     if let Some(message) = message {
         fields.push(("squash_commit_message".into(), message));
     }
+    // A post-rebase `/merge` (squash=false) still creates a merge commit on
+    // merge-commit and semi-linear projects, so it carries the audit too.
     // trace:STORY-2733 | ai:codex
-    if opts.method == MergeMethod::Merge {
+    // trace:STORY-2733 | ai:claude
+    if matches!(opts.method, MergeMethod::Merge | MergeMethod::Rebase) {
         if let Some(body) = &opts.squash_body {
             fields.push((
                 "merge_commit_message".into(),
@@ -6664,6 +6667,21 @@ mod tests {
             "merge_commit_message".into(),
             format!("fix: slice one\n\n{audit}")
         )));
+        // GitLab rebase: the `/rebase` transition carries nothing, but the
+        // post-rebase `/merge` (squash=false) still writes the audit message.
+        // trace:STORY-2733 | ai:claude
+        opts.method = MergeMethod::Rebase;
+        let rebase = gitlab_merge_api_shape(path, &opts, true, "abc123", "fix: slice one");
+        assert_eq!(rebase.path, format!("{path}/rebase"));
+        assert!(rebase.fields.is_empty());
+        let after = gitlab_merge_api_shape(path, &opts, false, "abc123", "fix: slice one");
+        assert_eq!(after.path, format!("{path}/merge"));
+        assert!(after.fields.contains(&("squash".into(), "false".into())));
+        assert!(after.fields.contains(&(
+            "merge_commit_message".into(),
+            format!("fix: slice one\n\n{audit}")
+        )));
+        opts.method = MergeMethod::Merge;
 
         let tmp = tempfile::tempdir().unwrap();
         let root = tmp.path();

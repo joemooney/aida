@@ -3404,6 +3404,7 @@ fn mandate_include_gate_paths_preserves_other_gates_and_audits_train_member() {
     );
     let member = crate::pr_train::Member {
         gate_audit: Some(audit.clone()),
+        cover: None,
         pr: 7,
         head: HEAD.into(),
         subject: "work".into(),

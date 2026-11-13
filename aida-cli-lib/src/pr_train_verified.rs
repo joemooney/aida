@@ -331,10 +331,8 @@ fn collect(
             );
         }
         if car.member.gate_audit.is_some() || car.member.release.is_some() {
-            let cover = fresh
-                .release
-                .as_ref()
-                .or(car.member.release.as_ref())
+            // trace:STORY-2733 | ai:claude
+            let cover = crate::pr_train::final_live_cover(&fresh, &car.member)
                 .context("train protected-path audit has no live mandate cover")?;
             anyhow::ensure!(
                 crate::gate::mandate_ship::mandate_cover_still_active(cover)

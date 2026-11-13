@@ -78,6 +78,33 @@ pub(crate) struct Member {
     // trace:BUG-2214 | ai:claude
     #[serde(skip)]
     pub release: Option<crate::gate::mandate_ship::MandateCover>,
+    /// The live mandate cover that admitted this member's spec policy, kept
+    /// apart from `release`: a supervised member with no hold left to release
+    /// (a human-cleared one) still lands under this cover. Never journaled —
+    /// every gate run, including after journal recovery, re-reads it.
+    // trace:STORY-2733 | ai:claude
+    #[serde(skip)]
+    pub cover: Option<crate::gate::mandate_ship::MandateCover>,
+}
+
+impl Member {
+    /// The live mandate cover a protected-path audit lands under: the policy
+    /// cover, else the hold-release cover. `None` = no live mandate cover.
+    // trace:STORY-2733 | ai:claude
+    pub(crate) fn live_cover(&self) -> Option<&crate::gate::mandate_ship::MandateCover> {
+        self.cover.as_ref().or(self.release.as_ref())
+    }
+}
+
+/// The live mandate cover the final train refresh binds a member's audit to:
+/// today's fresh gate first, else the cover held since the build. A
+/// human-cleared hold leaves no release cover, so the policy cover counts.
+// trace:STORY-2733 | ai:claude
+pub(crate) fn final_live_cover<'a>(
+    fresh: &'a Member,
+    built: &'a Member,
+) -> Option<&'a crate::gate::mandate_ship::MandateCover> {
+    fresh.live_cover().or_else(|| built.live_cover())
 }
 
 /// A member left off main, and why.
@@ -1404,10 +1431,8 @@ fn typed_gate_member_with(
     // trace:BUG-2214 | ai:claude
     // Persist audit evidence separately from the live, non-serialized cover.
     // trace:STORY-2733 | ai:codex
-    let gate_audit = cover_slot
-        .as_ref()
-        .and_then(|c| c.as_ref().ok())
-        .and_then(|c| c.gate_audit());
+    let policy_cover = cover_slot.as_ref().and_then(|c| c.as_ref().ok()).cloned();
+    let gate_audit = policy_cover.as_ref().and_then(|c| c.gate_audit());
     let release = match &held {
         None => None,
         Some(reason) => {
@@ -1428,6 +1453,8 @@ fn typed_gate_member_with(
         }
     };
     let gate_audit = release.as_ref().and_then(|c| c.gate_audit()).or(gate_audit);
+    // trace:STORY-2733 | ai:claude
+    let cover = policy_cover.or_else(|| release.clone());
     Ok(Member {
         gate_audit,
         pr,
@@ -1435,6 +1462,7 @@ fn typed_gate_member_with(
         subject,
         body,
         release,
+        cover,
     })
 }
 
