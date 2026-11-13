@@ -1,5 +1,6 @@
 id: 01a1d541-88f9-74f3-8ff8-b4912edab901
 spec_id: STORY-73022632d35647cca3858b18ac0723e3-005
+agreed_id: STORY-2332
 title: 'Review PR-3949: [AI:codex] refactor(cli): extract terminal and command framework leaf crates (Refs TASK-3783)'
 description: |
   Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a1d51f`) for branch `task-b6b1278890774ef993d2ebc327862470-1063`.
@@ -36,6 +37,10 @@ history:
   author: dirtlab
   timestamp: 2026-11-13T14:13:37.741050782Z
   session_id: 01a1d51f8e0e
+  changes: []
+- id: 01a1d55d-dae8-7410-b74a-8333882a2750
+  author: joe
+  timestamp: 2026-11-13T14:44:20.328588188Z
   changes: []
 filed_at:
   code_sha: dc53b3a4ecf5f2616b2d807a45f5fa420f63f8c4
