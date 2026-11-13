@@ -225,6 +225,7 @@ fn the_admitted_record_takes_its_authority_from_the_checks() {
         seat: crate::gate::mandate::MANDATE_SEAT.into(),
         scope: crate::gate::mandate::SCOPE_SHIP_HELD.into(),
         include_supervised: false,
+        include_gate_paths: false,
         reason: None,
         issued_at: t0(),
         expires_at: t0(),
