@@ -30,7 +30,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-13T15:54:08.931576118Z
-modified_at: 2026-11-13T16:34:03.620671282Z
+modified_at: 2026-11-13T17:51:58.804433468Z
 req_type: Story
 tags:
 - architecture
@@ -84,6 +84,13 @@ comments:
   created_at: 2026-11-13T16:34:03.620671282Z
   modified_at: 2026-11-13T16:34:03.620671282Z
   session_id: 01a1d5a03f62
+  harness_version: codex-cli 0.167.0
+- id: 01a1d609-a554-79e1-956a-c5a2f0ab93db
+  author: dirtlab
+  content: 'Re-entry validation: implementation and repair already committed by host; no new source edits, worktree clean. Freshness regressions passed (2 tests, j20261113T174002033-2-0), including repaired fixture. Required watcher/carry-over filters passed (210 tests, j20261113T174954960-2-0). TUI all-target check and CLI no-default-features check passed via lane jobs. Fast source gates passed; Cargo components were split to lane jobs, not an uninterrupted make check-ci-fast run. Extra broad review_ run: 951 passed, 4 status_sections process fixtures refused for missing matching CLI binary (j20261113T174254109-2-0). Full handoff: /tmp/story2763-handoff.md. Independent STRICT review remains outstanding; no publication, queue completion or review record performed.'
+  created_at: 2026-11-13T17:51:58.804433468Z
+  modified_at: 2026-11-13T17:51:58.804433468Z
+  session_id: 01a1d5fe5a72
   harness_version: codex-cli 0.167.0
 history:
 - id: 01a1d59e-6b4b-7d10-8aea-02729132bc6f
