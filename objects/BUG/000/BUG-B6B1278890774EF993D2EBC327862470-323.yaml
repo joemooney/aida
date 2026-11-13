@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-13T12:51:33.706851654Z
-modified_at: 2026-11-13T12:56:33.760676265Z
+modified_at: 2026-11-13T14:04:11.404586904Z
 req_type: Bug
 tags:
 - lanes
@@ -19,6 +19,13 @@ comments:
   content: 'Also blocks STORY-2593 (#3938: 45 hunks in containment/launch). Separately, dell1''s umask 0002 makes AIDA rewrite .git/aida-work-dispenser.toml as 0664, after which every ID allocation (auto-queue review stories, punt comments) refuses. Workaround: ''umask 022'' in the dell1 lane launches. The writer should set 0600 explicitly.'
   created_at: 2026-11-13T12:56:33.760676265Z
   modified_at: 2026-11-13T12:56:33.760676265Z
+  session_id: 01a1d4aa-9c99-76c2-ac94-7f0795f8a7f9
+  harness_version: 2.1.323 (Claude Code)
+- id: 01a1d539-190c-7112-898a-faa41de4a27e
+  author: joe
+  content: 'Advisor 07:05: dell1''s .git/aida-work-dispenser.toml went back to 0664 (mtime ~06:3x) even though both lanes launched under ''umask 022''. So the writer is not the lane''s umask; some other dell1 writer (autoland, cron, or a non-lane aida process) recreates it group-writable. Each time, the review-story auto-queue and punt comments fail silently on dell1.'
+  created_at: 2026-11-13T14:04:11.404586904Z
+  modified_at: 2026-11-13T14:04:11.404586904Z
   session_id: 01a1d4aa-9c99-76c2-ac94-7f0795f8a7f9
   harness_version: 2.1.323 (Claude Code)
 history:
