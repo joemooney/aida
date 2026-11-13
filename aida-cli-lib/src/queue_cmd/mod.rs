@@ -146,6 +146,7 @@ pub(crate) use time_args::{
 mod work;
 #[cfg(test)]
 pub(crate) use work::resolve_rework_review;
+// trace:STORY-2749 | ai:claude
 pub(crate) use work::ResumePublicationFailure;
 pub(crate) use work::{
     append_reviewer_prompt_suffixes, append_reviewer_prompt_suffixes_with,
@@ -199,6 +200,7 @@ pub(crate) use work::{
     derive_queue_work_prompt, latest_ruling_comment, prepend_ruling, resolve_pickup_attempt,
     rework_pr_head_branch_from_lookup,
 };
+pub(crate) use work::{launcher_track, spec_track, TRACK_TAG_PREFIX};
 pub use work::{refuse_waiting_review, spec_open_change_key};
 
 /// `store_path` is the orphan-store path; the `--json` fast path opens a

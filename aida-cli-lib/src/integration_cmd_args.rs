@@ -1,5 +1,6 @@
 //! `aida integration` clap types, owned by `integration_cmd.rs` and
-//! re-exported from `cli.rs`. trace:STORY-2737 | ai:claude
+//! re-exported from `cli.rs`.
+// trace:STORY-2737 | ai:claude
 
 use clap::Subcommand;
 

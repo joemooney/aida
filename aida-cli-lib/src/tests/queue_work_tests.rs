@@ -4951,3 +4951,74 @@ fn story_2690_no_argument_hold_refusal_keeps_resolved_head_and_rework() {
         }
     }
 }
+
+// STORY-2749: one track per spec. A `track:<owner>` spec is fresh work only
+// for a launcher running that track (`AIDA_TRACK`, default `main`).
+// trace:STORY-2749 | ai:claude
+#[test]
+fn story_2749_fresh_pickup_refuses_a_spec_on_another_track() {
+    let mut r = req("TASK-2749", None, RequirementType::Task);
+    r.status = RequirementStatus::Approved;
+    r.tags.insert("track:integration".into());
+    let mut store = aida_core::RequirementsStore::default();
+    store.requirements.push(r.clone());
+
+    {
+        let _env = crate::test_env::EnvVarsGuard::apply(&[("AIDA_TRACK", None)]);
+        let policy = queue_fresh_pickup_policy(&r, &store, false, None);
+        assert_eq!(
+            policy,
+            QueueFreshPickup::OtherTrack {
+                owner: "integration".into(),
+                launcher: "main".into()
+            }
+        );
+        let label = queue_fresh_pickup_reason_label(&policy).unwrap();
+        assert!(
+            label.contains("`integration` track") && label.contains("AIDA_TRACK=integration"),
+            "{label}"
+        );
+        // Drains and rework routing see the same refusal.
+        assert_eq!(queue_drain_pickup_policy(&r, &store, false, None), policy);
+    }
+    {
+        let _env = crate::test_env::EnvVarsGuard::set(&[("AIDA_TRACK", "Integration")]);
+        assert_eq!(
+            queue_fresh_pickup_policy(&r, &store, false, None),
+            QueueFreshPickup::Pickable
+        );
+    }
+    // `track:main` is the default launcher's own track; untagged is free.
+    let _env = crate::test_env::EnvVarsGuard::apply(&[("AIDA_TRACK", None)]);
+    r.tags = ["track:main".to_string()].into_iter().collect();
+    assert_eq!(
+        queue_fresh_pickup_policy(&r, &store, false, None),
+        QueueFreshPickup::Pickable
+    );
+    r.tags.clear();
+    assert_eq!(
+        queue_fresh_pickup_policy(&r, &store, false, None),
+        QueueFreshPickup::Pickable
+    );
+    // A terminal spec reports its terminal state, not its stale track.
+    r.tags.insert("track:dell1".into());
+    r.status = RequirementStatus::Completed;
+    assert_eq!(
+        queue_fresh_pickup_policy(&r, &store, false, None),
+        QueueFreshPickup::Terminal(RequirementStatus::Completed)
+    );
+}
+
+// trace:STORY-2749 trace:STORY-2737 | ai:claude
+#[test]
+fn story_2749_completion_drops_track_and_landed_tags() {
+    let mut r = req("TASK-2750", None, RequirementType::Task);
+    r.status = RequirementStatus::Done;
+    r.tags = ["track:integration", "landed-in-integration", "perf"]
+        .iter()
+        .map(|t| t.to_string())
+        .collect();
+    crate::completion::mark_completed(&mut r);
+    assert_eq!(r.status, RequirementStatus::Completed);
+    assert_eq!(r.tags.iter().collect::<Vec<_>>(), [&"perf".to_string()]);
+}
