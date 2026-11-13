@@ -306,7 +306,7 @@ class RealRepoTest(unittest.TestCase):
         self.assertEqual(p.commands, [BASE + ["-p", "aida-cli-lib", "--lib", "--", "glossary_render::glossary_render_tests"]])
 
     def test_included_lib_parts_run_unfiltered_only_with_allow_full(self):
-        for n in (1, 3, 5):
+        for n in (5,):
             with self.subTest(part=n):
                 p = self.run_plan([f"aida-cli-lib/src/lib_part{n}.rs"], allow_full=True)
                 self.assertEqual(p.commands, [BASE + ["-p", "aida-cli-lib", "--lib"]])
@@ -322,15 +322,15 @@ class RealRepoTest(unittest.TestCase):
         self.assertEqual(rc, tt.TOO_WIDE_EXIT)
 
     def test_heavy_lib_widening_narrows_to_the_named_modules(self):
-        # lib_part1.rs widens (crate root) but guard tests that include_str! it are named.
-        p = self.run_plan(["aida-cli-lib/src/lib_part1.rs", "aida-cli-lib/src/tests/role_identity_tests.rs"])
+        # lib_part5.rs widens (crate root) but guard tests that include_str! it are named.
+        p = self.run_plan(["aida-cli-lib/src/lib_part5.rs", "aida-cli-lib/src/tests/role_identity_tests.rs"])
         self.assertEqual(p.too_wide, {})
         self.assertEqual(len(p.commands), 1)
         cmd = p.commands[0]
         self.assertEqual(cmd[:8], BASE + ["-p", "aida-cli-lib", "--lib", "--"])
         self.assertIn("role::role_identity_tests", cmd)
         self.assertIn("queue_cmd::headless_hint_tests", cmd)
-        self.assertTrue(any("CI's job" in n and "lib_part1.rs" in n for n in p.notes))
+        self.assertTrue(any("CI's job" in n and "lib_part5.rs" in n for n in p.notes))
 
     def test_caller_filter_lifts_the_heavy_lib_cap(self):
         p = self.run_plan(["aida-cli-lib/build.rs"], extra=["story_1853"])

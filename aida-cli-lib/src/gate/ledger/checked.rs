@@ -324,11 +324,17 @@ fn read_change(
 /// A bounded inventory of spec-to-change bindings, derived strictly from
 /// events rather than the fallible by-spec hints. Discovery retains no review
 /// payloads. Discovery and selection each have an aggregate work budget.
+///
+/// BUG-2517: the same single pass also builds the mis-key ownership index
+/// (phase-3 witness fingerprints only, charged to the inventory budget), so
+/// every selected vector is filtered against one index per discovery.
 // trace:BUG-2531 | ai:codex
+// trace:BUG-2517 | ai:claude
 pub(crate) struct Discovery {
     ledger: File,
     by_spec: Option<File>,
     discovered: Vec<String>,
+    owners: super::project::MiskeyOwners,
     bound: std::collections::HashMap<String, Vec<String>>,
     /// Selected ledgers are read once across a list operation. Their total
     /// retained payload is bounded by the caller's selection budget.
@@ -348,7 +354,10 @@ pub(crate) fn discover(root: &Path) -> Result<Option<Discovery>, Unsafe> {
 }
 
 // trace:BUG-2531 | ai:codex
-fn discover_with_budget(root: &Path, work: &mut Budget) -> Result<Option<Discovery>, Unsafe> {
+pub(crate) fn discover_with_budget(
+    root: &Path,
+    work: &mut Budget,
+) -> Result<Option<Discovery>, Unsafe> {
     let Some((ledger, by_spec)) = ledger_dirs(root)? else {
         return Ok(None);
     };
@@ -358,6 +367,8 @@ fn discover_with_budget(root: &Path, work: &mut Budget) -> Result<Option<Discove
     // Inventory strings also have a finite aggregate budget, independent of
     // the (potentially much larger) unrelated review payloads being inspected.
     let mut inventory_budget = Budget::default();
+    // trace:BUG-2517 | ai:claude
+    let mut owners = super::project::MiskeyOwners::new(std::iter::empty());
     for name in list_pinned(&ledger, &ledger_path)? {
         let Some(change) = name
             .strip_suffix(".jsonl")
@@ -382,6 +393,8 @@ fn discover_with_budget(root: &Path, work: &mut Budget) -> Result<Option<Discove
                 "refusing gate-ledger discovery: {name} vanished while it was read"
             )));
         };
+        // trace:BUG-2517 | ai:claude
+        inventory_budget.spend_bytes(owners.add(&events))?;
         for e in events.into_iter().filter(|e| e.verdict_record().is_some()) {
             if let Some(spec) = e.spec.as_deref() {
                 let spec = spec.trim().to_ascii_uppercase();
@@ -396,6 +409,7 @@ fn discover_with_budget(root: &Path, work: &mut Budget) -> Result<Option<Discove
     }
     Ok(Some(Discovery {
         ledger,
+        owners,
         by_spec,
         discovered,
         bound,
@@ -404,6 +418,45 @@ fn discover_with_budget(root: &Path, work: &mut Budget) -> Result<Option<Discove
 }
 
 impl Discovery {
+    /// Reuse the ownership snapshot for additional vectors without rescanning
+    /// witnesses or rebuilding their semantic fingerprints.
+    // trace:BUG-2517 | ai:codex
+    pub(crate) fn filter_events(&self, events: &mut Vec<GateEvent>) {
+        self.owners.filter(events);
+    }
+
+    /// Every event on `change`'s discovered ledger, read once per discovery
+    /// under the caller's selection budget and filtered through the shared
+    /// ownership index. Empty when discovery found no ledger for it.
+    // trace:BUG-2517 | ai:codex
+    pub(crate) fn change_events(
+        &mut self,
+        change: ChangeKey,
+        budget: &mut Budget,
+    ) -> Result<Vec<GateEvent>, Unsafe> {
+        let key = change.as_key();
+        if !self.discovered.contains(&key) {
+            return Ok(Vec::new());
+        }
+        let mut events = self.select(&key, budget)?.to_vec();
+        self.owners.filter(&mut events);
+        Ok(events)
+    }
+
+    // trace:BUG-2531 | ai:codex
+    fn select(&mut self, key: &str, budget: &mut Budget) -> Result<&[GateEvent], Unsafe> {
+        if !self.selected.contains_key(key) {
+            let name = format!("{key}.jsonl");
+            let selected = read_change(&self.ledger, &name, key, budget)?.ok_or_else(|| {
+                Unsafe(format!(
+                    "refusing gate-ledger selection: {name} vanished while it was read"
+                ))
+            })?;
+            self.selected.insert(key.to_string(), selected);
+        }
+        Ok(&self.selected[key])
+    }
+
     /// Every verdict event for each spec label in `labels`, oldest first per
     /// label: the discovered change-bound events plus the label's unbound
     /// ledger (a record already bound to a change is read once, from the
@@ -420,19 +473,9 @@ impl Discovery {
             let spec =
                 spec_key(label).ok_or_else(|| Unsafe(format!("{label:?} is not a spec label")))?;
             let mut events = Vec::new();
-            for key in self.bound.get(&spec).into_iter().flatten() {
-                if !self.selected.contains_key(key) {
-                    let name = format!("{key}.jsonl");
-                    let selected =
-                        read_change(&self.ledger, &name, key, budget)?.ok_or_else(|| {
-                            Unsafe(format!(
-                                "refusing gate-ledger selection: {name} vanished while it was read"
-                            ))
-                        })?;
-                    self.selected.insert(key.clone(), selected);
-                }
+            for key in self.bound.get(&spec).cloned().into_iter().flatten() {
                 events.extend(
-                    self.selected[key]
+                    self.select(&key, budget)?
                         .iter()
                         .filter(|e| {
                             e.verdict_record().is_some()
@@ -482,11 +525,62 @@ impl Discovery {
                     events.extend(unbound);
                 }
             }
+            // trace:BUG-2517 | ai:codex
+            self.owners.filter(&mut events);
             events.sort_by(|a, b| a.at.cmp(&b.at).then(a.seq.cmp(&b.seq)));
             out.push((spec, events));
         }
         Ok(out)
     }
+}
+
+/// Ignore an old spec-routed copy when the PR-keyed handshake proves that
+/// the very same act of review belongs to another change. Current heads
+/// alone cannot disqualify historical reviews (including force-pushed heads).
+/// This is read-only: neither ledger nor sequence history is repaired.
+// trace:BUG-2517 | ai:codex
+pub(crate) fn filter_miskeyed(
+    root: &Path,
+    events: Vec<GateEvent>,
+    budget: &mut Budget,
+) -> Result<Vec<GateEvent>, Unsafe> {
+    // The by-spec files are hints, not completeness evidence: an earlier
+    // append may have succeeded while indexing failed. Use pinned discovery.
+    let Some(discovery) = discover_with_budget(root, budget)? else {
+        // Input may have been read before the directory disappeared. An
+        // absent corpus cannot establish ownership of those review copies.
+        // trace:BUG-2517 | ai:codex
+        if !events.is_empty() {
+            return Err(Unsafe(
+                "refusing gate-ledger ownership: ledger disappeared after input was read".into(),
+            ));
+        }
+        return Ok(events);
+    };
+    let mut events = events;
+    discovery.filter_events(&mut events);
+    Ok(events)
+}
+
+/// [`filter_miskeyed`] for the lossy single-label readers: when discovery is
+/// incomplete (an unrelated ledger is malformed, unreadable or over budget)
+/// every review copy a foreign change could own is withheld, while evidence
+/// no witness could disqualify — holds, carry-over proofs, phase-3 records —
+/// stays readable. Never presents raw foreign evidence; never rewrites.
+// trace:BUG-2517 | ai:claude
+pub(crate) fn filter_miskeyed_or_fail_closed(
+    root: &Path,
+    events: Vec<GateEvent>,
+) -> Vec<GateEvent> {
+    let mut events = events;
+    match discover(root) {
+        Ok(Some(discovery)) => discovery.filter_events(&mut events),
+        // The directory can disappear after a legacy reader has read its
+        // input vector. Absence then proves no ownership for those copies.
+        // trace:BUG-2517 | ai:codex
+        Ok(None) | Err(_) => super::project::MiskeyOwners::fail_closed(&mut events),
+    }
+    events
 }
 
 /// STORY-2324: every event on `change`'s ledger under `root`, read strictly
@@ -498,53 +592,65 @@ pub(crate) fn read_change_events(
     change: ChangeKey,
     budget: &mut Budget,
 ) -> Result<Vec<GateEvent>, Unsafe> {
-    let Some((ledger, _)) = ledger_dirs(root)? else {
-        return Ok(Vec::new());
-    };
-    let key = change.as_key();
-    Ok(read_change(&ledger, &format!("{key}.jsonl"), &key, budget)?.unwrap_or_default())
+    match discover(root)? {
+        Some(mut d) => d.change_events(change, budget),
+        None => Ok(Vec::new()),
+    }
 }
 
-/// STORY-2324: the `by-spec` entries for one spec `label` under `root`, read
-/// strictly: its unbound verdict events and the changes its index names.
-/// Both empty when absent.
-// trace:STORY-2324 | ai:claude
-pub(crate) fn read_spec_entries(
-    root: &Path,
-    label: &str,
-    budget: &mut Budget,
-) -> Result<(Vec<GateEvent>, Vec<ChangeKey>), Unsafe> {
-    let spec = spec_key(label).ok_or_else(|| Unsafe(format!("{label:?} is not a spec label")))?;
-    let Some((_, Some(by_spec))) = ledger_dirs(root)? else {
-        return Ok((Vec::new(), Vec::new()));
-    };
-    let unbound_name = format!("{spec}.jsonl");
-    let unbound = match read_entry(&by_spec, &unbound_name, MAX_LEDGER_BYTES, budget)? {
-        Some(body) => parse_events(&unbound_name, &body, &spec, budget)?
-            .into_iter()
-            .filter(|e| e.verdict_record().is_some())
-            .collect(),
-        None => Vec::new(),
-    };
-    let index_name = format!("{spec}.json");
-    let mut changes = Vec::new();
-    if let Some(body) = read_entry(&by_spec, &index_name, MAX_INDEX_BYTES, budget)? {
-        let index: SpecIndex = serde_json::from_slice(&body)
-            .map_err(|e| Unsafe(format!("refusing gate-ledger index {index_name}: {e}")))?;
-        if index.changes.len() > MAX_CHANGES_PER_SPEC {
-            return Err(Unsafe(format!(
-                "refusing gate-ledger index {index_name}: it names more than {MAX_CHANGES_PER_SPEC} changes"
-            )));
+impl Discovery {
+    /// Read a member's unbound evidence and index through this operation's pinned
+    /// by-spec directory, sharing the same budget as the change discovery.
+    // trace:STORY-2324 | ai:claude
+    // trace:BUG-2517 | ai:codex
+    pub(crate) fn spec_entries(
+        &self,
+        label: &str,
+        budget: &mut Budget,
+    ) -> Result<(Vec<GateEvent>, Vec<ChangeKey>), Unsafe> {
+        let spec =
+            spec_key(label).ok_or_else(|| Unsafe(format!("{label:?} is not a spec label")))?;
+        let Some(by_spec) = &self.by_spec else {
+            return Ok((Vec::new(), Vec::new()));
+        };
+        let unbound_name = format!("{spec}.jsonl");
+        let unbound = match read_entry(by_spec, &unbound_name, MAX_LEDGER_BYTES, budget)? {
+            Some(body) => parse_events(&unbound_name, &body, &spec, budget)?
+                .into_iter()
+                .filter(|e| e.verdict_record().is_some())
+                .collect(),
+            None => Vec::new(),
+        };
+        let index_name = format!("{spec}.json");
+        let mut changes = Vec::new();
+        if let Some(body) = read_entry(by_spec, &index_name, MAX_INDEX_BYTES, budget)? {
+            let index: SpecIndex = serde_json::from_slice(&body)
+                .map_err(|e| Unsafe(format!("refusing gate-ledger index {index_name}: {e}")))?;
+            if index.changes.len() > MAX_CHANGES_PER_SPEC {
+                return Err(Unsafe(format!(
+                    "refusing gate-ledger index {index_name}: it names more than {MAX_CHANGES_PER_SPEC} changes"
+                )));
+            }
+            for c in &index.changes {
+                let change = ChangeKey::parse(c).ok_or_else(|| {
+                    Unsafe(format!(
+                        "refusing gate-ledger index {index_name}: {c:?} is not a change key"
+                    ))
+                })?;
+                // trace:BUG-2517 | ai:codex
+                // A cached discovery must retain the strict reader's missing
+                // ledger refusal, rather than treating absent evidence as empty.
+                if !self.discovered.contains(&change.as_key()) {
+                    return Err(Unsafe(format!(
+                        "refusing gate-ledger index {index_name}: it names {}, whose ledger is missing",
+                        change.as_key()
+                    )));
+                }
+                changes.push(change);
+            }
         }
-        for c in &index.changes {
-            changes.push(ChangeKey::parse(c).ok_or_else(|| {
-                Unsafe(format!(
-                    "refusing gate-ledger index {index_name}: {c:?} is not a change key"
-                ))
-            })?);
-        }
+        Ok((unbound, changes))
     }
-    Ok((unbound, changes))
 }
 
 /// Read-only capacity probe for doctor; no event payloads are read.
