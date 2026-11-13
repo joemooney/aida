@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-11T12:18:05.824589631Z
-modified_at: 2026-11-13T15:41:58.635929866Z
+modified_at: 2026-11-13T15:48:15.689699082Z
 req_type: Task
 relationships:
 - rel_type: BlockedBy
@@ -51,6 +51,12 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a1d598-63d0-77e1-a14f-2344b581700b
+  author: dirtlab
+  timestamp: 2026-11-13T15:48:16.464424207Z
+  session_id: 01a1d597b6f1
+  harness_version: codex-cli 0.167.0
+  changes: []
 filed_at:
   code_sha: 11b131dfe3341e6d9c7127d64370f91366094711
   branch: main
@@ -60,6 +66,11 @@ filed_at:
   vendor: claude
   session: 01a1ca83-fabb-7663-852c-12c78d4e097f
   harness_version: 2.1.322 (Claude Code)
+attention_reason:
+  category: other
+  detail: 'Native implementer pickup refused: TASK-3785 is Needs Attention (request-changes); promotion to InProgress requires advisor authority. Existing ratchet implementation is already in the checkout. Advisor must triage and authorize resumption before implementation or publication.'
+  raised_by: implementer
+  raised_at: 2026-11-13T15:48:15.689699082Z
 failure_reason:
   phase: reviewer
   phase_index: 3
