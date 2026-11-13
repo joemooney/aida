@@ -1,0 +1,23 @@
+id: 01a1d742-09e6-7fd2-a021-08f14e87d5ca
+spec_id: BUG-b6b1278890774ef993d2ebc327862470-333
+agreed_id: BUG-2568
+title: 'Claude implementer lanes on dell1 cannot push: the lane sandbox has no GitHub credentials, so finished work is punted as ''unable to publish'''
+description: '2026-11-13 16:07 dell1 Claude lanes BUG-2542 and BUG-2557 both finished, committed locally, then failed git push with ''could not read Username for https://github.com'' and punted (explicit-punt, pr=unknown). Codex lanes on the same host publish fine (the host publishes for native Codex seats). The STORY-2660 Claude lane also merged main but left 2 commits no remote has, which blocked the next force-claim. Advisor workaround: push from dell1''s host shell and open the PR with gh (#3970, #3971, #3921 dc335bf). Expected: a Claude seat''s finished head is published by the host, as Codex seats'' are, or the lane gets a scoped push credential. Acceptance: a dell1 --vendor claude lane that commits ends with implementer: pushed and an open PR, without advisor intervention.'
+status: Draft
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-13T23:33:11.782657199Z
+modified_at: 2026-11-13T23:33:11.782657199Z
+req_type: Bug
+tags:
+- track:dell1
+filed_at:
+  code_sha: 4ac4c1d8ab080f7bdf96157582c0934171c2a73c
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 4ac4c1d8ab0
+  vendor: claude
+  session: 01a1d73b-e31c-7f33-b2fe-cee145ddc6fb
+  harness_version: 2.1.325 (Claude Code)
