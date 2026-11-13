@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-10T22:04:54.061461Z
-modified_at: 2026-11-13T05:23:55.834262653Z
+modified_at: 2026-11-13T05:28:40.756994199Z
 req_type: Story
 comments:
 - id: 01a1c781-4cf1-7c80-b086-89c5c5096ab6
@@ -472,6 +472,13 @@ comments:
   content: 'Round 10: the current branch already contains the final sanitized-config overlay after read-only metadata mounts and the journal-backed post-regeneration marker gate. Added regression coverage proving a readable seat config include stays hidden, sanitized Git reads committed objects, and removing generated markers cannot bypass failed preparation credit via direct retry (index, HEAD and MERGE_HEAD unchanged). Validation: lane job j20261113T051836303-2-0, cargo test --profile agent -p aida-cli-lib --lib -- story_2710_host_regenerates_conflicted_outputs_with_read_only_git: 1 passed, 0 failed; rustfmt --check and git diff --check pass. Native seat leaves changes uncommitted for host publication. Configured host codegraph client is unavailable; doctor reports missing.'
   created_at: 2026-11-13T05:23:55.834262653Z
   modified_at: 2026-11-13T05:23:55.834262653Z
+  session_id: 01a1d356c1f7
+  harness_version: codex-cli 0.167.0
+- id: 01a1d361-2234-7e71-83ab-8cdd4b2b2917
+  author: dirtlab
+  content: 'Fast-gate fix round: ExecContext ledger had ceiling 1234 while both its exact site entries and the repository scan total 1233, with zero added/stale sites. Corrected only the ceiling to 1233. Validation: python3 -m unittest tests.test_exec_context_ratchet executed all 19 tests successfully; git diff --check passes. Edits left uncommitted for host publication.'
+  created_at: 2026-11-13T05:28:40.756994199Z
+  modified_at: 2026-11-13T05:28:40.756994199Z
   session_id: 01a1d356c1f7
   harness_version: codex-cli 0.167.0
 history:
