@@ -8,8 +8,16 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-13T04:07:35.213330891Z
-modified_at: 2026-11-13T04:07:35.213330891Z
+modified_at: 2026-11-13T04:41:26.881771590Z
 req_type: Story
+comments:
+- id: 01a1d335-e461-7f33-b9d9-3172b780e847
+  author: joe
+  content: 'Operator 21:18 refinement: track is a tag family ''track:<owner>''. No track tag = free for any launcher to grab. Values: track:main (main-track lanes, trains), track:integration (integration agent only), track:dell1 (dell1 feeder partition; local fill-slots/auto-rework skip it), track:operator (supervised, human-driven; no headless lane). A launcher only takes a spec whose tag is absent or names its own track. Ops autoland updated 21:41 to skip any track:* other than track:main.'
+  created_at: 2026-11-13T04:41:26.881771590Z
+  modified_at: 2026-11-13T04:41:26.881771590Z
+  session_id: 01a1d2e6-f5db-7f33-9b74-3ae5fdaf9e0c
+  harness_version: 2.1.323 (Claude Code)
 filed_at:
   code_sha: 2a62f92c2a200b58e0d95446df07e355e062ab49
   branch: main
