@@ -1,4 +1,10 @@
 - user_id: role:implementer
+  requirement_id: 01a19db5-0aac-72e0-869f-fdee4a59db62
+  position: -715000
+  added_by: role:implementer
+  added_at: 2026-11-13T21:14:24.053558497Z
+  for_role: implementer
+- user_id: role:implementer
   requirement_id: 01a1b2ce-dc16-78c0-99c0-514d53b02f45
   position: -714000
   added_by: role:implementer
@@ -505,16 +511,6 @@
     mergeable=CONFLICTING: resolve the merge conflicts
     Address these blockers, commit and push. If disputing a finding, use `aida punt` and name that finding.
   added_at: 2026-11-13T10:46:04.361252313Z
-  for_role: implementer
-- user_id: role:implementer
-  requirement_id: 01a19db5-0aac-72e0-869f-fdee4a59db62
-  position: 0
-  added_by: empty-rework
-  note: |-
-    Empty rework of PR-3940 at ca1c836a04411c6c2fdf5b23789baf4e8ab2ed04: no new pushed commit.
-    mergeable=CONFLICTING: resolve the merge conflicts
-    Address these blockers, commit and push. If disputing a finding, use `aida punt` and name that finding.
-  added_at: 2026-11-13T10:49:03.458403714Z
   for_role: implementer
 - user_id: role:implementer
   requirement_id: 01a1bca1-470d-7e60-84dc-b1bf370a05c9
