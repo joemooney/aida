@@ -481,9 +481,13 @@ Open trains and unknown forge evidence retain their riders; dry runs never write
 these repairs.
 <!-- trace:BUG-2537 | ai:codex -->
 
-Recovery does not inherit terminal consent from the new invocation: recovered
-supervised members still need a current mandate cover when a human repeats
-the member PR set at a terminal. Previously green trains wait again if CI is pending;
+Recovery never inherits consent from the run that wrote the journal; consent
+comes only from the current invocation. A journal resumes only when the PRs
+named now are exactly its member set, so a human at a terminal who explicitly
+names that same set consents for its recovered supervised members, with no
+mandate needed. An `--all-ready` sweep or a recovery without a terminal never
+consents: recovered supervised members then still need a current mandate
+cover. Previously green trains wait again if CI is pending;
 confirmed red CI retires the train through the normal non-landing confirmation.
 Completed entries are fsynced and removed; startup also prunes valid old Done
 receipts. Unreadable journals, ambiguous lookups and changed head/base/branch
