@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-13T02:45:43.305350105Z
-modified_at: 2026-11-13T05:46:28.688532770Z
+modified_at: 2026-11-13T05:55:05.427691105Z
 req_type: Bug
 comments:
 - id: 01a1d2dc-351e-78f3-89d7-7e2ecb290f14
@@ -68,6 +68,12 @@ history:
   session_id: 01a1d3707d97
   harness_version: codex-cli 0.167.0
   changes: []
+- id: 01a1d379-55c6-72a3-96ee-286a029f344e
+  author: dirtlab
+  timestamp: 2026-11-13T05:55:06.822231902Z
+  session_id: 01a1d3786da5
+  harness_version: codex-cli 0.167.0
+  changes: []
 filed_at:
   code_sha: 0558a9e06aac10a087327ade1e1ab0a0c3d4ad50
   branch: main
@@ -79,9 +85,9 @@ filed_at:
   harness_version: 2.1.323 (Claude Code)
 attention_reason:
   category: blocked-dependency
-  detail: 'Native implementer pickup refused: Needs Attention to InProgress requires advisor authority; existing request-changes shelving remains a publication veto. Advisor triage is required before implementation can resume.'
+  detail: 'Native implementer pickup refused: Needs Attention to InProgress requires advisor authority. Existing request-changes shelving and punt remain publication vetoes; advisor triage is required before implementation resumes.'
   raised_by: implementer
-  raised_at: 2026-11-13T05:46:22.586707237Z
+  raised_at: 2026-11-13T05:55:05.427691105Z
 failure_reason:
   phase: reviewer
   phase_index: 3
