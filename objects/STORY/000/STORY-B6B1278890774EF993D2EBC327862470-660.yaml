@@ -23,7 +23,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-12T19:11:56.371806442Z
-modified_at: 2026-11-13T16:03:03.083429141Z
+modified_at: 2026-11-13T16:21:49.753944822Z
 req_type: Story
 tags:
 - operator-held
@@ -190,6 +190,13 @@ comments:
   content: '[advisor gap incident 2026-11-13 08:43] main unmoved 60 min since #3922 (promotion 4, 07:43). Cause: no main-track PR approved at head. After promotion 4 landed, every queued review was refused at pickup as stale (base 1-13 commits behind, overlapping files): #3824 #3896 #3909 #3920 #3919 #3939 #3952. Two more failed on a transient dirty store (BUG-2561) and the store pull broke on duplicate timing records (BUG-2559). review-watch neither retries nor updates the branch (BUG-2561). Actions: update-branch on #3824/#3896/#3909/#3920, reworks for #3919/#3939, reviewers relaunched on deputies, store repaired by hand. In flight: promotion 5 (BUG-2556, job 01a1d588, canary 7/10 green), 8 reviews. Process lesson: a promotion landing turns every open main PR stale for the reviewer''s overlap check, so updating branches right after each landing should be automatic (folded into BUG-2561).'
   created_at: 2026-11-13T15:42:12.277815434Z
   modified_at: 2026-11-13T15:42:12.277815434Z
+  session_id: 01a1d54b-060a-7951-aa40-7f0fd928126f
+  harness_version: 2.1.323 (Claude Code)
+- id: 01a1d5b7-1c39-7f71-b460-713c50d245c7
+  author: joe
+  content: '[advisor gap update 09:23, main unmoved ~100 min] An additional cause, self-inflicted: the advisor launched round-3 reviewers detached (setsid nohup) on deputy 2, so they lost process ancestry and could not record verdicts. #3824 APPROVED at 4fb943b (no findings, all CI green) but recording was refused: ''no agent session id and no process ancestry''. Relaunched attached to the deputy job (.aida/tmp/review-bound.sh). Next expected landings: promotion 5 #3954 (review running, default deputy) and #3824 (~09:45).'
+  created_at: 2026-11-13T16:21:49.753944822Z
+  modified_at: 2026-11-13T16:21:49.753944822Z
   session_id: 01a1d54b-060a-7951-aa40-7f0fd928126f
   harness_version: 2.1.323 (Claude Code)
 history:
