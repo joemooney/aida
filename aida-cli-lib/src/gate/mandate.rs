@@ -8,7 +8,7 @@
 //! carries the audit copy (`MandateChanged`).
 //!
 //! Every load re-validates each record (24h cap, no future issue time, the
-//! advisor seat and known scope, the current user as principal, a 0600
+//! advisor seat and known scope, the operator as principal, a 0600
 //! regular file owned by this uid, never a symlink); an invalid record is
 //! ignored with a warning and never shadows a valid one. Revocation is
 //! monotonic: `aida mandate stop` writes a `<id>.stopped` tombstone that is
@@ -439,6 +439,11 @@ pub(crate) fn state_at(mandates: &[Mandate], now: DateTime<Utc>) -> MandateState
     }
 }
 
+// trace:BUG-2524 | ai:codex
+pub(crate) use super::kernel_deps::operator_principal;
+#[cfg(test)]
+use super::kernel_deps::operator_principal_from;
+
 /// The state read from disk now — never cached. `warn` prints the records
 /// it ignored to stderr.
 // trace:STORY-1698 | ai:claude
@@ -447,7 +452,7 @@ pub(crate) fn current_state_reporting(warn: bool) -> MandateState {
         return MandateState::None;
     };
     let now = Utc::now();
-    let (valid, warnings) = load_valid(&dir, &crate::gate::kernel_deps::current_user_id(None), now);
+    let (valid, warnings) = load_valid(&dir, &operator_principal(), now);
     if warn {
         for w in &warnings {
             eprintln!("  warning: {w}");

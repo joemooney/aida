@@ -108,8 +108,12 @@ impl FlowFixture {
         write_spec(&store, "TASK-100", &plain_req("TASK-100"));
         write_spec(&store, "STORY-1917", &plain_req("STORY-1917"));
 
-        let ambient =
-            crate::test_env::AmbientGuard::hermetic_with_seat(&root, "advisor", delegable);
+        let ambient = crate::test_env::AmbientGuard::hermetic_with_seat_and(
+            &root,
+            "advisor",
+            delegable,
+            &[("USER", Some(crate::test_env::HERMETIC_TEST_USER))],
+        );
         git(&store, &["add", "-A"]);
         git(&store, &["commit", "-qm", "init store"]);
 

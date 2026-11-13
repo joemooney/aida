@@ -1552,6 +1552,7 @@ fn mandate_ship_cover_passes_committed_trace_ids_to_the_decision() {
         &[],
         &[
             ("AIDA_HOME", Some(home.to_str().unwrap())),
+            ("USER", Some(crate::test_env::HERMETIC_TEST_USER)),
             ("AIDA_TEST_GH_BINARY", Some(gh.to_str().unwrap())),
         ],
     );
@@ -1865,7 +1866,10 @@ fn task_1800_aliased_id_resolves_through_alias_and_is_judged_normally() {
         root,
         "advisor",
         &[],
-        &[("AIDA_TEST_GH_BINARY", Some(gh.to_str().unwrap()))],
+        &[
+            ("USER", Some(crate::test_env::HERMETIC_TEST_USER)),
+            ("AIDA_TEST_GH_BINARY", Some(gh.to_str().unwrap())),
+        ],
     );
     git_out(&store, &["add", "-A"]);
     git_out(
@@ -2051,7 +2055,10 @@ fn ship_tracing_deleted_agreed_id_spec(
         root,
         "advisor",
         &[],
-        &[("AIDA_TEST_GH_BINARY", Some(gh.to_str().unwrap()))],
+        &[
+            ("USER", Some(crate::test_env::HERMETIC_TEST_USER)),
+            ("AIDA_TEST_GH_BINARY", Some(gh.to_str().unwrap())),
+        ],
     );
     git_out(&store, &["add", "-A"]);
     git_out(
@@ -3545,4 +3552,14 @@ fn mandate_cover_rechecks_withdrawn_gate_path_opt_in_before_merge() {
     cover.gate_match = None;
     assert!(cover_active_in(&cover, &MandateState::Active(m.clone())));
     assert!(!cover_active_in(&cover, &MandateState::Expired(m)));
+}
+
+// trace:BUG-2524 | ai:codex
+#[test]
+fn bug_2524_unknown_operator_does_not_fall_back_to_seat_or_default() {
+    use aida_core::exec_context::Environment;
+    let env = Environment::from_pairs([("AIDA_USER".into(), "advisor-seat".into())]);
+    assert_eq!(operator_principal_from(&env), "");
+    let env = env.with_value("USER", Some("  joe  ".into()));
+    assert_eq!(operator_principal_from(&env), "joe");
 }

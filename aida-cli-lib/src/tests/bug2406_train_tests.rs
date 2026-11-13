@@ -133,7 +133,10 @@ impl Fixture {
     /// so the old guard is dropped first).
     fn reenv(&mut self, extra: &[(&'static str, Option<&str>)]) {
         self._env = None;
-        let mut pairs = vec![("PATH", Some(self.path.as_str()))];
+        let mut pairs = vec![
+            ("PATH", Some(self.path.as_str())),
+            ("USER", Some("train-test-operator")),
+        ];
         pairs.extend_from_slice(extra);
         let guard = crate::test_env::EnvVarsGuard::apply(&pairs);
         self._env = Some(guard);
@@ -270,7 +273,10 @@ impl Fixture {
             "#!/bin/sh\nfor arg in \"$@\"; do\ncase \"$arg\" in fetch|push|ls-remote) exec /usr/bin/git -c 'url.{}.insteadOf=https://github.com/fixture/train.git' \"$@\";; esac\ndone\nexec /usr/bin/git \"$@\"\n", origin.path().display()));
 
         let path = format!("{}:{}", bin.display(), std::env::var("PATH").unwrap());
-        let env = crate::test_env::EnvVarsGuard::apply(&[("PATH", Some(&path))]);
+        let env = crate::test_env::EnvVarsGuard::apply(&[
+            ("PATH", Some(&path)),
+            ("USER", Some("train-test-operator")),
+        ]);
         let state = json!({"prs":prs});
         save(root, &state);
         Self {
@@ -1331,7 +1337,7 @@ fn plant_mandate_with_gate_paths(
     include_gate_paths: bool,
 ) -> crate::gate::mandate_ship::MandateCover {
     use crate::gate::mandate;
-    let principal = crate::gate::kernel_deps::current_user_id(None);
+    let principal = crate::gate::mandate::operator_principal();
     let m = mandate::Mandate {
         id: uuid::Uuid::new_v4().to_string(),
         principal: principal.clone(),
