@@ -64,14 +64,16 @@ jobs:
           fi
           python3 -m pip install PyYAML
       # The local gate reader keeps run bodies only; pass trusted bases here.
-      # trace:STORY-2735 | ai:codex
+      # trace:STORY-2735 TASK-3785 | ai:codex
       - run: |
           : "${EXEC_CONTEXT_BASE:?FAST requires a trusted base for the environment ratchet}"
           : "${CRATE_GLOBS_BASE:?FAST requires a trusted base for the crate-glob ratchet}"
+          : "${GATE_DEPENDENCIES_BASE:?FAST requires a trusted base for the gate-dependency ratchet}"
           make check-ci-fast
         env:
           EXEC_CONTEXT_BASE: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha || github.event.before }}
           CRATE_GLOBS_BASE: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha || github.event.before }}
+          GATE_DEPENDENCIES_BASE: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha || github.event.before }}
 
   fast-compile:
     name: CI (fast compile)
