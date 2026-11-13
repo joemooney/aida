@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-12T21:59:52.896824799Z
-modified_at: 2026-11-13T06:18:07.868139779Z
+modified_at: 2026-11-13T06:34:22.366179460Z
 req_type: Task
 tags:
 - from-advisor:BUG-2539
@@ -16,6 +16,14 @@ tags:
 - linked:BUG-2539
 - severity:minor
 - track:dell1
+comments:
+- id: 01a1d39d-471e-7293-9a2c-84d7cbba36ca
+  author: dirtlab
+  content: 'Implemented lane TMPDIR projection to sandbox /tmp for ordinary Cargo jobs as well as fast gates. Strengthened the existing real-Cargo nested-bwrap fixture with an injected unavailable /dev/shm TMPDIR and a writable-/tmp check in its limiter. Validation: git diff --check passed. Launcher job j20261113T061910202-2-0 (cargo test --profile agent -p aida-cli-lib --lib -- bug_2383_bwrap_real_cargo_test_job_reports_pass_and_fail_through_the_cli --nocapture) timed out after 900s during compilation, exit 124, before tests executed; untested=true. Initial aida-cli invocation had no library target and was corrected. Needs a host/launcher rerun with a longer timeout. Edits remain uncommitted; Refs declaration preserves non-completion pending validation.'
+  created_at: 2026-11-13T06:34:22.366179460Z
+  modified_at: 2026-11-13T06:34:22.366179460Z
+  session_id: 01a1d38d3c4d
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1d1cd-34b7-7111-ada2-c651b7c61e56
   author: joe
