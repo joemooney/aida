@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-13T02:45:43.305350105Z
-modified_at: 2026-11-13T06:37:31.315620113Z
+modified_at: 2026-11-13T07:48:12.286787008Z
 req_type: Bug
 comments:
 - id: 01a1d2dc-351e-78f3-89d7-7e2ecb290f14
@@ -37,6 +37,12 @@ comments:
   content: 'Round 2: addressing both AC2 findings. Pre-pull force-claim now only inspects eligibility; reclamation stays behind successful sync and refreshed verdict/deferral gates with owner revalidation. Added read-only source-branch lease admission using the existing resolver/coexistence policy, plus a post-sync check and existing setup recheck. Regression validation is running through the lane job runner. Native seat leaves code edits uncommitted for host publication.'
   created_at: 2026-11-13T06:37:31.315620113Z
   modified_at: 2026-11-13T06:37:31.315620113Z
+  session_id: 01a1d39b2d92
+- id: 01a1d3e0-df7e-7f53-b675-18d7f04eebd5
+  author: joe
+  content: 'Round 2 addressed both AC2 findings. Force-claim eligibility preserves the checkout and lease until successful store sync and refreshed conclusive/deferred gates, then revalidates before reclamation. Read-only source-branch lease preflight reuses the resolver, retained-owner judgment and explicit credited-review coexistence rules, rejects retained conflicts without prompting before sync, and rechecks after sync; setup-time checks remain. Regression coverage includes failed pull, freshly synchronized conclusive and deferred evidence, live/unprovable source leases with a broken remote and a no-sync-child assertion, plus positive coexistence/reclamation controls. Final lane runs: review_repickup_tests 5 passed, bug_2455_force_claim_clone_tests 6 passed. Formatting, git diff --check and execution-input ledger guard passed (1234 sites, zero additions). Existing cleanup fixtures now use controlled writer-admission scans. Native seat leaves four edited files uncommitted for host publication; the spec status promotion remains advisor-gated.'
+  created_at: 2026-11-13T07:48:12.286787008Z
+  modified_at: 2026-11-13T07:48:12.286787008Z
   session_id: 01a1d39b2d92
 history:
 - id: 01a1d2cc-3ead-77d2-bdac-92a7b8f80dc0
