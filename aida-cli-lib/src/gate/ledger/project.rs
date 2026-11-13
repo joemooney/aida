@@ -183,9 +183,17 @@ fn verdict_events(root: &Path, key: &str) -> Vec<GateEvent> {
         return Vec::new();
     };
     // trace:BUG-2517 | ai:codex
-    // One pinned discovery filters every related change: per-change
-    // rediscovery would rescan the whole ledger once for each PR.
-    let raw: Vec<GateEvent> = changes_for_spec(root, &spec)
+    // One discovery filters every related change. trace:BUG-2531 | ai:claude
+    // It reads only the ledgers bound to this spec, never the whole corpus.
+    // trace:BUG-2531 | ai:claude — the index is a hint; the bindings are
+    // the complete set of changes recorded against the spec.
+    let mut changes = changes_for_spec(root, &spec);
+    for change in super::bindings::bound_changes_lossy(root, &spec) {
+        if !changes.contains(&change) {
+            changes.push(change);
+        }
+    }
+    let raw: Vec<GateEvent> = changes
         .into_iter()
         .flat_map(|change| store::read_file(root, change))
         .filter(|e| !e.is_spec_only())
@@ -565,6 +573,24 @@ impl MiskeyOwners {
         });
     }
 
+    /// [`Self::filter`] for an index holding only the witnesses bound to the
+    /// specs [`witness_specs`] names: a candidate whose spec has no binding
+    /// key could have unindexed witnesses, so it is withheld.
+    // trace:BUG-2531 | ai:claude
+    pub(crate) fn filter_bound(&self, events: &mut Vec<GateEvent>) {
+        events.retain(|event| match disqualifiable(event) {
+            Candidate::Keep => true,
+            Candidate::Drop => false,
+            Candidate::Fingerprint(key) => {
+                event.spec.as_deref().and_then(spec_key).is_some()
+                    && !self
+                        .owners
+                        .get(&key)
+                        .is_some_and(|changes| changes.iter().any(|change| change != &event.change))
+            }
+        });
+    }
+
     /// Without a complete ownership index, keep exactly the events no witness
     /// could disqualify: holds, carry-over proofs, phase-3 records and other
     /// unfingerprintable evidence stay; every review copy that a foreign
@@ -575,6 +601,26 @@ impl MiskeyOwners {
     pub(crate) fn fail_closed(events: &mut Vec<GateEvent>) {
         events.retain(|event| matches!(disqualifiable(event), Candidate::Keep));
     }
+}
+
+/// Whether any of `events` is a copy an ownership witness could disqualify.
+// trace:BUG-2531 | ai:claude
+pub(crate) fn needs_witnesses(events: &[GateEvent]) -> bool {
+    events
+        .iter()
+        .any(|e| matches!(disqualifiable(e), Candidate::Fingerprint(_)))
+}
+
+/// The spec keys whose bindings hold every witness that could disqualify
+/// one of `events`. A witness must share the candidate's fingerprint, which
+/// includes its spec, so only changes bound to that spec can hold one.
+// trace:BUG-2531 | ai:claude
+pub(crate) fn witness_specs(events: &[GateEvent]) -> std::collections::BTreeSet<String> {
+    events
+        .iter()
+        .filter(|e| matches!(disqualifiable(e), Candidate::Fingerprint(_)))
+        .filter_map(|e| e.spec.as_deref().and_then(spec_key))
+        .collect()
 }
 
 // trace:BUG-2517 | ai:claude

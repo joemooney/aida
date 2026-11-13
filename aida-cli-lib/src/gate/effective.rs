@@ -719,7 +719,8 @@ fn load_view_with_budget(
             if crate::gate::ledger::project::spec_key(label).is_none() {
                 continue;
             }
-            let (u, c) = match &discovery {
+            // trace:BUG-2531 | ai:claude — bindings plus index hints.
+            let (u, c) = match discovery.as_mut() {
                 Some(d) => d.spec_entries(label, &mut budget)?,
                 None => (Vec::new(), Vec::new()),
             };

@@ -2630,9 +2630,44 @@ pub(crate) fn doctor_contradictions(
     Ok(())
 }
 
+/// The gate ledger's spec-to-change bindings must be complete before
+/// verdict selection can trust them: a missing or unsupported completeness
+/// marker is a finding whose heal runs the one-time bootstrap.
+// trace:BUG-2531 | ai:claude
+pub(crate) fn scan_gate_ledger_bindings(project_root: &std::path::Path) -> Vec<DoctorFinding> {
+    use crate::gate::ledger::{self, bindings};
+    let state = ledger::store_root(project_root)
+        .and_then(|root| bindings::marker_state(&root))
+        .map_err(|e| e.to_string());
+    let summary = match state {
+        Ok(
+            bindings::MarkerState::NoLedger
+            | bindings::MarkerState::Complete
+            | bindings::MarkerState::Trivial,
+        ) => return vec![],
+        Ok(bindings::MarkerState::Missing) => {
+            "the gate ledger's spec-to-change bindings have not been built; verdict selection refuses until they are".to_string()
+        }
+        Ok(bindings::MarkerState::Unsupported(why)) => format!(
+            "the gate ledger's bindings marker is not supported by this aida ({why}); verdict selection refuses until it is rebuilt"
+        ),
+        Err(e) => format!("cannot inspect the gate ledger's bindings: {e}"),
+    };
+    vec![DoctorFinding {
+        category: "gate-ledger-bindings".into(),
+        id: "gate-ledger-bindings".into(),
+        summary,
+        action: format!(
+            "rebuild the bindings (scans every change ledger once under the ledger lock): `{}`",
+            bindings::FIX_COMMAND
+        ),
+        safe_heal: true,
+    }]
+}
+
 /// Warn before historical change ledgers reach half a selection's byte budget.
 /// This remains useful after scoping selection: related histories still share
-/// that budget, and discovery must inspect every active change.
+/// that budget, and the bindings bootstrap inspects every active change.
 // trace:BUG-2531 | ai:codex
 pub(super) fn scan_gate_ledger_capacity(project_root: &std::path::Path) -> Vec<DoctorFinding> {
     use crate::gate::ledger::{self, checked};

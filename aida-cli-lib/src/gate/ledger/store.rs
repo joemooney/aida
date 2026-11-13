@@ -270,14 +270,22 @@ fn append_locked(
     Ok(pending)
 }
 
-/// Stamp `seq`/`at` on `pending` and append them in one write, then index
-/// their specs.
+/// Bind `pending`'s specs to the change, stamp `seq`/`at`, append them in
+/// one write, then index their specs. The bindings are written ahead of the
+/// append, under the same locks, and a failed binding fails the append: an
+/// event without a binding would be invisible to selection.
+// trace:BUG-2531 | ai:claude
 fn write_events(
     root: &Path,
     change: ChangeKey,
     existing: &[GateEvent],
     pending: &mut [GateEvent],
 ) -> std::io::Result<()> {
+    let specs: std::collections::BTreeSet<&str> =
+        pending.iter().filter_map(|e| e.spec.as_deref()).collect();
+    for spec in specs {
+        super::bindings::bind(root, spec, change)?;
+    }
     let mut seq = existing.last().map(|e| e.seq).unwrap_or(0);
     let now = chrono::Utc::now().to_rfc3339();
     let mut lines = String::new();
