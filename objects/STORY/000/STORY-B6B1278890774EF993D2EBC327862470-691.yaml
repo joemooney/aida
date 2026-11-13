@@ -38,12 +38,12 @@ description: |
 
   ## Success metric (decides whether AIDA continues; operator 09:51)
   Within 48h of S2 going live, on active days: median of at least 1 merge/hour to main, approved-to-merged median under 60 min, and no PR in a non-BLOCKED state for more than 2h. Measured from git log and the gate ledger; reported on STORY-2737.
-status: Approved
+status: InProgress
 priority: High
-owner: ''
+owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-13T16:52:56.270142081Z
-modified_at: 2026-11-13T16:54:35.580463638Z
+modified_at: 2026-11-13T17:11:53.651861896Z
 req_type: Story
 tags:
 - architecture
@@ -89,6 +89,15 @@ history:
   session_id: 01a1d54b-060a-7951-aa40-7f0fd928126f
   harness_version: 2.1.323 (Claude Code)
   changes: []
+- id: 01a1d5e4-f233-71f2-bb11-1b7a0a442931
+  author: aida-session-start
+  timestamp: 2026-11-13T17:11:53.651860870Z
+  session_id: 01a1d5e3-fa48-7571-b809-45d095068816
+  harness_version: 2.1.323 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: 8265057964618d451894a955f2b90463164762aa
   branch: main
