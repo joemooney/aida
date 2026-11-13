@@ -220,6 +220,15 @@ pub(crate) fn emit_action(root: &std::path::Path, mandate_id: &str, actor: &str,
 // trace:TASK-b6b1278890774ef993d2ebc327862470-013 | trace:TASK-b6b1278890774ef993d2ebc327862470-024 | ai:claude
 #[cfg(test)]
 pub(crate) const FACADE_EXTERNAL_LEAVES: &[(&str, &str)] = &[
+    // trace:BUG-2524 | ai:codex
+    (
+        "aida_core::exec_context::Environment",
+        "shared execution-input snapshot type used on the kernel floor to resolve the mandate operator independently of the queue identity",
+    ),
+    (
+        "aida_core::exec_context::Environment::capture",
+        "shared environment capture boundary for the kernel floor's mandate operator lookup; avoids a second ambient reader",
+    ),
     // trace:TASK-3366 | ai:codex
     ("aida_core::proc_identity::ProcIdentity::capture", "verified local process capture; feeds authority"),
     ("aida_core::proc_identity::observe", "namespace-qualified process observation; feeds authority"),

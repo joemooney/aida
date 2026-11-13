@@ -39,6 +39,23 @@ pub(crate) fn current_user_id(user_override: Option<&str>) -> String {
     })
 }
 
+/// Mandates belong to the operator, while AIDA_USER identifies a queue/session.
+/// Keep mint, renewal and every reader in the same identity domain. An unknown
+/// operator stays empty so record validation and minting refuse it.
+// trace:BUG-2524 | ai:codex
+pub(crate) fn operator_principal_from(env: &aida_core::exec_context::Environment) -> String {
+    ["USER", "USERNAME"]
+        .into_iter()
+        .find_map(|key| env.var(key).ok().map(str::trim).filter(|s| !s.is_empty()))
+        .unwrap_or("")
+        .to_string()
+}
+
+// trace:BUG-2524 | ai:codex
+pub(crate) fn operator_principal() -> String {
+    operator_principal_from(&aida_core::exec_context::Environment::capture())
+}
+
 /// TASK-32: cross-platform home-dir lookup with an `AIDA_HOME` override.
 /// On Windows, `dirs::home_dir()` resolves via `SHGetKnownFolderPath`,
 /// which ignores env vars — that breaks bg_worker tests that need to
