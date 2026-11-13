@@ -23,7 +23,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-12T19:11:56.371806442Z
-modified_at: 2026-11-13T11:45:47.267664808Z
+modified_at: 2026-11-13T13:43:42.763461520Z
 req_type: Story
 tags:
 - operator-held
@@ -164,6 +164,13 @@ comments:
   content: 'GAP 2026-11-13 03:25-04:3x MST (main unmoved >60 min). Cause: train #3941 (#3917+#3928) went green 03:57, then spent about 30 min in Gate on two full store-history walks (BUG-2554, now signed off) and was finally EJECTED by journal recovery dropping TTY consent (named:false, filed BUG-2556, track:integration). Action: #3936 train in flight (train PR #3943); fresh train 3917+3928+3942 queued behind it on deputy default; #3941 closed by that job.'
   created_at: 2026-11-13T11:35:56.985626342Z
   modified_at: 2026-11-13T11:35:56.985626342Z
+  session_id: 01a1d4aa-9c99-76c2-ac94-7f0795f8a7f9
+  harness_version: 2.1.323 (Claude Code)
+- id: 01a1d526-59ab-7d41-9e57-b0d1ba5b402c
+  author: joe
+  content: 'Advisor 06:45: train for #3916 landed at 06:29, but its post-merge ''aida pull'' has spent 14+ min in ''git reflog expire --all'' store maintenance, holding deputy default. Promotion #3922 (approved at 3d3917f, CI green) waits behind it. More evidence for BUG-2543 / BUG-2554: post-merge housekeeping should not block the ship queue.'
+  created_at: 2026-11-13T13:43:42.763461520Z
+  modified_at: 2026-11-13T13:43:42.763461520Z
   session_id: 01a1d4aa-9c99-76c2-ac94-7f0795f8a7f9
   harness_version: 2.1.323 (Claude Code)
 history:
