@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-02T19:20:50.092491662Z
-modified_at: 2026-11-13T10:48:50.501937484Z
+modified_at: 2026-11-13T10:54:04.311296661Z
 req_type: Story
 tags:
 - architecture
@@ -785,6 +785,13 @@ comments:
   content: 'Advisor 03:40: PR #3940 (story-2325-prd) is CONFLICTING with main, so CI never started. Next round: rebase onto current origin/main (no merge of main), resolve the conflicts, rerun the targeted test and make check-ci-fast, push with --force-with-lease. The PR is already open.'
   created_at: 2026-11-13T10:44:20.126980414Z
   modified_at: 2026-11-13T10:44:20.126980414Z
+  session_id: 01a1d3ee-83e8-71b3-a2c5-aed5baed6fdc
+  harness_version: 2.1.323 (Claude Code)
+- id: 01a1d48b-0a17-7100-b283-defab1ba7409
+  author: joe
+  content: 'Advisor 03:56: the 03:50 rebase lane launched Claude again (BUG-2553, open-PR continuation ignores --vendor codex), so I killed it. Paused in autoland-skip; relaunch on Codex once #3936 (BUG-2553) is on main and dell1 is rebuilt. The 03:40 rebase brief stands.'
+  created_at: 2026-11-13T10:54:04.311296661Z
+  modified_at: 2026-11-13T10:54:04.311296661Z
   session_id: 01a1d3ee-83e8-71b3-a2c5-aed5baed6fdc
   harness_version: 2.1.323 (Claude Code)
 history:
