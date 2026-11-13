@@ -43,7 +43,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-13T16:52:56.270142081Z
-modified_at: 2026-11-13T18:34:27.231177129Z
+modified_at: 2026-11-13T19:38:59.299274020Z
 req_type: Story
 tags:
 - architecture
@@ -97,6 +97,13 @@ comments:
   created_at: 2026-11-13T18:34:27.231177129Z
   modified_at: 2026-11-13T18:34:27.231177129Z
   session_id: 01a1d5f7-27ab-7543-8808-b0ec6c271689
+  harness_version: 2.1.323 (Claude Code)
+- id: 01a1d66b-9d63-7473-a217-bed950ceb0cf
+  author: joe
+  content: '[integration seat 2026-11-13 12:45] S1: PR #3959 (head 75d5f1e3a8f), aida land status; round-1 CR''s 12 findings ruled non-blocking by the advisor (read-only slice) and carried as S2 entry criteria (typed UNKNOWN for unreadable approval/ledger/marker evidence; the real hold-clearance decision; per-pass pinned refs with git routing hygiene). S1b: branch story-2768-s1b-now (head 37735a49060), gates pass, PR opens when S1 merges: every pass writes .aida/cache/now.json; aida now [--watch] [--json] renders it with no git/gh/ps. Rulings recorded: (1) advisor 11:01: CI gates the ship, never the review; an unreviewed head gets its reviewer while CI runs, a red head goes to rework (CI-FAILED), an approved head with running CI stays READY (shown under WAITING-CI in aida now). (2) Reviewer detection also reads live PR-scoped leases and cross-clone claims; unreadable leases read as a review in progress. (3) A met rework hold is the operator''s to clear (owner shown). Known gaps: DESIGNING stage is in the model but unpopulated (no cheap fact for ''sketch awaiting signoff''); a pass took ~2 min in S1 (per-change forge reads in the approval gate); --format json on aida land status is refused by the output policy (no JSON projection registered) and is fixed in S2; round history reads the gate ledger only.'
+  created_at: 2026-11-13T19:38:59.299274020Z
+  modified_at: 2026-11-13T19:38:59.299274020Z
+  session_id: 01a1d5e3-fa48-7571-b809-45d095068816
   harness_version: 2.1.323 (Claude Code)
 history:
 - id: 01a1d5d3-fe28-7cc2-a7e3-638454ed4798
