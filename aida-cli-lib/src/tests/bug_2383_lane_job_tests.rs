@@ -475,6 +475,38 @@ fn job_env_carries_only_allow_listed_keys() {
     assert!(!scrubbed.iter().any(|(k, _)| k == "AIDA_SESSION_GRANT"));
 }
 
+// Outer lane temporary directories disappear when bubblewrap replaces /dev.
+// Test projection without requiring bubblewrap or mutating the process env.
+// trace:TASK-3099 | ai:codex
+#[test]
+#[cfg(target_os = "linux")]
+fn task_3099_job_tmpdir_is_private_for_cargo_and_fast_gates() {
+    let mut lane = LaneJobs {
+        seat: PathBuf::from("/seat"),
+        inbox: PathBuf::from("/seat/inbox"),
+        results: PathBuf::from("/results"),
+        lease_id: "lease-tmpdir".into(),
+        build_env: vec![("TMPDIR".into(), "/build/tmp".into())],
+        host_env: Vec::new(),
+        program: "cargo".into(),
+        sandbox: Sandbox::Bwrap,
+    };
+    for inherited in [None, Some("/dev/shm/unavailable-outer-tmp")] {
+        lane.host_env = inherited
+            .map(|value| ("TMPDIR".into(), value.into()))
+            .into_iter()
+            .collect();
+        for argv in [
+            vec!["cargo", "test", "--profile", "agent"],
+            vec!["make", "check-ci-fast"],
+        ] {
+            let mut request = job(&argv);
+            request.env.insert("TMPDIR".into(), "/request/tmp".into());
+            assert_eq!(lane.job_env(&request)["TMPDIR"], "/tmp");
+        }
+    }
+}
+
 #[cfg(unix)]
 #[test]
 fn a_job_that_prints_its_env_shows_only_allow_listed_keys() {
