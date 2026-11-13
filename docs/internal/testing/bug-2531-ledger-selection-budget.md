@@ -77,9 +77,23 @@ Round-5 host handoff:
   hints, and automatic merge/close archival preserving refusal evidence,
   direct reads and reopened-change revival. This PR does not complete BUG-2531.”
 - Native seat leaves edits uncommitted for the host to commit and publish.
-- Formatting and `git diff --check` passed. Final-source executed-test evidence
-  is pending job `j20261113T021212493-2-0`; earlier runs are superseded.
+- Formatting and `git diff --check` passed. Final-source job
+  `j20261113T021212493-2-0` executed all five BUG-2531 tests: five passed,
+  zero failed. Earlier runs are superseded.
 - Host must verify the destination: this checkout HEAD is preserved WIP
   `622c7081ad`, not reviewed PR head `78dfea63a192`. Do not replace unrelated
   PR changes with this older checkout. Apply the slice-1 scope record and
   preserve the reviewed mitigation when publishing.
+
+
+Fast-gate recovery validation:
+
+- Host fast checks reported a missing Cargo fingerprint path while writing
+  `aida-core` build-script metadata. The routing fixtures (52 tests) and
+  docs-only scheduling guard passed in that run.
+- Reran the failed gate through the launcher as
+  `cargo check --profile agent -p aida-cli --no-default-features`.
+  Job `j20261113T022035626-2-0` finished with exit 0; no Rust diagnostic or
+  fingerprint write failure reproduced. No source workaround was needed.
+- This is targeted recovery evidence, not a claim that the full fast suite
+  was rerun. Existing punt/hold constraints and the Refs-only declaration remain.
