@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-13T01:54:48.391951523Z
-modified_at: 2026-11-13T03:25:32.653331828Z
+modified_at: 2026-11-13T05:45:42.265475335Z
 req_type: Bug
 comments:
 - id: 01a1d2b0-810d-71e2-9ffb-3a2943c74aba
@@ -65,6 +65,12 @@ comments:
   content: 'Round 3 native-seat handoff: addressed all three findings. reviewer_completion now reads the selected current verdict''s raw sweep_pending barrier before latching completion; WAITING is a stop signal with a recorded runtime timestamp, without changing collector approval semantics. Interactive Codex resume gets the rendered composed reviewer prompt; Claude''s granted resume accepts an optional trailing prompt and receives the composed policy. Added delayed pending/completed twin and WAITING shutdown/runtime regressions plus real interactive resume argv coverage for both vendors. Also updated the existing fresh Codex launch assertion identified as the sole failing CI test at a368fa9e91d6 (lib-1); other CI lanes/gates passed. rustfmt checks on six touched Rust files and git diff --check pass. untested=true: lane job j20261113T030647205-3993915-0 timed out during compilation after 900s, exit 124, without executing tests. Retry j20261113T030917842-2-0 is waiting inside Cargo''s shared build-slot limiter (2 in use); launch module job j20261113T031058867-4039475-0 remains queued. No compiler diagnostics reported before timeout. Host must complete validation before queue completion. Changes left uncommitted under native-seat rules; publication will use Refs. Codegraph host client was absent and doctor reported unreachable; source navigation used rg instead.'
   created_at: 2026-11-13T03:25:32.653297442Z
   modified_at: 2026-11-13T03:25:32.653297442Z
+- id: 01a1d370-b879-7e50-a955-94d0fa9514fc
+  author: joe
+  content: 'CI repair at 241b82fdd19d: added run_path_isolated_test before fixtures in assert_interactive_resume_policy, the shared helper that changes cwd. Both vendor callers already isolated, but the source hygiene guard requires each cwd-mutating helper to declare isolation locally. This keeps the real Codex and Claude resume-policy regression coverage while fixing no_unisolated_set_current_dir_in_test_code. Verified the branch already contains all three requested review fixes: raw delivery_pending refusal before shutdown latching, WAITING completion/runtime without approval, and composed policy prompts on both interactive resume arms. rustfmt --check on the changed file and git diff --check pass. untested=true: lane job j20261113T052947521-1097784-0 timed out after 900 seconds during compilation (exit 124), without executed tests or compiler diagnostics. Regression job j20261113T053000739-1100912-0 started but is waiting for a Cargo build slot (2 in use); host must finish both targeted validations before completion. One source file changed; edits left uncommitted for native-seat host publication. Prescribed codegraph client is absent and doctor reports the shared index unreachable; navigation used rg. Publication declaration retains Refs pending validation.'
+  created_at: 2026-11-13T05:45:42.265475335Z
+  modified_at: 2026-11-13T05:45:42.265475335Z
+  session_id: 01a1d361619d
 history:
 - id: 01a1d29d-880a-7201-8b91-ded826a703b0
   author: joe
