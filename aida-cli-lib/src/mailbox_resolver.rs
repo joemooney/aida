@@ -411,6 +411,122 @@ impl RecipientDirectory {
         Ok(resolved)
     }
 
+    /// `seat:<name>`: the live (or unverified) sessions whose registry row
+    /// records that seat, with the same cohort, queue and refusal rules as a
+    /// role. No holder queues for the seat when the sender asked
+    /// (`--queue-for-role`), else refuses naming the seats that are held.
+    // trace:STORY-2745 | ai:claude
+    fn resolve_seat(
+        &self,
+        key: &str,
+        queue_for_role: bool,
+        cli_hint: bool,
+        escape: &str,
+    ) -> Result<ResolvedRecipient> {
+        let raw = key.trim_start_matches("seat:");
+        let address = aida_core::mailbox_identity::seat_address(raw).ok_or_else(|| {
+            anyhow::anyhow!(
+                "send refused: '{key}' is not a seat name (letters, digits, '-' or '_'); {escape}"
+            )
+        })?;
+        let seat = &address["seat:".len()..];
+        let holds = |a: &AgentRegistryEntry| {
+            a.seat
+                .as_deref()
+                .is_some_and(|s| s.trim().eq_ignore_ascii_case(seat))
+        };
+        let holders: Vec<&AgentRegistryEntry> = self
+            .agents
+            .iter()
+            .filter(|a| self.reader_may_exist(a) && holds(a))
+            .collect();
+        let label = |a: &AgentRegistryEntry| {
+            a.name
+                .as_deref()
+                .map(|name| format!("{name} ({})", a.id))
+                .unwrap_or_else(|| a.id.clone())
+        };
+        if holders.is_empty() {
+            if queue_for_role {
+                return Ok(ResolvedRecipient {
+                    relay_run: None,
+                    address: address.clone(),
+                    reader_notice: None,
+                    cohort: Some(CohortReaders {
+                        role: address,
+                        queued: true,
+                        ..Default::default()
+                    }),
+                });
+            }
+            let held: BTreeSet<String> = self
+                .agents
+                .iter()
+                .filter(|a| self.reader_may_exist(a))
+                .filter_map(|a| a.seat.as_deref())
+                .map(|s| s.trim().to_ascii_lowercase())
+                .collect();
+            let held = if held.is_empty() {
+                "no session holds a seat".to_string()
+            } else {
+                format!(
+                    "held seats: {}",
+                    held.into_iter().collect::<Vec<_>>().join(", ")
+                )
+            };
+            let queue = if cli_hint {
+                ", or pass --queue-for-role to queue it for the seat's next holder"
+            } else {
+                ""
+            };
+            bail!("send refused: seat '{seat}' has no live holder ({held}); {escape}{queue}");
+        }
+        let mut cohort = CohortReaders {
+            role: address.clone(),
+            ..Default::default()
+        };
+        for a in &holders {
+            match self.reader_uuid(a) {
+                Some(uuid) => cohort.readers.push(uuid),
+                None => cohort.uuidless.push(label(a)),
+            }
+        }
+        cohort.readers.sort();
+        cohort.readers.dedup();
+        cohort.queued = queue_for_role && cohort.readers.is_empty();
+        let (live, unverified): (Vec<_>, Vec<_>) = holders
+            .iter()
+            .partition(|a| !self.unknown_ids.contains(&a.id));
+        let mut lists = Vec::new();
+        if !live.is_empty() {
+            let names: Vec<String> = live.iter().map(|a| label(a)).collect();
+            lists.push(format!("live: {}", names.join(", ")));
+        }
+        if !unverified.is_empty() {
+            let names: Vec<String> = unverified.iter().map(|a| label(a)).collect();
+            lists.push(format!("unverified: {}", names.join(", ")));
+            lists.push(
+                "unverified readers have unknown liveness; delivering to durable inbox".to_string(),
+            );
+        }
+        let warning = if holders.len() > 1 || !unverified.is_empty() {
+            "warning: "
+        } else {
+            ""
+        };
+        Ok(ResolvedRecipient {
+            relay_run: None,
+            address,
+            cohort: Some(cohort),
+            reader_notice: Some(format!(
+                "{warning}{} live, {} unverified: {}",
+                live.len(),
+                unverified.len(),
+                lists.join("; ")
+            )),
+        })
+    }
+
     fn resolve_address(
         &self,
         target: &str,
@@ -435,6 +551,9 @@ impl RecipientDirectory {
                     cohort: None,
                 })
                 .ok_or_else(|| anyhow::anyhow!("send refused: unknown person '{name}'; {escape}"));
+        }
+        if key.starts_with("seat:") {
+            return self.resolve_seat(&key, queue_for_role, cli_hint, &escape);
         }
         let role = self.roles.get(&key);
         let vendor = match key.as_str() {

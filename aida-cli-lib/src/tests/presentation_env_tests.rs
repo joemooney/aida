@@ -294,6 +294,7 @@ fn isolated_agent_launch_plan(project: &std::path::Path, name: &str) -> AgentLau
         launch_cwd: project.to_path_buf(),
         role: Some("implementer".into()),
         role_instance: RoleInstanceKind::Driver,
+        seat: None,
         current_spec: Some("TASK-1482".into()),
         name: name.to_string(),
         lease_id: None,

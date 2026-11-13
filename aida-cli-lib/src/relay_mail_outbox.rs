@@ -715,6 +715,7 @@ fn prepare(
             archived: false,
             from_source: SenderSource::Explicit,
             from_role: None,
+            from_seat: None,
             relayed_from: None,
         },
         sidecar,

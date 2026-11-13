@@ -112,6 +112,14 @@ pub struct AgentRegistryEntry {
     pub(crate) last_active_at: DateTime<Utc>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub(crate) role: Option<String>,
+    /// The named seat this session holds (`aida agent new --seat`, exported
+    /// as `AIDA_ROTATION_SEAT`), e.g. `integration` for a session whose role
+    /// is `implementer`. Mail addresses it as `seat:<name>`. `None` on rows
+    /// from older binaries and on sessions launched without a seat, which
+    /// then route exactly as before.
+    // trace:STORY-2745 | ai:claude
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) seat: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub(crate) current_spec: Option<String>,
     pub(crate) worktree_path: PathBuf,
@@ -788,6 +796,7 @@ pub fn touch_mcp_agent(
         started_at: now,
         last_active_at: now,
         role: None,
+        seat: None,
         current_spec: None,
         worktree_path: project_root.to_path_buf(),
         source: "mcp".to_string(),
@@ -954,6 +963,7 @@ fn touch_session_start_agent_for(
             started_at: now,
             last_active_at: now,
             role: None,
+            seat: None,
             current_spec: None,
             worktree_path: worktree_root.to_path_buf(),
             source: "session-start-hook".to_string(),
@@ -998,6 +1008,10 @@ fn touch_session_start_agent_for(
     } else {
         entry.role = env_nonempty("AIDA_SESSION_ROLE").or(entry.role);
         entry.current_spec = env_scope.or(entry.current_spec);
+        // trace:STORY-2745 | ai:claude
+        entry.seat = env_nonempty(crate::agent_rotation::SEAT_ENV)
+            .and_then(|s| crate::seat_rotation::sanitize_seat(&s).ok())
+            .or(entry.seat);
         entry.worktree_path = worktree_root.to_path_buf();
     }
     if entry.source != "agent-launcher" {
@@ -1463,6 +1477,7 @@ fn register_spawned_agent_as(
         started_at: now,
         last_active_at: now,
         role,
+        seat: None,
         current_spec,
         worktree_path,
         source: "agent-launcher".to_string(),
@@ -1514,6 +1529,7 @@ pub(crate) fn register_role_enter_agent(
         started_at: now,
         last_active_at: now,
         role: Some(role.to_string()),
+        seat: None,
         current_spec: env_nonempty("AIDA_SESSION_SCOPE").filter(|s| looks_like_spec_id(s)),
         worktree_path,
         source: "role-enter".to_string(),
@@ -1686,6 +1702,7 @@ pub(crate) fn register_existing_agent(
         started_at: now,
         last_active_at: now,
         role: Some(role),
+        seat: None,
         current_spec,
         worktree_path,
         source: "manual-register".to_string(),
@@ -3906,6 +3923,7 @@ mod tests {
             started_at: last_active_at,
             last_active_at,
             role: Some("implementer".to_string()),
+            seat: None,
             current_spec: None,
             worktree_path: PathBuf::from("/tmp/aida-story"),
             source: "mcp".to_string(),

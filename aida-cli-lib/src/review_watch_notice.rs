@@ -155,6 +155,7 @@ fn message(id: String, to: &str, subject: String, body: String) -> aida_core::ma
         archived: false,
         from_source: SenderSource::Explicit,
         from_role: None,
+        from_seat: None,
         relayed_from: None,
     }
 }

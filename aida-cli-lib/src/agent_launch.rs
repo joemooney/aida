@@ -1295,6 +1295,7 @@ pub(crate) fn dispatch_agent_new(cmd: &AgentNewCommand, git_read_only: bool) -> 
             bg,
             description,
             rotate,
+            seat,
             grant_inline: _,
             delegate_seats,
         } => agent_new_claude(
@@ -1321,6 +1322,7 @@ pub(crate) fn dispatch_agent_new(cmd: &AgentNewCommand, git_read_only: bool) -> 
             ),
             AgentDefaultFlagOptions::new(!*no_default_flags, extra_flags.clone(), model.clone())
                 .rotating(*rotate)
+                .seated(seat.clone())
                 .delegating(delegate_seats.clone())
                 .declaring_git_policy(git_read_only),
             name.clone(),
@@ -1353,6 +1355,7 @@ pub(crate) fn dispatch_agent_new(cmd: &AgentNewCommand, git_read_only: bool) -> 
             description,
             no_mail_wake,
             rotate,
+            seat,
             grant_inline: _,
             delegate_seats,
             bg: true,
@@ -1388,6 +1391,7 @@ pub(crate) fn dispatch_agent_new(cmd: &AgentNewCommand, git_read_only: bool) -> 
                     model.clone(),
                 )
                 .rotating(*rotate)
+                .seated(seat.clone())
                 .delegating(delegate_seats.clone())
                 .declaring_git_policy(git_read_only),
                 name: name.clone(),
@@ -1423,6 +1427,7 @@ pub(crate) fn dispatch_agent_new(cmd: &AgentNewCommand, git_read_only: bool) -> 
             description,
             no_mail_wake,
             rotate,
+            seat,
             grant_inline: _,
             delegate_seats,
             bg: false,
@@ -1453,6 +1458,7 @@ pub(crate) fn dispatch_agent_new(cmd: &AgentNewCommand, git_read_only: bool) -> 
             // trace:STORY-B6B1278890774EF993D2EBC327862470-150 | ai:claude
             AgentDefaultFlagOptions::new(!*no_default_flags, extra_flags.clone(), model.clone())
                 .rotating(*rotate)
+                .seated(seat.clone())
                 .delegating(delegate_seats.clone())
                 .declaring_git_policy(git_read_only),
             name.clone(),
@@ -1629,6 +1635,7 @@ pub(crate) fn agent_resume_ended(
         launch_cwd: entry.worktree_path.clone(),
         role: entry.role.clone(),
         role_instance: RoleInstanceKind::Driver,
+        seat: entry.seat.clone(),
         current_spec: entry.current_spec.clone(),
         name: entry
             .name
@@ -1803,6 +1810,10 @@ pub(crate) struct AgentLaunchPlan {
     pub(crate) launch_cwd: std::path::PathBuf,
     pub(crate) role: Option<String>,
     pub(crate) role_instance: RoleInstanceKind,
+    /// The named seat (`--seat`); exported to the child as
+    /// `AIDA_ROTATION_SEAT` and recorded on its registry row, so mail can
+    /// address it as `seat:<name>`. trace:STORY-2745 | ai:claude
+    pub(crate) seat: Option<String>,
     pub(crate) current_spec: Option<String>,
     pub(crate) name: String,
     /// SPIKE-34: id of the lease created by `prepare_agent_launch` when
@@ -1908,6 +1919,8 @@ pub(crate) struct AgentDefaultFlagOptions {
     // trace:STORY-B6B1278890774EF993D2EBC327862470-101 | ai:claude
     pub(crate) rotate: bool,
     pub(crate) delegate_seats: Vec<String>,
+    /// `--seat <name>`: the named seat the child holds. trace:STORY-2745 | ai:claude
+    pub(crate) seat: Option<String>,
     // Only agent-new CLI declarations; other callers retain their existing output.
     // trace:STORY-1486 | ai:codex
     pub(crate) declared_git_read_only: Option<bool>,
@@ -1925,6 +1938,7 @@ impl AgentDefaultFlagOptions {
             model_override,
             rotate: false,
             delegate_seats: Vec::new(),
+            seat: None,
             declared_git_read_only: None,
         }
     }
@@ -1938,6 +1952,12 @@ impl AgentDefaultFlagOptions {
     // trace:BUG-2467 | ai:codex
     pub(crate) fn delegating(mut self, seats: Vec<String>) -> Self {
         self.delegate_seats = seats;
+        self
+    }
+
+    /// Set `--seat`. trace:STORY-2745 | ai:claude
+    pub(crate) fn seated(mut self, seat: Option<String>) -> Self {
+        self.seat = seat;
         self
     }
 
@@ -3192,6 +3212,12 @@ pub(crate) fn agent_new_with_config_wake(
     // trace:BUG-2394 | ai:claude
     let codex_mcp_defaults = flag_options.use_config_defaults;
     let composition = wrapper.then(session::ClaudeWrapperComposition::enter);
+    // A named seat is validated before any side effect. trace:STORY-2745 | ai:claude
+    let seat = flag_options
+        .seat
+        .as_deref()
+        .map(crate::seat_rotation::sanitize_seat)
+        .transpose()?;
     apply_agent_default_flags(
         &mut config,
         &project_root,
@@ -3339,7 +3365,7 @@ pub(crate) fn agent_new_with_config_wake(
     // A launch that fails before its child spawns releases its handle.
     // trace:STORY-1843 | ai:claude
     let mut handle_guard = crate::agent_handle::LaunchReservationGuard::new(&project_root);
-    let (plan, mut setup_receipt) = prepare_agent_launch_attempt(
+    let (mut plan, mut setup_receipt) = prepare_agent_launch_attempt(
         &project_root,
         role,
         spec,
@@ -3349,7 +3375,8 @@ pub(crate) fn agent_new_with_config_wake(
         // trace:BUG-2169 | ai:claude
         launch_wants_seat_clone(&config),
     )?;
-    // trace:BUG-2169 | ai:claude
+    plan.seat = seat.clone(); // trace:STORY-2745 | ai:claude
+                              // trace:BUG-2169 | ai:claude
     {
         let _composition = wrapper.then(session::ClaudeWrapperComposition::enter);
         rescope_contained_settings(&mut config, &plan.launch_cwd, plan.role.as_deref())?;
@@ -3557,6 +3584,12 @@ pub(crate) fn agent_new_bg_dispatch(
              environment that provides it), then retry `aida agent new claude --bg`"
         )
     })?;
+    // A named seat is validated before any side effect. trace:STORY-2745 | ai:claude
+    let seat = flag_options
+        .seat
+        .as_deref()
+        .map(crate::seat_rotation::sanitize_seat)
+        .transpose()?;
     apply_agent_default_flags(
         &mut config,
         &project_root,
@@ -3694,7 +3727,7 @@ pub(crate) fn agent_new_bg_dispatch(
     // A launch that fails before its child spawns releases its handle.
     // trace:STORY-1843 | ai:claude
     let mut handle_guard = crate::agent_handle::LaunchReservationGuard::new(&project_root);
-    let (plan, mut setup_receipt) = prepare_agent_launch_attempt(
+    let (mut plan, mut setup_receipt) = prepare_agent_launch_attempt(
         &project_root,
         role,
         spec,
@@ -3704,7 +3737,8 @@ pub(crate) fn agent_new_bg_dispatch(
         // trace:BUG-2169 | ai:claude
         launch_wants_seat_clone(&config),
     )?;
-    // trace:BUG-2169 | ai:claude
+    plan.seat = seat.clone(); // trace:STORY-2745 | ai:claude
+                              // trace:BUG-2169 | ai:claude
     rescope_contained_settings(&mut config, &plan.launch_cwd, plan.role.as_deref())?;
     config.default_args.extend(agent_seed_session_args(
         config.agent_type,
@@ -4918,6 +4952,7 @@ fn prepare_agent_launch_attempt_inner(
                 launch_cwd: launch_cwd.to_path_buf(),
                 role,
                 role_instance: RoleInstanceKind::Driver,
+                seat: None,
                 current_spec: None,
                 name,
                 lease_id: None,
@@ -4979,6 +5014,7 @@ fn prepare_agent_launch_attempt_inner(
                         launch_cwd: lease.worktree_path,
                         role: plan_role,
                         role_instance: RoleInstanceKind::Driver,
+                        seat: None,
                         current_spec: Some(spec),
                         name,
                         lease_id: Some(lease.id),
@@ -5094,6 +5130,7 @@ fn prepare_agent_launch_attempt_inner(
                     launch_cwd: lease.worktree_path,
                     role: plan_role,
                     role_instance: RoleInstanceKind::Driver,
+                    seat: None,
                     current_spec: Some(spec),
                     name,
                     lease_id,
@@ -5125,6 +5162,7 @@ fn prepare_agent_launch_attempt_inner(
                     launch_cwd: launch_cwd.to_path_buf(),
                     role: plan_role,
                     role_instance,
+                    seat: None,
                     current_spec: None,
                     name,
                     lease_id: None,
@@ -5686,6 +5724,7 @@ pub(crate) fn prepare_agent_launch_dry(
         launch_cwd: project_root.to_path_buf(),
         role: plan_role,
         role_instance,
+        seat: None,
         // Personas may discuss a supplied spec but never own it.
         current_spec: if persona { None } else { spec },
         name,
@@ -7332,7 +7371,10 @@ fn run_rotating_agent(
     let agent_rotation::Supervision { policy, on_gap } = supervision;
     // ONE seat for the supervisor, the child's handoff commands and its
     // SessionStart hook: the child gets it as AIDA_ROTATION_SEAT.
-    let seat = agent_rotation::supervisor_seat(plan.role.as_deref(), config.agent_type);
+    // An explicit `--seat` names it; else the role (or vendor). trace:STORY-2745 | ai:claude
+    let seat = plan.seat.clone().unwrap_or_else(|| {
+        agent_rotation::supervisor_seat(plan.role.as_deref(), config.agent_type)
+    });
     let mut run = agent_rotation::RotationRun::bind(&plan.project_root, &plan.name)?;
     if let Some(lease_id) = &plan.lease_id {
         session::stamp_lease_active_pid_at(&plan.project_root, lease_id, std::process::id())
@@ -7640,6 +7682,9 @@ pub(crate) fn run_agent_generation_with_io(
         if let Some(sid) = rotation.previous_session {
             command.env(crate::agent_rotation::PREVIOUS_SESSION_ENV, sid);
         }
+    } else if let Some(seat) = &plan.seat {
+        // An unsupervised launch still names its seat. trace:STORY-2745 | ai:claude
+        command.env(crate::agent_rotation::SEAT_ENV, seat);
     }
     if let Some(ctx) = launch_context {
         command
@@ -8256,6 +8301,7 @@ mod task_1806_launch_mandate_tests {
             launch_cwd: project.to_path_buf(),
             role: Some("implementer".into()),
             role_instance: RoleInstanceKind::Driver,
+            seat: None,
             current_spec: Some("TASK-2000".into()),
             name: "lane-2000".to_string(),
             lease_id: None,
@@ -8329,6 +8375,7 @@ mod task_1806_launch_mandate_tests {
             started_at: now,
             last_active_at: now,
             role: None,
+            seat: None,
             current_spec: Some("TASK-1784".into()),
             worktree_path: project.clone(),
             source: "session-start-hook".into(),

@@ -418,7 +418,7 @@ fn route_message(
         deleted: false,
         archived: false,
         from_source: SenderSource::Explicit,
-        from_role: None,
+        from_role: None, from_seat: None,
         relayed_from: None,
     }
 }

@@ -3098,7 +3098,7 @@ impl<'a> McpServer<'a> {
             deleted: false,
             archived: false,
             from_source,
-            from_role,
+            from_role, from_seat: None,
             relayed_from,
         };
         // A role send records its send-time cohort, as on the CLI.

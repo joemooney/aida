@@ -79,6 +79,9 @@ pub struct IdentityEnv {
     aliases: Vec<String>,
     /// Raw non-empty `AIDA_SESSION_ROLE`.
     role: Option<String>,
+    /// Raw non-empty `AIDA_ROTATION_SEAT`: the named seat this session holds.
+    // trace:STORY-2745 | ai:claude
+    seat: Option<String>,
     /// Raw non-empty `AIDA_AGENT_TYPE`.
     vendor: Option<String>,
     /// Session id from the hook payload this process was handed.
@@ -108,6 +111,7 @@ impl IdentityEnv {
             user,
             aliases: ALIAS_ENVS.into_iter().filter_map(nonempty_env).collect(),
             role: nonempty_env("AIDA_SESSION_ROLE"),
+            seat: nonempty_env("AIDA_ROTATION_SEAT"),
             vendor: nonempty_env("AIDA_AGENT_TYPE"),
             payload_session: std::env::var("AIDA_HOOK_PAYLOAD")
                 .ok()
@@ -247,6 +251,9 @@ struct RegistryRow {
     ended_at: Option<toml::Value>,
     #[serde(default)]
     role: Option<String>,
+    // trace:STORY-2745 | ai:claude
+    #[serde(default)]
+    seat: Option<String>,
     #[serde(default)]
     mail_wake: Option<String>,
 }
@@ -640,6 +647,9 @@ pub struct MailIdentityFacts {
     user_is_known_person: bool,
     aliases: Vec<String>,
     role: Option<String>,
+    /// The named seat (`seat:<name>` is a shared inbox identity, like a
+    /// role). trace:STORY-2745 | ai:claude
+    seat: Option<String>,
     env_vendor: Option<String>,
     /// A selected session row failed verification: no private inbox.
     unverified: bool,
@@ -672,6 +682,7 @@ impl MailIdentityFacts {
             user_is_known_person,
             aliases: if unverified { Vec::new() } else { env.aliases },
             role: env.role,
+            seat: env.seat,
             env_vendor: env.vendor,
             unverified,
         }
@@ -733,6 +744,7 @@ impl MailIdentityFacts {
             user_is_known_person: false,
             aliases: Vec::new(),
             role: parsed.role.filter(|r| !r.trim().is_empty()),
+            seat: parsed.seat.filter(|s| !s.trim().is_empty()),
             env_vendor: None,
             unverified: false,
         })
@@ -789,6 +801,7 @@ impl MailIdentityFacts {
             user_is_known_person,
             aliases: aliases.iter().map(|s| s.to_string()).collect(),
             role: role.map(str::to_string),
+            seat: None,
             env_vendor: env_vendor.map(str::to_string),
             unverified: false,
         }
@@ -843,6 +856,11 @@ pub fn classified_identities(facts: &MailIdentityFacts) -> Vec<(String, Identity
         let (role, _default) = effective_role(Some(raw));
         push(&mut ids, role, IdentityClass::Shared);
     }
+    // A named seat is a shared address like a role: `seat:<name>`.
+    // trace:STORY-2745 | ai:claude
+    if let Some(seat) = facts.seat.as_deref().and_then(seat_address) {
+        push(&mut ids, seat, IdentityClass::Shared);
+    }
     if let Some(raw) = facts
         .own_vendor
         .clone()
@@ -855,6 +873,19 @@ pub fn classified_identities(facts: &MailIdentityFacts) -> Vec<(String, Identity
         push(&mut ids, handle.to_string(), IdentityClass::Private);
     }
     ids
+}
+
+/// The mail address of a named seat, `seat:<name>` (lowercase, trimmed);
+/// `None` for a blank or malformed name.
+// trace:STORY-2745 | ai:claude
+pub fn seat_address(raw: &str) -> Option<String> {
+    let seat = raw.trim().to_ascii_lowercase();
+    let valid = !seat.is_empty()
+        && seat.len() <= 64
+        && seat
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_');
+    valid.then(|| format!("seat:{seat}"))
 }
 
 /// [`classified_identities`] without the classes.
