@@ -1,0 +1,34 @@
+id: 01a1d541-88f9-74f3-8ff8-b4912edab901
+spec_id: STORY-73022632d35647cca3858b18ac0723e3-005
+title: 'Review PR-3949: [AI:codex] refactor(cli): extract terminal and command framework leaf crates (Refs TASK-3783)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a1d51f`) for branch `task-b6b1278890774ef993d2ebc327862470-1063`.
+
+  - PR: <https://github.com/joemooney/aida/pull/3949>
+  - Branch: `task-b6b1278890774ef993d2ebc327862470-1063` → `main`
+
+  ## Slice of (Refs only — not completed by this PR)
+
+  Commit subjects carry `(Refs SPEC-ID)`: this PR is one slice of a spec that a later PR completes. Review this slice against that spec's acceptance criteria.
+
+  - TASK-3783
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 3949` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-13T14:13:24.345050116Z
+modified_at: 2026-11-13T14:13:24.345050116Z
+req_type: Story
+filed_at:
+  code_sha: dc53b3a4ecf5f2616b2d807a45f5fa420f63f8c4
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 47bfb18596
+  session: 01a1d51f8e0e
