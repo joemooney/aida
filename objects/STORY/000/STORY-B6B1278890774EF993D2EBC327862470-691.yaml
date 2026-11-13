@@ -43,7 +43,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-13T16:52:56.270142081Z
-modified_at: 2026-11-13T23:41:03.946580666Z
+modified_at: 2026-11-13T23:41:41.583614369Z
 req_type: Story
 tags:
 - architecture
@@ -177,6 +177,27 @@ comments:
   created_at: 2026-11-13T23:41:03.946580666Z
   modified_at: 2026-11-13T23:41:03.946580666Z
   session_id: 01a1d72e-0d28-76e0-890c-867fba05abcf
+  harness_version: 2.1.325 (Claude Code)
+- id: 01a1d749-d14f-7dc0-97e7-4f1a14bc99d4
+  author: joe
+  content: |-
+    Advisor signoff 16:45 MST on the S2 sketch (aida land run [--once]): APPROVED, subject to conditions 1-6.
+
+    Rulings:
+    (a) YES. Pass --allow-stale-base only when this pass's pinned merge-tree of head into base is clean. Record the merge-tree result id with the launch (land-children.json, and the log) so the review can be audited against what was checked. The approval still needs carry-over proof plus green CI at the exact head before READY. Drop this path once STORY-2763 is on the same track.
+    (b) YES. Use queue rework (60s bound) + queue work --force-claim, as autoland does.
+    (c) YES. Use queue work's normal vendor selection, but never override a vendor that an open PR's rework already preserves (BUG-2553). --vendor applies only to fresh launches.
+
+    Conditions (from failures seen today):
+    1. Train act: never start a train while any .aida/train/<id>.json journal other than run.lock remains (a resumed journal drops TTY consent and ejects supervised members, BUG-2556 order). Never cancel train CI. A train child gets no timeout shorter than 90 min.
+    2. CI-FAILED derivation ignores a cancelled run that a later run at the same head superseded. Ghost cancellations from hold-clear and label events sent rework to approved #3948 and blocked ships of #3909 and #3966 today. Only a completed failure at the exact head counts.
+    3. force-claim refusal 'seat has N commit(s) that no remote has': derive BLOCKED with the seat path and the instruction to push or salvage. Never relaunch over it. (Today STORY-2660's resolved merge sat unpushed until the advisor pushed it.)
+    4. Reviewer timeout: before killing or relaunching, re-read the verdict at that head. If one was recorded, it's done (the reviewer was in post-verdict shutdown, BUG-2546). Kill the whole process group. Make review_timeout_secs a knob; 2700 as the default is fine.
+    5. Integration-base PRs: run aida pr auto-queue-review --branch <head-branch> before the reviewer pickup. Without it, pickup refuses (the review-3944 recipe).
+    6. Children keep the land run process as an ancestor: no setsid or double-fork. A detached reviewer cannot bind its verdict.
+  created_at: 2026-11-13T23:41:41.583614369Z
+  modified_at: 2026-11-13T23:41:41.583614369Z
+  session_id: 01a1d73b-e31c-7f33-b2fe-cee145ddc6fb
   harness_version: 2.1.325 (Claude Code)
 history:
 - id: 01a1d5d3-fe28-7cc2-a7e3-638454ed4798
