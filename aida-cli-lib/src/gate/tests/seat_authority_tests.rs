@@ -37,7 +37,10 @@ fn bug_2544_delegation_preserves_parent_rejection_reason() {
     let text = mismatch.to_string();
     assert!(text.contains("different-launcher"), "{text}");
     assert!(text.contains(SUBJECT), "{text}");
-    assert!(!text.contains(&id), "only the grant prefix should be disclosed");
+    assert!(
+        !text.contains(&id),
+        "only the grant prefix should be disclosed"
+    );
     env.set_key("AIDA_USER", SUBJECT);
     revoke_by_id(&id).unwrap();
     let revoked = validate_child_delegation(tmp.path(), "reviewer").unwrap_err();
