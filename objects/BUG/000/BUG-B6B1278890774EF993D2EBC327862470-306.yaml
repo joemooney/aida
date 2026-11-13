@@ -3,12 +3,12 @@ spec_id: BUG-b6b1278890774ef993d2ebc327862470-306
 agreed_id: BUG-2541
 title: session end cannot retire a contained seat clone whose host binding is unverified (mail retention refuses even with --force)
 description: 'dell1 2026-11-12: seat clone aida-seat-aida-bug-...-304 (lease 01a1d1150582, branch bug-overlay-fingerprint-flake). Its 202 tracked files were deleted (interrupted teardown?). After restoring them, ''aida session end --branch B --yes|--force'' refuses: ''mail retention refused ... the seat clone has no verified host binding to its main checkout, so its mail cannot be fenced and retained; the tree was kept''. Running it from inside the clone refuses too: ''marker, alternates and lease do not agree on a main checkout''. Every pickup on the branch stays blocked (''held by a contained seat private clone''). Expected: an operator path that salvages the mail (or confirms it is empty) and ends the lease.'
-status: InProgress
+status: NeedsAttention
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-12T21:48:37.083633477Z
-modified_at: 2026-11-13T06:31:12.231042411Z
+modified_at: 2026-11-13T06:33:22.460223290Z
 req_type: Bug
 tags:
 - track:dell1
@@ -29,6 +29,21 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1d39a-e980-7641-ba19-7fa3bc405dc6
+  author: dirtlab
+  timestamp: 2026-11-13T06:31:47.328835065Z
+  session_id: 01a1d39a5202
+  harness_version: codex-cli 0.167.0
+  changes: []
+- id: 01a1d39c-5d1c-7b92-9bee-43c9b3fd677d
+  author: dirtlab
+  timestamp: 2026-11-13T06:33:22.460250646Z
+  session_id: 01a1d39a5202
+  harness_version: codex-cli 0.167.0
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 filed_at:
   code_sha: 0d6c60e6d982aad0c2c4ad38214010289a267d92
   branch: main
@@ -38,3 +53,9 @@ filed_at:
   vendor: claude
   session: 01a1d19e-9195-7853-815f-b54753ebd973
   harness_version: 2.1.322 (Claude Code)
+attention_reason:
+  category: design-fork
+  detail: 'Unverified-clone recovery crosses mail fencing and sandbox admission: a mail-only lease fallback still leaves probe/salvage refused, while broadening host_recorded_clone changes launch authority. Need an explicit host-only recovery contract deciding binding repair versus preserved quarantine, including ambiguous writer anchors and live-use refusal. Investigation and required regressions: docs/internal/testing/bug-2541-unverified-clone-recovery.md. No production changes or affected clone mutations.'
+  lean: Prefer a separate host-only binding-repair operation using exact host lease evidence, preserving original metadata and mail, then ordinary fenced teardown; do not weaken host_recorded_clone or --force.
+  raised_by: implementer
+  raised_at: 2026-11-13T06:33:22.460223290Z
