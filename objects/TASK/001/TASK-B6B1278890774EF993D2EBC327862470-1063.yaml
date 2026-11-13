@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-11T12:17:13.260009028Z
-modified_at: 2026-11-13T22:05:32.942645849Z
+modified_at: 2026-11-13T22:30:18.396143717Z
 req_type: Task
 relationships:
 - rel_type: BlockedBy
@@ -110,6 +110,12 @@ comments:
   modified_at: 2026-11-13T22:05:32.942645849Z
   session_id: 01a1d684-8599-70e0-a01c-714f54d2f8de
   harness_version: 2.1.323 (Claude Code)
+- id: 01a1d708-761c-7b72-945b-2e70087d6cc8
+  author: joe
+  content: 'PR #3949 host-staged merge repair: corrected only scripts/exec-context-legacy.json. Restored seven exact-site navigation keys to aida-term/aida-cmdkit, retired the removed glyphs home environment read, and preserved upstream test-site retirements. Ceiling 1204. No conflict markers remain; JSON and git diff --check pass. Targeted Python suites: 19 execution-context ratchet tests and 5 relocation tests pass. Git metadata left read-only; host must stage and publish with Refs-only credit. Host codegraph query client is absent at its configured absolute path; used rg/direct source confirmation.'
+  created_at: 2026-11-13T22:30:18.396143717Z
+  modified_at: 2026-11-13T22:30:18.396143717Z
+  session_id: 01a1d706722f
 history:
 - id: 01a1ca8a-8ee7-7991-b976-a941a11ff32c
   author: joe
@@ -176,6 +182,11 @@ history:
   timestamp: 2026-11-13T21:48:00.567261366Z
   session_id: 01a1d6e0fc5c
   harness_version: codex-cli 0.167.0
+  changes: []
+- id: 01a1d707-6c7e-7fc3-b9e7-3fd4e5bfa005
+  author: joe
+  timestamp: 2026-11-13T22:29:10.398234574Z
+  session_id: 01a1d706722f
   changes: []
 filed_at:
   code_sha: 11b131dfe3341e6d9c7127d64370f91366094711
