@@ -95,12 +95,6 @@
   added_at: 2026-11-13T08:55:15.201334591Z
   for_role: implementer
 - user_id: dirtlab
-  requirement_id: 01a1ca8a-722c-79a0-b301-26e4d9948e37
-  position: 383000
-  added_by: dirtlab
-  added_at: 2026-11-13T13:35:19.980422155Z
-  for_role: implementer
-- user_id: dirtlab
   requirement_id: 01a1ca8b-3f80-76c1-bca5-331c4c0e47e1
   position: 384000
   added_by: dirtlab
