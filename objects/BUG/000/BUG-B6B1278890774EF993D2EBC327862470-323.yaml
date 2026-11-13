@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-13T12:51:33.706851654Z
-modified_at: 2026-11-13T22:31:27.800293712Z
+modified_at: 2026-11-13T22:49:24.877117697Z
 req_type: Bug
 tags:
 - lanes
@@ -62,6 +62,13 @@ comments:
   content: 'Operator decision 15:31 MST (Joe: ''agreed''): integration-bc (Claude seat) does a one-off REAL merge of origin/main into PR #3953, which stays a main-track PR. Conflicts in 6 files; resolve keeping main''s behaviour plus BUG-2558. Then a review launch at the new head. This unparks STORY-2593 (#3938), TASK-3783 (#3949) and STORY-2660 (#3921) once #3953 is on main and dell1 is rebuilt.'
   created_at: 2026-11-13T22:31:27.800293712Z
   modified_at: 2026-11-13T22:31:27.800293712Z
+  session_id: 01a1d684-8599-70e0-a01c-714f54d2f8de
+  harness_version: 2.1.323 (Claude Code)
+- id: 01a1d719-f48d-7b62-ac35-a586e5ddff07
+  author: joe
+  content: 'Advisor 15:50: operator freed Claude capacity (excess weekly credits, expire 2026-11-15). This conflict merge goes to a Claude implementer lane on dell1 (--vendor claude), because a Codex native seat cannot record the merge of main. Scope: REAL merge of origin/main into the open PR branch (no rebase, no force push), resolving conflicts to keep main''s behaviour plus this spec''s change, then targeted tests and check-ci-fast, then push. Nothing else.'
+  created_at: 2026-11-13T22:49:24.877117697Z
+  modified_at: 2026-11-13T22:49:24.877117697Z
   session_id: 01a1d684-8599-70e0-a01c-714f54d2f8de
   harness_version: 2.1.323 (Claude Code)
 history:
