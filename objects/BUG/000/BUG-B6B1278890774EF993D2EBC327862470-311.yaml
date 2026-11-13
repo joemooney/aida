@@ -8,8 +8,25 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-13T01:54:48.391951523Z
-modified_at: 2026-11-13T02:03:59.654826394Z
+modified_at: 2026-11-13T02:15:45.165850385Z
 req_type: Bug
+comments:
+- id: 01a1d2b0-810d-71e2-9ffb-3a2943c74aba
+  author: dirtlab
+  content: |
+    Implemented BUG-2546 in the native lane; edits remain uncommitted for host publication.
+
+    Changed files: aida-cli-lib/src/reviewer_completion.rs (new scoped completion watcher and regression tests), headless_linger.rs (stop independent of final result/background holds), review_watch.rs and session.rs (fresh/resumed and contained wait integration), queue_cmd/work.rs (all standalone reviewer policy, scope and credited-spec lookup), lib.rs (module registration).
+
+    Standalone headless reviewers stop after a fresh terminal verdict matching their child grant and attested SHA, with a two-second exit grace and existing process-tree termination. Existing collector remains responsible for verdict acceptance. All standalone reviewer prompts forbid local cargo/test/build work unless explicitly requested and require immediate exit after recording. Result output reports post_verdict_runtime_ms from the recorded timestamp; missing evidence reports unknown. Interactive sessions retain human-controlled process lifetime.
+
+    Validation: launcher cargo test --profile agent -p aida-cli-lib --lib -- headless_linger::tests: 7 passed. Launcher cargo test --profile agent -p aida-cli-lib --lib -- bug2546: 2 passed (latest build; repeated queued run also passed). git diff --check passed. untested=false.
+
+    No implementation blocker. Configured codegraph client /home/joe/ai/aida/.codegraph/proxy-state/bin/codegraph is absent; doctor reports missing client, so navigation used rg. Host deployment remains needed. Cargo restriction is prompt policy, not removal of sandbox cargo access. Host must commit/publish and complete the queue after exit.
+  created_at: 2026-11-13T02:15:45.165850385Z
+  modified_at: 2026-11-13T02:15:45.165850385Z
+  session_id: 01a1d2a54ca2
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1d29d-880a-7201-8b91-ded826a703b0
   author: joe
