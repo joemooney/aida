@@ -1376,6 +1376,15 @@ mod branch_behind_main_tests;
 #[path = "tests/session_root_resolution_tests.rs"]
 mod session_root_resolution_tests;
 
+// trace:TASK-3428 | ai:codex
+mod review_surface;
+use review_surface::{
+    classify_human_review_bucket, classify_review_surface, classify_review_surface_forge_first,
+    is_store_branch, requirement_is_deferred, resolve_review_surface_forge_first,
+    review_surface_branch, spec_eligible_for_review_awaiting, HumanReviewBucket, ReviewSurface,
+    REVIEW_SURFACE_UNKNOWN_LABEL,
+};
+
 include!("review_commands.rs");
 
 // trace:TASK-3428 | ai:codex
