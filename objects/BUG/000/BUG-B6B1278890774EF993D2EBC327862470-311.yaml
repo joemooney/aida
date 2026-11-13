@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-13T01:54:48.391951523Z
-modified_at: 2026-11-13T18:28:33.679589566Z
+modified_at: 2026-11-13T20:42:40.779729673Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -176,6 +176,10 @@ history:
   author: joe
   timestamp: 2026-11-13T16:49:29.503919815Z
   changes: []
+- id: 01a1d6a5-eeec-73b1-a518-8c407c1b76e8
+  author: joe
+  timestamp: 2026-11-13T20:42:41.260395985Z
+  changes: []
 filed_at:
   code_sha: 5b9a248a1be21f885473abada02ba08ebaba721e
   branch: main
@@ -189,7 +193,7 @@ failure_reason:
   phase: reviewer
   phase_index: 3
   kind: verdict:request-changes
-  detail: 'Full sweep: publication projection still hides child-grant completion evidence; AC1/AC3 unverified on publisher-enabled nodes, AC2 verified by policy and launch tests. Earlier three findings fixed. CI pending at review time.'
+  detail: 'Corrected full sweep: AC1/AC3 unverified on publisher-enabled nodes because effective signed verdict projections hide child-grant completion evidence; AC2 verified by policy and launch tests. One blocking completion defect remains despite green build/test CI.'
   recovery_hint: address the review findings, move BUG-2546 back to In Progress, and clear the PR hold only after approval
   shelved_by: reviewer
-  shelved_at: 2026-11-13T16:49:29.313869896Z
+  shelved_at: 2026-11-13T20:42:40.779729673Z
