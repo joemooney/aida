@@ -3,12 +3,12 @@ spec_id: BUG-b6b1278890774ef993d2ebc327862470-300
 agreed_id: BUG-2535
 title: aida pr ship hangs for 20+ minutes in step 6 'inspecting seat clone' after a successful merge
 description: '2026-11-12 03:49-04:12 MST: ''aida pr ship 3860'' (deputy job 01a1cf5f) merged PR-3860 at 03:49, then sat in step 6 (prune verified merged agent worktrees, ''up to 60s'') on ''inspecting seat clone .../aida-seat-aida-bug-b6b1278890774ef993d2ebc327862470-213 (bounded scan)'' for over 20 minutes, holding the serial deputy queue so the next train could not start. Cancelled by the advisor. Expected: the 60s budget is enforced across the whole step, including each seat-clone scan.'
-status: Approved
+status: InProgress
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-12T11:10:55.183396177Z
-modified_at: 2026-11-13T19:09:19.445646960Z
+modified_at: 2026-11-13T19:19:55.092661097Z
 req_type: Bug
 tags:
 - track:dell1
@@ -104,6 +104,13 @@ history:
   - field_name: status
     old_value: NeedsAttention
     new_value: Approved
+- id: 01a1d65a-27d4-7503-a9ca-cfbebf99409d
+  author: aida-session-start
+  timestamp: 2026-11-13T19:19:55.092659298Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: a1fcc33e2febf356c98b0dae0908b250678cd56b
   branch: main
