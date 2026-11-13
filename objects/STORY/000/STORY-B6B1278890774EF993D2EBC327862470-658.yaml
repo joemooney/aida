@@ -28,7 +28,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-12T17:51:40.579097417Z
-modified_at: 2026-11-13T00:44:29.404688783Z
+modified_at: 2026-11-13T00:44:43.696592687Z
 req_type: Story
 relationships:
 - rel_type:
@@ -81,6 +81,19 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: FAST CI still omits ratchet base inputs; required ci:full validation setup remains absent. CI pending at review time.. It was punted on: blocked-dependency: Native pickup refused: STORY-2735 is Needs Attention and promotion requires advisor authority. Implementation already exists at HEAD 7da0685010e; clean worktree. Existing request-changes/hold must be triaged before authorized rework or publication.. No triage reason was given.'
   created_at: 2026-11-13T00:44:29.404685340Z
   modified_at: 2026-11-13T00:44:29.404685340Z
+- id: 01a1d25d-2ac7-74b2-9df2-0e61b72e0308
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (STORY-2735):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: e434410dd90d
+    Recorded: 2026-11-13T00:43:07.078323369+00:00
+    Findings:
+    1. [P2] .github/workflows/ci.yml:66: FAST invokes make check-ci-fast without EXEC_CONTEXT_BASE or CRATE_GLOBS_BASE. load_ci_steps retains only step name/run, discarding the original step env; both guards therefore skip base-relative check_growth. Source changes plus matching ledger expansion can pass FAST. Supply trusted PR base inputs or preserve the step environment, and add a regression through the actual FAST invocation proving ledger growth refuses.
+    2. [P2] Required FULL validation setup remains missing: STORY-2735 LIGHT gate and advisor signoff require this PR to carry ci:full. Current labels omit it; exact-head run 43337903495 selected ci-tier: fast and skipped the FULL matrix. Apply ci:full and retain evidence of FULL execution before landing; this is missing required setup, not a refusal due to pending CI.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-13T00:44:43.591788354Z
+  modified_at: 2026-11-13T00:44:43.591788354Z
 history:
 - id: 01a1d0e3-3615-7533-9c49-092ba133a6b5
   author: joe
