@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-02T19:20:50.092491662Z
-modified_at: 2026-11-13T09:40:45.941291852Z
+modified_at: 2026-11-13T10:01:55.514710794Z
 req_type: Story
 tags:
 - architecture
@@ -753,6 +753,18 @@ comments:
   modified_at: 2026-11-13T09:40:45.941291852Z
   session_id: 01a1d3ee-83e8-71b3-a2c5-aed5baed6fdc
   harness_version: 2.1.323 (Claude Code)
+- id: 01a1d45b-4c3a-7b81-85ea-cf5f0b79f366
+  author: dirtlab
+  content: |
+    Final-round resumed native handoff: base 124b6966eb already contains findings 1-5 fixes and relocated OVERVIEW narrative (spec comment 44). New uncommitted changes remove retired --steal from the phase-1 argv helper and its caller, remove the unused driver field, mark constructor compatibility input unreachable, and update existing argv tests (finding 5). Finding-2 regressions initially failed before recovery because their legacy synthetic allocation file inherited group-write permissions; queued_scope now gives that fixture file mode 0600, preserving production policy.
+
+    Validation: 33 distinct executed Rust tests pass: phase argv 4, retry workspace argv 1, recovery hints 24, queue recovery 4 including actual Live/Unknown WIP parking without reclaim. Final passing job IDs: j20261113T095847330-2-0, j20261113T095838147-2-0, j20261113T094921598-2-0, j20261113T095007345-2-0. Python ownership ratchet 2/2, rustfmt --check, git diff --check and CI gate classification audit pass. Initial mistaken binary-crate jobs and fixture failures are superseded by corrected passing runs. make check-ci-fast was stopped when it invoked Cargo directly; no full-gate pass claimed.
+
+    Native Refs publication declaration recorded: [AI:codex] fix(ownership): remove retired steal from phase launch arguments (Refs STORY-2325). Five changed files, uncommitted. Host must rebase (local branch 146 commits behind origin/main), commit, publish a new PR as directed in advisor comment 48, and verify every CI lane at that resulting head for finding 6. Existing merge hold remains; no clearance or bypass claimed. No Git metadata mutation, push, PR creation, queue done, review record or merge from this seat. Full handoff: /tmp/story2325-native-handoff.md. Turn ended after handoff; no ongoing work claimed.
+  created_at: 2026-11-13T10:01:55.514710794Z
+  modified_at: 2026-11-13T10:01:55.514710794Z
+  session_id: 01a1d44d1a3a
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a19ed2-508b-7401-9865-70193fa0d0af
   author: joe
