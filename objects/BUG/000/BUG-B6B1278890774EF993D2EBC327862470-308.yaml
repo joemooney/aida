@@ -8,10 +8,17 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-12T23:29:52.950918801Z
-modified_at: 2026-11-13T05:43:22.777862489Z
+modified_at: 2026-11-13T05:43:28.409924768Z
 req_type: Bug
 tags:
 - track:integration
+comments:
+- id: 01a1d36e-ad99-7812-a931-5c35fee5f656
+  author: joe
+  content: 'integration seat claimed 22:45 MST. Profile (aida review list, 60 s): ~0.75 s/key, of which ~0.6 s is a full gate-ledger discovery per key (filter_miskeyed_or_fail_closed -> discover) and ~0.15 s is 3 git spawns (store_view rev-parse, spec-index ls-tree, git-common-dir). Plan: a scoped listing snapshot memoizes discovery owners, publication store view/tip, spec-index listing and canonical Snapshot once per listing; single-key gate reads unchanged.'
+  created_at: 2026-11-13T05:43:28.409924768Z
+  modified_at: 2026-11-13T05:43:28.409924768Z
+  session_id: 92a24ff6-1324-4fe1-a02b-b2601f384b4b
 history:
 - id: 01a1d363-5ded-7e80-b51f-abf18415cebb
   author: joe
