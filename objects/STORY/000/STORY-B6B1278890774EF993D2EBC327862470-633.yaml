@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-10T22:04:54.061461Z
-modified_at: 2026-11-13T08:21:01.407914495Z
+modified_at: 2026-11-13T12:42:52.703281171Z
 req_type: Story
 comments:
 - id: 01a1c781-4cf1-7c80-b086-89c5c5096ab6
@@ -481,6 +481,13 @@ comments:
   modified_at: 2026-11-13T05:28:40.756994199Z
   session_id: 01a1d356c1f7
   harness_version: codex-cli 0.167.0
+- id: 01a1d4ee-a79f-71b2-b9c9-db4498695f58
+  author: joe
+  content: 'Round 10 (PR #3832): merged origin/main (BUG-2553 conflicts: kept host-staged no-mail route, adopted main''s preflight/containment recheck). P1: regeneration sets fixed RUSTC_WRAPPER='''' via EnvPolicy decisions. P2: renderer builds in the seat''s validated target (clone record or linked-worktree lease at <main>/target/worktrees/<dir>, real dir), bound writable; generation has its own 900s budget covering all phases (restore keeps probe bound). P3: docs split restore-only preparation from publication-time generation. New tests: story_2710_cargo_backed_regeneration_disables_wrapper_and_uses_seat_target, story_2710_repair_seat_target_rejects_foreign_or_symlinked_targets.'
+  created_at: 2026-11-13T12:42:52.703281171Z
+  modified_at: 2026-11-13T12:42:52.703281171Z
+  session_id: 01a1d4e0d2c0
+  harness_version: 2.1.323 (Claude Code)
 history:
 - id: 01a1c77f-ffdf-7ac3-a382-33d6a384e617
   author: aida-session-start
