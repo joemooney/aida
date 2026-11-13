@@ -856,6 +856,18 @@ fn load_receipts(
 /// authority; an attempted review namespace or explicit publisher there still
 /// goes through strict refusal.
 fn store_view(root: &Path) -> Result<Option<(PathBuf, String)>> {
+    // A listing pins the store and its tip once. trace:BUG-2543 | ai:claude
+    if let Some(hit) = super::listing_scope::get(|m| m.store_view.get(root).cloned()) {
+        return Ok(hit);
+    }
+    let view = store_view_uncached(root)?;
+    super::listing_scope::put(|m| {
+        m.store_view.insert(root.to_path_buf(), view.clone());
+    });
+    Ok(view)
+}
+
+fn store_view_uncached(root: &Path) -> Result<Option<(PathBuf, String)>> {
     let Some(store) = store(root) else {
         return Ok(None);
     };
@@ -1069,9 +1081,7 @@ fn select_effective(
         return Ok(Vec::new());
     }
     let (receipt, _, _) = answering(relevant.clone());
-    let snapshot = Snapshot::at_head(root)
-        .map_err(|e| anyhow::anyhow!(e.to_string()))?
-        .context("missing canonical review snapshot")?;
+    let snapshot = snapshot_at_head(root)?; // trace:BUG-2543 | ai:claude
     if receipt.decision == "approved" {
         let requested = snapshot.resolve(spec_ids);
         ensure!(
@@ -1117,6 +1127,63 @@ fn answering<'a, S, P>(mut relevant: Vec<&'a (Receipt, S, P)>) -> &'a (Receipt, 
         .unwrap_or(relevant[0])
 }
 
+/// The canonical snapshot at the store head; one per listing.
+// trace:BUG-2543 | ai:claude
+fn snapshot_at_head(root: &Path) -> Result<std::rc::Rc<Snapshot>> {
+    if let Some(hit) = super::listing_scope::get(|m| m.snapshot.get(root).cloned()) {
+        return Ok(hit);
+    }
+    let snapshot = std::rc::Rc::new(
+        Snapshot::at_head(root)
+            .map_err(|e| anyhow::anyhow!(e.to_string()))?
+            .context("missing canonical review snapshot")?,
+    );
+    super::listing_scope::put(|m| {
+        m.snapshot.insert(root.to_path_buf(), snapshot.clone());
+    });
+    Ok(snapshot)
+}
+
+/// The committed names under the spec index directory `dir` at `tip`,
+/// bounded per change like [`list`]. Inside a listing the whole index is
+/// listed once and filtered here.
+// trace:BUG-2543 | ai:claude
+fn spec_index_list(store: &Path, tip: &str, dir: &str) -> Result<Vec<String>> {
+    if !super::listing_scope::active() {
+        return list(store, tip, dir);
+    }
+    let all = spec_index_names(store, tip)?;
+    let prefix = format!("{dir}/");
+    let names: Vec<String> = all
+        .iter()
+        .filter(|n| n.starts_with(&prefix))
+        .cloned()
+        .collect();
+    ensure!(
+        names.len() <= MAX_PER_CHANGE,
+        "review evidence read budget exhausted for {dir}"
+    );
+    Ok(names)
+}
+
+/// Every committed name under [`SPEC_INDEX`] at `tip`, once per listing.
+// trace:BUG-2543 | ai:claude
+fn spec_index_names(store: &Path, tip: &str) -> Result<std::rc::Rc<Vec<String>>> {
+    let key = (store.to_path_buf(), tip.to_string());
+    if let Some(hit) = super::listing_scope::get(|m| m.spec_index.get(&key).cloned()) {
+        return Ok(hit);
+    }
+    let names = String::from_utf8(git(
+        store,
+        &["ls-tree", "-r", "--name-only", tip, "--", SPEC_INDEX],
+    )?)?;
+    let names = std::rc::Rc::new(names.lines().map(str::to_string).collect::<Vec<_>>());
+    super::listing_scope::put(|m| {
+        m.spec_index.insert(key, names.clone());
+    });
+    Ok(names)
+}
+
 /// The change a spec-keyed read selects: of the changes whose receipts
 /// covered the spec, the newest (highest number). An older change's
 /// refusal never answers for the spec once a newer change carries it.
@@ -1124,16 +1191,20 @@ fn spec_change(root: &Path, spec_ids: &[&str]) -> Result<Option<ChangeKey>> {
     let Some((store, tip)) = store_view(root)? else {
         return Ok(None);
     };
-    if git(&store, &["ls-tree", &tip, "--", SPEC_INDEX])?.is_empty() {
+    // trace:BUG-2543 | ai:claude
+    let index_empty = if super::listing_scope::active() {
+        spec_index_names(&store, &tip)?.is_empty()
+    } else {
+        git(&store, &["ls-tree", &tip, "--", SPEC_INDEX])?.is_empty()
+    };
+    if index_empty {
         return Ok(None);
     }
-    let snapshot = Snapshot::at_head(root)
-        .map_err(|e| anyhow::anyhow!(e.to_string()))?
-        .context("missing canonical review snapshot")?;
+    let snapshot = snapshot_at_head(root)?;
     let mut newest: Option<ChangeKey> = None;
     for member in snapshot.resolve(spec_ids).members {
         let dir = format!("{SPEC_INDEX}/{}", member.key);
-        for name in list(&store, &tip, &dir)? {
+        for name in spec_index_list(&store, &tip, &dir)? {
             let Some(change) = name
                 .rsplit('/')
                 .next()

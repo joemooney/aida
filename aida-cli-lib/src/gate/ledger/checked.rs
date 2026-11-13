@@ -573,12 +573,26 @@ pub(crate) fn filter_miskeyed_or_fail_closed(
     events: Vec<GateEvent>,
 ) -> Vec<GateEvent> {
     let mut events = events;
-    match discover(root) {
-        Ok(Some(discovery)) => discovery.filter_events(&mut events),
-        // The directory can disappear after a legacy reader has read its
-        // input vector. Absence then proves no ownership for those copies.
-        // trace:BUG-2517 | ai:codex
-        Ok(None) | Err(_) => super::project::MiskeyOwners::fail_closed(&mut events),
+    // A listing discovers once and filters every key against that index.
+    // trace:BUG-2543 | ai:claude
+    let root_key = root.to_path_buf();
+    let owners = crate::gate::listing_scope::get(|m| m.owners.get(&root_key).cloned())
+        .unwrap_or_else(|| {
+            let owners = std::rc::Rc::new(match discover(root) {
+                Ok(Some(discovery)) => Some(discovery.owners),
+                // The directory can disappear after a legacy reader has read its
+                // input vector. Absence then proves no ownership for those copies.
+                // trace:BUG-2517 | ai:codex
+                Ok(None) | Err(_) => None,
+            });
+            crate::gate::listing_scope::put(|m| {
+                m.owners.insert(root_key, owners.clone());
+            });
+            owners
+        });
+    match owners.as_ref() {
+        Some(owners) => owners.filter(&mut events),
+        None => super::project::MiskeyOwners::fail_closed(&mut events),
     }
     events
 }

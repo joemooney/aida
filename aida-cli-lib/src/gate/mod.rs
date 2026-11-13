@@ -25,6 +25,8 @@ pub(crate) mod fleet_lanes;
 pub(crate) mod hold_collect;
 pub(crate) mod kernel_deps;
 pub(crate) mod ledger;
+// trace:BUG-2543 | ai:claude — one read snapshot per verdict listing.
+pub(crate) mod listing_scope;
 pub(crate) mod mandate;
 pub(crate) mod mandate_drive;
 pub(crate) mod mandate_gates;

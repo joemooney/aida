@@ -3859,6 +3859,9 @@ pub fn active_verdicts_for(
     project_root: &Path,
     keys: impl IntoIterator<Item = String>,
 ) -> Vec<(String, RecordedVerdict)> {
+    // One ledger discovery and one publication snapshot for the whole
+    // listing, not one per key. trace:BUG-2543 | ai:claude
+    let _scope = super::listing_scope::ListingScope::enter();
     let mut out: Vec<(String, RecordedVerdict)> = keys
         .into_iter()
         .filter_map(|key| {

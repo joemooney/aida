@@ -2984,3 +2984,52 @@ fn bug_2517_local_review_survives_open_record_and_collect_without_binding() {
             .any(|e| e.verdict_record() == Some(&local)));
     }
 }
+
+// BUG-2543: a verdict listing discovers the ledger once for every key, and
+// answers exactly what fresh single-key reads answer.
+// trace:BUG-2543 | ai:claude
+#[test]
+fn bug_2543_listing_discovers_once_and_matches_single_key_reads() {
+    let (_tmp, root) = root();
+    let _env = uncontained();
+    const CHANGES: usize = 8;
+    for n in 1..=CHANGES {
+        let spec = GateSpec::with_key(&format!("BUG-{n}"), None);
+        let verdict = if n % 2 == 0 {
+            "approved"
+        } else {
+            "request_changes"
+        };
+        let rec = record(verdict, &ts(n as i64), Some(&attestation("reviewer")));
+        store::append_one(
+            &root,
+            event::verdict_event(&root, ChangeKey::pr(n as u64), &rec, Some(&spec)),
+        )
+        .unwrap();
+    }
+    let keys: Vec<String> = (1..=CHANGES)
+        .flat_map(|n| [format!("PR-{n}"), format!("BUG-{n}")])
+        .collect();
+
+    project::OWNERSHIP_WORK.with(|work| work.set((0, 0)));
+    let listed = rv::active_verdicts_for(&root, keys.clone());
+    assert_eq!(
+        project::OWNERSHIP_WORK.with(|work| work.get()).0,
+        1,
+        "one discovery per listing, not one per key"
+    );
+    assert!(listed.len() >= CHANGES, "{listed:?}");
+
+    project::OWNERSHIP_WORK.with(|work| work.set((0, 0)));
+    let mut single: Vec<(String, rv::RecordedVerdict)> = keys
+        .iter()
+        .filter_map(|key| {
+            let body = rv::current_verdict(&root, key)?.body;
+            Some((key.clone(), rv::parse_recorded_verdict(&body)?))
+        })
+        .collect();
+    single.sort_by(|a, b| a.0.cmp(&b.0));
+    assert_eq!(format!("{listed:?}"), format!("{single:?}"));
+    // Outside a listing every read stays fresh: no memo survives the scope.
+    assert!(project::OWNERSHIP_WORK.with(|work| work.get()).0 >= CHANGES);
+}
