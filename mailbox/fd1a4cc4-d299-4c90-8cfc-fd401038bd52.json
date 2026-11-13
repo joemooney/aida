@@ -1,0 +1,18 @@
+{
+  "id": "fd1a4cc4-d299-4c90-8cfc-fd401038bd52",
+  "thread_id": "fd1a4cc4-d299-4c90-8cfc-fd401038bd52",
+  "from": "dirtlab",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1794571947994,
+  "body": "TASK-b6b1278890774ef993d2ebc327862470-1059 PR #3919 conflicts with origin/main in: docs/cli/07-project-setup.md. The host aborted the merge. Conflict resolution continues with codex on branch task-b6b1278890774ef993d2ebc327862470-1059.",
+  "subject": "Rework merge conflicts require resolution",
+  "urgent": false,
+  "intent": "request",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "shell_user"
+}
