@@ -14,8 +14,10 @@ use std::os::unix::fs::{DirBuilderExt, MetadataExt, OpenOptionsExt};
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
 
+// The landing reconciler discovers through the same pinned forge reads.
+// trace:STORY-2768 | ai:claude
 #[path = "review_watch_forge.rs"]
-mod forge;
+pub(crate) mod forge;
 // Every process signal lives here, behind pidfd identity checks.
 // trace:TASK-1945 | ai:claude
 #[path = "review_watch_signal.rs"]
