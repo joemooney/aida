@@ -6697,6 +6697,9 @@ pub(crate) fn run_standalone_reviewer(
                             host_main, // trace:TASK-2032 | ai:claude
                         },
                     )?;
+                    // Codex resume accepts a trailing message for this turn.
+                    // trace:BUG-2546 | ai:codex
+                    cmd.arg(session::codex_interactive_prompt(prompt));
                     cmd.current_dir(worktree);
                     // trace:BUG-2386 | ai:claude
                     if let Err(error) = session::finalize_codex_resume(&mut cmd, project_root) {
@@ -6746,6 +6749,7 @@ pub(crate) fn run_standalone_reviewer(
                             permission_mode,
                             contained,
                             Some(&grant.id),
+                            Some(prompt),
                         )?,
                         None,
                         Some(grant.id),

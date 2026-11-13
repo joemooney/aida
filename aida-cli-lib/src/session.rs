@@ -2572,12 +2572,13 @@ pub fn spawn_claude_resume(
     permission_mode: Option<&str>,
     contained: bool,
 ) -> Result<std::process::ExitStatus> {
-    spawn_claude_resume_with_grant(host_main, id, permission_mode, contained, None)
+    spawn_claude_resume_with_grant(host_main, id, permission_mode, contained, None, None)
 }
 
 /// BUG-2149: [`spawn_claude_resume`] with an explicit seat grant for the
 /// child, so a caller that minted the child's grant knows exactly which grant
 /// the resumed session records under. `None` inherits the ambient grant.
+/// `prompt` supplies a new message when refreshing policy in an older thread.
 // trace:BUG-2149 | ai:claude
 pub(crate) fn spawn_claude_resume_with_grant(
     host_main: Option<&Path>,
@@ -2585,6 +2586,7 @@ pub(crate) fn spawn_claude_resume_with_grant(
     permission_mode: Option<&str>,
     contained: bool,
     grant_id: Option<&str>,
+    prompt: Option<&str>,
 ) -> Result<std::process::ExitStatus> {
     // trace:BUG-2172 | ai:codex
     let parent_contained = aida_contained_env()?;
@@ -2609,6 +2611,11 @@ pub(crate) fn spawn_claude_resume_with_grant(
     }
     if contained {
         cmd.args(claude_contained_flags(host_main)?);
+    }
+    // A positional message is submitted to the resumed interactive session.
+    // trace:BUG-2546 | ai:codex
+    if let Some(prompt) = prompt {
+        cmd.arg(prompt);
     }
     // trace:BUG-2006 | ai:antigravity
     if contained {
@@ -14066,7 +14073,8 @@ mod tests {
         std::fs::remove_file(&capture).unwrap();
         let host_main = crate::seat_clone::launcher_main();
         let status =
-            spawn_claude_resume_with_grant(host_main.as_deref(), "sid", None, false, None).unwrap();
+            spawn_claude_resume_with_grant(host_main.as_deref(), "sid", None, false, None, None)
+                .unwrap();
         assert!(status.success());
         let output = std::fs::read_to_string(&capture).unwrap();
         assert!(output.starts_with("1\n--resume\nsid\n"), "{output}");
@@ -14077,6 +14085,7 @@ mod tests {
             "sid",
             Some("bypassPermissions"),
             false,
+            None,
             None
         )
         .is_err());

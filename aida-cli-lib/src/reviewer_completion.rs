@@ -91,7 +91,10 @@ fn matches(
     use crate::gate::review_verdict::VerdictKind;
     matches!(
         v.kind,
-        VerdictKind::Approved | VerdictKind::RequestChanges | VerdictKind::Rejected
+        VerdictKind::Approved
+            | VerdictKind::RequestChanges
+            | VerdictKind::Rejected
+            | VerdictKind::Waiting
     ) && v
         .recorded_at
         .as_deref()
@@ -115,7 +118,16 @@ pub(crate) fn should_stop() -> bool {
             };
             let verdict = w.roots.iter().find_map(|root| {
                 w.keys.iter().find_map(|key| {
-                    crate::gate::review_verdict::read_recorded_verdict(root, key)
+                    // Read the selected source once and inspect its raw delivery barrier.
+                    // Normalization makes a pending approval look like a refusal;
+                    // it must not arm shutdown while finding delivery is in flight.
+                    // trace:BUG-2546 | ai:codex
+                    let current = crate::gate::review_verdict::current_verdict(root, key)?;
+                    let raw: serde_json::Value = serde_json::from_str(&current.body).ok()?;
+                    if crate::gate::review_verdict::delivery_pending(&raw) {
+                        return None;
+                    }
+                    crate::gate::review_verdict::parse_recorded_verdict(&current.body)
                         .filter(|v| matches(v, grant, w.since))
                 })
             });
@@ -161,11 +173,98 @@ mod tests {
         assert!(!valid(&body));
         body["recorded_at"] = (since + chrono::Duration::seconds(1)).to_rfc3339().into();
         body["verdict"] = "WAITING".into();
+        assert!(valid(&body));
+        body["verdict"] = "unknown".into();
         assert!(!valid(&body));
         body["verdict"] = "REQUEST_CHANGES".into();
         assert!(valid(&body));
         body["reviewed_sha"] = "different".into();
         assert!(!valid(&body));
+    }
+
+    // trace:BUG-2546 | ai:codex
+    #[test]
+    fn bug2546_delayed_delivery_does_not_arm_shutdown_until_completed() {
+        use crate::gate::review_verdict::{read_recorded_verdict, verdict_path, VerdictKind};
+        let tmp = tempfile::tempdir().unwrap();
+        let _scope = Scope::new(tmp.path(), tmp.path(), 7, &[]);
+        bind_grant("child");
+        let path = verdict_path(tmp.path(), "PR-7");
+        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+        let mut body = serde_json::json!({
+            "verdict": "APPROVED", "reviewed_sha": "abc", "sweep_pending": true,
+            "recorded_at": chrono::Utc::now().to_rfc3339(),
+            "recorder_attestation": { "sha": "abc", "grant_id": "child" }
+        });
+        std::fs::write(&path, body.to_string()).unwrap();
+        assert_eq!(
+            read_recorded_verdict(tmp.path(), "PR-7").unwrap().kind,
+            VerdictKind::RequestChanges
+        );
+        assert!(!should_stop());
+        // Delivery can outlast the shutdown grace while blocked on the store lock.
+        std::thread::sleep(Duration::from_millis(2100));
+        assert!(!should_stop());
+        WATCH.with(|w| {
+            let slot = w.borrow();
+            let w = slot.as_ref().unwrap();
+            assert!(w.seen.is_none());
+            assert!(w.recorded_at.is_none());
+        });
+        body["sweep_pending"] = false.into();
+        std::fs::write(&path, body.to_string()).unwrap();
+        assert_eq!(
+            read_recorded_verdict(tmp.path(), "PR-7").unwrap().kind,
+            VerdictKind::Approved
+        );
+        assert!(
+            !should_stop(),
+            "completed delivery starts a fresh grace period"
+        );
+        WATCH.with(|w| {
+            let mut slot = w.borrow_mut();
+            let w = slot.as_mut().unwrap();
+            assert!(w.seen.is_some());
+            assert!(w.recorded_at.is_some());
+            w.seen = Some(Instant::now() - Duration::from_secs(3));
+        });
+        assert!(should_stop());
+    }
+
+    // WAITING completes the reviewer process, but never approves the change.
+    // trace:BUG-2546 | ai:codex
+    #[test]
+    fn bug2546_waiting_stops_and_retains_runtime_timestamp_without_approval() {
+        use crate::gate::review_verdict::{read_recorded_verdict, verdict_path, VerdictKind};
+        let tmp = tempfile::tempdir().unwrap();
+        let _scope = Scope::new(tmp.path(), tmp.path(), 7, &[]);
+        bind_grant("child");
+        let path = verdict_path(tmp.path(), "PR-7");
+        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+        let recorded_at = chrono::Utc::now();
+        let body = serde_json::json!({
+            "verdict": "WAITING", "reviewed_sha": "abc",
+            "recorded_at": recorded_at.to_rfc3339(),
+            "recorder_attestation": { "sha": "abc", "grant_id": "child" }
+        });
+        std::fs::write(&path, body.to_string()).unwrap();
+        let verdict = read_recorded_verdict(tmp.path(), "PR-7").unwrap();
+        assert_eq!(verdict.kind, VerdictKind::Waiting);
+        assert!(!verdict.kind.approves());
+        assert!(!should_stop());
+        WATCH.with(|w| {
+            let mut slot = w.borrow_mut();
+            let w = slot.as_mut().unwrap();
+            assert_eq!(w.recorded_at, Some(recorded_at));
+            assert!(w.seen.is_some());
+            w.seen = Some(Instant::now() - Duration::from_secs(3));
+        });
+        let mut child = std::process::Command::new("sleep")
+            .arg("30")
+            .spawn()
+            .unwrap();
+        assert!(wait(&mut child).unwrap().success());
+        assert!(child.try_wait().unwrap().is_some());
     }
 
     #[test]
