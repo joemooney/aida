@@ -5629,3 +5629,49 @@ fn bug2547_abandon_cli_is_exclusive() {
             .is_err());
     }
 }
+
+// trace:STORY-2733 trace:TASK-3785 | ai:codex
+// Train policy and journaling assertions belong with the command that owns them.
+#[test]
+fn mandate_include_gate_paths_audits_train_member() {
+    use crate::gate::mandate_gates::ProtectedPaths;
+    use crate::gate::mandate_ship::MandateCover;
+
+    let paths = vec!["aida-cli-lib/src/gate/mandate.rs".to_owned()];
+    let cover = MandateCover::from_checked_paths(
+        "mandate-test".into(),
+        "joe".into(),
+        &paths,
+        ProtectedPaths::floor_ref(),
+    );
+    let audit = cover.gate_audit().unwrap();
+    let records = || {
+        vec![(
+            "TASK-1".into(),
+            Vec::new(),
+            Some(aida_core::ExecutionMode::Guided),
+        )]
+    };
+    assert!(member_spec_policy_refusal(records(), false, || Ok(())).is_none());
+    assert!(
+        member_spec_policy_refusal(records(), false, || Err(Some("protected paths".into())))
+            .is_some()
+    );
+    let member = Member {
+        gate_audit: Some(audit.clone()),
+        cover: None,
+        pr: 7,
+        head: "a".repeat(40),
+        subject: "work".into(),
+        body: String::new(),
+        release: Some(cover),
+    };
+    let message = car_message(&member);
+    assert!(message.contains(&audit));
+    let restored: Member = serde_json::from_value(serde_json::to_value(&member).unwrap()).unwrap();
+    assert!(
+        restored.release.is_none(),
+        "live authority is never journaled"
+    );
+    assert_eq!(car_message(&restored), message);
+}
