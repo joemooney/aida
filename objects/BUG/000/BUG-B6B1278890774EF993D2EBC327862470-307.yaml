@@ -8,10 +8,27 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-12T23:29:14.437520729Z
-modified_at: 2026-11-13T23:06:58.297336957Z
+modified_at: 2026-11-13T23:13:03.581709262Z
 req_type: Bug
 tags:
 - track:integration
+comments:
+- id: 01a1d72f-9a5d-7de2-8cea-ea74c04d9528
+  author: dirtlab
+  content: |-
+    ## Implementer slice (Refs)
+
+    Shipped (1) and (2):
+    - `aida doctor` adds a finding per oversized ledger (`gate-ledger-oversized:<file>`) and per near-cap ledger (`gate-ledger-near-cap:<file>`, at least 50% of the 16 MiB cap). The aggregate `gate-ledger-capacity` finding now names the 3 largest files and both budgets. Each one prescribes `mkdir -p <root>/.aida/gate-ledger-quarantine && mv <ledger> <quarantine>/`, which keeps the evidence.
+    - The discovery refusal now names the full file path and its size, says it blocks review selection for every spec, and gives the same quarantine command plus a pointer to `aida doctor`.
+
+    Deferred (3), automatic compaction or archival of closed/merged ledgers: this is a design fork. The strict reader refuses when a by-spec index names a change whose ledger is missing, so archival either needs discovery to read an archive tier or needs compaction that keeps exactly the verdict and MiskeyOwners witness events. That is a mandate-gate question and needs an advisor sketch. Also open: why PR-3888.jsonl grew to 23 MB at all. A write-side cap or dedupe may be the root fix.
+
+    Note: filing the implementer finding failed because host /home/dirtlab/ai/aida/.git/aida-work-dispenser.toml is mode 0664 (`chmod go-w` needed), so the deferral is recorded here instead.
+  created_at: 2026-11-13T23:13:03.581709262Z
+  modified_at: 2026-11-13T23:13:03.581709262Z
+  session_id: 01a1d729adb5
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1d363-4409-75b0-b91c-374998062348
   author: joe
