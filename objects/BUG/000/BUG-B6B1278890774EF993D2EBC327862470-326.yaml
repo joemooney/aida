@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-13T14:52:30.016248538Z
-modified_at: 2026-11-13T15:42:17.660591356Z
+modified_at: 2026-11-13T15:55:03.240135779Z
 req_type: Bug
 tags:
 - review-watch
@@ -26,6 +26,13 @@ comments:
   content: 'Scope addition (advisor 08:43): after any merge to main, stale-base refusals hit every open PR touching the same files. On a stale-base refusal, review-watch should run ''gh pr update-branch'' (a merge, no force-push) and re-admit the new head, falling back to rework only on conflict.'
   created_at: 2026-11-13T15:42:17.660591356Z
   modified_at: 2026-11-13T15:42:17.660591356Z
+  session_id: 01a1d54b-060a-7951-aa40-7f0fd928126f
+  harness_version: 2.1.323 (Claude Code)
+- id: 01a1d59e-98c8-7472-9b5c-d878608e5b43
+  author: joe
+  content: 'Scope split (advisor 08:58): the stale-base refusal remedy moves to STORY-2763 AC2. BUG-2561 keeps only the retry for transient pre-pickup refusals (dirty store, store pull).'
+  created_at: 2026-11-13T15:55:03.240135779Z
+  modified_at: 2026-11-13T15:55:03.240135779Z
   session_id: 01a1d54b-060a-7951-aa40-7f0fd928126f
   harness_version: 2.1.323 (Claude Code)
 history:
