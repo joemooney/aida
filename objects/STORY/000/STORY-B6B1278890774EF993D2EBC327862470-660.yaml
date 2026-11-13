@@ -23,7 +23,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-12T19:11:56.371806442Z
-modified_at: 2026-11-13T11:05:07.069045493Z
+modified_at: 2026-11-13T11:17:45.587319547Z
 req_type: Story
 tags:
 - operator-held
@@ -144,6 +144,13 @@ comments:
   created_at: 2026-11-13T11:05:07.069045493Z
   modified_at: 2026-11-13T11:05:07.069045493Z
   session_id: 01a1d418-ebf0-79b3-844f-d0ab8bed7682
+  harness_version: 2.1.323 (Claude Code)
+- id: 01a1d4a0-b9f3-74b1-a01d-981b646e46bd
+  author: joe
+  content: 'Advisor 04:21: train #3941 went green at 03:57 but sat in Gate for 20+ min because of two full store-history walks in mandate.rs (lines ~205 and ~340) on a disk at about 30% IO pressure. Filed BUG-2554 (track:integration, approved). Main is still at 11bf5e9 (03:2x).'
+  created_at: 2026-11-13T11:17:45.587319547Z
+  modified_at: 2026-11-13T11:17:45.587319547Z
+  session_id: 01a1d3ee-83e8-71b3-a2c5-aed5baed6fdc
   harness_version: 2.1.323 (Claude Code)
 history:
 - id: 01a1d175-992b-7501-a0fb-89a007208ac0
