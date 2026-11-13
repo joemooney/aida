@@ -16243,7 +16243,7 @@ Usage: aida pr emergency-land [OPTIONS] <N>
 
 Arguments:
   <N>
-          Open GitHub PR to merge into the default branch
+          Open PR or MR to merge into the default branch
 
 Options:
       --max-lines <MAX_LINES>
