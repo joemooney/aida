@@ -82,6 +82,8 @@ fn pr_branch(r: &Path, name: &str, edit: impl FnOnce(&Path)) -> String {
 
 fn member(pr: u64, head: &str, subject: &str) -> Member {
     Member {
+        gate_audit: None,
+        cover: None,
         pr,
         head: head.to_string(),
         subject: subject.to_string(),
@@ -93,6 +95,7 @@ fn member(pr: u64, head: &str, subject: &str) -> Member {
 /// BUG-2214: the cover a fake gate hands a held member.
 fn fake_cover() -> crate::gate::mandate_ship::MandateCover {
     crate::gate::mandate_ship::MandateCover {
+        gate_match: None,
         id: "6f1c1d6e-0000-4000-8000-00000000fake".into(),
         principal: "joe".into(),
     }
@@ -1090,6 +1093,52 @@ fn live_gate_refuses_a_supervised_spec_without_a_human_or_a_mandate() {
     }
 }
 
+// A headless supervised protected-path member whose hold a human cleared is
+// admitted by the mandate's policy cover alone (no hold left to release).
+// The final train refresh must still find that live cover — from the fresh
+// gate, and after journal recovery dropped every live cover — and bind the
+// audit to it, instead of refusing for want of a release cover.
+// trace:STORY-2733 | ai:claude
+#[test]
+fn live_gate_keeps_policy_cover_for_human_cleared_protected_path_member() {
+    use crate::gate::mandate_gates::{GateMatch, PathSource};
+    let mut c = FakeChecks::shipping("TASK-9", &[], Some(aida_core::ExecutionMode::Guided));
+    c.hold = None; // a human cleared it: no marker remains
+    c.mandate_active = true;
+    let mut cover = fake_cover();
+    cover.gate_match = Some(GateMatch {
+        path: "aida-cli-lib/src/gate/mandate.rs".into(),
+        entry: "aida-cli-lib/src/gate/".into(),
+        source: PathSource::BuiltIn,
+    });
+    c.mandate = Ok(cover.clone());
+    let built = gate_member_with(&mut c, "main", 41).unwrap();
+    assert!(built.release.is_none(), "no hold left to release");
+    assert_eq!(built.cover.as_ref(), Some(&cover));
+    assert!(built.gate_audit.is_some());
+    assert_eq!(cover.gate_audit(), built.gate_audit);
+    // Journal recovery: live covers are never serialized.
+    let restored: Member = serde_json::from_value(serde_json::to_value(&built).unwrap()).unwrap();
+    assert!(restored.cover.is_none() && restored.release.is_none());
+    assert_eq!(restored.gate_audit, built.gate_audit);
+    // The final refresh re-gates the member; its fresh policy cover binds.
+    let mut again = FakeChecks::shipping("TASK-9", &[], Some(aida_core::ExecutionMode::Guided));
+    again.mandate_active = true;
+    again.mandate = Ok(cover.clone());
+    let fresh = gate_member_with(&mut again, "main", 41).unwrap();
+    for car in [&built, &restored] {
+        let live = crate::pr_train::final_live_cover(&fresh, car).expect("live cover");
+        assert_eq!(live.gate_audit(), car.gate_audit);
+    }
+    // Without the fresh gate, the build-time cover still counts in-process.
+    assert_eq!(
+        crate::pr_train::final_live_cover(&restored, &built),
+        Some(&cover)
+    );
+    // No live cover anywhere fails closed.
+    assert!(crate::pr_train::final_live_cover(&restored, &restored).is_none());
+}
+
 #[test]
 fn live_gate_lands_a_drain_spec_unattended() {
     let mut c = FakeChecks::shipping("TASK-9", &[], Some(aida_core::ExecutionMode::Drain));
@@ -1665,6 +1714,8 @@ fn a_car_keeps_the_head_commits_spec_id_when_ship_derives_no_subject() {
     let subject = member_squash_subject(returned, commit, "feat: X");
     assert_eq!(subject, "feat: X (STORY-1)");
     let car = car_message(&Member {
+        gate_audit: None,
+        cover: None,
         pr: 9,
         head: "a".repeat(40),
         subject,
@@ -1970,6 +2021,54 @@ fn bug_2214_land_releases_covered_holds_then_merges() {
     assert_eq!(f.released, [7]);
     assert_eq!(f.gate_checked_covers, [fake_cover().id]);
     assert!(f.rearmed.is_empty(), "{:?}", f.rearmed);
+}
+
+// trace:STORY-2733 | ai:codex
+#[test]
+fn mandate_train_rebuilds_changed_audit_before_releasing_holds() {
+    use crate::gate::mandate_gates::{GateMatch, PathSource};
+    let mut old = covered_member(7);
+    old.release.as_mut().unwrap().gate_match = Some(GateMatch {
+        path: "aida-cli-lib/src/gate/mandate.rs".into(),
+        entry: "aida-cli-lib/src/gate/".into(),
+        source: PathSource::BuiltIn,
+    });
+    old.gate_audit = old.release.as_ref().unwrap().gate_audit();
+    for change in ["mandate", "entry", "source", "removed"] {
+        let mut fresh = old.clone();
+        let cover = fresh.release.as_mut().unwrap();
+        match change {
+            "mandate" => cover.id = "replacement-mandate".into(),
+            "entry" => cover.gate_match.as_mut().unwrap().entry = "aida-cli-lib/".into(),
+            "source" => cover.gate_match.as_mut().unwrap().source = PathSource::Operator,
+            "removed" => cover.gate_match = None,
+            _ => unreachable!(),
+        }
+        fresh.gate_audit = cover.gate_audit();
+        let mut f = FakeForge::mains(&["base"]);
+        f.gates.insert(7, Ok(fresh.clone()));
+        f.gate_green = true;
+        let mut rails = ForgeRails::new(&mut f, "mandate-audit".into());
+        let built = rails.build("base", &[old.clone()]).unwrap();
+        assert_eq!(rails.test(&[built.clone()]).unwrap(), [CiVerdict::Green]);
+        assert!(
+            matches!(rails.land(&built).unwrap(), Landing::Refused(ref ejected)
+                if ejected.len() == 1 && ejected[0].reason.contains("mandate audit changed")),
+            "{change}"
+        );
+        drop(rails);
+        assert!(f.released.is_empty(), "{change}");
+        assert!(f.merged.is_empty(), "{change}");
+        let mut rails = ForgeRails::new(&mut f, "mandate-audit-rebuilt".into());
+        let rebuilt = rails.build("base", &[fresh]).unwrap();
+        rails.test(&[rebuilt.clone()]).unwrap();
+        assert!(
+            matches!(rails.land(&rebuilt).unwrap(), Landing::Landed(_)),
+            "{change}"
+        );
+        drop(rails);
+        assert_eq!(f.released, [7], "{change}");
+    }
 }
 
 // trace:BUG-2214.ac2ec1b2 | ai:claude
@@ -3919,6 +4018,7 @@ fn pr_train_journal_completed_member_is_skipped_and_authority_is_not_restored() 
     let mut forge = FakeForge::mains(&["main"]);
     let mut m = member(1, "head1", "s");
     m.release = Some(crate::gate::mandate_ship::MandateCover {
+        gate_match: None,
         id: "not-authority".into(),
         principal: "operator".into(),
     });
@@ -4104,34 +4204,50 @@ fn bug2537_train_ownership_checked_cleanup_skips_closed_and_refuses_failed_or_mo
 }
 
 // trace:STORY-2401 | ai:codex
+// trace:BUG-2556 | ai:claude
 #[test]
-fn pr_train_journal_recovery_has_no_terminal_consent_for_old_members() {
+fn pr_train_journal_recovery_consents_only_for_the_named_train() {
     let dir = tempfile::tempdir().unwrap();
     let recording = crate::forge::fake::RecordingForge::new();
-    // The current command names #50; the old train carries supervised #41.
-    let opts = TrainOptions {
-        prs: &[50],
-        all_ready: false,
+    let opts = |prs: &'static [u64], all_ready: bool| TrainOptions {
+        prs,
+        all_ready,
         dry_run: false,
         local_ci: None,
         max: 10,
         no_pull: true,
     };
-    let host = LiveTrainForge {
-        project_root: dir.path().into(),
-        main_worktree: dir.path().into(),
-        base: "main".into(),
-        forge: &recording,
-        named: prs_named_on_command_line(&opts),
-        dispatch_ctx: None,
-        dispatch_abort: None,
-    }
-    .for_recovery();
+    let recovery_host = |opts: &TrainOptions| {
+        LiveTrainForge {
+            project_root: dir.path().into(),
+            main_worktree: dir.path().into(),
+            base: "main".into(),
+            forge: &recording,
+            named: false,
+            dispatch_ctx: None,
+            dispatch_abort: None,
+        }
+        .for_recovery(opts)
+        .named
+    };
+    // BUG-2556: the human at the terminal named exactly the recovered train's
+    // members, so its supervised member #41 keeps their consent.
+    let named = recovery_host(&opts(&[41], false));
+    assert!(
+        named,
+        "a recovered train named on the command line keeps consent"
+    );
     let mut checks = FakeChecks::shipping("TASK-9", &[], Some(aida_core::ExecutionMode::Guided));
-    checks.tty = tty_consents(true, host.named);
+    checks.tty = tty_consents(true, named);
+    gate_member_with(&mut checks, "main", 41).expect("named recovered member gates");
+    // An `--all-ready` sweep never consents for a supervised member.
+    let mut checks = FakeChecks::shipping("TASK-9", &[], Some(aida_core::ExecutionMode::Guided));
+    checks.tty = tty_consents(true, recovery_host(&opts(&[41], true)));
     let refusal = gate_member_with(&mut checks, "main", 41).unwrap_err();
     assert!(refusal.contains("TASK-9 is marked"), "{refusal}");
     assert!(checks.calls.contains(&"mandate"));
+    // Naming #50 never authorizes the old train carrying #41: recovery does
+    // not resume it at all (BUG-2547), so nothing gates or merges.
     let train = train_of("main", &fms(&[41]));
     let mut entry = journal::Entry::new(train, "train/old-all-ready-1".into());
     entry.change_id = Some(901);
@@ -4141,7 +4257,8 @@ fn pr_train_journal_recovery_has_no_terminal_consent_for_old_members() {
     let mut forge = FakeForge::mains(&["main"]);
     forge.gates.insert(41, Err(refusal));
     let mut rails = ForgeRails::new(&mut forge, "new".into()).with_journal(dir.path());
-    assert_eq!(rails.resume_for(Some(&[41])).unwrap().ejected[0].pr, 41);
+    let out = rails.resume_for(Some(&[50])).unwrap();
+    assert!(out.ejected.is_empty() && out.landed.is_empty());
     drop(rails);
     assert!(forge.merged.is_empty());
 }
