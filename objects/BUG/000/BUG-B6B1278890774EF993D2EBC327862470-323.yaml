@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-13T12:51:33.706851654Z
-modified_at: 2026-11-13T22:05:52.998276252Z
+modified_at: 2026-11-13T22:31:27.800293712Z
 req_type: Bug
 tags:
 - lanes
@@ -55,6 +55,13 @@ comments:
   content: 'Advisor 15:13: PR #3953 CONFLICTS with main in 6 files (queue_cmd/work.rs, rework_direction.rs, seat_clone.rs, bug_home_038_seat_publish_tests.rs, queue_work_tests.rs, scripts/store-writers.toml). A Codex native seat cannot record that merge, which is the very bug this PR fixes, so it needs a Claude seat. Its review (CR at 79bd77f) waits for the merged head. It unblocks STORY-2593 (#3938) and TASK-3783 (#3949), both parked.'
   created_at: 2026-11-13T22:05:52.998276252Z
   modified_at: 2026-11-13T22:05:52.998276252Z
+  session_id: 01a1d684-8599-70e0-a01c-714f54d2f8de
+  harness_version: 2.1.323 (Claude Code)
+- id: 01a1d709-8538-7e53-a43c-3ece86568a48
+  author: joe
+  content: 'Operator decision 15:31 MST (Joe: ''agreed''): integration-bc (Claude seat) does a one-off REAL merge of origin/main into PR #3953, which stays a main-track PR. Conflicts in 6 files; resolve keeping main''s behaviour plus BUG-2558. Then a review launch at the new head. This unparks STORY-2593 (#3938), TASK-3783 (#3949) and STORY-2660 (#3921) once #3953 is on main and dell1 is rebuilt.'
+  created_at: 2026-11-13T22:31:27.800293712Z
+  modified_at: 2026-11-13T22:31:27.800293712Z
   session_id: 01a1d684-8599-70e0-a01c-714f54d2f8de
   harness_version: 2.1.323 (Claude Code)
 history:
