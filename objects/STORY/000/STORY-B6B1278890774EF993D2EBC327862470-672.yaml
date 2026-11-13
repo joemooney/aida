@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-13T04:07:35.213330891Z
-modified_at: 2026-11-13T05:48:25.406937932Z
+modified_at: 2026-11-13T05:48:29.711660413Z
 req_type: Story
 tags:
 - track:integration
@@ -20,6 +20,12 @@ comments:
   modified_at: 2026-11-13T04:41:26.881771590Z
   session_id: 01a1d2e6-f5db-7f33-9b74-3ae5fdaf9e0c
   harness_version: 2.1.323 (Claude Code)
+- id: 01a1d373-468f-73b1-b729-29daa25e17e3
+  author: joe
+  content: 'integration seat claimed 22:58 MST. Design: queue_fresh_pickup_policy returns OtherTrack(owner) when the spec carries track:<owner> and the launcher''s track (AIDA_TRACK, default main) differs, so queue work/next/list/drains all refuse or skip it with the reason; the work preflight names the track; completing a spec strips its track:* tags. Integration agent tagging on first merge stays a seat procedure (already in its brief).'
+  created_at: 2026-11-13T05:48:29.711660413Z
+  modified_at: 2026-11-13T05:48:29.711660413Z
+  session_id: 92a24ff6-1324-4fe1-a02b-b2601f384b4b
 history:
 - id: 01a1d363-eb51-78a2-b07a-6155c944bf86
   author: joe
