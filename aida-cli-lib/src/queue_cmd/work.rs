@@ -6563,9 +6563,8 @@ pub(crate) fn run_standalone_reviewer(
         .unwrap_or_default();
 
     // trace:BUG-2546 | ai:codex
-    let _completion = no_human.then(|| {
-        crate::reviewer_completion::Scope::new(project_root, worktree, pr, &pr_spec_ids)
-    });
+    let _completion = no_human
+        .then(|| crate::reviewer_completion::Scope::new(project_root, worktree, pr, &pr_spec_ids));
     let policy_prompt = format!("{prompt}\n\nReviewer policy: do not run Cargo or local test/build commands unless explicitly requested by the operator. Use source and existing CI evidence. After successfully recording your verdict, give a brief final response and exit immediately; do not perform further work.");
     let prompt = policy_prompt.as_str();
     let watch_prompt = crate::review_watch::reviewer_launch_prompt(project_root, pr, prompt)?;

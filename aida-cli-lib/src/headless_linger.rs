@@ -194,7 +194,10 @@ pub(crate) fn wait_reaping_after_result_holding(
         if crate::reviewer_completion::should_stop() {
             terminate_tree(child)?;
             use std::os::unix::process::ExitStatusExt;
-            return Ok(LingerWait { status: ExitStatus::from_raw(0), reaped: true });
+            return Ok(LingerWait {
+                status: ExitStatus::from_raw(0),
+                reaped: true,
+            });
         }
         if result_seen.is_none() {
             result_seen = watch.poll().map(|r| (Instant::now(), r));
