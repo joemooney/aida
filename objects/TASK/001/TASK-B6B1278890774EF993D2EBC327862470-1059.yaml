@@ -3,12 +3,12 @@ spec_id: TASK-b6b1278890774ef993d2ebc327862470-1059
 agreed_id: TASK-3779
 title: 'Usability sweep: compact ''aida config permissions show'' and pad emoji glyphs in terminal output'
 description: 'Reported from operator''s work machine (Codex, GitLab project hello-work-0x), 2026-11-09. (1) ''aida config permissions show'' is too noisy: one summary row per vendor (tier, launch readiness, net effect) by default; the launch/scope detail lines and long refusal prose move under --verbose. (2) Where output prints an emoji or wide symbol, terminals often swallow the next character; always follow such glyphs with a space (two where the glyph is double-width ambiguous), via one shared helper, with a ratchet test over CLI output strings.'
-status: InProgress
+status: NeedsAttention
 priority: Low
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-10T03:07:15.181924Z
-modified_at: 2026-11-13T03:17:55.924597626Z
+modified_at: 2026-11-13T05:32:49.122694721Z
 req_type: Task
 comments:
 - id: 01a1c674-cd0d-76a2-8159-4728d6fffd38
@@ -252,6 +252,15 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1d364-ec62-7a12-8756-6551feea3414
+  author: joe
+  timestamp: 2026-11-13T05:32:49.122737427Z
+  session_id: 01a1d360e99e
+  harness_version: 2.1.323 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 execution_mode: drain
 filed_at:
   code_sha: 838f14c3c2811c6b63da5d465700cff773c36190
@@ -262,6 +271,12 @@ filed_at:
   vendor: claude
   session: 01a1beff-fc3b-78e2-93e2-9b0c283b0339
   harness_version: 2.1.319 (Claude Code)
+attention_reason:
+  category: blocked-dependency
+  detail: 'Round 3: the required merge of origin/main (2a62f92c2a2) into PR #3919 cannot be committed from this lane. git merge aborts with ''unable to create symlink .claude/skills/aida-emergency-fix: Read-only file system'' (.claude/skills is write-denied by the seat sandbox), and building the merge commit through git plumbing (temporary index / mktree) is denied by the session permission policy. The only conflict is docs/cli/07-project-setup.md, ''Per-vendor containment posture'' paragraph: resolve it by taking origin/main''s hunk. Verified with docs/cli/verify-manual.py parse_chapters on the resolved text: every --verbose/--json citation on those lines resolves to ''config permissions show'' (none bare); verify-manual.py --static passes; ''aida config permissions show --help'' lists --json and -v/--verbose. The P2 finding (bare citations) was already fixed on branch head 9b38b6b, and main carries the same full invocations. Needs a seat that can write .claude/skills, or an operator, to run: git merge origin/main, take theirs for that hunk, then push.'
+  lean: Take origin/main's version of the conflicting hunk; no other change is needed for the P2 finding.
+  raised_by: implementer
+  raised_at: 2026-11-13T05:32:49.122694721Z
 failure_reason:
   phase: reviewer
   phase_index: 3
