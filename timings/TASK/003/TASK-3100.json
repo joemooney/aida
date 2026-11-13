@@ -1,0 +1,22 @@
+{
+  "schema_version": 1,
+  "spec": "TASK-3100",
+  "publishes": [
+    {
+      "at": "2026-11-13T08:50:34.233508311Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-11-13T08:50:34.144639212Z",
+      "spec": "TASK-3100",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "fbc85370deb9007f2722f1a580182f6b95008b2d",
+        "pr": 3929,
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
