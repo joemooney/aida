@@ -513,6 +513,71 @@ fn every_config_toml_site_is_inventoried_and_every_worktree_key_is_policy() {
     );
 }
 
+// trace:TASK-3428 | ai:codex
+#[test]
+fn relocated_root_readers_preserve_their_trust_channels() {
+    let text = std::fs::read_to_string(workspace_root().join(INVENTORY_RELPATH))
+        .expect("config trust inventory must exist");
+    let inventory = parse_inventory(&text);
+    // The initialization shortcut only probes presence; review mode consumes
+    // branch-local policy. Moving either reader must not conflate those roles.
+    let detected = detected_sites(&workspace_root(), &["aida-cli-lib"]);
+    for (owner, channel) in [
+        ("argv_rewrite.rs", "probe"),
+        ("review_helpers.rs", "worktree"),
+    ] {
+        let path = format!("aida-cli-lib/src/{owner}");
+        assert_eq!(
+            detected.get(&path),
+            Some(&1),
+            "relocated reader {path} must own exactly one detected config site"
+        );
+        assert_eq!(
+            inventory.readers.get(&path),
+            Some(&(vec![channel.to_string()], 1)),
+            "relocated reader {path} must retain its exact trust classification"
+        );
+    }
+    assert!(
+        !inventory.readers.contains_key("aida-cli-lib/src/lib.rs"),
+        "the crate root no longer owns either config reader"
+    );
+    assert!(
+        !detected.contains_key("aida-cli-lib/src/lib.rs"),
+        "the source detector must agree that the crate root owns no config sites"
+    );
+}
+
+// trace:TASK-3428 | ai:codex
+#[test]
+fn guard_rejects_pre_move_root_inventory_against_current_sources() {
+    let root = workspace_root();
+    let text = std::fs::read_to_string(root.join(INVENTORY_RELPATH))
+        .expect("config trust inventory must exist");
+    let mut inventory = parse_inventory(&text);
+    for owner in ["argv_rewrite.rs", "review_helpers.rs"] {
+        assert!(inventory
+            .readers
+            .remove(&format!("aida-cli-lib/src/{owner}"))
+            .is_some());
+    }
+    inventory.readers.insert(
+        "aida-cli-lib/src/lib.rs".to_string(),
+        (vec!["probe".to_string(), "worktree".to_string()], 2),
+    );
+
+    // Recreate the reviewed defect without changing files or the detector.
+    let complaints = check(&detected_sites(&root, SCANNED_CRATES), &inventory);
+    assert_eq!(complaints.len(), 3, "{complaints:?}");
+    for owner in ["argv_rewrite.rs", "review_helpers.rs", "lib.rs"] {
+        let path = format!("aida-cli-lib/src/{owner}");
+        assert!(
+            complaints.iter().any(|complaint| complaint.contains(&path)),
+            "the pre-move inventory must refuse {path}: {complaints:?}"
+        );
+    }
+}
+
 /// AC3 control: the three `[agent_registry]` keys that exist today classify
 /// clean, exactly as inventoried.
 #[test]
@@ -666,10 +731,6 @@ const WRITE_CHANNEL_EXEMPT: &[(&str, &str)] = &[
     (
         "aida-cli-lib/src/config_commit.rs",
         "commits the file with git; never writes it",
-    ),
-    (
-        "aida-cli-lib/src/lib.rs",
-        "its one site (read_review_mode) only reads; config writes live in their modules",
     ),
     (
         "aida-core/src/adoption_projection.rs",
