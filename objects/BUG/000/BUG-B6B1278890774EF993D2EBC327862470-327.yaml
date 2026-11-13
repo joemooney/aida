@@ -3,12 +3,12 @@ spec_id: BUG-b6b1278890774ef993d2ebc327862470-327
 agreed_id: BUG-2562
 title: 'review-watch strands PRs on ''verdict history unreadable: review history changed during watcher selection'' and never retries'
 description: 'Observed 2026-11-13 09:42 (review-watch readiness): PR-3919, PR-3920, PR-3921, PR-3938 are ''not ready: verdict history unreadable: review history changed during watcher selection'', last checked 05:31-12:55 UTC; they are never re-checked, so no review is admitted (PR-3920 has waited since 05:31). Acceptance: (1) a history-changed race retries selection on the next pass with a fresh read (bounded), never as a terminal state; (2) the readiness view shows the age of the check and the watcher re-checks any row older than one interval; (3) regression: a concurrent verdict append during selection results in admission on the next pass.'
-status: Approved
+status: Superseded
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-13T16:46:45.106913830Z
-modified_at: 2026-11-13T16:53:46.040025860Z
+modified_at: 2026-11-13T16:54:24.294438168Z
 req_type: Bug
 tags:
 - review-watch
@@ -31,6 +31,15 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Approved
+- id: 01a1d5d4-ef26-7b50-9c17-8329eb19c446
+  author: joe
+  timestamp: 2026-11-13T16:54:24.294433715Z
+  session_id: 01a1d54b-060a-7951-aa40-7f0fd928126f
+  harness_version: 2.1.323 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Superseded
 filed_at:
   code_sha: 3631f7ca05567a6984ff2376b997539389b6f758
   branch: main
