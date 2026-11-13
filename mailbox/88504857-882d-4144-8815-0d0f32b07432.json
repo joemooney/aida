@@ -1,0 +1,18 @@
+{
+  "id": "88504857-882d-4144-8815-0d0f32b07432",
+  "thread_id": "88504857-882d-4144-8815-0d0f32b07432",
+  "from": "dirtlab",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1794606435932,
+  "body": "TASK-b6b1278890774ef993d2ebc327862470-1063 PR #3949 conflicts with origin/main in: scripts/exec-context-legacy.json. The host aborted the merge. Conflict resolution continues with codex on branch task-b6b1278890774ef993d2ebc327862470-1063.",
+  "subject": "Rework merge conflicts require resolution",
+  "urgent": false,
+  "intent": "request",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "shell_user"
+}
