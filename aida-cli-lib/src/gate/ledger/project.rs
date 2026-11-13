@@ -162,7 +162,7 @@ pub(crate) fn index_spec(root: &Path, spec: &str, change: ChangeKey) -> std::io:
 /// witness can disqualify; callers needing diagnostics use the checked reader.
 pub(crate) fn events(root: &Path, change: ChangeKey) -> Vec<GateEvent> {
     // trace:BUG-2517 | ai:codex
-    let events = store::read_file(root, change)
+    let events = store::read_listed(root, change) // trace:BUG-2543 | ai:claude
         .into_iter()
         .filter(|e| !e.is_spec_only())
         .collect::<Vec<_>>();
@@ -187,7 +187,7 @@ fn verdict_events(root: &Path, key: &str) -> Vec<GateEvent> {
     // rediscovery would rescan the whole ledger once for each PR.
     let raw: Vec<GateEvent> = changes_for_spec(root, &spec)
         .into_iter()
-        .flat_map(|change| store::read_file(root, change))
+        .flat_map(|change| store::read_listed(root, change)) // trace:BUG-2543 | ai:claude
         .filter(|e| !e.is_spec_only())
         .filter(|e| e.verdict_record().is_some() && e.spec.as_deref() == Some(spec.as_str()))
         .collect();

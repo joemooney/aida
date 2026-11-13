@@ -1327,3 +1327,47 @@ fn bug_2543_oversized_aggregate_falls_back_per_directory() {
     }
     AGGREGATE_CAP_OVERRIDE.with(|c| c.set(None));
 }
+
+// BUG-2543 (review round 2, P1): a committed name git would quote stays
+// under its directory in both the single-key and the listing read, so the
+// change refuses in both instead of vanishing from the listing.
+// trace:BUG-2543 | ai:claude
+#[test]
+fn bug_2543_quoted_publication_name_refuses_in_listing_and_single_key() {
+    let tmp = tempfile::tempdir().unwrap();
+    let store = tmp.path();
+    git_ok(store, &["init", "-q"]);
+    git_ok(
+        store,
+        &["remote", "add", "origin", "https://example.invalid/r.git"],
+    );
+    let dir = evidence_dir("PR-1", PUBLICATIONS);
+    write(store, &format!("{dir}/node/bad\tname.json"), "{}");
+    git_ok(store, &["add", "-A"]);
+    git_ok(store, &["commit", "-qm", "bad name"]);
+    let tip = git_ok(store, &["rev-parse", "HEAD"]);
+    let bad = format!("{dir}/node/bad\tname.json");
+    assert_eq!(list(store, &tip, &dir).unwrap(), vec![bad.clone()]);
+    assert!(load_receipts(store, store, &tip, "PR-1").is_err());
+    let _scope = super::super::listing_scope::ListingScope::enter();
+    assert_eq!(scoped_list(store, &tip, CHANGES, &dir).unwrap(), vec![bad]);
+    assert!(load_receipts(store, store, &tip, "PR-1").is_err());
+}
+
+// BUG-2543 (review round 2, P2): inside a listing the canonical snapshot is
+// read at the pinned publication tip, even when the store advances between
+// pinning and the first snapshot read.
+// trace:BUG-2543 | ai:claude
+#[test]
+fn bug_2543_listing_snapshot_reads_the_pinned_tip() {
+    if !available() {
+        return;
+    }
+    let f = Fixture::new();
+    let _env = env(&f.temp.path().join("home-a"));
+    let _scope = super::super::listing_scope::ListingScope::enter();
+    let (store, tip) = store_view(&f.a).unwrap().expect("a publication store");
+    persist(&store, &file("operator-note.txt", b"moves the store"), true).unwrap();
+    assert_ne!(head(&store).unwrap(), tip, "the store advanced");
+    assert_eq!(snapshot_at_head(&f.a).unwrap().head, tip);
+}

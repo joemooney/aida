@@ -398,6 +398,32 @@ impl Snapshot {
             .map_err(|_| SnapshotError("a non-text HEAD".into()))?
             .trim()
             .to_string();
+        Self::of_commit(&store, &head)
+    }
+
+    /// The committed snapshot of the store repository `store` at `head`, a
+    /// commit pinned by the caller (a listing reads every key at one tip).
+    // trace:BUG-2543 | ai:claude
+    pub(crate) fn of_store_at(store: &Path, head: &str) -> Result<Self, SnapshotError> {
+        let store = store.to_path_buf();
+        let top = git_bounded(&store, &["rev-parse", "--show-toplevel"], None, 4096)?;
+        let top = std::path::PathBuf::from(String::from_utf8_lossy(&top).trim());
+        let same = match (top.canonicalize(), store.canonicalize()) {
+            (Ok(a), Ok(b)) => a == b,
+            _ => false,
+        };
+        if !same {
+            return Err(SnapshotError(format!(
+                "{} is not the top of its own git repository",
+                store.display()
+            )));
+        }
+        Self::of_commit(&store, head)
+    }
+
+    fn of_commit(store: &std::path::PathBuf, head: &str) -> Result<Self, SnapshotError> {
+        let store = store.clone();
+        let head = head.to_string();
         if head.len() < 40 || !head.bytes().all(|b| b.is_ascii_hexdigit()) {
             return Err(SnapshotError("an unreadable HEAD".into()));
         }

@@ -161,6 +161,25 @@ pub(crate) fn read_file(root: &Path, change: ChangeKey) -> Vec<GateEvent> {
     let Ok(body) = std::fs::read_to_string(ledger_file(root, change)) else {
         return Vec::new();
     };
+    parse_lines(&body)
+}
+
+/// [`read_file`] for a verdict reader: inside a listing, only the bytes the
+/// listing's discovery indexed (see `checked::pinned_len`). Writers keep
+/// using [`read_file`], which always sees the whole file.
+// trace:BUG-2543 | ai:claude
+pub(crate) fn read_listed(root: &Path, change: ChangeKey) -> Vec<GateEvent> {
+    let Some(len) = super::checked::pinned_len(root, change) else {
+        return read_file(root, change);
+    };
+    let Ok(body) = std::fs::read(ledger_file(root, change)) else {
+        return Vec::new();
+    };
+    let indexed = &body[..body.len().min(len as usize)];
+    parse_lines(&String::from_utf8_lossy(indexed))
+}
+
+fn parse_lines(body: &str) -> Vec<GateEvent> {
     body.lines()
         .filter(|l| !l.trim().is_empty())
         .filter_map(|l| serde_json::from_str(l).ok())
@@ -297,7 +316,7 @@ fn write_events(
     // A listing that writes keeps its ownership index current instead of
     // rediscovering once per closed round. trace:BUG-2551 | ai:claude
     if let Some(before) = before {
-        super::checked::note_append(root, change, before, before + lines.len() as u64, pending);
+        super::checked::note_append(root, change, before, &lines, pending);
     }
     for event in pending.iter() {
         if let Some(spec) = event.spec.as_deref() {

@@ -249,6 +249,15 @@ fn run_capped(mut cmd: Command, cap: usize) -> Result<Vec<u8>> {
 fn git(root: &Path, args: &[&str]) -> Result<Vec<u8>> {
     git_capped(root, args, CAP)
 }
+/// The names of a `ls-tree -z --name-only` listing; a non-UTF-8 name refuses.
+// trace:BUG-2543 | ai:claude
+fn nul_names(listing: Vec<u8>) -> Result<Vec<String>> {
+    listing
+        .split(|b| *b == 0)
+        .filter(|name| !name.is_empty())
+        .map(|name| Ok(String::from_utf8(name.to_vec())?))
+        .collect()
+}
 fn git_capped(root: &Path, args: &[&str], cap: usize) -> Result<Vec<u8>> {
     #[cfg(test)]
     GIT_CALLS.with(|n| n.set(n.get() + 1));
@@ -357,13 +366,15 @@ fn evidence_dir(change: &str, kind: &str) -> String {
 fn evidence_path(change: &str, kind: &str, node: &str, id: Uuid) -> String {
     format!("{}/{node}/{id}.json", evidence_dir(change, kind))
 }
-/// Committed names under `dir`, bounded per change.
+/// Committed names under `dir`, bounded per change. NUL-delimited, so a
+/// name git would quote (tab, newline, non-ASCII) arrives verbatim, stays
+/// under its directory and fails its identity check instead of vanishing.
+// trace:BUG-2543 | ai:claude
 fn list(store: &Path, tip: &str, dir: &str) -> Result<Vec<String>> {
-    let names = String::from_utf8(git(
+    let names = nul_names(git(
         store,
-        &["ls-tree", "-r", "--name-only", tip, "--", dir],
+        &["ls-tree", "-r", "-z", "--name-only", tip, "--", dir],
     )?)?;
-    let names: Vec<String> = names.lines().map(str::to_string).collect();
     ensure!(
         names.len() <= MAX_PER_CHANGE,
         "review evidence read budget exhausted for {dir}"
@@ -1186,11 +1197,22 @@ fn snapshot_at_head(root: &Path) -> Result<std::rc::Rc<Snapshot>> {
     if let Some(hit) = super::listing_scope::get(|m| m.snapshot.get(root).cloned()) {
         return Ok(hit);
     }
-    let snapshot = std::rc::Rc::new(
-        Snapshot::at_head(root)
+    // Inside a listing the canonical identities are read at the pinned
+    // publication tip, so receipts, roster, index and identities all come
+    // from one commit. trace:BUG-2543 | ai:claude
+    let pinned = if super::listing_scope::active() {
+        store_view(root)?
+    } else {
+        None
+    };
+    let snapshot = std::rc::Rc::new(match pinned {
+        Some((store, tip)) => {
+            Snapshot::of_store_at(&store, &tip).map_err(|e| anyhow::anyhow!(e.to_string()))?
+        }
+        None => Snapshot::at_head(root)
             .map_err(|e| anyhow::anyhow!(e.to_string()))?
             .context("missing canonical review snapshot")?,
-    );
+    });
     super::listing_scope::put(|m| {
         m.snapshot.insert(root.to_path_buf(), snapshot.clone());
     });
@@ -1211,15 +1233,16 @@ fn aggregate_names(store: &Path, tip: &str, top: &'static str) -> Option<std::rc
     if let Some(hit) = super::listing_scope::get(|m| m.aggregate.get(&key).cloned()) {
         return hit;
     }
+    // A non-UTF-8 name makes the aggregate unusable: each directory is then
+    // read (and refused) on its own, exactly as a single-key read does.
     let names = git_capped(
         store,
-        &["ls-tree", "-r", "--name-only", tip, "--", top],
+        &["ls-tree", "-r", "-z", "--name-only", tip, "--", top],
         aggregate_cap(),
     )
     .ok()
-    .and_then(|bytes| String::from_utf8(bytes).ok())
-    .map(|text| {
-        let mut names: Vec<String> = text.lines().map(str::to_string).collect();
+    .and_then(|bytes| nul_names(bytes).ok())
+    .map(|mut names| {
         names.sort_unstable();
         std::rc::Rc::new(names)
     });

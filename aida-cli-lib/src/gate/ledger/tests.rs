@@ -3035,11 +3035,11 @@ fn bug_2543_listing_discovers_once_and_matches_single_key_reads() {
 }
 
 // BUG-2551: this thread's own appends inside a listing are folded into the
-// memoized ownership index (no rediscovery per closed round); a ledger that
-// another writer grew is rediscovered before its events are admitted.
+// memoized ownership index (no rediscovery per closed round); what another
+// writer appends stays out of the listing's pinned snapshot.
 // trace:BUG-2551 BUG-2543 | ai:claude
 #[test]
-fn bug_2551_own_appends_fold_and_foreign_growth_rediscovers() {
+fn bug_2551_own_appends_fold_and_foreign_growth_stays_pinned() {
     let (_tmp, root) = root();
     let _env = uncontained();
     let spec = GateSpec::with_key("BUG-1", None);
@@ -3066,6 +3066,7 @@ fn bug_2551_own_appends_fold_and_foreign_growth_rediscovers() {
     }
     assert_eq!(builds(), 1, "own appends fold into the listing's index");
     // Another writer (raw append, not through this thread) grows PR-1.
+    let indexed = project::events(&root, ChangeKey::pr(1)).len();
     let line = std::fs::read_to_string(store::ledger_file(&root, ChangeKey::pr(1))).unwrap();
     let mut file = std::fs::OpenOptions::new()
         .append(true)
@@ -3074,8 +3075,13 @@ fn bug_2551_own_appends_fold_and_foreign_growth_rediscovers() {
     let mut next: serde_json::Value = serde_json::from_str(line.lines().last().unwrap()).unwrap();
     next["seq"] = serde_json::json!(next["seq"].as_u64().unwrap() + 1);
     std::io::Write::write_all(&mut file, format!("{next}\n").as_bytes()).unwrap();
-    let _ = project::events(&root, ChangeKey::pr(1));
-    assert_eq!(builds(), 2, "a ledger grown by another writer rediscovers");
+    let pinned = project::events(&root, ChangeKey::pr(1)).len();
+    assert_eq!(builds(), 1);
+    // The listing reads the bytes its discovery indexed; the next listing
+    // (or any read outside one) sees the other writer's event.
+    assert_eq!(pinned, indexed, "the listing's read stays pinned");
+    drop(_scope);
+    assert_eq!(project::events(&root, ChangeKey::pr(1)).len(), indexed + 1);
 }
 
 // BUG-2543 (review P1): a listing never admits a foreign copy whose owner's
@@ -3159,4 +3165,110 @@ fn bug_2551_reconciling_many_waits_discovers_once() {
         );
     }
     assert_eq!(builds, 1, "one discovery for {WAITS} closures");
+}
+
+// BUG-2543 (review round 2, P1): a witness appended only to ANOTHER ledger
+// after discovery never splits a listing between two states: the listing
+// answers exactly what a read at discovery time answered.
+// trace:BUG-2543 | ai:claude
+#[test]
+fn bug_2543_witness_on_another_ledger_after_discovery_stays_out_of_the_listing() {
+    let (_tmp, root) = root();
+    let _env = uncontained();
+    let spec = GateSpec::resolve(&root, "BUG-2492");
+    let first = ChangeKey::pr(3651);
+    let second = ChangeKey::pr(3764);
+    let old = record("request_changes", &ts(1), Some(&attestation("reviewer")));
+    store::append_one(&root, event::verdict_event(&root, first, &old, Some(&spec))).unwrap();
+    let mut foreign = record("approved", &ts(2), Some(&attestation("reviewer")));
+    foreign.insert("reviewed_sha".into(), serde_json::json!(OTHER_HEAD));
+    store::append_one(
+        &root,
+        event::verdict_event(&root, first, &foreign, Some(&spec)),
+    )
+    .unwrap();
+    let before = project::newest_verdict_event(&root, "PR-3651")
+        .unwrap()
+        .verdict_record()
+        .cloned();
+    let scope = crate::gate::listing_scope::ListingScope::enter();
+    let first_read = project::newest_verdict_event(&root, "PR-3651")
+        .unwrap()
+        .verdict_record()
+        .cloned();
+    {
+        let root = root.clone();
+        let spec = spec.clone();
+        let mut witness = foreign.clone();
+        witness.insert("mode".into(), serde_json::json!(project::PHASE3_MODE));
+        std::thread::spawn(move || {
+            store::append_one(
+                &root,
+                event::verdict_event(&root, second, &witness, Some(&spec)),
+            )
+            .unwrap();
+        })
+        .join()
+        .unwrap();
+    }
+    let second_read = project::newest_verdict_event(&root, "PR-3651")
+        .unwrap()
+        .verdict_record()
+        .cloned();
+    drop(scope);
+    let after = project::newest_verdict_event(&root, "PR-3651")
+        .unwrap()
+        .verdict_record()
+        .cloned();
+    assert_eq!(
+        first_read, before,
+        "the listing starts at the discovery state"
+    );
+    assert_eq!(
+        second_read, first_read,
+        "and never moves within the listing"
+    );
+    assert_eq!(after.as_ref(), Some(&old), "the next read sees the witness");
+}
+
+// BUG-2543 (review round 2, P2): an append folded into a listing is held to
+// the limits discovery enforces; one that crosses them invalidates the memo
+// and the listing answers what a fresh read answers.
+// trace:BUG-2543 | ai:claude
+#[test]
+fn bug_2543_folded_append_over_a_line_limit_rediscovers() {
+    let (_tmp, root) = root();
+    let _env = uncontained();
+    let spec = GateSpec::with_key("BUG-1", None);
+    let rec = record("request_changes", &ts(1), Some(&attestation("reviewer")));
+    store::append_one(
+        &root,
+        event::verdict_event(&root, ChangeKey::pr(1), &rec, Some(&spec)),
+    )
+    .unwrap();
+    let scope = crate::gate::listing_scope::ListingScope::enter();
+    project::OWNERSHIP_WORK.with(|work| work.set((0, 0)));
+    let builds = || project::OWNERSHIP_WORK.with(|work| work.get()).0;
+    let _ = project::events(&root, ChangeKey::pr(1));
+    assert_eq!(builds(), 1);
+    let mut huge = record("approved", &ts(2), Some(&attestation("reviewer")));
+    huge.insert(
+        "summary".into(),
+        serde_json::json!("x".repeat(checked::MAX_LINE_BYTES + 1)),
+    );
+    store::append_one(
+        &root,
+        event::verdict_event(&root, ChangeKey::pr(1), &huge, Some(&spec)),
+    )
+    .unwrap();
+    let listed = project::newest_verdict_event(&root, "PR-1").map(|e| e.verdict_record().cloned());
+    assert_eq!(builds(), 2, "the oversized append invalidated the memo");
+    drop(scope);
+    let fresh = project::newest_verdict_event(&root, "PR-1").map(|e| e.verdict_record().cloned());
+    assert_eq!(listed, fresh);
+    assert!(
+        listed.flatten().map_or(true, |r| r.get("verdict")
+            != Some(&serde_json::json!("approved"))),
+        "an oversized approval is never presented"
+    );
 }
