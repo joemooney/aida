@@ -746,22 +746,117 @@ pub(crate) fn read_arming_history(root: &Path, key: &str) -> Result<RetainedHist
 }
 
 pub(crate) fn auto_release(project: &Path, pr: u64) -> Result<Outcome> {
+    let unread = std::cell::Cell::new(false);
+    match with_live_io(project, pr, false, &unread, |root, hold, io| {
+        auto_release_steps(root, hold, io, false)
+    })? {
+        None => Ok(Outcome::NoHold),
+        Some(Judged::Done(outcome)) => Ok(outcome),
+        Some(Judged::Eligible(_)) => bail!("auto-release stopped before releasing"),
+    }
+}
+
+/// What [`auto_release`] would decide for `pr`'s hold at its live head,
+/// without releasing anything.
+// trace:STORY-2768 | ai:claude
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum ReleaseCondition {
+    NoHold,
+    /// Every eligibility check passes and no mandate is needed.
+    Met,
+    /// Every other check passes; a covered spec is sensitive, so the release
+    /// also needs this active mandate's cover. That cover is NOT judged
+    /// here: only the release consults it.
+    PendingCover(String),
+    /// The release would refuse, and why.
+    Unmet(String),
+    /// The forge or the store could not be read.
+    Unknown(String),
+}
+
+/// The read-only half of [`auto_release`]: its own first eligibility pass
+/// (legacy and composed holds, absorbed reasons, covered-spec resolution,
+/// always-human and sensitive classes, the reviewer's grant, an attested
+/// approval at the live head, the arming refusal's order), stopped before
+/// the release. It records no carry-over proof, prints no forge retries and
+/// never consults the mandate through the ship cover (which writes the
+/// exclusion ledger): for a sensitive spec it reads the mandate state only
+/// and answers [`ReleaseCondition::PendingCover`]. A caller that acts calls
+/// [`auto_release`], which decides everything again.
+// trace:STORY-2768 | ai:claude
+pub(crate) fn release_condition(project: &Path, pr: u64) -> ReleaseCondition {
+    let unread = std::cell::Cell::new(false);
+    match with_live_io(project, pr, true, &unread, |root, hold, io| {
+        auto_release_steps(root, hold, io, true)
+    }) {
+        Ok(None) => ReleaseCondition::NoHold,
+        Ok(Some(Judged::Eligible(releases))) => {
+            match releases.into_iter().find_map(|release| release.mandate) {
+                Some(mandate) => ReleaseCondition::PendingCover(mandate),
+                None => ReleaseCondition::Met,
+            }
+        }
+        Ok(Some(Judged::Done(_))) => {
+            ReleaseCondition::Unknown("the read-only check ran a release step".into())
+        }
+        Err(error) if unread.get() => ReleaseCondition::Unknown(format!("{error:#}")),
+        Err(error) => ReleaseCondition::Unmet(format!("{error:#}")),
+    }
+}
+
+/// The mandate a read-only check names for a sensitive release: the active
+/// one, when it covers held ships and lifts the supervised classes. Reads
+/// the mandate records and nothing else.
+// trace:STORY-2768 | ai:claude
+fn mandate_named_read_only() -> Result<String> {
+    use crate::gate::mandate::{MandateState, Scope};
+    match crate::gate::mandate::current_state() {
+        MandateState::Active(m) if m.covers(Scope::ShipHeld) && m.include_supervised => Ok(m.id),
+        MandateState::Active(m) => bail!(
+            "mandate {} does not cover held ships of supervised specs",
+            m.id
+        ),
+        _ => bail!("no mandate is active"),
+    }
+}
+
+/// Run `f` with the production I/O for `pr`'s hold; `Ok(None)` when no hold
+/// is recorded. `read_only` swaps every input that would leave state behind
+/// for one that only reads. `unread` is set when a forge or store read
+/// failed, so the caller can tell "could not look" from a refusal.
+// trace:STORY-2768 | ai:claude
+fn with_live_io<T>(
+    project: &Path,
+    pr: u64,
+    read_only: bool,
+    unread: &std::cell::Cell<bool>,
+    f: impl FnOnce(&Path, &mh::MergeHoldRecord, AutoReleaseIo<'_>) -> Result<T>,
+) -> Result<Option<T>> {
     let root = crate::main_worktree_root_from(project);
     let Some(hold) = mh::read_hold_record(&root, pr) else {
-        return Ok(Outcome::NoHold);
+        return Ok(None);
+    };
+    let noted = |error: anyhow::Error| {
+        unread.set(true);
+        error
     };
     let kind = crate::forge::resolve_open_change_forge_kind(&root);
     let pin = mh::resolve_pinned_repo(&root, kind)
-        .map_err(anyhow::Error::msg)?
-        .context("no forge repository for auto-release")?;
-    let live_head = || mh::fetch_pinned_change(&root, kind, pr).map_err(anyhow::Error::msg);
+        .map_err(anyhow::Error::msg)
+        .and_then(|pin| pin.context("no forge repository for auto-release"))
+        .map_err(noted)?;
+    let live_head = || {
+        mh::fetch_pinned_change(&root, kind, pr)
+            .map_err(anyhow::Error::msg)
+            .map_err(noted)
+    };
     let known_ids: Vec<String> = hold
         .spec
         .iter()
         .filter(|spec| !spec.starts_with("PR-"))
         .cloned()
         .collect();
-    auto_release_with(
+    f(
         &root,
         &hold,
         AutoReleaseIo {
@@ -769,14 +864,20 @@ pub(crate) fn auto_release(project: &Path, pr: u64) -> Result<Outcome> {
             read_hold: &|| mh::read_hold_record(&root, pr),
             covered_specs: &|| {
                 let forge = crate::forge::forge_for_kind(&root, kind);
-                let mut sink = crate::network_retry::StderrSink;
-                let headlines = forge.change_commit_headlines(pr, &mut sink)?;
-                let title = forge.change_metadata(pr, &mut sink)?.title;
+                let mut loud = crate::network_retry::StderrSink;
+                let mut quiet = crate::network_retry::NoopSink;
+                let sink: &mut dyn crate::network_retry::RetrySink =
+                    if read_only { &mut quiet } else { &mut loud };
+                let headlines = forge
+                    .change_commit_headlines(pr, &mut *sink)
+                    .map_err(noted)?;
+                let title = forge.change_metadata(pr, &mut *sink).map_err(noted)?.title;
                 // BUG-2403: each covered spec's proved labels join the corpus.
                 // trace:BUG-2403 | ai:claude
                 let ids = with_proved_labels(&root, covered_spec_ids(&headlines, &title, &hold));
                 let store = crate::pr_lookup::load_review_story_inventory(&root)
-                    .context("covered spec store is unreadable; human clear required")?;
+                    .context("covered spec store is unreadable; human clear required")
+                    .map_err(noted)?;
                 Ok((ids, store))
             },
             // M1 slice 2: the arming verdict and its round history are read
@@ -825,12 +926,15 @@ pub(crate) fn auto_release(project: &Path, pr: u64) -> Result<Outcome> {
                     head,
                     None,
                     &known_ids,
-                    true,
+                    !read_only,
                 )
                 .map(Some)
                 .map_err(anyhow::Error::msg)
             },
             mandate: &|| {
+                if read_only {
+                    return mandate_named_read_only();
+                }
                 // TASK-2323: the BUG-2214 evidence fetch needs the head
                 // BRANCH; with `None` here the rework-release path never
                 // fetched, and a forge-moved head failed the exclusion diff.
@@ -860,7 +964,12 @@ pub(crate) fn auto_release(project: &Path, pr: u64) -> Result<Outcome> {
             // main root — the same roots the verdict file lookup uses.
             // trace:BUG-2216 | ai:claude
             refusal_release: &|record, head| {
-                crate::pr_cmd::ship_refusal_release(&[project, root.as_path()], record, Some(head))
+                crate::pr_cmd::ship_refusal_release_recording(
+                    &[project, root.as_path()],
+                    record,
+                    Some(head),
+                    !read_only,
+                )
             },
             comment: &|body| {
                 let (cli, args) = match kind {
@@ -970,6 +1079,28 @@ fn auto_release_with(
     hold: &mh::MergeHoldRecord,
     io: AutoReleaseIo<'_>,
 ) -> Result<Outcome> {
+    match auto_release_steps(root, hold, io, false)? {
+        Judged::Done(outcome) => Ok(outcome),
+        Judged::Eligible(_) => bail!("auto-release stopped before releasing"),
+    }
+}
+
+/// How far [`auto_release_steps`] went.
+// trace:STORY-2768 | ai:claude
+enum Judged {
+    /// `judge_only`: every arming refusal is answered; nothing was released.
+    Eligible(Vec<Release>),
+    Done(Outcome),
+}
+
+/// The auto-release: the first eligibility pass, then (unless `judge_only`)
+/// the release with its two re-validation passes.
+fn auto_release_steps(
+    root: &Path,
+    hold: &mh::MergeHoldRecord,
+    io: AutoReleaseIo<'_>,
+    judge_only: bool,
+) -> Result<Judged> {
     let head = open_change_head((io.live_head)()?)?;
     let refs = arming_refs(hold)?;
     let check = |hold: &mh::MergeHoldRecord,
@@ -1063,6 +1194,10 @@ fn auto_release_with(
     };
     let (ids, store) = (io.covered_specs)()?;
     let releases = check_all(&ids, &store)?;
+    // trace:STORY-2768 | ai:claude
+    if judge_only {
+        return Ok(Judged::Eligible(releases));
+    }
     let release = releases[0].clone();
     let also: Vec<mh::VerdictRef> = releases[1..].iter().map(|r| r.verdict.clone()).collect();
     let released = release_with(
@@ -1141,9 +1276,9 @@ fn auto_release_with(
         );
     }
     released?;
-    Ok(Outcome::Released {
+    Ok(Judged::Done(Outcome::Released {
         mandate: release.mandate,
-    })
+    }))
 }
 
 /// A release-condition check that never answers, for fixtures whose arming

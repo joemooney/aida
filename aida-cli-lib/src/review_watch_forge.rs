@@ -36,7 +36,7 @@ pub(crate) struct Repository {
 
 // Apply the same repository-routing hygiene to probes and both child levels.
 // trace:TASK-1993 | ai:codex
-fn clear_routing(command: &mut Command) {
+pub(crate) fn clear_routing(command: &mut Command) {
     for name in [
         "GH_REPO",
         "GLAB_REPO",

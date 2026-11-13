@@ -2105,6 +2105,19 @@ pub(crate) fn ship_refusal_release(
     record: &crate::gate::merge_hold_core::MergeHoldRecord,
     head: Option<&str>,
 ) -> crate::gate::merge_hold_core::RefusalRelease {
+    ship_refusal_release_recording(roots, record, head, true)
+}
+
+/// [`ship_refusal_release`]; with `record_proof` off a carry-over proven
+/// here is not written to the gate ledger, so the answer leaves no state
+/// behind (a status report).
+// trace:STORY-2768 | ai:claude
+pub(crate) fn ship_refusal_release_recording(
+    roots: &[&std::path::Path],
+    record: &crate::gate::merge_hold_core::MergeHoldRecord,
+    head: Option<&str>,
+    record_proof: bool,
+) -> crate::gate::merge_hold_core::RefusalRelease {
     let exact = crate::gate::merge_hold_core::refusal_release(
         record,
         head,
@@ -2125,7 +2138,13 @@ pub(crate) fn ship_refusal_release(
         let head = head.ok_or("the PR head is unavailable")?;
         let keys = crate::gate::merge_hold_core::refusal_verdict_keys(record);
         crate::gate::merge_hold_core::live_carried_approval(
-            roots, root, record.pr, head, None, &keys, true,
+            roots,
+            root,
+            record.pr,
+            head,
+            None,
+            &keys,
+            record_proof,
         )
     })
 }
