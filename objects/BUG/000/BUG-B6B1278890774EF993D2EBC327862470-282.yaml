@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-10T06:40:07.764479561Z
-modified_at: 2026-11-13T00:22:34.305817481Z
+modified_at: 2026-11-13T00:23:51.813903983Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -250,6 +250,12 @@ comments:
   content: 'Round 4: retained fail-closed historical foreign-copy filtering and the single streaming ownership index already on this branch. Added a strict-reader refusal when discovery disappears after input was read, removed semantic review-payload cloning from fingerprint construction, and expanded one-pass coverage to 36 witnesses across 12 change buckets. Lane job j20261113T000213788-2326851-0 executed all 20 BUG-2517 tests successfully. CI log diagnosis: porcelain parity snapshot raced detached Git maintenance from fixture commits; fixture Git now disables maintenance.auto and gc.auto while keeping full metadata snapshots. Maintenance guard suite: 8 tests passed. Final parity rerun j20261113T000333387-2333761-0 is rebuilding the CLI. Edits remain uncommitted under the native-seat publication contract.'
   created_at: 2026-11-13T00:22:34.305817481Z
   modified_at: 2026-11-13T00:22:34.305817481Z
+  session_id: 01a1d22fe5ff
+- id: 01a1d24a-1105-7202-8cb8-635826908352
+  author: joe
+  content: 'Round 4 final validation: lane job j20261113T000333387-2333761-0 passed core_external_porcelain_parity (1 executed test) after building its required porcelain sibling. The BUG-2517 unit filter passed all 20 executed tests in job j20261113T000213788-2326851-0, including the malformed/unreadable/oversized foreign-copy regression and multi-round one-pass ownership regression. Git-maintenance guard suite passed 8 tests; rustfmt checks for all three touched Rust files, Python syntax, and git diff --check passed. No findings disputed. Four changed files are ready for the host to commit and publish under the native-seat contract. Codegraph navigation was unavailable: fixed host client missing and doctor reported unreachable index; rg was used instead.'
+  created_at: 2026-11-13T00:23:51.813903983Z
+  modified_at: 2026-11-13T00:23:51.813903983Z
   session_id: 01a1d22fe5ff
 history:
 - id: 01a1c4af-45a0-7a32-8edf-55980e6f5825
