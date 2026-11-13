@@ -1169,6 +1169,62 @@ mod loop_tests {
         CONTROLLER.with(|id| *id.borrow_mut() = None);
     }
 
+    // Obligations accumulate rather than collapse: three threshold episodes in
+    // one outage each keep a durable notice, whether recovery is observed as a
+    // success or as the first failure of a fresh episode, and a repeat
+    // observation after recovery never re-publishes or drops one.
+    // trace:STORY-2691 | ai:claude
+    #[test]
+    fn story2691_outage_across_many_thresholds_keeps_every_notice() {
+        for recover_with_failure in [false, true] {
+            let temp = tempfile::tempdir().unwrap();
+            let root = temp.path();
+            CONTROLLER.with(|id| *id.borrow_mut() = Some("fixture".into()));
+            let mailbox = root.join(".aida/mailbox");
+            std::fs::create_dir_all(root.join(".aida")).unwrap();
+            std::fs::write(&mailbox, "temporarily unavailable").unwrap();
+            let mut ids = Vec::new();
+            for episode in ["A", "B", "C"] {
+                for _ in 0..3 {
+                    let _ = controller_dispatch(root, Some(episode), false);
+                }
+                let saved = failure_state(root).unwrap();
+                let alert = saved.alert.expect("each episode persists its notice");
+                assert!(!alert.sent);
+                assert_eq!(saved.carried.len(), ids.len());
+                ids.push(alert.message.id);
+                assert!(controller_dispatch(root, None, true).is_err());
+                assert_eq!(failure_state(root).unwrap().carried.len(), ids.len());
+            }
+            std::fs::remove_file(&mailbox).unwrap();
+            if recover_with_failure {
+                controller_dispatch(root, Some("D"), false).unwrap();
+                let saved = failure_state(root).unwrap();
+                assert_eq!(saved.count, 1);
+                assert!(saved.alert.is_none());
+            } else {
+                controller_dispatch(root, None, true).unwrap();
+            }
+            assert!(failure_state(root).unwrap().carried.is_empty());
+            controller_dispatch(root, None, true).unwrap();
+            let mut delivered: Vec<String> = std::fs::read_dir(&mailbox)
+                .unwrap()
+                .map(|entry| {
+                    let value: serde_json::Value =
+                        serde_json::from_slice(&std::fs::read(entry.unwrap().path()).unwrap())
+                            .unwrap();
+                    value["id"].as_str().unwrap().to_string()
+                })
+                .collect();
+            delivered.sort();
+            ids.sort();
+            ids.dedup();
+            assert_eq!(ids.len(), 3);
+            assert_eq!(delivered, ids);
+            CONTROLLER.with(|id| *id.borrow_mut() = None);
+        }
+    }
+
     // trace:STORY-2691 | ai:codex
     #[test]
     fn story2691_unsent_alert_retries_after_restart_before_idle_or_success() {
