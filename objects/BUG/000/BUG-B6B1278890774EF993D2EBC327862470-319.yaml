@@ -3,18 +3,28 @@ spec_id: BUG-b6b1278890774ef993d2ebc327862470-319
 agreed_id: BUG-2554
 title: Train gate's store_history_alias_map runs git log --all -p -G over the whole store history and blocks the train for 10+ min under disk pressure
 description: 'Observed 2026-11-13 03:57-04:10 (advisor). Train #3941 (#3917+#3928) went green at 03:57, then sat in journal step Gate for more than 10 minutes. Its child was ''git log --all --format= -p --unified=0 --find-renames -l0 --regexp-ignore-case -G^(spec_id|agreed_id): *[...](STORY-HOME-096|TASK-1-108)[...] -- objects/'' in the store repo, in D state, with host IO pressure some avg10 about 55%. Source: aida-cli-lib/src/mandate.rs store_history_alias_map (TASK-1800 / BUG-2179), which resolves legacy or agreed IDs by patch-walking every version of every object on every ref. Cost grows with store history, runs on every train gate, and competes with lanes and cargo for disk. Acceptance: (1) alias resolution answers from an index (the cache DB, or a persisted alias map keyed by spec_id/agreed_id updated on write or pull) and reaches git history only on an index miss for an ID that is genuinely absent; (2) a train gate whose members name no legacy or deleted IDs performs no history walk; (3) a bounded walk (by time or ref set) with a clear refusal remains the fallback; (4) a regression proving the gate on a store with long history finishes without a full -p walk. Keep BUG-2179''s correctness: a deleted spec named by its agreed_id is still found.'
-status: Draft
+status: Approved
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-13T11:08:09.225798765Z
-modified_at: 2026-11-13T11:08:09.225798765Z
+modified_at: 2026-11-13T11:08:29.918271707Z
 req_type: Bug
 tags:
 - mandate
 - perf
 - track:integration
 - train
+history:
+- id: 01a1d498-3f5e-76e0-8686-02d176a4d628
+  author: joe
+  timestamp: 2026-11-13T11:08:29.918265855Z
+  session_id: 01a1d3ee-83e8-71b3-a2c5-aed5baed6fdc
+  harness_version: 2.1.323 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Approved
 filed_at:
   code_sha: 11bf5e9a018e0a304ec1af0d43435c1886b4328f
   branch: main
