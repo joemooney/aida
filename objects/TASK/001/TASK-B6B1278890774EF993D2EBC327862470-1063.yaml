@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-11T12:17:13.260009028Z
-modified_at: 2026-11-13T13:52:44.058981166Z
+modified_at: 2026-11-13T14:06:34.804827788Z
 req_type: Task
 relationships:
 - rel_type: BlockedBy
@@ -39,6 +39,13 @@ comments:
   content: 'Host follow-up: required dell1 before/after clean and one-line-edit rebuild benchmarks remain outstanding (this seat hostname is disrad-dvp98b3puw). Filing the requested headless draft finding was attempted but refused before writing: aida-work-dispenser.toml is mode 0664 and the allocator requires it not be group/other writable. Native seat Git metadata is read-only, so no chmod was attempted. This comment preserves the flag without bypassing that refusal.'
   created_at: 2026-11-13T13:52:44.058981166Z
   modified_at: 2026-11-13T13:52:44.058981166Z
+  session_id: 01a1d51f8e0e
+  harness_version: codex-cli 0.167.0
+- id: 01a1d53b-4934-77d3-a839-b77fcb4793b6
+  author: dirtlab
+  content: 'Native implementation and validation complete for the code slice: aida-cmdkit 4 tests, aida-term 64 tests, combined CLI regressions 182 tests, real show/format-pin plus help snapshot tests, and aida-cli --no-default-features check passed. Python checks passed: crate-split tools 17, writer inventory 54, exec-context ratchet 19 (in-memory overlay includes unstaged new crates; no Git index writes). Exact environment-site/growth conservation, writer inventory, crate-glob guard, touched-source rustfmt, shell syntax and diff whitespace passed. Glyph HOME fixtures use isolated child tests. Required dell1 before/after build timings remain missing, so retain In Progress and non-completing Refs. Full changed-path and validation handoff: /tmp/task-3783-handoff.txt.'
+  created_at: 2026-11-13T14:06:34.804827788Z
+  modified_at: 2026-11-13T14:06:34.804827788Z
   session_id: 01a1d51f8e0e
   harness_version: codex-cli 0.167.0
 history:
