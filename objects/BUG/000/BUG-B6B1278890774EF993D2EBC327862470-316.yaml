@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-13T05:04:27.319151195Z
-modified_at: 2026-11-13T05:58:39.972631842Z
+modified_at: 2026-11-13T05:58:42.297747178Z
 req_type: Bug
 tags:
 - track:integration
@@ -20,6 +20,12 @@ comments:
   modified_at: 2026-11-13T05:43:27.986792025Z
   session_id: 01a1d2e6-f5db-7f33-9b74-3ae5fdaf9e0c
   harness_version: 2.1.323 (Claude Code)
+- id: 01a1d37c-9f79-7123-8a55-4f90bd3f9011
+  author: joe
+  content: 'integration seat 23:15: root cause found. Every aida pull auto-bump calls reconcile_waiting_verdicts(root, None) (db_reconcile.rs) which resolves current_verdict for every one of ~2,800 verdict keys; each read does a full gate-ledger discovery (~0.6 s) plus publication git spawns. Fix rides on BUG-2543''s ListingScope (branch bug-2543-listing-snapshot, commit 960dd9f): the reconcile loop shares one discovery; ledger writes inside a scope drop the memoized ownership index. The cache.db reads in the report are not addressed separately; re-measure pull after this lands.'
+  created_at: 2026-11-13T05:58:42.297747178Z
+  modified_at: 2026-11-13T05:58:42.297747178Z
+  session_id: 92a24ff6-1324-4fe1-a02b-b2601f384b4b
 history:
 - id: 01a1d363-766b-7430-8bca-0c0a924878fa
   author: joe
