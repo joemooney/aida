@@ -657,16 +657,17 @@ pub(crate) fn validate(job: &JobRequest) -> std::result::Result<(), String> {
 
 /// The job's timeout: its `AIDA_CARGO_TIMEOUT` (seconds) bounded by
 /// [`MAX_TIMEOUT_SECS`], else [`DEFAULT_TIMEOUT_SECS`] on a seeded target
-/// and [`MAX_TIMEOUT_SECS`] on a `cold` (unseeded) one. A cold build of
-/// aida-cli-lib alone takes about 27 minutes, so on a host without reflinks
+/// and [`MAX_TIMEOUT_SECS`] on a `cold` (unseeded) one.
+/// Fast gates use the same maximum bound, independently of Cargo overrides.
+/// A cold build of aida-cli-lib alone takes about 27 minutes, so without reflinks
 /// (ext4) the default would time every first job out (round-3 finding 7).
 // trace:BUG-2383 | ai:claude
 pub(crate) fn timeout_for(job: &JobRequest, cold: bool) -> Duration {
     if fast_gate_job(job) {
-        // A measured full sandbox gate exceeds five minutes on the shared host.
-        // Keep a fixed ten-minute bound independent of Cargo build overrides.
-        // trace:STORY-2640 | ai:codex
-        return Duration::from_secs(600);
+        // Full LIGHT validation can exceed ten minutes on the shared host.
+        // Keep a bounded host policy independent of seat Cargo overrides.
+        // trace:TASK-3100 | ai:codex
+        return Duration::from_secs(MAX_TIMEOUT_SECS);
     }
     let default = if cold {
         MAX_TIMEOUT_SECS
