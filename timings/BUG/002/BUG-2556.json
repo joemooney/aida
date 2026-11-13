@@ -1,0 +1,40 @@
+{
+  "schema_version": 1,
+  "spec": "BUG-2556",
+  "publishes": [
+    {
+      "at": "2026-11-13T16:53:40.775777286Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-11-13T11:45:11.256448027Z",
+      "spec": "BUG-2556",
+      "kind": {
+        "event": "UnshippedWorkDetected",
+        "spec": "BUG-2556",
+        "branch": "bug-2556-recovery-consent",
+        "first_seen": "2026-11-13T11:45:11.256386673+00:00"
+      }
+    },
+    {
+      "ts": "2026-11-13T16:48:22.606597894Z",
+      "spec": "BUG-2556",
+      "seat": "advisor",
+      "kind": {
+        "event": "PrMerged",
+        "pr": 3954
+      }
+    },
+    {
+      "ts": "2026-11-13T16:53:40.569904327Z",
+      "spec": "BUG-2556",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "8265057964618d451894a955f2b90463164762aa",
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
