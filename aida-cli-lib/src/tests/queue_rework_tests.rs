@@ -2500,15 +2500,15 @@ fn story_2690_rework_refuses_all_human_parking_before_mutation() {
             err.to_string().contains(&format!("reason={expected}:")),
             "{tag:?}: {err:#}"
         );
-        let after = storage.load().unwrap();
-        assert_eq!(
-            before_requirements,
-            serde_json::to_value(&after.requirements).unwrap(),
-            "{tag:?}"
-        );
-        assert!(
-            storage.queue_list("codex", true).unwrap().is_empty(),
-            "{tag:?}"
-        );
     }
+    // Each case addresses a distinct spec, so a single final snapshot detects
+    // mutation by any refusal while avoiding per-case Git-backed loads.
+    // Keep all command cases on this one fixture: the 82-case spelling matrix
+    // belongs in the pure validator test, never in a Git-fixture loop.
+    let after = storage.load().unwrap();
+    assert_eq!(
+        before_requirements,
+        serde_json::to_value(&after.requirements).unwrap()
+    );
+    assert!(storage.queue_list("codex", true).unwrap().is_empty());
 }
