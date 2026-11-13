@@ -1500,3 +1500,5 @@ mod bug_1638_race_seam_tests;
 #[cfg(test)]
 #[path = "tests/stale_cache_fixture.rs"]
 mod stale_cache_fixture;
+
+mod reviewer_completion; // trace:BUG-2546 | ai:codex
