@@ -1,0 +1,18 @@
+{
+  "id": "09b4bdc1-7f8c-4436-8b51-a52699c55e55",
+  "thread_id": "09b4bdc1-7f8c-4436-8b51-a52699c55e55",
+  "from": "joe",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1794530377865,
+  "body": "TASK-b6b1278890774ef993d2ebc327862470-960 PR #3887 conflicts with origin/main in: aida-cli-lib/src/lib_part1.rs. The host aborted the merge. Conflict resolution requires Claude on branch task-3428-slice-b. Fresh route: aida queue work TASK-b6b1278890774ef993d2ebc327862470-960 --vendor claude --fresh --no-human.",
+  "subject": "Rework merge conflicts require Claude",
+  "urgent": false,
+  "intent": "request",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "shell_user"
+}
