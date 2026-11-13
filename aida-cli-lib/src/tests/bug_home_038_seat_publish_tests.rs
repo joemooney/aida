@@ -2234,7 +2234,7 @@ esac
 // trace:BUG-2456 | ai:codex
 #[cfg(target_os = "linux")]
 #[test]
-fn bug_2456_clone_rework_publishes_through_host_and_never_runs_seat_hooks() {
+fn bug_2558_clone_rework_retains_merge_and_publishes_through_host_without_seat_hooks() {
     if !bwrap_live_or_skip() {
         return;
     }
@@ -2262,13 +2262,40 @@ fn bug_2456_clone_rework_publishes_through_host_and_never_runs_seat_hooks() {
             &clone,
             &["remote", "set-url", "origin", "/nonexistent/seat-origin"],
         );
-        let files = prepare_rework_merge(&fx.main, &clone, "feat", false).unwrap();
+        let files = prepare_rework_merge(&fx.main, &clone, "feat", false, true).unwrap();
         let remote = git_ok(&fx.origin, &["rev-parse", "refs/heads/feat"]);
         let head = git_ok(&clone, &["rev-parse", "HEAD"]);
         if conflicts {
             assert_eq!(files, ["README.md"]);
             assert_eq!(head, before);
             assert_eq!(remote, before);
+            // The lane resolves bytes only. Host Git remains responsible for
+            // staging and completing this exact two-parent merge.
+            // trace:BUG-2558 | ai:codex
+            let base = git_ok(&clone, &["rev-parse", "MERGE_HEAD"]);
+            assert!(!git_ok(&clone, &["ls-files", "-u"]).is_empty());
+            assert!(std::fs::read_to_string(clone.join("README.md"))
+                .unwrap()
+                .contains("<<<<<<<"));
+            assert!(commit_pending(&fx.main, &clone, "feat", "fix: resolve (BUG-2558)").is_err());
+            std::fs::write(clone.join("README.md"), "resolved both changes\n").unwrap();
+            assert_eq!(
+                prepare_rework_merge(&fx.main, &clone, "feat", true, true).unwrap(),
+                files
+            );
+            assert!(prepare_rework_merge(&fx.main, &clone, "feat", false, true).is_err());
+            let tip = commit_pending(&fx.main, &clone, "feat", "fix: resolve (BUG-2558)")
+                .unwrap()
+                .unwrap();
+            assert_eq!(
+                git_ok(&clone, &["show", "-s", "--format=%P", &tip]),
+                format!("{before} {base}")
+            );
+            assert!(git_ok(&clone, &["ls-files", "-u"]).is_empty());
+            // This helper tests the trusted import/push seam; the ordinary
+            // queue exit path additionally enforces the native fast gate.
+            publish_rework_merge(&fx.main, &clone, "feat", &tip).unwrap();
+            assert_eq!(git_ok(&fx.origin, &["rev-parse", "refs/heads/feat"]), tip);
         } else {
             assert!(files.is_empty());
             assert_ne!(head, before);
@@ -3535,7 +3562,7 @@ fn bug_2504_recovery_matches_recorded_tree_kind() {
             );
             std::fs::write(tree.join("pending"), "preserve me\n").unwrap();
             let head = git_ok(&tree, &["rev-parse", "HEAD"]);
-            let error = prepare_rework_merge(&fx.main, &tree, "feat", true).unwrap_err();
+            let error = prepare_rework_merge(&fx.main, &tree, "feat", true, true).unwrap_err();
             let message = format!("{error:#}");
             assert!(message.contains("edits preserved"), "{message}");
             assert!(message.contains(tree.to_str().unwrap()), "{message}");
@@ -3556,7 +3583,7 @@ fn bug_2504_recovery_matches_recorded_tree_kind() {
                 std::fs::remove_file(tree.join("pending")).unwrap();
                 let message = format!(
                     "{:#}",
-                    prepare_rework_merge(&fx.main, &tree, "feat", false).unwrap_err()
+                    prepare_rework_merge(&fx.main, &tree, "feat", false, true).unwrap_err()
                 );
                 assert!(
                     message.contains("retry pickup with its current head"),
@@ -3597,7 +3624,7 @@ fn bug_2504_rework_preflight_has_no_commit_recovery() {
     for branch in ["feat", "other"] {
         let message = format!(
             "{:#}",
-            prepare_rework_merge(&fx.main, &tree, branch, true).unwrap_err()
+            prepare_rework_merge(&fx.main, &tree, branch, true, true).unwrap_err()
         );
         assert!(
             message.contains(if branch == "feat" {
@@ -3640,7 +3667,7 @@ fn bug_2504_recorded_clone_admits_clean_main_advance() {
     std::fs::write(tree.join("pending"), "preserve me\n").unwrap();
     let head = git_ok(&tree, &["rev-parse", "HEAD"]);
     let status = git_ok(&tree, &["status", "--porcelain"]);
-    assert!(prepare_rework_merge(&fx.main, &tree, "feat", true)
+    assert!(prepare_rework_merge(&fx.main, &tree, "feat", true, true)
         .unwrap()
         .is_empty());
     assert_eq!(git_ok(&tree, &["rev-parse", "HEAD"]), head);

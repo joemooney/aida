@@ -143,6 +143,20 @@ leaves its edits uncommitted. When an implementer lane's Codex process exits,
 the launcher commits that pending work in the seat clone. An operator can also
 commit and publish it with
 `aida ship <SPEC> --from-seat <clone> --commit-pending '<subject> (<SPEC>)'`.
+
+For a native Codex clone rework that conflicts with main, the host retains `MERGE_HEAD`,
+the unmerged index and working-tree markers before launch. Resolve file contents
+only, run targeted tests, declare publication and exit. The host records original
+conflict paths in its locked `.aida/repair-journal.json`, bound to the branch,
+both merge parents and seat directory identity. Resuming the recorded repair
+preserves edits; a fresh pickup refuses an unfinished merge. Before staging,
+the host rejects opening or closing conflict markers in those original paths,
+including staged retries, and refuses missing or mismatched journal evidence.
+It then commits the merge and uses the ordinary fast gate and publication vetoes.
+A failed commit retains staged merge resolutions and the journal for host retry.
+Linked-worktree reworks retain their existing merge workflow.
+<!-- trace:BUG-2558 | ai:codex -->
+
 Both commands accept `--commit-body-file <file>` for an optional UTF-8 body,
 including required trailers such as `Help-Golden: unchanged`. The body follows
 the subject and a blank line. For native declarations, the host

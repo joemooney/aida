@@ -585,7 +585,7 @@ pub(crate) fn rework_conflict_route(
     notify(
         "Rework merge conflicts require resolution",
         &format!(
-            "{scope} PR #{pr} conflicts with origin/main in: {}. The host aborted the merge. \
+            "{scope} PR #{pr} conflicts with origin/main in: {}. \
          Conflict resolution continues with {} on branch {branch}.",
             files.join(", "),
             vendor.as_str(),
@@ -597,6 +597,8 @@ pub(crate) fn rework_conflict_route(
 /// The launch facts [`apply_rework_conflict_route`] needs from the pickup.
 // trace:STORY-2475 | ai:claude
 pub(crate) struct ReworkConflictLaunch<'a> {
+    // trace:BUG-2558 | ai:codex
+    pub(crate) host_staged: bool,
     pub(crate) vendor: session::HeadlessVendor,
     pub(crate) resume: bool,
     pub(crate) interactive: bool,
@@ -637,11 +639,21 @@ pub(crate) fn apply_rework_conflict_route(
 
     prompt.push_str(&format!(
         "\n\n{}",
-        crate::rework_direction::conflict_task(&crate::rework_direction::MainConflict {
-            pr: launch.pr,
-            base: "main".into(),
-            files,
-        })
+        if launch.host_staged {
+            crate::rework_direction::host_staged_conflict_task(
+                &crate::rework_direction::MainConflict {
+                    pr: launch.pr,
+                    base: "main".into(),
+                    files,
+                },
+            )
+        } else {
+            crate::rework_direction::conflict_task(&crate::rework_direction::MainConflict {
+                pr: launch.pr,
+                base: "main".into(),
+                files,
+            })
+        }
     ));
     Ok(vendor)
 }
@@ -5497,16 +5509,32 @@ pub(crate) fn handle_queue_work(
             let mut prompt = prompt.clone();
             if !no_launch && !plan_only && !guided && role == "implementer" {
                 if let Some((pr, branch)) = rework_pr.as_ref() {
+                    // Only native Codex uses host publication; self-publishing
+                    // vendors keep their existing merge workflow.
+                    // trace:BUG-2558 | ai:codex
+                    let host_staged = launch_vendor == session::HeadlessVendor::Codex
+                        && session::containment_posture_in(
+                            &project_root,
+                            launch_vendor.as_str(),
+                            contained,
+                        )? == session::ContainmentPosture::Native
+                        && crate::seat_clone::host_recorded_clone(
+                            &project_root,
+                            &lease.worktree_path,
+                        )
+                        .is_some();
                     let files = crate::seat_clone::prepare_rework_merge(
                         &project_root,
                         &lease.worktree_path,
                         branch,
                         matches!(launch, Some(QueueWorkLaunch::Resume(_))),
+                        host_staged,
                     );
                     launch_vendor = apply_rework_conflict_route(
                         &project_root,
                         files,
                         ReworkConflictLaunch {
+                            host_staged,
                             vendor: launch_vendor,
                             resume: matches!(launch, Some(QueueWorkLaunch::Resume(_))),
                             interactive: !no_human,

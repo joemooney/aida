@@ -21,6 +21,8 @@ use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result};
 
+mod repair;
+
 /// Where `create` writes the marker naming the clone's main checkout,
 /// relative to the clone root. `.aida/*` is excluded from git in the clone.
 // trace:BUG-2169 | ai:claude
@@ -3013,16 +3015,21 @@ fn salvage_capped(main: &Path, clone: &Path, cap: u64) -> Result<PathBuf> {
 
 /// Host preparation of a rework. Clone Git runs only in AIDA's writable
 /// sandbox with the host identity; ordinary linked worktrees use host Git.
-/// The host never resolves a conflict: collect its paths and abort it.
+/// Native clones retain conflicts for working-tree-only resolution; the host
+/// journals the original paths before launching the lane. Linked worktrees
+/// retain their existing abort-and-merge workflow.
+// trace:BUG-2558 | ai:codex
 // trace:STORY-2475 | ai:codex
 pub(crate) fn prepare_rework_merge(
     main: &Path,
     tree: &Path,
     branch: &str,
     resume: bool,
+    host_staged: bool,
 ) -> Result<Vec<String>> {
     use std::ffi::{OsStr, OsString};
     let clone = host_recorded_clone(main, tree);
+    let retain_conflicts = host_staged && clone.is_some();
     let pinned = dir_identity(tree)?;
     let host_value = |key: &str| -> Result<String> {
         let mut cmd = git(main);
@@ -3043,9 +3050,17 @@ pub(crate) fn prepare_rework_merge(
         ensure_dir_identity(tree, pinned)?;
         if clone.is_some() {
             let args: Vec<&OsStr> = args.iter().map(OsStr::new).collect();
-            run_commit_sandboxed(tree, main, &args, &identity)
-                .map(|out| String::from_utf8_lossy(&out).trim().to_string())
-                .map_err(|why| anyhow::anyhow!("rework Git failed: {why}"))
+            let out = run_commit_sandboxed(tree, main, &args, &identity)
+                .map_err(|why| anyhow::anyhow!("rework Git failed: {why}"))?;
+            // Preserve NUL-delimited path bytes exactly; refuse non-UTF-8
+            // rather than journaling a lossy name that would evade the scan.
+            // trace:BUG-2558 | ai:codex
+            let out = String::from_utf8(out).context("rework Git returned non-UTF-8 evidence")?;
+            Ok(if args.first() == Some(&OsStr::new("diff")) {
+                out
+            } else {
+                out.trim().to_owned()
+            })
         } else {
             let mut cmd = aida_core::git_ops::host_git_command(tree);
             cmd.args([
@@ -3078,18 +3093,23 @@ pub(crate) fn prepare_rework_merge(
         "rework seat {} is not on the PR head branch {branch}; inspect `aida session leases --all` and restore the recorded branch through the appropriate seat recovery path before retrying",
         tree.display()
     );
-    anyhow::ensure!(
-        execute(&["rev-parse", "-q", "--verify", "MERGE_HEAD"]).is_err(),
-        "rework seat {} already has an unfinished merge; inspect and resolve or abort that merge through the appropriate seat recovery path before retrying; do not stage unresolved files",
-        tree.display()
-    );
+    // A resumed native lane continues the same host-staged merge without
+    // fetching or resetting its working-tree resolutions.
+    // trace:BUG-2558 | ai:codex
+    if let Ok(base) = execute(&["rev-parse", "-q", "--verify", "MERGE_HEAD"]) {
+        anyhow::ensure!(retain_conflicts && resume,
+            "rework seat {} already has an unfinished merge; resume its recorded repair or recover it on the host; do not stage unresolved files", tree.display());
+        let head = execute(&["rev-parse", "HEAD"])?;
+        return repair::paths(main, tree, branch, &head, &base);
+    }
     // Recovery depends on the host's recorded tree kind, never seat configuration.
     // trace:BUG-2504 | ai:codex
     let pending_resume = resume
         && execute(&["status", "--porcelain", "--untracked-files=all"])
             .is_ok_and(|status| !status.is_empty());
-    prepare_rework_merge_with(
+    let files = prepare_rework_merge_impl(
         &execute,
+        retain_conflicts,
         branch,
         resume,
         |tip| publish_rework_merge(main, tree, branch, tip),
@@ -3160,7 +3180,14 @@ pub(crate) fn prepare_rework_merge(
              confirmed conflicts can use a fresh `aida queue work SPEC --vendor claude --fresh --no-human`",
             tree.display()
         ))
-    })
+    })?;
+    if retain_conflicts && !files.is_empty() {
+        repair::record(main, tree, branch, pinned,
+            execute(&["rev-parse", "HEAD"])?,
+            execute(&["rev-parse", "--verify", "MERGE_HEAD"])?, files.clone())
+            .context("conflicted merge retained but repair journal write failed; no vendor launched; recover on the host")?;
+    }
+    Ok(files)
 }
 
 /// Publish the prepared tip using only the trusted host origin. Clone objects
@@ -3283,8 +3310,21 @@ fn merge_publication_head_with(
 // Keep launch admission and the Git operations together: any failed fetch,
 // ancestry check, merge or abort propagates before the vendor can start.
 // trace:STORY-2475 | ai:codex
+#[cfg(test)]
 fn prepare_rework_merge_with(
     execute: &dyn Fn(&[&str]) -> Result<String>,
+    branch: &str,
+    resume: bool,
+    publish: impl FnOnce(&str) -> Result<()>,
+    fetch_heads: impl FnOnce() -> Result<(String, String)>,
+) -> Result<Vec<String>> {
+    prepare_rework_merge_impl(execute, false, branch, resume, publish, fetch_heads)
+}
+
+// trace:BUG-2558 | ai:codex
+fn prepare_rework_merge_impl(
+    execute: &dyn Fn(&[&str]) -> Result<String>,
+    retain_conflicts: bool,
     branch: &str,
     resume: bool,
     publish: impl FnOnce(&str) -> Result<()>,
@@ -3321,7 +3361,7 @@ fn prepare_rework_merge_with(
         return Ok(Vec::new());
     }
     let before = execute(&["rev-parse", "HEAD"])?;
-    let files = finish_rework_merge(execute, &base)?;
+    let files = finish_rework_merge_impl(execute, &base, retain_conflicts)?;
     // Only publish the host-created merge of the fetched PR head and base.
     // Existing local lane commits retain the post-exit trailer and punt/hold
     // gates, including when this merge reports "Already up to date".
@@ -3340,15 +3380,36 @@ fn prepare_rework_merge_with(
 }
 
 // trace:STORY-2475 | ai:codex
+#[cfg(test)]
 fn finish_rework_merge(
     execute: &dyn Fn(&[&str]) -> Result<String>,
     base: &str,
+) -> Result<Vec<String>> {
+    finish_rework_merge_impl(execute, base, false)
+}
+
+// trace:BUG-2558 | ai:codex
+fn finish_rework_merge_impl(
+    execute: &dyn Fn(&[&str]) -> Result<String>,
+    base: &str,
+    retain_conflicts: bool,
 ) -> Result<Vec<String>> {
     match execute(&["merge", "--no-edit", "--no-verify", base]) {
         Ok(_) => Ok(Vec::new()),
         Err(why) => {
             let files = execute(&["diff", "--name-only", "--diff-filter=U", "-z"]);
-            // Conflict paths always require a successful abort. Even a
+            if retain_conflicts && files.as_ref().is_ok_and(|paths| !paths.is_empty()) {
+                anyhow::ensure!(
+                    execute(&["rev-parse", "--verify", "MERGE_HEAD"])? == base,
+                    "conflicted merge parent differs from pinned base; no vendor launched"
+                );
+                return Ok(files?
+                    .split('\0')
+                    .filter(|p| !p.is_empty())
+                    .map(str::to_string)
+                    .collect());
+            }
+            // Non-native conflicts require a successful abort. Even a
             // timed-out merge with no paths may have a MERGE_HEAD to clear.
             if files.as_ref().is_ok_and(|paths| !paths.is_empty())
                 || execute(&["rev-parse", "-q", "--verify", "MERGE_HEAD"]).is_ok()
@@ -4058,7 +4119,10 @@ mod rework_merge_tests {
 /// the working tree is untouched, and a failure after staging restores the
 /// index to the exact tree it held before (`git write-tree` snapshot, then
 /// `git read-tree`), so nothing is left staged, but only while HEAD has not
-/// moved ([`index_restore_allowed`]).
+/// moved ([`index_restore_allowed`]). Pending repair merges retain the staged
+/// index on failure instead: an unmerged index has no write-tree snapshot, and
+/// the host journal preserves the original conflict paths for a safe retry.
+// trace:BUG-2558 | ai:codex
 // trace:TASK-2712 | ai:claude
 pub(crate) fn commit_pending(
     main: &Path,
@@ -4120,23 +4184,46 @@ pub(crate) fn commit_pending(
     ];
     status_args.extend(pathspec);
     let status = probe_text(&status_args)?;
-    if status.is_empty() {
+    // A merge whose resolution equals HEAD can have an empty status and
+    // still needs its second parent committed.
+    // trace:BUG-2558 | ai:codex
+    let inspect = |program: &str, args: &[&std::ffi::OsStr]| {
+        run_sandboxed(clone, main, program, args, PROBE_OUTPUT_CAP)
+            .map_err(|why| anyhow::anyhow!("could not inspect pending merge: {why}"))
+    };
+    let pending = pending_merge_head(&inspect)?;
+    let merge_base = if pending.is_empty() {
+        None
+    } else {
+        Some(
+            String::from_utf8(pending)
+                .context("invalid pending merge parent")?
+                .trim()
+                .to_owned(),
+        )
+    };
+    let original_paths = merge_base
+        .as_ref()
+        .map(|base| {
+            let head = probe_text(&[os("rev-parse"), os("HEAD")])?;
+            repair::paths(main, clone, branch, &head, base).map(|paths| {
+                paths
+                    .into_iter()
+                    .map(std::ffi::OsString::from)
+                    .collect::<Vec<_>>()
+            })
+        })
+        .transpose()?;
+    if status.is_empty() && merge_base.is_none() {
         return Ok(None);
     }
     // The lane cannot update the index: resolved files still have unmerged
     // entries until this host stages them. Check working-tree bytes first,
     // including staged resolutions on a retry, before any index mutation.
     // trace:STORY-2710 | ai:codex
-    // No shared host journal is wired into publication yet. Refuse a pending
-    // merge rather than infer its original conflicts from a mutable index or
-    // changed paths. Ordinary publication needs no conflict evidence.
-    refuse_pending_conflict_markers(
-        &|program, args| {
-            run_sandboxed(clone, main, program, args, PROBE_OUTPUT_CAP)
-                .map_err(|why| anyhow::anyhow!("could not inspect conflict markers: {why}"))
-        },
-        None,
-    )?;
+    // Immutable paths from the host journal survive staged retries.
+    // trace:BUG-2558 | ai:codex
+    refuse_pending_conflict_markers(&inspect, original_paths.as_deref())?;
     let identity: [(&'static str, std::ffi::OsString); 4] = [
         ("GIT_AUTHOR_NAME", name.clone().into()),
         ("GIT_AUTHOR_EMAIL", email.clone().into()),
@@ -4158,15 +4245,26 @@ pub(crate) fn commit_pending(
     let head_before = probe_text(&[os("rev-parse"), os("--verify"), os("HEAD")]).ok();
     // The index as it is now, so a failure after staging can put it back.
     ensure_dir_identity(clone, pinned)?;
-    let index_tree = run_commit_sandboxed(clone, main, &[os("write-tree")], &identity)
-        .map(|out| String::from_utf8_lossy(&out).trim().to_string())
-        .map_err(|failure| recovery("snapshot the index before staging", failure))?;
+    // An unmerged index cannot be represented by write-tree. On failure
+    // retain its staged repair for retry; the journal remains authoritative.
+    // trace:BUG-2558 | ai:codex
+    let index_tree = if merge_base.is_some() {
+        None
+    } else {
+        Some(
+            run_commit_sandboxed(clone, main, &[os("write-tree")], &identity)
+                .map(|out| String::from_utf8_lossy(&out).trim().to_string())
+                .map_err(|failure| recovery("snapshot the index before staging", failure))?,
+        )
+    };
     anyhow::ensure!(
-        index_tree.len() >= 40 && index_tree.bytes().all(|b| b.is_ascii_hexdigit()),
-        "refusing to commit the seat's pending work: `git write-tree` in {} printed `{}`, not \
+        index_tree
+            .as_ref()
+            .is_none_or(|tree| tree.len() >= 40 && tree.bytes().all(|b| b.is_ascii_hexdigit())),
+        "refusing to commit the seat's pending work: `git write-tree` in {} printed `{:?}`, not \
          a tree id. Nothing was committed",
         clone.display(),
-        index_tree.escape_debug()
+        index_tree
     );
     let staged = (|| -> Result<String> {
         // Stage everything `.gitignore`/`info/exclude` allow. No explicit
@@ -4224,6 +4322,9 @@ pub(crate) fn commit_pending(
     match staged {
         Ok(tip) => Ok(Some(tip)),
         Err(error) => {
+            let Some(index_tree) = index_tree else {
+                return Err(error.context("pending merge and staged resolutions retained for host retry; repair journal preserved"));
+            };
             // Put the index back exactly, but only while HEAD has not moved:
             // after a commit that landed, the index matches the new HEAD and
             // rolling it back would stage a reversal. Never touch the tree.
@@ -4257,6 +4358,23 @@ pub(crate) fn commit_pending(
     }
 }
 
+// Quiet no-ref exit 1 means no pending merge; all other failures refuse.
+// trace:BUG-2558 | ai:codex
+fn pending_merge_head(
+    execute: &dyn Fn(&str, &[&std::ffi::OsStr]) -> Result<Vec<u8>>,
+) -> Result<Vec<u8>> {
+    use std::ffi::OsStr;
+    execute(
+        "sh",
+        &[
+            OsStr::new("-c"),
+            OsStr::new(
+                r#"git rev-parse --verify --quiet MERGE_HEAD; result=$?; if [ "$result" -eq 1 ]; then exit 0; else exit "$result"; fi"#,
+            ),
+        ],
+    )
+}
+
 /// Scan only the host-recorded original conflicts, including on staged retries.
 /// The caller must obtain these from the shared repair journal, never reconstruct
 /// them from changed paths or the current index. Missing evidence refuses pending
@@ -4274,20 +4392,12 @@ fn refuse_pending_conflict_markers(
     // A missing MERGE_HEAD is ordinary publication, not conflict repair. Keep
     // actual probe failures distinct from git's documented quiet no-ref exit.
     // trace:STORY-2710 | ai:codex
-    let pending = execute(
-        "sh",
-        &[
-            OsStr::new("-c"),
-            OsStr::new(
-                r#"git rev-parse --verify --quiet MERGE_HEAD; result=$?; if [ "$result" -eq 1 ]; then exit 0; else exit "$result"; fi"#,
-            ),
-        ],
-    )?;
+    let pending = pending_merge_head(execute)?;
     if pending.is_empty() {
         return Ok(());
     }
     let original = original_conflict_paths.context(
-        "refusing to publish a pending merge: host-recorded original conflict paths are unavailable; shared repair journal integration is required; nothing was staged or committed",
+        "refusing to publish a pending merge: host-recorded original conflict paths are unavailable; nothing was staged or committed",
     )?;
     anyhow::ensure!(
         !original.is_empty(),

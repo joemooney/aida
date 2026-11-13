@@ -228,6 +228,24 @@ pub(crate) fn conflict_task(conflict: &MainConflict) -> String {
     )
 }
 
+/// Native seats resolve bytes while the host owns the pending merge and Git.
+// trace:BUG-2558 | ai:codex
+pub(crate) fn host_staged_conflict_task(conflict: &MainConflict) -> String {
+    format!(
+        "FIRST TASK — resolve conflicts with {base} first: PR #{pr}. The host has retained \
+         MERGE_HEAD, the unmerged index and conflict markers. Resolve working-tree files only: \
+         {files}. Leave Git metadata read-only and all edits uncommitted. Do not fetch, merge, \
+         stage, commit or push. Run targeted tests through the lane job runner, then declare \
+         publication with `aida ship -m '<subject> (SPEC-ID)'` and exit. The host scans the \
+         original conflict paths, stages and records the merge, runs the fast gate and pushes \
+         through the existing publication vetoes. If sources require an advisor decision, \
+         run `aida punt`; do not union ratchet allowances or discard either side silently.",
+        base = conflict.base,
+        pr = conflict.pr,
+        files = conflict.files.join(", ")
+    )
+}
+
 fn comment_block(label: &str, comment: &aida_core::Comment, scope: &str) -> String {
     format!(
         "{label} ({} by {}) — {scope}:\n{}",

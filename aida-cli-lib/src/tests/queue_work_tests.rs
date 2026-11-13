@@ -4484,7 +4484,9 @@ fn bug_2553_conflicts_preserve_selected_vendor_for_fresh_and_resume() {
                     notified.set(true);
                     assert!(subject.contains("resolution"));
                     assert!(body.contains("src/conflict.rs"));
-                    assert!(body.contains("aborted"));
+                    // Clone repairs can retain the merge for host publication.
+                    // trace:BUG-2558 | ai:codex
+                    assert!(body.contains("conflicts with origin/main"));
                     assert!(body.contains(vendor.as_str()));
                     assert!(!body.contains("will not launch Codex"));
                     Ok(())
@@ -4638,11 +4640,13 @@ fn bug_2553_configured_vendor_survives_open_pr_rework_preparation() {
             let mut prompt = String::from("/aida-pickup STORY-2475");
             let mut model = Some("gpt-codex".to_string());
             let mailed = Cell::new(0);
-            let prepared = crate::seat_clone::prepare_rework_merge(&project, &seat, branch, false);
+            let prepared =
+                crate::seat_clone::prepare_rework_merge(&project, &seat, branch, false, true);
             let vendor = apply_rework_conflict_route(
                 &project,
                 prepared,
                 ReworkConflictLaunch {
+                    host_staged: false,
                     vendor: crate::session::resolve_enabled_headless_vendor(&project).unwrap(),
                     resume: false,
                     interactive,
