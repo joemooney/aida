@@ -1,6 +1,6 @@
 //! Operator emergency merge; protection restoration precedes all success reporting.
 // trace:STORY-2732 | ai:codex
-use crate::forge::emergency_land::GitHub;
+use crate::forge::{emergency_land::Client, ForgeKind};
 use anyhow::{bail, ensure, Context, Result};
 use serde_json::{json, Value};
 use std::io::Write;
@@ -9,7 +9,7 @@ use std::time::{Duration, Instant};
 
 #[derive(clap::Args, Debug)]
 pub struct EmergencyLandArgs {
-    /// Open GitHub PR to merge into the default branch.
+    /// Open PR or MR to merge into the default branch.
     pub n: u64,
     /// Maximum added plus deleted lines.
     #[arg(long, default_value_t = 200)]
@@ -31,7 +31,7 @@ pub(crate) trait Forge {
     fn lift(&mut self, scope: &str) -> Result<()>;
     fn restore_protection(&mut self, scope: &str) -> Result<()>;
     fn verify_protection(&mut self, scope: &str, backup: &Value) -> Result<()>;
-    fn recovery_command(&self, scope: &str) -> String;
+    fn recovery_command(&self, scope: &str, backup: &Value) -> String;
     fn merge_sha(&mut self, scope: &str, n: u64) -> Result<String>;
     fn merge(&mut self, n: u64, title: &str, head: &str) -> Result<()>;
 }
@@ -96,6 +96,7 @@ pub(crate) fn without_urls(mut value: Value) -> Value {
 struct Restore<'a, F: Forge> {
     forge: &'a mut F,
     endpoint: &'a str,
+    backup: &'a Value,
     armed: bool,
 }
 impl<F: Forge> Restore<'_, F> {
@@ -107,7 +108,7 @@ impl<F: Forge> Restore<'_, F> {
         Ok(())
     }
     fn command(&self) -> String {
-        self.forge.recovery_command(self.endpoint)
+        self.forge.recovery_command(self.endpoint, self.backup)
     }
 }
 impl<F: Forge> Drop for Restore<'_, F> {
@@ -122,7 +123,7 @@ impl<F: Forge> Drop for Restore<'_, F> {
     }
 }
 
-/// The finally boundary includes ambiguous DELETE failures and panics, not just merge errors.
+/// The finally boundary includes ambiguous policy-write failures and panics, not just merge errors.
 fn land<F: Forge>(
     forge: &mut F,
     args: &EmergencyLandArgs,
@@ -139,6 +140,7 @@ fn land<F: Forge>(
     let mut guard = Restore {
         forge,
         endpoint,
+        backup,
         armed: enabled,
     };
     let merged = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| -> Result<()> {
@@ -190,6 +192,7 @@ fn land<F: Forge>(
     Ok(sha)
 }
 
+// trace:TASK-3788 | ai:codex
 pub(crate) fn run(args: &EmergencyLandArgs) -> Result<()> {
     let env = aida_core::exec_context::Environment::capture();
     let role = crate::role::effective_role();
@@ -205,49 +208,33 @@ pub(crate) fn run(args: &EmergencyLandArgs) -> Result<()> {
         aida_core::seat_clone_detect::seat_clone_root(&root).is_none(),
         "emergency-land is never callable from a lane clone; run from the operator checkout"
     );
-    ensure!(
-        crate::forge::resolve_forge_kind(&root) == crate::forge::ForgeKind::GitHub,
-        "emergency-land supports GitHub only"
-    );
-    let mut forge = GitHub::new(root.clone())?;
-    let repo = forge.json(&["repo", "view", "--json", "nameWithOwner,defaultBranchRef"])?;
-    let name = repo["nameWithOwner"]
-        .as_str()
-        .context("missing repository")?;
-    let base = repo["defaultBranchRef"]["name"]
-        .as_str()
-        .context("missing default branch")?;
-    let mut pr = forge.json(&["pr", "view", &args.n.to_string(), "--json", "state,baseRefName,mergeable,mergeStateStatus,isDraft,additions,deletions,changedFiles,headRefOid,title"])?;
-    preconditions(args, human, &pr, base)?;
-    let checks = forge.command(&[
-        "pr",
-        "checks",
-        &args.n.to_string(),
-        "--required",
-        "--json",
-        "name,state",
-    ]);
-    // `gh pr checks` exits 8 for pending and 1 for failed checks. Use the API
-    // protection contexts + head check runs instead of dropping that evidence.
-    let endpoint = format!("repos/{name}/branches/{}/protection", encode(base));
-    let backup = forge.api("GET", &endpoint)?;
-    ensure!(
-        backup["enforce_admins"]["enabled"].is_boolean(),
-        "missing admin enforcement evidence"
-    );
-    pr["required_checks"] = match checks {
-        Ok(text) => serde_json::from_str(&text)?,
-        Err(_) => required_checks(&mut forge, name, &pr, &backup)?,
+    let kind = crate::forge::resolve_forge_kind(&root);
+    crate::forge::emergency_land::supported(kind)?;
+    let mut forge = Client::new(root.clone(), kind)?;
+    let (pr, endpoint, backup, base) = if kind == ForgeKind::GitLab {
+        let (pr, endpoint, backup, base) = forge.prepare_gitlab(args.n)?;
+        preconditions(args, human, &pr, &base)?;
+        (pr, endpoint, backup, base)
+    } else {
+        let (pr, endpoint, backup) = prepare_github(&mut forge, args, human)?;
+        let base = pr["baseRefName"].as_str().unwrap().to_owned();
+        (pr, endpoint, backup, base)
     };
-    println!("Preconditions passed for PR {}. Plan: GET protection; save backup; DELETE enforce_admins only if enabled; gh pr merge --squash --admin; ALWAYS restore; GET and compare protection; append audit and spec comment; {}.", args.n, if args.no_watch { "skip watch" } else { "watch main squash CI for up to 30 minutes" });
+    println!("Preconditions passed for change {}. Plan: save policy backup; {}; ALWAYS restore and verify; append audit and spec comment; {}.", args.n,
+        if kind == ForgeKind::GitLab { "PUT pipeline requirement off only if enabled; GitLab merge API with squash and auto-merge disabled" } else { "DELETE enforce_admins only if enabled; gh pr merge --squash --admin" },
+        if args.no_watch { "skip watch" } else { "watch merge-commit CI for up to 30 minutes" });
     if args.dry_run {
         println!("Dry run: no API or local writes.");
         return Ok(());
     }
-    let operator = forge.api("GET", "user")?["login"]
-        .as_str()
-        .context("missing operator login")?
-        .to_owned();
+    let operator = forge.api("GET", "user")?[if kind == ForgeKind::GitLab {
+        "username"
+    } else {
+        "login"
+    }]
+    .as_str()
+    .context("missing operator login")?
+    .to_owned();
     let dir = root.join(".aida/emergency-land");
     std::fs::create_dir_all(&dir)?;
     let path = dir.join(format!(
@@ -311,12 +298,49 @@ pub(crate) fn run(args: &EmergencyLandArgs) -> Result<()> {
         bail!("interrupted; protection restored; inspect merge {sha}");
     }
     if !args.no_watch {
-        watch(&forge, &sha, &mut signals)?;
+        watch(&forge, &endpoint, &base, &sha, &mut signals)?;
     }
     Ok(())
 }
 
-fn encode(s: &str) -> String {
+fn prepare_github(
+    forge: &mut Client,
+    args: &EmergencyLandArgs,
+    human: bool,
+) -> Result<(Value, String, Value)> {
+    let repo = forge.json(&["repo", "view", "--json", "nameWithOwner,defaultBranchRef"])?;
+    let name = repo["nameWithOwner"]
+        .as_str()
+        .context("missing repository")?;
+    let base = repo["defaultBranchRef"]["name"]
+        .as_str()
+        .context("missing default branch")?;
+    let mut pr = forge.json(&["pr", "view", &args.n.to_string(), "--json", "state,baseRefName,mergeable,mergeStateStatus,isDraft,additions,deletions,changedFiles,headRefOid,title"])?;
+    preconditions(args, human, &pr, base)?;
+    let checks = forge.command(&[
+        "pr",
+        "checks",
+        &args.n.to_string(),
+        "--required",
+        "--json",
+        "name,state",
+    ]);
+    // `gh pr checks` exits 8 for pending and 1 for failed checks. Use the API
+    // protection contexts + head check runs instead of dropping that evidence.
+    let endpoint = format!("repos/{name}/branches/{}/protection", encode(base));
+    let backup = forge.api("GET", &endpoint)?;
+    ensure!(
+        backup["enforce_admins"]["enabled"].is_boolean(),
+        "missing admin enforcement evidence"
+    );
+    pr["required_checks"] = match checks {
+        Ok(text) => serde_json::from_str(&text)?,
+        Err(_) => required_checks(forge, name, &pr, &backup)?,
+    };
+    Ok((pr, endpoint, backup))
+}
+
+pub(crate) fn encode(s: &str) -> String {
     s.bytes()
         .map(|b| {
             if b.is_ascii_alphanumeric() || b"-_.~".contains(&b) {
@@ -359,8 +383,29 @@ fn required_checks(
     Ok(json!(rows))
 }
 
+// trace:TASK-3788 | ai:codex
+pub(crate) fn gitlab_revert_command(commit: &Value, sha: &str) -> Result<String> {
+    ensure!(commit["id"] == sha, "commit does not match merge SHA");
+    let parents = commit["parent_ids"]
+        .as_array()
+        .context("missing commit parents")?;
+    ensure!(
+        !parents.is_empty()
+            && parents
+                .iter()
+                .all(|p| p.as_str().is_some_and(|s| !s.is_empty())),
+        "invalid commit parents"
+    );
+    Ok(format!(
+        "git revert {}{sha}",
+        if parents.len() > 1 { "-m 1 " } else { "" }
+    ))
+}
+
 fn watch(
-    forge: &GitHub,
+    forge: &Client,
+    scope: &str,
+    base: &str,
     sha: &str,
     signals: &mut crate::forwarded_signals::Forwarding,
 ) -> Result<()> {
@@ -374,23 +419,44 @@ fn watch(
             !remaining.is_zero(),
             "CI watch timed out after 30 minutes; inspect merge {sha}"
         );
-        let runs: Value = serde_json::from_str(&forge.command_with_budget(
-            &[
-                "run",
-                "list",
-                "--commit",
-                sha,
-                "--limit",
-                "100",
-                "--json",
-                "status,conclusion",
-            ],
-            remaining,
-        )?)?;
+        let runs: Value = if forge.kind == ForgeKind::GitLab {
+            // glab ci status is branch-scoped. Query pipelines by exact merge SHA
+            // so a newer default-branch pipeline cannot substitute its evidence.
+            let rows: Value = serde_json::from_str(&forge.command_with_budget(
+                &[
+                    "api",
+                    "-X",
+                    "GET",
+                    &format!(
+                        "{scope}/pipelines?sha={}&ref={}&per_page=100",
+                        encode(sha),
+                        encode(base)
+                    ),
+                ],
+                remaining,
+            )?)?;
+            gitlab_ci_runs(&rows, sha)?
+        } else {
+            serde_json::from_str(&forge.command_with_budget(
+                &[
+                    "run",
+                    "list",
+                    "--commit",
+                    sha,
+                    "--limit",
+                    "100",
+                    "--json",
+                    "status,conclusion",
+                ],
+                remaining,
+            )?)?
+        };
         let runs = runs.as_array().context("invalid CI run list")?;
         let state = classify_ci_runs(runs);
         if state == CiState::Red {
-            bail!("Post-merge CI is red. Revert through a new PR: git fetch origin && git switch -c revert-emergency-{} origin/HEAD && git revert {} && git push -u origin HEAD && gh pr create --fill; then aida pr emergency-land <REVERT-PR>. No automatic revert was made.", &sha[..sha.len().min(12)], sha);
+            let revert = forge.revert_command(scope, sha)
+                .context("Post-merge CI is red; cannot determine revert topology; inspect the merge commit parents")?;
+            bail!("Post-merge CI is red. Revert through a new PR: git fetch origin && git switch -c revert-emergency-{} origin/HEAD && {} && git push -u origin HEAD && {}; then aida pr emergency-land <REVERT-PR>. No automatic revert was made.", &sha[..sha.len().min(12)], revert, if forge.kind == ForgeKind::GitLab { "glab mr create --fill" } else { "gh pr create --fill" });
         }
         if state == CiState::Green {
             println!("Merge-commit CI completed successfully.");
@@ -407,6 +473,28 @@ fn watch(
             Duration::from_secs(10).min(deadline.saturating_duration_since(Instant::now())),
         );
     }
+}
+
+// trace:TASK-3788 | ai:codex
+fn gitlab_ci_runs(rows: &Value, sha: &str) -> Result<Value> {
+    let mut runs = Vec::new();
+    for row in rows.as_array().context("invalid GitLab pipeline list")? {
+        ensure!(row["sha"] == sha, "pipeline does not match merge commit");
+        let status = row["status"].as_str().context("missing pipeline status")?;
+        let (state, conclusion) = match status {
+            "success" => ("completed", "success"),
+            "failed" | "canceled" | "skipped" | "manual" => ("completed", "failure"),
+            "created"
+            | "waiting_for_resource"
+            | "preparing"
+            | "pending"
+            | "running"
+            | "scheduled" => ("in_progress", ""),
+            _ => bail!("unknown GitLab pipeline status: {status}"),
+        };
+        runs.push(json!({"status":state, "conclusion":conclusion}));
+    }
+    Ok(json!(runs))
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -478,6 +566,475 @@ mod tests {
             CiState::Red
         );
     }
+    // Exercise the production GitLab adapter through a fake command boundary.
+    // trace:TASK-3788 | ai:codex
+    #[derive(Default)]
+    struct GitLabState {
+        calls: Vec<Vec<String>>,
+        enabled: bool,
+        nullable_skipped: bool,
+        armed_pipeline: Option<&'static str>,
+        merged: bool,
+        fail_merge: bool,
+        panic_merge: bool,
+        fail_lift: bool,
+        fail_restore: bool,
+        mismatch: bool,
+        fail_verify: bool,
+    }
+    fn gitlab_fake(state: GitLabState) -> (Client, std::rc::Rc<std::cell::RefCell<GitLabState>>) {
+        let state = std::rc::Rc::new(std::cell::RefCell::new(state));
+        let shared = state.clone();
+        let client = Client::fake(ForgeKind::GitLab, move |args| {
+            let mut s = shared.borrow_mut();
+            s.calls.push(args.iter().map(|s| s.to_string()).collect());
+            let value = match args {
+                ["api", "-X", "PUT", "projects/group%2Frepo", "-f", field] => {
+                    if *field == "only_allow_merge_if_pipeline_succeeds=false" {
+                        s.enabled = false;
+                        ensure!(!s.fail_lift, "lost PUT response");
+                    } else {
+                        assert_eq!(*field, "only_allow_merge_if_pipeline_succeeds=true");
+                        ensure!(!s.fail_restore, "restore failed");
+                        s.enabled = true;
+                    }
+                    Value::Null
+                }
+                ["api", "-X", "GET", "projects/:id"] => {
+                    json!({"id":42, "path_with_namespace":"group/repo", "default_branch":"main",
+                        "only_allow_merge_if_pipeline_succeeds":s.enabled,
+                        "allow_merge_on_skipped_pipeline":if s.nullable_skipped { Value::Null } else { json!(false) },
+                        "only_allow_merge_if_all_discussions_are_resolved":true})
+                }
+                ["api", "-X", "GET", "projects/group%2Frepo/merge_requests/7/changes"] => {
+                    json!({"sha":"head", "changes_count":"1", "overflow":false,
+                        "changes":[{"diff":"@@ -1 +1 @@\n-old\n+new\n"}]})
+                }
+                ["api", "-X", "GET", "projects/group%2Frepo"] => {
+                    ensure!(!s.fail_verify, "verify unavailable");
+                    json!({"only_allow_merge_if_pipeline_succeeds":s.enabled,
+                        "allow_merge_on_skipped_pipeline":if s.nullable_skipped { Value::Null } else { json!(false) },
+                        "only_allow_merge_if_all_discussions_are_resolved":!s.mismatch})
+                }
+                ["api", "-X", "GET", "projects/group%2Frepo/merge_requests/7"] => {
+                    json!({"state":if s.merged { "merged" } else { "opened" },
+                        "merge_commit_sha":if s.merged { json!("merge123") } else { Value::Null },
+                        "squash_commit_sha":if s.merged { json!("squash123") } else { Value::Null },
+                        "merge_when_pipeline_succeeds":s.armed_pipeline.is_some(),
+                        "head_pipeline":{"status":s.armed_pipeline},
+                        "target_project_id":42,"target_branch":"main","changes_count":"1",
+                        "detailed_merge_status":if s.armed_pipeline == Some("running") { "ci_still_running" } else { "ci_must_pass" },
+                        "has_conflicts":false,"draft":false,"sha":"head","diff_refs":{"head_sha":"head"},
+                        "title":pr()["title"]})
+                }
+                ["api", "-X", "PUT", "projects/:id/merge_requests/7/merge", "-f", "squash=true", "-f", "auto_merge=false", "-f", "merge_when_pipeline_succeeds=false", "-f", "sha=head", "-f", message] =>
+                {
+                    assert_eq!(
+                        *message,
+                        format!("squash_commit_message={}", pr()["title"].as_str().unwrap())
+                    );
+                    assert!(
+                        !s.enabled,
+                        "pipeline-success policy must be off during merge"
+                    );
+                    assert!(!s.panic_merge, "merge panic");
+                    ensure!(!s.fail_merge, "GitLab: approval required");
+                    s.merged = true;
+                    s.armed_pipeline = None;
+                    Value::Null
+                }
+                _ => panic!("unexpected glab command: {args:?}"),
+            };
+            Ok(value.to_string())
+        });
+        (client, state)
+    }
+    fn gitlab_exercise(
+        state: GitLabState,
+        args: &EmergencyLandArgs,
+        human: bool,
+        pr: &Value,
+    ) -> (Result<String>, std::rc::Rc<std::cell::RefCell<GitLabState>>) {
+        let backup = json!({"only_allow_merge_if_pipeline_succeeds":state.enabled,
+            "allow_merge_on_skipped_pipeline":if state.nullable_skipped { Value::Null } else { json!(false) },
+            "only_allow_merge_if_all_discussions_are_resolved":true});
+        let armed = state.armed_pipeline.is_some();
+        let (mut client, shared) = gitlab_fake(state);
+        // Already-armed cases go through the actual adapter preparation too,
+        // with the server reporting an opened MR behind running or failed CI.
+        let prepared;
+        let pr = if armed {
+            let (change, scope, saved, base) = client.prepare_gitlab(args.n).unwrap();
+            assert_eq!(scope, "projects/group%2Frepo");
+            assert_eq!(saved, backup);
+            assert_eq!(base, "main");
+            prepared = change;
+            &prepared
+        } else {
+            pr
+        };
+        let dir = tempfile::tempdir().unwrap();
+        let result = preconditions(args, human, pr, "main").and_then(|()| {
+            land(
+                &mut client,
+                args,
+                pr,
+                "projects/group%2Frepo",
+                &backup,
+                &dir.path().join("audit.jsonl"),
+                "operator",
+            )
+        });
+        if !shared.borrow().calls.is_empty() {
+            let audit: Value = serde_json::from_str(
+                std::fs::read_to_string(dir.path().join("audit.jsonl"))
+                    .unwrap()
+                    .trim(),
+            )
+            .unwrap();
+            assert_eq!(
+                audit["merge_sha"],
+                if shared.borrow().merged {
+                    "merge123"
+                } else {
+                    ""
+                }
+            );
+            assert_eq!(audit["skipped_required_checks"], pr["required_checks"]);
+        } else {
+            assert!(!dir.path().join("audit.jsonl").exists());
+        }
+        (result, shared)
+    }
+    #[test]
+    fn pr_emergency_land_gitlab_happy_and_already_off() {
+        for enabled in [true, false] {
+            let (result, state) = gitlab_exercise(
+                GitLabState {
+                    enabled,
+                    ..Default::default()
+                },
+                &args(),
+                true,
+                &pr(),
+            );
+            assert_eq!(result.unwrap(), "merge123");
+            let state = state.borrow();
+            assert_eq!(state.enabled, enabled);
+            let writes: Vec<_> = state
+                .calls
+                .iter()
+                .filter(|c| c.get(2).is_some_and(|a| a == "PUT") && c[3] == "projects/group%2Frepo")
+                .collect();
+            assert_eq!(writes.len(), if enabled { 2 } else { 0 });
+            if enabled {
+                assert_eq!(
+                    state.calls[0][5],
+                    "only_allow_merge_if_pipeline_succeeds=false"
+                );
+                assert_eq!(
+                    state.calls[2][5],
+                    "only_allow_merge_if_pipeline_succeeds=true"
+                );
+            }
+        }
+    }
+    // trace:TASK-3788 | ai:codex
+    #[test]
+    fn pr_emergency_land_gitlab_nullable_policy_and_armed_pipeline() {
+        for enabled in [true, false] {
+            for pipeline in ["running", "failed"] {
+                for fail_merge in [false, true] {
+                    let (result, shared) = gitlab_exercise(
+                        GitLabState {
+                            enabled,
+                            nullable_skipped: true,
+                            armed_pipeline: Some(pipeline),
+                            fail_merge,
+                            ..Default::default()
+                        },
+                        &args(),
+                        true,
+                        &pr(),
+                    );
+                    assert_eq!(result.is_ok(), !fail_merge);
+                    let state = shared.borrow();
+                    assert_eq!(state.enabled, enabled);
+                    assert_eq!(
+                        state.armed_pipeline,
+                        if fail_merge { Some(pipeline) } else { None }
+                    );
+                    let writes: Vec<_> = state
+                        .calls
+                        .iter()
+                        .filter(|c| c[2] == "PUT" && c[3] == "projects/group%2Frepo")
+                        .collect();
+                    assert_eq!(writes.len(), if enabled { 2 } else { 0 });
+                    assert!(state.calls.iter().any(|c| c[3].ends_with("/merge")));
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn pr_emergency_land_gitlab_policy_rejects_missing_invalid_and_changed_null() {
+        use crate::forge::emergency_land::policy;
+        let valid = json!({"only_allow_merge_if_pipeline_succeeds":false,
+            "allow_merge_on_skipped_pipeline":null,
+            "only_allow_merge_if_all_discussions_are_resolved":true});
+        assert_eq!(policy(&valid).unwrap(), valid);
+        for field in valid.as_object().unwrap().keys() {
+            let mut missing = valid.clone();
+            missing.as_object_mut().unwrap().remove(field);
+            assert!(policy(&missing).is_err());
+            for value in [json!("false"), json!(0), json!([])] {
+                let mut invalid = valid.clone();
+                invalid[field] = value;
+                assert!(policy(&invalid).is_err());
+            }
+            if field != "allow_merge_on_skipped_pipeline" {
+                let mut invalid = valid.clone();
+                invalid[field] = Value::Null;
+                assert!(policy(&invalid).is_err());
+            }
+        }
+        let (mut client, _) = gitlab_fake(GitLabState::default());
+        assert!(client
+            .verify_protection("projects/group%2Frepo", &valid)
+            .is_err());
+    }
+
+    #[test]
+    fn pr_emergency_land_gitlab_revert_uses_actual_commit_parents() {
+        for (parents, expected) in [
+            (json!(["base", "squash"]), "git revert -m 1 abc123"),
+            (json!(["base"]), "git revert abc123"),
+        ] {
+            let client = Client::fake(ForgeKind::GitLab, move |args| {
+                assert_eq!(
+                    args,
+                    [
+                        "api",
+                        "-X",
+                        "GET",
+                        "projects/group%2Frepo/repository/commits/abc123"
+                    ]
+                );
+                Ok(json!({"id":"abc123", "parent_ids":parents}).to_string())
+            });
+            assert_eq!(
+                client
+                    .revert_command("projects/group%2Frepo", "abc123")
+                    .unwrap(),
+                expected
+            );
+        }
+        for commit in [
+            json!({"id":"abc123"}),
+            json!({"id":"other", "parent_ids":["base"]}),
+            json!({"id":"abc123", "parent_ids":[]}),
+            json!({"id":"abc123", "parent_ids":[null]}),
+        ] {
+            assert!(gitlab_revert_command(&commit, "abc123").is_err());
+        }
+    }
+
+    #[test]
+    fn pr_emergency_land_gitlab_merge_failure_panic_and_ambiguous_lift_restore() {
+        for mode in 0..3 {
+            let (result, state) = gitlab_exercise(
+                GitLabState {
+                    enabled: true,
+                    fail_merge: mode == 0,
+                    panic_merge: mode == 1,
+                    fail_lift: mode == 2,
+                    ..Default::default()
+                },
+                &args(),
+                true,
+                &pr(),
+            );
+            assert!(result.is_err());
+            if mode == 0 {
+                assert!(result
+                    .unwrap_err()
+                    .to_string()
+                    .contains("approval required"));
+            }
+            let state = state.borrow();
+            assert!(state.enabled);
+            assert!(state.calls.iter().any(|c| c
+                .last()
+                .is_some_and(|s| s == "only_allow_merge_if_pipeline_succeeds=true")));
+            if mode == 2 {
+                assert!(!state.calls.iter().any(|c| c[3].ends_with("/merge")));
+            }
+        }
+    }
+    #[test]
+    fn pr_emergency_land_gitlab_restore_and_verify_failures_show_recovery() {
+        for mode in 0..3 {
+            let (result, _) = gitlab_exercise(
+                GitLabState {
+                    enabled: true,
+                    fail_restore: mode == 0,
+                    mismatch: mode == 1,
+                    fail_verify: mode == 2,
+                    ..Default::default()
+                },
+                &args(),
+                true,
+                &pr(),
+            );
+            assert!(result.unwrap_err().to_string().contains(
+                "glab api -X PUT projects/group%2Frepo -f only_allow_merge_if_pipeline_succeeds=true"));
+        }
+    }
+    #[test]
+    fn pr_emergency_land_gitlab_disabled_mismatch_recovery_preserves_original_setting() {
+        let (result, state) = gitlab_exercise(
+            GitLabState {
+                mismatch: true,
+                ..Default::default()
+            },
+            &args(),
+            true,
+            &pr(),
+        );
+        assert!(result.unwrap_err().to_string().contains(
+            "glab api -X PUT projects/group%2Frepo -f only_allow_merge_if_pipeline_succeeds=false"
+        ));
+        assert!(!state
+            .borrow()
+            .calls
+            .iter()
+            .any(|c| c.get(2).is_some_and(|s| s == "PUT") && c[3] == "projects/group%2Frepo"));
+    }
+    #[test]
+    fn pr_emergency_land_gitlab_refusals_and_dry_run_make_no_calls() {
+        let mut cases = vec![(false, pr())];
+        for (field, value) in [
+            ("state", json!("CLOSED")),
+            ("baseRefName", json!("other")),
+            ("mergeable", json!("UNKNOWN")),
+            ("isDraft", json!(true)),
+            ("additions", json!(201)),
+            ("changedFiles", json!(11)),
+        ] {
+            let mut p = pr();
+            p[field] = value;
+            cases.push((true, p));
+        }
+        for (human, p) in cases {
+            let (result, state) = gitlab_exercise(GitLabState::default(), &args(), human, &p);
+            assert!(result.is_err());
+            assert!(state.borrow().calls.is_empty());
+        }
+        let mut a = args();
+        a.dry_run = true;
+        let (result, state) = gitlab_exercise(
+            GitLabState {
+                enabled: true,
+                ..Default::default()
+            },
+            &a,
+            true,
+            &pr(),
+        );
+        assert!(result.is_ok());
+        assert!(state.borrow().calls.is_empty());
+        assert!(crate::forge::emergency_land::supported(ForgeKind::None)
+            .unwrap_err()
+            .to_string()
+            .contains("no forge-side protection to lift; push the fix normally"));
+    }
+    #[test]
+    fn pr_emergency_land_gitlab_normalization_and_ci_are_fail_closed() {
+        use crate::forge::emergency_land::{gitlab_change, policy};
+        let mr = json!({"overflow":false,"changes_count":"1",
+            "changes":[{"diff":"@@ -1 +1 @@\n-old\n+new\n"}],
+            "state":"opened","target_branch":"main","detailed_merge_status":"ci_must_pass",
+            "has_conflicts":false,"draft":false,"sha":"head","diff_refs":{"head_sha":"head"},"title":"fix","head_pipeline":{"status":"running"}});
+        // The full preparation uses only read APIs, encodes nested project paths
+        // and retains only the three policy fields.
+        for enabled in [true, false] {
+            for skipped in [json!(false), Value::Null] {
+                let expected_skipped = skipped.clone();
+                let observed = mr.clone();
+                let mut client = Client::fake(ForgeKind::GitLab, move |args| {
+                    Ok(match args {
+                ["api", "-X", "GET", "projects/:id"] => json!({
+                    "id":42, "path_with_namespace":"group/sub/repo", "default_branch":"main",
+                    "only_allow_merge_if_pipeline_succeeds":enabled,
+                    "allow_merge_on_skipped_pipeline":skipped,
+                    "only_allow_merge_if_all_discussions_are_resolved":true, "unrelated":"ignored"}),
+                ["api", "-X", "GET", "projects/group%2Fsub%2Frepo/merge_requests/7"]
+                | ["api", "-X", "GET", "projects/group%2Fsub%2Frepo/merge_requests/7/changes"] => {
+                    let mut response = observed.clone(); response["target_project_id"] = json!(42); response
+                }
+                _ => panic!("unexpected preparation command: {args:?}"),
+            }.to_string())
+                });
+                let (prepared, scope, backup, base) = client.prepare_gitlab(7).unwrap();
+                assert_eq!(scope, "projects/group%2Fsub%2Frepo");
+                assert_eq!(base, "main");
+                assert_eq!(backup.as_object().unwrap().len(), 3);
+                assert_eq!(prepared, gitlab_change(&mr).unwrap());
+                assert_eq!(backup["allow_merge_on_skipped_pipeline"], expected_skipped);
+                assert_eq!(client.needs_lift(&backup).unwrap(), enabled);
+            }
+        }
+        let normalized = gitlab_change(&mr).unwrap();
+        preconditions(&args(), true, &normalized, "main").unwrap();
+        assert_eq!(normalized["additions"], 1);
+        assert_eq!(normalized["deletions"], 1);
+        for (key, value) in [
+            ("overflow", json!(true)),
+            ("overflow", Value::Null),
+            ("changes_count", json!("1000+")),
+            ("changes_count", json!("2")),
+        ] {
+            let mut bad = mr.clone();
+            bad[key] = value;
+            assert!(gitlab_change(&bad).is_err());
+        }
+        for (key, value) in [
+            ("has_conflicts", json!(true)),
+            ("detailed_merge_status", json!("checking")),
+            ("detailed_merge_status", json!("future_state")),
+        ] {
+            let mut bad = mr.clone();
+            bad[key] = value;
+            assert!(preconditions(&args(), true, &gitlab_change(&bad).unwrap(), "main").is_err());
+        }
+        let mut stale = mr.clone();
+        stale["diff_refs"]["head_sha"] = json!("old");
+        assert!(gitlab_change(&stale).is_err());
+        assert!(policy(&json!({"only_allow_merge_if_pipeline_succeeds":true})).is_err());
+        assert_eq!(
+            classify_ci_runs(
+                gitlab_ci_runs(&json!([]), "abc123")
+                    .unwrap()
+                    .as_array()
+                    .unwrap()
+            ),
+            CiState::Pending
+        );
+        for (status, expected) in [
+            ("success", CiState::Green),
+            ("running", CiState::Pending),
+            ("failed", CiState::Red),
+            ("canceled", CiState::Red),
+            ("manual", CiState::Red),
+        ] {
+            let runs =
+                gitlab_ci_runs(&json!([{"sha":"abc123","status":status}]), "abc123").unwrap();
+            assert_eq!(classify_ci_runs(runs.as_array().unwrap()), expected);
+        }
+        assert!(gitlab_ci_runs(&json!([{"sha":"other","status":"success"}]), "abc123").is_err());
+        assert!(gitlab_ci_runs(&json!([{"sha":"abc123","status":"future"}]), "abc123").is_err());
+    }
+
     #[derive(Default)]
     struct Fake {
         calls: Vec<String>,
@@ -530,7 +1087,7 @@ mod tests {
             );
             Ok(())
         }
-        fn recovery_command(&self, scope: &str) -> String {
+        fn recovery_command(&self, scope: &str, _: &Value) -> String {
             format!("gh api -X POST {scope}/enforce_admins")
         }
         fn merge_sha(&mut self, _: &str, n: u64) -> Result<String> {

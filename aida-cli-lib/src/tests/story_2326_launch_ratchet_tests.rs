@@ -13,7 +13,11 @@ use std::path::{Path, PathBuf};
 const CRATES: &[&str] = &["aida-mcp", "aida-core", "aida-cli-lib", "aida-tui"];
 
 /// Modules that are the launcher itself.
-const LAUNCHER: &[&str] = &["aida-cli-lib/src/launch/", "aida-core/src/launch_policy.rs"];
+const LAUNCHER: &[&str] = &[
+    "aida-cli-lib/src/launch/",
+    "aida-cli-lib/src/vendors/profile.rs",
+    "aida-core/src/launch_policy.rs",
+];
 
 /// (file, markers, why it is not converted yet). Exact counts; the total
 /// may only fall (see [`CEILING`]).
@@ -27,7 +31,7 @@ const LEDGER: &[(&str, usize, &str)] = &[
     ("aida-cli-lib/src/agent_launch.rs", 6, "slice C: Codex grant/finalize writes; slice D: the harness version probe"),
     ("aida-cli-lib/src/agent_registry.rs", 2, "not a vendor child: terminal title restore and probe"),
     ("aida-cli-lib/src/claude_agents.rs", 1, "slice D: vendor query (agents list)"),
-    ("aida-cli-lib/src/codex_tool_env.rs", 2, "Codex probe and cfg(test) tool shell constructor; finalization moved into launch/profile.rs"),
+    ("aida-cli-lib/src/codex_tool_env.rs", 2, "Codex probe and cfg(test) tool shell constructor; finalization moved into vendors/profile.rs"),
     ("aida-cli-lib/src/compete_cmd.rs", 2, "slice C: remaining compete grant/finalize markers (vendor construction migrated in B)"),
     ("aida-cli-lib/src/containment/supervisor.rs", 3, "STORY-2238: the containment supervisor, a permitted constructor module"),
     ("aida-cli-lib/src/criteria_red_run.rs", 1, "generic helper: runs a criteria command"),
@@ -46,7 +50,7 @@ const LEDGER: &[(&str, usize, &str)] = &[
     ("aida-cli-lib/src/kernel.rs", 2, "not a vendor child: gh binary probe"),
     ("aida-cli-lib/src/lane_env.rs", 1, "the in-process lane seat correction (Q2), not a spawn"),
     ("aida-cli-lib/src/lane_job.rs", 1, "not a vendor child: BUG-2383's sandboxed lane job runner (a cargo job, from main)"),
-    ("aida-cli-lib/src/lib_part5.rs", 1, "slice D: vendor adapter command"),
+    ("aida-cli-lib/src/review_commands.rs", 1, "slice D: vendor adapter command"),
     ("aida-cli-lib/src/mail_wake.rs", 1, "not a vendor child: the mail-wake helper binary"),
     ("aida-cli-lib/src/mailbox_wake_run.rs", 1, "slice C: Codex thread submit"),
     ("aida-cli-lib/src/mandate_drive.rs", 1, "generic helper: scrubbed_command"),
@@ -250,9 +254,9 @@ const NON_VENDOR_SPELLINGS: &[&str] = &[
     "pr_ship_post_merge_aida_exe",
     "resolve_aida_exe",
     "self.aida_exe",
-    // The emergency-land GitHub port's `gh`, resolved by
-    // crate::resolve_forge_cli(ForgeKind::GitHub). trace:STORY-2732 | ai:claude
-    "self.gh",
+    // Emergency-land's gh/glab, resolved only by crate::resolve_forge_cli.
+    // trace:TASK-3788 | ai:codex
+    "self.forge_cli",
     "std::env::current_exe",
 ];
 
@@ -530,7 +534,7 @@ fn story_2326_profile_and_grant_issuance_have_one_owner() {
             continue;
         }
         let src = production(&std::fs::read_to_string(&file).unwrap());
-        if rel != "launch/profile.rs" {
+        if rel != "vendors/profile.rs" {
             assert!(
                 !src.contains("fn prepare_launch("),
                 "private profile finalizer escaped into {rel}"
@@ -551,7 +555,7 @@ fn story_2326_profile_and_grant_issuance_have_one_owner() {
             "legacy launch issuer in {rel}"
         );
     }
-    let profile = std::fs::read_to_string(root.join("launch/profile.rs")).unwrap();
+    let profile = std::fs::read_to_string(root.join("vendors/profile.rs")).unwrap();
     assert!(profile.contains("fn prepare_launch("));
     assert!(!profile.contains("pub(crate) fn prepare_launch("));
 }
