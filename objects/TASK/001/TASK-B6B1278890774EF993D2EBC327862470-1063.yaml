@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-11T12:17:13.260009028Z
-modified_at: 2026-11-13T13:36:47.239943036Z
+modified_at: 2026-11-13T13:52:44.058981166Z
 req_type: Task
 relationships:
 - rel_type: BlockedBy
@@ -26,6 +26,21 @@ relationships:
   target_id: 01a1ca8a-f7d4-79f1-bc7d-19935822a071
   created_at: 2026-11-11T12:17:57.367933396Z
   created_by: joe
+comments:
+- id: 01a1d52b-350c-7993-bc26-ae2f2e8be596
+  author: dirtlab
+  content: 'Implementation underway in native seat: extracted aida-cmdkit and aida-term with compatibility facades; CLI registry, concrete AddArgs and tail-dispatch adapters remain in cli-lib. Baseline lane cargo check passed; cmdkit executed 4 tests successfully; targeted CLI/term tests are running. Required dell1 clean-build and one-line-edit before/after benchmark is not yet established; baseline lane check is not claimed as that evidence. Host codegraph client path from AGENTS.md is missing; doctor confirms codegraph unavailable, using rg fallback.'
+  created_at: 2026-11-13T13:49:01.068081528Z
+  modified_at: 2026-11-13T13:49:01.068081528Z
+  session_id: 01a1d51f8e0e
+  harness_version: codex-cli 0.167.0
+- id: 01a1d52e-9c1a-7382-a690-896012726389
+  author: dirtlab
+  content: 'Host follow-up: required dell1 before/after clean and one-line-edit rebuild benchmarks remain outstanding (this seat hostname is disrad-dvp98b3puw). Filing the requested headless draft finding was attempted but refused before writing: aida-work-dispenser.toml is mode 0664 and the allocator requires it not be group/other writable. Native seat Git metadata is read-only, so no chmod was attempted. This comment preserves the flag without bypassing that refusal.'
+  created_at: 2026-11-13T13:52:44.058981166Z
+  modified_at: 2026-11-13T13:52:44.058981166Z
+  session_id: 01a1d51f8e0e
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1ca8a-8ee7-7991-b976-a941a11ff32c
   author: joe
