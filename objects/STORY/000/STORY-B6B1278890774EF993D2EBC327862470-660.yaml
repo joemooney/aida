@@ -23,7 +23,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-12T19:11:56.371806442Z
-modified_at: 2026-11-13T05:06:50.576789945Z
+modified_at: 2026-11-13T06:33:47.753636374Z
 req_type: Story
 tags:
 - operator-held
@@ -89,6 +89,13 @@ comments:
   content: 'Gap alarm 21:27 MST: main unmoved since 2a62f92 (20:27). Cause: store pull wedged 20:27-20:55 by duplicate auto-bump completions (BUG-2550); every reviewer pickup failed, so #3907/#3832/#3898 and others lost ~45 min of review time; #3907 train refused (approval bound to another head). Action: store repaired 20:55, reviews requeued 21:08, promotion 4 (#3922, BUG-2545) cut 21:40 from canary-green 9aa1afd, review+ship job on deputy default.'
   created_at: 2026-11-13T04:41:31.936824983Z
   modified_at: 2026-11-13T04:41:31.936824983Z
+  session_id: 01a1d2e6-f5db-7f33-9b74-3ae5fdaf9e0c
+  harness_version: 2.1.323 (Claude Code)
+- id: 01a1d39c-bfe9-7c20-88e9-2b5a2ee3c104
+  author: joe
+  content: 'Gap incident closed 23:32 MST: main moved 2a62f92 -> 599d6d1 (#3907 BUG-2544 via train #3923). Gap 3h05m. Contributing causes: store wedge (BUG-2550), misfiled verdict keys deadlocking pickup vs train on PR-3907 (filed on BUG-2544), hung aida pull x3 (BUG-2551), promotion review needing auto-queue-review, transient dirty-store pickup refusal. Next landings queued: promotion 4 (#3922), train #3911+#3918.'
+  created_at: 2026-11-13T06:33:47.753636374Z
+  modified_at: 2026-11-13T06:33:47.753636374Z
   session_id: 01a1d2e6-f5db-7f33-9b74-3ae5fdaf9e0c
   harness_version: 2.1.323 (Claude Code)
 history:
