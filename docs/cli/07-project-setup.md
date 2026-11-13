@@ -651,7 +651,7 @@ forwarding, and raw Git, other AIDA writers that do not go through the store
 backend, and foreign writers can bypass it. No history rewrite, clean export,
 live hub hook or automatic forwarding is provided.
 
-#### Per-vendor containment posture
+### `aida config permissions show` — per-vendor containment posture
 
 `aida config permissions show` prints one row per vendor with its tier,
 configured/refused launch state, and net effect. This is a configuration view,
