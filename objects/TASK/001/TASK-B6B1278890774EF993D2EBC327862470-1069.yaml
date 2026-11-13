@@ -18,7 +18,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-12T17:38:36.583411920Z
-modified_at: 2026-11-13T03:50:51.840538968Z
+modified_at: 2026-11-13T04:48:46.305802707Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -49,6 +49,12 @@ comments:
   created_at: 2026-11-13T02:37:26.346307752Z
   modified_at: 2026-11-13T02:37:26.346307752Z
   session_id: 01a1d2a421d6
+- id: 01a1d33c-98e1-7e72-a58f-6a81fa683e89
+  author: joe
+  content: 'Round 2 rework addresses all three findings: preserve the explicitly nullable skipped-pipeline setting while refusing missing/invalid policy evidence; use the SHA-pinned immediate GitLab merge API with both auto-merge spellings disabled so glab MRCheckErrors cannot block an already-armed MR, retaining server approval and branch-role checks; derive revert mainline from the actual commit parent list. Adapter fixtures cover nullable prepare/already-off/restore comparison, opened already-armed MRs behind running or failed pipelines and server refusals, and both revert topologies. Also repaired the CI launch ratchet by replacing the obsolete self.gh spelling with the exact gh/glab-only self.forge_cli spelling; the ceiling is unchanged. Validation passed: 18 emergency-land tests (j20261113T040441859-378621-0), all 7 launch-ratchet tests including the CI failure (j20261113T040449385-379911-0), no-default-features CLI check (j20261113T040537165-387930-0), TUI all-targets check (j20261113T040622396-403654-0), 44 fast source gates, workspace target-root rustfmt and git diff --check. Mail fixtures passed under CI-style umask 022 after initial shared-write fixture refusals. Final-source emergency-land rerun j20261113T040723802-420070-0 remains active. Native edits are uncommitted for host publication. Needs Attention to InProgress was refused as advisor-only, so status remains untouched; the reviewed codegraph client is absent/unreachable.'
+  created_at: 2026-11-13T04:48:46.305802707Z
+  modified_at: 2026-11-13T04:48:46.305802707Z
+  session_id: 01a1d311a0e3
 history:
 - id: 01a1d0d7-43e6-7d03-b1da-4751bfeb71a0
   author: joe
