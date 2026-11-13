@@ -9,7 +9,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T00:17:53.805850Z
-modified_at: 2026-11-13T10:43:12.355776624Z
+modified_at: 2026-11-13T10:54:09.575446159Z
 req_type: Story
 tags:
 - architecture
@@ -493,6 +493,13 @@ comments:
   content: 'Advisor 03:40: PR #3939 (story-2538-slice-b) is CONFLICTING with main, so CI never started (only the merge-hold checks ran). Next round: rebase story-2538-slice-b onto current origin/main (no merge of main), resolve the conflicts keeping main''s behaviour plus this slice''s change, rerun the targeted test and make check-ci-fast, then push the lane branch with --force-with-lease. The PR is already open; do not open another.'
   created_at: 2026-11-13T10:42:11.002596480Z
   modified_at: 2026-11-13T10:42:11.002596480Z
+  session_id: 01a1d3ee-83e8-71b3-a2c5-aed5baed6fdc
+  harness_version: 2.1.323 (Claude Code)
+- id: 01a1d48b-1ea7-7fe2-9324-b90ac541ebfa
+  author: joe
+  content: 'Advisor 03:56: the 03:50 rebase lane launched Claude again (BUG-2553, open-PR continuation ignores --vendor codex), so I killed it. Paused in autoland-skip; relaunch on Codex once #3936 (BUG-2553) is on main and dell1 is rebuilt. The 03:40 rebase brief stands.'
+  created_at: 2026-11-13T10:54:09.575446159Z
+  modified_at: 2026-11-13T10:54:09.575446159Z
   session_id: 01a1d3ee-83e8-71b3-a2c5-aed5baed6fdc
   harness_version: 2.1.323 (Claude Code)
 history:
