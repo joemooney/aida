@@ -136,9 +136,10 @@ class CiTiers(unittest.TestCase):
                 expected = '${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha || github.event.before }}'
                 self.assertEqual(step['env'][variable], expected)
                 env.update({key: base for key, value in step['env'].items() if value == expected})
-                def run():
+                def run(environment=None):
                     return subprocess.run(['bash', '-e', '-o', 'pipefail', '-c', step['run']],
-                        cwd=root, env=env, capture_output=True, text=True, timeout=25)
+                        cwd=root, env=env if environment is None else environment,
+                        capture_output=True, text=True, timeout=25)
                 clean = run()
                 self.assertEqual(clean.returncode, 0, clean.stdout + clean.stderr)
                 if variable == 'EXEC_CONTEXT_BASE':
@@ -149,6 +150,14 @@ class CiTiers(unittest.TestCase):
                 else:
                     write('aida-core/src/legacy.rs', 'use crate::*;')
                     write('scripts/crate-globs-legacy.json', json.dumps({'aida-core/src/legacy.rs': 1}))
+                # Positive control: matching source/ledger growth alone passes
+                # this same FAST invocation. Its refusal below must come from
+                # the trusted base comparison, not an inconsistent fixture.
+                without_base = {key: value for key, value in env.items()
+                                if key not in guards.values()}
+                unchecked = run(without_base)
+                self.assertEqual(unchecked.returncode, 0,
+                                 unchecked.stdout + unchecked.stderr)
                 result = run()
                 self.assertNotEqual(result.returncode, 0, result.stdout + result.stderr)
                 self.assertIn('may only shrink',
