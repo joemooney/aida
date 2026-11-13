@@ -8,12 +8,12 @@ description: |-
   Sketch first (guided, a credential boundary). Decide how a contained worker gets ChatGPT-session auth without seeing the host ~/.codex: (a) a host broker that mints or refreshes the token and passes a scoped, short-lived copy into a private CODEX_HOME inside the sandbox; (b) an auth.json copy into a tmpfs CODEX_HOME bound read-only, with refresh-token exfiltration risk stated; or (c) an API-key-only path, with a documented operator step. Cover refresh-token handling, the auth.openai.com/chatgpt.com egress entries (already in allowed_hosts), revocation when the lane ends, and what the C1/C2 checks must assert about credential visibility.
 
   Acceptance: the refusal is removed for the chosen path; the C0-C4 harness runs under --boundary aida with the operator's ChatGPT login and reports real pass/fail; BUG-2447/2448 then close or are re-scoped from that evidence.
-status: InProgress
+status: NeedsAttention
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T21:41:03.638236900Z
-modified_at: 2026-11-13T12:05:20.982619298Z
+modified_at: 2026-11-13T12:12:47.670791242Z
 req_type: Story
 tags:
 - track:dell1
@@ -1096,6 +1096,15 @@ history:
   session_id: 01a1d4aa-9c99-76c2-ac94-7f0795f8a7f9
   harness_version: 2.1.323 (Claude Code)
   changes: []
+- id: 01a1d4d3-1cb6-7432-b5df-08b77336273c
+  author: dirtlab
+  timestamp: 2026-11-13T12:12:47.670802155Z
+  session_id: 01a1d4d28ebc
+  harness_version: codex-cli 0.167.0
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 execution_mode: drive
 filed_at:
   code_sha: 0ab91ad23e8c9a0c582ab4eb7e277f6a774aaaa2
@@ -1105,3 +1114,8 @@ filed_at:
   aida_build_sha: b34755f19c7
   vendor: claude
   session: 3dd100c3-f8c0-44d9-ac4c-f9ff0eb32a27
+attention_reason:
+  category: blocked-dependency
+  detail: 'Round 13: required first action is host fetch/merge/push of origin/main for PR #3938, but this standalone native seat prohibits Git metadata writes, commits and pushes. Local origin/main is 177 commits ahead (HEAD has 14 unique commits); no unresolved index entries and no working-tree edits. Host must resolve and publish the merge before further work. Findings 1 and 2 already addressed by 7b4dc02c70; finding 3 retains synchronous hashing intentionally, with metadata-preserving rewrite regression in 201ade38b1. Previous commits do not satisfy this round; no new commit claimed. Host must also deploy reviewed codegraph client under primary checkout .codegraph/proxy-state/bin/codegraph and provide its absolute path; doctor reports missing. untested=true.'
+  raised_by: implementer
+  raised_at: 2026-11-13T12:12:47.670791242Z
