@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-13T11:44:39.422508821Z
-modified_at: 2026-11-13T23:23:50.704907013Z
+modified_at: 2026-11-13T23:33:48.015489058Z
 req_type: Bug
 tags:
 - track:integration
@@ -33,6 +33,13 @@ comments:
   modified_at: 2026-11-13T23:23:37.723233665Z
   session_id: 01a1d729a0e1
   harness_version: 2.1.319 (Claude Code)
+- id: 01a1d742-976f-7a41-adee-fdce58a6f1bc
+  author: joe
+  content: 'Advisor 16:35: the dell1 Claude lane finished the fix (an advisor-only --rereview that records a rereview-admitted gate-ledger event) but punted because it couldn''t push (BUG-2568). The advisor pushed the branch and opened #3971 against main (train track). Single-user deployment, so the new ledger event type breaking older binaries is accepted.'
+  created_at: 2026-11-13T23:33:48.015489058Z
+  modified_at: 2026-11-13T23:33:48.015489058Z
+  session_id: 01a1d73b-e31c-7f33-b2fe-cee145ddc6fb
+  harness_version: 2.1.325 (Claude Code)
 history:
 - id: 01a1d4b9-79a0-7750-b265-f5e183ab7a41
   author: joe
