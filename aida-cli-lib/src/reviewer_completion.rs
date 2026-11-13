@@ -328,6 +328,59 @@ mod tests {
         assert!(child.try_wait().unwrap().is_some());
     }
 
+    // Completed delivery alone cannot bind a different or stale review to this
+    // launch, including WAITING. Exercise discovery as well as the predicate.
+    // trace:BUG-2546 | ai:codex
+    #[test]
+    fn bug2546_completed_delivery_still_requires_current_launch_identity() {
+        use crate::gate::review_verdict::verdict_path;
+        for kind in ["APPROVED", "REQUEST_CHANGES", "REJECTED", "WAITING"] {
+            for invalid in ["timestamp", "grant", "sha"] {
+                let tmp = tempfile::tempdir().unwrap();
+                let _scope = Scope::new(tmp.path(), tmp.path(), 7, &[]);
+                bind_grant("child");
+                let path = verdict_path(tmp.path(), "PR-7");
+                std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+                let mut body = serde_json::json!({
+                    "verdict": kind, "reviewed_sha": "abc", "sweep_pending": false,
+                    "recorded_at": chrono::Utc::now().to_rfc3339(),
+                    "recorder_attestation": { "sha": "abc", "grant_id": "child" }
+                });
+                match invalid {
+                    "timestamp" => {
+                        body["recorded_at"] = (chrono::Utc::now() - chrono::Duration::hours(1))
+                            .to_rfc3339()
+                            .into()
+                    }
+                    "grant" => body["recorder_attestation"]["grant_id"] = "other".into(),
+                    "sha" => body["reviewed_sha"] = "other".into(),
+                    _ => unreachable!(),
+                }
+                std::fs::write(&path, body.to_string()).unwrap();
+                assert!(!should_stop(), "{kind}: {invalid}");
+                WATCH.with(|w| {
+                    let slot = w.borrow();
+                    let w = slot.as_ref().unwrap();
+                    assert!(w.seen.is_none(), "{kind}: {invalid}");
+                    assert!(w.recorded_at.is_none(), "{kind}: {invalid}");
+                });
+                // Replacing that record with this launch's completed twin
+                // must start the grace and supply runtime evidence.
+                body["recorded_at"] = chrono::Utc::now().to_rfc3339().into();
+                body["recorder_attestation"]["grant_id"] = "child".into();
+                body["reviewed_sha"] = "abc".into();
+                std::fs::write(&path, body.to_string()).unwrap();
+                assert!(!should_stop());
+                WATCH.with(|w| {
+                    let slot = w.borrow();
+                    let w = slot.as_ref().unwrap();
+                    assert!(w.seen.is_some(), "{kind}: {invalid}");
+                    assert!(w.recorded_at.is_some(), "{kind}: {invalid}");
+                });
+            }
+        }
+    }
+
     #[test]
     fn bug2546_verdict_stop_ignores_a_background_hold_and_reaps_child() {
         use std::process::Command;
