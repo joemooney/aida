@@ -1,0 +1,33 @@
+id: 01a1d752-6226-7e00-a84d-7885d12f14c5
+spec_id: STORY-b6b1278890774ef993d2ebc327862470-701
+agreed_id: STORY-2778
+title: 'Review PR-3973: [AI:claude] fix(land): evidence that is safe to act on: unknown waits, pinned commits, the hold''s own release decision (STORY-2768)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `(no-sess`) for branch `story-2768-s2-entry`.
+
+  - PR: <https://github.com/joemooney/aida/pull/3973>
+  - Branch: `story-2768-s2-entry` → `story-2768-s1b-now`
+
+  ## Covers
+
+  - STORY-2768
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 3973` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-13T23:51:02.950628487Z
+modified_at: 2026-11-13T23:51:02.950628487Z
+req_type: Story
+filed_at:
+  code_sha: bc24a1e6883b8fc1f036ca37e6fe3c4060d75255
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 4ac4c1d8ab0
+  vendor: claude
