@@ -2282,6 +2282,7 @@ fn rebase_auto_merge_onto(repo: &Path, target: &str) -> Result<StorePullOutcome>
                     && !is_oplog_path(path)
                     && !is_queue_registry_path(path)
                     && !is_schedule_ledger_path(path)
+                    && !is_timing_record_path(path)
                 {
                     anyhow::bail!("rebase conflict in non-mergeable path `{path}` — cannot auto-merge; falling back to manual resolution");
                 }
@@ -2295,6 +2296,9 @@ fn rebase_auto_merge_onto(repo: &Path, target: &str) -> Result<StorePullOutcome>
                 } else if is_schedule_ledger_path(path) {
                     // trace:STORY-1226 | ai:claude
                     resolve_schedule_ledger_conflict(repo, path)
+                } else if is_timing_record_path(path) {
+                    // trace:BUG-2550 | ai:claude
+                    resolve_timing_record_conflict(repo, path)
                 } else {
                     resolve_spec_conflict(repo, path, true)
                 };
@@ -2799,6 +2803,62 @@ fn is_schedule_ledger_path(path: &str) -> bool {
         Some(r) => !r.contains('/') && r.ends_with(".yaml"),
         None => false,
     }
+}
+
+/// True when `path` is a published timing record,
+/// `timings/<TYPE>/<shard>/<ID>.json` (STORY-1480).
+// trace:BUG-2550 | ai:claude
+fn is_timing_record_path(path: &str) -> bool {
+    let p = path.replace('\\', "/");
+    match p.strip_prefix("timings/") {
+        Some(rel) => rel.split('/').count() == 3 && rel.ends_with(".json"),
+        None => false,
+    }
+}
+
+/// The typed timing-record merger: given our and their side of a conflicted
+/// record (either may be absent), return the merged text and how many
+/// entries their side contributed, or refuse. Installed by the CLI, which
+/// owns the record's schema (`TimingRecord`); aida-core cannot parse it.
+// trace:BUG-2550 | ai:claude
+pub type TimingRecordMerger = fn(Option<&str>, Option<&str>) -> Result<(String, usize)>;
+
+fn timing_record_merger_slot() -> &'static std::sync::OnceLock<TimingRecordMerger> {
+    static SLOT: std::sync::OnceLock<TimingRecordMerger> = std::sync::OnceLock::new();
+    &SLOT
+}
+
+/// Install the process-wide timing-record merger (first install wins).
+/// Without one, a timing-record conflict falls back to manual resolution.
+// trace:BUG-2550 | ai:claude
+pub fn install_timing_record_merger(merger: TimingRecordMerger) {
+    let _ = timing_record_merger_slot().set(merger);
+}
+
+/// Union-merge two sides of a conflicted timing record and write the result.
+/// Two clones that each auto-bump the same merge both publish the spec's
+/// record (BUG-2550); the record is append-only evidence, so the union is the
+/// only correct answer. The merge goes through the installed typed merger,
+/// which refuses any side the production reader would not read losslessly;
+/// a refusal leaves both sides untouched and the pull falls back to manual.
+// trace:BUG-2550 | ai:claude
+fn resolve_timing_record_conflict(repo: &Path, path: &str) -> Result<String> {
+    let Some(merger) = timing_record_merger_slot().get() else {
+        anyhow::bail!("no timing-record merger is installed for `{path}`");
+    };
+    let ours = git_show_stage(repo, 2, path)?;
+    let theirs = git_show_stage(repo, 3, path)?;
+    let (merged, added) = merger(ours.as_deref(), theirs.as_deref())
+        .with_context(|| format!("refusing to auto-merge timing record `{path}`"))?;
+    let abs = repo.join(path);
+    if let Some(parent) = abs.parent() {
+        std::fs::create_dir_all(parent).ok();
+    }
+    crate::write_atomic(&abs, merged.as_bytes()).with_context(|| format!("write merged {path}"))?;
+    Ok(format!(
+        "timing record `{path}`: union of both sides ({added} entr{} added)",
+        if added == 1 { "y" } else { "ies" }
+    ))
 }
 
 /// True when a merge is currently in progress in `repo` (MERGE_HEAD exists).
@@ -10681,6 +10741,16 @@ mod tests {
         ];
         want.sort();
         assert_eq!(got, want, "no queue entry may be dropped by the merge");
+    }
+
+    // The typed merge and the end-to-end pull live with the record's schema
+    // in aida-cli-lib (timing_record / bug_2550 tests).
+    // trace:BUG-2550 | ai:claude
+    #[test]
+    fn bug_2550_timing_record_paths() {
+        assert!(is_timing_record_path("timings/BUG/000/BUG-9.json"));
+        assert!(!is_timing_record_path("timings/BUG-9.json"));
+        assert!(!is_timing_record_path("objects/BUG/000/BUG-9.json"));
     }
 
     // A failed plain store pull owns the rebase it started and must abort it

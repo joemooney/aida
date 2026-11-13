@@ -977,3 +977,57 @@ fn bug_2451_github_pickup_ignores_train_carrying_rider_commits() {
     let calls = std::fs::read_to_string(root.join("args")).unwrap();
     assert!(!calls.contains("/pulls/3200"), "{calls}");
 }
+
+// BUG-2545: the integration canary (head `integration`) and promotion PRs
+// (head `promote/integration-N`) carry every integration commit's trailers
+// and name the specs in their titles. They are no spec's change: the rider's
+// own PR stays its only open change, and with no rider PR the spec has none.
+// trace:BUG-2545 | ai:claude
+#[test]
+fn bug_2545_integration_canary_and_promotion_are_not_a_specs_change() {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
+    let f = Fixture::new();
+    let root = f.dir.path();
+    let aggregates = format!(
+        "{}{}",
+        row(
+            3905,
+            "canary: integration -> main (BUG-2392)",
+            "integration"
+        ),
+        row(
+            3906,
+            "promote integration batch 3 (BUG-2392)",
+            "promote/integration-3"
+        )
+    );
+    let rows = format!("{}{aggregates}", row(42, "fix (BUG-2392)", "rider"));
+    std::fs::write(root.join("search"), &rows).unwrap();
+    std::fs::write(root.join("all"), &rows).unwrap();
+    let forge = crate::forge::GitHubForge::new(root);
+    use crate::forge::Forge as _;
+    let changes = forge.open_changes_for_spec("BUG-2392").unwrap();
+    assert_eq!(
+        changes.iter().map(|c| c.id).collect::<Vec<_>>(),
+        vec![42],
+        "{changes:?}"
+    );
+    assert_eq!(
+        crate::session_start::pickup_pr_branch(&forge, "BUG-2392", None).unwrap(),
+        Some((42, "rider".into()))
+    );
+    std::fs::write(root.join("search"), &aggregates).unwrap();
+    std::fs::write(root.join("all"), &aggregates).unwrap();
+    assert!(forge.open_changes_for_spec("BUG-2392").unwrap().is_empty());
+    assert!(crate::pr_lookup::is_integration_aggregate_branch(
+        "integration"
+    ));
+    assert!(crate::pr_lookup::is_integration_aggregate_branch(
+        "promote/integration-12"
+    ));
+    assert!(!crate::pr_lookup::is_integration_aggregate_branch(
+        "bug-2545-integration-fix"
+    ));
+}

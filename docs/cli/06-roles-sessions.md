@@ -848,21 +848,19 @@ conflict checks.
 <!-- trace:BUG-2504 | ai:codex -->
 
 The conflict check runs after session setup has provisioned the seat and minted
-its lease, inside the pickup's launch rollback boundary. A fresh Codex pickup
-that reroutes keeps that same seat (including a clone seat) and lease. Before
-launch it installs the Claude vendor override, repeats vendor and containment
-preflight, clears the Codex model selection, and appends the conflict task to
-the prompt. It does not rebuild the seat for Claude. A refusal before spawn
-uses the ordinary setup rollback.
+its lease, inside the pickup's launch rollback boundary. Conflicts preserve the
+selected vendor, model, seat and lease. Before launch, pickup notifies the
+advisor, repeats vendor and containment preflight, and appends the conflict
+resolution task to the prompt. A refusal before spawn uses the ordinary setup
+rollback. The same routing applies to interactive implementer pickups.
 
-This also applies to interactive implementer pickups without `--no-human`:
-a fresh conflicting pickup launches interactive Claude in the seated tree;
-an existing Codex resume refuses and prints the fresh Claude command. Guided,
-plan-only and `--no-launch` pickups skip this automatic preparation. Current
-automated coverage tests the merge, route/refusal and publication helpers;
-it does not exercise the complete `handle_queue_work` pickup through an
-interactive exec or a Claude launch from a clone provisioned for Codex. That
-integration boundary still needs a manual exercise or a command-level test.
+An explicit resume uses the vendor that recorded the session and prints that
+reason before launch; configuration cannot move an existing thread to another
+vendor. Guided, plan-only and `--no-launch` pickups skip automatic preparation.
+Automated coverage exercises clean and conflicting PR branches with a configured
+Codex vendor, including interactive and headless routing. It does not exercise
+the complete pickup through vendor execution.
+<!-- trace:BUG-2553 | ai:codex -->
 
 After a contained Codex headless implementer exits, its host commits pending
 seat edits and publishes through `ship --from-seat`, updating the existing
@@ -1281,7 +1279,11 @@ The same pass sends two more notices, each once:
 - **Round cap.** When a change has used both review rounds and its head has
   no review, the watcher starts none, and mails the advisor once for the
   change. The mail names the reviewed heads, the unreviewed head, and the
-  findings file.
+  findings file. Before delivery, it appends a `manual-review-requested`
+  event to the change's gate ledger, binding the request ID, recipient and
+  unreviewed head. Retries retain one ledger request and one mailbox request;
+  this advisory event grants no review or merge authority.
+  <!-- trace:BUG-2548 | ai:codex -->
 
 Like the ready wake, each notice has a deterministic ID and is recorded as
 sent only after delivery. A failed delivery is retried on a later pass and
@@ -1298,6 +1300,14 @@ instructions. Shared claims carry optional invocation IDs; rollback compares the
 exact acquired claim under the store lock and publishes outside that lock.
 Legacy claims remain readable and are never adopted as rollback authority.
 <!-- trace:BUG-2188 | ai:codex -->
+
+Pickup checks branch/worktree ownership before pulling the spec store. A clean
+review worktree with proven ended ownership can be retired automatically after
+its commits are confirmed covered by the forge head and its merge holds are
+preserved. Live, unknown, dirty, locked or unpublished work remains protected.
+A refused launch reports successful rollback only after its lease file is gone;
+retained ownership instead produces a cleanup error naming the lease.
+<!-- trace:BUG-2548 | ai:codex -->
 
 ### Pipeline stall alarms
 

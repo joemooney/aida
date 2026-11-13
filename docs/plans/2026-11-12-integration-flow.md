@@ -44,6 +44,29 @@ Never:
 - Rewrite history on `integration` (it is shared with the main session).
 - Run `cargo test --workspace`, `make check-ci`, or `make check`.
 
+## Integration <-> main protocol (operator ruling 17:30)
+
+- The integration session is the **sole writer** of `origin/integration`.
+  The advisor no longer pushes it.
+- Merge a PR branch into `integration` only when it is approved at its
+  **exact current head**: `aida review verdict PR-N` must show APPROVED against
+  that head. Your own commits still go straight to `integration`.
+- After every push, message the advisor seat: `integration pushed at <sha>`.
+  Canary draft PR #3905 runs full CI on it; the advisor cuts
+  `promote/integration-N` only from a head that is green there.
+- When the advisor says `promotion N landed at <main sha>, sync main`:
+  check `git diff origin/main <promoted integration sha>` is empty and that
+  sha is an ancestor of `origin/integration`, then
+  `git merge -s ours origin/main`, push, and report the new sha.
+- `-s ours` is ONLY for a promotion sync, where main's content already equals
+  integration's. When a PR or train lands on `main` directly (not through
+  integration), do a real `git merge origin/main`, run `make check-ci-fast`,
+  push, and report the sha; `-s ours` there would silently drop its content.
+- `scripts/integration-sync-main.sh [--dry-run]` does both: it picks
+  `-s ours` only when main's tree equals an integration commit (a promotion),
+  otherwise a real merge, then runs `make check-ci-fast`, pushes, and prints
+  the line to send the advisor. It never rebases or force-pushes.
+
 ## Parallel work (optional)
 
 Codex lanes on dell1 still work for independent items. The main session can
