@@ -3458,9 +3458,12 @@ fn mandate_legacy_record_defaults_gate_paths_false() {
     assert_eq!(json["mandate"]["include_gate_paths"], true);
 }
 
+// A renewal or revival keeps the protected-path opt-in unless the human
+// changes it there; either way it takes a human at a terminal.
 // trace:STORY-2733 | ai:codex
+// trace:STORY-2771 | ai:claude
 #[test]
-fn mandate_renew_requires_fresh_gate_paths_opt_in_including_revival() {
+fn mandate_renew_keeps_or_changes_gate_paths_only_for_a_human_including_revival() {
     let tmp = tempfile::tempdir().unwrap();
     let m = mint(
         tmp.path(),
@@ -3476,46 +3479,38 @@ fn mandate_renew_requires_fresh_gate_paths_opt_in_including_revival() {
     )
     .unwrap();
     assert!(load_valid(tmp.path(), "joe", now()).0[0].include_gate_paths);
-    let (renewed, _, _) = extend(
+    let keep = RenewOverrides::default();
+    let gate_paths = |include| RenewOverrides {
+        include_gate_paths: Some(include),
+        ..RenewOverrides::default()
+    };
+    let at = |hours| now() + Duration::hours(hours);
+    let (renewed, _, _) = extend(tmp.path(), &human_ok, "joe", None, &keep, at(1)).unwrap();
+    assert!(renewed.include_gate_paths);
+    let (renewed, receipt, _) = extend(
         tmp.path(),
         &human_ok,
         "joe",
         None,
-        false,
-        now() + Duration::hours(1),
+        &gate_paths(false),
+        at(2),
     )
     .unwrap();
     assert!(!renewed.include_gate_paths);
-    let (renewed, _, _) = extend(
-        tmp.path(),
-        &human_ok,
-        "joe",
-        None,
-        true,
-        now() + Duration::hours(2),
-    )
-    .unwrap();
+    assert_eq!(receipt.changes, vec!["include-gate-paths: on -> off"]);
+    let (renewed, _, _) = extend(tmp.path(), &human_ok, "joe", None, &keep, at(3)).unwrap();
+    assert!(!renewed.include_gate_paths);
+    let (renewed, _, _) =
+        extend(tmp.path(), &human_ok, "joe", None, &gate_paths(true), at(4)).unwrap();
     assert!(renewed.include_gate_paths);
-    let (revived, _, old) = extend(
-        tmp.path(),
-        &human_ok,
-        "joe",
-        None,
-        false,
-        now() + Duration::hours(12),
-    )
-    .unwrap();
-    assert!(!revived.include_gate_paths);
+    let (revived, _, old) = extend(tmp.path(), &human_ok, "joe", None, &keep, at(14)).unwrap();
+    assert!(revived.include_gate_paths);
     assert_eq!(old.as_deref(), Some(m.id.as_str()));
-    assert!(extend(
-        tmp.path(),
-        &no_tty,
-        "joe",
-        None,
-        true,
-        now() + Duration::hours(13)
-    )
-    .is_err());
+    assert!(extend(tmp.path(), &no_tty, "joe", None, &gate_paths(false), at(15)).is_err());
+    assert!(load_valid(tmp.path(), "joe", at(15))
+        .0
+        .iter()
+        .any(|m| m.include_gate_paths));
 }
 
 // trace:STORY-2733 | ai:codex
