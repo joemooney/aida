@@ -1014,21 +1014,25 @@ fn principal_mismatch_warns_and_does_nothing() {
 fn principal_warnings_name_both_values_and_the_fix() {
     let w = principal_warnings(&PrincipalProbe::Resolved("cron".into()), "joe", true);
     assert_eq!(w.len(), 1);
-    assert!(w[0].contains("`cron`") && w[0].contains("`joe`") && w[0].contains("AIDA_USER=joe"));
+    assert!(w[0].contains("`cron`") && w[0].contains("`joe`") && w[0].contains("USER=joe"));
     assert!(principal_warnings(&PrincipalProbe::Resolved("joe".into()), "joe", true).is_empty());
     let w = principal_warnings(&PrincipalProbe::NoDriver, "joe", false);
     assert_eq!(w.len(), 2);
     assert!(w[0].contains("no schedule driver"));
     assert!(w[1].contains("fleet drive --tick"));
     assert_eq!(
-        aida_user_in("Environment=\"AIDA_USER=joe\" PATH=/bin"),
+        operator_user_in("Environment=\"USER=joe\" PATH=/bin"),
         Some("joe".into())
     );
     assert_eq!(
-        aida_user_in("*/5 * * * * AIDA_USER=joe aida schedule tick # aida-schedule-tick:/r"),
+        operator_user_in("*/5 * * * * USER=joe aida schedule tick # aida-schedule-tick:/r"),
         Some("joe".into())
     );
-    assert_eq!(aida_user_in("ExecStart=/bin/aida schedule tick"), None);
+    assert_eq!(operator_user_in("ExecStart=/bin/aida schedule tick"), None);
+    assert_eq!(
+        operator_user_in("Environment=\"AIDA_USER=advisor-seat\""),
+        None
+    );
 }
 
 // ── T7.13: fail-closed parsing ──────────────────────────────────────────────
@@ -1815,6 +1819,7 @@ fn the_per_turn_notice_reads_the_live_mandate_and_marks_each_session_once() {
     let home_s = home.path().display().to_string();
     let _env = crate::test_env::EnvVarsGuard::apply(&[
         ("AIDA_HOME", Some(&home_s)),
+        ("USER", Some("joe")),
         (crate::gate::seat_authority::GRANT_ENV, None),
         ("AIDA_SESSION_ROLE", None),
     ]);
@@ -1823,7 +1828,7 @@ fn the_per_turn_notice_reads_the_live_mandate_and_marks_each_session_once() {
     let m = crate::gate::mandate::start_with(
         &dir,
         &ok_human,
-        &crate::current_user_id(None),
+        &crate::gate::mandate::operator_principal(),
         Duration::hours(2),
         Some("fire".into()),
         true,
@@ -1834,7 +1839,13 @@ fn the_per_turn_notice_reads_the_live_mandate_and_marks_each_session_once() {
     let line = crate::status_awaiting::mandate_notice_line(now, Some("s1")).unwrap();
     assert!(line.starts_with("MANDATE drive · "), "{line}");
     assert!(line.contains(" · fire · gates: "), "{line}");
-    crate::gate::mandate::stop(&dir, &ok_human, &crate::current_user_id(None), now).unwrap();
+    crate::gate::mandate::stop(
+        &dir,
+        &ok_human,
+        &crate::gate::mandate::operator_principal(),
+        now,
+    )
+    .unwrap();
     // Two role-less sessions each see the stopped line once.
     for session in ["s1", "s2"] {
         let first = crate::status_awaiting::mandate_notice_line(now, Some(session)).unwrap();

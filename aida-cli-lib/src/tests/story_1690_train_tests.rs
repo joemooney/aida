@@ -4141,7 +4141,7 @@ fn pr_train_journal_recovery_has_no_terminal_consent_for_old_members() {
     let mut forge = FakeForge::mains(&["main"]);
     forge.gates.insert(41, Err(refusal));
     let mut rails = ForgeRails::new(&mut forge, "new".into()).with_journal(dir.path());
-    assert_eq!(rails.resume().unwrap().ejected[0].pr, 41);
+    assert_eq!(rails.resume_for(Some(&[41])).unwrap().ejected[0].pr, 41);
     drop(rails);
     assert!(forge.merged.is_empty());
 }
@@ -5459,5 +5459,56 @@ fn bug2537_train_ownership_forge_terminal_repair_and_unknown_refusal() {
         );
         let record = store.load(&key).unwrap().unwrap();
         assert_eq!(matches!(record.phase, Phase::Training { .. }), refused);
+    }
+}
+
+// trace:BUG-2547 | ai:codex
+#[test]
+fn bug2547_recovery_only_matches_requested_member_set() {
+    let dir = tempfile::tempdir().unwrap();
+    let entry = journal::Entry::new(
+        train_of("main", &fms(&[3902, 3903])),
+        "train/stale-1".into(),
+    );
+    assert!(entry.matches(&[3903, 3902, 3902]));
+    assert!(!entry.matches(&[3902]));
+    assert!(!entry.matches(&[3887]));
+    assert!(!entry.matches(&[]));
+    journal::activate(dir.path(), entry).unwrap();
+    journal::clear();
+    let mut forge = FakeForge::mains(&["main"]);
+    let mut rails = ForgeRails::new(&mut forge, "fresh".into()).with_journal(dir.path());
+    let out = rails.resume_for(Some(&[3887])).unwrap();
+    assert!(out.landed.is_empty());
+    assert!(out.ejected.is_empty());
+    assert_eq!(journal::entries(dir.path()).unwrap().len(), 1);
+}
+
+// trace:BUG-2547 | ai:codex
+#[test]
+fn bug2547_abandon_is_locked_and_local_even_for_malformed_journals() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("stale-1.json");
+    std::fs::write(&path, "malformed").unwrap();
+    assert!(journal::abandon(dir.path(), "../stale-1.json").is_err());
+    let lock = journal::lock(dir.path()).unwrap();
+    assert!(journal::abandon(dir.path(), "stale-1.json").is_err());
+    assert!(path.exists());
+    drop(lock);
+    journal::abandon(dir.path(), "stale-1.json").unwrap();
+    assert!(!path.exists());
+    assert!(journal::abandon(dir.path(), "stale-1.json").is_err());
+}
+
+// trace:BUG-2547 | ai:codex
+#[test]
+fn bug2547_abandon_cli_is_exclusive() {
+    assert!(crate::TEST_CLI
+        .try_parse_from(["aida", "pr", "train", "--abandon", "stale-1.json"])
+        .is_ok());
+    for extra in ["3887", "--all-ready", "--dry-run", "--no-pull"] {
+        assert!(crate::TEST_CLI
+            .try_parse_from(["aida", "pr", "train", "--abandon", "stale-1.json", extra])
+            .is_err());
     }
 }

@@ -1145,6 +1145,10 @@ mod story_284_store_sync_tests;
 #[path = "tests/bug_1468_stale_check_tests.rs"]
 mod bug_1468_stale_check_tests;
 
+#[cfg(all(test, unix))]
+#[path = "tests/story_2737_sync_main_script_tests.rs"]
+mod story_2737_sync_main_script_tests;
+
 #[cfg(test)]
 #[path = "tests/forge_binary_resolution_tests.rs"]
 mod forge_binary_resolution_tests;

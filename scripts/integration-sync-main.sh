@@ -55,7 +55,9 @@ if [ -n "$promoted" ]; then
   kind="promotion sync (-s ours): main $short_main has the tree of integration $(git rev-parse --short "$promoted")"
   merge=(git merge -s ours --no-edit -m "[AI:claude] chore(integration): record main $short_main (promotion of $(git rev-parse --short "$promoted")) as merged (STORY-2737)" "$main")
 else
-  subjects=$(git log --format='  %h %s' "HEAD..$main" | head -20)
+  # Bound at the producer: `git log | head` dies of SIGPIPE (exit 141) under
+  # pipefail once the log outgrows the pipe buffer.
+  subjects=$(git log -n 20 --format='  %h %s' "HEAD..$main")
   kind="real merge: main $short_main moved independently of integration"
   merge=(git merge --no-ff -m "[AI:claude] chore(integration): merge main $short_main (STORY-2737)" "$main")
 fi
