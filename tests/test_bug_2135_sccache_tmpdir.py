@@ -34,6 +34,10 @@ spec.loader.exec_module(check_ci)
 class TestSccacheTmpdirDetection(unittest.TestCase):
     def setUp(self):
         self.env_backup = dict(os.environ)
+        # trace:BUG-2501 | ai:codex — exercise fake servers even when the
+        # enclosing lane disables sccache or pins its real server PID.
+        for name in ("AIDA_SCCACHE_DISABLE", "AIDA_SCCACHE_PIDS", "RUSTC_WRAPPER"):
+            os.environ.pop(name, None)
 
     def tearDown(self):
         os.environ.clear()
@@ -231,6 +235,8 @@ class TestTask2772BoundedServerStart(unittest.TestCase):
 
     def setUp(self):
         self.saved_env = dict(os.environ)
+        # trace:BUG-2501 | ai:codex — the restart case must inspect its fake PID.
+        os.environ.pop("AIDA_SCCACHE_PIDS", None)
         self.saved_timeouts = (check_ci.SCCACHE_SERVER_TIMEOUT, check_ci.SCCACHE_PROBE_TIMEOUT)
 
     def tearDown(self):
