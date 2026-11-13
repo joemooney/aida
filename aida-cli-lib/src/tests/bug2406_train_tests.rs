@@ -382,11 +382,13 @@ fn bug2441_unresolved_member_refuses((branch, title, cause): (&str, &str, &str))
     let f = Fixture::with_member_metadata(true, Some(branch), Some(title));
     let forge = GitHubForge::new(f.root());
     let mut live = f.live(&forge);
-    let (train, change) = f.opened(&mut live);
-    let lease = live.lease(change.id).unwrap();
-    let error = live
-        .merge_verified(&change, &train, lease.as_ref())
-        .unwrap_err();
+    // trace:BUG-2538 | ai:codex — evidence preflight now refuses before open.
+    let members: Vec<_> = [11, 12]
+        .into_iter()
+        .map(|n| live.gate(n).unwrap())
+        .collect();
+    let base = live.fetch_main().unwrap();
+    let error = live.build(&base, &members).unwrap_err();
     assert!(format!("{error:#}").contains(cause), "{error:#}");
     assert!(calls(f.root()).is_empty());
 }
@@ -1704,4 +1706,93 @@ fn bug2528_exact_tip_ci_wait_is_bounded_and_fails_closed() {
         || panic!("must refuse immediately"),
     )
     .unwrap_err();
+}
+
+// trace:BUG-2538 | ai:codex
+#[test]
+fn bug2538_long_review_history_trains_with_compact_audit() {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
+    let f = Fixture::new(true);
+    let mut record = f.records[0].clone();
+    record["rounds"] = json!((0..41).map(|_| f.records[0].clone()).collect::<Vec<_>>());
+    for sequence in 0..110 {
+        record["audit_sequence"] = json!(sequence);
+        ledger::store::append_one(
+            f.root(),
+            ledger::event::verdict_event(
+                f.root(),
+                ledger::ChangeKey::pr(11),
+                record.as_object().unwrap(),
+                Some(&ledger::GateSpec::with_key(
+                    "BUG-b6b1278890774ef993d2ebc327862470-173",
+                    None,
+                )),
+            ),
+        )
+        .unwrap();
+    }
+    assert!(
+        fs::read_to_string(ledger::store::ledger_file(
+            f.root(),
+            ledger::ChangeKey::pr(11)
+        ))
+        .unwrap()
+        .lines()
+        .count()
+            > 100
+    );
+    let forge = GitHubForge::new(f.root());
+    let mut live = f.live(&forge);
+    let (train, change) = f.opened(&mut live);
+    let lease = live.lease(change.id).unwrap();
+    live.merge_verified(&change, &train, lease.as_ref())
+        .unwrap();
+    assert_eq!(calls(f.root()).len(), 1);
+    let events = ledger::project::events(f.root(), ledger::ChangeKey::pr(77));
+    let proof = events
+        .iter()
+        .find_map(|event| match &event.body {
+            ledger::EventBody::TrainCoverage { proof } => Some(proof),
+            _ => None,
+        })
+        .unwrap();
+    assert!(serde_json::to_vec(proof).unwrap().len() < 32 * 1024);
+    for source in proof["sources"].as_array().unwrap() {
+        for original in source["originals"].as_array().unwrap() {
+            assert!(original.get("record").is_none());
+            assert_eq!(original["sha256"].as_str().unwrap().len(), 64);
+        }
+    }
+    assert_ne!(digest(&record).unwrap(), digest(&f.records[0]).unwrap());
+}
+
+// trace:BUG-2538 | ai:codex
+#[test]
+fn bug2538_oversized_import_ejects_before_publication() {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
+    let f = Fixture::new(true);
+    let mut record = f.records[0].clone();
+    record["audit_padding"] = json!("x".repeat(9 * 1024 * 1024));
+    ledger::store::append_unbound(
+        f.root(),
+        &ledger::GateSpec::with_key("BUG-2400", None),
+        record.as_object().unwrap(),
+    )
+    .unwrap();
+    let forge = GitHubForge::new(f.root());
+    let mut live = f.live(&forge);
+    let member = live.gate(11).unwrap();
+    let base = live.fetch_main().unwrap();
+    let train = live.build(&base, &[member]).unwrap();
+    assert!(train.cars.is_empty());
+    assert_eq!(train.dropped[0].pr, 11);
+    assert!(train.dropped[0].reason.contains("16 MiB"));
+    let transport = fs::read_to_string(f.root().join("transport-calls")).unwrap();
+    assert!(!transport.lines().any(|line| line.starts_with("pr create")));
+    assert!(ensure_budget(MAX_EVIDENCE_BYTES).is_ok());
+    assert!(ensure_budget(MAX_EVIDENCE_BYTES + 1).is_err());
 }

@@ -8141,3 +8141,166 @@ pub(crate) fn pr_state_workflows(
     );
     Ok(body["data"]["repository"].clone())
 }
+
+// Concrete client for the operator emergency command. Keeping process effects
+// here preserves the forge boundary; lifecycle and restoration policy stay in
+// pr_emergency_land, whose tests inject a fake client.
+// trace:STORY-2732 | ai:codex
+pub(crate) mod emergency_land {
+    use crate::pr_emergency_land::Forge;
+    use anyhow::{bail, ensure, Context, Result};
+    use serde_json::Value;
+    use std::cell::{Cell, RefCell};
+    use std::io::{Read, Seek};
+    use std::os::unix::process::CommandExt;
+    use std::path::PathBuf;
+    use std::time::{Duration, Instant};
+    pub(crate) struct GitHub {
+        root: PathBuf,
+        gh: PathBuf,
+        critical: bool,
+        signals: RefCell<crate::forwarded_signals::Forwarding>,
+        interrupted: Cell<bool>,
+    }
+    impl GitHub {
+        pub(crate) fn new(root: PathBuf) -> Result<Self> {
+            let gh = crate::resolve_forge_cli(crate::forge::ForgeKind::GitHub)
+                .context("GitHub CLI (gh) is required")?;
+            Ok(Self {
+                root,
+                gh: gh.into(),
+                critical: false,
+                signals: RefCell::new(crate::forwarded_signals::Forwarding::install()?),
+                interrupted: Cell::new(false),
+            })
+        }
+
+        fn interrupted(&self) -> bool {
+            if self.signals.borrow_mut().take().is_some() {
+                self.interrupted.set(true);
+            }
+            self.interrupted.get()
+        }
+        /// Files avoid pipe deadlocks; a per-call deadline bounds hung forge children.
+        pub(crate) fn command(&self, args: &[&str]) -> Result<String> {
+            self.command_with_budget(args, Duration::from_secs(45))
+        }
+        pub(crate) fn command_with_budget(
+            &self,
+            args: &[&str],
+            budget: Duration,
+        ) -> Result<String> {
+            let restoring = self.critical
+                && args.first() == Some(&"api")
+                && (args.get(2) == Some(&"POST")
+                    || args
+                        .last()
+                        .is_some_and(|s| s.ends_with("/protection") || s.contains("/pulls/")));
+            ensure!(
+                restoring || !self.interrupted(),
+                "emergency forge call interrupted"
+            );
+            let mut stdout = tempfile::tempfile()?;
+            let mut stderr = tempfile::tempfile()?;
+            let mut child = std::process::Command::new(&self.gh)
+                .current_dir(&self.root)
+                .args(args)
+                .process_group(0)
+                .stdout(stdout.try_clone()?)
+                .stderr(stderr.try_clone()?)
+                .spawn()?;
+            let deadline = Instant::now() + budget.min(Duration::from_secs(45));
+            let status = loop {
+                if let Some(status) = child.try_wait()? {
+                    break status;
+                }
+                if (!restoring && self.interrupted()) || Instant::now() >= deadline {
+                    crate::forwarded_signals::signal_child_tree(child.id(), &[], libc::SIGKILL);
+                    let _ = child.wait();
+                    bail!("gh call interrupted or timed out: {}", args.join(" "));
+                }
+                std::thread::sleep(Duration::from_millis(100));
+            };
+            ensure!(
+                restoring || !self.interrupted(),
+                "emergency forge call interrupted"
+            );
+            stdout.rewind()?;
+            stderr.rewind()?;
+            let mut output = String::new();
+            let mut error = String::new();
+            stdout.read_to_string(&mut output)?;
+            stderr.read_to_string(&mut error)?;
+            ensure!(status.success(), "gh {} failed: {error}", args.join(" "));
+            Ok(output)
+        }
+        pub(crate) fn json(&self, args: &[&str]) -> Result<Value> {
+            Ok(serde_json::from_str(&self.command(args)?)?)
+        }
+    }
+    impl Forge for GitHub {
+        fn api(&mut self, method: &str, endpoint: &str) -> Result<Value> {
+            if method == "DELETE" && endpoint.ends_with("/enforce_admins") {
+                self.critical = true;
+            }
+            let output = self.command(&["api", "-X", method, endpoint])?;
+            if output.trim().is_empty() {
+                Ok(Value::Null)
+            } else {
+                Ok(serde_json::from_str(&output)?)
+            }
+        }
+        fn needs_lift(&self, backup: &Value) -> Result<bool> {
+            backup["enforce_admins"]["enabled"]
+                .as_bool()
+                .context("missing enforce_admins.enabled in protection backup")
+        }
+        fn lift(&mut self, scope: &str) -> Result<()> {
+            self.api("DELETE", &format!("{scope}/enforce_admins"))?;
+            Ok(())
+        }
+        fn restore_protection(&mut self, scope: &str) -> Result<()> {
+            self.api("POST", &format!("{scope}/enforce_admins"))?;
+            Ok(())
+        }
+        fn verify_protection(&mut self, scope: &str, backup: &Value) -> Result<()> {
+            use crate::pr_emergency_land::without_urls;
+            let after = self.api("GET", scope)?;
+            ensure!(
+                without_urls(after) == without_urls(backup.clone()),
+                "protection differs from backup"
+            );
+            Ok(())
+        }
+        fn recovery_command(&self, scope: &str) -> String {
+            format!("gh api -X POST {scope}/enforce_admins")
+        }
+        fn merge_sha(&mut self, scope: &str, n: u64) -> Result<String> {
+            let repo = scope
+                .split("/branches/")
+                .next()
+                .context("missing protection scope")?;
+            let info = self.api("GET", &format!("{repo}/pulls/{n}"))?;
+            Ok(if info["merged"] == true {
+                info["merge_commit_sha"].as_str().unwrap_or("").to_owned()
+            } else {
+                String::new()
+            })
+        }
+        fn merge(&mut self, n: u64, title: &str, head: &str) -> Result<()> {
+            self.critical = true;
+            self.command(&[
+                "pr",
+                "merge",
+                &n.to_string(),
+                "--squash",
+                "--admin",
+                "--subject",
+                title,
+                "--match-head-commit",
+                head,
+            ])?;
+            Ok(())
+        }
+    }
+}
