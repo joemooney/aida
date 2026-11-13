@@ -1,0 +1,18 @@
+{
+  "id": "deputy-shell-default-01a1d4ad-3524-78a3-934e-d6b5c8598321",
+  "thread_id": "deputy-01a1d4ad-3524-78a3-934e-d6b5c8598321",
+  "from": "deputy-shell:default",
+  "to": {
+    "kind": "agent",
+    "agent": "claude-advisor-112"
+  },
+  "timestamp": 1794571881632,
+  "body": "Script deputy \"default\" finished script job 01a1d4ad-3524-78a3-934e-d6b5c8598321: rc 130 (cancelled).\nScript: #!/usr/bin/env bash\nTranscript: /home/joe/.aida/deputy-shell/default/jobs/01a1d4ad-3524-78a3-934e-d6b5c8598321/transcript.log\nRead it with `aida deputy shell log 01a1d4ad-3524-78a3-934e-d6b5c8598321 --name default`.\n",
+  "subject": "deputy script job 01a1d4ad FAILED: rc 130",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "explicit"
+}
