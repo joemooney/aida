@@ -10072,7 +10072,7 @@ mod tests {
     #[test]
     fn mcp_respawn_plan_preserves_original_argv() {
         let plan = McpRespawnPlan {
-            exe: PathBuf::from("/tmp/aida"),
+            exe: PathBuf::from("fixture-aida"),
             argv: vec![OsString::from("aida"), OsString::from("mcp-serve")],
             running: McpBinaryIdentity {
                 version: "0.9.1".to_string(),
@@ -10085,7 +10085,7 @@ mod tests {
                 dirty: false,
             },
         };
-        assert_eq!(plan.exe, PathBuf::from("/tmp/aida"));
+        assert_eq!(plan.exe, PathBuf::from("fixture-aida"));
         assert_eq!(plan.argv[1], OsString::from("mcp-serve"));
         assert_eq!(plan.running.label(), "0.9.1 sha aaaaaaa");
         assert_eq!(plan.on_disk.label(), "0.9.1 sha bbbbbbb");
@@ -12978,7 +12978,7 @@ mod tests {
         // lease may differ in case from the spec_id claim_task lowercased into
         // the filename, so the path MUST fold case — else the reap misses and
         // the orphan lingers (the 24-day TASK-702 leak). Lock the contract.
-        let dir = std::path::Path::new("/tmp/sessions");
+        let dir = std::path::Path::new("fixture-sessions");
         let lower = mcp_claim_path(dir, "task-702");
         let upper = mcp_claim_path(dir, "TASK-702");
         assert_eq!(lower, upper, "scope casing must not change the reaped path");
@@ -14713,12 +14713,18 @@ mod tests {
     fn seed_lease(dir: &Path, id: &str, scope: &str, role: &str) {
         let sessions = dir.join(".aida").join("sessions");
         std::fs::create_dir_all(&sessions).unwrap();
+        // trace:STORY-2593 | ai:codex — keep fixture paths inside their temporary root.
+        let worktree = toml::Value::String(
+            dir.join(format!("wt-{scope}"))
+                .to_string_lossy()
+                .into_owned(),
+        );
         let body = format!(
             "id = \"{id}\"\n\
              scope = \"{scope}\"\n\
              slug = \"{scope}\"\n\
              owner = \"tester\"\n\
-             worktree_path = \"/tmp/wt-{scope}\"\n\
+             worktree_path = {worktree}\n\
              branch = \"{scope}-branch\"\n\
              started_at = \"2026-06-07T00:00:00Z\"\n\
              hostname = \"testhost\"\n\
@@ -14956,12 +14962,18 @@ mod tests {
     fn seed_role(dir: &Path, name: &str, purpose: &str) {
         let roles = dir.join(".aida").join("roles");
         std::fs::create_dir_all(&roles).unwrap();
+        // trace:STORY-2593 | ai:codex — serialize platform paths as TOML strings.
+        let worktree = toml::Value::String(
+            dir.join(format!("wt-{name}"))
+                .to_string_lossy()
+                .into_owned(),
+        );
         let body = format!(
             "name = \"{name}\"\n\
              purpose = \"{purpose}\"\n\
              created_at = \"2026-06-01T00:00:00Z\"\n\
              last_active_at = \"2026-06-07T00:00:00Z\"\n\
-             working_directory = \"/tmp/wt-{name}\"\n\
+             working_directory = {worktree}\n\
              global = false\n\
              scope_tags = [\"inbox\"]\n\
              scope_status = \"draft\"\n"
