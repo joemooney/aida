@@ -1,0 +1,36 @@
+id: 01a1d3fc-15db-7ea0-89f7-1527a6bdba28
+spec_id: STORY-b6b1278890774ef993d2ebc327862470-678
+agreed_id: STORY-2755
+title: 'Review PR-3935: [AI:claude] feat(integration): aida integration tags; launchers refuse other-track specs (STORY-2737 STORY-2749)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `(no-sess`) for branch `story-2737b-landed-in-integration`.
+
+  - PR: <https://github.com/joemooney/aida/pull/3935>
+  - Branch: `story-2737b-landed-in-integration` → `integration`
+
+  ## Covers
+
+  - STORY-2737
+  - STORY-2749
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 3935` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-13T08:17:55.675915869Z
+modified_at: 2026-11-13T08:17:55.675915869Z
+req_type: Story
+filed_at:
+  code_sha: 9298aa92e001afae83002b49028a5dfbe6dbccd5
+  branch: story-2737b-landed-in-integration
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 599d6d1a1e5
+  vendor: claude
+  session: 01a1d394-b764-7e21-a752-015032d87411
+  harness_version: 2.1.323 (Claude Code)
