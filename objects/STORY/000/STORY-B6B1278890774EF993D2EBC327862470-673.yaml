@@ -2,7 +2,7 @@ id: 01a1d34b-20ee-7702-86da-8e23d0c11309
 spec_id: STORY-b6b1278890774ef993d2ebc327862470-673
 agreed_id: STORY-2750
 title: 'Review PR-3922: [AI:claude] chore(integration): promote integration batch 4 to main (BUG-2545)'
-description: |
+description: |-
   Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `(no-sess`) for branch `promote/integration-4`.
 
   - PR: <https://github.com/joemooney/aida/pull/3922>
@@ -19,7 +19,6 @@ description: |
   - BUG-2537
   - TASK-3789
   - BUG-2538
-  - TASK-3448
   - BUG-2533
   - BUG-2522
   - BUG-2521
@@ -33,6 +32,10 @@ description: |
   - STORY-2732
   - BUG-2531
 
+  ## Inherited (already completed; not reviewed here)
+
+  - TASK-3448 (completed earlier; its commits reach main through integration, and no criterion is claimed by this PR)
+
   ## Acceptance
 
   - Generate a structured review prompt with `aida review prompt --pr 3922` and verify each spec's acceptance criteria.
@@ -43,7 +46,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-13T05:04:38.638688628Z
-modified_at: 2026-11-13T11:21:57.926037144Z
+modified_at: 2026-11-13T11:44:01.521591548Z
 req_type: Story
 relationships:
 - rel_type:
@@ -146,6 +149,13 @@ comments:
   modified_at: 2026-11-13T11:21:57.926037144Z
   session_id: 01a1d3ee-83e8-71b3-a2c5-aed5baed6fdc
   harness_version: 2.1.323 (Claude Code)
+- id: 01a1d4b8-c5f1-7fe1-9c31-abd6a9c77301
+  author: joe
+  content: 'ADVISOR 04:50: ruling on the P2 TASK-3448 evidence finding at c8bc6df. TASK-3448 is already Completed, and its commits are inherited from integration. Removed from Covers and listed under ''Inherited (not reviewed here)''. No criterion of TASK-3448 is claimed by #3922. Re-review at the same head.'
+  created_at: 2026-11-13T11:44:01.521591548Z
+  modified_at: 2026-11-13T11:44:01.521591548Z
+  session_id: 01a1d4aa-9c99-76c2-ac94-7f0795f8a7f9
+  harness_version: 2.1.323 (Claude Code)
 history:
 - id: 01a1d34c-c5ed-79f0-9cea-7d0f57d52b6c
   author: joe
@@ -223,6 +233,12 @@ history:
   author: joe
   timestamp: 2026-11-13T11:21:53.194580401Z
   session_id: 01a1d3ee-83e8-71b3-a2c5-aed5baed6fdc
+  harness_version: 2.1.323 (Claude Code)
+  changes: []
+- id: 01a1d4b8-be7a-7f83-86a7-9270a5b9dbeb
+  author: joe
+  timestamp: 2026-11-13T11:43:59.610368626Z
+  session_id: 01a1d4aa-9c99-76c2-ac94-7f0795f8a7f9
   harness_version: 2.1.323 (Claude Code)
   changes: []
 filed_at:
