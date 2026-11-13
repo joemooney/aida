@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-12T11:10:55.183396177Z
-modified_at: 2026-11-13T19:19:55.092661097Z
+modified_at: 2026-11-13T19:36:55.947768218Z
 req_type: Bug
 tags:
 - track:dell1
@@ -59,6 +59,13 @@ comments:
   modified_at: 2026-11-13T19:09:19.292823298Z
   session_id: 01a1d5f7-27ab-7543-8808-b0ec6c271689
   harness_version: 2.1.323 (Claude Code)
+- id: 01a1d669-bb8b-7432-a644-890a51ccbd3c
+  author: dirtlab
+  content: 'Round 2: bounded post-SIGKILL confirmation to 200ms with reaper ownership and an inherited cleanup lock that survives supervisor exit; sweep entry verifies parent handoff, lock identity and ownership. Moved regressions to src/tests/bug_2535_tests.rs, regenerated and inspected the hidden-inclusive help golden, and classified the sweep in the JSON audit. Lane validation passed: 5 BUG-2535 tests, normal help_surface_matches_golden_snapshot, and all 14 bug_1502_format_json_audit tests. rustfmt and git diff --check pass. Edits left uncommitted for the native host launcher.'
+  created_at: 2026-11-13T19:36:55.947768218Z
+  modified_at: 2026-11-13T19:36:55.947768218Z
+  session_id: 01a1d65a2186
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1d364-5260-7363-a01f-2dc06cc3a4d7
   author: joe
