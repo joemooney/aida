@@ -17,12 +17,12 @@ description: |
   - Generate a structured review prompt with `aida review prompt --pr 3900` and verify each spec's acceptance criteria.
   - Approve and merge, or request changes by spec id.
   - Mark this story `completed` once the PR is merged.
-status: Draft
+status: Rejected
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-12T19:23:03.299092807Z
-modified_at: 2026-11-12T19:23:29.868979991Z
+modified_at: 2026-11-13T00:34:23.685429072Z
 req_type: Story
 relationships:
 - rel_type:
@@ -30,12 +30,25 @@ relationships:
   target_id: 01a1d0e7-29d7-77f2-a99d-cfc26c9f4e31
   created_at: 2026-11-12T19:23:29.868976774Z
   created_by: joe
+comments:
+- id: 01a1d253-bd34-7210-8afb-0234700e829e
+  author: aida-auto-bump
+  content: 'Auto-rejected: PR #3900 closed on the forge without merging.'
+  created_at: 2026-11-13T00:34:25.716391781Z
+  modified_at: 2026-11-13T00:34:25.716391781Z
 history:
 - id: 01a1d137-181d-7593-ab3a-4dbb264b6be9
   author: joe
   timestamp: 2026-11-12T19:23:31.229952661Z
   session_id: 01a1d0f4116e
   changes: []
+- id: 01a1d253-bd34-7210-8afb-02424eaa41d2
+  author: aida-auto-bump
+  timestamp: 2026-11-13T00:34:25.716397809Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Rejected
 filed_at:
   code_sha: 0d6c60e6d982aad0c2c4ad38214010289a267d92
   branch: main
