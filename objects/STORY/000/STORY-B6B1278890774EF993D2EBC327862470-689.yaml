@@ -1,0 +1,35 @@
+id: 01a1d5c2-9900-7ad1-8aa7-bc0656dda987
+spec_id: STORY-b6b1278890774ef993d2ebc327862470-689
+agreed_id: STORY-2766
+title: 'Review PR-3955: [AI:claude] fix(store): hub reconcile unions duplicate timing records (BUG-2559)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `(no-sess`) for branch `bug-2559-timing-reconcile`.
+
+  - PR: <https://github.com/joemooney/aida/pull/3955>
+  - Branch: `bug-2559-timing-reconcile` → `integration`
+
+  ## Covers
+
+  - BUG-2559
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 3955` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-13T16:34:22.592223778Z
+modified_at: 2026-11-13T16:34:22.592223778Z
+req_type: Story
+filed_at:
+  code_sha: 5652ea465a222e7d3ade2cadb967ddd30a6b6b44
+  branch: integration
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 3631f7ca055
+  vendor: claude
+  session: 01a1d544-f5ad-79c2-97f9-6fbd19ddbd45
+  harness_version: 2.1.323 (Claude Code)
