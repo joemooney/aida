@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-13T14:52:30.016248538Z
-modified_at: 2026-11-13T15:00:56.741823393Z
+modified_at: 2026-11-13T15:42:17.660591356Z
 req_type: Bug
 tags:
 - review-watch
@@ -19,6 +19,13 @@ comments:
   content: 'Also hits implementer lanes: on dell1 2026-11-13 08:01 a second ''aida queue work TASK-3097'' launched 45s after BUG-2558 refused with ''store pull refused: uncommitted changes'' because the first lane''s claim write (objects/BUG/.../323.yaml) was still uncommitted. The fix should make pickup pulls tolerate or wait out a sibling lane''s in-flight store write, not only add watcher retries.'
   created_at: 2026-11-13T15:00:56.741823393Z
   modified_at: 2026-11-13T15:00:56.741823393Z
+  session_id: 01a1d54b-060a-7951-aa40-7f0fd928126f
+  harness_version: 2.1.323 (Claude Code)
+- id: 01a1d592-ea3c-7940-bbf4-755beec6f3f3
+  author: joe
+  content: 'Scope addition (advisor 08:43): after any merge to main, stale-base refusals hit every open PR touching the same files. On a stale-base refusal, review-watch should run ''gh pr update-branch'' (a merge, no force-push) and re-admit the new head, falling back to rework only on conflict.'
+  created_at: 2026-11-13T15:42:17.660591356Z
+  modified_at: 2026-11-13T15:42:17.660591356Z
   session_id: 01a1d54b-060a-7951-aa40-7f0fd928126f
   harness_version: 2.1.323 (Claude Code)
 history:
