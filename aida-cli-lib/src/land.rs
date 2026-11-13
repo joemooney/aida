@@ -35,6 +35,35 @@ pub(crate) struct Pr {
     pub head: String,
     pub base: String,
     pub branch: Option<String>,
+    pub title: String,
+    /// When the forge last saw the change move.
+    pub updated_at: Option<String>,
+    /// Whether the forge's merge-hold label is set, when discovery read it.
+    pub hold_label: Option<bool>,
+    /// CI on the head, when discovery read it.
+    pub ci: Option<Ci>,
+}
+
+/// CI on a change's head, summed over every check.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum Ci {
+    /// No check has reported.
+    None,
+    Pending,
+    Green,
+    /// The failed checks, named.
+    Red(String),
+}
+
+impl Ci {
+    fn label(&self) -> String {
+        match self {
+            Ci::None => "none".into(),
+            Ci::Pending => "pending".into(),
+            Ci::Green => "green".into(),
+            Ci::Red(names) => format!("red: {names}"),
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize)]
@@ -52,8 +81,12 @@ pub(crate) enum State {
     Landing,
     Conflict,
     Reviewing,
+    /// A check failed on the head: the head is about to change.
+    CiFailed,
     Ready,
     ChangesRequested,
+    /// Unreviewed, with CI still running on the head.
+    WaitingCi,
     NeedsReview,
     Blocked,
     /// Evidence could not be read this pass; the next pass asks again.
@@ -61,8 +94,10 @@ pub(crate) enum State {
 }
 
 impl State {
-    fn label(&self) -> &'static str {
+    pub(crate) fn label(&self) -> &'static str {
         match self {
+            State::CiFailed => "CI-FAILED",
+            State::WaitingCi => "WAITING-CI",
             State::Landing => "LANDING",
             State::Conflict => "CONFLICT",
             State::Reviewing => "REVIEWING",
@@ -83,7 +118,8 @@ pub(crate) enum Action {
     Wait,
     DispatchRework,
     LaunchReview,
-    /// Clear a hold whose release condition is met, then land.
+    /// Clear a hold whose release condition is met, then land. Clearing a
+    /// hold takes a human at a terminal, so this is the operator's.
     ClearHoldAndLand,
     /// Add to the next train (main track).
     Train,
@@ -93,12 +129,23 @@ pub(crate) enum Action {
 }
 
 impl Action {
-    fn label(&self) -> &'static str {
+    /// Who carries the action out.
+    pub(crate) fn owner(&self) -> &'static str {
+        match self {
+            Action::Wait => "-",
+            Action::DispatchRework | Action::LaunchReview | Action::Train => "reconciler",
+            Action::ClearHoldAndLand => "operator",
+            Action::ReportToIntegration => "integration seat",
+            Action::AdvisorRuling => "advisor",
+        }
+    }
+
+    pub(crate) fn label(&self) -> &'static str {
         match self {
             Action::Wait => "wait",
             Action::DispatchRework => "dispatch rework",
             Action::LaunchReview => "launch reviewer",
-            Action::ClearHoldAndLand => "clear met hold, then land",
+            Action::ClearHoldAndLand => "operator clears met hold, then land",
             Action::Train => "add to next train",
             Action::ReportToIntegration => "report to integration seat",
             Action::AdvisorRuling => "advisor ruling",
@@ -133,6 +180,8 @@ pub(crate) trait Evidence {
     fn conflict(&self, pr: &Pr) -> std::result::Result<bool, String>;
     /// A live review of the head, described.
     fn reviewing(&self, pr: &Pr) -> Option<String>;
+    /// CI on the head.
+    fn ci(&self, pr: &Pr) -> std::result::Result<Ci, String>;
     /// An approval covering the head's content, described; `Err` is the
     /// gate's refusal.
     fn approval(&self, pr: &Pr) -> std::result::Result<String, String>;
@@ -152,6 +201,9 @@ pub(crate) struct Row {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub since: Option<String>,
     pub reason: String,
+    /// Who is working the change now: a reviewer or a lane.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub actor: Option<String>,
 }
 
 pub(crate) fn track_of(pr: &Pr) -> Track {
@@ -174,6 +226,7 @@ pub(crate) fn derive(pr: &Pr, evidence: &dyn Evidence) -> Row {
         action,
         since,
         reason,
+        actor: None,
     };
     let unknown = |what: &str, why: String| {
         row(
@@ -203,12 +256,10 @@ pub(crate) fn derive(pr: &Pr, evidence: &dyn Evidence) -> Row {
     // Rework goes to a lane only when none is already on the branch.
     let rework = |state: State, since: Option<String>, reason: String| match evidence.lane(pr) {
         Ok(None) => row(state, Action::DispatchRework, since, reason),
-        Ok(Some(lane)) => row(
-            state,
-            Action::Wait,
-            since,
-            format!("{reason}; lane {lane} is on it"),
-        ),
+        Ok(Some(lane)) => Row {
+            actor: Some(lane),
+            ..row(state, Action::Wait, since, reason)
+        },
         Err(why) => unknown("lane liveness", why),
     };
     match evidence.conflict(pr) {
@@ -223,7 +274,21 @@ pub(crate) fn derive(pr: &Pr, evidence: &dyn Evidence) -> Row {
         Err(why) => return unknown("mergeability", why),
     }
     if let Some(review) = evidence.reviewing(pr) {
-        return row(State::Reviewing, Action::Wait, None, review);
+        return Row {
+            actor: Some(review.clone()),
+            ..row(State::Reviewing, Action::Wait, None, review)
+        };
+    }
+    let ci = match evidence.ci(pr) {
+        Ok(ci) => ci,
+        Err(why) => return unknown("CI", why),
+    };
+    if let Ci::Red(failed) = &ci {
+        return rework(
+            State::CiFailed,
+            None,
+            format!("CI failed on the head: {failed}"),
+        );
     }
     let refusal = match evidence.approval(pr) {
         Ok(approval) => {
@@ -279,6 +344,14 @@ pub(crate) fn derive(pr: &Pr, evidence: &dyn Evidence) -> Row {
             ),
         );
     }
+    if ci == Ci::Pending {
+        return row(
+            State::WaitingCi,
+            Action::Wait,
+            None,
+            "unreviewed; CI is still running on the head".into(),
+        );
+    }
     row(State::NeedsReview, Action::LaunchReview, None, refusal)
 }
 
@@ -303,12 +376,12 @@ fn one_line(text: &str, limit: usize) -> String {
 pub(crate) fn render(rows: &[Row]) -> String {
     let mut out = String::new();
     out.push_str(&format!(
-        "{:<6} {:<11} {:<17} {:<26} {:<16} {}\n",
+        "{:<6} {:<11} {:<17} {:<36} {:<16} {}\n",
         "PR", "TRACK", "STATE", "ACTION", "SINCE", "REASON"
     ));
     for row in rows {
         out.push_str(&format!(
-            "{:<6} {:<11} {:<17} {:<26} {:<16} {}\n",
+            "{:<6} {:<11} {:<17} {:<36} {:<16} {}\n",
             row.pr,
             match row.track {
                 Track::Main => "main",
@@ -430,6 +503,9 @@ struct Live {
     /// Set when the pass's fetch failed: every git-backed fact is unknown.
     fetch_error: Option<String>,
     leases: std::cell::OnceCell<std::result::Result<Vec<crate::leases::SessionLease>, String>>,
+    /// Live claims from other clones and hosts, read once per pass from the
+    /// synced store: never a process probe of another machine.
+    claims: Vec<crate::coordination::Claim>,
 }
 
 impl Live {
@@ -453,6 +529,73 @@ impl Live {
         crate::gate::review_carryover::single_merge_base(&self.root, &base, sha)
             .and_then(|fork| crate::gate::review_carryover::patch_id(&self.root, &fork, sha))
             .unwrap_or_else(|_| sha.to_string())
+    }
+
+    fn local_leases(&self) -> std::result::Result<&[crate::leases::SessionLease], String> {
+        self.leases
+            .get_or_init(|| crate::status_prs::live_owned_leases_strict(&self.root))
+            .as_ref()
+            .map(Vec::as_slice)
+            .map_err(Clone::clone)
+    }
+}
+
+/// How a local lease's holder reads in the table.
+fn lease_actor(lease: &crate::leases::SessionLease) -> String {
+    format!(
+        "{}@{} ({})",
+        lease.role.as_deref().unwrap_or("lane"),
+        lease.hostname,
+        lease.id
+    )
+}
+
+/// How another clone's claim reads in the table.
+pub(crate) fn claim_actor(claim: &crate::coordination::Claim) -> String {
+    format!(
+        "{}@{}",
+        if claim.agent.is_empty() {
+            "lane"
+        } else {
+            &claim.agent
+        },
+        claim.host
+    )
+}
+
+/// Whether a claim's scope names one of the change's specs, or its branch
+/// (a lane's branch starts with its spec's canonical ID).
+pub(crate) fn claim_covers(scope: &str, pr: &Pr) -> bool {
+    let scope = scope.trim();
+    if scope.is_empty() {
+        return false;
+    }
+    if pr.branch.as_deref().is_some_and(|branch| {
+        branch
+            .to_ascii_uppercase()
+            .starts_with(&scope.to_ascii_uppercase())
+    }) {
+        return true;
+    }
+    specs_of(pr)
+        .iter()
+        .any(|id| aida_core::id_identity::same_id(id, scope))
+}
+
+/// The specs a change's title names: those in its trailing parentheses when
+/// it has them, else every ID in the title.
+pub(crate) fn specs_of(pr: &Pr) -> Vec<String> {
+    let title = pr.title.trim();
+    let trailer = title
+        .strip_suffix(')')
+        .and_then(|rest| rest.rfind('(').map(|at| &rest[at + 1..]));
+    let ids = trailer
+        .map(crate::pr_ship::extract_spec_ids_from_text)
+        .unwrap_or_default();
+    if ids.is_empty() {
+        crate::pr_ship::extract_spec_ids_from_text(title)
+    } else {
+        ids
     }
 }
 
@@ -479,7 +622,34 @@ impl Evidence for Live {
     }
 
     fn reviewing(&self, pr: &Pr) -> Option<String> {
-        crate::gate::review_marker::live_description(&self.root, pr.id, Some(&pr.head))
+        if let Some(claimed) =
+            crate::gate::review_marker::live_description(&self.root, pr.id, Some(&pr.head))
+        {
+            return Some(claimed);
+        }
+        // A reviewer that has launched but not yet claimed the head holds a
+        // lease scoped to the change. Unreadable leases read as a review in
+        // progress: a second reviewer must never be launched on a guess.
+        let scope = format!("PR-{}", pr.id);
+        match self.local_leases() {
+            Ok(leases) => leases
+                .iter()
+                .find(|lease| lease.scope.eq_ignore_ascii_case(&scope))
+                .map(|lease| format!("{} launched, no claim yet", lease_actor(lease)))
+                .or_else(|| {
+                    self.claims
+                        .iter()
+                        .find(|claim| claim.scope.eq_ignore_ascii_case(&scope))
+                        .map(|claim| format!("{} reviewing", claim_actor(claim)))
+                }),
+            Err(why) => Some(format!("reviewer leases unreadable ({why})")),
+        }
+    }
+
+    fn ci(&self, pr: &Pr) -> std::result::Result<Ci, String> {
+        pr.ci
+            .clone()
+            .ok_or_else(|| "discovery did not report checks".to_string())
     }
 
     fn approval(&self, pr: &Pr) -> std::result::Result<String, String> {
@@ -549,12 +719,14 @@ impl Evidence for Live {
                 released_by_approval: false,
             }));
         }
-        Ok(
-            crate::merge_hold::label_present(&self.root, pr.id)?.then(|| Hold {
-                detail: "the merge-hold label is set on the forge".into(),
-                released_by_approval: false,
-            }),
-        )
+        let labelled = match pr.hold_label {
+            Some(labelled) => labelled,
+            None => crate::merge_hold::label_present(&self.root, pr.id)?,
+        };
+        Ok(labelled.then(|| Hold {
+            detail: "the merge-hold label is set on the forge".into(),
+            released_by_approval: false,
+        }))
     }
 
     fn rounds(&self, pr: &Pr) -> std::result::Result<Rounds, String> {
@@ -591,16 +763,18 @@ impl Evidence for Live {
         let Some(branch) = pr.branch.as_deref() else {
             return Err("the change's branch is unknown".into());
         };
-        self.leases
-            .get_or_init(|| crate::status_prs::live_owned_leases_strict(&self.root))
-            .as_ref()
-            .map(|leases| {
-                leases
-                    .iter()
-                    .find(|lease| lease.branch == branch)
-                    .map(|lease| lease.id.clone())
-            })
-            .map_err(Clone::clone)
+        if let Some(lease) = self
+            .local_leases()?
+            .iter()
+            .find(|lease| lease.branch == branch)
+        {
+            return Ok(Some(lease_actor(lease)));
+        }
+        Ok(self
+            .claims
+            .iter()
+            .find(|claim| claim_covers(&claim.scope, pr))
+            .map(claim_actor))
     }
 }
 
@@ -608,29 +782,194 @@ fn short(sha: &str) -> &str {
     sha.get(..12).unwrap_or(sha)
 }
 
+/// CI summed over a GitHub `statusCheckRollup`.
+pub(crate) fn ci_of_rollup(rollup: &serde_json::Value) -> Ci {
+    let Some(checks) = rollup.as_array().filter(|checks| !checks.is_empty()) else {
+        return Ci::None;
+    };
+    let text = |check: &serde_json::Value, key: &str| {
+        check
+            .get(key)
+            .and_then(|v| v.as_str())
+            .unwrap_or_default()
+            .to_ascii_uppercase()
+    };
+    let mut failed: Vec<String> = Vec::new();
+    let mut pending = false;
+    for check in checks {
+        let name = check
+            .get("name")
+            .or_else(|| check.get("context"))
+            .and_then(|v| v.as_str())
+            .unwrap_or("check");
+        // A check run reports `status` + `conclusion`; a commit status
+        // reports `state`.
+        let outcome = match text(check, "conclusion") {
+            done if !done.is_empty() => done,
+            _ => text(check, "state"),
+        };
+        match outcome.as_str() {
+            "SUCCESS" | "NEUTRAL" | "SKIPPED" => {}
+            "" | "PENDING" | "EXPECTED" | "QUEUED" | "IN_PROGRESS" => pending = true,
+            _ => failed.push(name.to_string()),
+        }
+    }
+    if !failed.is_empty() {
+        failed.sort();
+        failed.dedup();
+        return Ci::Red(one_line(&failed.join(", "), 80));
+    }
+    if pending {
+        Ci::Pending
+    } else {
+        Ci::Green
+    }
+}
+
+/// One forge read for every open change, with its title, labels and checks.
+/// `None` on a forge without it (GitLab): the caller falls back to the
+/// watcher's discovery and reads the rest per change.
+fn discover_rich(
+    root: &Path,
+    repo: &crate::review_watch::forge::Repository,
+) -> Result<Option<Vec<Pr>>> {
+    let Some(slug) = repo.github_slug() else {
+        return Ok(None);
+    };
+    let mut command = std::process::Command::new("gh");
+    command
+        .args([
+            "pr",
+            "list",
+            "--state",
+            "open",
+            "--limit",
+            "1000",
+            "--repo",
+            &slug,
+            "--json",
+            "number,title,headRefOid,headRefName,baseRefName,isDraft,labels,statusCheckRollup,updatedAt",
+        ])
+        .current_dir(root)
+        .stdin(std::process::Stdio::null());
+    repo.pin_command(&mut command);
+    let out = crate::command_output_with_timeout(command, std::time::Duration::from_secs(60))
+        .context("the forge listing of open changes failed to run or timed out")?;
+    anyhow::ensure!(
+        out.status.success(),
+        "the forge listing of open changes failed: {}",
+        one_line(&String::from_utf8_lossy(&out.stderr), 300)
+    );
+    let rows: Vec<serde_json::Value> =
+        serde_json::from_slice(&out.stdout).context("invalid forge listing")?;
+    let text = |row: &serde_json::Value, key: &str| -> Result<String> {
+        row.get(key)
+            .and_then(|v| v.as_str())
+            .map(str::to_string)
+            .with_context(|| format!("forge listing row has no `{key}`"))
+    };
+    let mut changes = Vec::new();
+    for row in &rows {
+        if row.get("isDraft").and_then(|v| v.as_bool()) == Some(true) {
+            continue;
+        }
+        let head = text(row, "headRefOid")?;
+        anyhow::ensure!(
+            head.len() == 40 && head.bytes().all(|c| c.is_ascii_hexdigit()),
+            "forge listing row has an invalid head"
+        );
+        changes.push(Pr {
+            id: row
+                .get("number")
+                .and_then(|v| v.as_u64())
+                .context("forge listing row has no number")?,
+            head,
+            base: text(row, "baseRefName")?,
+            branch: Some(text(row, "headRefName")?),
+            title: text(row, "title")?,
+            updated_at: row
+                .get("updatedAt")
+                .and_then(|v| v.as_str())
+                .map(str::to_string),
+            hold_label: Some(
+                row.get("labels")
+                    .and_then(|v| v.as_array())
+                    .is_some_and(|labels| {
+                        labels.iter().any(|label| {
+                            label.get("name").and_then(|v| v.as_str())
+                                == Some(crate::merge_hold::HOLD_LABEL)
+                        })
+                    }),
+            ),
+            ci: Some(ci_of_rollup(
+                row.get("statusCheckRollup")
+                    .unwrap_or(&serde_json::Value::Null),
+            )),
+        });
+    }
+    Ok(Some(changes))
+}
+
+/// Everything one pass derived, with the facts the snapshot is built from.
+pub(crate) struct Pass {
+    pub root: PathBuf,
+    pub changes: Vec<Pr>,
+    pub rows: Vec<Row>,
+    /// Live lanes on this clone and, through the synced store, on others.
+    pub local_lanes: Vec<crate::leases::SessionLease>,
+    pub foreign_lanes: Vec<crate::coordination::Claim>,
+}
+
 /// Discover the open changes and derive a row for each.
-pub(crate) fn live_pass(start: &Path) -> Result<Vec<Row>> {
+pub(crate) fn live_pass(start: &Path) -> Result<Pass> {
     let root = crate::review_watch::forge::main_root(start)?;
     let repo = crate::review_watch::forge::Repository::load(&root)?;
-    let changes: Vec<Pr> = repo
-        .discover(&root)?
-        .into_iter()
-        .map(|change| Pr {
-            id: change.id,
-            head: change.head,
-            base: change.base,
-            branch: change.head_branch,
-        })
-        .collect();
+    let changes: Vec<Pr> = match discover_rich(&root, &repo)? {
+        Some(changes) => changes,
+        None => repo
+            .discover(&root)?
+            .into_iter()
+            .map(|change| Pr {
+                id: change.id,
+                head: change.head,
+                base: change.base,
+                branch: change.head_branch,
+                title: String::new(),
+                updated_at: None,
+                hold_label: None,
+                ci: None,
+            })
+            .collect(),
+    };
     let gitlab = repo.github_slug().is_none();
+    let our_clone = root.display().to_string();
+    let foreign: Vec<crate::coordination::Claim> =
+        crate::coordination::list_claims(&root.join(".aida-store"))
+            .into_iter()
+            .filter(|claim| claim.clone_path.is_empty() || claim.clone_path != our_clone)
+            .collect();
+    let (claims, _stale) = crate::coordination::partition_claims(
+        foreign,
+        chrono::Utc::now(),
+        &crate::coordination::hostname(),
+    );
     let live = Live {
         fetch_error: fetch(&root, &changes, gitlab)
             .err()
             .map(|e| format!("{e:#}")),
-        root,
+        root: root.clone(),
         leases: std::cell::OnceCell::new(),
+        claims,
     };
-    Ok(pass(&changes, &live))
+    let rows = pass(&changes, &live);
+    let local_lanes = live.local_leases().map(<[_]>::to_vec).unwrap_or_default();
+    Ok(Pass {
+        root,
+        changes,
+        rows,
+        local_lanes,
+        foreign_lanes: live.claims,
+    })
 }
 
 /// The landing reconciler: every open change's state, derived from the forge,
@@ -649,7 +988,14 @@ fn run(matches: &clap::ArgMatches, ctx: &crate::cmdkit::DispatchCtx) -> Result<(
     match args.action {
         land_args::LandCommand::Status => {
             let root = crate::find_project_root()?;
-            let rows = live_pass(&root)?;
+            let started = std::time::Instant::now();
+            let pass = live_pass(&root)?;
+            // Every pass refreshes the snapshot `aida now` renders.
+            let snapshot = crate::now::build(&pass, started.elapsed());
+            if let Err(error) = crate::now::write(&pass.root, &snapshot) {
+                eprintln!("the `aida now` snapshot was not written: {error:#}");
+            }
+            let rows = pass.rows;
             if ctx.globals.and_then(|g| g.format) == Some(crate::cmdkit::OutputFormat::Json) {
                 println!("{}", serde_json::to_string_pretty(&rows)?);
             } else {

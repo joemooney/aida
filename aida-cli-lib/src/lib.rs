@@ -184,6 +184,7 @@ pub mod lane_env;
 mod land;
 mod lane_cmd;
 mod lane_job;
+mod now;
 // trace:STORY-2640 | ai:codex
 mod lane_fast_gate;
 mod project_checks;
