@@ -3,12 +3,12 @@ spec_id: BUG-b6b1278890774ef993d2ebc327862470-316
 agreed_id: BUG-2551
 title: aida pull spins CPU-bound for 10+ minutes on gate-ledger/by-spec and cache.db; blocks deputy train and ship jobs
 description: '2026-11-12 21:40-22:05 MST, primary checkout, load avg 10-28. Two separate ''aida pull'' runs (deputy job scripts) each ran >10 min at ~50% CPU with only .aida/gate-ledger, gate-ledger/by-spec (1010 entries, 36M) and cache-db/cache.db open; ''aida review list'' did the same for 21 min. Killed by hand. Started after the 20:55 store rebase repair (BUG-2550). Expected: pull finishes in seconds; any ledger/cache rebuild is bounded, incremental, or deferred to the cache worker.'
-status: InProgress
+status: NeedsAttention
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-13T05:04:27.319151195Z
-modified_at: 2026-11-13T08:08:37.471373172Z
+modified_at: 2026-11-13T08:52:12.257514389Z
 req_type: Bug
 tags:
 - track:integration
@@ -54,6 +54,13 @@ history:
   author: joe
   timestamp: 2026-11-13T08:08:39.999251641Z
   changes: []
+- id: 01a1d41b-7761-7431-a897-59d3aff3a3e8
+  author: aida-orchestrator
+  timestamp: 2026-11-13T08:52:12.257539025Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 filed_at:
   code_sha: 2a62f92c2a200b58e0d95446df07e355e062ab49
   branch: main
@@ -63,3 +70,11 @@ filed_at:
   vendor: claude
   session: 01a1d2e6-f5db-7f33-9b74-3ae5fdaf9e0c
   harness_version: 2.1.323 (Claude Code)
+failure_reason:
+  phase: reviewer
+  phase_index: 3
+  kind: verdict:request-changes
+  detail: 'Full sweep: four reproduced defects in ownership freshness, Git scaling, index-budget isolation, and pull reconciliation scaling.'
+  recovery_hint: address the review findings, move BUG-2551 back to In Progress, and clear the PR hold only after approval
+  shelved_by: reviewer
+  shelved_at: 2026-11-13T08:52:12.257514389Z
