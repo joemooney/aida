@@ -3,12 +3,12 @@ spec_id: BUG-b6b1278890774ef993d2ebc327862470-310
 agreed_id: BUG-2545
 title: 'Integration canary PR blocks single-PR trains: ''already has open change'' for every spec merged into integration'
 description: '2026-11-12 18:11: ''aida pr train 3902'' (BUG-2539, approved at head, green) stopped early: ''BUG-2539 already has open change #3905 on integration; refusing a second change''. #3905 is the never-merged draft canary (integration->main) that runs full CI on every integration push (STORY-2737 throughput rule 2). Because the canary carries every integration commit, any spec merged into integration can no longer land as a single PR via train, which contradicts throughput rule 4 (approved green single PR ships straight to main). ''aida pr ship'' does not apply the guard (promotion #3904 shipped with #3905 open). Want: the one-open-change-per-spec guard ignores draft canary PRs (e.g. a canary label or base/head integration->main draft), or treats a change already on integration as compatible with landing the original PR.'
-status: NeedsAttention
+status: Completed
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-13T01:16:21.435486098Z
-modified_at: 2026-11-13T13:46:35.981125349Z
+modified_at: 2026-11-13T14:57:14.370550794Z
 req_type: Bug
 tags:
 - track:integration
@@ -90,6 +90,19 @@ history:
   author: joe
   timestamp: 2026-11-13T11:17:34.399962958Z
   changes: []
+- id: 01a1d569-aa79-7ee3-93ec-01dbf673c525
+  author: aida-auto-bump
+  timestamp: 2026-11-13T14:57:14.361919947Z
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Completed
+processing_record:
+- id: 01a1d569-aa82-7a20-9bb4-72530d1a57b9
+  timestamp: 2026-11-13T14:57:14.370549486Z
+  agent: aida
+  commit_sha: 3631f7ca05567a6984ff2376b997539389b6f758
+  summary: Completed via merge 3631f7ca
 filed_at:
   code_sha: 9968a8ab4ec2b4110f24d64122a7e60ab755a95b
   branch: main
@@ -99,11 +112,7 @@ filed_at:
   vendor: claude
   session: 01a1d240-c397-7b61-b29f-bb337c138943
   harness_version: 2.1.323 (Claude Code)
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: 'Full sweep: SIGPIPE fixed and new code regressions pass exact-head CI; TASK-3448 declared coverage still retains all four supplied untraced criteria. CI pending.'
-  recovery_hint: address the review findings, move BUG-2545 back to In Progress, and clear the PR hold only after approval
-  shelved_by: reviewer
-  shelved_at: 2026-11-13T11:17:34.208075938Z
+implementation_info:
+  implemented: false
+  completed_at: 2026-11-13T14:57:14.361915820Z
+  completion_sha: 3631f7ca05567a6984ff2376b997539389b6f758
