@@ -547,6 +547,14 @@ pub(crate) fn filter_miskeyed(
     // The by-spec files are hints, not completeness evidence: an earlier
     // append may have succeeded while indexing failed. Use pinned discovery.
     let Some(discovery) = discover_with_budget(root, budget)? else {
+        // Input may have been read before the directory disappeared. An
+        // absent corpus cannot establish ownership of those review copies.
+        // trace:BUG-2517 | ai:codex
+        if !events.is_empty() {
+            return Err(Unsafe(
+                "refusing gate-ledger ownership: ledger disappeared after input was read".into(),
+            ));
+        }
         return Ok(events);
     };
     let mut events = events;

@@ -2607,6 +2607,15 @@ fn bug_2517_disappearing_discovery_never_returns_raw_review_copies() {
     assert!(raw.iter().any(|e| e.verdict_record().is_some()));
     // Simulate removal between the legacy input read and pinned discovery.
     std::fs::remove_dir_all(ledger_dir(&root)).unwrap();
+    // The strict reader must report incomplete evidence, too; absence must
+    // not turn its pre-read copies back into authoritative review records.
+    let error = checked::filter_miskeyed(&root, raw.clone(), &mut Default::default()).unwrap_err();
+    assert!(error.0.contains("ledger disappeared"), "{error}");
+    assert!(
+        checked::filter_miskeyed(&root, Vec::new(), &mut Default::default())
+            .unwrap()
+            .is_empty()
+    );
     let filtered = checked::filter_miskeyed_or_fail_closed(&root, raw);
     assert!(!filtered.iter().any(|e| e.verdict_record().is_some()));
     assert!(filtered
@@ -2620,15 +2629,25 @@ fn bug_2517_ownership_index_visits_corpus_once_per_discovery() {
     let (_tmp, root) = root();
     let _env = uncontained();
     const BUCKETS: usize = 12;
+    const ROUNDS: usize = 3;
     for n in 1..=BUCKETS {
         let spec = GateSpec::with_key(&format!("BUG-{n}"), None);
-        let mut rec = record("waiting", &ts(n as i64), Some(&attestation("reviewer")));
-        rec.insert("mode".into(), serde_json::json!(project::PHASE3_MODE));
-        store::append_one(
-            &root,
-            event::verdict_event(&root, ChangeKey::pr(n as u64), &rec, Some(&spec)),
-        )
-        .unwrap();
+        // Multiple distinct phase-3 witnesses per bucket catch rebuilds whose
+        // cost grows with both corpus buckets and historical review rounds.
+        // trace:BUG-2517 | ai:codex
+        for round in 0..ROUNDS {
+            let mut rec = record(
+                "waiting",
+                &ts((n * ROUNDS + round) as i64),
+                Some(&attestation("reviewer")),
+            );
+            rec.insert("mode".into(), serde_json::json!(project::PHASE3_MODE));
+            store::append_one(
+                &root,
+                event::verdict_event(&root, ChangeKey::pr(n as u64), &rec, Some(&spec)),
+            )
+            .unwrap();
+        }
     }
     // Ownership discovery visits the complete change corpus once, including
     // binding events and the hold that must survive every filtering pass.
@@ -2652,7 +2671,7 @@ fn bug_2517_ownership_index_visits_corpus_once_per_discovery() {
                 .iter()
                 .filter(|e| e.verdict_record().is_some())
                 .count(),
-            1
+            ROUNDS
         );
         assert_eq!(
             discovery
@@ -2660,7 +2679,7 @@ fn bug_2517_ownership_index_visits_corpus_once_per_discovery() {
                 .unwrap()[0]
                 .1
                 .len(),
-            1
+            ROUNDS
         );
     }
     // A misplaced copy must actually be removed by the cached ownership
@@ -2693,13 +2712,13 @@ fn bug_2517_ownership_index_visits_corpus_once_per_discovery() {
                 .iter()
                 .filter(|e| e.verdict_record().is_some())
                 .count(),
-            1
+            ROUNDS
         );
     }
     std::fs::remove_file(unrelated).unwrap();
     assert_eq!(
         project::OWNERSHIP_WORK.with(|work| work.get()),
-        (1, 2 * BUCKETS + 1)
+        (1, (ROUNDS + 1) * BUCKETS + 1)
     );
     // The legacy spec-indexed reader also performs only one discovery,
     // even when one spec names every change bucket.
@@ -2707,10 +2726,10 @@ fn bug_2517_ownership_index_visits_corpus_once_per_discovery() {
         project::index_spec(&root, "BUG-1", ChangeKey::pr(n as u64)).unwrap();
     }
     project::OWNERSHIP_WORK.with(|work| work.set((0, 0)));
-    assert_eq!(project::verdict_records(&root, "BUG-1").len(), 1);
+    assert_eq!(project::verdict_records(&root, "BUG-1").len(), ROUNDS);
     assert_eq!(
         project::OWNERSHIP_WORK.with(|work| work.get()),
-        (1, 2 * BUCKETS + 1)
+        (1, (ROUNDS + 1) * BUCKETS + 1)
     );
     // Filtering another vector through discovery must reuse that same index.
     project::OWNERSHIP_WORK.with(|work| work.set((0, 0)));
@@ -2721,11 +2740,11 @@ fn bug_2517_ownership_index_visits_corpus_once_per_discovery() {
             .iter()
             .filter(|e| e.verdict_record().is_some())
             .count(),
-        1
+        ROUNDS
     );
     assert_eq!(
         project::OWNERSHIP_WORK.with(|work| work.get()),
-        (1, 2 * BUCKETS + 1)
+        (1, (ROUNDS + 1) * BUCKETS + 1)
     );
 }
 

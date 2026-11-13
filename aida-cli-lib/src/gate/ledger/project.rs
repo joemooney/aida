@@ -480,10 +480,13 @@ fn review_fingerprint(event: &GateEvent) -> Option<String> {
     {
         return None;
     }
-    let semantic: JsonObj = record
+    // Borrow payloads while constructing the canonical fingerprint: the
+    // discovery owns only its serialized key, not a second review-body clone.
+    // A sorted map preserves the existing JSON object's canonical key order.
+    let semantic: std::collections::BTreeMap<&str, &serde_json::Value> = record
         .iter()
         .filter(|(k, _)| !OVERLAY_ONLY_FIELDS.contains(&k.as_str()))
-        .map(|(k, v)| (k.clone(), v.clone()))
+        .map(|(k, v)| (k.as_str(), v))
         .collect();
     serde_json::to_string(&(forge, spec, head, semantic)).ok()
 }
