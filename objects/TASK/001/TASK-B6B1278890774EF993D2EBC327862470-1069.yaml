@@ -13,12 +13,12 @@ description: |
 
   ACCEPTANCE: fake-forge unit tests for GitLab mirroring STORY-2732's five cases (happy path; merge failure still restores; setting already off is never touched; restore or verify failure exits non-zero and prints the restore command; refusals make no API writes); pure-git refusal test; docs/cli section notes GitLab behavior.
   LIGHT gate: one targeted cargo test -p aida-cli-lib emergency_land + make check-ci-fast. Lands after STORY-2732.
-status: NeedsAttention
+status: Completed
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-12T17:38:36.583411920Z
-modified_at: 2026-11-13T04:49:08.794636480Z
+modified_at: 2026-11-13T07:45:25.086344648Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -102,6 +102,20 @@ history:
   session_id: 01a1d306e9d7
   harness_version: codex-cli 0.167.0
   changes: []
+- id: 01a1d3de-4d80-7470-8ddb-dd99ade06a66
+  author: aida-auto-bump
+  timestamp: 2026-11-13T07:45:23.840687784Z
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Completed
+processing_record:
+- id: 01a1d3de-525e-7951-8248-b7609c6d3ee4
+  timestamp: 2026-11-13T07:45:25.086337390Z
+  agent: aida
+  commit_sha: f13fe5a8463299b1e2578d3ed5df98f953c1e499
+  summary: No actionable defects; all three prior findings resolved. Exact-head Ubuntu Build green; merge-hold-gate pending at review time.
+  review_verdict: approved
 filed_at:
   code_sha: ec5a35a7108475b421baf1101b26159a7aa0fab9
   branch: main
@@ -111,16 +125,12 @@ filed_at:
   vendor: claude
   session: 01a1d09a-4262-7d50-a00b-00a5a30f3934
   harness_version: 2.1.322 (Claude Code)
+implementation_info:
+  implemented: false
+  completed_at: 2026-11-13T07:45:23.840680707Z
+  completion_sha: f13fe5a8463299b1e2578d3ed5df98f953c1e499
 attention_reason:
   category: other
   detail: 'Pickup refused: TASK-3788 is Needs Attention with verdict:request-changes; promoting to InProgress requires advisor authority. Existing implementation and PR-3911 are present. Advisor triage is required before lane work or publication.'
   raised_by: implementer
   raised_at: 2026-11-13T03:50:51.840538968Z
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: 'Full sweep: nullable GitLab policy rejects valid projects, armed auto-merge blocks emergency landing, and merge-commit revert guidance fails. CI pending at review time.'
-  recovery_hint: address the review findings, move TASK-3788 back to In Progress, and clear the PR hold only after approval
-  shelved_by: reviewer
-  shelved_at: 2026-11-13T02:59:31.491270843Z
