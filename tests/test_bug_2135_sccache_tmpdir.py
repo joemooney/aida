@@ -33,11 +33,9 @@ spec.loader.exec_module(check_ci)
 
 class TestSccacheTmpdirDetection(unittest.TestCase):
     def setUp(self):
-        self.env_backup = dict(os.environ)
-
-    def tearDown(self):
-        os.environ.clear()
-        os.environ.update(self.env_backup)
+        # trace:STORY-2593 | ai:codex — host PID filters and opt-outs must
+        # not select real processes or bypass the synthetic server fixtures.
+        self.enterContext(mock.patch.dict(os.environ, {}, clear=True))
 
     def test_missing_tmpdir_detected(self):
         with tempfile.TemporaryDirectory() as td:
@@ -230,12 +228,12 @@ class TestTask2772BoundedServerStart(unittest.TestCase):
     """
 
     def setUp(self):
-        self.saved_env = dict(os.environ)
+        # Keep the restart watchdog on the synthetic process even when the
+        # parent runner supplies its own sccache PID filter or opt-out.
+        self.enterContext(mock.patch.dict(os.environ, {}, clear=True))
         self.saved_timeouts = (check_ci.SCCACHE_SERVER_TIMEOUT, check_ci.SCCACHE_PROBE_TIMEOUT)
 
     def tearDown(self):
-        os.environ.clear()
-        os.environ.update(self.saved_env)
         check_ci.SCCACHE_SERVER_TIMEOUT, check_ci.SCCACHE_PROBE_TIMEOUT = self.saved_timeouts
 
     def silent_sccache(self, td):
