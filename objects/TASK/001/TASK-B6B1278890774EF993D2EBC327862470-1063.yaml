@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-11T12:17:13.260009028Z
-modified_at: 2026-11-13T22:30:18.396143717Z
+modified_at: 2026-11-13T22:45:38.248767536Z
 req_type: Task
 relationships:
 - rel_type: BlockedBy
@@ -116,6 +116,13 @@ comments:
   created_at: 2026-11-13T22:30:18.396143717Z
   modified_at: 2026-11-13T22:30:18.396143717Z
   session_id: 01a1d706722f
+- id: 01a1d716-7f48-7f21-99ad-dcc93d759f93
+  author: joe
+  content: 'Advisor 15:46: UNPARKED. PR #3949 is MERGEABLE at 916f23d after the Codex commit ''resolve PR 3949 merge paths''. A scoped re-review is launched (prior approval at c7f1754 covers the rest).'
+  created_at: 2026-11-13T22:45:38.248767536Z
+  modified_at: 2026-11-13T22:45:38.248767536Z
+  session_id: 01a1d684-8599-70e0-a01c-714f54d2f8de
+  harness_version: 2.1.323 (Claude Code)
 history:
 - id: 01a1ca8a-8ee7-7991-b976-a941a11ff32c
   author: joe
