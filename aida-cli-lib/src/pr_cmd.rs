@@ -48,7 +48,8 @@ pub(crate) fn handle_pr_command(cmd: &PrCommand) -> Result<()> {
         // trace:BUG-2384 | ai:codex
         // trace:BUG-2535 | ai:codex
         PrCommand::PostShipSweep => {
-            let _lock = verify_post_ship_sweep_handoff()?;
+            let inputs = aida_core::exec_context::Environment::capture();
+            let _lock = verify_post_ship_sweep_handoff(&inputs)?;
             run_post_ship_sweep();
             Ok(())
         }
@@ -4757,17 +4758,22 @@ fn post_ship_cleanup_worker(args: PostShipCleanupArgs<'_>) -> Result<()> {
 const SWEEP_LOCK_FD: std::os::fd::RawFd = 198;
 
 // trace:BUG-2535 | ai:codex
-fn verify_post_ship_sweep_handoff() -> Result<std::fs::File> {
+fn verify_post_ship_sweep_handoff(
+    inputs: &aida_core::exec_context::Environment,
+) -> Result<std::fs::File> {
     let main = main_worktree_root_from(&find_project_root()?);
-    verify_sweep_lock(&main.join(".aida/post-ship-cleanup.lock"))
+    verify_sweep_lock(&main.join(".aida/post-ship-cleanup.lock"), inputs)
 }
 
 // trace:BUG-2535 | ai:codex
-fn verify_sweep_lock(path: &std::path::Path) -> Result<std::fs::File> {
+fn verify_sweep_lock(
+    path: &std::path::Path,
+    inputs: &aida_core::exec_context::Environment,
+) -> Result<std::fs::File> {
     use fs2::FileExt;
     use std::os::{fd::FromRawFd, unix::fs::MetadataExt};
     anyhow::ensure!(
-        std::env::var("AIDA_SWEEP_PARENT").ok().as_deref()
+        inputs.var("AIDA_SWEEP_PARENT").ok()
             == Some(unsafe { libc::getppid() }.to_string().as_str()),
         "post-ship-sweep requires a supervisor lock handoff"
     );

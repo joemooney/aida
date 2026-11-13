@@ -93,7 +93,10 @@ fn bug_2535_direct_entry_refuses_even_while_cleanup_lock_is_held() {
         if held {
             lock.lock_exclusive().unwrap();
         }
-        assert!(super::verify_sweep_lock(&path).is_err());
+        assert!(
+            super::verify_sweep_lock(&path, &aida_core::exec_context::Environment::default())
+                .is_err()
+        );
     }
 }
 
@@ -102,9 +105,10 @@ fn bug_2535_direct_entry_refuses_even_while_cleanup_lock_is_held() {
 fn bug_2535_verified_handoff_retains_serialization() {
     use fs2::FileExt;
     const CHILD: &str = "AIDA_2535_HANDOFF_TEST";
-    if let Some(path) = std::env::var_os(CHILD) {
-        let result = super::verify_sweep_lock(std::path::Path::new(&path));
-        if std::env::var_os("AIDA_2535_REFUSE").is_some() {
+    let inputs = aida_core::exec_context::Environment::capture();
+    if let Some(path) = inputs.get(CHILD) {
+        let result = super::verify_sweep_lock(std::path::Path::new(path), &inputs);
+        if inputs.get("AIDA_2535_REFUSE").is_some() {
             assert!(
                 result.is_err(),
                 "accepted an unlocked or unrelated descriptor"
