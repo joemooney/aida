@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-13T03:10:47.302266912Z
-modified_at: 2026-11-13T22:34:19.070457515Z
+modified_at: 2026-11-13T22:41:08.950923762Z
 req_type: Bug
 tags:
 - track:dell1
@@ -92,6 +92,13 @@ comments:
   modified_at: 2026-11-13T22:18:20.573283754Z
   session_id: 01a1d684-8599-70e0-a01c-714f54d2f8de
   harness_version: 2.1.323 (Claude Code)
+- id: 01a1d712-6356-7493-ac0a-a7936cdc616e
+  author: dirtlab
+  content: 'Round 3: addressed all three blocking findings. Canonical pickup compares the branch tip with the historical merged PR head and resumes post-merge work; existing non-clone worktrees supply their actual HEAD, with recorded-ref fallback only for missing trees; exit branch/head evidence persists before forge lookup, while Approved still requires known no-PR evidence. Added one regression per finding. Validation: lane job j20261113T223600549-2-0, cargo test --profile agent -p aida-cli-lib --lib -- bug_2549: 14 passed, 0 failed. git diff --check passed. Native seat leaves edits uncommitted for host publication.'
+  created_at: 2026-11-13T22:41:08.950923762Z
+  modified_at: 2026-11-13T22:41:08.950923762Z
+  session_id: 01a1d70c1bbe
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1d2e2-f946-73a0-bdee-dad6c72c0bc8
   author: joe
