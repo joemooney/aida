@@ -3,12 +3,12 @@ spec_id: BUG-b6b1278890774ef993d2ebc327862470-323
 agreed_id: BUG-2558
 title: 'Codex native-seat conflict reworks always punt: the host aborts the merge of main and the lane''s read-only Git cannot record one, so CONFLICTING PRs loop'
 description: '2026-11-13 05:2x: dell1 Codex lanes for BUG-2501 (#3920), STORY-2325 (#3940) and STORY-2593 (#3938), all CONFLICTING with main, punted. The host attempts ''merge origin/main'', aborts on conflict, and hands the lane a clean tree with ''conflict resolution continues with codex''. The native seat''s Git is read-only, so the lane can only write a patch to /tmp and punt (''the host must merge main first''). Each relaunch burns a lane slot. Want: the host leaves the conflicted merge in place (MERGE_HEAD plus conflict markers) for the lane to resolve in the working tree; the host verifies no markers remain, records the merge commit, runs the fast gate and pushes. Or the host records a merge that keeps conflict markers on a scratch branch. Until then the advisor hand-merges small additive conflicts (done for #3920 at 4a191e3); large ones (#3940: 8 files including ratchet baselines) stay parked.'
-status: InProgress
+status: Rejected
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-13T12:51:33.706851654Z
-modified_at: 2026-11-13T23:38:12.278571475Z
+modified_at: 2026-11-13T23:49:38.283224878Z
 req_type: Bug
 tags:
 - lanes
@@ -99,6 +99,13 @@ comments:
   modified_at: 2026-11-13T23:38:12.278571475Z
   session_id: 01a1d73ff6c5
   harness_version: codex-cli 0.167.0
+- id: 01a1d751-0f25-7781-9cd4-334bdabfd445
+  author: joe
+  content: 'Advisor 16:52: SUPERSEDED. STORY-2710 slice 1 (#3832, on main 11:41) implements the wanted behavior for every vendor: the host keeps the conflicted merge, writes a repair journal, and the lane edits only the working tree. #3953 closed. Tonight''s dell1 punts happened because dell1''s live binary (3631f7c, 09:09) predated #3832; it is being rebuilt from main now. Small residual: commit_pending treats any failed rev-parse as ''no pending merge''.'
+  created_at: 2026-11-13T23:49:36.165313305Z
+  modified_at: 2026-11-13T23:49:36.165313305Z
+  session_id: 01a1d73b-e31c-7f33-b2fe-cee145ddc6fb
+  harness_version: 2.1.325 (Claude Code)
 history:
 - id: 01a1d4f7-f92d-7a61-af83-4ceb9af49f3d
   author: joe
@@ -145,6 +152,15 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1d751-176b-7a32-929e-80a8a5150434
+  author: joe
+  timestamp: 2026-11-13T23:49:38.283218588Z
+  session_id: 01a1d73b-e31c-7f33-b2fe-cee145ddc6fb
+  harness_version: 2.1.325 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Rejected
 filed_at:
   code_sha: 76c12135362bc1f87985a5eb1ebff051f16bc212
   branch: main
