@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-13T04:07:35.213330891Z
-modified_at: 2026-11-13T08:45:03.990435799Z
+modified_at: 2026-11-13T11:05:03.483498450Z
 req_type: Story
 tags:
 - track:integration
@@ -32,6 +32,13 @@ comments:
   created_at: 2026-11-13T05:48:29.711660413Z
   modified_at: 2026-11-13T05:48:29.711660413Z
   session_id: 92a24ff6-1324-4fe1-a02b-b2601f384b4b
+- id: 01a1d495-18fb-7270-8262-06f270dea318
+  author: joe
+  content: 'Round-2 (PR #3935 @ 23b2d8df): all 5 round-1 findings FIXED, none deferred. (1) AIDA_TRACK added to AMBIENT_AIDA_KEYS; test story_2749_track_reaches_the_vendor_child projects it through VendorProfile::env_policy for claude+codex. (2) spec_track returns SpecTrack::{Free,Owner,Ambiguous}; several owners -> QueueFreshPickup::AmbiguousTrack (test covers both insertion orders). (3/4, on STORY-2737) see that spec. (5) effective_execution_mode: track:operator => Operator in queue_drain_pickup_policy, queue-wide drain candidates and spec_is_keyboard_only (--no-human); attended queue work at an operator launcher still takes it. Test with execution_mode None and Drain.'
+  created_at: 2026-11-13T11:05:03.483498450Z
+  modified_at: 2026-11-13T11:05:03.483498450Z
+  session_id: 01a1d418-ebf0-79b3-844f-d0ab8bed7682
+  harness_version: 2.1.323 (Claude Code)
 history:
 - id: 01a1d363-eb51-78a2-b07a-6155c944bf86
   author: joe
