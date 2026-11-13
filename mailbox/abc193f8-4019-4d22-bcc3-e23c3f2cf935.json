@@ -1,0 +1,18 @@
+{
+  "id": "abc193f8-4019-4d22-bcc3-e23c3f2cf935",
+  "thread_id": "abc193f8-4019-4d22-bcc3-e23c3f2cf935",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1794580342166,
+  "body": "GAP ALARM: main unmoved 63 min (tip dc53b3a4ecf). Integration-ready: 3917 3925 3928 . Investigate and act before anything else.",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "advisor"
+}

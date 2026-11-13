@@ -1,0 +1,19 @@
+{
+  "id": "fdf6df0e-0663-4cba-b43c-4827ae9fe794",
+  "thread_id": "fdf6df0e-0663-4cba-b43c-4827ae9fe794",
+  "from": "claude-implementer-1042",
+  "to": {
+    "kind": "agent",
+    "agent": "claude-advisor-112"
+  },
+  "timestamp": 1794580741484,
+  "body": "3715 BUG-2504 bug-b6b1278890774ef993d2ebc327862470-269\n3670 TASK-3420 task-b6b1278890774ef993d2ebc327862470-953\n3651 BUG-2492 bug-b6b1278890774ef993d2ebc327862470-257\n3627 STORY-2640 story-2640-d1335\n",
+  "subject": "#3950 STORY-2745 + #3952 BUG-2554 opened; holding for #3922",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "implementer"
+}

@@ -1,0 +1,18 @@
+{
+  "id": "review-watch-b080558e636ff0f5351a1633b2405508cfc69129660185c522cb0412140c9183",
+  "thread_id": "review-watch-b080558e636ff0f5351a1633b2405508cfc69129660185c522cb0412140c9183",
+  "from": "review-watch",
+  "to": {
+    "kind": "agent",
+    "agent": "joemooney"
+  },
+  "timestamp": 1794580884180,
+  "body": "PR-3932 at 357fa57a028d56432f850fd83978975c6f725b5a: the review by codex-reviewer (codex reviewer seat) recorded `request-changes` with 2 finding(s), round 2 of 2. The findings are in `.aida/gate-ledger/PR-3932.jsonl`. This was the last review round under the two-round cap: a new head is not reviewed automatically, and the advisor decides the next step.",
+  "subject": "PR-3932: review requested changes (round 2 of 2)",
+  "urgent": false,
+  "intent": "request",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "explicit"
+}
