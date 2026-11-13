@@ -165,11 +165,11 @@ pub(crate) struct CheckoutState {
     pub tracked_changes: Vec<String>,
     /// Count of untracked (non-ignored) files.
     pub untracked: usize,
-    /// Whether `refs/remotes/origin/main` exists.
-    pub has_origin_main: bool,
-    /// Commits in HEAD that origin/main lacks.
+    /// Whether the landing ref (see [`landing_ref`]) exists.
+    pub has_upstream: bool,
+    /// Commits in HEAD that the landing ref lacks.
     pub ahead: usize,
-    /// Commits in origin/main that HEAD lacks.
+    /// Commits in the landing ref that HEAD lacks.
     pub behind: usize,
     /// `git rev-parse HEAD`, when readable.
     // trace:STORY-1646 | ai:claude
@@ -193,10 +193,27 @@ pub(crate) enum PromotionPlan {
     Refuse { reasons: Vec<String> },
 }
 
-/// Pure promotion gate: primary checkout, on `main`, no tracked
-/// modifications, HEAD == origin/main. Untracked files only warn.
-/// `--allow-dirty` turns refusals into warnings; it never makes a worktree
-/// build promote.
+/// The integration branch: fast local landing, with `main` as the batched
+/// verification checkpoint (STORY-2737). Slice (c) moves this to config.
+// trace:STORY-2737 | ai:claude
+pub(crate) const INTEGRATION_BRANCH: &str = "integration";
+
+/// The remote-tracking ref a checkout on `branch` is compared with: its own
+/// `origin/integration` on the integration branch, otherwise `origin/main`.
+// trace:STORY-2737 | ai:claude
+pub(crate) fn landing_ref(branch: Option<&str>) -> &'static str {
+    match branch {
+        Some(INTEGRATION_BRANCH) => "origin/integration",
+        _ => "origin/main",
+    }
+}
+
+/// Pure promotion gate: on a landing branch (`main` in the primary checkout,
+/// or `integration` in any checkout), no tracked modifications, HEAD equal to
+/// that branch's `origin/` ref. Untracked files only warn. `--allow-dirty`
+/// turns refusals into warnings; it never makes a worktree build promote
+/// unless that worktree is on `integration`.
+// trace:STORY-2737 | ai:claude
 pub(crate) fn plan_promotion(
     state: &CheckoutState,
     no_promote: bool,
@@ -205,14 +222,20 @@ pub(crate) fn plan_promotion(
     if no_promote {
         return PromotionPlan::BuildOnly(BuildOnlyReason::NoPromote);
     }
-    if state.is_linked_worktree {
+    let on_integration = state.branch.as_deref() == Some(INTEGRATION_BRANCH);
+    if state.is_linked_worktree && !on_integration {
         return PromotionPlan::BuildOnly(BuildOnlyReason::Worktree);
     }
+    let upstream = landing_ref(state.branch.as_deref());
     let mut reasons = Vec::new();
     match state.branch.as_deref() {
-        Some("main") => {}
-        Some(other) => reasons.push(format!("on branch `{other}`, not `main`")),
-        None => reasons.push("HEAD is detached, not on `main`".to_string()),
+        Some("main") | Some(INTEGRATION_BRANCH) => {}
+        Some(other) => reasons.push(format!(
+            "on branch `{other}`, not `main` or `{INTEGRATION_BRANCH}`"
+        )),
+        None => reasons.push(format!(
+            "HEAD is detached, not on `main` or `{INTEGRATION_BRANCH}`"
+        )),
     }
     if !state.tracked_changes.is_empty() {
         let shown: Vec<&str> = state
@@ -233,21 +256,21 @@ pub(crate) fn plan_promotion(
             shown.join(", ")
         ));
     }
-    if !state.has_origin_main {
-        reasons.push("there is no `origin/main` to compare HEAD against".to_string());
+    if !state.has_upstream {
+        reasons.push(format!("there is no `{upstream}` to compare HEAD against"));
     } else if state.ahead > 0 && state.behind > 0 {
         reasons.push(format!(
-            "HEAD has diverged from origin/main ({} ahead, {} behind)",
+            "HEAD has diverged from {upstream} ({} ahead, {} behind)",
             state.ahead, state.behind
         ));
     } else if state.behind > 0 {
         reasons.push(format!(
-            "HEAD is {} commit(s) behind origin/main",
+            "HEAD is {} commit(s) behind {upstream}",
             state.behind
         ));
     } else if state.ahead > 0 {
         reasons.push(format!(
-            "HEAD is {} commit(s) ahead of origin/main (unpushed work)",
+            "HEAD is {} commit(s) ahead of {upstream} (unpushed work)",
             state.ahead
         ));
     }
@@ -274,16 +297,17 @@ pub(crate) fn plan_promotion(
 
 fn refusal_message(reasons: &[String]) -> String {
     let mut msg = String::from(
-        "refusing to promote: the live binary is only built from a clean `main` that matches `origin/main`.\n",
+        "refusing to promote: the live binary is only built from a clean `main` or `integration` \
+         that matches its `origin/` branch.\n",
     );
     for r in reasons {
         msg.push_str(&format!("  - {r}\n"));
     }
     msg.push_str(
         "Nothing was built and the live binaries are untouched.\n\
-         HEAD is compared with your local `origin/main` ref; this command does not fetch, \
+         HEAD is compared with your local `origin/` ref; this command does not fetch, \
          so run `git fetch` first if that ref may be stale.\n\
-         Options: commit/push or sync with `origin/main` and retry; `aida dev build --no-promote` \
+         Options: commit/push or sync with the `origin/` branch and retry; `aida dev build --no-promote` \
          to build and smoke-test only; or `aida dev build --allow-dirty` to promote anyway.",
     );
     msg
@@ -336,20 +360,18 @@ pub(crate) fn probe_checkout(repo: &Path) -> Result<CheckoutState> {
             tracked_changes.push(line[3..].to_string());
         }
     }
-    let has_origin_main = git_out(
-        repo,
-        &["rev-parse", "--verify", "-q", "refs/remotes/origin/main"],
-    )
-    .is_some();
+    // trace:STORY-2737 | ai:claude
+    let upstream = format!("refs/remotes/{}", landing_ref(branch.as_deref()));
+    let has_upstream = git_out(repo, &["rev-parse", "--verify", "-q", &upstream]).is_some();
     let (mut ahead, mut behind) = (0, 0);
-    if has_origin_main {
+    if has_upstream {
         if let Some(counts) = git_out(
             repo,
             &[
                 "rev-list",
                 "--left-right",
                 "--count",
-                "HEAD...refs/remotes/origin/main",
+                &format!("HEAD...{upstream}"),
             ],
         ) {
             let mut it = counts.split_whitespace().map(|n| n.parse().unwrap_or(0));
@@ -362,7 +384,7 @@ pub(crate) fn probe_checkout(repo: &Path) -> Result<CheckoutState> {
         branch,
         tracked_changes,
         untracked,
-        has_origin_main,
+        has_upstream,
         ahead,
         behind,
         head: git_out(repo, &["rev-parse", "HEAD"]).filter(|h| !h.is_empty()),

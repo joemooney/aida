@@ -47,7 +47,7 @@ const HEAD: &str = "abc1234567890def1234567890abc1234567890d";
 fn clean_main() -> CheckoutState {
     CheckoutState {
         branch: Some("main".into()),
-        has_origin_main: true,
+        has_upstream: true,
         head: Some(HEAD.into()),
         ..Default::default()
     }
@@ -275,7 +275,7 @@ fn every_refusal_case_refuses_and_allow_dirty_overrides_it() {
         ),
         (
             CheckoutState {
-                has_origin_main: false,
+                has_upstream: false,
                 ..clean_main()
             },
             "no `origin/main`",
@@ -455,6 +455,85 @@ fn probe_linked_worktree_is_build_only() {
         plan_promotion(&state, false, true),
         PromotionPlan::BuildOnly(BuildOnlyReason::Worktree)
     );
+}
+
+// STORY-2737 slice (a): `integration` is a landing branch. A clean
+// integration checkout, even a linked worktree, promotes when it matches
+// `origin/integration`; its refusals name `origin/integration`; any other
+// worktree branch stays build-only.
+// trace:STORY-2737 | ai:claude
+fn clean_integration_worktree() -> CheckoutState {
+    CheckoutState {
+        is_linked_worktree: true,
+        branch: Some("integration".into()),
+        ..clean_main()
+    }
+}
+
+#[test]
+fn story_2737_clean_integration_worktree_promotes() {
+    assert_eq!(
+        plan_promotion(&clean_integration_worktree(), false, false),
+        PromotionPlan::Promote { warnings: vec![] }
+    );
+    assert_eq!(
+        plan_promotion(&clean_integration_worktree(), true, false),
+        PromotionPlan::BuildOnly(BuildOnlyReason::NoPromote)
+    );
+}
+
+#[test]
+fn story_2737_integration_refusals_name_origin_integration() {
+    let behind = CheckoutState {
+        behind: 3,
+        ..clean_integration_worktree()
+    };
+    let reasons = refusal(&behind);
+    assert!(
+        reasons
+            .iter()
+            .any(|r| r.contains("3 commit(s) behind origin/integration")),
+        "{reasons:?}"
+    );
+    let missing = CheckoutState {
+        has_upstream: false,
+        ..clean_integration_worktree()
+    };
+    assert!(refusal(&missing)
+        .iter()
+        .any(|r| r.contains("no `origin/integration`")));
+    let dirty = CheckoutState {
+        tracked_changes: vec!["x.rs".into()],
+        ..clean_integration_worktree()
+    };
+    assert!(matches!(
+        plan_promotion(&dirty, false, true),
+        PromotionPlan::Promote { warnings } if warnings.iter().any(|w| w.contains("--allow-dirty"))
+    ));
+}
+
+#[test]
+fn story_2737_probe_integration_worktree_compares_with_origin_integration() {
+    let (tmp, _o, clone) = git_fixture();
+    git(&clone, &["branch", "integration"]);
+    git(&clone, &["push", "-q", "origin", "integration"]);
+    let wt = tmp.path().join("integ");
+    git(
+        &clone,
+        &["worktree", "add", "-q", wt.to_str().unwrap(), "integration"],
+    );
+    assert_eq!(probe_plan(&wt), PromotionPlan::Promote { warnings: vec![] });
+    // An unpushed integration commit is ahead of origin/integration, while
+    // origin/main is irrelevant to the integration checkout.
+    write(&wt.join("i.txt"), "integ");
+    git(&wt, &["add", "i.txt"]);
+    git(&wt, &["commit", "-q", "-m", "integ"]);
+    assert!(
+        matches!(probe_plan(&wt), PromotionPlan::Refuse { reasons } if reasons.iter().any(|r| r.contains("ahead of origin/integration")))
+    );
+    git(&wt, &["push", "-q", "origin", "integration"]);
+    git(&clone, &["fetch", "-q", "origin"]);
+    assert_eq!(probe_plan(&wt), PromotionPlan::Promote { warnings: vec![] });
 }
 
 // --- pipeline -------------------------------------------------------------------
