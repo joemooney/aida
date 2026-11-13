@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-11T12:17:13.260009028Z
-modified_at: 2026-11-13T21:49:10.151187316Z
+modified_at: 2026-11-13T22:05:32.942645849Z
 req_type: Task
 relationships:
 - rel_type: BlockedBy
@@ -103,6 +103,13 @@ comments:
   modified_at: 2026-11-13T21:49:10.151187316Z
   session_id: 01a1d6e0fc5c
   harness_version: codex-cli 0.167.0
+- id: 01a1d6f1-cb8e-7120-871f-750e11caf200
+  author: joe
+  content: 'Advisor 15:10: PARKED. The 14:33 dell1 lane returned an empty rework (mergeable=CONFLICTING): a Codex native seat cannot record the merge of main, the same limitation as STORY-2593. Relaunch once BUG-2558 (#3953) is on main and dell1 is rebuilt, or hand the merge to a Claude seat.'
+  created_at: 2026-11-13T22:05:32.942645849Z
+  modified_at: 2026-11-13T22:05:32.942645849Z
+  session_id: 01a1d684-8599-70e0-a01c-714f54d2f8de
+  harness_version: 2.1.323 (Claude Code)
 history:
 - id: 01a1ca8a-8ee7-7991-b976-a941a11ff32c
   author: joe
