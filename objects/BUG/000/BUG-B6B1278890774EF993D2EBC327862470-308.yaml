@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-12T23:29:52.950918801Z
-modified_at: 2026-11-13T12:26:20.635857632Z
+modified_at: 2026-11-13T12:28:54.265138002Z
 req_type: Bug
 tags:
 - track:integration
@@ -52,6 +52,19 @@ comments:
   created_at: 2026-11-13T11:28:23.432622486Z
   modified_at: 2026-11-13T11:28:23.432622486Z
   session_id: 01a1d418-ebf0-79b3-844f-d0ab8bed7682
+  harness_version: 2.1.323 (Claude Code)
+- id: 01a1d4e1-dc79-7b71-a00b-27792c94be01
+  author: joe
+  content: |-
+    ADVISOR RULING 05:32 (escalated after round 3 of #3932 at b08afd0: 3 P1 fail-open, 2 P2). Round 4 is authorized ONLY with this narrowed design, because three rounds have each found new fail-open paths in the snapshot:
+    (1) FAIL CLOSED ON CHANGE: the listing does not try to pin or replay corpora. Record each ledger file's identity (dev, ino, len, mtime_ns plus a content hash of the bytes read) at discovery. On read, if any identity differs, discard the snapshot and fall back to the uncached per-key path. Never truncate to an old length (P1-a).
+    (2) Exact-path parity: a non-directory or symlink at the publications path must refuse in the listing exactly as in list(); add the blob and symlink regressions (P1-b).
+    (3) Drop the thread-local MiskeyOwners memo, or invalidate it under the same identity check as (1); add the concurrent-writer regression the reviewer reproduced (P1-c).
+    (4) P2 perf (O(1) Git calls) and P2 aggregate 1 MiB cap: ACCEPTED as follow-ups, not fixed here. Revert the reviews/v1/specs aggregate read to per-spec reads, so no regression ships. The perf gain that stays is the single discovery pass.
+    If round 4 finds another fail-open, close #3932 and land only the per-spec read changes.
+  created_at: 2026-11-13T12:28:54.265138002Z
+  modified_at: 2026-11-13T12:28:54.265138002Z
+  session_id: 01a1d4aa-9c99-76c2-ac94-7f0795f8a7f9
   harness_version: 2.1.323 (Claude Code)
 history:
 - id: 01a1d363-5ded-7e80-b51f-abf18415cebb
