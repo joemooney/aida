@@ -2101,9 +2101,11 @@ mod pull_failure_tests {
         // No remote exists: any attempt to fetch or exhaust the retry loop
         // would replace this actionable refusal with a different error.
         let error = pull_store_allocation_retry(repo, "aida-store", 3).unwrap_err();
+        assert!(aida_core::git_ops::is_dirty_store_refusal(&error));
         let message = error.to_string();
         assert!(message.contains("commit or stash"), "{message}");
         assert!(!message.contains("after 3 attempt"), "{message}");
+        assert!(!message.contains("rebase --abort"), "{message}");
         assert_eq!(std::fs::read_to_string(repo.join("seed")).unwrap(), "dirty");
     }
 
@@ -2177,5 +2179,50 @@ mod pull_failure_tests {
             "{error:#}"
         );
         assert!(!aida_core::git_ops::rebase_in_progress(repo));
+    }
+
+    // trace:BUG-2501 | ai:codex — refusal must preserve staged writes as well.
+    #[test]
+    fn sync_pull_preserves_staged_changes_on_refusal() {
+        use aida_core::git_ops as git;
+
+        let temp = tempfile::tempdir().unwrap();
+        let repo = temp.path();
+        git::init(repo).unwrap();
+        git::configure_user(repo, "Test", "test@example.com").unwrap();
+        std::fs::write(repo.join("seed"), "seed").unwrap();
+        git::add(repo, &["seed"]).unwrap();
+        git::commit(repo, "seed").unwrap();
+        let head = git::head_sha(repo).unwrap();
+        let output = crate::test_git::git_command()
+            .arg("-C")
+            .arg(repo)
+            .args(["remote", "add", "origin"])
+            .arg(repo.join("missing"))
+            .output()
+            .unwrap();
+        assert!(output.status.success());
+        std::fs::write(repo.join("seed"), "staged write").unwrap();
+        git::add(repo, &["seed"]).unwrap();
+        // A later worktree edit must also survive; neither snapshot is ours
+        // to commit, stash or discard when the refresh refuses.
+        std::fs::write(repo.join("seed"), "pending write").unwrap();
+
+        let error = maybe_sync_pull(repo).unwrap_err();
+        assert!(git::is_dirty_store_refusal(&error), "{error:#}");
+        assert_eq!(git::head_sha(repo).unwrap(), head);
+        assert_eq!(
+            std::fs::read_to_string(repo.join("seed")).unwrap(),
+            "pending write"
+        );
+        let staged = crate::test_git::git_command()
+            .arg("-C")
+            .arg(repo)
+            .args(["show", ":seed"])
+            .output()
+            .unwrap();
+        assert!(staged.status.success());
+        assert_eq!(staged.stdout, b"staged write");
+        assert!(!git::rebase_in_progress(repo));
     }
 }
