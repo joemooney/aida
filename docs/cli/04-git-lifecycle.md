@@ -252,6 +252,13 @@ worker, serialized by a separate cleanup lock that never blocks merges.
 
 The worker records the final lease-end outcome in the ship activity log, even
 when it finishes after ship has returned. `--no-cleanup` skips the worker.
+Step 6 (reap plus merged-worktree pruning) runs under one supervised 60-second
+wall-clock budget, including clone probe setup and scans. On expiry the sweep
+and its observed descendants are stopped, and cleanup reports an interruption
+with `aida doctor` recovery advice. Earlier cleanup actions may already have
+applied; inspect before retrying. Lease end (step 5) is outside this budget.
+<!-- trace:BUG-2535 | ai:codex -->
+
 During ship cleanup each clone probe has a shared 10-second budget; timeouts and
 unreadable evidence retain the clone with a diagnostic. Shipped heads are
 checked in one Git batch, with exclusions streamed to revision walks. Existing

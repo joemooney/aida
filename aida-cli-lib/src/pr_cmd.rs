@@ -46,6 +46,11 @@ pub(crate) fn handle_pr_command(cmd: &PrCommand) -> Result<()> {
         PrCommand::State(args) => crate::pr_state::run(args),
         // Internal worker preserves the existing cleanup gates after ship exits.
         // trace:BUG-2384 | ai:codex
+        // trace:BUG-2535 | ai:codex
+        PrCommand::PostShipSweep => {
+            run_post_ship_sweep();
+            Ok(())
+        }
         PrCommand::PostShipCleanup {
             pr,
             lease,
@@ -4692,8 +4697,30 @@ fn post_ship_cleanup_worker(args: PostShipCleanupArgs<'_>) -> Result<()> {
         };
         log_ship_activity(&main, args.pr, &ShipStep::EndLease, &outcome);
     }
+    // A process boundary covers the entire sweep, including synchronous
+    // filesystem reads and probe setup outside the cooperative scan deadline.
+    // Keep the cleanup lock in this parent until the sweep has stopped.
+    // trace:BUG-2535 | ai:codex
+    if args.sweep {
+        let mut cmd = std::process::Command::new(pr_ship_post_merge_aida_exe());
+        cmd.current_dir(&main).args(["pr", "post-ship-sweep"]);
+        if let Err(error) = run_post_ship_sweep_bounded(cmd, doctor_cmd::POST_SHIP_GC_BUDGET) {
+            eprintln!(
+                "  post-merge cleanup deferred: {error:#}; run `aida doctor` to inspect and retry"
+            );
+        }
+    }
+    if let Some(failure) = end_failure {
+        anyhow::bail!(failure);
+    }
+    Ok(())
+}
+
+// trace:BUG-2535 | ai:codex
+fn run_post_ship_sweep() {
+    crate::seat_clone::scope_probe_budget_to_ship_cleanup();
     run_post_merge_worktree_gc(
-        args.sweep,
+        true,
         false,
         || {
             crate::session_reap::run_session_reap(crate::session_reap::ReapOptions {
@@ -4708,10 +4735,58 @@ fn post_ship_cleanup_worker(args: PostShipCleanupArgs<'_>) -> Result<()> {
         worktree_gc::run_merged_agent_worktree_gc_quiet,
         &mut std::io::stderr(),
     );
-    if let Some(failure) = end_failure {
-        anyhow::bail!(failure);
+}
+
+/// Inherit the terminal and progress streams while enforcing one wall-clock
+/// ceiling over reap, discovery, clone probes and pruning together.
+// trace:BUG-2535 | ai:codex
+fn run_post_ship_sweep_bounded(
+    mut cmd: std::process::Command,
+    budget: std::time::Duration,
+) -> Result<()> {
+    use std::os::unix::process::CommandExt;
+    cmd.process_group(0);
+    let mut forwarding = crate::forwarded_signals::Forwarding::install()?;
+    let started = std::time::Instant::now();
+    let mut child = cmd.spawn_retrying_etxtbsy()?;
+    loop {
+        let signal = forwarding.take();
+        let result = if signal.is_some() {
+            Ok(None)
+        } else {
+            child.try_wait()
+        };
+        match result {
+            Ok(Some(status)) => {
+                anyhow::ensure!(status.success(), "cleanup sweep exited with {status}");
+                return Ok(());
+            }
+            Ok(None) if signal.is_none() && started.elapsed() < budget => {
+                std::thread::sleep(std::time::Duration::from_millis(20));
+            }
+            result => {
+                // Probe subprocesses may create their own groups. Stop the
+                // whole observed tree as well as the sweep's original group.
+                let tree = crate::exit_signal::collect_process_tree(child.id());
+                crate::forwarded_signals::signal_child_tree(child.id(), &tree, libc::SIGKILL);
+                crate::kill_process_group(child.id());
+                let _ = child.kill();
+                let _ = child.wait();
+                if let Some(signal) = signal {
+                    drop(forwarding);
+                    crate::forwarded_signals::reraise(signal);
+                    anyhow::bail!("cleanup sweep interrupted by signal {signal}");
+                }
+                if let Err(error) = result {
+                    return Err(error.into());
+                }
+                anyhow::bail!(
+                    "cleanup sweep exceeded its {}s budget; cleanup interrupted; inspect remaining work",
+                    budget.as_secs()
+                );
+            }
+        }
     }
-    Ok(())
 }
 
 /// Why a post-ship cleanup run did not succeed: the worker never started
@@ -4776,8 +4851,8 @@ fn run_ship_cleanup_attended(
     Ok(true)
 }
 
-// The foreground wait is bounded, but cleanup itself is never killed midway
-// through mail retention or salvage. A detached worker keeps its safety gates.
+// The foreground wait is bounded. Lease end can continue in the background;
+// the step-6 sweep has its own supervised budget and keeps its safety gates.
 // `true` means completed, `false` means continuing in the background.
 // trace:BUG-2384 | ai:codex
 fn run_ship_cleanup_command(
@@ -4849,8 +4924,8 @@ fn run_ship_cleanup_command(
 
 /// Step 6 of `aida pr ship`: after a merge this run performed, reap exited
 /// sessions (`reap`) and prune merged agent worktrees (`prune`), in that
-/// order. `--no-cleanup` skips both and says so. Only the prune runs under the
-/// post-ship time budget; the reap is not bounded. Best-effort: a failure is
+/// order. `--no-cleanup` skips both and says so. The worker supervisor bounds
+/// the entire phase; prune also keeps its cooperative deadline. A failure is
 /// printed as a warning and never fails the ship.
 // trace:BUG-B6B1278890774EF993D2EBC327862470-033 | ai:claude
 pub(crate) fn run_post_merge_worktree_gc(
@@ -10541,3 +10616,51 @@ mod bug_2384_cleanup_tests {
 #[cfg(test)]
 #[path = "tests/bug_2515_gitlab_ship_tests.rs"]
 mod bug_2515_gitlab_ship_tests;
+
+// trace:BUG-2535 | ai:codex
+#[cfg(test)]
+mod bug_2535_tests {
+    use super::run_post_ship_sweep_bounded;
+    use std::{
+        process::Command,
+        time::{Duration, Instant},
+    };
+
+    #[test]
+    fn bug_2535_sweep_success_and_failure_are_preserved() {
+        let mut ok = Command::new("sh");
+        ok.args(["-c", "exit 0"]);
+        assert!(run_post_ship_sweep_bounded(ok, Duration::from_secs(2)).is_ok());
+        let mut failed = Command::new("sh");
+        failed.args(["-c", "exit 7"]);
+        let error = run_post_ship_sweep_bounded(failed, Duration::from_secs(2)).unwrap_err();
+        assert!(error.to_string().contains("exited with"), "{error}");
+    }
+
+    #[test]
+    fn bug_2535_stalled_scan_and_separate_group_descendant_stop_at_budget() {
+        let temp = tempfile::tempdir().unwrap();
+        let marker = temp.path().join("survived");
+        let ready = temp.path().join("ready");
+        let mut cmd = Command::new("sh");
+        // Model a probe that creates a fresh process group, then would mutate
+        // after the sweep has timed out. All paths are positional arguments.
+        cmd.args([
+            "-c",
+            r#"setsid sh -c 'touch "$2"; sleep 2; touch "$1"' sh "$1" "$2" & wait"#,
+            "sh",
+        ])
+        .arg(&marker)
+        .arg(&ready);
+        let start = Instant::now();
+        let error = run_post_ship_sweep_bounded(cmd, Duration::from_millis(500)).unwrap_err();
+        assert!(error.to_string().contains("budget"), "{error}");
+        assert!(start.elapsed() < Duration::from_secs(2));
+        assert!(
+            ready.exists(),
+            "descendant must have started before timeout"
+        );
+        std::thread::sleep(Duration::from_secs(2));
+        assert!(!marker.exists(), "timed-out descendant continued cleanup");
+    }
+}
