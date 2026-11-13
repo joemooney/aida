@@ -29,6 +29,7 @@ fn mandate(include_supervised: bool) -> Mandate {
         seat: crate::gate::mandate::MANDATE_SEAT.into(),
         scope: crate::gate::mandate::SCOPE_SHIP_HELD.into(),
         include_supervised,
+        include_gate_paths: false,
         reason: Some("fire".into()),
         issued_at: Utc::now() - chrono::Duration::hours(1),
         expires_at: Utc::now() + chrono::Duration::hours(7),

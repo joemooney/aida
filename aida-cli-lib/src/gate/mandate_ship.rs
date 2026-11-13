@@ -19,6 +19,40 @@ use crate::pr_ship;
 pub(crate) struct MandateCover {
     pub id: String,
     pub principal: String,
+    // trace:STORY-2733 | ai:codex
+    pub gate_match: Option<crate::gate::mandate_gates::GateMatch>,
+}
+
+impl MandateCover {
+    // trace:STORY-2733 | ai:codex
+    pub(crate) fn from_checked_paths(
+        id: String,
+        principal: String,
+        paths: &[String],
+        protected: &crate::gate::mandate_gates::ProtectedPaths,
+    ) -> Self {
+        Self {
+            id,
+            principal,
+            gate_match: crate::gate::mandate_gates::touches_gates(paths, protected),
+        }
+    }
+
+    /// Audit-only evidence from the exact protected set used by the cover.
+    // trace:STORY-2733 | ai:codex
+    pub(crate) fn gate_audit(&self) -> Option<String> {
+        self.gate_match.as_ref().map(|hit| {
+            format!(
+                "Aida-Mandate-Gate-Path: {}",
+                serde_json::json!({
+                    "mandate": self.id,
+                    "path": hit.path,
+                    "entry": hit.entry,
+                    "source": hit.source.as_str(),
+                })
+            )
+        })
+    }
 }
 
 /// Assemble exclusion subjects only; never use this union for authority inputs.
@@ -510,6 +544,7 @@ pub(in crate::gate) fn mandate_ship_cover(
         }),
         hold => hold,
     };
+    let protected = crate::gate::mandate_gates::ProtectedPaths::of(&gates);
     let id = decide(&ShipCheck {
         state: &state,
         now: chrono::Utc::now(),
@@ -536,7 +571,7 @@ pub(in crate::gate) fn mandate_ship_cover(
             .flatten(),
         changed_paths: Some(&changed_paths),
         // trace:STORY-1888 | ai:claude
-        protected: &crate::gate::mandate_gates::ProtectedPaths::of(&gates),
+        protected: &protected,
         ship_gate: crate::gate::mandate_gates::gate_reason(
             &gates,
             crate::gate::mandate_gates::GateOp::Ship,
@@ -546,10 +581,12 @@ pub(in crate::gate) fn mandate_ship_cover(
             crate::gate::mandate_gates::GateOp::HoldClear,
         ),
     })?;
-    Ok(MandateCover {
+    Ok(MandateCover::from_checked_paths(
         id,
-        principal: grant.map(|(_, p)| p).unwrap_or_default(),
-    })
+        grant.map(|(_, p)| p).unwrap_or_default(),
+        &changed_paths,
+        &protected,
+    ))
 }
 
 /// BUG-2214: the one mandate hold release — ship's exact sequence, shared by
@@ -572,6 +609,10 @@ pub(crate) fn release_hold_under_mandate(
 ) {
     use colored::Colorize;
     let pr = hold_record.pr;
+    let gate_audit = cover
+        .gate_audit()
+        .map(|line| format!("\n\n{line}"))
+        .unwrap_or_default();
     // A release the ledger did not record leaves the hold open: nothing may
     // announce it as released (no note, comment, event or label removal).
     // trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
@@ -589,7 +630,7 @@ pub(crate) fn release_hold_under_mandate(
         return;
     }
     eprintln!(
-        "  {} PR-{pr}: merge-hold {}",
+        "  {} PR-{pr}: merge-hold {}{gate_audit}",
         crate::glyph(crate::glyphs::Glyph::Info).cyan(),
         crate::gate::mandate::release_note(&cover.id)
     );
@@ -597,7 +638,7 @@ pub(crate) fn release_hold_under_mandate(
     let _ = crate::forge::forge_for(hold_root).comment(
         change,
         &format!(
-            "Merge-hold {} (`{}`). Approval at `{}`.",
+            "Merge-hold {} (`{}`). Approval at `{}`.{gate_audit}",
             crate::gate::mandate::release_note(&cover.id),
             cover.principal,
             head_sha.unwrap_or("?"),
@@ -613,7 +654,7 @@ pub(crate) fn release_hold_under_mandate(
             placed: false,
             // STORY-1698: a mandate release names the mandate.
             reason: Some(format!(
-                "{} — {reason}",
+                "{} — {reason}{gate_audit}",
                 crate::gate::mandate::release_note(&cover.id)
             )),
             // BUG-2214: a mandate release is an advisor action and never
@@ -702,6 +743,21 @@ pub(crate) fn rearm_after_mandate_failure(
 // trace:STORY-1698 | ai:claude
 pub(crate) fn mandate_still_active(id: &str) -> bool {
     matches!(crate::gate::mandate::current_state(), crate::gate::mandate::MandateState::Active(m) if m.id == id)
+}
+
+/// Renewal can withdraw protected-path coverage without changing the mandate ID.
+// trace:STORY-2733 | ai:codex
+pub(in crate::gate) fn cover_active_in(
+    cover: &MandateCover,
+    state: &crate::gate::mandate::MandateState,
+) -> bool {
+    matches!(state, crate::gate::mandate::MandateState::Active(m)
+        if m.id == cover.id && (cover.gate_match.is_none() || m.include_gate_paths))
+}
+
+// trace:STORY-2733 | ai:codex
+pub(crate) fn mandate_cover_still_active(cover: &MandateCover) -> bool {
+    cover_active_in(cover, &crate::gate::mandate::current_state())
 }
 
 /// Whether both `head_oid^{commit}` and `refs/remotes/origin/<base_ref>^{commit}`
