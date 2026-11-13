@@ -671,7 +671,19 @@ forwarding, and raw Git, other AIDA writers that do not go through the store
 backend, and foreign writers can bypass it. No history rewrite, clean export,
 live hub hook or automatic forwarding is provided.
 
-#### Per-vendor containment posture
+### `aida config permissions show` — per-vendor containment posture
+
+`aida config permissions show` prints one row per vendor with its tier,
+configured/refused launch state, and net effect. This is a configuration view,
+not a live launch probe.
+
+Use `aida config permissions show --verbose` for launch flags, scope, sandbox
+details, findings, and full refusal explanations. The equivalent short invocation
+is `aida config permissions show -v`.
+
+Use `aida config permissions show --json` for the complete structured report,
+regardless of verbosity.
+<!-- trace:TASK-3779 | ai:codex -->
 
 `aida config permissions show` prints one row per vendor with its tier,
 configured/refused launch state, and net effect. This is a configuration view,
