@@ -464,7 +464,15 @@ fn bug_2549_queue_resumes_prless_canonical_head_without_force() {
     git_ok(&fx.main, &["add", "unfinished"]);
     git_ok(
         &fx.main,
-        &["commit", "-qm", "unfinished implementation (Refs BUG-2451)"],
+        &[
+            "-c",
+            "maintenance.auto=false",
+            "-c",
+            "gc.auto=0",
+            "commit",
+            "-qm",
+            "unfinished implementation (Refs BUG-2451)",
+        ],
     );
     let head = git_ok(&fx.main, &["rev-parse", "bug-2451"]);
     git_ok(&fx.main, &["checkout", "main"]);
