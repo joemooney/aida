@@ -437,10 +437,13 @@ mod tests {
         let (fixture, approved) = carry::fixture();
         let root = fixture.path();
         let base = carry::git(root, &["rev-parse", "main"]);
-        carry::git(
-            root,
-            &["merge", "--quiet", "--no-commit", "--no-ff", "main"],
-        );
+        let merge = crate::test_git::git_command()
+            .arg("-C")
+            .arg(root)
+            .args(["merge", "--quiet", "--no-commit", "--no-ff", "main"])
+            .output()
+            .unwrap();
+        assert!(merge.status.success(), "{merge:?}");
         carry::write(root, "manual.txt", "unreviewed merge edit\n");
         let evil = carry::commit(root, "evil merge");
         let (baseline, clean) = delta_baseline(root, &base, &approved).unwrap();
@@ -455,7 +458,9 @@ mod tests {
         carry::write(root, "a.txt", "main conflicts with the approved content\n");
         let base = carry::commit(root, "conflicting main");
         carry::git(root, &["checkout", "--quiet", "pr"]);
-        let status = aida_core::git_ops::host_git_command(root)
+        let status = crate::test_git::git_command()
+            .arg("-C")
+            .arg(root)
             .args(["merge", "--no-edit", "main"])
             .output()
             .unwrap()
