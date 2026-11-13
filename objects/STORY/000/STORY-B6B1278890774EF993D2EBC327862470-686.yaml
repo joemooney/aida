@@ -30,7 +30,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-13T15:54:08.931576118Z
-modified_at: 2026-11-13T15:54:51.595163839Z
+modified_at: 2026-11-13T15:54:57.923363611Z
 req_type: Story
 tags:
 - architecture
@@ -38,6 +38,14 @@ tags:
 - review
 - throughput
 - track:dell1
+comments:
+- id: 01a1d59e-8403-7ec0-ae99-a8aca440a95a
+  author: joe
+  content: '[advisor signoff 2026-11-13 08:58] Architecture sketch is in the description; signed off by the advisor seat. Operator approved writing and routing it (08:52) and asked for configurable assurance (08:53, AC4). Route: dell1 Codex lane (track:dell1, main track, gate path, so it lands by deputy train). LIGHT gate: one targeted cargo test run on the review_watch/carryover modules plus check-ci-fast. Review STRICT (gate path): an independent reviewer that has not seen this sketch''s author context.'
+  created_at: 2026-11-13T15:54:57.923363611Z
+  modified_at: 2026-11-13T15:54:57.923363611Z
+  session_id: 01a1d54b-060a-7951-aa40-7f0fd928126f
+  harness_version: 2.1.323 (Claude Code)
 history:
 - id: 01a1d59e-6b4b-7d10-8aea-02729132bc6f
   author: joe
