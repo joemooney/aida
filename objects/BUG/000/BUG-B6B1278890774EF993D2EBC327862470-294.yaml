@@ -14,7 +14,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-11T21:54:58.150187720Z
-modified_at: 2026-11-13T05:45:34.711629126Z
+modified_at: 2026-11-13T05:59:07.187142956Z
 req_type: Bug
 tags:
 - track:dell1
@@ -35,6 +35,13 @@ comments:
     The prescribed /home/joe/ai/aida/.codegraph/proxy-state/bin/codegraph is absent; aida doctor check codegraph reports missing tooling. Host deployment is still needed. No codegraph index mutation was attempted.
   created_at: 2026-11-13T05:44:54.245502625Z
   modified_at: 2026-11-13T05:44:54.245502625Z
+  session_id: 01a1d36d96b6
+  harness_version: codex-cli 0.167.0
+- id: 01a1d37d-00b3-72c0-9163-3c4b2cfc6e6d
+  author: dirtlab
+  content: 'Validation handoff: only aida-cli-lib/src/deputy_shell/tests.rs changed, adding a_timeout_leaves_the_runner_alive_to_execute_the_next_job. rustfmt and git diff --check passed. Lane job j20261113T054352923-2-0 ran cargo test --profile agent -p aida-cli-lib --lib -- a_timeout_leaves_the_runner_alive_to_execute_the_next_job; timed out after 900s during compilation, exit 124, no executed tests: untested=true. Edits remain uncommitted. No ship declaration or queue completion: design-fork punt remains a publication veto.'
+  created_at: 2026-11-13T05:59:07.187142956Z
+  modified_at: 2026-11-13T05:59:07.187142956Z
   session_id: 01a1d36d96b6
   harness_version: codex-cli 0.167.0
 history:
