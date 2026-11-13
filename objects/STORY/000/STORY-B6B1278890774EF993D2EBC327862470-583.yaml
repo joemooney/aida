@@ -20,7 +20,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-08T02:56:36.206726Z
-modified_at: 2026-11-13T21:16:33.525242600Z
+modified_at: 2026-11-13T22:12:15.916486820Z
 req_type: Story
 tags:
 - architecture
@@ -323,6 +323,13 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was punted on: blocked-dependency: Merge of origin/main (PR #3921 conflicts) cannot be committed from this seat: ''git merge origin/main'' fails because the sandbox makes .claude/hooks, .claude/skills and aida-core/templates/settings.json unwritable (Read-only file system / Device busy), and the permission layer denies a scratch worktree and a temporary-index commit-tree. Conflicts are RESOLVED in this seat''s working tree (doctor_cmd.rs, standalone_implementer.rs, cli_help_snapshot.txt, story_1662_queue_work_wiring.rs, docs/cli/03-work-autonomy.md, docs/cli/07-project-setup.md, scripts/store-writers.toml); queue_cmd.rs must take main''s deletion (main''s queue_cmd/work.rs already has configured_cap(..)?). ~156 untracked files are leftovers of the failed checkout and equal main''s content. Host: run the merge outside the sandbox, then take these 7 working-tree files as the resolutions and git rm aida-cli-lib/src/queue_cmd.rs.. No triage reason was given.'
   created_at: 2026-11-13T20:45:38.414520911Z
   modified_at: 2026-11-13T20:45:38.414520911Z
+  session_id: 01a1d684-8599-70e0-a01c-714f54d2f8de
+  harness_version: 2.1.323 (Claude Code)
+- id: 01a1d6f7-f1ac-71a1-9d15-a8a4830734e6
+  author: joe
+  content: 'Advisor 15:12: PARKED. The 14:17 dell1 lane pushed 3d82287, but PR #3921 is still CONFLICTING with main: a Codex native seat cannot record the merge (the BUG-2558 limitation, same as STORY-2593 and TASK-3783). Relaunch once #3953 is on main and dell1 is rebuilt, or hand the merge to a Claude seat.'
+  created_at: 2026-11-13T22:12:15.916486820Z
+  modified_at: 2026-11-13T22:12:15.916486820Z
   session_id: 01a1d684-8599-70e0-a01c-714f54d2f8de
   harness_version: 2.1.323 (Claude Code)
 history:
