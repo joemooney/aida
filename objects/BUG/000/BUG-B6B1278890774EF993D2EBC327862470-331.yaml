@@ -1,0 +1,23 @@
+id: 01a1d6dd-7174-7c70-8c4b-cac73a6ebfa4
+spec_id: BUG-b6b1278890774ef993d2ebc327862470-331
+agreed_id: BUG-2566
+title: 'Review freshness: rework-routed conflict receipt never re-probes after the base changes'
+description: 'From PR-3956 review (STORY-2763) P2: review_watch.rs:2960-2973 and gate/review_freshness.rs:347-368 key the rework-routed receipt by PR/head only, so if main later resolves the conflict the unchanged PR head stays skipped forever. Acceptance: the receipt records the base tip; a changed base re-probes; regression test.'
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-13T21:43:19.156273375Z
+modified_at: 2026-11-13T21:43:19.156273375Z
+req_type: Bug
+tags:
+- track:dell1
+filed_at:
+  code_sha: 97d2f9fda0856183dee299b29760f3004c5db881
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 268f02eb6b9
+  vendor: claude
+  session: 01a1d684-8599-70e0-a01c-714f54d2f8de
+  harness_version: 2.1.323 (Claude Code)
