@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-13T01:54:48.391951523Z
-modified_at: 2026-11-13T02:45:26.142628754Z
+modified_at: 2026-11-13T02:45:29.090719300Z
 req_type: Bug
 comments:
 - id: 01a1d2b0-810d-71e2-9ffb-3a2943c74aba
@@ -32,6 +32,20 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Full sweep: request changes for premature shutdown on pending sweep delivery, missing WAITING completion, and policy omitted from interactive resumes. BUG-2546 AC1 unverified; AC2 unverified; AC3 verified by Scope::drop source. BUG-2546 (bug protocol): met via inline cfg(test) tests. CI pending at review time; no local builds/tests.. No triage reason was given.'
   created_at: 2026-11-13T02:45:26.142625165Z
   modified_at: 2026-11-13T02:45:26.142625165Z
+- id: 01a1d2cb-b8a9-7322-a265-a9f23b6a28ea
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (BUG-2546):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: f3e011b58fbb
+    Recorded: 2026-11-13T02:43:33.055801992+00:00
+    Findings:
+    1. [P1] aida-cli-lib/src/reviewer_completion.rs:116-128: Do not latch completion on sweep_pending delivery barriers. read_recorded_verdict parses sweep_pending:true as RequestChanges (gate/review_verdict.rs:749), which matches this predicate. For an uncontained headless reviewer recording an all-deferred approval, gate/ledger/mod.rs:record_verdict_at writes that attested pending record before emit_verdict_findings acquires the store writer lock. If delivery takes more than two seconds, this watcher kills the reviewer and its aida review record subprocess mid-transaction; it never revalidates after seen is set, and the collector excludes pending records, leaving no collectable completed verdict. Check delivery_pending on the raw current record before arming shutdown, and add coverage with delayed delivery plus a completed twin.
+    2. [P2] aida-cli-lib/src/reviewer_completion.rs:92-95: Treat a successfully recorded WAITING verdict as completed reviewer work too. Waiting is the required outcome for unavailable independent evidence and the workflow requires recording it and exiting for a fresh review. The explicit exclusion here (also asserted in the new test) leaves that headless vendor running indefinitely if it does not exit on its own, reproducing the held-lane bug for a valid verdict; the same omission reports unknown post-verdict runtime. Include Waiting in the stop/measurement path while preserving its existing non-approval semantics in the collector, and cover it.
+    3. [P2] aida-cli-lib/src/queue_cmd/work.rs:6568-6571: Deliver the new no-build reviewer policy to interactive resumed reviewers. The composed prompt is never passed by either interactive QueueWorkLaunch::Resume arm: Codex builds its resume command without prompt (6685-6699), and Claude calls spawn_claude_resume_with_grant (6743-6749), whose command only supplies --resume and flags. Resuming a pre-fix reviewer therefore receives no new Cargo restriction, despite this change intending all standalone reviewer prompts to enforce it. Pass the policy using the supported vendor resume prompt mechanism or enforce it independently; add launch-argument tests for both interactive resume vendors.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-13T02:45:28.873933272Z
+  modified_at: 2026-11-13T02:45:28.873933272Z
 history:
 - id: 01a1d29d-880a-7201-8b91-ded826a703b0
   author: joe
