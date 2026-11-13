@@ -30,7 +30,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-13T15:54:08.931576118Z
-modified_at: 2026-11-13T21:39:10.574635474Z
+modified_at: 2026-11-13T21:43:11.757179276Z
 req_type: Story
 tags:
 - architecture
@@ -92,6 +92,13 @@ comments:
   modified_at: 2026-11-13T17:51:58.804433468Z
   session_id: 01a1d5fe5a72
   harness_version: codex-cli 0.167.0
+- id: 01a1d6dd-548d-76c1-a215-7e7d40a0b1e4
+  author: joe
+  content: 'Advisor ruling 14:45 on PR-3956 CR at 3d3bec8 (aggressive triage): BLOCKING: P1 AC2 (orchestrator reviewer launches bypass current-base evidence; RealPhaseDriver::run_reviewer path) and P1 AC1 (automatic train admission rejects a proved carry-over). ACCEPTED as follow-up: P2 re-probe conflicts when base changes (receipt keyed by PR/head), filed as a draft. NARROWED: P2 workflow regressions, add ONE watcher-level regression for the AC6 approved-A / overlapping-B / clean-base-merge case; other AC tests are not required this round. Next review is scoped to these.'
+  created_at: 2026-11-13T21:43:11.757179276Z
+  modified_at: 2026-11-13T21:43:11.757179276Z
+  session_id: 01a1d684-8599-70e0-a01c-714f54d2f8de
+  harness_version: 2.1.323 (Claude Code)
 history:
 - id: 01a1d59e-6b4b-7d10-8aea-02729132bc6f
   author: joe
