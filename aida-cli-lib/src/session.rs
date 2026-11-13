@@ -2245,6 +2245,7 @@ fn spawn_vendor_headless_forking(
     }
     // trace:TASK-2707 | ai:codex
     // trace:TASK-2708 | ai:claude
+    crate::reviewer_completion::bind_grant(&child_grant.id); // trace:BUG-2546 | ai:codex
     if wrapper {
         let result = (|| -> Result<_> {
             let mut run = crate::containment::launch::PreparedLaunch::prepare(
@@ -2266,9 +2267,7 @@ fn spawn_vendor_headless_forking(
                 run.receipt(),
             )?;
             run.release()?;
-            let status = run
-                .child
-                .wait()
+            let status = crate::reviewer_completion::wait(&mut run.child)
                 .with_context(|| format!("failed to wait for contained {}", vendor.program()))?;
             run.vendor_exit(status)
         })();
@@ -7515,6 +7514,7 @@ fn run_vendor_headless_child(
     // trace:TASK-2707 | ai:codex — the foreground owner retains private state,
     // broker and proxy until the wrapper is reaped. No model before receipt.
     // trace:TASK-2708 | ai:claude — Claude under `claude = "aida"` too.
+    crate::reviewer_completion::bind_grant(grant_env); // trace:BUG-2546 | ai:codex
     if wrapper {
         // trace:TASK-2708 | ai:claude — every exit past the tee start, success
         // or error, finishes the lane record it registered and stops the tee;
