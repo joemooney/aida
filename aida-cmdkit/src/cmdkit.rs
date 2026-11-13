@@ -157,7 +157,7 @@ fn renamed_format_hint(command: &str, value: &str) -> Option<String> {
 /// The error for an explicit global `--format <value>` on `aida <command>`
 /// when that command's own format option has another name; `None` otherwise.
 // trace:BUG-2189 | ai:claude
-pub(crate) fn renamed_format_error(command: &str, value: &str) -> Option<anyhow::Error> {
+pub fn renamed_format_error(command: &str, value: &str) -> Option<anyhow::Error> {
     let hint = renamed_format_hint(command, value)?;
     Some(anyhow::anyhow!(
         "--format {value} sets the CLI output format (human/toon/json), which `aida {command}` \
@@ -169,7 +169,7 @@ pub(crate) fn renamed_format_error(command: &str, value: &str) -> Option<anyhow:
 /// has another name, so the former local `--format` spelling fails loudly
 /// instead of silently producing the default format.
 // trace:BUG-2189 | ai:claude
-pub(crate) fn refuse_global_format(ctx: &DispatchCtx, command: &str) -> Result<()> {
+pub fn refuse_global_format(ctx: &DispatchCtx, command: &str) -> Result<()> {
     let Some(format) = ctx.globals.and_then(|globals| globals.format) else {
         return Ok(());
     };
@@ -206,7 +206,7 @@ pub enum StoreCtx<'a> {
     },
     /// The deprecated centralized store, from the legacy dispatcher in `run()`.
     Legacy {
-        storage: &'a crate::Storage,
+        storage: &'a aida_core::Storage,
         requirements_path: &'a std::path::Path,
     },
 }
@@ -264,18 +264,18 @@ impl std::fmt::Debug for CommandReg {
 /// A parsed registered command: its registration and its own sub-matches.
 // trace:STORY-1728 | ai:claude
 #[derive(Debug)]
-pub(crate) struct Invocation {
+pub struct Invocation {
     pub reg: &'static CommandReg,
     pub matches: ArgMatches,
 }
 
 impl Invocation {
-    pub(crate) fn policy(&self) -> CmdPolicy {
+    pub fn policy(&self) -> CmdPolicy {
         (self.reg.policy)(&self.matches)
     }
 
     /// The early dispatch point, before storage init.
-    pub(crate) fn run_early(&self, globals: &GlobalArgs) -> Result<Flow> {
+    pub fn run_early(&self, globals: &GlobalArgs) -> Result<Flow> {
         let ctx = DispatchCtx {
             globals: Some(globals),
             store: None,
@@ -297,7 +297,7 @@ impl Invocation {
 
     /// A storage dispatcher. Early handlers always finish before storage
     /// init, so only store-phase handlers reach here.
-    pub(crate) fn run_store(&self, store: StoreCtx, globals: Option<&GlobalArgs>) -> Result<Flow> {
+    pub fn run_store(&self, store: StoreCtx, globals: Option<&GlobalArgs>) -> Result<Flow> {
         let ctx = DispatchCtx {
             globals,
             store: Some(store),
@@ -313,24 +313,24 @@ impl Invocation {
 /// The composition root supplies both callbacks without coupling consumers to
 /// the registry table or coupling this helper to a concrete CLI type.
 // trace:TASK-3448 | ai:codex
-pub(crate) struct CliSupport<T> {
+pub struct CliSupport<T> {
     command: fn() -> clap::Command,
     decode: fn(&mut clap::ArgMatches) -> Result<T, clap::Error>,
 }
 
 impl<T> CliSupport<T> {
-    pub(crate) const fn new(
+    pub const fn new(
         command: fn() -> clap::Command,
         decode: fn(&mut clap::ArgMatches) -> Result<T, clap::Error>,
     ) -> Self {
         Self { command, decode }
     }
 
-    pub(crate) fn built_command(&self) -> clap::Command {
+    pub fn built_command(&self) -> clap::Command {
         (self.command)()
     }
 
-    pub(crate) fn try_parse_from<I, A>(&self, argv: I) -> Result<T, clap::Error>
+    pub fn try_parse_from<I, A>(&self, argv: I) -> Result<T, clap::Error>
     where
         I: IntoIterator<Item = A>,
         A: Into<std::ffi::OsString> + Clone,
@@ -338,5 +338,103 @@ impl<T> CliSupport<T> {
         let mut root = self.built_command();
         let mut matches = root.try_get_matches_from_mut(argv)?;
         (self.decode)(&mut matches).map_err(|err| err.format(&mut root))
+    }
+}
+
+// trace:TASK-3783 | ai:codex
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn policy(_: &ArgMatches) -> CmdPolicy {
+        CmdPolicy {
+            stakeholder: StakeholderAction::Read,
+            per_write_auto_push: false,
+            skip_role_restore_prompt: true,
+            team_identity_write: false,
+        }
+    }
+
+    static EARLY: CommandReg = CommandReg {
+        name: "statusline",
+        help_after: "",
+        command: || clap::Command::new("statusline"),
+        policy,
+        run: Handler::Early(|_, ctx| {
+            assert!(ctx.store.is_none());
+            assert!(ctx.globals.unwrap().canonical_ids);
+            Ok(())
+        }),
+    };
+
+    static STORE: CommandReg = CommandReg {
+        name: "example",
+        help_after: "",
+        command: || clap::Command::new("example"),
+        policy,
+        run: Handler::Store(|_, ctx| {
+            Ok(if ctx.store.is_some() {
+                Flow::Return
+            } else {
+                Flow::Continue
+            })
+        }),
+    };
+
+    fn globals() -> GlobalArgs {
+        use clap::FromArgMatches;
+        let matches = <GlobalArgs as clap::Args>::augment_args(clap::Command::new("aida"))
+            .try_get_matches_from(["aida", "--format", "json", "--canonical-ids"])
+            .unwrap();
+        GlobalArgs::from_arg_matches(&matches).unwrap()
+    }
+
+    #[test]
+    fn globals_and_early_dispatch_keep_their_contract() {
+        let globals = globals();
+        assert_eq!(globals.format, Some(OutputFormat::Json));
+        let invocation = Invocation {
+            reg: &EARLY,
+            matches: (EARLY.command)().get_matches_from(["statusline"]),
+        };
+        assert_eq!(invocation.policy().stakeholder, StakeholderAction::Read);
+        assert_eq!(invocation.run_early(&globals).unwrap(), Flow::Return);
+    }
+
+    #[test]
+    fn store_handler_defers_until_a_store_is_supplied() {
+        let invocation = Invocation {
+            reg: &STORE,
+            matches: (STORE.command)().get_matches_from(["example"]),
+        };
+        assert_eq!(invocation.run_early(&globals()).unwrap(), Flow::Continue);
+        let store = StoreCtx::Distributed {
+            store_path: std::path::Path::new("store"),
+            project_root_hint: None,
+        };
+        assert_eq!(invocation.run_store(store, None).unwrap(), Flow::Return);
+    }
+
+    #[test]
+    fn parser_formats_decode_errors_against_the_injected_tree() {
+        let support = CliSupport::new(
+            || clap::Command::new("injected").arg(clap::Arg::new("value").required(true)),
+            |_| {
+                Err::<(), _>(clap::Error::raw(
+                    clap::error::ErrorKind::ValueValidation,
+                    "bad value",
+                ))
+            },
+        );
+        assert!(support
+            .try_parse_from(["injected"])
+            .unwrap_err()
+            .to_string()
+            .contains("<value>"));
+        let error = support
+            .try_parse_from(["injected", "x"])
+            .unwrap_err()
+            .to_string();
+        assert!(error.contains("bad value") && error.contains("injected <value>"));
     }
 }
