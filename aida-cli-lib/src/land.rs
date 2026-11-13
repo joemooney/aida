@@ -1077,28 +1077,8 @@ pub(crate) struct Pass {
     pub foreign_lanes: Vec<crate::coordination::Claim>,
 }
 
-/// Drop inherited git routing from this process, so the gate readers a pass
-/// calls (which run git themselves) cannot be pointed at another repository
-/// either. `aida land` always works on the repository it was started in.
-fn drop_inherited_git_routing() {
-    for name in [
-        "GIT_DIR",
-        "GIT_WORK_TREE",
-        "GIT_COMMON_DIR",
-        "GIT_INDEX_FILE",
-        "GIT_NAMESPACE",
-        "GIT_OBJECT_DIRECTORY",
-        "GIT_ALTERNATE_OBJECT_DIRECTORIES",
-        "GIT_CONFIG_COUNT",
-        "GIT_CONFIG_PARAMETERS",
-    ] {
-        std::env::remove_var(name);
-    }
-}
-
 /// Discover the open changes and derive a row for each.
 pub(crate) fn live_pass(start: &Path) -> Result<Pass> {
-    drop_inherited_git_routing();
     let root = crate::review_watch::forge::main_root(start)?;
     let repo = crate::review_watch::forge::Repository::load(&root)?;
     let changes: Vec<Pr> = match discover_rich(&root, &repo)? {
