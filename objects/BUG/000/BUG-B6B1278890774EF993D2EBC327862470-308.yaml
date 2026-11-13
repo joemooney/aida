@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-12T23:29:52.950918801Z
-modified_at: 2026-11-13T08:51:42.481092640Z
+modified_at: 2026-11-13T09:33:25.214622401Z
 req_type: Bug
 tags:
 - track:integration
@@ -25,6 +25,13 @@ comments:
   created_at: 2026-11-13T05:43:28.409924768Z
   modified_at: 2026-11-13T05:43:28.409924768Z
   session_id: 92a24ff6-1324-4fe1-a02b-b2601f384b4b
+- id: 01a1d441-335e-7db1-809a-ce5d9f82875f
+  author: joe
+  content: 'Round-2 (PR #3932 @ ed8cc0f3): all four round-1 findings are FIXED, none deferred. P1: per-key revalidation of indexed ledger lengths (test bug_2543_listing_sees_witness_written_after_discovery). P2 git O(1): listing-wide CHANGES tree read plus memoized repository/roster (test bug_2543_listing_publication_git_is_constant_in_keys, real store). P2 aggregate cap: 16 MiB aggregate with per-directory fallback (test bug_2543_oversized_aggregate_falls_back_per_directory). BUG-2551: own appends fold into the index (tests bug_2551_reconciling_many_waits_discovers_once, bug_2551_own_appends_fold_and_foreign_growth_rediscovers). Residual: receipt-bearing keys still read their own publication blobs (proportional to publications, not keys).'
+  created_at: 2026-11-13T09:33:25.214622401Z
+  modified_at: 2026-11-13T09:33:25.214622401Z
+  session_id: 01a1d418-ebf0-79b3-844f-d0ab8bed7682
+  harness_version: 2.1.323 (Claude Code)
 history:
 - id: 01a1d363-5ded-7e80-b51f-abf18415cebb
   author: joe
