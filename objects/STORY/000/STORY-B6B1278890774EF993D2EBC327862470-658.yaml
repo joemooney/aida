@@ -28,7 +28,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-12T17:51:40.579097417Z
-modified_at: 2026-11-13T00:47:05.887217127Z
+modified_at: 2026-11-13T02:13:36.320425431Z
 req_type: Story
 relationships:
 - rel_type:
@@ -94,6 +94,13 @@ comments:
     Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
   created_at: 2026-11-13T00:44:43.591788354Z
   modified_at: 2026-11-13T00:44:43.591788354Z
+- id: 01a1d2ae-89c0-7473-b7c9-400b6732ec3b
+  author: dirtlab
+  content: 'Round 2: existing e1490128e5 supplies both trusted FAST ratchet bases. Strengthened the actual make check-ci-fast regression with a no-base positive control: matching source/ledger expansion must pass without base comparison and refuse with the workflow base environment. PR #3898 currently carries ci:full. Hosted run https://github.com/joemooney/aida/actions/runs/43346406112 at head 7b61c5dbe38fa295adf9686a1eaa4c1fe786ab97 completed successfully: ci-tier: full, all seven FULL lanes and Build (ubuntu-latest) succeeded. New uncommitted test edits still require host publication and fresh exact-head CI before landing.'
+  created_at: 2026-11-13T02:13:36.320425431Z
+  modified_at: 2026-11-13T02:13:36.320425431Z
+  session_id: 01a1d2ada160
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1d0e3-3615-7533-9c49-092ba133a6b5
   author: joe
