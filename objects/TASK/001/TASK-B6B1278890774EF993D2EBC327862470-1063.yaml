@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-11T12:17:13.260009028Z
-modified_at: 2026-11-13T21:47:12.883799463Z
+modified_at: 2026-11-13T21:49:10.151187316Z
 req_type: Task
 relationships:
 - rel_type: BlockedBy
@@ -81,6 +81,28 @@ comments:
   modified_at: 2026-11-13T21:45:06.886847400Z
   session_id: 01a1d684-8599-70e0-a01c-714f54d2f8de
   harness_version: 2.1.323 (Claude Code)
+- id: 01a1d6e2-cc87-78d2-82ad-136d7e3b41e5
+  author: dirtlab
+  content: |
+    TASK-3783 / PR #3949 native-seat handoff
+
+    Blocker: AIDA_CONTAINMENT_POSTURE=native, AIDA_HEADLESS=1. User instructions explicitly prohibit Git metadata mutations, commit and push. No fetch, merge, commit, push or queue completion was attempted. Working tree remains unchanged.
+
+    HEAD c7f175496c3328db7e609533808003f41d8cfdaf
+    Local origin/main 97d2f9fda0856183dee299b29760f3004c5db881
+    Merge base 91fe1e337894199f15365d3f8ecfaf81366f8291
+    Host must fetch fresh main and perform the requested real merge before publication.
+
+    Candidate conflict resolution: /tmp/task-3783-resolved-exec-context-legacy.json
+    Computed by applying main's site-key delta relative to merge base to HEAD's ledger, preserving branch relocations. All 26 changed site keys combine without conflicts. Ceiling is HEAD 1232 + (main 1205 - base 1233) = 1204; summed site counts also 1204. Recompute if fetched main differs. Candidate is outside checkout because applying it without main's source changes would not represent a valid merged tree.
+
+    Validation on PRE-MERGE HEAD: aida-cmdkit 5 tests passed (j20261113T214751361-2-0). aida-term 64 tests passed (j20261113T214821547-2-0). No post-merge checks claimed. Host must run leaf tests and make check-ci-fast after actual merge.
+
+    Changed checkout files: none. Publication declaration: none, as there is no new checkout change to publish. TASK-3783 remains In Progress.
+  created_at: 2026-11-13T21:49:10.151187316Z
+  modified_at: 2026-11-13T21:49:10.151187316Z
+  session_id: 01a1d6e0fc5c
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1ca8a-8ee7-7991-b976-a941a11ff32c
   author: joe
@@ -142,6 +164,12 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1d6e1-bcb7-7b11-ad55-cccf49be92ed
+  author: dirtlab
+  timestamp: 2026-11-13T21:48:00.567261366Z
+  session_id: 01a1d6e0fc5c
+  harness_version: codex-cli 0.167.0
+  changes: []
 filed_at:
   code_sha: 11b131dfe3341e6d9c7127d64370f91366094711
   branch: main
