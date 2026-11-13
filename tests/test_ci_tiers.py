@@ -56,7 +56,7 @@ class CiTiers(unittest.TestCase):
         # Both ratchets compare against the trusted PR base, including when
         # the base is older than the shallow checkout's immediate parent.
         self.assertEqual(checkout['with']['fetch-depth'], 0)
-        self.assertTrue(any(step.get('run') == 'make check-ci-fast' for step in JOBS['fast-gates']['steps']))
+        self.assertTrue(any(step.get('run', '').strip().endswith('make check-ci-fast') for step in JOBS['fast-gates']['steps']))
         self.assertIn({'run': 'cargo check --profile dev --workspace --tests'},
                       JOBS['fast-compile']['steps'])
 
@@ -101,7 +101,7 @@ class CiTiers(unittest.TestCase):
         # Keep the real Make target, planner and guard bodies. Limit the fixture
         # inventory to the two affected guards; their unit suites run separately.
         # trace:STORY-2735 | ai:codex
-        step = next(s for s in JOBS['fast-gates']['steps'] if s.get('run') == 'make check-ci-fast')
+        step = next(s for s in JOBS['fast-gates']['steps'] if s.get('run', '').strip().endswith('make check-ci-fast'))
         guards = {'ExecContext environment ratchet': 'EXEC_CONTEXT_BASE',
                   'Crate glob import ratchet': 'CRATE_GLOBS_BASE'}
         for name, variable in guards.items():
@@ -141,8 +141,8 @@ class CiTiers(unittest.TestCase):
                 expected = '${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha || github.event.before }}'
                 self.assertEqual(step['env'][variable], expected)
                 env.update({key: base for key, value in step['env'].items() if value == expected})
-                def run(environment=None):
-                    return subprocess.run(['bash', '-e', '-o', 'pipefail', '-c', step['run']],
+                def run(environment=None, command=None):
+                    return subprocess.run(['bash', '-e', '-o', 'pipefail', '-c', step['run'] if command is None else command],
                         cwd=root, env=env if environment is None else environment,
                         capture_output=True, text=True, timeout=25)
                 clean = run()
@@ -168,7 +168,19 @@ class CiTiers(unittest.TestCase):
                 # the trusted base comparison, not an inconsistent fixture.
                 without_base = {key: value for key, value in env.items()
                                 if key not in guards.values()}
-                unchecked = run(without_base)
+                # Local Make remains usable without a PR event, but CI must
+                # fail closed if event resolution supplied an empty base.
+                for absent in ('', None):
+                    incomplete = dict(env)
+                    if absent is None:
+                        incomplete.pop(variable)
+                    else:
+                        incomplete[variable] = absent
+                    refused = run(incomplete)
+                    self.assertNotEqual(refused.returncode, 0,
+                                        refused.stdout + refused.stderr)
+                    self.assertIn('FAST requires a trusted base', refused.stderr)
+                unchecked = run(without_base, command='make check-ci-fast')
                 self.assertEqual(unchecked.returncode, 0,
                                  unchecked.stdout + unchecked.stderr)
                 result = run()
