@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-13T03:10:47.302266912Z
-modified_at: 2026-11-13T22:41:08.950923762Z
+modified_at: 2026-11-13T22:49:59.656399471Z
 req_type: Bug
 tags:
 - track:dell1
@@ -97,6 +97,13 @@ comments:
   content: 'Round 3: addressed all three blocking findings. Canonical pickup compares the branch tip with the historical merged PR head and resumes post-merge work; existing non-clone worktrees supply their actual HEAD, with recorded-ref fallback only for missing trees; exit branch/head evidence persists before forge lookup, while Approved still requires known no-PR evidence. Added one regression per finding. Validation: lane job j20261113T223600549-2-0, cargo test --profile agent -p aida-cli-lib --lib -- bug_2549: 14 passed, 0 failed. git diff --check passed. Native seat leaves edits uncommitted for host publication.'
   created_at: 2026-11-13T22:41:08.950923762Z
   modified_at: 2026-11-13T22:41:08.950923762Z
+  session_id: 01a1d70c1bbe
+  harness_version: codex-cli 0.167.0
+- id: 01a1d71a-7c68-73b2-98f6-790984e2cfb5
+  author: dirtlab
+  content: 'Fast-gate fix round: added maintenance.auto=false and gc.auto=0 to both new test commit invocations. Exact CI maintenance/ownership ratchet: 10 tests passed. Full make check-ci-fast passed all 46 gates with umask 022; ambient 0002 caused unrelated mail-wake fixture shared-write refusals on the first local full run. git diff --check passed. Only the pickup regression test file changed; edits remain uncommitted for host publication.'
+  created_at: 2026-11-13T22:49:59.656399471Z
+  modified_at: 2026-11-13T22:49:59.656399471Z
   session_id: 01a1d70c1bbe
   harness_version: codex-cli 0.167.0
 history:
