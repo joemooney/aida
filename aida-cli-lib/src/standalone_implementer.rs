@@ -1365,7 +1365,7 @@ fn run(
     // (`launch_head`), so finding the PR open afterwards proves nothing:
     // only the seat's git state says whether this run pushed.
     // trace:BUG-B6B1278890774EF993D2EBC327862470-050 | ai:claude
-    let launch_head = bg::seat_head(&worktree);
+    let launch_head = implementer_launch_head(&main_root, &worktree);
     let launch_pr = lookup_pr_with(launch.project_root, launch.branch, 1);
     attempt.bind(
         launch.spec,
@@ -1714,6 +1714,19 @@ pub(crate) fn claim_spec(project_root: &Path, spec: &str) {
 /// That is not a PR the caller can review.
 pub(crate) fn is_real_pr(pr: &crate::OpenPrInfo) -> bool {
     pr.number > 0
+}
+
+/// Pin the pre-run comparison head through the same trusted clone boundary
+/// used for final seat reads. Host Git deliberately refuses private clones.
+// trace:BUG-2536 | ai:codex
+pub(crate) fn implementer_launch_head(main: &Path, worktree: &Path) -> Option<String> {
+    if let Some(seat) = crate::seat_clone::host_recorded_clone(main, worktree) {
+        return match crate::seat_clone::probe(&seat.main, &seat.root) {
+            crate::seat_clone::Probe::Known(facts) => facts.head,
+            _ => None,
+        };
+    }
+    crate::headless_background::seat_head(worktree)
 }
 
 /// Whether `pr` is THIS run's PR: a real PR whose head is the lease branch.
