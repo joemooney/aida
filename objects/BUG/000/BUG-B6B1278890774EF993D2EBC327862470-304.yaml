@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-12T18:43:14.457201972Z
-modified_at: 2026-11-12T22:07:13.892693078Z
+modified_at: 2026-11-13T00:30:00.221103786Z
 req_type: Bug
 comments:
 - id: 01a1d119-6810-7f81-95b6-65589a91a298
@@ -45,6 +45,12 @@ comments:
   created_at: 2026-11-12T22:07:13.892693078Z
   modified_at: 2026-11-12T22:07:13.892693078Z
   session_id: 01a1d1ad9eb0
+- id: 01a1d24f-b01d-76d2-ab43-21a4c95508f2
+  author: joe
+  content: 'Integration session: PR #3902 merged into integration and CI unpinned to @stable (14f69472d84). #3902''s own CI ran on the 1.99.1 pin, so verified locally on rustc/cargo 1.100.0 (dev profile, fresh target dir, confirmed new build/<pkg>/<hash>/out layout with no deps/): AIDA_REQUIRE_BWRAP_LIVE=1 cargo +1.100.0 test -p aida-cli-lib --lib over bug_2383/bug_1745/bug_1749/bug_2398/spawn_and_resume_children/test_exec/bug026/task_1471: 34 passed, 0 failed, incl. the live bug_2383_bwrap_overlay_first_job_sees_a_prebuilt_dependency_as_fresh. check-ci-fast green. First full 1.100 CI proof comes with the next promotion to main.'
+  created_at: 2026-11-13T00:30:00.221103786Z
+  modified_at: 2026-11-13T00:30:00.221103786Z
+  session_id: 668a34f6-c74a-4b58-b144-167acd9792ef
 history:
 - id: 01a1d115-108b-7592-a01f-d749504387cd
   author: aida-session-start
