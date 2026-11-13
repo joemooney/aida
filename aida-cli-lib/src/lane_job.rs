@@ -1832,7 +1832,7 @@ fn run_one_authorized(
         use std::os::unix::process::CommandExt;
         cmd.process_group(0);
         if fast_gate_job(&job) {
-            crate::launch::profile::prepare_fast_gate_signals(&mut cmd);
+            crate::vendors::profile::prepare_fast_gate_signals(&mut cmd);
         }
     }
     let timeout = timeout(&job, seed.cold);
