@@ -28,32 +28,81 @@ pub(crate) enum QueueFreshPickup {
         owner: String,
         launcher: String,
     },
+    /// The spec carries `track:` tags naming more than one owner: no
+    /// launcher may take it until exactly one remains.
+    // trace:STORY-2749 | ai:claude
+    AmbiguousTrack(Vec<String>),
 }
 
 /// The tag family that assigns a spec to one track's launcher.
 // trace:STORY-2749 | ai:claude
 pub(crate) const TRACK_TAG_PREFIX: &str = "track:";
 
-/// The track a spec is assigned to, from its first `track:<owner>` tag.
+/// The track reserved for supervised, human-driven work: no headless lane
+/// takes it, whatever the launcher's own track.
 // trace:STORY-2749 | ai:claude
-pub(crate) fn spec_track(req: &aida_core::Requirement) -> Option<String> {
-    req.tags
+pub(crate) const OPERATOR_TRACK: &str = "operator";
+
+/// Which launcher a spec belongs to, from its `track:<owner>` tags.
+// trace:STORY-2749 | ai:claude
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum SpecTrack {
+    /// No track tag: any launcher may take it.
+    Free,
+    Owner(String),
+    /// Tags name several owners (sorted). Tags are a set, so picking one
+    /// would let different processes admit different launchers: refuse.
+    Ambiguous(Vec<String>),
+}
+
+/// The track a spec is assigned to: the distinct owners of its
+/// `track:<owner>` tags, compared case-insensitively.
+// trace:STORY-2749 | ai:claude
+pub(crate) fn spec_track(req: &aida_core::Requirement) -> SpecTrack {
+    let owners: std::collections::BTreeSet<String> = req
+        .tags
         .iter()
         .flat_map(|tag| tag.split_whitespace())
-        .find_map(|tag| tag.strip_prefix(TRACK_TAG_PREFIX))
+        .filter_map(|tag| tag.strip_prefix(TRACK_TAG_PREFIX))
         .map(|owner| owner.trim().to_ascii_lowercase())
         .filter(|owner| !owner.is_empty())
+        .collect();
+    let mut owners: Vec<String> = owners.into_iter().collect();
+    match owners.len() {
+        0 => SpecTrack::Free,
+        1 => SpecTrack::Owner(owners.remove(0)),
+        _ => SpecTrack::Ambiguous(owners),
+    }
+}
+
+/// The execution mode unattended admission enforces: the groomed mode, but
+/// `Operator` for a `track:operator` spec, which is supervised by
+/// definition whatever mode it groomed to.
+// trace:STORY-2749 | ai:claude
+pub(crate) fn effective_execution_mode(
+    req: &aida_core::Requirement,
+) -> Option<aida_core::ExecutionMode> {
+    use aida_core::ExecutionMode as M;
+    match req.execution_mode {
+        Some(mode @ (M::Guided | M::Operator | M::Decide)) => Some(mode),
+        _ if spec_track(req) == SpecTrack::Owner(OPERATOR_TRACK.into()) => Some(M::Operator),
+        mode => mode,
+    }
 }
 
 /// The pickup's spec track for the launch preflight line: its owner, or
 /// `free` when untagged or unreadable.
 // trace:STORY-2749 | ai:claude
 fn store_track_label(storage: &Storage, scope: &str) -> String {
-    storage
+    let track = storage
         .load()
         .ok()
-        .and_then(|store| store.get_requirement_by_spec_id(scope).and_then(spec_track))
-        .unwrap_or_else(|| "free".to_string())
+        .and_then(|store| store.get_requirement_by_spec_id(scope).map(spec_track));
+    match track {
+        Some(SpecTrack::Owner(owner)) => owner,
+        Some(SpecTrack::Ambiguous(owners)) => format!("ambiguous ({})", owners.join(", ")),
+        Some(SpecTrack::Free) | None => "free".to_string(),
+    }
 }
 
 /// The track this launcher runs: `AIDA_TRACK`, or `main` when unset.
@@ -96,10 +145,14 @@ pub(crate) fn queue_fresh_pickup_policy(
     // A spec on another launcher's track is never fresh work here.
     // trace:STORY-2749 | ai:claude
     if !is_terminal_status(&req.status) {
-        if let Some(owner) = spec_track(req) {
-            let launcher = launcher_track();
-            if owner != launcher {
-                return QueueFreshPickup::OtherTrack { owner, launcher };
+        match spec_track(req) {
+            SpecTrack::Free => {}
+            SpecTrack::Ambiguous(owners) => return QueueFreshPickup::AmbiguousTrack(owners),
+            SpecTrack::Owner(owner) => {
+                let launcher = launcher_track();
+                if owner != launcher {
+                    return QueueFreshPickup::OtherTrack { owner, launcher };
+                }
             }
         }
     }
@@ -161,6 +214,12 @@ pub(crate) fn queue_fresh_pickup_reason_label(policy: &QueueFreshPickup) -> Opti
             "on the `{owner}` track — only a `{owner}` launcher takes it (this one runs `{launcher}`; \
              set AIDA_TRACK={owner} to launch it there)"
         )),
+        // trace:STORY-2749 | ai:claude
+        QueueFreshPickup::AmbiguousTrack(owners) => Some(format!(
+            "tagged for several tracks ({}) — no launcher takes it until one \
+             `track:<owner>` tag remains",
+            owners.join(", ")
+        )),
         QueueFreshPickup::Blocked(reason) => {
             Some(aida_core::pickability::pickability_reason_label(reason))
         }
@@ -221,15 +280,10 @@ pub(crate) fn queue_drain_pickup_policy(
         return QueueFreshPickup::NeedsReleaseOperatorSession;
     }
     // trace:BUG-1120 | ai:codex
-    if matches!(
-        req.execution_mode,
-        Some(aida_core::ExecutionMode::Guided)
-            | Some(aida_core::ExecutionMode::Operator)
-            | Some(aida_core::ExecutionMode::Decide)
-    ) {
-        return QueueFreshPickup::NeedsGuidedOrOperatorSession(
-            req.execution_mode.expect("matched Some execution_mode"),
-        );
+    // A `track:operator` spec is supervised whatever it groomed to.
+    // trace:STORY-2749 | ai:claude
+    if let Some(mode) = queued_supervised_mode(req) {
+        return QueueFreshPickup::NeedsGuidedOrOperatorSession(mode);
     }
     queue_fresh_pickup_policy(req, store, force_needs_attention, project_root)
 }
@@ -238,7 +292,8 @@ pub(crate) fn queue_drain_pickup_policy(
 pub(crate) fn queued_supervised_mode(
     req: &aida_core::Requirement,
 ) -> Option<aida_core::ExecutionMode> {
-    match req.execution_mode {
+    // trace:STORY-2749 | ai:claude
+    match effective_execution_mode(req) {
         Some(
             mode @ (aida_core::ExecutionMode::Guided
             | aida_core::ExecutionMode::Operator
@@ -7590,7 +7645,8 @@ pub(crate) fn auto_complete_head_candidates_with_roles(
                     deferred: r.deferred,
                     deferred_reason: r.deferred_reason.clone(),
                     deferred_until: r.deferred_until.clone(),
-                    execution_mode: r.execution_mode,
+                    // trace:STORY-2749 | ai:claude
+                    execution_mode: effective_execution_mode(r),
                     tags: r.tags.clone(),
                     // BUG-1608: PRIN-5 fail closed — `pickability` treats a
                     // dangling or non-Completed `BlockedBy` target as blocked,

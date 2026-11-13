@@ -136,6 +136,9 @@ pub const AMBIENT_AIDA_KEYS: &[&str] = &[
     "AIDA_STORE_PATH",
     "AIDA_TEE_HEADLESS",
     "AIDA_TELEMETRY",
+    // The launcher's track (STORY-2749): the child's own `aida` commands
+    // must run on the track its parent admitted it under.
+    "AIDA_TRACK",
     "AIDA_TRANSPORT_SCAN_DEADLINE_MS",
     "AIDA_TUI_EPIC",
     "AIDA_TUI_LIVENESS_TTL_SECS",

@@ -200,7 +200,10 @@ pub(crate) use work::{
     derive_queue_work_prompt, latest_ruling_comment, prepend_ruling, resolve_pickup_attempt,
     rework_pr_head_branch_from_lookup,
 };
-pub(crate) use work::{launcher_track, spec_track, TRACK_TAG_PREFIX};
+pub(crate) use work::{
+    effective_execution_mode, launcher_track, spec_track, SpecTrack, OPERATOR_TRACK,
+    TRACK_TAG_PREFIX,
+};
 pub use work::{refuse_waiting_review, spec_open_change_key};
 
 /// `store_path` is the orphan-store path; the `--json` fast path opens a

@@ -3,12 +3,26 @@
 
 use super::*;
 
-fn spec(id: &str, status: &str, tags: &[&str]) -> ListedSpec {
-    ListedSpec {
-        display_id: id.into(),
-        status: status.into(),
-        tags: tags.iter().map(|t| t.to_string()).collect(),
-    }
+use aida_core::{Requirement, RequirementStatus as S, RequirementsStore};
+use std::collections::HashSet;
+
+fn stored(spec_id: &str, agreed: Option<&str>, status: S, tags: &[&str]) -> Requirement {
+    let mut r = Requirement::new(spec_id.to_string(), String::new());
+    r.spec_id = Some(spec_id.into());
+    r.agreed_id = agreed.map(String::from);
+    r.status = status;
+    r.tags = tags.iter().map(|t| t.to_string()).collect();
+    r
+}
+
+fn store_of(reqs: Vec<Requirement>) -> RequirementsStore {
+    let mut store = RequirementsStore::default();
+    store.requirements = reqs;
+    store
+}
+
+fn ids(specs: &[&ListedSpec]) -> Vec<String> {
+    specs.iter().map(|s| s.display_id.clone()).collect()
 }
 
 #[test]
@@ -26,26 +40,55 @@ fn completing_ids_use_the_completion_trailer_parser() {
 
 #[test]
 fn plan_tags_open_landed_specs_and_untags_closed_or_unlanded_ones() {
-    let landed = vec![
-        "BUG-1".to_string(),
-        "BUG-2".to_string(),
-        "BUG-5".to_string(),
-    ];
-    let specs = [
-        spec("BUG-1", "Approved", &[]),                   // open, landed: add
-        spec("BUG-2", "InProgress", &[LANDED_TAG]),       // already tagged: keep
-        spec("BUG-3", "Approved", &[LANDED_TAG, "perf"]), // not landed: remove
-        spec("BUG-4", "Completed", &[LANDED_TAG]),        // closed: remove
-        spec("BUG-5", "Completed", &[]),                  // closed: never add
-        spec("BUG-6", "Draft", &[]),                      // untouched
-    ];
+    let store = store_of(vec![
+        stored("BUG-1", None, S::Approved, &[]), // open, landed: add
+        stored("BUG-2", None, S::InProgress, &[LANDED_TAG]), // tagged: keep
+        stored("BUG-3", None, S::Approved, &[LANDED_TAG, "perf"]), // not landed: remove
+        stored("BUG-4", None, S::Completed, &[LANDED_TAG]), // closed: remove
+        stored("BUG-5", None, S::Completed, &[]), // closed: never add
+        stored("BUG-6", None, S::Draft, &[]),    // untouched
+    ]);
+    let landed: HashSet<uuid::Uuid> = ["BUG-1", "BUG-2", "BUG-5"]
+        .iter()
+        .filter_map(|t| resolve_trailer(&store, t))
+        .collect();
+    assert_eq!(landed.len(), 3);
+    let specs: Vec<ListedSpec> = store.requirements.iter().map(ListedSpec::of).collect();
     let (adds, removes) = plan_tag_changes(&specs, &landed);
-    assert_eq!(adds, ["BUG-1"]);
-    assert_eq!(removes, ["BUG-3", "BUG-4"]);
+    assert_eq!(ids(&adds), ["BUG-1"]);
+    assert_eq!(ids(&removes), ["BUG-3", "BUG-4"]);
+    // Edits address the stored spec by its stable UUID.
+    assert_eq!(adds[0].uuid, store.requirements[0].id);
 }
 
+// Review round 1: a trailer naming a spec by any identity the store knows
+// (origin id after agreed-id assignment, padding, a node alias) resolves to
+// that one stored spec; padding-equal ids naming two specs resolve to none.
+// trace:STORY-2737 | ai:claude
 #[test]
-fn plan_matches_ids_by_numeric_identity() {
-    let (adds, _) = plan_tag_changes(&[spec("TASK-42", "Approved", &[])], &["TASK-0042".into()]);
-    assert_eq!(adds, ["TASK-42"]);
+fn trailers_resolve_to_stored_spec_identity() {
+    let store = store_of(vec![
+        stored("TASK-HOME-42", Some("TASK-77"), S::Approved, &[]),
+        stored("TASK-ZZ-178", None, S::Approved, &[]),
+        stored("BUG-9", None, S::Approved, &[]),
+        stored("BUG-09", None, S::Approved, &[]),
+    ]);
+    let id = |n: usize| Some(store.requirements[n].id);
+    // Agreed display id and origin (native) id are the same spec.
+    assert_eq!(resolve_trailer(&store, "TASK-77"), id(0));
+    assert_eq!(resolve_trailer(&store, "TASK-HOME-42"), id(0));
+    assert_eq!(resolve_trailer(&store, "task-0077"), id(0));
+    // A node alias resolves through the store's literal-first order.
+    let mut retired = aida_core::node_alias::RetiredIds::default();
+    assert!(retired.add("TASK-1-418", "TASK-ZZ-178", "u"));
+    let _guard = aida_core::node_alias::install_for_thread(aida_core::node_alias::NodeAliasMap {
+        retired_ids: retired.index(),
+        ..Default::default()
+    });
+    assert_eq!(resolve_trailer(&store, "TASK-1-418"), id(1));
+    // Literal ids win; an unknown token names nothing.
+    assert_eq!(resolve_trailer(&store, "BUG-9"), id(2));
+    assert_eq!(resolve_trailer(&store, "BUG-404"), None);
+    // A padding-only match that names two stored specs tags neither.
+    assert_eq!(resolve_trailer(&store, "BUG-009"), None);
 }

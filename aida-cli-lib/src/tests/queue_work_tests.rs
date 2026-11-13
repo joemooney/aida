@@ -6,6 +6,7 @@
 //! trace:STORY-42 | ai:claude
 // trace:BUG-2017 | ai:codex — explicit positive global-ID fixture.
 use super::*;
+use crate::queue_cmd::{queued_supervised_mode, spec_track, SpecTrack};
 use crate::{
     append_reviewer_prompt_suffixes_with, apply_rework_conflict_route, auto_complete,
     auto_complete_phase1_target_status, build_implementer_phase_args, build_resolved_entry,
@@ -5021,4 +5022,93 @@ fn story_2749_completion_drops_track_and_landed_tags() {
     crate::completion::mark_completed(&mut r);
     assert_eq!(r.status, RequirementStatus::Completed);
     assert_eq!(r.tags.iter().collect::<Vec<_>>(), [&"perf".to_string()]);
+}
+
+// STORY-2749 review: tags are a set, so several track owners are refused
+// rather than resolved by iteration order; insertion order never matters.
+// trace:STORY-2749 | ai:claude
+#[test]
+fn story_2749_several_track_owners_are_refused_in_any_order() {
+    let _env = crate::test_env::EnvVarsGuard::apply(&[("AIDA_TRACK", None)]);
+    for tags in [
+        ["track:main", "track:integration"],
+        ["track:integration", "track:main"],
+    ] {
+        let mut r = req("TASK-2749", None, RequirementType::Task);
+        r.status = RequirementStatus::Approved;
+        for tag in tags {
+            r.tags.insert(tag.into());
+        }
+        let mut store = aida_core::RequirementsStore::default();
+        store.requirements.push(r.clone());
+        let want = QueueFreshPickup::AmbiguousTrack(vec!["integration".into(), "main".into()]);
+        assert_eq!(queue_fresh_pickup_policy(&r, &store, false, None), want);
+        assert_eq!(queue_drain_pickup_policy(&r, &store, false, None), want);
+        assert!(queue_fresh_pickup_reason_label(&want)
+            .unwrap()
+            .contains("integration, main"));
+    }
+    // The same owner spelled twice is one owner.
+    let mut r = req("TASK-2749", None, RequirementType::Task);
+    r.tags = ["track:Main".to_string(), "track:main".to_string()]
+        .into_iter()
+        .collect();
+    assert_eq!(spec_track(&r), SpecTrack::Owner("main".into()));
+}
+
+// STORY-2749 review: `track:operator` is supervised work. Even an operator
+// launcher's unattended paths refuse it, whatever execution mode it groomed.
+// trace:STORY-2749 | ai:claude
+#[test]
+fn story_2749_operator_track_never_runs_unattended() {
+    let _env = crate::test_env::EnvVarsGuard::set(&[("AIDA_TRACK", "operator")]);
+    for mode in [None, Some(aida_core::ExecutionMode::Drain)] {
+        let mut r = req("TASK-2750", None, RequirementType::Task);
+        r.status = RequirementStatus::Approved;
+        r.execution_mode = mode;
+        r.tags.insert("track:operator".into());
+        let mut store = aida_core::RequirementsStore::default();
+        store.requirements.push(r.clone());
+        assert_eq!(
+            queue_drain_pickup_policy(&r, &store, false, None),
+            QueueFreshPickup::NeedsGuidedOrOperatorSession(aida_core::ExecutionMode::Operator),
+            "{mode:?}"
+        );
+        assert!(crate::drain_gate::spec_is_keyboard_only(&r), "{mode:?}");
+        assert_eq!(
+            queued_supervised_mode(&r),
+            Some(aida_core::ExecutionMode::Operator)
+        );
+        // At the keyboard an operator launcher still takes it.
+        assert_eq!(
+            queue_fresh_pickup_policy(&r, &store, false, None),
+            QueueFreshPickup::Pickable
+        );
+    }
+}
+
+// STORY-2749 review: the launcher's track crosses the vendor child boundary,
+// so the child's own `aida` commands run on the track it was admitted under.
+// trace:STORY-2749 | ai:claude
+#[test]
+fn story_2749_track_reaches_the_vendor_child() {
+    let parent = aida_core::exec_context::Environment::from_pairs([(
+        std::ffi::OsString::from("AIDA_TRACK"),
+        std::ffi::OsString::from("integration"),
+    )]);
+    for vendor in [
+        aida_core::vendors::LaunchVendor::Claude,
+        aida_core::vendors::LaunchVendor::Codex,
+    ] {
+        let child = crate::launch::profile::VendorProfile::for_vendor(vendor)
+            .env_policy(aida_core::launch_policy::LaunchKind::Fresh)
+            .unwrap()
+            .project(&parent, std::iter::empty())
+            .unwrap();
+        assert_eq!(
+            child.get("AIDA_TRACK"),
+            Some(std::ffi::OsStr::new("integration")),
+            "{vendor:?}"
+        );
+    }
 }

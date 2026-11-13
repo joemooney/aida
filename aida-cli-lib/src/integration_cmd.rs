@@ -57,78 +57,99 @@ pub(crate) fn completing_ids(subjects: &[&str]) -> Vec<String> {
     out
 }
 
-/// One spec as `aida list --format json` reports it.
-#[derive(Debug, Clone, serde::Deserialize, PartialEq, Eq)]
+/// One stored spec, as the tag plan sees it: its stable identity (the
+/// UUID `aida edit` resolves directly), the id shown to the operator, its
+/// status and tags.
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct ListedSpec {
+    pub uuid: uuid::Uuid,
     pub display_id: String,
-    pub status: String,
-    #[serde(default)]
+    pub status: aida_core::RequirementStatus,
     pub tags: Vec<String>,
 }
 
-fn is_open(status: &str) -> bool {
+impl ListedSpec {
+    fn of(req: &aida_core::Requirement) -> Self {
+        let mut tags: Vec<String> = req.tags.iter().cloned().collect();
+        tags.sort();
+        Self {
+            uuid: req.id,
+            display_id: req.display_id(),
+            status: req.status.clone(),
+            tags,
+        }
+    }
+}
+
+fn is_open(status: &aida_core::RequirementStatus) -> bool {
+    use aida_core::RequirementStatus as S;
     matches!(
         status,
-        "Draft" | "Approved" | "Planned" | "InProgress" | "NeedsAttention"
+        S::Draft | S::Approved | S::Planned | S::InProgress | S::NeedsAttention
     )
 }
 
-/// The tag edits that make `specs` agree with `landed` (the ids completed on
-/// integration but not on main): add the tag to every open landed spec that
-/// lacks it; remove it from every tagged spec that is closed or not landed.
-/// Returned sorted, as (adds, removes).
-pub(crate) fn plan_tag_changes(
-    specs: &[ListedSpec],
-    landed: &[String],
-) -> (Vec<String>, Vec<String>) {
-    let is_landed = |id: &str| {
-        landed
-            .iter()
-            .any(|l| aida_core::id_identity::same_id(l, id))
-    };
+/// The stored spec a commit trailer token names, by the store's own
+/// resolution order: the literal id (native `spec_id`, then agreed id),
+/// then its node-alias expansion; numeric padding (`TASK-0042`) last.
+/// Origin ids are native `spec_id`s, so a pre-agreement trailer resolves to
+/// the same spec as its agreed display id. `None` for a token naming no spec.
+// trace:STORY-2737 | ai:claude
+pub(crate) fn resolve_trailer(
+    store: &aida_core::RequirementsStore,
+    token: &str,
+) -> Option<uuid::Uuid> {
+    aida_core::node_alias::resolve_literal_first_opt(token, |id| {
+        store.get_requirement_by_spec_id(id).map(|r| r.id)
+    })
+    .or_else(|| {
+        let mut hits = store.requirements.iter().filter(|r| {
+            [Some(r.display_id()), r.spec_id.clone(), r.agreed_id.clone()]
+                .into_iter()
+                .flatten()
+                .any(|id| aida_core::id_identity::same_id(&id, token))
+        });
+        // Padding-equal ids that name two specs are ambiguous: tag neither.
+        match (hits.next(), hits.next()) {
+            (Some(one), None) => Some(one.id),
+            _ => None,
+        }
+    })
+}
+
+/// The tag edits that make `specs` agree with `landed` (the stored specs
+/// completed on integration but not on main): add the tag to every open
+/// landed spec that lacks it; remove it from every tagged spec that is
+/// closed or not landed. Returned sorted by display id, as (adds, removes).
+pub(crate) fn plan_tag_changes<'a>(
+    specs: &'a [ListedSpec],
+    landed: &std::collections::HashSet<uuid::Uuid>,
+) -> (Vec<&'a ListedSpec>, Vec<&'a ListedSpec>) {
     let mut adds = Vec::new();
     let mut removes = Vec::new();
     for spec in specs {
         let tagged = spec.tags.iter().any(|t| t == LANDED_TAG);
-        let wanted = is_open(&spec.status) && is_landed(&spec.display_id);
+        let wanted = is_open(&spec.status) && landed.contains(&spec.uuid);
         if wanted && !tagged {
-            adds.push(spec.display_id.clone());
+            adds.push(spec);
         } else if tagged && !wanted {
-            removes.push(spec.display_id.clone());
+            removes.push(spec);
         }
     }
-    adds.sort();
-    removes.sort();
+    adds.sort_by(|a, b| a.display_id.cmp(&b.display_id));
+    removes.sort_by(|a, b| a.display_id.cmp(&b.display_id));
     (adds, removes)
 }
 
-fn aida_exe() -> std::path::PathBuf {
-    crate::aida_bin::current_executable_path()
-        .unwrap_or_else(crate::aida_bin::running_executable_fallback)
-}
-
-fn list_specs(root: &Path, extra: &[&str]) -> Result<Vec<ListedSpec>> {
-    let out = Command::new(aida_exe())
-        .current_dir(root)
-        .args([
-            "list",
-            "--no-focus",
-            "--all",
-            "--limit",
-            "0",
-            "--format",
-            "json",
-        ])
-        .args(extra)
-        .stdin(Stdio::null())
-        .output()
-        .context("running aida list")?;
-    anyhow::ensure!(
-        out.status.success(),
-        "aida list failed: {}",
-        String::from_utf8_lossy(&out.stderr).trim()
-    );
-    serde_json::from_slice(&out.stdout).context("parsing aida list --format json")
+/// Every stored spec, read from the store itself: no list query, so no
+/// role scope, focus or status filter can hide a landed or tagged spec.
+// trace:STORY-2737 | ai:claude
+fn load_store(root: &Path) -> Result<aida_core::RequirementsStore> {
+    let path = aida_core::store_locate::detect_distributed_store_from(root)
+        .unwrap_or_else(|| root.join(".aida-store"));
+    aida_core::Storage::new(path)
+        .load()
+        .context("loading the requirements store")
 }
 
 fn run_tags(root: &Path, dry_run: bool) -> Result<()> {
@@ -149,15 +170,13 @@ fn run_tags(root: &Path, dry_run: bool) -> Result<()> {
     )?;
     let subjects: Vec<&str> = log.lines().collect();
     let landed = completing_ids(&subjects);
-    // Open specs (candidates to tag) plus every spec already tagged, open or
-    // closed (candidates to untag).
-    let mut specs = list_specs(root, &["--status", "open"])?;
-    for tagged in list_specs(root, &["--tags", LANDED_TAG])? {
-        if !specs.iter().any(|s| s.display_id == tagged.display_id) {
-            specs.push(tagged);
-        }
-    }
-    let (adds, removes) = plan_tag_changes(&specs, &landed);
+    let store = load_store(root)?;
+    let landed_specs: std::collections::HashSet<uuid::Uuid> = landed
+        .iter()
+        .filter_map(|token| resolve_trailer(&store, token))
+        .collect();
+    let specs: Vec<ListedSpec> = store.requirements.iter().map(ListedSpec::of).collect();
+    let (adds, removes) = plan_tag_changes(&specs, &landed_specs);
     println!(
         "{} commit(s) on origin/integration not on origin/main complete {} spec(s).",
         subjects.len(),
@@ -167,18 +186,21 @@ fn run_tags(root: &Path, dry_run: bool) -> Result<()> {
         println!("`{LANDED_TAG}` tags are up to date.");
         return Ok(());
     }
-    for (verb, flag, ids) in [
+    for (verb, flag, specs) in [
         ("tag", "--add-tag", &adds),
         ("untag", "--remove-tag", &removes),
     ] {
-        for id in ids {
+        for spec in specs {
+            let id = &spec.display_id;
             if dry_run {
                 println!("  would {verb} {id}");
                 continue;
             }
-            let status = Command::new(aida_exe())
+            // Edit by UUID: the stable identity, never an alias guess.
+            let uuid = spec.uuid.to_string();
+            let status = Command::new(crate::kernel::aida_exe_path())
                 .current_dir(root)
-                .args(["edit", id, flag, LANDED_TAG])
+                .args(["edit", &uuid, flag, LANDED_TAG])
                 .stdin(Stdio::null())
                 .stdout(Stdio::null())
                 .status()
