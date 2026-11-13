@@ -3,13 +3,25 @@ spec_id: BUG-b6b1278890774ef993d2ebc327862470-289
 agreed_id: BUG-2524
 title: 'Advisor seat cannot see the operator''s mandate: AIDA_USER=<seat handle> makes current_user_id differ from the mandate principal'
 description: 'Observed 2026-11-11 05:15 MST: operator ran ''aida mandate renew'' (principal joe). In the advisor seat (AIDA_USER=claude-advisor-112), ''aida mandate status'' prints ''No mandate has been started'' and warns ''ignoring mandate record ...: principal joe is not the current user'' for every record; ''aida dispatch request take'' fails ''no active mandate''. With AIDA_USER unset, the same mandate shows ACTIVE. Cause: gate/mandate.rs record_problem compares m.principal to crate::current_user_id(None) (dispatch.rs:290, :809), which resolves the AIDA_USER seat handle. The mandate exists to authorize the advisor seat, so it must be resolved against the operator principal (the OS/git user, or the seat''s grant), not the seat handle. Acceptance: inside a seat with AIDA_USER set, an operator-minted mandate is visible and authorizes dispatch; a test pins it.'
-status: Draft
+status: Approved
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-11T12:20:05.985268708Z
-modified_at: 2026-11-11T12:20:05.985268708Z
+modified_at: 2026-11-13T05:31:52.639721130Z
 req_type: Bug
+tags:
+- track:dell1
+history:
+- id: 01a1d364-0fbf-7e60-b4b3-ed57a2638b6e
+  author: joe
+  timestamp: 2026-11-13T05:31:52.639706036Z
+  session_id: 01a1d2e6-f5db-7f33-9b74-3ae5fdaf9e0c
+  harness_version: 2.1.323 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Approved
 filed_at:
   code_sha: 11b131dfe3341e6d9c7127d64370f91366094711
   branch: main
