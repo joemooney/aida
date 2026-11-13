@@ -1295,7 +1295,7 @@ fn bug_2398_actual_recorder_artifacts_require_durable_independent_authority() {
     );
     let head = crate::test_git::commit_fixture(root);
     let record = || {
-        crate::handle_review_record_at(
+        crate::handle_review_record_fixture_at(
             root.to_path_buf(),
             "TASK-1",
             "approved",
@@ -1741,7 +1741,7 @@ fn bug_2403_bug_2398_recorder_artifacts_hold_through_remapped_selectors() {
     .unwrap();
     std::thread::sleep(std::time::Duration::from_millis(15));
     let record = || {
-        crate::handle_review_record_at(
+        crate::handle_review_record_fixture_at(
             root.to_path_buf(),
             NATIVE,
             "approved",
