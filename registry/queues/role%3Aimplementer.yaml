@@ -502,6 +502,8 @@
   added_by: fast-gate
   note: |-
     The host's sandboxed configured fast-check command failed. This is your ONE fast-gate fix round. Fix the failing gates below and finish. Native seats must leave edits uncommitted for host publication; retain all punt/hold instructions.
+    Traceback (most recent call last):
+      File "/home/dirtlab/ai/aida-worktrees/aida-seat-aida-bug-b6b1278890774ef993d2ebc327862470-266/tests/test_exec_context_ratchet.py", line 352, in test_repository_matches_exact_ledger
         GUARD.check(GUARD.scan(), json.loads((GUARD.ROOT / GUARD.LEDGER).read_text()))
       File "/home/dirtlab/ai/aida-worktrees/aida-seat-aida-bug-b6b1278890774ef993d2ebc327862470-266/scripts/check-exec-context.py", line 319, in check
         raise ValueError(f"new sites (forbidden): {dict(new)}\nretired/changed sites (prune ledger): {dict(stale)}")
@@ -509,39 +511,38 @@
     retired/changed sites (prune ledger): {}
 
     ----------------------------------------------------------------------
-    Ran 19 tests in 16.384s
+    Ran 19 tests in 15.902s
 
     FAILED (errors=1)
-    FAIL  ExecContext environment ratchet  (16.5s)
+    FAIL  ExecContext environment ratchet  (16.0s)
             this is CI's own `ExecContext environment ratchet` step, run locally.
     make: *** [Makefile:541: check-ci-fast] Error 1
     lane sccache: final job statistics
     Compile requests                     453
     Compile requests executed            363
-    Cache hits                           138
+    Cache hits                           358
     Cache hits (Assembler)                14
     Cache hits (C/C++)                    17
-    Cache hits (Rust)                    107
-    Cache misses                         220
-    Cache misses (Rust)                  220
-    Cache hits rate                    38.55 %
+    Cache hits (Rust)                    327
+    Cache misses                           0
+    Cache hits rate                   100.00 %
     Cache hits rate (Assembler)       100.00 %
     Cache hits rate (C/C++)           100.00 %
-    Cache hits rate (Rust)             32.72 %
+    Cache hits rate (Rust)            100.00 %
     Cache timeouts                         0
     Cache read errors                      0
     Forced recaches                        0
     Cache write errors                     0
     Cache errors                           0
-    Compilations                         220
+    Compilations                           0
     Compilation failures                   5
     Non-cacheable compilations             0
     Non-cacheable calls                   86
     Non-compilation calls                  4
     Unsupported compiler calls             0
     Average cache write                0.000 s
-    Average compiler                   0.359 s
-    Average cache read hit             0.001 s
+    Average compiler                   0.000 s
+    Average cache read hit             0.002 s
     Failed distributed compilations        0
 
     Non-cacheable reasons:
@@ -556,35 +557,34 @@
     Base directories                (none)
     Use direct/preprocessor mode?   yes
     Version (client)                0.19.0
-    Cache size                             5 GiB
+    Cache size                             6 GiB
     Max cache size                        10 GiB
     Stopping sccache server...
     Compile requests                     453
     Compile requests executed            363
-    Cache hits                           138
+    Cache hits                           358
     Cache hits (Assembler)                14
     Cache hits (C/C++)                    17
-    Cache hits (Rust)                    107
-    Cache misses                         220
-    Cache misses (Rust)                  220
-    Cache hits rate                    38.55 %
+    Cache hits (Rust)                    327
+    Cache misses                           0
+    Cache hits rate                   100.00 %
     Cache hits rate (Assembler)       100.00 %
     Cache hits rate (C/C++)           100.00 %
-    Cache hits rate (Rust)             32.72 %
+    Cache hits rate (Rust)            100.00 %
     Cache timeouts                         0
     Cache read errors                      0
     Forced recaches                        0
     Cache write errors                     0
     Cache errors                           0
-    Compilations                         220
+    Compilations                           0
     Compilation failures                   5
     Non-cacheable compilations             0
     Non-cacheable calls                   86
     Non-compilation calls                  4
     Unsupported compiler calls             0
     Average cache write                0.000 s
-    Average compiler                   0.359 s
-    Average cache read hit             0.001 s
+    Average compiler                   0.000 s
+    Average cache read hit             0.002 s
     Failed distributed compilations        0
 
     Non-cacheable reasons:
@@ -599,10 +599,10 @@
     Base directories                (none)
     Use direct/preprocessor mode?   yes
     Version (client)                0.19.0
-    Cache size                             5 GiB
+    Cache size                             6 GiB
     Max cache size                        10 GiB
     lane sccache: server exited before sandbox teardown
-  added_at: 2026-11-13T03:48:13.650911159Z
+  added_at: 2026-11-13T08:10:34.125531720Z
   for_role: implementer
 - user_id: role:implementer
   requirement_id: 01a1965c-3483-70e3-af35-1caaf7df3f96
