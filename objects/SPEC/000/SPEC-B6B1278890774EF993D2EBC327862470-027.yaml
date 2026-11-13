@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-12T19:55:23.242618884Z
-modified_at: 2026-11-13T06:15:10.925888241Z
+modified_at: 2026-11-13T06:39:06.055861552Z
 req_type: Task
 tags:
 - from-implementer:STORY-2733
@@ -22,6 +22,13 @@ comments:
   created_at: 2026-11-12T21:15:55.856611240Z
   modified_at: 2026-11-12T21:15:55.856611240Z
   session_id: 01a1d13f7835
+- id: 01a1d3a1-9b47-7772-bd24-4dde441ef007
+  author: dirtlab
+  content: 'Raised the host-controlled fast-gate timeout from 600s to the existing 3600s maximum for both make check-ci-fast and trusted configured shell gates. Seat environment overrides remain refused; Cargo timeout behavior and gate-result semantics are unchanged. Updated operator docs and regression coverage. Validation: rustfmt --check and git diff --check passed. Lane job j20261113T063110459-2-0 passed the exact_make_job_has_bounded_timeout_and_never_counts_as_cargo_tests regression (1 executed test); initial 900s compilation attempt timed out, retry used AIDA_CARGO_TIMEOUT=3600. Full LIGHT gate remains for a host runner rebuilt with this change. Edits left uncommitted for native host publication.'
+  created_at: 2026-11-13T06:39:06.055861552Z
+  modified_at: 2026-11-13T06:39:06.055861552Z
+  session_id: 01a1d38b2168
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1d1cd-386d-7c51-9eaf-8a2957dae6a1
   author: joe

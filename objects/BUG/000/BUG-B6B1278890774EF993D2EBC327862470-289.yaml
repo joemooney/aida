@@ -8,10 +8,51 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-11T12:20:05.985268708Z
-modified_at: 2026-11-13T06:02:06.420385210Z
+modified_at: 2026-11-13T06:37:11.657318841Z
 req_type: Bug
 tags:
 - track:dell1
+comments:
+- id: 01a1d39f-dc69-7a50-996f-e5c079b0059f
+  author: dirtlab
+  content: |
+    BUG-2524 implementation handoff
+
+    Mandate minting, renewal, stop, status, dispatch and drive resolve the operator from USER (USERNAME fallback), independently of the AIDA_USER seat/queue identity. Unknown operators refuse selection. Advisor dispatch still validates the bound seat grant and matching operator principal. Shared exec_context snapshot access lives on the kernel floor and is explicitly inventoried. Scheduler diagnostics now use USER. Tests cover a delegated advisor subject distinct from its operator principal, unknown/foreign operators, existing mandate gates and train release behavior.
+
+    Validation:
+    - Final lane job j20261113T063332960-2-0: 320 passed, 0 failed, 1 ignored. Includes BUG-2524 regressions, mandate/drive, gate source-boundary checks, and held-member train release.
+    - ExecContext legacy guard: 1234 exact sites, zero additions.
+    - rustfmt and git diff --check pass.
+    - Earlier broader run j20261113T061349056-2-0: 427 passed, 7 failed, 1 ignored. Three identity/boundary failures were corrected and pass in the final run. Four other fixtures remain validation limitations: missing matching agent/aida binary (bug_2398), two mail writer-admission cleanup refusals, and a disappearing /proc fd during task_2344 quiescence coverage. They were not rerun in the final focused selection.
+    - make check-ci-fast was stopped when it unexpectedly launched cargo directly, contrary to this lane's runner-only constraint.
+    - Draft finding creation was refused by unsafe shared allocator mode 0664 at /home/dirtlab/ai/aida/.git/aida-work-dispenser.toml; no finding was written. Host triage is needed for that allocator and the four broader-run limitations.
+    - Supplied codegraph client was absent; doctor reported codegraph missing. Navigation used rg.
+
+    Changed files:
+    - aida-cli-lib/src/dispatch.rs
+    - aida-cli-lib/src/gate/dispatch_deps.rs
+    - aida-cli-lib/src/gate/kernel_deps.rs
+    - aida-cli-lib/src/gate/mandate.rs
+    - aida-cli-lib/src/gate/mandate_drive.rs
+    - aida-cli-lib/src/gate/tests/story_1698_mandate_tests.rs
+    - aida-cli-lib/src/gate/tests/story_1700_drive_mandate_tests.rs
+    - aida-cli-lib/src/gate/tests/story_1917_dispatch_exec_tests.rs
+    - aida-cli-lib/src/gate/tests/story_1917_dispatch_flow_schedule_tests.rs
+    - aida-cli-lib/src/gate/tests/story_1917_dispatch_request_tests.rs
+    - aida-cli-lib/src/mandate.rs
+    - aida-cli-lib/src/mandate_drive.rs
+    - aida-cli-lib/src/tests/bug2406_train_tests.rs
+    - aida-cli-lib/src/tests/story_1888_gate_paths_tests.rs
+    - docs/advanced/authority-and-seats.md
+
+    Native seat: edits remain uncommitted. Host owns commit, publication and queue completion.
+
+    Help-Golden: unchanged
+  created_at: 2026-11-13T06:37:11.657318841Z
+  modified_at: 2026-11-13T06:37:11.657318841Z
+  session_id: 01a1d37f446b
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1d364-0fbf-7e60-b4b3-ed57a2638b6e
   author: joe
