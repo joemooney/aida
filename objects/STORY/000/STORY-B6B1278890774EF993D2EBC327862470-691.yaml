@@ -43,7 +43,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-13T16:52:56.270142081Z
-modified_at: 2026-11-13T22:17:30.671091151Z
+modified_at: 2026-11-13T22:19:16.786092480Z
 req_type: Story
 tags:
 - architecture
@@ -110,6 +110,26 @@ comments:
   content: Commit c04b25f8a6b references this requirement
   created_at: 2026-11-13T22:17:30.671091151Z
   modified_at: 2026-11-13T22:17:30.671091151Z
+  session_id: 01a1d681-a431-7ee0-8826-638d9544977f
+  harness_version: 2.1.323 (Claude Code)
+- id: 01a1d6fe-5db2-7903-a112-64ddaeb414b4
+  author: joe
+  content: |-
+    S2 entry criteria sketch (branch story-2768-s2-entry, off S1b). Changes to the Evidence seam in land.rs and three additive read-only helpers in gate/.
+
+    1+12 (typed UNKNOWN): Evidence::approval returns Result<Approval, String> with Approval::{Approved, Refused}; Err is "could not read" and derives UNKNOWN/wait. Live reads the verdict corpus first and treats an unreadable artifact, or a forge that could not confirm the change's specs, as Err before any refusal is considered. Evidence::reviewing returns Result<Option<String>, String>; review_marker gains a fallible read that separates NotFound from unreadable.
+
+    2 (ledger): rounds reads through gate::ledger::checked::read_change_events (strict, budgeted); Unsafe or an unresolvable store root is UNKNOWN. Delivery-pending records are skipped (finding 10, same filter the release path uses).
+
+    3 (hold): rework_hold_release gains release_condition(project, pr) -> NoHold | Met{needs_mandate} | Unmet(why) | Unknown(why). It runs auto_release's own first-pass eligibility (legacy/composed holds, absorbed reasons, covered-spec resolution, always-human and sensitive classes, grant, attested approval at the live head, arming-refusal order) and stops before release_with. Differences from a real release, all to keep it read-only: carry-over sites are read_only (no proof recorded), forge retries print nothing, and the mandate is NOT consulted through mandate_ship_cover (that writes the exclusion ledger). For a sensitive spec it reads the mandate state only: no active ship-held mandate with the supervised lift = Unmet; one active = Met{needs_mandate: id}, and the row says the mandate's cover is judged when the hold is released. S2's act step calls auto_release itself, so the full decision still gates the release. A failed forge read (live head, covered specs) is Unknown, not Unmet.
+
+    4 (pinning): each pass fetches into refs/aida/land/<pid>-<nonce>/..., resolves every head and base to a commit id once, checks the head equals the discovered head, and passes only commit ids to merge-tree, merge-base and patch-id afterwards. The pass deletes its own namespace when it ends and removes namespaces whose pid is dead.
+
+    5 (routing): every git call in land.rs clears the same routing variables as review_watch_forge (clear_routing made pub(crate)), and the fetch rechecks Repository::load(root).identity against the identity discovery pinned, refusing the pass if it changed.
+
+    P2s: 10 fixed with 2. 6, 7, 8, 9, 11 stay recorded as known limits unless they fall out of the above.
+  created_at: 2026-11-13T22:19:16.786092480Z
+  modified_at: 2026-11-13T22:19:16.786092480Z
   session_id: 01a1d681-a431-7ee0-8826-638d9544977f
   harness_version: 2.1.323 (Claude Code)
 history:
