@@ -2,6 +2,14 @@
 
 <!-- trace:STORY-2630 | ai:codex -->
 
+The 2026-11-08 advisor ruling resolves the design choice below: use a host
+query proxy when the installed CLI cannot query read-only. The candidate
+implementation and deployment contract now live in
+[scripts/codegraph/README.md](../../../scripts/codegraph/README.md). The
+observations below remain historical evidence for the upstream limitation;
+they do not describe the new proxy's implementation. Host deployment and
+real-seat AC5 evidence remain required before completion.
+
 Measured 2026-11-07 19:15 UTC from the native Codex implementer seat at
 `34dc5896bbdcdd669f23cedef35888f8a29331dc`. Slice 1 is present. This
 investigation concerns the remaining Slice 2 acceptance items: read-only

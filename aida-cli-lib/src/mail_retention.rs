@@ -412,3 +412,39 @@ mod tests {
 #[cfg(test)]
 #[path = "tests/story_1843_c2_refusal_tests.rs"]
 mod story_1843_c2_refusal_tests;
+
+/// A durable canonical copy for CLI retirement fixtures. No activation
+/// bypass: production still takes its fresh writer scan.
+// trace:TASK-3420 | ai:codex
+#[cfg(test)]
+pub(crate) fn preserve_fixture_mail(project: &Path, tree: &Path) {
+    let store = project.join(".git/retention-test-store");
+    if !store.exists() {
+        let out = crate::test_git::git_command()
+            .arg("-C")
+            .arg(project)
+            .args(["worktree", "add", "-q", "-b", "aida-store"])
+            .arg(&store)
+            .output()
+            .unwrap();
+        assert!(out.status.success(), "{out:?}");
+    }
+    let canonical = store.join("mailbox");
+    std::fs::create_dir_all(&canonical).unwrap();
+    for entry in std::fs::read_dir(tree.join(".aida/mailbox")).unwrap() {
+        let path = entry.unwrap().path();
+        if path.extension().is_some_and(|e| e == "json")
+            && !path
+                .file_name()
+                .unwrap()
+                .as_encoded_bytes()
+                .starts_with(b".")
+        {
+            aida_core::write_atomic(
+                &canonical.join(path.file_name().unwrap()),
+                std::fs::read(&path).unwrap(),
+            )
+            .unwrap();
+        }
+    }
+}

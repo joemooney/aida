@@ -198,7 +198,7 @@ fn bypass_still_bypasses_the_unmerged_branch_arm() {
 // trace:BUG-1763 | ai:claude
 #[test]
 fn preclaim_block_probes_forge_not_ancestry() {
-    let source = include_str!("../queue_cmd.rs");
+    let source = include_str!("../queue_cmd/work.rs");
     let work = source
         .split_once("pub(crate) fn handle_queue_work(")
         .unwrap()

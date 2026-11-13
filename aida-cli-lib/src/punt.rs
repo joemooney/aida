@@ -350,10 +350,36 @@ impl PuntSignal {
 /// Path the orchestrator provisions for a spec's punt signal —
 /// `.aida/punt-signals/<spec>.json` under the (main) project root.
 pub fn signal_path(project_root: &Path, spec: &str) -> PathBuf {
-    project_root
-        .join(".aida")
-        .join("punt-signals")
-        .join(format!("{spec}.json"))
+    case_insensitive_signal_path(project_root, "punt-signals", spec)
+}
+
+// Scope admission is ASCII case-insensitive; Linux filenames are not. Reuse
+// existing spellings (including legacy mixed-case origin IDs) on every surface.
+// trace:BUG-2488 | ai:codex
+fn case_insensitive_signal_path(root: &Path, directory: &str, spec: &str) -> PathBuf {
+    let directory = root.join(".aida").join(directory);
+    let name = format!("{spec}.json");
+    let exact = directory.join(&name);
+    if exact.exists() {
+        return exact;
+    }
+    if let Ok(entries) = std::fs::read_dir(&directory) {
+        let mut matches: Vec<_> = entries
+            .flatten()
+            .filter(|entry| {
+                entry
+                    .file_name()
+                    .to_string_lossy()
+                    .eq_ignore_ascii_case(&name)
+            })
+            .map(|entry| entry.path())
+            .collect();
+        matches.sort();
+        if let Some(path) = matches.into_iter().next() {
+            return path;
+        }
+    }
+    exact
 }
 
 /// Write a punt signal file, creating `.aida/punt-signals/` if needed.
@@ -363,6 +389,100 @@ pub fn write_signal(path: &Path, signal: &PuntSignal) -> anyhow::Result<()> {
     }
     std::fs::write(path, serde_json::to_string_pretty(signal)?)?;
     Ok(())
+}
+
+// Host access to seat-owned handshakes pins every directory before reading or
+// unlinking. The procfd paths stay anchored if a seat renames a parent; each
+// subsequent open refuses links. Missing is distinct from unsafe/unreadable.
+// trace:BUG-2488 | ai:codex
+pub(crate) fn seat_handshake_parent(
+    tree: &Path,
+    path: &Path,
+    create: bool,
+) -> anyhow::Result<Option<std::fs::File>> {
+    use std::os::fd::AsRawFd;
+    use std::os::unix::fs::OpenOptionsExt;
+    let relative = path.strip_prefix(tree)?;
+    let mut options = std::fs::OpenOptions::new();
+    options
+        .read(true)
+        .custom_flags(libc::O_NOFOLLOW | libc::O_DIRECTORY | libc::O_NONBLOCK);
+    // The host-provided lease root may have a host-owned alias. Resolve that
+    // root once, then pin it and refuse links at every seat-controlled level.
+    let root = match tree.canonicalize() {
+        Ok(root) => root,
+        Err(e) if !create && e.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+        Err(e) => return Err(e.into()),
+    };
+    let mut dir = options.open(root)?;
+    for part in relative
+        .parent()
+        .unwrap_or_else(|| Path::new(""))
+        .components()
+    {
+        anyhow::ensure!(
+            matches!(part, std::path::Component::Normal(_)),
+            "invalid seat handshake path"
+        );
+        let next = PathBuf::from(format!("/proc/self/fd/{}", dir.as_raw_fd())).join(part);
+        if create {
+            match std::fs::create_dir(&next) {
+                Ok(()) => {}
+                Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => {}
+                Err(e) => return Err(e.into()),
+            }
+        }
+        dir = match options.open(next) {
+            Ok(dir) => dir,
+            Err(e) if !create && e.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+            Err(e) => return Err(e.into()),
+        };
+    }
+    Ok(Some(dir))
+}
+
+pub(crate) fn seat_handshake_text(tree: &Path, path: &Path) -> anyhow::Result<Option<String>> {
+    use std::os::fd::AsRawFd;
+    let Some(dir) = seat_handshake_parent(tree, path, false)? else {
+        return Ok(None);
+    };
+    let pinned = PathBuf::from(format!("/proc/self/fd/{}", dir.as_raw_fd())).join(
+        path.file_name()
+            .ok_or_else(|| anyhow::anyhow!("invalid handshake path"))?,
+    );
+    match std::fs::symlink_metadata(&pinned) {
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+        Err(e) => return Err(e.into()),
+        Ok(_) => {}
+    }
+    aida_core::seat_clone_detect::read_regular_file(&pinned)
+        .map(Some)
+        .ok_or_else(|| {
+            anyhow::anyhow!(
+                "refusing unsafe, oversized or unreadable seat handshake: {}",
+                path.display()
+            )
+        })
+}
+
+pub(crate) fn read_seat_signal(tree: &Path, spec: &str) -> anyhow::Result<Option<PuntSignal>> {
+    seat_handshake_text(tree, &signal_path(tree, spec))?
+        .map(|body| serde_json::from_str(&body).map_err(Into::into))
+        .transpose()
+}
+
+pub(crate) fn read_seat_hold_signal(tree: &Path, spec: &str) -> anyhow::Result<Option<HoldSignal>> {
+    seat_handshake_text(tree, &hold_signal_path(tree, spec))?
+        .map(|body| serde_json::from_str(&body).map_err(Into::into))
+        .transpose()
+}
+
+pub(crate) fn read_seat_ledger(tree: &Path) -> anyhow::Result<Vec<PuntRecord>> {
+    let text = seat_handshake_text(tree, &ledger_path(tree))?.unwrap_or_default();
+    text.lines()
+        .filter(|line| !line.trim().is_empty())
+        .map(|line| serde_json::from_str(line).map_err(Into::into))
+        .collect()
 }
 
 /// Read a punt signal file. `None` when the file is absent or unparseable —
@@ -429,10 +549,7 @@ impl HoldSignal {
 /// Path the orchestrator provisions for a spec's PR-hold signal —
 /// `.aida/pr-holds/<spec>.json` under the (main) project root.
 pub fn hold_signal_path(project_root: &Path, spec: &str) -> PathBuf {
-    project_root
-        .join(".aida")
-        .join("pr-holds")
-        .join(format!("{spec}.json"))
+    case_insensitive_signal_path(project_root, "pr-holds", spec)
 }
 
 /// Write a PR-hold signal file, creating `.aida/pr-holds/` if needed.

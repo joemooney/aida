@@ -248,7 +248,25 @@ older result against its retained source inventory before returning verified
 receipt authority, then persists that proof. A warm exact read fetches only the
 requested old SHA; a cold read also performs the bounded newest-32 pass. These
 reads never publish statuses. Home processing skips unverified, obsolete and
-already-published results. Invalid input remains in the independent
+already-published results. For each unverified latest attempt still needing a
+native status, it reports the SHA, attempt, reason "outside the 32-attempt
+revalidation window", and exact `aida intent ci read --attempt N --sha S`
+recovery command. These rows also appear in Home's `aida awaiting` views.
+
+An exact read attempts verification; it does not guarantee recovery. If it
+refuses (for example, a returned job is absent from Home's pinned inventory),
+the result remains unverified and cannot publish a status. Inspect the refusal
+and audit row with `aida intent ci read --json`; repair the Work pipeline or
+inventory configuration as appropriate, then request a new globally unused
+attempt for the same SHA with `aida intent ci request --attempt N --sha S`.
+Run the repaired pipeline and process its new receipt. The newer request
+supersedes the refused attempt and removes its awaiting row. Retrying the old
+exact read cannot repair invalid receipt content. Never edit verification or
+publication markers to silence a refused result.
+
+Work clones show no Home status recovery notices. The display cache refresh is
+best-effort: a write failure warns without blocking intake, reads or publication.
+Invalid input remains in the independent
 quarantine ref/object database; it cannot advance the accepted intake branch or
 publish a native status. No work logs, URLs, paths, runner identities or diagnostic
 prose enter the return schema. Allow-lists and digests cannot establish that work
@@ -317,4 +335,7 @@ AIDA_TEST_BIN="$PWD/target/debug/aida" cargo test -p aida-cli-lib --no-default-f
 
 CI commands accept `--json` (or `--format json`) and emit one result object
 with a `message` field on success, except `ci read`, which emits an array of
-`{path, verification, audit}` objects; refusals remain nonzero exits.
+`{path, verification, audit}` objects. `ci process --json` also includes a
+`skipped` array of `{sha, attempt, reason, command}` objects; a publication
+refusal emits one `{error, skipped}` object on stdout. Refusals remain nonzero
+exits.

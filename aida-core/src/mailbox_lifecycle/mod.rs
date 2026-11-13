@@ -64,6 +64,8 @@ mod guard_tests;
 #[cfg(test)]
 mod leftovers_tests;
 #[cfg(test)]
+mod message_state_tests;
+#[cfg(test)]
 mod tests;
 
 use serde::{Deserialize, Serialize};
@@ -86,9 +88,9 @@ use crate::process_probe::{Probe, ProbeSource, ProcessIdentity};
 pub const LIFECYCLE_LOCK_TIMEOUT: Duration = Duration::from_secs(2);
 
 /// The operator command that reports whether every writer host on the
-/// machine is admitting (QC1). A mail-bearing source refuses retirement until
-/// an activation is recorded; the same command without `--dry-run` records
-/// it, for a human operator at a terminal only.
+/// machine is admitting (QC1). Retirement always takes a fresh scan after
+/// fencing; the stored activation and its build identity are informational.
+/// The same command without `--dry-run` records the report for a human operator.
 pub const ACTIVATION_COMMAND: &str = "aida mailbox retention activate --dry-run";
 
 /// Directory under the common Git dir that holds the anchor.

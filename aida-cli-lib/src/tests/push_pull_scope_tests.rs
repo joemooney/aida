@@ -58,7 +58,7 @@ fn resolve_scope_explicit_beats_env() {
 #[test]
 fn push_flag_combinations_parse() {
     // default
-    let cli = crate::command_registry::try_parse_from(["aida", "push"]).unwrap();
+    let cli = crate::TEST_CLI.try_parse_from(["aida", "push"]).unwrap();
     assert!(matches!(
         cli.command.registered::<crate::store_push_pull::PushArgs>(),
         crate::store_push_pull::PushArgs {
@@ -68,7 +68,9 @@ fn push_flag_combinations_parse() {
         }
     ));
     // --code-only
-    let cli = crate::command_registry::try_parse_from(["aida", "push", "--code-only"]).unwrap();
+    let cli = crate::TEST_CLI
+        .try_parse_from(["aida", "push", "--code-only"])
+        .unwrap();
     assert!(matches!(
         cli.command.registered::<crate::store_push_pull::PushArgs>(),
         crate::store_push_pull::PushArgs {
@@ -78,7 +80,9 @@ fn push_flag_combinations_parse() {
         }
     ));
     // --store-only
-    let cli = crate::command_registry::try_parse_from(["aida", "push", "--store-only"]).unwrap();
+    let cli = crate::TEST_CLI
+        .try_parse_from(["aida", "push", "--store-only"])
+        .unwrap();
     assert!(matches!(
         cli.command.registered::<crate::store_push_pull::PushArgs>(),
         crate::store_push_pull::PushArgs {
@@ -88,19 +92,17 @@ fn push_flag_combinations_parse() {
         }
     ));
     // both → clap rejects via conflicts_with
-    assert!(crate::command_registry::try_parse_from([
-        "aida",
-        "push",
-        "--code-only",
-        "--store-only"
-    ])
-    .is_err());
+    assert!(crate::TEST_CLI
+        .try_parse_from(["aida", "push", "--code-only", "--store-only"])
+        .is_err());
 }
 
 /// TASK-863: --no-notice parses and lands on the Push variant.
 #[test]
 fn push_no_notice_flag_parses() {
-    let cli = crate::command_registry::try_parse_from(["aida", "push", "--no-notice"]).unwrap();
+    let cli = crate::TEST_CLI
+        .try_parse_from(["aida", "push", "--no-notice"])
+        .unwrap();
     assert!(matches!(
         cli.command.registered::<crate::store_push_pull::PushArgs>(),
         crate::store_push_pull::PushArgs {
@@ -108,7 +110,7 @@ fn push_no_notice_flag_parses() {
             ..
         }
     ));
-    let cli = crate::command_registry::try_parse_from(["aida", "push"]).unwrap();
+    let cli = crate::TEST_CLI.try_parse_from(["aida", "push"]).unwrap();
     assert!(matches!(
         cli.command.registered::<crate::store_push_pull::PushArgs>(),
         crate::store_push_pull::PushArgs {
@@ -183,7 +185,7 @@ fn push_notice_env_suppression() {
 /// Same four combinations for `aida pull`.
 #[test]
 fn pull_flag_combinations_parse() {
-    let cli = crate::command_registry::try_parse_from(["aida", "pull"]).unwrap();
+    let cli = crate::TEST_CLI.try_parse_from(["aida", "pull"]).unwrap();
     assert!(matches!(
         cli.command.registered::<crate::store_push_pull::PullArgs>(),
         crate::store_push_pull::PullArgs {
@@ -192,7 +194,9 @@ fn pull_flag_combinations_parse() {
             ..
         }
     ));
-    let cli = crate::command_registry::try_parse_from(["aida", "pull", "--code-only"]).unwrap();
+    let cli = crate::TEST_CLI
+        .try_parse_from(["aida", "pull", "--code-only"])
+        .unwrap();
     assert!(matches!(
         cli.command.registered::<crate::store_push_pull::PullArgs>(),
         crate::store_push_pull::PullArgs {
@@ -201,7 +205,9 @@ fn pull_flag_combinations_parse() {
             ..
         }
     ));
-    let cli = crate::command_registry::try_parse_from(["aida", "pull", "--store-only"]).unwrap();
+    let cli = crate::TEST_CLI
+        .try_parse_from(["aida", "pull", "--store-only"])
+        .unwrap();
     assert!(matches!(
         cli.command.registered::<crate::store_push_pull::PullArgs>(),
         crate::store_push_pull::PullArgs {
@@ -210,20 +216,18 @@ fn pull_flag_combinations_parse() {
             ..
         }
     ));
-    assert!(crate::command_registry::try_parse_from([
-        "aida",
-        "pull",
-        "--code-only",
-        "--store-only"
-    ])
-    .is_err());
+    assert!(crate::TEST_CLI
+        .try_parse_from(["aida", "pull", "--code-only", "--store-only"])
+        .is_err());
 }
 
 /// TASK-108: --dry-run and --json parse for both verbs and compose
 /// with the scope flags.
 #[test]
 fn dry_run_flags_parse() {
-    let cli = crate::command_registry::try_parse_from(["aida", "push", "--dry-run"]).unwrap();
+    let cli = crate::TEST_CLI
+        .try_parse_from(["aida", "push", "--dry-run"])
+        .unwrap();
     assert!(matches!(
         cli.command.registered::<crate::store_push_pull::PushArgs>(),
         crate::store_push_pull::PushArgs {
@@ -232,8 +236,9 @@ fn dry_run_flags_parse() {
             ..
         }
     ));
-    let cli =
-        crate::command_registry::try_parse_from(["aida", "push", "--json", "--code-only"]).unwrap();
+    let cli = crate::TEST_CLI
+        .try_parse_from(["aida", "push", "--json", "--code-only"])
+        .unwrap();
     assert!(matches!(
         cli.command.registered::<crate::store_push_pull::PushArgs>(),
         crate::store_push_pull::PushArgs {
@@ -242,9 +247,9 @@ fn dry_run_flags_parse() {
             ..
         }
     ));
-    let cli =
-        crate::command_registry::try_parse_from(["aida", "pull", "--dry-run", "--store-only"])
-            .unwrap();
+    let cli = crate::TEST_CLI
+        .try_parse_from(["aida", "pull", "--dry-run", "--store-only"])
+        .unwrap();
     assert!(matches!(
         cli.command.registered::<crate::store_push_pull::PullArgs>(),
         crate::store_push_pull::PullArgs {
@@ -253,7 +258,9 @@ fn dry_run_flags_parse() {
             ..
         }
     ));
-    let cli = crate::command_registry::try_parse_from(["aida", "pull", "--json"]).unwrap();
+    let cli = crate::TEST_CLI
+        .try_parse_from(["aida", "pull", "--json"])
+        .unwrap();
     assert!(matches!(
         cli.command.registered::<crate::store_push_pull::PullArgs>(),
         crate::store_push_pull::PullArgs { json: true, .. }
@@ -272,7 +279,7 @@ fn dry_run_flags_parse() {
 #[test]
 fn push_pull_fetch_leg_flags_describe_the_leg_they_keep() {
     use clap::CommandFactory;
-    let cmd = crate::command_registry::built_command();
+    let cmd = crate::TEST_CLI.built_command();
     for verb in ["push", "pull", "fetch"] {
         let sub = cmd
             .get_subcommands()

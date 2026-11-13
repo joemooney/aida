@@ -85,7 +85,11 @@ impl Fixture {
         command
     }
     fn prepare(&self) -> Result<Session> {
-        Session::prepare(&self.command(), &self.lane)
+        Session::prepare(
+            &self.command(),
+            &self.lane,
+            crate::contained_boundary::StoreWriteProfile::Compatibility,
+        )
     }
     fn write_lease(&self, lease: &crate::leases::SessionLease) {
         let path = crate::leases::lease_path(&self.main, &lease.id);
@@ -111,6 +115,25 @@ impl Fixture {
         session.helper.read_exact(&mut reply).unwrap();
         reply[0]
     }
+}
+
+// The capability is passed by the launch owner after profile admission. Child
+// environment assignments cannot widen a compatibility authority session.
+// trace:TASK-3223 | ai:codex
+#[test]
+fn host_selected_profile_controls_broker_configuration() {
+    use crate::contained_boundary::StoreWriteProfile;
+    let home = tempfile::tempdir().unwrap();
+    let _env = crate::test_env::EnvVarGuard::set("AIDA_HOME", home.path().to_str().unwrap());
+    let f = Fixture::new();
+    let mut child = f.command();
+    child.env("AIDA_STORE_MUTATION_PROFILE", "mediated");
+    let session = Session::prepare(&child, &f.lane, StoreWriteProfile::Compatibility).unwrap();
+    assert_eq!(session.config["store_profile"], "compatibility");
+    drop(session);
+    child.env("AIDA_STORE_MUTATION_PROFILE", "compatibility");
+    let session = Session::prepare(&child, &f.lane, StoreWriteProfile::Mediated).unwrap();
+    assert_eq!(session.config["store_profile"], "mediated");
 }
 
 #[test]
@@ -146,7 +169,12 @@ fn task_3225_prepare_refuses_missing_or_mismatched_launch_authority() {
         let mut command = f.command();
         command.env_remove(key);
         assert!(
-            Session::prepare(&command, &f.lane).is_err(),
+            Session::prepare(
+                &command,
+                &f.lane,
+                crate::contained_boundary::StoreWriteProfile::Compatibility
+            )
+            .is_err(),
             "missing {key}"
         );
     }
@@ -159,17 +187,32 @@ fn task_3225_prepare_refuses_missing_or_mismatched_launch_authority() {
         let mut command = f.command();
         command.env(key, value);
         assert!(
-            Session::prepare(&command, &f.lane).is_err(),
+            Session::prepare(
+                &command,
+                &f.lane,
+                crate::contained_boundary::StoreWriteProfile::Compatibility
+            )
+            .is_err(),
             "{key}={value}"
         );
     }
     let other = tempfile::tempdir().unwrap();
     assert!(
-        Session::prepare(&f.command(), other.path()).is_err(),
+        Session::prepare(
+            &f.command(),
+            other.path(),
+            crate::contained_boundary::StoreWriteProfile::Compatibility
+        )
+        .is_err(),
         "wrong project"
     );
     assert!(
-        Session::prepare(&f.command(), &f.main).is_err(),
+        Session::prepare(
+            &f.command(),
+            &f.main,
+            crate::contained_boundary::StoreWriteProfile::Compatibility
+        )
+        .is_err(),
         "wrong worktree"
     );
     let mut lease = f.lease.clone();

@@ -436,7 +436,11 @@ class WorkCiTests(unittest.TestCase):
     def test_warm_history_bounds_new_inventory_and_exact_old_read(self):
         self.check_history_bounds(warm=True)
 
-    def check_history_bounds(self, warm):
+    # trace:TASK-3452 | ai:codex
+    def test_33_attempts_report_unverified_latest_result(self):
+        self.check_history_bounds(warm=False, total=33)
+
+    def check_history_bounds(self, warm, total=35):
         f = self.f
         f.poll()
         original = f.receipt()
@@ -445,12 +449,12 @@ class WorkCiTests(unittest.TestCase):
             f.cli(fresh, "pull")
         shas = {1: f.sha}
         values = []
-        for n in range(2, 36):
+        for n in range(2, total + 1):
             f.git(f.source, "commit", "--allow-empty", "-qm", f"source {n}")
             sha = f.git(f.source, "rev-parse", "HEAD").stdout.strip()
             shas[n] = sha
             value = dict(original, sha=sha, attempt=n)
-            if n == 2:
+            if n == 2 and total == 35:
                 value["jobs"] = [dict(original["jobs"][0], name="not-in-home")]
             value["digest"] = hashlib.sha256(json.dumps({k: v for k, v in value.items() if k != "digest"}, separators=(",", ":")).encode()).hexdigest()
             values.append(value)
@@ -463,7 +467,7 @@ class WorkCiTests(unittest.TestCase):
         log = f.root / "fetches"
         real_git = shutil.which("git")
         wrapper = shim / "git"
-        wrapper.write_text(f"#!/usr/bin/python3\nimport os,sys\nif 'fetch' in sys.argv: open({str(log)!r},'a').write(sys.argv[-1]+'\\n')\nos.execv({real_git!r},[{real_git!r},*sys.argv[1:]])\n")
+        wrapper.write_text(f"#!/usr/bin/python3\nimport os,sys\nif 'fetch' in sys.argv: open({str(log)!r},'a').write(sys.argv[-1]+'\\n')\nif 'ls-remote' in sys.argv and 'refs/aida/ci/*' in sys.argv: open({str(log)!r},'a').write('ls-remote\\n')\nos.execv({real_git!r},[{real_git!r},*sys.argv[1:]])\n")
         wrapper.chmod(0o700)
         f.env["PATH"] = str(shim) + os.pathsep + f.env["PATH"]
 
@@ -473,16 +477,16 @@ class WorkCiTests(unittest.TestCase):
         start = time.monotonic()
         pulled = f.cli(fresh, "pull")
         self.assertLess(time.monotonic() - start, 30)
-        unverified = 2 if warm else 3
+        unverified = total - 32 - int(warm)
         self.assertIn(f"{unverified} unverified-history", pulled.stderr)
-        self.assertEqual(set(source_fetches()), set(shas[n] for n in range(4, 36)))
+        self.assertEqual(set(source_fetches()), set(shas[n] for n in range(total - 31, total + 1)))
         self.assertEqual(len(source_fetches()), 32)
         checkpoint = f.private(fresh) / "validated-tip"
         self.assertTrue(checkpoint.exists())
         state = json.loads(checkpoint.read_text())
         tip = f.git(f.private(fresh) / "worktree", "rev-parse", "HEAD").stdout.strip()
         self.assertEqual(state["tip"], tip)
-        self.assertEqual(state["verified_ci"].count("1"), 35 - unverified)
+        self.assertEqual(state["verified_ci"].count("1"), total - unverified)
         log.write_text("")
         rows = json.loads(f.cli(fresh, "ci", "read", "--json").stdout)
         self.assertEqual(sum(row["verification"] == "unverified-history" for row in rows), unverified)
@@ -490,33 +494,160 @@ class WorkCiTests(unittest.TestCase):
         # Even when all recent statuses are already handled, processing must
         # never promote old audit bytes into receipt authority implicitly.
         for value in [original, *values]:
-            if value["attempt"] >= 4 or (warm and value["attempt"] == 1):
+            if value["attempt"] >= total - 31 or (warm and value["attempt"] == 1):
                 marker = f.private(fresh) / f"ci-status-{value['attempt']}.json"
                 marker.write_text(value["digest"])
                 marker.chmod(0o600)
-        f.cli(fresh, "ci", "process")
+        # trace:TASK-3452 | ai:codex
+        processed = f.cli(fresh, "ci", "process")
+        reason = "outside the 32-attempt revalidation window"
+        command = f"aida intent ci read --attempt 1 --sha {shas[1]}"
+        if not warm:
+            self.assertIn(reason, processed.stdout)
+            self.assertIn(command, processed.stdout)
+        reported = json.loads(f.cli(fresh, "ci", "process", "--json").stdout)
+        self.assertEqual(len(reported["skipped"]), unverified)
+        cached = [row for index in range(json.loads((f.private(fresh) / "ci-skipped-results.json").read_text()))
+                  for row in json.loads((f.private(fresh) / f"ci-skipped-results-{index}.json").read_text())]
+        self.assertEqual(cached, reported["skipped"])
+        # Awaiting must warn about both damaged indexes and missing parts.
+        # trace:TASK-3452 | ai:codex
+        awaiting_home = fresh / "isolated-home"
+        awaiting_env = dict(f.env, HOME=str(awaiting_home), XDG_CONFIG_HOME=str(awaiting_home / "config"),
+                            XDG_CACHE_HOME=str(awaiting_home / "cache"), AIDA_TELEMETRY="0")
+        initialized = subprocess.run([BINARY, "init", "--footprint", "minimal", "--no-skills", "--no-hooks",
+                                      "--no-post-hooks", "--no-roles", "--no-agent-config", "--no-schedule"],
+                                     cwd=fresh, env=awaiting_env, text=True, capture_output=True, timeout=f.cli_timeout, umask=0o022)
+        self.assertEqual(initialized.returncode, 0, initialized.stderr + initialized.stdout)
+        # Healthy awaiting output must expose the same actionable inventory.
+        # trace:TASK-3452 | ai:codex
+        awaiting = subprocess.run([BINARY, "awaiting", "--json", "--no-ci"], cwd=fresh, env=awaiting_env, text=True, capture_output=True, timeout=f.cli_timeout, umask=0o022)
+        self.assertEqual(awaiting.returncode, 0, awaiting.stderr + awaiting.stdout)
+        self.assertEqual(json.loads(awaiting.stdout)["ci_relay_skipped"], reported["skipped"])
+        for output_format in ("human", "toon"):
+            awaiting = subprocess.run([BINARY, "awaiting", "--format", output_format, "--no-ci"], cwd=fresh, env=awaiting_env, text=True, capture_output=True, timeout=f.cli_timeout, umask=0o022)
+            self.assertEqual(awaiting.returncode, 0, awaiting.stderr + awaiting.stdout)
+            for row in reported["skipped"]:
+                self.assertIn(row["sha"], awaiting.stdout)
+                self.assertIn(row["reason"], awaiting.stdout)
+                self.assertIn(row["command"], awaiting.stdout)
+        display_index = f.private(fresh) / "ci-skipped-results.json"
+        saved_index = display_index.read_bytes()
+        display_index.write_text("invalid json")
+        awaiting = subprocess.run([BINARY, "awaiting", "--json", "--no-ci"], cwd=fresh, env=awaiting_env, text=True, capture_output=True, timeout=f.cli_timeout, umask=0o022)
+        self.assertIn("could not read CI skipped-result display cache", awaiting.stderr)
+        display_index.write_bytes(saved_index)
+        display_part = f.private(fresh) / "ci-skipped-results-0.json"
+        saved_part = display_part.read_bytes()
+        display_part.unlink()
+        awaiting = subprocess.run([BINARY, "awaiting", "--json", "--no-ci"], cwd=fresh, env=awaiting_env, text=True, capture_output=True, timeout=f.cli_timeout, umask=0o022)
+        self.assertIn("could not read CI skipped-result display cache", awaiting.stderr)
+        display_part.write_bytes(saved_part)
+        display_part.chmod(0o600)
+        for row in reported["skipped"]:
+            self.assertEqual(row["reason"], reason)
+            self.assertEqual(row["command"], f"aida intent ci read --attempt {row['attempt']} --sha {row['sha']}")
         self.assertFalse(source_fetches())
         self.assertFalse(f.statuses)
+        # A publication refusal still reports skipped rows in one JSON object.
+        # trace:TASK-3452 | ai:codex
+        recent = values[-1]
+        marker = f.private(fresh) / f"ci-status-{total}.json"
+        marker.unlink()
+        pending = f.private(fresh) / f"ci-status-pending-{total}.json"
+        pending.write_text(recent["digest"])
+        pending.chmod(0o600)
+        refused = f.cli(fresh, "ci", "process", "--json", ok=False)
+        self.assertNotEqual(refused.returncode, 0)
+        failure = json.loads(refused.stdout)
+        self.assertIn("Uncertain native CI status", failure["error"])
+        self.assertEqual(failure["skipped"], reported["skipped"])
+        refused = f.cli(fresh, "ci", "process", ok=False)
+        if unverified:
+            self.assertIn(reason, refused.stdout)
+        pending.unlink()
+        marker.write_text(recent["digest"])
+        marker.chmod(0o600)
+        self.assertEqual(source_fetches(), [shas[total], shas[total]])
+        log.write_text("")
+        # A broken display cache must not block pull, read, or publication.
+        # trace:TASK-3452 | ai:codex
+        cache = f.private(fresh) / "ci-skipped-results.json"
+        saved_cache = cache.read_bytes()
+        cache.unlink()
+        cache.mkdir()
+        broken_pull = f.cli(fresh, "pull")
+        self.assertIn("display cache", broken_pull.stderr)
+        broken_process = f.cli(fresh, "ci", "process", "--json")
+        self.assertEqual(json.loads(broken_process.stdout)["skipped"], reported["skipped"])
+        self.assertEqual(broken_process.stderr.count("could not refresh CI skipped-result display cache"), 1)
+        # A refused old marker cannot block a current verified publication.
+        # trace:TASK-3452 | ai:codex
+        bad_marker = f.private(fresh) / f"ci-status-{3 if warm else 1}.json"
+        bad_marker.mkdir()
+        marker.unlink()
+        published = f.cli(fresh, "ci", "process", "--json")
+        self.assertIn("native status published", json.loads(published.stdout)["message"])
+        self.assertEqual(len(f.statuses), 1)
+        self.assertIn("publication marker", published.stderr)
+        self.assertEqual(json.loads(published.stdout)["skipped"], reported["skipped"])
+        bad_marker.rmdir()
+        f.statuses.clear()
         # Exact read revalidates only this old identity and persists its proof.
         old_attempt = 3 if warm else 1
-        rows = json.loads(f.cli(fresh, "ci", "read", "--attempt", str(old_attempt), "--sha", shas[old_attempt], "--json").stdout)
+        # Exact revalidation refreshes the broken display cache only once.
+        # trace:TASK-3452 | ai:codex
+        exact_read = f.cli(fresh, "ci", "read", "--attempt", str(old_attempt), "--sha", shas[old_attempt], "--json")
+        self.assertEqual(exact_read.stderr.count("could not refresh CI skipped-result display cache"), 1)
+        rows = json.loads(exact_read.stdout)
         self.assertEqual([row["verification"] for row in rows], ["verified"])
-        self.assertEqual(source_fetches(), [shas[old_attempt]])
+        self.assertEqual(source_fetches(), [shas[total], shas[old_attempt]])
+        cache.rmdir()
+        cache.write_bytes(saved_cache)
+        cache.chmod(0o600)
+        f.cli(fresh, "pull")
+        cached = [row for index in range(json.loads(cache.read_text()))
+                  for row in json.loads((f.private(fresh) / f"ci-skipped-results-{index}.json").read_text())]
+        self.assertNotIn(old_attempt, [row["attempt"] for row in cached])
         log.write_text("")
         f.cli(fresh, "ci", "read", "--attempt", str(old_attempt), "--sha", shas[old_attempt])
         self.assertFalse(source_fetches())
+        self.assertEqual(log.read_text().splitlines().count("ls-remote"), 1)
+        # Published old results must stay quiet after a cold validator pass.
+        # trace:TASK-3452 | ai:codex
+        marker = f.private(fresh) / "ci-status-1.json"
+        marker.write_text(original["digest"])
+        marker.chmod(0o600)
         # A validator fingerprint change invalidates all old proof, but uses
         # exactly the same bounded path and creates a fresh incremental checkpoint.
         state = json.loads(checkpoint.read_text())
         state["validator"] = "different compiled validators"
         checkpoint.write_text(json.dumps(state))
         pulled = f.cli(fresh, "pull")
-        self.assertIn("3 unverified-history", pulled.stderr)
+        self.assertIn(f"{total - 32} unverified-history", pulled.stderr)
         self.assertEqual(len(source_fetches()), 32)
+        processed = json.loads(f.cli(fresh, "ci", "process", "--json").stdout)
+        self.assertNotIn(1, [row["attempt"] for row in processed["skipped"]])
+        self.assertFalse(f.statuses)
         log.write_text("")
         f.cli(fresh, "pull")
         self.assertFalse(source_fetches())
         self.assertFalse(f.statuses)
+        if total == 33:
+            # Work cannot act on Home status alarms; clear stale display rows.
+            # trace:TASK-3452 | ai:codex
+            work = f.clone("work-history", "work")
+            work_cache = f.private(work) / "ci-skipped-results.json"
+            work_cache.write_text("1")
+            work_cache.chmod(0o600)
+            part = f.private(work) / "ci-skipped-results-0.json"
+            part.write_text(json.dumps(reported["skipped"]))
+            part.chmod(0o600)
+            f.cli(work, "pull")
+            self.assertEqual(json.loads(work_cache.read_text()), 0)
+            self.assertFalse(part.exists())
+            self.assertFalse(f.statuses)
+            return
         refused = f.cli(fresh, "ci", "read", "--attempt", "2", "--sha", shas[2], ok=False)
         self.assertNotEqual(refused.returncode, 0)
         self.assertNotIn("not-in-home", refused.stderr)
@@ -524,6 +655,22 @@ class WorkCiTests(unittest.TestCase):
         old = next(row for row in rows if row["audit"]["attempt"] == 2)
         self.assertEqual(old["verification"], "unverified-history")
         self.assertFalse(f.statuses)
+        # A new request supersedes a refused receipt without publishing it.
+        # trace:TASK-3452 | ai:codex
+        before = json.loads(f.cli(fresh, "ci", "process", "--json").stdout)
+        self.assertIn(2, [row["attempt"] for row in before["skipped"]])
+        f.cli(fresh, "ci", "request", "--attempt", str(total + 1),
+              "--sha", shas[2], principal="request")
+        self.assertEqual(len(f.statuses), 1)
+        self.assertEqual(f.statuses[0]["state"], "pending")
+        self.assertEqual(f.statuses[0]["sha"], shas[2])
+        requested_statuses = list(f.statuses)
+        after = json.loads(f.cli(fresh, "ci", "process", "--json").stdout)
+        self.assertNotIn(2, [row["attempt"] for row in after["skipped"]])
+        cached = [row for index in range(json.loads(cache.read_text()))
+                  for row in json.loads((f.private(fresh) / f"ci-skipped-results-{index}.json").read_text())]
+        self.assertEqual(cached, after["skipped"])
+        self.assertEqual(f.statuses, requested_statuses)
 
     def test_pending_attempt_does_not_starve_later_attempt(self):
         f = self.f

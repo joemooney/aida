@@ -53,7 +53,10 @@ pub enum RoleCommand {
         /// leaves this shell's role unchanged. Binds the process only: that
         /// session's hooks and MCP server can present the grant, but not its
         /// sandboxed tool calls, which need a session started from a role
-        /// shell.
+        /// shell. The grant remains issued to the invoking user; this does
+        /// not renew a managed agent's child grant. Renew the parent role at
+        /// the operator's terminal and relaunch through the agent's launcher.
+        // trace:BUG-2503 | ai:codex
         // trace:BUG-1934 | ai:claude
         #[clap(long = "bind-pid", value_name = "PID")]
         bind_pid: Option<u32>,
@@ -143,8 +146,9 @@ pub enum RoleCommand {
 
     /// Show this session's seat grant (seat, expiry, the processes it is
     /// bound to, and whether and how this process may present it: by its
-    /// session key or by process) and this session's agent harness pid for
-    /// `aida role enter <seat> --bind-pid`. Read-only; always exits 0.
+    /// session key or by process), its informational agent harness pid,
+    /// and managed-agent renewal guidance. Read-only; always exits 0.
+    // trace:BUG-2503 | ai:codex
     // trace:BUG-1934 | ai:claude
     // trace:TASK-2159 | ai:claude
     Status {

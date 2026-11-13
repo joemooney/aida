@@ -16,7 +16,12 @@
 
 use anyhow::Result;
 
-use crate::*;
+use crate::{
+    advance_backend, awaiting_you, collect_awaiting_report_inner, detect_distributed_store,
+    find_main_worktree_root, find_project_root, gather_running_work, read_queue_depth,
+    resolve_effective_role, statusline_cmd, UserStatusContext,
+};
+use aida_core::liveness::LeaseState;
 
 /// Save the current terminal title (XTerm title-stack push). Paired with
 /// [`RESTORE_TITLE`]; opt-in because not every terminal implements the stack.
@@ -110,6 +115,10 @@ pub(crate) fn you_channels(report: &awaiting_you::AwaitingReport) -> Vec<(usize,
         if n == 1 { singular } else { plural }.to_string()
     }
     let mut v: Vec<(usize, String)> = Vec::new();
+    // trace:TASK-3452 | ai:codex
+    if !report.ci_relay_skipped.is_empty() {
+        v.push((report.ci_relay_skipped.len(), "CI exact reads".into()));
+    }
     // trace:STORY-2336 | ai:codex
     if !report.idle_eligible.is_empty() {
         v.push((report.idle_eligible.len(), "idle eligible".into()));
@@ -453,6 +462,7 @@ mod tests {
     #[test]
     fn you_channels_flattens_every_populated_channel_with_counts() {
         let report = AwaitingReport {
+            ci_relay_skipped: Vec::new(),
             idle_eligible: Vec::new(),
             review_watch_skipped: Vec::new(),
             mergeable_prs: vec![MergeablePrItem {
@@ -642,7 +652,7 @@ pub(crate) struct StatusbarArgs {
 // dispatch early. trace:STORY-715 | ai:claude
 fn run_statusbar(
     matches: &clap::ArgMatches,
-    _ctx: &crate::command_registry::DispatchCtx,
+    _ctx: &crate::cmdkit::DispatchCtx,
 ) -> anyhow::Result<()> {
     let args = <StatusbarArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
     let StatusbarArgs {
@@ -655,16 +665,15 @@ fn run_statusbar(
 }
 
 // trace:STORY-1728 | ai:claude
-pub(crate) static STATUSBAR: crate::command_registry::CommandReg =
-    crate::command_registry::CommandReg {
-        name: "statusbar",
-        help_after: "state-snapshot",
-        command: <StatusbarArgs as clap::CommandFactory>::command,
-        policy: |_| crate::command_registry::CmdPolicy {
-            stakeholder: crate::stakeholder_role::StakeholderAction::Write,
-            per_write_auto_push: false,
-            skip_role_restore_prompt: true,
-            team_identity_write: false,
-        },
-        run: crate::command_registry::Handler::Early(run_statusbar),
-    };
+pub(crate) static STATUSBAR: crate::cmdkit::CommandReg = crate::cmdkit::CommandReg {
+    name: "statusbar",
+    help_after: "state-snapshot",
+    command: <StatusbarArgs as clap::CommandFactory>::command,
+    policy: |_| crate::cmdkit::CmdPolicy {
+        stakeholder: crate::stakeholder_role::StakeholderAction::Write,
+        per_write_auto_push: false,
+        skip_role_restore_prompt: true,
+        team_identity_write: false,
+    },
+    run: crate::cmdkit::Handler::Early(run_statusbar),
+};

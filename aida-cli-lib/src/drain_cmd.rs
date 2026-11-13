@@ -6,8 +6,18 @@
 // trace:STORY-771 | ai:claude
 
 use crate::process_retry::RetryEtxtbsy;
-use crate::*;
+use crate::{
+    agent_output_mode, aida_exe_path, auto_complete, autoprogress, ci_probe_with_forge,
+    collect_git_linkage_opts, drain_lock, drain_resume, drain_state, events,
+    find_main_worktree_root, handle_tail_cli, last_drain, network_retry, output_format_is_json,
+    pr_head_branch, pr_is_merged_with_sink, probe_branch_on_origin, process_probe,
+    release_dead_leases_for_resume, resolve_review_surface_forge_first, run_auto_complete, worker,
+    BranchOriginProbe, CiProbe, DrainCommand, ResumeEntry, ReviewSurface,
+};
+use aida_core::{RequirementStatus, Storage};
 use anyhow::Context;
+use anyhow::Result;
+use colored::Colorize;
 use serde::{Deserialize, Serialize};
 
 // trace:STORY-1728 | ai:claude
@@ -260,7 +270,7 @@ pub(crate) fn handle_drain_command(cmd: &DrainCommand) -> Result<()> {
             let json_output = output_format_is_json();
             drain_clear(&project_root, &status, json_output)
         }
-        DrainCommand::Status { json, clear } => {
+        DrainCommand::Status { json } => {
             // Resolve the shared `.aida/` root from any worktree so a child in
             // a sibling worktree reads the *orchestrator's* drain-state file.
             // On a resolution failure the lookup simply finds nothing — the
@@ -275,10 +285,6 @@ pub(crate) fn handle_drain_command(cmd: &DrainCommand) -> Result<()> {
                 .as_ref()
                 .filter(|outcome| outcome.should_show_in_drain_status(now));
             let json_output = *json || output_format_is_json();
-            if *clear {
-                note_hidden_alias(concat!("aida drain status ", "--clear"), "aida drain clear");
-                return drain_clear(&project_root, &status, json_output);
-            }
             // BUG-759: corroborate the launcher-held drain lock alongside the
             // orchestrator drain-state file. A live lock is authoritative when
             // the state file can't speak for the drain (absent, or a dead-pid
@@ -1390,26 +1396,22 @@ pub(crate) struct DrainArgs {
 // STORY-301: drain-state introspection. Dispatched before storage init —
 // it reads only `.aida/drain-state.json`, no requirement store.
 // trace:STORY-301 | ai:claude
-fn run_drain(
-    matches: &clap::ArgMatches,
-    _ctx: &crate::command_registry::DispatchCtx,
-) -> anyhow::Result<()> {
+fn run_drain(matches: &clap::ArgMatches, _ctx: &crate::cmdkit::DispatchCtx) -> anyhow::Result<()> {
     let args = <DrainArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
     let drain_cmd = &args.inner;
     return handle_drain_command(drain_cmd);
 }
 
 // trace:STORY-1728 | ai:claude
-pub(crate) static DRAIN: crate::command_registry::CommandReg =
-    crate::command_registry::CommandReg {
-        name: "drain",
-        help_after: "zen",
-        command: <DrainArgs as clap::CommandFactory>::command,
-        policy: |_| crate::command_registry::CmdPolicy {
-            stakeholder: crate::stakeholder_role::StakeholderAction::Write,
-            per_write_auto_push: false,
-            skip_role_restore_prompt: false,
-            team_identity_write: false,
-        },
-        run: crate::command_registry::Handler::Early(run_drain),
-    };
+pub(crate) static DRAIN: crate::cmdkit::CommandReg = crate::cmdkit::CommandReg {
+    name: "drain",
+    help_after: "zen",
+    command: <DrainArgs as clap::CommandFactory>::command,
+    policy: |_| crate::cmdkit::CmdPolicy {
+        stakeholder: crate::stakeholder_role::StakeholderAction::Write,
+        per_write_auto_push: false,
+        skip_role_restore_prompt: false,
+        team_identity_write: false,
+    },
+    run: crate::cmdkit::Handler::Early(run_drain),
+};

@@ -2,6 +2,7 @@
 //! (advisor code gate, no-verify-bypass recorder, automatic advisor-lock gate).
 //!
 //! Extracted verbatim from `main.rs` (SPIKE-78, pure-movement refactor).
+// trace:TASK-3428 | ai:codex
 
 use crate::cli;
 use crate::{
@@ -21,6 +22,11 @@ pub(crate) use internal_cmd_args::*;
 /// vendor-agnostic advisor-code-write gate (STORY-684).
 pub(crate) fn handle_internal_command(command: &cli::InternalCommand) -> Result<()> {
     match command {
+        // trace:TASK-3219 | ai:codex
+        cli::InternalCommand::ClaudeBgSupervise => {
+            crate::agent_launch::agent_claude_background::supervise_main()
+        }
+
         // trace:STORY-2254 | ai:claude
         cli::InternalCommand::CodexBgSupervise { attempt } => {
             crate::agent_launch::codex_bg_supervise_main(attempt)
@@ -234,25 +240,23 @@ pub(crate) struct InternalArgs {
 // trace:STORY-684
 fn run_internal(
     matches: &clap::ArgMatches,
-    _ctx: &crate::command_registry::DispatchCtx,
+    _ctx: &crate::cmdkit::DispatchCtx,
 ) -> anyhow::Result<()> {
-    use crate::*;
     let args = <InternalArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
     let InternalArgs { command } = &args;
     return self::handle_internal_command(command);
 }
 
 // trace:STORY-1728 | ai:claude
-pub(crate) static INTERNAL: crate::command_registry::CommandReg =
-    crate::command_registry::CommandReg {
-        name: "internal",
-        help_after: "fetch",
-        command: <InternalArgs as clap::CommandFactory>::command,
-        policy: |_| crate::command_registry::CmdPolicy {
-            stakeholder: crate::stakeholder_role::StakeholderAction::Write,
-            per_write_auto_push: false,
-            skip_role_restore_prompt: true,
-            team_identity_write: false,
-        },
-        run: crate::command_registry::Handler::Early(run_internal),
-    };
+pub(crate) static INTERNAL: crate::cmdkit::CommandReg = crate::cmdkit::CommandReg {
+    name: "internal",
+    help_after: "fetch",
+    command: <InternalArgs as clap::CommandFactory>::command,
+    policy: |_| crate::cmdkit::CmdPolicy {
+        stakeholder: crate::stakeholder_role::StakeholderAction::Write,
+        per_write_auto_push: false,
+        skip_role_restore_prompt: true,
+        team_identity_write: false,
+    },
+    run: crate::cmdkit::Handler::Early(run_internal),
+};

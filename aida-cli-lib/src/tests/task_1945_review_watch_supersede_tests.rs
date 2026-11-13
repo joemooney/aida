@@ -897,3 +897,58 @@ fn task_3365_subreaper_adoption_does_not_prove_group_ancestry() {
         orphan as i32
     );
 }
+
+// trace:TASK-3367 | ai:codex
+#[test]
+fn task_3367_local_unknown_observations_use_reservation_backstop() {
+    use aida_core::proc_identity::{UnknownReason, Verdict};
+    let mut identity = Identity::current().unwrap();
+    assert!(identity.observable());
+    let now = chrono::Utc::now();
+    for reason in [
+        UnknownReason::IncompleteProcfs,
+        UnknownReason::Unreadable("procfs read failed".into()),
+        UnknownReason::MissingIdentity,
+        UnknownReason::NamespaceMismatch,
+        UnknownReason::OtherNode,
+    ] {
+        let verdict = Verdict::ForeignUnknown(reason);
+        identity.recorded_at = Some(now);
+        assert!(identity.alive_with_verdict(verdict.clone()));
+        identity.recorded_at = Some(now - FOREIGN_IDENTITY_TTL - chrono::Duration::seconds(1));
+        assert!(!identity.alive_with_verdict(verdict.clone()));
+        identity.recorded_at = None;
+        assert!(identity.alive_with_verdict(verdict.clone()));
+        let boot = identity.boot.clone();
+        identity.boot = "previous-boot".into();
+        assert!(!identity.alive_with_verdict(verdict));
+        identity.boot = boot;
+    }
+}
+
+// trace:STORY-2691 | ai:codex
+#[cfg(target_os = "linux")]
+#[test]
+fn story2691_reaped_cancellation_requires_matching_attempt_receipt() {
+    let (_temp, store) = fixture();
+    let old = change(1, 1);
+    let attempt = reserve(&store, &old);
+    intent(&store, &old.key(), &change(1, 2));
+    let mut children = Vec::new();
+    for token in [attempt.token.clone(), "other-attempt".into()] {
+        let mut child = std::process::Command::new("/bin/sh")
+            .args(["-c", "kill -TERM $$"])
+            .spawn()
+            .unwrap();
+        child.wait().unwrap();
+        children.push(Dispatcher {
+            child,
+            key: old.key(),
+            token,
+        });
+    }
+    let outcomes = reap_dispatchers(&store, &mut children);
+    assert!(children.is_empty());
+    assert_eq!(outcomes.len(), 1);
+    assert!(outcomes[0].as_ref().unwrap().contains("dispatcher exited"));
+}

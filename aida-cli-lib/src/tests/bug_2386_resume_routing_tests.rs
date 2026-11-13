@@ -553,6 +553,8 @@ fn headless_codex_resume_gets_grant_role_native_posture_and_no_aida_contained() 
         crate::test_exec::codex_probe_script(
             "#!/bin/sh\nprintf '%s\\n' \"posture=$AIDA_CONTAINMENT_POSTURE\" \
              \"contained=${AIDA_CONTAINED-unset}\" \"role=$AIDA_SESSION_ROLE\" \
+             \"punt=${AIDA_PUNT_SIGNAL_FILE-unset}\" \
+             \"hold=${AIDA_HOLD_SIGNAL_FILE-unset}\" \
              \"grant=$AIDA_SESSION_GRANT\" \"$@\"\n",
         ),
     );
@@ -590,6 +592,9 @@ fn headless_codex_resume_gets_grant_role_native_posture_and_no_aida_contained() 
     .unwrap();
     assert!(status.success());
     let out = std::fs::read_to_string(&log).unwrap();
+    // trace:BUG-2488 | ai:codex — no lease is a supported resume; no transport.
+    assert!(out.contains("punt=unset\n"), "{out}");
+    assert!(out.contains("hold=unset\n"), "{out}");
     assert!(out.contains("posture=native\n"), "{out}");
     assert!(
         out.contains("contained=unset\n"),
@@ -612,6 +617,56 @@ fn headless_codex_resume_gets_grant_role_native_posture_and_no_aida_contained() 
         out.contains("shell_environment_policy.set.AIDA_SESSION_ROLE=\"implementer\"\n"),
         "{out}"
     );
+    // A leased resume reached through a symlink receives the seat transport.
+    // trace:BUG-2488 | ai:codex
+    std::fs::create_dir_all(root.join(".aida/sessions")).unwrap();
+    std::fs::write(
+        root.join(".aida/sessions/resume.toml"),
+        format!(
+            r#"id = "resume"
+scope = "TASK-b6b-941"
+slug = "resume"
+owner = "test"
+worktree_path = {:?}
+branch = "resume"
+started_at = "2026-11-08T00:00:00Z"
+hostname = "test"
+"#,
+            root.to_str().unwrap()
+        ),
+    )
+    .unwrap();
+    let alias = tmp.path().join("lane-alias");
+    std::os::unix::fs::symlink(&root, &alias).unwrap();
+    let (status, _) = session::spawn_vendor_headless_resume_granted(
+        Some(&root),
+        &session::HeadlessResume {
+            vendor: HeadlessVendor::Codex,
+            session_id: "aida-sid-2",
+            resume_id: "019a-thread",
+        },
+        "carry on",
+        &log,
+        &alias,
+        &tee,
+        false,
+        "implementer",
+    )
+    .unwrap();
+    assert!(status.success());
+    let out = std::fs::read_to_string(&log).unwrap();
+    for (key, path) in [
+        ("punt", crate::punt::signal_path(&alias, "TASK-b6b-941")),
+        (
+            "hold",
+            crate::punt::hold_signal_path(&alias, "TASK-b6b-941"),
+        ),
+    ] {
+        assert!(
+            out.contains(&format!("{key}={}\n", path.display())),
+            "{out}"
+        );
+    }
 }
 
 // ── punt resume vendor ──────────────────────────────────────────────────────

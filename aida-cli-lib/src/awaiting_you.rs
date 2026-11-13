@@ -26,6 +26,8 @@ pub(crate) const DEFAULT_CAP: usize = 5;
 /// signal, so a quiet `aida status` stays quiet.
 #[derive(Debug, Default, Clone)]
 pub(crate) struct AwaitingReport {
+    // trace:TASK-3452 | ai:codex
+    pub ci_relay_skipped: Vec<crate::ci_relay::SkippedAttempt>,
     // trace:STORY-2336 | ai:codex
     pub idle_eligible: Vec<crate::idle_eligible::IdleEligibleItem>,
     /// Open changes `aida review watch` is skipping without reviewing them,
@@ -321,6 +323,8 @@ pub(crate) fn review_relation(reviewed: Option<&str>, head: Option<&str>) -> Rev
 // trace:BUG-1549 | ai:claude
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum BlockedReason {
+    // trace:BUG-2500 | ai:codex
+    Waiting,
     /// The refusal was recorded against the current head.
     AtHead,
     /// The refusal cannot be pinned to a commit (no sha, a sha too short to
@@ -333,6 +337,7 @@ impl BlockedReason {
     // trace:BUG-1739 | ai:claude
     pub(crate) fn as_wire_str(self) -> &'static str {
         match self {
+            Self::Waiting => "waiting",
             Self::AtHead => "at_head",
             Self::Unverifiable => "unverifiable",
         }
@@ -506,7 +511,7 @@ pub(crate) fn classify_pr_review(
     // obstruction for a later PR on the same spec. trace:BUG-1529 | ai:claude
     let refusals: Vec<_> = candidates
         .iter()
-        .filter(|v| v.kind.blocks_done() && !v.is_closed())
+        .filter(|v| v.kind.requires_changes() && !v.is_closed())
         .collect();
     let approvals: Vec<_> = candidates.iter().filter(|v| v.kind.approves()).collect();
 
@@ -535,6 +540,26 @@ pub(crate) fn classify_pr_review(
                 reason,
                 reviewed_sha: sha(r),
                 recorded_at: r.recorded_at.clone(),
+            }),
+        };
+    }
+
+    // trace:BUG-2500 | ai:codex — a push never clears an external wait.
+    if let Some(v) = candidates
+        .iter()
+        .filter(|v| {
+            v.kind == crate::gate::review_verdict::VerdictKind::Waiting
+                && !v.is_closed()
+                && !superseded(v)
+        })
+        .max_by_key(|v| recorded_instant(v))
+    {
+        return PrReviewDecision {
+            suppressed: true,
+            row: Some(PrReviewRow::Blocked {
+                reason: BlockedReason::Waiting,
+                reviewed_sha: sha(v),
+                recorded_at: v.recorded_at.clone(),
             }),
         };
     }
@@ -1879,6 +1904,8 @@ impl AwaitingReport {
     // trace:BUG-1739 | ai:claude
     pub(crate) fn contributions(&self) -> Vec<(&'static str, usize)> {
         vec![
+            // trace:TASK-3452 | ai:codex
+            ("ci_relay_skipped", self.ci_relay_skipped.len()),
             ("prs", self.mergeable_prs.len()),
             ("idle_eligible", self.idle_eligible.len()),
             // trace:BUG-2426 | ai:claude
@@ -2054,6 +2081,28 @@ impl AwaitingReport {
             "reviewer_actionable: {} of {} routed",
             self.reviewer_actionable_count(),
             self.reviewer_queue_items.len()
+        );
+        // trace:TASK-3452 | ai:codex
+        let ci_rows: Vec<Vec<String>> = self
+            .ci_relay_skipped
+            .iter()
+            .map(|item| {
+                vec![
+                    item.sha.clone(),
+                    item.attempt.to_string(),
+                    item.reason.clone(),
+                    item.command.clone(),
+                ]
+            })
+            .collect();
+        let _ = writeln!(
+            out,
+            "{}",
+            crate::toon::table_raw(
+                "ci_relay_skipped",
+                &["sha", "attempt", "reason", "command"],
+                &ci_rows
+            )
         );
         // trace:BUG-2426 | ai:claude
         let skipped: Vec<Vec<String>> = self
@@ -2452,7 +2501,7 @@ impl AwaitingReport {
             // classify_pr_review already read; "age unknown" (PRIN-5) when
             // recorded_at was never captured.
             let age = match item.reason {
-                BlockedReason::AtHead => {
+                BlockedReason::Waiting | BlockedReason::AtHead => {
                     blocked_age_label(item.recorded_at.as_deref(), chrono::Utc::now())
                 }
                 BlockedReason::Unverifiable => {
@@ -2460,6 +2509,9 @@ impl AwaitingReport {
                 }
             };
             match item.reason {
+                BlockedReason::Waiting => writeln!(w,
+                    "  PR-{}{} WAITING — external evidence required; resume with a fresh review at the current head",
+                    item.pr, spec)?,
                 BlockedReason::AtHead => writeln!(
                     w,
                     "  {} PR-{}{} blocked — changes requested at the current head {} — {}",
@@ -2580,6 +2632,15 @@ impl AwaitingReport {
             budget -= 1;
         }
 
+        // trace:TASK-3452 | ai:codex
+        for item in &self.ci_relay_skipped {
+            if budget == 0 {
+                overflow += 1;
+                continue;
+            }
+            writeln!(w, "  {}", item.message())?;
+            budget -= 1;
+        }
         // trace:BUG-2426 | ai:claude
         for item in &self.review_watch_skipped {
             if budget == 0 {
@@ -2971,6 +3032,9 @@ impl AwaitingReport {
                     crate::gate::review_verdict::ReviewActionability::NeedsReview => {
                         ("👀", "needs-review")
                     }
+                    crate::gate::review_verdict::ReviewActionability::Waiting => {
+                        ("wait", "waiting")
+                    }
                     crate::gate::review_verdict::ReviewActionability::AwaitingRework => {
                         ("🔧", "awaiting-rework")
                     }
@@ -3095,6 +3159,8 @@ impl AwaitingReport {
         serde_json::json!({
             "total": self.total(),
             "idle_eligible": self.idle_eligible,
+            // trace:TASK-3452 | ai:codex
+            "ci_relay_skipped": self.ci_relay_skipped,
             // trace:BUG-2426 | ai:claude
             "review_watch_skipped": self.review_watch_skipped,
             "mergeable_prs": self.mergeable_prs.iter().map(|p| serde_json::json!({
@@ -3191,7 +3257,7 @@ impl AwaitingReport {
                     // Unverifiable: rework-since is unknown, so no overdue claim.
                     "overdue": match i.reason {
                         BlockedReason::AtHead => age.map(|a| a.overdue),
-                        BlockedReason::Unverifiable => None,
+                        BlockedReason::Waiting | BlockedReason::Unverifiable => None,
                     },
                 })
             }).collect::<Vec<_>>(),
@@ -3337,6 +3403,13 @@ impl AwaitingReport {
         }
         if !self.idle_eligible.is_empty() {
             parts.push(format!("{} idle eligible", self.idle_eligible.len()));
+        }
+        // trace:TASK-3452 | ai:codex
+        if !self.ci_relay_skipped.is_empty() {
+            parts.push(format!(
+                "{} CI results need exact read",
+                self.ci_relay_skipped.len()
+            ));
         }
         // trace:BUG-2426 | ai:claude
         if !self.review_watch_skipped.is_empty() {

@@ -40,6 +40,32 @@ fn mediated_profile_admission_is_closed_before_any_launch_effect() {
     );
 }
 
+// The gated profile refuses resume before state, service or vendor setup.
+// This proves refusal only; successful mediated resume is not implemented.
+// trace:TASK-3223 | ai:codex
+#[test]
+fn mediated_profile_resume_refuses_before_effects_in_primary_and_linked_layouts() {
+    for linked in [false, true] {
+        let f = Fixture::new(linked);
+        for verb in ["resume", "fork"] {
+            let mut child = Command::new("codex");
+            child.args(["exec", verb, "test-session"]);
+            child.env("AIDA_HEADLESS", "1");
+            child.env("AIDA_STORE_MUTATION_PROFILE", "mediated");
+            child.env("AIDA_STORE_MUTATION_REQUIRED", "1");
+            let error = PreparedLaunch::prepare(&mut child, &f.lane, Some(&f.main))
+                .err()
+                .expect("mediated resume must refuse")
+                .to_string();
+            assert!(error.contains("mediated store profile is gated"), "{error}");
+            assert_eq!(std::fs::read_dir(&f.state).unwrap().count(), 0);
+            for path in &f.protected {
+                assert_eq!(std::fs::read(path.join("sentinel")).unwrap(), b"unchanged");
+            }
+        }
+    }
+}
+
 struct Fixture {
     _tmp: tempfile::TempDir,
     main: PathBuf,
@@ -159,10 +185,26 @@ fn mediated_profile_pins_linked_gitdir_and_refuses_unreadable_binding() {
 }
 
 fn run_in_profile(profile: &WriteProfile, cwd: &Path, script: &str) -> std::process::Output {
+    run_in_profile_with_service(profile, cwd, script, None)
+}
+
+fn run_in_profile_with_service(
+    profile: &WriteProfile,
+    cwd: &Path,
+    script: &str,
+    service: Option<(&Path, &str)>,
+) -> std::process::Output {
     let mut command = Command::new("/usr/bin/bwrap");
-    command
-        .args(profile.args(cwd))
-        .args(["--", "/usr/bin/python3", "-I", "-S", "-c", script]);
+    command.args(profile.args(cwd));
+    if let Some((source, destination)) = service {
+        command.arg("--ro-bind").arg(source).arg(destination);
+        command
+            .arg("--ro-bind")
+            // trace:TASK-3223 | ai:codex
+            .arg(crate::aida_bin::current_executable_path().expect("exact-test executable"))
+            .arg("/run/aida-test-client");
+    }
+    command.args(["--", "/usr/bin/python3", "-I", "-S", "-c", script]);
     let fds: Vec<_> = profile.mounts.iter().map(|m| m.file.as_raw_fd()).collect();
     unsafe {
         command.pre_exec(move || {
@@ -179,6 +221,60 @@ fn run_in_profile(profile: &WriteProfile, cwd: &Path, script: &str) -> std::proc
         String::from_utf8_lossy(&out.stderr)
     );
     out
+}
+
+/// Invoked only by the parent fixture inside its sealed bwrap profile. Stdin
+/// carries fixture selectors, not authority. Exercise the actual early CLI
+/// translation, canonical read, Rust transport and reply validation here.
+// trace:TASK-3223 | ai:codex
+#[test]
+#[ignore = "child fixture requires the parent's sealed namespace and service"]
+fn mediated_profile_cli_child() {
+    use aida_core::exec_context::Environment;
+    use std::io::Read;
+    let mut input = String::new();
+    std::io::stdin()
+        .take(16385)
+        .read_to_string(&mut input)
+        .unwrap();
+    assert!(input.len() <= 16384);
+    let config: serde_json::Value = serde_json::from_str(&input).unwrap();
+    let object = Path::new(config["object"].as_str().unwrap());
+    let before = std::fs::read(object).unwrap();
+    let error = std::fs::write(object, b"raw overwrite").unwrap_err();
+    assert!(matches!(
+        error.raw_os_error(),
+        Some(libc::EROFS | libc::EACCES)
+    ));
+    assert_eq!(std::fs::read(object).unwrap(), before);
+    let environment = Environment::from_pairs([
+        ("AIDA_STORE_MUTATION_PROFILE".into(), "mediated".into()),
+        (
+            "AIDA_STORE_MUTATION_ENDPOINT".into(),
+            config["endpoint"].as_str().unwrap().into(),
+        ),
+        ("AIDA_SESSION_ROLE".into(), "implementer".into()),
+    ]);
+    let argv = [
+        "aida",
+        "comment",
+        "add",
+        "TASK-3223",
+        "same lane mediated comment",
+    ]
+    .map(std::ffi::OsString::from);
+    crate::store_mutation_entry::entry(
+        &environment,
+        &argv,
+        Some(Path::new(config["lane"].as_str().unwrap())),
+    )
+    .unwrap()
+    .unwrap();
+    let installed: aida_core::Requirement =
+        serde_yaml::from_slice(&std::fs::read(object).unwrap()).unwrap();
+    assert_eq!(installed.comments.len(), 1);
+    assert_eq!(installed.comments[0].content, "same lane mediated comment");
+    println!("raw writes denied; mediated comment committed through Rust CLI client");
 }
 
 /// Fixture-only transport carries closed operations from this filesystem
@@ -352,11 +448,17 @@ fn mediated_profile_live_raw_create_append_rename_denied_and_private_cache_writa
     }
     for linked in [false, true] {
         let f = Fixture::new(linked);
+        let route = super::store_mutation::routed_tests::Route::at(f.main.join(".aida-store"));
+        let object =
+            aida_core::object_store::object_path(&route.root().join("objects"), &route.origin)
+                .unwrap();
+        let before = std::fs::read(&object).unwrap();
+        let endpoint = format!("/run/aida-mutation/{}/service", route.epoch());
         let (profile, cache) = f.profile();
         let paths = serde_json::to_string(&f.protected).unwrap();
         let script = format!(
             r#"
-import errno, json, os, sqlite3
+import errno, hashlib, json, os, sqlite3, subprocess
 from pathlib import Path
 paths=json.loads({paths:?})
 source=Path({lane:?})/'rename-source'
@@ -384,12 +486,39 @@ db.execute("insert into derived values ('private')")
 db.commit()
 assert db.execute('select value from derived').fetchone()==('private',)
 db.close()
-print('raw writes denied; private cache writable')
+# The Rust child runs inside this same sealed namespace. It proves raw denial
+# itself, then drives the real early CLI entry and lane client to the host.
+config=dict(object={object:?}, endpoint={endpoint:?}, lane={lane:?})
+result=subprocess.run(['/run/aida-test-client', '--exact',
+    'launch::contained::mediated_store_tests::mediated_profile_cli_child',
+    '--ignored', '--nocapture', '--test-threads=2'], input=json.dumps(config), text=True,
+    capture_output=True, timeout=10)
+assert result.returncode==0,(result.stdout,result.stderr)
+assert '1 passed' in result.stdout,result.stdout
+replies=[json.loads(line) for line in result.stdout.splitlines() if line.startswith(chr(123))]
+assert len(replies)==1,result.stdout
+assert replies[0]['revision']==hashlib.sha256(Path({object:?}).read_bytes()).hexdigest()
+assert 'raw writes denied; mediated comment committed through Rust CLI client' in result.stdout,result.stdout
+print(result.stdout)
+print('raw writes denied; private cache writable; mediated comment committed')
 "#,
             lane = f.lane.to_str().unwrap(),
-            cache = cache.to_str().unwrap()
+            cache = cache.to_str().unwrap(),
+            object = object.to_str().unwrap(),
+            endpoint = endpoint,
         );
-        let out = run_in_profile(&profile, &f.lane, &script);
+        let out = run_in_profile_with_service(
+            &profile,
+            &f.lane,
+            &script,
+            Some((&route.endpoint(), &endpoint)),
+        );
+        let installed = route.row();
+        assert_ne!(std::fs::read(&object).unwrap(), before);
+        assert_eq!(installed.comments.len(), 1);
+        assert_eq!(installed.comments[0].content, "same lane mediated comment");
+        assert_eq!(installed.comments[0].author, "bound author");
+        assert!(String::from_utf8_lossy(&out.stdout).contains("mediated comment committed"));
         assert!(String::from_utf8_lossy(&out.stdout).contains("raw writes denied"));
         host_primitive_positives(&f, &profile);
         // Parent observations, not assertions made solely by the lane.

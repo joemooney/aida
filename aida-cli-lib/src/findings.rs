@@ -177,27 +177,28 @@ pub fn is_finding(tags: &[String]) -> bool {
     finding_source(tags).is_some()
 }
 
-/// The PR a review finding was raised against, from its `from-review:PR-<n>`
-/// tag. Used by the `--pr` filter (a review-only axis).
-fn finding_pr(tags: &[String]) -> Option<u32> {
-    tags.iter().find_map(|t| pr_number_from_tag(t))
-}
-
 /// The thing a finding was raised against, for the triage view's sub-header:
 /// `PR-<n>` for a review finding, the SPEC-ID for an implementer finding,
 /// the linked-spec or `general` for an advisor observation. Falls back to a
 /// placeholder when the source tag carries no value.
 fn finding_origin(tags: &[String], source: FindingSource) -> String {
     let prefix = source.tag_prefix();
-    tags.iter()
-        .find_map(|t| t.strip_prefix(prefix))
+    // Sweeps carry multiple origins; keep the display deterministic and complete.
+    // trace:TASK-3749 | ai:codex
+    let origins: std::collections::BTreeSet<_> = tags
+        .iter()
+        .filter_map(|t| t.strip_prefix(prefix))
         .filter(|v| !v.is_empty())
-        .map(|v| v.to_string())
-        .unwrap_or_else(|| match source {
+        .collect();
+    if origins.is_empty() {
+        match source {
             FindingSource::Review => "(no PR tag)".to_string(),
             FindingSource::Implementer => "(no spec tag)".to_string(),
             FindingSource::Advisor => "(no origin tag)".to_string(),
-        })
+        }
+    } else {
+        origins.into_iter().collect::<Vec<_>>().join(", ")
+    }
 }
 
 /// A finding's `kind:<category>` tag value. Implementer findings carry one
@@ -553,7 +554,12 @@ fn build_source_section(
             continue;
         }
         if let Some(want) = filter.pr {
-            if finding_pr(&s.tags) != Some(want) {
+            // trace:TASK-3749 | ai:codex
+            if !s
+                .tags
+                .iter()
+                .any(|tag| pr_number_from_tag(tag) == Some(want))
+            {
                 continue;
             }
         }
@@ -706,6 +712,37 @@ mod tests {
             completed_at: None, // trace:TASK-1474 | ai:claude
             yaml_path: String::new(),
         }
+    }
+
+    // trace:TASK-3749 | ai:codex
+    #[test]
+    fn task_3749_multi_pr_sweep_matches_each_pr() {
+        let summaries = vec![summary(
+            "TASK-1",
+            "sweep",
+            &["from-review:PR-70", "from-review:PR-64"],
+        )];
+        for pr in [64, 70] {
+            let view = build_findings_view(
+                &summaries,
+                &FindingsFilter {
+                    pr: Some(pr),
+                    ..Default::default()
+                },
+            );
+            assert_eq!(count_findings(&view), 1);
+            assert_eq!(view[0].groups[0].origin, "PR-64, PR-70");
+        }
+        assert_eq!(
+            count_findings(&build_findings_view(
+                &summaries,
+                &FindingsFilter {
+                    pr: Some(99),
+                    ..Default::default()
+                }
+            )),
+            0
+        );
     }
 
     #[test]

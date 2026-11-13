@@ -257,7 +257,7 @@ fn list_json_reports_stray_markers_with_their_label_only_state() {
 
 #[test]
 fn the_standalone_reviewer_adopts_its_marker_after_collecting_the_verdict() {
-    let src = include_str!("../../queue_cmd.rs");
+    let src = include_str!("../../queue_cmd/work.rs");
     let collect = src
         .find("crate::gate::review_verdict::collect_standalone_verdict(")
         .expect("verdict collection");

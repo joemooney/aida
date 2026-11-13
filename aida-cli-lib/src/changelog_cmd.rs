@@ -4,6 +4,7 @@
 //! module just maps the subcommand variant to a `ChangelogOptions` and calls
 //! `changelog::run`.
 // trace:TASK-299 | ai:claude
+// trace:TASK-3428 | ai:codex
 
 use anyhow::Result;
 
@@ -83,25 +84,23 @@ pub(crate) struct ChangelogArgs {
 // storage handle. Dispatch alongside Plan/Ultraplan. trace:TASK-299 | ai:claude
 fn run_changelog(
     matches: &clap::ArgMatches,
-    _ctx: &crate::command_registry::DispatchCtx,
+    _ctx: &crate::cmdkit::DispatchCtx,
 ) -> anyhow::Result<()> {
-    use crate::*;
     let args = <ChangelogArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
     let cl_cmd = &args.inner;
     return self::handle_changelog_command(cl_cmd);
 }
 
 // trace:STORY-1728 | ai:claude
-pub(crate) static CHANGELOG: crate::command_registry::CommandReg =
-    crate::command_registry::CommandReg {
-        name: "changelog",
-        help_after: "gate",
-        command: <ChangelogArgs as clap::CommandFactory>::command,
-        policy: |_| crate::command_registry::CmdPolicy {
-            stakeholder: crate::stakeholder_role::StakeholderAction::Write,
-            per_write_auto_push: false,
-            skip_role_restore_prompt: false,
-            team_identity_write: false,
-        },
-        run: crate::command_registry::Handler::Early(run_changelog),
-    };
+pub(crate) static CHANGELOG: crate::cmdkit::CommandReg = crate::cmdkit::CommandReg {
+    name: "changelog",
+    help_after: "gate",
+    command: <ChangelogArgs as clap::CommandFactory>::command,
+    policy: |_| crate::cmdkit::CmdPolicy {
+        stakeholder: crate::stakeholder_role::StakeholderAction::Write,
+        per_write_auto_push: false,
+        skip_role_restore_prompt: false,
+        team_identity_write: false,
+    },
+    run: crate::cmdkit::Handler::Early(run_changelog),
+};

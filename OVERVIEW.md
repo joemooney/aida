@@ -1,3 +1,30 @@
+The `aida-mcp` crate owns the MCP stdio transport and store handler above
+`aida-cli-lib`. The binary installs that handler before CLI parsing; the
+`mcp-serve` registry entry forwards to it. Shared tool descriptors and claim-path
+naming remain below the boundary in cli-lib (also re-exported by aida-mcp),
+so CLI registration and session cleanup do not depend on the transport.
+The CLI unit-test harness includes the transport source to retain its private
+fixtures; shipping-crate tests also exercise tools/list and the serve wrapper.
+Source guards scan the extracted crate and retain its existing launch and Git
+ratchet counts. Production cli-lib does not compile the transport. Respawn compares
+the CLI image's compiled identity and still probes the same resolved executable.
+<!-- trace:TASK-3429 | ai:codex -->
+Codegraph lane queries use a host proxy against a disposable SQLite backup;
+the primary index stays outside seat writable roots. The proxy requires host
+deployment, delivery of the reviewed absolute client path, and socket admission.
+Contained-seat acceptance remains outstanding. See the
+[deployment and acceptance guide](scripts/codegraph/README.md).
+<!-- trace:STORY-2630 | ai:codex -->
+
+`cmdkit::CliSupport<T>` provides tree building and parsing over callbacks injected
+by the crate root's `CLI_SUPPORT` (`TEST_CLI` in tests). The registry supplies its
+cached pristine tree and matches decoder at that boundary; consumers and the
+leaf helper do not import the registry. <!-- trace:TASK-3448 | ai:codex -->
+
+`cmdkit` holds the command-framework types and shared output/stakeholder vocabulary;
+existing CLI and stakeholder paths re-export them.
+<!-- trace:TASK-3425 | ai:codex -->
+
 Mailbox delivery resolves named agents against current registry liveness,
 shares canonicalization across CLI/MCP/mentions, refuses unknown/dead agents
 and empty role/vendor audiences, and lists group readers. Known people retain
@@ -28,12 +55,16 @@ are retained with recovery instructions; failed children revoke only the grant
 issued for that launch. See [session launch behavior](docs/cli/06-roles-sessions.md).
 <!-- trace:BUG-2188 BUG-2168 | ai:codex -->
 
-CI fan-out keeps libtest: two CLI-library unit halves, two deterministic
-CLI-integration halves, remaining workspace tests/doctests, and two gate lanes
-run on seven parallel Linux runners. The aggregate `Build (ubuntu-latest)` fails unless all
-lanes succeed. Test timing budgets remain per binary, and each test lane checks
-for untracked root entries. See [CI fan-out](docs/internal/testing/ci-test-shards.md).
-<!-- trace:TASK-1949 | ai:codex -->
+GitHub CI defaults ordinary PRs to FAST source gates and a parallel workspace/test
+compile check. The `ci:full` label or Actions variable `AIDA_PR_CI_TIER=full`
+selects FULL; main/train, merge groups, scheduled and manual runs always use
+FULL. Seven full lanes cover two CLI-library unit halves, two deterministic
+CLI-integration halves, remaining workspace tests/doctests, and two gate lanes.
+The aggregate `Build (ubuntu-latest)` requires every selected job to succeed.
+Direct ship refuses FAST CI; the train remains its route to main. Test timing
+budgets and untracked-root hygiene remain per full test lane. GitLab relay/MR
+pipelines remain full-only. See [CI tiers](docs/internal/testing/ci-test-shards.md).
+<!-- trace:TASK-1949 STORY-2735 | ai:codex -->
 
 `aida agent new` supplies the selected executable's reported `--version` to
 foreground/background children as `AIDA_HARNESS_VERSION`. Failed, empty or
@@ -181,9 +212,9 @@ commits while fetching and pushing origin's SHA. See
 [git lifecycle](docs/cli/04-git-lifecycle.md#aida-pull).
 <!-- trace:BUG-1803 | ai:codex -->
 
-The project schedule runs a read-only merged-worktree guard every 30 days and
-routes failures to the advisor. The operator reviews `aida worktree gc` and
-runs `aida worktree gc --yes --force` at a TTY; forced cleanup stays outside
+The project schedule runs a weekly read-only lifecycle-worktree GC
+check and routes failures to the advisor. The operator reviews `aida worktree gc` and
+runs `aida worktree gc --apply` at a TTY; forced cleanup stays outside
 scheduled and headless jobs.
 <!-- trace:TASK-1596 | ai:codex -->
 
@@ -383,12 +414,60 @@ explicit regex rules refuse sensitive content without certifying sanitization.
 Manual-email export is a self-contained JSON attachment. Store-only transport
 retains its separate authority. Independently enrolled intake transport uses
 `aida-intake/` under the clone common Git directory, with a separate repository,
-worktree, index, object database, refs and permanent lock. Only `aida-intent`
-is transported; full incoming history is validated before fast-forward
-acceptance. Explicit processing stores immutable receipts and journals
+worktree, index, object database, refs and permanent lock. Legacy enrollment
+transports only `aida-intent`. Opt-in profile v2 pins a writer identity and role,
+one `aida-feedback-<producer-id>` observation branch and at most one authorized
+`aida-feedback-receipts-<processor-id>` branch. Producer and processor write only
+their respective orphan histories; readers validate each history independently
+before combining views. Receipts can validate without a local observation.
+Full incoming history is validated before fast-forward acceptance. V2 currently
+uses full validation rather than legacy checkpoints; writer protection is
+reported unverified. Protection probing/foreign-write refusal, receipt v2 identity
+and unknown-state reporting, and CI relay alignment remain later slices; v2
+refuses CI commands until that alignment. See [per-writer intake](docs/cli/02-specs.md#native-per-writer-intake-first-round-trip-slice).
+<!-- trace:STORY-2652 | ai:codex -->
+ Explicit processing stores immutable receipts and journals
 create/comment operations to recover confirmed writes without replay. See [the wire format and commands](docs/cli/02-specs.md#aida-intent-note-validate-and-export).
 <!-- trace:STORY-2479 trace:TASK-3096 | ai:codex -->
 <!-- trace:TASK-3114 | ai:codex -->
+
+### Pre-compaction recovery
+
+Claude's optional `PreCompact` hook writes a bounded recovery packet through
+`aida session handoff`, retaining pointers to work, verdicts, findings and the
+next step. One reusable slot per worktree and role stays inside the lane's
+write boundary and disappears with the worktree. Ordinary handoff reads expose
+the snapshot to relaunches; compact SessionStart injects it as potentially stale
+context. Deliberate rotation handoffs remain separate in the primary checkout.
+Unavailable evidence stays unknown and snapshot failures do not block work.
+Snapshots grant no completion, review or publication authority. Codex remains
+disabled pending its trusted-hook test.
+<!-- trace:STORY-2662 | ai:codex -->
+
+### Conflict repair evidence
+
+Host-staged conflict repairs retain their original conflict paths in the shared,
+versioned `.aida/repair-journal.json`, protected by a permanent journal lock.
+Verified orphan adoption transfers ownership to the newly minted lease before
+removing its predecessor; setup rollback restores that ownership with the orphan.
+An unrelated lane cannot acquire the repair through adoption or resume.
+
+Preparation restores registered products while authoritative sources may still
+have conflicts. Publication stages resolved sources and runs full regeneration
+inside the sandbox. Failed preparation or regeneration retains the merge and
+refuses direct publication; resume must successfully retry the failed phase.
+Successful publication regeneration records the exact staged tree in the journal,
+and the commit gate requires that tree's evidence. Each publication attempt
+invalidates earlier generation evidence before executing a generator.
+
+The generator inventory includes the ignored `.agents/skills/aida-*` portable
+pack. Expected paths are frozen before generator execution from the host's real
+renderer inventory and staged template masters; helper-only directories and
+portable overrides without an ordinary skill prompt grant no new output paths.
+Fresh or stale ignored pack files therefore work without allowing arbitrary
+writes under `.agents/`. Original conflict paths remain the authority for the
+lane brief and marker gate across retries.
+<!-- trace:STORY-2710 | ai:codex -->
 
 ### Agent launch migration
 
@@ -430,7 +509,7 @@ Its checked-in ledger permits reductions only and excludes tests, fixtures and
 docs, including `cfg(all(test, ...))` and qualified test attributes. Cheap
 source/literal candidate checks retain escaped strings before decoding; mutant
 fixtures exercise new literals, match arms and aliases.
-The effectful `launch/profile.rs` adapter references the same descriptor and retains the existing finalizer. Capabilities do not admit
+The effectful `vendors/profile.rs` adapter references the same descriptor and retains the existing finalizer. Capabilities do not admit
 launches or grant containment credit; AGY's outer-only containment candidate
 still refuses pending conformance. Hook layouts, event contracts and backend
 selection now drive the init hook consumer. Pure parsing/fixture validation stays
@@ -648,6 +727,14 @@ constituent commit trailers still participate in the landing scan.
 The native desktop and WASM clients (egui-based) were extracted to a separate repo on 2026-05-02. The React dashboard's keyboard navigation (`j/k`, `g+key` chords, quick pickers) covers the vi-feel use case.
 
 ### Canonical gate ledger
+
+Cross-label discovery uses a scan-wide 128 MiB read ceiling and a 200,000
+JSON-parse-attempt ceiling, independently of the 64 MiB selection budget.
+Unrelated payloads and torn retries count; exhausting discovery refuses the
+lookup. This is an interim safety cap: relevant-only discovery and automatic
+archive retention still need the completeness and revival design described in
+[the proposed sketch](docs/plans/2026-11-12-bug-2531-discovery-retention-sketch.md).
+<!-- trace:BUG-2531 | ai:codex -->
 
 The gate architecture is **effective gate state = f(head SHA, canonical IDs,
 ledger)**. `gate::canon` resolves a change's spec labels against one committed
@@ -1403,6 +1490,24 @@ regular-file handle, with `O_NOFOLLOW | O_NONBLOCK` and a bounded read. The FIFO
 regression runs under an exact-test subprocess watchdog.
 <!-- trace:TASK-1786 | ai:codex -->
 
+Review recording resolves the reviewer's leased `PR-N` or `MR-N` before
+inheriting findings or choosing approval/hold routing. Both classification and
+the verdict builder read that change's record; a shared spec does not select
+another change's findings. An explicit `AIDA_REVIEW_VERDICT_FILE` remains the
+exact handshake destination, including gate suffixes. Standalone launch and
+contained artifact collection use the same forge-qualified change filename.
+Explicit local spec-only verdicts retain their local history but never bind to
+later changes, affect their gates, or clear their review claims. Legacy
+pre-change reviews remain eligible for binding to one change. Effective gates
+reuse one pinned ledger discovery across related changes under one aggregate
+budget; an index naming a missing change ledger refuses as incomplete evidence.
+Historical foreign-copy isolation also fails closed when ownership discovery is
+incomplete: lossy verdict readers withhold potentially misplaced review copies
+while retaining holds and phase-3 ownership records. Each discovery builds one
+ownership index from its change corpus and reuses it across spec/change buckets
+and additional event vectors; these reads never rewrite ledger history.
+<!-- trace:BUG-2517 | ai:codex -->
+
 Verdict reads use a held `review-verdicts` directory descriptor and `openat`
 with `O_DIRECTORY|O_NOFOLLOW` for archive descent. File opens use
 `O_NOFOLLOW|O_NONBLOCK`; metadata and bounded reads use the same handle and
@@ -1584,8 +1689,9 @@ conflicting per-tool posture defaults and refuses posture passthrough flags;
 an explicit operator launch-posture override retains its existing precedence.
 A native child does not receive `AIDA_CONTAINED=1` or AIDA containment credit.
 Native `aida ship -m '<complete subject> (Refs ID)'` records a lease/spec-bound
-publication declaration for the host after exit. A fresh launch token prevents
-reuse across attempts and survives supervised rotations within an attempt;
+publication declaration for the host after exit.
+A fresh launch token prevents reuse across attempts and
+survives supervised rotations within an attempt;
 lease release removes the host binding. The declaration stays inside the seat's
 existing write boundary. The host refuses invalid, epic, multi-spec or mismatched
 lease scopes before commit or forge probes. Existing Refs PRs or inconclusive
@@ -1593,8 +1699,19 @@ forge evidence downgrade declared completion to Refs; failed exits always use
 Refs. Punt/hold vetoes take precedence. See the
 [native publication handshake](docs/cli/04-git-lifecycle.md#aida-ship).
 <!-- trace:TASK-2902 | ai:codex -->
+Lanes write punt/hold handshakes inside their writable seat; the host mirrors
+those markers and the spec's punt ledger to preserve publication vetoes,
+held-resume admission and advisor visibility.
+<!-- trace:BUG-2488 | ai:codex -->
+
 Permission reports, doctor, launch output and statusline distinguish the posture;
 `AIDA_CONTAINMENT_POSTURE` stamps actual child posture for display only.
+
+Host fast gates run `make check-ci-fast` in the offline, cleared-environment
+lane-job bubblewrap sandbox with a fixed ten-minute timeout. Native publication gets one repair round before
+publishing; self-pushing lanes get one queued repair before review. Seat scripts
+never run unsandboxed, and missing bubblewrap reports `skipped(no-sandbox)`.
+<!-- trace:STORY-2640 | ai:codex -->
 
 The contained permission preset (`aida config permissions set contained`) writes
 `sandbox_workspace_write.writable_roots = []` for Codex. Reapplying it clears
@@ -1663,7 +1780,7 @@ and `/usr/bin/bwrap` are required. The host helper owns an isolated child-only
 session keyring, a private namespace tree, the CONNECT proxy, and the seccomp
 connect broker. Rust clears the helper environment and supplies an exact list;
 bubblewrap inherits it unchanged. API-key authentication uses `OPENAI_API_KEY`.
-Existing file-based ChatGPT login is admitted only for probed `codex-cli 0.166.0`:
+Existing file-based ChatGPT login is admitted only for probed `codex-cli 0.167.0`:
 the host pins a bounded, single-link, current-owner mode-0600 `auth.json`, reads
 access-token expiry and identity account routing, and requires grant lifetime
 plus a 300-second margin. A sealed memfd supplies only the access token, host ID
@@ -1671,6 +1788,12 @@ token and `refresh_token=""`, plus derived account routing and a generated
 delivery timestamp, through `--ro-bind-data` at a read-only private tmpfs auth
 leaf; no full cache or host refresh token enters the lane. Baseline lanes last
 at most one hour.
+Upgrade on the host with `npm i -g @openai/codex@0.167.0` and put its native
+executable first on PATH. The 0.167.0 executable pin and empty-HOME help fixture
+were refreshed together; the operator must rerun STORY-2593 conformance
+(`conformance-codex-aida`) against this pin for live proof.
+<!-- trace:TASK-3463 | ai:codex -->
+
 Unsupported versions, malformed or insufficient validity and keyring logins
 refuse. OAuth hosts are excluded from the effective ChatGPT lane allowlist;
 there is no renewal. The host supervisor enforces the absolute deadline and
@@ -1797,17 +1920,36 @@ liveness from creator metadata or a heartbeat. Foreign lease expiry remains a
 separate consumer policy. Ownership repair pins the recorded generation without
 recapturing today's process at an old PID.
 
-Review-watch receipts require a verified local procfs view. Caller capture
-fails closed on masked, hidepid, unverified or ancestor-coordinate views, with
-host-retry guidance; existing reservations remain held. Retained children may
-be recorded after exit but before reaping, when the PID cannot be reused.
-Missing legacy identity evidence uses the existing reboot/foreign-TTL backstop;
-undated legacy receipts still require reboot or operator recovery. Unknown
-identity never authorizes signalling, including orphaned group members adopted
-by an unrelated subreaper.
-<!-- trace:TASK-3365 | ai:codex -->
+Review-watch uses shared process identity observations with a separate
+reservation-expiry policy; unknown identity never authorizes signalling.
+<!-- trace:TASK-3367 | ai:codex -->
 
 The TASK-1750 ratchet inventories compatibility consumers in
 `proc_identity_legacy_baseline.json` and prevents new private PID/start
 decisions. See the signed
 [process identity sketch](docs/plans/2026-11-05-story-2537-proc-identity.md).
+
+<!-- trace:STORY-2641 | ai:codex -->
+Lane test jobs opt into sccache when the host Cargo home's `config.toml`
+(or legacy `config`) selects `build.rustc-wrapper = "sccache"` or an absolute
+path ending in `sccache`. Jobs use `~/.cache/aida/lane-sccache`, never the
+operator's cache. Each job starts a foreground server inside its sandbox with a
+Unix-domain socket in private `/tmp`. The job prints final `sccache --show-stats`, requests
+`--stop-server`, and waits for the server process before sandbox teardown so
+pending local cache writes can drain. The Cargo wrapper receives only the job's
+server PID for health checks, excluding foreign clients with inaccessible temp
+directories. If startup fails, the job warns and runs Cargo with the cache
+disabled. Shutdown/statistics failures fail an
+otherwise successful job; Cargo failures retain their exit code. Timeouts and
+forced lane stops can still interrupt cache writes. Jobs share cached artifacts
+but have separate servers. Jobs retain host PID identity for the shared Cargo
+slot queue, whose tickets use process IDs and host liveness checks. Cargo home
+remains read-only and Cargo stays offline. One lane can poison another lane's
+cache; this is accepted for contained, CI-gated lanes, and grants no access to
+operator builds. Host sccache statistics do not measure these separate servers;
+cache-hit acceptance must inspect the lane server's statistics on each host.
+Agent children receive their host-recorded seat target and disabled wrapper
+through declared launch resources rather than parent build-environment values.
+The lane job runner alone opts into the lane cache. Recorded clones without a
+cargo target (including fresh/non-Rust seats and targets removed by host clean)
+launch with the wrapper disabled and no target override.

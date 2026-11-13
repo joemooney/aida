@@ -6,6 +6,7 @@
 //! in `aida_core::git_ops::host_git_command`, and a raw builder skips it.
 //! trace:TASK-2143 | trace:TASK-2053 | ai:claude
 
+// trace:TASK-3429 | ai:codex
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
@@ -17,15 +18,22 @@ use std::path::{Path, PathBuf};
 /// clone with `// raw-git-ok(TASK-2053): <why>` in the three lines above it.
 const RAW_GIT_ALLOWLIST: &[(&str, usize)] = &[
     ("aida-cli-lib/src/agent_launch.rs", 1),
-    ("aida-cli-lib/src/doctor_cmd.rs", 18),
+    ("aida-cli-lib/src/doctor_cmd.rs", 1),
+    ("aida-cli-lib/src/doctor/remote.rs", 3),
+    ("aida-cli-lib/src/doctor/store_repair.rs", 4),
+    ("aida-cli-lib/src/doctor/worktrees.rs", 10),
     ("aida-cli-lib/src/doctor_root.rs", 4),
     ("aida-cli-lib/src/leases.rs", 1),
-    ("aida-cli-lib/src/lib_part5.rs", 6),
-    ("aida-cli-lib/src/mcp.rs", 1),
+    // trace:TASK-3428 | ai:codex — split the original six-site debt.
+    ("aida-cli-lib/src/review_commands.rs", 3),
+    ("aida-cli-lib/src/review_git_evidence.rs", 3),
+    ("aida-mcp/src/mcp.rs", 1),
     ("aida-cli-lib/src/orchestrator_leases.rs", 5),
     ("aida-cli-lib/src/phase_driver.rs", 1),
     ("aida-cli-lib/src/pr_cmd.rs", 47),
-    ("aida-cli-lib/src/queue_cmd.rs", 4),
+    ("aida-cli-lib/src/queue_cmd/done.rs", 1),
+    ("aida-cli-lib/src/queue_cmd/recover.rs", 2),
+    ("aida-cli-lib/src/queue_cmd/work.rs", 1),
     ("aida-cli-lib/src/seat_clone.rs", 2),
     ("aida-cli-lib/src/session_end.rs", 0),
     ("aida-cli-lib/src/session_reap.rs", 7),
@@ -49,7 +57,62 @@ const RAW_GIT_ALLOWLIST: &[(&str, usize)] = &[
 /// `ship.rs` runs step 1's commit in the ship root, a seat clone when ship
 /// runs in one (TASK-2359).
 // trace:TASK-2359 | ai:claude
-const ALWAYS_SCANNED: &[&str] = &["aida-cli-lib/src/ship.rs"];
+// trace:TASK-3428 | ai:codex — extracted evidence helpers receive lease trees.
+const ALWAYS_SCANNED: &[&str] = &[
+    "aida-cli-lib/src/ship.rs",
+    "aida-cli-lib/src/doctor_cmd.rs",
+    "aida-cli-lib/src/review_git_evidence.rs",
+];
+
+// Split queue and doctor modules retain their original file scan boundaries.
+// trace:TASK-3426 | ai:codex
+fn always_scanned(file: &str) -> bool {
+    ALWAYS_SCANNED.contains(&file)
+        || (file.starts_with("aida-cli-lib/src/queue_cmd/") && file.ends_with(".rs"))
+        || (file.starts_with("aida-cli-lib/src/doctor/") && file.ends_with(".rs"))
+}
+
+#[test]
+fn task_3426_all_queue_modules_reject_new_raw_git() {
+    let workspace = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
+    let sources = workspace_sources(workspace);
+    let queue_files: Vec<_> = sources
+        .keys()
+        .filter(|file| file.starts_with("aida-cli-lib/src/queue_cmd/"))
+        .collect();
+    assert!(!queue_files.is_empty());
+    for file in queue_files {
+        // No worktree_path token: coverage must follow the module boundary.
+        let injected = "fn injected() { let _ = Command::new(\"git\"); }";
+        let count = raw_git_builders(injected, !always_scanned(file)).unwrap();
+        let measured = BTreeMap::from([(file.clone(), count)]);
+        assert_eq!(ratchet_violations(&measured, &[]).len(), 1, "{file}");
+    }
+    // A future module gets the same protection without updating a file list.
+    assert!(always_scanned("aida-cli-lib/src/queue_cmd/future.rs"));
+}
+
+// trace:TASK-3428 | ai:codex
+#[test]
+fn task_3428_review_git_evidence_rejects_new_raw_git_without_lease_field() {
+    let file = "aida-cli-lib/src/review_git_evidence.rs";
+    let workspace = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
+    let src = std::fs::read_to_string(workspace.join(file)).unwrap();
+    assert!(!src.contains("worktree_path"));
+    assert_eq!(raw_git_in_lease_reader(&src), None);
+    let baseline = raw_git_builders(&src, !always_scanned(file)).unwrap();
+    let measured = BTreeMap::from([(file.to_string(), baseline)]);
+    let allowed = [(file, 3)];
+    assert!(ratchet_violations(&measured, &allowed).is_empty());
+
+    let injected = format!("{src}\nfn injected() {{ let _ = Command::new(\"git\"); }}\n");
+    let count = raw_git_builders(&injected, !always_scanned(file)).unwrap();
+    assert_eq!(count, baseline + 1);
+    let measured = BTreeMap::from([(file.to_string(), count)]);
+    let violations = ratchet_violations(&measured, &allowed);
+    assert_eq!(violations.len(), 1);
+    assert!(violations[0].contains("4 raw git builders, allowlist says 3"));
+}
 
 /// Lexical state across lines: braces inside Rust literals and comments do
 /// not close a test module. Raw strings close only with their full delimiter.
@@ -386,8 +449,7 @@ fn task_2143_no_new_raw_git_where_a_lease_tree_is_read() {
     let measured: BTreeMap<String, usize> = sources
         .iter()
         .filter_map(|(file, src)| {
-            raw_git_builders(src, !ALWAYS_SCANNED.contains(&file.as_str()))
-                .map(|n| (file.clone(), n))
+            raw_git_builders(src, !always_scanned(file)).map(|n| (file.clone(), n))
         })
         .collect();
     for always in ALWAYS_SCANNED {

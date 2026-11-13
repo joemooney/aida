@@ -1,7 +1,7 @@
 //! The activation report and record (QC1, STORY-1843 C2).
 //!
-//! A mail-bearing source refuses retirement until an operator records that
-//! every writer host on the machine admits before it writes. The dry run is a
+//! Retirement uses a fresh writer-admission scan after fencing, independently
+//! of the stored activation or its source build. The dry run is a
 //! read-only report of the AIDA processes that can write local mail and
 //! whether each is known to take a write permit; [`record`] re-runs that scan
 //! and writes `activation.json` only when the report would record. The CLI
@@ -22,8 +22,8 @@
 //!
 //! The record names the source build that wrote it (version and git SHA,
 //! shared by the `aida` and `aida-server` built from one checkout and by a
-//! re-promoted build of the same source), and only that source build honours it: after an upgrade or
-//! `aida dev rollback` to other source, that build records its own.
+//! re-promoted build of the same source). Reports distinguish a current
+//! record from an older one; retirement always uses fresh admission evidence.
 //!
 //! trace:STORY-1843 | ai:claude
 
@@ -235,28 +235,23 @@ pub fn dry_run_report(project_root: &Path) -> ActivationReport {
     report
 }
 
-/// BUG-2411: re-validate, read-only, an activation recorded by another source
-/// build. A fresh, complete scan of this machine in which every mail writer
-/// host runs this very build is the same evidence [`record`] writes down, so a
-/// retirement may honour it for itself without anyone re-recording (a dev
-/// rebuild changes the source build and would otherwise strand every
-/// mail-bearing checkout). A writer of another or a replaced build admits
-/// only when its executable carries [`WRITE_PERMIT_MARKER`] (BUG-2437).
-/// Nothing is written; any other writer of another build, an unidentifiable
-/// executable, an incomplete scan or a build that names no source still
-/// refuses (fail closed). In unit tests the scan is replaced by
-/// [`FRESH_SCAN`] (default: refuse) so a test never depends on this machine.
-// trace:BUG-2411 | ai:claude
+/// Fresh writer admission evidence for retirement, regardless of whether an
+/// activation is recorded or which source build recorded it. Called after
+/// fencing under Lifecycle; an incomplete or unverified scan refuses.
+/// Compatible permit markers admit older/replaced writers (BUG-2437).
+/// Unit tests use [`FRESH_SCAN`] so they never depend on the host's processes.
+// trace:TASK-3420 | ai:codex
 pub(crate) fn fresh_scan_admits() -> bool {
+    #[cfg(all(feature = "mailbox-test-support", not(test)))]
+    if let Some(admitting) = TEST_WRITER_SCAN.with(|f| f.get()) {
+        return admitting;
+    }
     #[cfg(test)]
     {
         FRESH_SCAN.with(|f| f.get())
     }
     #[cfg(not(test))]
     {
-        if super::source_build().is_none() {
-            return false;
-        }
         let Ok(meta) = std::fs::metadata("/proc/self/exe") else {
             return false;
         };
@@ -280,6 +275,42 @@ thread_local! {
     static PROMOTION_PROC_ROOT: std::cell::RefCell<Option<PathBuf>> = const {
         std::cell::RefCell::new(None)
     };
+}
+
+// Scoped writer inventory evidence for downstream tests. The feature is
+// enabled only by dev-dependencies; ordinary binaries expose no fixture API.
+// The default remains the real process scan, even with the feature enabled.
+// trace:TASK-3420 | ai:codex
+#[cfg(feature = "mailbox-test-support")]
+thread_local! {
+    static TEST_WRITER_SCAN: std::cell::Cell<Option<bool>> = const { std::cell::Cell::new(None) };
+}
+
+/// Restores the test thread's prior writer inventory on drop.
+// trace:TASK-3420 | ai:codex
+#[cfg(feature = "mailbox-test-support")]
+#[doc(hidden)]
+pub struct TestWriterScan {
+    previous: Option<bool>,
+    _thread: std::marker::PhantomData<std::rc::Rc<()>>,
+}
+
+#[cfg(feature = "mailbox-test-support")]
+impl Drop for TestWriterScan {
+    fn drop(&mut self) {
+        TEST_WRITER_SCAN.with(|f| f.set(self.previous));
+    }
+}
+
+/// Supply explicit writer inventory evidence for this test thread only.
+// trace:TASK-3420 | ai:codex
+#[cfg(feature = "mailbox-test-support")]
+#[doc(hidden)]
+pub fn test_writer_scan(admitting: bool) -> TestWriterScan {
+    TestWriterScan {
+        previous: TEST_WRITER_SCAN.with(|f| f.replace(Some(admitting))),
+        _thread: std::marker::PhantomData,
+    }
 }
 
 /// Record the activation under `project_root`'s anchor. A fresh scan runs

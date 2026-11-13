@@ -1,0 +1,942 @@
+//! AIDA owns opted-in Claude background workers; the vendor daemon is never used.
+//! The private socket carries launch data, never argv or a persisted capability.
+// trace:TASK-3219 | ai:codex
+use super::codex_bg_receipt::ProcId;
+use super::*;
+use std::fs::{File, OpenOptions};
+use std::io::{Read, Write};
+use std::os::fd::{AsRawFd, FromRawFd};
+use std::os::unix::{
+    fs::{DirBuilderExt, MetadataExt, OpenOptionsExt},
+    net::UnixStream,
+};
+use std::path::{Path, PathBuf};
+use std::time::Duration;
+
+const FD: i32 = 3;
+const LIMIT: usize = 1024 * 1024;
+const TIMEOUT: Duration = Duration::from_secs(45);
+
+/// Locate the first positional after AIDA's generated option/value pairs.
+/// A lone `attach` is a prompt; `--` explicitly starts prompt text.
+// trace:TASK-3219 | ai:codex
+pub(crate) fn is_attach_subcommand(args: &[String]) -> bool {
+    let mut i = 0;
+    while let Some(arg) = args.get(i) {
+        if arg == "--" {
+            return false;
+        }
+        if !arg.starts_with('-') {
+            return arg == "attach" && args.get(i + 1).is_some_and(|v| !v.starts_with('-'));
+        }
+        i += if matches!(
+            arg.as_str(),
+            "--setting-sources"
+                | "--settings"
+                | "--permission-mode"
+                | "--model"
+                | "--session-id"
+                | "--name"
+                | "--agent"
+                | "--agents"
+                | "--system-prompt"
+                | "--append-system-prompt"
+                | "--output-format"
+                | "--input-format"
+                | "--mcp-config"
+                | "--allowedTools"
+                | "--disallowedTools"
+                | "--tools"
+                | "--add-dir"
+                | "--max-turns"
+                | "--max-budget-usd"
+                | "--effort"
+        ) {
+            2
+        } else {
+            1
+        };
+    }
+    false
+}
+
+#[derive(serde::Serialize, serde::Deserialize)]
+struct Handoff {
+    parent: ProcId,
+    binary: PathBuf,
+    args: Vec<String>,
+    delegate_seats: Vec<String>,
+    plan: AgentLaunchPlan,
+    context: Option<AgentLaunchContext>,
+    description: Option<String>,
+    attempt: String,
+    #[cfg(test)]
+    aida: Option<PathBuf>,
+}
+
+fn send<T: serde::Serialize>(socket: &mut UnixStream, value: &T) -> Result<()> {
+    let bytes = serde_json::to_vec(value)?;
+    anyhow::ensure!(bytes.len() <= LIMIT, "background handoff exceeds limit");
+    let mut frame = Vec::with_capacity(4 + bytes.len());
+    frame.extend_from_slice(&(bytes.len() as u32).to_be_bytes());
+    frame.extend_from_slice(&bytes);
+    // run_cli restores SIGPIPE to SIG_DFL. A disconnected dispatcher must
+    // unwind the wrapper owner rather than terminate it before grant cleanup.
+    let mut remaining = frame.as_slice();
+    while !remaining.is_empty() {
+        let written = unsafe {
+            libc::send(
+                socket.as_raw_fd(),
+                remaining.as_ptr().cast(),
+                remaining.len(),
+                libc::MSG_NOSIGNAL,
+            )
+        };
+        if written < 0 {
+            let error = std::io::Error::last_os_error();
+            if error.kind() == std::io::ErrorKind::Interrupted {
+                continue;
+            }
+            return Err(error.into());
+        }
+        anyhow::ensure!(written != 0, "background handoff write made no progress");
+        remaining = &remaining[written as usize..];
+    }
+    Ok(())
+}
+
+fn receive<T: serde::de::DeserializeOwned>(socket: &mut UnixStream) -> Result<T> {
+    let mut len = [0; 4];
+    socket.read_exact(&mut len)?;
+    let len = u32::from_be_bytes(len) as usize;
+    anyhow::ensure!(len <= LIMIT, "background handoff exceeds limit");
+    let mut bytes = vec![0; len];
+    socket.read_exact(&mut bytes)?;
+    Ok(serde_json::from_slice(&bytes)?)
+}
+
+fn attempt_dir(root: &Path, attempt: &str) -> Result<PathBuf> {
+    let parsed = uuid::Uuid::parse_str(attempt).context("expected the background attempt UUID")?;
+    anyhow::ensure!(
+        parsed.to_string() == attempt,
+        "expected canonical background attempt UUID"
+    );
+    Ok(root.join(".aida/claude-background").join(attempt))
+}
+
+/// Only private, host-owned, singly linked regular files are readable.
+fn open_log(path: &Path) -> Result<File> {
+    let file = OpenOptions::new()
+        .read(true)
+        .custom_flags(libc::O_NOFOLLOW | libc::O_NONBLOCK)
+        .open(path)?;
+    let m = file.metadata()?;
+    anyhow::ensure!(
+        m.is_file()
+            && m.nlink() == 1
+            && m.uid() == unsafe { libc::getuid() }
+            && m.mode() & 0o077 == 0,
+        "refused unsafe background log"
+    );
+    Ok(file)
+}
+
+fn private_file(path: &Path) -> Result<File> {
+    Ok(OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .mode(0o600)
+        .custom_flags(libc::O_NOFOLLOW)
+        .open(path)?)
+}
+
+pub(crate) fn dispatch(
+    binary: &Path,
+    config: &AgentLaunchConfig,
+    plan: &AgentLaunchPlan,
+    context: Option<&AgentLaunchContext>,
+    prompt: &[String],
+    description: Option<String>,
+    take_ownership: impl FnOnce(),
+) -> Result<()> {
+    let attempt = uuid::Uuid::new_v4().to_string();
+    let dir = attempt_dir(&plan.project_root, &attempt)?;
+    // This host directory is outside the wrapper's writable profile.
+    let base = dir.parent().context("missing background directory")?;
+    match std::fs::DirBuilder::new().mode(0o700).create(base) {
+        Ok(()) => {}
+        Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => {}
+        Err(e) => return Err(e.into()),
+    }
+    let m = std::fs::symlink_metadata(base)?;
+    anyhow::ensure!(
+        m.is_dir() && m.uid() == unsafe { libc::getuid() } && m.mode() & 0o077 == 0,
+        "refused unsafe background directory"
+    );
+    std::fs::DirBuilder::new().mode(0o700).create(&dir)?;
+    let output = private_file(&dir.join("output.log"))?;
+    let mut args = config.default_args.clone();
+    args.extend_from_slice(prompt);
+    let init = Handoff {
+        parent: ProcId::current().context("launcher process identity unavailable")?,
+        binary: binary.into(),
+        args,
+        delegate_seats: config.delegate_seats.clone(),
+        plan: plan.clone(),
+        context: context.cloned(),
+        description,
+        attempt: attempt.clone(),
+        #[cfg(test)]
+        aida: crate::kernel::test_aida_exe::current(),
+    };
+    let (mut parent, child) = UnixStream::pair()?;
+    parent.set_read_timeout(Some(TIMEOUT))?;
+    parent.set_write_timeout(Some(TIMEOUT))?;
+    let mut helper = crate::launch::control::control_child()?;
+    helper.current_dir(&plan.project_root);
+    #[cfg(not(test))]
+    helper.args(["internal", "claude-bg-supervise"]);
+    #[cfg(test)]
+    helper.args([
+        "--exact",
+        "agent_launch::agent_claude_background::tests::supervisor_child_entry",
+        "--ignored",
+        "--nocapture",
+    ]);
+    dispatch_with_helper(
+        &mut helper,
+        child,
+        output,
+        &mut parent,
+        &init,
+        take_ownership,
+    )
+    .with_context(|| {
+        format!(
+            "background dispatch refused; inspect {}",
+            dir.join("output.log").display()
+        )
+    })?;
+    eprintln!("{}", crate::vendors::supervised_background_hint(&attempt));
+    Ok(())
+}
+
+fn dispatch_with_helper(
+    helper: &mut std::process::Command,
+    child: UnixStream,
+    output: File,
+    parent: &mut UnixStream,
+    init: &Handoff,
+    take_ownership: impl FnOnce(),
+) -> Result<()> {
+    crate::launch::control::detach_with_socket(helper, child.as_raw_fd(), FD);
+    helper
+        .stdin(std::process::Stdio::null())
+        .stdout(output.try_clone()?)
+        .stderr(output);
+    let mut supervisor = helper.spawn_retrying_etxtbsy()?;
+    drop(child);
+    let mut take_ownership = Some(take_ownership);
+    let mut transferred = false;
+    let result = (|| {
+        send(parent, init)?;
+        let ready: String = receive(parent)?;
+        anyhow::ensure!(
+            ready == "ready",
+            "background supervisor refused before release: {ready}"
+        );
+        // Ownership moves before the supervisor can release the vendor. If the
+        // final acknowledgement is lost, retain the admitted worktree and lease.
+        take_ownership.take().expect("ownership callback")();
+        transferred = true;
+        send(parent, &"release")?;
+        let accepted: String = receive(parent)?;
+        anyhow::ensure!(
+            accepted == "accepted",
+            "background supervisor did not accept: {accepted}"
+        );
+        Ok(())
+    })();
+    if let Err(error) = result {
+        let cleanup = cancel_supervisor(
+            &mut supervisor,
+            parent,
+            transferred,
+            take_ownership,
+            if transferred {
+                Duration::from_secs(2)
+            } else {
+                TIMEOUT
+            },
+        );
+        return Err(dispatch_error_with_cleanup(error, cleanup));
+    }
+    Ok(())
+}
+
+// trace:TASK-3219 | ai:codex
+fn dispatch_error_with_cleanup(error: anyhow::Error, cleanup: Result<()>) -> anyhow::Error {
+    match cleanup {
+        Ok(()) => error,
+        Err(cleanup) => error.context(format!(
+            "background supervisor cleanup also failed: {cleanup:#}"
+        )),
+    }
+}
+
+// trace:TASK-3219 | ai:codex
+fn cancel_supervisor(
+    supervisor: &mut std::process::Child,
+    parent: &UnixStream,
+    transferred: bool,
+    mut retain: Option<impl FnOnce()>,
+    grace: Duration,
+) -> Result<()> {
+    let result = (|| {
+        // Closing the release socket cancels slow prepare before WorkerSignals
+        // exists. The owner can unwind and revoke its grant when prepare returns.
+        let _ = parent.shutdown(std::net::Shutdown::Both);
+        if transferred {
+            // Ready is sent only after WorkerSignals was installed.
+            unsafe {
+                libc::kill(supervisor.id() as i32, libc::SIGTERM);
+            }
+        }
+        let deadline = std::time::Instant::now() + grace;
+        while supervisor.try_wait()?.is_none() && std::time::Instant::now() < deadline {
+            std::thread::sleep(Duration::from_millis(20));
+        }
+        if supervisor.try_wait()?.is_none() {
+            // Forced exit cannot prove RAII teardown. Retain the seat for recovery.
+            if let Some(retain) = retain.take() {
+                retain();
+            }
+            eprintln!("background supervisor required forced termination; launch resources retained for manual recovery");
+            supervisor.kill()?;
+        }
+        supervisor.wait()?; // Caller cleanup must never race a live owner.
+        Ok(())
+    })();
+    if result.is_err() {
+        // A failed wait/kill also leaves ownership uncertain. Do not let the
+        // caller remove the worktree underneath a possibly live supervisor.
+        if let Some(retain) = retain.take() {
+            retain();
+        }
+    }
+    result
+}
+
+/// Called with the worker held behind the wrapper's release barrier.
+pub(crate) fn before_release(socket: &mut UnixStream) -> Result<()> {
+    send(socket, &"ready")?;
+    let response: String = receive(socket)?;
+    anyhow::ensure!(
+        response == "release",
+        "dispatcher did not transfer background ownership"
+    );
+    Ok(())
+}
+
+pub(crate) fn supervise_main() -> Result<()> {
+    // The inherited socket is the sole launch input; no arbitrary state file,
+    // token-bearing argv, full parent environment snapshot or shell command.
+    let mut socket = unsafe { UnixStream::from_raw_fd(FD) };
+    unsafe {
+        libc::fcntl(FD, libc::F_SETFD, libc::FD_CLOEXEC);
+    }
+    socket.set_read_timeout(Some(TIMEOUT))?;
+    socket.set_write_timeout(Some(TIMEOUT))?;
+    let init: Handoff = receive(&mut socket)?;
+    anyhow::ensure!(
+        init.parent.pid == unsafe { libc::getppid() } as u32 && init.parent.is_live(),
+        "background launch parent identity changed"
+    );
+    anyhow::ensure!(
+        session::claude_uses_contained_wrapper(&init.plan.launch_cwd)?,
+        "background supervisor requires trusted Claude wrapper opt-in"
+    );
+    #[cfg(test)]
+    let _aida = init.aida.clone().map(crate::kernel::test_aida_exe::set);
+    let dir = attempt_dir(&init.plan.project_root, &init.attempt)?;
+    let me = ProcId::current().context("supervisor identity unavailable")?;
+    serde_json::to_writer(
+        private_file(&dir.join("supervisor.json"))?,
+        &(me, init.parent),
+    )?;
+    let config = AgentLaunchConfig {
+        agent_type: crate::vendors::supervised_background_name(),
+        binary: crate::vendors::supervised_background_name(),
+        default_args: init.args,
+        prompt_style: AgentPromptStyle::Positional,
+        contained: true,
+        delegate_seats: init.delegate_seats,
+    };
+    let mut accepted = socket.try_clone()?;
+    let result = run_agent_generation_with_io(
+        &init.binary,
+        &config,
+        &init.plan,
+        init.context.as_ref(),
+        &[],
+        init.description,
+        false,
+        false,
+        None,
+        None,
+        || send(&mut accepted, &"accepted"),
+        Some(&mut socket),
+    );
+    if let Err(e) = &result {
+        eprintln!("AIDA background supervisor failed: {e:#}");
+    }
+    // An explicit terminal result also makes an attach after exit finite.
+    writeln!(
+        private_file(&dir.join("ended"))?,
+        "{:?}",
+        result.as_ref().map(|r| r.status.code())
+    )?;
+    result.map(|_| ())
+}
+
+// Mark a background row ended on handshake, release and wait errors too.
+pub(crate) struct RegistryEnd {
+    pub(crate) root: PathBuf,
+    pub(crate) pid: u32,
+    pub(crate) armed: bool,
+}
+impl Drop for RegistryEnd {
+    fn drop(&mut self) {
+        if !self.armed {
+            return;
+        }
+        if let Err(e) = agent_registry::mark_agent_ended(
+            &self.root,
+            crate::vendors::supervised_background_name(),
+            self.pid,
+        ) {
+            eprintln!("failed to mark background worker ended: {e:#}");
+        }
+    }
+}
+
+pub(crate) fn logs(attempt: &str, follow: bool) -> Result<()> {
+    let root = find_aida_project_root_from(&std::env::current_dir()?)?;
+    let root = agent_launch_project_root_from(&root);
+    let dir = attempt_dir(&root, attempt)?;
+    // Reject linked directory components as well as a linked log leaf.
+    for path in [
+        dir.parent().context("missing background directory")?,
+        dir.as_path(),
+    ] {
+        let m = std::fs::symlink_metadata(path)?;
+        anyhow::ensure!(
+            m.is_dir() && m.uid() == unsafe { libc::getuid() } && m.mode() & 0o077 == 0,
+            "refused unsafe background directory"
+        );
+    }
+    let mut log = open_log(&dir.join("output.log"))?;
+    let stdout = std::io::stdout();
+    let terminal = crate::authority_stdout_is_terminal();
+    let mut output = stdout.lock();
+    let mut buf = [0; 16384];
+    let mut display = LogDisplay::default();
+    loop {
+        let n = log.read(&mut buf)?;
+        if n != 0 {
+            output.write_all(&display.bytes(&buf[..n], terminal, false))?;
+            output.flush()?;
+            continue;
+        }
+        if !follow {
+            break;
+        }
+        if dir.join("ended").exists() {
+            // The terminal marker follows worker exit. The writer may have
+            // appended between our EOF read and this observation.
+            loop {
+                let n = log.read(&mut buf)?;
+                if n == 0 {
+                    break;
+                }
+                output.write_all(&display.bytes(&buf[..n], terminal, false))?;
+            }
+            output.flush()?;
+            break;
+        }
+        let (me, _): (ProcId, ProcId) =
+            serde_json::from_reader(open_log(&dir.join("supervisor.json"))?)?;
+        if !me.is_live() {
+            // Exit may race the earlier marker check. Loop through the final
+            // drain (including pending UTF-8) once the terminal result exists.
+            if dir.join("ended").exists() {
+                continue;
+            }
+            anyhow::bail!(
+                "background supervisor exited without a terminal result; inspect the log"
+            );
+        }
+        std::thread::sleep(Duration::from_millis(100));
+    }
+    output.write_all(&display.bytes(&[], terminal, true))?;
+    output.flush()?;
+    Ok(())
+}
+
+// Carry incomplete UTF-8 between reads so encoded C1 controls cannot bypass
+// escaping at a chunk boundary. Pipes retain the original bytes.
+// trace:TASK-3219 | ai:codex
+#[derive(Default)]
+struct LogDisplay {
+    pending: Vec<u8>,
+}
+
+impl LogDisplay {
+    fn bytes(&mut self, bytes: &[u8], terminal: bool, end: bool) -> Vec<u8> {
+        if !terminal {
+            return bytes.to_vec();
+        }
+        let mut input = std::mem::take(&mut self.pending);
+        input.extend_from_slice(bytes);
+        let mut escaped = Vec::with_capacity(input.len());
+        let mut remaining = input.as_slice();
+        while !remaining.is_empty() {
+            let (valid, invalid) = match std::str::from_utf8(remaining) {
+                Ok(valid) => (valid, None),
+                Err(error) => (
+                    // valid_up_to is a verified UTF-8 boundary.
+                    std::str::from_utf8(&remaining[..error.valid_up_to()]).unwrap(),
+                    Some(error.error_len()),
+                ),
+            };
+            for ch in valid.chars() {
+                if ch.is_control() && !matches!(ch, '\t' | '\n') {
+                    // Escape each encoded byte, preserving an unambiguous
+                    // representation for C0, DEL and Unicode C1 controls.
+                    for byte in ch.encode_utf8(&mut [0; 4]).bytes() {
+                        escaped.extend_from_slice(format!("\\x{byte:02x}").as_bytes());
+                    }
+                } else {
+                    escaped.extend_from_slice(ch.encode_utf8(&mut [0; 4]).as_bytes());
+                }
+            }
+            remaining = &remaining[valid.len()..];
+            match invalid {
+                None => break,
+                Some(None) if !end => {
+                    self.pending.extend_from_slice(remaining);
+                    break;
+                }
+                Some(len) => {
+                    let len = len.unwrap_or(remaining.len());
+                    for byte in &remaining[..len] {
+                        escaped.extend_from_slice(format!("\\x{byte:02x}").as_bytes());
+                    }
+                    remaining = &remaining[len..];
+                }
+            }
+        }
+        escaped
+    }
+}
+
+#[cfg(test)]
+pub(crate) mod tests {
+    use super::*;
+    #[test]
+    fn supervisor_attach_detection_skips_composed_flags() {
+        let args = |a: &[&str]| a.iter().map(|s| s.to_string()).collect::<Vec<_>>();
+        for prefix in [
+            vec![],
+            args(&["--setting-sources", "project", "--settings", "{}"]),
+            args(&[
+                "--settings",
+                "{}",
+                "--model",
+                "attach",
+                "--session-id",
+                "uuid",
+                "--print",
+            ]),
+            args(&["--settings={}", "--model=sonnet"]),
+        ] {
+            let mut subcommand = prefix.clone();
+            subcommand.extend(args(&["attach", "session-id"]));
+            assert!(is_attach_subcommand(&subcommand), "{subcommand:?}");
+            for prompt in [
+                args(&["attach"]),
+                args(&["--", "attach", "session-id"]),
+                args(&["help", "attach"]),
+            ] {
+                let mut input = prefix.clone();
+                input.extend(prompt);
+                assert!(!is_attach_subcommand(&input), "{input:?}");
+            }
+        }
+    }
+
+    #[test]
+    fn supervisor_registry_guard_preserves_normal_end() {
+        let root = tempfile::tempdir().unwrap();
+        let vendor = crate::vendors::supervised_background_name();
+        let pid = std::process::id();
+        agent_registry::register_spawned_agent_with_row(
+            root.path(),
+            vendor,
+            pid,
+            agent_registry::SpawnedRow {
+                role: None,
+                current_spec: None,
+                worktree_path: root.path().into(),
+                binary: None,
+                name: None,
+                native_session_id: None,
+                resumed_from: None,
+                description: None,
+                delegate_seats: vec![],
+            },
+        )
+        .unwrap();
+        let mut guard = RegistryEnd {
+            root: root.path().into(),
+            pid,
+            armed: true,
+        };
+        let ended = agent_registry::mark_agent_ended(root.path(), vendor, pid)
+            .unwrap()
+            .unwrap();
+        guard.armed = false;
+        drop(guard);
+        let rows = agent_registry::load_entries(root.path());
+        let row = rows.iter().find(|(_, row)| row.id == ended.id).unwrap();
+        assert_eq!(row.1.ended_at, ended.ended_at);
+        assert_eq!(row.1.last_active_at, ended.last_active_at);
+
+        // An error before ordinary teardown still closes the row.
+        agent_registry::register_spawned_agent_with_row(
+            root.path(),
+            vendor,
+            pid,
+            agent_registry::SpawnedRow {
+                role: None,
+                current_spec: None,
+                worktree_path: root.path().into(),
+                binary: None,
+                name: None,
+                native_session_id: None,
+                resumed_from: None,
+                description: None,
+                delegate_seats: vec![],
+            },
+        )
+        .unwrap();
+        drop(RegistryEnd {
+            root: root.path().into(),
+            pid,
+            armed: true,
+        });
+        assert!(agent_registry::load_entries(root.path())
+            .iter()
+            .any(|(_, row)| row.ended_at.is_some()));
+    }
+
+    #[test]
+    fn supervisor_closed_socket_unwinds_with_default_sigpipe() {
+        const CHILD: &str = "AIDA_TEST_CLAUDE_BG_SIGPIPE";
+        if aida_core::exec_context::Environment::capture()
+            .get(CHILD)
+            .is_some()
+        {
+            unsafe {
+                libc::signal(libc::SIGPIPE, libc::SIG_DFL);
+            }
+            let (mut sender, peer) = UnixStream::pair().unwrap();
+            drop(peer);
+            let unwound = std::cell::Cell::new(false);
+            struct Cleanup<'a>(&'a std::cell::Cell<bool>);
+            impl Drop for Cleanup<'_> {
+                fn drop(&mut self) {
+                    self.0.set(true);
+                }
+            }
+            let result = (|| -> Result<()> {
+                let _cleanup = Cleanup(&unwound);
+                send(&mut sender, &"ready")?;
+                unreachable!("closed handoff accepted");
+            })();
+            assert!(result.is_err());
+            assert!(unwound.get());
+            return;
+        }
+        let status = crate::launch::control::control_child().unwrap()
+            .args(["--exact", "agent_launch::agent_claude_background::tests::supervisor_closed_socket_unwinds_with_default_sigpipe", "--nocapture"])
+            .env(CHILD, "1").status().unwrap();
+        assert!(status.success(), "closed socket terminated owner: {status}");
+    }
+
+    #[test]
+    fn supervisor_refusal_survives_cleanup_error() {
+        let error = dispatch_error_with_cleanup(
+            anyhow::anyhow!("background supervisor refused before release: seat refused"),
+            Err(anyhow::anyhow!("wait failed")),
+        );
+        let diagnostic = format!("{error:#}");
+        assert!(diagnostic.contains("background supervisor refused before release: seat refused"));
+        assert!(diagnostic.contains("cleanup also failed: wait failed"));
+        assert_eq!(
+            dispatch_error_with_cleanup(anyhow::anyhow!("original"), Ok(())).to_string(),
+            "original"
+        );
+    }
+
+    #[test]
+    fn supervisor_log_display_escapes_terminal_controls_across_reads() {
+        let bytes = b"plain\tline\n\x1b[2J\x1b]52;c;clipboard\x07\r\x08\x7f\x9b\xc2\x9b";
+        assert_eq!(LogDisplay::default().bytes(bytes, false, true), bytes);
+        let escaped = LogDisplay::default().bytes(bytes, true, true);
+        assert!(escaped.starts_with(b"plain\tline\n\\x1b[2J\\x1b]52;c;clipboard\\x07"));
+        assert!(escaped
+            .iter()
+            .all(|b| b.is_ascii_graphic() || matches!(b, b' ' | b'\t' | b'\n')));
+        for split in 0..=bytes.len() {
+            let mut display = LogDisplay::default();
+            let mut parts = display.bytes(&bytes[..split], true, false);
+            parts.extend_from_slice(&display.bytes(&bytes[split..], true, true));
+            assert_eq!(parts, escaped);
+        }
+    }
+
+    #[test]
+    fn supervisor_log_display_preserves_utf8_across_reads() {
+        let mut bytes = "Claude — ✓ ‘ready’ 日本語\n".as_bytes().to_vec();
+        bytes.extend_from_slice(b"\xc2\x9b\x9d\xff\xe2\x82");
+        let mut expected = "Claude — ✓ ‘ready’ 日本語\n".as_bytes().to_vec();
+        expected.extend_from_slice(b"\\xc2\\x9b\\x9d\\xff\\xe2\\x82");
+        for split in 0..=bytes.len() {
+            let mut display = LogDisplay::default();
+            let mut output = display.bytes(&bytes[..split], true, false);
+            output.extend_from_slice(&display.bytes(&bytes[split..], true, false));
+            output.extend_from_slice(&display.bytes(&[], true, true));
+            assert_eq!(output, expected, "split={split}");
+        }
+        let mut display = LogDisplay::default();
+        let mut output = Vec::new();
+        for byte in &bytes {
+            output.extend_from_slice(&display.bytes(&[*byte], true, false));
+        }
+        output.extend_from_slice(&display.bytes(&[], true, true));
+        assert_eq!(output, expected);
+    }
+
+    #[test]
+    fn supervisor_protocol_refuses_unowned_release_and_oversized_frames() {
+        let (mut a, mut b) = UnixStream::pair().unwrap();
+        send(&mut a, &"wrong").unwrap();
+        assert!(before_release(&mut b).is_err());
+        assert_eq!(receive::<String>(&mut a).unwrap(), "ready");
+        a.write_all(&((LIMIT + 1) as u32).to_be_bytes()).unwrap();
+        assert!(receive::<String>(&mut b).is_err());
+        let root = tempfile::tempdir().unwrap();
+        assert!(attempt_dir(root.path(), "../escape").is_err());
+        let leaf = root.path().join("log");
+        private_file(&leaf).unwrap().write_all(b"evidence").unwrap();
+        assert!(open_log(&leaf).is_ok());
+        std::os::unix::fs::symlink(&leaf, root.path().join("link")).unwrap();
+        assert!(open_log(&root.path().join("link")).is_err());
+    }
+
+    #[test]
+    #[cfg(target_os = "linux")]
+    fn supervisor_cancellation_closes_socket_and_reaps_before_cleanup() {
+        let (parent, child) = UnixStream::pair().unwrap();
+        let mut helper = std::process::Command::new("/bin/sh");
+        helper.args(["-c", "sleep 0.1; read x <&3 || exit 0; exit 1"]);
+        crate::launch::control::detach_with_socket(&mut helper, child.as_raw_fd(), FD);
+        let mut process = helper.spawn().unwrap();
+        drop(child);
+        let retained = std::cell::Cell::new(false);
+        cancel_supervisor(
+            &mut process,
+            &parent,
+            false,
+            Some(|| retained.set(true)),
+            Duration::from_secs(2),
+        )
+        .unwrap();
+        assert!(process.wait().unwrap().success());
+        assert!(!retained.get(), "graceful unwind permits ordinary cleanup");
+
+        let (parent, child) = UnixStream::pair().unwrap();
+        let mut helper = std::process::Command::new("/bin/sleep");
+        helper.arg("60");
+        crate::launch::control::detach_with_socket(&mut helper, child.as_raw_fd(), FD);
+        let mut process = helper.spawn().unwrap();
+        drop(child);
+        cancel_supervisor(
+            &mut process,
+            &parent,
+            false,
+            Some(|| retained.set(true)),
+            Duration::from_millis(10),
+        )
+        .unwrap();
+        assert!(
+            retained.get(),
+            "forced termination retains uncertain resources"
+        );
+        use std::os::unix::process::ExitStatusExt;
+        assert_eq!(process.wait().unwrap().signal(), Some(libc::SIGKILL));
+    }
+
+    // Cancel during prepare, before the owner's ready write. The child uses
+    // production SIG_DFL and must unwind real grant/registry ownership.
+    pub(crate) fn cancel_during_prepare(
+        binary: &Path,
+        config: &AgentLaunchConfig,
+        plan: &AgentLaunchPlan,
+    ) -> Result<PathBuf> {
+        let attempt = uuid::Uuid::new_v4().to_string();
+        let dir = attempt_dir(&plan.project_root, &attempt)?;
+        std::fs::DirBuilder::new().mode(0o700).create(&dir)?;
+        let output = private_file(&dir.join("output.log"))?;
+        let init = Handoff {
+            parent: ProcId::current().unwrap(),
+            binary: binary.into(),
+            args: config.default_args.clone(),
+            delegate_seats: config.delegate_seats.clone(),
+            plan: plan.clone(),
+            context: None,
+            description: None,
+            attempt,
+            aida: crate::kernel::test_aida_exe::current(),
+        };
+        let (mut parent, child) = UnixStream::pair()?;
+        let mut helper = crate::launch::control::control_child()?;
+        helper.current_dir(&plan.project_root).args([
+            "--exact",
+            "agent_launch::agent_claude_background::tests::supervisor_child_entry",
+            "--ignored",
+            "--nocapture",
+        ]);
+        crate::launch::control::detach_with_socket(&mut helper, child.as_raw_fd(), FD);
+        helper
+            .stdin(std::process::Stdio::null())
+            .stdout(output.try_clone()?)
+            .stderr(output);
+        let mut process = helper.spawn()?;
+        drop(child);
+        send(&mut parent, &init)?;
+        parent.shutdown(std::net::Shutdown::Both)?;
+        let deadline = std::time::Instant::now() + TIMEOUT;
+        while process.try_wait()?.is_none() && std::time::Instant::now() < deadline {
+            std::thread::sleep(Duration::from_millis(20));
+        }
+        if process.try_wait()?.is_none() {
+            process.kill()?;
+            process.wait()?;
+            anyhow::bail!("cancelled supervisor failed to unwind");
+        }
+        use std::os::unix::process::ExitStatusExt;
+        anyhow::ensure!(
+            process.wait()?.signal().is_none(),
+            "cancelled owner died by signal"
+        );
+        anyhow::ensure!(
+            dir.join("ended").exists(),
+            "cancelled owner omitted terminal result: {}",
+            std::fs::read_to_string(dir.join("output.log")).unwrap_or_default()
+        );
+        Ok(dir)
+    }
+
+    // A dispatcher process exits after dispatch; the live test remains alive
+    // to observe the independently owned wrapper and its grant teardown.
+    pub(crate) fn dispatch_via_exiting_process(
+        binary: &Path,
+        config: &AgentLaunchConfig,
+        plan: &AgentLaunchPlan,
+    ) -> Result<()> {
+        let init = Handoff {
+            parent: ProcId::current().unwrap(),
+            binary: binary.into(),
+            args: config.default_args.clone(),
+            delegate_seats: config.delegate_seats.clone(),
+            plan: plan.clone(),
+            context: None,
+            description: None,
+            attempt: uuid::Uuid::new_v4().to_string(),
+            aida: crate::kernel::test_aida_exe::current(),
+        };
+        let (mut parent, child) = UnixStream::pair()?;
+        parent.set_read_timeout(Some(TIMEOUT))?;
+        parent.set_write_timeout(Some(TIMEOUT))?;
+        let mut helper = crate::launch::control::control_child()?;
+        helper.current_dir(&plan.project_root);
+        helper.args([
+            "--exact",
+            "agent_launch::agent_claude_background::tests::supervisor_dispatcher_entry",
+            "--ignored",
+            "--nocapture",
+        ]);
+        let log = tempfile::tempfile()?;
+        let mut diagnostics = log.try_clone()?;
+        let result = dispatch_with_helper(&mut helper, child, log, &mut parent, &init, || {});
+        if let Err(e) = result {
+            use std::io::{Seek, SeekFrom};
+            diagnostics.seek(SeekFrom::Start(0))?;
+            let mut tail = String::new();
+            diagnostics.read_to_string(&mut tail)?;
+            if let Ok(attempts) =
+                std::fs::read_dir(init.plan.project_root.join(".aida/claude-background"))
+            {
+                for entry in attempts.flatten() {
+                    if let Ok(log) = std::fs::read_to_string(entry.path().join("output.log")) {
+                        tail.push_str("\nSupervisor output:\n");
+                        tail.push_str(&log);
+                    }
+                }
+            }
+            anyhow::bail!("{e:#}: dispatcher output:\n{tail}");
+        }
+        Ok(())
+    }
+
+    #[test]
+    #[ignore]
+    fn supervisor_dispatcher_entry() {
+        unsafe {
+            libc::signal(libc::SIGPIPE, libc::SIG_DFL);
+        }
+        let mut socket = unsafe { UnixStream::from_raw_fd(FD) };
+        unsafe {
+            libc::fcntl(FD, libc::F_SETFD, libc::FD_CLOEXEC);
+        }
+        socket.set_read_timeout(Some(TIMEOUT)).unwrap();
+        socket.set_write_timeout(Some(TIMEOUT)).unwrap();
+        let init: Handoff = receive(&mut socket).unwrap();
+        let _aida = init.aida.clone().map(crate::kernel::test_aida_exe::set);
+        let config = AgentLaunchConfig {
+            agent_type: crate::vendors::supervised_background_name(),
+            binary: crate::vendors::supervised_background_name(),
+            default_args: init.args,
+            prompt_style: AgentPromptStyle::Positional,
+            contained: true,
+            delegate_seats: init.delegate_seats,
+        };
+        dispatch(&init.binary, &config, &init.plan, None, &[], None, || {
+            before_release(&mut socket).unwrap()
+        })
+        .unwrap();
+        send(&mut socket, &"accepted").unwrap();
+    }
+
+    // Re-exec entrypoint for the actual detached supervisor in the live test.
+    #[test]
+    #[ignore]
+    fn supervisor_child_entry() {
+        unsafe {
+            libc::signal(libc::SIGPIPE, libc::SIG_DFL);
+        }
+        supervise_main().unwrap();
+    }
+}

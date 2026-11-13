@@ -57,7 +57,7 @@ pub(crate) fn place_collected_refusal(
     collected: &crate::gate::review_verdict::CollectedVerdict,
 ) -> std::io::Result<bool> {
     let kind = collected.verdict.kind;
-    if !kind.blocks_done() {
+    if !kind.requires_changes() {
         return Ok(false);
     }
     let key = collected
@@ -348,7 +348,7 @@ pub(crate) const MERGE_HOLD_LABELS: [MergeHoldLabel; 3] = [
     MergeHoldLabel {
         name: HOLD_LABEL,
         color: "B60205",
-        description: "Supervised merge hold — merge-hold-gate fails while present",
+        description: "Supervised merge hold — merge-hold-gate stays pending while present",
     },
     MergeHoldLabel {
         name: HOLD_RECORDED_LABEL,

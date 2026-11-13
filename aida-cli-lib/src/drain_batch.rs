@@ -1,8 +1,21 @@
 //! batch and single-branch drain drivers and cluster PRs (STORY-1488 slice 1)
 // trace:STORY-1488 | ai:claude
 
-use crate::*;
+use crate::current_branch_head_sha;
+use crate::process_retry::RetryEtxtbsy;
+use crate::{
+    aida_exe_path, auto_complete, branch_ahead_of, detect_open_pr_for_spec_via_forge, drain_caps,
+    drain_state, drain_summary, drive_robustness, emit_drain_cap_stop, entry_matches_role_filter,
+    events, finalize_drain_summary, find_main_worktree_root, find_project_root, last_drain,
+    maybe_digest_mailbox_best_effort, pr_ship, prompt_yes_no, queue_cmd, queue_role_fallback,
+    resolve_queue_role_filter, run_auto_complete, sum_headless_log_tokens, DrainTuning, PrLookup,
+    ResumeEntry, DEFAULT_MAX_FAILURES, DRAIN_CAP_EXIT_CODE,
+};
 use aida_core::git_ops::RemoteCredentialsExt as _;
+use aida_core::Storage;
+use anyhow::{Context, Result};
+use colored::Colorize;
+use std::io::IsTerminal;
 
 // Child-process batch pipelining preserves the existing per-spec engine while
 // passing the in-process outcome back to the parent scheduler.
@@ -30,6 +43,7 @@ pub(crate) fn pipelined_child_result_sidecar_json(
     let escalation = result.escalation.as_ref().map(|e| {
         serde_json::json!({
             "kind": match e.kind {
+                auto_complete::EscalationKind::Waiting => "waiting",
                 auto_complete::EscalationKind::MergeDecision => "merge-decision",
                 auto_complete::EscalationKind::DesignFork => "design-fork",
                 auto_complete::EscalationKind::SupervisedMerge => "supervised-merge",
@@ -44,8 +58,10 @@ pub(crate) fn pipelined_child_result_sidecar_json(
         "shipped_spec_id": result.shipped_spec_id,
         "escalation": escalation,
         "inconclusive_reason": result.inconclusive_reason,
+        "fast_gate_pending": result.fast_gate_pending,
         "shelved": result.shelved_reason.is_some(),
         "held_reason": result.held_reason,
+        "no_change": result.no_change,
         // BUG-1930: the parent's consecutive-environmental-failure halt reads
         // the failure kind and reason; without them every pipelined member
         // looked like a non-environmental failure. trace:BUG-1930 | ai:claude
@@ -83,6 +99,7 @@ pub(crate) fn parse_pipelined_child_result_sidecar(
         .and_then(auto_complete::Phase::from_index);
     let escalation = value.get("escalation").and_then(|v| {
         let kind = match v.get("kind").and_then(|k| k.as_str())? {
+            "waiting" => auto_complete::EscalationKind::Waiting,
             "merge-decision" => auto_complete::EscalationKind::MergeDecision,
             "design-fork" => auto_complete::EscalationKind::DesignFork,
             "supervised-merge" => auto_complete::EscalationKind::SupervisedMerge,
@@ -141,11 +158,19 @@ pub(crate) fn parse_pipelined_child_result_sidecar(
             .and_then(|v| v.as_str())
             .map(|s| s.to_string()),
         escalation,
+        fast_gate_pending: value
+            .get("fast_gate_pending")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false),
         inconclusive_reason: value
             .get("inconclusive_reason")
             .and_then(|v| v.as_str())
             .map(|s| s.to_string()),
         shelved_reason,
+        no_change: value
+            .get("no_change")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false),
         held_reason: value
             .get("held_reason")
             .and_then(|v| v.as_str())
@@ -585,13 +610,21 @@ impl auto_complete::BatchDriver for RealBatchDriver<'_> {
     }
 
     fn next_head(&mut self) -> Option<String> {
+        self.next_head_excluding(&[])
+    }
+
+    // trace:STORY-2640 | ai:codex
+    fn next_head_excluding(&mut self, excluded: &[String]) -> Option<String> {
         match resolve_batch_members(
             self.storage,
             &self.user_id,
             &self.batch_name,
             self.role.as_deref(),
         ) {
-            Ok(members) => members.into_iter().next().map(|m| m.1),
+            Ok(members) => members
+                .into_iter()
+                .map(|m| m.1)
+                .find(|id| !excluded.contains(id)),
             Err(e) => {
                 // A store/queue read failure is not "batch drained" — surface
                 // it and stop rather than reporting a false clean drain.
@@ -1632,7 +1665,8 @@ pub(crate) fn handle_auto_complete_single_branch(
             // same command resumes from the next member. trace:TASK-1137
             auto_complete::SingleBranchOutcome::Paused => {
                 eprintln!(
-                    "{} paused before {} — {} member{} committed on {} (no cluster pull \
+                    // trace:TASK-3749 | ai:codex
+                    "{} paused at {} — {} member{} committed on {} (no cluster pull \
                      request yet)",
                     crate::glyph(crate::glyphs::Glyph::InfoAlt).cyan().bold(),
                     result.stopped_at.as_deref().unwrap_or("the next member"),
@@ -2078,6 +2112,10 @@ pub(crate) fn emit_batch_chain_summary(
                 shipped_list
             );
         }
+        // trace:TASK-3608 | ai:codex
+        BatchDrainOutcome::NoChange => {
+            eprintln!("drain stopped: no-change — nothing published");
+        }
         // BUG-250: a member deliberately held its PR — the chain pauses there
         // until the operator runs the gate and opens the PR. trace:BUG-250
         BatchDrainOutcome::Held => {
@@ -2414,6 +2452,10 @@ pub(crate) fn emit_batch_drain_summary(
                  `aida queue work --batch {batch_name} --auto-complete`",
                 "→".dimmed()
             );
+        }
+        // trace:TASK-3608 | ai:codex
+        BatchDrainOutcome::NoChange => {
+            eprintln!("drain stopped: no-change — nothing published");
         }
         // BUG-250: a member deliberately held its PR — the batch pauses there
         // for the operator's manual gate. trace:BUG-250 | ai:claude

@@ -49,7 +49,17 @@ impl ForgeEvidence {
         let ci_completed_at = checks.filter(|c| !c.is_empty()).and_then(|checks| {
             checks
                 .iter()
-                .map(|c| parse_time(c["completedAt"].as_str()))
+                .map(|c| {
+                    // trace:BUG-2492 | ai:codex — successful commit statuses
+                    // have startedAt, not CheckRun completedAt. Pending evidence
+                    // must never seed a completed-CI observation.
+                    let time = if c["state"] == "SUCCESS" {
+                        c["startedAt"].as_str()
+                    } else {
+                        c["completedAt"].as_str()
+                    };
+                    parse_time(time)
+                })
                 .collect::<Option<Vec<_>>>()
                 .and_then(|times| times.into_iter().max())
         });
@@ -463,6 +473,28 @@ mod tests {
         )
         .unwrap();
     }
+    // trace:BUG-2500 | ai:codex
+    #[test]
+    fn bug_2500_waiting_is_never_ship_ready_with_sibling_approval() {
+        let t = setup();
+        let root = t.path();
+        verdict(root, "waiting", "abcdef1234");
+        std::fs::write(
+            root.join(".aida/review-verdicts/BUG-2500.json"),
+            serde_json::json!({"verdict":"approved", "reviewed_sha":"abcdef1234",
+                "recorded_at":"2026-11-03T04:40:00Z"})
+            .to_string(),
+        )
+        .unwrap();
+        assert!(local_kind(root, 42, "abcdef1234", "work (BUG-2500)", "topic").is_none());
+        assert!(current(
+            root,
+            snapshot("abcdef1234", "pass"),
+            &Cache::default(),
+            now()
+        )
+        .is_empty());
+    }
     #[test]
     fn idle_eligible_review_becomes_due_and_resets_on_head_or_action() {
         let t = setup();
@@ -780,5 +812,25 @@ mod tests {
         let conflicting = run(&eligible, conflict_at, with_mergeable(Some("CONFLICTING")));
         assert!(conflicting.observations.is_empty());
         assert_eq!(conflicting.invalidations[0].invalidated_at, conflict_at);
+    }
+}
+
+// trace:BUG-2492 | ai:codex
+#[cfg(test)]
+mod bug2492_status_time_tests {
+    #[test]
+    fn bug2492_status_completion_seed() {
+        let mut pr = serde_json::json!({"statusCheckRollup":[
+            {"completedAt":"2026-11-08T01:00:00Z"},
+            {"context":"merge-hold-gate","state":"SUCCESS","startedAt":"2026-11-08T02:00:00Z"}
+        ]});
+        assert_eq!(
+            super::ForgeEvidence::from_json(&pr).ci_completed_at,
+            super::parse_time(Some("2026-11-08T02:00:00Z"))
+        );
+        pr["statusCheckRollup"][1]["state"] = serde_json::json!("PENDING");
+        assert!(super::ForgeEvidence::from_json(&pr)
+            .ci_completed_at
+            .is_none());
     }
 }

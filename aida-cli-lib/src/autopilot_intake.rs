@@ -1,7 +1,14 @@
 //! Autopilot subcommands and `aida intake` (STORY-1488 slice 1)
 // trace:STORY-1488 | ai:claude
 
-use crate::*;
+use crate::{
+    all_queued_requirement_ids, autopilot, autopilot_audit, backlog, comment_cmd, current_user_id,
+    find_plan_files_for_spec, find_project_root, intake, is_standing_artifact_type,
+    load_store_for_lookup, presence, session,
+};
+use aida_core::Storage;
+use anyhow::{Context, Result};
+use colored::Colorize;
 
 // trace:STORY-1728 | ai:claude
 #[path = "autopilot_intake_args.rs"]
@@ -1111,7 +1118,7 @@ pub(crate) struct AutopilotArgs {
 // trace:TASK-1147 | ai:claude
 fn run_autopilot(
     matches: &clap::ArgMatches,
-    _ctx: &crate::command_registry::DispatchCtx,
+    _ctx: &crate::cmdkit::DispatchCtx,
 ) -> anyhow::Result<()> {
     let args = <AutopilotArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
     let cmd = &args.inner;
@@ -1119,19 +1126,18 @@ fn run_autopilot(
 }
 
 // trace:STORY-1728 | ai:claude
-pub(crate) static AUTOPILOT: crate::command_registry::CommandReg =
-    crate::command_registry::CommandReg {
-        name: "autopilot",
-        help_after: "backlog",
-        command: <AutopilotArgs as clap::CommandFactory>::command,
-        policy: |_| crate::command_registry::CmdPolicy {
-            stakeholder: crate::stakeholder_role::StakeholderAction::Write,
-            per_write_auto_push: false,
-            skip_role_restore_prompt: false,
-            team_identity_write: false,
-        },
-        run: crate::command_registry::Handler::Early(run_autopilot),
-    };
+pub(crate) static AUTOPILOT: crate::cmdkit::CommandReg = crate::cmdkit::CommandReg {
+    name: "autopilot",
+    help_after: "backlog",
+    command: <AutopilotArgs as clap::CommandFactory>::command,
+    policy: |_| crate::cmdkit::CmdPolicy {
+        stakeholder: crate::stakeholder_role::StakeholderAction::Write,
+        per_write_auto_push: false,
+        skip_role_restore_prompt: false,
+        team_identity_write: false,
+    },
+    run: crate::cmdkit::Handler::Early(run_autopilot),
+};
 
 // trace:STORY-560 trace:STORY-623 trace:STORY-708 | ai:claude
 /// GROOM the open specs: fire a cold-boot advisor agent that reads all open
@@ -1196,10 +1202,7 @@ pub(crate) struct GroomArgs {
 // aliases — STORY-708) self-loads the store to compute its candidate
 // fence and then launches a headless `claude -p` — no shared storage handle
 // needed. Dispatch early, like burndown. trace:STORY-560 trace:STORY-708 | ai:claude
-fn run_groom(
-    matches: &clap::ArgMatches,
-    _ctx: &crate::command_registry::DispatchCtx,
-) -> anyhow::Result<()> {
+fn run_groom(matches: &clap::ArgMatches, _ctx: &crate::cmdkit::DispatchCtx) -> anyhow::Result<()> {
     let args = <GroomArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
     let GroomArgs {
         apply,
@@ -1224,16 +1227,15 @@ fn run_groom(
 }
 
 // trace:STORY-1728 | ai:claude
-pub(crate) static GROOM: crate::command_registry::CommandReg =
-    crate::command_registry::CommandReg {
-        name: "groom",
-        help_after: "health",
-        command: <GroomArgs as clap::CommandFactory>::command,
-        policy: |_| crate::command_registry::CmdPolicy {
-            stakeholder: crate::stakeholder_role::StakeholderAction::Write,
-            per_write_auto_push: false,
-            skip_role_restore_prompt: false,
-            team_identity_write: false,
-        },
-        run: crate::command_registry::Handler::Early(run_groom),
-    };
+pub(crate) static GROOM: crate::cmdkit::CommandReg = crate::cmdkit::CommandReg {
+    name: "groom",
+    help_after: "health",
+    command: <GroomArgs as clap::CommandFactory>::command,
+    policy: |_| crate::cmdkit::CmdPolicy {
+        stakeholder: crate::stakeholder_role::StakeholderAction::Write,
+        per_write_auto_push: false,
+        skip_role_restore_prompt: false,
+        team_identity_write: false,
+    },
+    run: crate::cmdkit::Handler::Early(run_groom),
+};

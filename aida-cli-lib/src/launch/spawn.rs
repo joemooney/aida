@@ -34,11 +34,43 @@ pub(crate) fn spawn_agent(ctx: &LaunchContext) -> Result<Command> {
     // Claude is the first vendor cutover. The explicit uncontained fixture
     // override keeps integration harness inputs, never contained launches.
     // trace:STORY-2326 | ai:codex
-    let profile = super::profile::VendorProfile::for_vendor(ctx.vendor());
+    let profile = crate::vendors::profile::VendorProfile::for_vendor(ctx.vendor());
+    // trace:STORY-2641 | ai:codex
+    let resources = if ctx.fixture_override() || ctx.wrapper_environment() {
+        None
+    } else {
+        super::resources::SandboxResources::for_seat(
+            ctx.exec_context(),
+            ctx.host_main(),
+            ctx.cwd(),
+        )?
+    };
     if profile.clears_environment() && !ctx.fixture_override() && !ctx.wrapper_environment() {
-        let parent = aida_core::exec_context::Environment::capture();
-        let env = profile.child_env(ctx.kind(), &parent, None)?;
+        let env = profile.child_env(
+            ctx.kind(),
+            ctx.exec_context().environment(),
+            resources.as_ref(),
+        )?;
         cmd.env_clear().envs(env.pairs());
+    }
+    // Vendors that retain parent env still receive the seat-owned build values.
+    // trace:STORY-2641 | ai:codex
+    if !profile.clears_environment() {
+        if let Some(resources) = &resources {
+            cmd.envs(resources.cargo_env());
+        }
+    }
+    // A seat without a target must still override Cargo config and inherited
+    // wrappers, so it cannot connect to an operator cache server.
+    // trace:STORY-2641 | ai:codex
+    let isolated_seat = ctx.posture() != ContainmentPosture::None
+        || ctx.parent_contained()
+        || ctx
+            .host_main()
+            .is_some_and(|host| crate::seat_clone::host_recorded_clone(host, ctx.cwd()).is_some());
+    if resources.is_none() && isolated_seat && !ctx.fixture_override() && !ctx.wrapper_environment()
+    {
+        cmd.env("RUSTC_WRAPPER", "");
     }
     cmd.args(ctx.argv());
     if ctx.sets_cwd() {
@@ -163,7 +195,7 @@ pub(crate) fn assign_seat(
             // Exec retains this validated session's selectors after env_clear;
             // new child and lane decisions above always replace them.
             // trace:STORY-2326 | ai:codex
-            if super::profile::environment_is_cleared(cmd) {
+            if crate::vendors::profile::environment_is_cleared(cmd) {
                 for key in [
                     ROLE_ENV,
                     PURPOSE_ENV,

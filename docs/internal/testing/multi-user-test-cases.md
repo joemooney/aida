@@ -123,12 +123,12 @@ This table is the spine; almost every case is a consequence of it.
 - **Validates:** The STORY-641/645 auto-merger's safety boundary — only spec objects + the oplog are auto-resolved; everything else defers to manual.
 - **Status:** ✅ — `git_ops::pull_rebase_auto_merge` bails to the manual path for any conflicted path that is neither a spec object nor `oplog.yaml`; harness `case_MU-203` is `EXPECT=pass`. trace:STORY-641
 
-### MU-204 — concurrent same-spec edits AUTO-MERGE on pull (history union + LWW)
+### MU-204 — concurrent same-spec edits AUTO-MERGE on pull (history union + upstream scalars)
 - **Setup:** A and B each make a status change on FR-1 (each writes the spec object YAML + an append-only oplog op), both commit.
 - **Steps:** A pushes; B `aida pull` → store-leg rebase conflicts on `FR-1.yaml` **and** `oplog.yaml`; the auto-merger reconciles both.
-- **Expected:** B's pull completes with **no manual conflict** (rc==0, not left mid-rebase). The spec object's append-only arrays (`history:`/`comments:`/`processing_record:`) are unioned by entry id; scalar fields resolve last-write-wins by `modified_at`; tags union. The oplog is unioned by operation id (lamport reconcile). **Neither clone's edit is dropped** — both `SetStatus` ops survive in the unioned oplog; the merged spec status is the LWW winner.
+- **Expected:** B's pull completes with **no manual conflict** (rc==0, not left mid-rebase). The spec object's append-only arrays (`history:`/`comments:`/`processing_record:`) are unioned by entry id; scalar fields come from upstream; tags use removal-aware three-way merging. The oplog is unioned by operation id (lamport reconcile). **Neither clone's edit is dropped** — both `SetStatus` ops survive in the unioned oplog; the merged spec status is upstream’s status.
 - **Validates:** Structured three-way merge of spec objects + oplog on the pull path.
-- **Status:** ✅ **closed by STORY-641** — pure `conflict::merge_spec_three_way` (history/comments/processing_record union by id + scalar LWW + tag union) + `OpLog::merge` for the oplog, driven by `git_ops::pull_rebase_auto_merge` in the store-leg pull. A one-line note per auto-resolved file is printed; non-mergeable conflicts still fall back to manual (MU-203). Harness `case_MU-204` is `EXPECT=pass`. trace:STORY-641
+- **Status:** ✅ **closed by STORY-641** — pure `conflict::merge_spec_upstream` (history/comments/processing_record union by id + upstream scalars + removal-aware set merging) + `OpLog::merge` for the oplog, driven by `git_ops::pull_rebase_auto_merge` in the store-leg pull. A one-line note per auto-resolved file is printed; non-mergeable conflicts still fall back to manual (MU-203). Harness `case_MU-204` is `EXPECT=pass`. trace:STORY-641
 
 ### MU-205 — fresh-clone auto-attach
 - **Setup:** Brand-new `git clone`; first `aida list`.

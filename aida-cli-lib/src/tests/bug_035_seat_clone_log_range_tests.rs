@@ -6,6 +6,8 @@
 //! trace:BUG-B6B1278890774EF993D2EBC327862470-035 | ai:claude
 
 use super::*;
+use crate::{git_log_messages, resolve_log_range};
+use aida_core::DatabaseBackend;
 
 fn git(dir: &std::path::Path, args: &[&str]) {
     let out = crate::test_git::git_command()

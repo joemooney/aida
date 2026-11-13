@@ -30,7 +30,7 @@ def bounded(argv, env, cwd, timeout):
 
 
 def probe(binary, args, preflight):
-    fixture = Path(__file__).resolve().parents[2] / 'launch' / 'codex_0166_help.json'
+    fixture = Path(__file__).resolve().parents[2] / 'launch' / 'codex_0167_help.json'
     recorded = json.loads(fixture.read_text())
     with Path(binary).open('rb') as executable:
         assert hashlib.file_digest(executable, 'sha256').hexdigest() == recorded['sha256']

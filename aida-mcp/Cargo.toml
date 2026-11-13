@@ -1,0 +1,20 @@
+[package]
+name = "aida-mcp"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+description = "MCP stdio transport for AIDA"
+
+[dependencies]
+aida-cli-lib = { version = "0.16", path = "../aida-cli-lib", default-features = false }
+aida-core = { version = "0.16", path = "../aida-core" }
+anyhow.workspace = true
+chrono.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+uuid.workspace = true
+clap.workspace = true
+libc = "0.2"
+toml.workspace = true

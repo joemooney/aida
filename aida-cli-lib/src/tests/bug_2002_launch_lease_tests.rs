@@ -1,6 +1,8 @@
 // trace:BUG-2476 | ai:codex
 // trace:BUG-2017 | ai:codex — explicit positive global-ID fixture.
 use super::*;
+// trace:TASK-3428 | ai:codex
+use crate::leases::lease_state_for;
 
 // The lane's shared-write umask must not weaken this synthetic HOME setting.
 // trace:STORY-2325 | ai:codex
@@ -312,7 +314,7 @@ fn session_leases_default_includes_dispatch_blocking_stale_lease() {
 #[test]
 fn agent_new_bg_help_documents_noninteractive_form() {
     use clap::CommandFactory;
-    let mut command = crate::command_registry::built_command();
+    let mut command = crate::TEST_CLI.built_command();
     let help = command
         .find_subcommand_mut("agent")
         .unwrap()
@@ -642,6 +644,9 @@ fn bug2188_fresh_receipt_owns_exact_lease_and_rolls_back_requested_tree() {
     if crate::test_env::run_path_isolated_test() {
         return;
     }
+    // Explicit writer admission keeps rollback independent of host processes.
+    // trace:BUG-2533 | ai:codex
+    let _scan = aida_core::mailbox_lifecycle::activation::test_writer_scan(true);
     let (_tmp, root, tree) = receipt_project();
     let _env = crate::test_env::AmbientGuard::hermetic_and(
         &root,
@@ -677,6 +682,9 @@ fn bug2188_prelease_failure_removes_materialized_tree_and_names_cause() {
     if crate::test_env::run_path_isolated_test() {
         return;
     }
+    // Explicit writer admission keeps rollback independent of host processes.
+    // trace:BUG-2533 | ai:codex
+    let _scan = aida_core::mailbox_lifecycle::activation::test_writer_scan(true);
     let (_tmp, root, tree) = receipt_project();
     let _env = crate::test_env::AmbientGuard::hermetic_and(
         &root,
@@ -781,6 +789,9 @@ fn bug2188_pool_cleanup_keeps_the_lease_when_a_live_process_holds_the_tree() {
     if crate::test_env::run_path_isolated_test() {
         return;
     }
+    // Explicit writer admission keeps rollback independent of host processes.
+    // trace:BUG-2533 | ai:codex
+    let _scan = aida_core::mailbox_lifecycle::activation::test_writer_scan(true);
     let (_tmp, root, _tree) = receipt_project();
     let _env = crate::test_env::AmbientGuard::hermetic_and(
         &root,
@@ -829,6 +840,9 @@ fn bug2188_private_clone_cleanup_removes_the_clone_pin_and_lease() {
     if crate::test_env::run_path_isolated_test() {
         return;
     }
+    // Explicit writer admission keeps rollback independent of host processes.
+    // trace:BUG-2533 | ai:codex
+    let _scan = aida_core::mailbox_lifecycle::activation::test_writer_scan(true);
     let (_tmp, root, _tree) = receipt_project();
     std::fs::write(
         root.join(".aida/config.toml"),
@@ -1053,6 +1067,9 @@ fn bug2188_production_failed_launches_rollback_setup_and_child_grant() {
     if crate::test_env::run_path_isolated_test() {
         return;
     }
+    // Explicit writer admission keeps rollback independent of host processes.
+    // trace:BUG-2533 | ai:codex
+    let _scan = aida_core::mailbox_lifecycle::activation::test_writer_scan(true);
     for background in [false, true] {
         let (_tmp, root, _tree) = receipt_project();
         let _env = crate::test_env::AmbientGuard::hermetic_with_seat_and(
@@ -1427,6 +1444,9 @@ fn bug2188_full_pool_falls_back_to_a_fresh_worktree_and_rolls_it_back() {
     if crate::test_env::run_path_isolated_test() {
         return;
     }
+    // Explicit writer admission keeps rollback independent of host processes.
+    // trace:BUG-2533 | ai:codex
+    let _scan = aida_core::mailbox_lifecycle::activation::test_writer_scan(true);
     let (_tmp, root, _tree) = receipt_project();
     std::fs::write(
         root.join(".aida/config.toml"),
@@ -1491,6 +1511,9 @@ fn bug2188_failed_pool_checkout_rolls_back_the_pool_tree_then_falls_back() {
     if crate::test_env::run_path_isolated_test() {
         return;
     }
+    // Explicit writer admission keeps rollback independent of host processes.
+    // trace:BUG-2533 | ai:codex
+    let _scan = aida_core::mailbox_lifecycle::activation::test_writer_scan(true);
     let (_tmp, root, _tree) = receipt_project();
     let _env = crate::test_env::AmbientGuard::hermetic_and(
         &root,
@@ -1542,6 +1565,12 @@ fn bug2188_refused_launch_restores_approved_status_and_retry_succeeds() {
     if crate::test_env::run_path_isolated_test() {
         return;
     }
+    // Rollback retires the pool tree's mail before restoring the claim. Keep
+    // writer admission explicit: unrelated CI processes can make the real
+    // /proc scan incomplete, correctly retaining the tree and InProgress claim.
+    // Install this in the isolated child so it covers both launch and retry Drop.
+    // trace:BUG-2533 | ai:codex
+    let _scan = aida_core::mailbox_lifecycle::activation::test_writer_scan(true);
     for background in [false, true] {
         let (_tmp, root, _tree) = receipt_project();
         let mut store = aida_core::RequirementsStore::default();
@@ -1617,7 +1646,15 @@ fn bug2188_refused_launch_restores_approved_status_and_retry_succeeds() {
             false,
         );
         std::env::set_current_dir(previous_cwd).unwrap();
-        assert!(result.is_err(), "the fixture child must refuse");
+        let error = format!("{:#}", result.expect_err("the fixture child must refuse"));
+        assert!(
+            error.contains(if background {
+                "`claude --bg` exited with status 73"
+            } else {
+                "failed to spawn"
+            }),
+            "bg={background}: {error}"
+        );
         assert_eq!(status(), RequirementStatus::Approved, "bg={background}");
         assert!(list_leases(&root).is_empty());
 
@@ -1634,7 +1671,11 @@ fn bug2188_refused_launch_restores_approved_status_and_retry_succeeds() {
         assert_eq!(status(), RequirementStatus::InProgress);
         assert!(plan.lease_id.is_some());
         drop(receipt);
-        assert_eq!(status(), RequirementStatus::Approved);
+        assert_eq!(
+            status(),
+            RequirementStatus::Approved,
+            "retry bg={background}"
+        );
     }
 }
 
@@ -1780,4 +1821,65 @@ fn fresh_dispatch_receipt_cannot_authorize_a_later_recordless_reentry() {
         check().is_err(),
         "a later dispatch must retain unknown ownership"
     );
+}
+
+// trace:STORY-1486 | ai:codex
+#[test]
+fn launch_previews_do_not_create_faithful_notice_marker() {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
+    let (tmp, _) = fixture();
+    let _env = crate::test_env::AmbientGuard::hermetic(tmp.path(), None);
+    let marker = crate::aida_home_dir()
+        .unwrap()
+        .join(".faithful-launcher-notice");
+    assert!(!marker.exists());
+    for background in [false, true] {
+        for (show_context, show_prompt, noexec) in [
+            (true, false, false),
+            (false, true, false),
+            (false, false, true),
+        ] {
+            let config = AgentLaunchConfig {
+                delegate_seats: Vec::new(),
+                agent_type: "claude",
+                binary: "/usr/bin/true",
+                default_args: vec![],
+                prompt_style: AgentPromptStyle::Positional,
+                contained: false,
+            };
+            let launch = if background {
+                agent_new_bg_dispatch
+            } else {
+                agent_new_with_config
+            };
+            launch(
+                config,
+                None,
+                None,
+                false,
+                Some(tmp.path()),
+                AgentContextOptions::new(false, show_context),
+                false,
+                noexec,
+                show_prompt,
+                false,
+                AgentPromptOptions::new(Some("preview".into()), false),
+                AgentResumeOptions::new(false, None, false, false),
+                AgentDefaultFlagOptions::new(false, Vec::new(), None),
+                Some("preview-notice".into()),
+                None,
+                false,
+            )
+            .unwrap();
+            assert!(
+                !marker.exists(),
+                "bg={background} ctx={show_context} prompt={show_prompt} noexec={noexec} wrote marker"
+            );
+        }
+    }
+    // Positive control: the same HOME can persist a real launch's notice.
+    maybe_show_faithful_launcher_notice();
+    assert_eq!(std::fs::read_to_string(marker).unwrap(), "shown\n");
 }

@@ -259,3 +259,114 @@ impl Drop for CheckoutGuard {
         );
     }
 }
+
+/// Synthetic contained host for fake-vendor launch tests. This only supplies
+/// fixture policy and a forwarding executable; it is not containment evidence.
+// trace:STORY-2642 | ai:codex
+#[allow(dead_code)]
+#[cfg(target_os = "linux")]
+pub fn contained_lane_host(home: &Path, bin: &Path) {
+    use std::os::unix::fs::PermissionsExt;
+    std::fs::create_dir_all(home.join(".aida")).unwrap();
+    std::fs::write(
+        home.join(".aida/agents.toml"),
+        "[agents]\ncontained = true\n",
+    )
+    .unwrap();
+    let bwrap = bin.join("bwrap");
+    std::fs::write(
+        &bwrap,
+        r#"#!/bin/sh
+if [ -n "$AIDA_FIXTURE_BWRAP_LOG" ]; then
+    printf 'probe\n' >> "$AIDA_FIXTURE_BWRAP_LOG"
+fi
+while [ "$#" -gt 0 ]; do
+    case "$1" in
+        --) shift; exec "$@" ;;
+        --ro-bind|--ro-bind-try|--bind|--bind-try) shift 3 ;;
+        --chdir) cd "$2" || exit 98; shift 2 ;;
+        --dev|--proc|--tmpfs) shift 2 ;;
+        --setenv) export "$2=$3"; shift 3 ;;
+        --unsetenv) unset "$2"; shift 2 ;;
+        --die-with-parent|--new-session|--unshare-*) shift ;;
+        -*) echo "unsupported fixture bwrap flag: $1" >&2; exit 98 ;;
+        *) exec "$@" ;;
+    esac
+done
+exit 98
+"#,
+    )
+    .unwrap();
+    std::fs::set_permissions(bwrap, std::fs::Permissions::from_mode(0o755)).unwrap();
+}
+
+/// Complete the project policy used by synthetic contained launches, including
+/// the committed reviewer permissions checked before a PR checkout.
+// trace:STORY-2642 | ai:codex
+#[allow(dead_code)]
+pub fn contained_lane_project(repo: &Path) {
+    let config = repo.join(".aida/config.toml");
+    let mut policy: toml::Table = std::fs::read_to_string(&config).unwrap().parse().unwrap();
+    for (section, entries) in [
+        (
+            "contained",
+            [
+                ("enable", toml::Value::Boolean(true)),
+                (
+                    "allowed_hosts",
+                    toml::Value::Array(vec![
+                        toml::Value::String("github.com".into()),
+                        toml::Value::String("api.github.com".into()),
+                    ]),
+                ),
+            ],
+        ),
+        (
+            "agents",
+            [
+                ("vendor", toml::Value::String("claude".into())),
+                (
+                    "enabled",
+                    toml::Value::Array(vec![toml::Value::String("claude".into())]),
+                ),
+            ],
+        ),
+    ] {
+        let table = policy
+            .entry(section)
+            .or_insert_with(|| toml::Value::Table(toml::Table::new()))
+            .as_table_mut()
+            .unwrap();
+        for (key, value) in entries {
+            table.insert(key.into(), value);
+        }
+    }
+    std::fs::write(config, toml::to_string(&policy).unwrap()).unwrap();
+    std::fs::create_dir_all(repo.join(".claude")).unwrap();
+    let settings = serde_json::json!({
+        "permissions": {"allow": aida_core::scaffolding::REVIEWER_ALLOW_ENTRIES}
+    });
+    std::fs::write(
+        repo.join(".claude/settings.json"),
+        serde_json::to_vec_pretty(&settings).unwrap(),
+    )
+    .unwrap();
+}
+
+/// Supply the current head for one pinned GitHub change without network access.
+// trace:BUG-2517 | ai:codex
+#[allow(dead_code)]
+pub fn pinned_review_head(bin: &Path, number: u64, head: &str) {
+    use std::os::unix::fs::PermissionsExt;
+    std::fs::create_dir_all(bin).unwrap();
+    let body = serde_json::json!({
+        "url": format!("https://github.com/test/repo/pull/{number}"),
+        "state": "OPEN", "headRefOid": head, "labels": []
+    });
+    let script = format!(
+        "#!/bin/sh\ncase \"$*\" in\n  'pr view {number} -R test/repo --json url,state,headRefOid,labels') printf '%s\\n' '{body}' ;;\n  *) exit 1 ;;\nesac\n"
+    );
+    let path = bin.join("gh");
+    std::fs::write(&path, script).unwrap();
+    std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o755)).unwrap();
+}

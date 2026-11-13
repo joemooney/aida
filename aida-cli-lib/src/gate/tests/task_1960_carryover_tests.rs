@@ -403,7 +403,7 @@ fn record_is_written_and_reread_on_a_second_attempt() {
         &ledger,
         body.replace(
             &format!("\"proof_version\":{PROOF_VERSION}"),
-            "\"proof_version\":0",
+            "\"proof_version\":1",
         ),
     )
     .unwrap();
@@ -591,7 +591,7 @@ fn unresolvable_inputs_refuse() {
     ));
     assert!(matches!(
         prove_carry_over(repo, PR, "no-such-base", &approved, &h),
-        Err(CarryOverRefusal::Unresolvable { .. })
+        Err(CarryOverRefusal::Git { .. })
     ));
     assert!(matches!(
         prove(repo, "abc", &h),
@@ -1117,4 +1117,536 @@ fn corpus_carry_over_refuses_a_shaless_approval_or_an_unparseable_body() {
         corpus_gate(repo, &["BUG-9".to_string()], "main", &h).is_err(),
         "an unparseable live verdict beside the approval refuses"
     );
+}
+
+// Remote failures must not turn a locally cached success into authority.
+// trace:STORY-2694 | ai:codex
+#[test]
+fn cached_proof_refuses_when_protected_remote_is_unavailable() {
+    let _env = crate::test_env::EnvVarsGuard::apply(&[("AIDA_CONTAINED", None)]);
+    let (tmp, approved) = fixture();
+    let repo = tmp.path();
+    git(repo, &["merge", "--quiet", "--no-edit", "main"]);
+    let h = head(repo);
+    let site = CarryOverSite::new(repo, Some("main"));
+    carry_over_for_refusal(&site, PR, &moved(&approved, &h))
+        .unwrap()
+        .unwrap();
+    let count = proofs();
+    git(
+        repo,
+        &[
+            "remote",
+            "set-url",
+            "origin",
+            "/nonexistent/aida-carryover-origin",
+        ],
+    );
+    assert!(carry_over_for_refusal(&site, PR, &moved(&approved, &h))
+        .unwrap()
+        .is_err());
+    assert_eq!(proofs(), count, "no proof runs without refreshed identity");
+    assert_eq!(carry_events(repo, &h).len(), 1);
+}
+
+// ls-remote can succeed while fetching the branch fails. The local tracking
+// ref still exists, and must never serve as a fallback.
+// trace:STORY-2694 | ai:codex
+#[test]
+fn fresh_proof_refuses_failed_fetch_despite_local_tracking_tip() {
+    let (tmp, approved) = fixture();
+    let repo = tmp.path();
+    git(repo, &["merge", "--quiet", "--no-edit", "main"]);
+    let h = head(repo);
+    let tip = git(repo, &["rev-parse", "refs/remotes/origin/main"]);
+    git(tmp._origin.path(), &["update-ref", "-d", "refs/heads/main"]);
+    let why = prove(repo, &approved, &h).unwrap_err();
+    assert!(matches!(why, CarryOverRefusal::Git { .. }), "{why:?}");
+    assert_eq!(git(repo, &["rev-parse", "refs/remotes/origin/main"]), tip);
+}
+
+// A changed remote default invalidates a cached proof even while origin/main
+// and the PR base have stayed unchanged in this clone.
+// trace:STORY-2694 | ai:codex
+#[test]
+fn cached_proof_revalidates_remote_protected_identity() {
+    let _env = crate::test_env::EnvVarsGuard::apply(&[("AIDA_CONTAINED", None)]);
+    let (tmp, approved) = fixture();
+    let repo = tmp.path();
+    git(repo, &["merge", "--quiet", "--no-edit", "main"]);
+    let h = head(repo);
+    let site = CarryOverSite::new(repo, Some("main"));
+    carry_over_for_refusal(&site, PR, &moved(&approved, &h))
+        .unwrap()
+        .unwrap();
+    git(tmp._origin.path(), &["branch", "protected", "main"]);
+    git(
+        tmp._origin.path(),
+        &["symbolic-ref", "HEAD", "refs/heads/protected"],
+    );
+    let why = carry_over_for_refusal(&site, PR, &moved(&approved, &h))
+        .unwrap()
+        .unwrap_err();
+    assert!(
+        matches!(why, CarryOverRefusal::BaseNotProtected { .. }),
+        "{why:?}"
+    );
+}
+
+// A remote main advance must be fetched before deciding whether the ledger's
+// old base tip can be reused, even when no other process fetched this clone.
+// trace:STORY-2694 | ai:codex
+#[test]
+fn cached_proof_refreshes_remote_tip_before_reuse() {
+    let _env = crate::test_env::EnvVarsGuard::apply(&[("AIDA_CONTAINED", None)]);
+    let (tmp, approved) = fixture();
+    let repo = tmp.path();
+    git(repo, &["merge", "--quiet", "--no-edit", "main"]);
+    let h = head(repo);
+    let site = CarryOverSite::new(repo, Some("main"));
+    let (old, _) = carry_over_for_refusal(&site, PR, &moved(&approved, &h))
+        .unwrap()
+        .unwrap();
+    // Advance the remote independently so the clone's tracking ref stays stale.
+    let writer = tempfile::tempdir().unwrap();
+    git(
+        writer.path(),
+        &[
+            "clone",
+            "--quiet",
+            tmp._origin.path().to_str().unwrap(),
+            ".",
+        ],
+    );
+    git(
+        writer.path(),
+        &["config", "user.email", "aida@example.test"],
+    );
+    git(writer.path(), &["config", "user.name", "AIDA Test"]);
+    git(writer.path(), &["config", "commit.gpgsign", "false"]);
+    write(writer.path(), "remote-only.txt", "remote advance\n");
+    let new_tip = commit(writer.path(), "advance remote main");
+    publish_main(writer.path());
+    assert_eq!(
+        git(repo, &["rev-parse", "refs/remotes/origin/main"]),
+        old.base_tip
+    );
+    let count = proofs();
+    let (new, outcome) = carry_over_for_refusal(&site, PR, &moved(&approved, &h))
+        .unwrap()
+        .unwrap();
+    assert_eq!(new.base_tip, new_tip);
+    assert_eq!(outcome, Some(RecordOutcome::Written));
+    assert_eq!(proofs(), count + 1);
+    assert_eq!(carry_events(repo, &h).len(), 2);
+}
+
+// A successful identity probe does not excuse a subsequent fetch failure.
+// trace:STORY-2694 | ai:codex
+#[test]
+fn cached_proof_refuses_when_identity_probe_succeeds_but_fetch_fails() {
+    use std::os::unix::fs::PermissionsExt;
+    let _env = crate::test_env::EnvVarsGuard::apply(&[("AIDA_CONTAINED", None)]);
+    let (tmp, approved) = fixture();
+    let repo = tmp.path();
+    git(repo, &["merge", "--quiet", "--no-edit", "main"]);
+    let h = head(repo);
+    let site = CarryOverSite::new(repo, Some("main"));
+    carry_over_for_refusal(&site, PR, &moved(&approved, &h))
+        .unwrap()
+        .unwrap();
+    let count = proofs();
+    let control = tempfile::tempdir().unwrap();
+    let script = control.path().join("upload-pack");
+    let once = control.path().join("probed");
+    std::fs::write(
+        &script,
+        format!(
+            "#!/bin/sh\nif test -e '{}'; then exit 42; fi\n: > '{}'\nexec git-upload-pack \"$@\"\n",
+            once.display(),
+            once.display()
+        ),
+    )
+    .unwrap();
+    std::fs::set_permissions(&script, std::fs::Permissions::from_mode(0o700)).unwrap();
+    git(
+        repo,
+        &[
+            "config",
+            "remote.origin.uploadpack",
+            script.to_str().unwrap(),
+        ],
+    );
+    let why = carry_over_for_refusal(&site, PR, &moved(&approved, &h))
+        .unwrap()
+        .unwrap_err();
+    assert!(
+        matches!(&why, CarryOverRefusal::Git { detail } if detail.contains("fetch")),
+        "{why:?}"
+    );
+    assert!(once.exists(), "the first remote probe actually ran");
+    assert_eq!(proofs(), count);
+    assert_eq!(carry_events(repo, &h).len(), 1);
+}
+
+// trace:STORY-2694 | ai:codex
+pub(crate) fn consumer_coverage(
+    repo: &Path,
+    approved: &str,
+    head: &str,
+) -> Result<CarryOver, String> {
+    let v = approval(approved);
+    let bodies = vec![(
+        format!("PR-{PR}"),
+        serde_json::json!({
+            "verdict": "approved", "reviewed_sha": approved,
+        })
+        .to_string(),
+    )];
+    crate::gate::merge_hold_core::carried_approval(
+        PR,
+        head,
+        &[v.clone()],
+        &policy(&v),
+        &bodies,
+        &CarryOverSite::new(repo, Some("main")),
+    )
+}
+
+// trace:STORY-2694 | ai:codex
+// trace:STORY-b6b1278890774ef993d2ebc327862470-617.ac7f9646 | ai:codex
+// trace:STORY-b6b1278890774ef993d2ebc327862470-617.aca6d13e | ai:codex
+// trace:STORY-b6b1278890774ef993d2ebc327862470-617.acc08b36 | ai:codex
+#[test]
+fn consumer_clean_merge_releases_hold_with_original_review_and_durable_proof() {
+    use crate::gate::merge_hold_core as hold;
+    let (tmp, approved) = fixture();
+    let repo = tmp.path();
+    let h = clean_merge(repo);
+    let before = proofs();
+    let proof = consumer_coverage(repo, &approved, &h).unwrap();
+    assert_eq!(proofs(), before + 1, "consumers share one durable proof");
+    assert_eq!(proof.approved_sha, approved);
+    assert_eq!(proof.new_head, h);
+    assert_eq!(proof.base_tip, git(repo, &["rev-parse", "main"]));
+    assert_eq!(proof_event(repo, &h), Some(proof.clone()));
+    let record = hold::typed_hold(
+        PR,
+        hold::HoldReasonKind::Rework,
+        "findings",
+        Some(approved.clone()),
+    );
+    match hold::refusal_release_with_coverage(
+        &record,
+        hold::RefusalRelease::Held("old head".into()),
+        || consumer_coverage(repo, &approved, &h),
+    ) {
+        hold::RefusalRelease::Released(v) => assert_eq!(v.reviewed_sha, Some(approved)),
+        other => panic!("{other:?}"),
+    }
+    hold::validate_carried_change(&proof, &h, "main").unwrap();
+    assert!(hold::validate_carried_change(&proof, &h, "other").is_err());
+    assert!(hold::validate_carried_change(&proof, &"f".repeat(40), "main").is_err());
+    let pin = crate::gate::ship::refusal_release_pin(true, None, Some(&h), PR).unwrap();
+    assert_eq!(pin.as_deref(), Some(h.as_str()));
+    // Proof coverage grants no ownership clearance for a train rider.
+    let riders = vec![(99, Some(vec![(PR, h.clone())]))];
+    assert!(crate::pr_train::train_rider_refusal(PR, &riders, &[]).is_some());
+    assert!(crate::pr_train::train_rider_refusal(PR, &[], &riders).is_some());
+    assert!(crate::pr_train::train_rider_refusal(PR + 1, &riders, &[]).is_none());
+}
+
+// trace:STORY-2694 | ai:codex
+// trace:STORY-b6b1278890774ef993d2ebc327862470-617.aca6d13e | ai:codex
+#[test]
+fn consumer_carryover_refuses_standing_refusals_malformed_missing_sha_and_bad_authority() {
+    use crate::gate::merge_hold_core::carried_approval;
+    let (tmp, approved) = fixture();
+    let repo = tmp.path();
+    let h = clean_merge(repo);
+    // Even an existing valid proof never grants authority or hides a blocker.
+    consumer_coverage(repo, &approved, &h).unwrap();
+    let v = approval(&approved);
+    let site = CarryOverSite::new(repo, Some("main"));
+    for extra in [
+        serde_json::json!({"verdict":"request-changes", "reviewed_sha":h, "recorded_at":"2026-09-24T00:00:00Z"}).to_string(),
+        serde_json::json!({"verdict":"request-changes", "reviewed_sha":approved}).to_string(),
+        serde_json::json!({"verdict":"approved"}).to_string(),
+        "malformed".into(),
+    ] {
+        let bodies = vec![("PR-42".into(), serde_json::json!({"verdict":"approved", "reviewed_sha":approved}).to_string()),
+            ("TASK-1".into(), extra)];
+        assert!(carried_approval(PR, &h, &[v.clone()], &policy(&v), &bodies, &site).is_err());
+    }
+    let bodies = vec![(
+        "PR-42".into(),
+        serde_json::json!({"verdict":"approved", "reviewed_sha":approved}).to_string(),
+    )];
+    let mut p = policy(&v);
+    p.verified_authority.clear();
+    assert!(carried_approval(PR, &h, &[v.clone()], &p, &bodies, &site).is_err());
+    let mut p = policy(&v);
+    p.author_sessions = vec![crate::gate::ship::AuthorSession {
+        label: "author".into(),
+        tokens: v.attestation.as_ref().unwrap().identity.clone(),
+    }];
+    assert!(carried_approval(PR, &h, &[v], &p, &bodies, &site).is_err());
+}
+
+// trace:STORY-2694 | ai:codex
+// trace:STORY-b6b1278890774ef993d2ebc327862470-617.ac96a209 | ai:codex
+// trace:STORY-b6b1278890774ef993d2ebc327862470-617.acc08b36 | ai:codex
+#[test]
+fn consumer_carryover_refusal_matrix() {
+    for variant in ["conflict", "evil", "commit", "patch", "remote", "ledger"] {
+        let (tmp, approved) = fixture();
+        let repo = tmp.path();
+        let h = match variant {
+            "conflict" => {
+                git(repo, &["checkout", "--quiet", "main"]);
+                set_line(repo, "a.txt", 5, "main conflict");
+                commit(repo, "main conflict");
+                publish_main(repo);
+                git(repo, &["checkout", "--quiet", "pr"]);
+                git_may_fail(repo, &["merge", "--quiet", "--no-edit", "main"]);
+                write(repo, "a.txt", &lines(30, "resolved"));
+                commit(repo, "resolve conflict")
+            }
+            "evil" => evil_merge(repo, &approved),
+            "commit" => {
+                write(repo, "extra", "unreviewed");
+                commit(repo, "extra commit");
+                clean_merge(repo)
+            }
+            "patch" => {
+                git(repo, &["checkout", "--quiet", "main"]);
+                set_line(repo, "a.txt", 7, "nearby main change");
+                commit(repo, "nearby edit");
+                publish_main(repo);
+                git(repo, &["checkout", "--quiet", "pr"]);
+                clean_merge(repo)
+            }
+            _ => clean_merge(repo),
+        };
+        if variant == "remote" {
+            // Cache a valid proof first, then make its protected tip unavailable.
+            consumer_coverage(repo, &approved, &h).unwrap();
+            git(repo, &["remote", "set-url", "origin", "/no/such/origin"]);
+        }
+        if variant == "ledger" {
+            std::fs::create_dir_all(repo.join(".aida")).unwrap();
+            std::fs::write(crate::gate::ledger::ledger_dir(repo), "not a directory").unwrap();
+        }
+        let result = consumer_coverage(repo, &approved, &h);
+        assert!(result.is_err(), "{variant} must refuse");
+        use crate::gate::merge_hold_core as hold;
+        let record = hold::typed_hold(PR, hold::HoldReasonKind::Rework, "findings", Some(approved));
+        assert!(matches!(
+            hold::refusal_release_with_coverage(
+                &record,
+                hold::RefusalRelease::Held("old head".into()),
+                || result
+            ),
+            hold::RefusalRelease::Held(_)
+        ));
+    }
+}
+
+// trace:STORY-2694 | ai:codex
+// trace:STORY-b6b1278890774ef993d2ebc327862470-617.ac7f9646 | ai:codex
+#[test]
+fn consumer_verdict_display_exposes_coverage_without_restamping_or_writing() {
+    let (tmp, approved) = fixture();
+    let repo = tmp.path();
+    let h = clean_merge(repo);
+    record_corpus_verdict(repo, "PR-42", "approved", &approved);
+    let path = crate::gate::review_verdict::verdict_path(repo, "PR-42");
+    let before = std::fs::read(&path).unwrap();
+    let proof = consumer_coverage(repo, &approved, &h).unwrap();
+    let count = carry_events(repo, &h).len();
+    let (v, json, _) = crate::review_verdict_show_body_with_coverage(
+        repo,
+        "PR-42",
+        |_| crate::gate::review_verdict::TipRelation::Unknown,
+        |pr| {
+            assert_eq!(pr, PR);
+            Some(proof.clone())
+        },
+    )
+    .unwrap();
+    assert_eq!(v.reviewed_sha.as_deref(), Some(approved.as_str()));
+    assert_eq!(json["reviewed_sha"], approved);
+    assert_eq!(json["coverage"]["head_sha"], h);
+    assert_eq!(json["coverage"]["proof"]["base_tip"], proof.base_tip);
+    assert!(json["coverage"]["description"]
+        .as_str()
+        .unwrap()
+        .contains("carried to"));
+    assert_eq!(std::fs::read(path).unwrap(), before);
+    assert_eq!(carry_events(repo, &h).len(), count);
+}
+
+// trace:STORY-2696 | ai:codex
+#[test]
+fn story_2696_no_carry_exact_head_and_cached_proof() {
+    let _env = crate::test_env::EnvVarsGuard::apply(&[("AIDA_CONTAINED", None)]);
+    use crate::gate::approval::{approval_decision, HeadDecision};
+    let (tmp, approved) = fixture();
+    let repo = tmp.path();
+    git(repo, &["merge", "--quiet", "--no-edit", "main"]);
+    let h = head(repo);
+    let mut v = approval(&approved);
+    let site = CarryOverSite::new(repo, Some("main"));
+    assert!(matches!(
+        approval_decision(PR, &[v.clone()], Some(&h), &policy(&v), Some(&site)).unwrap(),
+        HeadDecision::CarriedOver(..)
+    ));
+    assert!(proof_event(repo, &h).is_some());
+    v.attestation.as_mut().unwrap().carry_eligible = false;
+    assert!(matches!(
+        approval_decision(PR, &[v.clone()], Some(&approved), &policy(&v), Some(&site)).unwrap(),
+        HeadDecision::Covered(_)
+    ));
+    let answer = approval_decision(PR, &[v.clone()], Some(&h), &policy(&v), Some(&site)).unwrap();
+    assert!(
+        matches!(answer, HeadDecision::Stale { message, .. } if message.contains("not carry-eligible"))
+    );
+    // No Git or cache operation is necessary for a reviewer-policy refusal.
+    let absent = CarryOverSite::new(Path::new("/no/such/repo"), Some("main"));
+    let refusal = crate::gate::ship::approval_head_refusal(&[v.clone()], Some(&h)).unwrap();
+    assert_eq!(
+        prove_for_refusal(&absent, PR, &refusal),
+        Some(Err(CarryOverRefusal::ReviewerPolicy))
+    );
+    assert!(!CarryOverRefusal::ReviewerPolicy.is_deterministic());
+    v.attestation.as_mut().unwrap().carry_eligible = true;
+    assert!(matches!(
+        approval_decision(PR, &[v.clone()], Some(&h), &policy(&v), Some(&site)).unwrap(),
+        HeadDecision::CarriedOver(..)
+    ));
+}
+
+// trace:STORY-2696 | ai:codex
+#[test]
+fn story_2696_cache_key_policy_and_legacy_version_recompute() {
+    let _env = crate::test_env::EnvVarsGuard::apply(&[("AIDA_CONTAINED", None)]);
+    let (tmp, approved) = fixture();
+    let repo = tmp.path();
+    git(repo, &["merge", "--quiet", "--no-edit", "main"]);
+    let h = head(repo);
+    let site = CarryOverSite::new(repo, Some("main"));
+    carry_over_for_refusal(&site, PR, &moved(&approved, &h))
+        .unwrap()
+        .unwrap();
+    let path =
+        crate::gate::ledger::store::ledger_file(repo, crate::gate::ledger::ChangeKey::pr(PR));
+    let original = std::fs::read_to_string(&path).unwrap();
+    assert!(original.contains("\"carry_eligible\":true"));
+    std::fs::write(
+        &path,
+        original.replace("\"carry_eligible\":true", "\"carry_eligible\":false"),
+    )
+    .unwrap();
+    assert!(stored_answer(repo, PR, "main", &approved, &h).is_none());
+    // A missing legacy policy is true, but a v1 proof must be recomputed.
+    let legacy = original
+        .replace(",\"carry_eligible\":true", "")
+        .replace("\"proof_version\":2", "\"proof_version\":1");
+    std::fs::write(&path, legacy).unwrap();
+    assert!(stored_answer(repo, PR, "main", &approved, &h).is_none());
+    let (_, outcome) = carry_over_for_refusal(&site, PR, &moved(&approved, &h))
+        .unwrap()
+        .unwrap();
+    assert_eq!(outcome, Some(RecordOutcome::Written));
+}
+
+// trace:STORY-2696 | ai:codex
+#[test]
+fn story_2696_corpus_refuses_policy_before_prover() {
+    use crate::gate::merge_hold_core::{corpus_merge_gate_carrying, CorpusMergeGate};
+    let approved = "a".repeat(40);
+    let head = "b".repeat(40);
+    let body = serde_json::json!({"verdict":"approved", "reviewed_sha":approved,
+        "recorder_attestation":{"sha":approved,"seat":"reviewer","carry_eligible":false}})
+    .to_string();
+    let corpus = vec![("PR-7".into(), body)];
+    let prove = &|_: &crate::gate::ship::ApprovalHeadRefusal| {
+        panic!("no-carry must not consult proof cache")
+    };
+    assert!(matches!(
+        corpus_merge_gate_carrying(7, &corpus, Some(&approved), prove),
+        CorpusMergeGate::Clear
+    ));
+    assert!(
+        matches!(corpus_merge_gate_carrying(7, &corpus, Some(&head), prove), CorpusMergeGate::Refuse { message, .. } if message.contains("not carry-eligible"))
+    );
+}
+
+// trace:STORY-2696 | ai:codex
+#[test]
+fn story_2696_corpus_superseded_policy_cannot_veto_clean_merge() {
+    use crate::gate::merge_hold_core::{corpus_merge_gate_carrying, CorpusMergeGate};
+    let (tmp, approved) = fixture();
+    let repo = tmp.path();
+    let head = clean_merge(repo);
+    record_corpus_verdict(repo, &format!("PR-{PR}"), "approved", &approved);
+    corpus_gate(repo, &[], "main", &head).unwrap();
+    let proof = proof_event(repo, &head).unwrap();
+    for key in ["STORY-2696", "PR-99"] {
+        let path = crate::gate::review_verdict::verdict_path(repo, key);
+        let mut stale_a = None;
+        let mut latest = None;
+        for (index, eligible) in [false, false, true].into_iter().enumerate() {
+            let mut act = crate::gate::review_verdict::build_verdict_object_with_policy(
+                repo,
+                &path,
+                Some("approved"),
+                Some(&approved),
+                None,
+                None,
+                &[],
+                "reviewer",
+                Some(eligible),
+            )
+            .unwrap();
+            act.insert(
+                "recorded_at".into(),
+                format!("2026-11-10T00:00:0{index}Z").into(),
+            );
+            act.insert(
+                "recorder_attestation".into(),
+                serde_json::json!({
+                    "sha":approved, "seat":"reviewer", "carry_eligible":eligible,
+                    "receipt_id":format!("receipt-{index}")
+                }),
+            );
+            if index == 1 {
+                let previous =
+                    crate::gate::review_verdict::read_current_verdict_object(&path).unwrap();
+                assert_eq!(
+                    crate::gate::review_verdict::record_outcome(Some(&previous), &act),
+                    crate::gate::review_verdict::RecordOutcome::Unchanged
+                );
+            }
+            crate::gate::review_verdict::write_verdict_object(&path, &act).unwrap();
+            if index == 0 {
+                stale_a = Some(serde_json::to_string(&act).unwrap());
+            }
+            latest = Some(serde_json::to_string(&act).unwrap());
+        }
+        for reverse in [false, true] {
+            let mut corpus = vec![
+                ("PR-7".into(), stale_a.clone().unwrap()),
+                ("STORY-2696".into(), latest.clone().unwrap()),
+            ];
+            if reverse {
+                corpus.reverse();
+            }
+            let prove = &|_: &crate::gate::ship::ApprovalHeadRefusal| Some(Ok(proof.clone()));
+            assert!(matches!(
+                corpus_merge_gate_carrying(PR, &corpus, Some(&head), prove),
+                CorpusMergeGate::Clear
+            ));
+        }
+    }
 }

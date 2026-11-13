@@ -1,7 +1,18 @@
+// trace:TASK-3429 | ai:codex
 //! `aida claim` / `aida unclaim` — operator spec-scoped claim leases (STORY-1488 slice 1).
 // trace:STORY-1488 | ai:claude
 
-use crate::*;
+use crate::OpenPrInfo;
+use crate::{
+    approved_to_in_progress_bump, creator_shell_pid, current_branch_at,
+    detect_distributed_store_from, detect_open_pr_for_spec, find_project_root, hostname,
+    lease_path, leases, leases_dir, list_leases, load_store_for_lookup, process_probe, slugify,
+    PrLookup, SessionLease,
+};
+use aida_core::liveness::LeaseState;
+use aida_core::{Requirement, RequirementStatus, Storage};
+use anyhow::{Context, Result};
+use colored::Colorize;
 
 /// TASK-957: resolve a `<spec>` argument (SPEC-ID, agreed-id, or UUID) to the
 /// matching requirement, loading the store read-only. Shared by `aida claim`
@@ -93,7 +104,7 @@ pub(crate) fn without_own_claims(
 /// checkout). Never the primary checkout's branch: a worktree-less claim has
 /// no branch of its own.
 // trace:BUG-2143 | ai:claude
-pub(crate) fn claim_lease_branch(
+pub fn claim_lease_branch(
     worktree_path: &std::path::Path,
     project_root: &std::path::Path,
 ) -> String {
@@ -321,7 +332,7 @@ pub(crate) fn handle_unclaim(spec: &str) -> Result<()> {
     let held = others.iter().any(|l| {
         l.scope.eq_ignore_ascii_case(&scope)
             && matches!(
-                lease_state_for(l, &live_sessions, chrono::Utc::now()),
+                leases::lease_state_for(l, &live_sessions, chrono::Utc::now()),
                 LeaseState::Live
             )
     });
@@ -488,7 +499,7 @@ fn persist_unclaim_status(
                         )
                     }))
                     || matches!(
-                        lease_state_for(lease, &live_sessions, chrono::Utc::now()),
+                        leases::lease_state_for(lease, &live_sessions, chrono::Utc::now()),
                         LeaseState::Live
                     ))
         });
@@ -549,29 +560,25 @@ pub(crate) struct ClaimArgs {
 // under `.aida/sessions/`. Like `aida ps` / `aida status <spec>` they touch
 // only the local lease dir + a cache-backed lookup, so they need no shared
 // storage handle — dispatch early. trace:TASK-957 | ai:claude
-fn run_claim(
-    matches: &clap::ArgMatches,
-    _ctx: &crate::command_registry::DispatchCtx,
-) -> anyhow::Result<()> {
+fn run_claim(matches: &clap::ArgMatches, _ctx: &crate::cmdkit::DispatchCtx) -> anyhow::Result<()> {
     let args = <ClaimArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
     let ClaimArgs { spec, worktree } = &args;
     return handle_claim(spec, worktree.as_deref());
 }
 
 // trace:STORY-1728 | ai:claude
-pub(crate) static CLAIM: crate::command_registry::CommandReg =
-    crate::command_registry::CommandReg {
-        name: "claim",
-        help_after: "undefer",
-        command: <ClaimArgs as clap::CommandFactory>::command,
-        policy: |_| crate::command_registry::CmdPolicy {
-            stakeholder: crate::stakeholder_role::StakeholderAction::Write,
-            per_write_auto_push: false,
-            skip_role_restore_prompt: false,
-            team_identity_write: false,
-        },
-        run: crate::command_registry::Handler::Early(run_claim),
-    };
+pub(crate) static CLAIM: crate::cmdkit::CommandReg = crate::cmdkit::CommandReg {
+    name: "claim",
+    help_after: "undefer",
+    command: <ClaimArgs as clap::CommandFactory>::command,
+    policy: |_| crate::cmdkit::CmdPolicy {
+        stakeholder: crate::stakeholder_role::StakeholderAction::Write,
+        per_write_auto_push: false,
+        skip_role_restore_prompt: false,
+        team_identity_write: false,
+    },
+    run: crate::cmdkit::Handler::Early(run_claim),
+};
 
 /// Inverse of `aida claim` — removes the caller's spec-scoped claim so a
 /// fresh `aida queue work <spec>` / `aida edit <spec>` no longer sees it.
@@ -587,7 +594,7 @@ pub(crate) struct UnclaimArgs {
 
 fn run_unclaim(
     matches: &clap::ArgMatches,
-    _ctx: &crate::command_registry::DispatchCtx,
+    _ctx: &crate::cmdkit::DispatchCtx,
 ) -> anyhow::Result<()> {
     let args = <UnclaimArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
     let UnclaimArgs { spec } = &args;
@@ -595,19 +602,18 @@ fn run_unclaim(
 }
 
 // trace:STORY-1728 | ai:claude
-pub(crate) static UNCLAIM: crate::command_registry::CommandReg =
-    crate::command_registry::CommandReg {
-        name: "unclaim",
-        help_after: "claim",
-        command: <UnclaimArgs as clap::CommandFactory>::command,
-        policy: |_| crate::command_registry::CmdPolicy {
-            stakeholder: crate::stakeholder_role::StakeholderAction::Write,
-            per_write_auto_push: false,
-            skip_role_restore_prompt: false,
-            team_identity_write: false,
-        },
-        run: crate::command_registry::Handler::Early(run_unclaim),
-    };
+pub(crate) static UNCLAIM: crate::cmdkit::CommandReg = crate::cmdkit::CommandReg {
+    name: "unclaim",
+    help_after: "claim",
+    command: <UnclaimArgs as clap::CommandFactory>::command,
+    policy: |_| crate::cmdkit::CmdPolicy {
+        stakeholder: crate::stakeholder_role::StakeholderAction::Write,
+        per_write_auto_push: false,
+        skip_role_restore_prompt: false,
+        team_identity_write: false,
+    },
+    run: crate::cmdkit::Handler::Early(run_unclaim),
+};
 
 #[cfg(test)]
 #[path = "tests/bug_2215_claim_status_tests.rs"]

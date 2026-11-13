@@ -40,7 +40,7 @@ fn open_pr_refusal_names_pr_spec_and_existing_branch_recovery() {
 // textually before the first claim call, which is the only mutating boundary.
 #[test]
 fn guard_is_before_claim_boundary() {
-    let source = include_str!("../queue_cmd.rs");
+    let source = include_str!("../queue_cmd/work.rs");
     let work = source
         .split_once("pub(crate) fn handle_queue_work(")
         .unwrap()

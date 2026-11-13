@@ -8,8 +8,28 @@ use crate::gate::approval::*;
 use crate::gate::ci_freshness::*;
 use crate::gate::mandate_ship::*;
 use crate::process_retry::RetryEtxtbsy;
-use crate::*;
+#[cfg(test)]
+use crate::{
+    auto_complete, extract_pr_number_from_commit_subject, help, spec_status, AutonomyMode,
+    Phase3StaleOverlapAction, RealPhaseDriver,
+};
+// trace:TASK-3428 | ai:codex
+use crate::{
+    active_lease_for_cwd, aida_bin, apply_effort_tag, change_lookup_for_branch, cli,
+    commit_subjects, complexity_calibration, current_git_branch, current_user_id,
+    detect_default_branch_ref, detect_merged_pr_for_branch_via_forge, doctor_cmd,
+    effort_calibration, events, extract_spec_ids_from_commit, find_main_worktree_root,
+    find_project_root, forge, format_review_label, gate, list_leases, load_store_for_lookup,
+    main_worktree_root_from, merge_lock, network_retry, orchestrator, parse_review_scope,
+    permissions, pr_is_merged_with_sink, pr_list_handler, pr_rebase, pr_ship, punt,
+    read_commits_in_range, remote_head_sha, render_auto_queue_outcome, resolve_aida_exe,
+    resolve_gate_range, role, run, run_client_trailer_guard, run_pr_open_spec_guard, session, ship,
+    spec_matches, stacks, truncate, try_auto_queue_pr_review, watch, worktree_gc, AutoQueueOrigin,
+    AutoQueueStatus, PrLookup, ReviewForge, Storage,
+};
 use aida_core::git_ops::RemoteCredentialsExt as _;
+use anyhow::{Context, Result};
+use colored::Colorize;
 use serde::{Deserialize, Serialize};
 
 // trace:STORY-1728 | ai:claude
@@ -21,6 +41,9 @@ pub(crate) use pr_cmd_args::*;
 // trace:STORY-90 | ai:claude
 pub(crate) fn handle_pr_command(cmd: &PrCommand) -> Result<()> {
     match cmd {
+        // trace:STORY-2732 | ai:codex
+        PrCommand::EmergencyLand(args) => crate::pr_emergency_land::run(args),
+        PrCommand::State(args) => crate::pr_state::run(args),
         // Internal worker preserves the existing cleanup gates after ship exits.
         // trace:BUG-2384 | ai:codex
         PrCommand::PostShipCleanup {
@@ -91,20 +114,26 @@ pub(crate) fn handle_pr_command(cmd: &PrCommand) -> Result<()> {
             )
         }
         PrCommand::Train {
+            abandon,
             prs,
             all_ready,
             dry_run,
             local_ci,
             max,
             no_pull,
-        } => crate::pr_train::pr_train_handler(&crate::pr_train::TrainOptions {
-            prs,
-            all_ready: *all_ready,
-            dry_run: *dry_run,
-            local_ci: local_ci.as_deref(),
-            max: *max,
-            no_pull: *no_pull,
-        }),
+        } => {
+            if let Some(name) = abandon {
+                return crate::pr_train::abandon_journal(name);
+            }
+            crate::pr_train::pr_train_handler(&crate::pr_train::TrainOptions {
+                prs,
+                all_ready: *all_ready,
+                dry_run: *dry_run,
+                local_ci: local_ci.as_deref(),
+                max: *max,
+                no_pull: *no_pull,
+            })
+        }
         // trace:STORY-1887 | ai:claude
         PrCommand::ShipBatch {
             prs,
@@ -2076,7 +2105,7 @@ pub(crate) fn ship_refusal_release(
     record: &crate::gate::merge_hold_core::MergeHoldRecord,
     head: Option<&str>,
 ) -> crate::gate::merge_hold_core::RefusalRelease {
-    crate::gate::merge_hold_core::refusal_release(
+    let exact = crate::gate::merge_hold_core::refusal_release(
         record,
         head,
         |key| {
@@ -2089,7 +2118,16 @@ pub(crate) fn ship_refusal_release(
                 .iter()
                 .find_map(|root| crate::gate::review_verdict::read_verdict_for_sha(root, key, sha))
         },
-    )
+    );
+    // trace:STORY-2694 | ai:codex
+    crate::gate::merge_hold_core::refusal_release_with_coverage(record, exact, || {
+        let root = roots.first().ok_or("no verdict root is available")?;
+        let head = head.ok_or("the PR head is unavailable")?;
+        let keys = crate::gate::merge_hold_core::refusal_verdict_keys(record);
+        crate::gate::merge_hold_core::live_carried_approval(
+            roots, root, record.pr, head, None, &keys, true,
+        )
+    })
 }
 
 /// BUG-1918: what PR `pr` ships, for the approval gate — `known_ids` (from
@@ -3357,6 +3395,13 @@ pub(crate) fn pr_ship_with_method_and_dispatch_ctx(
     // log for the merge step was already recorded as Skipped above, and the
     // idempotent pull + cleanup below still run. trace:BUG-574 | ai:claude
     let mut merged_this_run = false;
+    // trace:STORY-2735 | ai:codex
+    if !already_merged {
+        crate::ci_gate::require_full_ship_ci(
+            crate::forge::forge_for(&project_root).as_ref(),
+            &gate_change,
+        )?;
+    }
     // STORY-1171 / TASK-1243: hold the branch merge-lease across check→merge→pull
     // (ADR-38) so no two same-machine mergers race to this branch. Keyed on the
     // PR's base branch, held on the MAIN clone (all mergers resolve here), and
@@ -3389,6 +3434,12 @@ pub(crate) fn pr_ship_with_method_and_dispatch_ctx(
         }
     }
     if !already_merged {
+        // Re-read under the merge lease; no hold release or merge on FAST CI.
+        // trace:STORY-2735 | ai:codex
+        crate::ci_gate::require_full_ship_ci(
+            crate::forge::forge_for(&project_root).as_ref(),
+            &gate_change,
+        )?;
         ship_preflight_gates(
             &project_root,
             &main_worktree,
@@ -3538,7 +3589,7 @@ pub(crate) fn pr_ship_with_method_and_dispatch_ctx(
         // branch-name fallback or non-final rebase slice never completes a spec
         // silently. Rebase merges produce no squash subject.
         // trace:BUG-1919 trace:STORY-1663 | ai:antigravity
-        let ship_meta = fetch_pr_ship_metadata_via_gh(&project_root, pr_number)?;
+        let ship_meta = fetch_pr_ship_metadata_via_forge(&project_root, pr_number)?;
         let (explicit_squash_subject, completion_trailer) = derive_pr_ship_subject_for_method_from(
             &project_root,
             &ship_meta,
@@ -3650,6 +3701,16 @@ pub(crate) fn pr_ship_with_method_and_dispatch_ctx(
         )?;
         let sanitized_squash_body =
             ship_squash_body(merge_method, declares_non_completing, checked_squash_body);
+        // trace:STORY-2733 | ai:codex
+        let sanitized_squash_body =
+            if let Some(audit) = mandate_cover.as_ref().ok().and_then(|c| c.gate_audit()) {
+                Some(format!(
+                    "{}\n\n{audit}",
+                    sanitized_squash_body.unwrap_or_default()
+                ))
+            } else {
+                sanitized_squash_body
+            };
         let mut merge_opts = crate::forge::MergeOptions {
             method: merge_method,
             squash_subject: explicit_squash_subject.clone(),
@@ -3979,13 +4040,16 @@ pub(crate) fn pr_ship_with_method_and_dispatch_ctx(
         let dispatch_err = dispatch_ship_checkpoint(dispatch_ctx, ShipCheckpoint::PreMerge).err();
         let lapsed = mandate_release
             .as_ref()
-            .filter(|cover| !mandate_still_active(&cover.id));
+            .filter(|cover| !mandate_cover_still_active(cover));
         if dispatch_err.is_some() || lapsed.is_some() {
             let cause = match (&dispatch_err, lapsed) {
                 (Some(err), _) => {
                     format!("its dispatch request no longer has authority to merge ({err:#})")
                 }
-                (None, Some(cover)) => format!("mandate {} ended before the merge", cover.id),
+                (None, Some(cover)) => format!(
+                    "mandate {} ended or no longer covers protected paths before the merge",
+                    cover.id
+                ),
                 (None, None) => String::new(),
             };
             let rearm = if mandate_release.is_some() {
@@ -4146,7 +4210,7 @@ pub(crate) fn pr_ship_with_method_and_dispatch_ctx(
                 &cover.id,
                 pr_number,
                 crate::gate::dispatch_types::Outcome::Done,
-                None,
+                cover.gate_audit(),
             );
         }
     }
@@ -4190,7 +4254,7 @@ pub(crate) fn pr_ship_with_method_and_dispatch_ctx(
     // Best-effort: emit failures never fail the ship. trace:BUG-1423 | ai:claude
     let mut pr_merged_spec_ids: Vec<String> = Vec::new();
     let mut pr_title_body: Option<(String, String)> = None;
-    if let Ok(pr_meta) = fetch_pr_ship_metadata_via_gh(&project_root, pr_number) {
+    if let Ok(pr_meta) = fetch_pr_ship_metadata_via_forge(&project_root, pr_number) {
         pr_title_body = Some((pr_meta.title.clone(), pr_meta.body.clone()));
         // Use the same store-qualified completion intent as the squash subject
         // — including BUG-1919's non-completing / closure-held suppression, so
@@ -4673,7 +4737,7 @@ fn post_ship_cleanup_worker(args: PostShipCleanupArgs<'_>) -> Result<()> {
                 release_protected: false,
             })
         },
-        doctor_cmd::run_merged_agent_worktree_gc_quiet,
+        worktree_gc::run_merged_agent_worktree_gc_quiet,
         &mut std::io::stderr(),
     );
     if let Some(failure) = end_failure {
@@ -5091,7 +5155,7 @@ pub(crate) fn pr_ship_create_pr(project_root: &std::path::Path, branch: &str) ->
         req,
         &extract_spec_ids_from_commit(&commit_msg),
     )
-    .context("could not open a forge change request")?;
+    .map_err(crate::forge::open_change_error)?;
     if change.id == 0 {
         anyhow::bail!(
             "`gh pr create` succeeded but no PR number found in its output: {}",
@@ -5380,7 +5444,7 @@ pub(crate) fn derive_pr_ship_squash_subject(
     // main's tip. TASK-142: prefer the PR title as the explicit squash subject
     // base because the branch head may itself be a merge commit.
     // trace:TASK-140 TASK-142 | ai:codex
-    let pr = fetch_pr_ship_metadata_via_gh(project_root, pr_number)?;
+    let pr = fetch_pr_ship_metadata_via_forge(project_root, pr_number)?;
     derive_pr_ship_squash_subject_from(project_root, &pr, branch, no_complete)
 }
 
@@ -5480,7 +5544,7 @@ pub(crate) fn derive_pr_ship_subject_for_method(
     if method != crate::forge::MergeMethod::Rebase {
         return derive_pr_ship_squash_subject(project_root, pr_number, branch, no_complete);
     }
-    let pr = fetch_pr_ship_metadata_via_gh(project_root, pr_number)?;
+    let pr = fetch_pr_ship_metadata_via_forge(project_root, pr_number)?;
     derive_pr_ship_subject_for_method_from(
         project_root,
         &pr,
@@ -6874,6 +6938,7 @@ pub(crate) fn dispatch_ledger_cover(
     ctx: &crate::gate::dispatch_auth::DispatchExecutionContext,
 ) -> MandateCover {
     MandateCover {
+        gate_match: None,
         id: ctx.mandate_id().to_string(),
         principal: ctx.principal().to_string(),
     }
@@ -6896,7 +6961,10 @@ pub(crate) fn ledger_mandate_ship_failure(
             &cover.id,
             pr,
             crate::gate::dispatch_types::Outcome::Refused,
-            Some(why.to_string()),
+            Some(match cover.gate_audit() {
+                Some(audit) => format!("{why}\n{audit}"),
+                None => why.to_string(),
+            }),
         );
     }
 }
@@ -6914,43 +6982,24 @@ pub(crate) struct PrShipMetadata {
     pub(crate) number: Option<u64>,
 }
 
-pub(crate) fn fetch_pr_ship_metadata_via_gh(
+pub(crate) fn fetch_pr_ship_metadata_via_forge(
     project_root: &std::path::Path,
     n: u64,
 ) -> Result<PrShipMetadata> {
-    let n_str = n.to_string();
-    let mut command = std::process::Command::new("gh");
-    command
-        .current_dir(project_root)
-        .args(["pr", "view", &n_str, "--json", "title,body"]);
-    let out = crate::process_retry::command_output_retrying_etxtbsy(&mut command).map_err(|e| {
-        if e.kind() == std::io::ErrorKind::NotFound {
-            anyhow::anyhow!("`gh` not on PATH — install from https://cli.github.com/")
-        } else {
-            anyhow::anyhow!("`gh pr view {}` failed to spawn: {}", n, e)
-        }
-    })?;
-    if !out.status.success() {
-        anyhow::bail!(
-            "`gh pr view {}` exited {} — {}",
-            n,
-            out.status,
-            String::from_utf8_lossy(&out.stderr).trim()
-        );
-    }
-    let json: serde_json::Value = serde_json::from_slice(&out.stdout)
-        .with_context(|| format!("`gh pr view {}` returned non-JSON output", n))?;
+    // trace:BUG-2515 | ai:codex
+    let kind = crate::forge::resolve_forge_kind(project_root);
+    let (title, body) = crate::forge::forge_for_kind(project_root, kind)
+        .change_title_and_body(n)
+        .with_context(|| {
+            format!(
+                "could not resolve {} metadata via `{}`",
+                kind.change_noun(),
+                kind.cli_name()
+            )
+        })?;
     Ok(PrShipMetadata {
-        title: json
-            .get("title")
-            .and_then(|v| v.as_str())
-            .unwrap_or("")
-            .to_string(),
-        body: json
-            .get("body")
-            .and_then(|v| v.as_str())
-            .unwrap_or("")
-            .to_string(),
+        title,
+        body,
         number: Some(n),
     })
 }
@@ -6958,9 +7007,8 @@ pub(crate) fn fetch_pr_ship_metadata_via_gh(
 /// BUG-417: return `Some(reason)` when `aida pr ship` should skip the blocking
 /// CI wait rather than hang on a repo that will never register checks. Two
 /// triggers: (1) an explicit opt-out env (`AIDA_PR_SHIP_NO_CI_WAIT=1` or the
-/// `lifecycle:no-ci-wait` token in `AIDA_LIFECYCLE_TAGS`); (2) no GitHub Actions
-/// workflow files configured (`.github/workflows/*.{yml,yaml}` absent or empty)
-/// — the quizdom "no `.github/workflows` at all" case. `None` ⇒ wait normally.
+/// `lifecycle:no-ci-wait` token in `AIDA_LIFECYCLE_TAGS`); (2) neither GitHub
+/// Actions workflows nor `.gitlab-ci.yml` configured. `None` ⇒ wait normally.
 // trace:BUG-417 | ai:claude
 pub(crate) fn pr_ship_ci_wait_skip_reason(project_root: &std::path::Path) -> Option<String> {
     // Explicit opt-out (env-level honoring of lifecycle:no-ci-wait, which the
@@ -6983,16 +7031,22 @@ pub(crate) fn pr_ship_ci_wait_skip_reason(project_root: &std::path::Path) -> Opt
 
     // No workflows configured ⇒ checks will never register.
     if !repo_has_ci_workflows(project_root) {
-        return Some("no CI workflows configured (.github/workflows)".to_string());
+        return Some(
+            "no CI workflows configured (.github/workflows or .gitlab-ci.yml)".to_string(),
+        );
     }
     None
 }
 
-/// BUG-417: true when the project has at least one GitHub Actions workflow file
+/// True when the project has a GitLab CI file or at least one GitHub Actions workflow file
 /// (`.github/workflows/*.{yml,yaml}`). The pure file-name rule lives in
 /// `pr_ship::workflow_files_indicate_ci`; this only does the directory read.
 // trace:BUG-417 | ai:claude
 pub(crate) fn repo_has_ci_workflows(project_root: &std::path::Path) -> bool {
+    // trace:BUG-2515 | ai:codex
+    if project_root.join(".gitlab-ci.yml").is_file() {
+        return true;
+    }
     let dir = project_root.join(".github").join("workflows");
     let Ok(entries) = std::fs::read_dir(&dir) else {
         return false;
@@ -8634,9 +8688,9 @@ pub(crate) struct PrArgs {
 // trace:TASK-1715 | ai:claude
 fn run_pr(
     matches: &clap::ArgMatches,
-    ctx: &crate::command_registry::DispatchCtx,
-) -> anyhow::Result<crate::command_registry::Flow> {
-    use crate::command_registry::{Flow, StoreCtx};
+    ctx: &crate::cmdkit::DispatchCtx,
+) -> anyhow::Result<crate::cmdkit::Flow> {
+    use crate::cmdkit::{Flow, StoreCtx};
     let args = <PrArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
     let PrCommand::Review { id } = &args.inner else {
         // Only the early point reaches here: non-review subcommands return.
@@ -8699,7 +8753,15 @@ fn review_queue_argv(change: &str) -> [&str; 4] {
 /// `pr review` answers the cross-cutting gates exactly as `queue work` does;
 /// every other subcommand keeps the `pr` policy.
 // trace:TASK-1715 | ai:claude
-fn pr_cli_policy(matches: &clap::ArgMatches) -> crate::command_registry::CmdPolicy {
+fn pr_cli_policy(matches: &clap::ArgMatches) -> crate::cmdkit::CmdPolicy {
+    if matches.subcommand_name() == Some("state") {
+        return crate::cmdkit::CmdPolicy {
+            stakeholder: crate::stakeholder_role::StakeholderAction::Read,
+            per_write_auto_push: false,
+            skip_role_restore_prompt: true,
+            team_identity_write: false,
+        };
+    }
     let review = <PrArgs as clap::FromArgMatches>::from_arg_matches(matches)
         .ok()
         .and_then(|args| match args.inner {
@@ -8711,7 +8773,7 @@ fn pr_cli_policy(matches: &clap::ArgMatches) -> crate::command_registry::CmdPoli
         let root = crate::find_project_root()
             .unwrap_or_else(|_| std::env::current_dir().unwrap_or_default());
         let Ok(id) = review_change_id(&id, crate::forge::resolve_forge_kind(&root)) else {
-            return crate::command_registry::CmdPolicy {
+            return crate::cmdkit::CmdPolicy {
                 stakeholder: crate::stakeholder_role::StakeholderAction::Write,
                 per_write_auto_push: false,
                 skip_role_restore_prompt: false,
@@ -8724,7 +8786,7 @@ fn pr_cli_policy(matches: &clap::ArgMatches) -> crate::command_registry::CmdPoli
             return crate::queue_cmd::queue_cli_policy(&queue);
         }
     }
-    crate::command_registry::CmdPolicy {
+    crate::cmdkit::CmdPolicy {
         stakeholder: crate::stakeholder_role::StakeholderAction::Write,
         per_write_auto_push: false,
         skip_role_restore_prompt: false,
@@ -8733,12 +8795,12 @@ fn pr_cli_policy(matches: &clap::ArgMatches) -> crate::command_registry::CmdPoli
 }
 
 // trace:STORY-1728 | ai:claude
-pub(crate) static PR: crate::command_registry::CommandReg = crate::command_registry::CommandReg {
+pub(crate) static PR: crate::cmdkit::CommandReg = crate::cmdkit::CommandReg {
     name: "pr",
     help_after: "ship",
     command: <PrArgs as clap::CommandFactory>::command,
     policy: pr_cli_policy,
-    run: crate::command_registry::Handler::Store(run_pr),
+    run: crate::cmdkit::Handler::Store(run_pr),
 };
 
 /// The one-shot HUMAN-implementer finish. From inside a worktree where
@@ -8825,6 +8887,61 @@ pub(crate) struct ShipArgs {
         allow_hyphen_values = true
     )]
     pub commit_pending: Option<String>,
+
+    /// Read a UTF-8 commit body verbatim from this file. Use with native
+    /// -m declarations or --from-seat --commit-pending.
+    // trace:BUG-2493 | ai:codex
+    #[clap(long, value_name = "FILE")]
+    pub commit_body_file: Option<std::path::PathBuf>,
+}
+
+// trace:BUG-2493 | ai:codex
+pub(crate) fn ship_messages(
+    args: &ShipArgs,
+    native: bool,
+) -> anyhow::Result<(Option<String>, Option<String>)> {
+    // trace:BUG-2493 | ai:codex
+    // Native authors provide bodies only through the explicit body-file surface.
+    if native {
+        anyhow::ensure!(
+            !args
+                .message
+                .as_deref()
+                .is_some_and(|s| s.contains(['\n', '\r'])),
+            "native -m requires a single-line subject; use --commit-body-file for the body"
+        );
+    }
+    if args.commit_body_file.is_some() {
+        anyhow::ensure!(
+            args.commit_pending.is_some() || (args.message.is_some() && native),
+            "--commit-body-file requires native -m or --from-seat --commit-pending"
+        );
+    }
+    let body = args
+        .commit_body_file
+        .as_ref()
+        .map(|path| {
+            std::fs::read_to_string(path)
+                .with_context(|| format!("reading --commit-body-file {}", path.display()))
+        })
+        .transpose()?;
+    if let Some(body) = &body {
+        anyhow::ensure!(!body.contains('\0'), "commit body contains NUL");
+    }
+    let with_body = |subject: &str| -> anyhow::Result<String> {
+        anyhow::ensure!(
+            body.is_none() || !subject.contains(['\n', '\r']),
+            "--commit-body-file requires a single-line subject"
+        );
+        Ok(crate::native_publication::join_message(
+            subject,
+            body.as_deref(),
+        ))
+    };
+    Ok((
+        args.message.as_deref().map(with_body).transpose()?,
+        args.commit_pending.as_deref().map(with_body).transpose()?,
+    ))
 }
 
 // STORY-720: `aida ship` dispatches before storage init for the same
@@ -8832,10 +8949,7 @@ pub(crate) struct ShipArgs {
 // `aida` call (the finish tail reuses `pr_ship_handler`). The spec is
 // resolved from the branch / lease, not the requirement store.
 // trace:STORY-720 | ai:claude
-fn run_ship(
-    matches: &clap::ArgMatches,
-    _ctx: &crate::command_registry::DispatchCtx,
-) -> anyhow::Result<()> {
+fn run_ship(matches: &clap::ArgMatches, _ctx: &crate::cmdkit::DispatchCtx) -> anyhow::Result<()> {
     let args = <ShipArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
     let ShipArgs {
         spec,
@@ -8846,8 +8960,12 @@ fn run_ship(
         dry_run,
         no_trailer_check,
         from_seat,
-        commit_pending,
+        commit_pending: _,
+        commit_body_file: _,
     } = &args;
+    // trace:BUG-2493 | ai:codex
+    let native = std::env::var("AIDA_CONTAINMENT_POSTURE").as_deref() == Ok("native");
+    let (publication_message, pending_message) = ship_messages(&args, native)?;
     // trace:BUG-HOME-038 | ai:claude
     if let Some(clone) = from_seat {
         return crate::ship_from_seat::run(crate::ship_from_seat::FromSeatOptions {
@@ -8856,12 +8974,12 @@ fn run_ship(
             no_pr: *no_pr,
             dry_run: *dry_run,
             // trace:TASK-2712 | ai:claude
-            commit_pending: commit_pending.clone(),
+            commit_pending: pending_message,
         });
     }
     // trace:TASK-2902 | ai:codex
-    if std::env::var("AIDA_CONTAINMENT_POSTURE").as_deref() == Ok("native") {
-        if let Some(subject) = message {
+    if native {
+        if let Some(subject) = &publication_message {
             anyhow::ensure!(
                 !*no_trailer_check,
                 "native declarations require trailer validation"
@@ -8894,17 +9012,17 @@ fn run_ship(
 }
 
 // trace:STORY-1728 | ai:claude
-pub(crate) static SHIP: crate::command_registry::CommandReg = crate::command_registry::CommandReg {
+pub(crate) static SHIP: crate::cmdkit::CommandReg = crate::cmdkit::CommandReg {
     name: "ship",
     help_after: "triage",
     command: <ShipArgs as clap::CommandFactory>::command,
-    policy: |_| crate::command_registry::CmdPolicy {
+    policy: |_| crate::cmdkit::CmdPolicy {
         stakeholder: crate::stakeholder_role::StakeholderAction::BuildLoop,
         per_write_auto_push: false,
         skip_role_restore_prompt: false,
         team_identity_write: false,
     },
-    run: crate::command_registry::Handler::Early(run_ship),
+    run: crate::cmdkit::Handler::Early(run_ship),
 };
 
 #[cfg(test)]
@@ -9819,7 +9937,8 @@ mod story_1663_rebase_ship_tests {
     #[test]
     fn cli_parses_rebase_and_merge_method_and_rejects_final_slice_with_squash() {
         // trace:STORY-1663.ac5970a5 | ai:antigravity
-        let cli = crate::command_registry::try_parse_from(["aida", "pr", "ship", "42", "--rebase"])
+        let cli = crate::TEST_CLI
+            .try_parse_from(["aida", "pr", "ship", "42", "--rebase"])
             .expect("parses --rebase");
         match cli.command.registered::<crate::pr_cmd::PrArgs>() {
             crate::pr_cmd::PrArgs {
@@ -9844,16 +9963,17 @@ mod story_1663_rebase_ship_tests {
             other => panic!("unexpected command: {other:?}"),
         }
 
-        let cli2 = crate::command_registry::try_parse_from([
-            "aida",
-            "pr",
-            "ship",
-            "42",
-            "--merge-method",
-            "rebase",
-            "--final-slice",
-        ])
-        .expect("parses --merge-method rebase --final-slice");
+        let cli2 = crate::TEST_CLI
+            .try_parse_from([
+                "aida",
+                "pr",
+                "ship",
+                "42",
+                "--merge-method",
+                "rebase",
+                "--final-slice",
+            ])
+            .expect("parses --merge-method rebase --final-slice");
         match cli2.command.registered::<crate::pr_cmd::PrArgs>() {
             crate::pr_cmd::PrArgs {
                 inner:
@@ -9875,15 +9995,9 @@ mod story_1663_rebase_ship_tests {
             other => panic!("unexpected command: {other:?}"),
         }
 
-        let cli3 = crate::command_registry::try_parse_from([
-            "aida",
-            "pr",
-            "ship",
-            "42",
-            "--rebase",
-            "--complete-spec",
-        ])
-        .expect("parses --complete-spec alias");
+        let cli3 = crate::TEST_CLI
+            .try_parse_from(["aida", "pr", "ship", "42", "--rebase", "--complete-spec"])
+            .expect("parses --complete-spec alias");
         match cli3.command.registered::<crate::pr_cmd::PrArgs>() {
             crate::pr_cmd::PrArgs {
                 inner:
@@ -9900,16 +10014,17 @@ mod story_1663_rebase_ship_tests {
         }
 
         // Conflicting --rebase and --merge-method is rejected by clap.
-        assert!(crate::command_registry::try_parse_from([
-            "aida",
-            "pr",
-            "ship",
-            "42",
-            "--rebase",
-            "--merge-method",
-            "squash"
-        ])
-        .is_err());
+        assert!(crate::TEST_CLI
+            .try_parse_from([
+                "aida",
+                "pr",
+                "ship",
+                "42",
+                "--rebase",
+                "--merge-method",
+                "squash"
+            ])
+            .is_err());
 
         // --final-slice without --rebase or --merge-method rebase is rejected.
         let err = pr_ship::validate_ship_merge_method(false, None, true)
@@ -10458,3 +10573,7 @@ mod bug_2384_cleanup_tests {
         assert!(!lock.exists());
     }
 }
+
+#[cfg(test)]
+#[path = "tests/bug_2515_gitlab_ship_tests.rs"]
+mod bug_2515_gitlab_ship_tests;

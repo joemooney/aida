@@ -101,12 +101,17 @@ if a[0]=='api':
     endpoint=next((x for x in a[1:] if x.startswith('repos/')),a[1])
     if '/check-runs' in endpoint:
         sha=endpoint.split('/commits/')[1].split('/')[0]
-        emit(dict(total_count=2,check_runs=[dict(name=n,head_sha=s.get('ci_sha',sha),status='completed',conclusion=s.get('ci','success')) for n in ['Build (ubuntu-latest)','merge-hold-gate']]))
+        # trace:BUG-2528 | ai:codex
+        pending=s.get('pending_ci_reads',0)>0
+        if pending:
+            s['pending_ci_reads']-=1
+            (r/'transport.json').write_text(json.dumps(s))
+        emit(dict(total_count=2,check_runs=[dict(name=n,head_sha=s.get('ci_sha',sha),status='in_progress' if pending and n=='merge-hold-gate' else 'completed',conclusion=None if pending and n=='merge-hold-gate' else s.get('ci','success')) for n in ['Build (ubuntu-latest)','merge-hold-gate']]))
     if endpoint.split('?',1)[0].endswith('/status'):
         sha=endpoint.split('/commits/')[1].split('/')[0]; emit(dict(sha=sha,total_count=0,statuses=[]))
     if '/pulls/' in endpoint: emit(meta(endpoint.split('/pulls/')[1].split('/')[0]))
     # trace:BUG-2401 | ai:claude — the train's required-check policy reads.
-    if endpoint.endswith('/branches/main/protection'): emit(dict(required_status_checks=dict(contexts=['Build (ubuntu-latest)'])))
+    if endpoint.endswith('/branches/main/protection'): emit(dict(required_status_checks=dict(contexts=['Build (ubuntu-latest)','merge-hold-gate'])))
     if '/rules/branches/main' in endpoint: emit([])
 if a[:2]==['repo','view']: emit(dict(nameWithOwner='fixture/train',defaultBranchRef=dict(name='main')))
 print('unexpected gh '+repr(a),file=sys.stderr); sys.exit(2)
@@ -128,7 +133,10 @@ impl Fixture {
     /// so the old guard is dropped first).
     fn reenv(&mut self, extra: &[(&'static str, Option<&str>)]) {
         self._env = None;
-        let mut pairs = vec![("PATH", Some(self.path.as_str()))];
+        let mut pairs = vec![
+            ("PATH", Some(self.path.as_str())),
+            ("USER", Some("train-test-operator")),
+        ];
         pairs.extend_from_slice(extra);
         let guard = crate::test_env::EnvVarsGuard::apply(&pairs);
         self._env = Some(guard);
@@ -208,9 +216,10 @@ impl Fixture {
             req.execution_mode = Some(aida_core::ExecutionMode::Drain);
             store.requirements.push(req);
             let identity = vec![format!("session:fixture-reviewer-{n}")];
-            let receipt =
-                crate::gate::review_authority::write_human_receipt(&sha, alias, &identity, false)
-                    .unwrap();
+            let receipt = crate::gate::review_authority::write_human_receipt(
+                &sha, alias, &identity, false, true,
+            )
+            .unwrap();
             let record = json!({"verdict":"approved", "reviewed_sha":sha, "reviewed_branch":branch,
                 "recorded_at":chrono::Utc::now().to_rfc3339(), "recorded_by":"fixture independent human",
                 "recorder_attestation": {"sha":sha,"human_at_tty":true,"receipt_id":receipt,"identity":identity}});
@@ -264,7 +273,10 @@ impl Fixture {
             "#!/bin/sh\nfor arg in \"$@\"; do\ncase \"$arg\" in fetch|push|ls-remote) exec /usr/bin/git -c 'url.{}.insteadOf=https://github.com/fixture/train.git' \"$@\";; esac\ndone\nexec /usr/bin/git \"$@\"\n", origin.path().display()));
 
         let path = format!("{}:{}", bin.display(), std::env::var("PATH").unwrap());
-        let env = crate::test_env::EnvVarsGuard::apply(&[("PATH", Some(&path))]);
+        let env = crate::test_env::EnvVarsGuard::apply(&[
+            ("PATH", Some(&path)),
+            ("USER", Some("train-test-operator")),
+        ]);
         let state = json!({"prs":prs});
         save(root, &state);
         Self {
@@ -376,11 +388,13 @@ fn bug2441_unresolved_member_refuses((branch, title, cause): (&str, &str, &str))
     let f = Fixture::with_member_metadata(true, Some(branch), Some(title));
     let forge = GitHubForge::new(f.root());
     let mut live = f.live(&forge);
-    let (train, change) = f.opened(&mut live);
-    let lease = live.lease(change.id).unwrap();
-    let error = live
-        .merge_verified(&change, &train, lease.as_ref())
-        .unwrap_err();
+    // trace:BUG-2538 | ai:codex — evidence preflight now refuses before open.
+    let members: Vec<_> = [11, 12]
+        .into_iter()
+        .map(|n| live.gate(n).unwrap())
+        .collect();
+    let base = live.fetch_main().unwrap();
+    let error = live.build(&base, &members).unwrap_err();
     assert!(format!("{error:#}").contains(cause), "{error:#}");
     assert!(calls(f.root()).is_empty());
 }
@@ -583,6 +597,7 @@ fn bug2406_forged_build_refuses(fault: &str) {
         "base" => bad.base = bad.tip.clone(),
         "expired-release-cover" => {
             bad.cars[0].member.release = Some(crate::gate::mandate_ship::MandateCover {
+                gate_match: None,
                 id: uuid::Uuid::new_v4().to_string(),
                 principal: "fixture".into(),
             })
@@ -684,6 +699,26 @@ fixture_case!(
     77
 );
 fn bug2406_current_claim_refuses(pr: u64) {
+    bug2530_train_claim(pr, false);
+}
+
+// trace:BUG-2530 | ai:codex
+#[test]
+fn bug2530_post_approval_claim_allows_train() {
+    bug2530_train_claim(11, true);
+}
+
+// trace:BUG-2530 | ai:codex
+#[test]
+fn bug2530_post_approval_legacy_claim_allows_train() {
+    bug2530_train_claim_with_precision(11, true, false);
+}
+
+fn bug2530_train_claim(pr: u64, redundant: bool) {
+    bug2530_train_claim_with_precision(pr, redundant, true);
+}
+
+fn bug2530_train_claim_with_precision(pr: u64, redundant: bool, precise: bool) {
     if crate::test_env::run_path_isolated_test() {
         return;
     }
@@ -697,17 +732,35 @@ fn bug2406_current_claim_refuses(pr: u64) {
     } else {
         &train.cars[0].member.head
     };
-    let marker = crate::gate::review_marker::Marker::for_this_process(
+    let mut marker = crate::gate::review_marker::Marker::for_this_process(
         pr,
         Some(head),
         None,
         "fixture reviewer",
     );
+    // trace:BUG-2530 | ai:codex — keep this a pre-approval claim, independent
+    // of whether fixture setup and marker creation cross a clock second.
+    let approved_at =
+        chrono::DateTime::parse_from_rfc3339(f.records[0]["recorded_at"].as_str().unwrap())
+            .unwrap()
+            .timestamp() as u64;
+    marker.started_at = if redundant {
+        approved_at + 1
+    } else {
+        approved_at - 1
+    };
+    if !precise {
+        marker.started_at_nanos = None;
+    }
     crate::gate::review_marker::write(f.root(), &marker).unwrap();
-    assert!(live
-        .merge_verified(&change, &train, lease.as_ref())
-        .is_err());
-    assert!(calls(f.root()).is_empty());
+    let result = live.merge_verified(&change, &train, lease.as_ref());
+    if redundant {
+        result.unwrap();
+        assert_eq!(calls(f.root()).len(), 1);
+    } else {
+        assert!(result.is_err());
+        assert!(calls(f.root()).is_empty());
+    }
 }
 
 fixture_case!(
@@ -1276,14 +1329,22 @@ fn hold_on(pr: u64, head: &str) -> crate::gate::merge_hold_core::MergeHoldRecord
 
 /// An active ship-held mandate in the fixture's isolated HOME.
 fn plant_mandate() -> crate::gate::mandate_ship::MandateCover {
+    plant_mandate_with_gate_paths(false)
+}
+
+// trace:STORY-2733 | ai:codex
+fn plant_mandate_with_gate_paths(
+    include_gate_paths: bool,
+) -> crate::gate::mandate_ship::MandateCover {
     use crate::gate::mandate;
-    let principal = crate::gate::kernel_deps::current_user_id(None);
+    let principal = crate::gate::mandate::operator_principal();
     let m = mandate::Mandate {
         id: uuid::Uuid::new_v4().to_string(),
         principal: principal.clone(),
         seat: mandate::MANDATE_SEAT.into(),
         scope: mandate::SCOPE_SHIP_HELD.into(),
         include_supervised: false,
+        include_gate_paths,
         reason: Some("fixture fire".into()),
         issued_at: chrono::Utc::now() - chrono::Duration::minutes(1),
         expires_at: chrono::Utc::now() + chrono::Duration::hours(1),
@@ -1302,6 +1363,7 @@ fn plant_mandate() -> crate::gate::mandate_ship::MandateCover {
     .unwrap();
     assert!(crate::gate::mandate_ship::mandate_still_active(&m.id));
     crate::gate::mandate_ship::MandateCover {
+        gate_match: None,
         id: m.id,
         principal,
     }
@@ -1333,6 +1395,13 @@ fn bug2406_held_member_released_under_mandate_lands() {
     .unwrap();
     assert!(crate::gate::merge_hold_core::read_hold(f.root(), 11).is_none());
     train.cars[0].member.release = Some(cover);
+    // The release has re-run a context on this exact tip. The real final
+    // consumer must wait, then land instead of ejecting the member.
+    // trace:BUG-2528 | ai:codex
+    let mut state: Value =
+        serde_json::from_slice(&fs::read(f.root().join("transport.json")).unwrap()).unwrap();
+    state["pending_ci_reads"] = json!(1);
+    save(f.root(), &state);
     let lease = live.lease(change.id).unwrap();
     live.merge_verified(&change, &train, lease.as_ref())
         .unwrap();
@@ -1342,6 +1411,103 @@ fn bug2406_held_member_released_under_mandate_lands() {
     let audit = ledger::project::events(f.root(), ledger::ChangeKey::pr(77));
     assert!(audit.iter().any(|e| matches!(&e.body,
         ledger::EventBody::TrainCoverage { proof } if !proof["cars"][0]["release_cover"].is_null())));
+}
+
+// trace:STORY-2733 | ai:codex
+fixture_case!(
+    mandate_train_final_audit_survives_hold_release,
+    mandate_final_audit,
+    "same"
+);
+fixture_case!(
+    mandate_train_final_audit_refuses_replacement,
+    mandate_final_audit,
+    "replacement"
+);
+fixture_case!(
+    mandate_train_final_audit_refuses_changed_paths,
+    mandate_final_audit,
+    "paths"
+);
+fixture_case!(
+    mandate_train_final_audit_refuses_new_protected_path,
+    mandate_final_audit,
+    "added"
+);
+fn mandate_final_audit(change_audit: &str) {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
+    let f = Fixture::new(true);
+    let forge = GitHubForge::new(f.root());
+    let mut live = f.live(&forge);
+    let mut cover = plant_mandate_with_gate_paths(true);
+    let dir = crate::gate::mandate::mandate_dir().unwrap();
+    let path = dir.join(format!("{}.json", cover.id));
+    let config = crate::gate::kernel_deps::aida_home_dir()
+        .unwrap()
+        .join(".aida/config.toml");
+    let protected_config = "[mandate.human_gates]\nprotected_paths = ['car11']\n";
+    fs::write(
+        &config,
+        if change_audit == "added" {
+            ""
+        } else {
+            protected_config
+        },
+    )
+    .unwrap();
+    let gates = crate::gate::mandate_gates::load_human_gates(f.root());
+    cover = crate::gate::mandate_ship::MandateCover::from_checked_paths(
+        cover.id,
+        cover.principal,
+        &["car11".into()],
+        &crate::gate::mandate_gates::ProtectedPaths::of(&gates.map_err(|e| e.to_string())),
+    );
+    let mut members: Vec<_> = [11, 12]
+        .into_iter()
+        .map(|pr| live.gate(pr).unwrap())
+        .collect();
+    members[0].gate_audit = cover.gate_audit();
+    assert_eq!(members[0].gate_audit.is_some(), change_audit != "added");
+    members[0].release = Some(cover.clone());
+    let base = live.fetch_main().unwrap();
+    let train = live.build(&base, &members).unwrap();
+    let change = live.open(&train, "train/mandate-audit").unwrap();
+    assert_eq!(live.wait_ci(&change, &train).unwrap(), CiVerdict::Green);
+    let hold = hold_on(11, &members[0].head);
+    crate::gate::merge_hold_core::place_hold(f.root(), &hold).unwrap();
+    crate::gate::merge_hold_core::release_hold_under_mandate(
+        f.root(),
+        &hold,
+        &cover.principal,
+        &cover.id,
+        None,
+    )
+    .unwrap();
+    match change_audit {
+        "replacement" => {
+            fs::remove_file(path).unwrap();
+            plant_mandate_with_gate_paths(true);
+        }
+        "paths" => fs::write(config, "[mandate.human_gates]\nprotected_paths = []\n").unwrap(),
+        "same" => {}
+        "added" => fs::write(config, protected_config).unwrap(),
+        _ => unreachable!(),
+    }
+    let lease = live.lease(change.id).unwrap();
+    let result = live.merge_verified(&change, &train, lease.as_ref());
+    if change_audit == "same" {
+        result.unwrap();
+        assert_eq!(calls(f.root()).len(), 1);
+    } else {
+        let error = format!("{:#}", result.unwrap_err());
+        assert!(
+            error.contains("audit changed") || error.contains("mandate expired"),
+            "{error}"
+        );
+        assert!(calls(f.root()).is_empty());
+    }
 }
 
 fixture_case!(
@@ -1490,4 +1656,149 @@ fn task3112_rework_hint_retains_owning_spec_beside_refs_metadata() {
             .any(|(_, _, mode)| *mode == Some(aida_core::ExecutionMode::Operator)),
         "{policies:?}"
     );
+}
+
+// trace:BUG-2528 | ai:codex
+#[test]
+fn bug2528_exact_tip_ci_wait_is_bounded_and_fails_closed() {
+    use crate::forge::{CheckOutcome, CommitCheck, CommitChecks};
+    let checks = |sha: &str, outcome| CommitChecks {
+        sha: sha.into(),
+        checks: vec![CommitCheck {
+            name: "merge-hold-gate".into(),
+            outcome,
+        }],
+    };
+    let time = ExactTipCiClock::default();
+    let reads = std::cell::Cell::new(0);
+    let error = wait_exact_tip_ci(
+        "tip",
+        &["merge-hold-gate"],
+        180,
+        || {
+            reads.set(reads.get() + 1);
+            Ok(checks("tip", CheckOutcome::Pending))
+        },
+        || time.elapsed(),
+        || time.sleep(),
+    )
+    .unwrap_err();
+    assert!(error
+        .to_string()
+        .contains("still pending after 180s: merge-hold-gate"));
+    assert_eq!(time.elapsed(), 180);
+    assert_eq!(reads.get(), 19);
+    for (sha, outcome) in [
+        ("other", CheckOutcome::Passed),
+        ("tip", CheckOutcome::Failed),
+        ("tip", CheckOutcome::Skipped),
+    ] {
+        wait_exact_tip_ci(
+            "tip",
+            &["merge-hold-gate"],
+            180,
+            || Ok(checks(sha, outcome)),
+            || 0,
+            || panic!("must refuse immediately"),
+        )
+        .unwrap_err();
+    }
+    wait_exact_tip_ci(
+        "tip",
+        &["merge-hold-gate"],
+        180,
+        || anyhow::bail!("unreadable CI"),
+        || 0,
+        || panic!("must refuse immediately"),
+    )
+    .unwrap_err();
+}
+
+// trace:BUG-2538 | ai:codex
+#[test]
+fn bug2538_long_review_history_trains_with_compact_audit() {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
+    let f = Fixture::new(true);
+    let mut record = f.records[0].clone();
+    record["rounds"] = json!((0..41).map(|_| f.records[0].clone()).collect::<Vec<_>>());
+    for sequence in 0..110 {
+        record["audit_sequence"] = json!(sequence);
+        ledger::store::append_one(
+            f.root(),
+            ledger::event::verdict_event(
+                f.root(),
+                ledger::ChangeKey::pr(11),
+                record.as_object().unwrap(),
+                Some(&ledger::GateSpec::with_key(
+                    "BUG-b6b1278890774ef993d2ebc327862470-173",
+                    None,
+                )),
+            ),
+        )
+        .unwrap();
+    }
+    assert!(
+        fs::read_to_string(ledger::store::ledger_file(
+            f.root(),
+            ledger::ChangeKey::pr(11)
+        ))
+        .unwrap()
+        .lines()
+        .count()
+            > 100
+    );
+    let forge = GitHubForge::new(f.root());
+    let mut live = f.live(&forge);
+    let (train, change) = f.opened(&mut live);
+    let lease = live.lease(change.id).unwrap();
+    live.merge_verified(&change, &train, lease.as_ref())
+        .unwrap();
+    assert_eq!(calls(f.root()).len(), 1);
+    let events = ledger::project::events(f.root(), ledger::ChangeKey::pr(77));
+    let proof = events
+        .iter()
+        .find_map(|event| match &event.body {
+            ledger::EventBody::TrainCoverage { proof } => Some(proof),
+            _ => None,
+        })
+        .unwrap();
+    assert!(serde_json::to_vec(proof).unwrap().len() < 32 * 1024);
+    for source in proof["sources"].as_array().unwrap() {
+        for original in source["originals"].as_array().unwrap() {
+            assert!(original.get("record").is_none());
+            assert_eq!(original["sha256"].as_str().unwrap().len(), 64);
+        }
+    }
+    assert_ne!(digest(&record).unwrap(), digest(&f.records[0]).unwrap());
+}
+
+// trace:BUG-2538 | ai:codex
+#[test]
+fn bug2538_oversized_import_ejects_before_publication() {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
+    let f = Fixture::new(true);
+    let mut record = f.records[0].clone();
+    record["audit_padding"] = json!("x".repeat(9 * 1024 * 1024));
+    ledger::store::append_unbound(
+        f.root(),
+        &ledger::GateSpec::with_key("BUG-2400", None),
+        record.as_object().unwrap(),
+    )
+    .unwrap();
+    let forge = GitHubForge::new(f.root());
+    let mut live = f.live(&forge);
+    let member = live.gate(11).unwrap();
+    let base = live.fetch_main().unwrap();
+    let train = live.build(&base, &[member]).unwrap();
+    assert!(train.cars.is_empty());
+    assert_eq!(train.dropped[0].pr, 11);
+    assert!(train.dropped[0].reason.contains("16 MiB"));
+    let transport = fs::read_to_string(f.root().join("transport-calls")).unwrap();
+    assert!(!transport.lines().any(|line| line.starts_with("pr create")));
+    assert!(ensure_budget(MAX_EVIDENCE_BYTES).is_ok());
+    assert!(ensure_budget(MAX_EVIDENCE_BYTES + 1).is_err());
 }

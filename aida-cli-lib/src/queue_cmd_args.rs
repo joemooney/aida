@@ -60,7 +60,7 @@ pub enum QueueCommand {
         /// Pull from `origin/aida-store` before listing. Opt-in freshness
         /// for collaborators / multi-session workflows; fast path stays
         /// default. No-op when the local orphan branch is already
-        /// current; warns and falls back to the local view when offline.
+        /// current; refuses to continue when a configured remote pull fails.
         // trace:STORY-78 | ai:claude
         #[clap(long)]
         sync: bool,

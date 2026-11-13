@@ -5,7 +5,33 @@
 //! `lib.rs`, reached via `crate::`.
 // trace:STORY-771 | ai:claude
 
-use crate::*;
+use crate::{
+    agent_output_mode, build_status_store_from_cache, collect_awaiting_report,
+    collect_cleanup_report, collect_fast_status_snapshot, collect_pending_brief_counts,
+    collect_user_context, config_path_for_project, detect_stranded_primary, drain_state, events,
+    failure_reason_lines, find_main_worktree_root, find_project_root, history,
+    humanize_duration_secs, is_aida_repo, is_real_requirement_summary, is_standing_artifact_type,
+    leases, list_leases, load_store_for_lookup, orphan_branch_sync_state, output_format_is_json,
+    parse_since_arg, print_aida_dev_context, print_aida_dev_context_summary, print_fast_status,
+    print_fast_status_json, print_lease_detail, print_morning_after_banner,
+    print_morning_after_toon, print_status_agents_section, print_status_branch_section,
+    print_status_claude_code_section, print_status_codex_section,
+    print_status_coordination_section, print_status_findings_section, print_status_hygiene_section,
+    print_status_json, print_status_memory_drift_section, print_status_open_prs_section,
+    print_status_pr_section, print_status_presence_consumers, print_status_presence_line,
+    print_status_queue_section, print_status_recently_merged_section,
+    print_status_remote_activity_section, print_status_session_section, print_status_short,
+    print_status_store_drift_section, print_status_working_tree_section,
+    print_status_worktrees_section, print_stranded_primary_banner, print_toon_status,
+    process_probe, requirement_breakdown_summary_line, roleless_recovery_line, short_lease_id,
+    spec_scoped_lease, stale_cleanup_suffix, stale_orphaned_line, status_display, usage,
+    warm_status_network_probes, worker,
+};
+use aida_core::liveness::{classify_spec_liveness, LeaseState, SpecLiveness};
+use aida_core::DatabaseBackend;
+use aida_core::{Scaffolder, Storage};
+use anyhow::Result;
+use colored::Colorize;
 
 const DEFAULT_ABSENCE_DAYS: i64 = 14;
 
@@ -83,7 +109,7 @@ pub(crate) fn handle_status_spec(spec: &str, idle_minutes: u64, json: bool) -> R
 
     let now = chrono::Utc::now();
     let live = process_probe::probe_live_claude_sessions();
-    let lease_state = lease.map(|l| lease_state_for(l, &live, now));
+    let lease_state = lease.map(|l| leases::lease_state_for(l, &live, now));
     let mut verdict = classify_spec_liveness(lease_state, in_progress);
     let drain = drain_state::live_drain_spec(&project_root, &disp);
     if drain.is_some() {
@@ -1146,7 +1172,7 @@ fn count_live_and_stale_leases(project_root: &std::path::Path) -> (usize, usize)
     let mut live_count = 0;
     let mut stale_count = 0;
     for lease in &leases {
-        match lease_state_for(lease, &live, now) {
+        match leases::lease_state_for(lease, &live, now) {
             LeaseState::Unknown | LeaseState::Live | LeaseState::Dormant => live_count += 1,
             LeaseState::Stale => stale_count += 1,
         }
@@ -1853,9 +1879,13 @@ pub(crate) struct StatusArgs {
 
 fn run_status(
     matches: &clap::ArgMatches,
-    ctx: &crate::command_registry::DispatchCtx,
-) -> anyhow::Result<crate::command_registry::Flow> {
-    use crate::*;
+    ctx: &crate::cmdkit::DispatchCtx,
+) -> anyhow::Result<crate::cmdkit::Flow> {
+    use crate::{
+        find_project_root, handle_status_command, handle_status_command_distributed,
+        handle_status_spec, output_format_is_json, StatusArgs,
+    };
+    use colored::Colorize;
     let args = <StatusArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
     match &ctx.store {
         None => {
@@ -1873,7 +1903,7 @@ fn run_status(
             } = &args
             {
                 // trace:BUG-1289 | ai:claude
-                return crate::command_registry::returned(handle_status_spec(
+                return crate::cmdkit::returned(handle_status_spec(
                     spec,
                     *idle_minutes,
                     *json || output_format_is_json(),
@@ -1886,12 +1916,10 @@ fn run_status(
             if let StatusArgs { spec: None, .. } = &args {
                 crate::freshness_gate::warn_if_running_binary_stale();
             }
-            Ok(crate::command_registry::Flow::Continue)
+            Ok(crate::cmdkit::Flow::Continue)
         }
-        Some(crate::command_registry::StoreCtx::Distributed { .. }) => {
-            Ok(crate::command_registry::Flow::Continue)
-        }
-        Some(crate::command_registry::StoreCtx::Git {
+        Some(crate::cmdkit::StoreCtx::Distributed { .. }) => Ok(crate::cmdkit::Flow::Continue),
+        Some(crate::cmdkit::StoreCtx::Git {
             store_path,
             backend,
         }) => {
@@ -1956,7 +1984,7 @@ fn run_status(
                             }
                         }
                     }
-                    return crate::command_registry::returned(handle_status_command_distributed(
+                    return crate::cmdkit::returned(handle_status_command_distributed(
                         *no_dev_context,
                         *short,
                         effective_json,
@@ -1977,9 +2005,9 @@ fn run_status(
                     ));
                 }
             }
-            Ok(crate::command_registry::Flow::Continue)
+            Ok(crate::cmdkit::Flow::Continue)
         }
-        Some(crate::command_registry::StoreCtx::Legacy {
+        Some(crate::cmdkit::StoreCtx::Legacy {
             storage,
             requirements_path,
         }) => {
@@ -2008,22 +2036,21 @@ fn run_status(
                     handle_status_command(*no_dev_context, None, &storage)?;
                 }
             }
-            Ok(crate::command_registry::Flow::Continue)
+            Ok(crate::cmdkit::Flow::Continue)
         }
     }
 }
 
 // trace:STORY-1728 | ai:claude
-pub(crate) static STATUS: crate::command_registry::CommandReg =
-    crate::command_registry::CommandReg {
-        name: "status",
-        help_after: "node",
-        command: <StatusArgs as clap::CommandFactory>::command,
-        policy: |_| crate::command_registry::CmdPolicy {
-            stakeholder: crate::stakeholder_role::StakeholderAction::Read,
-            per_write_auto_push: false,
-            skip_role_restore_prompt: false,
-            team_identity_write: false,
-        },
-        run: crate::command_registry::Handler::Store(run_status),
-    };
+pub(crate) static STATUS: crate::cmdkit::CommandReg = crate::cmdkit::CommandReg {
+    name: "status",
+    help_after: "node",
+    command: <StatusArgs as clap::CommandFactory>::command,
+    policy: |_| crate::cmdkit::CmdPolicy {
+        stakeholder: crate::stakeholder_role::StakeholderAction::Read,
+        per_write_auto_push: false,
+        skip_role_restore_prompt: false,
+        team_identity_write: false,
+    },
+    run: crate::cmdkit::Handler::Store(run_status),
+};

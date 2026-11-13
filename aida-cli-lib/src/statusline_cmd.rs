@@ -17,7 +17,17 @@ use colored::Colorize;
 pub(crate) mod statusline_cmd_args;
 pub(crate) use statusline_cmd_args::*;
 
-use crate::*;
+use crate::{
+    active_lease_for_cwd, apply_color_mode, base_behind_indicator, cache_freshness_threshold_secs,
+    classify_cache_freshness, cli, commits_behind_origin_main, find_main_worktree_root, load_role,
+    load_session_activity, local_lags_origin, main_worktree_root_from, maybe_spawn_bg_fetch,
+    orchestrator, presence, read_draft_backlog_depth, read_last_fetch_age_secs, read_queue_depth,
+    read_urgent_unread_count, resolve_effective_role, rev_parse_origin_aida_store,
+    role_segment_text, session, slugify, statusline_agy_adapter, statusline_base_freshness_config,
+    statusline_claude_adapter, statusline_contract, statusline_project_root,
+    statusline_role_mismatch_enabled, truncate, CacheFreshness, OrchestratorBadge, RoleActivity,
+    SessionLease, SCOPE_LABEL_MAX, SESS_LABEL_MAX,
+};
 
 pub(crate) fn handle_statusline_command(
     color: &str,
@@ -1161,6 +1171,7 @@ pub(crate) fn wt_divergence_segment(worktree_path: &std::path::Path, slug: &str)
 /// Where `q:N` is the depth of the queue routed to the active role
 /// (omitted when zero).
 // trace:FR-1-041 | ai:claude
+// trace:TASK-1214 | ai:codex
 #[derive(clap::Parser, Debug)]
 #[clap(name = "statusline")]
 pub(crate) struct StatuslineArgs {
@@ -1168,21 +1179,6 @@ pub(crate) struct StatuslineArgs {
     /// is a TTY and `NO_COLOR` is unset), `always`, `never`.
     #[clap(long, value_parser = ["auto", "always", "never"], default_value = "auto")]
     pub color: String,
-
-    /// Emit the one-liner wrapped in an OSC terminal-title escape
-    /// sequence (`ESC ] 2 ; <line> BEL`) instead of printing it to the
-    /// body, so the AIDA role/queue/inbox segment rides the terminal
-    /// title bar / tmux window name. This is the in-agent parity surface
-    /// for clients (e.g. Codex CLI) whose built-in footer is a fixed
-    /// field set and cannot run `aida statusline` as a command: wire
-    /// `aida statusline title` into the shell prompt
-    /// (`PROMPT_COMMAND` / `precmd`) and the AIDA segment shows in the
-    /// terminal title during the agent session. Forces color off (an
-    /// OSC title string carries no ANSI). Mutually exclusive with the
-    /// `setup` subcommand.
-    // trace:TASK-896
-    #[clap(long, hide = true)]
-    pub title: bool,
 
     /// Merge live fields from a client's stdin JSON payload into the
     /// AIDA segment: model, context-window usage, activity, and VCS
@@ -1263,19 +1259,18 @@ pub(crate) fn statusline_session_handle(
 
 fn run_statusline(
     matches: &clap::ArgMatches,
-    _ctx: &crate::command_registry::DispatchCtx,
+    _ctx: &crate::cmdkit::DispatchCtx,
 ) -> anyhow::Result<()> {
     let args = <StatuslineArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
     let StatuslineArgs {
         color,
-        title,
         client,
         tmux_pane_pid,
         action,
     } = &args;
     // trace:TASK-0414 — the opt-in `setup` subcommand bootstraps the
     // statusline; with no subcommand we render the one-liner (default).
-    // trace:TASK-896 — `--title` emits the same one-liner wrapped in an
+    // trace:TASK-896 — `title` emits the same one-liner wrapped in an
     // OSC terminal-title escape so the AIDA segment rides the terminal
     // title bar (the in-agent parity surface for clients without a
     // command-backed footer, e.g. Codex CLI).
@@ -1288,15 +1283,9 @@ fn run_statusline(
         }
         Some(act) => return self::handle_statusline_setup_command(act),
         None => {
-            if *title {
-                note_hidden_alias(
-                    concat!("aida statusline ", "--title"),
-                    "aida statusline title",
-                );
-            }
             return self::handle_statusline_command(
                 color,
-                *title,
+                false,
                 client.as_deref(),
                 *tmux_pane_pid,
             );
@@ -1305,19 +1294,18 @@ fn run_statusline(
 }
 
 // trace:STORY-1728 | ai:claude
-pub(crate) static STATUSLINE: crate::command_registry::CommandReg =
-    crate::command_registry::CommandReg {
-        name: "statusline",
-        help_after: "statusbar",
-        command: <StatuslineArgs as clap::CommandFactory>::command,
-        policy: |_| crate::command_registry::CmdPolicy {
-            stakeholder: crate::stakeholder_role::StakeholderAction::Write,
-            per_write_auto_push: false,
-            skip_role_restore_prompt: true,
-            team_identity_write: false,
-        },
-        run: crate::command_registry::Handler::Early(run_statusline),
-    };
+pub(crate) static STATUSLINE: crate::cmdkit::CommandReg = crate::cmdkit::CommandReg {
+    name: "statusline",
+    help_after: "statusbar",
+    command: <StatuslineArgs as clap::CommandFactory>::command,
+    policy: |_| crate::cmdkit::CmdPolicy {
+        stakeholder: crate::stakeholder_role::StakeholderAction::Write,
+        per_write_auto_push: false,
+        skip_role_restore_prompt: true,
+        team_identity_write: false,
+    },
+    run: crate::cmdkit::Handler::Early(run_statusline),
+};
 
 // trace:TASK-2631 | ai:codex
 pub(crate) fn native_containment_statusline_segment(

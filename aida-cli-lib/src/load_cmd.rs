@@ -20,7 +20,13 @@ pub(crate) use load_cmd_args::*;
 use aida_core::{RequirementStatus, Storage};
 
 use crate::cli::LoadCommand;
-use crate::*;
+// trace:TASK-3428 | ai:codex
+use crate::kernel::{current_user_id, find_project_root};
+use crate::queue_misc::{
+    effort_display_id, print_effort_load_for_requirements, queued_requirement_ids,
+};
+use crate::worktree_gc::main_worktree_root_from;
+use crate::{calibration, effort_calibration};
 
 fn is_backlog_status(status: &RequirementStatus) -> bool {
     matches!(
@@ -164,16 +170,13 @@ pub(crate) struct LoadArgs {
 
 fn run_load(
     matches: &clap::ArgMatches,
-    ctx: &crate::command_registry::DispatchCtx,
-) -> anyhow::Result<crate::command_registry::Flow> {
-    use crate::*;
+    ctx: &crate::cmdkit::DispatchCtx,
+) -> anyhow::Result<crate::cmdkit::Flow> {
     let args = <LoadArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
     match &ctx.store {
-        None => Ok(crate::command_registry::Flow::Continue),
-        Some(crate::command_registry::StoreCtx::Distributed { .. }) => {
-            Ok(crate::command_registry::Flow::Continue)
-        }
-        Some(crate::command_registry::StoreCtx::Git {
+        None => Ok(crate::cmdkit::Flow::Continue),
+        Some(crate::cmdkit::StoreCtx::Distributed { .. }) => Ok(crate::cmdkit::Flow::Continue),
+        Some(crate::cmdkit::StoreCtx::Git {
             store_path,
             backend,
         }) => {
@@ -185,9 +188,9 @@ fn run_load(
                     self::handle_load_command(load_cmd, &storage)?;
                 }
             }
-            Ok(crate::command_registry::Flow::Continue)
+            Ok(crate::cmdkit::Flow::Continue)
         }
-        Some(crate::command_registry::StoreCtx::Legacy {
+        Some(crate::cmdkit::StoreCtx::Legacy {
             storage,
             requirements_path,
         }) => {
@@ -197,21 +200,21 @@ fn run_load(
                     self::handle_load_command(load_cmd, &storage)?;
                 }
             }
-            Ok(crate::command_registry::Flow::Continue)
+            Ok(crate::cmdkit::Flow::Continue)
         }
     }
 }
 
 // trace:STORY-1728 | ai:claude
-pub(crate) static LOAD: crate::command_registry::CommandReg = crate::command_registry::CommandReg {
+pub(crate) static LOAD: crate::cmdkit::CommandReg = crate::cmdkit::CommandReg {
     name: "load",
     help_after: "no-human",
     command: <LoadArgs as clap::CommandFactory>::command,
-    policy: |_| crate::command_registry::CmdPolicy {
+    policy: |_| crate::cmdkit::CmdPolicy {
         stakeholder: crate::stakeholder_role::StakeholderAction::Write,
         per_write_auto_push: false,
         skip_role_restore_prompt: false,
         team_identity_write: false,
     },
-    run: crate::command_registry::Handler::Store(run_load),
+    run: crate::cmdkit::Handler::Store(run_load),
 };

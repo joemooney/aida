@@ -2,8 +2,14 @@
 //! Extracted verbatim from `main.rs` (SPIKE-78 pure-movement refactor).
 
 use crate::cli::{DocCommand, DocsCommand};
-use crate::*;
+use crate::{
+    docs, find_project_root, find_uncovered_completed_specs, git_describe_latest_tag,
+    handle_doc_suggest, parse_tag_list, record_role_activity, render_discipline_glossary,
+    resolve_description,
+};
+use aida_core::DatabaseBackend;
 use aida_core::RequirementsStore;
+use aida_core::{RelationshipType, RequirementStatus, RequirementType, Storage};
 use anyhow::Result;
 use colored::Colorize;
 
@@ -567,9 +573,8 @@ pub(crate) struct DocsArgs {
 
 fn run_docs(
     matches: &clap::ArgMatches,
-    ctx: &crate::command_registry::DispatchCtx,
-) -> anyhow::Result<crate::command_registry::Flow> {
-    use crate::*;
+    ctx: &crate::cmdkit::DispatchCtx,
+) -> anyhow::Result<crate::cmdkit::Flow> {
     let args = <DocsArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
     // The sweep reads the working tree and git, not the requirements graph,
     // so it runs the same under every store backend. trace:STORY-2220 | ai:claude
@@ -579,20 +584,16 @@ fn run_docs(
         json,
     } = &args.inner
     {
-        return crate::command_registry::returned(crate::docs_sweep::run(
-            crate::docs_sweep::SweepOpts {
-                since: since.as_deref(),
-                report_only: *report_only,
-                json: *json,
-            },
-        ));
+        return crate::cmdkit::returned(crate::docs_sweep::run(crate::docs_sweep::SweepOpts {
+            since: since.as_deref(),
+            report_only: *report_only,
+            json: *json,
+        }));
     }
     match &ctx.store {
-        None => Ok(crate::command_registry::Flow::Continue),
-        Some(crate::command_registry::StoreCtx::Distributed { .. }) => {
-            Ok(crate::command_registry::Flow::Continue)
-        }
-        Some(crate::command_registry::StoreCtx::Git {
+        None => Ok(crate::cmdkit::Flow::Continue),
+        Some(crate::cmdkit::StoreCtx::Distributed { .. }) => Ok(crate::cmdkit::Flow::Continue),
+        Some(crate::cmdkit::StoreCtx::Git {
             store_path,
             backend,
         }) => {
@@ -602,14 +603,12 @@ fn run_docs(
                 DocsArgs { inner: docs_cmd } => {
                     // trace:FR-1-077 | ai:claude
                     let store = backend.load()?;
-                    return crate::command_registry::returned(self::handle_docs_with_store(
-                        docs_cmd, &store,
-                    ));
+                    return crate::cmdkit::returned(self::handle_docs_with_store(docs_cmd, &store));
                 }
             }
-            Ok(crate::command_registry::Flow::Continue)
+            Ok(crate::cmdkit::Flow::Continue)
         }
-        Some(crate::command_registry::StoreCtx::Legacy {
+        Some(crate::cmdkit::StoreCtx::Legacy {
             storage,
             requirements_path,
         }) => {
@@ -620,23 +619,23 @@ fn run_docs(
                     self::handle_docs_command(docs_cmd, &storage)?;
                 }
             }
-            Ok(crate::command_registry::Flow::Continue)
+            Ok(crate::cmdkit::Flow::Continue)
         }
     }
 }
 
 // trace:STORY-1728 | ai:claude
-pub(crate) static DOCS: crate::command_registry::CommandReg = crate::command_registry::CommandReg {
+pub(crate) static DOCS: crate::cmdkit::CommandReg = crate::cmdkit::CommandReg {
     name: "docs",
     help_after: "tui",
     command: <DocsArgs as clap::CommandFactory>::command,
-    policy: |_| crate::command_registry::CmdPolicy {
+    policy: |_| crate::cmdkit::CmdPolicy {
         stakeholder: crate::stakeholder_role::StakeholderAction::Write,
         per_write_auto_push: true,
         skip_role_restore_prompt: false,
         team_identity_write: false,
     },
-    run: crate::command_registry::Handler::Store(run_docs),
+    run: crate::cmdkit::Handler::Store(run_docs),
 };
 
 /// Living-documentation entries — narrative captured during work
@@ -655,16 +654,13 @@ pub(crate) struct DocArgs {
 
 fn run_doc(
     matches: &clap::ArgMatches,
-    ctx: &crate::command_registry::DispatchCtx,
-) -> anyhow::Result<crate::command_registry::Flow> {
-    use crate::*;
+    ctx: &crate::cmdkit::DispatchCtx,
+) -> anyhow::Result<crate::cmdkit::Flow> {
     let args = <DocArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
     match &ctx.store {
-        None => Ok(crate::command_registry::Flow::Continue),
-        Some(crate::command_registry::StoreCtx::Distributed { .. }) => {
-            Ok(crate::command_registry::Flow::Continue)
-        }
-        Some(crate::command_registry::StoreCtx::Git {
+        None => Ok(crate::cmdkit::Flow::Continue),
+        Some(crate::cmdkit::StoreCtx::Distributed { .. }) => Ok(crate::cmdkit::Flow::Continue),
+        Some(crate::cmdkit::StoreCtx::Git {
             store_path,
             backend,
         }) => {
@@ -676,9 +672,9 @@ fn run_doc(
                     self::handle_doc_command(doc_cmd, store_path, backend)?;
                 }
             }
-            Ok(crate::command_registry::Flow::Continue)
+            Ok(crate::cmdkit::Flow::Continue)
         }
-        Some(crate::command_registry::StoreCtx::Legacy {
+        Some(crate::cmdkit::StoreCtx::Legacy {
             storage,
             requirements_path,
         }) => {
@@ -695,21 +691,21 @@ fn run_doc(
                     );
                 }
             }
-            Ok(crate::command_registry::Flow::Continue)
+            Ok(crate::cmdkit::Flow::Continue)
         }
     }
 }
 
 // trace:STORY-1728 | ai:claude
-pub(crate) static DOC: crate::command_registry::CommandReg = crate::command_registry::CommandReg {
+pub(crate) static DOC: crate::cmdkit::CommandReg = crate::cmdkit::CommandReg {
     name: "doc",
     help_after: "rules",
     command: <DocArgs as clap::CommandFactory>::command,
-    policy: |_| crate::command_registry::CmdPolicy {
+    policy: |_| crate::cmdkit::CmdPolicy {
         stakeholder: crate::stakeholder_role::StakeholderAction::Write,
         per_write_auto_push: true,
         skip_role_restore_prompt: false,
         team_identity_write: false,
     },
-    run: crate::command_registry::Handler::Store(run_doc),
+    run: crate::cmdkit::Handler::Store(run_doc),
 };

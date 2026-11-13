@@ -300,13 +300,13 @@ class RealRepoTest(unittest.TestCase):
         p = self.run_plan(["aida-cli-lib/src/tests/role_identity_tests.rs"])
         self.assertEqual(p.commands, [BASE + ["-p", "aida-cli-lib", "--lib", "--", "role::role_identity_tests"]])
 
-    def test_path_declared_in_an_included_part_maps_to_the_crate_root(self):
-        # lib_part2.rs (include!d into lib.rs): #[path = "tests/glossary_render_tests.rs"]
+    def test_path_declared_in_a_named_module_maps_to_that_module(self):
+        # glossary_render.rs: #[path = "tests/glossary_render_tests.rs"]
         p = self.run_plan(["aida-cli-lib/src/tests/glossary_render_tests.rs"])
-        self.assertEqual(p.commands, [BASE + ["-p", "aida-cli-lib", "--lib", "--", "glossary_render_tests"]])
+        self.assertEqual(p.commands, [BASE + ["-p", "aida-cli-lib", "--lib", "--", "glossary_render::glossary_render_tests"]])
 
     def test_included_lib_parts_run_unfiltered_only_with_allow_full(self):
-        for n in range(1, 7):
+        for n in (5,):
             with self.subTest(part=n):
                 p = self.run_plan([f"aida-cli-lib/src/lib_part{n}.rs"], allow_full=True)
                 self.assertEqual(p.commands, [BASE + ["-p", "aida-cli-lib", "--lib"]])
@@ -322,15 +322,15 @@ class RealRepoTest(unittest.TestCase):
         self.assertEqual(rc, tt.TOO_WIDE_EXIT)
 
     def test_heavy_lib_widening_narrows_to_the_named_modules(self):
-        # lib_part1.rs widens (crate root) but guard tests that include_str! it are named.
-        p = self.run_plan(["aida-cli-lib/src/lib_part1.rs", "aida-cli-lib/src/tests/role_identity_tests.rs"])
+        # review_commands.rs widens (crate root) but guard tests that include_str! it are named.
+        p = self.run_plan(["aida-cli-lib/src/review_commands.rs", "aida-cli-lib/src/tests/role_identity_tests.rs"])
         self.assertEqual(p.too_wide, {})
         self.assertEqual(len(p.commands), 1)
         cmd = p.commands[0]
         self.assertEqual(cmd[:8], BASE + ["-p", "aida-cli-lib", "--lib", "--"])
         self.assertIn("role::role_identity_tests", cmd)
         self.assertIn("queue_cmd::headless_hint_tests", cmd)
-        self.assertTrue(any("CI's job" in n and "lib_part1.rs" in n for n in p.notes))
+        self.assertTrue(any("CI's job" in n and "review_commands.rs" in n for n in p.notes))
 
     def test_caller_filter_lifts_the_heavy_lib_cap(self):
         p = self.run_plan(["aida-cli-lib/build.rs"], extra=["story_1853"])
@@ -338,14 +338,14 @@ class RealRepoTest(unittest.TestCase):
         self.assertEqual(p.commands, [BASE + ["-p", "aida-cli-lib", "--lib", "--", "story_1853"]])
 
     def test_untested_heavy_lib_module_is_dropped_not_widened(self):
-        p = self.run_plan(["aida-cli-lib/src/tests/role_identity_tests.rs", "aida-cli-lib/src/queue_cmd.rs"])
+        p = self.run_plan(["aida-cli-lib/src/tests/role_identity_tests.rs", "aida-cli-lib/src/queue_cmd/work.rs"])
         ran = []
-        listing = lambda c: (0, "queue_cmd::tests::t: test\n")
+        listing = lambda c: (0, "queue_cmd::work::tests::t: test\n")
         p.suspect = {}  # treat role_identity_tests as untested, not a mapping bug
         self.assertEqual(tt.execute(p, [], False, lambda c: ran.append(c) or 0, listing), 0)
         self.assertEqual(len(ran), 1)
         self.assertNotIn("role::role_identity_tests", ran[0])
-        self.assertIn("queue_cmd", ran[0])
+        self.assertIn("queue_cmd::work", ran[0])
         p.derived = {"aida-cli-lib": {"role::role_identity_tests"}}
         p.commands = [BASE + ["-p", "aida-cli-lib", "--lib", "--", "role::role_identity_tests"]]
         self.assertEqual(tt.execute(p, [], False, self.fail_run, listing), 0)
@@ -376,9 +376,9 @@ class RealRepoTest(unittest.TestCase):
                          ["git_ops", "tests", "store_hook_tests"])
 
     def test_source_read_by_a_guard_test_adds_the_guard_module(self):
-        p = self.run_plan(["aida-cli-lib/src/queue_cmd.rs"])
+        p = self.run_plan(["aida-cli-lib/src/queue_cmd/work.rs"])
         self.assertEqual(len(p.commands), 1)
-        self.assertIn("queue_cmd", p.derived["aida-cli-lib"])
+        self.assertIn("queue_cmd::work", p.derived["aida-cli-lib"])
         self.assertIn("headless_hint_tests", " ".join(p.derived["aida-cli-lib"]))
 
     def test_templates_run_aida_core_unit_tests_unfiltered(self):
@@ -390,7 +390,7 @@ class RealRepoTest(unittest.TestCase):
         # story_1350_review_approach_tests.rs include_str!s the aida-pickup skill.
         p = self.run_plan(["aida-core/templates/skills/aida-pickup.md"])
         self.assertIn(BASE + ["-p", "aida-core", "--lib"], p.commands)
-        self.assertIn("story_1350_review_approach_tests", p.derived["aida-cli-lib"])
+        self.assertIn("regression_tests::story_1350_review_approach_tests", p.derived["aida-cli-lib"])
 
     def test_discipline_pack_change_runs_embedded_template_consumers(self):
         # #2671 round 1 broke these aida-cli-lib tests while aida-core's were green.
@@ -398,7 +398,7 @@ class RealRepoTest(unittest.TestCase):
         self.assertIn(BASE + ["-p", "aida-core", "--lib"], p.commands)
         cli = [c for c in p.commands if c[5] == "aida-cli-lib"]
         self.assertEqual(len(cli), 1)
-        self.assertIn("story_255_discipline_pack_tests", cli[0])
+        self.assertIn("regression_tests::story_255_discipline_pack_tests", cli[0])
         self.assertIn("scaffold_refresh", cli[0])  # reaches scaffold_refresh::tests
         self.assertIn("--", cli[0])
 

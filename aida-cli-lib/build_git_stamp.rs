@@ -56,6 +56,12 @@ fn emit_git_rerun_triggers() {
     let Some((git_dir, common_dir)) = resolve_git_dirs() else {
         return;
     };
+    // Dev builds also key Cargo's cached build-script output by HEAD. Git
+    // watches alone can retain a stale stamp in a reused target directory;
+    // deleting Rust's incremental cache does not invalidate that output.
+    // This is an invalidation input only: the stamp still comes from Git.
+    // trace:BUG-2499 | ai:codex
+    println!("cargo:rerun-if-env-changed=AIDA_DEV_BUILD_HEAD");
     let mut watched: Vec<std::path::PathBuf> = Vec::new();
 
     // Per-worktree state: HEAD, index (dirty flag), and HEAD's reflog, which

@@ -150,6 +150,31 @@ pub(crate) fn scan_occupancy_in(
 ) -> Occupancy {
     #[cfg(unix)]
     use std::os::unix::fs::MetadataExt;
+    // SAFETY: geteuid only reads this process's credentials.
+    #[cfg(unix)]
+    let me = unsafe { libc::geteuid() };
+    scan_occupancy_in_with_owner(proc_root, probe, exclude, |meta| {
+        #[cfg(unix)]
+        {
+            meta.uid() == me
+        }
+        #[cfg(not(unix))]
+        {
+            let _ = meta;
+            true
+        }
+    })
+}
+
+// Keep ownership injectable so foreign-uid regressions need neither root nor
+// changes to the test process's credentials. Production always uses geteuid.
+// trace:BUG-2511 | ai:codex
+pub(crate) fn scan_occupancy_in_with_owner(
+    proc_root: &Path,
+    probe: &OccupancyProbe<'_>,
+    exclude: &std::collections::HashSet<u32>,
+    is_ours: impl Fn(&std::fs::Metadata) -> bool,
+) -> Occupancy {
     let tree = probe
         .worktree
         .filter(|t| !t.as_os_str().is_empty())
@@ -158,9 +183,6 @@ pub(crate) fn scan_occupancy_in(
         Ok(entries) => entries,
         Err(e) => return Occupancy::Unknown(format!("{} is unreadable: {e}", proc_root.display())),
     };
-    // SAFETY: geteuid only reads this process's credentials.
-    #[cfg(unix)]
-    let me = unsafe { libc::geteuid() };
     let gone = |e: &std::io::Error| {
         e.kind() == std::io::ErrorKind::NotFound || e.raw_os_error() == Some(libc::ESRCH)
     };
@@ -187,13 +209,7 @@ pub(crate) fn scan_occupancy_in(
             Err(e) if gone(&e) => continue,
             Err(e) => return Occupancy::Unknown(format!("process {pid} is unreadable: {e}")),
         };
-        #[cfg(unix)]
-        let ours = meta.uid() == me;
-        #[cfg(not(unix))]
-        let ours = {
-            let _ = meta;
-            true
-        };
+        let ours = is_ours(&meta);
         let stat = match std::fs::read_to_string(base.join("stat")) {
             Ok(stat) => stat,
             Err(e) if gone(&e) => continue,

@@ -7,7 +7,16 @@
 //! stay in `main.rs` and are reached via `crate::`.
 // trace:SPIKE-78 | ai:claude
 
-use crate::*;
+use crate::{
+    cli_relationship_type, effective_display_status, get_default_author, handle_rel_list_modern,
+    is_terminal_status, nearest_standard_rel_type, not_found, parse_requirement_id,
+    reject_cross_store_spec_ref, rel_remove_matches, rel_should_write_inverse,
+    relationship_terminal_ambiguity_warning, RelationshipCommand, STANDARD_REL_TYPES,
+};
+use aida_core::DatabaseBackend;
+use aida_core::{RelationshipType, RequirementStatus, Storage};
+use anyhow::Result;
+use colored::Colorize;
 
 // trace:STORY-1728 | ai:claude
 #[path = "relationship_cmd_args.rs"]
@@ -328,16 +337,21 @@ pub(crate) struct RelArgs {
 
 fn run_rel(
     matches: &clap::ArgMatches,
-    ctx: &crate::command_registry::DispatchCtx,
-) -> anyhow::Result<crate::command_registry::Flow> {
-    use crate::*;
+    ctx: &crate::cmdkit::DispatchCtx,
+) -> anyhow::Result<crate::cmdkit::Flow> {
+    use crate::{
+        cli_relationship_type, get_default_author, handle_rel_list_modern, is_terminal_status,
+        nearest_standard_rel_type, not_found, reject_cross_store_spec_ref, rel_remove_matches,
+        rel_should_write_inverse, relationship_terminal_ambiguity_warning, RelationshipCommand,
+        STANDARD_REL_TYPES,
+    };
+    use aida_core::RelationshipType;
+    use colored::Colorize;
     let args = <RelArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
     match &ctx.store {
-        None => Ok(crate::command_registry::Flow::Continue),
-        Some(crate::command_registry::StoreCtx::Distributed { .. }) => {
-            Ok(crate::command_registry::Flow::Continue)
-        }
-        Some(crate::command_registry::StoreCtx::Git {
+        None => Ok(crate::cmdkit::Flow::Continue),
+        Some(crate::cmdkit::StoreCtx::Distributed { .. }) => Ok(crate::cmdkit::Flow::Continue),
+        Some(crate::cmdkit::StoreCtx::Git {
             store_path,
             backend,
         }) => {
@@ -616,9 +630,9 @@ fn run_rel(
                     )?;
                 }
             }
-            Ok(crate::command_registry::Flow::Continue)
+            Ok(crate::cmdkit::Flow::Continue)
         }
-        Some(crate::command_registry::StoreCtx::Legacy {
+        Some(crate::cmdkit::StoreCtx::Legacy {
             storage,
             requirements_path,
         }) => {
@@ -628,21 +642,21 @@ fn run_rel(
                     self::handle_relationship_command(rel_cmd, &storage)?;
                 }
             }
-            Ok(crate::command_registry::Flow::Continue)
+            Ok(crate::cmdkit::Flow::Continue)
         }
     }
 }
 
 // trace:STORY-1728 | ai:claude
-pub(crate) static REL: crate::command_registry::CommandReg = crate::command_registry::CommandReg {
+pub(crate) static REL: crate::cmdkit::CommandReg = crate::cmdkit::CommandReg {
     name: "rel",
     help_after: "upgrade",
     command: <RelArgs as clap::CommandFactory>::command,
-    policy: |_| crate::command_registry::CmdPolicy {
+    policy: |_| crate::cmdkit::CmdPolicy {
         stakeholder: crate::stakeholder_role::StakeholderAction::Relationship,
         per_write_auto_push: true,
         skip_role_restore_prompt: false,
         team_identity_write: false,
     },
-    run: crate::command_registry::Handler::Store(run_rel),
+    run: crate::cmdkit::Handler::Store(run_rel),
 };

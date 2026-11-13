@@ -9,7 +9,12 @@
 //! `load_store_for_lookup`, `scan_trace_graph`) stay in `main.rs`, reached
 //! via `crate::`.
 
-use crate::*;
+use anyhow::Result;
+use colored::Colorize;
+use std::collections::HashSet;
+
+// trace:TASK-3428 | ai:codex
+use crate::{find_project_root, load_store_for_lookup, scan_trace_graph, DepsCommand};
 
 // trace:STORY-1728 | ai:claude
 #[path = "deps_cmd_args.rs"]
@@ -277,25 +282,22 @@ pub(crate) struct DepsArgs {
 // `aida deps sweep` self-loads the store via `load_store_for_lookup`
 // and scans source for trace comments — like `plan helpers`, it needs
 // no shared storage handle. Read-only. trace:STORY-447 | ai:claude
-fn run_deps(
-    matches: &clap::ArgMatches,
-    _ctx: &crate::command_registry::DispatchCtx,
-) -> anyhow::Result<()> {
+fn run_deps(matches: &clap::ArgMatches, _ctx: &crate::cmdkit::DispatchCtx) -> anyhow::Result<()> {
     let args = <DepsArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
     let deps_cmd = &args.inner;
     return self::handle_deps_command(deps_cmd);
 }
 
 // trace:STORY-1728 | ai:claude
-pub(crate) static DEPS: crate::command_registry::CommandReg = crate::command_registry::CommandReg {
+pub(crate) static DEPS: crate::cmdkit::CommandReg = crate::cmdkit::CommandReg {
     name: "deps",
     help_after: "plan",
     command: <DepsArgs as clap::CommandFactory>::command,
-    policy: |_| crate::command_registry::CmdPolicy {
+    policy: |_| crate::cmdkit::CmdPolicy {
         stakeholder: crate::stakeholder_role::StakeholderAction::Write,
         per_write_auto_push: false,
         skip_role_restore_prompt: false,
         team_identity_write: false,
     },
-    run: crate::command_registry::Handler::Early(run_deps),
+    run: crate::cmdkit::Handler::Early(run_deps),
 };

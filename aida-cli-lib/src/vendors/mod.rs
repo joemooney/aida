@@ -1,7 +1,26 @@
-//! Vendor-facing rendering over the core registry. No process construction,
-//! admission decisions or grant issuance belongs in this module.
+//! Vendor-facing rendering and effectful launch adapters over the core registry.
 // trace:STORY-2539 | ai:codex
+pub(crate) mod profile;
+
 use aida_core::vendors::{Background, SkillSyntax, VendorProfile};
+
+// Read-only projection for declaration rendering and preview classification.
+// trace:STORY-1486 | ai:codex
+pub(crate) struct LaunchPreviewOptions<'a> {
+    pub cwd: &'a Option<std::path::PathBuf>,
+    pub noexec: &'a bool,
+}
+
+// trace:STORY-1486 | ai:codex
+pub(crate) fn launch_preview_options(
+    command: &crate::agent_launch::AgentNewCommand,
+) -> LaunchPreviewOptions<'_> {
+    use crate::agent_launch::AgentNewCommand;
+    let (AgentNewCommand::Claude { cwd, noexec, .. }
+    | AgentNewCommand::Codex { cwd, noexec, .. }
+    | AgentNewCommand::Antigravity { cwd, noexec, .. }) = command;
+    LaunchPreviewOptions { cwd, noexec }
+}
 
 fn with_args(head: String, args: &str) -> String {
     match args.trim() {
@@ -54,6 +73,17 @@ pub(crate) fn launch_with_skill(
     }
 }
 
+// trace:TASK-3219 | ai:codex
+pub(crate) fn supervised_background_name() -> &'static str {
+    aida_core::vendors::profile(aida_core::vendors::LaunchVendor::Claude).launch_name
+}
+pub(crate) fn supervised_background_hint(attempt: &str) -> String {
+    format!("AIDA background attempt {attempt}\n  logs: aida agent logs {attempt}\n  attach: aida agent attach {attempt}\n  claude attach is unavailable for AIDA-supervised sessions.")
+}
+pub(crate) fn background_attach_refusal() -> &'static str {
+    "claude attach is unavailable under the AIDA wrapper; use aida agent attach <attempt> or aida agent logs <attempt>"
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -77,7 +107,7 @@ mod tests {
                 ".claude/settings.json",
                 ".claude/hooks",
                 MailWake::PerTurnHooks,
-                Resume::RecordedSession,
+                Resume::RecordedSessionWithFork,
                 Background::DaemonHandoff,
                 SkillSyntax::Slash,
                 SandboxSupport::LegacyAndShared,
@@ -365,4 +395,65 @@ pub(crate) fn codex_binary_diagnostic(path: &std::path::Path) -> String {
             path.display()
         ),
     }
+}
+
+// trace:STORY-2642 | ai:codex
+pub(crate) mod host_diagnostics;
+
+/// Render a runnable unattended review pickup, including its launch vendor.
+// trace:BUG-2514 | ai:codex
+pub(crate) fn review_pickup_cmd(
+    profile: Option<&VendorProfile>,
+    noun: &str,
+    number: u64,
+) -> String {
+    let profile = profile
+        .unwrap_or_else(|| aida_core::vendors::profile(aida_core::vendors::LaunchVendor::Claude));
+    format!(
+        "aida queue work {noun}-{number} --role reviewer --vendor {} --no-human --strict",
+        profile.session_name
+    )
+}
+
+// trace:BUG-2513 | ai:codex
+pub(crate) mod native_setup {
+    pub const KEY: &str = "codex";
+    pub const PROMPT: &str = "  Opt Codex into its native sandbox? This is weaker than AIDA containment (native sandbox, not AIDA-contained). Write [contained.vendors] codex = \"native\"? [y/N]: ";
+    pub const WRITTEN: &str = "Codex native sandbox opt-in written. Commit .aida/config.toml to the trusted default branch before launching; native sandbox, not AIDA-contained.";
+    pub const FIX: &str = "aida init --agent codex (interactive opt-in for missing policy), or edit .aida/config.toml to set and commit [contained.vendors] codex = \"native\" to the trusted default branch";
+    pub const OTHER_FIX: &str = "use a supported vendor: aida agent new claude";
+}
+
+/// Preserve historical diagnostic spelling without granting unsupported resume.
+// trace:STORY-2539 | ai:codex
+pub(crate) fn resume_command(agent: &str, id: &str) -> (String, Vec<String>) {
+    let vendor = aida_core::vendors::LaunchVendor::parse(agent)
+        .unwrap_or(aida_core::vendors::LaunchVendor::Claude);
+    let p = aida_core::vendors::profile(vendor);
+    (
+        p.launch_name.into(),
+        p.resume_args(id, false)
+            .unwrap_or_else(|| vec!["resume".into(), id.into()]),
+    )
+}
+
+// trace:STORY-2539 STORY-2255 | ai:codex
+pub(crate) fn fork_thread_args(mut args: Vec<String>, thread: &str) -> anyhow::Result<Vec<String>> {
+    let thread = thread.trim();
+    anyhow::ensure!(!thread.is_empty(), "cannot fork an empty codex thread id");
+    let exec = args
+        .iter()
+        .position(|a| a == "exec")
+        .ok_or_else(|| anyhow::anyhow!("codex argv has no `exec` subcommand to fork"))?;
+    anyhow::ensure!(
+        args.len() > exec + 1,
+        "codex argv has no prompt after `exec`"
+    );
+    let operation = aida_core::vendors::profile(aida_core::vendors::LaunchVendor::Codex)
+        .resume_args(thread, true)
+        .expect("recorded-thread fork syntax");
+    args.insert(exec + 1, operation[0].clone());
+    let prompt_at = args.len() - 1;
+    args.insert(prompt_at, thread.to_string());
+    Ok(args)
 }

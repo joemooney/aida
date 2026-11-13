@@ -113,7 +113,7 @@ aida unarchive <ID>                    # Restore an archived spec
 aida defer <ID> --until "date:2026-12-01"  # Park as primed/conditional work — hidden from default views, NOT filed away; records the revisit trigger (STORY-584)
 aida list --deferred                   # Only deferred rows (the primed shelf) + each spec's revisit trigger; honors legacy deferred:* tags
 aida undefer <ID>                      # Restore a deferred spec to the active view
-aida show <ID>                         # Show requirement details + git linkage (commits/files/branch/PR — TASK-241)
+aida show <ID> --full                  # Show requirement details + git linkage (commits/files/branch/PR — TASK-241)
 aida show <ID> --no-git                # Skip the git-linkage section; --verbose expands it
 aida graph tree <ID>                    # Epic rollup; use blocked-by/blocks/impact modes for transitive queries (STORY-489)
 aida add --title "..." --type story --status draft --tags "tag1,tag2"
@@ -254,13 +254,16 @@ not add push triggers for `train/*` branches.
 
 The merge-hold gate retains its `synchronize`, `labeled`, `unlabeled`, and
 `edited` triggers as well as `opened` and `reopened`. Label/body events share
-the PR group rather than competing in separate groups, and the replacement
-still reports the required `merge-hold-gate` job. After a cancellation, verify
-that the current PR head has a completed gate; a cancelled run is not clearance.
-[GitHub concurrency](https://docs.github.com/en/actions/how-tos/write-workflows/choose-when-workflows-run/control-workflow-concurrency)
-does not guarantee dispatch order within a PR group, so an out-of-order label
-event can replace newer event evidence. Inspect the latest head and rerun its
-gate if necessary.
+the PR group rather than competing in separate groups. The serialized publisher
+reads live PR metadata and writes the required `merge-hold-gate` commit status;
+its job is named `publish-merge-hold-status`. Dispatch order is not guaranteed,
+but an old event reads current labels rather than replaying its event snapshot.
+`cancel-in-progress: false` preserves a running publisher; GitHub may still
+cancel an older waiting run when replacing its pending slot. A cancelled run is
+not clearance: verify the current head's required status and the surviving
+publisher. During the temporary dual-trigger bootstrap, follow the cancellation
+and notification checks in the cutover runbook.
+<!-- trace:BUG-2492 | ai:codex -->
 <!-- trace:TASK-3267 | ai:codex -->
 
 **Cross-worktree cargo cache gotcha** (TASK-0396): cargo's `target/.fingerprint/` references absolute paths from the build that produced each artifact. If `aida session end` removes a worktree, subsequent `cargo build` from a sibling worktree can fail with errors pointing at the deleted worktree's paths. Recovery: `cargo clean -p <crate>` for the affected workspace members, or `cargo clean` for a full reset. See `docs/advanced/session-lifecycle.md` for the full recipe.
@@ -349,9 +352,9 @@ Set `AIDA_COMMIT_STRICT=true` to reject non-conforming commits.
 
 ### MCP server
 
-`aida mcp-serve` exposes requirements as MCP tools and resources for native Claude Code integration via `.mcp.json`. Core requirement tools: `list_requirements`, `show_requirement`, `add_requirement`, `update_requirement`, `search_requirements`, `add_comment`, `add_relationship`, `query_graph`, `list_features`, `history`. The server **also** exposes the inter-agent coordination surface — mailbox (`send_message`/`read_inbox`), briefs (`list_briefs`/`read_brief`/`ack_brief`), punts, directives, findings, queue, sessions, and roles (~60 tools total; `grep '"name":' aida-cli/src/mcp.rs` for the live list). Resources: `aida://project/summary`, `aida://requirements/tree`. The MCP server is the **typed/structural** surface for MCP-native clients. Note: AIDA's 2026-06-29 agent-surface benchmark found MCP costs ~2× the token-efficient CLI (`AIDA_AGENT_OUTPUT`/TOON) for identical tasks at equal-or-lower success, and on-demand schema loading doesn't close the gap — so the **CLI is the primary agent surface**; MCP is the typed option, not the default. (`bench/agent-surface/results/report.md` — the 72-cell 2026-06-29 run, now committed.)
+`aida mcp-serve` exposes requirements as MCP tools and resources for native Claude Code integration via `.mcp.json`. Core requirement tools: `list_requirements`, `show_requirement`, `add_requirement`, `update_requirement`, `search_requirements`, `add_comment`, `add_relationship`, `query_graph`, `list_features`, `history`. The server **also** exposes the inter-agent coordination surface — mailbox (`send_message`/`read_inbox`), briefs (`list_briefs`/`read_brief`/`ack_brief`), punts, directives, findings, queue, sessions, and roles (~60 tools total; `grep '"name":' aida-cli-lib/src/mcp_schema.rs` for the live list). Resources: `aida://project/summary`, `aida://requirements/tree`. The MCP server is the **typed/structural** surface for MCP-native clients. Note: AIDA's 2026-06-29 agent-surface benchmark found MCP costs ~2× the token-efficient CLI (`AIDA_AGENT_OUTPUT`/TOON) for identical tasks at equal-or-lower success, and on-demand schema loading doesn't close the gap — so the **CLI is the primary agent surface**; MCP is the typed option, not the default. (`bench/agent-surface/results/report.md` — the 72-cell 2026-06-29 run, now committed.)
 
-The **7 core tool schemas mirror the current CLI surface** (STORY-82): the status/type enums are the full taxonomy; `list_requirements` filters on `tags`/`batch`/`parent`/`role`(`for`)/`in_flight` like `aida list`; `show_requirement` appends git linkage by default (`include_git`/`verbose`, matching `aida show`); `add_requirement` accepts `parent`/`feature`/`owner`; `update_requirement` edits `title`/`type`/`priority`/`tags`/`parent` (status transitions stay gated — approved/planned are advisor-only, completed is merge-driven); `search_requirements` narrows by `type`/`status`. When you add a new CLI filter or field, mirror it onto the matching MCP tool schema + handler so the two surfaces don't drift. trace:STORY-82
+The **7 core tool schemas mirror the current CLI surface** (STORY-82): the status/type enums are the full taxonomy; `list_requirements` filters on `tags`/`batch`/`parent`/`role`(`for`)/`in_flight` like `aida list`; `show_requirement` appends git linkage by default (`include_git`/`verbose`, matching `aida show --full`); `add_requirement` accepts `parent`/`feature`/`owner`; `update_requirement` edits `title`/`type`/`priority`/`tags`/`parent` (status transitions stay gated — approved/planned are advisor-only, completed is merge-driven); `search_requirements` narrows by `type`/`status`. When you add a new CLI filter or field, mirror it onto the matching MCP tool schema + handler so the two surfaces don't drift. trace:STORY-82
 
 Long-running MCP servers self-respawn after handled requests when the on-disk `aida --version` reports a newer package version or a different build SHA for the same version. The current MCP response is flushed first; the next request runs on the new binary. If a client still appears stale, kill that agent's `aida mcp-serve` process and let the MCP client respawn it.
 

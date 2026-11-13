@@ -178,6 +178,7 @@ def context(lane, full, failed=False, environ=None):
     environ = {} if environ is None else environ
     return {
         "matrix.shard": lane, "runner.os": "Linux",
+        "runner.environment": "github-hosted",
         "github.event_name": event_name(environ),
         "github.event.pull_request.base.sha": environ.get("CI_MERGE_REQUEST_DIFF_BASE_SHA", ""),
         "github.event.merge_group.base_sha": "",
@@ -201,7 +202,15 @@ def step_environment(step, current, parent):
 
 def validate_job(job, current):
     # trace:STORY-2606 | ai:codex
-    if set(job) - {"name", "runs-on", "defaults", "timeout-minutes", "env", "strategy", "steps"}:
+    # Relay ci/<attempt> jobs always execute the full lane inventory. Accept
+    # only the exact upstream tier gate, never arbitrary dependencies/policy.
+    # trace:STORY-2735 | ai:codex
+    if ("needs" in job or "if" in job) and not (
+        job.get("needs") == "tier"
+        and job.get("if") == "needs.tier.outputs.full == 'true'"
+    ):
+        raise ValueError("Unsupported upstream tier gate")
+    if set(job) - {"needs", "if", "name", "runs-on", "defaults", "timeout-minutes", "env", "strategy", "steps"}:
         raise ValueError("Unsupported upstream job settings")
     strategy = job.get("strategy", {})
     if set(strategy) - {"fail-fast", "matrix"}:
@@ -211,12 +220,20 @@ def validate_job(job, current):
         raise ValueError("Unsupported upstream matrix settings")
     if matrix.get("os", ["ubuntu-latest"]) != ["ubuntu-latest"]:
         raise ValueError("Unsupported upstream matrix OS")
-    if job.get("runs-on", "${{ matrix.os }}") != "${{ matrix.os }}":
+    # trace:STORY-2672 | ai:codex
+    # GitLab always uses its provisioned image; accept only the reviewed GitHub
+    # routing policy, never arbitrary runner expressions.
+    guarded_runner = '${{ vars.AIDA_DELL1_CI == \'true\' && (github.event_name == \'push\' || (github.event_name == \'pull_request\' && github.event.pull_request.head.repo.full_name == github.repository)) && contains(fromJSON(\'["lib-0","lib-1","cli-0","cli-1"]\'), matrix.shard) && fromJSON(\'["self-hosted","Linux","X64","aida-dell1"]\') || matrix.os }}'
+    if job.get("runs-on", "${{ matrix.os }}") not in ("${{ matrix.os }}", guarded_runner):
         raise ValueError("Unsupported upstream runner")
     if set(job.get("defaults", {})) - {"run"}:
         raise ValueError("Unsupported upstream defaults")
     allowed = {"name", "id", "if", "run", "uses", "with", "env", "shell", "timeout-minutes"}
-    step_environment(job, current, {})
+    # Job env is evaluated before a runner exists (GitHub context availability).
+    job_context = {key: value for key, value in current.items()
+                   if key.split(".")[0] in {"github", "needs", "strategy", "matrix",
+                                            "vars", "secrets", "inputs"}}
+    step_environment(job, job_context, {})
     if job.get("defaults", {}).get("run", {}) not in ({}, {"shell": "bash --noprofile --norc -e -o pipefail {0}"}):
         raise ValueError("Unsupported upstream run defaults")
     for step in job["steps"]:
@@ -242,7 +259,11 @@ def validate_job(job, current):
             if step.get("name") not in INSTALL_STEPS:
                 if re.search(r"\b(?:sudo|apt-get)\b", command):
                     raise ValueError("Unmapped upstream image installation step")
-                unknown = set(RUNNER_REFERENCE.findall(command)) - RUNNER_VARIABLES
+                references = set(RUNNER_REFERENCE.findall(command))
+                # This step never executes in the hosted-equivalent adapter.
+                if step.get("if") == "runner.environment == 'self-hosted'":
+                    references.discard("GITHUB_ENV")
+                unknown = references - RUNNER_VARIABLES
                 if unknown:
                     raise ValueError(f"Unsupported runner variables: {', '.join(sorted(unknown))}")
         else:

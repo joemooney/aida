@@ -3,9 +3,13 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    branches: [main, 'train/**']
+  workflow_dispatch:
+  schedule:
+    - cron: '23 9 * * 1'
   pull_request:
     branches: [main]
+    types: [opened, synchronize, reopened, labeled, unlabeled]
   merge_group:
 
 # Superseded PR heads must not starve merge-train CI.
@@ -23,9 +27,81 @@ permissions:
   pull-requests: read
 
 jobs:
+  # One selection feeds scheduling and the forge-readable check name.
+  # trace:STORY-2735 | ai:codex
+  tier:
+    name: "ci-tier: ${{ (github.event_name != 'pull_request' || startsWith(github.head_ref, 'train/') || contains(github.event.pull_request.labels.*.name, 'ci:full') || vars.AIDA_PR_CI_TIER == 'full') && 'full' || 'fast' }}"
+    runs-on: ubuntu-latest
+    outputs:
+      full: ${{ steps.select.outputs.full }}
+    steps:
+      - name: Select CI tier
+        id: select
+        env:
+          FULL: ${{ github.event_name != 'pull_request' || startsWith(github.head_ref, 'train/') || contains(github.event.pull_request.labels.*.name, 'ci:full') || vars.AIDA_PR_CI_TIER == 'full' }}
+        run: echo "full=$FULL" >> "$GITHUB_OUTPUT"
+
+  fast-gates:
+    name: CI (fast gates)
+    needs: tier
+    if: needs.tier.outputs.full != 'true'
+    runs-on: ubuntu-latest
+    # Keep the six-minute target separate from fixture/runner hang protection.
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt
+      - name: Install source guard dependencies
+        timeout-minutes: 5
+        run: |
+          if ! command -v rg >/dev/null 2>&1; then
+            sudo apt-get -o Acquire::Retries=1 -o Acquire::http::Timeout=15 -o Acquire::https::Timeout=15 update
+            sudo apt-get -o Acquire::Retries=1 -o Acquire::http::Timeout=15 -o Acquire::https::Timeout=15 install -y ripgrep
+          fi
+          python3 -m pip install PyYAML
+      # The local gate reader keeps run bodies only; pass trusted bases here.
+      # trace:STORY-2735 | ai:codex
+      - run: |
+          : "${EXEC_CONTEXT_BASE:?FAST requires a trusted base for the environment ratchet}"
+          : "${CRATE_GLOBS_BASE:?FAST requires a trusted base for the crate-glob ratchet}"
+          make check-ci-fast
+        env:
+          EXEC_CONTEXT_BASE: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha || github.event.before }}
+          CRATE_GLOBS_BASE: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha || github.event.before }}
+
+  fast-compile:
+    name: CI (fast compile)
+    needs: tier
+    if: needs.tier.outputs.full != 'true'
+    runs-on: ubuntu-latest
+    # Six minutes is the warm-cache target; retain cold-build headroom.
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v5
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Install compile dependencies
+        timeout-minutes: 5
+        run: |
+          sudo apt-get -o Acquire::Retries=1 -o Acquire::http::Timeout=15 -o Acquire::https::Timeout=15 update
+          sudo apt-get -o Acquire::Retries=1 -o Acquire::http::Timeout=15 -o Acquire::https::Timeout=15 install -y protobuf-compiler libxcb-render0-dev libxcb-shape0-dev libxcb-xfixes0-dev libxkbcommon-dev libssl-dev libgtk-3-dev
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: ci-dev-profile-fast-check
+      - run: cargo check --profile dev --workspace --tests
+
   build:
+    needs: tier
+    if: needs.tier.outputs.full == 'true'
     name: CI (${{ matrix.shard }})
-    runs-on: ${{ matrix.os }}
+    # Opt in only after operator provisioning and independent gate review.
+    # Forks and merge groups always use hosted capacity. Disabling the variable
+    # restores hosted routing; GitHub cannot fail over an already queued job.
+    # trace:STORY-2672 | ai:codex
+    runs-on: ${{ vars.AIDA_DELL1_CI == 'true' && (github.event_name == 'push' || (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository)) && contains(fromJSON('["lib-0","lib-1","cli-0","cli-1"]'), matrix.shard) && fromJSON('["self-hosted","Linux","X64","aida-dell1"]') || matrix.os }}
     defaults:
       run:
         # Keep this explicit: implementer_preflight.rs validates this contract
@@ -87,6 +163,8 @@ jobs:
       # trace:TASK-1447 | ai:claude
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
 
       # BUG-103: the macos-latest runner intermittently has a stale cache
       # where `cargo` resolves to `rustup-init`, breaking `cargo build`
@@ -113,10 +191,13 @@ jobs:
       # because arduino/setup-protoc still ships on Node.js 20 (deprecated)
       # and has no Node 24 release. trace:TASK-290 | ai:claude
       - name: Install Linux dependencies
-        if: steps.changes.outputs.full_ci == 'true' && runner.os == 'Linux'
+        # BUG-2526: an apt mirror/DNS outage must fail this step in minutes,
+        # not at the 40-minute job timeout. trace:BUG-2526 | ai:claude
+        timeout-minutes: 5
+        if: steps.changes.outputs.full_ci == 'true' && runner.os == 'Linux' && runner.environment != 'self-hosted'
         run: |
-          sudo apt-get update
-          sudo apt-get install -y protobuf-compiler libxcb-render0-dev libxcb-shape0-dev libxcb-xfixes0-dev libxkbcommon-dev libssl-dev libgtk-3-dev bubblewrap ripgrep
+          sudo apt-get -o Acquire::Retries=1 -o Acquire::http::Timeout=15 -o Acquire::https::Timeout=15 update
+          sudo apt-get -o Acquire::Retries=1 -o Acquire::http::Timeout=15 -o Acquire::https::Timeout=15 install -y protobuf-compiler libxcb-render0-dev libxcb-shape0-dev libxcb-xfixes0-dev libxkbcommon-dev libssl-dev libgtk-3-dev bubblewrap ripgrep
           # The mandatory synthetic containment tracer runs in the lib shard,
           # too. Apply the existing live-gate userns preparation before any
           # test lane; it must exercise namespaces rather than skip/refuse on
@@ -143,10 +224,22 @@ jobs:
       # on PATH (`wrapper_shells()`); without it the zsh leg silently skips.
       # trace:BUG-1960 | ai:claude
       - name: Install zsh (shell-wrapper test matrix)
-        if: steps.changes.outputs.full_ci == 'true' && runner.os == 'Linux'
+        # BUG-2526: an apt mirror/DNS outage must fail this step in minutes,
+        # not at the 40-minute job timeout. trace:BUG-2526 | ai:claude
+        timeout-minutes: 5
+        if: steps.changes.outputs.full_ci == 'true' && runner.os == 'Linux' && runner.environment != 'self-hosted'
         run: |
-          sudo apt-get install -y zsh
+          sudo apt-get -o Acquire::Retries=1 -o Acquire::http::Timeout=15 -o Acquire::https::Timeout=15 install -y zsh
           zsh --version
+
+      # No sudo or host policy changes on dell1. Fail closed if the operator's
+      # prepared image cannot run the mandatory namespace tests.
+      # trace:STORY-2672 | ai:codex
+      - name: Verify self-hosted prerequisites
+        if: runner.environment == 'self-hosted'
+        run: |
+          bash scripts/runner/check-prerequisites.sh
+          echo "AIDA_REQUIRE_BWRAP_LIVE=1" >> "$GITHUB_ENV"
 
       # The test lanes compile test binaries and dev-deps that gates never
       # builds, so each lane group (lib, cli, rest) saves its own cache;
@@ -161,7 +254,7 @@ jobs:
 
       # Check the feature-disabled stubs separately: a workspace build can
       # unify the TUI feature back in and hide errors in those branches.
-      # Check-only keeps this guard in the fast tier. trace:TASK-1601 | ai:codex
+      # This feature-specific check stays in FULL CI. trace:TASK-1601 STORY-2735 | ai:codex
       - name: Check aida-cli without default features
         if: ${{ matrix.shard == 'gates' && (steps.changes.outputs.full_ci == 'true') }}
         run: cargo check -p aida-cli --no-default-features
@@ -192,6 +285,12 @@ jobs:
       - name: Build aida binary for lib unit tests
         if: ${{ startsWith(matrix.shard, 'lib-') && (steps.changes.outputs.full_ci == 'true') }}
         run: cargo build -p aida-cli --bin aida
+
+      # Cross-binary parity uses the binaries from this checkout.
+      # trace:STORY-2704 | ai:codex
+      - name: Build porcelain binary for CLI parity tests
+        if: ${{ startsWith(matrix.shard, 'cli-') && (steps.changes.outputs.full_ci == 'true') }}
+        run: cargo build -p aida-porcelain --bin aida-porcelain
 
       # Pinned action commit (v2.87.22) and nextest version: a prebuilt
       # binary, no `cargo install`. trace:TASK-1957 | ai:claude
@@ -314,6 +413,8 @@ jobs:
           command -v git
           command -v openssl
           python3 -m unittest tests/test_containment_conformance.py
+          # trace:STORY-2630 | ai:codex
+          python3 -m unittest tests/test_codegraph_proxy.py
 
       # Fixed read-only protocol and kernel-credential channel fixtures.
       # trace:TASK-3225 | ai:codex
@@ -806,14 +907,21 @@ jobs:
       # Exercise both awk replacement semantics with the actual shipped hook.
       # trace:BUG-2475 | ai:codex
       - name: Install awk engines
+        # BUG-2526: an apt mirror/DNS outage must fail this step in minutes,
+        # not at the 40-minute job timeout. trace:BUG-2526 | ai:claude
+        timeout-minutes: 5
         if: matrix.shard == 'gates'
         run: |
-          sudo apt-get update
-          sudo apt-get install -y mawk gawk
+          sudo apt-get -o Acquire::Retries=1 -o Acquire::http::Timeout=15 -o Acquire::https::Timeout=15 update
+          sudo apt-get -o Acquire::Retries=1 -o Acquire::http::Timeout=15 -o Acquire::https::Timeout=15 install -y mawk gawk
 
       - name: Mail notice hook JSON protocol
         if: matrix.shard == 'gates'
         run: python3 tests/test_mail_notice_hook.py
+
+      - name: PreCompact handoff hook protocol
+        if: matrix.shard == 'gates'
+        run: python3 tests/test_precompact_handoff_hook.py
 
       # Tool-only expiry notices: shell/JSON protocol needs no CLI build.
       # trace:BUG-2014 | ai:codex
@@ -849,7 +957,8 @@ jobs:
         if: ${{ matrix.shard == 'gates' && (steps.changes.outputs.full_ci == 'true') }}
         run: |
           cargo fmt --all -- --check
-          rustfmt --edition 2021 --check aida-cli-lib/src/lib_part*.rs
+          # trace:TASK-3428 | ai:codex — final remaining include, renamed in slice C1.
+          rustfmt --edition 2021 --check aida-cli-lib/src/review_commands.rs
 
       - name: Removed mode-flag spelling guard
         if: ${{ matrix.shard == 'gates' && (steps.changes.outputs.full_ci == 'true') }}
@@ -938,6 +1047,20 @@ jobs:
             python3 scripts/check-exec-context.py
           fi
 
+      # trace:TASK-3428 | ai:codex
+      - name: Crate glob import ratchet
+        if: matrix.shard == 'gates'
+        env:
+          CRATE_GLOBS_BASE: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha || github.event.before }}
+        run: |
+          python3 -m unittest tests/test_crate_split_tools.py
+          if [ -n "$CRATE_GLOBS_BASE" ] && [ "$CRATE_GLOBS_BASE" != "0000000000000000000000000000000000000000" ]; then
+            git fetch --no-tags --depth=1 origin "$CRATE_GLOBS_BASE"
+            python3 scripts/check-crate-globs.py --base "$CRATE_GLOBS_BASE"
+          else
+            python3 scripts/check-crate-globs.py
+          fi
+
       # Inventory-only S1a; no service or permission changes. trace:TASK-3222 | ai:codex
       - name: Store writer inventory ratchet
         if: matrix.shard == 'gates'
@@ -960,6 +1083,11 @@ jobs:
       - name: Sccache tmpdir detection fixtures
         if: matrix.shard == 'gates'
         run: python3 -m unittest tests/test_bug_2135_sccache_tmpdir.py
+
+      # trace:TASK-3779 | ai:codex
+      - name: Terminal glyph padding ratchet
+        if: matrix.shard == 'gates'
+        run: python3 -m unittest tests/test_terminal_glyph_padding.py
 
       - name: Run clippy
         if: ${{ matrix.shard == 'gates' && (steps.changes.outputs.full_ci == 'true') }}
@@ -1002,6 +1130,16 @@ jobs:
           python3 scripts/check-trace-headers.py
           python3 -m unittest tests/test_check_trace_headers.py
 
+      # trace:STORY-2735 | ai:codex
+      - name: CI tier policy fixtures
+        if: matrix.shard == 'gates'
+        run: python3 -m unittest tests/test_ci_tiers.py
+
+      # trace:STORY-2672 | ai:codex
+      - name: Self-hosted routing security fixtures
+        if: matrix.shard == 'gates'
+        run: python3 -m unittest tests/test_self_hosted_runner.py
+
       # TASK-1447: regression check for the docs-drift guards above. Parses
       # this file and asserts each known docs-drift guard step either has no
       # full_ci gate (so it schedules on docs-only PRs) or carries a
@@ -1017,14 +1155,28 @@ jobs:
   # trace:TASK-1949 | ai:codex
   build-result:
     name: Build (ubuntu-latest)
-    needs: build
+    needs: [tier, build, fast-gates, fast-compile]
     if: ${{ always() }}
     runs-on: ubuntu-latest
     steps:
       - name: Require every CI lane
         env:
-          RESULT: ${{ needs.build.result }}
-        run: test "$RESULT" = success
+          TIER: ${{ needs.tier.result }}
+          FULL: ${{ needs.tier.outputs.full }}
+          BUILD: ${{ needs.build.result }}
+          GATES: ${{ needs.fast-gates.result }}
+          COMPILE: ${{ needs.fast-compile.result }}
+        run: |
+          test "$TIER" = success
+          if [ "$FULL" = true ]; then
+            test "$BUILD" = success
+            test "$GATES" = skipped && test "$COMPILE" = skipped
+          elif [ "$FULL" = false ]; then
+            test "$BUILD" = skipped
+            test "$GATES" = success && test "$COMPILE" = success
+          else
+            exit 1
+          fi
 
   # Create release artifacts for tags
   release:
@@ -1047,6 +1199,8 @@ jobs:
 
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
 
       # BUG-103: the macos-latest runner intermittently has a stale cache
       # where `cargo` resolves to `rustup-init`, breaking `cargo build`
@@ -1072,10 +1226,13 @@ jobs:
       # arduino/setup-protoc — that action still runs on Node.js 20
       # (deprecated) and has no Node 24 release. trace:TASK-290 | ai:claude
       - name: Install protoc (Linux)
+        # BUG-2526: an apt mirror/DNS outage must fail this step in minutes,
+        # not at the 40-minute job timeout. trace:BUG-2526 | ai:claude
+        timeout-minutes: 5
         if: runner.os == 'Linux'
         run: |
-          sudo apt-get update
-          sudo apt-get install -y protobuf-compiler libxcb-render0-dev libxcb-shape0-dev libxcb-xfixes0-dev libxkbcommon-dev libssl-dev libgtk-3-dev
+          sudo apt-get -o Acquire::Retries=1 -o Acquire::http::Timeout=15 -o Acquire::https::Timeout=15 update
+          sudo apt-get -o Acquire::Retries=1 -o Acquire::http::Timeout=15 -o Acquire::https::Timeout=15 install -y protobuf-compiler libxcb-render0-dev libxcb-shape0-dev libxcb-xfixes0-dev libxkbcommon-dev libssl-dev libgtk-3-dev
 
       - name: Cache Rust dependencies
         uses: Swatinem/rust-cache@v2

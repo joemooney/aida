@@ -1,7 +1,30 @@
 //! ps rows, seat activity probes, running-work gathering, and integrate (STORY-1488 slice 1)
 // trace:STORY-1488 | ai:claude
 
-use crate::*;
+use crate::leases::LeaseStateGlyph;
+use crate::{
+    advance_backend, agent_output_mode, agent_registry, attributable_live_sessions, awaiting_you,
+    config_path_for_project, current_user_id, detect_distributed_store,
+    detect_distributed_store_from, detect_open_pr_for_spec_via_forge, detect_stranded_primary,
+    dispatch_health_ps, drain_lock, drain_state, driver_view, enforce_team_gate, find_project_root,
+    focus, humanize_duration_secs, inspector_pids, integrate, integrate_view,
+    is_agent_managed_worktree, list_leases, load_store_for_lookup, main_worktree_root_from,
+    output_format_is_json, pending_approval, permissions, presence, print_stranded_primary_banner,
+    probe_resume_facts, process_probe, queue_cmd, session, session_manifest, session_reap,
+    spec_scoped_lease, tail_cmd, toon_status_token, truncate, unique_prefix_len, worktree_lease,
+    worktree_lock, PrLookup, SessionLease,
+};
+use crate::{
+    dispatch, hostname, lease_path, leases, leases_dir, mail_wake, ownership, role, worker,
+    worktree, zen,
+};
+use aida_core::liveness::LeaseState;
+use aida_core::DatabaseBackend;
+use aida_core::Storage;
+use anyhow::Result;
+use colored::Colorize;
+use std::collections::HashSet;
+use uuid::Uuid;
 
 /// The shortest unambiguous prefix of a lease id, for the `aida session end
 /// <id>` hint. Reuses the same disambiguation helper the `aida session leases`
@@ -666,7 +689,7 @@ pub(crate) fn ps_live_fanout_leases<'a>(
                 // the observer testifying for itself — see the doc comment.
                 // trace:BUG-1740 | ai:claude
                 && !ps_lease_identity_is_caller(l, caller_pids)
-                && matches!(lease_state_for(l, &corroborating, now), LeaseState::Live)
+                && matches!(leases::lease_state_for(l, &corroborating, now), LeaseState::Live)
         })
         .collect()
 }
@@ -2144,7 +2167,9 @@ pub(crate) fn gather_running_work(project_root: &std::path::Path) -> (Vec<PsRow>
     // keeps the row live even if the lease recorded a dead or transient pid.
     // Prune contradictory orphan rows when the spec belongs to a live registered agent.
     // trace:BUG-2010 | ai:antigravity
-    let live_agents = agent_registry::load_live_entries(project_root);
+    // Lease matching needs the boot-qualified identity, not the display projection.
+    // trace:TASK-3366 | ai:codex
+    let live_agents = agent_registry::load_live_identity_entries(project_root);
     apply_registered_agent_overlay(
         &live_agents,
         &leases,
@@ -2287,7 +2312,7 @@ pub(crate) fn build_running_work(
     let rows: Vec<PsRow> = leases
         .iter()
         .map(|l| {
-            let state = lease_state_for(l, live, now);
+            let state = leases::lease_state_for(l, live, now);
             // BUG-2197: a pid-less lease never borrows the inspector's pid.
             // trace:BUG-2197 | ai:claude
             let attributable = if state == LeaseState::Unknown {
@@ -2563,7 +2588,7 @@ pub(crate) fn build_running_work(
         }
         let id_refs: Vec<&str> = id_owned.iter().map(|s| s.as_str()).collect();
         let lease = spec_scoped_lease(leases, &id_refs);
-        let lease_state = lease.map(|l| lease_state_for(l, live, now));
+        let lease_state = lease.map(|l| leases::lease_state_for(l, live, now));
         // trace:BUG-778 | ai:claude
         let awaiting_agent = lease.is_some_and(|l| ps_row_awaiting_agent(&rows, &l.id));
         // BUG-1656: a non-live spec lease whose worktree is still being
@@ -3734,10 +3759,7 @@ pub(crate) struct PsArgs {
 // session leases + probes pid liveness and self-loads the store read-only
 // (to find orphaned In-Progress specs), so it needs no shared storage
 // handle — dispatch early. trace:STORY-696 | ai:claude
-fn run_ps(
-    matches: &clap::ArgMatches,
-    _ctx: &crate::command_registry::DispatchCtx,
-) -> anyhow::Result<()> {
+fn run_ps(matches: &clap::ArgMatches, _ctx: &crate::cmdkit::DispatchCtx) -> anyhow::Result<()> {
     let args = <PsArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
     let PsArgs { json, all } = &args;
     // trace:BUG-1289 | ai:claude
@@ -3745,17 +3767,17 @@ fn run_ps(
 }
 
 // trace:STORY-1728 | ai:claude
-pub(crate) static PS: crate::command_registry::CommandReg = crate::command_registry::CommandReg {
+pub(crate) static PS: crate::cmdkit::CommandReg = crate::cmdkit::CommandReg {
     name: "ps",
     help_after: "awaiting",
     command: <PsArgs as clap::CommandFactory>::command,
-    policy: |_| crate::command_registry::CmdPolicy {
+    policy: |_| crate::cmdkit::CmdPolicy {
         stakeholder: crate::stakeholder_role::StakeholderAction::Write,
         per_write_auto_push: false,
         skip_role_restore_prompt: false,
         team_identity_write: false,
     },
-    run: crate::command_registry::Handler::Early(run_ps),
+    run: crate::cmdkit::Handler::Early(run_ps),
 };
 
 /// The integrator seat: bare shows the merge queue; --run drains it.
@@ -3843,7 +3865,7 @@ pub(crate) struct IntegrateArgs {
 // queue instead of racing each other stale. trace:STORY-1024 | ai:codex
 fn run_integrate(
     matches: &clap::ArgMatches,
-    _ctx: &crate::command_registry::DispatchCtx,
+    _ctx: &crate::cmdkit::DispatchCtx,
 ) -> anyhow::Result<()> {
     let args = <IntegrateArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
     let IntegrateArgs {
@@ -3881,19 +3903,18 @@ fn run_integrate(
 }
 
 // trace:STORY-1728 | ai:claude
-pub(crate) static INTEGRATE: crate::command_registry::CommandReg =
-    crate::command_registry::CommandReg {
-        name: "integrate",
-        help_after: "tail",
-        command: <IntegrateArgs as clap::CommandFactory>::command,
-        policy: |_| crate::command_registry::CmdPolicy {
-            stakeholder: crate::stakeholder_role::StakeholderAction::BuildLoop,
-            per_write_auto_push: false,
-            skip_role_restore_prompt: false,
-            team_identity_write: false,
-        },
-        run: crate::command_registry::Handler::Early(run_integrate),
-    };
+pub(crate) static INTEGRATE: crate::cmdkit::CommandReg = crate::cmdkit::CommandReg {
+    name: "integrate",
+    help_after: "tail",
+    command: <IntegrateArgs as clap::CommandFactory>::command,
+    policy: |_| crate::cmdkit::CmdPolicy {
+        stakeholder: crate::stakeholder_role::StakeholderAction::BuildLoop,
+        per_write_auto_push: false,
+        skip_role_restore_prompt: false,
+        team_identity_write: false,
+    },
+    run: crate::cmdkit::Handler::Early(run_integrate),
+};
 
 #[cfg(test)]
 #[path = "tests/story_2254_ps_detached_codex_tests.rs"]

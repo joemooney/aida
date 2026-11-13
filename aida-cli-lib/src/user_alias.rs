@@ -167,7 +167,7 @@ pub(crate) fn load_table(path: &Path) -> Result<Vec<(String, String)>> {
 }
 
 /// The set of real top-level subcommand names + aliases, derived from the live
-/// clap command tree (`command_registry::built_command()`) — the single source of truth for "what
+/// clap command tree (`CLI_SUPPORT.built_command()`) — the single source of truth for "what
 /// is a real subcommand". A user alias may not shadow any of these.
 /// trace:TASK-877 | ai:claude
 pub(crate) fn real_subcommand_names() -> std::collections::HashSet<String> {
@@ -179,7 +179,7 @@ pub(crate) fn real_subcommand_names() -> std::collections::HashSet<String> {
         std::sync::OnceLock::new();
     NAMES
         .get_or_init(|| {
-            let cmd = crate::command_registry::built_command();
+            let cmd = crate::CLI_SUPPORT.built_command();
             let mut names = std::collections::HashSet::new();
             for sub in cmd.get_subcommands() {
                 names.insert(sub.get_name().to_string());
@@ -698,11 +698,8 @@ pub(crate) struct AliasArgs {
 // defaults to `list`. `add` / `remove` manage user aliases under the chosen
 // scope. trace:STORY-667 | ai:claude
 // trace:TASK-877 | ai:claude — user-alias CRUD dispatch.
-fn run_alias(
-    matches: &clap::ArgMatches,
-    _ctx: &crate::command_registry::DispatchCtx,
-) -> anyhow::Result<()> {
-    use crate::*;
+fn run_alias(matches: &clap::ArgMatches, _ctx: &crate::cmdkit::DispatchCtx) -> anyhow::Result<()> {
+    use crate::alias;
     let args = <AliasArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
     let AliasArgs { json, command } = &args;
     match command {
@@ -731,16 +728,15 @@ fn run_alias(
 }
 
 // trace:STORY-1728 | ai:claude
-pub(crate) static ALIAS: crate::command_registry::CommandReg =
-    crate::command_registry::CommandReg {
-        name: "alias",
-        help_after: "skill",
-        command: <AliasArgs as clap::CommandFactory>::command,
-        policy: |_| crate::command_registry::CmdPolicy {
-            stakeholder: crate::stakeholder_role::StakeholderAction::Write,
-            per_write_auto_push: false,
-            skip_role_restore_prompt: false,
-            team_identity_write: false,
-        },
-        run: crate::command_registry::Handler::Early(run_alias),
-    };
+pub(crate) static ALIAS: crate::cmdkit::CommandReg = crate::cmdkit::CommandReg {
+    name: "alias",
+    help_after: "skill",
+    command: <AliasArgs as clap::CommandFactory>::command,
+    policy: |_| crate::cmdkit::CmdPolicy {
+        stakeholder: crate::stakeholder_role::StakeholderAction::Write,
+        per_write_auto_push: false,
+        skip_role_restore_prompt: false,
+        team_identity_write: false,
+    },
+    run: crate::cmdkit::Handler::Early(run_alias),
+};

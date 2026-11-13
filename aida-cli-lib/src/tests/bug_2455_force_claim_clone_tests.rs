@@ -21,7 +21,7 @@ fn git_ok(dir: &Path, args: &[&str]) {
     );
 }
 
-fn set_owner(main: &Path, pid: Option<u32>) {
+pub(super) fn set_owner(main: &Path, pid: Option<u32>) {
     let mut lease = crate::list_leases(main).into_iter().next().unwrap();
     lease.pid_namespace = crate::agent_registry::current_pid_namespace();
     lease.active_pid = pid;
@@ -77,7 +77,7 @@ fn seed_owner(main: &Path, lease: &crate::SessionLease) {
     crate::ownership::dual::lease_written(main, &lease);
 }
 
-fn dead_pid() -> u32 {
+pub(super) fn dead_pid() -> u32 {
     let mut child = std::process::Command::new("true").spawn().unwrap();
     let pid = child.id();
     child.wait().unwrap();
@@ -110,11 +110,92 @@ fn bwrap_live() -> bool {
     live
 }
 
+// trace:BUG-2491 | ai:codex
+#[test]
+fn bug_2491_bwrap_force_claim_retires_unreachable_slice_tags() {
+    if !bwrap_live() {
+        return;
+    }
+    let _scan = aida_core::mailbox_lifecycle::activation::test_writer_scan(true);
+    let fx = fixture();
+    let _env = crate::test_env::AmbientGuard::hermetic_and(
+        &fx.main,
+        None,
+        &[("AIDA_TRUST_PID_NAMESPACE", Some("1"))],
+    );
+    let clone = leased_clone_on(&fx, "2491", "2491c1", "rework");
+    git_ok(
+        &clone,
+        &[
+            "push",
+            fx.origin.to_str().unwrap(),
+            "HEAD:refs/heads/rework",
+        ],
+    );
+    git_ok(&clone, &["checkout", "-qb", "checkpoint"]);
+    std::fs::write(clone.join("checkpoint.txt"), "pre-squash work\n").unwrap();
+    git_ok(&clone, &["add", "checkpoint.txt"]);
+    git_ok(
+        &clone,
+        &[
+            "-c",
+            "user.name=T",
+            "-c",
+            "user.email=t@example.com",
+            "commit",
+            "-qm",
+            "checkpoint",
+        ],
+    );
+    git_ok(&clone, &["tag", "slice-00-r1"]);
+    git_ok(
+        &clone,
+        &[
+            "-c",
+            "user.name=T",
+            "-c",
+            "user.email=t@example.com",
+            "tag",
+            "-a",
+            "slice-01-r1",
+            "-m",
+            "checkpoint",
+        ],
+    );
+    git_ok(&clone, &["checkout", "-q", "rework"]);
+    git_ok(&clone, &["branch", "-D", "checkpoint"]);
+    set_owner(&fx.main, Some(dead_pid()));
+    reclaim(&fx.main).unwrap();
+    assert!(!clone.exists());
+    assert!(crate::list_leases(&fx.main).is_empty());
+    let salvage_dir = fx
+        .main
+        .join(".aida/salvage")
+        .join(clone.file_name().unwrap());
+    let bundle = std::fs::read_dir(salvage_dir)
+        .unwrap()
+        .map(|entry| entry.unwrap().path())
+        .find(|path| path.extension().is_some_and(|ext| ext == "bundle"))
+        .expect("unreachable checkpoints must be bundled before teardown");
+    let output = crate::test_git::git_command()
+        .arg("-C")
+        .arg(&fx.main)
+        .args(["bundle", "list-heads"])
+        .arg(bundle)
+        .output()
+        .unwrap();
+    assert!(output.status.success());
+    let heads = String::from_utf8(output.stdout).unwrap();
+    assert!(heads.contains("refs/tags/slice-00-r1"), "{heads}");
+    assert!(heads.contains("refs/tags/slice-01-r1"), "{heads}");
+}
+
 #[test]
 fn bug_2455_bwrap_force_claim_retires_clean_pushed_dead_clone_and_lease() {
     if !bwrap_live() {
         return;
     }
+    let _scan = aida_core::mailbox_lifecycle::activation::test_writer_scan(true);
     let fx = fixture();
     let _env = crate::test_env::AmbientGuard::hermetic_and(
         &fx.main,

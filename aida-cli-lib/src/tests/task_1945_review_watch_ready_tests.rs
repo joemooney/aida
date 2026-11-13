@@ -444,6 +444,52 @@ mod gate {
             ready::evaluate(&c, &evidence),
             (Readiness::Ready, Some(_))
         ));
+        // trace:STORY-2697 | ai:codex — carry-over never carries source CI.
+        for (checks, expected) in [
+            (
+                CommitChecks {
+                    sha: c.head.clone(),
+                    checks: vec![],
+                },
+                "no CI checks on the head".to_string(),
+            ),
+            (
+                CommitChecks {
+                    sha: c.head.clone(),
+                    checks: vec![check(CI_AGGREGATOR_CHECK, CheckOutcome::Pending)],
+                },
+                format!("CI pending: {CI_AGGREGATOR_CHECK}"),
+            ),
+            (
+                CommitChecks {
+                    sha: c.head.clone(),
+                    checks: vec![check(CI_AGGREGATOR_CHECK, CheckOutcome::Failed)],
+                },
+                format!("CI failed: {CI_AGGREGATOR_CHECK}"),
+            ),
+            (
+                green(&approved),
+                format!("CI evidence is for {}, not the head", &approved[..12]),
+            ),
+        ] {
+            let blocked = Fake {
+                ci: Ok(checks),
+                approval: evidence.approval.clone(),
+                head: Ok(c.head.clone()),
+                ..Fake::ready()
+            };
+            assert_eq!(not_ready(&blocked, &c), expected);
+            // The same carried approval and stable destination head become ready
+            // when only the destination CI evidence changes to green.
+            let green_destination = Fake {
+                ci: Ok(green(&c.head)),
+                ..blocked
+            };
+            assert!(matches!(
+                ready::evaluate(&c, &green_destination),
+                (Readiness::Ready, Some(_))
+            ));
+        }
         untouched(repo.path());
     }
 
@@ -1132,4 +1178,211 @@ fn live_approval_composition_refuses_on_the_corpus_after_an_approval() {
         ready::approval_then_corpus(|| Ok(approval()), || ready::corpus_at(root, &c, &[])),
         Ok(approval())
     );
+}
+
+// trace:STORY-2694 | ai:codex
+// trace:STORY-b6b1278890774ef993d2ebc327862470-617.ac7f9646 | ai:codex
+#[test]
+fn carried_approval_suppresses_both_dispatch_checks_but_not_ci_readiness() {
+    use crate::gate::review_carryover::tests::{consumer_coverage, fixture as repo_fixture, git};
+    let (repo, approved) = repo_fixture();
+    let merge = crate::test_git::git_command()
+        .arg("-C")
+        .arg(repo.path())
+        .args(["merge", "--quiet", "--no-edit", "main"])
+        .output()
+        .unwrap();
+    assert!(
+        merge.status.success(),
+        "{}",
+        String::from_utf8_lossy(&merge.stderr)
+    );
+    let h = git(repo.path(), &["rev-parse", "HEAD"]);
+    let proof = consumer_coverage(repo.path(), &approved, &h).unwrap();
+    let store = Store::open(repo.path(), "github:github.com/owner/repo").unwrap();
+    let mut c = change(0, false);
+    c.id = 42;
+    c.head = h;
+    let report = crate::gate::merge_hold_core::carried_approval_report(&proof);
+    let description = report["description"].as_str().unwrap().to_string();
+    assert_eq!(report["reviewed_sha"], approved);
+    assert_eq!(report["head_sha"], c.head);
+    assert_eq!(report["proof"]["base_tip"], proof.base_tip);
+    assert_eq!(
+        probe_unneeded_with_coverage(&store, &c, || Some(description.clone())).unwrap(),
+        Some(description.clone())
+    );
+    assert!(
+        matches!(select_with_coverage(&store, &c, None, 2, || Some(description.clone())).unwrap(), Action::Skip(why) if why == description)
+    );
+    assert!(store
+        .load()
+        .unwrap()
+        .entries
+        .get("PR-42")
+        .is_none_or(|entry| entry.attempts.is_empty()));
+    let mut evidence = Fake::ready();
+    evidence.head = Ok(c.head.clone());
+    evidence.approval = Ok(Approval {
+        reviewed: approved,
+        identity: "reviewer".into(),
+        carried: Some(description),
+    });
+    evidence.ci = Ok(CommitChecks {
+        sha: c.head.clone(),
+        checks: vec![],
+    });
+    assert!(not_ready(&evidence, &c).contains("no CI checks"));
+    evidence.ci = Ok(green(&c.head));
+    assert!(matches!(
+        ready::evaluate(&c, &evidence),
+        (Readiness::Ready, Some(_))
+    ));
+    // Failure to prove coverage must leave the ordinary dispatch path available.
+    let (_other, other) = fixture();
+    assert_eq!(
+        probe_unneeded_with_coverage(&other, &c, || None).unwrap(),
+        None
+    );
+    assert!(matches!(
+        select_with_coverage(&other, &c, None, 2, || None).unwrap(),
+        Action::Dispatch(_)
+    ));
+}
+
+// trace:STORY-2691 | ai:codex
+#[test]
+fn story2691_auto_train_requires_exact_head_green_ci_and_no_hold() {
+    let mut c = change(0, false);
+    c.head_branch = Some("feature/example".into());
+    assert!(train::eligible(&c, &Fake::ready()).is_ok());
+    let mut f = Fake::ready();
+    f.ci.as_mut()
+        .unwrap()
+        .checks
+        .push(check("informational", CheckOutcome::Failed));
+    assert!(train::eligible(&c, &f).is_ok());
+    f = Fake::ready();
+    f.ci.as_mut().unwrap().checks.clear();
+    assert!(train::eligible(&c, &f).is_err());
+    f = Fake::ready();
+    f.approval.as_mut().unwrap().reviewed = "old-head".into();
+    assert!(train::eligible(&c, &f).is_err());
+    f = Fake::ready();
+    f.approval.as_mut().unwrap().carried = Some("carried proof".into());
+    assert!(train::eligible(&c, &f).is_err());
+    f = Fake::ready();
+    f.hold = Ok(Some("active hold".into()));
+    assert!(train::eligible(&c, &f).is_err());
+    f = Fake::ready();
+    f.hold = Err("unreadable hold".into());
+    assert!(train::eligible(&c, &f).is_err());
+    for outcome in [
+        CheckOutcome::Pending,
+        CheckOutcome::Failed,
+        CheckOutcome::Skipped,
+    ] {
+        f = Fake::ready();
+        f.ci.as_mut().unwrap().checks[1].outcome = outcome;
+        assert!(train::eligible(&c, &f).is_err());
+    }
+    f = Fake::ready();
+    f.ci.as_mut().unwrap().sha = "other-head".into();
+    assert!(train::eligible(&c, &f).is_err());
+    f = Fake::ready();
+    f.head = Ok("moved-head".into());
+    assert!(train::eligible(&c, &f).is_err());
+    f = Fake::ready();
+    f.approval = Err("CHANGES REQUESTED".into());
+    assert!(train::eligible(&c, &f).is_err());
+    c.head_branch = Some("train/existing".into());
+    assert!(train::eligible(&c, &Fake::ready()).is_err());
+    c.head_branch = None;
+    assert!(train::eligible(&c, &Fake::ready()).is_err());
+}
+
+// trace:STORY-2691 | ai:codex
+#[test]
+fn story2691_train_settled_refusals_differ_from_evidence_failures() {
+    use crate::pr_train::MemberGateError::{Refused, Unavailable};
+    let mut c = change(0, false);
+    c.head_branch = Some("feature/example".into());
+    let mut f = Fake::ready();
+    f.hold = Ok(Some("hold added before landing".into()));
+    assert!(matches!(train::eligible(&c, &f), Err(Refused(_))));
+    f = Fake::ready();
+    f.approval = Err("approval withdrawn during recovery".into());
+    assert!(matches!(train::eligible(&c, &f), Err(Refused(_))));
+    f = Fake::ready();
+    f.ci.as_mut().unwrap().checks[1].outcome = CheckOutcome::Failed;
+    assert!(matches!(train::eligible(&c, &f), Err(Refused(_))));
+    f = Fake::ready();
+    f.hold = Err("hold read failed".into());
+    assert!(matches!(train::eligible(&c, &f), Err(Unavailable(_))));
+    f = Fake::ready();
+    f.ci = Err("CI read failed".into());
+    assert!(matches!(train::eligible(&c, &f), Err(Unavailable(_))));
+}
+
+// trace:STORY-2691 | ai:codex
+#[test]
+fn story2691_unreadable_approval_artifacts_are_unavailable() {
+    let (temp, _) = fixture();
+    assert!(ready::train_verdict_reads(temp.path(), 7, &[]).is_ok());
+    let dir = temp.path().join(".aida/review-verdicts");
+    std::fs::create_dir_all(&dir).unwrap();
+    std::fs::write(dir.join("PR-7.json"), "invalid verdict").unwrap();
+    assert!(matches!(
+        ready::train_verdict_reads(temp.path(), 7, &[]),
+        Err(crate::pr_train::MemberGateError::Unavailable(_))
+    ));
+    record_verdict(temp.path(), "approved");
+    assert!(ready::train_verdict_reads(temp.path(), 7, &[]).is_ok());
+    let path = dir.join("PR-7.json");
+    let target = temp.path().join("approval.json");
+    std::fs::rename(&path, &target).unwrap();
+    std::os::unix::fs::symlink(&target, &path).unwrap();
+    assert!(matches!(
+        ready::train_verdict_reads(temp.path(), 7, &[]),
+        Err(crate::pr_train::MemberGateError::Unavailable(_))
+    ));
+}
+
+// trace:STORY-2691 | ai:codex
+#[test]
+fn story2691_repeated_train_evidence_failures_alert() {
+    for source in ["CI", "hold", "approval"] {
+        let (temp, _) = fixture();
+        let mut c = change(0, false);
+        c.head_branch = Some("feature/example".into());
+        for _ in 0..3 {
+            let mut f = Fake::ready();
+            let failure = match source {
+                "CI" => {
+                    f.ci = Err("CI unavailable".into());
+                    train::eligible(&c, &f).unwrap_err()
+                }
+                "hold" => {
+                    f.hold = Err("hold unavailable".into());
+                    train::eligible(&c, &f).unwrap_err()
+                }
+                _ => {
+                    let dir = temp.path().join(".aida/review-verdicts");
+                    std::fs::create_dir_all(&dir).unwrap();
+                    std::fs::write(dir.join("PR-7.json"), "invalid verdict").unwrap();
+                    ready::train_verdict_reads(temp.path(), 7, &[]).unwrap_err()
+                }
+            };
+            let crate::pr_train::MemberGateError::Unavailable(reason) = failure else {
+                panic!("evidence failure must not become ineligibility");
+            };
+            train_service::record_failure(temp.path(), Some(&reason)).unwrap();
+        }
+        let state: serde_json::Value = serde_json::from_slice(
+            &std::fs::read(temp.path().join(".aida/auto-train/failures.json")).unwrap(),
+        )
+        .unwrap();
+        assert_eq!(state["count"], 3);
+        assert_eq!(state["alert"]["sent"], true);
+    }
 }

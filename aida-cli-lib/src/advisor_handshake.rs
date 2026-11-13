@@ -1,3 +1,4 @@
+// trace:TASK-3429 | ai:codex
 //! Advisor handshake (`aida mailbox hello`): a launched non-advisor agent's
 //! first act is a mail round trip with the advisor, so a broken mail path
 //! shows up within minutes instead of when an operator relays mail by hand.
@@ -633,7 +634,7 @@ fn ack_message(
 /// sender's record marked acked when this checkout can reach it. Returns the
 /// handles whose ack this call wrote, so a re-read of an old hello reports
 /// nothing. Best-effort per hello.
-pub(crate) fn ack_hellos(
+pub fn ack_hellos(
     home_root: &Path,
     store_root: &Path,
     shown: &[&Message],
@@ -645,7 +646,7 @@ pub(crate) fn ack_hellos(
     }
     let (acker, from_source) = crate::resolve_mail_sender_identity(None);
     let main = crate::main_worktree_root_from(home_root);
-    let live = crate::agent_registry::load_live_entries(&main);
+    let live = crate::agent_registry::load_live_identity_entries(&main);
     let roots = record_roots(&main, &live);
     let directory =
         crate::mailbox_resolver::RecipientDirectory::load_for_send(home_root, store_root).ok();
@@ -811,7 +812,7 @@ pub(crate) fn run(
     let now = Utc::now();
     let role = crate::resolve_mail_sender_role();
     if role.as_deref() == Some(ADVISOR_ROLE) {
-        let live = crate::agent_registry::load_live_entries(&main);
+        let live = crate::agent_registry::load_live_identity_entries(&main);
         let lines = advisor_lines(&all_records(&record_roots(&main, &live)), now);
         if lines.is_empty() && !hook {
             return Ok(vec![
@@ -831,7 +832,7 @@ pub(crate) fn run(
             vec!["Advisor handshake: only agents launched with their own handle by `aida agent new` in a non-advisor role say hello.".into()]
         });
     }
-    let live = crate::agent_registry::load_live_entries(&main);
+    let live = crate::agent_registry::load_live_identity_entries(&main);
     let is_start = {
         let payload = std::env::var("AIDA_HOOK_PAYLOAD").unwrap_or_default();
         let event = std::env::var("AIDA_HOOK_EVENT").ok();
@@ -939,7 +940,7 @@ impl Census {
         Self::new(
             project_root,
             store_root,
-            crate::agent_registry::load_live_entries(project_root),
+            crate::agent_registry::load_live_identity_entries(project_root),
             Policy::load(project_root),
             Utc::now(),
         )

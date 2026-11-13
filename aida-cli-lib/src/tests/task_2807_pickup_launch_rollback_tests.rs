@@ -69,6 +69,7 @@ fn assert_kept(main: &Path, tree: &Path, scope: &str, lease_id: &str) {
 /// A refused child-grant mint inside the launch rolls the setup back.
 #[test]
 fn a_refused_mint_rolls_back_the_worktree_and_lease() {
+    let _scan = aida_core::mailbox_lifecycle::activation::test_writer_scan(true);
     let fx = fixture();
     let _ambient = crate::test_env::AmbientGuard::hermetic_with_seat(&fx.main, "implementer", &[]);
     let scope = "TASK-928071";
@@ -95,6 +96,7 @@ fn a_refused_mint_rolls_back_the_worktree_and_lease() {
 /// failed exec) rolls back too.
 #[test]
 fn any_pre_agent_failure_rolls_back_the_worktree_and_lease() {
+    let _scan = aida_core::mailbox_lifecycle::activation::test_writer_scan(true);
     let fx = fixture();
     let _ambient = crate::test_env::AmbientGuard::hermetic_with_seat(&fx.main, "implementer", &[]);
     let scope = "TASK-928072";
@@ -121,6 +123,7 @@ fn spawn_reviewer(program: &Path) -> anyhow::Result<std::process::ExitStatus> {
 /// TASK-2808: a failed codex spawn (no child process) rolls back.
 #[test]
 fn a_failed_codex_spawn_rolls_back_the_worktree_and_lease() {
+    let _scan = aida_core::mailbox_lifecycle::activation::test_writer_scan(true);
     let fx = fixture();
     let _ambient = crate::test_env::AmbientGuard::hermetic_with_seat(&fx.main, "implementer", &[]);
     let scope = "TASK-928076";
@@ -145,6 +148,7 @@ fn a_failed_codex_spawn_rolls_back_the_worktree_and_lease() {
 /// A reviewer that spawned and then failed (no verdict) can have run: kept.
 #[test]
 fn a_spawned_reviewer_that_fails_keeps_the_worktree_and_lease() {
+    let _scan = aida_core::mailbox_lifecycle::activation::test_writer_scan(true);
     let fx = fixture();
     let _ambient = crate::test_env::AmbientGuard::hermetic_with_seat(&fx.main, "implementer", &[]);
     let scope = "TASK-928077";
@@ -166,6 +170,7 @@ fn a_spawned_reviewer_that_fails_keeps_the_worktree_and_lease() {
 /// reviewer with no verdict) keeps its tree and lease.
 #[test]
 fn a_failure_after_the_agent_started_keeps_the_worktree_and_lease() {
+    let _scan = aida_core::mailbox_lifecycle::activation::test_writer_scan(true);
     let fx = fixture();
     let _ambient = crate::test_env::AmbientGuard::hermetic_with_seat(&fx.main, "implementer", &[]);
     let scope = "TASK-928073";
@@ -187,6 +192,7 @@ fn a_failure_after_the_agent_started_keeps_the_worktree_and_lease() {
 /// so its uncommitted work and lease survive; the panic still propagates.
 #[test]
 fn a_panic_after_the_agent_started_keeps_the_worktree_and_lease() {
+    let _scan = aida_core::mailbox_lifecycle::activation::test_writer_scan(true);
     let fx = fixture();
     let _ambient = crate::test_env::AmbientGuard::hermetic_with_seat(&fx.main, "implementer", &[]);
     let scope = "TASK-928074";
@@ -208,6 +214,7 @@ fn a_panic_after_the_agent_started_keeps_the_worktree_and_lease() {
 /// A panic before any agent could start still rolls the setup back.
 #[test]
 fn a_panic_before_the_agent_started_rolls_back() {
+    let _scan = aida_core::mailbox_lifecycle::activation::test_writer_scan(true);
     let fx = fixture();
     let _ambient = crate::test_env::AmbientGuard::hermetic_with_seat(&fx.main, "implementer", &[]);
     let scope = "TASK-928075";
@@ -222,4 +229,128 @@ fn a_panic_before_the_agent_started_rolls_back() {
 
     assert!(panicked.is_err(), "the panic propagates");
     assert_gone(&fx.main, &tree, scope);
+}
+
+// Production no--role session setup must publish the same effective role that
+// the local lease records, even from a reviewer/advisor shell.
+// trace:STORY-2705 | ai:codex
+#[test]
+fn session_start_default_role_claim_defers_cross_host_review_implementer_gate() {
+    use super::tests::git_ok;
+    for inherited in ["", "advisor", "reviewer"] {
+        let _scan = aida_core::mailbox_lifecycle::activation::test_writer_scan(true);
+        let fx = fixture();
+        let mut ambient =
+            crate::test_env::AmbientGuard::hermetic_with_seat(&fx.main, "implementer", &[]);
+        ambient.set_key("AIDA_SESSION_ROLE", inherited);
+        let store = fx.main.join(".aida-store");
+        std::fs::create_dir_all(&store).unwrap();
+        git_ok(&store, &["init", "-q", "-b", "aida-store"]);
+        git_ok(&store, &["config", "user.email", "test@example.com"]);
+        git_ok(&store, &["config", "user.name", "AIDA Test"]);
+        git_ok(&store, &["add", "-A"]);
+        let seed = crate::test_git::git_command()
+            .current_dir(&store)
+            .args(["commit", "--allow-empty", "-qm", "seed"])
+            .output()
+            .unwrap();
+        assert!(
+            seed.status.success(),
+            "{}",
+            String::from_utf8_lossy(&seed.stderr)
+        );
+        let origin = fx.root.join("store-origin.git");
+        git_ok(
+            &fx.root,
+            &[
+                "clone",
+                "-q",
+                "--bare",
+                store.to_str().unwrap(),
+                origin.to_str().unwrap(),
+            ],
+        );
+        git_ok(
+            &store,
+            &["remote", "add", "origin", origin.to_str().unwrap()],
+        );
+        let scope = "STORY-928079";
+        let _receipt = launching_setup(scope);
+        let mut claim = crate::coordination::list_claims(&store)
+            .into_iter()
+            .find(|c| c.scope == scope)
+            .expect("production session wrote claim");
+        assert_eq!(claim.agent, "implementer");
+        let lease = crate::list_leases(&fx.main)
+            .into_iter()
+            .find(|l| l.scope == scope)
+            .unwrap();
+        assert_eq!(lease.role.as_deref(), Some(claim.agent.as_str()));
+        // Observe the actual claim from another host, without a local lease.
+        let observer = fx.root.join("observer");
+        claim.host = "remote-fixture-host".into();
+        let path = crate::coordination::claim_path(&observer.join(".aida-store"), scope);
+        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+        std::fs::write(path, toml::to_string(&claim).unwrap()).unwrap();
+        assert!(
+            crate::review_implementer_gate::deferred_with_metadata(&observer, || Ok((
+                format!("fix (Refs {scope})"),
+                "other-branch".into()
+            )))
+            .unwrap()
+            .is_some()
+        );
+    }
+}
+
+// trace:BUG-2548 | ai:codex
+#[test]
+fn bug_2548_refused_review_removes_the_actual_lease_file() {
+    let _scan = aida_core::mailbox_lifecycle::activation::test_writer_scan(true);
+    let fx = fixture();
+    let mut ambient = crate::test_env::AmbientGuard::hermetic_with_seat(&fx.main, "reviewer", &[]);
+    let gh = fx.root.join("fake-gh");
+    crate::test_exec::write_executable(&gh, "#!/bin/sh\nexit 1\n");
+    ambient.set_key("AIDA_TEST_GH_BINARY", &gh);
+    assert!(crate::test_git::git_command()
+        .arg("-C")
+        .arg(&fx.main)
+        .args(["push", "-q", "origin", "HEAD:refs/pull/2548/head"])
+        .status()
+        .unwrap()
+        .success());
+    let scope = "PR-2548";
+    let receipt = launching_setup(scope);
+    let (id, tree) = lease_tree(&fx.main, scope).unwrap();
+    let path = crate::lease_path(&fx.main, &id);
+    assert!(path.is_file());
+    let (result, rolled_back) = run_pickup_launch(&fx.main, receipt, |_| {
+        anyhow::bail!("reviewer spawn refused")
+    });
+    assert!(result.is_err());
+    assert!(rolled_back);
+    assert!(
+        !path.exists(),
+        "rollback must unlink the actual lease record"
+    );
+    assert_gone(&fx.main, &tree, scope);
+}
+
+// trace:BUG-2548 | ai:codex
+#[test]
+fn bug_2548_retained_owner_cannot_report_successful_rollback() {
+    let _scan = aida_core::mailbox_lifecycle::activation::test_writer_scan(true);
+    let fx = fixture();
+    let _ambient = crate::test_env::AmbientGuard::hermetic_with_seat(&fx.main, "implementer", &[]);
+    let scope = "TASK-928078";
+    let mut receipt = launching_setup(scope);
+    let (id, tree) = lease_tree(&fx.main, scope).unwrap();
+    receipt.require_owner(|| false);
+    let (result, rolled_back) = run_pickup_launch(&fx.main, receipt, |_| {
+        anyhow::bail!("launch refused after ownership moved")
+    });
+    assert!(!rolled_back, "retained setup is not a successful rollback");
+    assert!(format!("{:#}", result.unwrap_err()).contains("retained lease"));
+    assert!(crate::lease_path(&fx.main, &id).is_file());
+    assert!(tree.exists());
 }

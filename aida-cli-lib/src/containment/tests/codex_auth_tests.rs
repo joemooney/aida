@@ -108,7 +108,7 @@ fn story_2593_binary_pin_never_executes_host_code() {
     let program = root.path().join("codex");
     let sentinel = root.path().join("executed");
     let script = format!(
-        "#!/bin/sh\ntouch '{}'\necho 'codex-cli 0.166.0'\n",
+        "#!/bin/sh\ntouch '{}'\necho 'codex-cli 0.167.0'\n",
         sentinel.display()
     );
     std::fs::write(&program, &script).unwrap();
@@ -550,7 +550,7 @@ fn story_2593_production_prepare_uses_private_chatgpt_leaf() {
     std::fs::write(
         &program,
         format!(
-            "#!/bin/sh\ntouch '{}'\necho 'codex-cli 0.166.0'\n",
+            "#!/bin/sh\ntouch '{}'\necho 'codex-cli 0.167.0'\n",
             sentinel.display()
         ),
     )
@@ -576,6 +576,7 @@ fn story_2593_production_prepare_uses_private_chatgpt_leaf() {
         unsafe { libc::getuid() },
         LaunchIo::Headless,
         &pin,
+        None,
     )
     .unwrap();
     assert!(plan.chatgpt_deadline.is_some());
@@ -655,6 +656,7 @@ fn story_2593_production_prepare_uses_private_chatgpt_leaf() {
         unsafe { libc::getuid() },
         LaunchIo::Headless,
         &pin,
+        None,
     )
     .unwrap();
     assert_eq!(capped.chatgpt_deadline, Some(exp - 300));
@@ -679,6 +681,7 @@ fn story_2593_production_prepare_uses_private_chatgpt_leaf() {
         unsafe { libc::getuid() },
         LaunchIo::Headless,
         &pin,
+        None,
     );
     assert!(match refused {
         Ok(_) => false,

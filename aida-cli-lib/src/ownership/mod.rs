@@ -65,3 +65,10 @@ pub(crate) use types::{
 mod tests;
 #[cfg(test)]
 mod writer_tests;
+
+/// Compatibility probe for local standalone slot receipts (not remote leases).
+/// Keep process inspection behind the ownership boundary until slot migration.
+// trace:STORY-2660 | ai:codex
+pub(crate) fn local_slot_process_is_alive(pid: u32, start: Option<&str>) -> bool {
+    aida_core::liveness::process_identity_is_alive(pid, start)
+}

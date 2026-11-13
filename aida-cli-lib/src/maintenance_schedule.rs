@@ -3651,19 +3651,12 @@ fn command_table() -> &'static [(&'static [&'static str], ScheduledCommand)] {
                 hook_allowed: false,
             },
         ),
-        // Read-only monthly guard; forced cleanup stays with the operator.
-        // trace:TASK-1596 | ai:codex
+        // trace:TASK-1222 | ai:codex — dry-run only; never allow --apply.
         (
-            &["doctor check merged-agent-worktrees --fail-on-findings"],
+            &["worktree gc --fail-on-findings"],
             ScheduledCommand {
-                display: "doctor check merged-agent-worktrees --fail-on-findings",
-                args: &[
-                    "doctor",
-                    "check",
-                    "merged-agent-worktrees",
-                    "--json",
-                    "--fail-on-findings",
-                ],
+                display: "worktree gc --fail-on-findings",
+                args: &["worktree", "gc", "--json", "--fail-on-findings"],
                 hook_allowed: false,
             },
         ),
@@ -3864,7 +3857,11 @@ pub(crate) const HYGIENE_COMMAND_TIMEOUT: std::time::Duration = std::time::Durat
 /// The kill ceiling for one scheduled child.
 // trace:STORY-2351 | ai:claude
 fn command_timeout(command: &ScheduledCommand) -> std::time::Duration {
-    if command.display == "session hygiene" {
+    // trace:TASK-1222 | ai:codex — lifecycle scans emit partial counts before this ceiling.
+    if matches!(
+        command.display,
+        "session hygiene" | "worktree gc --fail-on-findings"
+    ) {
         HYGIENE_COMMAND_TIMEOUT
     } else {
         SCHEDULED_COMMAND_TIMEOUT
@@ -4322,16 +4319,14 @@ pub(crate) struct ScheduleArgs {
 
 fn run_schedule(
     matches: &clap::ArgMatches,
-    ctx: &crate::command_registry::DispatchCtx,
-) -> anyhow::Result<crate::command_registry::Flow> {
-    use crate::*;
+    ctx: &crate::cmdkit::DispatchCtx,
+) -> anyhow::Result<crate::cmdkit::Flow> {
+    // trace:TASK-3428 | ai:codex
     let args = <ScheduleArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
     match &ctx.store {
-        None => Ok(crate::command_registry::Flow::Continue),
-        Some(crate::command_registry::StoreCtx::Distributed { .. }) => {
-            Ok(crate::command_registry::Flow::Continue)
-        }
-        Some(crate::command_registry::StoreCtx::Git {
+        None => Ok(crate::cmdkit::Flow::Continue),
+        Some(crate::cmdkit::StoreCtx::Distributed { .. }) => Ok(crate::cmdkit::Flow::Continue),
+        Some(crate::cmdkit::StoreCtx::Git {
             store_path,
             backend,
         }) => {
@@ -4341,16 +4336,16 @@ fn run_schedule(
                 ScheduleArgs {
                     inner: schedule_cmd,
                 } => {
-                    return crate::command_registry::returned(self::handle_schedule_command(
+                    return crate::cmdkit::returned(self::handle_schedule_command(
                         schedule_cmd,
                         store_path,
                         Some(backend),
                     ));
                 }
             }
-            Ok(crate::command_registry::Flow::Continue)
+            Ok(crate::cmdkit::Flow::Continue)
         }
-        Some(crate::command_registry::StoreCtx::Legacy {
+        Some(crate::cmdkit::StoreCtx::Legacy {
             storage,
             requirements_path,
         }) => {
@@ -4362,22 +4357,52 @@ fn run_schedule(
                     );
                 }
             }
-            Ok(crate::command_registry::Flow::Continue)
+            Ok(crate::cmdkit::Flow::Continue)
         }
     }
 }
 
 // trace:STORY-1728 | ai:claude
-pub(crate) static SCHEDULE: crate::command_registry::CommandReg =
-    crate::command_registry::CommandReg {
-        name: "schedule",
-        help_after: "store",
-        command: <ScheduleArgs as clap::CommandFactory>::command,
-        policy: |_| crate::command_registry::CmdPolicy {
-            stakeholder: crate::stakeholder_role::StakeholderAction::Write,
-            per_write_auto_push: false,
-            skip_role_restore_prompt: false,
-            team_identity_write: false,
-        },
-        run: crate::command_registry::Handler::Store(run_schedule),
+pub(crate) static SCHEDULE: crate::cmdkit::CommandReg = crate::cmdkit::CommandReg {
+    name: "schedule",
+    help_after: "store",
+    command: <ScheduleArgs as clap::CommandFactory>::command,
+    policy: |_| crate::cmdkit::CmdPolicy {
+        stakeholder: crate::stakeholder_role::StakeholderAction::Write,
+        per_write_auto_push: false,
+        skip_role_restore_prompt: false,
+        team_identity_write: false,
+    },
+    run: crate::cmdkit::Handler::Store(run_schedule),
+};
+
+/// The floor reclaim's wall-clock budget: half the guard child's kill
+/// ceiling, leaving the re-probe, the stuck scan and the report time to run.
+// trace:STORY-2351 | ai:claude
+pub(crate) const FLOOR_RECLAIM_BUDGET: std::time::Duration = std::time::Duration::from_secs(60);
+
+/// The disk-headroom `--fail-on-findings` reason: one line, and it leads
+/// with the STUCK sentence (reclaim cannot restore the floor, plus the top
+/// consumers) when there is one, so the routed item carries it. `None` when
+/// there are no findings.
+// trace:STORY-1916.ac641c6e | ai:claude
+pub(crate) fn disk_headroom_fail_reason(findings: &[DoctorFinding]) -> Option<String> {
+    if findings.is_empty() {
+        return None;
+    }
+    let tail = format!(
+        "{} finding(s) in {DISK_HEADROOM_CATEGORY} — failing because --fail-on-findings was requested",
+        findings.len()
+    );
+    let stuck = findings
+        .iter()
+        .find_map(|f| f.summary.find("STUCK:").map(|i| &f.summary[i..]));
+    let reason = match stuck {
+        Some(stuck) => format!("{stuck} — {tail}"),
+        None => tail,
     };
+    Some(reason.replace(['\n', '\r'], " "))
+}
+
+use crate::doctor_cmd::DISK_HEADROOM_CATEGORY;
+use crate::doctor_root::DoctorFinding;

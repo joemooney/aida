@@ -228,6 +228,30 @@ fn header_stamp(content: &str) -> Option<DateTime<Utc>> {
         .map(|t| t.with_timezone(&Utc))
 }
 
+// trace:STORY-2653 | ai:codex
+fn bounded_rotation_file(path: &Path, limit: u64) -> std::io::Result<String> {
+    use std::io::Read;
+    use std::os::unix::fs::OpenOptionsExt;
+    let file = std::fs::OpenOptions::new()
+        .read(true)
+        .custom_flags(libc::O_NOFOLLOW | libc::O_NONBLOCK)
+        .open(path)?;
+    let metadata = file.metadata()?;
+    if !metadata.is_file() || metadata.len() > limit {
+        return Err(std::io::Error::other(
+            "rotation evidence is not a bounded regular file",
+        ));
+    }
+    let mut content = String::new();
+    file.take(limit + 1).read_to_string(&mut content)?;
+    if content.len() as u64 > limit {
+        return Err(std::io::Error::other(
+            "rotation evidence grew beyond its limit",
+        ));
+    }
+    Ok(content)
+}
+
 /// The handoff a relaunched generation loads: exactly the file the
 /// supervisor matched, and only while its header still carries the stamp the
 /// supervisor saw. `Err` is the one-line reason nothing is loaded. A newer
@@ -240,7 +264,7 @@ pub(crate) fn matched_handoff(path: &str, stamp: &str) -> std::result::Result<St
     let want = DateTime::parse_from_rfc3339(stamp.trim())
         .map(|t| t.with_timezone(&Utc))
         .map_err(|_| format!("the handoff stamp `{}` is not a timestamp", stamp.trim()))?;
-    let content = match std::fs::read_to_string(path) {
+    let content = match bounded_rotation_file(Path::new(path), 32_000) {
         Ok(c) => c,
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
             return Err(format!("the matched handoff {path} is gone"));
@@ -255,6 +279,341 @@ pub(crate) fn matched_handoff(path: &str, stamp: &str) -> std::result::Result<St
             want.to_rfc3339()
         )),
         None => Err(format!("the handoff at {path} has no stamp")),
+    }
+}
+
+// trace:STORY-2653 | ai:codex
+#[derive(serde::Serialize, serde::Deserialize)]
+struct TurnRotation {
+    session: String,
+    notice: DateTime<Utc>,
+    boundary: Option<DateTime<Utc>>,
+}
+
+fn turn_path(root: &Path, seat: &str, handle: &str, generation: u64) -> Option<PathBuf> {
+    let seat = crate::seat_rotation::sanitize_seat(seat).ok()?;
+    // Handles are data, never path components supplied unchecked by a hook.
+    let handle = crate::seat_rotation::sanitize_seat(handle).ok()?;
+    Some(
+        root.join(".aida/handoff")
+            .join(seat)
+            .join(format!(".rotation-{handle}-{generation}.json")),
+    )
+}
+
+fn read_turn(path: &Path) -> Option<TurnRotation> {
+    serde_json::from_str(&bounded_rotation_file(path, 4096).ok()?).ok()
+}
+
+/// Called at the existing hook entry boundary. Stop only stamps a boundary;
+/// the launcher owns signalling and reaping its own child.
+// trace:STORY-2653 | ai:codex
+pub(crate) fn hook_turn(
+    root: &Path,
+    seat: &str,
+    payload: &str,
+    notice_active: bool,
+    writer: &crate::seat_rotation::HandoffWriter,
+) -> Result<()> {
+    let value: serde_json::Value = serde_json::from_str(payload)?;
+    let Some(session) = value
+        .get("session_id")
+        .and_then(|v| v.as_str())
+        .filter(|s| !s.is_empty())
+    else {
+        return Ok(());
+    };
+    let (Some(handle), Some(generation)) = (writer.handle.as_deref(), writer.generation) else {
+        return Ok(());
+    };
+    let Some(path) = turn_path(root, seat, handle, generation) else {
+        return Ok(());
+    };
+    let now = Utc::now();
+    let mut state = read_turn(&path).filter(|s| s.session == session);
+    if value.get("hook_event_name").and_then(|v| v.as_str()) == Some("Stop") {
+        let Some(mut current) = state else {
+            return Ok(());
+        };
+        let records = read_handoff_log(root, seat);
+        let run = GenerationRun {
+            seat,
+            handle,
+            native_session_id: Some(session),
+            spawned_at: current.notice,
+        };
+        let Some(handoff) =
+            fresh_handoff(&records, &run).filter(|h| !h.final_ && h.ts > current.notice)
+        else {
+            return Ok(());
+        };
+        let handoff_path = root.join(&handoff.path);
+        let mut content =
+            matched_handoff(&handoff_path.to_string_lossy(), &handoff.ts.to_rfc3339())
+                .map_err(anyhow::Error::msg)?;
+        if !content.contains("<!-- automatic rotation context -->") {
+            content.push_str(&rotation_context(
+                &value,
+                crate::gate::seat_authority::current_grant_id().as_deref(),
+            ));
+            let tmp = handoff_path.with_extension(format!("{}.tmp", uuid::Uuid::new_v4()));
+            std::fs::write(&tmp, &content)?;
+            std::fs::rename(tmp, &handoff_path)?;
+            // The supervisor loads this exact stamped file. Leave latest.md
+            // alone: a concurrent sibling may have published a newer handoff.
+        }
+        current.boundary = Some(now);
+        state = Some(current);
+    } else if notice_active && state.is_none() {
+        state = Some(TurnRotation {
+            session: session.into(),
+            notice: now,
+            boundary: None,
+        });
+    } else {
+        // A compacted/below-ceiling turn disarms the earlier notice. Missing
+        // usage evidence also fails closed rather than extending old intent.
+        if !notice_active && state.is_some() {
+            match std::fs::remove_file(&path) {
+                Ok(()) => {}
+                Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+                Err(error) => return Err(error.into()),
+            }
+        }
+        return Ok(());
+    }
+    std::fs::create_dir_all(path.parent().expect("turn parent"))?;
+    let tmp = path.with_extension(format!("{}.tmp", uuid::Uuid::new_v4()));
+    std::fs::write(&tmp, serde_json::to_vec(&state.expect("turn state"))?)?;
+    std::fs::rename(tmp, path)?;
+    Ok(())
+}
+
+/// Snapshot only goal tool arguments, never arbitrary transcript text or
+/// process environments. Missing evidence is explicit, not a claim of no goal.
+// trace:STORY-2653 | ai:codex
+fn rotation_context(payload: &serde_json::Value, grant: Option<&str>) -> String {
+    use std::io::{Read, Seek, SeekFrom};
+    fn goals(value: &serde_json::Value, found: &mut Vec<String>) {
+        match value {
+            serde_json::Value::Object(map) => {
+                if let Some(name) = map.get("name").and_then(|v| v.as_str()) {
+                    if matches!(
+                        name.rsplit('.').next(),
+                        Some("create_goal" | "update_goal" | "Goal")
+                    ) {
+                        let args = map.get("arguments").or_else(|| map.get("input"));
+                        if let Some(args) = args {
+                            if matches!(name.rsplit('.').next(), Some("create_goal" | "Goal")) {
+                                found.clear();
+                            }
+                            found.push(format!("{name}: {args}"));
+                        }
+                    }
+                }
+                for value in map.values() {
+                    goals(value, found);
+                }
+            }
+            serde_json::Value::Array(values) => {
+                for value in values {
+                    goals(value, found);
+                }
+            }
+            _ => {}
+        }
+    }
+    let mut found = Vec::new();
+    if let Some(path) = payload.get("transcript_path").and_then(|v| v.as_str()) {
+        if let Ok(mut file) = std::fs::File::open(path) {
+            let start = file
+                .metadata()
+                .map(|m| m.len().saturating_sub(512 * 1024))
+                .unwrap_or(0);
+            if file.seek(SeekFrom::Start(start)).is_ok() {
+                let mut tail = String::new();
+                if file.take(512 * 1024).read_to_string(&mut tail).is_ok() {
+                    for (index, line) in tail.lines().enumerate() {
+                        if start > 0 && index == 0 {
+                            continue;
+                        }
+                        if let Ok(value) = serde_json::from_str(line) {
+                            goals(&value, &mut found);
+                        }
+                    }
+                }
+            }
+        }
+    }
+    let mut out = String::from("\n<!-- automatic rotation context -->\n## Session goal evidence\n");
+    if found.is_empty() {
+        out.push_str("Goal state unknown: no goal tool record in the bounded transcript tail. Recover any session goal from the previous session before continuing.\n");
+    } else {
+        out.push_str("Recent goal tool records (evidence only; verify current state and recreate any active session goal):\n");
+        // Keep the latest creation as well as subsequent updates when possible.
+        let evidence = found.join("\n");
+        let mut end = evidence.len().min(4096);
+        while !evidence.is_char_boundary(end) {
+            end -= 1;
+        }
+        out.push_str(&evidence[..end]);
+        if end < evidence.len() {
+            out.push_str("\n[goal evidence truncated; recover from previous session]");
+        }
+        out.push('\n');
+    }
+    out.push_str("\n## Processes sharing the outgoing grant\nBest-effort local procfs snapshot; processes are not rebound. Restart needed watchers under the new grant.\n");
+    let Some(grant) = grant else {
+        out.push_str("Grant unavailable; process inventory unknown.\n");
+        return out;
+    };
+    let Ok(entries) = std::fs::read_dir("/proc") else {
+        out.push_str("Procfs unavailable; process inventory unknown.\n");
+        return out;
+    };
+    let mut pids = Vec::new();
+    for entry in entries.flatten() {
+        let Some(pid) = entry
+            .file_name()
+            .to_str()
+            .and_then(|s| s.parse::<u32>().ok())
+        else {
+            continue;
+        };
+        if crate::ps_integrate::read_pid_environ_vars(pid).is_some_and(|vars| {
+            vars.get(crate::gate::seat_authority::GRANT_ENV)
+                .map(String::as_str)
+                == Some(grant)
+        }) {
+            pids.push(pid);
+        }
+    }
+    pids.sort_unstable();
+    for pid in pids.iter().take(32) {
+        let comm = std::fs::read_to_string(format!("/proc/{pid}/comm")).unwrap_or_default();
+        let comm: String = comm.chars().filter(|c| !c.is_control()).take(80).collect();
+        out.push_str(&format!("- PID {pid} ({comm})\n"));
+    }
+    if pids.is_empty() {
+        out.push_str("No readable matching process environment observed.\n");
+    }
+    if pids.len() > 32 {
+        out.push_str("[process list truncated]\n");
+    }
+    out
+}
+
+/// A bounded poller independent of vendor Stop decisions. It never signals a
+/// PID discovered from disk: only the pidfd-pinned child this launcher spawned.
+// trace:STORY-2653 | ai:codex
+pub(crate) struct TurnMonitor {
+    stop: Arc<AtomicBool>,
+    thread: Option<std::thread::JoinHandle<()>>,
+}
+
+impl TurnMonitor {
+    pub(crate) fn start(
+        root: PathBuf,
+        seat: String,
+        handle: String,
+        generation: u64,
+        spawned_at: DateTime<Utc>,
+        child_pid: u32,
+        expected_session: Option<String>,
+    ) -> Self {
+        let stop = Arc::new(AtomicBool::new(false));
+        let stopped = Arc::clone(&stop);
+        // A pidfd pins the child identity even if wait() reaps it before the
+        // monitor joins. Never fall back to signalling a recyclable numeric PID.
+        use std::os::fd::{AsRawFd, FromRawFd};
+        let fd = unsafe { libc::syscall(libc::SYS_pidfd_open, child_pid, 0) };
+        let pidfd = (fd >= 0).then(|| unsafe { std::os::fd::OwnedFd::from_raw_fd(fd as i32) });
+        let thread = std::thread::spawn(move || {
+            let Some(pidfd) = pidfd else {
+                eprintln!("warning: rotation cannot pin child identity; automatic exit disabled");
+                return;
+            };
+            let Some(path) = turn_path(&root, &seat, &handle, generation) else {
+                return;
+            };
+            while !stopped.load(Ordering::SeqCst) {
+                if let Some(state) = read_turn(&path).filter(|state| {
+                    state.notice >= spawned_at && state.boundary.is_some_and(|b| b > state.notice)
+                }) {
+                    let session = expected_session.clone().or_else(|| {
+                        crate::agent_registry::load_entries(&root)
+                            .into_iter()
+                            .find(|(_, row)| {
+                                row.pid == child_pid && row.name.as_deref() == Some(&handle)
+                            })
+                            .and_then(|(_, row)| row.native_session_id.or(row.claude_session_id))
+                    });
+                    if session.as_deref() == Some(state.session.as_str()) {
+                        let records = read_handoff_log(&root, &seat);
+                        let run = GenerationRun {
+                            seat: &seat,
+                            handle: &handle,
+                            native_session_id: Some(&state.session),
+                            spawned_at,
+                        };
+                        if let Some(handoff) = fresh_handoff(&records, &run).filter(|h| {
+                            !h.final_ && h.ts > state.notice && Some(h.ts) <= state.boundary
+                        }) {
+                            let handoff_path = root.join(&handoff.path);
+                            if matched_handoff(
+                                &handoff_path.to_string_lossy(),
+                                &handoff.ts.to_rfc3339(),
+                            )
+                            .is_ok()
+                            {
+                                eprintln!("rotation: fresh handoff at turn boundary; ending {handle} #{generation}");
+                                unsafe {
+                                    libc::syscall(
+                                        libc::SYS_pidfd_send_signal,
+                                        pidfd.as_raw_fd(),
+                                        libc::SIGTERM,
+                                        std::ptr::null::<libc::siginfo_t>(),
+                                        0,
+                                    );
+                                }
+                                // A vendor/goal handler may ignore TERM. Only the
+                                // pinned child receives escalation, never its process group.
+                                for _ in 0..40 {
+                                    if stopped.load(Ordering::SeqCst) {
+                                        return;
+                                    }
+                                    std::thread::sleep(std::time::Duration::from_millis(50));
+                                }
+                                unsafe {
+                                    libc::syscall(
+                                        libc::SYS_pidfd_send_signal,
+                                        pidfd.as_raw_fd(),
+                                        libc::SIGKILL,
+                                        std::ptr::null::<libc::siginfo_t>(),
+                                        0,
+                                    );
+                                }
+                                return;
+                            }
+                        }
+                    }
+                }
+                std::thread::sleep(std::time::Duration::from_millis(50));
+            }
+        });
+        Self {
+            stop,
+            thread: Some(thread),
+        }
+    }
+}
+
+impl Drop for TurnMonitor {
+    fn drop(&mut self) {
+        self.stop.store(true, Ordering::SeqCst);
+        if let Some(thread) = self.thread.take() {
+            let _ = thread.join();
+        }
     }
 }
 
@@ -309,7 +668,30 @@ pub(crate) fn read_handoff_log(project_root: &Path, seat: &str) -> Vec<HandoffRe
         .join("handoff")
         .join(seat)
         .join("log.jsonl");
-    std::fs::read_to_string(path)
+    use std::io::{Read, Seek, SeekFrom};
+    use std::os::unix::fs::OpenOptionsExt;
+    let read_tail = || -> std::io::Result<String> {
+        let mut file = std::fs::OpenOptions::new()
+            .read(true)
+            .custom_flags(libc::O_NOFOLLOW | libc::O_NONBLOCK)
+            .open(path)?;
+        let metadata = file.metadata()?;
+        if !metadata.is_file() {
+            return Err(std::io::Error::other("handoff log is not regular"));
+        }
+        let start = metadata.len().saturating_sub(1024 * 1024);
+        file.seek(SeekFrom::Start(start))?;
+        let mut content = String::new();
+        file.take(1024 * 1024).read_to_string(&mut content)?;
+        if start > 0 {
+            content = content
+                .split_once('\n')
+                .map(|(_, tail)| tail.to_string())
+                .unwrap_or_default();
+        }
+        Ok(content)
+    };
+    read_tail()
         .unwrap_or_default()
         .lines()
         .filter_map(|l| serde_json::from_str(l.trim()).ok())

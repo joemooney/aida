@@ -89,7 +89,7 @@ pub enum MailWake {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Resume {
-    RecordedSession,
+    RecordedSessionWithFork,
     RecordedThread,
     Unsupported,
 }
@@ -160,6 +160,7 @@ pub static PROFILES: [VendorProfile; 3] = [
             events: &[
                 "PreToolUse",
                 "PostToolUse",
+                "PreCompact", // STORY-2662: Claude only; Codex trusted-hook test pending.
                 "SessionStart",
                 "UserPromptSubmit",
                 "Notification",
@@ -172,7 +173,7 @@ pub static PROFILES: [VendorProfile; 3] = [
         },
         sandbox: SandboxSupport::LegacyAndShared,
         mail_wake: MailWake::PerTurnHooks,
-        resume: Resume::RecordedSession,
+        resume: Resume::RecordedSessionWithFork,
         background: Background::DaemonHandoff,
         skill_syntax: SkillSyntax::Slash,
     },
@@ -246,6 +247,25 @@ impl PromptTransport {
 }
 
 impl VendorProfile {
+    /// Resume or fork an interactive recorded conversation. This describes argv
+    /// only; admission and runtime support checks remain with the caller.
+    // trace:STORY-2539 | ai:codex
+    pub fn resume_args(&self, id: &str, fork: bool) -> Option<Vec<String>> {
+        match self.resume {
+            Resume::RecordedSessionWithFork => {
+                let mut args = vec!["--resume".into(), id.into()];
+                if fork {
+                    args.push("--fork-session".into());
+                }
+                Some(args)
+            }
+            Resume::RecordedThread => {
+                Some(vec![if fork { "fork" } else { "resume" }.into(), id.into()])
+            }
+            Resume::Unsupported => None,
+        }
+    }
+
     pub fn interactive_prompt_args(&self, prompt: &str) -> Vec<String> {
         self.interactive_prompt.expand(prompt.into())
     }
@@ -255,3 +275,45 @@ mod headless;
 pub mod headless_posture;
 
 pub mod hooks;
+
+// Closed diagnostic selector; identity alone never grants admission.
+// trace:TASK-3048 | ai:codex
+pub const AGY_EXECUTABLE: &str = profile(LaunchVendor::Agy).executable;
+
+#[cfg(test)]
+mod resume_tests {
+    use super::*;
+
+    // trace:STORY-2539 | ai:codex
+    #[test]
+    fn story_2539_claude_resume_argv() {
+        let p = profile(LaunchVendor::Claude);
+        assert_eq!(
+            p.resume_args("--opaque id", false).unwrap(),
+            ["--resume", "--opaque id"]
+        );
+        assert_eq!(
+            p.resume_args("id", true).unwrap(),
+            ["--resume", "id", "--fork-session"]
+        );
+    }
+
+    // trace:STORY-2539 | ai:codex
+    #[test]
+    fn story_2539_codex_resume_argv() {
+        let p = profile(LaunchVendor::Codex);
+        assert_eq!(
+            p.resume_args("--opaque id", false).unwrap(),
+            ["resume", "--opaque id"]
+        );
+        assert_eq!(p.resume_args("id", true).unwrap(), ["fork", "id"]);
+    }
+
+    // trace:STORY-2539 | ai:codex
+    #[test]
+    fn story_2539_agy_resume_argv() {
+        let p = profile(LaunchVendor::Agy);
+        assert_eq!(p.resume_args("id", false), None);
+        assert_eq!(p.resume_args("id", true), None);
+    }
+}

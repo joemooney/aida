@@ -17,10 +17,16 @@ from pathlib import Path
 
 
 VERIFIED = {
+    # trace:STORY-2571 | ai:codex
+    "aida advisor loops status": "advisor loops status (not configured)",
+    # trace:STORY-2691 | ai:codex
+    "aida advisor loops train-status": "advisor loops train-status (not configured)",
     # trace:STORY-2402 | ai:codex
     "aida condition check": "condition check manual:joe",
     # Local attachments always emit JSON; validate also has a --json projection.
     # trace:STORY-2479 | ai:codex
+    # trace:STORY-2493 | ai:codex
+    "aida intent review-return": "intent review-return --file review-input.json (JSON attachment)",
     "aida intent note": "intent note --category observation --title title --file note.md (JSON attachment)",
     "aida intent validate": "intent validate --file observation.json",
     "aida intent export": "intent export --file observation.json (JSON attachment)",

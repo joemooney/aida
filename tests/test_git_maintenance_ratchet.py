@@ -28,7 +28,8 @@ import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
 BASELINE = ROOT / "scripts/git-maintenance-baseline.txt"
-CRATES = ["aida-core", "aida-cli-lib", "aida-cli", "aida-server", "aida-tui"]
+# trace:TASK-3429 | ai:codex
+CRATES = ["aida-mcp", "aida-core", "aida-cli-lib", "aida-cli", "aida-server", "aida-tui"]
 
 # Subcommands that start auto-maintenance in the local repository (commit,
 # merge, am, rebase, cherry-pick, revert, pull, fetch), commit-tree (writes

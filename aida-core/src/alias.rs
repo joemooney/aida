@@ -235,7 +235,7 @@ pub fn link_cas(store_root: &Path, a: &str, b: &str) -> std::io::Result<bool> {
             crate::db::with_store_write_lock(store_root, || -> anyhow::Result<Option<String>> {
                 // Step 1: pull latest (skip first attempt / solo).
                 if attempt > 0 && !local_only {
-                    git_ops::pull_rebase(store_root, "origin", &branch)?;
+                    git_ops::pull_rebase_store_retry(store_root, "origin", &branch)?;
                 }
 
                 // Step 2: load → merge our link → save. A redundant link is a no-op:
