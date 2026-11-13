@@ -1,0 +1,49 @@
+id: 01a1d617-52fb-7970-af20-b9619faeeca5
+spec_id: STORY-b6b1278890774ef993d2ebc327862470-695
+agreed_id: STORY-2772
+title: 'integration.review_after_merge config: low-risk PRs merge to integration before review; promotion requires approval at merged head'
+description: |
+  Operator ruling 2026-11-13 11:06 MST: low-risk integration-track changes merge into `integration` before review; review must approve the merged head before promotion to main. Operator: "it should be a configuration option".
+
+  Acceptance:
+  1. Config key in .aida/config.toml, e.g.
+     [integration]
+     review_after_merge = "off" | "low-risk"   # default "off"
+     plus the eligibility knobs: max_effort (default "4h"), excluded_tags (default ["architecture","security","gate","supervised"]). Protected paths are always excluded and cannot be configured away.
+  2. One eligibility function, `review_after_merge_eligible(spec, pr) -> Eligible | Ineligible(reason)`, used by the integration merge path. `aida land status` (STORY-2768) shows the reason.
+  3. When eligible, the integration merge gate accepts the PR with no approval, given a green make check-ci-fast plus the configured compile check, and records "merged-before-review" on the PR/spec.
+  4. The promotion gate refuses to cut or ship a promotion that contains a merged-before-review constituent without an approval at its merged head. It names that constituent so it can be reverted out of the snapshot (throughput rule 1).
+  5. Tests: eligibility matrix (tag, effort, protected path, config off); a promotion refused for a pending constituent; a promotion allowed once approved.
+  First consumer: STORY-2771. Until this lands, the advisor applies the ruling by hand, per PR.
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-13T18:06:55.227979618Z
+modified_at: 2026-11-13T18:07:03.985253054Z
+req_type: Story
+tags:
+- config
+- effort:open:1d
+- integration
+- landing
+- track:integration
+history:
+- id: 01a1d617-7531-7dc3-aba6-d82849880497
+  author: joe
+  timestamp: 2026-11-13T18:07:03.985246264Z
+  session_id: 01a1d5f7-27ab-7543-8808-b0ec6c271689
+  harness_version: 2.1.323 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Approved
+filed_at:
+  code_sha: ee8dd4b2bdf1495f699357a3f2f40f9bf3802983
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: '82650579646'
+  vendor: claude
+  session: 01a1d5f7-27ab-7543-8808-b0ec6c271689
+  harness_version: 2.1.323 (Claude Code)

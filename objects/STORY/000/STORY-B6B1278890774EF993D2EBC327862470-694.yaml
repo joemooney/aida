@@ -1,0 +1,48 @@
+id: 01a1d615-c4d8-7f11-9f37-7b11651ab9f6
+spec_id: STORY-b6b1278890774ef993d2ebc327862470-694
+agreed_id: STORY-2771
+title: 'aida mandate renew: --ttl alias and start-flag overrides (e.g. --include-gate-paths)'
+description: |
+  Operator request 2026-11-13 11:04: `aida mandate renew` should take TTL and flag tweaks instead of forcing a stop + full `start` retype.
+
+  Today renew keeps scope, flags and reason, and only takes `--for <DURATION>`. `start` names the same thing `--ttl`.
+
+  Acceptance:
+  1. `renew --ttl <DURATION>` is accepted as an alias of `--for` (same 24h ceiling). `start` keeps `--ttl`.
+  2. renew accepts the start flags as overrides of the renewed mandate: `--ship-held`, `--drive`, `--include-supervised` / `--exclude-supervised`, `--include-gate-paths`, `--scope`, `--reason`. Any flag not given keeps the original's value.
+  3. A renewal that changes flags records the before/after in the mandate lineage and prints a one-line diff (for example "include-gate-paths: off -> on"). Renewal with no overrides behaves as it does today.
+  4. Renew stays human-TTY-only, as today; no new authority path.
+  5. Tests: alias parity, one override round-trip, unchanged-flags renewal.
+
+  Low risk, CLI and mandate-store only. Track: integration (operator: should not take all day).
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-13T18:05:13.304899533Z
+modified_at: 2026-11-13T18:05:20.703031421Z
+req_type: Story
+tags:
+- cli
+- effort:open:4h
+- mandate
+- track:integration
+history:
+- id: 01a1d615-e1bf-7023-b142-8d64f48107ae
+  author: joe
+  timestamp: 2026-11-13T18:05:20.703023383Z
+  session_id: 01a1d5f7-27ab-7543-8808-b0ec6c271689
+  harness_version: 2.1.323 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Approved
+filed_at:
+  code_sha: ee8dd4b2bdf1495f699357a3f2f40f9bf3802983
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: '82650579646'
+  vendor: claude
+  session: 01a1d5f7-27ab-7543-8808-b0ec6c271689
+  harness_version: 2.1.323 (Claude Code)
