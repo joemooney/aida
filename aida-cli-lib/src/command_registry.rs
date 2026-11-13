@@ -94,6 +94,7 @@ pub(crate) static REGISTRY: &[&CommandReg] = &[
     &crate::import_plan_cmd::IMPORT_PLAN,
     &crate::init_cmd::INIT,
     &crate::ps_integrate::INTEGRATE,
+    &crate::integration_cmd::INTEGRATION,
     &crate::plan_intent::INTENT,
     &crate::internal_cmd::INTERNAL,
     &crate::tracker_cmd::JIRA,

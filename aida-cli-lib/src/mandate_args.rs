@@ -46,16 +46,51 @@ pub enum MandateAction {
         /// guided, keystone). Operator-only specs are never covered.
         #[clap(long)]
         include_supervised: bool,
+        /// Allow mandate ships and trains to take protected-path PRs. Requires
+        /// a human at a terminal; all other gates still apply.
+        // trace:STORY-2733 | ai:codex
+        #[clap(long)]
+        include_gate_paths: bool,
     },
     /// Extend the active mandate in place, or revive the latest expired one
-    /// with a fresh ID. Keeps scope, flags and reason. Stopped mandates stay
-    /// stopped. Human at an interactive terminal only.
+    /// with a fresh ID. Everything not named on the command line is kept:
+    /// scope, supervised flag, protected paths and reason. The start flags
+    /// change the renewed mandate; each change is recorded with the renewal.
+    /// Stopped mandates stay stopped. Human at an interactive terminal only.
     // trace:STORY-B6B1278890774EF993D2EBC327862470-166 | ai:claude
+    // trace:STORY-2771 | ai:claude
     Renew {
         /// How long from now it lasts, e.g. `8h` or `90m` (default: the
         /// duration it was started with, at most 24h).
-        #[clap(long = "for", value_name = "DURATION")]
+        #[clap(long = "for", visible_alias = "ttl", value_name = "DURATION")]
         duration: Option<String>,
+        /// Also cover shipping held PRs.
+        #[clap(long)]
+        ship_held: bool,
+        /// Scopes to add (e.g. `--scope dispatch`). Renewal never removes a
+        /// scope: stop the mandate and start a narrower one for that.
+        #[clap(long = "scope", value_name = "SCOPE")]
+        scopes: Vec<String>,
+        /// Make it a drive mandate (every scope and the drive tick). The
+        /// supervised flag is kept unless --include-supervised or
+        /// --exclude-supervised says otherwise.
+        #[clap(long)]
+        drive: bool,
+        /// Also cover sensitive specs from now on.
+        #[clap(long, conflicts_with = "exclude_supervised")]
+        include_supervised: bool,
+        /// Keep sensitive specs human-only from now on.
+        #[clap(long)]
+        exclude_supervised: bool,
+        /// Allow protected-path ships and trains from now on.
+        #[clap(long, conflicts_with = "exclude_gate_paths")]
+        include_gate_paths: bool,
+        /// Stop allowing protected-path ships and trains.
+        #[clap(long)]
+        exclude_gate_paths: bool,
+        /// Replace the recorded reason.
+        #[clap(long)]
+        reason: Option<String>,
     },
     /// End the active mandate now. Human at an interactive terminal only.
     Stop,
