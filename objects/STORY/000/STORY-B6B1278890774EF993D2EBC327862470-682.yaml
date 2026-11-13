@@ -1,0 +1,37 @@
+id: 01a1d538-16f8-72b2-b123-a28299d0083d
+spec_id: STORY-b6b1278890774ef993d2ebc327862470-682
+agreed_id: STORY-2759
+title: 'Review PR-3948: [AI:codex] ci(gate): ratchet upward command dependencies (Refs TASK-3785)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `(no-sess`) for branch `task-b6b1278890774ef993d2ebc327862470-1065`.
+
+  - PR: <https://github.com/joemooney/aida/pull/3948>
+  - Branch: `task-b6b1278890774ef993d2ebc327862470-1065` → `main`
+
+  ## Slice of (Refs only — not completed by this PR)
+
+  Commit subjects carry `(Refs SPEC-ID)`: this PR is one slice of a spec that a later PR completes. Review this slice against that spec's acceptance criteria.
+
+  - TASK-3785
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 3948` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-13T14:03:05.336572008Z
+modified_at: 2026-11-13T14:03:05.336572008Z
+req_type: Story
+filed_at:
+  code_sha: dc53b3a4ecf5f2616b2d807a45f5fa420f63f8c4
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: dc53b3a4ecf
+  vendor: claude
+  session: 01a1d4aa-9c99-76c2-ac94-7f0795f8a7f9
+  harness_version: 2.1.323 (Claude Code)
