@@ -1,0 +1,21 @@
+id: 01a1d2b7-4cac-7c63-a08d-a74bc9365038
+spec_id: BUG-b6b1278890774ef993d2ebc327862470-312
+agreed_id: BUG-2547
+title: aida pr train resumes a stale retained journal for a different PR set instead of training the requested PRs
+description: '2026-11-12 19:21: ''aida pr train 3887'' (deputy TTY) resumed .aida/train/79b6cd69-...-1.json, a journal retained from the failed 18:11 ''aida pr train 3902'' (step Open, change_id none, 0 members). It failed again with ''BUG-2539 already has open change #3905'' and never gated #3887. There is no flag to abandon a journal; the advisor had to move the file aside by hand. Want: a journal resumes only when the requested PR set matches its members (otherwise it says so and starts fresh), plus ''aida pr train --abandon <journal>''.'
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-13T02:23:10.508038872Z
+modified_at: 2026-11-13T02:23:10.508038872Z
+req_type: Bug
+filed_at:
+  code_sha: 5b9a248a1be21f885473abada02ba08ebaba721e
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 5b9a248a1be
+  vendor: claude
+  session: 01a1d240-c397-7b61-b29f-bb337c138943
+  harness_version: 2.1.323 (Claude Code)
