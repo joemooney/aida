@@ -9,6 +9,6 @@ note: 'resolved: live == main 2a7fe186bdc; earlier failure was a concurrent buil
 due_since: 2026-11-08T02:23:53.661407294Z
 due_reason: on CronJobFailed:dev-autopromote
 due_failure:
-  trip_id: dev-autopromote@2026-11-13T08:34:19.195196905Z
+  trip_id: dev-autopromote@2026-11-13T18:51:49.962258041Z
   job: dev-autopromote
-  error: 'exit 1: build of 9e5b788904e6f8b2f5e271583d1197b3173ce721 failed; log /home/joe/.aida/dev-autopromote/20261113T082411Z-9e5b788904e6.log; tail:    Compiling aida-cli-lib v0.16.0 (/home/joe/ai/aida/aida-cli-lib) |    Compiling aida-server v0.16.0 (/home/joe/ai/aida/aida-server) |    Compiling aida-mcp v0.16.0 (/home/joe/ai/aida/aida-mcp) |    Compiling aida-cli v0.16.0 (/home/joe/ai/aida/aida-cli) |     Finished `agent` profile [optimized] target(s) in 8m 42s | error: "another `aida dev build` or `aida dev rollback` is updating /home/joe/.local/share/aida/live right now; retry when it finishes. Nothing was changed." | help: aida dev build'
+  error: 'exit 1: build of ee8dd4b2bdf1495f699357a3f2f40f9bf3802983 failed; log /home/joe/.aida/dev-autopromote/20261113T182736Z-ee8dd4b2bdf1.log; tail:    Compiling aida-cli-lib v0.16.0 (/home/joe/ai/aida/aida-cli-lib) |    Compiling aida-server v0.16.0 (/home/joe/ai/aida/aida-server) |    Compiling aida-mcp v0.16.0 (/home/joe/ai/aida/aida-mcp) |    Compiling aida-cli v0.16.0 (/home/joe/ai/aida/aida-cli) |     Finished `agent` profile [optimized] target(s) in 17m 29s | Smoke test passed: /home/joe/.local/share/aida/live/.incoming/aida | error: "the staged build does not match HEAD, so it was not promoted: the staged `aida --version` reports sha ee8dd4b2bdf, but HEAD is 91fe1e337894199f15365d3f8ecfaf81366f8291." | help: aida --version'
