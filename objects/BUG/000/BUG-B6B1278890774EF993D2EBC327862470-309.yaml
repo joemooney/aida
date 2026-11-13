@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-13T01:11:24.623933148Z
-modified_at: 2026-11-13T02:50:41.657310725Z
+modified_at: 2026-11-13T05:21:18.963621590Z
 req_type: Bug
 comments:
 - id: 01a1d2a3-7c72-7e80-b0bd-9782eb1d7277
@@ -38,6 +38,13 @@ comments:
   created_at: 2026-11-13T02:50:41.657310725Z
   modified_at: 2026-11-13T02:50:41.657310725Z
   session_id: 668a34f6-c74a-4b58-b144-167acd9792ef
+- id: 01a1d35a-6473-7011-9ad7-ee0bfbdf249a
+  author: joe
+  content: 'Advisor 22:20: PR-3907 deadlock. The genuine codex approval at 84670ff (02:39) was filed under key BUG-2544; #3915''s approval at 109b770 (same spec) was filed under PR-3907. Pickup refuses a duplicate review (it sees the spec-key approval at head); the train refuses (PR-key verdict is at 109b770). Did not hand-edit the ledger: update-branch to a new head plus a fresh review. Follow-up belongs to BUG-2517 (verdict binding by change, not by spec).'
+  created_at: 2026-11-13T05:21:18.963621590Z
+  modified_at: 2026-11-13T05:21:18.963621590Z
+  session_id: 01a1d2e6-f5db-7f33-9b74-3ae5fdaf9e0c
+  harness_version: 2.1.323 (Claude Code)
 history:
 - id: 01a1d29d-457f-7573-94fd-e6604893c979
   author: joe
