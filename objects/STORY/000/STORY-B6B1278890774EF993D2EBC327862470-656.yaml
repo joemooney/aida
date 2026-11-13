@@ -23,7 +23,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-12T17:36:24.142897628Z
-modified_at: 2026-11-13T10:01:18.977032244Z
+modified_at: 2026-11-13T10:01:39.799887570Z
 req_type: Story
 relationships:
 - rel_type:
@@ -124,6 +124,13 @@ comments:
   content: Commit 82ced6e3a9d references this requirement
   created_at: 2026-11-13T10:01:18.977032244Z
   modified_at: 2026-11-13T10:01:18.977032244Z
+  session_id: 01a1d4486f2b
+  harness_version: 2.1.323 (Claude Code)
+- id: 01a1d45b-0ed7-7f23-80b7-64a87fdd6aeb
+  author: joe
+  content: 'Round 2 review fixes (82ced6e3a9d): (1) train Member keeps a non-journaled live policy cover separate from hold release; final refresh uses final_live_cover(fresh, built), so human-cleared supervised protected-path members land; regression live_gate_keeps_policy_cover_for_human_cleared_protected_path_member. (2) GitLab post-rebase /merge sends merge_commit_message with the audit body; request-shape regression in mandate_audit_body_reaches_merge_commits_on_every_forge. Also merged origin/main (ec0ec194dcb) resolving mandate.rs / story_1698 test conflicts.'
+  created_at: 2026-11-13T10:01:39.799887570Z
+  modified_at: 2026-11-13T10:01:39.799887570Z
   session_id: 01a1d4486f2b
   harness_version: 2.1.323 (Claude Code)
 history:
