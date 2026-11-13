@@ -1,0 +1,24 @@
+id: 01a1d4f9-ebf2-7253-adf1-debc669f7e7b
+spec_id: BUG-b6b1278890774ef993d2ebc327862470-324
+agreed_id: BUG-2559
+title: Two hosts auto-bump the same merged spec and both publish its timings record; the non-mergeable timings conflict then blocks every store pull on the second host
+description: '2026-11-13: after #3936 and after train #3945, the primary and dell1 each auto-bumped BUG-2553 / BUG-2548 (plus STORY-2539 and others) to Completed and each committed ''timing: publish <ID> record (auto-bump)''. The second host''s ''aida pull'' then failed: ''rebase conflict in non-mergeable path timings/BUG/002/BUG-2548.json''. That stopped dell1 lane pickups (''pre-pickup pull failed'') and the review launches on primary. Manual fix both times: drop or reset the duplicate local commits (origin already had equivalent records). Want: the timings publish is idempotent across hosts (on a rebase conflict for a timings record whose spec is already Completed upstream, keep upstream and drop the local publish), or only the host that merged publishes.'
+status: Draft
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-13T12:55:11.090557357Z
+modified_at: 2026-11-13T12:55:11.090557357Z
+req_type: Bug
+tags:
+- store
+- track:integration
+filed_at:
+  code_sha: 76c12135362bc1f87985a5eb1ebff051f16bc212
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 47bfb185960
+  vendor: claude
+  session: 01a1d4aa-9c99-76c2-ac94-7f0795f8a7f9
+  harness_version: 2.1.323 (Claude Code)
