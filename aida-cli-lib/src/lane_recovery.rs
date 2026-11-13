@@ -46,6 +46,18 @@ fn reconcile_observed_in(
     branch: &str,
     head: Option<&str>,
 ) -> Result<()> {
+    // Exit facts must survive unavailable forge evidence and source teardown.
+    storage.update_atomically(|store| {
+        if let Ok(Some(req)) = store.get_requirement_unambiguous_mut(spec) {
+            let note = format!(
+                "Lane exit evidence: retained branch `{branch}` at head `{}`.",
+                head.unwrap_or("unavailable")
+            );
+            if !req.comments.iter().any(|comment| comment.content == note) {
+                req.add_comment(Comment::new("lane-recovery".into(), note));
+            }
+        }
+    })?;
     let forge = crate::forge::forge_for_open_change(root);
     // Failed/unknown forge observations must never be treated as absence.
     if !forge.open_changes_for_spec(spec)?.is_empty()
@@ -208,6 +220,9 @@ pub(crate) fn exit_head(
                 crate::seat_clone::Probe::Known(facts) => facts.head,
                 _ => None,
             });
+        }
+        if lease.worktree_path.try_exists()? {
+            return Ok(aida_core::git_ops::worktree_head_sha(&lease.worktree_path));
         }
     }
     let output = aida_core::git_ops::host_git_command(root)

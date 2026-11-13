@@ -662,7 +662,7 @@ pub(crate) fn rework_pr_head_branch_override(
 }
 
 // Only the exact canonical scope slug may resume automatically. Open changes
-// are resolved first; merged residue keeps the existing dated-branch policy.
+// are resolved first; only unchanged merged residue uses a dated branch.
 // trace:BUG-2549 | ai:codex
 pub(crate) fn canonical_resume_branch(
     root: &std::path::Path,
@@ -677,11 +677,35 @@ pub(crate) fn canonical_resume_branch(
     if !matches!(
         forge.change_for_branch(&branch)?,
         crate::forge::ChangeLookup::NoChange
-    ) || !matches!(
-        forge.merged_change_for_branch(&branch)?,
-        crate::forge::ChangeLookup::NoChange
     ) {
         return Ok(None);
+    }
+    match forge.merged_change_for_branch(&branch)? {
+        crate::forge::ChangeLookup::NoChange => {}
+        crate::forge::ChangeLookup::Found(change) => {
+            let metadata =
+                forge.change_metadata(change.id, &mut crate::network_retry::StderrSink)?;
+            anyhow::ensure!(
+                !metadata.head_sha.is_empty(),
+                "merged change head is unavailable"
+            );
+            let output = aida_core::git_ops::host_git_command(root)
+                .args([
+                    "rev-parse",
+                    "--verify",
+                    &format!("refs/heads/{branch}^{{commit}}"),
+                ])
+                .output()?;
+            anyhow::ensure!(
+                output.status.success(),
+                "canonical branch head is unavailable"
+            );
+            let tip = String::from_utf8_lossy(&output.stdout).trim().to_owned();
+            if tip == metadata.head_sha {
+                return Ok(None);
+            }
+        }
+        _ => anyhow::bail!("cannot establish merged change evidence for `{branch}`"),
     }
     // A branch name alone cannot override a foreign lease, including stale
     // leases. Read errors retain the branch rather than guessing ownership.

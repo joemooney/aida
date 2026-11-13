@@ -773,3 +773,125 @@ fn bug_2549_exit_and_reference_recovery_use_legacy_store() {
         assert!(!fx.main.join(".aida-store").exists());
     }
 }
+
+// trace:BUG-2549 | ai:codex
+#[test]
+fn bug_2549_post_merge_commits_resume_canonical_branch() {
+    let fx = fixture();
+    let mut ambient =
+        crate::test_env::AmbientGuard::hermetic_with_seat(&fx.main, "implementer", &[]);
+    let gh = recovery_forge_fixture(&fx.main, &fx.root);
+    ambient.set_key("AIDA_TEST_GH_BINARY", &gh);
+    git_ok(&fx.main, &["branch", "bug-2451"]);
+    let merged_head = git_ok(&fx.main, &["rev-parse", "bug-2451"]);
+    crate::test_exec::write_executable(
+        &gh,
+        format!(
+            r#"#!/bin/sh
+if [ "$1" = --version ]; then echo 'gh test'; exit 0; fi
+if [ "$1 $2" = 'pr list' ]; then
+  case " $* " in
+    *' --state merged '*) printf '42\tRefs BUG-2451\thttps://example.invalid/42\tbug-2451\n';;
+  esac
+  exit 0
+fi
+if [ "$1 $2" = 'pr view' ]; then
+  printf '%s\n' '{{"state":"MERGED","headRefOid":"{merged_head}","headRefName":"bug-2451","baseRefName":"main"}}'
+  exit 0
+fi
+exit 1
+"#
+        ),
+    );
+    assert_eq!(
+        crate::queue_cmd::canonical_resume_branch(&fx.main, "BUG-2451", true).unwrap(),
+        None
+    );
+    git_ok(&fx.main, &["checkout", "bug-2451"]);
+    git_ok(
+        &fx.main,
+        &[
+            "-c",
+            "core.hooksPath=/dev/null",
+            "commit",
+            "--allow-empty",
+            "-qm",
+            "unfinished after merge",
+        ],
+    );
+    git_ok(&fx.main, &["checkout", "main"]);
+    let (storage, _) = super::orphan_reentry_tests::queued_scope(&fx.main, "BUG-2451");
+    let head = git_ok(&fx.main, &["rev-parse", "bug-2451"]);
+    queue_work(&storage, false).unwrap();
+    let lease = crate::list_leases(&fx.main).remove(0);
+    assert_eq!(lease.branch, "bug-2451");
+    assert_eq!(git_ok(&lease.worktree_path, &["rev-parse", "HEAD"]), head);
+}
+
+// trace:BUG-2549 | ai:codex
+#[test]
+fn bug_2549_detached_worktree_exit_captures_actual_head() {
+    let fx = fixture();
+    let mut ambient =
+        crate::test_env::AmbientGuard::hermetic_with_seat(&fx.main, "implementer", &[]);
+    let gh = recovery_forge_fixture(&fx.main, &fx.root);
+    ambient.set_key("AIDA_TEST_GH_BINARY", &gh);
+    let (storage, _) = super::orphan_reentry_tests::queued_scope(&fx.main, "BUG-2451");
+    queue_work(&storage, false).unwrap();
+    let lease = crate::list_leases(&fx.main).remove(0);
+    git_ok(&lease.worktree_path, &["checkout", "--detach"]);
+    git_ok(
+        &lease.worktree_path,
+        &[
+            "-c",
+            "core.hooksPath=/dev/null",
+            "commit",
+            "--allow-empty",
+            "-qm",
+            "detached unfinished work",
+        ],
+    );
+    let head = git_ok(&lease.worktree_path, &["rev-parse", "HEAD"]);
+    assert_ne!(git_ok(&fx.main, &["rev-parse", &lease.branch]), head);
+    assert_eq!(
+        crate::lane_recovery::exit_head(&fx.main, &lease.branch, &[lease.clone()]).unwrap(),
+        Some(head.clone())
+    );
+    git_ok(
+        &fx.main,
+        &["worktree", "remove", lease.worktree_path.to_str().unwrap()],
+    );
+    assert_eq!(
+        crate::lane_recovery::exit_head(&fx.main, &lease.branch, &[lease.clone()]).unwrap(),
+        Some(git_ok(&fx.main, &["rev-parse", &lease.branch]))
+    );
+}
+
+// trace:BUG-2549 | ai:codex
+#[test]
+fn bug_2549_unavailable_forge_preserves_exit_evidence() {
+    let fx = fixture();
+    let mut ambient =
+        crate::test_env::AmbientGuard::hermetic_with_seat(&fx.main, "implementer", &[]);
+    let gh = recovery_forge_fixture(&fx.main, &fx.root);
+    ambient.set_key("AIDA_TEST_GH_BINARY", &gh);
+    let (storage, set_status) = super::orphan_reentry_tests::queued_scope(&fx.main, "BUG-2451");
+    set_status(aida_core::RequirementStatus::InProgress);
+    crate::test_exec::write_executable(
+        &gh,
+        "#!/bin/sh\nif [ \"$1\" = --version ]; then echo 'gh test'; exit 0; fi\nexit 1\n",
+    );
+    assert!(crate::lane_recovery::reconcile_observed(
+        &fx.main,
+        "BUG-2451",
+        "bug-2451",
+        Some("detached-exit-head")
+    )
+    .is_err());
+    let store = storage.load().unwrap();
+    let req = store.get_requirement_by_spec_id("BUG-2451").unwrap();
+    assert_eq!(req.status, aida_core::RequirementStatus::InProgress);
+    assert!(req.comments.iter().any(|c| c.content.contains("bug-2451")
+        && c.content.contains("detached-exit-head")
+        && !c.content.contains("no open PR")));
+}
