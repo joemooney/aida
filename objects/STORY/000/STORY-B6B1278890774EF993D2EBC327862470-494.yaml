@@ -22,12 +22,12 @@ description: |
   6. Evidence run: an advisor session under --permission-mode auto completes one full sweep (rebind loops, dispatch, host-merge, ship) with zero permission prompts and no bypass. Record the prompts it did hit.
 
   Non-goals: no new authority for the advisor, no waiving gates, no generic shell deputy beyond the existing script-deputy contract.
-status: InProgress
+status: Approved
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T16:51:02.535818Z
-modified_at: 2026-11-09T06:52:57.549859091Z
+modified_at: 2026-11-13T02:57:59.510882042Z
 req_type: Story
 tags:
 - area:advisor
@@ -663,6 +663,13 @@ comments:
   created_at: 2026-11-09T03:09:22.515088412Z
   modified_at: 2026-11-09T03:09:22.515088412Z
   session_id: 7aacb1ed-ebaa-4da4-a195-500864e99e7d
+- id: 01a1d2d7-2cd6-73c2-91fd-6a009ee0cad6
+  author: joe
+  content: 'advisor 19:58 (operator-approved): reset In Progress -> Approved. No lease on primary or dell1 and no open PR held it (orphaned after a lane exit). Dispatching to dell1. trace:STORY-2737'
+  created_at: 2026-11-13T02:57:59.510882042Z
+  modified_at: 2026-11-13T02:57:59.510882042Z
+  session_id: 01a1d240-c397-7b61-b29f-bb337c138943
+  harness_version: 2.1.323 (Claude Code)
 history:
 - id: 01a1b1c5-af09-7d01-81e9-eaaac083f223
   author: joe
@@ -1141,6 +1148,15 @@ history:
   session_id: 01a1beff-fc3b-78e2-93e2-9b0c283b0339
   harness_version: 2.1.319 (Claude Code)
   changes: []
+- id: 01a1d2d7-2487-7cd1-a5ed-085b7cdc371e
+  author: joe
+  timestamp: 2026-11-13T02:57:57.383610295Z
+  session_id: 01a1d240-c397-7b61-b29f-bb337c138943
+  harness_version: 2.1.323 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Approved
 execution_mode: drain
 filed_at:
   code_sha: 8dcb86ca85da4826cec197aeb85269210e910403

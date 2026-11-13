@@ -28,12 +28,12 @@ description: |
   - Two jobs run concurrently without sharing a job directory or cache slot; the slot cap holds.
   - A test proves a PR job cannot write to the main/train cache.
   - Runbook updated. After activation, compare queue time and end-to-end run time against this baseline, and roll back the variable if wait increases.
-status: InProgress
+status: Approved
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-09T16:33:51.967266Z
-modified_at: 2026-11-12T09:26:15.583635792Z
+modified_at: 2026-11-13T02:58:35.214163196Z
 req_type: Story
 tags:
 - area:ci
@@ -305,6 +305,13 @@ comments:
   modified_at: 2026-11-12T09:26:15.583635792Z
   session_id: 01a1ceeb-e827-7832-8991-e83d9eb95cef
   harness_version: 2.1.322 (Claude Code)
+- id: 01a1d2d7-b84e-71d0-ba5d-2e47e3d8417c
+  author: joe
+  content: 'advisor 19:58 (operator-approved): reset In Progress -> Approved. No lease on primary or dell1 and no open PR held it (orphaned after a lane exit). Dispatching to dell1. trace:STORY-2737'
+  created_at: 2026-11-13T02:58:35.214163196Z
+  modified_at: 2026-11-13T02:58:35.214163196Z
+  session_id: 01a1d240-c397-7b61-b29f-bb337c138943
+  harness_version: 2.1.323 (Claude Code)
 history:
 - id: 01a1c325-9cdb-7b81-a057-a76e1b9c8512
   author: joe
@@ -525,6 +532,15 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1d2d7-b015-7fc3-919f-f31101f7ef04
+  author: joe
+  timestamp: 2026-11-13T02:58:33.109758680Z
+  session_id: 01a1d240-c397-7b61-b29f-bb337c138943
+  harness_version: 2.1.323 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Approved
 execution_mode: drain
 filed_at:
   code_sha: e4eee38238fa4cb8e8c85dadaa4ed07894cfbeea
