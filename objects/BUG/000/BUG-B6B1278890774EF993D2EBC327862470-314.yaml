@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-13T03:10:47.302266912Z
-modified_at: 2026-11-13T21:56:05.470394529Z
+modified_at: 2026-11-13T22:05:30.048848170Z
 req_type: Bug
 tags:
 - track:dell1
@@ -61,6 +61,13 @@ comments:
   created_at: 2026-11-13T19:18:16.609731619Z
   modified_at: 2026-11-13T19:18:16.609731619Z
   session_id: 01a1d5f7-27ab-7543-8808-b0ec6c271689
+  harness_version: 2.1.323 (Claude Code)
+- id: 01a1d6f1-c040-7852-8978-fd79e69bad75
+  author: joe
+  content: 'Advisor ruling 15:10 on PR-3924 CR at f89f30a: all three P2s stay BLOCKING. They are correctness defects tied to AC1/AC2: (1) work.rs:677-684 must not treat a historical merged PR as proof the canonical branch has no unfinished work; (2) lane_recovery.rs:205-217 must capture the actual worktree HEAD for non-clone leases; (3) lane_recovery.rs:48-57 must persist exit branch/head facts when the forge lookup fails. Rework is scoped to these three plus a regression test each; nothing else.'
+  created_at: 2026-11-13T22:05:30.048848170Z
+  modified_at: 2026-11-13T22:05:30.048848170Z
+  session_id: 01a1d684-8599-70e0-a01c-714f54d2f8de
   harness_version: 2.1.323 (Claude Code)
 history:
 - id: 01a1d2e2-f946-73a0-bdee-dad6c72c0bc8
