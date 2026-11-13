@@ -395,7 +395,7 @@ fn record_pr(
     crate::AFTER_SPEC_RECORD_HOOK.with(|h| *h.borrow_mut() = between);
     let result = crate::with_review_pr_subject(subject, || {
         crate::gate::review_authority::with_identity_source(reviewer, || {
-            crate::handle_review_record_at(
+            crate::handle_review_record_fixture_at(
                 root.clone(),
                 spec,
                 "approved",
@@ -447,9 +447,9 @@ fn bug_2403_record_pr_handshake_keeps_origin_release_receipt() {
     assert_eq!(pr_current.get("release_grant"), Some(&receipt));
 }
 
-/// Review finding 4b: on a GitLab-origin project the `--pr` handshake keeps
-/// its existing mapping contract (the orchestrator's `PR-N` anchor; no
-/// `MR-N` record is invented) and the same-origin receipt.
+/// A GitLab change records its ordinary verdict and handshake under MR-N,
+/// preserving its same-origin receipt without touching the PR-N ledger.
+// trace:BUG-2517 | ai:codex
 #[test]
 fn bug_2403_gitlab_record_pr_handshake_keeps_mapping_and_receipt() {
     let (_tmp, root, _env) = record_pr(
@@ -464,10 +464,10 @@ fn bug_2403_gitlab_record_pr_handshake_keeps_mapping_and_receipt() {
     );
     let spec_record = selected(&root, "BUG-24032");
     let receipt = spec_record.get("release_grant").cloned().unwrap();
-    let handshake = handshake_of(&root, "PR-24032");
+    let handshake = handshake_of(&root, "MR-24032");
     assert_eq!(handshake.get("release_grant"), Some(&receipt));
     assert!(
-        project::verdict_records(&root, "MR-24032").is_empty(),
+        project::verdict_records(&root, "PR-24032").is_empty(),
         "PR-N and MR-N stay distinct changes"
     );
 }
