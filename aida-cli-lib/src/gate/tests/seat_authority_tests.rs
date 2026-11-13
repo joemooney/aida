@@ -21,6 +21,51 @@ fn pinned_env() -> EnvVarsGuard {
     env
 }
 
+// trace:BUG-2544 | ai:codex
+#[test]
+fn bug_2544_delegation_preserves_parent_rejection_reason() {
+    let tmp = tempfile::tempdir().unwrap();
+    let mut env = pinned_env();
+    env.set_key("AIDA_HOME", tmp.path().join("home"));
+    env.unset_key(GRANT_ENV);
+    let absent = validate_child_delegation(tmp.path(), "reviewer").unwrap_err();
+    assert!(absent.to_string().contains("AIDA_SESSION_GRANT is absent"));
+    let id = test_support::mint_grant_for(tmp.path(), SUBJECT, "advisor", &["reviewer"]);
+    env.set_key(GRANT_ENV, &id);
+    env.set_key("AIDA_USER", "different-launcher");
+    let mismatch = validate_child_delegation(tmp.path(), "reviewer").unwrap_err();
+    let text = mismatch.to_string();
+    assert!(text.contains("different-launcher"), "{text}");
+    assert!(text.contains(SUBJECT), "{text}");
+    assert!(!text.contains(&id), "only the grant prefix should be disclosed");
+    env.set_key("AIDA_USER", SUBJECT);
+    revoke_by_id(&id).unwrap();
+    let revoked = validate_child_delegation(tmp.path(), "reviewer").unwrap_err();
+    assert!(revoked.to_string().contains("revoked at"), "{revoked}");
+}
+
+// trace:BUG-2544 | ai:codex
+#[test]
+fn bug_2544_sibling_reviewers_do_not_consume_parent_grant() {
+    let tmp = tempfile::tempdir().unwrap();
+    let mut env = pinned_env();
+    env.set_key("AIDA_HOME", tmp.path().join("home"));
+    let id = test_support::mint_grant_for(tmp.path(), SUBJECT, "advisor", &["reviewer"]);
+    env.set_key(GRANT_ENV, &id);
+    let before = std::fs::read(grant_path(&id).unwrap()).unwrap();
+    let first = issue_child(tmp.path(), "reviewer", "reviewer-one").unwrap();
+    let second = issue_child(tmp.path(), "reviewer", "reviewer-two").unwrap();
+    assert_ne!(first.id, second.id);
+    assert_eq!(std::fs::read(grant_path(&id).unwrap()).unwrap(), before);
+    revoke_by_id(&first.id).unwrap();
+    validate_child_delegation(tmp.path(), "reviewer").unwrap();
+    assert!(matches!(
+        grant_check_for(tmp.path(), &second.id, "reviewer-two"),
+        GrantCheck::Valid(_)
+    ));
+    revoke_by_id(&second.id).unwrap();
+}
+
 /// Apply `pairs` for this value's lifetime under the test's already-held
 /// [`pinned_env`] guard (the env lock is not reentrant), restoring each
 /// key's prior value on drop.

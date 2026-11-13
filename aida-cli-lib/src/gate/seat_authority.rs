@@ -2275,7 +2275,20 @@ pub(crate) fn validate_child_delegation(
     project_root: &Path,
     requested_seat: &str,
 ) -> Result<SeatGrant> {
-    let parent = current_grant(project_root).context("no valid parent seat grant is active")?;
+    // Preserve the failed check: collapsing to Option hides why a sibling
+    // launch cannot present the same parent grant.
+    // trace:BUG-2544 | ai:codex
+    let check = grant_check(project_root);
+    let parent = match check {
+        GrantCheck::Valid(parent) => parent,
+        GrantCheck::Absent => bail!(
+            "no valid parent seat grant is active: AIDA_SESSION_GRANT is absent; re-enter your role at a terminal before launching children"
+        ),
+        rejected => bail!(
+            "no valid parent seat grant is active: {}",
+            rejected.rejection_sentence().expect("rejected grant verdict")
+        ),
+    };
     if !parent
         .delegable_seats
         .iter()
