@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-11T12:17:13.260009028Z
-modified_at: 2026-11-13T18:56:42.241745960Z
+modified_at: 2026-11-13T21:32:25.584226317Z
 req_type: Task
 relationships:
 - rel_type: BlockedBy
@@ -66,6 +66,13 @@ comments:
   created_at: 2026-11-13T18:56:42.241745960Z
   modified_at: 2026-11-13T18:56:42.241745960Z
   session_id: 01a1d5f7-27ab-7543-8808-b0ec6c271689
+  harness_version: 2.1.323 (Claude Code)
+- id: 01a1d6d3-7870-7d91-84f6-88a7b2a77528
+  author: joe
+  content: 'Advisor 14:33: PR #3949 (approved c7f1754) was ejected from train 5: it conflicts with main after #3898/#3919/#3939/#3920 landed, so the approval no longer covers what would land. Rework scope: merge origin/main into the PR branch (real merge, no rebase), resolve conflicts keeping main''s behaviour, rerun the leaf-crate tests and check-ci-fast, push. No other changes; re-review is a scoped delta.'
+  created_at: 2026-11-13T21:32:25.584226317Z
+  modified_at: 2026-11-13T21:32:25.584226317Z
+  session_id: 01a1d684-8599-70e0-a01c-714f54d2f8de
   harness_version: 2.1.323 (Claude Code)
 history:
 - id: 01a1ca8a-8ee7-7991-b976-a941a11ff32c
