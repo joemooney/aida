@@ -3405,14 +3405,17 @@ fn regenerate_repair_outputs(
             git_dir.clone().into(),
         ]);
     }
-    let execute_driver = |sandbox: &[std::ffi::OsString], args: &[&OsStr]| -> Result<()> {
+    let execute_driver = |sandbox: &[std::ffi::OsString],
+                          args: &[&OsStr],
+                          timeout: std::time::Duration|
+     -> Result<()> {
         let mut cmd = std::process::Command::new("bwrap");
         cmd.args(sandbox)
             .arg("--")
             .arg("python3")
             .args(args)
             .stdin(std::process::Stdio::null());
-        match crate::command_output_with_timeout_capped(cmd, PROBE_TIMEOUT, PROBE_OUTPUT_CAP) {
+        match crate::command_output_with_timeout_capped(cmd, timeout, PROBE_OUTPUT_CAP) {
             crate::BoundedCommandOutput::Completed(out) if out.status.success() => Ok(()),
             crate::BoundedCommandOutput::Completed(out) => anyhow::bail!(
                 "repair regeneration refused: {}",
@@ -3425,7 +3428,7 @@ fn regenerate_repair_outputs(
     };
     // The embedded restore driver runs no checkout-authored programs.
     if restore_only {
-        return execute_driver(&sandbox, &restore);
+        return execute_driver(&sandbox, &restore, PROBE_TIMEOUT);
     }
     sandbox.extend(["--ro-bind".into(), git_dir.clone().into(), git_dir.into()]);
     if linked_git {
@@ -3494,13 +3497,32 @@ fn regenerate_repair_outputs(
         ]
         .map(Into::into),
     )?;
-    for (key, value) in policy.project(&tools, [])?.pairs() {
+    // Fixed build decisions, as in `seat_build_env`: an empty RUSTC_WRAPPER
+    // overrides a CARGO_HOME or repository `build.rustc-wrapper` (sccache),
+    // whose shared cache is never writable here. The renderer builds into the
+    // seat's own validated target (writable, outside host caches) so a
+    // fresh-seat regeneration reuses the seeded artifacts; without one, cargo
+    // falls back to a checkout-local target within the same bounded budget.
+    // trace:STORY-2710 | ai:claude
+    let seat_target = repair_seat_target(main, tree);
+    if let Some(dir) = &seat_target {
+        sandbox.extend(["--bind".into(), dir.clone().into(), dir.clone().into()]);
+    }
+    let decisions = [
+        ("RUSTC_WRAPPER".into(), Some(std::ffi::OsString::new())),
+        (
+            "CARGO_TARGET_DIR".into(),
+            seat_target.map(std::ffi::OsString::from),
+        ),
+    ];
+    for (key, value) in policy.project(&tools, decisions)?.pairs() {
         sandbox.extend(["--setenv".into(), key.to_owned(), value.to_owned()]);
     }
-    // The driver bounds its generators inside PROBE_TIMEOUT so a slow or
-    // refused run rolls its own writes back before the host would kill it.
+    // The driver bounds every generation phase (ledger, template renderer
+    // build and run, final ledger validation) inside one budget below the
+    // host's kill bound, so a slow or refused run rolls its own writes back.
     // trace:STORY-2710 | ai:claude
-    let budget = PROBE_TIMEOUT
+    let budget = REPAIR_GENERATION_TIMEOUT
         .saturating_sub(std::time::Duration::from_secs(20))
         .as_secs()
         .to_string();
@@ -3514,7 +3536,45 @@ fn regenerate_repair_outputs(
             OsStr::new(&pack_outputs),
             OsStr::new(&budget),
         ],
+        REPAIR_GENERATION_TIMEOUT,
     )
+}
+
+/// The host kill bound for publication-time regeneration. Unlike a Git probe,
+/// it may build the pinned template renderer from a cold or partly seeded
+/// target, so it is sized like a warm lane build rather than [`PROBE_TIMEOUT`].
+/// One budget covers every generation phase.
+// trace:STORY-2710 | ai:claude
+pub(crate) const REPAIR_GENERATION_TIMEOUT: std::time::Duration =
+    std::time::Duration::from_secs(900);
+
+/// The seat's own cargo target for repair regeneration: the host-recorded
+/// clone's validated target, else the linked worktree lease's target. Either
+/// is accepted only at `<main>/target/worktrees/<seat dir>` as a real
+/// directory (never a symlink), so the writable bind cannot reach host caches.
+// trace:STORY-2710 | ai:claude
+pub(crate) fn repair_seat_target(main: &Path, tree: &Path) -> Option<PathBuf> {
+    if let Some(clone) = host_recorded_clone(main, tree) {
+        return clone.cargo_target_dir;
+    }
+    let main = main.canonicalize().ok()?;
+    let tree = tree.canonicalize().ok()?;
+    let expected = main
+        .join("target")
+        .join("worktrees")
+        .join(tree.file_name()?);
+    crate::list_leases(&main)
+        .into_iter()
+        .find(|lease| {
+            lease.tree_kind != TreeKind::Clone
+                && lease.worktree_path.canonicalize().is_ok_and(|p| p == tree)
+        })?
+        .cargo_target_dir
+        .filter(|dir| {
+            std::fs::symlink_metadata(dir).is_ok_and(|m| m.file_type().is_dir())
+                && dir.canonicalize().is_ok_and(|real| real == expected)
+        })
+        .map(|_| expected)
 }
 
 // merge-tree -z emits a tree OID, then conflicted paths up to the empty

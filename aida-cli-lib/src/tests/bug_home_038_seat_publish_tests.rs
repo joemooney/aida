@@ -4758,3 +4758,202 @@ if '--write-ledger' in sys.argv:
         assert!(!fx.main.join(".git/generator-escaped").exists());
     }
 }
+
+/// Review round 10 (P1/P2): the registered `make sync-templates` builds its
+/// renderer with real Cargo. A configured `build.rustc-wrapper` (sccache on
+/// the operator host) must be disabled by a fixed decision rather than
+/// reaching an unwritable host cache, and the build must land in the seat's
+/// own lease-recorded target instead of a fresh checkout-local one.
+// trace:STORY-2710 | ai:claude
+#[test]
+fn story_2710_cargo_backed_regeneration_disables_wrapper_and_uses_seat_target() {
+    if !bwrap_live_or_skip() {
+        return;
+    }
+    let cargo_ok = std::process::Command::new("cargo")
+        .arg("--version")
+        .output()
+        .is_ok_and(|out| out.status.success());
+    if !cargo_ok {
+        eprintln!("skipping: cargo unavailable");
+        return;
+    }
+    let fx = fixture();
+    let ledger = ".aida/discipline/repair.md";
+    for dir in [
+        ".aida/discipline",
+        "aida-core/templates/.aida/discipline",
+        "renderer/src",
+        ".cargo",
+    ] {
+        std::fs::create_dir_all(fx.main.join(dir)).unwrap();
+    }
+    std::fs::write(
+        fx.main
+            .join("aida-core/templates/.aida/discipline/repair.md"),
+        "regenerated\n",
+    )
+    .unwrap();
+    // A wrapper that cannot run: without the fixed RUSTC_WRAPPER decision the
+    // build fails exactly as the host's sccache did on a read-only cache.
+    std::fs::write(
+        fx.main.join(".cargo/config.toml"),
+        "[build]\nrustc-wrapper = \"/nonexistent/aida-test-sccache\"\n",
+    )
+    .unwrap();
+    std::fs::write(
+        fx.main.join("renderer/Cargo.toml"),
+        "[package]\nname = \"renderer\"\nversion = \"0.1.0\"\nedition = \"2021\"\n\n[workspace]\n",
+    )
+    .unwrap();
+    std::fs::write(
+        fx.main.join("renderer/Cargo.lock"),
+        "version = 3\n\n[[package]]\nname = \"renderer\"\nversion = \"0.1.0\"\n",
+    )
+    .unwrap();
+    std::fs::write(
+        fx.main.join("renderer/src/main.rs"),
+        "fn main() {\n    let master = \
+         std::fs::read(\"aida-core/templates/.aida/discipline/repair.md\").unwrap();\n    \
+         std::fs::write(\".aida/discipline/repair.md\", master).unwrap();\n}\n",
+    )
+    .unwrap();
+    std::fs::write(
+        fx.main.join("Makefile"),
+        "sync-templates:\n\tcargo run --offline --locked --quiet --manifest-path renderer/Cargo.toml\n",
+    )
+    .unwrap();
+    std::fs::write(fx.main.join(ledger), "base\n").unwrap();
+    git_ok(&fx.main, &["add", "."]);
+    git_ok(
+        &fx.main,
+        &["commit", "-qm", "register cargo renderer fixture"],
+    );
+    git_ok(&fx.main, &["checkout", "-qb", "feat"]);
+    std::fs::write(fx.main.join(ledger), "PR\n").unwrap();
+    git_ok(&fx.main, &["commit", "-qam", "PR mirror"]);
+    git_ok(&fx.main, &["push", "-q", "origin", "feat"]);
+    git_ok(&fx.main, &["checkout", "main"]);
+    std::fs::write(fx.main.join(ledger), "main\n").unwrap();
+    git_ok(&fx.main, &["commit", "-qam", "main mirror"]);
+    git_ok(&fx.main, &["push", "-q", "origin", "main"]);
+
+    let id = "c0ffee271010";
+    let tree = leased_clone(&fx, "repair-cargo", id);
+    git_ok(
+        &tree,
+        &["reset", "--hard", &git_ok(&fx.main, &["rev-parse", "feat"])],
+    );
+    // Record the seat's own target, as session start does for a seeded seat.
+    let target = fx
+        .main
+        .canonicalize()
+        .unwrap()
+        .join("target/worktrees")
+        .join(tree.file_name().unwrap());
+    std::fs::create_dir_all(&target).unwrap();
+    let lease = crate::lease_path(&fx.main, id);
+    let mut body = std::fs::read_to_string(&lease).unwrap();
+    body.push_str(&format!(
+        "cargo_target_dir = {}\n",
+        aida_core::toml_quote::toml_string(&target.display().to_string())
+    ));
+    std::fs::write(&lease, body).unwrap();
+    assert_eq!(
+        crate::seat_clone::repair_seat_target(&fx.main, &tree).as_deref(),
+        Some(target.as_path())
+    );
+
+    // Negative control: the fixture's wrapper really breaks an unguarded build.
+    let control_target = tempfile::tempdir().unwrap();
+    let control = std::process::Command::new("cargo")
+        .current_dir(&tree)
+        .args([
+            "build",
+            "--offline",
+            "--locked",
+            "--quiet",
+            "--manifest-path",
+            "renderer/Cargo.toml",
+        ])
+        .env_remove("RUSTC_WRAPPER")
+        .env_remove("RUSTC_WORKSPACE_WRAPPER")
+        .env("CARGO_TARGET_DIR", control_target.path())
+        .output()
+        .unwrap();
+    assert!(
+        !control.status.success(),
+        "the poisoned wrapper fixture must fail without the fixed decision"
+    );
+
+    let files = prepare_rework_merge(&fx.main, &tree, "feat", false, 3813, "cargo-lane").unwrap();
+    assert_eq!(files, [ledger]);
+    let base = git_ok(&tree, &["rev-parse", "MERGE_HEAD"]);
+    crate::seat_clone::regenerate_repair_outputs(
+        &tree,
+        &fx.main,
+        &base,
+        &[],
+        &aida_core::exec_context::Environment::capture(),
+        false,
+    )
+    .unwrap_or_else(|e| panic!("cargo-backed regeneration: {e:#}"));
+    assert_eq!(
+        std::fs::read_to_string(tree.join(ledger)).unwrap(),
+        "regenerated\n"
+    );
+    // The renderer was built in the seat's recorded target, not the checkout.
+    assert!(target.join("debug/renderer").is_file());
+    assert!(!tree.join("renderer/target").exists());
+    assert!(git_ok(&tree, &["diff", "--name-only", "--diff-filter=U"]).is_empty());
+}
+
+/// A linked worktree's lease target is accepted only at the host-owned
+/// `<main>/target/worktrees/<dir>` location, as a real directory.
+// trace:STORY-2710 | ai:claude
+#[test]
+fn story_2710_repair_seat_target_rejects_foreign_or_symlinked_targets() {
+    let fx = fixture();
+    let tree = fx.root.join("linked-target");
+    git_ok(
+        &fx.main,
+        &["worktree", "add", "-q", tree.to_str().unwrap(), "-b", "lt"],
+    );
+    let main = fx.main.canonicalize().unwrap();
+    let expected = main.join("target/worktrees/linked-target");
+    let write_lease = |dir: &Path| {
+        let path = crate::lease_path(&fx.main, "c0ffee271011");
+        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+        std::fs::write(
+            path,
+            format!(
+                "id = \"c0ffee271011\"\nscope = \"STORY-2710\"\nslug = \"story-2710\"\n\
+                 owner = \"test\"\nworktree_path = {}\nbranch = \"lt\"\n\
+                 started_at = \"2026-11-13T00:00:00Z\"\nhostname = \"h\"\n\
+                 cargo_target_dir = {}\n",
+                aida_core::toml_quote::toml_string(&tree.display().to_string()),
+                aida_core::toml_quote::toml_string(&dir.display().to_string()),
+            ),
+        )
+        .unwrap();
+    };
+    // Missing directory: no target.
+    write_lease(&expected);
+    assert_eq!(crate::seat_clone::repair_seat_target(&fx.main, &tree), None);
+    // A foreign directory (for example a shared host cache) is refused.
+    let foreign = fx.root.join("shared-cache");
+    std::fs::create_dir_all(&foreign).unwrap();
+    write_lease(&foreign);
+    assert_eq!(crate::seat_clone::repair_seat_target(&fx.main, &tree), None);
+    // A symlink at the expected place would grant its target: refused.
+    std::fs::create_dir_all(expected.parent().unwrap()).unwrap();
+    std::os::unix::fs::symlink(&foreign, &expected).unwrap();
+    write_lease(&expected);
+    assert_eq!(crate::seat_clone::repair_seat_target(&fx.main, &tree), None);
+    std::fs::remove_file(&expected).unwrap();
+    std::fs::create_dir_all(&expected).unwrap();
+    assert_eq!(
+        crate::seat_clone::repair_seat_target(&fx.main, &tree),
+        Some(expected)
+    );
+}

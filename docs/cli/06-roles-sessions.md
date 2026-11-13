@@ -815,13 +815,26 @@ working-tree markers. A locked version-1 `.aida/repair-journal.json` records
 repository, PR, original head, lane reservation and original conflict paths.
 Unknown spawn outcomes block another reservation for that head until the lane
 is proven dead. The configured vendor and model remain selected; Codex Git
-metadata remains read-only. Registered exec-context and template outputs are
-restored from the pinned main commit and regenerated in the host sandbox.
-Conflicted authoritative inputs, generator failure or unexpected output writes
-refuse launch. The lane brief and host publication marker gate both consume the journal's
-original paths, including after a staging retry. Missing or mismatched evidence
-refuses pending-merge publication. The host stages resolved files and completes
-the merge after exit; a failed commit retains the staged repair for retry.
+metadata remains read-only.
+
+Preparation (before launch) only restores conflicted registered exec-context
+and template outputs from the pinned main commit; it runs no generator.
+Conflicts in authoritative sources (template masters, Rust sources and other
+generator inputs) are admitted: resolving them is the lane's task, not a failed
+launch. A failed restore still refuses launch.
+
+Generation runs at publication, after the lane exits and the host has staged
+its resolved files. The registered generators (the exec-context ledger and
+`make sync-templates`) run in the host sandbox with Git metadata read-only,
+compiler wrappers disabled, Cargo offline and the seat's own recorded build
+target, within one bounded regeneration budget that covers every phase.
+Still-unresolved authoritative inputs, generator failure or timeout, or
+unexpected output writes refuse publication; generator writes are rolled back
+and the merge and journal are retained for a retry. The lane brief and host
+publication marker gate both consume the journal's original paths, including
+after a staging retry. Missing or mismatched evidence refuses pending-merge
+publication. The host completes the merge after generation; a failed commit
+retains the staged repair for retry.
 Watcher dispatch, exact-tree compile gating and refusal-notice delivery are
 subsequent slices; this foundation does not establish full automatic repair.
 <!-- trace:STORY-2710 | ai:codex -->
