@@ -969,7 +969,7 @@ impl PreparedLaunch {
         // must receive an unprojected command, including future launch sites.
         // trace:STORY-2326 | ai:codex
         anyhow::ensure!(
-            !super::profile::environment_is_cleared(child),
+            !crate::vendors::profile::environment_is_cleared(child),
             "contained wrapper requires an unprojected command environment"
         );
         let store_profile = selected_store_profile(child)?;

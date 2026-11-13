@@ -665,18 +665,14 @@ fn destructive_callers_do_not_use_tolerant_cache_reads() {
     // trace:TASK-3429 | ai:codex — retain coverage of the extracted transport.
     rust_sources(&src_root.join("../../aida-mcp/src"), &mut files);
     assert!(files.len() > 10, "lint must see the crate sources");
-    // The scanner must see real bodies: worker gc's strict read is found.
-    let mut lib = std::fs::read_to_string(src_root.join("lib.rs")).unwrap();
-    for i in 1..=6 {
-        if let Ok(s) = std::fs::read_to_string(src_root.join(format!("lib_part{i}.rs"))) {
-            lib.push_str(&s);
-        }
-    }
+    // The scanner must see the extracted worker gc's strict read.
+    // trace:TASK-3428 | ai:codex
+    let worker_gc = std::fs::read_to_string(src_root.join("worker_gc.rs")).unwrap();
     assert!(
-        functions(&lib)
+        functions(&worker_gc)
             .iter()
             .any(|(n, _, code)| n == "run_worker_gc" && code.contains(".list_summaries_strict(")),
-        "lint scanner failed to parse lib.rs"
+        "lint scanner failed to parse worker_gc.rs"
     );
     let mut hits = Vec::new();
     for f in &files {
