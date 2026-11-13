@@ -23,7 +23,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-12T19:11:56.371806442Z
-modified_at: 2026-11-13T09:58:28.321612325Z
+modified_at: 2026-11-13T11:05:07.069045493Z
 req_type: Story
 tags:
 - operator-held
@@ -137,6 +137,13 @@ comments:
   created_at: 2026-11-13T09:58:28.321612325Z
   modified_at: 2026-11-13T09:58:28.321612325Z
   session_id: 01a1d3ee-83e8-71b3-a2c5-aed5baed6fdc
+  harness_version: 2.1.323 (Claude Code)
+- id: 01a1d495-26fd-7d63-aafc-4cbe24fff8d5
+  author: joe
+  content: 'Round-2 (PR #3935 @ 23b2d8df): integration tags now resolves commit trailers against the store (resolve_literal_first_opt over spec_id/agreed_id, node aliases, origin/native ids, padding; padding-ambiguous -> none) and edits by UUID (finding 3). It reads every stored spec in-process instead of two aida list subprocesses, so role scope/focus/status filters cannot hide specs (finding 4). Tests: trailers_resolve_to_stored_spec_identity, plan_tags_open_landed_specs_and_untags_closed_or_unlanded_ones.'
+  created_at: 2026-11-13T11:05:07.069045493Z
+  modified_at: 2026-11-13T11:05:07.069045493Z
+  session_id: 01a1d418-ebf0-79b3-844f-d0ab8bed7682
   harness_version: 2.1.323 (Claude Code)
 history:
 - id: 01a1d175-992b-7501-a0fb-89a007208ac0
