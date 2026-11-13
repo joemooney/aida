@@ -1145,6 +1145,10 @@ mod story_284_store_sync_tests;
 #[path = "tests/bug_1468_stale_check_tests.rs"]
 mod bug_1468_stale_check_tests;
 
+#[cfg(all(test, unix))]
+#[path = "tests/story_2737_sync_main_script_tests.rs"]
+mod story_2737_sync_main_script_tests;
+
 #[cfg(test)]
 #[path = "tests/forge_binary_resolution_tests.rs"]
 mod forge_binary_resolution_tests;
@@ -1377,7 +1381,41 @@ mod branch_behind_main_tests;
 #[path = "tests/session_root_resolution_tests.rs"]
 mod session_root_resolution_tests;
 
-include!("lib_part5.rs");
+// trace:TASK-3428 | ai:codex
+mod review_surface;
+use review_surface::{
+    classify_human_review_bucket, classify_review_surface, classify_review_surface_forge_first,
+    is_store_branch, requirement_is_deferred, resolve_review_surface_forge_first,
+    review_surface_branch, spec_eligible_for_review_awaiting, HumanReviewBucket, ReviewSurface,
+    REVIEW_SURFACE_UNKNOWN_LABEL,
+};
+
+include!("review_commands.rs");
+
+// trace:TASK-3428 | ai:codex
+mod review_advisor_launch;
+use review_advisor_launch::{
+    derisk_launch_request, guided_review_launch_request, handle_derisk_command,
+    handle_guided_human_review,
+};
+mod review_prompt;
+use review_prompt::{
+    append_implementer_approach, extract_implementer_approach, generate_review_prompt,
+    review_prompt_test_commands_section, IMPLEMENTER_APPROACH_MARKER,
+};
+
+// trace:TASK-3428 | ai:codex
+mod review_git_evidence;
+use review_git_evidence::{
+    commits_behind_default, git_diff_name_only, git_log_messages, pr_base_head, resolve_log_range,
+    stale_base_file_overlap, stale_base_note,
+};
+mod obsolete_scaffold;
+use obsolete_scaffold::detect_obe_aida_scaffold_files;
+mod requirements_grep;
+use requirements_grep::grep_requirements;
+mod worker_gc;
+use worker_gc::{run_worker_gc, worker_gc_target_still_dead};
 
 #[cfg(test)]
 // trace:STORY-2539 | ai:codex

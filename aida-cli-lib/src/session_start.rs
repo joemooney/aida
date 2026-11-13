@@ -146,6 +146,52 @@ pub(crate) fn review_pickup_conflict_decision(
     decide(backing)
 }
 
+/// Read-only queue admission uses the same source-branch resolver and
+/// coexistence rules as setup. Do not use review_branch_conflicts here: it can
+/// release dead leases. Setup retains its full conflict and cleanup recheck.
+// trace:BUG-2548 | ai:codex
+pub(crate) fn preflight_review_source_leases(
+    root: &std::path::Path,
+    forge: ReviewForge,
+    number: u64,
+    branch: &str,
+    review_coexistence: Option<(&str, &str)>,
+    store: Option<&aida_core::RequirementsStore>,
+) -> Result<()> {
+    let Some(source) = query_pr_source_branch(forge, number, root) else {
+        return Ok(());
+    };
+    for lease in list_leases(root)
+        .into_iter()
+        .filter(|l| l.branch == source || l.branch == branch)
+    {
+        let decision = review_pickup_conflict_decision(
+            // Admission cannot prompt or end ownership before refreshed gates.
+            // Setup still uses its ordinary terminal-aware conflict decision.
+            true,
+            crate::ownership::reader::lease_retained(root, &lease),
+            lease.role.as_deref(),
+            review_coexistence,
+            store,
+            &source,
+            || {
+                crate::forge::forge_for_kind(root, forge.forge_kind())
+                    .change_metadata(number, &mut crate::network_retry::NoopSink)
+                    .map(|meta| meta.title)
+            },
+        );
+        anyhow::ensure!(
+            decision != LeaseConflictDecision::Refuse,
+            "review is blocked by LIVE or unprovably-dead lease {} on `{}` ({}, worktree {}) before store pull; end that session or wait for it, then retry",
+            lease.id,
+            lease.branch,
+            lease.role.as_deref().unwrap_or("(unset)"),
+            lease.worktree_path.display()
+        );
+    }
+    Ok(())
+}
+
 /// STORY-71: PR/MR head + base metadata captured at session-start time.
 /// Recorded into the lease so `aida session show` can display it without
 /// re-querying the forge, and so a reviewer can recompute the diff range
@@ -1450,6 +1496,27 @@ impl SessionStartReceipt {
             cleanup.armed = false;
         }
         self.cleanup = None;
+    }
+    /// Drop is conservative: verify the lease artifact before reporting success.
+    // trace:BUG-2548 | ai:codex
+    pub(crate) fn rollback(mut self) -> Result<()> {
+        let lease = self.cleanup.as_ref().and_then(|cleanup| {
+            cleanup
+                .lease_id
+                .as_deref()
+                .map(|id| lease_path(&cleanup.root, id))
+        });
+        drop(self.cleanup.take());
+        if let Some(path) = lease {
+            match std::fs::symlink_metadata(&path) {
+                Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+                result => anyhow::bail!(
+                    "pickup rollback retained lease {}; inspect `aida session leases --all` ({result:?})",
+                    path.display()
+                ),
+            }
+        }
+        Ok(())
     }
     /// STORY-2254: make this receipt's rollback conditional on a durable
     /// ownership record. Its destructive Drop runs only while `still_owner`
