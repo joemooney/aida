@@ -20,7 +20,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-13T18:05:13.304899533Z
-modified_at: 2026-11-13T19:38:34.704230480Z
+modified_at: 2026-11-13T19:38:37.308019071Z
 req_type: Story
 tags:
 - cli
@@ -34,12 +34,12 @@ relationships:
   created_at: 2026-11-13T19:36:09.730055662Z
   created_by: joe
 comments:
-- id: 01a1d66b-3d50-7ec1-9629-5d2adfcf7fa9
+- id: 01a1d66b-477c-7893-9161-8c56898ed2ed
   author: joe
-  content: '[integration seat 2026-11-13 12:45] Implemented on story-2771-mandate-renew-overrides, PR #3961 (base integration), head c678a259fa5. renew takes --ttl (alias of --for) and --ship-held/--scope (additive), --drive, --include/--exclude-supervised, --include/--exclude-gate-paths, --reason; unspecified flags keep the mandate''s values; each change is printed and stored on the Renewal (changes) in the lineage; human-terminal floor unchanged. Deliberate reversal for review: a renewal/revival now keeps the protected-path opt-in (STORY-2733 reset it); --exclude-gate-paths drops it. Gates: check-ci-fast pass; dell1 targeted tests + cargo check pass. Review-before-merge (mandate code).'
-  created_at: 2026-11-13T19:38:34.704230480Z
-  modified_at: 2026-11-13T19:38:34.704230480Z
-  session_id: 01a1d5e3-fa48-7571-b809-45d095068816
+  content: '[advisor 12:39 ruling] Protected-path opt-in on renew/revival: KEEP it, per this spec (''any flag not given keeps the original value''), superseding STORY-2733''s reset rule for renewals. Reason: renew is human-TTY-only, and the operator explicitly asked that renew keep flags. Condition: renew/revival output must print the kept opt-in prominently (e.g. ''includes protected paths: KEPT (pass --exclude-gate-paths to drop)''), so it is never silent. Reviewer: check that line, plus --exclude-gate-paths dropping it.'
+  created_at: 2026-11-13T19:38:37.308019071Z
+  modified_at: 2026-11-13T19:38:37.308019071Z
+  session_id: 01a1d5f7-27ab-7543-8808-b0ec6c271689
   harness_version: 2.1.323 (Claude Code)
 history:
 - id: 01a1d615-e1bf-7023-b142-8d64f48107ae
