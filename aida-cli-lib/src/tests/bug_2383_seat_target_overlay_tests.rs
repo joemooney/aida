@@ -1282,6 +1282,7 @@ const FIXTURE_CRATE_LIB: &str = "pub fn answer() -> u32 { 42 }\n\n\
 // trace:BUG-b6b1278890774ef993d2ebc327862470-157.acd61bb0 | ai:claude
 // trace:BUG-b6b1278890774ef993d2ebc327862470-157.Test | ai:claude
 #[test]
+#[cfg(target_os = "linux")]
 fn bug_2383_bwrap_real_cargo_test_job_reports_pass_and_fail_through_the_cli() {
     let Some(cargo) = std::env::var_os("CARGO").map(PathBuf::from) else {
         return skip_live("no CARGO in the test environment");
@@ -1316,7 +1317,7 @@ fn bug_2383_bwrap_real_cargo_test_job_reports_pass_and_fail_through_the_cli() {
     crate::test_exec::write_executable(
         &limiter,
         &format!(
-            "#!/bin/sh\necho \"slot taken: $*\" >> \"$XDG_RUNTIME_DIR/cargo-slots-{uid}/slots.log\" || exit 97\n\
+            "#!/bin/sh\n[ \"$TMPDIR\" = /tmp ] && [ -w \"$TMPDIR\" ] || exit 96\necho \"slot taken: $*\" >> \"$XDG_RUNTIME_DIR/cargo-slots-{uid}/slots.log\" || exit 97\n\
              exec '{}' \"$@\"\n",
             cargo.display()
         ),
@@ -1330,8 +1331,19 @@ fn bug_2383_bwrap_real_cargo_test_job_reports_pass_and_fail_through_the_cli() {
         bin.display(),
         std::env::var("PATH").unwrap_or_default()
     );
-    host_env
-        .retain(|(k, _)| !matches!(k.as_str(), "PATH" | "XDG_RUNTIME_DIR" | "CARGO_TERM_COLOR"));
+    host_env.retain(|(k, _)| {
+        !matches!(
+            k.as_str(),
+            "PATH" | "XDG_RUNTIME_DIR" | "CARGO_TERM_COLOR" | "TMPDIR"
+        )
+    });
+    // Reproduce an outer runner's TMPDIR hidden by the nested sandbox's /dev.
+    // Keep this injected into the fixture, without changing the test process env.
+    // trace:TASK-3099 | ai:codex
+    host_env.push((
+        "TMPDIR".into(),
+        "/dev/shm/aida-unavailable-outer-tmp".into(),
+    ));
     host_env.push(("PATH".into(), path));
     host_env.push(("XDG_RUNTIME_DIR".into(), runtime.display().to_string()));
     host_env.push(("CARGO_TERM_COLOR".into(), "never".into()));

@@ -4466,9 +4466,9 @@ fn bug_1957_rework_match_hold_never_unmatches_the_specs_own_pr() {
     ));
 }
 
-// trace:STORY-2475 | ai:codex
+// trace:STORY-2475 BUG-2553 | ai:codex
 #[test]
-fn story_2475_conflicts_notify_and_route_only_fresh_or_claude_threads() {
+fn bug_2553_conflicts_preserve_selected_vendor_for_fresh_and_resume() {
     use crate::session::HeadlessVendor;
     use std::cell::Cell;
     for vendor in [HeadlessVendor::Codex, HeadlessVendor::Claude] {
@@ -4483,27 +4483,18 @@ fn story_2475_conflicts_notify_and_route_only_fresh_or_claude_threads() {
                 "rework",
                 |subject, body| {
                     notified.set(true);
-                    assert!(subject.contains("Claude"));
+                    assert!(subject.contains("resolution"));
                     assert!(body.contains("src/conflict.rs"));
                     assert!(body.contains("aborted"));
-                    assert!(body.contains("--vendor claude --fresh"));
+                    assert!(body.contains(vendor.as_str()));
                     assert!(!body.contains("will not launch Codex"));
                     Ok(())
                 },
             );
             assert!(notified.get());
-            if resume && vendor == HeadlessVendor::Codex {
-                assert!(result
-                    .unwrap_err()
-                    .to_string()
-                    .contains("fresh Claude lane"));
-            } else {
-                // Nonempty paths select the caller's Claude override before
-                // vendor/containment preflight and the eventual launch.
-                let (routed, files) = result.unwrap();
-                assert_eq!(routed, HeadlessVendor::Claude);
-                assert_eq!(files, vec!["src/conflict.rs"]);
-            }
+            let (routed, files) = result.unwrap();
+            assert_eq!(routed, vendor);
+            assert_eq!(files, vec!["src/conflict.rs"]);
         }
     }
 }
@@ -4552,17 +4543,14 @@ fn story_2475_preparation_or_mail_failure_cannot_admit_a_launch() {
 /// STORY-2475 review: the `handle_queue_work` conflict wiring on real Git.
 /// The seat (a linked worktree on the PR head) and its lease exist before the
 /// host merge runs, as after `session_start`. A conflicting merge is aborted
-/// in place, the advisor is told the files, and a Codex pickup is relaunched
-/// as Claude in that same seat: vendor resolved and preflighted again, Codex
-/// model pin dropped, conflict task appended. Headless and interactive
-/// pickups take the same route (the interactive launch then starts
-/// interactive Claude). A clean merge is committed and keeps the planned
-/// launch. Boundary: clone seats run the same Git through
-/// `run_commit_sandboxed`, covered by the seat_clone and live bwrap tests.
+/// in place, the advisor is told the files, and the configured vendor and model
+/// remain selected with the conflict task appended. Clean merges are committed
+/// before launch. Headless and interactive pickups use the same routing.
+// trace:BUG-2553 | ai:codex
 // trace:STORY-2475 | ai:claude
 // trace:BUG-2456 | ai:codex
 #[test]
-fn bug_2456_host_publishes_clean_rework_or_routes_conflicts_before_launch() {
+fn bug_2553_configured_vendor_survives_open_pr_rework_preparation() {
     use crate::session::HeadlessVendor;
     use std::cell::Cell;
     // HOME is pinned to the fixture, so the test runs in its own process.
@@ -4584,14 +4572,14 @@ fn bug_2456_host_publishes_clean_rework_or_routes_conflicts_before_launch() {
         );
         String::from_utf8_lossy(&out.stdout).trim().to_string()
     };
-    let fake_claude = root.join("fake-claude");
-    crate::test_exec::write_executable(&fake_claude, "#!/bin/sh\nexit 0\n");
+    let fake_agent = root.join("fake-agent");
+    crate::test_exec::write_executable(&fake_agent, "#!/bin/sh\nexit 0\n");
     let home = root.join("home");
     std::fs::create_dir_all(&home).unwrap();
     let mut env = crate::test_env::EnvVarsGuard::apply(&[
         ("AIDA_HOME", Some(home.to_str().unwrap())),
         ("HOME", Some(home.to_str().unwrap())),
-        ("AIDA_AGENT_CMD", Some(fake_claude.to_str().unwrap())),
+        ("AIDA_AGENT_CMD", Some(fake_agent.to_str().unwrap())),
         ("AIDA_HEADLESS_VENDOR", None),
         ("AIDA_AGENT_MODEL", None),
     ]);
@@ -4600,6 +4588,12 @@ fn bug_2456_host_publishes_clean_rework_or_routes_conflicts_before_launch() {
     git(root, &["init", "-q", "--bare", origin.to_str().unwrap()]);
     git(root, &["init", "-q", project.to_str().unwrap()]);
     git(&project, &["symbolic-ref", "HEAD", "refs/heads/main"]);
+    std::fs::create_dir_all(project.join(".aida")).unwrap();
+    std::fs::write(
+        project.join(".aida/agents.toml"),
+        "[agents]\nvendor = \"codex\"\n",
+    )
+    .unwrap();
     git(
         &project,
         &["remote", "add", "origin", origin.to_str().unwrap()],
@@ -4650,7 +4644,7 @@ fn bug_2456_host_publishes_clean_rework_or_routes_conflicts_before_launch() {
                 &project,
                 prepared,
                 ReworkConflictLaunch {
-                    vendor: HeadlessVendor::Codex,
+                    vendor: crate::session::resolve_enabled_headless_vendor(&project).unwrap(),
                     resume: false,
                     interactive,
                     contained: false,
@@ -4679,15 +4673,15 @@ fn bug_2456_host_publishes_clean_rework_or_routes_conflicts_before_launch() {
             let remote = git(&origin, &["rev-parse", &format!("refs/heads/{branch}")]);
             if conflicts {
                 assert_eq!(remote, head, "conflicts must not publish");
-                assert_eq!(vendor, HeadlessVendor::Claude);
+                assert_eq!(vendor, HeadlessVendor::Codex);
                 assert_eq!(mailed.get(), 1);
                 assert_eq!(git(&seat, &["rev-parse", "HEAD"]), head, "merge aborted");
                 assert!(prompt.contains("conflicting files: shared.rs"), "{prompt}");
-                assert_eq!(model, None);
-                assert!(std::env::var("AIDA_AGENT_MODEL").is_err());
+                assert_eq!(model.as_deref(), Some("gpt-codex"));
+                assert_eq!(std::env::var("AIDA_AGENT_MODEL").unwrap(), "gpt-codex");
                 assert_eq!(
                     crate::session::resolve_headless_vendor(&project),
-                    HeadlessVendor::Claude
+                    HeadlessVendor::Codex
                 );
             } else {
                 assert_eq!(
