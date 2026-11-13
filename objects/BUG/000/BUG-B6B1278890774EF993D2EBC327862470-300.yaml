@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-12T11:10:55.183396177Z
-modified_at: 2026-11-13T21:36:09.971091234Z
+modified_at: 2026-11-13T21:43:05.786080236Z
 req_type: Bug
 tags:
 - track:dell1
@@ -66,6 +66,13 @@ comments:
   modified_at: 2026-11-13T19:36:55.947768218Z
   session_id: 01a1d65a2186
   harness_version: codex-cli 0.167.0
+- id: 01a1d6dd-3d3a-7a33-a776-50aa6c1e58d5
+  author: joe
+  content: 'Advisor ruling 14:45 on PR-3926 CR at 96e9148: the single P2 (three new ambient env reads in pr_cmd.rs:4770 and bug_2535_tests.rs:105,107 fail check-exec-context.py, so fast gates and Build are red) is BLOCKING because CI must pass. Rework scope: route AIDA_SWEEP_PARENT through explicit args or ExecContext; make the test selectors explicit inputs; rerun check-exec-context.py --base origin/main and the BUG-2535 tests. Nothing else.'
+  created_at: 2026-11-13T21:43:05.786080236Z
+  modified_at: 2026-11-13T21:43:05.786080236Z
+  session_id: 01a1d684-8599-70e0-a01c-714f54d2f8de
+  harness_version: 2.1.323 (Claude Code)
 history:
 - id: 01a1d364-5260-7363-a01f-2dc06cc3a4d7
   author: joe
