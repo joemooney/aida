@@ -86,7 +86,7 @@ fn synthesize(node: &clap::Command, path: &[String], probe: Option<&clap::Arg>) 
         for (arg, pick) in args.iter().zip(&picks) {
             spell(arg, &candidates(arg)[*pick], &mut argv);
         }
-        let parsed = std::panic::catch_unwind(|| crate::command_registry::try_parse_from(&argv));
+        let parsed = std::panic::catch_unwind(|| crate::TEST_CLI.try_parse_from(&argv));
         let err = match parsed {
             Ok(Ok(_)) => return Some(argv[1..].join(" ")),
             Ok(Err(err)) => err,
@@ -107,7 +107,9 @@ fn synthesize(node: &clap::Command, path: &[String], probe: Option<&clap::Arg>) 
 fn answers(argv: &str) -> String {
     let mut full = vec!["aida"];
     full.extend(argv.split(' '));
-    let cli = crate::command_registry::try_parse_from(&full).expect("synthesized argv parses");
+    let cli = crate::TEST_CLI
+        .try_parse_from(&full)
+        .expect("synthesized argv parses");
     format!(
         "{:?}\t{}\t{}\t{}",
         crate::stakeholder_role::stakeholder_cli_action(&cli.command),
@@ -121,7 +123,7 @@ fn answers(argv: &str) -> String {
 /// for every command path and every single-flag variant of it that parses,
 /// sorted.
 fn policy_rows() -> Vec<String> {
-    let mut root = crate::command_registry::built_command();
+    let mut root = crate::TEST_CLI.built_command();
     root.build();
     let mut paths = Vec::new();
     collect_paths(&root, &[], &mut paths);
@@ -193,7 +195,7 @@ fn registered_policy_matches_mains_legacy_tables_for_every_verb() {
         full.extend(argv.split(' '));
         // Main's argv must still parse here (the golden help snapshot pins
         // the surface), so a parse failure is itself a divergence.
-        if crate::command_registry::try_parse_from(&full).is_err() {
+        if crate::TEST_CLI.try_parse_from(&full).is_err() {
             diverged.push(format!("aida {argv}: no longer parses"));
             continue;
         }

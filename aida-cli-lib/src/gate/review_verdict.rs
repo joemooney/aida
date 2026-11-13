@@ -3848,7 +3848,18 @@ pub(crate) fn recorded_round_count(project_root: &Path, key: &str) -> usize {
 /// ledger-only verdict is listed and a stale file does not hide a newer one.
 // trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
 pub fn list_active_verdicts(project_root: &Path) -> Vec<(String, RecordedVerdict)> {
-    let mut out: Vec<(String, RecordedVerdict)> = verdict_keys(project_root)
+    active_verdicts_for(project_root, verdict_keys(project_root))
+}
+
+/// [`list_active_verdicts`] restricted to `keys`, sorted by key. Resolving a
+/// key spawns git subprocesses, so a caller that wants a few keys filters
+/// [`verdict_keys`] first instead of resolving every key and discarding most.
+// trace:BUG-2540 | ai:claude
+pub fn active_verdicts_for(
+    project_root: &Path,
+    keys: impl IntoIterator<Item = String>,
+) -> Vec<(String, RecordedVerdict)> {
+    let mut out: Vec<(String, RecordedVerdict)> = keys
         .into_iter()
         .filter_map(|key| {
             let verdict = parse_recorded_verdict(&current_verdict(project_root, &key)?.body)?;

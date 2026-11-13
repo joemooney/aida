@@ -33,7 +33,8 @@ fn collect_paths(cmd: &clap::Command, prefix: &[String], out: &mut Vec<Vec<Strin
 }
 
 fn render_help_snapshot() -> String {
-    let mut root = built_command()
+    let mut root = crate::TEST_CLI
+        .built_command()
         .term_width(100)
         .color(clap::ColorChoice::Never);
     root.build();
@@ -164,7 +165,7 @@ fn every_top_level_name_has_exactly_one_owner() {
         .get_subcommands()
         .map(|sub| sub.get_name().to_string())
         .collect();
-    let built = built_command();
+    let built = crate::TEST_CLI.built_command();
     for sub in built.get_subcommands() {
         let name = sub.get_name();
         let owners = legacy.iter().filter(|n| *n == name).count()
@@ -201,7 +202,9 @@ fn every_registered_command_parses_through_the_registry_path() {
         (vec!["aida", "home"], "home"),
         (vec!["aida", "_bg-fetch", "fixture-store"], "_bg-fetch"),
     ] {
-        let cli = try_parse_from(&argv).unwrap_or_else(|err| panic!("{argv:?}: {err}"));
+        let cli = crate::TEST_CLI
+            .try_parse_from(&argv)
+            .unwrap_or_else(|err| panic!("{argv:?}: {err}"));
         let Command::Registered(invocation) = &cli.command;
         assert_eq!(invocation.reg.name, name);
         let _ = invocation.policy();
@@ -209,7 +212,9 @@ fn every_registered_command_parses_through_the_registry_path() {
     // Every registration is reachable by name; `--help` short-circuits any
     // required arguments.
     for reg in REGISTRY {
-        let err = try_parse_from(["aida", reg.name, "--help"]).expect_err("help exits");
+        let err = crate::TEST_CLI
+            .try_parse_from(["aida", reg.name, "--help"])
+            .expect_err("help exits");
         assert_eq!(
             err.kind(),
             clap::error::ErrorKind::DisplayHelp,
@@ -228,7 +233,7 @@ fn migrated_commands_keep_their_legacy_policy() {
         vec!["aida", "home"],
         vec!["aida", "_bg-fetch", "fixture-store"],
     ] {
-        let cli = try_parse_from(&argv).unwrap();
+        let cli = crate::TEST_CLI.try_parse_from(&argv).unwrap();
         assert_eq!(
             crate::stakeholder_cli_action(&cli.command),
             StakeholderAction::Write,
@@ -242,14 +247,18 @@ fn migrated_commands_keep_their_legacy_policy() {
 // trace:STORY-1728 | ai:claude
 #[test]
 fn bg_fetch_handler_receives_its_positional() {
-    let cli = try_parse_from(["aida", "_bg-fetch", "fixture-store"]).unwrap();
+    let cli = crate::TEST_CLI
+        .try_parse_from(["aida", "_bg-fetch", "fixture-store"])
+        .unwrap();
     let Command::Registered(invocation) = &cli.command;
     let args = <crate::session_misc_cmd::BgFetchArgs as FromArgMatches>::from_arg_matches(
         &invocation.matches,
     )
     .unwrap();
     assert_eq!(args.store_path, std::path::PathBuf::from("fixture-store"));
-    assert!(try_parse_from(["aida", "_bg-fetch"]).is_err());
+    assert!(crate::TEST_CLI
+        .try_parse_from(["aida", "_bg-fetch"])
+        .is_err());
 }
 
 // Top-level options reach both dispatch paths, before or after the command.
@@ -261,14 +270,16 @@ fn global_args_reach_registered_and_legacy_commands() {
         vec!["aida", "--format", "toon", "away"],
         vec!["aida", "away", "--format", "toon"],
     ] {
-        let cli = try_parse_from(&argv).unwrap();
+        let cli = crate::TEST_CLI.try_parse_from(&argv).unwrap();
         assert!(matches!(cli.command, Command::Registered(_)), "{argv:?}");
         assert!(
             matches!(cli.globals.format, Some(OutputFormat::Toon)),
             "{argv:?}"
         );
     }
-    let cli = try_parse_from(["aida", "-p", "demo", "--format", "json", "list"]).unwrap();
+    let cli = crate::TEST_CLI
+        .try_parse_from(["aida", "-p", "demo", "--format", "json", "list"])
+        .unwrap();
     assert!(matches!(
         cli.command
             .registered::<crate::requirements_cli::ListArgs>(),
@@ -276,7 +287,9 @@ fn global_args_reach_registered_and_legacy_commands() {
     ));
     assert!(matches!(cli.globals.format, Some(OutputFormat::Json)));
     assert_eq!(cli.globals.project.as_deref(), Some("demo"));
-    let cli = try_parse_from(["aida", "--file", "r.yaml", "home"]).unwrap();
+    let cli = crate::TEST_CLI
+        .try_parse_from(["aida", "--file", "r.yaml", "home"])
+        .unwrap();
     assert_eq!(cli.globals.file.as_deref(), Some("r.yaml"));
 }
 
@@ -306,7 +319,7 @@ fn registered_commands_shadow_path_extensions() {
     );
 }
 
-/// Production code reaches the clap tree only through this module, so no
+/// Production code reaches the clap tree through the injected support, so no
 /// consumer can miss a registered command. Test modules may still use the
 /// derived `Cli` parser directly.
 // trace:STORY-1728.aca82bf2 | ai:claude
@@ -339,9 +352,106 @@ fn production_code_uses_only_the_built_command_tree() {
     }
     assert!(
         hits.is_empty(),
-        "use crate::command_registry::{{built_command, parse_from, try_parse_from}}:\n{}",
+        "use crate::CLI_SUPPORT for the registered tree and parser:\n{}",
         hits.join("\n")
     );
+}
+
+/// The cmdkit framework names. They live in `cmdkit`; `command_registry`
+/// must neither re-export them nor be the path consumers import them through,
+/// or the main SCC regrows (TASK-3448).
+const CMDKIT_FRAMEWORK: &[&str] = &[
+    "OutputFormat",
+    "StakeholderAction",
+    "GlobalArgs",
+    "Handler",
+    "Flow",
+    "returned",
+    "StoreCtx",
+    "CmdPolicy",
+    "DispatchCtx",
+    "CommandReg",
+    "Invocation",
+    "CliSupport",
+];
+
+/// Boundary violations in one production source: a framework re-export from
+/// `command_registry.rs`, or any file naming a framework item through a
+/// `command_registry::` path (single item or brace group, across lines).
+// trace:TASK-3448.acf4f519 | ai:claude
+fn cmdkit_boundary_violations(name: &str, text: &str) -> Vec<String> {
+    let is_framework = |item: &str| {
+        let item = item.split(" as ").next().unwrap_or("").trim();
+        CMDKIT_FRAMEWORK.contains(&item)
+    };
+    let mut hits = Vec::new();
+    let lines = production_lines(text);
+    if name == "command_registry.rs" {
+        for (line_no, line) in &lines {
+            let t = line.trim_start();
+            if (t.starts_with("pub use") || t.starts_with("pub(crate) use"))
+                && (t.contains("cmdkit") || CMDKIT_FRAMEWORK.iter().any(|n| t.contains(n)))
+            {
+                hits.push(format!("{name}:{line_no}: re-export {}", t.trim()));
+            }
+        }
+    }
+    let body: String = lines.iter().map(|(_, l)| *l).collect::<Vec<_>>().join("\n");
+    let mut rest = body.as_str();
+    while let Some(at) = rest.find("command_registry::") {
+        rest = &rest[at + "command_registry::".len()..];
+        let items: Vec<&str> = if let Some(group) = rest.strip_prefix('{') {
+            group.split('}').next().unwrap_or("").split(',').collect()
+        } else {
+            let end = rest
+                .find(|c: char| !(c.is_alphanumeric() || c == '_'))
+                .unwrap_or(rest.len());
+            vec![&rest[..end]]
+        };
+        for item in items.into_iter().filter(|i| is_framework(i)) {
+            hits.push(format!("{name}: command_registry::{}", item.trim()));
+        }
+    }
+    hits
+}
+
+/// Consumers import the framework from `cmdkit`; `command_registry` keeps
+/// only its own registry items and the root callback injection.
+// trace:TASK-3448.acf4f519 | ai:claude
+#[test]
+fn cmdkit_framework_never_routes_through_command_registry() {
+    let src = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
+    let hits: Vec<String> = production_sources(&src)
+        .into_iter()
+        .flat_map(|path| {
+            let name = path.strip_prefix(&src).unwrap().display().to_string();
+            let text = std::fs::read_to_string(&path).unwrap();
+            cmdkit_boundary_violations(&name, &text)
+        })
+        .collect();
+    assert!(
+        hits.is_empty(),
+        "import cmdkit framework types from crate::cmdkit, never via command_registry:\n{}",
+        hits.join("\n")
+    );
+}
+
+// trace:TASK-3448.acf4f519 | ai:claude
+#[test]
+fn cmdkit_boundary_guard_rejects_restored_reexport_and_consumer_import() {
+    let reexport = "use crate::cmdkit::{CommandReg, Flow};\npub use crate::cmdkit::{DispatchCtx, Flow};\npub fn registry() {}\n";
+    assert_eq!(
+        cmdkit_boundary_violations("command_registry.rs", reexport).len(),
+        1
+    );
+    let single = "use crate::command_registry::Flow;\n";
+    assert_eq!(cmdkit_boundary_violations("pr_cmd.rs", single).len(), 1);
+    let grouped = "use crate::command_registry::{\n    REGISTRY,\n    DispatchCtx as Ctx,\n};\n";
+    assert_eq!(cmdkit_boundary_violations("pr_cmd.rs", grouped).len(), 1);
+    // Registry functions/statics and the private cmdkit import stay legal.
+    let legit = "use crate::cmdkit::{CommandReg, DispatchCtx, Flow, Invocation};\nuse crate::command_registry::{REGISTRY, lookup};\nfn f() { crate::command_registry::dispatch(); }\n";
+    assert!(cmdkit_boundary_violations("command_registry.rs", legit).is_empty());
+    assert!(cmdkit_boundary_violations("main_dispatch.rs", legit).is_empty());
 }
 
 /// Every `.rs` file below `dir`, recursively, except test modules (a
@@ -415,14 +525,18 @@ fn per_verb_stakeholder_policy_matches_the_legacy_table() {
         (vec!["aida", "punts", "list"], Read),
         (vec!["aida", "punts", "analyze"], Write),
     ] {
-        let cli = try_parse_from(&argv).unwrap_or_else(|err| panic!("{argv:?}: {err}"));
+        let cli = crate::TEST_CLI
+            .try_parse_from(&argv)
+            .unwrap_or_else(|err| panic!("{argv:?}: {err}"));
         assert_eq!(
             crate::stakeholder_cli_action(&cli.command),
             want,
             "{argv:?}"
         );
     }
-    let cli = try_parse_from(["aida", "role", "list"]).unwrap();
+    let cli = crate::TEST_CLI
+        .try_parse_from(["aida", "role", "list"])
+        .unwrap();
     assert!(crate::role::role_restore_prompt_should_skip(&cli.command));
 }
 
@@ -433,7 +547,9 @@ fn per_verb_stakeholder_policy_matches_the_legacy_table() {
 fn task118_retention_prune_is_a_write_and_its_dry_run_a_read() {
     use crate::stakeholder_role::stakeholder_action_allowed;
     let action = |argv: &[&str]| {
-        let cli = try_parse_from(argv).unwrap_or_else(|err| panic!("{argv:?}: {err}"));
+        let cli = crate::TEST_CLI
+            .try_parse_from(argv)
+            .unwrap_or_else(|err| panic!("{argv:?}: {err}"));
         crate::stakeholder_cli_action(&cli.command)
     };
     for argv in [
@@ -494,7 +610,10 @@ fn synthetic_invocation(run: Handler) -> Invocation {
 // trace:STORY-1728.ac394c52 | ai:claude
 #[test]
 fn early_handlers_run_without_a_store_and_continue_reaches_the_store_phase() {
-    let globals = try_parse_from(["aida", "status"]).unwrap().globals;
+    let globals = crate::TEST_CLI
+        .try_parse_from(["aida", "status"])
+        .unwrap()
+        .globals;
     SEEN.with(|seen| seen.borrow_mut().clear());
 
     let early = synthetic_invocation(Handler::Early(|_, ctx| {
@@ -695,7 +814,9 @@ fn team_identity_write_matches_mains_is_write_command_for_every_verb() {
         (vec!["aida", "status"], false),
         (vec!["aida", "team"], false),
     ] {
-        let cli = try_parse_from(&argv).unwrap_or_else(|err| panic!("{argv:?}: {err}"));
+        let cli = crate::TEST_CLI
+            .try_parse_from(&argv)
+            .unwrap_or_else(|err| panic!("{argv:?}: {err}"));
         assert_eq!(
             crate::status_awaiting::is_write_command(&cli.command),
             want,

@@ -1538,6 +1538,11 @@ struct NetForge {
     on_merge: Hook,
     merges: std::cell::Cell<usize>,
     closed: std::cell::Cell<usize>,
+    /// The opened train's (tip, head branch, base) once the test knows it, so
+    /// retirement can read terminal metadata: Open until `close_change`, then
+    /// Closed. Unset, metadata reads stay unimplemented.
+    // trace:BUG-2537 | ai:claude
+    train: std::cell::RefCell<Option<(String, String, String)>>,
 }
 
 fn fire(hook: &Hook) {
@@ -1558,7 +1563,37 @@ impl crate::forge::Forge for NetForge {
         _: u64,
         _: &mut dyn crate::network_retry::RetrySink,
     ) -> anyhow::Result<crate::forge::ChangeMetadata> {
-        unimplemented!()
+        let Some((tip, head, base)) = self.train.borrow().clone() else {
+            unimplemented!()
+        };
+        Ok(crate::forge::ChangeMetadata {
+            state: if self.merges.get() > 0 {
+                crate::forge::ChangeState::Merged
+            } else if self.closed.get() > 0 {
+                crate::forge::ChangeState::Closed
+            } else {
+                crate::forge::ChangeState::Open
+            },
+            title: "train".into(),
+            author: None,
+            merged_at: None,
+            base_ref: base,
+            head_ref: head,
+            head_sha: tip,
+            is_draft: false,
+            is_cross_repository: false,
+            head_repo: None,
+        })
+    }
+    // Ground truth for the confirmation boundary: the train is on base only
+    // if the fake merged it. trace:BUG-2537 | ai:claude
+    fn observe_change_ground_truth(
+        &self,
+        _: &std::path::Path,
+        _: u64,
+        _: &crate::forge::ChangeMetadata,
+    ) -> crate::forge_observed::Observed<bool> {
+        crate::forge_observed::Observed::Known(self.merges.get() > 0)
     }
     fn change_commit_headlines(
         &self,
@@ -1917,6 +1952,13 @@ fn story_1917_native_train_held_member_mandate_replaced_during_hold_gate_wait_ne
     let built = crate::pr_train::Rails::build(&mut rails, &base, &[m]).unwrap();
     let verdicts = crate::pr_train::Rails::test(&mut rails, std::slice::from_ref(&built)).unwrap();
     assert_eq!(verdicts, vec![crate::pr_train::CiVerdict::Green]);
+    // Retirement confirms terminal metadata before cleanup (BUG-2537).
+    let (_, opened) = rails.opened.last().expect("the train PR was opened");
+    *forge.train.borrow_mut() = Some((
+        built.tip.clone(),
+        opened.branch.clone(),
+        opened.base.clone(),
+    ));
     // Armed after the CI readiness reads, so the replacement lands inside the
     // hold-gate wait that follows the real release.
     *forge.on_check_rows.borrow_mut() = Some(Box::new(move || {

@@ -202,7 +202,8 @@ fn story2402_s2_display_handles_typed_and_legacy_triggers() {
 /// Pin the changed command help and catalog alongside the new condition gate.
 #[test]
 fn story2402_s2_defer_help_matches_snapshot() {
-    let root = crate::command_registry::built_command()
+    let root = crate::TEST_CLI
+        .built_command()
         .term_width(100)
         .color(clap::ColorChoice::Never);
     let help = root
