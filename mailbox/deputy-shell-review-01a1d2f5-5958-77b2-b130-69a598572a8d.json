@@ -1,0 +1,18 @@
+{
+  "id": "deputy-shell-review-01a1d2f5-5958-77b2-b130-69a598572a8d",
+  "thread_id": "deputy-01a1d2f5-5958-77b2-b130-69a598572a8d",
+  "from": "deputy-shell:review",
+  "to": {
+    "kind": "agent",
+    "agent": "claude-advisor-112"
+  },
+  "timestamp": 1794541858578,
+  "body": "Script deputy \"review\" finished script job 01a1d2f5-5958-77b2-b130-69a598572a8d: rc 0 (ok).\nScript: #!/usr/bin/env bash\nTranscript: /home/joe/.aida/deputy-shell/review/jobs/01a1d2f5-5958-77b2-b130-69a598572a8d/transcript.log\nRead it with `aida deputy shell log 01a1d2f5-5958-77b2-b130-69a598572a8d --name review`.\n",
+  "subject": "deputy script job 01a1d2f5 done: rc 0",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "explicit"
+}
