@@ -6014,7 +6014,7 @@ mod bug_1667_bypass_gate_tests {
                 "\n",
                 include_str!("pull_lines.rs")
             )),
-            include_str!("lib_part5.rs"),
+            include_str!("review_workflows.rs"),
             concat!(
                 include_str!("regression_tests.rs"),
                 "\n",

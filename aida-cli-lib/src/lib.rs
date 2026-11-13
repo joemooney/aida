@@ -1376,7 +1376,20 @@ mod branch_behind_main_tests;
 #[path = "tests/session_root_resolution_tests.rs"]
 mod session_root_resolution_tests;
 
-include!("lib_part5.rs");
+include!("review_workflows.rs");
+
+// trace:TASK-3428 | ai:codex
+mod review_git_evidence;
+use review_git_evidence::{
+    commits_behind_default, git_diff_name_only, git_log_messages, pr_base_head, resolve_log_range,
+    stale_base_file_overlap, stale_base_note,
+};
+mod obsolete_scaffold;
+use obsolete_scaffold::detect_obe_aida_scaffold_files;
+mod requirements_grep;
+use requirements_grep::grep_requirements;
+mod worker_gc;
+use worker_gc::{run_worker_gc, worker_gc_target_still_dead};
 
 #[cfg(test)]
 // trace:STORY-2539 | ai:codex

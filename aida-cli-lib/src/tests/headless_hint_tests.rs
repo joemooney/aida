@@ -200,7 +200,7 @@ fn headless_env_launches_route_through_shared_argv_builders() {
                 "\n",
                 include_str!("../pull_lines.rs")
             )),
-            include_str!("../lib_part5.rs"),
+            include_str!("../review_workflows.rs"),
             concat!(
                 include_str!("../regression_tests.rs"),
                 "\n",
@@ -288,7 +288,7 @@ fn no_human_resume_paths_use_headless_resume_launcher() {
                 "\n",
                 include_str!("../pull_lines.rs")
             )),
-            include_str!("../lib_part5.rs"),
+            include_str!("../review_workflows.rs"),
             concat!(
                 include_str!("../regression_tests.rs"),
                 "\n",

@@ -318,7 +318,7 @@ fn label_only_clear_is_recorded_as_the_human_principal() {
             "\n",
             include_str!("../../pull_lines.rs")
         )),
-        include_str!("../../lib_part5.rs"),
+        include_str!("../../review_workflows.rs"),
         concat!(
             include_str!("../../regression_tests.rs"),
             "\n",
@@ -440,7 +440,7 @@ fn list_surfaces_a_tampered_pr_and_its_empty_state_cannot_swallow_it() {
             "\n",
             include_str!("../../pull_lines.rs")
         )),
-        include_str!("../../lib_part5.rs"),
+        include_str!("../../review_workflows.rs"),
         concat!(
             include_str!("../../regression_tests.rs"),
             "\n",
@@ -1304,7 +1304,7 @@ fn explicit_reconciliation_refreshes_routes_and_render_stays_read_only() {
             "\n",
             include_str!("../../pull_lines.rs")
         )),
-        include_str!("../../lib_part5.rs"),
+        include_str!("../../review_workflows.rs"),
         concat!(
             include_str!("../../regression_tests.rs"),
             "\n",

@@ -885,7 +885,8 @@ jobs:
         if: ${{ matrix.shard == 'gates' && (steps.changes.outputs.full_ci == 'true') }}
         run: |
           cargo fmt --all -- --check
-          rustfmt --edition 2021 --check aida-cli-lib/src/lib_part*.rs
+          # trace:TASK-3428 | ai:codex — final remaining include, renamed in slice C1.
+          rustfmt --edition 2021 --check aida-cli-lib/src/review_workflows.rs
 
       - name: Removed mode-flag spelling guard
         if: ${{ matrix.shard == 'gates' && (steps.changes.outputs.full_ci == 'true') }}

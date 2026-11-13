@@ -49,7 +49,7 @@ const ENTRY_POINTS: &[(&str, &str)] = &[
     ("advisor_watch.rs", "fork_and_run_to"),
     ("questions.rs", "questions_clarify"),
     ("questions.rs", "build_questions_clarify_command"),
-    ("lib_part5.rs", "review_spec_launch_reviewer"),
+    ("review_workflows.rs", "review_spec_launch_reviewer"),
     ("leases.rs", "lease_tree_dirty_entries"),
 ];
 

@@ -406,7 +406,7 @@ mod task_1244_drain_merge_lease_tests {
                 "\n",
                 include_str!("pull_lines.rs")
             )),
-            include_str!("lib_part5.rs"),
+            include_str!("review_workflows.rs"),
             concat!(
                 include_str!("regression_tests.rs"),
                 "\n",
@@ -891,7 +891,7 @@ mod bug_1205_ci_phase_fallthrough_tests {
                 "\n",
                 include_str!("pull_lines.rs")
             )),
-            include_str!("lib_part5.rs"),
+            include_str!("review_workflows.rs"),
             concat!(
                 include_str!("regression_tests.rs"),
                 "\n",
@@ -1075,7 +1075,7 @@ mod bug_1195_review_story_lookup_tests {
                 "\n",
                 include_str!("pull_lines.rs")
             )),
-            include_str!("lib_part5.rs"),
+            include_str!("review_workflows.rs"),
             concat!(
                 include_str!("regression_tests.rs"),
                 "\n",
@@ -1160,7 +1160,7 @@ mod bug_1173_detection_hold_tests {
                 "\n",
                 include_str!("pull_lines.rs")
             )),
-            include_str!("lib_part5.rs"),
+            include_str!("review_workflows.rs"),
             concat!(
                 include_str!("regression_tests.rs"),
                 "\n",
