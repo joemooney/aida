@@ -3445,6 +3445,19 @@ pub(crate) fn preflight_queue_work_branch_reclaiming(
     adopting: Option<&std::path::Path>,
     force_claim: bool,
 ) -> Result<()> {
+    inspect_queue_work_branch(root, branch, adopting, force_claim, true)
+}
+
+// trace:BUG-2548 | ai:codex
+// Eligibility is read-only before sync; the post-gate pass revalidates before
+// destructive reclamation. Keep the existing reclaiming API for setup callers.
+fn inspect_queue_work_branch(
+    root: &std::path::Path,
+    branch: Option<&str>,
+    adopting: Option<&std::path::Path>,
+    force_claim: bool,
+    reclaim: bool,
+) -> Result<()> {
     let Some(branch) = branch else {
         return Ok(());
     };
@@ -3483,7 +3496,9 @@ pub(crate) fn preflight_queue_work_branch_reclaiming(
     }
     for clone in &clones {
         if force_claim {
-            reclaim_exited_branch_clone(root, branch, &clone.path)?;
+            if reclaim {
+                reclaim_exited_branch_clone(root, branch, &clone.path)?;
+            }
             continue;
         }
         anyhow::bail!(
@@ -4411,7 +4426,7 @@ pub(crate) fn handle_queue_work(
                 } else {
                     None
                 };
-                preflight_queue_work_branch_reclaiming(
+                inspect_queue_work_branch(
                     &project_root,
                     session_branch_override.or(review_branch.as_deref()),
                     adopt_orphan
@@ -4419,7 +4434,26 @@ pub(crate) fn handle_queue_work(
                         .map(|l| l.worktree_path.as_path())
                         .or(review_retirement.as_deref()),
                     force_claim,
+                    false,
                 )?;
+                let preflight_source_leases = || -> Result<()> {
+                    if adopt_orphan.is_none() {
+                        if let Some((forge, n)) = plan.review_target {
+                            crate::session_start::preflight_review_source_leases(
+                                &project_root,
+                                forge,
+                                n,
+                                session_branch_override
+                                    .or(review_branch.as_deref())
+                                    .unwrap(),
+                                role_input.review_coexistence(&plan),
+                                storage.load().ok().as_ref(),
+                            )?;
+                        }
+                    }
+                    Ok(())
+                };
+                preflight_source_leases()?;
                 // Pull after launch and occupancy preflights and before session setup
                 // or store writes. A stale view cannot authorize pickup after failure.
                 // trace:BUG-2490 | ai:codex
@@ -4456,6 +4490,10 @@ pub(crate) fn handle_queue_work(
                     }
                 }
 
+                // A source lease may have arrived during sync. Recheck before
+                // reclaiming any selected checkout; setup checks again too.
+                // trace:BUG-2548 | ai:codex
+                preflight_source_leases()?;
                 // Retire only after refreshed conclusive/deferred checks, then
                 // recheck occupancy in case a holder arrived during the pull.
                 // trace:BUG-2548 | ai:codex
