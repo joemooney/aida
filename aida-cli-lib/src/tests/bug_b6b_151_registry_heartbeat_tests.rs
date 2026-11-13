@@ -440,3 +440,59 @@ fn the_doctor_report_names_advisors_grant_evidence_and_hello_state() {
         .iter()
         .any(|r| r.summary.contains("not observable from this sandbox")));
 }
+
+// STORY-2745 review F1: the named seat survives both registration orders of
+// the launcher row and the child's SessionStart hook row.
+// trace:STORY-2745 | ai:claude
+fn story_2745_launcher_row(root: &Path, pid: u32, seat: Option<&str>) -> AgentRegistryEntry {
+    register_spawned_agent_with_row(
+        root,
+        &detect_agent_type(),
+        pid,
+        SpawnedRow {
+            role: Some("implementer".into()),
+            current_spec: None,
+            worktree_path: root.to_path_buf(),
+            binary: Some(&binary()),
+            name: None,
+            native_session_id: None,
+            resumed_from: None,
+            description: None,
+            delegate_seats: Vec::new(),
+            seat: seat.map(str::to_string),
+        },
+    )
+    .unwrap()
+}
+
+// trace:STORY-2745 | ai:claude
+#[test]
+fn story_2745_seat_survives_launcher_then_hook() {
+    let tmp = TempDir::new().unwrap();
+    let root = tmp.path();
+    let pid = std::process::id();
+    let launched = story_2745_launcher_row(root, pid, Some("integration"));
+    assert_eq!(launched.seat.as_deref(), Some("integration"));
+    // The hook fires with no seat in its env: the launcher's seat stays.
+    let _env = crate::test_env::EnvVarsGuard::apply(&[("AIDA_ROTATION_SEAT", None)]);
+    touch_session_start_agent_for(root, root, Some("sid-2745a"), &binary(), pid).unwrap();
+    assert_eq!(own_row(root).unwrap().seat.as_deref(), Some("integration"));
+}
+
+// trace:STORY-2745 | ai:claude
+#[test]
+fn story_2745_seat_survives_hook_then_launcher() {
+    let tmp = TempDir::new().unwrap();
+    let root = tmp.path();
+    let pid = std::process::id();
+    {
+        let _env = crate::test_env::EnvVarsGuard::set(&[("AIDA_ROTATION_SEAT", "integration")]);
+        let hooked =
+            touch_session_start_agent_for(root, root, Some("sid-2745b"), &binary(), pid).unwrap();
+        assert_eq!(hooked.seat.as_deref(), Some("integration"));
+    }
+    // A launcher write that lands second, carrying no seat, keeps the hook's.
+    let launched = story_2745_launcher_row(root, pid, None);
+    assert_eq!(launched.seat.as_deref(), Some("integration"));
+    assert_eq!(own_row(root).unwrap().seat.as_deref(), Some("integration"));
+}

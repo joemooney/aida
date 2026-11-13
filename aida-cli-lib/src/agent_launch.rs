@@ -3970,6 +3970,7 @@ pub(crate) fn link_bg_session(plan: &AgentLaunchPlan, lease_id: &str, sid: &str)
         plan.current_spec.as_deref(),
         plan.role.as_deref(),
         &plan.launch_cwd,
+        plan.seat.as_deref(),
     );
     Ok(())
 }
@@ -6841,6 +6842,12 @@ pub(crate) fn build_agent_new_bg_command(
         // registry/brief identity. trace:BUG-558 | ai:claude
         .env("AIDA_USER", &plan.name)
         .env("AIDA_PROJECT_ROOT", &plan.project_root);
+    // The `--bg` child holds its named seat as the foreground one does.
+    // trace:STORY-2745 | ai:claude
+    command.env_remove(crate::agent_rotation::SEAT_ENV);
+    if let Some(seat) = &plan.seat {
+        command.env(crate::agent_rotation::SEAT_ENV, seat);
+    }
     if config.agent_type != "codex" {
         command
             .stdin(std::process::Stdio::null())
@@ -7919,6 +7926,8 @@ pub(crate) fn run_agent_generation_with_io(
                 resumed_from: plan.resumed_from.clone(),
                 description,
                 delegate_seats: config.delegate_seats.clone(),
+                // trace:STORY-2745 | ai:claude
+                seat: plan.seat.clone(),
             },
         )
         .map(|entry| {

@@ -5248,3 +5248,47 @@ fn story_2256_every_agent_subcommand_passes_the_default_new_rewrite() {
         AgentCommand::Wake { .. }
     ));
 }
+
+// STORY-2745 review F2: the Claude `--bg` child holds its named seat, and a
+// seatless launch never leaks the launcher's own seat into it.
+// trace:STORY-2745 | ai:claude
+#[test]
+fn story_2745_bg_command_exports_its_seat() {
+    let tmp = tempfile::tempdir().unwrap();
+    let project = tmp.path().to_path_buf();
+    std::fs::create_dir_all(project.join(".aida-store")).unwrap();
+    let config = AgentLaunchConfig {
+        delegate_seats: Vec::new(),
+        agent_type: "claude",
+        binary: "claude",
+        default_args: vec!["--settings=test.json".to_string()],
+        prompt_style: AgentPromptStyle::Positional,
+        contained: true,
+    };
+    let plan = |seat: Option<&str>| AgentLaunchPlan {
+        project_root: project.clone(),
+        launch_cwd: project.clone(),
+        role: None,
+        role_instance: RoleInstanceKind::Driver,
+        seat: seat.map(str::to_string),
+        current_spec: None,
+        name: "test-bg-seat".to_string(),
+        lease_id: None,
+        native_session_id: None,
+        resumed_from: None,
+    };
+    let seat_env = |plan: &AgentLaunchPlan| {
+        let cmd =
+            build_agent_new_bg_command(std::path::Path::new("/bin/echo"), &config, plan, &[], None)
+                .unwrap();
+        cmd.get_envs()
+            .find(|(k, _)| *k == crate::agent_rotation::SEAT_ENV)
+            .map(|(_, v)| v.map(|v| v.to_string_lossy().into_owned()))
+    };
+    assert_eq!(
+        seat_env(&plan(Some("integration"))),
+        Some(Some("integration".to_string()))
+    );
+    // `None` here means the command removes the variable.
+    assert_eq!(seat_env(&plan(None)), Some(None));
+}

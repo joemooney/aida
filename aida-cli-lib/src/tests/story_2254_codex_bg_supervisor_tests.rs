@@ -122,6 +122,7 @@ impl Harness {
             lease_id: self.lease_id.clone(),
             grant_id: self.grant_id.clone(),
             delegate_seats: Vec::new(),
+            seat: None,
             description: None,
             mail_wake: "unsupported".into(),
             context_path: None,
@@ -422,6 +423,7 @@ fn story_2254_bg_supervisor_end_to_end_accepts_registers_and_cleans_up() {
         &successor_start,
         agent_registry::SpawnedRow {
             delegate_seats: Vec::new(),
+            seat: None,
             role: Some("implementer".into()),
             current_spec: Some("TASK-2254".into()),
             worktree_path: h.worktree.clone(),

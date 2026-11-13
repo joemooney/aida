@@ -426,6 +426,10 @@ pub(crate) struct SupervisorInit {
     /// Explicit launcher narrowing; empty means inherit on a later resume.
     #[serde(default)]
     pub delegate_seats: Vec<String>,
+    /// The named seat (`--seat`) the worker holds.
+    // trace:STORY-2745 | ai:claude
+    #[serde(default)]
+    pub seat: Option<String>,
     pub description: Option<String>,
     pub mail_wake: String,
     pub context_path: Option<std::path::PathBuf>,
@@ -595,6 +599,13 @@ pub(crate) fn agent_new_codex_bg(mut req: CodexBgRequest) -> Result<()> {
         contained: false,
     };
     let use_config_defaults = req.flag_options.use_config_defaults;
+    // A named seat is validated before any side effect. trace:STORY-2745 | ai:claude
+    let seat = req
+        .flag_options
+        .seat
+        .as_deref()
+        .map(crate::seat_rotation::sanitize_seat)
+        .transpose()?;
     apply_agent_default_flags(&mut config, &project_root, req.flag_options.clone(), false)?;
     refuse_uncontained_child_of_contained_parent(&config)?;
     let posture = resolve_native_posture(&config, &project_root, use_config_defaults)?;
@@ -723,7 +734,7 @@ pub(crate) fn agent_new_codex_bg(mut req: CodexBgRequest) -> Result<()> {
 
     req.resume.duplicate_check = true;
     let mut handle_guard = crate::agent_handle::LaunchReservationGuard::new(&project_root);
-    let (plan, setup_receipt) = {
+    let (mut plan, setup_receipt) = {
         // This invocation's own lease write is not refused by its own,
         // already admitted, attempt.
         let _own = receipt::OwnAttemptScope::enter(&attempt);
@@ -745,8 +756,9 @@ pub(crate) fn agent_new_codex_bg(mut req: CodexBgRequest) -> Result<()> {
             },
         )?
     };
-    // TASK-2712: the shared write set, scoped to the lane's own tree.
-    // trace:TASK-2712 | ai:claude
+    plan.seat = seat; // trace:STORY-2745 | ai:claude
+                      // TASK-2712: the shared write set, scoped to the lane's own tree.
+                      // trace:TASK-2712 | ai:claude
     crate::agent_launch::rescope_contained_settings(
         &mut config,
         &plan.launch_cwd,
@@ -890,6 +902,7 @@ pub(crate) fn agent_new_codex_bg(mut req: CodexBgRequest) -> Result<()> {
         lease_id: lease_id.clone(),
         grant_id: grant.id.clone(),
         delegate_seats: config.delegate_seats.clone(),
+        seat: plan.seat.clone(),
         description,
         mail_wake: mail_wake.as_str().to_string(),
         context_path: context_path.clone(),
@@ -1209,6 +1222,10 @@ fn build_worker_exec(
         .env("AIDA_PROJECT_ROOT", &plan.project_root)
         .env("AIDA_ROLE_INSTANCE", plan.role_instance.as_str())
         .env(crate::mail_wake::LAUNCH_WAKE_ENV, mail_wake.as_str());
+    // trace:STORY-2745 | ai:claude
+    if let Some(seat) = &plan.seat {
+        command.env(crate::agent_rotation::SEAT_ENV, seat);
+    }
     crate::agent_handle::apply_launch_env(&mut command, &plan.project_root, &plan.name);
     apply_harness_version(
         &mut command,
@@ -1567,6 +1584,8 @@ pub(crate) fn supervise_attempt(
             agent_registry::SpawnedRow {
                 // trace:BUG-2467 | ai:codex
                 delegate_seats: init.delegate_seats.clone(),
+                // trace:STORY-2745 | ai:claude
+                seat: init.seat.clone(),
                 role: Some(init.role.clone()),
                 current_spec: Some(init.spec.clone()),
                 worktree_path: init.worker.cwd.clone(),

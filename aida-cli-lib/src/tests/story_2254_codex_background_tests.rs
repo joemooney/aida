@@ -499,6 +499,7 @@ fn story_2254_bg_registers_actual_worker_pid_and_required_start() {
     let start = aida_core::liveness::process_start_identity(pid).unwrap();
     let row = || agent_registry::SpawnedRow {
         delegate_seats: Vec::new(),
+        seat: None,
         role: Some("implementer".into()),
         current_spec: Some("TASK-1".into()),
         worktree_path: root.to_path_buf(),
@@ -569,4 +570,56 @@ fn story_2254_bg_source_contract() {
     assert!(!src.contains("bind_grant_to_pid"));
     assert!(!src.contains("issue_launch_child("));
     assert!(src.contains("seat_authority::accept_detached_launch_child("));
+}
+
+// STORY-2745 review F2: a detached Codex worker carries its named seat in
+// its explicit environment (it starts from env_clear), and a seatless
+// launch carries none.
+// trace:STORY-2745 | ai:claude
+#[test]
+fn story_2745_detached_worker_exports_its_seat() {
+    let tmp = tempfile::tempdir().unwrap();
+    let project = tmp.path().to_path_buf();
+    let config = AgentLaunchConfig {
+        delegate_seats: Vec::new(),
+        agent_type: "codex",
+        binary: "codex",
+        default_args: Vec::new(),
+        prompt_style: AgentPromptStyle::Positional,
+        contained: false,
+    };
+    let plan = |seat: Option<&str>| crate::agent_launch::AgentLaunchPlan {
+        project_root: project.clone(),
+        launch_cwd: project.clone(),
+        role: Some("implementer".into()),
+        role_instance: crate::agent_launch::RoleInstanceKind::Driver,
+        seat: seat.map(str::to_string),
+        current_spec: Some("TASK-1".into()),
+        name: "impl-2745".into(),
+        lease_id: None,
+        native_session_id: None,
+        resumed_from: None,
+    };
+    let seat_of = |plan: &crate::agent_launch::AgentLaunchPlan| {
+        build_worker_exec(
+            std::path::Path::new("/bin/true"),
+            &config,
+            plan,
+            &[],
+            None,
+            "implementer",
+            "grant-2745",
+            agent_registry::MailWake::Off,
+        )
+        .unwrap()
+        .env
+        .into_iter()
+        .find(|(k, _)| k == crate::agent_rotation::SEAT_ENV)
+        .map(|(_, v)| v)
+    };
+    assert_eq!(
+        seat_of(&plan(Some("integration"))).as_deref(),
+        Some("integration")
+    );
+    assert_eq!(seat_of(&plan(None)), None);
 }

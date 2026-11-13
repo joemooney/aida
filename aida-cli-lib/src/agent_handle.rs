@@ -2070,7 +2070,9 @@ mod tests {
         adoptee.pid = 4_000_004;
         adoptee.pid_start = None;
         agent_registry::write_entry(project, &adoptee).unwrap();
-        agent_registry::adopt_bg_session_identity(project, "s-a", "impl-1", None, None, project);
+        agent_registry::adopt_bg_session_identity(
+            project, "s-a", "impl-1", None, None, project, None,
+        );
         let rows = agent_registry::load_entries(project);
         let named: Vec<_> = rows
             .iter()

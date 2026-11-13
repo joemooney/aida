@@ -594,6 +594,7 @@ pub(crate) mod tests {
                 resumed_from: None,
                 description: None,
                 delegate_seats: vec![],
+                seat: None,
             },
         )
         .unwrap();
@@ -627,6 +628,7 @@ pub(crate) mod tests {
                 resumed_from: None,
                 description: None,
                 delegate_seats: vec![],
+                seat: None,
             },
         )
         .unwrap();
