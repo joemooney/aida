@@ -250,9 +250,9 @@ const NON_VENDOR_SPELLINGS: &[&str] = &[
     "pr_ship_post_merge_aida_exe",
     "resolve_aida_exe",
     "self.aida_exe",
-    // The emergency-land GitHub port's `gh`, resolved by
-    // crate::resolve_forge_cli(ForgeKind::GitHub). trace:STORY-2732 | ai:claude
-    "self.gh",
+    // Emergency-land's gh/glab, resolved only by crate::resolve_forge_cli.
+    // trace:TASK-3788 | ai:codex
+    "self.forge_cli",
     "std::env::current_exe",
 ];
 
