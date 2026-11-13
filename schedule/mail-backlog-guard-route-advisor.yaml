@@ -5,10 +5,10 @@ last_by:
   session: 01a1beff-fc3b-78e2-93e2-9b0c283b0339
   vendor: claude
 result: done
-note: 'advisor: unread [request] from dirtlab, 45m old: Rework merge conflicts require resolution; advisor: unread [request] from dirtlab, 45m old: Rework merge conflicts require resolution; advisor: unread [request] from dirtlab, 44m old: Rework merge conflicts require resolution; advisor: unread [request] from review-watch, 36m old: PR-3939 behind `main` with overlap; update-branch conflicts'
+note: 'advisor: unread [request] from dirtlab, 41m old: Rework merge conflicts require resolution'
 due_since: 2026-11-09T10:53:52.591288010Z
 due_reason: on CronJobFired:mail-backlog-guard-route-advisor
 due_failure:
-  trip_id: mail-backlog-guard-route-advisor@2026-11-13T13:11:26Z
+  trip_id: mail-backlog-guard-route-advisor@2026-11-13T21:41:39Z
   job: mail-backlog
-  error: 'advisor: unread [request] from dirtlab, 45m old: Rework merge conflicts require resolution; advisor: unread [request] from dirtlab, 45m old: Rework merge conflicts require resolution; advisor: unread [request] from dirtlab, 44m old: Rework merge conflicts require resolution; advisor: unread [request] from review-watch, 36m old: PR-3939 behind `main` with overlap; update-branch conflicts'
+  error: 'advisor: unread [request] from dirtlab, 41m old: Rework merge conflicts require resolution'
