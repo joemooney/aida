@@ -8,12 +8,27 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-13T08:51:18.823097838Z
-modified_at: 2026-11-13T08:56:48.593865110Z
+modified_at: 2026-11-13T09:09:53.644213646Z
 req_type: Bug
 tags:
 - lanes
 - track:dell1
 - vendor
+comments:
+- id: 01a1d426-ec71-7a01-977f-138ab38eabd0
+  author: dirtlab
+  content: 'Root cause: apply_rework_conflict_route replaced the already resolved vendor with Claude after an aborted conflicting main merge, installed a process override and dropped the selected model. Rework now preserves vendor/model, advisor notification and conflict prompt. Explicit resumes print why their recorded vendor wins. Updated real Git fixture covers clean/conflicting PR branches with config vendor=codex, headless and interactive routing. Lane runner: bug_2553 2 passed; story_2539_vendor_literal_ratchet 3 passed. rustfmt and git diff --check passed. make check-ci-fast failed in unchanged mail-wake fixtures on temporary health-directory permissions (4 failures, 17 errors); standalone external-prose classifier check passed. Four changed files left uncommitted for host publication. Codegraph client unavailable at configured host path; doctor reports missing.'
+  created_at: 2026-11-13T09:04:43.121873054Z
+  modified_at: 2026-11-13T09:04:43.121873054Z
+  session_id: 01a1d41f35fa
+  harness_version: codex-cli 0.167.0
+- id: 01a1d42b-a96c-7290-ba37-857d685ade84
+  author: dirtlab
+  content: 'Fast-gate fix round: updated scripts/exec-context-legacy.json to retire the removed apply_rework_conflict_route remove_var site and relocate the identical var expression under the renamed regression fixture. Ceiling reduced 1234 -> 1233; no added environment access. Validated regeneration with --base HEAD (zero additions), all 19 tests.test_exec_context_ratchet tests passed, and git diff --check passed. Ledger-only follow-up left uncommitted for host publication; original publication declaration remains.'
+  created_at: 2026-11-13T09:09:53.644213646Z
+  modified_at: 2026-11-13T09:09:53.644213646Z
+  session_id: 01a1d41f35fa
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1d41b-2fe7-7b53-af97-f4d80184db5c
   author: joe
