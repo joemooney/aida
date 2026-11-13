@@ -210,9 +210,7 @@ pub(crate) fn exit_head(
             });
         }
     }
-    let output = std::process::Command::new("git")
-        .arg("-C")
-        .arg(root)
+    let output = aida_core::git_ops::host_git_command(root)
         .args([
             "rev-parse",
             "--verify",
