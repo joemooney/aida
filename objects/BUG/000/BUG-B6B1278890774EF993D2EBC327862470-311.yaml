@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-13T01:54:48.391951523Z
-modified_at: 2026-11-13T21:27:56.991095401Z
+modified_at: 2026-11-13T22:45:46.635625402Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -161,6 +161,12 @@ comments:
   modified_at: 2026-11-13T21:27:56.991095401Z
   session_id: 01a1d6c77d8c
   harness_version: codex-cli 0.167.0
+- id: 01a1d716-a00b-77b2-81a0-4311a8ed6fcd
+  author: joe
+  content: 'Round 5 verification at bcff16adc57: the existing production fix from 8a0614829e6 reads raw local child-grant completion independently of signed effective projections. Strengthened only the publisher-enabled regression to execute reviewer_completion::wait against a lingering sleep child and assert actual termination/reaping while the signed projection stays unchanged. Changed file: aida-cli-lib/src/gate/tests/story_2492_publication_tests.rs. Lane job j20261113T223251292-2-0 passed all 8 focused bug2546 tests (interactive resume fixtures excluded as outside this ruling); untested=false. Initial job j20261113T222952231-931951-0 finished compilation after 14m41s, passed 7 tests including the publisher regression, then hit its 900s limit; the cached rerun completed in 21.96s. rustfmt --check and git diff --check passed. make check-ci-fast timed out at 50s in unrelated Codex mail-wake fixtures after emitting error/failure markers; not a passing full fast gate. Codegraph host client absent and doctor reported unreachable; used rg. No additional implementer findings. Edits remain uncommitted for host publication; host retains publication and queue completion responsibility.'
+  created_at: 2026-11-13T22:45:46.635625402Z
+  modified_at: 2026-11-13T22:45:46.635625402Z
+  session_id: 01a1d70650a6
 history:
 - id: 01a1d29d-880a-7201-8b91-ded826a703b0
   author: joe
