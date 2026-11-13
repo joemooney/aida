@@ -479,12 +479,6 @@
   added_at: 2026-11-08T06:47:17.800332076Z
   for_role: implementer
 - user_id: role:implementer
-  requirement_id: 01a19db5-0aac-72e0-869f-fdee4a59db62
-  position: -171000
-  added_by: role:implementer
-  added_at: 2026-11-08T03:05:27.370811206Z
-  for_role: implementer
-- user_id: role:implementer
   requirement_id: 01a1ae38-489b-7db0-b752-9a823300b6e5
   position: -157000
   added_by: role:implementer
@@ -705,6 +699,114 @@
     Max cache size                        10 GiB
     lane sccache: server exited before sandbox teardown
   added_at: 2026-11-13T10:20:16.245442572Z
+  for_role: implementer
+- user_id: role:implementer
+  requirement_id: 01a19db5-0aac-72e0-869f-fdee4a59db62
+  position: 0
+  added_by: fast-gate
+  note: |-
+    The host's sandboxed configured fast-check command failed. This is your ONE fast-gate fix round. Fix the failing gates below and finish. Native seats must leave edits uncommitted for host publication; retain all punt/hold instructions.
+        GUARD.check(GUARD.scan(), json.loads((GUARD.ROOT / GUARD.LEDGER).read_text()))
+      File "/home/dirtlab/ai/aida-worktrees/aida-seat-aida-story-b6b1278890774ef993d2ebc327862470-323/scripts/check-exec-context.py", line 319, in check
+        raise ValueError(f"new sites (forbidden): {dict(new)}\nretired/changed sites (prune ledger): {dict(stale)}")
+    ValueError: new sites (forbidden): {'tests/test_bug_2135_sccache_tmpdir.py:setUp:os.environ:eb4fee8fe5620ad15bc6': 2, 'tests/test_bug_2135_sccache_tmpdir.py:setUp:os.environ:c66b6c148d9b49d0449d': 2}
+    retired/changed sites (prune ledger): {}
+
+    ----------------------------------------------------------------------
+    Ran 19 tests in 15.881s
+
+    FAILED (errors=1)
+    FAIL  ExecContext environment ratchet  (16.0s)
+            this is CI's own `ExecContext environment ratchet` step, run locally.
+    make: *** [Makefile:541: check-ci-fast] Error 1
+    lane sccache: final job statistics
+    Compile requests                     453
+    Compile requests executed            363
+    Cache hits                           138
+    Cache hits (Assembler)                14
+    Cache hits (C/C++)                    17
+    Cache hits (Rust)                    107
+    Cache misses                         220
+    Cache misses (Rust)                  220
+    Cache hits rate                    38.55 %
+    Cache hits rate (Assembler)       100.00 %
+    Cache hits rate (C/C++)           100.00 %
+    Cache hits rate (Rust)             32.72 %
+    Cache timeouts                         0
+    Cache read errors                      0
+    Forced recaches                        0
+    Cache write errors                     0
+    Cache errors                           0
+    Compilations                         220
+    Compilation failures                   5
+    Non-cacheable compilations             0
+    Non-cacheable calls                   86
+    Non-compilation calls                  4
+    Unsupported compiler calls             0
+    Average cache write                0.000 s
+    Average compiler                   0.353 s
+    Average cache read hit             0.000 s
+    Failed distributed compilations        0
+
+    Non-cacheable reasons:
+    crate-type (bin)                      42
+    crate-type (proc-macro)               27
+    incremental                            6
+    missing input                          5
+    -                                      3
+    -o                                     3
+
+    Cache location                  Local disk: "/home/dirtlab/.cache/aida/lane-sccache"
+    Base directories                (none)
+    Use direct/preprocessor mode?   yes
+    Version (client)                0.19.0
+    Cache size                             6 GiB
+    Max cache size                        10 GiB
+    Stopping sccache server...
+    Compile requests                     453
+    Compile requests executed            363
+    Cache hits                           138
+    Cache hits (Assembler)                14
+    Cache hits (C/C++)                    17
+    Cache hits (Rust)                    107
+    Cache misses                         220
+    Cache misses (Rust)                  220
+    Cache hits rate                    38.55 %
+    Cache hits rate (Assembler)       100.00 %
+    Cache hits rate (C/C++)           100.00 %
+    Cache hits rate (Rust)             32.72 %
+    Cache timeouts                         0
+    Cache read errors                      0
+    Forced recaches                        0
+    Cache write errors                     0
+    Cache errors                           0
+    Compilations                         220
+    Compilation failures                   5
+    Non-cacheable compilations             0
+    Non-cacheable calls                   86
+    Non-compilation calls                  4
+    Unsupported compiler calls             0
+    Average cache write                0.000 s
+    Average compiler                   0.353 s
+    Average cache read hit             0.000 s
+    Failed distributed compilations        0
+
+    Non-cacheable reasons:
+    crate-type (bin)                      42
+    crate-type (proc-macro)               27
+    incremental                            6
+    missing input                          5
+    -                                      3
+    -o                                     3
+
+    Cache location                  Local disk: "/home/dirtlab/.cache/aida/lane-sccache"
+    Base directories                (none)
+    Use direct/preprocessor mode?   yes
+    Version (client)                0.19.0
+    Cache size                             6 GiB
+    Max cache size                        10 GiB
+    lane sccache: server exited before sandbox teardown
+  added_at: 2026-11-13T10:27:47.212590948Z
   for_role: implementer
 - user_id: role:implementer
   requirement_id: 01a1965c-3483-70e3-af35-1caaf7df3f96
