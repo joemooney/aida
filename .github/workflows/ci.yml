@@ -63,7 +63,12 @@ jobs:
             sudo apt-get -o Acquire::Retries=1 -o Acquire::http::Timeout=15 -o Acquire::https::Timeout=15 install -y ripgrep
           fi
           python3 -m pip install PyYAML
+      # The local gate reader keeps run bodies only; pass trusted bases here.
+      # trace:STORY-2735 | ai:codex
       - run: make check-ci-fast
+        env:
+          EXEC_CONTEXT_BASE: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha || github.event.before }}
+          CRATE_GLOBS_BASE: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha || github.event.before }}
 
   fast-compile:
     name: CI (fast compile)

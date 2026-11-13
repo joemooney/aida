@@ -2,6 +2,8 @@
 trace:STORY-2735 | ai:codex
 """
 import itertools
+import json
+import tempfile
 from pathlib import Path
 from types import SimpleNamespace
 import subprocess
@@ -49,7 +51,7 @@ class CiTiers(unittest.TestCase):
         for job in ('fast-gates', 'fast-compile'):
             self.assertEqual(JOBS[job]['needs'], 'tier')
             self.assertEqual(JOBS[job]['if'], "needs.tier.outputs.full != 'true'")
-        self.assertIn({'run': 'make check-ci-fast'}, JOBS['fast-gates']['steps'])
+        self.assertTrue(any(step.get('run') == 'make check-ci-fast' for step in JOBS['fast-gates']['steps']))
         self.assertIn({'run': 'cargo check --profile dev --workspace --tests'},
                       JOBS['fast-compile']['steps'])
 
@@ -89,3 +91,65 @@ class CiTiers(unittest.TestCase):
         for name, command in steps:
             if tiers.get(name) == 'fast':
                 self.assertNotRegex(command, r'cargo (check|test|build)', name)
+
+    def test_actual_fast_invocation_refuses_matching_source_and_ledger_growth(self):
+        # Keep the real Make target, planner and guard bodies. Limit the fixture
+        # inventory to the two affected guards; their unit suites run separately.
+        # trace:STORY-2735 | ai:codex
+        step = next(s for s in JOBS['fast-gates']['steps'] if s.get('run') == 'make check-ci-fast')
+        guards = {'ExecContext environment ratchet': 'EXEC_CONTEXT_BASE',
+                  'Crate glob import ratchet': 'CRATE_GLOBS_BASE'}
+        for name, variable in guards.items():
+            with self.subTest(guard=name), tempfile.TemporaryDirectory() as directory:
+                root = Path(directory)
+                def write(path, content):
+                    target = root / path
+                    target.parent.mkdir(parents=True, exist_ok=True)
+                    target.write_text(content)
+                def git(*args):
+                    return subprocess.check_output(['git', '-c', 'maintenance.auto=false',
+                        '-c', 'gc.auto=0', '-c', 'user.name=Fixture',
+                        '-c', 'user.email=fixture@example.test', *args], cwd=root, stderr=subprocess.PIPE).decode().strip()
+                for path in ('Makefile', 'scripts/check-ci-gates.py',
+                             'scripts/check-exec-context.py', 'scripts/check-crate-globs.py'):
+                    write(path, (ROOT / path).read_text())
+                guard = next(s for s in JOBS['build']['steps'] if s.get('name') == name)
+                write('.github/workflows/ci.yml', yaml.safe_dump({'jobs': {'build': {
+                    'defaults': JOBS['build']['defaults'], 'steps': [guard]}}}))
+                write('scripts/ci-gate-tiers.toml', '[tiers]\n' + json.dumps(name) + ' = "fast"\n')
+                for test in ('test_exec_context_ratchet.py', 'test_crate_split_tools.py'):
+                    write('tests/' + test, 'import unittest\nclass Fixture(unittest.TestCase):\n def test_fixture(self): pass\n')
+                write('tests/__init__.py', '')
+                write('Cargo.toml', '[workspace]\nmembers = ["aida-core"]\n')
+                write('aida-core/src/legacy.rs', '')
+                write('aida-core/src/exec_context.rs', 'fn capture() { std::env::vars_os(); }')
+                empty = {'version': 1, 'owner': 'STORY-2538', 'ceiling': 0, 'sites': {}}
+                write('scripts/exec-context-legacy.json', json.dumps(empty))
+                write('scripts/crate-globs-legacy.json', '{}')
+                git('init')
+                git('add', '.')
+                git('commit', '-m', 'trusted base')
+                base = git('rev-parse', 'HEAD')
+                git('remote', 'add', 'origin', str(root))
+                env = {'PATH': '/usr/local/bin:/usr/bin:/bin', 'RUSTC_WRAPPER': ''}
+                # Resolve exactly the environment supplied by the FAST workflow.
+                expected = '${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha || github.event.before }}'
+                self.assertEqual(step['env'][variable], expected)
+                env.update({key: base for key, value in step['env'].items() if value == expected})
+                def run():
+                    return subprocess.run(['bash', '-e', '-o', 'pipefail', '-c', step['run']],
+                        cwd=root, env=env, capture_output=True, text=True, timeout=25)
+                clean = run()
+                self.assertEqual(clean.returncode, 0, clean.stdout + clean.stderr)
+                if variable == 'EXEC_CONTEXT_BASE':
+                    write('aida-core/src/legacy.rs', 'fn f() { std::env::var("NEW"); }')
+                    # Capture a matching expanded ledger without a base check.
+                    subprocess.run(['python3', 'scripts/check-exec-context.py', '--write-ledger'],
+                                   cwd=root, check=True, capture_output=True)
+                else:
+                    write('aida-core/src/legacy.rs', 'use crate::*;')
+                    write('scripts/crate-globs-legacy.json', json.dumps({'aida-core/src/legacy.rs': 1}))
+                result = run()
+                self.assertNotEqual(result.returncode, 0, result.stdout + result.stderr)
+                self.assertIn('may only shrink',
+                              result.stdout + result.stderr)
