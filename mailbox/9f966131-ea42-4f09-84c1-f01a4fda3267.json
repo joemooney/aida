@@ -1,0 +1,19 @@
+{
+  "id": "9f966131-ea42-4f09-84c1-f01a4fda3267",
+  "thread_id": "9f966131-ea42-4f09-84c1-f01a4fda3267",
+  "from": "claude-advisor-112",
+  "to": {
+    "kind": "agent",
+    "agent": "claude-implementer-1042"
+  },
+  "timestamp": 1794569710450,
+  "body": "BUG-2554 sketch approved with 3 conditions (comment on the spec): fail closed to the full walk; index only in git common dir, under the timeout; AC4 equality incl. the BUG-2179 case. Order: BUG-2556 first (one-liner train-recovery consent fix, details via SendMessage), then STORY-2745, then BUG-2554. #3932 r3 delta review at b08afd0 queued on deputy review (behind #3935).",
+  "subject": "BUG-2554 signed off; #3932 r3 review queued",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "advisor"
+}
