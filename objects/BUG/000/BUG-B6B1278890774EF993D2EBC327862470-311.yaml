@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-13T01:54:48.391951523Z
-modified_at: 2026-11-13T20:44:31.336006532Z
+modified_at: 2026-11-13T20:58:58.722904629Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -112,6 +112,13 @@ comments:
   modified_at: 2026-11-13T18:28:33.679589566Z
   session_id: 01a1d5f7-27ab-7543-8808-b0ec6c271689
   harness_version: 2.1.323 (Claude Code)
+- id: 01a1d6b4-d922-72f1-becc-a6bd64973227
+  author: dirtlab
+  content: 'Round 3: verified the existing fixes for findings 1-3 and added a new raw completion boundary plus legacy/completed/pending regression coverage for all four verdict dispositions. Strengthened both interactive resume launch tests to require current operator scope and exactly one reviewer-policy message. Validation: matching CLI built through the lane runner; final cargo test --profile agent -p aida-cli-lib --lib -- bug2546 passed 9 tests, 0 failures (job j20261113T205615347-2-0). Initial resume tests required the missing matching CLI fixture binary; rerun passed after building it. Edits left uncommitted for native host publication. Codegraph host client missing; doctor confirmed, navigation used rg.'
+  created_at: 2026-11-13T20:58:58.722904629Z
+  modified_at: 2026-11-13T20:58:58.722904629Z
+  session_id: 01a1d6a9bfe7
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1d29d-880a-7201-8b91-ded826a703b0
   author: joe
