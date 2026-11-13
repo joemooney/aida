@@ -38,12 +38,12 @@ description: |
 
   ## Success metric (decides whether AIDA continues; operator 09:51)
   Within 48h of S2 going live, on active days: median of at least 1 merge/hour to main, approved-to-merged median under 60 min, and no PR in a non-BLOCKED state for more than 2h. Measured from git log and the gate ledger; reported on STORY-2737.
-status: InProgress
+status: NeedsAttention
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-13T16:52:56.270142081Z
-modified_at: 2026-11-13T18:04:00.217931701Z
+modified_at: 2026-11-13T18:29:17.136257301Z
 req_type: Story
 tags:
 - architecture
@@ -126,6 +126,13 @@ history:
   author: joe
   timestamp: 2026-11-13T18:04:01.942624014Z
   changes: []
+- id: 01a1d62b-ccd0-76f2-91f8-b741eb08b2af
+  author: aida-orchestrator
+  timestamp: 2026-11-13T18:29:17.136291281Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 filed_at:
   code_sha: 8265057964618d451894a955f2b90463164762aa
   branch: main
@@ -135,3 +142,11 @@ filed_at:
   vendor: claude
   session: 01a1d54b-060a-7951-aa40-7f0fd928126f
   harness_version: 2.1.323 (Claude Code)
+failure_reason:
+  phase: reviewer
+  phase_index: 3
+  kind: verdict:request-changes
+  detail: 'S1 full sweep: 12 defects in evidence handling, hold eligibility, content rounds, Git pinning, discovery completeness and blocked ages; acceptance checklist enumerated.'
+  recovery_hint: address the review findings, move STORY-2768 back to In Progress, and clear the PR hold only after approval
+  shelved_by: reviewer
+  shelved_at: 2026-11-13T18:29:17.136257301Z
