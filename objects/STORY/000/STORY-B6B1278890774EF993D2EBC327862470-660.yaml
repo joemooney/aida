@@ -23,7 +23,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-12T19:11:56.371806442Z
-modified_at: 2026-11-13T08:56:49.795428550Z
+modified_at: 2026-11-13T09:18:11.532373001Z
 req_type: Story
 tags:
 - operator-held
@@ -122,6 +122,13 @@ comments:
   content: 'Advisor 01:58: supply gap found. Since 2026-11-12 20:35, every rework of BUG-2501 (#3920), TASK-3779 (#3919) and STORY-2660 (#3921) launched Claude instead of Codex and died on dell1 (no socat), leaving leases that refused the next attempts: about 5h with no progress on 3 main-track PRs. Filed BUG-2553 (track:dell1, Codex lane running) and BUG-2552 (retained-lease refusals, track:integration). The three are paused in autoland-skip until BUG-2553 lands.'
   created_at: 2026-11-13T08:56:49.795428550Z
   modified_at: 2026-11-13T08:56:49.795428550Z
+  session_id: 01a1d3ee-83e8-71b3-a2c5-aed5baed6fdc
+  harness_version: 2.1.323 (Claude Code)
+- id: 01a1d433-424c-71b0-8cee-65541ab7e095
+  author: joe
+  content: 'Advisor 02:20: promotion 4 (#3922) fast-forwarded to integration 8724e83 (a real merge of main 1387fa9), and review+ship submitted on deputy default (job 01a1d433). Waiting for #3931 to verify on integration would have stretched the main gap further (main last moved about 01:43), so #3931 goes in promotion 5. Canary #3905 at 8724e83 was 8 pass / 2 pending when cut; the ship requires green CI at that head.'
+  created_at: 2026-11-13T09:18:11.532373001Z
+  modified_at: 2026-11-13T09:18:11.532373001Z
   session_id: 01a1d3ee-83e8-71b3-a2c5-aed5baed6fdc
   harness_version: 2.1.323 (Claude Code)
 history:
