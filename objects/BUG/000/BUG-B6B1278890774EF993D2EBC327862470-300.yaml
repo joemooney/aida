@@ -8,10 +8,25 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-12T11:10:55.183396177Z
-modified_at: 2026-11-13T05:37:57.691270701Z
+modified_at: 2026-11-13T06:05:29.365671770Z
 req_type: Bug
 tags:
 - track:dell1
+comments:
+- id: 01a1d382-d595-7231-a000-12850b7d2897
+  author: dirtlab
+  content: |
+    Implemented the step-6 wall-clock ceiling using a supervised internal sweep subprocess. One 60-second budget covers reap, discovery, synchronous clone-probe setup, scans and pruning. The parent retains the cleanup lock until the sweep stops; timeout/cancellation stops the observed descendant tree, including separate process groups. Inherited stdio preserves terminal detection and progress. Timeout reports interrupted cleanup with doctor inspection/retry advice; earlier cleanup actions may already have applied. Step-5 lease end remains outside this budget.
+
+    Changed: aida-cli-lib/src/pr_cmd.rs, aida-cli-lib/src/pr_cmd_args.rs, docs/cli/04-git-lifecycle.md.
+
+    Validation through the launcher: bug_2535 (2 passed), bug_home_033_post_ship_gc_tests (6 passed), bug_2384_cleanup_tests (3 passed). Initial build exceeded 900 seconds without executed tests; retry with AIDA_CARGO_TIMEOUT=1800 succeeded. rustfmt --check on both changed Rust files and git diff --check passed.
+
+    The configured host Codegraph executable is missing; aida doctor check codegraph confirms missing tooling, so navigation used rg. No implementation blocker remains. Edits are uncommitted for native host publication; no commit, push, PR, merge or queue completion was performed by this seat.
+  created_at: 2026-11-13T06:05:29.365671770Z
+  modified_at: 2026-11-13T06:05:29.365671770Z
+  session_id: 01a1d369294f
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1d364-5260-7363-a01f-2dc06cc3a4d7
   author: joe
