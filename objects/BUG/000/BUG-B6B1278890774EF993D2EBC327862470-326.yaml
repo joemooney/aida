@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-13T14:52:30.016248538Z
-modified_at: 2026-11-13T15:55:03.240135779Z
+modified_at: 2026-11-13T16:53:30.923828871Z
 req_type: Bug
 tags:
 - review-watch
@@ -33,6 +33,13 @@ comments:
   content: 'Scope split (advisor 08:58): the stale-base refusal remedy moves to STORY-2763 AC2. BUG-2561 keeps only the retry for transient pre-pickup refusals (dirty store, store pull).'
   created_at: 2026-11-13T15:55:03.240135779Z
   modified_at: 2026-11-13T15:55:03.240135779Z
+  session_id: 01a1d54b-060a-7951-aa40-7f0fd928126f
+  harness_version: 2.1.323 (Claude Code)
+- id: 01a1d5d4-1eab-7890-98e1-117ba63fa847
+  author: joe
+  content: '[advisor 09:58] Superseded in practice by STORY-2768 S2 (the reconciler derives state each pass; there is no terminal failed state). Do not implement separately.'
+  created_at: 2026-11-13T16:53:30.923828871Z
+  modified_at: 2026-11-13T16:53:30.923828871Z
   session_id: 01a1d54b-060a-7951-aa40-7f0fd928126f
   harness_version: 2.1.323 (Claude Code)
 history:
