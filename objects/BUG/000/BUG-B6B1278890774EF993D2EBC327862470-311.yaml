@@ -1,0 +1,31 @@
+id: 01a1d29d-53c7-7ea3-9804-ff40a33200f2
+spec_id: BUG-b6b1278890774ef993d2ebc327862470-311
+agreed_id: BUG-2546
+title: Reviewer lane keeps running (incl. cargo builds) after its verdict is bound, holding the deputy job
+description: '2026-11-12 18:24-18:36: the PR-3906 reviewer (''aida queue work PR-3906 --role reviewer --no-human --vendor codex'', pid 2950282) recorded APPROVED at 01:24:45Z but kept running for 10+ more minutes, compiling aida_cli_lib (rustc --crate-name aida_cli_lib) in its worktree. Reviewers run no cargo by default (standing order 7). Its deputy job stayed ''running'', so the queued promotion ship waited behind it. Want: (1) the reviewer lane exits promptly once its verdict is bound; (2) reviewer prompts/policy deny unrequested cargo builds (or the reviewer sandbox has no cargo slot); (3) the lane result line records post-verdict runtime.'
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-13T01:54:48.391951523Z
+modified_at: 2026-11-13T01:55:01.770273372Z
+req_type: Bug
+history:
+- id: 01a1d29d-880a-7201-8b91-ded826a703b0
+  author: joe
+  timestamp: 2026-11-13T01:55:01.770264836Z
+  session_id: 01a1d240-c397-7b61-b29f-bb337c138943
+  harness_version: 2.1.323 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Approved
+filed_at:
+  code_sha: 5b9a248a1be21f885473abada02ba08ebaba721e
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 9968a8ab4ec
+  vendor: claude
+  session: 01a1d240-c397-7b61-b29f-bb337c138943
+  harness_version: 2.1.323 (Claude Code)
