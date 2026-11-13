@@ -105,6 +105,21 @@ fn matches(
                 && v.reviewed_sha.as_deref() == Some(a.sha.as_str())
         })
 }
+// Keep raw delivery evidence and launch matching at one boundary. A normalized
+// RecordedVerdict alone cannot distinguish delivery in flight from refusal.
+// trace:BUG-2546 | ai:codex
+fn completed_verdict(
+    body: &str,
+    grant: &str,
+    since: chrono::DateTime<chrono::Utc>,
+) -> Option<crate::gate::review_verdict::RecordedVerdict> {
+    let raw: serde_json::Value = serde_json::from_str(body).ok()?;
+    if crate::gate::review_verdict::delivery_pending(&raw) {
+        return None;
+    }
+    crate::gate::review_verdict::parse_recorded_verdict(body).filter(|v| matches(v, grant, since))
+}
+
 /// This is a stop signal only, never review acceptance or publication authority.
 pub(crate) fn should_stop() -> bool {
     WATCH.with(|w| {
@@ -123,12 +138,7 @@ pub(crate) fn should_stop() -> bool {
                     // it must not arm shutdown while finding delivery is in flight.
                     // trace:BUG-2546 | ai:codex
                     let current = crate::gate::review_verdict::current_verdict(root, key)?;
-                    let raw: serde_json::Value = serde_json::from_str(&current.body).ok()?;
-                    if crate::gate::review_verdict::delivery_pending(&raw) {
-                        return None;
-                    }
-                    crate::gate::review_verdict::parse_recorded_verdict(&current.body)
-                        .filter(|v| matches(v, grant, w.since))
+                    completed_verdict(&current.body, grant, w.since)
                 })
             });
             if let Some(v) = verdict {
@@ -180,6 +190,36 @@ mod tests {
         assert!(valid(&body));
         body["reviewed_sha"] = "different".into();
         assert!(!valid(&body));
+    }
+
+    // Older completed records have no barrier field. Both those and explicitly
+    // completed records stop every disposition, while pending twins never do.
+    // trace:BUG-2546 | ai:codex
+    #[test]
+    fn bug2546_raw_completion_boundary_preserves_legacy_and_waiting() {
+        let since = chrono::Utc::now();
+        for kind in ["APPROVED", "REQUEST_CHANGES", "REJECTED", "WAITING"] {
+            let mut body = serde_json::json!({
+                "verdict": kind, "reviewed_sha": "abc",
+                "recorded_at": since.to_rfc3339(),
+                "recorder_attestation": { "sha": "abc", "grant_id": "child" }
+            });
+            for pending in [None, Some(false), Some(true)] {
+                if let Some(pending) = pending {
+                    body["sweep_pending"] = pending.into();
+                }
+                let result = completed_verdict(&body.to_string(), "child", since);
+                assert_eq!(
+                    result.is_some(),
+                    pending != Some(true),
+                    "{kind}: {pending:?}"
+                );
+                if let Some(verdict) = result {
+                    assert_eq!(verdict.kind.approves(), kind == "APPROVED");
+                }
+            }
+        }
+        assert!(completed_verdict("{", "child", since).is_none());
     }
 
     // trace:BUG-2546 | ai:codex

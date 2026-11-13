@@ -270,7 +270,7 @@ fn assert_interactive_resume_policy(vendor: crate::session::HeadlessVendor) {
         &project,
         59,
         QueueWorkLaunch::Resume(id.into()),
-        "/aida-review --pr 59",
+        "/aida-review --pr 59\n\nOperator scope: prior findings plus delta.",
         None,
         "PR-59",
         "pr-59",
@@ -299,6 +299,20 @@ fn assert_interactive_resume_policy(vendor: crate::session::HeadlessVendor) {
         "{argv:?}"
     );
     let prompt = argv.last().expect("resume must receive a prompt");
+    // Policy and the current operator scope must arrive together as one new
+    // message, even when the resumed thread predates the policy change.
+    // trace:BUG-2546 | ai:codex
+    assert!(
+        prompt.contains("Operator scope: prior findings plus delta."),
+        "{argv:?}"
+    );
+    assert_eq!(
+        argv.iter()
+            .filter(|arg| arg.contains("Reviewer policy:"))
+            .count(),
+        1,
+        "policy must be delivered exactly once: {argv:?}"
+    );
     if vendor == crate::session::HeadlessVendor::Codex {
         assert!(!prompt.starts_with('/'), "{argv:?}");
         assert!(prompt.contains(".aida/review-verdicts/"), "{argv:?}");
