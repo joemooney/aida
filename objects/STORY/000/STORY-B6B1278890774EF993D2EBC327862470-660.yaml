@@ -23,7 +23,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-12T19:11:56.371806442Z
-modified_at: 2026-11-13T06:33:47.753636374Z
+modified_at: 2026-11-13T08:17:52.412371206Z
 req_type: Story
 tags:
 - operator-held
@@ -97,6 +97,13 @@ comments:
   created_at: 2026-11-13T06:33:47.753636374Z
   modified_at: 2026-11-13T06:33:47.753636374Z
   session_id: 01a1d2e6-f5db-7f33-9b74-3ae5fdaf9e0c
+  harness_version: 2.1.323 (Claude Code)
+- id: 01a1d3fc-091c-7383-a40f-140f4a2f9545
+  author: joe
+  content: 'Advisor 01:20: promotion 4 (#3922 at b125e26) review refused at launch: base 2 commits behind main (#3911,#3918) with 5 overlapping files. Root cause: integration held its main sync until promotion landed, but main kept moving. Plan: train #3927/#3929/#3930 lands first, then integration real-merges main, promote/integration-4 is fast-forwarded, review+ship with main-track trains held until it lands. Lesson: sync integration with main immediately before cutting a promotion, and freeze main-track trains during a promotion review.'
+  created_at: 2026-11-13T08:17:52.412371206Z
+  modified_at: 2026-11-13T08:17:52.412371206Z
+  session_id: 01a1d3ee-83e8-71b3-a2c5-aed5baed6fdc
   harness_version: 2.1.323 (Claude Code)
 history:
 - id: 01a1d175-992b-7501-a0fb-89a007208ac0
