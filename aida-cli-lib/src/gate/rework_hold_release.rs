@@ -786,9 +786,17 @@ pub(crate) enum ReleaseCondition {
 // trace:STORY-2768 | ai:claude
 pub(crate) fn release_condition(project: &Path, pr: u64) -> ReleaseCondition {
     let unread = std::cell::Cell::new(false);
-    match with_live_io(project, pr, true, &unread, |root, hold, io| {
+    let judged = with_live_io(project, pr, true, &unread, |root, hold, io| {
         auto_release_steps(root, hold, io, true)
-    }) {
+    });
+    condition_of(judged, unread.get())
+}
+
+/// A judge-only run as a [`ReleaseCondition`]; `unread` says a forge or
+/// store read failed, which makes an error "could not look", not a refusal.
+// trace:STORY-2768 | ai:claude
+fn condition_of(judged: Result<Option<Judged>>, unread: bool) -> ReleaseCondition {
+    match judged {
         Ok(None) => ReleaseCondition::NoHold,
         Ok(Some(Judged::Eligible(releases))) => {
             match releases.into_iter().find_map(|release| release.mandate) {
@@ -799,7 +807,7 @@ pub(crate) fn release_condition(project: &Path, pr: u64) -> ReleaseCondition {
         Ok(Some(Judged::Done(_))) => {
             ReleaseCondition::Unknown("the read-only check ran a release step".into())
         }
-        Err(error) if unread.get() => ReleaseCondition::Unknown(format!("{error:#}")),
+        Err(error) if unread => ReleaseCondition::Unknown(format!("{error:#}")),
         Err(error) => ReleaseCondition::Unmet(format!("{error:#}")),
     }
 }
@@ -1293,6 +1301,10 @@ pub(crate) fn held_check() -> mh::RefusalRelease {
 #[cfg(test)]
 #[path = "tests/story_1687_rework_release_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "tests/story_2768_release_condition_tests.rs"]
+mod story_2768_release_condition_tests;
 
 #[cfg(test)]
 #[path = "tests/story_1697_attested_release_tests.rs"]
