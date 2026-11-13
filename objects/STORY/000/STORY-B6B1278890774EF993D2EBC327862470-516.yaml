@@ -8,12 +8,12 @@ description: |-
   Sketch first (guided, a credential boundary). Decide how a contained worker gets ChatGPT-session auth without seeing the host ~/.codex: (a) a host broker that mints or refreshes the token and passes a scoped, short-lived copy into a private CODEX_HOME inside the sandbox; (b) an auth.json copy into a tmpfs CODEX_HOME bound read-only, with refresh-token exfiltration risk stated; or (c) an API-key-only path, with a documented operator step. Cover refresh-token handling, the auth.openai.com/chatgpt.com egress entries (already in allowed_hosts), revocation when the lane ends, and what the C1/C2 checks must assert about credential visibility.
 
   Acceptance: the refusal is removed for the chosen path; the C0-C4 harness runs under --boundary aida with the operator's ChatGPT login and reports real pass/fail; BUG-2447/2448 then close or are re-scoped from that evidence.
-status: InProgress
+status: NeedsAttention
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T21:41:03.638236900Z
-modified_at: 2026-11-13T20:59:44.384688859Z
+modified_at: 2026-11-13T21:00:20.016399380Z
 req_type: Story
 tags:
 - track:dell1
@@ -1142,6 +1142,15 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1d6b6-16b0-7530-aa36-6c703a66c9d0
+  author: dirtlab
+  timestamp: 2026-11-13T21:00:20.016409065Z
+  session_id: 01a1d6b58533
+  harness_version: codex-cli 0.167.0
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 execution_mode: drive
 filed_at:
   code_sha: 0ab91ad23e8c9a0c582ab4eb7e277f6a774aaaa2
@@ -1151,3 +1160,8 @@ filed_at:
   aida_build_sha: b34755f19c7
   vendor: claude
   session: 3dd100c3-f8c0-44d9-ac4c-f9ff0eb32a27
+attention_reason:
+  category: blocked-dependency
+  detail: 'Round 13 first task requires fetching main, resolving PR #3938 conflicts, committing merge and pushing before other work. This standalone native seat explicitly has read-only Git metadata and prohibits commit/push; host must perform that merge and publication before implementation resumes. Findings 1 and 2 already appear addressed in current HEAD 12e20ac2c6 (prepare_with_io retains body and injected pin; codex_auth::prepare has no version argument). Finding 3 explicitly accepts current synchronous hashing; no caching change required. Codegraph doctor reports missing client; host must supply the reviewed absolute primary-checkout client path.'
+  raised_by: implementer
+  raised_at: 2026-11-13T21:00:20.016399380Z
