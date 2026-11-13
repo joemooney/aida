@@ -428,14 +428,14 @@ fn a_pr_keyed_verdict_write_lands_on_the_change_and_a_spec_keyed_one_on_the_spec
     assert!(store::unbound_file(&root, "STORY-8").is_file());
 }
 
-/// STORY-080 AC2 (slice 3): a spec-only verdict recorded before any change
-/// existed binds to the change when it opens. It then reads under the change
+/// STORY-080 AC2 (slice 3): a legacy pre-change verdict without an explicit
+/// spec-only marker binds to the change when it opens. It reads under the change
 /// and, once, under the spec; the unbound ledger keeps its line (binding
 /// never deletes evidence); a later spec record lands on the change after
 /// it; and binding twice adds nothing.
 // trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
 #[test]
-fn a_spec_only_verdict_binds_to_the_change_when_it_opens() {
+fn a_legacy_pre_change_verdict_binds_to_the_change_when_it_opens() {
     let _env = uncontained();
     let (_tmp, root) = root();
     let a = attestation("reviewer");
@@ -2457,6 +2457,297 @@ fn bug_2451_publication_refuses_two_found_changes_even_from_original_head() {
     assert!(forge.opened.lock().unwrap().is_empty());
 }
 
+// trace:BUG-2517 | ai:codex
+#[test]
+fn bug_2517_foreign_copy_is_ignored_without_rewriting_history() {
+    let (_tmp, root) = root();
+    let _env = uncontained();
+    let spec = GateSpec::resolve(&root, "BUG-2492");
+    let first = ChangeKey::pr(3651);
+    let second = ChangeKey::pr(3764);
+    let old = record("approved", &ts(1), Some(&attestation("reviewer")));
+    store::append_one(&root, event::verdict_event(&root, first, &old, Some(&spec))).unwrap();
+    let mut foreign = record("waiting", &ts(2), Some(&attestation("reviewer")));
+    foreign.insert("reviewed_sha".into(), serde_json::json!(OTHER_HEAD));
+    store::append_one(
+        &root,
+        event::verdict_event(&root, first, &foreign, Some(&spec)),
+    )
+    .unwrap();
+    foreign.insert("mode".into(), serde_json::json!(project::PHASE3_MODE));
+    store::append_one(
+        &root,
+        event::verdict_event(&root, second, &foreign, Some(&spec)),
+    )
+    .unwrap();
+    // A failed derived-index write must not hide the correct PR's witness.
+    std::fs::remove_file(ledger_dir(&root).join("by-spec/BUG-2492.json")).unwrap();
+    let file = store::ledger_file(&root, first);
+    let before = std::fs::read(&file).unwrap();
+    assert_eq!(
+        project::newest_verdict_event(&root, "PR-3651")
+            .unwrap()
+            .verdict_record(),
+        Some(&old)
+    );
+    let events = checked::read_change_events(&root, first, &mut Default::default()).unwrap();
+    assert_eq!(
+        project::newest_of(events).unwrap().verdict_record(),
+        Some(&old)
+    );
+    let mut distinct = foreign.clone();
+    distinct.remove("mode");
+    distinct.insert("summary".into(), serde_json::json!("a distinct review"));
+    let a = event::verdict_event(&root, first, &distinct, Some(&spec));
+    let b = event::verdict_event(&root, second, &foreign, Some(&spec));
+    let mut distinct_events = vec![a];
+    project::MiskeyOwners::new([&b]).filter(&mut distinct_events);
+    assert_eq!(distinct_events.len(), 1);
+    // Exhaustion of either aggregate budget is unsafe, even though every
+    // individual ledger is valid. The strict reader must not return raw copies.
+    for mut budget in [
+        checked::Budget::with_limits(0, checked::MAX_SELECTION_EVENTS),
+        checked::Budget::with_limits(checked::MAX_SELECTION_BYTES, 0),
+    ] {
+        let raw = store::read_file(&root, first);
+        let error = checked::filter_miskeyed(&root, raw, &mut budget).unwrap_err();
+        assert!(error.0.contains("budget is exhausted"), "{error}");
+        assert_eq!(std::fs::read(&file).unwrap(), before);
+    }
+    // An unrelated corrupt ledger must not resurrect the foreign WAITING
+    // copy through either the PR-keyed or the spec-indexed legacy reader.
+    project::index_spec(&root, "BUG-2492", first).unwrap();
+    project::index_spec(&root, "BUG-2492", second).unwrap();
+    // trace:BUG-2517 | ai:claude — nor may it erase the change's hold state.
+    hold::append(
+        &root,
+        3651,
+        EventBody::ReleaseWithdrawn {
+            reason: "head moved".into(),
+        },
+        None,
+        None,
+    )
+    .unwrap();
+    let before = std::fs::read(&file).unwrap();
+    let second_file = store::ledger_file(&root, second);
+    let second_before = std::fs::read(&second_file).unwrap();
+    // Exercise distinct discovery refusals, including bounded-read failure.
+    // Sparse allocation keeps the oversized fixture cheap.
+    let unrelated = store::ledger_file(&root, ChangeKey::pr(9999));
+    for failure in ["malformed", "symlink", "oversized"] {
+        match failure {
+            "malformed" => std::fs::write(&unrelated, b"invalid\n").unwrap(),
+            "symlink" => std::os::unix::fs::symlink(&second_file, &unrelated).unwrap(),
+            "oversized" => std::fs::File::create(&unrelated)
+                .unwrap()
+                .set_len(checked::MAX_LEDGER_BYTES + 1)
+                .unwrap(),
+            _ => unreachable!(),
+        }
+        assert!(checked::discover(&root).is_err());
+        let is_foreign_waiting = |r: &JsonObj| r.get("verdict") == foreign.get("verdict");
+        // The first PR withholds every copy a foreign change could own...
+        assert!(project::newest_verdict_event(&root, "PR-3651").is_none());
+        assert!(project::verdict_records(&root, "PR-3651").is_empty());
+        assert!(!project::events(&root, first)
+            .iter()
+            .filter_map(|e| e.verdict_record())
+            .any(is_foreign_waiting));
+        // ...but keeps evidence no ownership witness can disqualify.
+        assert!(project::events(&root, first)
+            .iter()
+            .any(|e| matches!(e.body, EventBody::ReleaseWithdrawn { .. })));
+        // The owning PR's phase-3 record stays its own, and the spec-indexed
+        // reader answers with it, never with the first PR's foreign copy.
+        for label in ["PR-3764", "BUG-2492"] {
+            let newest = project::newest_verdict_event(&root, label).unwrap();
+            assert_eq!(newest.change, "PR-3764", "{label}");
+            assert_eq!(newest.verdict_record(), Some(&foreign), "{label}");
+            assert!(project::verdict_records(&root, label)
+                .iter()
+                .all(|r| r == &foreign));
+        }
+        assert_eq!(std::fs::read(&second_file).unwrap(), second_before);
+        assert_eq!(std::fs::read(&file).unwrap(), before);
+        std::fs::remove_file(&unrelated).unwrap();
+        // Recovery restores the first PR's own historical verdict, without
+        // restoring the foreign copy or persisting the conservative fallback.
+        assert_eq!(
+            project::newest_verdict_event(&root, "PR-3651")
+                .unwrap()
+                .verdict_record(),
+            Some(&old)
+        );
+        assert_eq!(std::fs::read(&file).unwrap(), before);
+        assert_eq!(std::fs::read(&second_file).unwrap(), second_before);
+    }
+}
+
+// trace:BUG-2517 | ai:codex
+#[test]
+fn bug_2517_disappearing_discovery_never_returns_raw_review_copies() {
+    let (_tmp, root) = root();
+    let _env = uncontained();
+    let spec = GateSpec::with_key("BUG-2517", None);
+    let rec = record("waiting", &ts(1), Some(&attestation("reviewer")));
+    let copy = event::verdict_event(&root, ChangeKey::pr(1), &rec, Some(&spec));
+    store::append_one(&root, copy).unwrap();
+    hold::append(
+        &root,
+        1,
+        EventBody::ReleaseWithdrawn {
+            reason: "head moved".into(),
+        },
+        None,
+        None,
+    )
+    .unwrap();
+    let raw = store::read_file(&root, ChangeKey::pr(1));
+    assert!(raw.iter().any(|e| e.verdict_record().is_some()));
+    // Simulate removal between the legacy input read and pinned discovery.
+    std::fs::remove_dir_all(ledger_dir(&root)).unwrap();
+    // The strict reader must report incomplete evidence, too; absence must
+    // not turn its pre-read copies back into authoritative review records.
+    let error = checked::filter_miskeyed(&root, raw.clone(), &mut Default::default()).unwrap_err();
+    assert!(error.0.contains("ledger disappeared"), "{error}");
+    assert!(
+        checked::filter_miskeyed(&root, Vec::new(), &mut Default::default())
+            .unwrap()
+            .is_empty()
+    );
+    let filtered = checked::filter_miskeyed_or_fail_closed(&root, raw);
+    assert!(!filtered.iter().any(|e| e.verdict_record().is_some()));
+    assert!(filtered
+        .iter()
+        .any(|e| matches!(e.body, EventBody::ReleaseWithdrawn { .. })));
+}
+
+// trace:BUG-2517 | ai:codex
+#[test]
+fn bug_2517_ownership_index_visits_corpus_once_per_discovery() {
+    let (_tmp, root) = root();
+    let _env = uncontained();
+    const BUCKETS: usize = 12;
+    const ROUNDS: usize = 3;
+    for n in 1..=BUCKETS {
+        let spec = GateSpec::with_key(&format!("BUG-{n}"), None);
+        // Multiple distinct phase-3 witnesses per bucket catch rebuilds whose
+        // cost grows with both corpus buckets and historical review rounds.
+        // trace:BUG-2517 | ai:codex
+        for round in 0..ROUNDS {
+            let mut rec = record(
+                "waiting",
+                &ts((n * ROUNDS + round) as i64),
+                Some(&attestation("reviewer")),
+            );
+            rec.insert("mode".into(), serde_json::json!(project::PHASE3_MODE));
+            store::append_one(
+                &root,
+                event::verdict_event(&root, ChangeKey::pr(n as u64), &rec, Some(&spec)),
+            )
+            .unwrap();
+        }
+    }
+    // Ownership discovery visits the complete change corpus once, including
+    // binding events and the hold that must survive every filtering pass.
+    hold::append(
+        &root,
+        1,
+        EventBody::ReleaseWithdrawn {
+            reason: "head moved".into(),
+        },
+        None,
+        None,
+    )
+    .unwrap();
+    project::OWNERSHIP_WORK.with(|work| work.set((0, 0)));
+    let mut discovery = checked::discover(&root).unwrap().unwrap();
+    for n in 1..=BUCKETS {
+        assert_eq!(
+            discovery
+                .change_events(ChangeKey::pr(n as u64), &mut Default::default())
+                .unwrap()
+                .iter()
+                .filter(|e| e.verdict_record().is_some())
+                .count(),
+            ROUNDS
+        );
+        assert_eq!(
+            discovery
+                .events_for(&[format!("BUG-{n}")], &mut Default::default())
+                .unwrap()[0]
+                .1
+                .len(),
+            ROUNDS
+        );
+    }
+    // A misplaced copy must actually be removed by the cached ownership
+    // index, rather than merely retaining buckets of already-correct records.
+    // Use the owning event's spec and semantic record, changing only its PR.
+    let witness = discovery
+        .change_events(ChangeKey::pr(1), &mut Default::default())
+        .unwrap()
+        .into_iter()
+        .find(|e| e.verdict_record().is_some())
+        .unwrap();
+    let mut copied_record = witness.verdict_record().unwrap().clone();
+    copied_record.remove("mode");
+    let copied_spec = GateSpec::with_key("BUG-1", None);
+    let misplaced =
+        event::verdict_event(&root, ChangeKey::pr(2), &copied_record, Some(&copied_spec));
+    let mut copies = vec![misplaced, witness];
+    discovery.filter_events(&mut copies);
+    assert_eq!(copies.len(), 1);
+    assert_eq!(copies[0].change, "PR-1");
+    // Additional vectors reuse the pinned snapshot even if the on-disk
+    // corpus becomes unreadable. No extra ownership visits are permitted.
+    let unrelated = store::ledger_file(&root, ChangeKey::pr(9999));
+    std::fs::write(&unrelated, b"invalid\n").unwrap();
+    for n in 1..=BUCKETS {
+        let mut events = store::read_file(&root, ChangeKey::pr(n as u64));
+        discovery.filter_events(&mut events);
+        assert_eq!(
+            events
+                .iter()
+                .filter(|e| e.verdict_record().is_some())
+                .count(),
+            ROUNDS
+        );
+    }
+    std::fs::remove_file(unrelated).unwrap();
+    assert_eq!(
+        project::OWNERSHIP_WORK.with(|work| work.get()),
+        (1, (ROUNDS + 1) * BUCKETS + 1)
+    );
+    // The legacy spec-indexed reader also performs only one discovery,
+    // even when one spec names every change bucket.
+    for n in 1..=BUCKETS {
+        project::index_spec(&root, "BUG-1", ChangeKey::pr(n as u64)).unwrap();
+    }
+    project::OWNERSHIP_WORK.with(|work| work.set((0, 0)));
+    assert_eq!(project::verdict_records(&root, "BUG-1").len(), ROUNDS);
+    assert_eq!(
+        project::OWNERSHIP_WORK.with(|work| work.get()),
+        (1, (ROUNDS + 1) * BUCKETS + 1)
+    );
+    // Filtering another vector through discovery must reuse that same index.
+    project::OWNERSHIP_WORK.with(|work| work.set((0, 0)));
+    let raw = store::read_file(&root, ChangeKey::pr(1));
+    assert_eq!(
+        checked::filter_miskeyed(&root, raw, &mut Default::default())
+            .unwrap()
+            .iter()
+            .filter(|e| e.verdict_record().is_some())
+            .count(),
+        ROUNDS
+    );
+    assert_eq!(
+        project::OWNERSHIP_WORK.with(|work| work.get()),
+        (1, (ROUNDS + 1) * BUCKETS + 1)
+    );
+}
+
 // trace:STORY-2698 | ai:codex
 #[test]
 fn review_risk_is_ledger_metadata_not_verdict_authority() {
@@ -2588,4 +2879,152 @@ fn story2691_checked_verdict_projects_ledger_without_hiding_invalid_files() {
     );
     std::os::unix::fs::symlink(root.join("missing"), &path).unwrap();
     assert!(rv::checked_current_verdict(&root, key).is_err());
+}
+
+// trace:BUG-2517 | ai:codex
+#[test]
+fn bug_2517_discovery_keeps_spec_reads_on_the_pinned_directory() {
+    let (_tmp, root) = root();
+    let spec = GateSpec::with_key("BUG-2517", None);
+    let local = record("waiting", &ts(1), None);
+    store::append_unbound(&root, &spec, &local).unwrap();
+    let mut budget = checked::Budget::default();
+    let discovery = checked::discover(&root).unwrap().unwrap();
+    let by_spec = ledger_dir(&root).join("by-spec");
+    std::fs::rename(&by_spec, ledger_dir(&root).join("old-by-spec")).unwrap();
+    std::fs::create_dir(&by_spec).unwrap();
+    // Replacement evidence must not enter a gate operation already reading
+    // through the old directory. A fresh operation must still refuse it.
+    std::fs::write(by_spec.join("BUG-2517.jsonl"), b"torn replacement").unwrap();
+    let (events, changes) = discovery.spec_entries("BUG-2517", &mut budget).unwrap();
+    assert_eq!(events.len(), 1);
+    assert_eq!(events[0].verdict_record(), Some(&local));
+    assert!(changes.is_empty());
+    let fresh = checked::discover(&root).unwrap().unwrap();
+    assert!(fresh
+        .spec_entries("BUG-2517", &mut checked::Budget::default())
+        .is_err());
+}
+
+// trace:BUG-2517 | ai:codex
+#[test]
+fn bug_2517_historical_spec_only_copy_has_no_change_authority() {
+    let (_tmp, root) = root();
+    let _env = uncontained();
+    let spec = GateSpec::with_key("BUG-2517", None);
+    let change = ChangeKey::pr(2517);
+    let own = record("approved", &ts(1), None);
+    store::append_one(
+        &root,
+        event::verdict_event(&root, change, &own, Some(&spec)),
+    )
+    .unwrap();
+    let mut local = record("waiting", &ts(2), None);
+    local.insert("change_binding".into(), "unbound".into());
+    store::append_unbound(&root, &spec, &local).unwrap();
+    // Model an old binder's copy, without granting the marker new authority.
+    store::append_one(
+        &root,
+        event::verdict_event(&root, change, &local, Some(&spec)),
+    )
+    .unwrap();
+    let path = store::ledger_file(&root, change);
+    let before = std::fs::read(&path).unwrap();
+    assert_eq!(project::newest_verdict(&root, "PR-2517"), Some(own));
+    assert_eq!(project::newest_verdict(&root, "BUG-2517"), Some(local));
+    assert_eq!(
+        checked::read_change_events(&root, change, &mut Default::default())
+            .unwrap()
+            .iter()
+            .filter(|e| e.verdict_record().is_some())
+            .count(),
+        1
+    );
+    assert_eq!(std::fs::read(path).unwrap(), before);
+}
+
+// trace:BUG-2517 | ai:codex
+#[test]
+fn bug_2517_spec_only_copy_stays_local_when_discovery_refuses() {
+    let (_tmp, root) = root();
+    let _env = uncontained();
+    let spec = GateSpec::with_key("BUG-2517", None);
+    let change = ChangeKey::pr(2517);
+    let own = record("approved", &ts(1), None);
+    store::append_one(
+        &root,
+        event::verdict_event(&root, change, &own, Some(&spec)),
+    )
+    .unwrap();
+    let mut local = record("waiting", &ts(2), None);
+    local.insert("change_binding".into(), "unbound".into());
+    store::append_unbound(&root, &spec, &local).unwrap();
+    store::append_one(
+        &root,
+        event::verdict_event(&root, change, &local, Some(&spec)),
+    )
+    .unwrap();
+    // Force incomplete ownership discovery with unrelated malformed evidence.
+    std::fs::write(store::ledger_file(&root, ChangeKey::pr(9999)), b"invalid\n").unwrap();
+    assert!(checked::discover(&root).is_err());
+    let path = store::ledger_file(&root, change);
+    let before = std::fs::read(&path).unwrap();
+    // A record without review provenance cannot be a proven foreign copy,
+    // so incomplete discovery leaves it readable (BUG-2517 fail-closed only
+    // withholds fingerprintable copies). trace:BUG-2517 | ai:claude
+    assert_eq!(project::newest_verdict(&root, "PR-2517"), Some(own));
+    assert!(project::events(&root, change)
+        .iter()
+        .all(|e| !e.is_spec_only()));
+    // The deliberately local record is still the spec's newest evidence.
+    assert_eq!(project::newest_verdict(&root, "BUG-2517"), Some(local));
+    assert_eq!(
+        project::newest_verdict_event(&root, "BUG-2517")
+            .unwrap()
+            .change,
+        "BUG-2517"
+    );
+    assert_eq!(std::fs::read(path).unwrap(), before);
+}
+
+// trace:BUG-2517 | ai:codex
+#[test]
+fn bug_2517_local_review_survives_open_record_and_collect_without_binding() {
+    let (_tmp, root) = root();
+    let _env = uncontained();
+    let spec = GateSpec::with_key("BUG-2517", None);
+    for word in ["waiting", "approved"] {
+        let mut local = record(word, &ts(1), None);
+        local.insert("change_binding".into(), "unbound".into());
+        rv::write_verdict_object(&rv::verdict_path(&root, &spec.label), &local).unwrap();
+        let unbound_path = ledger_dir(&root).join("by-spec/BUG-2517.jsonl");
+        let before = std::fs::read(&unbound_path).unwrap();
+
+        // Exercise the production entry points, not just the binder they share.
+        for change in [ChangeKey::pr(3651), ChangeKey::pr(3764)] {
+            super::bind_specs(&root, change, std::slice::from_ref(&spec));
+            assert!(project::events(&root, change)
+                .iter()
+                .all(|e| e.verdict_record() != Some(&local)));
+
+            let own = record("request-changes", &ts(2), None);
+            rv::write_verdict_object_for_spec(
+                &rv::verdict_path(&root, &change.as_key()),
+                &own,
+                Some(&spec.label),
+            )
+            .unwrap();
+            super::record_collected_verdict(&root, change, &own, &[(spec.clone(), own.clone())])
+                .unwrap();
+            let events =
+                checked::read_change_events(&root, change, &mut Default::default()).unwrap();
+            assert!(events.iter().all(|e| e.verdict_record() != Some(&local)));
+            assert!(events.iter().any(|e| e.verdict_record() == Some(&own)));
+        }
+        // Binding is append-only even for ignored local records.
+        assert_eq!(std::fs::read(unbound_path).unwrap(), before);
+        assert!(store::read_unbound(&root, &spec.label)
+            .iter()
+            .any(|e| e.verdict_record() == Some(&local)));
+    }
 }
