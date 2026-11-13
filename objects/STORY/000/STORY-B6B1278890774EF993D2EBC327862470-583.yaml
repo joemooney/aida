@@ -20,7 +20,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-08T02:56:36.206726Z
-modified_at: 2026-11-13T12:05:17.130541459Z
+modified_at: 2026-11-13T13:07:10.369326827Z
 req_type: Story
 tags:
 - architecture
@@ -310,6 +310,13 @@ comments:
   created_at: 2026-11-13T08:56:44.736205302Z
   modified_at: 2026-11-13T08:56:44.736205302Z
   session_id: 01a1d3ee-83e8-71b3-a2c5-aed5baed6fdc
+  harness_version: 2.1.323 (Claude Code)
+- id: 01a1d504-e5a1-7452-a7c0-4e760f597e9d
+  author: joe
+  content: 'Advisor 06:06: PARKED until BUG-2558. #3921 (1d0f30e) now conflicts with main in 13 files / 32 hunks after the STORY-2539 vendor-profile refactor landed. Too large for an advisor hand-merge, and Codex native seats cannot record merges.'
+  created_at: 2026-11-13T13:07:10.369326827Z
+  modified_at: 2026-11-13T13:07:10.369326827Z
+  session_id: 01a1d4aa-9c99-76c2-ac94-7f0795f8a7f9
   harness_version: 2.1.323 (Claude Code)
 history:
 - id: 01a1b91a-2eb5-7142-b252-8d3eb8d49b14
