@@ -2282,6 +2282,7 @@ fn rebase_auto_merge_onto(repo: &Path, target: &str) -> Result<StorePullOutcome>
                     && !is_oplog_path(path)
                     && !is_queue_registry_path(path)
                     && !is_schedule_ledger_path(path)
+                    && !is_timing_record_path(path)
                 {
                     anyhow::bail!("rebase conflict in non-mergeable path `{path}` — cannot auto-merge; falling back to manual resolution");
                 }
@@ -2295,6 +2296,9 @@ fn rebase_auto_merge_onto(repo: &Path, target: &str) -> Result<StorePullOutcome>
                 } else if is_schedule_ledger_path(path) {
                     // trace:STORY-1226 | ai:claude
                     resolve_schedule_ledger_conflict(repo, path)
+                } else if is_timing_record_path(path) {
+                    // trace:BUG-2550 | ai:claude
+                    resolve_timing_record_conflict(repo, path)
                 } else {
                     resolve_spec_conflict(repo, path, true)
                 };
@@ -2799,6 +2803,103 @@ fn is_schedule_ledger_path(path: &str) -> bool {
         Some(r) => !r.contains('/') && r.ends_with(".yaml"),
         None => false,
     }
+}
+
+/// True when `path` is a published timing record,
+/// `timings/<TYPE>/<shard>/<ID>.json` (STORY-1480).
+// trace:BUG-2550 | ai:claude
+fn is_timing_record_path(path: &str) -> bool {
+    let p = path.replace('\\', "/");
+    match p.strip_prefix("timings/") {
+        Some(rel) => rel.split('/').count() == 3 && rel.ends_with(".json"),
+        None => false,
+    }
+}
+
+/// Union-merge two sides of a conflicted timing record and write the result.
+/// Two clones that each auto-bump the same merge both publish the spec's
+/// record (BUG-2550); the record is append-only evidence, so the union is the
+/// only correct answer.
+// trace:BUG-2550 | ai:claude
+fn resolve_timing_record_conflict(repo: &Path, path: &str) -> Result<String> {
+    let ours = git_show_stage(repo, 2, path)?;
+    let theirs = git_show_stage(repo, 3, path)?;
+    let (merged, added) = union_timing_records(ours.as_deref(), theirs.as_deref())?;
+    let abs = repo.join(path);
+    if let Some(parent) = abs.parent() {
+        std::fs::create_dir_all(parent).ok();
+    }
+    crate::write_atomic(&abs, merged.as_bytes()).with_context(|| format!("write merged {path}"))?;
+    Ok(format!(
+        "timing record `{path}`: union of both sides ({added} entr{} added)",
+        if added == 1 { "y" } else { "ies" }
+    ))
+}
+
+/// The pure half of the timing-record resolver: union `events` and
+/// `publishes` of two records, deduplicated by their exact JSON and ordered
+/// by `ts` / `at`. Returns the merged pretty JSON and how many entries the
+/// incoming (theirs) side contributed that ours lacked. Refuses (so the pull
+/// falls back to manual resolution) when either side does not parse or the
+/// sides disagree on `spec` or `schema_version`: a record this binary cannot
+/// read is never clobbered.
+// trace:BUG-2550 | ai:claude
+pub fn union_timing_records(ours: Option<&str>, theirs: Option<&str>) -> Result<(String, usize)> {
+    use serde_json::Value;
+    fn parse(side: &str, text: &str) -> Result<serde_json::Map<String, Value>> {
+        match serde_json::from_str::<Value>(text) {
+            Ok(Value::Object(map)) => Ok(map),
+            Ok(_) => anyhow::bail!("{side} timing record is not a JSON object"),
+            Err(e) => anyhow::bail!("{side} timing record does not parse: {e}"),
+        }
+    }
+    let (ours, theirs) = match (ours, theirs) {
+        (Some(o), Some(t)) => (parse("our", o)?, parse("their", t)?),
+        (Some(one), None) | (None, Some(one)) => {
+            parse("the", one)?;
+            return Ok((one.to_string(), 0));
+        }
+        (None, None) => anyhow::bail!("neither side has the timing record"),
+    };
+    for field in ["spec", "schema_version"] {
+        anyhow::ensure!(
+            ours.get(field) == theirs.get(field),
+            "timing record sides disagree on `{field}` ({:?} vs {:?})",
+            ours.get(field),
+            theirs.get(field)
+        );
+    }
+    let mut merged = ours.clone();
+    let mut added = 0;
+    for (field, order_key) in [("events", "ts"), ("publishes", "at")] {
+        let list = |m: &serde_json::Map<String, Value>| -> Result<Vec<Value>> {
+            match m.get(field) {
+                None => Ok(Vec::new()),
+                Some(Value::Array(a)) => Ok(a.clone()),
+                Some(_) => anyhow::bail!("timing record `{field}` is not an array"),
+            }
+        };
+        let mut out = list(&ours)?;
+        let mut seen: std::collections::BTreeSet<String> =
+            out.iter().map(Value::to_string).collect();
+        for entry in list(&theirs)? {
+            if seen.insert(entry.to_string()) {
+                out.push(entry);
+                added += 1;
+            }
+        }
+        // RFC 3339 stamps; a stable sort keeps unstamped entries in place.
+        let stamp = |v: &Value| {
+            v.get(order_key)
+                .and_then(Value::as_str)
+                .and_then(|s| chrono::DateTime::parse_from_rfc3339(s).ok())
+        };
+        out.sort_by_key(|v| stamp(v));
+        merged.insert(field.to_string(), Value::Array(out));
+    }
+    let mut text = serde_json::to_string_pretty(&Value::Object(merged))?;
+    text.push('\n');
+    Ok((text, added))
 }
 
 /// True when a merge is currently in progress in `repo` (MERGE_HEAD exists).
@@ -10681,6 +10782,136 @@ mod tests {
         ];
         want.sort();
         assert_eq!(got, want, "no queue entry may be dropped by the merge");
+    }
+
+    fn timing_record_for_test(events: &[(&str, &str)], publishes: &[(&str, &str)]) -> String {
+        let events: Vec<serde_json::Value> = events
+            .iter()
+            .map(
+                |(ts, kind)| serde_json::json!({"ts": ts, "spec": "BUG-9", "kind": {"type": kind}}),
+            )
+            .collect();
+        let publishes: Vec<serde_json::Value> = publishes
+            .iter()
+            .map(|(at, by)| serde_json::json!({"at": at, "closed_by": by}))
+            .collect();
+        serde_json::to_string_pretty(&serde_json::json!({
+            "schema_version": 1, "spec": "BUG-9", "publishes": publishes, "events": events
+        }))
+        .unwrap()
+    }
+
+    /// BUG-2550: two clones auto-bump the same merge ~70 s apart; both
+    /// publish `timings/BUG/000/BUG-9.json`. The second clone's pull must
+    /// union the records instead of refusing a "non-mergeable path".
+    // trace:BUG-2550 | ai:claude
+    #[test]
+    fn bug_2550_pull_rebase_unions_timing_records_from_two_machines() {
+        let dir = tempfile::tempdir().unwrap();
+        let hub = dir.path().join("hub.git");
+        std::fs::create_dir_all(&hub).unwrap();
+        git(&hub, &["init", "--bare"]).unwrap();
+        git(&hub, &["symbolic-ref", "HEAD", "refs/heads/aida-store"]).unwrap();
+        let rel = "timings/BUG/000/BUG-9.json";
+        let write = |root: &Path, body: &str| {
+            std::fs::create_dir_all(root.join("timings/BUG/000")).unwrap();
+            std::fs::write(root.join(rel), body).unwrap();
+            add(root, &[rel]).unwrap();
+        };
+
+        let m1 = dir.path().join("machine1");
+        home_fixture_init(&m1).unwrap();
+        configure_user(&m1, "Joe", "joe@example.com").unwrap();
+        git(&m1, &["checkout", "-b", "aida-store"]).unwrap();
+        let done = ("2026-11-12T03:00:00Z", "spec_done");
+        write(
+            &m1,
+            &timing_record_for_test(&[done], &[("2026-11-12T03:00:01Z", "queue-done")]),
+        );
+        commit(&m1, "seed timing record").unwrap();
+        git(&m1, &["remote", "add", "origin", hub.to_str().unwrap()]).unwrap();
+        assert!(push(&m1, "origin", "aida-store").unwrap());
+        git(dir.path(), &["clone", hub.to_str().unwrap(), "machine2"]).unwrap();
+        let m2 = dir.path().join("machine2");
+        configure_user(&m2, "Joe", "joe@example.com").unwrap();
+
+        // Origin's auto-bump publishes first and pushes...
+        let completed_m1 = ("2026-11-12T03:28:00Z", "spec_completed");
+        write(
+            &m1,
+            &timing_record_for_test(
+                &[done, completed_m1],
+                &[
+                    ("2026-11-12T03:00:01Z", "queue-done"),
+                    ("2026-11-12T03:28:01Z", "auto-bump"),
+                ],
+            ),
+        );
+        commit(&m1, "auto-bump on machine 1").unwrap();
+        assert!(push(&m1, "origin", "aida-store").unwrap());
+        // ...while the local clone bumps the same merge 70 s later.
+        let completed_m2 = ("2026-11-12T03:29:10Z", "spec_completed");
+        write(
+            &m2,
+            &timing_record_for_test(
+                &[done, completed_m2],
+                &[
+                    ("2026-11-12T03:00:01Z", "queue-done"),
+                    ("2026-11-12T03:29:11Z", "auto-bump"),
+                ],
+            ),
+        );
+        commit(&m2, "auto-bump on machine 2").unwrap();
+
+        let outcome = pull_rebase_auto_merge(&m2, "origin", "aida-store")
+            .expect("duplicate auto-bump timing records must auto-merge, not fail");
+        match outcome {
+            StorePullOutcome::AutoMerged { notes } => assert!(
+                notes.iter().any(|n| n.contains("timing record")),
+                "expected a timing-record note, got: {notes:?}"
+            ),
+            StorePullOutcome::Clean => panic!("expected a conflict to be auto-merged"),
+        }
+        assert!(!rebase_in_progress(&m2));
+        let merged: serde_json::Value =
+            serde_json::from_str(&std::fs::read_to_string(m2.join(rel)).unwrap()).unwrap();
+        let ts = |field: &str, key: &str| -> Vec<String> {
+            merged[field]
+                .as_array()
+                .unwrap()
+                .iter()
+                .map(|v| v[key].as_str().unwrap().to_string())
+                .collect()
+        };
+        assert_eq!(ts("events", "ts"), [done.0, completed_m1.0, completed_m2.0]);
+        assert_eq!(
+            ts("publishes", "at"),
+            [
+                "2026-11-12T03:00:01Z",
+                "2026-11-12T03:28:01Z",
+                "2026-11-12T03:29:11Z"
+            ]
+        );
+    }
+
+    // trace:BUG-2550 | ai:claude
+    #[test]
+    fn bug_2550_timing_union_refuses_what_it_cannot_read() {
+        let one = timing_record_for_test(&[("2026-11-12T03:00:00Z", "spec_done")], &[]);
+        let (same, added) = union_timing_records(Some(&one), Some(&one)).unwrap();
+        assert_eq!(added, 0);
+        assert_eq!(
+            serde_json::from_str::<serde_json::Value>(&same).unwrap(),
+            serde_json::from_str::<serde_json::Value>(&one).unwrap()
+        );
+        let other_spec = one.replace("BUG-9", "BUG-10");
+        assert!(union_timing_records(Some(&one), Some(&other_spec)).is_err());
+        let newer = one.replace("\"schema_version\": 1", "\"schema_version\": 2");
+        assert!(union_timing_records(Some(&one), Some(&newer)).is_err());
+        assert!(union_timing_records(Some(&one), Some("<<<<<<< not json")).is_err());
+        assert!(is_timing_record_path("timings/BUG/000/BUG-9.json"));
+        assert!(!is_timing_record_path("timings/BUG-9.json"));
+        assert!(!is_timing_record_path("objects/BUG/000/BUG-9.json"));
     }
 
     // A failed plain store pull owns the rebase it started and must abort it
