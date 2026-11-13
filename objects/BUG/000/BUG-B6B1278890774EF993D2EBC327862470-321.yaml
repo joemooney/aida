@@ -3,12 +3,12 @@ spec_id: BUG-b6b1278890774ef993d2ebc327862470-321
 agreed_id: BUG-2556
 title: 'Train journal recovery drops human-at-TTY consent: recovery LiveTrainForge uses named:false, so a resumed deputy-TTY train ejects named supervised PRs'
 description: 'Observed 2026-11-13 04:29 MST: deputy-TTY ''aida pr train 3917 3928'' resumed train #3941 after a SIGPIPE kill (first attempt had gated both PRs ready). CI went green 03:57; recovery''s final gate ejected both as ''needs a human at a terminal or an active mandate'' and fell through to the mandate, which refused (gate/ path; no merge-hold marker). Cause: pr_train.rs ~4147 builds the recovery LiveTrainForge with named:false, and tty_consents(interactive_tty, named) then denies consent even though the PRs were named on the command line (BUG-2547 already scopes recovery to requested PRs). Fix: named: prs_named_on_command_line(opts) for the recovery ports, plus a test that a recovered named member keeps TTY consent. Cost: a 30 min green train and ~35 min of merge wait.'
-status: NeedsAttention
+status: Completed
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-13T11:31:04.211841656Z
-modified_at: 2026-11-13T16:02:52.298365218Z
+modified_at: 2026-11-13T16:53:29.044173151Z
 req_type: Bug
 tags:
 - track:integration
@@ -65,6 +65,20 @@ history:
   author: joe
   timestamp: 2026-11-13T16:02:54.164721711Z
   changes: []
+- id: 01a1d5d4-15c9-7e13-a515-6dbcd500134b
+  author: aida-auto-bump
+  timestamp: 2026-11-13T16:53:28.649218861Z
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Completed
+processing_record:
+- id: 01a1d5d4-1754-77a2-959f-3a9c7caf4083
+  timestamp: 2026-11-13T16:53:29.044169153Z
+  agent: aida
+  commit_sha: 8265057964618d451894a955f2b90463164762aa
+  summary: 'Full three-file sweep: current exact-named recovery preserves TTY consent; sweep/non-TTY and mismatched-set refusals remain. Exact-head CI and named consent regressions pass. Historical promotion criteria are unchanged from base; checklist in .aida/review-3954-checklist.md.'
+  review_verdict: approved
 filed_at:
   code_sha: 11bf5e9a018e0a304ec1af0d43435c1886b4328f
   branch: main
@@ -74,11 +88,7 @@ filed_at:
   vendor: claude
   session: 01a1d4aa-9c99-76c2-ac94-7f0795f8a7f9
   harness_version: 2.1.323 (Claude Code)
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: Both BUG-2556 criteria and 18 journal tests pass; CLI guide still contradicts the new recovery consent policy.
-  recovery_hint: address the review findings, move BUG-2556 back to In Progress, and clear the PR hold only after approval
-  shelved_by: reviewer
-  shelved_at: 2026-11-13T13:26:21.876985036Z
+implementation_info:
+  implemented: false
+  completed_at: 2026-11-13T16:53:28.649186121Z
+  completion_sha: 8265057964618d451894a955f2b90463164762aa
