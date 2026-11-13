@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-10T06:40:07.764479561Z
-modified_at: 2026-11-12T23:56:31.011057971Z
+modified_at: 2026-11-13T00:22:34.305817481Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -245,6 +245,12 @@ comments:
   modified_at: 2026-11-12T23:20:34.423547844Z
   session_id: 01a1d19e-9195-7853-815f-b54753ebd973
   harness_version: 2.1.322 (Claude Code)
+- id: 01a1d248-e241-7711-a22e-cb02442bd485
+  author: joe
+  content: 'Round 4: retained fail-closed historical foreign-copy filtering and the single streaming ownership index already on this branch. Added a strict-reader refusal when discovery disappears after input was read, removed semantic review-payload cloning from fingerprint construction, and expanded one-pass coverage to 36 witnesses across 12 change buckets. Lane job j20261113T000213788-2326851-0 executed all 20 BUG-2517 tests successfully. CI log diagnosis: porcelain parity snapshot raced detached Git maintenance from fixture commits; fixture Git now disables maintenance.auto and gc.auto while keeping full metadata snapshots. Maintenance guard suite: 8 tests passed. Final parity rerun j20261113T000333387-2333761-0 is rebuilding the CLI. Edits remain uncommitted under the native-seat publication contract.'
+  created_at: 2026-11-13T00:22:34.305817481Z
+  modified_at: 2026-11-13T00:22:34.305817481Z
+  session_id: 01a1d22fe5ff
 history:
 - id: 01a1c4af-45a0-7a32-8edf-55980e6f5825
   author: joe
