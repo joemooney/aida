@@ -44,22 +44,10 @@ fn task_1471_show_docs_child() {
     println!("SHOW_DOCS_END");
 }
 
-/// This build's libtest runner, via the process-wide resolver (a raw
-/// executable lookup outside the resolver trips the TASK-1262 ratchet). An
-/// ambient AIDA_BIN would redirect the resolver, so prove it is a test runner.
+// Re-exec the exact running image, independent of Cargo layout and AIDA_BIN.
+// trace:BUG-2539 | ai:codex
 fn test_runner() -> std::path::PathBuf {
-    let runner = crate::resolve_aida_exe();
-    assert_eq!(
-        runner
-            .parent()
-            .and_then(|deps| deps.file_name())
-            .and_then(|name| name.to_str()),
-        Some("deps"),
-        "expected this build's test runner under target/<profile>/deps, got {}; \
-         unset AIDA_BIN and re-run",
-        runner.display()
-    );
-    runner
+    crate::test_exec::current_test_runner()
 }
 
 fn show(root: &Path, format: &str) -> String {

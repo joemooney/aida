@@ -50,19 +50,15 @@ fn doctor_toon_fixture_round_trips_scalars_and_tables() {
     assert!(rendered.contains("performance_audits[1]"));
 }
 
-// Copy the ownership-checked resolver harness from BUG-1745. The resolver is
-// intentional: TASK-1262's architecture guard exact-allowlists its literal call;
-// do not name the underlying OS lookup here.
-// trace:BUG-1749 | ai:codex
-// trace:BUG-1777 | ai:codex
+// Derive the CLI from this exact test image, accepting both Cargo layouts.
+// Retain the checkout/target ownership checks below for binary candidates.
+// trace:BUG-1749 trace:BUG-1777 trace:BUG-2539 | ai:codex
 fn built_aida_binary() -> std::path::PathBuf {
-    let runner = crate::resolve_aida_exe();
-    let deps = runner.parent().expect("test runner has a parent directory");
-    assert_eq!(deps.file_name().and_then(|name| name.to_str()), Some("deps"), "expected this build's runner under target/<profile>/deps; an ambient AIDA_BIN redirects the resolver");
+    let runner = crate::test_exec::current_test_runner();
+    let profile_dir = crate::test_exec::test_profile_dir(&runner).unwrap();
     let checkout = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
         .parent()
-        .unwrap();
-    let profile_dir = deps.parent().expect("deps has a target/<profile> parent");
+        .expect("the crate directory sits inside the workspace root");
     let binary_name = format!("aida{}", std::env::consts::EXE_SUFFIX);
     // The cross-platform workflow prebuilds release artifacts before running
     // debug test binaries; local `cargo test` builds only the current profile.
