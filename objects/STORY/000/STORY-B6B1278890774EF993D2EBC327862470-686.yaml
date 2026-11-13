@@ -30,7 +30,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-13T15:54:08.931576118Z
-modified_at: 2026-11-13T15:56:53.161145055Z
+modified_at: 2026-11-13T15:59:37.178977546Z
 req_type: Story
 tags:
 - architecture
@@ -46,6 +46,23 @@ comments:
   modified_at: 2026-11-13T15:54:57.923363611Z
   session_id: 01a1d54b-060a-7951-aa40-7f0fd928126f
   harness_version: 2.1.323 (Claude Code)
+- id: 01a1d5a1-524b-7460-b821-01832ba951e5
+  author: dirtlab
+  content: 'Implementation approach: retain existing authoritative carry-over proofs and add trusted fast/strict freshness policy with path overrides, shared enforcement at proof consumers, review-as-landed evidence, and patch-based blocking-round accounting. Validate policy and carry-over regressions with the lane cargo runner and check-ci-fast; independent STRICT review remains host-routed.'
+  created_at: 2026-11-13T15:58:01.803695899Z
+  modified_at: 2026-11-13T15:58:01.803695899Z
+  session_id: 01a1d5a03f62
+  harness_version: codex-cli 0.167.0
+- id: 01a1d5a2-c6da-7fb3-9d84-df0496a99eb2
+  author: dirtlab
+  content: |
+    Acceptance criteria and evidence: real-Git freshness/carry-over fixtures will exercise fast versus strict and merge-as-landed evidence. Targeted review_watch/carryover cargo tests and check-ci-fast are the LIGHT gate. Independent STRICT review must be routed by the host after publication.
+    Expected files: gate/review_freshness.rs, gate/review_carryover.rs, review_watch and review_watch_ready/forge modules, reviewer pickup/prompt integration, config schema/inventory and policy documentation.
+    Ambiguities / conflicts as questions: None at this stage; existing STORY-2694 coverage supplies the proactive proof path.
+  created_at: 2026-11-13T15:59:37.178977546Z
+  modified_at: 2026-11-13T15:59:37.178977546Z
+  session_id: 01a1d5a03f62
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1d59e-6b4b-7d10-8aea-02729132bc6f
   author: joe
