@@ -2131,6 +2131,16 @@ pub(crate) fn session_end_with_discard_unpushed(
             );
         }
     }
+    // trace:BUG-2549 | ai:codex — a retained sibling lease or open PR keeps
+    // the spec claimed; the last PR-less lease returns unfinished work.
+    if let Err(error) =
+        crate::lane_recovery::reconcile(&project_root, &target.scope, &target.branch, None)
+    {
+        eprintln!(
+            "warning: lane recovery for {} needs retry: {error:#}",
+            target.scope
+        );
+    }
     // The lease file's real home is `<main>/.aida/sessions/`, which outlives a
     // removed worktree. trace:STORY-2325 | ai:claude
     let ownership_root = lease_target

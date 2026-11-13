@@ -145,6 +145,8 @@ pub(crate) use time_args::{
 };
 mod work;
 #[cfg(test)]
+pub(crate) use work::canonical_resume_branch; // trace:BUG-2549 | ai:codex
+#[cfg(test)]
 pub(crate) use work::resolve_rework_review;
 pub(crate) use work::ResumePublicationFailure;
 pub(crate) use work::{
