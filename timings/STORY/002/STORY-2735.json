@@ -1,0 +1,64 @@
+{
+  "schema_version": 1,
+  "spec": "STORY-2735",
+  "publishes": [
+    {
+      "at": "2026-11-13T20:39:50.081121203Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-11-13T00:44:42.317736711Z",
+      "spec": "STORY-2735",
+      "seat": "advisor",
+      "kind": {
+        "event": "SpecRequeued",
+        "via": "queue-rework",
+        "actor": "joe",
+        "from": "Needs Attention",
+        "to": "Approved"
+      }
+    },
+    {
+      "ts": "2026-11-13T20:02:02.182060368Z",
+      "spec": "STORY-2735",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 3898,
+        "verdict": "APPROVED",
+        "reviewed_sha": "7b7ccdf00adb0a0b772a6a6fd1a2480a772527b6"
+      }
+    },
+    {
+      "ts": "2026-11-13T20:05:27.108198613Z",
+      "spec": "STORY-2735",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 3898,
+        "verdict": "APPROVED",
+        "reviewed_sha": "7b7ccdf00adb0a0b772a6a6fd1a2480a772527b6"
+      }
+    },
+    {
+      "ts": "2026-11-13T20:37:59.784864501Z",
+      "spec": "STORY-2735",
+      "seat": "advisor",
+      "kind": {
+        "event": "PrMerged",
+        "pr": 3898
+      }
+    },
+    {
+      "ts": "2026-11-13T20:39:48.198632439Z",
+      "spec": "STORY-2735",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "14346bb54d56ba43238dda007f1009a9aee66f17",
+        "pr": 3898,
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
