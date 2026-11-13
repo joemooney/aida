@@ -5094,7 +5094,7 @@ fn story_2749_track_reaches_the_vendor_child() {
         aida_core::vendors::LaunchVendor::Claude,
         aida_core::vendors::LaunchVendor::Codex,
     ] {
-        let child = crate::launch::profile::VendorProfile::for_vendor(vendor)
+        let child = crate::vendors::profile::VendorProfile::for_vendor(vendor)
             .env_policy(aida_core::launch_policy::LaunchKind::Fresh)
             .unwrap()
             .project(&parent, std::iter::empty())
