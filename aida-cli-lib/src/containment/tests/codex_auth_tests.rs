@@ -45,6 +45,26 @@ fn story_2593_binary_pin_never_executes_host_code() {
     assert!(error.to_string().contains("re-probe this codex binary"));
     let pin = format!("{:x}", Sha256::digest(script.as_bytes()));
     codex_auth::require_program(&program, &pin).unwrap();
+    // trace:STORY-2593 | ai:codex — metadata alone cannot establish that
+    // executable bytes still match the approved digest between launches.
+    let before = std::fs::metadata(&program).unwrap();
+    let mut changed = script.as_bytes().to_vec();
+    *changed.last_mut().unwrap() = b' ';
+    std::fs::write(&program, changed).unwrap();
+    std::fs::File::options()
+        .write(true)
+        .open(&program)
+        .unwrap()
+        .set_times(std::fs::FileTimes::new().set_modified(before.modified().unwrap()))
+        .unwrap();
+    let after = std::fs::metadata(&program).unwrap();
+    assert_eq!(before.dev(), after.dev());
+    assert_eq!(before.ino(), after.ino());
+    assert_eq!(before.len(), after.len());
+    assert_eq!(before.modified().unwrap(), after.modified().unwrap());
+    assert!(codex_auth::require_program(&program, &pin).is_err());
+    std::fs::write(&program, &script).unwrap();
+    codex_auth::require_program(&program, &pin).unwrap();
     std::fs::write(&program, "changed executable").unwrap();
     assert!(codex_auth::require_program(&program, &pin).is_err());
     assert!(!sentinel.exists());
