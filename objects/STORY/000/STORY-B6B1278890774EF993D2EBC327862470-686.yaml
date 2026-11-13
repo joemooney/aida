@@ -30,7 +30,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-13T15:54:08.931576118Z
-modified_at: 2026-11-13T22:21:31.361689005Z
+modified_at: 2026-11-13T22:36:17.212319951Z
 req_type: Story
 tags:
 - architecture
@@ -123,6 +123,20 @@ comments:
   modified_at: 2026-11-13T22:06:28.112868960Z
   session_id: 01a1d684-8599-70e0-a01c-714f54d2f8de
   harness_version: 2.1.323 (Claude Code)
+- id: 01a1d70d-efbc-7ab0-9b79-fbb80eaa578c
+  author: dirtlab
+  content: |-
+    Round 2 implementation follows the binding advisor ruling: both P1 findings and the single narrowed AC6 watcher regression are addressed. Current-base/delta evidence is now composed in the common queue reviewer launch path, including orchestrator phase-3 children with AIDA_REVIEW_VERDICT_FILE already set. Automatic train admission accepts authoritative carry-over approval while keeping destination-head CI, head stability, holds and active-review checks. Strict policy still refuses carried approval at the authoritative gate.
+
+    Changed files: aida-cli-lib/src/advisor_loop_train.rs; aida-cli-lib/src/queue_cmd/work.rs; aida-cli-lib/src/gate/review_freshness.rs; aida-cli-lib/src/tests/task_1945_review_watch_ready_tests.rs; aida-cli-lib/src/gate/tests/task_1960_carryover_tests.rs.
+
+    Validation: lane job j20261113T223347058-2-0 executed and passed 3 tests (phase-3 verdict-file current-base evidence; overlapping A/B clean base merge through watcher admission, approval gate and automatic train eligibility under fast versus strict; automatic train CI/hold/head checks). All 45 non-Cargo fast source gates passed across the initial/resumed runs after fixing the fixture Git maintenance guards. Formatting checked directly with rustfmt; git diff --check passed. Earlier focused runs failed only on fixture forge classification; final fixture and tests pass. untested=false.
+
+    Finding 3 (base-change conflict re-probing) remains the advisor-accepted, already-filed follow-up; the broader finding-4 matrix remains outside this narrowed round. No finding is disputed. Supplied codegraph client is absent, so navigation used rg. Independent review and host commit/publication remain host steps. No commit, push, PR creation, queue completion or review verdict was performed from this native seat. Edits remain uncommitted. Handoff: /tmp/story2763-round2-handoff.md.
+  created_at: 2026-11-13T22:36:17.212319951Z
+  modified_at: 2026-11-13T22:36:17.212319951Z
+  session_id: 01a1d70063c2
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1d59e-6b4b-7d10-8aea-02729132bc6f
   author: joe
