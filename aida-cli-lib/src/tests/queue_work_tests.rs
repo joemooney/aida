@@ -5220,8 +5220,11 @@ fn story_2749_shared_check_refuses_operator_track_when_unattended() {
 #[test]
 fn story_2749_headless_plan_refuses_an_operator_cluster_member() {
     use crate::queue_cmd::{QueueWorkEntry, QueueWorkMode, QueueWorkPlan};
-    let _env = crate::test_env::EnvVarsGuard::set(&[("AIDA_TRACK", "operator")]);
-    for anchor_tag in [None, Some("track:main")] {
+    // Each anchor is admitted by its launcher, so only the operator child can
+    // refuse: a free anchor on an operator launcher, and a `track:main`
+    // anchor on a main launcher.
+    for (launcher, anchor_tag) in [("operator", None), ("main", Some("track:main"))] {
+        let _env = crate::test_env::EnvVarsGuard::set(&[("AIDA_TRACK", launcher)]);
         for mode in [None, Some(aida_core::ExecutionMode::Drain)] {
             let mut epic = req("EPIC-2760", None, RequirementType::Epic);
             epic.status = RequirementStatus::Planned;
