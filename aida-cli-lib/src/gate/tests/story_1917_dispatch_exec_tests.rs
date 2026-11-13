@@ -142,8 +142,12 @@ impl ExecFixture {
         write_spec(&store, "TASK-100", &plain_req("TASK-100"));
         write_spec(&store, "STORY-1917", &plain_req("STORY-1917"));
 
-        let ambient =
-            crate::test_env::AmbientGuard::hermetic_with_seat(&root, "advisor", delegable);
+        let ambient = crate::test_env::AmbientGuard::hermetic_with_seat_and(
+            &root,
+            "advisor",
+            delegable,
+            &[("USER", Some(crate::test_env::HERMETIC_TEST_USER))],
+        );
         let principal = crate::current_user_id(None);
         let mandate_dir = tmp.path().join("mandates");
         std::fs::create_dir_all(&mandate_dir).unwrap();
@@ -4461,4 +4465,52 @@ fn bug_2390_occupancy_names_live_codex_and_claude_lanes() {
     assert_eq!(live_agent_in_worktree(&claude, &wt), Some(("claude", 42)));
     let elsewhere = vec![live(43, AgentKind::Codex, tmp.path().to_path_buf())];
     assert_eq!(live_agent_in_worktree(&elsewhere, &wt), None);
+}
+
+// trace:BUG-2524 | ai:codex
+#[test]
+fn bug_2524_seat_identity_sees_operator_mandate_and_authorizes_dispatch() {
+    let mut f = ExecFixture::new(&["advisor"]);
+    let minted = f.start_mandate(&[Scope::ShipHeld, Scope::Dispatch], false);
+    f.ambient.set_key("USER", &f.principal);
+    let parent = crate::gate::seat_authority::grant_check(&f.root)
+        .into_valid()
+        .unwrap();
+    let child = crate::gate::seat_authority::issue_child_from(
+        parent,
+        "advisor",
+        "codex-advisor-seat",
+        false,
+    )
+    .unwrap();
+    f.ambient
+        .set_key(crate::gate::seat_authority::GRANT_ENV, &child.id);
+    f.ambient.set_key("AIDA_USER", "codex-advisor-seat");
+    let principal = mandate::operator_principal();
+    assert_eq!(principal, minted.principal);
+    let now = Utc::now();
+    let (valid, warnings) = mandate::load_valid(&f.mandate_dir, &principal, now);
+    assert!(warnings.is_empty(), "{warnings:?}");
+    assert!(
+        matches!(mandate::state_at(&valid, now), mandate::MandateState::Active(m) if m.id == minted.id)
+    );
+    let caller = crate::gate::dispatch_authority::check_request_authority(
+        &f.root,
+        &f.mandate_dir,
+        &principal,
+        &DispatchRequestVerb::Take {
+            pr: 100,
+            branch: "claude/fix-100".into(),
+            spec: "TASK-100".into(),
+            brief: f.write_brief("bug-2524.md", "Fix the PR."),
+            vendor: None,
+        },
+        now,
+    )
+    .unwrap();
+    assert_eq!(caller.mandate.id, minted.id);
+    // A seat label alone cannot select another operator's record.
+    f.ambient.set_key("USER", "another-operator");
+    let (valid, _) = mandate::load_valid(&f.mandate_dir, &mandate::operator_principal(), now);
+    assert!(valid.is_empty());
 }

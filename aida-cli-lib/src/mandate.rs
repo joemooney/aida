@@ -754,7 +754,7 @@ pub(crate) fn current_status_line(
     audit_root: Option<&Path>,
     now: DateTime<Utc>,
 ) -> Option<String> {
-    let (valid, _) = load_valid(dir, &crate::current_user_id(None), now);
+    let (valid, _) = load_valid(dir, &crate::gate::mandate::operator_principal(), now);
     let state = state_at(&valid, now);
     if let Some(root) = audit_root {
         notify_expiry(dir, root, &state, now);
@@ -942,7 +942,7 @@ pub(crate) fn handle_mandate(action: &crate::cli::MandateAction) -> Result<()> {
             // trace:STORY-1700 | ai:claude
             let m = start_as_human(
                 &dir,
-                &crate::current_user_id(None),
+                &crate::gate::mandate::operator_principal(),
                 ttl,
                 reason.clone(),
                 *drive,
@@ -995,8 +995,12 @@ pub(crate) fn handle_mandate(action: &crate::cli::MandateAction) -> Result<()> {
         crate::cli::MandateAction::Renew { duration } => {
             // Same grammar and 24h cap as `start --ttl`, named for this flag.
             let ttl = duration.as_deref().map(parse_renew_for).transpose()?;
-            let (m, renewal, revived_from) =
-                renew_as_human(&dir, &crate::current_user_id(None), ttl, Utc::now())?;
+            let (m, renewal, revived_from) = renew_as_human(
+                &dir,
+                &crate::gate::mandate::operator_principal(),
+                ttl,
+                Utc::now(),
+            )?;
             // trace:STORY-2346 | ai:claude
             if let Some(old_id) = revived_from {
                 if let Some(root) = &audit_root {
@@ -1018,7 +1022,11 @@ pub(crate) fn handle_mandate(action: &crate::cli::MandateAction) -> Result<()> {
             Ok(())
         }
         crate::cli::MandateAction::Stop => {
-            let stopped = stop_as_human(&dir, &crate::current_user_id(None), Utc::now())?;
+            let stopped = stop_as_human(
+                &dir,
+                &crate::gate::mandate::operator_principal(),
+                Utc::now(),
+            )?;
             if stopped.is_empty() {
                 println!("No mandate was active.");
             }
@@ -1042,7 +1050,8 @@ pub(crate) fn handle_mandate(action: &crate::cli::MandateAction) -> Result<()> {
                 }
                 return Ok(());
             }
-            let (valid, warnings) = load_valid(&dir, &crate::current_user_id(None), now);
+            let (valid, warnings) =
+                load_valid(&dir, &crate::gate::mandate::operator_principal(), now);
             let state = state_at(&valid, now);
             for w in &warnings {
                 eprintln!("warning: {w}");

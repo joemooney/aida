@@ -459,7 +459,11 @@ the same train. If CI never starts or stays unreadable, the command exits
 non-zero and leaves the train PR open for inspection, with its members still
 eligible. Retry the same command to resume: before admitting riders, a non-dry
 train reads its intent journals under the main worktree's `.aida/train/` and
-reconciles the pinned heads with fresh forge confirmation. A completed merge is
+resumes only journals whose member PR set equals the requested PR set (order does
+not matter). `--all-ready` uses the discovered open PR set. Nonmatching journals
+are reported and retained while the requested train starts fresh. Matching journals
+reconcile pinned heads with fresh forge confirmation.
+<!-- trace:BUG-2547 | ai:codex --> A completed merge is
 not repeated; remaining member closes finish from forge state. Recorded retirement
 decisions are confirmed again before closure. Unknown evidence stops admission and
 retains the PR and journal for inspection. A permanent run lock serializes whole
@@ -478,14 +482,20 @@ these repairs.
 <!-- trace:BUG-2537 | ai:codex -->
 
 Recovery does not inherit terminal consent from the new invocation: recovered
-supervised members still need a current mandate cover, even when a human names
-other PRs at a terminal. Previously green trains wait again if CI is pending;
+supervised members still need a current mandate cover when a human repeats
+the member PR set at a terminal. Previously green trains wait again if CI is pending;
 confirmed red CI retires the train through the normal non-landing confirmation.
 Completed entries are fsynced and removed; startup also prunes valid old Done
 receipts. Unreadable journals, ambiguous lookups and changed head/base/branch
 pins stop admission and name the evidence to inspect.
 
-**Inspecting and discarding a blocked journal.** From the main worktree, open an
+**Inspecting and discarding a blocked journal.** Run
+`aida pr train --abandon <id>.json` to discard one local recovery journal. This
+acquires the train run lock and leaves forge PRs, branches and members unchanged.
+It also accepts malformed journals so they can be cleared after inspection.
+<!-- trace:BUG-2547 | ai:codex -->
+
+For manual inspection from the main worktree, open an
 operator shell holding the same permanent lock as train recovery:
 
 ```bash
@@ -1086,7 +1096,7 @@ project. Each batch, PR outcome and stop is logged to
 ### `aida pr emergency-land`
 
 <!-- trace:STORY-2732 | ai:codex -->
-`aida pr emergency-land N` is a GitHub-only escape hatch for an explicitly
+`aida pr emergency-land N` is a GitHub/GitLab escape hatch for an explicitly
 operator-requested urgent fix. It uses the same human-presence floor as `pr ship`: a human terminal or
 an operator-attributed script-deputy job. Captured stdout is allowed. It refuses
 headless, direct lane and implementer/reviewer sessions. The PR must be open,
@@ -1112,4 +1122,23 @@ spec. The skill submits the landing script with
 `aida deputy shell submit --file F --wait` and checks the job exit code;
 exit 75 means the job is still pending, not a successful landing. Claude,
 Codex and Antigravity receive the skill through the shared template inventory.
-GitLab support remains a separate follow-up; this command currently refuses it.
+<!-- trace:TASK-3788 | ai:codex -->
+On GitLab, `N` is the MR IID. The backup contains the project's
+`only_allow_merge_if_pipeline_succeeds`, `allow_merge_on_skipped_pipeline` and
+`only_allow_merge_if_all_discussions_are_resolved` settings. Only the first
+setting is temporarily disabled, and only when originally enabled.
+The command uses `glab api` to PUT the MR merge endpoint with squash enabled,
+auto-merge disabled, the reviewed head SHA and the MR title as its squash
+message. This also handles MRs with auto-merge already armed behind running
+or failed CI. The nullable skipped-pipeline setting is preserved and compared
+without writing it. Approval rules
+and protected-branch merge roles remain enforced; a merge refusal preserves
+GitLab's reason after restoring the pipeline requirement. Restoration runs on
+failure, interruption and panic, and all three saved settings are compared.
+Incomplete or unknown diff/mergeability evidence refuses before writes.
+The CI watch queries GitLab pipelines by the actual default-branch merge SHA
+(falling back to the squash SHA for fast-forward merges), rather than
+`glab ci status`'s current branch pipeline. On red CI, the suggested revert
+reads the commit's parents and uses `git revert -m 1` for a merge commit,
+or ordinary `git revert` for a single-parent commit. Pure-git projects refuse:
+there is no forge-side protection to lift; push the fix normally.
