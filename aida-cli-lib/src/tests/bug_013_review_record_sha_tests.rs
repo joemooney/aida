@@ -267,7 +267,7 @@ fn interactive_review_parent_collects_before_rewriting_child_evidence() {
     // The behavioral test below exercises the real collector without a TTY.
     // Also pin its connection to the TTY-only parent: an anchor alone cannot
     // delegate holding unless this parent actually collects the child's result.
-    let source = include_str!("../review_workflows.rs");
+    let source = include_str!("../review_commands.rs");
     let parent = source
         .split_once("pub(crate) fn handle_review_spec(")
         .unwrap()

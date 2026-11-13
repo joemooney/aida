@@ -46,7 +46,7 @@ const LEDGER: &[(&str, usize, &str)] = &[
     ("aida-cli-lib/src/kernel.rs", 2, "not a vendor child: gh binary probe"),
     ("aida-cli-lib/src/lane_env.rs", 1, "the in-process lane seat correction (Q2), not a spawn"),
     ("aida-cli-lib/src/lane_job.rs", 1, "not a vendor child: BUG-2383's sandboxed lane job runner (a cargo job, from main)"),
-    ("aida-cli-lib/src/review_workflows.rs", 1, "slice D: vendor adapter command"),
+    ("aida-cli-lib/src/review_commands.rs", 1, "slice D: vendor adapter command"),
     ("aida-cli-lib/src/mail_wake.rs", 1, "not a vendor child: the mail-wake helper binary"),
     ("aida-cli-lib/src/mailbox_wake_run.rs", 1, "slice C: Codex thread submit"),
     ("aida-cli-lib/src/mandate_drive.rs", 1, "generic helper: scrubbed_command"),

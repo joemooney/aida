@@ -1376,7 +1376,19 @@ mod branch_behind_main_tests;
 #[path = "tests/session_root_resolution_tests.rs"]
 mod session_root_resolution_tests;
 
-include!("review_workflows.rs");
+include!("review_commands.rs");
+
+// trace:TASK-3428 | ai:codex
+mod review_advisor_launch;
+use review_advisor_launch::{
+    derisk_launch_request, guided_review_launch_request, handle_derisk_command,
+    handle_guided_human_review,
+};
+mod review_prompt;
+use review_prompt::{
+    append_implementer_approach, extract_implementer_approach, generate_review_prompt,
+    review_prompt_test_commands_section, IMPLEMENTER_APPROACH_MARKER,
+};
 
 // trace:TASK-3428 | ai:codex
 mod review_git_evidence;
