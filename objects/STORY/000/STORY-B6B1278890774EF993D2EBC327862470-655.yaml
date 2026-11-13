@@ -30,8 +30,10 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-12T17:27:12.872067622Z
-modified_at: 2026-11-13T00:04:17.793704605Z
+modified_at: 2026-11-13T04:08:08.980621764Z
 req_type: Story
+tags:
+- track:integration
 relationships:
 - rel_type: Parent
   target_id: 01a1d0d7-0ba7-7393-9dd0-cb74bf0d205f
@@ -107,6 +109,12 @@ history:
 - id: 01a1d238-27d7-71b0-bfe4-4322d61b3579
   author: joe
   timestamp: 2026-11-13T00:04:18.007687353Z
+  changes: []
+- id: 01a1d317-68b3-7131-a11c-e318be94f3cf
+  author: joe
+  timestamp: 2026-11-13T04:08:09.139071422Z
+  session_id: 01a1d2e6-f5db-7f33-9b74-3ae5fdaf9e0c
+  harness_version: 2.1.323 (Claude Code)
   changes: []
 filed_at:
   code_sha: ec5a35a7108475b421baf1101b26159a7aa0fab9
