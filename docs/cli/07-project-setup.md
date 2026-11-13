@@ -828,7 +828,7 @@ a zero host override is an error. Lowering the cap prevents new starts and does
 not terminate existing lanes.
 
 Capacity uses the distinct `--lane-capacity` flag; host readiness checks
-remain a separate surface.
+use `--lane-host`, a separate surface.
 `aida doctor --lane-capacity --json` reports version-1 local capacity data: cap,
 source (`host`, `project`, or `cpu`), nproc, slot scope, occupied/free counts and
 reservation states. Without `--json` it prints the same observation for humans.
@@ -836,13 +836,14 @@ It observes the standalone launcher's host-wide `~/.aida/standalone-implementers
 slot lock and records, shared across participating clones for the same host user;
 it neither initializes nor reaps slots. A busy writer or unreadable reservation
 returns an error rather than a false free-slot count. Reservations from an
-unobservable PID namespace (including unstamped legacy records in isolated seats) remain
-`unknown` and occupy capacity; admission never prunes them. The printed slot scope
-identifies the shared state. This is a capacity observation, not readiness
-certification. Stop old launchers in every clone before
-cutover: older binaries use checkout-local slots and cannot see the new shared
+unobservable PID namespace (including unstamped legacy records in isolated
+seats) remain `unknown` and occupy capacity; admission never prunes them.
+The printed slot scope identifies the shared state. This is a capacity
+observation, not readiness certification. Stop old launchers in every clone
+before cutover: older binaries use checkout-local slots and cannot see the shared
 state. The new binary refuses while a live legacy slot remains in the current
-project; it never removes that slot or terminates its owner.
+project. Unknown legacy-slot visibility also refuses with host-retry guidance;
+it never removes that slot or terminates its owner.
 
 The advisor-approved legacy `[lane_host] allow_ungranted = true` opt-in is
 reported as a warning. It grants no new authority in this slice: host placement,
