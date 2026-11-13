@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-13T03:10:47.302266912Z
-modified_at: 2026-11-13T09:04:34.094634733Z
+modified_at: 2026-11-13T09:22:32.787442415Z
 req_type: Bug
 tags:
 - track:dell1
@@ -34,6 +34,13 @@ comments:
   modified_at: 2026-11-13T09:02:03.608591333Z
   session_id: 01a1d3ee-83e8-71b3-a2c5-aed5baed6fdc
   harness_version: 2.1.323 (Claude Code)
+- id: 01a1d437-3ed3-7c72-854b-c5652b458c70
+  author: dirtlab
+  content: 'Addressed the request-changes defects: recovery uses the sandboxed clone probe instead of host Git in seat clones; session end captures head evidence before removal/pool return and recovers only after shared-claim release; local and cross-clone claims (including unreadable shared evidence) retain In Progress; root-scoped legacy YAML/SQLite resolution and queue-selected --file storage are preserved; canonical recovery writers and transitive lane-result behavior are inventoried. Final lane-runner validation: bug_2549 11 passed, pickup_entry_tests 15 passed, bug_2516 4 passed, lane_result::tests 5 passed. Policy suites 64 passed; targeted rustfmt and git diff --check passed. Codegraph client at the supplied absolute path was unavailable; doctor confirmed missing, so navigation used rg. Native handoff: six changed files remain uncommitted for host publication and queue completion.'
+  created_at: 2026-11-13T09:22:32.787442415Z
+  modified_at: 2026-11-13T09:22:32.787442415Z
+  session_id: 01a1d4263e53
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1d2e2-f946-73a0-bdee-dad6c72c0bc8
   author: joe
