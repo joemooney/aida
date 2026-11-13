@@ -2,11 +2,14 @@
 
 <!-- trace:BUG-2531 | ai:codex -->
 
-Round 2 does **not** complete BUG-2531. Both review findings are accepted.
-No approved scope split exists. The prior per-file discovery budget allowed
-up to 64 GiB of payload work; that regression is removed in this round.
+The binding advisor ruling of 2026-11-12 13:51 UTC approves two slices of
+BUG-2531. PR #3872 is slice 1 and must use a `(Refs BUG-2531)` trailer.
+Both P2 findings from the 13:30Z review are accepted for slice 2 of this same
+spec; they do not require new draft tasks. Review slice 1 for budget enforcement,
+regressions and tests. This supersedes the earlier unapproved-split/punt narrative
+below; existing substrate punt or hold signals still require host resolution.
 
-Discovery now shares one 64 MiB/200,000-event budget across all active
+Discovery now shares one 128 MiB/200,000-event budget across all active
 change ledgers, including torn-line retries. A metadata size check refuses
 before payload I/O when a file cannot fit the remaining budget. Reads of a
 concurrently growing file are limited to the smaller of the file cap and
@@ -24,24 +27,18 @@ binding inventory with an append/index failure protocol, migration of existing
 ledgers, and snapshot validation. Until that mechanism exists, scanning is
 bounded and fails closed rather than silently trusting incomplete hints.
 
-Finding 1 is therefore split: the aggregate I/O/parse regression is repaired;
-bounded discovery of only relevant changes remains open. The new small-budget
-regressions prove an over-budget unrelated malformed file is refused before
-payload read/parse, and that unrelated files share the event limit. The large
-history regression now expects an unsafe refusal rather than endorsing an
-unbounded scan. Existing alias tests retain missing-index refusal coverage.
+Slice 2 must run in a new lane and branch:
 
-Finding 2 remains open: no automatic closed/merged rotation is implemented.
-`store::ledger_file`, `read_file`, append/import and checked direct reads still
-address the active directory. Selection rejects missing indexed changes.
-Moving files alone breaks those readers; pruning indexes can hide refusals.
-A complete implementation must preserve bindings to archived evidence, read
-archived changes directly, and serialize revival with append and rotation
-under the ledger-wide lock. Closure must be established independently of a
-verdict's untrusted `closed_by_merge` field. Retention and rotation regressions
-cannot honestly pass without that mechanism. TASK-3098 is a design follow-up,
-not authorization to drop this requirement. The explicit BUG-2531 punt keeps
-both unfinished parts visible and vetoes completion/publication.
+- Finding 1: discover only ledgers relevant to the requested change/spec without
+  trusting lossy by-spec hints. Missing/stale hints must not hide refusals, and
+  unrelated history beyond the discovery ceiling must not block selection.
+- Finding 2: merge/close must automatically archive the change ledger while
+  preserving indexed refusal evidence, direct reads, and reopened-change
+  append/revival. Include retention regressions. The manual 2026-11-12 01:35
+  archival must never be needed again.
+
+No slice-2 implementation is added to #3872. The raised discovery ceiling is a
+mitigation, not completion. Selected payloads retain their separate 64 MiB budget.
 
 The existing doctor capacity warning remains at 32 MiB, using metadata only.
 The 4,096-change/16,384-directory-entry limits remain; they are not retention.
@@ -51,6 +48,8 @@ Validation command:
 - `aida lane job run -- cargo test --profile agent -p aida-cli-lib --lib -- bug_2531`
 
 Results are recorded in the final handoff. No completion credit is claimed.
+
+The following is historical round-2 evidence, not current validation or scope:
 
 Round-2 handoff validation (2026-11-12):
 
@@ -64,3 +63,23 @@ Round-2 handoff validation (2026-11-12):
 - BUG-2531 punt recorded successfully; store change queued for host commit.
   Non-completing Refs publication declaration recorded; punt veto remains.
   Checkout edits remain uncommitted as required by the native-seat contract.
+
+
+Round-5 host handoff:
+
+- Publication subject: `[AI:codex] fix(gate): retain approved discovery mitigation and scope split (Refs BUG-2531)`.
+- PR #3872 title must end in `(Refs BUG-2531)`.
+- PR body text: “Slice 1 of BUG-2531, per joe's binding 2026-11-12
+  13:51 UTC ruling. Raises the aggregate discovery ceiling to 128 MiB while
+  retaining the 200,000-event ceiling and separate selected-payload budget.
+  Both P2 findings from the 13:30Z review are accepted as slice 2 of this same
+  spec, on a new branch/lane: relevant-only discovery without trusting lossy
+  hints, and automatic merge/close archival preserving refusal evidence,
+  direct reads and reopened-change revival. This PR does not complete BUG-2531.”
+- Native seat leaves edits uncommitted for the host to commit and publish.
+- Formatting and `git diff --check` passed. Final-source executed-test evidence
+  is pending job `j20261113T021212493-2-0`; earlier runs are superseded.
+- Host must verify the destination: this checkout HEAD is preserved WIP
+  `622c7081ad`, not reviewed PR head `78dfea63a192`. Do not replace unrelated
+  PR changes with this older checkout. Apply the slice-1 scope record and
+  preserve the reviewed mitigation when publishing.

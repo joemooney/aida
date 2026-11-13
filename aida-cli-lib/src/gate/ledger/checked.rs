@@ -36,6 +36,11 @@ pub(crate) const MAX_SELECTION_BYTES: u64 = 64 * 1024 * 1024;
 /// Aggregate events one selection may parse across every label.
 pub(crate) const MAX_SELECTION_EVENTS: usize = 200_000;
 
+/// Aggregate discovery I/O, including unrelated payloads and torn retries.
+/// Exhaustion refuses; this ceiling does not provide relevant-only discovery.
+// trace:BUG-2531 | ai:codex
+pub(crate) const MAX_DISCOVERY_BYTES: u64 = 128 * 1024 * 1024;
+
 // Test-only counters measure payload I/O and actual JSON parse attempts,
 // independently of budget accounting. Thread-local to isolate parallel tests.
 #[cfg(test)]
@@ -344,7 +349,13 @@ pub(crate) struct Discovery {
 /// Discover the gate ledger under `root`; `Ok(None)` when it does not exist.
 // trace:BUG-2403 | ai:claude
 pub(crate) fn discover(root: &Path) -> Result<Option<Discovery>, Unsafe> {
-    discover_with_budget(root, &mut Budget::default())
+    discover_with_budget(
+        root,
+        &mut Budget {
+            bytes: MAX_DISCOVERY_BYTES,
+            events: MAX_SELECTION_EVENTS,
+        },
+    )
 }
 
 fn discover_with_budget(

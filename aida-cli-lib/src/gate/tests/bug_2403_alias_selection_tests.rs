@@ -700,11 +700,11 @@ fn bug_2507_rework_imports_large_ledger_findings_and_refuses_over_limit() {
 fn bug_2531_unrelated_closed_history_refuses_at_discovery_limit() {
     let (_tmp, root, _) = two_label_fixture();
     let _env = uncontained();
-    // Ten valid files below the per-file/line caps, together above 64 MiB.
+    // Twenty valid files below the per-file/line caps, together above 128 MiB.
     // Neither the index nor closed_by_merge is trusted to skip discovery.
     let large = "x".repeat(7 * 1024 * 1024);
     let mut total = 0;
-    for n in 1..=10 {
+    for n in 1..=20 {
         let change = ChangeKey::pr(n);
         let mut rec = record("approved", OLD_HEAD, &ts(-600), &[&large]);
         rec.insert("closed_by_merge".into(), json!(OLD_HEAD));
@@ -715,7 +715,7 @@ fn bug_2531_unrelated_closed_history_refuses_at_discovery_limit() {
         total += body.len() as u64;
         std::fs::write(store::ledger_file(&root, change), body).unwrap();
     }
-    assert!(total > crate::gate::ledger::checked::MAX_SELECTION_BYTES);
+    assert!(total > crate::gate::ledger::checked::MAX_DISCOVERY_BYTES);
     // Missing hints cannot authorize skipping evidence. Until a complete
     // binding index exists, oversized discovery must refuse rather than do
     // unbounded unrelated work or return an older approval.
