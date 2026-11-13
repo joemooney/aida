@@ -23,7 +23,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-12T19:11:56.371806442Z
-modified_at: 2026-11-13T18:43:53.427120846Z
+modified_at: 2026-11-13T19:43:22.116214100Z
 req_type: Story
 tags:
 - operator-held
@@ -216,6 +216,13 @@ comments:
   content: '[advisor 11:44] Gap: main unmoved 10:35 -> 11:43 (68 min). Causes: (1) the #3824+#3832 deputy train job deadlocked waiting for every check on #3824 while merge-hold-gate stayed pending until the hold it would clear itself (~25 min); (2) autoland cannot clear holds (no TTY), so the operator cleared it at 11:00; (3) train #3960 CI ~25 min, merge step ~8 min. Fixes: rubberstamp mode (advisor clears met holds via TTY deputies); deputy wait loops must exclude merge-hold-gate/publish-merge-hold-status.'
   created_at: 2026-11-13T18:43:53.427120846Z
   modified_at: 2026-11-13T18:43:53.427120846Z
+  session_id: 01a1d5f7-27ab-7543-8808-b0ec6c271689
+  harness_version: 2.1.323 (Claude Code)
+- id: 01a1d66f-a004-73c0-bba9-450093c0ac67
+  author: joe
+  content: '[advisor 12:43] Gap alarm: main unmoved since 11:43 (60 min). Nothing main-track is approved at its head. Cause: the 10:46-11:46 review batches produced no verdicts; every reviewer refused ''stale base'', because main/integration moved during the staggered launches and retries did not update the branch. Fixed at 12:10 (the template updates the branch on every try). 8 reviews relaunched 12:17-12:25. Next: #3898 re-review (~12:50); promotion 6 (#3935/#3913/#3955) is scripted on deputy 2 behind canary #3905 at cc059f1.'
+  created_at: 2026-11-13T19:43:22.116214100Z
+  modified_at: 2026-11-13T19:43:22.116214100Z
   session_id: 01a1d5f7-27ab-7543-8808-b0ec6c271689
   harness_version: 2.1.323 (Claude Code)
 history:
