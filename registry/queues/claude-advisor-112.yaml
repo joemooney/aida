@@ -14,11 +14,3 @@
   added_at: 2026-11-12T16:50:37.407338177Z
   for_role: reviewer
   added_by_machine: imac
-- user_id: claude-advisor-112
-  requirement_id: 01a1cad9-80fe-7eb1-8f90-97c280413920
-  position: 15000
-  added_by: claude-advisor-112
-  note: auto-queue retry reused canonical review story; covers 1 spec
-  added_at: 2026-11-12T17:15:12.852993121Z
-  for_role: reviewer
-  added_by_machine: imac
