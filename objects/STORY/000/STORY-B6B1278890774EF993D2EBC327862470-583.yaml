@@ -20,7 +20,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-08T02:56:36.206726Z
-modified_at: 2026-11-13T22:12:15.916486820Z
+modified_at: 2026-11-13T23:15:57.309752212Z
 req_type: Story
 tags:
 - architecture
@@ -330,6 +330,13 @@ comments:
   content: 'Advisor 15:12: PARKED. The 14:17 dell1 lane pushed 3d82287, but PR #3921 is still CONFLICTING with main: a Codex native seat cannot record the merge (the BUG-2558 limitation, same as STORY-2593 and TASK-3783). Relaunch once #3953 is on main and dell1 is rebuilt, or hand the merge to a Claude seat.'
   created_at: 2026-11-13T22:12:15.916486820Z
   modified_at: 2026-11-13T22:12:15.916486820Z
+  session_id: 01a1d684-8599-70e0-a01c-714f54d2f8de
+  harness_version: 2.1.323 (Claude Code)
+- id: 01a1d732-40fd-7cb2-b2d3-5128ad47e04b
+  author: joe
+  content: 'Advisor 15:50: operator freed Claude capacity (excess weekly credits, expire 2026-11-15). This conflict merge goes to a Claude implementer lane on dell1 (--vendor claude), because a Codex native seat cannot record the merge of main. Scope: REAL merge of origin/main into the open PR branch (no rebase, no force push), resolving conflicts to keep main''s behaviour plus this spec''s change, then targeted tests and check-ci-fast, then push. Nothing else.'
+  created_at: 2026-11-13T23:15:57.309752212Z
+  modified_at: 2026-11-13T23:15:57.309752212Z
   session_id: 01a1d684-8599-70e0-a01c-714f54d2f8de
   harness_version: 2.1.323 (Claude Code)
 history:
