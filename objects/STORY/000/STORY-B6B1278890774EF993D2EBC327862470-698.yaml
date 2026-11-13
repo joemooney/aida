@@ -1,0 +1,32 @@
+id: 01a1d6fe-0058-78a3-9c49-cdedaf6ad0b5
+spec_id: STORY-b6b1278890774ef993d2ebc327862470-698
+agreed_id: STORY-2775
+title: 'aida deputy shell run --loop: restart the runner when it exits, with exit-reason logging and backoff'
+description: |-
+  Operator 2026-11-13 15:16 MST: the 'review' script deputy runner had exited silently (no runner log under ~/.aida/deputy-shell/review/), so reviews queued there would sit unrun until the operator noticed. Operator proposal: a --loop argument as a cheap restart mechanism. Put it in the CLI, not only the interactive aida shell function, so it also covers runners started from scripts/tmux/systemd.
+
+  Acceptance:
+  1. 'aida deputy shell run [--name N] --loop' re-runs the runner after any exit (clean exit, crash or signal other than SIGINT/SIGTERM from the operator), with exponential backoff (1s doubling to 60s, reset after 10 min of uptime).
+  2. Every exit is recorded with its rc/signal and time in ~/.aida/deputy-shell/<name>/runner.log, plus a one-line stderr notice in the terminal.
+  3. Ctrl-C or SIGTERM to the loop stops it (no restart) and leaves no orphaned runner or stale runner.lock.
+  4. 'aida deputy shell list --name N' shows loop mode and restart count.
+  5. The interactive aida shell function forwards --loop unchanged (no separate loop logic in the function).
+  6. The runner records why it exits (the reason today's review runner died is unknown; log it on the next occurrence).
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-13T22:18:52.888699274Z
+modified_at: 2026-11-13T22:18:52.888699274Z
+req_type: Story
+tags:
+- track:integration
+filed_at:
+  code_sha: 97d2f9fda0856183dee299b29760f3004c5db881
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 97d2f9fda08
+  vendor: claude
+  session: 01a1d684-8599-70e0-a01c-714f54d2f8de
+  harness_version: 2.1.323 (Claude Code)
