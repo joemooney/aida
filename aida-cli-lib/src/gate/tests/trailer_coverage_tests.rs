@@ -267,7 +267,7 @@ fn record_approval(root: &std::path::Path, head: &str, spec: &str) -> anyhow::Re
     };
     crate::with_review_pr_subject(subject, || {
         crate::gate::review_authority::with_identity_source(reviewer, || {
-            crate::handle_review_record_at(
+            crate::handle_review_record_fixture_at(
                 root.to_path_buf(),
                 spec,
                 "approved",
