@@ -1282,6 +1282,7 @@ const FIXTURE_CRATE_LIB: &str = "pub fn answer() -> u32 { 42 }\n\n\
 // trace:BUG-b6b1278890774ef993d2ebc327862470-157.acd61bb0 | ai:claude
 // trace:BUG-b6b1278890774ef993d2ebc327862470-157.Test | ai:claude
 #[test]
+#[cfg(target_os = "linux")]
 fn bug_2383_bwrap_real_cargo_test_job_reports_pass_and_fail_through_the_cli() {
     let Some(cargo) = std::env::var_os("CARGO").map(PathBuf::from) else {
         return skip_live("no CARGO in the test environment");

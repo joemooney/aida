@@ -479,6 +479,7 @@ fn job_env_carries_only_allow_listed_keys() {
 // Test projection without requiring bubblewrap or mutating the process env.
 // trace:TASK-3099 | ai:codex
 #[test]
+#[cfg(target_os = "linux")]
 fn task_3099_job_tmpdir_is_private_for_cargo_and_fast_gates() {
     let mut lane = LaneJobs {
         seat: PathBuf::from("/seat"),
