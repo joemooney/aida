@@ -18,10 +18,18 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-13T00:35:57.525111678Z
-modified_at: 2026-11-13T08:27:24.184239582Z
+modified_at: 2026-11-13T08:27:28.370572251Z
 req_type: Story
 tags:
 - track:integration
+comments:
+- id: 01a1d404-d2f2-7ba3-acbe-5febcc59c91c
+  author: joe
+  content: 'Advisor ruling 01:28: approved with the refined AC1-AC6 for the integration track. Scope stays narrow: seat:<name> resolution plus a reply-to by seat or role, and no new transport. Reuse the existing seat registry (handoff/agent new); do not add a second seat table. AC5 stays best-effort, and SendMessage delivery must never be recorded as a mailbox claim. Must not touch gate/.'
+  created_at: 2026-11-13T08:27:28.370572251Z
+  modified_at: 2026-11-13T08:27:28.370572251Z
+  session_id: 01a1d3ee-83e8-71b3-a2c5-aed5baed6fdc
+  harness_version: 2.1.323 (Claude Code)
 history:
 - id: 01a1d404-5b69-7883-a178-72d22e485802
   author: joe
