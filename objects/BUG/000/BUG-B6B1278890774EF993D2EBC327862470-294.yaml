@@ -9,12 +9,12 @@ description: |-
   - A job timeout never terminates the deputy runner (regression test).
   - review-watch survives a deputy exit (separate supervisor) or the deputy restarts itself; 'aida awaiting' surfaces a dead deputy as an operator item.
   - Train waits do not block unrelated short jobs (separate queue or async train).
-status: InProgress
+status: NeedsAttention
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-11T21:54:58.150187720Z
-modified_at: 2026-11-13T05:44:54.245502625Z
+modified_at: 2026-11-13T05:45:34.711629126Z
 req_type: Bug
 tags:
 - track:dell1
@@ -60,6 +60,15 @@ history:
   session_id: 01a1d36d96b6
   harness_version: codex-cli 0.167.0
   changes: []
+- id: 01a1d370-9af7-70b2-aa79-8113b40bc8c6
+  author: dirtlab
+  timestamp: 2026-11-13T05:45:34.711652974Z
+  session_id: 01a1d36d96b6
+  harness_version: codex-cli 0.167.0
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 filed_at:
   code_sha: d8b778daec2194bf3bc3e33e18479cce6a97a902
   branch: main
@@ -69,3 +78,9 @@ filed_at:
   vendor: claude
   session: 01a1cb56-f02b-7652-869e-3788560cbf1b
   harness_version: 2.1.322 (Claude Code)
+attention_reason:
+  category: design-fork
+  detail: Remaining acceptance changes deputy/review-watch supervisor authority and train queue routing. CLAUDE.md requires advisor approval of an architecture sketch before implementation; sketch and timeout regression investigation are recorded on the spec. Historical deputy death cause remains unconfirmed.
+  lean: Use an operator-started external deputy supervisor with existing authority expiry checks and a separate named train deputy queue; preserve Unknown liveness evidence.
+  raised_by: implementer
+  raised_at: 2026-11-13T05:45:34.711629126Z
