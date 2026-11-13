@@ -154,6 +154,18 @@ fn read_entry(
     cap: u64,
     budget: &mut Budget,
 ) -> Result<Option<Vec<u8>>, Unsafe> {
+    Ok(read_entry_meta(dir, name, cap, budget)?.map(|(body, _)| body))
+}
+
+/// [`read_entry`], plus the metadata of the file it read (taken before the
+/// read).
+// trace:BUG-2543 | ai:claude
+fn read_entry_meta(
+    dir: &File,
+    name: &str,
+    cap: u64,
+    budget: &mut Budget,
+) -> Result<Option<(Vec<u8>, std::fs::Metadata)>, Unsafe> {
     use std::os::unix::fs::MetadataExt;
     let file = match openat(dir, name, 0) {
         Ok(f) => f,
@@ -189,7 +201,7 @@ fn read_entry(
         )));
     }
     budget.spend_bytes(body.len() as u64)?;
-    Ok(Some(body))
+    Ok(Some((body, meta)))
 }
 
 /// Every event in `body`, strictly: a torn, oversized, unparseable,
@@ -309,17 +321,17 @@ fn read_change(
     Ok(read_change_sized(ledger, name, change, budget)?.map(|(events, _)| events))
 }
 
-/// [`read_change`], plus the byte length of the body it parsed.
+/// [`read_change`], plus the identity of the exact bytes it parsed.
 // trace:BUG-2543 | ai:claude
 fn read_change_sized(
     ledger: &File,
     name: &str,
     change: &str,
     budget: &mut Budget,
-) -> Result<Option<(Vec<GateEvent>, u64)>, Unsafe> {
+) -> Result<Option<(Vec<GateEvent>, FileIdentity)>, Unsafe> {
     let mut attempt = 0;
     loop {
-        let Some(body) = read_entry(ledger, name, MAX_LEDGER_BYTES, budget)? else {
+        let Some((body, meta)) = read_entry_meta(ledger, name, MAX_LEDGER_BYTES, budget)? else {
             return Ok(None);
         };
         let torn = !body.is_empty() && !body.ends_with(b"\n");
@@ -328,8 +340,8 @@ fn read_change_sized(
             std::thread::sleep(std::time::Duration::from_millis(20));
             continue;
         }
-        let len = body.len() as u64;
-        return parse_events(name, &body, change, budget).map(|events| Some((events, len)));
+        let identity = FileIdentity::of(&meta, &body);
+        return parse_events(name, &body, change, budget).map(|events| Some((events, identity)));
     }
 }
 
@@ -347,9 +359,9 @@ pub(crate) struct Discovery {
     by_spec: Option<File>,
     discovered: Vec<String>,
     owners: super::project::MiskeyOwners,
-    /// Change key -> bytes of its ledger this discovery indexed.
+    /// Change key -> identity of the ledger bytes this discovery indexed.
     // trace:BUG-2543 | ai:claude
-    lengths: std::collections::HashMap<String, u64>,
+    identities: std::collections::HashMap<String, FileIdentity>,
     /// What remains of the read and inventory budgets after the scan, so a
     /// listing that folds later appends charges them exactly as a fresh
     /// discovery would.
@@ -391,7 +403,7 @@ pub(crate) fn discover_with_budget(
     let mut inventory_budget = Budget::default();
     // trace:BUG-2517 | ai:claude
     let mut owners = super::project::MiskeyOwners::new(std::iter::empty());
-    let mut lengths: std::collections::HashMap<String, u64> = Default::default();
+    let mut identities: std::collections::HashMap<String, FileIdentity> = Default::default();
     for name in list_pinned(&ledger, &ledger_path)? {
         let Some(change) = name
             .strip_suffix(".jsonl")
@@ -409,14 +421,14 @@ pub(crate) fn discover_with_budget(
         discovered.push(key.clone());
         // One budget for the entire scan, including retries. Never reset this
         // per file: 4096 individually legal files can otherwise cost 64 GiB.
-        let Some((events, len)) = read_change_sized(&ledger, &name, &key, work)
+        let Some((events, identity)) = read_change_sized(&ledger, &name, &key, work)
             .map_err(|e| Unsafe(format!("refusing gate-ledger discovery: {e}")))?
         else {
             return Err(Unsafe(format!(
                 "refusing gate-ledger discovery: {name} vanished while it was read"
             )));
         };
-        lengths.insert(key.clone(), len);
+        identities.insert(key.clone(), identity);
         // trace:BUG-2517 | ai:claude
         inventory_budget.spend_bytes(owners.add(&events))?;
         for e in events.into_iter().filter(|e| e.verdict_record().is_some()) {
@@ -438,7 +450,7 @@ pub(crate) fn discover_with_budget(
     Ok(Some(Discovery {
         ledger,
         owners,
-        lengths,
+        identities,
         work_left,
         inventory_left: inventory_budget,
         by_spec,
@@ -615,8 +627,9 @@ pub(crate) fn filter_miskeyed_or_fail_closed(
         return events;
     }
     // A listing discovers once and filters every key against that index.
-    // Its reads are pinned to the bytes that discovery indexed
-    // ([`pinned_len`]), so events and ownership come from one snapshot.
+    // Its reads admit only bytes identical to what that discovery indexed
+    // ([`listed_body`]); any change discards the snapshot, so events and
+    // ownership come from one discovery, or both from fresh reads.
     // trace:BUG-2543 | ai:claude
     ensure_snapshot(root);
     let filtered = crate::gate::listing_scope::get(|m| {
@@ -632,16 +645,57 @@ pub(crate) fn filter_miskeyed_or_fail_closed(
     events
 }
 
-/// One listing's mis-key ownership index plus the ledger lengths it
-/// indexed (BUG-2543). The listing reads every change ledger only up to
-/// those lengths, so its events and its ownership index are one pinned
-/// snapshot. Appends this thread makes inside the listing are charged and
-/// folded in, not rediscovered (BUG-2551).
+/// The identity of one change ledger's bytes as a discovery read them:
+/// the file (device, inode), its length and modification time, and a
+/// SHA-256 of exactly the bytes read. A listing admits a later read only
+/// when all of it still matches (BUG-2543 round 4: fail closed on change).
+// trace:BUG-2543 | ai:claude
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct FileIdentity {
+    dev: u64,
+    ino: u64,
+    len: u64,
+    mtime_ns: i128,
+    sha256: [u8; 32],
+}
+
+impl FileIdentity {
+    fn of(meta: &std::fs::Metadata, body: &[u8]) -> Self {
+        use sha2::{Digest as _, Sha256};
+        use std::os::unix::fs::MetadataExt;
+        Self {
+            dev: meta.dev(),
+            ino: meta.ino(),
+            len: body.len() as u64,
+            mtime_ns: i128::from(meta.mtime()) * 1_000_000_000 + i128::from(meta.mtime_nsec()),
+            sha256: Sha256::digest(body).into(),
+        }
+    }
+
+    /// Whether `meta` (of the file about to be read) can still be this
+    /// identity's file, unchanged.
+    fn same_file(&self, meta: &std::fs::Metadata) -> bool {
+        use std::os::unix::fs::MetadataExt;
+        meta.is_file()
+            && meta.dev() == self.dev
+            && meta.ino() == self.ino
+            && meta.len() == self.len
+            && i128::from(meta.mtime()) * 1_000_000_000 + i128::from(meta.mtime_nsec())
+                == self.mtime_ns
+    }
+}
+
+/// One listing's mis-key ownership index plus the identity of every ledger
+/// it indexed (BUG-2543). A listing read admits a ledger's bytes only when
+/// they are identical to what discovery indexed; any difference discards
+/// the snapshot, and that key is read fresh, exactly as outside a listing.
+/// Appends this thread makes inside the listing are verified on disk, then
+/// charged and folded in, not rediscovered (BUG-2551).
 // trace:BUG-2543 BUG-2551 | ai:claude
 pub(crate) struct OwnersSnapshot {
     /// `None`: discovery failed or found no ledger; every vector fails closed.
     owners: Option<super::project::MiskeyOwners>,
-    lengths: std::collections::HashMap<String, u64>,
+    identities: std::collections::HashMap<String, FileIdentity>,
     work_left: Budget,
     inventory_left: Budget,
 }
@@ -651,14 +705,14 @@ impl OwnersSnapshot {
         match discover(root) {
             Ok(Some(discovery)) => Self {
                 owners: Some(discovery.owners),
-                lengths: discovery.lengths,
+                identities: discovery.identities,
                 work_left: discovery.work_left,
                 inventory_left: discovery.inventory_left,
             },
             // trace:BUG-2517 | ai:codex
             Ok(None) | Err(_) => Self {
                 owners: None,
-                lengths: Default::default(),
+                identities: Default::default(),
                 work_left: Budget {
                     bytes: 0,
                     events: 0,
@@ -684,31 +738,87 @@ fn ensure_snapshot(root: &Path) {
     }
 }
 
-/// Inside a listing, the bytes of `change`'s ledger its ownership snapshot
-/// indexed: every read in the listing stops there, so a ledger another
-/// writer grows (a copy, or a witness on any other ledger) is seen by the
-/// next listing, never half-seen by this one. `None` outside a listing, and
-/// when discovery failed (those reads fail closed instead).
+/// Drop `root`'s snapshot: the next listing read rediscovers.
 // trace:BUG-2543 | ai:claude
-pub(crate) fn pinned_len(root: &Path, change: ChangeKey) -> Option<u64> {
+fn discard_snapshot(root: &Path) {
+    crate::gate::listing_scope::put(|m| {
+        m.owners.remove(root);
+    });
+}
+
+/// What a listing may read for one change ledger.
+// trace:BUG-2543 | ai:claude
+#[derive(Debug)]
+pub(crate) enum Listed {
+    /// Read it fresh, exactly as outside a listing: no listing is active,
+    /// discovery failed (the filter then fails closed), or the ledger
+    /// changed since discovery (the snapshot is discarded).
+    Fresh,
+    /// No ledger at discovery, and still none.
+    Absent,
+    /// The ledger, verified identical to the bytes discovery indexed.
+    Pinned(Vec<u8>),
+}
+
+/// Inside a listing, `change`'s ledger exactly as its discovery indexed it,
+/// re-read and verified (file identity, length, mtime and a SHA-256 of the
+/// bytes), never truncated to an old length and never read past it. Any
+/// difference discards the snapshot and answers [`Listed::Fresh`].
+// trace:BUG-2543 | ai:claude
+pub(crate) fn listed_body(root: &Path, change: ChangeKey) -> Listed {
     if !crate::gate::listing_scope::active() {
-        return None;
+        return Listed::Fresh;
     }
     ensure_snapshot(root);
     let key = change.as_key();
-    crate::gate::listing_scope::get(|m| {
+    let Some(expected) = crate::gate::listing_scope::get(|m| {
         let snapshot = m.owners.get(root)?;
         snapshot.owners.as_ref()?;
-        Some(snapshot.lengths.get(&key).copied().unwrap_or(0))
-    })
+        Some(snapshot.identities.get(&key).cloned())
+    }) else {
+        return Listed::Fresh;
+    };
+    let path = super::store::ledger_file(root, change);
+    let verified = match expected {
+        None => match std::fs::symlink_metadata(&path) {
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Listed::Absent,
+            _ => None,
+        },
+        Some(expected) => read_identical(&path, &expected),
+    };
+    match verified {
+        Some(body) => Listed::Pinned(body),
+        None => {
+            discard_snapshot(root);
+            Listed::Fresh
+        }
+    }
 }
 
-/// This thread appended `events` to `change`'s ledger, growing it from
-/// `before` to `after` bytes. Inside a listing, fold them into the memoized
+/// The bytes at `path` when they are exactly `expected`'s, read with at
+/// most one byte past its length.
+// trace:BUG-2543 | ai:claude
+fn read_identical(path: &Path, expected: &FileIdentity) -> Option<Vec<u8>> {
+    use sha2::{Digest as _, Sha256};
+    let file = File::open(path).ok()?;
+    let meta = file.metadata().ok()?;
+    if !expected.same_file(&meta) {
+        return None;
+    }
+    let mut body = Vec::new();
+    file.take(expected.len + 1).read_to_end(&mut body).ok()?;
+    let digest: [u8; 32] = Sha256::digest(&body).into();
+    (body.len() as u64 == expected.len && digest == expected.sha256).then_some(body)
+}
+
+/// This thread appended `lines` (`events`) to `change`'s ledger, which was
+/// `before` bytes long. Inside a listing, fold them into the memoized
 /// ownership index instead of discarding it, so a listing that closes K
-/// rounds still discovers once (BUG-2551). When the ledger was not exactly
-/// as long as indexed (another writer appended), drop the index instead.
-// trace:BUG-2551 | ai:claude
+/// rounds still discovers once (BUG-2551), but only after re-reading the
+/// ledger and verifying it is exactly the indexed bytes followed by these
+/// lines. Anything else (another writer, a replacement, a limit a fresh
+/// discovery enforces) discards the snapshot.
+// trace:BUG-2551 BUG-2543 | ai:claude
 pub(crate) fn note_append(
     root: &Path,
     change: ChangeKey,
@@ -716,24 +826,57 @@ pub(crate) fn note_append(
     lines: &str,
     events: &[GateEvent],
 ) {
+    if !crate::gate::listing_scope::active() {
+        return;
+    }
     let key = change.as_key();
-    let after = before + lines.len() as u64;
-    crate::gate::listing_scope::put(|m| {
-        let Some(snapshot) = m.owners.get_mut(root) else {
-            return;
+    let Some(expected) = crate::gate::listing_scope::get(|m| {
+        let snapshot = m.owners.get(root)?;
+        snapshot.owners.as_ref()?;
+        Some(snapshot.identities.get(&key).cloned())
+    }) else {
+        return;
+    };
+    let path = super::store::ledger_file(root, change);
+    let appended = (|| {
+        use sha2::{Digest as _, Sha256};
+        let file = File::open(&path).ok()?;
+        let meta = file.metadata().ok()?;
+        let after = before + lines.len() as u64;
+        if after > MAX_LEDGER_BYTES || meta.len() != after {
+            return None;
+        }
+        let mut body = Vec::new();
+        file.take(after + 1).read_to_end(&mut body).ok()?;
+        if body.len() as u64 != after || &body[before as usize..] != lines.as_bytes() {
+            return None;
+        }
+        let prior = &body[..before as usize];
+        let unchanged = match &expected {
+            None => prior.is_empty(),
+            Some(id) => {
+                use std::os::unix::fs::MetadataExt;
+                let digest: [u8; 32] = Sha256::digest(prior).into();
+                id.dev == meta.dev()
+                    && id.ino == meta.ino()
+                    && id.len == before
+                    && digest == id.sha256
+            }
         };
-        if snapshot.owners.is_none() {
-            return;
-        }
-        let folded = snapshot.lengths.get(&key).copied().unwrap_or(0) == before
-            && snapshot.fold(&key, after, lines, events).is_ok();
-        if !folded {
-            // Another writer appended, or the append crosses a limit a fresh
-            // discovery enforces: the next key rediscovers (and refuses or
-            // fails closed exactly as a fresh read does).
-            m.owners.remove(root);
-        }
+        unchanged.then(|| FileIdentity::of(&meta, &body))
+    })();
+    let folded = appended.is_some_and(|identity| {
+        let mut ok = false;
+        crate::gate::listing_scope::put(|m| {
+            if let Some(snapshot) = m.owners.get_mut(root) {
+                ok = snapshot.fold(&key, identity, lines, events).is_ok();
+            }
+        });
+        ok
     });
+    if !folded {
+        discard_snapshot(root);
+    }
 }
 
 impl OwnersSnapshot {
@@ -742,23 +885,26 @@ impl OwnersSnapshot {
     fn fold(
         &mut self,
         key: &str,
-        after: u64,
+        identity: FileIdentity,
         lines: &str,
         events: &[GateEvent],
     ) -> Result<(), Unsafe> {
-        if !self.lengths.contains_key(key) && self.lengths.len() >= MAX_CHANGE_LEDGERS {
+        if !self.identities.contains_key(key) && self.identities.len() >= MAX_CHANGE_LEDGERS {
             return Err(Unsafe("too many change ledgers".into()));
         }
-        if after > MAX_LEDGER_BYTES || lines.lines().any(|l| l.len() > MAX_LINE_BYTES) {
+        if identity.len > MAX_LEDGER_BYTES || lines.lines().any(|l| l.len() > MAX_LINE_BYTES) {
             return Err(Unsafe("an oversized ledger or line".into()));
         }
         self.work_left.spend_bytes(lines.len() as u64)?;
         for _ in events {
             self.work_left.spend_event()?;
         }
-        let owners = self.owners.as_mut().expect("checked by the caller");
+        let owners = self
+            .owners
+            .as_mut()
+            .ok_or_else(|| Unsafe("no index".into()))?;
         self.inventory_left.spend_bytes(owners.add(events))?;
-        self.lengths.insert(key.to_string(), after);
+        self.identities.insert(key.to_string(), identity);
         Ok(())
     }
 }

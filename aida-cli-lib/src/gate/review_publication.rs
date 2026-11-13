@@ -1259,11 +1259,15 @@ fn scoped_list(store: &Path, tip: &str, top: &'static str, dir: &str) -> Result<
     let Some(all) = aggregate_names(store, tip, top) else {
         return list(store, tip, dir);
     };
+    // Exact-path parity with `list`: an entry AT `dir` (a blob or symlink
+    // where a directory belongs) is listed too, so it refuses here exactly
+    // as a single-key read refuses it. trace:BUG-2543 | ai:claude
     let prefix = format!("{dir}/");
-    let from = all.partition_point(|n| n.as_str() < prefix.as_str());
+    let from = all.partition_point(|n| n.as_str() < dir);
     let names: Vec<String> = all[from..]
         .iter()
-        .take_while(|n| n.starts_with(&prefix))
+        .take_while(|n| n.starts_with(dir))
+        .filter(|n| n.as_str() == dir || n.starts_with(&prefix))
         .cloned()
         .collect();
     ensure!(
@@ -1280,19 +1284,16 @@ fn spec_change(root: &Path, spec_ids: &[&str]) -> Result<Option<ChangeKey>> {
     let Some((store, tip)) = store_view(root)? else {
         return Ok(None);
     };
-    // trace:BUG-2543 | ai:claude
-    let index_empty = match aggregate_names(&store, &tip, SPEC_INDEX) {
-        Some(all) => all.is_empty(),
-        None => git(&store, &["ls-tree", &tip, "--", SPEC_INDEX])?.is_empty(),
-    };
-    if index_empty {
+    // The spec index is read per spec, as outside a listing: its namespace
+    // can outgrow one bounded read (BUG-2543 round 4).
+    if git(&store, &["ls-tree", &tip, "--", SPEC_INDEX])?.is_empty() {
         return Ok(None);
     }
     let snapshot = snapshot_at_head(root)?;
     let mut newest: Option<ChangeKey> = None;
     for member in snapshot.resolve(spec_ids).members {
         let dir = format!("{SPEC_INDEX}/{}", member.key);
-        for name in scoped_list(&store, &tip, SPEC_INDEX, &dir)? {
+        for name in list(&store, &tip, &dir)? {
             let Some(change) = name
                 .rsplit('/')
                 .next()

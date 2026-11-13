@@ -23,8 +23,9 @@ use std::rc::Rc;
 /// The per-root answers one listing shares.
 #[derive(Default)]
 pub(crate) struct Memo {
-    /// Ledger root -> mis-key ownership index and the ledger lengths it
-    /// covers; revalidated per key (see `ledger::checked::OwnersSnapshot`).
+    /// Ledger root -> mis-key ownership index and the identity of every
+    /// ledger it covers; each read is verified against it and any change
+    /// discards it (see `ledger::checked::OwnersSnapshot`).
     pub(crate) owners: HashMap<PathBuf, super::ledger::checked::OwnersSnapshot>,
     /// Project root -> publication store and its pinned tip.
     pub(crate) store_view: HashMap<PathBuf, Option<(PathBuf, String)>>,

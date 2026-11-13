@@ -164,19 +164,17 @@ pub(crate) fn read_file(root: &Path, change: ChangeKey) -> Vec<GateEvent> {
     parse_lines(&body)
 }
 
-/// [`read_file`] for a verdict reader: inside a listing, only the bytes the
-/// listing's discovery indexed (see `checked::pinned_len`). Writers keep
-/// using [`read_file`], which always sees the whole file.
+/// [`read_file`] for a verdict reader: inside a listing, the ledger only
+/// when it is byte-identical to what the listing's discovery indexed, and
+/// otherwise a fresh read with the snapshot discarded (see
+/// `checked::listed_body`). Writers keep using [`read_file`].
 // trace:BUG-2543 | ai:claude
 pub(crate) fn read_listed(root: &Path, change: ChangeKey) -> Vec<GateEvent> {
-    let Some(len) = super::checked::pinned_len(root, change) else {
-        return read_file(root, change);
-    };
-    let Ok(body) = std::fs::read(ledger_file(root, change)) else {
-        return Vec::new();
-    };
-    let indexed = &body[..body.len().min(len as usize)];
-    parse_lines(&String::from_utf8_lossy(indexed))
+    match super::checked::listed_body(root, change) {
+        super::checked::Listed::Pinned(body) => parse_lines(&String::from_utf8_lossy(&body)),
+        super::checked::Listed::Absent => Vec::new(),
+        super::checked::Listed::Fresh => read_file(root, change),
+    }
 }
 
 fn parse_lines(body: &str) -> Vec<GateEvent> {

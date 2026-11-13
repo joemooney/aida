@@ -1371,3 +1371,52 @@ fn bug_2543_listing_snapshot_reads_the_pinned_tip() {
     assert_ne!(head(&store).unwrap(), tip, "the store advanced");
     assert_eq!(snapshot_at_head(&f.a).unwrap().head, tip);
 }
+
+// BUG-2543 round 4 (review P1-b): a blob or a symlink committed where the
+// publications directory belongs refuses inside a listing exactly as a
+// single-key read refuses it; the aggregate listing never drops it.
+// trace:BUG-2543 | ai:claude
+#[test]
+fn bug_2543_publication_path_blob_or_symlink_refuses_in_listing() {
+    for symlink in [false, true] {
+        let tmp = tempfile::tempdir().unwrap();
+        let store = tmp.path();
+        git_ok(store, &["init", "-q"]);
+        git_ok(
+            store,
+            &["remote", "add", "origin", "https://example.invalid/r.git"],
+        );
+        let dir = evidence_dir("PR-1", PUBLICATIONS);
+        if symlink {
+            let path = store.join(&dir);
+            std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+            std::os::unix::fs::symlink("elsewhere", &path).unwrap();
+        } else {
+            write(store, &dir, "{}");
+        }
+        // A sibling that sorts between `dir` and `dir/` stays out.
+        write(store, &format!("{dir}-other/x.json"), "{}");
+        git_ok(store, &["add", "-A"]);
+        git_ok(store, &["commit", "-qm", "malformed publications path"]);
+        let tip = git_ok(store, &["rev-parse", "HEAD"]);
+        assert_eq!(
+            list(store, &tip, &dir).unwrap(),
+            vec![dir.clone()],
+            "symlink={symlink}"
+        );
+        assert!(
+            load_receipts(store, store, &tip, "PR-1").is_err(),
+            "symlink={symlink}"
+        );
+        let _scope = super::super::listing_scope::ListingScope::enter();
+        assert_eq!(
+            scoped_list(store, &tip, CHANGES, &dir).unwrap(),
+            vec![dir.clone()],
+            "symlink={symlink}"
+        );
+        assert!(
+            load_receipts(store, store, &tip, "PR-1").is_err(),
+            "symlink={symlink}: the listing keeps the single-key refusal"
+        );
+    }
+}

@@ -3034,12 +3034,13 @@ fn bug_2543_listing_discovers_once_and_matches_single_key_reads() {
     assert!(project::OWNERSHIP_WORK.with(|work| work.get()).0 >= CHANGES);
 }
 
-// BUG-2551: this thread's own appends inside a listing are folded into the
-// memoized ownership index (no rediscovery per closed round); what another
-// writer appends stays out of the listing's pinned snapshot.
+// BUG-2551: this thread's own appends inside a listing are verified and
+// folded into the memoized ownership index (no rediscovery per closed
+// round); another writer's append changes the ledger, so the listing
+// discards its snapshot and reads it fresh (BUG-2543 round 4).
 // trace:BUG-2551 BUG-2543 | ai:claude
 #[test]
-fn bug_2551_own_appends_fold_and_foreign_growth_stays_pinned() {
+fn bug_2551_own_appends_fold_and_foreign_growth_reads_fresh() {
     let (_tmp, root) = root();
     let _env = uncontained();
     let spec = GateSpec::with_key("BUG-1", None);
@@ -3075,13 +3076,15 @@ fn bug_2551_own_appends_fold_and_foreign_growth_stays_pinned() {
     let mut next: serde_json::Value = serde_json::from_str(line.lines().last().unwrap()).unwrap();
     next["seq"] = serde_json::json!(next["seq"].as_u64().unwrap() + 1);
     std::io::Write::write_all(&mut file, format!("{next}\n").as_bytes()).unwrap();
-    let pinned = project::events(&root, ChangeKey::pr(1)).len();
-    assert_eq!(builds(), 1);
-    // The listing reads the bytes its discovery indexed; the next listing
-    // (or any read outside one) sees the other writer's event.
-    assert_eq!(pinned, indexed, "the listing's read stays pinned");
+    let listed = project::events(&root, ChangeKey::pr(1)).len();
+    assert_eq!(builds(), 2, "the changed ledger discarded the snapshot");
     drop(_scope);
-    assert_eq!(project::events(&root, ChangeKey::pr(1)).len(), indexed + 1);
+    let fresh = project::events(&root, ChangeKey::pr(1)).len();
+    assert_eq!(fresh, indexed + 1);
+    assert_eq!(
+        listed, fresh,
+        "the listing answers what a fresh read answers"
+    );
 }
 
 // BUG-2543 (review P1): a listing never admits a foreign copy whose owner's
@@ -3271,4 +3274,154 @@ fn bug_2543_folded_append_over_a_line_limit_rediscovers() {
             != Some(&serde_json::json!("approved"))),
         "an oversized approval is never presented"
     );
+}
+
+// BUG-2543 round 4 (review P1-a): a ledger replaced after discovery by
+// equal-length content is never read through the snapshot: the listing
+// discards it and answers exactly what a fresh read answers.
+// trace:BUG-2543 | ai:claude
+#[test]
+fn bug_2543_equal_length_replacement_discards_the_snapshot() {
+    let (_tmp, root) = root();
+    let _env = uncontained();
+    let change = ChangeKey::pr(1);
+    let spec = GateSpec::with_key("BUG-1", None);
+    let old = record("rejected", &ts(1), Some(&attestation("reviewer")));
+    store::append_one(
+        &root,
+        event::verdict_event(&root, change, &old, Some(&spec)),
+    )
+    .unwrap();
+    let scope = crate::gate::listing_scope::ListingScope::enter();
+    project::OWNERSHIP_WORK.with(|work| work.set((0, 0)));
+    let builds = || project::OWNERSHIP_WORK.with(|work| work.get()).0;
+    let _ = project::newest_verdict_event(&root, "PR-1").unwrap();
+    assert_eq!(builds(), 1);
+    let path = store::ledger_file(&root, change);
+    let text = std::fs::read_to_string(&path).unwrap();
+    let replacement = text.replace("rejected", "approved");
+    assert_eq!(text.len(), replacement.len());
+    std::fs::write(&path, replacement).unwrap();
+    let listed = project::newest_verdict_event(&root, "PR-1").map(|e| e.verdict_record().cloned());
+    assert_eq!(builds(), 2, "the replaced ledger discarded the snapshot");
+    drop(scope);
+    let fresh = project::newest_verdict_event(&root, "PR-1").map(|e| e.verdict_record().cloned());
+    assert_eq!(listed, fresh);
+}
+
+// BUG-2543 round 4 (review P1-a): a record-preserving migration that
+// replaces (and lengthens) a ledger after discovery never truncates it to
+// the old length: the newest refusal still answers, never an older approval.
+// trace:BUG-2543 | ai:claude
+#[test]
+fn bug_2543_migration_after_discovery_keeps_the_newest_refusal() {
+    let (_tmp, root) = root();
+    let _env = uncontained();
+    let change = ChangeKey::pr(1);
+    for (n, decision) in [(1, "approved"), (2, "rejected")] {
+        let rec = record(decision, &ts(n), Some(&attestation("reviewer")));
+        store::append_one(&root, verdict(change, Some("BUG-1"), rec)).unwrap();
+    }
+    let scope = crate::gate::listing_scope::ListingScope::enter();
+    let verdict_of = |root: &std::path::Path| {
+        project::newest_verdict_event(root, "PR-1")
+            .unwrap()
+            .verdict_record()
+            .unwrap()["verdict"]
+            .clone()
+    };
+    assert_eq!(verdict_of(&root), "rejected");
+    let path = store::ledger_file(&root, change);
+    let original = std::fs::read_to_string(&path).unwrap();
+    let key = crate::gate::canon::SpecKey(uuid::Uuid::new_v4());
+    let (stamped, _) =
+        migrate::stamp_file(&original, &|_| crate::gate::canon::Resolution::Hit(key));
+    migrate::verify_file(original.as_bytes(), stamped.as_bytes()).unwrap();
+    assert!(stamped.len() > original.len());
+    let staged = path.with_extension("migrating");
+    std::fs::write(&staged, stamped).unwrap();
+    std::fs::rename(&staged, &path).unwrap();
+    assert_eq!(
+        verdict_of(&root),
+        "rejected",
+        "the listing keeps the refusal"
+    );
+    drop(scope);
+    assert_eq!(verdict_of(&root), "rejected");
+}
+
+// BUG-2543 round 4 (review P1-c): another writer that appends a foreign copy
+// to PR-1 and its phase-3 witness to PR-2 after discovery never leaks the
+// foreign approval into the listing; it answers what a fresh read answers.
+// trace:BUG-2543 | ai:claude
+#[test]
+fn bug_2543_concurrent_writer_after_discovery_answers_as_fresh() {
+    let (_tmp, root) = root();
+    let _env = uncontained();
+    let spec = GateSpec::resolve(&root, "BUG-2492");
+    let first = ChangeKey::pr(1);
+    let second = ChangeKey::pr(2);
+    let old = record("request_changes", &ts(1), Some(&attestation("reviewer")));
+    store::append_one(&root, event::verdict_event(&root, first, &old, Some(&spec))).unwrap();
+    let scope = crate::gate::listing_scope::ListingScope::enter();
+    let read = |root: &std::path::Path| {
+        project::newest_verdict_event(root, "PR-1").map(|e| e.verdict_record().cloned())
+    };
+    assert_eq!(read(&root), Some(Some(old.clone())));
+    {
+        let root = root.clone();
+        let spec = spec.clone();
+        std::thread::spawn(move || {
+            let mut foreign = record("approved", &ts(2), Some(&attestation("reviewer")));
+            foreign.insert("reviewed_sha".into(), serde_json::json!(OTHER_HEAD));
+            store::append_one(
+                &root,
+                event::verdict_event(&root, first, &foreign, Some(&spec)),
+            )
+            .unwrap();
+            foreign.insert("mode".into(), serde_json::json!(project::PHASE3_MODE));
+            store::append_one(
+                &root,
+                event::verdict_event(&root, second, &foreign, Some(&spec)),
+            )
+            .unwrap();
+        })
+        .join()
+        .unwrap();
+    }
+    let listed = read(&root);
+    drop(scope);
+    let fresh = read(&root);
+    assert_eq!(fresh, Some(Some(old)));
+    assert_eq!(listed, fresh);
+}
+
+// BUG-2543 round 4: a listing read never reads past the length discovery
+// indexed; a ledger that grew is read fresh instead (exactly as outside a
+// listing), never sliced from a whole-file read.
+// trace:BUG-2543 | ai:claude
+#[test]
+fn bug_2543_verified_listing_read_is_bounded_by_the_indexed_length() {
+    let (_tmp, root) = root();
+    let _env = uncontained();
+    let change = ChangeKey::pr(1);
+    let rec = record("rejected", &ts(1), Some(&attestation("reviewer")));
+    store::append_one(&root, verdict(change, Some("BUG-1"), rec)).unwrap();
+    let _scope = crate::gate::listing_scope::ListingScope::enter();
+    let len = std::fs::metadata(store::ledger_file(&root, change))
+        .unwrap()
+        .len();
+    match checked::listed_body(&root, change) {
+        checked::Listed::Pinned(body) => assert_eq!(body.len() as u64, len),
+        other => panic!("unchanged ledger must read pinned: {other:?}"),
+    }
+    let mut file = std::fs::OpenOptions::new()
+        .append(true)
+        .open(store::ledger_file(&root, change))
+        .unwrap();
+    std::io::Write::write_all(&mut file, b"\n").unwrap();
+    assert!(matches!(
+        checked::listed_body(&root, change),
+        checked::Listed::Fresh
+    ));
 }
