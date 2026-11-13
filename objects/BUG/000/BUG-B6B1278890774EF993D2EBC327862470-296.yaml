@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-12T08:35:37.046532324Z
-modified_at: 2026-11-13T05:31:52.034111254Z
+modified_at: 2026-11-13T05:48:10.473123257Z
 req_type: Bug
 tags:
 - track:integration
@@ -169,6 +169,19 @@ comments:
   created_at: 2026-11-13T05:31:52.034111254Z
   modified_at: 2026-11-13T05:31:52.034111254Z
   session_id: 92a24ff6-1324-4fe1-a02b-b2601f384b4b
+- id: 01a1d372-fb69-7063-aecd-3e183af03a93
+  author: joe
+  content: |-
+    ADVISOR RULING 2026-11-12 22:55 MST on docs/plans/2026-11-12-bug-2531-discovery-retention-sketch.md (design fork). Decision: APPROVE THE SPLIT, with the completeness mechanism approved and simplified for a single-user install (operator standing rule: prefer breaking fixes and one-time rewrites, no compat shims).
+
+    1. BUG-2531 = discovery completeness. Approved: write-ahead binding records persisted under the existing writer locks before any verdict append; a failed binding write blocks the append; selection reads only the requested labels' bindings plus their change ledgers; by-spec indexes stay hints. Writer compatibility: NO runtime version fence. Bump the gate-ledger format version so older binaries refuse to write (one live binary, `aida dev build` promotes atomically). Bootstrap is ONE explicit maintenance command (an `aida doctor` fix) that scans all active ledgers under the exclusive lock, writes bindings, and publishes the completeness marker. Missing or unsupported marker = fail closed (refuse, name the fix). Tamper/link-attack hardening is limited to refusing on missing/inconsistent bindings; no extra threat model. BUG-2531 completes on this slice. The existing safety-cap Refs commits get no completion credit (already true).
+    2. TASK-3098 = retention/archival, SEQUENCED AFTER slice 1 lands. Approved as written in the sketch: one archive path per change; every reader resolves active-then-archive; conflicting copies refuse; rotation only on observed forge closed/merged under the exclusive lock; revival restores to active before append (sequences stay monotonic). The integration seat proposes the reader-visibility protocol (shared read lock vs recoverable move) in its PR description; no new sketch round.
+    3. The "keep full scans permanently" alternative is REJECTED: full scans are tonight's availability problem (BUG-2543, BUG-2551).
+    Validation: the sketch's list, scoped to the slice under review; no 4096-change or crash-interleave suite for slice 1 beyond bootstrap interruption and the binding/append boundary.
+  created_at: 2026-11-13T05:48:10.473123257Z
+  modified_at: 2026-11-13T05:48:10.473123257Z
+  session_id: 01a1d2e6-f5db-7f33-9b74-3ae5fdaf9e0c
+  harness_version: 2.1.323 (Claude Code)
 history:
 - id: 01a1cee6-975b-7d40-8689-d35e1f109d99
   author: joe
