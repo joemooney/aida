@@ -174,6 +174,26 @@ impl std::error::Error for NeedsRework {}
 
 /// Compose current-base evidence before the reviewer is spawned. Neither the
 /// synthetic merge nor its baseline rewrites the branch or earns approval.
+/// Common queue reviewer launch boundary. Verdict-file ownership only selects
+/// who collects the verdict; it must never select the review's evidence.
+// trace:STORY-2763 | ai:codex
+pub(crate) fn compose_launch_prompt(
+    root: &Path,
+    role: &str,
+    pr: Option<u64>,
+    no_launch: bool,
+    prompt: &mut String,
+) -> Result<()> {
+    if !no_launch && role.eq_ignore_ascii_case("reviewer") {
+        if let Some(pr) = pr {
+            if let Some(composed) = review_prompt(root, pr, prompt)? {
+                *prompt = composed;
+            }
+        }
+    }
+    Ok(())
+}
+
 pub(crate) fn review_prompt(root: &Path, pr: u64, prompt: &str) -> Result<Option<String>> {
     use super::review_carryover as carry;
     // Strict projects do not need a new forge request or synthetic evidence.
@@ -413,6 +433,47 @@ pub(crate) fn record(
 #[cfg(test)]
 mod tests {
     use super::*;
+    // trace:STORY-2763 | ai:codex
+    #[test]
+    fn story2763_phase3_verdict_file_keeps_current_base_evidence() {
+        if crate::test_env::run_path_isolated_test() {
+            return;
+        }
+        use crate::gate::review_carryover::tests as carry;
+        let (fixture, approved) = carry::fixture();
+        let root = fixture.path();
+        // Keep Git traffic on the local bare origin while metadata uses gh.
+        carry::write(
+            root,
+            ".aida/config.toml",
+            "[review]\nfreshness = 'fast'\n[forge]\nprovider = \"github\"\n",
+        );
+        let bin = root.join("fake-bin");
+        std::fs::create_dir(&bin).unwrap();
+        crate::test_exec::write_executable(&bin.join("gh"), &format!(
+            "#!/bin/sh\nprintf '%s\\n' '{{\"baseRefName\":\"main\",\"headRefName\":\"pr\",\"headRefOid\":\"{approved}\",\"isCrossRepository\":false,\"isDraft\":false}}'\n"
+        ));
+        let path = format!("{}:/usr/bin:/bin", bin.display());
+        let verdict = root.join("phase3-verdict.json");
+        let _env = crate::test_env::AmbientGuard::hermetic_and(
+            root,
+            None,
+            &[
+                ("PATH", Some(&path)),
+                ("AIDA_CONTAINED", None),
+                ("AIDA_REVIEW_VERDICT_FILE", Some(verdict.to_str().unwrap())),
+            ],
+        );
+        let mut prompt = "/aida-review --pr 42".to_string();
+        compose_launch_prompt(root, "reviewer", Some(42), false, &mut prompt).unwrap();
+        let base = carry::git(root, &["rev-parse", "origin/main"]);
+        assert!(prompt.contains(&format!("main at {base}")), "{prompt}");
+        assert!(prompt.contains("Landed tree:"));
+        assert!(prompt.contains(&format!("Attest the original PR head {approved}")));
+        assert!(prompt.contains("reviewed change"));
+        assert!(!verdict.exists());
+    }
+
     #[test]
     fn review_watch_freshness_policy_is_closed_and_paths_raise_assurance() {
         let fast = Policy::parse("[review]\nfreshness = 'fast'\nfreshness_strict_paths = ['src/gate/**', '**/secret?.rs']").unwrap();

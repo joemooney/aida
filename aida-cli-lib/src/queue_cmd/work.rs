@@ -4825,6 +4825,19 @@ pub(crate) fn handle_queue_work(
             prompt.push_str(&headless_waiting_rule_suffix(&role));
         }
 
+        // Shared by standalone and orchestrator phase-3 launches, including
+        // children with AIDA_REVIEW_VERDICT_FILE already set.
+        // trace:STORY-2763 | ai:codex
+        if let Some(root) = project_root_for_config.as_deref() {
+            crate::gate::review_freshness::compose_launch_prompt(
+                root,
+                &role,
+                plan.review_target.map(|(_, pr)| pr),
+                no_launch,
+                &mut prompt,
+            )?;
+        }
+
         // STORY-281: reviewer pre-flight stale-base check. Fires whenever the
         // resolved scope is ANY forge's PR/MR AND the inferred role is the
         // reviewer — every other pickup (implementer, dialog, architect) skips
@@ -6615,9 +6628,6 @@ pub(crate) fn run_standalone_reviewer(
     refuse_unpresentable_contained_reviewer(contained)?;
     let watch_prompt = crate::review_watch::reviewer_launch_prompt(project_root, pr, prompt)?;
     let prompt = watch_prompt.as_deref().unwrap_or(prompt);
-    // trace:STORY-2763 | ai:codex
-    let freshness_prompt = crate::gate::review_freshness::review_prompt(project_root, pr, prompt)?;
-    let prompt = freshness_prompt.as_deref().unwrap_or(prompt);
     // Keep a recoverable final draft even if a tool refuses the recording.
     // No command from the draft is automatically replayed by this launcher.
     // Headless only: an interactive reviewer has a human watching, and its

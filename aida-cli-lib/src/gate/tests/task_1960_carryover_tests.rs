@@ -608,7 +608,7 @@ fn unresolvable_inputs_refuse() {
 }
 
 /// An attested, independent approval recorded at `sha`.
-fn approval(sha: &str) -> crate::gate::review_verdict::RecordedVerdict {
+pub(crate) fn approval(sha: &str) -> crate::gate::review_verdict::RecordedVerdict {
     use crate::gate::review_verdict::{RecordedVerdict, RecorderAttestation, VerdictKind};
     RecordedVerdict {
         kind: VerdictKind::Approved,
@@ -628,7 +628,7 @@ fn approval(sha: &str) -> crate::gate::review_verdict::RecordedVerdict {
 
 /// A ship policy under which [`approval`]'s attestation verifies and the
 /// shipper is not its author.
-fn policy(
+pub(crate) fn policy(
     v: &crate::gate::review_verdict::RecordedVerdict,
 ) -> crate::gate::ship::ShipApprovalPolicy {
     let mut p = crate::gate::ship::ShipApprovalPolicy {
