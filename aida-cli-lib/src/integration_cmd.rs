@@ -74,7 +74,7 @@ impl ListedSpec {
         tags.sort();
         Self {
             uuid: req.id,
-            display_id: req.display_id(),
+            display_id: req.display_id(), // canonical-id: sort key; printed through display_spec_id
             status: req.status.clone(),
             tags,
         }
@@ -119,7 +119,8 @@ pub(crate) fn resolve_trailer(
     };
     aida_core::node_alias::resolve_literal_first_opt(token, literal).or_else(|| {
         let mut hits = store.requirements.iter().filter(|r| {
-            [Some(r.display_id()), r.spec_id.clone(), r.agreed_id.clone()]
+            // canonical-id: matched against the token, never printed
+            [Some(r.display_id()), r.spec_id.clone(), r.agreed_id.clone()] // canonical-id: see above
                 .into_iter()
                 .flatten()
                 .any(|id| aida_core::id_identity::same_id(&id, token))
@@ -206,7 +207,7 @@ fn run_tags(root: &Path, dry_run: bool) -> Result<()> {
         ("untag", "--remove-tag", &removes),
     ] {
         for spec in specs {
-            let id = &spec.display_id;
+            let id = aida_core::node_alias::display_spec_id(&spec.display_id);
             if dry_run {
                 println!("  would {verb} {id}");
                 continue;
