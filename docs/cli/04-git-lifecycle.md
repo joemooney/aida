@@ -656,6 +656,23 @@ returns an error; a verdict anchor alone does not finish that protection.
 
 ---
 
+### `aida integration tags`
+
+**One line**: mark the open specs whose work has reached the integration branch but not yet `main`.
+
+**Mental model.** Approved PRs can land on an `integration` branch first and reach `main` later, in one promotion. Until that promotion, a spec's completing commit is on `origin/integration`, the spec is not complete, and nothing in its status says its work has landed anywhere. `integration tags` closes that gap. It reads the completing-commit trailers on `origin/integration` that are not yet on `origin/main`. It adds the `landed-in-integration` tag to each open spec they name, and removes the tag from specs that are closed or no longer ahead of `main`. Completion is unchanged: a spec still completes when its commit reaches `main`.
+
+**Reach for it when**: you merge a PR into integration, or after a promotion, so `aida list --tag landed-in-integration` shows what is waiting to be promoted.
+
+**Don't reach for it when**: you want to complete a spec or promote integration to `main`. This command edits tags only.
+
+**Key options (rationale only).**
+- `--dry-run` prints the tag changes without making them. Use it to check the plan before tagging after a large merge.
+
+**Gotchas.** It reads the local `origin/` refs, so run `git fetch` first if they may be stale. Otherwise a fresh landing is missed, or a spec that was just promoted keeps its tag until the next run.
+
+**Chains with**: `git fetch` → `aida integration tags --dry-run` → `aida integration tags` → `aida list --tag landed-in-integration`.
+
 ## The two-leg git model: `fetch` / `pull` / `push`
 
 Here's the thing raw git doesn't know about your AIDA project: **there are two branches that must move together** — your **code** branch, and the orphan **`aida-store`** branch that holds the specs. `aida fetch`/`pull`/`push` are the verbs that keep both legs in sync, because doing one and forgetting the other is the mistake everyone makes. Each takes `--code-only` / `--store-only` to scope to one leg when you mean to.
