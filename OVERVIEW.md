@@ -484,7 +484,7 @@ Its checked-in ledger permits reductions only and excludes tests, fixtures and
 docs, including `cfg(all(test, ...))` and qualified test attributes. Cheap
 source/literal candidate checks retain escaped strings before decoding; mutant
 fixtures exercise new literals, match arms and aliases.
-The effectful `launch/profile.rs` adapter references the same descriptor and retains the existing finalizer. Capabilities do not admit
+The effectful `vendors/profile.rs` adapter references the same descriptor and retains the existing finalizer. Capabilities do not admit
 launches or grant containment credit; AGY's outer-only containment candidate
 still refuses pending conformance. Hook layouts, event contracts and backend
 selection now drive the init hook consumer. Pure parsing/fixture validation stays

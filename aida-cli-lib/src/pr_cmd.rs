@@ -114,20 +114,26 @@ pub(crate) fn handle_pr_command(cmd: &PrCommand) -> Result<()> {
             )
         }
         PrCommand::Train {
+            abandon,
             prs,
             all_ready,
             dry_run,
             local_ci,
             max,
             no_pull,
-        } => crate::pr_train::pr_train_handler(&crate::pr_train::TrainOptions {
-            prs,
-            all_ready: *all_ready,
-            dry_run: *dry_run,
-            local_ci: local_ci.as_deref(),
-            max: *max,
-            no_pull: *no_pull,
-        }),
+        } => {
+            if let Some(name) = abandon {
+                return crate::pr_train::abandon_journal(name);
+            }
+            crate::pr_train::pr_train_handler(&crate::pr_train::TrainOptions {
+                prs,
+                all_ready: *all_ready,
+                dry_run: *dry_run,
+                local_ci: local_ci.as_deref(),
+                max: *max,
+                no_pull: *no_pull,
+            })
+        }
         // trace:STORY-1887 | ai:claude
         PrCommand::ShipBatch {
             prs,

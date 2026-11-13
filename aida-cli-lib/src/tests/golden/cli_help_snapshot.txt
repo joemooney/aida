@@ -16637,13 +16637,16 @@ and left out with a comment.
 `--dry-run` gates and builds the train and prints the plan without pushing anything; add `--local-ci
 <CMD>` to simulate the whole run with a local command as CI, against a checkout of each train tip.
 
-Usage: aida pr train [OPTIONS] <N|--all-ready>
+Usage: aida pr train [OPTIONS] <N|--all-ready|--abandon <JOURNAL>>
 
 Arguments:
   [N]...
           PR numbers to train, in landing order
 
 Options:
+      --abandon <JOURNAL>
+          Discard a local journal by filename; leave forge PRs and branches unchanged
+
       --all-ready
           Train every open PR on the default branch that passes the gates, oldest first
 
@@ -48621,6 +48624,11 @@ Working on aida itself
     ],
     "about": "Land a batch of approved PRs together through a merge train, so two PRs that are each green cannot break main together",
     "flags": [
+      {
+        "name": "abandon",
+        "takes_value": true,
+        "help": "Discard a local journal by filename; leave forge PRs and branches unchanged"
+      },
       {
         "name": "all-ready",
         "takes_value": false,

@@ -467,7 +467,11 @@ the same train. If CI never starts or stays unreadable, the command exits
 non-zero and leaves the train PR open for inspection, with its members still
 eligible. Retry the same command to resume: before admitting riders, a non-dry
 train reads its intent journals under the main worktree's `.aida/train/` and
-reconciles the pinned heads with fresh forge confirmation. A completed merge is
+resumes only journals whose member PR set equals the requested PR set (order does
+not matter). `--all-ready` uses the discovered open PR set. Nonmatching journals
+are reported and retained while the requested train starts fresh. Matching journals
+reconcile pinned heads with fresh forge confirmation.
+<!-- trace:BUG-2547 | ai:codex --> A completed merge is
 not repeated; remaining member closes finish from forge state. Recorded retirement
 decisions are confirmed again before closure. Unknown evidence stops admission and
 retains the PR and journal for inspection. A permanent run lock serializes whole
@@ -486,14 +490,20 @@ these repairs.
 <!-- trace:BUG-2537 | ai:codex -->
 
 Recovery does not inherit terminal consent from the new invocation: recovered
-supervised members still need a current mandate cover, even when a human names
-other PRs at a terminal. Previously green trains wait again if CI is pending;
+supervised members still need a current mandate cover when a human repeats
+the member PR set at a terminal. Previously green trains wait again if CI is pending;
 confirmed red CI retires the train through the normal non-landing confirmation.
 Completed entries are fsynced and removed; startup also prunes valid old Done
 receipts. Unreadable journals, ambiguous lookups and changed head/base/branch
 pins stop admission and name the evidence to inspect.
 
-**Inspecting and discarding a blocked journal.** From the main worktree, open an
+**Inspecting and discarding a blocked journal.** Run
+`aida pr train --abandon <id>.json` to discard one local recovery journal. This
+acquires the train run lock and leaves forge PRs, branches and members unchanged.
+It also accepts malformed journals so they can be cleared after inspection.
+<!-- trace:BUG-2547 | ai:codex -->
+
+For manual inspection from the main worktree, open an
 operator shell holding the same permanent lock as train recovery:
 
 ```bash
