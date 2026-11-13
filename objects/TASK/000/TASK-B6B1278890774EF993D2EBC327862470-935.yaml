@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T10:46:16.888539142Z
-modified_at: 2026-11-13T03:24:27.718456188Z
+modified_at: 2026-11-13T03:30:18.056280757Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -58,6 +58,16 @@ comments:
     Zero-legacy closure remains unachieved: 56 files / 113 syntax allowances remain. Nine matches are repository/build probes, while function references in drain/solo acquisition escape the call-only pattern. Pool/retiring records lack namespace/boot and old serde readers accept added fields; DrainLock also lacks namespace and read_lock maps parse refusal to no lock. A new incompatible lock version alone therefore permits old drain launchers to acquire, rather than refusing. The signed sketch requires reader-first or safely refusing version boundaries. Request advisor/operator selection of reader-first coordinated rollout versus a host-enforced legacy-launcher fence before these owner writers change. Do not represent this artifact-only progress as S5 completion. No Git metadata mutation or publication performed.
   created_at: 2026-11-13T03:24:09.284195662Z
   modified_at: 2026-11-13T03:24:09.284195662Z
+  session_id: 01a1d2ea9733
+  harness_version: codex-cli 0.167.0
+- id: 01a1d2f4-c148-7211-b626-c1762a72af61
+  author: dirtlab
+  content: |
+    Final validation: lane jobs exited 0 with executed-test results: j20261113T032159197-2-0 core task_3367 regression 1 passed; j20261113T032305691-2-0 TASK-1750 guard 4 passed; j20261113T032315946-2-0 proc_identity + cache_location 19 passed; j20261113T032317119-2-0 review_watch 136 passed, including existing unknown reservation backstop regression and leaked fetch-ref cleanup. Python ownership ratchet 2 passed. rustfmt --check on all changed Rust files and git diff --check passed. untested=false for the changed artifact readers. No zero-legacy acceptance claim.
+
+    Six uncommitted files: aida-core/src/db/cache_location.rs; aida-core/src/proc_identity_tests.rs; aida-cli-lib/src/review_watch_forge.rs; aida-cli-lib/src/tests/fixtures/proc_identity_legacy_baseline.json; tests/test_ownership_liveness_ratchet.py; docs/internal/testing/proc-identity-s5-inventory.md. TASK-3367 was punted to Needs Attention for owner-record reader/writer rollout selection. That punt is a publication veto; no ship declaration, commit, push, PR, queue completion or review verdict was performed. Host should retain edits for triage; remaining inventory is 56 files / 113 syntax allowances.
+  created_at: 2026-11-13T03:30:18.056280757Z
+  modified_at: 2026-11-13T03:30:18.056280757Z
   session_id: 01a1d2ea9733
   harness_version: codex-cli 0.167.0
 history:
