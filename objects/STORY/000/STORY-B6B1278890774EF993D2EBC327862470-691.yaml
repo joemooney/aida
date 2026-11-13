@@ -1,0 +1,61 @@
+id: 01a1d5d3-974e-74b3-9772-ec37ab9f141d
+spec_id: STORY-b6b1278890774ef993d2ebc327862470-691
+agreed_id: STORY-2768
+title: 'Landing reconciler: one level-triggered ''aida land'' loop owns every open PR (derive state, one action per state), replacing review-watch admission, autoland, the spool and advisor sweeps'
+description: |
+  ## Why (operator 2026-11-13 09:51: "we need to get out of this hole, or terminate AIDA")
+  On 2026-11-13, main went from 07:43 to 09:48 with no merge while about 25 PRs were open. About ten independent mechanisms each stopped PRs: stale-base refusal at pickup, a dirty or duplicated store, the round cap, no retry after a failed launch (review-watch phase=failed), reviewers that could not bind a verdict, rework holds left over from older heads, "verdict history unreadable", the review concurrency cap, one-job-at-a-time deputies, and mandate expiry. Each stores its own state (watcher phases, holds, spool files, leases, deputy queues), and no component owns a PR end to end; the advisor's 10-minute sweeps act as a manual reconciler. Stuck state is never cleaned up (`aida ps` shows "Salvageable" and "Orphaned In-Progress" lists).
+
+  ## Design: one level-triggered landing reconciler (`aida land`)
+  **Principle: derive, don't store.** Every pass recomputes each open PR's state from facts: GitHub (head, base, mergeability, CI on the head), the gate ledger (verdicts, carry-over proofs), and live child processes. No per-PR phase is persisted, so no state can go stale. Each derived state maps to exactly ONE idempotent action. Running a pass twice is safe; a missed pass loses nothing.
+
+  **Runs as:** a single long-lived `aida land run` process in the operator's deputy terminal (it holds the grant, so it can dispatch, clear holds and train). Every reviewer and lane it launches is ITS child process, so verdicts always bind (fixes the ancestry failure) and liveness is known exactly (no pgrep or lease guessing).
+
+  **Per-PR states (in precedence order) and their single action:**
+  1. CONFLICT: `git merge-tree` of head into the base has conflicts → dispatch rework (if no live lane for the spec).
+  2. REVIEWING: our child reviewer is alive → nothing; past 45 min → kill it and relaunch once, then mark BLOCKED(reason).
+  3. APPROVED-CONTENT: an approval whose PR content equals the head's (carry-over proof: clean base merges plus equal patch-id; STORY-2763 AC1) → go to step 6.
+  4. CHANGES-REQUESTED at the current content → dispatch rework (if no live lane); content-unchanged heads consume no round (STORY-2763 AC3); after 3 content rounds → BLOCKED(needs advisor ruling).
+  5. NEEDS-REVIEW → launch a reviewer (child) against the merge-tree of the head into the current base (STORY-2763 AC2), limited by a concurrency cap; a pickup failure is retried next pass (no terminal failed state).
+  6. READY = APPROVED-CONTENT + no unmet hold. Holds are evaluated by release condition, not by head: a hold from an older round whose condition (approval covering the content) is met is cleared by the reconciler under the mandate.
+  7. LANDING: READY PRs are batched into ONE train at a time (main track) or reported to the integration seat (integration track); the train's own CI is the freshness gate. No per-PR branch updates.
+  8. BLOCKED(reason, since): the only terminal-ish state; always shows its reason and age; the advisor's queue is exactly the BLOCKED list.
+
+  **Housekeeping on every pass (removes the warning lists):** a dead lane with uncommitted work → salvage-commit and push to its branch, end the lease, dispatch rework if a PR exists; a flag-only In-Progress spec with no live child and no PR → reset to Approved; a stale reviewer worktree → remove.
+
+  **WIP limit (dispatcher-enforced):** when open PRs >= `land.wip_max` (default 6), new-spec lanes are refused; rework and review still run.
+
+  **One status view:** `aida land status` prints the derived table (PR, track, state, action taken, since, reason). It's the same code path as the pass in dry-run mode, so the view cannot disagree with the actor. `aida ps` links to it.
+
+  **Assurance policy:** honours STORY-2763's `[review] freshness = fast|strict` and per-path strict globs. Under strict: no carry-over, re-review every head, stale bases refused.
+
+  **What it REPLACES (deleted at slice 3, not kept alongside):** review-watch admission and readiness (`review_watch.rs`, `review_watch_ready.rs`: about 4.1k lines), ~/bin/aida-autoland.sh plus the spool and dispatch loop, advisor sweeps as the landing mechanism, and the per-PR deputy review scripts. The deputies stay only for one-off operator acts.
+
+  ## Slices (each must be live within hours, integration track; it reaches the live binary on merge)
+  - **S1 (read-only, target today):** `aida land status`: the derivation engine plus the table, using existing primitives (gh, gate ledger, carry-over `prove_for_refusal` in dry-run mode, merge-tree). Acceptance: on the live queue it classifies every open PR, and for the 2026-11-13 09:42 readiness snapshot it names the correct single action per PR (verified against the advisor's manual decisions in the STORY-2737 gap comments).
+  - **S2 (act):** `aida land run --once` and `run` (loop): steps 1-7 with children as reviewers and lanes, a concurrency cap and a 45-min reviewer timeout. Acceptance: with autoland stopped, a PR that is approved, then made stale by a landing on main, then merged cleanly with main ships with no human or advisor action; a transient pickup failure is retried on the next pass.
+  - **S3 (housekeeping, WIP, delete):** salvage and reset, the WIP limit, removal of review-watch admission and autoland, and `aida ps` pointing at the land status. Acceptance: the `aida ps` Salvageable and Orphaned lists are empty after one pass on the current machine state.
+
+  ## Success metric (decides whether AIDA continues; operator 09:51)
+  Within 48h of S2 going live, on active days: median of at least 1 merge/hour to main, approved-to-merged median under 60 min, and no PR in a non-BLOCKED state for more than 2h. Measured from git log and the gate ledger; reported on STORY-2737.
+status: Draft
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-13T16:52:56.270142081Z
+modified_at: 2026-11-13T16:52:56.270142081Z
+req_type: Story
+tags:
+- architecture
+- keystone
+- landing
+- track:integration
+filed_at:
+  code_sha: 8265057964618d451894a955f2b90463164762aa
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 3631f7ca055
+  vendor: claude
+  session: 01a1d54b-060a-7951-aa40-7f0fd928126f
+  harness_version: 2.1.323 (Claude Code)
