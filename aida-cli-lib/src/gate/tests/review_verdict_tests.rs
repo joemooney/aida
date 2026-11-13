@@ -1399,6 +1399,13 @@ const SHA_R2: &str = "cd21a1dc0a9e2222222222222222222222222222";
 
 fn record_pr(root: &Path, pr: &str, verdict: &str, sha: &str, by: &str, findings: &[String]) {
     let path = verdict_path(root, pr);
+    // trace:STORY-2698 | ai:codex — explicitly clear resolved findings.
+    let clear = vec![String::new()];
+    let findings = if verdict == "approved" && findings.is_empty() {
+        &clear
+    } else {
+        findings
+    };
     record_verdict_at_path(
         root,
         &path,
@@ -1750,7 +1757,8 @@ fn bug_1505_reader_resolves_legacy_key_aliases() {
                      "reviewer":"claude advisor","date":"2026-09-19",
                      "blocking_findings":["f1"]}"#;
     let v = parse_recorded_verdict(legacy).unwrap();
-    assert_eq!(v.kind, VerdictKind::Approved);
+    // trace:STORY-2698 | ai:codex — unclassified legacy findings block.
+    assert_eq!(v.kind, VerdictKind::RequestChanges);
     assert_eq!(v.reviewed_sha.as_deref(), Some("c87ac9e4"));
     assert_eq!(v.recorded_by.as_deref(), Some("claude advisor"));
     assert_eq!(v.recorded_at.as_deref(), Some("2026-09-19"));
@@ -1972,7 +1980,8 @@ fn a_fresh_approval_at_a_new_head_reports_a_new_round() {
         )
     );
     // The BUG-2136 scenario: an approval after a merge from main, at a new head.
-    let second = record_and_describe(dir.path(), "approved", sha2, &[]);
+    // trace:BUG-2527 | ai:codex — resolved findings must be cleared explicitly.
+    let second = record_and_describe(dir.path(), "approved", sha2, &[String::new()]);
     assert_eq!(
         second,
         format!(
@@ -2291,7 +2300,7 @@ fn pr_keyed_shaless_round_deduplicates_when_identical_and_counts_as_prior_round_
     let second_obj = build_verdict_object(
         dir.path(),
         &path,
-        Some("approved"),
+        Some("request-changes"),
         Some(sha),
         None,
         None,
@@ -2338,7 +2347,7 @@ fn per_sha_archive_carries_unarchived_rounds() {
         Some(SHA_R1),
         None,
         None,
-        &[],
+        &[String::new()],
         "y",
     )
     .unwrap();
@@ -2882,4 +2891,192 @@ fn task2964_uncertain_repeated_order_cannot_erase_all_evidence() {
     let bodies = [first.to_string(), second.to_string(), third.to_string()];
     assert!(reconcile_artifacts_for_sha(bodies.iter().map(String::as_str), HEAD).is_err());
     assert!(corpus_hold_at_head(&bodies, Some(HEAD), false).is_some());
+}
+
+// trace:STORY-2696 | ai:codex
+#[test]
+fn story_2696_policy_changes_retain_spec_and_pr_rounds() {
+    for id in ["STORY-2696", "PR-99"] {
+        for previous_policy in [None, Some(true), Some(false)] {
+            let dir = TempDir::new().unwrap();
+            let path = verdict_path(dir.path(), id);
+            let sha = "4444444444444444444444444444444444444444";
+            let mut before = build_verdict_object(
+                dir.path(),
+                &path,
+                Some("approved"),
+                Some(sha),
+                None,
+                None,
+                &[],
+                "reviewer",
+            )
+            .unwrap();
+            if let Some(policy) = previous_policy {
+                before.insert(
+                    ATTESTATION_KEY.into(),
+                    serde_json::json!({"sha":sha,
+                    "carry_eligible":policy}),
+                );
+            }
+            write_verdict_object(&path, &before).unwrap();
+            let incoming_policy = !previous_policy.unwrap_or(true);
+            let mut after = build_verdict_object_with_policy(
+                dir.path(),
+                &path,
+                Some("approved"),
+                Some(sha),
+                None,
+                None,
+                &[],
+                "reviewer",
+                Some(incoming_policy),
+            )
+            .unwrap();
+            after.insert(
+                ATTESTATION_KEY.into(),
+                serde_json::json!({"sha":sha,
+                "carry_eligible":incoming_policy}),
+            );
+            assert_eq!(after["rounds"].as_array().unwrap().len(), 1);
+            assert_eq!(
+                after["rounds"][0],
+                serde_json::Value::Object(before.clone())
+            );
+            assert_eq!(
+                record_outcome(Some(&before), &after),
+                RecordOutcome::Recorded { round: 2 }
+            );
+            write_verdict_object(&path, &after).unwrap();
+            let mut repeat = build_verdict_object_with_policy(
+                dir.path(),
+                &path,
+                Some("approved"),
+                Some(sha),
+                None,
+                None,
+                &[],
+                "reviewer",
+                Some(incoming_policy),
+            )
+            .unwrap();
+            repeat.insert(ATTESTATION_KEY.into(), after[ATTESTATION_KEY].clone());
+            assert_eq!(repeat["rounds"].as_array().unwrap().len(), 2);
+            assert_eq!(
+                record_outcome(Some(&after), &repeat),
+                RecordOutcome::Unchanged
+            );
+        }
+    }
+}
+
+// trace:STORY-2696 | ai:codex
+#[test]
+fn story_2696_legacy_watcher_recording_key_defaults_eligible() {
+    let key: RecordingKey = serde_json::from_value(serde_json::json!([
+        "4444444444444444444444444444444444444444",
+        "reviewer",
+        "approved",
+        []
+    ]))
+    .unwrap();
+    assert!(key.4);
+    let value = serde_json::to_value(&key).unwrap();
+    assert_eq!(value[4], true);
+}
+
+// trace:STORY-2696 | ai:codex
+#[test]
+fn story_2696_four_policy_toggles_preserve_distinct_acts() {
+    for id in ["STORY-2696", "PR-99"] {
+        let dir = TempDir::new().unwrap();
+        let path = verdict_path(dir.path(), id);
+        let sha = "4444444444444444444444444444444444444444";
+        let mut acts = Vec::new();
+        for (index, eligible) in [false, true, false, true].into_iter().enumerate() {
+            let mut current = build_verdict_object_with_policy(
+                dir.path(),
+                &path,
+                Some("approved"),
+                Some(sha),
+                None,
+                None,
+                &[],
+                "reviewer",
+                Some(eligible),
+            )
+            .unwrap();
+            current.insert(
+                "recorded_at".into(),
+                format!("2026-11-10T00:00:0{index}Z").into(),
+            );
+            current.insert(
+                ATTESTATION_KEY.into(),
+                serde_json::json!({
+                    "sha":sha, "seat":"reviewer", "carry_eligible":eligible,
+                    "receipt_id":format!("receipt-{index}")
+                }),
+            );
+            let rounds = current
+                .get("rounds")
+                .and_then(|v| v.as_array())
+                .cloned()
+                .unwrap_or_default();
+            assert_eq!(rounds, acts, "{id}: displaced acts at toggle {index}");
+            write_verdict_object(&path, &current).unwrap();
+            let mut repeat = build_verdict_object_with_policy(
+                dir.path(),
+                &path,
+                Some("approved"),
+                Some(sha),
+                None,
+                None,
+                &[],
+                "reviewer",
+                Some(eligible),
+            )
+            .unwrap();
+            repeat.insert(ATTESTATION_KEY.into(), current[ATTESTATION_KEY].clone());
+            assert_eq!(repeat["rounds"].as_array().unwrap().len(), index + 1);
+            assert_eq!(
+                record_outcome(Some(&current), &repeat),
+                RecordOutcome::Unchanged
+            );
+            current.remove("rounds");
+            acts.push(serde_json::Value::Object(current));
+        }
+    }
+}
+
+// BUG-2540: rework resolved every key in the store (thousands, each costing
+// git subprocesses) and then kept the few bound to its spec. The scoped
+// reader resolves only the keys it is handed, in key order, and the full
+// listing is the scoped reader over every key.
+// trace:BUG-2540 | ai:claude
+#[test]
+fn bug2540_active_verdicts_for_resolves_only_requested_keys() {
+    let tmp = TempDir::new().unwrap();
+    let body = |verdict: &str| {
+        serde_json::json!({"verdict": verdict, "reviewed_sha": "a".repeat(40)}).to_string()
+    };
+    for (key, verdict) in [
+        ("STORY-1", "approved"),
+        ("STORY-2", "request-changes"),
+        ("PR-5", "request-changes"),
+    ] {
+        let path = verdict_path(tmp.path(), key);
+        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+        write_verdict_atomic(&path, &body(verdict)).unwrap();
+    }
+    let scoped = active_verdicts_for(tmp.path(), ["STORY-2".to_string(), "PR-5".to_string()]);
+    let keys: Vec<&str> = scoped.iter().map(|(k, _)| k.as_str()).collect();
+    assert_eq!(keys, ["PR-5", "STORY-2"]);
+    assert!(scoped.iter().all(|(_, v)| v.kind.requires_changes()));
+    assert!(active_verdicts_for(tmp.path(), ["STORY-404".to_string()]).is_empty());
+    let all = list_active_verdicts(tmp.path());
+    assert_eq!(all.len(), 3);
+    assert_eq!(
+        all,
+        active_verdicts_for(tmp.path(), verdict_keys(tmp.path()))
+    );
 }

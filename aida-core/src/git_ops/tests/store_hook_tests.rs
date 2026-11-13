@@ -1,5 +1,118 @@
 use super::*;
 
+// trace:BUG-2490 | ai:codex
+#[test]
+fn bug_2490_store_hardening_disables_both_autostash_settings() {
+    let dir = tempfile::tempdir().unwrap();
+    let (main, store) = bug_1929_main_with_store(dir.path());
+    let custom = dir.path().join("custom-store");
+    std::fs::create_dir_all(custom.join("objects")).unwrap();
+    std::fs::write(custom.join("metadata.yaml"), "").unwrap();
+    for repo in [&store, &custom] {
+        let args = host_git_hardening(repo);
+        for setting in ["rebase.autoStash=false", "merge.autoStash=false"] {
+            assert!(
+                args.windows(2).any(|pair| pair == ["-c", setting]),
+                "{}: {args:?}",
+                repo.display()
+            );
+        }
+    }
+    assert!(!host_git_hardening(&main)
+        .iter()
+        .any(|arg| arg.contains("autoStash")));
+}
+
+// trace:BUG-2490 | ai:codex
+#[test]
+fn bug_2490_store_retry_preserves_pending_changes_and_explains_refusal() {
+    let dir = tempfile::tempdir().unwrap();
+    let (_main, store) = bug_1929_main_with_store(dir.path());
+    std::fs::write(store.join("pending.txt"), "base\n").unwrap();
+    add(&store, &["pending.txt"]).unwrap();
+    commit(&store, "seed pending file").unwrap();
+    let original_head = head_sha(&store).unwrap();
+    for staged in [false, true] {
+        std::fs::write(store.join("pending.txt"), "pending writer data\n").unwrap();
+        if staged {
+            add(&store, &["pending.txt"]).unwrap();
+        }
+        let status = git(&store, &["status", "--porcelain"]).unwrap().stdout;
+        // No such remote: the dirty guard must refuse before even fetching.
+        // CAS callers already hold the writer lock when retrying publication.
+        let error = crate::db::with_store_write_lock(&store, || {
+            pull_rebase_store_retry(&store, "missing-remote", "aida-store")
+        })
+        .unwrap_err()
+        .to_string();
+        assert!(error.contains("store publication retry refused"), "{error}");
+        assert!(error.contains("Automatic stashing is disabled"), "{error}");
+        assert!(error.contains("on the host"), "{error}");
+        assert_eq!(head_sha(&store).unwrap(), original_head);
+        assert_eq!(
+            git(&store, &["status", "--porcelain"]).unwrap().stdout,
+            status
+        );
+        assert_eq!(
+            std::fs::read_to_string(store.join("pending.txt")).unwrap(),
+            "pending writer data\n"
+        );
+        assert!(!rebase_in_progress(&store));
+        assert!(git(&store, &["stash", "list"]).unwrap().stdout.is_empty());
+    }
+    commit(&store, "finish pending write").unwrap();
+    crate::db::with_store_write_lock(&store, || {
+        pull_rebase_store_retry(&store, ".", "aida-store")
+    })
+    .unwrap();
+    assert!(!has_changes_checked(&store).unwrap());
+}
+
+// trace:BUG-2490 | ai:codex
+#[test]
+fn bug_2490_structured_rebase_refusal_retains_deleted_side_diagnosis() {
+    let dir = tempfile::tempdir().unwrap();
+    let (_main, store) = bug_1929_main_with_store(dir.path());
+    let path = "objects/STORY/000/STORY-deleted.yaml";
+    std::fs::create_dir_all(store.join("objects/STORY/000")).unwrap();
+    let mut spec = crate::models::Requirement::new("base".into(), String::new());
+    std::fs::write(store.join(path), serde_yaml::to_string(&spec).unwrap()).unwrap();
+    add(&store, &[path]).unwrap();
+    commit(&store, "base").unwrap();
+    assert!(
+        git(&store, &["checkout", "-b", "incoming"])
+            .unwrap()
+            .success
+    );
+    std::fs::remove_file(store.join(path)).unwrap();
+    add(&store, &[path]).unwrap();
+    commit(&store, "upstream deletes spec").unwrap();
+    assert!(git(&store, &["checkout", "aida-store"]).unwrap().success);
+    spec.title = "local edit".into();
+    std::fs::write(store.join(path), serde_yaml::to_string(&spec).unwrap()).unwrap();
+    add(&store, &[path]).unwrap();
+    commit(&store, "local modifies spec").unwrap();
+    let original_head = head_sha(&store).unwrap();
+    let error = rebase_auto_merge_onto(&store, "incoming")
+        .unwrap_err()
+        .to_string();
+    assert!(
+        error.contains(&format!("structured merge of `{path}` failed")),
+        "{error}"
+    );
+    assert!(
+        error.contains(&format!("one side deleted {path}; not auto-mergeable")),
+        "{error}"
+    );
+    assert_eq!(head_sha(&store).unwrap(), original_head);
+    assert_eq!(current_branch(&store).unwrap(), "aida-store");
+    assert!(!rebase_in_progress(&store));
+    assert_eq!(
+        std::fs::read_to_string(store.join(path)).unwrap(),
+        serde_yaml::to_string(&spec).unwrap()
+    );
+}
+
 // Store git ignores project hooks, even when they resolve in the store.
 // trace:BUG-1929 | ai:codex
 #[cfg(unix)]
@@ -1196,4 +1309,419 @@ fn task_2125_primary_gid_walk_finds_local_accounts() {
         assert!(found.contains(name), "{name} missing from {found:?}");
     }
     assert_eq!(crate::store_hooks::accounts_with_primary_gid(gid), found);
+}
+
+// trace:BUG-2490 | ai:codex
+#[test]
+fn bug_2490_autostash_conflict_refuses_store_commit() {
+    let dir = tempfile::tempdir().unwrap();
+    let (_main, store) = bug_1929_main_with_store(dir.path());
+    let raw = |args: &[&str]| {
+        std::process::Command::new("git")
+            .current_dir(&store)
+            .args([
+                "-c",
+                "core.hooksPath=/dev/null",
+                "-c",
+                "maintenance.auto=false",
+                "-c",
+                "gc.auto=0",
+            ])
+            .args(args)
+            .output()
+            .unwrap()
+    };
+    let path = "objects/STORY/000/STORY-test.yaml";
+    std::fs::create_dir_all(store.join("objects/STORY/000")).unwrap();
+    let valid = serde_yaml::to_string(&crate::models::Requirement::new(
+        "base".into(),
+        String::new(),
+    ))
+    .unwrap();
+    std::fs::write(store.join(path), &valid).unwrap();
+    assert!(raw(&["add", "."]).status.success());
+    assert!(raw(&["commit", "-qm", "base"]).status.success());
+    assert!(raw(&["checkout", "-qb", "incoming"]).status.success());
+    std::fs::write(
+        store.join(path),
+        valid.replace("title: base", "title: upstream"),
+    )
+    .unwrap();
+    assert!(raw(&["add", "."]).status.success());
+    assert!(raw(&["commit", "-qm", "upstream"]).status.success());
+    let head = raw(&["rev-parse", "HEAD"]).stdout;
+    assert!(raw(&["checkout", "-q", "aida-store"]).status.success());
+    std::fs::write(
+        store.join(path),
+        valid.replace("title: base", "title: local"),
+    )
+    .unwrap();
+    // Reproduce the operator's historical unguarded fast-forward. Git exits
+    // successfully even though reapplying its autostash leaves a conflict.
+    assert!(raw(&[
+        "-c",
+        "merge.autoStash=true",
+        "merge",
+        "--ff-only",
+        "incoming"
+    ])
+    .status
+    .success());
+    assert!(String::from_utf8_lossy(&raw(&["stash", "list"]).stdout).contains("autostash"));
+    assert!(validate_store_index(&store)
+        .unwrap_err()
+        .to_string()
+        .contains(path));
+    let error = validate_store_objects(&store).unwrap_err().to_string();
+    assert!(
+        error.contains(path) && error.contains("conflict markers"),
+        "{error}"
+    );
+    assert!(commit_pending_store_changes_on_host(&store).is_err());
+    assert!(raw(&["add", "."]).status.success());
+    assert!(commit(&store, "must refuse").is_err());
+    assert!(commit_paths(&store, "must refuse", &[path]).is_err());
+    assert_eq!(head, raw(&["rev-parse", "HEAD"]).stdout);
+    // A repaired worktree must not hide corrupt staged bytes.
+    std::fs::write(store.join(path), &valid).unwrap();
+    validate_store_objects(&store).unwrap();
+    assert!(commit(&store, "must refuse staged markers").is_err());
+    assert!(validate_store_index(&store)
+        .unwrap_err()
+        .to_string()
+        .contains("conflict markers"));
+    std::fs::write(store.join(path), "not: [valid yaml").unwrap();
+    assert!(validate_store_objects(&store)
+        .unwrap_err()
+        .to_string()
+        .contains("does not parse"));
+    std::fs::write(store.join(path), &valid).unwrap();
+    add(&store, &[path]).unwrap();
+    assert!(commit(&store, "chore: repaired object").unwrap());
+    // Repository config simulates inherited operator settings; command-line
+    // overrides must win without rewriting those settings.
+    for key in ["rebase.autoStash", "merge.autoStash"] {
+        assert!(raw(&["config", key, "true"]).status.success());
+        let value = git(&store, &["config", "--get", key]).unwrap();
+        assert_eq!(value.stdout.trim(), "false");
+    }
+}
+
+// trace:BUG-2490 | ai:codex
+#[test]
+fn bug_2490_targeted_commit_ignores_unrelated_corruption() {
+    let dir = tempfile::tempdir().unwrap();
+    let (_main, store) = bug_1929_main_with_store(dir.path());
+    let path = "objects/STORY/000/STORY-good.yaml";
+    std::fs::create_dir_all(store.join("objects/STORY/000")).unwrap();
+    let mut req = crate::models::Requirement::new("base".into(), String::new());
+    std::fs::write(store.join(path), serde_yaml::to_string(&req).unwrap()).unwrap();
+    add(&store, &[path]).unwrap();
+    commit(&store, "base").unwrap();
+    // Dirty corrupt worktree bytes outside the index cannot block an ordinary
+    // commit of a different object.
+    std::fs::write(store.join("objects/STORY/000/unrelated.yaml"), "broken: [").unwrap();
+    req.title = "staged".into();
+    std::fs::write(store.join(path), serde_yaml::to_string(&req).unwrap()).unwrap();
+    add(&store, &[path]).unwrap();
+    commit(&store, "targeted index").unwrap();
+    // An explicit pathspec must also leave unrelated staged corruption alone.
+    add(&store, &["objects/STORY/000/unrelated.yaml"]).unwrap();
+    req.title = "worktree".into();
+    std::fs::write(store.join(path), serde_yaml::to_string(&req).unwrap()).unwrap();
+    commit_paths(&store, "explicit path", &[path]).unwrap();
+    let staged = git(&store, &["diff", "--cached", "--name-only"]).unwrap();
+    assert!(staged.stdout.contains("unrelated.yaml"));
+    // But a directory pathspec that includes that corruption must refuse.
+    assert!(commit_paths(&store, "bad directory", &["objects/STORY"]).is_err());
+    assert!(commit_pending_store_changes_on_host(&store).is_err());
+}
+
+// trace:BUG-2490 | ai:codex
+#[test]
+fn bug_2490_pending_checks_only_dirty_objects_and_names_invalid_path() {
+    let dir = tempfile::tempdir().unwrap();
+    let (_main, store) = bug_1929_main_with_store(dir.path());
+    std::fs::create_dir_all(store.join("objects/STORY/000")).unwrap();
+    let bad = "objects/STORY/000/legacy.yaml";
+    std::fs::write(store.join(bad), "<<<<<<< old\n=======\n>>>>>>> other\n").unwrap();
+    // A foreign writer's already-committed corruption belongs in doctor;
+    // it must not prevent unrelated writes or sync of valid pending objects.
+    let raw = host_git_command(&store)
+        .args(["add", "."])
+        .output()
+        .unwrap();
+    assert!(raw.status.success());
+    let raw = host_git_command(&store)
+        .args(["-c", "maintenance.auto=false", "-c", "gc.auto=0"])
+        .args(["commit", "-qm", "legacy corruption"])
+        .output()
+        .unwrap();
+    assert!(raw.status.success());
+    let good = "objects/STORY/000/new.yaml";
+    let req = crate::models::Requirement::new("valid".into(), String::new());
+    std::fs::write(store.join(good), serde_yaml::to_string(&req).unwrap()).unwrap();
+    assert!(commit_pending_store_changes_on_host(&store).unwrap());
+    std::fs::write(store.join(bad), "<<<<<<< dirty\n=======\n>>>>>>> other\n").unwrap();
+    let head = head_sha(&store).unwrap();
+    let error = commit_pending_store_changes_on_host(&store)
+        .unwrap_err()
+        .to_string();
+    assert!(
+        error.contains(bad) && error.contains("conflict markers"),
+        "{error}"
+    );
+    assert_eq!(head_sha(&store).unwrap(), head);
+    assert!(git(&store, &["diff", "--cached", "--name-only"])
+        .unwrap()
+        .stdout
+        .is_empty());
+}
+
+// trace:BUG-2490 | ai:codex
+#[test]
+fn bug_2490_schema_invalid_objects_refuse_without_advancing_head() {
+    let dir = tempfile::tempdir().unwrap();
+    let (_main, store) = bug_1929_main_with_store(dir.path());
+    let path = "objects/STORY/000/STORY-invalid.yaml";
+    std::fs::create_dir_all(store.join("objects/STORY/000")).unwrap();
+    let req = crate::models::Requirement::new("valid".into(), String::new());
+    let valid = serde_yaml::to_string(&req).unwrap();
+    std::fs::write(store.join(path), &valid).unwrap();
+    add(&store, &[path]).unwrap();
+    commit(&store, "base").unwrap();
+    let head = head_sha(&store).unwrap();
+
+    // Valid YAML is insufficient: the committed bytes must deserialize as a
+    // requirement. Exercise both explicit worktree and staged-blob commits.
+    for invalid in ["title: [unterminated", "title: []\n"] {
+        std::fs::write(store.join(path), invalid).unwrap();
+        let error = commit_paths(&store, "invalid worktree", &[path])
+            .unwrap_err()
+            .to_string();
+        assert!(
+            error.contains(path) && error.contains("does not parse"),
+            "{error}"
+        );
+        assert_eq!(head_sha(&store).unwrap(), head);
+        add(&store, &[path]).unwrap();
+        // Repairing the worktree cannot hide invalid bytes in the index.
+        std::fs::write(store.join(path), &valid).unwrap();
+        let error = commit(&store, "invalid index").unwrap_err().to_string();
+        assert!(
+            error.contains(path) && error.contains("does not parse"),
+            "{error}"
+        );
+        assert_eq!(head_sha(&store).unwrap(), head);
+        add(&store, &[path]).unwrap();
+    }
+}
+
+// trace:BUG-2490 | ai:codex
+#[test]
+fn bug_2490_bulk_staged_objects_support_batch_and_unusual_names() {
+    let dir = tempfile::tempdir().unwrap();
+    let (_main, store) = bug_1929_main_with_store(dir.path());
+    std::fs::create_dir_all(store.join("objects/STORY/000")).unwrap();
+    // Enough input and output to exceed pipe buffers in both directions.
+    for i in 0..512 {
+        let path = format!("objects/STORY/000/object {i}\n[bracket].yaml");
+        let req = crate::models::Requirement::new(format!("object {i}"), "x".repeat(1024));
+        std::fs::write(store.join(path), serde_yaml::to_string(&req).unwrap()).unwrap();
+    }
+    add_all(&store, ".").unwrap();
+    assert!(commit(&store, "bulk").unwrap());
+    // Staged corruption still refuses even if the worktree is repaired.
+    let path = "objects/STORY/000/object 0\n[bracket].yaml";
+    let repaired = std::fs::read(store.join(path)).unwrap();
+    std::fs::write(store.join(path), "broken: [").unwrap();
+    add_all(&store, ".").unwrap();
+    std::fs::write(store.join(path), repaired).unwrap();
+    let error = commit(&store, "bad staged bytes").unwrap_err().to_string();
+    assert!(
+        error.contains(path) && error.contains("does not parse"),
+        "{error}"
+    );
+}
+
+// trace:BUG-2490 | ai:codex
+#[test]
+fn bug_2490_rebase_continuation_refuses_invalid_resolved_index() {
+    let dir = tempfile::tempdir().unwrap();
+    let (_main, store) = bug_1929_main_with_store(dir.path());
+    let path = "objects/STORY/000/STORY-resolved.yaml";
+    std::fs::create_dir_all(store.join("objects/STORY/000")).unwrap();
+    let valid = serde_yaml::to_string(&crate::models::Requirement::new(
+        "base".into(),
+        String::new(),
+    ))
+    .unwrap();
+    std::fs::write(store.join(path), &valid).unwrap();
+    add(&store, &[path]).unwrap();
+    commit(&store, "base").unwrap();
+    git(&store, &["checkout", "-b", "incoming"]).unwrap();
+    std::fs::write(
+        store.join(path),
+        valid.replace("title: base", "title: upstream"),
+    )
+    .unwrap();
+    add(&store, &[path]).unwrap();
+    commit(&store, "upstream").unwrap();
+    git(&store, &["checkout", "aida-store"]).unwrap();
+    std::fs::write(
+        store.join(path),
+        valid.replace("title: base", "title: local"),
+    )
+    .unwrap();
+    add(&store, &[path]).unwrap();
+    commit(&store, "local").unwrap();
+    let original_head = head_sha(&store).unwrap();
+    assert!(
+        !git(
+            &store,
+            &[
+                "-c",
+                "maintenance.auto=false",
+                "-c",
+                "gc.auto=0",
+                "rebase",
+                "incoming"
+            ]
+        )
+        .unwrap()
+        .success
+    );
+    assert!(rebase_in_progress(&store));
+    // Simulate a manual resolution that clears unmerged stages but is invalid.
+    std::fs::write(store.join(path), "title: []\n").unwrap();
+    stage_resolved_paths(&store, &[path]).unwrap();
+    let error = rebase_auto_merge_onto(&store, "incoming")
+        .unwrap_err()
+        .to_string();
+    assert!(
+        error.contains(path) && error.contains("does not parse"),
+        "{error}"
+    );
+    assert_eq!(original_head, head_sha(&store).unwrap());
+    assert!(!rebase_in_progress(&store));
+    assert_eq!(current_branch(&store).unwrap(), "aida-store");
+}
+
+// trace:BUG-2490 | ai:codex
+#[test]
+fn bug_2490_union_refusal_aborts_and_restores_branch() {
+    bug_2490_union_refusal(false);
+}
+
+// trace:BUG-2490 | ai:codex
+#[test]
+fn bug_2490_union_refusal_reports_failed_abort() {
+    bug_2490_union_refusal(true);
+}
+
+// trace:BUG-2490 | ai:codex
+fn bug_2490_union_refusal(block_abort: bool) {
+    let dir = tempfile::tempdir().unwrap();
+    let (main, store) = bug_1929_main_with_store(dir.path());
+    // A plain repository permits a test-owned hook; store repositories
+    // deliberately pin verified shipped hooks instead of project hooks.
+    let store = if block_abort { main } else { store };
+    let path = "objects/STORY/000/STORY-shared.yaml";
+    let bad = "objects/STORY/000/STORY-legacy.yaml";
+    std::fs::create_dir_all(store.join("objects/STORY/000")).unwrap();
+    let valid = serde_yaml::to_string(&crate::models::Requirement::new(
+        "base".into(),
+        String::new(),
+    ))
+    .unwrap();
+    std::fs::write(store.join(path), &valid).unwrap();
+    add(&store, &[path]).unwrap();
+    commit(&store, "base").unwrap();
+    let original_branch = current_branch(&store).unwrap();
+    assert!(
+        git(&store, &["checkout", "-b", "incoming"])
+            .unwrap()
+            .success
+    );
+    std::fs::write(
+        store.join(path),
+        valid.replace("title: base", "title: upstream"),
+    )
+    .unwrap();
+    // A historical invalid sibling arrives alongside a resolvable conflict.
+    std::fs::write(store.join(bad), "title: []\n").unwrap();
+    add(&store, &[path, bad]).unwrap();
+    assert!(
+        git(
+            &store,
+            &[
+                "-c",
+                "maintenance.auto=false",
+                "-c",
+                "gc.auto=0",
+                "commit",
+                "-m",
+                "legacy upstream"
+            ]
+        )
+        .unwrap()
+        .success
+    );
+    assert!(
+        git(&store, &["checkout", &original_branch])
+            .unwrap()
+            .success
+    );
+    std::fs::write(
+        store.join(path),
+        valid.replace("title: base", "title: local"),
+    )
+    .unwrap();
+    add(&store, &[path]).unwrap();
+    commit(&store, "local").unwrap();
+    let original_head = head_sha(&store).unwrap();
+    // Exercise the post-resolution guard directly: public preflight also rejects
+    // this historical invalid object before starting the managed operation.
+    if block_abort {
+        // Refuse the abort's ref transaction while allowing the merge to
+        // reach object validation.
+        use std::os::unix::fs::PermissionsExt;
+        let hooks = dir.path().join("hooks");
+        std::fs::create_dir_all(&hooks).unwrap();
+        let hook = hooks.join("reference-transaction");
+        std::fs::write(&hook, "#!/bin/sh\n[ \"$1\" = prepared ] || exit 0\ncase \"$(ps -o args= -p $PPID)\" in *merge*--abort*|*reset*--merge*) echo UNION-ABORT-BLOCKED >&2; exit 1;; esac\nexit 0\n").unwrap();
+        std::fs::set_permissions(&hook, std::fs::Permissions::from_mode(0o755)).unwrap();
+        assert!(
+            git(
+                &store,
+                &["config", "core.hooksPath", hooks.to_str().unwrap()]
+            )
+            .unwrap()
+            .success
+        );
+    }
+    let error = merge_union_onto(&store, "incoming", "union")
+        .unwrap_err()
+        .to_string();
+    assert!(
+        error.contains(bad) && error.contains("does not parse"),
+        "{error}"
+    );
+    if block_abort {
+        assert!(
+            error.contains("automatic `git merge --abort` also failed"),
+            "{error}"
+        );
+        assert!(error.contains("UNION-ABORT-BLOCKED"), "{error}");
+        assert!(merge_in_progress(&store));
+        return;
+    }
+    assert_eq!(original_head, head_sha(&store).unwrap());
+    assert_eq!(current_branch(&store).unwrap(), "aida-store");
+    assert!(
+        !git(&store, &["rev-parse", "--verify", "MERGE_HEAD"])
+            .unwrap()
+            .success
+    );
+    assert!(!has_changes_checked(&store).unwrap());
 }

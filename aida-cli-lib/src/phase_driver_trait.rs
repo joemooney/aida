@@ -1,7 +1,49 @@
 //! the impl auto_complete::PhaseDriver for RealPhaseDriver trait impl (STORY-1488 slice 1; Q9 split)
 // trace:STORY-1488 | ai:claude
 
-use crate::*;
+use crate::process_retry::RetryEtxtbsy;
+// trace:TASK-3428 | ai:codex
+use crate::{
+    advisor, agent_seat_for_phase, aida_subcmd_queue_add_for_reviewer_using, assemble_punt_payload,
+    auto_complete, auto_complete_telemetry, blocking_rework_verdict, build_ci_fix_prompt,
+    build_implementer_phase_args, build_phase3_auto_rebase_args, calibration,
+    capture_review_calibration_for_spec, ci_gate, ci_probe_change_id, ci_probe_with_forge,
+    ci_red_recovery_hint, ci_red_refine_poll_interval, classify_branch_swap_attribution,
+    classify_drain_merge_failure, classify_rework_head_change, claude_log_indicates_api_outage,
+    commit, current_branch_head_sha, decide_shelve_attribution, discard_orchestrated_child_refusal,
+    dispatched_branch_head_sha, drain_lock, drain_merge_lease_failure, drain_state,
+    effective_calibration_mode, emit_ci_terminal, empty_launch_decision,
+    enrich_headless_wait_failure, enrich_no_verdict_with_headless_diagnostic,
+    ensure_implementer_branch_pushed, ensure_pr_open_spec_attribution, ensure_spec_done_after_pr,
+    events, exit_signal, extract_bughunter_severity, failing_ci_log_excerpt,
+    fetch_pr_ship_metadata_via_forge, file_agent_gate_warning_finding,
+    file_reviewer_verdict_unavailable_finding, find_main_worktree_root, forge, gate, graded_review,
+    harvest, headless_launch_log_evidence, hold_signal, implementer_preflight,
+    latest_run_id_for_branch, lease_path, list_leases, load_store_for_lookup,
+    main_worktree_root_from, mark_lease_escalated_to_human, matching_agent_gates_for_spec,
+    merge_hold, network_retry, open_pr_review_story_using, orchestrated_session_lease_evidence,
+    orchestrator, orchestrator_phase_child_env, pane_host, phase1_empty_launch_retry_delay,
+    phase1_empty_launch_retry_sleep, phase3_head_archive_fallback, pr_credit_match_with_sink,
+    pr_credited_spec_id_with_sink, pr_head_branch, pr_head_ref_best_effort,
+    pr_head_sha_best_effort, pr_rebase, preflight_intermediate_only_check_with_forge,
+    preflight_stale_base_check_with_forge, prepare_graded_review,
+    prepare_orchestrated_lease_receipt, punt, queue_cmd, read_commits_in_range,
+    read_headless_log_for_session, read_review_mode, reclaim_implementer_retry_predecessor,
+    reconcile_orchestrated_branch, reconcile_verdict, release_dead_phase_predecessor_leases,
+    remote_head_sha, render_auto_queue_outcome, require_review_handoff, resolve_gh_binary,
+    resolve_pickup_workspace, resolve_shelve_gate_range, resume_command_with_cwd,
+    reviewer_wrote_message, rework_no_op_message, role, schedule, session, shelve_spec_on_failure,
+    sibling_verdict_sweep_for_phase3, spec_status, spec_verdict_fallback_for_phase3,
+    stamp_pr_review_verdict, try_auto_queue_pr_review,
+    try_open_orchestrator_pr_for_no_pr_pushed_branch, try_open_orchestrator_pr_for_no_pr_worktree,
+    verified_phase2_branch, wait_for_ci_terminal, watch_ci_for_context_with_forge,
+    watchdog_failure_with_committed_work, worktree, AdvisorPass, AgentGateOnFail, AutoQueueOrigin,
+    AutoQueueStatus, CiProbe, EmptyLaunchLog, OpenPrInfo, Phase1PrResolve, Phase1Workspace,
+    Phase3StaleOverlapAction, PhaseWatchdog, RealPhaseDriver, RequirementStatus, ReworkHeadChange,
+    ShelveAttribution,
+};
+use anyhow::{Context, Result};
+use colored::Colorize;
 
 impl auto_complete::PhaseDriver for RealPhaseDriver {
     fn capture_phase_done_pr(&mut self) {
@@ -102,7 +144,7 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
         else {
             return;
         };
-        let body = fetch_pr_ship_metadata_via_gh(&self.project_root, change.id)
+        let body = fetch_pr_ship_metadata_via_forge(&self.project_root, change.id)
             .map(|meta| meta.body)
             .unwrap_or_default();
         if !queue_cmd::rework_pr_head_matches_spec(
@@ -428,6 +470,15 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
                 self.drain_tuning.idle_config(),
                 auto_complete::Phase::Implementer,
             );
+            // trace:TASK-3608 | ai:codex
+            #[cfg(test)]
+            let wd = {
+                let mut wd = wd;
+                if let Some(poll) = self.watchdog_poll {
+                    wd.poll_every = poll;
+                }
+                wd
+            };
             // STORY-726: a headless implementer with teeing off (`--no-tee-headless`
             // / `AIDA_TEE_HEADLESS=0`) runs in TOTAL silence until it exits or the
             // watchdog kills it — the operator can't tell "thinking hard" from
@@ -440,7 +491,25 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
                 wd.with_heartbeat("implementer", &self.spec)
             }
         });
-        let mut wd_closure = watchdog.as_mut().map(|w| move || w.check());
+        // The fixture publishes a ready marker after its lease and manifest;
+        // its tiny ceiling must not race the child's first scheduling slice.
+        // A broken fixture still terminates within a bounded readiness budget.
+        // trace:TASK-3749 | ai:codex
+        #[cfg(test)]
+        let ready = self.watchdog_ready.clone();
+        #[cfg(test)]
+        let ready_started = std::time::Instant::now();
+        let mut wd_closure = watchdog.as_mut().map(|w| {
+            move || {
+                #[cfg(test)]
+                if ready.as_ref().is_some_and(|path| !path.exists())
+                    && ready_started.elapsed() < std::time::Duration::from_secs(10)
+                {
+                    return None;
+                }
+                w.check()
+            }
+        });
         let wd_dyn: Option<&mut dyn FnMut() -> Option<String>> = wd_closure
             .as_mut()
             .map(|c| c as &mut dyn FnMut() -> Option<String>);
@@ -760,6 +829,25 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
         // `claude --resume` with this exact cwd so Claude's project-slug
         // derivation finds the persisted session.
         self.implementer_worktree = Some(worktree_path.clone());
+        // Collect the writable-seat handshakes before the driver classifies exit.
+        // trace:BUG-2488 | ai:codex
+        crate::standalone_implementer::reconcile_signals(
+            &self.project_root,
+            &worktree_path,
+            &self.spec,
+        )
+        .map_err(|e| {
+            auto_complete::PhaseFailure::of(
+                auto_complete::FailureKind::Spawn,
+                format!("could not reconcile implementer signals: {e:#}"),
+            )
+        })?;
+        // Consume host evidence only for a successful child. Failed exits and
+        // punt/hold signals keep their existing classification precedence.
+        // trace:TASK-3608 | ai:codex
+        let native_no_change = crate::ship_from_seat::take_no_change(&self.project_root, &lease_id)
+            && watchdog_failure.is_none()
+            && matches!(&outcome, exit_signal::ExitOutcome::Natural(s) | exit_signal::ExitOutcome::Reaped(s) if s.success());
 
         // STORY-276: did the implementer punt? `aida punt` dropped the signal
         // file and the spec is now parked in NeedsAttention — there is no PR
@@ -775,7 +863,18 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
         // branch is reconciled from the worktree HEAD now so a resume +
         // PR-lookup has it. trace:STORY-276, STORY-306 | ai:claude
         if let Some(signal) = punt::read_signal(&punt_signal) {
-            let _ = std::fs::remove_file(&punt_signal);
+            // trace:BUG-2488 | ai:codex
+            crate::standalone_implementer::consume_punt_signal(
+                &self.project_root,
+                &worktree_path,
+                &self.spec,
+            )
+            .map_err(|e| {
+                auto_complete::PhaseFailure::of(
+                    auto_complete::FailureKind::Internal,
+                    format!("could not consume implementer punt: {e:#}"),
+                )
+            })?;
             self.branch = Some(reconcile_orchestrated_branch(
                 &self.project_root,
                 &lease_id,
@@ -871,6 +970,50 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
                         ),
                     ));
                 }
+            }
+        }
+
+        // A clean host-attested exit has nothing to publish. Look for an
+        // existing open PR before preflight, and never credit an older merge
+        // as work performed by this seat. Keep the observation for the normal
+        // PR path so rework still runs every gate.
+        // trace:TASK-3608 | ai:codex
+        let mut native_pr =
+            native_no_change.then(|| self.detect_phase1_pr_after_exit(&branch, true));
+        // Resolve native observations before preflight, retaining the receipt
+        // context on every retry. Older merged PRs never grant this seat credit.
+        // trace:TASK-3608 | ai:codex
+        if native_no_change {
+            let schedule =
+                auto_complete::gh_verify_backoff_schedule(self.drain_tuning.gh_verify_retries);
+            for wait in schedule {
+                if !matches!(native_pr, Some(Phase1PrResolve::Retry(_))) {
+                    break;
+                }
+                // trace:TASK-3608 | ai:codex
+                #[cfg(test)]
+                let wait = self.retry_wait.unwrap_or(wait);
+                std::thread::sleep(wait);
+                native_pr = Some(self.detect_phase1_pr_after_exit(&branch, true));
+            }
+            match native_pr.as_ref().unwrap() {
+                Phase1PrResolve::NoPr | Phase1PrResolve::AlreadyMerged(_) => {
+                    self.end_no_change_session();
+                    return Ok(auto_complete::ImplementerOutcome::NoChange);
+                }
+                Phase1PrResolve::Retry(reason) => {
+                    return Ok(auto_complete::ImplementerOutcome::Inconclusive {
+                        reason: reason.clone(),
+                        retry_hint: None,
+                    });
+                }
+                _ => {}
+            }
+        }
+
+        if matches!(native_pr, Some(Phase1PrResolve::Fail(_))) {
+            if let Some(Phase1PrResolve::Fail(failure)) = native_pr.take() {
+                return Err(failure);
             }
         }
 
@@ -976,7 +1119,10 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
             auto_complete::gh_verify_backoff_schedule(self.drain_tuning.gh_verify_retries);
         let mut attempt = 0usize;
         let pr = loop {
-            match self.detect_phase1_pr(&branch) {
+            match native_pr
+                .take()
+                .unwrap_or_else(|| self.detect_phase1_pr_after_exit(&branch, native_no_change))
+            {
                 Phase1PrResolve::Found(pr) => break Some(pr),
                 // BUG-709: the implementer already merged its own PR — the work
                 // shipped and the spec auto-bumped. Return a terminal
@@ -1093,6 +1239,12 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
                 Ok(auto_complete::ImplementerOutcome::PrOpened)
             }
             None => {
+                // Existing PRs above retain their normal rework/CI path.
+                // trace:TASK-3608 | ai:codex
+                if native_no_change {
+                    self.end_no_change_session();
+                    return Ok(auto_complete::ImplementerOutcome::NoChange);
+                }
                 // BUG-893: substrate-as-bouncer for the "implementer committed
                 // work but exited without opening a PR" gap. The committed HEAD
                 // lives in the implementer worktree; the main orchestrator
@@ -1201,6 +1353,26 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
         }
         self.set_pr_number(pr as u32);
         self.pr_number
+    }
+
+    // trace:STORY-2640 | ai:codex
+    fn fast_gate_blocks_review(&mut self) -> Result<bool, String> {
+        let branch = match self.branch.clone() {
+            Some(branch) if !branch.is_empty() => branch,
+            _ => match fast_gate_lookup_branch(
+                self.project_forge()
+                    .change_for_spec(&self.spec)
+                    .map_err(|error| format!("fast gate PR lookup failed: {error:#}"))?,
+            )? {
+                Some(branch) => branch,
+                None => return Ok(false),
+            },
+        };
+        crate::lane_fast_gate::blocks_review(
+            &crate::main_worktree_root_from(&self.project_root),
+            &branch,
+        )
+        .map_err(|error| format!("{error:#}"))
     }
 
     fn recover_phase1_failure_with_open_pr(
@@ -2388,6 +2560,10 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
                         ),
                     ));
                 }
+                auto_complete::ReviewerOutcome::Verdict(auto_complete::Verdict::Waiting) => {
+                    return Err(auto_complete::PhaseFailure::of(auto_complete::FailureKind::VerdictWaiting,
+                        format!("agent gate `{}` is WAITING on external evidence; resume with a fresh review at the current head", gate.name)));
+                }
                 auto_complete::ReviewerOutcome::Verdict(auto_complete::Verdict::Approved) => {}
                 auto_complete::ReviewerOutcome::Verdict(verdict) => {
                     let reason = format!(
@@ -2422,6 +2598,9 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
                         }
                         auto_complete::Verdict::Rejected => {
                             auto_complete::FailureKind::VerdictReject
+                        }
+                        auto_complete::Verdict::Waiting => {
+                            auto_complete::FailureKind::VerdictWaiting
                         }
                         auto_complete::Verdict::Approved => auto_complete::FailureKind::Failed,
                     };
@@ -3309,27 +3488,64 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
         .and_then(|resume_id| {
             // TASK-2032: the orchestrator runs at the host project root.
             // trace:TASK-2032 | ai:claude
+            let target = session::HeadlessResume {
+                vendor,
+                session_id: &session_id,
+                resume_id: &resume_id,
+            };
+            if let Some(lease) = self.implementer_lease.as_deref() {
+                return crate::queue_cmd::run_queue_resume_to_exit(
+                    crate::seat_clone::launcher_main().as_deref(),
+                    &target,
+                    &prompt,
+                    &log_path,
+                    &worktree,
+                    &tee_opts,
+                    self.contained,
+                    "implementer",
+                    (&self.project_root, &self.spec, lease),
+                    true,
+                );
+            }
             session::spawn_vendor_headless_resume(
                 crate::seat_clone::launcher_main().as_deref(),
-                &session::HeadlessResume {
-                    vendor,
-                    session_id: &session_id,
-                    resume_id: &resume_id,
-                },
+                &target,
                 &prompt,
                 &log_path,
                 &worktree,
                 &tee_opts,
-                false,
+                self.contained,
                 "implementer",
             )
         })
         .map_err(|e| {
-            PhaseFailure::of(
-                FailureKind::Spawn,
-                format!("advisor tier: could not resume the implementer session: {e}"),
-            )
+            if e.is::<crate::queue_cmd::ResumePublicationFailure>()
+                || e.is::<crate::lane_fast_gate::NativeCommitError>()
+            {
+                PhaseFailure::new(e.to_string())
+            } else {
+                PhaseFailure::of(
+                    FailureKind::Spawn,
+                    format!("advisor tier: could not resume the implementer session: {e}"),
+                )
+            }
         })?;
+        // A resumed implementer may punt again, including on a failed exit.
+        // Mirror its ledger before any status/outage classification returns.
+        // trace:BUG-2488 | ai:codex
+        crate::standalone_implementer::reconcile_signals(&self.project_root, &worktree, &self.spec)
+            .map_err(|e| {
+                PhaseFailure::of(
+                    FailureKind::Internal,
+                    format!("advisor tier: could not reconcile implementer signals: {e}"),
+                )
+            })?;
+        // Consume stale evidence even when the child failed; it cannot be
+        // reused by a later resume.
+        let native_no_change = self
+            .implementer_lease
+            .as_deref()
+            .is_some_and(|lease| crate::ship_from_seat::take_no_change(&self.project_root, lease));
         if !status.success() {
             // BUG-266: same Anthropic-API outage classification on the
             // advisor-resume leg — `spawn_claude_headless_resume` is the
@@ -3366,10 +3582,16 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
 
         // Classify from ground truth (the STORY-276 detect-punt logic): a
         // re-punt leaves the spec back in `NeedsAttention`.
-        if matches!(
-            spec_status(&self.project_root, &self.spec),
-            Some(RequirementStatus::NeedsAttention)
-        ) {
+        let resumed_punt = punt::read_signal(&punt::signal_path(&self.project_root, &self.spec));
+        if resumed_punt.is_some()
+            // A retained NeedsAttention status is not a new punt when the
+            // host has confirmed this resume made no changes.
+            // trace:TASK-3749 | ai:codex
+            || (!native_no_change && matches!(
+                spec_status(&self.project_root, &self.spec),
+                Some(RequirementStatus::NeedsAttention)
+            ))
+        {
             let reason = load_store_for_lookup(&self.project_root)
                 .and_then(|s| {
                     s.get_requirement_by_spec_id(&self.spec)
@@ -3380,48 +3602,67 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
             return Ok(ImplementerOutcome::Punted { reason });
         }
 
+        let hold_path = punt::hold_signal_path(&self.project_root, &self.spec);
+        if let Some(signal) = punt::read_hold_signal(&hold_path) {
+            return Ok(ImplementerOutcome::Held {
+                reason: signal.reason,
+                branch: self.branch.clone().unwrap_or_default(),
+            });
+        }
+
         // A ship opens a PR — a spec-id lookup is branch-independent and
         // robust, with the recorded branch as a fallback.
-        let pr =
-            match detect_open_pr_for_spec_via_forge(&self.project_root, &self.spec) {
-                PrLookup::Found(pr) => Some(pr),
-                // STORY-516: inner branch lookup forge-routed (the outer spec search
-                // is the list op, routed later). trace:STORY-516 | ai:claude
-                PrLookup::NoOpenPr => self.branch.as_deref().and_then(|b| {
-                    match change_lookup_for_branch(&self.project_root, b) {
-                        crate::forge::ChangeLookup::Found(c) => Some(OpenPrInfo {
-                            number: c.id,
-                            title: c.title.unwrap_or_default(),
-                            url: c.url,
-                            head_branch: (!c.branch.is_empty()).then_some(c.branch),
-                        }),
-                        _ => None,
-                    }
-                }),
-                PrLookup::GhMissing => {
-                    return Err(PhaseFailure::of(
-                        FailureKind::MissingTool,
-                        "`gh` is not on PATH — auto-complete needs it to track the PR",
-                    ));
-                }
-                PrLookup::GhFailed(why) => {
-                    return Err(PhaseFailure::new(format!(
-                        "could not look up the PR after the implementer resume: {why}"
-                    )));
-                }
-                // BUG-257: a transient GH-API outage on the resumed-implementer PR
-                // lookup is Inconclusive, not a failure. Drain pauses; the next
-                // retry re-attempts the lookup once the API is reachable.
-                // trace:BUG-257 | ai:claude
-                PrLookup::GhUnreachable(why) => {
-                    return Ok(ImplementerOutcome::Inconclusive {
-                        reason: format!("GH API unreachable after the implementer resume: {why}"),
-                        retry_hint: None,
-                    });
-                }
-            };
+        let lookup = self
+            .project_forge()
+            .change_for_spec(&self.spec)
+            .unwrap_or_else(|e| crate::forge::ChangeLookup::CliFailed(format!("{e:#}")));
+        let lookup = match lookup {
+            crate::forge::ChangeLookup::NoChange => match self.branch.as_deref() {
+                Some(branch) => self
+                    .project_forge()
+                    .change_for_branch(branch)
+                    .unwrap_or_else(|e| crate::forge::ChangeLookup::CliFailed(format!("{e:#}"))),
+                None if !native_no_change => crate::forge::ChangeLookup::NoChange,
+                None => crate::forge::ChangeLookup::Unreachable(
+                    "no recorded branch to confirm an empty lookup".into(),
+                ),
+            },
+            other => other,
+        };
+        let pr = match lookup {
+            crate::forge::ChangeLookup::Found(c) => Some(OpenPrInfo {
+                number: c.id,
+                title: c.title.unwrap_or_default(),
+                url: c.url,
+                head_branch: (!c.branch.is_empty()).then_some(c.branch),
+            }),
+            crate::forge::ChangeLookup::NoChange => None,
+            crate::forge::ChangeLookup::CliMissing => {
+                return Err(PhaseFailure::of(
+                    FailureKind::MissingTool,
+                    "forge CLI is not on PATH — auto-complete needs it to track the PR",
+                ));
+            }
+            crate::forge::ChangeLookup::CliFailed(why) if !native_no_change => {
+                return Err(PhaseFailure::new(format!(
+                    "could not look up the PR after the implementer resume: {why}"
+                )));
+            }
+            other => {
+                return Ok(ImplementerOutcome::Inconclusive {
+                    reason: format!(
+                        "could not confirm the PR after the implementer resume: {other:?}"
+                    ),
+                    retry_hint: None,
+                })
+            }
+        };
         match pr {
             Some(pr) => Ok(self.adopt_resumed_pr(pr)),
+            None if native_no_change => {
+                self.end_no_change_session();
+                Ok(ImplementerOutcome::NoChange)
+            }
             None => Err(PhaseFailure::of(
                 FailureKind::NoPr,
                 "the resumed implementer session exited but opened no PR — \
@@ -4122,21 +4363,26 @@ pub(crate) fn build_phase_driver_ci_fix_command(
         }
         cmd
     } else {
-        let ctx = crate::launch::LaunchContext::resolve(crate::launch::LaunchRequest {
-            vendor: crate::launch::context::launch_vendor(vendor),
-            kind: aida_core::launch_policy::LaunchKind::Fresh,
-            program: program.into(),
-            // Trusted output of session::headless_vendor_args (including
-            // posture flags and a prompt), not a default_flags/template tail.
-            // Caller configuration flags must be validated before this builder.
-            args: headless_vendor_args.to_vec(),
-            tail: Vec::new(),
-            posture,
-            cwd: worktree.to_path_buf(),
-            set_cwd: true,
-            // Native/None constructors do not cross the AIDA boundary.
-            host_main: None,
-        })?;
+        let ctx = {
+            let req = crate::launch::LaunchRequest {
+                vendor: crate::launch::context::launch_vendor(vendor),
+                kind: aida_core::launch_policy::LaunchKind::Fresh,
+                program: program.into(),
+                // Trusted output of session::headless_vendor_args (including
+                // posture flags and a prompt), not a default_flags/template tail.
+                // Caller configuration flags must be validated before this builder.
+                args: headless_vendor_args.to_vec(),
+                tail: Vec::new(),
+                posture,
+                cwd: worktree.to_path_buf(),
+                set_cwd: true,
+                // Native/None constructors do not cross the AIDA boundary.
+                host_main: None,
+            };
+            // trace:STORY-2538 | ai:codex
+            let exec = crate::session::capture_launch_exec(&req.cwd, req.host_main.as_deref())?;
+            crate::launch::LaunchContext::resolve(&exec, req)
+        }?;
         crate::launch::spawn_agent(&ctx)?
     };
     cmd.current_dir(worktree)
@@ -4274,4 +4520,31 @@ mod bug_1930_tests {
             failure.reason
         );
     }
+}
+
+// trace:STORY-2640 | ai:codex
+fn fast_gate_lookup_branch(lookup: crate::forge::ChangeLookup) -> Result<Option<String>, String> {
+    match lookup {
+        crate::forge::ChangeLookup::Found(pr) if !pr.branch.is_empty() => Ok(Some(pr.branch)),
+        crate::forge::ChangeLookup::NoChange => Ok(None),
+        other => Err(format!("fast gate PR lookup unavailable: {other:?}")),
+    }
+}
+
+#[cfg(test)]
+#[test]
+// trace:STORY-2640 | ai:codex
+fn fast_gate_unknown_forge_evidence_never_releases_review() {
+    use crate::forge::ChangeLookup;
+    for lookup in [
+        ChangeLookup::CliMissing,
+        ChangeLookup::CliFailed("auth".into()),
+        ChangeLookup::Unreachable("offline".into()),
+    ] {
+        assert!(fast_gate_lookup_branch(lookup).is_err());
+    }
+    assert_eq!(
+        fast_gate_lookup_branch(ChangeLookup::NoChange).unwrap(),
+        None
+    );
 }

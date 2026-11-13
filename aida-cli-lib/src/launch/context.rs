@@ -6,6 +6,7 @@
 
 use std::path::{Path, PathBuf};
 
+use aida_core::exec_context::ExecContext;
 use aida_core::launch_policy::{LaunchKind, LaunchVendor, PostureFlag};
 
 use crate::session::ContainmentPosture;
@@ -90,8 +91,9 @@ impl std::error::Error for LaunchRefusal {}
 
 /// A resolved launch. Fields are private: only [`LaunchContext::resolve`]
 /// builds one in production, so every launch passed the same checks.
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub(crate) struct LaunchContext {
+    exec: ExecContext,
     vendor: LaunchVendor,
     kind: LaunchKind,
     program: std::ffi::OsString,
@@ -106,18 +108,25 @@ pub(crate) struct LaunchContext {
 }
 
 impl LaunchContext {
-    /// Resolve `req` against this process's own containment.
-    pub(crate) fn resolve(req: LaunchRequest) -> Result<Self, LaunchRefusal> {
-        // A malformed value refuses here; the answer is this process's own
-        // inherited containment, never the export it made for its children.
-        if let Err(err) = crate::session::aida_contained_env() {
-            return Err(LaunchRefusal::MalformedParentContainment(format!(
-                "{err:#}"
-            )));
-        }
-        let agent_cmd = std::env::var_os(aida_core::launch_policy::AGENT_CMD_ENV)
+    /// Resolve against explicitly captured parent inputs, with no ambient reads.
+    // trace:STORY-2538 | ai:codex
+    pub(crate) fn resolve(exec: &ExecContext, req: LaunchRequest) -> Result<Self, LaunchRefusal> {
+        let parent_contained = exec
+            .environment()
+            .get("AIDA_CONTAINED")
+            .map(|raw| crate::session::parse_aida_contained(&raw.to_string_lossy()))
+            .transpose()
+            .map_err(|err| LaunchRefusal::MalformedParentContainment(format!("{err:#}")))?
+            .unwrap_or(false);
+        let agent_cmd = exec
+            .environment()
+            .get(aida_core::launch_policy::AGENT_CMD_ENV)
             .is_some_and(|cmd| !cmd.to_string_lossy().trim().is_empty());
-        Self::resolve_with(req, crate::session::process_contained(), agent_cmd)
+        Self::resolve_inputs(exec, req, parent_contained, agent_cmd)
+    }
+
+    pub(crate) fn exec_context(&self) -> &ExecContext {
+        &self.exec
     }
 
     /// [`Self::resolve`] with the parent's containment given and no program
@@ -133,7 +142,25 @@ impl LaunchContext {
     /// The pure resolution: `parent_contained` is this process's own
     /// containment and `agent_cmd` whether it carries an `AIDA_AGENT_CMD`
     /// override.
+    #[cfg(test)]
     pub(super) fn resolve_with(
+        req: LaunchRequest,
+        parent_contained: bool,
+        agent_cmd: bool,
+    ) -> Result<Self, LaunchRefusal> {
+        let exec = ExecContext::new(
+            aida_core::exec_context::Environment::capture(),
+            None,
+            req.cwd.clone(),
+            req.host_main.clone().unwrap_or_else(|| req.cwd.clone()),
+            aida_core::exec_context::ToolPaths::default(),
+            std::sync::Arc::new(aida_core::exec_context::SystemClock::default()),
+        );
+        Self::resolve_inputs(&exec, req, parent_contained, agent_cmd)
+    }
+
+    fn resolve_inputs(
+        exec: &ExecContext,
         req: LaunchRequest,
         parent_contained: bool,
         agent_cmd: bool,
@@ -170,6 +197,7 @@ impl LaunchContext {
         crate::containment::refuse_unreceipted_bypass(descriptor_key, &argv)
             .map_err(|error| LaunchRefusal::OuterOnlyPermission(error.to_string()))?;
         Ok(Self {
+            exec: exec.clone(),
             vendor: req.vendor,
             kind: req.kind,
             program: req.program,
@@ -246,5 +274,129 @@ pub(crate) fn launch_vendor(vendor: crate::session::HeadlessVendor) -> LaunchVen
         crate::session::HeadlessVendor::Claude => LaunchVendor::Claude,
         crate::session::HeadlessVendor::Codex => LaunchVendor::Codex,
         crate::session::HeadlessVendor::Agy => LaunchVendor::Agy,
+    }
+}
+
+// Deliberately omit execution inputs (which may contain secrets).
+impl std::fmt::Debug for LaunchContext {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("LaunchContext")
+            .field("vendor", &self.vendor)
+            .field("kind", &self.kind)
+            .field("posture", &self.posture)
+            .finish_non_exhaustive()
+    }
+}
+
+#[cfg(test)]
+mod exec_context_tests {
+    use super::*;
+    use aida_core::exec_context::{Environment, SystemClock, ToolPaths};
+
+    fn fixture(raw: Option<&std::ffi::OsStr>, home: &str) -> ExecContext {
+        ExecContext::new(
+            Environment::from_pairs(raw.map(|raw| ("AIDA_CONTAINED".into(), raw.to_os_string()))),
+            Some(home.into()),
+            "/project".into(),
+            "/authority".into(),
+            ToolPaths::default(),
+            std::sync::Arc::new(SystemClock::default()),
+        )
+    }
+
+    fn request() -> LaunchRequest {
+        LaunchRequest {
+            vendor: LaunchVendor::Claude,
+            kind: LaunchKind::Fresh,
+            program: "claude".into(),
+            args: vec![],
+            tail: vec![],
+            posture: ContainmentPosture::None,
+            cwd: "/project".into(),
+            set_cwd: true,
+            host_main: None,
+        }
+    }
+
+    #[test]
+    fn explicit_parent_contexts_coexist_and_refuse_malformed_inputs() {
+        let workers: Vec<_> = ["/home-a", "/home-b"]
+            .into_iter()
+            .map(|home| {
+                std::thread::spawn(move || {
+                    let exec = fixture(Some(std::ffi::OsStr::new("off")), home);
+                    let ctx = LaunchContext::resolve(&exec, request()).unwrap();
+                    assert!(!ctx.parent_contained());
+                    assert_eq!(ctx.exec_context().home(), Some(Path::new(home)));
+                    assert_eq!(
+                        crate::glyph_config::config_path_for(
+                            crate::glyph_config::Scope::User,
+                            &exec
+                        )
+                        .unwrap(),
+                        Path::new(home).join(".aida/config.toml")
+                    );
+                    assert_eq!(
+                        crate::glyph_config::config_path_for(
+                            crate::glyph_config::Scope::Project,
+                            &exec
+                        )
+                        .unwrap(),
+                        Path::new("/project/.aida/config.toml")
+                    );
+                    assert!(super::super::resources::cargo_slot_dir(&exec).is_none());
+                })
+            })
+            .collect();
+        for worker in workers {
+            worker.join().unwrap();
+        }
+        let contained = fixture(Some(std::ffi::OsStr::new("yes")), "/home");
+        assert!(matches!(
+            LaunchContext::resolve(&contained, request()),
+            Err(LaunchRefusal::WeakerThanParent { .. })
+        ));
+        let malformed = fixture(Some(std::ffi::OsStr::new("maybe")), "/home");
+        assert!(matches!(
+            LaunchContext::resolve(&malformed, request()),
+            Err(LaunchRefusal::MalformedParentContainment(_))
+        ));
+        use std::os::unix::ffi::OsStrExt;
+        let non_unicode = fixture(Some(std::ffi::OsStr::from_bytes(&[0xff])), "/home");
+        assert!(matches!(
+            LaunchContext::resolve(&non_unicode, request()),
+            Err(LaunchRefusal::MalformedParentContainment(_))
+        ));
+        let missing = ExecContext::new(
+            Environment::default(),
+            None,
+            "/project".into(),
+            "/authority".into(),
+            ToolPaths::default(),
+            std::sync::Arc::new(SystemClock::default()),
+        );
+        assert!(LaunchContext::resolve(&missing, request()).is_ok());
+        assert!(
+            crate::glyph_config::config_path_for(crate::glyph_config::Scope::User, &missing)
+                .is_err()
+        );
+        let override_ctx = fixture(Some(std::ffi::OsStr::new("on")), "/home");
+        let override_ctx = ExecContext::new(
+            override_ctx
+                .environment()
+                .clone()
+                .with_value("AIDA_AGENT_CMD", Some("fixture".into())),
+            None,
+            "/project".into(),
+            "/authority".into(),
+            ToolPaths::default(),
+            std::sync::Arc::new(SystemClock::default()),
+        );
+        let mut req = request();
+        req.posture = ContainmentPosture::Aida;
+        assert!(matches!(
+            LaunchContext::resolve(&override_ctx, req),
+            Err(LaunchRefusal::AgentCmdUnderContainment)
+        ));
     }
 }

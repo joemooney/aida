@@ -21,15 +21,28 @@ fn git_ok(repo: &std::path::Path, args: &[&str]) -> String {
 }
 
 fn queue_work(storage: &crate::Storage) -> anyhow::Result<()> {
+    queue_work_launch(storage, true)
+}
+
+fn queue_work_launch(storage: &crate::Storage, no_launch: bool) -> anyhow::Result<()> {
+    queue_work_launch_sync(storage, no_launch, true)
+}
+
+fn queue_work_launch_sync(
+    storage: &crate::Storage,
+    no_launch: bool,
+    no_pull: bool,
+) -> anyhow::Result<()> {
     crate::queue_cmd::handle_queue_work(
         storage,
+        None,
         crate::test_env::HERMETIC_TEST_USER,
-        Some("PR-2457"),
+        Some(if no_launch { "PR-2457" } else { "STORY-2457" }),
         None,
         false,
-        /* no_launch */ true,
+        /* no_launch */ no_launch,
         crate::queue_cmd::QueueWorkRoleInput::direct(Some("reviewer")),
-        /* no_pull */ true,
+        no_pull,
         None,
         None,
         None,
@@ -50,9 +63,9 @@ fn queue_work(storage: &crate::Storage) -> anyhow::Result<()> {
         false,
         false,
         false,
+        (!no_launch).then_some(crate::complexity_calibration::ComplexityLevel::High),
         None,
-        None,
-        None,
+        (!no_launch).then_some(crate::effort_calibration::EffortBucket::OneDay),
         false,
         false,
         false,
@@ -62,6 +75,18 @@ fn queue_work(storage: &crate::Storage) -> anyhow::Result<()> {
 }
 
 fn review_story(main: &std::path::Path) -> (crate::Storage, impl Fn(aida_core::RequirementStatus)) {
+    // Keep the trusted fixture setting private even under a shared-write
+    // runner umask; the allocation reader correctly rejects mode 0664.
+    // trace:BUG-2498 | ai:codex
+    use std::os::unix::fs::PermissionsExt;
+    let store_root = main.join(".aida-store");
+    crate::test_env::home_fixture_backend(&store_root).unwrap();
+    let common = aida_core::allocation_authority::common_dir(&store_root).unwrap();
+    std::fs::set_permissions(
+        common.join(aida_core::allocation_authority::CONFIG_FILE),
+        std::fs::Permissions::from_mode(0o600),
+    )
+    .unwrap();
     let (storage, status) = super::orphan_reentry_tests::queued_scope(main, "STORY-2457");
     std::fs::write(
         main.join(".aida-store/registry/team.toml"),
@@ -343,6 +368,7 @@ fn bug_2469_dead_review_reclaimed_only_when_new_head_covers_recorded_and_actual_
     assert!(queue_work(&storage).is_err());
     lease.active_pid = None;
     lease.creator_pid = None;
+    lease.holder_record = None;
     save(&lease);
     assert!(matches!(
         crate::ownership::reader::lease_owner(&fx.main, &lease),
@@ -428,10 +454,166 @@ fn bug_2469_dead_review_reclaimed_only_when_new_head_covers_recorded_and_actual_
     assert!(queue_work(&storage).is_err());
     assert!(lease_file.exists() && duplicate_file.exists());
     std::fs::remove_file(duplicate_file).unwrap();
+    // Production's stalled state: Reviewing, exact session, no witnesses.
+    // Neither an empty witness list nor an unrelated Closed record proves exit.
+    // trace:BUG-2498 | ai:codex
+    crate::ownership::dual::enable_for_test();
+    crate::ownership::dual::lease_released(&fx.main, &lease.id, "review completed");
+    assert!(matches!(
+        crate::ownership::reader::lease_owner(&fx.main, &lease),
+        crate::ownership::OwnerVerdict::Unknown { .. }
+    ));
+    assert!(!crate::ownership::reader::review_lease_ended(
+        &fx.main, &lease
+    ));
+    assert!(crate::ownership::reader::journal_reclaim(&fx.main, &lease).is_err());
+    lease.active_pid = None;
+    lease.creator_pid = None;
+    save(&lease);
+    let record = crate::ownership::reader::lease_record(&fx.main, &lease)
+        .unwrap()
+        .unwrap();
+    assert!(matches!(
+        record.phase,
+        crate::ownership::Phase::Reviewing { .. }
+    ));
+    assert!(record.holder.unwrap().witnesses.is_empty());
+    assert!(!crate::ownership::reader::review_lease_ended(
+        &fx.main, &lease
+    ));
+    // Observed production state: clean, pushed, witness-less, no verdict.
+    // The real supervisor exit path must still record completion.
+    // trace:BUG-2498 | ai:codex
+    crate::queue_cmd::end_finished_review(&fx.main, "PR-2457", &tree, false);
+    assert!(crate::ownership::reader::review_lease_ended(
+        &fx.main, &lease
+    ));
+    // A mail-retention refusal may stamp the lease after completion; it must
+    // preserve the binding while retaining all worker identity checks.
+    let mut retained = lease.clone();
+    retained.ending_retained_at = Some(chrono::Utc::now());
+    retained.ending_retained_reason = Some("unread mail".into());
+    std::fs::write(&lease_file, toml::to_string(&retained).unwrap()).unwrap();
+    assert!(crate::ownership::reader::review_lease_ended(
+        &fx.main, &retained
+    ));
+    save(&lease);
+    // Contained writers refuse before touching host ownership evidence.
+    // trace:TASK-3777 | ai:codex
+    let before = crate::ownership::reader::lease_record(&fx.main, &lease)
+        .unwrap()
+        .unwrap();
+    ambient.set_key("AIDA_CONTAINED", "1");
+    assert!(crate::ownership::reader::review_finished(&fx.main, &lease)
+        .unwrap_err()
+        .to_string()
+        .contains("contained seat"));
+    ambient.unset_key("AIDA_CONTAINED");
+    let after = crate::ownership::reader::lease_record(&fx.main, &lease)
+        .unwrap()
+        .unwrap();
+    assert_eq!(after.generation, before.generation);
+    std::fs::write(tree.join("pending"), "keep completed review notes").unwrap();
+    let ended = crate::queue_cmd::end_finished_review(&fx.main, "PR-2457", &tree, true);
+    assert!(ended[0].1.is_err());
+    assert!(crate::ownership::reader::review_lease_ended(
+        &fx.main, &lease
+    ));
+    assert!(queue_work(&storage).is_err());
+    assert!(lease_file.exists());
+    std::fs::remove_file(tree.join("pending")).unwrap();
+    let mut holder = std::process::Command::new("sleep")
+        .arg("30")
+        .current_dir(&tree)
+        .spawn()
+        .unwrap();
+    let result = queue_work(&storage);
+    holder.kill().unwrap();
+    holder.wait().unwrap();
+    assert!(result.is_err());
+    std::fs::write(tree.join("local"), "unpublished completed review fix").unwrap();
+    git_ok(&tree, &["add", "local"]);
+    git_ok(&tree, &["commit", "-qm", "completed review local commit"]);
+    assert_retained_refusal("review checkout has unpublished commits");
+    git_ok(&tree, &["reset", "--hard", &first_head]);
     let markers = tree.join(".aida/merge-holds");
     std::fs::create_dir_all(&markers).unwrap();
     std::fs::write(markers.join("PR-2457"), "review crashed with hold\n").unwrap();
-    queue_work(&storage).unwrap();
+    save(&lease); // the watcher sees the original witness-less Reviewing state
+    std::fs::write(tree.join("pending"), "retain until supervisor finishes").unwrap();
+    crate::review_watch::bug2498_review_worktree_release_allows_one_watch_setup_retry(
+        &next_head,
+        || queue_work(&storage),
+        || {
+            // Use the real supervisor completion path, not dual::lease_released.
+            let ended = crate::queue_cmd::end_finished_review(&fx.main, "PR-2457", &tree, true);
+            assert!(ended[0].1.is_err()); // dirty work is still retained
+            assert!(lease_file.exists());
+            assert!(crate::ownership::reader::review_lease_ended(
+                &fx.main, &lease
+            ));
+            let mut replacement = lease.clone();
+            replacement.id = "later-same-head-review".into();
+            assert!(!crate::ownership::reader::review_lease_ended(
+                &fx.main,
+                &replacement
+            ));
+            replacement = lease.clone();
+            replacement.active_pid = Some(std::process::id());
+            assert!(!crate::ownership::reader::review_lease_ended(
+                &fx.main,
+                &replacement
+            ));
+            // Legacy recorded workers need a positive dead identity; a PID
+            // without its start identity cannot borrow completion authority.
+            // trace:TASK-3777 | ai:codex
+            let mut child = std::process::Command::new("sleep")
+                .arg("30")
+                .spawn()
+                .unwrap();
+            let pid = child.id();
+            let start = crate::process_probe::process_start_identity(pid).unwrap();
+            child.kill().unwrap();
+            child.wait().unwrap();
+            replacement = lease.clone();
+            replacement.holder_record = None;
+            replacement.active_pid = Some(pid);
+            replacement.active_pid_start_time = Some(start);
+            save(&replacement);
+            crate::ownership::reader::review_finished(&fx.main, &replacement).unwrap();
+            assert!(crate::ownership::reader::review_lease_ended(
+                &fx.main,
+                &replacement
+            ));
+            replacement.active_pid = Some(std::process::id());
+            replacement.active_pid_start_time = None;
+            save(&replacement);
+            crate::ownership::reader::review_finished(&fx.main, &replacement).unwrap();
+            assert!(!crate::ownership::reader::review_lease_ended(
+                &fx.main,
+                &replacement
+            ));
+            replacement = lease.clone();
+            replacement.active_pid = Some(std::process::id());
+            // Even an otherwise matching receipt cannot override a recorded
+            // live worker outside the review cwd.
+            replacement.active_pid_start_time =
+                crate::process_probe::process_start_identity(std::process::id());
+            save(&replacement);
+            crate::ownership::reader::review_finished(&fx.main, &replacement).unwrap();
+            assert!(!crate::ownership::reader::review_lease_ended(
+                &fx.main,
+                &replacement
+            ));
+            save(&lease);
+            // Superseding killed the supervisor before verdict collection.
+            // Its watcher proves all recorded processes gone and closes the
+            // captured lease before the failed next-head pickup retries.
+            // trace:BUG-2498 | ai:codex
+            crate::review_watch::bug2498_confirm_superseded(&fx.main, &lease);
+            std::fs::remove_file(tree.join("pending")).unwrap();
+        },
+    );
     assert!(crate::gate::merge_hold_core::read_hold(&fx.main, 2457).is_some());
     assert!(!lease_file.exists());
     let new_lease = crate::list_leases(&fx.main).remove(0);
@@ -439,4 +621,101 @@ fn bug_2469_dead_review_reclaimed_only_when_new_head_covers_recorded_and_actual_
     assert_eq!(new_lease.worktree_path, tree);
     assert_eq!(git_ok(&tree, &["rev-parse", "HEAD"]), next_head);
     assert!(git_ok(&fx.main, &["for-each-ref", "refs/aida/review-coverage"]).is_empty());
+}
+
+// trace:BUG-2530 | ai:codex
+#[test]
+fn bug2530_concluded_pickup_preserves_checkout_queue_and_calibration() {
+    let fx = fixture();
+    let mut ambient = crate::test_env::AmbientGuard::hermetic_with_seat(&fx.main, "reviewer", &[]);
+    ambient.set_key("AIDA_TRUST_PID_NAMESPACE", "1");
+    let gh = fx.root.join("fake-gh");
+    crate::test_exec::write_executable(&gh, "#!/bin/sh\nexit 1\n");
+    ambient.set_key("AIDA_TEST_GH_BINARY", &gh);
+    git_ok(&fx.main, &["init", "-q", ".aida-store"]);
+    let (storage, status) = review_story(&fx.main);
+    git_ok(
+        &fx.main,
+        &["push", "-q", "origin", "HEAD:refs/pull/2457/head"],
+    );
+    queue_work(&storage).unwrap();
+    let lease = crate::list_leases(&fx.main).remove(0);
+    let tree = lease.worktree_path;
+    std::fs::remove_file(crate::lease_path(&fx.main, &lease.id)).unwrap();
+    status(aida_core::RequirementStatus::Approved);
+    let user = crate::test_env::HERMETIC_TEST_USER;
+    for row in storage.queue_list(user, false).unwrap() {
+        storage.queue_remove(user, &row.requirement_id).unwrap();
+    }
+    let before = serde_json::to_value(storage.load().unwrap()).unwrap();
+    let sha = git_ok(&tree, &["rev-parse", "HEAD"]);
+    ambient.set_key("AIDA_TEST_PR_HEAD_SHA", &sha);
+    let grant = crate::gate::seat_authority::test_support::mint_grant_for(
+        &fx.main,
+        user,
+        "advisor",
+        &["reviewer"],
+    );
+    ambient.set_key(crate::gate::seat_authority::GRANT_ENV, grant);
+    let path = crate::gate::review_verdict::verdict_path(&fx.main, "PR-2457");
+    std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+    let calibration = fx.main.join(".aida/complexity-calibration");
+    let effort = fx.main.join(".aida/effort-calibration");
+    // Remove setup's calibration so any attempted pickup write is visible.
+    for dir in [&calibration, &effort] {
+        if dir.exists() {
+            std::fs::remove_dir_all(dir).unwrap();
+        }
+    }
+    let identity = vec!["session:independent-reviewer".to_owned()];
+    let receipt =
+        crate::gate::review_authority::write_human_receipt(&sha, "PR-2457", &identity, false, true)
+            .unwrap();
+    let branch_before = git_ok(&fx.main, &["show-ref"]);
+    let checkout_before = git_ok(&tree, &["status", "--porcelain"]);
+    // The pull child publishes evidence absent from the pre-pull view. This
+    // proves admission sees the synchronized verdict before touching resources.
+    let incoming = fx.root.join("incoming-verdict.json");
+    let pulled = fx.root.join("pull-observed");
+    let fake = fx.root.join("pull-aida");
+    crate::test_exec::write_executable(&fake, format!(
+        "#!/bin/sh\n[ \"$*\" = 'db sync --pull' ] || exit 42\ncp '{}' '{}' || exit 43\ntouch '{}'\n",
+        incoming.display(), path.display(), pulled.display(),
+    ));
+    let _exe = crate::kernel::test_aida_exe::set(fake);
+    for kind in ["request-changes", "rejected", "approved"] {
+        std::fs::write(
+            &incoming,
+            serde_json::json!({
+                "verdict":kind, "reviewed_sha":sha,
+                "recorded_at":chrono::Utc::now().to_rfc3339(),
+                "recorder_attestation": {
+                    "sha":sha, "human_at_tty":true, "receipt_id":receipt, "identity":identity
+                }
+            })
+            .to_string(),
+        )
+        .unwrap();
+        let _ = std::fs::remove_file(&path);
+        let _ = std::fs::remove_file(&pulled);
+        let error = queue_work_launch_sync(&storage, false, false).unwrap_err();
+        assert!(pulled.exists(), "required pull must precede refusal");
+        assert!(
+            error
+                .to_string()
+                .contains("duplicate review is unnecessary"),
+            "{kind}: {error:#}"
+        );
+        assert!(tree.join(".git").exists());
+        assert_eq!(git_ok(&tree, &["rev-parse", "HEAD"]), sha);
+        assert_eq!(git_ok(&tree, &["status", "--porcelain"]), checkout_before);
+        assert_eq!(git_ok(&fx.main, &["show-ref"]), branch_before);
+        assert!(crate::list_leases(&fx.main).is_empty());
+        assert!(storage.queue_list(user, false).unwrap().is_empty());
+        assert_eq!(
+            serde_json::to_value(storage.load().unwrap()).unwrap(),
+            before
+        );
+        assert!(!calibration.exists() && !effort.exists());
+    }
 }

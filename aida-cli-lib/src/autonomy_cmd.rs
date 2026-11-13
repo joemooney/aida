@@ -6,6 +6,7 @@
 //! per day). Extracted verbatim from `main.rs` (SPIKE-78, pure movement) —
 //! the display/config layer only. The `AutonomyMode` enum + drain-shared
 //! resolution logic (ADR-10) stays near the drain machinery.
+// trace:TASK-3428 | ai:codex
 
 use anyhow::Result;
 use colored::Colorize;
@@ -263,25 +264,23 @@ pub(crate) struct AutonomyArgs {
 // store. trace:STORY-439 | ai:claude
 fn run_autonomy(
     matches: &clap::ArgMatches,
-    _ctx: &crate::command_registry::DispatchCtx,
+    _ctx: &crate::cmdkit::DispatchCtx,
 ) -> anyhow::Result<()> {
-    use crate::*;
     let args = <AutonomyArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
     let AutonomyArgs { command } = &args;
     return self::handle_autonomy_command(command.as_ref());
 }
 
 // trace:STORY-1728 | ai:claude
-pub(crate) static AUTONOMY: crate::command_registry::CommandReg =
-    crate::command_registry::CommandReg {
-        name: "autonomy",
-        help_after: "punts",
-        command: <AutonomyArgs as clap::CommandFactory>::command,
-        policy: |_| crate::command_registry::CmdPolicy {
-            stakeholder: crate::stakeholder_role::StakeholderAction::Write,
-            per_write_auto_push: false,
-            skip_role_restore_prompt: false,
-            team_identity_write: false,
-        },
-        run: crate::command_registry::Handler::Early(run_autonomy),
-    };
+pub(crate) static AUTONOMY: crate::cmdkit::CommandReg = crate::cmdkit::CommandReg {
+    name: "autonomy",
+    help_after: "punts",
+    command: <AutonomyArgs as clap::CommandFactory>::command,
+    policy: |_| crate::cmdkit::CmdPolicy {
+        stakeholder: crate::stakeholder_role::StakeholderAction::Write,
+        per_write_auto_push: false,
+        skip_role_restore_prompt: false,
+        team_identity_write: false,
+    },
+    run: crate::cmdkit::Handler::Early(run_autonomy),
+};

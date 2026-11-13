@@ -46,6 +46,8 @@ hermetic audit. `JSON not honoured` means unsupported and explicitly rejected.
 | `aida findings promote` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
 | `aida findings calibration` | COULD NOT VERIFY | Dedicated --json exists; needs command-specific state or external service |
 | `aida findings calibration annotate` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
+| `aida flow-data` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
+| `aida flow-data report` | COULD NOT VERIFY | Dedicated --json exists; needs command-specific state or external service |
 | `aida questions` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
 | `aida questions list` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
 | `aida questions sweep` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
@@ -56,6 +58,10 @@ hermetic audit. `JSON not honoured` means unsupported and explicitly rejected.
 | `aida decide` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
 | `aida research` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
 | `aida advisor` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
+| `aida advisor loops` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
+| `aida advisor loops status` | JSON honoured | advisor loops status (not configured) |
+| `aida advisor loops rebind` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
+| `aida advisor loops worker` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
 | `aida advisor register` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
 | `aida advisor unregister` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
 | `aida advisor watch` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
@@ -319,6 +325,7 @@ hermetic audit. `JSON not honoured` means unsupported and explicitly rejected.
 | `aida worktree pool adopt` | COULD NOT VERIFY | Dedicated --json exists; needs command-specific state or external service |
 | `aida worktree pool destroy` | COULD NOT VERIFY | Dedicated --json exists; needs command-specific state or external service |
 | `aida intent` | COULD NOT VERIFY | Dedicated --json exists; needs command-specific state or external service |
+| `aida intent review-return` | JSON honoured | intent review-return --file review-input.json (JSON attachment) |
 | `aida intent ci` | COULD NOT VERIFY | Dedicated --json exists; needs command-specific state or external service |
 | `aida intent ci enroll` | COULD NOT VERIFY | Dedicated --json exists; needs command-specific state or external service |
 | `aida intent ci request` | COULD NOT VERIFY | Dedicated --json exists; needs command-specific state or external service |
@@ -444,6 +451,8 @@ hermetic audit. `JSON not honoured` means unsupported and explicitly rejected.
 | `aida triage status` | COULD NOT VERIFY | Dedicated --json exists; needs command-specific state or external service |
 | `aida ship` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
 | `aida pr` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
+| `aida pr emergency-land` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
+| `aida pr state` | COULD NOT VERIFY | Dedicated --json exists; needs command-specific state or external service |
 | `aida pr post-ship-cleanup` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
 | `aida pr auto-queue-review` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
 | `aida pr review` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
@@ -561,6 +570,8 @@ hermetic audit. `JSON not honoured` means unsupported and explicitly rejected.
 | `aida config glyph unset` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
 | `aida config glyph reset` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
 | `aida config permissions` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
+| `aida config permissions conformance-launch` | JSON not honoured | Explicit diagnostic launch; no JSON output contract |
+| `aida config permissions runtime-policy` | JSON not honoured | Fixed embedded descriptor JSON; no format selector contract |
 | `aida config permissions probe` | JSON honoured | config permissions probe --vendor unregistered-audit-fixture (structured refusal; nonzero exit) |
 | `aida config permissions show` | COULD NOT VERIFY | Dedicated --json exists; needs command-specific state or external service |
 | `aida config permissions set` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
@@ -792,6 +803,7 @@ hermetic audit. `JSON not honoured` means unsupported and explicitly rejected.
 | `aida deputy shell resume` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
 | `aida deputy shell ack` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
 | `aida lane` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
+| `aida lane fast-gate-release` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
 | `aida lane job` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
 | `aida lane job run` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
 | `aida lane job wait` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |

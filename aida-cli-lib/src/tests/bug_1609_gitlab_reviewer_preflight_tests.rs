@@ -12,6 +12,7 @@
 //! trace:BUG-1609 | ai:claude
 
 use super::*;
+use crate::{format_review_label, parse_review_scope, pr_base_head, ReviewForge};
 
 /// A fake `glab` that answers `api -X GET projects/:id/merge_requests/<n>`
 /// with a real-shaped MR object whose source/target branches are NOT
@@ -107,7 +108,7 @@ fn gitlab_review_story_title_round_trips_to_gitlab_forge() {
     );
     assert_eq!(title, "Review MR-1: some MR title");
 
-    // What `derive_scope_from_entry` (queue_cmd.rs) does with a
+    // What `derive_scope_from_entry` (queue_cmd/work.rs) does with a
     // "Review <LABEL>: …" title: strip the prefix, take the first token,
     // parse it back through the same `parse_review_scope` it uses.
     let rest = title.strip_prefix("Review ").unwrap();
@@ -144,7 +145,7 @@ fn reviewer_preflight_pr_n_fires_for_every_forge() {
 #[test]
 fn auto_queue_review_help_text_is_forge_neutral() {
     use clap::CommandFactory;
-    let cmd = crate::command_registry::built_command();
+    let cmd = crate::TEST_CLI.built_command();
     let pr_cmd = cmd
         .get_subcommands()
         .find(|s| s.get_name() == "pr")

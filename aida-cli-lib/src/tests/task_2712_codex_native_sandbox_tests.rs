@@ -384,7 +384,7 @@ fn every_codex_spawn_path_gets_the_shared_write_set() {
             .contains("Some(crate::tool_contained_flags(host_main,vendor.profile().executable,)?)"),
         "headless_vendor_args must obtain its profile's posture from the shared helper"
     );
-    let queue: String = production_source("queue_cmd.rs")
+    let queue: String = production_source("queue_cmd/work.rs")
         .split_whitespace()
         .collect();
     assert!(queue.contains("child_grant_id.as_deref(),Some(&crate::canonical_role_name(&role)),);"));

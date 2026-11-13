@@ -88,7 +88,17 @@ consequence: string,
  */
 resolution: string, };
 
+export type ParkBinding = { version: number, wait_id: string, generation: bigint, owner_node_id: string, };
+
 export type DecisionRequest = {
+/**
+ * Stable identity; absent only on legacy unbound questions.
+ */
+question_id?: string | null,
+/**
+ * Host-owned retained-work binding. An answer does not release it.
+ */
+park_binding?: ParkBinding | null,
 /**
  * The self-contained question (state / deciding factor distilled so the
  * human needs no spec re-read to answer).
@@ -893,7 +903,7 @@ decisions?: Array<string>,
  */
 punted?: Array<string>,
 /**
- * The reviewer's verdict (`Approved` / `RequestChanges` / `Rejected`),
+ * The reviewer's verdict (`Approved` / `RequestChanges` / `Rejected` / `Waiting`),
  * promoted from the gitignored `.aida/review-verdicts/<spec>.json`.
  */
 review_verdict?: string | null, };

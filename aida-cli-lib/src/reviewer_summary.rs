@@ -141,7 +141,7 @@ pub const MERGE_ESCALATED_TO_HUMAN: &str = "escalated-to-human";
 /// trace:BUG-226 | ai:claude
 #[derive(Debug, Clone, serde::Deserialize)]
 pub struct VerdictFile {
-    /// `Approved` | `RequestChanges` | `Rejected`.
+    /// `Approved` | `RequestChanges` | `Rejected` | `waiting`.
     pub verdict: String,
     /// One-line rationale.
     #[serde(default)]
@@ -190,7 +190,7 @@ pub fn parse_verdict_file(json: &str) -> Option<VerdictFile> {
 }
 
 /// Map a verdict-file `verdict` string to the PASS / CHANGES REQUESTED /
-/// FAIL vocabulary the per-spec checklist uses. Case-tolerant. Returns
+/// FAIL / WAITING vocabulary the per-spec checklist uses. Case-tolerant. Returns
 /// `None` for an unrecognised verdict so the caller can surface the raw
 /// string. trace:BUG-226 | ai:claude
 fn verdict_label(raw: &str) -> Option<&'static str> {
@@ -200,6 +200,7 @@ fn verdict_label(raw: &str) -> Option<&'static str> {
         VerdictKind::Approved => Some("PASS"),
         VerdictKind::RequestChanges => Some("CHANGES REQUESTED"),
         VerdictKind::Rejected => Some("FAIL"),
+        VerdictKind::Waiting => Some("WAITING"),
         VerdictKind::Unknown => None,
     }
 }
@@ -747,7 +748,7 @@ pub(crate) fn review_record_template(
         .iter()
         .map(|spec| {
             format!(
-                "aida review record {spec} --pr {pr} --sha {} --verdict <approved|request-changes|rejected> \
+                "aida review record {spec} --pr {pr} --sha {} --verdict <approved|request-changes|rejected|waiting> \
                  --summary '<one line>' [--finding '<finding>' ...]",
                 head_sha.unwrap_or("<PR-HEAD-SHA>")
             )
@@ -988,7 +989,7 @@ mod bug2187_recovery_tests {
     fn recovery_prints_a_ready_record_command_when_none_was_attempted() {
         let template = review_record_template(&["STORY-77".into()], 59, Some("abc1234"));
         assert!(template.starts_with(
-            "aida review record STORY-77 --pr 59 --sha abc1234 --verdict <approved|request-changes|rejected>"
+            "aida review record STORY-77 --pr 59 --sha abc1234 --verdict <approved|request-changes|rejected|waiting>"
         ));
         let out = unrecorded_review_recovery(Path::new("/review"), None, Some("draft"), &template);
         assert!(out.contains(&template), "{out}");

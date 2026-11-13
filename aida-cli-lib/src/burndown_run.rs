@@ -1,7 +1,26 @@
+// trace:TASK-3429 | ai:codex
 //! burndown command, burndown run waves, wave PR integration and burndown config (STORY-1488 slice 1)
 // trace:STORY-1488 | ai:claude
 
-use crate::*;
+use crate::process_retry::RetryEtxtbsy;
+use crate::{
+    aida_exe_path, aida_home_dir, all_queued_added_at, all_queued_requirement_ids, burndown,
+    collect_open_prs, collect_open_prs_uncached, current_role_instance_is_companion,
+    current_user_id, detect_distributed_store_from, drain_lock, drive_robustness,
+    find_main_worktree_root, find_project_root, findings, forge, get_default_author, headless_tee,
+    humanize_relative, in_flight_lease_role_map, integrate, leases, list_leases, load_dispenser,
+    load_store_for_lookup, machine_readiness, main_worktree_root_from, maybe_sync_pull,
+    network_retry, pane_host, parse_requirement_type, process_probe, queue_cmd,
+    record_role_activity, session, shelve_spec_on_failure, spec_title_cell, status_cleanup,
+    truncate, wait_for_ci_terminal, CiProbe,
+};
+use crate::{pid_start_time, role, worktree};
+use aida_core::liveness::LeaseState;
+use aida_core::DatabaseBackend;
+use aida_core::RequirementStatus;
+use aida_core::{Requirement, RequirementType};
+use anyhow::{Context, Result};
+use colored::Colorize;
 
 // trace:STORY-1728 | ai:claude
 #[path = "burndown_run_args.rs"]
@@ -352,19 +371,10 @@ pub(crate) fn handle_burndown_run(
         })?;
     }
 
-    // BUG-530: sync the orphan store before computing the blessed set. The
-    // preflight reads the local `.aida-store/` worktree (via
-    // resolve_burndown_sets → load_store_for_lookup → GitBackend), which can
-    // LAG origin when a prior drain pushed Done→Completed bumps that this clone
-    // hasn't pulled — so the preflight would otherwise announce stale specs
-    // (e.g. already-Completed/unqueued ones). maybe_sync_pull is the proven
-    // `--sync` primitive: fetch + ff/rebase, and it NEVER fails the caller (every
-    // error → a warning), so a degraded/offline sync just falls back to the
-    // local view. Runs on dry-run too, so the previewed set matches the real
-    // drain. trace:BUG-530 | ai:claude
+    // trace:BUG-2501 | ai:codex — refresh must succeed before queueing work.
     if let Ok(project_root) = find_project_root() {
         if let Some(store_path) = detect_distributed_store_from(&project_root) {
-            let _ = maybe_sync_pull(&store_path);
+            maybe_sync_pull(&store_path)?;
         }
     }
 
@@ -667,7 +677,7 @@ pub(crate) fn handle_burndown_run(
         // A `--max` cap makes "blessed specs remain unstarted" an EXPECTED stop,
         // so the unstarted probe is skipped; open wave PRs must still drain.
         let mut residual =
-            probe_burndown_residual(&project_root, status, tag, batch, &ready, max.is_some());
+            probe_burndown_residual(&project_root, status, tag, batch, &ready, max.is_some())?;
         // TASK-1169 / ADR-21: the launcher integrates the open wave PRs ITSELF
         // — a Rust CI wait with no harness ceiling and no 10-minute tool cap —
         // BEFORE deciding whether another agent turn is even needed. Run on a
@@ -685,7 +695,7 @@ pub(crate) fn handle_burndown_run(
                     batch,
                     &ready,
                     max.is_some(),
-                );
+                )?;
             }
         }
         match burndown::drain_followup(code, residual.is_empty(), rounds_used, MAX_RESUME_ROUNDS) {
@@ -729,8 +739,8 @@ pub(crate) fn handle_burndown_run(
 /// Done→Completed merge bumps are visible), re-resolves the blessed ready set
 /// (the unstarted remainder — skipped when `--max` capped the run, where a
 /// remainder is an expected stop), and matches the forge's open PRs against
-/// the drain's scope (initial blessed set ∪ still-ready set). Every leg is
-/// best-effort: a failed probe degrades to "no residual" rather than wedging
+/// the drain's scope (initial blessed set ∪ still-ready set). After a successful
+/// refresh, other probes are best-effort: a failed probe degrades to "no residual" rather than wedging
 /// the launcher in a relaunch loop on bad data.
 // trace:BUG-755 | ai:claude
 pub(crate) fn probe_burndown_residual(
@@ -740,12 +750,12 @@ pub(crate) fn probe_burndown_residual(
     batch: Option<&str>,
     blessed: &[String],
     spec_capped: bool,
-) -> burndown::ResidualWork {
+) -> Result<burndown::ResidualWork> {
     // Refresh the store view first — the drain's merges push Done→Completed
     // bumps this clone may not have pulled (same reason as the BUG-530 preflight
-    // sync; never fails the caller).
+    // sync; a failed refresh stops integration and follow-up).
     if let Some(store_path) = detect_distributed_store_from(project_root) {
-        let _ = maybe_sync_pull(&store_path);
+        maybe_sync_pull(&store_path)?;
     }
     let unstarted: Vec<String> = if spec_capped {
         Vec::new()
@@ -803,10 +813,10 @@ pub(crate) fn probe_burndown_residual(
         .into_values()
         .map(|pr| (pr.number, pr.title, pr.head_branch))
         .collect();
-    burndown::ResidualWork {
+    Ok(burndown::ResidualWork {
         unmerged_prs: burndown::match_wave_prs(&scope, &open, &facts),
         unstarted,
-    }
+    })
 }
 
 /// TASK-1169 / ADR-21: the launcher's OWN integration leg — the impure half of
@@ -892,14 +902,15 @@ pub(crate) fn integrate_wave_prs(
         // either RequestChanges is a hard stop (never merge over a reviewer).
         let (forge_request_changes, mergeable, forge_head) =
             wave_pr_review_facts(project_root, pr.number);
-        let local_request_changes =
-            local_verdict_blocks_merge(project_root, pr.number, &pr.spec, forge_head.as_deref());
+        let local_review =
+            local_wave_review(project_root, pr.number, &pr.spec, forge_head.as_deref());
 
         let action = burndown::wave_pr_action(&burndown::WavePrFacts {
             supervision_label,
             wait_expired,
             ci,
-            request_changes: forge_request_changes || local_request_changes,
+            request_changes: forge_request_changes || local_review == LocalWaveReview::Blocked,
+            review_waiting: local_review == LocalWaveReview::Waiting,
             mergeable,
         });
 
@@ -1104,6 +1115,26 @@ pub(crate) fn local_verdict_blocks_merge(
     spec: &str,
     current_sha: Option<&str>,
 ) -> bool {
+    local_wave_review(project_root, pr_number, spec, current_sha) != LocalWaveReview::Clear
+}
+
+// trace:TASK-3777 | ai:codex
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum LocalWaveReview {
+    Clear,
+    Waiting,
+    Blocked,
+}
+
+// Preserve WAITING separately for wave reporting while every unproven receipt
+// remains a merge block, including the final irreversible-boundary recheck.
+// trace:TASK-3777 | ai:codex
+fn local_wave_review(
+    project_root: &std::path::Path,
+    pr_number: u64,
+    spec: &str,
+    current_sha: Option<&str>,
+) -> LocalWaveReview {
     // The merge chokepoint's own corpus: the PR and spec files, and the gate
     // ledger where it is newer or alone (M1: a collected verdict is ledger-only).
     // trace:TASK-1801 | ai:claude
@@ -1114,26 +1145,84 @@ pub(crate) fn local_verdict_blocks_merge(
         &[spec.to_string()],
     ) {
         Ok(found) => found.into_iter().map(|(_, body)| body).collect(),
-        Err(_) => return true,
+        Err(_) => return LocalWaveReview::Blocked,
     };
     if bodies.is_empty() {
-        return false;
+        return LocalWaveReview::Clear;
     }
     let Some(current_sha) = current_sha else {
-        return true;
+        return LocalWaveReview::Blocked;
     };
-    !matches!(
-        crate::gate::review_verdict::reconcile_artifacts_for_sha(
-            bodies.iter().map(String::as_str),
-            current_sha
-        ),
-        Ok(Some(crate::gate::review_verdict::VerdictKind::Approved))
-    )
+    match crate::gate::review_verdict::reconcile_artifacts_for_sha(
+        bodies.iter().map(String::as_str),
+        current_sha,
+    ) {
+        Ok(Some(crate::gate::review_verdict::VerdictKind::Approved)) => LocalWaveReview::Clear,
+        Ok(Some(crate::gate::review_verdict::VerdictKind::Waiting)) => LocalWaveReview::Waiting,
+        _ => LocalWaveReview::Blocked,
+    }
 }
 
 #[cfg(test)]
 mod bug_1581_merge_block_tests {
     use super::*;
+
+    // trace:TASK-3777 | ai:codex
+    #[test]
+    fn wave_waiting_receipt_reports_waiting_and_unproven_evidence_still_blocks() {
+        let root = tempfile::tempdir().unwrap();
+        let dir = root.path().join(".aida/review-verdicts");
+        std::fs::create_dir_all(&dir).unwrap();
+        let sha = "ac772eaca9d389fa762a232156df996023bfdf7a";
+        let path = dir.join("PR-3731.json");
+        let receipt = |verdict, reviewer| {
+            serde_json::json!({
+                "verdict": verdict, "reviewed_sha": sha, "recorded_by": reviewer,
+            })
+            .to_string()
+        };
+        std::fs::write(&path, receipt("Waiting", "reviewer-a")).unwrap();
+        let review = local_wave_review(root.path(), 3731, "TASK-3777", Some(sha));
+        assert_eq!(review, LocalWaveReview::Waiting);
+        let action = burndown::wave_pr_action(&burndown::WavePrFacts {
+            supervision_label: None,
+            wait_expired: None,
+            ci: integrate::CiState::Passing,
+            request_changes: review == LocalWaveReview::Blocked,
+            review_waiting: review == LocalWaveReview::Waiting,
+            mergeable: integrate::MergeableState::Mergeable,
+        });
+        assert_eq!(
+            action,
+            burndown::WavePrAction::Park(
+                integrate::ParkReason::ReviewWaiting.message().to_string()
+            )
+        );
+        assert!(local_verdict_blocks_merge(
+            root.path(),
+            3731,
+            "TASK-3777",
+            Some(sha)
+        ));
+        assert_eq!(
+            local_wave_review(root.path(), 3731, "TASK-3777", None),
+            LocalWaveReview::Blocked
+        );
+        std::fs::write(
+            dir.join("TASK-3777.json"),
+            receipt("Approved", "reviewer-b"),
+        )
+        .unwrap();
+        assert_eq!(
+            local_wave_review(root.path(), 3731, "TASK-3777", Some(sha)),
+            LocalWaveReview::Blocked
+        );
+        std::fs::write(&path, "invalid json").unwrap();
+        assert_eq!(
+            local_wave_review(root.path(), 3731, "TASK-3777", Some(sha)),
+            LocalWaveReview::Blocked
+        );
+    }
 
     // The top-level act follows every retained round even when that round's
     // clock is ahead. Unrelated-artifact opposition is covered separately.
@@ -1573,7 +1662,7 @@ pub(crate) fn leased_spec_ids(project_root: &std::path::Path) -> std::collection
     let live = process_probe::probe_live_claude_sessions();
     list_leases(project_root)
         .into_iter()
-        .filter(|l| !matches!(lease_state_for(l, &live, now), LeaseState::Stale))
+        .filter(|l| !matches!(leases::lease_state_for(l, &live, now), LeaseState::Stale))
         .map(|l| l.scope)
         .collect()
 }
@@ -1662,7 +1751,7 @@ pub(crate) fn handle_burndown_status(json: bool) -> Result<()> {
     let live = process_probe::probe_live_claude_sessions();
     let in_flight: Vec<InFlightLease> = list_leases(&project_root)
         .into_iter()
-        .filter(|l| !matches!(lease_state_for(l, &live, now), LeaseState::Stale))
+        .filter(|l| !matches!(leases::lease_state_for(l, &live, now), LeaseState::Stale))
         .map(|l| InFlightLease {
             scope: l.scope.clone(),
             branch: l.branch.clone(),
@@ -2655,7 +2744,7 @@ pub(crate) const STANDING_ARTIFACT_TYPES: [&str; 6] = [
 ];
 
 // pub(crate) so the MCP status surface can mirror this exact exclusion (BUG-717).
-pub(crate) fn is_standing_artifact_type(req_type: &str) -> bool {
+pub fn is_standing_artifact_type(req_type: &str) -> bool {
     STANDING_ARTIFACT_TYPES
         .iter()
         .any(|s| req_type.eq_ignore_ascii_case(s))
@@ -3181,7 +3270,7 @@ pub(crate) struct BurndownArgs {
 // trace:STORY-527 | ai:claude
 fn run_burndown(
     matches: &clap::ArgMatches,
-    _ctx: &crate::command_registry::DispatchCtx,
+    _ctx: &crate::cmdkit::DispatchCtx,
 ) -> anyhow::Result<()> {
     let args = <BurndownArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
     let cmd = &args.inner;
@@ -3189,16 +3278,15 @@ fn run_burndown(
 }
 
 // trace:STORY-1728 | ai:claude
-pub(crate) static BURNDOWN: crate::command_registry::CommandReg =
-    crate::command_registry::CommandReg {
-        name: "burndown",
-        help_after: "release",
-        command: <BurndownArgs as clap::CommandFactory>::command,
-        policy: |_| crate::command_registry::CmdPolicy {
-            stakeholder: crate::stakeholder_role::StakeholderAction::Write,
-            per_write_auto_push: false,
-            skip_role_restore_prompt: false,
-            team_identity_write: false,
-        },
-        run: crate::command_registry::Handler::Early(run_burndown),
-    };
+pub(crate) static BURNDOWN: crate::cmdkit::CommandReg = crate::cmdkit::CommandReg {
+    name: "burndown",
+    help_after: "release",
+    command: <BurndownArgs as clap::CommandFactory>::command,
+    policy: |_| crate::cmdkit::CmdPolicy {
+        stakeholder: crate::stakeholder_role::StakeholderAction::Write,
+        per_write_auto_push: false,
+        skip_role_restore_prompt: false,
+        team_identity_write: false,
+    },
+    run: crate::cmdkit::Handler::Early(run_burndown),
+};

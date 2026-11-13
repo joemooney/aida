@@ -379,6 +379,11 @@ fn task_2053_bwrap_probe_reads_clean_dirty_and_unpushed() {
     assert_eq!(facts.unpushed, 0, "{facts:?}");
     assert!(facts.dirty.is_empty(), "{facts:?}");
 
+    // Unignore the host marker: publication's commit and probe must agree.
+    // trace:TASK-3749 | ai:codex
+    std::fs::write(clone.join(".git/info/exclude"), "").unwrap();
+    assert!(known(probe(&fx.main, &clone)).dirty.is_empty());
+
     seat_commit(&clone, "a.txt");
     std::fs::write(clone.join("untracked.txt"), "u\n").unwrap();
     let facts = known(probe(&fx.main, &clone));
@@ -673,12 +678,6 @@ fn task_2053_bwrap_dismiss_removes_a_seat_clone_and_its_lease() {
     assert!(ledger.contains("seat_clone_dismiss"), "{ledger}");
 }
 
-/// A host file outside `/tmp` and outside the essential system paths: the
-/// crate's own manifest. A probe that can read it would also read `~/.ssh`.
-fn outside_file() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("Cargo.toml")
-}
-
 fn write_read_allowlist(fx: &Fixture, dirs: &[&Path]) {
     let list: Vec<String> = dirs
         .iter()
@@ -704,8 +703,13 @@ fn task_2053_bwrap_probe_runs_no_seat_filter_and_reads_only_the_seat_view() {
     }
     let fx = fixture();
     let clone = seat(&fx, "filter", "c0ffee000011");
-    let outside = outside_file();
+    // trace:STORY-2695 | ai:codex
+    // The probe overlays /tmp even in its unrestricted read control.
+    // Resolve the writable checkout at runtime, including for restored binaries.
+    let outside_dir = tempfile::tempdir_in(std::env::current_dir().unwrap()).unwrap();
+    let outside = outside_dir.path().join("host-secret");
     let marker = "name = \"aida-cli-lib\"";
+    std::fs::write(&outside, marker).unwrap();
     git_ok(
         &clone,
         &[
@@ -1901,6 +1905,19 @@ fn bug_051_runtime_links_and_build_output_are_not_work() {
     ] {
         assert!(!is_runtime_noise_entry(clone, work), "{work}");
     }
+    // trace:TASK-1222 | ai:codex
+    std::fs::create_dir_all(clone.join(".aida/sessions/nested")).unwrap();
+    std::fs::write(clone.join(".aida/sessions/ended.toml"), "lease").unwrap();
+    assert!(is_runtime_noise_entry(clone, "? .aida/sessions/ended.toml"));
+    for work in [
+        "? .aida/sessions/",
+        "? .aida/sessions/precious-notes",
+        "? .aida/sessions/nested/note.toml",
+        "? .aida/sessions/missing.toml",
+        "1 .M N... .aida/sessions/ended.toml",
+    ] {
+        assert!(!is_runtime_noise_entry(clone, work), "{work}");
+    }
     // A real `.aida-store` directory, not the link, still counts.
     let other = tempfile::tempdir().unwrap();
     std::fs::create_dir(other.path().join(".aida-store")).unwrap();
@@ -1908,6 +1925,61 @@ fn bug_051_runtime_links_and_build_output_are_not_work() {
     std::fs::create_dir(other.path().join(".codegraph")).unwrap();
     assert!(!is_runtime_noise_entry(other.path(), "? .codegraph/"));
     assert!(!is_runtime_noise_entry(clone, "1 .M N... .codegraph"));
+}
+
+// trace:TASK-1222 | ai:codex
+#[cfg(target_os = "linux")]
+#[test]
+fn task_1222_bwrap_probe_retains_precious_session_files() {
+    if !bwrap_live() {
+        return;
+    }
+    let fx = fixture();
+    let clone = seat(&fx, "session-files", "c0ffee001222");
+    // Creation ignores /.aida/* by default. Expose sessions here so status
+    // reaches the shared classifier, rather than hiding the precious file.
+    let exclude = clone.join(".git/info/exclude");
+    let mut rules = std::fs::read_to_string(&exclude).unwrap();
+    rules.push_str("\n!/.aida/sessions\n");
+    std::fs::write(exclude, rules).unwrap();
+    for directory in ["tests/__pycache__", ".claude"] {
+        std::fs::create_dir_all(clone.join(directory)).unwrap();
+    }
+    for file in [
+        "tests/__pycache__/fixture.cpython-313.pyc",
+        ".aida/team-onboarded",
+        ".aida/upstream-report-notice-version",
+        ".aida/.format-hint-shown",
+    ] {
+        std::fs::write(clone.join(file), "runtime").unwrap();
+    }
+    for file in [".bashrc", ".gitconfig", ".gitmodules"] {
+        std::fs::write(clone.join(file), "").unwrap();
+    }
+    std::os::unix::fs::symlink(fx.root.join("absent-skills"), clone.join(".claude/skills"))
+        .unwrap();
+    let sessions = clone.join(".aida/sessions");
+    // Exercise both the normal runtime symlink and a real local directory.
+    if std::fs::symlink_metadata(&sessions).is_ok() {
+        std::fs::remove_file(&sessions).unwrap();
+    }
+    std::os::unix::fs::symlink(fx.root.join("absent-sessions"), &sessions).unwrap();
+    assert!(known(probe(&fx.main, &clone)).dirty.is_empty());
+    std::fs::remove_file(&sessions).unwrap();
+    std::fs::create_dir_all(&sessions).unwrap();
+    std::fs::write(sessions.join("ended.toml"), "runtime lease").unwrap();
+    assert!(known(probe(&fx.main, &clone)).dirty.is_empty());
+    std::fs::write(sessions.join("precious-notes"), "keep this work").unwrap();
+    let facts = known(probe(&fx.main, &clone));
+    assert!(
+        facts
+            .dirty
+            .iter()
+            .any(|entry| entry.contains("precious-notes")),
+        "{facts:?}"
+    );
+    std::fs::remove_file(sessions.join("precious-notes")).unwrap();
+    assert!(known(probe(&fx.main, &clone)).dirty.is_empty());
 }
 
 /// A seat clone (lease `id`) whose one commit on `feat` was pushed to origin

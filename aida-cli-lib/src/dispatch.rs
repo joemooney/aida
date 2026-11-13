@@ -287,7 +287,7 @@ pub(crate) fn dispatch_record_active(now: DateTime<Utc>) -> bool {
     let Ok(dir) = mandate::mandate_dir() else {
         return false;
     };
-    let principal = crate::current_user_id(None);
+    let principal = crate::gate::mandate::operator_principal();
     let (valid, _) = mandate::load_valid(&dir, &principal, now);
     matches!(
         mandate::state_at(&valid, now),
@@ -806,7 +806,7 @@ pub(crate) fn handle_dispatch(action: &DispatchAction) -> Result<()> {
 
     match action {
         DispatchAction::Request { verb, json } => {
-            let principal = crate::current_user_id(None);
+            let principal = crate::gate::mandate::operator_principal();
             let submitted = submit_request(&main_worktree, &mandate_dir, &principal, verb, now)?;
             if *json {
                 let payload = serde_json::json!({
@@ -2637,19 +2637,24 @@ pub(crate) fn build_implementer_launch_command(
         posture == crate::session::ContainmentPosture::None,
         "this dispatch vendor requires the supervised agent launcher"
     );
-    let ctx = crate::launch::LaunchContext::resolve(crate::launch::LaunchRequest {
-        vendor: launch_vendor,
-        kind,
-        program: agent_bin.as_os_str().to_owned(),
-        // Switches above are launcher-owned. The name is a -n operand;
-        // the prompt is positional data, so neither is a flag tail.
-        args,
-        tail: Vec::new(),
-        posture,
-        cwd: wt_path.to_path_buf(),
-        set_cwd: true,
-        host_main: Some(main_worktree.to_path_buf()),
-    })?;
+    let ctx = {
+        let req = crate::launch::LaunchRequest {
+            vendor: launch_vendor,
+            kind,
+            program: agent_bin.as_os_str().to_owned(),
+            // Switches above are launcher-owned. The name is a -n operand;
+            // the prompt is positional data, so neither is a flag tail.
+            args,
+            tail: Vec::new(),
+            posture,
+            cwd: wt_path.to_path_buf(),
+            set_cwd: true,
+            host_main: Some(main_worktree.to_path_buf()),
+        };
+        // trace:STORY-2538 | ai:codex
+        let exec = crate::session::capture_launch_exec(&req.cwd, req.host_main.as_deref())?;
+        crate::launch::LaunchContext::resolve(&exec, req)
+    }?;
     let mut cmd = crate::launch::spawn_agent(&ctx)?;
     // Critical Boundary B requirement: implementer lanes never inherit or hold
     // any session grant, purpose, or dispatch worker claim token.
@@ -3220,23 +3225,22 @@ pub(crate) struct DispatchArgs {
 
 fn run_dispatch(
     matches: &clap::ArgMatches,
-    _ctx: &crate::command_registry::DispatchCtx,
+    _ctx: &crate::cmdkit::DispatchCtx,
 ) -> anyhow::Result<()> {
     let args = <DispatchArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
     handle_dispatch(&args.action)
 }
 
 // trace:STORY-1917 | ai:agy
-pub(crate) static DISPATCH: crate::command_registry::CommandReg =
-    crate::command_registry::CommandReg {
-        name: "dispatch",
-        help_after: "fleet",
-        command: <DispatchArgs as clap::CommandFactory>::command,
-        policy: |_| crate::command_registry::CmdPolicy {
-            stakeholder: crate::stakeholder_role::StakeholderAction::Write,
-            per_write_auto_push: false,
-            skip_role_restore_prompt: false,
-            team_identity_write: false,
-        },
-        run: crate::command_registry::Handler::Early(run_dispatch),
-    };
+pub(crate) static DISPATCH: crate::cmdkit::CommandReg = crate::cmdkit::CommandReg {
+    name: "dispatch",
+    help_after: "fleet",
+    command: <DispatchArgs as clap::CommandFactory>::command,
+    policy: |_| crate::cmdkit::CmdPolicy {
+        stakeholder: crate::stakeholder_role::StakeholderAction::Write,
+        per_write_auto_push: false,
+        skip_role_restore_prompt: false,
+        team_identity_write: false,
+    },
+    run: crate::cmdkit::Handler::Early(run_dispatch),
+};

@@ -1882,11 +1882,11 @@ cp {layout}/tool "$PREFIX/{layout}/tool"
         let dir = TempDir::new().unwrap();
         let cfg = config(&["/bin/true"]);
         let env = ScoreEnv::new(&cfg, false).unwrap();
-        env.require_source_hidden(
-            dir.path(),
-            Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap(),
-        )
-        .unwrap();
+        // trace:STORY-2695 | ai:codex
+        let source = TempDir::new().unwrap();
+        std::fs::write(source.path().join(".git"), "source repository marker").unwrap();
+        env.require_source_hidden(dir.path(), source.path())
+            .unwrap();
         // The existing helper deliberately exposes essential system paths.
         // A project living there must refuse; it cannot claim clean isolation.
         std::fs::write(dir.path().join(".git"), "visible repository marker").unwrap();

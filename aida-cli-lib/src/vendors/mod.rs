@@ -3,6 +3,24 @@
 // trace:STORY-2539 | ai:codex
 use aida_core::vendors::{Background, SkillSyntax, VendorProfile};
 
+// Read-only projection for declaration rendering and preview classification.
+// trace:STORY-1486 | ai:codex
+pub(crate) struct LaunchPreviewOptions<'a> {
+    pub cwd: &'a Option<std::path::PathBuf>,
+    pub noexec: &'a bool,
+}
+
+// trace:STORY-1486 | ai:codex
+pub(crate) fn launch_preview_options(
+    command: &crate::agent_launch::AgentNewCommand,
+) -> LaunchPreviewOptions<'_> {
+    use crate::agent_launch::AgentNewCommand;
+    let (AgentNewCommand::Claude { cwd, noexec, .. }
+    | AgentNewCommand::Codex { cwd, noexec, .. }
+    | AgentNewCommand::Antigravity { cwd, noexec, .. }) = command;
+    LaunchPreviewOptions { cwd, noexec }
+}
+
 fn with_args(head: String, args: &str) -> String {
     match args.trim() {
         "" => head,
@@ -376,4 +394,31 @@ pub(crate) fn codex_binary_diagnostic(path: &std::path::Path) -> String {
             path.display()
         ),
     }
+}
+
+// trace:STORY-2642 | ai:codex
+pub(crate) mod host_diagnostics;
+
+/// Render a runnable unattended review pickup, including its launch vendor.
+// trace:BUG-2514 | ai:codex
+pub(crate) fn review_pickup_cmd(
+    profile: Option<&VendorProfile>,
+    noun: &str,
+    number: u64,
+) -> String {
+    let profile = profile
+        .unwrap_or_else(|| aida_core::vendors::profile(aida_core::vendors::LaunchVendor::Claude));
+    format!(
+        "aida queue work {noun}-{number} --role reviewer --vendor {} --no-human --strict",
+        profile.session_name
+    )
+}
+
+// trace:BUG-2513 | ai:codex
+pub(crate) mod native_setup {
+    pub const KEY: &str = "codex";
+    pub const PROMPT: &str = "  Opt Codex into its native sandbox? This is weaker than AIDA containment (native sandbox, not AIDA-contained). Write [contained.vendors] codex = \"native\"? [y/N]: ";
+    pub const WRITTEN: &str = "Codex native sandbox opt-in written. Commit .aida/config.toml to the trusted default branch before launching; native sandbox, not AIDA-contained.";
+    pub const FIX: &str = "aida init --agent codex (interactive opt-in for missing policy), or edit .aida/config.toml to set and commit [contained.vendors] codex = \"native\" to the trusted default branch";
+    pub const OTHER_FIX: &str = "use a supported vendor: aida agent new claude";
 }

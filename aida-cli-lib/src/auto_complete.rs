@@ -473,6 +473,9 @@ pub(crate) enum FailureKind {
     /// typed shelve cause, not a crash.
     // trace:STORY-974 | ai:codex
     VerdictRequestChanges,
+    /// External evidence only; never an implementer retry or shelf.
+    // trace:BUG-2500 | ai:codex
+    VerdictWaiting,
     /// Phase 3: the reviewer produced a Rejected verdict. This is a typed
     /// shelve cause, not a crash.
     // trace:STORY-974 | ai:codex
@@ -674,6 +677,7 @@ impl FailureKind {
     /// old dedupe tags/tests, but new FailureReason/SpecShelved rows use this.
     pub(crate) fn cause_slug(self) -> &'static str {
         match self {
+            Self::VerdictWaiting => "verdict:waiting",
             Self::VerdictRequestChanges => "verdict:request-changes",
             Self::VerdictReject => "verdict:reject",
             Self::ReviewerWrote => "reviewer-wrote",
@@ -717,6 +721,7 @@ impl FailureKind {
     // trace:BUG-1930 | ai:claude
     pub(crate) fn from_cause_slug(slug: &str) -> Option<Self> {
         Some(match slug {
+            "verdict:waiting" => Self::VerdictWaiting,
             "verdict:request-changes" => Self::VerdictRequestChanges,
             "verdict:reject" => Self::VerdictReject,
             "reviewer-wrote" => Self::ReviewerWrote,
@@ -750,6 +755,7 @@ impl FailureKind {
 /// trace:STORY-246 | ai:claude
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum Verdict {
+    Waiting,
     Approved,
     RequestChanges,
     Rejected,
@@ -768,12 +774,14 @@ impl Verdict {
             VerdictKind::Approved => Some(Self::Approved),
             VerdictKind::RequestChanges => Some(Self::RequestChanges),
             VerdictKind::Rejected => Some(Self::Rejected),
+            VerdictKind::Waiting => Some(Self::Waiting),
             VerdictKind::Unknown => None,
         }
     }
 
     pub(crate) fn label(self) -> &'static str {
         match self {
+            Self::Waiting => "Waiting",
             Self::Approved => "Approved",
             Self::RequestChanges => "RequestChanges",
             Self::Rejected => "Rejected",
@@ -954,6 +962,8 @@ pub(crate) struct HintContext {
 pub(crate) enum ImplementerOutcome {
     /// The implementer opened a PR — the pipeline continues to CI (phase 2).
     PrOpened,
+    /// Successful native seat with no changes or PR. trace:TASK-3608 | ai:codex
+    NoChange,
     /// The implementer punted on a design-fork. `reason` is the one-line punt
     /// summary (category + detail) surfaced in the run epilogue. The punt is
     /// already durably recorded by `aida punt` (status flip + ledger).
@@ -1365,6 +1375,9 @@ pub(crate) enum ReviewerOutcome {
 /// trace:STORY-306 | ai:claude
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum EscalationKind {
+    /// External evidence; fresh review resumes without implementer retries.
+    // trace:BUG-2500 | ai:codex
+    Waiting,
     /// The reviewer escalated a merge decision (phase 3).
     MergeDecision,
     /// The headless advisor escalated a punted design-fork (phase 1 tier).
@@ -1479,6 +1492,9 @@ pub(crate) struct OrchestrationResult {
     /// the caller can log the run and a batch drain can sort the spec apart
     /// from a clean ship. trace:STORY-306 | ai:claude
     pub(crate) escalation: Option<EscalationSummary>,
+    /// Host fast-gate repair is queued: do not retry or claim a ship.
+    // trace:STORY-2640 | ai:codex
+    pub(crate) fast_gate_pending: bool,
     /// BUG-257: set when phase 1 ended *inconclusively* — the orchestrator
     /// could not determine whether a PR exists (a transient GH-API network
     /// error). Like `punt_reason` this is a non-failure stop (`exit_code` `0`,
@@ -1503,6 +1519,9 @@ pub(crate) struct OrchestrationResult {
     /// Carries the one-line hold summary for the run epilogue + batch summary.
     /// `None` on every other path. trace:BUG-250 | ai:claude
     pub(crate) held_reason: Option<String>,
+    /// A successful native seat produced no publication and has no open PR.
+    /// Stops a drain without shipping credit or shelving. trace:TASK-3608 | ai:codex
+    pub(crate) no_change: bool,
 }
 
 impl OrchestrationResult {
@@ -1521,9 +1540,11 @@ impl OrchestrationResult {
             punt_reason: None,
             shipped_spec_id: None,
             escalation: None,
+            fast_gate_pending: false,
             inconclusive_reason: None,
             shelved_reason: None,
             held_reason: None,
+            no_change: false,
         }
     }
 
@@ -1541,9 +1562,11 @@ impl OrchestrationResult {
             punt_reason: None,
             shipped_spec_id: None,
             escalation: None,
+            fast_gate_pending: false,
             inconclusive_reason: None,
             shelved_reason: None,
             held_reason: None,
+            no_change: false,
         }
     }
 
@@ -1592,6 +1615,12 @@ pub(crate) trait PhaseDriver {
     /// [`ImplementerOutcome::Punted`] when a headless implementer hit a
     /// design-fork and punted the spec to `NeedsAttention` (STORY-276).
     fn run_implementer(&mut self) -> Result<ImplementerOutcome, PhaseFailure>;
+
+    /// A host fast-gate repair must finish before any PR recovery or review.
+    // trace:STORY-2640 | ai:codex
+    fn fast_gate_blocks_review(&mut self) -> Result<bool, String> {
+        Ok(false)
+    }
 
     /// BUG-1244: freeze the PR proved by phase 1 for this orchestration run.
     /// Later phases may probe forge state, but may not silently switch to a PR
@@ -2423,9 +2452,11 @@ pub(crate) fn finish_noop(
         punt_reason: None,
         shipped_spec_id: None,
         escalation: None,
+        fast_gate_pending: false,
         inconclusive_reason: None,
         shelved_reason: None,
         held_reason: None,
+        no_change: false,
     }
 }
 
@@ -2480,9 +2511,11 @@ fn finish_success(
         punt_reason: None,
         shipped_spec_id,
         escalation: None,
+        fast_gate_pending: false,
         inconclusive_reason: None,
         shelved_reason: None,
         held_reason: None,
+        no_change: false,
     }
 }
 
@@ -2587,9 +2620,11 @@ fn finish_through_ci_success(
         punt_reason: None,
         shipped_spec_id,
         escalation: None,
+        fast_gate_pending: false,
         inconclusive_reason: None,
         shelved_reason: None,
         held_reason: None,
+        no_change: false,
     }
 }
 
@@ -2663,10 +2698,47 @@ fn finish_punted(
         punt_reason: Some(reason.to_string()),
         shipped_spec_id: None,
         escalation: None,
+        fast_gate_pending: false,
         inconclusive_reason: None,
         shelved_reason: None,
         held_reason: None,
+        no_change: false,
     }
+}
+
+// trace:BUG-2500 | ai:codex
+fn escalation_recovery_hint(kind: EscalationKind) -> &'static str {
+    match kind {
+        EscalationKind::Waiting => {
+            "obtain the named external evidence, then record a fresh review at the current head"
+        }
+        _ => "left for a human — triage it with `aida findings list`",
+    }
+}
+
+// trace:BUG-2500 | ai:codex
+fn escalation_closing_line(kind: EscalationKind) -> &'static str {
+    match kind {
+        EscalationKind::Waiting => {
+            "waiting — obtain the named external evidence, then record a fresh review at the current head; drain continues"
+        }
+        _ => "escalated — drain continues, a human decides",
+    }
+}
+
+#[test]
+fn bug_2500_waiting_recovery_requires_fresh_review() {
+    let hint = escalation_recovery_hint(EscalationKind::Waiting);
+    assert!(
+        hint.contains("external evidence") && hint.contains("fresh review at the current head")
+    );
+    assert!(!hint.contains("findings"));
+    let closing = escalation_closing_line(EscalationKind::Waiting);
+    assert!(closing.contains("waiting") && closing.contains("external evidence"));
+    assert!(closing.contains("fresh review at the current head"));
+    assert!(!closing.contains("a human decides"));
+    assert!(escalation_closing_line(EscalationKind::MergeDecision).contains("a human decides"));
+    assert!(escalation_recovery_hint(EscalationKind::DesignFork).contains("findings list"));
 }
 
 /// Print the escalation epilogue and build a *non-failure* terminal
@@ -2717,7 +2789,7 @@ fn finish_escalated(
     // The escalation surfaced in a specific phase — phase 3 for a merge
     // decision, phase 1 (the punt) for a design-fork.
     let phase = match kind {
-        EscalationKind::MergeDecision => Phase::Reviewer,
+        EscalationKind::Waiting | EscalationKind::MergeDecision => Phase::Reviewer,
         EscalationKind::DesignFork => Phase::Implementer,
         // trace:BUG-727 | ai:claude
         EscalationKind::SupervisedMerge => Phase::Merge,
@@ -2747,6 +2819,9 @@ fn finish_escalated(
         );
     } else {
         let what = match kind {
+            EscalationKind::Waiting => {
+                "review is WAITING; resume with a fresh review at the current head"
+            }
             EscalationKind::MergeDecision => "the reviewer escalated the merge decision to a human",
             EscalationKind::DesignFork => "the advisor escalated a design-fork to a human",
             // trace:BUG-727 | ai:claude
@@ -2759,14 +2834,15 @@ fn finish_escalated(
         eprintln!(
             "  {} {}",
             "→".dimmed(),
-            "left for a human — triage it with `aida findings list`".cyan()
+            escalation_recovery_hint(kind).cyan()
         );
         eprintln!();
         eprintln!(
-            "{} {} escalated ({}) — drain continues, a human decides",
+            "{} {} ({}) {}",
             "⏸".yellow().bold(),
             spec.bold(),
-            fmt_duration(elapsed)
+            fmt_duration(elapsed),
+            escalation_closing_line(kind)
         );
     }
     OrchestrationResult {
@@ -2781,9 +2857,11 @@ fn finish_escalated(
             kind,
             reason: reason.to_string(),
         }),
+        fast_gate_pending: false,
         inconclusive_reason: None,
         shelved_reason: None,
         held_reason: None,
+        no_change: false,
     }
 }
 
@@ -2873,9 +2951,11 @@ fn finish_inconclusive(
         punt_reason: None,
         shipped_spec_id: None,
         escalation: None,
+        fast_gate_pending: false,
         inconclusive_reason: Some(reason.to_string()),
         shelved_reason: None,
         held_reason: None,
+        no_change: false,
     }
 }
 
@@ -2977,10 +3057,43 @@ fn finish_inconclusive_shelved(
         punt_reason: None,
         shipped_spec_id: None,
         escalation: None,
+        fast_gate_pending: false,
         inconclusive_reason: None,
         shelved_reason,
         held_reason: None,
+        no_change: false,
     }
+}
+
+// trace:TASK-3608 | ai:codex
+fn finish_no_change(
+    spec: &str,
+    json: bool,
+    start: &Instant,
+    durations: Vec<(Phase, u128)>,
+) -> OrchestrationResult {
+    if json {
+        for phase in [Phase::Implementer.slug(), "auto-complete"] {
+            println!(
+                "{}",
+                phase_event(
+                    phase,
+                    "no-change",
+                    spec,
+                    start.elapsed().as_millis(),
+                    Some(0),
+                    &[]
+                )
+            );
+        }
+    } else {
+        eprintln!("{spec}: no-change — no work published");
+    }
+    let mut result = OrchestrationResult::ok();
+    result.no_change = true;
+    result.total_ms = start.elapsed().as_millis();
+    result.phase_durations = durations;
+    result
 }
 
 /// BUG-250: print the deliberate-PR-hold epilogue and build a clean *non-
@@ -3063,9 +3176,11 @@ fn finish_held(
         punt_reason: None,
         shipped_spec_id: None,
         escalation: None,
+        fast_gate_pending: false,
         inconclusive_reason: None,
         shelved_reason: None,
         held_reason: Some(summary),
+        no_change: false,
     }
 }
 
@@ -3219,9 +3334,11 @@ fn finish_failure(
         punt_reason: None,
         shipped_spec_id: None,
         escalation: None,
+        fast_gate_pending: false,
         inconclusive_reason: None,
         shelved_reason,
         held_reason: None,
+        no_change: false,
     }
 }
 
@@ -3289,9 +3406,11 @@ fn finish_reconciled(
         punt_reason: None,
         shipped_spec_id: None,
         escalation: None,
+        fast_gate_pending: false,
         inconclusive_reason: None,
         shelved_reason: None,
         held_reason: None,
+        no_change: false,
     }
 }
 
@@ -3317,6 +3436,44 @@ pub(crate) fn phase1_resolver_failure_reason(spec: &str, err: &str) -> String {
          same branch/worktree resolver as `aida queue work {spec}`); refused before \
          taking a lease"
     )
+}
+
+// Preserve the queued repair and its status; ordinary failure shelving would
+// park the very work this gate requires. No CI, reviewer, or merge may follow.
+// trace:STORY-2640 | ai:codex
+fn stop_for_fast_gate(
+    driver: &mut dyn PhaseDriver,
+    spec: &str,
+    json: bool,
+    start: &Instant,
+    durations: &[(Phase, u128)],
+) -> Option<OrchestrationResult> {
+    let (reason, pending) = match driver.fast_gate_blocks_review() {
+        Ok(false) => return None,
+        Ok(true) => (
+            "fast gate repair is pending; leaving its queued round for pickup".to_string(),
+            true,
+        ),
+        Err(error) => (
+            format!("cannot establish fast gate repair state: {error}"),
+            false,
+        ),
+    };
+    let mut result = finish_inconclusive(
+        spec,
+        json,
+        start,
+        durations.to_vec(),
+        &reason,
+        Some(if pending {
+            "complete the queued fast gate repair before resuming this PR"
+        } else {
+            "retry once the forge or network is reachable"
+        }),
+        driver.hint_context().forge,
+    );
+    result.fast_gate_pending = pending;
+    Some(result)
 }
 
 /// Resolve a phase `Err` through the BUG-241 reconcile step. The orchestrator
@@ -3587,6 +3744,12 @@ fn resume_after_advisor(
             json,
             start,
             &f,
+            durations.to_vec(),
+        ))),
+        Ok(ImplementerOutcome::NoChange) => PuntFlow::Terminal(Box::new(finish_no_change(
+            spec,
+            json,
+            start,
             durations.to_vec(),
         ))),
         Ok(ImplementerOutcome::PrOpened) => PuntFlow::Proceed,
@@ -4037,7 +4200,13 @@ pub(crate) fn orchestrate_with_resume(
         let phase_start = Instant::now();
         let mut retries_used = 0usize;
         loop {
-            match driver.run_implementer() {
+            let outcome = driver.run_implementer();
+            // Check before failure recovery: an open PR cannot redeem a queued repair.
+            // trace:STORY-2640 | ai:codex
+            if let Some(result) = stop_for_fast_gate(driver, spec, json, &start, &durations) {
+                return result;
+            }
+            match outcome {
                 Err(f) => {
                     // BUG-1524: a launch refusal (preflight/lease refusal,
                     // agent-binary launch failure) means no implementer ran
@@ -4129,6 +4298,10 @@ pub(crate) fn orchestrate_with_resume(
                             emit_done(Phase::Implementer, spec, json, start.elapsed().as_millis());
                         }
                     }
+                }
+                Ok(ImplementerOutcome::NoChange) => {
+                    durations.push((Phase::Implementer, phase_start.elapsed().as_millis()));
+                    return finish_no_change(spec, json, &start, durations);
                 }
                 Ok(ImplementerOutcome::PrOpened) => {
                     driver.capture_phase_done_pr();
@@ -4231,6 +4404,12 @@ pub(crate) fn orchestrate_with_resume(
             emit_shipped_mismatch(spec, &credited, json, start.elapsed().as_millis());
         }
     } // end phase-1 gate (STORY-492)
+
+    // Also protect --from-pr/--resume runs that skipped the implementer.
+    // trace:STORY-2640 | ai:codex
+    if let Some(result) = stop_for_fast_gate(driver, spec, json, &start, &durations) {
+        return result;
+    }
 
     // Phase 2 — end + wait for CI. lifecycle:no-ci-wait (incl. lifecycle:trivial)
     // skips the BLOCKING wait — CI still runs remotely, the orchestrator just
@@ -4340,6 +4519,9 @@ pub(crate) fn orchestrate_with_resume(
 
     // Phase 3 — reviewer session. lifecycle:no-review skips only this model
     // phase; merge and pull still run so substrate state stays coherent.
+    if let Some(result) = stop_for_fast_gate(driver, spec, json, &start, &durations) {
+        return result;
+    }
     if start_phase.index() > Phase::Reviewer.index() {
         if !json {
             eprintln!("  {} resumed past phase 3 (reviewer)", "↩".cyan());
@@ -4495,11 +4677,19 @@ pub(crate) fn orchestrate_with_resume(
                         events_root.as_deref(),
                     );
                 }
+                // trace:BUG-2500 | ai:codex
+                Ok(ReviewerOutcome::Verdict(Verdict::Waiting)) => {
+                    durations.push((Phase::Reviewer, phase_start.elapsed().as_millis()));
+                    return finish_escalated(spec, json, &start, durations, EscalationKind::Waiting,
+                        "WAITING: external evidence required; resume with a fresh recorded review at the current head",
+                        driver.events_root().as_deref());
+                }
                 Ok(ReviewerOutcome::Verdict(verdict)) if verdict != Verdict::Approved => {
                     durations.push((Phase::Reviewer, phase_start.elapsed().as_millis()));
                     let kind = match verdict {
                         Verdict::RequestChanges => FailureKind::VerdictRequestChanges,
                         Verdict::Rejected => FailureKind::VerdictReject,
+                        Verdict::Waiting => unreachable!("waiting stops before retries"),
                         Verdict::Approved => FailureKind::Failed,
                     };
                     let f = PhaseFailure::of(
@@ -4525,6 +4715,17 @@ pub(crate) fn orchestrate_with_resume(
     }
 
     if let Err(f) = driver.run_agent_gates() {
+        if f.kind == FailureKind::VerdictWaiting {
+            return finish_escalated(
+                spec,
+                json,
+                &start,
+                durations,
+                EscalationKind::Waiting,
+                &f.reason,
+                driver.events_root().as_deref(),
+            );
+        }
         let f = failure_with_retry_attempt(driver, &f, 0);
         return resolve_phase_failure(driver, Phase::Reviewer, spec, json, &start, &f, durations);
     }
@@ -4783,6 +4984,8 @@ pub(crate) fn orchestrate_with_resume(
 /// Why a [`drain_batch`] run stopped. trace:TASK-285 | ai:claude
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum BatchDrainOutcome {
+    /// Successful seat with nothing published. trace:TASK-3608 | ai:codex
+    NoChange,
     /// The batch is empty for the role — every queued member shipped.
     Drained,
     /// The `--max N` cap was reached with members still queued.
@@ -4947,6 +5150,10 @@ pub(crate) trait BatchDriver {
     /// Re-resolved each call — a completed spec leaves the queue, so the head
     /// advances naturally.
     fn next_head(&mut self) -> Option<String>;
+    // trace:STORY-2640 | ai:codex
+    fn next_head_excluding(&mut self, excluded: &[String]) -> Option<String> {
+        self.next_head().filter(|id| !excluded.contains(id))
+    }
     /// Run one spec's full `--auto-complete` orchestration.
     fn run_spec(&mut self, spec: &str) -> OrchestrationResult;
     /// TASK-966: cumulative reported tokens across every headless phase the
@@ -5170,6 +5377,15 @@ fn apply_batch_result(
             exit_code: DRIVE_EXIT_HARD_FAIL,
         });
     }
+    if result.fast_gate_pending {
+        skipped.push((
+            head,
+            result
+                .inconclusive_reason
+                .unwrap_or_else(|| "fast gate repair pending".into()),
+        ));
+        return None;
+    }
     if result.inconclusive_reason.is_some() {
         return Some(BatchDrainResult {
             shipped: shipped.clone(),
@@ -5182,7 +5398,7 @@ fn apply_batch_result(
             exit_code: 0,
         });
     }
-    if result.held_reason.is_some() {
+    if result.held_reason.is_some() || result.no_change {
         return Some(BatchDrainResult {
             shipped: shipped.clone(),
             punted: punted.clone(),
@@ -5190,7 +5406,11 @@ fn apply_batch_result(
             shelved: shelved.clone(),
             skipped: skipped.clone(),
             stopped_at: Some(head),
-            outcome: BatchDrainOutcome::Held,
+            outcome: if result.no_change {
+                BatchDrainOutcome::NoChange
+            } else {
+                BatchDrainOutcome::Held
+            },
             exit_code: 0,
         });
     }
@@ -5249,6 +5469,7 @@ fn record_result_after_latched_halt(
         return;
     };
     let reason = match &done.outcome {
+        BatchDrainOutcome::NoChange => "no-change — nothing published".to_string(),
         BatchDrainOutcome::Held => "held after the drain halted — PR left open".to_string(),
         BatchDrainOutcome::Inconclusive => {
             "inconclusive after the drain halted — left for retry".to_string()
@@ -5285,7 +5506,7 @@ pub(crate) fn drain_batch_pipelined_with_caps(
     let mut punted = Vec::new();
     let mut escalated = Vec::new();
     let mut shelved = Vec::new();
-    let mut skipped = Vec::new();
+    let mut skipped: Vec<(String, String)> = Vec::new();
     // STORY-1429: monotonic shelve-event count for the failure budget.
     // trace:STORY-1429 | ai:claude
     let mut shelve_events = 0usize;
@@ -5344,7 +5565,9 @@ pub(crate) fn drain_batch_pipelined_with_caps(
                     break;
                 }
             }
-            let Some(head) = driver.next_head() else {
+            let Some(head) = driver
+                .next_head_excluding(&skipped.iter().map(|(id, _)| id.clone()).collect::<Vec<_>>())
+            else {
                 no_more_heads = true;
                 break;
             };
@@ -5387,7 +5610,11 @@ pub(crate) fn drain_batch_pipelined_with_caps(
                 || (max.is_some()
                     && launched >= max.unwrap()
                     && !no_more_heads
-                    && driver.next_head().is_some())
+                    && driver
+                        .next_head_excluding(
+                            &skipped.iter().map(|(id, _)| id.clone()).collect::<Vec<_>>(),
+                        )
+                        .is_some())
             {
                 return BatchDrainResult {
                     shipped,
@@ -5428,6 +5655,7 @@ pub(crate) fn drain_batch_pipelined_with_caps(
         let should_finish_serial = through_ci.exit_code == 0
             && through_ci.inconclusive_reason.is_none()
             && through_ci.held_reason.is_none()
+            && !through_ci.no_change
             && through_ci.shipped_spec_id.is_none()
             && through_ci.punt_reason.is_none()
             && through_ci.escalation.is_none();
@@ -5616,7 +5844,9 @@ fn drain_batch_with_caps_streak(
     loop {
         // Resolve the head first: a `--max` of exactly the batch size should
         // report `Drained` (the batch genuinely emptied), not `MaxReached`.
-        let Some(head) = driver.next_head() else {
+        let Some(head) = driver
+            .next_head_excluding(&skipped.iter().map(|(id, _)| id.clone()).collect::<Vec<_>>())
+        else {
             // EPIC-28: clean drain or drained-with-shelved. The latter
             // wins whenever any failure shelved a spec, regardless of how
             // many independents shipped after — the operator still has to
@@ -5803,6 +6033,16 @@ fn drain_batch_with_caps_streak(
                 exit_code: DRIVE_EXIT_HARD_FAIL,
             };
         }
+        // trace:STORY-2640 | ai:codex — leave the repair row for a fresh pickup.
+        if result.fast_gate_pending {
+            skipped.push((
+                head,
+                result
+                    .inconclusive_reason
+                    .unwrap_or_else(|| "fast gate repair pending".into()),
+            ));
+            continue;
+        }
         // BUG-257: an inconclusive run pauses the drain. The spec stays in
         // its current state — no ship, no punt, no escalate — so the next
         // drain re-attempts once the GH API is reachable. Continuing here
@@ -5827,7 +6067,7 @@ fn drain_batch_with_caps_streak(
         // rather than falling through to the `shipped` bucket below (which
         // would falsely claim it shipped). The operator opens the PR and
         // re-runs the drain to continue. trace:BUG-250 | ai:claude
-        if result.held_reason.is_some() {
+        if result.held_reason.is_some() || result.no_change {
             return BatchDrainResult {
                 shipped,
                 punted,
@@ -5835,7 +6075,11 @@ fn drain_batch_with_caps_streak(
                 shelved,
                 skipped,
                 stopped_at: Some(head),
-                outcome: BatchDrainOutcome::Held,
+                outcome: if result.no_change {
+                    BatchDrainOutcome::NoChange
+                } else {
+                    BatchDrainOutcome::Held
+                },
                 exit_code: 0,
             };
         }
@@ -6110,6 +6354,16 @@ pub(crate) fn drain_batch_single_branch(
             }
         }
         let result = driver.run_member_through_ci(&head);
+        // trace:TASK-3608 | ai:codex — nothing to stack or credit as committed.
+        if result.no_change {
+            return SingleBranchResult {
+                committed,
+                cluster_members: Vec::new(),
+                stopped_at: Some(head),
+                outcome: SingleBranchOutcome::Paused,
+                exit_code: 0,
+            };
+        }
         // HALT-on-failure: a phase failure, OR any non-ship outcome (punt /
         // escalation / inconclusive / hold / shipped-mismatch), means this
         // member did not cleanly land on the shared branch. In a coupled
@@ -6118,6 +6372,7 @@ pub(crate) fn drain_batch_single_branch(
         // failed member is parked `NeedsAttention` by the driver. This is the
         // deliberate inverse of EPIC-28's shelve-and-continue (correct only for
         // INDEPENDENT members). trace:TASK-1003 | ai:claude
+        // trace:TASK-3749 | ai:codex
         let unclean = result.punt_reason.is_some()
             || result.escalation.is_some()
             || result.inconclusive_reason.is_some()
@@ -6432,7 +6687,7 @@ where
             // exactly like an inconclusive run — the held spec awaits the
             // operator's gate, so the chain stops cleanly rather than rolling
             // on to the next batch. trace:BUG-250 | ai:claude
-            BatchDrainOutcome::Held => {
+            outcome @ (BatchDrainOutcome::Held | BatchDrainOutcome::NoChange) => {
                 return BatchChainDrainResult {
                     steps,
                     shipped,
@@ -6442,7 +6697,7 @@ where
                     skipped,
                     stopped_batch: Some(batch_name.clone()),
                     stopped_at: result.stopped_at,
-                    outcome: BatchDrainOutcome::Held,
+                    outcome,
                     exit_code: result.exit_code,
                 };
             }

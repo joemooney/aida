@@ -897,3 +897,31 @@ fn task_3365_subreaper_adoption_does_not_prove_group_ancestry() {
         orphan as i32
     );
 }
+
+// trace:TASK-3367 | ai:codex
+#[test]
+fn task_3367_local_unknown_observations_use_reservation_backstop() {
+    use aida_core::proc_identity::{UnknownReason, Verdict};
+    let mut identity = Identity::current().unwrap();
+    assert!(identity.observable());
+    let now = chrono::Utc::now();
+    for reason in [
+        UnknownReason::IncompleteProcfs,
+        UnknownReason::Unreadable("procfs read failed".into()),
+        UnknownReason::MissingIdentity,
+        UnknownReason::NamespaceMismatch,
+        UnknownReason::OtherNode,
+    ] {
+        let verdict = Verdict::ForeignUnknown(reason);
+        identity.recorded_at = Some(now);
+        assert!(identity.alive_with_verdict(verdict.clone()));
+        identity.recorded_at = Some(now - FOREIGN_IDENTITY_TTL - chrono::Duration::seconds(1));
+        assert!(!identity.alive_with_verdict(verdict.clone()));
+        identity.recorded_at = None;
+        assert!(identity.alive_with_verdict(verdict.clone()));
+        let boot = identity.boot.clone();
+        identity.boot = "previous-boot".into();
+        assert!(!identity.alive_with_verdict(verdict));
+        identity.boot = boot;
+    }
+}

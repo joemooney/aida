@@ -11,6 +11,7 @@
 //! `read_reserved_paths`) is shared with `aida compete` and stays in `main.rs`,
 //! reached here via `crate::`. Extracted verbatim from `main.rs` (SPIKE-78); no
 //! behavior change.
+// trace:TASK-3428 | ai:codex
 
 use anyhow::Result;
 use colored::Colorize;
@@ -242,9 +243,8 @@ pub(crate) struct UltraplanArgs {
 // trace:TASK-113 | ai:claude
 fn run_ultraplan(
     matches: &clap::ArgMatches,
-    _ctx: &crate::command_registry::DispatchCtx,
+    _ctx: &crate::cmdkit::DispatchCtx,
 ) -> anyhow::Result<()> {
-    use crate::*;
     let args = <UltraplanArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
     let UltraplanArgs {
         spec,
@@ -257,16 +257,15 @@ fn run_ultraplan(
 }
 
 // trace:STORY-1728 | ai:claude
-pub(crate) static ULTRAPLAN: crate::command_registry::CommandReg =
-    crate::command_registry::CommandReg {
-        name: "ultraplan",
-        help_after: "manual",
-        command: <UltraplanArgs as clap::CommandFactory>::command,
-        policy: |_| crate::command_registry::CmdPolicy {
-            stakeholder: crate::stakeholder_role::StakeholderAction::Read,
-            per_write_auto_push: false,
-            skip_role_restore_prompt: false,
-            team_identity_write: false,
-        },
-        run: crate::command_registry::Handler::Early(run_ultraplan),
-    };
+pub(crate) static ULTRAPLAN: crate::cmdkit::CommandReg = crate::cmdkit::CommandReg {
+    name: "ultraplan",
+    help_after: "manual",
+    command: <UltraplanArgs as clap::CommandFactory>::command,
+    policy: |_| crate::cmdkit::CmdPolicy {
+        stakeholder: crate::stakeholder_role::StakeholderAction::Read,
+        per_write_auto_push: false,
+        skip_role_restore_prompt: false,
+        team_identity_write: false,
+    },
+    run: crate::cmdkit::Handler::Early(run_ultraplan),
+};

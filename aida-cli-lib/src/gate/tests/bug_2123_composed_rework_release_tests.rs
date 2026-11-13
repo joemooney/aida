@@ -22,8 +22,9 @@ const REVIEWER: &str = "claude reviewer seat";
 fn record(root: &Path, key: &str, verdict: &str, sha: &str) {
     let path = rv::verdict_path(root, key);
     std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+    // trace:STORY-2698 | ai:codex — a passing round explicitly clears prior findings.
     let findings = if verdict == "approved" {
-        Vec::new()
+        vec![String::new()]
     } else {
         vec!["the fix is untested".to_string()]
     };
@@ -125,6 +126,7 @@ fn release_hooks(
         root,
         &hold,
         AutoReleaseIo {
+            coverage: &|_| Ok(None),
             live_head: &|| {
                 on_read(reads.get());
                 let i = reads.get().min(heads.len() - 1);

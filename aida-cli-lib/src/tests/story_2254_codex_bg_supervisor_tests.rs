@@ -919,7 +919,7 @@ fn story_2254_bg_launch_status_and_recover_launch_cli() {
     let h = harness("TASK-2266");
     std::env::set_current_dir(h.root()).unwrap();
     let dispatch = |args: &[&str]| {
-        let cli = crate::command_registry::try_parse_from(args).unwrap();
+        let cli = crate::TEST_CLI.try_parse_from(args).unwrap();
         let AgentArgs { inner } = cli.command.registered::<AgentArgs>();
         handle_agent_command(&inner)
     };
@@ -1334,4 +1334,49 @@ fn bug_2467_detached_registry_retains_requested_selection_for_resume() {
             assert!(format!("{:#}", resumed.unwrap_err()).contains("does not delegate `reviewer`"));
         }
     }
+}
+
+// trace:BUG-2511 | ai:codex
+#[test]
+fn bug_2511_occupancy_unreadable_foreign_cwd() {
+    let tmp = tempfile::tempdir().unwrap();
+    let process = tmp.path().join("4242");
+    std::fs::create_dir(&process).unwrap();
+    std::fs::write(process.join("stat"), "4242 (foreign process) S 1 42 43").unwrap();
+    std::fs::write(process.join("cmdline"), b"unrelated\0").unwrap();
+    // A regular file makes read_link fail deterministically, including when
+    // tests run as root; unlike a missing cwd, this is not a vanished process.
+    std::fs::write(process.join("cwd"), b"unreadable link").unwrap();
+    let none = std::collections::HashSet::new();
+    let mut probe = receipt::OccupancyProbe {
+        worktree: Some(tmp.path()),
+        attempt: Some("our-attempt"),
+        ..Default::default()
+    };
+    let scan = |probe: &receipt::OccupancyProbe<'_>, ours| {
+        receipt::scan_occupancy_in_with_owner(tmp.path(), probe, &none, |_| ours)
+    };
+    assert_eq!(scan(&probe, false), receipt::Occupancy::Clear);
+    assert!(matches!(scan(&probe, true), receipt::Occupancy::Unknown(why) if why.contains("cwd")));
+    // Readable evidence still blocks even for a foreign process.
+    probe.group = Some(42);
+    assert!(
+        matches!(scan(&probe, false), receipt::Occupancy::Occupied(why) if why.contains("process group"))
+    );
+    probe.group = None;
+    probe.session = Some(43);
+    assert!(
+        matches!(scan(&probe, false), receipt::Occupancy::Occupied(why) if why.contains("session"))
+    );
+    probe.session = None;
+    std::fs::write(process.join("cmdline"), b"worker\0our-attempt\0").unwrap();
+    assert!(
+        matches!(scan(&probe, false), receipt::Occupancy::Occupied(why) if why.contains("attempt"))
+    );
+    std::fs::write(process.join("cmdline"), b"unrelated\0").unwrap();
+    std::fs::remove_file(process.join("cwd")).unwrap();
+    std::os::unix::fs::symlink(tmp.path(), process.join("cwd")).unwrap();
+    assert!(
+        matches!(scan(&probe, false), receipt::Occupancy::Occupied(why) if why.contains("running in"))
+    );
 }

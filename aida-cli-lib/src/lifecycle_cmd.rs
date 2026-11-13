@@ -4,7 +4,11 @@
 //! state machine itself lives in `aida_core::lifecycle`; this module is only the
 //! CLI handler plus its render helpers exclusive to `aida lifecycle`.
 
-use crate::*;
+use anyhow::{Context, Result};
+use colored::Colorize;
+
+// trace:TASK-3428 | ai:codex
+use crate::{find_project_root, load_store_for_lookup};
 
 /// `aida lifecycle --diagram [--check [--write]] [--doc <FILE>]` — Phase 1 of
 /// SPIKE-56 (TASK-737), generate-only. The spec-state transition model lives in
@@ -384,7 +388,7 @@ pub(crate) struct LifecycleArgs {
 // no behavior change to any other command. trace:TASK-737 | ai:claude
 fn run_lifecycle(
     matches: &clap::ArgMatches,
-    _ctx: &crate::command_registry::DispatchCtx,
+    _ctx: &crate::cmdkit::DispatchCtx,
 ) -> anyhow::Result<()> {
     let args = <LifecycleArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
     let LifecycleArgs {
@@ -406,16 +410,15 @@ fn run_lifecycle(
 }
 
 // trace:STORY-1728 | ai:claude
-pub(crate) static LIFECYCLE: crate::command_registry::CommandReg =
-    crate::command_registry::CommandReg {
-        name: "lifecycle",
-        help_after: "verify",
-        command: <LifecycleArgs as clap::CommandFactory>::command,
-        policy: |_| crate::command_registry::CmdPolicy {
-            stakeholder: crate::stakeholder_role::StakeholderAction::Write,
-            per_write_auto_push: false,
-            skip_role_restore_prompt: false,
-            team_identity_write: false,
-        },
-        run: crate::command_registry::Handler::Early(run_lifecycle),
-    };
+pub(crate) static LIFECYCLE: crate::cmdkit::CommandReg = crate::cmdkit::CommandReg {
+    name: "lifecycle",
+    help_after: "verify",
+    command: <LifecycleArgs as clap::CommandFactory>::command,
+    policy: |_| crate::cmdkit::CmdPolicy {
+        stakeholder: crate::stakeholder_role::StakeholderAction::Write,
+        per_write_auto_push: false,
+        skip_role_restore_prompt: false,
+        team_identity_write: false,
+    },
+    run: crate::cmdkit::Handler::Early(run_lifecycle),
+};

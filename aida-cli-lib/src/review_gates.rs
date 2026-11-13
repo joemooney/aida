@@ -1,7 +1,25 @@
 //! rework verdicts and auto-queued PR review gates (STORY-1488 slice 1)
 // trace:STORY-1488 | ai:claude
 
-use crate::*;
+use crate::process_retry::RetryEtxtbsy;
+#[cfg(test)]
+use crate::review_story_round_is_open;
+use crate::{
+    aida_exe_path, aida_subcmd_add_review_story, auto_complete, canonical_review_story,
+    change_lookup_for_branch, command_output_with_timeout_detail, drain_state,
+    extract_referenced_spec_ids_from_commit, extract_spec_ids_from_commit, format_review_label,
+    git_arg_guard, git_log_messages, load_review_story_inventory, parse_review_story_pr_number,
+    pr_base_head, pr_cmd, resolve_default_branch_ref, run, workflow_hints, BoundedCommandOutput,
+    OpenPrInfo, ReviewForge, SessionLease,
+};
+use crate::{
+    commit_subjects, forge, gate, pr_head_remote_ref_for, review_envelope_targets_pr,
+    reviewer_wrote_message,
+};
+use aida_core::DatabaseBackend;
+use aida_core::Storage;
+use anyhow::{Context, Result};
+use colored::Colorize;
 
 /// TASK-54: return Some((behind, sample)) when `branch` lags `main`
 /// (or origin/main) by 1+ commits. `sample` is a list of one-line
@@ -240,13 +258,13 @@ pub(crate) fn blocking_rework_verdict(
     pr: u32,
 ) -> Option<crate::gate::review_verdict::RecordedVerdict> {
     if let Some(verdict) = crate::gate::review_verdict::read_recorded_verdict(project_root, spec)
-        .filter(|verdict| verdict.kind.blocks_done())
+        .filter(|verdict| verdict.kind.requires_changes())
     {
         return Some(verdict);
     }
     let pr_id = format!("PR-{pr}");
     crate::gate::review_verdict::read_recorded_verdict(project_root, &pr_id)
-        .filter(|verdict| verdict.kind.blocks_done())
+        .filter(|verdict| verdict.kind.requires_changes())
 }
 
 /// Count how many commits `branch` is ahead of the repo's DEFAULT branch, and
@@ -473,6 +491,7 @@ pub(crate) fn reviewer_row_actionability(
         return crate::gate::review_verdict::ReviewActionability::NeedsReview;
     }
     let mut saw_rework = false;
+    let mut saw_waiting = false;
     for spec_id in &covered {
         let verdict = crate::gate::review_verdict::read_recorded_verdict_any(
             project_root,
@@ -513,12 +532,15 @@ pub(crate) fn reviewer_row_actionability(
             crate::gate::review_verdict::ReviewActionability::NeedsReview => {
                 return crate::gate::review_verdict::ReviewActionability::NeedsReview;
             }
+            crate::gate::review_verdict::ReviewActionability::Waiting => saw_waiting = true,
             crate::gate::review_verdict::ReviewActionability::AwaitingRework => saw_rework = true,
             crate::gate::review_verdict::ReviewActionability::Resolved => {}
         }
     }
     if saw_rework {
         crate::gate::review_verdict::ReviewActionability::AwaitingRework
+    } else if saw_waiting {
+        crate::gate::review_verdict::ReviewActionability::Waiting
     } else {
         crate::gate::review_verdict::ReviewActionability::Resolved
     }

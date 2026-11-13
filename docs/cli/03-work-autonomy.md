@@ -84,6 +84,18 @@ artifacts before running the command from an attested reviewer session. The
 launcher never records or accepts a verdict from log text.
 <!-- trace:BUG-2187 | ai:codex -->
 
+Review verdicts are keyed by the reviewer's leased `PR-N` or `MR-N`, never
+by looking up an open change for the spec. An explicit `--pr N` must agree
+with that lease. Without a change lease or explicit change number, a local
+spec-only review stays unbound. Recording for a change requires the pinned
+forge to report its current head. In `aida review record --sha <SHA>`, the
+supplied commit must resolve to that head. An old launch envelope or checkout
+cannot substitute for unavailable forge evidence. Ledger reads
+ignore a misplaced spec-routed copy when its matching change-keyed handshake
+proves that the same review belongs to another change; the original events
+remain untouched.
+<!-- trace:BUG-2517 | ai:codex -->
+
 **A standalone implementer reports one result line and an exit code.**
 An orchestrator, relay or advisor session launches an implementer as a
 separate process with Bash, not an in-session subagent:
@@ -229,6 +241,23 @@ The same recipe is embedded in every phase-failure comment, so the reader who de
 ---
 
 ### `aida lane`
+
+The host runs each lane's `make check-ci-fast` in the lane-job sandbox with a
+one-hour timeout, independent of seat Cargo timeout overrides.
+<!-- trace:TASK-3100 | ai:codex -->
+A source failure gets one repair round; a timeout reports
+`fast_gate=skipped(timeout)` without consuming that round. A retry that times out
+retains an earlier `fast_gate=fail`. Gate jobs reuse the lane target seed and
+overlay. If host publication merges a concurrently advanced PR head after the
+gate, it reports `fast_gate=skipped(reconciled)` (or retains a known failure)
+for that published merge. A host process that
+exits or is killed releases its unqueued review hold on the next review-watch
+check. Pending receipts have a 24-hour backstop, including legacy receipts
+(measured from file modification time). Queued repairs hold review only while
+the exact queue entry and a workable spec remain live, within that backstop.
+An operator can settle a stuck receipt with
+`aida lane fast-gate-release <branch>` from the host checkout. This retains the
+gate verdict and grants no publication or merge authority.
 
 **A headless implementer runs its local tests through its launcher.** A
 headless tool call is capped at 60 seconds, and a process it detaches dies
@@ -463,6 +492,18 @@ stale_after   = "2h"           # gap at/above this reads "stale"; "idle" between
 
 **Counting defect classes.** `findings classes` answers "how often does this kind of defect recur?" from recorded review verdicts. A reviewer can tag each finding with a class from a small fixed vocabulary when recording a verdict (incomplete-fix, fail-open, absent-evidence-reads-as-good, untested-path, contract-drift, race, perf, portability, stale-base, scope-creep); this report counts them across every verdict, archived rounds included, each act of review once. Limit it to a recent window with `--since` (`30d`, `12h`, `2w`, `24 hours ago`, an ISO date at local midnight, or RFC3339) and get machine output with `--json`. Findings recorded before classes existed stay unclassified and are counted as such; free text is never classified after the fact, because a keyword match cannot tell an approval from a refusal. `aida review classes` prints the same report.
 
+To park a recurring finding until a machine-checkable trigger, use
+`aida findings recur <id> --until 'spec:<dependency-id>=completed' --note 'seen again'`.
+The recurrence counter still increments; the finding is deferred and the hourly
+`defer-resurface` job evaluates its trigger. Unknown observations retain the
+deferral. Free text is refused; `--until manual:<who>` requires a non-empty
+`--reason` and the same hold authority as `aida defer`. A reasoned hold is
+retained for human review even when its condition is met.
+Parking and incrementing recurrence are separate writes. If the recurrence
+write fails after parking succeeds, the error names the saved deferral and
+trigger. Inspect the recurrence count before retrying.
+<!-- trace:STORY-2402 | ai:codex -->
+
 **Gotchas.** A finding is the right home for a not-yet-confirmed pattern; promote it at recurrence (the counter survives in a `recurrence:N` tag).
 
 **Chains with** — filed by `queue work --auto-complete` shelving; triaged into rework (`aida rework`) or dismissal.
@@ -507,7 +548,7 @@ The goal appears in the advisor's launch context (`## Goal`), in `aida session h
 The per-seat **job registry**: which periodic jobs each seat runs, whether one is overdue, and who last ran it. One command, one registry, two kinds of job:
 
 <!-- trace:TASK-176 | ai:codex -->
-- **substrate** — `command = "session reap"` (an allow-listed `aida` subcommand: `cache verify`, `session reap`, `session hygiene` (hourly reap, agent gc and idle-cache reclaim; routes only what it had to keep), `queue gc`, `notify check`, `doctor`, `doctor check performance --fail-on-findings`, `doctor check remote-drift --fail-on-findings`, `doctor check stale-remote-branches --fail-on-findings`, `doctor check disk-headroom --fail-on-findings`, `doctor check merged-agent-worktrees --fail-on-findings`, `doctor check runaway-seats --fail-on-findings`, `fleet drive --tick` (the drive-mandate tick; an idle no-op unless a drive mandate is active), `doctor check relay-stall --fail-on-findings` (blocked runs, explicit exits within 24 hours, and dead running/queued owners; only a seat handoff `.done` acknowledges a stall, never the run-directory rotation sentinel), `doctor check lane-liveness` (dead or stalled drain, driver and headless lanes with open work; PRs green at their head with no review lease or verdict there; human-only merge holds and unanswered advisor mailbox requests past their budget; dead-process spec leases. It routes each new finding once to a `lane-liveness-<seat>` seat job, or an operator notification for a human-only hold, and exits 0; it skips the PR check for a tick when `gh` fails or times out; records older than `max_age_hours` (24) are out of scope; this repo ships it disabled), `doctor check mail-backlog` (unread `[request]`/`[handoff]` mail older than `[doctor.mail_backlog] max_age_mins` (30) addressed to a live agent or a role one holds; it nudges each recipient through its wake path (a reminder mail an armed Codex session's mail wake delivers, a `mail-backlog-guard-route-<seat>` seat job for a Claude seat, or a `mail-backlog-guard-route-operator` item in `aida awaiting` when there is none), re-nudges the same message at most every `renudge_mins` (60), and exits 0; silent with no backlog; scaffolded and enabled as `mail-backlog-guard`), `fetch --code-only`, `store compact`, `shift tick`). Needs no LLM. `aida schedule tick` runs the due ones (the per-turn hook calls `aida schedule tick --hook`, which skips network-touching jobs) or paste `aida schedule emit-cron` into a real crontab. Idempotent, quiet when idle. The `aida doctor check <category> --fail-on-findings` shapes are **gates**, not reports: a non-zero exit emits `CronJobFailed`, which a paired `on = ["CronJobFailed:<guard-job>"]` seat job turns into a due item carrying that guard's trip evidence — see `hub-drift-guard`, `stranded-branches-guard` and `disk-headroom-guard` in the scaffolded `[schedule]` section (commented by default; this repo enables `hub-drift-guard` and `disk-headroom-guard`, and ships `stranded-branches-guard` disabled until its remote-branch backlog is healed) for the worked pattern. <!-- trace:STORY-1367 | ai:claude --> <!-- trace:STORY-1699 | ai:claude --> <!-- trace:STORY-1688 | ai:claude --> <!-- trace:STORY-HOME-128 | ai:claude -->
+- **substrate** — `command = "session reap"` (an allow-listed `aida` subcommand: `cache verify`, `session reap`, `session hygiene` (hourly reap, agent gc and idle-cache reclaim; routes only what it had to keep), `queue gc`, `notify check`, `doctor`, `doctor check performance --fail-on-findings`, `doctor check remote-drift --fail-on-findings`, `doctor check stale-remote-branches --fail-on-findings`, `doctor check disk-headroom --fail-on-findings`, `worktree gc --fail-on-findings` (weekly read-only lifecycle inventory), `doctor check runaway-seats --fail-on-findings`, `fleet drive --tick` (the drive-mandate tick; an idle no-op unless a drive mandate is active), `doctor check relay-stall --fail-on-findings` (blocked runs, explicit exits within 24 hours, and dead running/queued owners; only a seat handoff `.done` acknowledges a stall, never the run-directory rotation sentinel), `doctor check lane-liveness` (dead or stalled drain, driver and headless lanes with open work; PRs green at their head with no review lease or verdict there; human-only merge holds and unanswered advisor mailbox requests past their budget; dead-process spec leases. It routes each new finding once to a `lane-liveness-<seat>` seat job, or an operator notification for a human-only hold, and exits 0; it skips the PR check for a tick when `gh` fails or times out; records older than `max_age_hours` (24) are out of scope; this repo ships it disabled), `doctor check mail-backlog` (unread `[request]`/`[handoff]` mail older than `[doctor.mail_backlog] max_age_mins` (30) addressed to a live agent or a role one holds; it nudges each recipient through its wake path (a reminder mail an armed Codex session's mail wake delivers, a `mail-backlog-guard-route-<seat>` seat job for a Claude seat, or a `mail-backlog-guard-route-operator` item in `aida awaiting` when there is none), re-nudges the same message at most every `renudge_mins` (60), and exits 0; silent with no backlog; scaffolded and enabled as `mail-backlog-guard`), `fetch --code-only`, `store compact`, `shift tick`). Needs no LLM. `aida schedule tick` runs the due ones (the per-turn hook calls `aida schedule tick --hook`, which skips network-touching jobs) or paste `aida schedule emit-cron` into a real crontab. Idempotent, quiet when idle. The `aida doctor check <category> --fail-on-findings` shapes are **gates**, not reports: a non-zero exit emits `CronJobFailed`, which a paired `on = ["CronJobFailed:<guard-job>"]` seat job turns into a due item carrying that guard's trip evidence — see `hub-drift-guard`, `stranded-branches-guard` and `disk-headroom-guard` in the scaffolded `[schedule]` section (commented by default; this repo enables `hub-drift-guard` and `disk-headroom-guard`, and ships `stranded-branches-guard` disabled until its remote-branch backlog is healed) for the worked pattern. <!-- trace:STORY-1367 | ai:claude --> <!-- trace:STORY-1699 | ai:claude --> <!-- trace:STORY-1688 | ai:claude --> <!-- trace:STORY-HOME-128 | ai:claude -->
 
   The mail-backlog guard inspects delivery eligibility before choosing a wake path.
   Role mail keeps its original fixed cohort, queued binding, or valid explicit

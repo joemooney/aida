@@ -204,6 +204,7 @@ fn template_dir_trusted(dir: &std::path::Path, owner: u32) -> bool {
 #[allow(dead_code)]
 pub fn enroll_synthetic_home(root: &std::path::Path) {
     use std::io::Write;
+    use std::os::unix::fs::OpenOptionsExt;
     let root = root.canonicalize().expect("private fixture root");
     let temporary = std::env::temp_dir().canonicalize().unwrap();
     assert!(root.starts_with(&temporary), "fixture must be temporary");
@@ -216,6 +217,8 @@ pub fn enroll_synthetic_home(root: &std::path::Path) {
     let mut file = std::fs::OpenOptions::new()
         .write(true)
         .create_new(true)
+        // trace:BUG-2490 | ai:codex — remain trusted under a shared-write umask.
+        .mode(0o600)
         .open(setting)
         .expect("fresh explicit synthetic HOME binding");
     file.write_all(b"version=1\nauthoritative=true\n").unwrap();

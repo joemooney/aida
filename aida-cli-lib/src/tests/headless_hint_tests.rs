@@ -146,16 +146,72 @@ fn headless_env_launches_route_through_shared_argv_builders() {
         &format!(
             "{}\n{}\n{}\n{}\n{}\n{}\n{}",
             include_str!("../lib.rs"),
-            include_str!("../lib_part1.rs"),
-            include_str!("../lib_part2.rs"),
-            include_str!("../lib_part3.rs"),
-            include_str!("../lib_part4.rs"),
+            concat!(
+                include_str!("../glyph_render.rs"),
+                include_str!("../cli_entry.rs"),
+                include_str!("../history_filter.rs"),
+                include_str!("../output_policy.rs"),
+                include_str!("../list_render.rs"),
+                include_str!("../agent_errors.rs"),
+                include_str!("../cast_recording.rs"),
+                include_str!("../argv_rewrite.rs"),
+                include_str!("../review_helpers.rs"),
+                include_str!("../finding_queue.rs"),
+                include_str!("../gitignore_entries.rs"),
+                include_str!("../store_write_policy.rs"),
+                include_str!("../status_policy.rs")
+            ),
+            concat!(
+                include_str!("../retire_legacy.rs"),
+                "\n",
+                include_str!("../glossary_render.rs"),
+                "\n",
+                include_str!("../role_file_helpers.rs"),
+                "\n",
+                include_str!("../mailbox_errors.rs"),
+                "\n",
+                include_str!("../human_route.rs"),
+                "\n",
+                include_str!("../store_drift.rs"),
+                "\n",
+                include_str!("../launch_defaults.rs"),
+                "\n",
+                include_str!("../merge_hold_output.rs"),
+                "\n",
+                include_str!("../history_reporting.rs")
+            ),
+            concat!(
+                include_str!("../ci_staleness.rs"),
+                include_str!("../ci_watch.rs"),
+                include_str!("../bounded_process.rs"),
+                include_str!("../forge_lookup.rs"),
+                include_str!("../store_lookup.rs"),
+                include_str!("../output_policy.rs"),
+                include_str!("../statusline_counts.rs"),
+                include_str!("../session_warnings.rs"),
+                include_str!("../status_policy.rs"),
+                include_str!("../orchestrator_badge.rs"),
+                include_str!("../default_branch.rs"),
+                include_str!("../plan_structure.rs"),
+                include_str!("../worktree_dirty.rs")
+            ),
+            concat!(concat!(
+                include_str!("../scoped_lease.rs"),
+                "\n",
+                include_str!("../pull_lines.rs")
+            )),
             include_str!("../lib_part5.rs"),
-            include_str!("../lib_part6.rs")
+            concat!(
+                include_str!("../regression_tests.rs"),
+                "\n",
+                include_str!("../text_truncate.rs")
+            )
         ),
     );
-    // STORY-771: the queue-work launch machinery lives in queue_cmd.rs.
-    assert_env_setter_has_builder_context("queue_cmd.rs", include_str!("../queue_cmd.rs"));
+    // STORY-771: the queue-work launch machinery lives in queue_cmd/work.rs.
+    for (file, source) in crate::queue_cmd::production_sources() {
+        assert_env_setter_has_builder_context(&file, &source);
+    }
     // STORY-1488: the phase driver moved out of lib_part6.rs.
     assert_env_setter_has_builder_context("phase_driver.rs", include_str!("../phase_driver.rs"));
     assert_env_setter_has_builder_context(
@@ -172,20 +228,85 @@ fn headless_env_launches_route_through_shared_argv_builders() {
 #[test]
 fn no_human_resume_paths_use_headless_resume_launcher() {
     // STORY-771: the implementer + standalone-reviewer resume paths moved to
-    // queue_cmd.rs; the advisor resume stays in lib.rs. Scan both.
+    // queue_cmd/work.rs; the advisor resume stays in lib.rs. Scan both.
     let src = format!(
         "{}{}{}",
         format!(
             "{}\n{}\n{}\n{}\n{}\n{}\n{}",
             include_str!("../lib.rs"),
-            include_str!("../lib_part1.rs"),
-            include_str!("../lib_part2.rs"),
-            include_str!("../lib_part3.rs"),
-            include_str!("../lib_part4.rs"),
+            concat!(
+                include_str!("../glyph_render.rs"),
+                include_str!("../cli_entry.rs"),
+                include_str!("../history_filter.rs"),
+                include_str!("../output_policy.rs"),
+                include_str!("../list_render.rs"),
+                include_str!("../agent_errors.rs"),
+                include_str!("../cast_recording.rs"),
+                include_str!("../argv_rewrite.rs"),
+                include_str!("../review_helpers.rs"),
+                include_str!("../finding_queue.rs"),
+                include_str!("../gitignore_entries.rs"),
+                include_str!("../store_write_policy.rs"),
+                include_str!("../status_policy.rs")
+            ),
+            concat!(
+                include_str!("../retire_legacy.rs"),
+                "\n",
+                include_str!("../glossary_render.rs"),
+                "\n",
+                include_str!("../role_file_helpers.rs"),
+                "\n",
+                include_str!("../mailbox_errors.rs"),
+                "\n",
+                include_str!("../human_route.rs"),
+                "\n",
+                include_str!("../store_drift.rs"),
+                "\n",
+                include_str!("../launch_defaults.rs"),
+                "\n",
+                include_str!("../merge_hold_output.rs"),
+                "\n",
+                include_str!("../history_reporting.rs")
+            ),
+            concat!(
+                include_str!("../ci_staleness.rs"),
+                include_str!("../ci_watch.rs"),
+                include_str!("../bounded_process.rs"),
+                include_str!("../forge_lookup.rs"),
+                include_str!("../store_lookup.rs"),
+                include_str!("../output_policy.rs"),
+                include_str!("../statusline_counts.rs"),
+                include_str!("../session_warnings.rs"),
+                include_str!("../status_policy.rs"),
+                include_str!("../orchestrator_badge.rs"),
+                include_str!("../default_branch.rs"),
+                include_str!("../plan_structure.rs"),
+                include_str!("../worktree_dirty.rs")
+            ),
+            concat!(concat!(
+                include_str!("../scoped_lease.rs"),
+                "\n",
+                include_str!("../pull_lines.rs")
+            )),
             include_str!("../lib_part5.rs"),
-            include_str!("../lib_part6.rs")
+            concat!(
+                include_str!("../regression_tests.rs"),
+                "\n",
+                include_str!("../text_truncate.rs")
+            )
         ),
-        include_str!("../queue_cmd.rs"),
+        // Keep the Work include explicit so test-touched still discovers this
+        // guard, and scan all sibling modules for additional resume launches.
+        format!(
+            "{}\n{}",
+            include_str!("../queue_cmd/work.rs"),
+            crate::queue_cmd::production_sources()
+                .into_iter()
+                .filter(|(file, _)| file != "queue_cmd/work.rs")
+                .map(|(_, source)| source)
+                .collect::<Vec<_>>()
+                .join("\n")
+        ),
         include_str!("../phase_driver_trait.rs")
     )
     .replace("\r\n", "\n");

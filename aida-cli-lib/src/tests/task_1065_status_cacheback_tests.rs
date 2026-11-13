@@ -11,6 +11,8 @@ fn backend_in(dir: &std::path::Path) -> aida_core::CachedGitBackend {
 
 fn pending_dr() -> DecisionRequest {
     DecisionRequest {
+        question_id: Some(uuid::Uuid::new_v4()),
+        park_binding: None,
         question: "Ship or promote?".into(),
         choices: vec![DecisionChoice {
             label: "Ship".into(),

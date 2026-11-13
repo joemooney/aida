@@ -1,7 +1,21 @@
+// trace:TASK-3429 | ai:codex
 //! session prune/show/handoff/manifest and queue-work launch helpers (STORY-1488 slice 1)
 // trace:STORY-1488 | ai:claude
 
-use crate::*;
+use crate::canonical_role_name;
+use crate::process_retry::RetryEtxtbsy;
+use crate::{
+    aida_exe_path, drain_lock, find_lease_by_id_prefix, find_project_root, force_cleanup_lease,
+    humanize_age_secs, humanize_relative, humanize_size, lease_covers_cwd, lease_has_durable_owner,
+    lease_path, list_leases, load_session_activity, load_store_for_lookup, main_worktree_root_from,
+    parent_project_root_for_session, probe_dangling_claudes_at_path,
+    probe_live_claudes_in_worktree, process_probe, seat_rotation, session, session_manifest,
+    shell_quote, PruneCandidate, QueueWorkPlan, SessionLease, SessionManifestCommand,
+};
+use aida_core::{RequirementStatus, Storage};
+use anyhow::{Context, Result};
+use colored::Colorize;
+use std::io::IsTerminal;
 
 pub(crate) fn session_prune_orphans(dry_run: bool, yes: bool) -> Result<()> {
     let home = crate::home_dir().context("HOME not set; cannot locate Claude project dir")?;
@@ -984,9 +998,32 @@ pub(crate) fn session_handoff_seat(
     seat: Option<&str>,
     final_: bool,
     rotated: bool,
+    until: Option<&str>,
+    spec: Option<&str>,
+    reason: Option<&str>,
+    snapshot: bool,
+    body_only: bool,
 ) -> Result<()> {
-    let seat = resolve_handoff_seat(seat)?;
-    let project_root = main_worktree_root_from(&find_project_root()?);
+    // Reject prose before reading stdin or changing handoff/store state.
+    // trace:STORY-2402 | ai:codex
+    let condition = crate::condition_cmd::canonical_condition(until, reason)?;
+    let role_seat = seat_rotation::sanitize_seat(&resolve_handoff_seat(seat)?)?;
+    // trace:STORY-2662 | ai:codex
+    let cwd = find_project_root()?.canonicalize()?;
+    let snapshot_seat = seat_rotation::compact_snapshot_seat(&cwd, &role_seat);
+    let seat = if snapshot {
+        snapshot_seat.clone()
+    } else {
+        role_seat.clone()
+    };
+    // Recovery writes stay inside the lane's existing writable worktree. Deliberate
+    // rotation handoffs and standing orders retain their shared primary root.
+    // trace:STORY-2662 | ai:codex
+    let project_root = if snapshot {
+        cwd.clone()
+    } else {
+        main_worktree_root_from(&cwd)
+    };
     if let Some(src) = write {
         let body = if src == "-" {
             let mut s = String::new();
@@ -995,14 +1032,65 @@ pub(crate) fn session_handoff_seat(
         } else {
             std::fs::read_to_string(src).with_context(|| format!("reading {src}"))?
         };
+        anyhow::ensure!(!body.trim().is_empty(), "handoff note is empty");
+        let mut resolved_spec = spec.map(str::to_string);
+        let body = if let Some(ref condition) = condition {
+            let spec =
+                spec.ok_or_else(|| anyhow::anyhow!("conditional handoffs require --spec"))?;
+            let path = crate::store_sync::detect_distributed_store_from(&project_root).ok_or_else(
+                || anyhow::anyhow!("conditional handoffs require the canonical store"),
+            )?;
+            crate::status_awaiting::team_identity_write_guard(&path, true)?;
+            let backend = crate::queue_cmd::advance_backend(&path)?;
+            let row = backend
+                .get_requirement_unambiguous(spec)?
+                .ok_or_else(|| anyhow::anyhow!("unknown handoff spec: {spec}"))?;
+            let display_id = row.spec_id.as_deref().unwrap_or(spec);
+            resolved_spec = Some(display_id.to_string());
+            let combined = format!("{body}\n\nRevisit {display_id} when {condition}.\n");
+            anyhow::ensure!(
+                combined.trim().len() <= seat_rotation::HANDOFF_MAX_BYTES,
+                "conditional handoff exceeds the handoff size cap"
+            );
+            crate::defer_cmd::defer_single(spec, Some(&condition), reason, &backend, &path)?;
+            // Early handlers skip post-dispatch auto-push. Push the saved
+            // deferral before note I/O so a note failure still syncs it.
+            // trace:STORY-2402 | ai:codex
+            crate::maybe_auto_push_store(
+                &path,
+                crate::StoreAutoPushMode::PerWrite,
+                "conditional session handoff",
+            );
+            combined
+        } else {
+            body
+        };
         // trace:STORY-B6B1278890774EF993D2EBC327862470-101 | ai:claude
-        let written = seat_rotation::write_handoff_by(
+        let mut writer = seat_rotation::HandoffWriter::from_env(final_);
+        if snapshot {
+            writer.snapshot_owner = Some((cwd.clone(), role_seat.clone()));
+        }
+        let written = seat_rotation::write_handoff_kind(
             &project_root,
             &seat,
             &body,
             chrono::Utc::now(),
-            &seat_rotation::HandoffWriter::from_env(final_),
-        )?;
+            &writer,
+            if snapshot {
+                "compact-snapshot"
+            } else {
+                "handoff"
+            },
+        )
+        .map_err(|error| match condition.as_deref() {
+            // The store write already succeeded; preserve that fact on I/O failure.
+            // trace:STORY-2402 | ai:codex
+            Some(condition) => error.context(format!(
+                "handoff note failed after deferring {} until {condition}; deferral remains saved; repair the note and retry",
+                resolved_spec.as_deref().unwrap_or("?")
+            )),
+            None => error,
+        })?;
         println!(
             "Handoff written: {} ({} bytes)",
             written.path.display(),
@@ -1012,7 +1100,11 @@ pub(crate) fn session_handoff_seat(
         if final_ {
             println!("Final handoff: a rotation supervisor will not relaunch this session.");
         }
-        println!("Next session: aida session handoff --seat {seat} --show");
+        if snapshot {
+            println!("Next session: aida session handoff --seat {role_seat} --snapshot --show");
+        } else {
+            println!("Next session: aida session handoff --seat {seat} --show");
+        }
         return Ok(());
     }
     // A rotated generation loads exactly the handoff its supervisor matched
@@ -1035,6 +1127,33 @@ pub(crate) fn session_handoff_seat(
     } else {
         seat_rotation::read_latest_handoff(&project_root, &seat)?
     };
+    // Ordinary reads advertise this worktree's recovery packet to relaunches.
+    // Explicit body-only and rotated reads retain their exact-note semantics.
+    // trace:STORY-2662 | ai:codex
+    let handoff = if !snapshot && !rotated && !body_only {
+        let recovery = match seat_rotation::read_latest_handoff(&cwd, &snapshot_seat) {
+            Ok(recovery) => recovery,
+            Err(error) => {
+                eprintln!("Warning: recovery snapshot unavailable: {error:#}");
+                None
+            }
+        };
+        match recovery {
+            Some(text) => Some(format!(
+                "{}\nRecovery snapshot (may be stale; revalidate):\n{text}",
+                handoff.unwrap_or_default()
+            )),
+            None => handoff,
+        }
+    } else {
+        handoff
+    };
+    if body_only {
+        if let Some(text) = handoff {
+            print!("{text}");
+        }
+        return Ok(());
+    }
     // trace:STORY-1693 | ai:claude
     let standing = seat_rotation::render_standing_orders(&project_root, &seat)?;
     // STORY-1700: the active mandate, read live, prints first.
@@ -1344,7 +1463,7 @@ pub(crate) fn render_session_manifest(
 /// when no lease covers this shell or the manifest doesn't list the
 /// spec — most edits happen outside a planned cluster, so the path stays
 /// quiet by design. trace:STORY-98 | ai:claude
-pub(crate) fn update_manifest_for_status(spec_id: &str, canonical_status: &str) {
+pub fn update_manifest_for_status(spec_id: &str, canonical_status: &str) {
     let Ok(project_root) = find_project_root() else {
         return;
     };

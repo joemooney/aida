@@ -22,6 +22,8 @@ fn aida(repo: &Path, home: &Path, bin_dir: &Path) -> Command {
     cmd.env("HOME", home);
     cmd.env("AIDA_HOME", home);
     cmd.env("AIDA_TELEMETRY", "0");
+    cmd.env_remove("AIDA_OS_WRAP");
+    cmd.env_remove("AIDA_CONTAINED");
     let path = std::env::join_paths(
         std::iter::once(bin_dir.to_path_buf())
             .chain(std::env::split_paths(&std::env::var_os("PATH").unwrap())),
@@ -77,6 +79,7 @@ fn fixture(claude_body: &str, config_extra: &str) -> Fixture {
     for dir in [&repo, &home, &bin] {
         std::fs::create_dir_all(dir).unwrap();
     }
+    support::contained_lane_host(&home, &bin);
     let claude = bin.join("claude");
     std::fs::write(&claude, format!("#!/bin/sh\n{claude_body}\n")).unwrap();
     std::fs::set_permissions(&claude, std::fs::Permissions::from_mode(0o755)).unwrap();
@@ -259,7 +262,25 @@ fn cap_refusal_exits_34_and_leaves_no_lease_worktree_or_queue_row() {
         !text.contains("manual continuation"),
         "a cap refusal set nothing up to continue: {text}"
     );
-    assert_unchanged(&before, &snapshot(&fx));
+    let mut after = snapshot(&fx);
+    // Admission receipts are the only permitted refusal write. Validate them
+    // before excluding them from the setup-state comparison. trace:STORY-2690 | ai:codex
+    let receipts: Vec<_> = after
+        .keys()
+        .filter(|path| {
+            path.contains("/.aida/lane-results/") || path.starts_with(".aida/lane-results/")
+        })
+        .cloned()
+        .collect();
+    assert_eq!(receipts.len(), 1, "one admission receipt: {receipts:?}");
+    for path in receipts {
+        let receipt: serde_json::Value =
+            serde_json::from_slice(&after.remove(&path).unwrap()).unwrap();
+        assert_eq!(receipt["spec"], fx.spec);
+        assert_eq!(receipt["result"], "refused-before-start");
+        assert_eq!(receipt["started"], false);
+    }
+    assert_unchanged(&before, &after);
 }
 
 /// The full wiring: dispatch to the standalone launcher, the outcome line
@@ -354,5 +375,23 @@ fn live_legacy_slot_refuses_before_setup() {
     let (code, stdout, stderr) = launch(&fx, &grant);
     assert_ne!(code, Some(0));
     assert!(format!("{stdout}{stderr}").contains("legacy checkout-local launcher"));
-    assert_unchanged(&before, &snapshot(&fx));
+    let mut after = snapshot(&fx);
+    // Admission receipts are the only permitted refusal write. Validate them
+    // before excluding them from the setup-state comparison. trace:STORY-2690 | ai:codex
+    let receipts: Vec<_> = after
+        .keys()
+        .filter(|path| {
+            path.contains("/.aida/lane-results/") || path.starts_with(".aida/lane-results/")
+        })
+        .cloned()
+        .collect();
+    assert_eq!(receipts.len(), 1, "one admission receipt: {receipts:?}");
+    for path in receipts {
+        let receipt: serde_json::Value =
+            serde_json::from_slice(&after.remove(&path).unwrap()).unwrap();
+        assert_eq!(receipt["spec"], fx.spec);
+        assert_eq!(receipt["result"], "refused-before-start");
+        assert_eq!(receipt["started"], false);
+    }
+    assert_unchanged(&before, &after);
 }

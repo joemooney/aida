@@ -18,7 +18,7 @@ fn git(root: &Path, args: &[&str]) {
 }
 
 fn dispatch(args: &[&str]) -> Result<()> {
-    let cli = crate::command_registry::try_parse_from(args).unwrap();
+    let cli = crate::TEST_CLI.try_parse_from(args).unwrap();
     if args[1] == "agent" {
         let AgentArgs { inner } = cli.command.registered::<AgentArgs>() else {
             panic!("agent args")

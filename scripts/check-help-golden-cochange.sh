@@ -31,7 +31,10 @@ fi
 if printf '%s\n' "$changed" | grep -qxF "$golden"; then
   exit 0
 fi
-if git log --format=%B "$merge_base..HEAD" | grep -qE '^Help-Golden:[[:space:]]*unchanged[[:space:]]*$'; then
+# Consume the whole log: grep -q can close the pipe early and make git log
+# fail with SIGPIPE under pipefail for a large (or stale-base) history range.
+# trace:STORY-2704 | ai:codex
+if git log --format=%B "$merge_base..HEAD" | grep -E '^Help-Golden:[[:space:]]*unchanged[[:space:]]*$' >/dev/null; then
   echo "check-help-golden-cochange: surface changed without a golden update; allowed by a 'Help-Golden: unchanged' commit trailer"
   exit 0
 fi

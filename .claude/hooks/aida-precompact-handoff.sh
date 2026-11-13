@@ -1,0 +1,1 @@
+../../aida-core/templates/hooks/aida-precompact-handoff.sh

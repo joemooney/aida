@@ -622,6 +622,19 @@ pub enum SessionCommand {
         #[clap(long, value_name = "FILE", conflicts_with_all = ["check", "show"])]
         write: Option<String>,
 
+        /// Typed condition for work parked by this handoff.
+        // trace:STORY-2402 | ai:codex
+        #[clap(long, value_name = "CONDITION", requires_all = ["write", "spec"])]
+        until: Option<String>,
+
+        /// Spec to resurface when the handoff condition is met.
+        #[clap(long, requires = "until", value_parser = crate::spec_arg::spec_id)]
+        spec: Option<String>,
+
+        /// Explanation for an operator hold; required for manual:<who>.
+        #[clap(long, requires = "until")]
+        reason: Option<String>,
+
         /// Print the seat's standing orders (if any), then its latest handoff
         /// note (the seed for a fresh session).
         // trace:STORY-1464 | ai:claude
@@ -647,6 +660,15 @@ pub enum SessionCommand {
         // trace:STORY-B6B1278890774EF993D2EBC327862470-101 | ai:claude
         #[clap(long, hide = true, requires = "show")]
         rotated: bool,
+
+        // trace:STORY-2662 | ai:codex
+        /// Read/write the worktree recovery snapshot; never requests rotation.
+        #[clap(long, hide = true, conflicts_with_all = ["final_", "rotated", "check", "until"])]
+        snapshot: bool,
+
+        /// Read only the handoff text, without standing context.
+        #[clap(long, hide = true, requires = "show")]
+        body_only: bool,
 
         /// Manage the seat's repo-local standing orders
         /// (`.aida/standing-orders/<seat>.md`): `add "<text>"` appends a dated
@@ -773,7 +795,7 @@ pub enum SessionCommand {
     /// process is still alive owns its worktree as its cwd, so it is skipped
     /// and reaped on a later pass once it exits on its own. Dirty worktrees,
     /// locked worktrees, and branches carrying unique unmerged commits are
-    /// never removed — the same safety checks `aida worktree gc` applies.
+    /// never removed — the same safety checks as the doctor merged-agent-worktrees heal.
     ///
     /// A lease held on the main checkout (or another protected checkout) is
     /// never reaped, but it is RELEASED — the lease file only, never a file of
@@ -932,6 +954,10 @@ pub enum AgentCommand {
     // `aida agent new` opens an arrow-key agent-type picker instead of
     // erroring to clap help (mirrors `aida human`/`aida solo`).
     New {
+        /// Declare Git read-only policy for this launch (not enforced by current adapters).
+        // trace:STORY-1486 | ai:codex
+        #[clap(long, global = true)]
+        git_read_only: bool,
         /// Role for a launch using the configured default vendor.
         #[clap(long)]
         role: Option<String>,

@@ -1,3 +1,4 @@
+// trace:TASK-3429 | ai:codex
 //! Gate authority: the decisions that say whether a ship, merge, hold,
 //! verdict or seat action may proceed (STORY-1889). Everything under
 //! `aida-cli-lib/src/gate/` is on the mandate's protected floor
@@ -45,8 +46,8 @@ pub(crate) mod review_carryover;
 pub(crate) mod review_marker;
 pub(crate) mod review_verdict;
 pub(crate) mod rework_hold_release;
-pub(crate) mod role_authority;
-pub(crate) mod seat_authority;
+pub mod role_authority;
+pub mod seat_authority;
 pub(crate) mod ship;
 pub(crate) mod solo_review;
 // BUG-HOME-048: completion trailers complete only the specs a PR covers.

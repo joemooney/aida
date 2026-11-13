@@ -20,6 +20,8 @@
 //!
 //! trace:BUG-777 | ai:claude
 use super::*;
+// Keep test-only reader imports in the test file. trace:TASK-3428 | ai:codex
+use crate::leases::{auto_release_decision_for_lease, stale_lease_recovery_for_lease};
 
 /// A worktree-backed implementer lease at `worktree`, minted `age_secs` ago
 /// (relative to now — never a fixed wall-clock instant, which would rot into

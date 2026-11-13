@@ -493,3 +493,27 @@ fn worktree_occupant_finds_only_live_same_worktree_lease() {
         "a dead lease's worktree must read as free for auto-isolate"
     );
 }
+
+// trace:TASK-3420 | ai:codex
+#[test]
+fn task_3420_ancestry_filters_before_owner_read() {
+    let target = req_with_parents("TASK-2", &[]);
+    let mut store = RequirementsStore::new();
+    store.requirements.push(target.clone());
+    let leases = vec![lease("TASK-1", "unrelated"), lease("TASK-2", "matching")];
+    let reads = std::cell::Cell::new(0);
+    let owner = lease_owning_spec(
+        &leases,
+        None,
+        target.id,
+        target.spec_id.as_deref(),
+        &store,
+        |l| {
+            assert_eq!(l.id, "matching", "unrelated owners must not be read");
+            reads.set(reads.get() + 1);
+            true
+        },
+    );
+    assert_eq!(owner.unwrap().id, "matching");
+    assert_eq!(reads.get(), 1);
+}

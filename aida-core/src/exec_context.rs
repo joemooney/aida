@@ -47,6 +47,17 @@ impl Environment {
         self.0.get(key.as_ref()).map(OsString::as_os_str)
     }
 
+    /// Return a snapshot with an explicitly supplied boundary decision.
+    pub fn with_value(mut self, key: impl Into<OsString>, value: Option<OsString>) -> Self {
+        let key = key.into();
+        if let Some(value) = value {
+            self.0.insert(key, value);
+        } else {
+            self.0.remove(&key);
+        }
+        self
+    }
+
     /// Missing and non-Unicode inputs remain distinguishable.
     pub fn var(&self, key: impl AsRef<OsStr>) -> Result<&str, EnvLookupError> {
         match self.get(key) {

@@ -35,7 +35,15 @@ its descriptive publication subject before exiting: use
 `aida ship -m '[AI:codex] type(scope): subject (ID)'` for completed work, or
 `aida ship -m '[AI:codex] type(scope): subject (Refs ID)'` for an approved
 partial slice. In a native seat this only records a lease-bound declaration;
-the host commits and publishes after exit. Failed exits always retain Refs.
+the host commits and publishes after exit. For required commit-body trailers,
+write a UTF-8 body file outside the checkout (for example under `/tmp`) and add
+`--commit-body-file <file>` to the declaration
+(for example, a file containing `Help-Golden: unchanged`). The host also accepts
+`aida ship --from-seat <clone> --commit-pending '<subject>' --commit-body-file <file>`.
+The body is preserved after the subject. Avoid body lines ending in `(ID)` groups:
+those lines can also supply completion credit in squash commits.
+Failed exits always retain Refs.
+<!-- trace:BUG-2493 | ai:codex -->
 Publication refuses while another live process owns the seat; do not ask a deputy to bypass that refusal. A punt
 or manual hold remains a publication veto. Other postures keep the ordinary
 shipping workflow below.
@@ -400,11 +408,13 @@ from the title or general description, and do not post a placeholder comment.
 
 The comment must have these three sections:
 
-1. **Acceptance criteria as tests** — restate every acceptance criterion as
-   the test that will prove it and name the test layer (`unit`,
+1. **Acceptance criteria and evidence** — honor each criterion's declared evidence type.
+   For behavioral criteria, name the automated test and test layer (`unit`,
    `command-level`, `fixture`, or `drain-level`). If a criterion cannot be
    tested, flag that explicitly in this same section rather than silently
-   omitting it.
+   omitting it. For configuration, documentation or manual inspection, name
+   the artifact, validation procedure and expected result instead. An evidence
+   declaration alone does not prove satisfaction. <!-- trace:STORY-2702 | ai:codex -->
 2. **Expected files** — name the files or narrow file groups expected to be
    touched. Treat an unexpected production file later as a reason to stop and
    reassess scope.
@@ -415,7 +425,7 @@ The comment must have these three sections:
 For example:
 
 ```bash
-aida comment add <spec_id> $'## Implementer approach\n\n### Acceptance criteria as tests\n- **Command-level:** `<test>` proves `<criterion>`.\n- **No automated test:** `<criterion>` — `<reason and verification plan>`.\n\n### Expected files\n- `path/to/code.rs`\n- `path/to/test.rs`\n\n### Ambiguities / conflicts as questions\n- `<question, or None>`'
+aida comment add <spec_id> $'## Implementer approach\n\n### Acceptance criteria and evidence\n- **Command-level:** `<test>` proves `<criterion>`.\n- **No automated test:** `<criterion>` — `<reason and verification plan>`.\n\n### Expected files\n- `path/to/code.rs`\n- `path/to/test.rs`\n\n### Ambiguities / conflicts as questions\n- `<question, or None>`'
 ```
 
 The comment must exist before any edit made for the implementation. Reading

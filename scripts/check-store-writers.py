@@ -446,10 +446,14 @@ def operations(root, scanned=None):
                 handler = run.group(1) if run else "<unresolved-handler>"
                 entry = qualified(handler, path) if "::" in handler else module + "::" + handler
                 resolve("cli", name.group(1), [entry])
-        if path == "aida-cli-lib/src/mcp.rs":
+        if path in {"aida-cli-lib/src/mcp.rs", "aida-mcp/src/mcp.rs"}:
             for match in re.finditer(r'"([a-z_]+)"\s*=>\s*self\s*\.\s*(tool_\w+)', source):
                 item = next((item for _, _, item in parsed[path] if item.split("::")[-1] == match.group(2)), match.group(2))
                 resolve("mcp", match.group(1), [function_identity(path, item)])
+    # trace:TASK-3429 | ai:codex — the binary injects the extracted handler.
+    if "aida-mcp/src/serve.rs" in files and "cli:mcp-serve" in result:
+        resolve("cli", "mcp-serve", ["aida_cli_lib::mcp_serve::run_mcp_serve", "aida_mcp::serve::run_mcp_serve"],
+                "Binary-injected MCP handler; receiver and callback edges remain explicit cutover blockers.")
     # Enumerate every immediate operation of the core writing command groups,
     # including unresolved routes. Never treat missing lexical edges as reads.
     groups = {"QueueCommand": "queue", "CommentCommand": "comment",
@@ -484,7 +488,7 @@ def operations(root, scanned=None):
         "comment delete": ("comment_cmd", "delete_comment"),
         "comment add": ("comment_cmd", "add_comment_cli_relayed"),
         "findings add": ("findings_gate", "handle_findings_add"),
-        "session handoff": ("seat_rotation", "write_handoff_by"),
+        "session handoff": ("seat_rotation", "write_handoff_kind"),  # trace:STORY-2662 | ai:codex
         "session handoff standing-orders add": ("seat_rotation", "add_standing_order"),
         "mailbox send": ("mailbox_store", "write_message_with_deliveries"),
         "mailbox digest": ("mailbox_store", "digest_snapshot_to_canonical"),
@@ -492,6 +496,11 @@ def operations(root, scanned=None):
     for selector, (module, function) in explicit.items():
         if (root / f"aida-cli-lib/src/{module}.rs").exists():
             resolve("cli", selector, [f"aida_cli_lib::{module}::{function}"])
+    # trace:STORY-2662 | ai:codex
+    if "aida-cli-lib/src/seat_rotation.rs" in files:
+        resolve("cli", "session handoff", [
+            "aida_cli_lib::seat_rotation::write_handoff_kind",
+        ], "Reviewed session_handoff_seat snapshot branch writes worktree-local reusable slots; host writer authority remains a cutover blocker.")
     # trace:TASK-3222 | ai:codex
     # Reviewed bare-name edge: defer_resurface::run calls sweep. Do not infer
     # other bare calls globally, where unrelated names can collide.
@@ -500,7 +509,7 @@ def operations(root, scanned=None):
                 [f"aida_cli_lib::defer_resurface::{name}" for name in ("run", "sweep")],
                 "Reviewed run_defer -> defer_resurface::run -> sweep route, including the bare sweep call; atomic spec updates and human-queue writes remain blocked for TASK-3223 authority and receiver review.")
     # Explicit reviewed receiver/import edges, never global bare-name propagation.
-    mcp_path = "aida-cli-lib/src/mcp.rs"
+    mcp_path = "aida-mcp/src/mcp.rs" if "aida-mcp/src/mcp.rs" in files else "aida-cli-lib/src/mcp.rs"
     if mcp_path in files:
         for selector in ("queue_add", "queue_rework"):
             if "mcp:" + selector not in result:
@@ -522,7 +531,7 @@ def operations(root, scanned=None):
             if key in result:
                 result[key]["resolution_note"] = (f"tool_{selector} is PEEK-only: returns a CLI invocation without performing that mutation. "
                     "Keep blocked until the corresponding CLI operation and any incidental reads/cache effects are reconciled.")
-    queue_path = "aida-cli-lib/src/queue_cmd.rs"
+    queue_path = "aida-cli-lib/src/queue_cmd/done.rs"
     if queue_path in files:
         source, masked = files[queue_path]
         arm = re.search(r"QueueCommand::Done\s*\{[^}]*\}\s*=>\s*\{", masked)
@@ -587,13 +596,111 @@ def check(root: Path, inventory: Path | None = None, scanned=None) -> list[str]:
     for key in sorted(expected.keys() | registered.keys()):
         if key not in expected or key not in registered or any(registered[key].get(f) != expected[key][f] for f in ("entrypoints", "sites", "resolution_note")):
             errors.append(f"operation mapping changed: {key}")
+    errors.extend(check_routes(root, data, scanned))
     return errors
 
 
-def regenerate(root):
+# trace:TASK-3223 | ai:codex
+def check_routes(root, data, scanned):
+    """Validate partial route evidence without granting whole-command coverage.
+
+    A route describes an implemented variant, not all flags of its ordinary
+    CLI/MCP operation. In particular title-only edit support cannot discharge
+    status, relationship, ownership or other unsupported mutation semantics.
+    """
+    errors, seen = [], set()
+    operation_ids = {row["id"] for row in data.get("operation", [])}
+    functions_present = {function_identity(path, item)
+                         for path, items in scanned[2].items()
+                         for _, _, item in items}
+    required = {"operation", "wire_operation", "scope", "remaining", "entrypoint",
+                "client", "host", "evidence_tests"}
+    # Read the broker's closed vocabulary as data; never import/execute service
+    # code from the reviewed tree. Missing or malformed declarations fail closed.
+    wire_operations = set()
+    if data.get("mediated_route"):
+        try:
+            tree = ast.parse((root / "aida-cli-lib/src/store_mutation/service.py").read_text())
+            declarations = [node.value for node in tree.body
+                            if isinstance(node, ast.Assign) and any(
+                                isinstance(target, ast.Name) and target.id == "CANONICAL_VERBS"
+                                for target in node.targets)]
+            if len(declarations) != 1:
+                raise ValueError("expected one CANONICAL_VERBS declaration")
+            verbs = ast.literal_eval(declarations[0])
+            if (not isinstance(verbs, (tuple, list)) or not verbs
+                    or any(not isinstance(verb, str) or not verb for verb in verbs)
+                    or len(set(verbs)) != len(verbs)):
+                raise ValueError("invalid CANONICAL_VERBS vocabulary")
+            wire_operations = set(verbs)
+        except (OSError, SyntaxError, ValueError, TypeError) as error:
+            errors.append(f"mediated route wire vocabulary unavailable: {error}")
+    for row in data.get("mediated_route", []):
+        if not isinstance(row, dict) or set(row) != required or not all(row.values()):
+            errors.append("mediated route requires complete, closed evidence fields")
+            continue
+        if any(not isinstance(row[field], str) for field in required - {"evidence_tests"}):
+            errors.append("mediated route selectors, scope and remaining work must be strings")
+            continue
+        operation = row["operation"]
+        if row["wire_operation"] not in wire_operations:
+            errors.append(f"mediated route {operation}: unsupported wire operation: {row['wire_operation']}")
+        if operation in seen or operation not in operation_ids:
+            errors.append(f"duplicate or unregistered mediated route: {operation}")
+        seen.add(operation)
+        for field in ("entrypoint", "client", "host"):
+            if row[field] not in functions_present:
+                errors.append(f"mediated route {operation}: missing {field}: {row[field]}")
+        evidence = row["evidence_tests"]
+        if not isinstance(evidence, list) or not evidence:
+            errors.append(f"mediated route {operation}: evidence_tests must be a nonempty array")
+            continue
+        for path in evidence:
+            if (not isinstance(path, str) or Path(path).is_absolute()
+                    or ".." in Path(path).parts or not (root / path).is_file()):
+                errors.append(f"mediated route {operation}: missing or unsafe evidence: {path}")
+    return errors
+
+
+def regenerate(root, baseline=None):
     """Keep reviewed site policy; new sites start blocked, never authorized."""
     target = root / INVENTORY
-    old = tomllib.loads(target.read_text()) if target.exists() else {}
+    # trace:STORY-2692 | ai:codex
+    # A merge operator must explicitly choose policy evidence; never interpret
+    # conflict sides or discard reviewed policy by starting from an empty map.
+    source = baseline if baseline is not None else target
+    old = tomllib.loads(source.read_text()) if baseline is not None or source.exists() else {}
+    if baseline is not None and old.get("version") != 2:
+        raise ValueError("inventory baseline must be version 2")
+    if baseline is not None and not old.get("writer"):
+        raise ValueError("inventory baseline must contain writer rows; empty policy refused")
+    if baseline is not None:
+        # Explicit merge evidence must not silently fall back to default policy.
+        rows = old["writer"]
+        if not isinstance(rows, list):
+            raise ValueError("inventory writer must be an array of tables")
+        required = ("id", "path", "item", "sink", "lock", "gate", "disposition",
+                    "proposed_operation", "evidence_tests")
+        seen = set()
+        for row in rows:
+            if not isinstance(row, dict) or any(not row.get(key) for key in required):
+                raise ValueError("incomplete inventory writer row")
+            if any(not isinstance(row[key], str) for key in required if key != "evidence_tests"):
+                raise ValueError("invalid inventory writer field type")
+            tests = row["evidence_tests"]
+            if not isinstance(tests, list) or any(not isinstance(t, str) or not t for t in tests):
+                raise ValueError("invalid inventory writer evidence_tests")
+            path = Path(row["path"])
+            if path.is_absolute() or ".." in path.parts:
+                raise ValueError("unsafe inventory writer path")
+            key = site_id(row["path"], row["item"], row["sink"])
+            if row["id"] != key or key in seen:
+                raise ValueError("invalid or duplicate inventory writer id")
+            seen.add(key)
+            if row["disposition"] not in {"s2_typed", "host_only", "lane_private", "read_only", "blocked"}:
+                raise ValueError("invalid inventory writer disposition")
+            if row["disposition"] == "blocked" and not row.get("blocker"):
+                raise ValueError("inventory writer blocked row needs blocker")
     prior = {site_id(r["path"], r["item"], r["sink"]): r for r in old.get("writer", []) if "item" in r}
     scanned = scan(root)
     lines = ["# Source-review evidence only; no runtime authority. trace:TASK-3222 | ai:codex", "version = 2", "", "writer = ["]
@@ -618,9 +725,35 @@ def regenerate(root):
                 row[field] = prior_ops[key][field]
         lines.append("  { " + ", ".join(f"{k} = {json.dumps(v)}" for k, v in row.items()) + " },")
     lines += ["]", ""]
+    # Route review survives sink/operation reconciliation. New operations never
+    # inherit a route, and partial routes never clear mediated blockers.
+    if old.get("mediated_route"):
+        lines.append("mediated_route = [")
+        for row in old["mediated_route"]:
+            lines.append("  { " + ", ".join(f"{k} = {json.dumps(v)}" for k, v in row.items()) + " },")
+        lines += ["]", ""]
     target.parent.mkdir(parents=True, exist_ok=True)
     target.write_text("\n".join(lines))
     return scanned
+
+
+# trace:TASK-3223 | ai:codex
+def mediated_blockers(data):
+    """Report unresolved review evidence, never infer routing from a sink map.
+
+    The v2 operation schema deliberately requires blocked dispositions. A
+    reconciled inventory therefore cannot certify mediated-profile readiness;
+    routing needs reviewed operation policy and evidence before this can pass.
+    Only host-only and lane-private writer sites are outside routing in v2.
+    Neither s2_typed nor read_only carries verified routing evidence in this
+    schema. All operation mappings remain unresolved, regardless of labels.
+    """
+    return {
+        kind: sorted(row["id"] for row in data.get(kind, [])
+                     if kind == "operation" or row.get("disposition") not in
+                     {"host_only", "lane_private"})
+        for kind in ("writer", "operation")
+    }
 
 
 def main() -> int:
@@ -628,18 +761,38 @@ def main() -> int:
     parser.add_argument("--root", type=Path, default=ROOT)
     parser.add_argument("--candidates", action="store_true", help="print sink-site discovery evidence")
     parser.add_argument("--regenerate", action="store_true", help="reconcile sites after merging main; new sites remain blocked; review diff")
+    parser.add_argument("--baseline", type=Path, help="explicit reviewed inventory TOML used by --regenerate, even when the working inventory is conflicted")
+    parser.add_argument("--profile", choices=("compatibility", "mediated"),
+                        default="compatibility",
+                        help="mediated additionally refuses unresolved routing evidence; never grants launch authority")
     args = parser.parse_args()
+    if args.baseline is not None and (not args.regenerate or args.candidates):
+        parser.error("--baseline requires --regenerate and cannot be combined with --candidates")
+    # trace:TASK-3223 | ai:codex
+    if args.candidates and args.profile == "mediated":
+        parser.error("--candidates cannot be combined with --profile mediated")
     try:
         if args.candidates:
             print(json.dumps(discover(args.root), indent=2, sort_keys=True))
             return 0
-        scanned = regenerate(args.root) if args.regenerate else None
+        scanned = regenerate(args.root, args.baseline) if args.regenerate else None
         errors = check(args.root, scanned=scanned)
         if errors:
             print("store-writer inventory refused:\n" + "\n".join(errors) +
                   "\nAfter merging current main, run python3 scripts/check-store-writers.py --regenerate; review additions and delete stale rows in the inventory diff.", file=sys.stderr)
             return 1
         data = tomllib.loads((args.root / INVENTORY).read_text())
+        if args.profile == "mediated":
+            blockers = mediated_blockers(data)
+            report = dict(profile="mediated", unresolved=blockers,
+                          counts={kind: len(rows) for kind, rows in blockers.items()})
+            if data.get("mediated_route"):
+                report["partial_routes"] = data["mediated_route"]
+            print(json.dumps(report, sort_keys=True))
+            if any(blockers.values()):
+                print("mediated profile refused: reconciled inventory still has unresolved routing evidence; "
+                      "keep production admission gated", file=sys.stderr)
+                return 1
         print(f"store-writers: {len(data['writer'])} sink sites reconciled; {len(data.get('operation', []))} operation mappings with explicit S2 cutover blockers; no runtime authority granted")
         return 0
     except (OSError, ValueError, TypeError, KeyError, SyntaxError) as error:

@@ -187,6 +187,7 @@ fn a_stamped_handoff_round_trips_through_the_log() {
         native_session_id: Some("s1".to_string()),
         generation: Some(2),
         final_: false,
+        snapshot_owner: None,
     };
     let w =
         crate::seat_rotation::write_handoff_by(dir.path(), "advisor", "next: x", at(5), &writer)
@@ -583,6 +584,7 @@ fn turn_monitor_requires_notice_fresh_own_handoff_and_stop_boundary() {
         native_session_id: Some("own".into()),
         generation: Some(1),
         final_: false,
+        snapshot_owner: None,
     };
     let payload = |event: &str, session: &str| {
         serde_json::json!({"session_id":session,"hook_event_name":event}).to_string()
@@ -783,4 +785,30 @@ fn rotation_evidence_refuses_fifo_symlinks_and_oversize_without_blocking() {
         elapsed < std::time::Duration::from_millis(250),
         "blocking FIFO open: {elapsed:?}"
     );
+}
+
+// trace:STORY-2662 | ai:codex
+#[test]
+fn compact_snapshot_does_not_request_rotation() {
+    let dir = tempfile::tempdir().unwrap();
+    let writer = crate::seat_rotation::HandoffWriter {
+        handle: Some("claude-advisor-08".into()),
+        native_session_id: Some("s1".into()),
+        generation: Some(1),
+        final_: false,
+        snapshot_owner: None,
+    };
+    crate::seat_rotation::write_handoff_kind(
+        dir.path(),
+        "advisor",
+        "recover this session",
+        at(5),
+        &writer,
+        "compact-snapshot",
+    )
+    .unwrap();
+    let records = read_handoff_log(dir.path(), "advisor");
+    assert_eq!(records[0].event, "compact-snapshot");
+    assert!(fresh_handoff(&records, &run(Some("s1"))).is_none());
+    assert_eq!(decide(Some("s1"), 600, &records), RotationDecision::Exit);
 }

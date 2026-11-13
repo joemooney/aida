@@ -1,3 +1,4 @@
+// trace:TASK-3429 | ai:codex
 //! Session-bound role grants. `AIDA_SESSION_ROLE` is retained for display and
 //! routing only; authorization comes from a validated local grant record.
 // trace:STORY-1473 | ai:codex
@@ -589,6 +590,11 @@ pub(crate) enum GrantRejection {
         grant_subject: String,
         caller: String,
     },
+    // trace:BUG-2520 | ai:codex
+    PrincipalMismatch {
+        principal: String,
+        caller: String,
+    },
     /// The team roster no longer allows the principal this seat.
     RosterDenied {
         principal: String,
@@ -639,6 +645,10 @@ impl std::fmt::Display for GrantRejection {
             } => write!(
                 f,
                 "it was issued to `{grant_subject}` but this process runs as `{caller}`"
+            ),
+            Self::PrincipalMismatch { principal, caller } => write!(
+                f,
+                "its principal is `{principal}` but this deputy runs as `{caller}`"
             ),
             Self::RosterDenied { principal, seat } => write!(
                 f,
@@ -1149,6 +1159,28 @@ fn grant_check_for_at(
     caller: &str,
     now: DateTime<Utc>,
 ) -> GrantCheck {
+    grant_check_identity_at(project_root, id, caller, now, false)
+}
+
+/// Validate a deputy submitter against the operator principal, retaining the
+/// complete grant-chain checks. Peer presentation is checked by the deputy.
+// trace:BUG-2520 | ai:codex
+pub(crate) fn grant_check_for_principal(
+    project_root: &Path,
+    id: &str,
+    principal: &str,
+) -> GrantCheck {
+    grant_check_identity_at(project_root, id, principal, Utc::now(), true)
+}
+
+// trace:BUG-2520 | ai:codex
+fn grant_check_identity_at(
+    project_root: &Path,
+    id: &str,
+    caller: &str,
+    now: DateTime<Utc>,
+    principal: bool,
+) -> GrantCheck {
     let rejected = |seat: Option<String>, reason| GrantCheck::Rejected {
         id: id.to_string(),
         seat,
@@ -1159,10 +1191,15 @@ fn grant_check_for_at(
         Err(reason) => return rejected(None, reason),
     };
     // Checks run in the order `current_grant` always used: revoked, expired,
-    // subject, roster; then the parent's revoked, expired, principal,
+    // subject (or deputy principal), roster; then the parent's revoked, expired, principal,
     // roster, delegable.
     let own = check_lifetime(&grant, now).and_then(|()| {
-        if grant.subject == caller {
+        if principal && grant.principal != caller {
+            Err(GrantRejection::PrincipalMismatch {
+                principal: grant.principal.clone(),
+                caller: caller.to_string(),
+            })
+        } else if principal || grant.subject == caller {
             check_roster(project_root, &grant)
         } else {
             Err(GrantRejection::SubjectMismatch {
@@ -1238,7 +1275,7 @@ pub(crate) fn validated_grant(
     grant_check_for_at(project_root, id, subject, now).into_valid()
 }
 
-pub(crate) fn current_seat(project_root: &Path) -> Option<String> {
+pub fn current_seat(project_root: &Path) -> Option<String> {
     current_grant(project_root).map(|grant| grant.seat)
 }
 
@@ -2238,7 +2275,20 @@ pub(crate) fn validate_child_delegation(
     project_root: &Path,
     requested_seat: &str,
 ) -> Result<SeatGrant> {
-    let parent = current_grant(project_root).context("no valid parent seat grant is active")?;
+    // Preserve the failed check: collapsing to Option hides why a sibling
+    // launch cannot present the same parent grant.
+    // trace:BUG-2544 | ai:codex
+    let check = grant_check(project_root);
+    let parent = match check {
+        GrantCheck::Valid(parent) => parent,
+        GrantCheck::Absent => bail!(
+            "no valid parent seat grant is active: AIDA_SESSION_GRANT is absent; re-enter your role at a terminal before launching children"
+        ),
+        rejected => bail!(
+            "no valid parent seat grant is active: {}",
+            rejected.rejection_sentence().expect("rejected grant verdict")
+        ),
+    };
     if !parent
         .delegable_seats
         .iter()
@@ -3346,3 +3396,30 @@ mod bug_2209_roster_leak_tests;
 #[cfg(test)]
 #[path = "tests/story_2215_inline_grant_tests.rs"]
 mod story_2215_inline_grant_tests;
+
+/// Fixed host service issuance after socket peer attribution. Revalidate the
+/// entire advisor chain and narrow the controller to reviewer delegation.
+// trace:STORY-2571 | ai:codex
+pub(crate) fn issue_review_watch_child(
+    project: &Path,
+    id: &str,
+    subject: &str,
+) -> Result<SeatGrant> {
+    let parent = validated_grant(project, id, subject, Utc::now())
+        .context("review-watch parent authority ended")?;
+    anyhow::ensure!(
+        parent.seat == "advisor"
+            && parent.delegable_seats.iter().any(|s| s == "advisor")
+            && parent.delegable_seats.iter().any(|s| s == "reviewer"),
+        "review-watch requires advisor and reviewer delegation"
+    );
+    roster_check(project, &parent.principal, "advisor")
+        .map_err(|r| anyhow::anyhow!(r.describe("review-watch controller refused")))?;
+    issue_child_from_with_delegation(
+        parent,
+        "advisor",
+        "review-watch-controller",
+        false,
+        &["reviewer".into()],
+    )
+}

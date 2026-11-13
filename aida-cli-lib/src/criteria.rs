@@ -25,6 +25,7 @@ pub(crate) struct CriterionRow {
     pub(crate) criterion: Criterion,
     pub(crate) tests: Vec<TracedTest>,
     pub(crate) state: CriterionState,
+    pub(crate) evidence_type: EvidenceType,
 }
 
 #[derive(Debug, Clone, Serialize, PartialEq, Eq)]
@@ -33,6 +34,34 @@ pub(crate) enum CriterionState {
     Traced,
     Untraced,
     PostDeployment,
+    InspectionRequired,
+}
+
+/// Explicit evidence declarations never establish that the evidence passed.
+/// Unknown or absent annotations retain the behavioral test requirement.
+// trace:STORY-2702 | ai:codex
+#[derive(Debug, Clone, Copy, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "kebab-case")]
+pub(crate) enum EvidenceType {
+    BehavioralTest,
+    ConfigurationValidation,
+    DocumentationInspection,
+    ManualInspection,
+}
+
+impl EvidenceType {
+    pub(crate) fn from_text(text: &str) -> Self {
+        let text = text.trim_start();
+        if text.starts_with("[evidence: configuration-validation]") {
+            Self::ConfigurationValidation
+        } else if text.starts_with("[evidence: documentation-inspection]") {
+            Self::DocumentationInspection
+        } else if text.starts_with("[evidence: manual-inspection]") {
+            Self::ManualInspection
+        } else {
+            Self::BehavioralTest
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize, PartialEq, Eq)]
@@ -145,7 +174,10 @@ fn criteria_report_from_parts(
             let tests = tests_by_ac
                 .remove(&criterion.id.to_ascii_uppercase())
                 .unwrap_or_default();
-            let state = if is_post_deployment_criterion(&criterion.text) {
+            let evidence_type = EvidenceType::from_text(&criterion.text);
+            let state = if evidence_type != EvidenceType::BehavioralTest {
+                CriterionState::InspectionRequired
+            } else if is_post_deployment_criterion(&criterion.text) {
                 CriterionState::PostDeployment
             } else if tests.is_empty() {
                 CriterionState::Untraced
@@ -156,6 +188,7 @@ fn criteria_report_from_parts(
                 criterion,
                 tests,
                 state,
+                evidence_type,
             }
         })
         .collect();
@@ -1128,7 +1161,9 @@ fn print_human_report(report: &CriteriaReport) {
     for row in &report.criteria {
         println!();
         println!("{} {}", row.criterion.id.cyan().bold(), row.criterion.text);
-        if row.state == CriterionState::PostDeployment {
+        if row.state == CriterionState::InspectionRequired {
+            println!("  inspection-required {:?}: reviewer must verify evidence; declaration is not proof", row.evidence_type);
+        } else if row.state == CriterionState::PostDeployment {
             println!(
                 "  {} cannot be traced before this change ships; move the outcome, measurement window, and falsifying threshold to a follow-up measurement spec blocked by {}",
                 "post-deployment".yellow(), report.spec
@@ -1773,16 +1808,17 @@ pub(crate) struct CriteriaArgs {
 
 fn run_criteria(
     matches: &clap::ArgMatches,
-    ctx: &crate::command_registry::DispatchCtx,
-) -> anyhow::Result<crate::command_registry::Flow> {
-    use crate::*;
+    ctx: &crate::cmdkit::DispatchCtx,
+) -> anyhow::Result<crate::cmdkit::Flow> {
+    // trace:TASK-3428 | ai:codex
+    use crate::criteria_coverage;
+    use crate::kernel::find_project_root;
+    use aida_core::DatabaseBackend;
     let args = <CriteriaArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
     match &ctx.store {
-        None => Ok(crate::command_registry::Flow::Continue),
-        Some(crate::command_registry::StoreCtx::Distributed { .. }) => {
-            Ok(crate::command_registry::Flow::Continue)
-        }
-        Some(crate::command_registry::StoreCtx::Git {
+        None => Ok(crate::cmdkit::Flow::Continue),
+        Some(crate::cmdkit::StoreCtx::Distributed { .. }) => Ok(crate::cmdkit::Flow::Continue),
+        Some(crate::cmdkit::StoreCtx::Git {
             store_path,
             backend,
         }) => {
@@ -1806,9 +1842,9 @@ fn run_criteria(
                     )?;
                 }
             }
-            Ok(crate::command_registry::Flow::Continue)
+            Ok(crate::cmdkit::Flow::Continue)
         }
-        Some(crate::command_registry::StoreCtx::Legacy {
+        Some(crate::cmdkit::StoreCtx::Legacy {
             storage,
             requirements_path,
         }) => {
@@ -1833,22 +1869,21 @@ fn run_criteria(
                     )?;
                 }
             }
-            Ok(crate::command_registry::Flow::Continue)
+            Ok(crate::cmdkit::Flow::Continue)
         }
     }
 }
 
 // trace:STORY-1728 | ai:claude
-pub(crate) static CRITERIA: crate::command_registry::CommandReg =
-    crate::command_registry::CommandReg {
-        name: "criteria",
-        help_after: "graph",
-        command: <CriteriaArgs as clap::CommandFactory>::command,
-        policy: |_| crate::command_registry::CmdPolicy {
-            stakeholder: crate::stakeholder_role::StakeholderAction::Read,
-            per_write_auto_push: false,
-            skip_role_restore_prompt: false,
-            team_identity_write: false,
-        },
-        run: crate::command_registry::Handler::Store(run_criteria),
-    };
+pub(crate) static CRITERIA: crate::cmdkit::CommandReg = crate::cmdkit::CommandReg {
+    name: "criteria",
+    help_after: "graph",
+    command: <CriteriaArgs as clap::CommandFactory>::command,
+    policy: |_| crate::cmdkit::CmdPolicy {
+        stakeholder: crate::stakeholder_role::StakeholderAction::Read,
+        per_write_auto_push: false,
+        skip_role_restore_prompt: false,
+        team_identity_write: false,
+    },
+    run: crate::cmdkit::Handler::Store(run_criteria),
+};

@@ -1198,7 +1198,7 @@ pub(crate) fn restart_preview(
     now: DateTime<Utc>,
 ) -> Vec<String> {
     let mandate = crate::gate::mandate::mandate_dir().ok().and_then(|dir| {
-        let principal = crate::current_user_id(None);
+        let principal = crate::gate::mandate::operator_principal();
         active_drive_mandate(&dir, &principal, now)
     });
     let ledger = crate::gate::mandate::mandate_dir()
@@ -1649,11 +1649,12 @@ pub(crate) enum PrincipalProbe {
     Unknown(String),
 }
 
-/// An explicit `AIDA_USER=<name>` in a driver artifact (a systemd unit's
+/// An explicit `USER=<name>` in a driver artifact (a systemd unit's
 /// `Environment=` line, or the cron line).
-pub(crate) fn aida_user_in(text: &str) -> Option<String> {
+// trace:BUG-2524 | ai:codex
+pub(crate) fn operator_user_in(text: &str) -> Option<String> {
     text.split(|c: char| c.is_whitespace() || c == '"' || c == '\'')
-        .find_map(|tok| tok.strip_prefix("AIDA_USER="))
+        .find_map(|tok| tok.strip_prefix("USER="))
         .map(|v| v.trim_matches(|c| c == '"' || c == '\'').to_string())
         .filter(|v| !v.is_empty())
 }
@@ -1676,7 +1677,7 @@ fn passwd_name() -> Option<String> {
 }
 
 /// The principal the installed driver resolves, by the same order as
-/// `current_user_id`: an explicit `AIDA_USER` in the driver, else the uid's
+/// `operator_principal`: an explicit `USER` in the driver, else the uid's
 /// passwd name.
 // trace:STORY-1700 | ai:claude
 pub(crate) fn scheduler_principal(project_root: &Path) -> PrincipalProbe {
@@ -1712,7 +1713,7 @@ pub(crate) fn scheduler_principal(project_root: &Path) -> PrincipalProbe {
             }
         }
     }
-    if let Some(user) = texts.iter().find_map(|t| aida_user_in(t)) {
+    if let Some(user) = texts.iter().find_map(|t| operator_user_in(t)) {
         return PrincipalProbe::Resolved(user);
     }
     match passwd_name() {
@@ -1735,11 +1736,11 @@ pub(crate) fn principal_warnings(
             "no schedule driver is installed; the drive tick will never run (aida schedule install-systemd, or install-cron)".into(),
         ),
         PrincipalProbe::Resolved(p) if p.trim() != principal.trim() => out.push(format!(
-            "the installed schedule driver resolves principal `{p}`, but this mandate belongs to `{principal}`; the drive tick will not act on it. Fix: set AIDA_USER={principal} in the driver environment"
+            "the installed schedule driver resolves principal `{p}`, but this mandate belongs to `{principal}`; the drive tick will not act on it. Fix: set USER={principal} in the driver environment"
         )),
         PrincipalProbe::Resolved(_) => {}
         PrincipalProbe::Unknown(why) => out.push(format!(
-            "cannot tell which principal the schedule driver resolves ({why}); set AIDA_USER={principal} in the driver environment"
+            "cannot tell which principal the schedule driver resolves ({why}); set USER={principal} in the driver environment"
         )),
     }
     if !tick_job_enabled {
@@ -2031,25 +2032,21 @@ pub(crate) struct FleetArgs {
 
 // STORY-1700: the drive tick reads the AIDA home and the run dirs and
 // opens the store itself only for spec lookups. trace:STORY-1700 | ai:claude
-fn run_fleet(
-    matches: &clap::ArgMatches,
-    _ctx: &crate::command_registry::DispatchCtx,
-) -> anyhow::Result<()> {
+fn run_fleet(matches: &clap::ArgMatches, _ctx: &crate::cmdkit::DispatchCtx) -> anyhow::Result<()> {
     let args = <FleetArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
     handle_fleet(&args.action)
 }
 
 // trace:STORY-1728 | ai:claude
-pub(crate) static FLEET: crate::command_registry::CommandReg =
-    crate::command_registry::CommandReg {
-        name: "fleet",
-        help_after: "mandate",
-        command: <FleetArgs as clap::CommandFactory>::command,
-        policy: |_| crate::command_registry::CmdPolicy {
-            stakeholder: crate::stakeholder_role::StakeholderAction::Write,
-            per_write_auto_push: false,
-            skip_role_restore_prompt: false,
-            team_identity_write: false,
-        },
-        run: crate::command_registry::Handler::Early(run_fleet),
-    };
+pub(crate) static FLEET: crate::cmdkit::CommandReg = crate::cmdkit::CommandReg {
+    name: "fleet",
+    help_after: "mandate",
+    command: <FleetArgs as clap::CommandFactory>::command,
+    policy: |_| crate::cmdkit::CmdPolicy {
+        stakeholder: crate::stakeholder_role::StakeholderAction::Write,
+        per_write_auto_push: false,
+        skip_role_restore_prompt: false,
+        team_identity_write: false,
+    },
+    run: crate::cmdkit::Handler::Early(run_fleet),
+};

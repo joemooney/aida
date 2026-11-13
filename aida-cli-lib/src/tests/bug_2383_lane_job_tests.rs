@@ -1780,3 +1780,270 @@ fn update_lease_branch_keeps_the_lane_jobs_record() {
         "update_lease_branch dropped the runner record:\n{body}"
     );
 }
+
+// trace:STORY-2641 | ai:codex
+#[test]
+#[cfg(target_os = "linux")]
+fn story_2641_sccache_job_env_and_binds_are_opt_in_and_lane_only() {
+    use aida_core::exec_context::Environment;
+    let tmp = tempfile::tempdir().unwrap();
+    let cargo = tmp.path().join(".cargo");
+    std::fs::create_dir(&cargo).unwrap();
+    let parent = Environment::from_pairs([
+        ("HOME".into(), tmp.path().as_os_str().to_owned()),
+        ("SCCACHE_DIR".into(), "/operator/cache".into()),
+        ("SCCACHE_CONF".into(), "/operator/remote-config".into()),
+        ("SCCACHE_SERVER_UDS".into(), "/operator/server".into()),
+    ]);
+    assert!(lane_sccache_env(&parent).is_empty());
+    for wrapper in ["tools/sccache", "./sccache", "../bin/sccache"] {
+        std::fs::write(
+            cargo.join("config.toml"),
+            format!("[build]\nrustc-wrapper = '{wrapper}'\n"),
+        )
+        .unwrap();
+        assert!(lane_sccache_env(&parent).is_empty(), "{wrapper}");
+    }
+    std::fs::write(
+        cargo.join("config.toml"),
+        "[build]\nrustc-wrapper = 'sccache'\n",
+    )
+    .unwrap();
+    assert!(lane_sccache_env(&parent)
+        .iter()
+        .any(|(key, value)| key == "RUSTC_WRAPPER" && value == "sccache"));
+    std::fs::write(
+        cargo.join("config.toml"),
+        "[build]\nrustc-wrapper = 'other-wrapper'\n",
+    )
+    .unwrap();
+    assert!(lane_sccache_env(&parent).is_empty());
+    std::fs::write(
+        cargo.join("config.toml"),
+        "[build]\nrustc-wrapper = '/host/bin/sccache'\n",
+    )
+    .unwrap();
+    // Cargo prefers the extensionless file when both files exist.
+    std::fs::write(
+        cargo.join("config"),
+        "[build]\nrustc-wrapper = 'other-wrapper'\n",
+    )
+    .unwrap();
+    assert!(lane_sccache_env(&parent).is_empty());
+    std::fs::remove_file(cargo.join("config")).unwrap();
+    let mut lane = fixture_lane(tmp.path());
+    lane.build_env.extend(lane_sccache_env(&parent));
+    lane.prepare().unwrap();
+    let env = lane.job_env(&job(&["cargo", "test", "--profile", "agent"]));
+    let cache = tmp.path().join(".cache/aida/lane-sccache");
+    assert_eq!(env["SCCACHE_DIR"], cache.display().to_string());
+    assert_eq!(env["SCCACHE_CONF"], "/dev/null");
+    assert_eq!(env["RUSTC_WRAPPER"], "/host/bin/sccache");
+    assert_eq!(env["CARGO_NET_OFFLINE"], "true");
+    assert!(!env.contains_key("CARGO_INCREMENTAL"));
+    assert_eq!(env["SCCACHE_SERVER_PORT"], "0");
+    assert_eq!(env["SCCACHE_SERVER_UDS"], "/tmp/aida-lane-sccache.sock");
+    let rw = lane.sandbox_rw_paths(&env);
+    assert!(rw.contains(&cache));
+    assert!(!rw.contains(&cargo));
+    assert!(!rw.contains(&PathBuf::from("/operator/cache")));
+    let args = crate::session::lane_job_bwrap_argv(&lane.seat, &rw, &[], "cargo", vec![]);
+    assert!(args.windows(2).any(|args| args == ["--tmpfs", "/tmp"]));
+    assert!(!args.iter().any(|arg| arg == "--unshare-pid"));
+    assert!(args
+        .windows(3)
+        .any(|args| args[0] == "--bind-try" && args[1] == cache.display().to_string()));
+}
+
+// trace:STORY-2641 | ai:codex
+#[test]
+fn story_2641_sccache_existing_cache_diagnostic_names_path_and_remedy() {
+    use std::os::unix::fs::DirBuilderExt;
+    let tmp = tempfile::tempdir().unwrap();
+    let mut lane = fixture_lane(tmp.path());
+    let cache = tmp.path().join("cache with spaces");
+    std::fs::DirBuilder::new()
+        .mode(0o700)
+        .create(&cache)
+        .unwrap();
+    let private_permissions = std::fs::metadata(&cache).unwrap().permissions();
+    let mut read_only = private_permissions.clone();
+    read_only.set_readonly(true);
+    std::fs::set_permissions(&cache, read_only).unwrap();
+    lane.build_env
+        .push(("SCCACHE_DIR".into(), cache.display().to_string()));
+    let error = lane.prepare().unwrap_err().to_string();
+    assert!(error.contains(&cache.display().to_string()), "{error}");
+    assert!(error.contains("chmod 700"), "{error}");
+    std::fs::set_permissions(&cache, private_permissions).unwrap();
+    lane.prepare().unwrap();
+}
+
+// A fake server delays its final disk put until after stop-server returns:
+// returning from the job before wait(server) would lose the final artifact.
+// trace:STORY-2641 | ai:codex
+#[test]
+#[cfg(target_os = "linux")]
+fn story_2641_sccache_lifecycle_waits_for_writes_and_preserves_cargo_exit() {
+    let tmp = tempfile::tempdir().unwrap();
+    let wrapper = tmp.path().join("sccache fixture");
+    crate::test_exec::write_executable(
+        &wrapper,
+        r#"#!/usr/bin/python3
+import os, socket, sys, time
+from pathlib import Path
+root = Path(os.environ['SCCACHE_DIR'])
+if os.environ.get('SCCACHE_START_SERVER') == '1':
+    assert os.environ['TMPDIR'] == '/tmp'
+    (root / 'idle-timeout').write_text(os.environ['SCCACHE_IDLE_TIMEOUT'])
+    sock = socket.socket(socket.AF_UNIX)
+    sock.bind(os.environ['SCCACHE_SERVER_UDS'])
+    while not (root / 'stop').exists():
+        time.sleep(0.01)
+    time.sleep(0.2)
+    (root / 'persisted').write_text('final cache put')
+    sys.exit(0)
+if sys.argv[1] == '--show-stats':
+    print('Cache hits 1')
+elif sys.argv[1] == '--stop-server':
+    (root / 'stop').touch()
+else:
+    sys.exit(99)
+"#,
+    );
+    let mut env = BTreeMap::from([
+        (
+            "TMPDIR".into(),
+            tmp.path().join("missing-tmp").display().to_string(),
+        ),
+        ("RUSTC_WRAPPER".into(), wrapper.display().to_string()),
+        ("SCCACHE_DIR".into(), tmp.path().display().to_string()),
+        (
+            "SCCACHE_SERVER_UDS".into(),
+            tmp.path().join("server.sock").display().to_string(),
+        ),
+    ]);
+    // Shell-looking text is an argv value, never executable source.
+    let args = vec![
+        "-c".into(),
+        "test -n \"$AIDA_SCCACHE_PIDS\" && kill -0 \"$AIDA_SCCACHE_PIDS\" || exit 97; test \"$(tr '\\000' '\\n' < /proc/$AIDA_SCCACHE_PIDS/environ | sed -n 's/^TMPDIR=//p')\" = /tmp || exit 96; [ \"$1\" = '$(exit 99)' ] || exit 98; exit 7".into(),
+        "cargo-fixture".into(),
+        "$(exit 99)".into(),
+    ];
+    let (program, args) = cargo_with_cache_lifecycle(Path::new("/bin/sh"), args, &env);
+    let output = std::process::Command::new(program)
+        .args(args)
+        .env_clear()
+        .env("PATH", "/usr/bin:/bin")
+        .envs(&env)
+        .output()
+        .unwrap();
+    assert_eq!(output.status.code(), Some(7), "{output:?}");
+    // A dead launcher must leave a finite server lifetime, without expiring
+    // the server during the longest permitted cold build.
+    assert_eq!(
+        std::fs::read_to_string(tmp.path().join("idle-timeout"))
+            .unwrap()
+            .parse::<u64>()
+            .unwrap(),
+        MAX_TIMEOUT_SECS
+    );
+    assert_eq!(
+        std::fs::read_to_string(tmp.path().join("persisted")).unwrap(),
+        "final cache put"
+    );
+    let stdout = String::from_utf8(output.stdout).unwrap();
+    assert!(stdout.contains("Cache hits 1"), "{stdout}");
+    assert!(
+        stdout.contains("server exited before sandbox teardown"),
+        "{stdout}"
+    );
+    env.clear();
+    assert_eq!(
+        cargo_with_cache_lifecycle(Path::new("cargo"), vec!["test".into()], &env),
+        ("cargo".into(), vec!["test".into()])
+    );
+}
+
+// Host Cargo queue tickets must retain host PID identity, with or without cache.
+// trace:STORY-2641 | ai:codex
+#[test]
+#[cfg(target_os = "linux")]
+fn story_2641_sccache_host_queue_ticket_stays_live() {
+    use std::process::Command;
+    if !bwrap_usable() {
+        assert!(aida_core::exec_context::Environment::capture()
+            .get("AIDA_REQUIRE_BWRAP_LIVE")
+            .is_none());
+        eprintln!("SKIP (bwrap unavailable)");
+        return;
+    }
+    let tmp = tempfile::tempdir().unwrap();
+    // This test process is a live host queue owner throughout the sandbox.
+    let pid = std::process::id();
+    let ticket = tmp.path().join(format!("wait.0.{pid}"));
+    std::fs::write(&ticket, "host ticket").unwrap();
+    let script = r#"
+# The host wrapper uses the same kill -0 sweep for wait and acq tickets.
+kill -0 "$1" 2>/dev/null || rm "$2"
+test -f "$2"
+# A child must also publish its real host PID, not a namespace-local alias.
+test "$(readlink /proc/self/ns/pid)" = "$3"
+"#;
+    let namespace = std::fs::read_link("/proc/self/ns/pid").unwrap();
+    let args = crate::session::lane_job_bwrap_argv(
+        tmp.path(),
+        &[tmp.path().to_path_buf()],
+        &[],
+        "/bin/sh",
+        vec![
+            "-c".into(),
+            script.into(),
+            "ticket-check".into(),
+            pid.to_string(),
+            ticket.display().to_string(),
+            namespace.to_string_lossy().into_owned(),
+        ],
+    );
+    assert!(!args.iter().any(|arg| arg == "--unshare-pid"));
+    let mut cmd = Command::new("bwrap");
+    cmd.args(args);
+    let output = cmd.output().unwrap();
+    assert!(output.status.success(), "{output:?}");
+    assert_eq!(std::fs::read_to_string(&ticket).unwrap(), "host ticket");
+}
+
+// Host wrappers must inspect only the foreground server, not foreign clients.
+// trace:STORY-2641 | ai:codex
+#[test]
+fn story_2641_sccache_scopes_health_check_and_degrades_startup_failure() {
+    let tmp = tempfile::tempdir().unwrap();
+    let wrapper = tmp.path().join("sccache");
+    crate::test_exec::write_executable(&wrapper, "#!/bin/sh\nexit 1\n");
+    let env = BTreeMap::from([
+        ("RUSTC_WRAPPER".into(), wrapper.display().to_string()),
+        ("SCCACHE_DIR".into(), tmp.path().display().to_string()),
+        (
+            "SCCACHE_SERVER_UDS".into(),
+            tmp.path().join("socket").display().to_string(),
+        ),
+    ]);
+    let (program, args) = cargo_with_cache_lifecycle(
+        Path::new("/bin/sh"),
+        vec![
+            "-c".into(),
+            "test -z \"$RUSTC_WRAPPER\" && test -z \"$AIDA_SCCACHE_PIDS\" || exit 99; exit 7"
+                .into(),
+        ],
+        &env,
+    );
+    let output = std::process::Command::new(program)
+        .args(args)
+        .env_clear()
+        .env("PATH", "/usr/bin:/bin")
+        .envs(env)
+        .output()
+        .unwrap();
+    assert_eq!(output.status.code(), Some(7), "{output:?}");
+    assert!(String::from_utf8_lossy(&output.stderr).contains("running without cache"));
+}

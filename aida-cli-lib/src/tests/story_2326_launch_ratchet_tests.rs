@@ -6,10 +6,11 @@
 //! when the last slice lands. A new site, in any crate, fails here.
 // trace:STORY-2326 | ai:claude
 
+// trace:TASK-3429 | ai:codex
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
-const CRATES: &[&str] = &["aida-core", "aida-cli-lib", "aida-tui"];
+const CRATES: &[&str] = &["aida-mcp", "aida-core", "aida-cli-lib", "aida-tui"];
 
 /// Modules that are the launcher itself.
 const LAUNCHER: &[&str] = &["aida-cli-lib/src/launch/", "aida-core/src/launch_policy.rs"];
@@ -34,7 +35,7 @@ const LEDGER: &[(&str, usize, &str)] = &[
     ("aida-cli-lib/src/deputy_shell/runner.rs", 3, "not a vendor child: STORY-2338's script deputy runs bash under the operator's grant (the grant write), with a pre_exec process group (from main)"),
     ("aida-cli-lib/src/dev_build.rs", 2, "not a vendor child: the built aida binary smoke test"),
     ("aida-cli-lib/src/dev_cmd.rs", 1, "not a vendor child: resolved dev tool"),
-    ("aida-cli-lib/src/doctor_cmd.rs", 1, "slice D: vendor query (codex version)"),
+    ("aida-cli-lib/src/scaffold_cmd.rs", 1, "slice D: vendor query (codex version)"),
     ("aida-cli-lib/src/external_cmd.rs", 1, "not a vendor child: exec of an external aida-* subcommand"),
     ("aida-cli-lib/src/forge.rs", 1, "not a vendor child: forge CLI (gh/glab)"),
     ("aida-cli-lib/src/gate/rework_hold_release.rs", 1, "not a vendor child: forge CLI"),
@@ -50,7 +51,7 @@ const LEDGER: &[(&str, usize, &str)] = &[
     ("aida-cli-lib/src/mailbox_wake_run.rs", 1, "slice C: Codex thread submit"),
     ("aida-cli-lib/src/mandate_drive.rs", 1, "generic helper: scrubbed_command"),
     ("aida-cli-lib/src/manual.rs", 1, "not a vendor child: pager"),
-    ("aida-cli-lib/src/mcp.rs", 1, "not a vendor child: exec of the aida MCP server"),
+    ("aida-mcp/src/mcp.rs", 1, "not a vendor child: exec of the aida MCP server"),
     ("aida-cli-lib/src/merge_hold.rs", 3, "not a vendor child: forge CLI"),
     ("aida-cli-lib/src/pane_host.rs", 1, "not a vendor child: pane host argv"),
     ("aida-cli-lib/src/phase_driver.rs", 4, "slice C: phase advisor and auto-punt control child"),
@@ -220,6 +221,9 @@ const NON_VENDOR_SPELLINGS: &[&str] = &[
     "aida",
     "aida_bin",
     "bwrap",
+    // Injected Cargo executable in the release installer; never a vendor.
+    // trace:STORY-2704 | ai:codex
+    "cargo",
     "dev_bin",
     "exe",
     "fixture.gh",
@@ -246,6 +250,9 @@ const NON_VENDOR_SPELLINGS: &[&str] = &[
     "pr_ship_post_merge_aida_exe",
     "resolve_aida_exe",
     "self.aida_exe",
+    // Emergency-land's gh/glab, resolved only by crate::resolve_forge_cli.
+    // trace:TASK-3788 | ai:codex
+    "self.forge_cli",
     "std::env::current_exe",
 ];
 
@@ -287,7 +294,15 @@ fn vendor_program_arg(arg: &str) -> bool {
 fn calls<'a>(normalized: &'a str, name: &'a str) -> impl Iterator<Item = &'a str> + 'a {
     normalized.match_indices(name).filter_map(move |(at, _)| {
         let before = normalized[..at].chars().next_back();
-        let starts = !before.is_some_and(|c| c.is_alphanumeric() || c == '_');
+        // A fully qualified clap constructor builds CLI metadata, not a child.
+        // Keep unqualified and std/tokio constructors conservative.
+        // trace:STORY-2704 | ai:codex
+        let qualifier = normalized[..at]
+            .rsplit(|c: char| !(c.is_alphanumeric() || c == '_' || c == ':'))
+            .next()
+            .unwrap_or_default();
+        let clap = name == "Command::new(" && matches!(qualifier, "clap::" | "::clap::");
+        let starts = !clap && !before.is_some_and(|c| c.is_alphanumeric() || c == '_');
         starts.then(|| &normalized[at + name.len()..])
     })
 }
@@ -442,6 +457,25 @@ fn scanner_catches_every_mutant_spelling() {
     for src in clean {
         assert_eq!(markers(src), 0, "false positive: {src}");
     }
+}
+
+// trace:STORY-2704 | ai:codex
+#[test]
+fn scanner_distinguishes_clap_and_injected_cargo_from_vendor_launches() {
+    assert_eq!(markers("fn f() { clap::Command::new(entry.name); }"), 0);
+    assert_eq!(markers("fn f() { std::process::Command::new(cargo); }"), 0);
+    assert_eq!(markers("fn f() { fakeclap::Command::new(program); }"), 1);
+    assert_eq!(
+        markers("fn f() { vendor::clap::Command::new(program); }"),
+        1
+    );
+    assert_eq!(
+        markers(
+            "fn f() { clap::Command::new(entry.name); std::process::Command::new(entry.name); }"
+        ),
+        1
+    );
+    assert_eq!(markers("fn f() { clap::Command::new(entry.name); tokio::process::Command::new(vendor_cargo); }"), 1);
 }
 
 // Match identifiers as well as qualified calls so imports (including grouped

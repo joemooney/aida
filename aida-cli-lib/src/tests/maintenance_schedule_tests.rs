@@ -203,67 +203,55 @@ fn parse_project(toml_body: &str) -> Result<Option<LoadedScheduleConfig>> {
     }
 }
 
-// trace:TASK-1596 | ai:codex
+// trace:TASK-1222 | ai:codex
 #[test]
-fn task_1596_monthly_guard_is_read_only_and_routes_to_advisor() {
+// trace:TASK-1222.ac14b158 | ai:codex
+fn task_1222_weekly_gc_reports_to_advisor_without_apply() {
     let repo_root = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
     let registry = load_config(repo_root).unwrap().unwrap();
     let guard = registry
         .tasks
         .iter()
-        .find(|t| t.name == "merged-worktrees-guard")
+        .find(|t| t.name == "worktree-lifecycle-gc")
         .unwrap();
     assert!(guard.enabled);
-    assert_eq!(guard.interval, Some(Duration::days(30)));
+    assert_eq!(guard.interval, Some(Duration::days(7)));
     let command = guard.command.as_ref().unwrap();
     assert_eq!(
         command.args,
-        &[
-            "doctor",
-            "check",
-            "merged-agent-worktrees",
-            "--json",
-            "--fail-on-findings"
-        ]
+        &["worktree", "gc", "--json", "--fail-on-findings"]
     );
     assert!(!command.hook_allowed);
+    assert_eq!(command_timeout(command), HYGIENE_COMMAND_TIMEOUT);
+    assert!(parse_scheduled_command("worktree gc --apply").is_err());
     assert!(parse_scheduled_command("worktree gc --yes --force").is_err());
     let route = registry
         .tasks
         .iter()
-        .find(|t| t.name == "merged-worktrees-guard-route")
+        .find(|t| t.name == "worktree-lifecycle-gc-route")
         .unwrap();
     assert!(route.enabled);
     assert_eq!(route.seats, vec!["advisor"]);
     assert_eq!(
         route.on.iter().map(ToString::to_string).collect::<Vec<_>>(),
-        vec!["CronJobFailed:merged-worktrees-guard"]
+        vec!["CronJobFailed:worktree-lifecycle-gc"]
     );
     assert!(route.command.is_none());
+}
 
-    let tmp = tempfile::tempdir().unwrap();
-    let mut state = ScheduleState::default();
-    let seen = Rc::new(RefCell::new(Vec::new()));
-    for now in [
-        at(12),
-        at(12) + Duration::days(29),
-        at(12) + Duration::days(30),
-    ] {
-        tick_with_executor(
-            tmp.path(),
-            config(vec![guard.clone()]),
-            &mut state,
-            now,
-            false,
-            ok_exec(Rc::clone(&seen)),
-        )
-        .unwrap();
-    }
-    assert_eq!(
-        seen.borrow().len(),
-        2,
-        "guard runs initially and after 30 days, not after 29"
-    );
+// trace:TASK-1596 | ai:codex
+#[test]
+fn task_1596_monthly_guard_is_superseded_by_weekly_gc() {
+    let repo_root = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
+    let registry = load_config(repo_root).unwrap().unwrap();
+    assert!(!registry
+        .tasks
+        .iter()
+        .any(|t| t.name.starts_with("merged-worktrees-guard")));
+    assert!(registry
+        .tasks
+        .iter()
+        .any(|t| t.name == "worktree-lifecycle-gc" && t.enabled));
 }
 
 // trace:BUG-1746 | ai:codex
@@ -365,7 +353,7 @@ fn bug_1746_mirror_sync_failure_does_not_wake_unrelated_guard_routes() {
         "disk-headroom-guard-route",
         "performance-guard-route",
         "watchdog-route",
-        "merged-worktrees-guard-route",
+        "worktree-lifecycle-gc-route",
     ];
     let routes: Vec<Task> = parsed
         .tasks
@@ -451,7 +439,7 @@ fn story_2351_session_hygiene_is_scheduled_off_the_hook_path() {
     // The disk guard's floor reclaim runs under the default ceiling; its
     // own budget leaves the re-probe and report room before the kill.
     assert!(
-        crate::doctor_cmd::FLOOR_RECLAIM_BUDGET * 2 <= SCHEDULED_COMMAND_TIMEOUT,
+        crate::maintenance_schedule::FLOOR_RECLAIM_BUDGET * 2 <= SCHEDULED_COMMAND_TIMEOUT,
         "the floor reclaim must stop well before the guard child is killed"
     );
 }
@@ -1526,8 +1514,8 @@ fn each_new_guard_job_trips_and_routes_on_failure_and_is_silent_when_clean() {
         "doctor check stale-remote-branches --fail-on-findings",
         "doctor check disk-headroom --fail-on-findings",
         "doctor check runaway-seats --fail-on-findings",
-        // trace:TASK-1596 | ai:codex
-        "doctor check merged-agent-worktrees --fail-on-findings",
+        // trace:TASK-1222.ac14b158 | ai:codex
+        "worktree gc --fail-on-findings",
         // trace:STORY-1699 | ai:claude
         "doctor check relay-stall --fail-on-findings",
         // trace:TASK-2347 | ai:codex
@@ -2608,7 +2596,7 @@ fn story_1916_routed_disk_item_carries_the_stuck_sentence() {
         action: String::new(),
         safe_heal: false,
     };
-    let reason = crate::doctor_cmd::disk_headroom_fail_reason(&[finding]).unwrap();
+    let reason = crate::maintenance_schedule::disk_headroom_fail_reason(&[finding]).unwrap();
     let events = bug_1655_trip_disk_guard(tmp.path(), 1, &format!("warning: noise\n{reason}\n"));
     bug_1655_route(
         tmp.path(),
