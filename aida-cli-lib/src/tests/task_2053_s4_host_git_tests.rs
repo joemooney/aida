@@ -413,3 +413,55 @@ fn task_2053_bwrap_an_empty_gitmodules_placeholder_does_not_block_salvage() {
         .iter()
         .all(|l| l.id != lease.id));
 }
+
+// trace:BUG-2536 | ai:codex
+#[cfg(target_os = "linux")]
+#[test]
+fn bug_2536_clone_launch_head_allows_published_result() {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
+    let fx = fixture();
+    let _namespace = crate::test_env::EnvVarGuard::set("AIDA_TRUST_PID_NAMESPACE", "1");
+    let clone = leased_clone(&fx, "published", "c0ffee002536");
+    let expected = super::tests::git_ok(&fx.main, &["rev-parse", "origin/main"]);
+    // Negative control: the former launch read deliberately refuses this tree.
+    assert_eq!(crate::headless_background::seat_head(&clone), None);
+    let head = crate::standalone_implementer::implementer_launch_head(&fx.main, &clone);
+    assert_eq!(head.as_deref(), Some(expected.as_str()));
+    assert_eq!(
+        crate::standalone_implementer::implementer_launch_head(&fx.main, &fx.main),
+        Some(super::tests::git_ok(&fx.main, &["rev-parse", "HEAD"]))
+    );
+    let attempt = crate::lane_result::Attempt::begin(&fx.main, "BUG-2536", Some("feat")).unwrap();
+    attempt
+        .bind("BUG-2536", "feat", None, head.as_deref())
+        .unwrap();
+    attempt.started(123);
+    super::tests::git_ok(&clone, &["config", "user.email", "test@example.com"]);
+    super::tests::git_ok(&clone, &["config", "user.name", "AIDA Test"]);
+    super::tests::git_ok(&clone, &["commit", "--allow-empty", "-qm", "lane work"]);
+    super::tests::git_ok(&clone, &["push", "-q", "origin", "HEAD:feat"]);
+    let published = crate::headless_background::SeatState::read(&clone, "feat");
+    let new_head = published.pushed_head().expect("published clone head");
+    assert_ne!(head.as_deref(), Some(new_head));
+    assert_eq!(
+        attempt
+            .finish_outcome(
+                &crate::standalone_implementer::Outcome::PrOpened {
+                    pr: 42,
+                    head: Some(new_head.into()),
+                },
+                true,
+                false,
+                false,
+            )
+            .unwrap(),
+        crate::lane_result::Kind::Pushed
+    );
+    let line = attempt.line().unwrap();
+    assert!(
+        line.contains(&format!("reason=new-published-head pr=42 head={new_head}")),
+        "{line}"
+    );
+}
