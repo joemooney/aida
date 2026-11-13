@@ -38,18 +38,28 @@ description: |
 
   ## Success metric (decides whether AIDA continues; operator 09:51)
   Within 48h of S2 going live, on active days: median of at least 1 merge/hour to main, approved-to-merged median under 60 min, and no PR in a non-BLOCKED state for more than 2h. Measured from git log and the gate ledger; reported on STORY-2737.
-status: Draft
+status: Approved
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-13T16:52:56.270142081Z
-modified_at: 2026-11-13T16:52:56.270142081Z
+modified_at: 2026-11-13T16:53:22.600988020Z
 req_type: Story
 tags:
 - architecture
 - keystone
 - landing
 - track:integration
+history:
+- id: 01a1d5d3-fe28-7cc2-a7e3-638454ed4798
+  author: joe
+  timestamp: 2026-11-13T16:53:22.600985026Z
+  session_id: 01a1d54b-060a-7951-aa40-7f0fd928126f
+  harness_version: 2.1.323 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Approved
 filed_at:
   code_sha: 8265057964618d451894a955f2b90463164762aa
   branch: main
