@@ -13,7 +13,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T21:41:03.638236900Z
-modified_at: 2026-11-13T21:15:26.982042002Z
+modified_at: 2026-11-13T23:02:08.344023402Z
 req_type: Story
 tags:
 - track:dell1
@@ -602,6 +602,13 @@ comments:
   content: 'Advisor 14:17: re-PARKED. My 13:58 relaunch ignored the 05:58 park; the lane punted again for the same reason (native seat cannot record the merge of main). Do not relaunch until BUG-2558 (#3953) is on main and dell1 is rebuilt.'
   created_at: 2026-11-13T21:15:26.982042002Z
   modified_at: 2026-11-13T21:15:26.982042002Z
+  session_id: 01a1d684-8599-70e0-a01c-714f54d2f8de
+  harness_version: 2.1.323 (Claude Code)
+- id: 01a1d725-9ad8-7162-8bbf-c2efa4bf2709
+  author: joe
+  content: 'Advisor 15:50: operator freed Claude capacity (excess weekly credits, expire 2026-11-15). This conflict merge goes to a Claude implementer lane on dell1 (--vendor claude), because a Codex native seat cannot record the merge of main. Scope: REAL merge of origin/main into the open PR branch (no rebase, no force push), resolving conflicts to keep main''s behaviour plus this spec''s change, then targeted tests and check-ci-fast, then push. Nothing else.'
+  created_at: 2026-11-13T23:02:08.344023402Z
+  modified_at: 2026-11-13T23:02:08.344023402Z
   session_id: 01a1d684-8599-70e0-a01c-714f54d2f8de
   harness_version: 2.1.323 (Claude Code)
 history:
