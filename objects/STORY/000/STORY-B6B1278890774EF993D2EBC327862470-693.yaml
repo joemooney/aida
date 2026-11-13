@@ -1,0 +1,33 @@
+id: 01a1d614-6689-7611-8775-619f59f5095c
+spec_id: STORY-b6b1278890774ef993d2ebc327862470-693
+agreed_id: STORY-2770
+title: 'Review PR-3959: [AI:claude] feat(land): aida land status, the read-only landing reconciler pass (STORY-2768 S1)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `(no-sess`) for branch `story-2768-s1-land-status`.
+
+  - PR: <https://github.com/joemooney/aida/pull/3959>
+  - Branch: `story-2768-s1-land-status` → `integration`
+
+  ## Covers
+
+  - STORY-2768
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 3959` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-13T18:03:43.625823538Z
+modified_at: 2026-11-13T18:03:43.625823538Z
+req_type: Story
+filed_at:
+  code_sha: ee8dd4b2bdf1495f699357a3f2f40f9bf3802983
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: '82650579646'
+  vendor: claude
