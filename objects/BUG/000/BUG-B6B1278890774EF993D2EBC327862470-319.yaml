@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-13T11:08:09.225798765Z
-modified_at: 2026-11-13T11:31:09.888953147Z
+modified_at: 2026-11-13T11:35:02.634027682Z
 req_type: Bug
 tags:
 - mandate
@@ -41,6 +41,13 @@ comments:
   created_at: 2026-11-13T11:31:09.888953147Z
   modified_at: 2026-11-13T11:31:09.888953147Z
   session_id: 01a1d4ab-2dc9-7493-b77d-07f578345e59
+  harness_version: 2.1.323 (Claude Code)
+- id: 01a1d4b0-8cea-7582-982a-75be8eddd92e
+  author: joe
+  content: 'ADVISOR SIGNOFF (2026-11-13 04:35): sketch approved as written. Conditions: (1) a corrupt, unparsable or version-skewed index, or any doubt, falls back to the full walk (fail closed, never ''no aliases''); (2) the index lives only in the git common dir (never tracked or pushed), and refresh plus rebuild stay under AIDA_STORE_HISTORY_TIMEOUT_SECS; (3) the AC4 equality test compares index answers with full-walk answers on the long-history fixture, including the BUG-2179 deleted-by-agreed_id case. Reason: both walks cost every train about 20 minutes tonight, and the index judges exactly what the walks judge. Route: integration track, after BUG-2556 (a one-line train-recovery consent fix).'
+  created_at: 2026-11-13T11:35:02.634027682Z
+  modified_at: 2026-11-13T11:35:02.634027682Z
+  session_id: 01a1d4aa-9c99-76c2-ac94-7f0795f8a7f9
   harness_version: 2.1.323 (Claude Code)
 history:
 - id: 01a1d498-3f5e-76e0-8686-02d176a4d628

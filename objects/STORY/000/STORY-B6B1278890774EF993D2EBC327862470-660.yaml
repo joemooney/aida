@@ -23,7 +23,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-12T19:11:56.371806442Z
-modified_at: 2026-11-13T11:23:35.421231468Z
+modified_at: 2026-11-13T11:35:56.985626342Z
 req_type: Story
 tags:
 - operator-held
@@ -159,6 +159,13 @@ comments:
   modified_at: 2026-11-13T11:23:35.421231468Z
   session_id: 01a1d3ee-83e8-71b3-a2c5-aed5baed6fdc
   harness_version: 2.1.323 (Claude Code)
+- id: 01a1d4b1-6139-7731-b06f-995598cd7e81
+  author: joe
+  content: 'GAP 2026-11-13 03:25-04:3x MST (main unmoved >60 min). Cause: train #3941 (#3917+#3928) went green 03:57, then spent about 30 min in Gate on two full store-history walks (BUG-2554, now signed off) and was finally EJECTED by journal recovery dropping TTY consent (named:false, filed BUG-2556, track:integration). Action: #3936 train in flight (train PR #3943); fresh train 3917+3928+3942 queued behind it on deputy default; #3941 closed by that job.'
+  created_at: 2026-11-13T11:35:56.985626342Z
+  modified_at: 2026-11-13T11:35:56.985626342Z
+  session_id: 01a1d4aa-9c99-76c2-ac94-7f0795f8a7f9
+  harness_version: 2.1.323 (Claude Code)
 history:
 - id: 01a1d175-992b-7501-a0fb-89a007208ac0
   author: joe
@@ -215,6 +222,10 @@ history:
   session_id: 01a1d394-b764-7e21-a752-015032d87411
   harness_version: 2.1.323 (Claude Code)
   changes: []
+- id: 01a1d4b1-5820-7f72-a067-33199ec2bc3b
+  author: joe
+  timestamp: 2026-11-13T11:35:54.656066425Z
+  changes: []
 deferred: true
 deferred_at: 2026-11-13T04:01:31.457353384Z
 deferred_until: manual:integration
@@ -232,7 +243,7 @@ failure_reason:
   phase: reviewer
   phase_index: 3
   kind: verdict:request-changes
-  detail: Linked integration builds can promote after losing branch eligibility; help/manual still promise worktree builds never promote.
+  detail: 'Full sweep: four defects remain in Done landing markers, direct operator headless admission, queue-wide track selection, and literal-ID deduplication.'
   recovery_hint: address the review findings, move STORY-2737 back to In Progress, and clear the PR hold only after approval
   shelved_by: reviewer
-  shelved_at: 2026-11-13T03:44:14.360798811Z
+  shelved_at: 2026-11-13T11:35:54.421832669Z
