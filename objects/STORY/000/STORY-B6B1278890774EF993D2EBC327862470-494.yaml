@@ -27,7 +27,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T16:51:02.535818Z
-modified_at: 2026-11-13T02:57:59.510882042Z
+modified_at: 2026-11-13T03:00:56.758932404Z
 req_type: Story
 tags:
 - area:advisor
@@ -668,6 +668,13 @@ comments:
   content: 'advisor 19:58 (operator-approved): reset In Progress -> Approved. No lease on primary or dell1 and no open PR held it (orphaned after a lane exit). Dispatching to dell1. trace:STORY-2737'
   created_at: 2026-11-13T02:57:59.510882042Z
   modified_at: 2026-11-13T02:57:59.510882042Z
+  session_id: 01a1d240-c397-7b61-b29f-bb337c138943
+  harness_version: 2.1.323 (Claude Code)
+- id: 01a1d2d9-e136-7bf3-bc0d-9b1357c89165
+  author: joe
+  content: 'advisor 20:02: preserved unpushed commits from stale local seat story-b6b1278890774ef993d2ebc327862470-494 (branch story-2571-d1520) as origin/wip/story-2571-494-1112 (e0b079e8d11). New lane starts from main; reuse that branch only if its work is still relevant. trace:STORY-2737'
+  created_at: 2026-11-13T03:00:56.758932404Z
+  modified_at: 2026-11-13T03:00:56.758932404Z
   session_id: 01a1d240-c397-7b61-b29f-bb337c138943
   harness_version: 2.1.323 (Claude Code)
 history:
