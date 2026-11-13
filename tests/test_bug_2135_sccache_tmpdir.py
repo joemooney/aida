@@ -31,9 +31,21 @@ check_ci = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(check_ci)
 
 
+# Launcher PID filters and opt-outs must not override the fake server fixtures.
+# trace:STORY-2660 | ai:codex
+def sccache_fixture_env(env):
+    return {
+        key: value for key, value in env.items()
+        if not key.startswith("AIDA_SCCACHE") and key != "RUSTC_WRAPPER"
+    }
+
+
 class TestSccacheTmpdirDetection(unittest.TestCase):
     def setUp(self):
         self.env_backup = dict(os.environ)
+        self.enterContext(mock.patch.dict(
+            "os.environ", sccache_fixture_env(self.env_backup), clear=True
+        ))
 
     def tearDown(self):
         os.environ.clear()
@@ -231,6 +243,9 @@ class TestTask2772BoundedServerStart(unittest.TestCase):
 
     def setUp(self):
         self.saved_env = dict(os.environ)
+        self.enterContext(mock.patch.dict(
+            "os.environ", sccache_fixture_env(self.saved_env), clear=True
+        ))
         self.saved_timeouts = (check_ci.SCCACHE_SERVER_TIMEOUT, check_ci.SCCACHE_PROBE_TIMEOUT)
 
     def tearDown(self):
