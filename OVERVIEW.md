@@ -1465,6 +1465,24 @@ regular-file handle, with `O_NOFOLLOW | O_NONBLOCK` and a bounded read. The FIFO
 regression runs under an exact-test subprocess watchdog.
 <!-- trace:TASK-1786 | ai:codex -->
 
+Review recording resolves the reviewer's leased `PR-N` or `MR-N` before
+inheriting findings or choosing approval/hold routing. Both classification and
+the verdict builder read that change's record; a shared spec does not select
+another change's findings. An explicit `AIDA_REVIEW_VERDICT_FILE` remains the
+exact handshake destination, including gate suffixes. Standalone launch and
+contained artifact collection use the same forge-qualified change filename.
+Explicit local spec-only verdicts retain their local history but never bind to
+later changes, affect their gates, or clear their review claims. Legacy
+pre-change reviews remain eligible for binding to one change. Effective gates
+reuse one pinned ledger discovery across related changes under one aggregate
+budget; an index naming a missing change ledger refuses as incomplete evidence.
+Historical foreign-copy isolation also fails closed when ownership discovery is
+incomplete: lossy verdict readers withhold potentially misplaced review copies
+while retaining holds and phase-3 ownership records. Each discovery builds one
+ownership index from its change corpus and reuses it across spec/change buckets
+and additional event vectors; these reads never rewrite ledger history.
+<!-- trace:BUG-2517 | ai:codex -->
+
 Verdict reads use a held `review-verdicts` directory descriptor and `openat`
 with `O_DIRECTORY|O_NOFOLLOW` for archive descent. File opens use
 `O_NOFOLLOW|O_NONBLOCK`; metadata and bounded reads use the same handle and
