@@ -560,7 +560,9 @@ fn story_2254_bg_source_contract() {
         at("seat_authority::GRANT_ENV, grant_id)")
             < at("crate::vendors::profile::finalize_codex(&mut command)")
     );
-    assert!(at("headless_wait_envs(") < at("crate::vendors::profile::finalize_codex(&mut command)"));
+    assert!(
+        at("headless_wait_envs(") < at("crate::vendors::profile::finalize_codex(&mut command)")
+    );
     assert_eq!(
         src.matches("crate::vendors::profile::finalize_codex(")
             .count(),
