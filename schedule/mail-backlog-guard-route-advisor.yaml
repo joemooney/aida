@@ -5,10 +5,10 @@ last_by:
   session: 01a1beff-fc3b-78e2-93e2-9b0c283b0339
   vendor: claude
 result: done
-note: 'advisor: unread [request] from review-watch, 47m old: PR-3911: ready to ship'
+note: 'advisor: unread [request] from review-watch, 38m old: PR-3922 behind `main` with overlap; update-branch conflicts; advisor: unread [request] from review-watch, 37m old: PR-3911: ready to ship after its branch is updated'
 due_since: 2026-11-09T10:53:52.591288010Z
 due_reason: on CronJobFired:mail-backlog-guard-route-advisor
 due_failure:
-  trip_id: mail-backlog-guard-route-advisor@2026-11-13T06:29:24Z
+  trip_id: mail-backlog-guard-route-advisor@2026-11-13T07:13:08Z
   job: mail-backlog
-  error: 'advisor: unread [request] from review-watch, 47m old: PR-3911: ready to ship'
+  error: 'advisor: unread [request] from review-watch, 38m old: PR-3922 behind `main` with overlap; update-branch conflicts; advisor: unread [request] from review-watch, 37m old: PR-3911: ready to ship after its branch is updated'
