@@ -1,0 +1,49 @@
+id: 01a1d59d-c4a3-76d3-9462-7ce61063fcec
+spec_id: STORY-b6b1278890774ef993d2ebc327862470-686
+agreed_id: STORY-2763
+title: 'Approved PRs survive main moving: proactive carry-over, review against current base, base-merge heads don''t consume review rounds; configurable fast/strict assurance'
+description: |
+  ## Problem (observed 2026-11-13)
+  Every landing on main puts the whole open queue back into review. After promotion 4 (#3922) landed at 07:43, the reviews of #3824, #3896, #3909, #3920, #3832, #3898, #3919, #3939 and #3952 were refused at pickup ("base is N commits behind origin and overlaps M files ... refusing to launch reviewer against stale code"). Each needed a hand `gh pr update-branch`, which made a new head. Each new head needed a fresh full review (about 30 min of a Codex reviewer plus a full CI run), and several hit the two-round cap and needed an advisor ruling. Main went 60+ min without a merge (STORY-2737 gap incident, 08:43). With N open PRs, one landing costs about N reviews, and they finish just in time for the next landing to make them stale again.
+
+  ## What already exists, and the gap
+  - `gate/review_carryover.rs` (TASK-1960, STORY-080) already proves that an approval carries over a clean base merge. It needs two proofs: (1) the added commits are only base merges whose trees equal `git merge-tree --write-tree`; (2) the PR diff has the same `patch-id --verbatim`. The proof is stored as a `carry-over-proof` ledger event.
+  - BUT the proof is only computed at ship and merge-hold-clear time (`gate/mandate_ship.rs:650`, `gate/merge_hold_core.rs:1121/1659`). `review_watch_ready.rs` and `aida gate state` use `CarryOverSite::read_only`, so with no stored proof the watcher sees "approval at another commit", admits a full re-review, and the cap (`review_watch.rs:1019`) then routes the PR to the advisor. Example: PR-3824 was approved at a2acee6; its head 2009cac/4fb943b differs only by clean merges of main, but `aida gate state 3824` reports "stale: the approval was recorded at another commit".
+  - `pr_rebase.rs::classify_stale_base` (the overlap check) refuses reviewer pickup with no remedy and no retry.
+
+  ## Acceptance criteria
+  1. **Proactive carry-over.** When review-watch sees a new head and the change's latest verdict is APPROVED at an ancestor of that head, it runs `prove_for_refusal` on the primary side, writing the ledger event, BEFORE it admits a review. Proven: no review is launched and the PR counts as approved at the new head for every gate (ship, train, mandate, hold gate). Refused for a conflict resolution or an evil merge: it admits a DELTA review scoped to `approved_sha..head` minus the base-merge content, not a full sweep.
+  2. **Review against current base, not a stale branch.** Reviewer pickup no longer refuses when the base is behind with file overlap. The reviewer reviews the PR as it would land: the diff of `git merge-tree --write-tree <protected-base> <head>` against the protected base. Pickup refuses only on a real textual conflict, and that refusal dispatches rework to the implementer (not phase=failed). No branch update is needed for review: freshness belongs to the train, which already merges the current base and runs full CI.
+  3. **Cap counts findings rounds, not heads.** The two-round cap counts only rounds where the PR's own patch-id changed. A head that differs from the last reviewed head only by base merges (proof 1 passes) consumes no round.
+  4. **Configurable assurance (operator 2026-11-13 08:53).** One policy key, e.g. `[review] freshness = "fast" | "strict"` in `.aida/config.toml`. `strict` keeps today's behaviour exactly: no carry-over (every head is re-reviewed), stale-base refusal at pickup, and every head counts toward the cap. `fast` enables AC1-3. Per-path overrides force `strict` for listed globs even under `fast` (e.g. `freshness_strict_paths = ["aida-cli-lib/src/gate/**"]`). A PR touching any such path follows `strict`. The policy can be raised (fast to strict) by any operator but lowered only by an operator, never by an agent seat (the same protection as other gate config). This repository runs `fast` with no strict paths.
+  5. **Auditable.** Every carry-over decision, delta-review admission and skipped round writes a ledger event that names the policy in force and the proof. `aida gate state N` shows "approval carried from <sha> (fast policy, proof event #k)" or "strict policy: re-review required".
+  6. **Regression test reproducing tonight:** PR A approved at its head; PR B touching an overlapping file lands on main; main is merged into A cleanly. Under `fast`, the watcher admits no review and A ships. Under `strict`, a full review is admitted. A conflicting merge yields a delta review under `fast`.
+
+  ## Sketch (advisor; architecture, gate path)
+  - Wire `CarryOverSite::writable` plus `prove_for_refusal` into the review-watch admission path (`review_watch_ready.rs`), behind the policy read. The gate stays the only authority; no advisor or agent asserts a carry.
+  - Move the `classify_stale_base` refusal behind `strict`. Under `fast`, the reviewer prompt receives the merge-tree diff; on a conflict, pickup returns a typed `NeedsRework` that review-watch turns into `queue rework` (this absorbs the stale-base half of BUG-2561).
+  - Cap: `History::blocking_keys` keys on the patch-id rather than the head under `fast`.
+  - Config: add the key to the config schema with the existing protected-config write rules; defaults to `fast` with an empty strict list in this repo's committed config.
+  - Out of scope: the transient store-pull retry (stays in BUG-2561); integration-track changes (frozen until 2026-11-14 19:00).
+status: Draft
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-13T15:54:08.931576118Z
+modified_at: 2026-11-13T15:54:08.931576118Z
+req_type: Story
+tags:
+- architecture
+- gate
+- review
+- throughput
+- track:dell1
+filed_at:
+  code_sha: 3631f7ca05567a6984ff2376b997539389b6f758
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 3631f7ca055
+  vendor: claude
+  session: 01a1d54b-060a-7951-aa40-7f0fd928126f
+  harness_version: 2.1.323 (Claude Code)
