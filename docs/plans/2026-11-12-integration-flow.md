@@ -58,6 +58,10 @@ Never:
   check `git diff origin/main <promoted integration sha>` is empty and that
   sha is an ancestor of `origin/integration`, then
   `git merge -s ours origin/main`, push, and report the new sha.
+- `-s ours` is ONLY for a promotion sync, where main's content already equals
+  integration's. When a PR or train lands on `main` directly (not through
+  integration), do a real `git merge origin/main`, run `make check-ci-fast`,
+  push, and report the sha; `-s ours` there would silently drop its content.
 
 ## Parallel work (optional)
 
