@@ -13,7 +13,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T21:41:03.638236900Z
-modified_at: 2026-11-13T12:24:23.506823381Z
+modified_at: 2026-11-13T12:56:29.826436827Z
 req_type: Story
 tags:
 - track:dell1
@@ -581,6 +581,13 @@ comments:
   content: 'Advisor 05:28: the 05:10 dell1 lane punted without a recorded reason (dell1 store writes were failing on a 0664 work-dispenser file, now fixed). The 03:40 brief stands: rebase story-2593-r2219 onto origin/main, resolve conflicts keeping main''s behaviour, targeted test plus check-ci-fast, push with --force-with-lease to the open PR #3938. If you punt, name the exact blocker in the punt text.'
   created_at: 2026-11-13T12:24:23.506823381Z
   modified_at: 2026-11-13T12:24:23.506823381Z
+  session_id: 01a1d4aa-9c99-76c2-ac94-7f0795f8a7f9
+  harness_version: 2.1.323 (Claude Code)
+- id: 01a1d4fb-1f82-7f82-9090-f2a70157beec
+  author: joe
+  content: 'Advisor 05:58: PARKED until BUG-2558 lands. #3938 is still CONFLICTING after the 05:24 lane''s push (12e20ac, fast gate failed): 45 conflict hunks across containment/launch files, and Codex native seats cannot record the merge. Too large and sensitive for an advisor hand-merge.'
+  created_at: 2026-11-13T12:56:29.826436827Z
+  modified_at: 2026-11-13T12:56:29.826436827Z
   session_id: 01a1d4aa-9c99-76c2-ac94-7f0795f8a7f9
   harness_version: 2.1.323 (Claude Code)
 history:
