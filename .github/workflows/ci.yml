@@ -989,6 +989,20 @@ jobs:
             python3 scripts/check-crate-globs.py
           fi
 
+      # trace:TASK-3785 | ai:codex
+      - name: Gate downward dependency ratchet
+        if: matrix.shard == 'gates'
+        env:
+          GATE_DEPENDENCIES_BASE: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha || github.event.before }}
+        run: |
+          python3 -m unittest tests/test_gate_dependency_ratchet.py
+          if [ -n "$GATE_DEPENDENCIES_BASE" ] && [ "$GATE_DEPENDENCIES_BASE" != "0000000000000000000000000000000000000000" ]; then
+            git fetch --no-tags --depth=1 origin "$GATE_DEPENDENCIES_BASE"
+            python3 scripts/check-gate-dependencies.py --base "$GATE_DEPENDENCIES_BASE"
+          else
+            python3 scripts/check-gate-dependencies.py
+          fi
+
       # Inventory-only S1a; no service or permission changes. trace:TASK-3222 | ai:codex
       - name: Store writer inventory ratchet
         if: matrix.shard == 'gates'
