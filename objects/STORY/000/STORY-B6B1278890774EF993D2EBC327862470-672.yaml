@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-13T04:07:35.213330891Z
-modified_at: 2026-11-13T20:18:17.856433253Z
+modified_at: 2026-11-13T20:43:35.092955642Z
 req_type: Story
 tags:
 - track:integration
@@ -76,6 +76,13 @@ comments:
   content: 'Advisor ruling 13:18 MST: #3963 (bug_1502 audit rows, merged into integration under review-after-merge) is reviewed by the promotion-6 review at the exact integration head 108bf93. That review is a superset of #3963''s diff, so #3963 gets no separate review.'
   created_at: 2026-11-13T20:18:17.856433253Z
   modified_at: 2026-11-13T20:18:17.856433253Z
+  session_id: 01a1d684-8599-70e0-a01c-714f54d2f8de
+  harness_version: 2.1.323 (Claude Code)
+- id: 01a1d6a6-c134-7423-8ac3-e0c216dca1e6
+  author: joe
+  content: 'Advisor ruling 13:47 MST: canary red at 108bf93 on the display_id ratchet (+4 unmarked sites from #3935). Fixing forward ONCE, because it is a 4-line marker/friendly_id change verified by the ratchet test, the same cost as a revert plus canary rerun. If that push is not green, #3935 and #3963 are reverted out of integration per throughput rule 1.'
+  created_at: 2026-11-13T20:43:35.092955642Z
+  modified_at: 2026-11-13T20:43:35.092955642Z
   session_id: 01a1d684-8599-70e0-a01c-714f54d2f8de
   harness_version: 2.1.323 (Claude Code)
 history:
