@@ -1,0 +1,35 @@
+id: 01a1d4c0-6ba7-75c2-acee-4542d804c917
+spec_id: STORY-b6b1278890774ef993d2ebc327862470-680
+agreed_id: STORY-2757
+title: 'Review PR-3944: [AI:claude] fix(train): journal recovery keeps terminal consent for the named train (BUG-2556)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `(no-sess`) for branch `bug-2556-recovery-consent`.
+
+  - PR: <https://github.com/joemooney/aida/pull/3944>
+  - Branch: `bug-2556-recovery-consent` → `integration`
+
+  ## Covers
+
+  - BUG-2556
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 3944` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-13T11:52:22.695349188Z
+modified_at: 2026-11-13T11:52:22.695349188Z
+req_type: Story
+filed_at:
+  code_sha: 5f7758770edc62267d78ae1a4abf47f2a86a1467
+  branch: bug-2556-recovery-consent
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 11bf5e9a018
+  vendor: claude
+  session: 01a1d4ab-2dc9-7493-b77d-07f578345e59
+  harness_version: 2.1.323 (Claude Code)
