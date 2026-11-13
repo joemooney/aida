@@ -67,11 +67,66 @@ fn fixture_spawn_retries_while_writer_descriptor_is_open() {
     assert_eq!(String::from_utf8_lossy(&output.stdout).trim(), "ready");
 }
 
+/// Return the profile directory for either Cargo's legacy deps runner or its
+/// unit build directory. Match the full suffix rather than an arbitrary ancestor
+/// named `build`, since target directories and profiles may have custom names.
+// trace:BUG-2539 | ai:codex
+pub(crate) fn test_profile_dir(executable: &std::path::Path) -> Option<&std::path::Path> {
+    let directory = executable.parent()?;
+    if directory.file_name()? == "deps" {
+        return directory.parent();
+    }
+    if directory.file_name()? == "out" {
+        let unit = directory.parent()?;
+        let package = unit.parent()?;
+        let build = package.parent()?;
+        if build.file_name()? == "build" {
+            return build.parent();
+        }
+    }
+    None
+}
+
+/// Re-exec the running test image, independent of ambient CLI overrides.
+// trace:BUG-2539 | ai:codex
+pub(crate) fn current_test_runner() -> std::path::PathBuf {
+    let runner = crate::aida_bin::current_executable_path().expect("test executable");
+    assert!(
+        test_profile_dir(&runner).is_some(),
+        "unrecognized Cargo test executable layout: {}",
+        runner.display()
+    );
+    runner
+}
+
+// trace:BUG-2539 | ai:codex
+#[test]
+fn bug_2539_test_profile_recognizes_both_cargo_layouts() {
+    use std::path::Path;
+    for profile in ["debug", "release", "agent", "custom-profile"] {
+        let root = std::path::PathBuf::from("/custom/build/target").join(profile);
+        for suffix in [
+            "deps/runner-123",
+            "build/aida-cli-lib/012345/out/runner-123",
+        ] {
+            assert_eq!(test_profile_dir(&root.join(suffix)), Some(root.as_path()));
+        }
+    }
+    for path in [
+        "/target/debug/aida",
+        "/target/debug/build/pkg/hash/runner",
+        "/target/debug/other/pkg/hash/out/runner",
+        "/ambient/aida",
+    ] {
+        assert_eq!(test_profile_dir(Path::new(path)), None, "{path}");
+    }
+}
+
 /// The CLI built alongside this test artifact, never an ambient installed CLI.
-// trace:BUG-2398 | ai:codex
+// trace:BUG-2398 trace:BUG-2539 | ai:codex
 pub(crate) fn matching_aida_cli() -> std::path::PathBuf {
-    let test = crate::aida_bin::current_executable_path().expect("test executable");
-    let cli = test.parent().unwrap().parent().unwrap().join("aida");
+    let test = current_test_runner();
+    let cli = test_profile_dir(&test).unwrap().join("aida");
     assert!(
         cli.is_file(),
         "build the matching CLI before these process fixtures: {}",
