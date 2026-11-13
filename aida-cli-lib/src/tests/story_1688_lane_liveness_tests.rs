@@ -1370,15 +1370,20 @@ fn linked_verdict_does_not_count_as_review_started() {
     );
 }
 
-/// TASK-2094 / TASK-1665: an attested reviewer whose creator shell exited is
-/// read with the live probes. A crashed reviewer (nothing live in its
-/// worktree) no longer suppresses unpicked-ready-pr; a Codex-style reviewer
-/// registered inside its worktree still counts as the review started.
+/// Crashed legacy reviewers release while registered reviewers retain the PR.
+/// Admitted holder death is tested separately with a production witness.
+// trace:TASK-3420 | ai:codex
 // trace:TASK-1955 | ai:claude (TASK-2094, TASK-1665)
 #[test]
-fn reviewer_lease_with_a_dead_creator_is_read_with_live_probes() {
+fn task_3420_crashed_legacy_reviewer_and_registered_reviewer() {
     let tmp = tempfile::tempdir().unwrap();
     let root = tmp.path().canonicalize().unwrap();
+    std::process::Command::new("git")
+        .args(["init", "-q"])
+        .current_dir(&root)
+        .status()
+        .unwrap();
+    let _ambient = crate::test_env::AmbientGuard::hermetic_with_seat(&root, "implementer", &[]);
     let now = Utc::now();
     let worktree = root.join("aida-pr-2730");
     std::fs::create_dir_all(&worktree).unwrap();
@@ -1394,6 +1399,8 @@ fn reviewer_lease_with_a_dead_creator_is_read_with_live_probes() {
     review.creator_pid_start_time = creator.1;
     review.pr_head_sha = Some(HEAD_A.into());
     write_lease(&root, &review);
+    // trace:TASK-2120 trace:TASK-3420 | ai:codex
+    // Crashed legacy reviewer: production may have written no witness.
     let feed = prs_json(vec![gh_pr(
         2730,
         HEAD_A,
@@ -1446,60 +1453,78 @@ fn reviewer_lease_with_a_dead_creator_is_read_with_live_probes() {
         },
     )
     .unwrap();
-    assert!(
-        ids(&findings_at(&root, now, &prs)).is_empty(),
-        "a live registered reviewer in the worktree has started the review"
+    assert_eq!(
+        ids(&findings_at(&root, now, &prs)),
+        Vec::<String>::new(),
+        "a registered legacy reviewer still holds the PR"
     );
 }
 
-/// TASK-2120: the live-session arm of `review_lease_running`. A Claude
-/// reviewer still running in its review worktree after its creator shell
-/// exited has started the review, with no agent-registry entry; with no live
-/// session there, the lease is not running. The probes are pre-filled, so no
-/// real process table is read.
-// trace:TASK-1955 | ai:claude (TASK-2120)
+/// Review progress follows the recorded owner, even if unrelated processes
+/// occupy the same worktree. Missing or replacement evidence retains ownership.
+// trace:TASK-3420 | ai:codex
 #[test]
-fn reviewer_lease_with_a_dead_creator_counts_a_live_claude_session_in_its_worktree() {
+fn task_3420_review_lease_uses_recorded_ownership() {
     let tmp = tempfile::tempdir().unwrap();
     let root = tmp.path().canonicalize().unwrap();
+    // The production reader resolves the project through Git.
+    std::process::Command::new("git")
+        .args(["init", "-q"])
+        .current_dir(&root)
+        .status()
+        .unwrap();
+    let _ambient = crate::test_env::AmbientGuard::hermetic_with_seat(&root, "implementer", &[]);
     let now = Utc::now();
-    let worktree = root.join("aida-pr-2731");
-    std::fs::create_dir_all(&worktree).unwrap();
     let mut review = lease("rv31", "PR-2731", &dead_pid(), now);
     review.role = Some("reviewer".into());
     review.review_verb = true;
     review.claim_verb = false;
-    review.worktree_path = worktree.clone();
-    review.active_pid = None;
-    review.active_pid_start_time = None;
-    let creator = dead_pid();
-    review.creator_pid = Some(creator.0);
-    review.creator_pid_start_time = creator.1;
-
-    let claude = |cwd: &Path| crate::process_probe::LiveSession {
-        // Not the inspecting process or its ancestors (BUG-2197 excludes those).
-        pid: 4_000_001,
-        cwd: cwd.to_path_buf(),
-        jsonl: None,
-        stale_cwd: false,
-    };
-    let running = |sessions: Vec<crate::process_probe::LiveSession>| {
-        review_lease_running(
-            &root,
-            &review,
-            &mut Some(sessions),
-            &mut Some(Vec::new()),
-            now,
-        )
-    };
+    review.pr_head_sha = Some("head".into());
     assert!(
-        running(vec![claude(&worktree.join("src"))]),
-        "a live Claude session in the review worktree has started the review"
+        !review_lease_running(&crate::ownership::reader::LeaseReader::new(&root), &review),
+        "crashed legacy reviewer releases without a witness"
     );
-    assert!(!running(Vec::new()), "nothing live: the reviewer crashed");
+    // Exercise the admitted process envelope written by the production adapter.
+    let mut command = std::process::Command::new("sleep");
+    command.arg("30");
+    let capture = aida_core::proc_identity::prepare_command(&mut command).unwrap();
+    let mut child = command.spawn().unwrap();
+    let admission = capture.finish(&mut child);
+    admission.validate().unwrap();
+    review.active_pid = Some(child.id());
+    review.active_pid_start_time = crate::process_probe::process_start_identity(child.id());
+    review.hostname = crate::coordination::hostname();
+    review.pid_namespace = aida_core::process_probe::ProbeSource::system()
+        .pid_namespace(child.id())
+        .ok();
+    review.holder_record = Some(serde_json::to_string(&admission).unwrap());
+    crate::ownership::dual::enable_for_test();
+    crate::ownership::dual::lease_written(&root, &review);
+    let record = crate::ownership::reader::lease_record(&root, &review)
+        .unwrap()
+        .expect("production adapter persisted ownership");
+    assert!(record
+        .holder
+        .unwrap()
+        .witnesses
+        .iter()
+        .any(|w| w.admission.is_some()));
     assert!(
-        !running(vec![claude(&root.join("elsewhere"))]),
-        "a session outside the review worktree does not count"
+        review_lease_running(&crate::ownership::reader::LeaseReader::new(&root), &review),
+        "live admitted holder"
+    );
+    child.kill().unwrap();
+    child.wait().unwrap();
+    assert!(
+        !review_lease_running(&crate::ownership::reader::LeaseReader::new(&root), &review),
+        "positive death proof releases the review"
+    );
+    let mut replacement = review.clone();
+    replacement.id = "replacement".into();
+    crate::ownership::dual::lease_written(&root, &replacement);
+    assert!(
+        review_lease_running(&crate::ownership::reader::LeaseReader::new(&root), &review),
+        "another generation does not prove this owner dead"
     );
 }
 
@@ -1605,4 +1630,42 @@ fn linked_worktree_hold_waits_from_the_primary_placement_event() {
         .find(|h| h.pr == 2712)
         .expect("the linked worktree sees the primary's hold");
     assert_eq!(hold.waiting_since, placed_at);
+}
+
+// trace:BUG-2492 | ai:codex
+#[test]
+fn bug2492_readiness_skips_pending_status_context_only_for_a_hold() {
+    let now = Utc::now();
+    let green_at = now - Duration::minutes(30);
+    let pr = gh_pr(1, HEAD_A, Some(green_at), false);
+    let mut rollup = pr["statusCheckRollup"].as_array().unwrap().clone();
+    rollup.push(serde_json::json!({"__typename":"StatusContext", "context":"merge-hold-gate", "state":"PENDING"}));
+    let required = ["Build".into(), "merge-hold-gate".into()];
+    for required in [None, Some(required.as_slice())] {
+        assert_eq!(rollup_green_at(&rollup, false, required), None);
+        assert_eq!(
+            rollup_green_at(&rollup, true, required)
+                .unwrap()
+                .timestamp(),
+            green_at.timestamp()
+        );
+    }
+    rollup.push(
+        serde_json::json!({"__typename":"StatusContext", "context":"Other", "state":"PENDING"}),
+    );
+    assert_eq!(rollup_green_at(&rollup, true, None), None);
+}
+
+// trace:TASK-3749 | ai:codex
+#[test]
+fn task_3749_no_change_drain_member_is_finished_work() {
+    let tmp = tempfile::tempdir().unwrap();
+    let root = tmp.path();
+    let dead = dead_pid();
+    let mut drain = crate::drain_state::DrainState::new_batch("night", &["TASK-20".into()]);
+    drain.orchestrator_pid = dead.0;
+    drain.orchestrator_pid_start = dead.1;
+    drain.members[0].state = crate::drain_state::STATE_NO_CHANGE.into();
+    drain.write(root).unwrap();
+    assert!(findings_at(root, Utc::now(), &no_prs).is_empty());
 }

@@ -329,6 +329,8 @@ fn mandate_status_with_an_unreadable_committed_layer_shows_the_floor_only() {
 /// The Rust source roots the ratchet scans, relative to the workspace root.
 const SCANNED_ROOTS: &[&str] = &[
     "aida-cli-lib/src",
+    // trace:TASK-3429 | ai:codex — retain coverage after transport extraction.
+    "aida-mcp/src",
     "aida-cli/src",
     "aida-core/src",
     "aida-server/src",
@@ -933,7 +935,7 @@ fn drive_tick_authority_inputs_are_private_to_the_gate() {
         "spec_signoff_from(",
         "load_human_gates(",
         "collect_held_prs(",
-        "current_user_id(",
+        "operator_principal(",
     ] {
         assert!(
             live.contains(input),

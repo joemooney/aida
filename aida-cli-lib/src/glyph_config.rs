@@ -23,28 +23,18 @@ pub(crate) enum Scope {
 
 /// Resolve the `config.toml` path for `scope`. The project path is derived from
 /// [`crate::find_project_root`]; the user path from the home dir.
-pub(crate) fn config_path_for(scope: Scope) -> Result<PathBuf> {
-    match scope {
-        Scope::Project => {
-            let root = crate::find_project_root()
-                .context("not inside an AIDA project — run `aida init`, or use `--user`")?;
-            Ok(root.join(".aida").join("config.toml"))
-        }
-        Scope::User => {
-            let home = home_dir()
-                .ok_or_else(|| anyhow::anyhow!("could not resolve home directory for --user"))?;
-            Ok(home.join(".aida").join("config.toml"))
-        }
-    }
-}
-
-/// Honors the test override so unit tests don't read the real home.
-fn home_dir() -> Option<PathBuf> {
-    #[cfg(test)]
-    if let Some(home) = std::env::var_os("AIDA_TEST_HOME") {
-        return Some(PathBuf::from(home).join("home"));
-    }
-    crate::home_dir()
+// trace:STORY-2538 | ai:codex
+pub(crate) fn config_path_for(
+    scope: Scope,
+    exec: &aida_core::exec_context::ExecContext,
+) -> Result<PathBuf> {
+    let root = match scope {
+        Scope::Project => exec.project_root(),
+        Scope::User => exec
+            .home()
+            .ok_or_else(|| anyhow::anyhow!("could not resolve home directory for --user"))?,
+    };
+    Ok(root.join(".aida").join("config.toml"))
 }
 
 /// Load a `config.toml` into an editable document, or a fresh empty one if the

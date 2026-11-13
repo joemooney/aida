@@ -1,6 +1,6 @@
 // `aida help commands` — the flat, comprehensive catalog of every command
 // and subcommand, one line each. The rows are derived live from the clap
-// definition (a recursive walk over `command_registry::built_command()`), NOT hand-maintained,
+// definition (a recursive walk over `CLI_SUPPORT.built_command()`), NOT hand-maintained,
 // so the catalog can never drift from the real surface: a new subcommand
 // appears here the moment it exists, a removed one disappears.
 // trace:TASK-1098 | ai:claude
@@ -37,7 +37,7 @@ pub(crate) struct CatalogFlag {
 /// and flags stay out of the default grep surface unless explicitly requested.
 // trace:STORY-1027 | ai:codex
 pub(crate) fn catalog_rows(include_hidden: bool) -> Vec<CatalogRow> {
-    let mut cmd = crate::command_registry::built_command();
+    let mut cmd = crate::CLI_SUPPORT.built_command();
     cmd.build();
     let mut rows = Vec::new();
     collect(
@@ -418,7 +418,7 @@ pub(crate) fn print_semantic_help_topic(term: &str, project_root: Option<&Path>)
 }
 
 pub(crate) fn print_exact_command_help(path: &str) -> bool {
-    let mut cmd = crate::command_registry::built_command();
+    let mut cmd = crate::CLI_SUPPORT.built_command();
     cmd.build();
     let mut current = &mut cmd;
     for part in path.split_whitespace() {
@@ -427,6 +427,7 @@ pub(crate) fn print_exact_command_help(path: &str) -> bool {
         };
         current = next;
     }
+    crate::external_cmd::append_parent_help(current);
     let _ = current.print_help();
     println!();
     true
@@ -573,7 +574,7 @@ struct HelpDocument {
 }
 
 fn help_documents() -> Vec<HelpDocument> {
-    let mut cmd = crate::command_registry::built_command();
+    let mut cmd = crate::CLI_SUPPORT.built_command();
     cmd.build();
     let mut docs = Vec::new();
     collect_help_documents(&cmd, "aida", false, &mut docs);
@@ -748,9 +749,8 @@ pub(crate) struct CommandsArgs {
 
 fn run_commands(
     matches: &clap::ArgMatches,
-    _ctx: &crate::command_registry::DispatchCtx,
+    _ctx: &crate::cmdkit::DispatchCtx,
 ) -> anyhow::Result<()> {
-    use crate::*;
     let args = <CommandsArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
     let CommandsArgs {
         flags,
@@ -762,16 +762,15 @@ fn run_commands(
 }
 
 // trace:STORY-1728 | ai:claude
-pub(crate) static COMMANDS: crate::command_registry::CommandReg =
-    crate::command_registry::CommandReg {
-        name: "commands",
-        help_after: "help-all",
-        command: <CommandsArgs as clap::CommandFactory>::command,
-        policy: |_| crate::command_registry::CmdPolicy {
-            stakeholder: crate::stakeholder_role::StakeholderAction::Write,
-            per_write_auto_push: false,
-            skip_role_restore_prompt: false,
-            team_identity_write: false,
-        },
-        run: crate::command_registry::Handler::Early(run_commands),
-    };
+pub(crate) static COMMANDS: crate::cmdkit::CommandReg = crate::cmdkit::CommandReg {
+    name: "commands",
+    help_after: "help-all",
+    command: <CommandsArgs as clap::CommandFactory>::command,
+    policy: |_| crate::cmdkit::CmdPolicy {
+        stakeholder: crate::stakeholder_role::StakeholderAction::Write,
+        per_write_auto_push: false,
+        skip_role_restore_prompt: false,
+        team_identity_write: false,
+    },
+    run: crate::cmdkit::Handler::Early(run_commands),
+};

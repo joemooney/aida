@@ -110,10 +110,7 @@ pub(crate) struct TuiArgs {
 // holds no storage handle (it shells out to `aida` subcommands), so
 // it dispatches before storage init like Goal / Statusline.
 // trace:STORY-132 | ai:claude
-fn run_tui(
-    matches: &clap::ArgMatches,
-    _ctx: &crate::command_registry::DispatchCtx,
-) -> anyhow::Result<()> {
+fn run_tui(matches: &clap::ArgMatches, _ctx: &crate::cmdkit::DispatchCtx) -> anyhow::Result<()> {
     let args = <TuiArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
     let TuiArgs {
         scope,
@@ -125,15 +122,15 @@ fn run_tui(
 }
 
 // trace:STORY-1728 | ai:claude
-pub(crate) static TUI: crate::command_registry::CommandReg = crate::command_registry::CommandReg {
+pub(crate) static TUI: crate::cmdkit::CommandReg = crate::cmdkit::CommandReg {
     name: "tui",
     help_after: "mcp",
     command: <TuiArgs as clap::CommandFactory>::command,
-    policy: |_| crate::command_registry::CmdPolicy {
+    policy: |_| crate::cmdkit::CmdPolicy {
         stakeholder: crate::stakeholder_role::StakeholderAction::Write,
         per_write_auto_push: false,
         skip_role_restore_prompt: false,
         team_identity_write: false,
     },
-    run: crate::command_registry::Handler::Early(run_tui),
+    run: crate::cmdkit::Handler::Early(run_tui),
 };

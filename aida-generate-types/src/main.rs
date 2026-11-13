@@ -41,6 +41,9 @@ fn generate_types_content() -> String {
         declaration::<models::FailureReason>(),
         // STORY-522: async decision-inbox types
         declaration::<models::DecisionChoice>(),
+        // DecisionRequest's retained-work binding must be exported too.
+        // trace:STORY-2661 | ai:codex
+        declaration::<models::ParkBinding>(),
         declaration::<models::DecisionRequest>(),
         declaration::<models::RequirementPriority>(),
         declaration::<models::RequirementType>(),

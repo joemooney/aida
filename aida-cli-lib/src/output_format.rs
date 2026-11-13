@@ -90,12 +90,12 @@ pub(crate) fn output_format_from_env() -> Option<OutputFormat> {
 /// accepted spellings of `human`/`toon`.
 // trace:STORY-764 | ai:claude
 pub(crate) fn parse_output_format(raw: Option<&str>) -> Option<OutputFormat> {
-    match raw?.trim().to_ascii_lowercase().as_str() {
-        "human" | "table" => Some(OutputFormat::Human),
-        "toon" | "agent" => Some(OutputFormat::Toon),
-        "json" => Some(OutputFormat::Json),
-        _ => None,
-    }
+    use aida_core::output_format::{parse_output_format, OutputFormat as CoreFormat};
+    parse_output_format(raw).map(|format| match format {
+        CoreFormat::Human => OutputFormat::Human,
+        CoreFormat::Toon => OutputFormat::Toon,
+        CoreFormat::Json => OutputFormat::Json,
+    })
 }
 
 /// The installed explicit override, if any. `None` until

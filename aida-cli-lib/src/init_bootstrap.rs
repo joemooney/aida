@@ -22,6 +22,8 @@ use std::path::{Path, PathBuf};
 pub(crate) struct BootstrapPlan {
     pub dir: PathBuf,
     pub lang: Option<Lang>,
+    pub gitlab_enable_ci: bool,
+    pub gitlab_runner_tags: Vec<String>,
     pub github: bool,
     pub public: bool,
     pub remote: Option<String>,
@@ -312,6 +314,10 @@ pub(crate) fn create_and_scaffold(plan: &BootstrapPlan) -> Result<()> {
             );
         }
     }
+    // trace:STORY-2701 | ai:codex
+    if plan.gitlab.is_some() {
+        crate::gitlab_project_create::scaffold_ci(dir, plan.lang, &plan.gitlab_runner_tags)?;
+    }
     if !dir.join(".git").exists() {
         run_in(dir, "git", &["init"])?;
         println!("  {} git repository initialized", "+".green());
@@ -485,6 +491,15 @@ pub(crate) fn publish_remotes(plan: &BootstrapPlan, dir: &Path) -> Result<Option
             return Err(e);
         }
         println!("  {} pushed `{}` to {}", "+".green(), branch, url);
+        // CI diagnostics must not roll back an already published project.
+        // trace:STORY-2701 | ai:codex
+        if let Err(error) = crate::gitlab_project_create::check_project_ci(
+            &url,
+            plan.gitlab_enable_ci,
+            &plan.gitlab_runner_tags,
+        ) {
+            eprintln!("GitLab CI/CD setup incomplete: {error:#}. Ask a project/group administrator to review CI/CD policy and runner access; no organizational restrictions were changed.");
+        }
         if remote != "origin" {
             gitlab_mirror = Some(remote.clone());
         }

@@ -374,6 +374,7 @@ pub use models::{
     NumberingStrategy,
     // Multi-repo origin dimension (ADR-12)
     Origin,
+    ParkBinding,
     // Durable processing-record audit trail (STORY-582)
     ProcessingRecord,
     PuntCategory,
@@ -445,3 +446,9 @@ pub use templates::{
 };
 #[cfg(feature = "native")]
 pub use user_prefs::UserPreferences;
+
+/// Observational gate-ledger API; never creates files, locks or caches.
+pub mod gate_ledger_read;
+
+// trace:STORY-2704 | ai:codex
+pub mod output_format;

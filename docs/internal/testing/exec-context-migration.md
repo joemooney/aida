@@ -3,9 +3,9 @@
 <!-- trace:STORY-2538 | ai:codex -->
 
 The approved R4 design lives in STORY-2538's sketch and advisor sign-off of
-2026-11-06. Slice A introduces the types and inventories below. No production
-reader has been migrated and no launch environment has been cleared by this
-slice. STORY-2538 remains incomplete.
+2026-11-06. Slice A introduced the types and inventories below. Slice B migrates
+launch parent facts, seat resource lookup, and glyph config write-path selection.
+STORY-2538 remains incomplete; this slice supplies no new containment admission.
 
 ## Shared inputs and launch boundary
 
@@ -34,10 +34,23 @@ test overrides and required-live declarations, refuses. Ordinary secrets are
 absent unless a future reviewed policy explicitly lists their exact keys.
 Neither context nor environment/policy types implement Debug or serialization.
 
-PR-C (STORY-2326) owns vendor profiles, moving `prepare_launch`, grant issuer
-consolidation, `control_child`/`control_env`, resume/finalization and resource
-renderers. Until PR-C merges, R4 must not edit `aida-cli-lib/src/launch/` or
-change `LaunchContext::resolve`. This slice edits neither.
+Slice B follows the completed STORY-2326 launch work and STORY-2641 resource
+wiring. Launch call sites capture an `ExecContext` at their request boundary and
+pass it to `LaunchContext::resolve`. Resolution and resource lookup read only
+that supplied snapshot; the resolved context carries it through `spawn_agent`,
+including the existing child environment projection. The capture boundary keeps
+the legacy child-export ledger semantics: validate the current containment
+marker, then select the parent's inherited marker when the current value still
+matches this process's export. The existing live authority and filesystem checks
+remain in place. `XDG_RUNTIME_DIR` is a parent input, never a child-forwarding grant.
+
+The additional cluster is glyph config write-path selection. Config commands
+supply an explicit project root and optional home; the glyph path resolver no
+longer looks up home or a test override. The command boundary retains the legacy
+home resolver and test-home fence. Glyph rendering and other config readers
+remain later migration work. Fixture tests exercise concurrent independent homes,
+missing home/runtime inputs, malformed/non-Unicode containment, monotonic parent
+containment and contained program-override refusal without process env mutation.
 
 ## Exact-site legacy ledger
 

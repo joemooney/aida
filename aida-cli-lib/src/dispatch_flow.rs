@@ -637,6 +637,12 @@ pub(crate) fn run_flow_verb(
         };
 
         match flow_ship_decision(current_verdict) {
+            FlowVerdict::Waiting => {
+                return RunnerOutcome::Failed {
+                    summary: format!("PR #{pr} review is WAITING: external evidence required; resume with a fresh review at the current head; existing holds remain intact"),
+                    exit_code: Some(1),
+                };
+            }
             FlowVerdict::Ship => {}
             FlowVerdict::ChangesRequested => {
                 // Stop immediately on CHANGES_REQUESTED / REJECTED without clearing any hold!

@@ -21,6 +21,19 @@ c = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(c)
 
 
+# trace:TASK-3095 | ai:codex
+@contextlib.contextmanager
+def fixture_home_directory():
+    # Keep output outside /tmp and /run without bypassing the production guard.
+    # The checkout is writable in native lanes; the operator's home need not be.
+    with tempfile.TemporaryDirectory(dir=Path(__file__).resolve().parents[1]) as directory:
+        home = Path(directory)
+        fixture_home = home / ".aida"
+        fixture_home.mkdir()
+        with mock.patch.object(Path, "home", return_value=home):
+            yield fixture_home
+
+
 # trace:BUG-2497 | ai:codex
 class RunCompletionTests(unittest.TestCase):
     def test_agy_verified_terminal_receipt_completes_run(self):
@@ -264,9 +277,7 @@ items = [{name = "preserved", enabled = true}]
 
     # trace:TASK-3048 | ai:codex
     def test_agy_aida_setup_uses_policy_from_selected_binary(self):
-        fixture_home = Path.home() / ".aida"
-        fixture_home.mkdir(exist_ok=True)
-        with tempfile.TemporaryDirectory(dir=fixture_home) as directory:
+        with fixture_home_directory() as directory:
             root = Path(directory) / "experiment"
             calls = []
             def setup(argv, cwd, env, report, stage):
@@ -300,9 +311,7 @@ items = [{name = "preserved", enabled = true}]
     # Relocating role authority must not silently relocate the credential source.
     # trace:TASK-3048 | ai:codex
     def test_agy_fixture_keeps_original_credential_source(self):
-        fixture_home = Path.home() / ".aida"
-        fixture_home.mkdir(exist_ok=True)
-        with tempfile.TemporaryDirectory(dir=fixture_home) as directory:
+        with fixture_home_directory() as directory:
             root = Path(directory) / "experiment"
             runtime = {"auth_hosts": ["binary.fixture.test"], "relative": ".gemini/antigravity-cli",
                        "credential": "antigravity-oauth-token"}
@@ -430,8 +439,6 @@ items = [{name = "preserved", enabled = true}]
 
     # trace:BUG-2462 | ai:codex
     def test_role_refusal_reports_actual_diagnostic_and_keeps_tty(self):
-        fixture_home = Path.home() / ".aida"
-        fixture_home.mkdir(exist_ok=True)
         diagnostics = [
             ("cannot check seat: the AIDA store has no team roster (registry/team.toml is missing)",
              "fixture-roster-missing"),
@@ -440,7 +447,7 @@ items = [{name = "preserved", enabled = true}]
             ("cannot check seat: unreadable roster", "fixture-role-enter-refused"),
         ]
         for diagnostic, reason in diagnostics:
-            with self.subTest(reason=reason), tempfile.TemporaryDirectory(dir=fixture_home) as directory:
+            with self.subTest(reason=reason), fixture_home_directory() as directory:
                 root = Path(directory) / "experiment"
                 args = type("Args", (), {"vendor": "codex", "output": root, "timeout": 1})()
                 def fixture(argv, repo, env, report, stage):
@@ -934,9 +941,7 @@ assert termios.tcgetattr(0) == before
             self.assertEqual(list(path.parent.iterdir()), [path])
 
     def test_outer_timeout_keeps_continuation_setup_and_budgets_setup_time(self):
-        fixture_home = Path.home() / ".aida"
-        fixture_home.mkdir(exist_ok=True)
-        with tempfile.TemporaryDirectory(dir=fixture_home) as directory:
+        with fixture_home_directory() as directory:
             root = Path(directory) / "experiment"
             args = type("Args", (), {"vendor": "codex", "output": root, "timeout": 123})()
             def fixture(argv, repo, env, report, stage):

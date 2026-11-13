@@ -1,9 +1,14 @@
+// trace:TASK-3429 | ai:codex
 //! Stakeholder/requester role capability gates for CLI and MCP actions (STORY-1488 slice 1)
 // trace:STORY-1488 | ai:claude
 
-use crate::*;
+use crate::{
+    canonical_role_name, parse_requirement_type, Command, REQUESTER_INTAKE_FORBIDDEN_FIELDS,
+};
+use aida_core::RequirementType;
+use anyhow::Result;
 
-pub(crate) fn active_stakeholder_role() -> Option<String> {
+pub fn active_stakeholder_role() -> Option<String> {
     std::env::var("AIDA_SESSION_ROLE")
         .ok()
         .map(|role| canonical_role_name(role.trim()))
@@ -17,7 +22,7 @@ pub(crate) fn is_stakeholder_role(role: &str) -> bool {
 }
 
 // trace:TASK-1594 | ai:claude
-pub(crate) fn stakeholder_refusal_message(role: &str, action: &str) -> String {
+pub fn stakeholder_refusal_message(role: &str, action: &str) -> String {
     format!(
         "The '{role}' role is a least-privilege stakeholder role; refusing {action}. Ask an advisor to groom, route, or approve it."
     )
@@ -31,7 +36,7 @@ pub(crate) fn stakeholder_refusal(role: &str, action: &str) -> anyhow::Error {
 // trace:TASK-3425 | ai:codex
 pub(crate) use crate::cmdkit::StakeholderAction;
 
-pub(crate) fn stakeholder_action_allowed(role: &str, action: StakeholderAction) -> bool {
+pub fn stakeholder_action_allowed(role: &str, action: StakeholderAction) -> bool {
     match role {
         "guest" => action == StakeholderAction::Read,
         "requester" => matches!(action, StakeholderAction::Read | StakeholderAction::Intake),
@@ -39,7 +44,7 @@ pub(crate) fn stakeholder_action_allowed(role: &str, action: StakeholderAction) 
     }
 }
 
-pub(crate) fn stakeholder_action_label(action: StakeholderAction) -> &'static str {
+pub fn stakeholder_action_label(action: StakeholderAction) -> &'static str {
     match action {
         StakeholderAction::Read => "reads",
         StakeholderAction::Intake => "adding requirements",
@@ -65,7 +70,7 @@ pub(crate) fn stakeholder_action_label(action: StakeholderAction) -> &'static st
 /// narrower than the MCP `read-only` profile: that profile also contains
 /// command-producing helpers whose returned commands can mutate shared state.
 // trace:BUG-1197 | ai:codex
-pub(crate) fn stakeholder_mcp_read_allowed(tool_name: &str) -> bool {
+pub fn stakeholder_mcp_read_allowed(tool_name: &str) -> bool {
     matches!(
         tool_name,
         "list_requirements"
@@ -96,7 +101,7 @@ pub(crate) fn stakeholder_mcp_read_allowed(tool_name: &str) -> bool {
     )
 }
 
-pub(crate) fn requester_intake_type_allowed(type_name: &str) -> bool {
+pub fn requester_intake_type_allowed(type_name: &str) -> bool {
     parse_requirement_type(type_name)
         .map(|req_type| requester_add_type_allowed(&req_type))
         .unwrap_or(false)
@@ -258,7 +263,9 @@ mod stakeholder_cli_policy_tests {
     use super::*;
 
     fn guest_refusal(args: &[&str]) -> anyhow::Error {
-        let mut cli = crate::command_registry::try_parse_from(args).expect("valid CLI command");
+        let mut cli = crate::TEST_CLI
+            .try_parse_from(args)
+            .expect("valid CLI command");
         enforce_stakeholder_role_capabilities_for_role(&mut cli.command, "guest")
             .expect_err("guest command must be refused")
     }
@@ -287,7 +294,9 @@ mod stakeholder_cli_policy_tests {
             &["aida", "queue", "list"][..],
             &["aida", "mailbox", "inbox", "--peek"][..],
         ] {
-            let mut cli = crate::command_registry::try_parse_from(args).expect("valid CLI command");
+            let mut cli = crate::TEST_CLI
+                .try_parse_from(args)
+                .expect("valid CLI command");
             enforce_stakeholder_role_capabilities_for_role(&mut cli.command, "guest")
                 .unwrap_or_else(|err| panic!("guest read {args:?} was refused: {err}"));
         }
@@ -301,7 +310,9 @@ mod stakeholder_cli_policy_tests {
     }
 
     fn add_matches(args: &[&str]) -> clap::ArgMatches {
-        let cli = crate::command_registry::try_parse_from(args).expect("valid CLI command");
+        let cli = crate::TEST_CLI
+            .try_parse_from(args)
+            .expect("valid CLI command");
         let Command::Registered(invocation) = cli.command;
         assert_eq!(invocation.reg.name, "add");
         invocation.matches
@@ -366,10 +377,11 @@ mod stakeholder_cli_policy_tests {
     fn requester_cli_rejects_every_shared_forbidden_intake_field() {
         for field in REQUESTER_INTAKE_FORBIDDEN_FIELDS {
             let flag = format!("--{field}");
-            let mut cli = crate::command_registry::try_parse_from([
-                "aida", "add", "--title", "request", "--type", "bug", &flag, "EPIC-5",
-            ])
-            .expect("valid CLI command");
+            let mut cli = crate::TEST_CLI
+                .try_parse_from([
+                    "aida", "add", "--title", "request", "--type", "bug", &flag, "EPIC-5",
+                ])
+                .expect("valid CLI command");
             let err = enforce_stakeholder_role_capabilities_for_role(&mut cli.command, "requester")
                 .expect_err("shared requester intake field must be refused");
             assert!(

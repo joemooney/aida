@@ -1,3 +1,4 @@
+// trace:TASK-3429 | ai:codex
 //! `aida db` git-backend command cluster — the storage/git-backend command
 //! handler (`handle_git_backend_command`), extracted from `main.rs` (SPIKE-78
 //! / TASK-1151; pure movement, no behavior change). Shared store/git helpers
@@ -5,10 +6,22 @@
 
 #![allow(clippy::too_many_arguments)]
 
+use crate::get_default_author;
+use crate::resolve_current_session_id;
+use aida_core::DatabaseBackend;
 use anyhow::{Context, Result};
 use serde::Serialize;
 
-use crate::*;
+use crate::{
+    command_triggers_per_write_auto_push, format_tags_inline, load_dispenser,
+    maybe_auto_push_store, maybe_team_identity_guard, not_found, report_cmd, status_display,
+    strip_ansi_color, toon_status_token, truncate, warn_if_periodic_auto_push, CacheCommand,
+    Command, StoreAutoPushMode,
+};
+use aida_core::{Requirement, RequirementType, RequirementsStore, Storage};
+use colored::Colorize;
+use std::io::IsTerminal;
+use uuid::Uuid;
 
 // trace:TASK-190 | ai:codex
 pub(crate) fn resolve_comment_body(
@@ -1418,7 +1431,7 @@ pub(crate) fn db_sync_local_window(
 /// A command the git-backend dispatcher does not serve. Shared with
 /// registered store-phase commands that have no git-backend form.
 // trace:STORY-1728 | ai:claude
-pub(crate) fn exit_unsupported_on_git_backend() -> ! {
+pub fn exit_unsupported_on_git_backend() -> ! {
     eprintln!(
         "Command not yet supported for git backend.\n\
          Supported: list, add, show, edit, del, search, comment add/list,\n\
@@ -1600,7 +1613,7 @@ pub(crate) fn handle_git_backend_command(
     let flow = match command {
         // trace:STORY-1728 | ai:claude
         Command::Registered(invocation) => {
-            let store = crate::command_registry::StoreCtx::Git {
+            let store = crate::cmdkit::StoreCtx::Git {
                 store_path,
                 backend: &backend,
             };
@@ -1616,7 +1629,7 @@ pub(crate) fn handle_git_backend_command(
     let close_phase = crate::usage::phase("close");
     drop(backend);
     drop(close_phase);
-    if flow == crate::command_registry::Flow::Return {
+    if flow == crate::cmdkit::Flow::Return {
         return Ok(());
     }
 

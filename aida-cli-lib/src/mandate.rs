@@ -753,7 +753,7 @@ pub(crate) fn current_status_line(
     audit_root: Option<&Path>,
     now: DateTime<Utc>,
 ) -> Option<String> {
-    let (valid, _) = load_valid(dir, &crate::current_user_id(None), now);
+    let (valid, _) = load_valid(dir, &crate::gate::mandate::operator_principal(), now);
     let state = state_at(&valid, now);
     if let Some(root) = audit_root {
         notify_expiry(dir, root, &state, now);
@@ -941,7 +941,7 @@ pub(crate) fn handle_mandate(action: &crate::cli::MandateAction) -> Result<()> {
             // trace:STORY-1700 | ai:claude
             let m = start_as_human(
                 &dir,
-                &crate::current_user_id(None),
+                &crate::gate::mandate::operator_principal(),
                 ttl,
                 reason.clone(),
                 *drive,
@@ -994,8 +994,12 @@ pub(crate) fn handle_mandate(action: &crate::cli::MandateAction) -> Result<()> {
         crate::cli::MandateAction::Renew { duration } => {
             // Same grammar and 24h cap as `start --ttl`, named for this flag.
             let ttl = duration.as_deref().map(parse_renew_for).transpose()?;
-            let (m, renewal, revived_from) =
-                renew_as_human(&dir, &crate::current_user_id(None), ttl, Utc::now())?;
+            let (m, renewal, revived_from) = renew_as_human(
+                &dir,
+                &crate::gate::mandate::operator_principal(),
+                ttl,
+                Utc::now(),
+            )?;
             // trace:STORY-2346 | ai:claude
             if let Some(old_id) = revived_from {
                 if let Some(root) = &audit_root {
@@ -1017,7 +1021,11 @@ pub(crate) fn handle_mandate(action: &crate::cli::MandateAction) -> Result<()> {
             Ok(())
         }
         crate::cli::MandateAction::Stop => {
-            let stopped = stop_as_human(&dir, &crate::current_user_id(None), Utc::now())?;
+            let stopped = stop_as_human(
+                &dir,
+                &crate::gate::mandate::operator_principal(),
+                Utc::now(),
+            )?;
             if stopped.is_empty() {
                 println!("No mandate was active.");
             }
@@ -1041,7 +1049,8 @@ pub(crate) fn handle_mandate(action: &crate::cli::MandateAction) -> Result<()> {
                 }
                 return Ok(());
             }
-            let (valid, warnings) = load_valid(&dir, &crate::current_user_id(None), now);
+            let (valid, warnings) =
+                load_valid(&dir, &crate::gate::mandate::operator_principal(), now);
             let state = state_at(&valid, now);
             for w in &warnings {
                 eprintln!("warning: {w}");
@@ -1104,25 +1113,24 @@ pub(crate) struct MandateArgs {
 // home (+ a best-effort audit event); no store handle. trace:STORY-1698 | ai:claude
 fn run_mandate(
     matches: &clap::ArgMatches,
-    _ctx: &crate::command_registry::DispatchCtx,
+    _ctx: &crate::cmdkit::DispatchCtx,
 ) -> anyhow::Result<()> {
-    use crate::*;
+    // trace:TASK-3428 | ai:codex
     let args = <MandateArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
     let MandateArgs { action } = &args;
     return self::handle_mandate(action);
 }
 
 // trace:STORY-1728 | ai:claude
-pub(crate) static MANDATE: crate::command_registry::CommandReg =
-    crate::command_registry::CommandReg {
-        name: "mandate",
-        help_after: "merge-hold",
-        command: <MandateArgs as clap::CommandFactory>::command,
-        policy: |_| crate::command_registry::CmdPolicy {
-            stakeholder: crate::stakeholder_role::StakeholderAction::Write,
-            per_write_auto_push: false,
-            skip_role_restore_prompt: false,
-            team_identity_write: false,
-        },
-        run: crate::command_registry::Handler::Early(run_mandate),
-    };
+pub(crate) static MANDATE: crate::cmdkit::CommandReg = crate::cmdkit::CommandReg {
+    name: "mandate",
+    help_after: "merge-hold",
+    command: <MandateArgs as clap::CommandFactory>::command,
+    policy: |_| crate::cmdkit::CmdPolicy {
+        stakeholder: crate::stakeholder_role::StakeholderAction::Write,
+        per_write_auto_push: false,
+        skip_role_restore_prompt: false,
+        team_identity_write: false,
+    },
+    run: crate::cmdkit::Handler::Early(run_mandate),
+};

@@ -128,43 +128,42 @@ fn gitlab_target_of_url_splits_namespace_and_name() {
 #[test]
 fn init_gitlab_flag_parses_alongside_github_and_conflicts_with_remote() {
     use clap::Parser;
-    assert!(crate::command_registry::try_parse_from([
-        "aida",
-        "init",
-        "proj",
-        "--github",
-        "--gitlab",
-        "gitlab.example.test/ai",
-        "--public"
-    ])
-    .is_ok());
-    assert!(crate::command_registry::try_parse_from([
-        "aida",
-        "init",
-        "proj",
-        "--gitlab",
-        "gitlab.example.test/ai",
-        "--public"
-    ])
-    .is_ok());
-    assert!(crate::command_registry::try_parse_from([
-        "aida",
-        "init",
-        "proj",
-        "--gitlab",
-        "gitlab.example.test/ai",
-        "--remote",
-        "git@x:y.git"
-    ])
-    .is_err());
-    assert!(
-        crate::command_registry::try_parse_from([
+    assert!(crate::TEST_CLI
+        .try_parse_from([
             "aida",
             "init",
+            "proj",
+            "--github",
             "--gitlab",
-            "gitlab.example.test"
+            "gitlab.example.test/ai",
+            "--public"
         ])
-        .is_err(),
+        .is_ok());
+    assert!(crate::TEST_CLI
+        .try_parse_from([
+            "aida",
+            "init",
+            "proj",
+            "--gitlab",
+            "gitlab.example.test/ai",
+            "--public"
+        ])
+        .is_ok());
+    assert!(crate::TEST_CLI
+        .try_parse_from([
+            "aida",
+            "init",
+            "proj",
+            "--gitlab",
+            "gitlab.example.test/ai",
+            "--remote",
+            "git@x:y.git"
+        ])
+        .is_err());
+    assert!(
+        crate::TEST_CLI
+            .try_parse_from(["aida", "init", "--gitlab", "gitlab.example.test"])
+            .is_err(),
         "--gitlab needs the positional DIR"
     );
 }
@@ -223,6 +222,8 @@ fn bare_plan(dir: std::path::PathBuf) -> crate::init_bootstrap::BootstrapPlan {
         forge: None,
         github_repo: None,
         gitlab: None,
+        gitlab_enable_ci: false,
+        gitlab_runner_tags: Vec::new(),
     }
 }
 
@@ -462,6 +463,7 @@ fn init_github_plus_gitlab_creates_both_and_publishes_in_order() {
             "glab api --hostname gitlab.example.test namespaces/ai",
             "glab api --hostname gitlab.example.test -X POST projects -f name=proj -f path=proj -f namespace_id=42 -f visibility=private",
             "push gitlab refs/heads/main",
+            "glab api --hostname gitlab.example.test projects/ai%2Fproj",
             "push github refs/heads/aida-store",
             "push gitlab refs/heads/aida-store",
         ]

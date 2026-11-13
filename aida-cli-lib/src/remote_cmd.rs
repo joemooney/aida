@@ -23,10 +23,7 @@ pub(crate) struct RemoteArgs {
 // `aida remote create`/`attach` bootstrap a git origin — they operate on a
 // project that, by definition, may not have a working store/remote yet, so
 // dispatch before storage init. trace:STORY-537 | ai:claude
-fn run_remote(
-    matches: &clap::ArgMatches,
-    _ctx: &crate::command_registry::DispatchCtx,
-) -> anyhow::Result<()> {
+fn run_remote(matches: &clap::ArgMatches, _ctx: &crate::cmdkit::DispatchCtx) -> anyhow::Result<()> {
     // trace:TASK-3428 | ai:codex
     use crate::{find_project_root, mirror_guard, remote_create, store_local};
     let args = <RemoteArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
@@ -87,16 +84,15 @@ fn run_remote(
 }
 
 // trace:STORY-1728 | ai:claude
-pub(crate) static REMOTE: crate::command_registry::CommandReg =
-    crate::command_registry::CommandReg {
-        name: "remote",
-        help_after: "digest",
-        command: <RemoteArgs as clap::CommandFactory>::command,
-        policy: |_| crate::command_registry::CmdPolicy {
-            stakeholder: crate::stakeholder_role::StakeholderAction::Write,
-            per_write_auto_push: false,
-            skip_role_restore_prompt: false,
-            team_identity_write: false,
-        },
-        run: crate::command_registry::Handler::Early(run_remote),
-    };
+pub(crate) static REMOTE: crate::cmdkit::CommandReg = crate::cmdkit::CommandReg {
+    name: "remote",
+    help_after: "digest",
+    command: <RemoteArgs as clap::CommandFactory>::command,
+    policy: |_| crate::cmdkit::CmdPolicy {
+        stakeholder: crate::stakeholder_role::StakeholderAction::Write,
+        per_write_auto_push: false,
+        skip_role_restore_prompt: false,
+        team_identity_write: false,
+    },
+    run: crate::cmdkit::Handler::Early(run_remote),
+};

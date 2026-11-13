@@ -167,6 +167,10 @@ fn noexec_verbose_prints_stakeholder_and_explicit_git_downgrades() {
     .unwrap();
     use std::os::unix::fs::PermissionsExt;
     std::fs::set_permissions(&claude, std::fs::Permissions::from_mode(0o755)).unwrap();
+    // trace:TASK-3736 | ai:codex
+    for vendor in ["codex", "agy"] {
+        std::fs::copy(&claude, bin.join(vendor)).unwrap();
+    }
     let path = format!(
         "{}:{}",
         bin.display(),
@@ -211,7 +215,12 @@ fn noexec_verbose_prints_stakeholder_and_explicit_git_downgrades() {
     let config_path = repo.join(".aida/config.toml");
     let mut config: toml::Value =
         toml::from_str(&std::fs::read_to_string(&config_path).unwrap()).unwrap();
-    config["agents"]["enabled"] = toml::Value::Array(vec![toml::Value::String("claude".into())]);
+    config["agents"]["enabled"] = toml::Value::Array(
+        ["claude", "codex", "antigravity"]
+            .into_iter()
+            .map(|v| toml::Value::String(v.into()))
+            .collect(),
+    );
     std::fs::write(config_path, toml::to_string(&config).unwrap()).unwrap();
     std::fs::write(
         repo.join(".aida/launch-profile.toml"),
@@ -299,6 +308,32 @@ fn noexec_verbose_prints_stakeholder_and_explicit_git_downgrades() {
         stdout.contains("git_policy: read-only (explicit --git-read-only downgrade"),
         "{stdout}"
     );
+    // Exercise each vendor's actual no-exec print site, including the native
+    // background preview. Missing policy output must fail the real CLI test.
+    // trace:TASK-3736 | ai:codex
+    for vendor in ["codex", "antigravity"] {
+        let args = vec![
+            "agent",
+            "new",
+            vendor,
+            "--role",
+            "implementer",
+            "--no-exec",
+            "--git-read-only",
+        ];
+        let out = aida(&repo, &home, &path, &args);
+        let stdout = String::from_utf8_lossy(&out.stdout);
+        assert!(
+            out.status.success(),
+            "{vendor}: {stdout}\n{}",
+            String::from_utf8_lossy(&out.stderr)
+        );
+        assert!(
+            stdout.contains("git_policy: read-only (explicit --git-read-only downgrade"),
+            "{vendor}: {stdout}"
+        );
+        assert!(!stdout.contains("unexpected-agent-execution"));
+    }
     let roles = aida(&repo, &home, &path, &["role", "scaffold"]);
     assert!(
         roles.status.success(),
@@ -399,4 +434,76 @@ fn noexec_verbose_prints_stakeholder_and_explicit_git_downgrades() {
             "{stdout}"
         );
     }
+    std::fs::remove_file(repo.join("target")).unwrap();
+    // The background preview reads the same trusted policy as a real spawn.
+    // trace:TASK-3736 | ai:codex
+    let config_path = repo.join(".aida/config.toml");
+    let mut config: toml::Value =
+        toml::from_str(&std::fs::read_to_string(&config_path).unwrap()).unwrap();
+    config["contained"] =
+        toml::from_str::<toml::Value>("enable = true\n[vendors]\ncodex = \"native\"\n").unwrap();
+    std::fs::write(&config_path, toml::to_string(&config).unwrap()).unwrap();
+    git(&repo, &["add", "-f", ".aida/config.toml"]);
+    git(&repo, &["commit", "-q", "-m", "trusted native policy"]);
+    git(&repo, &["update-ref", "refs/remotes/origin/main", "HEAD"]);
+    git(
+        &repo,
+        &[
+            "symbolic-ref",
+            "refs/remotes/origin/HEAD",
+            "refs/remotes/origin/main",
+        ],
+    );
+    let out = aida(
+        &repo,
+        &home,
+        &path,
+        &[
+            "agent",
+            "new",
+            "codex",
+            "--bg",
+            "TASK-1",
+            "--role",
+            "implementer",
+            "--no-exec",
+            "--git-read-only",
+        ],
+    );
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert!(
+        out.status.success(),
+        "{stdout}\n{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    assert!(
+        stdout.contains("git_policy: read-only (explicit --git-read-only downgrade"),
+        "{stdout}"
+    );
+    assert!(!String::from_utf8_lossy(&out.stderr).contains("unexpected-agent-execution"));
+    // A non-preview dispatch reports policy before refusing the missing spec;
+    // no child session can be started for this deliberately unknown scope.
+    // trace:TASK-3736 | ai:codex
+    let out = aida(
+        &repo,
+        &home,
+        &path,
+        &[
+            "agent",
+            "new",
+            "codex",
+            "--bg",
+            "TASK-999999999",
+            "--role",
+            "implementer",
+            "--git-read-only",
+        ],
+    );
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert!(!out.status.success(), "unknown spec unexpectedly launched");
+    assert!(
+        stderr.contains("git_policy: read-only (explicit --git-read-only downgrade"),
+        "{stderr}"
+    );
+    assert!(!stderr.contains("unexpected-agent-execution"), "{stderr}");
 }

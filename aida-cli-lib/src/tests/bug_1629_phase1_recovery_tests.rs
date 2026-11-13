@@ -1015,7 +1015,7 @@ fn bug_1769_advance_decision() {
 // trace:TASK-3608 | ai:codex
 #[test]
 fn task_3608_host_no_change_survives_lease_discovery() {
-    for mode in 0..7 {
+    for mode in 0..10 {
         let temp = tempfile::tempdir().unwrap();
         let root = git_project(&temp);
         if mode == 1 {
@@ -1058,7 +1058,16 @@ claude_session_id = "$sid"
 items = []
 EOF
 exit 0"#;
-        let stub = stub(&root, script, script);
+        // trace:TASK-3749 | ai:codex — receipts never supersede fresh vetoes/failure.
+        let script = match mode {
+            7 => script.replace("exit 0", r#"printf '%s' '{"spec":"NFR-56","category":"design-fork","detail":"fresh punt"}' > "$AIDA_PUNT_SIGNAL_FILE"
+exit 0"#),
+            8 => script.replace("exit 0", r#"printf '%s' '{"spec":"NFR-56","branch":"main","reason":"fresh hold"}' > "$AIDA_HOLD_SIGNAL_FILE"
+exit 0"#),
+            9 => script.replace("exit 0", "exit 1"),
+            _ => script.to_string(),
+        };
+        let stub = stub(&root, &script, &script);
         if mode == 3 {
             let body = std::fs::read_to_string(&stub).unwrap();
             std::fs::write(&stub, body.replace("  rm -f", "  exit 1\n  rm -f")).unwrap();
@@ -1105,6 +1114,28 @@ exit 0"#;
         // Exhaust branch-error cases immediately; modes 1 and 6 recover.
         d.drain_tuning.gh_verify_retries = if matches!(mode, 4 | 5) { 0 } else { 1 };
         // A confirmed no-change must bypass even a failing preflight.
+
+        if mode >= 7 {
+            let outcome = d.run_implementer();
+            match mode {
+                7 => assert!(
+                    matches!(outcome, Ok(ImplementerOutcome::Punted { .. })),
+                    "{outcome:?}"
+                ),
+                8 => assert!(
+                    matches!(outcome, Ok(ImplementerOutcome::Held { .. })),
+                    "{outcome:?}"
+                ),
+                9 => assert!(outcome.is_err(), "{outcome:?}"),
+                _ => unreachable!(),
+            }
+            // An early failed exit may retain its receipt; it still cannot
+            // classify as NoChange. Signal paths consume successful receipts.
+            if mode != 9 {
+                assert!(!crate::ship_from_seat::take_no_change(&root, lane));
+            }
+            continue;
+        }
 
         let result = crate::auto_complete::orchestrate(
             &mut d,
@@ -1271,12 +1302,14 @@ claude_session_id = "$sid"
 items = []
 EOF
 exit 0"#;
-    let script = script.replace("exit 0", "sleep 90");
+    let script = script.replace("exit 0", "touch .aida/watchdog-ready\nsleep 90");
     let exe = stub(&root, &script, &script);
     let mut d = driver(&root, "NFR-56", exe);
-    // Poll after the stub has published its lease, then trip the real ceiling.
+    // Wait for explicit child readiness, then trip the real ceiling.
     // trace:TASK-3608 | ai:codex
-    d.watchdog_poll = Some(std::time::Duration::from_millis(100));
+    // trace:TASK-3749 | ai:codex
+    d.watchdog_ready = Some(root.join(".aida/watchdog-ready"));
+    d.watchdog_poll = Some(std::time::Duration::from_millis(1));
     d.drain_tuning.ceiling = std::time::Duration::from_millis(1);
     d.lifecycle_skip.no_preflight = true;
     d.forge_factory = Some(crate::forge::fake::RecordingForge::new().factory());

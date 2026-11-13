@@ -133,7 +133,12 @@ fights its own description is worse than no acceptance.
 
 From the answers, draft a concrete, **testable** `## Acceptance` section.
 Number each criterion; phrase each so a reviewer can mark it pass/fail without
-re-interviewing the human. Name the primary caller in the criteria that depend
+re-interviewing the human. Declare an evidence type after each label using
+`[evidence: behavioral-test]`, `[evidence: configuration-validation]`,
+`[evidence: documentation-inspection]` or `[evidence: manual-inspection]`.
+Behavioral requirements still need automated tests; inspection criteria name
+the artifact, procedure and expected result. <!-- trace:STORY-2702 | ai:codex -->
+Name the primary caller in the criteria that depend
 on it.
 
 Show the draft and ask for approval or edits **before** binding. Once the human

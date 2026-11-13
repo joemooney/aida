@@ -1,7 +1,13 @@
 //! handle_db_check_collisions, handle_block_command, block auto-allocation (STORY-1488 slice 1)
 // trace:STORY-1488 | ai:claude
 
-use crate::*;
+use crate::{
+    add_remote_sync_disabled, config_parse_error_message, hostname, load_node_id,
+    read_agreed_counter, read_id_counter_scope, read_id_format_policy, run, BlockCommand,
+};
+
+use anyhow::{Context, Result};
+use colored::Colorize;
 
 /// Audit the store for pre-existing agreed-id collisions — two requirements
 /// claiming the same short id across their (spec_id, agreed_id) pair.
@@ -1807,7 +1813,7 @@ mod task_1930_tests {
 
         // Run doctor_tombstone_stale_blocks_in_store and doctor_repair_dangling_relationships_in_store.
         let tombstoned =
-            crate::doctor_cmd::doctor_tombstone_stale_blocks_in_store(&store_path, None).unwrap();
+            crate::db_block::doctor_tombstone_stale_blocks_in_store(&store_path, None).unwrap();
         assert_eq!(tombstoned, 1);
         let after_blocks = aida_core::BlockRegistry::load(&blocks_path).unwrap();
         let n1_block = after_blocks
@@ -1827,7 +1833,7 @@ mod task_1930_tests {
         assert!(stale_block.is_exhausted());
 
         let repaired =
-            crate::doctor_cmd::doctor_repair_dangling_relationships_in_store(&store_path, None)
+            crate::db_block::doctor_repair_dangling_relationships_in_store(&store_path, None)
                 .unwrap();
         assert_eq!(repaired, 1);
         let r1_after = aida_core::object_store::read_object(&objects_root, "TASK-1").unwrap();
@@ -1855,7 +1861,7 @@ mod task_1930_tests {
             })
         })
         .unwrap();
-        let (mig_start, mig_end) = crate::doctor_cmd::doctor_migrate_counter_scope_in_store(
+        let (mig_start, mig_end) = crate::db_block::doctor_migrate_counter_scope_in_store(
             &project_root,
             &store_path,
             "n1",
@@ -1910,4 +1916,268 @@ mod dirty_pull_tests {
             "pending"
         );
     }
+}
+
+/// Re-load canonical objects under `store_write_lock` and strip any relationship
+/// whose `target_id` does not resolve to an existing requirement in the store
+/// (and, when `confirmed_edges` is `Some`, belongs to the user-confirmed preview set).
+// trace:TASK-1930 trace:TASK-1981 | ai:agy
+pub(crate) fn doctor_repair_dangling_relationships_in_store(
+    store_path: &std::path::Path,
+    confirmed_edges: Option<
+        &std::collections::HashSet<(uuid::Uuid, uuid::Uuid, aida_core::RelationshipType)>,
+    >,
+) -> Result<usize> {
+    let objects_root = store_path.join("objects");
+    let mut fixed = 0usize;
+    let mut stripped_edges = 0usize;
+    aida_core::db::with_store_write_lock(store_path, || -> Result<()> {
+        let fresh_reqs = aida_core::object_store::load_all_objects(&objects_root)?;
+        let fresh_uuids: std::collections::HashSet<uuid::Uuid> =
+            fresh_reqs.iter().map(|r| r.id).collect();
+        for mut req in fresh_reqs {
+            let prior = req.clone(); // trace:STORY-1674 | ai:codex
+            let req_id = req.id;
+            let before = req.relationships.len();
+            req.relationships.retain(|r| {
+                if fresh_uuids.contains(&r.target_id) {
+                    return true;
+                }
+                match confirmed_edges {
+                    Some(confirmed) => {
+                        !confirmed.contains(&(req_id, r.target_id, r.rel_type.clone()))
+                    }
+                    None => false,
+                }
+            });
+            if req.relationships.len() != before {
+                stripped_edges += before - req.relationships.len();
+                aida_core::provenance::stamp_write(
+                    &mut req,
+                    Some(&prior),
+                    &aida_core::provenance::WriteContext::capture(),
+                )?;
+                aida_core::object_store::write_object(&objects_root, &req)?;
+                fixed += 1;
+            }
+        }
+        if fixed > 0 {
+            let _ = aida_core::git_ops::add(store_path, &["objects"]);
+            let _ = aida_core::git_ops::commit(
+                store_path,
+                &format!(
+                    "chore(repair): strip {} dangling relationship target(s)",
+                    stripped_edges
+                ),
+            );
+        }
+        Ok(())
+    })?;
+    Ok(fixed)
+}
+
+/// Acquire `store_write_lock -> blocks.lock`, re-load `blocks.yaml` and
+/// `nodes.toml`, and tombstone any active block whose `node_id` is absent from
+/// `nodes.toml` (and, when `confirmed_blocks` is `Some`, belongs to the
+/// user-confirmed preview set).
+// trace:TASK-1930 trace:TASK-1981 | ai:agy
+pub(crate) fn doctor_tombstone_stale_blocks_in_store(
+    store_path: &std::path::Path,
+    confirmed_blocks: Option<&std::collections::HashSet<(String, String, u32, u32)>>,
+) -> Result<usize> {
+    use aida_core::{BlockRegistry, NodeRegistry};
+    let blocks_path = store_path.join("registry").join("blocks.yaml");
+    let nodes_path = store_path.join("registry").join("nodes.toml");
+    aida_core::db::with_store_write_lock(store_path, || {
+        aida_core::BlockRegistry::with_dispense_lock(&blocks_path, || -> Result<usize> {
+            let mut fresh_blocks = BlockRegistry::load(&blocks_path)?;
+            let fresh_nodes = NodeRegistry::load(&nodes_path).unwrap_or_default();
+            let fresh_registered: std::collections::HashSet<String> =
+                fresh_nodes.nodes.iter().map(|n| n.id.clone()).collect();
+            let mut tombstoned = 0usize;
+            for b in &mut fresh_blocks.blocks {
+                if !fresh_registered.contains(&b.node_id)
+                    && !b.is_exhausted()
+                    && confirmed_blocks.is_none_or(|confirmed| {
+                        confirmed.contains(&(
+                            b.node_id.clone(),
+                            b.type_prefix.clone(),
+                            b.range_start,
+                            b.range_end,
+                        ))
+                    })
+                {
+                    b.next = b.range_end + 1;
+                    tombstoned += 1;
+                }
+            }
+            if tombstoned > 0 {
+                fresh_blocks.save(&blocks_path)?;
+                let _ = aida_core::git_ops::add(store_path, &["registry/blocks.yaml"]);
+                let _ = aida_core::git_ops::commit(
+                    store_path,
+                    &format!(
+                        "chore(registry): tombstone {} stale block(s) (no node owner)",
+                        tombstoned
+                    ),
+                );
+            }
+            Ok(tombstoned)
+        })
+    })
+}
+
+/// Acquire `store_write_lock -> blocks.lock`, re-load `blocks.yaml` and
+/// `config.toml`, exhaust `node_id`'s active per-type blocks (intersected with
+/// `confirmed_blocks` when `Some`), claim a new `*` global block above the fresh
+/// `highest_end`, update `config.toml`, and commit.
+// trace:TASK-1930 trace:TASK-1981 | ai:agy
+pub(crate) fn doctor_migrate_counter_scope_in_store(
+    project_root: &std::path::Path,
+    store_path: &std::path::Path,
+    node_id: &str,
+    new_block_size: u32,
+    confirmed_blocks: Option<&std::collections::HashSet<(String, u32, u32)>>,
+) -> Result<(u32, u32)> {
+    use aida_core::BlockRegistry;
+    let blocks_path = store_path.join("registry").join("blocks.yaml");
+    let config_path = project_root.join(".aida").join("config.toml");
+    aida_core::db::with_store_write_lock(store_path, || {
+        aida_core::BlockRegistry::with_dispense_lock(&blocks_path, || -> Result<(u32, u32)> {
+            if read_id_counter_scope(project_root) == aida_core::IdCounterScope::Global {
+                anyhow::bail!("already on global counter_scope — nothing to migrate");
+            }
+            let mut fresh_registry = BlockRegistry::load(&blocks_path)?;
+            // Migration changes the node's entire allocation policy. Refuse a
+            // new unconfirmed active block rather than leave it usable under
+            // the new scope. trace:TASK-1981 | ai:codex
+            if confirmed_blocks.is_some_and(|confirmed| {
+                fresh_registry.blocks.iter().any(|b| {
+                    b.node_id == node_id
+                        && !b.is_exhausted()
+                        && !confirmed.contains(&(b.type_prefix.clone(), b.range_start, b.range_end))
+                })
+            }) {
+                anyhow::bail!("active blocks changed since confirmation; rerun counter migration");
+            }
+
+            if !fresh_registry.blocks.iter().any(|b| {
+                b.node_id == node_id
+                    && !b.is_exhausted()
+                    && confirmed_blocks.is_none_or(|confirmed| {
+                        confirmed.contains(&(b.type_prefix.clone(), b.range_start, b.range_end))
+                    })
+            }) {
+                anyhow::bail!(
+                    "node {} has no active per-type blocks in blocks.yaml — \
+                     either already migrated, or this clone hasn't been initialized",
+                    node_id
+                );
+            }
+            let fresh_highest_end: u32 = fresh_registry
+                .blocks
+                .iter()
+                .map(|b| b.range_end)
+                .max()
+                .unwrap_or(0);
+            for b in fresh_registry.blocks.iter_mut() {
+                if b.node_id == node_id
+                    && !b.is_exhausted()
+                    && confirmed_blocks.is_none_or(|confirmed| {
+                        confirmed.contains(&(b.type_prefix.clone(), b.range_start, b.range_end))
+                    })
+                {
+                    b.next = b.range_end + 1;
+                }
+            }
+            let owner = aida_core::git_ops::git_config_get("user.email")
+                .ok()
+                .or_else(|| std::env::var("USER").ok())
+                .unwrap_or_else(|| "unknown".to_string());
+            let claimed = fresh_registry.claim_block_with_floor(
+                node_id.to_string(),
+                owner,
+                hostname(),
+                aida_core::IdCounterScope::GLOBAL_TYPE_PREFIX.to_string(),
+                new_block_size,
+                fresh_highest_end,
+            );
+            let claimed_start = claimed.range_start;
+            let claimed_end = claimed.range_end;
+            fresh_registry.save(&blocks_path)?;
+
+            // Update config.toml — preserve the file by line-rewriting; if
+            // counter_scope already exists (it shouldn't given the early check),
+            // overwrite. Otherwise append after the [id_format] section.
+            update_config_counter_scope(&config_path, "global")?;
+
+            // Stage + commit the registry change. The lease symlink in the
+            // session worktree means `git -C <store_path>` operates on the
+            // shared orphan branch.
+            let _ = aida_core::git_ops::add(store_path, &["registry/blocks.yaml"]);
+            let _ = aida_core::git_ops::commit(
+                store_path,
+                &format!(
+                    "chore(registry): migrate node {} to global counter (*-{}..{})",
+                    node_id, claimed_start, claimed_end
+                ),
+            );
+            Ok((claimed_start, claimed_end))
+        })
+    })
+}
+
+/// Update the `[id_format] counter_scope` value in config.toml. Adds the
+/// line if missing, replaces it in-place if present. Preserves the rest
+/// of the file (comments, other keys, formatting).
+pub(crate) fn update_config_counter_scope(
+    config_path: &std::path::Path,
+    new_value: &str,
+) -> Result<()> {
+    let content = std::fs::read_to_string(config_path)?;
+    let mut lines: Vec<String> = content.lines().map(|s| s.to_string()).collect();
+    let mut in_id_format = false;
+    let mut last_id_format_line: Option<usize> = None;
+    let mut replaced = false;
+    for (i, line) in lines.iter_mut().enumerate() {
+        let trimmed_owned: String = line.trim().to_string();
+        if trimmed_owned.starts_with('[') {
+            in_id_format = trimmed_owned == "[id_format]";
+            if in_id_format {
+                last_id_format_line = Some(i);
+            }
+            continue;
+        }
+        if in_id_format && trimmed_owned.starts_with("counter_scope") {
+            // trace:BUG-1650 | ai:claude
+            *line = format!(
+                "counter_scope = {}",
+                aida_core::toml_quote::toml_string(new_value)
+            );
+            replaced = true;
+        }
+        if in_id_format && !trimmed_owned.is_empty() && !trimmed_owned.starts_with('#') {
+            last_id_format_line = Some(i);
+        }
+    }
+    if !replaced {
+        // Insert after the last line of the [id_format] section.
+        let insert_at = last_id_format_line.map(|i| i + 1);
+        let new_line = format!(
+            "counter_scope = {}",
+            aida_core::toml_quote::toml_string(new_value)
+        );
+        match insert_at {
+            Some(idx) => lines.insert(idx, new_line),
+            None => {
+                // No [id_format] section found — append both header and value.
+                lines.push(String::new());
+                lines.push("[id_format]".to_string());
+                lines.push(new_line);
+            }
+        }
+    }
+    // trace:STORY-1741 | ai:claude
+    aida_core::write_config_atomic(config_path, lines.join("\n") + "\n")?;
+    Ok(())
 }

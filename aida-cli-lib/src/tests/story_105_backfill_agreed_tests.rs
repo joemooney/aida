@@ -407,14 +407,9 @@ fn bug_2378_repoint_skips_a_tracked_legacy_identity() {
 
 #[test]
 fn doctor_fix_agreed_ids_parses() {
-    let cli = crate::command_registry::try_parse_from([
-        "aida",
-        "doctor",
-        "--fix",
-        "agreed-ids",
-        "--dry-run",
-    ])
-    .unwrap();
+    let cli = crate::TEST_CLI
+        .try_parse_from(["aida", "doctor", "--fix", "agreed-ids", "--dry-run"])
+        .unwrap();
     let crate::doctor_cmd::DoctorArgs { fix, dry_run, .. } =
         cli.command.registered::<crate::doctor_cmd::DoctorArgs>()
     else {

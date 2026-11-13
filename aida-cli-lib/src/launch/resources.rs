@@ -3,7 +3,9 @@
 //! slot, target and generated-settings validation; backend renderers in the
 //! following slice consume these checks. No helper creates or widens a slot.
 // trace:STORY-2326 | ai:claude
+// trace:STORY-2538 | ai:codex
 
+use aida_core::exec_context::ExecContext;
 use std::path::PathBuf;
 
 /// The compile cache declaration; lane caches never select the operator server.
@@ -69,6 +71,7 @@ impl SandboxResources {
     /// Resolve the seat declaration from host evidence, never forwarded build env.
     // trace:STORY-2641 | ai:codex
     pub(crate) fn for_seat(
+        exec: &ExecContext,
         host: Option<&std::path::Path>,
         seat: &std::path::Path,
     ) -> anyhow::Result<Option<Self>> {
@@ -87,7 +90,7 @@ impl SandboxResources {
             write_roots: crate::seat_clone::seat_extra_write_paths(&clone),
             store_paths: vec![],
             deny: vec![],
-            cargo: CargoResources::resolve(host, seat, target)?,
+            cargo: CargoResources::resolve(exec, host, seat, target)?,
         }))
     }
 
@@ -123,8 +126,8 @@ impl SandboxResources {
 /// Resolve only an existing, private slot directory. Never create it or
 /// broaden its permissions. Symlinks are refused rather than followed.
 // trace:STORY-2326 | ai:codex
-pub(crate) fn cargo_slot_dir() -> Option<PathBuf> {
-    let runtime = std::env::var_os("XDG_RUNTIME_DIR")?;
+pub(crate) fn cargo_slot_dir(exec: &ExecContext) -> Option<PathBuf> {
+    let runtime = exec.environment().get("XDG_RUNTIME_DIR")?;
     let uid = unsafe { libc::geteuid() };
     checked_slot_dir(
         PathBuf::from(runtime).join(format!("cargo-slots-{uid}")),
@@ -145,6 +148,7 @@ impl CargoResources {
     /// The caller supplies an existing target (no mkdir here).
     // trace:STORY-2326 | ai:codex
     pub(crate) fn resolve(
+        exec: &ExecContext,
         authority_root: &std::path::Path,
         seat_root: &std::path::Path,
         target_dir: &std::path::Path,
@@ -168,7 +172,7 @@ impl CargoResources {
         );
         Ok(Self {
             target_dir: target,
-            slot_dir: cargo_slot_dir(),
+            slot_dir: cargo_slot_dir(exec),
             sccache: Sccache::Off,
         })
     }
@@ -225,6 +229,34 @@ mod story_2326_resources_tests {
     use super::*;
     use std::os::unix::fs::{symlink, PermissionsExt};
 
+    fn fixture(runtime: Option<&std::path::Path>) -> ExecContext {
+        use aida_core::exec_context::{Environment, SystemClock, ToolPaths};
+        ExecContext::new(
+            Environment::from_pairs(
+                runtime.map(|path| ("XDG_RUNTIME_DIR".into(), path.as_os_str().to_owned())),
+            ),
+            None,
+            "/seat".into(),
+            "/host".into(),
+            ToolPaths::default(),
+            std::sync::Arc::new(SystemClock::default()),
+        )
+    }
+
+    #[test]
+    fn runtime_slot_uses_only_explicit_context() {
+        let tmp = tempfile::tempdir().unwrap();
+        let path = tmp
+            .path()
+            .join(format!("cargo-slots-{}", unsafe { libc::geteuid() }));
+        let exec = fixture(Some(tmp.path()));
+        assert_eq!(cargo_slot_dir(&exec), None);
+        std::fs::create_dir(&path).unwrap();
+        std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o700)).unwrap();
+        assert_eq!(cargo_slot_dir(&exec), Some(path));
+        assert_eq!(cargo_slot_dir(&fixture(None)), None);
+    }
+
     #[test]
     fn slot_directory_requires_existing_owned_mode_0700() {
         let tmp = tempfile::tempdir().unwrap();
@@ -251,12 +283,16 @@ mod story_2326_resources_tests {
         for root in [&host, &seat, &other] {
             std::fs::create_dir_all(root.join("target")).unwrap();
         }
-        assert!(CargoResources::resolve(&host, &seat, &seat.join("target")).is_ok());
+        assert!(
+            CargoResources::resolve(&fixture(None), &host, &seat, &seat.join("target")).is_ok()
+        );
         for target in [host.join("target"), other.join("target"), seat.clone()] {
-            assert!(CargoResources::resolve(&host, &seat, &target).is_err());
+            assert!(CargoResources::resolve(&fixture(None), &host, &seat, &target).is_err());
         }
         symlink(other.join("target"), seat.join("alias")).unwrap();
-        assert!(CargoResources::resolve(&host, &seat, &seat.join("alias")).is_err());
+        assert!(
+            CargoResources::resolve(&fixture(None), &host, &seat, &seat.join("alias")).is_err()
+        );
     }
 
     #[test]

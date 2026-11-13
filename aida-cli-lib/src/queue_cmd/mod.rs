@@ -1,3 +1,4 @@
+// trace:TASK-3429 | ai:codex
 //! `aida queue` command cluster — `handle_queue_command` and the
 //! advance/progress/rework/work/recover/integrate handlers plus their
 //! queue-local helpers, extracted from `lib.rs` (SPIKE-78 / STORY-771;
@@ -9,7 +10,72 @@
 // trace:STORY-771 | ai:claude
 
 use crate::process_retry::RetryEtxtbsy;
-use crate::*;
+use crate::{
+    active_lease_for_cwd, active_role_scope, agent_output_mode, all_open_prs_for_spec_via_forge,
+    apply_calibration_tags, apply_effort_tag, apply_session_env_to_process, auto_complete, backlog,
+    base_behind_indicator, batch_tag_of, behind_origin_warning, branch_commits_ahead_default,
+    branch_commits_ahead_main, brief, build_integrate_rebase_args, build_queue_warn_subset,
+    burndown, canonical_review_story, canonical_role_name, capture_interface_changes,
+    capture_review_calibration_for_spec, capture_test_plan, change_lookup_for_branch, ci_failures,
+    classify_queue_move_target, cli, clone_seat_trees, collect_open_facts, collect_open_prs,
+    commits_behind_origin_main, completion, complexity_calibration, config_path_for_project,
+    confirm, current_role_instance_is_companion, current_user_id,
+    default_queue_collision_fingerprint, derive_parent_epic_label, detect_default_branch_ref,
+    detect_distributed_store_from, detect_open_pr_for_spec_via_forge, discover_plan_context,
+    drain_caps, drain_cmd, drain_lock, drain_running_banner, drain_state, drivable_queued_count,
+    drive_robustness, dup_pickup_recheck, effective_role, effort_calibration, enforce_team_gate,
+    entry_matches_role_filter, entry_scope_session_match, epic_descendant_uuid_set, event_wait,
+    extract_plan_followups, extract_referenced_spec_ids_from_commit, extract_spec_ids_from_commit,
+    fetch_pr_ship_metadata_via_forge, filter_entries_by_descendant_set, find_lease_by_id_prefix,
+    find_lease_by_spec, find_main_worktree_root, find_project_root, findings, first_run, focus,
+    focus_scope_guard_for_spec, for_target_requires_dispatch_authority, forecast_rebase_onto,
+    forge, format_review_label, format_review_story_display, format_tag_chip, get_default_author,
+    git_log_messages, global_queue, glyph, handle_auto_complete, handle_auto_complete_batch,
+    handle_auto_complete_batches, handle_auto_complete_next_n, handle_auto_complete_single_branch,
+    handle_drain_resume, handle_from_pr, handle_review_spec, headless_tee, hostname,
+    identity_guard, in_flight_lease_role_map, integrate, integrate_checkout, is_next_keyword_id,
+    is_terminal_status, is_terminal_status_str, launch, lease_covers_cwd, lease_owning_spec,
+    leases, list_leases, load_agents_bypass, load_agents_contained, load_dispenser,
+    main_worktree_root_from, maintenance_schedule, maybe_hint_advisor_seat,
+    maybe_hint_after_queue_drain, maybe_show_faithful_launcher_notice, merge_hold,
+    move_to_absolute_position, network_retry, no_human_kickoff_gate, non_interactive_confirm,
+    non_tty_interactive_implementer_preflight, normalize_batch_name, not_found, notify,
+    orchestrator, orphan_store_behind_count, output_format_is_json, output_format_override,
+    pane_host, parse_batch_chain, parse_days_arg, parse_next_keyword, parse_pr_arg,
+    parse_review_scope, parse_review_story_pr_number, parse_status, permissions,
+    pickup_worktree_path, plan_review_warning, position_after, pr_base_head,
+    pr_is_merged_with_sink, pr_rebase, pr_ship, preflight_intermediate_only_check,
+    preflight_stale_base_check, presence, print_effort_load_for_requirements, print_scope_sessions,
+    print_ultraplan_suggestion_hint, probe_branch_on_origin, probe_resume_facts, prompt_yes_no,
+    publish_orchestrated_lease_receipt_from_env, punt, queue_add_hidden_view_reason, queue_recover,
+    queue_role_fallback, queued_review_story_for_pr, read_behavior_permission_mode,
+    record_role_activity, recover_open_change, remote_branch_gone, render_in_flight_grouped,
+    resolve_autonomy_mode, resolve_batch_members, resolve_default_branch_ref, resolve_drain_alias,
+    resolve_pr_to_spec, resolve_queue_role_filter, resolve_queue_work_batch,
+    resolve_queue_work_launch, resolve_queue_work_permission_mode, resolve_session_branch,
+    resolve_stack_base, review_title_matches, reviewer_row_actionability, reviewer_summary, role,
+    roleless_recovery_sentence, run, run_aida_db_sync_pull, run_client_trailer_guard,
+    scope_fallback_pick, session, session_end, session_enforcement, session_manifest,
+    shell_join_display, shell_quote, shelve_spec_on_failure, slugify, spec_arg, split_last_char,
+    stacks, standalone_implementer, status_advance_requires_advisor_authority, status_display,
+    strip_batch_prefix, tag_matches_exact, tag_matches_prefix, toon_status_token, truncate,
+    update_manifest_for_status, verdict_tip_relation, wait_for_ci_terminal,
+    warn_if_queued_ahead_of_blocker, warn_pending_briefs_for_running_agent, watch, workflow_hints,
+    working_tree_clean, worktree, worktree_dirty_entries, worktree_lease,
+    write_queue_work_manifest, zen, AutonomyMode, BranchOriginProbe, CiProbe, DrainOverlay,
+    DupPickupDecision, NextKeyword, OpenPrSnapshot, OutputFormat, PrLookup, QueueWorkLaunch,
+    ReviewForge, ReviewStoryLookup, SessionEnforcement, SessionLease, SoftSignpostShown,
+};
+use crate::{maybe_sync_pull, QueueCommand};
+use aida_core::DatabaseBackend;
+use aida_core::Storage;
+use aida_core::{Requirement, RequirementStatus, RequirementType};
+use anyhow::Context;
+use anyhow::Result;
+use colored::Colorize;
+use std::collections::HashSet;
+use std::io::IsTerminal;
+use uuid::Uuid;
 // trace:STORY-1889 | ai:claude
 use crate::gate::review_verdict::evaluate_review_verdict_gate;
 use std::path::Path;
@@ -62,20 +128,24 @@ mod recover;
 pub(crate) use recover::{handle_queue_recover, recover_action_label, recover_push_branch};
 mod remove_move;
 mod rework;
+#[cfg(test)]
+pub(crate) use rework::require_rework_pickable;
 pub(crate) use rework::{
     current_queue_route, drain_running, drain_running_notice, handle_queue_rework,
     handle_rework_entry, loop_guard_park, needs_attention_parks, park_reason_line,
-    record_rework_ruling, requeue_project_root, rework_smart_target, rework_target_for_mode,
-    rework_triage_loop, run_aida_interactive, run_rework, DrainRunning, ReworkArgs, ReworkFlags,
-    REWORK,
+    record_rework_ruling, rework_is_review_shelf, rework_smart_target, rework_triage_loop,
+    run_aida_interactive, run_rework, DrainRunning, ReworkArgs, ReworkFlags, REWORK,
 };
 mod time_args;
+pub use rework::{requeue_project_root, rework_target_for_mode};
+pub use time_args::parse_lookback;
 pub(crate) use time_args::{
-    is_definitive_time_bound_error, parse_lookback, parse_lookback_at, parse_since_arg,
-    parse_since_arg_at, parse_time_bound_at, AmbiguousLocalTime, TimeBoundOutOfRange,
-    NAIVE_DATETIME_FORMATS,
+    is_definitive_time_bound_error, parse_lookback_at, parse_since_arg, parse_since_arg_at,
+    parse_time_bound_at, AmbiguousLocalTime, TimeBoundOutOfRange, NAIVE_DATETIME_FORMATS,
 };
 mod work;
+#[cfg(test)]
+pub(crate) use work::resolve_rework_review;
 pub(crate) use work::ResumePublicationFailure;
 pub(crate) use work::{
     append_reviewer_prompt_suffixes, append_reviewer_prompt_suffixes_with,
@@ -106,17 +176,17 @@ pub(crate) use work::{
     queue_work_manual_continuation, queue_work_plan_wants_pr_head_branch, queue_work_role_mismatch,
     queue_work_self_claim, queued_supervised_mode, reclaim_exited_branch_clone,
     record_pickup_refusal, refuse_retired_steal, refuse_unpresentable_contained_reviewer,
-    refused_review_launch_releases_lease, release_refused_review_lease, resolve_auto_complete_head,
-    resolve_queue_work_plan, resolve_queue_work_posture, resolve_rework_findings,
-    resume_autocomplete_conflict_message, retire_idle_review_worktree, review_calibration_spec_ids,
-    review_calibration_spec_ids_in, review_envelope_targets_pr, review_ref_from_verdict_filename,
-    review_round_from_comments, reviewer_from_pr_contract_suffix, reviewer_pickup_keeps_pr_scope,
-    reviewer_preflight_pr_n, reviewer_prompt_for_round, reviewer_spawn_instant,
-    reviewer_vendor_exit_code, reviewer_verdict_anchor_suffix, rework_conflict_route,
-    rework_findings_block_for_spec, rework_pickup_prompt, rework_pr_head_branch_override,
-    rework_pr_head_matches_spec, rework_role_input, rework_round_from_comments,
-    ruling_comment_text, run_pickup_launch, run_queue_resume_to_exit, run_standalone_reviewer,
-    scope_conflict_resume_hint, spec_matches, spec_open_change_key, standalone_review_plan,
+    refuse_waiting_pickup, refused_review_launch_releases_lease, release_refused_review_lease,
+    resolve_auto_complete_head, resolve_queue_work_plan, resolve_queue_work_posture,
+    resolve_rework_findings, resume_autocomplete_conflict_message, retire_idle_review_worktree,
+    review_calibration_spec_ids, review_calibration_spec_ids_in, review_envelope_targets_pr,
+    review_ref_from_verdict_filename, review_round_from_comments, reviewer_from_pr_contract_suffix,
+    reviewer_pickup_keeps_pr_scope, reviewer_preflight_pr_n, reviewer_prompt_for_round,
+    reviewer_spawn_instant, reviewer_vendor_exit_code, reviewer_verdict_anchor_suffix,
+    rework_conflict_route, rework_findings_block_for_spec, rework_pickup_prompt,
+    rework_pr_head_branch_override, rework_pr_head_matches_spec, rework_role_input,
+    rework_round_from_comments, ruling_comment_text, run_pickup_launch, run_queue_resume_to_exit,
+    run_standalone_reviewer, scope_conflict_resume_hint, spec_matches, standalone_review_plan,
     standalone_review_pr_head, standalone_reviewer_outcome, standalone_reviewer_record_anchor,
     standalone_summary_verdict_body, verdict_recorded_time, AgentLaunchMark,
     AutoCompleteHeadCandidate, AutoCompleteHeadPick, LeasePeek, NoReviewVerdict,
@@ -126,9 +196,10 @@ pub(crate) use work::{
 };
 #[cfg(test)]
 pub(crate) use work::{
-    derive_queue_work_prompt, latest_ruling_comment, prepend_ruling,
+    derive_queue_work_prompt, latest_ruling_comment, prepend_ruling, resolve_pickup_attempt,
     rework_pr_head_branch_from_lookup,
 };
+pub use work::{refuse_waiting_review, spec_open_change_key};
 
 /// `store_path` is the orphan-store path; the `--json` fast path opens a
 /// cache-backed backend from it to resolve titles via the SQLite cache rather
@@ -262,8 +333,8 @@ pub(crate) struct QueueArgs {
 
 fn run_queue(
     matches: &clap::ArgMatches,
-    ctx: &crate::command_registry::DispatchCtx,
-) -> anyhow::Result<crate::command_registry::Flow> {
+    ctx: &crate::cmdkit::DispatchCtx,
+) -> anyhow::Result<crate::cmdkit::Flow> {
     let args = <QueueArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
     dispatch_queue_args(&args, ctx)
 }
@@ -274,15 +345,14 @@ fn run_queue(
 // trace:TASK-1715 | ai:claude
 pub(crate) fn dispatch_queue_args(
     args: &QueueArgs,
-    ctx: &crate::command_registry::DispatchCtx,
-) -> anyhow::Result<crate::command_registry::Flow> {
-    use crate::*;
+    ctx: &crate::cmdkit::DispatchCtx,
+) -> anyhow::Result<crate::cmdkit::Flow> {
+    use crate::{handle_queue_command, maybe_sync_pull, QueueArgs, QueueCommand};
+    use aida_core::Storage;
     match &ctx.store {
-        None => Ok(crate::command_registry::Flow::Continue),
-        Some(crate::command_registry::StoreCtx::Distributed { .. }) => {
-            Ok(crate::command_registry::Flow::Continue)
-        }
-        Some(crate::command_registry::StoreCtx::Git {
+        None => Ok(crate::cmdkit::Flow::Continue),
+        Some(crate::cmdkit::StoreCtx::Distributed { .. }) => Ok(crate::cmdkit::Flow::Continue),
+        Some(crate::cmdkit::StoreCtx::Git {
             store_path,
             backend,
         }) => {
@@ -305,9 +375,9 @@ pub(crate) fn dispatch_queue_args(
                     handle_queue_command(queue_cmd, &storage, store_path)?;
                 }
             }
-            Ok(crate::command_registry::Flow::Continue)
+            Ok(crate::cmdkit::Flow::Continue)
         }
-        Some(crate::command_registry::StoreCtx::Legacy {
+        Some(crate::cmdkit::StoreCtx::Legacy {
             storage,
             requirements_path,
         }) => {
@@ -317,30 +387,29 @@ pub(crate) fn dispatch_queue_args(
                     handle_queue_command(queue_cmd, &storage, &requirements_path)?;
                 }
             }
-            Ok(crate::command_registry::Flow::Continue)
+            Ok(crate::cmdkit::Flow::Continue)
         }
     }
 }
 
 // trace:STORY-1728 | ai:claude
-pub(crate) static QUEUE: crate::command_registry::CommandReg =
-    crate::command_registry::CommandReg {
-        name: "queue",
-        help_after: "grep",
-        command: <QueueArgs as clap::CommandFactory>::command,
-        policy: queue_cli_policy,
-        run: crate::command_registry::Handler::Store(run_queue),
-    };
+pub(crate) static QUEUE: crate::cmdkit::CommandReg = crate::cmdkit::CommandReg {
+    name: "queue",
+    help_after: "grep",
+    command: <QueueArgs as clap::CommandFactory>::command,
+    policy: queue_cli_policy,
+    run: crate::cmdkit::Handler::Store(run_queue),
+};
 
 // Per-verb policy, carried over from the legacy stakeholder and per-write
 // auto-push tables. An unparseable invocation gets the fail-closed answer.
 // trace:STORY-1728 | ai:claude
-pub(crate) fn queue_cli_policy(matches: &clap::ArgMatches) -> crate::command_registry::CmdPolicy {
+pub(crate) fn queue_cli_policy(matches: &clap::ArgMatches) -> crate::cmdkit::CmdPolicy {
     use crate::cli::QueueCommand;
     use crate::stakeholder_role::StakeholderAction as SA;
     let args = <QueueArgs as clap::FromArgMatches>::from_arg_matches(matches).ok();
     let inner = args.as_ref().map(|args| &args.inner);
-    crate::command_registry::CmdPolicy {
+    crate::cmdkit::CmdPolicy {
         stakeholder: if matches!(
             inner,
             Some(

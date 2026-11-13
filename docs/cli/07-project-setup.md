@@ -10,6 +10,20 @@ The one-time and once-in-a-while plumbing: the commands that *establish* an AIDA
 
 *(Covered deeply in [Chapter 1](01-getting-started.md#aida-init).)* The one-time bootstrap that turns a git repo into an AIDA project — store + cache + selected agent scaffolding, plus first-machine-global defaults. MCP registration is explicit opt-in with `--with-mcp`; the CLI is the default surface for CLI-capable agents. See the [operator route](../operator-setup.md) for adopted projects and sibling-store setup. Everything else in this chapter either *re-runs a slice* of what `init` set up (`scaffold`, `memories`, `statusline`) or *configures* it after the fact (`config`, `type`, `feature`, `node`). If you're reading Chapter 7 to set up a project, start there.
 
+`aida init DIR --gitlab HOST/GROUP` checks project CI/CD after publication.
+Disabled CI/CD requires an affirmative terminal answer or explicit
+`--gitlab-enable-ci`; headless runs never prompt or enable it implicitly.
+A missing `.gitlab-ci.yml` receives a starter test job for detected Python,
+Rust or Node projects, with `--gitlab-runner-tags linux,docker` selecting tags.
+Existing pipelines are preserved. Review the generated dependency and test
+commands; a new project may still need tests or a lockfile before CI passes.
+The runner check requires an online, unpaused runner matching the selected tags;
+permission errors, policy restrictions and unknown availability are reported as
+incomplete setup. It does not register runners or change group/instance policy.
+After enabling previously disabled CI/CD, start a pipeline for the pushed branch
+in GitLab. On a resumed repository, commit and push any newly generated pipeline.
+<!-- trace:STORY-2701 | ai:codex -->
+
 ---
 
 ### `aida remote`
@@ -451,7 +465,7 @@ Names resolve in a fixed order, and the first match wins:
 
 If nothing matches, you get the usual unrecognised-command error and exit code. When an installed extension has a similar name, a hint names it.
 
-The extension name must be the first argument: `aida deploy --format json` works, `aida --format json deploy` does not. On Windows, `aida-<name>.exe`, `.cmd` and `.bat` are found as well.
+For a top-level extension, the name must be the first argument: `aida deploy --format json` works, `aida --format json deploy` does not. On Windows, `aida-<name>.exe`, `.cmd` and `.bat` are found as well.
 
 The extension receives its context in the environment:
 - `AIDA_PROJECT_ROOT` — the project root, when run inside an AIDA project (unset otherwise).
@@ -463,6 +477,26 @@ The extension receives its context in the environment:
 Extensions should read and change project state through `"$AIDA_BIN" ... --json` (or another machine output format), never by writing to the store or cache files directly. That keeps validation, history and sync in one place.
 
 Installed extensions are listed in an "External commands" group in `aida help`, `aida help --all` and `aida alias list`, and `aida help <name>` runs `aida-<name> --help`.
+
+<!-- trace:STORY-2704 | ai:codex -->
+A built-in parent also admits one installed child extension: for example,
+`aida review summary` runs `aida-review-summary`, passing only the arguments
+after `summary`. Built-in children, their aliases, and existing built-in argv
+rewrites win. Clap validates global and parent options, including their values,
+before dispatch; required positional
+operands are never extension slots. Optional parent operands coexist with named
+children, as in `review [SPEC]`. External parents own all of their remaining
+arguments: `aida flow report` runs `aida-flow report`.
+Nested extensions currently refuse explicit `--project`/`-p`, `--file`,
+`--server`/`-s` and `--canonical-ids` before the child name: their context comes
+from the current directory. Arguments after the child name belong to the
+extension, including any same-spelled options.
+
+`aida review --help` and `aida help review` list installed child extensions with
+their paths. `aida review summary --help` and `aida help review summary` delegate
+to the extension with `--help`. Top-level help and alias JSON show the full
+invocation (`aida review summary`), retaining the executable path. Discovery
+never executes a candidate. Missing extensions retain the usual parser result.
 
 ---
 
@@ -639,6 +673,14 @@ live hub hook or automatic forwarding is provided.
 
 #### Per-vendor containment posture
 
+`aida config permissions show` prints one row per vendor with its tier,
+configured/refused launch state, and net effect. This is a configuration view,
+not a live launch probe. Use `aida config permissions show --verbose` (or
+`aida config permissions show -v`) for launch flags, scope, sandbox details,
+findings, and full refusal explanations. `aida config permissions show --json`
+retains the complete structured report regardless of verbosity.
+<!-- trace:TASK-3779 | ai:codex -->
+
 With containment enabled, opt Codex into its native sandbox in the trusted
 default-branch `.aida/config.toml` (the committed `origin/<default>` copy read
 through `trusted_config`; local default branch only when no remote ref exists):
@@ -647,6 +689,17 @@ through `trusted_config`; local default branch only when no remote ref exists):
 [contained.vendors]
 codex = "native"
 ```
+
+Interactive `aida init` offers this opt-in when Codex is selected (including
+`--agent codex`). The separate consent defaults to no and warns that native
+sandboxing is weaker than AIDA containment. Existing vendor settings are preserved.
+Non-interactive init and `aida init --no-agent-config` do not grant the opt-in.
+
+`aida config permissions show` reports each vendor's configured containment-policy
+launch readiness separately from permission consistency: `ready` or `refused`
+with the reason and a fix command. JSON includes `launch_readiness` and
+`launch_fix` on each agent row. Readiness here does not verify credentials,
+installed executables, or launch-surface prerequisites.
 
 Branch-local edits cannot grant this opt-in. Merge the configuration into the
 default branch before launching Codex under containment. Missing or unreadable
@@ -834,10 +887,20 @@ tokens, both unfiltered and under `--category permission-posture`.
 
 <!-- trace:STORY-2642 | ai:codex -->
 Run `aida doctor --lane-host` on a machine before starting automated lanes.
+The [FAQ-151 checklist](../advanced/lane-host-checklist.md) retains the command
+pointer and remaining manual SSH, clone, login and system setup steps.
 It prints PASS/FAIL rows and a fix hint for each failure; `--json` emits the
 same checks as one array. Required failures exit nonzero. Advisory NOTE rows
 carry `required: false` in JSON and do not fail the command.
 `aida init` prints local checks without a live store-network probe or blocking setup.
+
+<!-- trace:BUG-2519 | ai:codex -->
+The advisory `lane-cache-reuse` check compiles a tiny Rust library in two working
+directories, then retries in the first directory if reuse fails. It distinguishes
+path-sensitive misses from failure to cache the same compilation at all. This
+performance evidence is separate from required cache transport/write checks;
+a passing transport check alone does not prove cross-seat Rust reuse. See the
+[cache reuse investigation](../internal/testing/bug-2519-lane-cache-reuse.md).
 
 `aida doctor --lane-host --fix` applies the existing contained permission
 preset to the **user** agents and Codex config files, honoring `CODEX_HOME`
@@ -861,22 +924,25 @@ vendor, not every future orchestrator phase; those phases retain their ordinary
 launch admission checks. The existing vendor admission checks still apply. A trusted
 native Codex opt-in is reported as “native sandbox, not AIDA-contained”.
 
-The report checks every enabled lane vendor (or the selected headless vendor
-when no enabled list is configured). Auth rows establish
-credential-source presence only, including Claude’s `CLAUDE_CONFIG_DIR` and
-`CLAUDE_CODE_OAUTH_TOKEN` overrides. Vendors without a supported credential probe
-(including AGY) emit an explicit advisory unverifiable note; log in manually. Binary comparison uses the locally known
-origin default-branch SHA only for development binaries built from this project,
-including the promoted live binary (`~/.local/share/aida/live/aida` by default,
-or the directory selected by `AIDA_DEV_LIVE_DIR`).
-Release installs and other projects receive an advisory unverified binary row.
-Store connectivity uses a bounded read-only probe against origin's `aida-store`
-branch, preserving `GIT_SSH_COMMAND` or `core.sshCommand` with batch-mode options.
-The cache check requires an executable `RUSTC_WRAPPER` or user Cargo
-`build.rustc-wrapper`; legacy `CARGO_HOME/config` takes precedence over
-`config.toml`. Lane-job cache reachability is a separate advisory note until an in-sandbox probe is available.
-A passing host report does not certify cache transport, token validity or every
-future orchestrator phase.
+The report checks every enabled lane vendor (or the selected headless vendor when no
+enabled list is configured). Auth rows establish credential-source presence only,
+including Claude’s `CLAUDE_CONFIG_DIR` and `CLAUDE_CODE_OAUTH_TOKEN` overrides. AGY
+checks its nonempty `~/.gemini/antigravity-cli/antigravity-oauth-token` file; this does
+not verify token validity or refresh. Other vendors without a supported probe emit an
+advisory note. Binary comparison uses the locally known origin default-branch SHA only
+for development binaries built from this project, including the promoted live binary
+(`~/.local/share/aida/live/aida` by default, or the directory selected by
+`AIDA_DEV_LIVE_DIR`). Release installs compare their version with a bounded GitHub
+latest-release lookup; stale, dirty or unavailable evidence fails with an upgrade hint.
+Development binaries used with other projects retain an advisory row. Store connectivity
+uses a bounded read-only probe against origin's `aida-store` branch, preserving
+`GIT_SSH_COMMAND` or `core.sshCommand` with batch-mode options. The cache check requires
+an executable `RUSTC_WRAPPER` or user Cargo `build.rustc-wrapper`; legacy
+`CARGO_HOME/config` takes precedence over `config.toml`. Lane-job cache reachability
+starts a private sccache server through the lane-job sandbox and lifecycle, queries it
+and writes/reads a temporary cache file. Missing configuration, sandbox denial, uncached
+fallback and failed transport fail the check. A passing host report does not certify
+token validity or every future orchestrator phase.
 
 Manual setup remains: configure SSH access and any required host/DNS entries,
 clone the project, put AIDA on the login-shell PATH, and log in to the selected
@@ -922,3 +988,24 @@ The advisor-approved legacy `[lane_host] allow_ungranted = true` opt-in is
 reported as a warning. It grants no new authority in this slice: host placement,
 SSH dispatch, a remote grant issuer, unified remote leases/ps, and script
 retirement remain follow-up work.
+
+### Project validation commands
+
+Set project-specific commands in the default branch's `.aida/config.toml`:
+
+```toml
+[validation]
+format = "ruff format ."
+test = "python3 -m unittest discover"
+fast_check = "python3 -m unittest discover"
+```
+
+Lane launch prompts name `format` and `test`. The host runs `fast_check` via
+`/bin/sh -c` in the lane's existing fast-gate sandbox before publication, with
+network and host IPC isolated and a one-hour timeout. Commands run from the
+seat checkout. A failing check retains the existing single repair round.
+Missing or blank `fast_check` skips the gate with `skipped(unconfigured)` and a
+stated reason; no Makefile or Rust toolchain is assumed. Malformed configuration
+reports an infrastructure error instead of executing a command. These commands come only from trusted default-branch
+configuration; edits in a lane cannot select host gate commands.
+<!-- trace:BUG-2512 | ai:codex -->

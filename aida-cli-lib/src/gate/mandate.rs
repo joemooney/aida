@@ -8,7 +8,7 @@
 //! carries the audit copy (`MandateChanged`).
 //!
 //! Every load re-validates each record (24h cap, no future issue time, the
-//! advisor seat and known scope, the current user as principal, a 0600
+//! advisor seat and known scope, the operator as principal, a 0600
 //! regular file owned by this uid, never a symlink); an invalid record is
 //! ignored with a warning and never shadows a valid one. Revocation is
 //! monotonic: `aida mandate stop` writes a `<id>.stopped` tombstone that is
@@ -435,6 +435,11 @@ pub(crate) fn state_at(mandates: &[Mandate], now: DateTime<Utc>) -> MandateState
     }
 }
 
+// trace:BUG-2524 | ai:codex
+pub(crate) use super::kernel_deps::operator_principal;
+#[cfg(test)]
+use super::kernel_deps::operator_principal_from;
+
 /// The state read from disk now — never cached. `warn` prints the records
 /// it ignored to stderr.
 // trace:STORY-1698 | ai:claude
@@ -443,7 +448,7 @@ pub(crate) fn current_state_reporting(warn: bool) -> MandateState {
         return MandateState::None;
     };
     let now = Utc::now();
-    let (valid, warnings) = load_valid(&dir, &crate::gate::kernel_deps::current_user_id(None), now);
+    let (valid, warnings) = load_valid(&dir, &operator_principal(), now);
     if warn {
         for w in &warnings {
             eprintln!("  warning: {w}");
@@ -965,12 +970,18 @@ fn exclusion_metadata_check(meta: &std::fs::Metadata, uid: u32) -> std::result::
     if !meta.is_file() {
         return Err("is not a regular file".into());
     }
-    let mode = meta.mode() & 0o7777;
-    if mode != 0o600 {
-        return Err(format!("has mode {mode:o}, not 600"));
-    }
+    exclusion_mode_check(meta.mode())?;
     if meta.uid() != uid {
         return Err(format!("is owned by uid {}, not {uid}", meta.uid()));
+    }
+    Ok(())
+}
+
+// trace:STORY-2695 | ai:codex
+fn exclusion_mode_check(mode: u32) -> std::result::Result<(), String> {
+    let mode = mode & 0o7777;
+    if mode != 0o600 {
+        return Err(format!("has mode {mode:o}, not 600"));
     }
     Ok(())
 }

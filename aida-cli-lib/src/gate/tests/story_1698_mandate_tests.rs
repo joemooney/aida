@@ -1153,7 +1153,11 @@ fn task_1790_exclusions_require_private_owned_regular_file() {
     assert!(exclusion_metadata_check(&meta, meta.uid().wrapping_add(1))
         .unwrap_err()
         .contains("owned by uid"));
-    for mode in [0o644, 0o660, 0o400, 0o4600] {
+    // trace:STORY-2695 | ai:codex
+    assert!(exclusion_mode_check(0o4600)
+        .unwrap_err()
+        .contains("not 600"));
+    for mode in [0o644, 0o660, 0o400] {
         std::fs::set_permissions(&path, std::fs::Permissions::from_mode(mode)).unwrap();
         let ledger = read_exclusions(tmp.path());
         assert!(
@@ -1422,17 +1426,19 @@ fn exclusion_writer_refuses_invalid_ledger_without_appending() {
     let seen = vec![("TASK-2".into(), "guided".into(), false)];
     record_exclusions(tmp.path(), &seen, now()).unwrap();
     let before = std::fs::read(&path).unwrap();
-    for mode in [0o644, 0o4600] {
-        std::fs::set_permissions(&path, std::fs::Permissions::from_mode(mode)).unwrap();
-        assert!(private_file_check(&path).is_err());
-        assert!(record_exclusions(
-            tmp.path(),
-            &[("TASK-3".into(), "guided".into(), false)],
-            now()
-        )
-        .is_err());
-        assert_eq!(std::fs::read(&path).unwrap(), before);
-    }
+    // trace:STORY-2695 | ai:codex
+    assert!(exclusion_mode_check(0o4600)
+        .unwrap_err()
+        .contains("not 600"));
+    std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o644)).unwrap();
+    assert!(private_file_check(&path).is_err());
+    assert!(record_exclusions(
+        tmp.path(),
+        &[("TASK-3".into(), "guided".into(), false)],
+        now()
+    )
+    .is_err());
+    assert_eq!(std::fs::read(&path).unwrap(), before);
     std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o600)).unwrap();
     std::fs::write(&path, b"malformed\n").unwrap();
     assert!(record_exclusions(tmp.path(), &seen, now()).is_err());
@@ -1540,6 +1546,7 @@ fn mandate_ship_cover_passes_committed_trace_ids_to_the_decision() {
         &[],
         &[
             ("AIDA_HOME", Some(home.to_str().unwrap())),
+            ("USER", Some(crate::test_env::HERMETIC_TEST_USER)),
             ("AIDA_TEST_GH_BINARY", Some(gh.to_str().unwrap())),
         ],
     );
@@ -1848,7 +1855,10 @@ fn task_1800_aliased_id_resolves_through_alias_and_is_judged_normally() {
         root,
         "advisor",
         &[],
-        &[("AIDA_TEST_GH_BINARY", Some(gh.to_str().unwrap()))],
+        &[
+            ("USER", Some(crate::test_env::HERMETIC_TEST_USER)),
+            ("AIDA_TEST_GH_BINARY", Some(gh.to_str().unwrap())),
+        ],
     );
     git_out(&store, &["add", "-A"]);
     git_out(
@@ -2034,7 +2044,10 @@ fn ship_tracing_deleted_agreed_id_spec(
         root,
         "advisor",
         &[],
-        &[("AIDA_TEST_GH_BINARY", Some(gh.to_str().unwrap()))],
+        &[
+            ("USER", Some(crate::test_env::HERMETIC_TEST_USER)),
+            ("AIDA_TEST_GH_BINARY", Some(gh.to_str().unwrap())),
+        ],
     );
     git_out(&store, &["add", "-A"]);
     git_out(
@@ -3313,4 +3326,14 @@ fn task_2314_completed_and_shipped_on_main_expires() {
         Ok(active(false).id),
         "Completed and shipped operator-only traces expire"
     );
+}
+
+// trace:BUG-2524 | ai:codex
+#[test]
+fn bug_2524_unknown_operator_does_not_fall_back_to_seat_or_default() {
+    use aida_core::exec_context::Environment;
+    let env = Environment::from_pairs([("AIDA_USER".into(), "advisor-seat".into())]);
+    assert_eq!(operator_principal_from(&env), "");
+    let env = env.with_value("USER", Some("  joe  ".into()));
+    assert_eq!(operator_principal_from(&env), "joe");
 }

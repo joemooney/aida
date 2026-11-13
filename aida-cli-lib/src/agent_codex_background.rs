@@ -180,9 +180,15 @@ pub(crate) fn refuse_posture_overrides(args: &[String]) -> Result<()> {
                     || key.starts_with("approval")
                     || key.starts_with("shell_environment_policy")
                     || key.starts_with("permissions")
+                    // trace:TASK-3736 | ai:codex
+                    || key.starts_with("profile")
             }
             _ => {
-                arg.contains("danger-full-access")
+                // trace:TASK-3736 | ai:codex
+                arg == "--profile"
+                    || arg.starts_with("--profile=")
+                    || arg.starts_with("-p")
+                    || arg.contains("danger-full-access")
                     || arg.starts_with("--sandbox=")
                     || arg.starts_with("--ask-for-approval=")
                     || arg.starts_with("--config=")
@@ -363,6 +369,35 @@ pub(crate) fn ambient_env(
             })
         })
         .collect()
+}
+
+// trace:BUG-2510 | ai:codex
+fn worker_ambient_env(
+    vars: impl IntoIterator<Item = (std::ffi::OsString, std::ffi::OsString)>,
+    configured: &[String],
+) -> Vec<(std::ffi::OsString, std::ffi::OsString)> {
+    let mut names = WORKER_AMBIENT_ENV.to_vec();
+    names.extend(configured.iter().map(String::as_str));
+    ambient_env(vars, &names, WORKER_AMBIENT_PREFIXES)
+}
+
+#[cfg(test)]
+mod env_passthrough_tests {
+    // trace:BUG-2510 | ai:codex
+    #[test]
+    fn env_passthrough_worker_projection() {
+        let vars = [
+            "XAIAA_API_KEY",
+            "UNCONFIGURED_KEY",
+            "OPENAI_API_KEY",
+            "LC_TIME",
+            "AIDA_ROLE",
+        ]
+        .map(|key| (key.into(), "secret".into()));
+        let kept = super::worker_ambient_env(vars, &["XAIAA_API_KEY".into()]);
+        let names: Vec<_> = kept.iter().map(|(key, _)| key.to_str().unwrap()).collect();
+        assert_eq!(names, ["XAIAA_API_KEY", "OPENAI_API_KEY", "LC_TIME"]);
+    }
 }
 
 /// The exact program, argv, environment and cwd the barrier `execve`s.
@@ -1149,18 +1184,16 @@ fn build_worker_exec(
     grant_id: &str,
     mail_wake: agent_registry::MailWake,
 ) -> Result<WorkerExec> {
+    let vendor = "codex";
     let (ceiling_key, ceiling_value) =
         crate::burndown_run::bg_wait_ceiling_env(Some(&plan.project_root));
+    let passthrough = crate::agent_config::load_vendor_env_passthrough(&plan.project_root, vendor)?;
     let mut command = std::process::Command::new(binary);
     command
         .current_dir(&plan.launch_cwd)
         .args(exec_args(&config.default_args, prompt_args))
         .env_clear()
-        .envs(ambient_env(
-            std::env::vars_os(),
-            WORKER_AMBIENT_ENV,
-            WORKER_AMBIENT_PREFIXES,
-        ))
+        .envs(worker_ambient_env(std::env::vars_os(), &passthrough))
         .env("AIDA_HEADLESS", "1")
         .envs(crate::burndown_run::headless_wait_envs(
             ceiling_key,
@@ -1170,7 +1203,7 @@ fn build_worker_exec(
             "AIDA_CONTAINMENT_POSTURE",
             agent_containment_posture(config),
         )
-        .env("AIDA_AGENT_TYPE", "codex")
+        .env("AIDA_AGENT_TYPE", vendor)
         .env("AIDA_AGENT_NAME", &plan.name)
         .env("AIDA_USER", &plan.name)
         .env("AIDA_PROJECT_ROOT", &plan.project_root)

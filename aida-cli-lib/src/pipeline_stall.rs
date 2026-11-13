@@ -873,7 +873,7 @@ fn observe_prs(
             train.push(train_pr_running(root, pr.number, &mut s.details));
             continue;
         }
-        let ready = if hold_gate_failed(row) {
+        let ready = if hold_gate_blocking(row) {
             Some(false)
         } else {
             pr_ready(root, pr)
@@ -1007,10 +1007,31 @@ fn ci_checks(row: &serde_json::Value) -> Vec<&serde_json::Value> {
         .filter(|c| check_name(c) != Some("merge-hold-gate"))
         .collect()
 }
-fn hold_gate_failed(row: &serde_json::Value) -> bool {
+fn hold_gate_has_hold_evidence(row: &serde_json::Value) -> bool {
+    // trace:BUG-2492 | ai:codex — inspection pending alone is not a hold.
+    let has = |name: &str| {
+        row["labels"].as_array().is_some_and(|labels| {
+            labels
+                .iter()
+                .any(|label| label["name"].as_str() == Some(name))
+        })
+    };
+    has("aida:merge-hold") || (has("aida:merge-hold-recorded") && !has("aida:merge-hold-cleared"))
+}
+fn hold_gate_blocking(row: &serde_json::Value) -> bool {
     latest_checks(row)
         .into_iter()
-        .any(|c| check_name(c) == Some("merge-hold-gate") && check_failed(c))
+        // trace:BUG-2492 | ai:codex — commit statuses replaced failed hold jobs.
+        .any(|c| {
+            check_name(c).is_some_and(|name| {
+                crate::ci_gate::check_name_eq(name, crate::ci_gate::HOLD_GATE_CHECK)
+            }) && (check_failed(c)
+                || c["state"] == "PENDING"
+                || matches!(
+                    c["status"].as_str(),
+                    Some("PENDING" | "QUEUED" | "IN_PROGRESS")
+                ))
+        })
 }
 fn check_failed(check: &serde_json::Value) -> bool {
     matches!(
@@ -1128,8 +1149,26 @@ fn pr_digest(
     if pr.is_draft {
         blockers.push(format!("draft; gh pr ready {n}"));
     }
-    if crate::pr_has_merge_hold(root, pr) || hold_gate_failed(row) {
+    if crate::pr_has_merge_hold(root, pr)
+        || (hold_gate_has_hold_evidence(row) && hold_gate_blocking(row))
+    {
         blockers.push(format!("merge hold; aida merge-hold auto-release {n} (eligible Rework approval) or human/advisor: aida merge-hold clear {n}"));
+    }
+    // trace:BUG-2500 | ai:codex — waiting is distinct from missing review.
+    for verdict in verdict_ids(pr)
+        .iter()
+        .filter_map(|id| crate::gate::review_verdict::read_recorded_verdict(root, id))
+    {
+        if !verdict.is_closed()
+            && verdict.kind == crate::gate::review_verdict::VerdictKind::Waiting
+            // trace:TASK-3777 | ai:codex
+            && verdict.reviewed_sha.as_deref().zip(pr.head_sha.as_deref())
+                .is_some_and(|(reviewed, head)| crate::gate::review_verdict::same_reviewed_sha(reviewed, head))
+        {
+            blockers.push(format!("WAITING: {}; resume with a fresh review at this head; aida queue work PR-{n} --role reviewer",
+                verdict.summary.as_deref().unwrap_or("external evidence required")));
+            break; // One PR may have several verdict aliases. trace:TASK-3777 | ai:codex
+        }
     }
     let checks: Vec<_> = ci_checks(row)
         .into_iter()
@@ -1555,6 +1594,46 @@ mod tests {
         assert!(failure_details(&[(42, row)], &mut |_| panic!("hold log fetched")).is_empty());
     }
 
+    // trace:BUG-2492 | ai:codex
+    #[test]
+    fn bug2492_pending_hold_status_blocks_readiness_without_red_ci_or_logs() {
+        let t = tempfile::tempdir().unwrap();
+        for labels in [
+            serde_json::json!([]),
+            serde_json::json!([{"name":"aida:merge-hold"}]),
+            serde_json::json!([{"name":"aida:merge-hold-recorded"}]),
+            serde_json::json!([{"name":"aida:merge-hold-recorded"},{"name":"aida:merge-hold-cleared"}]),
+        ] {
+            for state in ["PENDING", "FAILURE", "SUCCESS"] {
+                let row = serde_json::json!({
+                    "number":42,"title":"work","headRefName":"topic",
+                    "headRefOid":"abcdef1234","mergeable":"MERGEABLE","isDraft":false,
+                    "labels":labels,
+                    "statusCheckRollup":[
+                        {"__typename":"StatusContext","context":"merge-hold-gate","state":state},
+                        {"name":"Build","status":"COMPLETED","conclusion":"SUCCESS"}]
+                });
+                assert_eq!(hold_gate_blocking(&row), state != "SUCCESS");
+                let raw = vec![row.clone()];
+                let prs = parse_stall_prs(&raw, Some(&["merge-hold-gate".into(), "Build".into()]));
+                assert_eq!(prs.by_branch["topic"].ci_rollup.as_deref(), Some("pass"));
+                let mut s = idle();
+                observe_prs(t.path(), Some(t.path()), &prs, &raw, &mut s);
+                if state != "SUCCESS" {
+                    assert_eq!(s.ready, Some(false));
+                    assert_eq!(
+                        s.details.join("\n").contains("merge hold"),
+                        hold_gate_has_hold_evidence(&row)
+                    );
+                }
+                assert!(s.failed_jobs.is_empty());
+                assert!(
+                    failure_details(&[(42, row)], &mut |_| panic!("hold log fetched")).is_empty()
+                );
+            }
+        }
+    }
+
     // trace:TASK-3112 | ai:codex
     #[test]
     fn task3112_same_named_jobs_in_different_workflows_remain_distinct() {
@@ -1725,6 +1804,47 @@ mod tests {
         .by_branch
         .remove("topic")
         .unwrap()
+    }
+    // trace:BUG-2500 | ai:codex
+    #[test]
+    fn bug_2500_pipeline_digest_preserves_waiting_dependency() {
+        let t = tempfile::tempdir().unwrap();
+        let root = t.path();
+        let dir = root.join(".aida/review-verdicts");
+        std::fs::create_dir_all(&dir).unwrap();
+        let mut p = pr();
+        // Both aliases and an abbreviated receipt still produce one blocker.
+        // trace:TASK-3777 | ai:codex
+        p.head_sha = Some("abcdef1234567890abcdef1234567890abcdef12".into());
+        for key in ["PR-42", "BUG-2500"] {
+            let mut p = p.clone();
+            p.title = "work (BUG-2500)".into();
+            let path = dir.join(format!("{key}.json"));
+            std::fs::write(
+                &path,
+                serde_json::json!({
+                    "verdict":"waiting", "reviewed_sha":"abcdef1234",
+                    "summary":"Host: operator must run probe; resume with evidence"
+                })
+                .to_string(),
+            )
+            .unwrap();
+            assert_eq!(pr_ready(root, &p), Some(false));
+            assert!(!current_rejection(root, &p));
+            let digest = pr_digest(root, &p, &serde_json::json!({}), Some(false), false).join("\n");
+            assert!(
+                digest.contains("WAITING")
+                    && digest.contains("Host:")
+                    && digest.contains("fresh review"),
+                "{digest}"
+            );
+            assert!(
+                !digest.contains("review missing")
+                    && !digest.contains("queue rework")
+                    && !digest.contains("ship-ready")
+            );
+            assert_eq!(digest.matches("WAITING:").count(), 1);
+        }
     }
     #[test]
     fn readiness_uses_current_head_verdict_without_idle_age_filter() {

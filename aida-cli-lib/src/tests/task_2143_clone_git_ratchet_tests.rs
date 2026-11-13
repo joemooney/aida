@@ -6,6 +6,7 @@
 //! in `aida_core::git_ops::host_git_command`, and a raw builder skips it.
 //! trace:TASK-2143 | trace:TASK-2053 | ai:claude
 
+// trace:TASK-3429 | ai:codex
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
@@ -17,11 +18,14 @@ use std::path::{Path, PathBuf};
 /// clone with `// raw-git-ok(TASK-2053): <why>` in the three lines above it.
 const RAW_GIT_ALLOWLIST: &[(&str, usize)] = &[
     ("aida-cli-lib/src/agent_launch.rs", 1),
-    ("aida-cli-lib/src/doctor_cmd.rs", 18),
+    ("aida-cli-lib/src/doctor_cmd.rs", 1),
+    ("aida-cli-lib/src/doctor/remote.rs", 3),
+    ("aida-cli-lib/src/doctor/store_repair.rs", 4),
+    ("aida-cli-lib/src/doctor/worktrees.rs", 10),
     ("aida-cli-lib/src/doctor_root.rs", 4),
     ("aida-cli-lib/src/leases.rs", 1),
     ("aida-cli-lib/src/lib_part5.rs", 6),
-    ("aida-cli-lib/src/mcp.rs", 1),
+    ("aida-mcp/src/mcp.rs", 1),
     ("aida-cli-lib/src/orchestrator_leases.rs", 5),
     ("aida-cli-lib/src/phase_driver.rs", 1),
     ("aida-cli-lib/src/pr_cmd.rs", 47),
@@ -51,13 +55,14 @@ const RAW_GIT_ALLOWLIST: &[(&str, usize)] = &[
 /// `ship.rs` runs step 1's commit in the ship root, a seat clone when ship
 /// runs in one (TASK-2359).
 // trace:TASK-2359 | ai:claude
-const ALWAYS_SCANNED: &[&str] = &["aida-cli-lib/src/ship.rs"];
+const ALWAYS_SCANNED: &[&str] = &["aida-cli-lib/src/ship.rs", "aida-cli-lib/src/doctor_cmd.rs"];
 
-// All split queue modules inherit the original queue_cmd.rs scan boundary.
+// Split queue and doctor modules retain their original file scan boundaries.
 // trace:TASK-3426 | ai:codex
 fn always_scanned(file: &str) -> bool {
     ALWAYS_SCANNED.contains(&file)
         || (file.starts_with("aida-cli-lib/src/queue_cmd/") && file.ends_with(".rs"))
+        || (file.starts_with("aida-cli-lib/src/doctor/") && file.ends_with(".rs"))
 }
 
 #[test]

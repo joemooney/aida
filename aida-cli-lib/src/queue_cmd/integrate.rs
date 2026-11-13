@@ -28,7 +28,15 @@ pub(crate) fn probe_pr_integration_state(
     // either into the catch-all `None` arm is the exact PR-2009 false-green
     // shape through `aida integrate` (`classify_integration_action` merges on
     // `None`). trace:BUG-1481 | ai:claude
+    // trace:BUG-2492 | ai:codex — an intentional hold cannot settle by
+    // waiting for CI. Park it, including recorded holds with a removed label.
+    let held = item.is_some_and(|i| {
+        i.labels.iter().any(|l| l == "aida:merge-hold")
+            || (i.labels.iter().any(|l| l == "aida:merge-hold-recorded")
+                && !i.labels.iter().any(|l| l == "aida:merge-hold-cleared"))
+    });
     let ci = match item.and_then(|i| i.ci_rollup.as_deref()) {
+        Some("pending") if held => integrate::CiState::Failing,
         Some("pass") => integrate::CiState::Passing,
         Some("fail") => integrate::CiState::Failing,
         Some("pending") => integrate::CiState::Running,
@@ -62,7 +70,7 @@ pub(crate) fn probe_pr_integration_state(
     // an existing artifact that is conflicting or unreadable is a block, not
     // the optimistic absence of RequestChanges.
     // trace:BUG-1581 | ai:codex
-    let (local_request_changes, review_integrity_unproven) = item
+    let (local_request_changes, review_waiting, review_integrity_unproven) = item
         .map(|i| {
             // The merge chokepoint's corpus, gate ledger included (M1).
             // trace:TASK-1801 | ai:claude
@@ -73,31 +81,35 @@ pub(crate) fn probe_pr_integration_state(
                 &[spec_id.to_string()],
             ) {
                 Ok(found) => found.into_iter().map(|(_, body)| body).collect(),
-                Err(_) => return (false, true),
+                Err(_) => return (false, false, true),
             };
             if bodies.is_empty() {
-                return (false, false);
+                return (false, false, false);
             }
             let Some(head) = i.head_sha.as_deref() else {
-                return (false, true);
+                return (false, false, true);
             };
             match crate::gate::review_verdict::reconcile_artifacts_for_sha(
                 bodies.iter().map(String::as_str),
                 head,
             ) {
                 Ok(Some(crate::gate::review_verdict::VerdictKind::Approved)) | Ok(None) => {
-                    (false, false)
+                    (false, false, false)
                 }
-                Ok(Some(_)) => (true, false),
-                Err(_) => (false, true),
+                // Waiting blocks integration without requesting implementation rework.
+                // trace:TASK-3777 | ai:codex
+                Ok(Some(crate::gate::review_verdict::VerdictKind::Waiting)) => (false, true, false),
+                Ok(Some(_)) => (true, false, false),
+                Err(_) => (false, false, true),
             }
         })
-        .unwrap_or((false, false));
+        .unwrap_or((false, false, false));
 
     integrate::PrIntegrationState {
         ci,
         request_changes_pending: forge_request_changes || local_request_changes,
         review_integrity_unproven,
+        review_waiting,
         mergeable,
     }
 }
@@ -237,6 +249,7 @@ mod bug_1581_integration_probe_tests {
             ("Approved", "Rejected", false),
             ("RequestChanges", "Approved", true),
             ("Rejected", "Approved", true),
+            ("Waiting", "Approved", false),
         ] {
             let root = tempfile::tempdir().unwrap();
             let path = verdict_path(root.path());
@@ -258,7 +271,12 @@ mod bug_1581_integration_probe_tests {
                 probe_pr_integration_state(root.path(), "BUG-1581", Some("bug-1581"), &snapshot());
             assert!(!state.review_integrity_unproven);
             assert_eq!(state.request_changes_pending, blocks);
-            let expected = if blocks {
+            assert_eq!(state.review_waiting, current == "Waiting");
+            let expected = if current == "Waiting" {
+                crate::integrate::IntegrationAction::Park(
+                    crate::integrate::ParkReason::ReviewWaiting,
+                )
+            } else if blocks {
                 crate::integrate::IntegrationAction::Park(
                     crate::integrate::ParkReason::RequestChanges,
                 )
@@ -292,6 +310,32 @@ mod bug_1581_integration_probe_tests {
                 crate::integrate::ParkReason::ReviewIntegrity
             )
         ));
+    }
+
+    // trace:BUG-2492 | ai:codex
+    #[test]
+    fn bug2492_integrate_parks_pending_and_malformed_hold_status() {
+        let root = tempfile::tempdir().unwrap();
+        for status in ["PENDING", "FAILURE", "ERROR"] {
+            let mut snap = snapshot();
+            let rows = vec![serde_json::json!({
+                "__typename":"StatusContext", "context":"merge-hold-gate", "state":status
+            })];
+            let item = snap.by_branch.get_mut("bug-1581").unwrap();
+            item.ci_rollup = Some(crate::status_prs::summarize_status_check_rollup(&rows));
+            item.labels = vec!["aida:merge-hold-recorded".into()];
+            let state =
+                probe_pr_integration_state(root.path(), "BUG-1581", Some("bug-1581"), &snap);
+            assert!(!matches!(
+                crate::integrate::classify_integration_action(&state),
+                crate::integrate::IntegrationAction::Merge
+            ));
+            assert_eq!(state.ci, crate::integrate::CiState::Failing);
+            assert!(matches!(
+                crate::integrate::classify_integration_action(&state),
+                crate::integrate::IntegrationAction::Park(_)
+            ));
+        }
     }
 
     // BUG-1481: a `ci_rollup` of "missing" (a required check's row never

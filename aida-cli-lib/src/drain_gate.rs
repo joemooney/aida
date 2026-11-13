@@ -1,7 +1,22 @@
 //! drain human-gate refusals, from-pr entry, plan prelude, and auto-complete run (STORY-1488 slice 1)
 // trace:STORY-1488 | ai:claude
 
-use crate::*;
+use crate::process_retry::RetryEtxtbsy;
+use crate::{
+    agent_registry, aida_exe_path, auto_complete, cli, detect_distributed_store_from, drain_resume,
+    drain_state, ensure_queued_for_implementer, find_main_worktree_root, format_review_label,
+    maybe_digest_mailbox_best_effort, network_retry, parse_review_scope,
+    phase1_restore_report_line, pr_head_branch, pr_is_merged_with_sink,
+    prepare_registered_auto_complete_phase1, presence, probe_resume_facts, prompt_yes_no,
+    record_auto_complete_run, release_dead_leases_for_resume, resolve_lifecycle_skip,
+    resolve_pr_to_spec, restore_phase1_status_on_lease_failure, should_clear_drain_state,
+    solo_spec_is_keystone, spec_status, verified_from_pr_ci_head,
+    write_pipelined_child_result_sidecar, AutonomyMode, RealPhaseDriver, ResumeEntry,
+};
+use aida_core::{RequirementStatus, Storage};
+use anyhow::{Context, Result};
+use colored::Colorize;
+use std::io::IsTerminal;
 
 // trace:STORY-1728 | ai:claude
 #[path = "drain_gate_args.rs"]
@@ -1989,7 +2004,7 @@ pub(crate) struct NoHumanArgs {
 // a fresh clone too. trace:TASK-394 | ai:claude
 fn run_no_human(
     matches: &clap::ArgMatches,
-    _ctx: &crate::command_registry::DispatchCtx,
+    _ctx: &crate::cmdkit::DispatchCtx,
 ) -> anyhow::Result<()> {
     let args = <NoHumanArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
     let no_human_cmd = &args.inner;
@@ -1997,16 +2012,15 @@ fn run_no_human(
 }
 
 // trace:STORY-1728 | ai:claude
-pub(crate) static NO_HUMAN: crate::command_registry::CommandReg =
-    crate::command_registry::CommandReg {
-        name: "no-human",
-        help_after: "autonomy",
-        command: <NoHumanArgs as clap::CommandFactory>::command,
-        policy: |_| crate::command_registry::CmdPolicy {
-            stakeholder: crate::stakeholder_role::StakeholderAction::Write,
-            per_write_auto_push: false,
-            skip_role_restore_prompt: false,
-            team_identity_write: false,
-        },
-        run: crate::command_registry::Handler::Early(run_no_human),
-    };
+pub(crate) static NO_HUMAN: crate::cmdkit::CommandReg = crate::cmdkit::CommandReg {
+    name: "no-human",
+    help_after: "autonomy",
+    command: <NoHumanArgs as clap::CommandFactory>::command,
+    policy: |_| crate::cmdkit::CmdPolicy {
+        stakeholder: crate::stakeholder_role::StakeholderAction::Write,
+        per_write_auto_push: false,
+        skip_role_restore_prompt: false,
+        team_identity_write: false,
+    },
+    run: crate::cmdkit::Handler::Early(run_no_human),
+};

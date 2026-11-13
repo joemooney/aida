@@ -602,13 +602,14 @@ mod tests {
         }
         commit(store.path());
         let out = TempDir::new().unwrap();
-        let cli = crate::command_registry::try_parse_from([
-            std::ffi::OsString::from("aida"),
-            "regen".into(),
-            "corpus".into(),
-            out.path().as_os_str().to_owned(),
-        ])
-        .unwrap();
+        let cli = crate::TEST_CLI
+            .try_parse_from([
+                std::ffi::OsString::from("aida"),
+                "regen".into(),
+                "corpus".into(),
+                out.path().as_os_str().to_owned(),
+            ])
+            .unwrap();
         crate::store_sync::run_on_distributed_store(&cli.command, store.path(), None).unwrap();
         let manifest: serde_json::Value =
             serde_json::from_slice(&std::fs::read(out.path().join("manifest.json")).unwrap())
@@ -651,14 +652,9 @@ mod tests {
     #[test]
     fn corpus_cli_parses_override() {
         use clap::Parser;
-        let cli = crate::command_registry::try_parse_from([
-            "aida",
-            "regen",
-            "corpus",
-            "output",
-            "--allow-dirty",
-        ])
-        .unwrap();
+        let cli = crate::TEST_CLI
+            .try_parse_from(["aida", "regen", "corpus", "output", "--allow-dirty"])
+            .unwrap();
         assert!(matches!(
             cli.command.registered::<crate::regen::RegenArgs>(),
             crate::regen::RegenArgs {
@@ -691,7 +687,7 @@ mod tests {
             if let Some(family) = family {
                 args.extend(["--model-family", family]);
             }
-            let parsed = crate::command_registry::try_parse_from(args).unwrap();
+            let parsed = crate::TEST_CLI.try_parse_from(args).unwrap();
             match parsed.command.registered::<crate::regen::RegenArgs>() {
                 crate::regen::RegenArgs {
                     inner: RegenCommand::Score { model_family, .. },
@@ -715,13 +711,12 @@ pub(crate) struct RegenArgs {
 
 fn run_regen(
     matches: &clap::ArgMatches,
-    ctx: &crate::command_registry::DispatchCtx,
-) -> anyhow::Result<crate::command_registry::Flow> {
-    use crate::*;
+    ctx: &crate::cmdkit::DispatchCtx,
+) -> anyhow::Result<crate::cmdkit::Flow> {
     let args = <RegenArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
     match &ctx.store {
-        None => Ok(crate::command_registry::Flow::Continue),
-        Some(crate::command_registry::StoreCtx::Distributed {
+        None => Ok(crate::cmdkit::Flow::Continue),
+        Some(crate::cmdkit::StoreCtx::Distributed {
             store_path,
             project_root_hint,
         }) => {
@@ -729,9 +724,9 @@ fn run_regen(
             // Immutable corpus reads bypass cache/dispenser setup.
             // trace:TASK-1729 | ai:codex
             let _ = project_root_hint;
-            crate::command_registry::returned(self::handle_command(store_path, &args.inner))
+            crate::cmdkit::returned(self::handle_command(store_path, &args.inner))
         }
-        Some(crate::command_registry::StoreCtx::Git {
+        Some(crate::cmdkit::StoreCtx::Git {
             store_path,
             backend,
         }) => {
@@ -740,7 +735,7 @@ fn run_regen(
             let _ = (store_path, backend, &args);
             crate::git_backend_cmd::exit_unsupported_on_git_backend()
         }
-        Some(crate::command_registry::StoreCtx::Legacy {
+        Some(crate::cmdkit::StoreCtx::Legacy {
             storage,
             requirements_path,
         }) => {
@@ -753,22 +748,21 @@ fn run_regen(
                 );
                 }
             }
-            Ok(crate::command_registry::Flow::Continue)
+            Ok(crate::cmdkit::Flow::Continue)
         }
     }
 }
 
 // trace:STORY-1728 | ai:claude
-pub(crate) static REGEN: crate::command_registry::CommandReg =
-    crate::command_registry::CommandReg {
-        name: "regen",
-        help_after: "schema",
-        command: <RegenArgs as clap::CommandFactory>::command,
-        policy: |_| crate::command_registry::CmdPolicy {
-            stakeholder: crate::stakeholder_role::StakeholderAction::Write,
-            per_write_auto_push: false,
-            skip_role_restore_prompt: false,
-            team_identity_write: false,
-        },
-        run: crate::command_registry::Handler::Store(run_regen),
-    };
+pub(crate) static REGEN: crate::cmdkit::CommandReg = crate::cmdkit::CommandReg {
+    name: "regen",
+    help_after: "schema",
+    command: <RegenArgs as clap::CommandFactory>::command,
+    policy: |_| crate::cmdkit::CmdPolicy {
+        stakeholder: crate::stakeholder_role::StakeholderAction::Write,
+        per_write_auto_push: false,
+        skip_role_restore_prompt: false,
+        team_identity_write: false,
+    },
+    run: crate::cmdkit::Handler::Store(run_regen),
+};

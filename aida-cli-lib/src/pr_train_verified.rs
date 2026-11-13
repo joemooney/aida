@@ -6,6 +6,8 @@ use crate::forge::{ChangeRef, Forge, MergeMethod, MergeOptions};
 use crate::gate::{approval, ledger, merge_hold_core as corpus, review_verdict as rv};
 use serde_json::{json, Value};
 
+const MAX_EVIDENCE_BYTES: u64 = 16 * 1024 * 1024;
+
 const PATCH_VERSION: u32 = 1; // binary/full-index diff + git patch-id --verbatim
 
 type Bodies = Vec<(String, Value)>;
@@ -181,6 +183,14 @@ fn verified<'a>(
     event.head = Some(train.tip.clone());
     event.base_ref = Some(live.base.clone());
     event.base_tip = Some(train.base.clone());
+    validate_ledger(&store, &format!("PR-{}", change.id))?;
+    let path = ledger::store::ledger_file(&store, ledger::ChangeKey::pr(change.id));
+    let existing = match std::fs::metadata(path) {
+        Ok(meta) => meta.len(),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => 0,
+        Err(e) => return Err(e.into()),
+    };
+    ensure_budget(existing + serde_json::to_vec(&event)?.len() as u64 + 1024)?;
     ledger::record_event(&store, event).context("persisting train coverage audit")?;
     Ok(VerifiedTrainMerge {
         root,
@@ -267,13 +277,22 @@ fn collect(
     // trace:STORY-2401 | ai:codex
     let ci_key =
         crate::ci_digest::CiEvidenceKey::read(&live.project_root, &train.tip, live.forge.kind())?;
-    let checks = live.forge.commit_checks(&ci_key.head_sha)?;
     let names: Vec<&str> = required.iter().map(String::as_str).collect();
-    anyhow::ensure!(
-        checks.sha == train.tip
-            && crate::forge::judge_commit_checks(&checks, &names) == crate::forge::CommitCi::Green,
-        "train exact-tip required CI is not green"
-    );
+    // Hold release can re-run a required context even after the PR-level
+    // wait passed. Every proof refresh must settle the exact commit too.
+    // trace:BUG-2528 | ai:codex
+    let clock = ExactTipCiClock::default();
+    wait_exact_tip_ci(
+        &ci_key.head_sha,
+        &names,
+        180,
+        || {
+            live.dispatch_check()?;
+            live.forge.commit_checks(&ci_key.head_sha)
+        },
+        || clock.elapsed(),
+        || clock.sleep(),
+    )?;
     let mut sources = Vec::new();
     let mut mapped = Vec::new();
     // trace:BUG-2438 | ai:claude
@@ -373,7 +392,7 @@ fn collect(
         let effective =
             rv::effective_recordings_for_sha(raw_bodies.iter().map(String::as_str), &fresh.head)
                 .map_err(anyhow::Error::msg)?;
-        let mut originals = Vec::new();
+        let mut originals: Bodies = Vec::new();
         let mut superseded_here = Vec::new();
         for (key, record, verdict) in verdicts {
             if verdict.is_closed() {
@@ -399,7 +418,7 @@ fn collect(
             if is_superseded {
                 // Covered by this car's current-head verdict, so the train's
                 // own exact-tip corpus gate must not re-weigh it either.
-                superseded_here.push(json!({"key": key, "record": record}));
+                superseded_here.push((key.clone(), record.clone()));
                 if !superseded.contains(&(key.clone(), record.clone())) {
                     superseded.push((key.clone(), record.clone()));
                 }
@@ -423,8 +442,7 @@ fn collect(
                 .is_none(),
                 "train original review authority refused"
             );
-            let reference = ledger::project::newest_verdict_event(&live.project_root, key);
-            originals.push(json!({"key": key, "record": record, "ledger_reference": reference}));
+            originals.push((key.clone(), record.clone()));
             if !mapped.contains(&(key.clone(), record.clone())) {
                 mapped.push((key.clone(), record.clone()));
             }
@@ -433,7 +451,7 @@ fn collect(
             !originals.is_empty(),
             "train car has no original authorized approval"
         );
-        sources.push(json!({"pr": fresh.pr, "head": fresh.head, "branch": source.head_ref, "specs": ids, "originals": originals, "superseded": superseded_here, "metadata":metadata, "policy_specs":policy_specs}));
+        sources.push(json!({"pr": fresh.pr, "head": fresh.head, "branch": source.head_ref, "specs": ids, "originals": original_references(&live.project_root, &originals)?, "superseded": compact_bodies(&superseded_here)?, "metadata":metadata, "policy_specs":policy_specs}));
         all_specs.extend(ids);
     }
     all_specs.sort();
@@ -481,9 +499,214 @@ fn collect(
         json!({"v": PATCH_VERSION, "repository": repository, "origin": origin,
         "change": change.id, "branch": change.branch, "base_ref": live.base,
         "base_tip": train.base, "tip": train.tip, "ci_key": ci_key, "cars": cars, "sources": sources,
-        "specs": all_specs, "bound_source_event": bound}),
+        "specs": all_specs, "bound_source_event": bound.as_ref().map(compact_event).transpose()?}),
         mapped,
     ))
+}
+
+// trace:BUG-2538 | ai:codex
+// Audit hashes bind the exact live inputs without copying growing review histories.
+// Full bodies remain invocation-local and still pass all ordinary authority checks.
+fn digest(value: &impl serde::Serialize) -> Result<String> {
+    use sha2::{Digest, Sha256};
+    Ok(format!("{:x}", Sha256::digest(serde_json::to_vec(value)?)))
+}
+
+fn compact_event(event: &ledger::GateEvent) -> Result<Value> {
+    Ok(json!({"change": event.change, "seq": event.seq, "sha256": digest(event)?}))
+}
+
+fn compact_bodies(bodies: &Bodies) -> Result<Value> {
+    use sha2::{Digest, Sha256};
+    let mut keys = std::collections::BTreeMap::<&str, (Sha256, usize)>::new();
+    for (key, record) in bodies {
+        let (hash, count) = keys.entry(key).or_default();
+        // Fixed-size framed hashes preserve order and multiplicity per key.
+        hash.update(digest(record)?.as_bytes());
+        *count += 1;
+    }
+    Ok(Value::Array(keys.into_iter().map(|(key, (hash, count))|
+        json!({"key": key, "count": count, "sha256": format!("{:x}", hash.finalize())})
+    ).collect()))
+}
+
+// Pin the answering event as well as the body set: a new ledger recording
+// must invalidate a sealed context even when its review body is identical.
+fn original_references(root: &Path, bodies: &Bodies) -> Result<Value> {
+    let mut references = compact_bodies(bodies)?;
+    for entry in references
+        .as_array_mut()
+        .expect("body summaries are an array")
+    {
+        let key = entry["key"]
+            .as_str()
+            .context("review summary key missing")?;
+        let reference = ledger::project::newest_verdict_event(root, key)
+            .as_ref()
+            .map(compact_event)
+            .transpose()?;
+        entry["ledger_reference"] = serde_json::to_value(reference)?;
+    }
+    Ok(references)
+}
+
+// trace:BUG-2538 | ai:codex
+#[derive(Debug)]
+pub(super) struct EvidenceTooLarge;
+
+impl std::fmt::Display for EvidenceTooLarge {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("train evidence would exceed the 16 MiB cap; ship this rider separately")
+    }
+}
+impl std::error::Error for EvidenceTooLarge {}
+
+fn ensure_budget(bytes: u64) -> Result<()> {
+    if bytes > MAX_EVIDENCE_BYTES {
+        return Err(EvidenceTooLarge.into());
+    }
+    Ok(())
+}
+
+/// Conservative byte budget before branch push, PR creation or CI. Include
+/// possible M1 unbound imports, proof metadata and a MiB for event envelopes,
+/// the bounded source-event reference and subsequent gate events. Recheck the
+/// actual ledger plus serialized event immediately before writing the audit.
+pub(super) fn preflight(live: &LiveTrainForge<'_>, train: &Built, branch: &str) -> Result<()> {
+    if train.cars.is_empty() {
+        return Ok(());
+    }
+    let mut bytes = 1024 * 1024;
+    bytes += serde_json::to_vec(&verify_structure(&live.main_worktree, train)?)?.len() as u64;
+    bytes += serde_json::to_vec(&(
+        branch,
+        &live.base,
+        &live.project_root,
+        &train.tip,
+        &train.base,
+    ))?
+    .len() as u64;
+    let mut imported = std::collections::BTreeSet::new();
+    let store = ledger::store_root(&live.project_root)?;
+    for car in &train.cars {
+        let source = live
+            .forge
+            .change_metadata(car.member.pr, &mut crate::network_retry::NoopSink)?;
+        let ids = resolved_member_spec_ids(
+            &live.project_root,
+            &source.head_ref,
+            &source.title,
+            &car.member.subject,
+            &car.member.body,
+        )?;
+        let ids = aliases(&live.project_root, &ids)?;
+        let bodies = read_bodies(&live.project_root, car.member.pr, &ids, &car.member.head)?;
+        // Budget both possible summaries using the full key set and include
+        // the source envelope (not just metadata nested inside it).
+        let references = original_references(&live.project_root, &bodies)?;
+        let metadata = json!({"state":format!("{:?}",source.state), "title":source.title,
+            "author":source.author,"base":source.base_ref,"branch":source.head_ref,"head":source.head_sha,
+            "draft":source.is_draft,"cross_repository":source.is_cross_repository,"repository":source.head_repo});
+        let policy = crate::pr_cmd::ship_gate_spec_records_for_ids(&live.project_root, ids.clone());
+        bytes += serde_json::to_vec(&json!({"pr":car.member.pr, "head":car.member.head,
+            "branch":source.head_ref, "specs":ids, "metadata":metadata, "policy_specs":policy,
+            "originals":references, "superseded":references}))?
+        .len() as u64;
+        // The top-level spec union is no larger than the per-car alias sets.
+        bytes += serde_json::to_vec(&ids)?.len() as u64;
+        // M1 only binds explicit trailing subject specs; aliases overestimate
+        // that set safely. Count every unbound line, including already-bound
+        // ones that M1 will skip. No rider ledger history is copied by M1.
+        for id in ids {
+            if imported.insert(id.clone()) {
+                let path = ledger::ledger_dir(&store)
+                    .join("by-spec")
+                    .join(format!("{id}.jsonl"));
+                match std::fs::metadata(path) {
+                    Ok(meta) => bytes += meta.len() * 2,
+                    Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+                    Err(e) => return Err(e.into()),
+                }
+            }
+        }
+        ensure_budget(bytes)?;
+    }
+    ensure_budget(bytes)
+}
+
+// Keep integration tests on the real final-gate path without wall-clock polling.
+// The same polling loop and deadline apply; unit tests advance logical time.
+// trace:BUG-2528 | ai:codex
+struct ExactTipCiClock {
+    #[cfg(not(test))]
+    started: std::time::Instant,
+    #[cfg(test)]
+    seconds: std::cell::Cell<u64>,
+}
+
+impl Default for ExactTipCiClock {
+    fn default() -> Self {
+        Self {
+            #[cfg(not(test))]
+            started: std::time::Instant::now(),
+            #[cfg(test)]
+            seconds: std::cell::Cell::new(0),
+        }
+    }
+}
+
+impl ExactTipCiClock {
+    fn elapsed(&self) -> u64 {
+        #[cfg(not(test))]
+        {
+            self.started.elapsed().as_secs()
+        }
+        #[cfg(test)]
+        {
+            self.seconds.get()
+        }
+    }
+
+    fn sleep(&self) {
+        #[cfg(not(test))]
+        std::thread::sleep(std::time::Duration::from_secs(TRAIN_CI_POLL_SECS));
+        #[cfg(test)]
+        self.seconds.set(self.seconds.get() + TRAIN_CI_POLL_SECS);
+    }
+}
+
+/// Only an in-flight context may defer the final decision. Never substitute
+/// branch CI, an earlier green snapshot, or an unreadable observation.
+// trace:BUG-2528 | ai:codex
+fn wait_exact_tip_ci(
+    tip: &str,
+    required: &[&str],
+    limit_secs: u64,
+    mut snapshot: impl FnMut() -> Result<crate::forge::CommitChecks>,
+    mut elapsed: impl FnMut() -> u64,
+    mut sleep: impl FnMut(),
+) -> Result<()> {
+    loop {
+        let checks = snapshot()?;
+        anyhow::ensure!(checks.sha == tip, "train exact-tip CI SHA changed");
+        match crate::forge::judge_commit_checks(&checks, required) {
+            crate::forge::CommitCi::Green => return Ok(()),
+            crate::forge::CommitCi::Pending(names) => {
+                let seconds = elapsed();
+                anyhow::ensure!(
+                    seconds < limit_secs,
+                    "train exact-tip required CI still pending after {limit_secs}s: {}",
+                    names.join(", ")
+                );
+                println!(
+                    "  train exact-tip CI pending ({seconds}/{limit_secs}s): {}",
+                    names.join(", ")
+                );
+                sleep();
+            }
+            state => anyhow::bail!("train exact-tip required CI is not green: {state:?}"),
+        }
+    }
 }
 
 /// Verify the existing objects, without rebuilding timestamped commits. Exact
@@ -686,14 +909,17 @@ fn validate_ledger(root: &Path, key: &str) -> Result<()> {
         };
         let meta = file.metadata()?;
         anyhow::ensure!(
-            meta.is_file() && meta.nlink() == 1 && meta.len() <= 16 * 1024 * 1024,
+            meta.is_file() && meta.nlink() == 1 && meta.len() <= MAX_EVIDENCE_BYTES,
             "invalid train evidence file"
         );
         let mut body = String::new();
         file.by_ref()
-            .take(16 * 1024 * 1024 + 1)
+            .take(MAX_EVIDENCE_BYTES + 1)
             .read_to_string(&mut body)?;
-        anyhow::ensure!(body.len() <= 16 * 1024 * 1024, "train evidence too large");
+        anyhow::ensure!(
+            body.len() as u64 <= MAX_EVIDENCE_BYTES,
+            "train evidence too large"
+        );
         Ok(Some(body))
     }
     let dir = ledger::ledger_dir(root);

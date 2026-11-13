@@ -23,7 +23,7 @@ use std::process::{Command, Stdio};
 use std::time::{Duration, Instant};
 
 /// The binaries that make up one live build, promoted and rolled back as a pair.
-pub(crate) const LIVE_BINARIES: [&str; 2] = ["aida", "aida-server"];
+pub(crate) const LIVE_BINARIES: [&str; 3] = ["aida", "aida-server", "aida-porcelain"];
 
 /// Cargo profile `aida dev build` compiles (same as `make build-fast`).
 const PROFILE: &str = "agent";
@@ -405,6 +405,9 @@ pub(crate) trait BuildSteps {
     /// Run `aida` / `server` (in `repo`); `Err` names what failed. When
     /// promoting these are the staged copies that will be renamed live.
     fn smoke(&mut self, repo: &Path, aida: &Path, server: &Path) -> Result<()>;
+    fn smoke_porcelain(&mut self, _binary: &Path) -> Result<()> {
+        Ok(())
+    }
     /// The `sha ...` token of `aida --version` (may end in `+dirty`).
     // trace:STORY-1646 | ai:claude
     fn version_sha(&mut self, aida: &Path) -> Option<String>;
@@ -563,6 +566,9 @@ pub(crate) fn run_dev_build(
                     &layout.built("aida-server"),
                 )
                 .map_err(smoke_failed)?;
+            steps
+                .smoke_porcelain(&layout.built("aida-porcelain"))
+                .map_err(smoke_failed)?;
             writeln!(out, "Smoke test passed: {}", layout.built("aida").display())?;
             match reason {
                 BuildOnlyReason::Worktree => writeln!(
@@ -591,11 +597,13 @@ pub(crate) fn run_dev_build(
                 writeln!(out, "note: {note}")?;
             }
             let incoming = stage_incoming(layout)?;
-            let smoked = steps.smoke(
-                &layout.repo,
-                &incoming.join("aida"),
-                &incoming.join("aida-server"),
-            );
+            let smoked = steps
+                .smoke(
+                    &layout.repo,
+                    &incoming.join("aida"),
+                    &incoming.join("aida-server"),
+                )
+                .and_then(|_| steps.smoke_porcelain(&incoming.join("aida-porcelain")));
             if let Err(e) = smoked {
                 let _ = std::fs::remove_dir_all(&incoming);
                 return Err(smoke_failed(e));
@@ -1071,6 +1079,7 @@ pub(crate) fn recover_live_dir_with_steps(
 ) -> Result<Vec<String>> {
     let live = &layout.live_dir;
     let mut notes = Vec::new();
+    finish_generation_swap(layout)?;
     let prev_old = live.join(".prev-old");
     if prev_old.exists() {
         if layout.prev_dir().exists() {
@@ -1118,9 +1127,7 @@ pub(crate) fn recover_live_dir_with_steps(
         // them (forward when swapped, back otherwise) only ever moves files
         // out of `.rollback/` and is a no-op once done.
         let marked = swap.join(ROLLBACK_MARKER).exists();
-        let swapped = LIVE_BINARIES
-            .iter()
-            .any(|n| !layout.prev(n).exists() || (marked && !swap.join(n).is_file()));
+        let swapped = !layout.prev("aida").exists() || (marked && !swap.join("aida").is_file());
         settle_records(layout, &swap, swapped, &mut |_| Ok(()))?;
         for name in LIVE_BINARIES {
             let parked = swap.join(name);
@@ -1165,7 +1172,106 @@ pub(crate) fn stage_incoming(layout: &DevLayout) -> Result<PathBuf> {
             )
         })?;
     }
+    std::os::unix::fs::symlink("aida-porcelain", incoming.join("aida-flow"))?;
+    std::fs::write(
+        incoming.join(INVENTORY),
+        serde_json::to_vec(GENERATION_NAMES)?,
+    )?;
     Ok(incoming)
+}
+
+// trace:STORY-2704 | ai:codex
+const INVENTORY: &str = ".inventory.json";
+const GENERATION_NAMES: &[&str] = &["aida", "aida-server", "aida-porcelain", "aida-flow"];
+
+fn generation_inventory(dir: &Path) -> Result<Vec<String>> {
+    let path = dir.join(INVENTORY);
+    if path.exists() {
+        let names: Vec<String> = serde_json::from_slice(&std::fs::read(path)?)?;
+        anyhow::ensure!(
+            names.iter().all(|n| GENERATION_NAMES.contains(&n.as_str())),
+            "invalid generation inventory"
+        );
+        anyhow::ensure!(
+            names.iter().all(|n| dir.join(n).symlink_metadata().is_ok()),
+            "generation inventory member missing"
+        );
+        return Ok(names);
+    }
+    // Legacy generations predate the inventory. Capture their actual members,
+    // including lexical aliases, rather than borrowing the current binary set.
+    Ok(GENERATION_NAMES
+        .iter()
+        .filter(|n| dir.join(n).symlink_metadata().is_ok())
+        .map(|n| (*n).to_string())
+        .collect())
+}
+
+fn copy_member(from: &Path, to: &Path) -> Result<()> {
+    if let Ok(target) = std::fs::read_link(from) {
+        std::os::unix::fs::symlink(target, to)?;
+    } else {
+        link_or_copy(from, to)?;
+    }
+    Ok(())
+}
+
+/// A durable pair of complete generation snapshots makes recovery replayable,
+/// including removals and aliases. Sources remain until every destination settles.
+fn finish_generation_swap(layout: &DevLayout) -> Result<()> {
+    let swap = layout.live_dir.join(".generation-swap");
+    if !swap.exists() {
+        return Ok(());
+    }
+    if swap.join("ready").exists() {
+        for (source, destination) in [
+            (swap.join("prev"), layout.live_dir.clone()),
+            (swap.join("live"), layout.prev_dir()),
+        ] {
+            std::fs::create_dir_all(&destination)?;
+            let names = generation_inventory(&source)?;
+            for name in GENERATION_NAMES
+                .iter()
+                .copied()
+                .chain([PROMOTED_FILE, INVENTORY])
+            {
+                let to = destination.join(name);
+                if source.join(name).symlink_metadata().is_ok() {
+                    let tmp = destination.join(format!(".restore-{name}"));
+                    let _ = std::fs::remove_file(&tmp);
+                    copy_member(&source.join(name), &tmp)?;
+                    std::fs::rename(tmp, to)?;
+                } else if to.symlink_metadata().is_ok() {
+                    std::fs::remove_file(to)?;
+                }
+            }
+            anyhow::ensure!(
+                names
+                    .iter()
+                    .all(|n| destination.join(n).symlink_metadata().is_ok()),
+                "incomplete generation restore"
+            );
+        }
+    }
+    // Remove the replay marker before deleting either immutable snapshot.
+    let ready = swap.join("ready");
+    if ready.exists() {
+        std::fs::remove_file(ready)?;
+    }
+    std::fs::remove_dir_all(swap)?;
+    Ok(())
+}
+
+fn snapshot_generation(source: &Path, destination: &Path) -> Result<()> {
+    std::fs::create_dir_all(destination)?;
+    let names = generation_inventory(source)?;
+    for name in names.iter().map(String::as_str).chain([PROMOTED_FILE]) {
+        if source.join(name).symlink_metadata().is_ok() {
+            copy_member(&source.join(name), &destination.join(name))?;
+        }
+    }
+    std::fs::write(destination.join(INVENTORY), serde_json::to_vec(&names)?)?;
+    Ok(())
 }
 
 /// Marker `rollback` writes into `.rollback/` once the live pair and both
@@ -1246,16 +1352,7 @@ pub(crate) fn commit_staged(layout: &DevLayout, meta: &PromotionMeta) -> Result<
     if LIVE_BINARIES.iter().any(|n| layout.live(n).is_file()) {
         let prev_new = live.join(".prev-new");
         fresh_dir(&prev_new)?;
-        for name in LIVE_BINARIES {
-            if layout.live(name).is_file() {
-                link_or_copy(&layout.live(name), &prev_new.join(name))?;
-            }
-        }
-        // The outgoing pair's record goes with it, so rollback can swap it back.
-        let live_meta = live.join(PROMOTED_FILE);
-        if live_meta.is_file() {
-            link_or_copy(&live_meta, &prev_new.join(PROMOTED_FILE))?;
-        }
+        snapshot_generation(live, &prev_new)?;
         let prev_old = live.join(".prev-old");
         if prev_old.exists() {
             std::fs::remove_dir_all(&prev_old)?;
@@ -1270,6 +1367,8 @@ pub(crate) fn commit_staged(layout: &DevLayout, meta: &PromotionMeta) -> Result<
         std::fs::rename(incoming.join(name), layout.live(name))
             .with_context(|| format!("promoting {}", layout.live(name).display()))?;
     }
+    std::fs::rename(incoming.join("aida-flow"), live.join("aida-flow"))?;
+    std::fs::rename(incoming.join(INVENTORY), live.join(INVENTORY))?;
     std::fs::rename(incoming.join(PROMOTED_FILE), live.join(PROMOTED_FILE))
         .with_context(|| format!("writing {}", live.join(PROMOTED_FILE).display()))?;
     let _ = std::fs::remove_dir(&incoming);
@@ -1329,59 +1428,68 @@ pub(crate) fn rollback_with_steps(
 ) -> Result<Vec<String>> {
     let _lock = lock_live_dir(layout)?;
     let notes = recover_live_dir(layout)?;
-    for name in LIVE_BINARIES {
-        if !layout.prev(name).is_file() {
-            bail!(
-                "no previous build to roll back to ({} does not exist); nothing was changed",
-                layout.prev(name).display()
-            );
-        }
-        if !layout.live(name).is_file() {
-            bail!(
-                "no live build to roll back from ({} does not exist); nothing was changed",
-                layout.live(name).display()
-            );
-        }
+    let live_names = generation_inventory(&layout.live_dir)?;
+    let prev_names = generation_inventory(&layout.prev_dir())?;
+    for required in ["aida", "aida-server"] {
+        anyhow::ensure!(
+            live_names.iter().any(|n| n == required) && prev_names.iter().any(|n| n == required),
+            "no previous build or complete live build; nothing was changed"
+        );
     }
-    // trace:TASK-2272 | ai:claude
     let rolled_away = read_promotion_meta(&layout.live_dir).map(|m| m.sha);
-    // Park the live pair and both records, mark parking done, then per
-    // binary prev -> live and the parked copy -> prev, then settle the
-    // records. [`recover_live_dir`] finishes or undoes a crash at any step.
-    let swap = layout.live_dir.join(".rollback");
-    fresh_dir(&swap)?;
-    step("fresh")?;
-    for name in LIVE_BINARIES {
-        link_or_copy(&layout.live(name), &swap.join(name))?;
-        step("parked-binary")?;
+    // Retain the existing interruption fixtures for identical legacy pairs.
+    // Membership changes and all inventoried generations use complete snapshots.
+    if live_names != prev_names
+        || live_names.iter().any(|n| n == "aida-flow")
+        || layout.live_dir.join(INVENTORY).exists()
+        || layout.prev_dir().join(INVENTORY).exists()
+    {
+        let swap = layout.live_dir.join(".generation-swap");
+        snapshot_generation(&layout.live_dir, &swap.join("live"))?;
+        snapshot_generation(&layout.prev_dir(), &swap.join("prev"))?;
+        std::fs::write(swap.join("ready"), b"")?;
+        step("generation-ready")?;
+        finish_generation_swap(layout)?;
+    } else {
+        let rollback_names: Vec<_> = live_names.iter().map(String::as_str).collect();
+        // Park the live pair and both records, mark parking done, then per
+        // binary prev -> live and the parked copy -> prev, then settle the
+        // records. [`recover_live_dir`] finishes or undoes a crash at any step.
+        let swap = layout.live_dir.join(".rollback");
+        fresh_dir(&swap)?;
+        step("fresh")?;
+        for &name in &rollback_names {
+            link_or_copy(&layout.live(name), &swap.join(name))?;
+            step("parked-binary")?;
+        }
+        // trace:STORY-1646 | ai:claude
+        // trace:BUG-1959 | ai:claude
+        move_record(
+            &layout.live_dir.join(PROMOTED_FILE),
+            &swap.join(PARKED_LIVE_RECORD),
+        )?;
+        step("parked-live-record")?;
+        move_record(
+            &layout.prev_dir().join(PROMOTED_FILE),
+            &swap.join(PARKED_PREV_RECORD),
+        )?;
+        step("parked-prev-record")?;
+        // Parking is complete; from here a parked binary missing from `.rollback/`
+        // means it was swapped into `prev/` (see [`recover_live_dir`]).
+        std::fs::write(swap.join(ROLLBACK_MARKER), b"")?;
+        step("marked")?;
+        for &name in &rollback_names {
+            std::fs::rename(layout.prev(name), layout.live(name))
+                .with_context(|| format!("restoring {}", layout.live(name).display()))?;
+            step("restored-binary")?;
+            std::fs::rename(swap.join(name), layout.prev(name))?;
+            step("swapped-binary")?;
+        }
+        settle_records(layout, &swap, true, step)?;
+        std::fs::remove_file(swap.join(ROLLBACK_MARKER))?;
+        step("unmarked")?;
+        let _ = std::fs::remove_dir(&swap);
     }
-    // trace:STORY-1646 | ai:claude
-    // trace:BUG-1959 | ai:claude
-    move_record(
-        &layout.live_dir.join(PROMOTED_FILE),
-        &swap.join(PARKED_LIVE_RECORD),
-    )?;
-    step("parked-live-record")?;
-    move_record(
-        &layout.prev_dir().join(PROMOTED_FILE),
-        &swap.join(PARKED_PREV_RECORD),
-    )?;
-    step("parked-prev-record")?;
-    // Parking is complete; from here a parked binary missing from `.rollback/`
-    // means it was swapped into `prev/` (see [`recover_live_dir`]).
-    std::fs::write(swap.join(ROLLBACK_MARKER), b"")?;
-    step("marked")?;
-    for name in LIVE_BINARIES {
-        std::fs::rename(layout.prev(name), layout.live(name))
-            .with_context(|| format!("restoring {}", layout.live(name).display()))?;
-        step("restored-binary")?;
-        std::fs::rename(swap.join(name), layout.prev(name))?;
-        step("swapped-binary")?;
-    }
-    settle_records(layout, &swap, true, step)?;
-    std::fs::remove_file(swap.join(ROLLBACK_MARKER))?;
-    step("unmarked")?;
-    let _ = std::fs::remove_dir(&swap);
     let mut notes = notes;
     // The scheduled autopromote must not rebuild what was just rolled away.
     // trace:TASK-2272 | ai:claude
@@ -1495,7 +1603,21 @@ pub(crate) fn install_links(
     }
     let plans: Vec<(&str, LinkAction)> = LIVE_BINARIES
         .iter()
-        .map(|n| (*n, plan_link(&layout.link(n), &layout.live(n))))
+        .copied()
+        .chain(std::iter::once("aida-flow"))
+        .map(|n| {
+            (
+                n,
+                plan_link(
+                    &layout.link(n),
+                    &if n == "aida-flow" {
+                        PathBuf::from("aida-porcelain")
+                    } else {
+                        layout.live(n)
+                    },
+                ),
+            )
+        })
         .collect();
     for (name, action) in &plans {
         if let LinkAction::Blocked { why } = action {
@@ -1527,7 +1649,11 @@ pub(crate) fn install_links(
         .with_context(|| format!("creating {}", layout.link_dir.display()))?;
     for (name, action) in &plans {
         let link = layout.link(name);
-        let target = layout.live(name);
+        let target = if *name == "aida-flow" {
+            PathBuf::from("aida-porcelain")
+        } else {
+            layout.live(name)
+        };
         match action {
             LinkAction::AlreadyCorrect => {
                 writeln!(
@@ -1725,6 +1851,30 @@ pub(crate) fn smoke_command(bin: &Path) -> Command {
 pub(crate) struct RealSteps;
 
 impl BuildSteps for RealSteps {
+    fn smoke_porcelain(&mut self, binary: &Path) -> Result<()> {
+        smoke_check(
+            "aida-porcelain --version",
+            smoke_command(binary).arg("--version"),
+            Duration::from_secs(15),
+            |o| o.starts_with("aida-porcelain "),
+        )?;
+        smoke_check(
+            "aida-porcelain flow --help",
+            smoke_command(binary).args(["flow", "--help"]),
+            Duration::from_secs(15),
+            |o| o.contains("report"),
+        )?;
+        let mut alias = smoke_command(binary);
+        use std::os::unix::process::CommandExt;
+        alias.arg0("aida-flow").args(["report", "--help"]);
+        smoke_check(
+            "aida-flow report --help",
+            &mut alias,
+            Duration::from_secs(15),
+            |o| o.contains("--since"),
+        )
+    }
+
     fn probe(&mut self, repo: &Path) -> Result<CheckoutState> {
         probe_checkout(repo)
     }

@@ -44,6 +44,7 @@
 #     while an agent is mid-edit, so that gate belongs after the push, not
 #     before it. trace:TASK-1567
 [tiers]
+"Terminal glyph padding ratchet" = "fast" # trace:TASK-3779 | ai:codex
 # trace:STORY-2672 | ai:codex
 "Self-hosted routing security fixtures" = "fast"
 # trace:STORY-2606 | ai:codex
@@ -66,6 +67,7 @@
 "Grant expiry hook protocol" = "fast"
 "Build all packages" = "full"
 "Build aida binary for lib unit tests" = "full"
+"Build porcelain binary for CLI parity tests" = "full"
 # Check-only, like the TUI seam guard. trace:TASK-1601 | ai:codex
 "Check aida-cli without default features" = "fast"
 "TUI seam guard" = "fast"

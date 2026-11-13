@@ -6,7 +6,7 @@
 use super::*;
 
 fn parse(args: &[&str]) -> std::result::Result<AgentCommand, clap::Error> {
-    crate::command_registry::try_parse_from(args).map(|cli| {
+    crate::TEST_CLI.try_parse_from(args).map(|cli| {
         let AgentArgs { inner } = cli.command.registered::<AgentArgs>();
         inner
     })
@@ -139,10 +139,11 @@ fn story_2254_bg_positional_and_flag_spec() {
 // trace:STORY-b6b1278890774ef993d2ebc327862470-277.ac0b1daf | ai:claude
 #[test]
 fn story_2254_bg_conflicting_spec_forms_refuse() {
-    let cli = crate::command_registry::try_parse_from([
-        "aida", "agent", "new", "codex", "--bg", "--spec", "TASK-1", "TASK-2",
-    ])
-    .unwrap();
+    let cli = crate::TEST_CLI
+        .try_parse_from([
+            "aida", "agent", "new", "codex", "--bg", "--spec", "TASK-1", "TASK-2",
+        ])
+        .unwrap();
     let AgentArgs { inner } = cli.command.registered::<AgentArgs>();
     let err = handle_agent_command(&inner).unwrap_err();
     assert!(format!("{err:#}").contains("conflicting specs"), "{err:#}");
@@ -176,7 +177,8 @@ fn story_2254_bg_rejects_unsupported_requests_before_setup() {
 // trace:STORY-2254 | ai:claude
 // trace:STORY-b6b1278890774ef993d2ebc327862470-277.acf38ac0 | ai:claude
 #[test]
-fn story_2254_bg_permission_override_refused() {
+// trace:TASK-3736 | ai:codex
+fn task_3736_story_2254_bg_permission_override_refused() {
     let native: Vec<String> = [
         "--sandbox",
         "workspace-write",
@@ -188,6 +190,14 @@ fn story_2254_bg_permission_override_refused() {
     assert!(refuse_posture_overrides(&native).is_ok());
     for bad in [
         vec!["--dangerously-bypass-approvals-and-sandbox"],
+        // trace:TASK-3736 | ai:codex
+        vec!["--profile", "other"],
+        vec!["--profile=other"],
+        vec!["-p", "other"],
+        vec!["-pother"],
+        vec!["-p=other"],
+        vec!["-c", "profile=other"],
+        vec!["--config", "profiles.other.sandbox_mode=read-only"],
         vec!["--yolo"],
         vec!["--full-auto"],
         vec!["--sandbox", "danger-full-access"],

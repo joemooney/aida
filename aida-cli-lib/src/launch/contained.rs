@@ -1679,7 +1679,9 @@ fn codex_argv(
                     "approval",
                     "default_permissions",
                     "shell_environment_policy",
-                    "permissions"
+                    "permissions",
+                    // trace:TASK-3736 | ai:codex
+                    "profile"
                 ]
                 .iter()
                 .any(|prefix| key.starts_with(prefix)),
@@ -1695,6 +1697,14 @@ fn codex_argv(
             i += consumed;
             continue;
         }
+        // Profiles can replace posture through their layered config.
+        // trace:TASK-3736 | ai:codex
+        anyhow::ensure!(
+            !(original[i] == "--profile"
+                || original[i].starts_with("--profile=")
+                || original[i].starts_with("-p")),
+            "contained launch refuses config profile override"
+        );
         // trace:BUG-2495 | ai:codex — approval flags are top-level only in
         // the pinned CLI; exec accepts the equivalent config override.
         let approval = if matches!(original[i].as_str(), "--ask-for-approval" | "-a") {

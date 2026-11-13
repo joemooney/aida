@@ -36,6 +36,11 @@
 //
 // trace:TASK-1177 | ai:claude
 
+use crate::{
+    attributable_live_sessions, forge, inspector_pids, lease_has_durable_owner,
+    lease_owner_unknown, worktree,
+};
+use aida_core::DatabaseBackend;
 use anyhow::Result;
 use colored::Colorize;
 
@@ -43,7 +48,20 @@ use crate::doctor_cmd::{
     branch_content_fully_landed, branch_paths_match_default, classify_agent_worktree,
     AgentWorktreeFacts, AgentWorktreeVerdict,
 };
-use crate::*;
+use crate::{
+    active_worktree_paths, agent_registry, aggregate_session_activity_into_roles, awaiting_you,
+    collect_unshipped_work_items, confirm, current_user_id, detect_distributed_store_from,
+    detect_merged_pr_for_branch_via_forge, extract_referenced_spec_ids_from_commit,
+    extract_spec_ids_from_commit, find_project_root, is_plan_commit_subject, lease_path,
+    lease_recorded_owner, leases, list_leases, load_dispenser, mailbox_store,
+    main_worktree_root_from, process_probe, resolve_default_branch_ref, run,
+    salvage_worktree_patch, session_activity_path, session_manifest, worktree_dirty_entries,
+    worktree_is_active, worktree_is_locked, worktree_pool_global_hooks, PrLookup, SessionLease,
+};
+use aida_core::liveness::{LeaseState, StaleLeaseRecovery};
+use aida_core::{RequirementStatus, Storage};
+use std::collections::HashSet;
+use std::io::IsTerminal;
 
 /// The reap verdict for one session lease. `Reap` carries the reason the pass
 /// judged it finished; `Skip` carries the strongest objection.
@@ -990,7 +1008,7 @@ pub(crate) fn scan_reapable_with(
             has_worktree && worktree_is_active(&lease.worktree_path, &active);
         let owner_gone = crate::leases::lease_owner_gone(lease);
         let process_exited = session_process_exited(
-            lease_state_for(lease, &live, now),
+            leases::lease_state_for(lease, &live, now),
             owner_gone,
             worktree_has_live_process,
         );
@@ -1358,7 +1376,7 @@ fn scan_clone_lease(
 ) -> ReapRow {
     let owner_gone = crate::leases::lease_owner_gone(lease);
     let process_exited = session_process_exited(
-        lease_state_for(lease, live, now),
+        leases::lease_state_for(lease, live, now),
         owner_gone,
         worktree_is_active(&lease.worktree_path, active),
     );

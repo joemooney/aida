@@ -1266,9 +1266,14 @@ pub(crate) struct IdentityArgs {
 
 fn run_identity(
     matches: &clap::ArgMatches,
-    ctx: &crate::command_registry::DispatchCtx,
-) -> anyhow::Result<crate::command_registry::Flow> {
-    use crate::*;
+    ctx: &crate::cmdkit::DispatchCtx,
+) -> anyhow::Result<crate::cmdkit::Flow> {
+    // trace:TASK-3428 | ai:codex
+    use crate::identity_gate;
+    use crate::kernel::find_project_root;
+    use crate::status_awaiting::{
+        handle_identity_link, handle_identity_list, handle_identity_show,
+    };
     let args = <IdentityArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
     match &ctx.store {
         None => {
@@ -1283,21 +1288,22 @@ fn run_identity(
                     .unwrap_or_else(|_| std::env::current_dir().unwrap_or_default());
                 match cmd {
                     crate::cli::IdentityCommand::Check => {
-                        return crate::command_registry::returned(
-                            identity_gate::handle_identity_check(&project_root),
-                        );
+                        return crate::cmdkit::returned(identity_gate::handle_identity_check(
+                            &project_root,
+                        ));
                     }
                     // BUG-1926: `project_root` here is the checkout being pushed
                     // from (possibly the `.aida-store` worktree); the handler resolves
                     // the governing allowlist from the owning project itself.
                     // trace:BUG-1926 | ai:claude
                     crate::cli::IdentityCommand::CheckPush { pushed_remote } => {
-                        return crate::command_registry::returned(
-                            identity_gate::handle_identity_check_push(&project_root, pushed_remote),
-                        );
+                        return crate::cmdkit::returned(identity_gate::handle_identity_check_push(
+                            &project_root,
+                            pushed_remote,
+                        ));
                     }
                     crate::cli::IdentityCommand::InstallHook => {
-                        return crate::command_registry::returned(
+                        return crate::cmdkit::returned(
                             identity_gate::handle_identity_install_hook(&project_root),
                         );
                     }
@@ -1306,12 +1312,10 @@ fn run_identity(
                     | crate::cli::IdentityCommand::Show { .. } => {}
                 }
             }
-            Ok(crate::command_registry::Flow::Continue)
+            Ok(crate::cmdkit::Flow::Continue)
         }
-        Some(crate::command_registry::StoreCtx::Distributed { .. }) => {
-            Ok(crate::command_registry::Flow::Continue)
-        }
-        Some(crate::command_registry::StoreCtx::Git {
+        Some(crate::cmdkit::StoreCtx::Distributed { .. }) => Ok(crate::cmdkit::Flow::Continue),
+        Some(crate::cmdkit::StoreCtx::Git {
             store_path,
             backend,
         }) => {
@@ -1320,7 +1324,7 @@ fn run_identity(
             match &args {
                 // trace:TASK-845 | ai:claude — the shared person-alias registry.
                 IdentityArgs { cmd } => {
-                    return crate::command_registry::returned(match cmd {
+                    return crate::cmdkit::returned(match cmd {
                         IdentityCommand::Link { a, b } => handle_identity_link(store_path, a, b),
                         IdentityCommand::List { json } => handle_identity_list(store_path, *json),
                         IdentityCommand::Show { id, json } => {
@@ -1338,9 +1342,9 @@ fn run_identity(
                     });
                 }
             }
-            Ok(crate::command_registry::Flow::Continue)
+            Ok(crate::cmdkit::Flow::Continue)
         }
-        Some(crate::command_registry::StoreCtx::Legacy {
+        Some(crate::cmdkit::StoreCtx::Legacy {
             storage,
             requirements_path,
         }) => {
@@ -1356,22 +1360,21 @@ fn run_identity(
                 );
                 }
             }
-            Ok(crate::command_registry::Flow::Continue)
+            Ok(crate::cmdkit::Flow::Continue)
         }
     }
 }
 
 // trace:STORY-1728 | ai:claude
-pub(crate) static IDENTITY: crate::command_registry::CommandReg =
-    crate::command_registry::CommandReg {
-        name: "identity",
-        help_after: "team",
-        command: <IdentityArgs as clap::CommandFactory>::command,
-        policy: |_| crate::command_registry::CmdPolicy {
-            stakeholder: crate::stakeholder_role::StakeholderAction::Write,
-            per_write_auto_push: false,
-            skip_role_restore_prompt: false,
-            team_identity_write: false,
-        },
-        run: crate::command_registry::Handler::Store(run_identity),
-    };
+pub(crate) static IDENTITY: crate::cmdkit::CommandReg = crate::cmdkit::CommandReg {
+    name: "identity",
+    help_after: "team",
+    command: <IdentityArgs as clap::CommandFactory>::command,
+    policy: |_| crate::cmdkit::CmdPolicy {
+        stakeholder: crate::stakeholder_role::StakeholderAction::Write,
+        per_write_auto_push: false,
+        skip_role_restore_prompt: false,
+        team_identity_write: false,
+    },
+    run: crate::cmdkit::Handler::Store(run_identity),
+};

@@ -1,7 +1,19 @@
+// trace:TASK-3429 | ai:codex
 //! distributed store detection and attach, store sync and ID allocation config (STORY-1488 slice 1)
 // trace:STORY-1488 | ai:claude
 
-use crate::*;
+use crate::process_retry::RetryEtxtbsy;
+use crate::{
+    aida_exe_path, aida_home_dir, branch_exists_anywhere, config_declares_distributed,
+    config_parse_error_message, config_path_for_project, git_backend_cmd, load_dispenser,
+    maybe_auto_push_store, sha_prefix_match, Command,
+};
+use aida_core::store_locate::StoreOverride;
+use aida_core::DatabaseBackend;
+use aida_core::{RequirementsStore, Storage};
+use anyhow::{Context, Result};
+use colored::Colorize;
+use uuid::Uuid;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum StoreAutoPushMode {
@@ -148,11 +160,11 @@ pub(crate) fn run_on_distributed_store(
     // finish here; the rest fall through to the git-backend dispatcher.
     // trace:STORY-1728 | ai:claude
     let Command::Registered(invocation) = command;
-    let store = crate::command_registry::StoreCtx::Distributed {
+    let store = crate::cmdkit::StoreCtx::Distributed {
         store_path,
         project_root_hint,
     };
-    if invocation.run_store(store, None)? == crate::command_registry::Flow::Return {
+    if invocation.run_store(store, None)? == crate::cmdkit::Flow::Return {
         return Ok(());
     }
     git_backend_cmd::handle_git_backend_command(store_path, command)
@@ -174,7 +186,7 @@ pub(crate) fn run_on_distributed_store(
 /// root) and double-nested the store. `project_root_from_store_hint` derives
 /// the real root from it instead.
 // trace:TASK-1487 | ai:claude
-pub(crate) fn mcp_serve_project_root(
+pub fn mcp_serve_project_root(
     store_path: &std::path::Path,
     project_root_hint: Option<&std::path::Path>,
     cwd_project_root: Option<std::path::PathBuf>,

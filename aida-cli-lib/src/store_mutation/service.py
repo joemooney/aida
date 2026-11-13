@@ -90,10 +90,19 @@ def mutation_request(raw):
                     raise ValueError('comment')
             elif obj['op'] == 'spec_edit':
                 fields = data['fields']
-                if not isinstance(fields, dict) or not fields or not set(fields) <= {'title', 'description', 'priority'}:
+                if not isinstance(fields, dict) or not fields or not set(fields) <= {'title', 'description', 'priority', 'weight', 'tags'}:
                     raise ValueError('fields')
-                if any(not isinstance(v, str) for v in fields.values()):
+                if any(not isinstance(v, str) for k, v in fields.items() if k not in ('weight', 'tags')):
                     raise ValueError('field value')
+                if 'tags' in fields:
+                    tags = fields['tags']
+                    if not isinstance(tags, list) or len(tags) > 256 or any(not isinstance(tag, str) or len(tag.encode()) > 512 or any(c.isspace() for c in tag.strip()) or any(ord(c) < 32 or 127 <= ord(c) <= 159 for c in tag) for tag in tags):
+                        raise ValueError('tags')
+                if 'weight' in fields and fields['weight'] is not None:
+                    import math
+                    weight = fields['weight']
+                    if isinstance(weight, bool) or not isinstance(weight, (int, float)) or not math.isfinite(weight) or abs(weight) > 3.4028234663852886e38:
+                        raise ValueError('weight')
                 if 'priority' in fields and fields['priority'].lower() not in ('high', 'medium', 'med', 'low'):
                     raise ValueError('priority')
                 if 'title' in fields and (not fields['title'] or len(fields['title'].encode()) > 512):

@@ -1,3 +1,4 @@
+// trace:TASK-3429 | ai:codex
 //! Advisor handshake (`aida mailbox hello`): a launched non-advisor agent's
 //! first act is a mail round trip with the advisor, so a broken mail path
 //! shows up within minutes instead of when an operator relays mail by hand.
@@ -633,7 +634,7 @@ fn ack_message(
 /// sender's record marked acked when this checkout can reach it. Returns the
 /// handles whose ack this call wrote, so a re-read of an old hello reports
 /// nothing. Best-effort per hello.
-pub(crate) fn ack_hellos(
+pub fn ack_hellos(
     home_root: &Path,
     store_root: &Path,
     shown: &[&Message],

@@ -61,16 +61,15 @@ pub(crate) struct ReviewArgs {
 
 fn run_review(
     matches: &clap::ArgMatches,
-    ctx: &crate::command_registry::DispatchCtx,
-) -> anyhow::Result<crate::command_registry::Flow> {
-    use crate::*;
+    ctx: &crate::cmdkit::DispatchCtx,
+) -> anyhow::Result<crate::cmdkit::Flow> {
+    use crate::handle_review_spec;
+    use aida_core::Storage;
     let args = <ReviewArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
     match &ctx.store {
-        None => Ok(crate::command_registry::Flow::Continue),
-        Some(crate::command_registry::StoreCtx::Distributed { .. }) => {
-            Ok(crate::command_registry::Flow::Continue)
-        }
-        Some(crate::command_registry::StoreCtx::Git {
+        None => Ok(crate::cmdkit::Flow::Continue),
+        Some(crate::cmdkit::StoreCtx::Distributed { .. }) => Ok(crate::cmdkit::Flow::Continue),
+        Some(crate::cmdkit::StoreCtx::Git {
             store_path,
             backend,
         }) => {
@@ -109,9 +108,9 @@ fn run_review(
                     }
                 }
             }
-            Ok(crate::command_registry::Flow::Continue)
+            Ok(crate::cmdkit::Flow::Continue)
         }
-        Some(crate::command_registry::StoreCtx::Legacy {
+        Some(crate::cmdkit::StoreCtx::Legacy {
             storage,
             requirements_path,
         }) => {
@@ -143,31 +142,34 @@ fn run_review(
                     }
                 }
             }
-            Ok(crate::command_registry::Flow::Continue)
+            Ok(crate::cmdkit::Flow::Continue)
         }
     }
 }
 
 // trace:STORY-1728 | ai:claude
-pub(crate) static REVIEW: crate::command_registry::CommandReg =
-    crate::command_registry::CommandReg {
-        name: "review",
-        help_after: "trace",
-        command: <ReviewArgs as clap::CommandFactory>::command,
-        policy: |_| crate::command_registry::CmdPolicy {
-            stakeholder: crate::stakeholder_role::StakeholderAction::Write,
-            per_write_auto_push: false,
-            skip_role_restore_prompt: false,
-            team_identity_write: false,
-        },
-        run: crate::command_registry::Handler::Store(run_review),
-    };
+pub(crate) static REVIEW: crate::cmdkit::CommandReg = crate::cmdkit::CommandReg {
+    name: "review",
+    help_after: "trace",
+    command: <ReviewArgs as clap::CommandFactory>::command,
+    policy: |_| crate::cmdkit::CmdPolicy {
+        stakeholder: crate::stakeholder_role::StakeholderAction::Write,
+        per_write_auto_push: false,
+        skip_role_restore_prompt: false,
+        team_identity_write: false,
+    },
+    run: crate::cmdkit::Handler::Store(run_review),
+};
 // trace:STORY-1728 | ai:claude
 pub(crate) fn handle_review_command(
     cmd: &crate::ReviewCommand,
     storage: &crate::Storage,
 ) -> anyhow::Result<()> {
-    use crate::*;
+    use crate::{
+        cli, find_project_root, generate_review_prompt, handle_review_claim, handle_review_classes,
+        handle_review_list, handle_review_normalize_shas, handle_review_record,
+        handle_review_stranded, handle_review_verdict_show, mass_change, rules_sync, ReviewCommand,
+    };
     match cmd {
         ReviewCommand::Authorship { pr, specs } => {
             crate::gate::review_publication::publish_checkout_authorship(
@@ -208,6 +210,7 @@ pub(crate) fn handle_review_command(
         }
         // trace:BUG-775 | ai:claude
         ReviewCommand::Record {
+            no_carry,
             spec,
             verdict,
             sha,
@@ -225,6 +228,7 @@ pub(crate) fn handle_review_command(
             finding,
             finding_class,
             *pr,
+            *no_carry,
         ),
         // trace:STORY-1417 | ai:claude
         ReviewCommand::Classes { since, json } => handle_review_classes(since.as_deref(), *json),

@@ -99,7 +99,8 @@ pub struct AutoCompleteEvent {
 impl AutoCompleteEvent {
     /// Whether this run did not succeed.
     pub fn is_failure(&self) -> bool {
-        self.outcome != "success"
+        // trace:TASK-3749 | ai:codex
+        !matches!(self.outcome.as_str(), "success" | "no-change")
     }
 }
 
@@ -323,6 +324,16 @@ mod tests {
     fn is_failure_distinguishes_outcome() {
         assert!(ev("X", "failed", Some(1)).is_failure());
         assert!(!ev("X", "success", None).is_failure());
+    }
+
+    // trace:TASK-3749 | ai:codex
+    #[test]
+    fn task_3749_no_change_is_successful_telemetry() {
+        let events = vec![ev("X", "no-change", None)];
+        assert!(!events[0].is_failure());
+        let summary = summarize(&events);
+        assert_eq!((summary.total, summary.success, summary.failed), (1, 1, 0));
+        assert!(failure_histogram(&events).is_empty());
     }
 
     #[test]

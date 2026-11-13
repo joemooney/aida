@@ -1,3 +1,20 @@
+Cross-label gate-ledger discovery has a separate 128 MiB/200,000-attempt
+aggregate work ceiling, including unrelated payloads and torn retries; exhaustion
+refuses selection. Automatic archive retention and discovery limited to relevant
+changes remain unresolved. See docs/internal/testing/bug-2531-ledger-selection-budget.md.
+<!-- trace:BUG-2531 | ai:codex -->
+
+MCP transport and its store handler live in `aida-mcp`; the binary injects the
+handler into cli-lib's `mcp-serve` registration before parsing. Shared descriptors
+and claim naming stay below that boundary. CLI-local MCP tests include the
+transport source to retain private fixtures. See OVERVIEW.md.
+<!-- trace:TASK-3429 | ai:codex -->
+
+Local spec-only reviews neither bind to changes nor settle their review claims.
+Effective gate reads share one pinned discovery and refuse indexes naming
+missing change ledgers. Legacy pre-change binding remains. See OVERVIEW.md.
+<!-- trace:BUG-2517 | ai:codex -->
+
 CI freshness compares pinned workflow content: the GitHub `.github/workflows`
 tree or GitLab `.gitlab-ci.yml` blob. Equal digests avoid stale-definition
 refusals, including edits followed by reverts; the separate behind-base gate

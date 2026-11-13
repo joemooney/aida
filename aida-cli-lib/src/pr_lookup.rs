@@ -1,8 +1,20 @@
 //! open/merged PR detection, PR credit matching and PR-to-spec resolution (STORY-1488 slice 1)
 // trace:STORY-1488 | ai:claude
 
-use crate::*;
+use crate::forge;
+use crate::process_retry::RetryEtxtbsy;
+use crate::FORGE_LOOKUP_TIMEOUT;
+use crate::{
+    aida_exe_path, awaiting_you, config_declares_distributed, detect_distributed_store_from,
+    extract_spec_ids_from_commit, forge_lookup_output, is_plan_commit_subject, is_terminal_status,
+    network_retry, parse_open_pr_snapshot, queue_cmd, queue_role_fallback,
+    resolve_default_branch_ref, resolve_forge_cli, resolve_gh_binary, review_title_matches,
+    status_cleanup, with_forge_lookup_timeout, ReviewForge, FORGE_LOOKUP_TIMED_OUT,
+};
 use aida_core::git_ops::RemoteCredentialsExt as _;
+use aida_core::DatabaseBackend;
+use aida_core::{RequirementsStore, Storage};
+use anyhow::{Context, Result};
 
 /// Open-PR metadata captured by `gh pr list` for a session's branch. Just
 /// the fields the auto-queue side-effect needs to brief a reviewer.

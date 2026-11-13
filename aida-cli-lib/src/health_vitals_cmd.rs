@@ -312,26 +312,22 @@ pub(crate) struct HealthArgs {
 // STORY-658: `aida health` self-loads the store + probes the runtime
 // substrate (leases, drain lock, queue) — no shared storage handle needed,
 // so dispatch early like burndown. trace:STORY-658 | ai:claude
-fn run_health(
-    matches: &clap::ArgMatches,
-    _ctx: &crate::command_registry::DispatchCtx,
-) -> anyhow::Result<()> {
+fn run_health(matches: &clap::ArgMatches, _ctx: &crate::cmdkit::DispatchCtx) -> anyhow::Result<()> {
     let args = <HealthArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
     let HealthArgs { json, brief } = &args;
     return self::handle_health_vitals_command(*json, *brief);
 }
 
 // trace:STORY-1728 | ai:claude
-pub(crate) static HEALTH: crate::command_registry::CommandReg =
-    crate::command_registry::CommandReg {
-        name: "health",
-        help_after: "autoprogress",
-        command: <HealthArgs as clap::CommandFactory>::command,
-        policy: |_| crate::command_registry::CmdPolicy {
-            stakeholder: crate::stakeholder_role::StakeholderAction::Write,
-            per_write_auto_push: false,
-            skip_role_restore_prompt: false,
-            team_identity_write: false,
-        },
-        run: crate::command_registry::Handler::Early(run_health),
-    };
+pub(crate) static HEALTH: crate::cmdkit::CommandReg = crate::cmdkit::CommandReg {
+    name: "health",
+    help_after: "autoprogress",
+    command: <HealthArgs as clap::CommandFactory>::command,
+    policy: |_| crate::cmdkit::CmdPolicy {
+        stakeholder: crate::stakeholder_role::StakeholderAction::Write,
+        per_write_auto_push: false,
+        skip_role_restore_prompt: false,
+        team_identity_write: false,
+    },
+    run: crate::cmdkit::Handler::Early(run_health),
+};

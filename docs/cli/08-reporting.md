@@ -71,7 +71,19 @@ The cache is disposable and non-canonical, and grants no lifecycle authority.
 ## Merge-hold gate and clearance limits
 
 The required `merge-hold-gate` check uses three forge labels. An active
-`aida:merge-hold` always fails. A persistent `aida:merge-hold-recorded` label
+`aida:merge-hold` always blocks merging. On GitHub, ordinary holds publish a
+`pending` commit status on the PR head under the required `merge-hold-gate`
+context; the publisher Actions job succeeds, avoiding failure mail for a hold.
+Label changes rerun the publisher without a push. Malformed evidence (including
+a clearance without a recorded hold) still publishes failure and fails the job.
+GitLab retains its failing-job gate.
+
+The repository operator verifies required-check enforcement during installation.
+AIDA CI summaries treat a confirmed hold's pending gate as the hold itself;
+other pending checks still wait for completion.
+<!-- trace:BUG-2492 | ai:codex -->
+
+A persistent `aida:merge-hold-recorded` label
 means the PR was held previously; the check passes after release only when
 `aida:merge-hold-cleared` is also present. `aida merge-hold clear <pr>` keeps
 the existing human-at-an-interactive-terminal floor, writes the local JSON
@@ -489,7 +501,11 @@ persistence.
 
 **One line** — show which acceptance criteria for one spec are traced by Rust, pytest, JavaScript/TypeScript, or Go tests.
 
-**Mental model.** `criteria` turns a spec's `## Acceptance` section into stable criterion IDs, then scans Rust `#[test]` functions, pytest `def test_*` functions, Jest/Vitest/Mocha `test(...)` and `it(...)` calls, and Go `func TestXxx(...)` functions. Put a `trace:<SPEC>.<label>` token in a comment directly above the test (`//` in Rust, JS/TS, and Go; `#` in Python) or inside its body. A blank or non-comment line breaks an above-test attachment. It is the smallest anti-drift loop between the store and executable tests: each acceptance criterion should have at least one traced test, and each traced test should point at a real criterion rather than a stale or vague marker.
+**Mental model.** `criteria` turns a spec's `## Acceptance` section into stable criterion IDs, then scans Rust `#[test]` functions, pytest `def test_*` functions, Jest/Vitest/Mocha `test(...)` and `it(...)` calls, and Go `func TestXxx(...)` functions. Put a `trace:<SPEC>.<label>` token in a comment directly above the test (`//` in Rust, JS/TS, and Go; `#` in Python) or inside its body. A blank or non-comment line breaks an above-test attachment. It is the smallest anti-drift loop between the store and executable tests: each behavioral acceptance criterion should have at least one traced test, and each traced test should point at a real criterion rather than a stale or vague marker.
+
+<!-- trace:STORY-2702 | ai:codex -->
+Declare evidence immediately after the criterion label: `AC1: [evidence: behavioral-test] ...`, `[evidence: configuration-validation]`, `[evidence: documentation-inspection]`, or `[evidence: manual-inspection]`. Omitted or unknown annotations retain the behavioral test requirement. Behavioral criteria require automated tests. For configuration validation, cite the configuration and validation command/result or routing analysis; for documentation inspection, cite the document and check its claims; for manual inspection, record the procedure, observed result and limitations. An annotation is not evidence of satisfaction. Reviewers must report missing evidence and behavioral requirements mislabeled as inspection, without demanding automated tests solely for documentation, configuration or manual criteria. Non-behavioral criteria appear as `inspection-required` with `evidence_type` in JSON; they are excluded from the untested done gate but remain mandatory reviewer checks. Use explicit AC labels to keep trace IDs stable when annotations change.
+
 
 **Reach for it when** — you want to audit a spec's test coverage at the criterion level, especially before reconstitution/harvest work. The report answers: which criteria have tests, which criteria are untested, and which tests trace a bare spec or an unknown criterion.
 
@@ -788,3 +804,68 @@ current working directory, as they would for a shell lookup.
 
 <!-- trace:STORY-1673 | ai:codex -->
 <!-- trace:STORY-1673 | ai:claude -->
+
+## Flow report
+
+<!-- trace:STORY-2704 | ai:codex -->
+Installations provide `aida flow report ...`, `aida-porcelain flow report ...` and
+`aida-flow report ...`, with the same text/JSON report and window flags.
+`aida dev build --install-links` installs the companion and the relative
+`aida-flow -> aida-porcelain` alias. `aida flow` resolves that external alias;
+there is no built-in `flow` registration.
+The companion renders the hidden `aida flow-data report` substrate JSON reader. It selects the reader
+from `AIDA_BIN`, then `aida` beside the running companion, then `aida` on `PATH`.
+An explicit selection is authoritative: execution failures do not try another
+reader. There is no additional report timeout; the substrate reader owns query budgets.
+Child failures preserve stdout, stderr and exit code (signals use 128 + signal).
+The companion does not open a mutable store, refresh caches, acquire leases or
+update the queue.
+Development promotion and rollback restore each generation’s binary and alias
+inventory. Rolling back to a generation predating porcelain removes the
+companion and its alias; rolling forward restores them.
+Release archives, `install.sh`, `make install` and tarball upgrades include
+`aida-porcelain` and the relative `aida-flow` link. Upgrades stage the complete
+bundle before replacing binaries by atomic rename and restore the previous files
+if a replacement fails. Installers refuse an existing `aida-flow` directory,
+file or foreign symlink before replacing any bundle member. Only an absent path
+or the owned relative `aida-flow -> aida-porcelain` alias is accepted.
+Environment output-format aliases (`table` for `human`,
+`agent` for `toon`) use the same parser as core.
+
+<!-- trace:STORY-2699 | ai:codex -->
+`aida flow report --since 2026-11-09 --until 2026-11-10 --format json`
+reports GitHub PRs landed in the inclusive UTC window on local `origin/main`.
+Omit `--until` to use now, or omit `--format json` for a human table.
+`--json` is equivalent to `--format json`. Dates accept
+`YYYY-MM-DD` or RFC3339. Fetch on the host beforehand when fresh history is
+needed; this command does not fetch, mutate the ledger, or change gates.
+As in the advisor baseline, landing uses the matching main commit’s committer
+timestamp and trailing `(#N)` PR number, rather than a separate forge merge
+timestamp; train-created commits can predate the actual merge.
+
+Per PR, the report includes open hours, pushes, verdict counts, first-review
+hours, approval-to-land hours, CI runs and classified change-request findings.
+As in the advisor baseline, **pushes means commit count**, a proxy rather than
+actual push events. Local ledger verdict records are walked recursively;
+findings deduplicate by their first 120 characters per PR. The first matching
+classifier wins: CI failure, metadata/title/trailer, scope incomplete, tests
+missing, conflict/merge, correctness defect, then other. Severity preserves the
+baseline's P0–P3, BLOCKER/BLOCKING, minor, nit and cosmetic labels; unmarked
+findings are UNTAGGED.
+
+Approval-to-land requires the latest recorded verdict to approve; a later
+refusal makes it unknown. CI hours run from `startedAt` to `updatedAt` for
+completed GitHub Actions runs associated with retained PR commits (including
+failed runs). This excludes queue time; GitHub's latest attempt may replace
+rerun history, and force-pushed-away commits are unavailable. Train coverage on a train PR links its members through `proof.sources`. Train
+hours are that train PR’s forge creation-to-merge duration; multiple linked
+trains remain visible and the longest merged duration supplies the aggregate.
+This does not measure queue admission. Missing train/ledger evidence is unknown, never zero.
+A missing ledger is explicitly marked; unreadable or malformed evidence and
+forge failures fail the report. Commit/run caps refuse potentially truncated
+answers. GitHub credentials and `gh` are required.
+
+Aggregate distributions include sample count, median (average of the middle
+pair for even samples), and nearest-rank p90 for each timing, pushes, and CI
+run durations. Null measurements are excluded. The report is observational;
+local evidence availability and the commit-count proxy limit comparisons.

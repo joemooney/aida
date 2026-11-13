@@ -43,6 +43,13 @@ impl Entry {
             call: String::new(),
         }
     }
+    // trace:BUG-2547 | ai:codex
+    pub(super) fn matches(&self, requested: &[u64]) -> bool {
+        let members: std::collections::BTreeSet<_> =
+            self.train.cars.iter().map(|c| c.member.pr).collect();
+        !members.is_empty() && members == requested.iter().copied().collect()
+    }
+
     fn path(&self, dir: &Path) -> PathBuf {
         // Generated branches have one slash. Refuse path traversal on reads.
         dir.join(format!(
@@ -229,16 +236,26 @@ impl ForgeRails<'_> {
         activate(dir, entry)
     }
 
-    /// Reconcile every unfinished train before admitting any new riders. A
+    /// Reconcile matching unfinished trains before admitting new riders. A
     /// failed read retains the entry and stops admission. Completed mutations
     /// are detected from forge truth, including the call/receipt crash window.
+    #[cfg(test)]
     pub(super) fn resume(&mut self) -> Result<Outcome> {
+        self.resume_for(None)
+    }
+
+    // trace:BUG-2547 | ai:codex
+    pub(super) fn resume_for(&mut self, requested: Option<&[u64]>) -> Result<Outcome> {
         let Some(dir) = self.journal_dir.clone() else {
             return Ok(Outcome::default());
         };
         let mut out = Outcome::default();
         for entry in entries(&dir)? {
             if entry.step == Step::Done {
+                continue;
+            }
+            if requested.is_some_and(|prs| !entry.matches(prs)) {
+                eprintln!("Skipping retained train journal {}: member PR set differs from requested PRs; starting fresh. Use `aida pr train --abandon {}` to discard it.", entry.path(&dir).display(), entry.path(&dir).file_name().unwrap().to_string_lossy());
                 continue;
             }
             activate(&dir, entry.clone())?;
@@ -350,4 +367,56 @@ impl Drop for Scope {
     fn drop(&mut self) {
         clear();
     }
+}
+
+/// Report reservations without the recovery reader's terminal-file cleanup.
+// trace:STORY-2688 | ai:codex
+pub(super) fn pr_state_members(dir: &Path) -> Result<Vec<u64>> {
+    let entries = match std::fs::read_dir(dir) {
+        Ok(entries) => entries,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(Vec::new()),
+        Err(e) => return Err(e.into()),
+    };
+    let mut members = Vec::new();
+    for item in entries {
+        let path = item?.path();
+        if path.extension().is_none_or(|ext| ext != "json") {
+            continue;
+        }
+        let body = aida_core::seat_clone_detect::read_regular_file(&path)
+            .context("unsafe or unreadable train receipt")?;
+        let entry: Entry = serde_json::from_str(&body)?;
+        entry.validate()?;
+        anyhow::ensure!(entry.path(dir) == path, "train receipt filename mismatch");
+        if entry.step != Step::Done {
+            members.extend(entry.train.cars.iter().map(|c| c.member.pr).filter(|pr| {
+                !entry.completed_members.contains(pr) && !entry.rejected.iter().any(|r| r.pr == *pr)
+            }));
+        }
+    }
+    Ok(members)
+}
+
+// trace:BUG-2547 | ai:codex
+pub(super) fn abandon(dir: &Path, name: &str) -> Result<()> {
+    anyhow::ensure!(
+        Path::new(name).components().count() == 1
+            && name.ends_with(".json")
+            && !name.starts_with('.'),
+        "name a train journal filename, such as <uuid>-1.json"
+    );
+    let _lock = lock(dir)?;
+    let path = dir.join(name);
+    let metadata = std::fs::symlink_metadata(&path)?;
+    anyhow::ensure!(
+        metadata.file_type().is_file(),
+        "train journal must be a regular file"
+    );
+    std::fs::remove_file(&path)?;
+    File::open(dir)?.sync_all()?;
+    println!(
+        "Abandoned local train journal {}; forge PRs and branches are unchanged.",
+        path.display()
+    );
+    Ok(())
 }

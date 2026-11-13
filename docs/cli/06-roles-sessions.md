@@ -36,7 +36,7 @@ Around that core sit the **launchers** and the **comms**. `aida agent new` and `
 - `enter` / `end` — the env-mutating pair; both *output shell code* and must be `eval`'d (or run bare under the shell helper). This is why they feel different from every other subcommand — they can't change your shell from a child process, so they hand you the code to do it. `enter` mints a direct grant (interactive TTY, seat in your roster), and so does `add` when it can; [the launcher table](#how-each-launcher-sets-the-agents-grant) lists both. `end` revokes the grant.
 - `enter --delegate-seat <seat>` (repeatable) — declare which child seats *this* session may hand to agents it launches. Omitted means **none**: a session cannot delegate by default, so before a launcher can issue an agent a `reviewer` child grant, your session must have been entered with `--delegate-seat reviewer`. Entering `advisor` at a TTY with no `--delegate-seat` asks once whether to include `advisor` in the delegation set (the advisor's own headless sub-launches need it; the default answer is no).
 - `enter --bind-pid <pid>` — mint the grant for *another* running session instead of this terminal: name that session's agent harness (claude, codex, agy) or shell by pid. It must be a live process of yours, and not pid 1 or anything above your own terminal session (a session manager, terminal emulator or multiplexer would bind far too much). Your shell's role is left unchanged; the output names the grant id that session exports as `AIDA_SESSION_GRANT`. A grant id copied into a session from `~/.aida/session-grants/` or a log is refused, so hand-carrying a grant id into a background session no longer works. `--bind-pid` binds the process only: that session's hooks and MCP server can present the grant, but its sandboxed tool calls cannot (they run in their own process namespace). A background or relay session that needs its seat in tool calls must be started from the role shell. <!-- trace:BUG-1934 | ai:claude -->
-- `status` (`--json`) — this session's grant: seat, expiry, the processes it is bound to, whether and how this process may present it (`via`: `key`, `proc` or `none`, plus the refusal reason when not), and this session's agent harness pid for `--bind-pid`. A command run from an agent's tool shell never offers that transient shell's pid; when no stable harness pid can be seen (a sandboxed tool call), it says so. Read-only. <!-- trace:BUG-1934 | ai:claude --> <!-- trace:TASK-2159 | ai:claude -->
+- `status` (`--json`) — this session's grant: seat, expiry, the processes it is bound to, whether and how this process may present it (`via`: `key`, `proc` or `none`, plus the refusal reason when not), and this session's informational agent harness pid. It does not offer `--bind-pid` as renewal: that grant retains the invoking user's subject and cannot replace a managed agent's child grant. Save a handoff, re-enter the parent role at the operator's terminal with the required `--delegate-seat` options, then relaunch through the agent's launcher; in-place renewal for managed agents is unsupported. <!-- trace:BUG-2503 | ai:codex --> A command run from an agent's tool shell never offers that transient shell's pid; when no stable harness pid can be seen (a sandboxed tool call), it says so. Read-only. <!-- trace:BUG-1934 | ai:claude --> <!-- trace:TASK-2159 | ai:claude -->
 - `add` (with `--global`) — define a new role; `--global` stores it under `~/.aida/roles/` for personas you carry across projects (triage, code-review) rather than per-project.
 - `scope` (`set` / `show` / `clear`) — attach a standing filter to a role so `aida list` and `aida queue list/next` auto-narrow while you wear that hat (the canonical example: a `triage` role scoped to `--tags inbox --status draft`). Override per-command with explicit `--tags`/`--status` or `--no-scope`. This is *why* a role is more than a label — it reshapes what you see.
 - `prompt` (`set` / `show` / `clear`) — the per-role system-prompt addendum injected into Claude at session start via the role-context hook. The seam where a role carries *instructions*, not just identity.
@@ -59,7 +59,7 @@ Around that core sit the **launchers** and the **comms**. `aida agent new` and `
 **Mental model.** Use `eval "$(aida role enter <seat> [--delegate-seat <child-seat> ...] [--ttl <dur>])"` at an interactive human TTY to establish a session seat. The requested seat must be in your **team roster**; add or remove roster seats with `aida team allow-seat <user> <seat>` and `aida team disallow-seat <user> <seat>`, which themselves require an interactive TTY (a terminal check, not proof that a human is typing). The roster is a *ceiling* (which seats you may ever take), the grant is the *active seat* (which one this session holds). Direct shell grants have **empty delegation by default**: list each child seat this session may hand out with a repeated `--delegate-seat`. A **child grant** is a distinct grant for one seat: one per launched session, bound to the parent and limited to the parent's delegation set. Advisor and integrator children can delegate onward within the validated parent's set; `agent new --delegate-seat` narrows that set. Implementer and reviewer children cannot delegate onward. Which launchers issue one, and when, is in the table below. `AIDA_SESSION_ROLE` is only a display/routing hint and cannot grant authority. An **MCP server captures the grant it starts with** and re-validates it on every gated call (so revoking the grant takes effect immediately), but it cannot acquire a *different* one while running: to change a server's authority, enter the seat at a TTY and restart/reconnect the server. Grant lifetime defaults to 24 hours. The operator can pass `--ttl <dur>` (e.g. `72h` or `90m`) to set a custom duration, capped by `[seat] max_grant_hours` (default 24h, hard ceiling 168h; bare numbers without a unit are refused). Effective cap is `min(global, project)` when both are configured; project configuration alone can only lower the default 24h ceiling. All grants are subject to an unconfigurable hard ceiling of 168 hours. A cap below 24 does not shorten the default 24h grant when `--ttl` is omitted. Managed agent sessions cannot mint direct grants. <!-- trace:TASK-1787 | ai:antigravity -->
 <!-- trace:BUG-2467 | ai:codex -->
 
-**Grants are bound to a process tree.** A grant id is not a bearer token. `aida role enter` binds the grant to the shell that ran it and that shell's terminal session: any process in this terminal session can use this grant (an agent you start there, its tool calls and hooks), and no process outside it can, even with the id exported. A child grant is bound to the launcher that minted it, so a worker it execs or spawns holds it. `aida role enter <seat> --bind-pid <pid>` binds a grant to a named running session's process, which serves only that session's unsandboxed hooks and MCP server. Matching uses each process's kernel start identity, so a recycled pid never matches. Every refusal (`aida doctor --category seat-grant`, `aida role status`) names the fix. A grant minted before binding existed is refused outright: after upgrading, re-enter each seat with `eval "$(aida role enter <seat>)"`, and start background and relay seats from that role shell or an aida launcher (not with `--bind-pid`, whose grant their sandboxed tool calls cannot present). A review approval records which bound process presented its grant, and `aida pr ship` re-checks that against the grant. <!-- trace:BUG-1934 | ai:claude -->
+**Grants are bound to a process tree.** A grant id is not a bearer token. `aida role enter` binds the grant to the shell that ran it and that shell's terminal session: any process in this terminal session can use this grant (an agent you start there, its tool calls and hooks), and no process outside it can, even with the id exported. A child grant is bound to the launcher that minted it, so a worker it execs or spawns holds it. `aida role enter <seat> --bind-pid <pid>` binds a grant to a named running session's process **for the invoking user**, which serves only that session's unsandboxed hooks and MCP server. Matching uses each process's kernel start identity, so a recycled pid never matches. Every refusal (`aida doctor --category seat-grant`, `aida role status`) names the fix. A grant minted before binding existed is refused outright: after upgrading, re-enter each seat with `eval "$(aida role enter <seat>)"`, and start background and relay seats from that role shell or an aida launcher (not with `--bind-pid`, whose grant their sandboxed tool calls cannot present). A review approval records which bound process presented its grant, and `aida pr ship` re-checks that against the grant. <!-- trace:BUG-1934 | ai:claude -->
 
 **Sandboxed tool calls hold the grant's session key.** An agent harness's sandbox (Claude Code's bubblewrap sandbox, for one) runs each tool call in its own process namespace, where the bound shell is invisible. So `aida role enter` also puts a one-time secret into the entering shell's Linux session keyring, as a key only that shell and its descendants can read. The grant record holds only the secret's digest. Session keyrings are inherited into sandboxes, so a tool call of an agent started from that shell (foreground, or a background/relay agent launched there with `aida agent new` without `--bg` or `nohup`) presents the grant by holding the key. A session the agent daemon (`--bg`) or a tmux server starts does not descend from the role shell. It holds no key and is refused with a sentence naming the fix. A launcher puts each child grant's key into its own keyring before starting the worker. `aida role end`, re-entering, or revoking a grant invalidates its key, and the key also expires with the grant. Where the kernel refuses keyrings (some containers), a grant falls back to its process binding only, and a sandboxed caller is refused with that reason, never allowed. The secret never appears in argv, the environment, a file or shell history: the eval text turns xtrace off and passes it to `aida role adopt-key` in a quoted heredoc. <!-- trace:BUG-1934 | ai:claude -->
 
@@ -815,25 +815,51 @@ the merge, sends the advisor a request, and routes a fresh launch to Claude.
 A conflicting Codex resume refuses with a fresh Claude launch command;
 a Codex thread cannot resume under another vendor. Fetch, merge, abort,
 mail, or vendor-preflight failures stop the launch. A resume with pending
-edits preserves them and skips the merge attempt; an unfinished merge still
-refuses. Clean resumes use the normal merge and conflict checks.
+edits preserves them and fetches both heads. After verifying the PR head is
+incorporated, the host probes committed trees with `git merge-tree --write-tree`.
+A clean probe admits pending work even when main has advanced. A conflicting or
+failed probe refuses without changing the index, HEAD or pending files.
+The preservation commands below apply only after branch and unfinished-merge
+preflight checks pass. A wrong-branch refusal requires restoring the recorded
+branch; an unfinished merge requires inspection and resolution or abort before
+retrying. Do not stage unresolved files or commit pending work on the wrong branch.
+Never run host Git inside a seat clone: its configuration and hooks are
+seat-controlled. After the lane exits, inspect `aida session leases --all`
+for the recorded path and scope. For recorded clones, preserve and publish pending work through
+`aida ship --from-seat PATH SPEC --commit-pending 'fix: preserve rework (Refs SPEC)'`,
+substituting the recorded path and spec ID. This runs clone Git in AIDA's
+sandbox and retains publication gates; a refusal is not successful publication.
+For linked worktrees, after the lane exits, use host Git in the recorded worktree:
+`git -C PATH add -A`, `git -C PATH commit -m "fix: preserve rework (Refs SPEC)"`,
+then `git -C PATH fetch origin`, `git -C PATH merge origin/BRANCH` and
+`git -C PATH merge origin/main`. Resolve any conflicts, commit the resolution,
+and retry pickup with `--resume`. The clone-only `ship --from-seat` command
+does not support linked worktrees.
+If a probe fails without reporting conflicts, diagnose its error before retrying.
+For confirmed conflicts, once publication succeeds, start a fresh `aida queue work SPEC --vendor claude --fresh --no-human`
+for conflict resolution. A clean seat behind the PR head needs a fresh pickup
+from the current head, without a pending-work commit or `--resume`.
+A failed adopted-seat launch restores its orphan lease so that retry can adopt
+the same tree. Host preparation is required for native children because their
+sandbox makes Git metadata read-only.
+An unfinished merge still refuses. Clean resumes use the normal merge and
+conflict checks.
+<!-- trace:BUG-2504 | ai:codex -->
 
 The conflict check runs after session setup has provisioned the seat and minted
-its lease, inside the pickup's launch rollback boundary. A fresh Codex pickup
-that reroutes keeps that same seat (including a clone seat) and lease. Before
-launch it installs the Claude vendor override, repeats vendor and containment
-preflight, clears the Codex model selection, and appends the conflict task to
-the prompt. It does not rebuild the seat for Claude. A refusal before spawn
-uses the ordinary setup rollback.
+its lease, inside the pickup's launch rollback boundary. Conflicts preserve the
+selected vendor, model, seat and lease. Before launch, pickup notifies the
+advisor, repeats vendor and containment preflight, and appends the conflict
+resolution task to the prompt. A refusal before spawn uses the ordinary setup
+rollback. The same routing applies to interactive implementer pickups.
 
-This also applies to interactive implementer pickups without `--no-human`:
-a fresh conflicting pickup launches interactive Claude in the seated tree;
-an existing Codex resume refuses and prints the fresh Claude command. Guided,
-plan-only and `--no-launch` pickups skip this automatic preparation. Current
-automated coverage tests the merge, route/refusal and publication helpers;
-it does not exercise the complete `handle_queue_work` pickup through an
-interactive exec or a Claude launch from a clone provisioned for Codex. That
-integration boundary still needs a manual exercise or a command-level test.
+An explicit resume uses the vendor that recorded the session and prints that
+reason before launch; configuration cannot move an existing thread to another
+vendor. Guided, plan-only and `--no-launch` pickups skip automatic preparation.
+Automated coverage exercises clean and conflicting PR branches with a configured
+Codex vendor, including interactive and headless routing. It does not exercise
+the complete pickup through vendor execution.
+<!-- trace:BUG-2553 | ai:codex -->
 
 After a contained Codex headless implementer exits, its host commits pending
 seat edits and publishes through `ship --from-seat`, updating the existing
@@ -847,6 +873,17 @@ This host step replaces the advisor's manual auto-publish workaround.
 <!-- trace:STORY-2475 | ai:codex -->
 
 ## Watching for new review heads
+
+Review-watch and explicit `aida queue work PR-N --role reviewer` pickups defer
+while a live implementer lane owns the change's branch or a linked spec. The
+watcher prints `deferred: implementer lane live (host, lease)` and records the
+reason for `aida awaiting`, without reserving a review attempt. Local leases
+require positive process liveness; cross-host claims use their existing heartbeat
+expiry. Dormant, dead and expired records do not defer review. This also covers
+merge-only heads after a changes-requested verdict. Once the lane ends, the next
+pass admits the current head through ordinary review deduplication; merge-only
+history alone never blocks review indefinitely.
+<!-- trace:STORY-2705 | ai:codex -->
 
 For an advisor service that follows grant rotation, start the operator's
 `aida deputy shell run` in its ordinary advisor terminal, then launch the
@@ -1016,8 +1053,31 @@ a PID disappears or is reused. When the dispatcher observes queue work exit
 unsuccessfully (a stale-base or intermediate-only refusal, a reviewer lease
 already held, or a launch-boundary revalidation failure), it records the
 attempt as exited with the last line of its log. That frees the slot, the head
-is not relaunched, and a later head dispatches normally. The parent records
-each dispatcher's process identity; if a dispatcher exits before claiming its
+uses the existing bounded setup retry policy, and a later head dispatches normally.
+A review that ends without a verdict for its head retries after 60 seconds,
+then 120 seconds, with at most three attempts per head. A `WAITING` verdict
+also permits a fresh review after a 20-minute backoff, sharing that same
+three-attempt budget; approvals and change requests still consume the head.
+This bounded backoff permits re-review after CI or other external evidence
+changes without requiring a manual release. Retry counts and
+backoff deadlines survive watcher restarts; a new head resets them. Exhaustion
+names the change, head and last diagnostic in `aida advisor loops status`.
+Inspect the logs and use `aida review watch --release PR-N` (or `MR-N`) for
+operator recovery. Live or ambiguous descendants still prevent a retry.
+With a distributed admission hub, the stopped owner records a signed
+`Terminal` with `NoVerdict` or `Inconclusive` (WAITING) evidence. Only that
+terminal permits the new `Retry` claim for the same head, and the hub independently caps started attempts at three.
+An active claim or a conclusive durable verdict refuses readmission; a
+terminal recorded with a conclusive verdict (`Verdict` evidence) stays consumed.
+An unprefixed terminal written before this change is recoverable only while the
+head's synced outcome is `WAITING`. A conclusive publication from any node
+takes precedence over a peer's `WAITING` at the same head, so a peer approval
+ends the wait and a peer change request is never hidden. Every watcher, with or
+without a local attempt, honours the same 20-minute deadline measured from the
+signed `WAITING` publication. Local release does not reset the hub's attempt cap.
+<!-- trace:BUG-2518 trace:BUG-2521 | ai:codex ai:claude -->
+
+The parent records each dispatcher's process identity; if a dispatcher exits before claiming its
 reservation (a refused grant, an unusable store, a timed-out claim), any
 watcher, including a restarted one, records the reservation as exited and
 frees its slot. Only a dispatcher lost after claiming, before recording an
@@ -1109,6 +1169,45 @@ remaining processes yourself, `aida review watch --release PR-N` clears the
 attempt. It stays refused while any recorded process is still running. An
 attempt recorded before process groups were kept gets per-process signals
 only, with no group sweep.
+
+Reviewers can record `aida review record <SPEC> --verdict approved --no-carry`
+to require fresh review whenever the head changes, including a clean merge from
+main. The approval remains valid at its exact reviewed head. The policy is part
+of the authenticated recording and signed publication; older approvals default
+to carry-eligible. A later reviewer recording sets the policy anew. Cached
+carry-over proofs cannot override a no-carry approval. `--no-carry` is refused
+for other verdicts.
+<!-- trace:STORY-2696 | ai:codex -->
+
+An authorized approval at an older head can also suppress review dispatch after
+clean merges of the protected default branch. Both dispatch checks reconcile
+the live verdict corpus and require a durable carry-over proof naming the
+reviewed head, current head and refreshed base tip. Standing non-approvals,
+malformed or missing-SHA evidence, unavailable protected-tip refreshes, and
+unrecordable proofs do not suppress review. This grants no ship readiness:
+CI must pass at the current head, and merge holds still apply.
+
+A refusal hold's release condition can use the same coverage, while preserving
+the original reviewed SHA and every other clearance obligation. The merge
+remains pinned to the current head. `aida review verdict PR-N` reports
+“APPROVED at H, carried to H2” with the protected base tip; `--json` includes
+an optional `coverage` object with `reviewed_sha`, `head_sha` and the full
+`proof`. Reading the verdict does not record a new approval or proof.
+<!-- trace:STORY-2694 | ai:codex -->
+
+New gate-ledger verdict events also record a versioned advisory risk assessment,
+computed from the committed diff against the pinned protected-base tip. The tier
+is `FASTTRACK`, `STANDARD` or `STRICT`, with repository, base/head and reasons.
+Sensitive paths take precedence across the whole diff, including both rename
+paths. Version 1 also uses `STRICT` above 500 changed lines or 20 paths,
+for executable/symlink/submodule evidence and possible test-oracle weakening;
+unavailable or unsupported evidence is `STRICT`. `aida review verdict`
+shows the stored tier and reasons as advisory only; `--json` includes `risk`.
+Older records have no assessment. This does not change review depth, blocking
+rules, hold clearance, fast-track eligibility or train admission. Incoming
+reviewer-supplied tiers are not authoritative; the ledger writer computes its
+own evidence on each verdict.
+<!-- trace:STORY-2698 | ai:codex -->
 
 ### Ship-readiness report
 <!-- trace:TASK-1945 | ai:claude -->
@@ -1348,3 +1447,46 @@ A later `aida ship` from that detached seat restores its leased branch only if
 both HEAD and the branch still equal the recorded PR head and Git permits the
 checkout. A moved branch or another session's handoff refuses recovery.
 <!-- trace:STORY-2325 | ai:codex -->
+
+Conditional relay/seat handoffs use
+`aida session handoff --seat advisor --write handoff.md --spec <spec-id> --until 'pr:42=merged'`.
+This parks the named spec using the same typed condition and hold policy as
+`aida defer`, and includes the canonical trigger in the handoff note. The
+hourly `defer-resurface` job evaluates that spec; a met condition resurfaces it.
+Conditional handoffs use the same per-write store auto-push policy as `aida defer`.
+The deferral is saved before the note: if note I/O fails, the error names the
+saved spec and trigger. Repair the note and retry; the deferral remains active.
+This does not automatically execute the handoff instructions or launch a seat.
+Free-text triggers are refused. Use `--until manual:<who> --reason '<explanation>'`
+for a human decision; this retains an operator hold and routes old manual
+conditions to the human queue after 14 days.
+<!-- trace:STORY-2402 | ai:codex -->
+
+<!-- trace:BUG-2500 | ai:codex -->
+<!-- trace:STORY-2697 | ai:codex -->
+A defect-free head receives `approved` even while CI is pending or running;
+include "CI pending at review time" in the rationale. Readiness still requires
+successful exact-head CI, including after clean-merge approval carry-over.
+An approved member may enter a train before its CI settles, but landing still
+requires successful stacked-tip CI. Approval may release an eligible Rework
+hold before CI settles; releasing a hold merges nothing. Ordinary ship CI
+gates and their existing opt-outs are unchanged. A CI failure keeps readiness
+blocked; fixing it creates a new head requiring review or eligible carry-over.
+
+A review blocked on independent external evidence (such as an operator-only
+canary), or a specific named test result needed for judgment, records `waiting`
+(displayed `WAITING`), with a summary naming the dependency, responsible actor
+and resume condition, and no substantive findings. Code defects still require
+`request-changes`. Waiting blocks completion and merge without implementer
+rework, repeat-findings credit or a Rework hold. Existing holds remain intact.
+A fresh recorded review at the current head ends an active change's wait;
+green CI or a changed head alone does not. There is no automatic resume service.
+
+When the reviewed batch PR or MR is confirmed merged or closed, queue pickup
+and merge reconciliation retire that batch's wait even for a Refs-only batch
+whose spec remains in progress. A review URL must name this repository; an
+index-only association also needs a matching reviewed head. Unknown forge
+evidence retains the wait. Closure annotates the exact source round and key,
+preserves signed publications, and supplies neither approval nor spec completion.
+Independent findings and newer waits remain actionable.
+<!-- trace:BUG-2525 | ai:codex -->

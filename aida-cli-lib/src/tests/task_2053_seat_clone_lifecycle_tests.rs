@@ -379,6 +379,11 @@ fn task_2053_bwrap_probe_reads_clean_dirty_and_unpushed() {
     assert_eq!(facts.unpushed, 0, "{facts:?}");
     assert!(facts.dirty.is_empty(), "{facts:?}");
 
+    // Unignore the host marker: publication's commit and probe must agree.
+    // trace:TASK-3749 | ai:codex
+    std::fs::write(clone.join(".git/info/exclude"), "").unwrap();
+    assert!(known(probe(&fx.main, &clone)).dirty.is_empty());
+
     seat_commit(&clone, "a.txt");
     std::fs::write(clone.join("untracked.txt"), "u\n").unwrap();
     let facts = known(probe(&fx.main, &clone));
@@ -673,12 +678,6 @@ fn task_2053_bwrap_dismiss_removes_a_seat_clone_and_its_lease() {
     assert!(ledger.contains("seat_clone_dismiss"), "{ledger}");
 }
 
-/// A host file outside `/tmp` and outside the essential system paths: the
-/// crate's own manifest. A probe that can read it would also read `~/.ssh`.
-fn outside_file() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("Cargo.toml")
-}
-
 fn write_read_allowlist(fx: &Fixture, dirs: &[&Path]) {
     let list: Vec<String> = dirs
         .iter()
@@ -704,8 +703,13 @@ fn task_2053_bwrap_probe_runs_no_seat_filter_and_reads_only_the_seat_view() {
     }
     let fx = fixture();
     let clone = seat(&fx, "filter", "c0ffee000011");
-    let outside = outside_file();
+    // trace:STORY-2695 | ai:codex
+    // The probe overlays /tmp even in its unrestricted read control.
+    // Resolve the writable checkout at runtime, including for restored binaries.
+    let outside_dir = tempfile::tempdir_in(std::env::current_dir().unwrap()).unwrap();
+    let outside = outside_dir.path().join("host-secret");
     let marker = "name = \"aida-cli-lib\"";
+    std::fs::write(&outside, marker).unwrap();
     git_ok(
         &clone,
         &[

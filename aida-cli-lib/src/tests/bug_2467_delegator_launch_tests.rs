@@ -6,19 +6,20 @@ use crate::test_env::EnvVarsGuard;
 #[test]
 fn bug_2467_parses_delegation_for_every_vendor() {
     for vendor in ["claude", "codex", "antigravity"] {
-        let cli = crate::command_registry::try_parse_from([
-            "aida",
-            "agent",
-            "new",
-            vendor,
-            "--role",
-            "advisor",
-            "--delegate-seat",
-            "reviewer",
-            "--delegate-seat",
-            "implementer",
-        ])
-        .unwrap();
+        let cli = crate::TEST_CLI
+            .try_parse_from([
+                "aida",
+                "agent",
+                "new",
+                vendor,
+                "--role",
+                "advisor",
+                "--delegate-seat",
+                "reviewer",
+                "--delegate-seat",
+                "implementer",
+            ])
+            .unwrap();
         let AgentArgs {
             inner: AgentCommand::New {
                 command: Some(cmd), ..
@@ -32,16 +33,17 @@ fn bug_2467_parses_delegation_for_every_vendor() {
         | AgentNewCommand::Antigravity { delegate_seats, .. }) = cmd;
         assert_eq!(delegate_seats, &["reviewer", "implementer"]);
     }
-    let cli = crate::command_registry::try_parse_from([
-        "aida",
-        "agent",
-        "new",
-        "--role",
-        "advisor",
-        "--delegate-seat",
-        "reviewer",
-    ])
-    .unwrap();
+    let cli = crate::TEST_CLI
+        .try_parse_from([
+            "aida",
+            "agent",
+            "new",
+            "--role",
+            "advisor",
+            "--delegate-seat",
+            "reviewer",
+        ])
+        .unwrap();
     let AgentArgs {
         inner:
             AgentCommand::New {
@@ -432,17 +434,18 @@ printf '%s\n' "$@" > "$AIDA_PROJECT_ROOT/child-argv"
     let original_cwd = std::env::current_dir().unwrap();
     std::env::set_current_dir(&root).unwrap();
     // The exact documented line: no extra flags or direct launcher calls.
-    let cli = crate::command_registry::try_parse_from([
-        "aida",
-        "agent",
-        "new",
-        "claude",
-        "--role",
-        "advisor",
-        "--permission-mode",
-        "auto",
-    ])
-    .unwrap();
+    let cli = crate::TEST_CLI
+        .try_parse_from([
+            "aida",
+            "agent",
+            "new",
+            "claude",
+            "--role",
+            "advisor",
+            "--permission-mode",
+            "auto",
+        ])
+        .unwrap();
     let AgentArgs { inner } = cli.command.registered::<AgentArgs>();
     let result = handle_agent_command(&inner);
     std::env::set_current_dir(original_cwd).unwrap();

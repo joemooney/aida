@@ -1,7 +1,54 @@
+// trace:TASK-3429 | ai:codex
 //! requirement add/list/show/edit/delete handlers, status/priority/type parsing and `aida grep` (STORY-1488 slice 1)
 // trace:STORY-1488 | ai:claude
 
-use crate::*;
+use crate::{
+    active_lease_for_cwd, active_role_scope, add_blocked_by_edge, add_queue_route_role,
+    agent_list_default_cap, agent_output_mode, agent_registry, alias, all_queued_requirement_ids,
+    apply_carve_out, approval_forbidden_for_type, auto_complete, backlog, brief,
+    carve_out_description, cleanup_escalated_leases_for_spec, cli, collect_ancestor_store,
+    completion, complexity_calibration, context_prompt, current_user_id, derive_parent_epic_label,
+    detect_distributed_store, docs, doctor_cmd, edit_buffer, edit_completion_render,
+    effort_calibration, empty_list_hint_line, enforce_protected_spec_gate, enforce_session_lease,
+    ensure_block_capacity, ensure_parent_edge_from_tag, extract_plan_followups, find_project_root,
+    findings, first_run, focus_scope_guard, format_queue_membership, format_review_story_display,
+    format_tag_chip, get_default_author, glyph, grep_requirements, handle_list_human,
+    handle_review_list, help, history, human, in_flight_lease_scopes, is_into_completed_transition,
+    is_standing_artifact_type, is_terminal_status, list_count_denom_label, list_default_open_lens,
+    list_hidden_hint_lines, list_human_count_footer, list_leases, load_node_id, looks_like_spec_id,
+    main_worktree_root_from, manual_epic_status_edit_forbidden, maybe_hint_advisor_seat,
+    maybe_hint_after_queue_drain, maybe_print_whats_left_tip, maybe_sync_pull,
+    normalize_batch_name, not_found, output_format_is_json, parse_pr_arg, parse_requirement_id,
+    permissions, pr_list_handler, print_comment, print_deferred_triggers,
+    print_empty_human_list_truncation_footer, print_git_linkage, pull_store_before_id_allocation,
+    punt, push_store_after_id_allocation, queue_at_filing_refusal, queue_cmd,
+    queue_memberships_for, read_id_format_policy, read_list_show_hidden_hints, record_edit_changes,
+    record_role_activity, rel_type_label, relationship_phrase, remove_blocked_by_edge,
+    render_completion_crescendo, render_list_fields_table, render_search_fields, render_spec_card,
+    render_tree, resolve_human_only, resolve_list_user_filter, resolve_pr_to_spec, role,
+    roleless_recovery_sentence, run, short_sha, status_advance_requires_advisor_authority,
+    status_display, status_requires_advisor_authority, suspicious_title_signal,
+    team_role_refusal_clause, toon_list_cell, toon_list_fields, tree_group_header,
+    update_manifest_for_status, validate_priority_input, validate_status_input,
+    validate_status_input_for_type, verify_cmd, warn_pending_briefs_for_running_agent, worktree,
+    CardDensity, CardRel, EditCompletionRender, HashSet, QueueAtFilingRefusal,
+};
+
+#[cfg(test)]
+use crate::mcp;
+
+use crate::doctor_root::collect_doctor_findings;
+use crate::output_format::{toon_local_id_cell, with_local_id_column};
+use crate::rel_cards::hostname;
+use crate::upgrade_release::confirm;
+use aida_core::{
+    forbidden_attention_transition, DatabaseBackend, FieldChange, RelationshipType, Requirement,
+    RequirementPriority, RequirementStatus, RequirementType, RequirementsStore, Storage,
+};
+use anyhow::{Context, Result};
+use colored::Colorize;
+use serde::Serialize;
+use uuid::Uuid;
 
 /// True for a scaffold artifact that must be executable: a git or Claude
 /// Code hook, or a shell script.
@@ -1249,7 +1296,7 @@ pub(crate) const TAGS_FLAG: &str = "--tags";
 /// worse failure than the blob, because it reads as authoritative.
 // trace:BUG-1770 | ai:claude
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum TagRepair {
+pub enum TagRepair {
     /// A comma-separated argument: `--tags a,b`.
     CommaFlag(&'static str),
     /// A repeatable single-value flag: `--add-tag a --add-tag b`.
@@ -1295,7 +1342,7 @@ impl TagRepair {
 /// store can only be named by reproducing it verbatim, and refusing that would
 /// leave the existing blobs unrepairable by the incremental form.
 // trace:BUG-1770 | ai:claude
-pub(crate) fn validate_tag_value(tag: &str, repair: TagRepair) -> anyhow::Result<()> {
+pub fn validate_tag_value(tag: &str, repair: TagRepair) -> anyhow::Result<()> {
     if !tag.chars().any(char::is_whitespace) {
         return Ok(());
     }
@@ -1423,24 +1470,10 @@ pub(crate) fn dropped_structural_tags(
     old_tags: &HashSet<String>,
     new_tags: &HashSet<String>,
 ) -> Vec<String> {
-    const PREFIXES: &[&str] = &[
-        "parent:",
-        "batch:",
-        "lane:",
-        "severity:",
-        "lifecycle:",
-        "aida:",
-    ];
-    let mut dropped: Vec<String> = old_tags
-        .difference(new_tags)
-        .filter(|tag| PREFIXES.iter().any(|prefix| tag.starts_with(prefix)))
-        .cloned()
-        .collect();
-    dropped.sort();
-    dropped
+    aida_core::db::canonical_mutation::dropped_structural_tags(old_tags, new_tags)
 }
 
-pub(crate) fn enforce_structural_tag_replacement(
+pub fn enforce_structural_tag_replacement(
     old_tags: &HashSet<String>,
     new_tags: &HashSet<String>,
     force: bool,
@@ -2699,18 +2732,17 @@ pub(crate) fn add_args_for_dispatch(matches: &clap::ArgMatches) -> anyhow::Resul
 
 fn run_add(
     matches: &clap::ArgMatches,
-    ctx: &crate::command_registry::DispatchCtx,
-) -> anyhow::Result<crate::command_registry::Flow> {
-    use crate::*;
+    ctx: &crate::cmdkit::DispatchCtx,
+) -> anyhow::Result<crate::cmdkit::Flow> {
     let args = self::add_args_for_dispatch(matches)?;
     // trace:STORY-1468 | ai:codex — refuse unsupported storage before any mutation.
     let origin_prompt = if let Some(path) = &args.origin_prompt_file {
         let store_path = match &ctx.store {
-            None | Some(crate::command_registry::StoreCtx::Distributed { .. }) => {
-                return Ok(crate::command_registry::Flow::Continue);
+            None | Some(crate::cmdkit::StoreCtx::Distributed { .. }) => {
+                return Ok(crate::cmdkit::Flow::Continue);
             }
-            Some(crate::command_registry::StoreCtx::Git { store_path, .. }) => store_path,
-            Some(crate::command_registry::StoreCtx::Legacy { .. }) => {
+            Some(crate::cmdkit::StoreCtx::Git { store_path, .. }) => store_path,
+            Some(crate::cmdkit::StoreCtx::Legacy { .. }) => {
                 anyhow::bail!("Originating prompt capture requires the git-canonical store; SQLite, PostgreSQL and YAML backends are unsupported");
             }
         };
@@ -2729,11 +2761,9 @@ fn run_add(
         return crate::sanitized_intake::run(&args, ctx);
     }
     match &ctx.store {
-        None => Ok(crate::command_registry::Flow::Continue),
-        Some(crate::command_registry::StoreCtx::Distributed { .. }) => {
-            Ok(crate::command_registry::Flow::Continue)
-        }
-        Some(crate::command_registry::StoreCtx::Git {
+        None => Ok(crate::cmdkit::Flow::Continue),
+        Some(crate::cmdkit::StoreCtx::Distributed { .. }) => Ok(crate::cmdkit::Flow::Continue),
+        Some(crate::cmdkit::StoreCtx::Git {
             store_path,
             backend,
         }) => {
@@ -3947,9 +3977,9 @@ fn run_add(
                     }
                 }
             }
-            Ok(crate::command_registry::Flow::Continue)
+            Ok(crate::cmdkit::Flow::Continue)
         }
-        Some(crate::command_registry::StoreCtx::Legacy {
+        Some(crate::cmdkit::StoreCtx::Legacy {
             storage,
             requirements_path,
         }) => {
@@ -4051,23 +4081,23 @@ fn run_add(
                     }
                 }
             }
-            Ok(crate::command_registry::Flow::Continue)
+            Ok(crate::cmdkit::Flow::Continue)
         }
     }
 }
 
 // trace:STORY-1728 | ai:claude
-pub(crate) static ADD: crate::command_registry::CommandReg = crate::command_registry::CommandReg {
+pub(crate) static ADD: crate::cmdkit::CommandReg = crate::cmdkit::CommandReg {
     name: "add",
     help_after: "derisk",
     command: <AddArgs as clap::CommandFactory>::command,
-    policy: |_| crate::command_registry::CmdPolicy {
+    policy: |_| crate::cmdkit::CmdPolicy {
         stakeholder: crate::stakeholder_role::StakeholderAction::Intake,
         per_write_auto_push: true,
         skip_role_restore_prompt: false,
         team_identity_write: true,
     },
-    run: crate::command_registry::Handler::Store(run_add),
+    run: crate::cmdkit::Handler::Store(run_add),
 };
 
 /// List all requirements
@@ -4423,9 +4453,8 @@ pub(crate) struct ListArgs {
 
 fn run_list(
     matches: &clap::ArgMatches,
-    ctx: &crate::command_registry::DispatchCtx,
-) -> anyhow::Result<crate::command_registry::Flow> {
-    use crate::*;
+    ctx: &crate::cmdkit::DispatchCtx,
+) -> anyhow::Result<crate::cmdkit::Flow> {
     let args = <ListArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
     match &ctx.store {
         None => {
@@ -4437,19 +4466,17 @@ fn run_list(
             } = &args
             {
                 if s == "pr" || s == "mr" {
-                    return crate::command_registry::returned(pr_list_handler(*json, false));
+                    return crate::cmdkit::returned(pr_list_handler(*json, false));
                 }
                 // trace:TASK-1590 | ai:antigravity
                 if s == "review" {
-                    return crate::command_registry::returned(handle_review_list(*json));
+                    return crate::cmdkit::returned(handle_review_list(*json));
                 }
             }
-            Ok(crate::command_registry::Flow::Continue)
+            Ok(crate::cmdkit::Flow::Continue)
         }
-        Some(crate::command_registry::StoreCtx::Distributed { .. }) => {
-            Ok(crate::command_registry::Flow::Continue)
-        }
-        Some(crate::command_registry::StoreCtx::Git {
+        Some(crate::cmdkit::StoreCtx::Distributed { .. }) => Ok(crate::cmdkit::Flow::Continue),
+        Some(crate::cmdkit::StoreCtx::Git {
             store_path,
             backend,
         }) => {
@@ -4534,9 +4561,10 @@ fn run_list(
                         if *sync {
                             maybe_sync_pull(store_path)?;
                         }
-                        return crate::command_registry::returned(
-                            crate::faq_topics::run_faq_topics(backend, effective_json),
-                        );
+                        return crate::cmdkit::returned(crate::faq_topics::run_faq_topics(
+                            backend,
+                            effective_json,
+                        ));
                     }
                     let shortcut: Option<String> = if positional_type.is_some() {
                         None
@@ -4565,9 +4593,7 @@ fn run_list(
                         if *sync {
                             maybe_sync_pull(store_path)?;
                         }
-                        return crate::command_registry::returned(handle_list_human(
-                            *short, backend,
-                        ));
+                        return crate::cmdkit::returned(handle_list_human(*short, backend));
                     }
                     // STORY-662: resolve the owner-or-assignee `--user` filter. The
                     // positional `me` / `user:<name>` token is an alternate spelling of
@@ -5323,7 +5349,7 @@ fn run_list(
                                 println!("{id}");
                             }
                         }
-                        return crate::command_registry::returned(Ok(()));
+                        return crate::cmdkit::returned(Ok(()));
                     }
 
                     // TASK-670: compute the leading work-routing overlay (queued /
@@ -5715,10 +5741,10 @@ fn run_list(
                                 })
                                 .collect();
                             println!("{}", crate::cache_output::json_pretty(&narrowed)?);
-                            return crate::command_registry::returned(Ok(()));
+                            return crate::cmdkit::returned(Ok(()));
                         }
                         println!("{}", crate::cache_output::json_pretty(&out)?);
-                        return crate::command_registry::returned(Ok(()));
+                        return crate::cmdkit::returned(Ok(()));
                     }
 
                     // TASK-964: AGENT-MODE token-efficient TOON render. Replaces the
@@ -5881,7 +5907,7 @@ fn run_list(
                         if let Some(block) = crate::help_next::render(&next) {
                             println!("{block}");
                         }
-                        return crate::command_registry::returned(Ok(()));
+                        return crate::cmdkit::returned(Ok(()));
                     }
 
                     // TASK-970: in AGENT MODE, when the default cap trimmed the table,
@@ -5922,7 +5948,7 @@ fn run_list(
                             );
                             print_hidden_hints();
                             print_empty_list_hint();
-                            return crate::command_registry::returned(Ok(()));
+                            return crate::cmdkit::returned(Ok(()));
                         }
                         let store = backend.load()?;
                         let by_uuid: std::collections::HashMap<Uuid, &aida_core::Requirement> =
@@ -6069,7 +6095,7 @@ fn run_list(
                         print_deferred_triggers(*deferred, &reqs);
                         print_rework_needed_notes(&reqs, &rework_ids);
                         maybe_print_whats_left_tip(status.as_deref(), &reqs);
-                        return crate::command_registry::returned(Ok(()));
+                        return crate::cmdkit::returned(Ok(()));
                     }
 
                     // STORY-734: `--fields <csv>` selects AND orders the columns of the
@@ -6118,7 +6144,7 @@ fn run_list(
                             print_rework_needed_notes(&reqs, &rework_ids);
                             maybe_print_whats_left_tip(status.as_deref(), &reqs);
                         }
-                        return crate::command_registry::returned(Ok(()));
+                        return crate::cmdkit::returned(Ok(()));
                     }
 
                     if reqs.is_empty() {
@@ -6191,9 +6217,9 @@ fn run_list(
                     }
                 }
             }
-            Ok(crate::command_registry::Flow::Continue)
+            Ok(crate::cmdkit::Flow::Continue)
         }
-        Some(crate::command_registry::StoreCtx::Legacy {
+        Some(crate::cmdkit::StoreCtx::Legacy {
             storage,
             requirements_path,
         }) => {
@@ -6223,23 +6249,23 @@ fn run_list(
                     list_requirements(&storage, status, priority, r#type, feature, tags)?;
                 }
             }
-            Ok(crate::command_registry::Flow::Continue)
+            Ok(crate::cmdkit::Flow::Continue)
         }
     }
 }
 
 // trace:STORY-1728 | ai:claude
-pub(crate) static LIST: crate::command_registry::CommandReg = crate::command_registry::CommandReg {
+pub(crate) static LIST: crate::cmdkit::CommandReg = crate::cmdkit::CommandReg {
     name: "list",
     help_after: "fasttrack",
     command: <ListArgs as clap::CommandFactory>::command,
-    policy: |_| crate::command_registry::CmdPolicy {
+    policy: |_| crate::cmdkit::CmdPolicy {
         stakeholder: crate::stakeholder_role::StakeholderAction::Read,
         per_write_auto_push: false,
         skip_role_restore_prompt: false,
         team_identity_write: false,
     },
-    run: crate::command_registry::Handler::Store(run_list),
+    run: crate::cmdkit::Handler::Store(run_list),
 };
 
 /// Show details for a specific requirement
@@ -6382,16 +6408,13 @@ pub(crate) fn local_twin_note(
 
 fn run_show(
     matches: &clap::ArgMatches,
-    ctx: &crate::command_registry::DispatchCtx,
-) -> anyhow::Result<crate::command_registry::Flow> {
-    use crate::*;
+    ctx: &crate::cmdkit::DispatchCtx,
+) -> anyhow::Result<crate::cmdkit::Flow> {
     let args = <ShowArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
     match &ctx.store {
-        None => Ok(crate::command_registry::Flow::Continue),
-        Some(crate::command_registry::StoreCtx::Distributed { .. }) => {
-            Ok(crate::command_registry::Flow::Continue)
-        }
-        Some(crate::command_registry::StoreCtx::Git {
+        None => Ok(crate::cmdkit::Flow::Continue),
+        Some(crate::cmdkit::StoreCtx::Distributed { .. }) => Ok(crate::cmdkit::Flow::Continue),
+        Some(crate::cmdkit::StoreCtx::Git {
             store_path,
             backend,
         }) => {
@@ -6472,9 +6495,7 @@ fn run_show(
                     // friendly format hint instead of the version-mismatch/rebuild wall
                     // (which `parse_failure_hint` is reserved for below). trace:BUG-599
                     if !is_spec_id_or_uuid(id) {
-                        return crate::command_registry::returned(Err(
-                            not_found::invalid_spec_id_format(id),
-                        ));
+                        return crate::cmdkit::returned(Err(not_found::invalid_spec_id_format(id)));
                     }
                     // The id is well-formed, so any Err here is a genuine on-disk parse
                     // failure (binary/version skew) worth the rebuild hint. A
@@ -6512,12 +6533,12 @@ fn run_show(
                                 // BUG-600: a not-found lookup is a failure — return the
                                 // error (exit non-zero) like edit/defer/archive, don't
                                 // print-and-exit-0. trace:BUG-600 | ai:claude
-                                return crate::command_registry::returned(Err(
+                                return crate::cmdkit::returned(Err(
                                     not_found::requirement_not_found(id, Some(store_path)),
                                 ));
                             }
                         }
-                        return crate::command_registry::returned(Ok(()));
+                        return crate::cmdkit::returned(Ok(()));
                     }
                     match lookup? {
                         Some(req) => {
@@ -6542,7 +6563,7 @@ fn run_show(
                                         })
                                     );
                                 }
-                                return crate::command_registry::returned(Ok(()));
+                                return crate::cmdkit::returned(Ok(()));
                             }
                             // Share the fallback index across relationships and blockers.
                             // trace:BUG-1678 | ai:codex
@@ -6936,7 +6957,7 @@ fn run_show(
                                     serde_json::Value::Array(queue_membership),
                                 );
                                 println!("{}", crate::cache_output::json_pretty(&out)?);
-                                return crate::command_registry::returned(Ok(()));
+                                return crate::cmdkit::returned(Ok(()));
                             }
                             // TASK-964: AGENT-MODE token-efficient TOON render for the
                             // single-spec detail. A flat scalar head (the minimal field
@@ -7214,7 +7235,7 @@ fn run_show(
                                 if let Some(block) = crate::help_next::render(&next) {
                                     println!("{block}");
                                 }
-                                return crate::command_registry::returned(Ok(()));
+                                return crate::cmdkit::returned(Ok(()));
                             }
                             // TASK-265: --card renders a compact boxed spec card
                             // instead of the linear detail view, so /aida-pickup can
@@ -7257,7 +7278,7 @@ fn run_show(
                                 if let Some(block) = crate::help_next::render_human(&next) {
                                     println!("{block}");
                                 }
-                                return crate::command_registry::returned(Ok(()));
+                                return crate::cmdkit::returned(Ok(()));
                             }
                             // trace:STORY-B6B1278890774EF993D2EBC327862470-078 | ai:claude
                             let friendly = req.friendly_id();
@@ -7912,16 +7933,17 @@ fn run_show(
                             // process exits non-zero, matching edit/defer/archive and
                             // keeping script gating + usage telemetry honest (was a
                             // print-and-exit-0). trace:BUG-600 | ai:claude
-                            return crate::command_registry::returned(Err(
-                                not_found::requirement_not_found(id, Some(store_path)),
-                            ));
+                            return crate::cmdkit::returned(Err(not_found::requirement_not_found(
+                                id,
+                                Some(store_path),
+                            )));
                         }
                     }
                 }
             }
-            Ok(crate::command_registry::Flow::Continue)
+            Ok(crate::cmdkit::Flow::Continue)
         }
-        Some(crate::command_registry::StoreCtx::Legacy {
+        Some(crate::cmdkit::StoreCtx::Legacy {
             storage,
             requirements_path,
         }) => {
@@ -7938,23 +7960,23 @@ fn run_show(
                     show_requirement(&storage, id)?;
                 }
             }
-            Ok(crate::command_registry::Flow::Continue)
+            Ok(crate::cmdkit::Flow::Continue)
         }
     }
 }
 
 // trace:STORY-1728 | ai:claude
-pub(crate) static SHOW: crate::command_registry::CommandReg = crate::command_registry::CommandReg {
+pub(crate) static SHOW: crate::cmdkit::CommandReg = crate::cmdkit::CommandReg {
     name: "show",
     help_after: "list",
     command: <ShowArgs as clap::CommandFactory>::command,
-    policy: |_| crate::command_registry::CmdPolicy {
+    policy: |_| crate::cmdkit::CmdPolicy {
         stakeholder: crate::stakeholder_role::StakeholderAction::Read,
         per_write_auto_push: false,
         skip_role_restore_prompt: false,
         team_identity_write: false,
     },
-    run: crate::command_registry::Handler::Store(run_show),
+    run: crate::cmdkit::Handler::Store(run_show),
 };
 
 /// Edit an existing requirement
@@ -8213,7 +8235,7 @@ pub(crate) struct EditArgs {
 /// MCP `update_requirement`) asks this. A legacy `deferred:*` tag defers too:
 /// the spec reads `deferred` either way ([`crate::status_display::is_deferred`]).
 // trace:TASK-1955 | ai:claude
-pub(crate) fn deferred_status_edit_refusal(req: &aida_core::Requirement) -> Option<String> {
+pub fn deferred_status_edit_refusal(req: &aida_core::Requirement) -> Option<String> {
     let id = req.spec_id.clone().unwrap_or_else(|| req.id.to_string());
     if req.deferred {
         return Some(format!(
@@ -8237,16 +8259,13 @@ mod task_2174_deferred_status_edit_tests;
 
 fn run_edit(
     matches: &clap::ArgMatches,
-    ctx: &crate::command_registry::DispatchCtx,
-) -> anyhow::Result<crate::command_registry::Flow> {
-    use crate::*;
+    ctx: &crate::cmdkit::DispatchCtx,
+) -> anyhow::Result<crate::cmdkit::Flow> {
     let args = <EditArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
     match &ctx.store {
-        None => Ok(crate::command_registry::Flow::Continue),
-        Some(crate::command_registry::StoreCtx::Distributed { .. }) => {
-            Ok(crate::command_registry::Flow::Continue)
-        }
-        Some(crate::command_registry::StoreCtx::Git {
+        None => Ok(crate::cmdkit::Flow::Continue),
+        Some(crate::cmdkit::StoreCtx::Distributed { .. }) => Ok(crate::cmdkit::Flow::Continue),
+        Some(crate::cmdkit::StoreCtx::Git {
             store_path,
             backend,
         }) => {
@@ -8334,9 +8353,7 @@ fn run_edit(
                     // format" (or, via the lookup, the version-mismatch wall).
                     // trace:BUG-599 | ai:claude
                     if !is_spec_id_or_uuid(id) {
-                        return crate::command_registry::returned(Err(
-                            not_found::invalid_spec_id_format(id),
-                        ));
+                        return crate::cmdkit::returned(Err(not_found::invalid_spec_id_format(id)));
                     }
                     // BUG-68: record activity AFTER successful lookup AND
                     // after the TASK-47 terminal-status guard, so a refused
@@ -8529,12 +8546,12 @@ fn run_edit(
                                     && editor_description.is_none()
                                 {
                                     println!("No changes — {} left untouched.", display_id);
-                                    return crate::command_registry::returned(Ok(()));
+                                    return crate::cmdkit::returned(Ok(()));
                                 }
                             }
                             None => {
                                 println!("Empty buffer — {} left untouched.", display_id);
-                                return crate::command_registry::returned(Ok(()));
+                                return crate::cmdkit::returned(Ok(()));
                             }
                         }
                     }
@@ -9521,9 +9538,9 @@ fn run_edit(
                     }
                 }
             }
-            Ok(crate::command_registry::Flow::Continue)
+            Ok(crate::cmdkit::Flow::Continue)
         }
-        Some(crate::command_registry::StoreCtx::Legacy {
+        Some(crate::cmdkit::StoreCtx::Legacy {
             storage,
             requirements_path,
         }) => {
@@ -9627,23 +9644,23 @@ fn run_edit(
                     }
                 }
             }
-            Ok(crate::command_registry::Flow::Continue)
+            Ok(crate::cmdkit::Flow::Continue)
         }
     }
 }
 
 // trace:STORY-1728 | ai:claude
-pub(crate) static EDIT: crate::command_registry::CommandReg = crate::command_registry::CommandReg {
+pub(crate) static EDIT: crate::cmdkit::CommandReg = crate::cmdkit::CommandReg {
     name: "edit",
     help_after: "done",
     command: <EditArgs as clap::CommandFactory>::command,
-    policy: |_| crate::command_registry::CmdPolicy {
+    policy: |_| crate::cmdkit::CmdPolicy {
         stakeholder: crate::stakeholder_role::StakeholderAction::EditRequirement,
         per_write_auto_push: true,
         skip_role_restore_prompt: false,
         team_identity_write: true,
     },
-    run: crate::command_registry::Handler::Store(run_edit),
+    run: crate::cmdkit::Handler::Store(run_edit),
 };
 
 /// Delete a requirement
@@ -9660,16 +9677,13 @@ pub(crate) struct DelArgs {
 
 fn run_del(
     matches: &clap::ArgMatches,
-    ctx: &crate::command_registry::DispatchCtx,
-) -> anyhow::Result<crate::command_registry::Flow> {
-    use crate::*;
+    ctx: &crate::cmdkit::DispatchCtx,
+) -> anyhow::Result<crate::cmdkit::Flow> {
     let args = <DelArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
     match &ctx.store {
-        None => Ok(crate::command_registry::Flow::Continue),
-        Some(crate::command_registry::StoreCtx::Distributed { .. }) => {
-            Ok(crate::command_registry::Flow::Continue)
-        }
-        Some(crate::command_registry::StoreCtx::Git {
+        None => Ok(crate::cmdkit::Flow::Continue),
+        Some(crate::cmdkit::StoreCtx::Distributed { .. }) => Ok(crate::cmdkit::Flow::Continue),
+        Some(crate::cmdkit::StoreCtx::Git {
             store_path,
             backend,
         }) => {
@@ -9690,7 +9704,7 @@ fn run_del(
                         std::io::stdin().read_line(&mut input)?;
                         if !input.trim().eq_ignore_ascii_case("y") {
                             println!("Cancelled.");
-                            return crate::command_registry::returned(Ok(()));
+                            return crate::cmdkit::returned(Ok(()));
                         }
                     }
 
@@ -9698,9 +9712,9 @@ fn run_del(
                     println!("Deleted: {}", id);
                 }
             }
-            Ok(crate::command_registry::Flow::Continue)
+            Ok(crate::cmdkit::Flow::Continue)
         }
-        Some(crate::command_registry::StoreCtx::Legacy {
+        Some(crate::cmdkit::StoreCtx::Legacy {
             storage,
             requirements_path,
         }) => {
@@ -9710,23 +9724,23 @@ fn run_del(
                     delete_requirement(&storage, id, *yes)?;
                 }
             }
-            Ok(crate::command_registry::Flow::Continue)
+            Ok(crate::cmdkit::Flow::Continue)
         }
     }
 }
 
 // trace:STORY-1728 | ai:claude
-pub(crate) static DEL: crate::command_registry::CommandReg = crate::command_registry::CommandReg {
+pub(crate) static DEL: crate::cmdkit::CommandReg = crate::cmdkit::CommandReg {
     name: "del",
     help_after: "edit",
     command: <DelArgs as clap::CommandFactory>::command,
-    policy: |_| crate::command_registry::CmdPolicy {
+    policy: |_| crate::cmdkit::CmdPolicy {
         stakeholder: crate::stakeholder_role::StakeholderAction::Write,
         per_write_auto_push: true,
         skip_role_restore_prompt: false,
         team_identity_write: false,
     },
-    run: crate::command_registry::Handler::Store(run_del),
+    run: crate::cmdkit::Handler::Store(run_del),
 };
 
 /// Search requirements for a pattern (like grep)
@@ -9788,16 +9802,13 @@ pub(crate) struct GrepArgs {
 
 fn run_grep(
     matches: &clap::ArgMatches,
-    ctx: &crate::command_registry::DispatchCtx,
-) -> anyhow::Result<crate::command_registry::Flow> {
-    use crate::*;
+    ctx: &crate::cmdkit::DispatchCtx,
+) -> anyhow::Result<crate::cmdkit::Flow> {
     let args = <GrepArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
     match &ctx.store {
-        None => Ok(crate::command_registry::Flow::Continue),
-        Some(crate::command_registry::StoreCtx::Distributed { .. }) => {
-            Ok(crate::command_registry::Flow::Continue)
-        }
-        Some(crate::command_registry::StoreCtx::Git {
+        None => Ok(crate::cmdkit::Flow::Continue),
+        Some(crate::cmdkit::StoreCtx::Distributed { .. }) => Ok(crate::cmdkit::Flow::Continue),
+        Some(crate::cmdkit::StoreCtx::Git {
             store_path,
             backend,
         }) => {
@@ -9806,7 +9817,7 @@ fn run_grep(
             let _ = (store_path, backend, &args);
             crate::git_backend_cmd::exit_unsupported_on_git_backend()
         }
-        Some(crate::command_registry::StoreCtx::Legacy {
+        Some(crate::cmdkit::StoreCtx::Legacy {
             storage,
             requirements_path,
         }) => {
@@ -9845,23 +9856,23 @@ fn run_grep(
                     )?;
                 }
             }
-            Ok(crate::command_registry::Flow::Continue)
+            Ok(crate::cmdkit::Flow::Continue)
         }
     }
 }
 
 // trace:STORY-1728 | ai:claude
-pub(crate) static GREP: crate::command_registry::CommandReg = crate::command_registry::CommandReg {
+pub(crate) static GREP: crate::cmdkit::CommandReg = crate::cmdkit::CommandReg {
     name: "grep",
     help_after: "doc",
     command: <GrepArgs as clap::CommandFactory>::command,
-    policy: |_| crate::command_registry::CmdPolicy {
+    policy: |_| crate::cmdkit::CmdPolicy {
         stakeholder: crate::stakeholder_role::StakeholderAction::Write,
         per_write_auto_push: false,
         skip_role_restore_prompt: false,
         team_identity_write: false,
     },
-    run: crate::command_registry::Handler::Store(run_grep),
+    run: crate::cmdkit::Handler::Store(run_grep),
 };
 
 /// Simple search for requirements (case-insensitive by default)
@@ -9954,16 +9965,13 @@ pub(crate) struct SearchArgs {
 
 fn run_search(
     matches: &clap::ArgMatches,
-    ctx: &crate::command_registry::DispatchCtx,
-) -> anyhow::Result<crate::command_registry::Flow> {
-    use crate::*;
+    ctx: &crate::cmdkit::DispatchCtx,
+) -> anyhow::Result<crate::cmdkit::Flow> {
     let args = <SearchArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
     match &ctx.store {
-        None => Ok(crate::command_registry::Flow::Continue),
-        Some(crate::command_registry::StoreCtx::Distributed { .. }) => {
-            Ok(crate::command_registry::Flow::Continue)
-        }
-        Some(crate::command_registry::StoreCtx::Git {
+        None => Ok(crate::cmdkit::Flow::Continue),
+        Some(crate::cmdkit::StoreCtx::Distributed { .. }) => Ok(crate::cmdkit::Flow::Continue),
+        Some(crate::cmdkit::StoreCtx::Git {
             store_path,
             backend,
         }) => {
@@ -10042,7 +10050,7 @@ fn run_search(
                                 println!("{id}");
                             }
                         }
-                        return crate::command_registry::returned(Ok(()));
+                        return crate::cmdkit::returned(Ok(()));
                     }
 
                     // BUG-531: `--json` emits the row set as a JSON array without the
@@ -10072,7 +10080,7 @@ fn run_search(
                             })
                             .collect();
                         println!("{}", crate::cache_output::json_pretty(&out)?);
-                        return crate::command_registry::returned(Ok(()));
+                        return crate::cmdkit::returned(Ok(()));
                     }
 
                     // STORY-734: `--fields <csv>` selects + orders the columns of the
@@ -10110,7 +10118,7 @@ fn run_search(
                                 )
                             );
                         }
-                        return crate::command_registry::returned(Ok(()));
+                        return crate::cmdkit::returned(Ok(()));
                     }
 
                     // BUG-672: the DEFAULT search path (no `--fields`) was a hardcoded
@@ -10136,7 +10144,7 @@ fn run_search(
                         if let Some(block) = crate::help_next::render(&next) {
                             println!("{block}");
                         }
-                        return crate::command_registry::returned(Ok(()));
+                        return crate::cmdkit::returned(Ok(()));
                     }
 
                     if results.is_empty() {
@@ -10171,9 +10179,9 @@ fn run_search(
                     }
                 }
             }
-            Ok(crate::command_registry::Flow::Continue)
+            Ok(crate::cmdkit::Flow::Continue)
         }
-        Some(crate::command_registry::StoreCtx::Legacy {
+        Some(crate::cmdkit::StoreCtx::Legacy {
             storage,
             requirements_path,
         }) => {
@@ -10209,25 +10217,24 @@ fn run_search(
                     )?;
                 }
             }
-            Ok(crate::command_registry::Flow::Continue)
+            Ok(crate::cmdkit::Flow::Continue)
         }
     }
 }
 
 // trace:STORY-1728 | ai:claude
-pub(crate) static SEARCH: crate::command_registry::CommandReg =
-    crate::command_registry::CommandReg {
-        name: "search",
-        help_after: "rework",
-        command: <SearchArgs as clap::CommandFactory>::command,
-        policy: |_| crate::command_registry::CmdPolicy {
-            stakeholder: crate::stakeholder_role::StakeholderAction::Read,
-            per_write_auto_push: false,
-            skip_role_restore_prompt: false,
-            team_identity_write: false,
-        },
-        run: crate::command_registry::Handler::Store(run_search),
-    };
+pub(crate) static SEARCH: crate::cmdkit::CommandReg = crate::cmdkit::CommandReg {
+    name: "search",
+    help_after: "rework",
+    command: <SearchArgs as clap::CommandFactory>::command,
+    policy: |_| crate::cmdkit::CmdPolicy {
+        stakeholder: crate::stakeholder_role::StakeholderAction::Read,
+        per_write_auto_push: false,
+        skip_role_restore_prompt: false,
+        team_identity_write: false,
+    },
+    run: crate::cmdkit::Handler::Store(run_search),
+};
 
 /// The one line a refused delegated add prints about the agreed ID its
 /// block dispensed: returned to the block, burned (a concurrent add
@@ -10297,7 +10304,7 @@ mod task_1954_focus_phrase_tests {
 mod origin_prompt_tests {
     #[test]
     fn origin_prompt_cli_defers_until_store_open_and_refuses_legacy() {
-        use crate::command_registry::{DispatchCtx, Flow, StoreCtx};
+        use crate::cmdkit::{DispatchCtx, Flow, StoreCtx};
         use clap::CommandFactory;
         let matches = super::AddArgs::command()
             .try_get_matches_from([
@@ -10366,7 +10373,7 @@ mod origin_prompt_tests {
         ] {
             let mut args = vec!["aida", "add", "--title", "Feature"];
             args.extend(extra);
-            assert!(crate::command_registry::try_parse_from(args).is_ok());
+            assert!(crate::TEST_CLI.try_parse_from(args).is_ok());
         }
         for extra in [
             vec!["--origin-prompt-file", "reviewed.txt", "--no-origin-prompt"],
@@ -10375,15 +10382,11 @@ mod origin_prompt_tests {
         ] {
             let mut args = vec!["aida", "add", "--title", "Feature"];
             args.extend(extra);
-            assert!(crate::command_registry::try_parse_from(args).is_err());
+            assert!(crate::TEST_CLI.try_parse_from(args).is_err());
         }
-        assert!(crate::command_registry::try_parse_from([
-            "aida",
-            "show",
-            "TASK-1",
-            "--origin-prompt"
-        ])
-        .is_ok());
+        assert!(crate::TEST_CLI
+            .try_parse_from(["aida", "show", "TASK-1", "--origin-prompt"])
+            .is_ok());
         let mut json_args = [
             "aida",
             "show",
@@ -10396,7 +10399,7 @@ mod origin_prompt_tests {
         .to_vec();
         crate::json_capability_gate(&mut json_args).unwrap();
         assert!(json_args.iter().any(|arg| arg == "--json"));
-        assert!(crate::command_registry::try_parse_from(json_args).is_ok());
+        assert!(crate::TEST_CLI.try_parse_from(json_args).is_ok());
         for mode in [
             "--card",
             "--tree",
@@ -10409,14 +10412,9 @@ mod origin_prompt_tests {
             "--brief",
             "--full",
         ] {
-            assert!(crate::command_registry::try_parse_from([
-                "aida",
-                "show",
-                "TASK-1",
-                "--origin-prompt",
-                mode
-            ])
-            .is_err());
+            assert!(crate::TEST_CLI
+                .try_parse_from(["aida", "show", "TASK-1", "--origin-prompt", mode])
+                .is_err());
         }
     }
 }

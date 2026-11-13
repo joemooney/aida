@@ -1,6 +1,8 @@
 //! Detect an unchanged, still blocked PR before a standalone lane reports success.
 // trace:BUG-2452 | ai:codex
-use crate::*;
+use crate::launch;
+use aida_core::{RequirementStatus, Storage};
+use anyhow::{Context, Result};
 use std::path::Path;
 use std::process::Command;
 use std::time::Duration;
@@ -57,7 +59,7 @@ fn reasons(
         reasons.push(format!("required check failed: {}", check.name));
     }
     for verdict in verdicts.iter().filter(|v| {
-        v.kind.blocks_done()
+        v.kind.requires_changes()
             && v.closed_by_merge.is_none()
             && v.reviewed_sha.as_deref().is_some_and(|sha| {
                 crate::gate::review_verdict::same_reviewed_sha(sha, &state.head_ref_oid)

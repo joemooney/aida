@@ -1,7 +1,24 @@
+// trace:TASK-3429 | ai:codex
 //! `aida rel` edge add/remove, relationship type matching and rows, tree, comment and card rendering (STORY-1488 slice 1)
 // trace:STORY-1488 | ai:claude
 
-use crate::*;
+use crate::is_terminal_status_str;
+use crate::{
+    build_intent_neighborhood, discover_plan_context, extract_acceptance_section,
+    find_main_worktree_root, get_default_author, intent, is_terminal_status, load_store_for_lookup,
+    not_found, print_git_linkage, resolve_current_session_id, status_display, SessionLease,
+};
+use crate::{do_dispatch, effective_display_status, parse_requirement_id, trailer_spec_or_skip};
+use aida_core::DatabaseBackend;
+use aida_core::Storage;
+use aida_core::{
+    Comment, RelationshipType, Requirement, RequirementPriority, RequirementStatus,
+    RequirementsStore,
+};
+use anyhow::Result;
+use colored::Colorize;
+use std::collections::HashSet;
+use uuid::Uuid;
 
 /// Read node_id from the store's node.toml; defaults to 1 for unregistered nodes.
 pub(crate) fn load_node_id(store_path: &std::path::Path) -> String {
@@ -54,9 +71,7 @@ pub(crate) fn hostname() -> String {
 /// Load or create the distributed dispenser for a git-backed store.
 /// Reads node config from {store}/.aida/node.toml; defaults to node_id=1
 /// if no node registration has happened yet.
-pub(crate) fn load_dispenser(
-    store_path: &std::path::Path,
-) -> Result<aida_core::models::DispenserHandle> {
+pub fn load_dispenser(store_path: &std::path::Path) -> Result<aida_core::models::DispenserHandle> {
     use aida_core::dispenser::{FileDispenser, IdMode};
     use aida_core::node::NodeConfig;
 
@@ -580,7 +595,7 @@ pub(crate) fn looks_like_cross_store_spec_ref(s: &str) -> bool {
             .all(|c| c.is_ascii_uppercase() || c.is_ascii_digit() || c == '-')
 }
 
-pub(crate) fn reject_cross_store_spec_ref(raw: &str) -> Result<()> {
+pub fn reject_cross_store_spec_ref(raw: &str) -> Result<()> {
     if looks_like_cross_store_spec_ref(raw) {
         anyhow::bail!(
             "cross-store requirement reference `{raw}` cannot be resolved as a local graph edge. \
@@ -590,7 +605,7 @@ pub(crate) fn reject_cross_store_spec_ref(raw: &str) -> Result<()> {
     Ok(())
 }
 
-pub(crate) fn relationship_terminal_ambiguity_warning(
+pub fn relationship_terminal_ambiguity_warning(
     rel_type: &RelationshipType,
     source: &Requirement,
     target: &Requirement,

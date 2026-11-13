@@ -43,9 +43,29 @@ pub struct EditFields {
         skip_serializing_if = "Option::is_none"
     )]
     pub priority: Option<String>,
+    /// Missing leaves tags unchanged; an empty list clears nonstructural tags.
+    #[serde(
+        default,
+        deserialize_with = "present_tags",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub tags: Option<Vec<String>>,
+    /// Missing leaves weight unchanged; explicit null clears it.
+    #[serde(
+        default,
+        deserialize_with = "present_weight",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub weight: Option<Option<f32>>,
 }
-// Missing fields mean unchanged; explicit null is not an edit verb. Match the
-// broker's closed schema when decoding independently in the trusted host.
+fn present_tags<'de, D: serde::Deserializer<'de>>(d: D) -> Result<Option<Vec<String>>, D::Error> {
+    Vec::<String>::deserialize(d).map(Some)
+}
+fn present_weight<'de, D: serde::Deserializer<'de>>(d: D) -> Result<Option<Option<f32>>, D::Error> {
+    Option::<f32>::deserialize(d).map(Some)
+}
+// Missing text fields mean unchanged; explicit null is not a text edit verb.
+// Match the broker's closed schema independently in the trusted host.
 fn present_text<'de, D: serde::Deserializer<'de>>(d: D) -> Result<Option<String>, D::Error> {
     String::deserialize(d).map(Some)
 }
@@ -106,10 +126,28 @@ impl CanonicalOperation {
                 anyhow::ensure!(
                     fields.title.is_some()
                         || fields.description.is_some()
-                        || fields.priority.is_some(),
+                        || fields.priority.is_some()
+                        || fields.weight.is_some()
+                        || fields.tags.is_some(),
                     "InvalidRequest"
                 );
                 fields.parsed_priority()?;
+                if let Some(tags) = &fields.tags {
+                    anyhow::ensure!(tags.len() <= 256, "InvalidRequest");
+                    for tag in tags {
+                        anyhow::ensure!(
+                            tag.len() <= 512 && !tag.chars().any(char::is_control),
+                            "InvalidRequest"
+                        );
+                        anyhow::ensure!(
+                            !tag.trim().chars().any(char::is_whitespace),
+                            "InvalidRequest"
+                        );
+                    }
+                }
+                if let Some(Some(weight)) = fields.weight {
+                    anyhow::ensure!(weight.is_finite(), "InvalidRequest");
+                }
                 if let Some(t) = &fields.title {
                     anyhow::ensure!(text(t) && t.len() <= 512, "InvalidRequest");
                 }
@@ -124,6 +162,29 @@ impl CanonicalOperation {
         }
         Ok(())
     }
+}
+
+/// Shared replacement protection for routing and graph-integrity tags.
+// trace:TASK-3223 | ai:codex
+pub fn dropped_structural_tags(
+    old_tags: &std::collections::HashSet<String>,
+    new_tags: &std::collections::HashSet<String>,
+) -> Vec<String> {
+    const PREFIXES: &[&str] = &[
+        "parent:",
+        "batch:",
+        "lane:",
+        "severity:",
+        "lifecycle:",
+        "aida:",
+    ];
+    let mut dropped: Vec<String> = old_tags
+        .difference(new_tags)
+        .filter(|tag| PREFIXES.iter().any(|prefix| tag.starts_with(prefix)))
+        .cloned()
+        .collect();
+    dropped.sort();
+    dropped
 }
 
 #[cfg(test)]
@@ -165,14 +226,49 @@ mod tests {
             .validate()
             .is_err());
         for fields in [
+            serde_json::json!({"tags": null}),
+            serde_json::json!({"tags": "one,two"}),
+            serde_json::json!({"tags": [1]}),
             serde_json::json!({"priority": null}),
             serde_json::json!({"priority": 1}),
+            serde_json::json!({"weight": "42"}),
+            serde_json::json!({"weight": true}),
             serde_json::json!({"title": null, "description": "text"}),
             serde_json::json!({"description": null, "title": "title"}),
             serde_json::json!({"title": "title", "status": "Completed"}),
         ] {
             assert!(operation(&revision, fields).is_err());
         }
+        for tags in [
+            serde_json::json!([]),
+            serde_json::json!(["alpha", " beta ", "alpha"]),
+        ] {
+            let decoded = operation(&revision, serde_json::json!({"tags":tags})).unwrap();
+            decoded.validate().unwrap();
+        }
+        for tags in [
+            serde_json::json!(["one two"]),
+            serde_json::json!(["x\u{7f}"]),
+            serde_json::json!(["x".repeat(513)]),
+            serde_json::json!(vec!["x"; 257]),
+        ] {
+            assert!(operation(&revision, serde_json::json!({"tags":tags}))
+                .unwrap()
+                .validate()
+                .is_err());
+        }
+        for weight in [serde_json::json!(0.75), serde_json::Value::Null] {
+            let decoded = operation(&revision, serde_json::json!({"weight": weight})).unwrap();
+            decoded.validate().unwrap();
+            assert_eq!(
+                serde_json::to_value(decoded).unwrap()["data"]["fields"]["weight"],
+                weight
+            );
+        }
+        assert!(operation(&revision, serde_json::json!({"weight": 1e100}))
+            .unwrap()
+            .validate()
+            .is_err());
         assert!(operation(&revision, serde_json::json!({}))
             .unwrap()
             .validate()

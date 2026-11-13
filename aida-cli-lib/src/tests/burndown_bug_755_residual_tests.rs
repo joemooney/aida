@@ -13,6 +13,7 @@ fn wave_pr_action_holds_supervised_even_when_approved_and_green() {
         wait_expired: None,
         ci: crate::integrate::CiState::Passing,
         request_changes: false,
+        review_waiting: false,
         mergeable: crate::integrate::MergeableState::Mergeable,
     });
     assert!(

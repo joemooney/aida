@@ -26,4 +26,4 @@ Begin with one coding agent and one repository using the [getting-started guide]
 
 ## Source and inspection
 
-The [MCP implementation](../aida-cli-lib/src/mcp.rs), [CLI integrations reference](cli/09-integrations.md) and [forge providers guide](advanced/forge-providers.md) are starting points for checking the installed surface. Use `aida mcp-serve --help`, `aida github --help`, `aida gitlab --help` and `aida jira --help` for exact commands and flags.
+The [MCP implementation](../aida-mcp/src/mcp.rs), [CLI integrations reference](cli/09-integrations.md) and [forge providers guide](advanced/forge-providers.md) are starting points for checking the installed surface. Use `aida mcp-serve --help`, `aida github --help`, `aida gitlab --help` and `aida jira --help` for exact commands and flags.

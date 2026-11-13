@@ -211,6 +211,6 @@ pub(crate) fn parse_lookback_at<Tz: chrono::TimeZone>(
 
 /// [`parse_lookback_at`] against the wall clock and the system timezone.
 // trace:TASK-1509 | ai:claude
-pub(crate) fn parse_lookback(raw: &str, flag: &str) -> Result<chrono::Duration> {
+pub fn parse_lookback(raw: &str, flag: &str) -> Result<chrono::Duration> {
     parse_lookback_at(raw, flag, chrono::Utc::now(), &chrono::Local)
 }

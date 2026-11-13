@@ -175,14 +175,9 @@ mod tests {
 
     #[test]
     fn story1673_cli_parses_only_explicit_constraints_command() {
-        let cli = crate::command_registry::try_parse_from([
-            "aida",
-            "verify",
-            "constraints",
-            "--json",
-            "--fail-on-drift",
-        ])
-        .unwrap();
+        let cli = crate::TEST_CLI
+            .try_parse_from(["aida", "verify", "constraints", "--json", "--fail-on-drift"])
+            .unwrap();
         assert!(matches!(
             cli.command.registered::<crate::verify_cmd::VerifyArgs>(),
             crate::verify_cmd::VerifyArgs {
@@ -205,7 +200,7 @@ mod tests {
                 "touch sentinel",
             ],
         ] {
-            assert!(crate::command_registry::try_parse_from(args).is_err());
+            assert!(crate::TEST_CLI.try_parse_from(args).is_err());
         }
     }
 
@@ -274,28 +269,21 @@ mod tests {
         assert!(!fails_on_unknown(&rows, true));
         // --fail-on-unknown is opt-in on top of --fail-on-drift.
         // trace:TASK-1954 | ai:claude  trace:TASK-1796 | ai:claude
-        assert!(crate::command_registry::try_parse_from([
-            "aida",
-            "verify",
-            "constraints",
-            "--fail-on-unknown"
-        ])
-        .is_err());
-        assert!(crate::command_registry::try_parse_from([
-            "aida",
-            "verify",
-            "constraints",
-            "--fail-on-drift",
-            "--fail-on-unknown"
-        ])
-        .is_ok());
-        assert!(crate::command_registry::try_parse_from([
-            "aida",
-            "verify",
-            "constraints",
-            "--verbose"
-        ])
-        .is_ok());
+        assert!(crate::TEST_CLI
+            .try_parse_from(["aida", "verify", "constraints", "--fail-on-unknown"])
+            .is_err());
+        assert!(crate::TEST_CLI
+            .try_parse_from([
+                "aida",
+                "verify",
+                "constraints",
+                "--fail-on-drift",
+                "--fail-on-unknown"
+            ])
+            .is_ok());
+        assert!(crate::TEST_CLI
+            .try_parse_from(["aida", "verify", "constraints", "--verbose"])
+            .is_ok());
     }
 }
 
@@ -433,10 +421,7 @@ pub(crate) struct VerifyArgs {
 
 // Explicit only: no sync/drain/hook path invokes host probes.
 // trace:STORY-1673 | ai:codex
-fn run_verify(
-    matches: &clap::ArgMatches,
-    ctx: &crate::command_registry::DispatchCtx,
-) -> anyhow::Result<()> {
+fn run_verify(matches: &clap::ArgMatches, ctx: &crate::cmdkit::DispatchCtx) -> anyhow::Result<()> {
     let args = <VerifyArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
     let cmd = &args.inner;
     return self::handle_verify_command(
@@ -446,18 +431,17 @@ fn run_verify(
 }
 
 // trace:STORY-1728 | ai:claude
-pub(crate) static VERIFY: crate::command_registry::CommandReg =
-    crate::command_registry::CommandReg {
-        name: "verify",
-        help_after: "lint",
-        command: <VerifyArgs as clap::CommandFactory>::command,
-        // Main's table had no read arm for top-level `verify` (only `db block
-        // verify`), so it fell through to Write; guests stay refused.
-        policy: |_| crate::command_registry::CmdPolicy {
-            stakeholder: crate::stakeholder_role::StakeholderAction::Write,
-            per_write_auto_push: false,
-            skip_role_restore_prompt: false,
-            team_identity_write: false,
-        },
-        run: crate::command_registry::Handler::Early(run_verify),
-    };
+pub(crate) static VERIFY: crate::cmdkit::CommandReg = crate::cmdkit::CommandReg {
+    name: "verify",
+    help_after: "lint",
+    command: <VerifyArgs as clap::CommandFactory>::command,
+    // Main's table had no read arm for top-level `verify` (only `db block
+    // verify`), so it fell through to Write; guests stay refused.
+    policy: |_| crate::cmdkit::CmdPolicy {
+        stakeholder: crate::stakeholder_role::StakeholderAction::Write,
+        per_write_auto_push: false,
+        skip_role_restore_prompt: false,
+        team_identity_write: false,
+    },
+    run: crate::cmdkit::Handler::Early(run_verify),
+};

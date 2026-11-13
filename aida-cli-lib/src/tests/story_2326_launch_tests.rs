@@ -137,8 +137,13 @@ fn resolve_refusal_table() {
     ]);
     for posture in [aida, none, native] {
         let (got, calls) = boundary_calls(|| {
-            LaunchContext::resolve(request(posture, LaunchKind::Fresh, &[]))
-                .map(|ctx| spawn_agent(&ctx))
+            {
+                let req = request(posture, LaunchKind::Fresh, &[]);
+                let exec = crate::session::capture_launch_exec(&req.cwd, req.host_main.as_deref())
+                    .map_err(|e| LaunchRefusal::MalformedParentContainment(format!("{e:#}")))?;
+                LaunchContext::resolve(&exec, req)
+            }
+            .map(|ctx| spawn_agent(&ctx))
         });
         match got {
             Err(LaunchRefusal::MalformedParentContainment(msg)) => {

@@ -655,6 +655,8 @@ findings promote --reason TASK-1 TASK-1	Finding	true	false	false
 findings promote --to TASK-1 TASK-1	Finding	true	false	false
 findings promote TASK-1	Finding	true	false	false
 findings recur --note TASK-1 TASK-1	Finding	true	false	false
+findings recur --reason hold --until manual:joe TASK-1	Finding	true	false	true
+findings recur --until date:2026-01-01 TASK-1	Finding	true	false	true
 findings recur TASK-1	Finding	true	false	false
 focus	Write	false	false	false
 focus clear	Write	false	false	false
@@ -1677,9 +1679,12 @@ session gc --dry-run	Session	false	false	true
 session gc --yes	Session	false	false	true
 session handoff	Session	false	false	true
 session handoff --check	Session	false	false	true
+session handoff --reason hold --until manual:joe --spec TASK-1 --write TASK-1	Session	true	false	true
 session handoff --seat TASK-1	Session	false	false	true
 session handoff --show	Session	false	false	true
+session handoff --spec TASK-1 --write TASK-1 --until date:2026-01-01	Session	true	false	true
 session handoff --standing-orders TASK-1	Session	false	false	true
+session handoff --until date:2026-01-01 --write TASK-1 --spec TASK-1	Session	true	false	true
 session handoff --write TASK-1	Session	false	false	true
 session harness-worktree-register --agent-id TASK-1 --cwd TASK-1	Session	false	false	true
 session harness-worktree-register --agent-id TASK-1 --cwd TASK-1 --agent-type TASK-1	Session	false	false	true

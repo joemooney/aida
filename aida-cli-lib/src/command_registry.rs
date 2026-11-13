@@ -1,8 +1,9 @@
+// trace:TASK-3429 | ai:codex
 //! Per-module command registration. Each command module owns its clap
 //! definition, dispatch phase, policy and handler in one `CommandReg`, listed
 //! once in [`REGISTRY`]; the legacy `Command` enum in `cli.rs` shrinks one
-//! slice at a time until it is gone. `built_command()` is the only way
-//! production code may obtain the CLI's clap tree, so every consumer (parse,
+//! slice at a time until it is gone. `built_command()` supplies the pristine
+//! tree to the crate root's injected CLI support, so every consumer (parse,
 //! help, catalog, alias and extension shadowing) sees registered commands.
 // trace:STORY-1728 | ai:claude
 
@@ -10,9 +11,9 @@ use anyhow::Result;
 use clap::{ArgMatches, CommandFactory, FromArgMatches};
 
 use crate::cli::{Cli, Command, GlobalArgs};
-// Preserve the existing framework import paths.
-// trace:TASK-3425 | ai:codex
-pub(crate) use crate::cmdkit::*;
+// Framework types live in cmdkit; consumers import them from there directly.
+// trace:TASK-3448 | ai:claude
+use crate::cmdkit::{CommandReg, DispatchCtx, Flow, Invocation};
 
 /// Every registered command, sorted by command name (byte order) so parallel
 /// additions rarely touch the same line.
@@ -72,6 +73,7 @@ pub(crate) static REGISTRY: &[&CommandReg] = &[
     &crate::field_study_cmd::FIELD_STUDY,
     &crate::findings_gate::FINDINGS,
     &crate::mandate_drive::FLEET,
+    &crate::flow_cmd::FLOW,
     &crate::focus_cmd::FOCUS,
     &crate::gate_cmd::GATE,
     &crate::tracker_cmd::GITHUB,
@@ -105,7 +107,7 @@ pub(crate) static REGISTRY: &[&CommandReg] = &[
     &crate::mandate::MANDATE,
     &crate::manual::MANUAL,
     &crate::mcp_cmd::MCP,
-    &crate::mcp::MCP_SERVE,
+    &crate::mcp_serve::MCP_SERVE,
     &crate::memories_cmd::MEMORIES,
     &crate::merge_hold_cmd::MERGE_HOLD,
     &crate::merge_hold_cmd::MERGE_LOCK,
@@ -291,30 +293,21 @@ pub(crate) fn help_order<'a>(
     Ok(order)
 }
 
-/// Parse argv against [`built_command`]; clap's own error on failure.
+/// Parse argv through the injected leaf helper, exiting with clap's message
+/// and code on error (the `Parser::parse_from` contract).
 // trace:STORY-1728 | ai:claude
-pub(crate) fn try_parse_from<I, T>(argv: I) -> Result<Cli, clap::Error>
-where
-    I: IntoIterator<Item = T>,
-    T: Into<std::ffi::OsString> + Clone,
-{
-    let mut root = built_command();
-    let mut matches = root.try_get_matches_from_mut(argv)?;
-    cli_from_matches(&mut matches).map_err(|err| err.format(&mut root))
-}
-
-/// [`try_parse_from`], exiting with clap's message and code on error (the
-/// `Parser::parse_from` contract).
-// trace:STORY-1728 | ai:claude
+// trace:TASK-3448 | ai:codex
 pub(crate) fn parse_from<I, T>(argv: I) -> Cli
 where
     I: IntoIterator<Item = T>,
     T: Into<std::ffi::OsString> + Clone,
 {
-    try_parse_from(argv).unwrap_or_else(|err| err.exit())
+    crate::CLI_SUPPORT
+        .try_parse_from(argv)
+        .unwrap_or_else(|err| err.exit())
 }
 
-fn cli_from_matches(matches: &mut ArgMatches) -> Result<Cli, clap::Error> {
+pub(crate) fn cli_from_matches(matches: &mut ArgMatches) -> Result<Cli, clap::Error> {
     let Some(reg) = matches.subcommand_name().and_then(lookup) else {
         return Cli::from_arg_matches_mut(matches);
     };
@@ -360,7 +353,8 @@ where
     I: IntoIterator<Item = T>,
     T: Into<std::ffi::OsString> + Clone,
 {
-    try_parse_from(argv)
+    crate::TEST_CLI
+        .try_parse_from(argv)
         .unwrap_or_else(|err| panic!("test argv does not parse: {err}"))
         .command
 }
@@ -393,3 +387,82 @@ mod bug_2189_format_collision_tests;
 #[cfg(test)]
 #[path = "tests/bug_2221_pristine_tree_tests.rs"]
 mod bug_2221_pristine_tree_tests;
+
+// trace:TASK-3429 | ai:codex
+/// Store handler supplied by the binary, so cli-lib never depends on aida-mcp.
+pub type McpHandler = fn(&clap::ArgMatches, &DispatchCtx) -> anyhow::Result<Flow>;
+static MCP_HANDLER: std::sync::OnceLock<McpHandler> = std::sync::OnceLock::new();
+/// Install the transport handler used by the mcp-serve REGISTRY entry before parsing.
+pub fn register_mcp_handler(handler: McpHandler) {
+    MCP_HANDLER
+        .set(handler)
+        .expect("MCP handler already installed");
+}
+pub(crate) fn run_mcp_handler(
+    matches: &clap::ArgMatches,
+    ctx: &DispatchCtx,
+) -> anyhow::Result<Flow> {
+    let handler = MCP_HANDLER
+        .get()
+        .ok_or_else(|| anyhow::anyhow!("MCP transport not registered by binary"))?;
+    handler(matches, ctx)
+}
+
+// trace:TASK-3429 TASK-3223 | ai:claude
+/// Gated mcp-serve transport supplied by the binary; absent means refuse.
+pub type MediatedMcpHandler = fn(
+    &crate::store_mutation_client::Client,
+    &aida_core::exec_context::Environment,
+    &std::path::Path,
+) -> anyhow::Result<()>;
+static MEDIATED_MCP_HANDLER: std::sync::OnceLock<MediatedMcpHandler> = std::sync::OnceLock::new();
+/// Install the gated transport used when a mediated session runs mcp-serve.
+pub fn register_mediated_mcp_handler(handler: MediatedMcpHandler) {
+    MEDIATED_MCP_HANDLER
+        .set(handler)
+        .expect("mediated MCP handler already installed");
+}
+pub(crate) fn run_mediated_mcp_handler(
+    client: &crate::store_mutation_client::Client,
+    env: &aida_core::exec_context::Environment,
+    store: &std::path::Path,
+) -> anyhow::Result<()> {
+    let handler = MEDIATED_MCP_HANDLER
+        .get()
+        .ok_or_else(|| anyhow::anyhow!("MCP transport not registered by binary"))?;
+    handler(client, env, store)
+}
+
+// trace:TASK-3429 | ai:codex
+#[cfg(test)]
+#[test]
+fn mcp_handler_refuses_without_binary_registration() {
+    let matches = clap::Command::new("mcp-serve").get_matches_from(["mcp-serve"]);
+    let ctx = DispatchCtx {
+        globals: None,
+        store: None,
+    };
+    let error = run_mcp_handler(&matches, &ctx).err().expect("must refuse");
+    assert!(error
+        .to_string()
+        .contains("MCP transport not registered by binary"));
+}
+
+// trace:TASK-3429 | ai:codex
+#[cfg(test)]
+#[test]
+fn mediated_mcp_handler_refuses_without_binary_registration() {
+    let client = crate::store_mutation_client::Client::fixture(
+        "/nonexistent/mcp-registration-test/service".into(),
+        uuid::Uuid::nil(),
+    );
+    let env = aida_core::exec_context::Environment::default();
+    // No transport or store access is needed to diagnose missing registration.
+    let error = run_mediated_mcp_handler(
+        &client,
+        &env,
+        std::path::Path::new("/nonexistent/mcp-registration-test/store"),
+    )
+    .expect_err("mediated MCP must refuse without binary registration");
+    assert_eq!(error.to_string(), "MCP transport not registered by binary");
+}

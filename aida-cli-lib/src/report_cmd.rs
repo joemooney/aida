@@ -699,17 +699,18 @@ mod tests {
 
     #[test]
     fn report_cli_parses_bug_idea_and_recheck_forms() {
-        let cli = crate::command_registry::try_parse_from([
-            "aida",
-            "report",
-            "bug",
-            "--title",
-            "bad picker",
-            "--description",
-            "body",
-            "--copy",
-        ])
-        .unwrap();
+        let cli = crate::TEST_CLI
+            .try_parse_from([
+                "aida",
+                "report",
+                "bug",
+                "--title",
+                "bad picker",
+                "--description",
+                "body",
+                "--copy",
+            ])
+            .unwrap();
         let crate::report_cmd::ReportArgs {
             recheck: false,
             command:
@@ -726,14 +727,9 @@ mod tests {
         assert_eq!(title, "bad picker");
         assert_eq!(description.as_deref(), Some("body"));
 
-        let cli = crate::command_registry::try_parse_from([
-            "aida",
-            "report",
-            "idea",
-            "--title",
-            "better flow",
-        ])
-        .unwrap();
+        let cli = crate::TEST_CLI
+            .try_parse_from(["aida", "report", "idea", "--title", "better flow"])
+            .unwrap();
         assert!(matches!(
             cli.command.registered::<crate::report_cmd::ReportArgs>(),
             crate::report_cmd::ReportArgs {
@@ -742,7 +738,9 @@ mod tests {
             }
         ));
 
-        let cli = crate::command_registry::try_parse_from(["aida", "report", "--recheck"]).unwrap();
+        let cli = crate::TEST_CLI
+            .try_parse_from(["aida", "report", "--recheck"])
+            .unwrap();
         assert!(matches!(
             cli.command.registered::<crate::report_cmd::ReportArgs>(),
             crate::report_cmd::ReportArgs {
@@ -1068,23 +1066,21 @@ pub(crate) struct ReportArgs {
 
 fn run_report(
     matches: &clap::ArgMatches,
-    ctx: &crate::command_registry::DispatchCtx,
-) -> anyhow::Result<crate::command_registry::Flow> {
-    use crate::*;
+    ctx: &crate::cmdkit::DispatchCtx,
+) -> anyhow::Result<crate::cmdkit::Flow> {
+    // trace:TASK-3428 | ai:codex
     let args = <ReportArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
     // trace:BUG-2189 | ai:claude
     if matches!(
         args.command,
         Some(crate::cli::ReportCommand::AiIntegration { .. })
     ) {
-        crate::command_registry::refuse_global_format(ctx, "report ai-integration")?;
+        crate::cmdkit::refuse_global_format(ctx, "report ai-integration")?;
     }
     match &ctx.store {
-        None => Ok(crate::command_registry::Flow::Continue),
-        Some(crate::command_registry::StoreCtx::Distributed { .. }) => {
-            Ok(crate::command_registry::Flow::Continue)
-        }
-        Some(crate::command_registry::StoreCtx::Git {
+        None => Ok(crate::cmdkit::Flow::Continue),
+        Some(crate::cmdkit::StoreCtx::Distributed { .. }) => Ok(crate::cmdkit::Flow::Continue),
+        Some(crate::cmdkit::StoreCtx::Git {
             store_path,
             backend,
         }) => {
@@ -1094,7 +1090,7 @@ fn run_report(
                 ReportArgs { recheck, command } => {
                     let storage = Storage::new(store_path.to_path_buf());
                     let db_path_str = store_path.display().to_string();
-                    return crate::command_registry::returned(self::handle_report_command(
+                    return crate::cmdkit::returned(self::handle_report_command(
                         *recheck,
                         command.as_ref(),
                         &storage,
@@ -1102,9 +1098,9 @@ fn run_report(
                     ));
                 }
             }
-            Ok(crate::command_registry::Flow::Continue)
+            Ok(crate::cmdkit::Flow::Continue)
         }
-        Some(crate::command_registry::StoreCtx::Legacy {
+        Some(crate::cmdkit::StoreCtx::Legacy {
             storage,
             requirements_path,
         }) => {
@@ -1123,22 +1119,21 @@ fn run_report(
                     )?;
                 }
             }
-            Ok(crate::command_registry::Flow::Continue)
+            Ok(crate::cmdkit::Flow::Continue)
         }
     }
 }
 
 // trace:STORY-1728 | ai:claude
-pub(crate) static REPORT: crate::command_registry::CommandReg =
-    crate::command_registry::CommandReg {
-        name: "report",
-        help_after: "review",
-        command: <ReportArgs as clap::CommandFactory>::command,
-        policy: |_| crate::command_registry::CmdPolicy {
-            stakeholder: crate::stakeholder_role::StakeholderAction::Write,
-            per_write_auto_push: false,
-            skip_role_restore_prompt: false,
-            team_identity_write: false,
-        },
-        run: crate::command_registry::Handler::Store(run_report),
-    };
+pub(crate) static REPORT: crate::cmdkit::CommandReg = crate::cmdkit::CommandReg {
+    name: "report",
+    help_after: "review",
+    command: <ReportArgs as clap::CommandFactory>::command,
+    policy: |_| crate::cmdkit::CmdPolicy {
+        stakeholder: crate::stakeholder_role::StakeholderAction::Write,
+        per_write_auto_push: false,
+        skip_role_restore_prompt: false,
+        team_identity_write: false,
+    },
+    run: crate::cmdkit::Handler::Store(run_report),
+};

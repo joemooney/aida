@@ -529,6 +529,19 @@ fn commit_committed_at_fetching(
     })
 }
 
+/// Read the live head/base pair through the approval orchestrator's forge boundary.
+/// Both carry-over checks use this adapter so hold decisions stay inside gate/.
+// trace:STORY-2694 | ai:codex
+pub(crate) fn carryover_change_identity(
+    root: &std::path::Path,
+    pr: u64,
+) -> Result<(String, String), String> {
+    let metadata = crate::forge::forge_for(root)
+        .change_metadata(pr, &mut crate::network_retry::NoopSink)
+        .map_err(|why| why.to_string())?;
+    Ok((metadata.head_sha, metadata.base_ref))
+}
+
 #[cfg(test)]
 #[path = "tests/task_1448_drain_merge_approval_gate_tests.rs"]
 mod task_1448_drain_merge_approval_gate_tests;

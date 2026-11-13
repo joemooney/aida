@@ -6,9 +6,11 @@
 //! production source, comments included.
 // trace:TASK-1752 | ai:claude
 
+// trace:TASK-3429 | ai:codex
 use std::path::{Path, PathBuf};
 
 const CRATES: &[&str] = &[
+    "aida-mcp",
     "aida-core",
     "aida-cli-lib",
     "aida-cli",

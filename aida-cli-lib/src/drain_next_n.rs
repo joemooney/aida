@@ -1,7 +1,25 @@
 //! next-N drain driver: RealNextNDriver, next-keyword parsing, drain summary and cap stop, auto-complete run records and failure-bug drafting (STORY-1488 slice 1)
 // trace:STORY-1488 | ai:claude
 
-use crate::*;
+use crate::current_branch_head_sha;
+use crate::process_retry::RetryEtxtbsy;
+use crate::read_pipelined_child_result_sidecar;
+use crate::{
+    aida_exe_path, auto_complete, auto_complete_head_candidates_with_blocked,
+    auto_complete_head_candidates_with_roles, auto_complete_head_drivable, auto_complete_telemetry,
+    build_sha_short, canonical_role_name, classify_pipelined_child_outcome, comment_cmd,
+    detect_distributed_store_from, detect_open_pr_for_spec_via_forge, drain_caps,
+    drain_failure_note, drain_state, drain_summary, drive_robustness, effective_auto_complete_role,
+    events, find_main_worktree_root, last_drain, load_dispenser, next_n_rework_idle_message,
+    notify, pick_auto_complete_head_for_role, pipelined_child_common_args, pipelined_child_env,
+    resolve_queue_rework_needed, rule_violation, run_auto_complete, session, usage,
+    AutoCompleteHeadPick, DrainTuning, PrLookup, RealPhaseDriver, ResumeEntry,
+    DEFAULT_MAX_FAILURES,
+};
+use aida_core::DatabaseBackend;
+use aida_core::Storage;
+use anyhow::Result;
+use colored::Colorize;
 
 /// TASK-293 — a parsed `next` / `nextN` keyword positional for `aida queue
 /// work`. trace:TASK-293 | ai:claude
@@ -108,9 +126,25 @@ pub(crate) fn resolve_next_n_head(
     Vec<(String, String)>,
     Vec<(String, String)>,
 ) {
+    resolve_next_n_head_excluding(storage, user_id, role_override, &[])
+}
+
+// trace:STORY-2640 | ai:codex
+#[allow(clippy::type_complexity)]
+fn resolve_next_n_head_excluding(
+    storage: &Storage,
+    user_id: &str,
+    role_override: Option<&str>,
+    excluded: &[String],
+) -> (
+    Option<AutoCompleteHeadPick>,
+    Vec<(String, String)>,
+    Vec<(String, String)>,
+) {
     let effective_role = effective_auto_complete_role(role_override);
     match auto_complete_head_candidates_with_roles(storage, user_id, Some(&effective_role)) {
-        Ok(candidates) => {
+        Ok(mut candidates) => {
+            candidates.retain(|candidate| !excluded.contains(&candidate.id));
             let pick = pick_auto_complete_head_for_role(&candidates, &effective_role).unwrap();
             let (role_skipped, blocked_skipped) = match &pick {
                 Some(pick) => (pick.role_skipped.clone(), pick.blocked_skipped.clone()),
@@ -565,8 +599,17 @@ impl auto_complete::BatchDriver for RealNextNDriver<'_> {
     }
 
     fn next_head(&mut self) -> Option<String> {
-        let (pick, role_skipped, blocked_skipped) =
-            resolve_next_n_head(self.storage, &self.user_id, self.role_override.as_deref());
+        self.next_head_excluding(&[])
+    }
+
+    // trace:STORY-2640 | ai:codex
+    fn next_head_excluding(&mut self, excluded: &[String]) -> Option<String> {
+        let (pick, role_skipped, blocked_skipped) = resolve_next_n_head_excluding(
+            self.storage,
+            &self.user_id,
+            self.role_override.as_deref(),
+            excluded,
+        );
         for (spec, role) in &role_skipped {
             if self.seen_role_skips.insert(spec.clone()) {
                 eprintln!("skipped {spec} — routed for {role}");
@@ -1382,7 +1425,10 @@ pub(crate) fn record_auto_complete_run(
         spec_id: spec.to_string(),
         started_at: started_at.to_rfc3339(),
         completed_at: completed_at.to_rfc3339(),
-        outcome: if result.exit_code == 0 {
+        // trace:TASK-3749 | ai:codex
+        outcome: if result.no_change {
+            "no-change".to_string()
+        } else if result.exit_code == 0 {
             "success".to_string()
         } else {
             "failed".to_string()

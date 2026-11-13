@@ -64,7 +64,7 @@ fn root(cwd: &Path) -> Result<PathBuf> {
 }
 
 fn run(client: &Client, env: &Environment, argv: &[String], cwd: &Path) -> Result<()> {
-    let mut command = crate::command_registry::built_command();
+    let mut command = crate::CLI_SUPPORT.built_command();
     let matches = match command.try_get_matches_from_mut(argv) {
         Ok(matches) => matches,
         Err(error)
@@ -82,7 +82,7 @@ fn run(client: &Client, env: &Environment, argv: &[String], cwd: &Path) -> Resul
     explicit_fields(&matches, &[], &command)?;
     let (name, args) = matches.subcommand().context("UnsupportedOperation")?;
     if name == "mcp-serve" {
-        return crate::mcp::run_mediated_mcp_server(client, env, &root(cwd)?);
+        return crate::command_registry::run_mediated_mcp_handler(client, env, &root(cwd)?);
     }
     let (tool, payload) = translate(name, args, cwd)?;
     let action = if tool == "add_comment" {
@@ -156,7 +156,7 @@ fn translate_with_reader(
     cwd: &Path,
     stdin: &mut impl Read,
 ) -> Result<(&'static str, Value)> {
-    let command = crate::command_registry::built_command();
+    let command = crate::CLI_SUPPORT.built_command();
     let command = command
         .find_subcommand(name)
         .context("UnsupportedOperation")?;
@@ -184,13 +184,32 @@ fn translate_with_reader(
             Ok(("add_comment", json!({"id":id,"text":text})))
         }
         "edit" => {
-            explicit_fields(args, &["id", "title", "description", "priority"], command)?;
+            explicit_fields(
+                args,
+                &["id", "title", "description", "priority", "weight", "tags"],
+                command,
+            )?;
             let id = args.get_one::<String>("id").context("InvalidRequest")?;
             let mut payload = json!({"id":id});
             for field in ["title", "description", "priority"] {
                 if let Some(value) = args.get_one::<String>(field) {
                     payload[field] = json!(value);
                 }
+            }
+            if let Some(value) = args.get_one::<String>("tags") {
+                payload["tags"] = json!(crate::requirements_cli::parse_tag_list(value)?);
+            }
+            if let Some(value) = args.get_one::<String>("weight") {
+                payload["weight"] = if value.trim().is_empty() {
+                    serde_json::Value::Null
+                } else {
+                    let weight: f32 = value
+                        .trim()
+                        .parse()
+                        .context("InvalidRequest: weight must be finite")?;
+                    ensure!(weight.is_finite(), "InvalidRequest: weight must be finite");
+                    json!(weight)
+                };
             }
             ensure!(
                 payload.as_object().unwrap().len() > 1,
@@ -349,6 +368,16 @@ mod tests {
     fn closed_cli_translation_preserves_content_and_rejects_semantic_downgrades() {
         for (argv, tool, payload) in [
             (
+                vec!["aida", "edit", "TASK-1", "--tags", "alpha, beta,alpha"],
+                "update_requirement",
+                json!({"id":"TASK-1", "tags":["alpha", "beta", "alpha"]}),
+            ),
+            (
+                vec!["aida", "edit", "TASK-1", "--tags", ""],
+                "update_requirement",
+                json!({"id":"TASK-1", "tags":[]}),
+            ),
+            (
                 vec!["aida", "comment", "add", "TASK-1", "text"],
                 "add_comment",
                 json!({"id":"TASK-1","text":"text"}),
@@ -359,12 +388,23 @@ mod tests {
                 json!({"id":"TASK-1","description":""}),
             ),
             (
+                vec!["aida", "edit", "TASK-1", "--weight", "0.75"],
+                "update_requirement",
+                json!({"id":"TASK-1","weight":0.75}),
+            ),
+            (
+                vec!["aida", "edit", "TASK-1", "--weight", ""],
+                "update_requirement",
+                json!({"id":"TASK-1","weight":null}),
+            ),
+            (
                 vec!["aida", "edit", "TASK-1", "--priority", "med"],
                 "update_requirement",
                 json!({"id":"TASK-1","priority":"med"}),
             ),
         ] {
-            let matches = crate::command_registry::built_command()
+            let matches = crate::TEST_CLI
+                .built_command()
                 .try_get_matches_from(argv)
                 .unwrap();
             let (name, args) = matches.subcommand().unwrap();
@@ -374,6 +414,9 @@ mod tests {
             );
         }
         for argv in [
+            vec!["aida", "edit", "TASK-1", "--tags", "a b"],
+            vec!["aida", "edit", "TASK-1", "--tags", "a", "--force"],
+            vec!["aida", "edit", "TASK-1", "--add-tag", "a"],
             vec![
                 "aida", "comment", "add", "TASK-1", "text", "--author", "spoof",
             ],
@@ -396,7 +439,8 @@ mod tests {
             ],
             vec!["aida", "queue", "done", "TASK-1"],
         ] {
-            let matches = crate::command_registry::built_command()
+            let matches = crate::TEST_CLI
+                .built_command()
                 .try_get_matches_from(argv)
                 .unwrap();
             let (name, args) = matches.subcommand().unwrap();
@@ -410,7 +454,8 @@ mod tests {
         let path = tmp.path().join("body");
         let text = "literal `command` $(command)\n\tsecond line";
         std::fs::write(&path, text).unwrap();
-        let matches = crate::command_registry::built_command()
+        let matches = crate::TEST_CLI
+            .built_command()
             .try_get_matches_from(["aida", "comment", "add", "TASK-1", "--body-file", "body"])
             .unwrap();
         let (name, args) = matches.subcommand().unwrap();
@@ -440,7 +485,8 @@ mod tests {
             vec!["aida", "comment", "add", "TASK-1", "--stdin"],
             "add_comment",
         )] {
-            let matches = crate::command_registry::built_command()
+            let matches = crate::TEST_CLI
+                .built_command()
                 .try_get_matches_from(argv)
                 .unwrap();
             let (name, args) = matches.subcommand().unwrap();
@@ -492,7 +538,8 @@ mod tests {
         ] {
             let mut argv = vec!["aida", "comment", "add", "TASK-1", "--stdin"];
             argv.extend(extra);
-            let matches = crate::command_registry::built_command()
+            let matches = crate::TEST_CLI
+                .built_command()
                 .try_get_matches_from(argv)
                 .unwrap();
             let (name, args) = matches.subcommand().unwrap();
@@ -521,7 +568,8 @@ mod tests {
                 &id,
             ];
             argv.extend(extra);
-            let matches = crate::command_registry::built_command()
+            let matches = crate::TEST_CLI
+                .built_command()
                 .try_get_matches_from(argv)
                 .unwrap();
             let (name, args) = matches.subcommand().unwrap();

@@ -622,6 +622,19 @@ pub enum SessionCommand {
         #[clap(long, value_name = "FILE", conflicts_with_all = ["check", "show"])]
         write: Option<String>,
 
+        /// Typed condition for work parked by this handoff.
+        // trace:STORY-2402 | ai:codex
+        #[clap(long, value_name = "CONDITION", requires_all = ["write", "spec"])]
+        until: Option<String>,
+
+        /// Spec to resurface when the handoff condition is met.
+        #[clap(long, requires = "until", value_parser = crate::spec_arg::spec_id)]
+        spec: Option<String>,
+
+        /// Explanation for an operator hold; required for manual:<who>.
+        #[clap(long, requires = "until")]
+        reason: Option<String>,
+
         /// Print the seat's standing orders (if any), then its latest handoff
         /// note (the seed for a fresh session).
         // trace:STORY-1464 | ai:claude
@@ -650,7 +663,7 @@ pub enum SessionCommand {
 
         // trace:STORY-2662 | ai:codex
         /// Read/write the worktree recovery snapshot; never requests rotation.
-        #[clap(long, hide = true, conflicts_with_all = ["final_", "rotated", "check"])]
+        #[clap(long, hide = true, conflicts_with_all = ["final_", "rotated", "check", "until"])]
         snapshot: bool,
 
         /// Read only the handoff text, without standing context.

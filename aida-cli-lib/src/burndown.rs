@@ -2403,6 +2403,8 @@ pub(crate) struct WavePrFacts {
     pub wait_expired: Option<String>,
     pub ci: crate::integrate::CiState,
     pub request_changes: bool,
+    // trace:TASK-3777 | ai:codex
+    pub review_waiting: bool,
     pub mergeable: crate::integrate::MergeableState,
 }
 
@@ -2447,6 +2449,7 @@ pub(crate) fn wave_pr_action(f: &WavePrFacts) -> WavePrAction {
         ci: f.ci,
         request_changes_pending: f.request_changes,
         review_integrity_unproven: false,
+        review_waiting: f.review_waiting,
         mergeable: f.mergeable,
     };
     match crate::integrate::classify_integration_action(&state) {

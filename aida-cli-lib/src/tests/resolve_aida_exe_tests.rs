@@ -49,6 +49,8 @@ fn no_cli_source_outside_the_resolver_uses_raw_current_executable_lookup() {
     let src_dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
     let mut files = Vec::new();
     visit(&src_dir, &mut files);
+    // trace:TASK-3429 | ai:codex — retain coverage of the extracted transport.
+    visit(&src_dir.join("../../aida-mcp/src"), &mut files);
     let needle = concat!("current_", "exe()");
     let mut lib_total = 0;
     for path in files {

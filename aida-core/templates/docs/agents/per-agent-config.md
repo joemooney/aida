@@ -90,3 +90,22 @@ These files are operational defaults, not a permission model. Only enable flags
 you are comfortable applying to every supervised launch in that scope. In
 particular, unsafe permission or sandbox bypass flags are the operator's
 responsibility and should not be enabled casually in shared projects.
+
+## Detached worker credential environment
+
+<!-- trace:BUG-2510 | ai:codex -->
+Custom credential names can be explicitly passed to detached Codex workers:
+
+```toml
+[vendors.codex]
+env_passthrough = ["XAIAA_API_KEY"]
+```
+
+Set this in `~/.aida/agents.toml` or `.aida/agents.toml`. A project list
+replaces the user list; `[]` clears it. Names are added to the worker's built-in
+ambient allowlist. Unconfigured names remain excluded. Only exact environment
+identifiers (letters, digits and underscores, starting with a letter or underscore)
+are accepted; wildcards and `AIDA_*` names fail config loading. Store names here,
+never credential values. `aida doctor --lane-host` reports configured names missing
+from the host environment, without displaying values. This setting does not grant
+containment or authentication readiness.

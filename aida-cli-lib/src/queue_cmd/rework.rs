@@ -44,7 +44,7 @@ pub(crate) fn rework_smart_target(current: &RequirementStatus) -> Option<Require
 /// Metadata-only rework must leave the queued spec claimable.
 /// `InProgress` is only valid when this command immediately chains into
 /// `queue work`, which establishes the lease that backs that status.
-pub(crate) fn rework_target_for_mode(
+pub fn rework_target_for_mode(
     current: &RequirementStatus,
     launches_work: bool,
 ) -> Option<RequirementStatus> {
@@ -70,7 +70,7 @@ pub(crate) fn rework_target_for_mode(
 /// log for `storage`: the store's parent directory, falling back to the
 /// discovered project root.
 // trace:STORY-1429 | ai:claude
-pub(crate) fn requeue_project_root(storage: &Storage) -> std::path::PathBuf {
+pub fn requeue_project_root(storage: &Storage) -> std::path::PathBuf {
     storage
         .path()
         .parent()
@@ -313,6 +313,40 @@ pub(crate) fn needs_attention_parks(store: &aida_core::RequirementsStore) -> Vec
     parks
 }
 
+/// Only a reviewer shelf can complete the repeated-review loop. A punt or CI
+/// pause may retain the same imported review while an advisor resolves a new
+/// obstacle; replaying that receipt must not undo the triage decision.
+/// Legacy loop-guard parks remain review shelves until a deliberate status edit.
+/// Current recurrence refusals retain the original reviewer failure marker.
+// trace:TASK-3777 | ai:codex
+// trace:BUG-2502 | ai:codex
+pub(crate) fn rework_is_review_shelf(req: &Requirement) -> bool {
+    req.status == RequirementStatus::NeedsAttention
+        && req.attention_reason.is_none()
+        && (req
+            .history
+            .iter()
+            .rev()
+            .find(|entry| {
+                entry
+                    .changes
+                    .iter()
+                    .any(|change| change.field_name == "status")
+            })
+            .is_some_and(|entry| entry.author == aida_core::conflict::LOOP_GUARD_AUTHOR)
+            || req.failure_reason.as_ref().is_some_and(|failure| {
+                // Review recording and drain shelving use different rejection slugs.
+                failure.phase == "reviewer"
+                    && matches!(
+                        failure.kind.as_str(),
+                        "verdict:request-changes"
+                            | "verdict:rejected"
+                            | "verdict:reject"
+                            | "verdict:stranded"
+                    )
+            }))
+}
+
 /// The BUG-1213 loop guard's write: return the spec to NeedsAttention after
 /// identical review findings recurred.
 ///
@@ -547,6 +581,53 @@ pub(crate) fn handle_queue_rework(
         .clone()
         .or_else(|| req.spec_id.clone())
         .unwrap_or_else(|| "???".to_string());
+    // BUG-1277: look for a prior entry for this spec across EVERY queue
+    // file, not just the invoking user's own — a previous `rework`/`add`
+    // may already have routed it to a shared role queue, and both the
+    // route-inheritance fallback below and the move-not-duplicate step
+    // after it need to find it wherever it actually lives.
+    // trace:BUG-1277 | ai:claude
+    // BUG-1427: retain every matching identity. Rework promises a move, so a
+    // stale duplicate in a third queue must not survive merely because it was
+    // not the first match returned by queue_users(). trace:BUG-1427 | ai:codex
+    let existing_entries_elsewhere: Vec<(String, aida_core::QueueEntry)> = storage
+        .queue_users()?
+        .into_iter()
+        .map(|candidate_user| {
+            let entry = storage
+                .queue_list(&candidate_user, true)?
+                .into_iter()
+                .find(|entry| entry.requirement_id == req_id);
+            Ok(entry.map(|entry| (candidate_user, entry)))
+        })
+        .collect::<Result<Vec<_>>>()?
+        .into_iter()
+        .flatten()
+        .collect();
+
+    // Route resolution: --for wins; otherwise rework preserves the existing
+    // queue route so reviewer-requested fixups stay visible to the intended
+    // role. If there is no usable prior route, default to implementer.
+    // trace:BUG-851 | ai:codex
+    let for_role_resolved: Option<String> = match for_role {
+        Some("any") => None,
+        Some(role) => Some(canonical_role_name(role)),
+        None => existing_entries_elsewhere
+            .first()
+            .and_then(|(_, entry)| entry.for_role.as_deref())
+            .filter(|role| !role.trim().is_empty())
+            .map(canonical_role_name)
+            .or_else(|| Some("implementer".to_string())),
+    };
+
+    // trace:BUG-2500 | ai:codex — refuse before status, comments or queue writes.
+    if for_role_resolved.as_deref() != Some("reviewer") {
+        if let Ok(root) = find_project_root() {
+            let open = spec_open_change_key(&root, &[display_id.as_str(), spec_id.as_str()]);
+            refuse_waiting_review(&root, &display_id, &spec_id, open.as_deref())
+                .map_err(|why| anyhow::anyhow!(why))?;
+        }
+    }
     let title = req.title.clone();
     let current_status = req.status.clone();
 
@@ -657,6 +738,129 @@ pub(crate) fn handle_queue_rework(
         }
     }
 
+    // Refuse predictable routing holds before any status or comment write.
+    // The same owner projects the shelf cleanup; the live check below catches
+    // changes during routing. trace:STORY-2690 | ai:codex
+    if for_role_resolved.as_deref() != Some("reviewer") {
+        let mut projected = req.clone();
+        if let Some(target) = &target_status {
+            if current_status == RequirementStatus::NeedsAttention && target != &current_status {
+                crate::requeue::return_to_flight(
+                    &mut projected,
+                    &current_status,
+                    target,
+                    &crate::requeue::ReturnCtx {
+                        via: "rework routing preflight".into(),
+                        via_slug: "queue-rework",
+                        author: get_default_author(),
+                        clear_escalation: crate::requeue::caller_may_clear_escalation(),
+                        reason: reason.map(str::to_owned),
+                        automated: false,
+                    },
+                );
+            } else {
+                projected.status = target.clone();
+            }
+        }
+        require_rework_pickable(&projected, &store)?;
+    }
+
+    // Decide recurrence before return-to-flight clears review evidence and
+    // emits its audit/event: a refused blind retry never leaves the shelf.
+    // trace:BUG-2502 | ai:codex
+    // A reviewer RequestChanges/Rejection is the actual acceptance delta for a
+    // rework pickup. Persist it onto the spec before queueing so every later
+    // pickup surface sees the same blocking context. trace:BUG-814 | ai:codex
+    let mut pending_findings = None;
+    if let Ok(root) = find_project_root() {
+        // BUG-2430: a review keyed by the spec's open PR counts too.
+        // trace:BUG-2430 | ai:claude
+        let open_change = spec_open_change_key(&root, &[display_id.as_str(), spec_id.as_str()]);
+        let findings = match resolve_rework_findings(
+            &root,
+            &display_id,
+            &spec_id,
+            open_change.as_deref(),
+        ) {
+            Ok(block) => block,
+            Err(why) => {
+                // trace:BUG-2507 | ai:codex
+                eprintln!("warning: no review findings imported for {display_id}: {why}. Read the review comment before starting rework.");
+                None
+            }
+        };
+        if let Some(block) = findings {
+            // Decide from existing evidence without recording a round before
+            // the status transition succeeds. trace:TASK-3777 | ai:codex
+            let recurred = findings_recur_consecutively(&req.comments, &block);
+            if !recurred {
+                pending_findings = Some(block.clone());
+            } else if rework_is_review_shelf(req) {
+                // BUG-1213: the same blocking findings produced two consecutive
+                // request-changes shelves. A third blind requeue is a loop, so
+                // retain the NeedsAttention shelf and route an explicit
+                // advisor finding + brief instead.
+                // Per-spec compare-and-swap, no whole-store write. trace:BUG-1612 | ai:claude
+                // BUG-1632: the loop guard's decision is automated even when a
+                // person ran `queue rework`, so it records the transition under
+                // an automated author the BUG-1625 merge guard recognizes.
+                // trace:BUG-1632 | ai:claude
+                // BUG-1637: a spec that reached a terminal status meanwhile is
+                // left alone, and there is no loop left to escalate.
+                // trace:BUG-1637 | ai:claude
+                let mut parked = false;
+                storage.update_spec_atomically(req, |r| parked = loop_guard_park(r))?;
+                if !parked {
+                    println!(
+                        "  {} {display_id} reached a final status meanwhile; left it as it is",
+                        "·".dimmed()
+                    );
+                    return Ok(());
+                }
+                let note = format!(
+                    "Identical reviewer findings recurred twice for {display_id}; do not \
+                     requeue a third implementer round until an advisor chooses a different \
+                     implementer/seat or resolves the dispute.\n\n{block}"
+                );
+                // BUG-1199: every in-process `aida` subprocess resolves through the
+                // once-per-process resolver, never a raw executable lookup.
+                let exe = crate::aida_exe_path();
+                let finding_title = format!("Repeated unchanged review findings: {display_id}");
+                let finding = std::process::Command::new(&exe)
+                    .current_dir(&root)
+                    .args([
+                        "findings",
+                        "add",
+                        "--title",
+                        &finding_title,
+                        "--note",
+                        &note,
+                        "--severity",
+                        "major",
+                        "--linked-specs",
+                        &display_id,
+                        "--tags",
+                        "loop-guard,review-recurrence",
+                    ])
+                    .status_retrying_etxtbsy()?;
+                anyhow::ensure!(finding.success(), "could not file repeated-review finding");
+                let brief = std::process::Command::new(&exe)
+                    .current_dir(&root)
+                    .args(["brief", "advisor", &display_id, "--note", &note, "--notify"])
+                    .status_retrying_etxtbsy()?;
+                anyhow::ensure!(
+                    brief.success(),
+                    "could not write repeated-review advisor brief"
+                );
+                println!(
+                    "  {} identical review findings recurred — escalated to advisor; not re-queued",
+                    crate::glyph(crate::glyphs::Glyph::Warning).yellow().bold()
+                );
+                return Ok(());
+            }
+        }
+    }
+
     // Status flip (if any). STORY-1429: the target was computed from a status
     // read before this point, so the write re-checks it (compare-and-swap)
     // and changes nothing when the spec moved in between. Leaving
@@ -761,14 +965,33 @@ pub(crate) fn handle_queue_rework(
             }
             record_role_activity(&spec_id, "rework");
             update_manifest_for_status(&spec_id, &format!("{:?}", new_status));
-            println!(
-                "{} {} status: {} → {}",
-                crate::glyph(crate::glyphs::Glyph::Check).green(),
-                display_id.bold(),
-                current_status.to_string().dimmed(),
-                new_status.to_string().cyan(),
-            );
         }
+    }
+
+    // A successful status write is not proof that a worker can pick it up.
+    // Validate the live record before moving queue rows or reporting success.
+    // trace:STORY-2690 | ai:codex
+    if for_role_resolved.as_deref() != Some("reviewer") {
+        let live = storage.load()?;
+        let current = live
+            .requirements
+            .iter()
+            .find(|r| r.id == req_id)
+            .context("rework spec disappeared before routing")?;
+        require_rework_pickable(current, &live)?;
+    }
+
+    // Persist the acceptance delta only after the flip succeeded, so a failed
+    // flip followed by a retry cannot impersonate an implementer round.
+    // trace:TASK-3777 | ai:codex
+    if let Some(block) = pending_findings {
+        let comment = aida_core::Comment::new(get_default_author(), block.clone());
+        storage.update_spec_atomically(req, |r| {
+            if !findings_recur_consecutively(&r.comments, &block) {
+                r.add_comment(comment);
+            }
+        })?;
+        println!("  {} review findings captured as comment", "·".dimmed());
     }
 
     // Optional audit comment. Mirrors `aida comment add` path so the
@@ -795,147 +1018,19 @@ pub(crate) fn handle_queue_rework(
         );
     }
 
-    // A reviewer RequestChanges/Rejection is the actual acceptance delta for a
-    // rework pickup. Persist it onto the spec before queueing so every later
-    // pickup surface sees the same blocking context. trace:BUG-814 | ai:codex
-    if let Ok(root) = find_project_root() {
-        // BUG-2430: a review keyed by the spec's open PR counts too.
-        // trace:BUG-2430 | ai:claude
-        let open_change = spec_open_change_key(&root, &[display_id.as_str(), spec_id.as_str()]);
-        let findings = match resolve_rework_findings(
-            &root,
-            &display_id,
-            &spec_id,
-            open_change.as_deref(),
-        ) {
-            Ok(block) => block,
-            Err(why) => {
-                // trace:BUG-2507 | ai:codex
-                eprintln!("warning: no review findings imported for {display_id}: {why}. Read the review comment before starting rework.");
-                None
-            }
-        };
-        if let Some(block) = findings {
-            let author = get_default_author();
-            let comment = aida_core::Comment::new(author, block.clone());
-            // BUG-1213 (round 2): recurrence means the IMMEDIATELY PREVIOUS
-            // round's findings equal this round's — not "an identical block
-            // exists somewhere in history". A → B → A is progress, not a loop.
-            // trace:BUG-1213 | ai:claude
-            let mut recurred = false;
-            // Per-spec compare-and-swap, no whole-store write. trace:BUG-1612 | ai:claude
-            storage.update_spec_atomically(req, |r| {
-                recurred = findings_recur_consecutively(&r.comments, &block);
-                if !recurred {
-                    r.add_comment(comment);
-                }
-            })?;
-            if !recurred {
-                println!("  {} review findings captured as comment", "·".dimmed());
-            } else if current_status == RequirementStatus::NeedsAttention {
-                // BUG-1213: the same blocking findings produced two consecutive
-                // request-changes shelves. A third blind requeue is a loop, so
-                // return the spec to NeedsAttention and route an explicit
-                // advisor finding + brief instead.
-                // Per-spec compare-and-swap, no whole-store write. trace:BUG-1612 | ai:claude
-                // BUG-1632: the loop guard's decision is automated even when a
-                // person ran `queue rework`, so it records the transition under
-                // an automated author the BUG-1625 merge guard recognizes.
-                // trace:BUG-1632 | ai:claude
-                // BUG-1637: a spec that reached a terminal status meanwhile is
-                // left alone, and there is no loop left to escalate.
-                // trace:BUG-1637 | ai:claude
-                let mut parked = false;
-                storage.update_spec_atomically(req, |r| parked = loop_guard_park(r))?;
-                if !parked {
-                    println!(
-                        "  {} {display_id} reached a final status meanwhile; left it as it is",
-                        "·".dimmed()
-                    );
-                    return Ok(());
-                }
-                let note = format!(
-                    "Identical reviewer findings recurred twice for {display_id}; do not \
-                     requeue a third implementer round until an advisor chooses a different \
-                     implementer/seat or resolves the dispute.\n\n{block}"
-                );
-                // BUG-1199: every in-process `aida` subprocess resolves through the
-                // once-per-process resolver, never a raw executable lookup.
-                let exe = crate::aida_exe_path();
-                let finding_title = format!("Repeated unchanged review findings: {display_id}");
-                let finding = std::process::Command::new(&exe)
-                    .current_dir(&root)
-                    .args([
-                        "findings",
-                        "add",
-                        "--title",
-                        &finding_title,
-                        "--note",
-                        &note,
-                        "--severity",
-                        "major",
-                        "--linked-specs",
-                        &display_id,
-                        "--tags",
-                        "loop-guard,review-recurrence",
-                    ])
-                    .status_retrying_etxtbsy()?;
-                anyhow::ensure!(finding.success(), "could not file repeated-review finding");
-                let brief = std::process::Command::new(&exe)
-                    .current_dir(&root)
-                    .args(["brief", "advisor", &display_id, "--note", &note, "--notify"])
-                    .status_retrying_etxtbsy()?;
-                anyhow::ensure!(
-                    brief.success(),
-                    "could not write repeated-review advisor brief"
-                );
-                println!(
-                    "  {} identical review findings recurred — escalated to advisor; not re-queued",
-                    crate::glyph(crate::glyphs::Glyph::Warning).yellow().bold()
-                );
-                return Ok(());
-            }
+    // Report success after the recurrence guard and status transition succeed.
+    // trace:BUG-2502 | ai:codex
+    if let Some(ref new_status) = target_status {
+        if new_status != &current_status {
+            println!(
+                "{} {} status: {} → {}",
+                crate::glyph(crate::glyphs::Glyph::Check).green(),
+                display_id.bold(),
+                current_status.to_string().dimmed(),
+                new_status.to_string().cyan(),
+            );
         }
     }
-
-    // BUG-1277: look for a prior entry for this spec across EVERY queue
-    // file, not just the invoking user's own — a previous `rework`/`add`
-    // may already have routed it to a shared role queue, and both the
-    // route-inheritance fallback below and the move-not-duplicate step
-    // after it need to find it wherever it actually lives.
-    // trace:BUG-1277 | ai:claude
-    // BUG-1427: retain every matching identity. Rework promises a move, so a
-    // stale duplicate in a third queue must not survive merely because it was
-    // not the first match returned by queue_users(). trace:BUG-1427 | ai:codex
-    let existing_entries_elsewhere: Vec<(String, aida_core::QueueEntry)> = storage
-        .queue_users()?
-        .into_iter()
-        .map(|candidate_user| {
-            let entry = storage
-                .queue_list(&candidate_user, true)?
-                .into_iter()
-                .find(|entry| entry.requirement_id == req_id);
-            Ok(entry.map(|entry| (candidate_user, entry)))
-        })
-        .collect::<Result<Vec<_>>>()?
-        .into_iter()
-        .flatten()
-        .collect();
-
-    // Route resolution: --for wins; otherwise rework preserves the existing
-    // queue route so reviewer-requested fixups stay visible to the intended
-    // role. If there is no usable prior route, default to implementer.
-    // trace:BUG-851 | ai:codex
-    let for_role_resolved: Option<String> = match for_role {
-        Some("any") => None,
-        Some(role) => Some(canonical_role_name(role)),
-        None => existing_entries_elsewhere
-            .first()
-            .and_then(|(_, entry)| entry.for_role.as_deref())
-            .filter(|role| !role.trim().is_empty())
-            .map(canonical_role_name)
-            .or_else(|| Some("implementer".to_string())),
-    };
 
     // BUG-1277: a rework routed to a role (the default — see above) must
     // land where a batch drain actually reads it: the role's shared queue
@@ -1163,16 +1258,13 @@ pub(crate) struct ReworkArgs {
 
 pub(crate) fn run_rework(
     matches: &clap::ArgMatches,
-    ctx: &crate::command_registry::DispatchCtx,
-) -> anyhow::Result<crate::command_registry::Flow> {
-    use crate::*;
+    ctx: &crate::cmdkit::DispatchCtx,
+) -> anyhow::Result<crate::cmdkit::Flow> {
     let args = <ReworkArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
     match &ctx.store {
-        None => Ok(crate::command_registry::Flow::Continue),
-        Some(crate::command_registry::StoreCtx::Distributed { .. }) => {
-            Ok(crate::command_registry::Flow::Continue)
-        }
-        Some(crate::command_registry::StoreCtx::Git {
+        None => Ok(crate::cmdkit::Flow::Continue),
+        Some(crate::cmdkit::StoreCtx::Distributed { .. }) => Ok(crate::cmdkit::Flow::Continue),
+        Some(crate::cmdkit::StoreCtx::Git {
             store_path,
             backend,
         }) => {
@@ -1218,9 +1310,9 @@ pub(crate) fn run_rework(
                     )?;
                 }
             }
-            Ok(crate::command_registry::Flow::Continue)
+            Ok(crate::cmdkit::Flow::Continue)
         }
-        Some(crate::command_registry::StoreCtx::Legacy {
+        Some(crate::cmdkit::StoreCtx::Legacy {
             storage,
             requirements_path,
         }) => {
@@ -1265,25 +1357,24 @@ pub(crate) fn run_rework(
                     )?;
                 }
             }
-            Ok(crate::command_registry::Flow::Continue)
+            Ok(crate::cmdkit::Flow::Continue)
         }
     }
 }
 
 // trace:STORY-1728 | ai:claude
-pub(crate) static REWORK: crate::command_registry::CommandReg =
-    crate::command_registry::CommandReg {
-        name: "rework",
-        help_after: "autopilot",
-        command: <ReworkArgs as clap::CommandFactory>::command,
-        policy: |_| crate::command_registry::CmdPolicy {
-            stakeholder: crate::stakeholder_role::StakeholderAction::Write,
-            per_write_auto_push: true,
-            skip_role_restore_prompt: false,
-            team_identity_write: false,
-        },
-        run: crate::command_registry::Handler::Store(run_rework),
-    };
+pub(crate) static REWORK: crate::cmdkit::CommandReg = crate::cmdkit::CommandReg {
+    name: "rework",
+    help_after: "autopilot",
+    command: <ReworkArgs as clap::CommandFactory>::command,
+    policy: |_| crate::cmdkit::CmdPolicy {
+        stakeholder: crate::stakeholder_role::StakeholderAction::Write,
+        per_write_auto_push: true,
+        skip_role_restore_prompt: false,
+        team_identity_write: false,
+    },
+    run: crate::cmdkit::Handler::Store(run_rework),
+};
 
 // trace:TASK-3426 | ai:codex
 pub(super) fn handle_queue_command(
@@ -1343,4 +1434,108 @@ pub(super) fn handle_queue_command(
         _ => unreachable!("dispatcher selected another queue subcommand"),
     }
     Ok(())
+}
+
+// Preserve human escalation and all shared pickup gates even for open PRs.
+// trace:STORY-2690 | ai:codex
+pub(crate) fn require_rework_pickable(
+    req: &Requirement,
+    store: &aida_core::RequirementsStore,
+) -> Result<()> {
+    let tags: Vec<_> = req.tags.iter().cloned().collect();
+    if let Some(tag) = crate::burndown::parking_tag(&tags) {
+        let code = if tag.eq_ignore_ascii_case("needs-human") {
+            "needs-human"
+        } else {
+            "parking-tag"
+        };
+        anyhow::bail!(
+            "rework-routing-refused reason={code}: a human must clear the parking tag {tag}"
+        );
+    }
+    if req
+        .decision_request
+        .as_ref()
+        .is_some_and(|request| request.is_pending())
+    {
+        anyhow::bail!(
+            "rework-routing-refused reason=pending-decision: a human must answer the decision request"
+        );
+    }
+    let policy = super::work::queue_drain_pickup_policy(req, store, false, None);
+    let code = match &policy {
+        super::work::QueueFreshPickup::Pickable => return Ok(()),
+        super::work::QueueFreshPickup::Deferred => "deferred",
+        super::work::QueueFreshPickup::Archived => "archived",
+        super::work::QueueFreshPickup::NeedsGuidedOrOperatorSession(_) => "supervised-mode",
+        super::work::QueueFreshPickup::NeedsReleaseOperatorSession => "release-operator",
+        super::work::QueueFreshPickup::AwaitingMerge => "awaiting-merge",
+        super::work::QueueFreshPickup::AwaitingRework => "awaiting-rework",
+        super::work::QueueFreshPickup::Terminal(_) => "terminal",
+        super::work::QueueFreshPickup::Blocked(reason) => match reason {
+            aida_core::pickability::BlockedReason::NeedsTriage => "needs-triage",
+            aida_core::pickability::BlockedReason::HumanOnly => "human-only",
+            aida_core::pickability::BlockedReason::KnowledgeType { .. } => "knowledge-type",
+            _ => "blocked-by",
+        },
+    };
+    anyhow::bail!(
+        "rework-routing-refused reason={code}: {}",
+        super::work::queue_fresh_pickup_reason_label(&policy).unwrap_or_default()
+    );
+}
+
+#[cfg(test)]
+mod story_2690_tests {
+    use super::*;
+
+    #[test]
+    fn story_2690_routing_preserves_pickup_and_human_gates() {
+        let mut store = aida_core::RequirementsStore::default();
+        let mut req = Requirement::new("rework".into(), String::new());
+        for status in [
+            RequirementStatus::Approved,
+            RequirementStatus::InProgress,
+            RequirementStatus::Planned,
+        ] {
+            req.status = status;
+            assert!(require_rework_pickable(&req, &store).is_ok());
+        }
+        req.status = RequirementStatus::NeedsAttention;
+        assert!(require_rework_pickable(&req, &store)
+            .unwrap_err()
+            .to_string()
+            .contains("reason=needs-triage"));
+        req.status = RequirementStatus::Approved;
+        req.tags.insert("needs-human".into());
+        assert!(require_rework_pickable(&req, &store)
+            .unwrap_err()
+            .to_string()
+            .contains("reason=needs-human"));
+        req.tags.clear();
+        req.deferred = true;
+        assert!(require_rework_pickable(&req, &store)
+            .unwrap_err()
+            .to_string()
+            .contains("reason=deferred"));
+        req.deferred = false;
+        req.human_only = true;
+        assert!(require_rework_pickable(&req, &store)
+            .unwrap_err()
+            .to_string()
+            .contains("reason=human-only"));
+        req.human_only = false;
+        let blocker = Requirement::new("blocker".into(), String::new());
+        req.relationships.push(aida_core::Relationship {
+            rel_type: aida_core::RelationshipType::BlockedBy,
+            target_id: blocker.id,
+            created_at: None,
+            created_by: None,
+        });
+        store.requirements.push(blocker);
+        assert!(require_rework_pickable(&req, &store)
+            .unwrap_err()
+            .to_string()
+            .contains("reason=blocked-by"));
+    }
 }

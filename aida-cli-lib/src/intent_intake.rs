@@ -1,6 +1,6 @@
 //! Independent, clone-local observation transport. Envelope prose is data only.
 // trace:TASK-3096 | ai:codex
-use crate::observation_envelope::{self as envelope, Envelope, ENVELOPE_LIMIT};
+use crate::observation_envelope::{self as envelope, ENVELOPE_LIMIT};
 use aida_core::transport_policy::{self as transport_process, Private};
 use anyhow::{bail, Context, Result};
 use clap::{Subcommand, ValueEnum};
@@ -75,7 +75,7 @@ pub(crate) enum IntakeCommand {
         /// Exact envelope JSON; omit to publish retained commits and receipts.
         #[clap(long)]
         file: Option<PathBuf>,
-        /// Required when adding an envelope. Omit --file to retry a pending push.
+        /// Required for observation/finding text. Fixed verdicts need no confirmation.
         #[clap(long, requires = "file")]
         reviewed: bool,
         /// Emit machine-readable JSON.
@@ -291,6 +291,7 @@ fn validator_prefix() -> String {
     let mut validator = Sha256::new();
     validator.update(include_bytes!("intent_intake.rs"));
     validator.update(include_bytes!("observation_envelope.rs"));
+    validator.update(include_bytes!("review_envelope.rs"));
     validator.update(include_bytes!("ci_receipt.rs"));
     validator.update(include_bytes!("ci_relay.rs"));
     validator.update(include_bytes!("ci_inventory.rs"));
@@ -699,17 +700,22 @@ impl Intake {
                     } else {
                         "observations"
                     };
-                    if path != allowed && !path.starts_with(&format!("{allowed}/")) {
+                    let review_path = allowed == "observations"
+                        && matches!(path.split('/').next(), Some("findings" | "review-verdicts"));
+                    if !review_path && path != allowed && !path.starts_with(&format!("{allowed}/"))
+                    {
                         bail!("Path is forbidden for this intake branch role");
                     }
                 }
                 if parts.len() == 3
                     && parts[0] == "040000"
                     && parts[1] == "tree"
-                    && (matches!(path, "observations" | "receipts" | "ci-results")
-                        || path
-                            .strip_prefix("ci-results/")
-                            .is_some_and(crate::ci_receipt::oid))
+                    && (matches!(
+                        path,
+                        "observations" | "receipts" | "ci-results" | "findings" | "review-verdicts"
+                    ) || path
+                        .strip_prefix("ci-results/")
+                        .is_some_and(crate::ci_receipt::oid))
                 {
                     continue;
                 }
@@ -721,7 +727,11 @@ impl Intake {
                     .strip_suffix(".json")
                     .context("Unexpected intake filename")?;
                 if folder != "ci-results"
-                    && (!digest(checksum) || !matches!(folder, "observations" | "receipts"))
+                    && (!digest(checksum)
+                        || !matches!(
+                            folder,
+                            "observations" | "receipts" | "findings" | "review-verdicts"
+                        ))
                 {
                     bail!("Unexpected intake path");
                 }
@@ -784,6 +794,18 @@ impl Intake {
                     if value.checksum != checksum {
                         bail!("Intake digest filename mismatch");
                     }
+                } else if matches!(folder, "findings" | "review-verdicts") {
+                    let value = crate::review_envelope::parse(&bytes, &self.profile.deny_patterns)?;
+                    if let crate::review_envelope::Payload::Verdict(v) = &value.payload {
+                        if branch.strip_prefix("refs/heads/aida-feedback-")
+                            != Some(v.reviewer_node.as_str())
+                        {
+                            bail!("Verdict node must match enrolled producer identity");
+                        }
+                    }
+                    if value.folder() != folder || value.checksum != checksum {
+                        bail!("Review digest filename or kind mismatch");
+                    }
                 } else {
                     let receipt: Receipt = serde_json::from_slice(&bytes)
                         .map_err(|_| anyhow::anyhow!("Invalid intake receipt schema or JSON"))?;
@@ -822,6 +844,7 @@ impl Intake {
             for path in current.keys().filter(|p| p.starts_with("receipts/")) {
                 if self.profile.version == 1
                     && !current.contains_key(&path.replacen("receipts/", "observations/", 1))
+                    && !current.contains_key(&path.replacen("receipts/", "findings/", 1))
                 {
                     bail!("Receipt without observation refused");
                 }
@@ -1214,12 +1237,42 @@ fn process(
         intake.sync()?;
     }
     let files = intake.files()?;
-    let value: Envelope = envelope::parse(
-        files
-            .get(&format!("observations/{checksum}.json"))
-            .context("Unknown intake observation")?,
-        &intake.profile.deny_patterns,
-    )?;
+    // Verdicts have no processing action in this slice: retained pending data only.
+    // trace:STORY-2493 | ai:codex
+    let finding = files
+        .get(&format!("findings/{checksum}.json"))
+        .map(|bytes| crate::review_envelope::parse(bytes, &intake.profile.deny_patterns))
+        .transpose()?;
+    let (title, body_text, finding_tags) = if let Some(value) = finding {
+        let crate::review_envelope::Payload::Finding(f) = value.payload else {
+            bail!("Expected finding payload");
+        };
+        if !matches!(action, Action::Create | Action::Pending) || target.is_some() {
+            bail!("Imported findings support only create or pending");
+        }
+        let tags = format!(
+            "from-review:INTENT,severity:{},blocking:{},intake-digest:{}",
+            f.severity.tag(),
+            f.blocking,
+            checksum
+        );
+        (
+            f.title,
+            format!(
+                "{}\n\nHome location: {}:{}\nBlocking: {}",
+                f.body, f.file, f.line, f.blocking
+            ),
+            Some(tags),
+        )
+    } else {
+        let value = envelope::parse(
+            files
+                .get(&format!("observations/{checksum}.json"))
+                .context("Unknown observation or finding (verdicts remain pending data)")?,
+            &intake.profile.deny_patterns,
+        )?;
+        (value.title, value.body, None)
+    };
     let receipt_path = format!("receipts/{checksum}.json");
     let journal_name = format!("operation-{checksum}.json");
     if let Some(bytes) = files.get(&receipt_path) {
@@ -1354,6 +1407,10 @@ fn process(
                 bail!("Ambiguous prior spec write: durable journal retained; inspect intake-op evidence and reconcile manually. Refusing automatic replay");
             }
             let marker = format!("intake-op:{}", journal.operation);
+            let tags = finding_tags
+                .as_ref()
+                .map(|t| format!("{marker},{t}"))
+                .unwrap_or_else(|| marker.clone());
             // Reuse normal CLI authorization and canonical writers, never bypass
             // role, transport, hypothesis or store mutation policy here.
             let mut cmd = Command::new(crate::resolve_aida_exe());
@@ -1362,20 +1419,18 @@ fn process(
                 .envs(crate::headless_wait_envs(ceiling_key, &ceiling_value));
             let body;
             if action == Action::Create {
-                cmd.arg("add")
-                    .arg(format!("--title={}", value.title))
-                    .args([
-                        "--description-stdin",
-                        "--type",
-                        "task",
-                        "--status",
-                        "draft",
-                        "--tags",
-                        &marker,
-                        "--format",
-                        "human",
-                    ]);
-                body = value.body;
+                cmd.arg("add").arg(format!("--title={}", title)).args([
+                    "--description-stdin",
+                    "--type",
+                    "task",
+                    "--status",
+                    "draft",
+                    "--tags",
+                    &tags,
+                    "--format",
+                    "human",
+                ]);
+                body = body_text.clone();
             } else {
                 cmd.args([
                     "comment",
@@ -1385,7 +1440,7 @@ fn process(
                     "--format",
                     "human",
                 ]);
-                body = format!("{}\n\n{}\n\n[{marker}]", value.title, value.body);
+                body = format!("{}\n\n{}\n\n[{marker}]", title, body_text);
             }
             let result = transport_process::bounded_with_stderr(
                 cmd,
@@ -1477,6 +1532,21 @@ fn print_receipt(receipt: &Receipt, json: bool) -> Result<()> {
     Ok(())
 }
 
+// Validate both formats without changing the observation v1 hash contract.
+// trace:STORY-2493 | ai:codex
+pub(super) fn content_path(bytes: &[u8], patterns: &[String]) -> Result<(&'static str, String)> {
+    // Closed parsers refuse malformed kinds and unknown fields. No schema fallback
+    // can reinterpret review data as observation prose.
+    let kind: serde_json::Value = serde_json::from_slice(bytes)
+        .map_err(|_| anyhow::anyhow!("Invalid envelope schema or JSON"))?;
+    if kind.get("kind").and_then(serde_json::Value::as_str) == Some("observation") {
+        let value = envelope::parse(bytes, patterns)?;
+        return Ok(("observations", value.checksum));
+    }
+    let value = crate::review_envelope::parse(bytes, patterns)?;
+    Ok((value.folder(), value.checksum))
+}
+
 pub(crate) fn run(command: &IntakeCommand, json_format: bool) -> Result<()> {
     let intake = Intake::open(command)?;
     let json = json_format
@@ -1513,12 +1583,12 @@ pub(crate) fn run(command: &IntakeCommand, json_format: bool) -> Result<()> {
                 bail!("Only an enrolled producer may publish observations; processors use process");
             }
             if let Some(file) = file {
-                if !reviewed {
+                let bytes = envelope::read_bounded(file, ENVELOPE_LIMIT)?;
+                let (folder, checksum) = content_path(&bytes, &intake.profile.deny_patterns)?;
+                if !reviewed && folder != "review-verdicts" {
                     bail!("Publication requires explicit --reviewed confirmation");
                 }
-                let bytes = envelope::read_bounded(file, ENVELOPE_LIMIT)?;
-                let value = envelope::parse(&bytes, &intake.profile.deny_patterns)?;
-                intake.append(&format!("observations/{}.json", value.checksum), &bytes)?;
+                intake.append(&format!("{folder}/{checksum}.json"), &bytes)?;
             } else {
                 intake.sync()?;
                 intake.push()?;
@@ -1540,6 +1610,7 @@ pub(crate) fn run(command: &IntakeCommand, json_format: bool) -> Result<()> {
                 .filter(|path| {
                     path.starts_with("receipts/")
                         && !files.contains_key(&path.replacen("receipts/", "observations/", 1))
+                        && !files.contains_key(&path.replacen("receipts/", "findings/", 1))
                 })
                 .map(|path| {
                     path.trim_start_matches("receipts/")
@@ -1571,14 +1642,32 @@ pub(crate) fn run(command: &IntakeCommand, json_format: bool) -> Result<()> {
                 None
             };
             let mut rows = Vec::new();
-            for (path, bytes) in files.iter().filter(|(p, _)| p.starts_with("observations/")) {
-                let value = envelope::parse(bytes, &intake.profile.deny_patterns)?;
-                let receipt = files
-                    .get(&path.replacen("observations/", "receipts/", 1))
+            for (_path, bytes) in files.iter().filter(|(p, _)| {
+                matches!(
+                    p.split('/').next(),
+                    Some("observations" | "findings" | "review-verdicts")
+                )
+            }) {
+                let (folder, checksum) = content_path(bytes, &intake.profile.deny_patterns)?;
+                let title = if folder == "observations" {
+                    envelope::parse(bytes, &intake.profile.deny_patterns)?.title
+                } else if folder == "findings" {
+                    match crate::review_envelope::parse(bytes, &intake.profile.deny_patterns)?
+                        .payload
+                    {
+                        crate::review_envelope::Payload::Finding(f) => f.title,
+                        _ => unreachable!(),
+                    }
+                } else {
+                    "Pending verdict (no gate credit)".into()
+                };
+                let receipt = (folder != "review-verdicts")
+                    .then(|| files.get(&format!("receipts/{checksum}.json")))
+                    .flatten()
                     .map(|b| serde_json::from_slice::<Receipt>(b))
                     .transpose()?;
                 if *all || receipt.is_none() {
-                    rows.push(serde_json::json!({"label": value.label(), "checksum": value.checksum, "title": value.title, "state": if receipt.is_some() {"processed"} else {"pending"}, "receipt": receipt.as_ref().map(|r| receipt_view(r, store.as_ref())).transpose()?}));
+                    rows.push(serde_json::json!({"label": format!("INTENT-{}", &checksum[..12]), "checksum": checksum, "kind": folder, "title": title, "state": if receipt.is_some() {"processed"} else {"pending"}, "receipt": receipt.as_ref().map(|r| receipt_view(r, store.as_ref())).transpose()?}));
                 }
             }
             if json {

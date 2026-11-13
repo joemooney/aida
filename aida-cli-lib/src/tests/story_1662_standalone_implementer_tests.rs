@@ -531,7 +531,9 @@ impl Drop for MarkerGuard {
 // trace:STORY-1662.AC6 | ai:claude
 #[test]
 fn pr_ship_refuses_under_the_marker() {
-    let cli = crate::command_registry::try_parse_from(["aida", "pr", "ship", "42"]).unwrap();
+    let cli = crate::TEST_CLI
+        .try_parse_from(["aida", "pr", "ship", "42"])
+        .unwrap();
     let args = cli.command.registered::<crate::pr_cmd::PrArgs>();
     let _marker = MarkerGuard::set();
     let err = crate::pr_cmd::handle_pr_command(&args.inner).unwrap_err();
@@ -972,7 +974,7 @@ fn stub_vendor_that_punts_exits_32_as_a_live_implementer_lane_with_no_grant_leak
 
     let result = std::thread::scope(|scope| {
         let launch = scope.spawn(|| {
-            run(Launch {
+            run_for_test(Launch {
                 project_root: &project,
                 vendor: crate::session::HeadlessVendor::Claude,
                 prompt: "/aida-pickup STORY-9",
@@ -1042,6 +1044,19 @@ fn stub_vendor_that_punts_exits_32_as_a_live_implementer_lane_with_no_grant_leak
         result
     });
     let err = result.expect_err("a punted run is not an open PR");
+    // Real child spawn and punt must agree with the durable terminal result.
+    // trace:STORY-2690 | ai:codex
+    let receipts: Vec<_> = std::fs::read_dir(project.join(".aida/lane-results"))
+        .unwrap()
+        .map(|e| e.unwrap().path())
+        .collect();
+    assert_eq!(receipts.len(), 1);
+    let receipt: serde_json::Value =
+        serde_json::from_slice(&std::fs::read(&receipts[0]).unwrap()).unwrap();
+    assert_eq!(receipt["result"], "punted");
+    assert_eq!(receipt["started"], true);
+    assert!(receipt["child_pid"].as_u64().is_some());
+
     assert_eq!(
         crate::exit_code_for_error(&err),
         PUNTED_EXIT_CODE,

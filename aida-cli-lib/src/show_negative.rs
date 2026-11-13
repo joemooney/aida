@@ -64,7 +64,12 @@
 //! binding amendments (see the spec's comments).
 // trace:BUG-2221 | ai:claude
 
-use crate::*;
+use crate::{collect_git_linkage_opts, collect_git_linkage_until, schema};
+use crate::{
+    command_output_with_timeout_detail, extract_referenced_spec_ids_from_commit,
+    extract_spec_ids_from_commit, extract_trace_line_spec_ids, git_arg_guard, run,
+    BoundedCommandOutput, LINKAGE_COMMIT_LOG_TIMEOUT,
+};
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::io::Write as _;
 use std::path::{Path, PathBuf};
