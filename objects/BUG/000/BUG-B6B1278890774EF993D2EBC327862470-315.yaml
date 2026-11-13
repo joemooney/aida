@@ -8,8 +8,10 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-13T03:56:52.002540842Z
-modified_at: 2026-11-13T05:30:03.645489983Z
+modified_at: 2026-11-13T05:31:35.571740210Z
 req_type: Bug
+tags:
+- track:integration
 history:
 - id: 01a1d362-42b9-70b2-b1e5-f78dd238c0d3
   author: joe
@@ -23,6 +25,12 @@ history:
 - id: 01a1d362-66fc-7600-9549-7d6417ba9f47
   author: joe
   timestamp: 2026-11-13T05:30:03.900537953Z
+  session_id: 01a1d2e6-f5db-7f33-9b74-3ae5fdaf9e0c
+  harness_version: 2.1.323 (Claude Code)
+  changes: []
+- id: 01a1d363-cdb9-76a2-b88f-a0f893e9ceb5
+  author: joe
+  timestamp: 2026-11-13T05:31:35.737356133Z
   session_id: 01a1d2e6-f5db-7f33-9b74-3ae5fdaf9e0c
   harness_version: 2.1.323 (Claude Code)
   changes: []
