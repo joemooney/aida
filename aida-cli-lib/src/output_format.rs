@@ -3,115 +3,15 @@
 
 // trace:TASK-3428 | ai:codex
 use crate::cli::OutputFormat;
+// trace:TASK-3783 | ai:codex
 use crate::kernel::find_project_root;
 use crate::leases::list_leases;
 use crate::worktree_gc::find_main_worktree_root;
-use crate::{
-    build_list_fields_lines_with, format_weight, resolve_agent_mode, toon_status_token,
-    TOON_LIST_DEFAULT_FIELDS, TOON_LIST_FIELD_ALIASES, TOON_LIST_KNOWN_FIELDS,
-};
+use crate::{build_list_fields_lines_with, resolve_agent_mode};
 use crate::{headless_tail, tail_cmd};
+pub(crate) use aida_term::output_format::*;
 use anyhow::Result;
 use std::io::IsTerminal;
-
-/// TASK-970: the agent-ergonomics output gate. Two AIDA surfaces lean toward
-/// agent-friendly output when the caller is a non-interactive agent rather than
-/// a human at a TTY: bare `aida` routes to the status snapshot (not the
-/// getting-started menu), and bare `aida list` applies a default row cap.
-///
-/// AGENT MODE is true when EITHER `AIDA_AGENT_OUTPUT` is set to a truthy value
-/// OR stdout is not a TTY (piped / headless / MCP). `AIDA_AGENT_OUTPUT=0`
-/// (or `false`/`no`/`off`) force-selects the HUMAN path even when piped, which
-/// also makes the human path testable without a real terminal. The human-at-a-
-/// TTY path is left byte-identical; everything gated on this is agent-only.
-// trace:TASK-970
-pub(crate) fn agent_output_mode_quiet() -> bool {
-    let pin = output_format_override();
-    let env = std::env::var("AIDA_AGENT_OUTPUT").ok();
-    let stdout_is_tty = std::io::stdout().is_terminal();
-    resolve_agent_mode(pin, env.as_deref(), stdout_is_tty)
-}
-
-pub(crate) fn agent_output_mode() -> bool {
-    // STORY-764: an explicit `--format` / `AIDA_OUTPUT_FORMAT` pin wins over the
-    // `AIDA_AGENT_OUTPUT` env + TTY default. `human` selects the human path;
-    // `toon` / `json` both select the agent (machine) path. This is the durable
-    // escape hatch scripts use so piped/captured output no longer silently
-    // switches format out from under them (BUG-707). trace:STORY-764 | ai:claude
-    let pin = output_format_override();
-    let env = std::env::var("AIDA_AGENT_OUTPUT").ok();
-    let stdout_is_tty = std::io::stdout().is_terminal();
-    let agent = resolve_agent_mode(pin, env.as_deref(), stdout_is_tty);
-    // STORY-764: loud-but-once. When we auto-switched to the compact agent format
-    // purely because stdout is not a terminal — no explicit pin, no explicit
-    // `AIDA_AGENT_OUTPUT` — nudge the caller (on STDERR, so piped STDOUT stays
-    // clean) toward `--format` the first time. trace:STORY-764 | ai:claude
-    // BUG-1813: the decision is the pure [`toon_switch_hint_applies`] so it is
-    // unit-tested, and it also requires stderr to be a terminal — when a script
-    // captures `2>&1` there is no human to nudge, only output to pollute.
-    // trace:BUG-1813 | ai:claude
-    let stderr_is_tty = std::io::stderr().is_terminal();
-    if toon_switch_hint_applies(pin, env.as_deref(), stdout_is_tty, stderr_is_tty) {
-        maybe_emit_toon_switch_hint();
-    }
-    agent
-}
-
-/// STORY-764: process-global explicit output-format override, installed exactly
-/// once from the global `--format` flag (or `AIDA_OUTPUT_FORMAT`) right after
-/// argv parsing. Everything that renders consults [`agent_output_mode`] /
-/// [`output_format_is_json`], which read this first — so the pin is honored
-/// uniformly without threading a format param through every handler.
-// trace:STORY-764 | ai:claude
-pub(crate) static OUTPUT_FORMAT_OVERRIDE: std::sync::OnceLock<Option<OutputFormat>> =
-    std::sync::OnceLock::new();
-
-/// Resolve + install the [`OUTPUT_FORMAT_OVERRIDE`] once. Precedence: the
-/// `--format` flag wins; else `AIDA_OUTPUT_FORMAT` (human|toon|json,
-/// case-insensitive); else `None` (fall back to the TTY-based default).
-/// Idempotent — a later call is a no-op (the first install sticks).
-// trace:STORY-764 | ai:claude
-pub(crate) fn set_output_format_override(flag: Option<OutputFormat>) {
-    let resolved = flag.or_else(output_format_from_env);
-    let _ = OUTPUT_FORMAT_OVERRIDE.set(resolved);
-}
-
-/// Parse `AIDA_OUTPUT_FORMAT` into an [`OutputFormat`]. Unset or unrecognized
-/// values yield `None` (defer to the TTY-based default rather than erroring, so
-/// a stray value never breaks a command).
-// trace:STORY-764 | ai:claude
-pub(crate) fn output_format_from_env() -> Option<OutputFormat> {
-    parse_output_format(std::env::var("AIDA_OUTPUT_FORMAT").ok().as_deref())
-}
-
-/// Pure parse of an `AIDA_OUTPUT_FORMAT` value into an [`OutputFormat`]. Unset
-/// (`None`) or an unrecognized value yields `None` (defer to the TTY-based
-/// default rather than erroring). Case-insensitive; `table`/`agent` are
-/// accepted spellings of `human`/`toon`.
-// trace:STORY-764 | ai:claude
-pub(crate) fn parse_output_format(raw: Option<&str>) -> Option<OutputFormat> {
-    use aida_core::output_format::{parse_output_format, OutputFormat as CoreFormat};
-    parse_output_format(raw).map(|format| match format {
-        CoreFormat::Human => OutputFormat::Human,
-        CoreFormat::Toon => OutputFormat::Toon,
-        CoreFormat::Json => OutputFormat::Json,
-    })
-}
-
-/// The installed explicit override, if any. `None` until
-/// [`set_output_format_override`] runs (or if no pin was given).
-// trace:STORY-764 | ai:claude
-pub(crate) fn output_format_override() -> Option<OutputFormat> {
-    OUTPUT_FORMAT_OVERRIDE.get().copied().flatten()
-}
-
-/// True when the explicit pin selects JSON. Commands that carry a `--json`
-/// flag OR this in, so `--format json` / `AIDA_OUTPUT_FORMAT=json` reaches them
-/// uniformly.
-// trace:STORY-764 | ai:claude
-pub(crate) fn output_format_is_json() -> bool {
-    matches!(output_format_override(), Some(OutputFormat::Json))
-}
 
 /// Build and dispatch the shared tail resolver from clap-parsed arguments.
 /// Both `aida tail drain` and `aida drain tail` enter here, then flow through
@@ -163,159 +63,6 @@ pub(crate) fn handle_tail_cli(
     tail_cmd::handle_tail(&project_root, sessions, &opts)
 }
 
-/// Pure core of [`agent_output_mode`] (testable without touching the real env
-/// or a real terminal). `env` is the `AIDA_AGENT_OUTPUT` value (None = unset);
-/// `stdout_is_tty` is whether stdout is a terminal.
-// trace:TASK-970
-pub(crate) fn agent_output_mode_from(env: Option<&str>, stdout_is_tty: bool) -> bool {
-    match env {
-        Some(v) => !matches!(
-            v.trim().to_ascii_lowercase().as_str(),
-            "" | "0" | "false" | "no" | "off"
-        ),
-        None => !stdout_is_tty,
-    }
-}
-
-/// Resolve the requested `--fields` selection for agent-mode `aida list` into a
-/// validated, ordered field list. `None` (no `--fields`) yields the minimal
-/// default. A `csv` string is split on commas and/or whitespace (so a copied
-/// TOON header's field list works; the human table's display headers, such as
-/// `Modified`, are labels rather than field names and are rejected),
-/// lowercased, alias-resolved via
-/// [`TOON_LIST_FIELD_ALIASES`], and checked against [`TOON_LIST_KNOWN_FIELDS`];
-/// an unknown name is an error naming the valid set. Empty segments are
-/// ignored; an empty selection falls back to the default.
-// trace:TASK-964
-// trace:TASK-2205 | ai:claude
-// trace:TASK-2238 | ai:claude
-pub(crate) fn toon_list_fields(csv: Option<&str>) -> Result<Vec<String>> {
-    let Some(csv) = csv else {
-        return Ok(TOON_LIST_DEFAULT_FIELDS
-            .iter()
-            .map(|s| s.to_string())
-            .collect());
-    };
-    let mut out = Vec::new();
-    for raw in csv.split(|c: char| c == ',' || c.is_whitespace()) {
-        let name = raw.to_ascii_lowercase();
-        if name.is_empty() {
-            continue;
-        }
-        let name = TOON_LIST_FIELD_ALIASES
-            .iter()
-            .find(|(alias, _)| *alias == name)
-            .map_or(name, |(_, field)| field.to_string());
-        if !TOON_LIST_KNOWN_FIELDS.contains(&name.as_str()) {
-            anyhow::bail!(
-                "unknown --fields entry `{name}`; valid fields: {}",
-                TOON_LIST_KNOWN_FIELDS.join(", ")
-            );
-        }
-        out.push(name);
-    }
-    if out.is_empty() {
-        return Ok(TOON_LIST_DEFAULT_FIELDS
-            .iter()
-            .map(|s| s.to_string())
-            .collect());
-    }
-    Ok(out)
-}
-
-/// The agent-mode `local_id` cell: the spec's local ID when it differs from
-/// the agreed ID shown in `id`, `(agreed id pending)` for a local-only spec,
-/// and empty for a spec with one ID.
-// trace:STORY-B6B1278890774EF993D2EBC327862470-105 | ai:claude
-pub(crate) fn toon_local_id_cell(agreed_id: Option<&str>, spec_id: Option<&str>) -> String {
-    if aida_core::node_alias::agreed_id_pending(agreed_id, spec_id) {
-        return "(agreed id pending)".to_string();
-    }
-    let agreed = agreed_id.map(str::trim).filter(|a| !a.is_empty());
-    let local = spec_id.map(str::trim).filter(|s| !s.is_empty());
-    match (agreed, local) {
-        (Some(a), Some(l)) if !aida_core::id_identity::same_id(a, l) => {
-            aida_core::node_alias::display_spec_id(l)
-        }
-        _ => String::new(),
-    }
-}
-
-/// Whether any row has a `local_id` cell, so the default agent list adds the
-/// column right after `id` (a store with only one-ID specs keeps its shape).
-// trace:STORY-B6B1278890774EF993D2EBC327862470-105 | ai:claude
-pub(crate) fn with_local_id_column(
-    mut selected: Vec<String>,
-    explicit_fields: bool,
-    reqs: &[aida_core::RequirementSummary],
-) -> Vec<String> {
-    if explicit_fields || selected.iter().any(|f| f == "local_id") {
-        return selected;
-    }
-    let any = reqs
-        .iter()
-        .any(|r| !toon_local_id_cell(r.agreed_id.as_deref(), r.spec_id.as_deref()).is_empty());
-    if any {
-        let at = selected.iter().position(|f| f == "id").map_or(0, |i| i + 1);
-        selected.insert(at, "local_id".to_string());
-    }
-    selected
-}
-
-/// Project one requirement summary + its routing triple `(in_flight, blocked,
-/// queued)` onto a single named list field, as the cell string for a TOON row.
-// trace:TASK-964
-pub(crate) fn toon_list_cell(
-    r: &aida_core::RequirementSummary,
-    routing: (bool, bool, bool),
-    field: &str,
-) -> String {
-    let (in_flight, blocked, queued) = routing;
-    match field {
-        // trace:STORY-B6B1278890774EF993D2EBC327862470-078 | ai:claude
-        "id" => aida_core::node_alias::display_spec_id(
-            r.agreed_id
-                .as_deref()
-                .or(r.spec_id.as_deref())
-                .unwrap_or(""),
-        ),
-        // The local ID beside the agreed one; a local-only spec says its
-        // agreed ID is pending (its `id` cell already is the local ID).
-        // trace:STORY-B6B1278890774EF993D2EBC327862470-105 | ai:claude
-        "local_id" => toon_local_id_cell(r.agreed_id.as_deref(), r.spec_id.as_deref()),
-        "title" => r.title.clone(),
-        // BUG-781: the agent surface reports the TERMINAL truth for an accepted
-        // decision — `accepted`, the recognized ADR verb — not the `approved`
-        // token that reads as "cleared to start". trace:BUG-781 | ai:claude
-        "status" => toon_status_token(crate::status_display::display_status_for_type(
-            &r.req_type,
-            &r.status,
-        )),
-        "type" => r.req_type.to_ascii_lowercase(),
-        "priority" => r.priority.to_ascii_lowercase(),
-        "feature" => r.feature.clone(),
-        "owner" => r.owner.clone(),
-        "assignee" => r.assignee.clone().unwrap_or_default(),
-        "tags" => r.tags.join(" "),
-        "heft" => r.heft.to_string(),
-        // trace:TASK-1215 | ai:codex
-        "modified_at" => r.modified_at.clone(),
-        // trace:TASK-2205 | ai:claude — rendered like modified_at.
-        "opened" => r.created_at.clone(),
-        // trace:FR-283 | ai:claude — empty cell = no weight set.
-        "weight" => r.weight.map(format_weight).unwrap_or_default(),
-        "queued" => queued.to_string(),
-        "in_flight" => in_flight.to_string(),
-        "blocked" => blocked.to_string(),
-        // trace:STORY-776 | ai:claude — empty cell = ungroomed.
-        "mode" => r.execution_mode.clone().unwrap_or_default(),
-        // trace:STORY-634 | ai:claude — empty cell = single-repo.
-        "origin" => r.origin.clone().unwrap_or_default(),
-        "deferred_reason" => r.deferred_reason.clone().unwrap_or_default(),
-        _ => String::new(),
-    }
-}
-
 /// Print the human `aida list --fields <csv>` table. Thin wrapper over
 /// [`build_list_fields_lines`].
 // trace:STORY-734 | ai:claude — plain `//` keeps the marker out of any doc/help.
@@ -332,99 +79,6 @@ pub(crate) fn render_list_fields_table<F, C>(
     for line in build_list_fields_lines_with(reqs, fields, routing_of, cell_of) {
         println!("{line}");
     }
-}
-
-/// STORY-764's one-time nudge, emitted on STDERR when output auto-switched to
-/// TOON because stdout is piped. Kept as a constant so the test asserts the
-/// exact text the user sees.
-// trace:BUG-1813 | ai:claude
-pub(crate) const TOON_SWITCH_HINT: &str =
-    "note: stdout is not a terminal — aida switched to compact TOON output. \
-     Pin a format with `--format human|toon|json` or AIDA_OUTPUT_FORMAT to keep scripts stable.";
-
-/// File name of the once-marker that silences [`TOON_SWITCH_HINT`] after its
-/// first appearance; lives under a project's `.aida/` or, outside a project,
-/// under `~/.aida/`.
-// trace:BUG-1813 | ai:claude
-pub(crate) const TOON_SWITCH_HINT_MARKER: &str = ".format-hint-shown";
-
-/// Pure decision: does the STORY-764 auto-switch hint apply? True only on the
-/// REAL auto-switch path — no `--format` / `AIDA_OUTPUT_FORMAT` pin, no
-/// `AIDA_AGENT_OUTPUT`, stdout not a terminal (with no pin and no env the
-/// agent verdict is exactly `!stdout_is_tty`) — AND stderr is a terminal.
-/// A pinned format was the caller's explicit choice, so there is nothing to
-/// hint about; a non-terminal stderr means no human is watching (cron, CI,
-/// MCP, a `2>&1` capture), so the hint would only pollute captured output.
-/// That keeps the hint for the case STORY-764 built it for: a human at a
-/// terminal piping `aida … | grep` for the first time.
-// trace:BUG-1813 | ai:claude
-pub(crate) fn toon_switch_hint_applies(
-    pin: Option<OutputFormat>,
-    agent_env: Option<&str>,
-    stdout_is_tty: bool,
-    stderr_is_tty: bool,
-) -> bool {
-    pin.is_none() && agent_env.is_none() && !stdout_is_tty && stderr_is_tty
-}
-
-/// Where the once-marker lives: the project's `.aida/` when inside a project,
-/// else the user's `~/.aida/` so a shell outside any project still remembers
-/// the hint was shown, else `None` (nowhere to persist it).
-// trace:BUG-1813 | ai:claude
-pub(crate) fn toon_switch_hint_marker(
-    project_root: Option<&std::path::Path>,
-    home: Option<&std::path::Path>,
-) -> Option<std::path::PathBuf> {
-    project_root
-        .or(home)
-        .map(|dir| dir.join(".aida").join(TOON_SWITCH_HINT_MARKER))
-}
-
-/// Write [`TOON_SWITCH_HINT`] to `err` at most once per `marker`. The marker is
-/// persisted FIRST and the hint is written only when that succeeded: a hint
-/// that cannot be remembered would otherwise reappear on every invocation
-/// (each script call is a fresh process), which is exactly the spam this guards
-/// against. `None` (nowhere to persist), an existing marker, or an unwritable
-/// marker all mean silence. Returns true when the hint was written.
-// trace:BUG-1813 | ai:claude
-pub(crate) fn emit_toon_switch_hint_once(
-    marker: Option<&std::path::Path>,
-    err: &mut dyn std::io::Write,
-) -> bool {
-    let Some(marker) = marker else {
-        return false;
-    };
-    if marker.exists() {
-        return false;
-    }
-    if marker
-        .parent()
-        .is_some_and(|dir| std::fs::create_dir_all(dir).is_err())
-    {
-        return false;
-    }
-    if std::fs::write(marker, b"").is_err() {
-        return false;
-    }
-    let _ = writeln!(err, "{TOON_SWITCH_HINT}");
-    true
-}
-
-/// STORY-764: emit the first-pipe format hint at most once. Guarded first by a
-/// process-once `OnceLock`, then by the once-marker from
-/// [`toon_switch_hint_marker`] (project `.aida/`, else `~/.aida/`). Real
-/// filesystem + real stderr; the testable logic is [`emit_toon_switch_hint_once`].
-// trace:STORY-764 | ai:claude
-// trace:BUG-1813 | ai:claude
-pub(crate) fn maybe_emit_toon_switch_hint() {
-    static PROCESS_ONCE: std::sync::OnceLock<()> = std::sync::OnceLock::new();
-    if PROCESS_ONCE.set(()).is_err() {
-        return; // already fired in this process
-    }
-    let root = find_project_root().ok();
-    let home = crate::home_dir();
-    let marker = toon_switch_hint_marker(root.as_deref(), home.as_deref());
-    let _ = emit_toon_switch_hint_once(marker.as_deref(), &mut std::io::stderr());
 }
 
 #[cfg(test)]
@@ -445,3 +99,48 @@ mod bug_1813_toon_hint_tests;
 #[cfg(test)]
 #[path = "tests/node_alias_display_ratchet_tests.rs"]
 mod node_alias_display_ratchet_tests;
+
+// trace:TASK-3783 | ai:codex
+fn to_term(format: OutputFormat) -> aida_core::output_format::OutputFormat {
+    match format {
+        OutputFormat::Human => aida_core::output_format::OutputFormat::Human,
+        OutputFormat::Toon => aida_core::output_format::OutputFormat::Toon,
+        OutputFormat::Json => aida_core::output_format::OutputFormat::Json,
+    }
+}
+fn from_term(format: aida_core::output_format::OutputFormat) -> OutputFormat {
+    match format {
+        aida_core::output_format::OutputFormat::Human => OutputFormat::Human,
+        aida_core::output_format::OutputFormat::Toon => OutputFormat::Toon,
+        aida_core::output_format::OutputFormat::Json => OutputFormat::Json,
+    }
+}
+fn hint_context() -> (Option<std::path::PathBuf>, Option<std::path::PathBuf>) {
+    (find_project_root().ok(), crate::home_dir())
+}
+pub(crate) fn agent_output_mode() -> bool {
+    aida_term::output_format::agent_output_mode(hint_context)
+}
+pub(crate) fn set_output_format_override(flag: Option<OutputFormat>) {
+    aida_term::output_format::set_output_format_override(flag.map(to_term));
+}
+pub(crate) fn output_format_from_env() -> Option<OutputFormat> {
+    aida_term::output_format::output_format_from_env().map(from_term)
+}
+pub(crate) fn parse_output_format(raw: Option<&str>) -> Option<OutputFormat> {
+    aida_term::output_format::parse_output_format(raw).map(from_term)
+}
+pub(crate) fn output_format_override() -> Option<OutputFormat> {
+    aida_term::output_format::output_format_override().map(from_term)
+}
+pub(crate) fn toon_switch_hint_applies(
+    pin: Option<OutputFormat>,
+    env: Option<&str>,
+    out_tty: bool,
+    err_tty: bool,
+) -> bool {
+    aida_term::output_format::toon_switch_hint_applies(pin.map(to_term), env, out_tty, err_tty)
+}
+pub(crate) fn maybe_emit_toon_switch_hint() {
+    aida_term::output_format::maybe_emit_toon_switch_hint(hint_context);
+}

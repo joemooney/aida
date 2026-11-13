@@ -20,12 +20,12 @@ use anyhow::{bail, Result};
 /// Marks the end of git's options: every later argument is a revision or a
 /// path, even when it starts with `-`. Supported since git 2.24.
 /// Defined on the floor (TASK-b6b1278890774ef993d2ebc327862470-024).
-pub(crate) const END_OF_OPTIONS: &str = crate::gate::kernel_deps::END_OF_OPTIONS;
+pub const END_OF_OPTIONS: &str = "--end-of-options";
 
 /// Refuse a user-supplied git ref/revision/path that starts with `-`, which
 /// git would otherwise read as an option. `flag` names where the value came
 /// from (e.g. `--since`) so the error points at it.
-pub(crate) fn reject_option_like(flag: &str, value: &str) -> Result<()> {
+pub fn reject_option_like(flag: &str, value: &str) -> Result<()> {
     if is_option_like(value) {
         bail!(
             "invalid {flag} value `{}`: it starts with `-`, so git would read it as an \
@@ -37,7 +37,7 @@ pub(crate) fn reject_option_like(flag: &str, value: &str) -> Result<()> {
 }
 
 /// True when `value` (ignoring leading whitespace) starts with `-`.
-pub(crate) fn is_option_like(value: &str) -> bool {
+pub fn is_option_like(value: &str) -> bool {
     value.trim_start().starts_with('-')
 }
 
@@ -45,8 +45,8 @@ pub(crate) fn is_option_like(value: &str) -> bool {
 /// digits (SHA-1 or SHA-256). A value read from the store, a commit trailer
 /// or a verdict must pass this before it becomes a git revision argument.
 // Implemented on the floor (TASK-b6b1278890774ef993d2ebc327862470-024).
-pub(crate) fn is_hex_sha(value: &str) -> bool {
-    crate::gate::kernel_deps::is_hex_sha(value)
+pub fn is_hex_sha(value: &str) -> bool {
+    (7..=64).contains(&value.len()) && value.bytes().all(|b| b.is_ascii_hexdigit())
 }
 
 /// True when `name` is a branch name that may be spliced, unquoted, into a
@@ -61,7 +61,7 @@ pub(crate) fn is_hex_sha(value: &str) -> bool {
 /// a real branch name. A forge or remote-derived default branch must pass
 /// this before it reaches a shell string.
 // trace:BUG-1624 | ai:claude
-pub(crate) fn is_shell_safe_branch_name(name: &str) -> bool {
+pub fn is_shell_safe_branch_name(name: &str) -> bool {
     if name.is_empty()
         || is_option_like(name)
         || !name.bytes().all(|b| {
