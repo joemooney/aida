@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-12T21:59:52.896824799Z
-modified_at: 2026-11-13T08:33:06.062995468Z
+modified_at: 2026-11-13T08:44:12.252874761Z
 req_type: Task
 tags:
 - from-advisor:BUG-2539
@@ -31,6 +31,20 @@ comments:
   modified_at: 2026-11-13T08:06:37.186796716Z
   session_id: 01a1d3ee-83e8-71b3-a2c5-aed5baed6fdc
   harness_version: 2.1.323 (Claude Code)
+- id: 01a1d410-4886-7671-9920-04f2adddd7b8
+  author: dirtlab
+  content: Confirmed the existing TMPDIR=/tmp projection and nested-Cargo fixture fix in commit 5162bd64ba. Added a focused projection regression covering Cargo and fast-gate requests, absent and unavailable outer TMPDIR values, and rejected build/request overrides. Lane jobs j20261113T083411419-2-0 and j20261113T083412585-2-0 each executed one test and passed (aida-cli-lib). git diff --check passes. Edits remain uncommitted for host publication. Supplied codegraph client path is absent; doctor reports missing client.
+  created_at: 2026-11-13T08:39:59.366332760Z
+  modified_at: 2026-11-13T08:39:59.366332760Z
+  session_id: 01a1d40988ed
+  harness_version: codex-cli 0.167.0
+- id: 01a1d414-245c-7152-888a-01c017f5a71c
+  author: dirtlab
+  content: 'Fast-gate fix round: added explicit target_os=linux cfg attributes to the TMPDIR projection regression and real bubblewrap Cargo regression. These tests assert Linux sandbox /tmp behavior. bash scripts/check-portability.sh passes (exit 0); git diff --check passes. Attributes preserve the Linux test behavior validated by the earlier two executed passing tests. Two test files remain uncommitted for host publication.'
+  created_at: 2026-11-13T08:44:12.252874761Z
+  modified_at: 2026-11-13T08:44:12.252874761Z
+  session_id: 01a1d40988ed
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1d1cd-34b7-7111-ada2-c651b7c61e56
   author: joe
