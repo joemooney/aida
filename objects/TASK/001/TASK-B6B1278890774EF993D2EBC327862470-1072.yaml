@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-12T21:59:52.896824799Z
-modified_at: 2026-11-13T06:34:22.366179460Z
+modified_at: 2026-11-13T08:06:37.186796716Z
 req_type: Task
 tags:
 - from-advisor:BUG-2539
@@ -24,6 +24,13 @@ comments:
   modified_at: 2026-11-13T06:34:22.366179460Z
   session_id: 01a1d38d3c4d
   harness_version: codex-cli 0.167.0
+- id: 01a1d3f1-bb82-7171-a2a2-c34a121c9e13
+  author: joe
+  content: 'Advisor 01:10: PR #3928 red on CI (gates): portability ratchet, new tmp literal at aida-cli-lib/src/tests/bug_2383_seat_target_overlay_tests.rs:1319 ("[ \"$TMPDIR\" = /tmp ]" in a sh fixture). Fix: put the test behind #[cfg(unix)] or derive the path from TMPDIR instead of comparing to /tmp. Run scripts/check-portability.sh locally. Rework queued via autoland spool.'
+  created_at: 2026-11-13T08:06:37.186796716Z
+  modified_at: 2026-11-13T08:06:37.186796716Z
+  session_id: 01a1d3ee-83e8-71b3-a2c5-aed5baed6fdc
+  harness_version: 2.1.323 (Claude Code)
 history:
 - id: 01a1d1cd-34b7-7111-ada2-c651b7c61e56
   author: joe
