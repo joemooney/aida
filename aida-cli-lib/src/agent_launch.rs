@@ -1131,6 +1131,7 @@ pub(crate) fn agent_new_command_for_type(token: &str) -> Option<AgentNewCommand>
             delegate_seats: Vec::new(),
             bg: false,
             rotate: false,
+            seat: None,
         }),
         "codex" => Some(AgentNewCommand::Codex {
             role: None,
@@ -1160,6 +1161,7 @@ pub(crate) fn agent_new_command_for_type(token: &str) -> Option<AgentNewCommand>
             delegate_seats: Vec::new(),
             no_mail_wake: false,
             rotate: false,
+            seat: None,
             bg: false,
             spec_positional: None,
             branch: None,

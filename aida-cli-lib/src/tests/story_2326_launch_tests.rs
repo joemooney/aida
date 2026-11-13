@@ -590,7 +590,6 @@ fn agent_new_plan(project: &std::path::Path) -> crate::agent_launch::AgentLaunch
         role: None,
         role_instance: crate::role::RoleInstanceKind::Driver,
         seat: None,
-        seat: None,
         current_spec: None,
         name: "lane-2326".to_string(),
         lease_id: None,
