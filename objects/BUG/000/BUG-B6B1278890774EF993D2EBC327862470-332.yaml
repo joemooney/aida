@@ -1,0 +1,21 @@
+id: 01a1d6dd-f506-7021-8295-ff076e525f4f
+spec_id: BUG-b6b1278890774ef993d2ebc327862470-332
+agreed_id: BUG-2567
+title: Gate-dependency ratchet misses 'extern crate self as <alias>' paths
+description: 'From PR-3948 review (TASK-3785) P2: scripts/check-gate-dependencies.py:27-34 returns an empty edge set for ''extern crate self as root; root::session::new_item()'' and ''use root::session::new_item;''. Acceptance: resolve or explicitly refuse current-crate aliases; fixture test for both forms.'
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-13T21:43:52.838281618Z
+modified_at: 2026-11-13T21:43:52.838281618Z
+req_type: Bug
+filed_at:
+  code_sha: 97d2f9fda0856183dee299b29760f3004c5db881
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 268f02eb6b9
+  vendor: claude
+  session: 01a1d684-8599-70e0-a01c-714f54d2f8de
+  harness_version: 2.1.323 (Claude Code)
