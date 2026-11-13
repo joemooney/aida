@@ -566,12 +566,13 @@ pub(crate) fn run_queue_resume_to_exit(
 }
 
 /// Resolve the host merge result before any vendor is launched. Successful
-/// conflicts require advisor delivery; an existing non-Claude thread refuses.
+/// conflicts require advisor delivery and preserve the selected session vendor.
+// trace:BUG-2553 | ai:codex
 // trace:STORY-2475 | ai:codex
 pub(crate) fn rework_conflict_route(
     prepared: Result<Vec<String>>,
     vendor: session::HeadlessVendor,
-    resume: bool,
+    _resume: bool,
     scope: &str,
     pr: u64,
     branch: &str,
@@ -582,21 +583,15 @@ pub(crate) fn rework_conflict_route(
         return Ok((vendor, files));
     }
     notify(
-        "Rework merge conflicts require Claude",
+        "Rework merge conflicts require resolution",
         &format!(
             "{scope} PR #{pr} conflicts with origin/main in: {}. The host aborted the merge. \
-         Conflict resolution requires Claude on branch {branch}. Fresh route: \
-         aida queue work {scope} --vendor claude --fresh --no-human.",
-            files.join(", ")
+         Conflict resolution continues with {} on branch {branch}.",
+            files.join(", "),
+            vendor.as_str(),
         ),
     )?;
-    if resume && vendor != session::HeadlessVendor::Claude {
-        anyhow::bail!(
-            "conflicting rework requires a fresh Claude lane: \
-            aida queue work {scope} --vendor claude --fresh --no-human"
-        );
-    }
-    Ok((session::HeadlessVendor::Claude, files))
+    Ok((vendor, files))
 }
 
 /// The launch facts [`apply_rework_conflict_route`] needs from the pickup.
@@ -613,20 +608,15 @@ pub(crate) struct ReworkConflictLaunch<'a> {
 
 /// Apply the host merge result to a pickup whose seat (linked worktree or
 /// clone) and lease already exist. A clean merge keeps the planned vendor,
-/// model and prompt. A conflict reroutes the launch to Claude in the same
-/// seat: the override is installed, the vendor is resolved and preflighted
-/// again (binary, `[agents] enabled`, containment), the vendor-specific model
-/// pin is dropped, and the conflict task is appended to the prompt. An
-/// interactive pickup (`!no_human`) gets the same reroute: the launch below
-/// starts interactive Claude, not Codex. Any refusal returns before
-/// `agent.starting()`, so the BUG-2428 setup rollback releases the seat.
-// trace:STORY-2475 | ai:claude
+/// model and prompt. A conflict keeps that vendor and model, rechecks launch
+/// admission, and appends the conflict task before any child starts.
+// trace:STORY-2475 BUG-2553 | ai:codex
 pub(crate) fn apply_rework_conflict_route(
-    project_root: &Path,
+    _project_root: &Path,
     prepared: Result<Vec<String>>,
     launch: ReworkConflictLaunch<'_>,
     prompt: &mut String,
-    resolved_model: &mut Option<String>,
+    _resolved_model: &mut Option<String>,
     notify: impl FnOnce(&str, &str) -> Result<()>,
 ) -> Result<session::HeadlessVendor> {
     let (route_vendor, files) = rework_conflict_route(
@@ -641,12 +631,10 @@ pub(crate) fn apply_rework_conflict_route(
     if files.is_empty() {
         return Ok(launch.vendor);
     }
-    session::install_headless_vendor_override(route_vendor.as_str());
-    let vendor = session::resolve_enabled_headless_vendor(project_root)?;
+    let vendor = route_vendor;
     session::preflight_launch_vendor(vendor, launch.interactive)?;
     session::require_vendor_containment(vendor, launch.contained, "conflict rework")?;
-    std::env::remove_var("AIDA_AGENT_MODEL");
-    *resolved_model = None;
+
     prompt.push_str(&format!(
         "\n\n{}",
         crate::rework_direction::conflict_task(&crate::rework_direction::MainConflict {
@@ -4122,6 +4110,11 @@ pub(crate) fn handle_queue_work(
                     let (recorded, resume_id) =
                         crate::codex_resume::recorded_resume(&root, id, Some(plan.scope.as_str()))?;
                     session::require_resume_vendor(&root, recorded)?;
+                    // trace:BUG-2553 | ai:codex
+                    eprintln!(
+                        "  resume: using recorded vendor `{}` for session `{id}`; configured vendor does not replace an existing thread",
+                        recorded.as_str()
+                    );
                     resume_target = Some((recorded, resume_id));
                     Some(recorded)
                 }
