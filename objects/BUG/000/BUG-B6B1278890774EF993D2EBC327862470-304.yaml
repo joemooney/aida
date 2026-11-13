@@ -3,12 +3,12 @@ spec_id: BUG-b6b1278890774ef993d2ebc327862470-304
 agreed_id: BUG-2539
 title: 'CI gates flake: bug_2383_bwrap_overlay_first_job_sees_a_prebuilt_dependency_as_fresh fails with ''target/agent has no fingerprints'', red-lighting trains'
 description: 'Since ~18:20Z 2026-11-12 the ''Live bwrap OS-wrap confinement gate'' step (CI gates shard) fails intermittently on unrelated heads: train #3889 (job 131397770897), PR #3890 (job 131398695557), PR #3832. Main at 0d6c60e passed it at 17:22Z; PRs #3884/#3887/#3824 passed it. Failure: ''the lane could not use the overlay or bwrap: seed: cold (overlay: .../target/agent has no fingerprints)''. Test: aida-cli-lib/src/tests/bug_2383_seat_target_overlay_tests.rs:1044. A red gates shard makes trains bisect (train #3889 -> #3891), costing a CI cycle per flake. Acceptance: (1) root-cause the cold-seed/no-fingerprints race; (2) the test passes deterministically (repeat-run evidence), no retry-as-fix.'
-status: InProgress
+status: Completed
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-12T18:43:14.457201972Z
-modified_at: 2026-11-13T01:14:23.631900043Z
+modified_at: 2026-11-13T01:47:02.518412316Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -82,6 +82,15 @@ history:
   session_id: 01a1d240-c397-7b61-b29f-bb337c138943
   harness_version: 2.1.323 (Claude Code)
   changes: []
+- id: 01a1d296-37f6-7c01-b157-bdc6063542eb
+  author: joe
+  timestamp: 2026-11-13T01:47:02.518393658Z
+  session_id: 01a1d240-c397-7b61-b29f-bb337c138943
+  harness_version: 2.1.323 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
 filed_at:
   code_sha: 0d6c60e6d982aad0c2c4ad38214010289a267d92
   branch: main
@@ -91,3 +100,6 @@ filed_at:
   vendor: claude
   session: 01a1d0eb-22cc-7262-8f6c-7266e9cc1fbb
   harness_version: 2.1.322 (Claude Code)
+implementation_info:
+  implemented: false
+  completed_at: 2026-11-13T01:47:02.518377161Z
