@@ -23,7 +23,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-12T19:11:56.371806442Z
-modified_at: 2026-11-13T08:44:17.758731147Z
+modified_at: 2026-11-13T08:56:49.795428550Z
 req_type: Story
 tags:
 - operator-held
@@ -115,6 +115,13 @@ comments:
   content: 'Advisor 01:44: train #3934 landed #3927 (BUG-2536), #3929 (TASK-3100) and #3930 (BUG-2524); main at 1387fa9 (01:4x), the first merges since 00:4x. Integration seat told to real-merge main; promotion 4 is re-cut after that, and main-track trains are held until it lands.'
   created_at: 2026-11-13T08:44:17.758731147Z
   modified_at: 2026-11-13T08:44:17.758731147Z
+  session_id: 01a1d3ee-83e8-71b3-a2c5-aed5baed6fdc
+  harness_version: 2.1.323 (Claude Code)
+- id: 01a1d41f-b383-7e13-9a20-7206ab88ce48
+  author: joe
+  content: 'Advisor 01:58: supply gap found. Since 2026-11-12 20:35, every rework of BUG-2501 (#3920), TASK-3779 (#3919) and STORY-2660 (#3921) launched Claude instead of Codex and died on dell1 (no socat), leaving leases that refused the next attempts: about 5h with no progress on 3 main-track PRs. Filed BUG-2553 (track:dell1, Codex lane running) and BUG-2552 (retained-lease refusals, track:integration). The three are paused in autoland-skip until BUG-2553 lands.'
+  created_at: 2026-11-13T08:56:49.795428550Z
+  modified_at: 2026-11-13T08:56:49.795428550Z
   session_id: 01a1d3ee-83e8-71b3-a2c5-aed5baed6fdc
   harness_version: 2.1.323 (Claude Code)
 history:
