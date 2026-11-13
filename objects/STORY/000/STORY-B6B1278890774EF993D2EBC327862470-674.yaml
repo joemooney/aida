@@ -1,0 +1,33 @@
+id: 01a1d376-6f12-7143-9587-2746c3d92d6d
+spec_id: STORY-b6b1278890774ef993d2ebc327862470-674
+agreed_id: STORY-2751
+title: 'Review PR-3909: [AI:codex] fix(review): stop headless reviewers after verdict recording (BUG-2546)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a1d361`) for branch `bug-b6b1278890774ef993d2ebc327862470-311`.
+
+  - PR: <https://github.com/joemooney/aida/pull/3909>
+  - Branch: `bug-b6b1278890774ef993d2ebc327862470-311` → `main`
+
+  ## Covers
+
+  - BUG-2546
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 3909` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-13T05:51:56.690014846Z
+modified_at: 2026-11-13T05:51:56.690014846Z
+req_type: Story
+filed_at:
+  code_sha: 2a62f92c2a200b58e0d95446df07e355e062ab49
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 2a62f92c2a2
+  session: 01a1d361619d
