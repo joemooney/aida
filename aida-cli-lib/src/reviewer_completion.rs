@@ -234,6 +234,7 @@ mod tests {
     // A pending barrier must keep the actual wait loop alive beyond its grace,
     // including a WAITING disposition. The completed twin must then reap it.
     // trace:BUG-2546 | ai:codex
+    #[cfg(unix)]
     #[test]
     fn bug2546_wait_loop_preserves_pending_child_and_reaps_completed_twin() {
         use crate::gate::review_verdict::verdict_path;
