@@ -24,7 +24,9 @@ const RAW_GIT_ALLOWLIST: &[(&str, usize)] = &[
     ("aida-cli-lib/src/doctor/worktrees.rs", 10),
     ("aida-cli-lib/src/doctor_root.rs", 4),
     ("aida-cli-lib/src/leases.rs", 1),
-    ("aida-cli-lib/src/review_commands.rs", 6),
+    // trace:TASK-3428 | ai:codex — split the original six-site debt.
+    ("aida-cli-lib/src/review_commands.rs", 3),
+    ("aida-cli-lib/src/review_git_evidence.rs", 3),
     ("aida-mcp/src/mcp.rs", 1),
     ("aida-cli-lib/src/orchestrator_leases.rs", 5),
     ("aida-cli-lib/src/phase_driver.rs", 1),
@@ -55,7 +57,12 @@ const RAW_GIT_ALLOWLIST: &[(&str, usize)] = &[
 /// `ship.rs` runs step 1's commit in the ship root, a seat clone when ship
 /// runs in one (TASK-2359).
 // trace:TASK-2359 | ai:claude
-const ALWAYS_SCANNED: &[&str] = &["aida-cli-lib/src/ship.rs", "aida-cli-lib/src/doctor_cmd.rs"];
+// trace:TASK-3428 | ai:codex — extracted evidence helpers receive lease trees.
+const ALWAYS_SCANNED: &[&str] = &[
+    "aida-cli-lib/src/ship.rs",
+    "aida-cli-lib/src/doctor_cmd.rs",
+    "aida-cli-lib/src/review_git_evidence.rs",
+];
 
 // Split queue and doctor modules retain their original file scan boundaries.
 // trace:TASK-3426 | ai:codex
@@ -83,6 +90,28 @@ fn task_3426_all_queue_modules_reject_new_raw_git() {
     }
     // A future module gets the same protection without updating a file list.
     assert!(always_scanned("aida-cli-lib/src/queue_cmd/future.rs"));
+}
+
+// trace:TASK-3428 | ai:codex
+#[test]
+fn task_3428_review_git_evidence_rejects_new_raw_git_without_lease_field() {
+    let file = "aida-cli-lib/src/review_git_evidence.rs";
+    let workspace = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
+    let src = std::fs::read_to_string(workspace.join(file)).unwrap();
+    assert!(!src.contains("worktree_path"));
+    assert_eq!(raw_git_in_lease_reader(&src), None);
+    let baseline = raw_git_builders(&src, !always_scanned(file)).unwrap();
+    let measured = BTreeMap::from([(file.to_string(), baseline)]);
+    let allowed = [(file, 3)];
+    assert!(ratchet_violations(&measured, &allowed).is_empty());
+
+    let injected = format!("{src}\nfn injected() {{ let _ = Command::new(\"git\"); }}\n");
+    let count = raw_git_builders(&injected, !always_scanned(file)).unwrap();
+    assert_eq!(count, baseline + 1);
+    let measured = BTreeMap::from([(file.to_string(), count)]);
+    let violations = ratchet_violations(&measured, &allowed);
+    assert_eq!(violations.len(), 1);
+    assert!(violations[0].contains("4 raw git builders, allowlist says 3"));
 }
 
 /// Lexical state across lines: braces inside Rust literals and comments do
