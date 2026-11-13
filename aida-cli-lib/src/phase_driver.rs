@@ -213,13 +213,6 @@ pub(crate) struct RealPhaseDriver {
     /// `run_implementer` launches.
     // trace:BUG-2386 | ai:claude
     pub(crate) implementer_vendor: Option<crate::session::HeadlessVendor>,
-    /// BUG-311: thread the user's `aida queue work --auto-complete --steal`
-    /// flag through to the phase-1 implementer subprocess. Without this the
-    /// outer `--steal` is dropped on the floor — phase 1's `handle_queue_work`
-    /// sees the dormant lease, bails with the canned "pass --steal" message,
-    /// and the orchestrator reports a generic phase-1 failure even though
-    /// the user *did* pass --steal. trace:BUG-311 | ai:claude
-    pub(crate) steal: bool,
     /// TASK-559: thread the user's `aida queue work --auto-complete
     /// --force-claim` flag through to the phase-1 implementer subprocess.
     pub(crate) force_claim: bool,
@@ -639,7 +632,9 @@ impl RealPhaseDriver {
         // carried alongside `no_human`. trace:ADR-10 | ai:claude
         autonomy_mode: AutonomyMode,
         run_token: String,
-        steal: bool,
+        // Compatibility argument; queue-work refuses it before dispatch.
+        // trace:STORY-2325 | ai:codex
+        _steal: bool,
         force_claim: bool,
         allow_stale_base: bool,
         no_auto_rebase: bool,
@@ -678,7 +673,6 @@ impl RealPhaseDriver {
             implementer_session: None,
             implementer_worktree: None,
             implementer_vendor: None,
-            steal,
             force_claim,
             allow_stale_base,
             no_auto_rebase,

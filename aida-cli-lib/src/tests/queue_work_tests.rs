@@ -2515,19 +2515,13 @@ fn queue_work_force_claim_flag_parses() {
     }
 }
 
-// BUG-311: the orchestrator's phase-1 `aida queue work` subprocess must
-// carry `--steal` when the outer drain was invoked with it. Without
-// threading, the inner subprocess's dormant-lease guard sees `steal=false`
-// and bails with the canned "pass --steal" message — exactly the
-// symptom this BUG reported. These tests pin the argv contract so a
-// refactor cannot silently drop the flag again. trace:BUG-311 | ai:claude
-
+// Phase-1 argv retains session identity without forwarding retired --steal.
+// trace:STORY-2325 | ai:codex
 #[test]
-fn implementer_phase_args_threads_steal() {
+fn implementer_phase_args_preserves_session_identity() {
     let args = build_implementer_phase_args(
         "BUG-311",
         "0192f1c8-aaaa-7000-8000-000000000001",
-        true,
         false,
         None,
         None,
@@ -2535,8 +2529,8 @@ fn implementer_phase_args_threads_steal() {
         None,
     );
     assert!(
-        args.iter().any(|a| a == "--steal"),
-        "--steal must be threaded to phase 1 when the outer drain set it; got {:?}",
+        args.iter().all(|a| a != "--steal"),
+        "phase 1 must omit retired --steal; got {:?}",
         args
     );
     assert_eq!(args[0], "queue");
@@ -2548,8 +2542,7 @@ fn implementer_phase_args_threads_steal() {
 
 #[test]
 fn implementer_phase_args_omits_steal_by_default() {
-    let args =
-        build_implementer_phase_args("BUG-311", "uuid", false, false, None, None, false, None);
+    let args = build_implementer_phase_args("BUG-311", "uuid", false, None, None, false, None);
     assert!(
         args.iter().all(|a| a != "--steal"),
         "--steal must not appear when the outer drain did not pass it; got {:?}",
@@ -2562,14 +2555,13 @@ fn implementer_phase_args_threads_no_human_and_permission() {
     let args = build_implementer_phase_args(
         "TASK-1",
         "uuid",
-        true,
         false,
         None,
         None,
         true,
         Some("bypassPermissions"),
     );
-    assert!(args.iter().any(|a| a == "--steal"));
+    assert!(args.iter().all(|a| a != "--steal"));
     assert!(args.iter().any(|a| a == "--no-human"));
     let i = args
         .iter()
@@ -2583,8 +2575,7 @@ fn implementer_phase_args_threads_no_human_and_permission() {
 
 #[test]
 fn implementer_phase_args_threads_force_claim() {
-    let args =
-        build_implementer_phase_args("TASK-559", "uuid", false, true, None, None, false, None);
+    let args = build_implementer_phase_args("TASK-559", "uuid", true, None, None, false, None);
     assert!(
         args.iter().any(|a| a == "--force-claim"),
         "--force-claim must be threaded to phase 1 when the outer drain set it; got {:?}",
@@ -2603,7 +2594,6 @@ fn implementer_retry_args_thread_branch_and_existing_path_without_steal() {
     let args = build_implementer_phase_args(
         "STORY-993",
         "uuid",
-        false,
         true,
         Some("story-993"),
         Some(path),

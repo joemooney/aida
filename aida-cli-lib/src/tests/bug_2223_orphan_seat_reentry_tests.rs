@@ -613,6 +613,16 @@ pub(super) fn queued_scope(
 ) -> (crate::Storage, impl Fn(aida_core::RequirementStatus)) {
     let store_root = main.join(".aida-store");
     let backend = crate::test_env::home_fixture_backend(&store_root).unwrap();
+    // This fixture's legacy enrollment writer inherits the lane's umask.
+    // Allocation reads require private writes even on group-writable hosts.
+    // trace:STORY-2325 | ai:codex
+    std::fs::set_permissions(
+        aida_core::allocation_authority::common_dir(&store_root)
+            .unwrap()
+            .join(aida_core::allocation_authority::CONFIG_FILE),
+        std::os::unix::fs::PermissionsExt::from_mode(0o600),
+    )
+    .unwrap();
     let storage = crate::Storage::new(&store_root);
     std::fs::create_dir_all(store_root.join("registry")).unwrap();
     std::fs::write(
