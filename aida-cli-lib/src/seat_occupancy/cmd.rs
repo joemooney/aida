@@ -353,6 +353,7 @@ fn notify_holder(
         archived: false,
         from_source,
         from_role: crate::resolve_mail_sender_role(),
+        from_seat: None,
         relayed_from: None,
     };
     crate::mailbox_store::write_message(project_root, &msg).context("writing the takeover notice")

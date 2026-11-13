@@ -4101,6 +4101,7 @@ mod task_2253_agy_session_start_gc_tests {
             started_at: at,
             last_active_at: at,
             role: Some("implementer".to_string()),
+            seat: None,
             current_spec: None,
             worktree_path: worktree.to_path_buf(),
             source: "hook".to_string(),

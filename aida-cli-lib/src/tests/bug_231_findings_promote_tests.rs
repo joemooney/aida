@@ -284,6 +284,7 @@ fn message_to_agent_type_reaches_inbox() {
         archived: false,
         from_source: aida_core::mailbox::SenderSource::Explicit,
         from_role: None,
+        from_seat: None,
         relayed_from: None,
     };
     let watermarks = std::collections::HashMap::new();
@@ -416,6 +417,7 @@ fn mailbox_mutation_allowed_for_sender_or_operator_only() {
         archived: false,
         from_source: aida_core::mailbox::SenderSource::Explicit,
         from_role: None,
+        from_seat: None,
         relayed_from: None,
     };
     assert!(mailbox_mutation_allowed(&msg, "codex", "joe"));
@@ -1241,6 +1243,7 @@ fn urgent_broadcast(id: &str, from: &str, ts: i64) -> aida_core::mailbox::Messag
         archived: false,
         from_source: aida_core::mailbox::SenderSource::Explicit,
         from_role: None,
+        from_seat: None,
         relayed_from: None,
     }
 }

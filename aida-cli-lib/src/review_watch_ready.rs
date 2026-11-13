@@ -247,6 +247,7 @@ pub(super) fn wake_message(
         archived: false,
         from_source: SenderSource::Explicit,
         from_role: None,
+        from_seat: None,
         relayed_from: None,
     }
 }

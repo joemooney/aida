@@ -2965,6 +2965,7 @@ fn task_2902_launch_paths_preserve_signals_on_refused_spawn() {
         launch_cwd: clone.clone(),
         role: Some("implementer".into()),
         role_instance: crate::role::RoleInstanceKind::Driver,
+        seat: None,
         current_spec: Some("BUG-1".into()),
         name: "publication-test".into(),
         lease_id: Some(lease.into()),

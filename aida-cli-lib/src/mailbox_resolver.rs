@@ -411,6 +411,123 @@ impl RecipientDirectory {
         Ok(resolved)
     }
 
+    /// `seat:<name>`: the live (or unverified) sessions whose registry row
+    /// records that seat, with the same cohort, queue and refusal rules as a
+    /// role. No holder queues for the seat when the sender asked
+    /// (`--queue-for-role`), else refuses naming the seats that are held.
+    // trace:STORY-2745 | ai:claude
+    fn resolve_seat(
+        &self,
+        key: &str,
+        queue_for_role: bool,
+        cli_hint: bool,
+        escape: &str,
+    ) -> Result<ResolvedRecipient> {
+        let raw = key.trim_start_matches("seat:");
+        let address = aida_core::mailbox_identity::seat_address(raw).ok_or_else(|| {
+            anyhow::anyhow!(
+                "send refused: '{key}' is not a seat name (letters, digits, '-' or '_'); {escape}"
+            )
+        })?;
+        let seat = &address["seat:".len()..];
+        let holds = |a: &AgentRegistryEntry| {
+            a.seat
+                .as_deref()
+                .is_some_and(|s| s.trim().eq_ignore_ascii_case(seat))
+        };
+        let holders: Vec<&AgentRegistryEntry> = self
+            .agents
+            .iter()
+            .filter(|a| self.reader_may_exist(a) && holds(a))
+            .collect();
+        let label = |a: &AgentRegistryEntry| {
+            a.name
+                .as_deref()
+                .map(|name| format!("{name} ({})", a.id))
+                .unwrap_or_else(|| a.id.clone())
+        };
+        if holders.is_empty() {
+            if queue_for_role {
+                return Ok(ResolvedRecipient {
+                    relay_run: None,
+                    address: address.clone(),
+                    reader_notice: None,
+                    cohort: Some(CohortReaders {
+                        role: address,
+                        queued: true,
+                        ..Default::default()
+                    }),
+                });
+            }
+            let held: BTreeSet<String> = self
+                .agents
+                .iter()
+                .filter(|a| self.reader_may_exist(a))
+                .filter_map(|a| a.seat.as_deref())
+                .map(|s| s.trim().to_ascii_lowercase())
+                .collect();
+            let held = if held.is_empty() {
+                "no session holds a seat".to_string()
+            } else {
+                format!(
+                    "held seats: {}",
+                    held.into_iter().collect::<Vec<_>>().join(", ")
+                )
+            };
+            let queue = if cli_hint {
+                ", or pass --queue-for-role to queue it for the seat's next holder"
+            } else {
+                ""
+            };
+            bail!("send refused: seat '{seat}' has no live holder ({held}); {escape}{queue}");
+        }
+        let mut cohort = CohortReaders {
+            role: address.clone(),
+            ..Default::default()
+        };
+        for a in &holders {
+            match self.reader_uuid(a) {
+                Some(uuid) => cohort.readers.push(uuid),
+                None => cohort.uuidless.push(label(a)),
+            }
+        }
+        cohort.readers.sort();
+        cohort.readers.dedup();
+        cohort.queued = queue_for_role && cohort.readers.is_empty();
+        let (live, unverified): (Vec<&AgentRegistryEntry>, Vec<&AgentRegistryEntry>) = holders
+            .iter()
+            .copied()
+            .partition(|a| !self.unknown_ids.contains(&a.id));
+        let mut lists = Vec::new();
+        if !live.is_empty() {
+            let names: Vec<String> = live.iter().map(|a| label(a)).collect();
+            lists.push(format!("live: {}", names.join(", ")));
+        }
+        if !unverified.is_empty() {
+            let names: Vec<String> = unverified.iter().map(|a| label(a)).collect();
+            lists.push(format!("unverified: {}", names.join(", ")));
+            lists.push(
+                "unverified readers have unknown liveness; delivering to durable inbox".to_string(),
+            );
+        }
+        let warning = if holders.len() > 1 || !unverified.is_empty() {
+            "warning: "
+        } else {
+            ""
+        };
+        Ok(ResolvedRecipient {
+            relay_run: None,
+            address,
+            cohort: Some(cohort),
+            reader_notice: Some(format!(
+                "{warning}{} live, {} unverified: {}",
+                live.len(),
+                unverified.len(),
+                lists.join("; ")
+            )),
+        })
+    }
+
     fn resolve_address(
         &self,
         target: &str,
@@ -435,6 +552,9 @@ impl RecipientDirectory {
                     cohort: None,
                 })
                 .ok_or_else(|| anyhow::anyhow!("send refused: unknown person '{name}'; {escape}"));
+        }
+        if key.starts_with("seat:") {
+            return self.resolve_seat(&key, queue_for_role, cli_hint, &escape);
         }
         let role = self.roles.get(&key);
         let vendor = match key.as_str() {
@@ -1631,5 +1751,147 @@ mod tests {
                 .to_string()
                 .contains("applies only to a role")
         );
+    }
+
+    // ---- STORY-2745: seat:<name> addressing ---------------------------
+
+    fn seated(project: &Path, id: &str, name: &str, role: &str, seat: Option<&str>) {
+        registry(project, id, name, role, false);
+        if let Some(seat) = seat {
+            use std::io::Write;
+            let mut file = std::fs::OpenOptions::new()
+                .append(true)
+                .open(agent_registry::agents_dir(project).join(format!("{id}.toml")))
+                .unwrap();
+            writeln!(file, "seat = '{seat}'").unwrap();
+        }
+    }
+
+    // trace:STORY-2745 | ai:claude
+    #[test]
+    fn story2745_seat_address_reaches_only_the_seat_holder_whatever_its_role() {
+        let tmp = tempfile::tempdir().unwrap();
+        seated(
+            tmp.path(),
+            "row-int",
+            "integ-7",
+            "implementer",
+            Some("integration"),
+        );
+        seated(tmp.path(), "row-impl", "impl-3", "implementer", None);
+        let d = RecipientDirectory::load(tmp.path(), &tmp.path().join(".aida-store")).unwrap();
+        for target in ["seat:integration", "Seat:Integration", " seat:INTEGRATION "] {
+            let r = d.resolve_send(target, false).unwrap();
+            assert_eq!(r.address, "seat:integration", "{target}");
+            let cohort = r.cohort.expect("a seat send records its cohort");
+            assert_eq!(cohort.role, "seat:integration");
+            assert!(!cohort.queued);
+            assert_eq!(cohort.uuidless, ["integ-7 (row-int)"]);
+            let notice = r.reader_notice.unwrap();
+            assert!(notice.contains("integ-7"), "{notice}");
+            assert!(!notice.contains("impl-3"), "{notice}");
+        }
+        // A row with no seat routes exactly as before: by role.
+        let role = d.resolve_send("implementer", false).unwrap();
+        assert_eq!(role.address, "implementer");
+        let notice = role.reader_notice.unwrap();
+        assert!(
+            notice.contains("integ-7") && notice.contains("impl-3"),
+            "{notice}"
+        );
+    }
+
+    // trace:STORY-2745 | ai:claude
+    #[test]
+    fn story2745_unheld_seat_refuses_naming_held_seats_or_queues_on_request() {
+        let tmp = tempfile::tempdir().unwrap();
+        seated(tmp.path(), "row-adv", "adv-1", "advisor", Some("advisor"));
+        seated(
+            tmp.path(),
+            "row-gone",
+            "old-int",
+            "implementer",
+            Some("integration"),
+        );
+        // An ended holder is not a reader.
+        let path = agent_registry::agents_dir(tmp.path()).join("row-gone.toml");
+        let body = std::fs::read_to_string(&path).unwrap();
+        std::fs::write(&path, format!("{body}ended_at = '2026-10-20T00:00:00Z'\n")).unwrap();
+        let d = RecipientDirectory::load(tmp.path(), &tmp.path().join(".aida-store")).unwrap();
+        let err = d
+            .resolve_send("seat:integration", false)
+            .unwrap_err()
+            .to_string();
+        assert!(
+            err.contains("seat 'integration' has no live holder"),
+            "{err}"
+        );
+        assert!(err.contains("held seats: advisor"), "{err}");
+        assert!(err.contains("--queue-for-role"), "{err}");
+        let queued = d.resolve_send("seat:integration", true).unwrap();
+        assert_eq!(queued.address, "seat:integration");
+        let cohort = queued.cohort.unwrap();
+        assert!(cohort.queued && cohort.role == "seat:integration");
+        for bad in ["seat:", "seat:two words", "seat:x/y"] {
+            let err = d.resolve_send(bad, false).unwrap_err().to_string();
+            assert!(err.contains("not a seat name"), "{bad}: {err}");
+        }
+    }
+
+    // trace:STORY-2745 | ai:claude
+    #[test]
+    fn story2745_reply_goes_to_the_sender_seat_then_role_then_id() {
+        let message =
+            |from_seat: Option<&str>, from_role: Option<&str>| aida_core::mailbox::Message {
+                id: "m1".into(),
+                thread_id: "m1".into(),
+                from: "integ-7".into(),
+                to: aida_core::mailbox::Recipient::Agent("advisor".into()),
+                timestamp: 0,
+                in_reply_to: None,
+                body: "promotion ready".into(),
+                subject: None,
+                urgent: false,
+                intent: aida_core::mailbox::Intent::Fyi,
+                retracted: false,
+                deleted: false,
+                archived: false,
+                from_source: aida_core::mailbox::SenderSource::Explicit,
+                from_role: from_role.map(str::to_string),
+                from_seat: from_seat.map(str::to_string),
+                relayed_from: None,
+            };
+        assert_eq!(
+            crate::mailbox_cmd::reply_candidates(&message(
+                Some("Integration"),
+                Some("implementer")
+            )),
+            ["seat:integration", "implementer", "integ-7"]
+        );
+        assert_eq!(
+            crate::mailbox_cmd::reply_candidates(&message(None, Some("implementer"))),
+            ["implementer", "integ-7"]
+        );
+        assert_eq!(
+            crate::mailbox_cmd::reply_candidates(&message(Some("bad seat"), None)),
+            ["integ-7"]
+        );
+        // The rotated sender's seat still resolves through its new holder.
+        let tmp = tempfile::tempdir().unwrap();
+        seated(
+            tmp.path(),
+            "row-int-2",
+            "integ-8",
+            "implementer",
+            Some("integration"),
+        );
+        let d = RecipientDirectory::load(tmp.path(), &tmp.path().join(".aida-store")).unwrap();
+        let candidates = crate::mailbox_cmd::reply_candidates(&message(
+            Some("integration"),
+            Some("implementer"),
+        ));
+        let first = d.resolve_send(&candidates[0], false).unwrap();
+        assert_eq!(first.address, "seat:integration");
+        assert!(first.reader_notice.unwrap().contains("integ-8"));
     }
 }

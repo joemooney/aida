@@ -687,3 +687,23 @@ fn proc_identity_s4_foreign_observer_session_binding() {
         Err(BindingRefusal::Ended)
     );
 }
+
+// trace:STORY-2745 | ai:claude
+#[test]
+fn story2745_a_named_seat_is_a_shared_inbox_identity() {
+    let mut facts =
+        MailIdentityFacts::fixture(None, None, "joe", false, &[], Some("implementer"), None);
+    facts.seat = Some(" Integration ".into());
+    let ids = classified_identities(&facts);
+    assert!(
+        ids.contains(&("seat:integration".to_string(), IdentityClass::Shared)),
+        "{ids:?}"
+    );
+    assert!(ids.iter().any(|(id, _)| id == "implementer"), "{ids:?}");
+    facts.seat = Some("not a seat!".into());
+    assert!(!inbox_identities(&facts)
+        .iter()
+        .any(|id| id.starts_with("seat:")));
+    assert_eq!(seat_address("Integration"), Some("seat:integration".into()));
+    assert_eq!(seat_address("  "), None);
+}

@@ -1366,6 +1366,7 @@ mod tests {
             started_at: now,
             last_active_at: now,
             role: Some("implementer".to_string()),
+            seat: None,
             current_spec: None,
             worktree_path: project.to_path_buf(),
             source: "session-start-hook".to_string(),
@@ -1697,6 +1698,7 @@ mod tests {
             archived: false,
             from_source: SenderSource::Explicit,
             from_role: None,
+            from_seat: None,
             relayed_from: None,
         };
         let notice = build_notice(
@@ -2113,6 +2115,7 @@ mod tests {
             archived: false,
             from_source: SenderSource::Explicit,
             from_role: None,
+            from_seat: None,
             relayed_from: None,
         }
     }
