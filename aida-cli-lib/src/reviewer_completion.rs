@@ -133,11 +133,11 @@ pub(crate) fn should_stop() -> bool {
             };
             let verdict = w.roots.iter().find_map(|root| {
                 w.keys.iter().find_map(|key| {
-                    // Read the selected source once and inspect its raw delivery barrier.
+                    // Read the raw local source, independent of signed publication.
                     // Normalization makes a pending approval look like a refusal;
                     // it must not arm shutdown while finding delivery is in flight.
                     // trace:BUG-2546 | ai:codex
-                    let current = crate::gate::review_verdict::current_verdict(root, key)?;
+                    let current = crate::gate::review_verdict::local_completion_verdict(root, key)?;
                     completed_verdict(&current.body, grant, w.since)
                 })
             });
