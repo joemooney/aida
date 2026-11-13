@@ -697,7 +697,7 @@ fn bug_2507_rework_imports_large_ledger_findings_and_refuses_over_limit() {
 
 // trace:BUG-2531 | ai:codex
 #[test]
-fn bug_2531_unrelated_closed_history_does_not_exhaust_selection() {
+fn bug_2531_unrelated_closed_history_refuses_at_discovery_limit() {
     let (_tmp, root, _) = two_label_fixture();
     let _env = uncontained();
     // Ten valid files below the per-file/line caps, together above 64 MiB.
@@ -716,15 +716,12 @@ fn bug_2531_unrelated_closed_history_does_not_exhaust_selection() {
         std::fs::write(store::ledger_file(&root, change), body).unwrap();
     }
     assert!(total > crate::gate::ledger::checked::MAX_SELECTION_BYTES);
-    // Missing index must still discover the selected requirement's refusal.
+    // Missing hints cannot authorize skipping evidence. Until a complete
+    // binding index exists, oversized discovery must refuse rather than do
+    // unbounded unrelated work or return an older approval.
     let index = crate::gate::ledger::ledger_dir(&root).join("by-spec");
     std::fs::remove_file(index.join(format!("{NATIVE}.json"))).unwrap();
-    assert_eq!(
-        selected(select_verdict(&root, &[FRIENDLY, NATIVE])).raw,
-        "request_changes"
-    );
-    // Relevant history still consumes the finite selection budget.
-    let sel = select_verdict(&root, &["STORY-UNRELATED-1", "STORY-UNRELATED-2"]);
+    let sel = select_verdict(&root, &[FRIENDLY, NATIVE]);
     assert!(matches!(sel, AliasSelection::Unsafe { .. }), "{sel:?}");
 }
 

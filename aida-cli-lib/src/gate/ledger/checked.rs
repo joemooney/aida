@@ -36,6 +36,13 @@ pub(crate) const MAX_SELECTION_BYTES: u64 = 64 * 1024 * 1024;
 /// Aggregate events one selection may parse across every label.
 pub(crate) const MAX_SELECTION_EVENTS: usize = 200_000;
 
+// Test-only counters measure payload I/O and actual JSON parse attempts,
+// independently of budget accounting. Thread-local to isolate parallel tests.
+#[cfg(test)]
+thread_local! {
+    static PAYLOAD_WORK: std::cell::Cell<(u64, usize)> = const { std::cell::Cell::new((0, 0)) };
+}
+
 /// Evidence the checked reader refused: the selector must not answer past it.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct Unsafe(pub String);
@@ -162,10 +169,23 @@ fn read_entry(
             "refusing gate-ledger entry {name}: it must be a singly linked regular file of at most {cap} bytes"
         )));
     }
+    // Refuse before allocating or reading an entry that cannot fit. Also
+    // bound a concurrently growing file by the remaining operation budget.
+    if meta.len() > budget.bytes {
+        return Err(Unsafe(
+            "the selection's aggregate gate-ledger read budget is exhausted".into(),
+        ));
+    }
+    let read_cap = cap.min(budget.bytes);
     let mut body = Vec::new();
-    file.take(cap + 1)
+    file.take(read_cap + 1)
         .read_to_end(&mut body)
         .map_err(|e| Unsafe(format!("refusing gate-ledger entry {name}: {e}")))?;
+    #[cfg(test)]
+    PAYLOAD_WORK.with(|work| {
+        let (bytes, parses) = work.get();
+        work.set((bytes + body.len() as u64, parses));
+    });
     if body.len() as u64 > cap {
         return Err(Unsafe(format!(
             "refusing gate-ledger entry {name}: it grew past {cap} bytes while read"
@@ -209,6 +229,11 @@ fn parse_events(
             )));
         }
         budget.spend_event()?;
+        #[cfg(test)]
+        PAYLOAD_WORK.with(|work| {
+            let (bytes, parses) = work.get();
+            work.set((bytes, parses + 1));
+        });
         let event: GateEvent =
             serde_json::from_str(line).map_err(|e| bad(&format!("does not parse ({e})")))?;
         if event.v == 0 || event.v > EVENT_VERSION {
@@ -304,7 +329,7 @@ fn read_change(
 
 /// A bounded inventory of spec-to-change bindings, derived strictly from
 /// events rather than the fallible by-spec hints. Discovery retains no review
-/// payloads. Only ledgers needed by a selection consume its aggregate budget.
+/// payloads. Discovery and selected payloads each have an aggregate budget.
 // trace:BUG-2531 | ai:codex
 pub(crate) struct Discovery {
     ledger: File,
@@ -319,6 +344,13 @@ pub(crate) struct Discovery {
 /// Discover the gate ledger under `root`; `Ok(None)` when it does not exist.
 // trace:BUG-2403 | ai:claude
 pub(crate) fn discover(root: &Path) -> Result<Option<Discovery>, Unsafe> {
+    discover_with_budget(root, &mut Budget::default())
+}
+
+fn discover_with_budget(
+    root: &Path,
+    scan_budget: &mut Budget,
+) -> Result<Option<Discovery>, Unsafe> {
     let Some((ledger, by_spec)) = ledger_dirs(root)? else {
         return Ok(None);
     };
@@ -343,9 +375,9 @@ pub(crate) fn discover(root: &Path) -> Result<Option<Discovery>, Unsafe> {
         }
         let key = change.as_key();
         discovered.push(key.clone());
-        // Each inspected file remains subject to all strict checks and finite
-        // byte/event limits. Do not debit unrelated payloads from a selection.
-        let Some(events) = read_change(&ledger, &name, &key, &mut Budget::default())? else {
+        // Unrelated payload work must remain bounded across the whole scan,
+        // including retries. Exhaustion refuses; it cannot imply absence.
+        let Some(events) = read_change(&ledger, &name, &key, scan_budget)? else {
             return Err(Unsafe(format!(
                 "refusing gate-ledger discovery: {name} vanished while it was read"
             )));
@@ -541,4 +573,59 @@ pub(crate) fn active_bytes(root: &Path) -> Result<u64, Unsafe> {
         bytes = bytes.saturating_add(meta.len());
     }
     Ok(bytes)
+}
+
+#[cfg(test)]
+mod discovery_budget_tests {
+    use super::*;
+
+    // trace:BUG-2531 | ai:codex
+    #[test]
+    fn bug_2531_discovery_refuses_before_reading_or_parsing_over_budget_payload() {
+        let root = tempfile::tempdir().unwrap();
+        let dir = super::super::ledger_dir(root.path());
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join("PR-1.jsonl"), b"   \n").unwrap();
+        // This unrelated file would produce a parse error if discovery read
+        // it. The aggregate limit must stop it before payload I/O instead.
+        std::fs::write(dir.join("PR-2.jsonl"), b"bad\n").unwrap();
+        PAYLOAD_WORK.with(|work| work.set((0, 0)));
+        let mut budget = Budget::with_limits(7, 10);
+        let error = discover_with_budget(root.path(), &mut budget)
+            .err()
+            .unwrap();
+        assert!(error.0.contains("read budget is exhausted"), "{error}");
+        assert_eq!(PAYLOAD_WORK.with(|work| work.get()), (4, 0));
+        assert_eq!(budget.bytes, 3);
+        assert_eq!(budget.events, 10);
+    }
+
+    // trace:BUG-2531 | ai:codex
+    #[test]
+    fn bug_2531_discovery_event_budget_is_shared_between_unrelated_files() {
+        let root = tempfile::tempdir().unwrap();
+        let dir = super::super::ledger_dir(root.path());
+        std::fs::create_dir_all(&dir).unwrap();
+        for n in 1..=2 {
+            let event = GateEvent::new(
+                ChangeKey::pr(n),
+                super::super::event::EventBody::Verdict {
+                    record: serde_json::Map::new(),
+                },
+            );
+            std::fs::write(
+                dir.join(format!("PR-{n}.jsonl")),
+                format!("{}\n", serde_json::to_string(&event).unwrap()),
+            )
+            .unwrap();
+        }
+        PAYLOAD_WORK.with(|work| work.set((0, 0)));
+        let mut budget = Budget::with_limits(1024 * 1024, 1);
+        let error = discover_with_budget(root.path(), &mut budget)
+            .err()
+            .unwrap();
+        assert!(error.0.contains("event budget is exhausted"), "{error}");
+        assert_eq!(PAYLOAD_WORK.with(|work| work.get()).1, 1);
+        assert_eq!(budget.events, 0);
+    }
 }
