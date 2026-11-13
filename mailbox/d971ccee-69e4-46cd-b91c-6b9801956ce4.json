@@ -1,0 +1,18 @@
+{
+  "id": "d971ccee-69e4-46cd-b91c-6b9801956ce4",
+  "thread_id": "d971ccee-69e4-46cd-b91c-6b9801956ce4",
+  "from": "dirtlab",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1794604597278,
+  "body": "STORY-b6b1278890774ef993d2ebc327862470-583 PR #3921 conflicts with origin/main in: AGENTS.md, OVERVIEW.md, aida-cli-lib/src/advisor_cmd_root.rs, aida-cli-lib/src/advisor_cmd_root_args.rs, aida-cli-lib/src/cli_entry.rs, aida-cli-lib/src/config_cmd.rs, aida-cli-lib/src/deputy_shell/runner.rs, aida-cli-lib/src/deputy_shell/socket.rs, aida-cli-lib/src/gate/ledger/tests.rs, aida-cli-lib/src/gate/mandate_ship.rs, aida-cli-lib/src/gate/seat_authority.rs, aida-cli-lib/src/gate/tests/merge_hold_core_tests.rs, aida-cli-lib/src/gate/tests/story_1698_mandate_tests.rs, aida-cli-lib/src/lane_job.rs, aida-cli-lib/src/launch/context.rs, aida-cli-lib/src/launch/spawn.rs, aida-cli-lib/src/lib.rs, aida-cli-lib/src/mandate.rs, aida-cli-lib/src/pr_train.rs, aida-cli-lib/src/queue_cmd/work.rs, aida-cli-lib/src/review_commands.rs, aida-cli-lib/src/review_watch.rs, aida-cli-lib/src/review_watch_service.rs, aida-cli-lib/src/seat_clone.rs, aida-cli-lib/src/session_start.rs, aida-cli-lib/src/standalone_implementer.rs, aida-cli-lib/src/tests/bug_013_review_record_sha_tests.rs, aida-cli-lib/src/tests/bug_1186_reviewer_seat_tests.rs, aida-cli-lib/src/tests/bug_1737_lens_scope_disclosure_tests.rs, aida-cli-lib/src/tests/bug_2457_review_repickup_tests.rs, aida-cli-lib/src/tests/bug_home_038_seat_publish_tests.rs, aida-cli-lib/src/tests/fixtures/proc_identity_legacy_baseline.json, aida-cli-lib/src/tests/golden/cli_help_snapshot.txt, aida-cli-lib/src/tests/headless_hint_tests.rs, aida-cli-lib/src/tests/queue_work_tests.rs, aida-cli-lib/src/tests/story_1690_train_tests.rs, aida-cli-lib/src/tests/story_2326_launch_tests.rs, aida-cli-lib/src/tests/story_2539_vendor_literals.tsv, aida-cli-lib/src/tests/task_1945_review_watch_ready_tests.rs, aida-cli-lib/src/tests/task_1945_review_watch_supersede_tests.rs, aida-cli-lib/src/tests/task_2143_clone_git_ratchet_tests.rs, aida-cli-lib/src/tests/task_2807_pickup_launch_rollback_tests.rs, aida-cli-lib/src/upgrade_release.rs, aida-cli-lib/src/vendors/mod.rs, aida-cli/tests/bug_1502_format_json_audit.rs, aida-core/src/git_ops.rs, aida-core/src/vendors/mod.rs, docs/cli/03-work-autonomy.md, docs/cli/04-git-lifecycle.md, docs/cli/06-roles-sessions.md, docs/cli/07-project-setup.md, docs/internal/cli-format-json-audit.md, docs/internal/testing/ci-test-shards.md, docs/plans/2026-11-10-story-2710-conflict-lane.md, docs/plans/2026-11-12-integration-flow.md, scripts/ci-gate-tiers.toml, scripts/config-trust.toml, scripts/exec-context-legacy.json, scripts/generate-format-json-audit.py, scripts/ownership-liveness-legacy.json, scripts/store-writers.toml, tests/test_store_writer_inventory.py, tests/test_test_touched.py. The host aborted the merge. Conflict resolution continues with codex on branch story-b6b1278890774ef993d2ebc327862470-583.",
+  "subject": "Rework merge conflicts require resolution",
+  "urgent": false,
+  "intent": "request",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "shell_user"
+}
