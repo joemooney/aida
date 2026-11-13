@@ -723,3 +723,38 @@ fn bug_2486_child_cap_preserves_parent_binding_and_revocation() {
     write_grant(&revoked).unwrap();
     assert!(cap_launch_child_expiry(&child.id, deadline - 60).is_err());
 }
+
+// BUG-2544: a launch that outlived the deputy job holding its grant failed
+// with a bare "no valid parent seat grant is active". The refusal now names
+// the grant and the rejection, and a presenter refusal says how to launch.
+// trace:BUG-2544 | ai:claude
+#[test]
+fn bug_2544_parent_grant_refusal_names_reason_and_background_fix() {
+    let id = "215c5bb6-63cc-41ab-ac56-b5960df84452";
+    let presenter = parent_grant_refusal(
+        id,
+        &GrantRejection::PresenterNotBound {
+            bound_to: "process 3297532".into(),
+        },
+    );
+    assert!(
+        presenter.starts_with("no valid parent seat grant is active: grant 215c5bb6"),
+        "{presenter}"
+    );
+    assert!(
+        presenter.contains("bound to process 3297532"),
+        "{presenter}"
+    );
+    assert!(
+        presenter.contains("background") && presenter.contains("`wait`"),
+        "{presenter}"
+    );
+    let expired = parent_grant_refusal(
+        id,
+        &GrantRejection::Expired {
+            at: chrono::Utc::now(),
+        },
+    );
+    assert!(expired.contains("it expired at"), "{expired}");
+    assert!(!expired.contains("background"), "{expired}");
+}
