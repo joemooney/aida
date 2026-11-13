@@ -18,7 +18,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-13T00:35:57.525111678Z
-modified_at: 2026-11-13T08:27:53.046851637Z
+modified_at: 2026-11-13T08:30:23.472424974Z
 req_type: Story
 tags:
 - track:integration
@@ -29,6 +29,18 @@ comments:
   created_at: 2026-11-13T08:27:28.370572251Z
   modified_at: 2026-11-13T08:27:28.370572251Z
   session_id: 01a1d3ee-83e8-71b3-a2c5-aed5baed6fdc
+  harness_version: 2.1.323 (Claude Code)
+- id: 01a1d407-7ef0-71a3-9a39-6bfee3527b9a
+  author: joe
+  content: |-
+    SKETCH (integration seat, 2026-11-13 01:35) — STORY-2745 seat:<name> addressing. Design fork: the ruling says "existing seat registry", but none maps a seat name to a live session.
+    Findings: seat_occupancy (.aida/seat-occupancy/<seat>.json) holds live holders but only for single-occupancy seats (orchestrator by default; others refuse without an ownership boundary). AgentRegistryEntry (.aida/agents/<id>.toml, the mailbox resolver's reader set) has role but no seat. The seat a session uses for handoff/rotation is AIDA_ROTATION_SEAT (set by `aida agent new --rotate`, = role or vendor) or `--seat` passed by hand; the only persistent trace is .aida/handoff/<seat>/log.jsonl (history, not liveness). The integration seat today is just role implementer + a hand-passed --seat.
+    Proposal (A, recommended): no new table — add one optional field `seat` to AgentRegistryEntry, written at registration from AIDA_ROTATION_SEAT (canonical via sanitize_seat). `aida agent new --seat <name>` (new flag; defaults to today's supervisor_seat) exports AIDA_ROTATION_SEAT=<name>, so rotation, handoff default and mail all key on one name. Resolver: `seat:<name>` = live/unknown-liveness registry rows with that seat, same cohort/queue/refusal path as a role (zero readers -> --queue-for-role style queue for the seat, else refusal listing seats seen in the registry and handoff dirs). Sender: Message gains optional `from_seat` (from AIDA_ROTATION_SEAT); `mailbox send --in-reply-to <id>` without --to replies to the parent's from_seat, else from_role, else from. AC4: existing codex inbox notice path, no new transport; AC5 best-effort print only, never recorded.
+    Rejected (B): resolve via handoff log latest native_session_id joined to live registry rows — heuristic, breaks across rotation before the first handoff.
+    Out of scope: seat_occupancy semantics, grants, gate/.
+  created_at: 2026-11-13T08:30:23.472424974Z
+  modified_at: 2026-11-13T08:30:23.472424974Z
+  session_id: 01a1d394-b764-7e21-a752-015032d87411
   harness_version: 2.1.323 (Claude Code)
 history:
 - id: 01a1d404-5b69-7883-a178-72d22e485802
