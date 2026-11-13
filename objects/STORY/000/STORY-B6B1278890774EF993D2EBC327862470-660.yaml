@@ -23,7 +23,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-12T19:11:56.371806442Z
-modified_at: 2026-11-13T21:23:41.256829097Z
+modified_at: 2026-11-13T22:23:21.928141085Z
 req_type: Story
 tags:
 - operator-held
@@ -242,6 +242,13 @@ comments:
   content: 'Main gap closed 13:38 MST: train #3962 landed #3898 #3919 #3939 (gap 11:43-13:38, 1h55m). Post-green delay ~6 min was the train''s gate-ledger scan (1066 spec dirs), the read #3952/#3932 fix. Train 5 (#3949 #3920) is next.'
   created_at: 2026-11-13T20:38:20.483223941Z
   modified_at: 2026-11-13T20:38:20.483223941Z
+  session_id: 01a1d684-8599-70e0-a01c-714f54d2f8de
+  harness_version: 2.1.323 (Claude Code)
+- id: 01a1d702-1b48-75c2-9cc8-81fe00b6d67a
+  author: joe
+  content: 'Main gap incident 15:23 MST: main unmoved since 14:21 (97d2f9f, #3920). Cause: #3909 (approved bcff16a) carried ghost failed checks from a superseded CI run; it was closed and reopened at 15:05 and train 6 (#3967) is in CI (11 pass, 8 pending, no failures). Promotion 6 (#3966) is in scoped re-review after a stale TASK-3448 coverage link was removed. Three PRs (#3938, #3949, #3921) are parked behind #3953 (BUG-2558), which itself needs a Claude seat to merge main; operator decision pending.'
+  created_at: 2026-11-13T22:23:21.928141085Z
+  modified_at: 2026-11-13T22:23:21.928141085Z
   session_id: 01a1d684-8599-70e0-a01c-714f54d2f8de
   harness_version: 2.1.323 (Claude Code)
 history:
