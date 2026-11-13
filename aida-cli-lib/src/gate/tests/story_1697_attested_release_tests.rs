@@ -38,6 +38,7 @@ fn mandate(include_supervised: bool) -> Mandate {
         scopes: Default::default(),
         kind: None,
         renewals: Vec::new(),
+        revived: None,
     }
 }
 

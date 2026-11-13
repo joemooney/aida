@@ -347,3 +347,169 @@ fn a_kept_protected_path_opt_in_is_printed_and_a_changed_or_absent_one_is_not() 
     assert_eq!(renewed(&keep, 20), kept);
     assert_eq!(renewed(&gate_paths(false), 21), None);
 }
+
+/// A supervised ship-held mandate started at `t0` for 8h.
+fn supervised(dir: &Path) -> Mandate {
+    start_with_scopes(
+        dir,
+        &human_ok,
+        "joe",
+        Duration::hours(8),
+        None,
+        true,
+        false,
+        BTreeSet::from([Scope::ShipHeld]),
+        t0(),
+    )
+    .unwrap()
+}
+
+#[test]
+fn a_renewal_that_withdraws_the_supervised_lift_ends_covers_issued_under_it() {
+    use crate::gate::mandate_ship::{cover_active_in, MandateCover};
+    let tmp = tempfile::tempdir().unwrap();
+    let before = supervised(tmp.path());
+    assert!(before.include_supervised);
+    let cover = |issued_supervised| {
+        MandateCover::from_checked_paths(
+            before.id.clone(),
+            "joe".into(),
+            &["README.md".into()],
+            crate::gate::mandate_gates::ProtectedPaths::floor_ref(),
+            issued_supervised,
+        )
+    };
+    let wide = cover(true);
+    assert!(cover_active_in(
+        &wide,
+        &MandateState::Active(before.clone())
+    ));
+
+    // A plain renewal keeps the lift, so the cover stays live.
+    let at = t0() + Duration::hours(1);
+    renew(tmp.path(), &human_ok, "joe", None, at).unwrap();
+    assert!(cover_active_in(
+        &wide,
+        &MandateState::Active(stored(tmp.path(), at))
+    ));
+
+    // Narrowed in place: same id, and the wide cover is over.
+    let at = at + Duration::hours(1);
+    let overrides = RenewOverrides {
+        include_supervised: Some(false),
+        ..RenewOverrides::default()
+    };
+    renew_with(tmp.path(), &human_ok, "joe", None, &overrides, at).unwrap();
+    let narrowed = stored(tmp.path(), at);
+    assert_eq!(narrowed.id, before.id);
+    assert!(!narrowed.include_supervised);
+    assert!(!cover_active_in(
+        &wide,
+        &MandateState::Active(narrowed.clone())
+    ));
+    // A cover issued while the lift was already off is unaffected.
+    assert!(cover_active_in(
+        &cover(false),
+        &MandateState::Active(narrowed)
+    ));
+}
+
+#[test]
+fn a_revival_stores_its_receipt_and_the_record_still_validates() {
+    let tmp = tempfile::tempdir().unwrap();
+    let before = ship_held(tmp.path());
+    let late = before.expires_at + Duration::hours(1);
+    let overrides = RenewOverrides {
+        include_supervised: Some(true),
+        ..RenewOverrides::default()
+    };
+    let (revived, receipt, _) =
+        renew_with(tmp.path(), &human_ok, "joe", None, &overrides, late).unwrap();
+    assert_eq!(
+        receipt.changes,
+        vec!["include-supervised: off -> on".to_string()]
+    );
+    let revival = revived.revived.clone().expect("the revival is recorded");
+    assert_eq!(revival.from_id, before.id);
+    assert_eq!(revival.receipt, receipt);
+    assert_eq!(revival.receipt.previous_expires_at, before.expires_at);
+
+    // It loads as valid, with the receipt, and status names where it came from.
+    let on_disk = stored(tmp.path(), late);
+    assert_eq!(on_disk, revived);
+    let text =
+        crate::mandate::status_report(&MandateState::Active(on_disk.clone()), late, None, false);
+    assert!(
+        text.contains(&format!("revived:   from {} (expired ", before.id))
+            && text.contains("changed include-supervised: off -> on"),
+        "{text}"
+    );
+
+    // An in-place renewal afterwards keeps the receipt and still validates.
+    let later = late + Duration::hours(1);
+    renew(tmp.path(), &human_ok, "joe", None, later).unwrap();
+    let renewed = stored(tmp.path(), later);
+    assert_eq!(renewed.revived, Some(revival));
+    assert_eq!(renewed.renewals.len(), 1);
+
+    // A receipt that does not match the record's issuance is refused.
+    let mut forged = renewed.clone();
+    forged.revived.as_mut().unwrap().receipt.renewed_at = later;
+    std::fs::write(
+        tmp.path().join(format!("{}.json", forged.id)),
+        serde_json::to_vec_pretty(&forged).unwrap(),
+    )
+    .unwrap();
+    let (valid, warnings) = load_valid(tmp.path(), "joe", later);
+    assert!(valid.iter().all(|m| m.id != forged.id), "{valid:?}");
+    assert!(
+        warnings
+            .iter()
+            .any(|w| w.contains("its revival receipt does not match its issuance")),
+        "{warnings:?}"
+    );
+}
+
+#[test]
+fn a_revival_with_changes_says_so_and_its_audit_event_carries_them() {
+    let tmp = tempfile::tempdir().unwrap();
+    let before = ship_held(tmp.path());
+    let late = before.expires_at + Duration::hours(1);
+    let overrides = RenewOverrides {
+        include_supervised: Some(true),
+        ..RenewOverrides::default()
+    };
+    let (revived, receipt, _) =
+        renew_with(tmp.path(), &human_ok, "joe", None, &overrides, late).unwrap();
+    let text = crate::mandate::revived_message(&before.id, &revived, &receipt);
+    assert!(
+        !text.contains("supervised flag and human gates retained"),
+        "{text}"
+    );
+    assert!(
+        text.contains("Everything not listed above retained"),
+        "{text}"
+    );
+
+    let events = tempfile::tempdir().unwrap();
+    crate::mandate::emit_revived(events.path(), &revived, &before.id, &receipt);
+    let changes: Vec<_> = crate::events::read_all(events.path())
+        .into_iter()
+        .filter_map(|e| match e.kind {
+            crate::events::EventKind::MandateChanged { changes, .. } => Some(changes),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(changes, vec![receipt.changes.clone()]);
+
+    // Nothing changed: the old wording stands.
+    let plain = tempfile::tempdir().unwrap();
+    let before = ship_held(plain.path());
+    let (revived, receipt, _) =
+        renew_reporting_revival(plain.path(), &human_ok, "joe", None, late).unwrap();
+    let text = crate::mandate::revived_message(&before.id, &revived, &receipt);
+    assert!(
+        text.contains("Scope, supervised flag and human gates retained"),
+        "{text}"
+    );
+}

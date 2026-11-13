@@ -142,6 +142,23 @@ pub(crate) struct Mandate {
     // trace:STORY-B6B1278890774EF993D2EBC327862470-166 | ai:claude
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub renewals: Vec<Renewal>,
+    /// Set when `aida mandate renew` re-minted this record from an expired
+    /// one: which mandate, and what the renewal changed.
+    // trace:STORY-2771 | ai:claude
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub revived: Option<Revival>,
+}
+
+/// Where a revived mandate came from. The receipt is kept apart from
+/// `renewals` because that lineage only holds in-place extensions.
+// trace:STORY-2771 | ai:claude
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub(crate) struct Revival {
+    /// The expired mandate's id.
+    pub from_id: String,
+    /// Who revived it and when, the old expiry, the first expiry of this
+    /// record, and what the overrides changed.
+    pub receipt: Renewal,
 }
 
 /// One in-place renewal of a mandate: who extended it, when, and the expiry
@@ -445,6 +462,18 @@ fn renewal_problem(m: &Mandate) -> Option<String> {
     }
     let mut since = m.issued_at;
     let mut expiry = m.issued_at + m.original_ttl();
+    // A revival mints the record: its receipt is dated at issuance, names an
+    // expiry already past, and sets the record's first expiry.
+    // trace:STORY-2771 | ai:claude
+    if let Some(revival) = &m.revived {
+        let r = &revival.receipt;
+        if r.renewed_at != m.issued_at
+            || r.previous_expires_at > r.renewed_at
+            || r.expires_at != expiry
+        {
+            return Some("its revival receipt does not match its issuance".into());
+        }
+    }
     for r in &m.renewals {
         if r.renewed_at < since || r.previous_expires_at != expiry {
             return Some("its renewal lineage is out of order".into());
@@ -744,8 +773,9 @@ pub(crate) fn renew_reporting_revival(
 ///   [`Renewal`] is appended to its lineage. The third value is `None`.
 /// - With none active, the latest expired one is re-minted under a fresh id,
 ///   `issued_at = now` and an empty lineage (expired grants and the old
-///   record are left alone); the returned [`Renewal`] is only a receipt
-///   naming the old expiry, and the third value is the old mandate's id.
+///   record are left alone); the returned [`Renewal`] is the receipt stored
+///   as the record's [`Revival`], and the third value is the old mandate's
+///   id.
 ///
 /// Same floor as [`mint`]. A stop racing this write still wins: its tombstone
 /// is never removed and revokes whatever the record says. Private: production
@@ -795,6 +825,11 @@ fn extend(
         let old_id = std::mem::replace(&mut m.id, Uuid::new_v4().to_string());
         m.issued_at = now;
         m.renewals.clear();
+        // trace:STORY-2771 | ai:claude
+        m.revived = Some(Revival {
+            from_id: old_id.clone(),
+            receipt: renewal.clone(),
+        });
         Some(old_id)
     } else {
         m.renewals.push(renewal.clone());
@@ -952,6 +987,7 @@ fn mint(
         scopes,
         kind: drive.then(|| KIND_DRIVE.to_string()),
         renewals: Vec::new(),
+        revived: None,
     };
     write_private(
         &dir.join(format!("{}.json", mandate.id)),

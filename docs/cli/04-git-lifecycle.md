@@ -893,7 +893,12 @@ a drive mandate, `--include-supervised` / `--exclude-supervised` and
 `--include-gate-paths` / `--exclude-gate-paths` set those flags, and `--reason`
 replaces the reason. A flag you do not pass keeps its value. Each change is
 printed as `name: before -> after` and recorded with the renewal in the
-mandate's lineage. Human gates keep their existing policy.
+mandate's lineage. Human gates keep their existing policy. A revived mandate
+records the mandate it replaced and the same change lines, and
+`aida mandate status` shows them as `revived:`. Turning off the supervised
+flag or the protected-path opt-in takes effect at once: a ship or train
+already in progress that started under the wider mandate is refused before
+its merge, and its hold is put back.
 
 During the last 60 minutes, the status/hook banner shows
 `MANDATE expires in Nm, run: aida mandate renew`. A deduplicated mail notice

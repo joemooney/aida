@@ -489,6 +489,7 @@ pub(crate) fn emit_renewed(project_root: &Path, mandate: &Mandate, renewal: &Ren
             include_gate_paths: mandate.include_gate_paths,
             reason: mandate.reason.clone(),
             renewed_from: Some(renewal.previous_expires_at.to_rfc3339()),
+            changes: renewal.changes.clone(),
         },
     );
     event.seat = crate::events::active_seat();
@@ -497,9 +498,15 @@ pub(crate) fn emit_renewed(project_root: &Path, mandate: &Mandate, renewal: &Ren
 
 /// The audit copy of a revival in `.aida/events.jsonl`: a start whose
 /// `renewed_from` names the expired mandate it re-minted, so the trail links
-/// the two. Best-effort.
+/// the two, with what the revival changed. Best-effort.
 // trace:STORY-2346 | ai:claude
-pub(crate) fn emit_revived(project_root: &Path, mandate: &Mandate, old_id: &str) {
+// trace:STORY-2771 | ai:claude
+pub(crate) fn emit_revived(
+    project_root: &Path,
+    mandate: &Mandate,
+    old_id: &str,
+    receipt: &Renewal,
+) {
     let mut event = crate::events::Event::new(
         None,
         "",
@@ -512,6 +519,7 @@ pub(crate) fn emit_revived(project_root: &Path, mandate: &Mandate, old_id: &str)
             include_gate_paths: mandate.include_gate_paths,
             reason: mandate.reason.clone(),
             renewed_from: Some(old_id.to_string()),
+            changes: receipt.changes.clone(),
         },
     );
     event.seat = crate::events::active_seat();
@@ -523,12 +531,18 @@ pub(crate) fn emit_revived(project_root: &Path, mandate: &Mandate, old_id: &str)
 // trace:STORY-2346 | ai:claude
 pub(crate) fn revived_message(old_id: &str, m: &Mandate, receipt: &Renewal) -> String {
     format!(
-        "Revived mandate {old_id} (expired {}) as {} ({}, supervised: {}); active until {}. Scope, supervised flag and human gates retained; protected paths: {}.",
+        "Revived mandate {old_id} (expired {}) as {} ({}, supervised: {}); active until {}. {}; protected paths: {}.",
         receipt.previous_expires_at.to_rfc3339(),
         m.id,
         m.effective_scopes().iter().map(|s| s.as_str()).collect::<Vec<_>>().join(", "),
         m.include_supervised,
         m.expires_at.to_rfc3339(),
+        // trace:STORY-2771 | ai:claude
+        if receipt.changes.is_empty() {
+            "Scope, supervised flag and human gates retained"
+        } else {
+            "Everything not listed above retained"
+        },
         m.include_gate_paths
     )
 }
@@ -548,6 +562,7 @@ pub(crate) fn emit_changed(project_root: &Path, mandate: &Mandate, active: bool)
             include_gate_paths: mandate.include_gate_paths,
             reason: mandate.reason.clone(),
             renewed_from: None,
+            changes: Vec::new(),
         },
     );
     event.seat = crate::events::active_seat();
@@ -881,6 +896,19 @@ fn status_text(state: &MandateState, now: DateTime<Utc>) -> String {
                 last.previous_expires_at.to_rfc3339()
             ),
         });
+        // trace:STORY-2771 | ai:claude
+        if let Some(revival) = &m.revived {
+            lines.push(format!(
+                "  revived:   from {} (expired {}){}",
+                revival.from_id,
+                revival.receipt.previous_expires_at.to_rfc3339(),
+                if revival.receipt.changes.is_empty() {
+                    String::new()
+                } else {
+                    format!("; changed {}", revival.receipt.changes.join("; "))
+                }
+            ));
+        }
         lines.join("\n")
     };
     match state {
@@ -1085,7 +1113,7 @@ pub(crate) fn handle_mandate(action: &crate::cli::MandateAction) -> Result<()> {
             // trace:STORY-2346 | ai:claude
             if let Some(old_id) = revived_from {
                 if let Some(root) = &audit_root {
-                    emit_revived(root, &m, &old_id);
+                    emit_revived(root, &m, &old_id, &renewal);
                 }
                 println!("{}", revived_message(&old_id, &m, &renewal));
                 return Ok(());

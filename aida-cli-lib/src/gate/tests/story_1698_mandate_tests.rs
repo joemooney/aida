@@ -43,6 +43,7 @@ fn active(include_supervised: bool) -> Mandate {
         scopes: Default::default(),
         kind: None,
         renewals: Vec::new(),
+        revived: None,
     }
 }
 
@@ -1067,7 +1068,7 @@ fn every_failure_after_a_mandate_release_re_arms_the_hold() {
     let merged = after.find("merged_this_run = true;").unwrap();
     let window = &after[..merged + 2000];
     assert!(window.contains("if mandate_release.is_some() {")); // }
-    assert!(window.contains("ended or no longer covers protected paths before the merge"));
+    assert!(window.contains("ended or was narrowed by a renewal before the merge"));
     assert!(window.contains("re-arm a mandate-released hold on a failed merge"));
     assert_eq!(
         window.matches("rearm_after_mandate_failure(").count(),
@@ -3372,8 +3373,13 @@ fn mandate_include_gate_paths_preserves_other_gates_and_audits_train_member() {
     c.changed_paths = Some(&paths);
     assert_eq!(gate_checks(&c, &[&c.ship_gate]), Ok(()));
     let id = ship_decision(&c).unwrap();
-    let cover =
-        MandateCover::from_checked_paths(id, "joe".into(), &paths, ProtectedPaths::floor_ref());
+    let cover = MandateCover::from_checked_paths(
+        id,
+        "joe".into(),
+        &paths,
+        ProtectedPaths::floor_ref(),
+        false,
+    );
     assert_eq!(cover.gate_match, Some(hit));
     let audit = cover.gate_audit().unwrap();
     let evidence: serde_json::Value =
@@ -3522,6 +3528,7 @@ fn mandate_gate_audit_keeps_unusual_paths_on_one_physical_line() {
         "joe".into(),
         std::slice::from_ref(&path),
         crate::gate::mandate_gates::ProtectedPaths::floor_ref(),
+        false,
     );
     let audit = cover.gate_audit().unwrap();
     assert_eq!(audit.lines().count(), 1);
@@ -3541,6 +3548,7 @@ fn mandate_cover_rechecks_withdrawn_gate_path_opt_in_before_merge() {
         m.principal.clone(),
         &["aida-cli-lib/src/gate/x.rs".into()],
         crate::gate::mandate_gates::ProtectedPaths::floor_ref(),
+        false,
     );
     assert!(cover_active_in(&cover, &MandateState::Active(m.clone())));
     m.include_gate_paths = false;

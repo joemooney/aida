@@ -503,7 +503,7 @@ fn revival_prints_the_old_id_and_links_the_audit_event_to_it() {
         "{text}"
     );
 
-    crate::mandate::emit_revived(tmp.path(), &revived, &original.id);
+    crate::mandate::emit_revived(tmp.path(), &revived, &original.id, &receipt);
     let events: Vec<_> = crate::events::read_all(tmp.path())
         .into_iter()
         .filter_map(|e| match e.kind {
