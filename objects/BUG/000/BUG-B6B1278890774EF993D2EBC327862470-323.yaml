@@ -8,11 +8,19 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-13T12:51:33.706851654Z
-modified_at: 2026-11-13T12:53:03.405984822Z
+modified_at: 2026-11-13T12:56:33.760676265Z
 req_type: Bug
 tags:
 - lanes
 - track:dell1
+comments:
+- id: 01a1d4fb-2ee0-7390-8fc2-dc0a087d3972
+  author: joe
+  content: 'Also blocks STORY-2593 (#3938: 45 hunks in containment/launch). Separately, dell1''s umask 0002 makes AIDA rewrite .git/aida-work-dispenser.toml as 0664, after which every ID allocation (auto-queue review stories, punt comments) refuses. Workaround: ''umask 022'' in the dell1 lane launches. The writer should set 0600 explicitly.'
+  created_at: 2026-11-13T12:56:33.760676265Z
+  modified_at: 2026-11-13T12:56:33.760676265Z
+  session_id: 01a1d4aa-9c99-76c2-ac94-7f0795f8a7f9
+  harness_version: 2.1.323 (Claude Code)
 history:
 - id: 01a1d4f7-f92d-7a61-af83-4ceb9af49f3d
   author: joe
