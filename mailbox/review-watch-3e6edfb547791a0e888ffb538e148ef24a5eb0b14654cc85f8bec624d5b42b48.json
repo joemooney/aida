@@ -1,0 +1,18 @@
+{
+  "id": "review-watch-3e6edfb547791a0e888ffb538e148ef24a5eb0b14654cc85f8bec624d5b42b48",
+  "thread_id": "review-watch-3e6edfb547791a0e888ffb538e148ef24a5eb0b14654cc85f8bec624d5b42b48",
+  "from": "review-watch",
+  "to": {
+    "kind": "agent",
+    "agent": "joemooney"
+  },
+  "timestamp": 1794537940860,
+  "body": "PR-3909 at f3e011b58fbbd467480d7beae13b9c2f1959dce8: the review by codex-reviewer (codex reviewer seat) recorded `request-changes` with 3 finding(s), round 1 of 2. The findings are in `.aida/gate-ledger/PR-3909.jsonl`. Address them and push a new head; the watcher starts its review when it sees the head.",
+  "subject": "PR-3909: review requested changes (round 1 of 2)",
+  "urgent": false,
+  "intent": "request",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "explicit"
+}
