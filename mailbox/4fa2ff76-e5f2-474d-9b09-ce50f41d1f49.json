@@ -1,0 +1,18 @@
+{
+  "id": "4fa2ff76-e5f2-474d-9b09-ce50f41d1f49",
+  "thread_id": "4fa2ff76-e5f2-474d-9b09-ce50f41d1f49",
+  "from": "dirtlab",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1794612731574,
+  "body": "STORY-b6b1278890774ef993d2ebc327862470-323 PR #3940 conflicts with origin/main in: aida-cli-lib/src/orchestrator_leases.rs, aida-cli-lib/src/ownership/writer_tests.rs, aida-cli-lib/src/queue_cmd.rs, aida-cli-lib/src/tests/bug_2002_launch_lease_tests.rs, aida-cli-lib/src/tests/bug_2223_orphan_seat_reentry_tests.rs, aida-cli-lib/src/tests/queue_work_tests.rs, scripts/ownership-liveness-legacy.json, tests/test_bug_2135_sccache_tmpdir.py, tests/test_ownership_liveness_ratchet.py. The host aborted the merge. Conflict resolution continues with codex on branch story-2325-prd.",
+  "subject": "Rework merge conflicts require resolution",
+  "urgent": false,
+  "intent": "request",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "shell_user"
+}

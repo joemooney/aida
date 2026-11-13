@@ -1,0 +1,18 @@
+{
+  "id": "d3e33156-a31b-441f-9086-198bb5249a9a",
+  "thread_id": "d3e33156-a31b-441f-9086-198bb5249a9a",
+  "from": "dirtlab",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1794612664262,
+  "body": "BUG-b6b1278890774ef993d2ebc327862470-323 PR #3953 conflicts with origin/main in: aida-cli-lib/src/queue_cmd/work.rs, aida-cli-lib/src/rework_direction.rs, aida-cli-lib/src/seat_clone.rs, aida-cli-lib/src/tests/bug_home_038_seat_publish_tests.rs, aida-cli-lib/src/tests/queue_work_tests.rs, scripts/store-writers.toml. The host aborted the merge. Conflict resolution continues with codex on branch bug-b6b1278890774ef993d2ebc327862470-323.",
+  "subject": "Rework merge conflicts require resolution",
+  "urgent": false,
+  "intent": "request",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "shell_user"
+}

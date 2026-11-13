@@ -1,0 +1,18 @@
+{
+  "id": "eca95bed-c7ff-47ec-a286-a04b95a8abaa",
+  "thread_id": "eca95bed-c7ff-47ec-a286-a04b95a8abaa",
+  "from": "dirtlab",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1794612705240,
+  "body": "STORY-b6b1278890774ef993d2ebc327862470-516 PR #3938 conflicts with origin/main in: OVERVIEW.md, aida-cli-lib/src/containment/contained_host.py, aida-cli-lib/src/containment/tests/codex_auth_probe.py, aida-cli-lib/src/containment/tests/codex_auth_tests.rs, aida-cli-lib/src/launch/codex_auth.rs, aida-cli-lib/src/launch/contained.rs, aida-cli-lib/src/mcp.rs, scripts/config-trust.toml, scripts/store-writers.toml, tests/test_bug_2135_sccache_tmpdir.py. The host aborted the merge. Conflict resolution continues with codex on branch story-2593-r2219.",
+  "subject": "Rework merge conflicts require resolution",
+  "urgent": false,
+  "intent": "request",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "shell_user"
+}
