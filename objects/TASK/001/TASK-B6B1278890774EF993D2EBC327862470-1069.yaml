@@ -13,12 +13,12 @@ description: |
 
   ACCEPTANCE: fake-forge unit tests for GitLab mirroring STORY-2732's five cases (happy path; merge failure still restores; setting already off is never touched; restore or verify failure exits non-zero and prints the restore command; refusals make no API writes); pure-git refusal test; docs/cli section notes GitLab behavior.
   LIGHT gate: one targeted cargo test -p aida-cli-lib emergency_land + make check-ci-fast. Lands after STORY-2732.
-status: Approved
+status: InProgress
 priority: High
-owner: ''
+owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-12T17:38:36.583411920Z
-modified_at: 2026-11-12T17:39:37.166984390Z
+modified_at: 2026-11-13T02:02:24.085274155Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -48,6 +48,13 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Approved
+- id: 01a1d2a4-47d5-7882-b88d-47fa124a4697
+  author: aida-session-start
+  timestamp: 2026-11-13T02:02:24.085270464Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: ec5a35a7108475b421baf1101b26159a7aa0fab9
   branch: main
