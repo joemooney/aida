@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-02T19:20:50.092491662Z
-modified_at: 2026-11-13T12:27:17.037558175Z
+modified_at: 2026-11-13T12:53:07.529590917Z
 req_type: Story
 tags:
 - architecture
@@ -794,6 +794,13 @@ comments:
   created_at: 2026-11-13T10:54:04.311296661Z
   modified_at: 2026-11-13T10:54:04.311296661Z
   session_id: 01a1d3ee-83e8-71b3-a2c5-aed5baed6fdc
+  harness_version: 2.1.323 (Claude Code)
+- id: 01a1d4f8-0949-7b31-8d8f-142a275cdbff
+  author: joe
+  content: 'Advisor 05:52: PARKED until BUG-2558 lands. #3940 conflicts with main in 8 files, including the ownership-liveness ratchet baselines, and Codex native seats cannot record a merge, so every lane punts. Too large for an advisor hand-merge on a keystone spec.'
+  created_at: 2026-11-13T12:53:07.529590917Z
+  modified_at: 2026-11-13T12:53:07.529590917Z
+  session_id: 01a1d4aa-9c99-76c2-ac94-7f0795f8a7f9
   harness_version: 2.1.323 (Claude Code)
 history:
 - id: 01a19ed2-508b-7401-9865-70193fa0d0af
