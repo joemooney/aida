@@ -6,6 +6,7 @@
 //! trace:STORY-42 | ai:claude
 // trace:BUG-2017 | ai:codex — explicit positive global-ID fixture.
 use super::*;
+use crate::queue_cmd::{queued_supervised_mode, spec_track, SpecTrack};
 use crate::{
     append_reviewer_prompt_suffixes_with, apply_rework_conflict_route, auto_complete,
     auto_complete_phase1_target_status, build_implementer_phase_args, build_resolved_entry,
@@ -4944,4 +4945,363 @@ fn story_2690_no_argument_hold_refusal_keeps_resolved_head_and_rework() {
             assert_eq!(receipt["pr"], 42);
         }
     }
+}
+
+// STORY-2749: one track per spec. A `track:<owner>` spec is fresh work only
+// for a launcher running that track (`AIDA_TRACK`, default `main`).
+// trace:STORY-2749 | ai:claude
+#[test]
+fn story_2749_fresh_pickup_refuses_a_spec_on_another_track() {
+    let mut r = req("TASK-2749", None, RequirementType::Task);
+    r.status = RequirementStatus::Approved;
+    r.tags.insert("track:integration".into());
+    let mut store = aida_core::RequirementsStore::default();
+    store.requirements.push(r.clone());
+
+    {
+        let _env = crate::test_env::EnvVarsGuard::apply(&[("AIDA_TRACK", None)]);
+        let policy = queue_fresh_pickup_policy(&r, &store, false, None);
+        assert_eq!(
+            policy,
+            QueueFreshPickup::OtherTrack {
+                owner: "integration".into(),
+                launcher: "main".into()
+            }
+        );
+        let label = queue_fresh_pickup_reason_label(&policy).unwrap();
+        assert!(
+            label.contains("`integration` track") && label.contains("AIDA_TRACK=integration"),
+            "{label}"
+        );
+        // Drains and rework routing see the same refusal.
+        assert_eq!(queue_drain_pickup_policy(&r, &store, false, None), policy);
+    }
+    {
+        let _env = crate::test_env::EnvVarsGuard::set(&[("AIDA_TRACK", "Integration")]);
+        assert_eq!(
+            queue_fresh_pickup_policy(&r, &store, false, None),
+            QueueFreshPickup::Pickable
+        );
+    }
+    // `track:main` is the default launcher's own track; untagged is free.
+    let _env = crate::test_env::EnvVarsGuard::apply(&[("AIDA_TRACK", None)]);
+    r.tags = ["track:main".to_string()].into_iter().collect();
+    assert_eq!(
+        queue_fresh_pickup_policy(&r, &store, false, None),
+        QueueFreshPickup::Pickable
+    );
+    r.tags.clear();
+    assert_eq!(
+        queue_fresh_pickup_policy(&r, &store, false, None),
+        QueueFreshPickup::Pickable
+    );
+    // A terminal spec reports its terminal state, not its stale track.
+    r.tags.insert("track:dell1".into());
+    r.status = RequirementStatus::Completed;
+    assert_eq!(
+        queue_fresh_pickup_policy(&r, &store, false, None),
+        QueueFreshPickup::Terminal(RequirementStatus::Completed)
+    );
+}
+
+// trace:STORY-2749 trace:STORY-2737 | ai:claude
+#[test]
+fn story_2749_completion_drops_track_and_landed_tags() {
+    let mut r = req("TASK-2750", None, RequirementType::Task);
+    r.status = RequirementStatus::Done;
+    r.tags = ["track:integration", "landed-in-integration", "perf"]
+        .iter()
+        .map(|t| t.to_string())
+        .collect();
+    crate::completion::mark_completed(&mut r);
+    assert_eq!(r.status, RequirementStatus::Completed);
+    assert_eq!(r.tags.iter().collect::<Vec<_>>(), [&"perf".to_string()]);
+}
+
+// STORY-2749 review: tags are a set, so several track owners are refused
+// rather than resolved by iteration order; insertion order never matters.
+// trace:STORY-2749 | ai:claude
+#[test]
+fn story_2749_several_track_owners_are_refused_in_any_order() {
+    let _env = crate::test_env::EnvVarsGuard::apply(&[("AIDA_TRACK", None)]);
+    for tags in [
+        ["track:main", "track:integration"],
+        ["track:integration", "track:main"],
+    ] {
+        let mut r = req("TASK-2749", None, RequirementType::Task);
+        r.status = RequirementStatus::Approved;
+        for tag in tags {
+            r.tags.insert(tag.into());
+        }
+        let mut store = aida_core::RequirementsStore::default();
+        store.requirements.push(r.clone());
+        let want = QueueFreshPickup::AmbiguousTrack(vec!["integration".into(), "main".into()]);
+        assert_eq!(queue_fresh_pickup_policy(&r, &store, false, None), want);
+        assert_eq!(queue_drain_pickup_policy(&r, &store, false, None), want);
+        assert!(queue_fresh_pickup_reason_label(&want)
+            .unwrap()
+            .contains("integration, main"));
+    }
+    // The same owner spelled twice is one owner.
+    let mut r = req("TASK-2749", None, RequirementType::Task);
+    r.tags = ["track:Main".to_string(), "track:main".to_string()]
+        .into_iter()
+        .collect();
+    assert_eq!(spec_track(&r), SpecTrack::Owner("main".into()));
+}
+
+// STORY-2749 review: `track:operator` is supervised work. Even an operator
+// launcher's unattended paths refuse it, whatever execution mode it groomed.
+// trace:STORY-2749 | ai:claude
+#[test]
+fn story_2749_operator_track_never_runs_unattended() {
+    let _env = crate::test_env::EnvVarsGuard::set(&[("AIDA_TRACK", "operator")]);
+    for mode in [None, Some(aida_core::ExecutionMode::Drain)] {
+        let mut r = req("TASK-2750", None, RequirementType::Task);
+        r.status = RequirementStatus::Approved;
+        r.execution_mode = mode;
+        r.tags.insert("track:operator".into());
+        let mut store = aida_core::RequirementsStore::default();
+        store.requirements.push(r.clone());
+        assert_eq!(
+            queue_drain_pickup_policy(&r, &store, false, None),
+            QueueFreshPickup::NeedsGuidedOrOperatorSession(aida_core::ExecutionMode::Operator),
+            "{mode:?}"
+        );
+        assert!(crate::drain_gate::spec_is_keyboard_only(&r), "{mode:?}");
+        assert_eq!(
+            queued_supervised_mode(&r),
+            Some(aida_core::ExecutionMode::Operator)
+        );
+        // At the keyboard an operator launcher still takes it.
+        assert_eq!(
+            queue_fresh_pickup_policy(&r, &store, false, None),
+            QueueFreshPickup::Pickable
+        );
+    }
+}
+
+// STORY-2749 review: the launcher's track crosses the vendor child boundary,
+// so the child's own `aida` commands run on the track it was admitted under.
+// trace:STORY-2749 | ai:claude
+#[test]
+fn story_2749_track_reaches_the_vendor_child() {
+    let parent = aida_core::exec_context::Environment::from_pairs([(
+        std::ffi::OsString::from("AIDA_TRACK"),
+        std::ffi::OsString::from("integration"),
+    )]);
+    for vendor in [
+        aida_core::vendors::LaunchVendor::Claude,
+        aida_core::vendors::LaunchVendor::Codex,
+    ] {
+        let child = crate::vendors::profile::VendorProfile::for_vendor(vendor)
+            .env_policy(aida_core::launch_policy::LaunchKind::Fresh)
+            .unwrap()
+            .project(&parent, std::iter::empty())
+            .unwrap();
+        assert_eq!(
+            child.get("AIDA_TRACK"),
+            Some(std::ffi::OsStr::new("integration")),
+            "{vendor:?}"
+        );
+    }
+}
+
+// STORY-2749 review round 2: a headless pickup of a `track:operator` spec is
+// refused even on an operator launcher, whatever execution mode it groomed;
+// at the keyboard it proceeds.
+// trace:STORY-2749 | ai:claude
+#[test]
+fn story_2749_direct_headless_pickup_refuses_operator_track() {
+    let _env = crate::test_env::EnvVarsGuard::set(&[("AIDA_TRACK", "operator")]);
+    for mode in [None, Some(aida_core::ExecutionMode::Drain)] {
+        let mut r = req("TASK-2751", None, RequirementType::Task);
+        r.status = RequirementStatus::Approved;
+        r.execution_mode = mode;
+        r.tags.insert("track:operator".into());
+        let refusal = crate::queue_cmd::operator_track_headless_refusal(&r, true)
+            .unwrap_or_else(|| panic!("{mode:?}: headless operator pickup must refuse"));
+        assert!(
+            refusal.to_string().contains("never runs headless"),
+            "{refusal}"
+        );
+        assert!(
+            crate::queue_cmd::operator_track_headless_refusal(&r, false).is_none(),
+            "{mode:?}: attended pickup proceeds"
+        );
+        r.tags.clear();
+        assert!(crate::queue_cmd::operator_track_headless_refusal(&r, true).is_none());
+    }
+}
+
+// STORY-2749 review round 2: the queue-wide auto-complete head skips a spec on
+// another track (or several) before selection, so a main launcher drives the
+// eligible main item behind it; the count and preview projections agree.
+// trace:STORY-2749 | ai:claude
+#[test]
+fn story_2749_auto_complete_head_skips_foreign_tracks() {
+    let _env = crate::test_env::EnvVarsGuard::apply(&[("AIDA_TRACK", None)]);
+    let candidate = |id: &str, tags: &[&str]| AutoCompleteHeadCandidate {
+        deferred_reason: None,
+        deferred_until: None,
+        id: id.to_string(),
+        status: RequirementStatus::Approved,
+        for_role: None,
+        deferred: false,
+        execution_mode: None,
+        tags: tags.iter().map(|t| t.to_string()).collect(),
+        blocked: None,
+    };
+    let candidates = vec![
+        candidate("TASK-42", &["track:integration"]),
+        candidate("TASK-44", &["track:main", "track:dell1"]),
+        candidate("TASK-43", &["track:main"]),
+    ];
+    let pick = pick_auto_complete_head_for_role(&candidates, "implementer")
+        .unwrap()
+        .expect("the main item behind the foreign heads is drivable");
+    assert_eq!(pick.spec, "TASK-43");
+    let skipped: Vec<&str> = pick
+        .blocked_skipped
+        .iter()
+        .map(|(id, _)| id.as_str())
+        .collect();
+    assert_eq!(skipped, ["TASK-42", "TASK-44"]);
+    assert!(pick.blocked_skipped[0].1.contains("`integration` track"));
+    // A terminal spec's stale track is not a refusal.
+    assert!(crate::queue_cmd::track_refusal(
+        &candidates[0].tags,
+        &RequirementStatus::Completed,
+        true
+    )
+    .is_none());
+}
+
+// STORY-2749 review round 4: every unattended admission refuses a
+// `track:operator` spec through the one shared check, even on a matching
+// `AIDA_TRACK=operator` launcher and whatever execution mode it groomed.
+// Attended pickup still admits it.
+// trace:STORY-2749 | ai:claude
+fn story_2749_operator_spec(id: &str, mode: Option<aida_core::ExecutionMode>) -> Requirement {
+    let mut r = req(id, None, RequirementType::Task);
+    r.status = RequirementStatus::Approved;
+    r.execution_mode = mode;
+    r.tags.insert("track:operator".into());
+    r
+}
+
+// trace:STORY-2749 | ai:claude
+#[test]
+fn story_2749_shared_check_refuses_operator_track_when_unattended() {
+    let _env = crate::test_env::EnvVarsGuard::set(&[("AIDA_TRACK", "operator")]);
+    let r = story_2749_operator_spec("TASK-2760", None);
+    assert_eq!(
+        crate::queue_cmd::track_refusal(&r.tags, &r.status, true),
+        Some(QueueFreshPickup::NeedsGuidedOrOperatorSession(
+            aida_core::ExecutionMode::Operator
+        ))
+    );
+    assert_eq!(
+        crate::queue_cmd::track_refusal(&r.tags, &r.status, false),
+        None
+    );
+}
+
+// Path 1: a direct `--no-human` pickup checks every resolved member, so a
+// free (or differently tagged) cluster anchor cannot carry a
+// `track:operator` child into a headless session.
+// trace:STORY-2749 | ai:claude
+#[test]
+fn story_2749_headless_plan_refuses_an_operator_cluster_member() {
+    use crate::queue_cmd::{QueueWorkEntry, QueueWorkMode, QueueWorkPlan};
+    // Each anchor is admitted by its launcher, so only the operator child can
+    // refuse: a free anchor on an operator launcher, and a `track:main`
+    // anchor on a main launcher.
+    for (launcher, anchor_tag) in [("operator", None), ("main", Some("track:main"))] {
+        let _env = crate::test_env::EnvVarsGuard::set(&[("AIDA_TRACK", launcher)]);
+        for mode in [None, Some(aida_core::ExecutionMode::Drain)] {
+            let mut epic = req("EPIC-2760", None, RequirementType::Epic);
+            epic.status = RequirementStatus::Planned;
+            if let Some(tag) = anchor_tag {
+                epic.tags.insert(tag.into());
+            }
+            let child = story_2749_operator_spec("TASK-2761", mode);
+            let mut store = aida_core::RequirementsStore::default();
+            store.requirements.push(epic.clone());
+            store.requirements.push(child.clone());
+            let plan = QueueWorkPlan {
+                mode: QueueWorkMode::Cluster,
+                entries: vec![QueueWorkEntry {
+                    queue: entry(child.id, None, Some("EPIC-2760")),
+                    spec_id: "TASK-2761".into(),
+                    status_at_plan: "Approved".into(),
+                }],
+                scope: "EPIC-2760".into(),
+                review_target: None,
+                anchor_display: "EPIC-2760".into(),
+                anchor_title: "Cluster".into(),
+            };
+            let refusal = crate::queue_cmd::headless_plan_refusal(&plan, &store, true)
+                .unwrap_or_else(|| panic!("{anchor_tag:?}/{mode:?}: member must refuse"));
+            assert!(
+                refusal.to_string().contains("TASK-2761"),
+                "{anchor_tag:?}/{mode:?}: {refusal}"
+            );
+            assert!(
+                crate::queue_cmd::headless_plan_refusal(&plan, &store, false).is_none(),
+                "{anchor_tag:?}/{mode:?}: attended cluster pickup proceeds"
+            );
+        }
+    }
+}
+
+// Path 2: the drain policy refuses it independently of execution mode.
+// trace:STORY-2749 | ai:claude
+#[test]
+fn story_2749_drain_refuses_operator_track_on_an_operator_launcher() {
+    let _env = crate::test_env::EnvVarsGuard::set(&[("AIDA_TRACK", "operator")]);
+    for mode in [None, Some(aida_core::ExecutionMode::Drain)] {
+        let r = story_2749_operator_spec("TASK-2762", mode);
+        let mut store = aida_core::RequirementsStore::default();
+        store.requirements.push(r.clone());
+        assert_eq!(
+            queue_drain_pickup_policy(&r, &store, false, None),
+            QueueFreshPickup::NeedsGuidedOrOperatorSession(aida_core::ExecutionMode::Operator),
+            "{mode:?}"
+        );
+        assert_eq!(
+            queue_fresh_pickup_policy(&r, &store, false, None),
+            QueueFreshPickup::Pickable,
+            "{mode:?}: attended pickup on the operator launcher proceeds"
+        );
+    }
+}
+
+// Path 3: the auto-complete head skips it by its tag alone, even when the
+// candidate carries no supervised execution mode.
+// trace:STORY-2749 | ai:claude
+#[test]
+fn story_2749_auto_complete_head_skips_operator_track_on_an_operator_launcher() {
+    let _env = crate::test_env::EnvVarsGuard::set(&[("AIDA_TRACK", "operator")]);
+    let candidate = |id: &str, tags: &[&str]| AutoCompleteHeadCandidate {
+        deferred_reason: None,
+        deferred_until: None,
+        id: id.to_string(),
+        status: RequirementStatus::Approved,
+        for_role: None,
+        deferred: false,
+        execution_mode: None,
+        tags: tags.iter().map(|t| t.to_string()).collect(),
+        blocked: None,
+    };
+    let candidates = vec![
+        candidate("TASK-2763", &["track:operator"]),
+        candidate("TASK-2764", &[]),
+    ];
+    let pick = pick_auto_complete_head_for_role(&candidates, "implementer")
+        .unwrap()
+        .expect("the free item behind the operator head is drivable");
+    assert_eq!(pick.spec, "TASK-2764");
+    assert_eq!(pick.blocked_skipped.len(), 1);
+    assert_eq!(pick.blocked_skipped[0].0, "TASK-2763");
 }

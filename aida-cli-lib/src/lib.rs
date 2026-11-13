@@ -256,6 +256,7 @@ mod mcp_cmd;
 mod orchestrator_cmd;
 mod pr_cmd;
 // trace:STORY-2732 | ai:codex
+mod integration_cmd;
 mod pr_emergency_land;
 pub(crate) mod pr_list;
 mod pr_state;

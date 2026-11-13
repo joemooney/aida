@@ -656,6 +656,23 @@ returns an error; a verdict anchor alone does not finish that protection.
 
 ---
 
+### `aida integration tags`
+
+**One line**: mark the open specs whose work has reached the integration branch but not yet `main`.
+
+**Mental model.** Approved PRs can land on an `integration` branch first and reach `main` later, in one promotion. Until that promotion, a spec's completing commit is on `origin/integration`, the spec is not complete, and nothing in its status says its work has landed anywhere. `integration tags` closes that gap. It reads the completing-commit trailers on `origin/integration` that are not yet on `origin/main`. It adds the `landed-in-integration` tag to each open spec they name, and removes the tag from specs that are closed or no longer ahead of `main`. Completion is unchanged: a spec still completes when its commit reaches `main`.
+
+**Reach for it when**: you merge a PR into integration, or after a promotion, so `aida list --tag landed-in-integration` shows what is waiting to be promoted.
+
+**Don't reach for it when**: you want to complete a spec or promote integration to `main`. This command edits tags only.
+
+**Key options (rationale only).**
+- `--dry-run` prints the tag changes without making them. Use it to check the plan before tagging after a large merge.
+
+**Gotchas.** It reads the local `origin/` refs, so run `git fetch` first if they may be stale. Otherwise a fresh landing is missed, or a spec that was just promoted keeps its tag until the next run.
+
+**Chains with**: `git fetch` → `aida integration tags --dry-run` → `aida integration tags` → `aida list --tag landed-in-integration`.
+
 ## The two-leg git model: `fetch` / `pull` / `push`
 
 Here's the thing raw git doesn't know about your AIDA project: **there are two branches that must move together** — your **code** branch, and the orphan **`aida-store`** branch that holds the specs. `aida fetch`/`pull`/`push` are the verbs that keep both legs in sync, because doing one and forgetting the other is the mistake everyone makes. Each takes `--code-only` / `--store-only` to scope to one leg when you mean to.
@@ -861,16 +878,27 @@ guided, keystone); with `--drive`, `--exclude-supervised` keeps sensitive
 specs human-only. `--include-gate-paths` also covers protected-path PRs in
 ships and trains; all other gates still apply.
 
-**Renewing.** `aida mandate renew [--for <duration>]` extends the active
-mandate in place. Its scope, supervised flag, reason and id stay the same, and anything already acting under it (queued dispatches, the
+**Renewing.** `aida mandate renew [--for <duration>]` (`--ttl` is the same
+flag) extends the active mandate in place. Its scope, supervised flag,
+protected-path opt-in, reason and id stay the same, and anything already acting under it (queued dispatches, the
 drive tick, a running `aida deputy`) keeps working. The new expiry is now plus the duration: by default
 the duration it was started with, at most `24h`. Like start and stop, it needs
 a human at an interactive terminal. If the latest mandate expired, renew
 re-mints its scope, supervised flag and reason with a fresh ID and TTL, and prints when
 the old mandate expired. Old derived grants stay expired. Stopped mandates
 stay stopped. With no prior mandate, run `aida mandate start --ship-held`.
-Protected paths require `--include-gate-paths` again on every renewal or revival;
-omitting it resets the opt-in. Human gates keep their existing policy.
+A renewal can also change the mandate with the start flags: `--ship-held` and
+`--scope <scope>` add scopes (a renewal never removes one), `--drive` makes it
+a drive mandate, `--include-supervised` / `--exclude-supervised` and
+`--include-gate-paths` / `--exclude-gate-paths` set those flags, and `--reason`
+replaces the reason. A flag you do not pass keeps its value. Each change is
+printed as `name: before -> after` and recorded with the renewal in the
+mandate's lineage. Human gates keep their existing policy. A revived mandate
+records the mandate it replaced and the same change lines, and
+`aida mandate status` shows them as `revived:`. Turning off the supervised
+flag or the protected-path opt-in takes effect at once: a ship or train
+already in progress that started under the wider mandate is refused before
+its merge, and its hold is put back.
 
 During the last 60 minutes, the status/hook banner shows
 `MANDATE expires in Nm, run: aida mandate renew`. A deduplicated mail notice
@@ -1014,9 +1042,10 @@ ops = ["ship"]   # any of: ship, sketch-signoff, dispatch, hold-clear, relay-res
   take protected-path PRs and release their eligible holds. Train CI on top of
   main replaces each member's CI rerun. The matched path, protected entry and
   source are recorded in release audit lines and commit audit trailers.
-  `aida mandate status` shows the opt-in. Existing records default to false;
-  `aida mandate renew --include-gate-paths` must pass it again, including when
-  reviving an expired mandate. Omitting it resets the opt-in. Unresolved changed
+  `aida mandate status` shows the opt-in. Existing records default to false.
+  `aida mandate renew --include-gate-paths` turns it on for a running or
+  revived mandate and `--exclude-gate-paths` turns it off; a renewal that
+  passes neither keeps it as it was. Unresolved changed
   paths still refuse, and human gates, holds, approval at head, independent
   review and authorship checks still apply. The protected floor and config
   layering are unchanged.

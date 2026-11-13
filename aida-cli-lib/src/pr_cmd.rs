@@ -4034,7 +4034,7 @@ pub(crate) fn pr_ship_with_method_and_dispatch_ctx(
                     format!("its dispatch request no longer has authority to merge ({err:#})")
                 }
                 (None, Some(cover)) => format!(
-                    "mandate {} ended or no longer covers protected paths before the merge",
+                    "mandate {} ended or was narrowed by a renewal before the merge",
                     cover.id
                 ),
                 (None, None) => String::new(),
@@ -6926,6 +6926,7 @@ pub(crate) fn dispatch_ledger_cover(
 ) -> MandateCover {
     MandateCover {
         gate_match: None,
+        issued_supervised: false,
         id: ctx.mandate_id().to_string(),
         principal: ctx.principal().to_string(),
     }
