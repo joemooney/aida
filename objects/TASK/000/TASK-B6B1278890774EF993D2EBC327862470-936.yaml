@@ -3,12 +3,12 @@ spec_id: TASK-b6b1278890774ef993d2ebc327862470-936
 agreed_id: TASK-3368
 title: 'STORY-2537 S6: broker-attested ProcIdentity (separately signed slice)'
 description: 'Per sketch docs/plans/2026-11-05-story-2537-proc-identity.md (~305): the broker slice needs its own sketch and advisor signoff before implementation. Mode guided: write the sketch first.'
-status: InProgress
+status: NeedsAttention
 priority: Low
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T10:46:47.827833836Z
-modified_at: 2026-11-13T03:20:41.154045933Z
+modified_at: 2026-11-13T03:21:17.481397906Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -464,6 +464,15 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1d2ec-81a9-7423-906e-62941e9b222f
+  author: dirtlab
+  timestamp: 2026-11-13T03:21:17.481416652Z
+  session_id: 01a1d2ebc5d0
+  harness_version: codex-cli 0.167.0
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 filed_at:
   code_sha: 4803b66ade90fa4f6ccbcfb20f3af84d4aaf7886
   branch: main
@@ -473,3 +482,8 @@ filed_at:
   vendor: claude
   session: 01a1b441-8158-7162-ad75-f7915b45ee33
   harness_version: 2.1.319 (Claude Code)
+attention_reason:
+  category: missing-context
+  detail: 'Round 5 findings 1 and 2 cannot be applied in this seat: HEAD d54f7550d8 is the earlier docs slice, aida-cli-lib/src/proc_broker/ is absent, and lib.rs has no proc_broker declaration. Reviewed commit e3aeb4748a51 exists locally and contains both reported defects, but this checkout does not contain that implementation. Neither finding is disputed. Host must relaunch on the PR #3747 implementation head; restoring the whole broker implementation here would exceed the binding two-fix scope. No source changes or validation tests were performed; untested=true.'
+  raised_by: implementer
+  raised_at: 2026-11-13T03:21:17.481397906Z
