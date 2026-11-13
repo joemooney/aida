@@ -511,10 +511,10 @@
     retired/changed sites (prune ledger): {}
 
     ----------------------------------------------------------------------
-    Ran 19 tests in 15.902s
+    Ran 19 tests in 26.019s
 
     FAILED (errors=1)
-    FAIL  ExecContext environment ratchet  (16.0s)
+    FAIL  ExecContext environment ratchet  (26.1s)
             this is CI's own `ExecContext environment ratchet` step, run locally.
     make: *** [Makefile:541: check-ci-fast] Error 1
     lane sccache: final job statistics
@@ -602,7 +602,7 @@
     Cache size                             6 GiB
     Max cache size                        10 GiB
     lane sccache: server exited before sandbox teardown
-  added_at: 2026-11-13T08:10:34.125531720Z
+  added_at: 2026-11-13T08:38:18.956128055Z
   for_role: implementer
 - user_id: role:implementer
   requirement_id: 01a1965c-3483-70e3-af35-1caaf7df3f96
