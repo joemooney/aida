@@ -27,6 +27,24 @@ def inventory(root, rows):
 
 
 class WriterInventoryTests(unittest.TestCase):
+    # trace:STORY-2710 | ai:codex
+    def test_read_only_probe_callback_still_requires_sink_classification(self):
+        self.put("aida-cli-lib/src/seat_clone.rs", '''
+            fn refuse_pending_conflict_markers(execute: &dyn Fn(&str, &[&str])) {
+                execute("git", &["rev-parse", "--verify", "MERGE_HEAD"]);
+                execute("git", &["grep", "--no-textconv", "<<<<<<<"]);
+            }
+        ''')
+        key = "aida-cli-lib/src/seat_clone.rs|refuse_pending_conflict_markers|execute"
+        self.assertIn(key, guard.discover(self.root))
+        self.assertTrue(any(key in error for error in guard.check(self.root)))
+        guard.regenerate(self.root)
+        self.assertEqual([], guard.check(self.root))
+        # Reconciliation discovers the callback, but cannot grant read-only policy.
+        import tomllib
+        rows = tomllib.loads((self.root / guard.INVENTORY).read_text())["writer"]
+        self.assertEqual("blocked", next(row for row in rows if row["id"] == key)["disposition"])
+
     # trace:STORY-2692 | ai:codex
     def test_explicit_merge_baseline_preserves_reviewed_policy(self):
         import tomllib
