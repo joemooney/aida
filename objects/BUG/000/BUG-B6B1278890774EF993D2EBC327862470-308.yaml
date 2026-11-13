@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-12T23:29:52.950918801Z
-modified_at: 2026-11-13T10:43:17.514723108Z
+modified_at: 2026-11-13T10:53:11.101520126Z
 req_type: Bug
 tags:
 - track:integration
@@ -31,6 +31,13 @@ comments:
   created_at: 2026-11-13T09:33:25.214622401Z
   modified_at: 2026-11-13T09:33:25.214622401Z
   session_id: 01a1d418-ebf0-79b3-844f-d0ab8bed7682
+  harness_version: 2.1.323 (Claude Code)
+- id: 01a1d48a-3a3d-7ea1-a8c2-826d44af590e
+  author: joe
+  content: 'Advisor ruling 03:53 on the PR-3932 round-2 CR at ed8cc0f: round 3 authorized as an exception to the 2-round cap. All four findings are real correctness defects in a gate-ledger read path, not polish. Fix all four in one push: (1) P1 pin the event corpus, so listing reads come from discovery''s own ledger reads and never from live files; (2) P1 ls-tree -z for quoted names; (3) P2 invalidate the memo when our own append exceeds a checked-reader limit; (4) P2 load the Snapshot at the pinned tip. No follow-up BUG split: that would knowingly ship an inconsistent listing and a new spec, contrary to the 2026-10-28 one-ruling rule. Round 3 gets a delta review; if it requests changes again, escalate to me before any round 4.'
+  created_at: 2026-11-13T10:53:11.101520126Z
+  modified_at: 2026-11-13T10:53:11.101520126Z
+  session_id: 01a1d3ee-83e8-71b3-a2c5-aed5baed6fdc
   harness_version: 2.1.323 (Claude Code)
 history:
 - id: 01a1d363-5ded-7e80-b51f-abf18415cebb
