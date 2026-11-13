@@ -194,7 +194,7 @@ fn run_tags(root: &Path, dry_run: bool) -> Result<()> {
 }
 
 /// The integration-branch flow: `integration` takes work fast; `main` is the
-/// batched checkpoint that completes specs (STORY-2737).
+/// batched checkpoint that completes specs.
 // trace:STORY-2737 | ai:claude
 #[derive(clap::Parser, Debug)]
 #[clap(name = "integration")]

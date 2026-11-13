@@ -116,6 +116,8 @@ Commands:
                 ship held PRs with an attested, independent approval
   tail          Stream a running session's log — found by id, not by file path.
   integrate     The integrator seat: bare shows the merge queue; --run drains it
+  integration   The integration-branch flow: `integration` takes work fast; `main` is the batched
+                checkpoint that completes specs
   watch         Stream the drain event feed and wake on actionable verbs only
   contract      Print the versioned read-only monitor contract
   notify        Operator alerts for stalled drains and escalations
@@ -7600,6 +7602,64 @@ Options:
 
       --user <USER>
           User ID (defaults to AIDA_USER or system user)
+
+  -h, --help
+          Print help (see a summary with '-h')
+===== aida integration
+The integration-branch flow: `integration` takes work fast; `main` is the batched checkpoint that
+completes specs
+
+Usage: aida integration [OPTIONS] <COMMAND>
+
+Commands:
+  tags  Tag the open specs whose completing commits are on `origin/integration` but not yet on
+        `origin/main` with `landed-in-integration`, and remove the tag from specs that are closed or
+        no longer ahead of `main`. Reads the local `origin/` refs; run `git fetch` first if they may
+        be stale. Completion itself still happens when the commit reaches `main`
+  help  Print this message or the help of the given subcommand(s)
+
+Options:
+      --format <FORMAT>
+          Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
+          compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
+          piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)
+
+          Possible values:
+          - human: Human-readable tables / emoji (the interactive default at a TTY)
+          - toon:  Token-efficient TOON — the compact agent default when piped/captured
+          - json:  Machine JSON, for commands that support a JSON projection
+
+      --canonical-ids
+          Show node-local spec IDs in their canonical form instead of the node's friendly label (for
+          scripts). Also settable via AIDA_CANONICAL_IDS=1
+
+  -h, --help
+          Print help (see a summary with '-h')
+===== aida integration tags
+Tag the open specs whose completing commits are on `origin/integration` but not yet on `origin/main`
+with `landed-in-integration`, and remove the tag from specs that are closed or no longer ahead of
+`main`. Reads the local `origin/` refs; run `git fetch` first if they may be stale. Completion
+itself still happens when the commit reaches `main`
+
+Usage: aida integration tags [OPTIONS]
+
+Options:
+      --dry-run
+          Print the tag changes without making them
+
+      --format <FORMAT>
+          Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
+          compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
+          piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)
+
+          Possible values:
+          - human: Human-readable tables / emoji (the interactive default at a TTY)
+          - toon:  Token-efficient TOON — the compact agent default when piped/captured
+          - json:  Machine JSON, for commands that support a JSON projection
+
+      --canonical-ids
+          Show node-local spec IDs in their canonical form instead of the node's friendly label (for
+          scripts). Also settable via AIDA_CANONICAL_IDS=1
 
   -h, --help
           Print help (see a summary with '-h')
@@ -39537,6 +39597,62 @@ Working on aida itself
         "name": "watch",
         "takes_value": false,
         "help": "Keep watching for newly-ready Done-with-PR specs and drain them serially as they appear"
+      }
+    ],
+    "hidden": false
+  },
+  {
+    "path": [
+      "aida",
+      "integration"
+    ],
+    "about": "The integration-branch flow: `integration` takes work fast; `main` is the batched checkpoint that completes specs",
+    "flags": [
+      {
+        "name": "canonical-ids",
+        "takes_value": false,
+        "help": "Show node-local spec IDs in their canonical form instead of the node's friendly label (for scripts). Also settable via AIDA_CANONICAL_IDS=1"
+      },
+      {
+        "name": "format",
+        "takes_value": true,
+        "help": "Pin the output format regardless of whether stdout is a terminal: human = tables, toon = compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)"
+      },
+      {
+        "name": "help",
+        "takes_value": false,
+        "help": "Print help (see more with '--help')"
+      }
+    ],
+    "hidden": false
+  },
+  {
+    "path": [
+      "aida",
+      "integration",
+      "tags"
+    ],
+    "about": "Tag the open specs whose completing commits are on `origin/integration` but not yet on `origin/main` with `landed-in-integration`, and remove the tag from specs that are closed or no longer ahead of `main`. Reads the local `origin/` refs; run `git fetch` first if they may be stale. Completion itself still happens when the commit reaches `main`",
+    "flags": [
+      {
+        "name": "canonical-ids",
+        "takes_value": false,
+        "help": "Show node-local spec IDs in their canonical form instead of the node's friendly label (for scripts). Also settable via AIDA_CANONICAL_IDS=1"
+      },
+      {
+        "name": "dry-run",
+        "takes_value": false,
+        "help": "Print the tag changes without making them"
+      },
+      {
+        "name": "format",
+        "takes_value": true,
+        "help": "Pin the output format regardless of whether stdout is a terminal: human = tables, toon = compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)"
+      },
+      {
+        "name": "help",
+        "takes_value": false,
+        "help": "Print help (see more with '--help')"
       }
     ],
     "hidden": false
