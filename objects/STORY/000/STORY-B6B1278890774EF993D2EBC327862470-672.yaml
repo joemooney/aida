@@ -3,12 +3,12 @@ spec_id: STORY-b6b1278890774ef993d2ebc327862470-672
 agreed_id: STORY-2749
 title: 'track:integration tag: every lane launcher refuses a main-track lane on an integration-track spec'
 description: 'Operator 2026-11-12 20:59 (emergency): one track per spec, enforced by the spec tag ''track:integration'' instead of the hand-kept ~/.aida/autoland-skip. Done in ops (20:10): ~/bin/aida-autoland.sh launch_lane skips tagged specs. Remaining (product): ''aida queue work SPEC --role implementer'' refuses a tagged spec unless the launch targets the integration branch; the launch preflight lists the track; the integration agent tags a spec when it first merges one of its commits; a promotion that completes the spec removes the tag. Retire ~/.aida/autoland-skip after that.'
-status: Approved
+status: InProgress
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-13T04:07:35.213330891Z
-modified_at: 2026-11-13T05:31:43.313905482Z
+modified_at: 2026-11-13T05:48:25.406937932Z
 req_type: Story
 tags:
 - track:integration
@@ -30,6 +30,14 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Approved
+- id: 01a1d373-35be-7712-8c0b-db7a7e9bd84b
+  author: joe
+  timestamp: 2026-11-13T05:48:25.406933138Z
+  session_id: 92a24ff6-1324-4fe1-a02b-b2601f384b4b
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: 2a62f92c2a200b58e0d95446df07e355e062ab49
   branch: main
