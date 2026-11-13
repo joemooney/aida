@@ -3,12 +3,12 @@ spec_id: STORY-b6b1278890774ef993d2ebc327862470-615
 agreed_id: STORY-2692
 title: 'Mechanical merge support: regenerate inventories and snapshots instead of merging them, and carry PR edits across file splits'
 description: 'Problem: on 2026-11-08 PR-3685 split queue_cmd.rs and conflicted eight PRs the same way; scripts/store-writers.toml and the CLI help golden also conflicted repeatedly though they are generated. Hand scripts resolved most of it. Requirement: generated files are regenerated after merging rather than merged; a tested tool ports a PR''s hunks across a recorded file split with exact-match only, reporting anything it cannot place. Acceptance: fixture PRs across a split merge without hand edits; an inexact hunk is refused, never guessed.'
-status: InProgress
+status: NeedsAttention
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-09T01:58:54.698246911Z
-modified_at: 2026-11-13T03:12:53.148067019Z
+modified_at: 2026-11-13T03:14:17.499432451Z
 req_type: Story
 tags:
 - area:orchestration
@@ -350,6 +350,15 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1d2e6-191b-7542-8ba3-4522bc1da7a5
+  author: dirtlab
+  timestamp: 2026-11-13T03:14:17.499451069Z
+  session_id: 01a1d2e4c860
+  harness_version: codex-cli 0.167.0
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 filed_at:
   code_sha: a7a14984cec5533987dfeccb70d1f91aaebbf22a
   branch: main
@@ -358,3 +367,8 @@ filed_at:
   aida_build_sha: 8a4a909a967
   vendor: claude
   session: 20abb7c3-8f9b-4a5e-b326-404921f3b450
+attention_reason:
+  category: blocked-dependency
+  detail: 'Round 3 finding 1 remains blocked: partial inventory-only slice requires PR title ending (Refs STORY-2692), without snapshots claim, and a filed CLI help golden follow-up. Filing via aida add refused because host .git/aida-work-dispenser.toml is mode 0664; metadata is read-only in this native seat. Host must repair allocation state and file remainder before publication; do not close STORY-2692. Findings 2 and 3 have additional code and regression changes left uncommitted for host. No dispute of the findings.'
+  raised_by: implementer
+  raised_at: 2026-11-13T03:14:17.499432451Z
