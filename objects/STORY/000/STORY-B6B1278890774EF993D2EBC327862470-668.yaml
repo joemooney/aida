@@ -18,7 +18,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-13T00:35:57.525111678Z
-modified_at: 2026-11-13T08:30:23.472424974Z
+modified_at: 2026-11-13T08:32:01.039471242Z
 req_type: Story
 tags:
 - track:integration
@@ -41,6 +41,13 @@ comments:
   created_at: 2026-11-13T08:30:23.472424974Z
   modified_at: 2026-11-13T08:30:23.472424974Z
   session_id: 01a1d394-b764-7e21-a752-015032d87411
+  harness_version: 2.1.323 (Claude Code)
+- id: 01a1d408-fc0f-7822-85e3-c584562a04a1
+  author: joe
+  content: 'Advisor signoff 01:32: Proposal A approved. Add an optional seat on AgentRegistryEntry, filled from AIDA_ROTATION_SEAT, which aida agent new --seat exports. seat:<name> resolves through the existing role cohort/queue/refusal path. Message gets an optional from_seat. --in-reply-to without --to resolves from_seat, then from_role, then from. B is rejected: joining the handoff log to registry rows is a heuristic that breaks between rotation and the first handoff. Conditions: both new fields serde-default/skip-if-none, so older rows and messages still read; a registry row with no seat behaves exactly as today; no new table or file.'
+  created_at: 2026-11-13T08:32:01.039471242Z
+  modified_at: 2026-11-13T08:32:01.039471242Z
+  session_id: 01a1d3ee-83e8-71b3-a2c5-aed5baed6fdc
   harness_version: 2.1.323 (Claude Code)
 history:
 - id: 01a1d404-5b69-7883-a178-72d22e485802
