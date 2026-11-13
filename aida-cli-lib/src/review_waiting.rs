@@ -57,6 +57,10 @@ pub(crate) fn reconcile_waiting_verdicts_with(
 ) {
     use crate::forge::ChangeState;
     use crate::gate::ledger::{self, ChangeKey};
+    // Every `aida pull` auto-bump walks every verdict key here: share one
+    // ledger discovery and publication snapshot across them.
+    // trace:BUG-2551 | ai:claude
+    let _scope = crate::gate::listing_scope::ListingScope::enter();
     let mut observations = std::collections::HashMap::new();
     let candidates = keys
         .map(<[String]>::to_vec)

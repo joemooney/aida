@@ -79,6 +79,14 @@ pub(crate) fn put(write: impl FnOnce(&mut Memo)) {
     });
 }
 
+/// A ledger append inside a scope drops the memoized ownership index, so a
+/// listing that also writes (waiting-review reconciliation closes rounds as
+/// it goes) never filters a later key against a pre-write index.
+// trace:BUG-2551 | ai:claude
+pub(crate) fn ledger_written() {
+    put(|memo| memo.owners.clear());
+}
+
 /// Whether a scope is active on this thread.
 pub(crate) fn active() -> bool {
     SCOPE.with(|scope| scope.borrow().is_some())

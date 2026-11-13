@@ -3033,3 +3033,32 @@ fn bug_2543_listing_discovers_once_and_matches_single_key_reads() {
     // Outside a listing every read stays fresh: no memo survives the scope.
     assert!(project::OWNERSHIP_WORK.with(|work| work.get()).0 >= CHANGES);
 }
+
+// BUG-2551: a ledger write inside a listing drops the memoized ownership
+// index, so the next key is filtered against a fresh discovery.
+// trace:BUG-2551 | ai:claude
+#[test]
+fn bug_2551_ledger_write_inside_listing_rediscovers() {
+    let (_tmp, root) = root();
+    let _env = uncontained();
+    let spec = GateSpec::with_key("BUG-1", None);
+    let rec = record("approved", &ts(1), Some(&attestation("reviewer")));
+    store::append_one(
+        &root,
+        event::verdict_event(&root, ChangeKey::pr(1), &rec, Some(&spec)),
+    )
+    .unwrap();
+    let _scope = crate::gate::listing_scope::ListingScope::enter();
+    project::OWNERSHIP_WORK.with(|work| work.set((0, 0)));
+    let _ = checked::filter_miskeyed_or_fail_closed(&root, Vec::new());
+    let _ = checked::filter_miskeyed_or_fail_closed(&root, Vec::new());
+    assert_eq!(project::OWNERSHIP_WORK.with(|work| work.get()).0, 1);
+    let rec = record("request_changes", &ts(2), Some(&attestation("reviewer")));
+    store::append_one(
+        &root,
+        event::verdict_event(&root, ChangeKey::pr(2), &rec, Some(&spec)),
+    )
+    .unwrap();
+    let _ = checked::filter_miskeyed_or_fail_closed(&root, Vec::new());
+    assert_eq!(project::OWNERSHIP_WORK.with(|work| work.get()).0, 2);
+}
