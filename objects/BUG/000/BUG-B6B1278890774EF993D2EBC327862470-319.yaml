@@ -8,13 +8,21 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-13T11:08:09.225798765Z
-modified_at: 2026-11-13T11:08:29.918271707Z
+modified_at: 2026-11-13T11:17:38.642282071Z
 req_type: Bug
 tags:
 - mandate
 - perf
 - track:integration
 - train
+comments:
+- id: 01a1d4a0-9ed2-7f92-8a28-78ff03c1722d
+  author: joe
+  content: 'Advisor 04:20: the same train (#3941) then ran a SECOND full walk in Gate, ''git log --all --format=%x00%H --no-renames --diff-filter=ACMRT --name-only -- objects'' (10+ min in D state, 300 MB read). Together the two walks added about 20+ min to every train tonight. Scope both: the gate should resolve from the index, and walk history only on a miss.'
+  created_at: 2026-11-13T11:17:38.642282071Z
+  modified_at: 2026-11-13T11:17:38.642282071Z
+  session_id: 01a1d3ee-83e8-71b3-a2c5-aed5baed6fdc
+  harness_version: 2.1.323 (Claude Code)
 history:
 - id: 01a1d498-3f5e-76e0-8686-02d176a4d628
   author: joe
