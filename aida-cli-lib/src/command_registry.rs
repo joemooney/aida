@@ -98,6 +98,7 @@ pub(crate) static REGISTRY: &[&CommandReg] = &[
     &crate::plan_intent::INTENT,
     &crate::internal_cmd::INTERNAL,
     &crate::tracker_cmd::JIRA,
+    &crate::land::LAND,
     &crate::lane_cmd::LANE,
     &crate::lifecycle_cmd::LIFECYCLE,
     &crate::lint_cmd::LINT,
