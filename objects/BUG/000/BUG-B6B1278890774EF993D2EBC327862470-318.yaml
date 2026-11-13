@@ -1,0 +1,25 @@
+id: 01a1d41a-a6a7-7dd2-b3b5-6823f8f14bf0
+spec_id: BUG-b6b1278890774ef993d2ebc327862470-318
+agreed_id: BUG-2553
+title: Rework lane continuing an open PR launches the Claude standalone implementer despite --vendor codex and AIDA_HEADLESS_VENDOR=codex
+description: 'Observed on dell1, 2026-11-12 20:35 to 2026-11-13 01:52 (advisor). Every ''aida queue work SPEC --role implementer --no-human --vendor codex --force-claim'' rework that prints ''rework: continuing open PR #N on its branch'' then prints ''preparing claude standalone implementer'' (BUG-2501 #3920, TASK-3779 #3919, STORY-2660 #3921; about 15 runs). Fresh pickups of the same specs and other reworks launched as codex (TASK-3099, STORY-2710, TASK-3428). dell1 has agents.toml vendor=codex and no socat, so each Claude lane dies at startup (''Sandbox required but unavailable: socat not installed''), leaving a retained lease (see BUG-2552). Setting AIDA_HEADLESS_VENDOR=codex on the launch (01:52 STORY-2660 relaunch) still chose claude, so the vendor comes from neither resolve_headless_vendor''s flag/env/config chain nor agents.toml; suspect a recorded vendor on the retained branch/lease/attempt, or the standalone_implementer Launch built from a default (the queue_cmd/work.rs ~4110 resume/launch-vendor block and standalone_implementer::Launch.vendor). Result: three main-track PRs got no rework for about 5h. Acceptance: (1) an explicit --vendor (or env/config) decides the standalone implementer vendor for an open-PR rework continuation; (2) when a recorded vendor intentionally wins (a resume), the launch line says why; (3) a fixture: rework continuation of an open PR with config vendor=codex launches codex.'
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-13T08:51:18.823097838Z
+modified_at: 2026-11-13T08:51:18.823097838Z
+req_type: Bug
+tags:
+- lanes
+- track:dell1
+- vendor
+filed_at:
+  code_sha: 1387fa9d9ecf8ce25e47ded8c62ca53bcee123df
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 9e5b788904e
+  vendor: claude
+  session: 01a1d3ee-83e8-71b3-a2c5-aed5baed6fdc
+  harness_version: 2.1.323 (Claude Code)
