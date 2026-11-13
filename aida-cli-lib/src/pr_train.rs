@@ -67,6 +67,10 @@ pub(crate) struct Member {
     pub head: String,
     pub subject: String,
     pub body: String,
+    /// Audit-only trailer retained across journal recovery; never grants cover.
+    // trace:STORY-2733 | ai:codex
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub gate_audit: Option<String>,
     /// BUG-2214: the mandate cover under which the land step releases this
     /// member's merge-hold, from the gate's most recent cover check (the
     /// pre-land re-gate refreshes it under the merge lease). `None` = no hold
@@ -74,6 +78,33 @@ pub(crate) struct Member {
     // trace:BUG-2214 | ai:claude
     #[serde(skip)]
     pub release: Option<crate::gate::mandate_ship::MandateCover>,
+    /// The live mandate cover that admitted this member's spec policy, kept
+    /// apart from `release`: a supervised member with no hold left to release
+    /// (a human-cleared one) still lands under this cover. Never journaled —
+    /// every gate run, including after journal recovery, re-reads it.
+    // trace:STORY-2733 | ai:claude
+    #[serde(skip)]
+    pub cover: Option<crate::gate::mandate_ship::MandateCover>,
+}
+
+impl Member {
+    /// The live mandate cover a protected-path audit lands under: the policy
+    /// cover, else the hold-release cover. `None` = no live mandate cover.
+    // trace:STORY-2733 | ai:claude
+    pub(crate) fn live_cover(&self) -> Option<&crate::gate::mandate_ship::MandateCover> {
+        self.cover.as_ref().or(self.release.as_ref())
+    }
+}
+
+/// The live mandate cover the final train refresh binds a member's audit to:
+/// today's fresh gate first, else the cover held since the build. A
+/// human-cleared hold leaves no release cover, so the policy cover counts.
+// trace:STORY-2733 | ai:claude
+pub(crate) fn final_live_cover<'a>(
+    fresh: &'a Member,
+    built: &'a Member,
+) -> Option<&'a crate::gate::mandate_ship::MandateCover> {
+    fresh.live_cover().or_else(|| built.live_cover())
 }
 
 /// A member left off main, and why.
@@ -159,7 +190,11 @@ pub(crate) fn car_message(m: &Member) -> String {
         format!("{subject} {suffix}")
     };
     let body = m.body.trim();
-    let trailer = format!("Aida-Train-Member: #{} at {}", m.pr, m.head);
+    let mut trailer = format!("Aida-Train-Member: #{} at {}", m.pr, m.head);
+    // trace:STORY-2733 | ai:codex
+    if let Some(audit) = &m.gate_audit {
+        trailer.push_str(&format!("\n{audit}"));
+    }
     if body.is_empty() {
         format!("{subject}\n\n{trailer}\n")
     } else {
@@ -1303,6 +1338,17 @@ fn typed_gate_member_with(
             "its head could not be read from the forge; failing closed".to_string(),
         ));
     }
+    // Apply at the typed gate too: recovery and pre-land confirmations use it
+    // directly. Compare the strict evidence with this metadata snapshot.
+    // trace:STORY-2691 | ai:codex
+    if ADVISOR_LOOP.with(std::cell::Cell::get) {
+        let observed = crate::review_watch::advisor_train_eligible(checks.marker_root(), pr)?;
+        if observed != head {
+            return Err(MemberGateError::Unavailable(
+                "head moved during automatic train admission".into(),
+            ));
+        }
+    }
     // TASK-1602: ship's in-drive ownership gate. trace:STORY-1690 | ai:claude
     if let Some(detail) = checks.drive_block(pr) {
         return Err(MemberGateError::Refused(format!(
@@ -1394,6 +1440,10 @@ fn typed_gate_member_with(
     // would release its hold; the release itself happens at land time, under
     // the merge lease, through ship's own release sequence.
     // trace:BUG-2214 | ai:claude
+    // Persist audit evidence separately from the live, non-serialized cover.
+    // trace:STORY-2733 | ai:codex
+    let policy_cover = cover_slot.as_ref().and_then(|c| c.as_ref().ok()).cloned();
+    let gate_audit = policy_cover.as_ref().and_then(|c| c.gate_audit());
     let release = match &held {
         None => None,
         Some(reason) => {
@@ -1413,12 +1463,17 @@ fn typed_gate_member_with(
             }
         }
     };
+    let gate_audit = release.as_ref().and_then(|c| c.gate_audit()).or(gate_audit);
+    // trace:STORY-2733 | ai:claude
+    let cover = policy_cover.or_else(|| release.clone());
     Ok(Member {
+        gate_audit,
         pr,
         head,
         subject,
         body,
         release,
+        cover,
     })
 }
 
@@ -1697,6 +1752,31 @@ pub(crate) fn tty_consents(interactive_tty: bool, named: bool) -> bool {
 // Recovery settles riders before admission, including an invocation whose only
 // candidates were just recovered. It must not schedule those members again.
 // trace:STORY-2401 | ai:codex
+fn automatic_idle(all_ready: bool, candidates: &[u64]) -> bool {
+    all_ready && candidates.is_empty() && ADVISOR_LOOP.with(std::cell::Cell::get)
+}
+
+// Recovery can close the last open rider before discovery. Report those
+// outcomes even though this automatic pass has no new train to run.
+// trace:STORY-2691 | ai:codex
+fn report_automatic_idle(
+    all_ready: bool,
+    candidates: &[u64],
+    recovered: &Outcome,
+    mut output: impl std::io::Write,
+) -> Result<bool> {
+    if !automatic_idle(all_ready, candidates) {
+        return Ok(false);
+    }
+    for (pr, commit) in &recovered.landed {
+        writeln!(output, "  landed #{pr} ({})", short(commit))?;
+    }
+    for e in &recovered.ejected {
+        writeln!(output, "  ejected #{}: {}", e.pr, e.reason)?;
+    }
+    Ok(true)
+}
+
 fn filter_recovered_candidates(candidates: &mut Vec<u64>, recovered: &Outcome) -> Result<()> {
     let mut seen = std::collections::BTreeSet::new();
     candidates.retain(|n| seen.insert(*n));
@@ -2468,11 +2548,17 @@ pub(crate) struct LiveTrainForge<'a> {
 }
 
 impl LiveTrainForge<'_> {
-    // A journal persists intent, never a previous terminal's consent. Naming a
-    // different PR now cannot authorize any recovered member.
+    // A journal persists intent, never a previous terminal's consent: consent
+    // comes only from the current invocation. Recovery resumes only a journal
+    // whose member set is exactly the PRs explicitly named now (BUG-2547), so
+    // current TTY authority over that exact, named set consents for its
+    // recovered supervised members without a mandate. An `--all-ready` sweep
+    // and a non-TTY recovery never consent (a supervised member then needs a
+    // mandate cover), and a PR named for a different train never resumes it.
     // trace:STORY-2401 | ai:codex
-    fn for_recovery(mut self) -> Self {
-        self.named = false;
+    // trace:BUG-2556 | ai:claude
+    fn for_recovery(mut self, opts: &TrainOptions) -> Self {
+        self.named = prs_named_on_command_line(opts);
         self
     }
 
@@ -3259,8 +3345,11 @@ impl TrainForge for LiveTrainForge<'_> {
             })?;
         // STORY-1698 parity: the mandate is re-read from disk immediately
         // before the release that precedes the merge.
-        if !crate::gate::mandate_ship::mandate_still_active(&cover.id) {
-            return Err(format!("mandate {} is no longer active", cover.id));
+        if !crate::gate::mandate_ship::mandate_cover_still_active(cover) {
+            return Err(format!(
+                "mandate {} is no longer active or no longer covers protected paths",
+                cover.id
+            ));
         }
         let change = crate::forge::ChangeRef {
             id: member.pr,
@@ -3726,7 +3815,17 @@ impl Rails for ForgeRails<'_> {
             };
             match gate {
                 crate::forge_observed::Observed::Known(Ok(m)) if m.head == car.member.head => {
-                    fresh.push(m)
+                    // The audit is already baked into the tested car commit.
+                    // Refreshing only the live cover cannot update that commit.
+                    // trace:STORY-2733 | ai:codex
+                    if m.gate_audit != car.member.gate_audit {
+                        refused.push(Ejected {
+                            pr,
+                            reason: "its protected-path mandate audit changed after the train was built; re-train with fresh coverage".into(),
+                        });
+                    } else {
+                        fresh.push(m)
+                    }
                 }
                 crate::forge_observed::Observed::Known(Ok(m)) => {
                     if !self.ports.confirm_member_head(pr, &m.head) {
@@ -4148,11 +4247,19 @@ pub(crate) fn pr_train_handler_with_dispatch_ctx(
             dispatch_ctx,
             dispatch_abort: None,
         }
-        .for_recovery();
+        .for_recovery(opts);
         ForgeRails::new(&mut ports, uuid::Uuid::new_v4().to_string())
             .with_journal(&journal_dir)
             .resume_for(Some(&candidates))?
     };
+    if report_automatic_idle(
+        opts.all_ready,
+        &candidates,
+        &recovered,
+        std::io::stdout().lock(),
+    )? {
+        return Ok(());
+    }
     filter_recovered_candidates(&mut candidates, &recovered)?;
     if let Some(why) = explicit_over_max_refusal(candidates.len(), opts.max, opts.all_ready) {
         anyhow::bail!(why);
@@ -4186,19 +4293,28 @@ pub(crate) fn pr_train_handler_with_dispatch_ctx(
             refused.push(Ejected { pr, reason });
             continue;
         }
-        match gate_member(
-            &project_root,
-            &main_worktree,
-            forge.as_ref(),
+        match typed_gate_member_with(
+            &mut LiveChecks {
+                project_root: &project_root,
+                main_worktree: &main_worktree,
+                forge: forge.as_ref(),
+                base: &base,
+                named: prs_named_on_command_line(opts),
+            },
             &base,
             pr,
-            prs_named_on_command_line(opts),
         ) {
             Ok(m) => {
                 println!("  ✓ #{pr} ready at {}: {}", short(&m.head), m.subject);
                 members.push(m);
             }
-            Err(reason) => {
+            Err(MemberGateError::Unavailable(reason))
+                if ADVISOR_LOOP.with(std::cell::Cell::get) =>
+            {
+                anyhow::bail!("PR #{pr} admission evidence unavailable: {reason}");
+            }
+            Err(error) => {
+                let reason = error.reason();
                 println!("  ✗ #{pr} not eligible: {reason}");
                 refused.push(Ejected { pr, reason });
             }
@@ -4358,6 +4474,30 @@ pub(crate) fn pr_train_handler_with_dispatch_ctx(
 #[cfg(test)]
 #[path = "tests/story_1690_train_tests.rs"]
 mod tests;
+
+// Automatic services use a stricter member contract than explicit trains:
+// exact-head approvals and no mandate hold release or approval carry-over.
+// The guard is scoped to this thread and cleared even on error/unwind.
+// trace:STORY-2691 | ai:codex
+thread_local! { static ADVISOR_LOOP: std::cell::Cell<bool> = const { std::cell::Cell::new(false) }; }
+pub(crate) fn advisor_train_handler() -> Result<()> {
+    struct Reset;
+    impl Drop for Reset {
+        fn drop(&mut self) {
+            ADVISOR_LOOP.with(|v| v.set(false));
+        }
+    }
+    ADVISOR_LOOP.with(|v| v.set(true));
+    let _reset = Reset;
+    pr_train_handler(&TrainOptions {
+        prs: &[],
+        all_ready: true,
+        dry_run: false,
+        local_ci: None,
+        max: 10,
+        no_pull: true,
+    })
+}
 
 // trace:STORY-2688 | ai:codex
 pub(crate) fn pr_state_members(root: &Path) -> Result<Vec<u64>> {

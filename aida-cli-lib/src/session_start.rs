@@ -146,6 +146,52 @@ pub(crate) fn review_pickup_conflict_decision(
     decide(backing)
 }
 
+/// Read-only queue admission uses the same source-branch resolver and
+/// coexistence rules as setup. Do not use review_branch_conflicts here: it can
+/// release dead leases. Setup retains its full conflict and cleanup recheck.
+// trace:BUG-2548 | ai:codex
+pub(crate) fn preflight_review_source_leases(
+    root: &std::path::Path,
+    forge: ReviewForge,
+    number: u64,
+    branch: &str,
+    review_coexistence: Option<(&str, &str)>,
+    store: Option<&aida_core::RequirementsStore>,
+) -> Result<()> {
+    let Some(source) = query_pr_source_branch(forge, number, root) else {
+        return Ok(());
+    };
+    for lease in list_leases(root)
+        .into_iter()
+        .filter(|l| l.branch == source || l.branch == branch)
+    {
+        let decision = review_pickup_conflict_decision(
+            // Admission cannot prompt or end ownership before refreshed gates.
+            // Setup still uses its ordinary terminal-aware conflict decision.
+            true,
+            crate::ownership::reader::lease_retained(root, &lease),
+            lease.role.as_deref(),
+            review_coexistence,
+            store,
+            &source,
+            || {
+                crate::forge::forge_for_kind(root, forge.forge_kind())
+                    .change_metadata(number, &mut crate::network_retry::NoopSink)
+                    .map(|meta| meta.title)
+            },
+        );
+        anyhow::ensure!(
+            decision != LeaseConflictDecision::Refuse,
+            "review is blocked by LIVE or unprovably-dead lease {} on `{}` ({}, worktree {}) before store pull; end that session or wait for it, then retry",
+            lease.id,
+            lease.branch,
+            lease.role.as_deref().unwrap_or("(unset)"),
+            lease.worktree_path.display()
+        );
+    }
+    Ok(())
+}
+
 /// STORY-71: PR/MR head + base metadata captured at session-start time.
 /// Recorded into the lease so `aida session show` can display it without
 /// re-querying the forge, and so a reviewer can recompute the diff range
@@ -1451,6 +1497,27 @@ impl SessionStartReceipt {
         }
         self.cleanup = None;
     }
+    /// Drop is conservative: verify the lease artifact before reporting success.
+    // trace:BUG-2548 | ai:codex
+    pub(crate) fn rollback(mut self) -> Result<()> {
+        let lease = self.cleanup.as_ref().and_then(|cleanup| {
+            cleanup
+                .lease_id
+                .as_deref()
+                .map(|id| lease_path(&cleanup.root, id))
+        });
+        drop(self.cleanup.take());
+        if let Some(path) = lease {
+            match std::fs::symlink_metadata(&path) {
+                Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+                result => anyhow::bail!(
+                    "pickup rollback retained lease {}; inspect `aida session leases --all` ({result:?})",
+                    path.display()
+                ),
+            }
+        }
+        Ok(())
+    }
     /// STORY-2254: make this receipt's rollback conditional on a durable
     /// ownership record. Its destructive Drop runs only while `still_owner`
     /// confirms this invocation still owns the setup, so a crash or early
@@ -1681,6 +1748,15 @@ impl Drop for SessionStartCleanup {
                     } {
                         return Err(error.into());
                     }
+                }
+                // trace:STORY-2710 | ai:codex
+                if let Some(successor) = &self.lease_id {
+                    crate::repair_journal::RepairGuard::lock(&self.root)?.transfer_adopted_lane(
+                        &orphan.worktree_path,
+                        &orphan.branch,
+                        successor,
+                        &orphan.id,
+                    )?;
                 }
                 crate::ownership::dual::lease_written(&self.root, orphan);
                 Ok(())
@@ -3493,6 +3569,15 @@ pub(crate) fn session_start_with_receipt(
         if let Some(cleanup) = rollback.as_mut() {
             cleanup.adopted_orphan = Some(orphan.clone());
         }
+        // Transfer only at the verified adoption boundary, before removing the
+        // original lease. The shared journal remains independent of watcher state.
+        // trace:STORY-2710 | ai:codex
+        crate::repair_journal::RepairGuard::lock(&project_root)?.transfer_adopted_lane(
+            &lease.worktree_path,
+            &lease.branch,
+            &orphan.id,
+            &lease.id,
+        )?;
         aggregate_session_activity_into_roles(&project_root, &orphan.id);
         if !remove_session_lease_record_only(&project_root, &orphan.id) {
             // Not `aida session end`: that would tear down the adopted tree.

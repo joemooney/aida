@@ -221,6 +221,62 @@ pub(crate) fn check_name_eq(a: &str, b: &str) -> bool {
     a.eq_ignore_ascii_case(b)
 }
 
+/// Direct shipping requires FULL when this workflow advertises CI tiers.
+/// Match the marker to Build's run: adding ci:full on the same head leaves
+/// an older fast marker visible in GitHub's per-name check rollup.
+/// Untiered repositories and other forges retain their existing CI policy.
+// trace:STORY-2735 | ai:codex
+pub(crate) fn require_full_ship_ci(
+    forge: &dyn crate::forge::Forge,
+    change: &crate::forge::ChangeRef,
+) -> anyhow::Result<()> {
+    if forge.kind() != crate::forge::ForgeKind::GitHub {
+        return Ok(());
+    }
+    let rows = forge.check_rows(change)?;
+    let markers: Vec<_> = rows
+        .iter()
+        .filter(|row| row.workflow == "CI" && row.name.starts_with("ci-tier: "))
+        .collect();
+    if markers.is_empty() {
+        return Ok(());
+    }
+    let build = rows
+        .iter()
+        .find(|row| row.workflow == "CI" && row.name == "Build (ubuntu-latest)");
+    let full = build.is_some_and(|build| {
+        build.bucket == "pass"
+            && build
+                .run_id
+                .as_ref()
+                .and_then(|id| id.parse::<u64>().ok())
+                .is_some_and(|build_id| {
+                    markers.iter().all(|marker| {
+                        marker
+                            .run_id
+                            .as_ref()
+                            .and_then(|id| id.parse::<u64>().ok())
+                            .is_some_and(|marker_id| marker_id <= build_id)
+                    })
+                })
+            && markers.iter().any(|marker| {
+                marker.name == "ci-tier: full"
+                    && marker.bucket == "pass"
+                    && marker.run_id == build.run_id
+            })
+            && !markers
+                .iter()
+                .any(|marker| marker.name != "ci-tier: full" && marker.run_id == build.run_id)
+    });
+    if !full {
+        return Err(crate::gate::ship::ShipRefusal::CiRed.error(format!(
+            "PR-{} has FAST or unconfirmed full-tier CI; use `aida pr train` or add `ci:full` and wait for FULL CI before `aida pr ship`",
+            change.id
+        )));
+    }
+    Ok(())
+}
+
 /// Pure classification of the rows. `required` is the branch-protection
 /// required-check name set (empty when the repo declares none — then nothing
 /// is "non-required by policy", but the allow-list still applies because a
@@ -1334,6 +1390,56 @@ mod tests {
             registration_polls: std::cell::Cell::new(0),
             labels: (false, false, false),
         }
+    }
+
+    // trace:STORY-2735 | ai:codex
+    #[test]
+    fn story_2735_ship_requires_full_ci_for_build_run() {
+        let check = |name: &str, run: &str, bucket: &str| {
+            let mut value = row(name, "CI", bucket);
+            value.run_id = Some(run.into());
+            value
+        };
+        let build = check("Build (ubuntu-latest)", "2", "pass");
+        let fast = check("ci-tier: fast", "2", "pass");
+        let full = check("ci-tier: full", "2", "pass");
+        for rows in [
+            vec![build.clone(), fast.clone()],
+            vec![
+                build.clone(),
+                check("ci-tier: full", "1", "pass"),
+                fast.clone(),
+            ],
+            vec![build.clone(), check("ci-tier: full", "2", "pending")],
+            vec![fast.clone()],
+            vec![build.clone(), full.clone(), fast.clone()],
+            vec![
+                build.clone(),
+                full.clone(),
+                check("ci-tier: fast", "3", "pass"),
+            ],
+            vec![
+                build.clone(),
+                full.clone(),
+                check("ci-tier: full", "3", "pending"),
+            ],
+            vec![row("Build (ubuntu-latest)", "CI", "pass"), full.clone()],
+        ] {
+            let f = fake(&[], Some(rows));
+            let err = require_full_ship_ci(&f, &change()).unwrap_err().to_string();
+            assert!(
+                err.contains("aida pr train") && err.contains("ci:full"),
+                "{err}"
+            );
+        }
+        for rows in [
+            vec![build.clone(), full.clone()],
+            vec![build.clone(), full, check("ci-tier: fast", "1", "pass")],
+            vec![build], // legacy / untiered workflow
+        ] {
+            require_full_ship_ci(&fake(&[], Some(rows)), &change()).unwrap();
+        }
+        assert!(require_full_ship_ci(&fake(&[], None), &change()).is_err());
     }
 
     #[test]

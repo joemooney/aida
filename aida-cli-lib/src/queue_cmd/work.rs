@@ -565,8 +565,8 @@ pub(crate) fn run_queue_resume_to_exit(
     Ok(status)
 }
 
-/// Resolve the host merge result before any vendor is launched. Successful
-/// conflicts require advisor delivery and preserve the selected session vendor.
+/// Keep the configured vendor for a host-staged repair. Preparation failures
+/// still refuse before launch; notification delivery belongs to a later slice.
 // trace:BUG-2553 | ai:codex
 // trace:STORY-2475 | ai:codex
 pub(crate) fn rework_conflict_route(
@@ -582,15 +582,9 @@ pub(crate) fn rework_conflict_route(
     if files.is_empty() {
         return Ok((vendor, files));
     }
-    notify(
-        "Rework merge conflicts require resolution",
-        &format!(
-            "{scope} PR #{pr} conflicts with origin/main in: {}. The host aborted the merge. \
-         Conflict resolution continues with {} on branch {branch}.",
-            files.join(", "),
-            vendor.as_str(),
-        ),
-    )?;
+    // The host retained this merge and its original paths. Keep the configured
+    // vendor, including resumed Codex threads; no conflict-only mail prerequisite.
+    let _ = (scope, pr, branch, notify);
     Ok((vendor, files))
 }
 
@@ -606,11 +600,10 @@ pub(crate) struct ReworkConflictLaunch<'a> {
     pub(crate) branch: &'a str,
 }
 
-/// Apply the host merge result to a pickup whose seat (linked worktree or
-/// clone) and lease already exist. A clean merge keeps the planned vendor,
-/// model and prompt. A conflict keeps that vendor and model, rechecks launch
-/// admission, and appends the conflict task before any child starts.
-// trace:STORY-2475 BUG-2553 | ai:codex
+/// Append the host-journal conflict paths without changing vendor or model.
+/// Launch admission and containment are rechecked before any child starts.
+// trace:STORY-2475 | ai:claude
+// trace:BUG-2553 | ai:codex
 pub(crate) fn apply_rework_conflict_route(
     _project_root: &Path,
     prepared: Result<Vec<String>>,
@@ -634,10 +627,9 @@ pub(crate) fn apply_rework_conflict_route(
     let vendor = route_vendor;
     session::preflight_launch_vendor(vendor, launch.interactive)?;
     session::require_vendor_containment(vendor, launch.contained, "conflict rework")?;
-
     prompt.push_str(&format!(
         "\n\n{}",
-        crate::rework_direction::conflict_task(&crate::rework_direction::MainConflict {
+        crate::rework_direction::host_conflict_task(&crate::rework_direction::MainConflict {
             pr: launch.pr,
             base: "main".into(),
             files,
@@ -3216,6 +3208,18 @@ pub(crate) fn retire_idle_review_worktree(
     forge: ReviewForge,
     n: u64,
 ) -> Result<()> {
+    review_worktree_retirement(root, forge, n, true).map(|_| ())
+}
+
+// trace:BUG-2548 | ai:codex
+// Before pull, prove eligibility without removing a checkout that freshly
+// synchronized verdicts may require us to retain. Retirement rechecks all facts.
+fn review_worktree_retirement(
+    root: &std::path::Path,
+    forge: ReviewForge,
+    n: u64,
+    retire: bool,
+) -> Result<Option<std::path::PathBuf>> {
     let branch = forge.local_branch_for(n);
     let path = crate::session_start::pickup_worktree_path(root, &branch)?;
     let output = aida_core::git_ops::host_git_command(root)
@@ -3234,7 +3238,7 @@ pub(crate) fn retire_idle_review_worktree(
                     == crate::worktree::canonical_or_self(&path)
         });
     if !candidate {
-        return Ok(());
+        return Ok(None);
     }
     // A finished review may already have released ownership; a crashed one
     // needs positive death proof. Only one exact reviewer lease is eligible.
@@ -3254,7 +3258,7 @@ pub(crate) fn retire_idle_review_worktree(
         {
             Some(lease)
         }
-        _ => return preflight_queue_work_branch(root, Some(&branch)),
+        _ => return preflight_queue_work_branch(root, Some(&branch)).map(|_| None),
     };
     let locked = inventory.split("\n\n").any(|record| {
         record
@@ -3272,7 +3276,7 @@ pub(crate) fn retire_idle_review_worktree(
         || working_tree_clean(&path) != Some(true)
         || aida_core::worktree_holders::check_worktree_removal(&path).is_err()
     {
-        return preflight_queue_work_branch(root, Some(&branch));
+        return preflight_queue_work_branch(root, Some(&branch)).map(|_| None);
     }
     // Require both the recorded review head and every actual seat commit to
     // survive at the fresh forge head. Force-pushes and local fixes retain it.
@@ -3322,6 +3326,9 @@ pub(crate) fn retire_idle_review_worktree(
     } else {
         None
     };
+    if !retire {
+        return Ok(Some(path));
+    }
     // Collect a legacy hold before removal, even if it predates this pickup.
     // Unknown markers and unreadable directories retain the checkout.
     let markers = path.join(".aida/merge-holds");
@@ -3344,7 +3351,7 @@ pub(crate) fn retire_idle_review_worktree(
                 "review merge-hold directory is not a directory"
             );
             if std::fs::read_dir(&markers)?.next().transpose()?.is_some() {
-                return preflight_queue_work_branch(root, Some(&branch));
+                return preflight_queue_work_branch(root, Some(&branch)).map(|_| None);
             }
         }
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
@@ -3394,7 +3401,7 @@ pub(crate) fn retire_idle_review_worktree(
             lease.id
         );
     }
-    Ok(())
+    Ok(Some(path))
 }
 
 /// [`preflight_queue_work_branch`], except that the orphan's tree `adopting`
@@ -3417,6 +3424,19 @@ pub(crate) fn preflight_queue_work_branch_reclaiming(
     branch: Option<&str>,
     adopting: Option<&std::path::Path>,
     force_claim: bool,
+) -> Result<()> {
+    inspect_queue_work_branch(root, branch, adopting, force_claim, true)
+}
+
+// trace:BUG-2548 | ai:codex
+// Eligibility is read-only before sync; the post-gate pass revalidates before
+// destructive reclamation. Keep the existing reclaiming API for setup callers.
+fn inspect_queue_work_branch(
+    root: &std::path::Path,
+    branch: Option<&str>,
+    adopting: Option<&std::path::Path>,
+    force_claim: bool,
+    reclaim: bool,
 ) -> Result<()> {
     let Some(branch) = branch else {
         return Ok(());
@@ -3456,7 +3476,9 @@ pub(crate) fn preflight_queue_work_branch_reclaiming(
     }
     for clone in &clones {
         if force_claim {
-            reclaim_exited_branch_clone(root, branch, &clone.path)?;
+            if reclaim {
+                reclaim_exited_branch_clone(root, branch, &clone.path)?;
+            }
             continue;
         }
         anyhow::bail!(
@@ -4365,7 +4387,59 @@ pub(crate) fn handle_queue_work(
                         crate::gate::seat_authority::preflight_sandboxed_child_key(&child_seat)?;
                     }
                 }
-                // Pull after read-only launch preflights and before session setup
+                // trace:STORY-1662 | ai:claude
+                // trace:STORY-2660 | ai:codex
+                if standalone_implementer {
+                    _standalone_slot = Some(crate::standalone_implementer::acquire_slot(
+                        &project_root,
+                        &plan.scope,
+                        crate::standalone_implementer::configured_cap(&project_root)?,
+                    )?);
+                }
+                // trace:BUG-2548 | ai:codex — refuse conflicts before store I/O.
+                let review_retirement = if role == "reviewer"
+                    && adopt_orphan.is_none()
+                    && session_branch_override.is_none()
+                    && path_override.is_none()
+                {
+                    match plan.review_target {
+                        Some((forge, n)) => {
+                            review_worktree_retirement(&project_root, forge, n, false)?
+                        }
+                        None => None,
+                    }
+                } else {
+                    None
+                };
+                inspect_queue_work_branch(
+                    &project_root,
+                    session_branch_override.or(review_branch.as_deref()),
+                    adopt_orphan
+                        .as_ref()
+                        .map(|l| l.worktree_path.as_path())
+                        .or(review_retirement.as_deref()),
+                    force_claim,
+                    false,
+                )?;
+                let preflight_source_leases = || -> Result<()> {
+                    if adopt_orphan.is_none() {
+                        if let Some((forge, n)) = plan.review_target {
+                            crate::session_start::preflight_review_source_leases(
+                                &project_root,
+                                forge,
+                                n,
+                                session_branch_override
+                                    .or(review_branch.as_deref())
+                                    .unwrap(),
+                                role_input.review_coexistence(&plan),
+                                storage.load().ok().as_ref(),
+                            )?;
+                        }
+                    }
+                    Ok(())
+                };
+                preflight_source_leases()?;
+                // Pull after launch and occupancy preflights and before session setup
                 // or store writes. A stale view cannot authorize pickup after failure.
                 // trace:BUG-2490 | ai:codex
                 if !no_pull {
@@ -4401,24 +4475,14 @@ pub(crate) fn handle_queue_work(
                     }
                 }
 
-                // trace:STORY-1662 | ai:claude
-                // trace:STORY-2660 | ai:codex
-                if standalone_implementer {
-                    _standalone_slot = Some(crate::standalone_implementer::acquire_slot(
-                        &project_root,
-                        &plan.scope,
-                        crate::standalone_implementer::configured_cap(&project_root)?,
-                    )?);
-                }
-                // Force-claim may retire a dead clone, so delegation and launch
-                // capacity must succeed before this preflight mutates anything.
-                // trace:BUG-2455 | ai:codex
-                // trace:BUG-2457 | ai:codex
-                if role == "reviewer"
-                    && adopt_orphan.is_none()
-                    && session_branch_override.is_none()
-                    && path_override.is_none()
-                {
+                // A source lease may have arrived during sync. Recheck before
+                // reclaiming any selected checkout; setup checks again too.
+                // trace:BUG-2548 | ai:codex
+                preflight_source_leases()?;
+                // Retire only after refreshed conclusive/deferred checks, then
+                // recheck occupancy in case a holder arrived during the pull.
+                // trace:BUG-2548 | ai:codex
+                if review_retirement.is_some() {
                     if let Some((forge, n)) = plan.review_target {
                         retire_idle_review_worktree(&project_root, forge, n)?;
                     }
@@ -5430,6 +5494,8 @@ pub(crate) fn handle_queue_work(
                         &lease.worktree_path,
                         branch,
                         matches!(launch, Some(QueueWorkLaunch::Resume(_))),
+                        *pr,
+                        &lease.id,
                     );
                     launch_vendor = apply_rework_conflict_route(
                         &project_root,
@@ -6418,7 +6484,16 @@ pub(crate) fn run_pickup_launch(
     };
     if launch_refused_before_agent(&result, mark.started()) && receipt.owns_setup() {
         leave_setup_tree(project_root, &receipt);
-        drop(receipt);
+        // trace:BUG-2548 | ai:codex — never claim success with a retained lease.
+        if let Err(error) = receipt.rollback() {
+            return (
+                Err(error.context(format!(
+                    "pre-agent launch failed: {:#}",
+                    result.as_ref().unwrap_err()
+                ))),
+                false,
+            );
+        }
         return (result, true);
     }
     receipt.disarm();
@@ -6535,6 +6610,31 @@ pub(crate) fn run_standalone_reviewer(
     // contained reviewer whose grant key cannot be held before it spawns.
     // trace:BUG-b6b1278890774ef993d2ebc327862470-045 | ai:claude
     refuse_unpresentable_contained_reviewer(contained)?;
+    let pr_spec_ids: Vec<String> = fetch_pr_ship_metadata_via_forge(project_root, pr)
+        // trace:BUG-2515 | ai:codex
+        // Standalone PR reviewers can lack local forge configuration (for
+        // example in a scratch launch root). Preserve their GitHub recovery
+        // lookup without redirecting a configured GitLab MR to GitHub.
+        .or_else(|err| {
+            if crate::forge::resolve_forge_kind(project_root) != crate::forge::ForgeKind::None {
+                return Err(err);
+            }
+            crate::forge::forge_for_kind(project_root, crate::forge::ForgeKind::GitHub)
+                .change_title_and_body(pr)
+                .map(|(title, body)| crate::pr_cmd::PrShipMetadata {
+                    title,
+                    body,
+                    number: Some(pr),
+                })
+        })
+        .map(|meta| review_calibration_spec_ids(project_root, &meta.title, branch, &meta.body))
+        .unwrap_or_default();
+
+    // trace:BUG-2546 | ai:codex
+    let _completion = no_human
+        .then(|| crate::reviewer_completion::Scope::new(project_root, worktree, pr, &pr_spec_ids));
+    let policy_prompt = format!("{prompt}\n\nReviewer policy: do not run Cargo or local test/build commands unless explicitly requested by the operator. Use source and existing CI evidence. After successfully recording your verdict, give a brief final response and exit immediately; do not perform further work.");
+    let prompt = policy_prompt.as_str();
     let watch_prompt = crate::review_watch::reviewer_launch_prompt(project_root, pr, prompt)?;
     let prompt = watch_prompt.as_deref().unwrap_or(prompt);
     // Keep a recoverable final draft even if a tool refuses the recording.
@@ -6665,6 +6765,9 @@ pub(crate) fn run_standalone_reviewer(
                             host_main, // trace:TASK-2032 | ai:claude
                         },
                     )?;
+                    // Codex resume accepts a trailing message for this turn.
+                    // trace:BUG-2546 | ai:codex
+                    cmd.arg(session::codex_interactive_prompt(prompt));
                     cmd.current_dir(worktree);
                     // trace:BUG-2386 | ai:claude
                     if let Err(error) = session::finalize_codex_resume(&mut cmd, project_root) {
@@ -6714,6 +6817,7 @@ pub(crate) fn run_standalone_reviewer(
                             permission_mode,
                             contained,
                             Some(&grant.id),
+                            Some(prompt),
                         )?,
                         None,
                         Some(grant.id),
@@ -6828,26 +6932,6 @@ pub(crate) fn run_standalone_reviewer(
     // Commit it now, or the mandate's fail-closed store snapshot refuses
     // every ship until someone commits by hand. trace:BUG-2180 | ai:claude
     store_commit.commit();
-
-    let pr_spec_ids: Vec<String> = fetch_pr_ship_metadata_via_forge(project_root, pr)
-        // trace:BUG-2515 | ai:codex
-        // Standalone PR reviewers can lack local forge configuration (for
-        // example in a scratch launch root). Preserve their GitHub recovery
-        // lookup without redirecting a configured GitLab MR to GitHub.
-        .or_else(|err| {
-            if crate::forge::resolve_forge_kind(project_root) != crate::forge::ForgeKind::None {
-                return Err(err);
-            }
-            crate::forge::forge_for_kind(project_root, crate::forge::ForgeKind::GitHub)
-                .change_title_and_body(pr)
-                .map(|(title, body)| crate::pr_cmd::PrShipMetadata {
-                    title,
-                    body,
-                    number: Some(pr),
-                })
-        })
-        .map(|meta| review_calibration_spec_ids(project_root, &meta.title, branch, &meta.body))
-        .unwrap_or_default();
 
     // BUG-2149: a contained reviewer can only write inside its review
     // worktree, so its `aida review record` lands there and never reaches

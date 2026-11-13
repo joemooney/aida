@@ -1185,7 +1185,7 @@ pub(crate) fn build_compete_arm_command(
         // Compete arms and judges do not receive a delegated seat.
         // trace:BUG-2398 | ai:codex
         compete_codex_environment(&mut cmd, worktree_dir);
-        crate::launch::profile::finalize_codex(&mut cmd)?;
+        crate::vendors::profile::finalize_codex(&mut cmd)?;
     }
     // Finalize after the Codex adapter, which rebuilds the Command.
     crate::launch::parent::bind_child_to_parent(&mut cmd);
@@ -1972,7 +1972,9 @@ mod containment_tests {
             false,
         )
         .is_err());
-        assert!(session::spawn_claude_resume_with_grant(None, "sid", None, true, None).is_err());
+        assert!(
+            session::spawn_claude_resume_with_grant(None, "sid", None, true, None, None).is_err()
+        );
         assert!(handle_compete_command(
             "TASK-1",
             &["claude".into()],

@@ -780,7 +780,7 @@ pub(crate) fn build_contained_resume_command(
         .unwrap_or_else(|| launcher_cwd.to_path_buf());
     prepare_contained_mailbox_for_launch(host_main.as_deref(), &worktree)?;
     let mut cmd = std::process::Command::new("claude");
-    cmd.args(["--resume", &target.id]);
+    cmd.args(resume_command_for(target).1);
     cmd.args(claude_contained_flags_for_roots(
         host_main.as_deref(),
         &contained_session_write_roots_from(&worktree),
@@ -1926,21 +1926,8 @@ pub(crate) fn compose_headless_command_forking(
 /// the positional change; every posture flag is kept as built. The prompt is
 /// the final element of every Codex headless argv.
 // trace:STORY-2255 | ai:claude
-pub(crate) fn codex_exec_fork_args(mut args: Vec<String>, thread: &str) -> Result<Vec<String>> {
-    let thread = thread.trim();
-    anyhow::ensure!(!thread.is_empty(), "cannot fork an empty codex thread id");
-    let exec = args
-        .iter()
-        .position(|a| a == "exec")
-        .context("codex argv has no `exec` subcommand to fork")?;
-    anyhow::ensure!(
-        args.len() > exec + 1,
-        "codex argv has no prompt after `exec`"
-    );
-    args.insert(exec + 1, "fork".to_string());
-    let prompt_at = args.len() - 1;
-    args.insert(prompt_at, thread.to_string());
-    Ok(args)
+pub(crate) fn codex_exec_fork_args(args: Vec<String>, thread: &str) -> Result<Vec<String>> {
+    crate::vendors::fork_thread_args(args, thread)
 }
 
 /// How long the `codex exec fork --help` probe may run. A codex that blocks
@@ -2238,13 +2225,14 @@ fn spawn_vendor_headless_forking(
             .env("AIDA_PROJECT_ROOT", headless_worktree_root());
     }
     if vendor == HeadlessVendor::Codex && posture != ContainmentPosture::Aida {
-        if let Err(error) = crate::launch::profile::finalize_codex(&mut cmd) {
+        if let Err(error) = crate::vendors::profile::finalize_codex(&mut cmd) {
             revoke_headless_child_grant(&child_grant.id);
             return Err(error);
         }
     }
     // trace:TASK-2707 | ai:codex
     // trace:TASK-2708 | ai:claude
+    crate::reviewer_completion::bind_grant(&child_grant.id); // trace:BUG-2546 | ai:codex
     if wrapper {
         let result = (|| -> Result<_> {
             let mut run = crate::containment::launch::PreparedLaunch::prepare(
@@ -2266,9 +2254,7 @@ fn spawn_vendor_headless_forking(
                 run.receipt(),
             )?;
             run.release()?;
-            let status = run
-                .child
-                .wait()
+            let status = crate::reviewer_completion::wait(&mut run.child)
                 .with_context(|| format!("failed to wait for contained {}", vendor.program()))?;
             run.vendor_exit(status)
         })();
@@ -2573,12 +2559,13 @@ pub fn spawn_claude_resume(
     permission_mode: Option<&str>,
     contained: bool,
 ) -> Result<std::process::ExitStatus> {
-    spawn_claude_resume_with_grant(host_main, id, permission_mode, contained, None)
+    spawn_claude_resume_with_grant(host_main, id, permission_mode, contained, None, None)
 }
 
 /// BUG-2149: [`spawn_claude_resume`] with an explicit seat grant for the
 /// child, so a caller that minted the child's grant knows exactly which grant
 /// the resumed session records under. `None` inherits the ambient grant.
+/// `prompt` supplies a new message when refreshing policy in an older thread.
 // trace:BUG-2149 | ai:claude
 pub(crate) fn spawn_claude_resume_with_grant(
     host_main: Option<&Path>,
@@ -2586,6 +2573,7 @@ pub(crate) fn spawn_claude_resume_with_grant(
     permission_mode: Option<&str>,
     contained: bool,
     grant_id: Option<&str>,
+    prompt: Option<&str>,
 ) -> Result<std::process::ExitStatus> {
     // trace:BUG-2172 | ai:codex
     let parent_contained = aida_contained_env()?;
@@ -2610,6 +2598,11 @@ pub(crate) fn spawn_claude_resume_with_grant(
     }
     if contained {
         cmd.args(claude_contained_flags(host_main)?);
+    }
+    // A positional message is submitted to the resumed interactive session.
+    // trace:BUG-2546 | ai:codex
+    if let Some(prompt) = prompt {
+        cmd.arg(prompt);
     }
     // trace:BUG-2006 | ai:antigravity
     if contained {
@@ -2989,7 +2982,7 @@ pub fn exec_codex_session(
             cmd.env(key, value);
         }
     }
-    crate::launch::profile::finalize_codex(&mut cmd)?;
+    crate::vendors::profile::finalize_codex(&mut cmd)?;
     #[cfg(unix)]
     {
         use std::os::unix::process::CommandExt;
@@ -3095,7 +3088,7 @@ pub fn exec_codex_resume(
 /// [`build_codex_resume_command`] exactly like a fresh interactive Codex
 /// launch ([`exec_codex_session`]): public child metadata, the seat the
 /// delegated grant names (unless the caller already set one), then
-/// [`crate::launch::profile::finalize_codex`]. Call last, after the caller's
+/// [`crate::vendors::profile::finalize_codex`]. Call last, after the caller's
 /// cwd/seat customization and before any stdio or spawn/exec. A caller that
 /// issued the grant revokes it when this refuses.
 // trace:BUG-2386 | ai:claude
@@ -3124,7 +3117,7 @@ pub(crate) fn finalize_codex_resume(
     cmd.env("AIDA_USER", user)
         .env("AIDA_PROJECT_ROOT", project_root)
         .env("AIDA_AGENT_TYPE", "codex");
-    crate::launch::profile::finalize_codex(cmd)
+    crate::vendors::profile::finalize_codex(cmd)
 }
 
 /// BUG-1607: the interactive reviewer launch a resolved `vendor` maps to —
@@ -3376,7 +3369,7 @@ pub(crate) fn spawn_reviewer_launch_plan_granted(
     if plan.vendor == HeadlessVendor::Codex {
         cmd.env("AIDA_USER", crate::current_user_id(None))
             .env("AIDA_PROJECT_ROOT", project_root);
-        if let Err(error) = crate::launch::profile::finalize_codex(&mut cmd) {
+        if let Err(error) = crate::vendors::profile::finalize_codex(&mut cmd) {
             revoke_headless_child_grant(&grant.id);
             return Err(error);
         }
@@ -6586,7 +6579,7 @@ pub(crate) fn finalize_coordinator_launch(
     }
     cmd.env("AIDA_USER", crate::current_user_id(None))
         .env("AIDA_PROJECT_ROOT", project_root);
-    crate::launch::profile::finalize_codex(cmd)
+    crate::vendors::profile::finalize_codex(cmd)
 }
 
 /// Finalize, then wait on a coordinator `cmd`, releasing the child handle
@@ -7055,7 +7048,7 @@ pub(crate) fn drain_resume_lane<'a>(
 // trace:BUG-2386 | ai:claude
 // trace:STORY-2539 | ai:codex
 pub(crate) fn vendor_can_resume(vendor: HeadlessVendor) -> bool {
-    vendor.profile().resume != aida_core::vendors::Resume::Unsupported
+    vendor.profile().resume_args("", false).is_some()
 }
 
 /// BUG-050: run the `--auto-complete` drain's phase-1 implementer on `lease`
@@ -7510,11 +7503,12 @@ fn run_vendor_headless_child(
     if vendor == HeadlessVendor::Codex
         && containment_posture(vendor, contained)? != ContainmentPosture::Aida
     {
-        crate::launch::profile::finalize_codex(&mut child_cmd)?;
+        crate::vendors::profile::finalize_codex(&mut child_cmd)?;
     }
     // trace:TASK-2707 | ai:codex — the foreground owner retains private state,
     // broker and proxy until the wrapper is reaped. No model before receipt.
     // trace:TASK-2708 | ai:claude — Claude under `claude = "aida"` too.
+    crate::reviewer_completion::bind_grant(grant_env); // trace:BUG-2546 | ai:codex
     if wrapper {
         // trace:TASK-2708 | ai:claude — every exit past the tee start, success
         // or error, finishes the lane record it registered and stops the tee;
@@ -8561,7 +8555,7 @@ pub(crate) fn spawn_vendor_headless_resume_granted(
     // live child grant. trace:BUG-2386 | ai:claude
     cmd.env("AIDA_USER", crate::current_user_id(None))
         .env("AIDA_PROJECT_ROOT", headless_worktree_root());
-    if let Err(error) = crate::launch::profile::finalize_codex(&mut cmd) {
+    if let Err(error) = crate::vendors::profile::finalize_codex(&mut cmd) {
         tee.stop();
         revoke_headless_child_grant(&child_grant.id);
         return Err(error);
@@ -9940,20 +9934,7 @@ fn resolve_resume_target(prefix: &str) -> Result<ResumeTarget> {
 }
 
 fn resume_command_for(target: &ResumeTarget) -> (String, Vec<String>) {
-    match target.agent.as_str() {
-        "codex" => (
-            "codex".to_string(),
-            vec!["resume".to_string(), target.id.clone()],
-        ),
-        "antigravity" => (
-            "antigravity".to_string(),
-            vec!["resume".to_string(), target.id.clone()],
-        ),
-        _ => (
-            "claude".to_string(),
-            vec!["--resume".to_string(), target.id.clone()],
-        ),
-    }
+    crate::vendors::resume_command(&target.agent, &target.id)
 }
 
 // trace:BUG-2386 | ai:claude
@@ -14066,7 +14047,8 @@ mod tests {
         std::fs::remove_file(&capture).unwrap();
         let host_main = crate::seat_clone::launcher_main();
         let status =
-            spawn_claude_resume_with_grant(host_main.as_deref(), "sid", None, false, None).unwrap();
+            spawn_claude_resume_with_grant(host_main.as_deref(), "sid", None, false, None, None)
+                .unwrap();
         assert!(status.success());
         let output = std::fs::read_to_string(&capture).unwrap();
         assert!(output.starts_with("1\n--resume\nsid\n"), "{output}");
@@ -14077,6 +14059,7 @@ mod tests {
             "sid",
             Some("bypassPermissions"),
             false,
+            None,
             None
         )
         .is_err());
@@ -14788,7 +14771,7 @@ mod tests {
                     "{vendor:?}: the routed seat, not the launcher's"
                 );
                 let cleared =
-                    crate::launch::profile::VendorProfile::for_vendor(vendor.launch_vendor())
+                    crate::vendors::profile::VendorProfile::for_vendor(vendor.launch_vendor())
                         .clears_environment();
                 if cleared {
                     assert_eq!(get("AIDA_SESSION_PURPOSE").flatten(), None);
