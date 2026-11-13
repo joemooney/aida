@@ -1059,8 +1059,11 @@ impl LaneJobs {
                 "HOME".into(),
                 fast_gate_home(&self.seat).display().to_string(),
             );
-            env.insert("TMPDIR".into(), "/tmp".into());
         }
+        // Bubblewrap replaces /dev and /tmp. A launcher's TMPDIR (including
+        // an outer lane's /dev/shm directory) may not exist in this namespace.
+        // trace:TASK-3099 | ai:codex
+        env.insert("TMPDIR".into(), "/tmp".into());
         env.insert(
             crate::headless_background::LANE_MARKER_ENV.to_string(),
             self.lease_id.clone(),
