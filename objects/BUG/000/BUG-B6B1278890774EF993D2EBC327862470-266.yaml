@@ -15,7 +15,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-08T19:27:28.525198886Z
-modified_at: 2026-11-13T12:46:10.788473994Z
+modified_at: 2026-11-13T13:08:40.012001596Z
 req_type: Bug
 tags:
 - track:dell1
@@ -329,6 +329,47 @@ comments:
   modified_at: 2026-11-13T12:46:10.788473994Z
   session_id: 01a1d4aa-9c99-76c2-ac94-7f0795f8a7f9
   harness_version: 2.1.323 (Claude Code)
+- id: 01a1d500-ffd0-7911-8df2-58ae583023fe
+  author: dirtlab
+  content: |
+    The landed semantic pull implementation preserves upstream scalars and concurrent evidence. This completion slice adds a staged/worktree preservation regression for refused sync pulls and requires the allocation retry diagnostic to retain its typed dirty-store refusal without rebase-abort advice. It also removes two exact duplicate store-writer inventory rows introduced by merging main; retained policies are unchanged.
+
+    Acceptance evidence (test names are under store_sync::pull_failure_tests):
+    - AC1: sync_pull_merges_concurrent_objects_with_upstream_scalars verifies upstream title/timestamp, nested replies, history union/order and replay without duplicates through two real clones.
+    - AC2: sync_pull_refuses_dirty_store_and_unreachable_remote and sync_pull_skips_remote_without_store_branch verify failure versus supported local-only/unpublished stores. New sync_pull_preserves_staged_changes_on_refusal checks unchanged HEAD, index and worktree on refusal.
+    - AC3: allocation_retry_dirty_store_stops_before_fetch checks the typed dirty refusal, immediate stop and accurate recovery advice.
+    - AC4: BUG-2490's stopgap comment names ~/store-sync.sh, ~/store-resolve.py and ~/lane-run.sh on dell1. No such paths or helper references are tracked in this checkout. There is no in-repo stopgap to delete. Operator-side sync remains outside this advisor-directed slice.
+
+    Base: HEAD ea969456a2 contains origin/main 76c12135362bc1f87985a5eb1ebff051f16bc212.
+
+    Validation:
+    - Baseline lane job j20261113T125537786-2-0: 46 store_sync tests passed, exit 0.
+    - Final edited-source job j20261113T125646847-2-0: 47 executed, 47 passed, exit 0; untested=false. The runner reported overlay-stale after execution because the primary rewrote a seed file; no test failed.
+    - Store-writer inventory: passed, 3545 sink sites / 294 operation mappings.
+    - Inventory mutation fixtures: 54 passed.
+    - rustfmt --check, git diff --check and CI classification audit (86 gates): passed.
+    - make check-ci-fast: incomplete. Direct invocation stopped during TUI Cargo compilation because lane instructions require the host job runner. Attempt to delegate Cargo through that runner refused because the fast-tier guard prohibits invoking aida. Host must run the unmodified make check-ci-fast before completion. Logs: /tmp/bug2501-fast.log and /tmp/bug2501-fast-runner.log.
+
+    Edits remain uncommitted for host publication. Intended completion title after the LIGHT gate passes: [AI:codex] fix(store): complete semantic pull and fail-closed writes (BUG-2501).
+  created_at: 2026-11-13T13:02:54.928183486Z
+  modified_at: 2026-11-13T13:02:54.928183486Z
+  session_id: 01a1d4f9dc53
+  harness_version: codex-cli 0.167.0
+- id: 01a1d506-43cc-73f0-afd8-4e4ed9e40b6d
+  author: dirtlab
+  content: |
+    BUG-2501 one fast-gate fix round:
+    - tests/test_bug_2135_sccache_tmpdir.py: the two fixture classes now use private environment dictionaries injected through a module-local OS namespace. Tests retain real OS functions/constants while avoiding process-global environment mutations. Existing assertions and production behavior are unchanged.
+    - scripts/exec-context-legacy.json: pruned retired sites only, from 1233 to 1205. Regeneration with --base HEAD passed with zero additions.
+    Validation:
+    - python3 -m unittest tests.test_exec_context_ratchet tests.test_bug_2135_sccache_tmpdir: 41 passed.
+    - AIDA_SCCACHE_DISABLE=1 AIDA_SCCACHE_PIDS=999999 RUSTC_WRAPPER=other-wrapper python3 -m unittest tests.test_bug_2135_sccache_tmpdir: 22 passed.
+    - git diff --check: passed.
+    Full configured fast gate still requires host rerun; no full-gate success claimed. Edits remain uncommitted. Existing Refs publication declaration and all punt/hold restrictions remain in force.
+  created_at: 2026-11-13T13:08:40.012001596Z
+  modified_at: 2026-11-13T13:08:40.012001596Z
+  session_id: 01a1d4f9dc53
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1bcc3-bd29-7692-a764-d1e8c8dbaa00
   author: aida-session-start
