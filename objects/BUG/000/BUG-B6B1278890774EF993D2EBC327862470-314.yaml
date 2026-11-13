@@ -3,12 +3,12 @@ spec_id: BUG-b6b1278890774ef993d2ebc327862470-314
 agreed_id: BUG-2549
 title: Lane exits without a PR leave an unfinished branch and an orphaned In Progress spec; next pickup refuses instead of resuming
 description: '2026-11-12: 17 specs sat In Progress with no lease on any host and no open PR; dispatching them, STORY-2325 (branch ...-323, 6 days), STORY-2539 (...-462), BUG-2501 (...-266) and STORY-2538 (...-461) were refused: ''Branch X exists, no open PR was found for it ... looks like unfinished work. Pass --branch or delete the stale branch.'' TASK-3428 also stayed In Progress after its Refs PR #3887 merged and its lane exited. Acceptance: AC1 when the existing branch is the same spec''s canonical branch, ''aida queue work'' resumes it by default and says so (refusal stays for a branch owned by another spec or a dirty/foreign state); AC2 every lane exit without an open PR records the branch name and head on the spec (comment or field) and, when no lease or open PR holds the spec, returns it to Approved; AC3 a Refs-PR merge whose lane has exited returns the spec to Approved when no other lease/PR holds it; AC4 regression tests for each. Related: STORY-2690 typed lane exits.'
-status: Approved
+status: InProgress
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-13T03:10:47.302266912Z
-modified_at: 2026-11-13T22:18:20.748375337Z
+modified_at: 2026-11-13T22:34:19.070457515Z
 req_type: Bug
 tags:
 - track:dell1
@@ -192,6 +192,13 @@ history:
   - field_name: status
     old_value: NeedsAttention
     new_value: Approved
+- id: 01a1d70c-223e-73a0-89af-923b80b22fc9
+  author: aida-session-start
+  timestamp: 2026-11-13T22:34:19.070456140Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: 0558a9e06aac10a087327ade1e1ab0a0c3d4ad50
   branch: main
