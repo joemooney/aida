@@ -20,7 +20,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-13T18:05:13.304899533Z
-modified_at: 2026-11-13T20:19:40.464580872Z
+modified_at: 2026-11-13T22:16:37.060509244Z
 req_type: Story
 tags:
 - cli
@@ -46,6 +46,13 @@ comments:
   content: Commit d3b3c913bac references this requirement
   created_at: 2026-11-13T20:19:40.464580872Z
   modified_at: 2026-11-13T20:19:40.464580872Z
+  session_id: 01a1d681-a431-7ee0-8826-638d9544977f
+  harness_version: 2.1.323 (Claude Code)
+- id: 01a1d6fb-edc4-7b20-bd83-2e2343c15ed4
+  author: joe
+  content: 'Review round 1 fixed in d3b3c913bac, approved at 921bdcbdd2ff, merged into integration at 3b27c441d91 (rides promotion 7). P1: a ship cover records issued_supervised and cover_active_in checks the mandate''s current flags, so renew --exclude-supervised ends every cover issued under the lift (not only ones that relied on it). P2: a revival stores {from_id, receipt} on the fresh record as ''revived'', validated against issuance and shown in mandate status; MandateChanged events carry the change lines. P3: revival message no longer claims flags were retained when they changed.'
+  created_at: 2026-11-13T22:16:37.060509244Z
+  modified_at: 2026-11-13T22:16:37.060509244Z
   session_id: 01a1d681-a431-7ee0-8826-638d9544977f
   harness_version: 2.1.323 (Claude Code)
 history:
