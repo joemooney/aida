@@ -3,12 +3,12 @@ spec_id: BUG-b6b1278890774ef993d2ebc327862470-316
 agreed_id: BUG-2551
 title: aida pull spins CPU-bound for 10+ minutes on gate-ledger/by-spec and cache.db; blocks deputy train and ship jobs
 description: '2026-11-12 21:40-22:05 MST, primary checkout, load avg 10-28. Two separate ''aida pull'' runs (deputy job scripts) each ran >10 min at ~50% CPU with only .aida/gate-ledger, gate-ledger/by-spec (1010 entries, 36M) and cache-db/cache.db open; ''aida review list'' did the same for 21 min. Killed by hand. Started after the 20:55 store rebase repair (BUG-2550). Expected: pull finishes in seconds; any ledger/cache rebuild is bounded, incremental, or deferred to the cache worker.'
-status: Approved
+status: InProgress
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-13T05:04:27.319151195Z
-modified_at: 2026-11-13T05:43:27.986792025Z
+modified_at: 2026-11-13T05:58:39.972631842Z
 req_type: Bug
 tags:
 - track:integration
@@ -30,6 +30,14 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Approved
+- id: 01a1d37c-9664-72c1-9f3e-6a16c5d174ce
+  author: joe
+  timestamp: 2026-11-13T05:58:39.972617983Z
+  session_id: 92a24ff6-1324-4fe1-a02b-b2601f384b4b
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: 2a62f92c2a200b58e0d95446df07e355e062ab49
   branch: main
