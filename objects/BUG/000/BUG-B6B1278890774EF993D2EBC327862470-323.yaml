@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-13T12:51:33.706851654Z
-modified_at: 2026-11-13T14:59:19.177023061Z
+modified_at: 2026-11-13T15:22:07.175823111Z
 req_type: Bug
 tags:
 - lanes
@@ -28,6 +28,28 @@ comments:
   modified_at: 2026-11-13T14:04:11.404586904Z
   session_id: 01a1d4aa-9c99-76c2-ac94-7f0795f8a7f9
   harness_version: 2.1.323 (Claude Code)
+- id: 01a1d57b-0950-7e71-bb1a-9033569327a7
+  author: dirtlab
+  content: |
+    Implemented the direct native Codex clone rework path from the approved host-staged-merge ruling in docs/plans/2026-11-10-story-2710-conflict-lane.md. The host retains MERGE_HEAD, index conflicts and markers, and persists original paths in a versioned, locked main-root repair journal bound to the seat directory identity, branch and both merge parents. Native lane briefs request working-tree edits and a publication declaration only. Recorded repairs resume without overwriting resolutions. Host commit_pending loads the original paths, refuses residual markers even on staged retries, and completes the pending merge without attempting write-tree on an unmerged index. Failed merge commits retain staged resolutions and journal evidence for retry. Existing publication vetoes and exact-head fast gates remain in force; other vendor and linked-worktree workflows retain their prior behavior.
+
+    The broader STORY-2710 automatic watcher dispatch/reservation and generated-output migration are outside this direct-rework fix. This lane leaves all code edits uncommitted for host publication. The configured reviewed codegraph executable was absent; doctor confirmed it missing, and navigation used rg.
+
+    Validation on the final source, all via the lane job runner: bug_255 (7 passed, job j20261113T151359601-2-0); story_2710_marker_gate (1 passed, j20261113T151519078-2-0); story_2475 (10 passed, j20261113T151527460-2-0); bug_2504 (5 passed, j20261113T151541636-2-0). Total 23 passed, zero failures. The sandboxed clone fixture executed without a bwrap skip and verifies host merge retention, marker refusal, resume preservation, a two-parent resolution commit and trusted-origin push without seat hooks. Rustfmt checks and git diff --check pass. No live Codex vendor process was launched for validation. An earlier broader run exposed an obsolete aborted-merge notification assertion, which was corrected before the final passing run.
+
+    Changed files: aida-cli-lib/src/seat_clone.rs; new aida-cli-lib/src/seat_clone/repair.rs; aida-cli-lib/src/queue_cmd/work.rs; aida-cli-lib/src/rework_direction.rs; aida-cli-lib/src/tests/bug_home_038_seat_publish_tests.rs; aida-cli-lib/src/tests/queue_work_tests.rs; docs/cli/04-git-lifecycle.md. No implementation blockers. Host should deploy the reviewed codegraph client at the supplied absolute path for future navigation.
+  created_at: 2026-11-13T15:16:12.752189894Z
+  modified_at: 2026-11-13T15:16:12.752189894Z
+  session_id: 01a1d56b1f6e
+  harness_version: codex-cli 0.167.0
+- id: 01a1d580-71c7-7b21-9437-87de03d4046a
+  author: dirtlab
+  content: |
+    Fast-gate fix round: reconciled scripts/store-writers.toml with python3 scripts/check-store-writers.py --regenerate. Reviewed exactly seven added sink rows and two stale removals: the renamed prepare/finish helpers, extracted pending-merge probe, and four repair-journal writer sites. Existing policy and operation mappings are preserved; every added row keeps the conservative blocked disposition and explicit TASK-3223 cutover blocker. No runtime authority or allow-list expansion. Validation: python3 -m unittest discover -s tests -p test_store_writer_inventory.py passed all 54 tests; git diff --check passed. python3 scripts/check-store-writers.py passed: 3554 sink sites and 294 operation mappings reconciled. Only scripts/store-writers.toml changed in this fix round; edits remain uncommitted for the host. The host must rerun the full configured fast gate; this seat ran the failing inventory gate and its mutation fixtures. Punt/hold vetoes are retained.
+  created_at: 2026-11-13T15:22:07.175823111Z
+  modified_at: 2026-11-13T15:22:07.175823111Z
+  session_id: 01a1d56b1f6e
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1d4f7-f92d-7a61-af83-4ceb9af49f3d
   author: joe
