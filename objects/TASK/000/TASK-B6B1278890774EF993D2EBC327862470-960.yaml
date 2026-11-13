@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T23:39:41.575597Z
-modified_at: 2026-11-13T02:48:35.467528126Z
+modified_at: 2026-11-13T03:13:10.670516982Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -928,6 +928,13 @@ comments:
   content: 'ADVISOR BRIEF slice C (2026-11-12 19:50): #3887 (lib_part1/3) landed on main 0558a9e. Remaining scope = AC3 for lib_part5.rs only (5556 lines, last include! at lib.rs:1379) plus any glob import it carries. Dissolve lib_part5.rs into named modules by concern (pure moves, no behaviour change), run scripts/relocate-ledger-paths.py for moved paths, keep the glob-import ratchet at zero. If it exceeds ~40 files or ~1500 changed lines, split into slice C1/C2 and open C1 first. LIGHT gate: one targeted cargo test filter + make check-ci-fast, then push. PR against main. trace:TASK-3428'
   created_at: 2026-11-13T02:48:35.467528126Z
   modified_at: 2026-11-13T02:48:35.467528126Z
+  session_id: 01a1d240-c397-7b61-b29f-bb337c138943
+  harness_version: 2.1.323 (Claude Code)
+- id: 01a1d2e5-140e-7c02-af51-4c8b0235509b
+  author: joe
+  content: 'advisor 20:16: slice C1 (lib_part5 command helpers, 23 files) opened as #3916 from primary after dell1 publication failed on missing node binding (fixed: aida node acquire on dell1). C2 = remainder of lib_part5.rs. trace:TASK-3428'
+  created_at: 2026-11-13T03:13:10.670516982Z
+  modified_at: 2026-11-13T03:13:10.670516982Z
   session_id: 01a1d240-c397-7b61-b29f-bb337c138943
   harness_version: 2.1.323 (Claude Code)
 history:
