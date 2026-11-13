@@ -47,16 +47,20 @@ fn plan_tags_open_landed_specs_and_untags_closed_or_unlanded_ones() {
         stored("BUG-4", None, S::Completed, &[LANDED_TAG]), // closed: remove
         stored("BUG-5", None, S::Completed, &[]), // closed: never add
         stored("BUG-6", None, S::Draft, &[]),    // untouched
+        // Review round 2: Done is implemented work awaiting promotion.
+        stored("BUG-7", None, S::Done, &[]), // done, landed: add
+        stored("BUG-8", None, S::Done, &[LANDED_TAG]), // done, landed: keep
+        stored("BUG-10", None, S::Done, &[LANDED_TAG]), // done, not landed: remove
     ]);
-    let landed: HashSet<uuid::Uuid> = ["BUG-1", "BUG-2", "BUG-5"]
+    let landed: HashSet<uuid::Uuid> = ["BUG-1", "BUG-2", "BUG-5", "BUG-7", "BUG-8"]
         .iter()
         .filter_map(|t| resolve_trailer(&store, t))
         .collect();
-    assert_eq!(landed.len(), 3);
+    assert_eq!(landed.len(), 5);
     let specs: Vec<ListedSpec> = store.requirements.iter().map(ListedSpec::of).collect();
     let (adds, removes) = plan_tag_changes(&specs, &landed);
-    assert_eq!(ids(&adds), ["BUG-1"]);
-    assert_eq!(ids(&removes), ["BUG-3", "BUG-4"]);
+    assert_eq!(ids(&adds), ["BUG-1", "BUG-7"]);
+    assert_eq!(ids(&removes), ["BUG-10", "BUG-3", "BUG-4"]);
     // Edits address the stored spec by its stable UUID.
     assert_eq!(adds[0].uuid, store.requirements[0].id);
 }
@@ -91,4 +95,41 @@ fn trailers_resolve_to_stored_spec_identity() {
     assert_eq!(resolve_trailer(&store, "BUG-404"), None);
     // A padding-only match that names two stored specs tags neither.
     assert_eq!(resolve_trailer(&store, "BUG-009"), None);
+}
+
+// Review round 2: padding-equal literal trailers that name two stored specs
+// each resolve to their own spec, from collector to resolver, whichever
+// order the store holds them in; a padded token matching both names neither.
+// trace:STORY-2737 | ai:claude
+#[test]
+fn distinct_padding_equal_literals_each_land_their_own_spec() {
+    for flip in [false, true] {
+        let mut reqs = vec![
+            stored("BUG-9", None, S::Approved, &[]),
+            stored("BUG-09", None, S::Approved, &[]),
+        ];
+        if flip {
+            reqs.reverse();
+        }
+        let store = store_of(reqs);
+        let uuid_of = |id: &str| {
+            store
+                .requirements
+                .iter()
+                .find(|r| r.spec_id.as_deref() == Some(id))
+                .map(|r| r.id)
+        };
+        let tokens = completing_ids(&["fix: a (BUG-9)", "fix: b (BUG-09)"]);
+        assert_eq!(tokens, ["BUG-9", "BUG-09"]);
+        let landed: HashSet<uuid::Uuid> = tokens
+            .iter()
+            .filter_map(|t| resolve_trailer(&store, t))
+            .collect();
+        let want: HashSet<uuid::Uuid> = [uuid_of("BUG-9"), uuid_of("BUG-09")]
+            .into_iter()
+            .flatten()
+            .collect();
+        assert_eq!(landed, want, "flip={flip}");
+        assert_eq!(resolve_trailer(&store, "BUG-009"), None, "flip={flip}");
+    }
 }

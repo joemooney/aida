@@ -5112,3 +5112,71 @@ fn story_2749_track_reaches_the_vendor_child() {
         );
     }
 }
+
+// STORY-2749 review round 2: a headless pickup of a `track:operator` spec is
+// refused even on an operator launcher, whatever execution mode it groomed;
+// at the keyboard it proceeds.
+// trace:STORY-2749 | ai:claude
+#[test]
+fn story_2749_direct_headless_pickup_refuses_operator_track() {
+    let _env = crate::test_env::EnvVarsGuard::set(&[("AIDA_TRACK", "operator")]);
+    for mode in [None, Some(aida_core::ExecutionMode::Drain)] {
+        let mut r = req("TASK-2751", None, RequirementType::Task);
+        r.status = RequirementStatus::Approved;
+        r.execution_mode = mode;
+        r.tags.insert("track:operator".into());
+        let refusal = crate::queue_cmd::operator_track_headless_refusal(&r, true)
+            .unwrap_or_else(|| panic!("{mode:?}: headless operator pickup must refuse"));
+        assert!(
+            refusal.to_string().contains("never runs headless"),
+            "{refusal}"
+        );
+        assert!(
+            crate::queue_cmd::operator_track_headless_refusal(&r, false).is_none(),
+            "{mode:?}: attended pickup proceeds"
+        );
+        r.tags.clear();
+        assert!(crate::queue_cmd::operator_track_headless_refusal(&r, true).is_none());
+    }
+}
+
+// STORY-2749 review round 2: the queue-wide auto-complete head skips a spec on
+// another track (or several) before selection, so a main launcher drives the
+// eligible main item behind it; the count and preview projections agree.
+// trace:STORY-2749 | ai:claude
+#[test]
+fn story_2749_auto_complete_head_skips_foreign_tracks() {
+    let _env = crate::test_env::EnvVarsGuard::apply(&[("AIDA_TRACK", None)]);
+    let candidate = |id: &str, tags: &[&str]| AutoCompleteHeadCandidate {
+        deferred_reason: None,
+        deferred_until: None,
+        id: id.to_string(),
+        status: RequirementStatus::Approved,
+        for_role: None,
+        deferred: false,
+        execution_mode: None,
+        tags: tags.iter().map(|t| t.to_string()).collect(),
+        blocked: None,
+    };
+    let candidates = vec![
+        candidate("TASK-42", &["track:integration"]),
+        candidate("TASK-44", &["track:main", "track:dell1"]),
+        candidate("TASK-43", &["track:main"]),
+    ];
+    let pick = pick_auto_complete_head_for_role(&candidates, "implementer")
+        .unwrap()
+        .expect("the main item behind the foreign heads is drivable");
+    assert_eq!(pick.spec, "TASK-43");
+    let skipped: Vec<&str> = pick
+        .blocked_skipped
+        .iter()
+        .map(|(id, _)| id.as_str())
+        .collect();
+    assert_eq!(skipped, ["TASK-42", "TASK-44"]);
+    assert!(pick.blocked_skipped[0].1.contains("`integration` track"));
+    // A terminal spec's stale track is not a refusal.
+    assert!(
+        crate::queue_cmd::track_refusal(&candidates[0].tags, &RequirementStatus::Completed)
+            .is_none()
+    );
+}

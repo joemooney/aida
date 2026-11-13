@@ -40,16 +40,16 @@ fn git(root: &Path, args: &[&str]) -> Result<String> {
 }
 
 /// The spec ids the commit `subjects` complete, upper-cased and deduplicated
-/// by numeric identity, in first-seen order.
+/// only as literal tokens, in first-seen order. Padding-equal tokens
+/// (`BUG-9`, `BUG-09`) stay distinct: each may name its own stored spec, so
+/// identity is deduplicated after [`resolve_trailer`], by UUID.
+// trace:STORY-2737 | ai:claude
 pub(crate) fn completing_ids(subjects: &[&str]) -> Vec<String> {
     let mut out: Vec<String> = Vec::new();
     for subject in subjects {
         for id in crate::zen_drive_root::extract_spec_ids_from_commit(subject) {
             let id = id.to_ascii_uppercase();
-            if !out
-                .iter()
-                .any(|seen| aida_core::id_identity::same_id(seen, &id))
-            {
+            if !out.contains(&id) {
                 out.push(id);
             }
         }
@@ -81,28 +81,43 @@ impl ListedSpec {
     }
 }
 
-fn is_open(status: &aida_core::RequirementStatus) -> bool {
+/// Whether a spec in `status` can still be awaiting promotion to main. Done
+/// is the normal state of implemented work whose completing commit is on
+/// integration only, so it keeps (and gains) the tag until promotion
+/// completes it.
+// trace:STORY-2737 | ai:claude
+fn awaits_promotion(status: &aida_core::RequirementStatus) -> bool {
     use aida_core::RequirementStatus as S;
     matches!(
         status,
-        S::Draft | S::Approved | S::Planned | S::InProgress | S::NeedsAttention
+        S::Draft | S::Approved | S::Planned | S::InProgress | S::NeedsAttention | S::Done
     )
 }
 
-/// The stored spec a commit trailer token names, by the store's own
-/// resolution order: the literal id (native `spec_id`, then agreed id),
-/// then its node-alias expansion; numeric padding (`TASK-0042`) last.
-/// Origin ids are native `spec_id`s, so a pre-agreement trailer resolves to
-/// the same spec as its agreed display id. `None` for a token naming no spec.
+/// The stored spec a commit trailer token names: the exact literal id
+/// (native `spec_id`, then agreed id, compared as strings, never by numeric
+/// identity), then its node-alias expansion, and a numeric-padding match
+/// (`TASK-0042`) last, only when it is unique. Origin ids are native
+/// `spec_id`s, so a pre-agreement trailer resolves to the same spec as its
+/// agreed display id. `None` for a token naming no spec, or one whose
+/// padding matches two stored specs.
 // trace:STORY-2737 | ai:claude
 pub(crate) fn resolve_trailer(
     store: &aida_core::RequirementsStore,
     token: &str,
 ) -> Option<uuid::Uuid> {
-    aida_core::node_alias::resolve_literal_first_opt(token, |id| {
-        store.get_requirement_by_spec_id(id).map(|r| r.id)
-    })
-    .or_else(|| {
+    let literal = |id: &str| {
+        let exact = |field: &Option<String>| {
+            field
+                .as_deref()
+                .is_some_and(|stored| stored.eq_ignore_ascii_case(id))
+        };
+        let native = store.requirements.iter().find(|r| exact(&r.spec_id));
+        native
+            .or_else(|| store.requirements.iter().find(|r| exact(&r.agreed_id)))
+            .map(|r| r.id)
+    };
+    aida_core::node_alias::resolve_literal_first_opt(token, literal).or_else(|| {
         let mut hits = store.requirements.iter().filter(|r| {
             [Some(r.display_id()), r.spec_id.clone(), r.agreed_id.clone()]
                 .into_iter()
@@ -129,7 +144,7 @@ pub(crate) fn plan_tag_changes<'a>(
     let mut removes = Vec::new();
     for spec in specs {
         let tagged = spec.tags.iter().any(|t| t == LANDED_TAG);
-        let wanted = is_open(&spec.status) && landed.contains(&spec.uuid);
+        let wanted = awaits_promotion(&spec.status) && landed.contains(&spec.uuid);
         if wanted && !tagged {
             adds.push(spec);
         } else if tagged && !wanted {
@@ -180,7 +195,7 @@ fn run_tags(root: &Path, dry_run: bool) -> Result<()> {
     println!(
         "{} commit(s) on origin/integration not on origin/main complete {} spec(s).",
         subjects.len(),
-        landed.len()
+        landed_specs.len()
     );
     if adds.is_empty() && removes.is_empty() {
         println!("`{LANDED_TAG}` tags are up to date.");

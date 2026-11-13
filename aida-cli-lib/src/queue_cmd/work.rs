@@ -59,9 +59,15 @@ pub(crate) enum SpecTrack {
 /// `track:<owner>` tags, compared case-insensitively.
 // trace:STORY-2749 | ai:claude
 pub(crate) fn spec_track(req: &aida_core::Requirement) -> SpecTrack {
-    let owners: std::collections::BTreeSet<String> = req
-        .tags
-        .iter()
+    tags_track(&req.tags)
+}
+
+/// [`spec_track`] over a spec's tags alone, for queue projections that
+/// carry tags rather than the stored spec.
+// trace:STORY-2749 | ai:claude
+pub(crate) fn tags_track<'a>(tags: impl IntoIterator<Item = &'a String>) -> SpecTrack {
+    let owners: std::collections::BTreeSet<String> = tags
+        .into_iter()
         .flat_map(|tag| tag.split_whitespace())
         .filter_map(|tag| tag.strip_prefix(TRACK_TAG_PREFIX))
         .map(|owner| owner.trim().to_ascii_lowercase())
@@ -142,19 +148,8 @@ pub(crate) fn queue_fresh_pickup_policy(
     if req.archived {
         return QueueFreshPickup::Archived;
     }
-    // A spec on another launcher's track is never fresh work here.
-    // trace:STORY-2749 | ai:claude
-    if !is_terminal_status(&req.status) {
-        match spec_track(req) {
-            SpecTrack::Free => {}
-            SpecTrack::Ambiguous(owners) => return QueueFreshPickup::AmbiguousTrack(owners),
-            SpecTrack::Owner(owner) => {
-                let launcher = launcher_track();
-                if owner != launcher {
-                    return QueueFreshPickup::OtherTrack { owner, launcher };
-                }
-            }
-        }
+    if let Some(refusal) = track_refusal(&req.tags, &req.status) {
+        return refusal;
     }
     if matches!(req.status, RequirementStatus::Done) {
         if let Some(root) = project_root {
@@ -183,6 +178,57 @@ pub(crate) fn queue_fresh_pickup_policy(
         aida_core::pickability::Pickability::Pickable => QueueFreshPickup::Pickable,
         aida_core::pickability::Pickability::Blocked(reason) => QueueFreshPickup::Blocked(reason),
     }
+}
+
+/// A spec on another launcher's track, or on several, is never fresh work
+/// here: the one track check every pickup surface shares, from single-spec
+/// pickup to the queue-wide auto-complete head and its projections. A
+/// terminal spec reports its terminal state, not a stale track.
+// trace:STORY-2749 | ai:claude
+pub(crate) fn track_refusal<'a>(
+    tags: impl IntoIterator<Item = &'a String>,
+    status: &RequirementStatus,
+) -> Option<QueueFreshPickup> {
+    if is_terminal_status(status) {
+        return None;
+    }
+    match tags_track(tags) {
+        SpecTrack::Free => None,
+        SpecTrack::Ambiguous(owners) => Some(QueueFreshPickup::AmbiguousTrack(owners)),
+        SpecTrack::Owner(owner) => {
+            let launcher = launcher_track();
+            (owner != launcher).then_some(QueueFreshPickup::OtherTrack { owner, launcher })
+        }
+    }
+}
+
+/// The skip reason a queue projection shows for a spec [`track_refusal`]
+/// refuses.
+// trace:STORY-2749 | ai:claude
+fn track_skip_reason<'a>(
+    tags: impl IntoIterator<Item = &'a String>,
+    status: &RequirementStatus,
+) -> Option<String> {
+    track_refusal(tags, status).map(|refusal| {
+        queue_fresh_pickup_reason_label(&refusal).unwrap_or_else(|| "on another track".into())
+    })
+}
+
+/// STORY-2749 review: a `track:operator` spec is supervised work, so a
+/// headless (`--no-human`) pickup refuses it even on an operator launcher,
+/// before any setup, status or lease change; at the keyboard it proceeds.
+// trace:STORY-2749 | ai:claude
+pub(crate) fn operator_track_headless_refusal(
+    req: &aida_core::Requirement,
+    no_human: bool,
+) -> Option<anyhow::Error> {
+    (no_human && spec_track(req) == SpecTrack::Owner(OPERATOR_TRACK.into())).then(|| {
+        anyhow::anyhow!(
+            "{} is on the `{OPERATOR_TRACK}` track: supervised work never runs headless. \
+             Drop --no-human and drive it at the keyboard.",
+            req.display_id()
+        )
+    })
 }
 
 pub(crate) fn queue_fresh_pickup_reason_label(policy: &QueueFreshPickup) -> Option<String> {
@@ -4147,6 +4193,10 @@ pub(crate) fn handle_queue_work(
             ) {
                 return Err(refusal);
             }
+            // trace:STORY-2749 | ai:claude
+            if let Some(refusal) = operator_track_headless_refusal(&req, no_human) {
+                return Err(refusal);
+            }
         }
 
         // TASK-304: on a no-arg head pickup, surface the ultraplan suggestion
@@ -7580,6 +7630,13 @@ pub(crate) fn pick_auto_complete_head_for_role(
             release_skipped.push(candidate.id.clone());
             continue;
         }
+        // A foreign or ambiguous track is skipped before selection, so the
+        // drain never registers or bumps work its phase-1 child would refuse.
+        // trace:STORY-2749 | ai:claude
+        if let Some(reason) = track_skip_reason(&candidate.tags, &candidate.status) {
+            blocked_skipped.push((candidate.id.clone(), reason));
+            continue;
+        }
         // trace:BUG-1120 | ai:codex
         if let Some(
             mode @ (aida_core::ExecutionMode::Guided
@@ -7709,7 +7766,9 @@ pub(crate) fn auto_complete_head_candidates_with_blocked(
         if candidate.deferred {
             continue;
         }
-        out.push((candidate.id, candidate.status, candidate.blocked));
+        // trace:STORY-2749 | ai:claude
+        let blocked = track_skip_reason(&candidate.tags, &candidate.status).or(candidate.blocked);
+        out.push((candidate.id, candidate.status, blocked));
     }
     Ok(out)
 }
