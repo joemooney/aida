@@ -1,0 +1,21 @@
+id: 01a1d316-e42d-71f3-bba4-4c65704fe737
+spec_id: STORY-b6b1278890774ef993d2ebc327862470-672
+agreed_id: STORY-2749
+title: 'track:integration tag: every lane launcher refuses a main-track lane on an integration-track spec'
+description: 'Operator 2026-11-12 20:59 (emergency): one track per spec, enforced by the spec tag ''track:integration'' instead of the hand-kept ~/.aida/autoland-skip. Done in ops (20:10): ~/bin/aida-autoland.sh launch_lane skips tagged specs. Remaining (product): ''aida queue work SPEC --role implementer'' refuses a tagged spec unless the launch targets the integration branch; the launch preflight lists the track; the integration agent tags a spec when it first merges one of its commits; a promotion that completes the spec removes the tag. Retire ~/.aida/autoland-skip after that.'
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-13T04:07:35.213330891Z
+modified_at: 2026-11-13T04:07:35.213330891Z
+req_type: Story
+filed_at:
+  code_sha: 2a62f92c2a200b58e0d95446df07e355e062ab49
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 2a62f92c2a2
+  vendor: claude
+  session: 01a1d2e6-f5db-7f33-9b74-3ae5fdaf9e0c
+  harness_version: 2.1.323 (Claude Code)
