@@ -231,6 +231,59 @@ mod tests {
         assert!(should_stop());
     }
 
+    // A pending barrier must keep the actual wait loop alive beyond its grace,
+    // including a WAITING disposition. The completed twin must then reap it.
+    // trace:BUG-2546 | ai:codex
+    #[test]
+    fn bug2546_wait_loop_preserves_pending_child_and_reaps_completed_twin() {
+        use crate::gate::review_verdict::verdict_path;
+        for kind in ["APPROVED", "WAITING"] {
+            let tmp = tempfile::tempdir().unwrap();
+            let _scope = Scope::new(tmp.path(), tmp.path(), 7, &[]);
+            bind_grant("child");
+            let path = verdict_path(tmp.path(), "PR-7");
+            std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+            let mut body = serde_json::json!({
+                "verdict": kind, "reviewed_sha": "abc", "sweep_pending": true,
+                "recorded_at": chrono::Utc::now().to_rfc3339(),
+                "recorder_attestation": { "sha": "abc", "grant_id": "child" }
+            });
+            std::fs::write(&path, body.to_string()).unwrap();
+            // Run the child past the grace before publishing completed delivery.
+            // The child itself publishes its completed twin, so an early kill
+            // leaves the barrier pending and makes the assertion below fail.
+            body["sweep_pending"] = false.into();
+            let completed = tmp.path().join("completed.json");
+            std::fs::write(&completed, body.to_string()).unwrap();
+            let mut child = std::process::Command::new("sh")
+                .args([
+                    "-c",
+                    "sleep 3; mv -- \"$1\" \"$2\"; exec sleep 30",
+                    "reviewer",
+                ])
+                .arg(&completed)
+                .arg(&path)
+                .spawn()
+                .unwrap();
+            assert!(wait(&mut child).unwrap().success());
+            assert!(
+                !child.try_wait().unwrap().unwrap().success(),
+                "{kind}: the completion watcher must terminate the lingering child"
+            );
+            let raw: serde_json::Value =
+                serde_json::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
+            assert!(
+                !crate::gate::review_verdict::delivery_pending(&raw),
+                "{kind}"
+            );
+            WATCH.with(|w| {
+                let slot = w.borrow();
+                let w = slot.as_ref().unwrap();
+                assert!(w.recorded_at.is_some(), "{kind}");
+            });
+        }
+    }
+
     // WAITING completes the reviewer process, but never approves the change.
     // trace:BUG-2546 | ai:codex
     #[test]

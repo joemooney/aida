@@ -246,7 +246,18 @@ fn assert_interactive_resume_policy(vendor: crate::session::HeadlessVendor) {
     env.set_key(crate::gate::seat_authority::GRANT_ENV, &grant);
     std::env::set_current_dir(&project).unwrap();
     let tree = tmp.path().join("reviewer-worktree");
-    std::fs::create_dir_all(&tree).unwrap();
+    // The real Codex seat probe runs in the reviewer worktree. Give that
+    // fixture the same store/roster as its launcher, as a real pickup does.
+    // trace:BUG-2546 | ai:codex
+    std::fs::create_dir_all(tree.join(".aida")).unwrap();
+    std::fs::write(
+        tree.join(".aida/config.toml"),
+        format!(
+            "store_path = {}\n",
+            toml::Value::String(project.join(".aida-store").to_string_lossy().into_owned())
+        ),
+    )
+    .unwrap();
     let verdict_path = project.join(".aida/review-verdicts/PR-59.json");
     let result = run_standalone_reviewer(
         &project,
