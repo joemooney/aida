@@ -30,7 +30,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-13T15:54:08.931576118Z
-modified_at: 2026-11-13T16:28:50.262382578Z
+modified_at: 2026-11-13T16:34:03.620671282Z
 req_type: Story
 tags:
 - architecture
@@ -73,6 +73,16 @@ comments:
     Edits remain uncommitted for host publication. Independent STRICT review by a reviewer without the sketch author's context remains required. Full changed-file/validation handoff: /tmp/story2763-handoff.md. The supplied codegraph client is absent (doctor also reports missing); navigation used rg. No queue completion or reviewer verdict was recorded from this seat.
   created_at: 2026-11-13T16:28:50.262382578Z
   modified_at: 2026-11-13T16:28:50.262382578Z
+  session_id: 01a1d5a03f62
+  harness_version: codex-cli 0.167.0
+- id: 01a1d5c2-4ee4-7980-92e5-41a90c5221e9
+  author: dirtlab
+  content: |
+    ONE fast-gate fix round: updated both merge spawns in gate/review_freshness.rs's delta-review fixture to use crate::test_git::git_command(), explicitly disabling automatic maintenance through the shared test helper. Kept the successful clean-merge assertion and expected conflict exit assertion.
+
+    Validation: python3 -m unittest tests.test_git_maintenance_ratchet passed (8 tests); rustfmt --check and git diff --check passed. Targeted Cargo rerun was submitted as j20261113T163304382-2-0 but could not start: the lane runner's overlay mount failed with "special device overlay does not exist" (exit 125). Cargo untested=true for this repair. No production code changed. Edits remain uncommitted for host publication; existing STRICT independent-review requirement and publication vetoes remain in force.
+  created_at: 2026-11-13T16:34:03.620671282Z
+  modified_at: 2026-11-13T16:34:03.620671282Z
   session_id: 01a1d5a03f62
   harness_version: codex-cli 0.167.0
 history:

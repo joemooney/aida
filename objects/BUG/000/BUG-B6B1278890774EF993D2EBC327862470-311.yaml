@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-13T01:54:48.391951523Z
-modified_at: 2026-11-13T16:19:36.510767594Z
+modified_at: 2026-11-13T16:31:39.981943362Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -96,6 +96,13 @@ comments:
   content: 'Round 3: current branch already guards raw sweep_pending before completion, includes WAITING completion/runtime, and supplies the composed reviewer policy to interactive Codex and Claude resumes. Added regression coverage for delayed REQUEST_CHANGES and REJECTED delivery alongside APPROVED/WAITING, exact runtime timestamps and collector approval semantics, plus full resumed policy assertions for both vendors. Targeted bug2546 lane tests running; no dispute of the three findings. Host must commit/publish because this native seat has read-only Git metadata.'
   created_at: 2026-11-13T16:19:36.510767594Z
   modified_at: 2026-11-13T16:19:36.510767594Z
+  session_id: 01a1d5b404f9
+  harness_version: codex-cli 0.167.0
+- id: 01a1d5c0-1dcd-7b40-8217-5e878178c3bd
+  author: dirtlab
+  content: 'Round 3 validation complete: lane cargo build --profile agent -p aida-cli --bin aida passed. Lane cargo test --profile agent -p aida-cli-lib --lib -- bug2546 passed: 7 executed tests, 0 failures, covering all three findings. Initial test run had 5 passes and 2 fixture prerequisite failures (matching CLI absent); building the CLI resolved both. rustfmt --check on changed files and git diff --check passed. No findings disputed. New regression edits remain uncommitted for host publication.'
+  created_at: 2026-11-13T16:31:39.981943362Z
+  modified_at: 2026-11-13T16:31:39.981943362Z
   session_id: 01a1d5b404f9
   harness_version: codex-cli 0.167.0
 history:
