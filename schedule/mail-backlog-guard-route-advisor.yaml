@@ -5,10 +5,10 @@ last_by:
   session: 01a1beff-fc3b-78e2-93e2-9b0c283b0339
   vendor: claude
 result: done
-note: 'advisor: unread [request] from dirtlab, 68m old: Rework merge conflicts require resolution; advisor: unread [request] from dirtlab, 37m old: Rework merge conflicts require resolution'
+note: 'advisor: unread [request] from dirtlab, 110m old: Rework merge conflicts require resolution'
 due_since: 2026-11-09T10:53:52.591288010Z
 due_reason: on CronJobFired:mail-backlog-guard-route-advisor
 due_failure:
-  trip_id: mail-backlog-guard-route-advisor@2026-11-13T22:24:39Z
+  trip_id: mail-backlog-guard-route-advisor@2026-11-13T22:50:04Z
   job: mail-backlog
-  error: 'advisor: unread [request] from dirtlab, 68m old: Rework merge conflicts require resolution; advisor: unread [request] from dirtlab, 37m old: Rework merge conflicts require resolution'
+  error: 'advisor: unread [request] from dirtlab, 110m old: Rework merge conflicts require resolution'
