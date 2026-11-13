@@ -2,14 +2,31 @@ id: 01a1d255-23d5-7b33-88ea-ad2d8dfcbe59
 spec_id: STORY-b6b1278890774ef993d2ebc327862470-668
 agreed_id: STORY-2745
 title: Peer-agent coordination messages reach any vendor and are recorded in AIDA (mailbox as the vendor-neutral channel)
-description: 'Operator 2026-11-12 17:35: keep the ability to message between Codex, Claude and other agent sessions. On 2026-11-12 the advisor (Claude) and the integration agent (Claude) coordinated the integration-writer protocol via Claude Code SendMessage. It worked, but that channel is Claude-only: a Codex integration agent could not receive it, and the exchange is not recorded in the AIDA substrate. Want: role-to-role coordination (e.g. ''promotion N landed, sync main''; ''integration pushed at SHA'') sent through aida mailbox so any vendor''s session receives it (Codex via its inbox hook or poll), with optional live delivery to a Claude session via SendMessage as a fast path. Acceptance: (1) an advisor can message the integration seat by role, whichever vendor holds it; (2) the message and reply appear in aida mailbox history; (3) a Codex session sees an unread message before its next turn.'
+description: |
+  Operator 2026-11-12 17:35: keep the ability to message between Codex, Claude and other agent sessions. On 2026-11-12 the advisor (Claude) and the integration agent (Claude) coordinated the integration-writer protocol via Claude Code SendMessage. It worked, but that channel is Claude-only: a Codex integration agent could not receive it, and the exchange is not recorded in the AIDA substrate. Want: role-to-role coordination (e.g. 'promotion N landed, sync main'; 'integration pushed at SHA') sent through aida mailbox so any vendor's session receives it (Codex via its inbox hook or poll), with optional live delivery to a Claude session via SendMessage as a fast path. Acceptance: (1) an advisor can message the integration seat by role, whichever vendor holds it; (2) the message and reply appear in aida mailbox history; (3) a Codex session sees an unread message before its next turn.
+
+  Refined acceptance (integration seat, 2026-11-13). Gap observed: the advisor role is already mail-addressable (the startup hello reaches it), but a named seat that runs under a generic role (the integration seat runs as implementer) is not, and Claude session handles such as aida-f6 do not resolve as mail recipients.
+  AC1 Seat address: `aida mailbox send --to seat:<name>` resolves to the live session(s) holding that seat (the seat recorded by `aida agent new --seat`/handoff), whatever the vendor. With no live holder it queues for the seat (first launch of the seat receives it), and the refusal/queue line names the seat. Unknown seat names refuse and list the known seats.
+  AC2 Reply path: a message received by seat carries a reply-to of the sender's seat or role, so `aida mailbox reply <id>` reaches the sender by seat/role, not by a session handle that rotation invalidates.
+  AC3 History: both directions appear in `aida mailbox history` (thread view) with sender seat/role and vendor.
+  AC4 Codex delivery: a Codex session holding the seat sees an unread-mail notice before its next turn via the template-managed codex hook (aida-core/templates/codex-hooks.json); headless Codex lanes see it at the next `aida` command via the existing inbox notice.
+  AC5 Claude fast path (optional, best-effort): when the holder is a live Claude session reachable by SendMessage, the send also prints the handle to notify; mailbox remains the record. No delivery claim beyond what the mailbox records.
+  AC6 Seat handoff docs/prompt: the integration-seat prompt template uses `aida mailbox send --to seat:advisor`/`--to advisor` instead of SendMessage-only instructions.
+  Tests: resolver unit tests for seat:<name> (live holder, no holder → queued, unknown → refusal listing seats); a two-session fixture where a reply reaches the original seat after the sender rotated; codex hook fixture emitting the unread notice.
 status: Draft
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-13T00:35:57.525111678Z
-modified_at: 2026-11-13T00:35:57.525111678Z
+modified_at: 2026-11-13T08:26:57.659274844Z
 req_type: Story
+history:
+- id: 01a1d404-5b69-7883-a178-72d22e485802
+  author: joe
+  timestamp: 2026-11-13T08:26:57.769646071Z
+  session_id: 01a1d394-b764-7e21-a752-015032d87411
+  harness_version: 2.1.323 (Claude Code)
+  changes: []
 filed_at:
   code_sha: 9968a8ab4ec2b4110f24d64122a7e60ab755a95b
   branch: main
