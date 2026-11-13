@@ -593,114 +593,6 @@
   added_at: 2026-11-13T08:38:18.956128055Z
   for_role: implementer
 - user_id: role:implementer
-  requirement_id: 01a1b2ce-dc16-78c0-99c0-514d53b02f45
-  position: 0
-  added_by: fast-gate
-  note: |-
-    The host's sandboxed configured fast-check command failed. This is your ONE fast-gate fix round. Fix the failing gates below and finish. Native seats must leave edits uncommitted for host publication; retain all punt/hold instructions.
-    ======================================================================
-    FAIL: test_missing_tmpdir_detected (tests.test_bug_2135_sccache_tmpdir.TestSccacheTmpdirDetection.test_missing_tmpdir_detected)
-    ----------------------------------------------------------------------
-    Traceback (most recent call last):
-      File "/home/dirtlab/ai/aida-worktrees/aida-seat-aida-story-b6b1278890774ef993d2ebc327862470-516/tests/test_bug_2135_sccache_tmpdir.py", line 57, in test_missing_tmpdir_detected
-        self.assertEqual(detected, str(deleted_tmp))
-    AssertionError: None != '/tmp/tmpg297y70r/deleted_tmp'
-
-    ----------------------------------------------------------------------
-    Ran 22 tests in 2.034s
-
-    FAILED (failures=3)
-    FAIL  Sccache tmpdir detection fixtures  (2.1s)
-            this is CI's own `Sccache tmpdir detection fixtures` step, run locally.
-    make: *** [Makefile:541: check-ci-fast] Error 1
-    lane sccache: final job statistics
-    Compile requests                     453
-    Compile requests executed            363
-    Cache hits                           358
-    Cache hits (Assembler)                14
-    Cache hits (C/C++)                    17
-    Cache hits (Rust)                    327
-    Cache misses                           0
-    Cache hits rate                   100.00 %
-    Cache hits rate (Assembler)       100.00 %
-    Cache hits rate (C/C++)           100.00 %
-    Cache hits rate (Rust)            100.00 %
-    Cache timeouts                         0
-    Cache read errors                      0
-    Forced recaches                        0
-    Cache write errors                     0
-    Cache errors                           0
-    Compilations                           0
-    Compilation failures                   5
-    Non-cacheable compilations             0
-    Non-cacheable calls                   86
-    Non-compilation calls                  4
-    Unsupported compiler calls             0
-    Average cache write                0.000 s
-    Average compiler                   0.000 s
-    Average cache read hit             0.002 s
-    Failed distributed compilations        0
-
-    Non-cacheable reasons:
-    crate-type (bin)                      42
-    crate-type (proc-macro)               27
-    incremental                            6
-    missing input                          5
-    -                                      3
-    -o                                     3
-
-    Cache location                  Local disk: "/home/dirtlab/.cache/aida/lane-sccache"
-    Base directories                (none)
-    Use direct/preprocessor mode?   yes
-    Version (client)                0.19.0
-    Cache size                             6 GiB
-    Max cache size                        10 GiB
-    Stopping sccache server...
-    Compile requests                     453
-    Compile requests executed            363
-    Cache hits                           358
-    Cache hits (Assembler)                14
-    Cache hits (C/C++)                    17
-    Cache hits (Rust)                    327
-    Cache misses                           0
-    Cache hits rate                   100.00 %
-    Cache hits rate (Assembler)       100.00 %
-    Cache hits rate (C/C++)           100.00 %
-    Cache hits rate (Rust)            100.00 %
-    Cache timeouts                         0
-    Cache read errors                      0
-    Forced recaches                        0
-    Cache write errors                     0
-    Cache errors                           0
-    Compilations                           0
-    Compilation failures                   5
-    Non-cacheable compilations             0
-    Non-cacheable calls                   86
-    Non-compilation calls                  4
-    Unsupported compiler calls             0
-    Average cache write                0.000 s
-    Average compiler                   0.000 s
-    Average cache read hit             0.002 s
-    Failed distributed compilations        0
-
-    Non-cacheable reasons:
-    crate-type (bin)                      42
-    crate-type (proc-macro)               27
-    incremental                            6
-    missing input                          5
-    -                                      3
-    -o                                     3
-
-    Cache location                  Local disk: "/home/dirtlab/.cache/aida/lane-sccache"
-    Base directories                (none)
-    Use direct/preprocessor mode?   yes
-    Version (client)                0.19.0
-    Cache size                             6 GiB
-    Max cache size                        10 GiB
-    lane sccache: server exited before sandbox teardown
-  added_at: 2026-11-13T10:20:16.245442572Z
-  for_role: implementer
-- user_id: role:implementer
   requirement_id: 01a19db5-0aac-72e0-869f-fdee4a59db62
   position: 0
   added_by: fast-gate
@@ -807,6 +699,16 @@
     Max cache size                        10 GiB
     lane sccache: server exited before sandbox teardown
   added_at: 2026-11-13T10:27:47.212590948Z
+  for_role: implementer
+- user_id: role:implementer
+  requirement_id: 01a1b2ce-dc16-78c0-99c0-514d53b02f45
+  position: 0
+  added_by: empty-rework
+  note: |-
+    Empty rework of PR-3938 at d2e9aa5807aa4eb79840c7ba5d77c479f86a5018: no new pushed commit.
+    mergeable=CONFLICTING: resolve the merge conflicts
+    Address these blockers, commit and push. If disputing a finding, use `aida punt` and name that finding.
+  added_at: 2026-11-13T10:42:14.358326037Z
   for_role: implementer
 - user_id: role:implementer
   requirement_id: 01a1965c-3483-70e3-af35-1caaf7df3f96
