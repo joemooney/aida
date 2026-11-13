@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-12T15:12:31.833974678Z
-modified_at: 2026-11-13T06:06:49.216899272Z
+modified_at: 2026-11-13T06:21:59.227969032Z
 req_type: Bug
 tags:
 - track:dell1
@@ -25,6 +25,13 @@ comments:
   content: 'Validation complete: lane_result::tests executed 5 tests, all passed (job j20261113T054249349-2-0). The new real-clone commit/push regression executed 1 test and passed (job j20261113T055040860-2-0). Initial regression job j20261113T054201940-2-0 timed out during compilation at 900s; subsequent compilation and executed tests succeeded. rustfmt and git diff --check pass. Two files changed: standalone_implementer.rs and tests/task_2053_s4_host_git_tests.rs. Edits remain uncommitted for host publication. No implementation blockers; reviewed host codegraph client is missing.'
   created_at: 2026-11-13T06:06:49.216899272Z
   modified_at: 2026-11-13T06:06:49.216899272Z
+  session_id: 01a1d36b5051
+  harness_version: codex-cli 0.167.0
+- id: 01a1d391-f03b-7741-b882-f5a8220c3154
+  author: dirtlab
+  content: 'Fast-gate fix round: changed the regression commit/push calls to invoke crate::test_git::git_command directly, making their maintenance guard visible to the ratchet. Exact failing CI step passed: python3 -m unittest tests/test_git_maintenance_ratchet.py tests/test_ownership_liveness_ratchet.py (10 tests). Clone publication regression re-executed and passed (1 test, lane job j20261113T061340410-2-0). rustfmt and git diff --check pass. Test-only fix remains uncommitted for host publication.'
+  created_at: 2026-11-13T06:21:59.227969032Z
+  modified_at: 2026-11-13T06:21:59.227969032Z
   session_id: 01a1d36b5051
   harness_version: codex-cli 0.167.0
 history:
