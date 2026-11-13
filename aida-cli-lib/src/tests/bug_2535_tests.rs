@@ -5,6 +5,7 @@ use std::{
     time::{Duration, Instant},
 };
 
+#[cfg(target_os = "linux")]
 #[test]
 fn bug_2535_sweep_success_and_failure_are_preserved() {
     let mut ok = Command::new("sh");
@@ -17,6 +18,7 @@ fn bug_2535_sweep_success_and_failure_are_preserved() {
     assert!(error.to_string().contains("exited with"), "{error}");
 }
 
+#[cfg(target_os = "linux")]
 #[test]
 fn bug_2535_stalled_scan_and_separate_group_descendant_stop_at_budget() {
     let temp = tempfile::tempdir().unwrap();
@@ -51,6 +53,7 @@ fn locked_file() -> std::fs::File {
     lock
 }
 
+#[cfg(target_os = "linux")]
 #[test]
 fn bug_2535_termination_wait_is_bounded_and_reaper_retains_lock() {
     use crate::process_retry::RetryEtxtbsy;
@@ -79,6 +82,7 @@ fn bug_2535_termination_wait_is_bounded_and_reaper_retains_lock() {
     }
 }
 
+#[cfg(target_os = "linux")]
 #[test]
 fn bug_2535_direct_entry_refuses_even_while_cleanup_lock_is_held() {
     use fs2::FileExt;
@@ -93,6 +97,7 @@ fn bug_2535_direct_entry_refuses_even_while_cleanup_lock_is_held() {
     }
 }
 
+#[cfg(target_os = "linux")]
 #[test]
 fn bug_2535_verified_handoff_retains_serialization() {
     use fs2::FileExt;
