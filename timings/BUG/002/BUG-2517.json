@@ -9,9 +9,123 @@
     {
       "at": "2026-11-13T03:28:25.732008892Z",
       "closed_by": "auto-bump"
+    },
+    {
+      "at": "2026-11-13T03:29:35.234624755Z",
+      "closed_by": "auto-bump"
     }
   ],
   "events": [
+    {
+      "ts": "2026-11-10T21:15:55.999791703Z",
+      "spec": "BUG-2517",
+      "kind": {
+        "event": "UnshippedWorkDetected",
+        "spec": "BUG-2517",
+        "branch": "pr-3775",
+        "first_seen": "2026-11-10T21:15:55.999726685+00:00"
+      }
+    },
+    {
+      "ts": "2026-11-11T04:51:45.529269385Z",
+      "spec": "BUG-2517",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 3775,
+        "verdict": "CHANGES REQUESTED",
+        "reviewed_sha": "ce9683eaf45f5a3d198d689bf2309080bc1783ef"
+      }
+    },
+    {
+      "ts": "2026-11-11T04:51:47.130433991Z",
+      "spec": "BUG-2517",
+      "kind": {
+        "event": "SpecShelved",
+        "phase": "reviewer",
+        "kind": "verdict:request-changes",
+        "detail": "Advisor relay of the codex reviewer's verdict, lost to BUG-2522 (hold placement refused in the native sandbox). Three findings, full text at https://github.com/joemooney/aida/pull/3775#issuecomment-6787234295: (1) shared-spec findings contaminate verdict classification (lib_part5.rs:3139-3144: resolve the leased change before classifying inherited findings); (2) explicit gate anchors are overwritten; (3) contained GitLab MR verdicts cannot be collected.",
+        "recovery_hint": "address the review findings, move BUG-2517 back to In Progress, and clear the PR hold only after approval"
+      }
+    },
+    {
+      "ts": "2026-11-11T05:01:30.354819450Z",
+      "spec": "BUG-2517",
+      "seat": "advisor",
+      "kind": {
+        "event": "SpecRequeued",
+        "via": "queue-rework",
+        "actor": "joe",
+        "from": "Needs Attention",
+        "to": "Approved"
+      }
+    },
+    {
+      "ts": "2026-11-11T05:57:29.414799403Z",
+      "spec": "BUG-2517",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 3775,
+        "verdict": "CHANGES REQUESTED",
+        "reviewed_sha": "544b8b9dbc279cd824a1f8eb389b66214ae540f7"
+      }
+    },
+    {
+      "ts": "2026-11-11T05:57:31.117853071Z",
+      "spec": "BUG-2517",
+      "kind": {
+        "event": "SpecShelved",
+        "phase": "reviewer",
+        "kind": "verdict:request-changes",
+        "detail": "Full sweep: 3 defects in spec-only isolation/claims and repeated discovery budget; BUG-2517 (bug protocol): met (test files touched). Current-head CI pending; source/ledger evidence inspected, no local tests run.",
+        "recovery_hint": "address the review findings, move BUG-2517 back to In Progress, and clear the PR hold only after approval"
+      }
+    },
+    {
+      "ts": "2026-11-11T05:59:38.165440529Z",
+      "spec": "BUG-2517",
+      "seat": "advisor",
+      "kind": {
+        "event": "SpecRequeued",
+        "via": "queue-rework",
+        "actor": "joe",
+        "from": "Needs Attention",
+        "to": "Approved"
+      }
+    },
+    {
+      "ts": "2026-11-11T13:20:41.197270660Z",
+      "spec": "BUG-2517",
+      "seat": "advisor",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 1,
+        "slug": "implementer",
+        "attempt": 1
+      }
+    },
+    {
+      "ts": "2026-11-12T08:49:58.068057193Z",
+      "spec": "BUG-2517",
+      "seat": "advisor",
+      "kind": {
+        "event": "SpecRequeued",
+        "via": "queue-rework",
+        "actor": "joe",
+        "from": "Needs Attention",
+        "to": "Approved"
+      }
+    },
+    {
+      "ts": "2026-11-13T03:27:49.742578485Z",
+      "spec": "BUG-2517",
+      "seat": "advisor",
+      "kind": {
+        "event": "PrMerged",
+        "pr": 3775
+      }
+    },
     {
       "ts": "2026-11-13T03:28:19.535856307Z",
       "spec": "BUG-2517",
@@ -24,6 +138,16 @@
     },
     {
       "ts": "2026-11-13T03:28:25.394367354Z",
+      "spec": "BUG-2517",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "2a62f92c2a200b58e0d95446df07e355e062ab49",
+        "pr": 3775,
+        "closed_by": "auto-bump"
+      }
+    },
+    {
+      "ts": "2026-11-13T03:29:34.549251053Z",
       "spec": "BUG-2517",
       "kind": {
         "event": "SpecCompleted",
