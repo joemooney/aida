@@ -2,8 +2,8 @@
 //! Per-module command registration. Each command module owns its clap
 //! definition, dispatch phase, policy and handler in one `CommandReg`, listed
 //! once in [`REGISTRY`]; the legacy `Command` enum in `cli.rs` shrinks one
-//! slice at a time until it is gone. `built_command()` is the only way
-//! production code may obtain the CLI's clap tree, so every consumer (parse,
+//! slice at a time until it is gone. `built_command()` supplies the pristine
+//! tree to the crate root's injected CLI support, so every consumer (parse,
 //! help, catalog, alias and extension shadowing) sees registered commands.
 // trace:STORY-1728 | ai:claude
 
@@ -293,37 +293,21 @@ pub(crate) fn help_order<'a>(
     Ok(order)
 }
 
-/// Supply the production tree and decoder to the test composition root.
+/// Parse argv through the injected leaf helper, exiting with clap's message
+/// and code on error (the `Parser::parse_from` contract).
+// trace:STORY-1728 | ai:claude
 // trace:TASK-3448 | ai:codex
-#[cfg(test)]
-pub(crate) const fn test_support() -> crate::cmdkit::testing::CliTestSupport<Cli> {
-    crate::cmdkit::testing::CliTestSupport::new(built_command, cli_from_matches)
-}
-
-/// Parse argv against [`built_command`]; clap's own error on failure.
-// trace:STORY-1728 | ai:claude
-pub(crate) fn try_parse_from<I, T>(argv: I) -> Result<Cli, clap::Error>
-where
-    I: IntoIterator<Item = T>,
-    T: Into<std::ffi::OsString> + Clone,
-{
-    let mut root = built_command();
-    let mut matches = root.try_get_matches_from_mut(argv)?;
-    cli_from_matches(&mut matches).map_err(|err| err.format(&mut root))
-}
-
-/// [`try_parse_from`], exiting with clap's message and code on error (the
-/// `Parser::parse_from` contract).
-// trace:STORY-1728 | ai:claude
 pub(crate) fn parse_from<I, T>(argv: I) -> Cli
 where
     I: IntoIterator<Item = T>,
     T: Into<std::ffi::OsString> + Clone,
 {
-    try_parse_from(argv).unwrap_or_else(|err| err.exit())
+    crate::CLI_SUPPORT
+        .try_parse_from(argv)
+        .unwrap_or_else(|err| err.exit())
 }
 
-fn cli_from_matches(matches: &mut ArgMatches) -> Result<Cli, clap::Error> {
+pub(crate) fn cli_from_matches(matches: &mut ArgMatches) -> Result<Cli, clap::Error> {
     let Some(reg) = matches.subcommand_name().and_then(lookup) else {
         return Cli::from_arg_matches_mut(matches);
     };
@@ -369,7 +353,8 @@ where
     I: IntoIterator<Item = T>,
     T: Into<std::ffi::OsString> + Clone,
 {
-    try_parse_from(argv)
+    crate::TEST_CLI
+        .try_parse_from(argv)
         .unwrap_or_else(|err| panic!("test argv does not parse: {err}"))
         .command
 }

@@ -16172,6 +16172,7 @@ idempotent backup for changes opened without it
 Usage: aida pr [OPTIONS] <COMMAND>
 
 Commands:
+  emergency-land     Operator-only emergency squash merge with verified protection restoration
   state              Derive PR states, next actions and owners without performing actions
   auto-queue-review  File the reviewer story for the change (PR/MR) open on the current branch and
                      queue it to the `reviewer` role. Idempotent: when a `Review PR-<n>:` / `Review
@@ -16210,6 +16211,46 @@ Commands:
   help               Print this message or the help of the given subcommand(s)
 
 Options:
+      --format <FORMAT>
+          Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
+          compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
+          piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)
+
+          Possible values:
+          - human: Human-readable tables / emoji (the interactive default at a TTY)
+          - toon:  Token-efficient TOON — the compact agent default when piped/captured
+          - json:  Machine JSON, for commands that support a JSON projection
+
+      --canonical-ids
+          Show node-local spec IDs in their canonical form instead of the node's friendly label (for
+          scripts). Also settable via AIDA_CANONICAL_IDS=1
+
+  -h, --help
+          Print help (see a summary with '-h')
+===== aida pr emergency-land
+Operator-only emergency squash merge with verified protection restoration
+
+Usage: aida pr emergency-land [OPTIONS] <N>
+
+Arguments:
+  <N>
+          Open GitHub PR to merge into the default branch
+
+Options:
+      --max-lines <MAX_LINES>
+          Maximum added plus deleted lines
+          
+          [default: 200]
+
+      --allow-large
+          Permit more than the line limit or ten files
+
+      --dry-run
+          Print the plan and precondition verdict without writes
+
+      --no-watch
+          Skip the bounded post-merge CI watch
+
       --format <FORMAT>
           Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
           compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
@@ -48200,6 +48241,52 @@ Working on aida itself
         "name": "help",
         "takes_value": false,
         "help": "Print help (see more with '--help')"
+      }
+    ],
+    "hidden": false
+  },
+  {
+    "path": [
+      "aida",
+      "pr",
+      "emergency-land"
+    ],
+    "about": "Operator-only emergency squash merge with verified protection restoration",
+    "flags": [
+      {
+        "name": "allow-large",
+        "takes_value": false,
+        "help": "Permit more than the line limit or ten files"
+      },
+      {
+        "name": "canonical-ids",
+        "takes_value": false,
+        "help": "Show node-local spec IDs in their canonical form instead of the node's friendly label (for scripts). Also settable via AIDA_CANONICAL_IDS=1"
+      },
+      {
+        "name": "dry-run",
+        "takes_value": false,
+        "help": "Print the plan and precondition verdict without writes"
+      },
+      {
+        "name": "format",
+        "takes_value": true,
+        "help": "Pin the output format regardless of whether stdout is a terminal: human = tables, toon = compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)"
+      },
+      {
+        "name": "help",
+        "takes_value": false,
+        "help": "Print help (see more with '--help')"
+      },
+      {
+        "name": "max-lines",
+        "takes_value": true,
+        "help": "Maximum added plus deleted lines"
+      },
+      {
+        "name": "no-watch",
+        "takes_value": false,
+        "help": "Skip the bounded post-merge CI watch"
       }
     ],
     "hidden": false

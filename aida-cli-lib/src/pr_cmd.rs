@@ -41,6 +41,8 @@ pub(crate) use pr_cmd_args::*;
 // trace:STORY-90 | ai:claude
 pub(crate) fn handle_pr_command(cmd: &PrCommand) -> Result<()> {
     match cmd {
+        // trace:STORY-2732 | ai:codex
+        PrCommand::EmergencyLand(args) => crate::pr_emergency_land::run(args),
         PrCommand::State(args) => crate::pr_state::run(args),
         // Internal worker preserves the existing cleanup gates after ship exits.
         // trace:BUG-2384 | ai:codex

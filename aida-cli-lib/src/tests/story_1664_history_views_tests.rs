@@ -296,24 +296,25 @@ fn cli_parses_each_view_with_list_style_filters() {
         ("approved", HistoryView::Approved),
         ("closed", HistoryView::Closed),
     ] {
-        let cli = crate::command_registry::try_parse_from([
-            "aida",
-            "history",
-            word,
-            "--since",
-            "30d",
-            "--type",
-            "bug",
-            "--tags",
-            "cli,ui",
-            "--priority",
-            "high",
-            "--all-events",
-            "--oldest-first",
-            "-n",
-            "5",
-        ])
-        .unwrap();
+        let cli = crate::TEST_CLI
+            .try_parse_from([
+                "aida",
+                "history",
+                word,
+                "--since",
+                "30d",
+                "--type",
+                "bug",
+                "--tags",
+                "cli,ui",
+                "--priority",
+                "high",
+                "--all-events",
+                "--oldest-first",
+                "-n",
+                "5",
+            ])
+            .unwrap();
         let crate::history::HistoryArgs {
             cmd: Some(ref cmd),
             ref since,
@@ -334,12 +335,16 @@ fn cli_parses_each_view_with_list_style_filters() {
         assert_eq!(limit, Some(5));
     }
     // The existing surfaces are unchanged.
-    let cli = crate::command_registry::try_parse_from(["aida", "history", "TASK-1"]).unwrap();
+    let cli = crate::TEST_CLI
+        .try_parse_from(["aida", "history", "TASK-1"])
+        .unwrap();
     assert!(matches!(
         cli.command.registered::<crate::history::HistoryArgs>(),
         crate::history::HistoryArgs { cmd: None, .. }
     ));
-    let cli = crate::command_registry::try_parse_from(["aida", "history", "events"]).unwrap();
+    let cli = crate::TEST_CLI
+        .try_parse_from(["aida", "history", "events"])
+        .unwrap();
     assert!(matches!(
         cli.command.registered::<crate::history::HistoryArgs>(),
         crate::history::HistoryArgs {

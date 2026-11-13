@@ -531,7 +531,9 @@ impl Drop for MarkerGuard {
 // trace:STORY-1662.AC6 | ai:claude
 #[test]
 fn pr_ship_refuses_under_the_marker() {
-    let cli = crate::command_registry::try_parse_from(["aida", "pr", "ship", "42"]).unwrap();
+    let cli = crate::TEST_CLI
+        .try_parse_from(["aida", "pr", "ship", "42"])
+        .unwrap();
     let args = cli.command.registered::<crate::pr_cmd::PrArgs>();
     let _marker = MarkerGuard::set();
     let err = crate::pr_cmd::handle_pr_command(&args.inner).unwrap_err();
