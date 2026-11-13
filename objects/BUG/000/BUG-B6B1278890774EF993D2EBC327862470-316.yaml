@@ -8,10 +8,18 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-13T05:04:27.319151195Z
-modified_at: 2026-11-13T05:31:13.387456265Z
+modified_at: 2026-11-13T05:43:27.986792025Z
 req_type: Bug
 tags:
 - track:integration
+comments:
+- id: 01a1d36e-abf2-7273-af10-ed04c1b0a627
+  author: joe
+  content: '22:45: related failure. The PR-3922 promotion reviewer pickup failed with ''store pull refused: uncommitted changes'' (a concurrent store writer left the tree dirty for a moment), and the follow-up ''aida pull'' in the job hung again (killed after ~20 min). The pre-pickup pull should wait on the store lock or retry, not fail on a transient dirty tree.'
+  created_at: 2026-11-13T05:43:27.986792025Z
+  modified_at: 2026-11-13T05:43:27.986792025Z
+  session_id: 01a1d2e6-f5db-7f33-9b74-3ae5fdaf9e0c
+  harness_version: 2.1.323 (Claude Code)
 history:
 - id: 01a1d363-766b-7430-8bca-0c0a924878fa
   author: joe
