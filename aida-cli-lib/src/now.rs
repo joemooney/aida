@@ -350,7 +350,7 @@ pub(crate) fn assemble(
     items.sort_by(|a, b| (a.stage, a.pr, &a.spec).cmp(&(b.stage, b.pr, &b.spec)));
 
     let has_item = |requirement: &aida_core::models::Requirement| {
-        let label = spec_label(&requirement.display_id());
+        let label = spec_label(&requirement.display_id()); // canonical-id: key matched against item labels
         items.iter().any(|item| item.spec == label)
     };
     queues.approved_not_started = requirements
@@ -392,7 +392,7 @@ pub(crate) fn assemble(
         }
     }
     for requirement in requirements {
-        let label = spec_label(&requirement.display_id());
+        let label = spec_label(&requirement.display_id()); // canonical-id: key matched against item labels
         let item = items.iter().find(|item| item.spec == label);
         let entry = match (&requirement.status, item) {
             (Status::NeedsAttention, Some(item)) if item.actor != NO_ACTOR => Some((
