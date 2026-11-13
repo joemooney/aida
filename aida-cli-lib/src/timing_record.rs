@@ -1047,6 +1047,7 @@ mod tests {
                 "-c",
                 "core.hooksPath=/dev/null",
             ])
+            .args(["-c", "maintenance.auto=false", "-c", "gc.auto=0"])
             .args(args)
             .output()
             .unwrap();
