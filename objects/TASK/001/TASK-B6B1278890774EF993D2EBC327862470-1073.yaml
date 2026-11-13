@@ -1,0 +1,30 @@
+id: 01a1d680-a18f-72d0-adff-1d390cc8a1b3
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-1073
+title: Non-blocking review findings sweep
+description: |
+  ## Findings from STORY-2735
+  Reviewed sha: 7b7ccdf00adb0a0b772a6a6fd1a2480a772527b6
+
+  ### finding-hash:2c7ae2ea
+
+  [P3] .github/workflows/ci.yml:45,77: FAST check names match pr_train.rs:638 train_ci_is_shard, so seven passing FULL shards and two skipped FAST jobs display 7/9 shards passed. Readiness is unaffected. Future cleanup can rename the checks or narrow the filter and extend its fixture.
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-11-13T20:01:56.623034248Z
+modified_at: 2026-11-13T20:01:56.676227554Z
+req_type: Task
+tags:
+- carried-finding:STORY-2735:2c7ae2ea
+- carried-from:STORY-2735
+- finding-hash:2c7ae2ea
+- from-review:STORY-2735
+- kind:finding-sweep
+filed_at:
+  code_sha: 91fe1e337894199f15365d3f8ecfaf81366f8291
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 91fe1e33789
+  vendor: claude
