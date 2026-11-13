@@ -154,13 +154,21 @@ class CiTiers(unittest.TestCase):
                 clean = run()
                 self.assertEqual(clean.returncode, 0, clean.stdout + clean.stderr)
                 # Missing trusted evidence must refuse even on a clean tree.
-                # Use a local origin so this exercises fetch failure without
-                # network access or relying on an unavailable external server.
+                # Full-history checkout must already contain the trusted base.
+                # Refuse before Make or any guard's optional no-base branch.
                 unavailable = dict(env, **{variable: '1' * 40})
                 missing = run(unavailable)
                 self.assertNotEqual(missing.returncode, 0,
                                     missing.stdout + missing.stderr)
-                self.assertIn('not our ref', missing.stdout + missing.stderr)
+                self.assertIn('FAST requires a trusted base resolving to a checked-out commit', missing.stderr)
+                self.assertNotIn('RUN   ', missing.stdout)
+                # A real Git object is insufficient when it is not a commit.
+                blob = git('rev-parse', 'HEAD:Makefile')
+                noncommit = run(dict(env, **{variable: blob}))
+                self.assertNotEqual(noncommit.returncode, 0,
+                                    noncommit.stdout + noncommit.stderr)
+                self.assertIn('FAST requires a trusted base resolving to a checked-out commit', noncommit.stderr)
+                self.assertNotIn('RUN   ', noncommit.stdout)
                 if variable == 'EXEC_CONTEXT_BASE':
                     write('aida-core/src/legacy.rs', 'fn f() { std::env::var("NEW"); }')
                     # Capture a matching expanded ledger without a base check.

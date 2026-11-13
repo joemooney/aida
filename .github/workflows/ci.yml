@@ -75,6 +75,12 @@ jobs:
               echo "FAST requires a trusted base; Git's null SHA is not a revision" >&2
               exit 1
             fi
+            # checkout fetches full history; refuse unavailable/non-commit bases
+            # before the local reader can run any of the source gates.
+            if ! git rev-parse --verify --end-of-options "${base}^{commit}" >/dev/null 2>&1; then
+              echo "FAST requires a trusted base resolving to a checked-out commit" >&2
+              exit 1
+            fi
           done
           make check-ci-fast
         env:
