@@ -23,7 +23,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-12T19:11:56.371806442Z
-modified_at: 2026-11-13T19:43:22.116214100Z
+modified_at: 2026-11-13T20:08:56.045293096Z
 req_type: Story
 tags:
 - operator-held
@@ -224,6 +224,13 @@ comments:
   created_at: 2026-11-13T19:43:22.116214100Z
   modified_at: 2026-11-13T19:43:22.116214100Z
   session_id: 01a1d5f7-27ab-7543-8808-b0ec6c271689
+  harness_version: 2.1.323 (Claude Code)
+- id: 01a1d687-07ed-7241-bf8e-dbb2311bb248
+  author: joe
+  content: 'Main gap update 13:20 MST: main unmoved since 11:43 (91fe1e3). In flight: train #3962 (#3898, #3919, #3939) in CI; train 5 (#3949, #3920, both approved and green) queued behind it on the default deputy. Promotion 6 blocked on canary #3905 red (bug_1502 audit rows for ''aida integration''); integration seat fixing. Review batch h (8 main-track PRs at new heads) launched on deputy 2.'
+  created_at: 2026-11-13T20:08:56.045293096Z
+  modified_at: 2026-11-13T20:08:56.045293096Z
+  session_id: 01a1d684-8599-70e0-a01c-714f54d2f8de
   harness_version: 2.1.323 (Claude Code)
 history:
 - id: 01a1d175-992b-7501-a0fb-89a007208ac0
