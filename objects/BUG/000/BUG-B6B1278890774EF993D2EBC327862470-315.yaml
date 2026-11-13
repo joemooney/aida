@@ -3,12 +3,12 @@ spec_id: BUG-b6b1278890774ef993d2ebc327862470-315
 agreed_id: BUG-2550
 title: Merge-time auto-bump runs twice for one merge; duplicate completions conflict on store pull and block every reviewer pickup
 description: '2026-11-12 20:27 MST: #3775 merged as 2a62f92. Two auto-bump runs ~70s apart (03:28 origin, 03:29 local) each completed BUG-2517 and STORY-2712 and appended timings/*.json. The rebase conflicted on the timings JSON (non-mergeable path) and on the spec YAMLs. ''aida db sync --pull'' failed, and every ''aida queue work PR-N --role reviewer'' then refused at pre-pickup pull (review deputy stalled ~25 min). Fixed by hand: rebase, union-merge of timings publishes/events, keep upstream for the duplicate bump. Fix: make the auto-bump idempotent per (spec, completion_sha), so the second run no-ops when the spec is already Completed at that sha; make timings/*.json union-mergeable (merge driver or per-event files). Related: review-watch mailed ''PR-3907 ready to ship'' while the train refused it because its approval was bound to 109b770 (another PR''s head).'
-status: NeedsAttention
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-13T03:56:52.002540842Z
-modified_at: 2026-11-13T10:51:58.084343830Z
+modified_at: 2026-11-13T14:57:17.064082825Z
 req_type: Bug
 tags:
 - track:integration
@@ -77,6 +77,19 @@ history:
   author: joe
   timestamp: 2026-11-13T10:51:59.427413531Z
   changes: []
+- id: 01a1d569-b501-7a51-945f-2ef88551b6ea
+  author: aida-auto-bump
+  timestamp: 2026-11-13T14:57:17.057698858Z
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Completed
+processing_record:
+- id: 01a1d569-b508-7ed0-8057-6c81a1c2b8bf
+  timestamp: 2026-11-13T14:57:17.064081777Z
+  agent: aida
+  commit_sha: 3631f7ca05567a6984ff2376b997539389b6f758
+  summary: Completed via merge 3631f7ca
 filed_at:
   code_sha: 2a62f92c2a200b58e0d95446df07e355e062ab49
   branch: main
@@ -86,11 +99,7 @@ filed_at:
   vendor: claude
   session: 01a1d2e6-f5db-7f33-9b74-3ae5fdaf9e0c
   harness_version: 2.1.323 (Claude Code)
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: 'Full sweep: timing schema validation and production-format regression coverage need fixes. BUG-2550 bug protocol: met (inline tests). AC1 verified by existing idempotence guards/test source; AC2 unverified end-to-end. No build/test CI visible; no local tests run.'
-  recovery_hint: address the review findings, move BUG-2550 back to In Progress, and clear the PR hold only after approval
-  shelved_by: reviewer
-  shelved_at: 2026-11-13T07:51:42.568737489Z
+implementation_info:
+  implemented: false
+  completed_at: 2026-11-13T14:57:17.057693376Z
+  completion_sha: 3631f7ca05567a6984ff2376b997539389b6f758
