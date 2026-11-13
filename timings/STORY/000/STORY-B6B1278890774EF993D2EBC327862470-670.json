@@ -3,11 +3,25 @@
   "spec": "STORY-B6B1278890774EF993D2EBC327862470-670",
   "publishes": [
     {
+      "at": "2026-11-13T07:43:48.464347407Z",
+      "closed_by": "auto-bump"
+    },
+    {
       "at": "2026-11-13T07:45:54.000289006Z",
       "closed_by": "auto-bump"
     }
   ],
   "events": [
+    {
+      "ts": "2026-11-13T07:43:48.409359068Z",
+      "spec": "STORY-b6b1278890774ef993d2ebc327862470-670",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "f13fe5a8463299b1e2578d3ed5df98f953c1e499",
+        "pr": 3911,
+        "closed_by": "auto-bump"
+      }
+    },
     {
       "ts": "2026-11-13T07:45:53.390746209Z",
       "spec": "STORY-b6b1278890774ef993d2ebc327862470-670",
