@@ -440,8 +440,21 @@ fn bug_2536_clone_launch_head_allows_published_result() {
     attempt.started(123);
     super::tests::git_ok(&clone, &["config", "user.email", "test@example.com"]);
     super::tests::git_ok(&clone, &["config", "user.name", "AIDA Test"]);
-    super::tests::git_ok(&clone, &["commit", "--allow-empty", "-qm", "lane work"]);
-    super::tests::git_ok(&clone, &["push", "-q", "origin", "HEAD:feat"]);
+    for args in [
+        ["commit", "--allow-empty", "-qm", "lane work"],
+        ["push", "-q", "origin", "HEAD:feat"],
+    ] {
+        let output = crate::test_git::git_command()
+            .current_dir(&clone)
+            .args(args)
+            .output()
+            .unwrap();
+        assert!(
+            output.status.success(),
+            "git {args:?}: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+    }
     let published = crate::headless_background::SeatState::read(&clone, "feat");
     let new_head = published.pushed_head().expect("published clone head");
     assert_ne!(head.as_deref(), Some(new_head));
