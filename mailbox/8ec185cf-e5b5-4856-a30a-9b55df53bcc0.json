@@ -1,0 +1,18 @@
+{
+  "id": "8ec185cf-e5b5-4856-a30a-9b55df53bcc0",
+  "thread_id": "8ec185cf-e5b5-4856-a30a-9b55df53bcc0",
+  "from": "dirtlab",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1794571424874,
+  "body": "BUG-b6b1278890774ef993d2ebc327862470-266 PR #3920 conflicts with origin/main in: aida-cli-lib/src/db_block.rs, aida-cli-lib/src/store_sync.rs, scripts/store-writers.toml. The host aborted the merge. Conflict resolution continues with codex on branch bug-b6b1278890774ef993d2ebc327862470-266.",
+  "subject": "Rework merge conflicts require resolution",
+  "urgent": false,
+  "intent": "request",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "shell_user"
+}
