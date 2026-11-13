@@ -13,7 +13,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T21:41:03.638236900Z
-modified_at: 2026-11-13T21:00:20.016399380Z
+modified_at: 2026-11-13T21:15:26.982042002Z
 req_type: Story
 tags:
 - track:dell1
@@ -595,6 +595,13 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was punted on: blocked-dependency: Round 13: required first action is host fetch/merge/push of origin/main for PR #3938, but this standalone native seat prohibits Git metadata writes, commits and pushes. Local origin/main is 177 commits ahead (HEAD has 14 unique commits); no unresolved index entries and no working-tree edits. Host must resolve and publish the merge before further work. Findings 1 and 2 already addressed by 7b4dc02c70; finding 3 retains synchronous hashing intentionally, with metadata-preserving rewrite regression in 201ade38b1. Previous commits do not satisfy this round; no new commit claimed. Host must also deploy reviewed codegraph client under primary checkout .codegraph/proxy-state/bin/codegraph and provide its absolute path; doctor reports missing. untested=true.. No triage reason was given.'
   created_at: 2026-11-13T20:57:35.985774921Z
   modified_at: 2026-11-13T20:57:35.985774921Z
+  session_id: 01a1d684-8599-70e0-a01c-714f54d2f8de
+  harness_version: 2.1.323 (Claude Code)
+- id: 01a1d6c3-ed86-70a1-98bd-6d27cfe44703
+  author: joe
+  content: 'Advisor 14:17: re-PARKED. My 13:58 relaunch ignored the 05:58 park; the lane punted again for the same reason (native seat cannot record the merge of main). Do not relaunch until BUG-2558 (#3953) is on main and dell1 is rebuilt.'
+  created_at: 2026-11-13T21:15:26.982042002Z
+  modified_at: 2026-11-13T21:15:26.982042002Z
   session_id: 01a1d684-8599-70e0-a01c-714f54d2f8de
   harness_version: 2.1.323 (Claude Code)
 history:
