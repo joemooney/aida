@@ -697,6 +697,7 @@ pub mod schema;
 // trace:BUG-1934 | ai:claude
 mod codex_tool_env;
 mod grant_keyring;
+mod repair_journal;
 // trace:BUG-2169 | ai:claude — a contained seat's private clone (the only host accessor).
 mod seat_clone;
 // trace:BUG-B6B1278890774EF993D2EBC327862470-049 | ai:claude — pre-trust seat worktrees in ~/.claude.json.

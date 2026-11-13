@@ -565,8 +565,8 @@ pub(crate) fn run_queue_resume_to_exit(
     Ok(status)
 }
 
-/// Resolve the host merge result before any vendor is launched. Successful
-/// conflicts require advisor delivery and preserve the selected session vendor.
+/// Keep the configured vendor for a host-staged repair. Preparation failures
+/// still refuse before launch; notification delivery belongs to a later slice.
 // trace:BUG-2553 | ai:codex
 // trace:STORY-2475 | ai:codex
 pub(crate) fn rework_conflict_route(
@@ -582,15 +582,9 @@ pub(crate) fn rework_conflict_route(
     if files.is_empty() {
         return Ok((vendor, files));
     }
-    notify(
-        "Rework merge conflicts require resolution",
-        &format!(
-            "{scope} PR #{pr} conflicts with origin/main in: {}. The host aborted the merge. \
-         Conflict resolution continues with {} on branch {branch}.",
-            files.join(", "),
-            vendor.as_str(),
-        ),
-    )?;
+    // The host retained this merge and its original paths. Keep the configured
+    // vendor, including resumed Codex threads; no conflict-only mail prerequisite.
+    let _ = (scope, pr, branch, notify);
     Ok((vendor, files))
 }
 
@@ -606,11 +600,10 @@ pub(crate) struct ReworkConflictLaunch<'a> {
     pub(crate) branch: &'a str,
 }
 
-/// Apply the host merge result to a pickup whose seat (linked worktree or
-/// clone) and lease already exist. A clean merge keeps the planned vendor,
-/// model and prompt. A conflict keeps that vendor and model, rechecks launch
-/// admission, and appends the conflict task before any child starts.
-// trace:STORY-2475 BUG-2553 | ai:codex
+/// Append the host-journal conflict paths without changing vendor or model.
+/// Launch admission and containment are rechecked before any child starts.
+// trace:STORY-2475 | ai:claude
+// trace:BUG-2553 | ai:codex
 pub(crate) fn apply_rework_conflict_route(
     _project_root: &Path,
     prepared: Result<Vec<String>>,
@@ -634,10 +627,9 @@ pub(crate) fn apply_rework_conflict_route(
     let vendor = route_vendor;
     session::preflight_launch_vendor(vendor, launch.interactive)?;
     session::require_vendor_containment(vendor, launch.contained, "conflict rework")?;
-
     prompt.push_str(&format!(
         "\n\n{}",
-        crate::rework_direction::conflict_task(&crate::rework_direction::MainConflict {
+        crate::rework_direction::host_conflict_task(&crate::rework_direction::MainConflict {
             pr: launch.pr,
             base: "main".into(),
             files,
@@ -5502,6 +5494,8 @@ pub(crate) fn handle_queue_work(
                         &lease.worktree_path,
                         branch,
                         matches!(launch, Some(QueueWorkLaunch::Resume(_))),
+                        *pr,
+                        &lease.id,
                     );
                     launch_vendor = apply_rework_conflict_route(
                         &project_root,
