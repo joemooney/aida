@@ -234,6 +234,11 @@ class CrateSplitTools(unittest.TestCase):
                       'other.rs|old.rs|literal:codex\t3\n'
                       'old.rs.extra|example|literal:codex\t1\n')
             (root / VENDOR_LITERALS).write_text(vendor)
+            # trace:TASK-3783 | ai:codex
+            config = root / 'scripts/config-trust.toml'
+            config.write_text('[readers."old.rs"]\nchannels = ["policy"]\nsites = 2\n')
+            writers = root / 'scripts/store-writers.toml'
+            writers.write_text('writer = [{id = "old.rs|example|write", path = "old.rs", evidence = "old.rs prose"}]\n')
             (root / 'old.rs').rename(root / 'new.rs')
             (root / 'new.rs').write_text('changed')
             with self.assertRaises(ValueError):
@@ -245,6 +250,8 @@ class CrateSplitTools(unittest.TestCase):
             (root / 'new.rs').write_text('fn example() {}\n')
             MOVE.relocate(root, 'old.rs', 'new.rs', 'HEAD')
             self.assertEqual(json.loads((root / 'scripts/exec-context-legacy.json').read_text()), {'ceiling': 2, 'sites': {'new.rs:f:var:abc': 2}})
+            self.assertEqual(config.read_text(), '[readers."new.rs"]\nchannels = ["policy"]\nsites = 2\n')
+            self.assertEqual(writers.read_text(), 'writer = [{id = "new.rs|example|write", path = "new.rs", evidence = "old.rs prose"}]\n')
             self.assertEqual((root / 'scripts/portability-allowlist.txt').read_text(), '# old.rs:comment\nr\tnew.rs:source old.rs:text\n')
             self.assertEqual(json.loads((root / 'scripts/crate-globs-legacy.json').read_text()), {'new.rs': 1})
             self.assertEqual(json.loads(ownership_path.read_text()),
