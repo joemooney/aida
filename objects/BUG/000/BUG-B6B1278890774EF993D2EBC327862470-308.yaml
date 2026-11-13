@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-12T23:29:52.950918801Z
-modified_at: 2026-11-13T12:28:54.265138002Z
+modified_at: 2026-11-13T14:38:15.254179242Z
 req_type: Bug
 tags:
 - track:integration
@@ -103,6 +103,10 @@ history:
   author: joe
   timestamp: 2026-11-13T12:26:20.785557419Z
   changes: []
+- id: 01a1d558-547d-7841-bc54-9417d6554514
+  author: joe
+  timestamp: 2026-11-13T14:38:18.237706408Z
+  changes: []
 filed_at:
   code_sha: 618ce8ab39bf3a803800ba55a00b44a0e11745ff
   branch: integration
@@ -115,7 +119,7 @@ failure_reason:
   phase: reviewer
   phase_index: 3
   kind: verdict:request-changes
-  detail: Two fail-open listing defects remain; escalate to advisor before any round 4.
+  detail: 'Two P1 cached-reread defects: linked evidence bypasses fresh discovery refusal, and FIFO replacement blocks review/pull; advisor round-4 escalation applies.'
   recovery_hint: address the review findings, move BUG-2543 back to In Progress, and clear the PR hold only after approval
   shelved_by: reviewer
-  shelved_at: 2026-11-13T12:26:20.635857632Z
+  shelved_at: 2026-11-13T14:38:15.254179242Z
