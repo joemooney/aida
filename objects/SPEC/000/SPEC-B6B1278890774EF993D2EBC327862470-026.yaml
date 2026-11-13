@@ -8,13 +8,21 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-12T08:49:25.240326961Z
-modified_at: 2026-11-13T05:31:28.731001473Z
+modified_at: 2026-11-13T05:33:04.139102369Z
 req_type: Task
 tags:
 - from-implementer:BUG-2531
 - kind:design-choice
 - severity:major
 - track:integration
+comments:
+- id: 01a1d365-270b-7b03-b5ce-0e8931bb9c99
+  author: joe
+  content: 'Advisor 22:35: approved as integration-track with the gate-ledger cluster (BUG-2531/2542/2543/2551, TASK-3097). Architecture-level: post the archive-aware retention contract as a sketch on this spec and get advisor signoff before implementing.'
+  created_at: 2026-11-13T05:33:04.139102369Z
+  modified_at: 2026-11-13T05:33:04.139102369Z
+  session_id: 01a1d2e6-f5db-7f33-9b74-3ae5fdaf9e0c
+  harness_version: 2.1.323 (Claude Code)
 history:
 - id: 01a1cef8-4538-71c2-a07d-81406a7925d4
   author: joe
