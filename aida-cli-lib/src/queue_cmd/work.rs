@@ -5512,12 +5512,10 @@ pub(crate) fn handle_queue_work(
                     // Only native Codex uses host publication; self-publishing
                     // vendors keep their existing merge workflow.
                     // trace:BUG-2558 | ai:codex
-                    let host_staged = launch_vendor == session::HeadlessVendor::Codex
-                        && session::containment_posture_in(
-                            &project_root,
-                            launch_vendor.as_str(),
-                            contained,
-                        )? == session::ContainmentPosture::Native
+                    let host_staged = crate::vendors::profile::VendorProfile::for_vendor(
+                        launch_vendor.launch_vendor(),
+                    )
+                    .uses_native_host_publication(&project_root, contained)?
                         && crate::seat_clone::host_recorded_clone(
                             &project_root,
                             &lease.worktree_path,

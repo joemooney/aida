@@ -59,6 +59,21 @@ impl VendorProfile {
         Self(aida_core::vendors::profile(vendor))
     }
 
+    /// Native clone launches publish through the host only for this profile.
+    // trace:BUG-2558 | ai:codex
+    pub(crate) fn uses_native_host_publication(
+        &self,
+        project_root: &std::path::Path,
+        contained: bool,
+    ) -> Result<bool> {
+        Ok(self.0.vendor == LaunchVendor::Codex
+            && crate::session::containment_posture_in(
+                project_root,
+                self.0.vendor.as_str(),
+                contained,
+            )? == crate::session::ContainmentPosture::Native)
+    }
+
     /// Exact non-AIDA configuration for each vendor; no prefix forwarding.
     // trace:STORY-2326 | ai:codex
     pub(crate) fn env_policy(
