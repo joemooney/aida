@@ -574,6 +574,15 @@ history:
   session_id: 01a1d4aa-9c99-76c2-ac94-7f0795f8a7f9
   harness_version: 2.1.323 (Claude Code)
   changes: []
+- id: 01a1d4e1-2731-7c01-9290-65d41c1bf59c
+  author: dirtlab
+  timestamp: 2026-11-13T12:28:07.857366348Z
+  session_id: 01a1d4df43cf
+  harness_version: codex-cli 0.167.0
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 filed_at:
   code_sha: db2eb4c39e46704132705ccb2b8300574ead41a6
   branch: main
