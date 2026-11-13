@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-13T01:54:48.391951523Z
-modified_at: 2026-11-13T20:58:58.722904629Z
+modified_at: 2026-11-13T21:03:00.034948929Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -119,6 +119,13 @@ comments:
   modified_at: 2026-11-13T20:58:58.722904629Z
   session_id: 01a1d6a9bfe7
   harness_version: codex-cli 0.167.0
+- id: 01a1d6b8-87c2-7521-9905-f185fef4444e
+  author: joe
+  content: 'Advisor ruling 14:03 MST on PR-3909 CR at 3ea584f: the single finding (AC1/AC3 unverified on publisher-enabled nodes; signed projections hide local child-grant completion evidence) stays BLOCKING as an acceptance-criterion miss. Scope the rework to that defect only: make child-grant completion visible to the headless-reviewer stop path when the publisher is enabled, and add a test on a publisher-enabled fixture. Nothing else is in scope for round 5.'
+  created_at: 2026-11-13T21:03:00.034948929Z
+  modified_at: 2026-11-13T21:03:00.034948929Z
+  session_id: 01a1d684-8599-70e0-a01c-714f54d2f8de
+  harness_version: 2.1.323 (Claude Code)
 history:
 - id: 01a1d29d-880a-7201-8b91-ded826a703b0
   author: joe
