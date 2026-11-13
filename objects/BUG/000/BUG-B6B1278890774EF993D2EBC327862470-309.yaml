@@ -1,0 +1,21 @@
+id: 01a1d275-98cf-79d2-a593-ddcf2c905ca6
+spec_id: BUG-b6b1278890774ef993d2ebc327862470-309
+agreed_id: BUG-2544
+title: Second concurrent 'aida queue work PR-N --role reviewer' from the same deputy shell fails 'no valid parent seat grant is active'
+description: 'Observed 2026-11-12 17:52 and 18:03: a deputy script launched reviewers for PR-3902 and PR-3896 in parallel from the operator''s default deputy (same AIDA_SESSION_GRANT). Both times the first launch proceeded (PR-3902 reviewed, verdict at 453348f) and the second failed with: error: "no valid parent seat grant is active" (exit 1, setup rolled back). Sequential launches from the same shell work (PR-3904 at 17:12). Expected: a parent grant can delegate several concurrent reviewer children, or the error names the real cause (grant consumed or swapped by the sibling delegation) and suggests launching them sequentially. Logs: .aida/tmp/lanes/review-3896.log.'
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-13T01:11:24.623933148Z
+modified_at: 2026-11-13T01:11:24.623933148Z
+req_type: Bug
+filed_at:
+  code_sha: 9968a8ab4ec2b4110f24d64122a7e60ab755a95b
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 9968a8ab4ec
+  vendor: claude
+  session: 01a1d240-c397-7b61-b29f-bb337c138943
+  harness_version: 2.1.323 (Claude Code)
