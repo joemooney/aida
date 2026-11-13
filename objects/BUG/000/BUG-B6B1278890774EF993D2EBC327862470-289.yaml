@@ -3,12 +3,12 @@ spec_id: BUG-b6b1278890774ef993d2ebc327862470-289
 agreed_id: BUG-2524
 title: 'Advisor seat cannot see the operator''s mandate: AIDA_USER=<seat handle> makes current_user_id differ from the mandate principal'
 description: 'Observed 2026-11-11 05:15 MST: operator ran ''aida mandate renew'' (principal joe). In the advisor seat (AIDA_USER=claude-advisor-112), ''aida mandate status'' prints ''No mandate has been started'' and warns ''ignoring mandate record ...: principal joe is not the current user'' for every record; ''aida dispatch request take'' fails ''no active mandate''. With AIDA_USER unset, the same mandate shows ACTIVE. Cause: gate/mandate.rs record_problem compares m.principal to crate::current_user_id(None) (dispatch.rs:290, :809), which resolves the AIDA_USER seat handle. The mandate exists to authorize the advisor seat, so it must be resolved against the operator principal (the OS/git user, or the seat''s grant), not the seat handle. Acceptance: inside a seat with AIDA_USER set, an operator-minted mandate is visible and authorizes dispatch; a test pins it.'
-status: InProgress
+status: Completed
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-11T12:20:05.985268708Z
-modified_at: 2026-11-13T06:37:11.657318841Z
+modified_at: 2026-11-13T08:50:20.048947485Z
 req_type: Bug
 tags:
 - track:dell1
@@ -76,6 +76,19 @@ history:
   session_id: 01a1d37f446b
   harness_version: codex-cli 0.167.0
   changes: []
+- id: 01a1d419-c101-7221-a2f4-e8899827239a
+  author: aida-auto-bump
+  timestamp: 2026-11-13T08:50:20.033266767Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a1d419-c110-79c1-85b3-f90ecfc416f6
+  timestamp: 2026-11-13T08:50:20.048946006Z
+  agent: aida
+  commit_sha: 1387fa9d9ecf8ce25e47ded8c62ca53bcee123df
+  summary: Completed via merge 1387fa9d
 filed_at:
   code_sha: 11b131dfe3341e6d9c7127d64370f91366094711
   branch: main
@@ -85,3 +98,7 @@ filed_at:
   vendor: claude
   session: 01a1ca83-fabb-7663-852c-12c78d4e097f
   harness_version: 2.1.322 (Claude Code)
+implementation_info:
+  implemented: false
+  completed_at: 2026-11-13T08:50:20.033257104Z
+  completion_sha: 1387fa9d9ecf8ce25e47ded8c62ca53bcee123df
