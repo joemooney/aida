@@ -903,7 +903,7 @@ fn pr_keyed_approval_from_main_is_refused_for_the_author() {
         &[("AIDA_SESSION_ID", None)],
     );
     let record = || {
-        crate::handle_review_record_at(
+        crate::handle_review_record_fixture_at(
             root.path().to_path_buf(),
             "PR-2485",
             "approved",
