@@ -4,13 +4,45 @@
 <!-- trace:TASK-1979 | ai:claude -->
 <!-- trace:TASK-1988 | ai:claude -->
 
-The `build` matrix runs seven Ubuntu lanes on the `ci-dev-profile` Rust
+<!-- trace:STORY-2735 | ai:codex -->
+
+Ordinary PR events default to **FAST**: the source guards from
+`make check-ci-fast` plus `cargo check --profile dev --workspace --tests`, in
+parallel. No test shard or binary contract runs. The warm-cache wall-time
+target is six minutes; cold compilation can take longer. The compile job keeps
+40 minutes of headroom. Feature-disabled and TUI Cargo checks remain FULL gates.
+
+A PR with the `ci:full` label, or repository Actions variable
+`AIDA_PR_CI_TIER=full`, runs **FULL** instead. Unset, `fast`, or unrecognized
+variable values select FAST for ordinary PRs. Adding/removing the label triggers
+a fresh run at the same head. Main and `train/**` pushes, train PRs, merge groups,
+scheduled runs and manual dispatches always select FULL. The `tier` job selects
+once and emits a `ci-tier: fast` or `ci-tier: full` check name.
+
+Both tiers report `Build (ubuntu-latest)`. The aggregate requires successful
+selection and every selected job; failed, cancelled or unexpectedly skipped
+selected jobs fail Build. Only the unselected tier may be skipped. Merge-hold
+checks retain their existing policy.
+
+Direct `aida pr ship` refuses FAST CI: use `aida pr train`, or add `ci:full`
+and wait for a successful FULL Build. The guard matches the FULL marker to
+Build's workflow run, so an earlier FULL result cannot authorize a newer FAST
+Build, and an old FAST marker does not prevent a later FULL run. It rechecks
+under the merge lease. Untiered repositories and other forges retain their
+existing policy; train execution does not invoke this single-PR guard.
+
+The GitLab GDMA adapter always runs its full seven-lane inventory for retained
+`ci/<attempt>` relay jobs. It accepts only the exact reviewed GitHub tier gate
+and does not evaluate PR tier selection. The separate handwritten GitLab MR
+pipeline has no FAST tier yet; its verify/test/bwrap gates remain unchanged.
+
+The FULL `build` matrix runs seven Ubuntu lanes on the `ci-dev-profile` Rust
 dependency cache. Gates and contracts share the base cache, which gates saves.
 Each test-lane group (`lib`, `cli`, `rest`) saves and restores its own cache
 under a suffixed shared key (`ci-dev-profile-lib`, and so on), because the test lanes compile test binaries and dev-dependencies that
 gates never builds.
 `build-result` retains the required `Build (ubuntu-latest)` check and runs even
-when a lane fails or is cancelled. It succeeds only when the whole matrix does.
+when a lane fails or is cancelled. In FULL mode it succeeds only when the whole matrix does.
 The separate merge-hold workflow is unchanged.
 
 Optional dell1 routing for the four heavy shards is disabled by default. See
@@ -68,7 +100,7 @@ nextest cannot run. Before the swap, a non-gating shadow lane ran nextest
 beside cargo test; on main runs 39455014512, 39475194172 and 39476669725 each
 lane ran the same tests, by name, under both runners.
 
-Docs-only changes skip the test execution and expensive gates; the existing
+In FULL mode, docs-only changes skip the test execution and expensive gates; the existing
 unconditional documentation guards still execute in their respective gate lanes. Every test
 lane uploads its log, its nextest JUnit reports and its timing JSON, enforces
 the per-test budget in `scripts/test-time-budget.toml` (read from the JUnit
@@ -79,9 +111,9 @@ Both store-attach guards compare Git's discovered top-level directory with
 `$PWD/.aida-store` before resetting the store. A plain directory inside the
 checkout fails rather than inheriting the enclosing checkout's Git discovery.
 
-`make check-ci-fast` reads workflow step bodies, runs source gates before Cargo
-compilation, and runs `cargo check` with the seeded `agent` profile. A cold
-target therefore cannot hide source-ratchet failures behind compilation. Host
+`make check-ci-fast` reads workflow step bodies and runs source gates without
+Cargo compilation. Cargo checks stay in the FULL inventory and the separate
+FAST compile job. Host
 lane gates keep the ten-minute sandbox deadline; timeout, runner refusal and
 signal termination report `skipped(<reason>)` without spending a source repair.
 A native publication that cannot recover a clean committed seat returns an error.
