@@ -18,7 +18,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-12T17:38:36.583411920Z
-modified_at: 2026-11-13T02:59:31.491270843Z
+modified_at: 2026-11-13T03:50:51.840538968Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -84,6 +84,12 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a1d307-9f71-76f0-962c-871ada116a06
+  author: dirtlab
+  timestamp: 2026-11-13T03:50:54.577790347Z
+  session_id: 01a1d306e9d7
+  harness_version: codex-cli 0.167.0
+  changes: []
 filed_at:
   code_sha: ec5a35a7108475b421baf1101b26159a7aa0fab9
   branch: main
@@ -93,6 +99,11 @@ filed_at:
   vendor: claude
   session: 01a1d09a-4262-7d50-a00b-00a5a30f3934
   harness_version: 2.1.322 (Claude Code)
+attention_reason:
+  category: other
+  detail: 'Pickup refused: TASK-3788 is Needs Attention with verdict:request-changes; promoting to InProgress requires advisor authority. Existing implementation and PR-3911 are present. Advisor triage is required before lane work or publication.'
+  raised_by: implementer
+  raised_at: 2026-11-13T03:50:51.840538968Z
 failure_reason:
   phase: reviewer
   phase_index: 3
