@@ -1,0 +1,18 @@
+{
+  "id": "fadd97df-8d17-4190-b429-c2f57830135a",
+  "thread_id": "fadd97df-8d17-4190-b429-c2f57830135a",
+  "from": "joe",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1794542978801,
+  "body": "BUG-b6b1278890774ef993d2ebc327862470-266 PR #3920 conflicts with origin/main in: aida-cli-lib/src/db_block.rs, aida-cli-lib/src/store_sync.rs, scripts/store-writers.toml. The host aborted the merge. Conflict resolution requires Claude on branch bug-b6b1278890774ef993d2ebc327862470-266. Fresh route: aida queue work BUG-b6b1278890774ef993d2ebc327862470-266 --vendor claude --fresh --no-human.",
+  "subject": "Rework merge conflicts require Claude",
+  "urgent": false,
+  "intent": "request",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "shell_user"
+}
