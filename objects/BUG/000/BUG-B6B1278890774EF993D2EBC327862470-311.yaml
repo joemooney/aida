@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-13T01:54:48.391951523Z
-modified_at: 2026-11-13T16:49:29.313869896Z
+modified_at: 2026-11-13T18:28:33.679589566Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -105,6 +105,13 @@ comments:
   modified_at: 2026-11-13T16:31:39.981943362Z
   session_id: 01a1d5b404f9
   harness_version: codex-cli 0.167.0
+- id: 01a1d62b-230f-70c1-8ee2-ad49a0042bdb
+  author: joe
+  content: '[advisor 11:30] Round 4 authorized for PR-3909 at 8621fbd (rework pushed after the round-3 CR at 6f65f4c). Under the 11:27 triage ruling only AC1/AC3 evidence stays blocking; any other finding this round is accepted, not reworked.'
+  created_at: 2026-11-13T18:28:33.679589566Z
+  modified_at: 2026-11-13T18:28:33.679589566Z
+  session_id: 01a1d5f7-27ab-7543-8808-b0ec6c271689
+  harness_version: 2.1.323 (Claude Code)
 history:
 - id: 01a1d29d-880a-7201-8b91-ded826a703b0
   author: joe
