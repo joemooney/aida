@@ -8,11 +8,16 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-13T16:46:45.106913830Z
-modified_at: 2026-11-13T16:54:24.294438168Z
+modified_at: 2026-11-13T16:54:28.197472026Z
 req_type: Bug
 tags:
 - review-watch
 - track:integration
+relationships:
+- rel_type: SupersededBy
+  target_id: 01a1d5d3-974e-74b3-9772-ec37ab9f141d
+  created_at: 2026-11-13T16:54:28.197468281Z
+  created_by: joe
 comments:
 - id: 01a1d5d4-59b8-70e3-b270-42267423d444
   author: joe
@@ -40,6 +45,12 @@ history:
   - field_name: status
     old_value: Approved
     new_value: Superseded
+- id: 01a1d5d5-05c1-7911-b15b-f38c6674ee99
+  author: joe
+  timestamp: 2026-11-13T16:54:30.081849818Z
+  session_id: 01a1d54b-060a-7951-aa40-7f0fd928126f
+  harness_version: 2.1.323 (Claude Code)
+  changes: []
 filed_at:
   code_sha: 3631f7ca05567a6984ff2376b997539389b6f758
   branch: main
