@@ -4483,6 +4483,13 @@ if '--write-ledger' in sys.argv:
     poison = subprocess.run(['git', 'config', '--get', 'repair.seatPoison'], capture_output=True)
     assert poison.returncode == 1, 'generator consumed seat-controlled Git config'
     assert subprocess.check_output(['git', 'config', '--get', 'core.bare']).strip() == b'false'
+    # Git's lock-and-rename writer must also fail, not just direct file writes.
+    # trace:STORY-2710 | ai:codex
+    write_config = subprocess.run(['git', 'config', '--local', 'repair.seatPoison', 'written'],
+                                  capture_output=True)
+    assert write_config.returncode != 0, 'generator rewrote protected Git config'
+    assert subprocess.run(['git', 'config', '--get', 'repair.seatPoison'],
+                          capture_output=True).returncode == 1
     subprocess.run(['git', 'show', 'HEAD:scripts/check-exec-context.py'],
                    check=True, capture_output=True)
     for key in ('GIT_DIR', 'GIT_COMMON_DIR'):
@@ -4626,6 +4633,9 @@ if '--write-ledger' in sys.argv:
                 ">>>>>>> generated\n",
                 "<<<<<<< generated\n",
                 "<<<<<<< generated\r\n=======\r\n>>>>>>> generated\r\n",
+                // Diff3 output from a template master must hit the same gate.
+                // trace:STORY-2710 | ai:codex
+                "<<<<<<< generated\nours\n||||||| base\nbase\n=======\ntheirs\n>>>>>>> generated\n",
             ] {
                 // Each retry starts clean: the first marker gate must pass,
                 // leaving the post-generation journal gate to refuse this run.
