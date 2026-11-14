@@ -17,7 +17,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-13T22:18:52.888699274Z
-modified_at: 2026-11-14T08:40:44.380154141Z
+modified_at: 2026-11-14T08:48:53.511136881Z
 req_type: Story
 tags:
 - track:integration
@@ -68,6 +68,20 @@ comments:
   modified_at: 2026-11-14T08:38:38.254072984Z
   session_id: 01a1d8f3-f948-7072-b174-fa9507ed074b
   harness_version: 2.1.325 (Claude Code)
+- id: 01a1d93e-9e23-7931-be3f-d8e55892a165
+  author: dirtlab
+  content: 'Addressed advisor AC2/AC6 ruling only: record_exit now appends runner.log before terminal output and uses a fallible stderr write whose failure is ignored. Added isolated subprocess regression with stderr attached to a disconnected Unix stream (EPIPE), verifying successful exit and preserved reason. Only changed aida-cli-lib/src/deputy_shell/supervisor.rs. Launcher job j20261114T084109340-2-0 passed all 6 story_2775 tests. rustfmt --check and git diff --check pass. make check-ci-fast passed preceding checks, then failed Rust structural ratchets (50 pass, 1 fail): proc_identity_legacy_decisions_do_not_expand reports 2 production identity calls in supervisor.rs. Both exist unchanged in HEAD; no baseline or identity changes made under the ruling requiring no other changes. Filed draft finding for triage. Native handoff leaves changes uncommitted; host owns publication and completion.'
+  created_at: 2026-11-14T08:48:42.019280129Z
+  modified_at: 2026-11-14T08:48:42.019280129Z
+  session_id: 01a1d936bd99
+  harness_version: codex-cli 0.167.0
+- id: 01a1d93e-cb07-7a43-9bfe-51efe55a75d9
+  author: dirtlab
+  content: 'Correction: draft finding creation was refused before writing because the host WORK allocation file /home/dirtlab/ai/aida/.git/aida-work-dispenser.toml has mode 0664 (group/other writable). The CLI requests host chmod go-w on that file. This seat has read-only Git metadata, so no permission repair attempted. The structural-ratchet blocker remains captured in this spec comment instead.'
+  created_at: 2026-11-14T08:48:53.511136881Z
+  modified_at: 2026-11-14T08:48:53.511136881Z
+  session_id: 01a1d936bd99
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1d8cb-f2dc-7ec1-a627-8dfcb3f8fa5a
   author: joe
