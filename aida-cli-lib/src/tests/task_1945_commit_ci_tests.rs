@@ -242,16 +242,46 @@ fn gitlab_statuses_keep_the_newest_job_per_name() {
     assert!(parse_glab_commit_statuses(&[job(9, "test", "mystery")], SHA).is_err());
 }
 
-/// The required aggregator is the check run of CI's `build-result` job,
-/// whose name is fixed (no matrix expression), so the constant cannot drift
-/// from the workflow.
+/// The required aggregator is the check run of CI's `build-result` job. Its
+/// name is one expression of a fixed shape: a label event that leaves the CI
+/// tier alone reports under a name of its own, every other run reports the
+/// aggregator constant. No matrix, so the constant cannot drift from the
+/// workflow.
+// trace:BUG-2578 | ai:claude
 #[test]
 fn aggregator_const_matches_the_ci_workflow() {
+    // The label-event condition, as ci.yml repeats it on every gated job.
+    const LABEL_EVENT: &str = "((github.event.action == 'labeled' || github.event.action == 'unlabeled') && github.event.label.name != 'ci:full')";
     let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../.github/workflows/ci.yml");
     let workflow: serde_yaml::Value =
         serde_yaml::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
     let job = &workflow["jobs"]["build-result"];
-    assert_eq!(job["name"].as_str(), Some(CI_AGGREGATOR_CHECK), "{job:?}");
+    let name = job["name"].as_str().unwrap();
+    // `${{ <label event> && '<label name>' || '<aggregator>' }}`, nothing else.
+    let branches = name
+        .strip_prefix("${{ ")
+        .and_then(|rest| rest.strip_suffix("' }}"))
+        .and_then(|rest| rest.strip_prefix(LABEL_EVENT))
+        .and_then(|rest| rest.strip_prefix(" && '"))
+        .and_then(|rest| rest.split_once("' || '"));
+    let Some((label_name, other_name)) = branches else {
+        panic!("build-result's name is not the expected expression: {name}");
+    };
+    assert!(
+        !label_name.contains('\'') && !other_name.contains('\''),
+        "each branch is one string literal: {name}"
+    );
+    assert_eq!(other_name, CI_AGGREGATOR_CHECK, "{name}");
+    // An empty label name is falsy, so the expression would fall through to
+    // the aggregator name.
+    assert!(!label_name.is_empty(), "{name}");
+    assert_ne!(label_name, CI_AGGREGATOR_CHECK, "{name}");
+    // The run that reports the label name is the one that skips the job.
+    assert_eq!(
+        job["if"].as_str(),
+        Some(format!("${{{{ always() && !{LABEL_EVENT} }}}}").as_str()),
+        "{job:?}"
+    );
     assert!(
         job.get("strategy").is_none(),
         "a matrix would change the check name"
