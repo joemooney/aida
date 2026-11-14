@@ -1,0 +1,49 @@
+id: 01a1db40-4dac-7683-8862-684cc2eb5629
+spec_id: STORY-b6b1278890774ef993d2ebc327862470-744
+agreed_id: STORY-2821
+title: Make the reviewer stale-base policy a project setting instead of a per-launch flag
+description: |-
+  Today the reviewer pre-flight refuses a review when the PR's base is behind origin AND the base has since touched a file the PR also touches (STORY-281, BUG-1434). The only way to change that is the per-launch flag --allow-stale-base on 'aida queue work PR-N --role reviewer' / 'aida review' / 'aida human review'.
+
+  On 2026-11-14 this refusal cost promotion 9b (#4040) about 55 minutes (reviewer retry loop 09:15-10:00 MST, refusal, update-branch, CI and review restarted) and also stopped #3956, #4022 and #3950. On a project that lands every 30-40 minutes through a train that rebuilds each member on current main and runs the full matrix, the refusal mostly restarts work. Other projects (no train, slow main, reviews as the last gate) want the strict behaviour. The operator's ruling: keep both, and make it a knob each project tunes.
+
+  Change: add a project setting, e.g. in .aida/config.toml
+
+    [review]
+    stale_base = "refuse-on-overlap"   # default, today's behaviour
+               # "refuse-on-conflict"  : refuse only when the forge reports the PR conflicting with its base
+               # "warn"                : never refuse; print the staleness note in the reviewer prompt
+
+  Every reviewer launch path reads it (queue work --role reviewer, the review watcher, drain phase 3, aida review, aida human review). --allow-stale-base stays as a one-launch override equal to "warn". The review watcher's own branch update (BUG-2426, review_watch_update.rs) follows the same setting: under refuse-on-conflict or warn it does not ask the forge to merge the base into a merely-overlapping head. The reviewer prompt always states how far behind the base the reviewed head is, whatever the setting.
+
+  This project then sets stale_base = "refuse-on-conflict".
+
+  Acceptance: (1) default config behaves exactly as today; (2) with refuse-on-conflict a stale, overlapping, non-conflicting PR is reviewed and the prompt carries the staleness note; a conflicting PR is refused with the existing message; (3) with warn nothing is refused; (4) the review watcher does not update-branch an overlapping head under refuse-on-conflict or warn; (5) 'aida config' / the config docs list the setting and its three values; (6) an unknown value is a config error naming the allowed values.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-14T18:09:46.924768383Z
+modified_at: 2026-11-14T18:10:24.096024385Z
+req_type: Story
+tags:
+- config
+- landing
+history:
+- id: 01a1db40-dee0-78e0-b36e-623ac494aa0d
+  author: joe
+  timestamp: 2026-11-14T18:10:24.096016378Z
+  session_id: 01a1dab1-9447-7d22-b5ff-0c9084e122ea
+  harness_version: 2.1.325 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Approved
+filed_at:
+  code_sha: 96fc262834527304fe85fc9ee32e4d04f1aaf4ea
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 5ea861d7358
+  vendor: claude
+  session: fc28c702-2f6e-419e-b882-6ddfeb9134ff
