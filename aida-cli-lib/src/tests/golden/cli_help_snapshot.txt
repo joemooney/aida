@@ -7713,7 +7713,9 @@ Commands:
   promotion-check  Check that everything on `integration` not yet promoted to `main` was reviewed:
                    each merged change needs an approval at exactly the head that was merged. Exits 1
                    and names each change that lacks one, with the revert that takes it out. Reads
-                   the local `origin/` refs
+                   the local `origin/` refs. A promotion is squashed into `main`, so git alone
+                   cannot always tell which commits it carried: pass `--since` to say where the last
+                   one was cut
   help             Print this message or the help of the given subcommand(s)
 
 Options:
@@ -7800,13 +7802,20 @@ Options:
 ===== aida integration promotion-check
 Check that everything on `integration` not yet promoted to `main` was reviewed: each merged change
 needs an approval at exactly the head that was merged. Exits 1 and names each change that lacks one,
-with the revert that takes it out. Reads the local `origin/` refs
+with the revert that takes it out. Reads the local `origin/` refs. A promotion is squashed into
+`main`, so git alone cannot always tell which commits it carried: pass `--since` to say where the
+last one was cut
 
 Usage: aida integration promotion-check [OPTIONS]
 
 Options:
       --tip <COMMIT>
           The commit to check; `origin/integration` when omitted
+
+      --since <COMMIT>
+          The integration commit the last promotion was cut from: only commits after it are checked.
+          Without it the check goes back to the newest integration commit whose content is exactly a
+          commit on `main`, which a promotion leaves only when `main` took nothing else in between
 
       --format <FORMAT>
           Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
@@ -40124,7 +40133,7 @@ Working on aida itself
       "integration",
       "promotion-check"
     ],
-    "about": "Check that everything on `integration` not yet promoted to `main` was reviewed: each merged change needs an approval at exactly the head that was merged. Exits 1 and names each change that lacks one, with the revert that takes it out. Reads the local `origin/` refs",
+    "about": "Check that everything on `integration` not yet promoted to `main` was reviewed: each merged change needs an approval at exactly the head that was merged. Exits 1 and names each change that lacks one, with the revert that takes it out. Reads the local `origin/` refs. A promotion is squashed into `main`, so git alone cannot always tell which commits it carried: pass `--since` to say where the last one was cut",
     "flags": [
       {
         "name": "canonical-ids",
@@ -40140,6 +40149,11 @@ Working on aida itself
         "name": "help",
         "takes_value": false,
         "help": "Print help (see more with '--help')"
+      },
+      {
+        "name": "since",
+        "takes_value": true,
+        "help": "The integration commit the last promotion was cut from: only commits after it are checked. Without it the check goes back to the newest integration commit whose content is exactly a commit on `main`, which a promotion leaves only when `main` took nothing else in between"
       },
       {
         "name": "tip",
