@@ -3,12 +3,12 @@ spec_id: BUG-b6b1278890774ef993d2ebc327862470-322
 agreed_id: BUG-2557
 title: 'No supported re-review at the same head after the review contract changes: BUG-2530 refuses a duplicate review, so the advisor must push an empty commit (and pay a full CI run)'
 description: '2026-11-13 04:50: promotion #3922 had CHANGES REQUESTED at c8bc6df only because review story STORY-2750 listed an inherited, already-completed TASK-3448 under Covers. After the advisor corrected the coverage, ''aida queue work PR-3922 --role reviewer --fresh'' refused (''already has a CHANGES REQUESTED verdict at this exact head; a duplicate review is unnecessary'', review_marker.rs refuse_conclusive_head). Workaround: an empty commit, which costs a full CI run. Want: an advisor-only ''--rereview <reason>'' that admits one fresh review at the same head when the review story changed after the verdict, recorded in the gate ledger. A related defect: auto-queue-review re-adds inherited, completed specs to a promotion''s Covers list.'
-status: NeedsAttention
+status: Completed
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-13T11:44:39.422508821Z
-modified_at: 2026-11-13T23:33:48.015489058Z
+modified_at: 2026-11-14T02:45:00.903621249Z
 req_type: Bug
 tags:
 - track:integration
@@ -66,6 +66,20 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a1d7f1-a641-7f71-a238-aba5bd7c0793
+  author: aida-auto-bump
+  timestamp: 2026-11-14T02:45:00.609514711Z
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Completed
+processing_record:
+- id: 01a1d7f1-a767-7501-82c1-585671a74505
+  timestamp: 2026-11-14T02:45:00.903606745Z
+  agent: aida
+  commit_sha: 01b8e71cebf7fbfb5696a28dabab42075b1e8271
+  summary: 'Advisor-only --rereview records a rereview-admitted gate-ledger event; refuse_conclusive_head yields only while the superseded verdict (kind+recorded_at) is the head''s newest, so exactly one fresh review is admitted; fail-closed on ledger/recorded_at gaps; tests cover admit/spend/other-head/no-reason/no-head/advisor-only. Bug protocol (touches a test file): met. Fast CI green at head.'
+  review_verdict: approved
 filed_at:
   code_sha: 11bf5e9a018e0a304ec1af0d43435c1886b4328f
   branch: main
@@ -75,6 +89,10 @@ filed_at:
   vendor: claude
   session: 01a1d4aa-9c99-76c2-ac94-7f0795f8a7f9
   harness_version: 2.1.323 (Claude Code)
+implementation_info:
+  implemented: false
+  completed_at: 2026-11-14T02:45:00.609508933Z
+  completion_sha: 01b8e71cebf7fbfb5696a28dabab42075b1e8271
 attention_reason:
   category: other
   detail: 'work complete locally but unable to publish: git push to https://github.com failed in the seat sandbox (no credentials: could not read Username). Commit b39fded312 on branch bug-b6b1278890774ef993d2ebc327862470-322; targeted tests pass (33 passed incl. bug2557).'
