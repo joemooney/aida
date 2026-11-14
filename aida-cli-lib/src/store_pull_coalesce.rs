@@ -181,21 +181,50 @@ impl Drop for RunnerGuard<'_> {
     }
 }
 
-/// The lock file, locked. Held only while a caller reads and writes the
-/// marker and the state; dropping it unlocks and closes the descriptor.
-fn decision_lock(lock_path: &Path) -> Option<std::fs::File> {
+/// The outcome of asking for the decision lock.
+enum Decision {
+    /// Locked. Held only while a caller reads and writes the marker and the
+    /// state; dropping it unlocks and closes the descriptor.
+    Held(std::fs::File),
+    /// Another caller held it until `deadline`; no descriptor is kept.
+    Busy,
+    /// No lock file (read-only store, odd filesystem).
+    Unavailable,
+}
+
+/// Take the lock file without blocking: one try, then retries every
+/// [`POLL`] until `deadline`. Nothing slow runs under it, so contention is
+/// short; a holder that stalls costs a caller at most its own wait budget.
+// trace:BUG-2565 | ai:claude
+fn decision_lock(lock_path: &Path, deadline: Instant) -> Decision {
     if let Some(parent) = lock_path.parent() {
-        std::fs::create_dir_all(parent).ok()?;
+        if std::fs::create_dir_all(parent).is_err() {
+            return Decision::Unavailable;
+        }
     }
-    let lock = std::fs::OpenOptions::new()
+    let Ok(lock) = std::fs::OpenOptions::new()
         .create(true)
         .truncate(false)
         .write(true)
         .open(lock_path)
-        .ok()?;
-    lock.lock_exclusive().ok()?;
-    Some(lock)
+    else {
+        return Decision::Unavailable;
+    };
+    loop {
+        if lock.try_lock_exclusive().is_ok() {
+            return Decision::Held(lock);
+        }
+        let now = Instant::now();
+        if now >= deadline {
+            return Decision::Busy;
+        }
+        std::thread::sleep(POLL.min(deadline - now));
+    }
 }
+
+/// Time allowed for the lock that orders the state write before the marker
+/// removal. Missing it costs only that ordering: both writes are renames.
+const STATE_LOCK_WAIT: Duration = Duration::from_secs(5);
 
 /// Generation of the last successful pull, or `None` when unknown.
 fn read_generation(state: &Path) -> Option<u64> {
@@ -279,13 +308,28 @@ fn coalesce_with_environment(
     let seen = read_generation(&state_path);
     let budget = duration_setting(environment, "AIDA_PULL_COALESCE_WAIT_SECS", WAIT_BUDGET);
     let start = Instant::now();
+    let deadline = start + budget;
     let mut waited = false;
+    // `reusable` probes the remote: it runs once, with no lock held.
+    let mut reusable = Some(reusable);
+    let gave_up = |budget: Duration| {
+        eprintln!(
+            "  the other store pull is still running after {}s — pulling without it",
+            budget.as_secs()
+        );
+    };
     // Decide under the lock; leave the loop as the pull to run.
     loop {
-        // No lock file (read-only store, odd filesystem): behave as before.
         // trace:BUG-2565 | ai:claude
-        let Some(lock) = decision_lock(&lock_path) else {
-            return run().map(|()| Turn::Ran);
+        let lock = match decision_lock(&lock_path, deadline) {
+            Decision::Held(lock) => lock,
+            // No lock file: behave as before.
+            Decision::Unavailable => return run().map(|()| Turn::Ran),
+            // The descriptor is already closed.
+            Decision::Busy => {
+                gave_up(budget);
+                return run().map(|()| Turn::Ran);
+            }
         };
         match read_runner(&run_path).filter(Runner::is_live) {
             // A hook of the pull in flight ran this pull: waiting for it
@@ -303,10 +347,7 @@ fn coalesce_with_environment(
                     );
                 }
                 if start.elapsed() >= budget {
-                    eprintln!(
-                        "  the other store pull is still running after {}s — pulling without it",
-                        budget.as_secs()
-                    );
+                    gave_up(budget);
                     return run().map(|()| Turn::Ran);
                 }
                 std::thread::sleep(POLL);
@@ -314,15 +355,37 @@ fn coalesce_with_environment(
             }
             None => {}
         }
-        if waited {
-            let now = read_generation(&state_path);
-            let finished_meanwhile = match (seen, now) {
-                (Some(a), Some(b)) => b > a,
-                (None, Some(_)) => true,
-                _ => false,
-            };
-            if finished_meanwhile && reusable() {
-                return Ok(Turn::Reused);
+        let now = read_generation(&state_path);
+        let finished_meanwhile = match (seen, now) {
+            (Some(a), Some(b)) => b > a,
+            (None, Some(_)) => true,
+            _ => false,
+        };
+        if waited && finished_meanwhile {
+            if let Some(reusable) = reusable.take() {
+                // The freshness probe talks to the remote: never under the lock.
+                drop(lock);
+                if !reusable() {
+                    continue;
+                }
+                // Revalidate: reuse only if no pull started and none ended
+                // since the probe's view. Otherwise decide again, without reuse.
+                match decision_lock(&lock_path, deadline) {
+                    Decision::Held(lock) => {
+                        let unchanged = read_runner(&run_path).filter(Runner::is_live).is_none()
+                            && read_generation(&state_path) == now;
+                        drop(lock);
+                        if unchanged {
+                            return Ok(Turn::Reused);
+                        }
+                        continue;
+                    }
+                    Decision::Unavailable => return run().map(|()| Turn::Ran),
+                    Decision::Busy => {
+                        gave_up(budget);
+                        return run().map(|()| Turn::Ran);
+                    }
+                }
             }
         }
         // A marker that cannot be written costs only the coalescing.
@@ -338,7 +401,7 @@ fn coalesce_with_environment(
     let result = run();
     // The state is written before the marker goes, so a waiter that sees
     // no pull in flight also sees how that pull ended.
-    let lock = decision_lock(&lock_path);
+    let lock = decision_lock(&lock_path, Instant::now() + STATE_LOCK_WAIT);
     write_state(&state_path, read_counter(&state_path) + 1, result.is_ok());
     drop(guard);
     drop(lock);

@@ -692,3 +692,101 @@ fn a_marker_of_a_dead_pull_is_not_waited_for() {
         assert!(!run_path.exists());
     }
 }
+
+fn wait_secs(secs: &str) -> Environment {
+    Environment::from_pairs([("AIDA_PULL_COALESCE_WAIT_SECS".into(), secs.into())])
+}
+
+// A caller that holds the decision lock and stalls (a probe that hangs, a
+// stopped process) costs a waiter its own wait budget and no more: zero
+// means one try, then the caller pulls without it.
+// trace:BUG-2565 | ai:claude
+#[test]
+fn a_stalled_decision_lock_holder_costs_at_most_the_wait_budget() {
+    let (_tmp, root, store) = project();
+    let (lock_path, _) = coalesce_paths(&store, &root, "stalled");
+    std::fs::create_dir_all(lock_path.parent().unwrap()).unwrap();
+    let stalled = std::fs::File::create(&lock_path).unwrap();
+    stalled.lock_exclusive().unwrap();
+    for (secs, within) in [("0", Duration::from_secs(1)), ("1", Duration::from_secs(3))] {
+        let ran = AtomicUsize::new(0);
+        let started = std::time::Instant::now();
+        let turn = coalesce_with_environment(
+            &store,
+            &root,
+            "stalled",
+            &wait_secs(secs),
+            || panic!("nothing finished: there is nothing to reuse"),
+            || {
+                ran.fetch_add(1, Ordering::SeqCst);
+                Ok(())
+            },
+        )
+        .unwrap();
+        assert_eq!(turn, Turn::Ran, "WAIT_SECS={secs}");
+        assert_eq!(ran.load(Ordering::SeqCst), 1, "WAIT_SECS={secs}");
+        assert!(
+            started.elapsed() < within,
+            "WAIT_SECS={secs} waited {:?}",
+            started.elapsed()
+        );
+    }
+    drop(stalled);
+}
+
+// The freshness probe of a waiter talks to the remote, so it runs with the
+// decision lock free; the result is reused only after a revalidation.
+// trace:BUG-2565 | ai:claude
+#[test]
+fn the_freshness_probe_runs_with_the_decision_lock_free() {
+    let (_tmp, root, store) = project();
+    let (lock_path, state_path) = coalesce_paths(&store, &root, "probe");
+    let run_path = runner_path(&lock_path);
+    std::fs::create_dir_all(run_path.parent().unwrap()).unwrap();
+    // A live process that is not an ancestor stands in for the pull in flight.
+    let mut child = std::process::Command::new("sleep")
+        .arg("30")
+        .spawn()
+        .unwrap();
+    let id = aida_core::proc_identity::ProcIdentity::capture(child.id()).unwrap();
+    assert!(write_runner(
+        &run_path,
+        &Runner {
+            pid: child.id(),
+            start: id.legacy().start,
+            ns: id.pidns_inode,
+            token: "in-flight".into(),
+        }
+    ));
+    let finisher = {
+        let (state_path, run_path) = (state_path.clone(), run_path.clone());
+        std::thread::spawn(move || {
+            std::thread::sleep(Duration::from_millis(500));
+            write_state(&state_path, 1, true);
+            std::fs::remove_file(&run_path).unwrap();
+        })
+    };
+    let probed = AtomicBool::new(false);
+    let turn = coalesce_with_environment(
+        &store,
+        &root,
+        "probe",
+        &wait_secs("30"),
+        || {
+            let probe = std::fs::File::open(&lock_path).unwrap();
+            assert!(
+                probe.try_lock_exclusive().is_ok(),
+                "the probe runs under the decision lock"
+            );
+            probed.store(true, Ordering::SeqCst);
+            true
+        },
+        || panic!("the finished pull is reusable"),
+    )
+    .unwrap();
+    finisher.join().unwrap();
+    let _ = child.kill();
+    let _ = child.wait();
+    assert_eq!(turn, Turn::Reused);
+    assert!(probed.load(Ordering::SeqCst));
+}
