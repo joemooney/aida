@@ -8,10 +8,39 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-14T00:41:42.911566698Z
-modified_at: 2026-11-14T02:34:29.751918666Z
+modified_at: 2026-11-14T04:12:35.620106058Z
 req_type: Bug
 tags:
 - track:integration
+comments:
+- id: 01a1d841-d5a4-7662-89cd-fafb9504d31e
+  author: joe
+  content: |
+    Integration seat sketch for BUG-2569, 2026-11-13 22:10 MST. Gate code, so this needs advisor signoff before I write it, and review-before-merge.
+
+    ROOT CAUSE (reproduced, not inferred). I replayed PR-3966's gate ledger as it stood at the refusal (first 12 events) through `corpus_gate_bodies` + `corpus_merge_gate_carrying`, on main bc24a1e (the binary that ran train 9) and on current integration. Result is the exact message train 9 posted, with no "did not carry over" sentence and the carry-over proof never consulted.
+    1. The member gate (`pr_train.rs` gate_member) asks the verdict corpus about the ids in the member's branch name and title: for #3966 that is STORY-2749, STORY-2737, BUG-2559. With those keys the approval at 2eb10a7 carries to f0ed970 and the gate clears.
+    2. The merge step (`pr_train_verified.rs` refresh, line ~396) asks about every id in the car's subject and body, plus aliases. #3966 is a promotion, so its body lists every constituent commit: 45 spec ids.
+    3. Two of those ids have a newest verdict that is a refusal recorded for a different change at a different commit: BUG-2531 (request-changes at 8b93d67, PRs #3872/#3901) and BUG-b6b...-286 (request-changes at 0bb2110). `corpus_carry_over` returns None as soon as any live body does not approve ("a standing refusal at ANY sha is never carried past"), so the approval is not carried and the merge refuses.
+    4. The same foreign refusals are ignored when the head has an exact-head approval (reconcile only counts recordings at the head). That is why the re-review at f0ed970 let train 11 land it. So the gate is inconsistent with itself: a refusal of another change blocks a carried approval but not a direct one.
+    Any promotion PR whose approval is carried will hit this, as will any PR whose commits mention a spec that has an open refusal elsewhere.
+
+    FIX, two parts.
+    A. A refusal recorded for another change is not evidence about this one. In `corpus_gate_bodies`, when a spec key's ledger verdict event is bound to a different change number than the PR being judged, it is counted only if it was recorded at the head being judged. Kept exactly as today: the PR's own key, events bound to this PR under any spec key, unbound spec records, and verdict files under review-verdicts (those have no change binding). The same-head exception keeps a refusal in force when a change is closed and reopened under a new number at the same commit. Mechanically: `corpus_gate_bodies` gains a head-aware form used by `corpus_gate_decision` and the train's `read_bodies`; with no head known nothing is dropped (fails closed).
+    B. One id set for both train decisions. gate_member derives its ids with the same function the merge step uses (`resolved_member_spec_ids` over branch, title, car subject and body, then coverage, then aliases), by composing the car message before the corpus check. A refusal that would stop the merge then stops the member at gating, before the 40-minute CI run, not after.
+
+    TESTS (failing first).
+    - Ledger fixture shaped like the incident: PR 42 approved at A, clean base merge to B; spec X's newest verdict is request-changes bound to PR 99 at another commit. `corpus_gate_decision(42, [X], head B)` clears with the proof on the ledger. Today it refuses.
+    - Still refuses: the same refusal bound to PR 42 at an older commit; an unbound spec refusal; a file refusal (existing test `corpus_gate_never_carries_a_refusal_or_an_unprotected_base` stays green); a PR-99 refusal recorded at B itself.
+    - Train: a member admitted by carry-over at gating is merged by the final step with a car body that names a spec refused on another change (the acceptance test); and a member with its own standing refusal under a body-only spec is refused at gating, not at merge.
+
+    NOT IN THIS CHANGE: the hold-release and `aida land` reads of the corpus keep their current key sets (BUG-2570 covers the land read). I do not touch gate/orchestrator_leaves.rs.
+
+    Question for signoff: is the same-head exception in A what you want, or should a refusal bound to another change never count? I recommend keeping the exception.
+  created_at: 2026-11-14T04:12:35.620106058Z
+  modified_at: 2026-11-14T04:12:35.620106058Z
+  session_id: 01a1d7e6-ad96-7820-94e0-3f17a564c833
+  harness_version: 2.1.325 (Claude Code)
 history:
 - id: 01a1d7e7-8f5a-7f43-916b-1a5f2bfd0ce0
   author: joe
