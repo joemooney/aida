@@ -80,6 +80,8 @@ const WORKER_AMBIENT_ENV: &[&str] = &[
     "RUSTUP_HOME",
     "AIDA_HOME",
     "AIDA_BIN",
+    // trace:STORY-2765 | ai:codex — retain the dispatcher admission track.
+    "AIDA_TRACK",
     "NO_COLOR",
 ];
 /// Prefix families the worker keeps (locale only).
@@ -383,6 +385,21 @@ fn worker_ambient_env(
 
 #[cfg(test)]
 mod env_passthrough_tests {
+    // trace:STORY-2765 | ai:codex
+    #[cfg(unix)]
+    #[test]
+    fn story_2765_detached_worker_child_keeps_track() {
+        let env = super::worker_ambient_env([("AIDA_TRACK".into(), "integration".into())], &[]);
+        let output = std::process::Command::new("/bin/sh")
+            .args(["-c", "printf '%s' \"$AIDA_TRACK\""])
+            .env_clear()
+            .envs(env)
+            .output()
+            .unwrap();
+        assert!(output.status.success());
+        assert_eq!(output.stdout, b"integration");
+    }
+
     // trace:BUG-2510 | ai:codex
     #[test]
     fn env_passthrough_worker_projection() {
@@ -392,11 +409,15 @@ mod env_passthrough_tests {
             "OPENAI_API_KEY",
             "LC_TIME",
             "AIDA_ROLE",
+            "AIDA_TRACK",
         ]
         .map(|key| (key.into(), "secret".into()));
         let kept = super::worker_ambient_env(vars, &["XAIAA_API_KEY".into()]);
         let names: Vec<_> = kept.iter().map(|(key, _)| key.to_str().unwrap()).collect();
-        assert_eq!(names, ["XAIAA_API_KEY", "OPENAI_API_KEY", "LC_TIME"]);
+        assert_eq!(
+            names,
+            ["XAIAA_API_KEY", "OPENAI_API_KEY", "LC_TIME", "AIDA_TRACK"]
+        );
     }
 }
 
@@ -651,6 +672,14 @@ pub(crate) fn agent_new_codex_bg(mut req: CodexBgRequest) -> Result<()> {
         req.verbose,
         false,
     );
+    // trace:STORY-2765 | ai:codex
+    preflight_agent_new_track(
+        &project_root,
+        Some(&expected_role),
+        spec.as_deref(),
+        false,
+        true,
+    )?;
     preflight_agent_new_delegation(&project_root, Some(&expected_role))?;
     crate::gate::seat_authority::validate_launch_delegable_seats(
         &project_root,
