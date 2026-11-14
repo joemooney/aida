@@ -133,3 +133,42 @@ fn distinct_padding_equal_literals_each_land_their_own_spec() {
         assert_eq!(resolve_trailer(&store, "BUG-009"), None, "flip={flip}");
     }
 }
+
+// trace:STORY-2765 | ai:codex
+#[test]
+fn story_2765_tag_discovery_ignores_active_role_scope() {
+    let tmp = tempfile::TempDir::new().unwrap();
+    let storage = crate::test_env::home_fixture_storage(tmp.path().join(".aida-store"));
+    let store = store_of(vec![
+        stored("BUG-1", None, S::Done, &[LANDED_TAG]),
+        stored("BUG-2", None, S::Completed, &[LANDED_TAG]),
+    ]);
+    storage.save(&store).unwrap();
+    let role_path = crate::role::project_role_file(tmp.path(), "implementer");
+    std::fs::create_dir_all(role_path.parent().unwrap()).unwrap();
+    std::fs::write(
+        &role_path,
+        r#"name = "implementer"
+created_at = "2026-01-01T00:00:00Z"
+last_active_at = "2026-01-01T00:00:00Z"
+scope_tags = ["unrelated"]
+scope_status = "approved"
+"#,
+    )
+    .unwrap();
+    let _env = crate::test_env::EnvVarsGuard::set(&[
+        ("AIDA_SESSION_ROLE", "implementer"),
+        ("AIDA_SESSION_PROJECT", tmp.path().to_str().unwrap()),
+    ]);
+    assert_eq!(
+        crate::role::active_role_scope(),
+        Some((vec!["unrelated".into()], Some("approved".into())))
+    );
+    let loaded = load_store(tmp.path()).unwrap();
+    assert_eq!(loaded.requirements.len(), 2);
+    let specs: Vec<_> = loaded.requirements.iter().map(ListedSpec::of).collect();
+    let landed = HashSet::from([store.requirements[0].id]);
+    let (adds, removes) = plan_tag_changes(&specs, &landed);
+    assert!(adds.is_empty());
+    assert_eq!(ids(&removes), ["BUG-2"]);
+}

@@ -886,6 +886,78 @@ pub(crate) fn rework_pr_head_branch_override(
     Ok(existing)
 }
 
+// Only the exact canonical scope slug may resume automatically. Open changes
+// are resolved first; only unchanged merged residue uses a dated branch.
+// trace:BUG-2549 | ai:codex
+pub(crate) fn canonical_resume_branch(
+    root: &std::path::Path,
+    scope: &str,
+    eligible: bool,
+) -> Result<Option<String>> {
+    let branch = slugify(scope);
+    if !eligible || !crate::branch_exists_anywhere(root, &branch) {
+        return Ok(None);
+    }
+    let forge = crate::forge::forge_for_open_change(root);
+    if !matches!(
+        forge.change_for_branch(&branch)?,
+        crate::forge::ChangeLookup::NoChange
+    ) {
+        return Ok(None);
+    }
+    match forge.merged_change_for_branch(&branch)? {
+        crate::forge::ChangeLookup::NoChange => {}
+        crate::forge::ChangeLookup::Found(change) => {
+            // Merged residue (including an origin-only branch) with no commits
+            // past the merged head allocates a fresh dated branch, as before;
+            // only a tip proven to have moved past the merged head resumes.
+            // Confirmed merged evidence whose head cannot be read, or a tip
+            // that cannot be resolved, is not such proof: fall back softly to
+            // the dated allocation rather than failing pickup.
+            // trace:BUG-2549 | ai:claude
+            let merged_head = forge
+                .change_metadata(change.id, &mut crate::network_retry::StderrSink)
+                .ok()
+                .map(|metadata| metadata.head_sha)
+                .filter(|head| !head.is_empty());
+            match (merged_head, canonical_branch_tip(root, &branch)) {
+                (Some(merged), Some(tip)) if tip != merged => {}
+                _ => return Ok(None),
+            }
+        }
+        _ => anyhow::bail!("cannot establish merged change evidence for `{branch}`"),
+    }
+    // A branch name alone cannot override a foreign lease, including stale
+    // leases. Read errors retain the branch rather than guessing ownership.
+    let leases = crate::leases::list_leases_strict_all(root).map_err(anyhow::Error::msg)?;
+    anyhow::ensure!(
+        !leases.iter().any(|lease| lease.branch == branch),
+        "canonical branch `{branch}` still has a lease; inspect or resume that lease explicitly"
+    );
+    Ok(Some(branch))
+}
+
+/// The canonical branch tip: the local branch when present, otherwise the
+/// origin branch (merged residue is often origin-only). `None` when neither
+/// resolves.
+// trace:BUG-2549 | ai:claude
+fn canonical_branch_tip(root: &std::path::Path, branch: &str) -> Option<String> {
+    let output = aida_core::git_ops::host_git_command(root)
+        .args([
+            "rev-parse",
+            "--verify",
+            "--quiet",
+            &format!("refs/heads/{branch}^{{commit}}"),
+        ])
+        .output()
+        .ok()?;
+    let local = String::from_utf8_lossy(&output.stdout).trim().to_owned();
+    if output.status.success() && !local.is_empty() {
+        return Some(local);
+    }
+    aida_core::git_ops::remote_branch_head_sha(root, "origin", branch)
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum QueueWorkMode {
     Head,
@@ -4558,7 +4630,27 @@ pub(crate) fn handle_queue_work(
         let resolved_pickup_pr =
             (plan.entries.len() == 1 && plan.review_target.is_none()).then(|| rework_pr.clone());
         let rework_branch_override = rework_pr.as_ref().map(|(_, branch)| branch.clone());
-        let session_branch_override = branch_override.or(rework_branch_override.as_deref());
+        // trace:BUG-2549 | ai:codex
+        let canonical_resume = canonical_resume_branch(
+            &project_root,
+            &plan.scope,
+            !list_sessions
+                && plan.entries.len() == 1
+                && plan.review_target.is_none()
+                && role == "implementer"
+                && branch_override.is_none()
+                && rework_branch_override.is_none()
+                && adopt_orphan.is_none(),
+        )?;
+        if let Some(branch) = &canonical_resume {
+            eprintln!(
+                "  resume: continuing {} on its existing canonical branch `{branch}`",
+                plan.scope
+            );
+        }
+        let session_branch_override = branch_override
+            .or(rework_branch_override.as_deref())
+            .or(canonical_resume.as_deref());
 
         // BUG-2223: an adopted orphan fixes the tree and branch; an explicit
         // --path or --branch naming another one refuses rather than guess.
@@ -4828,6 +4920,16 @@ pub(crate) fn handle_queue_work(
                     adopt_orphan.as_ref().map(|l| l.worktree_path.as_path()),
                     force_claim,
                 )?;
+                // trace:BUG-2549 | ai:codex — known PR-less, unleased branch.
+                if canonical_resume.is_some() && !dry_run {
+                    crate::lane_recovery::reconcile_in(
+                        &project_root,
+                        storage,
+                        &plan.scope,
+                        session_branch_override.unwrap(),
+                        None,
+                    )?;
+                }
                 // Persist only the synthesized explicit row, after all three
                 // preflight decisions. Do not reselect a different queue head.
                 for entry in &plan.entries {
@@ -5636,6 +5738,7 @@ pub(crate) fn handle_queue_work(
         // BUG-022: the open PR is the one this pickup continues, not a
         // collision. trace:BUG-b6b1278890774ef993d2ebc327862470-022 | ai:claude
         || rework_branch_override.is_some()
+        || canonical_resume.is_some()
         || preclaim_review_session
         || preclaim_orchestrator_corroborated
         || resume.is_some()

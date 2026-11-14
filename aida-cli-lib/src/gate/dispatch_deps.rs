@@ -77,6 +77,34 @@ pub(crate) fn canonical_role_name(raw: &str) -> String {
 pub(crate) fn load_store_for_lookup(
     project_root: &std::path::Path,
 ) -> Option<aida_core::RequirementsStore> {
+    let started = std::time::Instant::now();
+    let store = load_store_uncounted(project_root);
+    STORE_LOADS.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    STORE_LOAD_MICROS.fetch_add(
+        started.elapsed().as_micros() as u64,
+        std::sync::atomic::Ordering::Relaxed,
+    );
+    store
+}
+
+// Every lookup re-reads the whole store from disk, so a caller that reports
+// its own duration can say how much of it these reads were.
+// trace:BUG-2584 | ai:claude
+static STORE_LOADS: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+static STORE_LOAD_MICROS: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+
+/// How many whole-store lookup loads this process has run, and their total
+/// wall-clock time. Read it before and after a step to attribute the step.
+// trace:BUG-2584 | ai:claude
+pub(crate) fn store_load_totals() -> (u64, std::time::Duration) {
+    use std::sync::atomic::Ordering::Relaxed;
+    (
+        STORE_LOADS.load(Relaxed),
+        std::time::Duration::from_micros(STORE_LOAD_MICROS.load(Relaxed)),
+    )
+}
+
+fn load_store_uncounted(project_root: &std::path::Path) -> Option<aida_core::RequirementsStore> {
     // Git-canonical: walk up from project_root looking for an .aida/config.toml.
     if let Some(store_path) = aida_core::store_locate::detect_distributed_store_from(project_root) {
         if let Ok(backend) = aida_core::GitBackend::new(&store_path) {
