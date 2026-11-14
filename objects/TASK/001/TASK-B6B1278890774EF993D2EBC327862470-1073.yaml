@@ -1121,12 +1121,20 @@ description: |
   ### finding-hash:47f62f07
 
   The integration standing orders (aida-core/templates/.aida/discipline/standing-orders/integration.md and its mirror) cite `aida mailbox history`, which is not a command: the verbs are `aida mailbox thread <id>` and `aida mailbox list`. The same file and the --to help (mailbox_cmd_args.rs:135) say a reply goes to the sender seat, then its role; since c03d5d1 a seat-sent parent is answered to the seat only and never falls through to the role. Name the real verb and correct the fallback wording in the template master, then run make sync-templates.
+
+
+  ## Findings from PR-4028
+  Reviewed sha: bf74a91943e31fac441dfdb5934ed7f72eaebd8c
+
+  ### finding-hash:32aad4b9
+
+  GitHub does not evaluate `name` on a skipped job: live label-event runs 43626153606 and 43626153616 report the raw expression text as the check name, not `label event (...)`. Correct docs/internal/testing/ci-test-shards.md:19-23 and the ci.yml:20-27 comment, and make the tests assert the property that actually protects the gate (the raw name is neither `Build (ubuntu-latest)` nor prefixed `ci-tier: `).
 status: Draft
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-13T20:01:56.623034248Z
-modified_at: 2026-11-14T19:30:14.055389282Z
+modified_at: 2026-11-14T19:33:54.409338646Z
 req_type: Task
 tags:
 - carried-finding:BUG-2543:2a99ebfc
@@ -1262,6 +1270,7 @@ tags:
 - carried-finding:PR-4024:2df54e83
 - carried-finding:PR-4027:8c6f0ae6
 - carried-finding:PR-4027:c239c3d3
+- carried-finding:PR-4028:32aad4b9
 - carried-finding:PR-4030:1287747b
 - carried-finding:PR-4030:540b7d86
 - carried-finding:PR-4030:a9731915
@@ -1379,6 +1388,7 @@ tags:
 - carried-from:PR-4022
 - carried-from:PR-4024
 - carried-from:PR-4027
+- carried-from:PR-4028
 - carried-from:PR-4030
 - carried-from:PR-4040
 - carried-from:PR-4046
@@ -1421,6 +1431,7 @@ tags:
 - finding-hash:2dfbd6d5
 - finding-hash:2fb703ca
 - finding-hash:32088b60
+- finding-hash:32aad4b9
 - finding-hash:35d3eb09
 - finding-hash:360471e3
 - finding-hash:376b178e
@@ -1559,6 +1570,7 @@ tags:
 - from-review:PR-4022
 - from-review:PR-4024
 - from-review:PR-4027
+- from-review:PR-4028
 - from-review:PR-4030
 - from-review:PR-4040
 - from-review:PR-4046
@@ -1972,6 +1984,11 @@ history:
   author: joe
   timestamp: 2026-11-14T19:30:15.540301968Z
   session_id: 01a1db835ac8
+  changes: []
+- id: 01a1db8d-57d6-7070-9e1b-a1a162a9a467
+  author: joe
+  timestamp: 2026-11-14T19:33:55.798525385Z
+  session_id: 01a1db899b48
   changes: []
 filed_at:
   code_sha: 91fe1e337894199f15365d3f8ecfaf81366f8291
