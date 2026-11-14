@@ -469,12 +469,20 @@ description: |
   ### finding-hash:3f4b4821
 
   TASK-3785 AC4 (file burn-down child PRs moving functions into gate or behind traits once the ratchet lands) has no filed children yet; merge-time completion via the (TASK-3785) trailer would close the spec with AC4 undone. Advisor should file the burn-down children, or keep the spec open, at landing.
+
+
+  ## Findings from TASK-3785
+  Reviewed sha: 435ecfa80ff44e5918bc73eeddaff3d5cf12b2d0
+
+  ### finding-hash:3f4b4821
+
+  TASK-3785 AC4 (file burn-down child PRs moving functions into gate or behind traits once the ratchet lands) has no filed children yet; merge-time completion via the (TASK-3785) trailer would close the spec with AC4 undone. Advisor should file the burn-down children, or keep the spec open, at landing.
 status: Draft
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-13T20:01:56.623034248Z
-modified_at: 2026-11-14T08:36:16.328211008Z
+modified_at: 2026-11-14T08:36:25.697434628Z
 req_type: Task
 tags:
 - carried-finding:BUG-2543:2a99ebfc
@@ -551,6 +559,7 @@ tags:
 - carried-finding:STORY-2768:6810bcf9
 - carried-finding:STORY-2768:7ce2cb14
 - carried-finding:STORY-2768:c0a8d165
+- carried-finding:TASK-3785:3f4b4821
 - carried-finding:TASK-3791:2c08aa50
 - carried-finding:TASK-3791:360471e3
 - carried-finding:TASK-3791:8a49a174
@@ -588,6 +597,7 @@ tags:
 - carried-from:STORY-2735
 - carried-from:STORY-2763
 - carried-from:STORY-2768
+- carried-from:TASK-3785
 - carried-from:TASK-3791
 - finding-hash:04ad58d8
 - finding-hash:0bff30e1
@@ -665,6 +675,7 @@ tags:
 - from-review:STORY-2735
 - from-review:STORY-2763
 - from-review:STORY-2768
+- from-review:TASK-3785
 - from-review:TASK-3791
 - kind:finding-sweep
 history:
@@ -850,6 +861,11 @@ history:
 - id: 01a1d933-43d3-7ed0-84fa-7a3f3b0b5105
   author: joe
   timestamp: 2026-11-14T08:36:18.003652396Z
+  session_id: 01a1d930f5a0
+  changes: []
+- id: 01a1d933-6847-73e2-a4d1-d79c43ca3aaa
+  author: joe
+  timestamp: 2026-11-14T08:36:27.335113961Z
   session_id: 01a1d930f5a0
   changes: []
 filed_at:
