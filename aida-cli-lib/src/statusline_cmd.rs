@@ -267,7 +267,10 @@ pub(crate) fn handle_statusline_command(
         // trace:BUG-2585 | ai:claude
         let (role_text, role_warning) = {
             let now = chrono::Utc::now();
-            match crate::relay_grant::seat_life(now).and_then(|life| life.suffix(now)) {
+            let env = aida_core::exec_context::Environment::capture();
+            match crate::relay_grant::seat_life(&project_root, &env, now)
+                .and_then(|life| life.suffix(now))
+            {
                 Some(suffix) if !role_text.contains("expire") => {
                     (format!("{role_text} ({suffix})"), true)
                 }

@@ -730,7 +730,11 @@ pub(crate) fn doctor_multi_agent(opts: DoctorRunOptions) -> Result<()> {
     )? {
         findings.extend(crate::gate::seat_authority::doctor_scan(&project_root));
         // trace:BUG-2585 | ai:claude
-        findings.extend(crate::relay_grant::doctor_scan(chrono::Utc::now()));
+        findings.extend(crate::relay_grant::doctor_scan(
+            &project_root,
+            &aida_core::exec_context::Environment::capture(),
+            chrono::Utc::now(),
+        ));
         findings.sort_by(|a, b| a.category.cmp(&b.category).then(a.id.cmp(&b.id)));
     }
     // trace:STORY-B6B1278890774EF993D2EBC327862470-100 | ai:claude
@@ -1280,7 +1284,11 @@ fn doctor_check_store_free_light(category: &str, json: bool, fail_on_findings: b
         crate::gate::seat_authority::DOCTOR_CATEGORY => {
             // trace:BUG-2585 | ai:claude
             let mut findings = crate::gate::seat_authority::doctor_scan(&project_root);
-            findings.extend(crate::relay_grant::doctor_scan(chrono::Utc::now()));
+            findings.extend(crate::relay_grant::doctor_scan(
+                &project_root,
+                &aida_core::exec_context::Environment::capture(),
+                chrono::Utc::now(),
+            ));
             DoctorReport::from_findings(findings)
         }
         // trace:STORY-B6B1278890774EF993D2EBC327862470-100 | ai:claude

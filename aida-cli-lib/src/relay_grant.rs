@@ -14,6 +14,7 @@
 // trace:BUG-2585 | ai:claude
 
 use crate::gate::seat_authority::{self as authority, GrantCheck, GrantRejection, SeatGrant};
+use aida_core::exec_context::Environment;
 use chrono::{DateTime, Duration, Utc};
 use std::path::Path;
 
@@ -222,7 +223,7 @@ pub(crate) fn hold(project_root: &Path, requested_seat: &str, adopt: bool) -> Op
     if let Some(next) = renewed(project_root, &own, requested_seat, now) {
         if adopt {
             // The selector only; the verdict above is the authority.
-            std::env::set_var(authority::GRANT_ENV, &next.id);
+            crate::agent_launch::adopt_launcher_grant(&next);
         }
         return None;
     }
@@ -378,28 +379,59 @@ pub(crate) fn launcher_life(requested_seat: &str) -> Option<ParentLife> {
     })
 }
 
-/// The seat's view: the grant its relay launched it under. `None` outside a
-/// supervised (`--rotate`) session. A grant already renewed for the relay
-/// reports the renewed expiry.
-pub(crate) fn seat_life(now: DateTime<Utc>) -> Option<ParentLife> {
-    std::env::var_os(crate::agent_rotation::GENERATION_ENV)?;
-    let own = authority::read_grant(&authority::current_grant_id()?).ok()?;
+/// The renewed grant that covers the relay holding `old`, as far as its
+/// seat can tell: a successor that passes the grant verdict for its
+/// principal (lifetime, roster) and is bound to the live process the relay
+/// named in [`BIND_PID_ENV`], which the relay runs under. Any other later
+/// grant for the same seat (another terminal's, another relay's) leaves the
+/// relay held, so it must not quiet the seat's warning.
+fn covering(
+    project_root: &Path,
+    old: &SeatGrant,
+    requested_seat: &str,
+    relay_pid: u32,
+    now: DateTime<Utc>,
+) -> Option<SeatGrant> {
+    let dir = authority::grant_dir().ok()?;
+    successors_in(&dir, old, requested_seat, now)
+        .into_iter()
+        .find(|next| {
+            authority::bound_to_process(next, relay_pid)
+                && matches!(
+                    authority::grant_check_for_principal(project_root, &next.id, &next.principal),
+                    GrantCheck::Valid(_)
+                )
+        })
+}
+
+/// The seat's view: the grant its relay launched it under, read from the
+/// seat's `env` snapshot. `None` outside a supervised (`--rotate`) session.
+/// A grant renewed for this relay reports the renewed expiry.
+pub(crate) fn seat_life(
+    project_root: &Path,
+    env: &Environment,
+    now: DateTime<Utc>,
+) -> Option<ParentLife> {
+    env.get(crate::agent_rotation::GENERATION_ENV)?;
+    let own_id = env
+        .var(authority::GRANT_ENV)
+        .ok()
+        .filter(|id| !id.trim().is_empty())?;
+    let own = authority::read_grant(own_id).ok()?;
     let parent = authority::read_grant(own.parent_grant_id.as_deref()?).ok()?;
     if parent.revoked_at.is_some() {
         return None;
     }
     let direct = parent.parent_grant_id.is_none();
-    let pid = std::env::var(BIND_PID_ENV)
+    let pid = env
+        .var(BIND_PID_ENV)
         .ok()
         .and_then(|raw| raw.trim().parse::<u32>().ok())
         .filter(|_| direct);
     let mut expires_at = chain_expiry(&parent);
-    if direct && expires_at - now < WARN_WITHIN {
-        if let Some(next) = authority::grant_dir().ok().and_then(|dir| {
-            successors_in(&dir, &parent, &own.seat, now)
-                .into_iter()
-                .next()
-        }) {
+    if expires_at - now < WARN_WITHIN {
+        if let Some(next) = pid.and_then(|pid| covering(project_root, &parent, &own.seat, pid, now))
+        {
             expires_at = next.expires_at;
         }
     }
@@ -414,8 +446,12 @@ pub(crate) fn seat_life(now: DateTime<Utc>) -> Option<ParentLife> {
 
 /// `aida doctor`'s finding for a supervised seat whose relay grant is inside
 /// [`WARN_WITHIN`] or expired (the `seat-grant` category).
-pub(crate) fn doctor_scan(now: DateTime<Utc>) -> Vec<crate::DoctorFinding> {
-    let Some(life) = seat_life(now) else {
+pub(crate) fn doctor_scan(
+    project_root: &Path,
+    env: &Environment,
+    now: DateTime<Utc>,
+) -> Vec<crate::DoctorFinding> {
+    let Some(life) = seat_life(project_root, env, now) else {
         return Vec::new();
     };
     if life.suffix(now).is_none() {

@@ -26,6 +26,19 @@ fn pinned_env(home: &Path) -> EnvVarsGuard {
     env
 }
 
+/// The environment a seat's command sees: its own grant and, under a relay,
+/// the generation and the pid a renewed grant must be bound to.
+fn seat_env(grant: &str, supervised: bool, relay_pid: Option<u32>) -> Environment {
+    let mut pairs = vec![(GRANT_ENV, grant.to_string())];
+    if supervised {
+        pairs.push((GENERATION_ENV, "2".to_string()));
+    }
+    if let Some(pid) = relay_pid {
+        pairs.push((BIND_PID_ENV, pid.to_string()));
+    }
+    Environment::from_pairs(pairs.into_iter().map(|(k, v)| (k.into(), v.into())))
+}
+
 /// Expire `id` an hour ago (issued a day before that).
 fn expire(id: &str) -> SeatGrant {
     rewrite_grant(id, |g| {
@@ -108,7 +121,7 @@ fn an_expired_relay_grant_holds_until_a_renewed_grant_is_valid() {
     let unbound = mint_grant_for(root, SUBJECT, "advisor", &["implementer"]);
     rewrite_grant(&unbound, |g| g.binding = vec!["proc:1@1".into()]);
     assert!(hold(root, "implementer", true).is_some());
-    assert_eq!(std::env::var(GRANT_ENV).unwrap(), old);
+    assert_eq!(authority::current_grant_id().unwrap(), old);
 
     // The wait stops on Ctrl-C and has printed the command once.
     let stop = AtomicBool::new(false);
@@ -143,7 +156,7 @@ fn an_expired_relay_grant_holds_until_a_renewed_grant_is_valid() {
     );
     assert!(proceeded);
     let renewed_id = renewed_id.unwrap();
-    assert_eq!(std::env::var(GRANT_ENV).unwrap(), renewed_id);
+    assert_eq!(authority::current_grant_id().unwrap(), renewed_id);
     assert!(String::from_utf8(out).unwrap().contains("renewed"));
     let parent = authority::validate_child_delegation(root, "implementer").unwrap();
     assert_eq!(parent.id, renewed_id);
@@ -169,7 +182,11 @@ fn the_turn_boundary_check_keeps_the_session_while_the_grant_is_expired() {
     assert!(announced);
     mint_grant_for(root, SUBJECT, "advisor", &["implementer"]);
     assert!(!hold_before_end(root, "h", "implementer", &mut announced));
-    assert_eq!(std::env::var(GRANT_ENV).unwrap(), old, "no adoption here");
+    assert_eq!(
+        authority::current_grant_id().unwrap(),
+        old,
+        "no adoption here"
+    );
 }
 
 /// A relay under a delegated grant holds too, but says the seat must be
@@ -194,17 +211,18 @@ fn a_delegated_relay_grant_holds_without_adopting_a_renewed_root() {
     assert!(!held.resumes);
     assert!(!held.command.contains("--bind-pid"), "{}", held.command);
     assert!(held.message("h", false).contains("start h again"));
-    assert_eq!(std::env::var(GRANT_ENV).unwrap(), mid.id);
+    assert_eq!(authority::current_grant_id().unwrap(), mid.id);
 }
 
 /// The seat of a supervised session reports its relay's grant: in the
 /// banner line, the statusline suffix and `aida doctor`, for a baseline
-/// seat too, and only under `--rotate`.
+/// seat too, and only under `--rotate`. Only a renewed grant that covers
+/// the relay ends the warning.
 #[test]
 fn a_supervised_seat_reports_its_relays_grant() {
     let tmp = tempfile::tempdir().unwrap();
     let root = tmp.path();
-    let mut env = pinned_env(root);
+    let _env = pinned_env(root);
     let top = mint_grant_for(root, SUBJECT, "advisor", &["implementer"]);
     let mut kid = authority::read_grant(&top).unwrap();
     kid.id = uuid::Uuid::new_v4().to_string();
@@ -212,42 +230,69 @@ fn a_supervised_seat_reports_its_relays_grant() {
     kid.parent_grant_id = Some(top.clone());
     kid.delegable_seats = Vec::new();
     put_grant(&kid);
-    env.set_key(GRANT_ENV, &kid.id);
     let now = Utc::now();
-    assert_eq!(seat_life(now), None, "not a supervised session");
+    assert_eq!(
+        seat_life(root, &seat_env(&kid.id, false, None), now),
+        None,
+        "not a supervised session"
+    );
 
-    env.set_key(GENERATION_ENV, "2");
-    env.set_key(BIND_PID_ENV, "4242");
-    let far = seat_life(now).unwrap();
+    // The relay runs under this (test) process, and named it.
+    let relay = std::process::id();
+    let env = seat_env(&kid.id, true, Some(relay));
+    let far = seat_life(root, &env, now).unwrap();
     assert_eq!(far.seat, "advisor");
     assert_eq!(far.suffix(now), None);
-    assert!(doctor_scan(now).is_empty());
+    assert!(doctor_scan(root, &env, now).is_empty());
 
     rewrite_grant(&top, |g| g.expires_at = now + Duration::minutes(90));
-    let near = seat_life(now).unwrap();
+    let near = seat_life(root, &env, now).unwrap();
     assert_eq!(
         near.command,
-        "eval \"$(aida role enter advisor --delegate-seat implementer --bind-pid 4242)\""
+        format!(
+            "eval \"$(aida role enter advisor --delegate-seat implementer --bind-pid {relay})\""
+        )
     );
     assert!(near.line(now).contains(&near.command));
     assert_eq!(
         near.suffix(now).as_deref(),
         Some("parent grant expires in 1h30m")
     );
-    let findings = doctor_scan(now);
+    let findings = doctor_scan(root, &env, now);
     assert_eq!(findings.len(), 1);
     assert_eq!(findings[0].category, authority::DOCTOR_CATEGORY);
     assert!(findings[0].summary.starts_with("PARENT GRANT advisor"));
     assert!(findings[0].action.contains(&near.command));
 
     expire(&top);
-    let gone = seat_life(now).unwrap();
+    let gone = seat_life(root, &env, now).unwrap();
     assert_eq!(gone.suffix(now).as_deref(), Some("parent grant expired"));
 
-    // Renewed for the relay: the seat reports the renewed life.
-    mint_grant_for(root, SUBJECT, "advisor", &["implementer"]);
-    assert_eq!(seat_life(now).unwrap().suffix(now), None);
-    assert!(doctor_scan(now).is_empty());
+    // A later grant for the same seat that the relay cannot present (the
+    // operator entered the role again in another terminal, or renewed it
+    // for another relay) leaves this relay held: the warning stays.
+    let elsewhere = mint_grant_for(root, SUBJECT, "advisor", &["implementer"]);
+    rewrite_grant(&elsewhere, |g| {
+        g.binding = vec!["proc:4194000@77".into(), "sid:4194000@77".into()]
+    });
+    let held = seat_life(root, &env, now).unwrap();
+    assert_eq!(held.suffix(now).as_deref(), Some("parent grant expired"));
+    assert_eq!(held.expires_at, gone.expires_at);
+    assert_eq!(doctor_scan(root, &env, now).len(), 1);
+
+    // Renewed for the relay (bound to the process it named): the seat
+    // reports the renewed life. A seat whose relay named no process cannot
+    // tell, and keeps warning.
+    let renewed = mint_grant_for(root, SUBJECT, "advisor", &["implementer"]);
+    let covered = seat_life(root, &env, now).unwrap();
+    assert_eq!(covered.suffix(now), None);
+    assert_eq!(
+        covered.expires_at,
+        authority::read_grant(&renewed).unwrap().expires_at
+    );
+    assert!(doctor_scan(root, &env, now).is_empty());
+    let unnamed = seat_life(root, &seat_env(&kid.id, true, None), now).unwrap();
+    assert_eq!(unnamed.suffix(now).as_deref(), Some("parent grant expired"));
 }
 
 /// Ahead of expiry the relay mails the advisor and product seats once per

@@ -4546,12 +4546,22 @@ fn offer_inline_parent_grant(project_root: &std::path::Path, seat: &str) -> Resu
         return Ok(());
     }
     match crate::gate::seat_authority::issue_inline_parent(project_root, "advisor", seat) {
-        // Edition 2021: set_var is safe; this process has not spawned the
-        // child yet, and the user's shell is a different process.
-        Ok(grant) => std::env::set_var(crate::gate::seat_authority::GRANT_ENV, &grant.id),
+        // This process has not spawned the child yet.
+        Ok(grant) => adopt_launcher_grant(&grant),
         Err(cause) => eprintln!("Could not mint the one-time grant: {cause:#}"),
     }
     Ok(())
+}
+
+/// Make `grant` the grant this launcher process exports, before it spawns
+/// the child it launches under it: the inline one-time parent, and a relay's
+/// renewed grant. The one place a launcher changes its own selector. It
+/// carries no authority; every later check runs the grant verdict.
+// trace:STORY-2215 | ai:claude
+// trace:BUG-2585 | ai:claude
+pub(crate) fn adopt_launcher_grant(grant: &crate::gate::seat_authority::SeatGrant) {
+    // Edition 2021: set_var is safe; the user's shell is a different process.
+    std::env::set_var(crate::gate::seat_authority::GRANT_ENV, &grant.id)
 }
 
 /// Hours the one-time grant lasts: min(8h, `[seat] max_grant_hours`), the
