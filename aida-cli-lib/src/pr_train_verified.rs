@@ -303,7 +303,7 @@ fn collect(
             // trace:STORY-2733 | ai:codex
             anyhow::ensure!(
                 crate::gate::mandate_ship::mandate_cover_still_active(cover),
-                "train release mandate expired, was revoked, or no longer covers protected paths"
+                "train release mandate expired, was revoked, or was narrowed by a renewal"
             );
         }
         let fresh = live.gate(car.member.pr).map_err(anyhow::Error::msg)?;
@@ -352,6 +352,7 @@ fn collect(
                 cover.principal.clone(),
                 &paths,
                 &crate::gate::mandate_gates::ProtectedPaths::of(&Ok::<_, String>(gates)),
+                cover.issued_supervised,
             );
             anyhow::ensure!(
                 current.gate_audit() == car.member.gate_audit,

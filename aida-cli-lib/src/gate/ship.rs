@@ -1088,6 +1088,14 @@ pub(crate) fn merge_gate_verdict_candidates(
             keys.push(id);
         }
     }
+    // BUG-2570: a spec's file holds one verdict, the last one written, for
+    // whichever change that was. Once this change has a verdict of its own on
+    // the ledger, a spec key answers from the ledger alone, with this
+    // change's events (and another change's only at this head).
+    // trace:BUG-2570 | ai:claude
+    let own_verdict = roots
+        .iter()
+        .any(|root| crate::gate::ledger::project::change_has_verdict(root, pr));
     let mut seen: Vec<std::path::PathBuf> = Vec::new();
     let mut out = Vec::new();
     for root in roots {
@@ -1098,12 +1106,17 @@ pub(crate) fn merge_gate_verdict_candidates(
                 continue;
             }
             seen.push(canon);
+            let ledger_only = own_verdict && *key != change_key;
             // TASK-1801: a current artefact that exists but the anchored
             // reader refuses (linked file or directory) is not evidence, and
             // it must not let an archived round answer for the key either.
             // trace:TASK-1801 | ai:claude
-            let body = crate::gate::review_verdict::read_verdict_body(&path);
-            let file_exists = std::fs::symlink_metadata(&path).is_ok();
+            let body = if ledger_only {
+                Err(std::io::Error::from(std::io::ErrorKind::NotFound))
+            } else {
+                crate::gate::review_verdict::read_verdict_body(&path)
+            };
+            let file_exists = !ledger_only && std::fs::symlink_metadata(&path).is_ok();
             if body.is_err() && file_exists {
                 continue;
             }
@@ -1121,7 +1134,9 @@ pub(crate) fn merge_gate_verdict_candidates(
             let ledger_applies = file.is_some() || !file_exists;
             let ledger = ledger_applies.then_some(()).and_then(|()| {
                 let store = crate::gate::ledger::store_root(root).ok()?;
-                let event = crate::gate::ledger::project::newest_verdict_event(&store, key)?;
+                let event = crate::gate::ledger::project::newest_verdict_event_for_change(
+                    &store, key, pr, head,
+                )?;
                 Some((store.join(".aida").join("gate-ledger").join(key), event))
             });
             let current = match ledger {
@@ -1242,3 +1257,7 @@ mod tests;
 #[cfg(test)]
 #[path = "tests/bug_1918_approval_authority_tests.rs"]
 mod bug_1918_approval_authority_tests;
+
+#[cfg(test)]
+#[path = "tests/bug_2570_shared_spec_verdict_tests.rs"]
+mod bug_2570_shared_spec_verdict_tests;
