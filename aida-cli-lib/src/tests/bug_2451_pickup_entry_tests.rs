@@ -832,6 +832,12 @@ exit 1
     let (storage, _) = super::orphan_reentry_tests::queued_scope(&fx.main, "BUG-2451");
     let head = git_ok(&fx.main, &["rev-parse", "bug-2451"]);
     assert_ne!(head, merged_head);
+    // Keep origin at the merged head: local unfinished work takes precedence
+    // over unchanged remote residue when selecting the canonical resume tip.
+    git_ok(
+        &fx.main,
+        &["update-ref", "refs/remotes/origin/bug-2451", &merged_head],
+    );
     // Historical merge evidence must remain harmless on repeated discovery.
     for _ in 0..2 {
         assert_eq!(
@@ -965,6 +971,20 @@ fn bug_2549_detached_worktree_exit_captures_actual_head() {
     let captured =
         crate::lane_recovery::exit_head(&fx.main, &lease.branch, &[lease.clone()]).unwrap();
     assert_eq!(captured, Some(head.clone()));
+    // Detached commits are not reachable from the recorded lease branch.
+    assert_eq!(
+        git_ok(
+            &lease.worktree_path,
+            &[
+                "for-each-ref",
+                "--format=%(refname)",
+                "--contains",
+                &head,
+                "refs/heads/"
+            ],
+        ),
+        ""
+    );
     // Switching away from the lease branch must use the live tree as well.
     git_ok(&lease.worktree_path, &["checkout", "-b", "switched-exit"]);
     assert_eq!(
@@ -1065,6 +1085,23 @@ fn bug_2549_unavailable_forge_preserves_exit_evidence() {
     let req = retry.get_requirement_by_spec_id("BUG-2451").unwrap();
     assert_eq!(req.comments.len(), comments);
     assert_eq!(req.status, aida_core::RequirementStatus::InProgress);
+    // Reopen the store independently, as a later recovery process would:
+    // evidence must be durable rather than an in-memory observation.
+    let reopened = aida_core::Storage::new(storage.path().to_path_buf())
+        .load()
+        .unwrap();
+    let persisted = reopened.get_requirement_by_spec_id("BUG-2451").unwrap();
+    assert_eq!(persisted.status, aida_core::RequirementStatus::InProgress);
+    assert_eq!(
+        persisted
+            .comments
+            .iter()
+            .filter(
+                |c| c.content.starts_with("Lane exit evidence:") && c.content.contains(&captured)
+            )
+            .count(),
+        1
+    );
     // A successful spec search followed by a failed branch lookup is also
     // unknown evidence; the durable captured facts must survive this path.
     crate::test_exec::write_executable(
