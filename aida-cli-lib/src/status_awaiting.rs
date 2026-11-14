@@ -558,6 +558,7 @@ pub(crate) fn collect_awaiting_report_inner(
         ctx,
         no_ci,
         notice_fast,
+        None,
         crate::collect_mail_identity_facts,
     )
 }
@@ -702,33 +703,14 @@ pub(crate) fn collect_mail_channel(
 /// [`collect_awaiting_report_inner`] with the mail channel's identity facts
 /// supplied, so a test asserts the operator/shared mail split from synthetic
 /// facts instead of the real session binding of whoever runs it.
-// trace:TASK-2345 | ai:claude
-pub(crate) fn collect_awaiting_report_with_mail_facts(
-    project_root: &std::path::Path,
-    backend: &aida_core::CachedGitBackend,
-    ctx: &UserStatusContext,
-    no_ci: bool,
-    notice_fast: bool,
-    mail_facts: impl FnOnce() -> MailIdentityFacts,
-) -> awaiting_you::AwaitingReport {
-    collect_awaiting_report_core(
-        project_root,
-        backend,
-        ctx,
-        no_ci,
-        notice_fast,
-        None,
-        mail_facts,
-    )
-}
-
-/// The awaiting report. `mail_bind` is `Some` only for the per-turn
+/// `mail_bind` is `Some` only for the per-turn
 /// `aida awaiting --notice` hook: that read takes the queued role and seat
 /// mail this session is eligible for (bounded, never waiting), so a session
 /// launched after mail was queued for it sees the notice before its next
 /// turn. Status, statusline and TUI views pass `None` and never bind.
+// trace:TASK-2345 | ai:claude
 // trace:STORY-2745 | ai:claude
-pub(crate) fn collect_awaiting_report_core(
+pub(crate) fn collect_awaiting_report_with_mail_facts(
     project_root: &std::path::Path,
     backend: &aida_core::CachedGitBackend,
     ctx: &UserStatusContext,
@@ -1706,7 +1688,7 @@ pub(crate) fn handle_awaiting_command(
         };
         // The per-turn notice takes queued role/seat mail this session is
         // eligible for. trace:STORY-2745 | ai:claude
-        let report = collect_awaiting_report_core(
+        let report = collect_awaiting_report_with_mail_facts(
             &project_root,
             backend,
             &ctx,

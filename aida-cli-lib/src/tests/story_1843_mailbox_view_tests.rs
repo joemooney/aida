@@ -525,7 +525,8 @@ fn awaiting_mail(
         queue_total: 0,
         agents: Vec::new(),
     };
-    crate::collect_awaiting_report_with_mail_facts(root, &backend, &ctx, true, false, facts).mail
+    crate::collect_awaiting_report_with_mail_facts(root, &backend, &ctx, true, false, None, facts)
+        .mail
 }
 
 /// F5: the awaiting mail channel counts the same view and says when it is

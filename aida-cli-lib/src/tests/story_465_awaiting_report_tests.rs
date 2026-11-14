@@ -54,6 +54,7 @@ fn awaiting_report_unbound(
         ctx,
         true,
         false,
+        None,
         crate::mailbox_view::observed_unbound_facts,
     )
 }
@@ -264,7 +265,7 @@ fn awaiting_report_bound(
     ctx: &UserStatusContext,
     handle: &str,
 ) -> awaiting_you::AwaitingReport {
-    collect_awaiting_report_with_mail_facts(project_root, backend, ctx, true, false, || {
+    collect_awaiting_report_with_mail_facts(project_root, backend, ctx, true, false, None, || {
         crate::mailbox_view::bound_facts(handle, "claude")
     })
 }
