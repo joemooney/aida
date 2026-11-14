@@ -1,0 +1,18 @@
+{
+  "id": "review-watch-1304ea178048b96ae118f19f29fe4d308f5cbe6d5ec186b94cad2837688b5c90",
+  "thread_id": "review-watch-1304ea178048b96ae118f19f29fe4d308f5cbe6d5ec186b94cad2837688b5c90",
+  "from": "review-watch",
+  "to": {
+    "kind": "agent",
+    "agent": "joemooney"
+  },
+  "timestamp": 1794671632659,
+  "body": "PR-4038 at 6803c247339334279278980480cfbff6a706fc30 is behind its base branch `integration` with overlapping paths. Merge `integration` into the branch and push before review. The watcher did not update the branch.",
+  "subject": "PR-4038: merge `integration` before review",
+  "urgent": false,
+  "intent": "request",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "explicit"
+}
