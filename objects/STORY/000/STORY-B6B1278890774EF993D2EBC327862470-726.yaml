@@ -1,0 +1,33 @@
+id: 01a1d976-9959-7d12-a5e4-6b9042308822
+spec_id: STORY-b6b1278890774ef993d2ebc327862470-726
+agreed_id: STORY-2803
+title: 'Review PR-4005: [AI:codex] fix(integration): enforce direct launch tracks and retain worker context (STORY-2765)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `(no-sess`) for branch `story-b6b1278890774ef993d2ebc327862470-688`.
+
+  - PR: <https://github.com/joemooney/aida/pull/4005>
+  - Branch: `story-b6b1278890774ef993d2ebc327862470-688` → `main`
+
+  ## Covers
+
+  - STORY-2765
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 4005` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-14T09:49:50.809383387Z
+modified_at: 2026-11-14T09:49:50.809383387Z
+req_type: Story
+filed_at:
+  code_sha: 66d456dc13e8a96a9b4e75313b86d709c9847cab
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 33122e4362d
+  vendor: claude
