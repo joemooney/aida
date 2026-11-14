@@ -421,14 +421,28 @@ description: |
   ### finding-hash:2a99ebfc
 
   store::read_regular (aida-cli-lib/src/gate/ledger/store.rs:164) checks is_file by path, then opens without O_NONBLOCK. A FIFO swapped in between the two can still block the lossy reader, even though the doc comment says it never hangs. Opening with O_NONBLOCK|O_NOFOLLOW-free flags and then fstat-checking would close the window.
+
+
+  ## Findings from BUG-2543
+  Reviewed sha: 54925b1d46bf955ef6609b232b0accbe2e958e99
+
+  ### finding-hash:6935f83d
+
+  Per-key publication git spawns (choose_current/review_publication, ~0.15 s/key per the 2026-11-13 profile) remain on review list and the pull reconcile, so the specs ask that 2,800 keys finish in seconds and that git be O(1) per listing; neither is met or measured here (only an ignored bench). The commit trailer (BUG-2543 BUG-2551) completes both specs at merge, and no follow-up spec exists for the O(1) git work the 05:32 ruling deferred. File it, and re-measure aida pull after landing.
+
+  ### finding-hash:2a99ebfc
+
+  store::read_regular (aida-cli-lib/src/gate/ledger/store.rs:164) checks is_file by path, then opens without O_NONBLOCK. A FIFO swapped in between the two can still block the lossy reader, even though the doc comment says it never hangs. Opening with O_NONBLOCK|O_NOFOLLOW-free flags and then fstat-checking would close the window.
 status: Draft
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-13T20:01:56.623034248Z
-modified_at: 2026-11-14T07:57:46.855471928Z
+modified_at: 2026-11-14T07:57:54.671101525Z
 req_type: Task
 tags:
+- carried-finding:BUG-2543:2a99ebfc
+- carried-finding:BUG-2543:6935f83d
 - carried-finding:BUG-2546:56ed8b81
 - carried-finding:BUG-2549:3975f29b
 - carried-finding:BUG-2549:79f360e4
@@ -502,6 +516,7 @@ tags:
 - carried-finding:TASK-3791:ac11f20d
 - carried-finding:TASK-3791:cd9ab7dd
 - carried-finding:TASK-3791:f1e29cc2
+- carried-from:BUG-2543
 - carried-from:BUG-2546
 - carried-from:BUG-2549
 - carried-from:BUG-2554
@@ -572,6 +587,7 @@ tags:
 - finding-hash:f1e29cc2
 - finding-hash:f238ea37
 - finding-hash:fe70e901
+- from-review:BUG-2543
 - from-review:BUG-2546
 - from-review:BUG-2549
 - from-review:BUG-2554
@@ -758,6 +774,11 @@ history:
 - id: 01a1d910-061c-77a1-8010-5189656e8e11
   author: joe
   timestamp: 2026-11-14T07:57:48.444474859Z
+  session_id: 01a1d90ca510
+  changes: []
+- id: 01a1d910-2501-7dd2-ad06-bb4f67dc976f
+  author: joe
+  timestamp: 2026-11-14T07:57:56.353027730Z
   session_id: 01a1d90ca510
   changes: []
 filed_at:
