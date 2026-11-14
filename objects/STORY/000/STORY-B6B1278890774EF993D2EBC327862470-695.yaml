@@ -15,12 +15,12 @@ description: |
   4. The promotion gate refuses to cut or ship a promotion that contains a merged-before-review constituent without an approval at its merged head. It names that constituent so it can be reverted out of the snapshot (throughput rule 1).
   5. Tests: eligibility matrix (tag, effort, protected path, config off); a promotion refused for a pending constituent; a promotion allowed once approved.
   First consumer: STORY-2771. Until this lands, the advisor applies the ruling by hand, per PR.
-status: InProgress
+status: NeedsAttention
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-13T18:06:55.227979618Z
-modified_at: 2026-11-14T12:40:49.848772100Z
+modified_at: 2026-11-14T12:58:33.513976475Z
 req_type: Story
 tags:
 - config
@@ -170,6 +170,15 @@ history:
   author: joe
   timestamp: 2026-11-14T12:40:51.683119129Z
   changes: []
+- id: 01a1da23-5ea9-7e40-bfd8-40ac9f5fec61
+  author: aida-orchestrator
+  timestamp: 2026-11-14T12:58:33.514002025Z
+  session_id: 01a1da20f62d
+  harness_version: 2.1.325 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 filed_at:
   code_sha: ee8dd4b2bdf1495f699357a3f2f40f9bf3802983
   branch: main
@@ -179,3 +188,11 @@ filed_at:
   vendor: claude
   session: 01a1d5f7-27ab-7543-8808-b0ec6c271689
   harness_version: 2.1.323 (Claude Code)
+failure_reason:
+  phase: reviewer
+  phase_index: 3
+  kind: verdict:request-changes
+  detail: Design matches the sketch and advisor rulings; config, eligibility, admission and promotion-check are well tested as pure functions. Two authority holes (rename hides a protected path; Reviewing state skips the changes-requested/CI-red refusals) and an untested AC3 record need one rework round. No build CI on this head at review time (only merge-hold checks).
+  recovery_hint: address the review findings, move STORY-2772 back to In Progress, and clear the PR hold only after approval
+  shelved_by: reviewer
+  shelved_at: 2026-11-14T12:58:33.513976475Z
