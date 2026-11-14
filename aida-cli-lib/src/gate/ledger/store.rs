@@ -267,6 +267,17 @@ fn append_locked(
     import: bool,
 ) -> std::io::Result<Vec<GateEvent>> {
     let existing = read_file(root, change);
+    // A ledger holding events of a newer format was written under rules this
+    // binary does not know (format 2 added write-ahead bindings): appending
+    // could break them, so refuse. trace:BUG-2531 | ai:claude
+    if let Some(newer) = existing.iter().find(|e| e.v > super::event::EVENT_VERSION) {
+        return Err(std::io::Error::other(format!(
+            "refusing to append to the gate ledger of {}: it holds format {} events, newer than the format {} this aida writes; upgrade aida",
+            change.as_key(),
+            newer.v,
+            super::event::EVENT_VERSION
+        )));
+    }
     let mut pending: Vec<GateEvent> = Vec::new();
     for event in events {
         // trace:BUG-2548 | ai:codex — retries keep one durable escalation.
@@ -299,14 +310,25 @@ fn append_locked(
     Ok(pending)
 }
 
-/// Stamp `seq`/`at` on `pending` and append them in one write, then index
-/// their specs.
+/// Bind `pending`'s specs to the change, stamp `seq`/`at`, append them in
+/// one write, then index their specs. The bindings are written ahead of the
+/// append, under the same locks, and a failed binding fails the append: an
+/// event without a binding would be invisible to selection.
+// trace:BUG-2531 | ai:claude
 fn write_events(
     root: &Path,
     change: ChangeKey,
     existing: &[GateEvent],
     pending: &mut [GateEvent],
 ) -> std::io::Result<()> {
+    // Before the first change ledger exists, whatever its events carry: a
+    // first append without a spec must not leave the ledger uncertified.
+    super::bindings::certify_empty(root)?;
+    let specs: std::collections::BTreeSet<&str> =
+        pending.iter().filter_map(|e| e.spec.as_deref()).collect();
+    for spec in specs {
+        super::bindings::bind(root, spec, change)?;
+    }
     let mut seq = existing.last().map(|e| e.seq).unwrap_or(0);
     let now = chrono::Utc::now().to_rfc3339();
     let mut lines = String::new();

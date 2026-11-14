@@ -69,3 +69,44 @@ The proposed design is in
 BUG-2531 must not be marked complete on the strength of this safety cap.
 The native Refs publication declaration grants no completion credit; the
 design-fork punt is a publication veto. Changes remain uncommitted for the host.
+
+## Completeness slice: write-ahead bindings (advisor ruling 2026-11-12 22:55 MST)
+
+The text above describes the earlier safety-cap slice. This slice replaces
+the full scan in selection and completes BUG-2531; retention and archival
+are TASK-3098.
+
+- A writer persists `gate-ledger/bindings/<SPEC>/<CHANGE>` for every spec its
+  events carry before it appends, under the append's locks. A failed binding
+  write fails the append.
+- `gate-ledger/bindings-complete.json` certifies that every change ledger is
+  bound. Selection refuses without a supported marker and names the fix:
+  `aida doctor --heal --yes --category gate-ledger-bindings`. That command
+  scans every active change ledger under the exclusive ledger lock, writes
+  the bindings and publishes the marker last, so an interrupted run leaves no
+  marker and a rerun completes it. A ledger with no change ledger at all is
+  certified by its first writer.
+- Selection, ownership filtering and the effective view read the requested
+  labels' bindings and only the change ledgers they name. The `by-spec`
+  indexes stay hints: they may add a change, never hide one. A bound change
+  whose ledger is missing, or a ledger that records a spec's reviews without
+  a binding, refuses and names the fix.
+- The event format is 2. Readers accept 1 and 2. A writer refuses a ledger
+  that holds events of a format newer than it writes. Binaries that predate
+  this slice have no such check, so only one live binary may write (the
+  ruling's single-install assumption).
+- The shared discovery of a verdict listing (BUG-2543) is revalidated
+  against what it read: the marker, the bindings of each spec it listed and
+  the stat identity of each ledger it read.
+- An unsafe or oversized ledger now refuses only the specs bound to it and
+  the bindings rebuild, not every selection.
+
+Deploy step: after a binary with this slice goes live, run the fix command
+once on the live store before any review or train.
+
+Regressions: `gate::ledger::bindings::tests` (bound-only reads counted by
+bytes and parse attempts with unrelated history over the old ceiling, missing
+and unsupported marker, bootstrap interruption and rerun, binding/append
+boundary, missing or inconsistent bindings, newer-format refusal, shared
+discovery after a new binding), plus the adapted
+`bug_2543_shared_discovery_tests` and `bug_2542` tests.
