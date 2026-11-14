@@ -1,0 +1,42 @@
+{
+  "schema_version": 1,
+  "spec": "STORY-2772",
+  "publishes": [
+    {
+      "at": "2026-11-14T23:40:06.479310243Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-11-14T11:34:16.791232462Z",
+      "spec": "STORY-2772",
+      "kind": {
+        "event": "UnshippedWorkDetected",
+        "spec": "STORY-2772",
+        "branch": "story-2772-integration-review",
+        "first_seen": "2026-11-14T11:34:16.791172010+00:00"
+      }
+    },
+    {
+      "ts": "2026-11-14T11:34:17.293466909Z",
+      "spec": "STORY-2772",
+      "kind": {
+        "event": "UnshippedWorkDetected",
+        "spec": "STORY-2772",
+        "branch": "origin/story-2772-check",
+        "first_seen": "2026-11-14T11:34:17.293395467+00:00"
+      }
+    },
+    {
+      "ts": "2026-11-14T23:40:06.301008565Z",
+      "spec": "STORY-2772",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "786738cea92618fee2d1eae01fe97b1d46eef12e",
+        "pr": 4067,
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
