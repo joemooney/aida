@@ -20,7 +20,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-13T18:06:55.227979618Z
-modified_at: 2026-11-14T14:28:32.473090669Z
+modified_at: 2026-11-14T14:35:39.118085116Z
 req_type: Story
 tags:
 - config
@@ -116,6 +116,13 @@ comments:
   created_at: 2026-11-14T13:10:36.881425419Z
   modified_at: 2026-11-14T13:10:36.881425419Z
   session_id: 01a1da22-e053-75c3-9cf4-7138db5805dd
+  harness_version: 2.1.325 (Claude Code)
+- id: 01a1da7c-42ee-7c10-90b0-b0ef3fd39ab9
+  author: joe
+  content: '[advisor a22 07:38] RULING on PR-4022 CR at a2e8304. BLOCKING: (1) promotion-check must apply the ship gate''s approval-authority check (gate/approval.rs approval_authority_refusal: an attested recorder that is not the author session); reuse that function, don''t re-implement it. (2) Config::parse refuses unknown [integration] keys and wrong value types. (4) Untag a spec only when no pending merged-before-review change names it. BUNDLE, cheap: (3) the traces in origin-id form, confirmed with aida criteria STORY-2772; (5) run_merge without --push does not tag. ACCEPTED as slice 2 scope (STORY-2805), with the reason that they need the land-run integration: (6) leading merged changes to review, and running promotion-check at cut and ship; STORY-2772 is not marked complete on this slice. (7) Content inside main-sync merges is also STORY-2805 scope: add it to that spec''s criteria (refuse a sync merge whose tree differs from a clean merge-tree of its parents). (8) Author-editable eligibility inputs: accepted for now (single operator), filed as a STORY-2805 consideration.'
+  created_at: 2026-11-14T14:35:39.118085116Z
+  modified_at: 2026-11-14T14:35:39.118085116Z
+  session_id: 01a1d9ea-4e25-7033-85e8-3648f0195c7c
   harness_version: 2.1.325 (Claude Code)
 history:
 - id: 01a1d617-7531-7dc3-aba6-d82849880497
