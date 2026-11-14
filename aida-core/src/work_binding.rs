@@ -854,6 +854,7 @@ mod tests {
     #[test]
     fn bug_2555_counter_stays_owner_writable_under_umask_002() {
         use std::os::unix::fs::PermissionsExt;
+        use std::os::unix::process::CommandExt;
         // The child is told it is the child by its working directory, which
         // holds this marker; the environment is not consulted.
         const CHILD: &str = "bug-2555-umask-child";
@@ -868,6 +869,13 @@ mod tests {
                     "--test-threads=1",
                 ])
                 .current_dir(cwd.path());
+            // SAFETY: `umask` is async-signal-safe and touches no memory.
+            unsafe {
+                child.pre_exec(|| {
+                    libc::umask(0o002);
+                    Ok(())
+                });
+            }
             let out = child.output().unwrap();
             let text = format!(
                 "{}{}",
@@ -878,12 +886,8 @@ mod tests {
             assert!(text.contains("1 passed"), "the child ran no test: {text}");
             return;
         }
-        // The child sets the umask itself: the test binary's startup hook
-        // (test_umask.rs) resets it to 022 before main, so one inherited from
-        // the parent would not survive. This process runs only this test, on
-        // one thread.
-        // SAFETY: `umask` only swaps the process file-creation mask.
-        unsafe { libc::umask(0o002) };
+        // SAFETY: reads the umask by setting it to the value it must have.
+        assert_eq!(unsafe { libc::umask(0o002) }, 0o002);
         let d = tempfile::tempdir().unwrap();
         crate::git_ops::init(d.path()).unwrap();
         bootstrap(d.path()).unwrap().unwrap();
