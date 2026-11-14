@@ -1,0 +1,33 @@
+id: 01a1db4e-528a-7140-b1ed-fc6d3e0e18a1
+spec_id: BUG-b6b1278890774ef993d2ebc327862470-350
+agreed_id: BUG-2585
+title: Seat relay dies at rotation when the operator's parent grant has expired, with no warning beforehand
+description: |-
+  2026-11-14 18:14Z: the integration seat (claude-implementer-1047, relay 'aida agent new claude --role implementer --rotate') wrote its handoff and rotated. The relaunch failed:
+
+    Error: no valid parent seat grant is active: grant 52956836 is refused because it expired at 2026-11-14T17:10Z
+
+  The seat stayed down until the operator noticed, ran 'aida role enter advisor --no-resume --delegate-seat ...' (new 24h grant) and relaunched by hand. The mandate still had 18h left; the 24h role grant had expired an hour earlier and nothing said so. Every relay started under the same operator grant (the advisor relay included) dies the same way at its next rotation, so an unattended run ends silently at the first rotation after grant expiry.
+
+  Wanted: (1) the relay checks the parent grant's remaining life before it ends the outgoing session; under a threshold (e.g. 2h) it warns in the seat's status line and mails the advisor and product seats; (2) when the grant is already expired at rotation, the relay does not end the working session: it keeps it running, prints the exact operator command that renews the grant, and retries the relaunch when a valid grant appears; (3) 'aida doctor' and the session-start banner show the parent grant expiry beside the mandate expiry; (4) consider letting an active mandate that covers the seat renew or stand in for the relay's parent grant, as a project setting.
+
+  Acceptance: a relay whose parent grant expires mid-run survives the next rotation attempt without losing the seat; the expiry is visible at least 2h ahead in the banner and by mail; the renewal command is printed verbatim.
+status: Draft
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-14T18:25:05.674074503Z
+modified_at: 2026-11-14T18:25:05.674074503Z
+req_type: Bug
+tags:
+- landing
+- track:integration
+- unattended
+filed_at:
+  code_sha: 96fc262834527304fe85fc9ee32e4d04f1aaf4ea
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 5ea861d7358
+  vendor: claude
+  session: fc28c702-2f6e-419e-b882-6ddfeb9134ff
