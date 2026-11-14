@@ -21,7 +21,6 @@ modified_at: 2026-11-14T19:07:06.242302513Z
 req_type: Story
 tags:
 - integration
-- track:integration
 relationships:
 - rel_type:
     custom: implemented-by
@@ -133,12 +132,25 @@ history:
   - field_name: status
     old_value: NeedsAttention
     new_value: Completed
+- id: 01a1db74-d19e-7681-876e-72bb21a07bd9
+  author: aida-auto-bump
+  timestamp: 2026-11-14T19:07:08.574574988Z
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Completed
 processing_record:
 - id: 01a1db74-c882-7730-a350-a290c7c0daf3
   timestamp: 2026-11-14T19:07:06.242300328Z
   agent: aida
   commit_sha: 56e442fd3b22481f49204d6e41f21621555ce70a
   summary: Completed via merge 56e442fd
+- id: 01a1db74-d3d2-7193-a78e-c5116e7f9716
+  timestamp: 2026-11-14T19:07:09.138566910Z
+  agent: aida
+  commit_sha: 56e442fd3b22481f49204d6e41f21621555ce70a
+  summary: 'Both round-3 blockers fixed at 5abc1d7: the track preflight admits scopes that are not stored specs and is read-only with no store (agent_launch.rs:4369-4386), each with a regression. AC1-5 verified, AC6 covered at the shared label only. CI fast tier green at head; full test shards do not run on this tier, so the new tests rest on the implementer''s lane run (8 passed).'
+  review_verdict: approved
 filed_at:
   code_sha: 5652ea465a222e7d3ade2cadb967ddd30a6b6b44
   branch: integration
