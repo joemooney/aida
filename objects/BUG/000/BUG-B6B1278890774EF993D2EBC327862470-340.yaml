@@ -17,7 +17,7 @@ priority: Low
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-14T11:36:18.476287136Z
-modified_at: 2026-11-14T14:44:13.173060383Z
+modified_at: 2026-11-14T16:37:22.490475392Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -92,6 +92,28 @@ comments:
   modified_at: 2026-11-14T14:44:13.173060383Z
   session_id: 01a1d9ea-4e25-7033-85e8-3648f0195c7c
   harness_version: 2.1.325 (Claude Code)
+- id: 01a1daeb-b3ba-77e0-a256-435d303fbca8
+  author: dirtlab
+  content: |-
+    [implementer lane 01a1dad7ae1b, 09:45] Rework for PR-4021 committed in the seat as 7410052ebf (rebased onto origin/main f5128d18cf); not pushed, the seat has no forge credentials, so the host has to publish it.
+
+    Cause, named in the commit body: stale dell1:/tmp/.git with a group-writable aida-work-node.toml (litter from the leak fixed in #3987). The fixture store had no Git identity of its own, allocation discovery walked up into /tmp/.git, and the requeue was refused as unsafe WORK allocation state; the loop prints the refusal and returns Ok.
+
+    Change (test only, aida-cli-lib/src/tests/queue_rework_tests.rs): new test bug_2575_triage_loop_requeues_under_ancestor_git_litter plants a 0664 aida-work-node.toml in a .git above the fixture root and asserts the r keystroke still requeues and nothing is written into that .git. Codex diagnostics kept.
+
+    Of the ruling's two options I took "discovery stops at the fixture root": #3987, now on main, already gives each fixture store its own repository, so no production or AmbientGuard change was needed and GIT_CEILING_DIRECTORIES is not set (common_dir ignores Git env overrides by design, so it would not have helped this path).
+
+    Evidence:
+    - Head: queue_rework_tests module, 62 passed, 0 failed (lane job j20261114T162539306-22-0), including the new test.
+    - With the pre-#3987 enroll_synthetic_home restored temporarily, the new test fails with the exact dell1 refusal and NeedsAttention vs Approved (j20261114T162155787-7-0); restored afterwards.
+    - make check-ci-fast cannot finish inside the seat's 60s call cap, so I ran its 48 gates in slices: 44 passed; "Rust structural ratchets" has a cargo half I did not run (its python half passed); three fail on sandbox EPERM / read-only /tmp unrelated to this diff (Containment conformance evidence tests, Store mutation channel tests, Self-hosted routing security fixtures).
+    - Not verified here: the dell1-over-ssh run itself.
+
+    Status edits were refused (Needs Attention needs advisor authority), so the spec is still Needs Attention and queue done was not run.
+  created_at: 2026-11-14T16:37:22.490475392Z
+  modified_at: 2026-11-14T16:37:22.490475392Z
+  session_id: 01a1dad7ae1b
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1d9d9-0f81-7752-9b38-a66eb0c96eaa
   author: joe
