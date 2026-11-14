@@ -409,12 +409,24 @@ description: |
   ### finding-hash:0bff30e1
 
   verify-manual.py defaults to target/debug/aida, but the repo dev build (aida dev build / make build-fast) produces target/agent/aida, so a local run may silently check a stale target/debug binary (the printed path is the only signal); consider preferring the newest of target/{agent,debug} or warning on mtime older than HEAD
+
+
+  ## Findings from PR-3990
+  Reviewed sha: 54925b1d46bf955ef6609b232b0accbe2e958e99
+
+  ### finding-hash:6935f83d
+
+  Per-key publication git spawns (choose_current/review_publication, ~0.15 s/key per the 2026-11-13 profile) remain on review list and the pull reconcile, so the specs ask that 2,800 keys finish in seconds and that git be O(1) per listing; neither is met or measured here (only an ignored bench). The commit trailer (BUG-2543 BUG-2551) completes both specs at merge, and no follow-up spec exists for the O(1) git work the 05:32 ruling deferred. File it, and re-measure aida pull after landing.
+
+  ### finding-hash:2a99ebfc
+
+  store::read_regular (aida-cli-lib/src/gate/ledger/store.rs:164) checks is_file by path, then opens without O_NONBLOCK. A FIFO swapped in between the two can still block the lossy reader, even though the doc comment says it never hangs. Opening with O_NONBLOCK|O_NOFOLLOW-free flags and then fstat-checking would close the window.
 status: Draft
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-13T20:01:56.623034248Z
-modified_at: 2026-11-14T07:54:42.509203124Z
+modified_at: 2026-11-14T07:57:46.855471928Z
 req_type: Task
 tags:
 - carried-finding:BUG-2546:56ed8b81
@@ -467,6 +479,8 @@ tags:
 - carried-finding:PR-3983:76a786ef
 - carried-finding:PR-3983:7bbbf9a9
 - carried-finding:PR-3983:dfed3eb6
+- carried-finding:PR-3990:2a99ebfc
+- carried-finding:PR-3990:6935f83d
 - carried-finding:PR-3994:46a7a9dc
 - carried-finding:PR-3994:51cbf3a8
 - carried-finding:PR-3998:0bff30e1
@@ -508,6 +522,7 @@ tags:
 - carried-from:PR-3973
 - carried-from:PR-3979
 - carried-from:PR-3983
+- carried-from:PR-3990
 - carried-from:PR-3994
 - carried-from:PR-3998
 - carried-from:STORY-2735
@@ -520,6 +535,7 @@ tags:
 - finding-hash:15915e39
 - finding-hash:198d1196
 - finding-hash:28356795
+- finding-hash:2a99ebfc
 - finding-hash:2c08aa50
 - finding-hash:2c7ae2ea
 - finding-hash:2dfbd6d5
@@ -538,6 +554,7 @@ tags:
 - finding-hash:6220a3dc
 - finding-hash:654190b6
 - finding-hash:6810bcf9
+- finding-hash:6935f83d
 - finding-hash:76a786ef
 - finding-hash:79f360e4
 - finding-hash:7bbbf9a9
@@ -575,6 +592,7 @@ tags:
 - from-review:PR-3973
 - from-review:PR-3979
 - from-review:PR-3983
+- from-review:PR-3990
 - from-review:PR-3994
 - from-review:PR-3998
 - from-review:STORY-2735
@@ -736,6 +754,11 @@ history:
   author: joe
   timestamp: 2026-11-14T07:54:44.183718301Z
   session_id: 01a1d90b0ab1
+  changes: []
+- id: 01a1d910-061c-77a1-8010-5189656e8e11
+  author: joe
+  timestamp: 2026-11-14T07:57:48.444474859Z
+  session_id: 01a1d90ca510
   changes: []
 filed_at:
   code_sha: 91fe1e337894199f15365d3f8ecfaf81366f8291
