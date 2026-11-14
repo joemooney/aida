@@ -18,7 +18,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-13T00:35:57.525111678Z
-modified_at: 2026-11-14T03:27:10.556411385Z
+modified_at: 2026-11-14T05:17:31.510406579Z
 req_type: Story
 tags:
 - track:integration
@@ -75,6 +75,13 @@ comments:
   created_at: 2026-11-14T03:09:57.500590459Z
   modified_at: 2026-11-14T03:09:57.500590459Z
   session_id: 01a1d797-2ccf-7771-899a-682081f10504
+  harness_version: 2.1.325 (Claude Code)
+- id: 01a1d87d-47f6-73f1-94f7-140faf6966eb
+  author: joe
+  content: '[advisor 114 22:20] #3950 round-2 verdict at 059e1b8: F2/F3/F5 fixed. Two findings remain: F1 delta (a stale-seat path on --bg relink) and F8 (the AC6 template''s tracked mirror is missing; run make sync-templates). Round 3 is the last: fix exactly these two, nothing else. Seat-identity code, so review strictly before merge.'
+  created_at: 2026-11-14T05:17:31.510406579Z
+  modified_at: 2026-11-14T05:17:31.510406579Z
+  session_id: 01a1d852-16ef-7973-bdde-ac3f274752a2
   harness_version: 2.1.325 (Claude Code)
 history:
 - id: 01a1d404-5b69-7883-a178-72d22e485802
