@@ -785,12 +785,20 @@ description: |
   ### finding-hash:1287747b
 
   aida-cli-lib/src/pr_train.rs:950, 3307-3309, 3800 and 3823-3840: no test reaches the forge-side InfraRed path (wait_train_ci and observe_ci mapping, the red confirmation re-read, the no-result close comment). The driver and classifier are tested on either side of it only.
+
+
+  ## Findings from PR-4021
+  Reviewed sha: 51b96b3f0b5983e5de99362c53d9efa354182adb
+
+  ### finding-hash:6089dde5
+
+  PR body does not name the cause (advisor ruling asked for it): stale dell1:/tmp/.git with a group-writable aida-work-node.toml reached by allocation discovery walking up from the fixture. It is named only in commit 7410052 body and the test doc comment at aida-cli-lib/src/tests/queue_rework_tests.rs:1616.
 status: Draft
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-13T20:01:56.623034248Z
-modified_at: 2026-11-14T16:44:32.240525637Z
+modified_at: 2026-11-14T17:20:12.391849292Z
 req_type: Task
 tags:
 - carried-finding:BUG-2543:2a99ebfc
@@ -903,6 +911,7 @@ tags:
 - carried-finding:PR-4020:2a257094
 - carried-finding:PR-4020:5863b5f0
 - carried-finding:PR-4020:e391cb46
+- carried-finding:PR-4021:6089dde5
 - carried-finding:PR-4024:0bdbec3f
 - carried-finding:PR-4024:2df54e83
 - carried-finding:PR-4030:1287747b
@@ -971,6 +980,7 @@ tags:
 - carried-from:PR-4013
 - carried-from:PR-4015
 - carried-from:PR-4020
+- carried-from:PR-4021
 - carried-from:PR-4024
 - carried-from:PR-4030
 - carried-from:STORY-2735
@@ -1017,6 +1027,7 @@ tags:
 - finding-hash:5863b5f0
 - finding-hash:5b9e60ad
 - finding-hash:5d2b67f3
+- finding-hash:6089dde5
 - finding-hash:6220a3dc
 - finding-hash:654190b6
 - finding-hash:6810bcf9
@@ -1097,6 +1108,7 @@ tags:
 - from-review:PR-4013
 - from-review:PR-4015
 - from-review:PR-4020
+- from-review:PR-4021
 - from-review:PR-4024
 - from-review:PR-4030
 - from-review:STORY-2735
@@ -1400,6 +1412,11 @@ history:
   author: joe
   timestamp: 2026-11-14T16:44:34.206567185Z
   session_id: 01a1daeeeb55
+  changes: []
+- id: 01a1db12-f024-7991-baf3-a1e7fbe6fb00
+  author: joe
+  timestamp: 2026-11-14T17:20:13.860660276Z
+  session_id: 01a1db10ee1e
   changes: []
 filed_at:
   code_sha: 91fe1e337894199f15365d3f8ecfaf81366f8291
