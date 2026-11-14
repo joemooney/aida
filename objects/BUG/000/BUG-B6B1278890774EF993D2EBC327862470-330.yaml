@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-13T20:52:54.357683400Z
-modified_at: 2026-11-14T12:14:45.751771050Z
+modified_at: 2026-11-14T12:40:28.038205055Z
 req_type: Bug
 tags:
 - perf
@@ -106,6 +106,13 @@ comments:
   modified_at: 2026-11-14T12:14:45.751771050Z
   session_id: 01a1d9ef96df
   harness_version: codex-cli 0.167.0
+- id: 01a1da12-ce86-7520-97fc-72e6023c5a44
+  author: joe
+  content: '[advisor a22 05:41] Review note for PR-4007 at d6eb35f: on the old merge result at 30e4a10, dell1 failed aida-core git_ops bug034_permission_denied_lock_is_not_retried, and the launch-input ratchet flagged AIDA_PULL_COALESCE as unclassified. The reviewer may run the targeted ''cargo test --profile agent -p aida-core git_ops'' to confirm both are fixed at this head (one targeted run allowed under the LIGHT gate).'
+  created_at: 2026-11-14T12:40:28.038205055Z
+  modified_at: 2026-11-14T12:40:28.038205055Z
+  session_id: 01a1d9ea-4e25-7033-85e8-3648f0195c7c
+  harness_version: 2.1.325 (Claude Code)
 history:
 - id: 01a1d8a9-d3a1-7243-a396-3ba4fdaf7412
   author: joe

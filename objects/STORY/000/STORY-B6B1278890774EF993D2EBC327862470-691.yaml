@@ -43,7 +43,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-13T16:52:56.270142081Z
-modified_at: 2026-11-14T12:36:27.798533425Z
+modified_at: 2026-11-14T12:41:00.827586151Z
 req_type: Story
 tags:
 - architecture
@@ -325,6 +325,21 @@ comments:
   created_at: 2026-11-14T12:36:27.798533425Z
   modified_at: 2026-11-14T12:36:27.798533425Z
   session_id: 01a1d9b6-e721-73f1-9ad6-1343da1a030e
+  harness_version: 2.1.325 (Claude Code)
+- id: 01a1da13-4e9b-78e3-a8c2-e474881773c3
+  author: joe
+  content: |-
+    [advisor a22 05:46] SIGNOFF on the slice 3 sketch (01a1da0f): APPROVED in the proposed order S3d, S3a, S3b, S3c-1, S3c-2, with these rulings.
+    (a) Salvageable rows: patch saved, lease released, worktree left alone. Agreed, because unattended deletion of dirty work cannot be undone. Condition: write the patch path onto the spec as a comment, so the next pickup can find it.
+    (b) Orphaned In-Progress spec with no open change: reset to Approved and queued, as proposed. Three conditions. (1) Leases are tracked per host: a spec whose latest lease is on another host (dell1) is not orphaned from this host; skip it and report it. (2) Before resetting, check origin for a spec branch with no PR (the refs/heads/<type>-<long-id>* pattern). If one exists, record it on the spec so the pickup resumes with --branch (BUG-2549 semantics), and do not count the spec as fresh. (3) Never reset a spec tagged supervised, operator-only or architecture; list those as NeedsAttention for a human instead.
+    (c) WIP: refuse, with --over-wip logged. Default [land] wip_max = 10: the operator lifted the 6-PR limit for dell1 lanes (2026-11-13 15:52) and wants 8 dell1 lanes. Count open changes across both tracks (main and integration). The refusal names aida now and the current count.
+    (d) Retire only the review worker. Agreed: the train worker is not landing admission.
+    (e) Precondition for S3c PR 1: 24h of land run carrying review admission with no manual reviewer launch by the advisor. Measure it from aida land status / the land run log and quote the numbers in the PR body.
+    (f) Promotion 7: also add a test that land run never update-branches, reworks or salvages a promote/* or train/* head, and that a train/* journal's PR is never counted as orphaned work. Nothing else is needed.
+    Architecture: deleting about 8.8k lines in S3c-2 is approved, provided the kept symbols move under neutral names in the same PR, with no behaviour change, and callers compile unchanged apart from the paths. Each PR stays low-risk and review-after-merge eligible, except S3c-2, which is review-before-merge. trace:STORY-2768 | ai:claude
+  created_at: 2026-11-14T12:41:00.827586151Z
+  modified_at: 2026-11-14T12:41:00.827586151Z
+  session_id: 01a1d9ea-4e25-7033-85e8-3648f0195c7c
   harness_version: 2.1.325 (Claude Code)
 history:
 - id: 01a1d5d3-fe28-7cc2-a7e3-638454ed4798
