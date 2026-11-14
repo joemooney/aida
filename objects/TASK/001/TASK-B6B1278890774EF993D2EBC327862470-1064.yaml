@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-11T12:17:47.476312683Z
-modified_at: 2026-11-14T10:40:01.009365071Z
+modified_at: 2026-11-14T13:20:30.147170002Z
 req_type: Task
 relationships:
 - rel_type: BlockedBy
@@ -52,6 +52,13 @@ comments:
   modified_at: 2026-11-14T10:40:01.009365071Z
   session_id: 01a1d99d5d32
   harness_version: codex-cli 0.167.0
+- id: 01a1da37-75c3-7311-8d52-041da3ae7c7a
+  author: dirtlab
+  content: 'Resumed acceptance audit at head ecb4117cd3. Existing extraction and review fixes already committed by host; no source changes needed. Fresh lane test j20261114T131919541-2-0 passed all 38 aida-testkit tests; git diff --check clean. Added uncommitted plan checkpoint: current-head FULL CI 43599084597 pending with no jobs started; successful prior extraction CI 43586756860 was FAST and skipped lib shards. Criterion 5 remains unresolved until FULL lib-0/lib-1 Run tests timings exist. Existing PR #3994 merge hold remains a publication veto; no new publication declaration or queue completion attempted. Handoff /tmp/TASK-3784-resume-handoff.txt.'
+  created_at: 2026-11-14T13:20:30.147170002Z
+  modified_at: 2026-11-14T13:20:30.147170002Z
+  session_id: 01a1da355beb
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1ca8b-157a-7c50-9f73-dc13d565bf63
   author: joe
@@ -82,6 +89,12 @@ history:
   author: dirtlab
   timestamp: 2026-11-14T10:32:38.183397978Z
   session_id: 01a1d99d5d32
+  harness_version: codex-cli 0.167.0
+  changes: []
+- id: 01a1da35-f370-77a0-9441-26231ae024a0
+  author: dirtlab
+  timestamp: 2026-11-14T13:18:51.248393208Z
+  session_id: 01a1da355beb
   harness_version: codex-cli 0.167.0
   changes: []
 filed_at:

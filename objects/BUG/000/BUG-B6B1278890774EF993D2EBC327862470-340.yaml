@@ -17,7 +17,7 @@ priority: Low
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-14T11:36:18.476287136Z
-modified_at: 2026-11-14T13:10:36.796326243Z
+modified_at: 2026-11-14T13:24:56.726384446Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -90,6 +90,12 @@ history:
   author: joe
   timestamp: 2026-11-14T12:03:01.541500002Z
   changes: []
+- id: 01a1da3b-8a54-7341-89bc-5288000f9a2b
+  author: dirtlab
+  timestamp: 2026-11-14T13:24:57.556687680Z
+  session_id: 01a1da313804
+  harness_version: 2.1.319 (Claude Code)
+  changes: []
 filed_at:
   code_sha: c219a07bf39e3e7210b8e3f14bf17708d20c3b5f
   branch: integration
@@ -101,6 +107,7 @@ filed_at:
   harness_version: 2.1.325 (Claude Code)
 attention_reason:
   category: missing-context
-  detail: Required dell1-over-ssh reproduction is unavailable in this lane, which runs on disrad-dvp98b3puw. Original and diagnostic-enhanced focused tests both pass without a terminal here. No root cause established. Uncommitted test-only assertions now expose GrantCheck rejection and resolved advisor authority before triage; rerun on dell1 with umask 022 and --nocapture to distinguish rejected fixture authority from a later rework refusal. Do not mark complete or publish as a fix.
+  detail: 'Cannot reproduce in this seat, so no cause is named and nothing new is published. The lane runs on Dell host disrad-dvp98b3puw but only inside bubblewrap (own PID namespace, sid 0, no ssh, test binary lives in the lane overlay). At branch head d339f87949 with the PR-4021 diagnostics, lane job j20261114T131434893-4-0 ran the focused test with umask-independent sandbox defaults and --nocapture: 1 passed, the loop printed ''BUG-9112 status: Needs Attention -> Approved''. Code reading narrows it but does not name it: the failing test shares its guard and handle_queue_rework path with rework_reason_is_recorded_once_and_emits_spec_requeued (same hermetic_with_seat_and + events on) and its loop path with triage_loop_d_decides_then_returns_to_the_same_spec; events are only written after the flip; no code reads SSH_* variables. A generic rejected seat grant would fail those siblings too. Needed: one run from a plain host shell on dell1 (ssh, no tty, umask 022, NOT a lane job) of this branch: cargo test --profile agent -p aida-cli-lib --lib -- triage_loop_r_keystroke rework_reason_is_recorded_once triage_loop_d_decides, and the full captured stdout of the failure. It will show either the GrantCheck rejection (diagnostic assert), or the loop''s ''error:'' / ''needs advisor authority'' / ''unknown key'' line, which names the ambient input.'
+  lean: 'Paste that stdout on the spec (or give a lane a host-namespace job runner); the fixture pin is then a small test-only change in queue_rework_tests.rs or test_env.rs. Also dump env | grep AIDA_ from the same ssh command: non-interactive ssh sources ~/.bashrc, an unpinned AIDA_* export there is the leading suspect.'
   raised_by: implementer
-  raised_at: 2026-11-14T11:50:15.682463167Z
+  raised_at: 2026-11-14T13:24:56.726384446Z
