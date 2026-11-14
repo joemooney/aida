@@ -18,7 +18,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-13T00:35:57.525111678Z
-modified_at: 2026-11-14T14:40:08.384566247Z
+modified_at: 2026-11-14T14:52:12.560134506Z
 req_type: Story
 tags:
 - track:integration
@@ -216,6 +216,12 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a1da8b-6edc-7be2-b226-49ea96b3f643
+  author: dirtlab
+  timestamp: 2026-11-14T14:52:13.404897820Z
+  session_id: 01a1da836ba4
+  harness_version: 2.1.319 (Claude Code)
+  changes: []
 filed_at:
   code_sha: 9968a8ab4ec2b4110f24d64122a7e60ab755a95b
   branch: main
@@ -225,6 +231,12 @@ filed_at:
   vendor: claude
   session: 01a1d240-c397-7b61-b29f-bb337c138943
   harness_version: 2.1.323 (Claude Code)
+attention_reason:
+  category: other
+  detail: 'Round-2 findings 1 and 2 (review of 059e1b8fe065) are not disputed, but both are already fixed on the pushed PR branch by 506994b735 (origin/story-2745-seat-mail-sq at 548d63d047 contains it), so there is nothing left to change and I will not make an empty commit. F1: agent_registry.rs:958 takes a linked session''s seat from the launch record only (None = no seat), :1044 no longer falls back to the row seat when linked, :1271 adopt_bg_session_identity sets the launch seat outright; tests story2745_recycled_spare_drops_the_earlier_launchs_seat_on_a_seatless_link and story2745_post_link_hook_alone_drops_a_stale_row_seat cover the requested scenario. F2: .aida/discipline/standing-orders/integration.md is tracked and byte-identical to the template. Verified at HEAD 4d4525d42f: cargo test -p aida-cli-lib --lib story2745 = 16 passed, 0 failed. The review was recorded against 059e1b8fe065, before the fix commit.'
+  lean: Re-review the PR at its current head; no further implementer change needed for these two findings.
+  raised_by: implementer
+  raised_at: 2026-11-14T14:52:12.560134506Z
 failure_reason:
   phase: reviewer
   phase_index: 3
