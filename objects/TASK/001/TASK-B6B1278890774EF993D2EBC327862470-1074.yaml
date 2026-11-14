@@ -8,11 +8,19 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-14T01:08:38.387968366Z
-modified_at: 2026-11-14T01:12:15.590544438Z
+modified_at: 2026-11-14T01:30:11.242280135Z
 req_type: Task
 tags:
 - ci
 - track:dell1
+comments:
+- id: 01a1d7ad-25aa-7cf3-95fb-05d9d673bf55
+  author: joe
+  content: '18:31 MST advisor review scope for #3979: verify the FAST tier would have caught BOTH #3926 failure classes from train 10: (a) story_2326_ambient_aida_inputs_have_a_disposition / launch_sites_outside_the_launcher_match_the_ledger (lib-1, #3975), and (b) resolve_aida_exe_tests::no_cli_source_outside_the_resolver_uses_raw_current_executable_lookup (lib-0, #3977). If (b) is missing, that is a blocking AC miss (AC2 completeness check should flag it). Touches gate/tests: ship via deputy-TTY train.'
+  created_at: 2026-11-14T01:30:11.242280135Z
+  modified_at: 2026-11-14T01:30:11.242280135Z
+  session_id: 01a1d797-2ccf-7771-899a-682081f10504
+  harness_version: 2.1.325 (Claude Code)
 history:
 - id: 01a1d79c-3f1a-70f1-b913-d2c94ef25eeb
   author: aida-session-start
