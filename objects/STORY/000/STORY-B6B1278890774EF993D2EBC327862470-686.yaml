@@ -30,7 +30,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-13T15:54:08.931576118Z
-modified_at: 2026-11-14T18:38:16.996838628Z
+modified_at: 2026-11-14T19:08:54.780614182Z
 req_type: Story
 tags:
 - architecture
@@ -303,6 +303,13 @@ comments:
   modified_at: 2026-11-14T18:38:16.996838628Z
   session_id: 01a1dab1-9447-7d22-b5ff-0c9084e122ea
   harness_version: 2.1.325 (Claude Code)
+- id: 01a1db76-707c-7503-a027-41ccc14e0ba7
+  author: dirtlab
+  content: 'Advisor ruling 11:40 addressed in commit be81871f29 (local on the lane branch; push from this seat failed: no GitHub credentials, host must publish). review_launch::review_prompt now (1) returns the ordinary prompt when the project has no forge (pure-git), and (2) degrades with a warning to the ordinary prompt when the current-base context cannot be established (forge metadata read, protected base resolution, base refresh, head resolution). (2) was needed because bug_2187 has a GitHub-shaped fixture and still failed after (1) with ''the remote''s default branch could not be resolved locally''. Conflict routing (NeedsRework) and ''change moved while composing'' still refuse. New tests: story2763_pure_git_project_launches_ordinary_review_prompt, story2763_unreadable_change_metadata_launches_ordinary_review_prompt. Lane runs: aida-cli bug_2139 (6 passed), bug_2187 (1 passed), bug_2201 (3 passed); lib story2763 filter 15 passed; broad lib reviewer/queue_cmd/phase_driver filter 1489 passed, 6 failed, all sandbox-environment refusals outside this change (mail-retention writer scan, ForeignNamespace, PID liveness, two isolated session tests). The CI run log was unreadable from this seat (HTTP 403), so the specific lib-1 and contracts failures were not identified or rerun. make check-ci-fast not run (60s cap); rustfmt, store-writers, gate-dependency ratchet and diff --check pass. Stale round-2 findings 1-4 not reworked: superseded by later rulings.'
+  created_at: 2026-11-14T19:08:54.780614182Z
+  modified_at: 2026-11-14T19:08:54.780614182Z
+  session_id: 01a1db5ff6eb
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1d59e-6b4b-7d10-8aea-02729132bc6f
   author: joe
