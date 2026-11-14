@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-13T21:43:52.838281618Z
-modified_at: 2026-11-14T05:31:45.655545888Z
+modified_at: 2026-11-14T05:33:11.903453729Z
 req_type: Bug
 comments:
 - id: 01a1d88a-5077-7260-8601-e51ac96009ec
@@ -16,6 +16,13 @@ comments:
   content: '[advisor 114 22:35] Approved for a dell1 Codex lane: well-scoped main-track bug, feeds the main merge rate (STORY-2737). Keep the fix to the described defect, add a regression test, run the LIGHT gate (one targeted cargo run plus make check-ci-fast).'
   created_at: 2026-11-14T05:31:45.655545888Z
   modified_at: 2026-11-14T05:31:45.655545888Z
+  session_id: 01a1d852-16ef-7973-bdde-ac3f274752a2
+  harness_version: 2.1.325 (Claude Code)
+- id: 01a1d88b-a15f-7b03-888f-0ca4803b0ac7
+  author: joe
+  content: '[advisor 114 22:38] This lane owns the extern-crate-self alias gap that the TASK-3785 review also found; the TASK-3785 rework leaves it to you.'
+  created_at: 2026-11-14T05:33:11.903453729Z
+  modified_at: 2026-11-14T05:33:11.903453729Z
   session_id: 01a1d852-16ef-7973-bdde-ac3f274752a2
   harness_version: 2.1.325 (Claude Code)
 history:
