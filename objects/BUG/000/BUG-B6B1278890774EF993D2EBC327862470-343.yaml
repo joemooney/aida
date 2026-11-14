@@ -13,7 +13,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-14T13:05:16.063317537Z
-modified_at: 2026-11-14T15:35:58.849358664Z
+modified_at: 2026-11-14T19:02:42.161970945Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -80,6 +80,13 @@ comments:
   modified_at: 2026-11-14T15:35:57.111736122Z
   session_id: 01a1daafb9ad
   harness_version: 2.1.319 (Claude Code)
+- id: 01a1db70-c0f1-7173-b758-e01baaf83a03
+  author: joe
+  content: 'Advisor ruling (2026-11-14 12:15, on the 08:35 fork and the CR at d3c633d): option A. Keep the name expression whose non-label branch is the literal ''Build (ubuntu-latest)''; change the lib test aggregator_const_matches_the_ci_workflow to accept exactly that expression shape (assert the non-label branch equals the aggregator const, and that the label branch cannot equal it). Reason: the 08:28 literal-name directive is withdrawn; the lane showed a skipped literal Build defeats require_full_ship_ci and branch protection. B, C, D rejected. Blocking for re-review: AC4 only (that test green under the FULL tier; run it once on dell1: cargo test -p aida-cli-lib aggregator_const_matches_the_ci_workflow). AC1 live in-progress observation is accepted as unverifiable before merge.'
+  created_at: 2026-11-14T19:02:42.161970945Z
+  modified_at: 2026-11-14T19:02:42.161970945Z
+  session_id: 01a1db6d-e689-7532-9eef-772722add87b
+  harness_version: 2.1.325 (Claude Code)
 history:
 - id: 01a1da2c-3b66-7010-95f7-26087a6c659f
   author: joe
