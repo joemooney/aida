@@ -157,11 +157,13 @@ fn race(store: &Path, root: &Path, waiters: usize, first_ok: bool) -> (usize, us
         })
     };
     holding.wait();
+    let started = Arc::new(AtomicUsize::new(0));
     let others: Vec<_> = (0..waiters)
         .map(|_| {
             let (store, root) = (store.to_path_buf(), root.to_path_buf());
-            let (ran, reused) = (ran.clone(), reused.clone());
+            let (ran, reused, started) = (ran.clone(), reused.clone(), started.clone());
             std::thread::spawn(move || {
+                started.fetch_add(1, Ordering::SeqCst);
                 let turn = coalesce(
                     &store,
                     &root,
@@ -179,7 +181,11 @@ fn race(store: &Path, root: &Path, waiters: usize, first_ok: bool) -> (usize, us
             })
         })
         .collect();
-    // Let every waiter read the state and block on the lock.
+    // Let every waiter start (a loaded host can delay a spawn past any fixed
+    // sleep) and then see the pull in flight before it ends.
+    while started.load(Ordering::SeqCst) < waiters {
+        std::thread::sleep(Duration::from_millis(10));
+    }
     std::thread::sleep(Duration::from_millis(600));
     release.wait();
     let _ = first.join().unwrap();
