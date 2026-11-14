@@ -1,0 +1,35 @@
+id: 01a1dafe-c029-7763-b956-eea7f5f8eb09
+spec_id: BUG-b6b1278890774ef993d2ebc327862470-349
+agreed_id: BUG-2584
+title: aida pr train spends 7.5 minutes CPU-bound between 'train PR is green' and the merge
+description: |-
+  Train PR #4045 (#3924 + #4034 + #4035), 2026-11-14, default deputy job 01a1dab6, process 'aida pr train 4034 3924 4035' (pid 807156):
+
+    09:50:05 MST  transcript: 'train PR #4045 is green'  (last line the job printed)
+    09:50-09:57   main thread in R state at about 45% of a core (221 utime ticks in a 5 s sample), 6 other threads asleep, no child processes, only open project file .aida/train/run.lock
+    journal .aida/train/c0866273-...-1.json during that time: step 'Merge', call 'GitHub metadata attempt', rewritten every few seconds
+    09:57:5x      PR merged; journal moves to step 'Members', call 'GitHub command'
+
+  So the final verified-train gate between green and merge took 7.5 minutes on a 3-member train, on a track where a whole train cycle is 15-30 minutes. Nothing is printed during it, so an advisor cannot tell it from a hang. GitHub rate limits were not exhausted (core 4992, graphql 4105 remaining). Suspects, not verified: the per-member final audit re-reading review/gate history (#3924 has six review rounds; see bug2538 'long review history trains with compact audit'), or the same cache.db scan that makes the post-train 'aida pull' spin (BUG-2551).
+
+  Wanted: (1) find what the CPU is spent on (a profile or timing log around the final gate) and make the green-to-merge step take seconds; (2) print one line per phase of the final gate so progress is visible.
+
+  Acceptance: on a 3-member train, time from 'train PR is green' to the merge call is under 30 seconds, and each final-gate phase logs a line with its duration.
+status: Draft
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-14T16:58:10.857853786Z
+modified_at: 2026-11-14T16:58:10.857853786Z
+req_type: Bug
+tags:
+- landing
+- track:integration
+filed_at:
+  code_sha: 5ea861d7358b33c4422c965a8e2285fd41b2ba6e
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: f5128d18cf1
+  vendor: claude
+  session: fc28c702-2f6e-419e-b882-6ddfeb9134ff

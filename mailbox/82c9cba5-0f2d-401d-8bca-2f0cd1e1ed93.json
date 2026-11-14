@@ -1,0 +1,19 @@
+{
+  "id": "82c9cba5-0f2d-401d-8bca-2f0cd1e1ed93",
+  "thread_id": "82c9cba5-0f2d-401d-8bca-2f0cd1e1ed93",
+  "from": "claude-implementer-1047",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1794673672786,
+  "body": "[integration seat 09:55] Sketch for BUG-2579, for advisor signoff before any code (this is deputy authority code, so I am not treating it as low risk).\n\nToday `cancel` and `ack` (deputy_shell_cmd.rs) compare the job's `submitter.session_id` with the caller's session id; a rotated seat has a new session id and is refused.\n\nProposed:\n1. Ownership for cancel / ack / wait: the caller owns a job when it holds a currently valid seat grant (`seat_authority::grant_check` is Valid) on the same project root whose canonical seat, subject and principal equal the job's `submitter.seat`, `subject`, `principal`. A launched agent's grant subject is its handle, so the rotated session of the same handle matches and another handle does not. The session-id match and the operator terminal stay as they are. Cancel and ack only stop or dismiss work; nothing here lets a session submit or run anything new.\n   Open point: a grant issued directly by `aida role enter` has subject = the OS user, so two such sessions on the same seat could cancel each other's jobs. I would accept that (same person, same seat); say if you want the lease id recorded on the job and compared as well.\n2. `deputy shell list`: for each queued job, run the claim-side `attribution::verdict` read-only and print `will run` or `would be refused: <code>`.\n3. Rotation handoff: the automatic rotation context gets a \"Queued deputy jobs\" section (id, deputy, first line of the script) for jobs whose submitter matches the outgoing seat by rule 1.\n4. Tests: a session with a new session id and a grant of the same seat/subject/principal cancels the predecessor's queued job; a grant with another subject is refused; list shows both verdicts.\n\nNot changed: what the runner accepts at claim. A queued job whose submitting grant is gone is still refused there; item 2 only makes that visible in advance.\n",
+  "subject": "BUG-2579 sketch on the spec: signoff wanted before code (deputy cancel ownership across rotation)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "implementer"
+}

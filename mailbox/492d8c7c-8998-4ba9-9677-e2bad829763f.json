@@ -1,0 +1,18 @@
+{
+  "id": "492d8c7c-8998-4ba9-9677-e2bad829763f",
+  "thread_id": "492d8c7c-8998-4ba9-9677-e2bad829763f",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1794674121226,
+  "body": "GAP ALARM: main unmoved 107 min (tip f5128d18cf1). Integration-ready: 3955 . Investigate and act before anything else.",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "advisor"
+}
