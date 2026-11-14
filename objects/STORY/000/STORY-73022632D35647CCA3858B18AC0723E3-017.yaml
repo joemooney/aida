@@ -1,0 +1,31 @@
+id: 01a1db5d-66aa-73d3-8226-f33c08369eda
+spec_id: STORY-73022632d35647cca3858b18ac0723e3-017
+title: 'Review PR-4052: [AI:claude] feat(review): make the reviewer stale-base policy a project setting (STORY-2821)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `(no-sess`) for branch `story-b6b1278890774ef993d2ebc327862470-744`.
+
+  - PR: <https://github.com/joemooney/aida/pull/4052>
+  - Branch: `story-b6b1278890774ef993d2ebc327862470-744` → `main`
+
+  ## Covers
+
+  - STORY-2821
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 4052` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-14T18:41:33.866005083Z
+modified_at: 2026-11-14T18:41:33.866005083Z
+req_type: Story
+filed_at:
+  code_sha: e14d6c9a70b0a348e789051c741c6f5c49a113bd
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: bc24a1e688
