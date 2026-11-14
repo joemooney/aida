@@ -17,7 +17,7 @@ priority: Low
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-14T11:36:18.476287136Z
-modified_at: 2026-11-14T18:42:40.395454837Z
+modified_at: 2026-11-14T18:42:43.942369324Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -162,16 +162,16 @@ history:
   session_id: 01a1da5c577c
   harness_version: 2.1.319 (Claude Code)
   changes: []
-- id: 01a1db5e-6a81-7ba1-bb16-46731d680d24
+- id: 01a1db5e-785b-7e13-8f1e-33d6207e9e55
   author: aida-auto-bump
-  timestamp: 2026-11-14T18:42:40.385355141Z
+  timestamp: 2026-11-14T18:42:43.931665915Z
   changes:
   - field_name: status
     old_value: NeedsAttention
     new_value: Completed
 processing_record:
-- id: 01a1db5e-6a8b-7f53-b4ad-8ccdc95c2493
-  timestamp: 2026-11-14T18:42:40.395452205Z
+- id: 01a1db5e-7866-78d1-95ea-9f374a9188c9
+  timestamp: 2026-11-14T18:42:43.942366708Z
   agent: aida
   commit_sha: 38a738f44f036cddc4327b137f5a3a3fef087095
   summary: Completed via merge 38a738f4
@@ -186,7 +186,7 @@ filed_at:
   harness_version: 2.1.325 (Claude Code)
 implementation_info:
   implemented: false
-  completed_at: 2026-11-14T18:42:40.385349012Z
+  completed_at: 2026-11-14T18:42:43.931659796Z
   completion_sha: 38a738f44f036cddc4327b137f5a3a3fef087095
 attention_reason:
   category: missing-context
