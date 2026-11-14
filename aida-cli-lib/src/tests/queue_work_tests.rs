@@ -5279,3 +5279,31 @@ fn story_2749_auto_complete_head_skips_operator_track_on_an_operator_launcher() 
     assert_eq!(pick.blocked_skipped.len(), 1);
     assert_eq!(pick.blocked_skipped[0].0, "TASK-2763");
 }
+
+// trace:STORY-2765 | ai:codex
+#[cfg(unix)]
+#[test]
+fn story_2765_real_child_inherits_projected_track() {
+    let parent = aida_core::exec_context::Environment::from_pairs([(
+        std::ffi::OsString::from("AIDA_TRACK"),
+        std::ffi::OsString::from("integration"),
+    )]);
+    for vendor in [
+        aida_core::vendors::LaunchVendor::Claude,
+        aida_core::vendors::LaunchVendor::Codex,
+    ] {
+        let child = crate::vendors::profile::VendorProfile::for_vendor(vendor)
+            .env_policy(aida_core::launch_policy::LaunchKind::Fresh)
+            .unwrap()
+            .project(&parent, std::iter::empty())
+            .unwrap();
+        let output = std::process::Command::new("/bin/sh")
+            .args(["-c", "printf '%s' \"$AIDA_TRACK\""])
+            .env_clear()
+            .envs(child.pairs())
+            .output()
+            .unwrap();
+        assert!(output.status.success());
+        assert_eq!(output.stdout, b"integration", "{vendor:?}");
+    }
+}
