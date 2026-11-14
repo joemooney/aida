@@ -140,3 +140,77 @@ fn a_seat_with_no_new_commits_ends_no_change_not_unpushed() {
         ("implementer: no-change".into(), 0)
     );
 }
+
+/// Review finding 2 (AC4): a launcher publish that pushed but could not open
+/// the PR leaves nothing "unpushed", and the error must still name the seat
+/// and the command that finishes the publish.
+#[test]
+fn the_error_names_the_retry_command_after_any_failed_seat_publish() {
+    let seat = Path::new("/lanes/aida-seat-x");
+    let retry = "`aida ship BUG-7 --from-seat /lanes/aida-seat-x`";
+    let pushed_no_pr = unpublished_note(None, true, true, "BUG-7", seat);
+    assert!(pushed_no_pr.contains(retry), "{pushed_no_pr}");
+    assert!(
+        pushed_no_pr.contains("/lanes/aida-seat-x;"),
+        "{pushed_no_pr}"
+    );
+    let unpushed = unpublished_note(Some(&Unshipped::UnpushedCommits), true, true, "BUG-7", seat);
+    assert!(unpushed.contains(retry), "{unpushed}");
+    // Nothing to retry: no failed publish, a dirty seat, a plain worktree.
+    assert_eq!(unpublished_note(None, true, false, "BUG-7", seat), "");
+    assert_eq!(unpublished_note(None, false, true, "BUG-7", seat), "");
+    assert_eq!(
+        unpublished_note(
+            Some(&Unshipped::UncommittedWork(2)),
+            true,
+            false,
+            "BUG-7",
+            seat
+        ),
+        ", leaving 2 uncommitted path(s) in its worktree"
+    );
+    assert_eq!(
+        unpublished_note(
+            Some(&Unshipped::UnpushedCommits),
+            false,
+            false,
+            "BUG-7",
+            seat
+        ),
+        ", leaving commits it did not push in its worktree"
+    );
+}
+
+/// Review finding 1 (AC2): a dirty seat with no commits is still a stall
+/// (`no-pr reason=uncommitted-work`), never `no-change`.
+#[test]
+fn a_dirty_seat_with_no_commits_is_not_no_change() {
+    let no_commits = |o| classify_no_change(o, true, || Ok(false));
+    let launch = LaunchSeat {
+        pr: None,
+        head: Some(LAUNCH),
+    };
+    let dirty = seat(LAUNCH, OriginHead::Absent, 2);
+    let out = no_change_only_when_clean(Outcome::NoPr, &dirty, no_commits).unwrap();
+    assert_eq!(out, Outcome::NoPr);
+    let (settled, work) = settle_outcome(out, &launch, &dirty);
+    assert_eq!(
+        report(&settled, Some(0), work.as_ref()),
+        (
+            "implementer: no-pr reason=uncommitted-work uncommitted=2".to_string(),
+            NO_PR_EXIT_CODE
+        )
+    );
+    // Unreadable is not clean either.
+    let mut unreadable = seat(LAUNCH, OriginHead::Absent, 0);
+    unreadable.uncommitted = None;
+    assert_eq!(
+        no_change_only_when_clean(Outcome::NoPr, &unreadable, no_commits).unwrap(),
+        Outcome::NoPr
+    );
+    let clean = seat(LAUNCH, OriginHead::Absent, 0);
+    assert_eq!(
+        no_change_only_when_clean(Outcome::NoPr, &clean, no_commits).unwrap(),
+        Outcome::NoChange
+    );
+}
