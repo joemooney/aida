@@ -3,12 +3,12 @@ spec_id: BUG-b6b1278890774ef993d2ebc327862470-309
 agreed_id: BUG-2544
 title: Second concurrent 'aida queue work PR-N --role reviewer' from the same deputy shell fails 'no valid parent seat grant is active'
 description: 'Observed 2026-11-12 17:52 and 18:03: a deputy script launched reviewers for PR-3902 and PR-3896 in parallel from the operator''s default deputy (same AIDA_SESSION_GRANT). Both times the first launch proceeded (PR-3902 reviewed, verdict at 453348f) and the second failed with: error: "no valid parent seat grant is active" (exit 1, setup rolled back). Sequential launches from the same shell work (PR-3904 at 17:12). Expected: a parent grant can delegate several concurrent reviewer children, or the error names the real cause (grant consumed or swapped by the sibling delegation) and suggests launching them sequentially. Logs: .aida/tmp/lanes/review-3896.log.'
-status: InProgress
+status: NeedsAttention
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-13T01:11:24.623933148Z
-modified_at: 2026-11-14T14:17:30.215326223Z
+modified_at: 2026-11-14T14:27:29.778148610Z
 req_type: Bug
 comments:
 - id: 01a1d2a3-7c72-7e80-b0bd-9782eb1d7277
@@ -90,6 +90,15 @@ history:
   session_id: 01a1d2a09ff0
   harness_version: codex-cli 0.167.0
   changes: []
+- id: 01a1da74-cb72-7a62-95e6-d6ef07253298
+  author: dirtlab
+  timestamp: 2026-11-14T14:27:29.778175959Z
+  session_id: 01a1da63974b
+  harness_version: 2.1.319 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 filed_at:
   code_sha: 9968a8ab4ec2b4110f24d64122a7e60ab755a95b
   branch: main
@@ -99,3 +108,9 @@ filed_at:
   vendor: claude
   session: 01a1d240-c397-7b61-b29f-bb337c138943
   harness_version: 2.1.323 (Claude Code)
+attention_reason:
+  category: other
+  detail: 'work complete locally but unable to publish: git push from the contained seat fails (no GitHub credential in the sandbox; gh reports the token for joemooney is invalid). Commit 90810a0e3f on bug-b6b1278890774ef993d2ebc327862470-309 is one commit on top of origin/main 3350540dba, tested (cargo test -p aida-cli-lib --lib bug_2544: 4 passed); make check-ci-fast did not finish inside the 60 s tool cap. It is a Refs diagnostic slice: the concurrent root cause is not reproduced.'
+  lean: 'branch is ready; from the host run ''aida ship BUG-2544 --no-merge'' in the seat (or re-auth gh and relaunch). Force-push is needed: the branch was linearized onto main. Keep BUG-2544 open until the parallel deputy launch is re-run on a current build; see findings TASK-...-002 and -003.'
+  raised_by: implementer
+  raised_at: 2026-11-14T14:27:29.778148610Z
