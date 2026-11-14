@@ -31,11 +31,17 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-14T22:34:21.521062494Z
-modified_at: 2026-11-14T23:16:28.770068144Z
+modified_at: 2026-11-14T23:17:41.865168691Z
 req_type: Story
 tags:
 - ci
 - landing-emergency
+relationships:
+- rel_type:
+    custom: implemented-by
+  target_id: 01a1dc5a-1352-7851-96f4-a06d5a50f797
+  created_at: 2026-11-14T23:17:41.865167179Z
+  created_by: dirtlab
 comments:
 - id: 01a1dc34-0b54-7f72-bcee-ec58e406cd75
   author: joe
@@ -103,6 +109,10 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a1dc5a-3ba4-7fe0-b1b2-5f028866daec
+  author: dirtlab
+  timestamp: 2026-11-14T23:17:43.460768548Z
+  changes: []
 filed_at:
   code_sha: 3cb7ba4fab12c60797d42bf51c7845633680c7d2
   branch: main
