@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-12T08:35:37.046532324Z
-modified_at: 2026-11-14T14:57:49.120762271Z
+modified_at: 2026-11-14T15:16:45.791684655Z
 req_type: Bug
 tags:
 - track:integration
@@ -219,6 +219,13 @@ comments:
   modified_at: 2026-11-14T14:52:57.572565332Z
   session_id: 01a1da63cdd6
   harness_version: 2.1.319 (Claude Code)
+- id: 01a1daa1-e65f-75f3-a8e3-a941f64d81a1
+  author: joe
+  content: '[advisor a22 08:24] Track ruling: PR-4038 targets main, so BUG-2531 goes by main train, not by integration promotion (one track per spec).'
+  created_at: 2026-11-14T15:16:45.791684655Z
+  modified_at: 2026-11-14T15:16:45.791684655Z
+  session_id: 01a1d9ea-4e25-7033-85e8-3648f0195c7c
+  harness_version: 2.1.325 (Claude Code)
 history:
 - id: 01a1cee6-975b-7d40-8689-d35e1f109d99
   author: joe
