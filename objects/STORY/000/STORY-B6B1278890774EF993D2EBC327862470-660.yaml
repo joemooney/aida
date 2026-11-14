@@ -23,7 +23,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-12T19:11:56.371806442Z
-modified_at: 2026-11-14T01:47:14.003630469Z
+modified_at: 2026-11-14T02:34:41.355827586Z
 req_type: Story
 tags:
 - operator-held
@@ -284,6 +284,13 @@ comments:
   content: '18:46 MST gap closed: #3938 landed via train 10 bisect (#3978) -> main c0465be. Gap 16:50-18:46 = 116 min. #3926 dropped (two FAST-tier-invisible ratchet failures: story_2326 lib-1, raw current_exe lib-0); both fixed on advisor-merge/pr-3926 and pushed to #3926 when the train job exits. TASK-3791 (#3979, in review) moves these ratchets onto PR CI.'
   created_at: 2026-11-14T01:47:14.003630469Z
   modified_at: 2026-11-14T01:47:14.003630469Z
+  session_id: 01a1d797-2ccf-7771-899a-682081f10504
+  harness_version: 2.1.325 (Claude Code)
+- id: 01a1d7e8-334b-7183-9500-a21a0c5b449a
+  author: joe
+  content: '19:34 MST: train 11 landed #3966 (promotion 6) + #3970 + #3971 -> main 01b8e71 (3 merges; previous 18:46). Train 12 (#3921 #3948 #3968 #3940) next, then train 13 (#3924 #3926 #3956 #3979).'
+  created_at: 2026-11-14T02:34:41.355827586Z
+  modified_at: 2026-11-14T02:34:41.355827586Z
   session_id: 01a1d797-2ccf-7771-899a-682081f10504
   harness_version: 2.1.325 (Claude Code)
 history:
