@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-13T03:10:47.302266912Z
-modified_at: 2026-11-14T11:34:24.673261694Z
+modified_at: 2026-11-14T12:04:20.486036249Z
 req_type: Bug
 tags:
 - track:dell1
@@ -175,6 +175,13 @@ comments:
   modified_at: 2026-11-14T10:03:04.756887437Z
   session_id: 01a1d976b97c
   harness_version: codex-cli 0.167.0
+- id: 01a1d9f1-bb86-78e3-917e-0c5de5af381f
+  author: joe
+  content: '[advisor a22 05:10] RULING round 6 on PR-3924 at 077619c: BLOCKING, the same AC1 miss for the third round. Rounds 5-6 added tests only. This round runs on a Claude lane on dell1. Required, in order: (1) on dell1, touch aida-core/src/lib.rs, then run cargo test --profile agent -p aida-cli-lib --lib bug_2451_queue_workspace_dates_confirmed_merged_retained_branch and paste the panic (bug_2451_pickup_entry_tests.rs:202). (2) Change PRODUCT code in the queue/seat-clone pickup path (aida-cli-lib/src/queue_cmd/work.rs and seat_clone pickup) so that the merged-residue retained-branch case dates as confirmed-merged again. Do not edit or weaken that test; if your change conflicts with its contract, explain why in the PR body. (3) Re-run that one test plus your bug_2549 tests, then make check-ci-fast, then push. Never use AIDA_UPDATE_SNAPSHOTS=1. Done means the bug_2451 test passes at the pushed head.'
+  created_at: 2026-11-14T12:04:20.486036249Z
+  modified_at: 2026-11-14T12:04:20.486036249Z
+  session_id: 01a1d9ea-4e25-7033-85e8-3648f0195c7c
+  harness_version: 2.1.325 (Claude Code)
 history:
 - id: 01a1d2e2-f946-73a0-bdee-dad6c72c0bc8
   author: joe
