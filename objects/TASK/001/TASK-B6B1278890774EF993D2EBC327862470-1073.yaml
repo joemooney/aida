@@ -173,15 +173,24 @@ description: |
   ### finding-hash:fe70e901
 
   aida-cli-lib/src/queue_cmd/work.rs:718-731 canonical_branch_tip prefers a stale local refs/heads/<branch> over origin: if local equals the merged PR head but origin later gained PR-less commits (pushed from a seat clone), pickup allocates a fresh dated branch instead of resuming the origin work. Consider comparing origin tip too when local equals the merged head.
+
+
+  ## Findings from BUG-2549
+  Reviewed sha: f459a3d16f6dc44da1a95d1e74cd09776aca073f
+
+  ### finding-hash:fe70e901
+
+  aida-cli-lib/src/queue_cmd/work.rs:718-731 canonical_branch_tip prefers a stale local refs/heads/<branch> over origin: if local equals the merged PR head but origin later gained PR-less commits (pushed from a seat clone), pickup allocates a fresh dated branch instead of resuming the origin work. Consider comparing origin tip too when local equals the merged head.
 status: Draft
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-13T20:01:56.623034248Z
-modified_at: 2026-11-14T02:02:50.884042789Z
+modified_at: 2026-11-14T02:02:59.673021045Z
 req_type: Task
 tags:
 - carried-finding:BUG-2546:56ed8b81
+- carried-finding:BUG-2549:fe70e901
 - carried-finding:BUG-2557:55e0cbfe
 - carried-finding:BUG-2557:f238ea37
 - carried-finding:PR-3921:0cbc5c63
@@ -210,6 +219,7 @@ tags:
 - carried-finding:STORY-2768:7ce2cb14
 - carried-finding:STORY-2768:c0a8d165
 - carried-from:BUG-2546
+- carried-from:BUG-2549
 - carried-from:BUG-2557
 - carried-from:PR-3921
 - carried-from:PR-3924
@@ -243,6 +253,7 @@ tags:
 - finding-hash:f238ea37
 - finding-hash:fe70e901
 - from-review:BUG-2546
+- from-review:BUG-2549
 - from-review:BUG-2557
 - from-review:PR-3921
 - from-review:PR-3924
@@ -330,6 +341,11 @@ history:
 - id: 01a1d7cb-11cc-76e0-964f-4c045f115e33
   author: joe
   timestamp: 2026-11-14T02:02:52.236634851Z
+  session_id: 01a1d7c81382
+  changes: []
+- id: 01a1d7cb-342e-7b11-87ae-68cee8843387
+  author: joe
+  timestamp: 2026-11-14T02:03:01.038993786Z
   session_id: 01a1d7c81382
   changes: []
 filed_at:
