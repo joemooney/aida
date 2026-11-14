@@ -1586,7 +1586,8 @@ assurance on selected paths even under fast policy, use for example
 paths, `*`, `**`, and `?`; unsupported syntax refuses fast assurance. Renames
 consider both old and new paths. This repository uses fast with no overrides.
 
-These keys are protected operator configuration: `aida config set` refuses them.
+These keys are protected operator configuration: `aida config menu` lists them
+as read-only, and nothing under `aida config` writes them.
 Change them deliberately on the trusted default branch; an agent's branch-local
 copy cannot lower assurance. Missing or unreadable trusted configuration and
 invalid policy select strict. In a readable config, omitted keys default to fast
