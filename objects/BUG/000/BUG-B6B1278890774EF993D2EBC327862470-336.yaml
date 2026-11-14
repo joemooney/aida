@@ -3,15 +3,13 @@ spec_id: BUG-b6b1278890774ef993d2ebc327862470-336
 agreed_id: BUG-2571
 title: 'aida land run follow-ups from #3981 review: inherited-child timeouts, --once wait list, limits as knobs'
 description: 'Accepted non-blocking findings from the #3981 round-1 review (advisor 19:57 on STORY-2768): (F4) after land run restarts, children from the previous process are supervised for the full timeout and each timeout counts against the head, so restarts can derive BLOCKED without fault; stop inherited children without counting, or do not count their timeouts. (F6) the --once wait loop supervises against the pre-wait change list, so a reviewer whose head moved is not stopped, and settle notes are discarded instead of printed. (F7) max_reviews/max_lanes/review_timeout_secs are read raw from .aida/config.toml; register them as KnobSpecs and warn on out-of-range values.'
-status: InProgress
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-14T02:53:44.322875636Z
-modified_at: 2026-11-14T22:18:59.381026796Z
+modified_at: 2026-11-14T23:39:33.457386711Z
 req_type: Bug
-tags:
-- track:integration
 relationships:
 - rel_type:
     custom: implemented-by
@@ -74,6 +72,20 @@ history:
   author: joe
   timestamp: 2026-11-14T22:19:12.045491192Z
   changes: []
+- id: 01a1dc6e-3793-7731-9da9-2ed54b97d2ea
+  author: aida-auto-bump
+  timestamp: 2026-11-14T23:39:33.139797408Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a1dc6e-38d1-7d32-b9dd-1c18701b40b6
+  timestamp: 2026-11-14T23:39:33.457383588Z
+  agent: aida
+  commit_sha: 786738cea92618fee2d1eae01fe97b1d46eef12e
+  summary: 'F4/F6/F7 implemented: inherited reviewers stopped uncounted (tested), --once wait rereads changes and prints settle notes (inspection), [land] limits registered as KnobSpecs with range warnings (tested). Required CI not yet reported on this head (only merge-hold checks) — CI pending at review time. Four deferred non-blocking findings.'
+  review_verdict: approved
 filed_at:
   code_sha: 01b8e71cebf7fbfb5696a28dabab42075b1e8271
   branch: main
@@ -83,3 +95,7 @@ filed_at:
   vendor: claude
   session: 01a1d797-2ccf-7771-899a-682081f10504
   harness_version: 2.1.325 (Claude Code)
+implementation_info:
+  implemented: false
+  completed_at: 2026-11-14T23:39:33.139789534Z
+  completion_sha: 786738cea92618fee2d1eae01fe97b1d46eef12e
