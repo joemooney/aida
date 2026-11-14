@@ -1,0 +1,33 @@
+id: 01a1da47-d57c-7763-bbcf-4ae93952d960
+spec_id: STORY-b6b1278890774ef993d2ebc327862470-735
+agreed_id: STORY-2812
+title: 'Review PR-4027: [AI:claude] feat(train): require green full-tier CI on approved heads (STORY-2809)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `(no-sess`) for branch `story-b6b1278890774ef993d2ebc327862470-732`.
+
+  - PR: <https://github.com/joemooney/aida/pull/4027>
+  - Branch: `story-b6b1278890774ef993d2ebc327862470-732` → `main`
+
+  ## Covers
+
+  - STORY-2809
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 4027` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-14T13:38:23.228751522Z
+modified_at: 2026-11-14T13:38:23.228751522Z
+req_type: Story
+filed_at:
+  code_sha: 2682c4c4fe5a42194a6f2eca01940008e3a41776
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 166920a3bf8
+  vendor: claude
