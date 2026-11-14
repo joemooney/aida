@@ -589,12 +589,32 @@ description: |
   ### finding-hash:7c082b28
 
   aida-testkit/src/test_exec.rs:39-49 reimplements the 5x50ms ETXTBSY retry from aida-term/src/process_retry.rs:9-33 (needed because testkit may depend only on aida-core); nothing ties the two policies, so they can drift silently
+
+
+  ## Findings from PR-4020
+  Reviewed sha: 992b1f748b2c5f3c75cc112f56a5d436ca6e803b
+
+  ### finding-hash:e391cb46
+
+  F6 (--once wait loop rereads changes every max(interval,30)s and prints settle notes, land_run.rs:1066-1111) has no automated test; verified by inspection only. Extract the wait step behind Acts plus a changes-reader closure so a Fake can assert a moved-head reviewer is stopped during the wait.
+
+  ### finding-hash:276a9aea
+
+  config_cmd.rs:751-780 KnobSpec default strings ("2","2","2700") and docs are hard-coded rather than derived from LimitKnob.default, yet the LimitKnob doc comment (land_run.rs:271-273) claims the two cannot disagree; only min/max are shared. Add a test asserting spec.default == knob.default.to_string() or derive it.
+
+  ### finding-hash:2a257094
+
+  Dry-run lock probe (land_run.rs:949-957) briefly takes the exclusive run lock; a real aida land run starting in that window refuses with another run is already running. Rare false refusal, retry succeeds.
+
+  ### finding-hash:5863b5f0
+
+  policy_registry [land] rows (config_cmd.rs:3136-3175): the (default; the value set is out of range) rendering and ProjectConfig/Default source selection have no test; only Limits::from_config warnings are tested.
 status: Draft
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-13T20:01:56.623034248Z
-modified_at: 2026-11-14T11:44:04.444875807Z
+modified_at: 2026-11-14T11:58:37.866407819Z
 req_type: Task
 tags:
 - carried-finding:BUG-2543:2a99ebfc
@@ -674,6 +694,10 @@ tags:
 - carried-finding:PR-4012:9750b6dd
 - carried-finding:PR-4015:45085c26
 - carried-finding:PR-4015:74641343
+- carried-finding:PR-4020:276a9aea
+- carried-finding:PR-4020:2a257094
+- carried-finding:PR-4020:5863b5f0
+- carried-finding:PR-4020:e391cb46
 - carried-finding:STORY-2735:2c7ae2ea
 - carried-finding:STORY-2763:04ad58d8
 - carried-finding:STORY-2763:15915e39
@@ -732,6 +756,7 @@ tags:
 - carried-from:PR-4007
 - carried-from:PR-4012
 - carried-from:PR-4015
+- carried-from:PR-4020
 - carried-from:STORY-2735
 - carried-from:STORY-2763
 - carried-from:STORY-2768
@@ -743,7 +768,9 @@ tags:
 - finding-hash:0cbc5c63
 - finding-hash:15915e39
 - finding-hash:198d1196
+- finding-hash:276a9aea
 - finding-hash:28356795
+- finding-hash:2a257094
 - finding-hash:2a99ebfc
 - finding-hash:2c08aa50
 - finding-hash:2c7ae2ea
@@ -762,6 +789,7 @@ tags:
 - finding-hash:52636ea7
 - finding-hash:55e0cbfe
 - finding-hash:56ed8b81
+- finding-hash:5863b5f0
 - finding-hash:5b9e60ad
 - finding-hash:5d2b67f3
 - finding-hash:6220a3dc
@@ -789,6 +817,7 @@ tags:
 - finding-hash:cd9ab7dd
 - finding-hash:dee3f3a7
 - finding-hash:dfed3eb6
+- finding-hash:e391cb46
 - finding-hash:f1e29cc2
 - finding-hash:f238ea37
 - finding-hash:fe70e901
@@ -829,6 +858,7 @@ tags:
 - from-review:PR-4007
 - from-review:PR-4012
 - from-review:PR-4015
+- from-review:PR-4020
 - from-review:STORY-2735
 - from-review:STORY-2763
 - from-review:STORY-2768
@@ -1080,6 +1110,11 @@ history:
   author: joe
   timestamp: 2026-11-14T11:44:05.850203256Z
   session_id: 01a1d9da4c4a
+  changes: []
+- id: 01a1d9ec-863c-7e70-8af4-01a483b50061
+  author: joe
+  timestamp: 2026-11-14T11:58:39.164166104Z
+  session_id: 01a1d9e9cbc6
   changes: []
 filed_at:
   code_sha: 91fe1e337894199f15365d3f8ecfaf81366f8291
