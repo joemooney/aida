@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-13T09:04:38.611892111Z
-modified_at: 2026-11-14T06:49:56.204159085Z
+modified_at: 2026-11-14T06:52:10.316697850Z
 req_type: Task
 tags:
 - from-advisor:general
@@ -24,6 +24,13 @@ comments:
   modified_at: 2026-11-14T06:42:53.589072792Z
   session_id: 01a1d852-16ef-7973-bdde-ac3f274752a2
   harness_version: 2.1.325 (Claude Code)
+- id: 01a1d8d3-eecc-78f2-812c-ca6061a73454
+  author: dirtlab
+  content: 'Investigation: STORY-2660 commit 2b2e853562 already sets/restores umask 077 in WatcherTests.setUp, fixing the reported shared-write fixture refusal. Added a subprocess regression that starts under umask 002, executes real health registration/idempotence/removal, and checks cleanup restores 002. Mail-wake suite: 54 tests, OK (1 skipped). LIGHT gate and targeted lane Cargo validation in progress. No production permission checks weakened.'
+  created_at: 2026-11-14T06:52:10.316697850Z
+  modified_at: 2026-11-14T06:52:10.316697850Z
+  session_id: 01a1d8d15750
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1d449-4507-7560-b170-d77b7818f7ef
   author: joe
