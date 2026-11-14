@@ -1311,6 +1311,8 @@ fn bug2546_publisher_projection_does_not_hide_local_child_completion() {
         !child.try_wait().unwrap().unwrap().success(),
         "the completion watcher must terminate the lingering reviewer"
     );
+    std::thread::sleep(std::time::Duration::from_millis(2100));
+    assert!(crate::reviewer_completion::should_stop());
     // Stopping neither replaces the signed projection nor accepts this local
     // synthetic child record; the ordinary collector still owns acceptance.
     assert_eq!(

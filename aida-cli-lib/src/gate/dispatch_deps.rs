@@ -220,6 +220,9 @@ pub(crate) fn emit_action(root: &std::path::Path, mandate_id: &str, actor: &str,
 // trace:TASK-b6b1278890774ef993d2ebc327862470-013 | trace:TASK-b6b1278890774ef993d2ebc327862470-024 | ai:claude
 #[cfg(test)]
 pub(crate) const FACADE_EXTERNAL_LEAVES: &[(&str, &str)] = &[
+    // trace:TASK-3783 | ai:codex
+    ("crate::git_arg_guard::END_OF_OPTIONS", "shared aida-term git argument delimiter; the gate retains its validation decisions"),
+    ("crate::git_arg_guard::is_hex_sha", "shared aida-term bounded hex syntax check; it supplies no commit or authority evidence"),
     // trace:BUG-2524 | ai:codex
     (
         "aida_core::exec_context::Environment",
