@@ -165,18 +165,27 @@ description: |
   ### finding-hash:6220a3dc
 
   aida-cli-lib/src/land.rs plain_change sets updated_at: None and most derived rows have since: None, so on the GitLab fallback no change has an age. now.rs older_than(None) is false, so the 2h unowned ATTENTION rule (F3) never fires for GitLab changes.
+
+
+  ## Findings from PR-3924
+  Reviewed sha: f459a3d16f6dc44da1a95d1e74cd09776aca073f
+
+  ### finding-hash:fe70e901
+
+  aida-cli-lib/src/queue_cmd/work.rs:718-731 canonical_branch_tip prefers a stale local refs/heads/<branch> over origin: if local equals the merged PR head but origin later gained PR-less commits (pushed from a seat clone), pickup allocates a fresh dated branch instead of resuming the origin work. Consider comparing origin tip too when local equals the merged head.
 status: Draft
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-13T20:01:56.623034248Z
-modified_at: 2026-11-14T01:57:32.517642466Z
+modified_at: 2026-11-14T02:02:50.884042789Z
 req_type: Task
 tags:
 - carried-finding:BUG-2546:56ed8b81
 - carried-finding:BUG-2557:55e0cbfe
 - carried-finding:BUG-2557:f238ea37
 - carried-finding:PR-3921:0cbc5c63
+- carried-finding:PR-3924:fe70e901
 - carried-finding:PR-3938:654190b6
 - carried-finding:PR-3948:5d2b67f3
 - carried-finding:PR-3966:3961dae5
@@ -203,6 +212,7 @@ tags:
 - carried-from:BUG-2546
 - carried-from:BUG-2557
 - carried-from:PR-3921
+- carried-from:PR-3924
 - carried-from:PR-3938
 - carried-from:PR-3948
 - carried-from:PR-3966
@@ -231,9 +241,11 @@ tags:
 - finding-hash:c598b8f9
 - finding-hash:c7c082c2
 - finding-hash:f238ea37
+- finding-hash:fe70e901
 - from-review:BUG-2546
 - from-review:BUG-2557
 - from-review:PR-3921
+- from-review:PR-3924
 - from-review:PR-3938
 - from-review:PR-3948
 - from-review:PR-3966
@@ -314,6 +326,11 @@ history:
   author: joe
   timestamp: 2026-11-14T01:57:33.635810776Z
   session_id: 01a1d7c3b372
+  changes: []
+- id: 01a1d7cb-11cc-76e0-964f-4c045f115e33
+  author: joe
+  timestamp: 2026-11-14T02:02:52.236634851Z
+  session_id: 01a1d7c81382
   changes: []
 filed_at:
   code_sha: 91fe1e337894199f15365d3f8ecfaf81366f8291
