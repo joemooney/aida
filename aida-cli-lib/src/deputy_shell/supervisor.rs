@@ -27,7 +27,6 @@ pub(crate) fn record_exit(q: &Queue, reason: &str) -> Result<()> {
         q.name,
         reason.replace(['\r', '\n'], " ")
     );
-    eprintln!("{line}");
     let mut log = std::fs::OpenOptions::new()
         .create(true)
         .append(true)
@@ -35,6 +34,9 @@ pub(crate) fn record_exit(q: &Queue, reason: &str) -> Result<()> {
         .open(q.root.join("runner.log"))
         .context("open runner.log")?;
     writeln!(log, "{line}")?;
+    // Keep the exit evidence even when the operator's terminal has hung up.
+    // trace:STORY-2775 | ai:codex
+    let _ = writeln!(std::io::stderr(), "{line}");
     Ok(())
 }
 
@@ -160,6 +162,38 @@ fn supervise(q: &Queue, stop: &AtomicBool, command: &mut Command) -> Result<()> 
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn story_2775_broken_stderr_preserves_exit_reason() {
+        const CHILD_ROOT: &str = "AIDA_TEST_2775_BROKEN_STDERR_ROOT";
+        let environment = aida_core::exec_context::Environment::capture();
+        if let Some(root) = environment.get(CHILD_ROOT) {
+            let q = super::super::queue_in(std::path::Path::new(root), "test").unwrap();
+            record_exit(&q, "rc=7 reason=runner stopped").unwrap();
+            return;
+        }
+        let dir = tempfile::tempdir().unwrap();
+        let base = dir.path().join("queues");
+        let q = super::super::queue_in(&base, "test").unwrap();
+        q.ensure().unwrap();
+        let (reader, writer) = std::os::unix::net::UnixStream::pair().unwrap();
+        drop(reader);
+        let stderr: std::os::fd::OwnedFd = writer.into();
+        let output = Command::new("/proc/self/exe")
+            .args([
+                "--exact",
+                "deputy_shell::supervisor::tests::story_2775_broken_stderr_preserves_exit_reason",
+                "--nocapture",
+            ])
+            .env(CHILD_ROOT, &base)
+            .stderr(std::process::Stdio::from(stderr))
+            .output()
+            .unwrap();
+        assert!(output.status.success(), "{output:?}");
+        let log = std::fs::read_to_string(q.root.join("runner.log")).unwrap();
+        assert_eq!(log.lines().count(), 1, "{log}");
+        assert!(log.contains("rc=7 reason=runner stopped"), "{log}");
+    }
+
     #[test]
     fn story_2775_operator_signals_stop_supervisor() {
         const CHILD_ROOT: &str = "AIDA_TEST_2775_ROOT";
