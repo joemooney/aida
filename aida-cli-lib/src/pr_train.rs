@@ -1339,7 +1339,7 @@ fn typed_gate_member_with(
         ));
     }
     // Apply at the typed gate too: recovery and pre-land confirmations use it
-    // directly. Compare the strict evidence with this metadata snapshot.
+    // directly. Compare the authoritative evidence with this metadata snapshot.
     // trace:STORY-2691 | ai:codex
     if ADVISOR_LOOP.with(std::cell::Cell::get) {
         let observed = crate::review_watch::advisor_train_eligible(checks.marker_root(), pr)?;
@@ -4476,7 +4476,8 @@ pub(crate) fn pr_train_handler_with_dispatch_ctx(
 mod tests;
 
 // Automatic services use a stricter member contract than explicit trains:
-// exact-head approvals and no mandate hold release or approval carry-over.
+// authoritative approval coverage and no mandate hold release. Protected fast
+// policy may prove carry-over; strict policy requires an exact-head approval.
 // The guard is scoped to this thread and cleared even on error/unwind.
 // trace:STORY-2691 | ai:codex
 thread_local! { static ADVISOR_LOOP: std::cell::Cell<bool> = const { std::cell::Cell::new(false) }; }

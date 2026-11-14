@@ -1462,10 +1462,38 @@ fn story2763_watcher_overlapping_clean_merge_fast_train_and_strict_review() {
         evidence.head = Ok(head.clone());
         evidence.ci = Ok(green(&head));
         if strict {
-            assert!(matches!(action, Action::Dispatch(_)), "{action:?}");
+            let Action::Dispatch(attempt) = action else {
+                panic!("strict policy must reserve a full review: {action:?}");
+            };
             let refusal = evidence.approval.as_ref().unwrap_err();
             assert!(refusal.contains("strict"), "{refusal}");
             assert!(train::eligible(&c, &evidence).is_err());
+            // Run the reservation rather than merely inspecting its enum.
+            // Strict assurance spends one launch, then accepts only a fresh
+            // attested approval at the merged destination head.
+            let launches = std::cell::Cell::new(0);
+            execute_reservation(
+                &store,
+                &c.key(),
+                &attempt.token,
+                |_| Ok(()),
+                |_| {
+                    launches.set(launches.get() + 1);
+                    let verdict = fixture::approval(&head);
+                    let policy = fixture::policy(&verdict);
+                    evidence.approval = ready::approval_at(42, &[verdict], &head, &policy, &site);
+                    Ok(())
+                },
+            )
+            .unwrap();
+            assert_eq!(launches.get(), 1);
+            assert_eq!(evidence.approval.as_ref().unwrap().reviewed, head);
+            assert!(evidence.approval.as_ref().unwrap().carried.is_none());
+            train::eligible(&c, &evidence).unwrap();
+            assert!(matches!(
+                ready::evaluate(&c, &evidence),
+                (Readiness::Ready, Some(_))
+            ));
         } else {
             assert!(matches!(action, Action::Skip(_)), "{action:?}");
             assert!(store
@@ -1474,11 +1502,29 @@ fn story2763_watcher_overlapping_clean_merge_fast_train_and_strict_review() {
                 .entries
                 .get(&c.key())
                 .is_none_or(|entry| entry.attempts.is_empty()));
+            let approval = evidence.approval.as_ref().unwrap();
+            assert_eq!(approval.reviewed, approved);
+            assert!(
+                approval.carried.is_some(),
+                "must exercise proved carry-over"
+            );
             train::eligible(&c, &evidence).unwrap();
             assert!(matches!(
                 ready::evaluate(&c, &evidence),
                 (Readiness::Ready, Some(_))
             ));
+            // Carry-over supplies review coverage, never destination CI or
+            // permission to bypass an intervening merge hold.
+            for outcome in [CheckOutcome::Pending, CheckOutcome::Failed] {
+                let mut checks = green(&head);
+                checks.checks[1].outcome = outcome;
+                evidence.ci = Ok(checks);
+                assert!(train::eligible(&c, &evidence).is_err());
+            }
+            evidence.ci = Ok(green(&head));
+            evidence.hold = Ok(Some("hold after carry-over".into()));
+            assert!(train::eligible(&c, &evidence).is_err());
+            evidence.hold = Ok(None);
             evidence.ci = Ok(green(&approved));
             assert!(
                 train::eligible(&c, &evidence).is_err(),

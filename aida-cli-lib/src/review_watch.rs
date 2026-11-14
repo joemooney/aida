@@ -3767,8 +3767,9 @@ pub(crate) fn fixture_admission_spawn_failure(
     Ok(())
 }
 
-// Automatic trains deliberately require an approval recorded on this exact
-// head. The train's ordinary member gate still checks all publication gates.
+// Automatic trains require authoritative approval coverage of the current
+// head, including proved fast-policy carry-over. The ordinary member gate
+// still checks all publication gates.
 // trace:STORY-2691 | ai:codex
 pub(crate) fn advisor_train_eligible(
     root: &Path,
