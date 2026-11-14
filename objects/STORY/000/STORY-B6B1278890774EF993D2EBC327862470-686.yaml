@@ -30,7 +30,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-13T15:54:08.931576118Z
-modified_at: 2026-11-14T02:22:57.534168258Z
+modified_at: 2026-11-14T05:39:37.125796527Z
 req_type: Story
 tags:
 - architecture
@@ -199,6 +199,13 @@ comments:
   created_at: 2026-11-14T02:22:57.534168258Z
   modified_at: 2026-11-14T02:22:57.534168258Z
   session_id: 01a1d797-2ccf-7771-899a-682081f10504
+  harness_version: 2.1.325 (Claude Code)
+- id: 01a1d891-8225-75a1-bdc8-e5bd0a61a0fc
+  author: joe
+  content: '[advisor 114 22:42] Ejected from train 13 (main moved under it: diff changed or conflict). Merging origin/main into the branch on dell1 (dell1-merge.sh: host git, Codex resolves conflicts only), then a delta re-review and re-train.'
+  created_at: 2026-11-14T05:39:37.125796527Z
+  modified_at: 2026-11-14T05:39:37.125796527Z
+  session_id: 01a1d852-16ef-7973-bdde-ac3f274752a2
   harness_version: 2.1.325 (Claude Code)
 history:
 - id: 01a1d59e-6b4b-7d10-8aea-02729132bc6f
