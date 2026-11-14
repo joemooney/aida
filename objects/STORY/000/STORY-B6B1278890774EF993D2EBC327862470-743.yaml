@@ -1,0 +1,33 @@
+id: 01a1db3a-723b-71a2-9f3c-a7e7952c8f8d
+spec_id: STORY-b6b1278890774ef993d2ebc327862470-743
+agreed_id: STORY-2820
+title: 'Review PR-4047: [AI:claude] fix(deputy): a rotated seat owns its predecessor''s script jobs (BUG-2579)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `(no-sess`) for branch `fix/bug-2579-deputy-rotation`.
+
+  - PR: <https://github.com/joemooney/aida/pull/4047>
+  - Branch: `fix/bug-2579-deputy-rotation` → `integration`
+
+  ## Covers
+
+  - BUG-2579
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 4047` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-14T18:03:23.067461785Z
+modified_at: 2026-11-14T18:03:23.067461785Z
+req_type: Story
+filed_at:
+  code_sha: 96fc262834527304fe85fc9ee32e4d04f1aaf4ea
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 5ea861d7358
+  vendor: claude
