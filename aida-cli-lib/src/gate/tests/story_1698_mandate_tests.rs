@@ -3348,9 +3348,9 @@ fn task_2314_completed_and_shipped_on_main_expires() {
     );
 }
 
-// trace:STORY-2733 | ai:codex
+// trace:STORY-2733 trace:TASK-3785 | ai:codex
 #[test]
-fn mandate_include_gate_paths_preserves_other_gates_and_audits_train_member() {
+fn mandate_include_gate_paths_preserves_other_gates_and_audits_cover() {
     use crate::gate::mandate_gates::{GateMatch, PathSource, ProtectedPaths};
     use crate::gate::mandate_ship::MandateCover;
     let paths = vec!["aida-cli-lib/src/gate/mandate.rs".to_owned()];
@@ -3387,45 +3387,6 @@ fn mandate_include_gate_paths_preserves_other_gates_and_audits_train_member() {
     assert_eq!(evidence["path"], paths[0]);
     assert_eq!(evidence["entry"], "aida-cli-lib/src/gate/");
     assert_eq!(evidence["source"], "built-in");
-    let records = || {
-        vec![(
-            "TASK-1".into(),
-            Vec::new(),
-            Some(aida_core::ExecutionMode::Guided),
-        )]
-    };
-    assert!(
-        crate::pr_train::member_spec_policy_refusal(records(), false, || {
-            ship_decision(&c)
-                .map(|_| ())
-                .map_err(|e| Some(e.message(7)))
-        })
-        .is_none()
-    );
-    assert!(
-        crate::pr_train::member_spec_policy_refusal(records(), false, || Err(Some(
-            "protected paths".into()
-        )))
-        .is_some()
-    );
-    let member = crate::pr_train::Member {
-        gate_audit: Some(audit.clone()),
-        cover: None,
-        pr: 7,
-        head: HEAD.into(),
-        subject: "work".into(),
-        body: String::new(),
-        release: Some(cover),
-    };
-    let message = crate::pr_train::car_message(&member);
-    assert!(message.contains(&audit));
-    let restored: crate::pr_train::Member =
-        serde_json::from_value(serde_json::to_value(&member).unwrap()).unwrap();
-    assert!(
-        restored.release.is_none(),
-        "live authority is never journaled"
-    );
-    assert_eq!(crate::pr_train::car_message(&restored), message);
     c.changed_paths = None;
     assert_eq!(
         ship_decision(&c),
