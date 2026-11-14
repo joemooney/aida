@@ -45,6 +45,12 @@ use anyhow::Result;
 pub(crate) fn mark_completed(req: &mut Requirement) -> RequirementStatus {
     let prior = req.status.clone();
     req.set_status_from_str("Completed");
+    // A completed spec has left every track and every landing lane.
+    // trace:STORY-2749 trace:STORY-2737 | ai:claude
+    req.tags.retain(|tag| {
+        !tag.starts_with(crate::queue_cmd::TRACK_TAG_PREFIX)
+            && tag != crate::integration_cmd::LANDED_TAG
+    });
     let info = req
         .implementation_info
         .get_or_insert_with(aida_core::ImplementationInfo::default);

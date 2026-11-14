@@ -2889,6 +2889,8 @@ fn merge_in_progress(repo: &Path) -> bool {
 ///   (disjoint-range union, max-`next`; range collisions abort)
 /// - `registry/nodes.toml` → [`crate::node::union_node_registries`]
 ///   (3-way by node id; same-id-two-machines collisions abort)
+/// - `timings/**.json` → the installed typed timing-record merger (event
+///   union; BUG-2559)
 ///
 /// SAFETY: any conflict outside those paths, or any structured merge failure,
 /// aborts the merge (`git merge --abort`) and returns Err — the caller parks
@@ -2970,6 +2972,7 @@ fn merge_union_onto(repo: &Path, ref_: &str, message: &str) -> Result<StorePullO
             && !is_registry_blocks_path(path)
             && !is_registry_nodes_path(path)
             && !is_schedule_ledger_path(path)
+            && !is_timing_record_path(path)
         {
             return Err(abort_failed_store_operation(repo, "merge", anyhow::anyhow!(
                 "conflict in non-mergeable path `{path}` — cannot auto-union; resolve it manually in the store worktree"
@@ -2989,6 +2992,12 @@ fn merge_union_onto(repo: &Path, ref_: &str, message: &str) -> Result<StorePullO
             resolve_nodes_conflict(repo, path)
         } else if is_schedule_ledger_path(path) {
             resolve_schedule_ledger_conflict(repo, path)
+        } else if is_timing_record_path(path) {
+            // BUG-2559: two hosts auto-bump the same merge and both publish
+            // its timing record; the hub reconcile unions them exactly as
+            // the pull-rebase leg does (BUG-2550).
+            // trace:BUG-2559 | ai:claude
+            resolve_timing_record_conflict(repo, path)
         } else {
             resolve_spec_conflict(repo, path, false)
         };
