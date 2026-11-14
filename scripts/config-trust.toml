@@ -84,6 +84,12 @@ sites = 1
 channels = ["worktree"]
 sites = 1
 
+# `aida land run` reads how many reviewers and rework lanes it may run at
+# once and how long a reviewer may take. trace:STORY-2768 | ai:claude
+[readers."aida-cli-lib/src/land_run.rs"]
+channels = ["worktree"]
+sites = 1
+
 [readers."aida-cli-lib/src/ci_gate.rs"]
 channels = ["worktree"]
 sites = 1
@@ -679,6 +685,9 @@ max_concurrent = "policy" # Bounds reviewer count; selects no executable. TASK-3
 # nothing and launches nothing. STORY-2768.
 [keys.worktree.land]
 wip_max = "policy"
+max_reviews = "policy" # Bounds reviewer count; selects no executable.
+max_lanes = "policy" # Bounds rework lane count; selects no executable.
+review_timeout_secs = "policy" # How long a reviewer may run; bounded in code.
 
 [keys.worktree.drain]
 gh_verify_retries = "policy"

@@ -67,6 +67,10 @@ fn pass(changes: Vec<Pr>, rows: Vec<Row>, foreign: Vec<crate::coordination::Clai
         rows,
         local_lanes: Vec::new(),
         foreign_lanes: foreign,
+        gitlab: false,
+        merge_trees: Default::default(),
+        book: Default::default(),
+        notes: Vec::new(),
     }
 }
 
@@ -260,7 +264,7 @@ fn the_screen_shows_the_header_stages_queues_and_attention() {
     );
     assert!(screen.contains("\nREADY (1)\n"), "{screen}");
     assert!(
-        screen.contains("operator clears met hold, then land (operator)"),
+        screen.contains("release the met hold, then land (reconciler)"),
         "{screen}"
     );
     assert!(

@@ -358,9 +358,108 @@ fn running_ci_gates_the_landing_and_never_the_review() {
 }
 
 #[test]
-fn a_met_hold_is_the_operators_to_clear() {
-    assert_eq!(Action::ClearHoldAndLand.owner(), "operator");
-    assert!(Action::ClearHoldAndLand.label().starts_with("operator"));
+fn a_met_hold_is_the_reconcilers_to_release() {
+    assert_eq!(Action::ClearHoldAndLand.owner(), "reconciler");
+    assert!(Action::ClearHoldAndLand.label().starts_with("release"));
+}
+
+#[test]
+fn a_cancelled_run_is_not_a_failure_and_a_later_run_replaces_it() {
+    let ci = |json: &str| ci_of_rollup(&serde_json::from_str(json).unwrap());
+    // Cancelled and never rerun: the head was not tested.
+    assert_eq!(
+        ci(
+            r#"[{"name":"a","workflowName":"CI","conclusion":"CANCELLED","startedAt":"2026-11-13T10:00:00Z"}]"#
+        ),
+        Ci::Pending
+    );
+    // The same check ran again later at this head: only that run counts.
+    assert_eq!(
+        ci(
+            r#"[{"name":"a","workflowName":"CI","conclusion":"SUCCESS","startedAt":"2026-11-13T11:00:00Z"},{"name":"a","workflowName":"CI","conclusion":"CANCELLED","startedAt":"2026-11-13T10:00:00Z"}]"#
+        ),
+        Ci::Green
+    );
+    assert_eq!(
+        ci(
+            r#"[{"name":"a","workflowName":"CI","conclusion":"FAILURE","startedAt":"2026-11-13T10:00:00Z"},{"name":"a","workflowName":"CI","conclusion":"SUCCESS","startedAt":"2026-11-13T11:00:00Z"}]"#
+        ),
+        Ci::Green
+    );
+    // A later failure is a failure, whatever ran before it.
+    assert_eq!(
+        ci(
+            r#"[{"name":"a","workflowName":"CI","conclusion":"SUCCESS","startedAt":"2026-11-13T10:00:00Z"},{"name":"a","workflowName":"CI","conclusion":"FAILURE","startedAt":"2026-11-13T11:00:00Z"}]"#
+        ),
+        Ci::Red("a".into())
+    );
+    // The same name in another workflow is another check.
+    assert_eq!(
+        ci(
+            r#"[{"name":"a","workflowName":"CI","conclusion":"SUCCESS","startedAt":"2026-11-13T11:00:00Z"},{"name":"a","workflowName":"Docs","conclusion":"FAILURE","startedAt":"2026-11-13T10:00:00Z"}]"#
+        ),
+        Ci::Red("a".into())
+    );
+}
+
+#[test]
+fn a_head_whose_reviewers_timed_out_twice_goes_to_the_advisor() {
+    struct TimedOut(Fake, u32);
+    impl Evidence for TimedOut {
+        fn conflict(&self, pr: &Pr) -> std::result::Result<bool, String> {
+            self.0.conflict(pr)
+        }
+        fn reviewing(&self, pr: &Pr) -> std::result::Result<Option<String>, String> {
+            self.0.reviewing(pr)
+        }
+        fn ci(&self, pr: &Pr) -> std::result::Result<Ci, String> {
+            self.0.ci(pr)
+        }
+        fn approval(&self, pr: &Pr) -> std::result::Result<Approval, String> {
+            self.0.approval(pr)
+        }
+        fn hold(&self, pr: &Pr) -> std::result::Result<Option<Hold>, String> {
+            self.0.hold(pr)
+        }
+        fn rounds(&self, pr: &Pr) -> std::result::Result<Rounds, String> {
+            self.0.rounds(pr)
+        }
+        fn lane(&self, pr: &Pr) -> std::result::Result<Option<String>, String> {
+            self.0.lane(pr)
+        }
+        fn review_timeouts(&self, _: &Pr) -> u32 {
+            self.1
+        }
+        fn rework_stop(&self, _: &Pr) -> Option<String> {
+            Some("its seat has 2 commit(s) that no remote has".into())
+        }
+    }
+    let change = pr("main", "feature");
+    let once = derive(&change, &TimedOut(Fake::default(), 1));
+    assert_eq!(
+        (once.state, once.action),
+        (State::NeedsReview, Action::LaunchReview)
+    );
+    let twice = derive(&change, &TimedOut(Fake::default(), 2));
+    assert_eq!(
+        (twice.state, twice.action),
+        (State::Blocked, Action::AdvisorRuling)
+    );
+    // A lane that refused over unpushed seat work is never launched over.
+    let conflicted = Fake {
+        conflict: Ok(true),
+        ..Fake::default()
+    };
+    let stopped = derive(&change, &TimedOut(conflicted, 0));
+    assert_eq!(
+        (stopped.state, stopped.action),
+        (State::Blocked, Action::AdvisorRuling)
+    );
+    assert!(
+        stopped.reason.contains("no remote has"),
+        "{}",
+        stopped.reason
+    );
 }
 
 #[test]
@@ -384,7 +483,7 @@ fn a_check_rollup_sums_to_one_ci_state() {
         ci(
             r#"[{"name":"b","status":"IN_PROGRESS","conclusion":""},{"name":"z","status":"COMPLETED","conclusion":"FAILURE"},{"name":"a","status":"COMPLETED","conclusion":"CANCELLED"}]"#
         ),
-        Ci::Red("a, z".into())
+        Ci::Red("z".into())
     );
 }
 
