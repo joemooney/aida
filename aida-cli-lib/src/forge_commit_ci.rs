@@ -29,6 +29,8 @@ pub(crate) struct CommitCheck {
     /// details link); `None` for commit statuses and other forges.
     // trace:STORY-2809 | ai:claude
     pub run_id: Option<String>,
+    /// GitHub workflow identity, verified from the owning Actions run.
+    pub workflow_id: Option<String>,
 }
 
 /// Every check the forge reports on `sha`.
@@ -80,13 +82,14 @@ const LABEL_EVENT_MARKER: &str = "label event (CI tier unchanged)";
 /// would otherwise displace the run that did the work.
 ///
 /// Among the runs that executed, a run is superseded when a newer one reports
-/// a check of the same name; it then contributes nothing, whatever else it
+/// a check of the same name in the same verified workflow; it then contributes nothing, whatever else it
 /// reported. A `ci:full` label event restarts a PR's CI, and the cancelled run
 /// leaves rows the newer run never repeats: its own tier marker (`ci-tier:
 /// fast` against the newer run's `ci-tier: full`) and matrix jobs cancelled
 /// before their names expanded. Rows with no owning run (commit statuses) are
 /// kept as reported.
 // trace:STORY-2809 | ai:claude
+// trace:STORY-2809 | ai:codex
 fn latest_per_name(checks: &[CommitCheck]) -> Vec<&CommitCheck> {
     use std::collections::{HashMap, HashSet};
     let order = |c: &CommitCheck| c.run_id.as_deref().and_then(|id| id.parse::<u64>().ok());
@@ -103,16 +106,27 @@ fn latest_per_name(checks: &[CommitCheck]) -> Vec<&CommitCheck> {
         }
     }
     let ran = |run: &u64| executed.contains(run) && !label_event.contains(run);
-    let mut newest: HashMap<&str, u64> = HashMap::new();
+    let mut newest: HashMap<(&str, &str), u64> = HashMap::new();
     for check in checks {
-        if let Some(run) = order(check).filter(|run| ran(run)) {
-            let slot = newest.entry(check.name.as_str()).or_insert(run);
+        if let (Some(run), Some(workflow)) = (
+            order(check).filter(|run| ran(run)),
+            check.workflow_id.as_deref(),
+        ) {
+            let slot = newest.entry((workflow, check.name.as_str())).or_insert(run);
             *slot = (*slot).max(run);
         }
     }
     let superseded: HashSet<u64> = checks
         .iter()
-        .filter_map(|c| order(c).filter(|run| ran(run) && newest[c.name.as_str()] > *run))
+        .filter_map(|c| {
+            let workflow = c.workflow_id.as_deref()?;
+            order(c).filter(|run| {
+                ran(run)
+                    && newest
+                        .get(&(workflow, c.name.as_str()))
+                        .is_some_and(|latest| latest > run)
+            })
+        })
         .collect();
     checks
         .iter()
@@ -178,12 +192,14 @@ fn require_sha(found: Option<&str>, sha: &str, what: &str) -> Result<()> {
 /// every commit status (`commits/{sha}/status`) on `sha` in `repo`
 /// (`owner/name`). `api` runs `gh api <endpoint>` and returns its stdout,
 /// or `Err` when the command fails.
+// trace:STORY-2809 | ai:codex
 pub(crate) fn github_commit_checks(
     repo: &str,
     sha: &str,
     api: &mut dyn FnMut(&str) -> Result<Vec<u8>>,
 ) -> Result<CommitChecks> {
     let mut checks = Vec::new();
+    let mut workflows = std::collections::HashMap::<String, String>::new();
     let mut total = None;
     let mut seen = 0usize;
     for page in 1..=MAX_PAGES {
@@ -198,7 +214,35 @@ pub(crate) fn github_commit_checks(
         total = Some(count);
         let rows = runs.len();
         seen += rows;
-        checks.extend(runs);
+        for mut check in runs {
+            if let Some(run) = check.run_id.as_deref() {
+                if !workflows.contains_key(run) {
+                    let body = api(&format!("repos/{repo}/actions/runs/{run}"))?;
+                    let value = json(&body, "workflow run")?;
+                    require_sha(
+                        value.get("head_sha").and_then(|v| v.as_str()),
+                        sha,
+                        "workflow run",
+                    )?;
+                    anyhow::ensure!(
+                        value
+                            .get("id")
+                            .and_then(|v| v.as_u64())
+                            .map(|id| id.to_string())
+                            .as_deref()
+                            == Some(run),
+                        "workflow run identity mismatch"
+                    );
+                    let workflow = value
+                        .get("workflow_id")
+                        .and_then(|v| v.as_u64())
+                        .context("workflow run has no workflow_id")?;
+                    workflows.insert(run.to_string(), workflow.to_string());
+                }
+                check.workflow_id = workflows.get(run).cloned();
+            }
+            checks.push(check);
+        }
         if seen >= count || rows < PER_PAGE {
             anyhow::ensure!(
                 seen == count,
@@ -263,6 +307,7 @@ pub(crate) fn parse_gh_check_runs(
         out.push(CommitCheck {
             name: name.to_string(),
             outcome,
+            workflow_id: None,
             run_id: run
                 .get("details_url")
                 .and_then(|v| v.as_str())
@@ -315,6 +360,7 @@ pub(crate) fn parse_gh_commit_status(
                 name: name.to_string(),
                 outcome,
                 run_id: None,
+                workflow_id: None,
             })
         })
         .collect()
@@ -404,6 +450,7 @@ pub(crate) fn parse_glab_commit_statuses(
             name,
             outcome,
             run_id: None,
+            workflow_id: None,
         })
         .collect())
 }

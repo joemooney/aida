@@ -37,19 +37,30 @@ pub(crate) enum FullTier {
 /// the job that reports `ci-tier: <tier>`. Read from the checkout, never from
 /// one commit's checks, so a head whose tier check is absent (CI not started,
 /// a cancelled run, a workflow edited on the branch) cannot pass as untiered.
-pub(crate) fn repo_is_tiered(project_root: &Path) -> bool {
-    let Ok(dir) = std::fs::read_dir(project_root.join(".github/workflows")) else {
-        return false;
-    };
-    dir.flatten()
-        .filter(|entry| {
-            matches!(
-                entry.path().extension().and_then(|e| e.to_str()),
-                Some("yml" | "yaml")
-            )
-        })
-        .filter_map(|entry| std::fs::read_to_string(entry.path()).ok())
-        .any(|text| text.contains(TIER_PREFIX))
+// trace:STORY-2809 | ai:codex
+pub(crate) fn repo_is_tiered(project_root: &Path) -> std::io::Result<bool> {
+    let dir = std::fs::read_dir(project_root.join(".github/workflows"))?;
+    repo_is_tiered_with(
+        dir.map(|entry| entry.map(|entry| entry.path())),
+        std::fs::read_to_string,
+    )
+}
+
+fn repo_is_tiered_with(
+    entries: impl IntoIterator<Item = std::io::Result<std::path::PathBuf>>,
+    mut read: impl FnMut(std::path::PathBuf) -> std::io::Result<String>,
+) -> std::io::Result<bool> {
+    let mut tiered = false;
+    for entry in entries {
+        let path = entry?;
+        if matches!(
+            path.extension().and_then(|e| e.to_str()),
+            Some("yml" | "yaml")
+        ) {
+            tiered |= read(path)?.contains(TIER_PREFIX);
+        }
+    }
+    Ok(tiered)
 }
 
 /// Judge the full tier from every check on one commit; `tiered` is

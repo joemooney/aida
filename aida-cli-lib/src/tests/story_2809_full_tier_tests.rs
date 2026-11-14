@@ -18,6 +18,7 @@ fn checks(rows: &[(&str, CheckOutcome, Option<&str>)]) -> CommitChecks {
                 name: name.to_string(),
                 outcome: *outcome,
                 run_id: run.map(str::to_string),
+                workflow_id: Some("ci".to_string()),
             })
             .collect(),
     }
@@ -74,7 +75,7 @@ fn a_tiered_repository_refuses_a_head_with_checks_but_no_tier_check() {
 fn a_repository_is_tiered_when_a_workflow_defines_the_tier_job() {
     // trace:STORY-b6b1278890774ef993d2ebc327862470-732.accf1a65 | ai:claude
     let dir = tempfile::tempdir().unwrap();
-    assert!(!repo_is_tiered(dir.path()));
+    assert!(repo_is_tiered(dir.path()).is_err());
     let workflows = dir.path().join(".github/workflows");
     std::fs::create_dir_all(&workflows).unwrap();
     std::fs::write(
@@ -82,16 +83,16 @@ fn a_repository_is_tiered_when_a_workflow_defines_the_tier_job() {
         "jobs:\n  lint:\n    name: Lint\n",
     )
     .unwrap();
-    assert!(!repo_is_tiered(dir.path()));
+    assert!(!repo_is_tiered(dir.path()).unwrap());
     std::fs::write(
         workflows.join("ci.yml"),
         "jobs:\n  tier:\n    name: \"ci-tier: ${{ 'full' }}\"\n",
     )
     .unwrap();
-    assert!(repo_is_tiered(dir.path()));
+    assert!(repo_is_tiered(dir.path()).unwrap());
     // AIDA's own workflow is tiered.
     let repo = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("..");
-    assert!(repo_is_tiered(&repo));
+    assert!(repo_is_tiered(&repo).unwrap());
 }
 
 /// AC2: a refusal names the missing run.
@@ -527,4 +528,27 @@ fn the_skip_event_records_the_pr_head_and_reason() {
     assert_eq!(event["pr"], 41);
     assert_eq!(event["head_sha"], SHA);
     assert_eq!(event["detail"], "why");
+}
+
+// trace:STORY-b6b1278890774ef993d2ebc327862470-732.accf1a65 | ai:codex
+#[test]
+fn full_tier_discovery_refuses_directory_entry_and_file_read_errors() {
+    use std::io::{Error, ErrorKind};
+    let denied = || Error::new(ErrorKind::PermissionDenied, "unreadable workflow evidence");
+    let dir = tempfile::tempdir().unwrap();
+    assert!(repo_is_tiered(dir.path()).is_err());
+    assert!(repo_is_tiered_with([Err(denied())], |_| Ok(String::new())).is_err());
+    let paths = [
+        Ok(std::path::PathBuf::from("ci.yml")),
+        Ok(std::path::PathBuf::from("other.yml")),
+    ];
+    assert!(
+        repo_is_tiered_with(paths, |p| if p.ends_with("ci.yml") {
+            Ok("ci-tier: full".into())
+        } else {
+            Err(denied())
+        })
+        .is_err(),
+        "even a tier marker must not hide later read failures"
+    );
 }

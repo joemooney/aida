@@ -35,6 +35,7 @@ fn check(name: &str, outcome: CheckOutcome) -> CommitCheck {
         name: name.into(),
         outcome,
         run_id: None,
+        workflow_id: Some("ci".to_string()),
     }
 }
 

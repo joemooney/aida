@@ -815,6 +815,7 @@ fn lane_only() -> Result<crate::forge::CommitChecks> {
             name: "CI (lib-0)".into(),
             outcome: crate::forge::CheckOutcome::Passed,
             run_id: None,
+            workflow_id: Some("ci".to_string()),
         }],
     })
 }

@@ -1062,6 +1062,7 @@ struct FakeChecks {
     full_tier: Option<crate::full_tier::FullTier>,
     /// STORY-2809: the PRs a full-tier run was requested for.
     full_requests: Vec<u64>,
+    workflow_error: Option<String>,
     /// STORY-2809: false for a dry run or a re-check, which write nothing.
     admitting: bool,
 }
@@ -1083,6 +1084,7 @@ impl FakeChecks {
             asked: Vec::new(),
             full_tier: None,
             full_requests: Vec::new(),
+            workflow_error: None,
             admitting: true,
         }
     }
@@ -1184,6 +1186,9 @@ impl MemberChecks for FakeChecks {
         &mut self,
         _head: &str,
     ) -> std::result::Result<crate::full_tier::FullTier, String> {
+        if let Some(error) = &self.workflow_error {
+            return Err(error.clone());
+        }
         Ok(self
             .full_tier
             .clone()
@@ -6117,4 +6122,18 @@ fn skip_full_check_refuses_when_the_override_cannot_be_logged() {
     let why = with_skip_full_check(true, || gate_member_with(&mut c, "main", 41)).unwrap_err();
     assert!(why.contains("could not record the override"), "{why}");
     assert!(why.contains("no full-tier CI run exists"), "{why}");
+}
+
+// trace:STORY-b6b1278890774ef993d2ebc327862470-732.accf1a65 | ai:codex
+#[test]
+fn full_tier_workflow_discovery_errors_are_unavailable_even_with_override() {
+    for stage in ["directory", "entry", "file"] {
+        let mut c = FakeChecks::new();
+        c.workflow_error = Some(format!("workflow {stage}: permission denied"));
+        for skip in [false, true] {
+            let result = with_skip_full_check(skip, || full_tier_gate(&mut c, 41, &"a".repeat(40)));
+            assert!(matches!(result, Err(MemberGateError::Unavailable(_))));
+        }
+        assert!(c.full_requests.is_empty());
+    }
 }

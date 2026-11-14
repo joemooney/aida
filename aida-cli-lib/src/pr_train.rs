@@ -1911,15 +1911,13 @@ impl MemberChecks for LiveChecks<'_> {
         )
     }
     // trace:STORY-2809 | ai:claude
+    // trace:STORY-2809 | ai:codex
     fn full_tier(&mut self, head: &str) -> std::result::Result<crate::full_tier::FullTier, String> {
+        let tiered = crate::full_tier::repo_is_tiered(self.project_root)
+            .map_err(|e| format!("workflow discovery: {e}"))?;
         self.forge
             .commit_checks(head)
-            .map(|checks| {
-                crate::full_tier::judge(
-                    &checks,
-                    crate::full_tier::repo_is_tiered(self.project_root),
-                )
-            })
+            .map(|checks| crate::full_tier::judge(&checks, tiered))
             .map_err(|e| format!("{e:#}"))
     }
     // trace:STORY-2809 | ai:claude

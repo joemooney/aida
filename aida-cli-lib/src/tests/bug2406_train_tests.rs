@@ -1672,6 +1672,7 @@ fn bug2528_exact_tip_ci_wait_is_bounded_and_fails_closed() {
             name: "merge-hold-gate".into(),
             outcome,
             run_id: None,
+            workflow_id: Some("ci".to_string()),
         }],
     };
     let time = ExactTipCiClock::default();

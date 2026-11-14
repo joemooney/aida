@@ -117,6 +117,7 @@ fn a_cancelled_earlier_run_does_not_outvote_the_latest_run_of_a_check() {
         name: name.to_string(),
         outcome,
         run_id: run.map(str::to_string),
+        workflow_id: Some("ci".to_string()),
     };
     let on = |checks: Vec<CommitCheck>| CommitChecks {
         sha: SHA.to_string(),
@@ -176,6 +177,7 @@ fn a_fast_run_cancelled_by_the_full_run_contributes_nothing() {
         name: name.to_string(),
         outcome,
         run_id: Some(run.to_string()),
+        workflow_id: Some("ci".to_string()),
     };
     let cancelled_fast = || {
         vec![
@@ -290,6 +292,7 @@ fn a_label_event_run_never_supersedes_the_run_that_executed() {
         name: name.to_string(),
         outcome,
         run_id: Some(run.to_string()),
+        workflow_id: Some("ci".to_string()),
     };
     let real = |build| {
         vec![
@@ -702,4 +705,60 @@ fn aida_sized_relay_native_statuses_reach_required_pr_and_train_gates() {
             );
         }
     }
+}
+
+// trace:STORY-b6b1278890774ef993d2ebc327862470-732.acbd1c12 | ai:codex
+#[test]
+fn overlapping_job_names_in_distinct_workflows_never_supersede_failures() {
+    let row = |name: &str, outcome, run: &str, workflow: Option<&str>| CommitCheck {
+        name: name.into(),
+        outcome,
+        run_id: Some(run.into()),
+        workflow_id: workflow.map(str::to_string),
+    };
+    for workflow in [Some("other"), None] {
+        let checks = CommitChecks {
+            sha: SHA.into(),
+            checks: vec![
+                row("Build", CheckOutcome::Failed, "10", Some("ci")),
+                row("security", CheckOutcome::Failed, "10", Some("ci")),
+                row("Build", CheckOutcome::Passed, "11", workflow),
+            ],
+        };
+        assert_eq!(
+            judge_commit_checks(&checks, &[]),
+            CommitCi::Failed(vec!["Build".into(), "security".into()])
+        );
+    }
+}
+
+// trace:STORY-2809 | ai:codex
+#[test]
+fn github_commit_ci_verifies_workflow_identity_once_per_run() {
+    let mut asked = Vec::new();
+    let checks = github_commit_checks("o/r", SHA, &mut |endpoint| {
+        asked.push(endpoint.to_string());
+        Ok(serde_json::to_vec(&if endpoint.contains("/check-runs?") {
+            json!({"total_count": 2, "check_runs": [
+                {"name":"Build", "head_sha": SHA, "status":"completed", "conclusion":"success", "details_url":"https://github.com/o/r/actions/runs/11/job/1"},
+                {"name":"test", "head_sha": SHA, "status":"completed", "conclusion":"success", "details_url":"https://github.com/o/r/actions/runs/11/job/2"}]})
+        } else if endpoint.ends_with("/actions/runs/11") {
+            json!({"id":11,"workflow_id":42,"head_sha":SHA})
+        } else { no_statuses() }).unwrap())
+    }).unwrap();
+    assert!(checks
+        .checks
+        .iter()
+        .all(|c| c.workflow_id.as_deref() == Some("42")));
+    assert_eq!(
+        asked
+            .iter()
+            .filter(|s| s.contains("/actions/runs/"))
+            .count(),
+        1
+    );
+    assert!(github_commit_checks("o/r", SHA, &mut |endpoint| {
+        if endpoint.contains("/actions/runs/") { anyhow::bail!("unavailable"); }
+        Ok(serde_json::to_vec(&json!({"total_count":1,"check_runs":[{"name":"Build","head_sha":SHA,"status":"completed","conclusion":"success","details_url":"https://github.com/o/r/actions/runs/11/job/1"}]})).unwrap())
+    }).is_err());
 }
