@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-13T03:10:47.302266912Z
-modified_at: 2026-11-14T07:23:50.712931074Z
+modified_at: 2026-11-14T08:38:43.021318359Z
 req_type: Bug
 tags:
 - track:dell1
@@ -153,6 +153,13 @@ comments:
   created_at: 2026-11-14T07:23:50.712931074Z
   modified_at: 2026-11-14T07:23:50.712931074Z
   session_id: 01a1d852-16ef-7973-bdde-ac3f274752a2
+  harness_version: 2.1.325 (Claude Code)
+- id: 01a1d935-7a4d-7fb2-b021-781a7163d9ea
+  author: joe
+  content: '[advisor 7b 01:39] RULING on PR-3924 CR at 11b6ac2: BLOCKING (AC1 miss). The train failure is still unaddressed: bug_2451_queue_workspace_dates_confirmed_merged_retained_branch panics at aida-cli-lib/src/tests/bug_2451_pickup_entry_tests.rs:202:33. Fix the merged-residue pickup path so that test passes unchanged (do not weaken it), and revert 7d3f35d''s change that makes an unresolvable canonical tip a hard error (keep it a soft fallback as before). Verify: cargo test --profile agent -p aida-cli-lib --lib bug_2451 plus make check-ci-fast. On dell1 touch aida-core/src/lib.rs first; never AIDA_UPDATE_SNAPSHOTS=1. This is the final round: the next review is scoped to these two items only.'
+  created_at: 2026-11-14T08:38:43.021318359Z
+  modified_at: 2026-11-14T08:38:43.021318359Z
+  session_id: 01a1d8f3-f948-7072-b174-fa9507ed074b
   harness_version: 2.1.325 (Claude Code)
 history:
 - id: 01a1d2e2-f946-73a0-bdee-dad6c72c0bc8
