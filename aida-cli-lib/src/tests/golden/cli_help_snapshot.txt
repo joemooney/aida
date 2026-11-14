@@ -7699,11 +7699,24 @@ completes specs
 Usage: aida integration [OPTIONS] <COMMAND>
 
 Commands:
-  tags  Tag the open specs whose completing commits are on `origin/integration` but not yet on
-        `origin/main` with `landed-in-integration`, and remove the tag from specs that are closed or
-        no longer ahead of `main`. Reads the local `origin/` refs; run `git fetch` first if they may
-        be stale. Completion itself still happens when the commit reaches `main`
-  help  Print this message or the help of the given subcommand(s)
+  tags             Tag the open specs whose completing commits are on `origin/integration` but not
+                   yet on `origin/main` with `landed-in-integration`, and remove the tag from specs
+                   that are closed or no longer ahead of `main`. Reads the local `origin/` refs; run
+                   `git fetch` first if they may be stale. Completion itself still happens when the
+                   commit reaches `main`
+  merge            Merge one open change into `integration`. Run it in the integration worktree, on
+                   `integration`, clean and equal to `origin/integration`. The change is admitted
+                   when it is approved at its head, or, with `[integration] review_after_merge =
+                   "low-risk"`, when it is low-risk enough to be reviewed after the merge; an armed
+                   merge hold refuses either way. The configured checks then run on the merge
+                   result, and a failing check puts the branch back where it was
+  promotion-check  Check that everything on `integration` not yet promoted to `main` was reviewed:
+                   each merged change needs an approval at exactly the head that was merged. Exits 1
+                   and names each change that lacks one, with the revert that takes it out. Reads
+                   the local `origin/` refs. A promotion is squashed into `main`, so git alone
+                   cannot always tell which commits it carried: pass `--since` to say where the last
+                   one was cut
+  help             Print this message or the help of the given subcommand(s)
 
 Options:
       --format <FORMAT>
@@ -7733,6 +7746,76 @@ Usage: aida integration tags [OPTIONS]
 Options:
       --dry-run
           Print the tag changes without making them
+
+      --format <FORMAT>
+          Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
+          compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
+          piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)
+
+          Possible values:
+          - human: Human-readable tables / emoji (the interactive default at a TTY)
+          - toon:  Token-efficient TOON — the compact agent default when piped/captured
+          - json:  Machine JSON, for commands that support a JSON projection
+
+      --canonical-ids
+          Show node-local spec IDs in their canonical form instead of the node's friendly label (for
+          scripts). Also settable via AIDA_CANONICAL_IDS=1
+
+  -h, --help
+          Print help (see a summary with '-h')
+===== aida integration merge
+Merge one open change into `integration`. Run it in the integration worktree, on `integration`,
+clean and equal to `origin/integration`. The change is admitted when it is approved at its head, or,
+with `[integration] review_after_merge = "low-risk"`, when it is low-risk enough to be reviewed
+after the merge; an armed merge hold refuses either way. The configured checks then run on the merge
+result, and a failing check puts the branch back where it was
+
+Usage: aida integration merge [OPTIONS] <PR>
+
+Arguments:
+  <PR>
+          The change's number
+
+Options:
+      --push
+          Push `integration` once the checks pass
+
+      --dry-run
+          Say whether the change would be admitted, and merge nothing
+
+      --format <FORMAT>
+          Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
+          compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
+          piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)
+
+          Possible values:
+          - human: Human-readable tables / emoji (the interactive default at a TTY)
+          - toon:  Token-efficient TOON — the compact agent default when piped/captured
+          - json:  Machine JSON, for commands that support a JSON projection
+
+      --canonical-ids
+          Show node-local spec IDs in their canonical form instead of the node's friendly label (for
+          scripts). Also settable via AIDA_CANONICAL_IDS=1
+
+  -h, --help
+          Print help (see a summary with '-h')
+===== aida integration promotion-check
+Check that everything on `integration` not yet promoted to `main` was reviewed: each merged change
+needs an approval at exactly the head that was merged. Exits 1 and names each change that lacks one,
+with the revert that takes it out. Reads the local `origin/` refs. A promotion is squashed into
+`main`, so git alone cannot always tell which commits it carried: pass `--since` to say where the
+last one was cut
+
+Usage: aida integration promotion-check [OPTIONS]
+
+Options:
+      --tip <COMMIT>
+          The commit to check; `origin/integration` when omitted
+
+      --since <COMMIT>
+          The integration commit the last promotion was cut from: only commits after it are checked.
+          Without it the check goes back to the newest integration commit whose content is exactly a
+          commit on `main`, which a promotion leaves only when `main` took nothing else in between
 
       --format <FORMAT>
           Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
@@ -40004,6 +40087,78 @@ Working on aida itself
         "name": "help",
         "takes_value": false,
         "help": "Print help (see more with '--help')"
+      }
+    ],
+    "hidden": false
+  },
+  {
+    "path": [
+      "aida",
+      "integration",
+      "merge"
+    ],
+    "about": "Merge one open change into `integration`. Run it in the integration worktree, on `integration`, clean and equal to `origin/integration`. The change is admitted when it is approved at its head, or, with `[integration] review_after_merge = \"low-risk\"`, when it is low-risk enough to be reviewed after the merge; an armed merge hold refuses either way. The configured checks then run on the merge result, and a failing check puts the branch back where it was",
+    "flags": [
+      {
+        "name": "canonical-ids",
+        "takes_value": false,
+        "help": "Show node-local spec IDs in their canonical form instead of the node's friendly label (for scripts). Also settable via AIDA_CANONICAL_IDS=1"
+      },
+      {
+        "name": "dry-run",
+        "takes_value": false,
+        "help": "Say whether the change would be admitted, and merge nothing"
+      },
+      {
+        "name": "format",
+        "takes_value": true,
+        "help": "Pin the output format regardless of whether stdout is a terminal: human = tables, toon = compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)"
+      },
+      {
+        "name": "help",
+        "takes_value": false,
+        "help": "Print help (see more with '--help')"
+      },
+      {
+        "name": "push",
+        "takes_value": false,
+        "help": "Push `integration` once the checks pass"
+      }
+    ],
+    "hidden": false
+  },
+  {
+    "path": [
+      "aida",
+      "integration",
+      "promotion-check"
+    ],
+    "about": "Check that everything on `integration` not yet promoted to `main` was reviewed: each merged change needs an approval at exactly the head that was merged. Exits 1 and names each change that lacks one, with the revert that takes it out. Reads the local `origin/` refs. A promotion is squashed into `main`, so git alone cannot always tell which commits it carried: pass `--since` to say where the last one was cut",
+    "flags": [
+      {
+        "name": "canonical-ids",
+        "takes_value": false,
+        "help": "Show node-local spec IDs in their canonical form instead of the node's friendly label (for scripts). Also settable via AIDA_CANONICAL_IDS=1"
+      },
+      {
+        "name": "format",
+        "takes_value": true,
+        "help": "Pin the output format regardless of whether stdout is a terminal: human = tables, toon = compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)"
+      },
+      {
+        "name": "help",
+        "takes_value": false,
+        "help": "Print help (see more with '--help')"
+      },
+      {
+        "name": "since",
+        "takes_value": true,
+        "help": "The integration commit the last promotion was cut from: only commits after it are checked. Without it the check goes back to the newest integration commit whose content is exactly a commit on `main`, which a promotion leaves only when `main` took nothing else in between"
+      },
+      {
+        "name": "tip",
+        "takes_value": true,
+        "help": "The commit to check; `origin/integration` when omitted"
       }
     ],
     "hidden": false
