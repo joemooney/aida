@@ -1032,7 +1032,7 @@ fn live_gate_passes_a_clean_member_with_ships_message() {
     assert_eq!(
         c.calls,
         vec![
-            "metadata", "drive", "hold", "labels", "fetch", "approval", "corpus", "message",
+            "metadata", "drive", "hold", "labels", "fetch", "approval", "message", "corpus",
             "specs"
         ]
     );
