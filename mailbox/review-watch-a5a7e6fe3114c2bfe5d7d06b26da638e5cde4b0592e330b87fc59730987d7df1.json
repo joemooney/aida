@@ -1,0 +1,18 @@
+{
+  "id": "review-watch-a5a7e6fe3114c2bfe5d7d06b26da638e5cde4b0592e330b87fc59730987d7df1",
+  "thread_id": "review-watch-a5a7e6fe3114c2bfe5d7d06b26da638e5cde4b0592e330b87fc59730987d7df1",
+  "from": "review-watch",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1794691606699,
+  "body": "PR-4060 at 3484adef6ebc25d80a865cb1d1956cff3c31c8d6 is ready to ship: an authorized approval of 3484adef6ebc25d80a865cb1d1956cff3c31c8d6 covers the head, every CI check on 3484adef6ebc25d80a865cb1d1956cff3c31c8d6 passed, it is 0 commits behind `main`, and no merge hold or review in progress is recorded. Run `aida pr ship 4060` to merge it. The watcher only reports; it did not merge or update the branch.",
+  "subject": "PR-4060: ready to ship",
+  "urgent": false,
+  "intent": "request",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "explicit"
+}

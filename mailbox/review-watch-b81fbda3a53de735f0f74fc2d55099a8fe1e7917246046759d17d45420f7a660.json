@@ -1,0 +1,18 @@
+{
+  "id": "review-watch-b81fbda3a53de735f0f74fc2d55099a8fe1e7917246046759d17d45420f7a660",
+  "thread_id": "review-watch-b81fbda3a53de735f0f74fc2d55099a8fe1e7917246046759d17d45420f7a660",
+  "from": "review-watch",
+  "to": {
+    "kind": "agent",
+    "agent": "joemooney"
+  },
+  "timestamp": 1794691254054,
+  "body": "PR-4057 at ad2a1cd766556c410cadc749b6cec2eb38e60c31: the review by claude-reviewer (claude reviewer seat) recorded `request-changes` with 7 finding(s), round 1 of 2. The findings are in `.aida/gate-ledger/PR-4057.jsonl`. Address them and push a new head; the watcher starts its review when it sees the head.",
+  "subject": "PR-4057: review requested changes (round 1 of 2)",
+  "urgent": false,
+  "intent": "request",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "explicit"
+}
