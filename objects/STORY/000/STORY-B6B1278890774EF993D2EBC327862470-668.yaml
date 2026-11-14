@@ -18,7 +18,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-13T00:35:57.525111678Z
-modified_at: 2026-11-14T05:36:07.475406300Z
+modified_at: 2026-11-14T05:36:44.057681928Z
 req_type: Story
 tags:
 - track:integration
@@ -103,6 +103,13 @@ comments:
     Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
   created_at: 2026-11-14T05:36:07.294890788Z
   modified_at: 2026-11-14T05:36:07.294890788Z
+  session_id: 01a1d852-16ef-7973-bdde-ac3f274752a2
+  harness_version: 2.1.325 (Claude Code)
+- id: 01a1d88e-de19-7cd0-bed6-4b0fdcac7574
+  author: joe
+  content: '[advisor 114 22:38] HOLD: the operator told the integration seat not to touch #3950, #3952 or #3953. My 22:20 round-3 rework requeue completed before I learned that; no lane was launched. Added to ~/.aida/autoland-skip so autoland does not launch one. Waiting on Joe.'
+  created_at: 2026-11-14T05:36:44.057681928Z
+  modified_at: 2026-11-14T05:36:44.057681928Z
   session_id: 01a1d852-16ef-7973-bdde-ac3f274752a2
   harness_version: 2.1.325 (Claude Code)
 history:
