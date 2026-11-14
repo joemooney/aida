@@ -381,12 +381,24 @@ description: |
   ### finding-hash:3975f29b
 
   db_reconcile.rs:2224 calls lane_recovery::reconcile_reference_in for every Refs commit in the scan window. With pre_sha=None (aida db sync --pull, pr_cmd) that window is the last 50 commits, and each call does a full storage.load() (lane_recovery.rs:117), plus forge lookups for InProgress specs. That adds repeated store loads and network calls to every sync. Fix: load once per scan, or skip non-InProgress specs using a snapshot.
+
+
+  ## Findings from PR-3994
+  Reviewed sha: 136a4f020739118f38846ecd0e2b4286a32743ff
+
+  ### finding-hash:46a7a9dc
+
+  aida-testkit/src/test_home.rs:516 redirect_is_installed_before_tests_run now asserts testkit home_dir() instead of aida-cli-lib crate::home_dir(); the cli-lib production resolver routing under cfg(test) is only covered indirectly by global_roles_dir_resolves_under_the_temp_home. Consider a direct cli-lib assertion on crate::home_dir().
+
+  ### finding-hash:51cbf3a8
+
+  aida-testkit/src/test_exec.rs:39-49 hand-copies the 5x50ms ETXTBSY retry from aida-term/src/process_retry.rs (ETXTBSY_MAX_RETRIES/ETXTBSY_RETRY_DELAY); the two policies can drift. Add a comment cross-reference or a guard test pinning equality.
 status: Draft
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-13T20:01:56.623034248Z
-modified_at: 2026-11-14T06:11:53.699654944Z
+modified_at: 2026-11-14T07:19:51.303360598Z
 req_type: Task
 tags:
 - carried-finding:BUG-2546:56ed8b81
@@ -438,6 +450,8 @@ tags:
 - carried-finding:PR-3983:76a786ef
 - carried-finding:PR-3983:7bbbf9a9
 - carried-finding:PR-3983:dfed3eb6
+- carried-finding:PR-3994:46a7a9dc
+- carried-finding:PR-3994:51cbf3a8
 - carried-finding:STORY-2735:2c7ae2ea
 - carried-finding:STORY-2763:04ad58d8
 - carried-finding:STORY-2763:15915e39
@@ -475,6 +489,7 @@ tags:
 - carried-from:PR-3973
 - carried-from:PR-3979
 - carried-from:PR-3983
+- carried-from:PR-3994
 - carried-from:STORY-2735
 - carried-from:STORY-2763
 - carried-from:STORY-2768
@@ -491,7 +506,9 @@ tags:
 - finding-hash:360471e3
 - finding-hash:3961dae5
 - finding-hash:3975f29b
+- finding-hash:46a7a9dc
 - finding-hash:4843b9fe
+- finding-hash:51cbf3a8
 - finding-hash:52636ea7
 - finding-hash:55e0cbfe
 - finding-hash:56ed8b81
@@ -536,6 +553,7 @@ tags:
 - from-review:PR-3973
 - from-review:PR-3979
 - from-review:PR-3983
+- from-review:PR-3994
 - from-review:STORY-2735
 - from-review:STORY-2763
 - from-review:STORY-2768
@@ -680,6 +698,11 @@ history:
   author: joe
   timestamp: 2026-11-14T06:11:55.280101237Z
   session_id: 01a1d8aacfda
+  changes: []
+- id: 01a1d8ed-4df3-7c81-932f-214ae03ff690
+  author: joe
+  timestamp: 2026-11-14T07:19:53.075183353Z
+  session_id: 01a1d8e964cc
   changes: []
 filed_at:
   code_sha: 91fe1e337894199f15365d3f8ecfaf81366f8291
