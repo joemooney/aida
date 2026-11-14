@@ -478,3 +478,34 @@ fn bug_2536_clone_launch_head_allows_published_result() {
         "{line}"
     );
 }
+
+// trace:BUG-2549 | ai:codex
+#[test]
+fn bug_2549_exit_head_uses_contained_clone_accessor() {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
+    let fx = fixture();
+    let clone = leased_clone(&fx, "recovery", "c0ffee254901");
+    let expected = match probe(&fx.main, &clone) {
+        Probe::Known(facts) => facts.head,
+        _ => None,
+    };
+    let leases = crate::leases::list_leases_strict_all(&fx.main).unwrap();
+    let (shim_dir, log, _) = git_shim(&fx);
+    let _path = crate::test_env::EnvVarGuard::prepend_path(&shim_dir);
+    // Positive control: the recorder detects ordinary host Git in this clone.
+    std::process::Command::new("git")
+        .current_dir(&clone)
+        .args(["rev-parse", "HEAD"])
+        .output()
+        .unwrap();
+    assert!(!untagged_in(&log, &clone).is_empty());
+    std::fs::write(&log, "").unwrap();
+    let head = crate::lane_recovery::exit_head(&fx.main, "feat", &leases).unwrap();
+    assert_eq!(head, expected);
+    assert!(
+        untagged_in(&log, &clone).is_empty(),
+        "host Git ran in the seat clone"
+    );
+}
