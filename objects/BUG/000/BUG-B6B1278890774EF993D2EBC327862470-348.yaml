@@ -14,7 +14,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-14T15:26:35.946322613Z
-modified_at: 2026-11-14T16:26:35.894332676Z
+modified_at: 2026-11-14T16:29:46.498262023Z
 req_type: Bug
 tags:
 - area:train
@@ -29,6 +29,13 @@ comments:
   created_at: 2026-11-14T16:26:35.894332676Z
   modified_at: 2026-11-14T16:26:35.894332676Z
   session_id: 01a1dabe-503c-7aa1-a630-609dbc4400f2
+  harness_version: 2.1.325 (Claude Code)
+- id: 01a1dae4-be82-76b0-a65b-7d9a75917dc4
+  author: joe
+  content: 'Advisor ruling 2026-11-14 09:32: criterion 2 (skip an unreadable PR) is DROPPED: it would relax a fail-closed check in train code, and after #4046 only forge failures and >1000-commit PRs are unreadable. BUG-2583 closes on criteria 1 and 3 (#4046).'
+  created_at: 2026-11-14T16:29:46.498262023Z
+  modified_at: 2026-11-14T16:29:46.498262023Z
+  session_id: 01a1dab1-9447-7d22-b5ff-0c9084e122ea
   harness_version: 2.1.325 (Claude Code)
 history:
 - id: 01a1dada-e8c3-7e70-b02a-a3d3cdccd1a7
