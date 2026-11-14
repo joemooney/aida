@@ -16441,6 +16441,28 @@ Options:
 
   -h, --help
           Print help (see a summary with '-h')
+===== aida pr post-ship-sweep
+Internal: bounded post-merge reap and prune phase
+
+Usage: aida pr post-ship-sweep [OPTIONS]
+
+Options:
+      --format <FORMAT>
+          Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
+          compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
+          piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)
+
+          Possible values:
+          - human: Human-readable tables / emoji (the interactive default at a TTY)
+          - toon:  Token-efficient TOON — the compact agent default when piped/captured
+          - json:  Machine JSON, for commands that support a JSON projection
+
+      --canonical-ids
+          Show node-local spec IDs in their canonical form instead of the node's friendly label (for
+          scripts). Also settable via AIDA_CANONICAL_IDS=1
+
+  -h, --help
+          Print help (see a summary with '-h')
 ===== aida pr post-ship-cleanup
 Internal: the post-merge cleanup worker `aida pr ship` launches
 
@@ -31466,6 +31488,10 @@ Usage: aida land [OPTIONS] <COMMAND>
 Commands:
   status  Print every open change's landing state and the one action it calls for. Read-only:
           nothing is dispatched, cleared or merged
+  run     Run the pass and carry out each change's action: launch reviewers and rework lanes as
+          child processes, release holds whose condition is met, and send every ready change to one
+          train. Run it in a terminal that holds a seat grant, with autoland and the review watcher
+          stopped
   help    Print this message or the help of the given subcommand(s)
 
 Options:
@@ -31492,6 +31518,45 @@ dispatched, cleared or merged
 Usage: aida land status [OPTIONS]
 
 Options:
+      --format <FORMAT>
+          Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
+          compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
+          piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)
+
+          Possible values:
+          - human: Human-readable tables / emoji (the interactive default at a TTY)
+          - toon:  Token-efficient TOON — the compact agent default when piped/captured
+          - json:  Machine JSON, for commands that support a JSON projection
+
+      --canonical-ids
+          Show node-local spec IDs in their canonical form instead of the node's friendly label (for
+          scripts). Also settable via AIDA_CANONICAL_IDS=1
+
+  -h, --help
+          Print help (see a summary with '-h')
+===== aida land run
+Run the pass and carry out each change's action: launch reviewers and rework lanes as child
+processes, release holds whose condition is met, and send every ready change to one train. Run it in
+a terminal that holds a seat grant, with autoland and the review watcher stopped
+
+Usage: aida land run [OPTIONS]
+
+Options:
+      --once
+          Run one pass, wait for the children it started, and exit
+
+      --interval <INTERVAL>
+          Seconds between passes
+          
+          [default: 120]
+
+      --dry-run
+          Print what a pass would do and do none of it
+
+      --vendor <VENDOR>
+          The vendor reviewers run on; by default the usual selection applies. Rework lanes always
+          keep the vendor their change already has
+
       --format <FORMAT>
           Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
           compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
@@ -48725,6 +48790,32 @@ Working on aida itself
     "path": [
       "aida",
       "pr",
+      "post-ship-sweep"
+    ],
+    "about": "Internal: bounded post-merge reap and prune phase",
+    "flags": [
+      {
+        "name": "canonical-ids",
+        "takes_value": false,
+        "help": "Show node-local spec IDs in their canonical form instead of the node's friendly label (for scripts). Also settable via AIDA_CANONICAL_IDS=1"
+      },
+      {
+        "name": "format",
+        "takes_value": true,
+        "help": "Pin the output format regardless of whether stdout is a terminal: human = tables, toon = compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)"
+      },
+      {
+        "name": "help",
+        "takes_value": false,
+        "help": "Print help (see more with '--help')"
+      }
+    ],
+    "hidden": true
+  },
+  {
+    "path": [
+      "aida",
+      "pr",
       "post-ship-cleanup"
     ],
     "about": "Internal: the post-merge cleanup worker `aida pr ship` launches",
@@ -63906,6 +63997,52 @@ Working on aida itself
         "name": "help",
         "takes_value": false,
         "help": "Print help (see more with '--help')"
+      }
+    ],
+    "hidden": false
+  },
+  {
+    "path": [
+      "aida",
+      "land",
+      "run"
+    ],
+    "about": "Run the pass and carry out each change's action: launch reviewers and rework lanes as child processes, release holds whose condition is met, and send every ready change to one train. Run it in a terminal that holds a seat grant, with autoland and the review watcher stopped",
+    "flags": [
+      {
+        "name": "canonical-ids",
+        "takes_value": false,
+        "help": "Show node-local spec IDs in their canonical form instead of the node's friendly label (for scripts). Also settable via AIDA_CANONICAL_IDS=1"
+      },
+      {
+        "name": "dry-run",
+        "takes_value": false,
+        "help": "Print what a pass would do and do none of it"
+      },
+      {
+        "name": "format",
+        "takes_value": true,
+        "help": "Pin the output format regardless of whether stdout is a terminal: human = tables, toon = compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)"
+      },
+      {
+        "name": "help",
+        "takes_value": false,
+        "help": "Print help (see more with '--help')"
+      },
+      {
+        "name": "interval",
+        "takes_value": true,
+        "help": "Seconds between passes"
+      },
+      {
+        "name": "once",
+        "takes_value": false,
+        "help": "Run one pass, wait for the children it started, and exit"
+      },
+      {
+        "name": "vendor",
+        "takes_value": true,
+        "help": "The vendor reviewers run on; by default the usual selection applies. Rework lanes always keep the vendor their change already has"
       }
     ],
     "hidden": false

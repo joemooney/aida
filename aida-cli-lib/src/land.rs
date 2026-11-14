@@ -3,9 +3,9 @@
 //! state to exactly one action. Nothing about a change is stored between
 //! passes, so no state can go stale.
 //!
-//! This slice is read-only: `aida land status` runs the pass and prints the
-//! derived table. The acting loop calls the same [`derive`], so the view and
-//! the actor cannot disagree.
+//! `aida land status` runs the pass and prints the derived table. `aida land
+//! run` (see [`run`]) runs the same pass and then carries out each row's
+//! action, so the view and the actor cannot disagree.
 // trace:STORY-2768 | ai:claude
 
 use anyhow::{Context, Result};
@@ -14,6 +14,8 @@ use std::path::{Path, PathBuf};
 
 #[path = "land_args.rs"]
 pub(crate) mod land_args;
+#[path = "land_run.rs"]
+pub(crate) mod run;
 
 use crate::cmdkit::{CmdPolicy, CommandReg, Handler};
 use crate::gate::review_verdict::VerdictKind;
@@ -24,6 +26,8 @@ use crate::stakeholder_role::StakeholderAction;
 const MAX_CONTENT_ROUNDS: usize = 3;
 /// The branch whose changes the integration seat lands.
 const INTEGRATION_BRANCH: &str = "integration";
+/// The branch trains land on.
+const MAIN_BRANCH: &str = "main";
 const TRAIN_PREFIX: &str = "train/";
 /// Where a pass fetches the commits it compares. The refs are shared by
 /// every pass and only ever read under [`FETCH_LOCK`], straight after the
@@ -123,8 +127,8 @@ pub(crate) enum Action {
     Wait,
     DispatchRework,
     LaunchReview,
-    /// Clear a hold whose release condition is met, then land. Clearing a
-    /// hold takes a human at a terminal, so this is the operator's.
+    /// Release a hold whose release condition is met; the next pass lands
+    /// the change. The release decides again for itself.
     ClearHoldAndLand,
     /// Add to the next train (main track).
     Train,
@@ -138,8 +142,10 @@ impl Action {
     pub(crate) fn owner(&self) -> &'static str {
         match self {
             Action::Wait => "-",
-            Action::DispatchRework | Action::LaunchReview | Action::Train => "reconciler",
-            Action::ClearHoldAndLand => "operator",
+            Action::DispatchRework
+            | Action::LaunchReview
+            | Action::Train
+            | Action::ClearHoldAndLand => "reconciler",
             Action::ReportToIntegration => "integration seat",
             Action::AdvisorRuling => "advisor",
         }
@@ -150,7 +156,7 @@ impl Action {
             Action::Wait => "wait",
             Action::DispatchRework => "dispatch rework",
             Action::LaunchReview => "launch reviewer",
-            Action::ClearHoldAndLand => "operator clears met hold, then land",
+            Action::ClearHoldAndLand => "release the met hold, then land",
             Action::Train => "add to next train",
             Action::ReportToIntegration => "report to integration seat",
             Action::AdvisorRuling => "advisor ruling",
@@ -214,6 +220,15 @@ pub(crate) trait Evidence {
     fn rounds(&self, pr: &Pr) -> std::result::Result<Rounds, String>;
     /// A live lane working the change's branch, described.
     fn lane(&self, pr: &Pr) -> std::result::Result<Option<String>, String>;
+    /// How many reviewers of this head were stopped for running too long.
+    fn review_timeouts(&self, _pr: &Pr) -> u32 {
+        0
+    }
+    /// Why no rework lane may be launched for this head, when one refused
+    /// in a way a relaunch cannot fix.
+    fn rework_stop(&self, _pr: &Pr) -> Option<String> {
+        None
+    }
 }
 
 /// One row of the derived table.
@@ -286,7 +301,17 @@ pub(crate) fn derive(pr: &Pr, evidence: &dyn Evidence) -> Row {
     }
     // Rework goes to a lane only when none is already on the branch.
     let rework = |state: State, since: Option<String>, reason: String| match evidence.lane(pr) {
-        Ok(None) => row(state, Action::DispatchRework, since, reason),
+        // A lane that refused over unpushed work in its seat is never
+        // launched over: someone has to look at the seat first.
+        Ok(None) => match evidence.rework_stop(pr) {
+            Some(stop) => row(
+                State::Blocked,
+                Action::AdvisorRuling,
+                since,
+                format!("{reason}; rework refused: {stop}"),
+            ),
+            None => row(state, Action::DispatchRework, since, reason),
+        },
         Ok(Some(lane)) => Row {
             actor: Some(lane),
             ..row(state, Action::Wait, since, reason)
@@ -332,6 +357,18 @@ pub(crate) fn derive(pr: &Pr, evidence: &dyn Evidence) -> Row {
         Err(why) => return unknown("approval", why),
         Ok(Approval::Approved(approval)) => {
             return match evidence.hold(pr) {
+                // A change stacked on another change's branch is reviewed
+                // like any other, and lands only once its base has: a train
+                // merges into the main branch and nowhere else.
+                Ok(None) if pr.base != MAIN_BRANCH && pr.base != INTEGRATION_BRANCH => row(
+                    State::Ready,
+                    Action::Wait,
+                    None,
+                    format!(
+                        "{approval}; stacked on `{}`: retarget it when that lands",
+                        pr.base
+                    ),
+                ),
                 Ok(None) => row(
                     State::Ready,
                     match track {
@@ -395,6 +432,15 @@ pub(crate) fn derive(pr: &Pr, evidence: &dyn Evidence) -> Row {
                 "changes requested at this content (round {})",
                 rounds.content_rounds
             ),
+        );
+    }
+    let timeouts = evidence.review_timeouts(pr);
+    if timeouts >= run::MAX_REVIEW_TIMEOUTS {
+        return row(
+            State::Blocked,
+            Action::AdvisorRuling,
+            None,
+            format!("{timeouts} reviewers of this head were stopped for running too long"),
         );
     }
     row(State::NeedsReview, Action::LaunchReview, None, refusal)
@@ -616,6 +662,11 @@ struct Live {
     /// Live claims from other clones and hosts, read once per pass from the
     /// synced store: never a process probe of another machine.
     claims: Vec<crate::coordination::Claim>,
+    /// The children `aida land run` started that are still alive, and what
+    /// it recorded about the ones it stopped.
+    book: run::Book,
+    /// The tree each clean merge of a head into its base produced.
+    merge_trees: std::cell::RefCell<BTreeMap<u64, String>>,
 }
 
 impl Live {
@@ -724,13 +775,25 @@ impl Evidence for Live {
         )
         .map_err(|e| format!("{e:#}"))?;
         match out.status.code() {
-            Some(0) => Ok(false),
+            Some(0) => {
+                let tree = String::from_utf8_lossy(&out.stdout);
+                if let Some(tree) = tree.lines().next().filter(|tree| !tree.is_empty()) {
+                    self.merge_trees
+                        .borrow_mut()
+                        .insert(pr.id, tree.trim().to_string());
+                }
+                Ok(false)
+            }
             Some(1) => Ok(true),
             _ => Err(one_line(&String::from_utf8_lossy(&out.stderr), 200)),
         }
     }
 
     fn reviewing(&self, pr: &Pr) -> std::result::Result<Option<String>, String> {
+        // Our own reviewer is known to be alive before it claims anything.
+        if let Some(child) = self.book.reviewer(pr) {
+            return Ok(Some(child.describe()));
+        }
         // A marker that is there but unreadable is not "no reviewer".
         match crate::gate::review_marker::live_description_checked(
             &self.root,
@@ -917,6 +980,9 @@ impl Evidence for Live {
     }
 
     fn lane(&self, pr: &Pr) -> std::result::Result<Option<String>, String> {
+        if let Some(child) = self.book.lane(pr) {
+            return Ok(Some(child.describe()));
+        }
         let Some(branch) = pr.branch.as_deref() else {
             return Err("the change's branch is unknown".into());
         };
@@ -932,6 +998,14 @@ impl Evidence for Live {
             .iter()
             .find(|claim| claim_covers(&claim.scope, pr))
             .map(claim_actor))
+    }
+
+    fn review_timeouts(&self, pr: &Pr) -> u32 {
+        self.book.timeouts(pr)
+    }
+
+    fn rework_stop(&self, pr: &Pr) -> Option<String> {
+        self.book.stop(pr)
     }
 }
 
@@ -1088,6 +1162,15 @@ pub(crate) struct Pass {
     /// Live lanes on this clone and, through the synced store, on others.
     pub local_lanes: Vec<crate::leases::SessionLease>,
     pub foreign_lanes: Vec<crate::coordination::Claim>,
+    /// The forge keys its changes `MR-N`.
+    pub gitlab: bool,
+    /// The tree of each clean merge of a head into its base.
+    pub merge_trees: BTreeMap<u64, String>,
+    /// The record of `aida land run`'s children, settled against what is
+    /// alive now. Only `aida land run` writes it back.
+    pub book: run::Book,
+    /// What settling the record found.
+    pub notes: Vec<String>,
     /// What the pass could not read and so does not show.
     pub warnings: Vec<String>,
 }
@@ -1134,7 +1217,11 @@ pub(crate) fn live_pass(start: &Path) -> Result<Pass> {
         chrono::Utc::now(),
         &crate::coordination::hostname(),
     );
+    let mut book = run::Book::read(&root)?;
+    let notes = book.settle(&changes, &run::alive, &run::log_tail);
     let live = Live {
+        book,
+        merge_trees: Default::default(),
         pins: fetch(&root, &repo, &changes, gitlab).map_err(|e| format!("{e:#}")),
         gitlab,
         root: root.clone(),
@@ -1154,6 +1241,10 @@ pub(crate) fn live_pass(start: &Path) -> Result<Pass> {
         rows,
         local_lanes,
         foreign_lanes: live.claims,
+        gitlab,
+        merge_trees: live.merge_trees.into_inner(),
+        book: live.book,
+        notes,
         warnings,
     })
 }
@@ -1189,6 +1280,7 @@ fn run(matches: &clap::ArgMatches, ctx: &crate::cmdkit::DispatchCtx) -> Result<(
             }
             Ok(())
         }
+        land_args::LandCommand::Run(args) => run::run(&crate::find_project_root()?, &args),
     }
 }
 

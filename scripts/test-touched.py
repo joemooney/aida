@@ -86,8 +86,10 @@ class Package:
 @dataclass
 class SourceIndex:
     """What the package sources say about how files are compiled in."""
-    # `#[path = "..."] mod name;` target -> (declaring file, mod name)
-    path_mods: dict[str, tuple[str, str]] = field(default_factory=dict)
+    # Keep all declarations: an orphaned source can name the same test file
+    # as a live module. Resolve the declaring parent before choosing a filter.
+    # trace:STORY-2660 | ai:codex
+    path_mods: dict[str, list[tuple[str, str]]] = field(default_factory=dict)
     # `include!("...")` target -> including file
     includes: dict[str, str] = field(default_factory=dict)
     # `include_str!`/`include_bytes!`/`include_dir!` target -> embedding files
@@ -190,7 +192,7 @@ def build_index(root: str, packages: list[Package]) -> SourceIndex:
             idx.texts[f] = text
             d = posixpath.dirname(f)
             for target, name in PATH_MOD_RE.findall(text):
-                idx.path_mods.setdefault(_join(d, target), (f, name))
+                idx.path_mods.setdefault(_join(d, target), []).append((f, name))
             for m in INCLUDE_RE.finditer(text):
                 if m.start() and (text[m.start() - 1].isalnum() or text[m.start() - 1] in '_"\\'):
                     continue  # part of another identifier, or inside a string
@@ -262,9 +264,11 @@ def module_path(f: str, pkg: Package, idx: SourceIndex, seen: frozenset = frozen
     if f in idx.includes:
         return module_path(idx.includes[f], pkg, idx, seen)
     if f in idx.path_mods:
-        decl, name = idx.path_mods[f]
-        parent = module_path(decl, pkg, idx, seen)
-        return None if parent is None else parent + [name]
+        for decl, name in idx.path_mods[f]:
+            parent = module_path(decl, pkg, idx, seen)
+            if parent is not None:
+                return parent + [name]
+        return None
     src = _join(pkg.dir, "src")
     if not f.startswith(src + "/"):
         return None
