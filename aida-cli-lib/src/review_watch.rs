@@ -2520,12 +2520,24 @@ pub(crate) fn reviewer_status_on_spawn(
     on_spawn: impl FnOnce(),
 ) -> std::io::Result<std::process::ExitStatus> {
     use crate::process_retry::RetryEtxtbsy;
+    // trace:BUG-2546 | ai:codex
+    if let Some(grant) = cmd
+        .get_envs()
+        .find_map(|(key, value)| {
+            (key == aida_core::launch_policy::GRANT_ENV)
+                .then_some(value)
+                .flatten()
+        })
+        .and_then(|v| v.to_str())
+    {
+        crate::reviewer_completion::bind_grant(grant);
+    }
     let launch = LAUNCH.with(|launch| launch.borrow().clone());
     let Some((root, identity, key, head)) = launch else {
         let mut child = cmd.spawn_retrying_etxtbsy()?;
         note_agent_spawned();
         on_spawn();
-        return child.wait();
+        return crate::reviewer_completion::wait(&mut child);
     };
     let store = Store::open(&root, &identity).map_err(std::io::Error::other)?;
     retry_busy(|| store.record_reviewer(&key, &head, None)).map_err(std::io::Error::other)?;
@@ -2544,7 +2556,7 @@ pub(crate) fn reviewer_status_on_spawn(
             "{key}: reviewer identity unavailable; the attempt stays held as ambiguous: {error:#}"
         ),
     }
-    child.wait()
+    crate::reviewer_completion::wait(&mut child)
 }
 
 // trace:TASK-3472 | ai:codex
