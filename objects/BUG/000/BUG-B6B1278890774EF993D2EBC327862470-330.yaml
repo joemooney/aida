@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-13T20:52:54.357683400Z
-modified_at: 2026-11-14T13:36:02.770686013Z
+modified_at: 2026-11-14T13:57:01.479330642Z
 req_type: Bug
 tags:
 - perf
@@ -141,6 +141,13 @@ comments:
   modified_at: 2026-11-14T13:36:02.770686013Z
   session_id: 01a1da3d6ea0
   harness_version: 2.1.319 (Claude Code)
+- id: 01a1da58-e5a7-7831-90a3-0173e1e4d7eb
+  author: joe
+  content: '[advisor a22 06:58] Second occurrence: the post-train ''aida pull'' after train 20 (#4012) spun at 100% CPU (R state) for 6.5 min and blocked the default deputy until a TERM. It is reproducible after every train. If #4007 (BUG-2565) does not fix it, it needs its own bug.'
+  created_at: 2026-11-14T13:57:01.479330642Z
+  modified_at: 2026-11-14T13:57:01.479330642Z
+  session_id: 01a1d9ea-4e25-7033-85e8-3648f0195c7c
+  harness_version: 2.1.325 (Claude Code)
 history:
 - id: 01a1d8a9-d3a1-7243-a396-3ba4fdaf7412
   author: joe
