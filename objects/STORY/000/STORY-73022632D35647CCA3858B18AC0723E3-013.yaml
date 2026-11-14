@@ -1,5 +1,6 @@
 id: 01a1da73-e3a8-7343-b24f-419310b3feb8
 spec_id: STORY-73022632d35647cca3858b18ac0723e3-013
+agreed_id: STORY-2356
 title: 'Review PR-4034: [AI:claude] fix(ci): run train CI once, from the pull_request event (BUG-2581)'
 description: |
   Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `(no-sess`) for branch `bug-b6b1278890774ef993d2ebc327862470-346`.
@@ -33,6 +34,12 @@ history:
 - id: 01a1da74-1b93-7153-945b-e8fd897d4f4a
   author: dirtlab
   timestamp: 2026-11-14T14:26:44.755967088Z
+  changes: []
+- id: 01a1da7c-fd6c-7311-a223-ffdf80bd18a1
+  author: joe
+  timestamp: 2026-11-14T14:36:26.860219832Z
+  session_id: 01a1d9ea-4e25-7033-85e8-3648f0195c7c
+  harness_version: 2.1.325 (Claude Code)
   changes: []
 filed_at:
   code_sha: b63e2f597e16c70f98256ffa15d5481cb46c54b0

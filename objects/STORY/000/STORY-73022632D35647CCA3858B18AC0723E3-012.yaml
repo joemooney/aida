@@ -1,5 +1,6 @@
 id: 01a1da6f-4a3a-78f3-bc3d-74b3e45fb084
 spec_id: STORY-73022632d35647cca3858b18ac0723e3-012
+agreed_id: STORY-2357
 title: 'Review PR-4033: [AI:codex] fix(store): complete semantic pull and fail-closed writes (BUG-2501)'
 description: |
   Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `(no-sess`) for branch `bug-b6b1278890774ef993d2ebc327862470-266`.
@@ -33,6 +34,12 @@ history:
 - id: 01a1da6f-8407-7d90-9ca3-fdf54e1703ee
   author: dirtlab
   timestamp: 2026-11-14T14:21:43.815050974Z
+  changes: []
+- id: 01a1da7c-fe4d-7082-b90c-27db21de2c5a
+  author: joe
+  timestamp: 2026-11-14T14:36:27.085029868Z
+  session_id: 01a1d9ea-4e25-7033-85e8-3648f0195c7c
+  harness_version: 2.1.325 (Claude Code)
   changes: []
 filed_at:
   code_sha: b63e2f597e16c70f98256ffa15d5481cb46c54b0

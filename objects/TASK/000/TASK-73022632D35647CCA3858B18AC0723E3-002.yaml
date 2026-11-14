@@ -1,5 +1,6 @@
 id: 01a1da74-8319-78e1-9777-b50890435f90
 spec_id: TASK-73022632d35647cca3858b18ac0723e3-002
+agreed_id: TASK-3104
 title: Fresh headless child grant is issued from the seat root (cwd), not the root the launch preflight validated
 description: |
   `spawn_vendor_headless_forking` (aida-cli-lib/src/session.rs, the `issue_launch_child(&headless_worktree_root(), ...)` call) revalidates the parent grant and its roster from the project root of the current directory. `aida queue work` has already changed directory into the seat by then, so the roster is read through the seat's `.aida/config.toml` and its `.aida-store` link. The preflight in queue_cmd/work.rs validates from the launcher's project root. The resume arms (`spawn_claude_headless_resume_granted`, `spawn_vendor_headless_resume_granted`) pass `cwd` the same way. `launch/grant.rs` states that no authority is inferred from cwd.
@@ -19,6 +20,13 @@ tags:
 - from-implementer:BUG-2544
 - kind:bug-spotted
 - severity:minor
+history:
+- id: 01a1da7c-f86b-7c61-b390-99e0ef5605e3
+  author: joe
+  timestamp: 2026-11-14T14:36:25.579631962Z
+  session_id: 01a1d9ea-4e25-7033-85e8-3648f0195c7c
+  harness_version: 2.1.325 (Claude Code)
+  changes: []
 filed_at:
   code_sha: 90810a0e3f3e12ea40965dedaebcfebe3eb756a3
   branch: bug-b6b1278890774ef993d2ebc327862470-309
