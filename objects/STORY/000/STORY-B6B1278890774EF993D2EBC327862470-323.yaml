@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-02T19:20:50.092491662Z
-modified_at: 2026-11-13T23:32:33.368867258Z
+modified_at: 2026-11-14T00:06:17.301673593Z
 req_type: Story
 tags:
 - architecture
@@ -814,6 +814,13 @@ comments:
   content: 'Advisor 16:50: the dell1 Codex lane punted on round 13 because the native seat can''t commit the required merge of origin/main into PR #3940 (it is 160-190 commits behind with 9-10 conflicting files). A Claude fixer is doing the conflict merge (compile check on dell1, check-ci-fast), then pushing to the PR branch. After that the PR gets a fresh review; the open findings are judged against the merged head.'
   created_at: 2026-11-13T23:44:03.236623674Z
   modified_at: 2026-11-13T23:44:03.236623674Z
+  session_id: 01a1d73b-e31c-7f33-b2fe-cee145ddc6fb
+  harness_version: 2.1.325 (Claude Code)
+- id: 01a1d760-55d5-7810-b5de-a4f20f995603
+  author: joe
+  content: 'Advisor 17:07: #3940 merged with main at c0c40b4 (two merges plus one fix commit that drops ownership reader helpers duplicated from main). check-ci-fast 46 gates pass; dell1 cargo check is green; the targeted steal tests pass. Remaining diff (6 files): retired steal arg removed from the phase-launch builder and driver, queue_work test updates, sccache fixture tweak, regenerated ownership-liveness ratchet. Review queued.'
+  created_at: 2026-11-14T00:06:17.301673593Z
+  modified_at: 2026-11-14T00:06:17.301673593Z
   session_id: 01a1d73b-e31c-7f33-b2fe-cee145ddc6fb
   harness_version: 2.1.325 (Claude Code)
 history:
