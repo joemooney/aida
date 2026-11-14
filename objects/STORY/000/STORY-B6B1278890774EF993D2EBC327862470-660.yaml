@@ -23,7 +23,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-12T19:11:56.371806442Z
-modified_at: 2026-11-14T05:11:09.499981695Z
+modified_at: 2026-11-14T05:25:34.201353752Z
 req_type: Story
 tags:
 - operator-held
@@ -304,6 +304,13 @@ comments:
   created_at: 2026-11-14T02:57:42.009246528Z
   modified_at: 2026-11-14T02:57:42.009246528Z
   session_id: 01a1d797-2ccf-7771-899a-682081f10504
+  harness_version: 2.1.325 (Claude Code)
+- id: 01a1d884-a579-73d2-bb34-34ef6d7a95b9
+  author: joe
+  content: '[advisor 114 22:26] 60-min gap: main unmoved since 20:19 (6357b96, train 12). Cause: train 13''s deputy job was refused not-live after the advisor rotation (submitter session gone), unnoticed until 22:12. Resubmitted 22:12; train PR #3985 CI 4/9 shards at 22:24. Lesson: a rotating advisor must not leave queued deputy jobs bound to its own session — resubmit them on the next session''s first sweep.'
+  created_at: 2026-11-14T05:25:34.201353752Z
+  modified_at: 2026-11-14T05:25:34.201353752Z
+  session_id: 01a1d852-16ef-7973-bdde-ac3f274752a2
   harness_version: 2.1.325 (Claude Code)
 history:
 - id: 01a1d175-992b-7501-a0fb-89a007208ac0
