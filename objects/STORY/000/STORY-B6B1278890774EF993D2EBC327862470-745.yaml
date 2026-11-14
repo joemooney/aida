@@ -37,7 +37,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-14T18:18:20.399960794Z
-modified_at: 2026-11-14T18:22:56.717844418Z
+modified_at: 2026-11-14T19:12:53.524373572Z
 req_type: Story
 tags:
 - agent-ergonomics
@@ -49,6 +49,13 @@ comments:
   created_at: 2026-11-14T18:22:56.717844418Z
   modified_at: 2026-11-14T18:22:56.717844418Z
   session_id: 01a1dab1-9447-7d22-b5ff-0c9084e122ea
+  harness_version: 2.1.325 (Claude Code)
+- id: 01a1db7a-1514-75c2-a4ee-038f630f3161
+  author: joe
+  content: 'Friction (advisor, 2026-11-14 12:10): lane-run on dell1 auto-committed a retained seat''s 3 dirty files and then failed to publish because the PR branch had moved (TASK-3784); the fix was a manual branch-preserve + reset --hard to the PR head before relaunch. Also ''aida pull --store-only'' / ''aida push'' fail inside the Claude sandbox (store worktree index.lock is read-only) with no hint that the sandbox is the cause.'
+  created_at: 2026-11-14T19:12:53.524373572Z
+  modified_at: 2026-11-14T19:12:53.524373572Z
+  session_id: 01a1db6d-e689-7532-9eef-772722add87b
   harness_version: 2.1.325 (Claude Code)
 history:
 - id: 01a1db4a-abd7-74b1-97e3-ad48fe26683e
