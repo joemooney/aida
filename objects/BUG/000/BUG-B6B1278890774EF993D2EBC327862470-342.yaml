@@ -20,7 +20,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-14T12:59:48.856339929Z
-modified_at: 2026-11-14T16:16:52.199824218Z
+modified_at: 2026-11-14T16:33:45.051390675Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -74,6 +74,13 @@ comments:
   modified_at: 2026-11-14T16:16:52.199824218Z
   session_id: 01a1dab1-9447-7d22-b5ff-0c9084e122ea
   harness_version: 2.1.325 (Claude Code)
+- id: 01a1dae8-625b-7ab0-bc73-f8352cc044a8
+  author: dirtlab
+  content: 'Message delta for the 16:16 ruling: local commit 9d9213f8e2 on fix/train-no-blind-rerun-BUG-2577 (parent 759d2a2, NOT pushed: the seat has no GitHub credential). The train PR close comment for a no-result red now reads: ''Train CI ended without a test result (<why>). If this is the first such result for these members, they are retested once; if they were already retested, the train bisects, or ejects a lone member.'' One string in aida-cli-lib/src/pr_train.rs, no behaviour change. Tests: cargo test -p aida-cli-lib --lib -- pr_train: 217 passed, 1 failed (bug2547_abandon_is_locked_and_local_even_for_malformed_journals, ''another train owns the train journal''); that test passes when run alone and does not touch the changed string. Publish with: git push origin fix/train-no-blind-rerun-BUG-2577 (fast-forward).'
+  created_at: 2026-11-14T16:33:45.051390675Z
+  modified_at: 2026-11-14T16:33:45.051390675Z
+  session_id: 01a1dadd8d6e
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1da27-2bb7-7361-9d4b-679eedfaa209
   author: joe
