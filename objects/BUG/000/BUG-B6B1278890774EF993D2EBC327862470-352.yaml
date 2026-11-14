@@ -17,16 +17,22 @@ description: |
   - A detached-HEAD worktree whose HEAD commit is reachable from the default branch or from an open/merged PR head on the remote, with a clean tree and no live session lease, is eligible and removed by `--apply`.
   - `aida worktree gc` (or the umbrella gc, STORY-2711) reports and, with `--apply`, removes per-seat target directories (target/lane-overlay/<session>, target/worktrees/<name>) whose session or worktree no longer exists, and prints bytes reclaimed.
   - A test covers the detached case and the blank-stderr case.
-status: InProgress
+status: Done
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-14T20:47:29.076518272Z
-modified_at: 2026-11-14T20:57:47.630171647Z
+modified_at: 2026-11-14T21:19:30.276858895Z
 req_type: Bug
 tags:
 - disk
 - landing-emergency
+relationships:
+- rel_type:
+    custom: implemented-by
+  target_id: 01a1dbed-360b-7ab2-8a6b-94f5447a63b7
+  created_at: 2026-11-14T21:18:43.679450967Z
+  created_by: dirtlab
 comments:
 - id: 01a1dbd4-f055-7ee0-bb78-aea49a96d2d6
   author: joe
@@ -72,6 +78,21 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1dbed-5002-7933-9f6f-74ee024e98c4
+  author: dirtlab
+  timestamp: 2026-11-14T21:18:45.250415306Z
+  session_id: 01a1dbd7ade0
+  harness_version: 2.1.319 (Claude Code)
+  changes: []
+- id: 01a1dbee-0010-72a0-93e8-3a3ed74d6017
+  author: dirtlab
+  timestamp: 2026-11-14T21:19:30.320825547Z
+  session_id: 01a1dbd7ade0
+  harness_version: 2.1.319 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Done
 filed_at:
   code_sha: ce660d553f782fd223ca091bb3bd2dc394352eb5
   branch: main
@@ -80,3 +101,7 @@ filed_at:
   aida_build_sha: ce660d553f7
   vendor: claude
   session: 01a1db78-560d-7a81-a467-3742be1fefc3
+implementation_info:
+  implemented: true
+  implemented_at: 2026-11-14T21:19:30.276858895Z
+  implemented_by: dirtlab

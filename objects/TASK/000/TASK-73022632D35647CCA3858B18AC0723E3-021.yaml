@@ -1,0 +1,32 @@
+id: 01a1dbec-dba6-7843-a52c-bf421c918a23
+spec_id: TASK-73022632d35647cca3858b18ac0723e3-021
+title: worktree gc proves a detached HEAD published with ls-remote, so closed-unmerged PR heads count and local merge commits never do
+description: |
+  BUG-2587 asks for a detached HEAD "reachable from the default branch or from an open/merged PR head on the remote". Implemented in aida-cli-lib/src/worktree_lifecycle_gc.rs (`remote_heads`, `reachable_from`) as: reachable from any ref the default branch's remote advertises under refs/heads/*, refs/pull/*/head or refs/merge-requests/*/head. One ls-remote per scan, no forge CLI.
+
+  Two consequences to confirm:
+  1. A closed, unmerged PR head also qualifies (its commits are still on the remote, so nothing is lost).
+  2. A check tree whose HEAD is a merge commit made locally (main merged with a PR, never pushed) stays kept with "detached HEAD: no branch to prove merged". If integration or advisor-merge trees are routinely in that state, they need a separate rule, for example "every parent is published and the tree is clean".
+
+  Raised by the implementer while working BUG-2587.
+  Branch: bug-b6b1278890774ef993d2ebc327862470-352  ·  Commit: d5a6c3a62c  (PR link added on merge)
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-14T21:18:15.462274576Z
+modified_at: 2026-11-14T21:18:15.462274576Z
+req_type: Task
+tags:
+- from-implementer:BUG-2587
+- kind:design-choice
+- severity:minor
+filed_at:
+  code_sha: d5a6c3a62c8c2fc22ff68d224530cd2f88a05c34
+  branch: bug-b6b1278890774ef993d2ebc327862470-352
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: bc24a1e688
+  vendor: claude
+  session: 01a1dbd7ade0
+  harness_version: 2.1.319 (Claude Code)

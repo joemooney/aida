@@ -1,0 +1,31 @@
+id: 01a1dbec-c628-7102-8cc5-0789380ddba3
+spec_id: TASK-73022632d35647cca3858b18ac0723e3-019
+title: 'Lane overlay gc cannot delete an overlay: the kernel''s mode-000 work/work stops remove_dir_all and the error is dropped'
+description: |
+  aida-cli-lib/src/seat_target_overlay.rs `gc` (about line 549) removes a dead lane overlay with `remove_any` -> `std::fs::remove_dir_all` and ignores the result. Overlayfs leaves `<overlay>/work/work` at mode 000, so the recursive removal fails with EACCES every time and nothing is reclaimed. On dell1 on 2026-11-14 target/lane-overlay held 374 directories against about 47 session leases.
+
+  BUG-2587 adds a removal in `aida worktree gc --apply` that chmods such directories first (`remove_tree` in worktree_lifecycle_gc.rs). The automatic path in seat_target_overlay.rs still has the defect; it should share that removal and report failures.
+
+  Raised by the implementer while working BUG-2587.
+  Branch: bug-b6b1278890774ef993d2ebc327862470-352  ·  Commit: d5a6c3a62c  (PR link added on merge)
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-14T21:18:09.960983368Z
+modified_at: 2026-11-14T21:18:09.960983368Z
+req_type: Task
+tags:
+- disk
+- from-implementer:BUG-2587
+- kind:bug-spotted
+- severity:minor
+filed_at:
+  code_sha: d5a6c3a62c8c2fc22ff68d224530cd2f88a05c34
+  branch: bug-b6b1278890774ef993d2ebc327862470-352
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: bc24a1e688
+  vendor: claude
+  session: 01a1dbd7ade0
+  harness_version: 2.1.319 (Claude Code)
