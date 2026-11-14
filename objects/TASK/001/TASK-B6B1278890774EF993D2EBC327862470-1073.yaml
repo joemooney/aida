@@ -1105,12 +1105,28 @@ description: |
   ### finding-hash:47f62f07
 
   The integration standing orders (aida-core/templates/.aida/discipline/standing-orders/integration.md and its mirror) cite `aida mailbox history`, which is not a command: the verbs are `aida mailbox thread <id>` and `aida mailbox list`. The same file and the --to help (mailbox_cmd_args.rs:135) say a reply goes to the sender seat, then its role; since c03d5d1 a seat-sent parent is answered to the seat only and never falls through to the role. Name the real verb and correct the fallback wording in the template master, then run make sync-templates.
+
+
+  ## Findings from STORY-2745
+  Reviewed sha: c03d5d16801fa5fb122d181174d6ff1159a3957d
+
+  ### finding-hash:2a4c4b85
+
+  The --seat help text (agent_launch_args.rs:1352 and :1529, and the help snapshot) says Default: the role, but a launch without --rotate and without --seat records no seat and is not reachable as seat:<role>. Say that the role is the default only under --rotate.
+
+  ### finding-hash:32088b60
+
+  rustfmt re-attached existing trace comments as trailing comments after the new plan.seat assignments (agent_launch.rs:3383 and :3745, agent_codex_background.rs:759), so the BUG-2169 and TASK-2712 comments no longer sit above the code they describe. Put the plan.seat line after those comment blocks or give it its own comment line.
+
+  ### finding-hash:47f62f07
+
+  The integration standing orders (aida-core/templates/.aida/discipline/standing-orders/integration.md and its mirror) cite `aida mailbox history`, which is not a command: the verbs are `aida mailbox thread <id>` and `aida mailbox list`. The same file and the --to help (mailbox_cmd_args.rs:135) say a reply goes to the sender seat, then its role; since c03d5d1 a seat-sent parent is answered to the seat only and never falls through to the role. Name the real verb and correct the fallback wording in the template master, then run make sync-templates.
 status: Draft
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-13T20:01:56.623034248Z
-modified_at: 2026-11-14T19:29:53.866470932Z
+modified_at: 2026-11-14T19:30:14.055389282Z
 req_type: Task
 tags:
 - carried-finding:BUG-2543:2a99ebfc
@@ -1269,6 +1285,9 @@ tags:
 - carried-finding:PR-4053:e95a72ea
 - carried-finding:PR-4053:fd4627d4
 - carried-finding:STORY-2735:2c7ae2ea
+- carried-finding:STORY-2745:2a4c4b85
+- carried-finding:STORY-2745:32088b60
+- carried-finding:STORY-2745:47f62f07
 - carried-finding:STORY-2763:04ad58d8
 - carried-finding:STORY-2763:0d56e3a6
 - carried-finding:STORY-2763:138d1871
@@ -1367,6 +1386,7 @@ tags:
 - carried-from:PR-4052
 - carried-from:PR-4053
 - carried-from:STORY-2735
+- carried-from:STORY-2745
 - carried-from:STORY-2763
 - carried-from:STORY-2765
 - carried-from:STORY-2768
@@ -1546,6 +1566,7 @@ tags:
 - from-review:PR-4052
 - from-review:PR-4053
 - from-review:STORY-2735
+- from-review:STORY-2745
 - from-review:STORY-2763
 - from-review:STORY-2765
 - from-review:STORY-2768
@@ -1945,6 +1966,11 @@ history:
 - id: 01a1db89-ac73-76b0-9ba1-3cafa6d4a3f0
   author: joe
   timestamp: 2026-11-14T19:29:55.315937733Z
+  session_id: 01a1db835ac8
+  changes: []
+- id: 01a1db89-fb74-7610-a912-6043b89c19bc
+  author: joe
+  timestamp: 2026-11-14T19:30:15.540301968Z
   session_id: 01a1db835ac8
   changes: []
 filed_at:
