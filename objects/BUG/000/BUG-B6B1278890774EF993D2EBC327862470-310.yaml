@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-13T01:16:21.435486098Z
-modified_at: 2026-11-14T05:12:44.188536184Z
+modified_at: 2026-11-14T06:45:03.774054548Z
 req_type: Bug
 tags:
 - track:integration
@@ -32,6 +32,11 @@ relationships:
     custom: implemented-by
   target_id: 01a1d876-9b7c-7413-9ae2-0fc024358032
   created_at: 2026-11-14T05:12:44.188533499Z
+  created_by: joe
+- rel_type:
+    custom: implemented-by
+  target_id: 01a1d8ca-619f-7b01-af1f-9715ccaf15cf
+  created_at: 2026-11-14T06:45:03.774044981Z
   created_by: joe
 comments:
 - id: 01a1d2a9-722c-7b03-b94f-05dd67dbb2bd
@@ -130,6 +135,10 @@ history:
 - id: 01a1d878-f134-7882-9bb5-5d120cf697a9
   author: joe
   timestamp: 2026-11-14T05:12:47.156450740Z
+  changes: []
+- id: 01a1d8cd-7546-7780-9fb5-ecb40b59dcab
+  author: joe
+  timestamp: 2026-11-14T06:45:05.990382919Z
   changes: []
 processing_record:
 - id: 01a1d569-6696-70c3-be2d-e3cd8258b1ec
