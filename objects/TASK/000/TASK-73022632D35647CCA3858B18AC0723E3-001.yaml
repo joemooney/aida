@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-13T09:04:38.611892111Z
-modified_at: 2026-11-14T06:52:10.316697850Z
+modified_at: 2026-11-14T06:56:24.642913562Z
 req_type: Task
 tags:
 - from-advisor:general
@@ -29,6 +29,13 @@ comments:
   content: 'Investigation: STORY-2660 commit 2b2e853562 already sets/restores umask 077 in WatcherTests.setUp, fixing the reported shared-write fixture refusal. Added a subprocess regression that starts under umask 002, executes real health registration/idempotence/removal, and checks cleanup restores 002. Mail-wake suite: 54 tests, OK (1 skipped). LIGHT gate and targeted lane Cargo validation in progress. No production permission checks weakened.'
   created_at: 2026-11-14T06:52:10.316697850Z
   modified_at: 2026-11-14T06:52:10.316697850Z
+  session_id: 01a1d8d15750
+  harness_version: codex-cli 0.167.0
+- id: 01a1d8d7-d042-7c52-b57f-187e0f5df3f3
+  author: dirtlab
+  content: 'Final validation: mail-wake Python suite 54 tests OK (1 skipped); make check-ci-fast all 47 gates passed; lane job j20261114T065026560-2-0 cargo test --profile agent -p aida-cli-lib --lib -- restart_mail_wake_empty_and_unavailable_manager executed 1 test, passed; git diff --check clean. Only tests/test_codex_mail_wake.py changed. Existing STORY-2660 fixture fix retained; added explicit shared-host-umask regression. Native-seat edits left uncommitted for host publication.'
+  created_at: 2026-11-14T06:56:24.642913562Z
+  modified_at: 2026-11-14T06:56:24.642913562Z
   session_id: 01a1d8d15750
   harness_version: codex-cli 0.167.0
 history:
