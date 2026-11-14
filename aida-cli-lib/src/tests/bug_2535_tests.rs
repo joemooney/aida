@@ -136,7 +136,7 @@ fn bug_2535_verified_handoff_retains_serialization() {
         if mode != "unlocked" {
             lock.lock_exclusive().unwrap();
         }
-        let mut cmd = Command::new(std::env::current_exe().unwrap());
+        let mut cmd = Command::new(crate::aida_bin::current_executable_path().unwrap());
         cmd.args([
             "--exact",
             "pr_cmd::bug_2535_tests::bug_2535_verified_handoff_retains_serialization",
