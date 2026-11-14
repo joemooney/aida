@@ -15,19 +15,18 @@ description: |
   4. The promotion gate refuses to cut or ship a promotion that contains a merged-before-review constituent without an approval at its merged head. It names that constituent so it can be reverted out of the snapshot (throughput rule 1).
   5. Tests: eligibility matrix (tag, effort, protected path, config off); a promotion refused for a pending constituent; a promotion allowed once approved.
   First consumer: STORY-2771. Until this lands, the advisor applies the ruling by hand, per PR.
-status: NeedsAttention
+status: Completed
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-13T18:06:55.227979618Z
-modified_at: 2026-11-14T22:40:45.729861218Z
+modified_at: 2026-11-14T23:39:46.740515137Z
 req_type: Story
 tags:
 - config
 - effort:open:1d
 - integration
 - landing
-- track:integration
 relationships:
 - rel_type: Parent
   target_id: 01a1d999-8037-7703-afd6-40459071fabd
@@ -252,6 +251,20 @@ history:
   author: joe
   timestamp: 2026-11-14T22:18:00.100247812Z
   changes: []
+- id: 01a1dc6e-6b71-7230-86e8-6dd9715e1589
+  author: aida-auto-bump
+  timestamp: 2026-11-14T23:39:46.417996906Z
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Completed
+processing_record:
+- id: 01a1dc6e-6cb4-7432-9e95-abf9713f2ade
+  timestamp: 2026-11-14T23:39:46.740511706Z
+  agent: aida
+  commit_sha: 786738cea92618fee2d1eae01fe97b1d46eef12e
+  summary: 'Slice 1 approved at 94d87ef: both round-3 blocking items are fixed with tests (exact revert clears a pending change; unreadable gate config makes eligibility unknown). AC1, AC2, AC3, AC5 verified by tests; AC4 refusal and naming verified, cut/ship enforcement is STORY-2805 by advisor ruling, so STORY-2772 is not complete. Fast CI green at head; test shards not run in the fast tier, implementer reports 442 targeted tests passed on dell1.'
+  review_verdict: approved
 filed_at:
   code_sha: ee8dd4b2bdf1495f699357a3f2f40f9bf3802983
   branch: main
@@ -261,11 +274,7 @@ filed_at:
   vendor: claude
   session: 01a1d5f7-27ab-7543-8808-b0ec6c271689
   harness_version: 2.1.323 (Claude Code)
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: 'Round-1 blockers (rename, Reviewing, mark test) are fixed. Three remain: promotion-check accepts an approval the ship gate would refuse (no recorder authority check), an unknown [integration] key is ignored, and the criterion traces are not recognised. No build CI runs on integration-base PRs, so no test result was observed at this head; reviewer ran no cargo.'
-  recovery_hint: address the review findings, move STORY-2772 back to In Progress, and clear the PR hold only after approval
-  shelved_by: reviewer
-  shelved_at: 2026-11-14T14:28:32.473090669Z
+implementation_info:
+  implemented: false
+  completed_at: 2026-11-14T23:39:46.417988208Z
+  completion_sha: 786738cea92618fee2d1eae01fe97b1d46eef12e
