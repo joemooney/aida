@@ -4,7 +4,7 @@
 
 use super::*;
 use std::path::Path;
-use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::{Arc, Barrier};
 
 fn git(repo: &Path, args: &[&str]) -> String {
@@ -319,21 +319,42 @@ fn db_sync_checks_pending_and_locally_committed_objects() {
 
 #[test]
 fn waiter_refuses_pull_when_remote_moves_in_flight() {
+    moving_remote_waiter(false);
+}
+
+#[test]
+fn waiter_refuses_pull_when_code_remote_moves_in_flight() {
+    moving_remote_waiter(true);
+}
+
+// Exercise both production reuse predicates while an older successful pull
+// still owns the lock. The store stays current when only the code remote moves.
+// trace:BUG-2565 | ai:codex
+fn moving_remote_waiter(code_remote: bool) {
     let (tmp, root, store) = project();
-    let bare = add_origin(tmp.path(), &store);
+    add_origin(tmp.path(), &store);
+    let repo = if code_remote { &root } else { &store };
+    let branch = if code_remote { "main" } else { "aida-store" };
+    let bare = if code_remote {
+        let dir = tmp.path().join("code-origin");
+        std::fs::create_dir_all(&dir).unwrap();
+        add_origin(&dir, &root)
+    } else {
+        tmp.path().join("origin.git")
+    };
     let fetched = Arc::new(Barrier::new(2));
     let release = Arc::new(Barrier::new(2));
     let first = {
-        let (store, root) = (store.clone(), root.clone());
+        let (store, root, repo) = (store.clone(), root.clone(), repo.clone());
         let (fetched, release) = (fetched.clone(), release.clone());
         std::thread::spawn(move || {
             coalesce(
                 &store,
                 &root,
                 "moving",
-                || store_pull_reusable(&store),
+                || true,
                 || {
-                    git(&store, &["fetch", "origin"]);
+                    git(&repo, &["fetch", "origin"]);
                     fetched.wait();
                     release.wait();
                     Ok(())
@@ -356,17 +377,26 @@ fn waiter_refuses_pull_when_remote_moves_in_flight() {
     git(&other, &["config", "user.email", "test@example.com"]);
     git(&other, &["config", "user.name", "Test"]);
     commit(&other, "remote.txt");
-    git(&other, &["push", "--quiet", "origin", "aida-store"]);
+    git(&other, &["push", "--quiet", "origin", branch]);
+    let checked_reuse = Arc::new(AtomicBool::new(false));
     let waiter = {
-        let (store, root) = (store.clone(), root.clone());
+        let (store, root, repo) = (store.clone(), root.clone(), repo.clone());
+        let checked_reuse = checked_reuse.clone();
         std::thread::spawn(move || {
             coalesce(
                 &store,
                 &root,
                 "moving",
-                || store_pull_reusable(&store),
                 || {
-                    git(&store, &["pull", "--ff-only", "origin", "aida-store"]);
+                    checked_reuse.store(true, Ordering::SeqCst);
+                    if code_remote {
+                        pull_reusable(&store, &root, false, false)
+                    } else {
+                        store_pull_reusable(&store)
+                    }
+                },
+                || {
+                    git(&repo, &["pull", "--ff-only", "origin", branch]);
                     Ok(())
                 },
             )
@@ -377,9 +407,18 @@ fn waiter_refuses_pull_when_remote_moves_in_flight() {
     release.wait();
     assert_eq!(first.join().unwrap(), Turn::Ran);
     assert_eq!(waiter.join().unwrap(), Turn::Ran);
+    assert!(
+        checked_reuse.load(Ordering::SeqCst),
+        "the waiter must actually exercise the reuse veto"
+    );
+    assert_eq!(
+        git(repo, &["rev-parse", "HEAD"]),
+        git(&other, &["rev-parse", "HEAD"])
+    );
     assert!(store_pull_reusable(&store));
-    // The code leg must independently veto reuse when its remote advances.
-    assert!(!pull_reusable(&store, &root, false, false));
+    if code_remote {
+        assert!(pull_reusable(&store, &root, false, false));
+    }
 }
 
 #[test]

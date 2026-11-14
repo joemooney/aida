@@ -106,8 +106,11 @@ fn write_state(state: &Path, generation: u64, ok: bool) {
 /// this caller waited, return [`Turn::Reused`] without running `run`. A pull
 /// that failed, crashed, or outlived the wait budget is never reused — the
 /// caller runs its own. `reusable` is asked once the in-flight pull finished
-/// and can veto reuse (for example, when the store gained pending changes the
-/// finished pull did not commit).
+/// and must veto reuse when a selected remote moved after the finished pull's
+/// fetch, its freshness cannot be checked, or pending writes remain. Success
+/// alone is insufficient: an older pull may have fetched before this caller
+/// was invoked.
+// trace:BUG-2565 | ai:codex
 pub(crate) fn coalesce(
     store_path: &Path,
     project_root: &Path,
@@ -160,7 +163,7 @@ fn coalesce_with_environment(
     if lock.try_lock_exclusive().is_err() {
         waited = true;
         eprintln!(
-            "  waiting for a store pull already running in this checkout (its result is reused)…"
+            "  waiting for a store pull already running in this checkout (will check freshness before reuse)…"
         );
         let budget = duration_setting(environment, "AIDA_PULL_COALESCE_WAIT_SECS", WAIT_BUDGET);
         let start = Instant::now();
