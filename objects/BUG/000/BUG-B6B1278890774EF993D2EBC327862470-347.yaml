@@ -1,0 +1,30 @@
+id: 01a1da67-e2f0-7ba3-b921-b46f0a7fb3a3
+spec_id: BUG-b6b1278890774ef993d2ebc327862470-347
+agreed_id: BUG-2582
+title: aida-core git_ops bug034 tests flake on dell1, and ~21 git_ops/node-registry tests fail under umask 0002
+description: |
+  Reported by the integration seat 2026-11-14 07:13 MST. On dell1 at plain integration (tree of aefac4a5428), aida-core git_ops::commit_failure bug034 tests fail intermittently: 3 of 5 runs failed, a different test each time (permission_denied_lock_is_not_retried, other_failures_are_not_retried, lock_contention_retries_are_bounded). Separately, under dell1's default umask 0002 about 21 git_ops merge-gate and node-registry tests fail; they pass under umask 022.
+
+  Acceptance criteria:
+  1. The bug034 group passes 20 of 20 consecutive runs on dell1 (cargo test --profile agent -p aida-core git_ops::commit_failure), with the cause of the flake named (timing, shared temp path, or lock-file race).
+  2. The umask-sensitive tests either pin umask in their fixture or assert mode-independent facts; they pass under umask 0002 and 022.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-14T14:13:23.824117090Z
+modified_at: 2026-11-14T14:13:23.824117090Z
+req_type: Bug
+tags:
+- area:tests
+- flaky
+- track:dell1
+filed_at:
+  code_sha: 3350540dbab869a493924fe627364ed3a48ff9e4
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 2682c4c4fe5
+  vendor: claude
+  session: 01a1d9ea-4e25-7033-85e8-3648f0195c7c
+  harness_version: 2.1.325 (Claude Code)
