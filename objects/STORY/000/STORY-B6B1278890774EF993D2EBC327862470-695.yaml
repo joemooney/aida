@@ -15,12 +15,12 @@ description: |
   4. The promotion gate refuses to cut or ship a promotion that contains a merged-before-review constituent without an approval at its merged head. It names that constituent so it can be reverted out of the snapshot (throughput rule 1).
   5. Tests: eligibility matrix (tag, effort, protected path, config off); a promotion refused for a pending constituent; a promotion allowed once approved.
   First consumer: STORY-2771. Until this lands, the advisor applies the ruling by hand, per PR.
-status: Approved
+status: InProgress
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-13T18:06:55.227979618Z
-modified_at: 2026-11-14T10:25:53.953116368Z
+modified_at: 2026-11-14T11:15:52.672470694Z
 req_type: Story
 tags:
 - config
@@ -129,6 +129,15 @@ history:
   session_id: 01a1d8f3-f948-7072-b174-fa9507ed074b
   harness_version: 2.1.325 (Claude Code)
   changes: []
+- id: 01a1d9c5-5ce0-7d80-be7c-96421f05b0d2
+  author: aida-session-start
+  timestamp: 2026-11-14T11:15:52.672467488Z
+  session_id: 01a1d9b6-e721-73f1-9ad6-1343da1a030e
+  harness_version: 2.1.325 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: ee8dd4b2bdf1495f699357a3f2f40f9bf3802983
   branch: main
