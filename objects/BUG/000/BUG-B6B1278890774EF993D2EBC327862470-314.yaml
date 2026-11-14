@@ -3,12 +3,12 @@ spec_id: BUG-b6b1278890774ef993d2ebc327862470-314
 agreed_id: BUG-2549
 title: Lane exits without a PR leave an unfinished branch and an orphaned In Progress spec; next pickup refuses instead of resuming
 description: '2026-11-12: 17 specs sat In Progress with no lease on any host and no open PR; dispatching them, STORY-2325 (branch ...-323, 6 days), STORY-2539 (...-462), BUG-2501 (...-266) and STORY-2538 (...-461) were refused: ''Branch X exists, no open PR was found for it ... looks like unfinished work. Pass --branch or delete the stale branch.'' TASK-3428 also stayed In Progress after its Refs PR #3887 merged and its lane exited. Acceptance: AC1 when the existing branch is the same spec''s canonical branch, ''aida queue work'' resumes it by default and says so (refusal stays for a branch owned by another spec or a dirty/foreign state); AC2 every lane exit without an open PR records the branch name and head on the spec (comment or field) and, when no lease or open PR holds the spec, returns it to Approved; AC3 a Refs-PR merge whose lane has exited returns the spec to Approved when no other lease/PR holds it; AC4 regression tests for each. Related: STORY-2690 typed lane exits.'
-status: InProgress
+status: NeedsAttention
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-13T03:10:47.302266912Z
-modified_at: 2026-11-13T22:49:59.656399471Z
+modified_at: 2026-11-14T00:39:15.594359620Z
 req_type: Bug
 tags:
 - track:dell1
@@ -213,6 +213,15 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1d77e-858a-7723-9983-ce5b5665f196
+  author: aida-orchestrator
+  timestamp: 2026-11-14T00:39:15.594386305Z
+  session_id: 01a1d77c715e
+  harness_version: 2.1.325 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 filed_at:
   code_sha: 0558a9e06aac10a087327ade1e1ab0a0c3d4ad50
   branch: main
@@ -222,3 +231,11 @@ filed_at:
   vendor: claude
   session: 01a1d240-c397-7b61-b29f-bb337c138943
   harness_version: 2.1.323 (Claude Code)
+failure_reason:
+  phase: reviewer
+  phase_index: 3
+  kind: verdict:request-changes
+  detail: 'BUG-2549 round 4: all three round-3 findings fixed (post-merge resume, actual non-clone HEAD, forge-independent exit evidence), but the new merged-head comparison in canonical_resume_branch turns merged residue into a hard pickup error. AC1 unverified (merged-residue regression); AC2 verified by bug_2549_prless_lane_records_lease_head_then_resets_after_release, bug_2549_detached_worktree_exit_captures_actual_head, bug_2549_unavailable_forge_preserves_exit_evidence (source); AC3 verified by bug_2549_reference_merge_returns_unheld_spec_and_preserves_open_pr_claims and updated bug_2516_gitlab_pull_completion_trailers (source); AC4 verified (14 bug_2549 tests). BUG-2549 (bug protocol): met, test files changed. CI fast tier green; full test shards skipped at this head.'
+  recovery_hint: address the review findings, move BUG-2549 back to In Progress, and clear the PR hold only after approval
+  shelved_by: reviewer
+  shelved_at: 2026-11-14T00:39:15.594359620Z
