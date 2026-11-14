@@ -8,11 +8,19 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-13T20:52:54.357683400Z
-modified_at: 2026-11-14T06:06:10.850019412Z
+modified_at: 2026-11-14T06:06:22.367728722Z
 req_type: Bug
 tags:
 - perf
 - track:integration
+comments:
+- id: 01a1d8aa-009f-71d3-b502-d9f7b438f0c3
+  author: joe
+  content: '[advisor 114 23:10] APPROVED, priority raised: the store pull now throttles both trains and dell1 lane starts (every dell1 lane waits a full db sync --pull before launching). Scope: AC1 no-op fast path (<10 s with no new upstream commits) and AC2 coalescing (one lock; concurrent callers reuse the result), with the AC3 regression test. The gate-ledger reconcile cost itself is BUG-2543/2551 (commit 30f14d9 on bug-2543-single-discovery, PR imminent): base this lane on that branch once the PR is up, and do not touch the reconcile/discovery code. Track integration; Claude lane.'
+  created_at: 2026-11-14T06:06:22.367728722Z
+  modified_at: 2026-11-14T06:06:22.367728722Z
+  session_id: 01a1d852-16ef-7973-bdde-ac3f274752a2
+  harness_version: 2.1.325 (Claude Code)
 history:
 - id: 01a1d8a9-d3a1-7243-a396-3ba4fdaf7412
   author: joe
