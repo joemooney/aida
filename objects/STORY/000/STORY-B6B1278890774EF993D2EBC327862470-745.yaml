@@ -37,7 +37,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-14T18:18:20.399960794Z
-modified_at: 2026-11-14T21:36:22.276602222Z
+modified_at: 2026-11-14T22:04:11.723147155Z
 req_type: Story
 tags:
 - agent-ergonomics
@@ -109,6 +109,13 @@ comments:
   content: 'Friction (advisor, 2026-11-14 14:35, live binary d5f90ae): ''aida queue rework BUG-2585 --for implementer'' (AIDA_TRACK=integration) ran 200 s with no output and was killed by timeout; the same for TASK-3784 at 14:25 (240 s). Workaround again: aida edit --status in-progress + aida queue add --for implementer. Also ''aida mailbox show <id>'' does not exist (one message can only be read by grepping the whole inbox), and ''aida merge-hold show N'' does not exist (the hold reason is readable only from the marker file or the PR comment).'
   created_at: 2026-11-14T21:36:22.276602222Z
   modified_at: 2026-11-14T21:36:22.276602222Z
+  session_id: 01a1dbd6-f8cd-7313-a123-75ebbeaa2afd
+  harness_version: 2.1.325 (Claude Code)
+- id: 01a1dc16-ea4b-7530-8729-c024d2f3cf77
+  author: joe
+  content: 'Friction (advisor, 2026-11-14 15:06): ''aida pr auto-queue-review'' on a promotion PR (#4064, eight trailer IDs) files the review story (STORY-2831) and then fails on ''aida rel add ... --type implements'' (''implements'' isn''t a standard relationship type), so the story is never queued and ''aida queue work PR-4064 --role reviewer'' is refused ''no queued review story''. Workaround: aida queue add STORY-2831 --for reviewer, relaunch. Cost 8 minutes of review time on the promotion.'
+  created_at: 2026-11-14T22:04:11.723147155Z
+  modified_at: 2026-11-14T22:04:11.723147155Z
   session_id: 01a1dbd6-f8cd-7313-a123-75ebbeaa2afd
   harness_version: 2.1.325 (Claude Code)
 history:
