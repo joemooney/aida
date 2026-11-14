@@ -1,0 +1,33 @@
+id: 01a1d936-2a2d-7571-a9d9-c3f2255a5d35
+spec_id: STORY-b6b1278890774ef993d2ebc327862470-724
+agreed_id: STORY-2801
+title: 'Review PR-4010: [AI:codex] fix(ci): pin process identity ratchet in FAST selection (BUG-2574)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `(no-sess`) for branch `bug-b6b1278890774ef993d2ebc327862470-339`.
+
+  - PR: <https://github.com/joemooney/aida/pull/4010>
+  - Branch: `bug-b6b1278890774ef993d2ebc327862470-339` → `main`
+
+  ## Covers
+
+  - BUG-2574
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 4010` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-14T08:39:28.045579429Z
+modified_at: 2026-11-14T08:39:28.045579429Z
+req_type: Story
+filed_at:
+  code_sha: 60823a3cb079fb62463fd88934afe72619a87cae
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 60823a3cb07
+  vendor: claude
