@@ -1157,12 +1157,24 @@ description: |
   ### finding-hash:33bf6df1
 
   Stale path references after the move: aida-cli/tests/bug_1674_show_bounded_under_writer.rs:43 and bug_1956_reader_fallbacks_bounded_under_writer.rs:27 point readers at aida-cli-lib/src/test_timing.rs (now a one-line re-export; the documentation lives in aida-testkit/src/test_timing.rs), and the story_2326 ledger note for aida-testkit/src/test_exec.rs still says compiled into the crate.
+
+
+  ## Findings from PR-4052
+  Reviewed sha: f35b424945f4ad5477858d7a652c4234d95cfbfb
+
+  ### finding-hash:8cfe037b
+
+  review_watch.rs probe_unneeded_with_coverage: under refuse-on-conflict a conflicting head whose notice was already sent is no longer settled before the base probe, so the watcher repeats two fetches plus a merge-tree for it on every tick until the head moves. Settle it from a recorded conflict result instead.
+
+  ### finding-hash:ca169c0e
+
+  Under refuse-on-conflict an overlapping head whose merge result is unknown (review_watch_forge.rs merge_conflicts returns None on timeout or old git; ConflictPrediction::Unknown in the pre-flight) is reviewed. The watcher prints nothing when this happens, so an operator cannot tell a clean merge from an unjudged one.
 status: Draft
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-13T20:01:56.623034248Z
-modified_at: 2026-11-14T19:44:29.879971866Z
+modified_at: 2026-11-14T20:40:46.447365823Z
 req_type: Task
 tags:
 - carried-finding:BUG-2543:2a99ebfc
@@ -1319,8 +1331,10 @@ tags:
 - carried-finding:PR-4048:6d8c7712
 - carried-finding:PR-4048:f3b82bc9
 - carried-finding:PR-4052:4b183b41
+- carried-finding:PR-4052:8cfe037b
 - carried-finding:PR-4052:8d1b3558
 - carried-finding:PR-4052:9dab249d
+- carried-finding:PR-4052:ca169c0e
 - carried-finding:PR-4052:e40f3f6c
 - carried-finding:PR-4053:5b790bcc
 - carried-finding:PR-4053:d7ad1d67
@@ -1517,6 +1531,7 @@ tags:
 - finding-hash:83e5954d
 - finding-hash:8a49a174
 - finding-hash:8c6f0ae6
+- finding-hash:8cfe037b
 - finding-hash:8d1b3558
 - finding-hash:96ff0aa3
 - finding-hash:9750b6dd
@@ -1539,6 +1554,7 @@ tags:
 - finding-hash:c598b8f9
 - finding-hash:c7c082c2
 - finding-hash:c963d4df
+- finding-hash:ca169c0e
 - finding-hash:cd9ab7dd
 - finding-hash:cddc71c1
 - finding-hash:d0b021ea
@@ -2038,6 +2054,11 @@ history:
   author: joe
   timestamp: 2026-11-14T19:44:31.408528473Z
   session_id: 01a1db9396b3
+  changes: []
+- id: 01a1dbca-8ee9-7b83-8734-6245861e97c2
+  author: joe
+  timestamp: 2026-11-14T20:40:47.593983373Z
+  session_id: 01a1dbc876a7
   changes: []
 filed_at:
   code_sha: 91fe1e337894199f15365d3f8ecfaf81366f8291
