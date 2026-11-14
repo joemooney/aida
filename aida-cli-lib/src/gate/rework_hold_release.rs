@@ -747,9 +747,13 @@ pub(crate) fn read_arming_history(root: &Path, key: &str) -> Result<RetainedHist
 
 pub(crate) fn auto_release(project: &Path, pr: u64) -> Result<Outcome> {
     let unread = std::cell::Cell::new(false);
-    match with_live_io(project, pr, false, &unread, |root, hold, io| {
-        auto_release_steps(root, hold, io, false)
-    })? {
+    match crate::gate::rework_hold_release::with_live_io(
+        project,
+        pr,
+        false,
+        &unread,
+        |root, hold, io| auto_release_steps(root, hold, io, false),
+    )? {
         None => Ok(Outcome::NoHold),
         Some(Judged::Done(outcome)) => Ok(outcome),
         Some(Judged::Eligible(_)) => bail!("auto-release stopped before releasing"),
@@ -786,9 +790,13 @@ pub(crate) enum ReleaseCondition {
 // trace:STORY-2768 | ai:claude
 pub(crate) fn release_condition(project: &Path, pr: u64) -> ReleaseCondition {
     let unread = std::cell::Cell::new(false);
-    let judged = with_live_io(project, pr, true, &unread, |root, hold, io| {
-        auto_release_steps(root, hold, io, true)
-    });
+    let judged = crate::gate::rework_hold_release::with_live_io(
+        project,
+        pr,
+        true,
+        &unread,
+        |root, hold, io| auto_release_steps(root, hold, io, true),
+    );
     condition_of(judged, unread.get())
 }
 
