@@ -1092,6 +1092,15 @@ jobs:
           GATE_DEPENDENCIES_BASE: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha || github.event.before }}
         run: |
           python3 -m unittest tests/test_gate_dependency_ratchet.py
+          # load_ci_steps drops step env; FAST must export this trusted base.
+          # Refuse a missing PR base even when this body is invoked directly.
+          if [ "${GITHUB_EVENT_NAME:-}" = "pull_request" ]; then
+            : "${GATE_DEPENDENCIES_BASE:?PR CI requires a trusted gate-dependency base}"
+            if [ "$GATE_DEPENDENCIES_BASE" = "0000000000000000000000000000000000000000" ]; then
+              echo "PR CI requires a trusted gate-dependency base; null SHA refused" >&2
+              exit 1
+            fi
+          fi
           if [ -n "$GATE_DEPENDENCIES_BASE" ] && [ "$GATE_DEPENDENCIES_BASE" != "0000000000000000000000000000000000000000" ]; then
             git fetch --no-tags --depth=1 origin "$GATE_DEPENDENCIES_BASE"
             python3 scripts/check-gate-dependencies.py --base "$GATE_DEPENDENCIES_BASE"
