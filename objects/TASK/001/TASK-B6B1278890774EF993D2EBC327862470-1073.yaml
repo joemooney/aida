@@ -1077,12 +1077,24 @@ description: |
   ### finding-hash:8c6f0ae6
 
   pr_train.rs full_tier_gate writes the train-admit-skip-full-check entry (status overridden) before the later member gates and before --max selection, so a candidate that is then refused or left out of the train still logs an override; docs/advanced/landing.md says each admission appends one entry. Write the entry after the member is selected, or word the entry and the doc as an override of the check.
+
+
+  ## Findings from STORY-2809
+  Reviewed sha: a31c45019754f4a0a7fbf2d902c8b94fc64da747
+
+  ### finding-hash:c239c3d3
+
+  full_tier.rs label_plan counts any commit status in state PENDING as a run in flight. A held PR always carries the merge-hold-gate status as PENDING, so a held PR with a ci:full label left from an earlier head gets LabelPlan::Leave at re-approval and no FULL run starts. The train does not ask either while the hold stands, because typed_gate_member_with refuses a held member before full_tier_gate. The run starts only on the first train pass after clearance. Count only check runs (status not COMPLETED) on the CI workflow as in flight, or ignore the merge-hold-gate status.
+
+  ### finding-hash:8c6f0ae6
+
+  pr_train.rs full_tier_gate writes the train-admit-skip-full-check entry (status overridden) before the later member gates and before --max selection, so a candidate that is then refused or left out of the train still logs an override; docs/advanced/landing.md says each admission appends one entry. Write the entry after the member is selected, or word the entry and the doc as an override of the check.
 status: Draft
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-13T20:01:56.623034248Z
-modified_at: 2026-11-14T19:27:46.793776977Z
+modified_at: 2026-11-14T19:27:57.120660601Z
 req_type: Task
 tags:
 - carried-finding:BUG-2543:2a99ebfc
@@ -1263,6 +1275,8 @@ tags:
 - carried-finding:STORY-2772:dbd4e4d5
 - carried-finding:STORY-2775:73e42b4b
 - carried-finding:STORY-2775:abbae117
+- carried-finding:STORY-2809:8c6f0ae6
+- carried-finding:STORY-2809:c239c3d3
 - carried-finding:STORY-2821:4b183b41
 - carried-finding:STORY-2821:8d1b3558
 - carried-finding:STORY-2821:9dab249d
@@ -1338,6 +1352,7 @@ tags:
 - carried-from:STORY-2768
 - carried-from:STORY-2772
 - carried-from:STORY-2775
+- carried-from:STORY-2809
 - carried-from:STORY-2821
 - carried-from:STORY-2824
 - carried-from:TASK-3785
@@ -1512,6 +1527,7 @@ tags:
 - from-review:STORY-2768
 - from-review:STORY-2772
 - from-review:STORY-2775
+- from-review:STORY-2809
 - from-review:STORY-2821
 - from-review:STORY-2824
 - from-review:TASK-3785
@@ -1895,6 +1911,11 @@ history:
 - id: 01a1db87-bbc8-7663-bd53-02a0a6c0db6c
   author: joe
   timestamp: 2026-11-14T19:27:48.168649880Z
+  session_id: 01a1db82ce45
+  changes: []
+- id: 01a1db87-e40a-7961-bfdb-d20b19457ffe
+  author: joe
+  timestamp: 2026-11-14T19:27:58.474843059Z
   session_id: 01a1db82ce45
   changes: []
 filed_at:
