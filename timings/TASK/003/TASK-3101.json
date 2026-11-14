@@ -5,11 +5,34 @@
     {
       "at": "2026-11-14T10:31:22.454750260Z",
       "closed_by": "auto-bump"
+    },
+    {
+      "at": "2026-11-14T10:34:36.509446324Z",
+      "closed_by": "auto-bump"
     }
   ],
   "events": [
     {
+      "ts": "2026-11-14T10:28:00.618714934Z",
+      "spec": "TASK-3101",
+      "seat": "advisor",
+      "kind": {
+        "event": "PrMerged",
+        "pr": 3999
+      }
+    },
+    {
       "ts": "2026-11-14T10:31:22.411513531Z",
+      "spec": "TASK-3101",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "e81b5754d976b81d044bb5aff1f29ba97aeaa730",
+        "pr": 3999,
+        "closed_by": "auto-bump"
+      }
+    },
+    {
+      "ts": "2026-11-14T10:34:35.912858196Z",
       "spec": "TASK-3101",
       "kind": {
         "event": "SpecCompleted",
