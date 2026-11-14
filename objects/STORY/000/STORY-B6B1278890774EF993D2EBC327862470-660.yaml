@@ -23,7 +23,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-12T19:11:56.371806442Z
-modified_at: 2026-11-14T05:25:34.201353752Z
+modified_at: 2026-11-14T05:39:55.974483344Z
 req_type: Story
 tags:
 - operator-held
@@ -310,6 +310,13 @@ comments:
   content: '[advisor 114 22:26] 60-min gap: main unmoved since 20:19 (6357b96, train 12). Cause: train 13''s deputy job was refused not-live after the advisor rotation (submitter session gone), unnoticed until 22:12. Resubmitted 22:12; train PR #3985 CI 4/9 shards at 22:24. Lesson: a rotating advisor must not leave queued deputy jobs bound to its own session — resubmit them on the next session''s first sweep.'
   created_at: 2026-11-14T05:25:34.201353752Z
   modified_at: 2026-11-14T05:25:34.201353752Z
+  session_id: 01a1d852-16ef-7973-bdde-ac3f274752a2
+  harness_version: 2.1.325 (Claude Code)
+- id: 01a1d891-cbc6-79f1-857a-ea6e5280e969
+  author: joe
+  content: '[advisor 114 22:43] Gap closed: #3926 landed at 22:38 (1801b34), 2h19m after 20:19. Train 13 gated 4 PRs but ejected 3 at gating (#3979 conflict; #3924/#3956 patch-id changed when stacked on main): approvals no longer covered what would land. Repairs on dell1 (dell1-merge.sh) -> delta re-reviews -> train 14. Observation for STORY-2768 S3: ejection at gating after a ~2h idle queue wasted the train''s members; a pre-train freshness probe at approval time would have triggered the merges earlier.'
+  created_at: 2026-11-14T05:39:55.974483344Z
+  modified_at: 2026-11-14T05:39:55.974483344Z
   session_id: 01a1d852-16ef-7973-bdde-ac3f274752a2
   harness_version: 2.1.325 (Claude Code)
 history:
