@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-13T08:32:25.181868902Z
-modified_at: 2026-11-14T08:11:31.258718413Z
+modified_at: 2026-11-14T08:13:32.923484653Z
 req_type: Bug
 tags:
 - force-claim
@@ -82,6 +82,12 @@ history:
 - id: 01a1d8b1-64d5-7401-923b-1ce54d39b7cc
   author: joe
   timestamp: 2026-11-14T06:14:26.773494480Z
+  changes: []
+- id: 01a1d91e-7294-76e1-801a-004be2920f80
+  author: dirtlab
+  timestamp: 2026-11-14T08:13:33.716853037Z
+  session_id: 01a1d91dfec7
+  harness_version: codex-cli 0.167.0
   changes: []
 filed_at:
   code_sha: 9e5b788904e6f8b2f5e271583d1197b3173ce721
