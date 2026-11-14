@@ -21,11 +21,11 @@ fn env(seat: Option<&str>, scope: Option<&str>) -> crate::test_env::EnvVarsGuard
     ])
 }
 
-fn launcher_row(seat: Option<&str>) -> SpawnedRow<'static> {
+fn launcher_row(root: &Path, seat: Option<&str>) -> SpawnedRow<'static> {
     SpawnedRow {
         role: Some("implementer".into()),
         current_spec: None,
-        worktree_path: PathBuf::from("/tmp/story-2745"),
+        worktree_path: root.to_path_buf(),
         binary: None,
         name: Some("integ-7".into()),
         native_session_id: None,
@@ -61,7 +61,7 @@ fn story2745_hook_then_launcher_keeps_the_seat() {
     let hook = touch_session_start_agent_for(root, root, Some("sid-a"), &binary(), pid).unwrap();
     assert_eq!(hook.seat.as_deref(), Some("integration"));
     // A launcher write that names no seat keeps the hook's.
-    register_spawned_agent_with_row(root, "claude", pid, launcher_row(None)).unwrap();
+    register_spawned_agent_with_row(root, "claude", pid, launcher_row(root, None)).unwrap();
     assert_eq!(own_seat(root).as_deref(), Some("integration"));
     assert_resolves(root);
 }
@@ -73,7 +73,7 @@ fn story2745_launcher_then_hook_keeps_the_seat() {
     let pid = std::process::id();
     // The hook's env carries no seat (a background spare's, say).
     let _env = env(None, None);
-    register_spawned_agent_with_row(root, "claude", pid, launcher_row(Some("integration")))
+    register_spawned_agent_with_row(root, "claude", pid, launcher_row(root, Some("integration")))
         .unwrap();
     assert_eq!(own_seat(root).as_deref(), Some("integration"));
     let hook = touch_session_start_agent_for(root, root, Some("sid-b"), &binary(), pid).unwrap();
