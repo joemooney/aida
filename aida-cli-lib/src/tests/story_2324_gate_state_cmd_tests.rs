@@ -254,7 +254,13 @@ fn story2763_gate_state_audit_lines_and_freshness_decisions_name_the_policy() {
         "[review]\nfreshness = 'strict'\n",
     );
     carry::commit(repo, "operator raises assurance");
-    carry::git(repo, &["push", "--quiet", "origin", "main"]);
+    assert!(crate::test_git::git_command()
+        .arg("-C")
+        .arg(repo)
+        .args(["push", "--quiet", "origin", "main"])
+        .status()
+        .unwrap()
+        .success());
     carry::git(repo, &["checkout", "--quiet", "pr"]);
     assert_eq!(
         carry_over_for_refusal(&site, 42, &moved(&approved, &clean)).unwrap(),

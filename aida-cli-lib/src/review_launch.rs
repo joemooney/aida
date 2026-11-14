@@ -579,7 +579,13 @@ mod tests {
             &a.replace("a line 5\n", "a line 5 main competes\n"),
         );
         carry::commit(root, "main: conflicting");
-        carry::git(root, &["push", "--quiet", "origin", "main"]);
+        assert!(crate::test_git::git_command()
+            .arg("-C")
+            .arg(root)
+            .args(["push", "--quiet", "origin", "main"])
+            .status()
+            .unwrap()
+            .success());
         carry::git(root, &["checkout", "--quiet", "pr"]);
         let merge = crate::test_git::git_command()
             .arg("-C")
