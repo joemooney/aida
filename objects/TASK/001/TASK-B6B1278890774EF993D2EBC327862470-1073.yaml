@@ -181,12 +181,36 @@ description: |
   ### finding-hash:fe70e901
 
   aida-cli-lib/src/queue_cmd/work.rs:718-731 canonical_branch_tip prefers a stale local refs/heads/<branch> over origin: if local equals the merged PR head but origin later gained PR-less commits (pushed from a seat clone), pickup allocates a fresh dated branch instead of resuming the origin work. Consider comparing origin tip too when local equals the merged head.
+
+
+  ## Findings from PR-3956
+  Reviewed sha: 352a2dbe4c8209a2b5faad48e1d59222c587cf8b
+
+  ### finding-hash:dee3f3a7
+
+  Review evidence files .aida/review-evidence-PR-<n>-<baseline>-<tree>.diff (gate/review_freshness.rs:303-327) are never pruned; every new head/base pair leaves a possibly multi-MB file in the primary checkout.
+
+  ### finding-hash:bf60843e
+
+  write_evidence now lets git truncate and rewrite the target in place (git diff --output), dropping the earlier temp+rename atomicity; a relaunch for the same PR/baseline/tree can truncate the file while an earlier reviewer is reading it (review_freshness.rs:312-317).
+
+  ### finding-hash:97d326dd
+
+  Store-writer ratchet blind spot: git subprocess writes via diff --output are not in GIT_WRITERS (scripts/check-store-writers.py), so the evidence-file write is invisible to the inventory. Consider classifying it or widening the vocabulary.
+
+  ### finding-hash:15915e39
+
+  Rework-routed receipts are keyed only by PR/head (review_freshness.rs:362-399, review_watch watch_change), so a conflict later fixed on the base alone is never re-probed for the same head.
+
+  ### finding-hash:04ad58d8
+
+  No watcher-level integration test drives a conflicted or evil-merge head into an actual delta-review launch, or a textual conflict into implementer rework routing (AC1 delta half, AC2 refusal half). Only helper-level delta_baseline/landed_tree tests exist.
 status: Draft
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-13T20:01:56.623034248Z
-modified_at: 2026-11-14T02:02:59.673021045Z
+modified_at: 2026-11-14T02:15:41.114327364Z
 req_type: Task
 tags:
 - carried-finding:BUG-2546:56ed8b81
@@ -197,6 +221,11 @@ tags:
 - carried-finding:PR-3924:fe70e901
 - carried-finding:PR-3938:654190b6
 - carried-finding:PR-3948:5d2b67f3
+- carried-finding:PR-3956:04ad58d8
+- carried-finding:PR-3956:15915e39
+- carried-finding:PR-3956:97d326dd
+- carried-finding:PR-3956:bf60843e
+- carried-finding:PR-3956:dee3f3a7
 - carried-finding:PR-3966:3961dae5
 - carried-finding:PR-3966:c598b8f9
 - carried-finding:PR-3968:56ed8b81
@@ -225,6 +254,7 @@ tags:
 - carried-from:PR-3924
 - carried-from:PR-3938
 - carried-from:PR-3948
+- carried-from:PR-3956
 - carried-from:PR-3966
 - carried-from:PR-3968
 - carried-from:PR-3970
@@ -233,7 +263,9 @@ tags:
 - carried-from:PR-3973
 - carried-from:STORY-2735
 - carried-from:STORY-2768
+- finding-hash:04ad58d8
 - finding-hash:0cbc5c63
+- finding-hash:15915e39
 - finding-hash:198d1196
 - finding-hash:28356795
 - finding-hash:2c7ae2ea
@@ -247,9 +279,12 @@ tags:
 - finding-hash:654190b6
 - finding-hash:6810bcf9
 - finding-hash:7ce2cb14
+- finding-hash:97d326dd
+- finding-hash:bf60843e
 - finding-hash:c0a8d165
 - finding-hash:c598b8f9
 - finding-hash:c7c082c2
+- finding-hash:dee3f3a7
 - finding-hash:f238ea37
 - finding-hash:fe70e901
 - from-review:BUG-2546
@@ -259,6 +294,7 @@ tags:
 - from-review:PR-3924
 - from-review:PR-3938
 - from-review:PR-3948
+- from-review:PR-3956
 - from-review:PR-3966
 - from-review:PR-3968
 - from-review:PR-3970
@@ -347,6 +383,11 @@ history:
   author: joe
   timestamp: 2026-11-14T02:03:01.038993786Z
   session_id: 01a1d7c81382
+  changes: []
+- id: 01a1d7d6-d285-7d52-aad2-070fc6b663de
+  author: joe
+  timestamp: 2026-11-14T02:15:42.469202515Z
+  session_id: 01a1d7d3f479
   changes: []
 filed_at:
   code_sha: 91fe1e337894199f15365d3f8ecfaf81366f8291
