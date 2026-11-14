@@ -665,12 +665,36 @@ description: |
   ### finding-hash:01721c41
 
   aida-core/src/fs_atomic.rs write_atomic_mode opens its staging file with create+truncate and no O_EXCL/O_NOFOLLOW (work_candidate.rs publish_bytes uses create_new + O_NOFOLLOW for the same files), and its unit test claims a leftover staging file is covered but never creates one. The inserted test also separated the comment "write_atomic replaces content cleanly..." from replaces_content_no_leftovers.
+
+
+  ## Findings from PR-4007
+  Reviewed sha: 26a2f7666ac0b1c872c572054c277aff1657161e
+
+  ### finding-hash:735a4b90
+
+  record_reconcile (store_pull_coalesce.rs:301) reads the code and store HEADs after the auto-bump scan, not before. If local main moves during a running reconcile (gh pr merge in aida pr ship or a train, BUG-404 case), the watermark is written for the new HEAD although the scan never saw that commit. The post-merge aida pull (wide scan, store_push_pull.rs:3344) and db sync --pull (db_cmd.rs:733) then skip the reconcile, and the merged spec stays Done until either HEAD moves or the 15 min TTL expires. pull_reusable has the same gap: it checks containment only, so a waiter can reuse a pull whose reconcile predates the merge. Fix: capture reconcile_key before the scan and record that key; add a test that moves code HEAD between scan and record.
+
+  ### finding-hash:cddc71c1
+
+  pull_reusable (store_pull_coalesce.rs:233) checks the code remote with default_branch_name, but the aida pull code leg fetches and fast-forwards the current branch (store_push_pull.rs:2712-2771). On a non-default branch whose HEAD contains origin/<default>, a waiter reuses an in-flight pull even when origin/<current branch> moved after that pull fetched. Use the current branch in the freshness check.
+
+  ### finding-hash:9d27a4fe
+
+  A reused aida pull (handle_pull_command_coalesced, store_push_pull.rs:2655) skips mailbox_publish_snapshot, fire_schedules and mirror_sync_after_pull. Mail sent after the in-flight pull took its snapshot lives outside the store, so store_pull_reusable does not see it and it stays unpublished until the next pull or push. A reused db sync --pull also hides any conflict list the in-flight sync printed.
+
+  ### finding-hash:376b178e
+
+  pull_store_leg_locked captures pre_sha before committing pending changes (store_push_pull.rs:2496), so print_pull_summary lists the local chore: sync pending changes commit as if it came from upstream. Carried from round 2. Also, no test shows the aida pull store leg skipping the collision scan on a clean no-op remote; only the refusal side is tested (noop_remote_still_refuses_local_spec_id_collisions).
+
+  ### finding-hash:3db33acc
+
+  The post-train aida pull spin (6-14 min at 100% CPU after trains 19 and 20, advisor notes 06:17 and 06:58) happens with new upstream commits, which this PR does not bound. The wall-clock bound described in the BUG-2565 comment for commit 014bd40268 (AIDA_POST_TRAIN_PULL_TIMEOUT_SECS) is not on the PR head, so that spec comment is stale. File a separate bug for the post-train pull. The PR body is also stale: it says the env knobs were removed and lists 7 tests.
 status: Draft
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-13T20:01:56.623034248Z
-modified_at: 2026-11-14T13:53:14.114398823Z
+modified_at: 2026-11-14T14:30:03.073939340Z
 req_type: Task
 tags:
 - carried-finding:BUG-2543:2a99ebfc
@@ -749,8 +773,13 @@ tags:
 - carried-finding:PR-3998:0bff30e1
 - carried-finding:PR-4000:73e42b4b
 - carried-finding:PR-4000:abbae117
+- carried-finding:PR-4007:376b178e
+- carried-finding:PR-4007:3db33acc
 - carried-finding:PR-4007:45e63a87
+- carried-finding:PR-4007:735a4b90
+- carried-finding:PR-4007:9d27a4fe
 - carried-finding:PR-4007:c963d4df
+- carried-finding:PR-4007:cddc71c1
 - carried-finding:PR-4012:9750b6dd
 - carried-finding:PR-4013:01721c41
 - carried-finding:PR-4013:1fce0788
@@ -851,9 +880,11 @@ tags:
 - finding-hash:2dfbd6d5
 - finding-hash:35d3eb09
 - finding-hash:360471e3
+- finding-hash:376b178e
 - finding-hash:3961dae5
 - finding-hash:3975f29b
 - finding-hash:3cf67cda
+- finding-hash:3db33acc
 - finding-hash:3f4b4821
 - finding-hash:45085c26
 - finding-hash:45e63a87
@@ -871,6 +902,7 @@ tags:
 - finding-hash:654190b6
 - finding-hash:6810bcf9
 - finding-hash:6935f83d
+- finding-hash:735a4b90
 - finding-hash:73e42b4b
 - finding-hash:74641343
 - finding-hash:76a786ef
@@ -884,6 +916,7 @@ tags:
 - finding-hash:97d326dd
 - finding-hash:97ed1809
 - finding-hash:98776888
+- finding-hash:9d27a4fe
 - finding-hash:abbae117
 - finding-hash:ac11f20d
 - finding-hash:bf60843e
@@ -892,6 +925,7 @@ tags:
 - finding-hash:c7c082c2
 - finding-hash:c963d4df
 - finding-hash:cd9ab7dd
+- finding-hash:cddc71c1
 - finding-hash:dee3f3a7
 - finding-hash:dfed3eb6
 - finding-hash:e391cb46
@@ -1210,6 +1244,11 @@ history:
   author: joe
   timestamp: 2026-11-14T13:53:15.731630242Z
   session_id: 01a1da4f454a
+  changes: []
+- id: 01a1da77-2a20-7e42-bf9d-b36e89087fac
+  author: joe
+  timestamp: 2026-11-14T14:30:05.088394427Z
+  session_id: 01a1da717bd8
   changes: []
 filed_at:
   code_sha: 91fe1e337894199f15365d3f8ecfaf81366f8291
