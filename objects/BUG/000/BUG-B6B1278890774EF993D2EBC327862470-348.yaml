@@ -9,16 +9,26 @@ description: |
   1. The open-changes scan that train opening runs does not fail on a PR with more than 250 commits: page through correctly, or use a bounded query that needs no full commit list (for example, the PR title and head ref for spec IDs).
   2. An unreadable unrelated PR does not stop a train: it is reported and skipped, and the train refuses only when the unreadable PR could name one of the train's own specs.
   3. Test: a fixture forge returns an incomplete commit page for an unrelated PR, and the train opens.
-status: Approved
+status: InProgress
 priority: High
-owner: ''
+owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-14T15:26:35.946322613Z
-modified_at: 2026-11-14T15:26:35.946322613Z
+modified_at: 2026-11-14T16:19:01.955170399Z
 req_type: Bug
 tags:
 - area:train
 - track:integration
+history:
+- id: 01a1dada-e8c3-7e70-b02a-a3d3cdccd1a7
+  author: aida-session-start
+  timestamp: 2026-11-14T16:19:01.955169275Z
+  session_id: 01a1dabe-503c-7aa1-a630-609dbc4400f2
+  harness_version: 2.1.325 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: f5128d18cf1ff8dd78baa28e7bf57dcc4c69fc18
   branch: main
