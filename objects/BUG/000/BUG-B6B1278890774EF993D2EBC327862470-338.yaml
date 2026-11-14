@@ -17,12 +17,12 @@ description: |
   Separate product question, not answered here: a real clone made under umask 002 has a group-writable `.git`, and WORK intake refuses it with a chmod hint. That is the transport check working as designed; whether dell1 users should get a one-time repair is the operator's call.
 
   Acceptance: `(umask 002; cargo test -p aida-core --lib)` and the aida-cli-lib allocation_health tests pass.
-status: Approved
+status: InProgress
 priority: Medium
-owner: ''
+owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-14T07:49:44.649041180Z
-modified_at: 2026-11-14T09:16:47.604849949Z
+modified_at: 2026-11-14T09:18:40.726785682Z
 req_type: Bug
 comments:
 - id: 01a1d958-5674-7a52-850d-d6abdf554760
@@ -42,6 +42,13 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Approved
+- id: 01a1d95a-1056-7cd0-9834-724cf1fc1357
+  author: aida-session-start
+  timestamp: 2026-11-14T09:18:40.726784934Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: ffa77a2b961fde3c1c14c58df786a58d135eccbb
   branch: integration
