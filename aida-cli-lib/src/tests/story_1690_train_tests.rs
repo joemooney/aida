@@ -18,6 +18,59 @@ fn train_progress_prefixes_local_wall_clock_time() {
     assert!(pattern.is_match(&line), "unexpected progress line: {line}");
 }
 
+// trace:BUG-2584 | ai:claude
+#[test]
+fn final_gate_phase_line_names_the_phase_its_duration_and_store_reads() {
+    let quiet = final_gate_phase_line(
+        "recheck: member #3924 gate",
+        std::time::Duration::from_millis(41_250),
+        0,
+        std::time::Duration::ZERO,
+    );
+    let pattern = regex::Regex::new(
+        r"^  \d\d:\d\d:\d\d final gate: recheck: member #3924 gate took 41\.[23]s$",
+    )
+    .unwrap();
+    assert!(pattern.is_match(&quiet), "unexpected phase line: {quiet}");
+
+    let one = final_gate_phase_line(
+        "fetch main",
+        std::time::Duration::from_secs(2),
+        1,
+        std::time::Duration::from_millis(800),
+    );
+    assert!(
+        one.ends_with("final gate: fetch main took 2.0s (1 store read, 0.8s)"),
+        "{one}"
+    );
+    let many = final_gate_phase_line(
+        "proof: member #7 evidence",
+        std::time::Duration::from_secs(9),
+        7,
+        std::time::Duration::from_millis(5_600),
+    );
+    assert!(
+        many.ends_with("proof: member #7 evidence took 9.0s (7 store reads, 5.6s)"),
+        "{many}"
+    );
+}
+
+// trace:BUG-2584 | ai:claude
+#[test]
+fn final_gate_phase_counts_the_store_reads_made_inside_it() {
+    let dir = tempfile::tempdir().unwrap();
+    let before = crate::gate::dispatch_deps::store_load_totals();
+    let value = final_gate_phase("test phase", || {
+        // No store is reachable from an empty directory; the read still counts.
+        assert!(crate::load_store_for_lookup(dir.path()).is_none());
+        7
+    });
+    assert_eq!(value, 7);
+    let after = crate::gate::dispatch_deps::store_load_totals();
+    assert!(after.0 > before.0, "{before:?} -> {after:?}");
+    assert!(after.1 >= before.1);
+}
+
 fn git(repo: &Path, args: &[&str]) -> String {
     let out = crate::test_git::git_command()
         .arg("-C")

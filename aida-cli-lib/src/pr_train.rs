@@ -44,6 +44,69 @@ fn train_progress(message: std::fmt::Arguments<'_>) -> String {
     format!("  {} {message}", chrono::Local::now().format("%H:%M:%S"))
 }
 
+/// One finished phase of the final gate between "train PR is green" and the
+/// merge call: what it was, how long it took, and how much of that was
+/// whole-store reads. The gate is silent otherwise, and a slow phase cannot
+/// be told from a hang.
+// trace:BUG-2584 | ai:claude
+fn final_gate_phase_line(
+    label: &str,
+    elapsed: std::time::Duration,
+    store_loads: u64,
+    store_time: std::time::Duration,
+) -> String {
+    let store = match store_loads {
+        0 => String::new(),
+        1 => format!(" (1 store read, {:.1}s)", store_time.as_secs_f64()),
+        n => format!(" ({n} store reads, {:.1}s)", store_time.as_secs_f64()),
+    };
+    train_progress(format_args!(
+        "final gate: {label} took {:.1}s{store}",
+        elapsed.as_secs_f64()
+    ))
+}
+
+/// Prints its phase line when dropped, so a phase that leaves early on a
+/// refusal still reports how long it ran.
+// trace:BUG-2584 | ai:claude
+struct FinalGatePhase {
+    label: String,
+    started: std::time::Instant,
+    store: (u64, std::time::Duration),
+}
+
+impl FinalGatePhase {
+    fn start(label: impl Into<String>) -> Self {
+        Self {
+            label: label.into(),
+            started: std::time::Instant::now(),
+            store: crate::gate::dispatch_deps::store_load_totals(),
+        }
+    }
+}
+
+impl Drop for FinalGatePhase {
+    fn drop(&mut self) {
+        let (loads, load_time) = crate::gate::dispatch_deps::store_load_totals();
+        println!(
+            "{}",
+            final_gate_phase_line(
+                &self.label,
+                self.started.elapsed(),
+                loads.saturating_sub(self.store.0),
+                load_time.saturating_sub(self.store.1),
+            )
+        );
+    }
+}
+
+/// Run one final-gate phase and print its line when it ends.
+// trace:BUG-2584 | ai:claude
+fn final_gate_phase<T>(label: &str, phase: impl FnOnce() -> T) -> T {
+    let _phase = FinalGatePhase::start(label);
+    phase()
+}
+
 /// The forge adapter checkpoints active train intent before nested calls and
 /// retry attempts. Outside a journaled train this is a no-op.
 // trace:STORY-2401 | ai:codex
@@ -3971,6 +4034,7 @@ impl Rails for ForgeRails<'_> {
         }
         // Another merger holding the lease is about to move main: rebuild on
         // it rather than abort the run with open train PRs and no summary.
+        let gate_started = std::time::Instant::now();
         let _lease = match self.ports.lease(change.id) {
             Ok(lease) => lease,
             Err(holder) => {
@@ -3982,7 +4046,7 @@ impl Rails for ForgeRails<'_> {
                 return Ok(Landing::Stale);
             }
         };
-        if self.ports.fetch_main()? != train.base {
+        if final_gate_phase("fetch main", || self.ports.fetch_main())? != train.base {
             self.retire(
                 &change,
                 "Main moved after this train was built; the train rebuilds.",
@@ -3999,19 +4063,21 @@ impl Rails for ForgeRails<'_> {
         let mut fresh: Vec<Member> = Vec::new();
         for car in &train.cars {
             let pr = car.member.pr;
-            let first = self.ports.observe_gate(pr);
-            let gate = if matches!(&first, crate::forge_observed::Observed::Known(Ok(m)) if m.head == car.member.head)
-            {
-                first
-            } else {
-                let backoff = self.ports.confirmation_backoff();
-                let mut first = Some(first);
-                crate::forge_observed::confirm_snapshot(
-                    || first.take().unwrap_or_else(|| self.ports.observe_gate(pr)),
-                    |_| crate::forge_observed::Observed::Known(true),
-                    || std::thread::sleep(backoff),
-                )
-            };
+            let gate = final_gate_phase(&format!("re-gate member #{pr}"), || {
+                let first = self.ports.observe_gate(pr);
+                if matches!(&first, crate::forge_observed::Observed::Known(Ok(m)) if m.head == car.member.head)
+                {
+                    first
+                } else {
+                    let backoff = self.ports.confirmation_backoff();
+                    let mut first = Some(first);
+                    crate::forge_observed::confirm_snapshot(
+                        || first.take().unwrap_or_else(|| self.ports.observe_gate(pr)),
+                        |_| crate::forge_observed::Observed::Known(true),
+                        || std::thread::sleep(backoff),
+                    )
+                }
+            });
             match gate {
                 crate::forge_observed::Observed::Known(Ok(m)) if m.head == car.member.head => {
                     // The audit is already baked into the tested car commit.
@@ -4069,7 +4135,10 @@ impl Rails for ForgeRails<'_> {
         // after a release re-arms every released hold. trace:BUG-2214 | ai:claude
         let mut released: Vec<crate::gate::merge_hold_core::MergeHoldRecord> = Vec::new();
         for member in fresh.iter().filter(|m| m.release.is_some()) {
-            match self.ports.release_hold(member) {
+            let pr = member.pr;
+            match final_gate_phase(&format!("release hold on member #{pr}"), || {
+                self.ports.release_hold(member)
+            }) {
                 Ok(record) => released.push(record),
                 Err(why) => {
                     let rearm = self.rearm_released(&released);
@@ -4099,7 +4168,9 @@ impl Rails for ForgeRails<'_> {
                 .iter()
                 .filter_map(|m| m.release.as_ref().map(|c| c.id.clone()))
                 .collect();
-            match self.ports.hold_gate_green_after_release(&change, &covers) {
+            match final_gate_phase("wait for the train hold gate", || {
+                self.ports.hold_gate_green_after_release(&change, &covers)
+            }) {
                 Ok(true) => {}
                 Err(e) if crate::gate::dispatch_auth::is_dispatch_authority_aborted(&e) => {
                     let rearm = self.rearm_released(&released);
@@ -4137,7 +4208,7 @@ impl Rails for ForgeRails<'_> {
         // not take the lease (the web UI, a raw `gh pr merge`) could have
         // moved main meanwhile; strict is off, so the forge would rebase the
         // train onto an untested main. Look again right before merging.
-        if self.ports.fetch_main()? != train.base {
+        if final_gate_phase("fetch main again", || self.ports.fetch_main())? != train.base {
             let rearm = self.rearm_released(&released);
             if !rearm.is_empty() {
                 self.warn(format!("main moved after the hold release.{rearm}"));
@@ -4157,11 +4228,18 @@ impl Rails for ForgeRails<'_> {
         }
         self.intent(&change, train, Some(journal::Step::Merge))?;
         journal::before("merge verified train")?;
-        if let Err(e) = self
-            .ports
-            .merge_verified(&change, &checked, _lease.as_ref())
-            .with_context(|| format!("train PR #{} was not merged", change.id))
-        {
+        let merged = final_gate_phase("verify and merge", || {
+            self.ports
+                .merge_verified(&change, &checked, _lease.as_ref())
+        });
+        println!(
+            "{}",
+            train_progress(format_args!(
+                "final gate: {:.1}s from the merge lease to the end of the merge call",
+                gate_started.elapsed().as_secs_f64()
+            ))
+        );
+        if let Err(e) = merged.with_context(|| format!("train PR #{} was not merged", change.id)) {
             // BUG-2433: an error from the forge merge call itself may have
             // come after the merge took effect (GitHub answered a GraphQL
             // error but rebase-merged the train). Re-read before deciding: a
