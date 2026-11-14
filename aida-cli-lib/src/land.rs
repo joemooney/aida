@@ -31,6 +31,9 @@ const INTEGRATION_BRANCH: &str = "integration";
 /// The branch trains land on.
 const MAIN_BRANCH: &str = "main";
 const TRAIN_PREFIX: &str = "train/";
+/// A promotion of integration to main. It is reviewed and boards a train
+/// like any change, and no lane ever reworks it.
+const PROMOTE_PREFIX: &str = "promote/";
 /// Where a pass fetches the commits it compares. The refs are shared by
 /// every pass and only ever read under [`FETCH_LOCK`], straight after the
 /// fetch, to pin commit ids; nothing dereferences them afterwards.
@@ -301,8 +304,21 @@ pub(crate) fn derive(pr: &Pr, evidence: &dyn Evidence) -> Row {
             "the integration branch itself; the advisor cuts promotions from it".into(),
         );
     }
+    // A promotion is cut from integration: a lane that reworked it would
+    // move its head off the commit that was checked. The advisor cuts it
+    // again.
+    // trace:STORY-2768 | ai:claude
+    let promotion = branch.starts_with(PROMOTE_PREFIX);
     // Rework goes to a lane only when none is already on the branch.
     let rework = |state: State, since: Option<String>, reason: String| match evidence.lane(pr) {
+        _ if promotion => row(
+            State::Blocked,
+            Action::AdvisorRuling,
+            since,
+            format!(
+                "{reason}; a promotion is never reworked by a lane: cut it again from integration"
+            ),
+        ),
         // A lane that refused over unpushed work in its seat is never
         // launched over: someone has to look at the seat first.
         Ok(None) => match evidence.rework_stop(pr) {
