@@ -17,7 +17,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-14T18:25:05.674074503Z
-modified_at: 2026-11-14T21:18:09.698644181Z
+modified_at: 2026-11-14T21:24:11.880846341Z
 req_type: Bug
 tags:
 - landing
@@ -47,6 +47,13 @@ comments:
   content: 'Advisor note (2026-11-14 14:03): PR-4057 fast gates are red at ad2a1cd (run 43635068362): (1) docs/internal/architecture/external-tool-output-classifiers.md does not match the markers in the tree (regenerate it); (2) test-shard manifest: no shard runs aida-cli:lib:cli and more than one shard runs aida-cli:test:one; (3) ExecContext environment ratchet FAIL. A fresh review is running on deputy 4 (the 13:04 one recorded no verdict); rework is queued once it reports so both land in one round.'
   created_at: 2026-11-14T20:58:09.710985509Z
   modified_at: 2026-11-14T20:58:09.710985509Z
+  session_id: 01a1dbd6-f8cd-7313-a123-75ebbeaa2afd
+  harness_version: 2.1.325 (Claude Code)
+- id: 01a1dbf2-4be8-7e72-b3b0-7f1a065a12ec
+  author: joe
+  content: 'Advisor ruling (2026-11-14 14:32, CR on PR-4057 at ad2a1cd): all blocking, one round. (1) ExecContext environment ratchet: 7 new env read sites; route them through ExecContext or the launch-env key registry rather than adding ledger entries where a context is in reach, regenerate the ledger only for sites that genuinely cannot. (2) Reviewer finding: the seat-side expiry warning is suppressed by ANY later same-seat grant; it must be suppressed only by a grant that actually covers the held relay (correctness). (3) Regenerate docs/internal/architecture/external-tool-output-classifiers.md. (4) Test-shard manifest: aida-cli:lib:cli is in no shard and aida-cli:test:one is in more than one; fix the manifest (check whether the branch is simply behind integration here: merge origin/integration first). Gate: the bug_2585 tests plus make check-ci-fast green locally, then push; delta review. The 13:04 review that recorded no verdict: not diagnosed, treated as BUG-2564 family; the 14:18 one recorded normally.'
+  created_at: 2026-11-14T21:24:11.880846341Z
+  modified_at: 2026-11-14T21:24:11.880846341Z
   session_id: 01a1dbd6-f8cd-7313-a123-75ebbeaa2afd
   harness_version: 2.1.325 (Claude Code)
 history:
