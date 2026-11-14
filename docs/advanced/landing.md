@@ -23,9 +23,18 @@ approved again.
 
 `aida review record <ID> --verdict approved --pr <N>` applies the `ci:full`
 label to the pull request after it records the verdict. GitHub starts a FULL
-run on the head that was approved. If the label is already present from an
-earlier head, the command removes and re-adds it, because adding a label that
-is already there starts nothing.
+run on the head that was approved.
+
+Any label change on a pull request cancels its CI run in flight, so the command
+changes labels only when that starts a run without losing one:
+
+- The label is absent: it is added.
+- The label is present from an earlier head and no check is running on the
+  current head: it is removed and added again, because adding a label that is
+  already there starts nothing.
+- A check is still running on a labelled head, or the head already has a
+  full-tier run: nothing changes. `aida pr train` asks again when it finds an
+  approved head with no full-tier run.
 
 An advisor can start the same run by hand:
 
@@ -70,9 +79,12 @@ aida pr train <N...> --skip-full-check
 `--skip-full-check` admits members whose head has no green FULL run. Each
 admission prints a warning and appends a `train-admit-skip-full-check` entry,
 with the PR, head and reason, to `.aida/advisor-activity.jsonl`. The override
-applies to that invocation only. Every other train gate still applies.
+applies to that invocation only. Every other train gate still applies. If the
+entry cannot be written, the member is not admitted.
 
 ## Repositories without tiers
 
-The check applies where CI reports a `ci-tier:` check. A repository whose CI
-has a single tier is admitted as before.
+The check applies to a repository whose workflow files under
+`.github/workflows/` define a `ci-tier:` job. In such a repository a head with
+no `ci-tier: full` run is left out, whatever other checks it carries. A
+repository whose CI has a single tier is admitted as before.

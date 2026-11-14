@@ -108,6 +108,60 @@ fn github_pending_failed_and_empty_are_not_green() {
     );
 }
 
+/// A run cancelled and superseded on the same commit never reads as red:
+/// only the newest run of each check name is judged.
+// trace:STORY-2809 | ai:claude
+#[test]
+fn a_cancelled_earlier_run_does_not_outvote_the_latest_run_of_a_check() {
+    let row = |name: &str, outcome, run: Option<&str>| CommitCheck {
+        name: name.to_string(),
+        outcome,
+        run_id: run.map(str::to_string),
+    };
+    let on = |checks: Vec<CommitCheck>| CommitChecks {
+        sha: SHA.to_string(),
+        checks,
+    };
+    let superseded = on(vec![
+        row("CI (lib-0)", CheckOutcome::Failed, Some("10")),
+        row("Build", CheckOutcome::Failed, Some("10")),
+        row("CI (lib-0)", CheckOutcome::Passed, Some("11")),
+        row("Build", CheckOutcome::Passed, Some("11")),
+    ]);
+    assert_eq!(
+        judge_commit_checks(&superseded, &["Build"]),
+        CommitCi::Green
+    );
+    // The newest run is the one judged, in either direction and while it runs.
+    let regressed = on(vec![
+        row("Build", CheckOutcome::Passed, Some("10")),
+        row("Build", CheckOutcome::Failed, Some("11")),
+    ]);
+    assert_eq!(
+        judge_commit_checks(&regressed, &["Build"]),
+        CommitCi::Failed(vec!["Build".into()])
+    );
+    let rerunning = on(vec![
+        row("Build", CheckOutcome::Failed, Some("10")),
+        row("Build", CheckOutcome::Pending, Some("11")),
+    ]);
+    assert_eq!(
+        judge_commit_checks(&rerunning, &["Build"]),
+        CommitCi::Pending(vec!["Build".into()])
+    );
+    // A check only the cancelled run reported, and one with no owning run,
+    // still count.
+    let leftover = on(vec![
+        row("CI (lib-0)", CheckOutcome::Failed, Some("10")),
+        row("Build", CheckOutcome::Passed, Some("11")),
+        row("external", CheckOutcome::Failed, None),
+    ]);
+    assert_eq!(
+        judge_commit_checks(&leftover, &["Build"]),
+        CommitCi::Failed(vec!["CI (lib-0)".into(), "external".into()])
+    );
+}
+
 #[test]
 fn required_check_absent_is_unknown_not_green() {
     let (checks, _) = github(

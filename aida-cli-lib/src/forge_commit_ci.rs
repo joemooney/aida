@@ -63,13 +63,33 @@ pub(crate) enum CommitCi {
 #[cfg(test)]
 pub(crate) const CI_AGGREGATOR_CHECK: &str = "Build (ubuntu-latest)";
 
+/// The rows that count for each check name: those of the newest workflow run
+/// reporting that name. A run cancelled and superseded on the same commit (a
+/// label event restarts a PR's CI) leaves cancelled rows behind, and they
+/// must not read as red once a later run reports the same checks. Rows with
+/// no owning run (commit statuses) are kept as reported.
+// trace:STORY-2809 | ai:claude
+fn latest_per_name(checks: &[CommitCheck]) -> Vec<&CommitCheck> {
+    let order = |c: &CommitCheck| c.run_id.as_deref().and_then(|id| id.parse::<u64>().ok());
+    let mut newest: std::collections::HashMap<&str, Option<u64>> = std::collections::HashMap::new();
+    for check in checks {
+        let slot = newest.entry(check.name.as_str()).or_insert(None);
+        *slot = (*slot).max(order(check));
+    }
+    checks
+        .iter()
+        .filter(|c| newest[c.name.as_str()] == order(c))
+        .collect()
+}
+
 /// Judge `checks`: a failure outranks a pending check, which outranks a
 /// required check that did not succeed. A skipped check passes only when it
-/// is not required. An empty set is never green.
+/// is not required. An empty set is never green. Only the latest run of each
+/// check name counts.
 pub(crate) fn judge_commit_checks(checks: &CommitChecks, required: &[&str]) -> CommitCi {
+    let latest = latest_per_name(&checks.checks);
     let named = |outcome: CheckOutcome| -> Vec<String> {
-        checks
-            .checks
+        latest
             .iter()
             .filter(|c| c.outcome == outcome)
             .map(|c| c.name.clone())
@@ -87,8 +107,7 @@ pub(crate) fn judge_commit_checks(checks: &CommitChecks, required: &[&str]) -> C
         return CommitCi::Pending(pending);
     }
     if let Some(missing) = required.iter().find(|name| {
-        !checks
-            .checks
+        !latest
             .iter()
             .any(|c| c.name == **name && c.outcome == CheckOutcome::Passed)
     }) {

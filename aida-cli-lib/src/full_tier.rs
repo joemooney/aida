@@ -20,8 +20,8 @@ const AGGREGATE: &str = "Build (ubuntu-latest)";
 /// Where full-tier CI stands on one commit.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum FullTier {
-    /// The commit has checks but none advertises a CI tier: the repository's
-    /// CI is not tiered, so there is no separate full run to require.
+    /// The repository's CI is not tiered and the commit has checks: there is
+    /// no separate full run to require.
     Untiered,
     /// Full-tier run `run` passed its aggregate on this commit.
     Green { run: String },
@@ -33,13 +33,34 @@ pub(crate) enum FullTier {
     Missing,
 }
 
-/// Judge the full tier from every check on one commit. A run counts only when
-/// its own tier marker says `full`; checks from a FAST run on the same commit
-/// never contribute. A green run outranks a pending one, which outranks a
-/// failed one, so a rerun at the same head can still admit it.
-pub(crate) fn judge(checks: &CommitChecks) -> FullTier {
+/// Whether the repository's CI is tiered: one of its workflow files defines
+/// the job that reports `ci-tier: <tier>`. Read from the checkout, never from
+/// one commit's checks, so a head whose tier check is absent (CI not started,
+/// a cancelled run, a workflow edited on the branch) cannot pass as untiered.
+pub(crate) fn repo_is_tiered(project_root: &Path) -> bool {
+    let Ok(dir) = std::fs::read_dir(project_root.join(".github/workflows")) else {
+        return false;
+    };
+    dir.flatten()
+        .filter(|entry| {
+            matches!(
+                entry.path().extension().and_then(|e| e.to_str()),
+                Some("yml" | "yaml")
+            )
+        })
+        .filter_map(|entry| std::fs::read_to_string(entry.path()).ok())
+        .any(|text| text.contains(TIER_PREFIX))
+}
+
+/// Judge the full tier from every check on one commit; `tiered` is
+/// [`repo_is_tiered`]. A run counts only when its own tier marker says
+/// `full`; checks from a FAST run on the same commit never contribute. A
+/// green run outranks a pending one, which outranks a failed one, so a rerun
+/// at the same head can still admit it. In a tiered repository a commit with
+/// no full-tier run is `Missing` whatever else it carries.
+pub(crate) fn judge(checks: &CommitChecks, tiered: bool) -> FullTier {
     let is_marker = |name: &str| name.starts_with(TIER_PREFIX);
-    if !checks.checks.iter().any(|c| is_marker(&c.name)) {
+    if !tiered && !checks.checks.iter().any(|c| is_marker(&c.name)) {
         return if checks.checks.is_empty() {
             FullTier::Missing
         } else {
@@ -147,34 +168,98 @@ pub(crate) fn skip_event(now_iso: &str, pr: u64, head: &str, detail: &str) -> St
     .to_string()
 }
 
-/// The two label edits that start a full-tier run on PR `pr`'s current head.
-/// A label left over from an earlier head is removed first: adding a label
-/// the PR already carries fires no event, so no run would start.
-pub(crate) fn request_commands(repo: &str, pr: u64) -> [Vec<String>; 2] {
-    ["--remove-label", "--add-label"].map(|flag| {
-        vec![
-            "pr".to_string(),
-            "edit".to_string(),
-            pr.to_string(),
-            "-R".to_string(),
-            repo.to_string(),
-            flag.to_string(),
-            FULL_LABEL.to_string(),
-        ]
+/// What a full-tier request does to PR labels.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum LabelPlan {
+    /// The PR does not carry the label: adding it starts the run.
+    Add,
+    /// The label is left over from an earlier head and nothing is running on
+    /// this one: remove it and add it again, because adding a label the PR
+    /// already carries fires no event.
+    Reapply,
+    /// Change nothing: any label event cancels the PR's CI run in flight.
+    Leave,
+}
+
+/// Decide the label edits from `gh pr view --json labels,statusCheckRollup`.
+/// A head that already has a full-tier run, or a labelled head with a check
+/// still running, is left alone: relabelling would cancel that run.
+pub(crate) fn label_plan(view: &serde_json::Value) -> Result<LabelPlan, String> {
+    let list = |key: &str| {
+        view.get(key)
+            .and_then(|v| v.as_array())
+            .ok_or_else(|| format!("the PR view has no `{key}` list"))
+    };
+    let text = |row: &serde_json::Value, key: &str| {
+        row.get(key)
+            .and_then(|v| v.as_str())
+            .unwrap_or("")
+            .to_string()
+    };
+    let labelled = list("labels")?
+        .iter()
+        .any(|l| text(l, "name") == FULL_LABEL);
+    // A head with no check yet reports no rollup at all.
+    let none = Vec::new();
+    let rollup = match view.get("statusCheckRollup") {
+        None | Some(serde_json::Value::Null) => &none,
+        Some(_) => list("statusCheckRollup")?,
+    };
+    if rollup.iter().any(|c| text(c, "name") == FULL_MARKER) {
+        return Ok(LabelPlan::Leave);
+    }
+    if !labelled {
+        return Ok(LabelPlan::Add);
+    }
+    // A check run reports `status`, a commit status reports `state`.
+    let running = rollup.iter().any(|c| {
+        let status = text(c, "status");
+        (!status.is_empty() && status != "COMPLETED")
+            || matches!(text(c, "state").as_str(), "PENDING" | "EXPECTED")
+    });
+    Ok(if running {
+        LabelPlan::Leave
+    } else {
+        LabelPlan::Reapply
     })
 }
 
-/// Start a full-tier CI run on PR `pr`'s current head by (re)applying the
-/// `ci:full` label. `Ok(false)` when the project has no GitHub forge to ask.
-pub(crate) fn request_full_ci(project_root: &Path, pr: u64) -> Result<bool, String> {
-    request_full_ci_with(project_root, pr, crate::merge_hold::run_forge_cli)
+fn gh_pr(repo: &str, pr: u64, verb: &str, tail: &[&str]) -> Vec<String> {
+    let mut args = vec![
+        "pr".to_string(),
+        verb.to_string(),
+        pr.to_string(),
+        "-R".to_string(),
+        repo.to_string(),
+    ];
+    args.extend(tail.iter().map(|s| s.to_string()));
+    args
 }
 
-/// [`request_full_ci`] with the forge CLI injected.
+const VIEW_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(20);
+
+/// Start a full-tier CI run on PR `pr`'s current head through the `ci:full`
+/// label. `Ok(true)` when a label was edited; `Ok(false)` when the project has
+/// no GitHub forge to ask, or the head already has a run that an edit would
+/// cancel.
+pub(crate) fn request_full_ci(project_root: &Path, pr: u64) -> Result<bool, String> {
+    request_full_ci_with(
+        project_root,
+        pr,
+        |root, cli, args| {
+            crate::merge_hold::run_forge_cli_stdout_bounded_with(root, cli, args, VIEW_TIMEOUT)
+        },
+        crate::merge_hold::run_forge_cli,
+    )
+}
+
+/// [`request_full_ci`] with the forge CLI injected: `view` returns stdout on
+/// success, `edit` returns stderr; both return stderr on failure.
 pub(crate) fn request_full_ci_with(
     project_root: &Path,
     pr: u64,
-    runner: impl Fn(&Path, &str, &[String]) -> Result<(bool, String), String>,
+    view: impl Fn(&Path, &str, &[String]) -> Result<(bool, String), String>,
+    edit: impl Fn(&Path, &str, &[String]) -> Result<(bool, String), String>,
 ) -> Result<bool, String> {
     let kind = crate::forge::resolve_forge_kind(project_root);
     if kind != crate::forge::ForgeKind::GitHub {
@@ -183,13 +268,33 @@ pub(crate) fn request_full_ci_with(
     let Some(pin) = crate::merge_hold::resolve_pinned_repo(project_root, kind)? else {
         return Ok(false);
     };
-    let [remove, add] = request_commands(&pin.repo_arg(), pr);
-    // Removing a label the PR does not carry is not an error worth reporting.
-    let _ = runner(project_root, "gh", &remove);
-    match runner(project_root, "gh", &add)? {
-        (true, _) => Ok(true),
-        (false, stderr) => Err(format!("`gh {}` failed: {}", add.join(" "), stderr.trim())),
+    let repo = pin.repo_arg();
+    let run = |runner: &dyn Fn(&Path, &str, &[String]) -> Result<(bool, String), String>,
+               args: Vec<String>| match runner(project_root, "gh", &args)? {
+        (true, out) => Ok(out),
+        (false, err) => Err(format!("`gh {}` failed: {}", args.join(" "), err.trim())),
+    };
+    let viewed = run(
+        &view,
+        gh_pr(&repo, pr, "view", &["--json", "labels,statusCheckRollup"]),
+    )?;
+    let viewed = serde_json::from_str(&viewed)
+        .map_err(|e| format!("`gh pr view {pr}` returned invalid JSON: {e}"))?;
+    let plan = label_plan(&viewed)?;
+    if plan == LabelPlan::Leave {
+        return Ok(false);
     }
+    if plan == LabelPlan::Reapply {
+        run(
+            &edit,
+            gh_pr(&repo, pr, "edit", &["--remove-label", FULL_LABEL]),
+        )?;
+    }
+    run(
+        &edit,
+        gh_pr(&repo, pr, "edit", &["--add-label", FULL_LABEL]),
+    )?;
+    Ok(true)
 }
 
 #[cfg(test)]

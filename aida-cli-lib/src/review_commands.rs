@@ -2535,7 +2535,13 @@ pub(crate) fn handle_review_record(
         pr,
         no_carry,
     )?;
-    request_full_ci_after_approval(&project_root, verdict, findings, pr);
+    request_full_ci_after_approval(
+        &project_root,
+        verdict,
+        findings,
+        pr,
+        crate::full_tier::request_full_ci,
+    );
     Ok(())
 }
 
@@ -2543,11 +2549,12 @@ pub(crate) fn handle_review_record(
 /// train requires on that head. Best-effort: the verdict is already durable,
 /// and a train asks again for an approved head that still has no run.
 // trace:STORY-2809 | ai:claude
-fn request_full_ci_after_approval(
+pub(crate) fn request_full_ci_after_approval(
     project_root: &std::path::Path,
     verdict: &str,
     findings: &[String],
     pr: Option<u64>,
+    request: impl FnOnce(&std::path::Path, u64) -> std::result::Result<bool, String>,
 ) {
     let Some(n) = pr else { return };
     if crate::gate::review_verdict::incoming_disposition(verdict, findings)
@@ -2555,7 +2562,7 @@ fn request_full_ci_after_approval(
     {
         return;
     }
-    match crate::full_tier::request_full_ci(project_root, n) {
+    match request(project_root, n) {
         Ok(true) => println!(
             "  {} full-tier CI requested on PR-{n}'s head (label `{}`); a merge train admits it once that run is green",
             crate::glyph(crate::glyphs::Glyph::SubArrow).dimmed(),

@@ -1280,10 +1280,17 @@ fn full_tier_gate(
         return Ok(());
     };
     if SKIP_FULL_CHECK.with(std::cell::Cell::get) {
-        crate::pr_cmd::append_ship_activity_line(
+        // The override admits only once it is on record.
+        crate::pr_cmd::try_append_ship_activity_line(
             checks.marker_root(),
             &crate::full_tier::skip_event(&chrono::Utc::now().to_rfc3339(), pr, head, &why),
-        );
+        )
+        .map_err(|e| {
+            MemberGateError::Refused(format!(
+                "{why}; `--skip-full-check` could not record the override in the activity log \
+                 ({e}), so the member is not admitted"
+            ))
+        })?;
         eprintln!("  ! #{pr}: {why} — admitted anyway (--skip-full-check)");
         return Ok(());
     }
@@ -1765,7 +1772,12 @@ impl MemberChecks for LiveChecks<'_> {
     fn full_tier(&mut self, head: &str) -> std::result::Result<crate::full_tier::FullTier, String> {
         self.forge
             .commit_checks(head)
-            .map(|checks| crate::full_tier::judge(&checks))
+            .map(|checks| {
+                crate::full_tier::judge(
+                    &checks,
+                    crate::full_tier::repo_is_tiered(self.project_root),
+                )
+            })
             .map_err(|e| format!("{e:#}"))
     }
     // trace:STORY-2809 | ai:claude

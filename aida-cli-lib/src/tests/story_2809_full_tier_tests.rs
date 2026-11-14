@@ -1,6 +1,7 @@
 //! STORY-2809: full-tier CI evidence on one exact commit, and the label
 //! request that starts a full-tier run. Fake check listings and a fake forge
-//! CLI runner; no network.
+//! CLI runner; no network. `AC<n>` names the story's acceptance criterion a
+//! test covers.
 // trace:STORY-2809 | ai:claude
 use super::*;
 use crate::forge::CheckOutcome::{Failed, Passed, Pending, Skipped};
@@ -49,17 +50,52 @@ fn full_run(
     rows
 }
 
+/// AC2: tieredness is the repository's, not the commit's. A tiered
+/// repository refuses a head whose checks carry no `ci-tier` check at all.
 #[test]
-fn a_repository_without_tier_markers_is_untiered_but_no_checks_is_missing() {
-    let untiered = checks(&[("Build (ubuntu-latest)", Passed, Some("1"))]);
-    assert_eq!(judge(&untiered), FullTier::Untiered);
+fn a_tiered_repository_refuses_a_head_with_checks_but_no_tier_check() {
+    let unmarked = checks(&[("Build (ubuntu-latest)", Passed, Some("1"))]);
+    assert_eq!(judge(&unmarked, true), FullTier::Missing);
+    let why = admission_refusal(&judge(&unmarked, true), SHA).unwrap();
+    assert!(why.contains("no full-tier CI run exists"), "{why}");
+    assert_eq!(judge(&checks(&[]), true), FullTier::Missing);
+
+    // An untiered repository has no full run to require, but a head with no
+    // check at all is still refused, and a tier marker on the commit counts.
+    assert_eq!(judge(&unmarked, false), FullTier::Untiered);
     assert_eq!(admission_refusal(&FullTier::Untiered, SHA), None);
-    assert_eq!(judge(&checks(&[])), FullTier::Missing);
+    assert_eq!(judge(&checks(&[]), false), FullTier::Missing);
+    assert_eq!(judge(&checks(&fast_run("10")), false), FullTier::Missing);
 }
 
+/// AC2: the workflow files decide whether the repository is tiered.
+#[test]
+fn a_repository_is_tiered_when_a_workflow_defines_the_tier_job() {
+    let dir = tempfile::tempdir().unwrap();
+    assert!(!repo_is_tiered(dir.path()));
+    let workflows = dir.path().join(".github/workflows");
+    std::fs::create_dir_all(&workflows).unwrap();
+    std::fs::write(
+        workflows.join("lint.yml"),
+        "jobs:\n  lint:\n    name: Lint\n",
+    )
+    .unwrap();
+    assert!(!repo_is_tiered(dir.path()));
+    std::fs::write(
+        workflows.join("ci.yml"),
+        "jobs:\n  tier:\n    name: \"ci-tier: ${{ 'full' }}\"\n",
+    )
+    .unwrap();
+    assert!(repo_is_tiered(dir.path()));
+    // AIDA's own workflow is tiered.
+    let repo = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("..");
+    assert!(repo_is_tiered(&repo));
+}
+
+/// AC2: a refusal names the missing run.
 #[test]
 fn a_green_fast_run_is_not_a_full_tier_run() {
-    assert_eq!(judge(&checks(&fast_run("10"))), FullTier::Missing);
+    assert_eq!(judge(&checks(&fast_run("10")), true), FullTier::Missing);
     let why = admission_refusal(&FullTier::Missing, SHA).unwrap();
     assert!(
         why.contains("no full-tier CI run exists at its head e33fec1"),
@@ -71,18 +107,22 @@ fn a_green_fast_run_is_not_a_full_tier_run() {
     );
 }
 
+/// AC2: only a green full-tier run at the exact head admits.
 #[test]
 fn a_full_run_is_green_only_when_its_own_aggregate_passed() {
     let mut rows = fast_run("10");
     rows.extend(full_run("11", Passed, Some(Passed)));
-    assert_eq!(judge(&checks(&rows)), FullTier::Green { run: "11".into() });
-    assert_eq!(admission_refusal(&judge(&checks(&rows)), SHA), None);
+    assert_eq!(
+        judge(&checks(&rows), true),
+        FullTier::Green { run: "11".into() }
+    );
+    assert_eq!(admission_refusal(&judge(&checks(&rows), true), SHA), None);
 
     // Lanes still running, and the aggregate that registers after them.
     let mut rows = fast_run("10");
     rows.extend(full_run("11", Pending, None));
     assert_eq!(
-        judge(&checks(&rows)),
+        judge(&checks(&rows), true),
         FullTier::Pending {
             run: "11".into(),
             waiting: vec!["CI (cli-1)".into()]
@@ -91,7 +131,7 @@ fn a_full_run_is_green_only_when_its_own_aggregate_passed() {
     let mut rows = fast_run("10");
     rows.extend(full_run("11", Passed, None));
     assert_eq!(
-        judge(&checks(&rows)),
+        judge(&checks(&rows), true),
         FullTier::Pending {
             run: "11".into(),
             waiting: vec!["Build (ubuntu-latest)".into()]
@@ -101,7 +141,7 @@ fn a_full_run_is_green_only_when_its_own_aggregate_passed() {
     // The FAST run's green aggregate never stands in for a red full run.
     let mut rows = fast_run("10");
     rows.extend(full_run("11", Failed, Some(Failed)));
-    let tier = judge(&checks(&rows));
+    let tier = judge(&checks(&rows), true);
     assert_eq!(
         tier,
         FullTier::Failed {
@@ -116,29 +156,35 @@ fn a_full_run_is_green_only_when_its_own_aggregate_passed() {
     );
 }
 
+/// AC2
 #[test]
 fn a_green_rerun_at_the_same_head_outranks_an_earlier_red_or_cancelled_run() {
     let mut rows = full_run("11", Failed, Some(Failed));
     rows.extend(full_run("12", Passed, Some(Passed)));
-    assert_eq!(judge(&checks(&rows)), FullTier::Green { run: "12".into() });
+    assert_eq!(
+        judge(&checks(&rows), true),
+        FullTier::Green { run: "12".into() }
+    );
     // A newer run still in flight is reported ahead of the older failure.
     let mut rows = full_run("11", Failed, Some(Failed));
     rows.extend(full_run("12", Pending, None));
-    assert!(matches!(judge(&checks(&rows)), FullTier::Pending { run, .. } if run == "12"));
+    assert!(matches!(judge(&checks(&rows), true), FullTier::Pending { run, .. } if run == "12"));
 }
 
+/// AC2
 #[test]
 fn a_marker_without_a_run_or_with_a_second_tier_proves_nothing() {
     let unowned = checks(&[
         ("ci-tier: full", Passed, None),
         ("Build (ubuntu-latest)", Passed, None),
     ]);
-    assert_eq!(judge(&unowned), FullTier::Missing);
+    assert_eq!(judge(&unowned, true), FullTier::Missing);
     let mut rows = full_run("11", Passed, Some(Passed));
     rows.push(("ci-tier: fast", Passed, Some("11")));
-    assert_eq!(judge(&checks(&rows)), FullTier::Missing);
+    assert_eq!(judge(&checks(&rows), true), FullTier::Missing);
 }
 
+/// AC2
 #[test]
 fn check_runs_carry_the_workflow_run_that_owns_them() {
     let page = serde_json::json!({"total_count": 2, "check_runs": [
@@ -181,46 +227,221 @@ fn github_project() -> tempfile::TempDir {
     dir
 }
 
-#[test]
-fn a_request_drops_a_stale_label_then_adds_it_so_a_run_starts_on_this_head() {
+fn view(labels: &[&str], rollup: serde_json::Value) -> serde_json::Value {
+    let labels: Vec<_> = labels
+        .iter()
+        .map(|name| serde_json::json!({"name": name}))
+        .collect();
+    serde_json::json!({"labels": labels, "statusCheckRollup": rollup})
+}
+
+fn check_run(name: &str, status: &str) -> serde_json::Value {
+    serde_json::json!({"__typename": "CheckRun", "name": name, "status": status})
+}
+
+/// Run a request against a fake `gh`; returns the outcome and every call.
+fn request(view: serde_json::Value, add_ok: bool) -> (Result<bool, String>, Vec<String>) {
     let dir = github_project();
     let calls = std::cell::RefCell::new(Vec::new());
-    let requested = request_full_ci_with(dir.path(), 41, |_, cli, args| {
+    let record = |cli: &str, args: &[String]| {
         calls.borrow_mut().push(format!("{cli} {}", args.join(" ")));
-        Ok((true, String::new()))
-    });
-    assert_eq!(requested, Ok(true));
+    };
+    let outcome = request_full_ci_with(
+        dir.path(),
+        41,
+        |_, cli, args| {
+            record(cli, args);
+            Ok((true, view.to_string()))
+        },
+        |_, cli, args| {
+            record(cli, args);
+            let ok = add_ok || !args.contains(&"--add-label".to_string());
+            Ok((ok, "label not found".to_string()))
+        },
+    );
+    (outcome, calls.into_inner())
+}
+
+const VIEW: &str = "gh pr view 41 -R o/r --json labels,statusCheckRollup";
+
+/// AC1: an unlabelled PR gets the label, in one edit and with no removal.
+#[test]
+fn a_request_adds_the_label_only_when_the_pr_does_not_carry_it() {
+    for rollup in [
+        serde_json::Value::Null,
+        serde_json::json!([check_run("ci-tier: fast", "COMPLETED")]),
+        // A FAST run in flight gives way to the full run the label starts.
+        serde_json::json!([check_run("CI (fast gates)", "IN_PROGRESS")]),
+    ] {
+        let (outcome, calls) = request(view(&["merge-hold"], rollup), true);
+        assert_eq!(outcome, Ok(true));
+        assert_eq!(
+            calls,
+            vec![VIEW, "gh pr edit 41 -R o/r --add-label ci:full"]
+        );
+    }
+}
+
+/// AC1: no label event while CI is in flight on the head, and none on a head
+/// that already has a full-tier run: either would cancel a run.
+#[test]
+fn a_request_never_relabels_a_head_whose_run_it_would_cancel() {
+    for (labels, rollup) in [
+        (
+            vec!["ci:full"],
+            serde_json::json!([check_run("CI (fast gates)", "IN_PROGRESS")]),
+        ),
+        (
+            vec!["ci:full"],
+            serde_json::json!([{"__typename": "StatusContext", "context": "x", "state": "PENDING"}]),
+        ),
+        (
+            vec!["ci:full"],
+            serde_json::json!([
+                check_run("ci-tier: full", "COMPLETED"),
+                check_run("CI (lib-0)", "QUEUED")
+            ]),
+        ),
+        // The label was dropped, but the head's full run is still there.
+        (
+            vec![],
+            serde_json::json!([check_run("ci-tier: full", "COMPLETED")]),
+        ),
+    ] {
+        let (outcome, calls) = request(view(&labels, rollup), true);
+        assert_eq!(outcome, Ok(false));
+        assert_eq!(calls, vec![VIEW]);
+    }
+}
+
+/// AC1: a label left by an earlier head's approval is re-applied, because
+/// adding a label the PR already carries starts nothing.
+#[test]
+fn a_request_reapplies_a_stale_label_when_nothing_is_running() {
+    let rollup = serde_json::json!([
+        check_run("ci-tier: fast", "COMPLETED"),
+        {"__typename": "StatusContext", "context": "x", "state": "SUCCESS"}
+    ]);
+    let (outcome, calls) = request(view(&["ci:full"], rollup), true);
+    assert_eq!(outcome, Ok(true));
     assert_eq!(
-        *calls.borrow(),
+        calls,
         vec![
+            VIEW,
             "gh pr edit 41 -R o/r --remove-label ci:full",
             "gh pr edit 41 -R o/r --add-label ci:full",
         ]
     );
 }
 
+/// AC1
 #[test]
-fn a_failed_label_add_is_reported_and_a_project_without_github_asks_nothing() {
-    let dir = github_project();
-    let err = request_full_ci_with(dir.path(), 41, |_, _, args| {
-        Ok((
-            !args.contains(&"--add-label".to_string()),
-            "label not found".into(),
-        ))
-    })
-    .unwrap_err();
+fn a_failed_view_or_label_add_is_reported_and_a_project_without_github_asks_nothing() {
+    let (outcome, _) = request(view(&[], serde_json::json!([])), false);
+    let err = outcome.unwrap_err();
     assert!(
         err.contains("--add-label ci:full") && err.contains("label not found"),
         "{err}"
     );
+    let (outcome, calls) = request(serde_json::json!({"labels": 3}), true);
+    assert!(outcome.unwrap_err().contains("`labels`"));
+    assert_eq!(calls, vec![VIEW]);
+
+    let dir = github_project();
+    let err = request_full_ci_with(
+        dir.path(),
+        41,
+        |_, _, _| Ok((false, "HTTP 401".to_string())),
+        |_, _, _| panic!("no edit after a failed view"),
+    )
+    .unwrap_err();
+    assert!(
+        err.contains("gh pr view 41") && err.contains("HTTP 401"),
+        "{err}"
+    );
 
     let plain = project(None);
-    let requested = request_full_ci_with(plain.path(), 41, |_, _, _| {
-        panic!("no forge call without a GitHub forge")
-    });
+    let requested = request_full_ci_with(
+        plain.path(),
+        41,
+        |_, _, _| panic!("no forge call without a GitHub forge"),
+        |_, _, _| panic!("no forge call without a GitHub forge"),
+    );
     assert_eq!(requested, Ok(false));
 }
 
+/// Which PR `aida review record` asks a full-tier run for, with the request
+/// injected.
+fn requested_after(verdict: &str, findings: &[String], pr: Option<u64>) -> Vec<u64> {
+    let asked = std::cell::RefCell::new(Vec::new());
+    crate::request_full_ci_after_approval(
+        std::path::Path::new("/nonexistent"),
+        verdict,
+        findings,
+        pr,
+        |_, n| {
+            asked.borrow_mut().push(n);
+            Ok(true)
+        },
+    );
+    asked.into_inner()
+}
+
+fn deferred_finding() -> String {
+    serde_json::json!({"text": "F", "severity": "minor", "disposition": "deferred",
+        "rationale": "safe follow-up"})
+    .to_string()
+}
+
+/// AC1: an approval recorded with `--pr` starts the full-tier run, and so
+/// does a verdict whose every finding is deferred.
+#[test]
+fn an_approving_verdict_with_a_pr_requests_full_tier_ci() {
+    assert_eq!(requested_after("approved", &[], Some(41)), vec![41]);
+    assert_eq!(
+        requested_after("approved", &[deferred_finding()], Some(41)),
+        vec![41]
+    );
+    assert_eq!(
+        requested_after("request-changes", &[deferred_finding()], Some(41)),
+        vec![41]
+    );
+}
+
+/// AC1: nothing else starts one, and a failed request does not fail the
+/// verdict.
+#[test]
+fn a_non_approving_verdict_or_no_pr_requests_nothing() {
+    let blocking = ["a blocking finding".to_string()];
+    for verdict in [
+        "request-changes",
+        "rejected",
+        "waiting",
+        "approved-with-nits",
+    ] {
+        assert!(
+            requested_after(verdict, &blocking, Some(41)).is_empty(),
+            "{verdict}"
+        );
+    }
+    for verdict in ["rejected", "waiting"] {
+        assert!(
+            requested_after(verdict, &[], Some(41)).is_empty(),
+            "{verdict}"
+        );
+    }
+    assert!(requested_after("approved", &blocking, Some(41)).is_empty());
+    assert!(requested_after("approved", &[], None).is_empty());
+    crate::request_full_ci_after_approval(
+        std::path::Path::new("/nonexistent"),
+        "approved",
+        &[],
+        Some(41),
+        |_, _| Err("gh is not signed in".to_string()),
+    );
+}
+
+/// AC2: the override is logged.
 #[test]
 fn the_skip_event_records_the_pr_head_and_reason() {
     let event: serde_json::Value =

@@ -5798,7 +5798,7 @@ fn mandate_include_gate_paths_audits_train_member() {
 
 // ─────────────── full-tier CI on the approved head (STORY-2809) ───────────────
 
-// trace:STORY-2809 | ai:claude
+// trace:STORY-2809 | ai:claude — AC2 (and AC1: the train asks for the missing run)
 #[test]
 fn live_gate_refuses_an_approved_head_with_no_full_tier_run_and_requests_one() {
     let mut c = FakeChecks::new();
@@ -5815,7 +5815,7 @@ fn live_gate_refuses_an_approved_head_with_no_full_tier_run_and_requests_one() {
     assert_eq!(c.calls.last(), Some(&"approval"));
 }
 
-// trace:STORY-2809 | ai:claude
+// trace:STORY-2809 | ai:claude — AC2
 #[test]
 fn live_gate_names_a_running_or_red_full_tier_run_without_requesting_another() {
     for (tier, expected) in [
@@ -5842,7 +5842,7 @@ fn live_gate_names_a_running_or_red_full_tier_run_without_requesting_another() {
     }
 }
 
-// trace:STORY-2809 | ai:claude
+// trace:STORY-2809 | ai:claude — AC2
 #[test]
 fn live_gate_admits_a_green_full_tier_head_and_never_asks_an_unapproved_one() {
     let mut c = FakeChecks::new();
@@ -5858,7 +5858,7 @@ fn live_gate_admits_a_green_full_tier_head_and_never_asks_an_unapproved_one() {
     assert!(c.full_requests.is_empty());
 }
 
-// trace:STORY-2809 | ai:claude
+// trace:STORY-2809 | ai:claude — AC2: `--skip-full-check` overrides and is logged
 #[test]
 fn skip_full_check_admits_and_logs_the_override() {
     let mut c = FakeChecks::new();
@@ -5876,4 +5876,17 @@ fn skip_full_check_admits_and_logs_the_override() {
     let mut c = FakeChecks::new();
     c.full_tier = Some(crate::full_tier::FullTier::Missing);
     assert!(gate_member_with(&mut c, "main", 41).is_err());
+}
+
+// trace:STORY-2809 | ai:claude — AC2: an override that cannot be logged does
+// not admit.
+#[test]
+fn skip_full_check_refuses_when_the_override_cannot_be_logged() {
+    let mut c = FakeChecks::new();
+    c.full_tier = Some(crate::full_tier::FullTier::Missing);
+    // A directory where the log file belongs makes the write fail.
+    std::fs::create_dir_all(c.root.path().join(".aida/advisor-activity.jsonl")).unwrap();
+    let why = with_skip_full_check(true, || gate_member_with(&mut c, "main", 41)).unwrap_err();
+    assert!(why.contains("could not record the override"), "{why}");
+    assert!(why.contains("no full-tier CI run exists"), "{why}");
 }

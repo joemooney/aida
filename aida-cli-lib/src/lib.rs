@@ -464,9 +464,9 @@ mod first_run;
 mod focus;
 mod focus_cmd;
 pub mod forge;
-// trace:STORY-2809 | ai:claude — full-tier CI evidence on an approved PR head.
 mod forge_confirmation;
 mod forge_observed;
+// trace:STORY-2809 | ai:claude — full-tier CI evidence on an approved PR head.
 mod full_tier;
 
 // trace:STORY-2401 | ai:codex

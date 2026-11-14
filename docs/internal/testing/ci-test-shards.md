@@ -23,8 +23,8 @@ once and emits a `ci-tier: fast` or `ci-tier: full` check name.
 <!-- trace:STORY-2809 | ai:claude -->
 The label selects FULL for the head it was applied to. A `synchronize` event (a
 push) selects FAST even while the label is present. `aida review record` with
-an approving verdict re-applies the label, which starts FULL on the approved
-head, and `aida pr train` admits a member only when its exact head has a green
+an approving verdict adds the label (or re-applies a stale one when no check is
+running on the head), which starts FULL on the approved head, and `aida pr train` admits a member only when its exact head has a green
 FULL run. See [Landing approved work](../../advanced/landing.md).
 
 Both tiers report `Build (ubuntu-latest)`. The aggregate requires successful

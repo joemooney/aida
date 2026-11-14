@@ -7529,6 +7529,23 @@ pub(crate) fn append_ship_activity_line(main_worktree: &std::path::Path, line: &
     }
 }
 
+/// [`append_ship_activity_line`] for a caller whose action depends on the
+/// line being on record.
+// trace:STORY-2809 | ai:claude
+pub(crate) fn try_append_ship_activity_line(
+    main_worktree: &std::path::Path,
+    line: &str,
+) -> std::io::Result<()> {
+    use std::io::Write;
+    let aida_dir = main_worktree.join(".aida");
+    std::fs::create_dir_all(&aida_dir)?;
+    let mut f = std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(aida_dir.join("advisor-activity.jsonl"))?;
+    writeln!(f, "{line}")
+}
+
 /// `aida pr rebase <N> --check` — print the stale-base / overlap /
 /// conflict-prediction report and exit zero. Modifies nothing.
 // trace:TASK-308 | ai:claude
