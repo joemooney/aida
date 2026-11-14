@@ -4,9 +4,15 @@
 //! `<ledger>/bindings/<SPEC>/<CHANGE>` is one empty regular file per pair. A
 //! writer persists the binding of every spec its events carry BEFORE it
 //! appends them, under the same locks as the append, and a failed binding
-//! write fails the append. A binding without an event is harmless extra
-//! work; an event without a binding is forbidden. The `by-spec` indexes stay
-//! lossy hints.
+//! write fails the append. Every label is bound, whatever its spelling
+//! ([`binding_key`]). A binding without an event is harmless extra work; an
+//! event without a binding is forbidden. The `by-spec` indexes stay lossy
+//! hints.
+//!
+//! Only a format 2 writer binds, so binaries older than format 2 are fenced
+//! out of the ledger before anything is certified
+//! ([`super::store::fence_older_writers`]): their ledger-wide lock path is
+//! replaced by a dangling link, and each of their writes fails on it.
 //!
 //! `<ledger>/bindings-complete.json` certifies that every change ledger that
 //! predates the bindings has been bound. It is published by one explicit
@@ -14,8 +20,11 @@
 //! [`FIX_COMMAND`]) under the exclusive ledger lock, LAST, so an interrupted
 //! run leaves no marker and a rerun completes. A writer that finds no marker
 //! and no change ledger at all publishes it itself: an empty ledger is
-//! trivially complete. A missing or unsupported marker makes selection
-//! refuse ([`super::checked`]).
+//! trivially complete. A missing or unsupported marker, or a marker without
+//! the fence, makes selection refuse ([`super::checked`]); a writer that
+//! finds the fence down withdraws the marker. [`audit`] names every
+//! disagreement between a valid marker and the ledger, and the bootstrap
+//! repairs each.
 // trace:BUG-2531 | ai:claude
 // mandate-gate
 
@@ -164,15 +173,41 @@ fn publish_marker(root: &Path) -> std::io::Result<()> {
     })
 }
 
+/// The bindings directory name of the spec label `spec`, for every label an
+/// event can carry. A label usable as a file name is its own key (what
+/// selection asks for). Any other label (one with a separator, or one that
+/// reads as a change key) cannot be selected by label, but a review recorded
+/// under it can still be a misplaced copy whose witness sits on another
+/// change, so it is bound too, under `~<sha256 of the normalized label>`:
+/// the ownership filter finds every witness, and no review is withheld for
+/// want of a key. `~` never starts a label key.
+// trace:BUG-2531 | ai:claude
+pub(crate) fn binding_key(spec: &str) -> String {
+    use sha2::{Digest as _, Sha256};
+    spec_key(spec).unwrap_or_else(|| {
+        let mut h = Sha256::new();
+        h.update(spec.trim().to_ascii_uppercase().as_bytes());
+        format!("~{:x}", h.finalize())
+    })
+}
+
 /// Bind `spec` to `change` before an append that carries it. Called under
-/// the append's locks; any error must fail the append. A spec that is not
-/// a valid label key cannot be selected by label and needs no binding
-/// (ownership filtering withholds such copies instead).
+/// the append's locks; any error must fail the append. Every spec label is
+/// bound, whatever its spelling ([`binding_key`]).
 pub(crate) fn bind(root: &Path, spec: &str, change: ChangeKey) -> std::io::Result<()> {
-    let Some(spec) = spec_key(spec) else {
-        return Ok(());
-    };
-    write_binding(root, &spec, &change.as_key())
+    write_binding(root, &binding_key(spec), &change.as_key())
+}
+
+/// Withdraw the completeness marker: the ledger may hold events no binding
+/// names (an older binary could write it), so selection must refuse until
+/// the bootstrap has scanned it again. Absent is already withdrawn.
+// trace:BUG-2531 | ai:claude
+pub(crate) fn withdraw_marker(root: &Path) -> std::io::Result<()> {
+    match std::fs::remove_file(marker_file(root)) {
+        Ok(()) => fsync_dir(&ledger_dir(root)),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(()),
+        Err(e) => Err(e),
+    }
 }
 
 /// Certify a ledger that holds no change ledger yet: it is trivially
@@ -249,15 +284,113 @@ pub(crate) fn marker_state(root: &Path) -> std::io::Result<MarkerState> {
     }
 }
 
-/// Scan every change ledger strictly under the exclusive ledger lock, bind
-/// every spec its events carry, remove bindings whose change ledger no
-/// longer exists, and publish the marker last. Idempotent: an interrupted
-/// run leaves no new marker, and a rerun completes it.
+/// Remove whatever sits at `path` (a file, a link, or a directory tree).
+fn remove_entry(path: &Path) -> std::io::Result<()> {
+    if std::fs::symlink_metadata(path)?.is_dir() {
+        std::fs::remove_dir_all(path)
+    } else {
+        std::fs::remove_file(path)
+    }
+}
+
+/// The canonical keys of the change ledgers in the ledger directory.
+fn change_ledgers(root: &Path) -> std::io::Result<std::collections::BTreeSet<String>> {
+    let mut out = std::collections::BTreeSet::new();
+    for entry in std::fs::read_dir(ledger_dir(root))? {
+        if let Some(key) = entry?.file_name().to_str().and_then(change_ledger_name) {
+            out.insert(key);
+        }
+    }
+    Ok(out)
+}
+
+/// Every way the bindings disagree with the ledger they certify, as
+/// selection would refuse it: older writers not fenced out, a bindings tree
+/// that is not plain directories of regular files named by changes, a
+/// binding whose change ledger is gone and, when `deep`, a change ledger
+/// that carries a spec no binding names (a strict read of every change
+/// ledger, bounded like the bootstrap). Empty when they agree. Read without
+/// the ledger lock, so an append in flight can show as a binding whose
+/// ledger is missing; the bootstrap, under the lock, then finds nothing.
+// trace:BUG-2531 | ai:claude
+pub(crate) fn audit(root: &Path, deep: bool) -> std::io::Result<Vec<String>> {
+    let mut out = Vec::new();
+    if std::fs::symlink_metadata(ledger_dir(root)).is_err() {
+        return Ok(out);
+    }
+    if !super::store::writer_fenced(root) {
+        out.push("older aida binaries are not fenced out of the ledger".to_string());
+    }
+    let ledgers = change_ledgers(root)?;
+    let dir = bindings_dir(root);
+    match std::fs::symlink_metadata(&dir) {
+        Ok(m) if m.is_dir() => {
+            for spec in std::fs::read_dir(&dir)? {
+                let spec = spec?;
+                let label = spec.file_name().to_string_lossy().into_owned();
+                if !std::fs::symlink_metadata(spec.path())?.is_dir() {
+                    out.push(format!("bindings entry {label} is not a directory"));
+                    continue;
+                }
+                for entry in std::fs::read_dir(spec.path())? {
+                    let entry = entry?;
+                    let name = entry.file_name().to_string_lossy().into_owned();
+                    let canonical = ChangeKey::parse(&name).is_some_and(|c| c.as_key() == name);
+                    if !canonical || !std::fs::symlink_metadata(entry.path())?.is_file() {
+                        out.push(format!(
+                            "binding {label}/{name} is not a regular file named by a change"
+                        ));
+                    } else if !ledgers.contains(&name) {
+                        out.push(format!(
+                            "{label} is bound to {name}, whose ledger is missing"
+                        ));
+                    }
+                }
+            }
+        }
+        Ok(_) => out.push("the bindings directory is not a plain directory".to_string()),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+            out.push("the bindings directory is missing".to_string())
+        }
+        Err(e) => return Err(e),
+    }
+    if deep {
+        let mut work =
+            super::checked::Budget::with_limits(MAX_BOOTSTRAP_BYTES, MAX_BOOTSTRAP_EVENTS);
+        match super::checked::scan_bindings(root, &mut work) {
+            Ok(scan) => {
+                for (spec, changes) in &scan.unwrap_or_default().bound {
+                    for change in changes {
+                        let bound = std::fs::symlink_metadata(dir.join(spec).join(change))
+                            .is_ok_and(|m| m.is_file());
+                        if !bound {
+                            out.push(format!("{change} records {spec} events without a binding"));
+                        }
+                    }
+                }
+            }
+            Err(e) => out.push(format!(
+                "the bindings cannot be checked against the change ledgers: {e}"
+            )),
+        }
+    }
+    Ok(out)
+}
+
+/// Scan every change ledger strictly under the exclusive ledger lock (which
+/// fences older writers out), rebuild the bindings tree to exactly what the
+/// scan found — every spec its events carry is bound; a binding whose change
+/// ledger no longer exists, and anything that is not a binding, is removed —
+/// and publish the marker last. The marker is withdrawn first, so selection
+/// refuses while the tree is rebuilt, an interrupted run leaves no marker,
+/// and a rerun completes it. Safe to run on a ledger whose marker is valid:
+/// it repairs every inconsistency [`audit`] reports.
 pub(crate) fn bootstrap(root: &Path) -> std::io::Result<Bootstrapped> {
     super::store::with_exclusive(root, || {
         if std::fs::symlink_metadata(ledger_dir(root)).is_err() {
             return Ok(Bootstrapped::default());
         }
+        withdraw_marker(root)?;
         let mut work =
             super::checked::Budget::with_limits(MAX_BOOTSTRAP_BYTES, MAX_BOOTSTRAP_EVENTS);
         let scan = super::checked::scan_bindings(root, &mut work)
@@ -267,28 +400,40 @@ pub(crate) fn bootstrap(root: &Path) -> std::io::Result<Bootstrapped> {
             ledgers: scan.changes.len(),
             ..Default::default()
         };
-        ensure_dir(&bindings_dir(root))?;
+        // First remove what selection would refuse on: a binding whose
+        // ledger is gone (a first append that failed after its binding, or
+        // a removed ledger) and every entry that is not a binding at all.
+        let dir = bindings_dir(root);
+        if std::fs::symlink_metadata(&dir).is_ok_and(|m| !m.is_dir()) {
+            std::fs::remove_file(&dir)?;
+            out.pruned += 1;
+        }
+        ensure_dir(&dir)?;
+        for spec in std::fs::read_dir(&dir)? {
+            let spec = spec?.path();
+            if !std::fs::symlink_metadata(&spec)?.is_dir() {
+                std::fs::remove_file(&spec)?;
+                out.pruned += 1;
+                continue;
+            }
+            for entry in std::fs::read_dir(&spec)? {
+                let entry = entry?;
+                let bound = entry.file_name().to_str().is_some_and(|name| {
+                    scan.changes.contains(name)
+                        && std::fs::symlink_metadata(entry.path()).is_ok_and(|m| m.is_file())
+                });
+                if !bound {
+                    remove_entry(&entry.path())?;
+                    out.pruned += 1;
+                }
+            }
+            fsync_dir(&spec)?;
+        }
+        fsync_dir(&dir)?;
         for (spec, changes) in &scan.bound {
             for change in changes {
                 write_binding(root, spec, change)?;
                 out.bindings += 1;
-            }
-        }
-        // A binding whose ledger is gone (a first append that failed after
-        // its binding, or a removed ledger) would refuse selection forever.
-        for spec in std::fs::read_dir(bindings_dir(root))? {
-            let spec = spec?;
-            if !spec.file_type()?.is_dir() {
-                continue;
-            }
-            for entry in std::fs::read_dir(spec.path())? {
-                let entry = entry?;
-                let name = entry.file_name();
-                let Some(name) = name.to_str() else { continue };
-                if !scan.changes.contains(name) {
-                    std::fs::remove_file(entry.path())?;
-                    out.pruned += 1;
-                }
             }
         }
         #[cfg(test)]

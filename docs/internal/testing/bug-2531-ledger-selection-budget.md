@@ -92,9 +92,35 @@ are TASK-3098.
   whose ledger is missing, or a ledger that records a spec's reviews without
   a binding, refuses and names the fix.
 - The event format is 2. Readers accept 1 and 2. A writer refuses a ledger
-  that holds events of a format newer than it writes. Binaries that predate
-  this slice have no such check, so only one live binary may write (the
-  ruling's single-install assumption).
+  that holds events of a format newer than it writes.
+- Binaries older than format 2 cannot write the ledger. Format 2 moved the
+  ledger-wide lock to `.aida/gate-ledger.v2.lock`. Before its first write
+  (and before the bootstrap certifies anything) a format 2 binary replaces
+  the old lock path `.aida/gate-ledger.lock` with a dangling link, under the
+  exclusive format 2 lock, and then waits for every older writer that
+  already holds the old lock. An older binary opens (or creates) that path
+  before every ledger write, so each of its writes now fails with "No such
+  file or directory"; the link's target names the reason. Its readers are
+  unaffected (its strict reader already refuses format 2 events).
+- The fence is part of the completeness certificate. Selection refuses a
+  valid marker beside an old lock path that is not the fence, and a writer
+  that finds the fence down puts it back and withdraws the marker, because
+  an older binary may have appended without binding in between. To run an
+  older binary against the store again (a rollback), remove the link; after
+  returning to a format 2 binary, run the fix command again.
+- Every spec label an event carries is bound. A label usable as a file name
+  is its own key; any other label (one with a separator, or one that reads
+  as a change key) is bound under `~<sha256 of the normalized label>`. The
+  ownership filter therefore finds the witnesses of every review copy, and
+  no longer withholds a review whose label had no key.
+- The fix command also repairs a ledger whose marker is valid. `aida doctor`
+  reports, and the heal rebuilds, older writers not fenced out, a binding
+  whose change ledger is gone, a bindings tree that is not plain directories
+  of regular files named by changes and, when the category is asked for by
+  name (as the fix command does), a change ledger that carries a spec no
+  binding names. The rebuild withdraws the marker first, removes whatever
+  is not a binding of an existing change ledger, writes the bindings the
+  scan found and publishes the marker last.
 - The shared discovery of a verdict listing (BUG-2543) is revalidated
   against what it read: the marker, the bindings of each spec it listed and
   the stat identity of each ledger it read.
@@ -102,11 +128,23 @@ are TASK-3098.
   the bindings rebuild, not every selection.
 
 Deploy step: after a binary with this slice goes live, run the fix command
-once on the live store before any review or train.
+once on the live store before any review or train. Long-running processes of
+the previous binary (a review watch, a deputy loop) can no longer write the
+ledger from that point: restart them on the new binary. A contained reviewer
+opens `.aida/gate-ledger.v2.lock` read-only, so the fix command (which
+creates it) must have run on the host first.
+
+Known limit of the fence: an older writer that had opened the old lock but
+not yet locked it when the link went in is waited for twice; one stalled
+between those two system calls for longer than both waits would still append
+once. A hand-restored change ledger (moved back from the quarantine or the
+archive) carries no bindings either: run the fix command after restoring one.
 
 Regressions: `gate::ledger::bindings::tests` (bound-only reads counted by
 bytes and parse attempts with unrelated history over the old ceiling, missing
 and unsupported marker, bootstrap interruption and rerun, binding/append
 boundary, missing or inconsistent bindings, newer-format refusal, shared
-discovery after a new binding), plus the adapted
+discovery after a new binding, the older-writer fence and its wait, a fence
+taken down under a valid marker, the fix under a valid marker, a refusal
+under a label without a key), plus the adapted
 `bug_2543_shared_discovery_tests` and `bug_2542` tests.

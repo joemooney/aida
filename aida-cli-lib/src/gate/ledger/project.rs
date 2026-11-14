@@ -734,24 +734,6 @@ impl MiskeyOwners {
         });
     }
 
-    /// [`Self::filter`] for an index holding only the witnesses bound to the
-    /// specs [`witness_specs`] names: a candidate whose spec has no binding
-    /// key could have unindexed witnesses, so it is withheld.
-    // trace:BUG-2531 | ai:claude
-    pub(crate) fn filter_bound(&self, events: &mut Vec<GateEvent>) {
-        events.retain(|event| match disqualifiable(event) {
-            Candidate::Keep => true,
-            Candidate::Drop => false,
-            Candidate::Fingerprint(key) => {
-                event.spec.as_deref().and_then(spec_key).is_some()
-                    && !self
-                        .owners
-                        .get(&key)
-                        .is_some_and(|changes| changes.iter().any(|change| change != &event.change))
-            }
-        });
-    }
-
     /// Without a complete ownership index, keep exactly the events no witness
     /// could disqualify: holds, carry-over proofs, phase-3 records and other
     /// unfingerprintable evidence stay; every review copy that a foreign
@@ -772,15 +754,16 @@ pub(crate) fn needs_witnesses(events: &[GateEvent]) -> bool {
         .any(|e| matches!(disqualifiable(e), Candidate::Fingerprint(_)))
 }
 
-/// The spec keys whose bindings hold every witness that could disqualify
-/// one of `events`. A witness must share the candidate's fingerprint, which
-/// includes its spec, so only changes bound to that spec can hold one.
+/// The binding keys that hold every witness that could disqualify one of
+/// `events`. A witness must share the candidate's fingerprint, which
+/// includes its spec, so only changes bound to that spec can hold one; every
+/// spec label has a binding key, so no candidate goes unchecked.
 // trace:BUG-2531 | ai:claude
 pub(crate) fn witness_specs(events: &[GateEvent]) -> std::collections::BTreeSet<String> {
     events
         .iter()
         .filter(|e| matches!(disqualifiable(e), Candidate::Fingerprint(_)))
-        .filter_map(|e| e.spec.as_deref().and_then(spec_key))
+        .filter_map(|e| e.spec.as_deref().map(super::bindings::binding_key))
         .collect()
 }
 

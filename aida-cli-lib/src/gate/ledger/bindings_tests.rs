@@ -154,12 +154,12 @@ fn bug_2531_missing_or_unsupported_marker_fails_closed_naming_the_fix() {
     events = checked::filter_miskeyed_or_fail_closed(&root, events);
     assert!(events.iter().all(|e| e.verdict_record().is_none()));
 
-    let findings = crate::doctor_cmd::scan_gate_ledger_bindings(&root);
+    let findings = crate::doctor_cmd::scan_gate_ledger_bindings(&root, true);
     assert_eq!(findings.len(), 1);
     assert!(findings[0].action.contains(FIX_COMMAND));
     assert!(findings[0].safe_heal);
     bootstrap(&root).unwrap();
-    assert!(crate::doctor_cmd::scan_gate_ledger_bindings(&root).is_empty());
+    assert!(crate::doctor_cmd::scan_gate_ledger_bindings(&root, true).is_empty());
     let mut d = checked::discover(&root).unwrap().unwrap();
     let got = d
         .events_for(&["BUG-5".into()], &mut Budget::default())
@@ -423,4 +423,239 @@ fn bug_2531_first_append_without_a_spec_certifies_the_ledger() {
     legacy_ledger(&legacy, 1, "BUG-1", 16);
     append(&legacy, ChangeKey::pr(2), "BUG-2", &record("approved", 0));
     assert_eq!(marker_state(&legacy).unwrap(), MarkerState::Missing);
+}
+
+/// A ledger line as a binary older than format 2 appends it: version 1, no
+/// binding, no index (its best-effort index update failed).
+fn older_writer_appends(root: &Path, n: u64, spec: &str, verdict: &str) {
+    use std::io::Write as _;
+    let mut e = GateEvent::new(
+        ChangeKey::pr(n),
+        EventBody::Verdict {
+            record: record(verdict, 0),
+        },
+    );
+    e.v = 1;
+    e.spec = Some(spec.into());
+    e.head = Some(HEAD.into());
+    e.seq = 1_000;
+    e.at = ts(0);
+    let mut file = std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(store::ledger_file(root, ChangeKey::pr(n)))
+        .unwrap();
+    writeln!(file, "{}", serde_json::to_string(&e).unwrap()).unwrap();
+}
+
+/// A binary older than format 2 cannot write the ledger once a format 2
+/// writer has touched it: its ledger-wide lock no longer opens or creates.
+/// A ledger whose fence was taken down (so such a binary could write) is
+/// not trusted: selection refuses, the next writer withdraws the marker,
+/// and the fix finds what the older binary appended.
+#[test]
+fn bug_2531_older_writers_are_fenced_out_and_an_open_fence_fails_closed() {
+    let (_tmp, root) = root();
+    let _env = uncontained();
+    append(&root, ChangeKey::pr(1), "BUG-1", &record("approved", -60));
+    let legacy = store::legacy_lock_file(&root);
+    assert!(store::writer_fenced(&root));
+    // What every older binary does first, in both of its lock paths.
+    assert!(std::fs::File::open(&legacy).is_err());
+    assert!(std::fs::OpenOptions::new()
+        .create(true)
+        .truncate(false)
+        .write(true)
+        .open(&legacy)
+        .is_err());
+    assert!(!legacy.exists(), "the refused open created nothing");
+
+    // An operator takes the fence down and an older binary records a
+    // refusal on a new change: no binding, no index.
+    std::fs::remove_file(&legacy).unwrap();
+    std::fs::write(&legacy, b"").unwrap();
+    older_writer_appends(&root, 2, "BUG-1", "request-changes");
+    assert_eq!(marker_state(&root).unwrap(), MarkerState::Complete);
+    let err = checked::discover(&root).err().unwrap();
+    assert!(err.0.contains("not fenced out"), "{err}");
+    assert!(err.0.contains(FIX_COMMAND), "{err}");
+    let findings = crate::doctor_cmd::scan_gate_ledger_bindings(&root, false);
+    assert_eq!(findings.len(), 1);
+    assert!(
+        findings[0].summary.contains("not fenced out"),
+        "{findings:?}"
+    );
+    assert!(findings[0].safe_heal);
+
+    // The next format 2 write fences again and withdraws the marker: it
+    // cannot know what was appended while the fence was down.
+    append(&root, ChangeKey::pr(3), "BUG-3", &record("approved", 0));
+    assert!(store::writer_fenced(&root));
+    assert_eq!(marker_state(&root).unwrap(), MarkerState::Missing);
+    assert!(checked::discover(&root).is_err());
+    bootstrap(&root).unwrap();
+    assert!(crate::doctor_cmd::scan_gate_ledger_bindings(&root, true).is_empty());
+    let mut d = checked::discover(&root).unwrap().unwrap();
+    let got = d
+        .events_for(&["BUG-1".into()], &mut Budget::default())
+        .unwrap();
+    assert_eq!(
+        newest_verdict(&got[0].1).as_deref(),
+        Some("request-changes")
+    );
+}
+
+/// The fence waits out an older writer that already holds the old lock, so
+/// its append is on disk before anything is certified.
+#[test]
+fn bug_2531_fence_waits_for_an_older_writer_in_flight() {
+    use std::sync::atomic::{AtomicBool, Ordering};
+    let (_tmp, root) = root();
+    let _env = uncontained();
+    let legacy = store::legacy_lock_file(&root);
+    std::fs::create_dir_all(legacy.parent().unwrap()).unwrap();
+    std::fs::write(&legacy, b"").unwrap();
+    let older = std::fs::File::open(&legacy).unwrap();
+    fs2::FileExt::lock_shared(&older).unwrap();
+    let done = std::sync::Arc::new(AtomicBool::new(false));
+    let waiter = {
+        let (root, done) = (root.clone(), done.clone());
+        std::thread::spawn(move || {
+            store::fence_older_writers(&root).unwrap();
+            done.store(true, Ordering::SeqCst);
+        })
+    };
+    // The link goes in at once (no new older writer can start) ...
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
+    while !store::writer_fenced(&root) && std::time::Instant::now() < deadline {
+        std::thread::sleep(std::time::Duration::from_millis(5));
+    }
+    assert!(store::writer_fenced(&root));
+    // ... but the writer behind it does not proceed while the older one
+    // still holds its lock.
+    std::thread::sleep(std::time::Duration::from_millis(150));
+    assert!(!done.load(Ordering::SeqCst));
+    fs2::FileExt::unlock(&older).unwrap();
+    waiter.join().unwrap();
+    assert!(done.load(Ordering::SeqCst));
+}
+
+/// The fix command repairs what selection refuses on (or would miss) while
+/// the marker is valid: a change ledger carrying a spec no binding names, a
+/// binding whose ledger is gone, a bindings tree that is not plain
+/// directories of regular files. Doctor reports each.
+#[test]
+fn bug_2531_fix_repairs_inconsistencies_under_a_valid_marker() {
+    let (_tmp, root) = root();
+    let _env = uncontained();
+    let scan = |deep: bool| crate::doctor_cmd::scan_gate_ledger_bindings(&root, deep);
+    let newest = |spec: &str| {
+        let mut d = checked::discover(&root).unwrap().unwrap();
+        d.events_for(&[spec.to_string()], &mut Budget::default())
+            .map(|got| newest_verdict(&got[0].1))
+    };
+    append(
+        &root,
+        ChangeKey::pr(1),
+        "BUG-1",
+        &record("request-changes", 0),
+    );
+    assert!(scan(true).is_empty());
+
+    // A ledger records BUG-1 with neither binding nor hint: the marker is
+    // valid, nothing leads selection to the ledger, and the refusal is
+    // missed. Only the named, deep check can see it.
+    std::fs::remove_file(bindings_dir(&root).join("BUG-1/PR-1")).unwrap();
+    std::fs::remove_file(ledger_dir(&root).join("by-spec/BUG-1.json")).unwrap();
+    assert_eq!(marker_state(&root).unwrap(), MarkerState::Complete);
+    assert_eq!(newest("BUG-1").unwrap(), None);
+    assert!(scan(false).is_empty());
+    let findings = scan(true);
+    assert_eq!(findings.len(), 1);
+    assert!(
+        findings[0]
+            .summary
+            .contains("PR-1 records BUG-1 events without a binding"),
+        "{findings:?}"
+    );
+    assert!(findings[0].action.contains(FIX_COMMAND));
+    assert!(findings[0].safe_heal);
+    assert_eq!(bootstrap(&root).unwrap().bindings, 1);
+    assert!(scan(true).is_empty());
+    assert_eq!(newest("BUG-1").unwrap().as_deref(), Some("request-changes"));
+
+    // A binding whose ledger is gone, a non-directory spec entry and a
+    // linked binding: selection refuses on each; the cheap check sees them.
+    std::fs::write(bindings_dir(&root).join("BUG-1/PR-405"), b"").unwrap();
+    std::fs::write(bindings_dir(&root).join("BUG-9"), b"").unwrap();
+    std::fs::create_dir(bindings_dir(&root).join("BUG-8")).unwrap();
+    std::os::unix::fs::symlink("/dev/null", bindings_dir(&root).join("BUG-8/PR-1")).unwrap();
+    assert!(newest("BUG-1").unwrap_err().0.contains(FIX_COMMAND));
+    assert!(newest("BUG-9").unwrap_err().0.contains(FIX_COMMAND));
+    assert!(newest("BUG-8").unwrap_err().0.contains(FIX_COMMAND));
+    let findings = scan(false);
+    assert_eq!(findings.len(), 1);
+    let problems = audit(&root, false).unwrap();
+    for what in [
+        "BUG-1 is bound to PR-405, whose ledger is missing",
+        "bindings entry BUG-9 is not a directory",
+        "binding BUG-8/PR-1 is not a regular file named by a change",
+    ] {
+        assert!(problems.iter().any(|p| p == what), "{what}: {problems:?}");
+    }
+    assert_eq!(problems.len(), 3, "{problems:?}");
+    assert_eq!(bootstrap(&root).unwrap().pruned, 3);
+    assert!(scan(true).is_empty());
+    assert_eq!(newest("BUG-1").unwrap().as_deref(), Some("request-changes"));
+    assert_eq!(newest("BUG-9").unwrap(), None);
+    assert_eq!(newest("BUG-8").unwrap(), None);
+}
+
+/// A review recorded under a label that is not a label key (a separator in
+/// it) is bound like any other. The ownership filter therefore finds its
+/// witnesses and keeps the refusal, instead of withholding every such
+/// review for want of a key; a foreign copy is still dropped.
+#[test]
+fn bug_2531_a_refusal_under_an_unkeyable_label_is_bound_not_withheld() {
+    let (_tmp, root) = root();
+    let _env = uncontained();
+    let label = "BUG 7/odd";
+    assert!(project::spec_key(label).is_none());
+    let key = binding_key(label);
+    assert!(key.starts_with('~'), "{key}");
+    assert_eq!(key, binding_key(" bug 7/ODD "));
+
+    append(
+        &root,
+        ChangeKey::pr(1),
+        label,
+        &record("request-changes", -60),
+    );
+    assert!(bindings_dir(&root).join(&key).join("PR-1").is_file());
+    let read = |n: u64| {
+        newest_verdict(
+            &checked::read_change_events(&root, ChangeKey::pr(n), &mut Budget::default()).unwrap(),
+        )
+    };
+    assert_eq!(read(1).as_deref(), Some("request-changes"));
+    let raw = store::read_file(&root, ChangeKey::pr(1));
+    let kept = checked::filter_miskeyed_or_fail_closed(&root, raw);
+    assert_eq!(newest_verdict(&kept).as_deref(), Some("request-changes"));
+
+    // A newer approval on PR-1 that PR-2's phase-3 record proves foreign is
+    // still dropped: the witness is found through the same binding key.
+    let mut foreign = record("approved", 0);
+    append(&root, ChangeKey::pr(1), label, &foreign);
+    assert_eq!(read(1).as_deref(), Some("approved"));
+    foreign.insert("mode".into(), serde_json::json!(project::PHASE3_MODE));
+    append(&root, ChangeKey::pr(2), label, &foreign);
+    assert!(bindings_dir(&root).join(&key).join("PR-2").is_file());
+    assert_eq!(read(1).as_deref(), Some("request-changes"));
+
+    // A ledger written before bindings existed is bound the same way.
+    let (_tmp, old) = self::root();
+    legacy_ledger(&old, 5, label, 16);
+    bootstrap(&old).unwrap();
+    assert!(bindings_dir(&old).join(&key).join("PR-5").is_file());
+    assert!(crate::doctor_cmd::scan_gate_ledger_bindings(&old, true).is_empty());
 }

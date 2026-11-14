@@ -2632,19 +2632,51 @@ pub(crate) fn doctor_contradictions(
 
 /// The gate ledger's spec-to-change bindings must be complete before
 /// verdict selection can trust them: a missing or unsupported completeness
-/// marker is a finding whose heal runs the one-time bootstrap.
+/// marker is a finding whose heal runs the bootstrap. So is a valid marker
+/// over bindings that disagree with the ledger (older writers not fenced
+/// out, a binding whose ledger is gone, a malformed bindings tree and, when
+/// `deep`, a change ledger carrying a spec no binding names): selection
+/// refuses on each of those and names this heal, so the heal must take them.
+/// `deep` reads every change ledger once; the caller sets it when this
+/// category was asked for by name.
 // trace:BUG-2531 | ai:claude
-pub(crate) fn scan_gate_ledger_bindings(project_root: &std::path::Path) -> Vec<DoctorFinding> {
+pub(crate) fn scan_gate_ledger_bindings(
+    project_root: &std::path::Path,
+    deep: bool,
+) -> Vec<DoctorFinding> {
     use crate::gate::ledger::{self, bindings};
-    let state = ledger::store_root(project_root)
-        .and_then(|root| bindings::marker_state(&root))
-        .map_err(|e| e.to_string());
+    let root = ledger::store_root(project_root);
+    let state = root
+        .as_ref()
+        .map_err(|e| e.to_string())
+        .and_then(|root| bindings::marker_state(root).map_err(|e| e.to_string()));
     let summary = match state {
-        Ok(
-            bindings::MarkerState::NoLedger
-            | bindings::MarkerState::Complete
-            | bindings::MarkerState::Trivial,
-        ) => return vec![],
+        Ok(bindings::MarkerState::NoLedger | bindings::MarkerState::Trivial) => return vec![],
+        Ok(bindings::MarkerState::Complete) => {
+            let problems = root
+                .as_ref()
+                .map_err(|e| e.to_string())
+                .and_then(|root| bindings::audit(root, deep).map_err(|e| e.to_string()));
+            match problems {
+                Ok(problems) if problems.is_empty() => return vec![],
+                Ok(problems) => {
+                    let shown = problems
+                        .iter()
+                        .take(3)
+                        .cloned()
+                        .collect::<Vec<_>>()
+                        .join("; ");
+                    let more = match problems.len().saturating_sub(3) {
+                        0 => String::new(),
+                        n => format!("; and {n} more"),
+                    };
+                    format!(
+                        "the gate ledger's bindings are marked complete but disagree with the ledger ({shown}{more}); verdict selection refuses, or can miss a review, until they are rebuilt"
+                    )
+                }
+                Err(e) => format!("cannot inspect the gate ledger's bindings: {e}"),
+            }
+        }
         Ok(bindings::MarkerState::Missing) => {
             "the gate ledger's spec-to-change bindings have not been built; verdict selection refuses until they are".to_string()
         }

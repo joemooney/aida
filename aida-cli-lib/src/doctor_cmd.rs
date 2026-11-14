@@ -644,7 +644,12 @@ pub(crate) fn doctor_multi_agent(opts: DoctorRunOptions) -> Result<()> {
 
     // trace:BUG-2531 | ai:claude
     if doctor_category_selected(opts.category.as_deref(), "gate-ledger-bindings")? {
-        findings.extend(scan_gate_ledger_bindings(&project_root));
+        // Asked for by name (the fix command selection names): also read
+        // every change ledger for a spec no binding names.
+        findings.extend(scan_gate_ledger_bindings(
+            &project_root,
+            opts.category.is_some(),
+        ));
         findings.sort_by(|a, b| a.category.cmp(&b.category).then(a.id.cmp(&b.id)));
     }
 

@@ -15,7 +15,7 @@
 // mandate-gate
 
 use super::bindings::{
-    change_ledger_name, Marker, BINDINGS_DIR, FIX_COMMAND, MARKER_FILE, MARKER_FORMAT,
+    binding_key, change_ledger_name, Marker, BINDINGS_DIR, FIX_COMMAND, MARKER_FILE, MARKER_FORMAT,
 };
 use super::event::{GateEvent, EVENT_VERSION};
 use super::project::{spec_key, SpecIndex};
@@ -418,10 +418,11 @@ pub(crate) fn scan_bindings(root: &Path, work: &mut Budget) -> Result<Option<Sca
                 "refusing gate-ledger discovery: {name} vanished while it was read"
             )));
         };
-        // Bind exactly what a writer binds: every spec an event carries.
+        // Bind exactly what a writer binds: every spec an event carries,
+        // whatever its spelling.
         for spec in events
             .iter()
-            .filter_map(|e| e.spec.as_deref().and_then(spec_key))
+            .filter_map(|e| e.spec.as_deref().map(binding_key))
         {
             scan.bound.entry(spec).or_default().insert(key.clone());
         }
@@ -442,10 +443,15 @@ fn not_bound(why: String) -> Unsafe {
 }
 
 /// Whether selection may trust the bindings: `Ok(true)` with a supported
-/// marker, `Ok(false)` for a ledger with no change ledger at all (nothing to
-/// bind), otherwise a refusal naming the fix. Never a scan of payloads.
+/// marker and older writers fenced out, `Ok(false)` for a ledger with no
+/// change ledger at all (nothing to bind), otherwise a refusal naming the
+/// fix. Never a scan of payloads.
+///
+/// The fence is part of the certificate: a binary older than format 2
+/// appends without binding, so a marker beside an open legacy lock path
+/// (the fence was removed to let such a binary write) certifies nothing.
 // trace:BUG-2531 | ai:claude
-fn require_complete(ledger: &File, ledger_path: &Path) -> Result<bool, Unsafe> {
+fn require_complete(root: &Path, ledger: &File, ledger_path: &Path) -> Result<bool, Unsafe> {
     let mut tiny = Budget::with_limits(MAX_MARKER_BYTES, 0);
     match read_entry(ledger, MARKER_FILE, MAX_MARKER_BYTES, &mut tiny)? {
         Some(body) => {
@@ -459,6 +465,12 @@ fn require_complete(ledger: &File, ledger_path: &Path) -> Result<bool, Unsafe> {
                     "refusing gate-ledger selection: the bindings marker has unsupported format {}",
                     marker.format
                 )));
+            }
+            if !super::store::writer_fenced(root) {
+                return Err(not_bound(
+                    "refusing gate-ledger selection: older aida binaries are not fenced out of this ledger, so it may hold reviews without a binding"
+                        .into(),
+                ));
             }
             Ok(true)
         }
@@ -598,7 +610,7 @@ pub(crate) fn discover_with_budget(root: &Path, work: Budget) -> Result<Option<D
     };
     let ledger_path = super::ledger_dir(root);
     let ledger_id = dir_id(&ledger)?; // trace:BUG-2543 | ai:claude
-    let marked = require_complete(&ledger, &ledger_path)?;
+    let marked = require_complete(root, &ledger, &ledger_path)?;
     Ok(Some(Discovery {
         ledger,
         ledger_path,
@@ -657,7 +669,7 @@ impl Discovery {
         let reviewed: std::collections::BTreeSet<String> = events
             .iter()
             .filter(|e| e.verdict_record().is_some())
-            .filter_map(|e| e.spec.as_deref().and_then(spec_key))
+            .filter_map(|e| e.spec.as_deref().map(binding_key))
             .collect();
         for spec in reviewed {
             if !self.bound_changes(&spec)?.iter().any(|c| c == key) {
@@ -719,7 +731,9 @@ impl Discovery {
         for spec in super::project::witness_specs(events) {
             self.load_owners(&spec)?;
         }
-        self.owners.filter_bound(events);
+        // Every candidate's spec has a binding key, so the index holds every
+        // witness that could disqualify it: no review is withheld unproven.
+        self.owners.filter(events);
         Ok(())
     }
 
@@ -1110,7 +1124,7 @@ impl Discovery {
             return false;
         }
         let ledger_path = super::ledger_dir(root);
-        if require_complete(&ledger, &ledger_path).ok() != Some(self.marked) {
+        if require_complete(root, &ledger, &ledger_path).ok() != Some(self.marked) {
             return false;
         }
         self.bound.iter().all(|(spec, changes)| {
