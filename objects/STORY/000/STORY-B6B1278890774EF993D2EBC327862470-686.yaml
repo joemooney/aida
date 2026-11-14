@@ -30,7 +30,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-13T15:54:08.931576118Z
-modified_at: 2026-11-14T10:58:35.433393883Z
+modified_at: 2026-11-14T12:34:00.627899789Z
 req_type: Story
 tags:
 - architecture
@@ -267,6 +267,13 @@ comments:
   created_at: 2026-11-14T10:58:35.433393883Z
   modified_at: 2026-11-14T10:58:35.433393883Z
   session_id: 01a1d8f3-f948-7072-b174-fa9507ed074b
+  harness_version: 2.1.325 (Claude Code)
+- id: 01a1da0c-e533-77a2-a2c9-11fcb8152f93
+  author: joe
+  content: 'Round-2 CR (89b8b6fb69af) addressed in 4f851710697: (1) the review_watch fast path reuses the shared base probe, so the task_1750 baseline holds; (2) the pr_cmd scratch-ref cleanup uses review_freshness::git, so the task_2143 allowlist holds; (3) a routed conflict records Exited through transition_routed, skipping the BUG-2450 setup conversion, and the strict Phase::Exited assertion is restored; (4) route_rework dispatches through a recordable seam, and a new test covers a successful implementer dispatch plus its receipt; (5) three fast-policy preflight tests in task_471; (6) the skipped-round ledger assertions, fast and strict. Verified: aida-ci-guards task_1750/task_2143 pass, and cargo check of the aida-cli-lib lib and tests is clean. The new aida-cli-lib tests did NOT run: two lane test builds hit the 900s timeout.'
+  created_at: 2026-11-14T12:34:00.627899789Z
+  modified_at: 2026-11-14T12:34:00.627899789Z
+  session_id: 01a1d9de6bac
   harness_version: 2.1.325 (Claude Code)
 history:
 - id: 01a1d59e-6b4b-7d10-8aea-02729132bc6f
