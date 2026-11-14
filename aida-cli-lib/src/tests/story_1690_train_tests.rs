@@ -96,6 +96,7 @@ fn member(pr: u64, head: &str, subject: &str) -> Member {
 fn fake_cover() -> crate::gate::mandate_ship::MandateCover {
     crate::gate::mandate_ship::MandateCover {
         gate_match: None,
+        issued_supervised: false,
         id: "6f1c1d6e-0000-4000-8000-00000000fake".into(),
         principal: "joe".into(),
     }
@@ -4019,6 +4020,7 @@ fn pr_train_journal_completed_member_is_skipped_and_authority_is_not_restored() 
     let mut m = member(1, "head1", "s");
     m.release = Some(crate::gate::mandate_ship::MandateCover {
         gate_match: None,
+        issued_supervised: false,
         id: "not-authority".into(),
         principal: "operator".into(),
     });
@@ -5740,6 +5742,7 @@ fn mandate_include_gate_paths_audits_train_member() {
         "joe".into(),
         &paths,
         ProtectedPaths::floor_ref(),
+        false,
     );
     let audit = cover.gate_audit().unwrap();
     let records = || {

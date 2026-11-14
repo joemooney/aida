@@ -43,6 +43,7 @@ fn active(include_supervised: bool) -> Mandate {
         scopes: Default::default(),
         kind: None,
         renewals: Vec::new(),
+        revived: None,
     }
 }
 
@@ -1067,7 +1068,7 @@ fn every_failure_after_a_mandate_release_re_arms_the_hold() {
     let merged = after.find("merged_this_run = true;").unwrap();
     let window = &after[..merged + 2000];
     assert!(window.contains("if mandate_release.is_some() {")); // }
-    assert!(window.contains("ended or no longer covers protected paths before the merge"));
+    assert!(window.contains("ended or was narrowed by a renewal before the merge"));
     assert!(window.contains("re-arm a mandate-released hold on a failed merge"));
     assert_eq!(
         window.matches("rearm_after_mandate_failure(").count(),
@@ -3372,8 +3373,13 @@ fn mandate_include_gate_paths_preserves_other_gates_and_audits_cover() {
     c.changed_paths = Some(&paths);
     assert_eq!(gate_checks(&c, &[&c.ship_gate]), Ok(()));
     let id = ship_decision(&c).unwrap();
-    let cover =
-        MandateCover::from_checked_paths(id, "joe".into(), &paths, ProtectedPaths::floor_ref());
+    let cover = MandateCover::from_checked_paths(
+        id,
+        "joe".into(),
+        &paths,
+        ProtectedPaths::floor_ref(),
+        false,
+    );
     assert_eq!(cover.gate_match, Some(hit));
     let audit = cover.gate_audit().unwrap();
     let evidence: serde_json::Value =
@@ -3419,9 +3425,12 @@ fn mandate_legacy_record_defaults_gate_paths_false() {
     assert_eq!(json["mandate"]["include_gate_paths"], true);
 }
 
+// A renewal or revival keeps the protected-path opt-in unless the human
+// changes it there; either way it takes a human at a terminal.
 // trace:STORY-2733 | ai:codex
+// trace:STORY-2771 | ai:claude
 #[test]
-fn mandate_renew_requires_fresh_gate_paths_opt_in_including_revival() {
+fn mandate_renew_keeps_or_changes_gate_paths_only_for_a_human_including_revival() {
     let tmp = tempfile::tempdir().unwrap();
     let m = mint(
         tmp.path(),
@@ -3437,46 +3446,38 @@ fn mandate_renew_requires_fresh_gate_paths_opt_in_including_revival() {
     )
     .unwrap();
     assert!(load_valid(tmp.path(), "joe", now()).0[0].include_gate_paths);
-    let (renewed, _, _) = extend(
+    let keep = RenewOverrides::default();
+    let gate_paths = |include| RenewOverrides {
+        include_gate_paths: Some(include),
+        ..RenewOverrides::default()
+    };
+    let at = |hours| now() + Duration::hours(hours);
+    let (renewed, _, _) = extend(tmp.path(), &human_ok, "joe", None, &keep, at(1)).unwrap();
+    assert!(renewed.include_gate_paths);
+    let (renewed, receipt, _) = extend(
         tmp.path(),
         &human_ok,
         "joe",
         None,
-        false,
-        now() + Duration::hours(1),
+        &gate_paths(false),
+        at(2),
     )
     .unwrap();
     assert!(!renewed.include_gate_paths);
-    let (renewed, _, _) = extend(
-        tmp.path(),
-        &human_ok,
-        "joe",
-        None,
-        true,
-        now() + Duration::hours(2),
-    )
-    .unwrap();
+    assert_eq!(receipt.changes, vec!["include-gate-paths: on -> off"]);
+    let (renewed, _, _) = extend(tmp.path(), &human_ok, "joe", None, &keep, at(3)).unwrap();
+    assert!(!renewed.include_gate_paths);
+    let (renewed, _, _) =
+        extend(tmp.path(), &human_ok, "joe", None, &gate_paths(true), at(4)).unwrap();
     assert!(renewed.include_gate_paths);
-    let (revived, _, old) = extend(
-        tmp.path(),
-        &human_ok,
-        "joe",
-        None,
-        false,
-        now() + Duration::hours(12),
-    )
-    .unwrap();
-    assert!(!revived.include_gate_paths);
+    let (revived, _, old) = extend(tmp.path(), &human_ok, "joe", None, &keep, at(14)).unwrap();
+    assert!(revived.include_gate_paths);
     assert_eq!(old.as_deref(), Some(m.id.as_str()));
-    assert!(extend(
-        tmp.path(),
-        &no_tty,
-        "joe",
-        None,
-        true,
-        now() + Duration::hours(13)
-    )
-    .is_err());
+    assert!(extend(tmp.path(), &no_tty, "joe", None, &gate_paths(false), at(15)).is_err());
+    assert!(load_valid(tmp.path(), "joe", at(15))
+        .0
+        .iter()
+        .any(|m| m.include_gate_paths));
 }
 
 // trace:STORY-2733 | ai:codex
@@ -3488,6 +3489,7 @@ fn mandate_gate_audit_keeps_unusual_paths_on_one_physical_line() {
         "joe".into(),
         std::slice::from_ref(&path),
         crate::gate::mandate_gates::ProtectedPaths::floor_ref(),
+        false,
     );
     let audit = cover.gate_audit().unwrap();
     assert_eq!(audit.lines().count(), 1);
@@ -3507,6 +3509,7 @@ fn mandate_cover_rechecks_withdrawn_gate_path_opt_in_before_merge() {
         m.principal.clone(),
         &["aida-cli-lib/src/gate/x.rs".into()],
         crate::gate::mandate_gates::ProtectedPaths::floor_ref(),
+        false,
     );
     assert!(cover_active_in(&cover, &MandateState::Active(m.clone())));
     m.include_gate_paths = false;

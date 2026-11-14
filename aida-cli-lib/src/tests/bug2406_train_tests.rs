@@ -598,6 +598,7 @@ fn bug2406_forged_build_refuses(fault: &str) {
         "expired-release-cover" => {
             bad.cars[0].member.release = Some(crate::gate::mandate_ship::MandateCover {
                 gate_match: None,
+                issued_supervised: false,
                 id: uuid::Uuid::new_v4().to_string(),
                 principal: "fixture".into(),
             })
@@ -1353,6 +1354,7 @@ fn plant_mandate_with_gate_paths(
         scopes: Default::default(),
         kind: None,
         renewals: Vec::new(),
+        revived: None,
     };
     let dir = mandate::mandate_dir().unwrap();
     fs::create_dir_all(&dir).unwrap();
@@ -1364,6 +1366,7 @@ fn plant_mandate_with_gate_paths(
     assert!(crate::gate::mandate_ship::mandate_still_active(&m.id));
     crate::gate::mandate_ship::MandateCover {
         gate_match: None,
+        issued_supervised: false,
         id: m.id,
         principal,
     }
@@ -1463,6 +1466,7 @@ fn mandate_final_audit(change_audit: &str) {
         cover.principal,
         &["car11".into()],
         &crate::gate::mandate_gates::ProtectedPaths::of(&gates.map_err(|e| e.to_string())),
+        false,
     );
     let mut members: Vec<_> = [11, 12]
         .into_iter()
