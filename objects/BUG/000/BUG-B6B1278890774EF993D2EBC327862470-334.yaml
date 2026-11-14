@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-14T00:41:42.911566698Z
-modified_at: 2026-11-14T05:11:09.256512272Z
+modified_at: 2026-11-14T10:21:43.676298689Z
 req_type: Bug
 tags:
 - track:integration
@@ -50,6 +50,21 @@ comments:
   created_at: 2026-11-14T05:11:09.256512272Z
   modified_at: 2026-11-14T05:11:09.256512272Z
   session_id: 01a1d852-16ef-7973-bdde-ac3f274752a2
+  harness_version: 2.1.325 (Claude Code)
+- id: 01a1d993-c97c-7a93-b039-702bb64faa1f
+  author: joe
+  content: |
+    Implemented as signed, parts A and B with the added condition. Branch bug-2569-foreign-refusal at 3920c9d59cb, base integration, review before merge (gate code).
+    Differences from the sketch a reviewer should weigh:
+    1. A record bound to another change also counts when one of its earlier rounds was reviewed at the judged head (not only its newest round). An existing train test (bug2406 historical-train-blocker) depends on that, and it is the same-head exception applied to round history.
+    2. Part B adds the merge step's ids to the member gate's branch and title ids; when the merge step cannot derive ids (unresolvable or uncovered spec) the gate keeps the old ids and the member is refused where the existing bug2441 tests pin it, not at the gate.
+    3. The ancestry check lives in review_carryover.rs (commit_in_head); the frozen inventory in gate/orchestrator_leaves.rs is untouched.
+    4. The member gate's call order changed (message before corpus); the test that pins the order was updated.
+    5. A member's own refusal under a car-only spec was already refused at gating by the approval gate, so the part B train test uses another change's standing refusal inside the head.
+    Evidence: five bug_2569 tests; four fail with the source reverted and the train test then prints train 9's refusal verbatim. dell1 2075 passed, failures are the two known load-noise tests. check-ci-fast 47 gates.
+  created_at: 2026-11-14T10:21:43.676298689Z
+  modified_at: 2026-11-14T10:21:43.676298689Z
+  session_id: 01a1d874-d40d-7d13-8d29-0368fcee960d
   harness_version: 2.1.325 (Claude Code)
 history:
 - id: 01a1d7e7-8f5a-7f43-916b-1a5f2bfd0ce0
