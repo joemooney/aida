@@ -1,0 +1,35 @@
+id: 01a1d908-a449-7002-9ba9-642bf99e7c3e
+spec_id: BUG-b6b1278890774ef993d2ebc327862470-338
+agreed_id: BUG-2573
+title: aida-core test fixtures fail under an ambient umask of 002
+description: |
+  Found while fixing BUG-2555. With an ambient umask of 002 (the default in dell1's login shells) `cargo test -p aida-core --lib` has about 50 failing tests at integration ffa77a2, none caused by a product write:
+
+  1. Fixtures write `.aida/node.toml`, `.aida/dispenser.toml` and `<git-common>/aida-allocation.toml` with `std::fs::write`, so they come out 0664 and the allocation readers refuse them. Affected modules: allocation_authority, work_binding, work_candidate, git_ops (merge_gate, node registration), aida-cli-lib allocation_health.
+  2. Fixtures run `git init` under the ambient umask, so `.git` is 0775 and the transport private-directory check refuses it ("must be owned by you and not group- or other-writable"). Affected: db::git_backend::work_intake, transport_policy, adoption_plane, adoption_projection.
+
+  Effect: every lane on dell1 that runs these tests sees failures unrelated to its change.
+
+  Decide and do one of:
+  - fixtures write these files through a shared helper with an explicit mode, and create repositories with an explicit mode; or
+  - the test harness sets umask 022 once per test binary.
+
+  Separate product question, not answered here: a real clone made under umask 002 has a group-writable `.git`, and WORK intake refuses it with a chmod hint. That is the transport check working as designed; whether dell1 users should get a one-time repair is the operator's call.
+
+  Acceptance: `(umask 002; cargo test -p aida-core --lib)` and the aida-cli-lib allocation_health tests pass.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-14T07:49:44.649041180Z
+modified_at: 2026-11-14T07:49:44.649041180Z
+req_type: Bug
+filed_at:
+  code_sha: ffa77a2b961fde3c1c14c58df786a58d135eccbb
+  branch: integration
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 1801b341057
+  vendor: claude
+  session: 01a1d874-d40d-7d13-8d29-0368fcee960d
+  harness_version: 2.1.325 (Claude Code)
