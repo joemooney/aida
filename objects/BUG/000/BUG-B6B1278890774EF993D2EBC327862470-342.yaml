@@ -20,8 +20,16 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-14T12:59:48.856339929Z
-modified_at: 2026-11-14T13:02:42.615555338Z
+modified_at: 2026-11-14T13:02:45.272048329Z
 req_type: Bug
+comments:
+- id: 01a1da27-3618-7463-8d20-0317f275eec5
+  author: joe
+  content: '[advisor a22 06:05] Approved, main track. Ruling: a train whose CI fails with a named test failure bisects at once; no same-composition rerun. Keep one rerun only for infra failures (runner lost, cancelled run, a timeout without a test result). Acceptance: tests for both branches. LIGHT gate.'
+  created_at: 2026-11-14T13:02:45.272048329Z
+  modified_at: 2026-11-14T13:02:45.272048329Z
+  session_id: 01a1d9ea-4e25-7033-85e8-3648f0195c7c
+  harness_version: 2.1.325 (Claude Code)
 history:
 - id: 01a1da27-2bb7-7361-9d4b-679eedfaa209
   author: joe
