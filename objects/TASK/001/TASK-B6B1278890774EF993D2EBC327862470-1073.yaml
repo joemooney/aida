@@ -81,17 +81,26 @@ description: |
   ### finding-hash:56ed8b81
 
   story_2492_publication_tests.rs:1314-1315: the sleep(2100ms) + should_stop() assertion kept from main by the merge is redundant after reviewer_completion::wait has already returned via should_stop(); it adds 2.1s to the test without new coverage.
+
+
+  ## Findings from PR-3921
+  Reviewed sha: d94b8ae8fc61f25702869cc5aa0a8f5e7aa8ed0b
+
+  ### finding-hash:0cbc5c63
+
+  PR title says isolate sccache fixtures from launcher environment, but the round-3 merge took main sccache fix and the net diff contains no sccache change (it is the legacy unknown-visibility refusal, foreign-namespace slot test, test-touched orphan-shadow fix, mail-wake umask and doc rewrap). Retitle before squash so main history describes the change.
 status: Draft
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-13T20:01:56.623034248Z
-modified_at: 2026-11-14T01:00:13.279137441Z
+modified_at: 2026-11-14T01:00:26.918820037Z
 req_type: Task
 tags:
 - carried-finding:BUG-2546:56ed8b81
 - carried-finding:BUG-2557:55e0cbfe
 - carried-finding:BUG-2557:f238ea37
+- carried-finding:PR-3921:0cbc5c63
 - carried-finding:PR-3938:654190b6
 - carried-finding:PR-3948:5d2b67f3
 - carried-finding:PR-3968:56ed8b81
@@ -103,12 +112,14 @@ tags:
 - carried-finding:STORY-2735:2c7ae2ea
 - carried-from:BUG-2546
 - carried-from:BUG-2557
+- carried-from:PR-3921
 - carried-from:PR-3938
 - carried-from:PR-3948
 - carried-from:PR-3968
 - carried-from:PR-3970
 - carried-from:PR-3971
 - carried-from:STORY-2735
+- finding-hash:0cbc5c63
 - finding-hash:2c7ae2ea
 - finding-hash:52636ea7
 - finding-hash:55e0cbfe
@@ -120,6 +131,7 @@ tags:
 - finding-hash:f238ea37
 - from-review:BUG-2546
 - from-review:BUG-2557
+- from-review:PR-3921
 - from-review:PR-3938
 - from-review:PR-3948
 - from-review:PR-3968
@@ -166,6 +178,11 @@ history:
   author: joe
   timestamp: 2026-11-14T01:00:14.511684979Z
   session_id: 01a1d78fe74b
+  changes: []
+- id: 01a1d791-f0ee-71f1-bc59-b203d036ecc7
+  author: joe
+  timestamp: 2026-11-14T01:00:28.270866728Z
+  session_id: 01a1d78e2b34
   changes: []
 filed_at:
   code_sha: 91fe1e337894199f15365d3f8ecfaf81366f8291
