@@ -730,3 +730,34 @@ fn story2745_a_bound_rows_seat_is_the_sessions_seat() {
     let facts = MailIdentityFacts::observed(SessionBinding::Unbound, &catalog, stale);
     assert_eq!(facts.seat(), Some("other"));
 }
+
+// STORY-2745 review: a recycled `--bg` spare linked to a launch without
+// `--seat` has a registry row with no seat, while its env still carries the
+// earlier launch's `AIDA_ROTATION_SEAT`. The row decides: the session holds
+// no seat, reads no `seat:<old>` mail and stamps no `from_seat`.
+// trace:STORY-2745 | ai:claude
+#[test]
+fn story2745_a_seatless_row_overrides_a_stale_env_seat() {
+    let catalog = PeopleCatalogView::fixture(&[]);
+    let mut stale = IdentityEnv::fixture("spare-3", &[], Some("implementer"));
+    stale.seat = Some("integration".into());
+    let seatless = SessionBindingFacts::fixture("spare-3", "claude");
+    assert_eq!(seatless.seat, None);
+    let facts =
+        MailIdentityFacts::observed(SessionBinding::Bound(seatless), &catalog, stale.clone());
+    assert_eq!(facts.seat(), None);
+    let ids = inbox_identities(&facts);
+    assert!(!ids.iter().any(|id| id.starts_with("seat:")), "{ids:?}");
+    // The rest of the identity is unchanged.
+    assert!(ids.contains(&"spare-3".to_string()), "{ids:?}");
+    assert!(ids.contains(&"implementer".to_string()), "{ids:?}");
+    // A row that failed verification gives no seat either.
+    let facts = MailIdentityFacts::observed(
+        SessionBinding::Unverified(BindingRefusal::NotLive),
+        &catalog,
+        stale,
+    );
+    assert_eq!(facts.seat(), None);
+    let ids = inbox_identities(&facts);
+    assert!(!ids.iter().any(|id| id.starts_with("seat:")), "{ids:?}");
+}

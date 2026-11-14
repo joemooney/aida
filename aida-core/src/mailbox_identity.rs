@@ -671,11 +671,18 @@ impl MailIdentityFacts {
         catalog: &PeopleCatalogView,
         env: IdentityEnv,
     ) -> Self {
-        let (own_handle, own_vendor, own_recipient, unverified, bound_seat) = match binding {
+        // The seat follows the registry row once one exists. A bound row's
+        // seat is this session's own record, and a row that records none
+        // means no seat: a recycled `--bg` spare linked to a seatless launch
+        // still carries the earlier launch's `AIDA_ROTATION_SEAT`. A row
+        // that failed verification gives no seat either. Only a session
+        // with no row at all reads the seat from its environment.
+        // trace:STORY-2745 | ai:claude
+        let (own_handle, own_vendor, own_recipient, unverified, seat) = match binding {
             SessionBinding::Bound(b) => {
                 (Some(b.handle), Some(b.vendor), b.recipient, false, b.seat)
             }
-            SessionBinding::Unbound => (None, None, None, false, None),
+            SessionBinding::Unbound => (None, None, None, false, env.seat.clone()),
             SessionBinding::Unverified(_) => (None, None, None, true, None),
         };
         let user_is_known_person = (unverified
@@ -691,9 +698,7 @@ impl MailIdentityFacts {
             user_is_known_person,
             aliases: if unverified { Vec::new() } else { env.aliases },
             role: env.role,
-            // The bound row's seat first: it is this session's own record.
-            // trace:STORY-2745 | ai:claude
-            seat: bound_seat.or(env.seat),
+            seat,
             env_vendor: env.vendor,
             unverified,
         }
