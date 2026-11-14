@@ -1,0 +1,42 @@
+id: 01a1dbc1-7f4f-7341-8da2-6bbd12e9ee4f
+spec_id: STORY-b6b1278890774ef993d2ebc327862470-751
+agreed_id: STORY-2828
+title: Operator view of expiring authority (grants, mandates, relays) with extend, expiry warnings, and duration caps as global knobs
+description: |
+  Operator need (Joe, 2026-11-14, landing emergency): while firefighting, authority that expires on a timer (session grants, mandates) fails the fleet when the operator is away: the integration relay died at rotation because its operator grant had expired, and nothing warned anyone beforehand. There is no single place to see what will expire and extend it.
+
+  What exists today (read from the code on 2026-11-14):
+  - Session grants: `aida role enter --ttl`, capped by `[seat] max_grant_hours` in the GLOBAL ~/.aida/config.toml (default 24; a project value may only lower it), hard ceiling 168h, not configurable (gate/seat_authority.rs). The one-time grant minted by `aida agent new` is capped at 8h (INLINE_PARENT_MAX), with no knob.
+  - Mandates: `aida mandate start --ttl`, default 8h, at most 24h, a constant in mandate.rs with no knob; `aida mandate renew` extends, human at a terminal only.
+  - No command lists live grants with their expiry and what is bound to them; the record is a JSON file under ~/.aida/session-grants/. `aida whoami` and `aida role show` omit the parent grant.
+
+  Wanted:
+  1. One read-only view, e.g. `aida ops status` (name open), listing every time-limited operational artifact for this project and machine: the active mandate; each unrevoked session grant (seat, delegated seats, issued, expires, bound pid/terminal, which live relays and deputies depend on it); relay controllers and their parent grant; deputies; merge holds with a release condition; leases and claims older than their TTL; seat handoff notes' age. Sorted by time to expiry, with anything expiring inside a configurable warning window marked.
+  2. One operator-only extend path from that view: `aida ops extend <artifact>` or the existing `mandate renew` / a new `aida role grant renew`, human at an interactive terminal only. Agents can read the view but never extend.
+  3. Knobs, default = today's behaviour: `[mandate] max_ttl_hours` (default 24) and `[seat] inline_grant_max_hours` (default 8), both in the global config only, both bounded by the same 168h hard ceiling as grants. The hard ceiling stays hardcoded.
+  4. Expiry warning ahead of time: a due job or notice to the advisor and product seats when a grant or mandate that a live relay depends on is inside the warning window (default 2h), and `aida doctor` reports it. A relay refuses to rotate into a grant with less than one rotation period left, and says so, instead of dying at rotation.
+
+  Acceptance:
+  - With a mandate and two grants live, the view prints all three with expiry and dependants in under 5 s, and JSON output carries the same fields.
+  - Setting `[mandate] max_ttl_hours = 72` in the global config lets `aida mandate start --ttl 72h` succeed; with the key absent, 25h is refused exactly as today; 169h is refused whatever the config says; the same key in a project config cannot raise the cap.
+  - A grant 90 minutes from expiry with a live relay bound to it produces a notice to the product and advisor seats and a doctor finding naming the grant, the relay and the renew command.
+  - An agent session (no interactive terminal) calling the extend path is refused.
+  Not in scope: changing who may mint authority; any agent-side renewal.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-14T20:30:53.775714194Z
+modified_at: 2026-11-14T20:30:53.775714194Z
+req_type: Story
+tags:
+- landing-emergency
+- operator-ux
+filed_at:
+  code_sha: ce660d553f782fd223ca091bb3bd2dc394352eb5
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: ce660d553f7
+  vendor: claude
+  session: 01a1db78-560d-7a81-a467-3742be1fefc3
