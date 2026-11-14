@@ -122,8 +122,10 @@ stale_base = "refuse-on-overlap"   # default
 Every reviewer launch reads it: `aida queue work <PR-N> --role reviewer`, the
 review watcher, the drain's review phase, `aida review` and `aida human
 review` (the last two never refuse; there the setting decides whether the
-inline rebase offer defaults to yes). `--allow-stale-base` overrides a refusal
-for one launch, as `warn` would. Whatever the value, a reviewer launched on a
+inline rebase offer defaults to yes).
+`aida queue work <PR-N> --role reviewer --allow-stale-base` overrides a refusal
+for one launch, as setting the `stale_base` key to `warn` would. Whatever the
+value, a reviewer launched on a
 stale head is told in its prompt how many commits behind the base the head is
 and which of its files changed there. A value outside the three is a
 configuration error that names them; it is never read as the default. Use the
