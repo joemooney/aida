@@ -1305,12 +1305,32 @@ description: |
   ### finding-hash:ed15cafe
 
   Stale prose after the move: aida-cli/tests/bug_1674_show_bounded_under_writer.rs:43 and bug_1956_reader_fallbacks_bounded_under_writer.rs:27 point at aida-cli-lib/src/test_timing.rs (now a re-export); story_2326_launch_ratchet_tests.rs:80 note still says compiled into the crate; aida-testkit/src/test_home.rs:24 and the home_dir rustdoc now read as home_dir calling itself after crate::home_dir was mechanically shortened.
+
+
+  ## Findings from PR-4055
+  Reviewed sha: 203545e337c21ee77852b2e17f369e94b0627467
+
+  ### finding-hash:0e2e87de
+
+  aida-cli-lib/src/wip_limit.rs:118-184: admit() has no test of what it records. No test asserts the `wip-limit` event on a refusal, the `wip-limit-override` event for --over-wip or a --branch pickup at the limit, that --dry-run records nothing, or that an unreadable count proceeds and prints that the limit was not applied; the handler test (bug_2451_pickup_entry_tests.rs:325) asserts only the error text and the lease count. Assert the events in that test and add an unreadable-count case.
+
+  ### finding-hash:63944698
+
+  aida-cli-lib/src/queue_cmd/work.rs:9094 and 9791: --over-wip is accepted with --auto-complete or a batch drain but is read only on the plain path, so the drain child is still refused at the limit with no message that the flag was ignored. Refuse the combination or print that drains ignore it.
+
+  ### finding-hash:f8724699
+
+  aida-cli-lib/src/queue_cmd/work.rs:4710-4717: a spec that continues on its existing canonical branch with no open change (BUG-2549 canonical_resume, work.rs:4638) is classified New and refused at the limit, while the same branch named with --branch passes and is recorded. A multi-entry plan whose specs are all In Progress is also New, because queue_work_plan_wants_pr_head_branch (work.rs:536) requires exactly one entry.
+
+  ### finding-hash:f4bee831
+
+  aida-cli-lib/src/land.rs:1239: open_change_count takes only the length of the detailed forge listing (titles, labels, statusCheckRollup, up to 60 s) whenever the now.json snapshot is older than 10 minutes. A count-only listing would do.
 status: Draft
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-13T20:01:56.623034248Z
-modified_at: 2026-11-14T21:14:51.280136583Z
+modified_at: 2026-11-14T21:38:25.770298919Z
 req_type: Task
 tags:
 - carried-finding:BUG-2543:2a99ebfc
@@ -1491,6 +1511,10 @@ tags:
 - carried-finding:PR-4053:d7ad1d67
 - carried-finding:PR-4053:e95a72ea
 - carried-finding:PR-4053:fd4627d4
+- carried-finding:PR-4055:0e2e87de
+- carried-finding:PR-4055:63944698
+- carried-finding:PR-4055:f4bee831
+- carried-finding:PR-4055:f8724699
 - carried-finding:STORY-2735:2c7ae2ea
 - carried-finding:STORY-2745:2a4c4b85
 - carried-finding:STORY-2745:32088b60
@@ -1607,6 +1631,7 @@ tags:
 - carried-from:PR-4048
 - carried-from:PR-4052
 - carried-from:PR-4053
+- carried-from:PR-4055
 - carried-from:STORY-2735
 - carried-from:STORY-2745
 - carried-from:STORY-2763
@@ -1628,6 +1653,7 @@ tags:
 - finding-hash:0bff30e1
 - finding-hash:0cbc5c63
 - finding-hash:0d56e3a6
+- finding-hash:0e2e87de
 - finding-hash:1287747b
 - finding-hash:12932f51
 - finding-hash:138d1871
@@ -1685,6 +1711,7 @@ tags:
 - finding-hash:5f168a1d
 - finding-hash:6089dde5
 - finding-hash:6220a3dc
+- finding-hash:63944698
 - finding-hash:654190b6
 - finding-hash:6810bcf9
 - finding-hash:6935f83d
@@ -1749,6 +1776,8 @@ tags:
 - finding-hash:f1e29cc2
 - finding-hash:f238ea37
 - finding-hash:f3b82bc9
+- finding-hash:f4bee831
+- finding-hash:f8724699
 - finding-hash:fa83ec7a
 - finding-hash:fcb8f322
 - finding-hash:fd4627d4
@@ -1811,6 +1840,7 @@ tags:
 - from-review:PR-4048
 - from-review:PR-4052
 - from-review:PR-4053
+- from-review:PR-4055
 - from-review:STORY-2735
 - from-review:STORY-2745
 - from-review:STORY-2763
@@ -2268,6 +2298,11 @@ history:
   author: joe
   timestamp: 2026-11-14T21:14:52.446464871Z
   session_id: 01a1dbde9411
+  changes: []
+- id: 01a1dbff-588b-7d93-affc-b6b8153a0157
+  author: joe
+  timestamp: 2026-11-14T21:38:27.083548542Z
+  session_id: 01a1dbfc711b
   changes: []
 filed_at:
   code_sha: 91fe1e337894199f15365d3f8ecfaf81366f8291
