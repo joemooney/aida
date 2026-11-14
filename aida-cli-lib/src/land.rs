@@ -1203,6 +1203,13 @@ pub(crate) fn lanes_unreadable(why: &str) -> String {
 
 /// Discover the open changes and derive a row for each.
 pub(crate) fn live_pass(start: &Path) -> Result<Pass> {
+    // Every change's approval reads verdicts under several keys, and each
+    // read used to rediscover the whole gate ledger: minutes for twenty open
+    // changes. One discovery is shared for the pass; it is re-validated
+    // against the ledger before each reuse, and every key's events are still
+    // read fresh.
+    // trace:STORY-2768 | ai:claude
+    let _discovery = crate::gate::ledger::checked::DiscoveryScope::enter();
     let root = crate::review_watch::forge::main_root(start)?;
     let repo = crate::review_watch::forge::Repository::load(&root)?;
     let changes: Vec<Pr> = match discover_rich(&root, &repo)? {
