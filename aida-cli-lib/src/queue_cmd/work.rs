@@ -410,6 +410,8 @@ pub(crate) fn queued_supervised_mode(
 pub(crate) struct QueueWorkRoleInput<'a> {
     pickup: Option<&'a str>,
     explicit: Option<&'a str>,
+    /// BUG-2557: an advisor's `--rereview <reason>`.
+    rereview: Option<&'a str>,
 }
 
 impl<'a> QueueWorkRoleInput<'a> {
@@ -417,7 +419,14 @@ impl<'a> QueueWorkRoleInput<'a> {
         Self {
             pickup: role,
             explicit: role,
+            rereview: None,
         }
+    }
+
+    // trace:BUG-2557 | ai:claude
+    pub(crate) fn with_rereview(mut self, reason: Option<&'a str>) -> Self {
+        self.rereview = reason;
+        self
     }
 
     pub(crate) fn review_coexistence<'p>(
@@ -439,6 +448,7 @@ pub(crate) fn rework_role_input<'a>(
     QueueWorkRoleInput {
         pickup: resolved_route,
         explicit: raw_for,
+        rereview: None,
     }
 }
 
@@ -2489,6 +2499,88 @@ pub(crate) fn review_round_from_comments(comments: &[aida_core::Comment]) -> usi
 // trace:BUG-1609 | ai:claude
 pub(crate) fn reviewer_preflight_pr_n(review_target: Option<(ReviewForge, u64)>) -> Option<u64> {
     review_target.map(|(_, n)| n)
+}
+
+/// BUG-2557: validate `--rereview <reason>` before any pickup mutation. It
+/// admits a review, so it needs a launched reviewer pickup of a PR, and
+/// only the advisor seat may admit one. `None` when the flag is absent.
+// trace:BUG-2557 | ai:claude
+pub(crate) fn rereview_target<'a>(
+    reason: Option<&'a str>,
+    pickup_role: &str,
+    no_launch: bool,
+    pr: Option<u64>,
+) -> Result<Option<(u64, &'a str)>> {
+    let Some(reason) = reason else {
+        return Ok(None);
+    };
+    check_rereview_target(
+        reason,
+        crate::store_mutation_client::session_role(
+            &aida_core::exec_context::Environment::capture(),
+        )
+        .ok()
+        .flatten()
+        .as_deref(),
+        pickup_role,
+        no_launch,
+        pr,
+    )
+    .map(|pr| Some((pr, reason)))
+}
+
+/// The pure half of [`rereview_target`]: the session role is passed in.
+// trace:BUG-2557 | ai:claude
+pub(crate) fn check_rereview_target(
+    reason: &str,
+    session_role: Option<&str>,
+    pickup_role: &str,
+    no_launch: bool,
+    pr: Option<u64>,
+) -> Result<u64> {
+    anyhow::ensure!(
+        session_role.is_some_and(|r| crate::canonical_role_name(r.trim()) == "advisor"),
+        "`--rereview` is advisor-only: run it from the advisor seat (`eval \"$(aida role enter advisor)\"`)"
+    );
+    anyhow::ensure!(
+        !reason.trim().is_empty(),
+        "`--rereview` needs a reason (what changed in the review contract after the verdict)"
+    );
+    anyhow::ensure!(
+        pickup_role == "reviewer" && !no_launch,
+        "`--rereview` admits a fresh review, so it needs a launched reviewer pickup: \
+         `aida queue work PR-<N> --role reviewer --rereview <reason>`"
+    );
+    pr.ok_or_else(|| {
+        anyhow::anyhow!("`--rereview` needs a pull request target: `aida queue work PR-<N> --role reviewer --rereview <reason>`")
+    })
+}
+
+/// BUG-2557: record the advisor's admission on the gate ledger and say so.
+// trace:BUG-2557 | ai:claude
+fn admit_rereview_for_pickup(
+    project_root: &std::path::Path,
+    pr: u64,
+    head: Option<&str>,
+    reason: &str,
+) -> Result<()> {
+    let by = crate::coordination::hostname();
+    let by = format!("advisor@{by}");
+    match crate::gate::review_marker::admit_rereview(
+        &crate::main_worktree_root_from(project_root),
+        pr,
+        head,
+        reason,
+        &by,
+    )? {
+        Some(superseded) => eprintln!(
+            "  re-review admitted on PR-{pr}: one fresh review supersedes its {superseded} verdict at this head (recorded on the gate ledger)"
+        ),
+        None => eprintln!(
+            "  --rereview: PR-{pr} has no conclusive verdict blocking a review at this head; nothing to admit"
+        ),
+    }
+    Ok(())
 }
 
 // BUG-1213: keep durable-history round derivation on the same path used to
@@ -4676,11 +4768,27 @@ pub(crate) fn handle_queue_work(
                 )?;
                 }
 
+                // trace:BUG-2557 | ai:claude — `--rereview` needs a launched review of a PR.
+                let rereview_pr = rereview_target(
+                    role_input.rereview,
+                    &role,
+                    no_launch,
+                    reviewer_preflight_pr_n(plan.review_target),
+                )?;
                 // trace:BUG-2530 | ai:codex — after sync, before any pickup mutation.
                 if !no_launch && role == "reviewer" {
                     if let Some(pr_n) = reviewer_preflight_pr_n(plan.review_target) {
                         // trace:BUG-2530 | ai:codex
                         let head = standalone_review_pr_head(&project_root, pr_n);
+                        // trace:BUG-2557 | ai:claude
+                        if let Some((pr_n, reason)) = rereview_pr {
+                            admit_rereview_for_pickup(
+                                &project_root,
+                                pr_n,
+                                head.as_deref(),
+                                reason,
+                            )?;
+                        }
                         crate::gate::review_marker::refuse_conclusive_head(
                             &crate::main_worktree_root_from(&project_root),
                             pr_n,
@@ -8416,6 +8524,7 @@ pub(super) fn handle_queue_command(
             dry_run,
             resume,
             fresh,
+            rereview,
             list_sessions,
             session_id,
             vendor,
@@ -9488,7 +9597,7 @@ pub(super) fn handle_queue_command(
                 permission_mode.as_deref(),
                 *sandbox,
                 *no_launch,
-                QueueWorkRoleInput::direct(role.as_deref()),
+                QueueWorkRoleInput::direct(role.as_deref()).with_rereview(rereview.as_deref()),
                 *no_pull,
                 type_filter.as_deref(),
                 branch.as_deref(),
@@ -9555,4 +9664,61 @@ pub(super) fn handle_queue_command(
         _ => unreachable!("dispatcher selected another queue subcommand"),
     }
     Ok(())
+}
+
+// trace:BUG-2557 | ai:claude
+#[cfg(test)]
+mod bug2557_rereview_target_tests {
+    use super::check_rereview_target;
+
+    #[test]
+    fn rereview_is_advisor_only_and_needs_a_launched_pr_review() {
+        let ok = |role: Option<&str>, pickup: &str, no_launch: bool, pr: Option<u64>| {
+            check_rereview_target("coverage fixed", role, pickup, no_launch, pr)
+        };
+        assert_eq!(
+            ok(Some("advisor"), "reviewer", false, Some(3922)).unwrap(),
+            3922
+        );
+        assert_eq!(ok(Some(" dialog "), "reviewer", false, Some(1)).unwrap(), 1);
+        for (role, pickup, no_launch, pr, needle) in [
+            (None, "reviewer", false, Some(1), "advisor-only"),
+            (Some("reviewer"), "reviewer", false, Some(1), "advisor-only"),
+            (
+                Some("implementer"),
+                "reviewer",
+                false,
+                Some(1),
+                "advisor-only",
+            ),
+            (
+                Some("advisor"),
+                "implementer",
+                false,
+                Some(1),
+                "launched reviewer pickup",
+            ),
+            (
+                Some("advisor"),
+                "reviewer",
+                true,
+                Some(1),
+                "launched reviewer pickup",
+            ),
+            (
+                Some("advisor"),
+                "reviewer",
+                false,
+                None,
+                "pull request target",
+            ),
+        ] {
+            let err = ok(role, pickup, no_launch, pr).unwrap_err().to_string();
+            assert!(
+                err.contains(needle),
+                "{role:?}/{pickup}/{no_launch}/{pr:?}: {err}"
+            );
+        }
+        assert!(check_rereview_target("  ", Some("advisor"), "reviewer", false, Some(1)).is_err());
+    }
 }
