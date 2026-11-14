@@ -1,0 +1,33 @@
+id: 01a1d8ab-eba5-7561-b59c-7e8534ada536
+spec_id: STORY-b6b1278890774ef993d2ebc327862470-712
+agreed_id: STORY-2789
+title: 'Review PR-3987: [AI:codex] fix(tests): confine allocation fixture authority to its repository (BUG-2560)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `(no-sess`) for branch `bug-b6b1278890774ef993d2ebc327862470-325`.
+
+  - PR: <https://github.com/joemooney/aida/pull/3987>
+  - Branch: `bug-b6b1278890774ef993d2ebc327862470-325` → `main`
+
+  ## Covers
+
+  - BUG-2560
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 3987` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-14T06:08:28.069443343Z
+modified_at: 2026-11-14T06:08:28.069443343Z
+req_type: Story
+filed_at:
+  code_sha: 1801b34105752b7fda6dedc9cd1bf8b9e4881c59
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 1801b341057
+  vendor: claude
