@@ -1710,3 +1710,44 @@ fn bug_2569_this_changes_refusal_and_a_refusal_at_this_head_still_stop_it() {
     let text = format!("{:#}", corpus_gate(repo, &ids, "main", &h).unwrap_err());
     assert!(text.contains("outstanding"), "{text}");
 }
+
+// A change merged ahead of its review and refused afterwards rides inside
+// every head that contains its commit. Its refusal stops a carried approval
+// while it stands and the commit is in the head, and only then.
+// trace:BUG-2569 | ai:claude
+#[test]
+fn bug_2569_a_standing_refusal_of_a_commit_in_the_head_stops_the_carry_over() {
+    let ids = vec!["BUG-9".to_string()];
+    let carried = |after: &dyn Fn(&Path, &str, &str)| {
+        let (tmp, approved) = fixture();
+        let repo = tmp.path();
+        let h = clean_merge(repo);
+        record_corpus_verdict(repo, &format!("PR-{PR}"), "approved", &approved);
+        after(repo, &approved, &h);
+        corpus_gate(repo, &ids, "main", &h)
+    };
+
+    // The refused commit is in the head and change 99 still stands refused.
+    let stands = carried(&|repo, approved, _| {
+        ledger_verdict(repo, 99, "BUG-9", "request-changes", approved);
+    });
+    assert!(
+        stands.is_err(),
+        "a standing refusal inside the head stops it"
+    );
+
+    // Change 99 was approved afterwards: the refusal is a past round.
+    carried(&|repo, approved, _| {
+        ledger_verdict(repo, 99, "BUG-9", "request-changes", approved);
+        ledger_verdict(repo, 99, "BUG-8", "approved", &"d".repeat(40));
+    })
+    .expect("a refusal its own change has since been approved past does not count");
+
+    // Change 99 stands refused, at a commit this head does not contain.
+    carried(&|repo, _, h| {
+        let tree = format!("{h}^{{tree}}");
+        let outside = git(repo, &["commit-tree", &tree, "-p", h, "-m", "outside"]);
+        ledger_verdict(repo, 99, "BUG-9", "request-changes", &outside);
+    })
+    .expect("a refused commit outside the head is not part of what merges");
+}

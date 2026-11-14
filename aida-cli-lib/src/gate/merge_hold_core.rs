@@ -1471,6 +1471,28 @@ pub(crate) fn corpus_gate_bodies(
     pr: u64,
     spec_hints: &[String],
 ) -> Result<Vec<(String, String)>, String> {
+    corpus_gate_bodies_at(roots, pr, spec_hints, None)
+}
+
+/// [`corpus_gate_bodies`] for a merge decision about `head`. A spec key is
+/// shared by every change that ships the spec, so its newest ledger verdict
+/// can be about another change. Read for `head`, such a verdict counts only
+/// when it was recorded at `head`, or when it is a refusal that change still
+/// stands under and its commit is part of `head`. The change's own key, this
+/// change's verdicts under any key, unbound spec records and verdict files
+/// are read as before, and with no head nothing is left out.
+// trace:BUG-2569 | ai:claude
+pub(crate) fn corpus_gate_bodies_at(
+    roots: &[&Path],
+    pr: u64,
+    spec_hints: &[String],
+    head: Option<&str>,
+) -> Result<Vec<(String, String)>, String> {
+    let head = head.map(str::trim).filter(|head| !head.is_empty());
+    let in_head = |sha: &str| match (roots.first(), head) {
+        (Some(repo), Some(head)) => commit_in_head(repo, sha, head),
+        _ => true,
+    };
     let mut keys: Vec<String> = Vec::new();
     if pr > 0 {
         keys.push(format!("PR-{pr}"));
@@ -1501,8 +1523,13 @@ pub(crate) fn corpus_gate_bodies(
             let events = stores
                 .iter()
                 .filter_map(|store| {
-                    crate::gate::ledger::project::newest_verdict_event(store, key)
-                        .map(|event| (store.clone(), event))
+                    match head {
+                        Some(_) => crate::gate::ledger::project::newest_verdict_event_for_merge(
+                            store, key, pr, head, &in_head,
+                        ),
+                        None => crate::gate::ledger::project::newest_verdict_event(store, key),
+                    }
+                    .map(|event| (store.clone(), event))
                 })
                 .collect();
             (key.clone(), events)
@@ -1573,6 +1600,39 @@ pub(crate) fn corpus_gate_bodies(
         }
     }
     Ok(out)
+}
+
+/// Whether commit `sha` is part of `head`'s history in `repo`. Only a
+/// definite answer is `false`: git says it is not an ancestor, or `head` is
+/// here and `sha` is not (a commit this repository never received cannot be
+/// in a head it holds). Anything unreadable counts as contained.
+// trace:BUG-2569 | ai:claude
+fn commit_in_head(repo: &Path, sha: &str, head: &str) -> bool {
+    let git = |args: &[&str]| {
+        aida_core::git_ops::host_git_command(repo)
+            .args(args)
+            .stdin(std::process::Stdio::null())
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null())
+            .status()
+            .ok()
+            .and_then(|status| status.code())
+    };
+    match git(&["merge-base", "--is-ancestor", "--end-of-options", sha, head]) {
+        Some(0) => true,
+        Some(1) => false,
+        _ => {
+            let present = |rev: &str| {
+                git(&[
+                    "cat-file",
+                    "-e",
+                    "--end-of-options",
+                    &format!("{rev}^{{commit}}"),
+                ]) == Some(0)
+            };
+            !(present(head) && !present(sha))
+        }
+    }
 }
 
 /// The chokepoint entry every `Forge::merge_change` implementation calls.
@@ -1649,6 +1709,19 @@ pub(crate) fn corpus_gate_decision(
         return Ok(CorpusMergeGate::Clear);
     }
     let head = head();
+    // With the head known, a spec key answers for this change at this head
+    // (the first read, with no head, only decides whether to read the head).
+    // trace:BUG-2569 | ai:claude
+    let bodies = match corpus_gate_bodies_at(&roots, pr, spec_hints, head.as_deref()) {
+        Ok(bodies) => bodies,
+        Err(why) => anyhow::bail!(
+            "PR-{pr} was not merged: {why} — the merge fails closed on an unreadable verdict \
+             artifact. Restore or repair the file, then merge again."
+        ),
+    };
+    if bodies.is_empty() {
+        return Ok(CorpusMergeGate::Clear);
+    }
     let base_branch = base_branch.map(str::trim).filter(|b| !b.is_empty());
     let site = if record_proof {
         crate::gate::review_carryover::CarryOverSite::quiet(main_root.as_path(), base_branch)

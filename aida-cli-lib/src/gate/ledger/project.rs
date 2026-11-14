@@ -291,6 +291,56 @@ fn speaks_for_change(event: &GateEvent, pr: u64, head: Option<&str>) -> bool {
             .is_some_and(|at| same_reviewed_sha(at, head))
 }
 
+/// [`newest_verdict_event_for_change`] as the merge gate reads a spec key:
+/// besides what speaks for change `pr`, a refusal bound to another change
+/// still counts while that change stands refused and the refused commit is
+/// part of the head being judged (`in_head`). A member merged ahead of its
+/// review and refused afterwards is carried by every change that contains
+/// its commit, so an approval must not be carried past it.
+// trace:BUG-2569 | ai:claude
+pub(crate) fn newest_verdict_event_for_merge(
+    start: &Path,
+    key: &str,
+    pr: u64,
+    head: Option<&str>,
+    in_head: &dyn Fn(&str) -> bool,
+) -> Option<GateEvent> {
+    let root = store_root(start).ok()?;
+    let mut events = verdict_events(&root, key);
+    if ChangeKey::parse(key).is_none() {
+        events.retain(|event| {
+            speaks_for_change(event, pr, head) || standing_refusal_in_head(&root, event, in_head)
+        });
+    }
+    newest_of(events)
+}
+
+/// Whether `event`, a verdict bound to another change, is a refusal that
+/// change still stands under, of a commit `in_head` finds in the judged
+/// head. What cannot be read counts: an event with no parseable verdict or
+/// no recorded commit, and a change whose newest verdict does not approve.
+// trace:BUG-2569 | ai:claude
+fn standing_refusal_in_head(
+    root: &Path,
+    event: &GateEvent,
+    in_head: &dyn Fn(&str) -> bool,
+) -> bool {
+    let approves = |event: &GateEvent| {
+        event
+            .verdict_record()
+            .and_then(|record| serde_json::to_string(record).ok())
+            .and_then(|body| crate::gate::review_verdict::parse_recorded_verdict(&body))
+            .is_some_and(|verdict| verdict.kind.approves())
+    };
+    if approves(event) {
+        return false;
+    }
+    let superseded = ChangeKey::parse(&event.change)
+        .and_then(|bound| newest_of(verdict_events(root, &bound.as_key())))
+        .is_some_and(|newest| approves(&newest));
+    !superseded && event.head.as_deref().is_none_or(in_head)
+}
+
 /// Whether change `pr` has a verdict of its own on the ledger.
 // trace:BUG-2570 | ai:claude
 pub(crate) fn change_has_verdict(start: &Path, pr: u64) -> bool {
