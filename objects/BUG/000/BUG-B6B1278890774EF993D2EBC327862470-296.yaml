@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-12T08:35:37.046532324Z
-modified_at: 2026-11-14T07:37:07.252508130Z
+modified_at: 2026-11-14T14:06:21.573259316Z
 req_type: Bug
 tags:
 - track:integration
@@ -200,6 +200,13 @@ comments:
   modified_at: 2026-11-13T07:24:00.913157904Z
   session_id: 01a1d2e6-f5db-7f33-9b74-3ae5fdaf9e0c
   harness_version: 2.1.323 (Claude Code)
+- id: 01a1da61-7185-7581-a8e0-0389a704fa78
+  author: joe
+  content: '[advisor a22 07:10] Stale claim: In Progress, branch bug-b6b1278890774ef993d2ebc327862470-296 pushed with no PR, and no live lane. Resuming on a dell1 Fable lane on that branch: merge the current base (main, or integration for track:integration) with a real merge, finish the acceptance criteria, run one targeted cargo test plus make check-ci-fast, push, and open the PR. On dell1, touch aida-core/src/lib.rs before cargo, and never use AIDA_UPDATE_SNAPSHOTS=1.'
+  created_at: 2026-11-14T14:06:21.573259316Z
+  modified_at: 2026-11-14T14:06:21.573259316Z
+  session_id: 01a1d9ea-4e25-7033-85e8-3648f0195c7c
+  harness_version: 2.1.325 (Claude Code)
 history:
 - id: 01a1cee6-975b-7d40-8689-d35e1f109d99
   author: joe
