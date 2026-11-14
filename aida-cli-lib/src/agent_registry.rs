@@ -5789,3 +5789,7 @@ source = "mcp"
 #[cfg(test)]
 #[path = "tests/bug_b6b_151_registry_heartbeat_tests.rs"]
 mod bug_151_heartbeat_tests;
+
+// trace:TASK-3784 | ai:codex
+#[cfg(test)]
+pub(crate) mod test_support;

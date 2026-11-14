@@ -569,3 +569,53 @@ pub(crate) fn sandbox_args_for_contained(args: &[String]) -> Result<Vec<String>>
         })
         .collect()
 }
+
+// trace:TASK-3784 | ai:codex
+#[cfg(test)]
+pub(crate) mod test_support {
+    use crate::test_exec::matching_aida_cli;
+    /// Fake Codex protocol for lifecycle fixtures: run the REAL matching CLI's
+    /// model-free authority probe, then leave normal model argv/body untouched.
+    /// This emulates only our emitted exact-key metadata overrides and core
+    /// filtering. Real policy/table/profile semantics belong to the native fixture.
+    // trace:BUG-2398 | ai:codex
+    pub(crate) fn codex_probe_script(body: impl AsRef<str>) -> String {
+        let cli = matching_aida_cli();
+        let keys = super::tool_env_keys_for_test();
+        let script = format!(
+            r#"#!/bin/sh
+is_probe=false
+for arg in "$@"; do
+    [ "$arg" = sandbox ] && is_probe=true
+done
+if "$is_probe"; then
+    python3 - "$@" <<'AIDA_CODEX_FIXTURE_PY'
+import os, sys, tomllib
+args = sys.argv[1:]
+sep = args.index('--')
+env = os.environ.copy()
+for key in {keys:?}:
+    env.pop(key, None)
+i = 0
+while i < sep:
+    if args[i] == '-c':
+        table = tomllib.loads(args[i+1])
+        env.update(table.get('shell_environment_policy', {{}}).get('set', {{}}))
+        i += 1
+    i += 1
+command = args[sep+1:]
+assert command[1:3] == ['role', 'current'] and '--probe-seat' in command
+os.execve({cli:?}, [{cli:?}] + command[1:], env)
+AIDA_CODEX_FIXTURE_PY
+    exit $?
+fi
+"#,
+            cli = cli.to_string_lossy()
+        );
+        script
+            + body
+                .as_ref()
+                .strip_prefix("#!/bin/sh\n")
+                .unwrap_or(body.as_ref())
+    }
+}
