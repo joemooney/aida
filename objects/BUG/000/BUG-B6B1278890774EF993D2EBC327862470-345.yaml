@@ -15,12 +15,12 @@ description: |-
   Acceptance: (1) a headless implementer that commits and exits 0 without pushing ends with a PR open at its commit and the attempt recorded as published; (2) a dirty seat keeps today's behaviour; (3) a seat with no new commits ends 'no changes' without an error about unpushed commits; (4) publish failure leaves the commits in the seat and prints the retry command; (5) works for a seat on a remote lane host (dell1) with no operator grant.
 
   Stopgap in place: dell1 ~/lane-run.sh now runs 'aida ship SPEC --from-seat SEAT' when the seat is clean but its HEAD differs from origin's branch and is not on origin/main. Remove that branch of the wrapper when this lands.
-status: Approved
+status: InProgress
 priority: High
-owner: ''
+owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-14T13:40:54.226128122Z
-modified_at: 2026-11-14T13:44:03.307332136Z
+modified_at: 2026-11-14T16:02:57.264029843Z
 req_type: Bug
 tags:
 - landing
@@ -43,6 +43,15 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Approved
+- id: 01a1dacc-3070-7313-abdd-39f4f2d09bc3
+  author: aida-session-start
+  timestamp: 2026-11-14T16:02:57.264028581Z
+  session_id: 01a1dabe-503c-7aa1-a630-609dbc4400f2
+  harness_version: 2.1.325 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: 2682c4c4fe5a42194a6f2eca01940008e3a41776
   branch: main
