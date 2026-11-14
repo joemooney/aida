@@ -1693,6 +1693,16 @@ fn probe_unneeded(store: &Store, change: &forge::Change) -> Result<Option<String
     probe_unneeded_with_coverage(store, change, || dispatch_carried_approval(store, change))
 }
 
+/// Fast freshness (synthetic-merge conflict probing, no branch update) applies
+/// only to a change based on the protected branch. Integration-track and
+/// stacked changes keep the ordinary stale-base handling, never a refusal.
+// trace:STORY-2763 | ai:claude
+pub(super) fn fast_freshness(root: &Path, change: &forge::Change) -> bool {
+    crate::gate::review_freshness::for_head(root, &change.head)
+        == crate::gate::review_freshness::Freshness::Fast
+        && crate::gate::review_carryover::protected_base(root).is_ok_and(|p| p == change.base)
+}
+
 // trace:STORY-2694 | ai:codex
 fn probe_unneeded_with_coverage(
     store: &Store,
@@ -1705,10 +1715,7 @@ fn probe_unneeded_with_coverage(
         let Some(entry) = state.entries.get(&key) else {
             return Ok(None);
         };
-        if crate::gate::review_freshness::for_head(&store.root, head)
-            == crate::gate::review_freshness::Freshness::Strict
-            && entry.notices.get(head).is_some_and(|n| n.sent)
-        {
+        if !fast_freshness(&store.root, change) && entry.notices.get(head).is_some_and(|n| n.sent) {
             return Ok(Some((update::STALE_NOTIFIED.to_string(), false)));
         }
         Ok(entry
@@ -2199,8 +2206,7 @@ fn child_with_program(
                 repo.probe(root, &mut current)?;
                 if current.head == attempt.head
                     && current.overlap == Some(true)
-                    && crate::gate::review_freshness::for_head(root, &current.head)
-                        == crate::gate::review_freshness::Freshness::Fast
+                    && fast_freshness(root, &current)
                 {
                     crate::gate::review_freshness::route_rework(root, id, &current.head)?;
                     return Err(crate::gate::review_freshness::NeedsRework.into());
@@ -2445,11 +2451,7 @@ pub(crate) fn reviewer_launch_context(root: &Path, id: u64) -> Result<bool> {
         }
         return Err(error);
     }
-    if current.head == head
-        && current.overlap == Some(true)
-        && crate::gate::review_freshness::for_head(root, head)
-            == crate::gate::review_freshness::Freshness::Fast
-    {
+    if current.head == head && current.overlap == Some(true) && fast_freshness(root, &current) {
         crate::gate::review_freshness::route_rework(root, id, head)?;
         return Err(crate::gate::review_freshness::NeedsRework.into());
     }
@@ -2959,8 +2961,7 @@ fn watch_change(
     // Fast reviews need no branch update. Probe a synthetic merge and route
     // actual textual conflicts before reserving a reviewer or spending a round.
     // trace:STORY-2763 | ai:codex
-    let fast = crate::gate::review_freshness::for_head(root, &change.head)
-        == crate::gate::review_freshness::Freshness::Fast;
+    let fast = fast_freshness(root, &change);
     if fast {
         // Preserve the existing active-review and exact-head reservation
         // fences before any rework routing or remote base probe.

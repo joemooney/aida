@@ -409,12 +409,9 @@ impl Repository {
             // Under fast policy overlap means a real conflict, not two edits
             // in the same file. Keep the original head as the review identity.
             // trace:STORY-2763 | ai:codex
-            if crate::gate::review_freshness::for_head(root, &change.head)
-                == crate::gate::review_freshness::Freshness::Fast
-            {
-                let protected = crate::gate::review_carryover::protected_base(root)
-                    .map_err(|e| anyhow::anyhow!(e.reason()))?;
-                anyhow::ensure!(branch == protected, "review base is not protected");
+            // A non-protected base (integration track, stacked PR) falls
+            // through to the ordinary overlap probe. trace:STORY-2763 | ai:claude
+            if super::fast_freshness(root, change) {
                 return match crate::gate::review_freshness::landed_tree(root, &base, &head) {
                     Ok(_) => Ok((false, behind)),
                     Err(e) if e.is::<crate::gate::review_freshness::NeedsRework>() => {

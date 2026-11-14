@@ -7599,12 +7599,13 @@ pub(crate) fn preflight_stale_base_check_with_info(
     };
 
     // trace:STORY-2763 | ai:codex
+    // A non-protected base (integration track, stacked PR) keeps the ordinary
+    // stale-base classification. trace:STORY-2763 | ai:claude
+    let protected = crate::gate::review_carryover::protected_base(project_root).ok();
     let fast = crate::gate::review_freshness::for_head(project_root, &info.head_oid)
-        == crate::gate::review_freshness::Freshness::Fast;
-    let outcome = if fast {
-        let protected = crate::gate::review_carryover::protected_base(project_root)
-            .map_err(|e| anyhow::anyhow!(e.reason()))?;
-        anyhow::ensure!(info.base_ref == protected, "review base is not protected");
+        == crate::gate::review_freshness::Freshness::Fast
+        && protected.as_deref() == Some(info.base_ref.as_str());
+    let outcome = if let (true, Some(protected)) = (fast, protected) {
         crate::gate::review_carryover::refresh_base(project_root, &protected)
             .map_err(|e| anyhow::anyhow!(e.reason()))?;
         // Resolve the fetched head, not a branch that can move underneath us.
