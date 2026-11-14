@@ -17,12 +17,12 @@ description: |
   (a) needs no change at the vendor boundary.
 
   Acceptance: a reviewer whose in-sandbox record is refused still lands its verdict at the exact head via the parent. Test with a stub reviewer that writes the verdict file and has no ancestry. Afterwards, the headless-logs refusal count goes to 0 over 24h.
-status: Approved
+status: InProgress
 priority: High
-owner: ''
+owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-13T18:16:13.414258365Z
-modified_at: 2026-11-13T18:16:18.509873392Z
+modified_at: 2026-11-14T05:33:39.202469119Z
 req_type: Bug
 tags:
 - effort:open:4h
@@ -39,6 +39,13 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Approved
+- id: 01a1d88c-0c02-7c12-8b49-284ccee795fa
+  author: aida-session-start
+  timestamp: 2026-11-14T05:33:39.202467057Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: ee8dd4b2bdf1495f699357a3f2f40f9bf3802983
   branch: main
