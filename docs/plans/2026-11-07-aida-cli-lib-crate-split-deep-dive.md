@@ -433,6 +433,14 @@ Timing evidence collected before host publication:
 The before source is successful main run
 [43562483470](https://github.com/joemooney/aida/actions/runs/43562483470),
 head `1801b34105752b7fda6dedc9cd1bf8b9e4881c59`, 2026-11-14 UTC.
+
+After-timing checkpoint (2026-11-14 13:20 UTC): PR #3994 has `ci:full`;
+[current-head CI run 43599084597](https://github.com/joemooney/aida/actions/runs/43599084597)
+at `ecb4117cd338ff72928d7ad9a8ab72706f0e2d27` is pending with no jobs started.
+Successful extraction run 43586756860 used FAST and skipped the lib shards, so
+it cannot supply the after measurements. Record both FULL `Run tests` step
+durations here before completing timing acceptance. The existing merge hold
+remains in place.
 These are workflow step wall times, including compilation performed inside the
 test step. Record the same two steps from the published PR's FULL run before
 closing the timing acceptance criterion; local targeted tests are not a
