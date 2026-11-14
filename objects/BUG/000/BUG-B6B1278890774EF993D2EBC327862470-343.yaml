@@ -8,12 +8,12 @@ description: |-
   Fix: label events should start or cancel a CI run only when the label is ci:full (the only label that changes the tier). Options: gate the jobs with an if on github.event.action / github.event.label.name so other label events finish in seconds without joining the cancelling concurrency group, or give non-ci:full label events their own concurrency group. A hold-label change must not cancel an in-progress run on the same head.
 
   Acceptance: (1) adding or removing aida:merge-hold* on a PR with a CI run in progress leaves that run running; (2) adding ci:full starts a full run; removing it starts a fast run; (3) push to the PR still cancels the superseded run; (4) train PR behaviour unchanged.
-status: Approved
+status: InProgress
 priority: High
-owner: ''
+owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-14T13:05:16.063317537Z
-modified_at: 2026-11-14T13:08:25.605942387Z
+modified_at: 2026-11-14T13:10:27.618015065Z
 req_type: Bug
 comments:
 - id: 01a1da2c-6785-77a1-8af1-0ca2cb17d67e
@@ -33,6 +33,13 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Approved
+- id: 01a1da2e-4422-7dc3-857d-b2335ed76a18
+  author: aida-session-start
+  timestamp: 2026-11-14T13:10:27.618013408Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: 2682c4c4fe5a42194a6f2eca01940008e3a41776
   branch: main
