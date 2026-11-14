@@ -1133,3 +1133,102 @@ fn bug_2549_unavailable_forge_preserves_exit_evidence() {
         .iter()
         .any(|c| c.content.starts_with("Lane exit evidence:") && c.content.contains(&captured)));
 }
+
+// A fake gh reporting merged change #42 for `bug-2451`, with `view` as the
+// shell body answering `pr view`.
+// trace:BUG-2549 | ai:claude
+fn bug_2549_merged_gh(view: &str) -> String {
+    format!(
+        r#"#!/bin/sh
+if [ "$1" = --version ]; then echo 'gh test'; exit 0; fi
+if [ "$1 $2" = 'pr list' ]; then
+  case " $* " in
+    *' --state merged '*) printf '42\tRefs BUG-2451\thttps://example.invalid/42\tbug-2451\n';;
+  esac
+  exit 0
+fi
+if [ "$1 $2" = 'pr view' ]; then
+  {view}
+fi
+exit 1
+"#
+    )
+}
+
+// trace:BUG-2549 | ai:claude
+fn bug_2549_merged_view(head: &str) -> String {
+    format!(
+        r#"printf '%s\n' '{{"state":"MERGED","headRefOid":"{head}","headRefName":"bug-2451","baseRefName":"main"}}'; exit 0"#
+    )
+}
+
+// Confirmed merged evidence whose merged head cannot be read (empty output,
+// an empty head, or a failing view) must not fail pickup: it allocates a
+// dated branch, as main did.
+// trace:BUG-2549 | ai:claude
+#[test]
+fn bug_2549_unreadable_merged_head_allocates_a_dated_branch() {
+    for view in [
+        "exit 0".to_string(),
+        bug_2549_merged_view(""),
+        "exit 1".to_string(),
+    ] {
+        let fx = fixture();
+        let mut ambient =
+            crate::test_env::AmbientGuard::hermetic_with_seat(&fx.main, "implementer", &[]);
+        let gh = recovery_forge_fixture(&fx.main, &fx.root);
+        ambient.set_key("AIDA_TEST_GH_BINARY", &gh);
+        git_ok(&fx.main, &["branch", "bug-2451"]);
+        crate::test_exec::write_executable(&gh, bug_2549_merged_gh(&view));
+        assert_eq!(
+            crate::queue_cmd::canonical_resume_branch(&fx.main, "BUG-2451", true).unwrap(),
+            None,
+            "{view}"
+        );
+        let (storage, _) = super::orphan_reentry_tests::queued_scope(&fx.main, "BUG-2451");
+        queue_work(&storage, false).unwrap();
+        let lease = crate::list_leases(&fx.main).remove(0);
+        assert!(lease.branch.starts_with("bug-2451-"), "{}", lease.branch);
+        assert!(super::tests::ref_exists(&fx.main, "refs/heads/bug-2451"));
+    }
+}
+
+// A canonical branch whose tip cannot be resolved to a commit, alongside
+// confirmed merged evidence, also falls back to a dated branch instead of
+// aborting pickup.
+// trace:BUG-2549 | ai:claude
+#[test]
+fn bug_2549_unresolvable_canonical_tip_allocates_a_dated_branch() {
+    let fx = fixture();
+    let mut ambient =
+        crate::test_env::AmbientGuard::hermetic_with_seat(&fx.main, "implementer", &[]);
+    let gh = recovery_forge_fixture(&fx.main, &fx.root);
+    ambient.set_key("AIDA_TEST_GH_BINARY", &gh);
+    let merged_head = git_ok(&fx.main, &["rev-parse", "HEAD"]);
+    // The branch name exists locally but does not name a commit, and origin
+    // has no such branch: neither tip source resolves.
+    let tree = git_ok(&fx.main, &["rev-parse", "HEAD^{tree}"]);
+    let ref_path = git_ok(
+        &fx.main,
+        &[
+            "rev-parse",
+            "--path-format=absolute",
+            "--git-path",
+            "refs/heads/bug-2451",
+        ],
+    );
+    std::fs::write(&ref_path, format!("{tree}\n")).unwrap();
+    assert!(crate::branch_exists_anywhere(&fx.main, "bug-2451"));
+    crate::test_exec::write_executable(
+        &gh,
+        bug_2549_merged_gh(&bug_2549_merged_view(&merged_head)),
+    );
+    assert_eq!(
+        crate::queue_cmd::canonical_resume_branch(&fx.main, "BUG-2451", true).unwrap(),
+        None
+    );
+    let (storage, _) = super::orphan_reentry_tests::queued_scope(&fx.main, "BUG-2451");
+    queue_work(&storage, false).unwrap();
+    let lease = crate::list_leases(&fx.main).remove(0);
+    assert!(lease.branch.starts_with("bug-2451-"), "{}", lease.branch);
+}

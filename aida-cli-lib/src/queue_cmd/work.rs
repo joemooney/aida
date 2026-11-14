@@ -908,21 +908,21 @@ pub(crate) fn canonical_resume_branch(
     match forge.merged_change_for_branch(&branch)? {
         crate::forge::ChangeLookup::NoChange => {}
         crate::forge::ChangeLookup::Found(change) => {
-            let metadata =
-                forge.change_metadata(change.id, &mut crate::network_retry::StderrSink)?;
-            anyhow::ensure!(
-                !metadata.head_sha.is_empty(),
-                "merged change head is unavailable"
-            );
             // Merged residue (including an origin-only branch) with no commits
             // past the merged head allocates a fresh dated branch, as before;
-            // only a tip that moved past the merged head resumes.
+            // only a tip proven to have moved past the merged head resumes.
+            // Confirmed merged evidence whose head cannot be read, or a tip
+            // that cannot be resolved, is not such proof: fall back softly to
+            // the dated allocation rather than failing pickup.
             // trace:BUG-2549 | ai:claude
-            let tip = canonical_branch_tip(root, &branch).ok_or_else(|| {
-                anyhow::anyhow!("cannot establish canonical branch `{branch}` head; refusing to discard unfinished work")
-            })?;
-            if tip == metadata.head_sha {
-                return Ok(None);
+            let merged_head = forge
+                .change_metadata(change.id, &mut crate::network_retry::StderrSink)
+                .ok()
+                .map(|metadata| metadata.head_sha)
+                .filter(|head| !head.is_empty());
+            match (merged_head, canonical_branch_tip(root, &branch)) {
+                (Some(merged), Some(tip)) if tip != merged => {}
+                _ => return Ok(None),
             }
         }
         _ => anyhow::bail!("cannot establish merged change evidence for `{branch}`"),
