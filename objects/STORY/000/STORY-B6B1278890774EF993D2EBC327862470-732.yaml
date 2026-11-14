@@ -18,7 +18,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-14T12:41:27.454869454Z
-modified_at: 2026-11-14T21:12:38.826617623Z
+modified_at: 2026-11-14T21:26:26.576173284Z
 req_type: Story
 tags:
 - area:ci
@@ -164,6 +164,12 @@ comments:
   content: 'PR #4027 merge-repair handoff: resolved ci.yml preserving BUG-2578 non-tier-label guards and STORY-2809 synchronize-to-FAST selection in the tier name and execution selector. Updated tests/test_ci_tiers.py assertions for combined behavior. Python CI tier/shard suites: 33 passed. Launcher cargo test --profile agent -p aida-ci-guards --lib: 51 passed (job j20261114T211138902-3350569-0). Conflict-marker scan and git diff --check passed. make check-ci-fast attempted under a 55s bound: exit 124 during containment conformance tests, aggregate validation incomplete; log /tmp/story-2809-check-ci-fast.log. Left working-tree edits uncommitted and Git metadata untouched. Host must stage/commit/publish the retained merge, rerun FAST, obtain delta review, and run FULL at the new head; existing hold remains.'
   created_at: 2026-11-14T21:12:38.826617623Z
   modified_at: 2026-11-14T21:12:38.826617623Z
+  session_id: 01a1dbe53d1f
+- id: 01a1dbf4-5a10-7763-9ea3-8472538e4942
+  author: lane-recovery
+  content: 'Lane exit evidence: retained branch `story-b6b1278890774ef993d2ebc327862470-732` at head `58f58c007a502045d32c5f15556941ca0044e48f`.'
+  created_at: 2026-11-14T21:26:26.576166784Z
+  modified_at: 2026-11-14T21:26:26.576166784Z
   session_id: 01a1dbe53d1f
 history:
 - id: 01a1da15-71c2-7341-9db1-1661bad607cc
