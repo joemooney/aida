@@ -1,7 +1,7 @@
 //! Preserve retry evidence without claiming completion or releasing leases.
 // trace:BUG-2549 | ai:codex
 use aida_core::{Comment, RequirementStatus, Storage};
-use anyhow::Result;
+use anyhow::{Context, Result};
 use std::path::Path;
 
 pub(crate) fn reconcile(root: &Path, spec: &str, branch: &str, head: Option<&str>) -> Result<()> {
@@ -47,17 +47,19 @@ fn reconcile_observed_in(
     head: Option<&str>,
 ) -> Result<()> {
     // Exit facts must survive unavailable forge evidence and source teardown.
-    storage.update_atomically(|store| {
-        if let Ok(Some(req)) = store.get_requirement_unambiguous_mut(spec) {
-            let note = format!(
-                "Lane exit evidence: retained branch `{branch}` at head `{}`.",
-                head.unwrap_or("unavailable")
-            );
-            if !req.comments.iter().any(|comment| comment.content == note) {
-                req.add_comment(Comment::new("lane-recovery".into(), note));
+    storage
+        .update_atomically(|store| {
+            if let Ok(Some(req)) = store.get_requirement_unambiguous_mut(spec) {
+                let note = format!(
+                    "Lane exit evidence: retained branch `{branch}` at head `{}`.",
+                    head.unwrap_or("unavailable")
+                );
+                if !req.comments.iter().any(|comment| comment.content == note) {
+                    req.add_comment(Comment::new("lane-recovery".into(), note));
+                }
             }
-        }
-    })?;
+        })
+        .context("failed to persist captured lane exit evidence before forge discovery")?;
     let forge = crate::forge::forge_for_open_change(root);
     // Failed/unknown forge observations must never be treated as absence.
     if !forge.open_changes_for_spec(spec)?.is_empty()
@@ -222,6 +224,9 @@ pub(crate) fn exit_head(
             });
         }
         if lease.worktree_path.try_exists()? {
+            // The lease branch may no longer describe this tree (detached HEAD
+            // or a branch switch). A failed live probe must stay unknown rather
+            // than attributing the recorded branch's unrelated tip to the exit.
             return Ok(aida_core::git_ops::worktree_head_sha(&lease.worktree_path));
         }
     }

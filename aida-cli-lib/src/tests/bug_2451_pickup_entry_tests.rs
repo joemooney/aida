@@ -834,6 +834,13 @@ exit 1
             Some("bug-2451".into())
         );
     }
+    // Origin-only retained work also resumes, despite the historical merge.
+    git_ok(&fx.main, &["push", "-q", "origin", "bug-2451"]);
+    git_ok(&fx.main, &["branch", "-D", "bug-2451"]);
+    assert_eq!(
+        crate::queue_cmd::canonical_resume_branch(&fx.main, "BUG-2451", true).unwrap(),
+        Some("bug-2451".into())
+    );
     queue_work(&storage, false).unwrap();
     let lease = crate::list_leases(&fx.main).remove(0);
     assert_eq!(lease.branch, "bug-2451");
@@ -927,6 +934,12 @@ fn bug_2549_detached_worktree_exit_captures_actual_head() {
     let captured =
         crate::lane_recovery::exit_head(&fx.main, &lease.branch, &[lease.clone()]).unwrap();
     assert_eq!(captured, Some(head.clone()));
+    // Switching away from the lease branch must use the live tree as well.
+    git_ok(&lease.worktree_path, &["checkout", "-b", "switched-exit"]);
+    assert_eq!(
+        crate::lane_recovery::exit_head(&fx.main, &lease.branch, &[lease.clone()]).unwrap(),
+        captured
+    );
     git_ok(
         &fx.main,
         &["worktree", "remove", lease.worktree_path.to_str().unwrap()],
@@ -960,8 +973,29 @@ fn bug_2549_unavailable_forge_preserves_exit_evidence() {
         crate::test_env::AmbientGuard::hermetic_with_seat(&fx.main, "implementer", &[]);
     let gh = recovery_forge_fixture(&fx.main, &fx.root);
     ambient.set_key("AIDA_TEST_GH_BINARY", &gh);
-    let (storage, set_status) = super::orphan_reentry_tests::queued_scope(&fx.main, "BUG-2451");
-    set_status(aida_core::RequirementStatus::InProgress);
+    let (storage, _) = super::orphan_reentry_tests::queued_scope(&fx.main, "BUG-2451");
+    queue_work(&storage, false).unwrap();
+    let lease = crate::list_leases(&fx.main).remove(0);
+    git_ok(&lease.worktree_path, &["checkout", "--detach"]);
+    git_ok(
+        &lease.worktree_path,
+        &[
+            "-c",
+            "core.hooksPath=/dev/null",
+            "commit",
+            "--allow-empty",
+            "-qm",
+            "private exit during outage",
+        ],
+    );
+    let captured = crate::lane_recovery::exit_head(&fx.main, &lease.branch, &[lease.clone()])
+        .unwrap()
+        .unwrap();
+    git_ok(
+        &fx.main,
+        &["worktree", "remove", lease.worktree_path.to_str().unwrap()],
+    );
+    std::fs::remove_file(crate::lease_path(&fx.main, &lease.id)).unwrap();
     crate::test_exec::write_executable(
         &gh,
         "#!/bin/sh\nif [ \"$1\" = --version ]; then echo 'gh test'; exit 0; fi\nexit 1\n",
@@ -970,14 +1004,14 @@ fn bug_2549_unavailable_forge_preserves_exit_evidence() {
         &fx.main,
         "BUG-2451",
         "bug-2451",
-        Some("detached-exit-head")
+        Some(&captured)
     )
     .is_err());
     let store = storage.load().unwrap();
     let req = store.get_requirement_by_spec_id("BUG-2451").unwrap();
     assert_eq!(req.status, aida_core::RequirementStatus::InProgress);
     assert!(req.comments.iter().any(|c| c.content.contains("bug-2451")
-        && c.content.contains("detached-exit-head")
+        && c.content.contains(&captured)
         && !c.content.contains("no open PR")));
     assert!(!req
         .comments
@@ -989,7 +1023,7 @@ fn bug_2549_unavailable_forge_preserves_exit_evidence() {
         &fx.main,
         "BUG-2451",
         "bug-2451",
-        Some("detached-exit-head")
+        Some(&captured)
     )
     .is_err());
     let retry = storage.load().unwrap();
@@ -998,19 +1032,13 @@ fn bug_2549_unavailable_forge_preserves_exit_evidence() {
     assert_eq!(req.status, aida_core::RequirementStatus::InProgress);
     // Only a later successful no-PR observation authorizes the transition.
     recovery_forge_fixture(&fx.main, &fx.root);
-    crate::lane_recovery::reconcile_observed(
-        &fx.main,
-        "BUG-2451",
-        "bug-2451",
-        Some("detached-exit-head"),
-    )
-    .unwrap();
+    crate::lane_recovery::reconcile_observed(&fx.main, "BUG-2451", "bug-2451", Some(&captured))
+        .unwrap();
     let recovered = storage.load().unwrap();
     let req = recovered.get_requirement_by_spec_id("BUG-2451").unwrap();
     assert_eq!(req.status, aida_core::RequirementStatus::Approved);
     assert!(req
         .comments
         .iter()
-        .any(|c| c.content.starts_with("Lane exit evidence:")
-            && c.content.contains("detached-exit-head")));
+        .any(|c| c.content.starts_with("Lane exit evidence:") && c.content.contains(&captured)));
 }

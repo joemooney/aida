@@ -918,9 +918,11 @@ pub(crate) fn canonical_resume_branch(
             // past the merged head allocates a fresh dated branch, as before;
             // only a tip that moved past the merged head resumes.
             // trace:BUG-2549 | ai:claude
-            match canonical_branch_tip(root, &branch) {
-                Some(tip) if tip != metadata.head_sha => {}
-                _ => return Ok(None),
+            let tip = canonical_branch_tip(root, &branch).ok_or_else(|| {
+                anyhow::anyhow!("cannot establish canonical branch `{branch}` head; refusing to discard unfinished work")
+            })?;
+            if tip == metadata.head_sha {
+                return Ok(None);
             }
         }
         _ => anyhow::bail!("cannot establish merged change evidence for `{branch}`"),
