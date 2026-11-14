@@ -30,7 +30,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-13T15:54:08.931576118Z
-modified_at: 2026-11-14T06:07:34.808536454Z
+modified_at: 2026-11-14T06:13:02.452574437Z
 req_type: Story
 tags:
 - architecture
@@ -292,6 +292,12 @@ history:
   - field_name: status
     old_value: NeedsAttention
     new_value: Approved
+- id: 01a1d8b0-1c69-7a11-b641-3d9f261a71ad
+  author: joe
+  timestamp: 2026-11-14T06:13:02.697596371Z
+  session_id: 01a1d8ac27e8
+  harness_version: 2.1.325 (Claude Code)
+  changes: []
 filed_at:
   code_sha: 3631f7ca05567a6984ff2376b997539389b6f758
   branch: main
@@ -301,3 +307,11 @@ filed_at:
   vendor: claude
   session: 01a1d54b-060a-7951-aa40-7f0fd928126f
   harness_version: 2.1.323 (Claude Code)
+failure_reason:
+  phase: reviewer
+  phase_index: 3
+  kind: verdict:request-changes
+  detail: Core fast/strict freshness design is sound (trusted default-branch policy, strict revokes cached proofs, patch-id round dedupe, clean-merge carry-over + train), but CI is red on the gate dependency ratchet and AC1/AC2/AC5/AC6 (delta admission, conflict rework routing, audit output) plus per-path overrides lack tests.
+  recovery_hint: address the review findings, move STORY-B6B1278890774EF993D2EBC327862470-686 back to In Progress, and clear the PR hold only after approval
+  shelved_by: reviewer
+  shelved_at: 2026-11-14T06:13:02.452574437Z
