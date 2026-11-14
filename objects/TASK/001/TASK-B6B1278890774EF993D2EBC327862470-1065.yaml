@@ -3,12 +3,12 @@ spec_id: TASK-b6b1278890774ef993d2ebc327862470-1065
 agreed_id: TASK-3785
 title: 'Crate-split PR8: gate downward-only dependency ratchet'
 description: 'Per SPIKE-713 (docs/plans/2026-11-07-aida-cli-lib-crate-split-deep-dive.md) section 7 row 8. Acceptance: (1) a Python ratchet shaped like scripts/check-exec-context.py counts gate -> {pr_cmd, session, seat_clone, queue_cmd, auto_complete, awaiting_you, orchestrator, pr_ship, pr_train, drain_lock, drain_state, store_sync, merge_hold} item edges with a checked-in ceiling at today''s count (about 144); (2) wired into make check-ci-fast and the CI Build job; (3) the ceiling can only decrease; (4) burn-down PRs that move functions into gate or behind traits are filed as children once the ratchet lands.'
-status: InProgress
+status: Completed
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-11T12:18:05.824589631Z
-modified_at: 2026-11-14T07:24:25.591917262Z
+modified_at: 2026-11-14T12:16:42.007890188Z
 req_type: Task
 relationships:
 - rel_type: BlockedBy
@@ -168,6 +168,20 @@ history:
   author: joe
   timestamp: 2026-11-14T07:24:34.304550004Z
   changes: []
+- id: 01a1d9fd-06db-7291-8776-22fc65368185
+  author: aida-auto-bump
+  timestamp: 2026-11-14T12:16:40.667452701Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a1d9fd-0c17-7f40-b7be-22dadbcefc40
+  timestamp: 2026-11-14T12:16:42.007885695Z
+  agent: aida
+  commit_sha: 166920a3bf8bd517e8d670a09dd3a7a3de96b7f9
+  summary: 'Advisor-scoped P1 rework satisfied: fast-gates exports+requires GATE_DEPENDENCIES_BASE (ci.yml:71,89); Build gate step now refuses missing/empty/null base on pull_request (ci.yml:1095-1103); FAST fixture commits source+ledger growth at a newer PR head and proves rejection vs older trusted base (test_ci_tiers.py:188-228); GitLab adapter supplies GITHUB_EVENT_NAME overriding stale inherited value (run-upstream.py:29,331; test_gdma_ci.py:221). AC1/AC3 verified by merged ratchet + fixture; AC2 verified; AC4 is a post-landing filing action (deferred). Alias bypass split to BUG-2567 per advisor. CI green at exact head (run 43573553356).'
+  review_verdict: approved
 filed_at:
   code_sha: 11b131dfe3341e6d9c7127d64370f91366094711
   branch: main
@@ -177,3 +191,7 @@ filed_at:
   vendor: claude
   session: 01a1ca83-fabb-7663-852c-12c78d4e097f
   harness_version: 2.1.322 (Claude Code)
+implementation_info:
+  implemented: false
+  completed_at: 2026-11-14T12:16:40.667444888Z
+  completion_sha: 166920a3bf8bd517e8d670a09dd3a7a3de96b7f9
