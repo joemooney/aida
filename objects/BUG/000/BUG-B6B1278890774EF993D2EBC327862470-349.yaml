@@ -20,11 +20,29 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-14T16:58:10.857853786Z
-modified_at: 2026-11-14T17:04:43.625326919Z
+modified_at: 2026-11-14T17:22:17.692364789Z
 req_type: Bug
 tags:
 - landing
 - track:integration
+comments:
+- id: 01a1db14-d3dc-7330-acc2-432936081381
+  author: dirtlab
+  content: |-
+    ## Implementer note: timing log shipped, speed-up not yet (partial, Refs)
+
+    Shipped on branch bug-b6b1278890774ef993d2ebc327862470-349 (commit d2aeabea3d): one line per final-gate phase with its duration, printed when the phase ends whether it passed or refused. Phases: main fetches, each member re-gate, hold release, and inside the verified merge the structure check, train PR state, exact-tip CI, each member gate and evidence, the audit write, the corpus recheck. Proof pass and pre-attempt recheck are labelled apart. Each line also says how many whole-store reads the phase made and their time.
+
+    Not done: the green-to-merge time is unchanged. The slow phase could not be identified from this lane (the gate ledger and train journal are not readable here, and no train can be run). What the code shows:
+    - The full member gate runs three times per member between green and merge: once in land, once in the proof collect, once in the recheck before the first merge attempt.
+    - Every `load_store_for_lookup` re-reads the whole store: 0.8s measured on this store (7,739 objects, 58 MB), at least 7 per member per collect pass by reading the code, so 40s or more on a 3-member train from store reads alone. That is above the 30s target but far short of 7.5 minutes, so something else dominates.
+    - The journal label `GitHub metadata attempt` is written only by `change_metadata`; the long CPU stretch follows one of those calls, which fits the per-member evidence phase in `collect` (no forge call until the next member).
+
+    Next: read the phase lines from the next train, then fix the phase they name.
+  created_at: 2026-11-14T17:22:17.692364789Z
+  modified_at: 2026-11-14T17:22:17.692364789Z
+  session_id: 01a1db044047
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1daff-e2f5-7ce1-9f15-a0d8c0c25a15
   author: joe

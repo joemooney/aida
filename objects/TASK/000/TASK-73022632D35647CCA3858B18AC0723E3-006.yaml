@@ -1,0 +1,36 @@
+id: 01a1db14-fdb8-76a1-9bf9-cd9e2a9c19eb
+spec_id: TASK-73022632d35647cca3858b18ac0723e3-006
+title: BUG-2584 shipped only the final-gate timing log; green-to-merge is still slow
+description: |
+  BUG-2584 asks for two things: make the step from "train PR is green" to the merge call take seconds, and print one line per final-gate phase with its duration. Only the second shipped. The first acceptance criterion (under 30 seconds on a 3-member train) is not met and was not measured.
+
+  Why: the slow phase could not be identified from the implementer lane. The gate ledger and the train journal are not readable there and no train can be run, so there was no profile to act on.
+
+  What to do: after the next `aida pr train` lands, read its `final gate: ... took Ns` lines and fix the phase they name. Candidates seen in the code (aida-cli-lib/src/pr_train_verified.rs `collect`, aida-cli-lib/src/pr_train.rs `land`):
+  - the full member gate runs three times per member (land, proof collect, recheck before the first merge attempt);
+  - each `load_store_for_lookup` re-reads the whole store, 0.8s measured on this store, at least 7 per member per collect pass — 40s or more on a 3-member train, above the target on its own but well short of 7.5 minutes.
+
+  The commit carries `Refs BUG-2584`, so the merge does not complete the spec; BUG-2584 stays In Progress.
+
+  Raised by the implementer while working BUG-2584.
+  Branch: bug-b6b1278890774ef993d2ebc327862470-349  ·  Commit: d2aeabea3d  (PR link added on merge)
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-14T17:22:28.408353138Z
+modified_at: 2026-11-14T17:22:28.408353138Z
+req_type: Task
+tags:
+- from-implementer:BUG-2584
+- kind:deviation
+- severity:major
+filed_at:
+  code_sha: d2aeabea3dfcce83b9ba1550f36273863c41f73c
+  branch: bug-b6b1278890774ef993d2ebc327862470-349
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: bc24a1e688
+  vendor: claude
+  session: 01a1db044047
+  harness_version: 2.1.319 (Claude Code)
