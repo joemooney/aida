@@ -16,6 +16,10 @@ pub enum PrCommand {
     /// Derive PR states, next actions and owners without performing actions.
     // trace:STORY-2688 | ai:codex
     State(crate::pr_state::StateArgs),
+    // trace:BUG-2535 | ai:codex
+    /// Internal: bounded post-merge reap and prune phase.
+    #[clap(hide = true)]
+    PostShipSweep,
     // Sequential post-merge worker, launched only after releasing the merge lease.
     // trace:BUG-2384 | ai:codex
     /// Internal: the post-merge cleanup worker `aida pr ship` launches
