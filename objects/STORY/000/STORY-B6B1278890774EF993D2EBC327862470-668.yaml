@@ -13,12 +13,12 @@ description: |
   AC5 Claude fast path (optional, best-effort): when the holder is a live Claude session reachable by SendMessage, the send also prints the handle to notify; mailbox remains the record. No delivery claim beyond what the mailbox records.
   AC6 Seat handoff docs/prompt: the integration-seat prompt template uses `aida mailbox send --to seat:advisor`/`--to advisor` instead of SendMessage-only instructions.
   Tests: resolver unit tests for seat:<name> (live holder, no holder → queued, unknown → refusal listing seats); a two-session fixture where a reply reaches the original seat after the sender rotated; codex hook fixture emitting the unread notice.
-status: Approved
+status: InProgress
 priority: Medium
-owner: ''
+owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-13T00:35:57.525111678Z
-modified_at: 2026-11-14T13:17:37.774788836Z
+modified_at: 2026-11-14T13:40:44.059918894Z
 req_type: Story
 tags:
 - track:integration
@@ -172,6 +172,13 @@ history:
   - field_name: status
     old_value: NeedsAttention
     new_value: Approved
+- id: 01a1da49-fb9b-75d1-bf3c-fde300e32445
+  author: aida-session-start
+  timestamp: 2026-11-14T13:40:44.059917095Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: 9968a8ab4ec2b4110f24d64122a7e60ab755a95b
   branch: main
