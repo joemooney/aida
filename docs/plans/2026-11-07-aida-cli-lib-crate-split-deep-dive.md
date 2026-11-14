@@ -434,9 +434,11 @@ The before source is successful main run
 [43562483470](https://github.com/joemooney/aida/actions/runs/43562483470),
 head `1801b34105752b7fda6dedc9cd1bf8b9e4881c59`, 2026-11-14 UTC.
 
-After-timing checkpoint (2026-11-14 13:20 UTC): PR #3994 has `ci:full`;
-[current-head CI run 43599084597](https://github.com/joemooney/aida/actions/runs/43599084597)
-at `ecb4117cd338ff72928d7ad9a8ab72706f0e2d27` is pending with no jobs started.
+After-timing checkpoint (2026-11-14 13:55 UTC): PR #3994 has `ci:full`;
+[current-head CI run 43602038976](https://github.com/joemooney/aida/actions/runs/43602038976)
+at `4bdefcbaeb1bcc9938dc482465f458d35a9f1d81` selected FULL. Both lib shards
+are building the aida binary; their `Run tests` steps have not started.
+Previously recorded run 43599084597 at `ecb4117cd3` was cancelled without jobs.
 Successful extraction run 43586756860 used FAST and skipped the lib shards, so
 it cannot supply the after measurements. Record both FULL `Run tests` step
 durations here before completing timing acceptance. The existing merge hold
