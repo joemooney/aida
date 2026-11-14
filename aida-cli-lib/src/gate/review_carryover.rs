@@ -930,6 +930,24 @@ fn git_ok(repo: &Path, args: &[&str]) -> bool {
     git_raw(repo, args).is_ok_and(|o| o.status.success())
 }
 
+/// Whether commit `sha` is part of `head`'s history in `repo`. Only a
+/// definite answer is `false`: git says it is not an ancestor, or `head` is
+/// here and `sha` is not (a commit this repository never received cannot be
+/// in a head it holds). Anything unreadable counts as contained.
+// trace:BUG-2569 | ai:claude
+pub(crate) fn commit_in_head(repo: &Path, sha: &str, head: &str) -> bool {
+    let code = |args: &[&str]| git_raw(repo, args).ok().and_then(|out| out.status.code());
+    match code(&["merge-base", "--is-ancestor", sha, head]) {
+        Some(0) => true,
+        Some(1) => false,
+        _ => {
+            let present =
+                |rev: &str| code(&["cat-file", "-e", &format!("{rev}^{{commit}}")]) == Some(0);
+            !(present(head) && !present(sha))
+        }
+    }
+}
+
 #[cfg(test)]
 #[path = "tests/task_1960_carryover_tests.rs"]
 pub(crate) mod tests;
