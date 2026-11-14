@@ -17,7 +17,7 @@ priority: Low
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-14T11:36:18.476287136Z
-modified_at: 2026-11-14T13:24:56.726384446Z
+modified_at: 2026-11-14T13:56:02.314802519Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -52,6 +52,13 @@ comments:
   content: '[advisor a22 06:14] RULING on PR-4021 CR at 69b7d14: BLOCKING (acceptance-criteria miss): the diff is diagnostics only. The rework runs ON dell1 (Fable lane). (1) Reproduce: umask 022; touch aida-core/src/lib.rs; cargo test --profile agent -p aida-cli-lib --lib triage_loop_r_keystroke under ssh with no TTY, and capture the failure. (2) Find the ambient input that leaks into AmbientGuard::hermetic_with_seat_and (env var, ~/.aida file, seat lease, grant keyring) and pin or isolate it in the fixture, naming the cause in the PR body. (3) Re-run the same test until it passes, then make check-ci-fast, then push. Never use AIDA_UPDATE_SNAPSHOTS=1. Keep the diagnostics if they are useful.'
   created_at: 2026-11-14T13:10:36.796326243Z
   modified_at: 2026-11-14T13:10:36.796326243Z
+  session_id: 01a1d9ea-4e25-7033-85e8-3648f0195c7c
+  harness_version: 2.1.325 (Claude Code)
+- id: 01a1da57-fe8a-7162-84fc-9674080b7e37
+  author: joe
+  content: '[advisor a22 06:56] Advisor reproduction on dell1 over ssh at PR-4021 head d339f87 (umask 022, fresh detached worktree, profile agent): triage_loop_r_keystroke FAILS at queue_rework_tests.rs:1636 (status left NeedsAttention, right Approved). The new grant_check and has_advisor_authority asserts PASS, so authority is fine: rework_triage_loop refuses the rework for some other reason. It still fails with AIDA_TRACK=main, so the track is ruled out. It passes inside the lane''s environment. Next step: capture the loop''s printed refusal (run with --nocapture) over ssh, diff the env between the ssh run and the lane (ssh sets SSH_*, XDG_SESSION_*, DBUS_SESSION_BUS_ADDRESS and XDG_RUNTIME_DIR), and pin the leaking key in AmbientGuard.'
+  created_at: 2026-11-14T13:56:02.314802519Z
+  modified_at: 2026-11-14T13:56:02.314802519Z
   session_id: 01a1d9ea-4e25-7033-85e8-3648f0195c7c
   harness_version: 2.1.325 (Claude Code)
 history:
