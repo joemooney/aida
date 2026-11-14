@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-12T08:35:37.046532324Z
-modified_at: 2026-11-14T14:06:21.573259316Z
+modified_at: 2026-11-14T14:52:57.572565332Z
 req_type: Bug
 tags:
 - track:integration
@@ -207,6 +207,13 @@ comments:
   modified_at: 2026-11-14T14:06:21.573259316Z
   session_id: 01a1d9ea-4e25-7033-85e8-3648f0195c7c
   harness_version: 2.1.325 (Claude Code)
+- id: 01a1da8c-1b64-7150-b07b-04ac6fc1aac1
+  author: dirtlab
+  content: 'Round 6 (lane on bug-b6b1278890774ef993d2ebc327862470-296, 2026-11-14): merged integration (869b98f8a0) and committed the completeness slice the 2026-11-12 22:55 ruling approved (3060a9a4f7): write-ahead bindings, completeness marker, one-time doctor bootstrap, bound-only selection, event format 2. It ports the integration seat''s bug-2531-bindings commit (033fe8e088, never merged) onto current integration: the BUG-2543 shared discovery now revalidates the marker, the bindings it listed and each ledger it read; BUG-2542 quarantine refusal moves to the bindings scan; an unsafe unrelated ledger no longer blocks a selection. Two defects found and fixed in the port: a first append without a spec left a new ledger uncertified (every later selection refused until the doctor fix); nothing made a writer refuse a newer format (now it does; binaries older than this slice still do not check). Round-6 findings: (1) BUG-2534 delivery barriers are already excluded on integration (History::add skips sweep_pending, inline rounds included, with ledger-only tests), no change needed; (2) PR #3901 is merged and its title cannot change; the later ruling keeps BUG-2531 open and completes it on this slice, so this commit carries the completing trailer. Tests: gate::ledger + review_watch + carryover + review_alias + effective 442 passed; wider gate/review/train/land run 3719 passed, remaining failures need a built CLI binary or are mail-retention fixtures (being rechecked). Deploy step unchanged: run ''aida doctor --heal --yes --category gate-ledger-bindings'' once after the binary goes live. The seat has no forge credentials: branch is committed locally, not pushed; PR base must be integration.'
+  created_at: 2026-11-14T14:52:57.572565332Z
+  modified_at: 2026-11-14T14:52:57.572565332Z
+  session_id: 01a1da63cdd6
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1cee6-975b-7d40-8689-d35e1f109d99
   author: joe
