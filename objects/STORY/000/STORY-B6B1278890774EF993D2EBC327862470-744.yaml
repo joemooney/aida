@@ -19,12 +19,12 @@ description: |-
   This project then sets stale_base = "refuse-on-conflict".
 
   Acceptance: (1) default config behaves exactly as today; (2) with refuse-on-conflict a stale, overlapping, non-conflicting PR is reviewed and the prompt carries the staleness note; a conflicting PR is refused with the existing message; (3) with warn nothing is refused; (4) the review watcher does not update-branch an overlapping head under refuse-on-conflict or warn; (5) 'aida config' / the config docs list the setting and its three values; (6) an unknown value is a config error naming the allowed values.
-status: InProgress
+status: Done
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-14T18:09:46.924768383Z
-modified_at: 2026-11-14T18:36:07.717089567Z
+modified_at: 2026-11-14T18:40:47.581091467Z
 req_type: Story
 tags:
 - config
@@ -60,6 +60,15 @@ history:
   session_id: 01a1db4453c6
   harness_version: 2.1.319 (Claude Code)
   changes: []
+- id: 01a1db5c-b1ff-7cf1-8332-ed527255d2a7
+  author: dirtlab
+  timestamp: 2026-11-14T18:40:47.615930585Z
+  session_id: 01a1db4453c6
+  harness_version: 2.1.319 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Done
 filed_at:
   code_sha: 96fc262834527304fe85fc9ee32e4d04f1aaf4ea
   branch: main
@@ -68,3 +77,7 @@ filed_at:
   aida_build_sha: 5ea861d7358
   vendor: claude
   session: fc28c702-2f6e-419e-b882-6ddfeb9134ff
+implementation_info:
+  implemented: true
+  implemented_at: 2026-11-14T18:40:47.581091467Z
+  implemented_by: dirtlab
