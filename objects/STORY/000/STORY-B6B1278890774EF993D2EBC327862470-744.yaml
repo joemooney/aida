@@ -24,7 +24,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-14T18:09:46.924768383Z
-modified_at: 2026-11-14T19:53:09.147137155Z
+modified_at: 2026-11-14T20:27:09.839991177Z
 req_type: Story
 tags:
 - config
@@ -54,6 +54,13 @@ comments:
   created_at: 2026-11-14T19:44:53.574311297Z
   modified_at: 2026-11-14T19:44:53.574311297Z
   session_id: 01a1db6d-e689-7532-9eef-772722add87b
+  harness_version: 2.1.325 (Claude Code)
+- id: 01a1dbbe-148f-7e82-a198-69e2cd42317e
+  author: joe
+  content: 'Ruling fix pushed at f35b424 (PR-4052): docs/cli/07-project-setup.md now cites the flag as ''aida queue work <PR-N> --role reviewer --allow-stale-base'' in one span and names stale_base as a config key. Local: verify-manual.py --static OK, doc audience/links/paths/trace-header/docs-guards gates OK. NOT run locally: full verify-manual.py (lane-built binary is not reachable from the seat; AIDA_BIN override denied) and the complete make check-ci-fast (exceeds the 60s tool-call cap). The contracts shard on the new head is the confirming run.'
+  created_at: 2026-11-14T20:27:09.839991177Z
+  modified_at: 2026-11-14T20:27:09.839991177Z
+  session_id: 01a1dbb01610
   harness_version: 2.1.325 (Claude Code)
 history:
 - id: 01a1db40-dee0-78e0-b36e-623ac494aa0d
