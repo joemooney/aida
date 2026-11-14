@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-11T12:18:44.426945707Z
-modified_at: 2026-11-14T19:10:17.027657083Z
+modified_at: 2026-11-14T19:10:25.012375810Z
 req_type: Task
 relationships:
 - rel_type: BlockedBy
@@ -22,6 +22,14 @@ relationships:
   target_id: 01a1ca8a-f7d4-79f1-bc7d-19935822a071
   created_at: 2026-11-14T19:10:17.027653709Z
   created_by: joe
+comments:
+- id: 01a1db77-d0f4-7593-9d0f-5b9b9d768166
+  author: joe
+  content: 'Advisor ruling (2026-11-14 12:30): STORY-2538 no longer gates the crate split. Slices A (#3515) and B (#3784, #3939) are on main and the exact-site ratchet runs in CI, so the foundation the PR7 note waited for has settled; the remaining 1204 ledger sites are a long tail across ~every module and cannot be a precondition. Sequencing: TASK-3787 (PR7) is now blocked-by TASK-3784 (PR6, #3994) instead, since #3994 edits session.rs and agent_registry. PR7 moves session.rs verbatim and relocates its ledger keys in the same PR. STORY-2538 slice C (next bounded cluster: config/home/tool readers, not test_env/test_home and not session.rs) starts only after #3994 and PR7 land, to avoid rebasing verbatim moves. #3950 also edits session.rs: whichever of #3950 and PR7 is second rebases.'
+  created_at: 2026-11-14T19:10:25.012375810Z
+  modified_at: 2026-11-14T19:10:25.012375810Z
+  session_id: 01a1db6d-e689-7532-9eef-772722add87b
+  harness_version: 2.1.325 (Claude Code)
 history:
 - id: 01a1ca8b-f5f0-7442-bac6-79814c7dc836
   author: joe
