@@ -441,6 +441,20 @@ fn task_2707_exact_environment_selection_excludes_explicit_tokens() {
     assert_eq!(env["AIDA_SESSION_GRANT"], "");
     assert!(!TOOL_NET_ENV.contains(&"OPENAI_API_KEY"));
 }
+// A contained lane's final environment is env_clear'd and rebuilt from this
+// selection, so the parent's admission track must survive it.
+// trace:STORY-2765 | ai:claude
+#[test]
+fn story_2765_contained_lane_keeps_parent_track() {
+    let mut cmd = Command::new("codex");
+    cmd.env("AIDA_TRACK", "integration");
+    assert_eq!(
+        selected_environment(&cmd)
+            .get("AIDA_TRACK")
+            .map(String::as_str),
+        Some("integration")
+    );
+}
 #[test]
 fn task_2707_native_composition_companion_empty_grant_and_generated_profile() {
     // trace:TASK-2708 | ai:claude — its own opt-in, never the required-live gate.
