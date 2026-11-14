@@ -89,12 +89,24 @@ description: |
   ### finding-hash:0cbc5c63
 
   PR title says isolate sccache fixtures from launcher environment, but the round-3 merge took main sccache fix and the net diff contains no sccache change (it is the legacy unknown-visibility refusal, foreign-namespace slot test, test-touched orphan-shadow fix, mail-wake umask and doc rewrap). Retitle before squash so main history describes the change.
+
+
+  ## Findings from PR-3966
+  Reviewed sha: f0ed9707062f6b127e73c503ff147289062fe405
+
+  ### finding-hash:c598b8f9
+
+  aida integration tags: promotions to main are squash merges (e.g. 82650579646 has one parent), so origin/main..origin/integration keeps every already-promoted integration commit forever (BUG-2556 commits still listed after batch 5). The "remove the tag from specs no longer ahead of main" path (integration_cmd.rs run_tags/plan_tag_changes; help text in integration_cmd_args.rs) never fires; an open multi-slice or Refs-promoted spec (e.g. STORY-2737, STORY-2749) stays/re-gets landed-in-integration after its work reached main. Fix: bound the log at the last promotion marker or compare patch-ids/tree content, and align help/docs.
+
+  ### finding-hash:3961dae5
+
+  The launch preflight track line (queue_cmd/work.rs handle_queue_work: eprintln "track: {launcher} (spec: {label})" via store_track_label) has no test asserting it, although the STORY-2749 description requires the preflight to list the track.
 status: Draft
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-13T20:01:56.623034248Z
-modified_at: 2026-11-14T01:00:26.918820037Z
+modified_at: 2026-11-14T01:01:56.022509319Z
 req_type: Task
 tags:
 - carried-finding:BUG-2546:56ed8b81
@@ -103,6 +115,8 @@ tags:
 - carried-finding:PR-3921:0cbc5c63
 - carried-finding:PR-3938:654190b6
 - carried-finding:PR-3948:5d2b67f3
+- carried-finding:PR-3966:3961dae5
+- carried-finding:PR-3966:c598b8f9
 - carried-finding:PR-3968:56ed8b81
 - carried-finding:PR-3970:52636ea7
 - carried-finding:PR-3970:5b9e60ad
@@ -115,18 +129,21 @@ tags:
 - carried-from:PR-3921
 - carried-from:PR-3938
 - carried-from:PR-3948
+- carried-from:PR-3966
 - carried-from:PR-3968
 - carried-from:PR-3970
 - carried-from:PR-3971
 - carried-from:STORY-2735
 - finding-hash:0cbc5c63
 - finding-hash:2c7ae2ea
+- finding-hash:3961dae5
 - finding-hash:52636ea7
 - finding-hash:55e0cbfe
 - finding-hash:56ed8b81
 - finding-hash:5b9e60ad
 - finding-hash:5d2b67f3
 - finding-hash:654190b6
+- finding-hash:c598b8f9
 - finding-hash:c7c082c2
 - finding-hash:f238ea37
 - from-review:BUG-2546
@@ -134,6 +151,7 @@ tags:
 - from-review:PR-3921
 - from-review:PR-3938
 - from-review:PR-3948
+- from-review:PR-3966
 - from-review:PR-3968
 - from-review:PR-3970
 - from-review:PR-3971
@@ -183,6 +201,11 @@ history:
   author: joe
   timestamp: 2026-11-14T01:00:28.270866728Z
   session_id: 01a1d78e2b34
+  changes: []
+- id: 01a1d793-4c04-7c41-9e7d-69db2af74916
+  author: joe
+  timestamp: 2026-11-14T01:01:57.124528121Z
+  session_id: 01a1d7909031
   changes: []
 filed_at:
   code_sha: 91fe1e337894199f15365d3f8ecfaf81366f8291
