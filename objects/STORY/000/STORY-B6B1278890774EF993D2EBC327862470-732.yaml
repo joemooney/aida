@@ -18,7 +18,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-14T12:41:27.454869454Z
-modified_at: 2026-11-14T20:12:50.248064152Z
+modified_at: 2026-11-14T20:57:29.279564875Z
 req_type: Story
 tags:
 - area:ci
@@ -151,6 +151,13 @@ comments:
   created_at: 2026-11-14T20:12:50.248064152Z
   modified_at: 2026-11-14T20:12:50.248064152Z
   session_id: 01a1db6d-e689-7532-9eef-772722add87b
+  harness_version: 2.1.325 (Claude Code)
+- id: 01a1dbd9-d7bf-7521-a572-cc1080af13e6
+  author: joe
+  content: 'Advisor ruling (2026-11-14 14:00): PR-4027 went CONFLICTING with main in .github/workflows/ci.yml when #4028 (BUG-2578) landed. Merge hold added. Rework: merge origin/main, resolve ci.yml keeping both the BUG-2578 label-event guard and this PR''s full-tier requirement, run tests/test_ci_tiers.py and tests/test_ci_test_shards.py plus make check-ci-fast, push. Then delta review and a full run at the new head.'
+  created_at: 2026-11-14T20:57:29.279564875Z
+  modified_at: 2026-11-14T20:57:29.279564875Z
+  session_id: 01a1dbd6-f8cd-7313-a123-75ebbeaa2afd
   harness_version: 2.1.325 (Claude Code)
 history:
 - id: 01a1da15-71c2-7341-9db1-1661bad607cc
