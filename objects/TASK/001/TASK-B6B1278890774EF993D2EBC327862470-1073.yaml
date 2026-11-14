@@ -1137,12 +1137,32 @@ description: |
   ### finding-hash:32aad4b9
 
   GitHub does not evaluate `name` on a skipped job: live label-event runs 43626153606 and 43626153616 report the raw expression text as the check name, not `label event (...)`. Correct docs/internal/testing/ci-test-shards.md:19-23 and the ci.yml:20-27 comment, and make the tests assert the property that actually protects the gate (the raw name is neither `Build (ubuntu-latest)` nor prefixed `ci-tier: `).
+
+
+  ## Findings from PR-3994
+  Reviewed sha: 64e1fd9cfa6c631caf6198f6fd47102909fc1574
+
+  ### finding-hash:83e5954d
+
+  AC5 remains open: docs/plans/2026-11-07-aida-cli-lib-crate-split-deep-dive.md section 5.3 still shows After as pending (before: lib-0 685s, lib-1 556s). Record both lib shard Run tests durations from a successful FULL run before TASK-3784 is completed.
+
+  ### finding-hash:7c1b2064
+
+  No FULL-tier CI has run at 64e1fd9: run 43632573663 selected the fast tier and skipped the lib/cli/rest shards, so the 38 aida-testkit unit tests (rest shard, including bug_2560_testkit_*) and the cli-lib shim/adapter tests have only lane-run evidence. Label ci:full and require the shard matrix green before landing.
+
+  ### finding-hash:ae1481ad
+
+  aida-testkit/src/test_exec.rs:39-49 reimplements the 5x50ms ETXTBSY retry from aida-term/src/process_retry.rs:9-33; nothing ties the two policies, so they can drift silently.
+
+  ### finding-hash:33bf6df1
+
+  Stale path references after the move: aida-cli/tests/bug_1674_show_bounded_under_writer.rs:43 and bug_1956_reader_fallbacks_bounded_under_writer.rs:27 point readers at aida-cli-lib/src/test_timing.rs (now a one-line re-export; the documentation lives in aida-testkit/src/test_timing.rs), and the story_2326 ledger note for aida-testkit/src/test_exec.rs still says compiled into the crate.
 status: Draft
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-13T20:01:56.623034248Z
-modified_at: 2026-11-14T19:34:01.058799998Z
+modified_at: 2026-11-14T19:44:29.879971866Z
 req_type: Task
 tags:
 - carried-finding:BUG-2543:2a99ebfc
@@ -1241,9 +1261,13 @@ tags:
 - carried-finding:PR-3989:49b64e26
 - carried-finding:PR-3990:2a99ebfc
 - carried-finding:PR-3990:6935f83d
+- carried-finding:PR-3994:33bf6df1
 - carried-finding:PR-3994:46a7a9dc
 - carried-finding:PR-3994:51cbf3a8
 - carried-finding:PR-3994:7c082b28
+- carried-finding:PR-3994:7c1b2064
+- carried-finding:PR-3994:83e5954d
+- carried-finding:PR-3994:ae1481ad
 - carried-finding:PR-3997:3f4b4821
 - carried-finding:PR-3998:0bff30e1
 - carried-finding:PR-4000:73e42b4b
@@ -1442,6 +1466,7 @@ tags:
 - finding-hash:2fb703ca
 - finding-hash:32088b60
 - finding-hash:32aad4b9
+- finding-hash:33bf6df1
 - finding-hash:35d3eb09
 - finding-hash:360471e3
 - finding-hash:376b178e
@@ -1486,8 +1511,10 @@ tags:
 - finding-hash:79f360e4
 - finding-hash:7bbbf9a9
 - finding-hash:7c082b28
+- finding-hash:7c1b2064
 - finding-hash:7ce2cb14
 - finding-hash:7d6b05ec
+- finding-hash:83e5954d
 - finding-hash:8a49a174
 - finding-hash:8c6f0ae6
 - finding-hash:8d1b3558
@@ -1503,6 +1530,7 @@ tags:
 - finding-hash:a9731915
 - finding-hash:abbae117
 - finding-hash:ac11f20d
+- finding-hash:ae1481ad
 - finding-hash:b29349ce
 - finding-hash:bf60843e
 - finding-hash:c0a8d165
@@ -2005,6 +2033,11 @@ history:
   author: joe
   timestamp: 2026-11-14T19:34:02.480450602Z
   session_id: 01a1db899b48
+  changes: []
+- id: 01a1db97-0ab0-7b21-bceb-5467174c7bae
+  author: joe
+  timestamp: 2026-11-14T19:44:31.408528473Z
+  session_id: 01a1db9396b3
   changes: []
 filed_at:
   code_sha: 91fe1e337894199f15365d3f8ecfaf81366f8291
