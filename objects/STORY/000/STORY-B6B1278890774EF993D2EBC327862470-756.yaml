@@ -26,12 +26,12 @@ description: |
   - Adding a new test under a ratchet-kind module without listing it fails a test.
   - Metric to watch for a week: approvals later held for a red full run on the PR's own change, per day (6 on 2026-11-14).
   Not in scope: changing train admission (still a passing full run at the approved head).
-status: InProgress
+status: NeedsAttention
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-14T22:34:21.521062494Z
-modified_at: 2026-11-14T23:00:23.958183512Z
+modified_at: 2026-11-14T23:16:28.770068144Z
 req_type: Story
 tags:
 - ci
@@ -64,6 +64,13 @@ comments:
   modified_at: 2026-11-14T23:00:23.958183512Z
   session_id: 01a1dc3cc346
   harness_version: codex-cli 0.167.0
+- id: 01a1dc58-e76b-7132-8dee-ca0fa275659a
+  author: dirtlab
+  content: 'Final native-lane validation: full make check-ci-fast passed through launcher job j20261114T225147386-2-0: 48 source gates, 82 ratchet Python fixtures, all 140 selected Rust tests, store-writer inventory and dynamic manual verification. CI-tier fixtures separately passed (7), giving 89 relevant Python fixtures total. The new selection negative control rejects an injected unlisted gate-path test; runner negative controls reject empty/partial execution and failed children. The separately launched preflight-selection regression passed 1/1. Warm native full-gate log timestamps span 23:03:42.771Z to 23:15:15.028Z (about 11m32s including runner cleanup); dynamic manual verification accounts for 277.69s. This is one native-lane measurement, NOT the required three hosted PR before/after samples. Frozen selection includes application source guards previously excluded with mixed runtime suites: launch/role inventories, linkage parser hash and portable-skill registration. Actual runtime lock/adoption/inventory behavior remains excluded with dispositions. Rustfmt and git diff --check passed. Declaration is Refs STORY-2833 with Help-Golden: unchanged. Remaining manual gates: PR-4027 is still open, rebase/host sequencing must wait; failed-head replays and three-PR hosted timing comparison remain outstanding. No commit, push, PR or queue completion performed.'
+  created_at: 2026-11-14T23:16:16.363368176Z
+  modified_at: 2026-11-14T23:16:16.363368176Z
+  session_id: 01a1dc3cc346
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1dc35-456f-7f80-bca9-be00d457be73
   author: joe
@@ -87,6 +94,15 @@ history:
   session_id: 01a1dc3cc346
   harness_version: codex-cli 0.167.0
   changes: []
+- id: 01a1dc59-17e2-7810-ba94-1b4032803318
+  author: dirtlab
+  timestamp: 2026-11-14T23:16:28.770085870Z
+  session_id: 01a1dc3cc346
+  harness_version: codex-cli 0.167.0
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 filed_at:
   code_sha: 3cb7ba4fab12c60797d42bf51c7845633680c7d2
   branch: main
@@ -95,3 +111,8 @@ filed_at:
   aida_build_sha: 3cb7ba4fab1
   vendor: claude
   session: 01a1db78-560d-7a81-a467-3742be1fefc3
+attention_reason:
+  category: blocked-dependency
+  detail: 'Manual publication and acceptance gate: advisor sequencing requires main containing PR-4027 before review, but PR-4027 remains open and this native seat cannot rebase or publish. Historical failing-head replay and three hosted PR warm before/after measurements are still required. Implementation and full native pre-push gate are green (48 source gates, 140 selected Rust tests, dynamic manual checks; about 11m32s warm locally). Preserve the recorded Refs declaration and uncommitted edits; do not publish until the sequencing and remaining acceptance evidence are resolved.'
+  raised_by: implementer
+  raised_at: 2026-11-14T23:16:28.770068144Z
