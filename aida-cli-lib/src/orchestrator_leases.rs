@@ -765,6 +765,11 @@ pub(crate) fn prepend_dir_to_path(
 #[path = "tests/resolve_aida_exe_tests.rs"]
 mod resolve_aida_exe_tests;
 
+// trace:TASK-3791 | ai:codex
+#[cfg(test)]
+#[path = "tests/resolve_aida_exe_ratchet_tests.rs"]
+mod resolve_aida_exe_ratchet_tests;
+
 #[cfg(test)]
 #[path = "tests/story_1418_completion_seam_tests.rs"]
 mod story_1418_completion_seam_tests;

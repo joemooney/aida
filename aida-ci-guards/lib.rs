@@ -28,3 +28,6 @@ pub mod task_1752_grant_env_guard_tests;
 pub mod task_2032_launcher_main_ratchet_tests;
 #[path = "../aida-cli-lib/src/tests/task_2143_clone_git_ratchet_tests.rs"]
 pub mod task_2143_clone_git_ratchet_tests;
+
+#[path = "../aida-cli-lib/src/tests/resolve_aida_exe_ratchet_tests.rs"]
+pub mod resolve_aida_exe_ratchet_tests;

@@ -171,3 +171,10 @@ seven core launch-policy tests passed, and the three selection-audit plus five
 CI-tier fixtures passed. Injecting an unclassified production
 `AIDA_SWEEP_PARENT` literal produced the expected FAST-test refusal; the temporary
 fixture was removed. These are lane measurements, not hosted-runner timings.
+
+The #3926 lib-0 failure is also covered by the shared
+`resolve_aida_exe_ratchet_tests::no_cli_source_outside_the_resolver_uses_raw_current_executable_lookup`
+guard. Its dedicated ratchet module runs in FAST and FULL; the selection audit
+explicitly verifies that removing that module from FAST fails coverage. Adding
+`std::env::current_exe()` outside the resolver makes the shared guard fail.
+<!-- trace:TASK-3791 | ai:codex -->

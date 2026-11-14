@@ -65,6 +65,15 @@ class StructuralSelection(unittest.TestCase):
             self.assertEqual(len(missing(root, set(), {})), 2)
             self.assertEqual(missing(root, {source.relative_to(root).as_posix()}, {}), set())
 
+    def test_executable_lookup_guard_requires_fast_selection(self):
+        # The lib-0 train failure from #3926 must be covered even though its
+        # original test name contains neither "ratchet" nor "inventory".
+        path = 'aida-cli-lib/src/tests/resolve_aida_exe_ratchet_tests.rs'
+        test = path + '::no_cli_source_outside_the_resolver_uses_raw_current_executable_lookup'
+        self.assertIn(test, candidates(ROOT))
+        self.assertIn(test, missing(ROOT, selected() - {path}, {}))
+        self.assertNotIn(test, missing(ROOT, selected(), {}))
+
     def test_fast_runs_the_shared_harness_and_selection_audit(self):
         import tomllib
         import yaml
