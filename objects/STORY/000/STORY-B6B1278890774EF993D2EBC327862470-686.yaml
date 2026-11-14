@@ -30,7 +30,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-13T15:54:08.931576118Z
-modified_at: 2026-11-14T07:00:38.118133809Z
+modified_at: 2026-11-14T07:55:30.115073476Z
 req_type: Story
 tags:
 - architecture
@@ -232,6 +232,13 @@ comments:
   created_at: 2026-11-14T06:33:03.643139853Z
   modified_at: 2026-11-14T06:33:03.643139853Z
   session_id: 01a1d852-16ef-7973-bdde-ac3f274752a2
+  harness_version: 2.1.325 (Claude Code)
+- id: 01a1d90d-e9c3-7ef0-b7e6-e45ee71b0fff
+  author: joe
+  content: 'Round 2 (41adcdaab2f): launch composition (compose_launch_prompt/review_prompt/route_rework/evidence) moved from gate/review_freshness.rs to review_launch.rs, so gate ratchet shows zero additions. New tests: delta scope for evil and conflict-resolved merges (review_scope), NeedsRework preflight leading to Exited, rework-routed receipt idempotency, gate-state audit lines plus freshness decisions with policy, strict-path glob refusal. gate state uses same_reviewed_sha. A failed strict audit write now warns. Evidence files are pruned per PR and after 7 days. Local cargo test never finished: the lane job runner timed out at 900s on a cold build, three times. CI is the test of record.'
+  created_at: 2026-11-14T07:55:30.115073476Z
+  modified_at: 2026-11-14T07:55:30.115073476Z
+  session_id: 01a1d8db8aa7
   harness_version: 2.1.325 (Claude Code)
 history:
 - id: 01a1d59e-6b4b-7d10-8aea-02729132bc6f
