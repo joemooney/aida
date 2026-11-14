@@ -46,6 +46,14 @@ mod tests {
         if manifest_dir.join("tests").is_dir() {
             offenders.extend(scan_raw_env_writes_in_dir(&manifest_dir.join("tests")));
         }
+        // Shared fixtures and their future test modules retain the same guard.
+        // trace:TASK-3784 | ai:codex
+        offenders.extend(scan_raw_env_writes_in_dir(
+            &manifest_dir.join("../aida-testkit/src"),
+        ));
+        offenders.extend(scan_raw_env_writes_in_dir(
+            &manifest_dir.join("../aida-testkit/tests"),
+        ));
         assert!(
             offenders.is_empty(),
             "found raw env::set_var / remove_var in test code outside helpers:\n{}",
@@ -76,6 +84,13 @@ mod tests {
                 &manifest_dir.join("tests"),
             ));
         }
+        // trace:TASK-3784 | ai:codex
+        offenders.extend(scan_unisolated_set_current_dir_in_dir(
+            &manifest_dir.join("../aida-testkit/src"),
+        ));
+        offenders.extend(scan_unisolated_set_current_dir_in_dir(
+            &manifest_dir.join("../aida-testkit/tests"),
+        ));
         assert!(
             offenders.is_empty(),
             "found set_current_dir in test code without run_path_isolated_test():\n{}",
