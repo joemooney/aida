@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-13T13:53:20.390665880Z
-modified_at: 2026-11-14T07:44:10.776206393Z
+modified_at: 2026-11-14T11:15:28.605643734Z
 req_type: Bug
 tags:
 - hygiene
@@ -49,6 +49,13 @@ comments:
   modified_at: 2026-11-14T07:44:10.776206393Z
   session_id: 01a1d8f9b72a
   harness_version: codex-cli 0.167.0
+- id: 01a1d9c4-fedd-7e12-b884-1ab2ae63b16a
+  author: joe
+  content: '[advisor 7b 04:17] REWORK (blocking, CI): train 17 (#4016) went red on CI (lib-0): pr_train::verified::bug2406::{bug2406_current_claim_refuses_11, bug2406_current_claim_refuses_77, bug2406_final_gate_includes_the_train_change_hints} panic at aida-cli-lib/src/tests/bug2406_train_tests.rs:308:35 (''PR-11 has no approval recorded at its head'') via test_env.rs:109. #3987 is the only member touching test_env.rs / allocation_authority: the confined fixture authority apparently hides the approval records the bug2406 fixture writes (different repo/store root). Fix the fixture confinement so those tests pass unchanged. Verify: cargo test --profile agent -p aida-cli-lib --lib bug2406 plus make check-ci-fast (these run only in the full tier, so run them explicitly). dell1: touch aida-core/src/lib.rs first; never AIDA_UPDATE_SNAPSHOTS=1.'
+  created_at: 2026-11-14T11:15:28.605643734Z
+  modified_at: 2026-11-14T11:15:28.605643734Z
+  session_id: 01a1d8f3-f948-7072-b174-fa9507ed074b
+  harness_version: 2.1.325 (Claude Code)
 history:
 - id: 01a1d889-fed8-7962-86df-f0e26e40b385
   author: joe
