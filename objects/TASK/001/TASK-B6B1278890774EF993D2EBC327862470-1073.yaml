@@ -609,12 +609,32 @@ description: |
   ### finding-hash:5863b5f0
 
   policy_registry [land] rows (config_cmd.rs:3136-3175): the (default; the value set is out of range) rendering and ProjectConfig/Default source selection have no test; only Limits::from_config warnings are tested.
+
+
+  ## Findings from BUG-2571
+  Reviewed sha: 992b1f748b2c5f3c75cc112f56a5d436ca6e803b
+
+  ### finding-hash:e391cb46
+
+  F6 (--once wait loop rereads changes every max(interval,30)s and prints settle notes, land_run.rs:1066-1111) has no automated test; verified by inspection only. Extract the wait step behind Acts plus a changes-reader closure so a Fake can assert a moved-head reviewer is stopped during the wait.
+
+  ### finding-hash:276a9aea
+
+  config_cmd.rs:751-780 KnobSpec default strings ("2","2","2700") and docs are hard-coded rather than derived from LimitKnob.default, yet the LimitKnob doc comment (land_run.rs:271-273) claims the two cannot disagree; only min/max are shared. Add a test asserting spec.default == knob.default.to_string() or derive it.
+
+  ### finding-hash:2a257094
+
+  Dry-run lock probe (land_run.rs:949-957) briefly takes the exclusive run lock; a real aida land run starting in that window refuses with another run is already running. Rare false refusal, retry succeeds.
+
+  ### finding-hash:5863b5f0
+
+  policy_registry [land] rows (config_cmd.rs:3136-3175): the (default; the value set is out of range) rendering and ProjectConfig/Default source selection have no test; only Limits::from_config warnings are tested.
 status: Draft
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-13T20:01:56.623034248Z
-modified_at: 2026-11-14T11:58:37.866407819Z
+modified_at: 2026-11-14T11:58:44.231112305Z
 req_type: Task
 tags:
 - carried-finding:BUG-2543:2a99ebfc
@@ -640,6 +660,10 @@ tags:
 - carried-finding:BUG-2570:76a786ef
 - carried-finding:BUG-2570:7bbbf9a9
 - carried-finding:BUG-2570:dfed3eb6
+- carried-finding:BUG-2571:276a9aea
+- carried-finding:BUG-2571:2a257094
+- carried-finding:BUG-2571:5863b5f0
+- carried-finding:BUG-2571:e391cb46
 - carried-finding:BUG-2573:9750b6dd
 - carried-finding:PR-3921:0cbc5c63
 - carried-finding:PR-3924:3975f29b
@@ -731,6 +755,7 @@ tags:
 - carried-from:BUG-2565
 - carried-from:BUG-2569
 - carried-from:BUG-2570
+- carried-from:BUG-2571
 - carried-from:BUG-2573
 - carried-from:PR-3921
 - carried-from:PR-3924
@@ -833,6 +858,7 @@ tags:
 - from-review:BUG-2565
 - from-review:BUG-2569
 - from-review:BUG-2570
+- from-review:BUG-2571
 - from-review:BUG-2573
 - from-review:PR-3921
 - from-review:PR-3924
@@ -1114,6 +1140,11 @@ history:
 - id: 01a1d9ec-863c-7e70-8af4-01a483b50061
   author: joe
   timestamp: 2026-11-14T11:58:39.164166104Z
+  session_id: 01a1d9e9cbc6
+  changes: []
+- id: 01a1d9ec-9f1f-7bf3-b256-13e1c48d548e
+  author: joe
+  timestamp: 2026-11-14T11:58:45.535737854Z
   session_id: 01a1d9e9cbc6
   changes: []
 filed_at:
