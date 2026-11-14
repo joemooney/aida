@@ -1076,6 +1076,15 @@ jobs:
             python3 scripts/check-crate-globs.py
           fi
 
+      # Reuse the shard tests in a dependency-light harness (<2 minutes).
+      # trace:TASK-3791 | ai:codex
+      - name: Rust structural ratchets
+        if: matrix.shard == 'gates'
+        timeout-minutes: 2
+        run: |
+          python3 -m unittest tests/test_ci_structural_guards.py
+          cargo test -p aida-ci-guards --lib
+
       # trace:TASK-3785 | ai:codex
       - name: Gate downward dependency ratchet
         if: matrix.shard == 'gates'

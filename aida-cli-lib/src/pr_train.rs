@@ -1158,6 +1158,23 @@ pub(crate) trait MemberChecks {
     /// never looks a verdict or spec policy up under a foreign bare id.
     // trace:BUG-B6B1278890774EF993D2EBC327862470-048 | ai:claude
     fn covered_ids(&mut self, pr: u64, head_ref: &str, ids: Vec<String>) -> Vec<String>;
+    /// The spec ids the verdict corpus is asked about for this member. Live,
+    /// this is the set the merge step asks about, so the two cannot disagree.
+    // trace:BUG-2569 | ai:claude
+    fn corpus_ids(
+        &mut self,
+        pr: u64,
+        head_ref: &str,
+        title: &str,
+        _subject: &str,
+        _body: &str,
+    ) -> Vec<String> {
+        self.covered_ids(
+            pr,
+            head_ref,
+            crate::pr_ship::extract_spec_ids_from_text(&format!("{head_ref} {title}")),
+        )
+    }
     /// The local merge-hold marker's reason, if any.
     fn hold_marker(&mut self, pr: u64) -> Option<String>;
     fn labels(
@@ -1405,15 +1422,13 @@ fn typed_gate_member_with(
     }
     // BUG-HOME-048: both id lists pass the PR's trailer coverage.
     // trace:BUG-B6B1278890774EF993D2EBC327862470-048 | ai:claude
-    let hints = checks.covered_ids(
-        pr,
-        &head_ref,
-        crate::pr_ship::extract_spec_ids_from_text(&format!("{head_ref} {}", meta.title)),
-    );
-    checks.checked_corpus(pr, &hints, &head)?;
+    // The car message is composed first: the corpus is asked about every
+    // spec it names, as the merge step will ask. trace:BUG-2569 | ai:claude
     let (subject, body) = checks
         .message(pr, &meta, &head)
         .map_err(MemberGateError::Unavailable)?;
+    let hints = checks.corpus_ids(pr, &head_ref, &meta.title, &subject, &body);
+    checks.checked_corpus(pr, &hints, &head)?;
     // STORY-529, BUG-727, STORY-1698: the spec-policy gates ship applies
     // before it merges. trace:STORY-1690 | ai:claude
     let ids = checks.covered_ids(
@@ -1504,6 +1519,34 @@ impl MemberChecks for LiveChecks<'_> {
     }
     fn covered_ids(&mut self, pr: u64, head_ref: &str, ids: Vec<String>) -> Vec<String> {
         crate::gate::trailer_coverage::covered_gate_ids(self.project_root, head_ref, Some(pr), ids)
+    }
+    // The branch and title ids as before, plus everything the merge step
+    // will ask about. A member whose ids the merge step cannot derive keeps
+    // the branch and title ids here and is refused where it always was.
+    // trace:BUG-2569 | ai:claude
+    fn corpus_ids(
+        &mut self,
+        pr: u64,
+        head_ref: &str,
+        title: &str,
+        subject: &str,
+        body: &str,
+    ) -> Vec<String> {
+        let mut ids = self.covered_ids(
+            pr,
+            head_ref,
+            crate::pr_ship::extract_spec_ids_from_text(&format!("{head_ref} {title}")),
+        );
+        if let Ok(merge_step) =
+            verified::merge_step_spec_ids(self.project_root, pr, head_ref, title, subject, body)
+        {
+            for id in merge_step {
+                if !ids.iter().any(|have| have.eq_ignore_ascii_case(&id)) {
+                    ids.push(id);
+                }
+            }
+        }
+        ids
     }
     fn hold_marker(&mut self, pr: u64) -> Option<String> {
         crate::gate::merge_hold_core::read_hold(self.main_worktree, pr)

@@ -525,7 +525,11 @@ fn story_2326_grant_owner_mutants() {
 // trace:STORY-2326 | ai:codex
 #[test]
 fn story_2326_profile_and_grant_issuance_have_one_owner() {
-    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
+    // trace:TASK-3791 | ai:codex — also executed by aida-ci-guards.
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .parent()
+        .unwrap()
+        .join("aida-cli-lib/src");
     let mut files = Vec::new();
     rust_files(&root, &mut files);
     for file in files {

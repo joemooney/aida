@@ -31066,6 +31066,9 @@ Start the script deputy in this terminal (your terminal only)
 Usage: aida deputy shell run [OPTIONS]
 
 Options:
+      --loop
+          Restart the runner after exits, with exponential backoff up to 60 seconds
+
       --name <NAME>
           Name of this script deputy; each name has its own queue and audit log
           
@@ -63593,6 +63596,11 @@ Working on aida itself
         "name": "keep-days",
         "takes_value": true,
         "help": "Keep finished jobs this many days (default: `[deputy_shell] keep_days` in `.aida/config.toml`, else 30)"
+      },
+      {
+        "name": "loop",
+        "takes_value": false,
+        "help": "Restart the runner after exits, with exponential backoff up to 60 seconds"
       },
       {
         "name": "name",
