@@ -18,7 +18,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-13T00:35:57.525111678Z
-modified_at: 2026-11-14T13:40:44.059918894Z
+modified_at: 2026-11-14T13:51:15.244360048Z
 req_type: Story
 tags:
 - track:integration
@@ -119,6 +119,13 @@ comments:
   modified_at: 2026-11-14T13:17:37.774788836Z
   session_id: 01a1d9ea-4e25-7033-85e8-3648f0195c7c
   harness_version: 2.1.325 (Claude Code)
+- id: 01a1da53-9d2c-7a52-bb3a-11904e8f13b3
+  author: dirtlab
+  content: 'Round 2 (PR #3950): F1 fixed: a session linked to a launch takes that launch''s seat outright (None = no seat) in both adopt_bg_session_identity and the SessionStart hook; unlinked sessions keep env/launcher-row behaviour. Tests: recycled spare with stale env seat + seatless adopt + post-link hook leaves seat None and seat:<old> unheld. F2 fixed: .aida/discipline/standing-orders/integration.md mirror added (byte-identical to the template). Also resolved the staged merge of main 2682c4c4fe (all conflicts were main''s later STORY-2768 land work; main''s side kept).'
+  created_at: 2026-11-14T13:51:15.244360048Z
+  modified_at: 2026-11-14T13:51:15.244360048Z
+  session_id: 01a1da49f50e
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1d404-5b69-7883-a178-72d22e485802
   author: joe
