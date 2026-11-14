@@ -29,8 +29,13 @@ permissions:
 jobs:
   # One selection feeds scheduling and the forge-readable check name.
   # trace:STORY-2735 | ai:codex
+  # The ci:full label selects FULL for the head it was applied to: recording
+  # an approval (re)applies it, which starts the full run a merge train
+  # requires on that exact head. A push (synchronize) runs FAST again even
+  # while the label lingers, until the new head is approved.
+  # trace:STORY-2809 | ai:claude
   tier:
-    name: "ci-tier: ${{ (github.event_name != 'pull_request' || startsWith(github.head_ref, 'train/') || contains(github.event.pull_request.labels.*.name, 'ci:full') || vars.AIDA_PR_CI_TIER == 'full') && 'full' || 'fast' }}"
+    name: "ci-tier: ${{ (github.event_name != 'pull_request' || startsWith(github.head_ref, 'train/') || (contains(github.event.pull_request.labels.*.name, 'ci:full') && github.event.action != 'synchronize') || vars.AIDA_PR_CI_TIER == 'full') && 'full' || 'fast' }}"
     runs-on: ubuntu-latest
     outputs:
       full: ${{ steps.select.outputs.full }}
@@ -38,7 +43,7 @@ jobs:
       - name: Select CI tier
         id: select
         env:
-          FULL: ${{ github.event_name != 'pull_request' || startsWith(github.head_ref, 'train/') || contains(github.event.pull_request.labels.*.name, 'ci:full') || vars.AIDA_PR_CI_TIER == 'full' }}
+          FULL: ${{ github.event_name != 'pull_request' || startsWith(github.head_ref, 'train/') || (contains(github.event.pull_request.labels.*.name, 'ci:full') && github.event.action != 'synchronize') || vars.AIDA_PR_CI_TIER == 'full' }}
         run: echo "full=$FULL" >> "$GITHUB_OUTPUT"
 
   fast-gates:

@@ -16805,6 +16805,10 @@ rebase-merged pinned to its head, and each member PR is closed with a pointer to
 When it is red, it is rerun once, then split in halves (two at a time) until each bad PR is isolated
 and left out with a comment.
 
+On a repository whose CI is tiered, a PR rides only when its exact head already has a green
+full-tier CI run; recording an approval starts that run. `--skip-full-check` admits a PR without
+one.
+
 `--dry-run` gates and builds the train and prints the plan without pushing anything; add `--local-ci
 <CMD>` to simulate the whole run with a local command as CI, against a checkout of each train tip.
 
@@ -16836,6 +16840,10 @@ Options:
 
       --no-pull
           Skip the `aida pull` after a train lands
+
+      --skip-full-check
+          Admit PRs whose head has no green full-tier CI run. Each admission is written to the
+          activity log
 
       --format <FORMAT>
           Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
@@ -49155,6 +49163,11 @@ Working on aida itself
         "name": "no-pull",
         "takes_value": false,
         "help": "Skip the `aida pull` after a train lands"
+      },
+      {
+        "name": "skip-full-check",
+        "takes_value": false,
+        "help": "Admit PRs whose head has no green full-tier CI run. Each admission is written to the activity log"
       }
     ],
     "hidden": false

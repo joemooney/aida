@@ -128,17 +128,21 @@ pub(crate) fn handle_pr_command(cmd: &PrCommand) -> Result<()> {
             local_ci,
             max,
             no_pull,
+            skip_full_check,
         } => {
             if let Some(name) = abandon {
                 return crate::pr_train::abandon_journal(name);
             }
-            crate::pr_train::pr_train_handler(&crate::pr_train::TrainOptions {
-                prs,
-                all_ready: *all_ready,
-                dry_run: *dry_run,
-                local_ci: local_ci.as_deref(),
-                max: *max,
-                no_pull: *no_pull,
+            // trace:STORY-2809 | ai:claude
+            crate::pr_train::with_skip_full_check(*skip_full_check, || {
+                crate::pr_train::pr_train_handler(&crate::pr_train::TrainOptions {
+                    prs,
+                    all_ready: *all_ready,
+                    dry_run: *dry_run,
+                    local_ci: local_ci.as_deref(),
+                    max: *max,
+                    no_pull: *no_pull,
+                })
             })
         }
         // trace:STORY-1887 | ai:claude

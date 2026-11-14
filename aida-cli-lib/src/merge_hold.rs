@@ -1427,7 +1427,7 @@ pub(crate) fn sync_label_with_probe(
     Err(sync_error.unwrap_or(LabelSyncError::Other(legacy)))
 }
 
-fn run_forge_cli(
+pub(crate) fn run_forge_cli(
     project_root: &Path,
     cli: &str,
     args: &[String],

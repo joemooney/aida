@@ -2524,7 +2524,7 @@ pub(crate) fn handle_review_record(
 ) -> Result<()> {
     let project_root = drive_root_or_project_root()?;
     handle_review_record_policy_at(
-        project_root,
+        project_root.clone(),
         spec,
         verdict,
         sha,
@@ -2534,7 +2534,39 @@ pub(crate) fn handle_review_record(
         finding_classes,
         pr,
         no_carry,
-    )
+    )?;
+    request_full_ci_after_approval(&project_root, verdict, findings, pr);
+    Ok(())
+}
+
+/// An approval recorded on a PR head starts the full-tier CI run a merge
+/// train requires on that head. Best-effort: the verdict is already durable,
+/// and a train asks again for an approved head that still has no run.
+// trace:STORY-2809 | ai:claude
+fn request_full_ci_after_approval(
+    project_root: &std::path::Path,
+    verdict: &str,
+    findings: &[String],
+    pr: Option<u64>,
+) {
+    let Some(n) = pr else { return };
+    if crate::gate::review_verdict::incoming_disposition(verdict, findings)
+        != crate::gate::review_verdict::VerdictKind::Approved
+    {
+        return;
+    }
+    match crate::full_tier::request_full_ci(project_root, n) {
+        Ok(true) => println!(
+            "  {} full-tier CI requested on PR-{n}'s head (label `{}`); a merge train admits it once that run is green",
+            crate::glyph(crate::glyphs::Glyph::SubArrow).dimmed(),
+            crate::full_tier::FULL_LABEL
+        ),
+        Ok(false) => {}
+        Err(err) => eprintln!(
+            "  {} full-tier CI not requested on PR-{n}: {err} — `aida pr train` requests it again",
+            crate::glyph(crate::glyphs::Glyph::Warning).yellow(),
+        ),
+    }
 }
 
 // trace:BUG-2517 | ai:codex

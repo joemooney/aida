@@ -1226,6 +1226,81 @@ pub(crate) trait MemberChecks {
     /// itself re-reads the mandate.
     // trace:BUG-2214 | ai:claude
     fn mandate_active(&self) -> bool;
+    /// Where full-tier CI stands on the member's exact head, read by commit.
+    /// The default reports an untiered repository, which admits the member.
+    // trace:STORY-2809 | ai:claude
+    fn full_tier(
+        &mut self,
+        _head: &str,
+    ) -> std::result::Result<crate::full_tier::FullTier, String> {
+        Ok(crate::full_tier::FullTier::Untiered)
+    }
+    /// Start a full-tier run on an approved head that has none. `None` when
+    /// this gate run must not write to the forge (a dry run, a re-check).
+    // trace:STORY-2809 | ai:claude
+    fn request_full_tier(&mut self, _pr: u64) -> Option<std::result::Result<bool, String>> {
+        None
+    }
+}
+
+// `--skip-full-check` for this invocation's member gates, including the
+// re-checks before landing. Scoped to this thread and cleared on unwind, like
+// the advisor-loop guard. trace:STORY-2809 | ai:claude
+thread_local! { static SKIP_FULL_CHECK: std::cell::Cell<bool> = const { std::cell::Cell::new(false) }; }
+
+/// Run `f` with the full-tier admission check overridden when `skip` is set.
+// trace:STORY-2809 | ai:claude
+pub(crate) fn with_skip_full_check<R>(skip: bool, f: impl FnOnce() -> R) -> R {
+    struct Reset(bool);
+    impl Drop for Reset {
+        fn drop(&mut self) {
+            SKIP_FULL_CHECK.with(|v| v.set(self.0));
+        }
+    }
+    let _reset = Reset(SKIP_FULL_CHECK.with(|v| v.replace(skip)));
+    f()
+}
+
+/// The full-tier admission step: a member rides only when its exact, approved
+/// head carries a green full-tier CI run. A head with no such run is refused
+/// naming the run (and one is requested); `--skip-full-check` admits it and
+/// records the override in the activity log.
+// trace:STORY-2809 | ai:claude
+fn full_tier_gate(
+    checks: &mut dyn MemberChecks,
+    pr: u64,
+    head: &str,
+) -> std::result::Result<(), MemberGateError> {
+    let tier = checks.full_tier(head).map_err(|e| {
+        MemberGateError::Unavailable(format!(
+            "full-tier CI at its head could not be read ({e}); failing closed"
+        ))
+    })?;
+    let Some(why) = crate::full_tier::admission_refusal(&tier, head) else {
+        return Ok(());
+    };
+    if SKIP_FULL_CHECK.with(std::cell::Cell::get) {
+        crate::pr_cmd::append_ship_activity_line(
+            checks.marker_root(),
+            &crate::full_tier::skip_event(&chrono::Utc::now().to_rfc3339(), pr, head, &why),
+        );
+        eprintln!("  ! #{pr}: {why} — admitted anyway (--skip-full-check)");
+        return Ok(());
+    }
+    let requested = match tier {
+        crate::full_tier::FullTier::Missing => match checks.request_full_tier(pr) {
+            Some(Ok(true)) => "; a full-tier run was requested just now",
+            Some(Err(e)) => {
+                eprintln!("  ! #{pr}: could not request a full-tier run: {e}");
+                ""
+            }
+            _ => "",
+        },
+        _ => "",
+    };
+    Err(MemberGateError::Refused(format!(
+        "{why}{requested} (`--skip-full-check` overrides)"
+    )))
 }
 
 /// The spec IDs a member ships, read the way ship reads them: its branch and
@@ -1403,6 +1478,9 @@ fn typed_gate_member_with(
             short(&head)
         )));
     }
+    // Only an approved head is asked for (or granted) a full-tier run.
+    // trace:STORY-2809 | ai:claude
+    full_tier_gate(checks, pr, &head)?;
     // BUG-HOME-048: both id lists pass the PR's trailer coverage.
     // trace:BUG-B6B1278890774EF993D2EBC327862470-048 | ai:claude
     let hints = checks.covered_ids(
@@ -1486,6 +1564,9 @@ pub(crate) struct LiveChecks<'a> {
     pub base: &'a str,
     /// The PR was named on the command line, not swept in by `--all-ready`.
     pub named: bool,
+    /// This gate run may ask the forge to start a missing full-tier run.
+    // trace:STORY-2809 | ai:claude
+    pub request_full: bool,
 }
 
 impl MemberChecks for LiveChecks<'_> {
@@ -1679,6 +1760,18 @@ impl MemberChecks for LiveChecks<'_> {
             crate::gate::mandate::current_state(),
             crate::gate::mandate::MandateState::Active(_)
         )
+    }
+    // trace:STORY-2809 | ai:claude
+    fn full_tier(&mut self, head: &str) -> std::result::Result<crate::full_tier::FullTier, String> {
+        self.forge
+            .commit_checks(head)
+            .map(|checks| crate::full_tier::judge(&checks))
+            .map_err(|e| format!("{e:#}"))
+    }
+    // trace:STORY-2809 | ai:claude
+    fn request_full_tier(&mut self, pr: u64) -> Option<std::result::Result<bool, String>> {
+        self.request_full
+            .then(|| crate::full_tier::request_full_ci(self.project_root, pr))
     }
 }
 
@@ -2210,6 +2303,7 @@ pub(crate) fn gate_member(
             forge,
             base,
             named,
+            request_full: false,
         },
         base,
         pr,
@@ -2796,6 +2890,7 @@ impl TrainForge for LiveTrainForge<'_> {
                 forge: self.forge,
                 base: &self.base,
                 named: self.named,
+                request_full: false,
             },
             &self.base,
             pr,
@@ -4300,6 +4395,7 @@ pub(crate) fn pr_train_handler_with_dispatch_ctx(
                 forge: forge.as_ref(),
                 base: &base,
                 named: prs_named_on_command_line(opts),
+                request_full: !opts.dry_run,
             },
             &base,
             pr,
