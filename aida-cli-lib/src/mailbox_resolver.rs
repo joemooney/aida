@@ -413,8 +413,9 @@ impl RecipientDirectory {
 
     /// `seat:<name>`: the live (or unverified) sessions whose registry row
     /// records that seat, with the same cohort, queue and refusal rules as a
-    /// role. No holder queues for the seat when the sender asked
-    /// (`--queue-for-role`), else refuses naming the seats that are held.
+    /// role. An unknown seat is refused, naming the known seats. A known seat
+    /// with no holder queues for the seat when the sender asked
+    /// (`--queue-for-role`), else refuses naming the known seats.
     // trace:STORY-2745 | ai:claude
     fn resolve_seat(
         &self,
@@ -430,6 +431,47 @@ impl RecipientDirectory {
             )
         })?;
         let seat = &address["seat:".len()..];
+        // The known seats: any registry row's seat, live or ended, and every
+        // seat with a handoff record. An unknown name is refused even with
+        // `--queue-for-role`, so a typo never queues mail no one will read.
+        // trace:STORY-2745 | ai:claude
+        let mut known = crate::seat_rotation::handoff_seats(&self.project);
+        known.extend(
+            self.agents
+                .iter()
+                .filter_map(|a| a.seat.as_deref())
+                .filter_map(|s| crate::seat_rotation::sanitize_seat(s).ok()),
+        );
+        let held: BTreeSet<String> = self
+            .agents
+            .iter()
+            .filter(|a| self.reader_may_exist(a))
+            .filter_map(|a| a.seat.as_deref())
+            .filter_map(|s| crate::seat_rotation::sanitize_seat(s).ok())
+            .collect();
+        let known_list = || {
+            if known.is_empty() {
+                "no seat is known yet; launch one with `aida agent new --seat <name>`".to_string()
+            } else {
+                let names: Vec<String> = known
+                    .iter()
+                    .map(|s| {
+                        if held.contains(s) {
+                            format!("{s} (held)")
+                        } else {
+                            s.clone()
+                        }
+                    })
+                    .collect();
+                format!("known seats: {}", names.join(", "))
+            }
+        };
+        if !known.contains(seat) {
+            bail!(
+                "send refused: unknown seat '{seat}' ({}); {escape}",
+                known_list()
+            );
+        }
         let holds = |a: &AgentRegistryEntry| {
             a.seat
                 .as_deref()
@@ -459,21 +501,7 @@ impl RecipientDirectory {
                     }),
                 });
             }
-            let held: BTreeSet<String> = self
-                .agents
-                .iter()
-                .filter(|a| self.reader_may_exist(a))
-                .filter_map(|a| a.seat.as_deref())
-                .map(|s| s.trim().to_ascii_lowercase())
-                .collect();
-            let held = if held.is_empty() {
-                "no session holds a seat".to_string()
-            } else {
-                format!(
-                    "held seats: {}",
-                    held.into_iter().collect::<Vec<_>>().join(", ")
-                )
-            };
+            let held = known_list();
             let queue = if cli_hint {
                 ", or pass --queue-for-role to queue it for the seat's next holder"
             } else {
@@ -1826,7 +1854,10 @@ mod tests {
             err.contains("seat 'integration' has no live holder"),
             "{err}"
         );
-        assert!(err.contains("held seats: advisor"), "{err}");
+        assert!(
+            err.contains("known seats: advisor (held), integration"),
+            "{err}"
+        );
         assert!(err.contains("--queue-for-role"), "{err}");
         let queued = d.resolve_send("seat:integration", true).unwrap();
         assert_eq!(queued.address, "seat:integration");
@@ -1836,6 +1867,41 @@ mod tests {
             let err = d.resolve_send(bad, false).unwrap_err().to_string();
             assert!(err.contains("not a seat name"), "{bad}: {err}");
         }
+    }
+
+    // Review F3: an unknown seat refuses, naming the known seats, even with
+    // `--queue-for-role`; a seat known only from its handoff record queues.
+    // trace:STORY-2745 | ai:claude
+    #[test]
+    fn story2745_unknown_seat_refuses_even_with_queue_flag_and_lists_known_seats() {
+        let tmp = tempfile::tempdir().unwrap();
+        seated(tmp.path(), "row-adv", "adv-1", "advisor", Some("advisor"));
+        std::fs::create_dir_all(tmp.path().join(".aida/handoff/integration")).unwrap();
+        let d = RecipientDirectory::load(tmp.path(), &tmp.path().join(".aida-store")).unwrap();
+        for queue in [false, true] {
+            let err = d
+                .resolve_send("seat:integartion", queue)
+                .unwrap_err()
+                .to_string();
+            assert!(err.contains("unknown seat 'integartion'"), "{err}");
+            assert!(
+                err.contains("known seats: advisor (held), integration"),
+                "{err}"
+            );
+        }
+        // Known but unheld: refused without the flag, queued with it.
+        let err = d
+            .resolve_send("seat:integration", false)
+            .unwrap_err()
+            .to_string();
+        assert!(err.contains("has no live holder"), "{err}");
+        let queued = d.resolve_send("seat:integration", true).unwrap();
+        assert!(queued.cohort.unwrap().queued);
+        // No seat known at all says how to make one.
+        let empty = tempfile::tempdir().unwrap();
+        let d = RecipientDirectory::load(empty.path(), &empty.path().join(".aida-store")).unwrap();
+        let err = d.resolve_send("seat:x", true).unwrap_err().to_string();
+        assert!(err.contains("no seat is known yet"), "{err}");
     }
 
     // trace:STORY-2745 | ai:claude

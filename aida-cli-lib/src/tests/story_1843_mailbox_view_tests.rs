@@ -1303,3 +1303,87 @@ fn bug2449_inventory_gap_keeps_new_mail_and_partial_warning() {
     let displayed: Vec<_> = view.records().iter().collect();
     assert!(plan_ack(&view, &displayed).is_err());
 }
+
+// STORY-2745 review F5: mail queued for a seat before its holder launched is
+// taken by the per-turn notice read (the one the template-managed Codex
+// UserPromptSubmit hook runs via `aida awaiting --notice`), so the holder sees
+// it before its next turn. A status read never binds, so it stays hidden there.
+// trace:STORY-2745 | ai:claude
+#[test]
+fn story2745_notice_mail_channel_takes_seat_mail_queued_before_launch() {
+    let r = mail_repo();
+    let _env = crate::test_env::EnvVarsGuard::apply(&[
+        ("AIDA_SESSION_ROLE", Some("reviewer")),
+        ("AIDA_ROTATION_SEAT", Some("integration")),
+        ("AIDA_HANDLE", None),
+        ("AIDA_AGENT_NAME", None),
+        ("AIDA_HOOK_PAYLOAD", None),
+        ("CODEX_THREAD_ID", Some(D1_SESSION)),
+        ("CLAUDE_CODE_SESSION_ID", None),
+        ("CLAUDE_PID", None),
+    ]);
+    // Queued for the seat while no session held it.
+    let sidecar =
+        aida_core::mailbox_delivery::DeliverySidecar::queued("q-seat", "seat:integration", 10);
+    crate::mailbox_store::write_message_with_deliveries(
+        &r.sib,
+        &mail("q-seat", "seat:integration", 10, false),
+        Some(&sidecar),
+    )
+    .unwrap();
+    // The seat's holder launches afterwards.
+    register_self_as_reviewer(&r.main);
+    for (_, mut entry) in crate::agent_registry::load_entries(&r.main) {
+        entry.seat = Some("integration".into());
+        crate::agent_registry::write_entry(&r.main, &entry).unwrap();
+    }
+    let audience = own_audience_in(&r.main);
+    assert!(
+        audience.keys().any(|k| k == "seat:integration"),
+        "{:?}",
+        audience.keys().collect::<Vec<_>>()
+    );
+    let facts = || crate::collect_mail_identity_facts_in(Some(&r.main));
+    let total = |m: &crate::awaiting_you::MailChannel| m.unread + m.shared_unread;
+
+    let status = crate::collect_mail_channel(&r.main, None, &facts(), &passive_limits(), None);
+    assert_eq!(total(&status), 0, "a status read never takes queued mail");
+    assert_eq!(pending(&r, &audience), 1);
+
+    let notice = crate::collect_mail_channel(
+        &r.main,
+        None,
+        &facts(),
+        &passive_limits(),
+        Some(BindWait::Notice),
+    );
+    assert_eq!(total(&notice), 1, "the notice shows the seat's queued mail");
+    assert_eq!(pending(&r, &audience), 0, "and binds it to this holder");
+}
+
+// The template-managed Codex hook runs the mail notice before every turn,
+// and that script asks `aida awaiting --notice` (the binding read above).
+// trace:STORY-2745 | ai:claude
+#[test]
+fn story2745_codex_prompt_hook_runs_the_binding_notice() {
+    let templates = Path::new(env!("CARGO_MANIFEST_DIR")).join("../aida-core/templates");
+    let hooks: serde_json::Value =
+        serde_json::from_str(&std::fs::read_to_string(templates.join("codex-hooks.json")).unwrap())
+            .unwrap();
+    let commands: Vec<String> = hooks["hooks"]["UserPromptSubmit"]
+        .as_array()
+        .expect("a UserPromptSubmit hook")
+        .iter()
+        .flat_map(|h| h["hooks"].as_array().cloned().unwrap_or_default())
+        .filter_map(|h| h["command"].as_str().map(str::to_string))
+        .collect();
+    assert!(
+        commands.iter().any(|c| c.ends_with("aida-mail-notice.sh")),
+        "{commands:?}"
+    );
+    let script = std::fs::read_to_string(templates.join("hooks/aida-mail-notice.sh")).unwrap();
+    assert!(
+        script.contains("set -- awaiting --notice"),
+        "the notice verb changed"
+    );
+}

@@ -347,13 +347,14 @@ pub fn resolve_mail_sender_role() -> Option<String> {
         .map(|raw| canonical_role_name(&raw))
 }
 
-/// The named seat this session holds (`AIDA_ROTATION_SEAT`), recorded on
-/// sent mail as `from_seat` so a reply reaches whoever holds the seat.
+/// The named seat this session holds (its bound registry row's seat, else
+/// `AIDA_ROTATION_SEAT`), recorded on sent mail as `from_seat` so a reply
+/// reaches whoever holds the seat. The row covers a Codex tool shell or a
+/// `--bg` session whose env does not carry the seat.
 // trace:STORY-2745 | ai:claude
 pub fn resolve_mail_sender_seat() -> Option<String> {
-    aida_core::exec_context::Environment::capture()
-        .var(crate::agent_rotation::SEAT_ENV)
-        .ok()
+    crate::collect_mail_identity_facts()
+        .seat()
         .and_then(aida_core::mailbox_identity::seat_address)
         .map(|address| address["seat:".len()..].to_string())
 }

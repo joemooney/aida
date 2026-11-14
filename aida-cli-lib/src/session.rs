@@ -11124,6 +11124,7 @@ mod tests {
             batch_name: None,
             agent_name: None,
             plan: None,
+            seat: None,
             items: items
                 .iter()
                 .map(|(spec, pos, started)| ManifestItem {

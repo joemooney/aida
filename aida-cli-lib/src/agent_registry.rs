@@ -344,6 +344,8 @@ pub(crate) fn carry_concurrent_launcher_write(
         entry.name = disk.name.clone();
     }
     entry.role = disk.role.clone().or(entry.role.take());
+    // trace:STORY-2745 | ai:claude
+    entry.seat = disk.seat.clone().or(entry.seat.take());
     entry.current_spec = disk.current_spec.clone().or(entry.current_spec.take());
     entry.native_session_id = disk
         .native_session_id
@@ -855,29 +857,40 @@ pub fn touch_mcp_agent(
 /// (its manifest records the session id, possibly as a short prefix), with
 /// the name the launch gave it (TASK-2102).
 // trace:TASK-1955 | ai:claude (BUG-2167, TASK-2102)
-fn lease_linked_to_session(
-    project_root: &Path,
-    session_id: &str,
-) -> Option<(SessionLease, Option<String>)> {
+fn lease_linked_to_session(project_root: &Path, session_id: &str) -> Option<LinkedLaunch> {
     let session_id = session_id.trim();
     if session_id.is_empty() {
         return None;
     }
-    let linked: Vec<(String, Option<String>)> = crate::session_manifest::list_all(project_root)
-        .into_iter()
-        .filter(|m| {
-            m.claude_session_id
-                .as_deref()
-                .is_some_and(|sid| !sid.is_empty() && session_id.starts_with(sid))
-        })
-        .map(|m| (m.session_id, m.agent_name))
-        .collect();
+    let linked: Vec<(String, Option<String>, Option<String>)> =
+        crate::session_manifest::list_all(project_root)
+            .into_iter()
+            .filter(|m| {
+                m.claude_session_id
+                    .as_deref()
+                    .is_some_and(|sid| !sid.is_empty() && session_id.starts_with(sid))
+            })
+            .map(|m| (m.session_id, m.agent_name, m.seat))
+            .collect();
     crate::leases::list_leases(project_root)
         .into_iter()
         .find_map(|l| {
-            let name = linked.iter().find(|(id, _)| *id == l.id)?.1.clone();
-            Some((l, name))
+            let (_, name, seat) = linked.iter().find(|(id, _, _)| *id == l.id)?.clone();
+            Some(LinkedLaunch {
+                lease: l,
+                name,
+                seat,
+            })
         })
+}
+
+/// The lease a launcher linked to a session, with the launch's name and
+/// named seat as its manifest recorded them.
+// trace:STORY-2745 | ai:claude
+struct LinkedLaunch {
+    lease: SessionLease,
+    name: Option<String>,
+    seat: Option<String>,
 }
 
 /// Record the session a SessionStart hook fires in. `worktree_root` is the
@@ -921,18 +934,32 @@ fn touch_session_start_agent_for(
         .map_err(anyhow::Error::msg)
         .context("cannot verify local process coordinates; retry registration on the host")?;
     let linked = session_id.and_then(|sid| lease_linked_to_session(project_root, sid));
-    let (linked, launch_name) = match linked {
-        Some((lease, name)) => (Some(lease), name),
-        None => (None, None),
+    let (linked, launch_name, launch_seat) = match linked {
+        Some(LinkedLaunch { lease, name, seat }) => (Some(lease), name, seat),
+        None => (None, None, None),
     };
     let env_scope = env_nonempty("AIDA_SESSION_SCOPE").filter(|s| looks_like_spec_id(s));
-    let env_name = match &linked {
-        Some(lease) if env_scope.as_deref() != Some(lease.scope.as_str()) => None,
+    let env_trusted = !matches!(
+        &linked,
+        Some(lease) if env_scope.as_deref() != Some(lease.scope.as_str())
+    );
+    let env_name = if env_trusted {
         // A headless child's own handle, else its launch name.
         // trace:STORY-1843 | ai:claude
-        _ => env_nonempty(crate::agent_handle::HANDLE_ENV)
-            .or_else(|| env_nonempty("AIDA_AGENT_NAME")),
+        env_nonempty(crate::agent_handle::HANDLE_ENV).or_else(|| env_nonempty("AIDA_AGENT_NAME"))
+    } else {
+        None
     };
+    // The named seat: the linked launch's own record first, else the env
+    // under the same trust rule as the name (a spare's stale env never
+    // names it). trace:STORY-2745 | ai:claude
+    let env_seat = env_trusted
+        .then(|| env_nonempty(crate::agent_rotation::SEAT_ENV))
+        .flatten()
+        .and_then(|s| crate::seat_rotation::sanitize_seat(&s).ok());
+    let session_seat = launch_seat
+        .and_then(|s| crate::seat_rotation::sanitize_seat(&s).ok())
+        .or(env_seat);
     let read_row = std::fs::read_to_string(&path)
         .ok()
         .and_then(|body| toml::from_str::<AgentRegistryEntry>(&body).ok());
@@ -1008,12 +1035,11 @@ fn touch_session_start_agent_for(
     } else {
         entry.role = env_nonempty("AIDA_SESSION_ROLE").or(entry.role);
         entry.current_spec = env_scope.or(entry.current_spec);
-        // trace:STORY-2745 | ai:claude
-        entry.seat = env_nonempty(crate::agent_rotation::SEAT_ENV)
-            .and_then(|s| crate::seat_rotation::sanitize_seat(&s).ok())
-            .or(entry.seat);
         entry.worktree_path = worktree_root.to_path_buf();
     }
+    // Linked or not, the session keeps the seat it was launched into.
+    // trace:STORY-2745 | ai:claude
+    entry.seat = session_seat.or(entry.seat);
     if entry.source != "agent-launcher" {
         entry.source = "session-start-hook".to_string();
     }
@@ -1188,6 +1214,7 @@ pub(crate) fn adopt_bg_session_identity(
     name: &str,
     spec: Option<&str>,
     role: Option<&str>,
+    seat: Option<&str>,
     worktree: &Path,
 ) -> usize {
     let sid = sid.trim();
@@ -1232,6 +1259,8 @@ pub(crate) fn adopt_bg_session_identity(
         }
         entry.current_spec = spec.map(str::to_string);
         entry.role = role.map(str::to_string).or(entry.role);
+        // trace:STORY-2745 | ai:claude
+        entry.seat = seat.map(str::to_string).or(entry.seat);
         entry.worktree_path = worktree.to_path_buf();
         if write_entry(project_root, &entry).is_ok() {
             updated += 1;
@@ -1275,6 +1304,7 @@ pub(crate) fn register_spawned_agent(
             resumed_from,
             description,
             delegate_seats: Vec::new(),
+            seat: None,
         },
     )
 }
@@ -1309,6 +1339,9 @@ pub(crate) struct SpawnedRow<'a> {
     pub resumed_from: Option<String>,
     pub description: Option<String>,
     pub delegate_seats: Vec<String>,
+    /// The launch's named seat (`--seat`, or the rotation seat).
+    // trace:STORY-2745 | ai:claude
+    pub seat: Option<String>,
 }
 
 /// STORY-2254: register a detached worker strictly. Its start identity is
@@ -1423,6 +1456,7 @@ fn register_spawned_agent_as(
         resumed_from,
         description,
         delegate_seats,
+        seat,
     } = row;
     let now = Utc::now();
     let agent_type = normalize_agent_type(agent_type.to_string());
@@ -1463,6 +1497,9 @@ fn register_spawned_agent_as(
     let hook_session_id = hook_row
         .as_ref()
         .and_then(|old| old.claude_session_id.clone());
+    // A seat the same process's hook already recorded survives a launcher
+    // write that names none. trace:STORY-2745 | ai:claude
+    let seat = seat.or_else(|| hook_row.as_ref().and_then(|old| old.seat.clone()));
     let name = name.or_else(|| hook_row.and_then(|old| old.name));
     let entry = AgentRegistryEntry {
         id: agent_id(&agent_type, pid),
@@ -1477,7 +1514,7 @@ fn register_spawned_agent_as(
         started_at: now,
         last_active_at: now,
         role,
-        seat: None,
+        seat,
         current_spec,
         worktree_path,
         source: "agent-launcher".to_string(),
@@ -4268,6 +4305,7 @@ mod tests {
             "rebase-2673",
             Some("TASK-2000"),
             Some("implementer"),
+            None,
             &pool,
         );
         assert_eq!(n, 1);
@@ -5807,3 +5845,7 @@ source = "mcp"
 #[cfg(test)]
 #[path = "tests/bug_b6b_151_registry_heartbeat_tests.rs"]
 mod bug_151_heartbeat_tests;
+
+#[cfg(test)]
+#[path = "tests/story_2745_seat_registration_tests.rs"]
+mod story_2745_seat_registration_tests;

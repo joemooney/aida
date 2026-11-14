@@ -3955,6 +3955,7 @@ pub(crate) fn link_bg_session(plan: &AgentLaunchPlan, lease_id: &str, sid: &str)
             batch_name: None,
             agent_name: None,
             plan: None,
+            seat: None,
             items: Vec::new(),
         }
     });
@@ -3962,6 +3963,9 @@ pub(crate) fn link_bg_session(plan: &AgentLaunchPlan, lease_id: &str, sid: &str)
     // A hook that fires after this save names the row from it (TASK-2102).
     // trace:TASK-1955 | ai:claude (TASK-2102)
     manifest.agent_name = Some(plan.name.clone()).filter(|n| !n.trim().is_empty());
+    // ...and records its named seat, which the spare's env cannot carry.
+    // trace:STORY-2745 | ai:claude
+    manifest.seat = plan.seat.clone();
     session_manifest::save(&manifest_path, &manifest)?;
     agent_registry::adopt_bg_session_identity(
         &plan.project_root,
@@ -3969,6 +3973,7 @@ pub(crate) fn link_bg_session(plan: &AgentLaunchPlan, lease_id: &str, sid: &str)
         &plan.name,
         plan.current_spec.as_deref(),
         plan.role.as_deref(),
+        plan.seat.as_deref(),
         &plan.launch_cwd,
     );
     Ok(())
@@ -6858,6 +6863,11 @@ pub(crate) fn build_agent_new_bg_command(
     if let Some(spec) = &plan.current_spec {
         command.env("AIDA_SESSION_SCOPE", spec);
     }
+    // The detached child names its seat too. trace:STORY-2745 | ai:claude
+    command.env_remove(crate::agent_rotation::SEAT_ENV);
+    if let Some(seat) = &plan.seat {
+        command.env(crate::agent_rotation::SEAT_ENV, seat);
+    }
     apply_agent_lease_identity(&mut command, plan.lease_id.as_deref());
     // trace:TASK-2902 | ai:codex
     if native_post_exit_spec(config, plan).is_some() {
@@ -7665,6 +7675,13 @@ pub(crate) fn run_agent_generation_with_io(
         )?;
     }
 
+    // The seat the child holds: the rotation's, else the launch's `--seat`.
+    // Its registry row records the same seat its env names.
+    // trace:STORY-2745 | ai:claude
+    let child_seat: Option<String> = rotation
+        .as_ref()
+        .map(|rotation| rotation.seat.to_string())
+        .or_else(|| plan.seat.clone());
     // trace:STORY-B6B1278890774EF993D2EBC327862470-101 | ai:claude
     command
         .env_remove(crate::agent_rotation::GENERATION_ENV)
@@ -7919,6 +7936,8 @@ pub(crate) fn run_agent_generation_with_io(
                 resumed_from: plan.resumed_from.clone(),
                 description,
                 delegate_seats: config.delegate_seats.clone(),
+                // trace:STORY-2745 | ai:claude
+                seat: child_seat.clone(),
             },
         )
         .map(|entry| {

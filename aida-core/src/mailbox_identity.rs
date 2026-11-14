@@ -286,6 +286,10 @@ pub struct SessionBindingFacts {
     /// The handle reservation's recipient UUID, when the reservation names
     /// this row (slice D1). `None`: a UUID-less reader.
     recipient: Option<RecipientUuid>,
+    /// The named seat the bound row records. A Codex tool shell or a
+    /// `--bg` spare may not carry `AIDA_ROTATION_SEAT`; the row does.
+    // trace:STORY-2745 | ai:claude
+    seat: Option<String>,
 }
 
 impl SessionBindingFacts {
@@ -367,6 +371,7 @@ impl SessionBindingFacts {
             handle,
             vendor,
             recipient,
+            seat: parsed.seat.filter(|s| !s.trim().is_empty()),
         })
     }
 
@@ -385,6 +390,7 @@ impl SessionBindingFacts {
             handle: handle.to_string(),
             vendor: vendor.to_string(),
             recipient: None,
+            seat: None,
         }
     }
 }
@@ -665,10 +671,12 @@ impl MailIdentityFacts {
         catalog: &PeopleCatalogView,
         env: IdentityEnv,
     ) -> Self {
-        let (own_handle, own_vendor, own_recipient, unverified) = match binding {
-            SessionBinding::Bound(b) => (Some(b.handle), Some(b.vendor), b.recipient, false),
-            SessionBinding::Unbound => (None, None, None, false),
-            SessionBinding::Unverified(_) => (None, None, None, true),
+        let (own_handle, own_vendor, own_recipient, unverified, bound_seat) = match binding {
+            SessionBinding::Bound(b) => {
+                (Some(b.handle), Some(b.vendor), b.recipient, false, b.seat)
+            }
+            SessionBinding::Unbound => (None, None, None, false, None),
+            SessionBinding::Unverified(_) => (None, None, None, true, None),
         };
         let user_is_known_person = (unverified
             || own_handle
@@ -683,7 +691,9 @@ impl MailIdentityFacts {
             user_is_known_person,
             aliases: if unverified { Vec::new() } else { env.aliases },
             role: env.role,
-            seat: env.seat,
+            // The bound row's seat first: it is this session's own record.
+            // trace:STORY-2745 | ai:claude
+            seat: bound_seat.or(env.seat),
             env_vendor: env.vendor,
             unverified,
         }
@@ -773,6 +783,12 @@ impl MailIdentityFacts {
     /// The raw session role.
     pub fn role(&self) -> Option<&str> {
         self.role.as_deref()
+    }
+
+    /// The named seat this session holds, when it holds one.
+    // trace:STORY-2745 | ai:claude
+    pub fn seat(&self) -> Option<&str> {
+        self.seat.as_deref()
     }
 
     /// Test-only: these facts with a recipient UUID.

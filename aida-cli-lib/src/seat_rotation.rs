@@ -186,6 +186,22 @@ pub(crate) fn sanitize_seat(raw: &str) -> Result<String> {
     Ok(seat)
 }
 
+/// The seats with a handoff directory under `project_root`: every seat a
+/// session has rotated or handed off from. Names that are not valid seats
+/// are skipped.
+// trace:STORY-2745 | ai:claude
+pub(crate) fn handoff_seats(project_root: &Path) -> std::collections::BTreeSet<String> {
+    let Ok(entries) = std::fs::read_dir(project_root.join(".aida").join("handoff")) else {
+        return std::collections::BTreeSet::new();
+    };
+    entries
+        .flatten()
+        .filter(|e| e.file_type().is_ok_and(|t| t.is_dir()))
+        .filter_map(|e| e.file_name().to_str().map(str::to_string))
+        .filter_map(|name| sanitize_seat(&name).ok().filter(|s| *s == name))
+        .collect()
+}
+
 fn seat_dir(project_root: &Path, seat: &str) -> PathBuf {
     project_root.join(".aida").join("handoff").join(seat)
 }
@@ -689,6 +705,34 @@ mod tests {
         chrono::DateTime::parse_from_rfc3339(ts)
             .unwrap()
             .with_timezone(&chrono::Utc)
+    }
+
+    // STORY-2745 AC6: the integration seat's rendered standing orders route
+    // advisor coordination through the mailbox, by seat or role, and never
+    // through SendMessage alone. Rendered from the shipped template.
+    // trace:STORY-2745 | ai:claude
+    #[test]
+    fn story2745_integration_seat_orders_use_the_mailbox_not_sendmessage() {
+        let dir = tempfile::tempdir().unwrap();
+        let tracked = tracked_standing_orders_path(dir.path(), "integration");
+        std::fs::create_dir_all(tracked.parent().unwrap()).unwrap();
+        let template = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../aida-core/templates/.aida/discipline/standing-orders/integration.md");
+        std::fs::copy(template, &tracked).unwrap();
+        let block = render_standing_orders(dir.path(), "Integration")
+            .unwrap()
+            .unwrap();
+        assert!(block.starts_with(STANDING_ORDERS_HEADER), "{block}");
+        assert!(
+            block.contains("aida mailbox send --to seat:advisor"),
+            "{block}"
+        );
+        assert!(block.contains("`--to advisor`"), "{block}");
+        assert!(block.contains("--in-reply-to <id>"), "{block}");
+        assert!(
+            block.contains("Never send a\ncoordination message only by `SendMessage`"),
+            "{block}"
+        );
     }
 
     #[test]

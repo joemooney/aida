@@ -596,6 +596,7 @@ pub(crate) fn collect_mail_channel(
     ctx_role: Option<&str>,
     facts: &MailIdentityFacts,
     limits: &aida_core::mailbox_logical::ReadLimits,
+    bind: Option<crate::mailbox_view::BindWait>,
 ) -> awaiting_you::MailChannel {
     // Registered clients report their own private handle, never an
     // inherited parent's AIDA_USER. Shell/operator reads retain BUG-767's
@@ -609,12 +610,19 @@ pub(crate) fn collect_mail_channel(
     // worktrees and the canonical store, filtered to the verified
     // audience; only mail with no read evidence counts as unread.
     // trace:STORY-1843 | ai:claude
-    let view = crate::mailbox_view::read_own_mail(
-        project_root,
-        &project_root.join(".aida-store"),
-        &audience,
-        limits,
-    );
+    // Only the per-turn notice binds queued deliveries (`bind`), within its
+    // bounded wait. trace:STORY-2745 | ai:claude
+    let store_root = project_root.join(".aida-store");
+    let view = match bind {
+        Some(wait) => crate::mailbox_view::read_own_mail_binding(
+            project_root,
+            &store_root,
+            &audience,
+            limits,
+            wait,
+        ),
+        None => crate::mailbox_view::read_own_mail(project_root, &store_root, &audience, limits),
+    };
     let unread: Vec<aida_core::mailbox::Message> = view.unread().into_iter().cloned().collect();
     // A bound handle is verified in core; an unbound reader's headline
     // is its user.
@@ -701,6 +709,32 @@ pub(crate) fn collect_awaiting_report_with_mail_facts(
     ctx: &UserStatusContext,
     no_ci: bool,
     notice_fast: bool,
+    mail_facts: impl FnOnce() -> MailIdentityFacts,
+) -> awaiting_you::AwaitingReport {
+    collect_awaiting_report_core(
+        project_root,
+        backend,
+        ctx,
+        no_ci,
+        notice_fast,
+        None,
+        mail_facts,
+    )
+}
+
+/// The awaiting report. `mail_bind` is `Some` only for the per-turn
+/// `aida awaiting --notice` hook: that read takes the queued role and seat
+/// mail this session is eligible for (bounded, never waiting), so a session
+/// launched after mail was queued for it sees the notice before its next
+/// turn. Status, statusline and TUI views pass `None` and never bind.
+// trace:STORY-2745 | ai:claude
+pub(crate) fn collect_awaiting_report_core(
+    project_root: &std::path::Path,
+    backend: &aida_core::CachedGitBackend,
+    ctx: &UserStatusContext,
+    no_ci: bool,
+    notice_fast: bool,
+    mail_bind: Option<crate::mailbox_view::BindWait>,
     mail_facts: impl FnOnce() -> MailIdentityFacts,
 ) -> awaiting_you::AwaitingReport {
     // BUG-1288: the nightly channel performs independent forge reads. Start it
@@ -1022,6 +1056,7 @@ pub(crate) fn collect_awaiting_report_with_mail_facts(
         ctx.role.as_deref(),
         &mail_facts(),
         &crate::mailbox_view::passive_limits(),
+        mail_bind,
     );
 
     // Pending worker directives — the enqueue channel (`aida human audit`,
@@ -1669,7 +1704,17 @@ pub(crate) fn handle_awaiting_command(
             queue_total: 0,
             agents: Vec::new(),
         };
-        let report = collect_awaiting_report_inner(&project_root, backend, &ctx, true, true);
+        // The per-turn notice takes queued role/seat mail this session is
+        // eligible for. trace:STORY-2745 | ai:claude
+        let report = collect_awaiting_report_core(
+            &project_root,
+            backend,
+            &ctx,
+            true,
+            true,
+            Some(crate::mailbox_view::BindWait::Notice),
+            crate::collect_mail_identity_facts,
+        );
         if let Some(line) = report.compact_line() {
             println!("{line}");
             // trace:BUG-B6B1278890774EF993D2EBC327862470-040 | ai:claude

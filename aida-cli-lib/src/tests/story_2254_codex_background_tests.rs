@@ -507,6 +507,7 @@ fn story_2254_bg_registers_actual_worker_pid_and_required_start() {
         native_session_id: None,
         resumed_from: None,
         description: None,
+        seat: None,
     };
     // A stale start identity (reused pid) is refused.
     assert!(agent_registry::register_detached_worker(
