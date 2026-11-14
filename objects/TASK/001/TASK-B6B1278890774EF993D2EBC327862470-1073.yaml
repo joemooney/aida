@@ -557,12 +557,24 @@ description: |
   ### finding-hash:74641343
 
   The sketch listed an unbound spec refusal as a still-refuses test case; no new bug_2569 test pins it. speaks_for_change keeps unbound events by construction, so behaviour is unchanged, but a regression test would lock it in.
+
+
+  ## Findings from PR-4007
+  Reviewed sha: 30e4a10ed70231954a26fcbbd49c919dc958bae9
+
+  ### finding-hash:c963d4df
+
+  pull_store_leg_locked now captures pre_sha before committing pending changes (store_push_pull.rs:2496), so the TASK-73 print_pull_summary delta lists the local chore: sync pending changes commit as if it had landed from upstream. The collision-scan guard already checks `pending` explicitly, so pre_sha could move back after the pending commit with a separate pre-commit SHA kept for `moved`.
+
+  ### finding-hash:45e63a87
+
+  waiter_refuses_pull_when_remote_moves_in_flight line 382 asserts !pull_reusable(store, root, false, false), but the code repo in that fixture has no origin remote, so the assertion passes vacuously. The real code-leg veto is covered by code_remote_freshness_independently_vetoes_reuse.
 status: Draft
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-13T20:01:56.623034248Z
-modified_at: 2026-11-14T10:58:36.940988796Z
+modified_at: 2026-11-14T11:15:49.228868139Z
 req_type: Task
 tags:
 - carried-finding:BUG-2543:2a99ebfc
@@ -634,6 +646,8 @@ tags:
 - carried-finding:PR-3998:0bff30e1
 - carried-finding:PR-4000:73e42b4b
 - carried-finding:PR-4000:abbae117
+- carried-finding:PR-4007:45e63a87
+- carried-finding:PR-4007:c963d4df
 - carried-finding:PR-4012:9750b6dd
 - carried-finding:PR-4015:45085c26
 - carried-finding:PR-4015:74641343
@@ -691,6 +705,7 @@ tags:
 - carried-from:PR-3997
 - carried-from:PR-3998
 - carried-from:PR-4000
+- carried-from:PR-4007
 - carried-from:PR-4012
 - carried-from:PR-4015
 - carried-from:STORY-2735
@@ -715,6 +730,7 @@ tags:
 - finding-hash:3975f29b
 - finding-hash:3f4b4821
 - finding-hash:45085c26
+- finding-hash:45e63a87
 - finding-hash:46a7a9dc
 - finding-hash:4843b9fe
 - finding-hash:49b64e26
@@ -744,6 +760,7 @@ tags:
 - finding-hash:c0a8d165
 - finding-hash:c598b8f9
 - finding-hash:c7c082c2
+- finding-hash:c963d4df
 - finding-hash:cd9ab7dd
 - finding-hash:dee3f3a7
 - finding-hash:dfed3eb6
@@ -783,6 +800,7 @@ tags:
 - from-review:PR-3997
 - from-review:PR-3998
 - from-review:PR-4000
+- from-review:PR-4007
 - from-review:PR-4012
 - from-review:PR-4015
 - from-review:STORY-2735
@@ -1021,6 +1039,11 @@ history:
   author: joe
   timestamp: 2026-11-14T10:58:38.326124383Z
   session_id: 01a1d9b26775
+  changes: []
+- id: 01a1d9c5-5492-74f0-b3f7-c40c5158d33d
+  author: joe
+  timestamp: 2026-11-14T11:15:50.546014438Z
+  session_id: 01a1d9c2575b
   changes: []
 filed_at:
   code_sha: 91fe1e337894199f15365d3f8ecfaf81366f8291
