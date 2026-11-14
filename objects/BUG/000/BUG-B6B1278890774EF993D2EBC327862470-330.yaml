@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-13T20:52:54.357683400Z
-modified_at: 2026-11-14T09:51:51.364196259Z
+modified_at: 2026-11-14T11:39:11.066434499Z
 req_type: Bug
 tags:
 - perf
@@ -87,6 +87,13 @@ comments:
   modified_at: 2026-11-14T09:51:51.364196259Z
   session_id: 01a1d973dcb8
   harness_version: codex-cli 0.167.0
+- id: 01a1d9da-b35a-77b2-aae0-e7a986349412
+  author: joe
+  content: '[advisor 7b 04:39] REWORK (blocking, fast gate): the merge result fails ''Rust structural ratchets'' story_2326_ambient_aida_inputs_have_a_disposition: unclassified production inputs AIDA_PULL_COALESCE (store_pull_coalesce.rs:137) and AIDA_PULL_COALESCE_WAIT_SECS (:165). Give both a disposition in aida-core/src/launch_env_keys.rs: AMBIENT_AIDA_KEYS (launched children inherit the operator''s coalescing knobs). Nothing else. Run make check-ci-fast GREEN before pushing. dell1: touch aida-core/src/lib.rs first.'
+  created_at: 2026-11-14T11:39:11.066434499Z
+  modified_at: 2026-11-14T11:39:11.066434499Z
+  session_id: 01a1d8f3-f948-7072-b174-fa9507ed074b
+  harness_version: 2.1.325 (Claude Code)
 history:
 - id: 01a1d8a9-d3a1-7243-a396-3ba4fdaf7412
   author: joe
