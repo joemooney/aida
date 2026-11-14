@@ -5291,6 +5291,65 @@ fn story_2765_direct_track_admission_precedes_setup() {
         .contains("tagged for several tracks (integration, main)"));
 }
 
+/// A scope that is not a stored spec (PR-N, ad-hoc) has no track tags, so the
+/// preflight admits the implementer launch instead of refusing it as unknown.
+// trace:STORY-2765 | ai:claude
+#[test]
+fn story_2765_track_preflight_skips_scopes_that_are_not_stored_specs() {
+    let _env = crate::test_env::EnvVarsGuard::set(&[("AIDA_TRACK", "main")]);
+    let tmp = TempDir::new().unwrap();
+    let storage = crate::test_env::home_fixture_storage(tmp.path().join(".aida-store"));
+    let mut req = Requirement::new("track admission".into(), String::new());
+    req.spec_id = Some("STORY-2765".into());
+    req.status = RequirementStatus::Approved;
+    req.tags.insert("track:integration".into());
+    let mut store = aida_core::RequirementsStore::default();
+    store.requirements.push(req);
+    storage.save(&store).unwrap();
+    for scope in ["PR-4005", "ad-hoc-cleanup"] {
+        for background in [false, true] {
+            crate::agent_launch::preflight_agent_new_track(
+                tmp.path(),
+                Some("implementer"),
+                Some(scope),
+                false,
+                background,
+            )
+            .unwrap();
+        }
+    }
+    // The stored foreign-track spec is still refused from the same store.
+    crate::agent_launch::preflight_agent_new_track(
+        tmp.path(),
+        Some("implementer"),
+        Some("STORY-2765"),
+        false,
+        false,
+    )
+    .unwrap_err();
+}
+
+/// With no store on disk the preflight is read-only: it admits the launch
+/// (no track constraint) and creates nothing under the project root.
+// trace:STORY-2765 | ai:claude
+#[test]
+fn story_2765_track_preflight_never_creates_a_missing_store() {
+    let _env = crate::test_env::EnvVarsGuard::set(&[("AIDA_TRACK", "main")]);
+    let tmp = TempDir::new().unwrap();
+    for background in [false, true] {
+        crate::agent_launch::preflight_agent_new_track(
+            tmp.path(),
+            Some("implementer"),
+            Some("STORY-2765"),
+            false,
+            background,
+        )
+        .unwrap();
+    }
+    assert!(!tmp.path().join(".aida-store").exists());
+    assert_eq!(std::fs::read_dir(tmp.path()).unwrap().count(), 0);
+}
+
 /// Every path under `root` except git internals and the store itself: a
 /// refused launch must leave no handle, lease, session or worktree behind.
 // trace:STORY-2765 | ai:claude
@@ -5323,14 +5382,21 @@ fn story_2765_launch_footprint(root: &std::path::Path) -> Vec<std::path::PathBuf
 // trace:STORY-2765 | ai:claude
 #[test]
 fn story_2765_entry_points_refuse_foreign_track_before_consent_and_setup() {
-    let _env = crate::test_env::EnvVarsGuard::set(&[
-        ("AIDA_TRACK", "main"),
-        ("AIDA_BUILD_PROFILE", "invalid-for-test"),
-    ]);
-    assert!(crate::aida_bin::process().is_err());
     let tmp = TempDir::new().unwrap();
     let project = tmp.path().join("project");
     std::fs::create_dir_all(project.join(".aida")).unwrap();
+    // A minted advisor grant, so the delegation preflight that precedes track
+    // admission passes whatever grant the test runner's own env carries.
+    let _ambient = crate::test_env::AmbientGuard::hermetic_with_seat_and(
+        &project,
+        "advisor",
+        &["implementer", "reviewer"],
+        &[
+            ("AIDA_TRACK", Some("main")),
+            ("AIDA_BUILD_PROFILE", Some("invalid-for-test")),
+        ],
+    );
+    assert!(crate::aida_bin::process().is_err());
     assert!(crate::test_git::git_command()
         .args(["init", "-q", "-b", "main"])
         .arg(&project)

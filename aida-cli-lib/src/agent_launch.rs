@@ -4366,14 +4366,23 @@ pub(crate) fn preflight_agent_new_track(
     if resume || canonical_role_name(role) != "implementer" {
         return Ok(());
     }
+    // Read-only: an absent store carries no track constraint, and the
+    // preflight must never create one. trace:STORY-2765 | ai:claude
     let path = aida_core::store_locate::detect_distributed_store_from(project_root)
         .unwrap_or_else(|| project_root.join(".aida-store"));
-    let store = Storage::new(path).load()?;
-    let req = store
+    if !path.exists() {
+        return Ok(());
+    }
+    let store = Storage::new(path).load_for_read()?;
+    // A scope that is not a stored spec (PR-N, ad-hoc) has no track tags to
+    // judge; later launch steps own its validation.
+    let Some(req) = store
         .requirements
         .iter()
         .find(|req| spec_matches(req, spec))
-        .ok_or_else(|| anyhow::anyhow!("Unknown spec: {spec}"))?;
+    else {
+        return Ok(());
+    };
     let unattended = background
         || aida_core::exec_context::Environment::capture()
             .var("AIDA_HEADLESS")
