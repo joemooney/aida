@@ -23,7 +23,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-12T19:11:56.371806442Z
-modified_at: 2026-11-14T16:18:42.488759270Z
+modified_at: 2026-11-14T16:30:32.527971861Z
 req_type: Story
 tags:
 - operator-held
@@ -380,6 +380,13 @@ comments:
   created_at: 2026-11-14T15:30:34.279387024Z
   modified_at: 2026-11-14T15:30:34.279387024Z
   session_id: 01a1d9ea-4e25-7033-85e8-3648f0195c7c
+  harness_version: 2.1.325 (Claude Code)
+- id: 01a1dae5-724f-7f11-90ca-1574f972c9cf
+  author: joe
+  content: 'GAP 2026-11-14: main unmoved 07:47 -> (still, 09:35 MST). Causes: (1) train job for #4028 cancelled at 08:28 after opening #4039, leaving a journal that made 33b/34b refuse; (2) the successor advisor resumed that journal at 08:40 without the member check; #4028 is red on its own change and reran as #4041/#4042 until killed 09:14; (3) advisor frozen 08:43-09:13 by a spinning ''aida queue rework'' (BUG-2551 family). Recovery: train #4045 (#4034 #3924 #4035, all full-tier green) opened 09:18. Rules added: timeout on every foreground call; no journal resume without member checks.'
+  created_at: 2026-11-14T16:30:32.527971861Z
+  modified_at: 2026-11-14T16:30:32.527971861Z
+  session_id: 01a1dab1-9447-7d22-b5ff-0c9084e122ea
   harness_version: 2.1.325 (Claude Code)
 history:
 - id: 01a1d175-992b-7501-a0fb-89a007208ac0
