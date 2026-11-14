@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-13T21:43:52.838281618Z
-modified_at: 2026-11-14T05:49:06.505265514Z
+modified_at: 2026-11-14T05:50:35.059803556Z
 req_type: Bug
 comments:
 - id: 01a1d88a-5077-7260-8601-e51ac96009ec
@@ -25,6 +25,13 @@ comments:
   modified_at: 2026-11-14T05:33:11.903453729Z
   session_id: 01a1d852-16ef-7973-bdde-ac3f274752a2
   harness_version: 2.1.325 (Claude Code)
+- id: 01a1d89b-8c33-7693-83de-30e133059c6d
+  author: dirtlab
+  content: 'Implemented current-crate extern aliases in the gate dependency scanner using existing fixed-point alias expansion. Added reference/import/raw-identifier/grouped-import and glob fixtures, plus base-ledger refusal and no-write checks. Validation: 12 Python unittest tests pass; repository ratchet reports 150 edges, zero additions; git diff --check passes. Edits left uncommitted for native host publication. Codegraph client at configured absolute path is absent; doctor reports missing codegraph, so navigation used rg.'
+  created_at: 2026-11-14T05:50:35.059803556Z
+  modified_at: 2026-11-14T05:50:35.059803556Z
+  session_id: 01a1d89a24f5
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1d88a-1eba-79f3-b545-78b4696eee68
   author: joe
@@ -42,6 +49,12 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1d89a-c6b6-7ca2-8755-683c71b0ee64
+  author: dirtlab
+  timestamp: 2026-11-14T05:49:44.502068574Z
+  session_id: 01a1d89a24f5
+  harness_version: codex-cli 0.167.0
+  changes: []
 filed_at:
   code_sha: 97d2f9fda0856183dee299b29760f3004c5db881
   branch: main

@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-13T13:53:20.390665880Z
-modified_at: 2026-11-14T05:46:03.170738872Z
+modified_at: 2026-11-14T05:49:26.751294502Z
 req_type: Bug
 tags:
 - hygiene
@@ -22,6 +22,13 @@ comments:
   modified_at: 2026-11-14T05:31:28.774930522Z
   session_id: 01a1d852-16ef-7973-bdde-ac3f274752a2
   harness_version: 2.1.325 (Claude Code)
+- id: 01a1d89a-815f-7843-985b-d983730f5ed8
+  author: dirtlab
+  content: 'Implemented in aida-core/src/allocation_authority.rs: home_fixture_backend initializes a root-local Git identity instead of accepting ancestor discovery, and refuses common directories outside the fixture root. common_dir now validates and canonicalizes the gitdir target before reading commondir. Three regression tests pass; all 301 mailbox tests pass through the lane runner. rustfmt check and git diff --check pass. Broader allocation_authority::tests run: 37 passed, 10 failed on group-writable fixture settings/state (mode 0664, host umask 0002); production permissions remain unchanged. Reviewed codegraph client unavailable; doctor reports missing. Edits left uncommitted for host publication.'
+  created_at: 2026-11-14T05:49:26.751294502Z
+  modified_at: 2026-11-14T05:49:26.751294502Z
+  session_id: 01a1d896f29f
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1d889-fed8-7962-86df-f0e26e40b385
   author: joe
