@@ -6355,7 +6355,14 @@ fn configure_allocation(command: &AllocationCommand) -> Result<()> {
             aida_core::BlockRegistry::with_dispense_lock(&path, || {
                 // Revalidate existing settings under the local writer lock.
                 aida_core::allocation_authority::resolve(&root)?;
-                aida_core::write_atomic(&path, "version = 1\nauthoritative = true\n")?;
+                // The reader refuses a setting anyone else may write, so
+                // the mode is not left to the umask.
+                // trace:BUG-2555 | ai:claude
+                aida_core::write_atomic_mode(
+                    &path,
+                    "version = 1\nauthoritative = true\n",
+                    aida_core::OWNER_WRITABLE_MODE,
+                )?;
                 Ok(())
             })?;
             println!("This clone is now HOME allocation authority.");
