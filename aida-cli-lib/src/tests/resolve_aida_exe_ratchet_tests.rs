@@ -16,8 +16,7 @@ fn no_cli_source_outside_the_resolver_uses_raw_current_executable_lookup() {
         }
     }
 
-    let src_dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../aida-cli-lib/src");
+    let src_dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../aida-cli-lib/src");
     let mut files = Vec::new();
     visit(&src_dir, &mut files);
     // trace:TASK-3429 | ai:codex — retain coverage of the extracted transport.
@@ -47,4 +46,3 @@ fn no_cli_source_outside_the_resolver_uses_raw_current_executable_lookup() {
     }
     assert_eq!(lib_total, 1, "exactly one raw lookup in kernel.rs");
 }
-
