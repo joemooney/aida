@@ -1,5 +1,6 @@
 id: 01a1db8f-b138-75d2-a038-946ad8aca0f5
 spec_id: TASK-73022632d35647cca3858b18ac0723e3-014
+agreed_id: TASK-3118
 title: 'Relay adopts a renewed grant found in the grant store (bound with --bind-pid): confirm the authority shape'
 description: |
   aida-cli-lib/src/relay_grant.rs (hold / renewed / successors_in). A running relay cannot be handed a new grant id, so the printed renewal command is `aida role enter <seat> --delegate-seat ... --bind-pid <shell the relay runs under>`, and the relay scans the grant store for a direct role-enter grant of the same principal and seat, issued later and delegating the seat. It switches its AIDA_SESSION_GRANT selector to that grant only when grant_check_id (lifetime, subject, roster, process binding) accepts it for the relay process. No new authority is created, but selector discovery is new behaviour in the grant system and was not sketched or signed off beforehand. Limits that shipped: (a) a relay under a delegated grant (started inside another agent session) holds its session but never adopts a renewed root, since its grant may have been narrowed; it needs a relaunch. (b) --bind-pid accepts only a shell or an agent harness, so a relay not started from a shell prints a command that role enter will refuse.
@@ -17,6 +18,13 @@ tags:
 - from-implementer:BUG-2585
 - kind:design-choice
 - severity:major
+history:
+- id: 01a1db97-a043-7b82-ba6d-2a59e5df90ca
+  author: joe
+  timestamp: 2026-11-14T19:45:09.699528979Z
+  session_id: 01a1db6d-e689-7532-9eef-772722add87b
+  harness_version: 2.1.325 (Claude Code)
+  changes: []
 filed_at:
   code_sha: 6538b1a2222245dab5adf6889c59c8988ac1521b
   branch: bug-b6b1278890774ef993d2ebc327862470-350
