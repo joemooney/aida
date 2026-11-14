@@ -69,6 +69,10 @@ const ENV: &[&str] = &[
     "AIDA_CONTAINED",
     "AIDA_DRIVE_ROOT",
     "AIDA_HARNESS_VERSION",
+    // The launcher's admission track: the lane's own `aida` commands must run
+    // on the track its parent admitted it under (final env is env_clear'd).
+    // trace:STORY-2765 | ai:claude
+    "AIDA_TRACK",
 ];
 const TOOL_NET_ENV: &[&str] = &[
     "HTTP_PROXY",

@@ -2088,6 +2088,8 @@ mod pull_failure_tests {
         assert_eq!(replay.history, merged.history);
     }
 
+    // trace:BUG-2501 | ai:claude — AC3: the locked retry site reports a dirty
+    // store as the typed refusal, never as an unreachable remote.
     #[test]
     fn allocation_retry_dirty_store_stops_before_fetch() {
         let temp = tempfile::tempdir().unwrap();
@@ -2141,6 +2143,8 @@ mod pull_failure_tests {
         assert!(!aida_core::git_ops::rebase_in_progress(&repo));
     }
 
+    // trace:BUG-2501 | ai:claude — AC2: a dirty store or a failed pull returns
+    // an error, so callers stop instead of writing on the local view.
     #[test]
     fn sync_pull_refuses_dirty_store_and_unreachable_remote() {
         let temp = tempfile::tempdir().unwrap();

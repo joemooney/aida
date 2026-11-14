@@ -2219,6 +2219,15 @@ pub(crate) fn auto_bump_done_to_completed_with(
         if sha.is_empty() || subject.is_empty() {
             continue;
         }
+        // trace:BUG-2549 | ai:codex — a Refs merge closes a slice, not its
+        // unfinished spec. Open PRs and leases retain the claim.
+        for spec in crate::pr_ship::extract_trailing_refs_spec_ids_from_subject(subject) {
+            if let Err(error) =
+                crate::lane_recovery::reconcile_reference_in(project_root, storage, &spec, sha)
+            {
+                eprintln!("warning: reference-merge recovery for {spec} needs retry: {error:#}");
+            }
+        }
         // BUG-426: a plan commit (`docs(plans): …`) names the specs it PLANS
         // for in its trailing `(SPEC-ID …)` group, but a plan is a
         // pre-implementation artifact — the plan template leaves those specs
