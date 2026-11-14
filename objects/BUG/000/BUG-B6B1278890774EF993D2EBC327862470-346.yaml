@@ -12,12 +12,12 @@ description: |-
   Change: remove 'train/**' from the push trigger in .github/workflows/ci.yml. Update tests/test_ci_tiers.py:43 (asserts push branches == ['main', 'train/**']), docs/internal/testing/ci-test-shards.md:19 and the prose at scripts/check-ci-gates.py:682.
 
   Acceptance: (1) a new train PR shows exactly one CI run and one row per job; (2) the train lands on that run alone; (3) push to main still runs full CI; (4) test_ci_tiers passes.
-status: NeedsAttention
+status: Completed
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-14T14:10:29.014573367Z
-modified_at: 2026-11-14T14:26:46.123228729Z
+modified_at: 2026-11-14T17:03:11.399191515Z
 req_type: Bug
 tags:
 - ci
@@ -72,6 +72,19 @@ history:
   author: dirtlab
   timestamp: 2026-11-14T14:26:47.927425588Z
   changes: []
+- id: 01a1db03-561d-7ae3-978d-c8e90dc0ed4b
+  author: aida-auto-bump
+  timestamp: 2026-11-14T17:03:11.389472615Z
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Completed
+processing_record:
+- id: 01a1db03-5627-7923-92bf-92466ce751bd
+  timestamp: 2026-11-14T17:03:11.399189711Z
+  agent: aida
+  commit_sha: e26558378ecd396ccdcf8516a2b66ee66b06561c
+  summary: Completed via merge e2655837
 filed_at:
   code_sha: b63e2f597e16c70f98256ffa15d5481cb46c54b0
   branch: main
@@ -80,6 +93,10 @@ filed_at:
   aida_build_sha: 2682c4c4fe5
   vendor: claude
   session: fc28c702-2f6e-419e-b882-6ddfeb9134ff
+implementation_info:
+  implemented: false
+  completed_at: 2026-11-14T17:03:11.389467955Z
+  completion_sha: e26558378ecd396ccdcf8516a2b66ee66b06561c
 attention_reason:
   category: other
   detail: 'work complete locally but unable to publish: this lane has no valid GitHub credential (gh reports the joemooney token invalid; git push fails with ''could not read Username'')'
