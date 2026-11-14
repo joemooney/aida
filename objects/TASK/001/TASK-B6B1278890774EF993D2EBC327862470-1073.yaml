@@ -65,18 +65,27 @@ description: |
   ### finding-hash:5d2b67f3
 
   docs/internal/testing/gate-dependency-ratchet.md Follow-up filing handoff section records ephemeral seat state (a host-specific /home/dirtlab path, No child IDs exist yet); once the burn-down children are filed, replace it with their IDs
+
+
+  ## Findings from PR-3968
+  Reviewed sha: eea1e099ccce691971930729c83d661c7147478f
+
+  ### finding-hash:56ed8b81
+
+  story_2492_publication_tests.rs:1314-1315: the sleep(2100ms) + should_stop() assertion kept from main by the merge is redundant after reviewer_completion::wait has already returned via should_stop(); it adds 2.1s to the test without new coverage.
 status: Draft
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-13T20:01:56.623034248Z
-modified_at: 2026-11-14T00:59:44.526752975Z
+modified_at: 2026-11-14T01:00:07.939307773Z
 req_type: Task
 tags:
 - carried-finding:BUG-2557:55e0cbfe
 - carried-finding:BUG-2557:f238ea37
 - carried-finding:PR-3938:654190b6
 - carried-finding:PR-3948:5d2b67f3
+- carried-finding:PR-3968:56ed8b81
 - carried-finding:PR-3970:52636ea7
 - carried-finding:PR-3970:5b9e60ad
 - carried-finding:PR-3970:c7c082c2
@@ -86,12 +95,14 @@ tags:
 - carried-from:BUG-2557
 - carried-from:PR-3938
 - carried-from:PR-3948
+- carried-from:PR-3968
 - carried-from:PR-3970
 - carried-from:PR-3971
 - carried-from:STORY-2735
 - finding-hash:2c7ae2ea
 - finding-hash:52636ea7
 - finding-hash:55e0cbfe
+- finding-hash:56ed8b81
 - finding-hash:5b9e60ad
 - finding-hash:5d2b67f3
 - finding-hash:654190b6
@@ -100,6 +111,7 @@ tags:
 - from-review:BUG-2557
 - from-review:PR-3938
 - from-review:PR-3948
+- from-review:PR-3968
 - from-review:PR-3970
 - from-review:PR-3971
 - from-review:STORY-2735
@@ -133,6 +145,11 @@ history:
   author: joe
   timestamp: 2026-11-14T00:59:46.015239442Z
   session_id: 01a1d78f63b9
+  changes: []
+- id: 01a1d791-a606-7e82-89a2-2c84bf5e87b5
+  author: joe
+  timestamp: 2026-11-14T01:00:09.094832748Z
+  session_id: 01a1d78fe74b
   changes: []
 filed_at:
   code_sha: 91fe1e337894199f15365d3f8ecfaf81366f8291
