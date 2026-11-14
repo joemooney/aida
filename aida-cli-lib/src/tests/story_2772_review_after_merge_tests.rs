@@ -1,5 +1,5 @@
 //! STORY-2772: review after merge on the integration track.
-// trace:STORY-2772 STORY-2772.Tests | ai:claude
+// trace:STORY-2772 STORY-b6b1278890774ef993d2ebc327862470-695.Tests | ai:claude
 
 use super::*;
 
@@ -39,7 +39,7 @@ fn refusal(eligibility: Eligibility) -> String {
 }
 
 // ---- config --------------------------------------------------------------
-// trace:STORY-2772.ace3fe97 | ai:claude
+// trace:STORY-b6b1278890774ef993d2ebc327862470-695.ace3fe97 | ai:claude
 
 #[test]
 fn config_defaults_to_off_with_the_stated_knobs() {
@@ -86,6 +86,13 @@ fn config_refuses_a_value_it_cannot_read() {
         ),
         ("[integration]\nchecks = [1]\n", "checks"),
         ("[integration\n", "config.toml"),
+        // A misspelt key is refused, not dropped in favour of the default.
+        (
+            "[integration]\nexclude_tags = [\"security\"]\n",
+            "exclude_tags",
+        ),
+        ("[integration]\nmax_efort = \"1h\"\n", "max_efort"),
+        ("integration = \"low-risk\"\n", "must be a table"),
     ] {
         let error = Config::parse(Some(body)).unwrap_err();
         assert!(error.contains(names), "{body:?}: {error}");
@@ -95,7 +102,7 @@ fn config_refuses_a_value_it_cannot_read() {
 // ---- eligibility matrix --------------------------------------------------
 
 // The one eligibility function and its matrix.
-// trace:STORY-2772.acbbdc03 STORY-2772.Tests | ai:claude
+// trace:STORY-b6b1278890774ef993d2ebc327862470-695.acbbdc03 STORY-b6b1278890774ef993d2ebc327862470-695.Tests | ai:claude
 #[test]
 fn eligible_when_every_rule_passes() {
     let specs = [
@@ -254,7 +261,7 @@ fn an_approved_change_merges_without_asking_eligibility() {
     assert_eq!(got, Ok(Admission::Approved("the row's reason".into())));
 }
 
-// trace:STORY-2772.ac77df43 | ai:claude
+// trace:STORY-b6b1278890774ef993d2ebc327862470-695.ac77df43 | ai:claude
 #[test]
 fn an_eligible_unapproved_change_merges_before_review() {
     let got = admit(
@@ -277,7 +284,7 @@ fn a_change_under_review_is_refused_without_asking_eligibility() {
     assert!(why.contains("the row's reason"), "{why}");
 }
 
-// trace:STORY-2772.ac77df43 | ai:claude
+// trace:STORY-b6b1278890774ef993d2ebc327862470-695.ac77df43 | ai:claude
 #[test]
 fn only_a_merge_before_review_marks_its_known_unmarked_specs() {
     let specs = vec![
@@ -352,7 +359,7 @@ fn every_other_state_and_the_main_track_refuse() {
 }
 
 // ---- promotion check -----------------------------------------------------
-// trace:STORY-2772.acf93ff9 STORY-2772.Tests | ai:claude
+// trace:STORY-b6b1278890774ef993d2ebc327862470-695.acf93ff9 STORY-b6b1278890774ef993d2ebc327862470-695.Tests | ai:claude
 
 const HEAD_A: &str = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
 const HEAD_B: &str = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
@@ -372,6 +379,7 @@ fn approved_at(sha: &str) -> Option<Verdict> {
         approves: true,
         label: "APPROVED".into(),
         sha: Some(sha.to_string()),
+        authority: Ok(()),
     })
 }
 
@@ -401,7 +409,7 @@ fn history() -> Vec<FirstParent> {
 
 #[test]
 fn a_promotion_is_refused_naming_the_pending_constituent() {
-    let verdict = |pr: u64| if pr == 11 { approved_at(HEAD_A) } else { None };
+    let verdict = |pr: u64, _: &str| if pr == 11 { approved_at(HEAD_A) } else { None };
     let (approved, findings) = promotion_check(&history(), &on_main, &verdict);
     assert_eq!(approved.iter().map(|c| c.pr).collect::<Vec<_>>(), [11]);
     assert_eq!(findings.len(), 1);
@@ -413,7 +421,7 @@ fn a_promotion_is_refused_naming_the_pending_constituent() {
 
 #[test]
 fn a_promotion_is_allowed_once_every_constituent_is_approved_at_its_merged_head() {
-    let verdict = |pr: u64| match pr {
+    let verdict = |pr: u64, _: &str| match pr {
         11 => approved_at(HEAD_A),
         // A recorded short sha matches the head it abbreviates.
         12 => approved_at(&HEAD_B[..12]),
@@ -427,12 +435,13 @@ fn a_promotion_is_allowed_once_every_constituent_is_approved_at_its_merged_head(
 
 #[test]
 fn an_approval_at_another_head_or_a_later_refusal_does_not_count() {
-    let verdict = |pr: u64| match pr {
+    let verdict = |pr: u64, _: &str| match pr {
         11 => approved_at("cccccccccccc"),
         _ => Some(Verdict {
             approves: false,
             label: "CHANGES REQUESTED".into(),
             sha: Some(HEAD_B.into()),
+            authority: Ok(()),
         }),
     };
     let (approved, findings) = promotion_check(&history(), &on_main, &verdict);
@@ -448,16 +457,122 @@ fn an_approval_at_another_head_or_a_later_refusal_does_not_count() {
     );
     // An approval that names no commit, or too short a one, approves nothing.
     for sha in [None, Some("aaaa".to_string())] {
-        let verdict = |_: u64| {
+        let verdict = |_: u64, _: &str| {
             Some(Verdict {
                 approves: true,
                 label: "APPROVED".into(),
                 sha: sha.clone(),
+                authority: Ok(()),
             })
         };
         let (approved, _) = promotion_check(&history(), &on_main, &verdict);
         assert!(approved.is_empty(), "{sha:?}");
     }
+}
+
+/// The ship gate's authority check decides: an approval at the merged head
+/// that its author recorded, or that no attested recorder stands behind, is
+/// not a review.
+#[test]
+fn an_approval_without_the_ship_gates_authority_is_refused() {
+    use crate::gate::review_verdict::{RecordedVerdict, RecorderAttestation, VerdictKind};
+    use crate::gate::ship::{AuthorSession, ShipApprovalPolicy};
+    const AT: &str = "2026-11-14T05:30:00Z";
+    let approval = |attestation: Option<RecorderAttestation>| RecordedVerdict {
+        kind: VerdictKind::Approved,
+        raw: "approved".into(),
+        reviewed_sha: Some(HEAD_B.into()),
+        recorded_at: Some(AT.into()),
+        recorded_by: Some("aida review record (operator)".into()),
+        attestation,
+        ..Default::default()
+    };
+    let attested = |identity: &str| RecorderAttestation {
+        sha: HEAD_B.into(),
+        human_at_tty: true,
+        receipt_id: Some("rcpt-1".into()),
+        identity: vec![identity.to_string()],
+        ..Default::default()
+    };
+    let policy = |candidates: &[RecordedVerdict]| {
+        let mut policy = ShipApprovalPolicy {
+            author_sessions: vec![AuthorSession {
+                label: "the lane that wrote the change".into(),
+                tokens: vec!["session:author".into()],
+            }],
+            reviewed_committed_at: Some("2026-11-14T05:00:00Z".parse().unwrap()),
+            ..Default::default()
+        };
+        for verdict in candidates {
+            if let Some(attestation) = verdict.attestation.as_ref() {
+                if let Some(key) = attestation.authority_key(verdict.recorded_at.as_deref()) {
+                    policy
+                        .verified_authority
+                        .insert(key, attestation.identity.clone());
+                }
+            }
+        }
+        policy
+    };
+    // Recorded by the authoring session itself.
+    let own = [approval(Some(attested("session:author")))];
+    let why = approval_authority(12, &own, &policy(&own), true).unwrap_err();
+    assert!(why.contains("cannot approve its own work"), "{why}");
+    // No attested recorder at all, as a legacy verdict file has it.
+    let bare = [approval(None)];
+    let why = approval_authority(12, &bare, &policy(&bare), true).unwrap_err();
+    assert!(why.contains("PR-12"), "{why}");
+    // Another session's attested approval passes; unreadable does not.
+    let other = [approval(Some(attested("session:reviewer")))];
+    assert_eq!(
+        approval_authority(12, &other, &policy(&other), true),
+        Ok(())
+    );
+    let why = approval_authority(12, &other, &policy(&other), false).unwrap_err();
+    assert!(why.contains("could not be checked"), "{why}");
+
+    // And the check refuses the promotion on it, naming the change.
+    let verdict = |pr: u64, _: &str| match pr {
+        11 => approved_at(HEAD_A),
+        _ => Some(Verdict {
+            authority: Err("PR-12: the author cannot approve its own work".into()),
+            ..approved_at(HEAD_B).unwrap()
+        }),
+    };
+    let (approved, findings) = promotion_check(&history(), &on_main, &verdict);
+    assert_eq!(approved.iter().map(|c| c.pr).collect::<Vec<_>>(), [11]);
+    let text = findings[0].describe();
+    assert!(
+        text.contains("#12") && text.contains("its own work"),
+        "{text}"
+    );
+}
+
+/// A spec keeps its mark while any change naming it is still pending.
+#[test]
+fn a_spec_is_unmarked_only_when_no_pending_change_names_it() {
+    let constituent = |pr: u64, subject: &str| Constituent {
+        pr,
+        merge: format!("m{pr}"),
+        head: HEAD_A.into(),
+        subject: subject.into(),
+    };
+    let approved = [
+        constituent(11, "chore(integration): merge PR #11 a (BUG-1 BUG-2)"),
+        constituent(13, "chore(integration): merge PR #13 c (BUG-3)"),
+    ];
+    let findings = [
+        Finding::Pending {
+            constituent: constituent(12, "chore(integration): merge PR #12 b (bug-2)"),
+            why: "no review verdict is recorded".into(),
+        },
+        Finding::Unreviewed {
+            sha: "d1".into(),
+            subject: "fix: a direct commit (BUG-3)".into(),
+        },
+    ];
+    assert_eq!(specs_to_unmark(&approved, &findings), ["BUG-1"]);
+    assert_eq!(specs_to_unmark(&approved, &[]), ["BUG-1", "BUG-2", "BUG-3"]);
 }
 
 #[test]
@@ -478,7 +593,7 @@ fn a_direct_commit_or_an_unnamed_merge_is_refused() {
             subject: "chore(integration): merge PR #11 by hand".into(),
         },
     ];
-    let (approved, findings) = promotion_check(&commits, &on_main, &|_| approved_at(HEAD_A));
+    let (approved, findings) = promotion_check(&commits, &on_main, &|_, _| approved_at(HEAD_A));
     assert!(approved.is_empty());
     assert_eq!(findings.len(), 3);
     assert!(findings
@@ -641,7 +756,7 @@ fn a_conflicting_merge_leaves_integration_where_it_was() {
 
 /// A protected file moved out of its path is still listed at the protected
 /// path, so the move cannot make the change eligible.
-// trace:STORY-2772.ace3fe97 | ai:claude
+// trace:STORY-b6b1278890774ef993d2ebc327862470-695.ace3fe97 | ai:claude
 #[test]
 fn a_rename_out_of_a_protected_path_still_lists_it_and_refuses() {
     let dir = tempfile::tempdir().unwrap();
@@ -672,7 +787,7 @@ fn a_rename_out_of_a_protected_path_still_lists_it_and_refuses() {
 }
 
 // ---- land status ---------------------------------------------------------
-// trace:STORY-2772.acbbdc03 | ai:claude
+// trace:STORY-b6b1278890774ef993d2ebc327862470-695.acbbdc03 | ai:claude
 
 struct Unapproved(Option<&'static str>);
 

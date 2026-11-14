@@ -372,7 +372,12 @@ fn run_merge(root: &Path, pr: u64, push: bool, dry_run: bool) -> Result<()> {
         git(root, &["push", "origin", "HEAD:refs/heads/integration"])?;
         println!("pushed `integration` at {}", &tip[..11]);
     } else {
-        println!("not pushed (pass --push, or `git push origin integration`).");
+        // Nothing is marked for a merge that exists only here.
+        println!(
+            "not pushed (pass --push, or `git push origin integration`); no spec is marked `{}` for an unpushed merge.",
+            review::MERGED_BEFORE_REVIEW_TAG
+        );
+        return Ok(());
     }
     let specs: Vec<(String, Option<(uuid::Uuid, Vec<String>)>)> = reader
         .resolve(&crate::land::specs_of(change))
@@ -478,12 +483,34 @@ fn run_promotion_check(root: &Path, tip: Option<&str>, since: Option<&str>) -> R
             .status()
             .is_ok_and(|status| status.success())
     };
-    let verdict = |pr: u64| {
+    let verdict = |pr: u64, head: &str| {
         crate::gate::review_verdict::read_recorded_verdict(&ledger_root, &format!("PR-{pr}")).map(
-            |verdict| review::Verdict {
-                approves: verdict.kind.approves(),
-                label: verdict.kind.label().to_string(),
-                sha: verdict.reviewed_sha,
+            |verdict| {
+                let approves = verdict.kind.approves();
+                // The ship gate's own check, against the head that was
+                // merged: an approval the author recorded, or one with no
+                // attested recorder, does not review the change.
+                let authority = if approves {
+                    let ledger = ledger_root.as_path();
+                    let (candidates, policy, _, forge_answered) =
+                        crate::gate::approval::merge_approval_subject_observed(
+                            &[ledger],
+                            ledger,
+                            pr,
+                            &[],
+                            None,
+                            Some(head),
+                        );
+                    review::approval_authority(pr, &candidates, &policy, forge_answered)
+                } else {
+                    Ok(())
+                };
+                review::Verdict {
+                    approves,
+                    label: verdict.kind.label().to_string(),
+                    sha: verdict.reviewed_sha,
+                    authority,
+                }
             },
         )
     };
@@ -495,22 +522,21 @@ fn run_promotion_check(root: &Path, tip: Option<&str>, since: Option<&str>) -> R
     );
     // An approved change no longer needs its marker in the open list.
     if let Ok(store) = load_store(root) {
-        for constituent in &approved {
-            for token in crate::pr_ship::extract_spec_ids_from_text(&constituent.subject) {
-                let spec = resolve_trailer(&store, &token)
-                    .and_then(|uuid| store.requirements.iter().find(|r| r.id == uuid));
-                let Some(spec) = spec else { continue };
-                if spec.tags.contains(review::MERGED_BEFORE_REVIEW_TAG) {
-                    let id = aida_core::node_alias::display_spec_id(&token);
-                    match edit_tag(
-                        root,
-                        &spec.id,
-                        "--remove-tag",
-                        review::MERGED_BEFORE_REVIEW_TAG,
-                    ) {
-                        Ok(()) => println!("  untagged {id}"),
-                        Err(error) => eprintln!("  {id} was not untagged: {error:#}"),
-                    }
+        // Only a spec no pending change still names.
+        for token in review::specs_to_unmark(&approved, &findings) {
+            let spec = resolve_trailer(&store, &token)
+                .and_then(|uuid| store.requirements.iter().find(|r| r.id == uuid));
+            let Some(spec) = spec else { continue };
+            if spec.tags.contains(review::MERGED_BEFORE_REVIEW_TAG) {
+                let id = aida_core::node_alias::display_spec_id(&token);
+                match edit_tag(
+                    root,
+                    &spec.id,
+                    "--remove-tag",
+                    review::MERGED_BEFORE_REVIEW_TAG,
+                ) {
+                    Ok(()) => println!("  untagged {id}"),
+                    Err(error) => eprintln!("  {id} was not untagged: {error:#}"),
                 }
             }
         }

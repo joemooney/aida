@@ -68,6 +68,24 @@ impl Config {
         let Some(table) = root.get("integration") else {
             return Ok(config);
         };
+        // A key this does not know is refused, never dropped: a misspelt
+        // `excluded_tags` or `max_effort` would leave the default in force
+        // where the operator meant something stricter.
+        const KEYS: [&str; 4] = [
+            "review_after_merge",
+            "max_effort",
+            "excluded_tags",
+            "checks",
+        ];
+        let Some(keys) = table.as_table() else {
+            return Err("[integration] must be a table".into());
+        };
+        if let Some(unknown) = keys.keys().find(|key| !KEYS.contains(&key.as_str())) {
+            return Err(format!(
+                "[integration] has no key `{unknown}`; the keys are {}",
+                KEYS.join(", ")
+            ));
+        }
         let strings = |key: &str| -> Result<Option<Vec<String>>, String> {
             let Some(value) = table.get(key) else {
                 return Ok(None);
@@ -405,6 +423,56 @@ pub(crate) struct Verdict {
     pub approves: bool,
     pub label: String,
     pub sha: Option<String>,
+    /// Whether the approval has the authority the ship gate asks for: an
+    /// attested recorder that is not the change's author. `Err` says why
+    /// not, or that it could not be read.
+    pub authority: Result<(), String>,
+}
+
+/// The ship gate's approval-authority check (BUG-1918), for the newest
+/// approval among a merged change's `candidates`. Unknown is refused.
+// trace:STORY-2772 | ai:claude
+pub(crate) fn approval_authority(
+    pr: u64,
+    candidates: &[crate::gate::review_verdict::RecordedVerdict],
+    policy: &crate::gate::ship::ShipApprovalPolicy,
+    forge_answered: bool,
+) -> Result<(), String> {
+    if !forge_answered {
+        return Err(
+            "the authority of its approval could not be checked: the forge did not report the change's commits"
+                .into(),
+        );
+    }
+    match crate::gate::ship::approval_authority_refusal(candidates, policy) {
+        None => Ok(()),
+        Some(refusal) => Err(crate::gate::ship::approval_authority_refusal_message(
+            pr, &refusal,
+        )),
+    }
+}
+
+/// The spec tokens whose `merged-before-review` mark may come off: those an
+/// approved change names and no finding still names. A spec with one change
+/// approved and another pending keeps its mark.
+// trace:STORY-2772 | ai:claude
+pub(crate) fn specs_to_unmark(approved: &[Constituent], findings: &[Finding]) -> Vec<String> {
+    let tokens = |subject: &str| crate::pr_ship::extract_spec_ids_from_text(subject);
+    let pending: Vec<String> = findings
+        .iter()
+        .flat_map(|finding| match finding {
+            Finding::Pending { constituent, .. } => tokens(&constituent.subject),
+            Finding::Unreviewed { subject, .. } => tokens(subject),
+        })
+        .collect();
+    let mut out: Vec<String> = Vec::new();
+    for token in approved.iter().flat_map(|c| tokens(&c.subject)) {
+        let held = |list: &[String]| list.iter().any(|other| other.eq_ignore_ascii_case(&token));
+        if !held(&pending) && !held(&out) {
+            out.push(token);
+        }
+    }
+    out
 }
 
 /// A change merged into integration: its merge commit and the head merged.
@@ -450,13 +518,14 @@ impl Finding {
 /// Check every unpromoted commit. A merge whose second parent is on main is
 /// a sync of main and is skipped; a merge naming a change is a constituent
 /// and needs that change's newest verdict to approve exactly the merged
-/// head; anything else is refused. Returns the approved constituents and
+/// head, with the authority the ship gate asks for; anything else is
+/// refused. Returns the approved constituents and
 /// the findings, newest first.
 // trace:STORY-2772 | ai:claude
 pub(crate) fn promotion_check(
     commits: &[FirstParent],
     on_main: &dyn Fn(&str) -> bool,
-    verdict: &dyn Fn(u64) -> Option<Verdict>,
+    verdict: &dyn Fn(u64, &str) -> Option<Verdict>,
 ) -> (Vec<Constituent>, Vec<Finding>) {
     let mut approved = Vec::new();
     let mut findings = Vec::new();
@@ -481,14 +550,16 @@ pub(crate) fn promotion_check(
             head: head.clone(),
             subject: commit.subject.clone(),
         };
-        let why = match verdict(pr) {
+        let why = match verdict(pr, head) {
             None => Some("no review verdict is recorded".to_string()),
             Some(verdict) if !verdict.approves => {
                 Some(format!("its newest verdict is {}", verdict.label))
             }
             Some(verdict) => match verdict.sha.as_deref() {
                 // The full merged head must begin with what was reviewed.
-                Some(sha) if sha.len() >= 7 && head.starts_with(&sha.to_ascii_lowercase()) => None,
+                Some(sha) if sha.len() >= 7 && head.starts_with(&sha.to_ascii_lowercase()) => {
+                    verdict.authority.err()
+                }
                 Some(sha) => Some(format!(
                     "it is approved at {sha}, not at the head that was merged"
                 )),
