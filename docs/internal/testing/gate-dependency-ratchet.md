@@ -19,6 +19,9 @@ and `merge_hold`.
 The scanner reuses the ExecContext Rust tokenizer and grouped-use parser. It
 ignores comments and literals, expands import aliases, counts item imports and
 qualified references, and refuses crate-root and watched-module glob imports.
+Current-crate aliases declared with `extern crate self as root` resolve to
+`crate`, including references and imports through the alias.
+<!-- trace:BUG-2567 | ai:codex -->
 Ancestor-only module imports such as `use super::super as root` and grouped
 `use super::super::{self as root}` also refuse: the scanner has no source-module
 context to retain those bindings safely. Use an explicit `crate::` path instead.
