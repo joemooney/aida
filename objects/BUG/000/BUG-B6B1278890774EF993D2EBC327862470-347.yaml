@@ -8,17 +8,16 @@ description: |
   Acceptance criteria:
   1. The bug034 group passes 20 of 20 consecutive runs on dell1 (cargo test --profile agent -p aida-core git_ops::commit_failure), with the cause of the flake named (timing, shared temp path, or lock-file race).
   2. The umask-sensitive tests either pin umask in their fixture or assert mode-independent facts; they pass under umask 0002 and 022.
-status: InProgress
+status: Completed
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-14T14:13:23.824117090Z
-modified_at: 2026-11-14T16:55:19.032033025Z
+modified_at: 2026-11-14T19:39:07.432061581Z
 req_type: Bug
 tags:
 - area:tests
 - flaky
-- track:dell1
 relationships:
 - rel_type:
     custom: implemented-by
@@ -51,6 +50,20 @@ history:
   author: dirtlab
   timestamp: 2026-11-14T14:49:11.353367247Z
   changes: []
+- id: 01a1db92-1795-7d21-ab80-f3c6cd02fcbe
+  author: aida-auto-bump
+  timestamp: 2026-11-14T19:39:07.029504434Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a1db92-1928-78d2-931e-fc5534e2dc45
+  timestamp: 2026-11-14T19:39:07.432055741Z
+  agent: aida
+  commit_sha: ce660d553f782fd223ca091bb3bd2dc394352eb5
+  summary: 'Both criteria met: sh-read fake git removes the ETXTBSY fork/exec race (cause named in code); advisor evidence shows 20/20 on dell1 under umask 022 and 002; umask pin from BUG-2573 is on the base. No defects in the 1-file diff; CI green at head except merge-hold-gate.'
+  review_verdict: approved
 filed_at:
   code_sha: 3350540dbab869a493924fe627364ed3a48ff9e4
   branch: main
@@ -60,3 +73,7 @@ filed_at:
   vendor: claude
   session: 01a1d9ea-4e25-7033-85e8-3648f0195c7c
   harness_version: 2.1.325 (Claude Code)
+implementation_info:
+  implemented: false
+  completed_at: 2026-11-14T19:39:07.029497388Z
+  completion_sha: ce660d553f782fd223ca091bb3bd2dc394352eb5
