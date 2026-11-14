@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-11T12:17:47.476312683Z
-modified_at: 2026-11-14T06:32:35.909338133Z
+modified_at: 2026-11-14T09:46:53.107727637Z
 req_type: Task
 relationships:
 - rel_type: BlockedBy
@@ -33,6 +33,13 @@ comments:
   modified_at: 2026-11-14T06:32:35.909338133Z
   session_id: 01a1d8b27330
   harness_version: codex-cli 0.167.0
+- id: 01a1d973-e333-7681-aee4-064d98795f86
+  author: joe
+  content: '[advisor 7b 02:52] RULING on PR-3994 CR at 645ca23: BLOCKING (CI red), nothing else: the STORY-2326 launch ratchet fails because the test_exec Command::new site moved to aida-testkit, which the ratchet does not scan, leaving a stale ledger row. Fix: make the ratchet scan aida-testkit (preferred) and move the ledger row to the new path; do not raise any baseline. Verify: cargo test --profile agent -p aida-ci-guards story_2326 plus make check-ci-fast. dell1: touch aida-core/src/lib.rs first; never AIDA_UPDATE_SNAPSHOTS=1.'
+  created_at: 2026-11-14T09:46:53.107727637Z
+  modified_at: 2026-11-14T09:46:53.107727637Z
+  session_id: 01a1d8f3-f948-7072-b174-fa9507ed074b
+  harness_version: 2.1.325 (Claude Code)
 history:
 - id: 01a1ca8b-157a-7c50-9f73-dc13d565bf63
   author: joe
