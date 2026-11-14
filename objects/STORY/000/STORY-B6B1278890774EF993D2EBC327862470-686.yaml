@@ -30,7 +30,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-13T15:54:08.931576118Z
-modified_at: 2026-11-14T08:38:06.030297459Z
+modified_at: 2026-11-14T08:39:41.427977352Z
 req_type: Story
 tags:
 - architecture
@@ -239,6 +239,13 @@ comments:
   created_at: 2026-11-14T07:55:30.115073476Z
   modified_at: 2026-11-14T07:55:30.115073476Z
   session_id: 01a1d8db8aa7
+  harness_version: 2.1.325 (Claude Code)
+- id: 01a1d936-5e73-7943-ab71-28e4c1fad3af
+  author: joe
+  content: '[advisor 7b 01:41] RULING on PR-3956 round-3 CR at 41adcda. BLOCKING, and nothing else: (1) cargo fmt (fast gates red on rustfmt drift); (2) AC ac3d0be9: add tests for the rework dispatch to implementer and the pr_cmd.rs preflight fast branch; (3) AC ac984425: add a test for the skipped-round event. No behavior changes beyond what those tests prove. All other findings are fixed or accepted. The next review is scoped to these three items and approves if they pass. LIGHT gate; on dell1 touch aida-core/src/lib.rs first, never AIDA_UPDATE_SNAPSHOTS=1.'
+  created_at: 2026-11-14T08:39:41.427977352Z
+  modified_at: 2026-11-14T08:39:41.427977352Z
+  session_id: 01a1d8f3-f948-7072-b174-fa9507ed074b
   harness_version: 2.1.325 (Claude Code)
 history:
 - id: 01a1d59e-6b4b-7d10-8aea-02729132bc6f
