@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-12T08:35:37.046532324Z
-modified_at: 2026-11-14T15:16:45.791684655Z
+modified_at: 2026-11-14T15:25:57.031519594Z
 req_type: Bug
 tags:
 - track:integration
@@ -224,6 +224,13 @@ comments:
   content: '[advisor a22 08:24] Track ruling: PR-4038 targets main, so BUG-2531 goes by main train, not by integration promotion (one track per spec).'
   created_at: 2026-11-14T15:16:45.791684655Z
   modified_at: 2026-11-14T15:16:45.791684655Z
+  session_id: 01a1d9ea-4e25-7033-85e8-3648f0195c7c
+  harness_version: 2.1.325 (Claude Code)
+- id: 01a1daaa-4fa7-71e3-9292-3003f4256d88
+  author: joe
+  content: '[advisor a22 08:30] CORRECTION to my 08:24 track ruling: PR-4038''s branch is integration-based (it carries integration-only commits for BUG-2571, STORY-2768, STORY-2775 and BUG-2569). Against main it showed 254 commits, past GitHub''s 250-commit page, which broke ''aida pr train'' opening for every train. Retargeted PR-4038 to base integration; BUG-2531 goes by integration promotion, matching its track:integration tag.'
+  created_at: 2026-11-14T15:25:57.031519594Z
+  modified_at: 2026-11-14T15:25:57.031519594Z
   session_id: 01a1d9ea-4e25-7033-85e8-3648f0195c7c
   harness_version: 2.1.325 (Claude Code)
 history:
