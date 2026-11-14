@@ -641,12 +641,36 @@ description: |
   ### finding-hash:0bdbec3f
 
   No automated test covers the new pointer line in either output (ps_integrate.rs:3240, 3717-3718); a later edit can drop it silently
+
+
+  ## Findings from PR-4013
+  Reviewed sha: 80b64fc42f60980fb8b38597af3bf1d86095f311
+
+  ### finding-hash:1fce0788
+
+  BUG-2543/BUG-2551 timing criteria are unmet and unmeasured: each key still calls review_publication::current (aida-cli-lib/src/gate/review_verdict.rs:1608, git spawns, ~0.15 s/key in the 2026-11-13 profile), so review list and the pull reconcile over ~2,800 keys are still minutes, and the only timing evidence is an #[ignore] bench. No test asserts O(1) git per listing. Do not close both specs as fully met: file the O(1)-git follow-up the 05:32 ruling deferred and re-measure aida pull after landing.
+
+  ### finding-hash:98776888
+
+  Discovery::unchanged (aida-cli-lib/src/gate/ledger/checked.rs, impl Discovery) re-validates each ledger with a path-based std::fs::symlink_metadata(ledger_path.join(name)) after checking the directory handle, not fstatat on the pinned handle. A directory swapped for a symlink to the same files between the two steps passes the stat comparison once, where fresh discovery would refuse. Use fstatat(ledger, name, AT_SYMLINK_NOFOLLOW) on the handle ledger_dirs returned.
+
+  ### finding-hash:97ed1809
+
+  store::read_regular (aida-cli-lib/src/gate/ledger/store.rs:164) checks is_file by path and then opens without O_NONBLOCK, so a FIFO swapped in between still blocks the lossy reader although the doc comment says it never hangs. Open with O_NONBLOCK and check the handle.
+
+  ### finding-hash:3cf67cda
+
+  docs/cli/verify-manual.py defaults to <checkout>/target/debug/aida and ignores CARGO_TARGET_DIR, while the repo dev build (aida dev build, --profile agent) writes elsewhere; a local run can check a stale debug binary, with the printed path the only signal. Honour CARGO_TARGET_DIR or warn when the binary is older than HEAD.
+
+  ### finding-hash:01721c41
+
+  aida-core/src/fs_atomic.rs write_atomic_mode opens its staging file with create+truncate and no O_EXCL/O_NOFOLLOW (work_candidate.rs publish_bytes uses create_new + O_NOFOLLOW for the same files), and its unit test claims a leftover staging file is covered but never creates one. The inserted test also separated the comment "write_atomic replaces content cleanly..." from replaces_content_no_leftovers.
 status: Draft
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-13T20:01:56.623034248Z
-modified_at: 2026-11-14T13:30:51.258658196Z
+modified_at: 2026-11-14T13:53:14.114398823Z
 req_type: Task
 tags:
 - carried-finding:BUG-2543:2a99ebfc
@@ -728,6 +752,11 @@ tags:
 - carried-finding:PR-4007:45e63a87
 - carried-finding:PR-4007:c963d4df
 - carried-finding:PR-4012:9750b6dd
+- carried-finding:PR-4013:01721c41
+- carried-finding:PR-4013:1fce0788
+- carried-finding:PR-4013:3cf67cda
+- carried-finding:PR-4013:97ed1809
+- carried-finding:PR-4013:98776888
 - carried-finding:PR-4015:45085c26
 - carried-finding:PR-4015:74641343
 - carried-finding:PR-4020:276a9aea
@@ -794,6 +823,7 @@ tags:
 - carried-from:PR-4000
 - carried-from:PR-4007
 - carried-from:PR-4012
+- carried-from:PR-4013
 - carried-from:PR-4015
 - carried-from:PR-4020
 - carried-from:PR-4024
@@ -803,12 +833,14 @@ tags:
 - carried-from:STORY-2775
 - carried-from:TASK-3785
 - carried-from:TASK-3791
+- finding-hash:01721c41
 - finding-hash:04ad58d8
 - finding-hash:0bdbec3f
 - finding-hash:0bff30e1
 - finding-hash:0cbc5c63
 - finding-hash:15915e39
 - finding-hash:198d1196
+- finding-hash:1fce0788
 - finding-hash:276a9aea
 - finding-hash:28356795
 - finding-hash:2a257094
@@ -821,6 +853,7 @@ tags:
 - finding-hash:360471e3
 - finding-hash:3961dae5
 - finding-hash:3975f29b
+- finding-hash:3cf67cda
 - finding-hash:3f4b4821
 - finding-hash:45085c26
 - finding-hash:45e63a87
@@ -849,6 +882,8 @@ tags:
 - finding-hash:96ff0aa3
 - finding-hash:9750b6dd
 - finding-hash:97d326dd
+- finding-hash:97ed1809
+- finding-hash:98776888
 - finding-hash:abbae117
 - finding-hash:ac11f20d
 - finding-hash:bf60843e
@@ -900,6 +935,7 @@ tags:
 - from-review:PR-4000
 - from-review:PR-4007
 - from-review:PR-4012
+- from-review:PR-4013
 - from-review:PR-4015
 - from-review:PR-4020
 - from-review:PR-4024
@@ -1169,6 +1205,11 @@ history:
   author: joe
   timestamp: 2026-11-14T13:30:53.125645299Z
   session_id: 01a1da3e87f6
+  changes: []
+- id: 01a1da55-73d3-7590-885d-801040c2a33b
+  author: joe
+  timestamp: 2026-11-14T13:53:15.731630242Z
+  session_id: 01a1da4f454a
   changes: []
 filed_at:
   code_sha: 91fe1e337894199f15365d3f8ecfaf81366f8291
