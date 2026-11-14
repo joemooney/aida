@@ -320,9 +320,16 @@ completion or closing BUG-2447/BUG-2448.
 
 ## Implementation and validation after approval
 
-1. Pin the installed-version auth contract with fake-token tests; implement
+1. Pin the probed executable's SHA-256 and auth contract with fake-token tests; implement
    the approved host reader and access-only delivery in the shared launcher.
    Keep the existing refusal until every new preflight succeeds.
+   Executable admission hashes bytes without executing a host-side version
+   probe. Credential preparation has no independent version-string gate.
+   Keep the implementation body in `prepare_with_io`, injecting the expected
+   digest as an argument so its six ambient reads retain their existing
+   ExecContext ledger identities. Do not regenerate the ledger for this change.
+   Hash on every launch: a device/inode/size/mtime cache can miss a rewrite
+   that preserves those fields, as the binary-pin regression demonstrates.
 2. Test malformed/oversized/symlink/hardlink/FIFO/unsafe-permission inputs,
    expired/too-short lifetimes, unsupported storage, launch rollback and lane
    teardown. Ensure diagnostics, receipts and reports contain no token values.
