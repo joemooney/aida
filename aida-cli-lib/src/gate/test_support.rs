@@ -1,5 +1,6 @@
+// mandate-gate
 // trace:TASK-3784 | ai:codex
-use crate::test_env::EnvVarsGuard;
+use crate::test_env_base::EnvVarsGuard;
 use std::ffi::OsStr;
 
 /// BUG-1618: the fixed identity `AmbientGuard::hermetic` pins `AIDA_USER` to,
@@ -276,4 +277,18 @@ mod tests {
 
         crate::test_ambient::replace(outer);
     }
+}
+
+// Keep gate fixture compatibility exports on the protected floor.
+// trace:TASK-3784 | ai:codex
+pub(crate) mod test_env {
+    pub(crate) use super::{AmbientGuard, HERMETIC_TEST_USER};
+    pub(crate) use crate::test_env_base::{
+        enroll_synthetic_home, env_lock, holds_env_lock, home_fixture_backend,
+        home_fixture_cached_backend, home_fixture_storage, is_path_isolated_process,
+        pin_queue_user, require_path_mutation_scope, run_path_isolated_test,
+        run_path_isolated_test_output, scan_raw_env_writes_in_dir,
+        scan_unisolated_set_current_dir_in_dir, write_project_config_fixture,
+        AgentSessionIsolation, EnvLockGuard, EnvVarGuard, EnvVarsGuard, REQUIRE_BWRAP_LIVE_ENV,
+    };
 }

@@ -1,6 +1,5 @@
 // trace:TASK-3784 | ai:codex
 pub(crate) use crate::agent_registry::test_support::AgentSessionIsolation;
-pub(crate) use crate::gate::test_support::{AmbientGuard, HERMETIC_TEST_USER};
 pub(crate) use aida_testkit::test_env::*;
 use std::ffi::{OsStr, OsString};
 use std::path::Path;
