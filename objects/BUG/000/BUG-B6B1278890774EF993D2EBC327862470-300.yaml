@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-12T11:10:55.183396177Z
-modified_at: 2026-11-13T22:21:29.514507129Z
+modified_at: 2026-11-14T01:59:53.080831697Z
 req_type: Bug
 tags:
 - track:dell1
@@ -94,6 +94,13 @@ comments:
   modified_at: 2026-11-13T21:55:47.489916790Z
   session_id: 01a1d684-8599-70e0-a01c-714f54d2f8de
   harness_version: 2.1.323 (Claude Code)
+- id: 01a1d7c8-55f8-71d1-ae1c-389a062c6d97
+  author: joe
+  content: '18:59 MST advisor: #3926 now at 23389bc = prior approved head f56e5af + two advisor ratchet fixes (490364816fc: AIDA_SWEEP_PARENT in DROPPED_AIDA_KEYS + pr_cmd launch-site count; 23389bc: bug_2535 test re-exec via aida_bin::current_executable_path). Train 10 dropped #3926 for exactly these (lib-1 story_2326, lib-0 resolve_aida_exe ratchet). Delta re-review scoped to those two commits; dell1 targeted ratchets pass.'
+  created_at: 2026-11-14T01:59:53.080831697Z
+  modified_at: 2026-11-14T01:59:53.080831697Z
+  session_id: 01a1d797-2ccf-7771-899a-682081f10504
+  harness_version: 2.1.325 (Claude Code)
 history:
 - id: 01a1d364-5260-7363-a01f-2dc06cc3a4d7
   author: joe
