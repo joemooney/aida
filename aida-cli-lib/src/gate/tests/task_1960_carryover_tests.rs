@@ -1717,3 +1717,39 @@ fn review_watch_current_base_tree_accepts_overlap_and_types_textual_conflict() {
     let error = landed_tree(repo, &conflicting, &approved).unwrap_err();
     assert!(error.is::<NeedsRework>(), "{error:#}");
 }
+
+// AC4: a trusted `freshness_strict_paths` glob raises a fast project to strict
+// for a PR whose own diff (merge-base(trusted base, head)..head) touches it:
+// carry-over is refused, so the review is a full one. A PR that does not touch
+// the glob keeps the fast policy.
+// trace:STORY-2763 | ai:claude
+#[test]
+fn review_watch_strict_path_glob_refuses_carry_over_under_fast_policy() {
+    use crate::gate::review_freshness::{for_head, Freshness};
+    let _env = crate::test_env::EnvVarsGuard::apply(&[("AIDA_CONTAINED", None)]);
+    for (glob, expected) in [("a.*", Freshness::Strict), ("gate/**", Freshness::Fast)] {
+        let (tmp, approved) = fixture();
+        let repo = tmp.path();
+        git(repo, &["checkout", "--quiet", "main"]);
+        write(
+            repo,
+            ".aida/config.toml",
+            &format!("[review]\nfreshness = 'fast'\nfreshness_strict_paths = ['{glob}']\n"),
+        );
+        commit(repo, "operator protects a path");
+        publish_main(repo);
+        git(repo, &["checkout", "--quiet", "pr"]);
+        let h = clean_merge(repo);
+        // b.txt and the config arrive from the base: only the PR's own a.txt
+        // edit is in merge-base(base, head)..head.
+        assert_eq!(for_head(repo, &h), expected, "glob {glob}");
+        let site = CarryOverSite::new(repo, Some("main"));
+        let answer = carry_over_for_refusal(&site, PR, &moved(&approved, &h)).unwrap();
+        if expected == Freshness::Strict {
+            assert_eq!(answer, Err(CarryOverRefusal::StrictPolicy));
+            assert!(proof_event(repo, &h).is_none());
+        } else {
+            assert!(answer.is_ok(), "{answer:?}");
+        }
+    }
+}

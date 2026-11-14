@@ -3736,3 +3736,47 @@ fn review_watch_fast_rounds_count_patch_changes_and_strict_counts_heads() {
         2
     );
 }
+
+// AC2: a textual conflict found in preflight routes to rework, so the
+// reservation exits without launching work or failing a review round; any
+// other preflight refusal still fails the attempt.
+// trace:STORY-2763 | ai:claude
+#[test]
+fn story2763_conflict_preflight_exits_reservation_without_failing_a_round() {
+    let (_temp, store) = fixture();
+    let c = change(1, 1, false);
+    let attempt = dispatch(select(&store, &c, None, 1).unwrap());
+    let launched = std::cell::Cell::new(false);
+    execute_reservation(
+        &store,
+        &c.key(),
+        &attempt.token,
+        |_| Err(crate::gate::review_freshness::NeedsRework.into()),
+        |_| {
+            launched.set(true);
+            Ok(())
+        },
+    )
+    .expect("a routed conflict is not a reviewer failure");
+    assert!(!launched.get(), "no reviewer starts on a conflicting PR");
+    let recorded = &store.load().unwrap().entries[&c.key()].attempts[0];
+    assert_eq!(recorded.phase, Phase::Exited);
+    assert!(recorded
+        .diagnostic
+        .as_deref()
+        .unwrap()
+        .contains("conflicts with the protected base"));
+
+    let (_temp, store) = fixture();
+    let attempt = dispatch(select(&store, &c, None, 1).unwrap());
+    execute_reservation(
+        &store,
+        &c.key(),
+        &attempt.token,
+        |_| anyhow::bail!("other preflight refusal"),
+        |_| Ok(()),
+    )
+    .unwrap_err();
+    let recorded = &store.load().unwrap().entries[&c.key()].attempts[0];
+    assert_eq!(recorded.phase, Phase::Failed);
+}

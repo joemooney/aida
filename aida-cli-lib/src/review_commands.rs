@@ -1172,7 +1172,7 @@ pub(crate) fn handle_review_spec(
     };
     // trace:STORY-2763 | ai:codex
     let prompt = match pr_number {
-        Some(pr) => crate::gate::review_freshness::review_prompt(project_root, pr, &prompt)?
+        Some(pr) => crate::review_launch::review_prompt(project_root, pr, &prompt)?
             .unwrap_or(prompt),
         None => prompt,
     };

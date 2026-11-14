@@ -2208,7 +2208,7 @@ fn child_with_program(
                     && current.overlap == Some(true)
                     && fast_freshness(root, &current)
                 {
-                    crate::gate::review_freshness::route_rework(root, id, &current.head)?;
+                    crate::review_launch::route_rework(root, id, &current.head)?;
                     return Err(crate::gate::review_freshness::NeedsRework.into());
                 }
                 anyhow::ensure!(
@@ -2452,7 +2452,7 @@ pub(crate) fn reviewer_launch_context(root: &Path, id: u64) -> Result<bool> {
         return Err(error);
     }
     if current.head == head && current.overlap == Some(true) && fast_freshness(root, &current) {
-        crate::gate::review_freshness::route_rework(root, id, head)?;
+        crate::review_launch::route_rework(root, id, head)?;
         return Err(crate::gate::review_freshness::NeedsRework.into());
     }
     anyhow::ensure!(
@@ -2985,7 +2985,7 @@ fn watch_change(
         }
         repo.probe(root, &mut change)?;
         if change.overlap == Some(true) {
-            crate::gate::review_freshness::route_rework(root, change.id, &change.head)?;
+            crate::review_launch::route_rework(root, change.id, &change.head)?;
             record_skip(
                 store,
                 &change,

@@ -7812,7 +7812,7 @@ pub(crate) fn preflight_stale_base_check_with_info(
             .status();
         if let Err(e) = landed {
             if e.is::<crate::gate::review_freshness::NeedsRework>() {
-                crate::gate::review_freshness::route_rework(project_root, n, head.trim())?;
+                crate::review_launch::route_rework(project_root, n, head.trim())?;
             }
             return Err(e);
         }

@@ -293,6 +293,8 @@ mod review_waiting;
 mod sanitized_intake;
 // trace:TASK-1993 | ai:codex
 mod review_implementer_gate;
+// trace:STORY-2763 | ai:claude
+mod review_launch;
 mod review_watch;
 mod role;
 mod runaway_seats;

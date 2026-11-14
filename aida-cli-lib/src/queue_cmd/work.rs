@@ -5164,7 +5164,7 @@ pub(crate) fn handle_queue_work(
         // children with AIDA_REVIEW_VERDICT_FILE already set.
         // trace:STORY-2763 | ai:codex
         if let Some(root) = project_root_for_config.as_deref() {
-            crate::gate::review_freshness::compose_launch_prompt(
+            crate::review_launch::compose_launch_prompt(
                 root,
                 &role,
                 plan.review_target.map(|(_, pr)| pr),

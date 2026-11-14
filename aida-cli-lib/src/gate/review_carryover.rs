@@ -393,15 +393,22 @@ fn proved_for_refusal(
     if super::review_freshness::for_head(site.repo, head_sha)
         == super::review_freshness::Freshness::Strict
     {
+        // The refusal stays fail-closed either way; an unaudited refusal is
+        // surfaced rather than silently dropped.
+        // trace:STORY-2763 | ai:claude
         if site.append {
-            let _ = super::review_freshness::record(
+            if let Err(error) = super::review_freshness::record(
                 site.repo,
                 pr,
                 head_sha,
                 super::review_freshness::Freshness::Strict,
                 "re-review-required",
                 serde_json::json!({"approved_sha": reviewed_sha}),
-            );
+            ) {
+                eprintln!(
+                    "warning: PR-{pr}: strict re-review requirement could not be recorded on the gate ledger: {error:#}"
+                );
+            }
         }
         return Some(Err(CarryOverRefusal::StrictPolicy));
     }
