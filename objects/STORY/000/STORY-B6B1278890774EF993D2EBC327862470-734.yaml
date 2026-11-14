@@ -1,0 +1,33 @@
+id: 01a1da33-f3dc-7aa1-9444-2ccce7be974d
+spec_id: STORY-b6b1278890774ef993d2ebc327862470-734
+agreed_id: STORY-2811
+title: 'Review PR-4025: [AI:claude] fix(ci): pull requests into integration run CI (BUG-2576)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `(no-sess`) for branch `bug-2576-integration-pr-ci`.
+
+  - PR: <https://github.com/joemooney/aida/pull/4025>
+  - Branch: `bug-2576-integration-pr-ci` → `integration`
+
+  ## Covers
+
+  - BUG-2576
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 4025` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-14T13:16:40.284633363Z
+modified_at: 2026-11-14T13:16:40.284633363Z
+req_type: Story
+filed_at:
+  code_sha: 2682c4c4fe5a42194a6f2eca01940008e3a41776
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 166920a3bf8
+  vendor: claude
