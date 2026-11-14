@@ -819,14 +819,29 @@ pub(crate) fn list(q: &Queue, a: &ShellListArgs, out: &mut dyn Write) -> Result<
         .map(|r| r.submit_seats)
         .unwrap_or_else(ds::default_submit_seats);
     let probes = ds::attribution::Probes::live();
-    list_with(q, a, out, &|job| {
-        claim_forecast(ds::attribution::verdict(
+    // The verdict probes pids and reads the runner's seats as the runner
+    // does, which only works where the runner can be observed.
+    let blind = forecast_blind(&q.runner_status());
+    list_with(q, a, out, &|job| match &blind {
+        Some(unknown) => unknown.clone(),
+        None => claim_forecast(ds::attribution::verdict(
             job,
             &seats,
             &probes,
             chrono::Utc::now(),
-        ))
+        )),
     })
+}
+
+/// The forecast to print when this process cannot observe the runner (a
+/// sandboxed seat sees neither the runner nor a submitter's process, so its
+/// own verdict would differ from the runner's): `None` when it can.
+// trace:BUG-2579 | ai:claude
+pub(crate) fn forecast_blind(runner: &ds::RunnerStatus) -> Option<String> {
+    match runner {
+        ds::RunnerStatus::Unknown(why) => Some(format!("claim unknown: {why}")),
+        _ => None,
+    }
 }
 
 /// What the runner would do with a queued job if it claimed it now.

@@ -2392,9 +2392,11 @@ fn bug_2579_a_rotated_seat_owns_its_predecessors_jobs_and_another_handle_does_no
         }
     ));
 
-    // `cancel` applies the same rule before it reaches the runner. No runner
-    // is serving this queue, so the rotated seat's cancel gets past the
-    // ownership check and stops at the socket instead.
+    // `cancel` applies the same rule before it reaches the runner: another
+    // handle is refused, and the rotated seat's request is accepted by the
+    // runner's socket and the job never runs.
+    #[cfg(unix)]
+    let server = socket::serve(&f.q, probes(&[], &[], &[]), system_clock()).expect("serve");
     let refused = cancel(
         &f.q,
         &queued.id,
@@ -2412,19 +2414,28 @@ fn bug_2579_a_rotated_seat_owns_its_predecessors_jobs_and_another_handle_does_no
         refused.contains("not this session or its seat"),
         "{refused}"
     );
-    let rotated_cancel = cancel(
-        &f.q,
-        &queued.id,
-        &Caller {
-            session: Some("sess-new"),
-            grant: Some(&rotated),
-            main: Some(f.root()),
-        },
-        false,
-        &mut Vec::new(),
-    );
-    if let Err(e) = rotated_cancel {
-        assert!(!format!("{e:#}").contains("not this session"), "{e:#}");
+    assert_eq!(f.state(&queued.id).state, JobState::Queued);
+    #[cfg(unix)]
+    {
+        let mut said = Vec::new();
+        cancel(
+            &f.q,
+            &queued.id,
+            &Caller {
+                session: Some("sess-new"),
+                grant: Some(&rotated),
+                main: Some(f.root()),
+            },
+            false,
+            &mut said,
+        )
+        .expect("the rotated seat's cancel is accepted");
+        let said = String::from_utf8(said).unwrap();
+        assert!(said.contains("cancel requested"), "{said}");
+        drop(server);
+        run(&f.q, &f.cfg(probes(&[old.clone()], &[], &[])));
+        let s = f.state(&queued.id);
+        assert_eq!((s.state, s.rc), (JobState::Cancelled, Some(RC_CANCELLED)));
     }
 }
 
@@ -2527,6 +2538,40 @@ fn bug_2579_list_shows_whether_each_queued_job_will_run() {
         "{text}"
     );
     assert!(!line(&done.id).contains('['), "{text}");
+
+    // From a sandbox the runner cannot be observed, so the same verdict
+    // would be this process's, not the runner's: the list says unknown.
+    let blind = crate::deputy_shell_cmd::forecast_blind(&RunnerStatus::Unknown(
+        "cannot see host processes from this sandbox",
+    ))
+    .expect("an unobservable runner has no forecast");
+    assert_eq!(
+        blind,
+        "claim unknown: cannot see host processes from this sandbox"
+    );
+    for seen in [RunnerStatus::NotRunning, RunnerStatus::Legacy(4242)] {
+        assert_eq!(crate::deputy_shell_cmd::forecast_blind(&seen), None);
+    }
+    let mut out = Vec::new();
+    crate::deputy_shell_cmd::list_with(
+        &f.q,
+        &crate::deputy_shell_cmd::ShellListArgs {
+            name: "t".into(),
+            state: None,
+            limit: 50,
+        },
+        &mut out,
+        &|_| blind.clone(),
+    )
+    .unwrap();
+    let text = String::from_utf8(out).unwrap();
+    for id in [&runs.id, &stale.id] {
+        let row = text.lines().find(|l| l.contains(id.as_str())).unwrap();
+        assert!(
+            row.ends_with("[claim unknown: cannot see host processes from this sandbox]"),
+            "{text}"
+        );
+    }
 }
 
 /// BUG-2579: the rotation handoff names the outgoing session's queued jobs.
