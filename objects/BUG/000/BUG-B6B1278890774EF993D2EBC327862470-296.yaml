@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-12T08:35:37.046532324Z
-modified_at: 2026-11-14T17:35:31.049966496Z
+modified_at: 2026-11-14T18:09:39.211263798Z
 req_type: Bug
 tags:
 - track:integration
@@ -247,6 +247,13 @@ comments:
   modified_at: 2026-11-14T17:35:31.049966496Z
   session_id: 01a1dab1-9447-7d22-b5ff-0c9084e122ea
   harness_version: 2.1.325 (Claude Code)
+- id: 01a1db40-2f8b-7031-ba15-bc761a0da817
+  author: dirtlab
+  content: Commit 723df3554f references this requirement
+  created_at: 2026-11-14T18:09:39.211263798Z
+  modified_at: 2026-11-14T18:09:39.211263798Z
+  session_id: 01a1db23f6f1
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1cee6-975b-7d40-8689-d35e1f109d99
   author: joe
