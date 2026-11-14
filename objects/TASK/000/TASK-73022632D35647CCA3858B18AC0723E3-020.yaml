@@ -1,5 +1,6 @@
 id: 01a1dbec-d086-7ab2-92c2-4b66067fb057
 spec_id: TASK-73022632d35647cca3858b18ac0723e3-020
+agreed_id: TASK-3122
 title: task_1222_ended_clone_requires_origin_coverage_and_closed_pr fails inside the lane job sandbox on unmodified main
 description: |
   `aida lane job run -- cargo test --profile agent -p aida-cli-lib --lib -- task_1222_ended_clone_requires_origin_coverage` fails on main at d5f90aedd3 with no local changes (job j20261114T210749786-56-0), at the final `remove_with` of the seat clone: "mail retention refused ...: the fresh writer-admission scan could not verify every mail writer". The writer-admission scan cannot be trusted inside the lane sandbox, so a contained implementer cannot get a green run of aida-cli-lib/src/worktree_lifecycle_gc.rs tests. Either the test should inject the admission verdict or the lane sandbox should satisfy the scan.
@@ -17,6 +18,11 @@ tags:
 - from-implementer:BUG-2587
 - kind:bug-spotted
 - severity:minor
+history:
+- id: 01a1dc01-cb10-7712-bd85-1df9a58bab3c
+  author: joe
+  timestamp: 2026-11-14T21:41:07.472363350Z
+  changes: []
 filed_at:
   code_sha: d5a6c3a62c8c2fc22ff68d224530cd2f88a05c34
   branch: bug-b6b1278890774ef993d2ebc327862470-352

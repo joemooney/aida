@@ -1,5 +1,6 @@
 id: 01a1dbde-d70f-7fd0-834d-c6dd9ca7041d
 spec_id: TASK-73022632d35647cca3858b18ac0723e3-017
+agreed_id: TASK-3124
 title: Lowering [mandate] max_ttl_hours invalidates live mandates longer than the new cap
 description: |
   Every load re-validates a mandate record against the cap (gate/mandate.rs record_problem). With the cap now configurable, a 72h mandate minted under `max_ttl_hours = 72` is ignored with a warning ("its lifetime exceeds the 24h cap") as soon as the key is removed or lowered, or when a command runs in a project whose config lowers it. That is fail-closed and covered by a test, but an operator editing the config mid-mandate loses the mandate without a prompt. Consider a line in `aida mandate status` or doctor.
@@ -17,6 +18,11 @@ tags:
 - from-implementer:STORY-2828
 - kind:design-choice
 - severity:minor
+history:
+- id: 01a1dc01-cb5c-7c82-8140-2e8ab8d98db5
+  author: joe
+  timestamp: 2026-11-14T21:41:07.548146528Z
+  changes: []
 filed_at:
   code_sha: 3484adef6ebc25d80a865cb1d1956cff3c31c8d6
   branch: story-b6b1278890774ef993d2ebc327862470-751

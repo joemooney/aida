@@ -1,5 +1,6 @@
 id: 01a1dbdd-fde4-7f52-a6e4-4bbaf391bdfa
 spec_id: STORY-73022632d35647cca3858b18ac0723e3-019
+agreed_id: STORY-2368
 title: 'Review PR-4060: [AI:claude] feat(gate): global-config knobs for the mandate and inline-grant lifetime caps (Refs STORY-2828)'
 description: |
   Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a1dbcb`) for branch `story-b6b1278890774ef993d2ebc327862470-751`.
@@ -52,6 +53,10 @@ history:
   timestamp: 2026-11-14T21:02:22.134143838Z
   session_id: 01a1dbcbb140
   harness_version: 2.1.319 (Claude Code)
+  changes: []
+- id: 01a1dc01-ce7b-7a72-8cad-bf8596dc0151
+  author: joe
+  timestamp: 2026-11-14T21:41:08.347692261Z
   changes: []
 filed_at:
   code_sha: 3484adef6ebc25d80a865cb1d1956cff3c31c8d6

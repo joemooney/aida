@@ -1,5 +1,6 @@
 id: 01a1dbec-c628-7102-8cc5-0789380ddba3
 spec_id: TASK-73022632d35647cca3858b18ac0723e3-019
+agreed_id: TASK-3121
 title: 'Lane overlay gc cannot delete an overlay: the kernel''s mode-000 work/work stops remove_dir_all and the error is dropped'
 description: |
   aida-cli-lib/src/seat_target_overlay.rs `gc` (about line 549) removes a dead lane overlay with `remove_any` -> `std::fs::remove_dir_all` and ignores the result. Overlayfs leaves `<overlay>/work/work` at mode 000, so the recursive removal fails with EACCES every time and nothing is reclaimed. On dell1 on 2026-11-14 target/lane-overlay held 374 directories against about 47 session leases.
@@ -20,6 +21,11 @@ tags:
 - from-implementer:BUG-2587
 - kind:bug-spotted
 - severity:minor
+history:
+- id: 01a1dc01-caf7-7111-844d-b1029d116e40
+  author: joe
+  timestamp: 2026-11-14T21:41:07.447580725Z
+  changes: []
 filed_at:
   code_sha: d5a6c3a62c8c2fc22ff68d224530cd2f88a05c34
   branch: bug-b6b1278890774ef993d2ebc327862470-352

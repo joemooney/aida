@@ -1,5 +1,6 @@
 id: 01a1dbed-360b-7ab2-8a6b-94f5447a63b7
 spec_id: STORY-73022632d35647cca3858b18ac0723e3-020
+agreed_id: STORY-2367
 title: 'Review PR-4062: [AI:claude] fix(worktree): gc reclaims detached-HEAD worktrees and ownerless per-seat build output (BUG-2587)'
 description: |
   Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a1dbd7`) for branch `bug-b6b1278890774ef993d2ebc327862470-352`.
@@ -35,6 +36,10 @@ history:
   timestamp: 2026-11-14T21:18:42.809406869Z
   session_id: 01a1dbd7ade0
   harness_version: 2.1.319 (Claude Code)
+  changes: []
+- id: 01a1dc01-ce09-7a71-a288-00882e9db41a
+  author: joe
+  timestamp: 2026-11-14T21:41:08.233522751Z
   changes: []
 filed_at:
   code_sha: d5a6c3a62c8c2fc22ff68d224530cd2f88a05c34
