@@ -20,7 +20,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-13T18:06:55.227979618Z
-modified_at: 2026-11-14T11:15:52.672470694Z
+modified_at: 2026-11-14T11:55:05.146454387Z
 req_type: Story
 tags:
 - config
@@ -80,6 +80,13 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida edit --status`. It was punted on: blocked-dependency: Seat baseline 60823a3cb0 lacks the STORY-2768 landing reconciler (no land command/module/registration) and an integration PR merge/promotion-cut gate. integration_cmd.rs only implements tags; current integration protocol is manual. AC2/3/4 require these boundaries and durable constituent merged-head evidence, so enabling a review bypass here cannot satisfy the promotion invariant. Store records later land work (PRs 3959, 3973, 3981, 3992) absent from this checkout. Host should rebase/relaunch on the integration baseline containing the landing owner and establish the promotion-cut/ship evidence seam. Also the operator-supplied /home/joe/ai/aida/.codegraph/proxy-state/bin/codegraph is absent; doctor reports missing client.. No triage reason was given.'
   created_at: 2026-11-14T10:25:53.953106518Z
   modified_at: 2026-11-14T10:25:53.953106518Z
+  session_id: 01a1d8f3-f948-7072-b174-fa9507ed074b
+  harness_version: 2.1.325 (Claude Code)
+- id: 01a1d9e9-423a-77e3-b2d8-0fb15a4b79c5
+  author: joe
+  content: '[advisor 7b 04:55] RULING on slice-1 deviations: (1) --since ACCEPTED: promotions are squashed, so git cannot derive the last promotion boundary; the advisor passes --since <integration sha the last promotion was cut from>; a --since off the tip''s first-parent line errors. The fallback without --since is allowed but must print that it guessed. (2) Slice 2 (STORY-2805) records the boundary automatically: the promotion squash commit carries an ''Integration-Head: <sha>'' trailer and the check reads the newest one on main''s first-parent line; the cut tool writes it. (3) [integration] read from the DEFAULT BRANCH trusted config: ACCEPTED (BUG-1723 config-trust; review bypass and shell checks must not come from a branch-local file).'
+  created_at: 2026-11-14T11:55:05.146454387Z
+  modified_at: 2026-11-14T11:55:05.146454387Z
   session_id: 01a1d8f3-f948-7072-b174-fa9507ed074b
   harness_version: 2.1.325 (Claude Code)
 history:
