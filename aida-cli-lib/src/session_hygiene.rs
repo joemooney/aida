@@ -336,8 +336,26 @@ fn reclaim(
 /// `aida session hygiene`.
 // trace:STORY-2351 | ai:claude
 pub(crate) fn run(opts: &HygieneOptions) -> Result<()> {
-    let started = Instant::now();
     let project_root = crate::main_worktree_root_from(&crate::find_project_root()?);
+    let outcome = pass(&project_root, opts);
+    print!("{}", render_summary(&outcome, opts.dry_run));
+    let items = keep_items(&outcome, opts.idle_hours);
+    if items.is_empty() {
+        return Ok(());
+    }
+    for item in &items {
+        println!("KEEP  {} — {}", item.what, item.act);
+    }
+    // The scheduler routes the child's last stderr line; the error is it.
+    anyhow::bail!("{}", route_line(&items))
+}
+
+/// One hygiene pass over `project_root`: reap, agent gc, reclaim. Reports
+/// nothing; `aida land run` uses it as the first part of its housekeeping.
+// trace:STORY-2351 STORY-2768 | ai:claude
+pub(crate) fn pass(project_root: &Path, opts: &HygieneOptions) -> HygieneOutcome {
+    let started = Instant::now();
+    let project_root = project_root.to_path_buf();
     let mut outcome = HygieneOutcome::default();
 
     if opts.dry_run {
@@ -367,17 +385,7 @@ pub(crate) fn run(opts: &HygieneOptions) -> Result<()> {
     } else {
         reclaim(&project_root, opts, started + SOFT_BUDGET, &mut outcome);
     }
-
-    print!("{}", render_summary(&outcome, opts.dry_run));
-    let items = keep_items(&outcome, opts.idle_hours);
-    if items.is_empty() {
-        return Ok(());
-    }
-    for item in &items {
-        println!("KEEP  {} — {}", item.what, item.act);
-    }
-    // The scheduler routes the child's last stderr line; the error is it.
-    anyhow::bail!("{}", route_line(&items))
+    outcome
 }
 
 #[cfg(test)]

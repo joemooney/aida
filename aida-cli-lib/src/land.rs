@@ -12,6 +12,8 @@ use anyhow::{Context, Result};
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 
+#[path = "land_housekeeping.rs"]
+pub(crate) mod housekeeping;
 #[path = "land_args.rs"]
 pub(crate) mod land_args;
 #[path = "land_run.rs"]

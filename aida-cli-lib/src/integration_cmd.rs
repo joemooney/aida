@@ -160,7 +160,7 @@ pub(crate) fn plan_tag_changes<'a>(
 /// Every stored spec, read from the store itself: no list query, so no
 /// role scope, focus or status filter can hide a landed or tagged spec.
 // trace:STORY-2737 | ai:claude
-fn load_store(root: &Path) -> Result<aida_core::RequirementsStore> {
+pub(crate) fn load_store(root: &Path) -> Result<aida_core::RequirementsStore> {
     let path = aida_core::store_locate::detect_distributed_store_from(root)
         .unwrap_or_else(|| root.join(".aida-store"));
     aida_core::Storage::new(path)

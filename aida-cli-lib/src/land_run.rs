@@ -22,6 +22,9 @@ const BOOK: &str = ".aida/cache/land-children.json";
 const RUN_LOCK: &str = ".aida/cache/land-run.lock";
 const LOG_DIR: &str = ".aida/land/logs";
 const TRAIN_DIR: &str = ".aida/train";
+/// How often a running `aida land run` does its housekeeping step. One pass
+/// (`--once`, `--dry-run`) always does it.
+const HOUSEKEEPING_SECS: u64 = 600;
 /// The most changes one train takes.
 const TRAIN_MAX: usize = 10;
 /// A train older than this is reported. It is never stopped: stopping it
@@ -745,6 +748,64 @@ impl Live {
     }
 }
 
+// trace:STORY-2768 | ai:claude
+impl super::housekeeping::Keeper for Live {
+    fn salvage(&mut self, lane: &super::housekeeping::DeadLane) -> Result<Option<PathBuf>> {
+        crate::worktree_gc::salvage_worktree_patch(
+            &self.root,
+            lane.spec.as_deref().unwrap_or(&lane.branch),
+            lane.agent.as_deref(),
+            &lane.worktree,
+        )
+    }
+
+    fn note(&mut self, spec: &str, text: &str) -> Result<()> {
+        self.finish(&strings(&["comment", "add", spec, text]), 60)
+    }
+
+    fn release(&mut self, lane: &super::housekeeping::DeadLane) -> Result<()> {
+        crate::session_reap::release_lease_files(&self.root, &lane.lease);
+        Ok(())
+    }
+
+    fn reset(&mut self, spec: &str) -> Result<()> {
+        self.finish(
+            &strings(&["queue", "rework", spec, "--for", "implementer"]),
+            60,
+        )
+    }
+}
+
+/// The housekeeping step: the hygiene pass (reap, agent gc, reclaim), then
+/// dead lanes' work is saved and orphaned specs go back to the queue.
+// trace:STORY-2768 | ai:claude
+fn housekeep(pass: &super::Pass, live: &mut Live, dry_run: bool) -> Vec<String> {
+    use super::housekeeping;
+    let hygiene = crate::session_hygiene::pass(
+        &pass.root,
+        &crate::session_hygiene::HygieneOptions {
+            dry_run,
+            idle_hours: crate::session_hygiene::DEFAULT_IDLE_HOURS,
+        },
+    );
+    let mut notes = vec![format!(
+        "housekeeping: {} dead session(s) reaped, {} cache(s) reclaimed{}",
+        hygiene.reap.len(),
+        hygiene.reclaimed.len(),
+        if dry_run { " (dry run)" } else { "" }
+    )];
+    match housekeeping::survey(&pass.root, &pass.foreign_lanes) {
+        Ok((lanes, orphans)) => {
+            let steps = housekeeping::plan(lanes, orphans, &pass.changes);
+            notes.extend(housekeeping::keep(&steps, live, dry_run));
+        }
+        Err(error) => notes.push(format!(
+            "housekeeping: dead lanes and orphaned specs could not be read; nothing was salvaged or reset: {error:#}"
+        )),
+    }
+    notes
+}
+
 /// The first lines of a child's log: when it was launched, for which
 /// changes, against what, and with which command.
 fn log_header(
@@ -997,6 +1058,7 @@ pub(super) fn run(start: &Path, args: &super::land_args::RunArgs) -> Result<()> 
     // record is on disk: a pass reading the older one would start a second
     // reviewer beside a live one.
     let mut unsaved: Option<Book> = None;
+    let mut housekept: Option<std::time::Instant> = None;
     loop {
         acts.reap();
         if let Some(book) = unsaved.take() {
@@ -1014,6 +1076,11 @@ pub(super) fn run(start: &Path, args: &super::land_args::RunArgs) -> Result<()> 
             Ok(mut pass) => {
                 acts.gitlab = pass.gitlab;
                 let mut notes = std::mem::take(&mut pass.notes);
+                // After the changes are read, before children are counted.
+                if housekept.is_none_or(|at| at.elapsed().as_secs() >= HOUSEKEEPING_SECS) {
+                    notes.extend(housekeep(&pass, &mut acts, args.dry_run));
+                    housekept = Some(std::time::Instant::now());
+                }
                 notes.extend(supervise(
                     &pass.changes,
                     &mut pass.book,
