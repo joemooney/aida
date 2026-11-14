@@ -23,7 +23,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-12T19:11:56.371806442Z
-modified_at: 2026-11-14T06:42:49.840801155Z
+modified_at: 2026-11-14T07:26:15.935926339Z
 req_type: Story
 tags:
 - operator-held
@@ -329,6 +329,13 @@ comments:
   content: '[advisor 114 23:39] 60-min gap #2: main unmoved since 22:38 (1801b34, #3926). Train 14 (#3979 + #3924) went red on lib-1 (bug_2451_queue_workspace_dates_confirmed_merged_retained_branch; main green, #3924 green alone) and is retrying as #3993; train 15 (#3988 + others if approved) is queued behind it. Promotion 8 (#3992) is in review and canary.'
   created_at: 2026-11-14T06:38:44.443210676Z
   modified_at: 2026-11-14T06:38:44.443210676Z
+  session_id: 01a1d852-16ef-7973-bdde-ac3f274752a2
+  harness_version: 2.1.325 (Claude Code)
+- id: 01a1d8f3-257f-7551-b2c8-addd1c8a596a
+  author: joe
+  content: '[advisor 114 00:26] Gap #2 closed: #3979 landed 00:25 (60823a3), 1h47m after 22:38. #3924 ejected from train 14 (full-suite bug_2451 failure, fast-tier PR CI missed it); rework on dell1.'
+  created_at: 2026-11-14T07:26:15.935926339Z
+  modified_at: 2026-11-14T07:26:15.935926339Z
   session_id: 01a1d852-16ef-7973-bdde-ac3f274752a2
   harness_version: 2.1.325 (Claude Code)
 history:
