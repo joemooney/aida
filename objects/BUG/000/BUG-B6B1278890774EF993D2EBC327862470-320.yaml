@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-13T11:27:32.307973679Z
-modified_at: 2026-11-14T04:56:57.873675680Z
+modified_at: 2026-11-14T07:49:27.788834886Z
 req_type: Bug
 tags:
 - track:integration
@@ -26,6 +26,14 @@ comments:
   created_at: 2026-11-14T01:54:00.331299717Z
   modified_at: 2026-11-14T01:54:00.331299717Z
   session_id: 01a1d797-2ccf-7771-899a-682081f10504
+  harness_version: 2.1.325 (Claude Code)
+- id: 01a1d908-626c-74c1-9524-e1a173cab99f
+  author: joe
+  content: |
+    PR #4003 (base integration, head a0f423599b3), review before merge. Counter, binding and the enroll-home authority setting are written with an explicit 0644 through fs_atomic::write_atomic_mode; the reader is unchanged. dell1 green under umask 022 and 002 for the touched areas. Left out on purpose: about 50 aida-core unit tests still fail under an ambient umask of 002 because their fixtures write node.toml / the allocation setting with std::fs::write, or because git init made .git group-writable and the transport private-directory check refuses it by design. Filed separately.
+  created_at: 2026-11-14T07:49:27.788834886Z
+  modified_at: 2026-11-14T07:49:27.788834886Z
+  session_id: 01a1d874-d40d-7d13-8d29-0368fcee960d
   harness_version: 2.1.325 (Claude Code)
 history:
 - id: 01a1d79c-d878-7a93-841f-a8f2cdfb5b28
