@@ -501,12 +501,20 @@ description: |
   ### finding-hash:9750b6dd
 
   aida-core/src/test_umask.rs:19 fixture_permissions_are_private_under_ambient_group_writable_umask never establishes a group-writable ambient umask; under CI ambient 022 it passes with the init_array initializer deleted, so it cannot catch a regression off dell1. Spawn the test binary as a child with umask 002 (pre_exec or the isolated() re-exec pattern) and assert the child sees 022 (e.g. /proc/self/status Umask) and creates 0644 files.
+
+
+  ## Findings from BUG-2573
+  Reviewed sha: 36ccaaeddc307d956a6032025d4aad19d3f2fa6d
+
+  ### finding-hash:9750b6dd
+
+  aida-core/src/test_umask.rs:19 fixture_permissions_are_private_under_ambient_group_writable_umask never establishes a group-writable ambient umask; under CI ambient 022 it passes with the init_array initializer deleted, so it cannot catch a regression off dell1. Spawn the test binary as a child with umask 002 (pre_exec or the isolated() re-exec pattern) and assert the child sees 022 (e.g. /proc/self/status Umask) and creates 0644 files.
 status: Draft
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-13T20:01:56.623034248Z
-modified_at: 2026-11-14T10:19:12.720043598Z
+modified_at: 2026-11-14T10:19:27.716259880Z
 req_type: Task
 tags:
 - carried-finding:BUG-2543:2a99ebfc
@@ -528,6 +536,7 @@ tags:
 - carried-finding:BUG-2570:76a786ef
 - carried-finding:BUG-2570:7bbbf9a9
 - carried-finding:BUG-2570:dfed3eb6
+- carried-finding:BUG-2573:9750b6dd
 - carried-finding:PR-3921:0cbc5c63
 - carried-finding:PR-3924:3975f29b
 - carried-finding:PR-3924:79f360e4
@@ -603,6 +612,7 @@ tags:
 - carried-from:BUG-2560
 - carried-from:BUG-2563
 - carried-from:BUG-2570
+- carried-from:BUG-2573
 - carried-from:PR-3921
 - carried-from:PR-3924
 - carried-from:PR-3938
@@ -686,6 +696,7 @@ tags:
 - from-review:BUG-2560
 - from-review:BUG-2563
 - from-review:BUG-2570
+- from-review:BUG-2573
 - from-review:PR-3921
 - from-review:PR-3924
 - from-review:PR-3938
@@ -916,6 +927,11 @@ history:
 - id: 01a1d991-81d0-7271-9629-1e54105b7107
   author: joe
   timestamp: 2026-11-14T10:19:14.256097303Z
+  session_id: 01a1d98f8520
+  changes: []
+- id: 01a1d991-bd10-77c3-87cf-14fc844e4c26
+  author: joe
+  timestamp: 2026-11-14T10:19:29.424443492Z
   session_id: 01a1d98f8520
   changes: []
 filed_at:
