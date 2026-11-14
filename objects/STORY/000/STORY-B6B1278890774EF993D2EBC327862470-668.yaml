@@ -18,7 +18,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-13T00:35:57.525111678Z
-modified_at: 2026-11-14T13:51:15.244360048Z
+modified_at: 2026-11-14T14:02:21.267383436Z
 req_type: Story
 tags:
 - track:integration
@@ -126,6 +126,13 @@ comments:
   modified_at: 2026-11-14T13:51:15.244360048Z
   session_id: 01a1da49f50e
   harness_version: 2.1.319 (Claude Code)
+- id: 01a1da5d-c6d3-7d52-b399-d8d20f66514c
+  author: joe
+  content: '[advisor a22 07:04] Reviewer note for PR-3950 at 548d63d: the rework''s fixes are folded into merge commit 506994b (a merge of main into the branch). Review the diff against integration (81 files, +1449/-57), not commit by commit. Check both blocking findings from the 059e1b8 CR: the stale-seat path on the --bg relink, and the AC6 template master at aida-core/templates/.aida/discipline/standing-orders/integration.md with its tracked mirror.'
+  created_at: 2026-11-14T14:02:21.267383436Z
+  modified_at: 2026-11-14T14:02:21.267383436Z
+  session_id: 01a1d9ea-4e25-7033-85e8-3648f0195c7c
+  harness_version: 2.1.325 (Claude Code)
 history:
 - id: 01a1d404-5b69-7883-a178-72d22e485802
   author: joe
