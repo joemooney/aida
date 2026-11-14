@@ -295,9 +295,10 @@ pub(crate) fn review_prompt(root: &Path, pr: u64, prompt: &str) -> Result<Option
 }
 
 /// Persist the review diff under the project's runtime `.aida/` directory,
-/// which reviewer lanes already use (verdict files live there). Named by
-/// baseline and landed tree and published atomically, so concurrent launches
-/// for the same evidence agree. Returns (path, size in bytes).
+/// which reviewer lanes already use (verdict files live there). Git writes
+/// the file itself (`--output`), so no AIDA store writer is involved; the
+/// name is keyed by PR, baseline and landed tree, so a rewrite for the same
+/// evidence is byte-identical. Returns (path, size in bytes).
 // trace:STORY-2763 | ai:claude
 pub(crate) fn write_evidence(
     root: &Path,
@@ -305,34 +306,23 @@ pub(crate) fn write_evidence(
     baseline: &str,
     tree: &str,
 ) -> Result<(std::path::PathBuf, u64)> {
-    let dir = root.join(".aida").join("review-evidence");
-    std::fs::create_dir_all(&dir).context("review evidence directory unavailable")?;
-    let name = format!("PR-{pr}-{baseline}-{tree}.diff");
-    let partial = dir.join(format!(".{name}.{}.partial", std::process::id()));
-    let file = std::fs::File::create(&partial).context("review evidence file unavailable")?;
+    let path = root
+        .join(".aida")
+        .join(format!("review-evidence-PR-{pr}-{baseline}-{tree}.diff"));
     let output = aida_core::git_ops::host_git_command(root)
-        .args([
-            "diff",
-            "--no-ext-diff",
-            "--no-textconv",
-            "--no-renames",
-            "--binary",
-            baseline,
-            tree,
-            "--",
-        ])
-        .stdout(file)
+        .arg("diff")
+        .args(["--no-ext-diff", "--no-textconv", "--no-renames", "--binary"])
+        .arg(format!("--output={}", path.display()))
+        .args([baseline, tree, "--"])
         .output()?;
-    if !output.status.success() {
-        let _ = std::fs::remove_file(&partial);
-        anyhow::bail!(
-            "git diff failed: {}",
-            String::from_utf8_lossy(&output.stderr)
-        );
-    }
-    let path = dir.join(name);
-    std::fs::rename(&partial, &path).context("review evidence file could not be published")?;
-    let bytes = std::fs::metadata(&path)?.len();
+    anyhow::ensure!(
+        output.status.success(),
+        "review evidence could not be written: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let bytes = std::fs::metadata(&path)
+        .context("review evidence file missing")?
+        .len();
     Ok((path, bytes))
 }
 
@@ -568,7 +558,15 @@ mod tests {
                 .unwrap_or_else(|e| panic!("base {base} must launch: {e:#}"));
             assert_eq!(prompt, "/aida-review --pr 42", "base {base}");
         }
-        assert!(!root.join(".aida/review-evidence").exists());
+        let leaked = std::fs::read_dir(root.join(".aida"))
+            .unwrap()
+            .filter_map(Result::ok)
+            .any(|e| {
+                e.file_name()
+                    .to_string_lossy()
+                    .starts_with("review-evidence-")
+            });
+        assert!(!leaked, "ordinary prompt writes no landed-tree evidence");
     }
 
     // P2: a landed-tree diff over MAX_ARG_STRLEN (128 KiB) launches, carried
@@ -596,7 +594,12 @@ mod tests {
         );
         assert!(!prompt.contains("large reviewed line"));
         let evidence = evidence_path(&prompt);
-        assert!(evidence.starts_with(root.join(".aida/review-evidence")));
+        assert_eq!(evidence.parent(), Some(root.join(".aida").as_path()));
+        assert!(evidence
+            .file_name()
+            .unwrap()
+            .to_string_lossy()
+            .starts_with("review-evidence-PR-42-"));
         let diff = std::fs::read_to_string(&evidence).unwrap();
         assert!(diff.len() > 128 * 1024);
         assert!(diff.contains("large reviewed line 007999"));
