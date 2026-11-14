@@ -1369,6 +1369,14 @@ pub(crate) fn db_sync_local_window(
         // successful query establishes this state; failed queries refuse sync.
         // trace:BUG-2490 | ai:codex
         println!("  No origin/{branch} branch yet — skipping pull (push to create it).");
+    } else if pull && crate::store_pull_coalesce::store_already_has_remote_head(store_path, &branch)
+    {
+        // BUG-2565: origin has nothing this store lacks, so the pull, the two
+        // full strict store reads and the conflict scan would only confirm
+        // that. `Some(empty)` keeps the post-window steps running.
+        // trace:BUG-2565 | ai:claude
+        println!("  Already up to date with origin/{branch}.");
+        conflicts = Some(Vec::new());
     } else if pull {
         // Snapshot local state before pull for conflict detection.
         // trace:TASK-1717 | ai:claude — strict: an unreadable or unparsable

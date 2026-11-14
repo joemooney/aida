@@ -2552,9 +2552,14 @@ fn pull_store_leg_locked(
         }
     }
     println!("  {}", "store pull complete".green());
-    if let Err(e) = ensure_no_spec_id_collisions_canonical(store_path) {
-        eprintln!("  {} {}", "Warning:".yellow().bold(), e);
-        return Err(format!("store collision scan failed: {}", e));
+    // BUG-2565: a pull that moved nothing cannot have introduced a collision;
+    // skip the full-store scan. trace:BUG-2565 | ai:claude
+    let moved = pre_sha.is_none() || git_ops::head_sha(store_path).ok() != pre_sha;
+    if moved {
+        if let Err(e) = ensure_no_spec_id_collisions_canonical(store_path) {
+            eprintln!("  {} {}", "Warning:".yellow().bold(), e);
+            return Err(format!("store collision scan failed: {}", e));
+        }
     }
     // TASK-73 — summarize the delta unless --quiet.
     if !quiet {
@@ -2606,6 +2611,47 @@ fn pull_store_leg_locked(
     Ok(())
 }
 
+/// `aida pull`. Concurrent pulls with the same flags in one checkout run one
+/// pull: a caller that waited for an in-flight one reuses its successful
+/// result unless the store gained changes that pull did not commit.
+// trace:BUG-2565 | ai:claude
+pub(crate) fn handle_pull_command_coalesced(
+    store_path: &std::path::Path,
+    code_only: bool,
+    store_only: bool,
+    quiet: bool,
+    no_gate: bool,
+    auto: bool,
+) -> Result<()> {
+    let project_root = store_path
+        .parent()
+        .map(|p| p.to_path_buf())
+        .unwrap_or_else(|| std::env::current_dir().unwrap_or_default());
+    let kind = format!(
+        "pull-{}{}{}{}",
+        u8::from(code_only),
+        u8::from(store_only),
+        u8::from(no_gate),
+        u8::from(auto)
+    );
+    let turn = crate::store_pull_coalesce::coalesce(
+        store_path,
+        &project_root,
+        &kind,
+        || !aida_core::git_ops::has_changes_checked(store_path).unwrap_or(true),
+        || handle_pull_command(store_path, code_only, store_only, quiet, no_gate, auto),
+    )?;
+    if turn == crate::store_pull_coalesce::Turn::Reused {
+        println!(
+            "  {}",
+            "pull already completed by a concurrent `aida pull` in this checkout — reused its result"
+                .green()
+        );
+    }
+    Ok(())
+}
+
+/// One `aida pull`, uncoalesced.
 pub(crate) fn handle_pull_command(
     store_path: &std::path::Path,
     code_only: bool,
@@ -3280,8 +3326,21 @@ pub(crate) fn run_deferred_code_reconcile(
     }
     // BUG-1633: set only when the auto-bump actually walked a commit range.
     let mut scanned = false;
+    // BUG-2565: a wide rescan (no scan base) against the same code and store
+    // HEADs as the last completed reconcile would only repeat it — every
+    // waiting-review and stranded-review forge lookup included.
+    // trace:BUG-2565 | ai:claude
+    let already_reconciled = scan_pre.is_none()
+        && crate::store_pull_coalesce::reconcile_is_current(project_root, store_path);
+    if already_reconciled && dbg_autobump {
+        eprintln!(
+            "  [autobump-debug] skipped: code and store HEADs unchanged since the last reconcile"
+        );
+    }
     // trace:STORY-86 | ai:claude
-    if auto_bump_enabled() {
+    if auto_bump_enabled() && !already_reconciled {
+        #[cfg(test)]
+        crate::store_pull_coalesce::note_reconcile_run();
         match auto_bump_done_to_completed_with(
             project_root,
             store_path,
@@ -3291,6 +3350,9 @@ pub(crate) fn run_deferred_code_reconcile(
         ) {
             Ok((flips, did_scan)) => {
                 scanned = did_scan;
+                if did_scan {
+                    crate::store_pull_coalesce::record_reconcile(project_root, store_path);
+                }
                 // BUG-1633: defer followup filing for these flips to the next
                 // reconcile against a synced store. trace:BUG-1633 | ai:claude
                 if !extract_followups && !flips.is_empty() {
@@ -4161,7 +4223,7 @@ fn run_pull(
     matches: &clap::ArgMatches,
     ctx: &crate::cmdkit::DispatchCtx,
 ) -> anyhow::Result<crate::cmdkit::Flow> {
-    use crate::{handle_pull_command, handle_pull_dry_run, PullArgs};
+    use crate::{handle_pull_dry_run, PullArgs};
     let args = <PullArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
     // A transport plan must never run the ordinary dry-run's fetch/lifecycle path.
     // trace:STORY-1742 | ai:codex
@@ -4201,7 +4263,8 @@ fn run_pull(
                             *json,
                         ));
                     }
-                    return crate::cmdkit::returned(handle_pull_command(
+                    // trace:BUG-2565 | ai:claude
+                    return crate::cmdkit::returned(handle_pull_command_coalesced(
                         store_path,
                         *code_only,
                         *store_only,
