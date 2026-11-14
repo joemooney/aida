@@ -252,6 +252,51 @@ pub(crate) fn newest_verdict_event(start: &Path, key: &str) -> Option<GateEvent>
     newest_of(verdict_events(&root, key))
 }
 
+/// The newest verdict event that speaks for change `pr` under `key`.
+///
+/// A spec key is shared by every change that ships the spec, so its newest
+/// event can be a verdict on some other change. Read for one change, a spec
+/// key answers with that change's own events and the spec's unbound ones; an
+/// event bound to another change counts only when it was recorded at `head`,
+/// the commit being judged. With no change (`pr` 0) or no head known, nothing
+/// is left out. A change key is read as [`newest_verdict_event`] reads it.
+// trace:BUG-2570 | ai:claude
+pub(crate) fn newest_verdict_event_for_change(
+    start: &Path,
+    key: &str,
+    pr: u64,
+    head: Option<&str>,
+) -> Option<GateEvent> {
+    let root = store_root(start).ok()?;
+    let mut events = verdict_events(&root, key);
+    if ChangeKey::parse(key).is_none() {
+        events.retain(|event| speaks_for_change(event, pr, head));
+    }
+    newest_of(events)
+}
+
+/// Whether `event`, read under a spec key, is evidence about change `pr` at
+/// `head` ([`newest_verdict_event_for_change`]).
+// trace:BUG-2570 | ai:claude
+fn speaks_for_change(event: &GateEvent, pr: u64, head: Option<&str>) -> bool {
+    let head = head.map(str::trim).filter(|head| !head.is_empty());
+    let (Some(bound), Some(head)) = (ChangeKey::parse(&event.change), head) else {
+        return true;
+    };
+    pr == 0
+        || bound.number == pr
+        || event
+            .head
+            .as_deref()
+            .is_some_and(|at| same_reviewed_sha(at, head))
+}
+
+/// Whether change `pr` has a verdict of its own on the ledger.
+// trace:BUG-2570 | ai:claude
+pub(crate) fn change_has_verdict(start: &Path, pr: u64) -> bool {
+    pr > 0 && newest_verdict_event(start, &ChangeKey::pr(pr).as_key()).is_some()
+}
+
 /// Select a review round before applying lifecycle annotations. An annotation
 /// carries no independent ordering authority against a legacy file: the source
 /// round must first win ordinary selection, then the exact-source overlay applies.

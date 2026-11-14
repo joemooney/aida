@@ -1318,6 +1318,25 @@ pub fn read_recorded_verdict(project_root: &Path, spec: &str) -> Option<Recorded
     parse_recorded_verdict(&current_verdict(project_root, spec)?.body)
 }
 
+/// [`read_recorded_verdict`] as it concerns change `pr` at `head`. A spec key
+/// is shared by every change that ships the spec; once `pr` has a verdict of
+/// its own on the ledger, the spec key answers with the verdicts recorded
+/// for `pr` and not with whichever change was reviewed last.
+// trace:BUG-2570 | ai:claude
+pub(crate) fn read_recorded_verdict_for_change(
+    project_root: &Path,
+    key: &str,
+    pr: u64,
+    head: Option<&str>,
+) -> Option<RecordedVerdict> {
+    use crate::gate::ledger::{project, ChangeKey};
+    if ChangeKey::parse(key).is_some() || !project::change_has_verdict(project_root, pr) {
+        return read_recorded_verdict(project_root, key);
+    }
+    project::newest_verdict_event_for_change(project_root, key, pr, head)
+        .and_then(|event| event.verdict_record().and_then(parse_ledger_record))
+}
+
 /// A verdict record carried on the gate ledger, parsed like a file body.
 // trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
 pub(crate) fn parse_ledger_record(record: &JsonObj) -> Option<RecordedVerdict> {
