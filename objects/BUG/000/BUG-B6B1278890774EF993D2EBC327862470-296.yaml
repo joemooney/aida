@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-12T08:35:37.046532324Z
-modified_at: 2026-11-14T18:09:59.136124391Z
+modified_at: 2026-11-14T19:13:59.197512230Z
 req_type: Bug
 tags:
 - track:integration
@@ -261,6 +261,13 @@ comments:
   modified_at: 2026-11-14T18:09:59.136124391Z
   session_id: 01a1db23f6f1
   harness_version: 2.1.319 (Claude Code)
+- id: 01a1db7b-159d-71a1-a128-d0dcfc6d379d
+  author: joe
+  content: 'Advisor ruling (2026-11-14 12:14, CR on PR-4038 at 723df35): blocking = one item. A deleted binding with a missing or stale hint still hides a newer refusal, and the test asserts the miss. Fix discovery so a newer refusal is found regardless of the hint (fall back to a full read when the hint is absent or stale), and invert the test to assert the refusal is seen. Rework runs on a dell1 lane, track integration, on the PR branch; base stays integration; publish by hand afterwards. Gate: one targeted cargo test run of the gate ledger tests plus make check-ci-fast.'
+  created_at: 2026-11-14T19:13:59.197512230Z
+  modified_at: 2026-11-14T19:13:59.197512230Z
+  session_id: 01a1db6d-e689-7532-9eef-772722add87b
+  harness_version: 2.1.325 (Claude Code)
 history:
 - id: 01a1cee6-975b-7d40-8689-d35e1f109d99
   author: joe
