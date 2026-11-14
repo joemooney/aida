@@ -3,12 +3,12 @@ spec_id: STORY-b6b1278890774ef993d2ebc327862470-747
 agreed_id: STORY-2824
 title: 'aida pr train --check N...: say whether each PR qualifies for a train right now, and why not'
 description: 'From the Agent CLI friction log (STORY-2822 item 13). Advisors re-implement train eligibility in shell (approved at exact head, no armed hold, checks green, passing ci-tier: full, failures only from superseded runs ignored) and got it wrong twice on 2026-11-14 (27 min of waits; stale cancelled rows read as red). Acceptance: (1) ''aida pr train --check N...'' and ''--check --all-open'' print one row per PR: eligible yes/no and the first failing gate with its remedy; (2) uses exactly the gates ''aida pr train'' applies plus the full-tier rule from STORY-2809 when configured; (3) changes nothing (no labels, no holds, no journal); (4) json output and exit 0 only if every named PR is eligible; (5) bounded time.'
-status: NeedsAttention
+status: InProgress
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-14T18:22:12.152871570Z
-modified_at: 2026-11-14T22:16:11.466512047Z
+modified_at: 2026-11-14T22:34:00.795309226Z
 req_type: Story
 tags:
 - docs:impacted
@@ -103,6 +103,24 @@ comments:
   created_at: 2026-11-14T22:16:11.466506766Z
   modified_at: 2026-11-14T22:16:11.466506766Z
   session_id: 01a1dbf9b94d
+- id: 01a1dc32-1613-7032-9bcd-c1e0a368936f
+  author: joe
+  content: |-
+    Advisor ruling (2026-11-14 15:40, PR-4053 CR at 5515dfa, round 3, five P2 findings; triage once, no further rounds on the non-blocking ones):
+    BLOCKING (one fix): findings 2 and 3, --all-open enumeration. A truncated, failed or malformed PR listing must never produce eligible:true / exit 0. Do not rely on Forge::list_changes as it is: list with an explicit high limit (or paginate) and refuse when the result reaches the limit; a nonzero gh exit or an unparseable row is an error with a nonzero exit, distinct from a confirmed-empty list. Tests: failed listing followed by a successful train read exits nonzero; a listing above 30 rows is complete or refused.
+    NOT BLOCKING, ruled once: (1) FullCi placeholder: the round-0 disposition stands, the full-tier rule is not on main. If PR-4027 has merged when the lane starts, rebase on main and make full_tier_gate honour read_only and enter Gate::FullCi; if it has not, leave it. (4) config repair in read-only mode: round-0 disposition stands; take the reviewer's small fix (read title/body through self.forge.change_title_and_body) only if it is a few lines, no new fixture required. (5) --timeout propagation into subprocesses: out of scope for a heft-2 story; make the --timeout help text say it is checked between candidates, and the deadline work is filed as a follow-up draft.
+    Gate before push: cargo test -p aida-cli-lib story_2824 (dell1 lane job) plus make check-ci-fast. Then delta review; ci:full goes on at review launch (removed now, hold stays).
+  created_at: 2026-11-14T22:33:52.403435243Z
+  modified_at: 2026-11-14T22:33:52.403435243Z
+  session_id: 01a1dc2c-25f2-7d52-aa8c-61e0f270e9d1
+  harness_version: 2.1.325 (Claude Code)
+- id: 01a1dc32-36db-7a21-bea8-246fff3863c8
+  author: joe
+  content: 'Returned from NeedsAttention to In Progress via `aida edit --status`. It was punted on: other: work complete locally but unable to publish: the seat has no GitHub credential (git push: could not read Username for https://github.com; gh returns HTTP 401), so commit 20383fc0cb on story-b6b1278890774ef993d2ebc327862470-747 is not pushed and no PR is open. No triage reason was given.'
+  created_at: 2026-11-14T22:34:00.795298521Z
+  modified_at: 2026-11-14T22:34:00.795298521Z
+  session_id: 01a1dc2c-25f2-7d52-aa8c-61e0f270e9d1
+  harness_version: 2.1.325 (Claude Code)
 history:
 - id: 01a1db50-9f3b-76d0-bb89-e5b424c233d5
   author: aida-session-start
@@ -136,6 +154,15 @@ history:
   author: dirtlab
   timestamp: 2026-11-14T19:03:24.589274498Z
   changes: []
+- id: 01a1dc32-36db-7a21-bea8-2452de4f6802
+  author: joe
+  timestamp: 2026-11-14T22:34:00.795288087Z
+  session_id: 01a1dc2c-25f2-7d52-aa8c-61e0f270e9d1
+  harness_version: 2.1.325 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: InProgress
 filed_at:
   code_sha: 96fc262834527304fe85fc9ee32e4d04f1aaf4ea
   branch: main
@@ -145,9 +172,3 @@ filed_at:
   vendor: claude
   session: 01a1dab1-9447-7d22-b5ff-0c9084e122ea
   harness_version: 2.1.325 (Claude Code)
-attention_reason:
-  category: other
-  detail: 'work complete locally but unable to publish: the seat has no GitHub credential (git push: could not read Username for https://github.com; gh returns HTTP 401), so commit 20383fc0cb on story-b6b1278890774ef993d2ebc327862470-747 is not pushed and no PR is open'
-  lean: 'branch is ready and rebased on origin/main e14d6c9a70; publish from a seat with credentials: aida ship STORY-2824 --no-merge, then aida pr auto-queue-review'
-  raised_by: implementer
-  raised_at: 2026-11-14T19:02:12.117658161Z

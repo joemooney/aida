@@ -1,0 +1,46 @@
+id: 01a1dc32-87d1-76d3-9b42-4e07d6c0f529
+spec_id: STORY-b6b1278890774ef993d2ebc327862470-756
+agreed_id: STORY-2833
+title: Run the ratchet set (inventory, audit, source-scan, manual checks) in the fast CI tier and in the lane pre-push gate, so approvals stop going red at the full tier
+description: |
+  Problem (2026-11-14 landing emergency): landing fell to about 1 PR/hour in the afternoon although a train cycle is only 26-33 minutes (#4054 19:08-19:34Z, #4059 20:15-20:47Z, #4061 21:13-21:40Z). The gaps are supply: PRs approved on a fast-tier green go red at the full tier on their own change, each costing a hold, rework, delta review and a second 25-minute full run before a train can take them.
+
+  Today's full-tier reds on a PR's own change, and what failed:
+  - #4053: aida-cli bug_1502_format_json_audit `checked_in_audit_is_exhaustive_and_every_honoured_probe_parses` (new flag, audit not regenerated; 10 s test).
+  - #3994: aida-cli-lib `gate::mandate_gates::story_1888_gate_paths_tests` x3 (files moved; under 4 s).
+  - #4053 second head: story_1888 frozen-inventory ratchet (forge calls added inside gate/approval.rs).
+  - #4052: manual cites a flag under the wrong command (docs/manual check).
+  - #4007 in promotion 10: aida-cli `task_1717_store_writer_lock`.
+  - #4022 on integration: `bug_1985_host_status_guard` source-scan guard.
+  Five of six are source-scan, inventory, audit or manual-consistency tests: cheap, deterministic, and exactly the kind a targeted cargo run in a lane does not select. The fast tier runs `cargo check --workspace --tests` and the fast gates; it executes no test.
+
+  Wanted:
+  1. A named, checked-in "ratchet set": the inventory, audit, golden, source-scan and manual-consistency tests across the workspace (start from the five above and every test of the same kind: story_1888 gate paths, bug_1502 audit, bug_1985 guard, cli help snapshot, store-writers and config-trust inventories, manual citation check). Selected by a nextest filter or test-name list in one file, with a ratchet test that fails when a new test of this kind is added without being listed.
+  2. The fast tier of CI runs the ratchet set after its compile step. Budget: the fast tier stays under 12 minutes warm; if compiling the test binaries breaks the budget, say so with numbers and propose the split rather than narrowing silently.
+  3. `make check-ratchets` runs the same set locally; the implementer pre-push gate and the lane wrapper run it; a lane does not push a head that fails it. `make check-ci-fast` either includes it or names it in its output.
+  4. A reviewer treats a red ratchet set as blocking without further analysis.
+
+  Acceptance:
+  - Re-running the fast tier at the five failing heads listed above goes red for each on the same test that failed at the full tier (use the recorded SHAs; #4007's lock test is exempt if it is not a ratchet-kind test, say which it is).
+  - Fast-tier wall time, warm, measured before and after on three PRs and reported on this spec.
+  - Adding a new test under a ratchet-kind module without listing it fails a test.
+  - Metric to watch for a week: approvals later held for a red full run on the PR's own change, per day (6 on 2026-11-14).
+  Not in scope: changing train admission (still a passing full run at the approved head).
+status: Draft
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-14T22:34:21.521062494Z
+modified_at: 2026-11-14T22:34:21.521062494Z
+req_type: Story
+tags:
+- ci
+- landing-emergency
+filed_at:
+  code_sha: 3cb7ba4fab12c60797d42bf51c7845633680c7d2
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 3cb7ba4fab1
+  vendor: claude
+  session: 01a1db78-560d-7a81-a467-3742be1fefc3

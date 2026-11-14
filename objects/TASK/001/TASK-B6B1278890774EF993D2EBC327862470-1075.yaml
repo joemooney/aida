@@ -1,0 +1,21 @@
+id: 01a1dc32-1a0e-7551-9a79-565f0cae4a7b
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-1075
+agreed_id: TASK-3792
+title: 'aida pr train --check: propagate the --timeout deadline into discovery and member subprocesses'
+description: Deferred from the PR-4053 review (STORY-2824 finding 5, ruled non-blocking 2026-11-14). --timeout is consulted only between candidate checks; protected_base (git ls-remote), live_trains and member fetch/metadata reads can block past it, so --timeout 0 may hang before any row. Propagate a deadline through discovery and member subprocesses, terminate outstanding children, report unfinished PRs as not-checked; add subprocess timeout fixtures with no network.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-14T22:33:53.422098281Z
+modified_at: 2026-11-14T22:33:53.422098281Z
+req_type: Task
+filed_at:
+  code_sha: 3cb7ba4fab12c60797d42bf51c7845633680c7d2
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 3cb7ba4fab1
+  vendor: claude
+  session: 01a1dc2c-25f2-7d52-aa8c-61e0f270e9d1
+  harness_version: 2.1.325 (Claude Code)
