@@ -20,7 +20,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-14T13:40:54.226128122Z
-modified_at: 2026-11-14T16:31:04.602169163Z
+modified_at: 2026-11-14T17:08:21.159398616Z
 req_type: Bug
 tags:
 - landing
@@ -38,6 +38,13 @@ comments:
   created_at: 2026-11-14T13:44:03.307332136Z
   modified_at: 2026-11-14T13:44:03.307332136Z
   session_id: 01a1d9ea-4e25-7033-85e8-3648f0195c7c
+  harness_version: 2.1.325 (Claude Code)
+- id: 01a1db08-1027-73b0-aeeb-374a7e4452b1
+  author: joe
+  content: 'Advisor ruling on the #4044 verdict at 9d4a8c5 (CHANGES REQUESTED): both findings BLOCKING (acceptance): (1) AC2 regression: a dirty seat with no commits must still end ''no-pr uncommitted-work'', not no-change exit 0; (2) AC4: print the retry command after a push-ok / PR-open failure. AC5 live exercise is not required for approval. Next review scoped to these two.'
+  created_at: 2026-11-14T17:08:21.159398616Z
+  modified_at: 2026-11-14T17:08:21.159398616Z
+  session_id: 01a1dab1-9447-7d22-b5ff-0c9084e122ea
   harness_version: 2.1.325 (Claude Code)
 history:
 - id: 01a1da4c-edb1-74e1-b5f8-3f1ff9c41cd6
