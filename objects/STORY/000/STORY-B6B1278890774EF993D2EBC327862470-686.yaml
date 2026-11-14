@@ -30,7 +30,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-13T15:54:08.931576118Z
-modified_at: 2026-11-14T06:13:02.452574437Z
+modified_at: 2026-11-14T06:33:03.643139853Z
 req_type: Story
 tags:
 - architecture
@@ -226,6 +226,13 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: New head 8a541a6 adds only comment edits and extra test assertions; both prior blocking findings (non-protected-base launch/probe failure; argv-inlined diff E2BIG/1MiB refusal) remain unaddressed. ACs: AC1 verified by story2763_watcher_overlapping_clean_merge_fast_train_and_strict_review + review_watch_delta_excludes_clean_base_content_and_includes_resolutions; AC2 partial (landed-tree review implemented, broken for non-protected bases and large diffs); AC3 verified by review_watch_fast_rounds_count_patch_changes_and_strict_counts_heads; AC4 verified by review_watch_freshness_policy_is_closed_and_paths_raise_assurance + review_watch_fast_proof_is_revoked_by_trusted_strict_policy + scripts/config-trust.toml; AC5 verified by gate ledger event tests + gate_state_cmd rendering (review_watch_strict_effective_state_requires_review_of_each_head); AC6 verified by story2763_watcher_overlapping_clean_merge_fast_train_and_strict_review (fast skip/strict dispatch) + delta test for conflicts. CI fast gates green; merge-hold-gate pending.. No triage reason was given.'
   created_at: 2026-11-14T06:07:34.808530826Z
   modified_at: 2026-11-14T06:07:34.808530826Z
+- id: 01a1d8c2-6f9b-7291-bd38-95d398f0a1e2
+  author: joe
+  content: '[advisor 114 23:36] SCOPE WIDENED (supersedes my 22:58 ''ledger only''): the 23:13 review at 7a8b76f judges the fast/strict freshness design sound. This rework fixes (1) the gate dependency ratchet (CI red) and (2) adds tests for AC1 (delta admission), AC2 (conflict rework routing), AC5/AC6 (audit output) and the per-path overrides. No design changes. This is round 3 and the last full round; anything still open after it is ruled merge-plus-follow-up or parked.'
+  created_at: 2026-11-14T06:33:03.643139853Z
+  modified_at: 2026-11-14T06:33:03.643139853Z
+  session_id: 01a1d852-16ef-7973-bdde-ac3f274752a2
+  harness_version: 2.1.325 (Claude Code)
 history:
 - id: 01a1d59e-6b4b-7d10-8aea-02729132bc6f
   author: joe
