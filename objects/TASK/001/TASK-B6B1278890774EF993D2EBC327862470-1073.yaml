@@ -937,12 +937,36 @@ description: |
   ### finding-hash:5f168a1d
 
   story_1690_train_tests.rs:60 `final_gate_phase_counts_the_store_reads_made_inside_it` asserts only that the process-global totals rose, not that the phase attributed the delta; no test covers the Drop line on an early refusal return.
+
+
+  ## Findings from PR-4022
+  Reviewed sha: 94d87ef828e98cb6d1b61b6ed365cc607a5ba2f4
+
+  ### finding-hash:c45fcedb
+
+  changed_paths (land.rs:548) reads `git diff --name-only` without -z or core.quotePath=off, so a path with a non-ASCII byte comes back quoted and escaped and matches no protected entry: a new file such as `billing/é.sql` under a protected directory leaves the change eligible. Use `-z` (or `-c core.quotePath=off`) and add a test.
+
+  ### finding-hash:5d395d55
+
+  Carried to STORY-2805 by the advisor rulings of 2026-11-14: nothing runs promotion-check at cut or ship and nothing leads a merged change to its review; content inside a main-sync merge is not checked; --since is an unverified statement of the last cut; spec tags and effort are author-editable. STORY-2772 must not be marked complete on this slice. run_merge with --push, the tag write through `aida edit`, and the Reader/Live wiring have no test and no end-to-end run.
+
+  ### finding-hash:5b62cb1c
+
+  run_merge (integration_cmd.rs, the push step) returns the push error with the merge still on local `integration`; the next run refuses with local integration is not origin/integration and the operator must reset by hand. Put the branch back, or print the reset command.
+
+  ### finding-hash:2fb703ca
+
+  The `merged-before-review` tag can go stale: promotion-check with --tip older than origin/integration or --since past a pending merge untags a spec whose pending change is outside the range checked, and a spec whose pending change was reverted out keeps the tag because nothing removes it. Untag only when the tip is origin/integration, and untag the specs of a reverted change.
+
+  ### finding-hash:dbd4e4d5
+
+  docs/cli/04-git-lifecycle.md (promotion-check) says every passing change has its tag removed, but a spec keeps it while another pending change names it, and the section does not say that only an exact `git revert -m 1` with no other change clears a refusal. Also `checks = []` in the trusted config merges with no check at all; say so in the docs or refuse an empty list.
 status: Draft
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-13T20:01:56.623034248Z
-modified_at: 2026-11-14T17:56:08.718650228Z
+modified_at: 2026-11-14T18:24:38.546168667Z
 req_type: Task
 tags:
 - carried-finding:BUG-2543:2a99ebfc
@@ -1066,6 +1090,11 @@ tags:
 - carried-finding:PR-4020:5863b5f0
 - carried-finding:PR-4020:e391cb46
 - carried-finding:PR-4021:6089dde5
+- carried-finding:PR-4022:2fb703ca
+- carried-finding:PR-4022:5b62cb1c
+- carried-finding:PR-4022:5d395d55
+- carried-finding:PR-4022:c45fcedb
+- carried-finding:PR-4022:dbd4e4d5
 - carried-finding:PR-4024:0bdbec3f
 - carried-finding:PR-4024:2df54e83
 - carried-finding:PR-4030:1287747b
@@ -1155,6 +1184,7 @@ tags:
 - carried-from:PR-4015
 - carried-from:PR-4020
 - carried-from:PR-4021
+- carried-from:PR-4022
 - carried-from:PR-4024
 - carried-from:PR-4030
 - carried-from:PR-4040
@@ -1188,6 +1218,7 @@ tags:
 - finding-hash:2c7ae2ea
 - finding-hash:2df54e83
 - finding-hash:2dfbd6d5
+- finding-hash:2fb703ca
 - finding-hash:35d3eb09
 - finding-hash:360471e3
 - finding-hash:376b178e
@@ -1209,8 +1240,10 @@ tags:
 - finding-hash:55e0cbfe
 - finding-hash:56ed8b81
 - finding-hash:5863b5f0
+- finding-hash:5b62cb1c
 - finding-hash:5b9e60ad
 - finding-hash:5d2b67f3
+- finding-hash:5d395d55
 - finding-hash:5f168a1d
 - finding-hash:6089dde5
 - finding-hash:6220a3dc
@@ -1244,6 +1277,7 @@ tags:
 - finding-hash:b29349ce
 - finding-hash:bf60843e
 - finding-hash:c0a8d165
+- finding-hash:c45fcedb
 - finding-hash:c598b8f9
 - finding-hash:c7c082c2
 - finding-hash:c963d4df
@@ -1251,6 +1285,7 @@ tags:
 - finding-hash:cddc71c1
 - finding-hash:d0b021ea
 - finding-hash:d51c0f59
+- finding-hash:dbd4e4d5
 - finding-hash:dee3f3a7
 - finding-hash:dfed3eb6
 - finding-hash:e391cb46
@@ -1307,6 +1342,7 @@ tags:
 - from-review:PR-4015
 - from-review:PR-4020
 - from-review:PR-4021
+- from-review:PR-4022
 - from-review:PR-4024
 - from-review:PR-4030
 - from-review:PR-4040
@@ -1664,6 +1700,11 @@ history:
   author: joe
   timestamp: 2026-11-14T17:56:10.377634164Z
   session_id: 01a1db31b43e
+  changes: []
+- id: 01a1db4d-ef39-7da3-8dae-fae48ec33591
+  author: joe
+  timestamp: 2026-11-14T18:24:40.249633855Z
+  session_id: 01a1db49870b
   changes: []
 filed_at:
   code_sha: 91fe1e337894199f15365d3f8ecfaf81366f8291
