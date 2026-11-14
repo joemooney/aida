@@ -477,12 +477,20 @@ description: |
   ### finding-hash:3f4b4821
 
   TASK-3785 AC4 (file burn-down child PRs moving functions into gate or behind traits once the ratchet lands) has no filed children yet; merge-time completion via the (TASK-3785) trailer would close the spec with AC4 undone. Advisor should file the burn-down children, or keep the spec open, at landing.
+
+
+  ## Findings from PR-3989
+  Reviewed sha: 3df4803a3af2350e80190def730f2267220abcc8
+
+  ### finding-hash:49b64e26
+
+  force_claim_clone_owner accepts only Dead(Absent|Exited) for lease.active_pid; a dead worker whose PID was since reused (Dead(Reused)) or that died across a reboot (Dead(Reboot)) still gets refused, so the manual session-end workaround can still be needed (aida-cli-lib/src/ownership/reader.rs:79-88). Also the fixture stores HolderRecord::refused(..) instead of a real mismatched identity record, and the raw record identity is never probed (only the clone cwd-holder check in seat_clone::destroy backs that up).
 status: Draft
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-13T20:01:56.623034248Z
-modified_at: 2026-11-14T08:36:25.697434628Z
+modified_at: 2026-11-14T09:03:59.462299156Z
 req_type: Task
 tags:
 - carried-finding:BUG-2543:2a99ebfc
@@ -541,6 +549,7 @@ tags:
 - carried-finding:PR-3983:7bbbf9a9
 - carried-finding:PR-3983:dfed3eb6
 - carried-finding:PR-3987:96ff0aa3
+- carried-finding:PR-3989:49b64e26
 - carried-finding:PR-3990:2a99ebfc
 - carried-finding:PR-3990:6935f83d
 - carried-finding:PR-3994:46a7a9dc
@@ -590,6 +599,7 @@ tags:
 - carried-from:PR-3979
 - carried-from:PR-3983
 - carried-from:PR-3987
+- carried-from:PR-3989
 - carried-from:PR-3990
 - carried-from:PR-3994
 - carried-from:PR-3997
@@ -616,6 +626,7 @@ tags:
 - finding-hash:3f4b4821
 - finding-hash:46a7a9dc
 - finding-hash:4843b9fe
+- finding-hash:49b64e26
 - finding-hash:51cbf3a8
 - finding-hash:52636ea7
 - finding-hash:55e0cbfe
@@ -668,6 +679,7 @@ tags:
 - from-review:PR-3979
 - from-review:PR-3983
 - from-review:PR-3987
+- from-review:PR-3989
 - from-review:PR-3990
 - from-review:PR-3994
 - from-review:PR-3997
@@ -867,6 +879,11 @@ history:
   author: joe
   timestamp: 2026-11-14T08:36:27.335113961Z
   session_id: 01a1d930f5a0
+  changes: []
+- id: 01a1d94c-a333-7a80-a625-ae6b2cf0e700
+  author: joe
+  timestamp: 2026-11-14T09:04:00.819910162Z
+  session_id: 01a1d94a013f
   changes: []
 filed_at:
   code_sha: 91fe1e337894199f15365d3f8ecfaf81366f8291
