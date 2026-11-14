@@ -758,6 +758,10 @@ mod team;
 mod team_cmd;
 #[cfg(test)]
 mod test_env;
+// trace:BUG-2573 | ai:codex
+#[cfg(test)]
+#[path = "../../aida-core/src/test_umask.rs"]
+mod test_umask;
 #[cfg(test)]
 mod test_exec;
 // trace:BUG-2191 | ai:claude — fixture git without detached auto-maintenance.
