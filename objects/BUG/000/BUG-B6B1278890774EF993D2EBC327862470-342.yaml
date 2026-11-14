@@ -20,7 +20,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-14T12:59:48.856339929Z
-modified_at: 2026-11-14T16:12:18.749811548Z
+modified_at: 2026-11-14T16:16:52.199824218Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -67,6 +67,13 @@ comments:
   modified_at: 2026-11-14T15:05:37.160292952Z
   session_id: 01a1da88bc20
   harness_version: 2.1.319 (Claude Code)
+- id: 01a1dad8-ede7-76c3-9c21-efc442f079b9
+  author: joe
+  content: 'Advisor ruling on the #4030 verdict at 759d2a2 (CHANGES REQUESTED): (1) BLOCKING, small: the train PR close comment claims a retest that does not happen on a second no-result red; make the message say what the driver does. (2) ACCEPTED: no criterion anchors on the tests; the three criteria are covered by named tests, anchors are bookkeeping. Next review is scoped to the message delta.'
+  created_at: 2026-11-14T16:16:52.199824218Z
+  modified_at: 2026-11-14T16:16:52.199824218Z
+  session_id: 01a1dab1-9447-7d22-b5ff-0c9084e122ea
+  harness_version: 2.1.325 (Claude Code)
 history:
 - id: 01a1da27-2bb7-7361-9d4b-679eedfaa209
   author: joe
