@@ -1,0 +1,34 @@
+id: 01a1dc11-223b-77e3-b40e-aaab8152167e
+spec_id: TASK-73022632d35647cca3858b18ac0723e3-022
+title: 'pr train --status: step names, exit codes and driver-written sidecars chosen by the implementer'
+description: |
+  Three calls made within STORY-2823 that the advisor should know shipped:
+
+  1. Step names are the journal's own (Open, Ci, Gate, Merge, Retire, Members), not the spec's list "Gate/Ci/Merge/Members/Cleanup". There is no Cleanup step in the journal; a driver that holds the lock before any journal exists is reported as running with "no train built yet".
+  2. Exit codes: 0 = running (live driver), 40 = no train, 41 = orphaned journal. Registered in EXIT_CODES (aida-cli-lib/src/orchestrator_leases.rs). "No train" is therefore non-zero, which trips `set -e` scripts.
+  3. The journal has no step timestamp or driver PID and denies unknown fields, so the driver now writes two advisory files: its process identity into .aida/train/run.lock, and a `<journal>.step` sidecar (aida-cli-lib/src/pr_train_journal.rs: record_driver, note_step). A train driven by a binary older than this change shows "for an unknown time" and "PID is not visible"; running vs orphaned is then decided by a momentary shared-lock probe on run.lock (lock_held), which can make a train starting in that instant refuse with the busy message.
+
+  Also: clap's `requires = "status"` did not reject `--json` without `--status`, so that rule is enforced at dispatch (aida-cli-lib/src/pr_cmd.rs).
+
+  Raised by the implementer while working STORY-2823.
+  Branch: story-b6b1278890774ef993d2ebc327862470-746  ·  Commit: a926eaf40a  ·  PR-4065
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-14T21:57:52.827723907Z
+modified_at: 2026-11-14T21:57:52.827723907Z
+req_type: Task
+tags:
+- from-implementer:STORY-2823
+- kind:design-choice
+- severity:minor
+filed_at:
+  code_sha: 55849dcf548b2cc599cc73af9af4cb6d7b7c4e5b
+  branch: story-b6b1278890774ef993d2ebc327862470-746
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: bc24a1e688
+  vendor: claude
+  session: 01a1dbdd5de5
+  harness_version: 2.1.319 (Claude Code)

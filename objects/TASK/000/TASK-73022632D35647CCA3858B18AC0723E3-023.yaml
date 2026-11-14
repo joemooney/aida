@@ -1,0 +1,30 @@
+id: 01a1dc11-3ba2-7692-aa73-c9e720a2c9f8
+spec_id: TASK-73022632d35647cca3858b18ac0723e3-023
+title: Train lock tests race with fork-inherited lock handles under threaded lib tests
+description: |
+  pr_train::tests::bug2547_abandon_is_locked_and_local_even_for_malformed_journals and pr_train_journal_lock_contention_is_typed_and_releases_on_exit (aida-cli-lib/src/tests/story_1690_train_tests.rs:5895, :5295) drop the run lock and immediately re-take it. The flock belongs to the open file description, so a child forked by a concurrent test thread while the handle was open keeps the lock until it execs. Under `cargo test --lib` (threads, many git spawns) the re-take then fails with "another train owns the train journal".
+
+  Seen 3 times in 5 local runs while STORY-2823 briefly did slow work with the handle open; fixed there by reading the driver identity before opening the lock and caching it per process, after which 2 runs passed. The race itself predates that change and remains possible (it does not occur under nextest's process-per-test). The same inheritance applies in production: a child spawned by the train driver can hold run.lock for an instant after the driver exits.
+
+  Raised by the implementer while working STORY-2823.
+  Branch: story-b6b1278890774ef993d2ebc327862470-746  ·  Commit: a926eaf40a  ·  PR-4065
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-14T21:57:59.330293103Z
+modified_at: 2026-11-14T21:57:59.330293103Z
+req_type: Task
+tags:
+- from-implementer:STORY-2823
+- kind:bug-spotted
+- severity:minor
+filed_at:
+  code_sha: 55849dcf548b2cc599cc73af9af4cb6d7b7c4e5b
+  branch: story-b6b1278890774ef993d2ebc327862470-746
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: bc24a1e688
+  vendor: claude
+  session: 01a1dbdd5de5
+  harness_version: 2.1.319 (Claude Code)
