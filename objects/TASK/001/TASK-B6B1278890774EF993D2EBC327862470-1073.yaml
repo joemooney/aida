@@ -837,12 +837,24 @@ description: |
   ### finding-hash:2b087a82
 
   Test coverage gaps on otherwise correct code: the entry-point regression (agent_launcher_tests.rs:5384) drives agent_new_with_config and agent_new_bg_dispatch but not agent_new_codex_bg (agent_codex_background.rs:676), and the AC3 real-child test (queue_work_tests.rs:5286) covers Claude and Codex but not Agy.
+
+
+  ## Findings from STORY-2765
+  Reviewed sha: 5abc1d7dab05847f2eb8e21e01c655d8d68772d7
+
+  ### finding-hash:4e068149
+
+  AC6 has no test that renders the `set AIDA_TRACK=<owner>` hint through queue list, queue next and a drain preview; coverage is at the shared label only (queue_work_tests.rs:4928).
+
+  ### finding-hash:2b087a82
+
+  Test coverage gaps on otherwise correct code: the entry-point regression (agent_launcher_tests.rs:5384) drives agent_new_with_config and agent_new_bg_dispatch but not agent_new_codex_bg (agent_codex_background.rs:676), and the AC3 real-child test (queue_work_tests.rs:5286) covers Claude and Codex but not Agy.
 status: Draft
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-13T20:01:56.623034248Z
-modified_at: 2026-11-14T17:36:33.595560956Z
+modified_at: 2026-11-14T17:36:46.594248650Z
 req_type: Task
 tags:
 - carried-finding:BUG-2543:2a99ebfc
@@ -975,6 +987,8 @@ tags:
 - carried-finding:STORY-2763:97d326dd
 - carried-finding:STORY-2763:bf60843e
 - carried-finding:STORY-2763:dee3f3a7
+- carried-finding:STORY-2765:2b087a82
+- carried-finding:STORY-2765:4e068149
 - carried-finding:STORY-2768:198d1196
 - carried-finding:STORY-2768:28356795
 - carried-finding:STORY-2768:6220a3dc
@@ -1040,6 +1054,7 @@ tags:
 - carried-from:PR-4046
 - carried-from:STORY-2735
 - carried-from:STORY-2763
+- carried-from:STORY-2765
 - carried-from:STORY-2768
 - carried-from:STORY-2775
 - carried-from:TASK-3785
@@ -1176,6 +1191,7 @@ tags:
 - from-review:PR-4046
 - from-review:STORY-2735
 - from-review:STORY-2763
+- from-review:STORY-2765
 - from-review:STORY-2768
 - from-review:STORY-2775
 - from-review:TASK-3785
@@ -1499,6 +1515,11 @@ history:
 - id: 01a1db21-eb04-7082-9960-2d0bc1ee9530
   author: joe
   timestamp: 2026-11-14T17:36:35.588768116Z
+  session_id: 01a1db1ec04c
+  changes: []
+- id: 01a1db22-1c9b-7c82-add1-5303722dd81c
+  author: joe
+  timestamp: 2026-11-14T17:36:48.283678918Z
   session_id: 01a1db1ec04c
   changes: []
 filed_at:
