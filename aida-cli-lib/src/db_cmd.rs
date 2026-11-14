@@ -550,7 +550,7 @@ fn run_db(
     // trace:TASK-3428 | ai:codex
     use crate::db_block::{handle_block_command, handle_db_check_collisions};
     use crate::db_reconcile::{
-        auto_bump_done_to_completed, auto_bump_enabled, handle_db_reconcile_status,
+        auto_bump_done_to_completed_with, auto_bump_enabled, handle_db_reconcile_status,
         print_auto_bump_summary,
     };
     use crate::output_format::output_format_is_json;
@@ -689,78 +689,119 @@ fn run_db(
                         anyhow::bail!("Not a git repository: {}", store_path.display());
                     }
 
-                    // trace:TASK-1717 | ai:claude — the pending commit, the pull
-                    // --rebase and its own cleanup, the collision scan and the
-                    // capture of the commit to push are ONE store-writer transaction
-                    // under the store write lock, so no spec edit, queue write,
-                    // mailbox digest or second sync can touch the index/HEAD between
-                    // them. The push, mirrors, auto-bump and maintenance run after
-                    // the lock is released.
-                    let window = aida_core::db::with_store_write_lock(store_path, || {
-                        db_sync_local_window(store_path, *pull, *push, message.as_deref())
-                    })?;
-                    let branch = window.branch.clone();
-                    let push_sha = window.head;
+                    // BUG-2565: the whole sync as one closure so a pull-only
+                    // sync can coalesce with a concurrent one. trace:BUG-2565 | ai:claude
+                    let sync = || -> Result<()> {
+                        // trace:TASK-1717 | ai:claude — the pending commit, the pull
+                        // --rebase and its own cleanup, the collision scan and the
+                        // capture of the commit to push are ONE store-writer transaction
+                        // under the store write lock, so no spec edit, queue write,
+                        // mailbox digest or second sync can touch the index/HEAD between
+                        // them. The push, mirrors, auto-bump and maintenance run after
+                        // the lock is released.
+                        let window = aida_core::db::with_store_write_lock(store_path, || {
+                            db_sync_local_window(store_path, *pull, *push, message.as_deref())
+                        })?;
+                        let branch = window.branch.clone();
+                        let push_sha = window.head;
 
-                    if let Some(conflicts) = &window.conflicts {
-                        if !conflicts.is_empty() {
-                            println!();
-                            println!("{}", "Conflicts detected:".red().bold());
-                            for conflict in conflicts {
+                        if let Some(conflicts) = &window.conflicts {
+                            if !conflicts.is_empty() {
                                 println!();
-                                print!("{}", conflict);
-                            }
-                            println!();
-                            println!(
+                                println!("{}", "Conflicts detected:".red().bold());
+                                for conflict in conflicts {
+                                    println!();
+                                    print!("{}", conflict);
+                                }
+                                println!();
+                                println!(
                             "Resolve with: aida edit <ID> --title/--status/... to pick the version you want."
                         );
-                        }
+                            }
 
-                        // STORY-86: also scan the code repo's default
-                        // branch for any spec-referencing commits that
-                        // arrived (possibly via a separate `git pull`)
-                        // and bump matching Done specs. `db sync --pull`
-                        // is decoupled from `git pull`, so we don't know
-                        // a pre_sha here — fall back to HEAD~50. The
-                        // `status == Done` guard inside the helper keeps
-                        // this idempotent. trace:STORY-86 | ai:claude
-                        if auto_bump_enabled() {
-                            if let Some(project_root) = store_path.parent() {
-                                let storage = Storage::new(store_path);
-                                match auto_bump_done_to_completed(
-                                    project_root,
-                                    store_path,
-                                    None,
-                                    &storage,
-                                ) {
-                                    Ok(flips) => print_auto_bump_summary(&flips),
-                                    Err(e) => {
-                                        eprintln!(
-                                            "  {} auto-bump failed: {}",
-                                            "Warning:".yellow().bold(),
-                                            e
-                                        );
+                            // STORY-86: also scan the code repo's default
+                            // branch for any spec-referencing commits that
+                            // arrived (possibly via a separate `git pull`)
+                            // and bump matching Done specs. `db sync --pull`
+                            // is decoupled from `git pull`, so we don't know
+                            // a pre_sha here — fall back to HEAD~50. The
+                            // `status == Done` guard inside the helper keeps
+                            // this idempotent. trace:STORY-86 | ai:claude
+                            // BUG-2565: skip the wide rescan when neither HEAD moved
+                            // since the last one completed. trace:BUG-2565 | ai:claude
+                            if auto_bump_enabled() {
+                                if let Some(project_root) = store_path.parent().filter(|root| {
+                                    !crate::store_pull_coalesce::reconcile_is_current(
+                                        root, store_path,
+                                    )
+                                }) {
+                                    let storage = Storage::new(store_path);
+                                    match auto_bump_done_to_completed_with(
+                                        project_root,
+                                        store_path,
+                                        None,
+                                        &storage,
+                                        true,
+                                    ) {
+                                        Ok((flips, scanned)) => {
+                                            print_auto_bump_summary(&flips);
+                                            if scanned {
+                                                crate::store_pull_coalesce::record_reconcile(
+                                                    project_root,
+                                                    store_path,
+                                                );
+                                            }
+                                        }
+                                        Err(e) => {
+                                            eprintln!(
+                                                "  {} auto-bump failed: {}",
+                                                "Warning:".yellow().bold(),
+                                                e
+                                            );
+                                        }
                                     }
                                 }
                             }
                         }
-                    }
 
-                    if *push {
-                        db_sync_push_leg(store_path, &branch, push_sha)?;
-                    }
+                        if *push {
+                            db_sync_push_leg(store_path, &branch, push_sha)?;
+                        }
 
-                    if !pull && !push {
-                        println!("Use --pull and/or --push to sync with remote.");
-                        println!("  aida db sync --pull --push");
-                    }
+                        if !pull && !push {
+                            println!("Use --pull and/or --push to sync with remote.");
+                            println!("  aida db sync --pull --push");
+                        }
 
-                    // TASK-1033: opportunistic store maintenance after a sync that
-                    // touched the store — ensure the lowered gc.auto is set, then
-                    // `git gc --auto` (a cheap no-op unless the threshold is exceeded).
-                    // Best-effort; never fails the sync.
-                    if *pull || *push {
-                        aida_core::git_ops::opportunistic_store_gc(store_path);
+                        // TASK-1033: opportunistic store maintenance after a sync that
+                        // touched the store — ensure the lowered gc.auto is set, then
+                        // `git gc --auto` (a cheap no-op unless the threshold is exceeded).
+                        // Best-effort; never fails the sync.
+                        if *pull || *push {
+                            aida_core::git_ops::opportunistic_store_gc(store_path);
+                        }
+                        Ok(())
+                    };
+                    // BUG-2565: concurrent pull-only syncs of this checkout run
+                    // one pull; a caller that waited reuses its result unless
+                    // the store gained changes it did not commit.
+                    // trace:BUG-2565 | ai:claude
+                    if *pull && !*push {
+                        let project_root = store_path.parent().unwrap_or(store_path);
+                        let turn = crate::store_pull_coalesce::coalesce(
+                            store_path,
+                            project_root,
+                            "db-sync-pull",
+                            || crate::store_pull_coalesce::store_pull_reusable(store_path),
+                            sync,
+                        )?;
+                        if turn == crate::store_pull_coalesce::Turn::Reused {
+                            println!(
+                                "Store already pulled by a sync that just finished in this checkout — reused its result."
+                            );
+                        }
+                    } else {
+                        sync()?;
                     }
                 }
                 // Status
