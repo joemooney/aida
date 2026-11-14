@@ -826,6 +826,14 @@ exit 1
     git_ok(&fx.main, &["checkout", "main"]);
     let (storage, _) = super::orphan_reentry_tests::queued_scope(&fx.main, "BUG-2451");
     let head = git_ok(&fx.main, &["rev-parse", "bug-2451"]);
+    assert_ne!(head, merged_head);
+    // Historical merge evidence must remain harmless on repeated discovery.
+    for _ in 0..2 {
+        assert_eq!(
+            crate::queue_cmd::canonical_resume_branch(&fx.main, "BUG-2451", true).unwrap(),
+            Some("bug-2451".into())
+        );
+    }
     queue_work(&storage, false).unwrap();
     let lease = crate::list_leases(&fx.main).remove(0);
     assert_eq!(lease.branch, "bug-2451");
@@ -861,10 +869,9 @@ fn bug_2549_detached_worktree_exit_captures_actual_head() {
     );
     let head = git_ok(&lease.worktree_path, &["rev-parse", "HEAD"]);
     assert_ne!(git_ok(&fx.main, &["rev-parse", &lease.branch]), head);
-    assert_eq!(
-        crate::lane_recovery::exit_head(&fx.main, &lease.branch, &[lease.clone()]).unwrap(),
-        Some(head.clone())
-    );
+    let captured =
+        crate::lane_recovery::exit_head(&fx.main, &lease.branch, &[lease.clone()]).unwrap();
+    assert_eq!(captured, Some(head.clone()));
     git_ok(
         &fx.main,
         &["worktree", "remove", lease.worktree_path.to_str().unwrap()],
@@ -873,6 +880,21 @@ fn bug_2549_detached_worktree_exit_captures_actual_head() {
         crate::lane_recovery::exit_head(&fx.main, &lease.branch, &[lease.clone()]).unwrap(),
         Some(git_ok(&fx.main, &["rev-parse", &lease.branch]))
     );
+    // Match session end: reconcile the captured facts after tree/lease removal.
+    std::fs::remove_file(crate::lease_path(&fx.main, &lease.id)).unwrap();
+    crate::lane_recovery::reconcile_observed(
+        &fx.main,
+        "BUG-2451",
+        &lease.branch,
+        captured.as_deref(),
+    )
+    .unwrap();
+    let store = storage.load().unwrap();
+    let req = store.get_requirement_by_spec_id("BUG-2451").unwrap();
+    assert!(req
+        .comments
+        .iter()
+        .any(|c| c.content.contains(&head) && c.content.contains(&lease.branch)));
 }
 
 // trace:BUG-2549 | ai:codex
@@ -902,4 +924,38 @@ fn bug_2549_unavailable_forge_preserves_exit_evidence() {
     assert!(req.comments.iter().any(|c| c.content.contains("bug-2451")
         && c.content.contains("detached-exit-head")
         && !c.content.contains("no open PR")));
+    assert!(!req
+        .comments
+        .iter()
+        .any(|c| c.content.contains("no open PR")));
+    let comments = req.comments.len();
+    // An outage retry must preserve one durable copy without changing status.
+    assert!(crate::lane_recovery::reconcile_observed(
+        &fx.main,
+        "BUG-2451",
+        "bug-2451",
+        Some("detached-exit-head")
+    )
+    .is_err());
+    let retry = storage.load().unwrap();
+    let req = retry.get_requirement_by_spec_id("BUG-2451").unwrap();
+    assert_eq!(req.comments.len(), comments);
+    assert_eq!(req.status, aida_core::RequirementStatus::InProgress);
+    // Only a later successful no-PR observation authorizes the transition.
+    recovery_forge_fixture(&fx.main, &fx.root);
+    crate::lane_recovery::reconcile_observed(
+        &fx.main,
+        "BUG-2451",
+        "bug-2451",
+        Some("detached-exit-head"),
+    )
+    .unwrap();
+    let recovered = storage.load().unwrap();
+    let req = recovered.get_requirement_by_spec_id("BUG-2451").unwrap();
+    assert_eq!(req.status, aida_core::RequirementStatus::Approved);
+    assert!(req
+        .comments
+        .iter()
+        .any(|c| c.content.starts_with("Lane exit evidence:")
+            && c.content.contains("detached-exit-head")));
 }
