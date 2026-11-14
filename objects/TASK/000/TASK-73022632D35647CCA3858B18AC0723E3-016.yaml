@@ -1,0 +1,28 @@
+id: 01a1dbde-c245-7ed1-b86b-daaa48159ead
+spec_id: TASK-73022632d35647cca3858b18ac0723e3-016
+title: 'Duration knobs: project config is read to lower the caps; config-trust lists them under keys.worktree'
+description: |
+  The signoff on STORY-2828 says both "read ONLY from the global config" and "a project value may lower the cap, never raise it". PR-4060 implements the second: [mandate] max_ttl_hours and [seat] inline_grant_max_hours go through the max_grant_hours loader (gate/seat_authority.rs resolve_hour_cap), so the project .aida/config.toml is read, to lower only. scripts/config-trust.toml has no global-only class, so both keys are listed under [keys.worktree.*] as `policy` with a lower-only note. A mandate is per user, so its project layer is the project the command runs in (find_project_root). If strictly global-only was meant, drop the project read for these two keys.
+
+  Raised by the implementer while working STORY-2828.
+  Branch: story-b6b1278890774ef993d2ebc327862470-751  ·  Commit: 5cce9a0390  (PR-4060)
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-14T21:02:51.461032121Z
+modified_at: 2026-11-14T21:02:51.461032121Z
+req_type: Task
+tags:
+- from-implementer:STORY-2828
+- kind:design-choice
+- severity:minor
+filed_at:
+  code_sha: 3484adef6ebc25d80a865cb1d1956cff3c31c8d6
+  branch: story-b6b1278890774ef993d2ebc327862470-751
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: bc24a1e688
+  vendor: claude
+  session: 01a1dbcbb140
+  harness_version: 2.1.319 (Claude Code)

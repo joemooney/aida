@@ -27,7 +27,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-14T20:30:53.775714194Z
-modified_at: 2026-11-14T20:46:05.205151231Z
+modified_at: 2026-11-14T21:03:04.284518325Z
 req_type: Story
 tags:
 - landing-emergency
@@ -71,6 +71,13 @@ comments:
     - The signoff says both "read ONLY from the global config" and "a project value may lower the cap, never raise it" (the `max_grant_hours` precedence). I am implementing the second reading: the project copy is read only to lower. `config-trust.toml` has no global-only class, so the keys are listed under `[keys.worktree.*]` as `policy` with a lower-only note. Is that the intended registration?
   created_at: 2026-11-14T20:46:05.205151231Z
   modified_at: 2026-11-14T20:46:05.205151231Z
+  session_id: 01a1dbcbb140
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a1dbde-f45c-7271-8d16-8fa33ae887af
+  author: dirtlab
+  content: 'Slice 1 (the two duration knobs) is open as PR-4060, commit 5cce9a0390, `Refs STORY-2828` so the story stays open for slice 2. Touches `gate/`: needs a human merge. Tests: the new `story_2828` unit tests plus the mandate, grant-TTL, config and gate-path suites passed through the lane job runner. `make check-ci-fast` did not complete in the lane sandbox (its containment conformance gate is denied a socket), so CI is the first full run of the fast gates. trace:STORY-2828 | ai:claude'
+  created_at: 2026-11-14T21:03:04.284518325Z
+  modified_at: 2026-11-14T21:03:04.284518325Z
   session_id: 01a1dbcbb140
   harness_version: 2.1.319 (Claude Code)
 history:
