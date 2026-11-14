@@ -645,15 +645,12 @@ fn salvage_worktree_patch_with(
         "# AIDA salvage patch\n# worktree: {}\n\n",
         worktree.display()
     ));
+    // One HEAD-to-worktree diff: it already holds the staged changes, so a
+    // second `--cached` diff would repeat them and the patch would not apply.
+    // trace:STORY-2768 | ai:claude
     body.push_str(&salvage_read(
         worktree,
         &["diff", "--binary", "HEAD"],
-        complete,
-        false,
-    )?);
-    body.push_str(&salvage_read(
-        worktree,
-        &["diff", "--binary", "--cached"],
         complete,
         false,
     )?);

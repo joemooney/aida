@@ -754,6 +754,65 @@ fn a_salvage_that_cannot_capture_every_file_writes_no_patch() {
     assert_eq!(patches(), 1);
 }
 
+// The patch a lease is released on recovers the work: applied to a clean
+// checkout of HEAD it reproduces staged additions, staged edits, an edit both
+// staged and changed again, and an untracked file.
+// trace:STORY-2768 | ai:claude
+#[test]
+fn a_complete_salvage_patch_applies_back_to_the_same_worktree() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path().join("root");
+    let tree = dir.path().join("tree");
+    let clean = dir.path().join("clean");
+    std::fs::create_dir_all(&root).unwrap();
+    std::fs::create_dir_all(&tree).unwrap();
+    git(&tree, &["init", "-q", "-b", "main"]);
+    git(&tree, &["config", "user.email", "t@example.invalid"]);
+    git(&tree, &["config", "user.name", "T"]);
+    for name in ["edited.txt", "mixed.txt", "kept.txt"] {
+        std::fs::write(tree.join(name), "one\n").unwrap();
+    }
+    git(&tree, &["add", "."]);
+    git(&tree, &["commit", "-q", "-m", "first"]);
+    git(
+        dir.path(),
+        &[
+            "clone",
+            "-q",
+            tree.to_str().unwrap(),
+            clean.to_str().unwrap(),
+        ],
+    );
+
+    // A staged new file, a staged edit, an edit staged and then changed
+    // again, and an untracked file.
+    std::fs::write(tree.join("added.txt"), "added\n").unwrap();
+    std::fs::write(tree.join("edited.txt"), "one\nstaged\n").unwrap();
+    std::fs::write(tree.join("mixed.txt"), "one\nstaged\n").unwrap();
+    git(&tree, &["add", "added.txt", "edited.txt", "mixed.txt"]);
+    std::fs::write(tree.join("mixed.txt"), "one\nstaged\nunstaged\n").unwrap();
+    std::fs::write(tree.join("untracked.txt"), "untracked\n").unwrap();
+
+    let patch = crate::worktree_gc::salvage_worktree_patch_complete(&root, "BUG-7", None, &tree)
+        .unwrap()
+        .expect("a patch");
+    git(&clean, &["apply", "--check", patch.to_str().unwrap()]);
+    git(&clean, &["apply", patch.to_str().unwrap()]);
+    for name in [
+        "added.txt",
+        "edited.txt",
+        "mixed.txt",
+        "kept.txt",
+        "untracked.txt",
+    ] {
+        assert_eq!(
+            std::fs::read_to_string(clean.join(name)).unwrap(),
+            std::fs::read_to_string(tree.join(name)).unwrap(),
+            "{name} after applying the salvage patch"
+        );
+    }
+}
+
 // A lease file that cannot be removed is reported as not released.
 #[test]
 fn a_lease_that_cannot_be_removed_is_not_reported_released() {
