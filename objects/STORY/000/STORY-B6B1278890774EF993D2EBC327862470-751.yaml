@@ -22,12 +22,12 @@ description: |
   - A grant 90 minutes from expiry with a live relay bound to it produces a notice to the product and advisor seats and a doctor finding naming the grant, the relay and the renew command.
   - An agent session (no interactive terminal) calling the extend path is refused.
   Not in scope: changing who may mint authority; any agent-side renewal.
-status: InProgress
+status: Approved
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-14T20:30:53.775714194Z
-modified_at: 2026-11-14T21:03:04.284518325Z
+modified_at: 2026-11-14T22:36:12.188982310Z
 req_type: Story
 tags:
 - landing-emergency
@@ -80,6 +80,11 @@ comments:
   modified_at: 2026-11-14T21:03:04.284518325Z
   session_id: 01a1dbcbb140
   harness_version: 2.1.319 (Claude Code)
+- id: 01a1dc34-381c-7682-a9e8-5e106cc08441
+  author: lane-recovery
+  content: Reference merge `72cfa08d38a826f2e27acbb0e5c322fff8b29e81` left unfinished work with no lease or open PR; returned to Approved.
+  created_at: 2026-11-14T22:36:12.188971829Z
+  modified_at: 2026-11-14T22:36:12.188971829Z
 history:
 - id: 01a1dbc9-8d7f-7011-a059-a04197eb5620
   author: joe
@@ -97,6 +102,13 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1dc34-381c-7682-a9e8-5e262940876d
+  author: lane-recovery
+  timestamp: 2026-11-14T22:36:12.188982242Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Approved
 filed_at:
   code_sha: ce660d553f782fd223ca091bb3bd2dc394352eb5
   branch: main
