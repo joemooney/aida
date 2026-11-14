@@ -37,7 +37,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-14T18:18:20.399960794Z
-modified_at: 2026-11-14T20:21:59.179312713Z
+modified_at: 2026-11-14T21:03:24.770560284Z
 req_type: Story
 tags:
 - agent-ergonomics
@@ -96,6 +96,13 @@ comments:
   created_at: 2026-11-14T20:21:59.179312713Z
   modified_at: 2026-11-14T20:21:59.179312713Z
   session_id: 01a1db6d-e689-7532-9eef-772722add87b
+  harness_version: 2.1.325 (Claude Code)
+- id: 01a1dbdf-4462-7a63-9609-1a87342efdad
+  author: joe
+  content: 'Friction (advisor, 2026-11-14 14:00): gh pr checks counts ''fail'' rows from cancelled, superseded runs at the same head, so ''is this PR green'' needs the run id of the passing ci-tier: full job and a filter on it (ship-train-next.sh does this by hand). aida pr train --check should own that.'
+  created_at: 2026-11-14T21:03:24.770560284Z
+  modified_at: 2026-11-14T21:03:24.770560284Z
+  session_id: 01a1dbd6-f8cd-7313-a123-75ebbeaa2afd
   harness_version: 2.1.325 (Claude Code)
 history:
 - id: 01a1db4a-abd7-74b1-97e3-ad48fe26683e
