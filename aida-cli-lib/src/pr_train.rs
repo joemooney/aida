@@ -1766,12 +1766,32 @@ impl MemberChecks for LiveChecks<'_> {
         head: &str,
     ) -> std::result::Result<Option<String>, MemberGateError> {
         // trace:STORY-2824 | ai:claude
-        let observe = if self.read_only {
-            crate::gate::approval::peek_merge_path_approval_gate
+        // Reuse the caller's forge so reports never repair forge configuration
+        // and the approval orchestrator needs no new outside paths.
+        // trace:STORY-2824 | ai:codex
+        let observed = if self.read_only {
+            crate::gate::approval::peek_merge_path_approval_gate(
+                self.project_root,
+                pr,
+                &[],
+                Some(head_ref),
+                Some(head),
+                &|| {
+                    self.forge
+                        .observe_change_metadata(pr, &mut crate::network_retry::NoopSink)
+                        .map(|result| result.map(|metadata| metadata.base_ref))
+                },
+            )
         } else {
-            crate::gate::approval::observe_merge_path_approval_gate
+            crate::gate::approval::observe_merge_path_approval_gate(
+                self.project_root,
+                pr,
+                &[],
+                Some(head_ref),
+                Some(head),
+            )
         };
-        match observe(self.project_root, pr, &[], Some(head_ref), Some(head)) {
+        match observed {
             crate::forge_observed::Observed::Known(result) => {
                 result.map_err(MemberGateError::Refused)
             }

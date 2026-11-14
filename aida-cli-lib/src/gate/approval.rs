@@ -345,21 +345,44 @@ pub(crate) fn observe_merge_path_approval_gate(
     head_branch: Option<&str>,
     head_sha: Option<&str>,
 ) -> crate::forge_observed::Observed<std::result::Result<Option<String>, String>> {
-    observe_merge_path_approval_gate_with(project_root, pr, known_ids, head_branch, head_sha, true)
+    observe_merge_path_approval_gate_with(
+        project_root,
+        pr,
+        known_ids,
+        head_branch,
+        head_sha,
+        true,
+        &|| {
+            crate::forge::forge_for(project_root)
+                .observe_change_metadata(pr, &mut crate::network_retry::NoopSink)
+                .map(|result| result.map(|metadata| metadata.base_ref))
+        },
+    )
 }
 
 /// [`observe_merge_path_approval_gate`] for a read-only report: the same
 /// decision, with no held-gate event, no activity line and no carry-over
 /// answer appended to the gate ledger.
+/// The caller supplies the base observation using its read-only forge resolver.
 // trace:STORY-2824 | ai:claude
+// trace:STORY-2824 | ai:codex
 pub(crate) fn peek_merge_path_approval_gate(
     project_root: &std::path::Path,
     pr: u64,
     known_ids: &[String],
     head_branch: Option<&str>,
     head_sha: Option<&str>,
+    base_now: &dyn Fn() -> crate::forge_observed::Observed<std::result::Result<String, String>>,
 ) -> crate::forge_observed::Observed<std::result::Result<Option<String>, String>> {
-    observe_merge_path_approval_gate_with(project_root, pr, known_ids, head_branch, head_sha, false)
+    observe_merge_path_approval_gate_with(
+        project_root,
+        pr,
+        known_ids,
+        head_branch,
+        head_sha,
+        false,
+        base_now,
+    )
 }
 
 fn observe_merge_path_approval_gate_with(
@@ -369,6 +392,7 @@ fn observe_merge_path_approval_gate_with(
     head_branch: Option<&str>,
     head_sha: Option<&str>,
     record: bool,
+    base_now: &dyn Fn() -> crate::forge_observed::Observed<std::result::Result<String, String>>,
 ) -> crate::forge_observed::Observed<std::result::Result<Option<String>, String>> {
     let main_worktree = crate::main_worktree_root_from(project_root);
     let (candidates, policy) = merge_approval_inputs(
@@ -394,16 +418,8 @@ fn observe_merge_path_approval_gate_with(
         &policy,
         head_sha,
         &site,
-        // A read-only report resolves the forge without repairing a stale
-        // `[forge]` config entry. trace:STORY-2824 | ai:claude
-        &|| match (if record {
-            crate::forge::forge_for(project_root)
-        } else {
-            crate::forge::forge_for_kind(project_root, crate::forge::peek_forge_kind(project_root))
-        })
-        .observe_change_metadata(pr, &mut crate::network_retry::NoopSink)
-        {
-            crate::forge_observed::Observed::Known(Ok(m)) => Some(m.base_ref),
+        &|| match base_now() {
+            crate::forge_observed::Observed::Known(Ok(base)) => Some(base),
             crate::forge_observed::Observed::Known(Err(why))
             | crate::forge_observed::Observed::Pending(why)
             | crate::forge_observed::Observed::Transient(why) => {
