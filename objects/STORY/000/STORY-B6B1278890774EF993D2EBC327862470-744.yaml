@@ -19,12 +19,12 @@ description: |-
   This project then sets stale_base = "refuse-on-conflict".
 
   Acceptance: (1) default config behaves exactly as today; (2) with refuse-on-conflict a stale, overlapping, non-conflicting PR is reviewed and the prompt carries the staleness note; a conflicting PR is refused with the existing message; (3) with warn nothing is refused; (4) the review watcher does not update-branch an overlapping head under refuse-on-conflict or warn; (5) 'aida config' / the config docs list the setting and its three values; (6) an unknown value is a config error naming the allowed values.
-status: InProgress
+status: Completed
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-14T18:09:46.924768383Z
-modified_at: 2026-11-14T20:39:05.608684975Z
+modified_at: 2026-11-14T21:50:46.260061745Z
 req_type: Story
 tags:
 - config
@@ -123,6 +123,20 @@ history:
   - field_name: status
     old_value: Done
     new_value: InProgress
+- id: 01a1dc0a-9df0-7a80-8f9d-4aa1e3046d29
+  author: aida-auto-bump
+  timestamp: 2026-11-14T21:50:45.744143068Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a1dc0a-9ff4-7e30-b19c-d02f98af094c
+  timestamp: 2026-11-14T21:50:46.260056141Z
+  agent: aida
+  commit_sha: 3cb7ba4fab12c60797d42bf51c7845633680c7d2
+  summary: 'All six acceptance criteria met at f35b424: policy enum + single decision fn shared by queue-work pre-flight, drain phase 3, aida review/human review and the watcher; default path unchanged; refusal paths tested. CI pending at review time (contracts shard is the confirming run for the docs/cli/07 flag-citation fix).'
+  review_verdict: approved
 filed_at:
   code_sha: 96fc262834527304fe85fc9ee32e4d04f1aaf4ea
   branch: main
@@ -135,4 +149,6 @@ implementation_info:
   implemented: true
   implemented_at: 2026-11-14T18:40:47.581091467Z
   implemented_by: dirtlab
+  completed_at: 2026-11-14T21:50:45.744135739Z
+  completion_sha: 3cb7ba4fab12c60797d42bf51c7845633680c7d2
   reopened_at_sha: ce660d553f782fd223ca091bb3bd2dc394352eb5
