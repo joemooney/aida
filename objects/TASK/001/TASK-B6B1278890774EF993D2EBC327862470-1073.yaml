@@ -245,12 +245,28 @@ description: |
   ### finding-hash:8a49a174
 
   selected() only recognises #[path] entries under aida-cli-lib/src/(gate/)?tests/, so a future harness module from aida-core or another crate would not count as selected.
+
+
+  ## Findings from TASK-3791
+  Reviewed sha: c5410adfab24dd3d2060a531bee9b67a70106efa
+
+  ### finding-hash:360471e3
+
+  Selection-audit discovery (tests/test_ci_structural_guards.py candidates()) relies on the ratchet/inventory naming convention, so source-scanning guards with other names (e.g. bug_1670 destructive_callers_do_not_use_tolerant_cache_reads, story_1728 cmdkit_framework_never_routes_through_command_registry) stay FULL-only and invisible to the audit.
+
+  ### finding-hash:f1e29cc2
+
+  timeout-minutes: 2 on the Build-job Rust structural ratchets step (ci.yml) is not enforced on the PR FAST path, which runs all gates inside make check-ci-fast; the test checking the key overstates the <2 min guarantee.
+
+  ### finding-hash:8a49a174
+
+  selected() only recognises #[path] entries under aida-cli-lib/src/(gate/)?tests/, so a future harness module from aida-core or another crate would not count as selected.
 status: Draft
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-13T20:01:56.623034248Z
-modified_at: 2026-11-14T02:20:03.193376728Z
+modified_at: 2026-11-14T02:20:08.121965127Z
 req_type: Task
 tags:
 - carried-finding:BUG-2546:56ed8b81
@@ -295,6 +311,9 @@ tags:
 - carried-finding:STORY-2768:6810bcf9
 - carried-finding:STORY-2768:7ce2cb14
 - carried-finding:STORY-2768:c0a8d165
+- carried-finding:TASK-3791:360471e3
+- carried-finding:TASK-3791:8a49a174
+- carried-finding:TASK-3791:f1e29cc2
 - carried-from:BUG-2546
 - carried-from:BUG-2549
 - carried-from:BUG-2557
@@ -313,6 +332,7 @@ tags:
 - carried-from:STORY-2735
 - carried-from:STORY-2763
 - carried-from:STORY-2768
+- carried-from:TASK-3791
 - finding-hash:04ad58d8
 - finding-hash:0cbc5c63
 - finding-hash:15915e39
@@ -358,6 +378,7 @@ tags:
 - from-review:STORY-2735
 - from-review:STORY-2763
 - from-review:STORY-2768
+- from-review:TASK-3791
 - kind:finding-sweep
 history:
 - id: 01a1d6a2-101a-76b0-8f1a-90d0013071f2
@@ -452,6 +473,11 @@ history:
 - id: 01a1d7da-d13b-7540-bc7b-dd9aa33397d5
   author: joe
   timestamp: 2026-11-14T02:20:04.283942303Z
+  session_id: 01a1d7d99653
+  changes: []
+- id: 01a1d7da-e47e-75d1-8d08-f5451497d5de
+  author: joe
+  timestamp: 2026-11-14T02:20:09.214917594Z
   session_id: 01a1d7d99653
   changes: []
 filed_at:
