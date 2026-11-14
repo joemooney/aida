@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-13T05:04:27.319151195Z
-modified_at: 2026-11-14T13:05:47.987853008Z
+modified_at: 2026-11-14T14:16:27.363467471Z
 req_type: Bug
 tags:
 - track:integration
@@ -54,6 +54,13 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida edit --status`. It was shelved on: reviewer/verdict:request-changes: Two P1 cached-reread defects: linked evidence bypasses fresh discovery refusal, and FIFO replacement blocks review/pull; advisor round-4 escalation applies.. No triage reason was given.'
   created_at: 2026-11-14T05:12:40.323254674Z
   modified_at: 2026-11-14T05:12:40.323254674Z
+- id: 01a1da6a-afe3-71a0-9523-3e851d250a67
+  author: joe
+  content: '[advisor a22 07:19] Live evidence, 3 of 3 trains this morning: the post-train ''aida pull'' run by ''aida pr train'' (child of the train process) spins in R state at 45-100% CPU with only .aida/cache-db/cache.db, -wal and -shm open (no store or git files). It ran 14 min (train 19), 6.5 min (train 20) and over 3 min (#4002), each ended by TERM. That matches this bug''s cache.db symptom. The fix is in promotion 9 (#4013, train 26). Confirm after it lands.'
+  created_at: 2026-11-14T14:16:27.363467471Z
+  modified_at: 2026-11-14T14:16:27.363467471Z
+  session_id: 01a1d9ea-4e25-7033-85e8-3648f0195c7c
+  harness_version: 2.1.325 (Claude Code)
 history:
 - id: 01a1d363-766b-7430-8bca-0c0a924878fa
   author: joe
