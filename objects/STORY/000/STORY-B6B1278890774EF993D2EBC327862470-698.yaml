@@ -17,7 +17,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-13T22:18:52.888699274Z
-modified_at: 2026-11-14T07:24:11.892318256Z
+modified_at: 2026-11-14T08:38:38.254072984Z
 req_type: Story
 tags:
 - track:integration
@@ -61,6 +61,13 @@ comments:
   modified_at: 2026-11-14T07:14:41.831434732Z
   session_id: 01a1d8d14e9e
   harness_version: codex-cli 0.167.0
+- id: 01a1d935-67ae-7811-b277-fa660743184c
+  author: joe
+  content: '[advisor 7b 01:39] RULING on PR-4000 CR at c5d99fe: BLOCKING (AC2/AC6 miss). record_exit must persist the exit reason to the runner log BEFORE any terminal write, and terminal writes must not panic on a hung-up tty: replace eprintln! with a fallible write (let _ = writeln!(std::io::stderr(), ...)). Add a regression test that closes/redirects stderr to a broken pipe and asserts the exit reason is logged. No other changes. LIGHT gate; on dell1 touch aida-core/src/lib.rs first, never AIDA_UPDATE_SNAPSHOTS=1. Base is integration.'
+  created_at: 2026-11-14T08:38:38.254072984Z
+  modified_at: 2026-11-14T08:38:38.254072984Z
+  session_id: 01a1d8f3-f948-7072-b174-fa9507ed074b
+  harness_version: 2.1.325 (Claude Code)
 history:
 - id: 01a1d8cb-f2dc-7ec1-a627-8dfcb3f8fa5a
   author: joe
