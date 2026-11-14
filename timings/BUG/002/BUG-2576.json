@@ -1,0 +1,32 @@
+{
+  "schema_version": 1,
+  "spec": "BUG-2576",
+  "publishes": [
+    {
+      "at": "2026-11-14T23:40:03.391679420Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-11-14T13:09:41.775862337Z",
+      "spec": "BUG-2576",
+      "kind": {
+        "event": "UnshippedWorkDetected",
+        "spec": "BUG-2576",
+        "branch": "bug-2576-integration-pr-ci",
+        "first_seen": "2026-11-14T13:09:41.775799266+00:00"
+      }
+    },
+    {
+      "ts": "2026-11-14T23:40:03.213391027Z",
+      "spec": "BUG-2576",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "786738cea92618fee2d1eae01fe97b1d46eef12e",
+        "pr": 4067,
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
