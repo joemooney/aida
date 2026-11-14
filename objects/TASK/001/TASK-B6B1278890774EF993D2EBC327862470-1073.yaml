@@ -629,12 +629,24 @@ description: |
   ### finding-hash:5863b5f0
 
   policy_registry [land] rows (config_cmd.rs:3136-3175): the (default; the value set is out of range) rendering and ProjectConfig/Default source selection have no test; only Limits::from_config warnings are tested.
+
+
+  ## Findings from PR-4024
+  Reviewed sha: fa19c00a58db3ab736a4815e4ac29d7664abec1c
+
+  ### finding-hash:2df54e83
+
+  Compact (TOON) pointer at ps_integrate.rs:3240 names only aida land status; the signed-off S3d sketch says the line points at aida land status and aida now in both text and TOON
+
+  ### finding-hash:0bdbec3f
+
+  No automated test covers the new pointer line in either output (ps_integrate.rs:3240, 3717-3718); a later edit can drop it silently
 status: Draft
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-13T20:01:56.623034248Z
-modified_at: 2026-11-14T11:58:44.231112305Z
+modified_at: 2026-11-14T13:30:51.258658196Z
 req_type: Task
 tags:
 - carried-finding:BUG-2543:2a99ebfc
@@ -722,6 +734,8 @@ tags:
 - carried-finding:PR-4020:2a257094
 - carried-finding:PR-4020:5863b5f0
 - carried-finding:PR-4020:e391cb46
+- carried-finding:PR-4024:0bdbec3f
+- carried-finding:PR-4024:2df54e83
 - carried-finding:STORY-2735:2c7ae2ea
 - carried-finding:STORY-2763:04ad58d8
 - carried-finding:STORY-2763:15915e39
@@ -782,6 +796,7 @@ tags:
 - carried-from:PR-4012
 - carried-from:PR-4015
 - carried-from:PR-4020
+- carried-from:PR-4024
 - carried-from:STORY-2735
 - carried-from:STORY-2763
 - carried-from:STORY-2768
@@ -789,6 +804,7 @@ tags:
 - carried-from:TASK-3785
 - carried-from:TASK-3791
 - finding-hash:04ad58d8
+- finding-hash:0bdbec3f
 - finding-hash:0bff30e1
 - finding-hash:0cbc5c63
 - finding-hash:15915e39
@@ -799,6 +815,7 @@ tags:
 - finding-hash:2a99ebfc
 - finding-hash:2c08aa50
 - finding-hash:2c7ae2ea
+- finding-hash:2df54e83
 - finding-hash:2dfbd6d5
 - finding-hash:35d3eb09
 - finding-hash:360471e3
@@ -885,6 +902,7 @@ tags:
 - from-review:PR-4012
 - from-review:PR-4015
 - from-review:PR-4020
+- from-review:PR-4024
 - from-review:STORY-2735
 - from-review:STORY-2763
 - from-review:STORY-2768
@@ -1146,6 +1164,11 @@ history:
   author: joe
   timestamp: 2026-11-14T11:58:45.535737854Z
   session_id: 01a1d9e9cbc6
+  changes: []
+- id: 01a1da40-f745-7352-9623-1802f7003278
+  author: joe
+  timestamp: 2026-11-14T13:30:53.125645299Z
+  session_id: 01a1da3e87f6
   changes: []
 filed_at:
   code_sha: 91fe1e337894199f15365d3f8ecfaf81366f8291
