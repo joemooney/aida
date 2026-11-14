@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-13T20:52:54.357683400Z
-modified_at: 2026-11-14T12:40:28.038205055Z
+modified_at: 2026-11-14T13:15:29.410457526Z
 req_type: Bug
 tags:
 - perf
@@ -111,6 +111,13 @@ comments:
   content: '[advisor a22 05:41] Review note for PR-4007 at d6eb35f: on the old merge result at 30e4a10, dell1 failed aida-core git_ops bug034_permission_denied_lock_is_not_retried, and the launch-input ratchet flagged AIDA_PULL_COALESCE as unclassified. The reviewer may run the targeted ''cargo test --profile agent -p aida-core git_ops'' to confirm both are fixed at this head (one targeted run allowed under the LIGHT gate).'
   created_at: 2026-11-14T12:40:28.038205055Z
   modified_at: 2026-11-14T12:40:28.038205055Z
+  session_id: 01a1d9ea-4e25-7033-85e8-3648f0195c7c
+  harness_version: 2.1.325 (Claude Code)
+- id: 01a1da32-df02-7da0-adc6-41ae65c4b686
+  author: joe
+  content: '[advisor a22 06:17] Evidence: the post-train ''aida pull'' in deputy job 01a1d973 (train 19, after #4023 merged) ran 14 min at 100% CPU (pid 3468472, state R) and blocked the serial default deputy queue. One TERM ended it and the train script finished rc 0. If #4007 does not bound the pull''s runtime, add a wall-clock bound to the post-train pull in the same PR, or file the gap.'
+  created_at: 2026-11-14T13:15:29.410457526Z
+  modified_at: 2026-11-14T13:15:29.410457526Z
   session_id: 01a1d9ea-4e25-7033-85e8-3648f0195c7c
   harness_version: 2.1.325 (Claude Code)
 history:
