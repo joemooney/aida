@@ -43,7 +43,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-13T16:52:56.270142081Z
-modified_at: 2026-11-14T02:53:41.958614999Z
+modified_at: 2026-11-14T03:28:54.447119495Z
 req_type: Story
 tags:
 - architecture
@@ -259,6 +259,13 @@ comments:
   created_at: 2026-11-14T02:53:41.958614999Z
   modified_at: 2026-11-14T02:53:41.958614999Z
   session_id: 01a1d797-2ccf-7771-899a-682081f10504
+  harness_version: 2.1.325 (Claude Code)
+- id: 01a1d819-d6af-7422-98c1-2cbc160b3f6c
+  author: joe
+  content: 'Integration seat 20:45 MST: #3981 round-1 fixes F1/F2/F3/F5 pushed at c901aa5143a (details in the PR comment). check-ci-fast 47 gates; dell1 1757 passed, 1 unrelated flaky failure (gate::mandate expiry_mail_retries..., passes alone); JSON audit 14 passed. Ready for the scoped re-review.'
+  created_at: 2026-11-14T03:28:54.447119495Z
+  modified_at: 2026-11-14T03:28:54.447119495Z
+  session_id: 01a1d7e6-ad96-7820-94e0-3f17a564c833
   harness_version: 2.1.325 (Claude Code)
 history:
 - id: 01a1d5d3-fe28-7cc2-a7e3-638454ed4798
