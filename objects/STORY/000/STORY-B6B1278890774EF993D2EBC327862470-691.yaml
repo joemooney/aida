@@ -43,7 +43,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-13T16:52:56.270142081Z
-modified_at: 2026-11-14T02:32:24.106587723Z
+modified_at: 2026-11-14T02:51:05.387575278Z
 req_type: Story
 tags:
 - architecture
@@ -307,6 +307,12 @@ history:
   author: joe
   timestamp: 2026-11-14T02:32:25.631936448Z
   changes: []
+- id: 01a1d7f7-3791-70f1-a408-da5e8cfcf8c8
+  author: joe
+  timestamp: 2026-11-14T02:51:05.489880851Z
+  session_id: 01a1d7f3623b
+  harness_version: 2.1.325 (Claude Code)
+  changes: []
 filed_at:
   code_sha: 8265057964618d451894a955f2b90463164762aa
   branch: main
@@ -320,7 +326,7 @@ failure_reason:
   phase: reviewer
   phase_index: 3
   kind: verdict:request-changes
-  detail: 'S1 full sweep: 12 defects in evidence handling, hold eligibility, content rounds, Git pinning, discovery completeness and blocked ages; acceptance checklist enumerated.'
+  detail: 'Round 1 full sweep: 6 advisor conditions and rulings a-c mostly met with fake-Acts tests; blocking: the reviewer-timeout verdict re-read accepts any older verdict at the head, so the stale-approval re-review case (the S2 acceptance path) relaunches forever and never reaches BLOCKED; the merge-tree id is not written to the reviewer log (ruling a). CI not reported at head at review time (only merge-hold checks). Live acceptance unverified (accepted operator act).'
   recovery_hint: address the review findings, move STORY-2768 back to In Progress, and clear the PR hold only after approval
   shelved_by: reviewer
-  shelved_at: 2026-11-13T18:29:17.136257301Z
+  shelved_at: 2026-11-14T02:51:05.387575278Z
