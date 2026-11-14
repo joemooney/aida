@@ -1,0 +1,42 @@
+{
+  "schema_version": 1,
+  "spec": "BUG-2569",
+  "publishes": [
+    {
+      "at": "2026-11-14T23:40:01.278579193Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-11-14T02:40:28.370052515Z",
+      "spec": "BUG-2569",
+      "kind": {
+        "event": "UnshippedWorkDetected",
+        "spec": "BUG-2569",
+        "branch": "bug-2569-train-merge-carry",
+        "first_seen": "2026-11-14T02:40:28.369978354+00:00"
+      }
+    },
+    {
+      "ts": "2026-11-14T08:02:53.095602956Z",
+      "spec": "BUG-2569",
+      "kind": {
+        "event": "UnshippedWorkDetected",
+        "spec": "BUG-2569",
+        "branch": "bug-2569-foreign-refusal",
+        "first_seen": "2026-11-14T08:02:53.095536634+00:00"
+      }
+    },
+    {
+      "ts": "2026-11-14T23:40:01.097917467Z",
+      "spec": "BUG-2569",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "786738cea92618fee2d1eae01fe97b1d46eef12e",
+        "pr": 4067,
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
