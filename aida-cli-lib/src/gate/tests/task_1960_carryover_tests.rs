@@ -1650,3 +1650,104 @@ fn story_2696_corpus_superseded_policy_cannot_veto_clean_merge() {
         }
     }
 }
+
+/// A verdict on `change`'s ledger for `spec`, as `aida review record
+/// <spec> --pr <change>` leaves it.
+fn ledger_verdict(repo: &Path, change: u64, spec: &str, verdict: &str, sha: &str) {
+    use crate::gate::ledger;
+    let record = serde_json::json!({"verdict": verdict, "reviewed_sha": sha,
+        "recorded_by": "reviewer-b", "recorded_at": "2026-11-13T00:00:00Z"});
+    let path = crate::gate::review_verdict::verdict_path(repo, &format!("PR-{change}"));
+    ledger::record_verdict_at(
+        &path,
+        record.as_object().unwrap(),
+        Some(&crate::gate::canon::GateSpec::with_key(spec, None)),
+    )
+    .unwrap();
+}
+
+// Train 9: promotion #3966 named 45 specs in its car body. Two of them had a
+// refusal recorded for an unrelated change, and that stopped an approval
+// that had carried over a clean base merge. A refusal of another change at
+// another commit says nothing about this one.
+// trace:BUG-2569 | ai:claude
+#[test]
+fn bug_2569_a_refusal_of_another_change_does_not_stop_a_carried_approval() {
+    let (tmp, approved) = fixture();
+    let repo = tmp.path();
+    let h = clean_merge(repo);
+    let ids = vec!["BUG-9".to_string()];
+    let elsewhere = "c".repeat(40);
+    record_corpus_verdict(repo, &format!("PR-{PR}"), "approved", &approved);
+    ledger_verdict(repo, 99, "BUG-9", "request-changes", &elsewhere);
+    corpus_gate(repo, &ids, "main", &h)
+        .expect("another change's refusal at another commit is not about this head");
+    assert!(proof_event(repo, &h).is_some());
+}
+
+// What still stops the carry-over: a refusal of this change under a spec
+// key, and another change's refusal recorded at this very head.
+// trace:BUG-2569 | ai:claude
+#[test]
+fn bug_2569_this_changes_refusal_and_a_refusal_at_this_head_still_stop_it() {
+    let ids = vec!["BUG-9".to_string()];
+
+    let (tmp, approved) = fixture();
+    let repo = tmp.path();
+    let h = clean_merge(repo);
+    record_corpus_verdict(repo, &format!("PR-{PR}"), "approved", &approved);
+    ledger_verdict(repo, PR, "BUG-9", "request-changes", &"c".repeat(40));
+    assert!(
+        corpus_gate(repo, &ids, "main", &h).is_err(),
+        "this change's own refusal under a spec key stands"
+    );
+
+    let (tmp, approved) = fixture();
+    let repo = tmp.path();
+    let h = clean_merge(repo);
+    record_corpus_verdict(repo, &format!("PR-{PR}"), "approved", &approved);
+    ledger_verdict(repo, 99, "BUG-9", "request-changes", &h);
+    let text = format!("{:#}", corpus_gate(repo, &ids, "main", &h).unwrap_err());
+    assert!(text.contains("outstanding"), "{text}");
+}
+
+// A change merged ahead of its review and refused afterwards rides inside
+// every head that contains its commit. Its refusal stops a carried approval
+// while it stands and the commit is in the head, and only then.
+// trace:BUG-2569 | ai:claude
+#[test]
+fn bug_2569_a_standing_refusal_of_a_commit_in_the_head_stops_the_carry_over() {
+    let ids = vec!["BUG-9".to_string()];
+    let carried = |after: &dyn Fn(&Path, &str, &str)| {
+        let (tmp, approved) = fixture();
+        let repo = tmp.path();
+        let h = clean_merge(repo);
+        record_corpus_verdict(repo, &format!("PR-{PR}"), "approved", &approved);
+        after(repo, &approved, &h);
+        corpus_gate(repo, &ids, "main", &h)
+    };
+
+    // The refused commit is in the head and change 99 still stands refused.
+    let stands = carried(&|repo, approved, _| {
+        ledger_verdict(repo, 99, "BUG-9", "request-changes", approved);
+    });
+    assert!(
+        stands.is_err(),
+        "a standing refusal inside the head stops it"
+    );
+
+    // Change 99 was approved afterwards: the refusal is a past round.
+    carried(&|repo, approved, _| {
+        ledger_verdict(repo, 99, "BUG-9", "request-changes", approved);
+        ledger_verdict(repo, 99, "BUG-8", "approved", &"d".repeat(40));
+    })
+    .expect("a refusal its own change has since been approved past does not count");
+
+    // Change 99 stands refused, at a commit this head does not contain.
+    carried(&|repo, _, h| {
+        let tree = format!("{h}^{{tree}}");
+        let outside = git(repo, &["commit-tree", &tree, "-p", h, "-m", "outside"]);
+        ledger_verdict(repo, 99, "BUG-9", "request-changes", &outside);
+    })
+    .expect("a refused commit outside the head is not part of what merges");
+}

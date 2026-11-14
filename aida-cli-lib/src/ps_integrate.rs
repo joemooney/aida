@@ -3237,6 +3237,7 @@ pub(crate) fn handle_ps(json: bool, all: bool) -> Result<()> {
         if !watch_ready.is_empty() {
             println!("{}", ps_review_watch_ready_toon(&watch_ready));
         }
+        println!("landing: aida land status");
         return Ok(());
     }
 
@@ -3713,8 +3714,17 @@ pub(crate) fn handle_ps(json: bool, all: bool) -> Result<()> {
         }
     }
 
+    println!();
+    println!("{}", format!("Open changes: {LANDING_POINTER}").dimmed());
+
     Ok(())
 }
+
+/// Where the state of every open change is shown. `aida ps` lists
+/// processes; what each change waits on is the landing view's to say.
+// trace:STORY-2768 | ai:claude
+pub(crate) const LANDING_POINTER: &str =
+    "`aida land status` lists each open change and what it waits on; `aida now` is the one-screen view";
 
 // trace:BUG-2010 | ai:antigravity
 #[cfg(test)]
