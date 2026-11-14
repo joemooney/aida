@@ -27,7 +27,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-14T20:30:53.775714194Z
-modified_at: 2026-11-14T20:36:21.880431892Z
+modified_at: 2026-11-14T20:39:36.998928629Z
 req_type: Story
 tags:
 - landing-emergency
@@ -39,6 +39,17 @@ comments:
   created_at: 2026-11-14T20:36:21.880431892Z
   modified_at: 2026-11-14T20:36:21.880431892Z
   session_id: 01a1db78-560d-7a81-a467-3742be1fefc3
+- id: 01a1dbc9-7b26-7073-9a89-8e504f26f462
+  author: joe
+  content: |-
+    ADVISOR TRIAGE + SKETCH SIGNOFF (2026-11-14 13:40). Approved. Slice 1 is narrowed, because BUG-2585 (PR #4057, in review) already delivers the warnings half: the relay holds its seat instead of dying when the parent grant is expired, mails advisor and product inside 2h, 'aida role expiry' prints the parent-grant line, and doctor raises a seat-grant finding. Do not rebuild those. After #4057 lands, compare it against item 4 here and file only the gap (mandate expiry notice, if missing) as a follow-up.
+    SLICE 1 = the two knobs, this design, no fork left open: (1) [mandate] max_ttl_hours, default 24; (2) [seat] inline_grant_max_hours, default 8. Both are read ONLY from the global ~/.aida/config.toml through the same loader and precedence as [seat] max_grant_hours in gate/seat_authority.rs: a project config value may lower the cap, never raise it. Both are clamped by the ONE existing 168h hard-ceiling constant (share it, do not add a second constant); inline_grant_max_hours is additionally clamped to the effective max_grant_hours. Absent key = today's constants exactly, so no behaviour change without config. Register both keys in scripts/config-trust.toml as global-only. No new command, no change to who may mint or renew authority, nothing agent-side. Refusal messages name the cap, where it was read from, and the key to change.
+    Tests (the spec's second acceptance bullet, for both knobs): key absent -> 25h mandate refused as today; global 72 -> 72h accepted; 169h refused whatever the config says; project-config value cannot raise; inline grant default 8h unchanged and raised by the global key only.
+    Commit with 'Refs STORY-2828' (slice 2 keeps the story open). Gate: one targeted cargo test run of the new tests plus make check-ci-fast. Touches gate/: review before merge, STRICT. Slice 2 (single view + operator-only extend) stays unstarted until the landing emergency ends; it will need its own sketch. trace:STORY-2828 | ai:claude
+  created_at: 2026-11-14T20:39:36.998928629Z
+  modified_at: 2026-11-14T20:39:36.998928629Z
+  session_id: 01a1db6d-e689-7532-9eef-772722add87b
+  harness_version: 2.1.325 (Claude Code)
 filed_at:
   code_sha: ce660d553f782fd223ca091bb3bd2dc394352eb5
   branch: main
