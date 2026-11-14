@@ -1285,12 +1285,32 @@ description: |
   ### finding-hash:d4e2f347
 
   review_watch.rs Store::retain with preserve_heads (fast policy): blocking recordings on base-merge-only heads spend no round, so such heads keep being re-reviewed, and once more than 16 blocking recordings are retained the ensure fails select_with_coverage and round_for on every poll instead of routing the change to the advisor.
+
+
+  ## Findings from PR-3994
+  Reviewed sha: d7486d59c9867944b4a80af75cff03d8acae4722
+
+  ### finding-hash:79256db6
+
+  AC5 remains open: docs/plans/2026-11-07-aida-cli-lib-crate-split-deep-dive.md section 5.3 still shows After as pending (before: lib-0 685s, lib-1 556s). Record the lib-0/lib-1 Run tests durations from FULL run 43639860433 (or a later successful FULL run) before TASK-3784 is completed.
+
+  ### finding-hash:12932f51
+
+  crate::test_env is now an explicit re-export list inside gate-protected aida-cli-lib/src/gate/test_support.rs (mod test_env) plus a frozen ORCHESTRATOR_OUTSIDE_PATHS entry in gate/orchestrator_leaves.rs; any future aida-testkit test_env helper is unreachable through crate::test_env until both protected files get a human merge. The backing module is also renamed test_env_base, so test IDs moved from test_env::tests::* to test_env_base::tests::* and old name filters match nothing.
+
+  ### finding-hash:2162fe2c
+
+  tests/test_git_maintenance_ratchet.py:32 CRATES and tests/test_executable_fixture_ratchet.py:81 (aida-cli-lib/src only) do not scan aida-testkit, so a new raw write-class git call or hand-rolled executable fixture added to the testkit would not be ratcheted.
+
+  ### finding-hash:ed15cafe
+
+  Stale prose after the move: aida-cli/tests/bug_1674_show_bounded_under_writer.rs:43 and bug_1956_reader_fallbacks_bounded_under_writer.rs:27 point at aida-cli-lib/src/test_timing.rs (now a re-export); story_2326_launch_ratchet_tests.rs:80 note still says compiled into the crate; aida-testkit/src/test_home.rs:24 and the home_dir rustdoc now read as home_dir calling itself after crate::home_dir was mechanically shortened.
 status: Draft
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-13T20:01:56.623034248Z
-modified_at: 2026-11-14T21:07:02.506430820Z
+modified_at: 2026-11-14T21:14:51.280136583Z
 req_type: Task
 tags:
 - carried-finding:BUG-2543:2a99ebfc
@@ -1397,13 +1417,17 @@ tags:
 - carried-finding:PR-3989:49b64e26
 - carried-finding:PR-3990:2a99ebfc
 - carried-finding:PR-3990:6935f83d
+- carried-finding:PR-3994:12932f51
+- carried-finding:PR-3994:2162fe2c
 - carried-finding:PR-3994:33bf6df1
 - carried-finding:PR-3994:46a7a9dc
 - carried-finding:PR-3994:51cbf3a8
+- carried-finding:PR-3994:79256db6
 - carried-finding:PR-3994:7c082b28
 - carried-finding:PR-3994:7c1b2064
 - carried-finding:PR-3994:83e5954d
 - carried-finding:PR-3994:ae1481ad
+- carried-finding:PR-3994:ed15cafe
 - carried-finding:PR-3997:3f4b4821
 - carried-finding:PR-3998:0bff30e1
 - carried-finding:PR-4000:73e42b4b
@@ -1605,12 +1629,14 @@ tags:
 - finding-hash:0cbc5c63
 - finding-hash:0d56e3a6
 - finding-hash:1287747b
+- finding-hash:12932f51
 - finding-hash:138d1871
 - finding-hash:15915e39
 - finding-hash:198d1196
 - finding-hash:1bf50580
 - finding-hash:1f7b8f62
 - finding-hash:1fce0788
+- finding-hash:2162fe2c
 - finding-hash:236bf348
 - finding-hash:24879d52
 - finding-hash:276a9aea
@@ -1669,6 +1695,7 @@ tags:
 - finding-hash:73e42b4b
 - finding-hash:74641343
 - finding-hash:76a786ef
+- finding-hash:79256db6
 - finding-hash:79f360e4
 - finding-hash:7bbbf9a9
 - finding-hash:7c082b28
@@ -1717,6 +1744,7 @@ tags:
 - finding-hash:e40f3f6c
 - finding-hash:e5eb0aa5
 - finding-hash:e95a72ea
+- finding-hash:ed15cafe
 - finding-hash:f167aa2d
 - finding-hash:f1e29cc2
 - finding-hash:f238ea37
@@ -2235,6 +2263,11 @@ history:
   author: joe
   timestamp: 2026-11-14T21:07:04.046655864Z
   session_id: 01a1dbdee1b1
+  changes: []
+- id: 01a1dbe9-c29e-7491-8d7d-15c4be58ee26
+  author: joe
+  timestamp: 2026-11-14T21:14:52.446464871Z
+  session_id: 01a1dbde9411
   changes: []
 filed_at:
   code_sha: 91fe1e337894199f15365d3f8ecfaf81366f8291
