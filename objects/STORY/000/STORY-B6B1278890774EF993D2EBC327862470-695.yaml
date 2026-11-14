@@ -28,6 +28,10 @@ tags:
 - integration
 - landing
 - track:integration
+relationships:
+- rel_type: Parent
+  target_id: 01a1d999-8037-7703-afd6-40459071fabd
+  created_at: 2026-11-14T10:29:59.155988156Z
 comments:
 - id: 01a1d996-725b-7ab0-9286-4c386d321898
   author: joe
@@ -119,6 +123,12 @@ history:
   - field_name: status
     old_value: NeedsAttention
     new_value: Approved
+- id: 01a1d99b-9068-7f42-862a-d72a446bf1c3
+  author: joe
+  timestamp: 2026-11-14T10:30:13.352425879Z
+  session_id: 01a1d8f3-f948-7072-b174-fa9507ed074b
+  harness_version: 2.1.325 (Claude Code)
+  changes: []
 filed_at:
   code_sha: ee8dd4b2bdf1495f699357a3f2f40f9bf3802983
   branch: main
