@@ -308,6 +308,41 @@ fn memoized_heads() -> impl FnMut(&Path, &str) -> Result<Vec<String>> {
     }
 }
 
+/// Whether `path` is the AIDA store worktree, whatever it has checked out.
+/// A detached HEAD has no `aida-store` branch for the branch guard to see, so
+/// the store is recognized by where and what it is: the attached
+/// `.aida-store` directory, the store the project configuration resolves to,
+/// or a tree with the store layout.
+// trace:BUG-2587 | ai:claude
+fn store_worktree(main: &Path, path: &Path) -> bool {
+    aida_core::git_ops::is_store_tree(path)
+        || same_path(&main.join(".aida-store"), path)
+        || aida_core::store_locate::detect_distributed_store_from(main)
+            .is_some_and(|store| same_path(&store, path))
+}
+
+/// Trees that are never eligible, on a branch or detached: the primary
+/// checkout (and anything containing it) and the store worktree.
+// trace:BUG-2587 | ai:claude
+fn protected_identity(main: &Path, path: &Path, is_clone: bool) -> Result<()> {
+    anyhow::ensure!(
+        !same_path(main, path) && !main.starts_with(path),
+        "protected main checkout"
+    );
+    anyhow::ensure!(!store_worktree(main, path), "protected store worktree");
+    // A linked worktree's `.git` is a pointer file. A directory there is a
+    // repository of its own, which this path must never tear down.
+    if !is_clone {
+        let dot_git = std::fs::symlink_metadata(path.join(".git"))
+            .context("unreadable worktree .git pointer")?;
+        anyhow::ensure!(
+            dot_git.is_file(),
+            "protected primary checkout: not a linked worktree"
+        );
+    }
+    Ok(())
+}
+
 // The holder guard exempts this process; explicitly retain its checkout.
 // trace:TASK-1222 | ai:codex
 fn protect_invoking(row: &mut Candidate, invoking: &Path) {
@@ -350,10 +385,10 @@ fn inspect_full(
     };
     let result = (|| -> Result<()> {
         row.identity = Some(crate::seat_clone::dir_identity(path)?);
-        anyhow::ensure!(
-            !same_path(main, path) && !main.starts_with(path),
-            "protected main checkout"
-        );
+        // Identity first: no branch, HEAD or remote evidence is read for a
+        // tree that is protected by what it is.
+        // trace:BUG-2587 | ai:claude
+        protected_identity(main, path, is_clone)?;
         if is_clone {
             anyhow::ensure!(
                 crate::seat_clone::is_seat_clone_location(main, path),
@@ -523,7 +558,13 @@ fn inventory(main: &Path) -> Result<Vec<(PathBuf, bool)>> {
     let raw = git(main, &["worktree", "list", "--porcelain"])?;
     let mut paths: Vec<_> = crate::worktree_reclaim::parse_worktree_entries(&raw)
         .into_iter()
-        .filter(|w| !same_path(main, &w.path) && w.branch.as_deref() != Some("aida-store"))
+        // The store is never a candidate, by branch or, detached, by identity.
+        // trace:BUG-2587 | ai:claude
+        .filter(|w| {
+            !same_path(main, &w.path)
+                && w.branch.as_deref() != Some("aida-store")
+                && !store_worktree(main, &w.path)
+        })
         .map(|w| (w.path, false))
         .collect();
     let parent = seat_parent(main)?;
@@ -1574,7 +1615,7 @@ mod tests {
     #[test]
     fn bug_2587_git_failure_with_empty_stderr_names_the_command() {
         // trace:BUG-2587 | ai:claude
-        // trace:BUG-2587.acc62c33 | ai:claude
+        // trace:BUG-b6b1278890774ef993d2ebc327862470-352.acc62c33 | ai:claude
         let (_tmp, main) = fixture();
         let tree = detached(&main, "integ-quiet");
         // `--quiet` exits 1 and prints nothing on a detached HEAD.
@@ -1597,8 +1638,8 @@ mod tests {
     #[test]
     fn bug_2587_detached_head_is_reported_plainly_with_its_size() {
         // trace:BUG-2587 | ai:claude
-        // trace:BUG-2587.ac0e26fa | ai:claude
-        // trace:BUG-2587.acc62c33 | ai:claude
+        // trace:BUG-b6b1278890774ef993d2ebc327862470-352.ac0e26fa | ai:claude
+        // trace:BUG-b6b1278890774ef993d2ebc327862470-352.acc62c33 | ai:claude
         let (_tmp, main) = fixture();
         let tree = detached(&main, "integ-local");
         let head = commit(&tree, "local-only");
@@ -1629,7 +1670,7 @@ mod tests {
     #[test]
     fn bug_2587_detached_head_on_default_or_remote_pr_head_is_removed() {
         // trace:BUG-2587 | ai:claude
-        // trace:BUG-2587.ac82fd75 | ai:claude
+        // trace:BUG-b6b1278890774ef993d2ebc327862470-352.ac82fd75 | ai:claude
         let (_tmp, main) = fixture();
         // On the default branch: no forge and no remote listing is consulted.
         let merged = detached(&main, "integ-merged");
@@ -1696,9 +1737,125 @@ mod tests {
     }
 
     #[test]
+    fn bug_2587_detached_store_and_primary_trees_are_never_eligible() {
+        // trace:BUG-2587 | ai:claude
+        // trace:BUG-b6b1278890774ef993d2ebc327862470-352.ac82fd75 | ai:claude
+        let (_tmp, main) = fixture();
+        let detached_at = |path: &Path| {
+            git_ok(
+                &main,
+                &[
+                    "worktree",
+                    "add",
+                    "-q",
+                    "--detach",
+                    path.to_str().unwrap(),
+                    "origin/main",
+                ],
+            );
+        };
+        let kept = |path: &Path, row: &Candidate| {
+            assert!(!row.eligible, "{}", row.reason);
+            assert_eq!(row.reason, "protected store worktree");
+            // A plan that claims eligibility is still refused at removal.
+            let mut forged = row.clone();
+            forged.eligible = true;
+            let refused = remove_with(&main, &forged, "origin/main", &[], &mut absent);
+            assert!(
+                format!("{:#}", refused.unwrap_err()).contains("protected store worktree"),
+                "removal must name the protection"
+            );
+            assert!(path.join("seed").exists());
+            assert!(!inventory(&main)
+                .unwrap()
+                .iter()
+                .any(|(listed, _)| same_path(listed, path)));
+        };
+
+        // The attached store, detached, clean, unleased, its HEAD published
+        // on the remote: everything the detached path asks for, and kept.
+        let store = main.join(".aida-store");
+        detached_at(&store);
+        let head = commit(&store, "requirement.yaml");
+        git_ok(
+            &store,
+            &["push", "-q", "origin", "HEAD:refs/heads/aida-store"],
+        );
+        assert_eq!(linked_branch(&store).unwrap(), None);
+        assert!(reachable_from(&main, &head, &remote_heads(&main, "origin").unwrap()).unwrap());
+        let row = inspect_with(&main, &store, false, "origin/main", &mut absent);
+        assert_eq!(row.head, None, "no HEAD evidence is read for a store");
+        kept(&store, &row);
+        // The same holds on the default branch, with no remote consulted.
+        git_ok(&store, &["checkout", "-q", "--detach", "origin/main"]);
+        let row = inspect_full(
+            &main,
+            &store,
+            false,
+            "origin/main",
+            &mut |_, _, _| panic!("a store is never looked up on the forge"),
+            &mut |_, _| panic!("a store needs no remote listing"),
+        );
+        kept(&store, &row);
+
+        // A store the project configuration names, under any directory name.
+        let named = main.parent().unwrap().join("team-store");
+        detached_at(&named);
+        let control = inspect_with(&main, &named, false, "origin/main", &mut absent);
+        assert!(control.eligible, "{}", control.reason);
+        std::fs::create_dir_all(main.join(".aida")).unwrap();
+        std::fs::write(
+            main.join(".aida/config.toml"),
+            "[deployment]\nstore_path = '../team-store'\n",
+        )
+        .unwrap();
+        // The attached store is gone, so the configured one resolves.
+        git_ok(&main, &["worktree", "remove", "--force", ".aida-store"]);
+        let row = inspect_with(&main, &named, false, "origin/main", &mut absent);
+        kept(&named, &row);
+        std::fs::remove_file(main.join(".aida/config.toml")).unwrap();
+
+        // A tree holding the store layout, wherever it is and unconfigured.
+        let layout = main.parent().unwrap().join("integ-store-copy");
+        detached_at(&layout);
+        std::fs::create_dir(layout.join("objects")).unwrap();
+        std::fs::write(layout.join("objects/a.yaml"), "a").unwrap();
+        std::fs::write(layout.join("metadata.yaml"), "m").unwrap();
+        git_ok(&layout, &["add", "."]);
+        git_ok(&layout, &["commit", "-qm", "store"]);
+        git_ok(&layout, &["push", "-q", "origin", "HEAD:refs/pull/9/head"]);
+        let row = inspect_with(&main, &layout, false, "origin/main", &mut absent);
+        kept(&layout, &row);
+
+        // The primary checkout, detached or presented as a linked worktree.
+        git_ok(&main, &["checkout", "-q", "--detach", "origin/main"]);
+        let row = inspect_with(&main, &main, false, "origin/main", &mut absent);
+        assert!(!row.eligible);
+        assert_eq!(row.reason, "protected main checkout");
+        let other = main.parent().unwrap().join("other-primary");
+        git_ok(
+            main.parent().unwrap(),
+            &[
+                "clone",
+                "-q",
+                main.to_str().unwrap(),
+                other.to_str().unwrap(),
+            ],
+        );
+        git_ok(&other, &["checkout", "-q", "--detach"]);
+        let row = inspect_with(&main, &other, false, "origin/main", &mut absent);
+        assert!(!row.eligible);
+        assert!(
+            row.reason.starts_with("protected primary checkout"),
+            "{}",
+            row.reason
+        );
+    }
+
+    #[test]
     fn bug_2587_orphan_seat_target_dirs_are_reported_and_removed() {
         // trace:BUG-2587 | ai:claude
-        // trace:BUG-2587.acd1fb99 | ai:claude
+        // trace:BUG-b6b1278890774ef993d2ebc327862470-352.acd1fb99 | ai:claude
         use std::os::unix::fs::PermissionsExt;
         let (_tmp, main) = fixture();
         let tree = linked(&main, "feature");
