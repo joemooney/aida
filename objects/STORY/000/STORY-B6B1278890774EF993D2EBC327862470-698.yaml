@@ -12,15 +12,25 @@ description: |-
   4. 'aida deputy shell list --name N' shows loop mode and restart count.
   5. The interactive aida shell function forwards --loop unchanged (no separate loop logic in the function).
   6. The runner records why it exits (the reason today's review runner died is unknown; log it on the next occurrence).
-status: Draft
+status: Approved
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-13T22:18:52.888699274Z
-modified_at: 2026-11-13T22:18:52.888699274Z
+modified_at: 2026-11-14T06:43:27.068049679Z
 req_type: Story
 tags:
 - track:integration
+history:
+- id: 01a1d8cb-f2dc-7ec1-a627-8dfcb3f8fa5a
+  author: joe
+  timestamp: 2026-11-14T06:43:27.068040555Z
+  session_id: 01a1d852-16ef-7973-bdde-ac3f274752a2
+  harness_version: 2.1.325 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Approved
 filed_at:
   code_sha: 97d2f9fda0856183dee299b29760f3004c5db881
   branch: main
