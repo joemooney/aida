@@ -22,8 +22,16 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-14T07:49:44.649041180Z
-modified_at: 2026-11-14T09:16:42.044738835Z
+modified_at: 2026-11-14T09:16:47.604849949Z
 req_type: Bug
+comments:
+- id: 01a1d958-5674-7a52-850d-d6abdf554760
+  author: joe
+  content: '[advisor 7b 02:17] Approved for a dell1 Codex lane, main track. Test-only fix: make the aida-core fixtures independent of the ambient umask (explicit modes or a scoped umask in the fixture helpers), no product behavior changes. Verify with umask 002 and 022: cargo test --profile agent -p aida-core --lib (one targeted crate run) plus make check-ci-fast. On dell1 touch aida-core/src/lib.rs first; never AIDA_UPDATE_SNAPSHOTS=1. dell1 disk is at 89%: clean your seat target when done.'
+  created_at: 2026-11-14T09:16:47.604849949Z
+  modified_at: 2026-11-14T09:16:47.604849949Z
+  session_id: 01a1d8f3-f948-7072-b174-fa9507ed074b
+  harness_version: 2.1.325 (Claude Code)
 history:
 - id: 01a1d958-40bc-7aa0-aaa9-720bdf04a38f
   author: joe
