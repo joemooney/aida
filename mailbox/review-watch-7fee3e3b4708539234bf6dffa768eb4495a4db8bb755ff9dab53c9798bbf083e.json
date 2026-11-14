@@ -1,0 +1,18 @@
+{
+  "id": "review-watch-7fee3e3b4708539234bf6dffa768eb4495a4db8bb755ff9dab53c9798bbf083e",
+  "thread_id": "review-watch-7fee3e3b4708539234bf6dffa768eb4495a4db8bb755ff9dab53c9798bbf083e",
+  "from": "review-watch",
+  "to": {
+    "kind": "agent",
+    "agent": "joemooney"
+  },
+  "timestamp": 1794649428100,
+  "body": "PR-4000 at 65cb7ef1aaeaf91cae587b5bc93f399e5397dabf: the review by claude-reviewer (claude reviewer seat) recorded `request-changes` with 6 finding(s), round 2 of 2. The findings are in `.aida/gate-ledger/PR-4000.jsonl`. This was the last review round under the two-round cap: a new head is not reviewed automatically, and the advisor decides the next step.",
+  "subject": "PR-4000: review requested changes (round 2 of 2)",
+  "urgent": false,
+  "intent": "request",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "explicit"
+}
