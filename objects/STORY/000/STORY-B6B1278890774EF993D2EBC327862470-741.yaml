@@ -1,0 +1,35 @@
+id: 01a1db05-1392-7272-8a70-59ccc6b501a5
+spec_id: STORY-b6b1278890774ef993d2ebc327862470-741
+agreed_id: STORY-2818
+title: 'Review PR-4046: [AI:claude] fix(train): read a PR with over 250 commits through the compare endpoint (BUG-2583)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `(no-sess`) for branch `fix/bug-2583-train-large-pr`.
+
+  - PR: <https://github.com/joemooney/aida/pull/4046>
+  - Branch: `fix/bug-2583-train-large-pr` → `integration`
+
+  ## Slice of (Refs only — not completed by this PR)
+
+  Commit subjects carry `(Refs SPEC-ID)`: this PR is one slice of a spec that a later PR completes. Review this slice against that spec's acceptance criteria.
+
+  - BUG-2583
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 4046` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-14T17:05:05.426843903Z
+modified_at: 2026-11-14T17:05:05.426843903Z
+req_type: Story
+filed_at:
+  code_sha: 5ea861d7358b33c4422c965a8e2285fd41b2ba6e
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: f5128d18cf1
+  vendor: claude
