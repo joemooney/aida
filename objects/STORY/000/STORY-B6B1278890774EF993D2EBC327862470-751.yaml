@@ -27,11 +27,18 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-14T20:30:53.775714194Z
-modified_at: 2026-11-14T20:30:53.775714194Z
+modified_at: 2026-11-14T20:36:21.880431892Z
 req_type: Story
 tags:
 - landing-emergency
 - operator-ux
+comments:
+- id: 01a1dbc6-80f8-7492-9c06-660bdc8e7dac
+  author: joe
+  content: 'Joe agreed 2026-11-14 13:36 MST (product seat''s reading of ''agreed'' to the recommendation made in chat): build in two slices. Slice 1, now, behind landing fixes: the two duration knobs (global config only, defaults unchanged, 168h ceiling fixed) and the expiry warnings (notice to advisor and product seats, doctor finding, relay refuses to rotate into a short grant). Slice 2, after the landing emergency: the single operator view and the operator-only extend path. Knobs, not a development mode.'
+  created_at: 2026-11-14T20:36:21.880431892Z
+  modified_at: 2026-11-14T20:36:21.880431892Z
+  session_id: 01a1db78-560d-7a81-a467-3742be1fefc3
 filed_at:
   code_sha: ce660d553f782fd223ca091bb3bd2dc394352eb5
   branch: main
