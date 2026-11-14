@@ -153,12 +153,24 @@ description: |
   ### finding-hash:6220a3dc
 
   aida-cli-lib/src/land.rs plain_change sets updated_at: None and most derived rows have since: None, so on the GitLab fallback no change has an age. now.rs older_than(None) is false, so the 2h unowned ATTENTION rule (F3) never fires for GitLab changes.
+
+
+  ## Findings from STORY-2768
+  Reviewed sha: d6cb65736391a9e5a7f09a81c162315f2c31ae0f
+
+  ### finding-hash:7ce2cb14
+
+  aida-cli-lib/src/land.rs ci_of_rollup keeps the run with the greater startedAt per (workflowName, name). A rerun that is still queued may report an empty or zero startedAt, so an older FAILURE at the same head wins and the head reads CI-FAILED until the rerun starts. S2 condition 2 (only a completed failure of the latest run counts) should treat a queued or in-progress sibling as superseding, or order by completedAt/databaseId.
+
+  ### finding-hash:6220a3dc
+
+  aida-cli-lib/src/land.rs plain_change sets updated_at: None and most derived rows have since: None, so on the GitLab fallback no change has an age. now.rs older_than(None) is false, so the 2h unowned ATTENTION rule (F3) never fires for GitLab changes.
 status: Draft
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-13T20:01:56.623034248Z
-modified_at: 2026-11-14T01:57:27.492258591Z
+modified_at: 2026-11-14T01:57:32.517642466Z
 req_type: Task
 tags:
 - carried-finding:BUG-2546:56ed8b81
@@ -184,7 +196,9 @@ tags:
 - carried-finding:STORY-2735:2c7ae2ea
 - carried-finding:STORY-2768:198d1196
 - carried-finding:STORY-2768:28356795
+- carried-finding:STORY-2768:6220a3dc
 - carried-finding:STORY-2768:6810bcf9
+- carried-finding:STORY-2768:7ce2cb14
 - carried-finding:STORY-2768:c0a8d165
 - carried-from:BUG-2546
 - carried-from:BUG-2557
@@ -294,6 +308,11 @@ history:
 - id: 01a1d7c6-21ab-7bb2-8002-1f4040de06d4
   author: joe
   timestamp: 2026-11-14T01:57:28.619517710Z
+  session_id: 01a1d7c3b372
+  changes: []
+- id: 01a1d7c6-3543-7b81-9eaa-4e976c42dacc
+  author: joe
+  timestamp: 2026-11-14T01:57:33.635810776Z
   session_id: 01a1d7c3b372
   changes: []
 filed_at:
