@@ -13,12 +13,12 @@ description: |
   3. Full runs for different PRs run concurrently, within the Actions concurrency limits; a train still runs its merge-result CI.
   4. Docs: docs/advanced (landing) states the new gate; make check-ci-list shows the tier.
   Track: main (CI workflow + train eligibility). Ship via train.
-status: Approved
+status: InProgress
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-14T12:41:27.454869454Z
-modified_at: 2026-11-14T15:59:34.540760936Z
+modified_at: 2026-11-14T16:15:23.618616486Z
 req_type: Story
 tags:
 - area:ci
@@ -199,6 +199,13 @@ history:
   - field_name: status
     old_value: NeedsAttention
     new_value: Approved
+- id: 01a1dad7-93e2-7253-8ffa-2f82ed043668
+  author: aida-session-start
+  timestamp: 2026-11-14T16:15:23.618615510Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: 166920a3bf8bd517e8d670a09dd3a7a3de96b7f9
   branch: main
