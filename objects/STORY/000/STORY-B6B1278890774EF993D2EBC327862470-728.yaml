@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-14T10:27:58.135719171Z
-modified_at: 2026-11-14T11:55:09.489702718Z
+modified_at: 2026-11-14T14:35:43.030059614Z
 req_type: Story
 tags:
 - gate
@@ -25,6 +25,13 @@ comments:
   created_at: 2026-11-14T11:55:09.489702718Z
   modified_at: 2026-11-14T11:55:09.489702718Z
   session_id: 01a1d8f3-f948-7072-b174-fa9507ed074b
+  harness_version: 2.1.325 (Claude Code)
+- id: 01a1da7c-5236-7fb1-bfbc-2e706cb9c607
+  author: joe
+  content: '[advisor a22 07:38] Scope added from the PR-4022 review: (a) lead merged-before-review changes to their review, and run promotion-check at cut and ship; (b) refuse a main-sync merge whose tree differs from a clean merge-tree of its parents, so edits inside a sync merge are not promoted unreviewed; (c) consider reading eligibility spec facts (tags, effort) as of the default branch, or refusing when they changed after the change opened.'
+  created_at: 2026-11-14T14:35:43.030059614Z
+  modified_at: 2026-11-14T14:35:43.030059614Z
+  session_id: 01a1d9ea-4e25-7033-85e8-3648f0195c7c
   harness_version: 2.1.325 (Claude Code)
 history:
 - id: 01a1d99b-6c92-7542-bc06-0c1803678a48
