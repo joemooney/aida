@@ -1,0 +1,18 @@
+{
+  "id": "review-watch-4f58a1d7864074ed90fbce54ce7ac3e8fd4ecc595152547ae3407bd9d2e30721",
+  "thread_id": "review-watch-4f58a1d7864074ed90fbce54ce7ac3e8fd4ecc595152547ae3407bd9d2e30721",
+  "from": "review-watch",
+  "to": {
+    "kind": "agent",
+    "agent": "joemooney"
+  },
+  "timestamp": 1794692711822,
+  "body": "PR-4027 at 58f58c007a502045d32c5f15556941ca0044e48f: the review by claude-reviewer (claude reviewer seat) recorded `request-changes` with 3 finding(s), round 2 of 2. The findings are in `.aida/gate-ledger/PR-4027.jsonl`. This was the last review round under the two-round cap: a new head is not reviewed automatically, and the advisor decides the next step.",
+  "subject": "PR-4027: review requested changes (round 2 of 2)",
+  "urgent": false,
+  "intent": "request",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "explicit"
+}
