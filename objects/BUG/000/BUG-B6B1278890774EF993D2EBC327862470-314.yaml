@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-13T03:10:47.302266912Z
-modified_at: 2026-11-14T05:39:34.434864226Z
+modified_at: 2026-11-14T07:23:50.712931074Z
 req_type: Bug
 tags:
 - track:dell1
@@ -145,6 +145,13 @@ comments:
   content: '[advisor 114 22:42] Ejected from train 13 (main moved under it: diff changed or conflict). Merging origin/main into the branch on dell1 (dell1-merge.sh: host git, Codex resolves conflicts only), then a delta re-review and re-train.'
   created_at: 2026-11-14T05:39:34.434864226Z
   modified_at: 2026-11-14T05:39:34.434864226Z
+  session_id: 01a1d852-16ef-7973-bdde-ac3f274752a2
+  harness_version: 2.1.325 (Claude Code)
+- id: 01a1d8f0-ee38-7501-b365-4952b37c1c08
+  author: joe
+  content: '[advisor 114 00:28] #3924 fails the full suite in trains 14a/14b (CI lib-1): seat_clone::pickup_entry_tests::bug_2451_queue_workspace_dates_confirmed_merged_retained_branch panics at aida-cli-lib/src/tests/bug_2451_pickup_entry_tests.rs:202:33. PR CI is fast-tier only, so this did not show at the PR head. Rework: make that test pass on current main (the PR edits that test file), run it plus the touched queue tests on dell1, nothing else.'
+  created_at: 2026-11-14T07:23:50.712931074Z
+  modified_at: 2026-11-14T07:23:50.712931074Z
   session_id: 01a1d852-16ef-7973-bdde-ac3f274752a2
   harness_version: 2.1.325 (Claude Code)
 history:
