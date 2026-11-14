@@ -2294,6 +2294,36 @@ pub(crate) fn parent_grant_refusal(id: &str, reason: &GrantRejection) -> String 
     message
 }
 
+/// For a parent grant refused by the roster, say which roster the check read
+/// and what it found. The grant verdict folds an unreachable store, a missing
+/// roster and a real denial into one sentence, and a launch repeats the check
+/// after setup from the root it then runs in, which can be another tree than
+/// the one its preflight read. A second read that allows the seat means the
+/// first one raced an update of the store (a sibling launch's store sync).
+/// Diagnostic only: the refusal stands either way.
+// trace:BUG-2544 | ai:claude
+fn parent_roster_refusal_detail(project_root: &Path, reason: &GrantRejection) -> Option<String> {
+    let (principal, seat) = match reason {
+        GrantRejection::RosterDenied { principal, seat } => (principal, seat),
+        GrantRejection::Parent(inner) => match inner.as_ref() {
+            GrantRejection::RosterDenied { principal, seat } => (principal, seat),
+            _ => return None,
+        },
+        _ => return None,
+    };
+    let root = project_root.display();
+    Some(match roster_check(project_root, principal, seat) {
+        Ok(store) => format!(
+            ". Read again from `{root}`, the roster at `{}` allows it, so the first read missed the roster's current content (the store was changing at that moment, as it does while another launch syncs it); run the launch again, or start launches one after another",
+            roster_path(&store).display()
+        ),
+        Err(refusal) => format!(
+            ". The roster was looked up from `{root}`: {}",
+            refusal.describe(&format!("`{principal}` is not allowed the `{seat}` seat"))
+        ),
+    })
+}
+
 /// Read-only launch preflight; issuance repeats this validation after setup.
 // trace:TASK-1337 | ai:codex
 pub(crate) fn validate_child_delegation(
@@ -2308,7 +2338,11 @@ pub(crate) fn validate_child_delegation(
         GrantCheck::Absent => bail!(
             "no valid parent seat grant is active: {GRANT_ENV} is absent; re-enter your role at a terminal before launching children"
         ),
-        GrantCheck::Rejected { id, reason, .. } => bail!("{}", parent_grant_refusal(&id, &reason)),
+        GrantCheck::Rejected { id, reason, .. } => bail!(
+            "{}{}",
+            parent_grant_refusal(&id, &reason),
+            parent_roster_refusal_detail(project_root, &reason).unwrap_or_default()
+        ),
     };
     if !parent
         .delegable_seats
