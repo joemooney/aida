@@ -571,25 +571,9 @@ impl Live {
     /// context this process may have inherited, so the child takes its
     /// ordinary attested path.
     fn command(&self, args: &[String]) -> std::process::Command {
-        let mut command = std::process::Command::new(&self.program);
-        command
-            .current_dir(&self.root)
-            .args(args)
-            .stdin(std::process::Stdio::null());
-        for (key, _) in std::env::vars_os() {
-            if key.to_str().is_some_and(|key| {
-                key.starts_with("AIDA_REVIEW_")
-                    || key.starts_with("AIDA_FROM_PR_")
-                    || key.starts_with("AIDA_AGENT_GATE_")
-            }) {
-                command.env_remove(key);
-            }
-        }
-        command
-            .env_remove("AIDA_GRADED_REVIEW_CONTEXT")
-            .env_remove("AIDA_SESSION_PURPOSE")
-            .env_remove("AIDA_CARGO_NO_SLOT");
-        self.repo.pin_command(&mut command);
+        // The watcher's builder: it drops that context and pins the forge.
+        let mut command = crate::review_watch::watch_command(&self.repo, &self.root, &self.program);
+        command.args(args);
         command
     }
 
