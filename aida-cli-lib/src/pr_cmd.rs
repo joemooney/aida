@@ -121,6 +121,8 @@ pub(crate) fn handle_pr_command(cmd: &PrCommand) -> Result<()> {
             )
         }
         PrCommand::Train {
+            status,
+            json,
             abandon,
             prs,
             all_ready,
@@ -129,6 +131,11 @@ pub(crate) fn handle_pr_command(cmd: &PrCommand) -> Result<()> {
             max,
             no_pull,
         } => {
+            // trace:STORY-2823 | ai:claude
+            anyhow::ensure!(*status || !*json, "--json applies only with --status");
+            if *status {
+                return crate::pr_train::train_status(*json);
+            }
             if let Some(name) = abandon {
                 return crate::pr_train::abandon_journal(name);
             }

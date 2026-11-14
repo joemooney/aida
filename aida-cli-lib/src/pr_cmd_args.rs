@@ -332,8 +332,21 @@ pub enum PrCommand {
     /// pushing anything; add `--local-ci <CMD>` to simulate the whole run
     /// with a local command as CI, against a checkout of each train tip.
     // trace:STORY-1690 | ai:claude
-    #[clap(group(ArgGroup::new("train_members").required(true).args(["prs", "all_ready", "abandon"])))]
+    ///
+    /// `--status` says what the train is doing right now and changes
+    /// nothing: the train PR, each member with its head, the step and the
+    /// time spent in it, a CI summary, and the PID driving it. It exits 0
+    /// while a live process drives the train, 40 when there is no train,
+    /// and 41 when a journal remains but nothing drives it.
+    #[clap(group(ArgGroup::new("train_members").required(true).args(["prs", "all_ready", "abandon", "status"])))]
     Train {
+        /// Show what the train is doing now; read-only.
+        // trace:STORY-2823 | ai:claude
+        #[clap(long, conflicts_with_all = ["prs", "all_ready", "abandon", "dry_run", "local_ci", "no_pull"])]
+        status: bool,
+        /// With --status: print the status as JSON.
+        #[clap(long)]
+        json: bool,
         /// Discard a local journal by filename; leave forge PRs and branches unchanged.
         // trace:BUG-2547 | ai:codex
         #[clap(long, value_name = "JOURNAL", conflicts_with_all = ["prs", "all_ready", "dry_run", "local_ci", "no_pull"])]

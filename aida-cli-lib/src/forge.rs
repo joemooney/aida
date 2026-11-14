@@ -4701,6 +4701,39 @@ pub(crate) fn gh_pr_checks_json(project_root: &Path, pr: u64, extra: &[&str]) ->
     )
 }
 
+/// One bounded read of a GitHub PR's check rows for a status display, killed
+/// at `timeout`. An empty list means no checks are registered yet; `Err` says
+/// why the rows could not be read. Never use it for a merge decision: it
+/// takes no train checkpoint and does not retry.
+// trace:STORY-2823 | ai:claude
+pub(crate) fn gh_pr_check_rows_bounded(
+    project_root: &Path,
+    pr: u64,
+    timeout: std::time::Duration,
+) -> std::result::Result<Vec<crate::ci_gate::CheckRow>, String> {
+    let mut cmd = Command::new("gh");
+    cmd.current_dir(project_root)
+        .args(["pr", "checks", &pr.to_string()])
+        .args(["--json", "name,bucket,workflow,link"]);
+    let out = crate::command_output_with_timeout(cmd, timeout)
+        .ok_or_else(|| format!("gh did not answer within {}s", timeout.as_secs()))?;
+    let stdout = String::from_utf8_lossy(&out.stdout).trim().to_string();
+    let stderr = String::from_utf8_lossy(&out.stderr).trim().to_string();
+    if stdout.starts_with('[') {
+        return crate::ci_gate::parse_check_rows(&stdout)
+            .ok_or_else(|| "could not parse the gh checks output".to_string());
+    }
+    if crate::pr_ship::gh_pr_checks_output_is_unregistered(&stdout, &stderr) {
+        return Ok(Vec::new());
+    }
+    Err(stderr
+        .lines()
+        .next()
+        .filter(|l| !l.is_empty())
+        .unwrap_or("gh pr checks failed")
+        .to_string())
+}
+
 /// STORY-1166: registration state from a GitLab pipelines listing for a ref:
 /// an empty (or unparsable) list means no pipeline has started yet.
 // trace:STORY-1166 | ai:claude

@@ -16809,13 +16809,24 @@ result is rerun, once.
 `--dry-run` gates and builds the train and prints the plan without pushing anything; add `--local-ci
 <CMD>` to simulate the whole run with a local command as CI, against a checkout of each train tip.
 
-Usage: aida pr train [OPTIONS] <N|--all-ready|--abandon <JOURNAL>>
+`--status` says what the train is doing right now and changes nothing: the train PR, each member
+with its head, the step and the time spent in it, a CI summary, and the PID driving it. It exits 0
+while a live process drives the train, 40 when there is no train, and 41 when a journal remains but
+nothing drives it.
+
+Usage: aida pr train [OPTIONS] <N|--all-ready|--abandon <JOURNAL>|--status>
 
 Arguments:
   [N]...
           PR numbers to train, in landing order
 
 Options:
+      --status
+          Show what the train is doing now; read-only
+
+      --json
+          With --status: print the status as JSON
+
       --abandon <JOURNAL>
           Discard a local journal by filename; leave forge PRs and branches unchanged
 
@@ -16835,9 +16846,6 @@ Options:
           
           [default: 10]
 
-      --no-pull
-          Skip the `aida pull` after a train lands
-
       --format <FORMAT>
           Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
           compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
@@ -16847,6 +16855,9 @@ Options:
           - human: Human-readable tables / emoji (the interactive default at a TTY)
           - toon:  Token-efficient TOON — the compact agent default when piped/captured
           - json:  Machine JSON, for commands that support a JSON projection
+
+      --no-pull
+          Skip the `aida pull` after a train lands
 
       --canonical-ids
           Show node-local spec IDs in their canonical form instead of the node's friendly label (for
@@ -49143,6 +49154,11 @@ Working on aida itself
         "help": "Print help (see more with '--help')"
       },
       {
+        "name": "json",
+        "takes_value": false,
+        "help": "With --status: print the status as JSON"
+      },
+      {
         "name": "local-ci",
         "takes_value": true,
         "help": "With --dry-run: run CMD in a checkout of each train tip as the CI, and simulate the full land / bisect run locally"
@@ -49156,6 +49172,11 @@ Working on aida itself
         "name": "no-pull",
         "takes_value": false,
         "help": "Skip the `aida pull` after a train lands"
+      },
+      {
+        "name": "status",
+        "takes_value": false,
+        "help": "Show what the train is doing now; read-only"
       }
     ],
     "hidden": false

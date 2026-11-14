@@ -954,6 +954,15 @@ pub(crate) const EXIT_CODES: &[(i32, &str)] = &[
         crate::maintenance_schedule::TIMEOUT_EXIT_STATUS,
         "scheduled job timed out",
     ),
+    // trace:STORY-2823 | ai:claude
+    (
+        crate::pr_train::NO_TRAIN_EXIT_CODE,
+        "pr train --status: no train",
+    ),
+    (
+        crate::pr_train::ORPHANED_EXIT_CODE,
+        "pr train --status: orphaned journal",
+    ),
     (drain_signal::SIGTERM_EXIT_CODE, "terminated by SIGTERM"),
 ];
 
@@ -987,6 +996,10 @@ pub(crate) fn exit_code_for_error(err: &anyhow::Error) -> i32 {
         } else {
             named_exit_code(exit.code)
         };
+    }
+    // trace:STORY-2823 | ai:claude
+    if let Some(exit) = err.downcast_ref::<crate::pr_train::TrainStatusExit>() {
+        return named_exit_code(exit.0);
     }
     err.downcast_ref::<pr_rebase::RebaseFailureExit>()
         .map(|sig| named_exit_code(sig.code))
