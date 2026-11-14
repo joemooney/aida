@@ -17,7 +17,7 @@ priority: Low
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-14T11:36:18.476287136Z
-modified_at: 2026-11-14T13:56:02.314802519Z
+modified_at: 2026-11-14T14:05:02.518712235Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -61,6 +61,30 @@ comments:
   modified_at: 2026-11-14T13:56:02.314802519Z
   session_id: 01a1d9ea-4e25-7033-85e8-3648f0195c7c
   harness_version: 2.1.325 (Claude Code)
+- id: 01a1da60-1b7b-7721-97f1-98a78171f691
+  author: dirtlab
+  content: |-
+    [implementer lane 01a1da5c577c, 07:00] No code change this round; cause still not named.
+
+    This seat can only run cargo through the lane job runner (bubblewrap, own PID namespace), where the test passes (j20261114T131434893-4-0). It has no host shell and no ssh, so the advisor's next step (capture the refusal over ssh) cannot be done from here.
+
+    Ruled out by reading at 34ea340670:
+    - Host HOME state: test_home.rs redirects HOME to a per-process temp dir before main, clears AIDA_HOME, AIDA_TEST_HOME, XDG_{CONFIG,DATA,CACHE,STATE}_HOME and every AIDA_SESSION_* variable, and writes its own .gitconfig (gpgsign off). So ~/.aida, the real gitconfig and the operator session identity do not reach the test.
+    - Project root and authority TTY: pinned to the temp dir by AmbientGuard (find_project_root, stdin/stdout/stderr terminal answers).
+    - Seat authority: the PR-4021 asserts pass on dell1 (advisor run).
+    - State keyed on the fixture id: nothing under ~/.aida, ~/.cache/aida or the primary checkout's .aida names BUG-9112 apart from this bug's own logs.
+
+    What can still leak: AIDA_* variables other than AIDA_SESSION_* (the constructor leaves them), PATH-resolved gh/git, the host process table (/proc), cwd and TMPDIR.
+
+    The loop hides the reason in two ways, and both end up in the test's captured stdout, which cargo prints for a failing test without --nocapture:
+    - handle_queue_rework returned Err: a line starting `error:` (rework.rs:503).
+    - the preview was not offerable, so `r` was not a key: a line `unknown key `r`` and no `[r] requeue` in the prompt (rework.rs:523).
+
+    Needed from one dell1 ssh run of PR-4021 head: the full stdout block of the failing test, the output of `env | grep ^AIDA_` from the same ssh command, and whether rework_reason_is_recorded_once and triage_loop_d_decides pass in that run.
+  created_at: 2026-11-14T14:04:54.011920253Z
+  modified_at: 2026-11-14T14:04:54.011920253Z
+  session_id: 01a1da5c577c
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1d9d9-0f81-7752-9b38-a66eb0c96eaa
   author: joe
@@ -103,6 +127,12 @@ history:
   session_id: 01a1da313804
   harness_version: 2.1.319 (Claude Code)
   changes: []
+- id: 01a1da60-41ac-7792-9786-4450178bbae4
+  author: dirtlab
+  timestamp: 2026-11-14T14:05:03.788895892Z
+  session_id: 01a1da5c577c
+  harness_version: 2.1.319 (Claude Code)
+  changes: []
 filed_at:
   code_sha: c219a07bf39e3e7210b8e3f14bf17708d20c3b5f
   branch: integration
@@ -114,7 +144,7 @@ filed_at:
   harness_version: 2.1.325 (Claude Code)
 attention_reason:
   category: missing-context
-  detail: 'Cannot reproduce in this seat, so no cause is named and nothing new is published. The lane runs on Dell host disrad-dvp98b3puw but only inside bubblewrap (own PID namespace, sid 0, no ssh, test binary lives in the lane overlay). At branch head d339f87949 with the PR-4021 diagnostics, lane job j20261114T131434893-4-0 ran the focused test with umask-independent sandbox defaults and --nocapture: 1 passed, the loop printed ''BUG-9112 status: Needs Attention -> Approved''. Code reading narrows it but does not name it: the failing test shares its guard and handle_queue_rework path with rework_reason_is_recorded_once_and_emits_spec_requeued (same hermetic_with_seat_and + events on) and its loop path with triage_loop_d_decides_then_returns_to_the_same_spec; events are only written after the flip; no code reads SSH_* variables. A generic rejected seat grant would fail those siblings too. Needed: one run from a plain host shell on dell1 (ssh, no tty, umask 022, NOT a lane job) of this branch: cargo test --profile agent -p aida-cli-lib --lib -- triage_loop_r_keystroke rework_reason_is_recorded_once triage_loop_d_decides, and the full captured stdout of the failure. It will show either the GrantCheck rejection (diagnostic assert), or the loop''s ''error:'' / ''needs advisor authority'' / ''unknown key'' line, which names the ambient input.'
-  lean: 'Paste that stdout on the spec (or give a lane a host-namespace job runner); the fixture pin is then a small test-only change in queue_rework_tests.rs or test_env.rs. Also dump env | grep AIDA_ from the same ssh command: non-interactive ssh sources ~/.bashrc, an unpinned AIDA_* export there is the leading suspect.'
+  detail: 'Cause still not named and no code changed this round. The lane can only run cargo inside bubblewrap, where the test passes; it has no host shell or ssh, so the failing dell1 run cannot be captured from here. Reading rules out host HOME state (test_home.rs redirects HOME and clears AIDA_SESSION_*, AIDA_HOME and XDG_*_HOME before main), the project root and authority TTY (pinned by AmbientGuard) and seat authority (PR-4021 asserts pass on dell1). Still able to leak: non-session AIDA_* variables, PATH-resolved gh/git, the host process table, cwd, TMPDIR. Needed from one dell1 ssh run of PR-4021 head: the failing test''s stdout block (cargo prints it without --nocapture; it holds either an ''error:'' line from handle_queue_rework or ''unknown key r'' with no [r] in the prompt), env | grep ^AIDA_ from the same ssh command, and whether rework_reason_is_recorded_once and triage_loop_d_decides pass. Details in the 07:00 spec comment.'
+  lean: Paste that stdout on the spec; the fix is then a small test-only pin in AmbientGuard or the fixture. Or give a lane a host-namespace job runner.
   raised_by: implementer
-  raised_at: 2026-11-14T13:24:56.726384446Z
+  raised_at: 2026-11-14T14:05:02.518712235Z
