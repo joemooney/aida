@@ -411,6 +411,24 @@ impl RecipientDirectory {
         Ok(resolved)
     }
 
+    /// A send queued for the next holder of the seat at `address`
+    /// (`seat:<name>`, already normalized), with no reader now. A reply to a
+    /// seat nobody holds uses it: the seat is the parent's recorded sender,
+    /// so it queues even when no registry row or handoff still names it.
+    // trace:STORY-2745 | ai:claude
+    pub(crate) fn queued_for_seat(address: &str) -> ResolvedRecipient {
+        ResolvedRecipient {
+            relay_run: None,
+            address: address.to_string(),
+            reader_notice: None,
+            cohort: Some(CohortReaders {
+                role: address.to_string(),
+                queued: true,
+                ..Default::default()
+            }),
+        }
+    }
+
     /// `seat:<name>`: the live (or unverified) sessions whose registry row
     /// records that seat, with the same cohort, queue and refusal rules as a
     /// role. An unknown seat is refused, naming the known seats. A known seat
@@ -1959,5 +1977,88 @@ mod tests {
         let first = d.resolve_send(&candidates[0], false).unwrap();
         assert_eq!(first.address, "seat:integration");
         assert!(first.reader_notice.unwrap().contains("integ-8"));
+    }
+
+    // Advisor ruling 2026-11-14: a reply to a seat nobody holds stays
+    // addressed to the seat, queued for its next holder; it never spills to
+    // the sender's role cohort.
+    // trace:STORY-2745 | ai:claude
+    #[test]
+    fn story2745_reply_to_an_unheld_seat_queues_for_the_seat_not_the_role_cohort() {
+        let parent = aida_core::mailbox::Message {
+            id: "m1".into(),
+            thread_id: "m1".into(),
+            from: "integ-7".into(),
+            to: aida_core::mailbox::Recipient::Agent("advisor".into()),
+            timestamp: 0,
+            in_reply_to: None,
+            body: "promotion ready".into(),
+            subject: None,
+            urgent: false,
+            intent: aida_core::mailbox::Intent::Fyi,
+            retracted: false,
+            deleted: false,
+            archived: false,
+            from_source: aida_core::mailbox::SenderSource::Explicit,
+            from_role: Some("implementer".into()),
+            from_seat: Some("integration".into()),
+            relayed_from: None,
+        };
+        let tmp = tempfile::tempdir().unwrap();
+        // The seat's holder has ended; two live implementers share its role.
+        seated(
+            tmp.path(),
+            "row-gone",
+            "integ-7",
+            "implementer",
+            Some("integration"),
+        );
+        let path = agent_registry::agents_dir(tmp.path()).join("row-gone.toml");
+        let body = std::fs::read_to_string(&path).unwrap();
+        std::fs::write(&path, format!("{body}ended_at = '2026-10-20T00:00:00Z'\n")).unwrap();
+        seated(tmp.path(), "row-impl-1", "impl-1", "implementer", None);
+        seated(tmp.path(), "row-impl-2", "impl-2", "implementer", None);
+        let d = RecipientDirectory::load(tmp.path(), &tmp.path().join(".aida-store")).unwrap();
+        // The role does resolve, to the whole cohort: the spill to avoid.
+        let role = d.resolve_send("implementer", false).unwrap();
+        let notice = role.reader_notice.unwrap();
+        assert!(
+            notice.contains("impl-1") && notice.contains("impl-2"),
+            "{notice}"
+        );
+        for queue in [false, true] {
+            let (target, resolved) =
+                crate::mailbox_cmd::resolve_reply_recipient(&d, &parent, queue).unwrap();
+            assert_eq!(target, "seat:integration");
+            assert_eq!(resolved.address, "seat:integration");
+            let cohort = resolved.cohort.expect("a seat reply records its cohort");
+            assert_eq!(cohort.role, "seat:integration");
+            assert!(cohort.queued, "queued for the next holder");
+            assert!(cohort.readers.is_empty() && cohort.uuidless.is_empty());
+        }
+        // A seat no row names any longer still keeps the reply.
+        let bare = tempfile::tempdir().unwrap();
+        seated(bare.path(), "row-impl-1", "impl-1", "implementer", None);
+        let d = RecipientDirectory::load(bare.path(), &bare.path().join(".aida-store")).unwrap();
+        let (target, resolved) =
+            crate::mailbox_cmd::resolve_reply_recipient(&d, &parent, false).unwrap();
+        assert_eq!(target, "seat:integration");
+        assert!(resolved.cohort.unwrap().queued);
+        // Once a session holds the seat again, the reply reaches only it.
+        seated(
+            tmp.path(),
+            "row-int-2",
+            "integ-8",
+            "implementer",
+            Some("integration"),
+        );
+        let d = RecipientDirectory::load(tmp.path(), &tmp.path().join(".aida-store")).unwrap();
+        let (_, resolved) =
+            crate::mailbox_cmd::resolve_reply_recipient(&d, &parent, false).unwrap();
+        let notice = resolved.reader_notice.unwrap();
+        assert!(
+            notice.contains("integ-8") && !notice.contains("impl-1"),
+            "{notice}"
+        );
     }
 }

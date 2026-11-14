@@ -72,6 +72,12 @@ pub(crate) const INHERITED_SESSION_ENV: &[&str] = &[
     // unless the launcher sets it explicitly afterwards.
     // trace:TASK-2737 | ai:claude
     crate::mail_wake::LAUNCH_WAKE_ENV,
+    // The launcher's named seat is the launcher's: a child holds only the
+    // seat its own launch names (set explicitly after this scrub, and
+    // recorded on its own registry row). Inherited, a headless child of the
+    // integration seat would read and send mail as `seat:integration`.
+    // trace:STORY-2745 | ai:claude
+    crate::agent_rotation::SEAT_ENV,
 ];
 
 /// Vendor names and aliases. A handle may not be one: `--to codex` must

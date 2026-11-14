@@ -1803,17 +1803,31 @@ fn inspect_inbox(
     Ok(())
 }
 
-/// The recipient a reply without `--to` goes to: the parent's sender seat
-/// (`seat:<from_seat>`), else its role, else its id, the first that
-/// resolves. Returns the address used and its resolution.
+/// The recipient a reply without `--to` goes to. A parent sent from a named
+/// seat is answered to that seat and nowhere else: its live holder, else
+/// queued for the seat's next holder. It never falls through to the
+/// sender's role, which would fan the reply out to the whole role cohort.
+/// A parent with no sender seat goes to its sender's role, else its id, the
+/// first that resolves. Returns the address used and its resolution.
 // trace:STORY-2745 | ai:claude
-fn resolve_reply_recipient(
+pub(crate) fn resolve_reply_recipient(
     directory: &crate::mailbox_resolver::RecipientDirectory,
     parent: &aida_core::mailbox::Message,
     queue_for_role: bool,
 ) -> Result<(String, crate::mailbox_resolver::ResolvedRecipient)> {
+    let candidates = reply_candidates(parent);
+    if let Some(seat) = candidates.first().filter(|t| t.starts_with("seat:")) {
+        let resolved = match directory.resolve_send(seat, queue_for_role) {
+            Ok(resolved) => resolved,
+            Err(_) => {
+                eprintln!("{seat} has no live holder; the reply is queued for its next holder");
+                crate::mailbox_resolver::RecipientDirectory::queued_for_seat(seat)
+            }
+        };
+        return Ok((seat.clone(), resolved));
+    }
     let mut refusals = Vec::new();
-    for target in reply_candidates(parent) {
+    for target in candidates {
         match directory.resolve_send(&target, queue_for_role) {
             Ok(resolved) => return Ok((target, resolved)),
             Err(e) => refusals.push(format!("{target}: {e:#}")),
