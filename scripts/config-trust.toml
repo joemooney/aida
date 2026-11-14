@@ -144,11 +144,12 @@ sites = 1
 channels = ["worktree", "write"]
 sites = 3
 
-[readers."aida-cli-lib/src/glyph_config.rs"]
+[readers."aida-term/src/glyph_config.rs"]
 channels = ["worktree", "home", "write"]
+# Project and user scopes share config_path_for's single config.toml literal.
 sites = 1
 
-[readers."aida-cli-lib/src/glyphs.rs"]
+[readers."aida-term/src/glyphs.rs"]
 channels = ["worktree", "home"]
 sites = 6
 
@@ -344,7 +345,7 @@ sites = 2
 channels = ["other-file"]
 sites = 1
 
-[readers."aida-cli-lib/src/network_retry.rs"]
+[readers."aida-term/src/network_retry.rs"]
 channels = ["worktree"]
 sites = 1
 
@@ -404,7 +405,7 @@ sites = 1
 channels = ["trusted"]
 sites = 1
 
-[readers."aida-cli-lib/src/usage.rs"]
+[readers."aida-term/src/usage.rs"]
 channels = ["worktree"]
 sites = 1
 

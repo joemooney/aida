@@ -124,6 +124,9 @@ pub(crate) fn run(q: &Queue, cfg: &RunnerConfig, stop: &AtomicBool) -> Result<us
     let _services = cfg
         .serve_socket
         .then(|| crate::review_watch::service::Supervisor::start(q.clone(), service_host.clone()));
+    let _train_services = cfg.serve_socket.then(|| {
+        crate::review_watch::train_service::Supervisor::start(q.clone(), service_host.clone())
+    });
     let server = if cfg.serve_socket {
         Some(super::socket::serve_service(
             q,
