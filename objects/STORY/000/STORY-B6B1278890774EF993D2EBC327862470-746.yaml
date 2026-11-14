@@ -3,13 +3,21 @@ spec_id: STORY-b6b1278890774ef993d2ebc327862470-746
 agreed_id: STORY-2823
 title: 'aida pr train --status: one command that says what the train is doing'
 description: 'From the Agent CLI friction log (STORY-2822 item 12). Today every advisor reads .aida/train/*.json, the deputy transcript and gh by hand to learn the train''s state, and two shell versions were wrong. Acceptance: (1) ''aida pr train --status'' (or ''aida train status'') prints, for the current journal or ''no train'': train PR number, members with heads, step (Gate/Ci/Merge/Members/Cleanup), time in step, CI shard summary, and the PID driving it or ''no live driver (orphaned journal)''; (2) exit code distinguishes none / running / orphaned; (3) json output; (4) read-only, bounded time (no gate-ledger rediscovery); (5) documented in docs/cli.'
-status: Approved
+status: InProgress
 priority: Medium
-owner: ''
+owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-14T18:21:33.508922524Z
-modified_at: 2026-11-14T18:21:33.508922524Z
+modified_at: 2026-11-14T21:01:22.011550461Z
 req_type: Story
+history:
+- id: 01a1dbdd-64db-7081-86bd-0d20eb1790fa
+  author: aida-session-start
+  timestamp: 2026-11-14T21:01:22.011548091Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: 96fc262834527304fe85fc9ee32e4d04f1aaf4ea
   branch: main
