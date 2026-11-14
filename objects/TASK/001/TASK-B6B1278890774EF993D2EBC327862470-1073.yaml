@@ -1381,12 +1381,20 @@ description: |
   ### finding-hash:8a91c29a
 
   checked.rs:374 discovery_refusal and the doctor oversized-ledger finding recommend quarantining a ledger without saying the fix command must follow (its bindings then name a missing ledger and those specs refuse); the refusal still says it blocks every spec; bindings.rs:8 calls a binding without an event harmless, which is untrue when the ledger is missing.
+
+
+  ## Findings from PR-4067
+  Reviewed sha: 83d83e823d7913e9e54a9534e30b77d05ef64121
+
+  ### finding-hash:e416aa20
+
+  Criteria with no test: STORY-2775 AC5 (shell function forwards --loop; only stated in docs/advanced/deputies.md:60), BUG-2580 AC5 (seat on a remote lane host with no operator grant), BUG-2583 AC3 (covered at lookup level by bug_2583_a_pr_over_the_commit_endpoint_ceiling_is_paged_by_compare, no train-opening fixture; AC2 was dropped by advisor ruling but the spec text still lists it), BUG-2571 F6 (the wait-loop re-read of open changes has no dedicated test). The other criteria on the launcher untraced list have passing tests that carry no origin-id criterion trace.
 status: Draft
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-13T20:01:56.623034248Z
-modified_at: 2026-11-14T22:04:46.836425352Z
+modified_at: 2026-11-14T22:39:29.591636156Z
 req_type: Task
 tags:
 - carried-finding:BUG-2531:059e4a00
@@ -1582,6 +1590,7 @@ tags:
 - carried-finding:PR-4055:63944698
 - carried-finding:PR-4055:f4bee831
 - carried-finding:PR-4055:f8724699
+- carried-finding:PR-4067:e416aa20
 - carried-finding:STORY-2735:2c7ae2ea
 - carried-finding:STORY-2745:2a4c4b85
 - carried-finding:STORY-2745:32088b60
@@ -1701,6 +1710,7 @@ tags:
 - carried-from:PR-4052
 - carried-from:PR-4053
 - carried-from:PR-4055
+- carried-from:PR-4067
 - carried-from:STORY-2735
 - carried-from:STORY-2745
 - carried-from:STORY-2763
@@ -1845,6 +1855,7 @@ tags:
 - finding-hash:dfed3eb6
 - finding-hash:e391cb46
 - finding-hash:e40f3f6c
+- finding-hash:e416aa20
 - finding-hash:e5eb0aa5
 - finding-hash:e95a72ea
 - finding-hash:ed15cafe
@@ -1919,6 +1930,7 @@ tags:
 - from-review:PR-4052
 - from-review:PR-4053
 - from-review:PR-4055
+- from-review:PR-4067
 - from-review:STORY-2735
 - from-review:STORY-2745
 - from-review:STORY-2763
@@ -2396,6 +2408,11 @@ history:
   author: joe
   timestamp: 2026-11-14T22:04:48.097257027Z
   session_id: 01a1dc11a2b8
+  changes: []
+- id: 01a1dc37-411e-7223-9635-aaf907cd5dae
+  author: joe
+  timestamp: 2026-11-14T22:39:31.102771287Z
+  session_id: 01a1dc3185f7
   changes: []
 filed_at:
   code_sha: 91fe1e337894199f15365d3f8ecfaf81366f8291
