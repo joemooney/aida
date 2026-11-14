@@ -1325,12 +1325,28 @@ description: |
   ### finding-hash:f4bee831
 
   aida-cli-lib/src/land.rs:1239: open_change_count takes only the length of the detailed forge listing (titles, labels, statusCheckRollup, up to 60 s) whenever the now.json snapshot is older than 10 minutes. A count-only listing would do.
+
+
+  ## Findings from PR-3994
+  Reviewed sha: b19fe497727f2b75583bef12c5f9fe4161bbbddf
+
+  ### finding-hash:7784eba2
+
+  tests/test_git_maintenance_ratchet.py:32 CRATES and tests/test_executable_fixture_ratchet.py:81 still scan only the old crates, so aida-testkit/src (which now holds test_git.rs, test_exec.rs, test_env.rs, test_home.rs) is outside the git-maintenance and fake-gh fixture ratchets that covered these files in aida-cli-lib. Add aida-testkit to both scans (keeping the test_exec.rs exemption).
+
+  ### finding-hash:cd740f6f
+
+  docs/plans/2026-11-07-aida-cli-lib-crate-split-deep-dive.md section 5.3 carries a stale checkpoint (PR open at 201130b, no ci:full label, FAST run 43605077655) and both After cells read Pending; ci:full is now on the PR. Replace the checkpoint prose with the lib-0/lib-1 Run tests durations from the FULL run at the approved head to close AC5.
+
+  ### finding-hash:036fb484
+
+  aida-cli-lib/src/gate/test_support.rs:286 re-exports the crate::test_env facade through an explicit name list, so a helper later added to aida_testkit::test_env is not reachable as crate::test_env::X until it is added there and to ORCHESTRATOR_OUTSIDE_PATHS (gate/orchestrator_leaves.rs:19). Note this in the facade comment.
 status: Draft
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-13T20:01:56.623034248Z
-modified_at: 2026-11-14T21:38:25.770298919Z
+modified_at: 2026-11-14T21:56:36.917051829Z
 req_type: Task
 tags:
 - carried-finding:BUG-2543:2a99ebfc
@@ -1437,16 +1453,19 @@ tags:
 - carried-finding:PR-3989:49b64e26
 - carried-finding:PR-3990:2a99ebfc
 - carried-finding:PR-3990:6935f83d
+- carried-finding:PR-3994:036fb484
 - carried-finding:PR-3994:12932f51
 - carried-finding:PR-3994:2162fe2c
 - carried-finding:PR-3994:33bf6df1
 - carried-finding:PR-3994:46a7a9dc
 - carried-finding:PR-3994:51cbf3a8
+- carried-finding:PR-3994:7784eba2
 - carried-finding:PR-3994:79256db6
 - carried-finding:PR-3994:7c082b28
 - carried-finding:PR-3994:7c1b2064
 - carried-finding:PR-3994:83e5954d
 - carried-finding:PR-3994:ae1481ad
+- carried-finding:PR-3994:cd740f6f
 - carried-finding:PR-3994:ed15cafe
 - carried-finding:PR-3997:3f4b4821
 - carried-finding:PR-3998:0bff30e1
@@ -1647,6 +1666,7 @@ tags:
 - finding-hash:01721c41
 - finding-hash:02bf8b4d
 - finding-hash:036825d8
+- finding-hash:036fb484
 - finding-hash:04ad58d8
 - finding-hash:0704b7b5
 - finding-hash:0bdbec3f
@@ -1722,6 +1742,7 @@ tags:
 - finding-hash:73e42b4b
 - finding-hash:74641343
 - finding-hash:76a786ef
+- finding-hash:7784eba2
 - finding-hash:79256db6
 - finding-hash:79f360e4
 - finding-hash:7bbbf9a9
@@ -1758,6 +1779,7 @@ tags:
 - finding-hash:c7c082c2
 - finding-hash:c963d4df
 - finding-hash:ca169c0e
+- finding-hash:cd740f6f
 - finding-hash:cd9ab7dd
 - finding-hash:cddc71c1
 - finding-hash:d0b021ea
@@ -2303,6 +2325,11 @@ history:
   author: joe
   timestamp: 2026-11-14T21:38:27.083548542Z
   session_id: 01a1dbfc711b
+  changes: []
+- id: 01a1dc0f-ff1a-7e82-a2f0-13ecf98ab0f6
+  author: joe
+  timestamp: 2026-11-14T21:56:38.298793336Z
+  session_id: 01a1dc0ca6cb
   changes: []
 filed_at:
   code_sha: 91fe1e337894199f15365d3f8ecfaf81366f8291
