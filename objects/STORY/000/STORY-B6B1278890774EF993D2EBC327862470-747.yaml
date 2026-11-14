@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-14T18:22:12.152871570Z
-modified_at: 2026-11-14T22:03:29.381668913Z
+modified_at: 2026-11-14T22:16:11.466512047Z
 req_type: Story
 tags:
 - docs:impacted
@@ -96,6 +96,12 @@ comments:
     Host follow-up: preserve PR-4053 hold; delta review with ci:full applied at review launch. No commit, push, PR, merge, review verdict or queue completion performed in seat. Needs Attention status remains: promotion refused for lack of advisor authority. MCP comment transport closed, so recording via CLI.
   created_at: 2026-11-14T22:03:29.381668913Z
   modified_at: 2026-11-14T22:03:29.381668913Z
+  session_id: 01a1dbf9b94d
+- id: 01a1dc21-e5ca-7a93-8de2-3dc5d0efae96
+  author: lane-recovery
+  content: 'Lane exit evidence: retained branch `story-b6b1278890774ef993d2ebc327862470-747` at head `5515dfaf08bc7cf0bdb545400ec880320f132380`.'
+  created_at: 2026-11-14T22:16:11.466506766Z
+  modified_at: 2026-11-14T22:16:11.466506766Z
   session_id: 01a1dbf9b94d
 history:
 - id: 01a1db50-9f3b-76d0-bb89-e5b424c233d5
