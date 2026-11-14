@@ -549,7 +549,8 @@ pub(crate) fn salvage_worktree_patch(
     agent: Option<&str>,
     worktree: &std::path::Path,
 ) -> Result<Option<std::path::PathBuf>> {
-    salvage_worktree_patch_with(project_root, spec_id, agent, worktree, false)
+    // An explicit path: the store-writer inventory follows only those.
+    self::salvage_worktree_patch_with(project_root, spec_id, agent, worktree, false)
 }
 
 /// [`salvage_worktree_patch`] for a caller that gives up the lane's lease
@@ -564,7 +565,8 @@ pub(crate) fn salvage_worktree_patch_complete(
     agent: Option<&str>,
     worktree: &std::path::Path,
 ) -> Result<Option<std::path::PathBuf>> {
-    salvage_worktree_patch_with(project_root, spec_id, agent, worktree, true)
+    // An explicit path: the store-writer inventory follows only those.
+    self::salvage_worktree_patch_with(project_root, spec_id, agent, worktree, true)
 }
 
 /// Git's output for a salvage read. `complete` makes a failed read an
