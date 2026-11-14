@@ -20,7 +20,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-14T12:59:48.856339929Z
-modified_at: 2026-11-14T13:02:45.272048329Z
+modified_at: 2026-11-14T14:09:32.979771696Z
 req_type: Bug
 comments:
 - id: 01a1da27-3618-7463-8d20-0317f275eec5
@@ -30,6 +30,12 @@ comments:
   modified_at: 2026-11-14T13:02:45.272048329Z
   session_id: 01a1d9ea-4e25-7033-85e8-3648f0195c7c
   harness_version: 2.1.325 (Claude Code)
+- id: 01a1da64-5d33-7d21-ad26-5e031c29b14a
+  author: joe
+  content: 'PR #4030 removes the same-composition rerun of a red train. pr_train:: unit tests 213 passed; make check-ci-fast 48 gates passed; ci:full label set.'
+  created_at: 2026-11-14T14:09:32.979771696Z
+  modified_at: 2026-11-14T14:09:32.979771696Z
+  session_id: fc28c702-2f6e-419e-b882-6ddfeb9134ff
 history:
 - id: 01a1da27-2bb7-7361-9d4b-679eedfaa209
   author: joe
