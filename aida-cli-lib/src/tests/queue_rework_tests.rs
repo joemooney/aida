@@ -1609,6 +1609,18 @@ fn triage_loop_r_keystroke_lands_approved_queued_and_emits_spec_requeued() {
         &[],
         &[(crate::events::EVENTS_DISABLE_ENV, None)],
     );
+    // Diagnose fixture authority separately: the loop displays rework refusals
+    // and returns Ok, otherwise hiding a rejected grant behind a status mismatch.
+    // trace:BUG-2575 | ai:codex
+    let grant = crate::gate::seat_authority::grant_check(tmp.path());
+    assert!(
+        matches!(&grant, crate::gate::seat_authority::GrantCheck::Valid(g) if g.seat == "advisor"),
+        "hermetic advisor fixture grant was not accepted: {grant:?}"
+    );
+    assert!(
+        crate::gate::role_authority::has_advisor_authority(),
+        "valid hermetic advisor grant did not resolve to advisor authority"
+    );
     let mut input = std::io::Cursor::new(b"r\n".to_vec());
     crate::queue_cmd::rework_triage_loop(
         &storage,
