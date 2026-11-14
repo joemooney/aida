@@ -20,7 +20,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-13T18:06:55.227979618Z
-modified_at: 2026-11-14T21:20:41.333298641Z
+modified_at: 2026-11-14T21:54:28.692403119Z
 req_type: Story
 tags:
 - config
@@ -143,6 +143,13 @@ comments:
   content: 'Integration seat 2026-11-14: slice 1 (PR #4022, dce19b0be35) left integration 7d0c929ce9d failing contained_boundary::store_tests::bug_1985_host_status_guard: the sync-main dirty check ran git status through integration_cmd.rs''s raw git wrapper. Fix is PR #4063 (head b8f40745a63, review before merge). It was missed because the dell1 tip checks ran narrow filters that never included that source-scan guard. From now on every integration tip check on dell1 includes the filters bug_1985 and bug_1929 (the contained_boundary store guards) in addition to the per-change filters.'
   created_at: 2026-11-14T21:20:41.333298641Z
   modified_at: 2026-11-14T21:20:41.333298641Z
+  session_id: 01a1dbaa-d75c-7d30-894c-172db7629c58
+  harness_version: 2.1.325 (Claude Code)
+- id: 01a1dc0e-04d4-7791-9121-6b041dd42bcd
+  author: joe
+  content: 'PR #4063 merged into integration as 6f12ea71765 (pushed 2026-11-14 14:54 MST). bug_1985_host_status_guard passes at that tip on dell1 (1652 passed for bug_1985 bug_1929 integration_cmd:: story_2772 story_2737 land:: gate::); fast gate 48 passed on the same tree.'
+  created_at: 2026-11-14T21:54:28.692403119Z
+  modified_at: 2026-11-14T21:54:28.692403119Z
   session_id: 01a1dbaa-d75c-7d30-894c-172db7629c58
   harness_version: 2.1.325 (Claude Code)
 history:
