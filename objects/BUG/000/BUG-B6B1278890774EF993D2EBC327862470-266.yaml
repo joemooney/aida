@@ -15,10 +15,16 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-08T19:27:28.525198886Z
-modified_at: 2026-11-14T14:20:09.147876554Z
+modified_at: 2026-11-14T14:21:46.340499890Z
 req_type: Bug
 tags:
 - track:dell1
+relationships:
+- rel_type:
+    custom: implemented-by
+  target_id: 01a1da6f-4a3a-78f3-bc3d-74b3e45fb084
+  created_at: 2026-11-14T14:21:46.340496084Z
+  created_by: dirtlab
 comments:
 - id: 01a1bcd8-beaf-7582-aa0b-006077ac5867
   author: dirtlab
@@ -660,6 +666,10 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a1da6f-9a8a-7f21-909e-2a1cb9069ba7
+  author: dirtlab
+  timestamp: 2026-11-14T14:21:49.578265972Z
+  changes: []
 filed_at:
   code_sha: db2eb4c39e46704132705ccb2b8300574ead41a6
   branch: main
