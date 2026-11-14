@@ -10,12 +10,12 @@ description: |
   2. A failed store pull stops store writes instead of proceeding on a local view: queue_cmd.rs pre-pickup pull, store_sync.rs maybe_sync_pull fallback, and burndown_run.rs, which discards the result.
   3. Retry sites that hold the writer lock then plain pull_rebase (git_ops.rs and store_sync.rs) report a dirty store accurately, not as 'remote unreachable'.
   4. Remove the stopgaps noted on BUG-2490 when this lands.
-status: InProgress
+status: Approved
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-08T19:27:28.525198886Z
-modified_at: 2026-11-14T14:21:46.340499890Z
+modified_at: 2026-11-14T18:03:04.418182106Z
 req_type: Bug
 tags:
 - track:dell1
@@ -405,6 +405,11 @@ comments:
   modified_at: 2026-11-14T14:20:09.147876554Z
   session_id: 01a1da634126
   harness_version: 2.1.319 (Claude Code)
+- id: 01a1db3a-2962-7d40-ab16-943e0e17e3b1
+  author: lane-recovery
+  content: Reference merge `97d2f9fda0856183dee299b29760f3004c5db881` left unfinished work with no lease or open PR; returned to Approved.
+  created_at: 2026-11-14T18:03:04.418173451Z
+  modified_at: 2026-11-14T18:03:04.418173451Z
 history:
 - id: 01a1bcc3-bd29-7692-a764-d1e8c8dbaa00
   author: aida-session-start
@@ -670,6 +675,13 @@ history:
   author: dirtlab
   timestamp: 2026-11-14T14:21:49.578265972Z
   changes: []
+- id: 01a1db3a-2962-7d40-ab16-944ec7ead018
+  author: lane-recovery
+  timestamp: 2026-11-14T18:03:04.418181981Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Approved
 filed_at:
   code_sha: db2eb4c39e46704132705ccb2b8300574ead41a6
   branch: main
