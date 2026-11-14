@@ -106,13 +106,25 @@ fn linked_lease(root: &Path, scope: &str, sid: &str, seat: Option<&str>) {
     .unwrap();
 }
 
+/// No live session holds `seat:<seat>`.
+fn assert_unheld(root: &Path, seat: &str) {
+    let d =
+        crate::mailbox_resolver::RecipientDirectory::load(root, &root.join(".aida-store")).unwrap();
+    assert!(
+        d.resolve_send(&format!("seat:{seat}"), false).is_err(),
+        "seat:{seat} must have no holder"
+    );
+}
+
+/// The link is the launch's record: a launch that named no seat holds none,
+/// even when the env's scope is the lease's (a spare reused for the same
+/// spec still carries the earlier launch's seat).
 #[test]
-fn story2745_lease_linked_session_records_the_seat_from_its_env() {
+fn story2745_linked_launch_without_a_seat_ignores_the_env_seat() {
     let tmp = TempDir::new().unwrap();
     let root = tmp.path();
     linked_lease(root, "TASK-2745", "c0ffee01", None);
-    // A `--spec` launch: the env's scope is the lease's, so its seat is trusted.
-    let _env = env(Some("integration"), Some("TASK-2745"));
+    let _env = env(Some("old-seat"), Some("TASK-2745"));
     let entry = touch_session_start_agent_for(
         root,
         root,
@@ -122,8 +134,56 @@ fn story2745_lease_linked_session_records_the_seat_from_its_env() {
     )
     .unwrap();
     assert_eq!(entry.current_spec.as_deref(), Some("TASK-2745"));
-    assert_eq!(entry.seat.as_deref(), Some("integration"));
-    assert_resolves(root);
+    assert_eq!(entry.seat, None);
+    assert_unheld(root, "old-seat");
+}
+
+/// Review round 2, finding 1: a recycled `--bg` spare whose hook fired
+/// before the link wrote the earlier launch's seat. The seatless launch's
+/// adopt step clears it, and a hook firing after the link keeps it clear.
+#[test]
+fn story2745_recycled_spare_drops_the_earlier_launchs_seat_on_a_seatless_link() {
+    let tmp = TempDir::new().unwrap();
+    let root = tmp.path();
+    let pid = std::process::id();
+    let sid = "c0ffee04-0000-4000-8000-000000000000";
+    // The spare's env is an earlier launch's: its scope and its seat.
+    let _env = env(Some("old-seat"), Some("TASK-1111"));
+    let pre = touch_session_start_agent_for(root, root, Some(sid), &binary(), pid).unwrap();
+    assert_eq!(pre.seat.as_deref(), Some("old-seat"), "the stale row");
+    // The launcher links the session to a launch with no `--seat`.
+    linked_lease(root, "TASK-2747", "c0ffee04", None);
+    adopt_bg_session_identity(
+        root,
+        "c0ffee04",
+        "impl-4",
+        Some("TASK-2747"),
+        Some("implementer"),
+        None,
+        root,
+    );
+    assert_eq!(own_seat(root), None);
+    let post = touch_session_start_agent_for(root, root, Some(sid), &binary(), pid).unwrap();
+    assert_eq!(post.seat, None);
+    assert_eq!(own_seat(root), None);
+    assert_unheld(root, "old-seat");
+}
+
+/// The same stale row, when the post-link hook runs before the adopt step:
+/// the hook alone drops the seat.
+#[test]
+fn story2745_post_link_hook_alone_drops_a_stale_row_seat() {
+    let tmp = TempDir::new().unwrap();
+    let root = tmp.path();
+    let pid = std::process::id();
+    let sid = "c0ffee05-0000-4000-8000-000000000000";
+    let _env = env(Some("old-seat"), Some("TASK-1111"));
+    touch_session_start_agent_for(root, root, Some(sid), &binary(), pid).unwrap();
+    assert_eq!(own_seat(root).as_deref(), Some("old-seat"));
+    linked_lease(root, "TASK-2748", "c0ffee05", None);
+    let post = touch_session_start_agent_for(root, root, Some(sid), &binary(), pid).unwrap();
+    assert_eq!(post.seat, None);
+    assert_unheld(root, "old-seat");
 }
 
 #[test]

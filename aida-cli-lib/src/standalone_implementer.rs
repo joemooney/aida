@@ -486,7 +486,14 @@ fn refuse_legacy_slots_from(
         let Some(slot) = read_slot(&path)? else {
             continue;
         };
-        anyhow::ensure!(slot_liveness(&slot, observer, crate::ownership::local_slot_process_is_alive) == Some(false),
+        let live = slot_liveness(
+            &slot,
+            observer,
+            crate::ownership::local_slot_process_is_alive,
+        );
+        anyhow::ensure!(live.is_some(),
+            "legacy checkout-local launcher {} visibility is unknown at {}; retry on the host before using host-wide slots", slot.pid, path.display());
+        anyhow::ensure!(live == Some(false),
             "legacy checkout-local launcher {} still holds {}; let it finish before using host-wide slots", slot.pid, path.display());
     }
     Ok(())
@@ -869,14 +876,14 @@ fn acquire_slot_in_from(
         let Some(slot) = read_slot(&path)? else {
             continue;
         };
-        match slot {
-            slot if slot_liveness(&slot, observer, &is_alive).is_none() => {
+        match slot_liveness(&slot, observer, &is_alive) {
+            None => {
                 running.push(slot.spec);
             }
             // A launcher whose child already logged its final result is
             // finishing, not running: its slot stays but is not counted.
             // trace:BUG-B6B1278890774EF993D2EBC327862470-027 | ai:claude
-            slot if slot.pid != pid && is_alive(slot.pid, slot.start.as_deref()) => {
+            Some(true) if slot.pid != pid => {
                 // trace:BUG-B6B1278890774EF993D2EBC327862470-044 | ai:claude
                 let finishing = !slot.waiting
                     && slot
@@ -1881,7 +1888,15 @@ mod host_capacity_tests {
                 acquire_slot_in_from(dir.clone(), "STORY-OTHER", 2, 500, probe, observer).is_err()
             );
             assert_eq!(std::fs::read_to_string(&path).unwrap(), body);
-            assert!(refuse_legacy_slots_from(tmp.path(), observer).is_err());
+            // Spare capacity permits a distinct launcher but must preserve the
+            // unknown owner, even when its child log has a final result.
+            let guard =
+                acquire_slot_in_from(dir.clone(), "STORY-OTHER", 2, 501, probe, observer).unwrap();
+            assert_eq!(std::fs::read_to_string(&path).unwrap(), body);
+            drop(guard);
+            let error = refuse_legacy_slots_from(tmp.path(), observer).unwrap_err();
+            assert!(error.to_string().contains("visibility is unknown"));
+            assert!(error.to_string().contains("retry on the host"));
         }
         let visible = Slot {
             pid: 500,
@@ -1893,6 +1908,41 @@ mod host_capacity_tests {
         };
         assert_eq!(slot_liveness(&visible, observer, |_, _| false), Some(false));
         assert_eq!(slot_liveness(&visible, observer, |_, _| true), Some(true));
+    }
+
+    // trace:STORY-2660 | ai:codex
+    #[test]
+    fn host_capacity_acquisition_stamps_namespace_and_foreign_observer_retains_slot() {
+        let tmp = tempfile::tempdir().unwrap();
+        let guard = acquire_slot_in(tmp.path().into(), "STORY-2660", 1, 500, |_, _| true).unwrap();
+        let path = tmp.path().join("500.json");
+        let slot = read_slot(&path).unwrap().unwrap();
+        assert_eq!(
+            slot.pid_namespace,
+            aida_core::pid_observer::current_pid_namespace()
+        );
+        // A non-isolated reader in a different namespace also cannot establish
+        // that this owner is dead. Never consult its local process table.
+        let observer = aida_core::pid_observer::PidObserver {
+            namespace: Some(slot.pid_namespace.unwrap_or(0).wrapping_add(1)),
+            isolated: false,
+        };
+        let probe = |_, _: Option<&str>| panic!("foreign namespace must not probe PIDs");
+        let status = observe_host_slots_from(
+            tmp.path().into(),
+            resolve_host_capacity(None, None, 2).unwrap(),
+            probe,
+            observer,
+        )
+        .unwrap();
+        assert_eq!((status.occupied, status.free), (1, 0));
+        assert_eq!(status.reservations[0].state, "unknown");
+        assert!(
+            acquire_slot_in_from(tmp.path().into(), "STORY-OTHER", 1, 501, probe, observer)
+                .is_err()
+        );
+        assert!(path.exists());
+        drop(guard);
     }
 
     #[test]

@@ -17,7 +17,8 @@
 #
 # trace:TASK-1555 | ai:claude
 
-# fast = needs no cargo BUILD, so it is cheap enough to run before every push.
+# fast = source guards plus the dependency-light aida-ci-guards test harness.
+# No application build is needed. trace:TASK-3791 | ai:codex
 # full = requires a built binary, invokes cargo, or shells into a script that
 #        runs `cargo build -p aida-cli` itself.
 #
@@ -44,7 +45,9 @@
 #     while an agent is mid-edit, so that gate belongs after the push, not
 #     before it. trace:TASK-1567
 [tiers]
-# Cargo checks belong to the compile/full path; FAST builds nothing.
+# trace:TASK-3791 | ai:codex
+"Rust structural ratchets" = "fast"
+# Application Cargo checks belong to the compile/full path.
 # trace:STORY-2735 | ai:codex
 "CI tier policy fixtures" = "fast"
 "Terminal glyph padding ratchet" = "fast" # trace:TASK-3779 | ai:codex
@@ -137,6 +140,7 @@
 "Check Rust test portability ratchet" = "fast"
 "Prose-classification rule fixtures" = "fast"
 "Executable fixture ratchet" = "fast"
+"Gate downward dependency ratchet" = "fast"  # trace:TASK-3785 | ai:codex
 "Crate glob import ratchet" = "fast"  # trace:TASK-3428 | ai:codex
 "ExecContext environment ratchet" = "fast"  # trace:STORY-2538 | ai:codex
 "Test git auto-maintenance ratchet" = "fast"  # trace:BUG-2191 | ai:claude

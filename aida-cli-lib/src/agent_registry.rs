@@ -950,16 +950,17 @@ fn touch_session_start_agent_for(
     } else {
         None
     };
-    // The named seat: the linked launch's own record first, else the env
-    // under the same trust rule as the name (a spare's stale env never
-    // names it). trace:STORY-2745 | ai:claude
-    let env_seat = env_trusted
-        .then(|| env_nonempty(crate::agent_rotation::SEAT_ENV))
-        .flatten()
-        .and_then(|s| crate::seat_rotation::sanitize_seat(&s).ok());
-    let session_seat = launch_seat
-        .and_then(|s| crate::seat_rotation::sanitize_seat(&s).ok())
-        .or(env_seat);
+    // The named seat. A linked session's seat is its launch's own record,
+    // and a launch that named none holds none: the spare it runs in may
+    // carry an earlier launch's env, and a hook that fired before the link
+    // may have written that env's seat to the row. An unlinked session
+    // reads its own env. trace:STORY-2745 | ai:claude
+    let session_seat = if linked.is_some() {
+        launch_seat
+    } else {
+        env_nonempty(crate::agent_rotation::SEAT_ENV)
+    }
+    .and_then(|s| crate::seat_rotation::sanitize_seat(&s).ok());
     let read_row = std::fs::read_to_string(&path)
         .ok()
         .and_then(|body| toml::from_str::<AgentRegistryEntry>(&body).ok());
@@ -1037,9 +1038,14 @@ fn touch_session_start_agent_for(
         entry.current_spec = env_scope.or(entry.current_spec);
         entry.worktree_path = worktree_root.to_path_buf();
     }
-    // Linked or not, the session keeps the seat it was launched into.
+    // The linked launch decides the seat outright, as it does the spec; an
+    // unlinked session keeps a seat its launcher already wrote to the row.
     // trace:STORY-2745 | ai:claude
-    entry.seat = session_seat.or(entry.seat);
+    entry.seat = if linked.is_some() {
+        session_seat
+    } else {
+        session_seat.or(entry.seat)
+    };
     if entry.source != "agent-launcher" {
         entry.source = "session-start-hook".to_string();
     }
@@ -1259,8 +1265,10 @@ pub(crate) fn adopt_bg_session_identity(
         }
         entry.current_spec = spec.map(str::to_string);
         entry.role = role.map(str::to_string).or(entry.role);
+        // The launch's seat replaces whatever the pre-link hook wrote from
+        // the spare's env; a launch with no seat leaves none.
         // trace:STORY-2745 | ai:claude
-        entry.seat = seat.map(str::to_string).or(entry.seat);
+        entry.seat = seat.and_then(|s| crate::seat_rotation::sanitize_seat(s).ok());
         entry.worktree_path = worktree.to_path_buf();
         if write_entry(project_root, &entry).is_ok() {
             updated += 1;
