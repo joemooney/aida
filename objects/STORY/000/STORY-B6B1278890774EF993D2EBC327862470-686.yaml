@@ -25,12 +25,12 @@ description: |
   - Cap: `History::blocking_keys` keys on the patch-id rather than the head under `fast`.
   - Config: add the key to the config schema with the existing protected-config write rules; defaults to `fast` with an empty strict list in this repo's committed config.
   - Out of scope: the transient store-pull retry (stays in BUG-2561); integration-track changes (frozen until 2026-11-14 19:00).
-status: Approved
+status: InProgress
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-13T15:54:08.931576118Z
-modified_at: 2026-11-14T06:33:03.643139853Z
+modified_at: 2026-11-14T07:00:38.118133809Z
 req_type: Story
 tags:
 - architecture
@@ -305,6 +305,13 @@ history:
   session_id: 01a1d8ac27e8
   harness_version: 2.1.325 (Claude Code)
   changes: []
+- id: 01a1d8db-ae66-7e41-8d90-58309bb49cbe
+  author: aida-session-start
+  timestamp: 2026-11-14T07:00:38.118131542Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: 3631f7ca05567a6984ff2376b997539389b6f758
   branch: main
