@@ -8,12 +8,12 @@ description: |-
   Fix: label events should start or cancel a CI run only when the label is ci:full (the only label that changes the tier). Options: gate the jobs with an if on github.event.action / github.event.label.name so other label events finish in seconds without joining the cancelling concurrency group, or give non-ci:full label events their own concurrency group. A hold-label change must not cancel an in-progress run on the same head.
 
   Acceptance: (1) adding or removing aida:merge-hold* on a PR with a CI run in progress leaves that run running; (2) adding ci:full starts a full run; removing it starts a fast run; (3) push to the PR still cancels the superseded run; (4) train PR behaviour unchanged.
-status: NeedsAttention
+status: Completed
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-14T13:05:16.063317537Z
-modified_at: 2026-11-14T19:15:35.669367810Z
+modified_at: 2026-11-14T20:53:56.898118198Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -137,6 +137,19 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a1dbd6-9a19-7983-a582-f589eeeecc9e
+  author: aida-auto-bump
+  timestamp: 2026-11-14T20:53:56.889092535Z
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Completed
+processing_record:
+- id: 01a1dbd6-9a22-7e40-a9aa-a84fa0d28c17
+  timestamp: 2026-11-14T20:53:56.898116820Z
+  agent: aida
+  commit_sha: d5f90aedd3a51c92a559eb538784d3c12bf70325
+  summary: Completed via merge d5f90aed
 filed_at:
   code_sha: 2682c4c4fe5a42194a6f2eca01940008e3a41776
   branch: main
@@ -145,6 +158,10 @@ filed_at:
   aida_build_sha: 166920a3bf8
   vendor: claude
   session: fc28c702-2f6e-419e-b882-6ddfeb9134ff
+implementation_info:
+  implemented: false
+  completed_at: 2026-11-14T20:53:56.889088455Z
+  completion_sha: d5f90aedd3a51c92a559eb538784d3c12bf70325
 attention_reason:
   category: design-fork
   detail: 'Advisor rework says the Build job name must stay literal and label events be gated by a job-level if. A skipped literal ''Build (ubuntu-latest)'' from a hold-label run becomes the newest Build row: require_full_ship_ci (ci_gate.rs:246-270) then refuses a head with passed FULL CI, and branch protection counts the skipped required check as green on a red head. A mirroring Build job and a separate label workflow fail too (details in the spec comment). Need a ruling: A keep the name expression and relax aggregator_const_matches_the_ci_workflow; B literal name, accept the regressions; C own concurrency group only (duplicate full run per toggle); D workflow_dispatch redesign.'
