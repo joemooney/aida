@@ -3,16 +3,15 @@ spec_id: TASK-b6b1278890774ef993d2ebc327862470-1074
 agreed_id: TASK-3791
 title: FAST PR CI tier runs the cheap ratchet and inventory tests
 description: 'Operator agreed 2026-11-13 18:07 MST. Since STORY-2735, PR pushes run only fast gates + compile; the cheap ratchet/inventory tests (STORY-2326 env-key ratchet incl. DROPPED_AIDA_KEYS, launch-site count inventories such as pr_cmd.rs, store-writer inventory, and similar sub-second structural tests) only run in the lib/cli shards on train/main. Result: train 10 (#3975/#3976) went red on lib-1 because #3926 added AIDA_SWEEP_PARENT without its ratchet entry, costing a full train cycle. Acceptance: (1) the FAST tier (ci-gate-tiers fast + the Build fast-gates step) runs these tests by name/filter, adding <2 min wall time; (2) the selection is a checked list in one place, with a test that fails when a new ratchet/inventory test exists in the shards but not in the list (or a naming convention it globs); (3) make check-ci-fast runs the same set locally; (4) a fixture or note demonstrating that the #3926 class of failure is caught on the PR tier. Main track (ship by train).'
-status: NeedsAttention
+status: Completed
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-14T01:08:38.387968366Z
-modified_at: 2026-11-14T05:39:39.280707103Z
+modified_at: 2026-11-14T07:37:07.312679625Z
 req_type: Task
 tags:
 - ci
-- track:dell1
 relationships:
 - rel_type:
     custom: implemented-by
@@ -75,6 +74,20 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a1d8fd-1039-7aa0-af11-1c5b9320de14
+  author: aida-auto-bump
+  timestamp: 2026-11-14T07:37:05.849248974Z
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Completed
+processing_record:
+- id: 01a1d8fd-15f0-78a1-89a7-14a98f1ada25
+  timestamp: 2026-11-14T07:37:07.312674281Z
+  agent: aida
+  commit_sha: 60823a3cb079fb62463fd88934afe72619a87cae
+  summary: 'Full sweep at aafe7a8: all 4 ACs met. Delta since approved c5410ad is the origin/main merge only (AIDA_TRACK/AIDA_SWEEP_PARENT keys, pr_cmd ledger 2, steal removal); launch_env_keys.rs is byte-identical to main''s moved tables; both #3926 classes (story_2326 ambient/launch-site ratchets; resolve_aida_exe_ratchet_tests raw current_exe guard) run in FAST with a removal-fails audit. CI fast gates+compile green at head; FULL shards run on train.'
+  review_verdict: approved
 filed_at:
   code_sha: bc24a1e6883b8fc1f036ca37e6fe3c4060d75255
   branch: main
@@ -84,11 +97,7 @@ filed_at:
   vendor: claude
   session: 01a1d797-2ccf-7771-899a-682081f10504
   harness_version: 2.1.325 (Claude Code)
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: FAST harness covers the STORY-2326 class (#3975) but omits the resolver raw current_exe ratchet that broke lib-0 in train 10 (#3977), and the AC2 completeness audit cannot detect that omission.
-  recovery_hint: address the review findings, move TASK-3791 back to In Progress, and clear the PR hold only after approval
-  shelved_by: reviewer
-  shelved_at: 2026-11-14T01:48:20.380169875Z
+implementation_info:
+  implemented: false
+  completed_at: 2026-11-14T07:37:05.849242506Z
+  completion_sha: 60823a3cb079fb62463fd88934afe72619a87cae
