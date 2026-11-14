@@ -20,7 +20,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-13T18:06:55.227979618Z
-modified_at: 2026-11-14T14:35:39.118085116Z
+modified_at: 2026-11-14T17:03:53.873346967Z
 req_type: Story
 tags:
 - config
@@ -123,6 +123,13 @@ comments:
   created_at: 2026-11-14T14:35:39.118085116Z
   modified_at: 2026-11-14T14:35:39.118085116Z
   session_id: 01a1d9ea-4e25-7033-85e8-3648f0195c7c
+  harness_version: 2.1.325 (Claude Code)
+- id: 01a1db03-fc11-71c2-87dc-85160999aa5f
+  author: joe
+  content: 'Advisor ruling on the #4022 verdict at 79268ec (CHANGES REQUESTED): BLOCKING (1) the printed revert remedy must actually clear the refusal (or print the remedy that does) with a test; BLOCKING (2, security) an unreadable gate config must fail closed: keep the built-in and project protected paths, never drop them. ACCEPTED (3): two criteria untraced, bookkeeping only. Next review scoped to (1) and (2).'
+  created_at: 2026-11-14T17:03:53.873346967Z
+  modified_at: 2026-11-14T17:03:53.873346967Z
+  session_id: 01a1dab1-9447-7d22-b5ff-0c9084e122ea
   harness_version: 2.1.325 (Claude Code)
 history:
 - id: 01a1d617-7531-7dc3-aba6-d82849880497
