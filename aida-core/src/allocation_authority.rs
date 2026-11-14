@@ -1620,8 +1620,10 @@ pub(crate) fn home_fixture_backend(root: &Path) -> Result<crate::GitBackend> {
     }
     let common = common_dir(root)?;
     anyhow::ensure!(
-        common.starts_with(&resolved),
-        "fixture authority requires a common Git directory inside its repository"
+        common.starts_with(&resolved)
+            || (root.join(".git").is_file()
+                && common.starts_with(std::env::temp_dir().canonicalize()?)),
+        "fixture authority requires a local or explicitly linked temporary Git directory"
     );
     let setting = common.join(CONFIG_FILE);
     if setting.exists() {
@@ -1654,6 +1656,23 @@ mod tests {
             common_dir(&root).unwrap(),
             root.join(".git").canonicalize().unwrap()
         );
+    }
+
+    // trace:BUG-2560 | ai:codex
+    #[test]
+    fn bug_2560_fixture_accepts_explicit_linked_worktree() {
+        let dir = tempfile::tempdir().unwrap();
+        let main = dir.path().join("main");
+        crate::git_ops::init(&main).unwrap();
+        let root = dir.path().join("linked");
+        std::fs::create_dir(&root).unwrap();
+        let gitdir = main.join(".git/worktrees/linked");
+        std::fs::create_dir_all(&gitdir).unwrap();
+        std::fs::write(gitdir.join("commondir"), "../..\n").unwrap();
+        std::fs::write(root.join(".git"), format!("gitdir: {}\n", gitdir.display())).unwrap();
+        home_fixture_backend(&root).unwrap();
+        assert!(main.join(".git").join(CONFIG_FILE).is_file());
+        require_global(&root).unwrap();
     }
 
     // trace:BUG-2560 | ai:codex
