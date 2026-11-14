@@ -3,12 +3,12 @@ spec_id: BUG-b6b1278890774ef993d2ebc327862470-332
 agreed_id: BUG-2567
 title: Gate-dependency ratchet misses 'extern crate self as <alias>' paths
 description: 'From PR-3948 review (TASK-3785) P2: scripts/check-gate-dependencies.py:27-34 returns an empty edge set for ''extern crate self as root; root::session::new_item()'' and ''use root::session::new_item;''. Acceptance: resolve or explicitly refuse current-crate aliases; fixture test for both forms.'
-status: InProgress
+status: Completed
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-13T21:43:52.838281618Z
-modified_at: 2026-11-14T05:59:33.167791429Z
+modified_at: 2026-11-14T08:54:30.886330924Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -65,6 +65,20 @@ history:
   author: joe
   timestamp: 2026-11-14T05:59:34.962092315Z
   changes: []
+- id: 01a1d943-ee91-7791-996a-2a2bf3f56920
+  author: aida-auto-bump
+  timestamp: 2026-11-14T08:54:30.289413435Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a1d943-f0e6-7803-b402-c29d8cb8c4ef
+  timestamp: 2026-11-14T08:54:30.886326631Z
+  agent: aida
+  commit_sha: 33122e4362dd3cead8d6afb750e40bcb01dd4ecb
+  summary: 'AC1 (resolve or refuse current-crate aliases) verified: scripts/check-gate-dependencies.py:32-36 maps ''extern crate self as X'' to crate, same fixed-point expansion as use bindings; same pattern as the existing std-alias code in check-exec-context.py:128-133. AC2 (fixture test for both forms) verified: test_current_crate_alias_references_and_imports covers reference, import, import placed before the alias, raw identifier and grouped forms; globs refuse; ledger ratchet refuses both spellings and does not write the ledger. Deep pass: leading ::, r# and pub prefixes all still resolve. No defects. CI fast gates green at head.'
+  review_verdict: approved
 filed_at:
   code_sha: 97d2f9fda0856183dee299b29760f3004c5db881
   branch: main
@@ -74,3 +88,7 @@ filed_at:
   vendor: claude
   session: 01a1d684-8599-70e0-a01c-714f54d2f8de
   harness_version: 2.1.323 (Claude Code)
+implementation_info:
+  implemented: false
+  completed_at: 2026-11-14T08:54:30.289406776Z
+  completion_sha: 33122e4362dd3cead8d6afb750e40bcb01dd4ecb
