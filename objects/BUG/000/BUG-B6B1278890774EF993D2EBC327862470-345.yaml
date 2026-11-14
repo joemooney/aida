@@ -1,0 +1,35 @@
+id: 01a1da4a-2352-7ad0-a5da-77b82f12e5c1
+spec_id: BUG-b6b1278890774ef993d2ebc327862470-345
+agreed_id: BUG-2580
+title: 'Headless implementer that commits but does not push ends ''failed-after-start: no-new-published-head'' and strands its commits in the seat'
+description: |-
+  Seen 2026-11-14 on dell1: three of the last four Claude implementer lanes (BUG-2549, BUG-2578, STORY-2809) ended with
+
+    implementer: failed-after-start ... reason=no-new-published-head pr=unknown head=unknown untested=true fast_gate=skipped(lane-ended)
+    error: the implementer exited (code 0) without publishing a new head for <SPEC>, leaving commits it did not push in its worktree
+
+  The lane did the work and committed it in its contained seat; nothing pushed it or opened a PR, the spec showed no PR, and the advisor had to find the seat and publish by hand (#4027, #4028). 'aida queue work' already knows the exact state (exit 0, seat clean, commits ahead of the published head) and reports it as an error instead of acting on it.
+
+  Fix: on implementer exit 0 with a clean seat whose branch is ahead of its published head (or has no published head), queue work publishes it itself by the same route as 'aida ship <SPEC> --from-seat <seat>' (bundle, verify, trailer check, push, open PR), then runs the lane-end fast gate against that head. Only when that publish fails does the attempt end failed, and the message names the seat path and the one command that retries the publish.
+
+  Acceptance: (1) a headless implementer that commits and exits 0 without pushing ends with a PR open at its commit and the attempt recorded as published; (2) a dirty seat keeps today's behaviour; (3) a seat with no new commits ends 'no changes' without an error about unpushed commits; (4) publish failure leaves the commits in the seat and prints the retry command; (5) works for a seat on a remote lane host (dell1) with no operator grant.
+
+  Stopgap in place: dell1 ~/lane-run.sh now runs 'aida ship SPEC --from-seat SEAT' when the seat is clean but its HEAD differs from origin's branch and is not on origin/main. Remove that branch of the wrapper when this lands.
+status: Draft
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-14T13:40:54.226128122Z
+modified_at: 2026-11-14T13:40:54.226128122Z
+req_type: Bug
+tags:
+- landing
+- track:integration
+filed_at:
+  code_sha: 2682c4c4fe5a42194a6f2eca01940008e3a41776
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 166920a3bf8
+  vendor: claude
+  session: fc28c702-2f6e-419e-b882-6ddfeb9134ff
