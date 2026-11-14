@@ -305,12 +305,32 @@ description: |
   ### finding-hash:4843b9fe
 
   Pre-existing, related: record_verdict_at_inner (gate/ledger/mod.rs:290-300) binds a spec-only aida review record SPEC to changes_for_spec().last(). With two open changes, a spec-only refusal meant for change A lands on change B's ledger, and the new reader then counts it for B (bound.number == B) whatever its head.
+
+
+  ## Findings from BUG-2570
+  Reviewed sha: cc2161c24f182358c1d82267ebac757a4ea929db
+
+  ### finding-hash:dfed3eb6
+
+  merge_hold_cmd.rs:952: placing a rework hold with --verdict <SPEC> still snapshots the VerdictRef (reviewed sha and seat) through read_recorded_verdict, so with two open changes under one spec it can record the other change's review. Use read_recorded_verdict_for_change(root, key, pr, head).
+
+  ### finding-hash:76a786ef
+
+  The hold-premise change (merge_hold_cmd.rs:631-650) has no test through premise_stale: only read_recorded_verdict_for_change is tested. Add a test where a Rework hold on change A is not flagged stale by change B's approval under the shared spec.
+
+  ### finding-hash:7bbbf9a9
+
+  gate/ship.rs:1109-1119: once the change has a ledger verdict, ledger_only skips the spec file entirely, even a refusal in that file at this exact head that never reached the ledger. Ledger events from another change at this head are kept (speaks_for_change), so the file and ledger paths treat same-head evidence differently. Consider keeping a spec-file record whose reviewed_sha matches head.
+
+  ### finding-hash:4843b9fe
+
+  Pre-existing, related: record_verdict_at_inner (gate/ledger/mod.rs:290-300) binds a spec-only aida review record SPEC to changes_for_spec().last(). With two open changes, a spec-only refusal meant for change A lands on change B's ledger, and the new reader then counts it for B (bound.number == B) whatever its head.
 status: Draft
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-13T20:01:56.623034248Z
-modified_at: 2026-11-14T05:31:35.593572065Z
+modified_at: 2026-11-14T05:31:47.372894813Z
 req_type: Task
 tags:
 - carried-finding:BUG-2546:56ed8b81
@@ -319,6 +339,10 @@ tags:
 - carried-finding:BUG-2554:35d3eb09
 - carried-finding:BUG-2557:55e0cbfe
 - carried-finding:BUG-2557:f238ea37
+- carried-finding:BUG-2570:4843b9fe
+- carried-finding:BUG-2570:76a786ef
+- carried-finding:BUG-2570:7bbbf9a9
+- carried-finding:BUG-2570:dfed3eb6
 - carried-finding:PR-3921:0cbc5c63
 - carried-finding:PR-3924:fe70e901
 - carried-finding:PR-3938:654190b6
@@ -370,6 +394,7 @@ tags:
 - carried-from:BUG-2549
 - carried-from:BUG-2554
 - carried-from:BUG-2557
+- carried-from:BUG-2570
 - carried-from:PR-3921
 - carried-from:PR-3924
 - carried-from:PR-3938
@@ -425,6 +450,7 @@ tags:
 - from-review:BUG-2549
 - from-review:BUG-2554
 - from-review:BUG-2557
+- from-review:BUG-2570
 - from-review:PR-3921
 - from-review:PR-3924
 - from-review:PR-3938
@@ -557,6 +583,11 @@ history:
 - id: 01a1d88a-2e28-7052-91d4-f88effd83bd1
   author: joe
   timestamp: 2026-11-14T05:31:36.872715151Z
+  session_id: 01a1d8872386
+  changes: []
+- id: 01a1d88a-5c70-7871-a449-57e5462b3ca4
+  author: joe
+  timestamp: 2026-11-14T05:31:48.720692691Z
   session_id: 01a1d8872386
   changes: []
 filed_at:
