@@ -7395,8 +7395,9 @@ Options:
           With --drive: keep sensitive specs human-only
 
       --ttl <TTL>
-          How long it lasts, e.g. `8h` or `90m` (default 8h, at most 24h). Extend an active one with
-          `aida mandate renew`
+          How long it lasts, e.g. `8h` or `90m` (default 8h, at most 24h unless `[mandate]
+          max_ttl_hours` in ~/.aida/config.toml raises the cap). Extend an active one with `aida
+          mandate renew`
 
       --reason <REASON>
           Why the mandate exists, recorded with it
@@ -7436,7 +7437,7 @@ Usage: aida mandate renew [OPTIONS]
 Options:
       --for <DURATION>
           How long from now it lasts, e.g. `8h` or `90m` (default: the duration it was started with,
-          at most 24h)
+          at most 24h unless `[mandate] max_ttl_hours` in ~/.aida/config.toml raises the cap)
           
           [aliases: --ttl]
 
@@ -39652,7 +39653,7 @@ Working on aida itself
       {
         "name": "ttl",
         "takes_value": true,
-        "help": "How long it lasts, e.g. `8h` or `90m` (default 8h, at most 24h). Extend an active one with `aida mandate renew`"
+        "help": "How long it lasts, e.g. `8h` or `90m` (default 8h, at most 24h unless `[mandate] max_ttl_hours` in ~/.aida/config.toml raises the cap). Extend an active one with `aida mandate renew`"
       }
     ],
     "hidden": false
@@ -39688,7 +39689,7 @@ Working on aida itself
       {
         "name": "for",
         "takes_value": true,
-        "help": "How long from now it lasts, e.g. `8h` or `90m` (default: the duration it was started with, at most 24h)"
+        "help": "How long from now it lasts, e.g. `8h` or `90m` (default: the duration it was started with, at most 24h unless `[mandate] max_ttl_hours` in ~/.aida/config.toml raises the cap)"
       },
       {
         "name": "format",
