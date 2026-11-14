@@ -22,6 +22,57 @@ def load_verify_manual():
     return module
 
 
+class VerifyManualBinaryTest(unittest.TestCase):
+    # trace:BUG-2563 | ai:codex
+    def test_worktree_binary_wins_over_path_and_all_probes_use_it(self):
+        vm = load_verify_manual()
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            cli = root / "docs/cli"
+            cli.mkdir(parents=True)
+            binary = root / "target/debug/aida"
+            binary.parent.mkdir(parents=True)
+            binary.write_text("#!/bin/sh\necho '  integration  Command'\necho 'Usage: aida integration tags'\necho '  --dry-run'\n")
+            binary.chmod(0o755)
+            with patch.object(vm, "CLI_DIR", str(cli)), patch.dict(
+                vm.os.environ, {"PATH": "/nonexistent"}, clear=True
+            ):
+                self.assertEqual(vm.aida_binary(), str(binary))
+                self.assertIn("--dry-run", vm.help_flags("integration tags"))
+                self.assertIn("integration", vm.help_all_commands())
+                self.assertIn(("integration",), vm.help_command_paths())
+                self.assertFalse(vm.subcommand_unrecognized("integration tags"))
+
+    def test_override_accepts_path_with_spaces(self):
+        vm = load_verify_manual()
+        with tempfile.TemporaryDirectory() as td:
+            binary = Path(td) / "branch aida"
+            binary.write_text("#!/bin/sh\necho --branch-only\n")
+            binary.chmod(0o755)
+            with patch.dict(vm.os.environ, {"AIDA_BIN": str(binary)}):
+                self.assertEqual(vm.aida_binary(), str(binary))
+                self.assertIn("--branch-only", vm.help_flags("integration tags"))
+
+    def test_missing_build_refuses_instead_of_using_path(self):
+        vm = load_verify_manual()
+        with tempfile.TemporaryDirectory() as td, patch.object(vm, "CLI_DIR", td), patch.dict(
+            vm.os.environ, {}, clear=True
+        ), patch.object(sys, "argv", [str(SCRIPT)]), contextlib.redirect_stderr(io.StringIO()) as err:
+            with self.assertRaises(SystemExit) as result:
+                vm.main()
+            self.assertEqual(result.exception.code, 1)
+            self.assertIn("set AIDA_BIN", err.getvalue())
+
+    def test_static_needs_no_binary(self):
+        vm = load_verify_manual()
+        with patch.object(sys, "argv", [str(SCRIPT), "--static"]), patch.object(
+            vm, "aida_binary", side_effect=AssertionError("must not select binary")
+        ), patch.object(vm, "main_static", return_value=0):
+            with self.assertRaises(SystemExit) as result:
+                vm.main()
+            self.assertEqual(result.exception.code, 0)
+
+
 class VerifyManualCompletenessTest(unittest.TestCase):
     # trace:BUG-2121 | ai:codex
     HELP_ALL = """Requirements
@@ -37,13 +88,16 @@ External commands
 
     def setUp(self):
         self.vm = load_verify_manual()
+        binary_patch = patch.object(self.vm, "aida_binary", return_value="/fixture/aida")
+        binary_patch.start()
+        self.addCleanup(binary_patch.stop)
 
     def test_help_all_excludes_extensions_preserves_builtins(self):
         with patch.object(
             self.vm.subprocess, "run", return_value=SimpleNamespace(stdout=self.HELP_ALL)
         ) as run:
             self.assertEqual(self.vm.help_all_commands(), ["add", "import"])
-        run.assert_called_once_with(["aida", "help-all"], capture_output=True, text=True)
+        run.assert_called_once_with(["/fixture/aida", "help-all"], capture_output=True, text=True)
 
     def test_completeness_ignores_extensions_but_rejects_missing_builtin(self):
         for undocumented, expected_exit in [(False, 0), (True, 1)]:
@@ -68,6 +122,7 @@ External commands
                     with self.assertRaises(SystemExit) as exit_result:
                         self.vm.main()
                 self.assertEqual(exit_result.exception.code, expected_exit)
+                self.assertIn("Checking aida binary: /fixture/aida", output.getvalue())
                 self.assertNotIn("aida gui", output.getvalue())
                 self.assertNotIn("aida host-bench", output.getvalue())
                 if undocumented:
@@ -98,6 +153,9 @@ class VerifyManualFlagsTest(unittest.TestCase):
 
     def setUp(self):
         self.vm = load_verify_manual()
+        binary_patch = patch.object(self.vm, "aida_binary", return_value="aida")
+        binary_patch.start()
+        self.addCleanup(binary_patch.stop)
         self.old_help_flags = self.vm.help_flags
         self.old_help_command_paths = self.vm.help_command_paths
         self.vm.help_flags.cache_clear()
@@ -221,6 +279,9 @@ pub struct Other {
 
     def setUp(self):
         self.vm = load_verify_manual()
+        binary_patch = patch.object(self.vm, "aida_binary", return_value="aida")
+        binary_patch.start()
+        self.addCleanup(binary_patch.stop)
 
     def test_static_clap_parse_visible_vs_hidden(self):
         visible, hidden = self.vm.clap_long_flags(self.CLAP_SOURCE)
@@ -302,6 +363,9 @@ class VerifyManualSubcommandTest(unittest.TestCase):
 
     def setUp(self):
         self.vm = load_verify_manual()
+        binary_patch = patch.object(self.vm, "aida_binary", return_value="aida")
+        binary_patch.start()
+        self.addCleanup(binary_patch.stop)
 
     def known(self, path):
         return path in self.KNOWN
