@@ -235,7 +235,7 @@ fn nested_discovery_respects_canonical_parents_and_hidden_child_aliases() {
 // trace:STORY-2704 | ai:codex
 #[test]
 fn nested_discovery_hides_builtin_argv_rewrite_claims() {
-    let tree = crate::command_registry::built_command();
+    let tree = crate::TEST_CLI.built_command();
     for name in ["queue", "agent"] {
         let parent = command_named(&tree, name).unwrap();
         let installed = [External {

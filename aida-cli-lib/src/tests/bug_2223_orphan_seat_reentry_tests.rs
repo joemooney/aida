@@ -247,6 +247,221 @@ fn an_orphaned_clone_with_uncommitted_work_is_re_entered_in_place() {
     );
 }
 
+// trace:STORY-2710 | ai:codex
+#[test]
+fn story_2710_actual_orphan_adoption_transfers_pending_repair() {
+    let fx = fixture();
+    clone_config(&fx.main, &fx.root);
+    let _ambient = crate::test_env::AmbientGuard::hermetic_with_seat(&fx.main, "implementer", &[]);
+    let orphan = orphaned_clone(&fx.main, "TASK-2223");
+    let tree = &orphan.worktree_path;
+    git_ok(tree, &["add", "-A"]);
+    git_ok(
+        tree,
+        &[
+            "-c",
+            "user.name=T",
+            "-c",
+            "user.email=t@example.com",
+            "-c",
+            "maintenance.auto=false",
+            "-c",
+            "gc.auto=0",
+            "commit",
+            "-qm",
+            "PR edits",
+        ],
+    );
+    let head = git_ok(tree, &["rev-parse", "HEAD"]);
+    std::fs::write(fx.main.join("README.md"), "competing main edit\n").unwrap();
+    git_ok(
+        &fx.main,
+        &[
+            "-c",
+            "maintenance.auto=false",
+            "-c",
+            "gc.auto=0",
+            "commit",
+            "-qam",
+            "main edit",
+        ],
+    );
+    let base = git_ok(&fx.main, &["rev-parse", "HEAD"]);
+    git_ok(
+        tree,
+        &[
+            "-c",
+            "maintenance.auto=false",
+            "-c",
+            "gc.auto=0",
+            "fetch",
+            "--no-write-fetch-head",
+            fx.main.to_str().unwrap(),
+            "main",
+        ],
+    );
+    let execute = |args: &[&str]| -> anyhow::Result<String> {
+        let out = crate::test_git::git_command()
+            .current_dir(tree)
+            .args(["-c", "user.name=T", "-c", "user.email=t@example.com"])
+            .args(args)
+            .output()?;
+        anyhow::ensure!(
+            out.status.success(),
+            "Git refused: {}",
+            String::from_utf8_lossy(&out.stderr)
+        );
+        Ok(String::from_utf8(out.stdout)?.trim().to_owned())
+    };
+    assert!(execute(&["merge", "--no-edit", &base]).is_err());
+    assert_eq!(execute(&["rev-parse", "MERGE_HEAD"]).unwrap(), base);
+    let key = crate::repair_journal::RepairKey {
+        repository: fx.main.clone(),
+        pr: 3813,
+        original_head: head.clone(),
+    };
+    let mut journal = crate::repair_journal::RepairGuard::lock(&fx.main).unwrap();
+    journal
+        .reserve(crate::repair_journal::RepairEntry {
+            key: key.clone(),
+            dispatched_by: "direct-rework".into(),
+            reserved_at: "now".into(),
+            lane_id: orphan.id.clone(),
+            tree_path: tree.clone(),
+            branch: orphan.branch.clone(),
+            base: base.clone(),
+            spawn: crate::repair_journal::SpawnOutcome::Unknown,
+            original_conflict_paths: vec!["README.md".into()],
+            // Restoration succeeded, but a publication generator failed.
+            // Adoption must preserve this stronger requirement for a full retry.
+            preparation_success: Some(true),
+            regeneration_success: Some(false),
+            regenerated_tree: None,
+            validation: None,
+            refusal_notice: None,
+        })
+        .unwrap();
+    drop(journal);
+    let index_before = execute(&["ls-files", "--stage"]).unwrap();
+    // Keep the adoption regression usable without user namespaces; the live
+    // containment lane requires this direct publication assertion to execute.
+    let bwrap_live = std::process::Command::new("bwrap")
+        .args([
+            "--ro-bind",
+            "/",
+            "/",
+            "--dev",
+            "/dev",
+            "--proc",
+            "/proc",
+            "true",
+        ])
+        .output()
+        .is_ok_and(|out| out.status.success());
+    if bwrap_live {
+        let refused = crate::seat_clone::commit_pending(
+            &fx.main,
+            tree,
+            &orphan.branch,
+            "failed generation must not publish (Refs STORY-2710)",
+        )
+        .unwrap_err();
+        assert!(
+            refused
+                .to_string()
+                .contains("repair preparation did not succeed"),
+            "{refused:#}"
+        );
+    } else {
+        assert!(
+            aida_core::exec_context::Environment::capture()
+                .get("AIDA_REQUIRE_BWRAP_LIVE")
+                .is_none(),
+            "bwrap required"
+        );
+        eprintln!("SKIP direct repair commit refusal (bwrap unavailable)");
+    }
+    assert_eq!(execute(&["ls-files", "--stage"]).unwrap(), index_before);
+    assert_eq!(execute(&["rev-parse", "HEAD"]).unwrap(), head);
+    assert_eq!(execute(&["rev-parse", "MERGE_HEAD"]).unwrap(), base);
+    assert!(crate::repair_journal::RepairGuard::lock(&fx.main)
+        .unwrap()
+        .transfer_adopted_lane(
+            tree,
+            &orphan.branch,
+            "unrelated-orphan",
+            "unrelated-successor"
+        )
+        .is_err());
+    let receipt = adopt_receipt("TASK-2223", &orphan.branch, tree, true, true).unwrap();
+    let failed_successor = lease_for(&fx.main, "TASK-2223");
+    assert_ne!(failed_successor.id, orphan.id);
+    let failure = prepare_host_repair_with(
+        &fx.main,
+        tree,
+        3813,
+        &failed_successor.id,
+        &execute,
+        &orphan.branch,
+        true,
+        |_| panic!("failed preparation cannot publish"),
+        |_, restore_only| {
+            assert!(!restore_only, "failed generation requires a full retry");
+            anyhow::bail!("generation still fails")
+        },
+        || Ok((base.clone(), head.clone())),
+    )
+    .unwrap_err();
+    assert!(failure.to_string().contains("generation still fails"));
+    // Failed resume setup restores the orphan lease AND its journal identity.
+    drop(receipt);
+    let journal = crate::repair_journal::RepairGuard::lock(&fx.main).unwrap();
+    let entry = journal
+        .for_tree(tree, &orphan.branch, &head, &base)
+        .unwrap();
+    assert_eq!(entry.lane_id, orphan.id);
+    assert!(entry.require_prepared().is_err());
+    assert_eq!(entry.regeneration_success, Some(false));
+    assert_eq!(entry.original_conflict_paths, ["README.md"]);
+    drop(journal);
+    assert!(!crate::lease_path(&fx.main, &failed_successor.id).exists());
+    adopt("TASK-2223", &orphan.branch, tree).unwrap();
+    let successor = lease_for(&fx.main, "TASK-2223");
+    assert_ne!(successor.id, orphan.id);
+    let resume = |lane: &str| {
+        prepare_host_repair_with(
+            &fx.main,
+            tree,
+            3813,
+            lane,
+            &execute,
+            &orphan.branch,
+            true,
+            |_| panic!("pending conflicts cannot publish"),
+            |input, restore_only| {
+                assert_eq!(input, base);
+                assert!(!restore_only, "successor must retry the failed generator");
+                Ok(())
+            },
+            || Ok((base.clone(), head.clone())),
+        )
+    };
+    assert!(resume(&orphan.id).is_err());
+    assert!(resume("unrelated-lane").is_err());
+    assert_eq!(resume(&successor.id).unwrap(), ["README.md"]);
+    let journal = crate::repair_journal::RepairGuard::lock(&fx.main).unwrap();
+    let entry = journal
+        .for_tree(tree, &orphan.branch, &head, &base)
+        .unwrap();
+    assert_eq!(entry.lane_id, successor.id);
+    entry.require_prepared().unwrap();
+    assert_eq!(entry.original_conflict_paths, ["README.md"]);
+    assert_eq!(entry.regeneration_success, Some(true));
+    // Resume admission is not exact-tree publication evidence. Publication
+    // must regenerate and record its own staged tree even after this recovery.
+    assert!(entry.require_regenerated_tree(&"c".repeat(40)).is_err());
+}
+
 /// Binding 5b: a lease whose owner is alive is never adopted.
 #[test]
 fn a_live_lease_is_refused() {

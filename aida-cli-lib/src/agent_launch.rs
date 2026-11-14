@@ -1207,7 +1207,7 @@ pub(crate) fn pick_agent_type_interactively() -> Result<Option<AgentNewCommand>>
     // Non-TTY (piped/headless): don't block on a picker — fall through to the
     // historical clap-help behavior by re-emitting the help for `agent new`.
     if !std::io::stdin().is_terminal() {
-        let mut cmd = crate::command_registry::built_command();
+        let mut cmd = crate::CLI_SUPPORT.built_command();
         if let Some(agent) = cmd.find_subcommand_mut("agent") {
             if let Some(new) = agent.find_subcommand_mut("new") {
                 let _ = new.clone().print_help();
@@ -3807,7 +3807,7 @@ pub(crate) fn agent_new_bg_dispatch(
     let mut grant_rollback = IssuedLaunchGrant::from_command(&command);
     if config.agent_type == "codex" {
         command.env(crate::gate::seat_authority::GRANT_ENV, "");
-        crate::launch::profile::finalize_codex(&mut command)?;
+        crate::vendors::profile::finalize_codex(&mut command)?;
     }
     command
         .stdin(std::process::Stdio::null())
@@ -7720,7 +7720,7 @@ pub(crate) fn run_agent_generation_with_io(
         if plan.role.is_none() {
             command.env(crate::gate::seat_authority::GRANT_ENV, "");
         }
-        crate::launch::profile::finalize_codex(&mut command)?;
+        crate::vendors::profile::finalize_codex(&mut command)?;
     }
     command
         .stdin(std::process::Stdio::inherit())

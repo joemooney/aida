@@ -155,7 +155,7 @@ impl VendorProfile {
         &self,
         kind: aida_core::launch_policy::LaunchKind,
         parent: &aida_core::exec_context::Environment,
-        resources: Option<&super::resources::SandboxResources>,
+        resources: Option<&crate::launch::resources::SandboxResources>,
     ) -> Result<aida_core::launch_policy::ChildEnv> {
         let policy = self.env_policy(kind)?;
         Ok(match resources {

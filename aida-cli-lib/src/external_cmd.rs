@@ -175,7 +175,7 @@ fn maybe_dispatch_nested(argv: &[String]) -> Result<Option<i32>> {
         args.remove(1);
         args.push("--help".into());
     }
-    let original = crate::command_registry::built_command();
+    let original = crate::CLI_SUPPORT.built_command();
     let installed = discover();
     let child_names: HashSet<String> = original
         .get_subcommands()
@@ -382,7 +382,7 @@ pub(crate) fn discover() -> Vec<External> {
 // trace:STORY-1641 | ai:claude
 pub(crate) fn discover_invocations() -> Vec<External> {
     let installed = discover();
-    let tree = crate::command_registry::built_command();
+    let tree = crate::CLI_SUPPORT.built_command();
     installed
         .iter()
         .filter_map(|entry| {

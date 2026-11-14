@@ -891,6 +891,15 @@ fn rework_held_prs_for_spec(project_root: &std::path::Path, spec: &str) -> Vec<u
         .collect()
 }
 
+/// The integration branch (STORY-2737) and its promotion branches. A PR from
+/// one of these to `main` bundles many specs' commits: the always-open canary
+/// (head `integration`) or a promotion (`promote/integration-N`). Slice (c)
+/// of STORY-2737 moves the branch name to config.
+// trace:BUG-2545 | ai:claude
+pub(crate) fn is_integration_aggregate_branch(branch: &str) -> bool {
+    branch == "integration" || branch.starts_with("promote/integration-")
+}
+
 fn collect_spec_prs(
     project_root: &std::path::Path,
     spec: &str,
@@ -948,6 +957,17 @@ fn collect_spec_prs(
                     ));
                 }
                 for pr in rows {
+                    // The integration canary and promotion PRs carry every
+                    // integration commit's trailers, so they are no spec's
+                    // change: never a second-change conflict, never a rework
+                    // head. trace:BUG-2545 | ai:claude
+                    if pr
+                        .head_branch
+                        .as_deref()
+                        .is_some_and(is_integration_aggregate_branch)
+                    {
+                        continue;
+                    }
                     // A train carries its riders' commit trailers but is not
                     // their rework head. Keep the single-change lookup intact.
                     // trace:BUG-2451 | ai:codex

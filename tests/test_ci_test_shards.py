@@ -188,6 +188,7 @@ class ShardsTest(unittest.TestCase):
             self.assertEqual(shards.main(['--compile', '--profile', 'agent']), 19)
             self.assertEqual(call.call_args.args[0], ['cargo', 'test', '--workspace', '--no-run', '--profile', 'agent'])
 
+    # trace:STORY-2735 | ai:codex
     def test_workflow_aggregate_fails_unless_all_lanes_succeed(self):
         workflow = yaml.safe_load((ROOT / '.github/workflows/ci.yml').read_text())
         build = workflow['jobs']['build']
@@ -195,11 +196,13 @@ class ShardsTest(unittest.TestCase):
         self.assertFalse(build['strategy']['fail-fast'])
         aggregate = workflow['jobs']['build-result']
         self.assertEqual(aggregate['name'], 'Build (ubuntu-latest)')
-        self.assertEqual(aggregate['needs'], 'build')
+        self.assertEqual(set(aggregate['needs']), {'tier', 'build', 'fast-gates', 'fast-compile'})
         self.assertEqual(aggregate['if'], '${{ always() }}')
         command = aggregate['steps'][0]['run']
         for status in ('success', 'failure', 'cancelled', 'skipped'):
-            result = subprocess.run(['bash', '-c', command], env={'RESULT': status})
+            result = subprocess.run(['bash', '-e', '-c', command],
+                                    env={'TIER': 'success', 'FULL': 'true', 'BUILD': status,
+                                         'GATES': 'skipped', 'COMPILE': 'skipped'})
             self.assertEqual(result.returncode == 0, status == 'success')
         steps = {s.get('name'): s for s in build['steps']}
         source = steps['Run tests']['run']

@@ -69,6 +69,81 @@ fn a_generation_id_follows_the_fingerprints_and_the_toolchain() {
     assert!(generation_id(&target, "agent").is_none());
 }
 
+// The 1.100 layout must warm without a legacy .fingerprint directory, and
+// primary rewrites must neither mutate an existing lower nor reuse its id.
+// trace:BUG-2539 | ai:codex
+#[test]
+fn bug_2539_unit_layout_snapshot_preserves_fingerprints_and_outputs() {
+    let tmp = tempfile::tempdir().unwrap();
+    let target = tmp.path().join("target");
+    let unit = target.join("agent/build/fixture-dep/0123456789abcdef");
+    std::fs::create_dir_all(unit.join("out")).unwrap();
+    assert!(generation_id(&target, "agent").is_none());
+    std::fs::create_dir_all(unit.join("fingerprint")).unwrap();
+    std::fs::write(
+        unit.join("fingerprint/lib-fixture_dep"),
+        "original fingerprint",
+    )
+    .unwrap();
+    std::fs::write(unit.join("out/libfixture_dep.rlib"), "original artifact").unwrap();
+    let id = generation_id(&target, "agent").unwrap();
+    let first = snapshot(&target, "agent", "lease-one", Duration::from_secs(5)).unwrap();
+    assert_eq!(first.id, id);
+    let relative = "build/fixture-dep/0123456789abcdef";
+    let lower = first.dir.join(relative);
+    for file in ["fingerprint/lib-fixture_dep", "out/libfixture_dep.rlib"] {
+        let source = unit.join(file);
+        let copy = lower.join(file);
+        assert_eq!(
+            std::fs::read(&copy).unwrap(),
+            std::fs::read(&source).unwrap()
+        );
+        assert_ne!(
+            std::fs::metadata(&copy).unwrap().ino(),
+            std::fs::metadata(&source).unwrap().ino()
+        );
+    }
+    assert_eq!(
+        snapshot(&target, "agent", "lease-two", Duration::from_secs(5)).unwrap(),
+        first
+    );
+    // Hold mtimes and lengths constant: the fingerprint's content still changes the id.
+    let fingerprint = unit.join("fingerprint/lib-fixture_dep");
+    let timestamp = std::fs::metadata(&fingerprint).unwrap().modified().unwrap();
+    std::fs::write(&fingerprint, "modified fingerprint").unwrap();
+    filetime_set(&fingerprint, timestamp);
+    assert_ne!(generation_id(&target, "agent").unwrap(), id);
+    assert_eq!(
+        std::fs::read_to_string(lower.join("fingerprint/lib-fixture_dep")).unwrap(),
+        "original fingerprint"
+    );
+    let second = snapshot(&target, "agent", "lease-three", Duration::from_secs(5)).unwrap();
+    let before_artifact = generation_id(&target, "agent").unwrap();
+    std::fs::write(
+        unit.join("out/libfixture_dep.rlib"),
+        "new artifact with a different length",
+    )
+    .unwrap();
+    assert_ne!(generation_id(&target, "agent").unwrap(), before_artifact);
+    assert_eq!(
+        std::fs::read_to_string(lower.join("out/libfixture_dep.rlib")).unwrap(),
+        "original artifact"
+    );
+    // A damaged copied output refuses reuse, retaining the old generation for its readers.
+    std::fs::remove_file(second.dir.join(relative).join("out/libfixture_dep.rlib")).unwrap();
+    assert!(!complete(&second.dir));
+    let third = snapshot(&target, "agent", "lease-four", Duration::from_secs(5)).unwrap();
+    std::fs::remove_file(third.dir.join(".build-manifest.json")).unwrap();
+    assert!(!complete(&third.dir));
+    let repaired = snapshot(&target, "agent", "lease-five", Duration::from_secs(5)).unwrap();
+    assert_ne!(repaired.dir, third.dir);
+    assert!(
+        third.dir.is_dir(),
+        "a live damaged generation must be retained"
+    );
+    assert!(complete(&repaired.dir));
+}
+
 fn filetime_set(path: &Path, at: std::time::SystemTime) {
     let f = std::fs::File::open(path).unwrap();
     f.set_modified(at).unwrap();
@@ -1115,6 +1190,12 @@ fn bug_2383_bwrap_overlay_first_job_sees_a_prebuilt_dependency_as_fresh() {
         built.status.success(),
         "the primary build failed: {built:?}"
     );
+    // Diagnose fixture/layout failures at the primary build, before a cold lane
+    // fallback obscures the successful cargo output. trace:BUG-2539 | ai:codex
+    assert!(
+        generation_id(&main_target, "agent").is_some(),
+        "the primary build produced no recognized fingerprints: {built:?}"
+    );
     std::fs::copy(primary_dir.join("Cargo.lock"), seat.join("Cargo.lock")).unwrap();
     let sessions = root.join(".aida/sessions");
     std::fs::create_dir_all(&sessions).unwrap();
@@ -1201,6 +1282,7 @@ const FIXTURE_CRATE_LIB: &str = "pub fn answer() -> u32 { 42 }\n\n\
 // trace:BUG-b6b1278890774ef993d2ebc327862470-157.acd61bb0 | ai:claude
 // trace:BUG-b6b1278890774ef993d2ebc327862470-157.Test | ai:claude
 #[test]
+#[cfg(target_os = "linux")]
 fn bug_2383_bwrap_real_cargo_test_job_reports_pass_and_fail_through_the_cli() {
     let Some(cargo) = std::env::var_os("CARGO").map(PathBuf::from) else {
         return skip_live("no CARGO in the test environment");
@@ -1235,7 +1317,7 @@ fn bug_2383_bwrap_real_cargo_test_job_reports_pass_and_fail_through_the_cli() {
     crate::test_exec::write_executable(
         &limiter,
         &format!(
-            "#!/bin/sh\necho \"slot taken: $*\" >> \"$XDG_RUNTIME_DIR/cargo-slots-{uid}/slots.log\" || exit 97\n\
+            "#!/bin/sh\n[ \"$TMPDIR\" = /tmp ] && [ -w \"$TMPDIR\" ] || exit 96\necho \"slot taken: $*\" >> \"$XDG_RUNTIME_DIR/cargo-slots-{uid}/slots.log\" || exit 97\n\
              exec '{}' \"$@\"\n",
             cargo.display()
         ),
@@ -1249,8 +1331,19 @@ fn bug_2383_bwrap_real_cargo_test_job_reports_pass_and_fail_through_the_cli() {
         bin.display(),
         std::env::var("PATH").unwrap_or_default()
     );
-    host_env
-        .retain(|(k, _)| !matches!(k.as_str(), "PATH" | "XDG_RUNTIME_DIR" | "CARGO_TERM_COLOR"));
+    host_env.retain(|(k, _)| {
+        !matches!(
+            k.as_str(),
+            "PATH" | "XDG_RUNTIME_DIR" | "CARGO_TERM_COLOR" | "TMPDIR"
+        )
+    });
+    // Reproduce an outer runner's TMPDIR hidden by the nested sandbox's /dev.
+    // Keep this injected into the fixture, without changing the test process env.
+    // trace:TASK-3099 | ai:codex
+    host_env.push((
+        "TMPDIR".into(),
+        "/dev/shm/aida-unavailable-outer-tmp".into(),
+    ));
     host_env.push(("PATH".into(), path));
     host_env.push(("XDG_RUNTIME_DIR".into(), runtime.display().to_string()));
     host_env.push(("CARGO_TERM_COLOR".into(), "never".into()));

@@ -64,7 +64,7 @@ fn root(cwd: &Path) -> Result<PathBuf> {
 }
 
 fn run(client: &Client, env: &Environment, argv: &[String], cwd: &Path) -> Result<()> {
-    let mut command = crate::command_registry::built_command();
+    let mut command = crate::CLI_SUPPORT.built_command();
     let matches = match command.try_get_matches_from_mut(argv) {
         Ok(matches) => matches,
         Err(error)
@@ -156,7 +156,7 @@ fn translate_with_reader(
     cwd: &Path,
     stdin: &mut impl Read,
 ) -> Result<(&'static str, Value)> {
-    let command = crate::command_registry::built_command();
+    let command = crate::CLI_SUPPORT.built_command();
     let command = command
         .find_subcommand(name)
         .context("UnsupportedOperation")?;

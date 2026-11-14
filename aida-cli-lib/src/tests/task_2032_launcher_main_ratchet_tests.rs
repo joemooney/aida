@@ -49,7 +49,7 @@ const ENTRY_POINTS: &[(&str, &str)] = &[
     ("advisor_watch.rs", "fork_and_run_to"),
     ("questions.rs", "questions_clarify"),
     ("questions.rs", "build_questions_clarify_command"),
-    ("lib_part5.rs", "review_spec_launch_reviewer"),
+    ("review_commands.rs", "review_spec_launch_reviewer"),
     ("leases.rs", "lease_tree_dirty_entries"),
 ];
 
@@ -123,7 +123,11 @@ fn production_calls(src: &Path) -> Vec<(String, String, usize)> {
 }
 
 fn src_dir() -> std::path::PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("src")
+    // trace:TASK-3791 | ai:codex — shared with the lightweight FAST harness.
+    Path::new(env!("CARGO_MANIFEST_DIR"))
+        .parent()
+        .unwrap()
+        .join("aida-cli-lib/src")
 }
 
 #[test]

@@ -496,7 +496,21 @@ fn quiet_render_hook_silences_only_render_panics() {
 // trace:BUG-1979 | ai:claude
 #[test]
 fn main_entry_applies_the_no_color_policy() {
-    let src = include_str!("../lib_part1.rs");
+    let src = concat!(
+        include_str!("../glyph_render.rs"),
+        include_str!("../cli_entry.rs"),
+        include_str!("../history_filter.rs"),
+        include_str!("../output_policy.rs"),
+        include_str!("../list_render.rs"),
+        include_str!("../agent_errors.rs"),
+        include_str!("../cast_recording.rs"),
+        include_str!("../argv_rewrite.rs"),
+        include_str!("../review_helpers.rs"),
+        include_str!("../finding_queue.rs"),
+        include_str!("../gitignore_entries.rs"),
+        include_str!("../store_write_policy.rs"),
+        include_str!("../status_policy.rs")
+    );
     let start = src.find("pub fn main_entry()").expect("main_entry exists");
     let body = &src[start..];
     let end = body.find("\n}\n").expect("main_entry closes");

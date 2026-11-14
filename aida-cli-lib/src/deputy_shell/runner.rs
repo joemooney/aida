@@ -124,6 +124,9 @@ pub(crate) fn run(q: &Queue, cfg: &RunnerConfig, stop: &AtomicBool) -> Result<us
     let _services = cfg
         .serve_socket
         .then(|| crate::review_watch::service::Supervisor::start(q.clone(), service_host.clone()));
+    let _train_services = cfg.serve_socket.then(|| {
+        crate::review_watch::train_service::Supervisor::start(q.clone(), service_host.clone())
+    });
     let server = if cfg.serve_socket {
         Some(super::socket::serve_service(
             q,
@@ -256,6 +259,8 @@ pub(crate) fn run(q: &Queue, cfg: &RunnerConfig, stop: &AtomicBool) -> Result<us
         r.reason = Some(stop_why.clone())
     });
     let _ = std::fs::remove_file(q.runner_json());
+    // trace:STORY-2775 | ai:codex
+    super::supervisor::record_exit(q, &format!("rc=0 reason={stop_why}"))?;
     say(cfg, &format!("[deputy shell] stopped: {stop_why}\r\n"));
     Ok(handled)
 }

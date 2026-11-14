@@ -63,6 +63,33 @@ pub(crate) fn watcher_history(root: &Path, change: &str) -> Result<Vec<(String, 
     Ok(history)
 }
 
+/// WAITING retry delay. Peers derive the deadline from the signed publication
+/// time, so a watcher with no local attempt cannot bypass the backoff.
+// trace:BUG-2521 | ai:claude
+pub(crate) const WAITING_RETRY_SECS: i64 = 20 * 60;
+pub(crate) fn waiting_retry_at(
+    root: &Path,
+    change: &str,
+    head: &str,
+) -> Result<Option<chrono::DateTime<chrono::Utc>>> {
+    // trace:BUG-2521 | ai:codex
+    // Do not use watcher_history: its one-answer projection discards peer times.
+    let receipts = select_effective(
+        root,
+        ChangeKey::parse(change).context("invalid watcher change")?,
+        &[],
+        Some(head),
+    )?;
+    if receipts.iter().any(|(r, ..)| r.decision != "waiting") {
+        return Ok(None);
+    }
+    Ok(receipts
+        .iter()
+        .filter_map(|(r, ..)| chrono::DateTime::parse_from_rfc3339(&r.recorded_at).ok())
+        .map(|t| t.with_timezone(&chrono::Utc) + chrono::Duration::seconds(WAITING_RETRY_SECS))
+        .max())
+}
+
 const ROSTER: &str = "reviews/v1/nodes.json";
 const CHANGES: &str = "reviews/v1/changes";
 const SPEC_INDEX: &str = "reviews/v1/specs";
@@ -936,13 +963,31 @@ fn select(
     spec_ids: &[&str],
     expected_head: Option<&str>,
 ) -> Result<Option<(Receipt, String)>> {
-    let Some((store, tip)) = store_view(root)? else {
+    let relevant = select_effective(root, change, spec_ids, expected_head)?;
+    if relevant.is_empty() {
         return Ok(None);
+    }
+    let (receipt, _, rel) = answering(relevant.iter().collect());
+    Ok(Some((receipt.clone(), rel.clone())))
+}
+
+/// All verified, unsuperseded publications at the selected head, before the
+/// one-answer projection. Keep retry timing and verdict selection on the same
+/// trust, supersession and store-consistency boundary.
+// trace:BUG-2521 | ai:codex
+fn select_effective(
+    root: &Path,
+    change: ChangeKey,
+    spec_ids: &[&str],
+    expected_head: Option<&str>,
+) -> Result<Vec<(Receipt, Signed, String)>> {
+    let Some((store, tip)) = store_view(root)? else {
+        return Ok(Vec::new());
     };
     let key = change.as_key();
     let all = load_receipts(root, &store, &tip, &key)?;
     if all.is_empty() {
-        return Ok(None);
+        return Ok(Vec::new());
     }
     let roster = roster(&store, &tip)?;
     let mut relevant: Vec<_> = all
@@ -956,7 +1001,7 @@ fn select(
             "review publications of {key} are ignored: every publishing node was revoked; \
              a fresh review of the change answers for it"
         ));
-        return Ok(None);
+        return Ok(Vec::new());
     }
     let started = std::time::Instant::now();
     for (r, signed, _) in &relevant {
@@ -1014,21 +1059,16 @@ fn select(
                     "review publications of {key} are ignored here: they name several heads \
                      and its branch is not fetched; fetch the branch to apply them"
                 ));
-                return Ok(None);
+                return Ok(Vec::new());
             }
         },
     };
     relevant.retain(|(r, ..)| r.head.eq_ignore_ascii_case(&change_head));
     if relevant.is_empty() {
         // Every surviving publication reviewed another head: stale here.
-        return Ok(None);
+        return Ok(Vec::new());
     }
-    relevant.sort_by(|(a, ..), (b, ..)| (&a.node, a.publication).cmp(&(&b.node, b.publication)));
-    let (receipt, _, rel) = relevant
-        .iter()
-        .find(|(r, ..)| r.decision != "approved")
-        .copied()
-        .unwrap_or(relevant[0]);
+    let (receipt, _, _) = answering(relevant.clone());
     let snapshot = Snapshot::at_head(root)
         .map_err(|e| anyhow::anyhow!(e.to_string()))?
         .context("missing canonical review snapshot")?;
@@ -1056,7 +1096,25 @@ fn select(
         head(&store)? == tip,
         "review roster changed during selection"
     );
-    Ok(Some((receipt.clone(), rel.clone())))
+    Ok(relevant.into_iter().cloned().collect())
+}
+
+/// The one publication that answers at a head (`relevant` is non-empty and
+/// already verified, unsuperseded and head-filtered). WAITING is provisional:
+/// any conclusive publication from any node answers instead, so a WAITING never
+/// hides a peer refusal or approval. A refusal still wins over approvals.
+// trace:BUG-2521 | ai:claude
+fn answering<'a, S, P>(mut relevant: Vec<&'a (Receipt, S, P)>) -> &'a (Receipt, S, P) {
+    let waiting = |r: &Receipt| rv::VerdictKind::parse(&r.decision) == rv::VerdictKind::Waiting;
+    if relevant.iter().any(|(r, ..)| !waiting(r)) {
+        relevant.retain(|(r, ..)| !waiting(r));
+    }
+    relevant.sort_by(|(a, ..), (b, ..)| (&a.node, a.publication).cmp(&(&b.node, b.publication)));
+    relevant
+        .iter()
+        .find(|(r, ..)| r.decision != "approved")
+        .copied()
+        .unwrap_or(relevant[0])
 }
 
 /// The change a spec-keyed read selects: of the changes whose receipts
@@ -1090,6 +1148,27 @@ fn spec_change(root: &Path, spec_ids: &[&str]) -> Result<Option<ChangeKey>> {
         }
     }
     Ok(newest)
+}
+
+// Enumerating committed names grants no trust; current() verifies every receipt.
+// trace:BUG-2525 | ai:codex
+pub(crate) fn recorded_change_keys(root: &Path) -> Vec<String> {
+    let Ok(Some((store, tip))) = store_view(root) else {
+        return Vec::new();
+    };
+    let Ok(paths) = list(&store, &tip, CHANGES) else {
+        return Vec::new();
+    };
+    let mut keys: Vec<String> = paths
+        .iter()
+        .filter_map(|path| {
+            let tail = path.strip_prefix(CHANGES)?.strip_prefix('/')?;
+            ChangeKey::parse(tail.split('/').next()?).map(|c| c.as_key())
+        })
+        .collect();
+    keys.sort();
+    keys.dedup();
+    keys
 }
 
 /// Change ids select their own change (spec ids are then coverage the

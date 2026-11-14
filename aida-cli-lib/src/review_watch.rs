@@ -14,8 +14,10 @@ use std::os::unix::fs::{DirBuilderExt, MetadataExt, OpenOptionsExt};
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
 
+// The landing reconciler discovers through the same pinned forge reads.
+// trace:STORY-2768 | ai:claude
 #[path = "review_watch_forge.rs"]
-mod forge;
+pub(crate) mod forge;
 // Every process signal lives here, behind pidfd identity checks.
 // trace:TASK-1945 | ai:claude
 #[path = "review_watch_signal.rs"]
@@ -36,6 +38,11 @@ mod update;
 // trace:STORY-2571 | ai:codex
 #[path = "review_watch_service.rs"]
 pub(crate) mod service;
+#[path = "advisor_loop_train.rs"]
+mod train;
+#[allow(dead_code)] // Shared engine also contains review-watch-only entry points.
+#[path = "review_watch_train_service.rs"]
+pub(crate) mod train_service;
 
 #[derive(Args, Debug, Clone)]
 pub struct ReviewWatchArgs {
@@ -358,8 +365,8 @@ struct Attempt {
     // trace:STORY-2401 | ai:codex
     #[serde(default)]
     fetch_failures: u8,
-    // Bounded retries survive replacement and controller restarts.
-    // trace:BUG-2518 | ai:codex
+    // Missing-verdict and WAITING retries share a budget across replacements/restarts.
+    // trace:BUG-2518 trace:BUG-2521 | ai:codex
     #[serde(default)]
     no_verdict_attempts: u8,
     #[serde(default)]
@@ -912,6 +919,27 @@ impl Store {
             });
             history.synced_heads.insert(synced);
         }
+        // The collector may remove its handshake after appending to the shared
+        // ledger. Missing local files must not spend another review attempt.
+        // Use the strict reader so corrupt evidence cannot look like no review.
+        // trace:BUG-2534 | ai:codex
+        let ledger_root = crate::gate::ledger::store_root(&self.root)?;
+        let change = crate::gate::ledger::ChangeKey::parse(key)
+            .context("invalid review history change key")?;
+        let events = crate::gate::ledger::checked::read_change_events(
+            &ledger_root,
+            change,
+            &mut crate::gate::ledger::checked::Budget::default(),
+        )
+        .map_err(|error| anyhow::anyhow!("review history ledger unreadable: {error}"))?;
+        for event in events {
+            if let Some(record) = event.verdict_record() {
+                history.add(
+                    &serde_json::to_vec(record)?,
+                    &format!(".aida/gate-ledger/{key}.jsonl"),
+                )?;
+            }
+        }
         let Some(dir) = Directory::existing(&self.runtime.path().join("review-verdicts"))? else {
             return Ok(history);
         };
@@ -989,7 +1017,7 @@ impl Store {
             );
             let history = self.history(key)?;
             anyhow::ensure!(
-                !history.contains(&attempt.head),
+                !history.conclusive(&attempt.head),
                 "head already has a recorded review; route further work to the advisor"
             );
             let used = history.blocking();
@@ -1164,6 +1192,13 @@ impl History {
             let object = value
                 .as_object()
                 .context("invalid historical review round")?;
+            // A pending delivery barrier is not a finished review, whether it
+            // is the current object or archived inside `rounds`; its delivered
+            // twin (or nothing) is what counts as a round.
+            // trace:BUG-2534 | ai:claude
+            if object.get("sweep_pending").and_then(|v| v.as_bool()) == Some(true) {
+                continue;
+            }
             anyhow::ensure!(
                 object
                     .get("unarchived_rounds")
@@ -1205,6 +1240,17 @@ impl History {
             key.0
                 .as_deref()
                 .is_some_and(|sha| crate::gate::review_verdict::same_reviewed_sha(sha, head))
+        })
+    }
+    // WAITING is provisional; every other recorded outcome consumes the head.
+    // trace:BUG-2521 | ai:codex
+    fn conclusive(&self, head: &str) -> bool {
+        self.keys.iter().any(|key| {
+            key.0
+                .as_deref()
+                .is_some_and(|sha| crate::gate::review_verdict::same_reviewed_sha(sha, head))
+                && crate::gate::review_verdict::VerdictKind::parse(&key.2)
+                    != crate::gate::review_verdict::VerdictKind::Waiting
         })
     }
     // The ordinary round (queue_cmd::review_round_from_comments) counts the
@@ -1379,7 +1425,7 @@ fn no_verdict_blocker(attempt: &Attempt) -> Option<String> {
         && attempt.no_verdict_retry_at.is_some()
         && matches!(attempt.phase, Phase::Completed | Phase::Exited))
     .then(|| format!(
-        "head {} blocked: three review attempts ended without a verdict ({}); inspect logs and release to retry",
+        "head {} blocked: three review attempts ended without a conclusive verdict ({}); inspect logs and release to retry",
         attempt.head, attempt.diagnostic.as_deref().unwrap_or("no diagnostic")
     ))
 }
@@ -1500,17 +1546,17 @@ fn select_with_coverage(
             return Ok(Action::Skip(format!("fetch unavailable on three dispatches for this head; repair credentials/remote and retry with `aida review watch --release {key}`, or route to the advisor")));
         }
         // A terminal receipt proves process completion, not verdict publication.
-        // Preserve ordinary setup/fetch retry policy; retry actual review attempts.
+        // Preserve setup/fetch policy; retry actual reviews lacking a conclusive verdict.
         // trace:BUG-2518 | ai:codex
         let mut no_verdict_attempts = 0;
         let mut no_verdict_ready = false;
         if let Some(attempt) = entry.attempts.iter_mut().find(|a| a.head == change.head) {
-            if history.contains(&change.head) {
+            if history.conclusive(&change.head) {
                 attempt.no_verdict_retry_at = None;
             }
             no_verdict_attempts = attempt.no_verdict_attempts;
             if matches!(attempt.phase, Phase::Completed | Phase::Exited)
-                && !attempt.retryable_fetch && !history.contains(&change.head)
+                && !attempt.retryable_fetch && !history.conclusive(&change.head)
                 && !(attempt.setup_retry && !attempt.reviewer_spawning)
             {
                 no_verdict_attempts = no_verdict_attempts.max(1);
@@ -1518,13 +1564,17 @@ fn select_with_coverage(
                 if !attempt.descendants_gone() || attempt.recorded().iter().any(|p| p.alive()) {
                     return Ok(Action::Skip(format!("unfinished review processes still hold this head; inspect before `aida review watch --release {key}`")));
                 }
+                // WAITING may depend on evidence other than CI; use a bounded backoff.
+                // trace:BUG-2521 | ai:codex
                 let retry_at = *attempt.no_verdict_retry_at.get_or_insert_with(||
-                    chrono::Utc::now() + chrono::Duration::seconds(60 * i64::from(no_verdict_attempts)));
+                    chrono::Utc::now() + chrono::Duration::seconds(
+                        if history.contains(&change.head) { review_publication::WAITING_RETRY_SECS }
+                        else { 60 * i64::from(no_verdict_attempts) }));
                 if let Some(reason) = no_verdict_blocker(attempt) {
                     return Ok(Action::Skip(reason));
                 }
                 if chrono::Utc::now() < retry_at {
-                    return Ok(Action::Skip(format!("review exited without a verdict; retry after {retry_at}")));
+                    return Ok(Action::Skip(format!("review ended without a conclusive verdict; retry after {retry_at}")));
                 }
                 no_verdict_attempts += 1;
                 no_verdict_ready = true;
@@ -1542,7 +1592,16 @@ fn select_with_coverage(
             return Ok(Action::Skip(format!("a review of an earlier head still holds this change ({holders}); it is superseded once the change is seen at a new head")));
         }
         if let Some(reason) = &carried { return Ok(Action::Skip(reason.clone())); }
-        if history.contains(&change.head) { return Ok(Action::Skip("head already has a recorded review".into())); }
+        if history.conclusive(&change.head) { return Ok(Action::Skip("head already has a recorded review".into())); }
+        // A synced WAITING sets one deadline for every watcher, local attempt or not.
+        // trace:BUG-2521 | ai:claude
+        if history.contains(&change.head) {
+            if let Some(retry_at) = review_publication::waiting_retry_at(&store.root, &key, &change.head)? {
+                if chrono::Utc::now() < retry_at {
+                    return Ok(Action::Skip(format!("review ended without a conclusive verdict; retry after {retry_at}")));
+                }
+            }
+        }
         if history.blocking() >= 2 { return Ok(Action::Skip("two-round review cap reached; route further work to the advisor".into())); }
         if total >= usize::from(max) { return Ok(Action::Skip(format!("global reviewer capacity ({max}) is held by {holders}; a running review frees its slot when it exits, and an ambiguous one (dispatcher lost) stays reserved until an operator confirms it ended: check its log in .aida/review-watch/logs/ and `aida session leases --all`"))); }
         // Exited->Failed setup conversions have a claimed dispatcher identity
@@ -1611,7 +1670,7 @@ fn probe_unneeded_with_coverage(
         return Ok(Some(reason));
     }
     let history = store.history(&key)?;
-    if history.contains(head) {
+    if history.conclusive(head) {
         return Ok(Some("head already has a recorded review".into()));
     }
     if let Some((reason, true)) = recorded {
@@ -2029,7 +2088,7 @@ fn queue_args(key: &str, vendor: Option<&str>) -> Vec<String> {
 // Clear inherited orchestration/gate context so queue work must take its
 // ordinary standalone attested path in the same pinned repository.
 // trace:TASK-1993 | ai:codex
-fn watch_command(repo: &forge::Repository, root: &Path, program: &Path) -> Command {
+pub(crate) fn watch_command(repo: &forge::Repository, root: &Path, program: &Path) -> Command {
     let mut command = Command::new(program);
     command.current_dir(root).stdin(Stdio::null());
     for (key, _) in std::env::vars_os() {
@@ -2169,16 +2228,21 @@ fn finish_admission(
             .flatten()
             .all(|p| p.observable() && !p.alive())
     {
-        let no_verdict = admission::Hub::load(root)?.is_some()
+        let inconclusive = admission::Hub::load(root)?.is_some()
             && !review_publication::watcher_history(root, key)?
                 .iter()
                 .any(|(body, _)| {
-                    crate::gate::review_verdict::parse_recorded_verdict(body)
-                        .is_some_and(|v| v.reviewed_sha.as_deref() == Some(head))
+                    crate::gate::review_verdict::parse_recorded_verdict(body).is_some_and(|v| {
+                        v.reviewed_sha.as_deref() == Some(head)
+                            && v.kind != crate::gate::review_verdict::VerdictKind::Waiting
+                    })
                 });
         admission::transition(root, key, head, token, admission::State::Terminal,
             format!("{}owner observed queue exit {status}; all recorded worker/reviewer identities stopped",
-                if no_verdict { admission::NO_VERDICT } else { "" }))?;
+                if inconclusive {
+                    if store.history(key)?.contains(head) { admission::INCONCLUSIVE }
+                    else { admission::NO_VERDICT }
+                } else { admission::VERDICT }))?;
     }
     Ok(())
 }
@@ -2368,12 +2432,24 @@ pub(crate) fn reviewer_status_on_spawn(
     on_spawn: impl FnOnce(),
 ) -> std::io::Result<std::process::ExitStatus> {
     use crate::process_retry::RetryEtxtbsy;
+    // trace:BUG-2546 | ai:codex
+    if let Some(grant) = cmd
+        .get_envs()
+        .find_map(|(key, value)| {
+            (key == aida_core::launch_policy::GRANT_ENV)
+                .then_some(value)
+                .flatten()
+        })
+        .and_then(|v| v.to_str())
+    {
+        crate::reviewer_completion::bind_grant(grant);
+    }
     let launch = LAUNCH.with(|launch| launch.borrow().clone());
     let Some((root, identity, key, head)) = launch else {
         let mut child = cmd.spawn_retrying_etxtbsy()?;
         note_agent_spawned();
         on_spawn();
-        return child.wait();
+        return crate::reviewer_completion::wait(&mut child);
     };
     let store = Store::open(&root, &identity).map_err(std::io::Error::other)?;
     retry_busy(|| store.record_reviewer(&key, &head, None)).map_err(std::io::Error::other)?;
@@ -2392,7 +2468,7 @@ pub(crate) fn reviewer_status_on_spawn(
             "{key}: reviewer identity unavailable; the attempt stays held as ambiguous: {error:#}"
         ),
     }
-    child.wait()
+    crate::reviewer_completion::wait(&mut child)
 }
 
 // trace:TASK-3472 | ai:codex
@@ -2465,23 +2541,15 @@ pub(crate) fn run_with_program(
     let mut reported_trains = BTreeSet::new();
     loop {
         service::check_controller(&root)?;
-        children.retain_mut(|d| match d.child.try_wait() {
-            Ok(Some(status)) => {
-                if let Err(error) =
-                    mark_unclaimed_exit(&store, &d.key, &d.token, &status.to_string())
-                {
-                    eprintln!("{}: could not record dispatcher exit: {error:#}", d.key);
-                }
-                false
-            }
-            _ => true,
-        });
+        for outcome in reap_dispatchers(&store, &mut children) {
+            service::controller_dispatch(&root, outcome.as_deref(), outcome.is_none())?;
+        }
         // trace:STORY-2492 | ai:codex
         if !sync_pass(&root, args.once)? {
             std::thread::sleep(std::time::Duration::from_secs(args.interval));
             continue;
         }
-        let changes = match repo.discover(&root) {
+        let changes = match observe_pass_input(&root, "discovery", repo.discover(&root)) {
             Ok(changes) => changes,
             Err(error) if !args.once => {
                 eprintln!("review-watch discovery refused: {error:#}");
@@ -2518,7 +2586,7 @@ pub(crate) fn run_with_program(
             &store,
             reviewable_changes(changes, &mut reported_trains),
             |change| {
-                watch_change(
+                let result = watch_change(
                     &root,
                     &repo,
                     &store,
@@ -2527,14 +2595,63 @@ pub(crate) fn run_with_program(
                     &authors,
                     change,
                     program,
-                )
+                );
+                observe_dispatch_result(&root, result)
             },
         )?;
+        // Synchronous setup/spawn errors are dispatch failures too: an idle
+        // discovery pass must not clear them before a dispatch succeeds.
+        // trace:STORY-2691 | ai:codex
+        service::controller_pass(&root, None)?;
         if args.once {
             return Ok(children.into_iter().map(|d| d.child).collect());
         }
         std::thread::sleep(std::time::Duration::from_secs(args.interval));
     }
+}
+
+// Count every synchronous dispatch refusal as it occurs, including several
+// failures in one pass and a fatal refusal that stops the pass early.
+// trace:STORY-2691 | ai:codex
+fn observe_dispatch_result(root: &Path, result: Result<()>) -> Result<()> {
+    if let Err(error) = &result {
+        if !is_busy(error) {
+            service::controller_dispatch(root, Some(&format!("{error:#}")), false)?;
+        }
+    }
+    result
+}
+
+// Confirm outcomes by reaping our own children; reservations alone are not success.
+// trace:STORY-2691 | ai:codex
+fn reap_dispatchers(store: &Store, children: &mut Vec<Dispatcher>) -> Vec<Option<String>> {
+    let mut outcomes = Vec::new();
+    children.retain_mut(|d| match d.child.try_wait() {
+        Ok(Some(status)) => {
+            // Match the durable receipt by both change and attempt token. A
+            // superseded attempt may already be terminal by the time we reap.
+            // Unreadable evidence cannot excuse an unexpected child failure.
+            let cancelled = store.load().ok().is_some_and(|state| {
+                state.entries.get(&d.key).is_some_and(|entry| {
+                    entry
+                        .attempts
+                        .iter()
+                        .any(|attempt| attempt.token == d.token && attempt.supersede.is_some())
+                })
+            });
+            if !cancelled {
+                outcomes.push(
+                    (!status.success()).then(|| format!("{}: dispatcher exited {status}", d.key)),
+                );
+            }
+            if let Err(error) = mark_unclaimed_exit(store, &d.key, &d.token, &status.to_string()) {
+                eprintln!("{}: could not record dispatcher exit: {error:#}", d.key);
+            }
+            false
+        }
+        _ => true,
+    });
+    outcomes
 }
 
 // Train members were reviewed at their own heads. Exclude the landing PR
@@ -2568,8 +2685,17 @@ fn reviewable_changes(
 // A transient synchronization refusal skips only this pass. `--once` retains
 // its nonzero contract; continuous mode will try again after the interval.
 // trace:STORY-b6b1278890774ef993d2ebc327862470-418.ac8cff0f | ai:codex
+fn observe_pass_input<T>(root: &Path, label: &str, result: Result<T>) -> Result<T> {
+    if let Err(error) = &result {
+        if !is_busy(error) {
+            service::controller_pass(root, Some(&format!("{label}: {error:#}")))?;
+        }
+    }
+    result
+}
+
 fn sync_pass(root: &Path, once: bool) -> Result<bool> {
-    match admission::sync(root) {
+    match observe_pass_input(root, "synchronization", admission::sync(root)) {
         Ok(()) => Ok(true),
         Err(error) if once => Err(error),
         Err(error) => {
@@ -3205,6 +3331,7 @@ mod tests;
 #[cfg(test)]
 pub(crate) use tests::{
     bug2498_confirm_superseded, bug2498_review_worktree_release_allows_one_watch_setup_retry,
+    bug2521_assert_peer_waiting_backoff,
 };
 
 // Real process fixtures: Linux only. trace:TASK-1945 | ai:claude
@@ -3509,6 +3636,21 @@ pub(crate) fn fixture_admission_spawn_failure(
         "local capacity leaked after hub cancellation error"
     );
     Ok(())
+}
+
+// Automatic trains deliberately require an approval recorded on this exact
+// head. The train's ordinary member gate still checks all publication gates.
+// trace:STORY-2691 | ai:codex
+pub(crate) fn advisor_train_eligible(
+    root: &Path,
+    pr: u64,
+) -> std::result::Result<String, crate::pr_train::MemberGateError> {
+    let unavailable =
+        |e: anyhow::Error| crate::pr_train::MemberGateError::Unavailable(format!("{e:#}"));
+    let repo = forge::Repository::load(root).map_err(unavailable)?;
+    let change = repo.change(root, pr).map_err(unavailable)?;
+    train::eligible(&change, &ready::Live { root, repo: &repo })?;
+    Ok(change.head)
 }
 
 /// Read the existing receipt store without acquiring a writer lock or creating it.

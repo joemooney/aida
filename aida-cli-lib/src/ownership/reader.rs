@@ -44,6 +44,60 @@ pub(crate) fn owner(record: &Ownership) -> OwnerVerdict {
     )
 }
 
+/// Explicit clone force-claim can independently prove a refused worker dead.
+/// The caller must first bind this cleanup record to the retained lease.
+// trace:BUG-2552 | ai:codex
+pub(crate) fn force_claim_clone_owner(
+    record: &Ownership,
+    lease: &crate::SessionLease,
+) -> OwnerVerdict {
+    let verdict = owner(record);
+    if !matches!(verdict, OwnerVerdict::Unknown { .. }) {
+        return verdict;
+    }
+    // Admission refusal is not process liveness. Require a local,
+    // observable recorded worker PID to be absent; never infer death
+    // from a changed start identity or an expired heartbeat here.
+    // trace:BUG-2552 | ai:codex
+    let refused_holder = record.holder.as_ref().is_some_and(|holder| {
+        !holder.witnesses.is_empty()
+            && holder.witnesses.iter().all(|witness| {
+                matches!(witness.kind, crate::ownership::WitnessKind::Process { .. })
+                    && witness
+                        .admission
+                        .as_ref()
+                        .is_some_and(|record| record.refusal().is_some())
+            })
+    });
+    let dead = refused_holder
+        && lease.tree_kind == crate::seat_clone::TreeKind::Clone
+        && lease.hostname == crate::coordination::hostname()
+        && aida_core::pid_observer::PidObserver::current().can_observe(lease.pid_namespace)
+        && crate::leases::lease_holder_record(lease)
+            .is_some_and(|record| record.refusal().is_some())
+        && lease.active_pid.is_some_and(|pid| {
+            pid != 0
+                && matches!(
+                    aida_core::proc_identity::observe_legacy_registry(
+                        pid,
+                        lease.active_pid_start_time.as_deref(),
+                        lease.pid_namespace,
+                    ),
+                    aida_core::proc_identity::Verdict::Dead(
+                        aida_core::proc_identity::DeadReason::Absent
+                            | aida_core::proc_identity::DeadReason::Exited
+                    )
+                )
+        });
+    if dead {
+        OwnerVerdict::Dead {
+            proof: "local refused worker process exited".into(),
+        }
+    } else {
+        verdict
+    }
+}
+
 /// Explicit release or positive death proof. Unknown and absent records retain
 /// the marker/train; elapsed time alone never permits destructive cleanup.
 pub(crate) fn ended(root: &Path, key: &WorkKey) -> Result<Option<String>> {

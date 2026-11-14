@@ -289,7 +289,13 @@ fn record_verdict_at_inner(
         return Ok(delivered);
     }
     let spec = GateSpec::resolve(&root, &key);
-    match project::changes_for_spec(&store, &spec.label).last() {
+    // trace:BUG-2517 | ai:codex
+    let changes = if record.get("change_binding").and_then(|v| v.as_str()) == Some("unbound") {
+        Vec::new()
+    } else {
+        project::changes_for_spec(&store, &spec.label)
+    };
+    match changes.last() {
         Some(change) => {
             let result = append_review_delivery(&store, *change, record, Some(&spec), pending)?;
             if record.get("sweep_pending").and_then(|v| v.as_bool()) != Some(true) {

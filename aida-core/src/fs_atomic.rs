@@ -95,6 +95,53 @@ pub fn write_atomic(path: &Path, content: impl AsRef<[u8]>) -> std::io::Result<(
     Ok(())
 }
 
+/// Permission bits for a file whose reader refuses it when anyone but its
+/// owner may write it (the ID counter and its binding).
+// trace:BUG-2555 | ai:claude
+pub const OWNER_WRITABLE_MODE: u32 = 0o644;
+
+/// [`write_atomic`] with the target's permission bits set to `mode`, whatever
+/// the process umask is.
+///
+/// `std::fs::write` creates a file as `0666 & !umask`, so under a umask of
+/// 002 the replacement is group-writable. Here the staging file's mode is set
+/// on its open handle before it is renamed over the target, so the target
+/// never exists with any other mode. Elsewhere than Unix this is
+/// [`write_atomic`].
+// trace:BUG-2555 | ai:claude
+pub fn write_atomic_mode(path: &Path, content: impl AsRef<[u8]>, mode: u32) -> std::io::Result<()> {
+    #[cfg(unix)]
+    {
+        use std::io::Write as _;
+        use std::os::unix::fs::{OpenOptionsExt as _, PermissionsExt as _};
+        let seq = STAGING_SEQ.fetch_add(1, Ordering::Relaxed);
+        let tmp = path.with_extension(format!("tmp.{}.{}", std::process::id(), seq));
+        let staged = (|| {
+            let mut file = std::fs::OpenOptions::new()
+                .write(true)
+                .create(true)
+                .truncate(true)
+                .mode(mode)
+                .open(&tmp)?;
+            // The umask masked the mode the file was created with, and a
+            // staging file left by an earlier process keeps its own.
+            file.set_permissions(std::fs::Permissions::from_mode(mode))?;
+            file.write_all(content.as_ref())?;
+            drop(file);
+            std::fs::rename(&tmp, path)
+        })();
+        if staged.is_err() {
+            let _ = std::fs::remove_file(&tmp);
+        }
+        staged
+    }
+    #[cfg(not(unix))]
+    {
+        let _ = mode;
+        write_atomic(path, content)
+    }
+}
+
 /// [`write_atomic`] for a config file: the one writer every `.aida/`
 /// config edit goes through. In an adopted worktree it refuses a file the
 /// adoption projection owns (or may own, behind an unreadable manifest),
@@ -233,6 +280,29 @@ mod tests {
     use std::sync::Arc;
 
     // write_atomic replaces content cleanly and leaves no temp file behind.
+    // An existing target's mode and a leftover staging file's mode do not
+    // survive: the replacement has exactly the mode asked for.
+    // trace:BUG-2555 | ai:claude
+    #[cfg(unix)]
+    #[test]
+    fn write_atomic_mode_sets_the_mode_it_is_given() {
+        use std::os::unix::fs::PermissionsExt;
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("counter.toml");
+        let mode =
+            |path: &std::path::Path| std::fs::metadata(path).unwrap().permissions().mode() & 0o777;
+        super::write_atomic_mode(&path, "one", 0o644).unwrap();
+        assert_eq!(mode(&path), 0o644);
+        std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o666)).unwrap();
+        super::write_atomic_mode(&path, "two", 0o644).unwrap();
+        assert_eq!(mode(&path), 0o644);
+        assert_eq!(std::fs::read_to_string(&path).unwrap(), "two");
+        super::write_atomic_mode(&path, "three", 0o600).unwrap();
+        assert_eq!(mode(&path), 0o600);
+        let litter: Vec<_> = std::fs::read_dir(dir.path()).unwrap().flatten().collect();
+        assert_eq!(litter.len(), 1, "no staging file is left behind");
+    }
+
     #[test]
     fn replaces_content_no_leftovers() {
         let dir = tempfile::tempdir().unwrap();

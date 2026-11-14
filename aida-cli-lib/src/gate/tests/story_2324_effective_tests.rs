@@ -921,6 +921,270 @@ fn bug_2500_ledger_waiting_blocks_both_heads_until_fresh_review() {
     }
 }
 
+// trace:BUG-2517 | ai:codex
+#[test]
+fn bug_2517_spec_only_never_binds_or_projects_and_related_changes_scan_once() {
+    let root = tempfile::tempdir().unwrap();
+    let r = subject();
+    let set = snapshot(&[r.clone()]).resolve(&["BUG-2403"]);
+    let spec = crate::gate::canon::GateSpec::with_key("BUG-2403", Some(SpecKey(r.id)));
+    for (i, word) in ["waiting", "approved"].iter().enumerate() {
+        let mut local = record(word, HEAD_A, &at(i as u64 + 1), &[]);
+        local.insert("change_binding".into(), "unbound".into());
+        crate::gate::ledger::store::append_unbound(root.path(), &spec, &local).unwrap();
+    }
+    for n in [3185, 3194] {
+        assert_eq!(
+            crate::gate::ledger::store::bind_unbound(root.path(), &spec, ChangeKey::pr(n)).unwrap(),
+            0
+        );
+        let mut e = verdict_ev(n, Some("BUG-2403"), "approved", HEAD_A);
+        e.change = format!("PR-{n}");
+        e.spec_key = Some(SpecKey(r.id));
+        crate::gate::ledger::store::append_one(root.path(), e).unwrap();
+        assert_eq!(
+            crate::gate::ledger::store::bind_unbound(root.path(), &spec, ChangeKey::pr(n)).unwrap(),
+            0
+        );
+    }
+    // Discovery reads unrelated corpus evidence under its own work budget
+    // (BUG-2531); the view's budget bounds only the ledgers it selects. Keep
+    // the unrelated ledger unindexed so the hints below are this member's.
+    // trace:BUG-2517 trace:BUG-2531 | ai:claude
+    let mut unrelated = verdict_ev(1, None, "waiting", HEAD_B);
+    unrelated.change = "PR-9000".into();
+    crate::gate::ledger::store::append_one(root.path(), unrelated).unwrap();
+    let dir = root.path().join(".aida/gate-ledger");
+    let lines = |p: std::path::PathBuf| {
+        std::fs::read_to_string(p)
+            .unwrap()
+            .lines()
+            .filter(|l| !l.trim().is_empty())
+            .count()
+    };
+    let selected_events = lines(dir.join("PR-3185.jsonl"))
+        + lines(dir.join("PR-3194.jsonl"))
+        + lines(dir.join("by-spec/BUG-2403.jsonl"));
+    let corpus: u64 = [3185, 3194]
+        .iter()
+        .map(|n| {
+            std::fs::metadata(dir.join(format!("PR-{n}.jsonl")))
+                .unwrap()
+                .len()
+        })
+        .sum();
+    let hints: u64 = std::fs::read_dir(dir.join("by-spec"))
+        .unwrap()
+        .map(|e| e.unwrap().metadata().unwrap().len())
+        .sum();
+    for n in [3185, 3194] {
+        let view = load_view_with_budget(
+            root.path(),
+            ChangeKey::pr(n),
+            &set,
+            Budget::with_limits(corpus + hints, selected_events),
+        )
+        .unwrap();
+        assert!(view.unbound.is_empty());
+        assert!(view
+            .change_events
+            .iter()
+            .all(|e| e.change == format!("PR-{n}")));
+        assert_eq!(
+            view.change_events
+                .iter()
+                .filter(|e| e.verdict_record().is_some())
+                .count(),
+            1
+        );
+    }
+    // Each selected ledger is read once: one byte or event less refuses.
+    assert!(load_view_with_budget(
+        root.path(),
+        ChangeKey::pr(3185),
+        &set,
+        Budget::with_limits(corpus + hints - 1, selected_events),
+    )
+    .is_err());
+    assert!(load_view_with_budget(
+        root.path(),
+        ChangeKey::pr(3185),
+        &set,
+        Budget::with_limits(corpus + hints, selected_events - 1),
+    )
+    .is_err());
+    assert_eq!(
+        crate::gate::ledger::store::read_unbound(root.path(), "BUG-2403").len(),
+        2
+    );
+}
+
+// trace:BUG-2517 | ai:codex
+#[test]
+fn bug_2517_direct_gate_views_ignore_explicit_spec_only_records() {
+    let r = subject();
+    for word in ["waiting", "approved"] {
+        let mut local = verdict_ev(1, Some("BUG-2403"), word, HEAD_A);
+        if let EventBody::Verdict { record } = &mut local.body {
+            record.insert("change_binding".into(), "unbound".into());
+        }
+        // Both the original spec sequence and a copy made by an older binder
+        // must have no effect on the named change, even at its exact head.
+        for copied in [false, true] {
+            let mut v = view(Vec::new());
+            if copied {
+                v.change_events.push(local.clone());
+            } else {
+                v.unbound.insert(SpecKey(r.id), vec![local.clone()]);
+            }
+            let s = state(&[r.clone()], &["BUG-2403"], &v, HEAD_A);
+            assert_eq!(s.verdict, Verdict::Absent, "{word}, copied={copied}");
+            assert!(refusals(&s).contains(&Refusal::NoApproval));
+        }
+    }
+}
+
+// trace:BUG-2517 | ai:codex
+#[test]
+fn bug_2517_cached_discovery_refuses_a_missing_related_change() {
+    let root = tempfile::tempdir().unwrap();
+    let r = subject();
+    let set = snapshot(&[r.clone()]).resolve(&["BUG-2403"]);
+    for n in [3185, 3194] {
+        let mut own = verdict_ev(1, Some("BUG-2403"), "approved", HEAD_A);
+        own.change = format!("PR-{n}");
+        own.spec_key = Some(SpecKey(r.id));
+        crate::gate::ledger::store::append_one(root.path(), own).unwrap();
+    }
+    // Keep the index's related change but remove its evidence. Reusing a
+    // discovery must refuse this just as the checked spec selector does.
+    std::fs::remove_file(crate::gate::ledger::store::ledger_file(
+        root.path(),
+        ChangeKey::pr(3194),
+    ))
+    .unwrap();
+    let err = load_view(root.path(), ChangeKey::pr(3185), &set).unwrap_err();
+    assert!(err.0.contains("PR-3194, whose ledger is missing"), "{err}");
+}
+
+// trace:BUG-2517 | ai:codex
+#[test]
+fn bug_2517_binding_keeps_legacy_prechange_reviews_distinct_from_local_reviews() {
+    use crate::gate::ledger::store;
+    let root = tempfile::tempdir().unwrap();
+    let r = subject();
+    let set = snapshot(&[r.clone()]).resolve(&["BUG-2403"]);
+    let spec = crate::gate::canon::GateSpec::with_key("BUG-2403", Some(SpecKey(r.id)));
+    let legacy = record("approved", HEAD_A, &at(1), &[]);
+    store::append_unbound(root.path(), &spec, &legacy).unwrap();
+    let mut local = record("waiting", HEAD_A, &at(2), &[]);
+    local.insert("change_binding".into(), "unbound".into());
+    store::append_unbound(root.path(), &spec, &local).unwrap();
+    let unbound = root.path().join(".aida/gate-ledger/by-spec/BUG-2403.jsonl");
+    let original = std::fs::read(&unbound).unwrap();
+    let change = ChangeKey::pr(3185);
+    let v = load_view(root.path(), change, &set).unwrap();
+    assert!(matches!(
+        effective_gate_state(HEAD_A, &set, &v, &drain()).verdict,
+        Verdict::Approved { .. }
+    ));
+    assert_eq!(store::bind_unbound(root.path(), &spec, change).unwrap(), 1);
+    let bound: Vec<_> = store::read_file(root.path(), change)
+        .into_iter()
+        .filter_map(|e| e.verdict_record().cloned())
+        .collect();
+    assert_eq!(bound, vec![legacy]);
+    let v = load_view(root.path(), change, &set).unwrap();
+    assert!(matches!(
+        effective_gate_state(HEAD_A, &set, &v, &drain()).verdict,
+        Verdict::Approved { .. }
+    ));
+    assert_eq!(
+        store::bind_unbound(root.path(), &spec, ChangeKey::pr(3194)).unwrap(),
+        0
+    );
+    let other = load_view(root.path(), ChangeKey::pr(3194), &set).unwrap();
+    assert_eq!(
+        effective_gate_state(HEAD_A, &set, &other, &drain()).verdict,
+        Verdict::Absent
+    );
+    assert_eq!(std::fs::read(unbound).unwrap(), original);
+}
+
+// trace:BUG-2517 | ai:codex
+#[test]
+fn bug_2517_local_records_stay_unbound_through_open_record_and_collect() {
+    use crate::gate::ledger::{self, store};
+    for word in ["waiting", "approved"] {
+        let root = tempfile::tempdir().unwrap();
+        let _ambient = crate::test_env::AmbientGuard::hermetic_and(
+            root.path(),
+            None,
+            &[("AIDA_CONTAINED", None)],
+        );
+        let r = subject();
+        let set = snapshot(&[r.clone()]).resolve(&["BUG-2403"]);
+        let spec = crate::gate::canon::GateSpec::with_key("BUG-2403", Some(SpecKey(r.id)));
+        let local_path = crate::gate::review_verdict::verdict_path(root.path(), "BUG-2403");
+        let mut local = record(word, HEAD_A, &at(1), &[]);
+        local.insert("change_binding".into(), "unbound".into());
+        ledger::record_verdict_at(&local_path, &local, Some(&spec)).unwrap();
+        let unbound_path = root.path().join(".aida/gate-ledger/by-spec/BUG-2403.jsonl");
+        let original = std::fs::read(&unbound_path).unwrap();
+        let mut previous_ledger = None;
+        for n in [3185, 3194] {
+            let change = ChangeKey::pr(n);
+            ledger::bind_specs(root.path(), change, &[spec.clone()]);
+            assert!(!store::ledger_file(root.path(), change).exists());
+            let v = load_view(root.path(), change, &set).unwrap();
+            assert!(v.unbound.is_empty());
+            assert_eq!(
+                effective_gate_state(HEAD_A, &set, &v, &drain()).verdict,
+                Verdict::Absent
+            );
+
+            let own = record("request-changes", HEAD_A, &at(2), &["own defect"]);
+            let change_path =
+                crate::gate::review_verdict::verdict_path(root.path(), &change.as_key());
+            ledger::record_verdict_at(&change_path, &own, Some(&spec)).unwrap();
+            let collected = record("waiting", HEAD_A, &at(3), &[]);
+            ledger::record_collected_verdict(
+                root.path(),
+                change,
+                &collected,
+                &[(spec.clone(), collected.clone())],
+            )
+            .unwrap();
+            let events = store::read_file(root.path(), change);
+            assert_eq!(
+                events
+                    .iter()
+                    .filter(|e| e.verdict_record().is_some())
+                    .count(),
+                3
+            );
+            assert!(events.iter().all(|e| !e.is_spec_only()));
+            let v = load_view(root.path(), change, &set).unwrap();
+            assert!(v.unbound.is_empty());
+            assert!(matches!(
+                effective_gate_state(HEAD_A, &set, &v, &drain()).verdict,
+                Verdict::Waiting { .. }
+            ));
+            if let Some(ref bytes) = previous_ledger {
+                assert_eq!(
+                    &std::fs::read(store::ledger_file(root.path(), ChangeKey::pr(3185))).unwrap(),
+                    bytes,
+                    "recording and collecting the second PR must preserve the first ledger"
+                );
+            } else {
+                previous_ledger =
+                    Some(std::fs::read(store::ledger_file(root.path(), change)).unwrap());
+            }
+            assert_eq!(std::fs::read(&unbound_path).unwrap(), original);
+        }
+    }
+}
+
 // trace:STORY-2696 | ai:codex
 #[test]
 fn story_2696_effective_policy_refuses_only_the_moved_head() {

@@ -14,35 +14,12 @@ fn doctor_envelope_carries_error_and_performance_audits() {
     assert_eq!(decoded["performance_audits"].as_array().unwrap().len(), 1);
 }
 
-// Locate the built `aida` binary through the process-wide hardened resolver
-// rather than a raw OS executable lookup: TASK-1262's architecture guard keeps every
-// such lookup inside the resolver, and its allowlist is exact — the guard greps for
-// the literal call, so naming it here would trip it too. Under
-// `cargo test` the resolver returns target/<profile>/deps/<runner>, so the
-// binary sits two levels up.
-// trace:BUG-1745 | ai:codex
-// trace:BUG-1777 | ai:codex
+// Derive the CLI from this exact test image, accepting both Cargo layouts.
+// Retain the checkout/target ownership checks below for binary candidates.
+// trace:BUG-1745 trace:BUG-1777 trace:BUG-2539 | ai:codex
 fn built_aida_binary() -> std::path::PathBuf {
-    let runner = crate::resolve_aida_exe();
-    // Prove the resolver handed back THIS build's test runner before deriving a
-    // sibling path from it. An ambient AIDA_BIN overrides the resolver, and an
-    // `is_file()` check alone would then happily run a different build's binary
-    // and report its behaviour as ours.
-    let deps = runner.parent().expect("test runner has a parent directory");
-    assert_eq!(
-        deps.file_name().and_then(|name| name.to_str()),
-        Some("deps"),
-        "expected this build's test runner under target/<profile>/deps, got {} \u{2014} \
-         an ambient AIDA_BIN redirects the resolver and would silently exercise \
-         a different binary; unset it and re-run",
-        runner.display()
-    );
-    let profile_dir = deps.parent().expect("deps has a target/<profile> parent");
-    // `deps` alone only narrows; it cannot prove ownership, since an honored
-    // AIDA_BIN override could in principle sit under some other build's `deps`.
-    // CARGO_MANIFEST_DIR is baked in at compile time and no environment variable
-    // can redirect it, so requiring the binary to live inside THIS checkout is
-    // what actually pins the artifact to this build.
+    let runner = crate::test_exec::current_test_runner();
+    let profile_dir = crate::test_exec::test_profile_dir(&runner).unwrap();
     let checkout = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
         .parent()
         .expect("the crate directory sits inside the workspace root");

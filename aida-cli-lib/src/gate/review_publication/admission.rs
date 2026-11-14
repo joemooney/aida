@@ -192,10 +192,18 @@ fn active(state: &State) -> bool {
     matches!(state, State::Reserved | State::Retry | State::Running)
 }
 
-// Only a stopped, verdict-less attempt can authorize bounded same-head readmission.
+// Only a stopped attempt without a conclusive verdict can authorize bounded readmission.
 // trace:BUG-2518 | ai:codex
 pub(crate) const NO_VERDICT: &str = "NoVerdict: ";
-fn retry_allowed(history: &[Transition], head: &str) -> bool {
+// trace:BUG-2521 | ai:codex
+pub(crate) const INCONCLUSIVE: &str = "Inconclusive: ";
+// A stop with a conclusive verdict is never retry-eligible. Before BUG-2521 such
+// stops, and WAITING stops, were unprefixed; only those legacy unprefixed
+// terminals may be recovered, and only while the head's publication is WAITING.
+// trace:BUG-2521 | ai:claude
+pub(crate) const VERDICT: &str = "Verdict: ";
+const LEGACY_EXIT: &str = "owner observed queue exit ";
+fn retry_allowed(history: &[Transition], head: &str, legacy_waiting: bool) -> bool {
     // A cancelled pre-spawn Retry did not consume a started attempt. Peel only
     // those exact pairs; unrelated heads or reservations cannot borrow authority.
     let mut authority = history;
@@ -214,9 +222,11 @@ fn retry_allowed(history: &[Transition], head: &str) -> bool {
     authority.last().is_some_and(|p| {
         p.head == head
             && p.state == State::Terminal
-            && p.evidence
-                .as_deref()
-                .is_some_and(|e| e.starts_with(NO_VERDICT))
+            && p.evidence.as_deref().is_some_and(|e| {
+                e.starts_with(NO_VERDICT)
+                    || e.starts_with(INCONCLUSIVE)
+                    || (legacy_waiting && e.starts_with(LEGACY_EXIT))
+            })
     }) && history
         .iter()
         .filter(|p| p.head == head && p.state == State::Running)
@@ -275,7 +285,10 @@ fn chain(hub: &Hub, key: &str, records: &[Signed], roster: &Roster) -> Result<Ve
                 ensure!(
                     !out.iter().any(|p| p.token == t.token)
                         && if t.state == State::Retry {
-                            retry_allowed(&out, &t.head)
+                            // Structural check; the WAITING-only condition for
+                            // legacy terminals is enforced at admission time.
+                            // trace:BUG-2521 | ai:claude
+                            retry_allowed(&out, &t.head, true)
                         } else {
                             !out.iter()
                                 .any(|p| p.head == t.head && p.state == State::Terminal)
@@ -483,8 +496,9 @@ fn admission_evidence(
         require_pinned(root, &Some(hub.clone()))?;
         if matches!(state, State::Reserved | State::Retry)
             && watcher_history(root, key)?.iter().any(|(body, _)| {
-                rv::parse_recorded_verdict(body)
-                    .is_some_and(|v| v.reviewed_sha.as_deref() == Some(head))
+                rv::parse_recorded_verdict(body).is_some_and(|v| {
+                    v.reviewed_sha.as_deref() == Some(head) && v.kind != rv::VerdictKind::Waiting
+                })
             })
         {
             return Ok(None);
@@ -530,7 +544,18 @@ fn update_with_observer(
                 .iter()
                 .any(|p| p.head == head && p.state == State::Terminal)
             {
-                if !retry_allowed(&history, head) {
+                // trace:BUG-2521 | ai:claude
+                let legacy_waiting = || -> Result<bool> {
+                    Ok(watcher_history(root, key)?.iter().any(|(body, _)| {
+                        rv::parse_recorded_verdict(body).is_some_and(|v| {
+                            v.reviewed_sha.as_deref() == Some(head)
+                                && v.kind == rv::VerdictKind::Waiting
+                        })
+                    }))
+                };
+                if !retry_allowed(&history, head, false)
+                    && !(retry_allowed(&history, head, true) && legacy_waiting()?)
+                {
                     return Ok(false);
                 }
                 State::Retry

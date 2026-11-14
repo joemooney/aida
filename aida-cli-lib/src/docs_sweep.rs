@@ -1271,7 +1271,7 @@ pub(crate) fn sweep(
         None => None,
     };
 
-    let mut root = crate::command_registry::built_command();
+    let mut root = crate::CLI_SUPPORT.built_command();
     root.build();
     let glossary_source = GLOSSARY_CANDIDATES
         .iter()

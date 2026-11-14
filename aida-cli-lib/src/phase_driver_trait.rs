@@ -379,7 +379,6 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
         let args = build_implementer_phase_args(
             &self.spec,
             &session_uuid,
-            self.steal,
             self.force_claim || self.retry_implementer_worktree.is_some(),
             Some(intended_branch.as_str()),
             Some(intended_path.as_path()),
@@ -4183,7 +4182,7 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
             if let Some(lease) = &self.implementer_lease {
                 child_cmd.env(crate::gate::review_authority::WORKER_SESSION_ENV, lease);
             }
-            crate::launch::profile::finalize_codex(&mut child_cmd)
+            crate::vendors::profile::finalize_codex(&mut child_cmd)
                 .map_err(|e| std::io::Error::other(format!("{e:#}")))
         } else {
             Ok(())

@@ -29,6 +29,7 @@ fn mandate(include_supervised: bool) -> Mandate {
         seat: crate::gate::mandate::MANDATE_SEAT.into(),
         scope: crate::gate::mandate::SCOPE_SHIP_HELD.into(),
         include_supervised,
+        include_gate_paths: false,
         reason: Some("fire".into()),
         issued_at: Utc::now() - chrono::Duration::hours(1),
         expires_at: Utc::now() + chrono::Duration::hours(7),
@@ -37,6 +38,7 @@ fn mandate(include_supervised: bool) -> Mandate {
         scopes: Default::default(),
         kind: None,
         renewals: Vec::new(),
+        revived: None,
     }
 }
 
@@ -569,7 +571,7 @@ fn bug_2398_actual_ungranted_record_keeps_auto_release_marker_and_labels() {
         ],
     );
     let head = crate::test_git::commit_fixture(root);
-    crate::handle_review_record_at(
+    crate::handle_review_record_fixture_at(
         root.to_path_buf(),
         "TASK-37",
         "approved",

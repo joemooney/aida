@@ -5248,7 +5248,7 @@ fn run_fasttrack(
                     if let Some(mode) = mode {
                         argv.push(format!("--mode={mode}"));
                     }
-                    let add = crate::command_registry::try_parse_from(argv).map_err(|err| {
+                    let add = crate::CLI_SUPPORT.try_parse_from(argv).map_err(|err| {
                         anyhow::anyhow!("fasttrack could not build its `aida add`: {err}")
                     })?;
                     return crate::cmdkit::returned(

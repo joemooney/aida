@@ -631,10 +631,21 @@ pub(crate) fn handle_merge_hold(action: &crate::cli::MergeHoldAction) -> Result<
             };
             let premise_of = |pr: u64| -> Option<String> {
                 let record = crate::gate::merge_hold_core::read_hold_record(&root, pr)?;
+                // The verdict as it concerns this change: a spec shared with
+                // another open change must not answer with that one's review.
+                // trace:BUG-2570 | ai:claude
+                let head = head_of(pr).or_else(|| record.target_head_sha.clone());
                 merge_hold::premise_stale(
                     &record,
                     head_of(pr).as_deref(),
-                    |spec| crate::gate::review_verdict::read_recorded_verdict(&root, spec),
+                    |spec| {
+                        crate::gate::review_verdict::read_recorded_verdict_for_change(
+                            &root,
+                            spec,
+                            pr,
+                            head.as_deref(),
+                        )
+                    },
                     |spec| spec_status.get(&spec.to_ascii_uppercase()).cloned(),
                 )
             };
@@ -650,6 +661,7 @@ pub(crate) fn handle_merge_hold(action: &crate::cli::MergeHoldAction) -> Result<
                             &[root.as_path()],
                             &record,
                             head_of(pr).as_deref(),
+                            true,
                         )
                     })
                 };
@@ -1148,6 +1160,7 @@ pub(crate) fn handle_merge_hold(action: &crate::cli::MergeHoldAction) -> Result<
                                 &[root.as_path()],
                                 record,
                                 head.as_deref(),
+                                true,
                             ) {
                                 crate::gate::merge_hold_core::RefusalRelease::Released(v) => {
                                     Some(v)

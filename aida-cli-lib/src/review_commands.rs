@@ -170,39 +170,6 @@ mod task_518_pr_to_spec_tests;
 #[path = "tests/bug_1993_review_surface_unknown_tests.rs"]
 mod bug_1993_review_surface_unknown_tests;
 
-/// trace:STORY-67 | ai:claude
-/// The review surface a held spec is sitting on — what `aida review <SPEC>`
-/// resolves the spec to before reviewing. NEVER asserts a closed/absent PR
-/// (the TASK-715 / BUG-493 failure mode); each variant is a verified state.
-/// trace:STORY-553 | ai:claude
-#[derive(Debug)]
-pub(crate) enum ReviewSurface {
-    /// An OPEN change (PR/MR) exists for the spec's branch.
-    OpenChange {
-        branch: String,
-        number: u64,
-        url: String,
-    },
-    /// Work is on a feature branch with commits, but no open change.
-    /// (Either never pushed a PR, or the held draft PR was closed.)
-    BranchNoChange { branch: String, commits: usize },
-    /// Commits reference the spec but already landed on the default branch.
-    Shipped { number: Option<u64> },
-    /// No commits and no trace comments reference the spec — built locally
-    /// and never pushed, or not started.
-    Local,
-    /// BUG-1993: a bounded linkage scan timed out before it could tell where
-    /// the work sits, so it may well be on a pushed branch. Never treated as
-    /// `Local`: callers keep the spec visible with an "unknown" note.
-    /// `reason` names the scan (`commit scan timed out`, ...).
-    // trace:BUG-1993 | ai:claude
-    Unknown { reason: &'static str },
-}
-
-/// BUG-1993: the `aida human` surface label for [`ReviewSurface::Unknown`].
-// trace:BUG-1993 | ai:claude
-pub(crate) const REVIEW_SURFACE_UNKNOWN_LABEL: &str = "unknown (scan timed out)";
-
 pub(crate) fn review_branch_no_change_context_card(
     spec_id: &str,
     branch: &str,
@@ -416,237 +383,6 @@ fn ask_ai_banner_mode(args: &[String]) -> &str {
         .or(args.first())
         .map(String::as_str)
         .unwrap_or("")
-}
-
-/// Classify a spec's review surface from its git linkage + (optional) forge
-/// change-lookup. Pure: the side-effecting `collect_git_linkage` /
-/// `change_lookup_for_branch` run at the call site; this is the decision so
-/// it's unit-testable. Order matters — shipped wins over branch, and only a
-/// `ChangeLookup::Found` becomes `OpenChange` (a closed/absent/unreachable
-/// PR must NOT be asserted as open — the TASK-715 / BUG-493 failure mode).
-/// trace:STORY-553 trace:BUG-493 | ai:claude
-pub(crate) fn classify_review_surface(
-    linkage: &GitLinkage,
-    change: Option<crate::forge::ChangeLookup>,
-) -> ReviewSurface {
-    classify_review_surface_forge_first(linkage, None, change)
-}
-
-/// BUG-876: resolve review surfaces forge-first. A lease/local branch is only
-/// an accelerator; an open PR whose head branch or commit trailers reference
-/// the spec remains the review surface after the lease is released.
-// trace:BUG-876 | ai:codex
-pub(crate) fn classify_review_surface_forge_first(
-    linkage: &GitLinkage,
-    spec_change: Option<crate::forge::ChangeLookup>,
-    branch_change: Option<crate::forge::ChangeLookup>,
-) -> ReviewSurface {
-    if linkage.shipped {
-        return ReviewSurface::Shipped {
-            number: linkage.shipped_pr,
-        };
-    }
-
-    if let Some(crate::forge::ChangeLookup::Found(c)) = spec_change {
-        let branch = if c.branch.is_empty() {
-            linkage
-                .branch
-                .clone()
-                .unwrap_or_else(|| "unknown".to_string())
-        } else {
-            c.branch
-        };
-        return ReviewSurface::OpenChange {
-            branch,
-            number: c.id,
-            url: c.url,
-        };
-    }
-
-    match (linkage.branch.clone(), branch_change) {
-        (Some(branch), Some(crate::forge::ChangeLookup::Found(c))) => ReviewSurface::OpenChange {
-            branch,
-            number: c.id,
-            url: c.url,
-        },
-        (Some(branch), _) => ReviewSurface::BranchNoChange {
-            branch,
-            commits: linkage.commits.len(),
-        },
-        // BUG-1993: no branch because a scan timed out is unknown, not
-        // "never pushed". trace:BUG-1993 | ai:claude
-        (None, _) => match linkage.unknown_reason() {
-            Some(reason) => ReviewSurface::Unknown { reason },
-            None => ReviewSurface::Local,
-        },
-    }
-}
-
-/// BUG-881: shared forge-first review-surface resolver for human review and
-/// PR-only drains. A lease/local branch is only an accelerator; a standalone
-/// `queue work --from-pr` must see the same open PR that `aida review` sees
-/// when the PR is discoverable by spec trailer or spec-named head branch.
-// trace:BUG-881 | ai:codex
-pub(crate) fn resolve_review_surface_forge_first(
-    project_root: &std::path::Path,
-    spec_id: &str,
-    linkage: &GitLinkage,
-) -> ReviewSurface {
-    let spec_change = change_lookup_for_spec(project_root, spec_id);
-    let branch_change = linkage
-        .branch
-        .as_deref()
-        .map(|b| change_lookup_for_branch(project_root, b));
-    classify_review_surface_forge_first(linkage, Some(spec_change), branch_change)
-}
-
-/// BUG-582: the robust invariant guarding the `aida human` reviews-awaiting
-/// bucket — a finished spec can NEVER be resurrected onto the operator's seat
-/// by a lingering local branch / stale review surface.
-///
-/// Two stale-data leaks made BUG-581 (already `Completed`, PR-1048 already
-/// MERGED) surface as "needs review": (1) a spec whose status is terminal must
-/// never be a review candidate regardless of any branch the Agent-tool
-/// worktrees left lying around (`worktree-agent-*` branches accumulate), and
-/// (2) only a genuinely-open surface (`OpenChange` / `BranchNoChange`) is a
-/// review; a merged (`Shipped`) or never-pushed (`Local`) surface is not.
-///
-/// Centralizing both checks in one pure predicate keeps the guarantee from
-/// drifting: the candidate pre-filter in `reviews_awaiting_human` is a cost
-/// bound (it reads the cache, which can be stale), while THIS is the
-/// load-bearing invariant — even a stale cache row that slipped through the
-/// pre-filter is dropped here. Pure ⇒ unit-testable without a repo/forge.
-/// trace:BUG-582 | ai:claude
-pub(crate) fn spec_eligible_for_review_awaiting(
-    status: aida_core::RequirementStatus,
-    surface: &ReviewSurface,
-) -> bool {
-    // A finished (merged) or abandoned spec is never review work — a lingering
-    // local branch must not put it back on the operator's seat.
-    if matches!(
-        status,
-        aida_core::RequirementStatus::Completed | aida_core::RequirementStatus::Rejected
-    ) {
-        return false;
-    }
-    // Only a genuinely-open review surface counts. `Shipped` = the PR already
-    // merged (the merged-PR signal); `Local` = never pushed. Neither is a
-    // review awaiting a human. The LEGITIMATE case — Done-on-a-branch with an
-    // OPEN PR not yet merged — is `OpenChange` and stays included.
-    // BUG-1993: an `Unknown` surface (scan timed out) may be a real pushed
-    // branch, so it stays on the seat with an "unknown" note rather than
-    // silently dropping. trace:BUG-1993 | ai:claude
-    matches!(
-        surface,
-        ReviewSurface::OpenChange { .. }
-            | ReviewSurface::BranchNoChange { .. }
-            | ReviewSurface::Unknown { .. }
-    )
-}
-
-/// BUG-722: the requirements-store orphan branch is never a code-review target.
-/// Commits that reference a spec but landed on `aida-store` during a store
-/// reconcile must not register as "a branch awaiting review" — the STORY-760
-/// false positive (`[branch aida-store]`). The store branch name is the
-/// project-wide constant the rest of the CLI hard-codes (see the
-/// `branch_exists_anywhere(.., "aida-store")` probe). Any configured store/
-/// mirror ref would also belong here, but a mirror is a REMOTE, not a branch —
-/// the branch name is uniformly `aida-store`.
-// trace:BUG-722 | ai:claude
-pub(crate) fn is_store_branch(branch: &str) -> bool {
-    branch == "aida-store"
-}
-
-/// BUG-722: the branch a review surface sits on, when it has one. `Shipped`
-/// (merged) and `Local` (never pushed) carry no live branch. Lets the
-/// classifier apply the store-branch exclusion without re-plumbing git.
-// trace:BUG-722 | ai:claude
-pub(crate) fn review_surface_branch(surface: &ReviewSurface) -> Option<&str> {
-    match surface {
-        ReviewSurface::OpenChange { branch, .. } | ReviewSurface::BranchNoChange { branch, .. } => {
-            Some(branch.as_str())
-        }
-        ReviewSurface::Shipped { .. } | ReviewSurface::Local | ReviewSurface::Unknown { .. } => {
-            None
-        }
-    }
-}
-
-/// BUG-722: which `aida human` bucket a candidate spec lands in once its
-/// status, view-state, and review surface are known. See
-/// [`classify_human_review_bucket`].
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum HumanReviewBucket {
-    /// A genuine code-review gate — an open PR, or a pushed branch on active/
-    /// Done work — the same surface `aida review <SPEC>` locates.
-    ReviewsAwaiting,
-    /// Loose work-in-progress: a `Draft` spec on a pushed branch with commits
-    /// but no open PR. Visible under `wip-branches`, but NOT a review gate.
-    WipBranch,
-    /// Not the human's review work at all (finished/abandoned/deferred/archived
-    /// spec, the store branch, or a merged/never-pushed surface).
-    Excluded,
-}
-
-/// BUG-722: classify what `aida human` bucket a candidate spec belongs to.
-/// Pure ⇒ every false-positive class is unit-testable without a repo/forge.
-/// Layers three gates on top of the BUG-582 status/surface invariant, in
-/// precedence order:
-///  1. **view-state** — a deferred or archived spec is hidden from the human's
-///     review seat exactly as `aida list` hides it from the default view
-///     (STORY-441 archived, STORY-584 deferred);
-///  2. **status/surface** — the BUG-582 invariant: a Completed/Rejected spec or
-///     a merged (`Shipped`) / never-pushed (`Local`) surface is never review
-///     work, even with a lingering local branch;
-///  3. **branch-type** — the `aida-store` requirements-store orphan branch is
-///     never a code-review target (the STORY-760 false positive);
-/// then splits the survivors: a `Draft` spec whose only surface is a pushed
-/// branch with no PR is loose WIP (`wip-branches`), not a review gate — nothing
-/// awaits a human until there's a PR or a Done claim (operator decision,
-/// 2026-07-12). Everything else is a genuine review.
-// trace:BUG-722 | ai:claude
-pub(crate) fn classify_human_review_bucket(
-    status: aida_core::RequirementStatus,
-    archived: bool,
-    deferred: bool,
-    surface: &ReviewSurface,
-) -> HumanReviewBucket {
-    // Gate 1 — view-state: a filed-away or primed-conditional spec is not the
-    // human's review work, even with a live branch (mirrors `aida list`).
-    if archived || deferred {
-        return HumanReviewBucket::Excluded;
-    }
-    // Gate 2 — the BUG-582 status/surface invariant.
-    if !spec_eligible_for_review_awaiting(status.clone(), surface) {
-        return HumanReviewBucket::Excluded;
-    }
-    // Gate 3 — branch-type: the requirements-store orphan branch is never a
-    // code-review target.
-    if review_surface_branch(surface).is_some_and(is_store_branch) {
-        return HumanReviewBucket::Excluded;
-    }
-    // Draft + pushed branch + no open PR ⇒ loose WIP, not a review gate.
-    // BUG-1993: a Draft whose surface is unknown (scan timed out) is listed
-    // as WIP too — visible, but not asserted as a review gate.
-    // trace:BUG-1993 | ai:claude
-    if matches!(status, aida_core::RequirementStatus::Draft)
-        && matches!(
-            surface,
-            ReviewSurface::BranchNoChange { .. } | ReviewSurface::Unknown { .. }
-        )
-    {
-        return HumanReviewBucket::WipBranch;
-    }
-    HumanReviewBucket::ReviewsAwaiting
-}
-
-/// BUG-722: mirror the deferred view-state predicate `aida list` applies — the
-/// `deferred` flag OR any legacy `deferred:*` parking tag (STORY-584's
-/// honor-both rule). Keeps the `aida human` review seat hidden for exactly the
-/// specs the default list hides.
-// trace:BUG-722 | ai:claude
-pub(crate) fn requirement_is_deferred(req: &aida_core::Requirement) -> bool {
-    req.deferred || req.tags.iter().any(|t| t.starts_with("deferred:"))
 }
 
 /// BUG-511: RAII release for the review-verb lease — removing the lease
@@ -966,7 +702,7 @@ pub(crate) fn review_spec_launch_reviewer(
     session_name: &str,
     prompt: &str,
     session_id: &str,
-) -> Result<std::process::ExitStatus> {
+) -> Result<(std::process::ExitStatus, String)> {
     // TASK-2032: `aida review` launches from the host project root.
     // trace:TASK-2032 | ai:claude
     let plan = session::interactive_reviewer_launch_plan(
@@ -983,7 +719,7 @@ pub(crate) fn review_spec_launch_reviewer(
     // resolved the same way every other authority check resolves it — not
     // whatever directory the process happens to sit in.
     // trace:STORY-1473 | ai:claude
-    session::spawn_reviewer_launch_plan(&plan, &find_project_root()?)
+    session::spawn_reviewer_launch_plan_granted(&plan, &find_project_root()?)
         .context("failed to launch the reviewer")
 }
 
@@ -1460,15 +1196,50 @@ pub(crate) fn handle_review_spec(
     // trace:BUG-1607 | ai:claude
     let vendor = review_vendor
         .expect("review_vendor is Some whenever no_agent is false (already returned above)");
+    // Pin the head before launching: collection must verify the original
+    // review target, even if the PR moves while the interactive child runs.
+    // trace:BUG-2522 | ai:codex
+    let review_head =
+        pr_number.and_then(|pr| crate::queue_cmd::standalone_review_pr_head(project_root, pr));
     let launched_at = std::time::SystemTime::now();
-    let status: std::process::ExitStatus =
-        review_spec_launch_reviewer(vendor, &name, &prompt, &session_id)?;
+    let launcher_grant = crate::gate::seat_authority::current_grant_id();
+    let (status, child_grant) = review_spec_launch_reviewer(vendor, &name, &prompt, &session_id)?;
     if !status.success() {
         eprintln!(
             "  {} the reviewer exited non-zero ({})",
             crate::glyph(crate::glyphs::Glyph::Warning).yellow(),
             status
         );
+    }
+
+    // An anchor delegates refusal holding to this parent, including native
+    // interactive reviewers. Collect before re-recording can stamp a new head
+    // or provenance onto the child's evidence. Refuse on unverifiable evidence.
+    // trace:BUG-2522 | ai:codex
+    if let Some(pr) = pr_number {
+        let current_head = crate::queue_cmd::standalone_review_pr_head(project_root, pr);
+        anyhow::ensure!(
+            review_head.is_some() && review_head == current_head,
+            "interactive review target for PR-{pr} changed or could not be verified; re-run the review"
+        );
+        let checks = crate::queue_cmd::StandaloneVerdictChecks {
+            project_root,
+            pr,
+            head_sha: review_head,
+            launcher_grant,
+            child_grant: Some(child_grant),
+        };
+        let collected = crate::gate::review_verdict::collect_interactive_review_refusal(
+            project_root,
+            pr,
+            &spec_id,
+            launched_at,
+            &checks,
+        )?;
+        // Keep hold/forge orchestration outside the protected decision kernel.
+        // trace:BUG-2522 | ai:codex
+        crate::merge_hold::arm_collected_refusal(project_root, pr, &collected)
+            .with_context(|| format!("verdict collected, but could not protect PR-{pr} with a merge hold; run `aida review stranded --fix`"))?;
     }
 
     // ---- Read + present the verdict (AGENT ANALYZES + RECOMMENDS) ----
@@ -2178,192 +1949,6 @@ pub(crate) fn record_stranded_sweep_measurement(project_root: &std::path::Path, 
     }
 }
 
-pub(crate) fn guided_review_prompt(spec: &str) -> String {
-    format!(
-        "Read your AIDA launch context first:\n\
-         cat \"$AIDA_AGENT_CONTEXT_FILE\"\n\
-         aida show {spec}\n\
-         aida review {spec} --no-agent\n\n\
-         You are the guided-review advisor for {spec}. Keep this interactive and bounded: \
-         inspect the linked review surface, compare the diff to the spec acceptance criteria, \
-         surface consequential review forks to the operator with concrete options and a \
-         recommendation, and finish by telling the operator whether to approve, request changes, \
-         inspect the diff manually, or defer. Do not auto-merge."
-    )
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) struct GuidedReviewLaunchRequest {
-    pub(crate) role: Option<String>,
-    pub(crate) spec: Option<String>,
-    pub(crate) prompt: String,
-    pub(crate) name: Option<String>,
-    pub(crate) description: Option<String>,
-}
-
-pub(crate) fn guided_review_launch_request(spec: &str) -> GuidedReviewLaunchRequest {
-    GuidedReviewLaunchRequest {
-        role: Some("advisor".to_string()),
-        // A guided review shell is an advisor reviewing an already-held surface,
-        // not a new implementation claim. Keep the spec in the prompt/name only
-        // so `agent new` does not run `session_start` for a Done spec.
-        // trace:STORY-818 | ai:codex
-        spec: None,
-        prompt: guided_review_prompt(spec),
-        name: Some(format!("guided-review-{}", slugify(spec))),
-        description: Some(format!("guided review for {spec}")),
-    }
-}
-
-pub(crate) fn derisk_prompt(spec: &str) -> String {
-    format!(
-        "Read your AIDA launch context first:\n\
-         cat \"$AIDA_AGENT_CONTEXT_FILE\"\n\
-         /aida-derisk {spec}\n\n\
-         You are the de-risk advisor for {spec}. Follow the /aida-derisk skill: \
-         read the spec and graph, classify decision/blast-radius risk, surface \
-         load-bearing forks to the operator, record decisions as ADRs, fold \
-         decisions and testable safety gates into acceptance, lint the result, \
-         and only write a new execution_mode after explicit operator confirmation. \
-         Do not implement the spec."
-    )
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) struct DeriskLaunchRequest {
-    pub(crate) role: Option<String>,
-    pub(crate) spec: Option<String>,
-    pub(crate) prompt: String,
-    pub(crate) name: Option<String>,
-    pub(crate) description: Option<String>,
-}
-
-// trace:TASK-1235 | ai:codex
-pub(crate) fn derisk_launch_request(spec: &str) -> DeriskLaunchRequest {
-    DeriskLaunchRequest {
-        role: Some("advisor".to_string()),
-        // De-risking is an advisor disposition session, not an implementation
-        // claim. Keep the target in the prompt/name so the launcher does not
-        // acquire an implementer-style spec worktree or mutate status.
-        spec: None,
-        prompt: derisk_prompt(spec),
-        name: Some(format!("derisk-{}", slugify(spec))),
-        description: Some(format!("de-risk {spec}")),
-    }
-}
-
-/// `aida derisk <SPEC>` — vendor-aware launcher for the `/aida-derisk` skill.
-/// The Rust command is deliberately thin: it starts an advisor session seeded
-/// with the skill prompt and leaves all mode decisions inside the skill's
-/// explicit-confirmation workflow.
-// trace:TASK-1235 | ai:codex
-pub(crate) fn handle_derisk_command(spec: &str) -> Result<()> {
-    if !std::io::stdin().is_terminal() || !std::io::stdout().is_terminal() {
-        anyhow::bail!("aida derisk needs an interactive terminal");
-    }
-    let vendor = session::resolve_session_vendor();
-    let launch = derisk_launch_request(spec);
-    match vendor {
-        session::HeadlessVendor::Claude => agent_new_claude(
-            launch.role,
-            launch.spec,
-            false,
-            None,
-            None,
-            false,
-            AgentContextOptions::new(true, false),
-            true,
-            false,
-            false,
-            false,
-            AgentPromptOptions::new(Some(launch.prompt), false),
-            AgentResumeOptions::new(false, None, true, false),
-            AgentDefaultFlagOptions::new(true, Vec::new(), None),
-            launch.name,
-            launch.description,
-            false,
-        ),
-        session::HeadlessVendor::Codex => agent_new_codex(
-            launch.role,
-            launch.spec,
-            false,
-            None,
-            false,
-            AgentContextOptions::new(true, false),
-            true,
-            false,
-            false,
-            false,
-            AgentPromptOptions::new(Some(launch.prompt), false),
-            AgentResumeOptions::new(false, None, true, false),
-            AgentDefaultFlagOptions::new(true, Vec::new(), None),
-            launch.name,
-            launch.description,
-        ),
-        session::HeadlessVendor::Agy => anyhow::bail!(
-            "aida derisk does not run on agy; set the session vendor to claude or codex \
-             (AIDA_HEADLESS_VENDOR=claude|codex, or `[agents] vendor` in agents.toml)."
-        ),
-    }
-}
-
-/// STORY-818: `aida human review <SPEC> --guided` — spawn an interactive
-/// advisor shell for review, using the existing `aida agent new` launch-context
-/// machinery instead of inventing a second session substrate. The launched
-/// agent deliberately has no `--spec` scope: review normally runs while the spec
-/// is Done, and a spec-scoped `agent new` means implementation lease/worktree
-/// semantics.
-// trace:STORY-818 | ai:codex
-pub(crate) fn handle_guided_human_review(spec: &str) -> Result<()> {
-    if !std::io::stdin().is_terminal() || !std::io::stdout().is_terminal() {
-        anyhow::bail!("guided review needs an interactive terminal");
-    }
-    let vendor = session::resolve_session_vendor();
-    let launch = guided_review_launch_request(spec);
-    match vendor {
-        session::HeadlessVendor::Claude => agent_new_claude(
-            launch.role,
-            launch.spec,
-            false,
-            None,
-            None,
-            false,
-            AgentContextOptions::new(true, false),
-            true,
-            false,
-            false,
-            false,
-            AgentPromptOptions::new(Some(launch.prompt), false),
-            AgentResumeOptions::new(false, None, true, false),
-            AgentDefaultFlagOptions::new(true, Vec::new(), None),
-            launch.name,
-            launch.description,
-            false,
-        ),
-        session::HeadlessVendor::Codex => agent_new_codex(
-            launch.role,
-            launch.spec,
-            false,
-            None,
-            false,
-            AgentContextOptions::new(true, false),
-            true,
-            false,
-            false,
-            false,
-            AgentPromptOptions::new(Some(launch.prompt), false),
-            AgentResumeOptions::new(false, None, true, false),
-            AgentDefaultFlagOptions::new(true, Vec::new(), None),
-            launch.name,
-            launch.description,
-        ),
-        session::HeadlessVendor::Agy => anyhow::bail!(
-            "guided review does not run on agy; set the session vendor to claude or codex \
-             (AIDA_HEADLESS_VENDOR=claude|codex, or `[agents] vendor` in agents.toml)."
-        ),
-    }
-}
-
 /// `aida review record` — write the spec's review verdict as state a gate can
 /// read. The recorded commit defaults to the branch tip, which is what makes
 /// "has the branch moved since the review?" answerable later.
@@ -2406,7 +1991,7 @@ thread_local! {
 // trace:BUG-912 | ai:codex
 pub(crate) fn review_pr_handshake_path(
     project_root: &std::path::Path,
-    pr_number: u64,
+    key: &str,
 ) -> std::path::PathBuf {
     if let Some(path) = std::env::var_os("AIDA_REVIEW_VERDICT_FILE")
         .map(std::path::PathBuf::from)
@@ -2418,20 +2003,20 @@ pub(crate) fn review_pr_handshake_path(
         .map(std::path::PathBuf::from)
         .filter(|p| p.is_dir())
     {
-        return crate::gate::review_verdict::verdict_path(&root, &format!("PR-{pr_number}"));
+        return crate::gate::review_verdict::verdict_path(&root, key);
     }
     if let Ok(cwd) = std::env::current_dir() {
         if let Some(root) = parent_project_root_for_session(&cwd).filter(|p| p.is_dir()) {
-            return crate::gate::review_verdict::verdict_path(&root, &format!("PR-{pr_number}"));
+            return crate::gate::review_verdict::verdict_path(&root, key);
         }
     }
     if let Some(root) = std::env::var_os("AIDA_DRIVE_ROOT")
         .map(std::path::PathBuf::from)
         .filter(|p| p.is_dir())
     {
-        return crate::gate::review_verdict::verdict_path(&root, &format!("PR-{pr_number}"));
+        return crate::gate::review_verdict::verdict_path(&root, key);
     }
-    crate::gate::review_verdict::verdict_path(project_root, &format!("PR-{pr_number}"))
+    crate::gate::review_verdict::verdict_path(project_root, key)
 }
 
 /// BUG-2201 / TASK-2040: where a contained reviewer writes the phase-3
@@ -2568,7 +2153,21 @@ mod story_1436_gate_held_tests {
         let src = format!(
             "{}\n{}\n{}\n{}\n{}\n{}\n{}\n{}",
             include_str!("lib.rs"),
-            include_str!("lib_part1.rs"),
+            concat!(
+                include_str!("glyph_render.rs"),
+                include_str!("cli_entry.rs"),
+                include_str!("history_filter.rs"),
+                include_str!("output_policy.rs"),
+                include_str!("list_render.rs"),
+                include_str!("agent_errors.rs"),
+                include_str!("cast_recording.rs"),
+                include_str!("argv_rewrite.rs"),
+                include_str!("review_helpers.rs"),
+                include_str!("finding_queue.rs"),
+                include_str!("gitignore_entries.rs"),
+                include_str!("store_write_policy.rs"),
+                include_str!("status_policy.rs")
+            ),
             concat!(
                 include_str!("retire_legacy.rs"),
                 "\n",
@@ -2588,13 +2187,31 @@ mod story_1436_gate_held_tests {
                 "\n",
                 include_str!("history_reporting.rs")
             ),
-            include_str!("lib_part3.rs"),
+            concat!(
+                include_str!("ci_staleness.rs"),
+                include_str!("ci_watch.rs"),
+                include_str!("bounded_process.rs"),
+                include_str!("forge_lookup.rs"),
+                include_str!("store_lookup.rs"),
+                include_str!("output_policy.rs"),
+                include_str!("statusline_counts.rs"),
+                include_str!("session_warnings.rs"),
+                include_str!("status_policy.rs"),
+                include_str!("orchestrator_badge.rs"),
+                include_str!("default_branch.rs"),
+                include_str!("plan_structure.rs"),
+                include_str!("worktree_dirty.rs")
+            ),
             concat!(concat!(
                 include_str!("scoped_lease.rs"),
                 "\n",
                 include_str!("pull_lines.rs")
             )),
-            include_str!("lib_part5.rs"),
+            concat!(
+                include_str!("review_commands.rs"),
+                include_str!("review_advisor_launch.rs"),
+                include_str!("review_prompt.rs")
+            ),
             concat!(
                 include_str!("regression_tests.rs"),
                 "\n",
@@ -2770,15 +2387,19 @@ pub(crate) fn assert_handshake_anchor_is_pinned(
 }
 
 /// STORY-1405: remove the review-in-progress marker(s) a recorded verdict
-/// settles — PR-keyed when `pr` is known, otherwise every marker naming
-/// `spec`. Checks the given root and the main clone (where merge surfaces
-/// look). Returns the PRs cleared.
+/// settles: only the resolved change's marker. A spec-only verdict (`pr` is
+/// `None`) settles no change, so it leaves every change's marker intact.
+/// Checks the given root and the main clone (where merge surfaces look).
+/// Returns the PRs cleared.
 // trace:STORY-1405 | ai:claude
+// trace:BUG-2517 | ai:codex
 pub(crate) fn clear_review_markers_for_verdict(
     project_root: &std::path::Path,
-    spec: &str,
     pr: Option<u64>,
 ) -> Vec<u64> {
+    let Some(n) = pr else {
+        return Vec::new();
+    };
     let mut roots = vec![project_root.to_path_buf()];
     let main = main_worktree_root_from(project_root);
     if main != project_root {
@@ -2786,22 +2407,8 @@ pub(crate) fn clear_review_markers_for_verdict(
     }
     let mut cleared = Vec::new();
     for root in &roots {
-        let targets: Vec<u64> = match pr {
-            Some(n) => vec![n],
-            None => crate::gate::review_marker::list(root)
-                .into_iter()
-                .filter(|m| {
-                    m.spec
-                        .as_deref()
-                        .is_some_and(|s| s.eq_ignore_ascii_case(spec))
-                })
-                .map(|m| m.pr)
-                .collect(),
-        };
-        for n in targets {
-            if crate::gate::review_marker::clear(root, n) {
-                cleared.push(n);
-            }
+        if crate::gate::review_marker::clear(root, n) {
+            cleared.push(n);
         }
     }
     cleared
@@ -2930,6 +2537,46 @@ pub(crate) fn handle_review_record(
     )
 }
 
+// trace:BUG-2517 | ai:codex
+pub(crate) fn review_record_change(
+    leases: &[SessionLease],
+    tokens: &[String],
+    spec: &str,
+    pr: Option<u64>,
+    forge: crate::forge::ForgeKind,
+) -> Result<Option<crate::gate::ledger::ChangeKey>> {
+    use crate::gate::ledger::{ChangeForge, ChangeKey};
+    let mut leased = leases
+        .iter()
+        .filter(|lease| {
+            (lease.review_verb || lease.role.as_deref() == Some("reviewer"))
+                && tokens.contains(&format!("lease:{}", lease.id))
+        })
+        .filter_map(|lease| ChangeKey::parse(&lease.scope));
+    let leased_change = leased.next();
+    anyhow::ensure!(
+        leased.all(|c| Some(c) == leased_change),
+        "refused: reviewer is bound to multiple changes; nothing was recorded"
+    );
+    let named = ChangeKey::parse(spec);
+    let explicit = pr.map(|number| ChangeKey {
+        forge: leased_change
+            .or(named)
+            .map(|c| c.forge)
+            .unwrap_or(match forge {
+                crate::forge::ForgeKind::GitLab => ChangeForge::Mr,
+                _ => ChangeForge::Pr,
+            }),
+        number,
+    });
+    let change = leased_change.or(named).or(explicit);
+    anyhow::ensure!(
+        named.into_iter().chain(explicit).all(|c| Some(c) == change),
+        "refused: named change differs from the reviewer's leased change; nothing was recorded"
+    );
+    Ok(change)
+}
+
 /// `aida review classes` — count recorded findings per defect class across
 /// the whole verdict corpus (current files, per-sha archives, retained
 /// rounds). Read-only.
@@ -3040,7 +2687,7 @@ pub(crate) fn handle_review_record_at(
     finding_classes: &[String],
     pr: Option<u64>,
 ) -> Result<()> {
-    handle_review_record_policy_at(
+    handle_review_record_with_head_at(
         project_root,
         spec,
         verdict,
@@ -3051,6 +2698,7 @@ pub(crate) fn handle_review_record_at(
         finding_classes,
         pr,
         false,
+        fetch_review_record_head,
     )
 }
 
@@ -3067,10 +2715,133 @@ pub(crate) fn handle_review_record_policy_at(
     pr: Option<u64>,
     no_carry: bool,
 ) -> Result<()> {
+    handle_review_record_with_head_at(
+        project_root,
+        spec,
+        verdict,
+        sha,
+        branch,
+        summary,
+        findings,
+        finding_classes,
+        pr,
+        no_carry,
+        fetch_review_record_head,
+    )
+}
+
+// trace:BUG-2517 | ai:codex
+fn fetch_review_record_head(
+    root: &std::path::Path,
+    change: crate::gate::ledger::ChangeKey,
+) -> Result<String> {
+    let forge = match change.forge {
+        crate::gate::ledger::ChangeForge::Pr => crate::forge::ForgeKind::GitHub,
+        crate::gate::ledger::ChangeForge::Mr => crate::forge::ForgeKind::GitLab,
+    };
+    merge_hold::fetch_pinned_change(root, forge, change.number)
+        .and_then(|c| {
+            c.and_then(|c| c.head_sha).ok_or_else(|| {
+                format!(
+                    "the forge did not return {}'s current head",
+                    change.as_key()
+                )
+            })
+        })
+        .map_err(anyhow::Error::msg)
+}
+
+// Classify exactly the record whose findings the builder will inherit.
+// trace:BUG-2517 | ai:codex
+pub(crate) fn review_record_kind(
+    path: &std::path::Path,
+    verdict: &str,
+    findings: &[String],
+) -> Result<crate::gate::review_verdict::VerdictKind> {
+    Ok(if findings.is_empty() {
+        let mut obj = crate::gate::review_verdict::read_current_verdict_object(path)?;
+        obj.insert("verdict".into(), verdict.into());
+        obj.remove("sweep_pending");
+        crate::gate::review_verdict::disposition_verdict(&obj)
+    } else {
+        crate::gate::review_verdict::incoming_disposition(verdict, findings)
+    })
+}
+
+// Existing authority/lifecycle fixtures inject their current forge head; real
+// forge/head regressions call handle_review_record_at instead.
+// trace:BUG-2517 | ai:codex
+#[cfg(test)]
+pub(crate) fn handle_review_record_fixture_at(
+    project_root: std::path::PathBuf,
+    spec: &str,
+    verdict: &str,
+    sha: Option<&str>,
+    branch: Option<&str>,
+    summary: Option<&str>,
+    findings: &[String],
+    finding_classes: &[String],
+    pr: Option<u64>,
+) -> Result<()> {
+    handle_review_record_with_head_at(
+        project_root,
+        spec,
+        verdict,
+        sha,
+        branch,
+        summary,
+        findings,
+        finding_classes,
+        pr,
+        false,
+        |root, _| {
+            resolve_commit_sha(root, "HEAD").ok_or_else(|| anyhow::anyhow!("fixture has no HEAD"))
+        },
+    )
+}
+
+// trace:BUG-2517 | ai:codex
+pub(crate) fn handle_review_record_with_head_at(
+    project_root: std::path::PathBuf,
+    spec: &str,
+    verdict: &str,
+    sha: Option<&str>,
+    branch: Option<&str>,
+    summary: Option<&str>,
+    findings: &[String],
+    finding_classes: &[String],
+    pr: Option<u64>,
+    no_carry: bool,
+    current_head: impl Fn(&std::path::Path, crate::gate::ledger::ChangeKey) -> Result<String>,
+) -> Result<()> {
+    // The launcher's explicit verdict anchor routes collection independently
+    // of containment posture. This input grants no review authority.
+    // trace:BUG-2522 | ai:codex
+    let env = aida_core::exec_context::Environment::capture();
+    let launcher_collects_review = crate::session::process_contained()
+        || env
+            .get("AIDA_REVIEW_VERDICT_FILE")
+            .is_some_and(|p| !p.is_empty());
     // trace:STORY-1662 | ai:claude
     crate::standalone_implementer::refuse_under_marker("review record")?;
     #[cfg(test)]
     assert_review_write_root_is_isolated(&project_root);
+    // trace:BUG-2517 | ai:codex
+    // Resolve the recorder's change from its own lease, never from the spec.
+    let leases = crate::gate::review_authority::visible_leases(&project_root);
+    let recorder_identity = crate::gate::review_authority::RecorderIdentity::current(&leases);
+    let change = review_record_change(
+        &leases,
+        &recorder_identity.tokens,
+        spec,
+        pr,
+        crate::forge::resolve_open_change_forge_kind(&project_root),
+    )?;
+    let pr = change.map(|c| c.number);
+    let key = change
+        .map(|c| c.as_key())
+        .unwrap_or_else(|| spec.to_string());
+    let path = crate::gate::review_verdict::verdict_path(&project_root, &key);
     // STORY-1417: resolve classes up front; a bad class is a warning, never a
     // reason to refuse the verdict. trace:STORY-1417 | ai:claude
     let (classes, class_warnings) =
@@ -3083,15 +2854,7 @@ pub(crate) fn handle_review_record_policy_at(
     }
     // trace:STORY-2698 | ai:codex — decide hold/authority routing using the
     // same inherited evidence the builder will retain, before any mutation.
-    let kind = if findings.is_empty() {
-        let path = crate::gate::review_verdict::verdict_path(&project_root, spec);
-        let mut obj = crate::gate::review_verdict::read_current_verdict_object(&path)?;
-        obj.insert("verdict".into(), verdict.into());
-        obj.remove("sweep_pending");
-        crate::gate::review_verdict::disposition_verdict(&obj)
-    } else {
-        crate::gate::review_verdict::incoming_disposition(verdict, findings)
-    };
+    let kind = review_record_kind(&path, verdict, findings)?;
     // trace:BUG-2527 | ai:claude — refuse before the verdict is canonicalized
     // to the disposition, so an explicit approval never silently becomes
     // CHANGES REQUESTED.
@@ -3133,72 +2896,15 @@ pub(crate) fn handle_review_record_policy_at(
         anyhow::bail!("refused: review record. {rejection}.");
     }
 
-    // A from-PR reviewer receives the forge-resolved head in its launch
-    // envelope. Prefer it to a checkout's HEAD, which may be stale or may be
-    // the drive root rather than the review worktree.
-    // trace:BUG-1467 | ai:codex
-    let envelope_pr_sha = pr
-        .and_then(|_| std::env::var("AIDA_FROM_PR_HEAD_SHA").ok())
-        .filter(|s| !s.trim().is_empty());
-    let forge_pr_sha = if envelope_pr_sha.is_none() {
-        match pr {
-            // TASK-1455: the verdict's head is read from the PINNED repo and
-            // refused if the forge answers for any other repo, so a PR number
-            // can never stamp this verdict with another repo's head.
-            // trace:TASK-1455 | ai:claude
-            Some(n) => {
-                let head = merge_hold::fetch_pinned_change(
-                    &project_root,
-                    crate::forge::resolve_open_change_forge_kind(&project_root),
-                    n,
-                )
-                .and_then(|change| {
-                    change
-                        .ok_or_else(|| "this project has no forge (pure-git)".to_string())?
-                        .head_sha
-                        .ok_or_else(|| format!("the forge did not return a head SHA for #{n}"))
-                })
-                .map_err(|e| anyhow::anyhow!(e));
-                match head {
-                    Ok(head) => Some(head),
-                    // With `--sha` an unreachable forge is not fatal: the
-                    // head under review falls back to the checkout's HEAD
-                    // below (advisor ruling on BUG-b6b1278890774ef993d2ebc327862470-013), so the typed sha is
-                    // still checked against a commit git resolved. Without
-                    // `--sha` the forge head IS the head, so it must answer.
-                    Err(_) if sha.is_some() => None,
-                    Err(e) => {
-                        return Err(e).with_context(|| {
-                            format!(
-                                "could not resolve PR {n}'s current head for the verdict; pass `--sha <commit>` explicitly"
-                            )
-                        });
-                    }
-                }
-            }
-            None => None,
-        }
-    } else {
-        None
-    };
-    // The head under review, in the same order the default has always used:
-    // the launch envelope's PR head, the forge's PR head, then the checkout.
-    let checkout_stands_in_for_pr =
-        pr.is_some() && envelope_pr_sha.is_none() && forge_pr_sha.is_none();
-    let tool_head = envelope_pr_sha
-        .or(forge_pr_sha)
+    // A launch envelope describes the launch, not the change's current head.
+    // Even an explicit --sha must be checked against a fresh pinned forge read.
+    let forge_pr_sha = change
+        .map(|change| current_head(&project_root, change))
+        .transpose()?;
+    let tool_head = forge_pr_sha
         .or_else(|| resolve_commit_sha(&project_root, branch.as_deref().unwrap_or("HEAD")))
         .or_else(|| resolve_commit_sha(&project_root, "HEAD"));
-    // A `--pr` whose forge could not answer is checked against the checkout,
-    // and omitting `--sha` would then fail on that same forge read — so the
-    // refusal must not send the caller there.
-    let remedy = if checkout_stands_in_for_pr {
-        "the forge did not report the PR's head, so the checkout's HEAD stands in for it: \
-         record from the review worktree checked out at the PR head, or retry once the forge \
-         is reachable"
-    } else {
-        "review that head, or omit `--sha` to record it"
-    };
+    let remedy = "review the named change's current head and retry";
     // BUG-b6b1278890774ef993d2ebc327862470-013: a typed `--sha` is the model's copy of a commit id, and one
     // mistyped character discarded a complete review at collection. Resolve
     // it with git and refuse here — at record time, with a clear message —
@@ -3304,6 +3010,16 @@ pub(crate) fn handle_review_record_policy_at(
             }
         }
     }
+    // trace:BUG-2517 | ai:codex
+    // Authority checks and a human challenge may outlive the initial read.
+    // Revalidate before receipts, holds, verdicts or coordination mutate state.
+    if let Some(change) = change {
+        let current = current_head(&project_root, change)?;
+        anyhow::ensure!(crate::gate::review_verdict::same_reviewed_sha(
+            resolved_sha.as_deref().unwrap_or_default(), &current),
+            "refused: {}'s head moved to {current}; review its current head and retry; nothing was recorded",
+            change.as_key());
+    }
     // BUG-1918: a human who passed the TTY floor leaves a receipt in the
     // user's AIDA home; the ship gate re-reads it instead of trusting the
     // `human_at_tty` flag stored beside the verdict.
@@ -3364,55 +3080,16 @@ pub(crate) fn handle_review_record_policy_at(
         );
     }
 
-    // A refusal is a protection event, not merely metadata. Arm the local
-    // merge chokepoint before publishing the verdict; mirroring the label also
-    // protects raw forge/UI merges when branch policy consumes it. The hold is
-    // later approval can release only an eligible Rework-only hold through
-    // the recorded release seam below; all other kinds keep human clear.
-    // trace:BUG-1452 trace:STORY-1687 | ai:codex
-    if kind.requires_changes() {
-        let n = pr.ok_or_else(|| {
-            anyhow::anyhow!(
-                "a refusing verdict must name `--pr <N>` so AIDA can protect the pull request"
-            )
-        })?;
-        // BUG-1536: exactly one root for the whole call — `project_root`, the
-        // parameter — so a hold and its label can never target a different
-        // tree than the verdict itself. STORY-1397 / BUG-1532 / BUG-1562: the
-        // hold is typed Rework, references this verdict record and states
-        // its release condition ([`refusal_hold`]).
-        // trace:BUG-1536 trace:STORY-1397 trace:BUG-1532 trace:BUG-1562 | ai:claude
-        //
-        // M1 slice 2: a contained reviewer cannot write the gate ledger; the
-        // launcher that started it arms this hold when it collects the
-        // verdict. trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
-        let hold = crate::gate::merge_hold_core::refusal_hold(
-            n,
-            spec,
-            kind.label(),
-            resolved_sha.clone(),
-            Some(recorded_by.clone()),
+    // Validate the refusal target before writing any record.
+    // trace:BUG-2522 | ai:codex
+    if kind.requires_changes() && pr.is_none() {
+        anyhow::bail!(
+            "a refusing verdict must name `--pr <N>` so AIDA can protect the pull request"
         );
-        if crate::session::process_contained() {
-            eprintln!(
-                "  {} PR-{n}'s merge hold is armed by the launcher when it collects this verdict",
-                crate::glyph(crate::glyphs::Glyph::Info).cyan(),
-            );
-        } else {
-            crate::gate::merge_hold_core::place_hold(&project_root, &hold)
-                .with_context(|| format!("could not protect PR-{n} with a merge hold"))?;
-            if let Err(err) = merge_hold::sync_label(&project_root, n, true) {
-                eprintln!(
-                    "  {} merge-hold label not applied on PR-{n}: {err} — the local merge chokepoint remains armed; run `aida merge-hold list --fix`",
-                    crate::glyph(crate::glyphs::Glyph::Warning).yellow(),
-                );
-            }
-        }
     }
     // STORY-1417: build + classify + one verified write — the same boundary
     // `record_verdict` uses, with the typed classes layered on before the
     // single durable write (BUG-1571). trace:STORY-1417 | ai:claude
-    let path = crate::gate::review_verdict::verdict_path(&project_root, spec);
     // BUG-2136: snapshot the record as it stands so the outcome line can say
     // whether this call added a round or re-recorded an identical one.
     // trace:BUG-2136 | ai:claude
@@ -3433,6 +3110,14 @@ pub(crate) fn handle_review_record_policy_at(
         Some(!no_carry),
     )
     .with_context(|| "could not write the review verdict")?;
+    // trace:BUG-2517 | ai:codex
+    // A local spec-only review has no change binding. Never route it via the
+    // spec's most recently indexed PR, which may be unrelated to this review.
+    if change.is_none() {
+        verdict_obj.insert("change_binding".into(), serde_json::json!("unbound"));
+    } else {
+        verdict_obj.remove("change_binding");
+    }
     // trace:STORY-1687 | ai:codex
     crate::gate::rework_hold_release::stamp_record_grant(&project_root, &mut verdict_obj);
     review_classes::apply_finding_classes(&mut verdict_obj, findings, &classes);
@@ -3447,7 +3132,7 @@ pub(crate) fn handle_review_record_policy_at(
         .and_then(|v| v.as_str())
         .map(str::to_string)
         .or_else(|| resolved_sha.clone());
-    crate::gate::review_verdict::write_verdict_object(&path, &verdict_obj)
+    crate::gate::review_verdict::write_verdict_object_for_spec(&path, &verdict_obj, Some(spec))
         .with_context(|| "could not write the review verdict")?;
     // PRIN-5 / BUG-1571: never report a record this process has not itself
     // just read back. M1 slice 2: read back from where the gates read it —
@@ -3460,10 +3145,11 @@ pub(crate) fn handle_review_record_policy_at(
         );
     }
     // STORY-1405: the verdict is on disk, so the review is no longer "in
-    // progress" — clear the PR's marker (by `--pr`, else any marker naming
-    // this spec) so merge surfaces now read the verdict instead.
+    // progress" — clear the resolved change's marker so merge surfaces now
+    // read the verdict instead. A spec-only verdict clears no change marker.
     // trace:STORY-1405 | ai:claude
-    clear_review_markers_for_verdict(&project_root, spec, pr);
+    // trace:BUG-2517 | ai:codex
+    clear_review_markers_for_verdict(&project_root, pr);
     // TASK-1450: a recorded review verdict is a reviewer-seat coordination
     // decision — the other gap BUG-1423's event feed left (that bug closed
     // the merge-path gap; this is the review-path gap). Emitted only after
@@ -3508,45 +3194,6 @@ pub(crate) fn handle_review_record_policy_at(
             }
         }
     }
-    if kind.requires_changes() {
-        let detail = summary
-            .filter(|s| !s.trim().is_empty())
-            .unwrap_or_else(|| kind.label());
-        let recovery = format!(
-            "address the review findings, move {} back to In Progress, and clear the PR hold only after approval",
-            spec.to_ascii_uppercase()
-        );
-        match shelve_spec_on_failure(
-            &project_root,
-            spec,
-            "reviewer",
-            3,
-            match kind {
-                crate::gate::review_verdict::VerdictKind::RequestChanges => {
-                    "verdict:request-changes"
-                }
-                crate::gate::review_verdict::VerdictKind::Rejected => "verdict:rejected",
-                _ => unreachable!("blocks_done only covers refusing verdicts"),
-            },
-            detail,
-            &recovery,
-        )? {
-            Some(_) => println!(
-                "  {} {} parked in Needs Attention and surfaced by `aida awaiting`.",
-                crate::glyph(crate::glyphs::Glyph::SubArrow).dimmed(),
-                spec.to_ascii_uppercase()
-            ),
-            None => anyhow::bail!(
-                "recorded the refusal and merge hold, but could not park {} in Needs Attention",
-                spec.to_ascii_uppercase()
-            ),
-        }
-        println!(
-            "  {} `aida queue done {}` will refuse until the branch moves past that commit.",
-            crate::glyph(crate::glyphs::Glyph::SubArrow).dimmed(),
-            spec.to_ascii_uppercase()
-        );
-    }
     println!(
         "  {} {}",
         "record:".dimmed(),
@@ -3566,7 +3213,7 @@ pub(crate) fn handle_review_record_policy_at(
                 hook(&project_root, spec);
             }
         });
-        let handshake = review_pr_handshake_path(&project_root, n);
+        let handshake = review_pr_handshake_path(&project_root, &key);
         // trace:BUG-1743 | ai:claude
         #[cfg(test)]
         assert_handshake_anchor_is_pinned(&project_root, &handshake);
@@ -3581,7 +3228,7 @@ pub(crate) fn handle_review_record_policy_at(
         // in-memory object, never from a re-read a concurrent reviewer could
         // have replaced. The read-back stays as the existence check.
         // trace:BUG-2403 | ai:claude
-        crate::gate::review_verdict::read_recorded_verdict(&project_root, spec)
+        crate::gate::review_verdict::read_recorded_verdict(&project_root, &key)
             .ok_or_else(|| anyhow::anyhow!("the verdict was written but could not be read back"))?;
         let origin_field = |k: &str| verdict_obj.get(k).and_then(|v| v.as_str());
         // BUG-1571: build the full handshake object (base fields + the
@@ -3655,7 +3302,8 @@ pub(crate) fn handle_review_record_policy_at(
                     err.kind(),
                     std::io::ErrorKind::PermissionDenied | std::io::ErrorKind::ReadOnlyFilesystem
                 );
-                let contained = refused && crate::session::process_contained();
+                // trace:BUG-2522 | ai:codex
+                let contained = refused && launcher_collects_review;
                 let Some(fallback) =
                     contained_handshake_fallback(&project_root, &handshake, contained)
                 else {
@@ -3699,6 +3347,87 @@ pub(crate) fn handle_review_record_policy_at(
             "  {} {} (phase-3 handshake — the orchestrator reads this to proceed)",
             "handshake:".dimmed(),
             handshake.display().to_string().dimmed()
+        );
+    }
+    // Both verdict artifacts are durable before hold or spec-state side effects.
+    // A failed hold must leave a collectable refusal behind.
+    // trace:BUG-2522 | ai:codex
+    if kind.requires_changes() {
+        let n = pr.ok_or_else(|| {
+            anyhow::anyhow!(
+                "a refusing verdict must name `--pr <N>` so AIDA can protect the pull request"
+            )
+        })?;
+        // BUG-1536: exactly one root for the whole call — `project_root`, the
+        // parameter — so a hold and its label can never target a different
+        // tree than the verdict itself. STORY-1397 / BUG-1532 / BUG-1562: the
+        // hold is typed Rework, references this verdict record and states
+        // its release condition ([`refusal_hold`]).
+        // trace:BUG-1536 trace:STORY-1397 trace:BUG-1532 trace:BUG-1562 | ai:claude
+        //
+        // M1 slice 2: a contained reviewer cannot write the gate ledger; the
+        // launcher that started it arms this hold when it collects the
+        // verdict. trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
+        let hold = crate::gate::merge_hold_core::refusal_hold(
+            n,
+            spec,
+            kind.label(),
+            resolved_sha.clone(),
+            Some(recorded_by.clone()),
+        );
+        if launcher_collects_review {
+            eprintln!(
+                "  {} PR-{n}'s merge hold is armed by the launcher when it collects this verdict",
+                crate::glyph(crate::glyphs::Glyph::Info).cyan(),
+            );
+        } else {
+            crate::gate::merge_hold_core::place_hold(&project_root, &hold)
+                .with_context(|| format!("verdict recorded, but could not protect PR-{n} with a merge hold; run `aida review stranded --fix`"))?;
+            if let Err(err) = merge_hold::sync_label(&project_root, n, true) {
+                eprintln!(
+                    "  {} merge-hold label not applied on PR-{n}: {err} — the local merge chokepoint remains armed; run `aida merge-hold list --fix`",
+                    crate::glyph(crate::glyphs::Glyph::Warning).yellow(),
+                );
+            }
+        }
+    }
+    if kind.requires_changes() {
+        let detail = summary
+            .filter(|s| !s.trim().is_empty())
+            .unwrap_or_else(|| kind.label());
+        let recovery = format!(
+            "address the review findings, move {} back to In Progress, and clear the PR hold only after approval",
+            spec.to_ascii_uppercase()
+        );
+        match shelve_spec_on_failure(
+            &project_root,
+            spec,
+            "reviewer",
+            3,
+            match kind {
+                crate::gate::review_verdict::VerdictKind::RequestChanges => {
+                    "verdict:request-changes"
+                }
+                crate::gate::review_verdict::VerdictKind::Rejected => "verdict:rejected",
+                _ => unreachable!("blocks_done only covers refusing verdicts"),
+            },
+            detail,
+            &recovery,
+        )? {
+            Some(_) => println!(
+                "  {} {} parked in Needs Attention and surfaced by `aida awaiting`.",
+                crate::glyph(crate::glyphs::Glyph::SubArrow).dimmed(),
+                spec.to_ascii_uppercase()
+            ),
+            None => anyhow::bail!(
+                "recorded the refusal, but could not park {} in Needs Attention",
+                spec.to_ascii_uppercase()
+            ),
+        }
+        println!(
+            "  {} `aida queue done {}` will refuse until the branch moves past that commit.",
+            crate::glyph(crate::glyphs::Glyph::SubArrow).dimmed(),
+            spec.to_ascii_uppercase()
         );
     }
     Ok(())
@@ -4061,7 +3790,7 @@ mod bug_1452_refusal_aftermath_tests {
         // trace:BUG-1743 | ai:claude
         // BUG-b6b1278890774ef993d2ebc327862470-013: a typed `--sha` must resolve to a real commit.
         let head = crate::test_git::commit_fixture(root.path());
-        handle_review_record_at(
+        handle_review_record_fixture_at(
             root.path().to_path_buf(),
             "BUG-14520",
             "request-changes",
@@ -4139,7 +3868,7 @@ mod bug_1452_refusal_aftermath_tests {
         // repository, and `handle_review_record_at` had already read it back
         // and confirmed its bytes. The claim that has to hold is about WHERE.
         // trace:BUG-1743 | ai:claude
-        let handshake = review_pr_handshake_path(root.path(), 1452);
+        let handshake = review_pr_handshake_path(root.path(), "PR-1452");
         assert!(
             handshake.starts_with(root.path()),
             "the phase-3 handshake anchor must resolve inside this test's own \
@@ -4224,7 +3953,7 @@ mod bug_1452_refusal_aftermath_tests {
         // real merged PR purely by chance.
         // BUG-b6b1278890774ef993d2ebc327862470-013: a typed `--sha` must resolve to a real commit.
         let head = crate::test_git::commit_fixture(explicit_root.path());
-        handle_review_record_at(
+        handle_review_record_fixture_at(
             explicit_root.path().to_path_buf(),
             "BUG-99999",
             "request-changes",
@@ -4578,903 +4307,4 @@ pub(crate) fn handle_review_list(json: bool) -> Result<()> {
     }
 
     Ok(())
-}
-
-/// trace:STORY-67 | ai:claude
-pub(crate) fn generate_review_prompt(
-    storage: &Storage,
-    specs_csv: Option<&str>,
-    pr: Option<u64>,
-    forge_override: Option<&str>,
-    write_path: Option<&str>,
-) -> Result<()> {
-    let store = storage.load()?;
-
-    // Resolve the spec list. Preference order: --specs explicit,
-    // --pr range parse, error if neither.
-    // trace:BUG-1434 | ai:claude
-    let (spec_ids, header_subtitle, staleness_note): (Vec<String>, String, Option<String>) =
-        if let Some(csv) = specs_csv {
-            let ids: Vec<String> = csv
-                .split(',')
-                .map(|s| s.trim().to_string())
-                .filter(|s| !s.is_empty())
-                .collect();
-            if ids.is_empty() {
-                anyhow::bail!("--specs was empty after splitting on commas");
-            }
-            (ids.clone(), format!("Specs: {}", ids.join(", ")), None)
-        } else if let Some(pr_n) = pr {
-            let project_root = find_project_root()?;
-            let forge = forge_override
-                .and_then(ReviewForge::parse)
-                .or_else(|| detect_forge_from_origin(&project_root))
-                .ok_or_else(|| {
-                    anyhow::anyhow!(
-                        "couldn't detect forge from origin URL — pass --forge github|gitlab"
-                    )
-                })?;
-            let (base, head) = pr_base_head(&project_root, forge, pr_n)?;
-            let messages = git_log_messages(&project_root, &base, &head)?;
-            let mut ids: Vec<String> = Vec::new();
-            for msg in &messages {
-                for id in extract_spec_ids_from_commit(msg) {
-                    if !ids
-                        .iter()
-                        .any(|existing| existing.eq_ignore_ascii_case(&id))
-                    {
-                        ids.push(id);
-                    }
-                }
-            }
-            if ids.is_empty() {
-                anyhow::bail!(
-                    "no `(REQ-ID)` trailers found in {}..{} ({} commits inspected)",
-                    base,
-                    head,
-                    messages.len()
-                );
-            }
-            let label = match forge {
-                ReviewForge::GitHub => format!("PR #{} — branch `{}`", pr_n, head),
-                ReviewForge::GitLab => format!("MR !{} — branch `{}`", pr_n, head),
-            };
-            let note = stale_base_note(&project_root, &head, &base);
-            (ids, label, note)
-        } else {
-            anyhow::bail!("pass --specs <CSV> or --pr <N>");
-        };
-
-    // Compose the markdown.
-    let mut out = String::new();
-    out.push_str("# Review Prompt\n\n");
-    out.push_str(&header_subtitle);
-    out.push_str("\n\n");
-    if let Some(note) = &staleness_note {
-        out.push_str("## Staleness\n\n");
-        out.push_str(note);
-        out.push('\n');
-    }
-    out.push_str("## What to verify\n\n");
-
-    let mut missing: Vec<String> = Vec::new();
-    for id in &spec_ids {
-        // TASK-72 polish: PR/MR pseudo-IDs (e.g., `PR-9`, `MR-42`) aren't
-        // real specs in the store — they're forge references that can
-        // sneak into the trailer-extracted list. Skip them silently so
-        // the review prompt doesn't lead with a misleading
-        // "PR-9 — (not found in store)" row before the real spec list.
-        // trace:TASK-72 | ai:claude
-        if parse_review_scope(id).is_some() {
-            continue;
-        }
-        let req = store
-            .requirements
-            .iter()
-            .find(|r| r.spec_id.as_deref() == Some(id.as_str()))
-            .or_else(|| {
-                uuid::Uuid::parse_str(id)
-                    .ok()
-                    .and_then(|u| store.requirements.iter().find(|r| r.id == u))
-            });
-        let Some(req) = req else {
-            out.push_str(&format!("### {}\n\n_(not found in store)_\n\n", id));
-            missing.push(id.clone());
-            continue;
-        };
-        out.push_str(&format!(
-            "### {} — {}\n\n",
-            req.spec_id.as_deref().unwrap_or(id.as_str()),
-            req.title
-        ));
-        match extract_acceptance_section(&req.description) {
-            Some(body) => {
-                out.push_str(&body);
-                out.push_str("\n\n");
-            }
-            None => {
-                out.push_str("_(no `## Acceptance` / `## Verify` section in description — review against the requirement title and description.)_\n\n");
-            }
-        }
-        append_implementer_approach(&mut out, &req.comments);
-    }
-
-    out.push_str(review_prompt_test_commands_section());
-
-    out.push_str("## Decide\n\n");
-    out.push_str(
-        "If every item above passes: approve and merge (`gh pr merge --squash` / \
-         `glab mr merge --squash`), then mark each linked req `completed`.\n\n",
-    );
-    out.push_str(
-        "If any item fails: request changes with specifics tied to the spec_id, \
-         so the contributor can address them by id (not by paraphrase).\n",
-    );
-
-    if let Some(path) = write_path {
-        std::fs::write(path, &out)
-            .with_context(|| format!("failed to write review prompt to {}", path))?;
-        eprintln!(
-            "{} review prompt written to {} ({} spec{}{})",
-            crate::glyph(crate::glyphs::Glyph::Check).green().bold(),
-            path,
-            spec_ids.len(),
-            if spec_ids.len() == 1 { "" } else { "s" },
-            if missing.is_empty() {
-                String::new()
-            } else {
-                format!(", {} missing in store", missing.len())
-            },
-        );
-    } else {
-        print!("{}", out);
-    }
-    Ok(())
-}
-
-/// The heading the pickup skill writes and the review prompt reads.
-///
-/// ONE constant for BOTH SIDES OF A HANDSHAKE THAT SPANS A TEMPLATE AND A
-/// PARSER. The writer is `aida-core/templates/skills/aida-pickup.md`, the
-/// reader is `extract_implementer_approach` below, and nothing in the type
-/// system connects them — edit the heading in the template alone and the
-/// reader silently stops matching, leaving reviews quietly missing the
-/// approach with no error anywhere. The coupling test in
-/// `story_1350_review_approach_tests` reads the template and asserts this
-/// exact string appears in it, so the two cannot drift apart in one edit.
-// trace:STORY-1350 | ai:claude
-pub(crate) const IMPLEMENTER_APPROACH_MARKER: &str = "## Implementer approach";
-
-/// Return the newest durable implementation-intent comment. The exact first
-/// heading is the stable marker written by the pickup skill; ordinary comments
-/// that merely mention an approach must not leak into the review checklist.
-// trace:STORY-1350 | ai:codex
-pub(crate) fn extract_implementer_approach(
-    comments: &[aida_core::models::Comment],
-) -> Option<&str> {
-    comments.iter().rev().find_map(|comment| {
-        let first_line = comment.content.trim_start().lines().next()?;
-        (first_line.trim_end() == IMPLEMENTER_APPROACH_MARKER).then_some(comment.content.trim())
-    })
-}
-
-// trace:STORY-1350 | ai:codex
-/// Emit the recorded approach, or SAY THAT THERE IS NONE.
-///
-/// Silence here is indistinguishable from "the implementer recorded nothing"
-/// and from "the section was dropped", and a reviewer reading a prompt with no
-/// approach section cannot tell which. Absent evidence has to look different
-/// from good evidence, so the absence is stated rather than left as a gap.
-// trace:STORY-1350 | ai:claude
-pub(crate) fn append_implementer_approach(
-    out: &mut String,
-    comments: &[aida_core::models::Comment],
-) {
-    match extract_implementer_approach(comments) {
-        Some(approach) => {
-            out.push_str("#### Recorded implementer approach\n\n");
-            out.push_str(approach);
-            out.push_str("\n\n");
-        }
-        None => {
-            out.push_str("#### Recorded implementer approach\n\n");
-            // The marker comes from the constant here too. Spelling it out
-            // again would make this the THIRD copy — the prose that TELLS a
-            // human what to write, drifting from the parser that reads it, so
-            // a rename would leave the system parsing X while instructing
-            // people to write Y. The coupling test covers this string.
-            out.push_str(&format!(
-                "_None recorded._ The implementer did not leave a comment beginning \
-                 `{IMPLEMENTER_APPROACH_MARKER}`, so this review has no stated intent \
-                 to check the diff against.\n\n"
-            ));
-        }
-    }
-}
-
-// trace:BUG-800 | ai:codex
-pub(crate) fn review_prompt_test_commands_section() -> &'static str {
-    "## Test Commands\n\n\
-     When you name focused tests, name the runnable command, not a bare test \
-     identifier. For Rust, use `cargo test -p <crate> <test_name>` (or the \
-     exact workspace/package command you ran) so the next agent does not \
-     pass the test name to the wrong binary.\n\n"
-}
-
-/// trace:STORY-67 | ai:claude
-pub(crate) fn pr_base_head(
-    project_root: &std::path::Path,
-    forge: ReviewForge,
-    n: u64,
-) -> Result<(String, String)> {
-    // STORY-1164: route the review-prompt metadata read through the Forge trait
-    // instead of hand-rolling `gh pr view` / `glab mr view` here. The provider
-    // owns CLI resolution, retry behavior, and GitLab's REST-shaped metadata.
-    if let Ok(m) = crate::forge::forge_for_kind(project_root, forge.forge_kind())
-        .change_metadata(n, &mut network_retry::NoopSink)
-    {
-        if !m.base_ref.is_empty() && !m.head_ref.is_empty() {
-            return Ok((m.base_ref, m.head_ref));
-        }
-    }
-
-    // Fallback: pure-git. We don't know the contributor's base branch,
-    // so we point at `main` (the most common case in this codebase) and
-    // set `head` to the local review branch (`pr-N` / `mr-N`) the user
-    // is presumed to have fetched via `aida session start --owns PR-N`
-    // (STORY-61). Tell the user.
-    eprintln!(
-        "{} couldn't resolve PR base/head via {} — falling back to base=main, head={}-{}; \
-         pass an explicit base via `git log <base>..<head>` if this is wrong.",
-        "Note:".yellow().bold(),
-        forge.cli_name(),
-        if matches!(forge, ReviewForge::GitHub) {
-            "pr"
-        } else {
-            "mr"
-        },
-        n
-    );
-    let head = match forge {
-        ReviewForge::GitHub => format!("pr-{}", n),
-        ReviewForge::GitLab => format!("mr-{}", n),
-    };
-    Ok(("main".to_string(), head))
-}
-
-/// How many commits `origin/<base>` (the default branch's last-fetched
-/// state) is ahead of `head` — i.e. how far the PR's tree trails the
-/// branch its checks and findings are compared against. Purely local: it
-/// reads whatever `origin/<base>` already points at and never fetches, so
-/// it's cheap enough to run on every prompt generation.
-///
-/// Returns `None` when the count can't be resolved (no such
-/// remote-tracking ref locally, `head` not resolvable, git not on PATH,
-/// …). Callers must render that as "unknown", never as `0` — a `0` reads
-/// as "you're current" while `None` means "we don't know", and conflating
-/// them turns absent evidence into false reassurance.
-// trace:BUG-1434 | ai:claude
-pub(crate) fn commits_behind_default(
-    project_root: &std::path::Path,
-    head: &str,
-    base: &str,
-) -> Option<u64> {
-    let remote_base = format!("origin/{}", base);
-    let range = format!("{}..{}", head, remote_base);
-    let out = std::process::Command::new("git")
-        .arg("-C")
-        .arg(project_root)
-        // trace:BUG-1622 | ai:claude
-        .args(["rev-list", "--count", git_arg_guard::END_OF_OPTIONS, &range])
-        .output()
-        .ok()?;
-    if !out.status.success() {
-        return None;
-    }
-    String::from_utf8_lossy(&out.stdout)
-        .trim()
-        .parse::<u64>()
-        .ok()
-}
-
-/// `git diff --name-only <a>...<b>` (triple-dot: files changed on `b`
-/// since its merge-base with `a`). Best-effort — any git failure yields an
-/// empty list rather than an error, since overlap is a nicety layered on
-/// top of the commits-behind count, not load-bearing on its own.
-// trace:BUG-1434 | ai:claude
-pub(crate) fn git_diff_name_only(project_root: &std::path::Path, a: &str, b: &str) -> Vec<String> {
-    let range = format!("{}...{}", a, b);
-    let Ok(out) = std::process::Command::new("git")
-        .arg("-C")
-        .arg(project_root)
-        // trace:BUG-1622 | ai:claude
-        .args([
-            "diff",
-            "--name-only",
-            git_arg_guard::END_OF_OPTIONS,
-            &range,
-            "--",
-        ])
-        .output()
-    else {
-        return Vec::new();
-    };
-    if !out.status.success() {
-        return Vec::new();
-    }
-    String::from_utf8_lossy(&out.stdout)
-        .lines()
-        .map(|l| l.trim().to_string())
-        .filter(|l| !l.is_empty())
-        .collect()
-}
-
-/// Files the intervening commits (`head..origin/<base>`) touch that the
-/// PR's own commits (`base..head`) also touch — the overlap where a stale
-/// base is most likely to distort a check or finding (acceptance #2 of
-/// this bug). Best-effort like `git_diff_name_only`: any git failure
-/// yields an empty overlap rather than an error.
-// trace:BUG-1434 | ai:claude
-pub(crate) fn stale_base_file_overlap(
-    project_root: &std::path::Path,
-    head: &str,
-    base: &str,
-) -> Vec<String> {
-    let remote_base = format!("origin/{}", base);
-    let intervening = git_diff_name_only(project_root, head, &remote_base);
-    let pr_own = git_diff_name_only(project_root, base, head);
-    let pr_own_set: std::collections::HashSet<&str> = pr_own.iter().map(|s| s.as_str()).collect();
-    let mut overlap: Vec<String> = intervening
-        .into_iter()
-        .filter(|f| pr_own_set.contains(f.as_str()))
-        .collect();
-    overlap.sort();
-    overlap.dedup();
-    overlap
-}
-
-/// Render the staleness section for `generate_review_prompt`'s `--pr` path.
-/// `None` means "say nothing" — either the head is level with
-/// `origin/<base>` (acceptance #5: no extra output when current) or the
-/// figure legitimately can't be computed and the caller has already fallen
-/// back to a different note. `commits_behind_default` returning `None`
-/// (PRIN-5: absent evidence, not a false `0`) still produces `Some` text
-/// here, stating "unknown" explicitly rather than omitting the section.
-// trace:BUG-1434 | ai:claude
-pub(crate) fn stale_base_note(
-    project_root: &std::path::Path,
-    head: &str,
-    base: &str,
-) -> Option<String> {
-    match commits_behind_default(project_root, head, base) {
-        None => Some(format!(
-            "PR head is an unknown number of commits behind `{base}` — the local \
-             `origin/{base}` ref couldn't be resolved, so staleness could not be computed. \
-             Treat the checks and findings below as unverified against the current default \
-             branch.\n"
-        )),
-        Some(0) => None,
-        Some(n) => {
-            let plural = if n == 1 { "" } else { "s" };
-            let mut note = format!(
-                "PR head is {n} commit{plural} behind `{base}` — the checks and findings below \
-                 were computed against a tree that far behind the default branch.\n"
-            );
-            let overlap = stale_base_file_overlap(project_root, head, base);
-            if !overlap.is_empty() {
-                let files = overlap
-                    .iter()
-                    .map(|f| format!("`{f}`"))
-                    .collect::<Vec<_>>()
-                    .join(", ");
-                note.push_str(&format!(
-                    "This PR also touches file{} those {n} intervening commit{plural} touched, \
-                     the case where findings are most likely distorted: {files}\n",
-                    if overlap.len() == 1 { "" } else { "s" }
-                ));
-            }
-            Some(note)
-        }
-    }
-}
-
-/// True when `rev` names a commit in the repo at `project_root`.
-fn git_rev_resolves(project_root: &std::path::Path, rev: &str) -> bool {
-    aida_core::git_ops::host_git_command(project_root)
-        .args(["rev-parse", "--verify", "--quiet"])
-        .arg(format!("{rev}^{{commit}}"))
-        .output()
-        .map(|o| o.status.success())
-        .unwrap_or(false)
-}
-
-/// Refresh `refs/remotes/origin/<branch>` from origin. Best effort: a missing
-/// branch or an unreachable origin leaves the ref as it was.
-fn fetch_origin_branch(project_root: &std::path::Path, branch: &str) {
-    use aida_core::git_ops::RemoteCredentialsExt as _;
-    let _ = aida_core::git_ops::host_git_command(project_root)
-        .env("GIT_TERMINAL_PROMPT", "0")
-        .args(["fetch", "--quiet", "--no-tags", "origin"])
-        .arg(format!("+refs/heads/{branch}:refs/remotes/origin/{branch}"))
-        // trace:BUG-2181 | ai:claude
-        .remote_credentials(project_root, "origin")
-        .output();
-}
-
-/// Resolve a forge's bare `base`/`head` branch names into a range this
-/// checkout can actually log. A contained lane pushes its branch from a seat
-/// clone, so the primary may have no local `<head>` at all, and whatever
-/// `origin/<head>` it has may predate the lane's latest push. In that case
-/// both ends are re-fetched from origin (a stale `origin/<base>` would pull
-/// already-merged trailers into the range) and the range is
-/// `origin/<base>..origin/<head>`. Leaves the names untouched when `head`
-/// resolves locally or nothing on origin does, so the caller's `git log`
-/// error names the range.
-// trace:BUG-B6B1278890774EF993D2EBC327862470-035 | ai:claude
-pub(crate) fn resolve_log_range(
-    project_root: &std::path::Path,
-    base: &str,
-    head: &str,
-) -> (String, String) {
-    if git_rev_resolves(project_root, head) {
-        return (base.to_string(), head.to_string());
-    }
-    fetch_origin_branch(project_root, head);
-    let remote_head = format!("origin/{head}");
-    if !git_rev_resolves(project_root, &remote_head) {
-        return (base.to_string(), head.to_string());
-    }
-    fetch_origin_branch(project_root, base);
-    let remote_base = format!("origin/{base}");
-    let base = if git_rev_resolves(project_root, &remote_base) {
-        remote_base
-    } else {
-        base.to_string()
-    };
-    (base, remote_head)
-}
-
-/// Run `git log <base>..<head> --pretty=format:%B%n--END--`. Returns
-/// each commit message as a separate string. A head branch that exists only
-/// on origin is resolved via [`resolve_log_range`]. trace:STORY-67 | ai:claude
-pub(crate) fn git_log_messages(
-    project_root: &std::path::Path,
-    base: &str,
-    head: &str,
-) -> Result<Vec<String>> {
-    let (base, head) = resolve_log_range(project_root, base, head);
-    let range = format!("{}..{}", base, head);
-    let out = std::process::Command::new("git")
-        .arg("-C")
-        .arg(project_root)
-        // trace:BUG-1622 | ai:claude
-        .args([
-            "log",
-            "--pretty=format:%B%n--END--",
-            git_arg_guard::END_OF_OPTIONS,
-            &range,
-            "--",
-        ])
-        .output()
-        .with_context(|| format!("running git log {}", range))?;
-    if !out.status.success() {
-        anyhow::bail!(
-            "git log {} failed: {}",
-            range,
-            String::from_utf8_lossy(&out.stderr).trim()
-        );
-    }
-    let stdout = String::from_utf8_lossy(&out.stdout);
-    let messages: Vec<String> = stdout
-        .split("--END--")
-        .map(|s| s.trim().to_string())
-        .filter(|s| !s.is_empty())
-        .collect();
-    Ok(messages)
-}
-
-// trace:FR-0259 | ai:claude:high
-/// BUG-298: find `aida-*` entries under `.claude/{skills,commands,hooks}` that
-/// no longer correspond to a template the current binary ships — left behind
-/// when a template was renamed/consolidated/retired. Compared by base name, so
-/// a flat `aida-x.md` and a folder-form `aida-x/` both resolve to `aida-x`.
-/// Symlinks are skipped — the in-repo dogfood `.claude/` is per-file symlinks
-/// into the master templates and must never be pruned. trace:BUG-298 | ai:claude
-pub(crate) fn detect_obe_aida_scaffold_files(root: &std::path::Path) -> Vec<std::path::PathBuf> {
-    // trace:TASK-1519 | ai:codex
-    use std::collections::{HashMap, HashSet};
-    const DIRS: [&str; 3] = ["skills", "commands", "hooks"];
-
-    // Expected base names per scaffold dir, from the embedded template set.
-    let mut expected: HashMap<&str, HashSet<String>> =
-        DIRS.iter().map(|d| (*d, HashSet::new())).collect();
-    for key in aida_core::templates::EMBEDDED_TEMPLATES.keys() {
-        for dir in DIRS {
-            if let Some(rest) = key.strip_prefix(&format!("{dir}/")) {
-                let first = rest.split('/').next().unwrap_or(rest);
-                let base = std::path::Path::new(first)
-                    .file_stem()
-                    .and_then(|s| s.to_str())
-                    .unwrap_or(first)
-                    .to_string();
-                expected.get_mut(dir).unwrap().insert(base);
-            }
-        }
-    }
-
-    let mut obe = Vec::new();
-    for dir in DIRS {
-        for parent in if dir == "skills" {
-            vec![".claude", ".agents"]
-        } else {
-            vec![".claude"]
-        } {
-            let d = root.join(parent).join(dir);
-            if parent == ".agents"
-                && (!root
-                    .join(".agents")
-                    .symlink_metadata()
-                    .is_ok_and(|m| m.file_type().is_dir())
-                    || !d.symlink_metadata().is_ok_and(|m| m.file_type().is_dir()))
-            {
-                continue;
-            }
-            let Ok(entries) = std::fs::read_dir(&d) else {
-                continue;
-            };
-            let exp = &expected[dir];
-            for entry in entries.flatten() {
-                let path = entry.path();
-                // Never touch symlinks (the dogfood per-file symlink layout).
-                if path
-                    .symlink_metadata()
-                    .map(|m| m.file_type().is_symlink())
-                    .unwrap_or(false)
-                {
-                    continue;
-                }
-                let Some(name) = path.file_name().and_then(|n| n.to_str()) else {
-                    continue;
-                };
-                if !name.starts_with("aida-") {
-                    continue;
-                }
-                let base = std::path::Path::new(name)
-                    .file_stem()
-                    .and_then(|s| s.to_str())
-                    .unwrap_or(name)
-                    .to_string();
-                if !exp.contains(&base) {
-                    // Shared portable skills belong to the operator unless we can
-                    // prove AIDA generated this exact, unedited regular file.
-                    if parent == ".agents" {
-                        if !path.is_dir() {
-                            continue;
-                        }
-                        let skill = path.join("SKILL.md");
-                        if skill.symlink_metadata().is_err()
-                            || skill
-                                .symlink_metadata()
-                                .is_ok_and(|m| !m.file_type().is_file())
-                        {
-                            continue;
-                        }
-                        let Ok(content) = std::fs::read_to_string(&skill) else {
-                            continue;
-                        };
-                        if aida_core::scaffolding::refresh::refresh_disposition(&content)
-                            != aida_core::scaffolding::refresh::RefreshDisposition::Pristine
-                        {
-                            continue;
-                        }
-                    }
-                    obe.push(path);
-                }
-            }
-        }
-    }
-    obe.sort();
-    obe
-}
-
-/// Search requirements for a pattern
-#[allow(clippy::too_many_arguments)]
-pub(crate) fn grep_requirements(
-    storage: &Storage,
-    pattern: &str,
-    ignore_case: bool,
-    extended_regex: bool,
-    after_context: usize,
-    before_context: usize,
-    context: Option<usize>,
-    field_filter: Option<&str>,
-    status_filter: Option<&str>,
-    type_filter: Option<&str>,
-    feature_filter: Option<&str>,
-    files_with_matches: bool,
-    count_only: bool,
-    invert_match: bool,
-) -> Result<()> {
-    use regex::RegexBuilder;
-
-    let store = storage.load_for_read()?;
-
-    // Build the regex pattern
-    let regex = if extended_regex {
-        RegexBuilder::new(pattern)
-            .case_insensitive(ignore_case)
-            .build()
-            .context("Invalid regex pattern")?
-    } else {
-        // Escape special regex characters for literal search
-        let escaped = regex::escape(pattern);
-        RegexBuilder::new(&escaped)
-            .case_insensitive(ignore_case)
-            .build()
-            .context("Invalid pattern")?
-    };
-
-    // Parse field filter
-    let fields: HashSet<&str> = if let Some(f) = field_filter {
-        f.split(',').map(|s| s.trim()).collect()
-    } else {
-        [
-            "title",
-            "description",
-            "comments",
-            "tags",
-            "owner",
-            "feature",
-            "spec_id",
-        ]
-        .iter()
-        .copied()
-        .collect()
-    };
-
-    // Context lines (C overrides A and B)
-    let ctx_before = context.unwrap_or(before_context);
-    let ctx_after = context.unwrap_or(after_context);
-
-    let mut total_matches = 0;
-    let mut matching_reqs = 0;
-
-    for req in &store.requirements {
-        // Apply filters
-        if let Some(status_str) = status_filter {
-            let req_status = req.status.to_string().to_lowercase();
-            if !req_status.contains(&status_str.to_lowercase()) {
-                continue;
-            }
-        }
-
-        if let Some(type_str) = type_filter {
-            let req_type = req.req_type.to_string().to_lowercase();
-            if !req_type.contains(&type_str.to_lowercase()) {
-                continue;
-            }
-        }
-
-        if let Some(feature_str) = feature_filter {
-            if !req
-                .feature
-                .to_lowercase()
-                .contains(&feature_str.to_lowercase())
-            {
-                continue;
-            }
-        }
-
-        // Collect matches from all fields
-        let mut matches: Vec<GrepMatch> = Vec::new();
-
-        // Search title
-        if fields.contains("title") {
-            if let Some(m) = search_field(&regex, "title", &req.title, ctx_before, ctx_after) {
-                matches.push(m);
-            }
-        }
-
-        // Search description
-        if fields.contains("description") {
-            for m in search_multiline_field(
-                &regex,
-                "description",
-                &req.description,
-                ctx_before,
-                ctx_after,
-            ) {
-                matches.push(m);
-            }
-        }
-
-        // Search spec_id
-        if fields.contains("spec_id") {
-            if let Some(spec_id) = &req.spec_id {
-                if let Some(m) = search_field(&regex, "spec_id", spec_id, ctx_before, ctx_after) {
-                    matches.push(m);
-                }
-            }
-        }
-
-        // Search owner
-        if fields.contains("owner") {
-            if let Some(m) = search_field(&regex, "owner", &req.owner, ctx_before, ctx_after) {
-                matches.push(m);
-            }
-        }
-
-        // Search feature
-        if fields.contains("feature") {
-            if let Some(m) = search_field(&regex, "feature", &req.feature, ctx_before, ctx_after) {
-                matches.push(m);
-            }
-        }
-
-        // Search tags
-        if fields.contains("tags") {
-            for tag in &req.tags {
-                if let Some(m) = search_field(&regex, "tags", tag, ctx_before, ctx_after) {
-                    matches.push(m);
-                }
-            }
-        }
-
-        // Search comments
-        if fields.contains("comments") {
-            for comment in &req.comments {
-                for m in search_multiline_field(
-                    &regex,
-                    &format!("comment:{}", comment.author),
-                    &comment.content,
-                    ctx_before,
-                    ctx_after,
-                ) {
-                    matches.push(m);
-                }
-            }
-        }
-
-        let has_matches = !matches.is_empty();
-        let should_show = if invert_match {
-            !has_matches
-        } else {
-            has_matches
-        };
-
-        if should_show {
-            matching_reqs += 1;
-            let match_count = matches.len();
-            total_matches += match_count;
-
-            let id_string = req.id.to_string();
-            let spec_id = req.spec_id.as_deref().unwrap_or(&id_string);
-
-            if files_with_matches {
-                // Just print the SPEC-ID
-                println!("{}", spec_id.cyan());
-            } else if count_only {
-                // Print count for this requirement
-                println!("{}: {}", spec_id.cyan(), match_count);
-            } else if invert_match {
-                // For invert match, just show SPEC-ID and title
-                println!("{}: {}", spec_id.cyan(), req.title);
-            } else {
-                // Full output with matches
-                println!("{}: {}", spec_id.cyan().bold(), req.title);
-                for m in matches {
-                    print_grep_match(&m);
-                }
-                println!();
-            }
-        }
-    }
-
-    // Summary
-    if !files_with_matches && !count_only {
-        if matching_reqs == 0 {
-            if invert_match {
-                println!("{}", "All requirements matched the pattern.".yellow());
-            } else {
-                println!("{}", "No matches found.".yellow());
-            }
-        } else {
-            println!(
-                "{} match(es) in {} requirement(s)",
-                total_matches.to_string().green(),
-                matching_reqs.to_string().green()
-            );
-        }
-    }
-
-    Ok(())
-}
-
-/// `aida worker gc`: prune `drain <SPEC-ID>` directives whose target spec is
-/// archived or terminal (Completed / Rejected) from `.aida/worker.cmd`.
-// trace:BUG-723 trace:BUG-1670 | ai:claude
-pub(crate) fn run_worker_gc(project_root: &std::path::Path, dry_run: bool) -> Result<()> {
-    let path = worker::worker_cmd_path(project_root);
-    let body = std::fs::read_to_string(&path).unwrap_or_default();
-    if worker::parse_directives_from_str(&body).is_empty() {
-        println!("No pending directives.");
-        return Ok(());
-    }
-    let store_path = detect_distributed_store_from(project_root).ok_or_else(|| {
-        anyhow::anyhow!("no requirement store found — cannot resolve directive target specs")
-    })?;
-    let backend = advance_backend(&store_path)?;
-    // Both view axes wide open: an archived (or deferred) target must
-    // still resolve so its directive is classified correctly. Strict: the
-    // tolerant read serves an old snapshot while another process writes the
-    // cache, and this pass deletes directives. trace:BUG-1670 | ai:claude
-    let summaries = backend.list_summaries_strict(&aida_core::ListFilter {
-        archive: aida_core::ArchiveFilter::Both,
-        defer: aida_core::DeferFilter::Both,
-        ..Default::default()
-    })?;
-    // Dead = the spec still exists AND is archived or terminal
-    // (Completed / Rejected) — same predicate as the queue's GC. A
-    // directive targeting an unknown spec is LEFT alone (fail-safe:
-    // no store row means no evidence the work shipped).
-    let mut dead_ids = std::collections::HashSet::new();
-    for s in &summaries {
-        if s.archived || is_terminal_status_str(&s.status) {
-            for id in [s.spec_id.as_deref(), s.agreed_id.as_deref()]
-                .into_iter()
-                .flatten()
-            {
-                dead_ids.insert(id.to_ascii_uppercase());
-            }
-        }
-    }
-    // Every prune candidate is re-read from its stored object before its
-    // directive is dropped; a read error or a missing object keeps it.
-    // trace:BUG-1670 | ai:claude
-    let is_dead = |spec: &str| {
-        dead_ids.contains(&spec.to_ascii_uppercase()) && worker_gc_target_still_dead(&backend, spec)
-    };
-    let outcome = worker::gc_directives_body(&body, &is_dead);
-    if outcome.pruned.is_empty() {
-        println!("No stale directives to prune.");
-        return Ok(());
-    }
-    println!(
-        "{} stale directive{} (target spec archived / Completed / Rejected):",
-        outcome.pruned.len(),
-        if outcome.pruned.len() == 1 { "" } else { "s" }
-    );
-    for d in &outcome.pruned {
-        println!("  - {}", d.raw);
-    }
-    if dry_run {
-        println!("Dry run — file unchanged.");
-        return Ok(());
-    }
-    std::fs::write(&path, &outcome.kept_body)?;
-    let remaining = worker::parse_directives_from_str(&outcome.kept_body).len();
-    println!(
-        "Pruned {} directive{}; {} remain{}.",
-        outcome.pruned.len(),
-        if outcome.pruned.len() == 1 { "" } else { "s" },
-        remaining,
-        if remaining == 1 { "s" } else { "" }
-    );
-    Ok(())
-}
-
-/// Whether the stored object for a worker directive's target is still
-/// archived or terminal. `get_requirement_by_spec_id` reads the spec's YAML,
-/// not the cache row, so a spec reopened since any cache snapshot reads as
-/// live. An unreadable or missing object is not proof the work shipped.
-// trace:BUG-1670 | ai:claude
-pub(crate) fn worker_gc_target_still_dead(
-    backend: &aida_core::CachedGitBackend,
-    spec: &str,
-) -> bool {
-    use aida_core::db::DatabaseBackend;
-    match backend.get_requirement_by_spec_id(spec) {
-        Ok(Some(req)) => req.archived || is_terminal_status_str(&format!("{:?}", req.status)),
-        _ => false,
-    }
 }

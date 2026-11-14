@@ -12,6 +12,10 @@ use std::path::Path;
 pub(crate) mod mandate_args;
 pub(crate) use mandate_args::*;
 
+// trace:BUG-2554 | ai:claude
+#[path = "mandate_history_index.rs"]
+pub(crate) mod history_index;
+
 /// One historical object body, read leniently: the full requirement when it
 /// parses, else just the fields exclusion looks at (an older schema). `Err`
 /// only when it is not YAML at all.
@@ -157,11 +161,46 @@ impl StoreHistoryBatch {
             .unwrap_or_else(|| Err(format!("{spec_id} was not part of the history read")))
     }
 
-    /// Read every version of each of `spec_ids`. `Err` when the store history
-    /// cannot be walked at all.
+    /// Read every version of each of `spec_ids`, listed from the
+    /// store-history index (BUG-2554). `Err` when the store history cannot be
+    /// walked at all.
+    // trace:BUG-2554 | ai:claude
     pub(crate) fn read(
         store_root: &Path,
         spec_ids: &[String],
+    ) -> std::result::Result<Self, String> {
+        Self::read_listed(store_root, spec_ids, |paths| {
+            let index = history_index::HistoryIndex::current(store_root)?;
+            let mut wanted = Vec::new();
+            for (key, rel) in paths {
+                for sha in index.versions.get(rel).into_iter().flatten() {
+                    wanted.push((key.clone(), format!("{sha}:{rel}")));
+                }
+            }
+            Ok(wanted)
+        })
+    }
+
+    /// [`Self::read`] by a full `git log --all` walk: the pre-index reading,
+    /// kept as the reference the index must equal.
+    // trace:BUG-2554 | ai:claude
+    #[cfg(test)]
+    pub(crate) fn read_full_walk(
+        store_root: &Path,
+        spec_ids: &[String],
+    ) -> std::result::Result<Self, String> {
+        Self::read_listed(store_root, spec_ids, |paths| {
+            full_walk_versions(store_root, paths)
+        })
+    }
+
+    /// Resolve each of `spec_ids` to its object path, `list` every stored
+    /// version as `(key, "<sha>:<path>")` newest first, then read them all in
+    /// one `git cat-file --batch`.
+    fn read_listed(
+        store_root: &Path,
+        spec_ids: &[String],
+        list: impl FnOnce(&[(String, String)]) -> std::result::Result<Vec<(String, String)>, String>,
     ) -> std::result::Result<Self, String> {
         let mut batch = Self::default();
         let mut paths: Vec<(String, String)> = Vec::new();
@@ -185,47 +224,7 @@ impl StoreHistoryBatch {
         if paths.is_empty() {
             return Ok(batch);
         }
-        // Deletions carry no body to read; every other touching commit does.
-        // The walk is limited by each path's top directory, not by every path:
-        // git checks each pathspec against every commit, so a PR tracing ~100
-        // specs took ~50 s over a ~50k-commit store, while one directory
-        // pathspec takes seconds whatever the spec count. The names it lists
-        // are filtered to the wanted paths below.
-        let mut tops: Vec<&str> = paths
-            .iter()
-            .map(|(_, rel)| rel.split_once('/').map_or(rel.as_str(), |(top, _)| top))
-            .collect();
-        tops.sort_unstable();
-        tops.dedup();
-        // TASK-2067 (advisor C1): renames off explicitly, so the listed names
-        // never depend on diff.renames or diff.renameLimit; a renamed-to path
-        // is listed as an addition. trace:TASK-2067 | ai:claude
-        let mut args: Vec<&str> = vec![
-            "log",
-            "--all",
-            "--format=%x00%H",
-            "--no-renames",
-            "--diff-filter=ACMRT",
-            "--name-only",
-            "--",
-        ];
-        args.extend(tops);
-        let log = store_git(store_root, &args, None)?;
-        let by_path: std::collections::BTreeMap<&str, &str> = paths
-            .iter()
-            .map(|(key, rel)| (rel.as_str(), key.as_str()))
-            .collect();
-        // `<sha>:<path>` per version, in log order (newest first).
-        let mut wanted: Vec<(String, String)> = Vec::new();
-        for record in String::from_utf8_lossy(&log).split('\0').skip(1) {
-            let mut lines = record.lines().map(str::trim).filter(|l| !l.is_empty());
-            let Some(sha) = lines.next() else { continue };
-            for file in lines {
-                if let Some(key) = by_path.get(file) {
-                    wanted.push((key.to_string(), format!("{sha}:{file}")));
-                }
-            }
-        }
+        let wanted = list(&paths)?;
         if wanted.is_empty() {
             return Ok(batch);
         }
@@ -258,6 +257,59 @@ impl StoreHistoryBatch {
         }
         Ok(batch)
     }
+}
+
+/// BUG-2179: every stored version of each `(key, path)` by one full
+/// `git log --all` walk, as `(key, "<sha>:<path>")` newest first. The
+/// reference reading the BUG-2554 index must equal.
+// trace:BUG-2179 trace:BUG-2554 | ai:claude
+#[cfg(test)]
+fn full_walk_versions(
+    store_root: &Path,
+    paths: &[(String, String)],
+) -> std::result::Result<Vec<(String, String)>, String> {
+    // Deletions carry no body to read; every other touching commit does.
+    // The walk is limited by each path's top directory, not by every path:
+    // git checks each pathspec against every commit, so a PR tracing ~100
+    // specs took ~50 s over a ~50k-commit store, while one directory
+    // pathspec takes seconds whatever the spec count. The names it lists
+    // are filtered to the wanted paths below.
+    let mut tops: Vec<&str> = paths
+        .iter()
+        .map(|(_, rel)| rel.split_once('/').map_or(rel.as_str(), |(top, _)| top))
+        .collect();
+    tops.sort_unstable();
+    tops.dedup();
+    // TASK-2067 (advisor C1): renames off explicitly, so the listed names
+    // never depend on diff.renames or diff.renameLimit; a renamed-to path
+    // is listed as an addition. trace:TASK-2067 | ai:claude
+    let mut args: Vec<&str> = vec![
+        "log",
+        "--all",
+        "--format=%x00%H",
+        "--no-renames",
+        "--diff-filter=ACMRT",
+        "--name-only",
+        "--",
+    ];
+    args.extend(tops);
+    let log = store_git(store_root, &args, None)?;
+    let by_path: std::collections::BTreeMap<&str, &str> = paths
+        .iter()
+        .map(|(key, rel)| (rel.as_str(), key.as_str()))
+        .collect();
+    // `<sha>:<path>` per version, in log order (newest first).
+    let mut wanted: Vec<(String, String)> = Vec::new();
+    for record in String::from_utf8_lossy(&log).split('\0').skip(1) {
+        let mut lines = record.lines().map(str::trim).filter(|l| !l.is_empty());
+        let Some(sha) = lines.next() else { continue };
+        for file in lines {
+            if let Some(key) = by_path.get(file) {
+                wanted.push((key.to_string(), format!("{sha}:{file}")));
+            }
+        }
+    }
+    Ok(wanted)
 }
 
 /// One `git cat-file --batch` reply: `(Some(body), rest)` for a found object,
@@ -309,8 +361,35 @@ pub(crate) fn store_history_versions_optional(
 /// caller refuses rather than treating an ID as dangling.
 // trace:TASK-1800 | ai:claude
 // trace:BUG-2179 | ai:claude
+// trace:BUG-2554 | ai:claude
 pub(crate) fn store_history_alias_map(
     store_root: &Path,
+    ids: &[String],
+) -> std::result::Result<std::collections::BTreeMap<String, Vec<String>>, String> {
+    let mut found = searchable_ids(ids)?;
+    if found.is_empty() {
+        return Ok(found);
+    }
+    // BUG-2554: answered from the store-history index, which walks only
+    // commits it has not seen; a doubtful index rebuilds by a full walk.
+    let index = history_index::HistoryIndex::current(store_root)
+        .map_err(|e| format!("cannot search store history for {}: {e}", ids.join(", ")))?;
+    for (id, aliases) in found.iter_mut() {
+        let Some(hit) = index.aliases.get(id) else {
+            continue;
+        };
+        if let Some(refusal) = &hit.refusal {
+            return Err(refusal.clone());
+        }
+        aliases.extend(hit.stems.iter().filter(|stem| *stem != id).cloned());
+    }
+    Ok(found)
+}
+
+/// Each of `ids`, upper-cased, mapped to no aliases yet; `Err` for an ID
+/// that is not a plain spec-ID token (and so cannot be searched for).
+// trace:TASK-1800 | ai:claude
+fn searchable_ids(
     ids: &[String],
 ) -> std::result::Result<std::collections::BTreeMap<String, Vec<String>>, String> {
     let mut found: std::collections::BTreeMap<String, Vec<String>> = Default::default();
@@ -324,39 +403,75 @@ pub(crate) fn store_history_alias_map(
         }
         found.insert(id.to_ascii_uppercase(), Vec::new());
     }
+    Ok(found)
+}
+
+/// [`store_history_alias_map`] by one full `-G` walk for just `ids`: the
+/// pre-index reading, kept as the reference the index must equal.
+// trace:TASK-1800 trace:BUG-2179 trace:BUG-2554 | ai:claude
+#[cfg(test)]
+pub(crate) fn store_history_alias_map_full_walk(
+    store_root: &Path,
+    ids: &[String],
+) -> std::result::Result<std::collections::BTreeMap<String, Vec<String>>, String> {
+    let mut found = searchable_ids(ids)?;
     if found.is_empty() {
         return Ok(found);
     }
     let alternation = found.keys().cloned().collect::<Vec<_>>().join("|");
     let pattern = format!("^(spec_id|agreed_id): *['\"]?({alternation})['\"]? *$");
-    let line_re = regex::RegexBuilder::new(&pattern)
+    let hits = alias_walk(store_root, &["--all"], &pattern)
+        .map_err(|e| format!("cannot search store history for {}: {e}", ids.join(", ")))?;
+    for (id, hit) in hits {
+        let stems = hit?;
+        if let Some(aliases) = found.get_mut(&id) {
+            for stem in stems {
+                if stem != id && !aliases.contains(&stem) {
+                    aliases.push(stem);
+                }
+            }
+        }
+    }
+    Ok(found)
+}
+
+/// One `-G` walk over the commits `range` selects, for `pattern` (whose
+/// second group is the ID): every `spec_id` / `agreed_id` line a version
+/// added or removed, in log order, as `(ID, stems)` (the canonical object
+/// stems that carried it, both sides of a rename) or `(ID, Err(refusal))`
+/// for a hit whose versions the history read could not find. `Err` when the
+/// history cannot be searched.
+// trace:TASK-1800 trace:BUG-2179 trace:BUG-2554 | ai:claude
+pub(crate) fn alias_walk(
+    store_root: &Path,
+    range: &[&str],
+    pattern: &str,
+) -> std::result::Result<Vec<(String, std::result::Result<Vec<String>, String>)>, String> {
+    let line_re = regex::RegexBuilder::new(pattern)
         .case_insensitive(true)
         .build()
         .map_err(|e| format!("cannot search store history: {e}"))?;
-    let out = store_git(
-        store_root,
-        &[
-            "log",
-            "--all",
-            "--format=",
-            "-p",
-            "--unified=0",
-            "--no-color",
-            "--no-ext-diff",
-            "--no-textconv",
-            "--no-show-signature",
-            "--src-prefix=a/",
-            "--dst-prefix=b/",
-            "--find-renames",
-            "-l0",
-            "--regexp-ignore-case",
-            &format!("-G{pattern}"),
-            "--",
-            "objects/",
-        ],
-        None,
-    )
-    .map_err(|e| format!("cannot search store history for {}: {e}", ids.join(", ")))?;
+    let g_pattern = format!("-G{pattern}");
+    let mut args: Vec<&str> = vec![
+        "log",
+        "--format=",
+        "-p",
+        "--unified=0",
+        "--no-color",
+        "--no-ext-diff",
+        "--no-textconv",
+        "--no-show-signature",
+        "--src-prefix=a/",
+        "--dst-prefix=b/",
+        "--find-renames",
+        "-l0",
+        "--regexp-ignore-case",
+        &g_pattern,
+    ];
+    args.extend(range);
+    args.extend(["--", "objects/"]);
+    let out = store_git(store_root, &args, None)?;
+    let mut hits = Vec::new();
     // TASK-2067: the (old, new) paths of the file pair being read. Renames
     // are detected explicitly (`--find-renames -l0` above), whatever the
     // user's diff.renames or diff.renameLimit, so a renumbered object is one
@@ -391,46 +506,54 @@ pub(crate) fn store_history_alias_map(
         let Some(caps) = line_re.captures(body) else {
             continue;
         };
+        let id = caps[2].to_ascii_uppercase();
         let (hit, other) = match &pair {
             Some((old, new)) if removed => (Some(old.as_str()), Some(new.as_str())),
             Some((old, new)) => (Some(new.as_str()), Some(old.as_str())),
             None => (None, None),
         };
-        // TASK-1800 (comment 24): the history read below finds versions only
-        // at an object's canonical path. A hit anywhere else would read as no
+        // TASK-1800 (comment 24): the history read finds versions only at an
+        // object's canonical path. A hit anywhere else would read as no
         // history and drop the ID as dangling, so it refuses instead.
         // trace:TASK-1800 | ai:claude
-        let stem = hit.and_then(canonical_object_stem).ok_or_else(|| {
-            format!(
-                "store history carries {} outside a canonical object path ({})",
-                &caps[2],
-                hit.unwrap_or("no file")
-            )
-        })?;
-        let id = caps[2].to_ascii_uppercase();
+        let Some(stem) = hit.and_then(canonical_object_stem) else {
+            hits.push((
+                id,
+                Err(format!(
+                    "store history carries {} outside a canonical object path ({})",
+                    &caps[2],
+                    hit.unwrap_or("no file")
+                )),
+            ));
+            continue;
+        };
         // The other side of a rename only adds versions to judge. TASK-2238:
         // a non-canonical other side would be versions never judged, so it
         // refuses like a non-canonical hit rather than being dropped.
         // trace:TASK-2238 | ai:claude
         let renamed = match other.filter(|other| Some(*other) != hit) {
             None => None,
-            Some(other) => Some(canonical_object_stem(other).ok_or_else(|| {
-                format!(
-                    "store history renames {} to or from a non-canonical object path ({other})",
-                    &caps[2]
-                )
-            })?),
-        };
-        if let Some(aliases) = found.get_mut(&id) {
-            for stem in std::iter::once(stem).chain(renamed) {
-                let stem = stem.to_ascii_uppercase();
-                if stem != id && !aliases.contains(&stem) {
-                    aliases.push(stem);
+            Some(other) => match canonical_object_stem(other) {
+                Some(renamed) => Some(renamed),
+                None => {
+                    hits.push((
+                        id,
+                        Err(format!(
+                            "store history renames {} to or from a non-canonical object path ({other})",
+                            &caps[2]
+                        )),
+                    ));
+                    continue;
                 }
-            }
-        }
+            },
+        };
+        let stems = std::iter::once(stem)
+            .chain(renamed)
+            .map(str::to_ascii_uppercase)
+            .collect();
+        hits.push((id, Ok(stems)));
     }
-    Ok(found)
+    Ok(hits)
 }
 
 /// The object ID whose canonical object path is `path`, if it is one.
@@ -486,8 +609,10 @@ pub(crate) fn emit_renewed(project_root: &Path, mandate: &Mandate, renewal: &Ren
             principal: renewal.renewed_by.clone(),
             expires_at: renewal.expires_at.to_rfc3339(),
             include_supervised: mandate.include_supervised,
+            include_gate_paths: mandate.include_gate_paths,
             reason: mandate.reason.clone(),
             renewed_from: Some(renewal.previous_expires_at.to_rfc3339()),
+            changes: renewal.changes.clone(),
         },
     );
     event.seat = crate::events::active_seat();
@@ -496,9 +621,15 @@ pub(crate) fn emit_renewed(project_root: &Path, mandate: &Mandate, renewal: &Ren
 
 /// The audit copy of a revival in `.aida/events.jsonl`: a start whose
 /// `renewed_from` names the expired mandate it re-minted, so the trail links
-/// the two. Best-effort.
+/// the two, with what the revival changed. Best-effort.
 // trace:STORY-2346 | ai:claude
-pub(crate) fn emit_revived(project_root: &Path, mandate: &Mandate, old_id: &str) {
+// trace:STORY-2771 | ai:claude
+pub(crate) fn emit_revived(
+    project_root: &Path,
+    mandate: &Mandate,
+    old_id: &str,
+    receipt: &Renewal,
+) {
     let mut event = crate::events::Event::new(
         None,
         "",
@@ -508,8 +639,10 @@ pub(crate) fn emit_revived(project_root: &Path, mandate: &Mandate, old_id: &str)
             principal: mandate.principal.clone(),
             expires_at: mandate.expires_at.to_rfc3339(),
             include_supervised: mandate.include_supervised,
+            include_gate_paths: mandate.include_gate_paths,
             reason: mandate.reason.clone(),
             renewed_from: Some(old_id.to_string()),
+            changes: receipt.changes.clone(),
         },
     );
     event.seat = crate::events::active_seat();
@@ -521,12 +654,19 @@ pub(crate) fn emit_revived(project_root: &Path, mandate: &Mandate, old_id: &str)
 // trace:STORY-2346 | ai:claude
 pub(crate) fn revived_message(old_id: &str, m: &Mandate, receipt: &Renewal) -> String {
     format!(
-        "Revived mandate {old_id} (expired {}) as {} ({}, supervised: {}); active until {}. Scope, flags, protected paths and human gates are unchanged.",
+        "Revived mandate {old_id} (expired {}) as {} ({}, supervised: {}); active until {}. {}; protected paths: {}.",
         receipt.previous_expires_at.to_rfc3339(),
         m.id,
         m.effective_scopes().iter().map(|s| s.as_str()).collect::<Vec<_>>().join(", "),
         m.include_supervised,
-        m.expires_at.to_rfc3339()
+        m.expires_at.to_rfc3339(),
+        // trace:STORY-2771 | ai:claude
+        if receipt.changes.is_empty() {
+            "Scope, supervised flag and human gates retained"
+        } else {
+            "Everything not listed above retained"
+        },
+        m.include_gate_paths
     )
 }
 
@@ -542,8 +682,10 @@ pub(crate) fn emit_changed(project_root: &Path, mandate: &Mandate, active: bool)
             principal: mandate.principal.clone(),
             expires_at: mandate.expires_at.to_rfc3339(),
             include_supervised: mandate.include_supervised,
+            include_gate_paths: mandate.include_gate_paths,
             reason: mandate.reason.clone(),
             renewed_from: None,
+            changes: Vec::new(),
         },
     );
     event.seat = crate::events::active_seat();
@@ -753,7 +895,7 @@ pub(crate) fn current_status_line(
     audit_root: Option<&Path>,
     now: DateTime<Utc>,
 ) -> Option<String> {
-    let (valid, _) = load_valid(dir, &crate::current_user_id(None), now);
+    let (valid, _) = load_valid(dir, &crate::gate::mandate::operator_principal(), now);
     let state = state_at(&valid, now);
     if let Some(root) = audit_root {
         notify_expiry(dir, root, &state, now);
@@ -861,6 +1003,7 @@ fn status_text(state: &MandateState, now: DateTime<Utc>) -> String {
                     "no"
                 }
             ),
+            format!("  includes protected paths: {}", m.include_gate_paths),
         ];
         if let Some(reason) = &m.reason {
             lines.push(format!("  reason:    {reason}"));
@@ -876,6 +1019,19 @@ fn status_text(state: &MandateState, now: DateTime<Utc>) -> String {
                 last.previous_expires_at.to_rfc3339()
             ),
         });
+        // trace:STORY-2771 | ai:claude
+        if let Some(revival) = &m.revived {
+            lines.push(format!(
+                "  revived:   from {} (expired {}){}",
+                revival.from_id,
+                revival.receipt.previous_expires_at.to_rfc3339(),
+                if revival.receipt.changes.is_empty() {
+                    String::new()
+                } else {
+                    format!("; changed {}", revival.receipt.changes.join("; "))
+                }
+            ));
+        }
         lines.join("\n")
     };
     match state {
@@ -907,6 +1063,53 @@ fn state_mandate(state: &MandateState) -> Option<&Mandate> {
     }
 }
 
+/// The line a renewal or revival prints when it carries the protected-path
+/// opt-in forward unchanged, so a kept opt-in is never silent.
+// trace:STORY-2771 | ai:claude
+pub(crate) fn kept_gate_paths_line(m: &Mandate, renewal: &Renewal) -> Option<String> {
+    let changed = renewal
+        .changes
+        .iter()
+        .any(|change| change.starts_with("include-gate-paths:"));
+    (m.include_gate_paths && !changed)
+        .then(|| "includes protected paths: KEPT (pass --exclude-gate-paths to drop)".to_string())
+}
+
+/// The overrides `aida mandate renew`'s flags ask for. An absent flag asks
+/// for nothing, so the renewed mandate keeps that value.
+// trace:STORY-2771 | ai:claude
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn renew_overrides(
+    ship_held: bool,
+    scopes: &[String],
+    drive: bool,
+    include_supervised: bool,
+    exclude_supervised: bool,
+    include_gate_paths: bool,
+    exclude_gate_paths: bool,
+    reason: Option<String>,
+) -> Result<crate::gate::mandate::RenewOverrides> {
+    let mut add_scopes = BTreeSet::new();
+    if ship_held {
+        add_scopes.insert(Scope::ShipHeld);
+    }
+    for raw in scopes {
+        add_scopes.insert(Scope::parse(raw)?);
+    }
+    let flag = |on: bool, off: bool| match (on, off) {
+        (true, _) => Some(true),
+        (_, true) => Some(false),
+        _ => None,
+    };
+    Ok(crate::gate::mandate::RenewOverrides {
+        drive,
+        add_scopes,
+        include_supervised: flag(include_supervised, exclude_supervised),
+        include_gate_paths: flag(include_gate_paths, exclude_gate_paths),
+        reason,
+    })
+}
+
 /// `aida mandate start|renew|stop|status`.
 // trace:STORY-1698 | ai:claude
 pub(crate) fn handle_mandate(action: &crate::cli::MandateAction) -> Result<()> {
@@ -921,6 +1124,7 @@ pub(crate) fn handle_mandate(action: &crate::cli::MandateAction) -> Result<()> {
             reason,
             include_supervised,
             exclude_supervised,
+            include_gate_paths,
         } => {
             let mut parsed_scopes = BTreeSet::new();
             if *ship_held {
@@ -941,12 +1145,13 @@ pub(crate) fn handle_mandate(action: &crate::cli::MandateAction) -> Result<()> {
             // trace:STORY-1700 | ai:claude
             let m = start_as_human(
                 &dir,
-                &crate::current_user_id(None),
+                &crate::gate::mandate::operator_principal(),
                 ttl,
                 reason.clone(),
                 *drive,
                 *include_supervised,
                 *exclude_supervised,
+                *include_gate_paths,
                 parsed_scopes,
                 Utc::now(),
             )?;
@@ -991,15 +1196,47 @@ pub(crate) fn handle_mandate(action: &crate::cli::MandateAction) -> Result<()> {
             Ok(())
         }
         // trace:STORY-B6B1278890774EF993D2EBC327862470-166 | ai:claude
-        crate::cli::MandateAction::Renew { duration } => {
+        crate::cli::MandateAction::Renew {
+            duration,
+            ship_held,
+            scopes,
+            drive,
+            include_supervised,
+            exclude_supervised,
+            include_gate_paths,
+            exclude_gate_paths,
+            reason,
+        } => {
             // Same grammar and 24h cap as `start --ttl`, named for this flag.
             let ttl = duration.as_deref().map(parse_renew_for).transpose()?;
-            let (m, renewal, revived_from) =
-                renew_as_human(&dir, &crate::current_user_id(None), ttl, Utc::now())?;
+            // trace:STORY-2771 | ai:claude
+            let overrides = renew_overrides(
+                *ship_held,
+                scopes,
+                *drive,
+                *include_supervised,
+                *exclude_supervised,
+                *include_gate_paths,
+                *exclude_gate_paths,
+                reason.clone(),
+            )?;
+            let (m, renewal, revived_from) = renew_as_human(
+                &dir,
+                &crate::gate::mandate::operator_principal(),
+                ttl,
+                &overrides,
+                Utc::now(),
+            )?;
+            for change in &renewal.changes {
+                println!("{change}");
+            }
+            if let Some(kept) = kept_gate_paths_line(&m, &renewal) {
+                println!("{kept}");
+            }
             // trace:STORY-2346 | ai:claude
             if let Some(old_id) = revived_from {
                 if let Some(root) = &audit_root {
-                    emit_revived(root, &m, &old_id);
+                    emit_revived(root, &m, &old_id, &renewal);
                 }
                 println!("{}", revived_message(&old_id, &m, &renewal));
                 return Ok(());
@@ -1008,16 +1245,26 @@ pub(crate) fn handle_mandate(action: &crate::cli::MandateAction) -> Result<()> {
                 emit_renewed(root, &m, &renewal);
             }
             println!(
-                "Mandate {} renewed until {} (was {}); its scope, flags and reason are unchanged (renewal {}).",
+                "Mandate {} renewed until {} (was {}); {}; protected paths: {} (renewal {}).",
                 m.id,
                 renewal.expires_at.to_rfc3339(),
                 renewal.previous_expires_at.to_rfc3339(),
+                if renewal.changes.is_empty() {
+                    "scope, supervised flag and reason retained"
+                } else {
+                    "everything else retained"
+                },
+                m.include_gate_paths,
                 m.renewals.len()
             );
             Ok(())
         }
         crate::cli::MandateAction::Stop => {
-            let stopped = stop_as_human(&dir, &crate::current_user_id(None), Utc::now())?;
+            let stopped = stop_as_human(
+                &dir,
+                &crate::gate::mandate::operator_principal(),
+                Utc::now(),
+            )?;
             if stopped.is_empty() {
                 println!("No mandate was active.");
             }
@@ -1041,7 +1288,8 @@ pub(crate) fn handle_mandate(action: &crate::cli::MandateAction) -> Result<()> {
                 }
                 return Ok(());
             }
-            let (valid, warnings) = load_valid(&dir, &crate::current_user_id(None), now);
+            let (valid, warnings) =
+                load_valid(&dir, &crate::gate::mandate::operator_principal(), now);
             let state = state_at(&valid, now);
             for w in &warnings {
                 eprintln!("warning: {w}");

@@ -6,6 +6,8 @@ use crate::forge::{ChangeRef, Forge, MergeMethod, MergeOptions};
 use crate::gate::{approval, ledger, merge_hold_core as corpus, review_verdict as rv};
 use serde_json::{json, Value};
 
+const MAX_EVIDENCE_BYTES: u64 = 16 * 1024 * 1024;
+
 const PATCH_VERSION: u32 = 1; // binary/full-index diff + git patch-id --verbatim
 
 type Bodies = Vec<(String, Value)>;
@@ -181,6 +183,14 @@ fn verified<'a>(
     event.head = Some(train.tip.clone());
     event.base_ref = Some(live.base.clone());
     event.base_tip = Some(train.base.clone());
+    validate_ledger(&store, &format!("PR-{}", change.id))?;
+    let path = ledger::store::ledger_file(&store, ledger::ChangeKey::pr(change.id));
+    let existing = match std::fs::metadata(path) {
+        Ok(meta) => meta.len(),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => 0,
+        Err(e) => return Err(e.into()),
+    };
+    ensure_budget(existing + serde_json::to_vec(&event)?.len() as u64 + 1024)?;
     ledger::record_event(&store, event).context("persisting train coverage audit")?;
     Ok(VerifiedTrainMerge {
         root,
@@ -290,9 +300,10 @@ fn collect(
     let mut all_specs = Vec::new();
     for car in &train.cars {
         if let Some(cover) = &car.member.release {
+            // trace:STORY-2733 | ai:codex
             anyhow::ensure!(
-                crate::gate::mandate_ship::mandate_still_active(&cover.id),
-                "train release mandate expired or was revoked"
+                crate::gate::mandate_ship::mandate_cover_still_active(cover),
+                "train release mandate expired, was revoked, or was narrowed by a renewal"
             );
         }
         let fresh = live.gate(car.member.pr).map_err(anyhow::Error::msg)?;
@@ -309,28 +320,56 @@ fn collect(
             source.head_sha == fresh.head && member_metadata_refusal(&source, &live.base).is_none(),
             "source metadata moved during the train gate"
         );
+        // A released marker may make the fresh member gate skip mandate cover.
+        // Retain the under-lease cover, but bind its audit to today's protected
+        // set on every final refresh, including transport retries.
+        // trace:STORY-2733 | ai:codex
+        if fresh.gate_audit.is_some() {
+            anyhow::ensure!(
+                fresh.gate_audit == car.member.gate_audit,
+                "train protected-path mandate audit changed; rebuild the train"
+            );
+        }
+        if car.member.gate_audit.is_some() || car.member.release.is_some() {
+            // trace:STORY-2733 | ai:claude
+            let cover = crate::pr_train::final_live_cover(&fresh, &car.member)
+                .context("train protected-path audit has no live mandate cover")?;
+            anyhow::ensure!(
+                crate::gate::mandate_ship::mandate_cover_still_active(cover)
+                    && cover.gate_audit() == car.member.gate_audit,
+                "train protected-path mandate audit changed; rebuild the train"
+            );
+            let evidence = crate::gate::mandate_traces::collect_pr(
+                &live.main_worktree,
+                &source.base_ref,
+                &fresh.head,
+                &source.head_sha,
+            )?;
+            let gates = crate::gate::mandate_gates::load_human_gates(&live.main_worktree)?;
+            let paths: Vec<_> = evidence.paths.into_iter().collect();
+            let current = crate::gate::mandate_ship::MandateCover::from_checked_paths(
+                cover.id.clone(),
+                cover.principal.clone(),
+                &paths,
+                &crate::gate::mandate_gates::ProtectedPaths::of(&Ok::<_, String>(gates)),
+                cover.issued_supervised,
+            );
+            anyhow::ensure!(
+                current.gate_audit() == car.member.gate_audit,
+                "train protected-path mandate audit changed; rebuild the train"
+            );
+        }
         let metadata = json!({"state":format!("{:?}",source.state), "title":source.title,
             "author":source.author,"base":source.base_ref,"branch":source.head_ref,"head":source.head_sha,
             "draft":source.is_draft,"cross_repository":source.is_cross_repository,"repository":source.head_repo});
-        let ids = resolved_member_spec_ids(
+        let ids = merge_step_spec_ids(
             &live.project_root,
+            fresh.pr,
             &source.head_ref,
             &source.title,
             &fresh.subject,
             &fresh.body,
         )?;
-        let covered = crate::gate::trailer_coverage::covered_gate_ids(
-            &live.project_root,
-            &source.head_ref,
-            Some(fresh.pr),
-            ids.clone(),
-        );
-        // trace:TASK-3111 trace:TASK-2843 | ai:codex
-        anyhow::ensure!(
-            ids.is_empty() || !covered.is_empty(),
-            "train source specs are uncovered by the branch/lease coverage filter"
-        );
-        let ids = aliases(&live.project_root, &covered)?;
         let mut policy_specs =
             crate::pr_cmd::ship_gate_spec_records_for_ids(&live.project_root, ids.clone());
         for (_, tags, _) in &mut policy_specs {
@@ -382,7 +421,7 @@ fn collect(
         let effective =
             rv::effective_recordings_for_sha(raw_bodies.iter().map(String::as_str), &fresh.head)
                 .map_err(anyhow::Error::msg)?;
-        let mut originals = Vec::new();
+        let mut originals: Bodies = Vec::new();
         let mut superseded_here = Vec::new();
         for (key, record, verdict) in verdicts {
             if verdict.is_closed() {
@@ -408,7 +447,7 @@ fn collect(
             if is_superseded {
                 // Covered by this car's current-head verdict, so the train's
                 // own exact-tip corpus gate must not re-weigh it either.
-                superseded_here.push(json!({"key": key, "record": record}));
+                superseded_here.push((key.clone(), record.clone()));
                 if !superseded.contains(&(key.clone(), record.clone())) {
                     superseded.push((key.clone(), record.clone()));
                 }
@@ -432,8 +471,7 @@ fn collect(
                 .is_none(),
                 "train original review authority refused"
             );
-            let reference = ledger::project::newest_verdict_event(&live.project_root, key);
-            originals.push(json!({"key": key, "record": record, "ledger_reference": reference}));
+            originals.push((key.clone(), record.clone()));
             if !mapped.contains(&(key.clone(), record.clone())) {
                 mapped.push((key.clone(), record.clone()));
             }
@@ -442,7 +480,7 @@ fn collect(
             !originals.is_empty(),
             "train car has no original authorized approval"
         );
-        sources.push(json!({"pr": fresh.pr, "head": fresh.head, "branch": source.head_ref, "specs": ids, "originals": originals, "superseded": superseded_here, "metadata":metadata, "policy_specs":policy_specs}));
+        sources.push(json!({"pr": fresh.pr, "head": fresh.head, "branch": source.head_ref, "specs": ids, "originals": original_references(&live.project_root, &originals)?, "superseded": compact_bodies(&superseded_here)?, "metadata":metadata, "policy_specs":policy_specs}));
         all_specs.extend(ids);
     }
     all_specs.sort();
@@ -490,9 +528,139 @@ fn collect(
         json!({"v": PATCH_VERSION, "repository": repository, "origin": origin,
         "change": change.id, "branch": change.branch, "base_ref": live.base,
         "base_tip": train.base, "tip": train.tip, "ci_key": ci_key, "cars": cars, "sources": sources,
-        "specs": all_specs, "bound_source_event": bound}),
+        "specs": all_specs, "bound_source_event": bound.as_ref().map(compact_event).transpose()?}),
         mapped,
     ))
+}
+
+// trace:BUG-2538 | ai:codex
+// Audit hashes bind the exact live inputs without copying growing review histories.
+// Full bodies remain invocation-local and still pass all ordinary authority checks.
+fn digest(value: &impl serde::Serialize) -> Result<String> {
+    use sha2::{Digest, Sha256};
+    Ok(format!("{:x}", Sha256::digest(serde_json::to_vec(value)?)))
+}
+
+fn compact_event(event: &ledger::GateEvent) -> Result<Value> {
+    Ok(json!({"change": event.change, "seq": event.seq, "sha256": digest(event)?}))
+}
+
+fn compact_bodies(bodies: &Bodies) -> Result<Value> {
+    use sha2::{Digest, Sha256};
+    let mut keys = std::collections::BTreeMap::<&str, (Sha256, usize)>::new();
+    for (key, record) in bodies {
+        let (hash, count) = keys.entry(key).or_default();
+        // Fixed-size framed hashes preserve order and multiplicity per key.
+        hash.update(digest(record)?.as_bytes());
+        *count += 1;
+    }
+    Ok(Value::Array(keys.into_iter().map(|(key, (hash, count))|
+        json!({"key": key, "count": count, "sha256": format!("{:x}", hash.finalize())})
+    ).collect()))
+}
+
+// Pin the answering event as well as the body set: a new ledger recording
+// must invalidate a sealed context even when its review body is identical.
+fn original_references(root: &Path, bodies: &Bodies) -> Result<Value> {
+    let mut references = compact_bodies(bodies)?;
+    for entry in references
+        .as_array_mut()
+        .expect("body summaries are an array")
+    {
+        let key = entry["key"]
+            .as_str()
+            .context("review summary key missing")?;
+        let reference = ledger::project::newest_verdict_event(root, key)
+            .as_ref()
+            .map(compact_event)
+            .transpose()?;
+        entry["ledger_reference"] = serde_json::to_value(reference)?;
+    }
+    Ok(references)
+}
+
+// trace:BUG-2538 | ai:codex
+#[derive(Debug)]
+pub(super) struct EvidenceTooLarge;
+
+impl std::fmt::Display for EvidenceTooLarge {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("train evidence would exceed the 16 MiB cap; ship this rider separately")
+    }
+}
+impl std::error::Error for EvidenceTooLarge {}
+
+fn ensure_budget(bytes: u64) -> Result<()> {
+    if bytes > MAX_EVIDENCE_BYTES {
+        return Err(EvidenceTooLarge.into());
+    }
+    Ok(())
+}
+
+/// Conservative byte budget before branch push, PR creation or CI. Include
+/// possible M1 unbound imports, proof metadata and a MiB for event envelopes,
+/// the bounded source-event reference and subsequent gate events. Recheck the
+/// actual ledger plus serialized event immediately before writing the audit.
+pub(super) fn preflight(live: &LiveTrainForge<'_>, train: &Built, branch: &str) -> Result<()> {
+    if train.cars.is_empty() {
+        return Ok(());
+    }
+    let mut bytes = 1024 * 1024;
+    bytes += serde_json::to_vec(&verify_structure(&live.main_worktree, train)?)?.len() as u64;
+    bytes += serde_json::to_vec(&(
+        branch,
+        &live.base,
+        &live.project_root,
+        &train.tip,
+        &train.base,
+    ))?
+    .len() as u64;
+    let mut imported = std::collections::BTreeSet::new();
+    let store = ledger::store_root(&live.project_root)?;
+    for car in &train.cars {
+        let source = live
+            .forge
+            .change_metadata(car.member.pr, &mut crate::network_retry::NoopSink)?;
+        let ids = resolved_member_spec_ids(
+            &live.project_root,
+            &source.head_ref,
+            &source.title,
+            &car.member.subject,
+            &car.member.body,
+        )?;
+        let ids = aliases(&live.project_root, &ids)?;
+        let bodies = read_bodies(&live.project_root, car.member.pr, &ids, &car.member.head)?;
+        // Budget both possible summaries using the full key set and include
+        // the source envelope (not just metadata nested inside it).
+        let references = original_references(&live.project_root, &bodies)?;
+        let metadata = json!({"state":format!("{:?}",source.state), "title":source.title,
+            "author":source.author,"base":source.base_ref,"branch":source.head_ref,"head":source.head_sha,
+            "draft":source.is_draft,"cross_repository":source.is_cross_repository,"repository":source.head_repo});
+        let policy = crate::pr_cmd::ship_gate_spec_records_for_ids(&live.project_root, ids.clone());
+        bytes += serde_json::to_vec(&json!({"pr":car.member.pr, "head":car.member.head,
+            "branch":source.head_ref, "specs":ids, "metadata":metadata, "policy_specs":policy,
+            "originals":references, "superseded":references}))?
+        .len() as u64;
+        // The top-level spec union is no larger than the per-car alias sets.
+        bytes += serde_json::to_vec(&ids)?.len() as u64;
+        // M1 only binds explicit trailing subject specs; aliases overestimate
+        // that set safely. Count every unbound line, including already-bound
+        // ones that M1 will skip. No rider ledger history is copied by M1.
+        for id in ids {
+            if imported.insert(id.clone()) {
+                let path = ledger::ledger_dir(&store)
+                    .join("by-spec")
+                    .join(format!("{id}.jsonl"));
+                match std::fs::metadata(path) {
+                    Ok(meta) => bytes += meta.len() * 2,
+                    Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+                    Err(e) => return Err(e.into()),
+                }
+            }
+        }
+        ensure_budget(bytes)?;
+    }
+    ensure_budget(bytes)
 }
 
 // Keep integration tests on the real final-gate path without wall-clock polling.
@@ -629,6 +797,31 @@ fn verify_structure(repo: &Path, train: &Built) -> Result<Vec<Value>> {
     Ok(proof)
 }
 
+/// The spec ids the merge step asks the verdict corpus about for one member:
+/// every id its branch, title and car message name, through the coverage
+/// filter, with each spec's aliases. The member gate asks about the same set
+/// ([`MemberChecks::corpus_ids`]), so a verdict that would stop the merge
+/// stops the member before the train is built.
+// trace:BUG-2569 | ai:claude
+pub(crate) fn merge_step_spec_ids(
+    root: &Path,
+    pr: u64,
+    head_ref: &str,
+    title: &str,
+    subject: &str,
+    body: &str,
+) -> Result<Vec<String>> {
+    let ids = resolved_member_spec_ids(root, head_ref, title, subject, body)?;
+    let covered =
+        crate::gate::trailer_coverage::covered_gate_ids(root, head_ref, Some(pr), ids.clone());
+    // trace:TASK-3111 trace:TASK-2843 | ai:codex
+    anyhow::ensure!(
+        ids.is_empty() || !covered.is_empty(),
+        "train source specs are uncovered by the branch/lease coverage filter"
+    );
+    aliases(root, &covered)
+}
+
 /// Branch names are hints: queue-work may append a rework suffix which the
 /// broad ID parser includes. Only discard an unresolved branch-only hint when
 /// explicit metadata supplies a resolvable spec. Ambiguous lookups still refuse,
@@ -738,7 +931,8 @@ fn read_bodies(root: &Path, pr: u64, ids: &[String], head: &str) -> Result<Bodie
             return Ok(vec![(key, serde_json::from_str(&publication.body)?)]);
         }
     }
-    corpus::corpus_gate_bodies(&[root, main.as_path()], pr, ids)
+    // trace:BUG-2569 | ai:claude — the same head-aware read the gate makes.
+    corpus::corpus_gate_bodies_at(&[root, main.as_path()], pr, ids, Some(head))
         .map_err(anyhow::Error::msg)?
         .into_iter()
         .map(|(key, body)| Ok((key, serde_json::from_str(&body)?)))
@@ -770,14 +964,17 @@ fn validate_ledger(root: &Path, key: &str) -> Result<()> {
         };
         let meta = file.metadata()?;
         anyhow::ensure!(
-            meta.is_file() && meta.nlink() == 1 && meta.len() <= 16 * 1024 * 1024,
+            meta.is_file() && meta.nlink() == 1 && meta.len() <= MAX_EVIDENCE_BYTES,
             "invalid train evidence file"
         );
         let mut body = String::new();
         file.by_ref()
-            .take(16 * 1024 * 1024 + 1)
+            .take(MAX_EVIDENCE_BYTES + 1)
             .read_to_string(&mut body)?;
-        anyhow::ensure!(body.len() <= 16 * 1024 * 1024, "train evidence too large");
+        anyhow::ensure!(
+            body.len() as u64 <= MAX_EVIDENCE_BYTES,
+            "train evidence too large"
+        );
         Ok(Some(body))
     }
     let dir = ledger::ledger_dir(root);

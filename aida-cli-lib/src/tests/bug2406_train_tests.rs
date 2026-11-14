@@ -133,7 +133,10 @@ impl Fixture {
     /// so the old guard is dropped first).
     fn reenv(&mut self, extra: &[(&'static str, Option<&str>)]) {
         self._env = None;
-        let mut pairs = vec![("PATH", Some(self.path.as_str()))];
+        let mut pairs = vec![
+            ("PATH", Some(self.path.as_str())),
+            ("USER", Some("train-test-operator")),
+        ];
         pairs.extend_from_slice(extra);
         let guard = crate::test_env::EnvVarsGuard::apply(&pairs);
         self._env = Some(guard);
@@ -270,7 +273,10 @@ impl Fixture {
             "#!/bin/sh\nfor arg in \"$@\"; do\ncase \"$arg\" in fetch|push|ls-remote) exec /usr/bin/git -c 'url.{}.insteadOf=https://github.com/fixture/train.git' \"$@\";; esac\ndone\nexec /usr/bin/git \"$@\"\n", origin.path().display()));
 
         let path = format!("{}:{}", bin.display(), std::env::var("PATH").unwrap());
-        let env = crate::test_env::EnvVarsGuard::apply(&[("PATH", Some(&path))]);
+        let env = crate::test_env::EnvVarsGuard::apply(&[
+            ("PATH", Some(&path)),
+            ("USER", Some("train-test-operator")),
+        ]);
         let state = json!({"prs":prs});
         save(root, &state);
         Self {
@@ -382,11 +388,13 @@ fn bug2441_unresolved_member_refuses((branch, title, cause): (&str, &str, &str))
     let f = Fixture::with_member_metadata(true, Some(branch), Some(title));
     let forge = GitHubForge::new(f.root());
     let mut live = f.live(&forge);
-    let (train, change) = f.opened(&mut live);
-    let lease = live.lease(change.id).unwrap();
-    let error = live
-        .merge_verified(&change, &train, lease.as_ref())
-        .unwrap_err();
+    // trace:BUG-2538 | ai:codex — evidence preflight now refuses before open.
+    let members: Vec<_> = [11, 12]
+        .into_iter()
+        .map(|n| live.gate(n).unwrap())
+        .collect();
+    let base = live.fetch_main().unwrap();
+    let error = live.build(&base, &members).unwrap_err();
     assert!(format!("{error:#}").contains(cause), "{error:#}");
     assert!(calls(f.root()).is_empty());
 }
@@ -589,6 +597,8 @@ fn bug2406_forged_build_refuses(fault: &str) {
         "base" => bad.base = bad.tip.clone(),
         "expired-release-cover" => {
             bad.cars[0].member.release = Some(crate::gate::mandate_ship::MandateCover {
+                gate_match: None,
+                issued_supervised: false,
                 id: uuid::Uuid::new_v4().to_string(),
                 principal: "fixture".into(),
             })
@@ -1320,14 +1330,22 @@ fn hold_on(pr: u64, head: &str) -> crate::gate::merge_hold_core::MergeHoldRecord
 
 /// An active ship-held mandate in the fixture's isolated HOME.
 fn plant_mandate() -> crate::gate::mandate_ship::MandateCover {
+    plant_mandate_with_gate_paths(false)
+}
+
+// trace:STORY-2733 | ai:codex
+fn plant_mandate_with_gate_paths(
+    include_gate_paths: bool,
+) -> crate::gate::mandate_ship::MandateCover {
     use crate::gate::mandate;
-    let principal = crate::gate::kernel_deps::current_user_id(None);
+    let principal = crate::gate::mandate::operator_principal();
     let m = mandate::Mandate {
         id: uuid::Uuid::new_v4().to_string(),
         principal: principal.clone(),
         seat: mandate::MANDATE_SEAT.into(),
         scope: mandate::SCOPE_SHIP_HELD.into(),
         include_supervised: false,
+        include_gate_paths,
         reason: Some("fixture fire".into()),
         issued_at: chrono::Utc::now() - chrono::Duration::minutes(1),
         expires_at: chrono::Utc::now() + chrono::Duration::hours(1),
@@ -1336,6 +1354,7 @@ fn plant_mandate() -> crate::gate::mandate_ship::MandateCover {
         scopes: Default::default(),
         kind: None,
         renewals: Vec::new(),
+        revived: None,
     };
     let dir = mandate::mandate_dir().unwrap();
     fs::create_dir_all(&dir).unwrap();
@@ -1346,6 +1365,8 @@ fn plant_mandate() -> crate::gate::mandate_ship::MandateCover {
     .unwrap();
     assert!(crate::gate::mandate_ship::mandate_still_active(&m.id));
     crate::gate::mandate_ship::MandateCover {
+        gate_match: None,
+        issued_supervised: false,
         id: m.id,
         principal,
     }
@@ -1393,6 +1414,104 @@ fn bug2406_held_member_released_under_mandate_lands() {
     let audit = ledger::project::events(f.root(), ledger::ChangeKey::pr(77));
     assert!(audit.iter().any(|e| matches!(&e.body,
         ledger::EventBody::TrainCoverage { proof } if !proof["cars"][0]["release_cover"].is_null())));
+}
+
+// trace:STORY-2733 | ai:codex
+fixture_case!(
+    mandate_train_final_audit_survives_hold_release,
+    mandate_final_audit,
+    "same"
+);
+fixture_case!(
+    mandate_train_final_audit_refuses_replacement,
+    mandate_final_audit,
+    "replacement"
+);
+fixture_case!(
+    mandate_train_final_audit_refuses_changed_paths,
+    mandate_final_audit,
+    "paths"
+);
+fixture_case!(
+    mandate_train_final_audit_refuses_new_protected_path,
+    mandate_final_audit,
+    "added"
+);
+fn mandate_final_audit(change_audit: &str) {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
+    let f = Fixture::new(true);
+    let forge = GitHubForge::new(f.root());
+    let mut live = f.live(&forge);
+    let mut cover = plant_mandate_with_gate_paths(true);
+    let dir = crate::gate::mandate::mandate_dir().unwrap();
+    let path = dir.join(format!("{}.json", cover.id));
+    let config = crate::gate::kernel_deps::aida_home_dir()
+        .unwrap()
+        .join(".aida/config.toml");
+    let protected_config = "[mandate.human_gates]\nprotected_paths = ['car11']\n";
+    fs::write(
+        &config,
+        if change_audit == "added" {
+            ""
+        } else {
+            protected_config
+        },
+    )
+    .unwrap();
+    let gates = crate::gate::mandate_gates::load_human_gates(f.root());
+    cover = crate::gate::mandate_ship::MandateCover::from_checked_paths(
+        cover.id,
+        cover.principal,
+        &["car11".into()],
+        &crate::gate::mandate_gates::ProtectedPaths::of(&gates.map_err(|e| e.to_string())),
+        false,
+    );
+    let mut members: Vec<_> = [11, 12]
+        .into_iter()
+        .map(|pr| live.gate(pr).unwrap())
+        .collect();
+    members[0].gate_audit = cover.gate_audit();
+    assert_eq!(members[0].gate_audit.is_some(), change_audit != "added");
+    members[0].release = Some(cover.clone());
+    let base = live.fetch_main().unwrap();
+    let train = live.build(&base, &members).unwrap();
+    let change = live.open(&train, "train/mandate-audit").unwrap();
+    assert_eq!(live.wait_ci(&change, &train).unwrap(), CiVerdict::Green);
+    let hold = hold_on(11, &members[0].head);
+    crate::gate::merge_hold_core::place_hold(f.root(), &hold).unwrap();
+    crate::gate::merge_hold_core::release_hold_under_mandate(
+        f.root(),
+        &hold,
+        &cover.principal,
+        &cover.id,
+        None,
+    )
+    .unwrap();
+    match change_audit {
+        "replacement" => {
+            fs::remove_file(path).unwrap();
+            plant_mandate_with_gate_paths(true);
+        }
+        "paths" => fs::write(config, "[mandate.human_gates]\nprotected_paths = []\n").unwrap(),
+        "same" => {}
+        "added" => fs::write(config, protected_config).unwrap(),
+        _ => unreachable!(),
+    }
+    let lease = live.lease(change.id).unwrap();
+    let result = live.merge_verified(&change, &train, lease.as_ref());
+    if change_audit == "same" {
+        result.unwrap();
+        assert_eq!(calls(f.root()).len(), 1);
+    } else {
+        let error = format!("{:#}", result.unwrap_err());
+        assert!(
+            error.contains("audit changed") || error.contains("mandate expired"),
+            "{error}"
+        );
+        assert!(calls(f.root()).is_empty());
+    }
 }
 
 fixture_case!(
@@ -1597,4 +1716,185 @@ fn bug2528_exact_tip_ci_wait_is_bounded_and_fails_closed() {
         || panic!("must refuse immediately"),
     )
     .unwrap_err();
+}
+
+// trace:BUG-2538 | ai:codex
+#[test]
+fn bug2538_long_review_history_trains_with_compact_audit() {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
+    let f = Fixture::new(true);
+    let mut record = f.records[0].clone();
+    record["rounds"] = json!((0..41).map(|_| f.records[0].clone()).collect::<Vec<_>>());
+    for sequence in 0..110 {
+        record["audit_sequence"] = json!(sequence);
+        ledger::store::append_one(
+            f.root(),
+            ledger::event::verdict_event(
+                f.root(),
+                ledger::ChangeKey::pr(11),
+                record.as_object().unwrap(),
+                Some(&ledger::GateSpec::with_key(
+                    "BUG-b6b1278890774ef993d2ebc327862470-173",
+                    None,
+                )),
+            ),
+        )
+        .unwrap();
+    }
+    assert!(
+        fs::read_to_string(ledger::store::ledger_file(
+            f.root(),
+            ledger::ChangeKey::pr(11)
+        ))
+        .unwrap()
+        .lines()
+        .count()
+            > 100
+    );
+    let forge = GitHubForge::new(f.root());
+    let mut live = f.live(&forge);
+    let (train, change) = f.opened(&mut live);
+    let lease = live.lease(change.id).unwrap();
+    live.merge_verified(&change, &train, lease.as_ref())
+        .unwrap();
+    assert_eq!(calls(f.root()).len(), 1);
+    let events = ledger::project::events(f.root(), ledger::ChangeKey::pr(77));
+    let proof = events
+        .iter()
+        .find_map(|event| match &event.body {
+            ledger::EventBody::TrainCoverage { proof } => Some(proof),
+            _ => None,
+        })
+        .unwrap();
+    assert!(serde_json::to_vec(proof).unwrap().len() < 32 * 1024);
+    for source in proof["sources"].as_array().unwrap() {
+        for original in source["originals"].as_array().unwrap() {
+            assert!(original.get("record").is_none());
+            assert_eq!(original["sha256"].as_str().unwrap().len(), 64);
+        }
+    }
+    assert_ne!(digest(&record).unwrap(), digest(&f.records[0]).unwrap());
+}
+
+// trace:BUG-2538 | ai:codex
+#[test]
+fn bug2538_oversized_import_ejects_before_publication() {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
+    let f = Fixture::new(true);
+    let mut record = f.records[0].clone();
+    record["audit_padding"] = json!("x".repeat(9 * 1024 * 1024));
+    ledger::store::append_unbound(
+        f.root(),
+        &ledger::GateSpec::with_key("BUG-2400", None),
+        record.as_object().unwrap(),
+    )
+    .unwrap();
+    let forge = GitHubForge::new(f.root());
+    let mut live = f.live(&forge);
+    let member = live.gate(11).unwrap();
+    let base = live.fetch_main().unwrap();
+    let train = live.build(&base, &[member]).unwrap();
+    assert!(train.cars.is_empty());
+    assert_eq!(train.dropped[0].pr, 11);
+    assert!(train.dropped[0].reason.contains("16 MiB"));
+    let transport = fs::read_to_string(f.root().join("transport-calls")).unwrap();
+    assert!(!transport.lines().any(|line| line.starts_with("pr create")));
+    assert!(ensure_budget(MAX_EVIDENCE_BYTES).is_ok());
+    assert!(ensure_budget(MAX_EVIDENCE_BYTES + 1).is_err());
+}
+
+/// BUG-2569: a promotion branch claims no spec, so the coverage filter keeps
+/// every spec its car message names (promotion #3966 named 45).
+// trace:BUG-2569 | ai:claude
+const BUG2569_BRANCH: &str = "promote/fixture-6";
+
+/// BUG-2569: move main, merge it cleanly into PR 11's branch with `message`
+/// and point the forge at the new head. PR 11's approval stays at the old
+/// head, so it reaches the new one only by carry-over.
+// trace:BUG-2569 | ai:claude
+fn bug2569_carried_head(f: &Fixture, message: &str) -> String {
+    const BRANCH: &str = BUG2569_BRANCH;
+    let root = f.root();
+    fs::write(root.join("moved"), "main moved\n").unwrap();
+    commit(root, "main moves");
+    g(root, &["push", "-q", "origin", "main"]);
+    g(root, &["checkout", "-q", BRANCH]);
+    g(root, &["merge", "-q", "--no-ff", "-m", message, "main"]);
+    let head = g(root, &["rev-parse", "HEAD"]);
+    g(root, &["push", "-q", "origin", BRANCH]);
+    g(root, &["checkout", "-q", "main"]);
+    let mut state: Value =
+        serde_json::from_slice(&fs::read(root.join("transport.json")).unwrap()).unwrap();
+    state["prs"]["11"]["headRefOid"] = json!(head);
+    save(root, &state);
+    head
+}
+
+/// BUG-2569: a refusal for STORY-2220 recorded on `change` at `sha`.
+// trace:BUG-2569 | ai:claude
+fn bug2569_refusal(f: &Fixture, change: u64, sha: &str) {
+    let record = json!({"verdict":"request-changes", "reviewed_sha":sha,
+        "recorded_at":chrono::Utc::now().to_rfc3339(), "recorded_by":"fixture other reviewer"});
+    let spec = ledger::GateSpec::with_key("STORY-b6b1278890774ef993d2ebc327862470-123", None);
+    ledger::store::append_one(
+        f.root(),
+        ledger::event::verdict_event(
+            f.root(),
+            ledger::ChangeKey::pr(change),
+            record.as_object().unwrap(),
+            Some(&spec),
+        ),
+    )
+    .unwrap();
+}
+
+/// BUG-2569 (train 9): PR 11's approval carried over a clean merge of main.
+/// Its car message names STORY-2220, whose newest verdict is a refusal of
+/// another change at another commit. The member gate admitted it and the
+/// merge step refused it after the CI run. Both now read that refusal as
+/// being about the other change, and the train lands.
+// trace:BUG-2569 | ai:claude
+#[test]
+fn bug_2569_train_lands_a_carried_member_whose_car_names_a_spec_refused_elsewhere() {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
+    let f = Fixture::with_member_metadata(false, Some(BUG2569_BRANCH), None);
+    bug2569_carried_head(&f, "Merge main into the member (STORY-2220)");
+    bug2569_refusal(&f, 99, &"c".repeat(40));
+    let forge = GitHubForge::new(f.root());
+    let mut live = f.live(&forge);
+    let (train, change) = f.opened(&mut live);
+    let lease = live.lease(change.id).unwrap();
+    live.merge_verified(&change, &train, lease.as_ref())
+        .unwrap_or_else(|e| panic!("the carried member must land: {e:#}"));
+    assert_eq!(calls(f.root()).len(), 1, "the train merges once");
+}
+
+/// BUG-2569: the member gate asks about the specs the car message names, as
+/// the merge step does. Change 99 stands refused at a commit PR 11's head
+/// contains, under a spec only PR 11's car message names: that stops PR 11
+/// at the gate, before a train is built, not at the merge after the CI run.
+// trace:BUG-2569 | ai:claude
+#[test]
+fn bug_2569_member_gate_refuses_what_the_merge_step_would_refuse() {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
+    let f = Fixture::with_member_metadata(false, Some(BUG2569_BRANCH), None);
+    bug2569_carried_head(&f, "Merge main into the member (STORY-2220)");
+    let inside = f.records[0]["reviewed_sha"].as_str().unwrap().to_string();
+    bug2569_refusal(&f, 99, &inside);
+    let forge = GitHubForge::new(f.root());
+    let mut live = f.live(&forge);
+    let refused = match live.gate(11) {
+        Ok(_) => panic!("the member gate admitted a member the merge step refuses"),
+        Err(why) => format!("{why:#}"),
+    };
+    assert!(refused.contains("do not approve"), "{refused}");
+    assert!(calls(f.root()).is_empty());
 }

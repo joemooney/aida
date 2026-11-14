@@ -21,6 +21,54 @@ fn pinned_env() -> EnvVarsGuard {
     env
 }
 
+// trace:BUG-2544 | ai:codex
+#[test]
+fn bug_2544_delegation_preserves_parent_rejection_reason() {
+    let tmp = tempfile::tempdir().unwrap();
+    let mut env = pinned_env();
+    env.set_key("AIDA_HOME", tmp.path().join("home"));
+    env.unset_key(GRANT_ENV);
+    let absent = validate_child_delegation(tmp.path(), "reviewer").unwrap_err();
+    assert!(absent.to_string().contains("AIDA_SESSION_GRANT is absent"));
+    let id = test_support::mint_grant_for(tmp.path(), SUBJECT, "advisor", &["reviewer"]);
+    env.set_key(GRANT_ENV, &id);
+    env.set_key("AIDA_USER", "different-launcher");
+    let mismatch = validate_child_delegation(tmp.path(), "reviewer").unwrap_err();
+    let text = mismatch.to_string();
+    assert!(text.contains("different-launcher"), "{text}");
+    assert!(text.contains(SUBJECT), "{text}");
+    assert!(
+        !text.contains(&id),
+        "only the grant prefix should be disclosed"
+    );
+    env.set_key("AIDA_USER", SUBJECT);
+    revoke_by_id(&id).unwrap();
+    let revoked = validate_child_delegation(tmp.path(), "reviewer").unwrap_err();
+    assert!(revoked.to_string().contains("revoked at"), "{revoked}");
+}
+
+// trace:BUG-2544 | ai:codex
+#[test]
+fn bug_2544_sibling_reviewers_do_not_consume_parent_grant() {
+    let tmp = tempfile::tempdir().unwrap();
+    let mut env = pinned_env();
+    env.set_key("AIDA_HOME", tmp.path().join("home"));
+    let id = test_support::mint_grant_for(tmp.path(), SUBJECT, "advisor", &["reviewer"]);
+    env.set_key(GRANT_ENV, &id);
+    let before = std::fs::read(grant_path(&id).unwrap()).unwrap();
+    let first = issue_child(tmp.path(), "reviewer", "reviewer-one").unwrap();
+    let second = issue_child(tmp.path(), "reviewer", "reviewer-two").unwrap();
+    assert_ne!(first.id, second.id);
+    assert_eq!(std::fs::read(grant_path(&id).unwrap()).unwrap(), before);
+    revoke_by_id(&first.id).unwrap();
+    validate_child_delegation(tmp.path(), "reviewer").unwrap();
+    assert!(matches!(
+        grant_check_for(tmp.path(), &second.id, "reviewer-two"),
+        GrantCheck::Valid(_)
+    ));
+    revoke_by_id(&second.id).unwrap();
+}
+
 /// Apply `pairs` for this value's lifetime under the test's already-held
 /// [`pinned_env`] guard (the env lock is not reentrant), restoring each
 /// key's prior value on drop.
@@ -674,4 +722,39 @@ fn bug_2486_child_cap_preserves_parent_binding_and_revocation() {
     revoked.binding.clear();
     write_grant(&revoked).unwrap();
     assert!(cap_launch_child_expiry(&child.id, deadline - 60).is_err());
+}
+
+// BUG-2544: a launch that outlived the deputy job holding its grant failed
+// with a bare "no valid parent seat grant is active". The refusal now names
+// the grant and the rejection, and a presenter refusal says how to launch.
+// trace:BUG-2544 | ai:claude
+#[test]
+fn bug_2544_parent_grant_refusal_names_reason_and_background_fix() {
+    let id = "215c5bb6-63cc-41ab-ac56-b5960df84452";
+    let presenter = parent_grant_refusal(
+        id,
+        &GrantRejection::PresenterNotBound {
+            bound_to: "process 3297532".into(),
+        },
+    );
+    assert!(
+        presenter.starts_with("no valid parent seat grant is active: grant 215c5bb6"),
+        "{presenter}"
+    );
+    assert!(
+        presenter.contains("bound to process 3297532"),
+        "{presenter}"
+    );
+    assert!(
+        presenter.contains("background") && presenter.contains("`wait`"),
+        "{presenter}"
+    );
+    let expired = parent_grant_refusal(
+        id,
+        &GrantRejection::Expired {
+            at: chrono::Utc::now(),
+        },
+    );
+    assert!(expired.contains("it expired at"), "{expired}");
+    assert!(!expired.contains("background"), "{expired}");
 }

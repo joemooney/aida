@@ -352,7 +352,21 @@ mod task_1244_drain_merge_lease_tests {
         let src = format!(
             "{}\n{}\n{}\n{}\n{}\n{}\n{}\n{}\n{}",
             include_str!("lib.rs"),
-            include_str!("lib_part1.rs"),
+            concat!(
+                include_str!("glyph_render.rs"),
+                include_str!("cli_entry.rs"),
+                include_str!("history_filter.rs"),
+                include_str!("output_policy.rs"),
+                include_str!("list_render.rs"),
+                include_str!("agent_errors.rs"),
+                include_str!("cast_recording.rs"),
+                include_str!("argv_rewrite.rs"),
+                include_str!("review_helpers.rs"),
+                include_str!("finding_queue.rs"),
+                include_str!("gitignore_entries.rs"),
+                include_str!("store_write_policy.rs"),
+                include_str!("status_policy.rs")
+            ),
             concat!(
                 include_str!("retire_legacy.rs"),
                 "\n",
@@ -372,13 +386,31 @@ mod task_1244_drain_merge_lease_tests {
                 "\n",
                 include_str!("history_reporting.rs")
             ),
-            include_str!("lib_part3.rs"),
+            concat!(
+                include_str!("ci_staleness.rs"),
+                include_str!("ci_watch.rs"),
+                include_str!("bounded_process.rs"),
+                include_str!("forge_lookup.rs"),
+                include_str!("store_lookup.rs"),
+                include_str!("output_policy.rs"),
+                include_str!("statusline_counts.rs"),
+                include_str!("session_warnings.rs"),
+                include_str!("status_policy.rs"),
+                include_str!("orchestrator_badge.rs"),
+                include_str!("default_branch.rs"),
+                include_str!("plan_structure.rs"),
+                include_str!("worktree_dirty.rs")
+            ),
             concat!(concat!(
                 include_str!("scoped_lease.rs"),
                 "\n",
                 include_str!("pull_lines.rs")
             )),
-            include_str!("lib_part5.rs"),
+            concat!(
+                include_str!("review_commands.rs"),
+                include_str!("review_advisor_launch.rs"),
+                include_str!("review_prompt.rs")
+            ),
             concat!(
                 include_str!("regression_tests.rs"),
                 "\n",
@@ -809,7 +841,21 @@ mod bug_1205_ci_phase_fallthrough_tests {
         let src = format!(
             "{}\n{}\n{}\n{}\n{}\n{}\n{}\n{}",
             include_str!("lib.rs"),
-            include_str!("lib_part1.rs"),
+            concat!(
+                include_str!("glyph_render.rs"),
+                include_str!("cli_entry.rs"),
+                include_str!("history_filter.rs"),
+                include_str!("output_policy.rs"),
+                include_str!("list_render.rs"),
+                include_str!("agent_errors.rs"),
+                include_str!("cast_recording.rs"),
+                include_str!("argv_rewrite.rs"),
+                include_str!("review_helpers.rs"),
+                include_str!("finding_queue.rs"),
+                include_str!("gitignore_entries.rs"),
+                include_str!("store_write_policy.rs"),
+                include_str!("status_policy.rs")
+            ),
             concat!(
                 include_str!("retire_legacy.rs"),
                 "\n",
@@ -829,13 +875,31 @@ mod bug_1205_ci_phase_fallthrough_tests {
                 "\n",
                 include_str!("history_reporting.rs")
             ),
-            include_str!("lib_part3.rs"),
+            concat!(
+                include_str!("ci_staleness.rs"),
+                include_str!("ci_watch.rs"),
+                include_str!("bounded_process.rs"),
+                include_str!("forge_lookup.rs"),
+                include_str!("store_lookup.rs"),
+                include_str!("output_policy.rs"),
+                include_str!("statusline_counts.rs"),
+                include_str!("session_warnings.rs"),
+                include_str!("status_policy.rs"),
+                include_str!("orchestrator_badge.rs"),
+                include_str!("default_branch.rs"),
+                include_str!("plan_structure.rs"),
+                include_str!("worktree_dirty.rs")
+            ),
             concat!(concat!(
                 include_str!("scoped_lease.rs"),
                 "\n",
                 include_str!("pull_lines.rs")
             )),
-            include_str!("lib_part5.rs"),
+            concat!(
+                include_str!("review_commands.rs"),
+                include_str!("review_advisor_launch.rs"),
+                include_str!("review_prompt.rs")
+            ),
             concat!(
                 include_str!("regression_tests.rs"),
                 "\n",
@@ -965,7 +1029,21 @@ mod bug_1195_review_story_lookup_tests {
         let src = format!(
             "{}\n{}\n{}\n{}\n{}\n{}\n{}\n{}",
             include_str!("lib.rs"),
-            include_str!("lib_part1.rs"),
+            concat!(
+                include_str!("glyph_render.rs"),
+                include_str!("cli_entry.rs"),
+                include_str!("history_filter.rs"),
+                include_str!("output_policy.rs"),
+                include_str!("list_render.rs"),
+                include_str!("agent_errors.rs"),
+                include_str!("cast_recording.rs"),
+                include_str!("argv_rewrite.rs"),
+                include_str!("review_helpers.rs"),
+                include_str!("finding_queue.rs"),
+                include_str!("gitignore_entries.rs"),
+                include_str!("store_write_policy.rs"),
+                include_str!("status_policy.rs")
+            ),
             concat!(
                 include_str!("retire_legacy.rs"),
                 "\n",
@@ -985,13 +1063,31 @@ mod bug_1195_review_story_lookup_tests {
                 "\n",
                 include_str!("history_reporting.rs")
             ),
-            include_str!("lib_part3.rs"),
+            concat!(
+                include_str!("ci_staleness.rs"),
+                include_str!("ci_watch.rs"),
+                include_str!("bounded_process.rs"),
+                include_str!("forge_lookup.rs"),
+                include_str!("store_lookup.rs"),
+                include_str!("output_policy.rs"),
+                include_str!("statusline_counts.rs"),
+                include_str!("session_warnings.rs"),
+                include_str!("status_policy.rs"),
+                include_str!("orchestrator_badge.rs"),
+                include_str!("default_branch.rs"),
+                include_str!("plan_structure.rs"),
+                include_str!("worktree_dirty.rs")
+            ),
             concat!(concat!(
                 include_str!("scoped_lease.rs"),
                 "\n",
                 include_str!("pull_lines.rs")
             )),
-            include_str!("lib_part5.rs"),
+            concat!(
+                include_str!("review_commands.rs"),
+                include_str!("review_advisor_launch.rs"),
+                include_str!("review_prompt.rs")
+            ),
             concat!(
                 include_str!("regression_tests.rs"),
                 "\n",
@@ -1022,7 +1118,21 @@ mod bug_1173_detection_hold_tests {
         let src = format!(
             "{}\n{}\n{}\n{}\n{}\n{}\n{}\n{}",
             include_str!("lib.rs"),
-            include_str!("lib_part1.rs"),
+            concat!(
+                include_str!("glyph_render.rs"),
+                include_str!("cli_entry.rs"),
+                include_str!("history_filter.rs"),
+                include_str!("output_policy.rs"),
+                include_str!("list_render.rs"),
+                include_str!("agent_errors.rs"),
+                include_str!("cast_recording.rs"),
+                include_str!("argv_rewrite.rs"),
+                include_str!("review_helpers.rs"),
+                include_str!("finding_queue.rs"),
+                include_str!("gitignore_entries.rs"),
+                include_str!("store_write_policy.rs"),
+                include_str!("status_policy.rs")
+            ),
             concat!(
                 include_str!("retire_legacy.rs"),
                 "\n",
@@ -1042,13 +1152,31 @@ mod bug_1173_detection_hold_tests {
                 "\n",
                 include_str!("history_reporting.rs")
             ),
-            include_str!("lib_part3.rs"),
+            concat!(
+                include_str!("ci_staleness.rs"),
+                include_str!("ci_watch.rs"),
+                include_str!("bounded_process.rs"),
+                include_str!("forge_lookup.rs"),
+                include_str!("store_lookup.rs"),
+                include_str!("output_policy.rs"),
+                include_str!("statusline_counts.rs"),
+                include_str!("session_warnings.rs"),
+                include_str!("status_policy.rs"),
+                include_str!("orchestrator_badge.rs"),
+                include_str!("default_branch.rs"),
+                include_str!("plan_structure.rs"),
+                include_str!("worktree_dirty.rs")
+            ),
             concat!(concat!(
                 include_str!("scoped_lease.rs"),
                 "\n",
                 include_str!("pull_lines.rs")
             )),
-            include_str!("lib_part5.rs"),
+            concat!(
+                include_str!("review_commands.rs"),
+                include_str!("review_advisor_launch.rs"),
+                include_str!("review_prompt.rs")
+            ),
             concat!(
                 include_str!("regression_tests.rs"),
                 "\n",

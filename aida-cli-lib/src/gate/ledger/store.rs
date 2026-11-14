@@ -60,6 +60,24 @@ pub(crate) fn lock_ledger_exclusive(root: &Path) -> std::io::Result<LedgerLock> 
     Ok(LedgerLock { file })
 }
 
+// Serialize the final source comparison and append against every ledger writer.
+// trace:BUG-2525 | ai:codex
+pub(crate) fn with_exclusive<T>(
+    root: &Path,
+    f: impl FnOnce() -> std::io::Result<T>,
+) -> std::io::Result<T> {
+    let _lock = lock_ledger_exclusive(root)?;
+    struct Depth;
+    impl Drop for Depth {
+        fn drop(&mut self) {
+            SHARED_DEPTH.with(|d| d.set(d.get().saturating_sub(1)));
+        }
+    }
+    SHARED_DEPTH.with(|d| d.set(d.get() + 1));
+    let _depth = Depth;
+    f()
+}
+
 thread_local! {
     /// How many [`with_lock`] frames this thread is inside: a nested writer
     /// (an append indexing its spec) already holds the shared lock.
@@ -137,10 +155,31 @@ fn open_append(path: &Path) -> std::io::Result<std::fs::File> {
     })
 }
 
+/// The text of the regular file at `path`; `None` when it is absent,
+/// unreadable, not UTF-8 or not a regular file. A regular-file check comes
+/// before the open, so a FIFO or device in a ledger's place never hangs a
+/// lossy reader (the strict reader in `checked` refuses it); the opened
+/// handle is checked again before any read.
+// trace:BUG-2543 | ai:claude
+pub(crate) fn read_regular(path: &Path) -> Option<String> {
+    use std::io::Read as _;
+    if !std::fs::metadata(path).ok()?.is_file() {
+        return None;
+    }
+    let mut file = std::fs::File::open(path).ok()?;
+    if !file.metadata().ok()?.is_file() {
+        return None;
+    }
+    let mut body = String::new();
+    file.read_to_string(&mut body).ok()?;
+    Some(body)
+}
+
 /// Every parseable event on the change's ledger, in file order. A line that
 /// does not parse (a torn final write) is skipped, never fatal.
 pub(crate) fn read_file(root: &Path, change: ChangeKey) -> Vec<GateEvent> {
-    let Ok(body) = std::fs::read_to_string(ledger_file(root, change)) else {
+    // trace:BUG-2543 | ai:claude — never blocks on a FIFO.
+    let Some(body) = read_regular(&ledger_file(root, change)) else {
         return Vec::new();
     };
     body.lines()
@@ -230,12 +269,20 @@ fn append_locked(
     let existing = read_file(root, change);
     let mut pending: Vec<GateEvent> = Vec::new();
     for event in events {
-        let known = event.verdict_record().is_some_and(|record| {
-            existing
-                .iter()
-                .chain(pending.iter())
-                .any(|e| e.verdict_record() == Some(record) && e.spec == event.spec)
-        });
+        // trace:BUG-2548 | ai:codex — retries keep one durable escalation.
+        let manual_known = match &event.body {
+            EventBody::ManualReviewRequested { request_id, .. } => existing.iter().chain(pending.iter()).any(|e| {
+                matches!(&e.body, EventBody::ManualReviewRequested { request_id: known, .. } if known == request_id)
+            }),
+            _ => false,
+        };
+        let known = manual_known
+            || event.verdict_record().is_some_and(|record| {
+                existing
+                    .iter()
+                    .chain(pending.iter())
+                    .any(|e| e.verdict_record() == Some(record) && e.spec == event.spec)
+            });
         if !known {
             pending.push(event);
         }
@@ -320,7 +367,8 @@ pub(crate) fn unbound_file(root: &Path, spec: &str) -> PathBuf {
 
 /// Every parseable event on `spec`'s unbound ledger, in file order.
 pub(crate) fn read_unbound(root: &Path, spec: &str) -> Vec<GateEvent> {
-    let Ok(body) = std::fs::read_to_string(unbound_file(root, spec)) else {
+    // trace:BUG-2543 | ai:claude — never blocks on a FIFO.
+    let Some(body) = read_regular(&unbound_file(root, spec)) else {
         return Vec::new();
     };
     body.lines()
@@ -397,6 +445,7 @@ pub(crate) fn append_unbound_expected(
 /// the key its unbound original was written with).
 // trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
 // trace:STORY-2324 | ai:claude
+// trace:BUG-2517 | ai:codex
 pub(crate) fn bind_unbound(
     root: &Path,
     gate_spec: &GateSpec,
@@ -414,6 +463,7 @@ pub(crate) fn bind_unbound(
         .collect();
     let unbound: Vec<GateEvent> = read_unbound(root, &spec)
         .into_iter()
+        .filter(|e| !e.is_spec_only())
         .filter(|u| {
             !bound_elsewhere
                 .iter()

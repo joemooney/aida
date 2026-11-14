@@ -5,7 +5,7 @@ use super::*;
 use crate::forge::ForgeKind;
 
 #[derive(Debug, Clone)]
-pub(super) struct Change {
+pub(crate) struct Change {
     pub id: u64,
     pub head: String,
     // The change's own target branch; overlap is judged against it, as the
@@ -26,7 +26,7 @@ impl Change {
         format!("{}-{}", if self.gitlab { "MR" } else { "PR" }, self.id)
     }
 }
-pub(super) struct Repository {
+pub(crate) struct Repository {
     pub identity: String,
     kind: ForgeKind,
     host: String,
@@ -36,7 +36,7 @@ pub(super) struct Repository {
 
 // Apply the same repository-routing hygiene to probes and both child levels.
 // trace:TASK-1993 | ai:codex
-fn clear_routing(command: &mut Command) {
+pub(crate) fn clear_routing(command: &mut Command) {
     for name in [
         "GH_REPO",
         "GLAB_REPO",
@@ -80,7 +80,7 @@ fn git(root: &Path, args: &[&str]) -> Result<String> {
 // Resolve the initial root with the same bounded, sanitized Git probes as all
 // later operations. Ambient Git routing cannot select another repository.
 // trace:TASK-1993 | ai:codex
-pub(super) fn main_root(start: &Path) -> Result<PathBuf> {
+pub(crate) fn main_root(start: &Path) -> Result<PathBuf> {
     // TASK-2053: recognise a seat clone before any git runs in `start`.
     // trace:TASK-2053 | ai:claude
     match crate::seat_clone::main_for(start) {

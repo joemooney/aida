@@ -57,15 +57,43 @@ pub(crate) struct GateEvent {
     pub body: EventBody,
 }
 
+// trace:BUG-2517 | ai:codex
+impl GateEvent {
+    /// Explicit local reviews never acquire change authority through later binding.
+    pub(crate) fn is_spec_only(&self) -> bool {
+        self.verdict_record()
+            .is_some_and(|r| r.get("change_binding").and_then(|v| v.as_str()) == Some("unbound"))
+    }
+}
+
 /// What happened. Slice 1 carried verdicts; slice 2 adds holds, their
 /// releases and label syncs; slice 3 adds carry-over proofs.
 // trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 #[serde(tag = "kind", rename_all = "kebab-case")]
 pub(crate) enum EventBody {
+    /// Advisory escalation only; grants no review or merge authority.
+    // trace:BUG-2548 | ai:codex
+    ManualReviewRequested {
+        request_id: String,
+        recipient: String,
+    },
     /// Invocation evidence only. Never deserialized into merge authorization.
     // trace:BUG-b6b1278890774ef993d2ebc327862470-179 | ai:codex
     TrainCoverage { proof: serde_json::Value },
+    /// An advisor admitted one fresh review at a head that already carries
+    /// a conclusive verdict (the review contract changed after it). Lifts
+    /// the duplicate-review refusal only while that exact verdict
+    /// (`superseded_verdict` recorded at `superseded_recorded_at`) is still
+    /// the head's newest; the next recorded verdict ends it. Grants no
+    /// review or merge authority.
+    // trace:BUG-2557 | ai:claude
+    RereviewAdmitted {
+        reason: String,
+        by: String,
+        superseded_verdict: String,
+        superseded_recorded_at: String,
+    },
     /// A review verdict: the full record exactly as the verdict writer built
     /// it, so `parse_recorded_verdict` reads it unchanged.
     Verdict { record: JsonObj },

@@ -468,7 +468,12 @@ mod tests {
         // Keep this list short and re-evaluate any addition. (Today the
         // master templates have full parity, so the allowlist is empty.)
         let command_only: HashSet<&str> = HashSet::new();
-        let skill_only: HashSet<&str> = ["aida-pickup"].iter().copied().collect();
+        // aida-emergency-fix is operator-invoked only (disable-model-invocation),
+        // so it has no slash-command twin. trace:STORY-2732 | ai:claude
+        let skill_only: HashSet<&str> = ["aida-pickup", "aida-emergency-fix"]
+            .iter()
+            .copied()
+            .collect();
 
         // Folder-form skills (`skills/<name>/SKILL.md`) and flat skills
         // (`skills/<name>.md`) both reduce to their canonical name via the

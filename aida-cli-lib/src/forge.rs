@@ -687,15 +687,14 @@ pub struct MergeOptions {
     /// Explicit squash/merge subject. `None` lets the forge default (gh: the PR
     /// title; pure-git: the branch head's subject).
     pub squash_subject: Option<String>,
-    /// Explicit squash body. `None` lets the forge build its default (gh:
+    /// Explicit squash/merge body. `None` lets the forge build its default (gh:
     /// the branch's commit messages plus auto-derived `Co-authored-by:`
     /// trailers). `aida pr ship` sets this when the default body would carry
     /// a non-allowlisted email (TASK-1330 identity hygiene): passing an
     /// explicit body both strips the offending trailers and suppresses the
-    /// forge's auto-derivation. GitHub-only today — gh passes it as
-    /// `--body`; the GitLab and pure-git merge paths ignore it (their squash
-    /// message comes from `squash_subject`, so they never auto-derive
-    /// co-author trailers in the first place).
+    /// forge's auto-derivation. GitHub passes it as `--body`; GitLab sends the
+    /// corresponding squash/merge commit message, and pure-git includes it
+    /// when creating the commit. Rebase creates no synthetic merge commit.
     // trace:TASK-1330 | ai:claude
     pub squash_body: Option<String>,
     /// Delete the source branch after a successful merge (forge-side).
@@ -825,6 +824,12 @@ pub(crate) fn github_merge_argv(id: u64, opts: &MergeOptions) -> Vec<String> {
             if let Some(subject) = &opts.squash_subject {
                 a.push("--subject".into());
                 a.push(subject.clone());
+            }
+            // trace:STORY-2733 | ai:codex — merge commits retain mandate audit bodies too.
+            if other == MergeMethod::Merge {
+                if let Some(body) = &opts.squash_body {
+                    a.extend(["--body".into(), body.clone()]);
+                }
             }
             if opts.delete_branch {
                 a.push("--delete-branch".into());
@@ -2093,6 +2098,46 @@ impl GitHubForge {
         };
         CiProbeEvidence { probe, head_sha }
     }
+}
+
+/// Every open GitHub change with its title, labels and check rollup, in one
+/// bounded read. `pin` fixes the host and clears inherited routing, as the
+/// caller's pinned discovery does. This is a plain read for the landing
+/// reconciler's pass: it is not a train forge call.
+// trace:STORY-2768 | ai:claude
+pub(crate) fn github_open_changes_detailed(
+    root: &Path,
+    slug: &str,
+    pin: &dyn Fn(&mut Command),
+) -> Result<Vec<serde_json::Value>> {
+    let mut command = Command::new("gh");
+    command
+        .args([
+            "pr",
+            "list",
+            "--state",
+            "open",
+            "--limit",
+            "1000",
+            "--repo",
+            slug,
+            "--json",
+            "number,title,headRefOid,headRefName,baseRefName,isDraft,labels,statusCheckRollup,updatedAt",
+        ])
+        .current_dir(root)
+        .stdin(std::process::Stdio::null());
+    pin(&mut command);
+    let out = crate::command_output_with_timeout(command, std::time::Duration::from_secs(60))
+        .context("the forge listing of open changes failed to run or timed out")?;
+    anyhow::ensure!(
+        out.status.success(),
+        "the forge listing of open changes failed: {}",
+        String::from_utf8_lossy(&out.stderr)
+            .split_whitespace()
+            .collect::<Vec<_>>()
+            .join(" ")
+    );
+    serde_json::from_slice(&out.stdout).context("invalid forge listing")
 }
 
 impl Forge for GitHubForge {
@@ -3771,19 +3816,24 @@ impl Forge for PureGitForge {
             }
             // `--no-edit` keeps the default merge message without opening an
             // editor (which would hang a non-interactive ship/drain).
-            MergeMethod::Merge => anyhow::ensure!(
-                git(&[
-                    "merge",
-                    "--no-ff",
-                    "--no-edit",
-                    crate::git_arg_guard::END_OF_OPTIONS,
-                    &c.branch
-                ])?
-                .status
-                .success(),
-                "pure-git merge: `git merge --no-ff {}` failed",
-                c.branch
-            ),
+            MergeMethod::Merge => {
+                let mut args = vec!["merge", "--no-ff", "--no-edit"];
+                let subject;
+                // trace:STORY-2733 | ai:codex
+                if let Some(body) = opts.squash_body.as_deref() {
+                    subject = opts
+                        .squash_subject
+                        .clone()
+                        .unwrap_or_else(|| format!("Merge {} into {}", c.branch, base));
+                    args.extend(["-m", &subject, "-m", body]);
+                }
+                args.extend([crate::git_arg_guard::END_OF_OPTIONS, &c.branch]);
+                anyhow::ensure!(
+                    git(&args)?.status.success(),
+                    "pure-git merge: `git merge --no-ff {}` failed",
+                    c.branch
+                );
+            }
             MergeMethod::Rebase => anyhow::ensure!(
                 git(&["rebase", crate::git_arg_guard::END_OF_OPTIONS, &c.branch])?
                     .status
@@ -4072,6 +4122,18 @@ fn gitlab_merge_api_shape(
     };
     if let Some(message) = message {
         fields.push(("squash_commit_message".into(), message));
+    }
+    // A post-rebase `/merge` (squash=false) still creates a merge commit on
+    // merge-commit and semi-linear projects, so it carries the audit too.
+    // trace:STORY-2733 | ai:codex
+    // trace:STORY-2733 | ai:claude
+    if matches!(opts.method, MergeMethod::Merge | MergeMethod::Rebase) {
+        if let Some(body) = &opts.squash_body {
+            fields.push((
+                "merge_commit_message".into(),
+                format!("{}\n\n{body}", subject.unwrap_or(mr_title)),
+            ));
+        }
     }
     GitLabMergeApiRequest {
         path: format!("{mr_path}/merge"),
@@ -6628,6 +6690,83 @@ mod tests {
         );
     }
 
+    // trace:STORY-2733 | ai:codex
+    #[test]
+    fn mandate_audit_body_reaches_merge_commits_on_every_forge() {
+        let mut opts = MergeOptions::squash();
+        opts.method = MergeMethod::Merge;
+        let audit = "Aida-Mandate-Gate-Path: {\"path\":\"aida-cli-lib/src/gate/x.rs\"}";
+        opts.squash_body = Some(audit.into());
+        let argv = github_merge_argv(7, &opts);
+        assert!(argv
+            .windows(2)
+            .any(|pair| pair[0] == "--body" && pair[1] == audit));
+        let path = "projects/:id/merge_requests/7";
+        let shaped = gitlab_merge_api_shape(path, &opts, false, "abc123", "fix: slice one");
+        assert!(shaped.fields.contains(&(
+            "merge_commit_message".into(),
+            format!("fix: slice one\n\n{audit}")
+        )));
+        // GitLab rebase: the `/rebase` transition carries nothing, but the
+        // post-rebase `/merge` (squash=false) still writes the audit message.
+        // trace:STORY-2733 | ai:claude
+        opts.method = MergeMethod::Rebase;
+        let rebase = gitlab_merge_api_shape(path, &opts, true, "abc123", "fix: slice one");
+        assert_eq!(rebase.path, format!("{path}/rebase"));
+        assert!(rebase.fields.is_empty());
+        let after = gitlab_merge_api_shape(path, &opts, false, "abc123", "fix: slice one");
+        assert_eq!(after.path, format!("{path}/merge"));
+        assert!(after.fields.contains(&("squash".into(), "false".into())));
+        assert!(after.fields.contains(&(
+            "merge_commit_message".into(),
+            format!("fix: slice one\n\n{audit}")
+        )));
+        opts.method = MergeMethod::Merge;
+
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        let g = |args: &[&str]| {
+            let out = crate::test_git::git_command()
+                .current_dir(root)
+                .args(args)
+                .output()
+                .unwrap();
+            assert!(out.status.success(), "git {args:?}");
+            String::from_utf8_lossy(&out.stdout).to_string()
+        };
+        g(&["init", "-q", "-b", "main"]);
+        g(&["config", "user.email", "t@t.t"]);
+        g(&["config", "user.name", "t"]);
+        std::fs::write(root.join("a"), "1").unwrap();
+        g(&["add", "."]);
+        g(&["commit", "-q", "-m", "base"]);
+        g(&["checkout", "-q", "-b", "feature"]);
+        std::fs::write(root.join("b"), "2").unwrap();
+        g(&["add", "."]);
+        g(&["commit", "-q", "-m", "feat: slice one"]);
+        g(&["checkout", "-q", "main"]);
+        let cref = ChangeRef {
+            id: 0,
+            url: String::new(),
+            branch: "feature".into(),
+            base: "main".into(),
+            title: None,
+        };
+        opts.squash_subject = None;
+        PureGitForge::new(root)
+            .merge_change(&cref, &opts, &mut crate::network_retry::NoopSink)
+            .unwrap();
+        let message = g(&["log", "-1", "--format=%B", "main"]);
+        assert!(message.contains(audit), "{message}");
+        assert_eq!(
+            g(&["rev-list", "--parents", "-n", "1", "main"])
+                .split_whitespace()
+                .count(),
+            3,
+            "a real merge commit carries the audit"
+        );
+    }
+
     // ── TASK-1458: match_head pin on every forge ────────────────────────────
     // trace:TASK-1458 | ai:claude
 
@@ -8059,4 +8198,414 @@ pub(crate) fn pr_state_workflows(
         "workflow batch returned GraphQL errors"
     );
     Ok(body["data"]["repository"].clone())
+}
+
+// Concrete client for the operator emergency command. Keeping process effects
+// here preserves the forge boundary; lifecycle and restoration policy stay in
+// pr_emergency_land, whose tests inject a fake client.
+// trace:STORY-2732 | ai:codex
+pub(crate) mod emergency_land {
+    use super::ForgeKind;
+    use crate::pr_emergency_land::Forge;
+    use anyhow::{bail, ensure, Context, Result};
+    use serde_json::Value;
+    use std::cell::{Cell, RefCell};
+    use std::io::{Read, Seek};
+    use std::os::unix::process::CommandExt;
+    use std::path::PathBuf;
+    use std::time::{Duration, Instant};
+    // trace:TASK-3788 | ai:codex
+    pub(crate) fn supported(kind: ForgeKind) -> Result<()> {
+        ensure!(
+            kind != ForgeKind::None,
+            "no forge-side protection to lift; push the fix normally"
+        );
+        Ok(())
+    }
+    pub(crate) fn policy(project: &Value) -> Result<Value> {
+        let mut saved = serde_json::Map::new();
+        for field in [
+            "only_allow_merge_if_pipeline_succeeds",
+            "allow_merge_on_skipped_pipeline",
+            "only_allow_merge_if_all_discussions_are_resolved",
+        ] {
+            // GitLab documents null for the skipped-pipeline setting. Missing
+            // evidence and null in either required boolean still refuse.
+            // trace:TASK-3788 | ai:codex
+            let value = project
+                .get(field)
+                .with_context(|| format!("missing merge policy field {field}"))?;
+            ensure!(
+                value.is_boolean()
+                    || (field == "allow_merge_on_skipped_pipeline" && value.is_null()),
+                "invalid merge policy field {field}"
+            );
+            saved.insert(field.into(), value.clone());
+        }
+        Ok(Value::Object(saved))
+    }
+    // Normalize only settled, non-conflicting GitLab observations. The CI,
+    // approval and discussion gates may still refuse the actual merge.
+    // trace:TASK-3788 | ai:codex
+    pub(crate) fn gitlab_change(mr: &Value) -> Result<Value> {
+        ensure!(
+            mr["overflow"] == false,
+            "GitLab diff is incomplete or overflow is unknown"
+        );
+        ensure!(
+            mr["sha"].as_str().is_some_and(|s| !s.is_empty())
+                && mr["diff_refs"]["head_sha"] == mr["sha"],
+            "MR diff does not match its current head"
+        );
+        let changes = mr["changes"].as_array().context("missing MR changes")?;
+        let count = mr["changes_count"]
+            .as_str()
+            .context("missing MR change count")?
+            .parse::<usize>()
+            .context("GitLab diff count is incomplete")?;
+        ensure!(
+            count == changes.len(),
+            "GitLab diff count differs from returned changes"
+        );
+        let mut additions = 0u64;
+        let mut deletions = 0u64;
+        for change in changes {
+            ensure!(
+                change["too_large"] != true && change["collapsed"] != true,
+                "GitLab diff is truncated"
+            );
+            for line in change["diff"].as_str().context("missing MR diff")?.lines() {
+                if line.starts_with('+') {
+                    additions += 1;
+                }
+                if line.starts_with('-') {
+                    deletions += 1;
+                }
+            }
+        }
+        let settled = matches!(
+            mr["detailed_merge_status"].as_str(),
+            Some(
+                "mergeable"
+                    | "ci_must_pass"
+                    | "ci_still_running"
+                    | "not_approved"
+                    | "discussions_not_resolved"
+            )
+        );
+        let draft = mr
+            .get("draft")
+            .or_else(|| mr.get("work_in_progress"))
+            .context("missing draft state")?;
+        ensure!(draft.is_boolean(), "invalid draft state");
+        Ok(serde_json::json!({
+            "state": if mr["state"] == "opened" { "OPEN" } else { "CLOSED" },
+            "baseRefName": mr["target_branch"],
+            "mergeable": if settled && mr["has_conflicts"] == false { "MERGEABLE" } else { "UNKNOWN" },
+            "mergeStateStatus": "CLEAN", "isDraft": draft,
+            "additions": additions, "deletions": deletions, "changedFiles": changes.len(),
+            "headRefOid": mr["sha"], "title": mr["title"],
+            "required_checks": [{"name":"Pipelines must succeed", "state":mr["head_pipeline"]}]
+        }))
+    }
+    pub(crate) struct Client {
+        pub(crate) kind: ForgeKind,
+        #[cfg(test)]
+        fake: Option<Box<dyn Fn(&[&str]) -> Result<String>>>,
+        root: PathBuf,
+        forge_cli: PathBuf,
+        critical: bool,
+        signals: RefCell<crate::forwarded_signals::Forwarding>,
+        interrupted: Cell<bool>,
+    }
+    impl Client {
+        pub(crate) fn new(root: PathBuf, kind: ForgeKind) -> Result<Self> {
+            supported(kind)?;
+            let cli = crate::resolve_forge_cli(kind).context("forge CLI is required")?;
+            Ok(Self {
+                kind,
+                #[cfg(test)]
+                fake: None,
+                root,
+                forge_cli: cli.into(),
+                critical: false,
+                signals: RefCell::new(crate::forwarded_signals::Forwarding::install()?),
+                interrupted: Cell::new(false),
+            })
+        }
+
+        #[cfg(test)]
+        pub(crate) fn fake(
+            kind: ForgeKind,
+            fake: impl Fn(&[&str]) -> Result<String> + 'static,
+        ) -> Self {
+            Self {
+                kind,
+                fake: Some(Box::new(fake)),
+                root: PathBuf::new(),
+                forge_cli: PathBuf::new(),
+                critical: false,
+                signals: RefCell::new(crate::forwarded_signals::Forwarding::install().unwrap()),
+                interrupted: Cell::new(false),
+            }
+        }
+
+        // trace:TASK-3788 | ai:codex
+        pub(crate) fn prepare_gitlab(&mut self, n: u64) -> Result<(Value, String, Value, String)> {
+            let project = self.api("GET", "projects/:id")?;
+            let path = project["path_with_namespace"]
+                .as_str()
+                .context("missing GitLab project path")?;
+            let scope = format!("projects/{}", crate::pr_emergency_land::encode(path));
+            let base = project["default_branch"]
+                .as_str()
+                .context("missing default branch")?
+                .to_owned();
+            let mut mr = self.api("GET", &format!("{scope}/merge_requests/{n}"))?;
+            let changes = self.api("GET", &format!("{scope}/merge_requests/{n}/changes"))?;
+            ensure!(
+                changes["sha"] == mr["sha"],
+                "MR head changed while reading its diff"
+            );
+            mr["changes"] = changes["changes"].clone();
+            mr["overflow"] = changes["overflow"].clone();
+            ensure!(
+                changes["changes_count"] == mr["changes_count"],
+                "MR diff count changed"
+            );
+            ensure!(
+                mr["target_project_id"] == project["id"] && project["id"].is_u64(),
+                "MR targets another project"
+            );
+            Ok((gitlab_change(&mr)?, scope, policy(&project)?, base))
+        }
+
+        fn interrupted(&self) -> bool {
+            if self.signals.borrow_mut().take().is_some() {
+                self.interrupted.set(true);
+            }
+            self.interrupted.get()
+        }
+        /// Files avoid pipe deadlocks; a per-call deadline bounds hung forge children.
+        pub(crate) fn command(&self, args: &[&str]) -> Result<String> {
+            self.command_with_budget(args, Duration::from_secs(45))
+        }
+        pub(crate) fn command_with_budget(
+            &self,
+            args: &[&str],
+            budget: Duration,
+        ) -> Result<String> {
+            #[cfg(test)]
+            if let Some(fake) = &self.fake {
+                return fake(args);
+            }
+            let restoring = self.critical
+                && args.first() == Some(&"api")
+                && (args.get(2) == Some(&"POST")
+                    || (self.kind == ForgeKind::GitLab
+                        && args.get(2) == Some(&"PUT")
+                        && args.last() == Some(&"only_allow_merge_if_pipeline_succeeds=true"))
+                    || (self.kind == ForgeKind::GitLab && args.get(2) == Some(&"GET"))
+                    || args
+                        .last()
+                        .is_some_and(|s| s.ends_with("/protection") || s.contains("/pulls/")));
+            ensure!(
+                restoring || !self.interrupted(),
+                "emergency forge call interrupted"
+            );
+            let mut stdout = tempfile::tempfile()?;
+            let mut stderr = tempfile::tempfile()?;
+            let mut child = std::process::Command::new(&self.forge_cli)
+                .current_dir(&self.root)
+                .args(args)
+                .process_group(0)
+                .stdout(stdout.try_clone()?)
+                .stderr(stderr.try_clone()?)
+                .spawn()?;
+            let deadline = Instant::now() + budget.min(Duration::from_secs(45));
+            let status = loop {
+                if let Some(status) = child.try_wait()? {
+                    break status;
+                }
+                if (!restoring && self.interrupted()) || Instant::now() >= deadline {
+                    crate::forwarded_signals::signal_child_tree(child.id(), &[], libc::SIGKILL);
+                    let _ = child.wait();
+                    bail!("forge call interrupted or timed out: {}", args.join(" "));
+                }
+                std::thread::sleep(Duration::from_millis(100));
+            };
+            ensure!(
+                restoring || !self.interrupted(),
+                "emergency forge call interrupted"
+            );
+            stdout.rewind()?;
+            stderr.rewind()?;
+            let mut output = String::new();
+            let mut error = String::new();
+            stdout.read_to_string(&mut output)?;
+            stderr.read_to_string(&mut error)?;
+            ensure!(status.success(), "forge {} failed: {error}", args.join(" "));
+            Ok(output)
+        }
+        // Read actual parents rather than inferring topology from squash mode:
+        // GitLab can squash and still create a two-parent merge commit.
+        // trace:TASK-3788 | ai:codex
+        pub(crate) fn revert_command(&self, scope: &str, sha: &str) -> Result<String> {
+            if self.kind != ForgeKind::GitLab {
+                return Ok(format!("git revert {sha}"));
+            }
+            let commit = self.json(&[
+                "api",
+                "-X",
+                "GET",
+                &format!("{scope}/repository/commits/{sha}"),
+            ])?;
+            crate::pr_emergency_land::gitlab_revert_command(&commit, sha)
+        }
+
+        pub(crate) fn json(&self, args: &[&str]) -> Result<Value> {
+            Ok(serde_json::from_str(&self.command(args)?)?)
+        }
+    }
+    impl Forge for Client {
+        fn api(&mut self, method: &str, endpoint: &str) -> Result<Value> {
+            if method == "DELETE" && endpoint.ends_with("/enforce_admins") {
+                self.critical = true;
+            }
+            let output = self.command(&["api", "-X", method, endpoint])?;
+            if output.trim().is_empty() {
+                Ok(Value::Null)
+            } else {
+                Ok(serde_json::from_str(&output)?)
+            }
+        }
+        fn needs_lift(&self, backup: &Value) -> Result<bool> {
+            if self.kind == ForgeKind::GitLab {
+                return policy(backup)?["only_allow_merge_if_pipeline_succeeds"]
+                    .as_bool()
+                    .context("missing pipeline policy");
+            }
+            backup["enforce_admins"]["enabled"]
+                .as_bool()
+                .context("missing enforce_admins.enabled in protection backup")
+        }
+        fn lift(&mut self, scope: &str) -> Result<()> {
+            if self.kind == ForgeKind::GitLab {
+                self.critical = true;
+                self.command(&[
+                    "api",
+                    "-X",
+                    "PUT",
+                    scope,
+                    "-f",
+                    "only_allow_merge_if_pipeline_succeeds=false",
+                ])?;
+                return Ok(());
+            }
+            self.api("DELETE", &format!("{scope}/enforce_admins"))?;
+            Ok(())
+        }
+        fn restore_protection(&mut self, scope: &str) -> Result<()> {
+            if self.kind == ForgeKind::GitLab {
+                self.command(&[
+                    "api",
+                    "-X",
+                    "PUT",
+                    scope,
+                    "-f",
+                    "only_allow_merge_if_pipeline_succeeds=true",
+                ])?;
+                return Ok(());
+            }
+            self.api("POST", &format!("{scope}/enforce_admins"))?;
+            Ok(())
+        }
+        fn verify_protection(&mut self, scope: &str, backup: &Value) -> Result<()> {
+            use crate::pr_emergency_land::without_urls;
+            let after = self.api("GET", scope)?;
+            if self.kind == ForgeKind::GitLab {
+                ensure!(
+                    policy(&after)? == policy(backup)?,
+                    "merge policy differs from backup"
+                );
+                return Ok(());
+            }
+            ensure!(
+                without_urls(after) == without_urls(backup.clone()),
+                "protection differs from backup"
+            );
+            Ok(())
+        }
+        fn recovery_command(&self, scope: &str, backup: &Value) -> String {
+            if self.kind == ForgeKind::GitLab {
+                return format!(
+                    "glab api -X PUT {scope} -f only_allow_merge_if_pipeline_succeeds={}",
+                    backup["only_allow_merge_if_pipeline_succeeds"]
+                );
+            }
+            format!("gh api -X POST {scope}/enforce_admins")
+        }
+        fn merge_sha(&mut self, scope: &str, n: u64) -> Result<String> {
+            if self.kind == ForgeKind::GitLab {
+                let info = self.api("GET", &format!("{scope}/merge_requests/{n}"))?;
+                return Ok(if info["state"] == "merged" {
+                    info["merge_commit_sha"]
+                        .as_str()
+                        .or_else(|| info["squash_commit_sha"].as_str())
+                        .unwrap_or("")
+                        .to_owned()
+                } else {
+                    String::new()
+                });
+            }
+            let repo = scope
+                .split("/branches/")
+                .next()
+                .context("missing protection scope")?;
+            let info = self.api("GET", &format!("{repo}/pulls/{n}"))?;
+            Ok(if info["merged"] == true {
+                info["merge_commit_sha"].as_str().unwrap_or("").to_owned()
+            } else {
+                String::new()
+            })
+        }
+        fn merge(&mut self, n: u64, title: &str, head: &str) -> Result<()> {
+            self.critical = true;
+            if self.kind == ForgeKind::GitLab {
+                self.command(&[
+                    // Use the server merge endpoint directly: glab mr merge's
+                    // MRCheckErrors rejects already-armed MRs behind running/red CI.
+                    // Server approval and protected-branch checks still apply.
+                    // trace:TASK-3788 | ai:codex
+                    "api",
+                    "-X",
+                    "PUT",
+                    &format!("projects/:id/merge_requests/{n}/merge"),
+                    "-f",
+                    "squash=true",
+                    "-f",
+                    "auto_merge=false",
+                    "-f",
+                    "merge_when_pipeline_succeeds=false",
+                    "-f",
+                    &format!("sha={head}"),
+                    "-f",
+                    &format!("squash_commit_message={title}"),
+                ])?;
+                return Ok(());
+            }
+            self.command(&[
+                "pr",
+                "merge",
+                &n.to_string(),
+                "--squash",
+                "--admin",
+                "--subject",
+                title,
+                "--match-head-commit",
+                head,
+            ])?;
+            Ok(())
+        }
+    }
 }

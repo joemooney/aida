@@ -55,6 +55,10 @@ SYNTH_FILES = {
     "aida-core/src/db/cache.rs": "#[cfg(test)]\nmod tests {}\n",
     "aida-core/src/ai/mod.rs": "\n",
     "aida-core/src/orphan.rs": "// declared nowhere\n",
+    # This sorts before lib.rs but is not reachable from the crate root.
+    # It must not shadow the active declaration of the same test file.
+    # trace:STORY-2660 | ai:codex
+    "aida-core/src/aaa_orphan.rs": '#[path = "tests/y_tests.rs"]\nmod stale_tests;\n',
     "aida-core/src/embed.rs": 'const S: &str = include_str!("embed/schema.sql");\n',
     "aida-core/src/embed/schema.sql": "create table t();\n",
     "aida-core/tests/context_budget.rs": "\n",
@@ -97,6 +101,13 @@ class SynthTest(unittest.TestCase):
 
     def run_plan(self, changed, extra=()):
         return tt.plan(changed, self.pkgs, "agent", list(extra), self.idx)
+
+    def test_orphan_declaration_does_not_shadow_live_test_module(self):
+        pkg = next(p for p in self.pkgs if p.name == "aida-core")
+        self.assertEqual(
+            tt.module_path("aida-core/src/tests/y_tests.rs", pkg, self.idx),
+            ["y_tests"],
+        )
 
     def test_docs_only_plan_nothing(self):
         p = self.run_plan(["docs/a.md", "README.md"])
@@ -306,7 +317,7 @@ class RealRepoTest(unittest.TestCase):
         self.assertEqual(p.commands, [BASE + ["-p", "aida-cli-lib", "--lib", "--", "glossary_render::glossary_render_tests"]])
 
     def test_included_lib_parts_run_unfiltered_only_with_allow_full(self):
-        for n in (1, 3, 5):
+        for n in (5,):
             with self.subTest(part=n):
                 p = self.run_plan([f"aida-cli-lib/src/lib_part{n}.rs"], allow_full=True)
                 self.assertEqual(p.commands, [BASE + ["-p", "aida-cli-lib", "--lib"]])
@@ -322,15 +333,15 @@ class RealRepoTest(unittest.TestCase):
         self.assertEqual(rc, tt.TOO_WIDE_EXIT)
 
     def test_heavy_lib_widening_narrows_to_the_named_modules(self):
-        # lib_part1.rs widens (crate root) but guard tests that include_str! it are named.
-        p = self.run_plan(["aida-cli-lib/src/lib_part1.rs", "aida-cli-lib/src/tests/role_identity_tests.rs"])
+        # review_commands.rs widens (crate root) but guard tests that include_str! it are named.
+        p = self.run_plan(["aida-cli-lib/src/review_commands.rs", "aida-cli-lib/src/tests/role_identity_tests.rs"])
         self.assertEqual(p.too_wide, {})
         self.assertEqual(len(p.commands), 1)
         cmd = p.commands[0]
         self.assertEqual(cmd[:8], BASE + ["-p", "aida-cli-lib", "--lib", "--"])
         self.assertIn("role::role_identity_tests", cmd)
         self.assertIn("queue_cmd::headless_hint_tests", cmd)
-        self.assertTrue(any("CI's job" in n and "lib_part1.rs" in n for n in p.notes))
+        self.assertTrue(any("CI's job" in n and "review_commands.rs" in n for n in p.notes))
 
     def test_caller_filter_lifts_the_heavy_lib_cap(self):
         p = self.run_plan(["aida-cli-lib/build.rs"], extra=["story_1853"])

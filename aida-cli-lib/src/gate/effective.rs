@@ -480,7 +480,9 @@ pub(crate) fn effective_gate_state(
     let verdict_events: Vec<&GateEvent> = view
         .change_events
         .iter()
-        .filter(|e| e.verdict_record().is_some())
+        // trace:BUG-2517 | ai:codex — callers can supply a view directly;
+        // spec-only evidence has no authority even if an older writer copied it.
+        .filter(|e| e.verdict_record().is_some() && !e.is_spec_only())
         .collect();
     // Persisted identities must not share a sequence through a reused label.
     // Unstamped events retain their normalized label partition.
@@ -557,7 +559,7 @@ pub(crate) fn effective_gate_state(
             .flatten()
             // A label can rebind. Its former owner's unbound events are
             // unrelated to this member and were never recorded on this change.
-            .filter(|u| u.spec_key.is_none_or(|key| key == m.key))
+            .filter(|u| !u.is_spec_only() && u.spec_key.is_none_or(|key| key == m.key))
             .filter(|u| {
                 !verdict_events
                     .iter()
@@ -684,8 +686,30 @@ pub(crate) fn load_view(
     change: ChangeKey,
     set: &CanonicalSet,
 ) -> Result<LedgerView, Unsafe> {
-    let mut budget = Budget::default();
-    let change_events = checked::read_change_events(root, change, &mut budget)?;
+    load_view_with_budget(root, change, set, Budget::default())
+}
+
+// trace:BUG-2517 | ai:codex
+fn load_view_with_budget(
+    root: &Path,
+    change: ChangeKey,
+    set: &CanonicalSet,
+    mut budget: Budget,
+) -> Result<LedgerView, Unsafe> {
+    // trace:BUG-2531 | ai:codex — discovery spends its own work budget; the
+    // caller's budget bounds only the evidence this view selects.
+    let mut discovery = checked::discover(root)?;
+    fn read_change(
+        discovery: &mut Option<checked::Discovery>,
+        key: ChangeKey,
+        budget: &mut Budget,
+    ) -> Result<Vec<GateEvent>, Unsafe> {
+        match discovery.as_mut() {
+            Some(d) => d.change_events(key, budget),
+            None => Ok(Vec::new()),
+        }
+    }
+    let change_events = read_change(&mut discovery, change, &mut budget)?;
     let mut unbound = BTreeMap::new();
     let mut others: std::collections::HashMap<ChangeKey, Vec<GateEvent>> = Default::default();
     for m in &set.members {
@@ -695,7 +719,10 @@ pub(crate) fn load_view(
             if crate::gate::ledger::project::spec_key(label).is_none() {
                 continue;
             }
-            let (u, c) = checked::read_spec_entries(root, label, &mut budget)?;
+            let (u, c) = match &discovery {
+                Some(d) => d.spec_entries(label, &mut budget)?,
+                None => (Vec::new(), Vec::new()),
+            };
             events.extend(u);
             indexed.extend(c);
         }
@@ -704,7 +731,7 @@ pub(crate) fn load_view(
         let mut bound_elsewhere: Vec<JsonObj> = Vec::new();
         for other in indexed.into_iter().filter(|c| *c != change) {
             if !others.contains_key(&other) {
-                let read = checked::read_change_events(root, other, &mut budget)?;
+                let read = read_change(&mut discovery, other, &mut budget)?;
                 others.insert(other, read);
             }
             bound_elsewhere.extend(
@@ -715,8 +742,9 @@ pub(crate) fn load_view(
             );
         }
         events.retain(|e| {
-            e.verdict_record()
-                .is_some_and(|r| !bound_elsewhere.contains(r))
+            !e.is_spec_only()
+                && e.verdict_record()
+                    .is_some_and(|r| !bound_elsewhere.contains(r))
         });
         // Unbound entries live in one file per label; the primary writer's
         // append time orders them across files, seq within one.

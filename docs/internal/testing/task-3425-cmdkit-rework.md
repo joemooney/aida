@@ -267,3 +267,92 @@ reduction or completion of TASK-3448**; publication must retain `Refs TASK-3448`
 
 The host publication subject must retain `Refs TASK-3448`, and its commit body
 and eventual squash message must retain `Help-Golden: unchanged` verbatim.
+
+## TASK-3448 remaining callers and production injection (slice C, 2026-11-12)
+
+<!-- trace:TASK-3448 | ai:codex -->
+
+The 15:52 UTC advisor brief supersedes the earlier validation gates. This slice
+migrates the remaining 31 caller files, including production callers and the
+registry-owned tests that imported the helpers through `use super::*`. Together
+with the three support files and two documentation files, it stays below the
+approximately 40-file split threshold.
+
+The existing generic injected helper becomes production `cmdkit::CliSupport<T>`.
+The crate root binds `CLI_SUPPORT` directly to the registry's pristine-tree
+provider and matches decoder; `TEST_CLI` is a test-only alias for that same
+instance. The registry's test-support factory and duplicate `try_parse_from`
+implementation are removed. Its exiting parser and test command projection use
+the injected parser too. No initialization hook, mutable callback registration,
+new command definition, or help snapshot change is introduced. Tree clones,
+match decoding, clap error formatting and the pristine-tree cache are preserved.
+
+There are zero consumer calls to `command_registry::try_parse_from` or
+`command_registry::built_command`. The sole remaining `built_command` reference
+outside its definition is the callback injected at the crate root (plus the
+provider's documentation). The leaf helper itself has no registry or concrete
+CLI-type dependency. `rg` confirms no unqualified calls remain in registry-owned
+tests. Codegraph's reviewed absolute executable is missing on this host, so no
+Codegraph result is claimed.
+
+Using the exact measurement function above with only its invocation footer
+changed to `measure('HEAD')` and `measure('WORKTREE')`:
+
+| Tree | Modules | Largest SCC | cmdkit in largest SCC |
+| --- | ---: | ---: | --- |
+| base `5a76ab9cff3` (includes main `d87c460e6f4`, #3881) | 622 | 367 | no |
+| slice C working tree | 622 | 350 | no |
+
+Inline-test edges and all existing filters are unchanged. The crate root is
+excluded by that existing measurement, as before; no new owner or edge exemption
+is added. The 17 modules leaving the largest SCC are `adoption_cmd`, `assign_cmd`,
+`command_registry`, `decide_cmd`, `derisk_cmd`, `driver_cmd`, `flow_cmd`,
+`health_vitals_cmd`, `import_export_cmd`, `import_plan_cmd`, `lifecycle_cmd`,
+`mcp_serve`, `monitor_contract`, `rebase_cmd`, `reconstitute`, `tui_entry`, and
+`ultraplan_cmd`. `cmdkit` retains only its existing `spec_arg` edge.
+
+This meets the spec's smaller-reduction allowance rather than the historical
+approximately 29-module target. A concrete remaining cycle is
+`cli -> agent_launch -> cli`: CLI argument re-exports reach `agent_launch`, whose
+`SessionArgs` and `AgentArgs` still wrap CLI argument types. Removing registry
+helper edges cannot dissolve that cycle; a later slice can target the argument
+ownership/re-export boundary. Production registry handler calls also remain in
+`store_mutation_entry`; registry-specific test inspection remains intentional.
+
+### Slice C validation and publication
+
+- Required `cargo check --profile agent -p aida-cli-lib --tests` passed via
+  launcher job `j20261112T162411769-2195721-0` (exit 0, 3m 24s).
+- The initial check `j20261112T162201254-2190189-0` failed on two registry-owned
+  wildcard-import test callers; both were migrated before the passing rerun.
+- Changed-file `rustfmt --edition 2021 --config skip_children=true --check` and
+  `git diff --check` passed. Thirty caller files reproduce exactly from the
+  original source with mechanical helper substitutions followed by rustfmt;
+  the registry ratchet/golden test file was migrated separately as well.
+- The SCC measurement reproduced the table above twice. Repository-wide `rg`
+  finds no code consumer of the registry parser/tree helpers beyond the root
+  callback injection; an existing TUI documentation reference is informational.
+- No local Rust tests executed (`untested=true`). Under the binding advisor
+  brief, CI supplies the test/fast-tier gate after host publication.
+
+The native seat leaves edits uncommitted and declares host publication with a
+completing TASK-3448 subject because the SCC shrinks under the spec's explicit
+smaller-reduction allowance. Preserve the standalone `Help-Golden: unchanged`
+body trailer in the host commit and eventual squash message.
+
+### Merged-head revalidation (2026-11-12, HEAD `6203d89bbc`)
+
+The slice C implementation is already committed as `df320cc77d`; this native
+seat adds only this validation record. After merging the subsequent main
+changes, the unchanged measurement script reports 622 owners and a largest SCC
+of 350 for both HEAD and the working tree. `cmdkit` still reaches only
+`spec_arg`. Repository-wide searches confirm that the only external registry
+parser/tree-helper reference is the crate-root tree-provider injection.
+
+`cargo check --profile agent -p aida-cli-lib --tests` passed again through
+launcher job `j20261112T170312292-2-0` (exit 0, 1m 48s). The help co-change
+guard against `origin/main` and `git diff --check` passed. The implementation
+commit already contains the standalone `Help-Golden: unchanged` trailer.
+No Rust tests executed in this revalidation (`untested=true`); CI remains the
+gate under the binding advisor brief. The reviewed Codegraph executable is
+still absent at the supplied absolute path; navigation used `rg`.

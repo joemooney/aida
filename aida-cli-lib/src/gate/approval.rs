@@ -282,6 +282,29 @@ pub(crate) fn merge_approval_subject(
     crate::gate::ship::ShipApprovalPolicy,
     Vec<String>,
 ) {
+    let (candidates, policy, ids, _) =
+        merge_approval_subject_observed(roots, main_worktree, pr, known_ids, head_branch, head_sha);
+    (candidates, policy, ids)
+}
+
+/// [`merge_approval_subject`] plus whether the forge answered. When it did
+/// not, the ids are only what the local title and branch claim, so a reader
+/// that must tell "no approval" from "could not look" treats the result as
+/// unknown.
+// trace:STORY-2768 | ai:claude
+pub(crate) fn merge_approval_subject_observed(
+    roots: &[&std::path::Path],
+    main_worktree: &std::path::Path,
+    pr: u64,
+    known_ids: &[String],
+    head_branch: Option<&str>,
+    head_sha: Option<&str>,
+) -> (
+    Vec<crate::gate::review_verdict::RecordedVerdict>,
+    crate::gate::ship::ShipApprovalPolicy,
+    Vec<String>,
+    bool,
+) {
     let (ids, branch, forge_resolved, authorship_ids) =
         pr_gate_subject(main_worktree, pr, known_ids, head_branch);
     let candidates = crate::gate::ship::merge_gate_verdict_candidates(roots, pr, &ids, head_sha);
@@ -290,7 +313,7 @@ pub(crate) fn merge_approval_subject(
     // trace:BUG-2199 | ai:claude
     let author_ids: &[String] = if forge_resolved { &authorship_ids } else { &[] };
     let policy = ship_approval_policy(main_worktree, author_ids, branch.as_deref(), &candidates);
-    (candidates, policy, ids)
+    (candidates, policy, ids, forge_resolved)
 }
 
 /// BUG-1918: the approval gate for merge paths other than `aida pr ship`

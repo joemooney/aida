@@ -3047,3 +3047,36 @@ fn story_2696_four_policy_toggles_preserve_distinct_acts() {
         }
     }
 }
+
+// BUG-2540: rework resolved every key in the store (thousands, each costing
+// git subprocesses) and then kept the few bound to its spec. The scoped
+// reader resolves only the keys it is handed, in key order, and the full
+// listing is the scoped reader over every key.
+// trace:BUG-2540 | ai:claude
+#[test]
+fn bug2540_active_verdicts_for_resolves_only_requested_keys() {
+    let tmp = TempDir::new().unwrap();
+    let body = |verdict: &str| {
+        serde_json::json!({"verdict": verdict, "reviewed_sha": "a".repeat(40)}).to_string()
+    };
+    for (key, verdict) in [
+        ("STORY-1", "approved"),
+        ("STORY-2", "request-changes"),
+        ("PR-5", "request-changes"),
+    ] {
+        let path = verdict_path(tmp.path(), key);
+        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+        write_verdict_atomic(&path, &body(verdict)).unwrap();
+    }
+    let scoped = active_verdicts_for(tmp.path(), ["STORY-2".to_string(), "PR-5".to_string()]);
+    let keys: Vec<&str> = scoped.iter().map(|(k, _)| k.as_str()).collect();
+    assert_eq!(keys, ["PR-5", "STORY-2"]);
+    assert!(scoped.iter().all(|(_, v)| v.kind.requires_changes()));
+    assert!(active_verdicts_for(tmp.path(), ["STORY-404".to_string()]).is_empty());
+    let all = list_active_verdicts(tmp.path());
+    assert_eq!(all.len(), 3);
+    assert_eq!(
+        all,
+        active_verdicts_for(tmp.path(), verdict_keys(tmp.path()))
+    );
+}

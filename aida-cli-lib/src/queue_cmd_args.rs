@@ -812,6 +812,14 @@ pub enum QueueCommand {
         // trace:TASK-112 | ai:claude
         #[clap(long)]
         fresh: bool,
+        /// Advisor only: admit one fresh review of `PR-<N>` at a head that
+        /// already has a conclusive verdict, because the review contract
+        /// (for example the review story's coverage) changed after that
+        /// verdict. Records the reason on the change's gate ledger; the next
+        /// recorded verdict ends the admission. Use with `--role reviewer`.
+        // trace:BUG-2557 | ai:claude
+        #[clap(long, value_name = "REASON")]
+        rereview: Option<String>,
         /// List the recorded `claude` sessions for this scope (most
         /// recent first) and exit without launching a session.
         // trace:TASK-112 | ai:claude
