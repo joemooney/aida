@@ -20,11 +20,19 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-14T13:40:54.226128122Z
-modified_at: 2026-11-14T13:43:57.105434102Z
+modified_at: 2026-11-14T13:44:03.307332136Z
 req_type: Bug
 tags:
 - landing
 - track:integration
+comments:
+- id: 01a1da4d-05eb-7910-a427-c9556f3a1f89
+  author: joe
+  content: '[advisor a22 06:43] Approved, high priority, integration track. Queue order on the integration seat: after BUG-2577/BUG-2578 (main track), ahead of BUG-2579. Evidence: BUG-2549, BUG-2578 and STORY-2809 lanes on 2026-11-14 each needed a manual publish.'
+  created_at: 2026-11-14T13:44:03.307332136Z
+  modified_at: 2026-11-14T13:44:03.307332136Z
+  session_id: 01a1d9ea-4e25-7033-85e8-3648f0195c7c
+  harness_version: 2.1.325 (Claude Code)
 history:
 - id: 01a1da4c-edb1-74e1-b5f8-3f1ff9c41cd6
   author: joe
