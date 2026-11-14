@@ -18,7 +18,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-13T00:35:57.525111678Z
-modified_at: 2026-11-14T05:36:44.057681928Z
+modified_at: 2026-11-14T13:17:37.774788836Z
 req_type: Story
 tags:
 - track:integration
@@ -111,6 +111,13 @@ comments:
   created_at: 2026-11-14T05:36:44.057681928Z
   modified_at: 2026-11-14T05:36:44.057681928Z
   session_id: 01a1d852-16ef-7973-bdde-ac3f274752a2
+  harness_version: 2.1.325 (Claude Code)
+- id: 01a1da34-d46e-72d3-99e6-611f679e90c2
+  author: joe
+  content: '[advisor a22 06:19] Rework of PR-3950 (CR at 059e1b8): both findings stay BLOCKING. (1) The stale-seat path on the --bg relink. (2) The AC6 template is missing its tracked mirror: edit the template master, run make sync-templates and make check-templates. Integration track; Fable lane on dell1. LIGHT gate: one targeted cargo test for the relink path, plus make check-ci-fast. On dell1, touch aida-core/src/lib.rs first, and never use AIDA_UPDATE_SNAPSHOTS=1.'
+  created_at: 2026-11-14T13:17:37.774788836Z
+  modified_at: 2026-11-14T13:17:37.774788836Z
+  session_id: 01a1d9ea-4e25-7033-85e8-3648f0195c7c
   harness_version: 2.1.325 (Claude Code)
 history:
 - id: 01a1d404-5b69-7883-a178-72d22e485802
