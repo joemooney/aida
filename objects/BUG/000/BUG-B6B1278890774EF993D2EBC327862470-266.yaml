@@ -15,7 +15,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-08T19:27:28.525198886Z
-modified_at: 2026-11-13T13:08:40.012001596Z
+modified_at: 2026-11-14T14:05:25.103907364Z
 req_type: Bug
 tags:
 - track:dell1
@@ -370,6 +370,13 @@ comments:
   modified_at: 2026-11-13T13:08:40.012001596Z
   session_id: 01a1d4f9dc53
   harness_version: codex-cli 0.167.0
+- id: 01a1da60-94ef-78f0-8241-0081ae994869
+  author: joe
+  content: '[advisor a22 07:10] Stale claim: In Progress, branch bug-b6b1278890774ef993d2ebc327862470-266 pushed with no PR, and no live lane. Resuming on a dell1 Fable lane on that branch: merge the current base (main, or integration for track:integration) with a real merge, finish the acceptance criteria, run one targeted cargo test plus make check-ci-fast, push, and open the PR. On dell1, touch aida-core/src/lib.rs before cargo, and never use AIDA_UPDATE_SNAPSHOTS=1.'
+  created_at: 2026-11-14T14:05:25.103907364Z
+  modified_at: 2026-11-14T14:05:25.103907364Z
+  session_id: 01a1d9ea-4e25-7033-85e8-3648f0195c7c
+  harness_version: 2.1.325 (Claude Code)
 history:
 - id: 01a1bcc3-bd29-7692-a764-d1e8c8dbaa00
   author: aida-session-start
