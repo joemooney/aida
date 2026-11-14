@@ -101,12 +101,32 @@ description: |
   ### finding-hash:3961dae5
 
   The launch preflight track line (queue_cmd/work.rs handle_queue_work: eprintln "track: {launcher} (spec: {label})" via store_track_label) has no test asserting it, although the STORY-2749 description requires the preflight to list the track.
+
+
+  ## Findings from PR-3973
+  Reviewed sha: 46777beb1b259a466a56923f082997fc558fed8c
+
+  ### finding-hash:198d1196
+
+  rework_hold_release.rs with_live_io: only the pin, live_head and covered_specs reads set unread; failures in read_arming_history, read_corpus or the coverage reads become ReleaseCondition::Unmet (BLOCKED) instead of Unknown.
+
+  ### finding-hash:c0a8d165
+
+  land.rs Live::approval reads the approval and carry-over against refs/remotes/origin/<base>, not the pass pinned base commit (now a declared known limit).
+
+  ### finding-hash:28356795
+
+  land.rs Live::rounds: content_id errors on AmbiguousBase/EmptyDiff leave an unapproved change UNKNOWN on every pass instead of BLOCKED with a reason.
+
+  ### finding-hash:6810bcf9
+
+  land.rs:424 render: STATE column is 17 wide but READY-PENDING-COVER is 19 chars; ClearHoldAndLand prints operator clears met hold for a PendingCover row.
 status: Draft
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-13T20:01:56.623034248Z
-modified_at: 2026-11-14T01:01:56.022509319Z
+modified_at: 2026-11-14T01:42:31.756159156Z
 req_type: Task
 tags:
 - carried-finding:BUG-2546:56ed8b81
@@ -123,6 +143,10 @@ tags:
 - carried-finding:PR-3970:c7c082c2
 - carried-finding:PR-3971:55e0cbfe
 - carried-finding:PR-3971:f238ea37
+- carried-finding:PR-3973:198d1196
+- carried-finding:PR-3973:28356795
+- carried-finding:PR-3973:6810bcf9
+- carried-finding:PR-3973:c0a8d165
 - carried-finding:STORY-2735:2c7ae2ea
 - carried-from:BUG-2546
 - carried-from:BUG-2557
@@ -133,8 +157,11 @@ tags:
 - carried-from:PR-3968
 - carried-from:PR-3970
 - carried-from:PR-3971
+- carried-from:PR-3973
 - carried-from:STORY-2735
 - finding-hash:0cbc5c63
+- finding-hash:198d1196
+- finding-hash:28356795
 - finding-hash:2c7ae2ea
 - finding-hash:3961dae5
 - finding-hash:52636ea7
@@ -143,6 +170,8 @@ tags:
 - finding-hash:5b9e60ad
 - finding-hash:5d2b67f3
 - finding-hash:654190b6
+- finding-hash:6810bcf9
+- finding-hash:c0a8d165
 - finding-hash:c598b8f9
 - finding-hash:c7c082c2
 - finding-hash:f238ea37
@@ -155,6 +184,7 @@ tags:
 - from-review:PR-3968
 - from-review:PR-3970
 - from-review:PR-3971
+- from-review:PR-3973
 - from-review:STORY-2735
 - kind:finding-sweep
 history:
@@ -206,6 +236,11 @@ history:
   author: joe
   timestamp: 2026-11-14T01:01:57.124528121Z
   session_id: 01a1d7909031
+  changes: []
+- id: 01a1d7b8-7882-7991-a4e2-92537ca8c458
+  author: joe
+  timestamp: 2026-11-14T01:42:33.346620874Z
+  session_id: 01a1d7b6a709
   changes: []
 filed_at:
   code_sha: 91fe1e337894199f15365d3f8ecfaf81366f8291
