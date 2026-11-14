@@ -1,0 +1,32 @@
+{
+  "schema_version": 1,
+  "spec": "BUG-2559",
+  "publishes": [
+    {
+      "at": "2026-11-14T02:45:19.056472708Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-11-13T16:20:30.676896942Z",
+      "spec": "BUG-2559",
+      "kind": {
+        "event": "UnshippedWorkDetected",
+        "spec": "BUG-2559",
+        "branch": "bug-2559-timing-reconcile",
+        "first_seen": "2026-11-13T16:20:30.671878446+00:00"
+      }
+    },
+    {
+      "ts": "2026-11-14T02:45:18.887762920Z",
+      "spec": "BUG-2559",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "396d99506c69e2138d14e038956cb89668867f4e",
+        "pr": 3966,
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
