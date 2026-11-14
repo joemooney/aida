@@ -1,0 +1,32 @@
+id: 01a1da24-84f8-78d3-bcfb-896306b14658
+spec_id: BUG-b6b1278890774ef993d2ebc327862470-342
+agreed_id: BUG-2577
+title: Merge train blindly re-runs a red train once before bisecting; every observed red is deterministic, so the rerun only burns a CI cycle
+description: |
+  The merge train driver (`aida-cli-lib/src/pr_train.rs`, `drive_into`) re-runs a red train ONCE with the same composition before it bisects by halves (a red one-member train is re-run once before it is ejected). The rerun flag is hard-coded on for the initial group.
+
+  Evidence (last 24h of CI, 2026-11-13/14): 4 failed trains. Every one failed on the same named test failures on every attempt: deterministic ratchet / behaviour test failures, zero flakes. The blind rerun never turned a train green. It costs one extra full CI cycle (about 20-25 minutes of the only landing track, doubled because train branches run CI for both the push and the pull_request event) per bad PR.
+
+  Fix: remove the blind rerun. A red multi-member train goes straight to bisection; a red one-member train ejects that member after one CI run.
+
+  Out of scope / must not change: unavailable CI, failed evidence/API reads, `Landing::Stale` requeues and landing refusals keep their current behaviour (they are separate paths and are not a red verdict).
+
+  Acceptance:
+  - red 2-member train -> exactly two one-member sub-trains next, no same-composition rerun
+  - red 1-member train -> member ejected after ONE CI run
+  - module docs, the train PR close comment, CLI help and the discipline/docs prose no longer claim a rerun
+status: Draft
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-14T12:59:48.856339929Z
+modified_at: 2026-11-14T12:59:48.856339929Z
+req_type: Bug
+filed_at:
+  code_sha: 166920a3bf8bd517e8d670a09dd3a7a3de96b7f9
+  branch: worktree-agent-a132ca8b8dbec7979
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 166920a3bf8
+  vendor: claude
+  session: fc28c702-2f6e-419e-b882-6ddfeb9134ff
