@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-13T05:04:27.319151195Z
-modified_at: 2026-11-14T16:17:37.489273076Z
+modified_at: 2026-11-14T16:20:59.342899120Z
 req_type: Bug
 tags:
 - track:integration
@@ -70,6 +70,13 @@ comments:
   created_at: 2026-11-14T14:16:27.363467471Z
   modified_at: 2026-11-14T14:16:27.363467471Z
   session_id: 01a1d9ea-4e25-7033-85e8-3648f0195c7c
+  harness_version: 2.1.325 (Claude Code)
+- id: 01a1dadc-b34e-7ad0-aa76-84032007c286
+  author: joe
+  content: 'Advisor 2026-11-14 09:22: ''aida queue rework SPEC --for implementer'' also spins on the live binary f5128d1 (ran 30 min at 08:43, and >120 s twice since): state R, ~43% CPU, open fds on .aida/cache-db/cache.db(+wal/shm) and .aida/gate-ledger/by-spec. Same shape as the post-train pull spin; expect promotion 9b (#4040) to fix it, re-test after it lands.'
+  created_at: 2026-11-14T16:20:59.342899120Z
+  modified_at: 2026-11-14T16:20:59.342899120Z
+  session_id: 01a1dab1-9447-7d22-b5ff-0c9084e122ea
   harness_version: 2.1.325 (Claude Code)
 history:
 - id: 01a1d363-766b-7430-8bca-0c0a924878fa
