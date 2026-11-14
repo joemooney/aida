@@ -2414,7 +2414,8 @@ fn bug_2579_a_rotated_seat_owns_its_predecessors_jobs_and_another_handle_does_no
         refused.contains("not this session or its seat"),
         "{refused}"
     );
-    assert_eq!(f.state(&queued.id).state, JobState::Queued);
+    let still = f.q.locate(&queued.id).unwrap().expect("the job");
+    assert_eq!(still.state.state, JobState::Queued, "a refused cancel");
     #[cfg(unix)]
     {
         let mut said = Vec::new();
