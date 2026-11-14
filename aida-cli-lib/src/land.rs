@@ -868,32 +868,9 @@ fn discover_rich(
     let Some(slug) = repo.github_slug() else {
         return Ok(None);
     };
-    let mut command = std::process::Command::new("gh");
-    command
-        .args([
-            "pr",
-            "list",
-            "--state",
-            "open",
-            "--limit",
-            "1000",
-            "--repo",
-            &slug,
-            "--json",
-            "number,title,headRefOid,headRefName,baseRefName,isDraft,labels,statusCheckRollup,updatedAt",
-        ])
-        .current_dir(root)
-        .stdin(std::process::Stdio::null());
-    repo.pin_command(&mut command);
-    let out = crate::command_output_with_timeout(command, std::time::Duration::from_secs(60))
-        .context("the forge listing of open changes failed to run or timed out")?;
-    anyhow::ensure!(
-        out.status.success(),
-        "the forge listing of open changes failed: {}",
-        one_line(&String::from_utf8_lossy(&out.stderr), 300)
-    );
-    let rows: Vec<serde_json::Value> =
-        serde_json::from_slice(&out.stdout).context("invalid forge listing")?;
+    let rows = crate::forge::github_open_changes_detailed(root, &slug, &|command| {
+        repo.pin_command(command)
+    })?;
     let text = |row: &serde_json::Value, key: &str| -> Result<String> {
         row.get(key)
             .and_then(|v| v.as_str())
