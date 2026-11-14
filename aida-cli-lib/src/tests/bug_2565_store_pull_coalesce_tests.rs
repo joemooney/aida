@@ -623,10 +623,12 @@ fn a_pull_started_by_the_pull_in_flight_runs_at_once() {
     let run_path = runner_path(&lock_path);
     std::fs::create_dir_all(run_path.parent().unwrap()).unwrap();
     let parent = std::os::unix::process::parent_id();
+    let id = aida_core::proc_identity::ProcIdentity::capture(parent)
+        .expect("the parent's process identity");
     let holder = Runner {
         pid: parent,
-        start: aida_core::liveness::process_start_identity(parent)
-            .expect("the parent's start identity"),
+        start: id.legacy().start,
+        ns: id.pidns_inode,
         token: "the-pull-in-flight".into(),
     };
     assert!(write_runner(&run_path, &holder));
@@ -667,12 +669,19 @@ fn a_marker_of_a_dead_pull_is_not_waited_for() {
     let mut child = std::process::Command::new("true").spawn().unwrap();
     let pid = child.id();
     child.wait().unwrap();
-    for start in ["linux:00000000-0000-0000-0000-000000000000:1", ""] {
+    let ns = aida_core::proc_identity::ProcIdentity::capture(std::process::id())
+        .expect("this process's identity")
+        .pidns_inode;
+    for (start, ns) in [
+        ("linux:00000000-0000-0000-0000-000000000000:1", ns),
+        ("", 0),
+    ] {
         assert!(write_runner(
             &run_path,
             &Runner {
                 pid,
                 start: start.into(),
+                ns,
                 token: "crashed".into(),
             }
         ));

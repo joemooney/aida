@@ -93,17 +93,22 @@ pub(crate) fn runner_path(lock_path: &Path) -> PathBuf {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct Runner {
     pub pid: u32,
-    /// The process's start identity; empty when it could not be read.
+    /// The process's start identity (`linux:<boot>:<ticks>`); empty when it
+    /// could not be read.
     pub start: String,
+    /// The pid namespace `pid` is numbered in; 0 when unknown.
+    pub ns: u64,
     pub token: String,
 }
 
 impl Runner {
     fn current() -> Self {
         let pid = std::process::id();
+        let id = aida_core::proc_identity::ProcIdentity::capture(pid).ok();
         Self {
             pid,
-            start: aida_core::liveness::process_start_identity(pid).unwrap_or_default(),
+            start: id.as_ref().map(|id| id.legacy().start).unwrap_or_default(),
+            ns: id.map(|id| id.pidns_inode).unwrap_or(0),
             token: uuid::Uuid::new_v4().to_string(),
         }
     }
@@ -111,11 +116,13 @@ impl Runner {
     /// Whether the recorded process is still the one running. A marker left
     /// by a pull that crashed names a process that is gone.
     fn is_live(&self) -> bool {
-        if self.start.is_empty() {
+        use aida_core::proc_identity::{observe, ProcIdentity, Verdict};
+        if self.start.is_empty() || self.ns == 0 {
             // No identity to compare: only this very process can vouch.
             return self.pid == std::process::id();
         }
-        aida_core::liveness::process_identity_matches_strict(self.pid, &self.start)
+        ProcIdentity::from_registry(self.pid, Some(&self.start), Some(self.ns))
+            .is_some_and(|id| observe(&id, true) == Verdict::Alive)
     }
 
     /// Whether this process was started, however indirectly, by the
@@ -136,6 +143,7 @@ pub(crate) fn read_runner(path: &Path) -> Option<Runner> {
     Some(Runner {
         pid: lines.next()?.trim().parse().ok()?,
         start: lines.next()?.trim().to_string(),
+        ns: lines.next()?.trim().parse().ok()?,
         token: lines.next()?.trim().to_string(),
     })
 }
@@ -146,7 +154,10 @@ pub(crate) fn write_runner(path: &Path, runner: &Runner) -> bool {
         path.file_name().and_then(|n| n.to_str()).unwrap_or("pull"),
         runner.token
     ));
-    let body = format!("{}\n{}\n{}\n", runner.pid, runner.start, runner.token);
+    let body = format!(
+        "{}\n{}\n{}\n{}\n",
+        runner.pid, runner.start, runner.ns, runner.token
+    );
     let written = std::fs::write(&tmp, body)
         .and_then(|_| std::fs::rename(&tmp, path))
         .is_ok();

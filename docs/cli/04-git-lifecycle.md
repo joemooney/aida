@@ -790,7 +790,8 @@ reuse. For diagnosis, `AIDA_PULL_COALESCE=0 aida pull` disables coalescing;
 the same setting applies to `aida db sync --pull`.
 
 The pull in flight is named by a marker file beside the coalescing lock
-(`pull-<kind>-running.lock`: process id, process start identity, call token).
+(`pull-<kind>-running.lock`: process id, process start identity, pid
+namespace, call token).
 The lock itself is taken only while a caller decides whether to wait, reuse or
 run, and is closed before the pull starts, so no coalescing lock is held or
 inherited while the store window, its hooks or `git gc` run. A marker whose
