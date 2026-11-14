@@ -3,12 +3,12 @@ spec_id: BUG-b6b1278890774ef993d2ebc327862470-324
 agreed_id: BUG-2559
 title: Two hosts auto-bump the same merged spec and both publish its timings record; the non-mergeable timings conflict then blocks every store pull on the second host
 description: '2026-11-13: after #3936 and after train #3945, the primary and dell1 each auto-bumped BUG-2553 / BUG-2548 (plus STORY-2539 and others) to Completed and each committed ''timing: publish <ID> record (auto-bump)''. The second host''s ''aida pull'' then failed: ''rebase conflict in non-mergeable path timings/BUG/002/BUG-2548.json''. That stopped dell1 lane pickups (''pre-pickup pull failed'') and the review launches on primary. Manual fix both times: drop or reset the duplicate local commits (origin already had equivalent records). Want: the timings publish is idempotent across hosts (on a rebase conflict for a timings record whose spec is already Completed upstream, keep upstream and drop the local publish), or only the host that merged publishes.'
-status: InProgress
+status: Completed
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-13T12:55:11.090557357Z
-modified_at: 2026-11-13T21:23:31.600982390Z
+modified_at: 2026-11-14T02:45:04.008904526Z
 req_type: Bug
 tags:
 - store
@@ -73,6 +73,20 @@ history:
   author: joe
   timestamp: 2026-11-13T21:23:33.185506364Z
   changes: []
+- id: 01a1d7f1-b25a-7392-9ac0-dbbf92cebd45
+  author: aida-auto-bump
+  timestamp: 2026-11-14T02:45:03.706079428Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a1d7f1-b388-75c1-9da5-03d0c7e9ba0c
+  timestamp: 2026-11-14T02:45:04.008901847Z
+  agent: aida
+  commit_sha: 396d99506c69e2138d14e038956cb89668867f4e
+  summary: Full diff and BUG-2559 requirement verified; all 18 timing-record tests and formatting pass; no actionable defects. Required build CI unreported at review time.
+  review_verdict: approved
 filed_at:
   code_sha: 76c12135362bc1f87985a5eb1ebff051f16bc212
   branch: main
@@ -82,3 +96,7 @@ filed_at:
   vendor: claude
   session: 01a1d4aa-9c99-76c2-ac94-7f0795f8a7f9
   harness_version: 2.1.323 (Claude Code)
+implementation_info:
+  implemented: false
+  completed_at: 2026-11-14T02:45:03.706073554Z
+  completion_sha: 396d99506c69e2138d14e038956cb89668867f4e
