@@ -364,45 +364,6 @@ fn a_met_hold_is_the_reconcilers_to_release() {
 }
 
 #[test]
-fn a_cancelled_run_is_not_a_failure_and_a_later_run_replaces_it() {
-    let ci = |json: &str| ci_of_rollup(&serde_json::from_str(json).unwrap());
-    // Cancelled and never rerun: the head was not tested.
-    assert_eq!(
-        ci(
-            r#"[{"name":"a","workflowName":"CI","conclusion":"CANCELLED","startedAt":"2026-11-13T10:00:00Z"}]"#
-        ),
-        Ci::Pending
-    );
-    // The same check ran again later at this head: only that run counts.
-    assert_eq!(
-        ci(
-            r#"[{"name":"a","workflowName":"CI","conclusion":"SUCCESS","startedAt":"2026-11-13T11:00:00Z"},{"name":"a","workflowName":"CI","conclusion":"CANCELLED","startedAt":"2026-11-13T10:00:00Z"}]"#
-        ),
-        Ci::Green
-    );
-    assert_eq!(
-        ci(
-            r#"[{"name":"a","workflowName":"CI","conclusion":"FAILURE","startedAt":"2026-11-13T10:00:00Z"},{"name":"a","workflowName":"CI","conclusion":"SUCCESS","startedAt":"2026-11-13T11:00:00Z"}]"#
-        ),
-        Ci::Green
-    );
-    // A later failure is a failure, whatever ran before it.
-    assert_eq!(
-        ci(
-            r#"[{"name":"a","workflowName":"CI","conclusion":"SUCCESS","startedAt":"2026-11-13T10:00:00Z"},{"name":"a","workflowName":"CI","conclusion":"FAILURE","startedAt":"2026-11-13T11:00:00Z"}]"#
-        ),
-        Ci::Red("a".into())
-    );
-    // The same name in another workflow is another check.
-    assert_eq!(
-        ci(
-            r#"[{"name":"a","workflowName":"CI","conclusion":"SUCCESS","startedAt":"2026-11-13T11:00:00Z"},{"name":"a","workflowName":"Docs","conclusion":"FAILURE","startedAt":"2026-11-13T10:00:00Z"}]"#
-        ),
-        Ci::Red("a".into())
-    );
-}
-
-#[test]
 fn a_head_whose_reviewers_timed_out_twice_goes_to_the_advisor() {
     struct TimedOut(Fake, u32);
     impl Evidence for TimedOut {
@@ -484,6 +445,72 @@ fn a_check_rollup_sums_to_one_ci_state() {
             r#"[{"name":"b","status":"IN_PROGRESS","conclusion":""},{"name":"z","status":"COMPLETED","conclusion":"FAILURE"},{"name":"a","status":"COMPLETED","conclusion":"CANCELLED"}]"#
         ),
         Ci::Red("z".into())
+    );
+}
+
+#[test]
+fn a_cancelled_run_is_not_a_failure_and_a_later_run_replaces_it() {
+    let ci = |json: &str| ci_of_rollup(&serde_json::from_str(json).unwrap());
+    // Cancelled and never rerun: the head was not tested.
+    assert_eq!(
+        ci(
+            r#"[{"name":"a","workflowName":"CI","conclusion":"CANCELLED","startedAt":"2026-11-13T10:00:00Z"}]"#
+        ),
+        Ci::Pending
+    );
+    // The same check ran again later at this head: only that run counts.
+    assert_eq!(
+        ci(
+            r#"[{"name":"a","workflowName":"CI","conclusion":"SUCCESS","startedAt":"2026-11-13T11:00:00Z"},{"name":"a","workflowName":"CI","conclusion":"CANCELLED","startedAt":"2026-11-13T10:00:00Z"}]"#
+        ),
+        Ci::Green
+    );
+    assert_eq!(
+        ci(
+            r#"[{"name":"a","workflowName":"CI","conclusion":"FAILURE","startedAt":"2026-11-13T10:00:00Z"},{"name":"a","workflowName":"CI","conclusion":"SUCCESS","startedAt":"2026-11-13T11:00:00Z"}]"#
+        ),
+        Ci::Green
+    );
+    // A later failure is a failure, whatever ran before it.
+    assert_eq!(
+        ci(
+            r#"[{"name":"a","workflowName":"CI","conclusion":"SUCCESS","startedAt":"2026-11-13T10:00:00Z"},{"name":"a","workflowName":"CI","conclusion":"FAILURE","startedAt":"2026-11-13T11:00:00Z"}]"#
+        ),
+        Ci::Red("a".into())
+    );
+    // The same name in another workflow is another check.
+    assert_eq!(
+        ci(
+            r#"[{"name":"a","workflowName":"CI","conclusion":"SUCCESS","startedAt":"2026-11-13T11:00:00Z"},{"name":"a","workflowName":"Docs","conclusion":"FAILURE","startedAt":"2026-11-13T10:00:00Z"}]"#
+        ),
+        Ci::Red("a".into())
+    );
+}
+
+#[test]
+fn a_change_from_a_forge_without_a_check_rollup_has_no_checks_and_keeps_its_title() {
+    let change = crate::review_watch::forge::Change {
+        id: 7,
+        head: "a".repeat(40),
+        base: "main".into(),
+        author: "someone".into(),
+        gitlab: true,
+        overlap: None,
+        behind: None,
+        head_branch: Some("feature".into()),
+    };
+    let pr = plain_change(change, "feat(x): a change (STORY-1)".into());
+    // "No check has reported", not "unknown": the change is derived.
+    assert_eq!(pr.ci, Some(Ci::None));
+    assert_eq!(specs_of(&pr), ["STORY-1"]);
+    let fake = Fake {
+        ci: Ok(pr.ci.clone().unwrap()),
+        ..Fake::default()
+    };
+    let row = derive(&pr, &fake);
+    assert_eq!(
+        (row.state, row.action),
+        (State::NeedsReview, Action::LaunchReview)
     );
 }
 

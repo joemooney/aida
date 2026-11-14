@@ -124,6 +124,9 @@ pub(crate) struct Snapshot {
     pub items: Vec<Item>,
     pub queues: Queues,
     pub attention: Vec<Attention>,
+    /// What the pass could not read, so what this snapshot may be missing.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub warnings: Vec<String>,
 }
 
 fn stage_of(state: &State, ci: Option<&str>) -> Stage {
@@ -366,10 +369,9 @@ pub(crate) fn assemble(
     for item in &items {
         let why = if let Some(blocker) = &item.blocked_by {
             Some(format!("blocked: {blocker}"))
-        } else if item.actor == NO_ACTOR
-            && item.stage != Stage::Ready
-            && older_than(item.since.as_deref(), UNOWNED_SECS)
-        {
+        // Every stage counts, READY included: a change nobody is moving
+        // for two hours is the thing this list exists to show.
+        } else if item.actor == NO_ACTOR && older_than(item.since.as_deref(), UNOWNED_SECS) {
             Some(format!(
                 "unowned: {} with no live actor for over 2h",
                 item.stage.label()
@@ -451,6 +453,7 @@ pub(crate) fn assemble(
         items,
         queues,
         attention,
+        warnings: pass.warnings.clone(),
     }
 }
 
@@ -556,6 +559,9 @@ pub(crate) fn render(snapshot: &Snapshot, now: DateTime<Utc>) -> String {
                 .red()
                 .bold()
         ));
+    }
+    for warning in &snapshot.warnings {
+        out.push_str(&format!("{}\n", format!("WARNING {warning}").yellow()));
     }
     for stage in Stage::ALL {
         let rows: Vec<&Item> = snapshot

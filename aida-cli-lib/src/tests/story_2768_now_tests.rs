@@ -71,6 +71,7 @@ fn pass(changes: Vec<Pr>, rows: Vec<Row>, foreign: Vec<crate::coordination::Clai
         merge_trees: Default::default(),
         book: Default::default(),
         notes: Vec::new(),
+        warnings: Vec::new(),
     }
 }
 
@@ -244,6 +245,111 @@ fn attention_names_a_reason_a_next_action_and_an_owner_for_every_entry() {
     }
     assert!(snapshot.attention[0].why.contains("unowned"));
     assert!(snapshot.attention[3].why.contains("the reason"));
+}
+
+#[test]
+fn a_ready_change_nobody_has_moved_for_two_hours_needs_attention() {
+    let mut stale = change(1, "BUG-1");
+    stale.updated_at = Some("2026-11-13T12:00:00Z".into());
+    let mut waiting = change(2, "BUG-2");
+    waiting.updated_at = Some("2026-11-13T12:00:00Z".into());
+    let mut landing = change(3, "BUG-3");
+    landing.updated_at = Some("2026-11-13T12:00:00Z".into());
+    let pending = Row {
+        ci: Some("pending".into()),
+        ..row(2, State::Ready, Action::Train, None)
+    };
+    let pass = pass(
+        vec![stale, waiting, landing, change(4, "BUG-4")],
+        vec![
+            row(1, State::Ready, Action::Train, None),
+            pending,
+            row(3, State::Landing, Action::Wait, None),
+            // Ready, and it moved a moment ago: not stuck.
+            row(4, State::Ready, Action::Train, None),
+        ],
+        Vec::new(),
+    );
+    let snapshot = snapshot(&pass, &[]);
+    let entries: Vec<(&str, &str)> = snapshot
+        .attention
+        .iter()
+        .map(|entry| (entry.spec.as_str(), entry.why.as_str()))
+        .collect();
+    assert_eq!(
+        entries,
+        vec![
+            (
+                "BUG-1 (#1)",
+                "unowned: READY with no live actor for over 2h"
+            ),
+            (
+                "BUG-2 (#2)",
+                "unowned: WAITING-CI with no live actor for over 2h"
+            ),
+            (
+                "BUG-3 (#3)",
+                "unowned: SHIPPING with no live actor for over 2h"
+            ),
+        ]
+    );
+}
+
+#[test]
+fn lanes_that_could_not_be_read_are_a_warning_on_the_screen_not_an_empty_list() {
+    let mut pass = pass(Vec::new(), Vec::new(), Vec::new());
+    pass.warnings = vec![crate::land::lanes_unreadable("lease 7 is not valid JSON")];
+    let snapshot = snapshot(&pass, &[]);
+    assert_eq!(snapshot.warnings.len(), 1);
+    colored::control::set_override(false);
+    let screen = render(&snapshot, now());
+    assert!(
+        screen.contains(
+            "\nWARNING this clone's leases could not be read (lease 7 is not valid JSON): live lanes are missing from this view\n"
+        ),
+        "{screen}"
+    );
+    // A snapshot written before the field existed still reads.
+    let mut json = serde_json::to_value(&snapshot).unwrap();
+    json.as_object_mut().unwrap().remove("warnings");
+    let old: Snapshot = serde_json::from_value(json).unwrap();
+    assert!(old.warnings.is_empty());
+}
+
+#[test]
+fn a_hold_awaiting_the_mandates_cover_is_blocked_and_never_counted_as_ready() {
+    let pass = pass(
+        vec![change(1, "BUG-1"), change(2, "BUG-2")],
+        vec![
+            row(1, State::ReadyPendingCover, Action::ClearHoldAndLand, None),
+            row(2, State::Ready, Action::Train, None),
+        ],
+        Vec::new(),
+    );
+    let snapshot = snapshot(&pass, &[]);
+    let stages: Vec<(Option<u64>, Stage)> = snapshot
+        .items
+        .iter()
+        .map(|item| (item.pr, item.stage))
+        .collect();
+    assert_eq!(
+        stages,
+        vec![(Some(2), Stage::Ready), (Some(1), Stage::Blocked)]
+    );
+    // It is in the attention list as blocked, with its reason.
+    assert!(
+        snapshot
+            .attention
+            .iter()
+            .any(|entry| entry.spec == "BUG-1 (#1)" && entry.why.starts_with("blocked:")),
+        "{:?}",
+        snapshot.attention
+    );
+    colored::control::set_override(false);
+    let screen = render(&snapshot, now());
+    // One change is ready, not two.
+    assert!(screen.contains("\nREADY (1)\n"), "{screen}");
+    assert!(screen.contains("\nBLOCKED (1)\n"), "{screen}");
 }
 
 #[test]
