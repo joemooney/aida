@@ -951,14 +951,31 @@ pub(crate) fn ci_of_rollup(rollup: &serde_json::Value) -> Ci {
             .unwrap_or_default()
             .to_ascii_uppercase()
     };
-    let mut failed: Vec<String> = Vec::new();
-    let mut pending = false;
-    for check in checks {
-        let name = check
+    let name_of = |check: &serde_json::Value| {
+        check
             .get("name")
             .or_else(|| check.get("context"))
             .and_then(|v| v.as_str())
-            .unwrap_or("check");
+            .unwrap_or("check")
+            .to_string()
+    };
+    // A check that ran more than once at this head counts once, by its
+    // newest run: a cancelled run that a later run replaced says nothing.
+    let mut newest: BTreeMap<(String, String), &serde_json::Value> = BTreeMap::new();
+    for check in checks {
+        let key = (text(check, "workflowName"), name_of(check));
+        let started = |check: &serde_json::Value| text(check, "startedAt");
+        match newest.get(&key) {
+            Some(kept) if started(kept) > started(check) => {}
+            _ => {
+                newest.insert(key, check);
+            }
+        }
+    }
+    let mut failed: Vec<String> = Vec::new();
+    let mut pending = false;
+    for check in newest.values() {
+        let name = name_of(check);
         // A check run reports `status` + `conclusion`; a commit status
         // reports `state`.
         let outcome = match text(check, "conclusion") {
@@ -968,7 +985,10 @@ pub(crate) fn ci_of_rollup(rollup: &serde_json::Value) -> Ci {
         match outcome.as_str() {
             "SUCCESS" | "NEUTRAL" | "SKIPPED" => {}
             "" | "PENDING" | "EXPECTED" | "QUEUED" | "IN_PROGRESS" => pending = true,
-            _ => failed.push(name.to_string()),
+            // A cancelled run did not test the head: CI is not green, and
+            // it is not a failure of the change either.
+            "CANCELLED" => pending = true,
+            _ => failed.push(name),
         }
     }
     if !failed.is_empty() {
@@ -983,6 +1003,22 @@ pub(crate) fn ci_of_rollup(rollup: &serde_json::Value) -> Ci {
     }
 }
 
+/// A change from the watcher's discovery, which reports no checks. That is
+/// "no check has reported", the same as a GitHub change with an empty
+/// rollup: unknown CI would make every change on such a forge UNKNOWN.
+pub(crate) fn plain_change(change: crate::review_watch::forge::Change, title: String) -> Pr {
+    Pr {
+        id: change.id,
+        head: change.head,
+        base: change.base,
+        branch: change.head_branch,
+        title,
+        updated_at: None,
+        hold_label: None,
+        ci: Some(Ci::None),
+    }
+}
+
 /// One forge read for every open change, with its title, labels and checks.
 /// `None` on a forge without it (GitLab): the caller falls back to the
 /// watcher's discovery and reads the rest per change.
@@ -993,32 +1029,9 @@ fn discover_rich(
     let Some(slug) = repo.github_slug() else {
         return Ok(None);
     };
-    let mut command = std::process::Command::new("gh");
-    command
-        .args([
-            "pr",
-            "list",
-            "--state",
-            "open",
-            "--limit",
-            "1000",
-            "--repo",
-            &slug,
-            "--json",
-            "number,title,headRefOid,headRefName,baseRefName,isDraft,labels,statusCheckRollup,updatedAt",
-        ])
-        .current_dir(root)
-        .stdin(std::process::Stdio::null());
-    repo.pin_command(&mut command);
-    let out = crate::command_output_with_timeout(command, std::time::Duration::from_secs(60))
-        .context("the forge listing of open changes failed to run or timed out")?;
-    anyhow::ensure!(
-        out.status.success(),
-        "the forge listing of open changes failed: {}",
-        one_line(&String::from_utf8_lossy(&out.stderr), 300)
-    );
-    let rows: Vec<serde_json::Value> =
-        serde_json::from_slice(&out.stdout).context("invalid forge listing")?;
+    let rows = crate::forge::github_open_changes_detailed(root, &slug, &|command| {
+        repo.pin_command(command)
+    })?;
     let text = |row: &serde_json::Value, key: &str| -> Result<String> {
         row.get(key)
             .and_then(|v| v.as_str())
@@ -1075,6 +1088,16 @@ pub(crate) struct Pass {
     /// Live lanes on this clone and, through the synced store, on others.
     pub local_lanes: Vec<crate::leases::SessionLease>,
     pub foreign_lanes: Vec<crate::coordination::Claim>,
+    /// What the pass could not read and so does not show.
+    pub warnings: Vec<String>,
+}
+
+/// The warning for a lease store that could not be read.
+pub(crate) fn lanes_unreadable(why: &str) -> String {
+    format!(
+        "this clone's leases could not be read ({}): live lanes are missing from this view",
+        one_line(why, 200)
+    )
 }
 
 /// Discover the open changes and derive a row for each.
@@ -1083,20 +1106,21 @@ pub(crate) fn live_pass(start: &Path) -> Result<Pass> {
     let repo = crate::review_watch::forge::Repository::load(&root)?;
     let changes: Vec<Pr> = match discover_rich(&root, &repo)? {
         Some(changes) => changes,
-        None => repo
-            .discover(&root)?
-            .into_iter()
-            .map(|change| Pr {
-                id: change.id,
-                head: change.head,
-                base: change.base,
-                branch: change.head_branch,
-                title: String::new(),
-                updated_at: None,
-                hold_label: None,
-                ci: None,
-            })
-            .collect(),
+        None => {
+            // The watcher's discovery carries no title; the specs a change
+            // ships are read from it, so each is asked for.
+            let forge = crate::forge::forge_for(&root);
+            repo.discover(&root)?
+                .into_iter()
+                .map(|change| {
+                    let title = forge
+                        .change_title_and_body(change.id)
+                        .map(|(title, _)| title)
+                        .unwrap_or_default();
+                    plain_change(change, title)
+                })
+                .collect()
+        }
     };
     let gitlab = repo.github_slug().is_none();
     let our_clone = root.display().to_string();
@@ -1118,13 +1142,19 @@ pub(crate) fn live_pass(start: &Path) -> Result<Pass> {
         claims,
     };
     let rows = pass(&changes, &live);
-    let local_lanes = live.local_leases().map(<[_]>::to_vec).unwrap_or_default();
+    // Lanes that could not be read are said to be missing, never shown as
+    // "no lanes".
+    let (local_lanes, warnings) = match live.local_leases() {
+        Ok(leases) => (leases.to_vec(), Vec::new()),
+        Err(why) => (Vec::new(), vec![lanes_unreadable(&why)]),
+    };
     Ok(Pass {
         root,
         changes,
         rows,
         local_lanes,
         foreign_lanes: live.claims,
+        warnings,
     })
 }
 
