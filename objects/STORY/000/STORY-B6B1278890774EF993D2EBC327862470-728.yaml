@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-14T10:27:58.135719171Z
-modified_at: 2026-11-14T10:27:58.135719171Z
+modified_at: 2026-11-14T11:55:09.489702718Z
 req_type: Story
 tags:
 - gate
@@ -18,6 +18,14 @@ relationships:
 - rel_type: Child
   target_id: 01a1d617-52fb-7970-af20-b9619faeeca5
   created_at: 2026-11-14T10:29:59.155988156Z
+comments:
+- id: 01a1d9e9-5331-7782-82b6-751fd7dde772
+  author: joe
+  content: '[advisor 7b 04:55] Boundary design ruled on STORY-2772: promotion squash commits carry ''Integration-Head: <sha>''; the member gate reads the newest such trailer on main''s first-parent line.'
+  created_at: 2026-11-14T11:55:09.489702718Z
+  modified_at: 2026-11-14T11:55:09.489702718Z
+  session_id: 01a1d8f3-f948-7072-b174-fa9507ed074b
+  harness_version: 2.1.325 (Claude Code)
 history:
 - id: 01a1d99b-6c92-7542-bc06-0c1803678a48
   author: joe
