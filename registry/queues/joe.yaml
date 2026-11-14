@@ -111,14 +111,6 @@
   for_role: reviewer
   added_by_machine: imac
 - user_id: joe
-  requirement_id: 01a1da68-0719-7700-b19c-79ab9c2d54f0
-  position: 639000
-  added_by: joe
-  note: auto-queue retry reused canonical review story; covers 1 spec
-  added_at: 2026-11-14T16:13:03.865550869Z
-  for_role: reviewer
-  added_by_machine: imac
-- user_id: joe
   requirement_id: 01a1d79e-4efa-7c21-b552-7c27b02dcf71
   position: 640000
   added_by: joe
@@ -156,5 +148,13 @@
   added_by: joe
   note: auto-queued by `aida pr` ((no-sess); covers 1 spec
   added_at: 2026-11-14T16:31:10.085159166Z
+  for_role: reviewer
+  added_by_machine: imac
+- user_id: joe
+  requirement_id: 01a1da68-0719-7700-b19c-79ab9c2d54f0
+  position: 645000
+  added_by: joe
+  note: auto-queue retry reused canonical review story; covers 1 spec
+  added_at: 2026-11-14T16:45:08.069157390Z
   for_role: reviewer
   added_by_machine: imac
