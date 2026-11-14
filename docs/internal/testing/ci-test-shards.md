@@ -16,7 +16,7 @@ target is six minutes; cold compilation can take longer. The compile job keeps
 A PR with the `ci:full` label, or repository Actions variable
 `AIDA_PR_CI_TIER=full`, runs **FULL** instead. Unset, `fast`, or unrecognized
 variable values select FAST for ordinary PRs. Adding/removing the label triggers
-a fresh run at the same head. Main and `train/**` pushes, train PRs, merge groups,
+a fresh run at the same head. Main pushes, train PRs, merge groups,
 scheduled runs and manual dispatches always select FULL. The `tier` job selects
 once and emits a `ci-tier: fast` or `ci-tier: full` check name.
 

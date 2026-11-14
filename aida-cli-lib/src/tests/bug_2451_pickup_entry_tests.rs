@@ -450,3 +450,785 @@ fn bug_2501_burndown_residual_refuses_failed_pull() {
         before.len()
     );
 }
+
+// Recovery exercises ordinary configured store discovery, unlike setup-only
+// pickup fixtures which intentionally pass an unattached store explicitly.
+// trace:BUG-2549 | ai:codex
+fn recovery_forge_fixture(main: &Path, root: &Path) -> std::path::PathBuf {
+    let gh = forge_fixture(main, root, "");
+    std::fs::write(main.join(".aida/config.toml"),
+        "[forge]\nprovider = \"github\"\n[deployment]\nmode = \"distributed\"\nstore_path = \".aida-store\"\n").unwrap();
+    gh
+}
+
+// trace:BUG-2549 | ai:codex
+#[test]
+fn bug_2549_queue_resumes_prless_canonical_head_without_force() {
+    let fx = fixture();
+    let mut ambient =
+        crate::test_env::AmbientGuard::hermetic_with_seat(&fx.main, "implementer", &[]);
+    let gh = recovery_forge_fixture(&fx.main, &fx.root);
+    ambient.set_key("AIDA_TEST_GH_BINARY", &gh);
+    git_ok(&fx.main, &["checkout", "-qb", "bug-2451"]);
+    std::fs::write(fx.main.join("unfinished"), "keep this implementation\n").unwrap();
+    git_ok(&fx.main, &["add", "unfinished"]);
+    git_ok(
+        &fx.main,
+        &[
+            "-c",
+            "maintenance.auto=false",
+            "-c",
+            "gc.auto=0",
+            "commit",
+            "-qm",
+            "unfinished implementation (Refs BUG-2451)",
+        ],
+    );
+    let head = git_ok(&fx.main, &["rev-parse", "bug-2451"]);
+    git_ok(&fx.main, &["checkout", "main"]);
+    let (storage, _) = super::orphan_reentry_tests::queued_scope(&fx.main, "BUG-2451");
+    storage
+        .update_atomically(|store| {
+            store
+                .get_requirement_by_spec_id_mut("BUG-2451")
+                .unwrap()
+                .status = aida_core::RequirementStatus::InProgress;
+        })
+        .unwrap();
+    queue_work(&storage, false).unwrap();
+    let leases = crate::list_leases(&fx.main);
+    assert_eq!(leases.len(), 1);
+    assert_eq!(leases[0].branch, "bug-2451");
+    assert_eq!(
+        git_ok(&leases[0].worktree_path, &["rev-parse", "HEAD"]),
+        head
+    );
+    assert_eq!(
+        std::fs::read_to_string(leases[0].worktree_path.join("unfinished")).unwrap(),
+        "keep this implementation\n"
+    );
+    assert!(!super::tests::ref_exists(&fx.main, "refs/heads/bug-2451-2"));
+    let store = storage.load().unwrap();
+    let req = store.get_requirement_by_spec_id("BUG-2451").unwrap();
+    assert!(req
+        .comments
+        .iter()
+        .any(|comment| comment.content.contains(&head)));
+}
+
+// trace:BUG-2549 | ai:codex
+#[test]
+fn bug_2549_queue_refuses_dirty_canonical_worktree_without_status_mutation() {
+    let fx = fixture();
+    let mut ambient =
+        crate::test_env::AmbientGuard::hermetic_with_seat(&fx.main, "implementer", &[]);
+    let gh = recovery_forge_fixture(&fx.main, &fx.root);
+    ambient.set_key("AIDA_TEST_GH_BINARY", &gh);
+    let held = fx.root.join("held");
+    git_ok(
+        &fx.main,
+        &["worktree", "add", "-qb", "bug-2451", held.to_str().unwrap()],
+    );
+    std::fs::write(held.join("pending"), "retain me").unwrap();
+    let (storage, _) = super::orphan_reentry_tests::queued_scope(&fx.main, "BUG-2451");
+    let error = queue_work(&storage, false).unwrap_err().to_string();
+    assert!(error.contains("held by worktree"), "{error}");
+    assert!(crate::list_leases(&fx.main).is_empty());
+    assert_eq!(
+        std::fs::read_to_string(held.join("pending")).unwrap(),
+        "retain me"
+    );
+    assert_eq!(
+        storage
+            .load()
+            .unwrap()
+            .get_requirement_by_spec_id("BUG-2451")
+            .unwrap()
+            .status,
+        aida_core::RequirementStatus::Approved
+    );
+}
+
+// trace:BUG-2549 | ai:codex
+#[test]
+fn bug_2549_reference_merge_returns_unheld_spec_and_preserves_open_pr_claims() {
+    let fx = fixture();
+    let mut ambient =
+        crate::test_env::AmbientGuard::hermetic_with_seat(&fx.main, "implementer", &[]);
+    let gh = recovery_forge_fixture(&fx.main, &fx.root);
+    ambient.set_key("AIDA_TEST_GH_BINARY", &gh);
+    let (storage, set_status) = super::orphan_reentry_tests::queued_scope(&fx.main, "BUG-2451");
+    set_status(aida_core::RequirementStatus::InProgress);
+    crate::lane_recovery::reconcile_reference(&fx.main, "BUG-2451", "merged-slice-sha").unwrap();
+    let store = storage.load().unwrap();
+    let req = store.get_requirement_by_spec_id("BUG-2451").unwrap();
+    assert_eq!(req.status, aida_core::RequirementStatus::Approved);
+    assert!(req
+        .comments
+        .iter()
+        .any(|c| c.content.contains("merged-slice-sha")));
+    for reply in [
+        "printf '42\\tfix (BUG-2451)\\thttps://example.invalid/42\\tbug-2451\\n'",
+        "exit 1",
+    ] {
+        crate::test_exec::write_executable(&gh, format!("#!/bin/sh\n{reply}\n"));
+        set_status(aida_core::RequirementStatus::InProgress);
+        let observation =
+            crate::lane_recovery::reconcile_reference(&fx.main, "BUG-2451", "merged-slice-sha");
+        if reply == "exit 1" {
+            assert!(observation.is_err());
+        } else {
+            observation.unwrap();
+        }
+        assert_eq!(
+            storage
+                .load()
+                .unwrap()
+                .get_requirement_by_spec_id("BUG-2451")
+                .unwrap()
+                .status,
+            aida_core::RequirementStatus::InProgress
+        );
+    }
+}
+
+// trace:BUG-2549 | ai:codex
+#[test]
+fn bug_2549_prless_lane_records_lease_head_then_resets_after_release() {
+    let fx = fixture();
+    let mut ambient =
+        crate::test_env::AmbientGuard::hermetic_with_seat(&fx.main, "implementer", &[]);
+    let gh = recovery_forge_fixture(&fx.main, &fx.root);
+    ambient.set_key("AIDA_TEST_GH_BINARY", &gh);
+    let (storage, set_status) = super::orphan_reentry_tests::queued_scope(&fx.main, "BUG-2451");
+    queue_work(&storage, false).unwrap();
+    // The setup-only fixture has no attached CLI backend for the launch bump.
+    set_status(aida_core::RequirementStatus::InProgress);
+    let lease = crate::list_leases(&fx.main).remove(0);
+    let head = git_ok(&lease.worktree_path, &["rev-parse", "HEAD"]);
+    crate::lane_recovery::reconcile(&fx.main, "BUG-2451", &lease.branch, None).unwrap();
+    assert_eq!(
+        storage
+            .load()
+            .unwrap()
+            .get_requirement_by_spec_id("BUG-2451")
+            .unwrap()
+            .status,
+        aida_core::RequirementStatus::InProgress
+    );
+    crate::lane_recovery::reconcile_reference(&fx.main, "BUG-2451", "merged-slice-sha").unwrap();
+    assert_eq!(
+        storage
+            .load()
+            .unwrap()
+            .get_requirement_by_spec_id("BUG-2451")
+            .unwrap()
+            .status,
+        aida_core::RequirementStatus::InProgress
+    );
+    std::fs::remove_file(crate::lease_path(&fx.main, &lease.id)).unwrap();
+    crate::lane_recovery::reconcile(&fx.main, "BUG-2451", &lease.branch, Some(&head)).unwrap();
+    let store = storage.load().unwrap();
+    let req = store.get_requirement_by_spec_id("BUG-2451").unwrap();
+    assert_eq!(req.status, aida_core::RequirementStatus::Approved);
+    assert!(req
+        .comments
+        .iter()
+        .any(|c| c.content.contains(&head) && c.content.contains(&lease.branch)));
+}
+
+// trace:BUG-2549 | ai:codex
+#[test]
+fn bug_2549_canonical_branch_with_foreign_lease_refuses() {
+    let fx = fixture();
+    let mut ambient =
+        crate::test_env::AmbientGuard::hermetic_with_seat(&fx.main, "implementer", &[]);
+    let gh = recovery_forge_fixture(&fx.main, &fx.root);
+    ambient.set_key("AIDA_TEST_GH_BINARY", &gh);
+    let (storage, _) = super::orphan_reentry_tests::queued_scope(&fx.main, "BUG-2451");
+    queue_work(&storage, false).unwrap();
+    let mut lease = crate::list_leases(&fx.main).remove(0);
+    lease.scope = "BUG-9999".into();
+    std::fs::write(
+        crate::lease_path(&fx.main, &lease.id),
+        toml::to_string(&lease).unwrap(),
+    )
+    .unwrap();
+    let error = crate::queue_cmd::canonical_resume_branch(&fx.main, "BUG-2451", true)
+        .unwrap_err()
+        .to_string();
+    assert!(error.contains("still has a lease"), "{error}");
+    assert_eq!(crate::list_leases(&fx.main)[0].scope, "BUG-9999");
+}
+
+// trace:BUG-2549 | ai:codex
+#[test]
+fn bug_2549_shared_claim_and_corrupt_registry_retain_in_progress() {
+    let fx = fixture();
+    let mut ambient =
+        crate::test_env::AmbientGuard::hermetic_with_seat(&fx.main, "implementer", &[]);
+    let gh = recovery_forge_fixture(&fx.main, &fx.root);
+    ambient.set_key("AIDA_TEST_GH_BINARY", &gh);
+    let (storage, set_status) = super::orphan_reentry_tests::queued_scope(&fx.main, "BUG-2451");
+    let dir = fx.main.join(".aida-store/coordination/leases");
+    std::fs::create_dir_all(&dir).unwrap();
+    let path = dir.join("foreign.toml");
+    for body in [
+        "scope = 'BUG-2451'\nnode_id = 'foreign'\nclone_path = '/foreign/clone'\nhost = 'other-host'\npid = 1\nagent = 'implementer'\nstarted_at = '2026-11-13T00:00:00Z'\nheartbeat_at = '2026-11-13T00:00:00Z'\nttl_secs = 1800\n",
+        "torn = ",
+    ] {
+        std::fs::write(&path, body).unwrap();
+        set_status(aida_core::RequirementStatus::InProgress);
+        crate::lane_recovery::reconcile_observed(&fx.main, "BUG-2451", "bug-2451", Some("exit-head")).unwrap();
+        crate::lane_recovery::reconcile_reference(&fx.main, "BUG-2451", "merge").unwrap();
+        let store = storage.load().unwrap();
+        let req = store.get_requirement_by_spec_id("BUG-2451").unwrap();
+        assert_eq!(req.status, aida_core::RequirementStatus::InProgress);
+        assert!(req.comments.iter().any(|c| c.content.contains("exit-head")));
+    }
+    std::fs::remove_file(path).unwrap();
+    crate::lane_recovery::reconcile_reference(&fx.main, "BUG-2451", "merge").unwrap();
+    assert_eq!(
+        storage
+            .load()
+            .unwrap()
+            .get_requirement_by_spec_id("BUG-2451")
+            .unwrap()
+            .status,
+        aida_core::RequirementStatus::Approved
+    );
+}
+
+// trace:BUG-2549 | ai:codex
+#[test]
+fn bug_2549_exit_and_reference_recovery_use_legacy_store() {
+    for file in ["requirements.yaml", "requirements.db", "selected.yaml"] {
+        let fx = fixture();
+        let mut ambient =
+            crate::test_env::AmbientGuard::hermetic_with_seat(&fx.main, "implementer", &[]);
+        let gh = forge_fixture(&fx.main, &fx.root, "");
+        ambient.set_key("AIDA_TEST_GH_BINARY", &gh);
+        std::fs::remove_dir_all(fx.main.join(".aida-store")).unwrap();
+        let storage = aida_core::Storage::new(fx.main.join(file));
+        let mut store = aida_core::RequirementsStore::default();
+        let mut req = aida_core::Requirement::new("retry".into(), String::new());
+        req.spec_id = Some("BUG-2451".into());
+        req.status = aida_core::RequirementStatus::InProgress;
+        store.requirements.push(req);
+        storage.save(&store).unwrap();
+        if file == "selected.yaml" {
+            crate::lane_recovery::reconcile_in(
+                &fx.main,
+                &storage,
+                "BUG-2451",
+                "deleted-branch",
+                Some("captured-before-removal"),
+            )
+            .unwrap();
+        } else {
+            crate::lane_recovery::reconcile_observed(
+                &fx.main,
+                "BUG-2451",
+                "deleted-branch",
+                Some("captured-before-removal"),
+            )
+            .unwrap();
+        }
+        let recovered = storage.load().unwrap();
+        let req = recovered.get_requirement_by_spec_id("BUG-2451").unwrap();
+        assert_eq!(req.status, aida_core::RequirementStatus::Approved);
+        assert!(req
+            .comments
+            .iter()
+            .any(|c| c.content.contains("captured-before-removal")));
+        storage
+            .update_atomically(|store| {
+                store
+                    .get_requirement_by_spec_id_mut("BUG-2451")
+                    .unwrap()
+                    .status = aida_core::RequirementStatus::InProgress
+            })
+            .unwrap();
+        if file == "selected.yaml" {
+            crate::lane_recovery::reconcile_reference_in(
+                &fx.main,
+                &storage,
+                "BUG-2451",
+                "legacy-merge",
+            )
+            .unwrap();
+        } else {
+            crate::lane_recovery::reconcile_reference(&fx.main, "BUG-2451", "legacy-merge")
+                .unwrap();
+        }
+        assert_eq!(
+            storage
+                .load()
+                .unwrap()
+                .get_requirement_by_spec_id("BUG-2451")
+                .unwrap()
+                .status,
+            aida_core::RequirementStatus::Approved
+        );
+        assert!(!fx.main.join(".aida-store").exists());
+    }
+}
+
+// trace:BUG-2549 | ai:codex
+#[test]
+fn bug_2549_post_merge_commits_resume_canonical_branch() {
+    let fx = fixture();
+    let mut ambient =
+        crate::test_env::AmbientGuard::hermetic_with_seat(&fx.main, "implementer", &[]);
+    let gh = recovery_forge_fixture(&fx.main, &fx.root);
+    ambient.set_key("AIDA_TEST_GH_BINARY", &gh);
+    git_ok(&fx.main, &["branch", "bug-2451"]);
+    let merged_head = git_ok(&fx.main, &["rev-parse", "bug-2451"]);
+    crate::test_exec::write_executable(
+        &gh,
+        format!(
+            r#"#!/bin/sh
+if [ "$1" = --version ]; then echo 'gh test'; exit 0; fi
+if [ "$1 $2" = 'pr list' ]; then
+  case " $* " in
+    *' --state merged '*) printf '42\tRefs BUG-2451\thttps://example.invalid/42\tbug-2451\n';;
+  esac
+  exit 0
+fi
+if [ "$1 $2" = 'pr view' ]; then
+  printf '%s\n' '{{"state":"MERGED","headRefOid":"{merged_head}","headRefName":"bug-2451","baseRefName":"main"}}'
+  exit 0
+fi
+exit 1
+"#
+        ),
+    );
+    assert_eq!(
+        crate::queue_cmd::canonical_resume_branch(&fx.main, "BUG-2451", true).unwrap(),
+        None
+    );
+    git_ok(&fx.main, &["checkout", "bug-2451"]);
+    std::fs::write(
+        fx.main.join("post-merge-work"),
+        "unfinished implementation\n",
+    )
+    .unwrap();
+    git_ok(&fx.main, &["add", "post-merge-work"]);
+    git_ok(
+        &fx.main,
+        &[
+            "-c",
+            "core.hooksPath=/dev/null",
+            "-c",
+            "maintenance.auto=false",
+            "-c",
+            "gc.auto=0",
+            "commit",
+            "-qm",
+            "unfinished after merge",
+        ],
+    );
+    git_ok(&fx.main, &["checkout", "main"]);
+    let (storage, _) = super::orphan_reentry_tests::queued_scope(&fx.main, "BUG-2451");
+    let head = git_ok(&fx.main, &["rev-parse", "bug-2451"]);
+    assert_ne!(head, merged_head);
+    // Keep origin at the merged head: local unfinished work takes precedence
+    // over unchanged remote residue when selecting the canonical resume tip.
+    git_ok(
+        &fx.main,
+        &["update-ref", "refs/remotes/origin/bug-2451", &merged_head],
+    );
+    // Historical merge evidence must remain harmless on repeated discovery.
+    for _ in 0..2 {
+        assert_eq!(
+            crate::queue_cmd::canonical_resume_branch(&fx.main, "BUG-2451", true).unwrap(),
+            Some("bug-2451".into())
+        );
+    }
+    // Origin-only retained work also resumes, despite the historical merge.
+    git_ok(
+        &fx.main,
+        &[
+            "-c",
+            "maintenance.auto=false",
+            "-c",
+            "gc.auto=0",
+            "push",
+            "-q",
+            "origin",
+            "bug-2451",
+        ],
+    );
+    git_ok(&fx.main, &["branch", "-D", "bug-2451"]);
+    assert_eq!(
+        crate::queue_cmd::canonical_resume_branch(&fx.main, "BUG-2451", true).unwrap(),
+        Some("bug-2451".into())
+    );
+    queue_work(&storage, false).unwrap();
+    let lease = crate::list_leases(&fx.main).remove(0);
+    assert_eq!(lease.branch, "bug-2451");
+    assert_eq!(git_ok(&lease.worktree_path, &["rev-parse", "HEAD"]), head);
+    assert_eq!(
+        std::fs::read_to_string(lease.worktree_path.join("post-merge-work")).unwrap(),
+        "unfinished implementation\n"
+    );
+}
+
+// Origin-only merged residue (no commits past the merged PR head) must not
+// fail pickup: it allocates a fresh dated branch as main did before.
+// trace:BUG-2549 | ai:claude
+#[test]
+fn bug_2549_merged_residue_allocates_a_fresh_branch() {
+    let fx = fixture();
+    let mut ambient =
+        crate::test_env::AmbientGuard::hermetic_with_seat(&fx.main, "implementer", &[]);
+    let gh = recovery_forge_fixture(&fx.main, &fx.root);
+    ambient.set_key("AIDA_TEST_GH_BINARY", &gh);
+    let merged_head = git_ok(&fx.main, &["rev-parse", "HEAD"]);
+    git_ok(
+        &fx.main,
+        &[
+            "-c",
+            "maintenance.auto=false",
+            "-c",
+            "gc.auto=0",
+            "push",
+            "-q",
+            "origin",
+            "HEAD:refs/heads/bug-2451",
+        ],
+    );
+    assert!(!super::tests::ref_exists(&fx.main, "refs/heads/bug-2451"));
+    assert!(crate::branch_exists_anywhere(&fx.main, "bug-2451"));
+    crate::test_exec::write_executable(
+        &gh,
+        format!(
+            r#"#!/bin/sh
+if [ "$1" = --version ]; then echo 'gh test'; exit 0; fi
+if [ "$1 $2" = 'pr list' ]; then
+  case " $* " in
+    *' --state merged '*) printf '42\tRefs BUG-2451\thttps://example.invalid/42\tbug-2451\n';;
+  esac
+  exit 0
+fi
+if [ "$1 $2" = 'pr view' ]; then
+  printf '%s\n' '{{"state":"MERGED","headRefOid":"{merged_head}","headRefName":"bug-2451","baseRefName":"main"}}'
+  exit 0
+fi
+exit 1
+"#
+        ),
+    );
+    assert_eq!(
+        crate::queue_cmd::canonical_resume_branch(&fx.main, "BUG-2451", true).unwrap(),
+        None
+    );
+    let (storage, _) = super::orphan_reentry_tests::queued_scope(&fx.main, "BUG-2451");
+    queue_work(&storage, false).unwrap();
+    let lease = crate::list_leases(&fx.main).remove(0);
+    assert!(lease.branch.starts_with("bug-2451-"), "{}", lease.branch);
+}
+
+// trace:BUG-2549 | ai:codex
+#[test]
+fn bug_2549_detached_worktree_exit_captures_actual_head() {
+    let fx = fixture();
+    let mut ambient =
+        crate::test_env::AmbientGuard::hermetic_with_seat(&fx.main, "implementer", &[]);
+    let gh = recovery_forge_fixture(&fx.main, &fx.root);
+    ambient.set_key("AIDA_TEST_GH_BINARY", &gh);
+    let (storage, _) = super::orphan_reentry_tests::queued_scope(&fx.main, "BUG-2451");
+    queue_work(&storage, false).unwrap();
+    let lease = crate::list_leases(&fx.main).remove(0);
+    git_ok(&lease.worktree_path, &["checkout", "--detach"]);
+    git_ok(
+        &lease.worktree_path,
+        &[
+            "-c",
+            "core.hooksPath=/dev/null",
+            "-c",
+            "maintenance.auto=false",
+            "-c",
+            "gc.auto=0",
+            "commit",
+            "--allow-empty",
+            "-qm",
+            "detached unfinished work",
+        ],
+    );
+    let head = git_ok(&lease.worktree_path, &["rev-parse", "HEAD"]);
+    assert_ne!(git_ok(&fx.main, &["rev-parse", &lease.branch]), head);
+    // A broken live HEAD must remain unknown, never fall back to the lease branch.
+    let git_dir = git_ok(&lease.worktree_path, &["rev-parse", "--absolute-git-dir"]);
+    let head_path = Path::new(&git_dir).join("HEAD");
+    let saved_head = std::fs::read(&head_path).unwrap();
+    std::fs::write(&head_path, "ref: refs/heads/missing-exit-head\n").unwrap();
+    assert_eq!(
+        crate::lane_recovery::exit_head(&fx.main, &lease.branch, &[lease.clone()]).unwrap(),
+        None
+    );
+    std::fs::write(&head_path, saved_head).unwrap();
+    let captured =
+        crate::lane_recovery::exit_head(&fx.main, &lease.branch, &[lease.clone()]).unwrap();
+    assert_eq!(captured, Some(head.clone()));
+    // Detached commits are not reachable from the recorded lease branch.
+    assert_eq!(
+        git_ok(
+            &lease.worktree_path,
+            &[
+                "for-each-ref",
+                "--format=%(refname)",
+                "--contains",
+                &head,
+                "refs/heads/"
+            ],
+        ),
+        ""
+    );
+    // Switching away from the lease branch must use the live tree as well.
+    git_ok(&lease.worktree_path, &["checkout", "-b", "switched-exit"]);
+    assert_eq!(
+        crate::lane_recovery::exit_head(&fx.main, &lease.branch, &[lease.clone()]).unwrap(),
+        captured
+    );
+    git_ok(
+        &fx.main,
+        &["worktree", "remove", lease.worktree_path.to_str().unwrap()],
+    );
+    assert_eq!(
+        crate::lane_recovery::exit_head(&fx.main, &lease.branch, &[lease.clone()]).unwrap(),
+        Some(git_ok(&fx.main, &["rev-parse", &lease.branch]))
+    );
+    // Match session end: reconcile the captured facts after tree/lease removal.
+    std::fs::remove_file(crate::lease_path(&fx.main, &lease.id)).unwrap();
+    crate::lane_recovery::reconcile_observed(
+        &fx.main,
+        "BUG-2451",
+        &lease.branch,
+        captured.as_deref(),
+    )
+    .unwrap();
+    let store = storage.load().unwrap();
+    let req = store.get_requirement_by_spec_id("BUG-2451").unwrap();
+    assert!(req
+        .comments
+        .iter()
+        .any(|c| c.content.contains(&head) && c.content.contains(&lease.branch)));
+}
+
+// trace:BUG-2549 | ai:codex
+#[test]
+fn bug_2549_unavailable_forge_preserves_exit_evidence() {
+    let fx = fixture();
+    let mut ambient =
+        crate::test_env::AmbientGuard::hermetic_with_seat(&fx.main, "implementer", &[]);
+    let gh = recovery_forge_fixture(&fx.main, &fx.root);
+    ambient.set_key("AIDA_TEST_GH_BINARY", &gh);
+    let (storage, _) = super::orphan_reentry_tests::queued_scope(&fx.main, "BUG-2451");
+    queue_work(&storage, false).unwrap();
+    let lease = crate::list_leases(&fx.main).remove(0);
+    git_ok(&lease.worktree_path, &["checkout", "--detach"]);
+    git_ok(
+        &lease.worktree_path,
+        &[
+            "-c",
+            "core.hooksPath=/dev/null",
+            "-c",
+            "maintenance.auto=false",
+            "-c",
+            "gc.auto=0",
+            "commit",
+            "--allow-empty",
+            "-qm",
+            "private exit during outage",
+        ],
+    );
+    let captured = crate::lane_recovery::exit_head(&fx.main, &lease.branch, &[lease.clone()])
+        .unwrap()
+        .unwrap();
+    git_ok(
+        &fx.main,
+        &["worktree", "remove", lease.worktree_path.to_str().unwrap()],
+    );
+    std::fs::remove_file(crate::lease_path(&fx.main, &lease.id)).unwrap();
+    crate::test_exec::write_executable(
+        &gh,
+        "#!/bin/sh\nif [ \"$1\" = --version ]; then echo 'gh test'; exit 0; fi\nexit 1\n",
+    );
+    assert!(crate::lane_recovery::reconcile_observed(
+        &fx.main,
+        "BUG-2451",
+        "bug-2451",
+        Some(&captured)
+    )
+    .is_err());
+    let store = storage.load().unwrap();
+    let req = store.get_requirement_by_spec_id("BUG-2451").unwrap();
+    assert_eq!(req.status, aida_core::RequirementStatus::InProgress);
+    assert!(req.comments.iter().any(|c| c.content.contains("bug-2451")
+        && c.content.contains(&captured)
+        && !c.content.contains("no open PR")));
+    assert!(!req
+        .comments
+        .iter()
+        .any(|c| c.content.contains("no open PR")));
+    let comments = req.comments.len();
+    // An outage retry must preserve one durable copy without changing status.
+    assert!(crate::lane_recovery::reconcile_observed(
+        &fx.main,
+        "BUG-2451",
+        "bug-2451",
+        Some(&captured)
+    )
+    .is_err());
+    let retry = storage.load().unwrap();
+    let req = retry.get_requirement_by_spec_id("BUG-2451").unwrap();
+    assert_eq!(req.comments.len(), comments);
+    assert_eq!(req.status, aida_core::RequirementStatus::InProgress);
+    // Reopen the store independently, as a later recovery process would:
+    // evidence must be durable rather than an in-memory observation.
+    let reopened = aida_core::Storage::new(storage.path().to_path_buf())
+        .load()
+        .unwrap();
+    let persisted = reopened.get_requirement_by_spec_id("BUG-2451").unwrap();
+    assert_eq!(persisted.status, aida_core::RequirementStatus::InProgress);
+    assert_eq!(
+        persisted
+            .comments
+            .iter()
+            .filter(
+                |c| c.content.starts_with("Lane exit evidence:") && c.content.contains(&captured)
+            )
+            .count(),
+        1
+    );
+    // A successful spec search followed by a failed branch lookup is also
+    // unknown evidence; the durable captured facts must survive this path.
+    crate::test_exec::write_executable(
+        &gh,
+        "#!/bin/sh\nif [ \"$1\" = --version ]; then echo 'gh test'; exit 0; fi\ncase \" $* \" in *' --search '*) exit 0;; esac\nexit 1\n",
+    );
+    assert!(crate::lane_recovery::reconcile_observed(
+        &fx.main,
+        "BUG-2451",
+        "bug-2451",
+        Some(&captured)
+    )
+    .is_err());
+    let branch_failure = storage.load().unwrap();
+    let req = branch_failure
+        .get_requirement_by_spec_id("BUG-2451")
+        .unwrap();
+    assert_eq!(req.comments.len(), comments);
+    assert_eq!(req.status, aida_core::RequirementStatus::InProgress);
+    // Only a later successful no-PR observation authorizes the transition.
+    recovery_forge_fixture(&fx.main, &fx.root);
+    crate::lane_recovery::reconcile_observed(&fx.main, "BUG-2451", "bug-2451", Some(&captured))
+        .unwrap();
+    let recovered = storage.load().unwrap();
+    let req = recovered.get_requirement_by_spec_id("BUG-2451").unwrap();
+    assert_eq!(req.status, aida_core::RequirementStatus::Approved);
+    assert!(req
+        .comments
+        .iter()
+        .any(|c| c.content.starts_with("Lane exit evidence:") && c.content.contains(&captured)));
+}
+
+// A fake gh reporting merged change #42 for `bug-2451`, with `view` as the
+// shell body answering `pr view`.
+// trace:BUG-2549 | ai:claude
+fn bug_2549_merged_gh(view: &str) -> String {
+    format!(
+        r#"#!/bin/sh
+if [ "$1" = --version ]; then echo 'gh test'; exit 0; fi
+if [ "$1 $2" = 'pr list' ]; then
+  case " $* " in
+    *' --state merged '*) printf '42\tRefs BUG-2451\thttps://example.invalid/42\tbug-2451\n';;
+  esac
+  exit 0
+fi
+if [ "$1 $2" = 'pr view' ]; then
+  {view}
+fi
+exit 1
+"#
+    )
+}
+
+// trace:BUG-2549 | ai:claude
+fn bug_2549_merged_view(head: &str) -> String {
+    format!(
+        r#"printf '%s\n' '{{"state":"MERGED","headRefOid":"{head}","headRefName":"bug-2451","baseRefName":"main"}}'; exit 0"#
+    )
+}
+
+// Confirmed merged evidence whose merged head cannot be read (empty output,
+// an empty head, or a failing view) must not fail pickup: it allocates a
+// dated branch, as main did.
+// trace:BUG-2549 | ai:claude
+#[test]
+fn bug_2549_unreadable_merged_head_allocates_a_dated_branch() {
+    for view in [
+        "exit 0".to_string(),
+        bug_2549_merged_view(""),
+        "exit 1".to_string(),
+    ] {
+        let fx = fixture();
+        let mut ambient =
+            crate::test_env::AmbientGuard::hermetic_with_seat(&fx.main, "implementer", &[]);
+        let gh = recovery_forge_fixture(&fx.main, &fx.root);
+        ambient.set_key("AIDA_TEST_GH_BINARY", &gh);
+        git_ok(&fx.main, &["branch", "bug-2451"]);
+        crate::test_exec::write_executable(&gh, bug_2549_merged_gh(&view));
+        assert_eq!(
+            crate::queue_cmd::canonical_resume_branch(&fx.main, "BUG-2451", true).unwrap(),
+            None,
+            "{view}"
+        );
+        let (storage, _) = super::orphan_reentry_tests::queued_scope(&fx.main, "BUG-2451");
+        queue_work(&storage, false).unwrap();
+        let lease = crate::list_leases(&fx.main).remove(0);
+        assert!(lease.branch.starts_with("bug-2451-"), "{}", lease.branch);
+        assert!(super::tests::ref_exists(&fx.main, "refs/heads/bug-2451"));
+    }
+}
+
+// A canonical branch whose tip cannot be resolved to a commit, alongside
+// confirmed merged evidence, also falls back to a dated branch instead of
+// aborting pickup.
+// trace:BUG-2549 | ai:claude
+#[test]
+fn bug_2549_unresolvable_canonical_tip_allocates_a_dated_branch() {
+    let fx = fixture();
+    let mut ambient =
+        crate::test_env::AmbientGuard::hermetic_with_seat(&fx.main, "implementer", &[]);
+    let gh = recovery_forge_fixture(&fx.main, &fx.root);
+    ambient.set_key("AIDA_TEST_GH_BINARY", &gh);
+    let merged_head = git_ok(&fx.main, &["rev-parse", "HEAD"]);
+    // The branch name exists locally but does not name a commit, and origin
+    // has no such branch: neither tip source resolves.
+    let tree = git_ok(&fx.main, &["rev-parse", "HEAD^{tree}"]);
+    let ref_path = git_ok(
+        &fx.main,
+        &[
+            "rev-parse",
+            "--path-format=absolute",
+            "--git-path",
+            "refs/heads/bug-2451",
+        ],
+    );
+    std::fs::write(&ref_path, format!("{tree}\n")).unwrap();
+    assert!(crate::branch_exists_anywhere(&fx.main, "bug-2451"));
+    crate::test_exec::write_executable(
+        &gh,
+        bug_2549_merged_gh(&bug_2549_merged_view(&merged_head)),
+    );
+    assert_eq!(
+        crate::queue_cmd::canonical_resume_branch(&fx.main, "BUG-2451", true).unwrap(),
+        None
+    );
+    let (storage, _) = super::orphan_reentry_tests::queued_scope(&fx.main, "BUG-2451");
+    queue_work(&storage, false).unwrap();
+    let lease = crate::list_leases(&fx.main).remove(0);
+    assert!(lease.branch.starts_with("bug-2451-"), "{}", lease.branch);
+}

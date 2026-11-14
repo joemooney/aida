@@ -2,8 +2,9 @@
 name: CI
 
 on:
+  # Train branches run CI once, from their pull_request event. trace:BUG-2581 | ai:claude
   push:
-    branches: [main, 'train/**']
+    branches: [main]
   workflow_dispatch:
   schedule:
     - cron: '23 9 * * 1'
