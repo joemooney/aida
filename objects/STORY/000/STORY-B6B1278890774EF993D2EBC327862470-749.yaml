@@ -1,0 +1,35 @@
+id: 01a1db87-bf61-7a62-95e6-34c02bc56d44
+spec_id: STORY-b6b1278890774ef993d2ebc327862470-749
+agreed_id: STORY-2826
+title: 'Review PR-4055: [AI:claude] feat(queue): refuse a new spec at the open-change limit (Refs STORY-2768)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `(no-sess`) for branch `story-2768-s3b-wip-limit`.
+
+  - PR: <https://github.com/joemooney/aida/pull/4055>
+  - Branch: `story-2768-s3b-wip-limit` → `integration`
+
+  ## Slice of (Refs only — not completed by this PR)
+
+  Commit subjects carry `(Refs SPEC-ID)`: this PR is one slice of a spec that a later PR completes. Review this slice against that spec's acceptance criteria.
+
+  - STORY-2768
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 4055` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-14T19:27:49.089645338Z
+modified_at: 2026-11-14T19:27:49.089645338Z
+req_type: Story
+filed_at:
+  code_sha: 91d3b85f92bf72f288b7c9a939283a6bf5d29f34
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 91d3b85f92b
+  vendor: claude
