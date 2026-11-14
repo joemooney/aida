@@ -18,7 +18,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-14T12:41:27.454869454Z
-modified_at: 2026-11-14T14:11:50.339615357Z
+modified_at: 2026-11-14T14:16:58.431222129Z
 req_type: Story
 tags:
 - area:ci
@@ -66,6 +66,13 @@ comments:
   content: '[advisor a22 06:40] RULINGS on the four choices in the punt, all ACCEPTED as built. (1) A thread-local --skip-full-check guard, with a resumed journal refusing a skip-admitted member: fail-closed, fine. (2) A repo with checks but no ci-tier marker is admitted as untiered; no checks at all is refused: fine. (3) The label persisting after a push: accepted, wasteful but not unsafe; BUG-2578 narrows label events. (4) Contained reviewers that cannot edit labels: accepted for now, since the train''s own request covers it; applying the label from the launcher''s verdict collection is a follow-up idea, not a blocker. The ID-dispenser mode-0664 refusal is a dell1 environment issue, not this spec''s. The advisor publishes commit 618859a from the dell1 seat and opens the PR.'
   created_at: 2026-11-14T13:37:03.549354225Z
   modified_at: 2026-11-14T13:37:03.549354225Z
+  session_id: 01a1d9ea-4e25-7033-85e8-3648f0195c7c
+  harness_version: 2.1.325 (Claude Code)
+- id: 01a1da6b-293f-77b0-b9ed-ca0a8b6bae05
+  author: joe
+  content: '[advisor a22 07:22] RULING on PR-4027 CR at 3840719. BLOCKING: (1) The approval-time relabel cancels CI in flight. Don''t remove and re-add ci:full: add it only when absent, and don''t relabel while a run on that head is in progress. Also make judge_commit_checks (forge_commit_ci.rs) take the LATEST run per check name, so a cancelled earlier run never reads as red. (2) Untiered fails open: decide tieredness from the repository (ci.yml defines the tier job), not from one commit''s checks; a tiered repo with no ci-tier check on the head is REFUSED. Add a test for it. (3) AC1 wiring untested: add the request_full_ci_after_approval tests the reviewer lists (approve with --pr requests; all-deferred approve requests; request-changes, rejected, waiting or no --pr request nothing), with the runner injected. BUNDLE, cheap: (4b) make the --skip-full-check activity-log write an error, not swallowed (the criterion says logged); (5) move the trace to mod full_tier and add the criterion ids to tests. ACCEPTED, no change: (4a) the override not admitting during a forge outage is fail-closed, which is fine. Rework on a dell1 Fable lane; LIGHT gate (one targeted cargo test run for full_tier and pr_train, plus make check-ci-fast).'
+  created_at: 2026-11-14T14:16:58.431222129Z
+  modified_at: 2026-11-14T14:16:58.431222129Z
   session_id: 01a1d9ea-4e25-7033-85e8-3648f0195c7c
   harness_version: 2.1.325 (Claude Code)
 history:
