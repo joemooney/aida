@@ -309,10 +309,33 @@ pub(crate) fn newest_verdict_event_for_merge(
     let mut events = verdict_events(&root, key);
     if ChangeKey::parse(key).is_none() {
         events.retain(|event| {
-            speaks_for_change(event, pr, head) || standing_refusal_in_head(&root, event, in_head)
+            speaks_for_change(event, pr, head)
+                || has_round_at(event, head)
+                || standing_refusal_in_head(&root, event, in_head)
         });
     }
     newest_of(events)
+}
+
+/// Whether any earlier round `event`'s record keeps was reviewed at `head`:
+/// such a record is evidence about `head` whatever its newest round names.
+// trace:BUG-2569 | ai:claude
+fn has_round_at(event: &GateEvent, head: Option<&str>) -> bool {
+    let Some(head) = head.map(str::trim).filter(|head| !head.is_empty()) else {
+        return false;
+    };
+    event
+        .verdict_record()
+        .and_then(|record| record.get("rounds"))
+        .and_then(|rounds| rounds.as_array())
+        .is_some_and(|rounds| {
+            rounds.iter().any(|round| {
+                round
+                    .get("reviewed_sha")
+                    .and_then(|sha| sha.as_str())
+                    .is_some_and(|sha| same_reviewed_sha(sha, head))
+            })
+        })
 }
 
 /// Whether `event`, a verdict bound to another change, is a refusal that

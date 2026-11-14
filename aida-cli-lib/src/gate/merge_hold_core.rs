@@ -1490,7 +1490,7 @@ pub(crate) fn corpus_gate_bodies_at(
 ) -> Result<Vec<(String, String)>, String> {
     let head = head.map(str::trim).filter(|head| !head.is_empty());
     let in_head = |sha: &str| match (roots.first(), head) {
-        (Some(repo), Some(head)) => commit_in_head(repo, sha, head),
+        (Some(repo), Some(head)) => crate::gate::review_carryover::commit_in_head(repo, sha, head),
         _ => true,
     };
     let mut keys: Vec<String> = Vec::new();
@@ -1600,39 +1600,6 @@ pub(crate) fn corpus_gate_bodies_at(
         }
     }
     Ok(out)
-}
-
-/// Whether commit `sha` is part of `head`'s history in `repo`. Only a
-/// definite answer is `false`: git says it is not an ancestor, or `head` is
-/// here and `sha` is not (a commit this repository never received cannot be
-/// in a head it holds). Anything unreadable counts as contained.
-// trace:BUG-2569 | ai:claude
-fn commit_in_head(repo: &Path, sha: &str, head: &str) -> bool {
-    let git = |args: &[&str]| {
-        aida_core::git_ops::host_git_command(repo)
-            .args(args)
-            .stdin(std::process::Stdio::null())
-            .stdout(std::process::Stdio::null())
-            .stderr(std::process::Stdio::null())
-            .status()
-            .ok()
-            .and_then(|status| status.code())
-    };
-    match git(&["merge-base", "--is-ancestor", "--end-of-options", sha, head]) {
-        Some(0) => true,
-        Some(1) => false,
-        _ => {
-            let present = |rev: &str| {
-                git(&[
-                    "cat-file",
-                    "-e",
-                    "--end-of-options",
-                    &format!("{rev}^{{commit}}"),
-                ]) == Some(0)
-            };
-            !(present(head) && !present(sha))
-        }
-    }
 }
 
 /// The chokepoint entry every `Forge::merge_change` implementation calls.
