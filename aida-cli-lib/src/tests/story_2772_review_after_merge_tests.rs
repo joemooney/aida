@@ -989,7 +989,7 @@ fn an_unreadable_gate_config_makes_eligibility_unknown_not_floor_only() {
     // And the project path decides: a change touching it is not eligible.
     let refused = review_after_merge_eligible(
         &low_risk(),
-        &[spec("BUG-1", &[])],
+        &[spec("BUG-1", &["effort:open:1h"])],
         &paths(&["billing/invoice.rs"]),
         &protected,
     );
@@ -1001,7 +1001,7 @@ fn an_unreadable_gate_config_makes_eligibility_unknown_not_floor_only() {
 fn an_excluded_tag_matches_whatever_its_case() {
     let why = refusal(decide(
         &low_risk(),
-        &[spec("BUG-1", &["Security"])],
+        &[spec("BUG-1", &["Security", "effort:open:1h"])],
         &["src/a.rs"],
     ));
     assert!(why.contains("Security"), "{why}");
