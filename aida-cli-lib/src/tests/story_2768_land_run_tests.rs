@@ -64,6 +64,8 @@ struct Fake {
     verdict: Option<std::result::Result<Vec<i64>, String>>,
     fail_launch: bool,
     release: Option<String>,
+    /// The recorded children were started by a run that has exited.
+    inherited: bool,
 }
 
 impl Acts for Fake {
@@ -109,6 +111,9 @@ impl Acts for Fake {
     }
     fn stop(&mut self, child: &Child) {
         self.calls.push(format!("stop {}", child.prs[0]));
+    }
+    fn owns(&self, _: &Child) -> bool {
+        !self.inherited
     }
 }
 
@@ -562,4 +567,56 @@ fn the_record_finds_a_reviewer_by_head_and_a_lane_by_change() {
     // A lane is what moves the head, so it still counts.
     assert!(book.lane(&moved(2)).is_some());
     assert!(book.lane(&change(1, "main")).is_none());
+}
+
+// After `aida land run` restarts, the reviewers the earlier process started
+// are still recorded and alive. Each was left to run to the time limit and
+// then counted against its head, so restarts alone could block a change.
+// trace:BUG-2571 | ai:claude
+#[test]
+fn bug_2571_an_earlier_runs_reviewer_is_stopped_at_once_and_never_counted() {
+    for minutes in [5, 600] {
+        let mut book = Book {
+            children: vec![child(Kind::Review, 1, minutes)],
+            ..Book::default()
+        };
+        let mut fake = Fake {
+            inherited: true,
+            ..Fake::default()
+        };
+        let notes = supervised(&mut book, &mut fake);
+        assert_eq!(fake.calls, ["stop 1"], "{minutes} min: {notes:?}");
+        assert!(book.children.is_empty());
+        assert!(
+            book.timeouts.is_empty(),
+            "{minutes} min: an earlier run's reviewer is not the head's fault"
+        );
+        assert!(notes[0].contains("an earlier run started it"), "{notes:?}");
+    }
+}
+
+// trace:BUG-2571 | ai:claude
+#[test]
+fn bug_2571_a_limit_outside_its_range_is_named_and_not_used() {
+    let read = |text: &str| Limits::from_config(Some(&toml::from_str(text).unwrap()));
+
+    let (limits, warnings) = read("[land]\nmax_reviews = 3\nreview_timeout_secs = 600\n");
+    assert_eq!((limits.max_reviews, limits.review_timeout_secs), (3, 600));
+    assert_eq!(limits.max_lanes, Limits::default().max_lanes);
+    assert!(warnings.is_empty(), "{warnings:?}");
+
+    let (limits, warnings) =
+        read("[land]\nmax_reviews = 40\nmax_lanes = \"two\"\nreview_timeout_secs = 5\n");
+    let defaults = Limits::default();
+    assert_eq!(limits.max_reviews, defaults.max_reviews);
+    assert_eq!(limits.max_lanes, defaults.max_lanes);
+    assert_eq!(limits.review_timeout_secs, defaults.review_timeout_secs);
+    assert_eq!(warnings.len(), 3, "{warnings:?}");
+    assert!(
+        warnings[0].contains("max_reviews = 40") && warnings[0].contains("from 1 to 8"),
+        "{warnings:?}"
+    );
+
+    let (_, warnings) = Limits::from_config(None);
+    assert!(warnings.is_empty());
 }
