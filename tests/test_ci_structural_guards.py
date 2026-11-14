@@ -1,5 +1,6 @@
 """FAST/FULL shared structural-test selection and mutation coverage.
 trace:TASK-3791 | ai:codex
+trace:STORY-2833 | ai:codex
 """
 import importlib.util
 import json
@@ -21,9 +22,11 @@ TEST = re.compile(r'#\[test\](?:(?!\bfn\b).)*?\bfn\s+(\w+)', re.S)
 
 def candidates(root):
     result = set()
-    for source in root.glob('aida-*/src/**/*.rs'):
+    sources = list(root.glob('aida-*/src/**/*.rs')) + list(root.glob('aida-*/tests/*.rs'))
+    for source in sources:
         path = source.relative_to(root).as_posix()
-        module = 'ratchet' in source.stem or source.stem.endswith('_inventory_tests')
+        module = ('ratchet' in source.stem or source.stem.endswith(
+            ('_inventory_tests', '_source_scan_tests', '_golden_tests', '_audit_tests')))
         text = source.read_text()
         if not module and not re.search(r'fn\s+\w*(?:ratchet|inventor)\w*', text):
             continue
@@ -34,8 +37,8 @@ def candidates(root):
 
 
 def selected():
-    return set(re.findall(r'#\[path = "../(aida-cli-lib/src/(?:gate/)?tests/[^"\n]+)"\]',
-                          HARNESS.read_text()))
+    paths = re.findall(r'#\[path = "../(aida-[^"\n]+\.rs)"\]', HARNESS.read_text())
+    return {path for path in paths if TEST.search(_mask.mask_rust((ROOT / path).read_text()))}
 
 
 def missing(root, paths, exclusions):

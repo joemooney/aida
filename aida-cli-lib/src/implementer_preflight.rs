@@ -27,6 +27,8 @@ const CI_BASH_SHELL: &str = "bash --noprofile --norc -e -o pipefail {0}";
 
 const DEFAULT_GUARD_NAMES: &[&str] = &[
     "Check formatting",
+    // trace:STORY-2833 | ai:codex
+    "Ratchet set",
     "Run clippy",
     "Check Rust test portability ratchet",
     "CLI-manual drift-guard (every command documented)",

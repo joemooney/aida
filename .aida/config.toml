@@ -75,6 +75,7 @@ standalone_implementer_cap = 4
 [preflight]
 guards = [
   "Check formatting",
+  "Ratchet set", # trace:STORY-2833 | ai:codex
   "Run clippy",
   "Check Rust test portability ratchet",
   "CLI-manual drift-guard (every command documented)",
