@@ -745,12 +745,32 @@ description: |
   ### finding-hash:7d6b05ec
 
   aida-cli-lib/src/lane_recovery.rs reconcile_observed_in writes the `Lane exit evidence` comment before the forge lookup on every lane and session exit, including exits with an open PR, and a second `Lane recovery` comment follows when no PR is found. AC2 scopes the record to exits without an open PR; consider one comment, or skipping when an open PR is confirmed.
+
+
+  ## Findings from PR-4030
+  Reviewed sha: 9d9213f8e2b4b66fbbc4c3b3222dbc12fe11228a
+
+  ### finding-hash:540b7d86
+
+  aida-cli-lib/src/tests/story_1690_train_tests.rs: the BUG-2577 tests carry `trace:BUG-2577` with no criterion anchor, so `aida criteria BUG-2577` still lists ac1f90e3, acc82b7a and acec78a1 as untested. Anchor drive_splits_a_red_two_member_train_into_exactly_two_sub_trains (ac1f90e3) and drive_ejects_a_red_one_member_train_after_one_ci_run (acc82b7a), and declare acec78a1 documentation-inspection evidence.
+
+  ### finding-hash:a9731915
+
+  aida-cli-lib/src/pr_train.rs:763-792: only `cancel`-bucket rows are infra. gh maps TIMED_OUT and STARTUP_FAILURE to the `fail` bucket, and a lost self-hosted runner usually concludes `failure`, so the advisor ruling’s "runner lost" and "timeout without a test result" cases are treated as test reds: a multi-member train bisects, and a lone good member is ejected after one run where it used to get a rerun.
+
+  ### finding-hash:f167aa2d
+
+  aida-cli-lib/src/pr_train.rs:460 vs 498: the spent flag is reset when a build drops a member but kept across Landing::Stale, although a rebuild on a moved main is also a new tip; the "one rerun per composition" rule is applied inconsistently.
+
+  ### finding-hash:1287747b
+
+  aida-cli-lib/src/pr_train.rs:950, 3307-3309, 3800 and 3823-3840: no test reaches the forge-side InfraRed path (wait_train_ci and observe_ci mapping, the red confirmation re-read, the no-result close comment). The driver and classifier are tested on either side of it only.
 status: Draft
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-13T20:01:56.623034248Z
-modified_at: 2026-11-14T15:05:05.121746713Z
+modified_at: 2026-11-14T16:44:11.430163190Z
 req_type: Task
 tags:
 - carried-finding:BUG-2543:2a99ebfc
@@ -861,6 +881,10 @@ tags:
 - carried-finding:PR-4020:e391cb46
 - carried-finding:PR-4024:0bdbec3f
 - carried-finding:PR-4024:2df54e83
+- carried-finding:PR-4030:1287747b
+- carried-finding:PR-4030:540b7d86
+- carried-finding:PR-4030:a9731915
+- carried-finding:PR-4030:f167aa2d
 - carried-finding:STORY-2735:2c7ae2ea
 - carried-finding:STORY-2763:04ad58d8
 - carried-finding:STORY-2763:15915e39
@@ -923,6 +947,7 @@ tags:
 - carried-from:PR-4015
 - carried-from:PR-4020
 - carried-from:PR-4024
+- carried-from:PR-4030
 - carried-from:STORY-2735
 - carried-from:STORY-2763
 - carried-from:STORY-2768
@@ -934,6 +959,7 @@ tags:
 - finding-hash:0bdbec3f
 - finding-hash:0bff30e1
 - finding-hash:0cbc5c63
+- finding-hash:1287747b
 - finding-hash:15915e39
 - finding-hash:198d1196
 - finding-hash:1fce0788
@@ -960,6 +986,7 @@ tags:
 - finding-hash:49b64e26
 - finding-hash:51cbf3a8
 - finding-hash:52636ea7
+- finding-hash:540b7d86
 - finding-hash:55e0cbfe
 - finding-hash:56ed8b81
 - finding-hash:5863b5f0
@@ -985,6 +1012,7 @@ tags:
 - finding-hash:97ed1809
 - finding-hash:98776888
 - finding-hash:9d27a4fe
+- finding-hash:a9731915
 - finding-hash:abbae117
 - finding-hash:ac11f20d
 - finding-hash:bf60843e
@@ -998,6 +1026,7 @@ tags:
 - finding-hash:dee3f3a7
 - finding-hash:dfed3eb6
 - finding-hash:e391cb46
+- finding-hash:f167aa2d
 - finding-hash:f1e29cc2
 - finding-hash:f238ea37
 - finding-hash:fcb8f322
@@ -1043,6 +1072,7 @@ tags:
 - from-review:PR-4015
 - from-review:PR-4020
 - from-review:PR-4024
+- from-review:PR-4030
 - from-review:STORY-2735
 - from-review:STORY-2763
 - from-review:STORY-2768
@@ -1334,6 +1364,11 @@ history:
   author: joe
   timestamp: 2026-11-14T15:05:06.741356999Z
   session_id: 01a1da93c7e0
+  changes: []
+- id: 01a1daf1-f7cd-73a0-9e26-c69b18701838
+  author: joe
+  timestamp: 2026-11-14T16:44:13.133912469Z
+  session_id: 01a1daeeeb55
   changes: []
 filed_at:
   code_sha: 91fe1e337894199f15365d3f8ecfaf81366f8291
