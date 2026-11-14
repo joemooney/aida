@@ -549,3 +549,129 @@ fn remote_head_query_distinguishes_absent_branch_and_failure() {
         Some(git(&store, &["rev-parse", "HEAD"]))
     );
 }
+
+// ---- the window: nothing of the coalescing is locked or open in it ---------
+
+/// The `.lock` files under `store` this process has open.
+fn open_lock_files(store: &Path) -> Vec<String> {
+    let store = std::fs::canonicalize(store).unwrap();
+    std::fs::read_dir("/proc/self/fd")
+        .unwrap()
+        .flatten()
+        .filter_map(|entry| std::fs::read_link(entry.path()).ok())
+        .filter(|target| {
+            target.starts_with(&store) && target.extension().is_some_and(|ext| ext == "lock")
+        })
+        .map(|target| target.display().to_string())
+        .collect()
+}
+
+// While the pull runs, the lock file is neither locked nor open in this
+// process, and the marker names this process. Afterwards the marker is gone.
+// trace:BUG-2565 | ai:claude
+#[test]
+fn the_pull_runs_with_no_coalesce_lock_held_or_open() {
+    let (_tmp, root, store) = project();
+    let (lock_path, state_path) = coalesce_paths(&store, &root, "window");
+    let run_path = runner_path(&lock_path);
+    for ok in [true, false] {
+        let result = coalesce(
+            &store,
+            &root,
+            "window",
+            || true,
+            || {
+                assert_eq!(open_lock_files(&store), Vec::<String>::new());
+                let probe = std::fs::File::open(&lock_path).unwrap();
+                assert!(
+                    probe.try_lock_exclusive().is_ok(),
+                    "the lock is free while the pull runs"
+                );
+                drop(probe);
+                let runner = read_runner(&run_path).expect("a marker for the pull in flight");
+                assert_eq!(runner.pid, std::process::id());
+                if ok {
+                    Ok(())
+                } else {
+                    Err(anyhow::anyhow!("network down"))
+                }
+            },
+        );
+        assert_eq!(result.is_ok(), ok);
+        assert!(!run_path.exists(), "the marker goes when the pull ends");
+        assert_eq!(open_lock_files(&store), Vec::<String>::new());
+        // The outcome is recorded either way; only a success is reusable.
+        assert_eq!(read_generation(&state_path).is_some(), ok);
+    }
+}
+
+// A hook of the pull in flight that starts a pull must not wait for the
+// pull that is running it. The marker here names this test's parent.
+// trace:BUG-2565 | ai:claude
+#[test]
+fn a_pull_started_by_the_pull_in_flight_runs_at_once() {
+    let (_tmp, root, store) = project();
+    let (lock_path, state_path) = coalesce_paths(&store, &root, "nested");
+    let run_path = runner_path(&lock_path);
+    std::fs::create_dir_all(run_path.parent().unwrap()).unwrap();
+    let parent = std::os::unix::process::parent_id();
+    let holder = Runner {
+        pid: parent,
+        start: aida_core::liveness::process_start_identity(parent)
+            .expect("the parent's start identity"),
+        token: "the-pull-in-flight".into(),
+    };
+    assert!(write_runner(&run_path, &holder));
+    let ran = AtomicUsize::new(0);
+    let started = std::time::Instant::now();
+    let turn = coalesce(
+        &store,
+        &root,
+        "nested",
+        || panic!("there is nothing to reuse: the pull in flight has not ended"),
+        || {
+            ran.fetch_add(1, Ordering::SeqCst);
+            Ok(())
+        },
+    )
+    .unwrap();
+    assert_eq!(turn, Turn::Ran);
+    assert_eq!(ran.load(Ordering::SeqCst), 1);
+    assert!(
+        started.elapsed() < Duration::from_secs(5),
+        "it did not wait: {:?}",
+        started.elapsed()
+    );
+    // The pull in flight keeps its marker, and its outcome is its own to write.
+    assert_eq!(read_runner(&run_path), Some(holder));
+    assert_eq!(read_generation(&state_path), None);
+}
+
+// A marker left by a pull that crashed names a process that is gone: the
+// next pull runs at once and replaces it.
+// trace:BUG-2565 | ai:claude
+#[test]
+fn a_marker_of_a_dead_pull_is_not_waited_for() {
+    let (_tmp, root, store) = project();
+    let (lock_path, _) = coalesce_paths(&store, &root, "dead");
+    let run_path = runner_path(&lock_path);
+    std::fs::create_dir_all(run_path.parent().unwrap()).unwrap();
+    let mut child = std::process::Command::new("true").spawn().unwrap();
+    let pid = child.id();
+    child.wait().unwrap();
+    for start in ["linux:00000000-0000-0000-0000-000000000000:1", ""] {
+        assert!(write_runner(
+            &run_path,
+            &Runner {
+                pid,
+                start: start.into(),
+                token: "crashed".into(),
+            }
+        ));
+        let started = std::time::Instant::now();
+        let turn = coalesce(&store, &root, "dead", || true, || Ok(())).unwrap();
+        assert_eq!(turn, Turn::Ran);
+        assert!(started.elapsed() < Duration::from_secs(5));
+        assert!(!run_path.exists());
+    }
+}

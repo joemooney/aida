@@ -9,9 +9,15 @@
 //!   and stranded-review forge lookups) over the last 50 commits, even when
 //!   neither the code repo nor the store had moved since the last one.
 //!
-//! [`coalesce`] serialises pulls of one kind in one checkout on a lock file
-//! and lets a caller that waited for an in-flight pull reuse its successful
-//! result instead of re-running it. [`reconcile_is_current`] /
+//! [`coalesce`] lets one pull of a kind run per checkout and lets a caller
+//! that waited for it reuse its successful result instead of re-running it.
+//! The pull in flight is named by a marker file, not by a held lock: the
+//! lock file is locked only while a caller decides (is a pull running, can
+//! its result be reused, am I the one to run) and is closed before the pull
+//! starts. No lock descriptor of this module is open while the store-write
+//! window, its hooks or `git gc` run, and a pull started from inside a
+//! running pull (a hook) is never made to wait for its own ancestor.
+//! [`reconcile_is_current`] /
 //! [`record_reconcile`] skip the wide reconcile when the code HEAD and store
 //! HEAD match the last completed one (bounded by a TTL, so forge-side changes
 //! that move neither HEAD are still picked up).
@@ -67,6 +73,119 @@ pub(crate) fn coalesce_paths(
     )
 }
 
+/// The marker naming the pull in flight, beside the lock file of
+/// [`coalesce_paths`]. It ends in `.lock` for the same ignore rule; it is
+/// never locked or kept open.
+pub(crate) fn runner_path(lock_path: &Path) -> PathBuf {
+    let name = lock_path
+        .file_name()
+        .and_then(|n| n.to_str())
+        .unwrap_or("pull.lock");
+    lock_path.with_file_name(format!(
+        "{}-running.lock",
+        name.strip_suffix(".lock").unwrap_or(name)
+    ))
+}
+
+/// The pull in flight: the process running it, and one token per call so
+/// two pulls in one process are told apart.
+// trace:BUG-2565 | ai:claude
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct Runner {
+    pub pid: u32,
+    /// The process's start identity; empty when it could not be read.
+    pub start: String,
+    pub token: String,
+}
+
+impl Runner {
+    fn current() -> Self {
+        let pid = std::process::id();
+        Self {
+            pid,
+            start: aida_core::liveness::process_start_identity(pid).unwrap_or_default(),
+            token: uuid::Uuid::new_v4().to_string(),
+        }
+    }
+
+    /// Whether the recorded process is still the one running. A marker left
+    /// by a pull that crashed names a process that is gone.
+    fn is_live(&self) -> bool {
+        if self.start.is_empty() {
+            // No identity to compare: only this very process can vouch.
+            return self.pid == std::process::id();
+        }
+        aida_core::liveness::process_identity_matches_strict(self.pid, &self.start)
+    }
+
+    /// Whether this process was started, however indirectly, by the
+    /// recorded one: a hook of the pull in flight that runs a pull itself.
+    fn is_ancestor_of_this_process(&self) -> bool {
+        let me = std::process::id();
+        self.pid != me
+            && aida_core::liveness::walk_ancestor_pids(me)
+                .iter()
+                .skip(1)
+                .any(|pid| *pid == self.pid)
+    }
+}
+
+pub(crate) fn read_runner(path: &Path) -> Option<Runner> {
+    let body = std::fs::read_to_string(path).ok()?;
+    let mut lines = body.lines();
+    Some(Runner {
+        pid: lines.next()?.trim().parse().ok()?,
+        start: lines.next()?.trim().to_string(),
+        token: lines.next()?.trim().to_string(),
+    })
+}
+
+pub(crate) fn write_runner(path: &Path, runner: &Runner) -> bool {
+    let tmp = path.with_file_name(format!(
+        "{}.{}.tmp.lock",
+        path.file_name().and_then(|n| n.to_str()).unwrap_or("pull"),
+        runner.token
+    ));
+    let body = format!("{}\n{}\n{}\n", runner.pid, runner.start, runner.token);
+    let written = std::fs::write(&tmp, body)
+        .and_then(|_| std::fs::rename(&tmp, path))
+        .is_ok();
+    if !written {
+        let _ = std::fs::remove_file(&tmp);
+    }
+    written
+}
+
+/// Removes this call's marker when the pull ends, however it ends.
+struct RunnerGuard<'a> {
+    path: &'a Path,
+    runner: &'a Runner,
+}
+
+impl Drop for RunnerGuard<'_> {
+    fn drop(&mut self) {
+        if read_runner(self.path).as_ref() == Some(self.runner) {
+            let _ = std::fs::remove_file(self.path);
+        }
+    }
+}
+
+/// The lock file, locked. Held only while a caller reads and writes the
+/// marker and the state; dropping it unlocks and closes the descriptor.
+fn decision_lock(lock_path: &Path) -> Option<std::fs::File> {
+    if let Some(parent) = lock_path.parent() {
+        std::fs::create_dir_all(parent).ok()?;
+    }
+    let lock = std::fs::OpenOptions::new()
+        .create(true)
+        .truncate(false)
+        .write(true)
+        .open(lock_path)
+        .ok()?;
+    lock.lock_exclusive().ok()?;
+    Some(lock)
+}
+
 /// Generation of the last successful pull, or `None` when unknown.
 fn read_generation(state: &Path) -> Option<u64> {
     let body = std::fs::read_to_string(state).ok()?;
@@ -110,6 +229,9 @@ fn write_state(state: &Path, generation: u64, ok: bool) {
 /// fetch, its freshness cannot be checked, or pending writes remain. Success
 /// alone is insufficient: an older pull may have fetched before this caller
 /// was invoked.
+///
+/// `run` is called with no lock of this module held and no descriptor of it
+/// open. A caller whose own ancestor is the pull in flight runs at once.
 // trace:BUG-2565 | ai:codex
 pub(crate) fn coalesce(
     store_path: &Path,
@@ -141,60 +263,73 @@ fn coalesce_with_environment(
         return run().map(|()| Turn::Ran);
     }
     let (lock_path, state_path) = coalesce_paths(store_path, project_root, kind);
-    let lock = lock_path
-        .parent()
-        .map(std::fs::create_dir_all)
-        .transpose()
-        .ok()
-        .and_then(|_| {
-            std::fs::OpenOptions::new()
-                .create(true)
-                .truncate(false)
-                .write(true)
-                .open(&lock_path)
-                .ok()
-        });
-    // No lock file (read-only store, odd filesystem): behave as before.
-    let Some(lock) = lock else {
-        return run().map(|()| Turn::Ran);
-    };
+    let run_path = runner_path(&lock_path);
+    let me = Runner::current();
     let seen = read_generation(&state_path);
+    let budget = duration_setting(environment, "AIDA_PULL_COALESCE_WAIT_SECS", WAIT_BUDGET);
+    let start = Instant::now();
     let mut waited = false;
-    if lock.try_lock_exclusive().is_err() {
-        waited = true;
-        eprintln!(
-            "  waiting for a store pull already running in this checkout (will check freshness before reuse)…"
-        );
-        let budget = duration_setting(environment, "AIDA_PULL_COALESCE_WAIT_SECS", WAIT_BUDGET);
-        let start = Instant::now();
-        loop {
-            std::thread::sleep(POLL);
-            if lock.try_lock_exclusive().is_ok() {
-                break;
-            }
-            if start.elapsed() >= budget {
-                eprintln!(
-                    "  the other store pull is still running after {}s — pulling without it",
-                    budget.as_secs()
-                );
+    // Decide under the lock; leave the loop as the pull to run.
+    loop {
+        // No lock file (read-only store, odd filesystem): behave as before.
+        // trace:BUG-2565 | ai:claude
+        let Some(lock) = decision_lock(&lock_path) else {
+            return run().map(|()| Turn::Ran);
+        };
+        match read_runner(&run_path).filter(Runner::is_live) {
+            // A hook of the pull in flight ran this pull: waiting for it
+            // would wait for ourselves.
+            Some(holder) if holder.is_ancestor_of_this_process() => {
+                drop(lock);
                 return run().map(|()| Turn::Ran);
             }
+            Some(_) => {
+                drop(lock);
+                if !waited {
+                    waited = true;
+                    eprintln!(
+                        "  waiting for a store pull already running in this checkout (will check freshness before reuse)…"
+                    );
+                }
+                if start.elapsed() >= budget {
+                    eprintln!(
+                        "  the other store pull is still running after {}s — pulling without it",
+                        budget.as_secs()
+                    );
+                    return run().map(|()| Turn::Ran);
+                }
+                std::thread::sleep(POLL);
+                continue;
+            }
+            None => {}
         }
-    }
-    // Held from here; released when `lock` drops.
-    if waited {
-        let now = read_generation(&state_path);
-        let finished_meanwhile = match (seen, now) {
-            (Some(a), Some(b)) => b > a,
-            (None, Some(_)) => true,
-            _ => false,
-        };
-        if finished_meanwhile && reusable() {
-            return Ok(Turn::Reused);
+        if waited {
+            let now = read_generation(&state_path);
+            let finished_meanwhile = match (seen, now) {
+                (Some(a), Some(b)) => b > a,
+                (None, Some(_)) => true,
+                _ => false,
+            };
+            if finished_meanwhile && reusable() {
+                return Ok(Turn::Reused);
+            }
         }
+        // A marker that cannot be written costs only the coalescing.
+        let _ = write_runner(&run_path, &me);
+        drop(lock);
+        break;
     }
+    // From here to the end of `run`, nothing of this module is locked or open.
+    let guard = RunnerGuard {
+        path: &run_path,
+        runner: &me,
+    };
     let result = run();
+    // The state is written before the marker goes, so a waiter that sees
+    // no pull in flight also sees how that pull ended.
+    let lock = decision_lock(&lock_path);
     write_state(&state_path, read_counter(&state_path) + 1, result.is_ok());
+    drop(guard);
     drop(lock);
     result.map(|()| Turn::Ran)
 }
