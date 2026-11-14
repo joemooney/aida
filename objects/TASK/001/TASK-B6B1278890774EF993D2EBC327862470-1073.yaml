@@ -357,12 +357,24 @@ description: |
   ### finding-hash:ac11f20d
 
   docs/internal/testing/ci-test-shards.md says all 50 shared tests passed, but the harness now has 51 after resolve_aida_exe_ratchet_tests was added.
+
+
+  ## Findings from PR-3924
+  Reviewed sha: ac90a563dabbbb791db73b6118e901255dbd05dc
+
+  ### finding-hash:79f360e4
+
+  queue_cmd/work.rs:4632 runs canonical_resume_branch before the STORY-2325 dead-owner reclaim sweep (work.rs:5606). An unmerged, PR-less canonical branch still leased by a proven-dead, clean owner now bails with "still has a lease" before reclaim runs, so the AC1 resume never applies after a reclaim. This is not a regression: before this PR the same case refused on branch collision after reclaim. Fix: reclaim first, or exclude reclaimable same-scope leases from the lease check.
+
+  ### finding-hash:3975f29b
+
+  db_reconcile.rs:2224 calls lane_recovery::reconcile_reference_in for every Refs commit in the scan window. With pre_sha=None (aida db sync --pull, pr_cmd) that window is the last 50 commits, and each call does a full storage.load() (lane_recovery.rs:117), plus forge lookups for InProgress specs. That adds repeated store loads and network calls to every sync. Fix: load once per scan, or skip non-InProgress specs using a snapshot.
 status: Draft
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-13T20:01:56.623034248Z
-modified_at: 2026-11-14T06:10:13.533876321Z
+modified_at: 2026-11-14T06:11:39.958613588Z
 req_type: Task
 tags:
 - carried-finding:BUG-2546:56ed8b81
@@ -376,6 +388,8 @@ tags:
 - carried-finding:BUG-2570:7bbbf9a9
 - carried-finding:BUG-2570:dfed3eb6
 - carried-finding:PR-3921:0cbc5c63
+- carried-finding:PR-3924:3975f29b
+- carried-finding:PR-3924:79f360e4
 - carried-finding:PR-3924:fe70e901
 - carried-finding:PR-3938:654190b6
 - carried-finding:PR-3948:5d2b67f3
@@ -462,6 +476,7 @@ tags:
 - finding-hash:35d3eb09
 - finding-hash:360471e3
 - finding-hash:3961dae5
+- finding-hash:3975f29b
 - finding-hash:4843b9fe
 - finding-hash:52636ea7
 - finding-hash:55e0cbfe
@@ -472,6 +487,7 @@ tags:
 - finding-hash:654190b6
 - finding-hash:6810bcf9
 - finding-hash:76a786ef
+- finding-hash:79f360e4
 - finding-hash:7bbbf9a9
 - finding-hash:7ce2cb14
 - finding-hash:8a49a174
@@ -640,6 +656,11 @@ history:
   author: joe
   timestamp: 2026-11-14T06:10:15.045332324Z
   session_id: 01a1d8aa6a5d
+  changes: []
+- id: 01a1d8ae-e2f1-7142-86b8-17cf9347debf
+  author: joe
+  timestamp: 2026-11-14T06:11:42.449050172Z
+  session_id: 01a1d8aacfda
   changes: []
 filed_at:
   code_sha: 91fe1e337894199f15365d3f8ecfaf81366f8291
