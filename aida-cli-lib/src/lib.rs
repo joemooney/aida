@@ -1460,6 +1460,7 @@ pub use queue_cmd::rework_target_for_mode;
 pub use queue_misc::entry_matches_role_filter;
 pub use queue_misc::resolve_mail_sender_identity;
 pub use queue_misc::resolve_mail_sender_role;
+pub use queue_misc::resolve_mail_sender_seat;
 pub use queue_misc::resolve_queue_role_filter;
 pub use rel_cards::reject_cross_store_spec_ref;
 pub use rel_cards::relationship_terminal_ambiguity_warning;

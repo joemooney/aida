@@ -429,6 +429,10 @@ pub(crate) struct SupervisorInit {
     pub description: Option<String>,
     pub mail_wake: String,
     pub context_path: Option<std::path::PathBuf>,
+    /// The launch's named seat (`--seat`), recorded on the worker's row.
+    // trace:STORY-2745 | ai:claude
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub seat: Option<String>,
 }
 
 /// Control messages (newline-delimited JSON on the private channels).
@@ -567,6 +571,13 @@ impl Drop for DispatcherGuard {
 /// `aida agent new codex --bg`.
 pub(crate) fn agent_new_codex_bg(mut req: CodexBgRequest) -> Result<()> {
     validate_request(&req)?;
+    // A named seat is validated before any side effect. trace:STORY-2745 | ai:claude
+    let seat = req
+        .flag_options
+        .seat
+        .as_deref()
+        .map(crate::seat_rotation::sanitize_seat)
+        .transpose()?;
     // A contained parent refuses codex outright (inherited containment is
     // sticky; native is never relabelled as AIDA containment).
     refuse_uncontained_child_of_contained_parent(&AgentLaunchConfig {
@@ -723,7 +734,7 @@ pub(crate) fn agent_new_codex_bg(mut req: CodexBgRequest) -> Result<()> {
 
     req.resume.duplicate_check = true;
     let mut handle_guard = crate::agent_handle::LaunchReservationGuard::new(&project_root);
-    let (plan, setup_receipt) = {
+    let (mut plan, setup_receipt) = {
         // This invocation's own lease write is not refused by its own,
         // already admitted, attempt.
         let _own = receipt::OwnAttemptScope::enter(&attempt);
@@ -745,8 +756,9 @@ pub(crate) fn agent_new_codex_bg(mut req: CodexBgRequest) -> Result<()> {
             },
         )?
     };
-    // TASK-2712: the shared write set, scoped to the lane's own tree.
-    // trace:TASK-2712 | ai:claude
+    plan.seat = seat; // trace:STORY-2745 | ai:claude
+                      // TASK-2712: the shared write set, scoped to the lane's own tree.
+                      // trace:TASK-2712 | ai:claude
     crate::agent_launch::rescope_contained_settings(
         &mut config,
         &plan.launch_cwd,
@@ -893,6 +905,7 @@ pub(crate) fn agent_new_codex_bg(mut req: CodexBgRequest) -> Result<()> {
         description,
         mail_wake: mail_wake.as_str().to_string(),
         context_path: context_path.clone(),
+        seat: plan.seat.clone(),
     };
     let mut line = serde_json::to_vec(&init)?;
     line.push(b'\n');
@@ -1216,6 +1229,10 @@ fn build_worker_exec(
     );
     if let Some(spec) = &plan.current_spec {
         command.env("AIDA_SESSION_SCOPE", spec);
+    }
+    // The worker names its seat. trace:STORY-2745 | ai:claude
+    if let Some(seat) = &plan.seat {
+        command.env(crate::agent_rotation::SEAT_ENV, seat);
     }
     apply_agent_lease_identity(&mut command, plan.lease_id.as_deref());
     // trace:TASK-2902 | ai:codex
@@ -1574,6 +1591,8 @@ pub(crate) fn supervise_attempt(
                 name: Some(init.agent_name.clone()),
                 native_session_id: None,
                 resumed_from: None,
+                // trace:STORY-2745 | ai:claude
+                seat: init.seat.clone(),
                 description: Some(
                     init.description
                         .clone()
@@ -2230,6 +2249,28 @@ mod story_2254_codex_background_tests;
 #[cfg(all(test, target_os = "linux"))]
 #[path = "tests/story_2254_codex_bg_supervisor_tests.rs"]
 mod story_2254_codex_bg_supervisor_tests;
+
+// The detached worker's environment, as the barrier would exec it.
+// trace:STORY-2745 | ai:claude
+#[cfg(test)]
+pub(crate) fn test_worker_env(
+    binary: &std::path::Path,
+    config: &AgentLaunchConfig,
+    plan: &AgentLaunchPlan,
+) -> Result<Vec<(String, String)>> {
+    build_worker_exec(
+        binary,
+        config,
+        plan,
+        &[],
+        None,
+        "implementer",
+        // A baseline seat's explicit empty grant: no grant probe runs.
+        "",
+        agent_registry::MailWake::Off,
+    )
+    .map(|worker| worker.env)
+}
 
 // Exercise the real detached-worker builder without spawning a supervisor.
 // trace:TASK-2902 | ai:codex

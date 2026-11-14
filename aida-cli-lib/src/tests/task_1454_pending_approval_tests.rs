@@ -158,6 +158,7 @@ fn gather_running_work_classifies_blocked_from_a_real_marker_file() {
         batch_name: None,
         agent_name: None,
         plan: None,
+        seat: None,
         items: Vec::new(),
     };
     session_manifest::save(
@@ -227,6 +228,7 @@ fn gather_running_work_ignores_a_stale_marker() {
         batch_name: None,
         agent_name: None,
         plan: None,
+        seat: None,
         items: Vec::new(),
     };
     session_manifest::save(

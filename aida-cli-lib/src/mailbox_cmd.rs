@@ -410,9 +410,6 @@ pub(crate) fn handle_mailbox_command(
             let resolution = if *broadcast {
                 None
             } else {
-                let target = to
-                    .as_deref()
-                    .ok_or_else(|| anyhow::anyhow!("specify --to <agent> or --broadcast"))?;
                 let directory = crate::mailbox_resolver::RecipientDirectory::load_for_send(
                     project_root,
                     store_root,
@@ -420,7 +417,27 @@ pub(crate) fn handle_mailbox_command(
                 for warning in directory.warnings() {
                     eprintln!("{warning}");
                 }
-                Some(directory.resolve_send(target, *queue_for_role)?)
+                match (to.as_deref(), in_reply_to.as_deref()) {
+                    (Some(target), _) => Some(directory.resolve_send(target, *queue_for_role)?),
+                    // A reply without --to goes back to the parent's sender:
+                    // its seat, else its role, else its id. trace:STORY-2745 | ai:claude
+                    (None, Some(reply_target)) => {
+                        let merged = crate::mailbox_view::addressable(project_root, store_root)
+                            .messages()
+                            .to_vec();
+                        let parent = resolve_mailbox_message(&merged, reply_target)
+                            .with_context(|| {
+                                format!("--in-reply-to '{reply_target}' was not resolved; reply refused")
+                            })?;
+                        let (target, resolved) =
+                            resolve_reply_recipient(&directory, parent, *queue_for_role)?;
+                        eprintln!("replying to {target}");
+                        Some(resolved)
+                    }
+                    (None, None) => anyhow::bail!(
+                        "specify --to <agent>, --to seat:<name>, --in-reply-to <id> or --broadcast"
+                    ),
+                }
             };
             let recipient = resolution
                 .as_ref()
@@ -442,6 +459,8 @@ pub(crate) fn handle_mailbox_command(
             let (sender, from_source) = crate::resolve_mail_sender_identity(from.as_deref());
             // trace:BUG-1592 | ai:claude
             let from_role = crate::resolve_mail_sender_role();
+            // trace:STORY-2745 | ai:claude
+            let from_seat = crate::resolve_mail_sender_seat();
             let id = uuid::Uuid::new_v4().to_string();
             // A role send records its send-time cohort beside the message.
             // trace:STORY-1843 | ai:claude
@@ -555,6 +574,7 @@ pub(crate) fn handle_mailbox_command(
                 archived: false,
                 from_source,
                 from_role,
+                from_seat,
                 relayed_from,
             };
             mailbox_store::write_message_with_deliveries(project_root, &msg, deliveries.as_ref())?;
@@ -1783,6 +1803,51 @@ fn inspect_inbox(
     Ok(())
 }
 
+/// The recipient a reply without `--to` goes to: the parent's sender seat
+/// (`seat:<from_seat>`), else its role, else its id, the first that
+/// resolves. Returns the address used and its resolution.
+// trace:STORY-2745 | ai:claude
+fn resolve_reply_recipient(
+    directory: &crate::mailbox_resolver::RecipientDirectory,
+    parent: &aida_core::mailbox::Message,
+    queue_for_role: bool,
+) -> Result<(String, crate::mailbox_resolver::ResolvedRecipient)> {
+    let mut refusals = Vec::new();
+    for target in reply_candidates(parent) {
+        match directory.resolve_send(&target, queue_for_role) {
+            Ok(resolved) => return Ok((target, resolved)),
+            Err(e) => refusals.push(format!("{target}: {e:#}")),
+        }
+    }
+    anyhow::bail!(
+        "reply refused: the sender of {} is not reachable ({}); pass --to",
+        parent.id,
+        refusals.join("; ")
+    )
+}
+
+/// PURE: the reply addresses for `parent`, in order: its sender's seat, its
+/// sender's role, its sender id.
+// trace:STORY-2745 | ai:claude
+pub(crate) fn reply_candidates(parent: &aida_core::mailbox::Message) -> Vec<String> {
+    let mut out: Vec<String> = Vec::new();
+    let seat = parent
+        .from_seat
+        .as_deref()
+        .and_then(aida_core::mailbox_identity::seat_address);
+    for target in [seat, parent.from_role.clone(), Some(parent.from.clone())]
+        .into_iter()
+        .flatten()
+        .map(|t| t.trim().to_string())
+        .filter(|t| !t.is_empty())
+    {
+        if !out.iter().any(|o| o.eq_ignore_ascii_case(&target)) {
+            out.push(target);
+        }
+    }
+    out
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1868,6 +1933,7 @@ mod tests {
             archived: false,
             from_source: aida_core::mailbox::SenderSource::Explicit,
             from_role: None,
+            from_seat: None,
             relayed_from: None,
         }
     }

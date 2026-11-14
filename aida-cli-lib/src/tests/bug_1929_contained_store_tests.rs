@@ -1951,6 +1951,7 @@ fn bug_2218_sandbox_mailbox_is_writable_but_sensitive_state_is_not() {
         archived: false,
         from_source: aida_core::mailbox::SenderSource::Explicit,
         from_role: None,
+        from_seat: None,
         relayed_from: None,
     };
     // Actual filesystem delivery uses the same main-root mailbox the binding covers.

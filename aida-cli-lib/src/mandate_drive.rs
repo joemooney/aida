@@ -1375,6 +1375,7 @@ pub(crate) fn emit_due_with(
         archived: false,
         from_source: aida_core::mailbox::SenderSource::Explicit,
         from_role: None,
+        from_seat: None,
         relayed_from: None,
     };
     write_mail(root, &msg)

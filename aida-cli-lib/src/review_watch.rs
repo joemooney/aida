@@ -2032,7 +2032,7 @@ fn stale_message_for(
         body: format!("{key} at {} {behind} with overlapping paths. {merge} into the branch and push before review. The watcher did not update the branch.", change.head),
         subject: Some(subject), urgent: false, intent: Intent::Request,
         retracted: false, deleted: false, archived: false, from_source: SenderSource::Explicit,
-        from_role: None, relayed_from: None }
+        from_role: None, from_seat: None, relayed_from: None }
 }
 
 /// A deterministic mailbox ID and no-clobber publication close the

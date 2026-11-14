@@ -79,6 +79,9 @@ pub struct IdentityEnv {
     aliases: Vec<String>,
     /// Raw non-empty `AIDA_SESSION_ROLE`.
     role: Option<String>,
+    /// Raw non-empty `AIDA_ROTATION_SEAT`: the named seat this session holds.
+    // trace:STORY-2745 | ai:claude
+    seat: Option<String>,
     /// Raw non-empty `AIDA_AGENT_TYPE`.
     vendor: Option<String>,
     /// Session id from the hook payload this process was handed.
@@ -108,6 +111,7 @@ impl IdentityEnv {
             user,
             aliases: ALIAS_ENVS.into_iter().filter_map(nonempty_env).collect(),
             role: nonempty_env("AIDA_SESSION_ROLE"),
+            seat: nonempty_env("AIDA_ROTATION_SEAT"),
             vendor: nonempty_env("AIDA_AGENT_TYPE"),
             payload_session: std::env::var("AIDA_HOOK_PAYLOAD")
                 .ok()
@@ -247,6 +251,9 @@ struct RegistryRow {
     ended_at: Option<toml::Value>,
     #[serde(default)]
     role: Option<String>,
+    // trace:STORY-2745 | ai:claude
+    #[serde(default)]
+    seat: Option<String>,
     #[serde(default)]
     mail_wake: Option<String>,
 }
@@ -279,6 +286,10 @@ pub struct SessionBindingFacts {
     /// The handle reservation's recipient UUID, when the reservation names
     /// this row (slice D1). `None`: a UUID-less reader.
     recipient: Option<RecipientUuid>,
+    /// The named seat the bound row records. A Codex tool shell or a
+    /// `--bg` spare may not carry `AIDA_ROTATION_SEAT`; the row does.
+    // trace:STORY-2745 | ai:claude
+    seat: Option<String>,
 }
 
 impl SessionBindingFacts {
@@ -360,6 +371,7 @@ impl SessionBindingFacts {
             handle,
             vendor,
             recipient,
+            seat: parsed.seat.filter(|s| !s.trim().is_empty()),
         })
     }
 
@@ -378,6 +390,7 @@ impl SessionBindingFacts {
             handle: handle.to_string(),
             vendor: vendor.to_string(),
             recipient: None,
+            seat: None,
         }
     }
 }
@@ -640,6 +653,10 @@ pub struct MailIdentityFacts {
     user_is_known_person: bool,
     aliases: Vec<String>,
     role: Option<String>,
+    /// The named seat (`seat:<name>` is a shared inbox identity, like a
+    /// role).
+    // trace:STORY-2745 | ai:claude
+    seat: Option<String>,
     env_vendor: Option<String>,
     /// A selected session row failed verification: no private inbox.
     unverified: bool,
@@ -654,10 +671,12 @@ impl MailIdentityFacts {
         catalog: &PeopleCatalogView,
         env: IdentityEnv,
     ) -> Self {
-        let (own_handle, own_vendor, own_recipient, unverified) = match binding {
-            SessionBinding::Bound(b) => (Some(b.handle), Some(b.vendor), b.recipient, false),
-            SessionBinding::Unbound => (None, None, None, false),
-            SessionBinding::Unverified(_) => (None, None, None, true),
+        let (own_handle, own_vendor, own_recipient, unverified, bound_seat) = match binding {
+            SessionBinding::Bound(b) => {
+                (Some(b.handle), Some(b.vendor), b.recipient, false, b.seat)
+            }
+            SessionBinding::Unbound => (None, None, None, false, None),
+            SessionBinding::Unverified(_) => (None, None, None, true, None),
         };
         let user_is_known_person = (unverified
             || own_handle
@@ -672,6 +691,9 @@ impl MailIdentityFacts {
             user_is_known_person,
             aliases: if unverified { Vec::new() } else { env.aliases },
             role: env.role,
+            // The bound row's seat first: it is this session's own record.
+            // trace:STORY-2745 | ai:claude
+            seat: bound_seat.or(env.seat),
             env_vendor: env.vendor,
             unverified,
         }
@@ -733,6 +755,7 @@ impl MailIdentityFacts {
             user_is_known_person: false,
             aliases: Vec::new(),
             role: parsed.role.filter(|r| !r.trim().is_empty()),
+            seat: parsed.seat.filter(|s| !s.trim().is_empty()),
             env_vendor: None,
             unverified: false,
         })
@@ -762,6 +785,12 @@ impl MailIdentityFacts {
         self.role.as_deref()
     }
 
+    /// The named seat this session holds, when it holds one.
+    // trace:STORY-2745 | ai:claude
+    pub fn seat(&self) -> Option<&str> {
+        self.seat.as_deref()
+    }
+
     /// Test-only: these facts with a recipient UUID.
     #[cfg(test)]
     pub(crate) fn with_recipient(mut self, recipient: RecipientUuid) -> Self {
@@ -789,6 +818,7 @@ impl MailIdentityFacts {
             user_is_known_person,
             aliases: aliases.iter().map(|s| s.to_string()).collect(),
             role: role.map(str::to_string),
+            seat: None,
             env_vendor: env_vendor.map(str::to_string),
             unverified: false,
         }
@@ -843,6 +873,11 @@ pub fn classified_identities(facts: &MailIdentityFacts) -> Vec<(String, Identity
         let (role, _default) = effective_role(Some(raw));
         push(&mut ids, role, IdentityClass::Shared);
     }
+    // A named seat is a shared address like a role: `seat:<name>`.
+    // trace:STORY-2745 | ai:claude
+    if let Some(seat) = facts.seat.as_deref().and_then(seat_address) {
+        push(&mut ids, seat, IdentityClass::Shared);
+    }
     if let Some(raw) = facts
         .own_vendor
         .clone()
@@ -855,6 +890,19 @@ pub fn classified_identities(facts: &MailIdentityFacts) -> Vec<(String, Identity
         push(&mut ids, handle.to_string(), IdentityClass::Private);
     }
     ids
+}
+
+/// The mail address of a named seat, `seat:<name>` (lowercase, trimmed);
+/// `None` for a blank or malformed name.
+// trace:STORY-2745 | ai:claude
+pub fn seat_address(raw: &str) -> Option<String> {
+    let seat = raw.trim().to_ascii_lowercase();
+    let valid = !seat.is_empty()
+        && seat.len() <= 64
+        && seat
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_');
+    valid.then(|| format!("seat:{seat}"))
 }
 
 /// [`classified_identities`] without the classes.

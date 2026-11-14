@@ -364,6 +364,7 @@ fn noexec_preview_renders_command_and_codex_permission_posture() {
         launch_cwd: project,
         role: Some("implementer".into()),
         role_instance: RoleInstanceKind::Driver,
+        seat: None,
         current_spec: Some("TASK-1232".into()),
         name: "codex-preview".to_string(),
         lease_id: None,
@@ -467,6 +468,7 @@ fn noexec_preview_includes_prompt_source_context_path_env_and_guidance_files() {
         launch_cwd: project.clone(),
         role: Some("implementer".into()),
         role_instance: RoleInstanceKind::Driver,
+        seat: None,
         current_spec: Some("TASK-1467".into()),
         name: "claude-preview".to_string(),
         lease_id: None,
@@ -537,6 +539,7 @@ fn noexec_preview_notes_context_disabled_when_no_context_is_set() {
         launch_cwd: project,
         role: None,
         role_instance: RoleInstanceKind::Driver,
+        seat: None,
         current_spec: None,
         name: "codex-preview".to_string(),
         lease_id: None,
@@ -628,6 +631,7 @@ fn verbose_diagnostics_reuse_noexec_body_with_a_distinct_launching_banner() {
         launch_cwd: project.clone(),
         role: Some("implementer".into()),
         role_instance: RoleInstanceKind::Driver,
+        seat: None,
         current_spec: Some("TASK-1498".into()),
         name: "claude-verbose".to_string(),
         lease_id: None,
@@ -742,6 +746,7 @@ fn verbose_diagnostics_never_print_the_full_prompt_text() {
         launch_cwd: project,
         role: None,
         role_instance: RoleInstanceKind::Driver,
+        seat: None,
         current_spec: None,
         name: "claude-verbose".to_string(),
         lease_id: None,
@@ -802,6 +807,7 @@ fn verbose_diagnostics_redact_secret_looking_argv_values() {
         launch_cwd: project,
         role: None,
         role_instance: RoleInstanceKind::Driver,
+        seat: None,
         current_spec: None,
         name: "claude-verbose".to_string(),
         lease_id: None,
@@ -1831,6 +1837,7 @@ fn agent_initial_prompt_args_map_by_agent_and_respect_opt_out() {
         launch_cwd: tmp.path().to_path_buf(),
         role: Some("implementer".into()),
         role_instance: RoleInstanceKind::Driver,
+        seat: None,
         current_spec: Some("TASK-556".into()),
         name: "agent-test".to_string(),
         lease_id: None,
@@ -2078,6 +2085,7 @@ fn show_prompt_prints_the_exact_injected_role_prompt() {
             launch_cwd: tmp.path().to_path_buf(),
             role: Some("product".into()),
             role_instance: RoleInstanceKind::Driver,
+            seat: None,
             current_spec: spec,
             name: "agy-test".to_string(),
             lease_id: None,
@@ -2874,6 +2882,7 @@ fn tracked_fake_agent_receives_env_and_registry_is_removed() {
         launch_cwd: project.clone(),
         role: Some("implementer".into()),
         role_instance: RoleInstanceKind::Driver,
+        seat: None,
         current_spec: Some("STORY-433".into()),
         name: "codex-test".to_string(),
         lease_id: None,
@@ -3009,6 +3018,7 @@ fn task_2712_foreground_lane_commits_pending_work_after_exit() {
             launch_cwd: tree.clone(),
             role: Some(role.into()),
             role_instance: RoleInstanceKind::Driver,
+            seat: None,
             current_spec: Some("STORY-433".into()),
             name: format!("codex-{name}"),
             lease_id: None,
@@ -3154,6 +3164,7 @@ fn tracked_fake_antigravity_receives_env_args_and_registry_is_removed() {
         launch_cwd: project.clone(),
         role: Some("implementer".into()),
         role_instance: RoleInstanceKind::Driver,
+        seat: None,
         current_spec: Some("STORY-434".into()),
         name: "agy-test".to_string(),
         lease_id: None,
@@ -3251,6 +3262,7 @@ fn renders_agent_launch_context_with_role_guidance_and_briefs() {
         launch_cwd: project,
         role: Some("implementer".into()),
         role_instance: RoleInstanceKind::Driver,
+        seat: None,
         current_spec: Some("STORY-436".into()),
         name: "codex-test".to_string(),
         lease_id: None,
@@ -3345,6 +3357,7 @@ fn cold_advisor_launch_context_names_gate_prohibition_and_next_command() {
         launch_cwd: project,
         role: Some("advisor".into()),
         role_instance: RoleInstanceKind::Driver,
+        seat: None,
         current_spec: None,
         name: "cold-advisor".to_string(),
         lease_id: None,
@@ -3430,6 +3443,7 @@ fn agent_launch_context_always_includes_mailbox_guidance_when_caught_up() {
         launch_cwd: project,
         role: Some("implementer".into()),
         role_instance: RoleInstanceKind::Driver,
+        seat: None,
         current_spec: None,
         name: "antigravity-test".to_string(),
         lease_id: None,
@@ -3524,6 +3538,7 @@ fn agent_launch_context_without_spec_preserves_open_ended_hint() {
         launch_cwd: project,
         role: Some("implementer".into()),
         role_instance: RoleInstanceKind::Driver,
+        seat: None,
         current_spec: None,
         name: "codex-test".to_string(),
         lease_id: None,
@@ -3594,6 +3609,7 @@ fn tracked_fake_agent_receives_context_file_env_and_cleans_file() {
         launch_cwd: project.clone(),
         role: Some("advisor".into()),
         role_instance: RoleInstanceKind::Driver,
+        seat: None,
         current_spec: None,
         name: "codex-test".to_string(),
         lease_id: None,
@@ -3805,6 +3821,7 @@ fn no_duplicate_check_is_the_escape_hatch_for_the_role_singleton() {
         launch_cwd: project.clone(),
         role: Some("reviewer".into()),
         role_instance: RoleInstanceKind::Driver,
+        seat: None,
         current_spec: None,
         name: "reviewer-pr2242".to_string(),
         lease_id: None,
@@ -4469,6 +4486,7 @@ fn is_contained_launch_detection() {
         launch_cwd: std::env::temp_dir(),
         role: Some("implementer".into()),
         role_instance: RoleInstanceKind::Driver,
+        seat: None,
         current_spec: None,
         name: "test-agent".into(),
         lease_id: None,
@@ -4513,6 +4531,7 @@ fn run_tracked_agent_contained_exports_aida_contained_and_uncontained_strips_it(
         launch_cwd: project.clone(),
         role: Some("implementer".into()),
         role_instance: RoleInstanceKind::Driver,
+        seat: None,
         current_spec: None,
         name: "test-agent".to_string(),
         lease_id: None,
@@ -4610,6 +4629,7 @@ fn agent_launch_env_inputs_contained_and_uncontained() {
         launch_cwd: std::path::PathBuf::from("/repo"),
         role: Some("implementer".into()),
         role_instance: RoleInstanceKind::Driver,
+        seat: None,
         current_spec: None,
         name: "test-agent".to_string(),
         lease_id: None,
@@ -4731,6 +4751,7 @@ fn build_agent_new_bg_command_exports_when_contained_and_strips_when_uncontained
         launch_cwd: project.clone(),
         role: None,
         role_instance: RoleInstanceKind::Driver,
+        seat: None,
         current_spec: None,
         name: "test-bg-agent".to_string(),
         lease_id: None,
@@ -5226,4 +5247,98 @@ fn story_2256_every_agent_subcommand_passes_the_default_new_rewrite() {
             .inner,
         AgentCommand::Wake { .. }
     ));
+}
+
+// STORY-2745 review F2: both background launch shapes carry `--seat` into
+// the worker's environment (`AIDA_ROTATION_SEAT`), and a seatless launch
+// never passes a seat through.
+// trace:STORY-2745 | ai:claude
+#[test]
+fn story2745_background_workers_carry_the_named_seat() {
+    let tmp = tempfile::tempdir().unwrap();
+    let project = tmp.path().to_path_buf();
+    std::fs::create_dir_all(project.join(".aida-store")).unwrap();
+    let plan = |seat: Option<&str>| AgentLaunchPlan {
+        project_root: project.clone(),
+        launch_cwd: project.clone(),
+        role: None,
+        role_instance: RoleInstanceKind::Driver,
+        seat: seat.map(str::to_string),
+        current_spec: None,
+        name: "integ-7".to_string(),
+        lease_id: None,
+        native_session_id: None,
+        resumed_from: None,
+    };
+    let seat_of = |envs: Vec<(String, Option<String>)>| {
+        envs.into_iter()
+            .find(|(k, _)| k == crate::agent_rotation::SEAT_ENV)
+            .and_then(|(_, v)| v)
+    };
+    let binary = std::path::Path::new("/bin/echo");
+
+    // `claude --bg`.
+    let claude = AgentLaunchConfig {
+        delegate_seats: Vec::new(),
+        agent_type: "claude",
+        binary: "claude",
+        default_args: Vec::new(),
+        prompt_style: AgentPromptStyle::Positional,
+        contained: false,
+    };
+    let claude_env = |seat| {
+        build_agent_new_bg_command(binary, &claude, &plan(seat), &[], None)
+            .unwrap()
+            .get_envs()
+            .map(|(k, v)| {
+                (
+                    k.to_string_lossy().into_owned(),
+                    v.map(|v| v.to_string_lossy().into_owned()),
+                )
+            })
+            .collect::<Vec<_>>()
+    };
+    assert_eq!(
+        seat_of(claude_env(Some("integration"))).as_deref(),
+        Some("integration")
+    );
+    assert_eq!(seat_of(claude_env(None)), None);
+
+    // The detached Codex worker (`aida agent new codex --bg`).
+    let codex = AgentLaunchConfig {
+        delegate_seats: Vec::new(),
+        agent_type: "codex",
+        binary: "codex",
+        default_args: Vec::new(),
+        prompt_style: AgentPromptStyle::Positional,
+        contained: false,
+    };
+    let codex_env = |seat| {
+        crate::agent_launch::agent_codex_background::test_worker_env(binary, &codex, &plan(seat))
+            .unwrap()
+            .into_iter()
+            .map(|(k, v)| (k, Some(v)))
+            .collect::<Vec<_>>()
+    };
+    assert_eq!(
+        seat_of(codex_env(Some("integration"))).as_deref(),
+        Some("integration")
+    );
+    assert_eq!(seat_of(codex_env(None)), None);
+}
+
+// The detached Codex supervisor's init carries the seat to the worker's
+// registry row.
+// trace:STORY-2745 | ai:claude
+#[test]
+fn story2745_codex_supervisor_init_carries_the_seat() {
+    let src = include_str!("../agent_codex_background.rs");
+    let register = src
+        .split("agent_registry::register_detached_worker(")
+        .nth(1)
+        .unwrap();
+    let register = &register[..register.find("})").unwrap()];
+    assert!(register.contains("seat: init.seat.clone()"), "{register}");
+    let init = src.split("let init = SupervisorInit {").nth(1).unwrap();
+    assert!(init[..init.find("};").unwrap()].contains("seat: plan.seat.clone()"));
 }

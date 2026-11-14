@@ -5671,7 +5671,10 @@ Arguments:
 
 Options:
       --to <TO>
-          Recipient agent id (e.g. `codex`). Omit and pass `--broadcast` to reach everyone
+          Recipient: an agent id or handle (e.g. `codex`), a role, `person:<name>`, or `seat:<name>`
+          for whichever session holds that seat (e.g. `seat:integration`). Omit with `--in-reply-to`
+          to answer the original sender's seat, else its role, else its id; pass `--broadcast` to
+          reach everyone
 
       --broadcast
           Broadcast to every agent instead of a single recipient
@@ -18358,6 +18361,11 @@ Options:
           exit without a fresh handoff, ends it for real. Default: `[agents.claude] rotate` in
           agents.toml, else off
 
+      --seat <NAME>
+          Name the seat this session holds, e.g. `integration` for a session whose role is
+          `implementer`. Exported as `AIDA_ROTATION_SEAT`, it keys rotation handoffs and lets mail
+          reach the session as `seat:<name>` whatever its vendor. Default: the role
+
   -h, --help
           Print help (see a summary with '-h')
 ===== aida agent new codex
@@ -18506,6 +18514,11 @@ Options:
           thread id, or, before the thread is known, was written after the launch under this handle.
           `aida session handoff --write --final`, or an exit without a fresh handoff, ends it for
           real. Default: `[agents.codex] rotate` in agents.toml, else off
+
+      --seat <NAME>
+          Name the seat this session holds, e.g. `integration` for a session whose role is
+          `implementer`. Exported as `AIDA_ROTATION_SEAT`, it keys rotation handoffs and lets mail
+          reach the session as `seat:<name>` whatever its vendor. Default: the role
 
       --bg
           Launch a detached Codex implementer or reviewer for SPEC: a fresh `codex exec` worker
@@ -38025,7 +38038,7 @@ Working on aida itself
       {
         "name": "to",
         "takes_value": true,
-        "help": "Recipient agent id (e.g. `codex`). Omit and pass `--broadcast` to reach everyone"
+        "help": "Recipient: an agent id or handle (e.g. `codex`), a role, `person:<name>`, or `seat:<name>` for whichever session holds that seat (e.g. `seat:integration`). Omit with `--in-reply-to` to answer the original sender's seat, else its role, else its id; pass `--broadcast` to reach everyone"
       },
       {
         "name": "urgent",
@@ -50634,6 +50647,11 @@ Working on aida itself
         "help": "Launch Claude in contained mode: strict Bash sandboxing, no unsandboxed fallback, destructive-command deny rules, and project-relative edit auto-allow only"
       },
       {
+        "name": "seat",
+        "takes_value": true,
+        "help": "Name the seat this session holds, e.g. `integration` for a session whose role is `implementer`. Exported as `AIDA_ROTATION_SEAT`, it keys rotation handoffs and lets mail reach the session as `seat:<name>` whatever its vendor. Default: the role"
+      },
+      {
         "name": "show-context",
         "takes_value": false,
         "help": "Print the generated launch-context snapshot before spawning"
@@ -50814,6 +50832,11 @@ Working on aida itself
         "name": "rotate",
         "takes_value": false,
         "help": "Supervise the session across context rotations: when it exits after writing a fresh seat handoff, relaunch it in the same worktree under the same handle and lease with the handoff loaded (a 5s countdown; Ctrl-C stops it). A handoff counts once it carries this session's thread id, or, before the thread is known, was written after the launch under this handle. `aida session handoff --write --final`, or an exit without a fresh handoff, ends it for real. Default: `[agents.codex] rotate` in agents.toml, else off"
+      },
+      {
+        "name": "seat",
+        "takes_value": true,
+        "help": "Name the seat this session holds, e.g. `integration` for a session whose role is `implementer`. Exported as `AIDA_ROTATION_SEAT`, it keys rotation handoffs and lets mail reach the session as `seat:<name>` whatever its vendor. Default: the role"
       },
       {
         "name": "show-context",

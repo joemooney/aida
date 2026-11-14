@@ -687,3 +687,46 @@ fn proc_identity_s4_foreign_observer_session_binding() {
         Err(BindingRefusal::Ended)
     );
 }
+
+// trace:STORY-2745 | ai:claude
+#[test]
+fn story2745_a_named_seat_is_a_shared_inbox_identity() {
+    let mut facts =
+        MailIdentityFacts::fixture(None, None, "joe", false, &[], Some("implementer"), None);
+    facts.seat = Some(" Integration ".into());
+    let ids = classified_identities(&facts);
+    assert!(
+        ids.contains(&("seat:integration".to_string(), IdentityClass::Shared)),
+        "{ids:?}"
+    );
+    assert!(ids.iter().any(|(id, _)| id == "implementer"), "{ids:?}");
+    facts.seat = Some("not a seat!".into());
+    assert!(!inbox_identities(&facts)
+        .iter()
+        .any(|id| id.starts_with("seat:")));
+    assert_eq!(seat_address("Integration"), Some("seat:integration".into()));
+    assert_eq!(seat_address("  "), None);
+}
+
+// STORY-2745 review F2: a bound session's seat comes from its registry row
+// when its env does not carry `AIDA_ROTATION_SEAT` (a Codex tool shell, a
+// `--bg` spare), and the row wins over a stale env seat.
+// trace:STORY-2745 | ai:claude
+#[test]
+fn story2745_a_bound_rows_seat_is_the_sessions_seat() {
+    let catalog = PeopleCatalogView::fixture(&[]);
+    let mut bound = SessionBindingFacts::fixture("integ-7", "codex");
+    bound.seat = Some("integration".into());
+    let env = IdentityEnv::fixture("integ-7", &[], Some("implementer"));
+    let facts =
+        MailIdentityFacts::observed(SessionBinding::Bound(bound.clone()), &catalog, env.clone());
+    assert_eq!(facts.seat(), Some("integration"));
+    assert!(inbox_identities(&facts).contains(&"seat:integration".to_string()));
+    let mut stale = env.clone();
+    stale.seat = Some("other".into());
+    let facts = MailIdentityFacts::observed(SessionBinding::Bound(bound), &catalog, stale.clone());
+    assert_eq!(facts.seat(), Some("integration"));
+    // Unbound: the env's seat.
+    let facts = MailIdentityFacts::observed(SessionBinding::Unbound, &catalog, stale);
+    assert_eq!(facts.seat(), Some("other"));
+}
