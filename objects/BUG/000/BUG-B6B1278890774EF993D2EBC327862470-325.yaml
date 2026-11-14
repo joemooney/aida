@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-13T13:53:20.390665880Z
-modified_at: 2026-11-14T06:09:33.340465610Z
+modified_at: 2026-11-14T07:24:05.455942178Z
 req_type: Bug
 tags:
 - hygiene
@@ -35,6 +35,13 @@ comments:
   modified_at: 2026-11-14T05:49:26.751294502Z
   session_id: 01a1d896f29f
   harness_version: codex-cli 0.167.0
+- id: 01a1d8f1-27cf-7d23-b24b-2514f6d2b185
+  author: joe
+  content: '[advisor 114 00:28] #3987 rework per the 06:45Z review: (1) the new inside-root check breaks the existing linked-worktree fixtures (bug_2140): keep linked worktrees valid; (2) apply the same fix to the cli-lib duplicate fixture (it keeps the ancestor-discovery defect). Nothing else.'
+  created_at: 2026-11-14T07:24:05.455942178Z
+  modified_at: 2026-11-14T07:24:05.455942178Z
+  session_id: 01a1d852-16ef-7973-bdde-ac3f274752a2
+  harness_version: 2.1.325 (Claude Code)
 history:
 - id: 01a1d889-fed8-7962-86df-f0e26e40b385
   author: joe
