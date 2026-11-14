@@ -5,7 +5,13 @@
 `python3 scripts/check-gate-dependencies.py` checks the exact upward item-edge
 inventory in `scripts/gate-dependencies-legacy.json`. The Build job's gates shard
 runs it with its PR/merge-group/push base revision, and classifying that step as
-`fast` also includes it in `make check-ci-fast`.
+`fast` also includes it in `make check-ci-fast`. The FAST invocation exports
+`GATE_DEPENDENCIES_BASE` alongside `EXEC_CONTEXT_BASE` and `CRATE_GLOBS_BASE`
+because the local step reader preserves run bodies but drops Build-step env.
+FAST requires all three bases to resolve to commits; the dependency guard also
+refuses missing or null bases on PR events. The integration fixture commits a
+matching source-plus-ledger ceiling increase at a newer PR head and verifies
+that the actual FAST Make invocation rejects it against the older trusted base.
 
 The initial ceiling is **150**, measured from the current tree rather than the
 older deep-dive estimate of 144. An edge is a unique `(source Rust file, target
