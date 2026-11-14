@@ -3,12 +3,12 @@ spec_id: STORY-b6b1278890774ef993d2ebc327862470-746
 agreed_id: STORY-2823
 title: 'aida pr train --status: one command that says what the train is doing'
 description: 'From the Agent CLI friction log (STORY-2822 item 12). Today every advisor reads .aida/train/*.json, the deputy transcript and gh by hand to learn the train''s state, and two shell versions were wrong. Acceptance: (1) ''aida pr train --status'' (or ''aida train status'') prints, for the current journal or ''no train'': train PR number, members with heads, step (Gate/Ci/Merge/Members/Cleanup), time in step, CI shard summary, and the PID driving it or ''no live driver (orphaned journal)''; (2) exit code distinguishes none / running / orphaned; (3) json output; (4) read-only, bounded time (no gate-ledger rediscovery); (5) documented in docs/cli.'
-status: Done
+status: InProgress
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-14T18:21:33.508922524Z
-modified_at: 2026-11-14T22:18:49.755899898Z
+modified_at: 2026-11-14T22:18:52.716869165Z
 req_type: Story
 relationships:
 - rel_type:
@@ -54,6 +54,15 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: Done
+- id: 01a1dc24-5bac-79e0-8153-dea25830596e
+  author: joe
+  timestamp: 2026-11-14T22:18:52.716859027Z
+  session_id: 01a1dbd6-f8cd-7313-a123-75ebbeaa2afd
+  harness_version: 2.1.325 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: InProgress
 filed_at:
   code_sha: 96fc262834527304fe85fc9ee32e4d04f1aaf4ea
   branch: main
@@ -67,3 +76,4 @@ implementation_info:
   implemented: true
   implemented_at: 2026-11-14T21:57:34.285073799Z
   implemented_by: dirtlab
+  reopened_at_sha: 3cb7ba4fab12c60797d42bf51c7845633680c7d2
