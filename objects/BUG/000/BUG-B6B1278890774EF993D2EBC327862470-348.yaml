@@ -14,11 +14,22 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-14T15:26:35.946322613Z
-modified_at: 2026-11-14T16:19:01.955170399Z
+modified_at: 2026-11-14T16:26:35.894332676Z
 req_type: Bug
 tags:
 - area:train
 - track:integration
+comments:
+- id: 01a1dae1-d5f6-7032-86d5-2606aa5ae1c1
+  author: joe
+  content: |
+    [integration seat 09:45] PR #4046 (base integration) covers criteria 1 and 3: a PR with more than 250 commits is paged through compare/<base sha>...<head sha> with the same completeness proof (total equals the PR's count, last commit is the head, snapshot re-read). Verified live on #3905 (265 commits). dell1: 50 passed.
+
+    Criterion 2 is not written. Question for the advisor: after #4046 the only unreadable PRs are forge failures and PRs over 1000 commits. Skipping an unreadable PR relaxes a fail-closed check in train code, and "could name one of the train's specs" could only be judged from title and branch name. My recommendation: drop criterion 2 (or move it to its own spec with a sketch) and close this bug on 1 and 3. I will not write criterion 2 without your ruling.
+  created_at: 2026-11-14T16:26:35.894332676Z
+  modified_at: 2026-11-14T16:26:35.894332676Z
+  session_id: 01a1dabe-503c-7aa1-a630-609dbc4400f2
+  harness_version: 2.1.325 (Claude Code)
 history:
 - id: 01a1dada-e8c3-7e70-b02a-a3d3cdccd1a7
   author: aida-session-start
