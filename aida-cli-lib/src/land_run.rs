@@ -904,7 +904,7 @@ pub(super) fn run(start: &Path, args: &super::land_args::RunArgs) -> Result<()> 
     let limits = Limits::load(&root);
     let mut acts = Live {
         repo: crate::review_watch::forge::Repository::load(&root)?,
-        program: std::env::current_exe().context("resolving the running aida binary")?,
+        program: crate::resolve_aida_exe(),
         vendor: args.vendor.clone(),
         gitlab: false,
         handles: Vec::new(),
