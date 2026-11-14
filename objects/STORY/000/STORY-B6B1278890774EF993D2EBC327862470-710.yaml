@@ -1,0 +1,33 @@
+id: 01a1d88f-25f0-78c3-9e23-6bbad59de4ad
+spec_id: STORY-b6b1278890774ef993d2ebc327862470-710
+agreed_id: STORY-2787
+title: 'Review PR-3986: [AI:codex] fix: Headless reviewer verdicts lost: ''aida review record'' inside the vendor sandbox has no bindable identity (10-16% of reviews) (BUG-2564)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `(no-sess`) for branch `bug-b6b1278890774ef993d2ebc327862470-329`.
+
+  - PR: <https://github.com/joemooney/aida/pull/3986>
+  - Branch: `bug-b6b1278890774ef993d2ebc327862470-329` → `main`
+
+  ## Covers
+
+  - BUG-2564
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 3986` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-14T05:37:02.448035735Z
+modified_at: 2026-11-14T05:37:02.448035735Z
+req_type: Story
+filed_at:
+  code_sha: 6357b967b99c1715e655bf29e383d7c31336ba6c
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 6357b967b99
+  vendor: claude
