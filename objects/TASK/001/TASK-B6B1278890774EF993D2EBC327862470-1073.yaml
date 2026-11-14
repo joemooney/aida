@@ -1213,12 +1213,48 @@ description: |
   ### finding-hash:a8474302
 
   No test covers the live read-only branches: LiveChecks::checked_corpus (no mirror arming), LiveChecks::mandate_cover (mandate gate, MANDATE_NOT_ASKED), peek_forge_kind, or pr_train_check_handler exit status. Tests script FakeChecks only.
+
+
+  ## Findings from PR-3956
+  Reviewed sha: 36afa067467a75d0e3201ed946f059264ee113e7
+
+  ### finding-hash:4222a3d6
+
+  review_launch.rs review_prompt: when launch_context fails under the fast policy the reviewer launches with the ordinary prompt and only a stderr warning; no freshness ledger event records that the review ran without current-base evidence (AC2/AC5). Record a decision such as evidence-unavailable for the head.
+
+  ### finding-hash:8b8a3fb6
+
+  gate/review_freshness.rs glob(): ** compiles to .* without (?s), so a changed path containing a newline never matches a freshness_strict_paths glob and the PR is treated as fast.
+
+  ### finding-hash:1f7b8f62
+
+  review_watch.rs execute_reservation: a conflict first seen by the queue-work child (base moves after the watcher preflight) is recorded through transition(Exited) with the BUG-2450 setup conversion, so it can be classed a setup failure and retried once instead of the routed exit transition_routed records.
+
+  ### finding-hash:02bf8b4d
+
+  pr_cmd.rs preflight_stale_base_check_with_info fast branch: the refresh_base error and the head-moved ensure return before update-ref -d on the scratch preflight ref, leaving it behind.
+
+  ### finding-hash:036825d8
+
+  gate/review_carryover.rs proved_for_refusal: the second strict-policy check (after the base refresh) returns StrictPolicy without writing the re-review-required freshness event the first check writes (AC5).
+
+  ### finding-hash:1bf50580
+
+  No test carries a criterion-level trace comment for the six criteria (acef95eb, ac3d0be9, ac5a9c72, ac59d017, ac984425, ac39a51c), so aida criteria reports all six untraced although each has behavioural tests in this diff. Add trace:STORY-b6b1278890774ef993d2ebc327862470-686.<ac-id> comments on those tests.
+
+  ### finding-hash:fa83ec7a
+
+  review_launch.rs route_rework: with several covered specs, a dispatch failure after the first subject leaves no rework-routed receipt, so the next poll dispatches queue rework again for subjects already routed. Separately, review_watch.rs watch_change skips a head with a rework-routed receipt forever, even if the protected base later stops conflicting with that same head.
+
+  ### finding-hash:d4e2f347
+
+  review_watch.rs Store::retain with preserve_heads (fast policy): blocking recordings on base-merge-only heads spend no round, so such heads keep being re-reviewed, and once more than 16 blocking recordings are retained the ensure fails select_with_coverage and round_for on every poll instead of routing the change to the advisor.
 status: Draft
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-13T20:01:56.623034248Z
-modified_at: 2026-11-14T20:41:50.719970068Z
+modified_at: 2026-11-14T21:06:54.919474702Z
 req_type: Task
 tags:
 - carried-finding:BUG-2543:2a99ebfc
@@ -1279,16 +1315,24 @@ tags:
 - carried-finding:PR-3950:47f62f07
 - carried-finding:PR-3952:2dfbd6d5
 - carried-finding:PR-3952:35d3eb09
+- carried-finding:PR-3956:02bf8b4d
+- carried-finding:PR-3956:036825d8
 - carried-finding:PR-3956:04ad58d8
 - carried-finding:PR-3956:0d56e3a6
 - carried-finding:PR-3956:138d1871
 - carried-finding:PR-3956:15915e39
+- carried-finding:PR-3956:1bf50580
+- carried-finding:PR-3956:1f7b8f62
+- carried-finding:PR-3956:4222a3d6
 - carried-finding:PR-3956:6aee22bd
+- carried-finding:PR-3956:8b8a3fb6
 - carried-finding:PR-3956:97d326dd
 - carried-finding:PR-3956:9b6c3c2d
 - carried-finding:PR-3956:bf60843e
+- carried-finding:PR-3956:d4e2f347
 - carried-finding:PR-3956:d51c0f59
 - carried-finding:PR-3956:dee3f3a7
+- carried-finding:PR-3956:fa83ec7a
 - carried-finding:PR-3966:3961dae5
 - carried-finding:PR-3966:c598b8f9
 - carried-finding:PR-3968:56ed8b81
@@ -1508,6 +1552,8 @@ tags:
 - carried-from:TASK-3785
 - carried-from:TASK-3791
 - finding-hash:01721c41
+- finding-hash:02bf8b4d
+- finding-hash:036825d8
 - finding-hash:04ad58d8
 - finding-hash:0704b7b5
 - finding-hash:0bdbec3f
@@ -1518,6 +1564,8 @@ tags:
 - finding-hash:138d1871
 - finding-hash:15915e39
 - finding-hash:198d1196
+- finding-hash:1bf50580
+- finding-hash:1f7b8f62
 - finding-hash:1fce0788
 - finding-hash:236bf348
 - finding-hash:24879d52
@@ -1543,6 +1591,7 @@ tags:
 - finding-hash:3cf67cda
 - finding-hash:3db33acc
 - finding-hash:3f4b4821
+- finding-hash:4222a3d6
 - finding-hash:43b83809
 - finding-hash:45085c26
 - finding-hash:45e63a87
@@ -1584,6 +1633,7 @@ tags:
 - finding-hash:7d6b05ec
 - finding-hash:83e5954d
 - finding-hash:8a49a174
+- finding-hash:8b8a3fb6
 - finding-hash:8c6f0ae6
 - finding-hash:8cfe037b
 - finding-hash:8d1b3558
@@ -1613,6 +1663,7 @@ tags:
 - finding-hash:cd9ab7dd
 - finding-hash:cddc71c1
 - finding-hash:d0b021ea
+- finding-hash:d4e2f347
 - finding-hash:d51c0f59
 - finding-hash:d7ad1d67
 - finding-hash:dbd4e4d5
@@ -1626,6 +1677,7 @@ tags:
 - finding-hash:f1e29cc2
 - finding-hash:f238ea37
 - finding-hash:f3b82bc9
+- finding-hash:fa83ec7a
 - finding-hash:fcb8f322
 - finding-hash:fd4627d4
 - finding-hash:fe70e901
@@ -2129,6 +2181,11 @@ history:
   author: joe
   timestamp: 2026-11-14T20:41:51.860901902Z
   session_id: 01a1dbc79fe8
+  changes: []
+- id: 01a1dbe2-7eff-7002-9977-6a8ee435a5b8
+  author: joe
+  timestamp: 2026-11-14T21:06:56.383393888Z
+  session_id: 01a1dbdee1b1
   changes: []
 filed_at:
   code_sha: 91fe1e337894199f15365d3f8ecfaf81366f8291
