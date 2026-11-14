@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-11T12:17:47.476312683Z
-modified_at: 2026-11-14T06:16:03.933498700Z
+modified_at: 2026-11-14T06:26:13.137299133Z
 req_type: Task
 relationships:
 - rel_type: BlockedBy
@@ -18,6 +18,14 @@ relationships:
 - rel_type: Child
   target_id: 01a1c91e-cfa5-7032-a3a8-2a4d85e2321c
   created_at: 2026-11-11T12:17:59.940037575Z
+comments:
+- id: 01a1d8bc-2c11-79c3-9450-4accb2bd6ad2
+  author: dirtlab
+  content: 'PR6 extraction implemented in native seat; edits remain uncommitted for host publication. Shared aida-testkit tests: 38 passed. Tooling checks passed: crate-split tools (17), ownership liveness (2), executable fixtures (8), git maintenance (8), crate-glob and gate dependency ratchets. Final CLI adapter/importer tests are running in lane job j20261114T062429047-2-0. CI before evidence is recorded in plan section 5.3 (run 43562483470: lib-0 test step 685s; lib-1 556s). After timing must be collected from host-published FULL CI before closing criterion 5; declaration will retain Refs. Headless draft-finding filing failed closed because host WORK allocation dispenser is group-writable mode 0664; no finding was created. Configured reviewed codegraph executable /home/joe/ai/aida/.codegraph/proxy-state/bin/codegraph is absent; host deployment/path correction needed. No Git metadata permissions were changed.'
+  created_at: 2026-11-14T06:26:13.137299133Z
+  modified_at: 2026-11-14T06:26:13.137299133Z
+  session_id: 01a1d8b27330
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1ca8b-157a-7c50-9f73-dc13d565bf63
   author: joe
