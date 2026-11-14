@@ -17,12 +17,12 @@ description: |
   - A detached-HEAD worktree whose HEAD commit is reachable from the default branch or from an open/merged PR head on the remote, with a clean tree and no live session lease, is eligible and removed by `--apply`.
   - `aida worktree gc` (or the umbrella gc, STORY-2711) reports and, with `--apply`, removes per-seat target directories (target/lane-overlay/<session>, target/worktrees/<name>) whose session or worktree no longer exists, and prints bytes reclaimed.
   - A test covers the detached case and the blank-stderr case.
-status: Draft
+status: Approved
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-14T20:47:29.076518272Z
-modified_at: 2026-11-14T20:52:07.893326900Z
+modified_at: 2026-11-14T20:52:09.826138845Z
 req_type: Bug
 tags:
 - disk
@@ -35,6 +35,16 @@ comments:
   modified_at: 2026-11-14T20:52:07.893326900Z
   session_id: 01a1db6d-e689-7532-9eef-772722add87b
   harness_version: 2.1.325 (Claude Code)
+history:
+- id: 01a1dbd4-f7e2-7a82-bc00-323f2c6b3b3d
+  author: joe
+  timestamp: 2026-11-14T20:52:09.826127070Z
+  session_id: 01a1db6d-e689-7532-9eef-772722add87b
+  harness_version: 2.1.325 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Approved
 filed_at:
   code_sha: ce660d553f782fd223ca091bb3bd2dc394352eb5
   branch: main
