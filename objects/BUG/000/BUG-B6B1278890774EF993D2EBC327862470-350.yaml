@@ -17,12 +17,31 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-14T18:25:05.674074503Z
-modified_at: 2026-11-14T19:10:14.397207431Z
+modified_at: 2026-11-14T19:19:41.100460444Z
 req_type: Bug
 tags:
 - landing
 - track:integration
 - unattended
+comments:
+- id: 01a1db80-4d2c-7970-800c-a6ef278ca937
+  author: dirtlab
+  content: |-
+    ## Implementer approach (BUG-2585)
+
+    **Relay side** (`aida agent new --rotate`): before it ends a session at a turn boundary, and again before it mints the next generation's grant, the relay checks the grant it exports. Expired: it keeps the session (or, if the session had already exited, keeps handle and lease and waits), prints the renewal command, mails advisor + product, and re-checks every 5s. Under 2h left: mails advisor + product once per grant and expiry.
+
+    **How a renewed grant reaches a running relay:** the printed command is `eval "$(aida role enter <seat> --delegate-seat ... --bind-pid <pid of the shell the relay runs under>)"`. The relay scans the grant store for a direct `role enter` grant of the same principal and seat, issued later, delegating the seat, and uses it only if the ordinary grant verdict (lifetime, subject, roster, process binding) accepts it for the relay process. Only the selector is discovered; no new authority path. A relay holding a *delegated* grant never adopts a renewed root (it may have been narrowed): it holds and asks for a relaunch.
+
+    **Seat side:** `aida role expiry` (SessionStart banner, beside the mandate line) prints `PARENT GRANT <seat> · <left> · expires <at>` for every supervised seat, with the renewal command inside 2h; the statusline role segment gets `(parent grant expires in 42m)`; `aida doctor` raises a `seat-grant` finding inside 2h.
+
+    **Not in this change:** item (4), a mandate standing in for the parent grant (filed as a follow-up).
+
+    Evidence: unit/command-level tests in `aida-cli-lib/src/tests/bug_2585_relay_grant_tests.rs`.
+  created_at: 2026-11-14T19:19:41.100460444Z
+  modified_at: 2026-11-14T19:19:41.100460444Z
+  session_id: 01a1db779f44
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1db53-2b6a-7e82-8f53-418729abd49e
   author: joe
