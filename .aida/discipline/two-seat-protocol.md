@@ -112,8 +112,8 @@ batched form of `aida pr ship`:
    means main is about to move, so the train rebuilds instead of aborting.
    A forge error mid-run closes the open train PRs, comments on every member
    left unlanded, and is reported in the run's summary.
-5. **Red trains bisect.** A red train is rerun once to rule out a flake, then
-   split in halves, two sub-trains at a time. A green half lands at once,
+5. **Red trains bisect.** A red train is not rerun: it is split in halves at
+   once, two sub-trains at a time. A green half lands at once,
    and the other half is rebuilt on the new main and retested. A one-member
    train that is red leaves that PR open with a comment saying why.
 

@@ -361,16 +361,41 @@ fn drive_lands_an_all_green_train_in_one_ci_run() {
     assert!(out.ejected.is_empty());
 }
 
+// trace:BUG-2577 | ai:claude
 #[test]
-fn drive_reruns_a_first_red_once_before_bisecting() {
+fn drive_bisects_a_first_red_without_rerunning_the_same_composition() {
+    // Even a red that would have passed on a second attempt is not rerun:
+    // the train goes straight to halves.
     let mut s = Script {
         flaky_first: true,
         ..Default::default()
     };
     let out = drive(&mut s, ms(&[1, 2, 3])).unwrap();
-    assert_eq!(s.tested, vec![vec![1, 2, 3], vec![1, 2, 3]]);
-    assert_eq!(s.landed, vec![vec![1, 2, 3]]);
-    assert_eq!(out.ci_runs, 2);
+    // [1,2,3] red → [1] and [2,3] together; [1] lands, which makes [2,3]
+    // stale, so it is rebuilt on the new main and tested again.
+    assert_eq!(
+        s.tested,
+        vec![vec![1, 2, 3], vec![1], vec![2, 3], vec![2, 3]]
+    );
+    assert_eq!(s.landed, vec![vec![1], vec![2, 3]]);
+    assert!(out.ejected.is_empty());
+    assert_eq!(out.ci_runs, 4);
+}
+
+// trace:BUG-2577 | ai:claude
+#[test]
+fn drive_splits_a_red_two_member_train_into_exactly_two_sub_trains() {
+    let mut s = Script {
+        bad: vec![2],
+        ..Default::default()
+    };
+    let out = drive(&mut s, ms(&[1, 2])).unwrap();
+    // One red run of [1,2], then exactly the two halves: no second [1,2].
+    assert_eq!(s.tested, vec![vec![1, 2], vec![1], vec![2]]);
+    assert_eq!(s.landed, vec![vec![1]]);
+    assert_eq!(out.ejected.len(), 1);
+    assert_eq!(out.ejected[0].pr, 2);
+    assert_eq!(out.ci_runs, 3);
 }
 
 #[test]
@@ -380,11 +405,11 @@ fn drive_bisects_a_red_train_and_ejects_only_the_bad_member() {
         ..Default::default()
     };
     let out = drive(&mut s, ms(&[1, 2, 3, 4])).unwrap();
-    // full, rerun, then halves [1,2] and [3,4] in parallel; [1,2] lands, so
-    // [3,4]'s verdict is red and it splits; [3] is ejected, [4] lands.
+    // full, then halves [1,2] and [3,4] in parallel (no rerun of the full
+    // train); [1,2] lands, [3,4] is red and splits; [3] is ejected, [4] lands.
     assert_eq!(s.tested[0], vec![1, 2, 3, 4]);
-    assert_eq!(s.tested[1], vec![1, 2, 3, 4]);
-    assert_eq!(s.tested[2..4], [vec![1, 2], vec![3, 4]]);
+    assert_eq!(s.tested[1..3], [vec![1, 2], vec![3, 4]]);
+    assert_eq!(s.tested[3..], [vec![3], vec![4]]);
     assert_eq!(s.landed, vec![vec![1, 2], vec![4]]);
     assert_eq!(out.ejected.len(), 1);
     assert_eq!(out.ejected[0].pr, 3);
@@ -432,17 +457,11 @@ fn drive_retests_a_green_sibling_after_the_other_half_lands() {
     let s = p.0;
     assert_eq!(
         s.tested,
-        vec![
-            vec![1, 2, 3, 4],
-            vec![1, 2, 3, 4],
-            vec![1, 2],
-            vec![3, 4],
-            vec![3, 4],
-        ]
+        vec![vec![1, 2, 3, 4], vec![1, 2], vec![3, 4], vec![3, 4],]
     );
     assert_eq!(s.landed, vec![vec![1, 2], vec![3, 4]]);
     assert!(out.ejected.is_empty());
-    assert_eq!(out.ci_runs, 5);
+    assert_eq!(out.ci_runs, 4);
 }
 
 #[test]
@@ -461,14 +480,17 @@ fn drive_rebuilds_a_stale_train_and_drops_members_refused_at_land() {
 }
 
 #[test]
-fn drive_ejects_a_red_one_member_train_after_its_rerun() {
+fn drive_ejects_a_red_one_member_train_after_one_ci_run() {
+    // trace:BUG-2577 | ai:claude
     let mut s = Script {
         bad: vec![9],
         ..Default::default()
     };
     let out = drive(&mut s, ms(&[9])).unwrap();
-    assert_eq!(s.tested.len(), 2);
+    assert_eq!(s.tested, vec![vec![9]]);
+    assert_eq!(out.ci_runs, 1);
     assert!(s.landed.is_empty());
+    assert_eq!(out.ejected.len(), 1);
     assert_eq!(out.ejected[0].pr, 9);
 }
 
@@ -635,7 +657,7 @@ fn regression_demo_two_green_prs_that_conflict_semantically_never_turn_main_red(
         rails.check_rev(&both.tip).unwrap(),
         CiVerdict::Red(_)
     ));
-    // The train: red, rerun, bisect — A lands, B is ejected before main moves
+    // The train: red, bisect — A lands, B is ejected before main moves
     // to a red state.
     let out = drive(
         &mut rails,
@@ -2629,7 +2651,7 @@ fn train_required_aggregate_registration_and_precedence() {
         train_ci_readiness(&rows, &required, &cfg, false),
         TrainCiReadiness::Missing(_)
     ));
-    // Preserve genuine red-train rerun/bisection even before registration.
+    // Preserve genuine red-train bisection even before registration.
     rows[0].bucket = "fail".into();
     assert!(matches!(
         train_ci_readiness(&rows, &required, &CiGateConfig::default(), false),

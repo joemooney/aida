@@ -16770,7 +16770,7 @@ use and checked to carry exactly the PR's approved diff (by patch-id). A PR that
 diff changes once stacked, is left out with its reason. The train is opened as a `train/*` PR so the
 normal CI runs on exactly what main will receive. When it is green and main has not moved, it is
 rebase-merged pinned to its head, and each member PR is closed with a pointer to its commit on main.
-When it is red, it is rerun once, then split in halves (two at a time) until each bad PR is isolated
+When it is red, it is not rerun: it is split in halves (two at a time) until each bad PR is isolated
 and left out with a comment.
 
 `--dry-run` gates and builds the train and prints the plan without pushing anything; add `--local-ci
@@ -16794,7 +16794,7 @@ Options:
 
       --local-ci <CMD>
           With --dry-run: run CMD in a checkout of each train tip as the CI, and simulate the full
-          land / rerun / bisect run locally
+          land / bisect run locally
 
       --max <N>
           At most this many PRs per train. With --all-ready the rest wait for the next train; naming
@@ -48953,7 +48953,7 @@ Working on aida itself
       {
         "name": "local-ci",
         "takes_value": true,
-        "help": "With --dry-run: run CMD in a checkout of each train tip as the CI, and simulate the full land / rerun / bisect run locally"
+        "help": "With --dry-run: run CMD in a checkout of each train tip as the CI, and simulate the full land / bisect run locally"
       },
       {
         "name": "max",

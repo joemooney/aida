@@ -323,7 +323,7 @@ pub enum PrCommand {
     /// opened as a `train/*` PR so the normal CI runs on exactly what main
     /// will receive. When it is green and main has not moved, it is
     /// rebase-merged pinned to its head, and each member PR is closed with a
-    /// pointer to its commit on main. When it is red, it is rerun once, then
+    /// pointer to its commit on main. When it is red, it is not rerun: it is
     /// split in halves (two at a time) until each bad PR is isolated and
     /// left out with a comment.
     ///
@@ -351,7 +351,7 @@ pub enum PrCommand {
         dry_run: bool,
 
         /// With --dry-run: run CMD in a checkout of each train tip as the
-        /// CI, and simulate the full land / rerun / bisect run locally.
+        /// CI, and simulate the full land / bisect run locally.
         #[clap(long, value_name = "CMD", requires = "dry_run")]
         local_ci: Option<String>,
 

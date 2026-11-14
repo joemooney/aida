@@ -417,7 +417,7 @@ reason. The train opens as a `train/*` PR, and CI and merge-hold-gate (train
 mode: every listed member's labels) run on it. When it is green and main has
 not moved, it is rebase-merged with `--match-head-commit <tip>` under the
 merge lease. Each member PR is then closed with a pointer to its commit, and
-`aida pull` completes specs from the trailers. A red train is rerun once, then
+`aida pull` completes specs from the trailers. A red train is not rerun: it is
 bisected in halves (two sub-trains at a time). A one-member red train leaves
 that PR open with a comment. `--dry-run` prints the gate verdicts and the
 plan; `--dry-run --local-ci <CMD>` simulates the whole run with a local CI
