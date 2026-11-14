@@ -5276,7 +5276,8 @@ fn bug_2516_gitlab_pull_completion_trailers() {
     );
     assert_eq!(
         store.get_requirement_by_spec_id("BUG-2517").unwrap().status,
-        RequirementStatus::InProgress
+        // trace:BUG-2549 | ai:codex — the Refs slice leaves unheld work retryable.
+        RequirementStatus::Approved
     );
     assert_eq!(
         store.get_requirement_by_spec_id("BUG-2518").unwrap().status,
