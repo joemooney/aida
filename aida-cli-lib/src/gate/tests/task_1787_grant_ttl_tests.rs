@@ -467,7 +467,7 @@ fn test_parse_ttl_boundary_values() {
 
     // Oversized config clamped to exactly 168h
     assert_eq!(
-        parse_max_grant_hours_from_str("[seat]\nmax_grant_hours = 500\n"),
+        parse_hours_key_from_str("[seat]\nmax_grant_hours = 500\n", MAX_GRANT_KEY),
         Some(168)
     );
 }
