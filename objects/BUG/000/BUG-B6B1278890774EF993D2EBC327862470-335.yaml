@@ -22,7 +22,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-14T02:19:26.646584262Z
-modified_at: 2026-11-14T04:37:39.310204370Z
+modified_at: 2026-11-14T04:55:44.598361790Z
 req_type: Bug
 tags:
 - effort:open:4h
@@ -36,6 +36,13 @@ comments:
   created_at: 2026-11-14T02:19:59.323160259Z
   modified_at: 2026-11-14T02:19:59.323160259Z
   session_id: 01a1d797-2ccf-7771-899a-682081f10504
+  harness_version: 2.1.325 (Claude Code)
+- id: 01a1d869-56d6-7031-b0d2-51adb5018a9d
+  author: joe
+  content: 'Integration seat 23:05 MST: PR #3983 (base integration, head cc2161c24f1). One ledger reader, newest_verdict_event_for_change: under a spec key a change reads its own events and the spec''s unbound ones; another change''s event counts only at the head being judged. Used by merge_gate_verdict_candidates (land status, ship, train member approval) and the hold premise; the spec file is not read once the change has a ledger verdict of its own. Tests cover both approval orders. check-ci-fast 46 gates, dell1 2109 passed. Gate code: needs review before merge. Not covered: corpus_gate_bodies (BUG-2569, sketch awaiting signoff) and ship_refusal_release.'
+  created_at: 2026-11-14T04:55:44.598361790Z
+  modified_at: 2026-11-14T04:55:44.598361790Z
+  session_id: 01a1d7e6-ad96-7820-94e0-3f17a564c833
   harness_version: 2.1.325 (Claude Code)
 history:
 - id: 01a1d7da-b683-7c60-a856-93fd59ac1c74
