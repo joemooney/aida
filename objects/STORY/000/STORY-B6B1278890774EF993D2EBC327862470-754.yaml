@@ -1,0 +1,74 @@
+id: 01a1dc10-1da9-71d0-befb-f21a893f3784
+spec_id: STORY-b6b1278890774ef993d2ebc327862470-754
+agreed_id: STORY-2831
+title: 'Review PR-4064: [AI:claude] chore(integration): store pull coalesces and skips clean-head scans, incremental gate history index, integration PR CI, lane publish and review-after-merge (STORY-2775 BUG-'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `(no-sess`) for branch `promote/integration-10`.
+
+  - PR: <https://github.com/joemooney/aida/pull/4064>
+  - Branch: `promote/integration-10` → `main`
+
+  ## Covers
+
+  - STORY-2737
+  - BUG-2580
+  - BUG-2583
+  - STORY-2772
+  - BUG-2565
+  - BUG-2576
+  - BUG-2554
+  - BUG-2571
+  - BUG-2569
+  - STORY-2775
+  - BUG-2555
+  - BUG-2543
+  - BUG-2551
+  - BUG-2563
+  - BUG-2570
+  - STORY-2768
+  - STORY-2771
+  - STORY-2749
+  - BUG-2559
+  - BUG-2556
+  - BUG-2550
+  - BUG-2545
+  - BUG-2539
+  - BUG-2540
+  - BUG-2534
+  - TASK-3790
+  - BUG-2537
+  - TASK-3789
+  - BUG-2538
+  - TASK-3448
+  - BUG-2533
+  - BUG-2522
+  - BUG-2521
+  - BUG-2525
+
+  ## Slice of (Refs only — not completed by this PR)
+
+  Commit subjects carry `(Refs SPEC-ID)`: this PR is one slice of a spec that a later PR completes. Review this slice against that spec's acceptance criteria.
+
+  - BUG-2544
+  - STORY-2732
+  - BUG-2531
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 4064` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-14T21:56:46.121227557Z
+modified_at: 2026-11-14T21:56:46.121227557Z
+req_type: Story
+filed_at:
+  code_sha: 3cb7ba4fab12c60797d42bf51c7845633680c7d2
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: d5f90aedd3a
+  vendor: claude
