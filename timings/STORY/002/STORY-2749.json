@@ -1,0 +1,32 @@
+{
+  "schema_version": 1,
+  "spec": "STORY-2749",
+  "publishes": [
+    {
+      "at": "2026-11-14T02:45:20.022343508Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-11-13T18:19:49.383882619Z",
+      "spec": "STORY-2749",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 3935,
+        "verdict": "APPROVED",
+        "reviewed_sha": "d3dc479fea2b2e8eb03f74f234990560aeadde4b"
+      }
+    },
+    {
+      "ts": "2026-11-14T02:45:19.852727190Z",
+      "spec": "STORY-2749",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "396d99506c69e2138d14e038956cb89668867f4e",
+        "pr": 3966,
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
