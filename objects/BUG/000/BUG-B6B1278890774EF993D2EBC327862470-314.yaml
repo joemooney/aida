@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-13T03:10:47.302266912Z
-modified_at: 2026-11-14T00:43:37.452022875Z
+modified_at: 2026-11-14T00:56:11.950395528Z
 req_type: Bug
 tags:
 - track:dell1
@@ -113,6 +113,13 @@ comments:
   modified_at: 2026-11-14T00:43:37.452022875Z
   session_id: 01a1d73b-e31c-7f33-b2fe-cee145ddc6fb
   harness_version: 2.1.325 (Claude Code)
+- id: 01a1d78e-07ae-7703-a032-39fe16dfb286
+  author: dirtlab
+  content: 'Round 3: the checkout already contains the three requested production fixes in cc2b87a282. New edits strengthen each regression: repeated canonical discovery retains post-merge work; detached exit facts persist after actual tree and lease removal; unavailable-forge retries deduplicate generic exit evidence, retain In Progress, and transition only after successful no-PR observation. Launcher job j20261114T005104921-2-0 ran cargo test --profile agent -p aida-cli-lib --lib bug_2549_: 14 passed, 0 failed. git diff --check passes. Changes are uncommitted for host publication. Reviewed codegraph client is absent; doctor confirms unavailable.'
+  created_at: 2026-11-14T00:56:11.950395528Z
+  modified_at: 2026-11-14T00:56:11.950395528Z
+  session_id: 01a1d78863e2
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1d2e2-f946-73a0-bdee-dad6c72c0bc8
   author: joe

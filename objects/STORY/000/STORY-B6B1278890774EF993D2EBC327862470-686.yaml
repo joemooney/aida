@@ -30,7 +30,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-13T15:54:08.931576118Z
-modified_at: 2026-11-14T00:43:38.985057946Z
+modified_at: 2026-11-14T01:02:00.844200818Z
 req_type: Story
 tags:
 - architecture
@@ -144,6 +144,28 @@ comments:
   modified_at: 2026-11-14T00:43:38.985057946Z
   session_id: 01a1d73b-e31c-7f33-b2fe-cee145ddc6fb
   harness_version: 2.1.325 (Claude Code)
+- id: 01a1d790-92b0-77f1-a062-d565025aaaf7
+  author: dirtlab
+  content: |
+    Round 2 advisor scope: existing branch commit 6cfc1aa7e8 already supplies common reviewer launch evidence (including AIDA_REVIEW_VERDICT_FILE) and authoritative carried automatic-train approval. This round extends the narrowed approved-A / overlapping-B / clean-base-merge watcher regression: strict reservation actually executes once, then a fresh attested destination-head approval permits train/readiness acceptance; fast suppression requires a real carry-over and retains destination-head CI plus hold refusals. Updated stale automatic-train contract comments. Targeted lane jobs executed and passed three Rust tests (story2763 filter: 2; automatic-train contract filter: 1). Formatting and whitespace checks pass. Conflict re-probe remains the advisor-accepted follow-up; broader workflow cases remain outside the narrowed ruling. Edits are uncommitted for host publication.
+  created_at: 2026-11-14T00:58:58.608512667Z
+  modified_at: 2026-11-14T00:58:58.608512667Z
+  session_id: 01a1d788e8b3
+  harness_version: codex-cli 0.167.0
+- id: 01a1d793-332a-73d1-9583-942051a56d87
+  author: dirtlab
+  content: 'Final validation: all three targeted Rust tests passed; all 45 fast CI source gates passed with umask 077 (initial default-umask run stopped at unrelated mail-wake shared-write fixture refusals). Formatting and git diff --check passed. Native host publication declaration recorded with Help-Golden: unchanged; three changed files remain uncommitted as required.'
+  created_at: 2026-11-14T01:01:50.762249833Z
+  modified_at: 2026-11-14T01:01:50.762249833Z
+  session_id: 01a1d788e8b3
+  harness_version: codex-cli 0.167.0
+- id: 01a1d793-5a8c-7953-bc05-fd1a7842af6b
+  author: dirtlab
+  content: 'Correction to preceding validation count: the completed fast-tier runner reports 46 gates passed, not 45.'
+  created_at: 2026-11-14T01:02:00.844200818Z
+  modified_at: 2026-11-14T01:02:00.844200818Z
+  session_id: 01a1d788e8b3
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1d59e-6b4b-7d10-8aea-02729132bc6f
   author: joe
