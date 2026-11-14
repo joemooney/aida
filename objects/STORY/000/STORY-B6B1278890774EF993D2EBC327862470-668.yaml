@@ -18,7 +18,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-13T00:35:57.525111678Z
-modified_at: 2026-11-14T18:38:36.548393008Z
+modified_at: 2026-11-14T19:04:34.750238060Z
 req_type: Story
 tags:
 - track:integration
@@ -168,6 +168,13 @@ comments:
   modified_at: 2026-11-14T18:38:36.548393008Z
   session_id: 01a1dab1-9447-7d22-b5ff-0c9084e122ea
   harness_version: 2.1.325 (Claude Code)
+- id: 01a1db72-78be-7102-8beb-1f3794df3357
+  author: dirtlab
+  content: 'Round 4 (PR #3950), commit c03d5d1680 on story-2745-seat-mail-sq, per the 18:38 ruling. (1) Headless child seat: AIDA_ROTATION_SEAT is now in the session identity every spawn path scrubs (INHERITED_SESSION_ENV, scrub_launcher_session_env), so a child holds only the seat its own launch names and its registry row records. Test story2745_headless_child_does_not_inherit_the_launcher_seat. (2) Reply to an unheld seat: a seat-sent parent is answered to that seat only (live holder, else queued for the next holder), never the role cohort. Test story2745_reply_to_an_unheld_seat_queues_for_the_seat_not_the_role_cohort. Lane job: aida-cli-lib story2745 18 passed. The round-2 items (bg relink seat, integration.md mirror) were already on the branch. Not done: push (the lane has no GitHub credentials; commit is local to the seat worktree), and make check-ci-fast did not finish inside the 60s tool cap.'
+  created_at: 2026-11-14T19:04:34.750238060Z
+  modified_at: 2026-11-14T19:04:34.750238060Z
+  session_id: 01a1db605163
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1d404-5b69-7883-a178-72d22e485802
   author: joe
