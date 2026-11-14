@@ -1,0 +1,53 @@
+{
+  "schema_version": 1,
+  "spec": "TASK-3785",
+  "publishes": [
+    {
+      "at": "2026-11-14T12:17:00.814182493Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-11-13T22:19:14.780216271Z",
+      "spec": "TASK-3785",
+      "seat": "advisor",
+      "kind": {
+        "event": "SpecRequeued",
+        "via": "queue-rework",
+        "actor": "joe",
+        "from": "Needs Attention",
+        "to": "Approved"
+      }
+    },
+    {
+      "ts": "2026-11-14T12:05:12.301177246Z",
+      "spec": "TASK-3785",
+      "seat": "advisor",
+      "kind": {
+        "event": "PrMerged",
+        "pr": 3997
+      }
+    },
+    {
+      "ts": "2026-11-14T12:13:04.897268680Z",
+      "spec": "TASK-3785",
+      "kind": {
+        "event": "UnshippedWorkDetected",
+        "spec": "TASK-3785",
+        "branch": "origin/task-3785-gate-deps-r2",
+        "first_seen": "2026-11-14T12:13:04.897179596+00:00"
+      }
+    },
+    {
+      "ts": "2026-11-14T12:17:00.427446971Z",
+      "spec": "TASK-3785",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "166920a3bf8bd517e8d670a09dd3a7a3de96b7f9",
+        "pr": 3997,
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
