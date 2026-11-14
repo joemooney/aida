@@ -15,16 +15,15 @@ description: |-
   Acceptance: (1) a headless implementer that commits and exits 0 without pushing ends with a PR open at its commit and the attempt recorded as published; (2) a dirty seat keeps today's behaviour; (3) a seat with no new commits ends 'no changes' without an error about unpushed commits; (4) publish failure leaves the commits in the seat and prints the retry command; (5) works for a seat on a remote lane host (dell1) with no operator grant.
 
   Stopgap in place: dell1 ~/lane-run.sh now runs 'aida ship SPEC --from-seat SEAT' when the seat is clean but its HEAD differs from origin's branch and is not on origin/main. Remove that branch of the wrapper when this lands.
-status: InProgress
+status: Completed
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-14T13:40:54.226128122Z
-modified_at: 2026-11-14T22:17:44.918387081Z
+modified_at: 2026-11-14T23:39:39.897706295Z
 req_type: Bug
 tags:
 - landing
-- track:integration
 relationships:
 - rel_type:
     custom: implemented-by
@@ -94,6 +93,20 @@ history:
   author: joe
   timestamp: 2026-11-14T22:17:46.267148052Z
   changes: []
+- id: 01a1dc6e-50a3-7870-9ee2-ca2a6b832fbe
+  author: aida-auto-bump
+  timestamp: 2026-11-14T23:39:39.555363316Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a1dc6e-51f9-71f0-9ef8-f062dad5ceb0
+  timestamp: 2026-11-14T23:39:39.897701780Z
+  agent: aida
+  commit_sha: 786738cea92618fee2d1eae01fe97b1d46eef12e
+  summary: 'BUG-2580 PASS at ce386e2: both prior blocking findings fixed (dirty seat never no-change; retry command printed after a part-way publish); AC1-4 covered by 7 unit tests plus wiring inspection, AC5 by source only (live run waived by advisor); fast CI green, test shards skipped by fast tier, merge-hold-gate pending clearance'
+  review_verdict: approved
 filed_at:
   code_sha: 2682c4c4fe5a42194a6f2eca01940008e3a41776
   branch: main
@@ -102,3 +115,7 @@ filed_at:
   aida_build_sha: 166920a3bf8
   vendor: claude
   session: fc28c702-2f6e-419e-b882-6ddfeb9134ff
+implementation_info:
+  implemented: false
+  completed_at: 2026-11-14T23:39:39.555354550Z
+  completion_sha: 786738cea92618fee2d1eae01fe97b1d46eef12e
