@@ -25,12 +25,12 @@ description: |
   - Cap: `History::blocking_keys` keys on the patch-id rather than the head under `fast`.
   - Config: add the key to the config schema with the existing protected-config write rules; defaults to `fast` with an empty strict list in this repo's committed config.
   - Out of scope: the transient store-pull retry (stays in BUG-2561); integration-track changes (frozen until 2026-11-14 19:00).
-status: NeedsAttention
+status: Approved
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-13T15:54:08.931576118Z
-modified_at: 2026-11-14T05:52:53.747227809Z
+modified_at: 2026-11-14T06:07:34.808536454Z
 req_type: Story
 tags:
 - architecture
@@ -221,6 +221,11 @@ comments:
   modified_at: 2026-11-14T05:52:53.747227809Z
   session_id: 01a1d852-16ef-7973-bdde-ac3f274752a2
   harness_version: 2.1.325 (Claude Code)
+- id: 01a1d8ab-1b98-79b2-8f0f-1053234552aa
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: New head 8a541a6 adds only comment edits and extra test assertions; both prior blocking findings (non-protected-base launch/probe failure; argv-inlined diff E2BIG/1MiB refusal) remain unaddressed. ACs: AC1 verified by story2763_watcher_overlapping_clean_merge_fast_train_and_strict_review + review_watch_delta_excludes_clean_base_content_and_includes_resolutions; AC2 partial (landed-tree review implemented, broken for non-protected bases and large diffs); AC3 verified by review_watch_fast_rounds_count_patch_changes_and_strict_counts_heads; AC4 verified by review_watch_freshness_policy_is_closed_and_paths_raise_assurance + review_watch_fast_proof_is_revoked_by_trusted_strict_policy + scripts/config-trust.toml; AC5 verified by gate ledger event tests + gate_state_cmd rendering (review_watch_strict_effective_state_requires_review_of_each_head); AC6 verified by story2763_watcher_overlapping_clean_merge_fast_train_and_strict_review (fast skip/strict dispatch) + delta test for conflicts. CI fast gates green; merge-hold-gate pending.. No triage reason was given.'
+  created_at: 2026-11-14T06:07:34.808530826Z
+  modified_at: 2026-11-14T06:07:34.808530826Z
 history:
 - id: 01a1d59e-6b4b-7d10-8aea-02729132bc6f
   author: joe
@@ -280,6 +285,13 @@ history:
   session_id: 01a1d7aae442
   harness_version: 2.1.325 (Claude Code)
   changes: []
+- id: 01a1d8ab-1b98-79b2-8f0f-104544c0aaaf
+  author: joe
+  timestamp: 2026-11-14T06:07:34.808516246Z
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 filed_at:
   code_sha: 3631f7ca05567a6984ff2376b997539389b6f758
   branch: main
@@ -289,11 +301,3 @@ filed_at:
   vendor: claude
   session: 01a1d54b-060a-7951-aa40-7f0fd928126f
   harness_version: 2.1.323 (Claude Code)
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: 'New head 8a541a6 adds only comment edits and extra test assertions; both prior blocking findings (non-protected-base launch/probe failure; argv-inlined diff E2BIG/1MiB refusal) remain unaddressed. ACs: AC1 verified by story2763_watcher_overlapping_clean_merge_fast_train_and_strict_review + review_watch_delta_excludes_clean_base_content_and_includes_resolutions; AC2 partial (landed-tree review implemented, broken for non-protected bases and large diffs); AC3 verified by review_watch_fast_rounds_count_patch_changes_and_strict_counts_heads; AC4 verified by review_watch_freshness_policy_is_closed_and_paths_raise_assurance + review_watch_fast_proof_is_revoked_by_trusted_strict_policy + scripts/config-trust.toml; AC5 verified by gate ledger event tests + gate_state_cmd rendering (review_watch_strict_effective_state_requires_review_of_each_head); AC6 verified by story2763_watcher_overlapping_clean_merge_fast_train_and_strict_review (fast skip/strict dispatch) + delta test for conflicts. CI fast gates green; merge-hold-gate pending.'
-  recovery_hint: address the review findings, move STORY-B6B1278890774EF993D2EBC327862470-686 back to In Progress, and clear the PR hold only after approval
-  shelved_by: reviewer
-  shelved_at: 2026-11-14T01:28:42.584188918Z
