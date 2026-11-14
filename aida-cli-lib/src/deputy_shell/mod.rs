@@ -41,6 +41,7 @@ pub(crate) mod attribution;
 #[cfg(unix)]
 pub(crate) mod runner;
 pub(crate) mod socket;
+// trace:STORY-2775 | ai:codex
 #[cfg(unix)]
 pub(crate) mod supervisor;
 

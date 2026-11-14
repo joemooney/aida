@@ -87,14 +87,12 @@ fn run_command(q: &Queue, command: &mut Command) -> Result<()> {
         .context("a supervisor for this deputy is already running")?;
     let stop = Arc::new(AtomicBool::new(false));
     let mut handlers = Vec::new();
-    for signal in [libc::SIGINT, libc::SIGTERM] {
+    // Terminal hangup ends the supervisor too: a replacement runner cannot
+    // pass terminal admission after the controlling terminal has gone away.
+    // trace:STORY-2775 | ai:codex
+    for signal in [libc::SIGINT, libc::SIGTERM, libc::SIGHUP] {
         handlers.push(signal_hook::flag::register(signal, stop.clone())?);
     }
-    // HUP may stop the runner, but must not terminate its supervisor.
-    handlers.push(signal_hook::flag::register(
-        libc::SIGHUP,
-        Arc::new(AtomicBool::new(false)),
-    )?);
     let result = supervise(q, &stop, command);
     for handler in handlers {
         signal_hook::low_level::unregister(handler);
@@ -248,7 +246,9 @@ mod tests {
             run_command(&q, &mut command).unwrap();
             return;
         }
-        for signal in [libc::SIGINT, libc::SIGTERM] {
+        // HUP to the supervisor alone must reap the runner without restarting.
+        // trace:STORY-2775 | ai:codex
+        for signal in [libc::SIGINT, libc::SIGTERM, libc::SIGHUP] {
             let dir = tempfile::tempdir().unwrap();
             let base = dir.path().join("queues");
             let q = super::super::queue_in(&base, "test").unwrap();

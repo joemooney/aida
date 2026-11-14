@@ -47,9 +47,10 @@ your consent to that.
 Add `--loop` to supervise the runner in the CLI. Clean exits, errors, and
 crashes restart after 1, 2, 4, 8, 16, 32, then 60 seconds; ten minutes of
 runner uptime resets the delay to one second. Ctrl-C or SIGTERM to the
-supervisor stops it and waits for the runner to finish cleanup. SIGHUP stops
-the runner and allows a restart. Existing terminal, shell-wrapper, and advisor
-grant requirements still apply; supervision does not renew an invalid grant.
+supervisor stops it and waits for the runner to finish cleanup. SIGHUP to the
+supervisor also stops it, so a terminal hangup cannot leave it restarting
+runners that cannot access the terminal. Existing terminal, shell-wrapper, and
+advisor grant requirements still apply; supervision does not renew an invalid grant.
 
 `aida deputy shell list --name N` reports whether loop mode is live and its
 restart count, including during backoff. Timestamped exit codes, signals, and
