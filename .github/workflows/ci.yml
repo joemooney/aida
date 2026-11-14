@@ -8,7 +8,10 @@ on:
   schedule:
     - cron: '23 9 * * 1'
   pull_request:
-    branches: [main]
+    # `integration` too: a change headed there is built and gated on every
+    # head, before review, exactly as one headed for main is.
+    # trace:BUG-2576 | ai:claude
+    branches: [main, integration]
     types: [opened, synchronize, reopened, labeled, unlabeled]
   merge_group:
 
