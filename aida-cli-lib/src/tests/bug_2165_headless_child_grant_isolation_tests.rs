@@ -13,7 +13,7 @@ use crate::session::HeadlessVendor;
 use std::path::Path;
 
 fn get_cmd_env<'a>(cmd: &'a mut std::process::Command, key: &str) -> Option<Option<&'a str>> {
-    let cleared = crate::launch::profile::environment_is_cleared(cmd);
+    let cleared = crate::vendors::profile::environment_is_cleared(cmd);
     let value = cmd.get_envs().find(|(k, _)| *k == key).map(|(_, v)| v);
     if value.is_none() {
         assert!(

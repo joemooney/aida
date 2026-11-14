@@ -3,7 +3,7 @@
 #![cfg(target_os = "linux")]
 
 use super::*;
-use crate::launch::profile::finalize_codex as prepare_launch;
+use crate::vendors::profile::finalize_codex as prepare_launch;
 use std::path::Path;
 
 // trace:BUG-b6b1278890774ef993d2ebc327862470-172.ac7d6a3b | ai:claude
@@ -901,7 +901,7 @@ fn bug_2398_final_spawn_boundary_ratchet() {
             .unwrap_or_else(|| panic!("stale LAUNCH_INVENTORY entry {rel}"));
         match how {
             Finalization::PrepareLaunch(n) => assert!(
-                text.matches("crate::launch::profile::finalize_codex(")
+                text.matches("crate::vendors::profile::finalize_codex(")
                     .count()
                     >= *n,
                 "{rel}: a managed Codex spawn path lost finalization"
@@ -935,7 +935,7 @@ fn bug_2398_final_spawn_boundary_ratchet() {
                         );
                     }
                 }
-                assert!(!text.contains("crate::launch::profile::finalize_codex("));
+                assert!(!text.contains("crate::vendors::profile::finalize_codex("));
             }
             Finalization::NotACodexLaunch(reason) => assert!(!reason.is_empty()),
         }
@@ -951,7 +951,7 @@ fn bug_2398_final_spawn_boundary_ratchet() {
         .split("\n}\n")
         .next()
         .unwrap()
-        .contains("crate::launch::profile::finalize_codex(cmd)"));
+        .contains("crate::vendors::profile::finalize_codex(cmd)"));
     let spawn = session
         .split("fn coordinator_status_with_handle_guard(")
         .nth(1)
@@ -974,7 +974,7 @@ fn bug_2398_final_spawn_boundary_ratchet() {
         .unwrap();
     assert!(
         run.find("customize(&mut child_cmd)").unwrap()
-            < run.find("crate::launch::profile::finalize_codex").unwrap()
+            < run.find("crate::vendors::profile::finalize_codex").unwrap()
     );
 }
 

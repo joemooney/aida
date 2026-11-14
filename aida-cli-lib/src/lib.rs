@@ -85,7 +85,8 @@ mod client;
 // trace:TASK-3425 | ai:codex
 // Direct framework imports are also used by the MCP transport crate.
 // trace:TASK-3448 | ai:codex
-pub mod cmdkit;
+// trace:TASK-3783 | ai:codex
+pub use aida_cmdkit as cmdkit;
 pub mod command_registry;
 
 // Inject the production command tree and decoder at the composition root.
@@ -180,8 +181,11 @@ mod knowledge_list;
 // trace:STORY-1662 | ai:claude
 pub mod lane_env;
 // trace:BUG-2383 | ai:claude — the lane job runner and `aida lane job`.
+// trace:STORY-2768 | ai:claude
+mod land;
 mod lane_cmd;
 mod lane_job;
+mod now;
 // trace:STORY-2640 | ai:codex
 mod lane_fast_gate;
 mod project_checks;
@@ -246,7 +250,8 @@ mod drain_lock;
 mod drain_signal;
 mod freshness_gate;
 // trace:BUG-1622 | ai:claude — keeps user-supplied refs from reading as git options.
-mod git_arg_guard;
+// trace:TASK-3783 | ai:codex
+pub(crate) use aida_term::git_arg_guard;
 pub mod git_backend_cmd;
 pub(crate) mod intent_capture;
 mod machine_readiness;
@@ -254,6 +259,7 @@ mod mcp_cmd;
 mod orchestrator_cmd;
 mod pr_cmd;
 // trace:STORY-2732 | ai:codex
+mod integration_cmd;
 mod pr_emergency_land;
 pub(crate) mod pr_list;
 mod pr_state;
@@ -491,7 +497,8 @@ mod import_plan_cmd;
 mod interview;
 mod regen; // trace:TASK-1729 | ai:codex
            // trace:STORY-633 | ai:claude — toml_edit writer for `aida config glyph`.
-mod glyph_config;
+           // trace:TASK-3783 | ai:codex
+pub(crate) use aida_term::glyph_config;
 pub mod glyphs;
 pub mod goal_cmd;
 // trace:EPIC-36 | ai:claude — session-vs-drain misclassification-gap metric.
@@ -589,7 +596,8 @@ mod metrics;
 mod metrics_cmd;
 // trace:TASK-1951 trace:TASK-2003 | ai:claude
 mod needs_attention_lens;
-mod network_retry;
+// trace:TASK-3783 | ai:codex
+pub(crate) use aida_term::network_retry;
 mod node_cmd;
 mod not_found;
 mod pr_claim_surface;
@@ -697,6 +705,7 @@ pub mod schema;
 // trace:BUG-1934 | ai:claude
 mod codex_tool_env;
 mod grant_keyring;
+mod repair_journal;
 // trace:BUG-2169 | ai:claude — a contained seat's private clone (the only host accessor).
 mod seat_clone;
 // trace:BUG-B6B1278890774EF993D2EBC327862470-049 | ai:claude — pre-trust seat worktrees in ~/.claude.json.
@@ -754,6 +763,10 @@ mod team_cmd;
 mod test_env;
 #[cfg(test)]
 mod test_exec;
+// trace:BUG-2573 | ai:codex
+#[cfg(test)]
+#[path = "../../aida-core/src/test_umask.rs"]
+mod test_umask;
 // trace:BUG-2191 | ai:claude — fixture git without detached auto-maintenance.
 #[cfg(test)]
 mod test_git;
@@ -764,7 +777,8 @@ mod test_home;
 #[cfg(test)]
 mod test_timing;
 // trace:TASK-964 | ai:claude — TOON agent-output encoder (token-efficient).
-mod toon;
+// trace:TASK-3783 | ai:codex
+pub(crate) use aida_term::toon;
 mod trace_cmd;
 mod tracker_cmd;
 mod triage_cmd;
@@ -1144,6 +1158,10 @@ mod story_284_store_sync_tests;
 #[path = "tests/bug_1468_stale_check_tests.rs"]
 mod bug_1468_stale_check_tests;
 
+#[cfg(all(test, unix))]
+#[path = "tests/story_2737_sync_main_script_tests.rs"]
+mod story_2737_sync_main_script_tests;
+
 #[cfg(test)]
 #[path = "tests/forge_binary_resolution_tests.rs"]
 mod forge_binary_resolution_tests;
@@ -1376,7 +1394,41 @@ mod branch_behind_main_tests;
 #[path = "tests/session_root_resolution_tests.rs"]
 mod session_root_resolution_tests;
 
-include!("lib_part5.rs");
+// trace:TASK-3428 | ai:codex
+mod review_surface;
+use review_surface::{
+    classify_human_review_bucket, classify_review_surface, classify_review_surface_forge_first,
+    is_store_branch, requirement_is_deferred, resolve_review_surface_forge_first,
+    review_surface_branch, spec_eligible_for_review_awaiting, HumanReviewBucket, ReviewSurface,
+    REVIEW_SURFACE_UNKNOWN_LABEL,
+};
+
+include!("review_commands.rs");
+
+// trace:TASK-3428 | ai:codex
+mod review_advisor_launch;
+use review_advisor_launch::{
+    derisk_launch_request, guided_review_launch_request, handle_derisk_command,
+    handle_guided_human_review,
+};
+mod review_prompt;
+use review_prompt::{
+    append_implementer_approach, extract_implementer_approach, generate_review_prompt,
+    review_prompt_test_commands_section, IMPLEMENTER_APPROACH_MARKER,
+};
+
+// trace:TASK-3428 | ai:codex
+mod review_git_evidence;
+use review_git_evidence::{
+    commits_behind_default, git_diff_name_only, git_log_messages, pr_base_head, resolve_log_range,
+    stale_base_file_overlap, stale_base_note,
+};
+mod obsolete_scaffold;
+use obsolete_scaffold::detect_obe_aida_scaffold_files;
+mod requirements_grep;
+use requirements_grep::grep_requirements;
+mod worker_gc;
+use worker_gc::{run_worker_gc, worker_gc_target_still_dead};
 
 #[cfg(test)]
 // trace:STORY-2539 | ai:codex
@@ -1460,3 +1512,5 @@ mod bug_1638_race_seam_tests;
 #[cfg(test)]
 #[path = "tests/stale_cache_fixture.rs"]
 mod stale_cache_fixture;
+
+mod reviewer_completion; // trace:BUG-2546 | ai:codex

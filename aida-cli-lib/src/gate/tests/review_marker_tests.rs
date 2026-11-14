@@ -547,3 +547,130 @@ fn bug2530_duplicate_admission_and_redundant_claim() {
     );
     assert!(read(dir.path(), 7).is_some());
 }
+
+/// BUG-2557: an advisor's `--rereview` admits exactly one fresh review at a
+/// head whose conclusive verdict the review contract outdated; the next
+/// recorded verdict at that head ends the admission.
+// trace:BUG-2557 | ai:claude
+#[test]
+fn bug2557_rereview_admits_one_fresh_review_at_a_conclusive_head() {
+    let dir = tempfile::tempdir().unwrap();
+    let home = dir.path().join("home");
+    let _env = crate::test_env::AmbientGuard::hermetic_and(
+        dir.path(),
+        None,
+        &[
+            ("AIDA_HOME", Some(home.to_str().unwrap())),
+            ("AIDA_CONTAINED", None),
+        ],
+    );
+    let git = |args: &[&str]| {
+        let out = crate::test_git::git_command()
+            .current_dir(dir.path())
+            .args([
+                "-c",
+                "user.name=Fixture",
+                "-c",
+                "user.email=fixture@example.invalid",
+            ])
+            .args(args)
+            .output()
+            .unwrap();
+        assert!(
+            out.status.success(),
+            "{}",
+            String::from_utf8_lossy(&out.stderr)
+        );
+        String::from_utf8(out.stdout).unwrap().trim().to_owned()
+    };
+    git(&["init", "-q"]);
+    git(&["commit", "--allow-empty", "-qm", "reviewed change"]);
+    let sha = git(&["rev-parse", "HEAD"]);
+    let head = sha.as_str();
+    let path = super::super::review_verdict::verdict_path(dir.path(), "PR-7");
+    std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+
+    // No verdict yet: nothing to admit, nothing recorded.
+    assert_eq!(
+        admit_rereview(dir.path(), 7, Some(head), "coverage fixed", "advisor").unwrap(),
+        None
+    );
+
+    let mut record = serde_json::json!({
+        "verdict": "request-changes", "reviewed_sha": head,
+        "recorded_at": "2026-11-13T04:50:00+00:00",
+    });
+    std::fs::write(&path, record.to_string()).unwrap();
+    let refusal = refuse_conclusive_head(dir.path(), 7, Some(head))
+        .unwrap_err()
+        .to_string();
+    assert!(
+        refusal.contains("--rereview"),
+        "refusal names the supported path: {refusal}"
+    );
+
+    assert!(
+        admit_rereview(dir.path(), 7, Some(head), "   ", "advisor").is_err(),
+        "a reason is required"
+    );
+    assert!(
+        admit_rereview(dir.path(), 7, None, "coverage fixed", "advisor").is_err(),
+        "an unresolved head cannot be admitted"
+    );
+    assert!(refuse_conclusive_head(dir.path(), 7, Some(head)).is_err());
+
+    assert_eq!(
+        admit_rereview(
+            dir.path(),
+            7,
+            Some(head),
+            "STORY-2750 Covers corrected",
+            "advisor"
+        )
+        .unwrap(),
+        Some("CHANGES REQUESTED")
+    );
+    assert!(
+        refuse_conclusive_head(dir.path(), 7, Some(head)).is_ok(),
+        "the admitted head accepts one fresh review"
+    );
+    let store = crate::gate::ledger::store_root(dir.path()).unwrap();
+    let admitted: Vec<_> =
+        crate::gate::ledger::project::events(&store, crate::gate::ledger::ChangeKey::pr(7))
+            .into_iter()
+            .filter_map(|e| match e.body {
+                crate::gate::ledger::EventBody::RereviewAdmitted { reason, .. } => {
+                    Some((e.head, reason))
+                }
+                _ => None,
+            })
+            .collect();
+    assert_eq!(
+        admitted,
+        vec![(
+            Some(head.to_string()),
+            "STORY-2750 Covers corrected".to_string()
+        )],
+        "the admission and its reason are on the gate ledger"
+    );
+    // A different head is unaffected by the admission.
+    assert!(refuse_conclusive_head(
+        dir.path(),
+        7,
+        Some("bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb")
+    )
+    .is_ok());
+
+    // The fresh review records its verdict: the admission is spent.
+    record["recorded_at"] = "2026-11-13T05:30:00+00:00".into();
+    std::fs::write(&path, record.to_string()).unwrap();
+    assert!(
+        refuse_conclusive_head(dir.path(), 7, Some(head)).is_err(),
+        "only one fresh review is admitted"
+    );
+
+    // A verdict with no recording time cannot be told apart from a later one.
+    record.as_object_mut().unwrap().remove("recorded_at");
+    std::fs::write(&path, record.to_string()).unwrap();
+    assert!(admit_rereview(dir.path(), 7, Some(head), "coverage fixed", "advisor").is_err());
+}

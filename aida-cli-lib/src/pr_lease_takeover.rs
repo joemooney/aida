@@ -4,7 +4,9 @@
 //! unreadable or superseded ownership refuses cleanup. A positive death proof
 //! plus a clean, remotely covered tree permits ordinary guarded session end;
 //! automated callers never receive a force override. Free work does not grant
-//! permission to remove its old tree. Legacy pure fixtures remain test-only.
+//! permission to remove its old tree. Explicit clone force-claim additionally
+//! accepts local worker death despite refused admission, retaining tree guards.
+//! Legacy pure fixtures remain test-only.
 // trace:STORY-2325 | ai:codex
 
 use crate::leases::SessionLease;
@@ -127,6 +129,26 @@ pub(crate) fn classify(
 /// the PR it reviews, not its local branch).
 // trace:STORY-2315 | ai:claude
 pub(crate) fn check_pr_lease(main: &Path, lease: &SessionLease, pr_branch: &str) -> PrLeaseCheck {
+    check_pr_lease_with_force_claim(main, lease, pr_branch, false)
+}
+
+// Explicit clone recovery may independently prove death when admission failed.
+// This does not relax ordinary PR relaunch or ownership-record binding.
+// trace:BUG-2552 | ai:codex
+pub(crate) fn check_force_claim_clone(
+    main: &Path,
+    lease: &SessionLease,
+    branch: &str,
+) -> PrLeaseCheck {
+    check_pr_lease_with_force_claim(main, lease, branch, true)
+}
+
+fn check_pr_lease_with_force_claim(
+    main: &Path,
+    lease: &SessionLease,
+    pr_branch: &str,
+    force_claim: bool,
+) -> PrLeaseCheck {
     // The record is authoritative. Free grants no permission to remove a tree;
     // retained handed-off seats still pass session_end's independent guards.
     // trace:STORY-2325 | ai:codex
@@ -164,7 +186,12 @@ pub(crate) fn check_pr_lease(main: &Path, lease: &SessionLease, pr_branch: &str)
     } else {
         return PrLeaseCheck::NotProvable("this lease no longer holds the ownership record".into());
     };
-    match crate::ownership::reader::owner(&cleanup_record) {
+    let owner = if force_claim {
+        crate::ownership::reader::force_claim_clone_owner(&cleanup_record, lease)
+    } else {
+        crate::ownership::reader::owner(&cleanup_record)
+    };
+    match owner {
         crate::ownership::OwnerVerdict::Alive { .. } => return PrLeaseCheck::Live,
         crate::ownership::OwnerVerdict::Unknown { why } => return PrLeaseCheck::NotProvable(why),
         crate::ownership::OwnerVerdict::Dead { .. } => {}

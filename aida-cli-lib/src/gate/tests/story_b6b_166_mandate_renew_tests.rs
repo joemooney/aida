@@ -188,12 +188,14 @@ fn renew_records_its_lineage_and_status_shows_the_count() {
                 renewed_by: "joe".into(),
                 previous_expires_at: before.expires_at,
                 expires_at: at + Duration::hours(8),
+                changes: Vec::new(),
             },
             Renewal {
                 renewed_at: at2,
                 renewed_by: "joe".into(),
                 previous_expires_at: first.expires_at,
                 expires_at: at2 + Duration::hours(12),
+                changes: Vec::new(),
             },
         ]
     );
@@ -282,6 +284,7 @@ fn a_record_renewed_after_it_expired_is_ignored() {
         renewed_by: "joe".into(),
         previous_expires_at: before.expires_at,
         expires_at: late + Duration::hours(8),
+        changes: Vec::new(),
     });
     m.expires_at = late + Duration::hours(8);
     write_private(
@@ -500,7 +503,7 @@ fn revival_prints_the_old_id_and_links_the_audit_event_to_it() {
         "{text}"
     );
 
-    crate::mandate::emit_revived(tmp.path(), &revived, &original.id);
+    crate::mandate::emit_revived(tmp.path(), &revived, &original.id, &receipt);
     let events: Vec<_> = crate::events::read_all(tmp.path())
         .into_iter()
         .filter_map(|e| match e.kind {

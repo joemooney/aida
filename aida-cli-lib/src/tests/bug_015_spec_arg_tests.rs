@@ -468,3 +468,111 @@ fn walk_spec_args(cmd: &clap::Command, path: &str, want: &str, failures: &mut Ve
         walk_spec_args(sub, sub_path.trim_start(), want, failures);
     }
 }
+
+// Run each entry point first in a fresh process: a process-global Once must
+// not hide discovery by the other path. No thread map masks leaked globals.
+// trace:TASK-3783 | ai:codex
+#[test]
+fn unit_test_parsing_does_not_install_ambient_store() {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
+    assert_no_ambient_initialization(false);
+}
+
+// trace:TASK-3783 | ai:codex
+#[test]
+fn unit_test_early_dispatch_does_not_install_ambient_store() {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
+    assert_no_ambient_initialization(true);
+}
+
+// trace:TASK-3783 | ai:codex
+fn assert_no_ambient_initialization(early_first: bool) {
+    use crate::cmdkit::{CommandReg, Flow, Handler};
+    use aida_core::{id_identity, node_alias};
+
+    let root = tempfile::tempdir().unwrap();
+    let store = root.path().join(".aida-store");
+    std::fs::create_dir_all(store.join("objects/story/ba")).unwrap();
+    std::fs::create_dir_all(root.path().join(".aida")).unwrap();
+    std::fs::write(
+        root.path().join(".aida/config.toml"),
+        "[ids]\nseq_width = 9\nnode_seq_width = 9\n",
+    )
+    .unwrap();
+    let mut explicit = node_alias::NodeAliasMap::default();
+    explicit.set("BASE", NODE).unwrap();
+    let mut ambient = explicit.clone();
+    ambient
+        .set("AMBIENT", "0123456789abcdef0123456789abcdef")
+        .unwrap();
+    ambient.save(&store).unwrap();
+    // Even an unreadable object's filename supplies literal-ID evidence.
+    std::fs::write(store.join("objects/story/ba/STORY-BASE-080.yaml"), "").unwrap();
+    let _env = crate::test_env::EnvVarGuard::set("AIDA_STORE", store.to_str().unwrap());
+    assert_eq!(
+        aida_core::store_locate::detect_distributed_store(),
+        Some(store)
+    );
+    node_alias::install(explicit.clone());
+    id_identity::install_widths(id_identity::IdWidths::default());
+
+    let parse = || {
+        assert_eq!(canonical("STORY-BASE-080"), canonical_of("080"));
+        assert_eq!(spec_id("STORY-BASE-080").unwrap(), canonical_of("080"));
+        assert_eq!(
+            spec_id_csv("STORY-BASE-080,TASK-9").unwrap(),
+            format!("{},TASK-9", canonical_of("080"))
+        );
+        let cli = crate::TEST_CLI
+            .try_parse_from(["aida", "review", "STORY-BASE-080"])
+            .unwrap();
+        assert_eq!(
+            cli.command
+                .registered::<crate::review_cmd::ReviewArgs>()
+                .spec,
+            Some(canonical_of("080"))
+        );
+    };
+    let early = || {
+        let cli = crate::TEST_CLI.try_parse_from(["aida", "review"]).unwrap();
+        let crate::cli::Command::Registered(mut invocation) = cli.command;
+        // Retain the real registry's initializer; replace only the handler
+        // so this regression does no review I/O.
+        invocation.reg = Box::leak(Box::new(CommandReg {
+            run: Handler::Early(|_, _| Ok(())),
+            ..*invocation.reg
+        }));
+        assert_eq!(invocation.run_early(&cli.globals).unwrap(), Flow::Return);
+    };
+    if early_first {
+        early();
+        parse();
+    } else {
+        parse();
+        early();
+    }
+    assert_eq!(*node_alias::installed(), explicit);
+    assert_eq!(
+        id_identity::installed_widths(),
+        id_identity::IdWidths::default()
+    );
+    assert_eq!(
+        node_alias::expand_or_keep("STORY-BASE-080"),
+        canonical_of("080"),
+        "ambient literal-ID lookup must not be installed"
+    );
+
+    // Positive control: the fixture is discoverable and would change every
+    // global the test protects if the consumer boundary were bypassed.
+    node_alias::install_from_store(&aida_core::store_locate::detect_distributed_store().unwrap());
+    assert_eq!(*node_alias::installed(), ambient);
+    assert_eq!(id_identity::installed_widths().seq_width, Some(9));
+    assert_eq!(
+        node_alias::expand_or_keep("STORY-BASE-080"),
+        "STORY-BASE-080"
+    );
+}

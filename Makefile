@@ -559,10 +559,11 @@ ensure-agent-skill-hooks:
 # in CI's order, stopping at the first failure. No gate command is duplicated
 # here or in the runner; see scripts/ci-gate-tiers.toml for why.
 # trace:TASK-1555 | ai:claude
-check-ci-fast: ## Pre-push gate: every CI gate that needs no cargo build (~90s)
+# trace:TASK-3791 | ai:codex
+check-ci-fast: ## Pre-push source gates and lightweight Rust structural tests (~2 min)
 	@python3 scripts/check-ci-gates.py --tier fast
 
-# check-ci-fast builds nothing, so it cannot see a test that no longer
+# check-ci-fast builds only structural guards, so it cannot see an application test that no longer
 # compiles against main (E0063 from a struct field added on main). This compiles
 # every test target, runs none: CI's `Run tests` body, reshaped by the runner to
 # `--no-run --profile agent`. Run it after every merge of main into a branch.

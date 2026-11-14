@@ -2633,22 +2633,100 @@ pub(crate) fn doctor_contradictions(
 /// Warn before historical change ledgers reach half a selection's byte budget.
 /// This remains useful after scoping selection: related histories still share
 /// that budget, and discovery must inspect every active change.
+///
+/// BUG-2542: one change ledger over the per-file cap refuses discovery, so
+/// review selection is unavailable for every spec. Each oversized or
+/// near-cap ledger gets its own finding naming the file and the quarantine
+/// command; the aggregate finding names the largest contributors.
 // trace:BUG-2531 | ai:codex
+// trace:BUG-2542 | ai:claude
 pub(super) fn scan_gate_ledger_capacity(project_root: &std::path::Path) -> Vec<DoctorFinding> {
     use crate::gate::ledger::{self, checked};
-    let result = ledger::store_root(project_root)
-        .map_err(|e| e.to_string())
-        .and_then(|root| checked::active_bytes(&root).map_err(|e| e.to_string()));
-    let summary = match result {
-        Ok(bytes) if bytes < checked::MAX_SELECTION_BYTES / 2 => return vec![],
-        Ok(bytes) => format!("active gate-ledger change files occupy {bytes} bytes, at least 50% of the {} byte selection budget", checked::MAX_SELECTION_BYTES),
-        Err(e) => format!("cannot inspect active gate-ledger capacity: {e}"),
-    };
-    vec![DoctorFinding {
+    let finding = |id: String, summary: String, action: String| DoctorFinding {
         category: "review-verdicts".into(),
-        id: "gate-ledger-capacity".into(),
+        id,
         summary,
-        action: "inspect closed/merged change history and plan archival with its by-spec references preserved; do not delete indexed evidence".into(),
+        action,
         safe_heal: false,
-    }]
+    };
+    let root = match ledger::store_root(project_root) {
+        Ok(root) => root,
+        Err(e) => {
+            return vec![finding(
+                "gate-ledger-capacity".into(),
+                format!("cannot inspect active gate-ledger capacity: {e}"),
+                "check the gate-ledger store root and its permissions".into(),
+            )]
+        }
+    };
+    let cap = match checked::capacity(&root) {
+        Ok(cap) => cap,
+        Err(e) => {
+            return vec![finding(
+                "gate-ledger-capacity".into(),
+                format!("cannot inspect active gate-ledger capacity: {e}"),
+                "inspect the named gate-ledger entry; discovery refuses on the same entry".into(),
+            )]
+        }
+    };
+    let dir = ledger::ledger_dir(&root);
+    let quarantine = |name: &str| {
+        format!(
+            "if the change is closed or merged, quarantine its ledger: {} (this keeps the evidence; do not delete it). A spec whose by-spec index names it reports the ledger missing until it is restored",
+            checked::quarantine_command(&root, name)
+        )
+    };
+    let mut out = Vec::new();
+    for (name, bytes) in &cap.files {
+        if *bytes > checked::MAX_LEDGER_BYTES {
+            out.push(finding(
+                format!("gate-ledger-oversized:{name}"),
+                format!(
+                    "{} is {bytes} bytes, over the {}-byte per-ledger cap: gate-ledger discovery refuses, so review selection is unavailable for every spec",
+                    dir.join(name).display(),
+                    checked::MAX_LEDGER_BYTES
+                ),
+                quarantine(name),
+            ));
+        } else if *bytes >= checked::MAX_LEDGER_BYTES / 2 {
+            out.push(finding(
+                format!("gate-ledger-near-cap:{name}"),
+                format!(
+                    "{} is {bytes} bytes, at least 50% of the {}-byte per-ledger cap; past the cap, review selection becomes unavailable for every spec",
+                    dir.join(name).display(),
+                    checked::MAX_LEDGER_BYTES
+                ),
+                quarantine(name),
+            ));
+        }
+    }
+    if cap.total >= checked::MAX_SELECTION_BYTES / 2 {
+        let largest = cap
+            .files
+            .iter()
+            .take(3)
+            .map(|(name, bytes)| format!("{name} ({bytes} bytes)"))
+            .collect::<Vec<_>>()
+            .join(", ");
+        let state = if cap.total > checked::MAX_DISCOVERY_BYTES {
+            "over the discovery budget: review selection is unavailable for every spec"
+        } else {
+            "at least 50% of the selection budget"
+        };
+        out.push(finding(
+            "gate-ledger-capacity".into(),
+            format!(
+                "active gate-ledger change files under {} occupy {} bytes, {state} ({} byte selection budget, {} byte discovery budget); largest: {largest}",
+                dir.display(),
+                cap.total,
+                checked::MAX_SELECTION_BYTES,
+                checked::MAX_DISCOVERY_BYTES
+            ),
+            format!(
+                "quarantine the largest closed or merged change ledgers into {} (keep them; do not delete indexed evidence)",
+                checked::quarantine_dir(&root).display()
+            ),
+        ));
+    }
+    out
 }

@@ -252,6 +252,16 @@ worker, serialized by a separate cleanup lock that never blocks merges.
 
 The worker records the final lease-end outcome in the ship activity log, even
 when it finishes after ship has returned. `--no-cleanup` skips the worker.
+Step 6 (reap plus merged-worktree pruning) runs under one supervised 60-second
+wall-clock budget, including clone probe setup and scans. On expiry the sweep
+and its observed descendants receive SIGKILL. Termination confirmation waits at
+most 200ms before handing off to a reaper; the sweep retains its inherited
+cleanup lock until it exits, including while kernel I/O delays termination.
+Direct sweep entry requires the supervisor’s verified lock handoff. Cleanup
+reports an interruption with `aida doctor` recovery advice. Earlier cleanup actions may already have
+applied; inspect before retrying. Lease end (step 5) is outside this budget.
+<!-- trace:BUG-2535 | ai:codex -->
+
 During ship cleanup each clone probe has a shared 10-second budget; timeouts and
 unreadable evidence retain the clone with a diagnostic. Shipped heads are
 checked in one Git batch, with exclusions streamed to revision walks. Existing
@@ -364,6 +374,14 @@ preserves the title without adding a trailer. Existing constituent commit
 trailers in squash bodies remain landing evidence for the auto-bump scanner.
 <!-- trace:TASK-1600 | ai:codex -->
 
+<!-- trace:STORY-2735 | ai:codex -->
+For tiered GitHub CI, direct ship requires FULL CI for the current Build run.
+FAST PRs should use `aida pr train`, or add the `ci:full` label and wait for a
+FULL run before shipping. The repository Actions variable `AIDA_PR_CI_TIER=full`
+opts ordinary PRs into FULL by default; unset or `fast` selects FAST. Train,
+main, merge-group, scheduled and manually dispatched runs always use FULL.
+See [CI tiers and lane policy](../internal/testing/ci-test-shards.md).
+
 **Rebase merge mode (`--rebase` / `--merge-method rebase`).** `aida pr ship [N]
 --rebase` runs the identical preflight, CI, independent review/approval,
 stale-head, and merge-hold gates as squash, pins the merge with
@@ -459,7 +477,11 @@ the same train. If CI never starts or stays unreadable, the command exits
 non-zero and leaves the train PR open for inspection, with its members still
 eligible. Retry the same command to resume: before admitting riders, a non-dry
 train reads its intent journals under the main worktree's `.aida/train/` and
-reconciles the pinned heads with fresh forge confirmation. A completed merge is
+resumes only journals whose member PR set equals the requested PR set (order does
+not matter). `--all-ready` uses the discovered open PR set. Nonmatching journals
+are reported and retained while the requested train starts fresh. Matching journals
+reconcile pinned heads with fresh forge confirmation.
+<!-- trace:BUG-2547 | ai:codex --> A completed merge is
 not repeated; remaining member closes finish from forge state. Recorded retirement
 decisions are confirmed again before closure. Unknown evidence stops admission and
 retains the PR and journal for inspection. A permanent run lock serializes whole
@@ -477,15 +499,25 @@ Open trains and unknown forge evidence retain their riders; dry runs never write
 these repairs.
 <!-- trace:BUG-2537 | ai:codex -->
 
-Recovery does not inherit terminal consent from the new invocation: recovered
-supervised members still need a current mandate cover, even when a human names
-other PRs at a terminal. Previously green trains wait again if CI is pending;
+Recovery never inherits consent from the run that wrote the journal; consent
+comes only from the current invocation. A journal resumes only when the PRs
+named now are exactly its member set, so a human at a terminal who explicitly
+names that same set consents for its recovered supervised members, with no
+mandate needed. An `--all-ready` sweep or a recovery without a terminal never
+consents: recovered supervised members then still need a current mandate
+cover. Previously green trains wait again if CI is pending;
 confirmed red CI retires the train through the normal non-landing confirmation.
 Completed entries are fsynced and removed; startup also prunes valid old Done
 receipts. Unreadable journals, ambiguous lookups and changed head/base/branch
 pins stop admission and name the evidence to inspect.
 
-**Inspecting and discarding a blocked journal.** From the main worktree, open an
+**Inspecting and discarding a blocked journal.** Run
+`aida pr train --abandon <id>.json` to discard one local recovery journal. This
+acquires the train run lock and leaves forge PRs, branches and members unchanged.
+It also accepts malformed journals so they can be cleared after inspection.
+<!-- trace:BUG-2547 | ai:codex -->
+
+For manual inspection from the main worktree, open an
 operator shell holding the same permanent lock as train recovery:
 
 ```bash
@@ -641,6 +673,23 @@ returns an error; a verdict anchor alone does not finish that protection.
 **Chains with** — `aida review` (request changes) → `aida rework` → back to the implementer → `aida queue done` again.
 
 ---
+
+### `aida integration tags`
+
+**One line**: mark the open specs whose work has reached the integration branch but not yet `main`.
+
+**Mental model.** Approved PRs can land on an `integration` branch first and reach `main` later, in one promotion. Until that promotion, a spec's completing commit is on `origin/integration`, the spec is not complete, and nothing in its status says its work has landed anywhere. `integration tags` closes that gap. It reads the completing-commit trailers on `origin/integration` that are not yet on `origin/main`. It adds the `landed-in-integration` tag to each open spec they name, and removes the tag from specs that are closed or no longer ahead of `main`. Completion is unchanged: a spec still completes when its commit reaches `main`.
+
+**Reach for it when**: you merge a PR into integration, or after a promotion, so `aida list --tag landed-in-integration` shows what is waiting to be promoted.
+
+**Don't reach for it when**: you want to complete a spec or promote integration to `main`. This command edits tags only.
+
+**Key options (rationale only).**
+- `--dry-run` prints the tag changes without making them. Use it to check the plan before tagging after a large merge.
+
+**Gotchas.** It reads the local `origin/` refs, so run `git fetch` first if they may be stale. Otherwise a fresh landing is missed, or a spec that was just promoted keeps its tag until the next run.
+
+**Chains with**: `git fetch` → `aida integration tags --dry-run` → `aida integration tags` → `aida list --tag landed-in-integration`.
 
 ## The two-leg git model: `fetch` / `pull` / `push`
 
@@ -844,18 +893,30 @@ as `dispatch` (`aida mandate start --ship-held --scope dispatch`), and
 `--drive` starts a drive mandate covering all scopes. `--include-supervised`
 also covers sensitive specs (security, containment, review or merge authority,
 guided, keystone); with `--drive`, `--exclude-supervised` keeps sensitive
-specs human-only.
+specs human-only. `--include-gate-paths` also covers protected-path PRs in
+ships and trains; all other gates still apply.
 
-**Renewing.** `aida mandate renew [--for <duration>]` extends the active
-mandate in place, so you do not retype its flags. Its scope, flags, reason and
-id stay the same, and anything already acting under it (queued dispatches, the
+**Renewing.** `aida mandate renew [--for <duration>]` (`--ttl` is the same
+flag) extends the active mandate in place. Its scope, supervised flag,
+protected-path opt-in, reason and id stay the same, and anything already acting under it (queued dispatches, the
 drive tick, a running `aida deputy`) keeps working. The new expiry is now plus the duration: by default
 the duration it was started with, at most `24h`. Like start and stop, it needs
 a human at an interactive terminal. If the latest mandate expired, renew
-re-mints its scope, flags and reason with a fresh ID and TTL, and prints when
+re-mints its scope, supervised flag and reason with a fresh ID and TTL, and prints when
 the old mandate expired. Old derived grants stay expired. Stopped mandates
 stay stopped. With no prior mandate, run `aida mandate start --ship-held`.
-Protected paths and human gates keep their existing policy.
+A renewal can also change the mandate with the start flags: `--ship-held` and
+`--scope <scope>` add scopes (a renewal never removes one), `--drive` makes it
+a drive mandate, `--include-supervised` / `--exclude-supervised` and
+`--include-gate-paths` / `--exclude-gate-paths` set those flags, and `--reason`
+replaces the reason. A flag you do not pass keeps its value. Each change is
+printed as `name: before -> after` and recorded with the renewal in the
+mandate's lineage. Human gates keep their existing policy. A revived mandate
+records the mandate it replaced and the same change lines, and
+`aida mandate status` shows them as `revived:`. Turning off the supervised
+flag or the protected-path opt-in takes effect at once: a ship or train
+already in progress that started under the wider mandate is refused before
+its merge, and its hold is put back.
 
 During the last 60 minutes, the status/hook banner shows
 `MANDATE expires in Nm, run: aida mandate renew`. A deduplicated mail notice
@@ -990,11 +1051,22 @@ ops = ["ship"]   # any of: ship, sketch-signoff, dispatch, hold-clear, relay-res
   `~/.aida/config.toml`, never from the working tree. Each layer can only add
   gates, so a branch cannot remove one.
 - If the committed layer cannot be read, every action is gated.
-- A PR that changes `.aida/config.toml` or the mandate code
-  (`dispatch.rs`, `mandate_drive.rs`, `mandate_traces.rs`, `relay_launch.rs`,
-  `pr_ship_batch.rs`, and everything under
-  `aida-cli-lib/src/gate/`) never ships under a mandate, and a mandate never
-  releases its rework hold either.
+- A PR that changes `.aida/config.toml`, anything under
+  `aida-cli-lib/src/gate/`, or the gate-path ratchet
+  `aida-cli-lib/src/tests/story_1888_gate_paths_tests.rs` requires a human merge
+  by default. A human at a
+  terminal can opt in with `aida mandate start --drive --include-gate-paths`
+  (or `--ship-held --include-gate-paths`). Such a mandate lets ships and trains
+  take protected-path PRs and release their eligible holds. Train CI on top of
+  main replaces each member's CI rerun. The matched path, protected entry and
+  source are recorded in release audit lines and commit audit trailers.
+  `aida mandate status` shows the opt-in. Existing records default to false.
+  `aida mandate renew --include-gate-paths` turns it on for a running or
+  revived mandate and `--exclude-gate-paths` turns it off; a renewal that
+  passes neither keeps it as it was. Unresolved changed
+  paths still refuse, and human gates, holds, approval at head, independent
+  review and authorship checks still apply. The protected floor and config
+  layering are unchanged.
   Listing `ship` or `hold-clear` stops mandate rework releases too.
 - You can protect more paths. Entries are exact paths, or directory prefixes
   that end in `/` (`gate/` matches `gate/x.rs`, never `gateway/x.rs`):

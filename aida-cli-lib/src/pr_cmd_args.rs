@@ -16,6 +16,10 @@ pub enum PrCommand {
     /// Derive PR states, next actions and owners without performing actions.
     // trace:STORY-2688 | ai:codex
     State(crate::pr_state::StateArgs),
+    // trace:BUG-2535 | ai:codex
+    /// Internal: bounded post-merge reap and prune phase.
+    #[clap(hide = true)]
+    PostShipSweep,
     // Sequential post-merge worker, launched only after releasing the merge lease.
     // trace:BUG-2384 | ai:codex
     /// Internal: the post-merge cleanup worker `aida pr ship` launches
@@ -327,8 +331,12 @@ pub enum PrCommand {
     /// pushing anything; add `--local-ci <CMD>` to simulate the whole run
     /// with a local command as CI, against a checkout of each train tip.
     // trace:STORY-1690 | ai:claude
-    #[clap(group(ArgGroup::new("train_members").required(true).args(["prs", "all_ready"])))]
+    #[clap(group(ArgGroup::new("train_members").required(true).args(["prs", "all_ready", "abandon"])))]
     Train {
+        /// Discard a local journal by filename; leave forge PRs and branches unchanged.
+        // trace:BUG-2547 | ai:codex
+        #[clap(long, value_name = "JOURNAL", conflicts_with_all = ["prs", "all_ready", "dry_run", "local_ci", "no_pull"])]
+        abandon: Option<String>,
         /// PR numbers to train, in landing order.
         #[clap(value_name = "N")]
         prs: Vec<u64>,

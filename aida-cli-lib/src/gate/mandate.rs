@@ -115,6 +115,11 @@ pub(crate) struct Mandate {
     /// Lifts the sensitive spec classes (never operator-only or decide).
     #[serde(default)]
     pub include_supervised: bool,
+    /// Human opt-in to ship protected-path PRs. A renewal keeps it unless
+    /// the human changes it there (STORY-2771).
+    // trace:STORY-2733 | ai:codex
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub include_gate_paths: bool,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub reason: Option<String>,
     pub issued_at: DateTime<Utc>,
@@ -132,11 +137,28 @@ pub(crate) struct Mandate {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub kind: Option<String>,
     /// Every in-place renewal (`aida mandate renew`), oldest first: the
-    /// lineage of the record's expiry. The id, scopes and flags never change,
+    /// lineage of the record's expiry. The id and scopes never change,
     /// so grants that name this mandate's id stay valid across a renewal.
     // trace:STORY-B6B1278890774EF993D2EBC327862470-166 | ai:claude
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub renewals: Vec<Renewal>,
+    /// Set when `aida mandate renew` re-minted this record from an expired
+    /// one: which mandate, and what the renewal changed.
+    // trace:STORY-2771 | ai:claude
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub revived: Option<Revival>,
+}
+
+/// Where a revived mandate came from. The receipt is kept apart from
+/// `renewals` because that lineage only holds in-place extensions.
+// trace:STORY-2771 | ai:claude
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub(crate) struct Revival {
+    /// The expired mandate's id.
+    pub from_id: String,
+    /// Who revived it and when, the old expiry, the first expiry of this
+    /// record, and what the overrides changed.
+    pub receipt: Renewal,
 }
 
 /// One in-place renewal of a mandate: who extended it, when, and the expiry
@@ -148,6 +170,104 @@ pub(crate) struct Renewal {
     pub renewed_by: String,
     pub previous_expires_at: DateTime<Utc>,
     pub expires_at: DateTime<Utc>,
+    /// What the renewal changed besides the expiry, one `name: before ->
+    /// after` line each; empty for a plain extension.
+    // trace:STORY-2771 | ai:claude
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub changes: Vec<String>,
+}
+
+/// What `aida mandate renew` changes besides the expiry. Every field left at
+/// its default keeps the renewed mandate's value.
+// trace:STORY-2771 | ai:claude
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub(crate) struct RenewOverrides {
+    /// Make it a drive mandate.
+    pub drive: bool,
+    /// Scopes to add; a renewal never removes one.
+    pub add_scopes: BTreeSet<Scope>,
+    pub include_supervised: Option<bool>,
+    pub include_gate_paths: Option<bool>,
+    pub reason: Option<String>,
+}
+
+impl RenewOverrides {
+    /// Apply to `m`, returning one `name: before -> after` line per value
+    /// that changed.
+    fn apply(&self, m: &mut Mandate) -> Vec<String> {
+        let on_off = |on: bool| if on { "on" } else { "off" };
+        let scope_list = |m: &Mandate| {
+            m.effective_scopes()
+                .iter()
+                .map(|s| s.as_str())
+                .collect::<Vec<_>>()
+                .join(", ")
+        };
+        let mut changes = Vec::new();
+        let scopes_before = scope_list(m);
+        let newly_drive = self.drive && !m.is_drive();
+        if newly_drive {
+            m.kind = Some(KIND_DRIVE.to_string());
+            changes.push("drive: off -> on".to_string());
+        }
+        // A plain renewal leaves the stored set alone (an old drive record
+        // must not quietly gain a scope added since). A changed set is
+        // stored as `mint` stores it: a drive record without the implied
+        // ship-held, a ship-held-only one empty.
+        if newly_drive || !self.add_scopes.is_empty() {
+            let mut scopes = if newly_drive {
+                Scope::ALL.into_iter().collect()
+            } else {
+                m.effective_scopes()
+            };
+            scopes.extend(self.add_scopes.iter().copied());
+            if m.is_drive() {
+                scopes.remove(&Scope::ShipHeld);
+            } else if scopes == BTreeSet::from([Scope::ShipHeld]) {
+                scopes.clear();
+            }
+            m.scopes = scopes;
+        }
+        let scopes_after = scope_list(m);
+        if scopes_after != scopes_before {
+            changes.push(format!("scopes: {scopes_before} -> {scopes_after}"));
+        }
+        if let Some(include) = self
+            .include_supervised
+            .filter(|v| *v != m.include_supervised)
+        {
+            changes.push(format!(
+                "include-supervised: {} -> {}",
+                on_off(m.include_supervised),
+                on_off(include)
+            ));
+            m.include_supervised = include;
+        }
+        if let Some(include) = self
+            .include_gate_paths
+            .filter(|v| *v != m.include_gate_paths)
+        {
+            changes.push(format!(
+                "include-gate-paths: {} -> {}",
+                on_off(m.include_gate_paths),
+                on_off(include)
+            ));
+            m.include_gate_paths = include;
+        }
+        if let Some(reason) = self
+            .reason
+            .as_deref()
+            .map(str::trim)
+            .filter(|r| !r.is_empty() && Some(*r) != m.reason.as_deref())
+        {
+            changes.push(format!(
+                "reason: {} -> {reason}",
+                m.reason.as_deref().unwrap_or("(none)")
+            ));
+            m.reason = Some(reason.to_string());
+        }
+        changes
+    }
 }
 
 impl Mandate {
@@ -342,6 +462,18 @@ fn renewal_problem(m: &Mandate) -> Option<String> {
     }
     let mut since = m.issued_at;
     let mut expiry = m.issued_at + m.original_ttl();
+    // A revival mints the record: its receipt is dated at issuance, names an
+    // expiry already past, and sets the record's first expiry.
+    // trace:STORY-2771 | ai:claude
+    if let Some(revival) = &m.revived {
+        let r = &revival.receipt;
+        if r.renewed_at != m.issued_at
+            || r.previous_expires_at > r.renewed_at
+            || r.expires_at != expiry
+        {
+            return Some("its revival receipt does not match its issuance".into());
+        }
+    }
     for r in &m.renewals {
         if r.renewed_at < since || r.previous_expires_at != expiry {
             return Some("its renewal lineage is out of order".into());
@@ -552,6 +684,7 @@ pub(crate) fn start_as_human(
     drive: bool,
     include_supervised: bool,
     exclude_supervised: bool,
+    include_gate_paths: bool,
     requested_scopes: BTreeSet<Scope>,
     now: DateTime<Utc>,
 ) -> Result<Mandate> {
@@ -562,6 +695,7 @@ pub(crate) fn start_as_human(
         ttl,
         reason,
         drive_includes_supervised(drive, include_supervised, exclude_supervised),
+        include_gate_paths,
         drive,
         requested_scopes,
         now,
@@ -582,9 +716,25 @@ pub(crate) fn renew_as_human(
     dir: &Path,
     by: &str,
     ttl: Option<Duration>,
+    overrides: &RenewOverrides,
     now: DateTime<Utc>,
 ) -> Result<(Mandate, Renewal, Option<String>)> {
-    extend(dir, &require_mandate_human, by, ttl, now)
+    extend(dir, &require_mandate_human, by, ttl, overrides, now)
+}
+
+/// Test seam: [`renew_as_human`] with an injected `human` floor and
+/// overrides.
+// trace:STORY-2771 | ai:claude
+#[cfg(test)]
+pub(crate) fn renew_with(
+    dir: &Path,
+    human: &dyn Fn() -> Result<()>,
+    by: &str,
+    ttl: Option<Duration>,
+    overrides: &RenewOverrides,
+    now: DateTime<Utc>,
+) -> Result<(Mandate, Renewal, Option<String>)> {
+    extend(dir, human, by, ttl, overrides, now)
 }
 
 /// Test seam: [`renew_as_human`] with an injected `human` floor.
@@ -597,7 +747,7 @@ pub(crate) fn renew(
     ttl: Option<Duration>,
     now: DateTime<Utc>,
 ) -> Result<(Mandate, Renewal)> {
-    extend(dir, human, by, ttl, now).map(|(m, r, _)| (m, r))
+    extend(dir, human, by, ttl, &RenewOverrides::default(), now).map(|(m, r, _)| (m, r))
 }
 
 /// Test seam: [`renew`] that also returns the id a revival replaced.
@@ -610,19 +760,22 @@ pub(crate) fn renew_reporting_revival(
     ttl: Option<Duration>,
     now: DateTime<Utc>,
 ) -> Result<(Mandate, Renewal, Option<String>)> {
-    extend(dir, human, by, ttl, now)
+    extend(dir, human, by, ttl, &RenewOverrides::default(), now)
 }
 
-/// Renew the principal's mandate. Scopes, flags, principal and reason are
-/// always kept, and the expiry becomes `now + ttl` (default: the original
+/// Renew the principal's mandate. The principal is kept, and so are the
+/// scopes, supervised flag, protected-path opt-in and reason unless
+/// `overrides` names them (STORY-2771); each change is recorded on the
+/// [`Renewal`]. The expiry becomes `now + ttl` (default: the original
 /// duration, at most [`MAX_TTL`]).
 ///
 /// - An active mandate is extended in place: same id and issuance, and a
 ///   [`Renewal`] is appended to its lineage. The third value is `None`.
 /// - With none active, the latest expired one is re-minted under a fresh id,
 ///   `issued_at = now` and an empty lineage (expired grants and the old
-///   record are left alone); the returned [`Renewal`] is only a receipt
-///   naming the old expiry, and the third value is the old mandate's id.
+///   record are left alone); the returned [`Renewal`] is the receipt stored
+///   as the record's [`Revival`], and the third value is the old mandate's
+///   id.
 ///
 /// Same floor as [`mint`]. A stop racing this write still wins: its tombstone
 /// is never removed and revokes whatever the record says. Private: production
@@ -633,6 +786,7 @@ fn extend(
     human: &dyn Fn() -> Result<()>,
     by: &str,
     ttl: Option<Duration>,
+    overrides: &RenewOverrides,
     now: DateTime<Utc>,
 ) -> Result<(Mandate, Renewal, Option<String>)> {
     if let Err(err) = human() {
@@ -654,11 +808,15 @@ fn extend(
     if ttl <= Duration::zero() {
         bail!("a mandate lasts more than zero and at most 24h");
     }
+    // trace:STORY-2733 | ai:codex
+    // trace:STORY-2771 | ai:claude
+    let changes = overrides.apply(&mut m);
     let renewal = Renewal {
         renewed_at: now,
         renewed_by: by.to_string(),
         previous_expires_at: m.expires_at,
         expires_at: now + ttl,
+        changes,
     };
     m.expires_at = renewal.expires_at;
     let revived_from = if revive {
@@ -667,6 +825,11 @@ fn extend(
         let old_id = std::mem::replace(&mut m.id, Uuid::new_v4().to_string());
         m.issued_at = now;
         m.renewals.clear();
+        // trace:STORY-2771 | ai:claude
+        m.revived = Some(Revival {
+            from_id: old_id.clone(),
+            receipt: renewal.clone(),
+        });
         Some(old_id)
     } else {
         m.renewals.push(renewal.clone());
@@ -756,6 +919,7 @@ pub(crate) fn start_with_scopes(
         ttl,
         reason,
         include_supervised,
+        false,
         drive,
         requested_scopes,
         now,
@@ -775,6 +939,7 @@ fn mint(
     ttl: Duration,
     reason: Option<String>,
     include_supervised: bool,
+    include_gate_paths: bool,
     drive: bool,
     requested_scopes: BTreeSet<Scope>,
     now: DateTime<Utc>,
@@ -811,6 +976,7 @@ fn mint(
         seat: MANDATE_SEAT.to_string(),
         scope: SCOPE_SHIP_HELD.to_string(),
         include_supervised,
+        include_gate_paths,
         reason: reason
             .map(|r| r.trim().to_string())
             .filter(|r| !r.is_empty()),
@@ -821,6 +987,7 @@ fn mint(
         scopes,
         kind: drive.then(|| KIND_DRIVE.to_string()),
         renewals: Vec::new(),
+        revived: None,
     };
     write_private(
         &dir.join(format!("{}.json", mandate.id)),
@@ -1173,8 +1340,8 @@ pub(crate) struct ShipCheck<'a> {
 }
 
 /// STORY-1700 (R1): the gate checks every mandate path runs before hold
-/// cover. A PR that touches the mandate or its gates, or whose files cannot
-/// be resolved, is never shipped nor released under a mandate; nor is any PR
+/// cover. Protected paths require the human-minted include_gate_paths opt-in;
+/// unresolved files always refuse. No PR ships or releases
 /// while one of `gates` (a human gate in force) names why.
 // trace:STORY-1700 | ai:claude
 fn gate_checks(
@@ -1186,7 +1353,10 @@ fn gate_checks(
         .ok_or(MandateRefusal::ChangedPathsUnresolved)?;
     // trace:STORY-1888 | ai:claude
     if let Some(hit) = crate::gate::mandate_gates::touches_gates(paths, c.protected) {
-        return Err(MandateRefusal::TouchesGates(hit));
+        // trace:STORY-2733 | ai:codex
+        if !matches!(c.state, MandateState::Active(m) if m.include_gate_paths) {
+            return Err(MandateRefusal::TouchesGates(hit));
+        }
     }
     if let Some(why) = gates.iter().find_map(|g| g.as_ref()) {
         return Err(MandateRefusal::HumanGated { why: why.clone() });
@@ -1766,3 +1936,7 @@ mod story_1698_mandate_tests;
 #[cfg(test)]
 #[path = "tests/story_b6b_166_mandate_renew_tests.rs"]
 mod story_b6b_166_mandate_renew_tests;
+// trace:STORY-2771 | ai:claude
+#[cfg(test)]
+#[path = "tests/story_2771_mandate_renew_overrides_tests.rs"]
+mod story_2771_mandate_renew_overrides_tests;

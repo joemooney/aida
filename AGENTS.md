@@ -4,6 +4,13 @@ refuses selection. Automatic archive retention and discovery limited to relevant
 changes remain unresolved. See docs/internal/testing/bug-2531-ledger-selection-budget.md.
 <!-- trace:BUG-2531 | ai:codex -->
 
+Repair adoption transfers journal ownership at the verified successor-lease
+boundary. Pending-merge publication requires successful preparation, retries
+failed generation through resume, and records successful regeneration against
+the staged tree. Ignored portable-pack outputs come from a closed pre-run
+inventory of host paths and staged skill masters. See OVERVIEW.md.
+<!-- trace:STORY-2710 | ai:codex -->
+
 MCP transport and its store handler live in `aida-mcp`; the binary injects the
 handler into cli-lib's `mcp-serve` registration before parsing. Shared descriptors
 and claim naming stay below that boundary. CLI-local MCP tests include the
@@ -104,11 +111,13 @@ set; counter migration refuses newly active unconfirmed blocks. See the
 [writer inventory](docs/plans/2026-10-19-store-writer-inventory.md).
 <!-- trace:TASK-1981 | ai:codex -->
 
-CI runs four test lanes plus separate guards and binary-contract lanes; the aggregate
-`Build (ubuntu-latest)` remains the required check. CLI halves use committed
-main-run timings; each shard keeps its timing budget and root hygiene check.
-See [CI fan-out](docs/internal/testing/ci-test-shards.md).
-<!-- trace:TASK-1949 | ai:codex -->
+Ordinary GitHub PRs default to FAST source guards plus workspace/test compilation.
+`ci:full` or `AIDA_PR_CI_TIER=full` selects FULL; main/train, merge groups and
+scheduled/manual runs always use FULL's seven lanes. The required aggregate
+`Build (ubuntu-latest)` validates the selected tier. Direct ship requires FULL;
+FAST PRs use the train. Each full test shard retains its timing and root hygiene
+checks. See [CI tiers](docs/internal/testing/ci-test-shards.md).
+<!-- trace:TASK-1949 STORY-2735 | ai:codex -->
 
 Rust mandate exclusions also add module comments outside fn/impl ranges and
 inline-module headers, including traces between items and at EOF. Leading
@@ -505,7 +514,7 @@ Pure vendor descriptors and headless argv/settings composition live in
 STORY-2539 token ratchet inventories remaining vendor literals and typed
 references outside `vendors/` by path and enclosing item; its ledger only shrinks.
 Test-only exclusions include compound `cfg(all(test, ...))` and qualified test attributes.
-`aida-cli-lib/src/vendors/` renders hints from that registry; `launch/profile.rs` keeps effectful finalization. Capability lookup
+`aida-cli-lib/src/vendors/` renders hints from that registry; `vendors/profile.rs` keeps effectful finalization. Capability lookup
 never grants launch admission or containment credit.
 <!-- trace:STORY-2539 | ai:codex -->
 

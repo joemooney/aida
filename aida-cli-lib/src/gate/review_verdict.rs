@@ -1318,6 +1318,25 @@ pub fn read_recorded_verdict(project_root: &Path, spec: &str) -> Option<Recorded
     parse_recorded_verdict(&current_verdict(project_root, spec)?.body)
 }
 
+/// [`read_recorded_verdict`] as it concerns change `pr` at `head`. A spec key
+/// is shared by every change that ships the spec; once `pr` has a verdict of
+/// its own on the ledger, the spec key answers with the verdicts recorded
+/// for `pr` and not with whichever change was reviewed last.
+// trace:BUG-2570 | ai:claude
+pub(crate) fn read_recorded_verdict_for_change(
+    project_root: &Path,
+    key: &str,
+    pr: u64,
+    head: Option<&str>,
+) -> Option<RecordedVerdict> {
+    use crate::gate::ledger::{project, ChangeKey};
+    if ChangeKey::parse(key).is_some() || !project::change_has_verdict(project_root, pr) {
+        return read_recorded_verdict(project_root, key);
+    }
+    project::newest_verdict_event_for_change(project_root, key, pr, head)
+        .and_then(|event| event.verdict_record().and_then(parse_ledger_record))
+}
+
 /// A verdict record carried on the gate ledger, parsed like a file body.
 // trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
 pub(crate) fn parse_ledger_record(record: &JsonObj) -> Option<RecordedVerdict> {
@@ -1497,6 +1516,42 @@ pub(crate) fn current_verdict(start: &Path, key: &str) -> Option<CurrentVerdict>
     choose_current(start, key, path, file_body)
 }
 
+/// Error-aware current projection for gates that must distinguish missing
+/// evidence from refused or malformed evidence. Never hide an unsafe legacy
+/// artifact behind a ledger verdict.
+// trace:STORY-2691 | ai:codex
+pub(crate) fn checked_current_verdict(
+    start: &Path,
+    key: &str,
+) -> std::io::Result<Option<RecordedVerdict>> {
+    let path = verdict_path(start, key);
+    let file_body = match read_verdict_body(&path) {
+        Ok(body) => {
+            if parse_recorded_verdict(&body).is_none() {
+                return Err(std::io::Error::new(
+                    std::io::ErrorKind::InvalidData,
+                    format!("invalid verdict {}", path.display()),
+                ));
+            }
+            Some(body)
+        }
+        Err(error)
+            if error.kind() == std::io::ErrorKind::NotFound
+                && matches!(std::fs::symlink_metadata(&path), Err(e) if e.kind() == std::io::ErrorKind::NotFound) =>
+        {
+            None
+        }
+        Err(error) => return Err(error),
+    };
+    choose_current(start, key, path, file_body)
+        .map(|current| {
+            parse_recorded_verdict(&current.body).ok_or_else(|| {
+                std::io::Error::new(std::io::ErrorKind::InvalidData, "invalid projected verdict")
+            })
+        })
+        .transpose()
+}
+
 /// [`current_verdict`] for the verdict file at `path`. Only the canonical
 /// layout `<root>/.aida/review-verdicts/<KEY>.json` has a ledger
 /// counterpart; any other path (a per-commit archive, a sibling checkout's
@@ -1560,6 +1615,27 @@ fn choose_current(
         }
         return Some(terminal_wait_overlay(start, key, remote));
     }
+    choose_local_current(start, key, path, file_body)
+        .map(|current| terminal_wait_overlay(start, key, current))
+}
+
+/// Raw local handoff/ledger evidence for reviewer shutdown only. Signed
+/// publications and lifecycle overlays omit the child grant or replace the
+/// recording, so they cannot establish this launch's completion. Acceptance
+/// continues to use the effective verdict readers.
+// trace:BUG-2546 | ai:codex
+pub(crate) fn local_completion_verdict(start: &Path, key: &str) -> Option<CurrentVerdict> {
+    let path = verdict_path(start, key);
+    let file_body = read_verdict_body(&path).ok();
+    choose_local_current(start, key, path, file_body)
+}
+
+fn choose_local_current(
+    start: &Path,
+    key: &str,
+    path: PathBuf,
+    file_body: Option<String>,
+) -> Option<CurrentVerdict> {
     // A current file that exists but the anchored reader refuses (unreadable,
     // or a linked file or directory) is not evidence, and the ledger must not
     // answer in its place: every gate fails closed on it (TASK-1801).
@@ -1593,9 +1669,7 @@ fn choose_current(
                 },
             })
         });
-    ledger
-        .or_else(|| file_body.map(from_file))
-        .map(|current| terminal_wait_overlay(start, key, current))
+    ledger.or_else(|| file_body.map(from_file))
 }
 
 /// Read the recorded verdict of ONE requirement known by several labels (its
