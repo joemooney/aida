@@ -552,7 +552,15 @@ fn remote_head_query_distinguishes_absent_branch_and_failure() {
 
 // ---- the window: nothing of the coalescing is locked or open in it ---------
 
-/// The `.lock` files under `store` this process has open.
+/// The `.lock` files under `store` this process has open. The descriptor
+/// table is readable only on Linux; elsewhere the lock probe in the test is
+/// the evidence.
+#[cfg(not(target_os = "linux"))]
+fn open_lock_files(_store: &Path) -> Vec<String> {
+    Vec::new()
+}
+
+#[cfg(target_os = "linux")]
 fn open_lock_files(store: &Path) -> Vec<String> {
     let store = std::fs::canonicalize(store).unwrap();
     std::fs::read_dir("/proc/self/fd")
