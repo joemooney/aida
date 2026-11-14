@@ -4,12 +4,12 @@ agreed_id: STORY-2538
 title: One injected ExecContext for production and tests (regroup R4)
 description: |
   Regroup R4: one injected ExecContext { env allowlist, home, tool paths, project root, clock } for production and tests, defined ONCE and shared with STORY-2326's env-clear allowlist. Ratchets: no std::env::var outside the context module, and no set_var in tests. Live-gate tests fail rather than skip when CI declares the capability. Evidence: BUG-2381, BUG-2209, TASK-2349/2345, TASK-2161, TASK-1973, BUG-1618 and 14 AIDA_TEST_* seams (TASK-1751 folds here). Trigger: STORY-2326 PR-B merged (the LaunchContext env type exists). Sketch-first.
-status: InProgress
+status: Approved
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T00:17:53.805850Z
-modified_at: 2026-11-13T13:07:07.206503471Z
+modified_at: 2026-11-14T18:03:34.368447678Z
 req_type: Story
 tags:
 - architecture
@@ -510,6 +510,11 @@ comments:
   modified_at: 2026-11-13T13:07:07.206503471Z
   session_id: 01a1d4aa-9c99-76c2-ac94-7f0795f8a7f9
   harness_version: 2.1.323 (Claude Code)
+- id: 01a1db3a-9e60-7d81-81c6-82845c5dfd12
+  author: lane-recovery
+  content: Reference merge `268f02eb6b99bb5e89efe24ca2be475d5c33face` left unfinished work with no lease or open PR; returned to Approved.
+  created_at: 2026-11-14T18:03:34.368438071Z
+  modified_at: 2026-11-14T18:03:34.368438071Z
 history:
 - id: 01a1ae38-af42-7111-8ef3-7b278b3830e7
   author: joe
@@ -943,6 +948,13 @@ history:
   session_id: 01a1d4aa-9c99-76c2-ac94-7f0795f8a7f9
   harness_version: 2.1.323 (Claude Code)
   changes: []
+- id: 01a1db3a-9e60-7d81-81c6-829fff82a9d8
+  author: lane-recovery
+  timestamp: 2026-11-14T18:03:34.368447406Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Approved
 execution_mode: drain
 filed_at:
   code_sha: 71c43691a10a62c49185808eb45d25b209f987c2
