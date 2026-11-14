@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-14T01:08:38.387968366Z
-modified_at: 2026-11-14T01:48:20.380169875Z
+modified_at: 2026-11-14T01:53:14.013482121Z
 req_type: Task
 tags:
 - ci
@@ -25,6 +25,13 @@ comments:
   content: '18:31 MST advisor review scope for #3979: verify the FAST tier would have caught BOTH #3926 failure classes from train 10: (a) story_2326_ambient_aida_inputs_have_a_disposition / launch_sites_outside_the_launcher_match_the_ledger (lib-1, #3975), and (b) resolve_aida_exe_tests::no_cli_source_outside_the_resolver_uses_raw_current_executable_lookup (lib-0, #3977). If (b) is missing, that is a blocking AC miss (AC2 completeness check should flag it). Touches gate/tests: ship via deputy-TTY train.'
   created_at: 2026-11-14T01:30:11.242280135Z
   modified_at: 2026-11-14T01:30:11.242280135Z
+  session_id: 01a1d797-2ccf-7771-899a-682081f10504
+  harness_version: 2.1.325 (Claude Code)
+- id: 01a1d7c2-3f1d-7d23-a2e4-5e64a2a160fc
+  author: joe
+  content: '18:55 MST advisor triage of #3979 CR at 7753bb1: BLOCKING (AC miss, flagged in scope): the FAST harness omits resolve_aida_exe_tests::no_cli_source_outside_the_resolver_uses_raw_current_executable_lookup, the exact lib-0 failure #3977 hit. Add it (and the completeness check should then pass). Any other non-blocking findings in that verdict: ACCEPTED as-is unless they are correctness. Next round: scoped re-review.'
+  created_at: 2026-11-14T01:53:14.013482121Z
+  modified_at: 2026-11-14T01:53:14.013482121Z
   session_id: 01a1d797-2ccf-7771-899a-682081f10504
   harness_version: 2.1.325 (Claude Code)
 history:
