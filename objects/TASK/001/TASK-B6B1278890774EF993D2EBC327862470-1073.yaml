@@ -285,12 +285,32 @@ description: |
   ### finding-hash:2dfbd6d5
 
   Squash-merged and deleted branch tips are not reachable from main, so they stay anchors until gc prunes them. Each prune then triggers a full rebuild (both full walks). On the live store (3484 tips) the full walk comes back after every gc prune. merge-base --independent on 3484 tips measured 3.3s. Consider pruning anchors that are unreachable, or have no objects/ history, after a successful refresh.
+
+
+  ## Findings from PR-3983
+  Reviewed sha: cc2161c24f182358c1d82267ebac757a4ea929db
+
+  ### finding-hash:dfed3eb6
+
+  merge_hold_cmd.rs:952: placing a rework hold with --verdict <SPEC> still snapshots the VerdictRef (reviewed sha and seat) through read_recorded_verdict, so with two open changes under one spec it can record the other change's review. Use read_recorded_verdict_for_change(root, key, pr, head).
+
+  ### finding-hash:76a786ef
+
+  The hold-premise change (merge_hold_cmd.rs:631-650) has no test through premise_stale: only read_recorded_verdict_for_change is tested. Add a test where a Rework hold on change A is not flagged stale by change B's approval under the shared spec.
+
+  ### finding-hash:7bbbf9a9
+
+  gate/ship.rs:1109-1119: once the change has a ledger verdict, ledger_only skips the spec file entirely, even a refusal in that file at this exact head that never reached the ledger. Ledger events from another change at this head are kept (speaks_for_change), so the file and ledger paths treat same-head evidence differently. Consider keeping a spec-file record whose reviewed_sha matches head.
+
+  ### finding-hash:4843b9fe
+
+  Pre-existing, related: record_verdict_at_inner (gate/ledger/mod.rs:290-300) binds a spec-only aida review record SPEC to changes_for_spec().last(). With two open changes, a spec-only refusal meant for change A lands on change B's ledger, and the new reader then counts it for B (bound.number == B) whatever its head.
 status: Draft
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-13T20:01:56.623034248Z
-modified_at: 2026-11-14T03:27:56.554353897Z
+modified_at: 2026-11-14T05:31:35.593572065Z
 req_type: Task
 tags:
 - carried-finding:BUG-2546:56ed8b81
@@ -327,6 +347,10 @@ tags:
 - carried-finding:PR-3979:360471e3
 - carried-finding:PR-3979:8a49a174
 - carried-finding:PR-3979:f1e29cc2
+- carried-finding:PR-3983:4843b9fe
+- carried-finding:PR-3983:76a786ef
+- carried-finding:PR-3983:7bbbf9a9
+- carried-finding:PR-3983:dfed3eb6
 - carried-finding:STORY-2735:2c7ae2ea
 - carried-finding:STORY-2763:04ad58d8
 - carried-finding:STORY-2763:15915e39
@@ -359,6 +383,7 @@ tags:
 - carried-from:PR-3972
 - carried-from:PR-3973
 - carried-from:PR-3979
+- carried-from:PR-3983
 - carried-from:STORY-2735
 - carried-from:STORY-2763
 - carried-from:STORY-2768
@@ -373,6 +398,7 @@ tags:
 - finding-hash:35d3eb09
 - finding-hash:360471e3
 - finding-hash:3961dae5
+- finding-hash:4843b9fe
 - finding-hash:52636ea7
 - finding-hash:55e0cbfe
 - finding-hash:56ed8b81
@@ -381,6 +407,8 @@ tags:
 - finding-hash:6220a3dc
 - finding-hash:654190b6
 - finding-hash:6810bcf9
+- finding-hash:76a786ef
+- finding-hash:7bbbf9a9
 - finding-hash:7ce2cb14
 - finding-hash:8a49a174
 - finding-hash:97d326dd
@@ -389,6 +417,7 @@ tags:
 - finding-hash:c598b8f9
 - finding-hash:c7c082c2
 - finding-hash:dee3f3a7
+- finding-hash:dfed3eb6
 - finding-hash:f1e29cc2
 - finding-hash:f238ea37
 - finding-hash:fe70e901
@@ -409,6 +438,7 @@ tags:
 - from-review:PR-3972
 - from-review:PR-3973
 - from-review:PR-3979
+- from-review:PR-3983
 - from-review:STORY-2735
 - from-review:STORY-2763
 - from-review:STORY-2768
@@ -523,6 +553,11 @@ history:
   author: joe
   timestamp: 2026-11-14T03:27:57.697858582Z
   session_id: 01a1d8158968
+  changes: []
+- id: 01a1d88a-2e28-7052-91d4-f88effd83bd1
+  author: joe
+  timestamp: 2026-11-14T05:31:36.872715151Z
+  session_id: 01a1d8872386
   changes: []
 filed_at:
   code_sha: 91fe1e337894199f15365d3f8ecfaf81366f8291
