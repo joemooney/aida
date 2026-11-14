@@ -129,16 +129,87 @@ fn bug_2531_selection_after_bootstrap_reads_only_bound_ledgers() {
     let mut d = checked::discover_with_budget(&root, Budget::with_limits(small, 100))
         .unwrap()
         .unwrap();
+    // The normal two-label selection: the spec's other alias was never
+    // recorded, so it has neither bindings nor a hint. That is no evidence
+    // of a lost binding, and it reads nothing.
     let got = d
-        .events_for(&["BUG-7".into()], &mut Budget::with_limits(small, 100))
+        .events_for(
+            &["BUG-7".into(), "STORY-ALIAS-7".into()],
+            &mut Budget::with_limits(small, 100),
+        )
         .unwrap();
     assert_eq!(
         newest_verdict(&got[0].1).as_deref(),
         Some("request-changes")
     );
+    assert!(got[1].1.is_empty());
+    // Exactly the marker, the recorded label's hint and its one bound
+    // ledger were read: no other change ledger, for either label.
     assert_eq!(work::READ_BYTES.with(Cell::get), expected);
     assert_eq!(work::PARSE_ATTEMPTS.with(Cell::get), lines);
-    // The hint confirms the bindings, so nothing was read in full.
+    assert_eq!(work::FULL_READ_ANSWERS.with(Cell::get), 0);
+    // The spec-keyed reader takes the same path for both labels.
+    assert!(project::newest_verdict(&root, "BUG-7").is_some());
+    assert_eq!(project::newest_verdict(&root, "STORY-ALIAS-7"), None);
+    assert_eq!(work::FULL_READ_ANSWERS.with(Cell::get), 0);
+
+    // The bootstrap leaves history it bound as a writer would: the label's
+    // hint names its bound changes, so it is selected from its bindings.
+    let hint = ledger_dir(&root).join("by-spec/STORY-UNRELATED-1.json");
+    let hint: serde_json::Value = serde_json::from_slice(&std::fs::read(hint).unwrap()).unwrap();
+    assert_eq!(hint["changes"].as_array().unwrap().len(), 40);
+    let mut d = checked::discover(&root).unwrap().unwrap();
+    let got = d
+        .events_for(&["STORY-UNRELATED-1".into()], &mut Budget::default())
+        .unwrap();
+    assert_eq!(got[0].1.len(), 40);
+    assert_eq!(work::FULL_READ_ANSWERS.with(Cell::get), 0);
+}
+
+/// The evidence of a lost binding, case by case.
+#[test]
+fn bug_2531_only_evidence_of_a_lost_binding_asks_for_a_full_read() {
+    use checked::binding_lost;
+    let none: Option<&[&str]> = None;
+    // Never recorded: no bindings directory, no hint.
+    assert!(!binding_lost(none, none));
+    // As a writer leaves them, and a hint that lost an entry.
+    assert!(!binding_lost(Some(&["PR-1"][..]), Some(&["PR-1"][..])));
+    assert!(!binding_lost(
+        Some(&["PR-1"][..]),
+        Some(&["PR-1", "PR-2"][..])
+    ));
+    assert!(!binding_lost(Some(&[][..]), none));
+    // The hint names a change the bindings do not.
+    assert!(binding_lost(
+        Some(&["PR-1", "PR-2"][..]),
+        Some(&["PR-1"][..])
+    ));
+    assert!(binding_lost(Some(&["PR-1"][..]), Some(&[][..])));
+    assert!(binding_lost(Some(&["PR-1"][..]), none));
+    // The bindings directory outlived the hint: emptied or not.
+    assert!(binding_lost(none, Some(&[][..])));
+    assert!(binding_lost(none, Some(&["PR-1"][..])));
+}
+
+/// The fix removes a label directory it emptied, so the label reads as
+/// never recorded rather than as a deletion on every selection.
+#[test]
+fn bug_2531_bootstrap_leaves_no_empty_label_directory() {
+    let (_tmp, root) = root();
+    let _env = uncontained();
+    append(&root, ChangeKey::pr(1), "BUG-1", &record("approved", 0));
+    std::fs::create_dir(bindings_dir(&root).join("BUG-2")).unwrap();
+    std::fs::write(bindings_dir(&root).join("BUG-2/PR-77"), b"").unwrap();
+    bootstrap(&root).unwrap();
+    assert!(!bindings_dir(&root).join("BUG-2").exists());
+    assert!(bindings_dir(&root).join("BUG-1/PR-1").is_file());
+    work::FULL_READ_ANSWERS.with(|n| n.set(0));
+    let mut d = checked::discover(&root).unwrap().unwrap();
+    let got = d
+        .events_for(&["BUG-2".into()], &mut Budget::default())
+        .unwrap();
+    assert!(got[0].1.is_empty());
     assert_eq!(work::FULL_READ_ANSWERS.with(Cell::get), 0);
 }
 
@@ -218,9 +289,11 @@ fn bug_2531_stale_or_missing_hint_still_finds_the_newer_refusal() {
             "{hint:?}"
         );
     }
-    // A deleted binding does not hide the refusal either: the hint names a
-    // change the bindings do not, or is absent, so selection reads every
-    // change ledger and finds the one that records the spec.
+    // A deleted binding does not hide the refusal either. Each state holds
+    // evidence of the deletion: the stale hint names a change the bindings
+    // do not, and with the hint missing the label's bindings directory
+    // stands without one. Selection then reads every change ledger and
+    // finds the one that records the spec.
     std::fs::remove_file(bindings_dir(&root).join("BUG-9/PR-2")).unwrap();
     for hint in [Some(r#"{"changes":["PR-1","PR-2"]}"#), None] {
         match hint {
@@ -595,9 +668,10 @@ fn bug_2531_fix_repairs_inconsistencies_under_a_valid_marker() {
     assert!(scan(true).is_empty());
 
     // A ledger records BUG-1 with neither binding nor hint, under a valid
-    // marker. The absent hint sends selection to a full read of the change
-    // ledgers, so the refusal is still seen; the named, deep check reports
-    // the lost binding and the fix restores it.
+    // marker. The label's emptied bindings directory is the evidence of the
+    // deletion and sends selection to a full read of the change ledgers, so
+    // the refusal is still seen; the named, deep check reports the lost
+    // binding and the fix restores it.
     std::fs::remove_file(bindings_dir(&root).join("BUG-1/PR-1")).unwrap();
     std::fs::remove_file(ledger_dir(&root).join("by-spec/BUG-1.json")).unwrap();
     assert_eq!(marker_state(&root).unwrap(), MarkerState::Complete);

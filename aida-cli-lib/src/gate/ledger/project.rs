@@ -140,25 +140,28 @@ fn index_changes(root: &Path, spec: &str) -> Option<Vec<ChangeKey>> {
 }
 
 /// Every change a spec-keyed read takes `spec`'s reviews from: its bindings
-/// and its index hint, and, when the hint is absent or does not name
-/// exactly the bound changes, every change whose ledger carries the spec
-/// (a full read: a deleted binding must not hide a newer refusal). `None`
-/// when that full read refuses: the set is then not known to be complete.
+/// and its index hint, and, only on evidence that a binding of the spec was
+/// lost ([`super::checked::binding_lost`]), every change whose ledger
+/// carries the spec (a full read: a deleted binding must not hide a newer
+/// refusal). `None` when that full read refuses: the set is then not known
+/// to be complete.
 // trace:BUG-2531 | ai:claude
 fn spec_changes(root: &Path, spec: &str) -> Option<Vec<ChangeKey>> {
     let hint = index_changes(root, spec);
     let bound = super::bindings::bound_changes_lossy(root, spec);
     let keys = |changes: &[ChangeKey]| changes.iter().map(|c| c.as_key()).collect::<Vec<_>>();
-    let confirmed =
-        super::checked::hint_confirms(hint.as_deref().map(keys).as_deref(), &keys(&bound));
+    let lost = super::checked::binding_lost(
+        hint.as_deref().map(keys).as_deref(),
+        bound.as_deref().map(keys).as_deref(),
+    );
     let mut changes = hint.unwrap_or_default();
     let mut add = |change: ChangeKey| {
         if !changes.contains(&change) {
             changes.push(change);
         }
     };
-    bound.into_iter().for_each(&mut add);
-    if !confirmed {
+    bound.into_iter().flatten().for_each(&mut add);
+    if lost {
         super::checked::recorded_changes(root, spec)
             .ok()?
             .iter()
@@ -219,9 +222,9 @@ fn verdict_events(root: &Path, key: &str) -> Vec<GateEvent> {
     // One discovery filters every related change. trace:BUG-2531 | ai:claude
     // It reads only the ledgers bound to this spec, never the whole corpus.
     // trace:BUG-2531 | ai:claude — the index is a hint; the bindings are
-    // the complete set of changes recorded against the spec while the hint
-    // confirms them, and a full read is otherwise. A full read that refuses
-    // withholds every bound copy, as incomplete discovery does below.
+    // the complete set of changes recorded against the spec; a full read
+    // replaces them only on evidence of a lost binding. A full read that
+    // refuses withholds every bound copy, as incomplete discovery does below.
     let changes = spec_changes(root, &spec).unwrap_or_default();
     let raw: Vec<GateEvent> = changes
         .into_iter()

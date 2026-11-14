@@ -384,8 +384,8 @@ fn discovery_refusal(root: &Path, name: &str, e: &Unsafe) -> Unsafe {
 /// The full, strict scan the bindings bootstrap needs: every change ledger
 /// and every spec its events carry. It reads every active ledger, so only
 /// the maintenance bootstrap ([`super::bindings::bootstrap`]) and a
-/// selection whose by-spec hint does not confirm its bindings
-/// ([`recorded_changes`]) run it; any other selection reads bindings instead.
+/// selection that holds evidence of a lost binding ([`binding_lost`],
+/// [`recorded_changes`]) run it; any other selection reads bindings instead.
 // trace:BUG-2531 | ai:claude
 #[derive(Debug, Default)]
 pub(crate) struct Scan {
@@ -437,10 +437,10 @@ thread_local! {
 
 /// Every change whose ledger carries an event for the normalized label
 /// `spec`, from a full strict read of every change ledger: the answer no
-/// lost binding or hint can shorten. A selection falls back to it when the
-/// label's by-spec hint is absent or disagrees with its bindings, because
-/// the two are then not two agreeing records of the same appends, and a
-/// deleted binding would otherwise hide a newer refusal.
+/// lost binding or hint can shorten. A selection falls back to it only on
+/// evidence that a binding of the label was lost ([`binding_lost`]): a
+/// deleted binding would otherwise hide a newer refusal. A label never
+/// recorded leaves no such evidence and is answered from its bindings.
 ///
 /// The read streams (no payload is retained) under the bootstrap's work
 /// ceiling, not the selection's budget; its result is reused on this thread
@@ -473,14 +473,29 @@ pub(crate) fn recorded_changes(root: &Path, spec: &str) -> Result<Vec<String>, U
         .unwrap_or_default())
 }
 
-/// Whether the by-spec hint confirms the bindings: present, and naming
-/// exactly the bound changes.
+/// Whether the label's records show that a binding existed and is gone.
+/// A writer creates the label's bindings directory, binds, appends, then
+/// names the change in the by-spec hint, so each of these is left only by a
+/// deletion (or by a write cut short, where the full read costs time only):
+///
+/// - the hint names a change the bindings do not (`hint` is what the hint
+///   names, `None` when the label has none);
+/// - the bindings directory exists (`bound` is `Some`) without a hint: the
+///   directory outlives its bindings and is the deletion's marker.
+///
+/// A label never recorded has neither directory nor hint and shows no
+/// evidence, and a hint that merely names fewer changes than the bindings
+/// is a lossy hint, not a lost binding. A binding and a hint entry deleted
+/// together leave no evidence either; only the deep audit sees that.
 // trace:BUG-2531 | ai:claude
-pub(crate) fn hint_confirms<T: Ord>(hint: Option<&[T]>, bound: &[T]) -> bool {
-    hint.is_some_and(|hint| {
-        hint.iter().collect::<std::collections::BTreeSet<_>>()
-            == bound.iter().collect::<std::collections::BTreeSet<_>>()
-    })
+pub(crate) fn binding_lost<T: PartialEq>(hint: Option<&[T]>, bound: Option<&[T]>) -> bool {
+    match hint {
+        Some(hint) => {
+            let bound = bound.unwrap_or_default();
+            hint.iter().any(|change| !bound.contains(change))
+        }
+        None => bound.is_some(),
+    }
 }
 
 // trace:BUG-2531 | ai:codex
@@ -597,7 +612,8 @@ struct Cached {
 
 /// The changes bound to the normalized label `spec` under the pinned
 /// `ledger` directory, strictly: every entry must be a regular file named by
-/// a change key. Without a marker (`marked` false) an absent bindings
+/// a change key. `None` when the label has no bindings directory: it was
+/// never bound. Without a marker (`marked` false) an absent bindings
 /// directory binds nothing.
 // trace:BUG-2531 | ai:claude
 fn list_bound(
@@ -605,7 +621,7 @@ fn list_bound(
     ledger_path: &Path,
     marked: bool,
     spec: &str,
-) -> Result<Vec<String>, Unsafe> {
+) -> Result<Option<Vec<String>>, Unsafe> {
     let refuse =
         |what: String, e: std::io::Error| not_bound(format!("refusing gate-ledger {what}: {e}"));
     let mut changes = Vec::new();
@@ -623,7 +639,10 @@ fn list_bound(
         Some(Err(e)) if missing(&e) => None,
         Some(Err(e)) => return Err(refuse(format!("bindings of {spec}"), e)),
     };
-    if let Some(dir) = spec_dir {
+    let Some(dir) = spec_dir else {
+        return Ok(None);
+    };
+    {
         let path = ledger_path.join(BINDINGS_DIR).join(spec);
         for name in list_pinned(&dir, &path)? {
             let key = ChangeKey::parse(&name)
@@ -646,15 +665,16 @@ fn list_bound(
             changes.push(key);
         }
     }
-    Ok(changes)
+    Ok(Some(changes))
 }
 
 /// Bound-only discovery (BUG-2531): an operation reads the requested
 /// labels' write-ahead bindings and only the change ledgers they name, plus
-/// the by-spec hints, which may add a change but never hide one. A label
-/// whose hint does not confirm its bindings is answered from a full read
-/// instead ([`Discovery::spec_changes`]). The completeness marker is checked
-/// when the discovery opens.
+/// the by-spec hints, which may add a change but never hide one. Only a
+/// label with evidence of a lost binding ([`binding_lost`]) is answered from
+/// a full read instead ([`Discovery::spec_changes`]); a label never recorded
+/// reads no change ledger. The completeness marker is checked when the
+/// discovery opens.
 ///
 /// BUG-2517: the mis-key ownership index is built from the same bound
 /// ledgers. A copy is disqualified only by a phase-3 witness with the same
@@ -681,7 +701,9 @@ pub(crate) struct Discovery {
     owned_changes: std::collections::HashSet<String>,
     /// Discovery's own work (ownership reads), separate from selections.
     work: Budget,
-    bound: std::collections::HashMap<String, Vec<String>>,
+    /// Per listed label, its bound changes; `None` when it has no bindings
+    /// directory.
+    bound: std::collections::HashMap<String, Option<Vec<String>>>,
     /// The store root, for the full read a selection falls back to, and
     /// what that read found beyond the bindings: per label, the changes
     /// whose ledger carries it although no binding names them.
@@ -736,6 +758,13 @@ impl Discovery {
     /// The changes bound to the normalized label `spec`, listed once.
     // trace:BUG-2531 | ai:claude
     fn bound_changes(&mut self, spec: &str) -> Result<Vec<String>, Unsafe> {
+        Ok(self.listed(spec)?.unwrap_or_default())
+    }
+
+    /// [`Discovery::bound_changes`], telling a label without a bindings
+    /// directory (`None`: never bound) from one whose directory is empty.
+    // trace:BUG-2531 | ai:claude
+    fn listed(&mut self, spec: &str) -> Result<Option<Vec<String>>, Unsafe> {
         if let Some(changes) = self.bound.get(spec) {
             return Ok(changes.clone());
         }
@@ -932,17 +961,19 @@ impl Discovery {
         )
     }
 
-    /// The bound changes of `spec` together with its index hints. The hint
-    /// and the bindings are two records of the same appends: when the hint
-    /// is absent or names other changes than the bindings, neither is
-    /// trusted to be complete (a deleted binding would hide a newer
-    /// refusal), and every change whose ledger carries the label is added
-    /// from a full read ([`recorded_changes`]).
+    /// The bound changes of `spec` together with its index hints. Only on
+    /// evidence that a binding of the label was lost ([`binding_lost`]: a
+    /// deleted binding would hide a newer refusal) is every change whose
+    /// ledger carries the label added from a full read
+    /// ([`recorded_changes`]). A label never recorded, such as the unused
+    /// alias of a two-label selection, reads no change ledger at all.
     // trace:BUG-2531 | ai:claude
     fn spec_changes(&mut self, spec: &str, budget: &mut Budget) -> Result<Vec<String>, Unsafe> {
-        let mut changes = self.bound_changes(spec)?;
+        let listed = self.listed(spec)?;
         let hint = self.index_hint(spec, budget)?;
-        if !hint_confirms(hint.as_deref(), &changes) {
+        let lost = binding_lost(hint.as_deref(), listed.as_deref());
+        let mut changes = listed.unwrap_or_default();
+        if lost {
             let found = match self.recovered.get(spec) {
                 Some(found) => found.clone(),
                 None => {

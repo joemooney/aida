@@ -8,11 +8,14 @@
 //! ([`binding_key`]). A binding without an event is harmless extra work; an
 //! event without a binding is forbidden. The `by-spec` indexes stay lossy
 //! hints, but a writer leaves a label's hint naming exactly its bound
-//! changes, so selection trusts the bindings only while the hint confirms
-//! them: an absent hint, or one naming other changes, sends that selection
-//! to a full read of the change ledgers
+//! changes, and the bootstrap does the same. Selection reads the bindings
+//! alone unless it holds evidence that one was lost
+//! ([`super::checked::binding_lost`]): a hint naming a change the bindings
+//! do not, or a label's bindings directory left without a hint. Only then
+//! does it read every change ledger
 //! ([`super::checked::recorded_changes`]), so a deleted binding does not
-//! hide a review. A binding and a hint that both lack the same change are
+//! hide a review, while a label never recorded (no directory, no hint)
+//! costs nothing. A binding and a hint that both lack the same change are
 //! indistinguishable from a spec never recorded on it; only the deep
 //! [`audit`] sees that.
 //!
@@ -237,19 +240,24 @@ thread_local! {
 }
 
 /// The changes bound to `spec`, read lossily for the single-label readers
-/// (which then filter through the strict reader): unreadable means none.
-pub(crate) fn bound_changes_lossy(root: &Path, spec: &str) -> Vec<ChangeKey> {
-    let Some(spec) = spec_key(spec) else {
-        return Vec::new();
-    };
-    let mut out: Vec<ChangeKey> = std::fs::read_dir(bindings_dir(root).join(spec))
+/// (which then filter through the strict reader): an unreadable entry is
+/// skipped. `None` when the label has no bindings directory (never bound).
+pub(crate) fn bound_changes_lossy(root: &Path, spec: &str) -> Option<Vec<ChangeKey>> {
+    let dir = bindings_dir(root).join(spec_key(spec)?);
+    // An entry that is not a directory is never a label's bindings; a
+    // directory that cannot be listed still shows the label was bound.
+    // trace:BUG-2531 | ai:claude
+    if !std::fs::symlink_metadata(&dir).is_ok_and(|m| m.is_dir()) {
+        return None;
+    }
+    let mut out: Vec<ChangeKey> = std::fs::read_dir(dir)
         .into_iter()
         .flatten()
         .flatten()
         .filter_map(|e| e.file_name().to_str().and_then(ChangeKey::parse))
         .collect();
     out.sort_by_key(|c| c.as_key());
-    out
+    Some(out)
 }
 
 /// What [`bootstrap`] did.
@@ -387,8 +395,9 @@ pub(crate) fn audit(root: &Path, deep: bool) -> std::io::Result<Vec<String>> {
 /// Scan every change ledger strictly under the exclusive ledger lock (which
 /// fences older writers out), rebuild the bindings tree to exactly what the
 /// scan found — every spec its events carry is bound; a binding whose change
-/// ledger no longer exists, and anything that is not a binding, is removed —
-/// and publish the marker last. The marker is withdrawn first, so selection
+/// ledger no longer exists, and anything that is not a binding, is removed;
+/// each label's by-spec hint names its bound changes; no label directory is
+/// left empty — and publish the marker last. The marker is withdrawn first, so selection
 /// refuses while the tree is rebuilt, an interrupted run leaves no marker,
 /// and a rerun completes it. Safe to run on a ledger whose marker is valid:
 /// it repairs every inconsistency [`audit`] reports.
@@ -440,9 +449,24 @@ pub(crate) fn bootstrap(root: &Path) -> std::io::Result<Bootstrapped> {
         for (spec, changes) in &scan.bound {
             for change in changes {
                 write_binding(root, spec, change)?;
+                // As a writer leaves them: the label's hint names its bound
+                // changes, so selection sees no evidence of a lost binding.
+                // trace:BUG-2531 | ai:claude
+                if let Some(change) = ChangeKey::parse(change) {
+                    super::project::index_spec(root, spec, change)?;
+                }
                 out.bindings += 1;
             }
         }
+        // A label's directory left empty by the pruning above would read as
+        // a deletion marker on every selection. trace:BUG-2531 | ai:claude
+        for spec in std::fs::read_dir(&dir)? {
+            let spec = spec?.path();
+            if std::fs::read_dir(&spec)?.next().is_none() {
+                remove_entry(&spec)?;
+            }
+        }
+        fsync_dir(&dir)?;
         #[cfg(test)]
         if STOP_BEFORE_MARKER.with(|s| s.get()) {
             return Err(refused("injected bootstrap interruption".into()));
