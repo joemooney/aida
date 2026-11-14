@@ -17,7 +17,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-13T16:07:16.079959811Z
-modified_at: 2026-11-14T10:20:37.777290941Z
+modified_at: 2026-11-14T10:39:38.164968103Z
 req_type: Story
 tags:
 - integration
@@ -50,6 +50,13 @@ comments:
   modified_at: 2026-11-14T07:52:29.222594290Z
   session_id: 01a1d8fb7710
   harness_version: codex-cli 0.167.0
+- id: 01a1d9a4-2eb4-7960-bdb5-a123e9d73280
+  author: joe
+  content: '[advisor 7b 03:40] RULING on PR-4005 CR at 215bb2b: BLOCKING, nothing else: (1) AC3: add AIDA_TRACK to the contained-launch env allowlist and a test proving a contained child launched with AIDA_TRACK=X sees X; (2) AC5: one test that an actual entry point (e.g. queue work / agent new with a mismatched or ambiguous track) refuses BEFORE any setup side effect (no worktree, lease or store write), not only the helper. PR now targets main (it was branched from main). LIGHT gate; dell1: touch aida-core/src/lib.rs first, never AIDA_UPDATE_SNAPSHOTS=1.'
+  created_at: 2026-11-14T10:39:38.164968103Z
+  modified_at: 2026-11-14T10:39:38.164968103Z
+  session_id: 01a1d8f3-f948-7072-b174-fa9507ed074b
+  harness_version: 2.1.325 (Claude Code)
 history:
 - id: 01a1d5ab-b363-7a91-8355-50d0017404d4
   author: joe
