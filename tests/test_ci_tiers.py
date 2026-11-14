@@ -28,6 +28,7 @@ class CiTiers(unittest.TestCase):
         # ci:full label lingers; every other PR event honours the label, so
         # (re)applying it on approval starts FULL on that head.
         # trace:STORY-2809 | ai:claude
+        # trace:STORY-b6b1278890774ef993d2ebc327862470-732.acbd1c12 | ai:claude
         for event, label, variable, head, action in itertools.product(
             ('pull_request', 'push', 'merge_group', 'schedule', 'workflow_dispatch'),
             (False, True), ('', 'fast', 'full', 'FULL', 'invalid'), ('feature/x', 'train/batch'),
@@ -53,6 +54,7 @@ class CiTiers(unittest.TestCase):
         # Full runs for different PRs never share a group, so they run side by
         # side; only a superseded run of the same PR is cancelled.
         # trace:STORY-2809 | ai:claude
+        # trace:STORY-b6b1278890774ef993d2ebc327862470-732.acf5d38c | ai:claude
         self.assertEqual(WORKFLOW['concurrency']['group'],
                          '${{ github.workflow }}-${{ github.event.pull_request.number || github.run_id }}')
         self.assertEqual(JOBS['build']['needs'], 'tier')

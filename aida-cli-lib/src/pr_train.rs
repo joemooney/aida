@@ -1235,6 +1235,13 @@ pub(crate) trait MemberChecks {
     ) -> std::result::Result<crate::full_tier::FullTier, String> {
         Ok(crate::full_tier::FullTier::Untiered)
     }
+    /// Whether this gate run admits the member into a train being built:
+    /// false for a dry run and for a re-check of an admitted member, which
+    /// write nothing to the forge or the activity log.
+    // trace:STORY-2809 | ai:claude
+    fn admitting(&self) -> bool {
+        true
+    }
     /// Start a full-tier run on an approved head that has none. `None` when
     /// this gate run must not write to the forge (a dry run, a re-check).
     // trace:STORY-2809 | ai:claude
@@ -1280,6 +1287,12 @@ fn full_tier_gate(
         return Ok(());
     };
     if SKIP_FULL_CHECK.with(std::cell::Cell::get) {
+        // A dry run admits nothing, and a re-check repeats an admission that
+        // is already on record: neither logs an override.
+        if !checks.admitting() {
+            eprintln!("  ! #{pr}: {why} — passed (--skip-full-check)");
+            return Ok(());
+        }
         // The override admits only once it is on record.
         crate::pr_cmd::try_append_ship_activity_line(
             checks.marker_root(),
@@ -1571,7 +1584,9 @@ pub(crate) struct LiveChecks<'a> {
     pub base: &'a str,
     /// The PR was named on the command line, not swept in by `--all-ready`.
     pub named: bool,
-    /// This gate run may ask the forge to start a missing full-tier run.
+    /// This gate run admits the member into a train being built (not a dry
+    /// run, not a re-check): it may ask the forge to start a missing
+    /// full-tier run and log a `--skip-full-check` override.
     // trace:STORY-2809 | ai:claude
     pub request_full: bool,
 }
@@ -1779,6 +1794,10 @@ impl MemberChecks for LiveChecks<'_> {
                 )
             })
             .map_err(|e| format!("{e:#}"))
+    }
+    // trace:STORY-2809 | ai:claude
+    fn admitting(&self) -> bool {
+        self.request_full
     }
     // trace:STORY-2809 | ai:claude
     fn request_full_tier(&mut self, pr: u64) -> Option<std::result::Result<bool, String>> {

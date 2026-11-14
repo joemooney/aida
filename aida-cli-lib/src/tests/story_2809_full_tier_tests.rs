@@ -54,6 +54,7 @@ fn full_run(
 /// repository refuses a head whose checks carry no `ci-tier` check at all.
 #[test]
 fn a_tiered_repository_refuses_a_head_with_checks_but_no_tier_check() {
+    // trace:STORY-b6b1278890774ef993d2ebc327862470-732.accf1a65 | ai:claude
     let unmarked = checks(&[("Build (ubuntu-latest)", Passed, Some("1"))]);
     assert_eq!(judge(&unmarked, true), FullTier::Missing);
     let why = admission_refusal(&judge(&unmarked, true), SHA).unwrap();
@@ -71,6 +72,7 @@ fn a_tiered_repository_refuses_a_head_with_checks_but_no_tier_check() {
 /// AC2: the workflow files decide whether the repository is tiered.
 #[test]
 fn a_repository_is_tiered_when_a_workflow_defines_the_tier_job() {
+    // trace:STORY-b6b1278890774ef993d2ebc327862470-732.accf1a65 | ai:claude
     let dir = tempfile::tempdir().unwrap();
     assert!(!repo_is_tiered(dir.path()));
     let workflows = dir.path().join(".github/workflows");
@@ -95,6 +97,7 @@ fn a_repository_is_tiered_when_a_workflow_defines_the_tier_job() {
 /// AC2: a refusal names the missing run.
 #[test]
 fn a_green_fast_run_is_not_a_full_tier_run() {
+    // trace:STORY-b6b1278890774ef993d2ebc327862470-732.accf1a65 | ai:claude
     assert_eq!(judge(&checks(&fast_run("10")), true), FullTier::Missing);
     let why = admission_refusal(&FullTier::Missing, SHA).unwrap();
     assert!(
@@ -110,6 +113,7 @@ fn a_green_fast_run_is_not_a_full_tier_run() {
 /// AC2: only a green full-tier run at the exact head admits.
 #[test]
 fn a_full_run_is_green_only_when_its_own_aggregate_passed() {
+    // trace:STORY-b6b1278890774ef993d2ebc327862470-732.accf1a65 | ai:claude
     let mut rows = fast_run("10");
     rows.extend(full_run("11", Passed, Some(Passed)));
     assert_eq!(
@@ -159,6 +163,7 @@ fn a_full_run_is_green_only_when_its_own_aggregate_passed() {
 /// AC2
 #[test]
 fn a_green_rerun_at_the_same_head_outranks_an_earlier_red_or_cancelled_run() {
+    // trace:STORY-b6b1278890774ef993d2ebc327862470-732.accf1a65 | ai:claude
     let mut rows = full_run("11", Failed, Some(Failed));
     rows.extend(full_run("12", Passed, Some(Passed)));
     assert_eq!(
@@ -174,6 +179,7 @@ fn a_green_rerun_at_the_same_head_outranks_an_earlier_red_or_cancelled_run() {
 /// AC2
 #[test]
 fn a_marker_without_a_run_or_with_a_second_tier_proves_nothing() {
+    // trace:STORY-b6b1278890774ef993d2ebc327862470-732.accf1a65 | ai:claude
     let unowned = checks(&[
         ("ci-tier: full", Passed, None),
         ("Build (ubuntu-latest)", Passed, None),
@@ -187,6 +193,7 @@ fn a_marker_without_a_run_or_with_a_second_tier_proves_nothing() {
 /// AC2
 #[test]
 fn check_runs_carry_the_workflow_run_that_owns_them() {
+    // trace:STORY-b6b1278890774ef993d2ebc327862470-732.accf1a65 | ai:claude
     let page = serde_json::json!({"total_count": 2, "check_runs": [
         {"name": "ci-tier: full", "status": "completed", "conclusion": "success", "head_sha": SHA,
          "details_url": "https://github.com/o/r/actions/runs/777/job/5"},
@@ -267,6 +274,7 @@ const VIEW: &str = "gh pr view 41 -R o/r --json labels,statusCheckRollup";
 /// AC1: an unlabelled PR gets the label, in one edit and with no removal.
 #[test]
 fn a_request_adds_the_label_only_when_the_pr_does_not_carry_it() {
+    // trace:STORY-b6b1278890774ef993d2ebc327862470-732.acbd1c12 | ai:claude
     for rollup in [
         serde_json::Value::Null,
         serde_json::json!([check_run("ci-tier: fast", "COMPLETED")]),
@@ -286,6 +294,7 @@ fn a_request_adds_the_label_only_when_the_pr_does_not_carry_it() {
 /// that already has a full-tier run: either would cancel a run.
 #[test]
 fn a_request_never_relabels_a_head_whose_run_it_would_cancel() {
+    // trace:STORY-b6b1278890774ef993d2ebc327862470-732.acbd1c12 | ai:claude
     for (labels, rollup) in [
         (
             vec!["ci:full"],
@@ -318,6 +327,7 @@ fn a_request_never_relabels_a_head_whose_run_it_would_cancel() {
 /// adding a label the PR already carries starts nothing.
 #[test]
 fn a_request_reapplies_a_stale_label_when_nothing_is_running() {
+    // trace:STORY-b6b1278890774ef993d2ebc327862470-732.acbd1c12 | ai:claude
     let rollup = serde_json::json!([
         check_run("ci-tier: fast", "COMPLETED"),
         {"__typename": "StatusContext", "context": "x", "state": "SUCCESS"}
@@ -337,6 +347,7 @@ fn a_request_reapplies_a_stale_label_when_nothing_is_running() {
 /// AC1
 #[test]
 fn a_failed_view_or_label_add_is_reported_and_a_project_without_github_asks_nothing() {
+    // trace:STORY-b6b1278890774ef993d2ebc327862470-732.acbd1c12 | ai:claude
     let (outcome, _) = request(view(&[], serde_json::json!([])), false);
     let err = outcome.unwrap_err();
     assert!(
@@ -397,6 +408,7 @@ fn deferred_finding() -> String {
 /// does a verdict whose every finding is deferred.
 #[test]
 fn an_approving_verdict_with_a_pr_requests_full_tier_ci() {
+    // trace:STORY-b6b1278890774ef993d2ebc327862470-732.acbd1c12 | ai:claude
     assert_eq!(requested_after("approved", &[], Some(41)), vec![41]);
     assert_eq!(
         requested_after("approved", &[deferred_finding()], Some(41)),
@@ -412,6 +424,7 @@ fn an_approving_verdict_with_a_pr_requests_full_tier_ci() {
 /// verdict.
 #[test]
 fn a_non_approving_verdict_or_no_pr_requests_nothing() {
+    // trace:STORY-b6b1278890774ef993d2ebc327862470-732.acbd1c12 | ai:claude
     let blocking = ["a blocking finding".to_string()];
     for verdict in [
         "request-changes",
@@ -441,9 +454,36 @@ fn a_non_approving_verdict_or_no_pr_requests_nothing() {
     );
 }
 
+/// Docs: the landing page states the gate in the words the train prints, and
+/// `make check-ci-list` describes the approved-head tier.
+#[test]
+fn the_landing_page_and_the_ci_gate_listing_state_the_gate() {
+    // trace:STORY-b6b1278890774ef993d2ebc327862470-732.Docs | ai:claude
+    let repo = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("..");
+    let page = std::fs::read_to_string(repo.join("docs/advanced/landing.md")).unwrap();
+    let refusal = admission_refusal(&FullTier::Missing, SHA).unwrap();
+    for stated in [
+        "no full-tier CI run exists at its head",
+        FULL_MARKER,
+        AGGREGATE,
+        FULL_LABEL,
+        "--skip-full-check",
+        "train-admit-skip-full-check",
+    ] {
+        assert!(
+            page.contains(stated),
+            "landing.md does not state `{stated}`"
+        );
+    }
+    assert!(refusal.contains("no full-tier CI run exists at its head"));
+    let listing = std::fs::read_to_string(repo.join("scripts/check-ci-gates.py")).unwrap();
+    assert!(listing.contains("Approved-head tier:") && listing.contains(FULL_LABEL));
+}
+
 /// AC2: the override is logged.
 #[test]
 fn the_skip_event_records_the_pr_head_and_reason() {
+    // trace:STORY-b6b1278890774ef993d2ebc327862470-732.accf1a65 | ai:claude
     let event: serde_json::Value =
         serde_json::from_str(&skip_event("2026-11-14T12:00:00Z", 41, SHA, "why")).unwrap();
     assert_eq!(event["command"], "aida pr train");

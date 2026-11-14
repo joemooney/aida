@@ -906,6 +906,8 @@ struct FakeChecks {
     full_tier: Option<crate::full_tier::FullTier>,
     /// STORY-2809: the PRs a full-tier run was requested for.
     full_requests: Vec<u64>,
+    /// STORY-2809: false for a dry run or a re-check, which write nothing.
+    admitting: bool,
 }
 
 impl FakeChecks {
@@ -925,6 +927,7 @@ impl FakeChecks {
             asked: Vec::new(),
             full_tier: None,
             full_requests: Vec::new(),
+            admitting: true,
         }
     }
 
@@ -1029,6 +1032,9 @@ impl MemberChecks for FakeChecks {
             .full_tier
             .clone()
             .unwrap_or(crate::full_tier::FullTier::Untiered))
+    }
+    fn admitting(&self) -> bool {
+        self.admitting
     }
     fn request_full_tier(&mut self, pr: u64) -> Option<std::result::Result<bool, String>> {
         self.full_requests.push(pr);
@@ -5801,6 +5807,8 @@ fn mandate_include_gate_paths_audits_train_member() {
 // trace:STORY-2809 | ai:claude — AC2 (and AC1: the train asks for the missing run)
 #[test]
 fn live_gate_refuses_an_approved_head_with_no_full_tier_run_and_requests_one() {
+    // trace:STORY-b6b1278890774ef993d2ebc327862470-732.acbd1c12 | ai:claude
+    // trace:STORY-b6b1278890774ef993d2ebc327862470-732.accf1a65 | ai:claude
     let mut c = FakeChecks::new();
     c.full_tier = Some(crate::full_tier::FullTier::Missing);
     let why = gate_member_with(&mut c, "main", 41).unwrap_err();
@@ -5818,6 +5826,7 @@ fn live_gate_refuses_an_approved_head_with_no_full_tier_run_and_requests_one() {
 // trace:STORY-2809 | ai:claude — AC2
 #[test]
 fn live_gate_names_a_running_or_red_full_tier_run_without_requesting_another() {
+    // trace:STORY-b6b1278890774ef993d2ebc327862470-732.accf1a65 | ai:claude
     for (tier, expected) in [
         (
             crate::full_tier::FullTier::Pending {
@@ -5845,6 +5854,7 @@ fn live_gate_names_a_running_or_red_full_tier_run_without_requesting_another() {
 // trace:STORY-2809 | ai:claude — AC2
 #[test]
 fn live_gate_admits_a_green_full_tier_head_and_never_asks_an_unapproved_one() {
+    // trace:STORY-b6b1278890774ef993d2ebc327862470-732.accf1a65 | ai:claude
     let mut c = FakeChecks::new();
     c.full_tier = Some(crate::full_tier::FullTier::Green { run: "900".into() });
     gate_member_with(&mut c, "main", 41).unwrap();
@@ -5861,6 +5871,7 @@ fn live_gate_admits_a_green_full_tier_head_and_never_asks_an_unapproved_one() {
 // trace:STORY-2809 | ai:claude — AC2: `--skip-full-check` overrides and is logged
 #[test]
 fn skip_full_check_admits_and_logs_the_override() {
+    // trace:STORY-b6b1278890774ef993d2ebc327862470-732.accf1a65 | ai:claude
     let mut c = FakeChecks::new();
     c.full_tier = Some(crate::full_tier::FullTier::Missing);
     let m = with_skip_full_check(true, || gate_member_with(&mut c, "main", 41)).unwrap();
@@ -5878,10 +5889,37 @@ fn skip_full_check_admits_and_logs_the_override() {
     assert!(gate_member_with(&mut c, "main", 41).is_err());
 }
 
+// trace:STORY-2809 | ai:claude — AC2: a dry run and a pre-landing re-check
+// pass the override without logging it, so one admission logs one entry.
+#[test]
+fn skip_full_check_logs_nothing_when_the_gate_run_does_not_admit() {
+    // trace:STORY-b6b1278890774ef993d2ebc327862470-732.accf1a65 | ai:claude
+    let mut c = FakeChecks::new();
+    c.full_tier = Some(crate::full_tier::FullTier::Missing);
+    c.admitting = false;
+    // A directory where the log file belongs would fail any write.
+    std::fs::create_dir_all(c.root.path().join(".aida/advisor-activity.jsonl")).unwrap();
+    let m = with_skip_full_check(true, || gate_member_with(&mut c, "main", 41)).unwrap();
+    assert_eq!(m.pr, 41);
+    assert!(c.full_requests.is_empty());
+
+    // An admission, then two re-checks: one entry.
+    let mut c = FakeChecks::new();
+    c.full_tier = Some(crate::full_tier::FullTier::Missing);
+    with_skip_full_check(true, || gate_member_with(&mut c, "main", 41)).unwrap();
+    c.admitting = false;
+    for _ in 0..2 {
+        with_skip_full_check(true, || gate_member_with(&mut c, "main", 41)).unwrap();
+    }
+    let log = std::fs::read_to_string(c.root.path().join(".aida/advisor-activity.jsonl")).unwrap();
+    assert_eq!(log.lines().count(), 1, "{log}");
+}
+
 // trace:STORY-2809 | ai:claude — AC2: an override that cannot be logged does
 // not admit.
 #[test]
 fn skip_full_check_refuses_when_the_override_cannot_be_logged() {
+    // trace:STORY-b6b1278890774ef993d2ebc327862470-732.accf1a65 | ai:claude
     let mut c = FakeChecks::new();
     c.full_tier = Some(crate::full_tier::FullTier::Missing);
     // A directory where the log file belongs makes the write fail.

@@ -1,6 +1,7 @@
 # Landing approved work
 
 <!-- trace:STORY-2809 | ai:claude -->
+<!-- trace:STORY-b6b1278890774ef993d2ebc327862470-732.Docs | ai:claude -->
 
 A pull request reaches the default branch through a merge train
 (`aida pr train`), which tests the combined result before it merges. This page
@@ -77,10 +78,11 @@ aida pr train <N...> --skip-full-check
 ```
 
 `--skip-full-check` admits members whose head has no green FULL run. Each
-admission prints a warning and appends a `train-admit-skip-full-check` entry,
+admission prints a warning and appends one `train-admit-skip-full-check` entry,
 with the PR, head and reason, to `.aida/advisor-activity.jsonl`. The override
 applies to that invocation only. Every other train gate still applies. If the
-entry cannot be written, the member is not admitted.
+entry cannot be written, the member is not admitted. With `--dry-run` nothing
+is admitted, so no entry is written.
 
 ## Repositories without tiers
 

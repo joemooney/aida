@@ -63,29 +63,37 @@ pub(crate) enum CommitCi {
 #[cfg(test)]
 pub(crate) const CI_AGGREGATOR_CHECK: &str = "Build (ubuntu-latest)";
 
-/// The rows that count for each check name: those of the newest workflow run
-/// reporting that name. A run cancelled and superseded on the same commit (a
-/// label event restarts a PR's CI) leaves cancelled rows behind, and they
-/// must not read as red once a later run reports the same checks. Rows with
-/// no owning run (commit statuses) are kept as reported.
+/// The rows that count: every row except those of a superseded workflow run.
+/// A run is superseded when a newer run on the commit reports a check of the
+/// same name; it then contributes nothing, whatever else it reported. A label
+/// event restarts a PR's CI, and the cancelled run leaves rows the newer run
+/// never repeats: its own tier marker (`ci-tier: fast` against the newer
+/// run's `ci-tier: full`) and matrix jobs cancelled before their names
+/// expanded. Rows with no owning run (commit statuses) are kept as reported.
 // trace:STORY-2809 | ai:claude
 fn latest_per_name(checks: &[CommitCheck]) -> Vec<&CommitCheck> {
     let order = |c: &CommitCheck| c.run_id.as_deref().and_then(|id| id.parse::<u64>().ok());
-    let mut newest: std::collections::HashMap<&str, Option<u64>> = std::collections::HashMap::new();
+    let mut newest: std::collections::HashMap<&str, u64> = std::collections::HashMap::new();
     for check in checks {
-        let slot = newest.entry(check.name.as_str()).or_insert(None);
-        *slot = (*slot).max(order(check));
+        if let Some(run) = order(check) {
+            let slot = newest.entry(check.name.as_str()).or_insert(run);
+            *slot = (*slot).max(run);
+        }
     }
+    let superseded: std::collections::HashSet<u64> = checks
+        .iter()
+        .filter_map(|c| order(c).filter(|run| newest[c.name.as_str()] > *run))
+        .collect();
     checks
         .iter()
-        .filter(|c| newest[c.name.as_str()] == order(c))
+        .filter(|c| order(c).is_none_or(|run| !superseded.contains(&run)))
         .collect()
 }
 
 /// Judge `checks`: a failure outranks a pending check, which outranks a
 /// required check that did not succeed. A skipped check passes only when it
-/// is not required. An empty set is never green. Only the latest run of each
-/// check name counts.
+/// is not required. An empty set is never green. A workflow run superseded by
+/// a newer one on the commit does not count.
 pub(crate) fn judge_commit_checks(checks: &CommitChecks, required: &[&str]) -> CommitCi {
     let latest = latest_per_name(&checks.checks);
     let named = |outcome: CheckOutcome| -> Vec<String> {

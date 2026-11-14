@@ -149,8 +149,8 @@ fn a_cancelled_earlier_run_does_not_outvote_the_latest_run_of_a_check() {
         judge_commit_checks(&rerunning, &["Build"]),
         CommitCi::Pending(vec!["Build".into()])
     );
-    // A check only the cancelled run reported, and one with no owning run,
-    // still count.
+    // A run that no newer run repeats a check of, and a check with no owning
+    // run, still count.
     let leftover = on(vec![
         row("CI (lib-0)", CheckOutcome::Failed, Some("10")),
         row("Build", CheckOutcome::Passed, Some("11")),
@@ -159,6 +159,67 @@ fn a_cancelled_earlier_run_does_not_outvote_the_latest_run_of_a_check() {
     assert_eq!(
         judge_commit_checks(&leftover, &["Build"]),
         CommitCi::Failed(vec!["CI (lib-0)".into(), "external".into()])
+    );
+}
+
+/// Re-applying `ci:full` starts a FAST run (the `unlabeled` event) that the
+/// FULL run cancels within seconds. The cancelled run leaves its tier marker
+/// and an unexpanded matrix job, names the FULL run never reports. The whole
+/// superseded run is dropped, so the approved head reads green.
+// trace:STORY-2809 | ai:claude
+#[test]
+fn a_fast_run_cancelled_by_the_full_run_contributes_nothing() {
+    // trace:STORY-b6b1278890774ef993d2ebc327862470-732.acbd1c12 | ai:claude
+    const FAST: &str = "43603377514";
+    const FULL: &str = "43603377600";
+    let row = |name: &str, outcome, run: &str| CommitCheck {
+        name: name.to_string(),
+        outcome,
+        run_id: Some(run.to_string()),
+    };
+    let cancelled_fast = || {
+        vec![
+            row("ci-tier: fast", CheckOutcome::Failed, FAST),
+            row("CI (${{ matrix.shard }})", CheckOutcome::Failed, FAST),
+            row("Build (ubuntu-latest)", CheckOutcome::Failed, FAST),
+        ]
+    };
+    let full = |build| {
+        vec![
+            row("ci-tier: full", CheckOutcome::Passed, FULL),
+            row("CI (lib-0)", CheckOutcome::Passed, FULL),
+            row("Build (ubuntu-latest)", build, FULL),
+        ]
+    };
+    let on = |first: Vec<CommitCheck>, second: Vec<CommitCheck>| CommitChecks {
+        sha: SHA.to_string(),
+        checks: first.into_iter().chain(second).collect(),
+    };
+    for required in [&["Build (ubuntu-latest)"][..], &[]] {
+        assert_eq!(
+            judge_commit_checks(&on(cancelled_fast(), full(CheckOutcome::Passed)), required),
+            CommitCi::Green
+        );
+    }
+    // The order the forge lists the rows in does not matter.
+    assert_eq!(
+        judge_commit_checks(&on(full(CheckOutcome::Passed), cancelled_fast()), &[]),
+        CommitCi::Green
+    );
+    // The newer run is still the one judged.
+    assert_eq!(
+        judge_commit_checks(&on(cancelled_fast(), full(CheckOutcome::Pending)), &[]),
+        CommitCi::Pending(vec!["Build (ubuntu-latest)".into()])
+    );
+    // A run of another workflow shares no check name with the FULL run, so
+    // its failure stands.
+    let mut other = on(cancelled_fast(), full(CheckOutcome::Passed));
+    other
+        .checks
+        .push(row("docs", CheckOutcome::Failed, "43603377000"));
+    assert_eq!(
+        judge_commit_checks(&other, &[]),
+        CommitCi::Failed(vec!["docs".into()])
     );
 }
 
