@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-11T12:17:47.476312683Z
-modified_at: 2026-11-14T21:24:09.484907963Z
+modified_at: 2026-11-14T21:35:01.071791400Z
 req_type: Task
 relationships:
 - rel_type: BlockedBy
@@ -134,6 +134,13 @@ comments:
   modified_at: 2026-11-14T21:24:09.484907963Z
   session_id: 01a1dbd6-f8cd-7313-a123-75ebbeaa2afd
   harness_version: 2.1.325 (Claude Code)
+- id: 01a1dbfc-33cf-7f72-b845-42e04f67a21e
+  author: dirtlab
+  content: 'Advisor delta implemented: derive the PATH probe child exact libtest name from module_path!() without the crate prefix, so test_env_base relocation and future moves remain valid. Scanned moved tests and aida-testkit: no remaining quoted test_env:: child selectors. Validation: bug_1994_path_isolation 4 passed / 1 scheduled stress ignored; story_1888_gate_paths 52 passed; make check-ci-fast 48 gates passed (including formatting and 51 Rust structural tests); git diff --check passed. One changed file: aida-cli-lib/src/tests/bug_1994_path_isolation_tests.rs. Edits left uncommitted for host publication and delta review; PR-3994 hold remains in force.'
+  created_at: 2026-11-14T21:35:01.071791400Z
+  modified_at: 2026-11-14T21:35:01.071791400Z
+  session_id: 01a1dbf5fec4
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1ca8b-157a-7c50-9f73-dc13d565bf63
   author: joe
