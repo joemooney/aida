@@ -880,14 +880,22 @@ fn with_live_io<T>(
             read_hold: &|| mh::read_hold_record(&root, pr),
             covered_specs: &|| {
                 let forge = crate::forge::forge_for_kind(&root, kind);
-                let mut loud = crate::network_retry::StderrSink;
-                let mut quiet = crate::network_retry::NoopSink;
-                let sink: &mut dyn crate::network_retry::RetrySink =
-                    if read_only { &mut quiet } else { &mut loud };
-                let headlines = forge
-                    .change_commit_headlines(pr, &mut *sink)
-                    .map_err(noted)?;
-                let title = forge.change_metadata(pr, &mut *sink).map_err(noted)?.title;
+                // A status read prints no retry notices.
+                let (headlines, metadata) = if read_only {
+                    let mut quiet = crate::network_retry::NoopSink;
+                    (
+                        forge.change_commit_headlines(pr, &mut quiet),
+                        forge.change_metadata(pr, &mut quiet),
+                    )
+                } else {
+                    let mut loud = crate::network_retry::StderrSink;
+                    (
+                        forge.change_commit_headlines(pr, &mut loud),
+                        forge.change_metadata(pr, &mut loud),
+                    )
+                };
+                let headlines = headlines.map_err(noted)?;
+                let title = metadata.map_err(noted)?.title;
                 // BUG-2403: each covered spec's proved labels join the corpus.
                 // trace:BUG-2403 | ai:claude
                 let ids = with_proved_labels(&root, covered_spec_ids(&headlines, &title, &hold));
@@ -980,7 +988,7 @@ fn with_live_io<T>(
             // main root — the same roots the verdict file lookup uses.
             // trace:BUG-2216 | ai:claude
             refusal_release: &|record, head| {
-                crate::pr_cmd::ship_refusal_release_recording(
+                crate::pr_cmd::ship_refusal_release(
                     &[project, root.as_path()],
                     record,
                     Some(head),
