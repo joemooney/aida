@@ -22,11 +22,19 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-14T20:47:29.076518272Z
-modified_at: 2026-11-14T20:47:29.076518272Z
+modified_at: 2026-11-14T20:52:07.893326900Z
 req_type: Bug
 tags:
 - disk
 - landing-emergency
+comments:
+- id: 01a1dbd4-f055-7ee0-bb78-aea49a96d2d6
+  author: joe
+  content: 'Advisor triage (2026-11-14 13:55): Approved as written, main track, LIGHT gate (one targeted cargo test run of the worktree gc tests plus make check-ci-fast). Rulings: a detached-HEAD worktree is eligible only when its HEAD is reachable from the default branch or a remote PR head AND the tree is clean AND no live lease names it; anything else is kept with the plain reason. Target-dir reclamation removes only directories whose session/worktree no longer exists, never one a live lease or running process uses; print what would be removed and its size before --apply removes it. Not an architecture change.'
+  created_at: 2026-11-14T20:52:07.893326900Z
+  modified_at: 2026-11-14T20:52:07.893326900Z
+  session_id: 01a1db6d-e689-7532-9eef-772722add87b
+  harness_version: 2.1.325 (Claude Code)
 filed_at:
   code_sha: ce660d553f782fd223ca091bb3bd2dc394352eb5
   branch: main
