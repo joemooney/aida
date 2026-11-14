@@ -18,7 +18,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-14T12:41:27.454869454Z
-modified_at: 2026-11-14T23:13:54.111337746Z
+modified_at: 2026-11-14T23:39:47.591556981Z
 req_type: Story
 tags:
 - area:ci
@@ -217,6 +217,44 @@ comments:
   modified_at: 2026-11-14T23:13:51.885877913Z
   session_id: 01a1dc2c-25f2-7d52-aa8c-61e0f270e9d1
   harness_version: 2.1.325 (Claude Code)
+- id: 01a1dc6e-7007-7c31-b026-527087db2fd3
+  author: dirtlab
+  content: |
+    STORY-2809 round-2 native implementer handoff
+
+    Implemented advisor P1: workflow-run supersession requires verified GitHub workflow_id, read once per run with run ID and exact-head validation. Missing identity never grants supersession. Added overlapping-job/distinct-workflow and identity lookup regressions; retained cancelled FAST/FULL and all-skipped label-event tests.
+    Implemented advisor P2: workflow directory, entry and file errors propagate as unavailable evidence. All entries are read even after finding a tier marker. Added read-failure and gate-unavailable regressions including skip-full-check.
+    Round-2 trace and admission-only logging fixes were already present in this checkout; verified all criteria traced and dry-run/re-check logging regressions pass.
+
+    Validation (all through launcher for cargo compilation/tests):
+    - commit_ci: 25 passed, including relay integration after CLI prerequisite build.
+    - full_tier: 21 passed.
+    - forge_read_ratchet_tests: 4 passed.
+    - skip_full_check: 3 passed.
+    - Python environment/crate-split/dependency/CI-tier tests: 55 passed.
+    - make check-ci-fast: 48 gates passed, with compilation/test calls routed through lane runner.
+    - aida criteria STORY-2809: no untested criteria or unanchored tests.
+    - git diff --check: passed.
+    The literal forge_commit_ci filter matched zero tests; corrected to commit_ci and executed tests above.
+
+    Changed files:
+    aida-cli-lib/src/forge_commit_ci.rs
+    aida-cli-lib/src/full_tier.rs
+    aida-cli-lib/src/pr_train.rs
+    aida-cli-lib/src/tests/bug2406_train_tests.rs
+    aida-cli-lib/src/tests/story_1689_commit_ci_status_tests.rs
+    aida-cli-lib/src/tests/story_1689_dev_autopromote_tests.rs
+    aida-cli-lib/src/tests/story_1690_train_tests.rs
+    aida-cli-lib/src/tests/story_2809_full_tier_tests.rs
+    aida-cli-lib/src/tests/task_1945_commit_ci_tests.rs
+    aida-cli-lib/src/tests/task_1945_review_watch_ready_tests.rs
+
+    Publication declaration recorded: [AI:codex] fix(ci): bind supersession to workflows and refuse unreadable tier evidence (STORY-2809)
+    Edits remain uncommitted. No push, PR creation, queue completion, ship merge or review recording performed. Host launcher must create this round's commit and publish subject to existing advisor hold. Hold remains a publication veto; no code/validation blocker remains.
+  created_at: 2026-11-14T23:39:47.591556981Z
+  modified_at: 2026-11-14T23:39:47.591556981Z
+  session_id: 01a1dc615bdb
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1da15-71c2-7341-9db1-1661bad607cc
   author: aida-session-start
