@@ -1,0 +1,23 @@
+id: 01a1d7f9-a402-77c0-9fc3-933053303936
+spec_id: BUG-b6b1278890774ef993d2ebc327862470-336
+agreed_id: BUG-2571
+title: 'aida land run follow-ups from #3981 review: inherited-child timeouts, --once wait list, limits as knobs'
+description: 'Accepted non-blocking findings from the #3981 round-1 review (advisor 19:57 on STORY-2768): (F4) after land run restarts, children from the previous process are supervised for the full timeout and each timeout counts against the head, so restarts can derive BLOCKED without fault; stop inherited children without counting, or do not count their timeouts. (F6) the --once wait loop supervises against the pre-wait change list, so a reviewer whose head moved is not stopped, and settle notes are discarded instead of printed. (F7) max_reviews/max_lanes/review_timeout_secs are read raw from .aida/config.toml; register them as KnobSpecs and warn on out-of-range values.'
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-14T02:53:44.322875636Z
+modified_at: 2026-11-14T02:53:44.322875636Z
+req_type: Bug
+tags:
+- track:integration
+filed_at:
+  code_sha: 01b8e71cebf7fbfb5696a28dabab42075b1e8271
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: c0465bed52e
+  vendor: claude
+  session: 01a1d797-2ccf-7771-899a-682081f10504
+  harness_version: 2.1.325 (Claude Code)
