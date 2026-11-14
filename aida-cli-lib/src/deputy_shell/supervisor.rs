@@ -154,14 +154,18 @@ fn supervise(q: &Queue, stop: &AtomicBool, command: &mut Command) -> Result<()> 
     Ok(())
 }
 
+// These subprocess fixtures depend on Linux procfs and POSIX shell signals.
+// trace:STORY-2775 | ai:codex
+#[cfg(target_os = "linux")]
 #[cfg(test)]
 mod tests {
     use super::*;
     #[test]
     fn story_2775_operator_signals_stop_supervisor() {
         const CHILD_ROOT: &str = "AIDA_TEST_2775_ROOT";
-        if let Some(root) = std::env::var_os(CHILD_ROOT) {
-            let q = super::super::queue_in(std::path::Path::new(&root), "test").unwrap();
+        let environment = aida_core::exec_context::Environment::capture();
+        if let Some(root) = environment.get(CHILD_ROOT) {
+            let q = super::super::queue_in(std::path::Path::new(root), "test").unwrap();
             let mut command = Command::new("/bin/sh");
             command
                 .args(["-c", "echo $$ > child.pid; exec sleep 30"])
