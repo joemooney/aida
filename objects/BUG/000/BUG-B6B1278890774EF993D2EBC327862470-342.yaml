@@ -15,12 +15,12 @@ description: |
   - red 2-member train -> exactly two one-member sub-trains next, no same-composition rerun
   - red 1-member train -> member ejected after ONE CI run
   - module docs, the train PR close comment, CLI help and the discipline/docs prose no longer claim a rerun
-status: InProgress
+status: NeedsAttention
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-14T12:59:48.856339929Z
-modified_at: 2026-11-14T15:05:37.160292952Z
+modified_at: 2026-11-14T15:05:42.835781549Z
 req_type: Bug
 comments:
 - id: 01a1da27-3618-7463-8d20-0317f275eec5
@@ -78,6 +78,15 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1da97-c8b3-7c92-83dc-9ae471c0bb31
+  author: dirtlab
+  timestamp: 2026-11-14T15:05:42.835791354Z
+  session_id: 01a1da88bc20
+  harness_version: 2.1.319 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 filed_at:
   code_sha: 166920a3bf8bd517e8d670a09dd3a7a3de96b7f9
   branch: worktree-agent-a132ca8b8dbec7979
@@ -86,3 +95,9 @@ filed_at:
   aida_build_sha: 166920a3bf8
   vendor: claude
   session: fc28c702-2f6e-419e-b882-6ddfeb9134ff
+attention_reason:
+  category: other
+  detail: 'work complete locally but unable to publish: the seat has no valid GitHub credential (gh token invalid; git push cannot authenticate), so the rework commit f71bbde68a for PR #4030 is not on origin'
+  lean: 'branch is ready; from the seat worktree run git push --force-with-lease origin fix/train-no-blind-rerun-BUG-2577 (aida ship rebased it onto origin/main), then re-review PR #4030'
+  raised_by: implementer
+  raised_at: 2026-11-14T15:05:42.835781549Z
