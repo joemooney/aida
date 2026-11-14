@@ -1,5 +1,6 @@
 id: 01a1dc3e-7aa8-7562-9be7-2a9762f9913c
 spec_id: TASK-73022632d35647cca3858b18ac0723e3-024
+agreed_id: TASK-3129
 title: Propagate train --check deadline into forge and git subprocesses
 description: Follow-up to STORY-2824 / PR-4053 advisor ruling (2026-11-14). The --timeout budget is checked between candidates. Thread a shared deadline through discovery and member probes so hung or slow forge/Git subprocesses are bounded by the remaining command budget. Preserve fail-closed unavailable/not-checked reporting and add subprocess timeout regressions.
 status: Draft
@@ -9,6 +10,11 @@ feature: Uncategorized
 created_at: 2026-11-14T22:47:24.584807086Z
 modified_at: 2026-11-14T22:47:24.584807086Z
 req_type: Task
+history:
+- id: 01a1dc6b-f6d9-7102-826d-02892d33d28b
+  author: joe
+  timestamp: 2026-11-14T23:37:05.497700712Z
+  changes: []
 filed_at:
   aida_version: 0.16.0
   aida_build_sha: bc24a1e688

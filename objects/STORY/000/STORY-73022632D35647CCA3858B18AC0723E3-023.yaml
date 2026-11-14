@@ -1,5 +1,6 @@
 id: 01a1dc5a-1352-7851-96f4-a06d5a50f797
 spec_id: STORY-73022632d35647cca3858b18ac0723e3-023
+agreed_id: STORY-2371
 title: 'Review PR-4071: [AI:codex] fix: Run the ratchet set (inventory, audit, source-scan, manual checks) in the fast CI tier and in the lane pre-push gate, so approvals stop going red at the full tier (STOR'
 description: |
   Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `(no-sess`) for branch `story-b6b1278890774ef993d2ebc327862470-756`.
@@ -33,6 +34,10 @@ history:
 - id: 01a1dc5a-2f07-7572-b167-ccb0fdc8942d
   author: dirtlab
   timestamp: 2026-11-14T23:17:40.231946111Z
+  changes: []
+- id: 01a1dc6b-f960-75d3-b510-d27a61386fbc
+  author: joe
+  timestamp: 2026-11-14T23:37:06.144611356Z
   changes: []
 filed_at:
   code_sha: 72cfa08d38a826f2e27acbb0e5c322fff8b29e81
