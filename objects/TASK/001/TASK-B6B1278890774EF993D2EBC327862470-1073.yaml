@@ -961,12 +961,36 @@ description: |
   ### finding-hash:dbd4e4d5
 
   docs/cli/04-git-lifecycle.md (promotion-check) says every passing change has its tag removed, but a spec keeps it while another pending change names it, and the section does not say that only an exact `git revert -m 1` with no other change clears a refusal. Also `checks = []` in the trusted config merges with no check at all; say so in the docs or refuse an empty list.
+
+
+  ## Findings from STORY-2772
+  Reviewed sha: 94d87ef828e98cb6d1b61b6ed365cc607a5ba2f4
+
+  ### finding-hash:c45fcedb
+
+  changed_paths (land.rs:548) reads `git diff --name-only` without -z or core.quotePath=off, so a path with a non-ASCII byte comes back quoted and escaped and matches no protected entry: a new file such as `billing/é.sql` under a protected directory leaves the change eligible. Use `-z` (or `-c core.quotePath=off`) and add a test.
+
+  ### finding-hash:5d395d55
+
+  Carried to STORY-2805 by the advisor rulings of 2026-11-14: nothing runs promotion-check at cut or ship and nothing leads a merged change to its review; content inside a main-sync merge is not checked; --since is an unverified statement of the last cut; spec tags and effort are author-editable. STORY-2772 must not be marked complete on this slice. run_merge with --push, the tag write through `aida edit`, and the Reader/Live wiring have no test and no end-to-end run.
+
+  ### finding-hash:5b62cb1c
+
+  run_merge (integration_cmd.rs, the push step) returns the push error with the merge still on local `integration`; the next run refuses with local integration is not origin/integration and the operator must reset by hand. Put the branch back, or print the reset command.
+
+  ### finding-hash:2fb703ca
+
+  The `merged-before-review` tag can go stale: promotion-check with --tip older than origin/integration or --since past a pending merge untags a spec whose pending change is outside the range checked, and a spec whose pending change was reverted out keeps the tag because nothing removes it. Untag only when the tip is origin/integration, and untag the specs of a reverted change.
+
+  ### finding-hash:dbd4e4d5
+
+  docs/cli/04-git-lifecycle.md (promotion-check) says every passing change has its tag removed, but a spec keeps it while another pending change names it, and the section does not say that only an exact `git revert -m 1` with no other change clears a refusal. Also `checks = []` in the trusted config merges with no check at all; say so in the docs or refuse an empty list.
 status: Draft
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-13T20:01:56.623034248Z
-modified_at: 2026-11-14T18:24:38.546168667Z
+modified_at: 2026-11-14T18:24:49.095121259Z
 req_type: Task
 tags:
 - carried-finding:BUG-2543:2a99ebfc
@@ -1130,6 +1154,11 @@ tags:
 - carried-finding:STORY-2768:6810bcf9
 - carried-finding:STORY-2768:7ce2cb14
 - carried-finding:STORY-2768:c0a8d165
+- carried-finding:STORY-2772:2fb703ca
+- carried-finding:STORY-2772:5b62cb1c
+- carried-finding:STORY-2772:5d395d55
+- carried-finding:STORY-2772:c45fcedb
+- carried-finding:STORY-2772:dbd4e4d5
 - carried-finding:STORY-2775:73e42b4b
 - carried-finding:STORY-2775:abbae117
 - carried-finding:TASK-3785:3f4b4821
@@ -1194,6 +1223,7 @@ tags:
 - carried-from:STORY-2763
 - carried-from:STORY-2765
 - carried-from:STORY-2768
+- carried-from:STORY-2772
 - carried-from:STORY-2775
 - carried-from:TASK-3785
 - carried-from:TASK-3791
@@ -1352,6 +1382,7 @@ tags:
 - from-review:STORY-2763
 - from-review:STORY-2765
 - from-review:STORY-2768
+- from-review:STORY-2772
 - from-review:STORY-2775
 - from-review:TASK-3785
 - from-review:TASK-3791
@@ -1704,6 +1735,11 @@ history:
 - id: 01a1db4d-ef39-7da3-8dae-fae48ec33591
   author: joe
   timestamp: 2026-11-14T18:24:40.249633855Z
+  session_id: 01a1db49870b
+  changes: []
+- id: 01a1db4e-1ab2-79f1-8159-a88ed6422864
+  author: joe
+  timestamp: 2026-11-14T18:24:51.378220896Z
   session_id: 01a1db49870b
   changes: []
 filed_at:
