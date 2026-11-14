@@ -1,5 +1,6 @@
 id: 01a1db15-c84b-71c2-9a92-675448993783
 spec_id: STORY-73022632d35647cca3858b18ac0723e3-016
+agreed_id: STORY-2363
 title: 'Review PR-4048: [AI:claude] fix(train): print one timed line per final-gate phase between green and merge (Refs BUG-2584)'
 description: |
   Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `(no-sess`) for branch `bug-b6b1278890774ef993d2ebc327862470-349`.
@@ -35,6 +36,12 @@ history:
 - id: 01a1db16-1961-7222-9bb2-3568bfe84888
   author: dirtlab
   timestamp: 2026-11-14T17:23:41.025707939Z
+  changes: []
+- id: 01a1db21-7281-7742-9378-360177e4ee28
+  author: joe
+  timestamp: 2026-11-14T17:36:04.737496064Z
+  session_id: 01a1dab1-9447-7d22-b5ff-0c9084e122ea
+  harness_version: 2.1.325 (Claude Code)
   changes: []
 filed_at:
   code_sha: 5ea861d7358b33c4422c965a8e2285fd41b2ba6e

@@ -1,5 +1,6 @@
 id: 01a1db14-fdb8-76a1-9bf9-cd9e2a9c19eb
 spec_id: TASK-73022632d35647cca3858b18ac0723e3-006
+agreed_id: TASK-3107
 title: BUG-2584 shipped only the final-gate timing log; green-to-merge is still slow
 description: |
   BUG-2584 asks for two things: make the step from "train PR is green" to the merge call take seconds, and print one line per final-gate phase with its duration. Only the second shipped. The first acceptance criterion (under 30 seconds on a 3-member train) is not met and was not measured.
@@ -25,6 +26,13 @@ tags:
 - from-implementer:BUG-2584
 - kind:deviation
 - severity:major
+history:
+- id: 01a1db21-6b36-7850-ab01-8f75da0660e4
+  author: joe
+  timestamp: 2026-11-14T17:36:02.870673288Z
+  session_id: 01a1dab1-9447-7d22-b5ff-0c9084e122ea
+  harness_version: 2.1.325 (Claude Code)
+  changes: []
 filed_at:
   code_sha: d2aeabea3dfcce83b9ba1550f36273863c41f73c
   branch: bug-b6b1278890774ef993d2ebc327862470-349
