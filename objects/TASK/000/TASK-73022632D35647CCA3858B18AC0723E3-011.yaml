@@ -1,0 +1,28 @@
+id: 01a1db6f-a7c6-78e0-8b4c-a0006dcbcac6
+spec_id: TASK-73022632d35647cca3858b18ac0723e3-011
+title: STORY-2824 touches gate-protected paths (gate/approval.rs, gate/review_marker.rs and their tests) to add read-only variants
+description: |
+  The train member gate was not write-free: observe_merge_path_approval_gate recorded held-gate events, an activity line and carry-over answers; enforce_corpus_decision armed a hold marker and label on a blocking verdict; review_marker::merge_gate removed expired markers; resolve_forge_kind could rewrite .aida/config.toml. For --check to change nothing I added peek_merge_path_approval_gate (merge_path_approval_decision now skips its event and activity writes when the CarryOverSite has append=false; every existing caller passes append=true, so their behaviour is unchanged), review_marker::merge_gate_peek, forge::peek_forge_kind, and a read_only flag on LiveChecks / MemberChecks. Files under aida-cli-lib/src/gate/ and gate/tests/ are protected, so this PR likely needs a human merge. Residual writes the check still makes, none of them labels, holds or journal: git fetches of the head and base (remote-tracking refs, loose merge-tree objects), a short-lived refs/aida/confirm/<uuid> when a rider's train is probed, creation of .aida/ownership/.lock if missing, and the store's first-load side effects.
+
+  Raised by the implementer while working STORY-2824.
+  Branch: story-b6b1278890774ef993d2ebc327862470-747  ·  Commit: e9bb21309e  (PR link added on merge)
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-14T19:01:30.182064372Z
+modified_at: 2026-11-14T19:01:30.182064372Z
+req_type: Task
+tags:
+- from-implementer:STORY-2824
+- kind:design-choice
+- severity:minor
+filed_at:
+  code_sha: e9bb21309e01c37cfe23a8261191309446adc0a0
+  branch: story-b6b1278890774ef993d2ebc327862470-747
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: bc24a1e688
+  vendor: claude
+  session: 01a1db50989e
+  harness_version: 2.1.319 (Claude Code)

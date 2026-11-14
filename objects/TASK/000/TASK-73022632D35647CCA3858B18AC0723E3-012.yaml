@@ -1,0 +1,28 @@
+id: 01a1db6f-b904-7f12-aec6-e184469bacf5
+spec_id: TASK-73022632d35647cca3858b18ac0723e3-012
+title: 'When STORY-2809 (PR-4027) lands: wire its full-tier gate under Gate::FullCi and pass request_full: false from aida pr train --check'
+description: |
+  STORY-2824 acceptance (2) names the full-tier rule from STORY-2809, which is not on main yet (PR-4027 open, changes requested). --check runs typed_gate_member_with, where PR-4027 inserts full_tier_gate, so it inherits the rule on merge. Two things to do when the second of the two PRs merges: (a) keep full_tier_gate(checks, pr, &head)? between at_gate(Gate::FullCi) and at_gate(Gate::Corpus) in aida-cli-lib/src/pr_train.rs so the report names the step "full-ci" (the remedy text already exists in pr_train_check.rs); otherwise a full-tier refusal is reported under "approval"; (b) the LiveChecks built in pr_train_check.rs needs request_full: false (a compile error forces this), so the check neither requests a run nor logs a --skip-full-check override. Until then the report has no full-tier row.
+
+  Raised by the implementer while working STORY-2824.
+  Branch: story-b6b1278890774ef993d2ebc327862470-747  ·  Commit: e9bb21309e  (PR link added on merge)
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-14T19:01:34.596439484Z
+modified_at: 2026-11-14T19:01:34.596439484Z
+req_type: Task
+tags:
+- from-implementer:STORY-2824
+- kind:followup-suggestion
+- severity:minor
+filed_at:
+  code_sha: e9bb21309e01c37cfe23a8261191309446adc0a0
+  branch: story-b6b1278890774ef993d2ebc327862470-747
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: bc24a1e688
+  vendor: claude
+  session: 01a1db50989e
+  harness_version: 2.1.319 (Claude Code)

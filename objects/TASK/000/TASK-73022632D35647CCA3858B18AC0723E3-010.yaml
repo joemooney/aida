@@ -1,0 +1,28 @@
+id: 01a1db6f-92aa-7252-a56e-51eb4f30ba07
+spec_id: TASK-73022632d35647cca3858b18ac0723e3-010
+title: aida pr train --check does not evaluate an active mandate's cover; such PRs report no at the mandate gate
+description: |
+  Acceptance (2) asks for exactly the train's gates and (3) for no writes. They conflict in one place: mandate_ship_cover (gate/mandate_ship.rs) appends to ~/.aida/mandates/exclusions.jsonl (note_exclusions) and may append a carry-over answer to the gate ledger, and LiveChecks::mandate_cover records a held-gate event and a mandate-drive action on refusal. So in read-only mode LiveChecks::mandate_cover (aida-cli-lib/src/pr_train.rs) returns "no mandate" when none is active (exact) and, when one is active and the answer depends on it (a supervised spec with no human at a terminal, or a held PR), reports not eligible at gate "mandate" with the remedy "aida pr train N --dry-run". The check can therefore say no where the train would say yes; it never says yes where the train would say no. Closing the gap needs a read-only mandate_ship_cover (exclusions computed in memory, CarryOverSite::read_only), a change inside the protected gate module.
+
+  Raised by the implementer while working STORY-2824.
+  Branch: story-b6b1278890774ef993d2ebc327862470-747  ·  Commit: e9bb21309e  (PR link added on merge)
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-14T19:01:24.778628762Z
+modified_at: 2026-11-14T19:01:24.778628762Z
+req_type: Task
+tags:
+- from-implementer:STORY-2824
+- kind:deviation
+- severity:minor
+filed_at:
+  code_sha: e9bb21309e01c37cfe23a8261191309446adc0a0
+  branch: story-b6b1278890774ef993d2ebc327862470-747
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: bc24a1e688
+  vendor: claude
+  session: 01a1db50989e
+  harness_version: 2.1.319 (Claude Code)
