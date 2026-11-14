@@ -1,5 +1,6 @@
 id: 01a1db5b-d156-7e02-adbd-7f14c1def25d
 spec_id: TASK-73022632d35647cca3858b18ac0723e3-009
+agreed_id: TASK-3113
 title: 'STORY-2821: launch-prompt staleness note is omitted when the pre-flight itself fails or the head is level'
 description: |
   STORY-2821 says the reviewer prompt always states how far behind the base the reviewed head is. The note is appended in the `aida queue work PR-N --role reviewer` pre-flight (aida-cli-lib/src/queue_cmd/work.rs) from the pre-flight outcome, so: (a) a head level with its base gets no note (nothing to state), and (b) when the pre-flight fails open on a forge/fetch error the launch proceeds with no note, since the distance is unknown. The `aida review prompt --pr` Staleness section (BUG-1434) is unchanged and still covers the unknown case there. Also: `aida review` / `aida human review` already never refused; the setting only changes the default answer of their inline rebase offer.
@@ -17,6 +18,13 @@ tags:
 - from-implementer:STORY-2821
 - kind:deviation
 - severity:minor
+history:
+- id: 01a1db68-c16b-74b3-96eb-4da62133a395
+  author: joe
+  timestamp: 2026-11-14T18:53:57.995148106Z
+  session_id: 01a1dab1-9447-7d22-b5ff-0c9084e122ea
+  harness_version: 2.1.325 (Claude Code)
+  changes: []
 filed_at:
   code_sha: 0f1aae45588a5ba421496c7080e4f05d7da7f71b
   branch: story-b6b1278890774ef993d2ebc327862470-744

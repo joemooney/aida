@@ -1,5 +1,6 @@
 id: 01a1db5d-66aa-73d3-8226-f33c08369eda
 spec_id: STORY-73022632d35647cca3858b18ac0723e3-017
+agreed_id: STORY-2364
 title: 'Review PR-4052: [AI:claude] feat(review): make the reviewer stale-base policy a project setting (STORY-2821)'
 description: |
   Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `(no-sess`) for branch `story-b6b1278890774ef993d2ebc327862470-744`.
@@ -33,6 +34,12 @@ history:
 - id: 01a1db5d-8639-7872-9bce-274b7bae228b
   author: dirtlab
   timestamp: 2026-11-14T18:41:41.945161015Z
+  changes: []
+- id: 01a1db68-c529-7482-af8f-cfe5445fc09e
+  author: joe
+  timestamp: 2026-11-14T18:53:58.953577338Z
+  session_id: 01a1dab1-9447-7d22-b5ff-0c9084e122ea
+  harness_version: 2.1.325 (Claude Code)
   changes: []
 filed_at:
   code_sha: e14d6c9a70b0a348e789051c741c6f5c49a113bd

@@ -1,5 +1,6 @@
 id: 01a1db5b-adae-7220-958b-e2c30fefc27d
 spec_id: TASK-73022632d35647cca3858b18ac0723e3-007
+agreed_id: TASK-3109
 title: 'STORY-2821: ''conflicting'' is judged by git merge-tree, not the forge''s mergeable field'
 description: |
   STORY-2821 says refuse-on-conflict refuses "only when the forge reports the PR conflicting with its base". The implementation judges a conflict with `git merge-tree --write-tree` on the base and head refs just fetched from the forge: the reviewer pre-flight reuses the prediction it already computed (aida-cli-lib/src/pr_rebase.rs stale_base_launch), and the review watcher's base probe gained the same check (aida-cli-lib/src/review_watch_forge.rs merge_conflicts). The forge's own `mergeable` field is not read.
@@ -21,6 +22,13 @@ tags:
 - from-implementer:STORY-2821
 - kind:design-choice
 - severity:minor
+history:
+- id: 01a1db68-c156-70a3-a275-db189f63824c
+  author: joe
+  timestamp: 2026-11-14T18:53:57.974342729Z
+  session_id: 01a1dab1-9447-7d22-b5ff-0c9084e122ea
+  harness_version: 2.1.325 (Claude Code)
+  changes: []
 filed_at:
   code_sha: 0f1aae45588a5ba421496c7080e4f05d7da7f71b
   branch: story-b6b1278890774ef993d2ebc327862470-744

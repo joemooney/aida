@@ -1,5 +1,6 @@
 id: 01a1db5b-c68b-7731-8075-09e8af536023
 spec_id: TASK-73022632d35647cca3858b18ac0723e3-008
+agreed_id: TASK-3108
 title: Review-watch readiness still calls an overlapping stale head not ready under refuse-on-conflict / warn
 description: |
   aida-cli-lib/src/review_watch_ready.rs evaluate() reports "N commit(s) behind <base> with overlapping paths; merge <base> into the branch" as NotReady for any stale overlapping head. STORY-2821 lets such a head be reviewed under `[review] stale_base = "refuse-on-conflict"` or "warn", but did not touch readiness (out of the story's scope). On this project the head is now reviewed and then still reported not ready until its branch is updated, which restarts CI and review on the new head — part of the cost the story set out to remove. Decide whether readiness should follow the same setting (not ready only when conflicting).
@@ -17,6 +18,13 @@ tags:
 - from-implementer:STORY-2821
 - kind:followup-suggestion
 - severity:minor
+history:
+- id: 01a1db68-c13b-7ee3-a59c-6dfc72ee81a1
+  author: joe
+  timestamp: 2026-11-14T18:53:57.947444717Z
+  session_id: 01a1dab1-9447-7d22-b5ff-0c9084e122ea
+  harness_version: 2.1.325 (Claude Code)
+  changes: []
 filed_at:
   code_sha: 0f1aae45588a5ba421496c7080e4f05d7da7f71b
   branch: story-b6b1278890774ef993d2ebc327862470-744
