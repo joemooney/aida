@@ -3874,7 +3874,8 @@ fn bug_2554_a_stalled_anchor_check_times_out() {
     git(root, &["init", "-q", "-b", "main"]);
     bug_2554_grow_store(root, 0, 6);
     bug_2554_assert_index_equals_full_walk(root, &bug_2554_ids(6));
-    let (_shim, path) = bug_2554_git_shim("*--ignore-missing*) exec /bin/sleep 30;;");
+    let (_shim, path) =
+        bug_2554_git_shim("*--ignore-missing*|*--batch-check*) exec /bin/sleep 30;;");
     let _guard = crate::test_env::EnvVarsGuard::apply(&[
         ("PATH", Some(&path)),
         ("AIDA_STORE_HISTORY_TIMEOUT_SECS", Some("1")),
