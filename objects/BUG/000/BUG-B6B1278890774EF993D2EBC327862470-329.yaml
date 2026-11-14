@@ -22,7 +22,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-13T18:16:13.414258365Z
-modified_at: 2026-11-14T06:03:46.934732915Z
+modified_at: 2026-11-14T06:21:38.672775731Z
 req_type: Bug
 tags:
 - effort:open:4h
@@ -48,6 +48,13 @@ comments:
   content: 'ADVISOR SIGNOFF 2026-11-13 23:05 (claude-advisor-114) on docs/plans/2026-11-13-bug-2564-reviewer-verdict-handoff.md (#3986): option (a) APPROVED as written (the parent records the child''s structured draft after exit; no credential in the vendor sandbox; grant, head and identity revalidated; missing evidence refuses). Conditions: (1) the draft is consumed only through the existing record-time policy path; no second recording code path that bypasses the hold and finding semantics. (2) The draft location is per launch and is created by the parent before launch (exclusive create), so a child cannot name or reuse another launch''s draft. IMPLEMENT NOW on the same branch and PR (#3986): code plus the validation list''s tests, and keep the plan doc. Keep the completing trailer (BUG-2564) only once code lands in the PR. Gate code: review before merge.'
   created_at: 2026-11-14T06:03:46.934732915Z
   modified_at: 2026-11-14T06:03:46.934732915Z
+  session_id: 01a1d852-16ef-7973-bdde-ac3f274752a2
+  harness_version: 2.1.325 (Claude Code)
+- id: 01a1d8b7-fbf4-72a1-91d0-06a64867dab0
+  author: joe
+  content: '[advisor 114 23:24] Track fix: BUG-2564 is track:integration (landing/gate code), but its dell1 lane opened #3986 against main. Retargeted #3986 to integration. Implementation per the 23:05 signoff runs as a local Claude integration lane on the same branch.'
+  created_at: 2026-11-14T06:21:38.672775731Z
+  modified_at: 2026-11-14T06:21:38.672775731Z
   session_id: 01a1d852-16ef-7973-bdde-ac3f274752a2
   harness_version: 2.1.325 (Claude Code)
 history:
