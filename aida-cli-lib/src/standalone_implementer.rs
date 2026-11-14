@@ -1173,6 +1173,42 @@ pub(crate) fn classify_seat_no_change(
     })
 }
 
+/// A self-publishing lane that exited 0 with a clean seat and commits it
+/// never pushed has done its work; its launcher publishes them by the route
+/// `aida ship <SPEC> --from-seat <seat>` takes, and the lane-end fast gate
+/// then runs against that head. A punt, a hold, a failed child or a dirty
+/// seat is left as it is. A failed publish leaves the commits in the seat
+/// and the outcome unchanged, so the run still ends failed.
+// trace:BUG-2580 | ai:claude
+pub(crate) fn publish_unpushed(
+    outcome: Outcome,
+    success: bool,
+    unshipped: Option<&Unshipped>,
+    publish: impl FnOnce() -> Result<()>,
+    republished: impl FnOnce() -> Outcome,
+) -> Outcome {
+    if !success
+        || !matches!(outcome, Outcome::NoPr | Outcome::PrOpened { .. })
+        || unshipped != Some(&Unshipped::UnpushedCommits)
+    {
+        return outcome;
+    }
+    eprintln!("implementer: the lane committed without pushing; publishing its seat");
+    match publish() {
+        Ok(()) => republished(),
+        Err(e) => {
+            eprintln!("implementer: publishing the seat failed: {e:#}");
+            outcome
+        }
+    }
+}
+
+/// The command that publishes a seat's committed work by hand.
+// trace:BUG-2580 | ai:claude
+pub(crate) fn seat_publish_command(spec: &str, seat: &Path) -> String {
+    format!("aida ship {spec} --from-seat {}", seat.display())
+}
+
 /// Run the child, wait, classify, print the result line, and return the
 /// outcome's exit code (`Ok` only for an open PR).
 #[cfg(test)]
@@ -1539,6 +1575,38 @@ fn run(
         outcome = classify_seat_no_change(outcome, status.success(), &main_root, &worktree)?;
     }
 
+    // A self-publishing lane in a seat clone: publish what it committed and
+    // did not push, and call a seat with nothing new "no change".
+    // trace:BUG-2580 | ai:claude
+    let seat_clone =
+        !host_published && crate::seat_clone::host_recorded_clone(&main_root, &worktree).is_some();
+    if seat_clone {
+        let before = bg::SeatState::read(&worktree, launch.branch);
+        let (_, unshipped) = settle_outcome(outcome.clone(), &launch_seat, &before);
+        outcome = publish_unpushed(
+            outcome,
+            status.success(),
+            unshipped.as_ref(),
+            || {
+                crate::ship_from_seat::run_at(
+                    &main_root,
+                    crate::ship_from_seat::FromSeatOptions {
+                        clone: worktree.clone(),
+                        spec: Some(crate::native_publication::resolve_scope(
+                            &main_root,
+                            launch.spec,
+                        )?),
+                        no_pr: false,
+                        dry_run: false,
+                        commit_pending: None,
+                    },
+                )
+            },
+            || classify(None, None, || lookup_pr(launch.project_root, launch.branch)),
+        );
+        outcome = classify_seat_no_change(outcome, status.success(), &main_root, &worktree)?;
+    }
+
     // trace:STORY-2640 | ai:codex
     let mut fast_rework = false;
     if let Outcome::PrOpened { pr, .. } = &outcome {
@@ -1668,6 +1736,13 @@ fn run(
                 match unshipped {
                     Some(bg::Unshipped::UncommittedWork(n)) =>
                         format!(", leaving {n} uncommitted path(s) in its worktree"),
+                    // trace:BUG-2580 | ai:claude
+                    Some(bg::Unshipped::UnpushedCommits) if seat_clone => format!(
+                        ", leaving commits it did not push in its seat {}; publish them \
+                         with `{}`",
+                        worktree.display(),
+                        seat_publish_command(launch.spec, &worktree)
+                    ),
                     Some(bg::Unshipped::UnpushedCommits) =>
                         ", leaving commits it did not push in its worktree".to_string(),
                     None => String::new(),
@@ -1789,6 +1864,10 @@ mod story_1662_standalone_implementer_tests;
 #[cfg(test)]
 #[path = "tests/bug_2436_finished_lane_lease_tests.rs"]
 mod bug_2436_finished_lane_lease_tests;
+// trace:BUG-2580 | ai:claude
+#[cfg(test)]
+#[path = "tests/bug_2580_publish_unpushed_tests.rs"]
+mod bug_2580_publish_unpushed_tests;
 
 // trace:STORY-2660 | ai:codex
 #[cfg(test)]
