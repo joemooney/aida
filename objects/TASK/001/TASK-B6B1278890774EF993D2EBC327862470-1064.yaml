@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-11T12:17:47.476312683Z
-modified_at: 2026-11-14T10:32:37.363593240Z
+modified_at: 2026-11-14T10:40:01.009365071Z
 req_type: Task
 relationships:
 - rel_type: BlockedBy
@@ -45,6 +45,13 @@ comments:
   content: 'PR #3994 round 2: addressed both findings in uncommitted native-seat edits. Launch ratchet now scans aida-testkit and tracks the moved test_exec site (count 1, CEILING 134 unchanged); both cli-lib test hygiene guards scan testkit src and tests. Validation: STORY-2326 7 passed, full aida-ci-guards 51 passed, structural tooling 4 passed, six selected workflow-owned fast source gates passed, changed-file rustfmt and whitespace clean. Hygiene selection j20261114T094835065-1364451-0 timed out during compilation at 900s, exit 124, with no tests executed (untested=true for hygiene); runner reported overlay-stale because primary rewrote generation agent-f4ad1c06d34053df in place. Host should refresh seed/target and rerun cargo test --profile agent -p aida-cli-lib --lib -- test_env::tests::. Full make check-ci-fast was not run. Refs publication declaration recorded with Help-Golden: unchanged; full-CI timing acceptance remains outstanding from prior slice. Handoff: /tmp/TASK-3784-round2-handoff.txt. No commit, push, PR action or queue completion from this read-only-Git seat.'
   created_at: 2026-11-14T10:03:55.293715671Z
   modified_at: 2026-11-14T10:03:55.293715671Z
+- id: 01a1d9a4-87f1-7320-8f8a-05753c41f031
+  author: dirtlab
+  content: 'Restored missing review fixes in this checkout: launch ratchet scans aida-testkit and moves test_exec row without raising ceiling; CLI env/cwd hygiene scans include testkit. Validation now passes: testkit 38, STORY-2326 7, CLI hygiene 2, full structural guards 51, Python structural/crate-split tooling 21, and all 47 FAST source gates (Cargo structural suite separately via lane runner). Formatting and whitespace clean. Edits uncommitted; Refs declaration retains Help-Golden: unchanged. FULL CI after shard timings still outstanding. Handoff /tmp/TASK-3784-handoff.txt; source-gate log /tmp/TASK-3784-fast-source.log. Codegraph client still absent; host setup required.'
+  created_at: 2026-11-14T10:40:01.009365071Z
+  modified_at: 2026-11-14T10:40:01.009365071Z
+  session_id: 01a1d99d5d32
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1ca8b-157a-7c50-9f73-dc13d565bf63
   author: joe
