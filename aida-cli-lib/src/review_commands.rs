@@ -1078,16 +1078,30 @@ pub(crate) fn handle_review_spec(
     // trace:BUG-510 | ai:claude
     if let Some(n) = pr_number {
         if !allow_stale_base && matches!(forge, crate::forge::ForgeKind::GitHub) {
+            // This verb never refuses, but it reads the project's
+            // `[review] stale_base` policy like every reviewer launch: the
+            // inline rebase offer defaults to yes only for a head the policy
+            // would refuse a reviewer on. trace:STORY-2821 | ai:claude
+            let policy = crate::review_helpers::read_stale_base_policy(project_root)?;
+            let mut rebase_by_default = false;
             let stale = match preflight_stale_base_check(project_root, n) {
-                Ok(pr_rebase::StaleBaseOutcome::Current) => None,
-                Ok(pr_rebase::StaleBaseOutcome::StaleNoOverlap { behind }) => {
-                    Some((behind, Vec::new()))
+                Ok(outcome) => {
+                    rebase_by_default = matches!(
+                        pr_rebase::stale_base_launch(n, policy, &outcome),
+                        pr_rebase::StaleBaseLaunch::Refuse(_)
+                    );
+                    match outcome {
+                        pr_rebase::StaleBaseOutcome::Current => None,
+                        pr_rebase::StaleBaseOutcome::StaleNoOverlap { behind } => {
+                            Some((behind, Vec::new()))
+                        }
+                        pr_rebase::StaleBaseOutcome::StaleOverlap {
+                            behind,
+                            overlap_files,
+                            ..
+                        } => Some((behind, overlap_files)),
+                    }
                 }
-                Ok(pr_rebase::StaleBaseOutcome::StaleOverlap {
-                    behind,
-                    overlap_files,
-                    ..
-                }) => Some((behind, overlap_files)),
                 Err(e) => {
                     eprintln!(
                         "  {} stale-base check for {change_noun}-{n} failed ({e}); \
@@ -1111,7 +1125,7 @@ pub(crate) fn handle_review_spec(
                     let diffstat = review_diffstat(project_root, &surface_branch);
                     let rebase_now = context_prompt::confirm_with_context_and_ai(
                         &format!("Rebase {change_noun}-{n} now?"),
-                        !overlap.is_empty(),
+                        rebase_by_default,
                         &card,
                         |out| {
                             ask_ai_review_once(project_root, &req, &spec_id, &card, &diffstat, out)
