@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-13T03:10:47.302266912Z
-modified_at: 2026-11-14T01:12:24.678057031Z
+modified_at: 2026-11-14T01:33:49.813323402Z
 req_type: Bug
 tags:
 - track:dell1
@@ -126,6 +126,13 @@ comments:
   modified_at: 2026-11-14T00:56:11.950395528Z
   session_id: 01a1d78863e2
   harness_version: codex-cli 0.167.0
+- id: 01a1d7b0-7b75-75e0-b28f-adb992b6d85b
+  author: joe
+  content: '18:36 MST advisor: CR at 25e6467 — P1 (merged-residue allocation fallback) unaddressed for the 2nd round; the Codex rework touched only tests. Reassigned to a Claude fixer (advisor-launched, pushes to the PR branch), then a scoped re-review. No new findings to rule.'
+  created_at: 2026-11-14T01:33:49.813323402Z
+  modified_at: 2026-11-14T01:33:49.813323402Z
+  session_id: 01a1d797-2ccf-7771-899a-682081f10504
+  harness_version: 2.1.325 (Claude Code)
 history:
 - id: 01a1d2e2-f946-73a0-bdee-dad6c72c0bc8
   author: joe
