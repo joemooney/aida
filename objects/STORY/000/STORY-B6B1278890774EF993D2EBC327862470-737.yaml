@@ -1,0 +1,33 @@
+id: 01a1da68-0719-7700-b19c-79ab9c2d54f0
+spec_id: STORY-b6b1278890774ef993d2ebc327862470-737
+agreed_id: STORY-2814
+title: 'Review PR-4030: [AI:claude] fix(train): bisect a red train at once, no same-composition rerun (BUG-2577)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `(no-sess`) for branch `fix/train-no-blind-rerun-BUG-2577`.
+
+  - PR: <https://github.com/joemooney/aida/pull/4030>
+  - Branch: `fix/train-no-blind-rerun-BUG-2577` → `main`
+
+  ## Covers
+
+  - BUG-2577
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 4030` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-14T14:13:33.081297553Z
+modified_at: 2026-11-14T14:13:33.081297553Z
+req_type: Story
+filed_at:
+  code_sha: 3350540dbab869a493924fe627364ed3a48ff9e4
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 2682c4c4fe5
+  vendor: claude
