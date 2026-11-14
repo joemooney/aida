@@ -123,9 +123,9 @@ pub(crate) fn changes_for_spec(root: &Path, spec: &str) -> Vec<ChangeKey> {
     let Some(path) = index_file(root, spec) else {
         return Vec::new();
     };
-    std::fs::read(&path)
-        .ok()
-        .and_then(|b| serde_json::from_slice::<SpecIndex>(&b).ok())
+    // trace:BUG-2543 | ai:claude — never blocks on a FIFO.
+    store::read_regular(&path)
+        .and_then(|b| serde_json::from_str::<SpecIndex>(&b).ok())
         .map(|i| {
             i.changes
                 .iter()
@@ -289,6 +289,79 @@ fn speaks_for_change(event: &GateEvent, pr: u64, head: Option<&str>) -> bool {
             .head
             .as_deref()
             .is_some_and(|at| same_reviewed_sha(at, head))
+}
+
+/// [`newest_verdict_event_for_change`] as the merge gate reads a spec key:
+/// besides what speaks for change `pr`, a refusal bound to another change
+/// still counts while that change stands refused and the refused commit is
+/// part of the head being judged (`in_head`). A member merged ahead of its
+/// review and refused afterwards is carried by every change that contains
+/// its commit, so an approval must not be carried past it.
+// trace:BUG-2569 | ai:claude
+pub(crate) fn newest_verdict_event_for_merge(
+    start: &Path,
+    key: &str,
+    pr: u64,
+    head: Option<&str>,
+    in_head: &dyn Fn(&str) -> bool,
+) -> Option<GateEvent> {
+    let root = store_root(start).ok()?;
+    let mut events = verdict_events(&root, key);
+    if ChangeKey::parse(key).is_none() {
+        events.retain(|event| {
+            speaks_for_change(event, pr, head)
+                || has_round_at(event, head)
+                || standing_refusal_in_head(&root, event, in_head)
+        });
+    }
+    newest_of(events)
+}
+
+/// Whether any earlier round `event`'s record keeps was reviewed at `head`:
+/// such a record is evidence about `head` whatever its newest round names.
+// trace:BUG-2569 | ai:claude
+fn has_round_at(event: &GateEvent, head: Option<&str>) -> bool {
+    let Some(head) = head.map(str::trim).filter(|head| !head.is_empty()) else {
+        return false;
+    };
+    event
+        .verdict_record()
+        .and_then(|record| record.get("rounds"))
+        .and_then(|rounds| rounds.as_array())
+        .is_some_and(|rounds| {
+            rounds.iter().any(|round| {
+                round
+                    .get("reviewed_sha")
+                    .and_then(|sha| sha.as_str())
+                    .is_some_and(|sha| same_reviewed_sha(sha, head))
+            })
+        })
+}
+
+/// Whether `event`, a verdict bound to another change, is a refusal that
+/// change still stands under, of a commit `in_head` finds in the judged
+/// head. What cannot be read counts: an event with no parseable verdict or
+/// no recorded commit, and a change whose newest verdict does not approve.
+// trace:BUG-2569 | ai:claude
+fn standing_refusal_in_head(
+    root: &Path,
+    event: &GateEvent,
+    in_head: &dyn Fn(&str) -> bool,
+) -> bool {
+    let approves = |event: &GateEvent| {
+        event
+            .verdict_record()
+            .and_then(|record| serde_json::to_string(record).ok())
+            .and_then(|body| crate::gate::review_verdict::parse_recorded_verdict(&body))
+            .is_some_and(|verdict| verdict.kind.approves())
+    };
+    if approves(event) {
+        return false;
+    }
+    let superseded = ChangeKey::parse(&event.change)
+        .and_then(|bound| newest_of(verdict_events(root, &bound.as_key())))
+        .is_some_and(|newest| approves(&newest));
+    !superseded && event.head.as_deref().is_none_or(in_head)
 }
 
 /// Whether change `pr` has a verdict of its own on the ledger.
