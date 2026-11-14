@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-13T20:52:54.357683400Z
-modified_at: 2026-11-14T22:04:24.039734924Z
+modified_at: 2026-11-14T22:10:00.038333956Z
 req_type: Bug
 tags:
 - perf
@@ -165,6 +165,13 @@ comments:
   content: 'Advisor finding (2026-11-14 14:12): the fix for this bug (PR-4007, coalesce concurrent pulls and skip scans at a clean head) is on origin/integration (b7830c2) but NOT on main, so the live binary and every lane, reviewer launch and post-train pull still run the unfixed pull. The 351 s sample above is the unfixed code. Product seat ruling 14:08: pull time is a landing loss and comes first. Action: no new lane; the next promotion must carry b7830c2 (asked the integration seat for its state). After it lands and the binary is rebuilt, re-time ''aida pull'' on the primary idle and with reviewers running; only if it is still over ~60 s take a perf profile and brief a lane. BUG-2551: its fix (one gate-ledger discovery per reconcile, #4040) is on main and removed the 100% CPU spin, but pulls stayed 100-350 s; treat it as fixed-but-insufficient and close it once the re-timing after this promotion is under the watchdog''s 75 s, otherwise reopen it with the profile.'
   created_at: 2026-11-14T21:08:53.235888420Z
   modified_at: 2026-11-14T21:08:53.235888420Z
+  session_id: 01a1dbd6-f8cd-7313-a123-75ebbeaa2afd
+  harness_version: 2.1.325 (Claude Code)
+- id: 01a1dc1c-3ae6-7bb2-b3a7-88894781c8f1
+  author: joe
+  content: 'Advisor finding + ruling (2026-11-14 15:14): promotion 10 (PR-4064, integration 6f12ea7) is red at the full tier on this bug''s change. cli-0, aida-cli::task_1717_store_writer_lock: gc_runs_after_the_store_window (line 2887: aida_locks lists .aida-store/.aida/pull-db-sync-pull-<hash>.lock after the window) and pull_store_leg_is_one_window (line 637: at post-rewrite the parent holds pull-pull-<hash>.lock as well as store-write.lock; the test requires exactly the store lock). PR-4007''s coalesce lock is a new lock held across the store window and its hooks; the integration checks never ran the aida-cli integration binaries, so it got through. Ruling: the tests stay as the contract. A lock the parent holds while hooks run can deadlock a hook that itself pulls, so do NOT widen the test''s allowed set by default. Fix in the pull: take the coalesce lock only around the decision ''is another pull running / can I reuse its result'', and release it before the store-write window opens (or hold it in a way hooks and gc never see as an aida lock, with a test that a hook-invoked ''aida pull --store-only'' inside the window returns instead of waiting). Keep the lock file out of .aida-store/.aida/ if gc counts files there. Gate: cargo test -p aida-cli --test task_1717_store_writer_lock (whole binary) plus the bug_2565 tests, check-ci-fast. Per the promotion rule the constituent is taken out of the snapshot: promotion 10b = 6f12ea7 minus merge b7830c2, once the rest of the full run shows no other failure. The fix goes back to integration for the next promotion.'
+  created_at: 2026-11-14T22:10:00.038333956Z
+  modified_at: 2026-11-14T22:10:00.038333956Z
   session_id: 01a1dbd6-f8cd-7313-a123-75ebbeaa2afd
   harness_version: 2.1.325 (Claude Code)
 history:
