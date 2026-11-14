@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """CLI-manual drift-guard (STORY-597 core).
 
-Checks against the live binary + the spec graph:
+Checks against the worktree binary + the spec graph:
   1. COMPLETENESS — every command in `aida help-all` has a `### `aida <cmd>`` entry
      in some docs/cli/*.md chapter (a top-level command may legitimately be covered
      under a parent header, so we match on the leading command token).
@@ -30,6 +30,10 @@ can backlink to its shaping spec(s) without the breadcrumb leaking into visible 
 Usage: python3 docs/cli/verify-manual.py            # all chapters
        python3 docs/cli/verify-manual.py 04-git*.md # one chapter
        python3 docs/cli/verify-manual.py --static   # no-build hidden-flag check
+
+Dynamic checks use this checkout's target/debug/aida. Set AIDA_BIN to an
+executable path (not a shell command) for another build/profile or target dir.
+The checker never falls back to the installed aida on PATH.
 """
 import functools
 import glob
@@ -37,6 +41,7 @@ import importlib.util
 import os
 import re
 import shlex
+import shutil
 import subprocess
 import sys
 
@@ -63,11 +68,29 @@ _sh = _vic.sh
 STORE_BRANCH = _vic.STORE_BRANCH
 
 
+# trace:BUG-2563 | ai:codex
+@functools.lru_cache(maxsize=1)
+def aida_binary():
+    override = os.environ.get("AIDA_BIN")
+    candidate = override if override is not None else os.path.join(
+        CLI_DIR, "..", "..", "target", "debug", "aida"
+    )
+    # Resolve explicit paths relative to the caller; bare override names use PATH.
+    resolved = shutil.which(candidate) if candidate else None
+    if not resolved:
+        raise RuntimeError(
+            f"aida binary is not executable: {candidate!r}; "
+            "build this checkout with cargo build -p aida-cli or set AIDA_BIN "
+            "to its built executable"
+        )
+    return os.path.abspath(resolved)
+
+
 def help_text(cmd):
     args = cmd.split() if isinstance(cmd, str) else list(cmd)
     try:
         return subprocess.run(
-            ["aida", *args, "--help"], capture_output=True, text=True, timeout=20
+            [aida_binary(), *args, "--help"], capture_output=True, text=True, timeout=20
         ).stdout
     except Exception:
         return ""
@@ -95,7 +118,7 @@ def command_path_exists(cmd_path):
 
 
 def help_all_commands():
-    out = subprocess.run(["aida", "help-all"], capture_output=True, text=True).stdout
+    out = subprocess.run([aida_binary(), "help-all"], capture_output=True, text=True).stdout
     cmds = []
     for line in out.splitlines():
         # PATH extensions are machine-local, outside the built-in manual.
@@ -118,7 +141,7 @@ def help_command_paths():
     `aida commands --json --flags` lands, this can become one structured call.
     """
     out = subprocess.run(
-        ["aida", "help", "commands"], capture_output=True, text=True
+        [aida_binary(), "help", "commands"], capture_output=True, text=True
     ).stdout
     paths = set()
     for line in out.splitlines():
@@ -499,7 +522,7 @@ def subcommand_unrecognized(cmd_path):
     # trace:BUG-1949 | ai:claude
     try:
         res = subprocess.run(
-            ["aida", *cmd_path.split(), "--help"],
+            [aida_binary(), *cmd_path.split(), "--help"],
             capture_output=True,
             text=True,
             timeout=20,
@@ -779,6 +802,12 @@ def main():
         if len(sys.argv) > 1
         else sorted(glob.glob(os.path.join(CLI_DIR, "[0-9][0-9]-*.md")))
     )
+    try:
+        binary = aida_binary()
+    except RuntimeError as error:
+        print(f"FAIL binary — {error}", file=sys.stderr)
+        sys.exit(1)
+    print(f"Checking aida binary: {binary}", flush=True)
     documented = parse_chapters(files)
     all_cmds = help_all_commands()
 
