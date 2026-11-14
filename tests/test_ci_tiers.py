@@ -76,7 +76,7 @@ class CiTiers(unittest.TestCase):
 
     def test_event_and_job_wiring(self):
         triggers = WORKFLOW.get('on', WORKFLOW.get(True))
-        self.assertEqual(triggers['push']['branches'], ['main', 'train/**'])
+        self.assertEqual(triggers['push']['branches'], ['main'])  # trace:BUG-2581 | ai:claude
         self.assertTrue({'labeled', 'unlabeled', 'synchronize'} <= set(triggers['pull_request']['types']))
         for event in ('merge_group', 'schedule', 'workflow_dispatch'):
             self.assertIn(event, triggers)

@@ -20,7 +20,7 @@ a fresh run at the same head and cancels the run it supersedes, as a push does.
 No other label does: an `aida:merge-hold*` change, for instance, starts a run in
 a concurrency group of its own that skips every job within seconds, under
 `label event (...)` check names, so the head's running CI, its `ci-tier:` marker
-and its `Build (ubuntu-latest)` result are left as they were. Main and `train/**` pushes, train PRs, merge groups,
+and its `Build (ubuntu-latest)` result are left as they were. Main pushes, train PRs, merge groups,
 scheduled runs and manual dispatches always select FULL. The `tier` job selects
 once and emits a `ci-tier: fast` or `ci-tier: full` check name.
 
