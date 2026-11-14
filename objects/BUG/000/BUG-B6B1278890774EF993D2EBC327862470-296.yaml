@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-12T08:35:37.046532324Z
-modified_at: 2026-11-14T20:02:53.245512574Z
+modified_at: 2026-11-14T20:35:30.409173097Z
 req_type: Bug
 tags:
 - track:integration
@@ -282,6 +282,13 @@ comments:
   modified_at: 2026-11-14T20:02:53.245512574Z
   session_id: 01a1db6d-e689-7532-9eef-772722add87b
   harness_version: 2.1.325 (Claude Code)
+- id: 01a1dbc5-b7e9-7ba3-8b12-d101a9c6665f
+  author: dirtlab
+  content: 'Round 9 (commit a073b9791a, pushed to the PR-4038 branch on top of 7c2fd94f07): advisor ruling 2026-11-14 13:06. The full read now runs only on evidence that a binding existed and is gone: (1) the label''s by-spec hint names a change the bindings do not, or (2) the label''s bindings directory exists without a hint (the directory outlives a deleted binding and serves as the deletion marker; no separate tombstone file is written). A label with neither directory nor hint (never recorded, e.g. the unused alias of a two-label selection) reads no change ledger; a hint naming fewer changes than the bindings reads only the bound ledgers. Both the strict selector and the spec-keyed lossy reader use the same rule (checked::binding_lost). So that bootstrapped history does not look like a deletion, the fix command now also writes each bound label''s hint and removes a label directory it emptied (one new store-writer inventory row). Tests: (a) two-label selection with an unrecorded alias reads exactly marker + one hint + one bound ledger (byte and parse counts asserted, zero full reads); (b) deleted binding with stale hint and with missing hint both find the newer refusal. Lane runner: gate::ledger + bug_2531 + bug_2403 131 passed 0 failed; review_alias/effective/review_watch/carryover/bug_2517/bug_2543/gate_ledger 369 passed 0 failed. make check-ci-fast not run (over this lane''s 60 s tool cap); rustfmt on the changed files, git diff --check and check-store-writers.py pass. Unchanged limit: a binding and its hint entry deleted together leave no evidence; only the deep doctor check reports it. Behaviour to know: a label whose hint write failed after a successful append (binding without hint) takes the full read until its next append or the fix command.'
+  created_at: 2026-11-14T20:35:30.409173097Z
+  modified_at: 2026-11-14T20:35:30.409173097Z
+  session_id: 01a1dbb7daa9
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1cee6-975b-7d40-8689-d35e1f109d99
   author: joe
