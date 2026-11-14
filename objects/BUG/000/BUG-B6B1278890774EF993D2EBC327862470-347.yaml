@@ -8,17 +8,25 @@ description: |
   Acceptance criteria:
   1. The bug034 group passes 20 of 20 consecutive runs on dell1 (cargo test --profile agent -p aida-core git_ops::commit_failure), with the cause of the flake named (timing, shared temp path, or lock-file race).
   2. The umask-sensitive tests either pin umask in their fixture or assert mode-independent facts; they pass under umask 0002 and 022.
-status: Approved
+status: InProgress
 priority: Medium
-owner: ''
+owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-14T14:13:23.824117090Z
-modified_at: 2026-11-14T14:13:23.824117090Z
+modified_at: 2026-11-14T14:40:37.225330884Z
 req_type: Bug
 tags:
 - area:tests
 - flaky
 - track:dell1
+history:
+- id: 01a1da80-cf69-7e40-b91f-a4156eaa46cb
+  author: aida-session-start
+  timestamp: 2026-11-14T14:40:37.225329284Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: 3350540dbab869a493924fe627364ed3a48ff9e4
   branch: main
