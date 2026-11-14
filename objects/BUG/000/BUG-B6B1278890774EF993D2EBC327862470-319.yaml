@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-13T11:08:09.225798765Z
-modified_at: 2026-11-14T03:08:27.041211489Z
+modified_at: 2026-11-14T03:08:58.723575684Z
 req_type: Bug
 tags:
 - mandate
@@ -60,6 +60,13 @@ comments:
   content: 'PR-3952 rework (round 2), new head 86e744d807f1 (merged origin/integration first). (1) P1 incomplete start points: FIXED. Tips now come from ''git rev-list --all --no-walk'', the same start set as ''git log --all'' (other worktrees'' detached HEADs included); a rebuild walks exactly those listed tips. Test: bug_2554_a_detached_worktree_commit_refreshes_a_warm_index. (2) P1 swallowed HEAD errors: FIXED. The separate HEAD probe is gone; any failure listing start points propagates as an error and the gate refuses. Test: bug_2554_a_failing_start_point_probe_refuses_not_reuses. (3) P1 unbounded tip validation: FIXED. The anchor check is ''rev-list --no-walk --ignore-missing <anchors>'' on argv (no stdin), so it runs under AIDA_STORE_HISTORY_TIMEOUT_SECS. Test: bug_2554_a_stalled_anchor_check_times_out (also stalls any --batch-check). (4) P2 lost GC anchors: FIXED. tips are now anchors for every retained history; an incremental refresh keeps merge-base --independent(old anchors + new tips) plus the live tips; every read validates them, and a missing one rebuilds. INDEX_VERSION is now 2, so v1 indexes rebuild. Test: bug_2554_a_deleted_ref_collected_after_a_refresh_rebuilds. Extra hardening: an anchor that is not a 40- or 64-hex object name counts as a corrupt index and rebuilds (anchors go onto git argv). (5) P2 refresh lock: LISTED AS NON-BLOCKING, for the advisor to rule. Concurrent refreshes cost duplicate walks but give the same answer: each write is atomic and self-consistent, and a lost write just re-walks. A lock file would add a new store-writers.toml sink (inventory change), which this brief forbids. Suggest a follow-up. Tests (dell1): 118 passed, 0 failed (bug_2554, bug_2179, task_1951, task_2238, story_2326, resolve_aida_exe_tests, store_writer). make check-ci-fast: 47 gates passed.'
   created_at: 2026-11-14T03:08:27.041211489Z
   modified_at: 2026-11-14T03:08:27.041211489Z
+  session_id: 01a1d797-2ccf-7771-899a-682081f10504
+  harness_version: 2.1.325 (Claude Code)
+- id: 01a1d807-97e3-7c32-bc5e-0a4de073ccb6
+  author: joe
+  content: '20:09 MST advisor ruling on the #3952 rework at 86e744d: findings 1-4 (P1 tips, P1 HEAD errors, P1 unbounded validation, P2 GC anchors) fixed by the Claude fixer with tests. Finding 5 (refresh lock) ACCEPTED as non-blocking: performance only (duplicate walks under concurrent gates); writes are atomic and self-consistent and a lost race only re-walks. Filed as follow-up with the out-of-scope StoreHistoryBatch::read stdin timeout gap. Next: scoped re-review of 1-4.'
+  created_at: 2026-11-14T03:08:58.723575684Z
+  modified_at: 2026-11-14T03:08:58.723575684Z
   session_id: 01a1d797-2ccf-7771-899a-682081f10504
   harness_version: 2.1.325 (Claude Code)
 history:
