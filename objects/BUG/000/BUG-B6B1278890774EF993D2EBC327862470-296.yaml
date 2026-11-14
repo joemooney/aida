@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-12T08:35:37.046532324Z
-modified_at: 2026-11-14T18:09:39.211263798Z
+modified_at: 2026-11-14T18:09:59.136124391Z
 req_type: Bug
 tags:
 - track:integration
@@ -252,6 +252,13 @@ comments:
   content: Commit 723df3554f references this requirement
   created_at: 2026-11-14T18:09:39.211263798Z
   modified_at: 2026-11-14T18:09:39.211263798Z
+  session_id: 01a1db23f6f1
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a1db40-7d60-7682-9bb5-7e299c91e54e
+  author: dirtlab
+  content: 'Round 7 (lane on bug-b6b1278890774ef993d2ebc327862470-296, commit 723df3554f, on top of e9b8afa540): the four blocking findings of the #4038 verdict at 87aac0b. The finding texts live in the reviewing host''s gate ledger and are not on this host, so each fix is built from the advisor''s one-line summary plus the code; the reviewer should check them against the original wording. (1) Binding completeness: every spec label an event carries is now bound (a label that is not a file-name key goes under ~sha256 of the normalized label), so the ownership filter finds every witness and no longer drops a review, refusals included, whose label had no key. (2) The fix command now works under a valid marker: doctor reports and the heal rebuilds older writers not fenced out, a binding whose ledger is gone, a malformed bindings tree and, when the category is named, a change ledger carrying a spec no binding names; the rebuild withdraws the marker first and publishes it last. (3) Older-writer exclusion is enforced: the ledger-wide lock moved to .aida/gate-ledger.v2.lock and the old path .aida/gate-ledger.lock becomes a dangling link that every older binary''s write fails on; the fence goes in under the exclusive lock and waits out older writers in flight; selection refuses a marker without the fence, and a writer that finds the fence down restores it and withdraws the marker. (4) Stray files aida-cli-lib/.aida/agents/handles/.lock and other-2802564.toml removed. Tests (lane runner, final code): gate::ledger + bug_2403 + bug_1505 + effective 198 passed, 0 failed. Wider gate/review/doctor/train/land/hold/migrate run on the code before two last message-and-format edits: 3364 passed, 32 failed, none in the ledger: 26 need a built CLI binary, 4 are mail-retention writer admission, 1 read-only /var/tmp, 1 seat-clone launch refusal. make check-ci-fast not run (over the 60 s tool cap and it invokes cargo); store-writer inventory, rustfmt on the changed files and git diff --check pass. Deploy: unchanged fix command once after the binary goes live; previous-binary long-running processes can no longer write the ledger and must be restarted; rollback to an older binary needs the link removed, then the fix command again after returning. Not pushed: this seat has no forge credentials; base must stay integration.'
+  created_at: 2026-11-14T18:09:59.136124391Z
+  modified_at: 2026-11-14T18:09:59.136124391Z
   session_id: 01a1db23f6f1
   harness_version: 2.1.319 (Claude Code)
 history:
