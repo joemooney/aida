@@ -20,7 +20,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-14T12:59:48.856339929Z
-modified_at: 2026-11-14T14:09:32.979771696Z
+modified_at: 2026-11-14T14:47:43.787720720Z
 req_type: Bug
 comments:
 - id: 01a1da27-3618-7463-8d20-0317f275eec5
@@ -36,6 +36,13 @@ comments:
   created_at: 2026-11-14T14:09:32.979771696Z
   modified_at: 2026-11-14T14:09:32.979771696Z
   session_id: fc28c702-2f6e-419e-b882-6ddfeb9134ff
+- id: 01a1da87-51ab-7a50-80f2-62df2bcad805
+  author: joe
+  content: '[advisor a22 07:50] RULING on PR-4030 CR at 38b24fc: all three BLOCKING (the ruling''s own criteria). (1) Distinguish infra red from test red: cancelled or runner-lost rows, or a run that ended with no test result, are INFRA and are rerun exactly once; a fail-bucket test failure bisects or ejects at once. (2) Tests: a driver test where an infra red is rerun once and then bisected or ejected; a train_ci_readiness test where a cancel-bucket row classifies as infra and a fail-bucket row as a test failure. (3) docs/what-is-aida.md:342 and the regenerated what-is-aida.html (lines 702 and 1047) no longer claim a rerun for test reds. Rework on a dell1 Fable lane on branch fix/train-no-blind-rerun-BUG-2577; LIGHT gate (cargo test -p aida-cli-lib --lib pr_train story_1690, plus make check-ci-fast).'
+  created_at: 2026-11-14T14:47:43.787720720Z
+  modified_at: 2026-11-14T14:47:43.787720720Z
+  session_id: 01a1d9ea-4e25-7033-85e8-3648f0195c7c
+  harness_version: 2.1.325 (Claude Code)
 history:
 - id: 01a1da27-2bb7-7361-9d4b-679eedfaa209
   author: joe
