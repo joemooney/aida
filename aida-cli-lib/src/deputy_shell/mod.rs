@@ -821,6 +821,35 @@ pub(crate) fn queue_names(base: &Path) -> Vec<String> {
     names
 }
 
+/// The still-queued jobs submitted under `grant`, across every deputy in
+/// `base`: `(deputy, job id, first script line)`. The rotation handoff lists
+/// these so the successor can keep or cancel them.
+// trace:BUG-2579 | ai:claude
+pub(crate) fn queued_jobs_for_grant(base: &Path, grant: &str) -> Vec<(String, String, String)> {
+    let mut out = Vec::new();
+    for name in queue_names(base) {
+        let Ok(q) = queue_in(base, &name) else {
+            continue;
+        };
+        for id in q.queued_ids() {
+            let Ok(Some(view)) = q.locate(&id) else {
+                continue;
+            };
+            let Some(job) = view.job else {
+                continue;
+            };
+            if view.state.state != JobState::Queued
+                || job.submitter.grant_id.as_deref() != Some(grant)
+            {
+                continue;
+            }
+            let first = job.script.lines().next().unwrap_or("").trim();
+            out.push((name.clone(), id, first.chars().take(120).collect()));
+        }
+    }
+    out
+}
+
 /// Failed script jobs nobody acknowledged, submitted from `project_root`,
 /// oldest first. With `session`, only that session's; with `None` (the
 /// operator's shell), every one. File reads only, so it rides the per-turn
