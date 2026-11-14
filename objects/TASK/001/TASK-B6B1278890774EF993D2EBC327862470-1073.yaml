@@ -813,12 +813,24 @@ description: |
   ### finding-hash:fefd3308
 
   AC3 is proven at all_open_prs_for_spec_via_forge, not through an end-to-end train opening; PR body also still says the title uses Refs and criterion 2 is pending, both superseded by the advisor ruling
+
+
+  ## Findings from BUG-2583
+  Reviewed sha: d699209a05f47512bc976b32d7989e4b046e7962
+
+  ### finding-hash:e5eb0aa5
+
+  bug_2583 test case labelled as a final page not ending on the PR head (page 3 = 201..=253) actually exercises the short-page/under-count branch; a compare listing with the full count whose last row is not the head is not covered for the compare path (aida-cli-lib/src/tests/bug_2400_exact_pr_association_tests.rs:1117)
+
+  ### finding-hash:fefd3308
+
+  AC3 is proven at all_open_prs_for_spec_via_forge, not through an end-to-end train opening; PR body also still says the title uses Refs and criterion 2 is pending, both superseded by the advisor ruling
 status: Draft
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-13T20:01:56.623034248Z
-modified_at: 2026-11-14T17:32:26.092636427Z
+modified_at: 2026-11-14T17:32:37.710135551Z
 req_type: Task
 tags:
 - carried-finding:BUG-2543:2a99ebfc
@@ -862,6 +874,8 @@ tags:
 - carried-finding:BUG-2577:540b7d86
 - carried-finding:BUG-2577:a9731915
 - carried-finding:BUG-2577:f167aa2d
+- carried-finding:BUG-2583:e5eb0aa5
+- carried-finding:BUG-2583:fefd3308
 - carried-finding:PR-3921:0cbc5c63
 - carried-finding:PR-3924:3975f29b
 - carried-finding:PR-3924:79f360e4
@@ -978,6 +992,7 @@ tags:
 - carried-from:BUG-2573
 - carried-from:BUG-2575
 - carried-from:BUG-2577
+- carried-from:BUG-2583
 - carried-from:PR-3921
 - carried-from:PR-3924
 - carried-from:PR-3938
@@ -1110,6 +1125,7 @@ tags:
 - from-review:BUG-2573
 - from-review:BUG-2575
 - from-review:BUG-2577
+- from-review:BUG-2583
 - from-review:PR-3921
 - from-review:PR-3924
 - from-review:PR-3938
@@ -1455,6 +1471,11 @@ history:
 - id: 01a1db1e-2438-7c22-90ea-f7c609ffc5f2
   author: joe
   timestamp: 2026-11-14T17:32:28.088469518Z
+  session_id: 01a1db1bdf42
+  changes: []
+- id: 01a1db1e-5082-7a21-b799-7c002f22d104
+  author: joe
+  timestamp: 2026-11-14T17:32:39.426510340Z
   session_id: 01a1db1bdf42
   changes: []
 filed_at:
