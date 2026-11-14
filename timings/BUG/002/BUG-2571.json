@@ -1,0 +1,32 @@
+{
+  "schema_version": 1,
+  "spec": "BUG-2571",
+  "publishes": [
+    {
+      "at": "2026-11-14T23:40:02.346410412Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-11-14T11:04:22.252871148Z",
+      "spec": "BUG-2571",
+      "kind": {
+        "event": "UnshippedWorkDetected",
+        "spec": "BUG-2571",
+        "branch": "bug-2571-land-run-followups",
+        "first_seen": "2026-11-14T11:04:22.252800457+00:00"
+      }
+    },
+    {
+      "ts": "2026-11-14T23:40:02.165011901Z",
+      "spec": "BUG-2571",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "786738cea92618fee2d1eae01fe97b1d46eef12e",
+        "pr": 4067,
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
