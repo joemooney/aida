@@ -3,13 +3,19 @@ spec_id: STORY-b6b1278890774ef993d2ebc327862470-746
 agreed_id: STORY-2823
 title: 'aida pr train --status: one command that says what the train is doing'
 description: 'From the Agent CLI friction log (STORY-2822 item 12). Today every advisor reads .aida/train/*.json, the deputy transcript and gh by hand to learn the train''s state, and two shell versions were wrong. Acceptance: (1) ''aida pr train --status'' (or ''aida train status'') prints, for the current journal or ''no train'': train PR number, members with heads, step (Gate/Ci/Merge/Members/Cleanup), time in step, CI shard summary, and the PID driving it or ''no live driver (orphaned journal)''; (2) exit code distinguishes none / running / orphaned; (3) json output; (4) read-only, bounded time (no gate-ledger rediscovery); (5) documented in docs/cli.'
-status: InProgress
+status: Done
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-14T18:21:33.508922524Z
-modified_at: 2026-11-14T21:56:37.018656476Z
+modified_at: 2026-11-14T21:57:34.285073799Z
 req_type: Story
+relationships:
+- rel_type:
+    custom: implemented-by
+  target_id: 01a1dc10-4d3a-7a13-a44e-1d733e6945af
+  created_at: 2026-11-14T21:57:04.583495389Z
+  created_by: dirtlab
 comments:
 - id: 01a1dc0f-fa1a-7f72-8855-a87194d87f58
   author: dirtlab
@@ -26,6 +32,21 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1dc10-6c1d-7003-8ff0-4a4e906e60f0
+  author: dirtlab
+  timestamp: 2026-11-14T21:57:06.205384822Z
+  session_id: 01a1dbdd5de5
+  harness_version: 2.1.319 (Claude Code)
+  changes: []
+- id: 01a1dc10-d9ee-7fe2-965c-3138c2db423b
+  author: dirtlab
+  timestamp: 2026-11-14T21:57:34.318130646Z
+  session_id: 01a1dbdd5de5
+  harness_version: 2.1.319 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Done
 filed_at:
   code_sha: 96fc262834527304fe85fc9ee32e4d04f1aaf4ea
   branch: main
@@ -35,3 +56,7 @@ filed_at:
   vendor: claude
   session: 01a1dab1-9447-7d22-b5ff-0c9084e122ea
   harness_version: 2.1.325 (Claude Code)
+implementation_info:
+  implemented: true
+  implemented_at: 2026-11-14T21:57:34.285073799Z
+  implemented_by: dirtlab
