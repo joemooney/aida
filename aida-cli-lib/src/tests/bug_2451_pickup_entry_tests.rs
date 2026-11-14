@@ -241,6 +241,17 @@ fn queue_work_sync(
     list_sessions: bool,
     no_pull: bool,
 ) -> anyhow::Result<()> {
+    queue_work_with(storage, list_sessions, no_pull, None, false)
+}
+
+// trace:STORY-2768 | ai:claude
+fn queue_work_with(
+    storage: &crate::Storage,
+    list_sessions: bool,
+    no_pull: bool,
+    branch: Option<&str>,
+    over_wip: bool,
+) -> anyhow::Result<()> {
     crate::queue_cmd::handle_queue_work(
         storage,
         None,
@@ -252,7 +263,7 @@ fn queue_work_sync(
         crate::queue_cmd::QueueWorkRoleInput::direct(Some("implementer")),
         no_pull,
         None,
-        None,
+        /* branch_override */ branch,
         None,
         false,
         None,
@@ -279,7 +290,84 @@ fn queue_work_sync(
         false,
         false,
         None,
+        over_wip,
     )
+}
+
+/// STORY-2768 S3b: a fresh snapshot saying `open` changes are open.
+// trace:STORY-2768 | ai:claude
+fn story_2768_snapshot(main: &Path, open: usize) {
+    let dir = main.join(".aida").join("cache");
+    std::fs::create_dir_all(&dir).unwrap();
+    let snapshot = serde_json::json!({
+        "version": 1,
+        "generated_at": chrono::Utc::now().to_rfc3339(),
+        "pass_seconds": 1,
+        "open_prs": open,
+        "wip_max": 10,
+        "main": { "merges_today": 0 },
+        "items": [],
+        "queues": {
+            "approved_not_started": 0,
+            "awaiting_review": 0,
+            "awaiting_rework": 0
+        },
+        "attention": []
+    });
+    std::fs::write(dir.join("now.json"), snapshot.to_string()).unwrap();
+}
+
+/// STORY-2768 S3b, through `handle_queue_work`: at the limit a new spec is
+/// refused before anything is claimed; under it, with `--over-wip`, or on an
+/// explicit `--branch`, the pickup goes on.
+// trace:STORY-2768 | ai:claude
+#[test]
+fn story_2768_queue_work_refuses_a_new_spec_at_the_open_change_limit() {
+    let gh_quiet = "#!/bin/sh\nif [ \"$1\" = --version ]; then echo 'gh test'; fi\nexit 0\n";
+    let setup = |open: usize| {
+        let fx = fixture();
+        let mut ambient =
+            crate::test_env::AmbientGuard::hermetic_with_seat(&fx.main, "implementer", &[]);
+        let gh = forge_fixture(&fx.main, &fx.root, "");
+        crate::test_exec::write_executable(&gh, gh_quiet);
+        ambient.set_key("AIDA_TEST_GH_BINARY", &gh);
+        story_2768_snapshot(&fx.main, open);
+        let (storage, _) = super::orphan_reentry_tests::queued_scope(&fx.main, "BUG-2451");
+        (fx, ambient, storage)
+    };
+
+    // At the limit: refused, and nothing was claimed.
+    let (fx, _ambient, storage) = setup(10);
+    let refused = queue_work_with(&storage, false, true, None, false)
+        .unwrap_err()
+        .to_string();
+    assert!(refused.contains("10 changes are open"), "{refused}");
+    assert!(refused.contains("--over-wip"), "{refused}");
+    assert!(crate::list_leases(&fx.main).is_empty(), "nothing claimed");
+    // Listing sessions allocates nothing and is never limited.
+    queue_work_with(&storage, true, true, None, false).unwrap();
+    drop(_ambient);
+
+    // The same count with --over-wip: the pickup takes its lease.
+    let (fx, _ambient, storage) = setup(10);
+    queue_work_with(&storage, false, true, None, true).unwrap();
+    assert_eq!(crate::list_leases(&fx.main).len(), 1, "--over-wip");
+    drop(_ambient);
+
+    // Under the limit: no refusal.
+    let (fx, _ambient, storage) = setup(9);
+    queue_work_with(&storage, false, true, None, false).unwrap();
+    assert_eq!(crate::list_leases(&fx.main).len(), 1, "under the limit");
+    drop(_ambient);
+
+    // An explicit --branch names existing work: exempt at the limit. Whatever
+    // the pickup then decides about that branch, it is not the WIP refusal.
+    let (fx, _ambient, storage) = setup(10);
+    git_ok(&fx.main, &["branch", "bug-2451-existing"]);
+    if let Err(error) = queue_work_with(&storage, false, true, Some("bug-2451-existing"), false) {
+        let error = format!("{error:#}");
+        assert!(!error.contains("changes are open"), "{error}");
+    }
 }
 
 // trace:BUG-2451 | ai:codex

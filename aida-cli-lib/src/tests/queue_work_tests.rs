@@ -2564,6 +2564,30 @@ fn queue_work_force_claim_flag_parses() {
     }
 }
 
+// trace:STORY-2768 | ai:claude
+#[test]
+fn queue_work_over_wip_flag_parses_and_defaults_off() {
+    let over_wip = |argv: &[&str]| {
+        let cli = crate::TEST_CLI
+            .try_parse_from(argv)
+            .expect("queue work parses");
+        match cli.command.registered::<crate::queue_cmd::QueueArgs>() {
+            crate::queue_cmd::QueueArgs {
+                inner: QueueCommand::Work { over_wip, .. },
+            } => over_wip,
+            other => panic!("expected queue work command, got {other:?}"),
+        }
+    };
+    assert!(over_wip(&[
+        "aida",
+        "queue",
+        "work",
+        "TASK-559",
+        "--over-wip"
+    ]));
+    assert!(!over_wip(&["aida", "queue", "work", "TASK-559"]));
+}
+
 // Phase-1 argv retains session identity without forwarding retired --steal.
 // trace:STORY-2325 | ai:codex
 #[test]

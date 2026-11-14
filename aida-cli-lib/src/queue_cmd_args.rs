@@ -709,6 +709,13 @@ pub enum QueueCommand {
         // trace:BUG-1126 | ai:claude
         #[clap(long)]
         force_claim: bool,
+        /// Start a new spec although the project is at its limit of open
+        /// changes (`[land] wip_max`). Without it a fresh implementer pickup
+        /// is refused at the limit; rework and review pickups are never
+        /// limited. The override is recorded.
+        // trace:STORY-2768 | ai:claude — plain `//` keeps the marker out of `--help`.
+        #[clap(long)]
+        over_wip: bool,
         /// Override the focus-scope drift guard: start work on a
         /// spec outside the active `aida focus` subtree even when `[focus]
         /// out_of_scope = "block"` would refuse, and silence the `warn` nudge.
