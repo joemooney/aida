@@ -33,26 +33,38 @@ description: |
   ### finding-hash:f238ea37
 
   BUG-2557 asks that the admission apply when the review story changed after the verdict; the implementation does not check this mechanically (advisor judgment plus a required reason), and the related auto-queue-review Covers defect (inherited completed specs re-added) is not fixed. Both disclosed by the implementer; the Covers defect needs its own spec.
+
+
+  ## Findings from PR-3938
+  Reviewed sha: 2809bc74568cee70830b3dccfd9a3963c6007ddb
+
+  ### finding-hash:654190b6
+
+  PR title says test(mcp): remove hard-coded temporary fixture paths, but after the merge with main the remaining diff is a containment binary-pin regression plus doc lines; retitle before squash so the landed commit subject describes the change, e.g. test(containment): reject metadata-preserving binary rewrites (Refs STORY-2593). PR body fast_gate=fail marker refers to stale head 12e20ac.
 status: Draft
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-13T20:01:56.623034248Z
-modified_at: 2026-11-13T23:48:32.843663065Z
+modified_at: 2026-11-14T00:26:40.247638080Z
 req_type: Task
 tags:
 - carried-finding:BUG-2557:55e0cbfe
 - carried-finding:BUG-2557:f238ea37
+- carried-finding:PR-3938:654190b6
 - carried-finding:PR-3971:55e0cbfe
 - carried-finding:PR-3971:f238ea37
 - carried-finding:STORY-2735:2c7ae2ea
 - carried-from:BUG-2557
+- carried-from:PR-3938
 - carried-from:PR-3971
 - carried-from:STORY-2735
 - finding-hash:2c7ae2ea
 - finding-hash:55e0cbfe
+- finding-hash:654190b6
 - finding-hash:f238ea37
 - from-review:BUG-2557
+- from-review:PR-3938
 - from-review:PR-3971
 - from-review:STORY-2735
 - kind:finding-sweep
@@ -70,6 +82,11 @@ history:
   author: joe
   timestamp: 2026-11-13T23:48:34.238475861Z
   session_id: 01a1d74e5ce2
+  changes: []
+- id: 01a1d773-061e-74b1-a702-906d1663f02c
+  author: joe
+  timestamp: 2026-11-14T00:26:42.078081929Z
+  session_id: 01a1d7711e6e
   changes: []
 filed_at:
   code_sha: 91fe1e337894199f15365d3f8ecfaf81366f8291
