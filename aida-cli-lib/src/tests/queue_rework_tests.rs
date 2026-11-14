@@ -1187,7 +1187,16 @@ fn requeue_by_non_tty_advisor_keeps_the_escalation_tag() {
 /// A git-canonical store under a temp project root (`<tmp>/.aida-store`), so
 /// the leases, drain lock and event log a requeue reads live in `<tmp>/.aida`.
 fn story_1429_fixture(reqs: Vec<aida_core::Requirement>) -> (tempfile::TempDir, Storage) {
-    let tmp = tempfile::tempdir().unwrap();
+    story_1429_fixture_in(tempfile::tempdir().unwrap(), reqs)
+}
+
+/// [`story_1429_fixture`] under a caller-chosen project root, so a test can
+/// put the root below a directory it controls.
+// trace:BUG-2575 | ai:claude
+fn story_1429_fixture_in(
+    tmp: tempfile::TempDir,
+    reqs: Vec<aida_core::Requirement>,
+) -> (tempfile::TempDir, Storage) {
     let store_root = tmp.path().join(".aida-store");
     std::fs::create_dir_all(tmp.path().join(".aida")).unwrap();
     let backend = crate::test_env::home_fixture_backend(&store_root).unwrap();
@@ -1601,6 +1610,38 @@ fn triage_loop_without_tty_prints_hints_and_never_prompts() {
 #[test]
 fn triage_loop_r_keystroke_lands_approved_queued_and_emits_spec_requeued() {
     let (tmp, storage) = story_1429_fixture(vec![parked("BUG-9112")]);
+    assert_r_keystroke_requeues(&tmp, &storage);
+}
+
+/// The dell1 failure: a stale `/tmp/.git` holding a group-writable
+/// `aida-work-node.toml` sat above every fixture's temp dir, and allocation
+/// discovery walked up from the fixture into it and refused the requeue as
+/// unsafe WORK allocation state. Lanes have a private `/tmp`, so only the
+/// host run saw it. This plants the same litter above the fixture root.
+// trace:BUG-2575 | ai:claude
+#[test]
+fn bug_2575_triage_loop_requeues_under_ancestor_git_litter() {
+    use std::os::unix::fs::PermissionsExt;
+    let parent = tempfile::tempdir().unwrap();
+    let litter = parent.path().join(".git");
+    std::fs::create_dir(&litter).unwrap();
+    let node = litter.join(aida_core::work_binding::BINDING_FILE);
+    std::fs::write(&node, "litter = true\n").unwrap();
+    std::fs::set_permissions(&node, std::fs::Permissions::from_mode(0o664)).unwrap();
+    let (tmp, storage) = story_1429_fixture_in(
+        tempfile::tempdir_in(parent.path()).unwrap(),
+        vec![parked("BUG-9112")],
+    );
+    assert_r_keystroke_requeues(&tmp, &storage);
+    // The fixture's allocation state stays in its own repository.
+    let left: Vec<_> = std::fs::read_dir(&litter)
+        .unwrap()
+        .map(|e| e.unwrap().file_name())
+        .collect();
+    assert_eq!(left, [aida_core::work_binding::BINDING_FILE]);
+}
+
+fn assert_r_keystroke_requeues(tmp: &tempfile::TempDir, storage: &Storage) {
     // ADR-66: advisor authority now needs a validated session grant, not an
     // env role. trace:STORY-1473 | ai:claude
     let _seat = crate::test_env::AmbientGuard::hermetic_with_seat_and(
@@ -1609,9 +1650,21 @@ fn triage_loop_r_keystroke_lands_approved_queued_and_emits_spec_requeued() {
         &[],
         &[(crate::events::EVENTS_DISABLE_ENV, None)],
     );
+    // Diagnose fixture authority separately: the loop displays rework refusals
+    // and returns Ok, otherwise hiding a rejected grant behind a status mismatch.
+    // trace:BUG-2575 | ai:codex
+    let grant = crate::gate::seat_authority::grant_check(tmp.path());
+    assert!(
+        matches!(&grant, crate::gate::seat_authority::GrantCheck::Valid(g) if g.seat == "advisor"),
+        "hermetic advisor fixture grant was not accepted: {grant:?}"
+    );
+    assert!(
+        crate::gate::role_authority::has_advisor_authority(),
+        "valid hermetic advisor grant did not resolve to advisor authority"
+    );
     let mut input = std::io::Cursor::new(b"r\n".to_vec());
     crate::queue_cmd::rework_triage_loop(
-        &storage,
+        storage,
         true,
         false,
         Some("codex"),
@@ -1621,7 +1674,7 @@ fn triage_loop_r_keystroke_lands_approved_queued_and_emits_spec_requeued() {
         &mut |_| panic!("show not pressed"),
     )
     .unwrap();
-    assert_eq!(status_of(&storage, "BUG-9112"), RequirementStatus::Approved);
+    assert_eq!(status_of(storage, "BUG-9112"), RequirementStatus::Approved);
     let entries = storage.queue_list("codex", true).unwrap();
     assert_eq!(entries.len(), 1);
     assert_eq!(entries[0].for_role.as_deref(), Some("implementer"));

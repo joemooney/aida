@@ -273,6 +273,8 @@ fn car_message_appends_the_pr_number_once() {
 struct Script {
     bad: Vec<u64>,
     flaky_first: bool,
+    /// The next N tested trains end with no test result (cancelled CI).
+    infra_runs: usize,
     stale_once: bool,
     refuse_at_land: Vec<u64>,
     main: u64,
@@ -310,6 +312,10 @@ impl Rails for Script {
             .map(|t| {
                 let ids = prs(&t.members());
                 self.tested.push(ids.clone());
+                if self.infra_runs > 0 {
+                    self.infra_runs -= 1;
+                    return CiVerdict::InfraRed("cancelled".into());
+                }
                 if std::mem::take(&mut self.flaky_first) || ids.iter().any(|p| self.bad.contains(p))
                 {
                     CiVerdict::Red("run".into())
@@ -362,16 +368,116 @@ fn drive_lands_an_all_green_train_in_one_ci_run() {
     assert!(out.ejected.is_empty());
 }
 
+// trace:BUG-2577 | ai:claude
 #[test]
-fn drive_reruns_a_first_red_once_before_bisecting() {
+fn drive_bisects_a_first_red_without_rerunning_the_same_composition() {
+    // Even a red that would have passed on a second attempt is not rerun:
+    // the train goes straight to halves.
     let mut s = Script {
         flaky_first: true,
         ..Default::default()
     };
     let out = drive(&mut s, ms(&[1, 2, 3])).unwrap();
-    assert_eq!(s.tested, vec![vec![1, 2, 3], vec![1, 2, 3]]);
-    assert_eq!(s.landed, vec![vec![1, 2, 3]]);
+    // [1,2,3] red → [1] and [2,3] together; [1] lands, which makes [2,3]
+    // stale, so it is rebuilt on the new main and tested again.
+    assert_eq!(
+        s.tested,
+        vec![vec![1, 2, 3], vec![1], vec![2, 3], vec![2, 3]]
+    );
+    assert_eq!(s.landed, vec![vec![1], vec![2, 3]]);
+    assert!(out.ejected.is_empty());
+    assert_eq!(out.ci_runs, 4);
+}
+
+// trace:BUG-2577 | ai:claude
+#[test]
+fn drive_splits_a_red_two_member_train_into_exactly_two_sub_trains() {
+    let mut s = Script {
+        bad: vec![2],
+        ..Default::default()
+    };
+    let out = drive(&mut s, ms(&[1, 2])).unwrap();
+    // One red run of [1,2], then exactly the two halves: no second [1,2].
+    assert_eq!(s.tested, vec![vec![1, 2], vec![1], vec![2]]);
+    assert_eq!(s.landed, vec![vec![1]]);
+    assert_eq!(out.ejected.len(), 1);
+    assert_eq!(out.ejected[0].pr, 2);
+    assert_eq!(out.ci_runs, 3);
+}
+
+// trace:BUG-2577 | ai:claude
+#[test]
+fn drive_reruns_an_infra_red_once_then_lands_the_same_composition() {
+    let mut s = Script {
+        infra_runs: 1,
+        ..Default::default()
+    };
+    let out = drive(&mut s, ms(&[1, 2])).unwrap();
+    assert_eq!(s.tested, vec![vec![1, 2], vec![1, 2]]);
+    assert_eq!(s.landed, vec![vec![1, 2]]);
+    assert!(out.ejected.is_empty());
     assert_eq!(out.ci_runs, 2);
+}
+
+// trace:BUG-2577 | ai:claude
+#[test]
+fn drive_bisects_after_one_infra_rerun_whatever_the_second_red_is() {
+    // Infra red, then a test red: one rerun, then the halves.
+    let mut s = Script {
+        infra_runs: 1,
+        bad: vec![2],
+        ..Default::default()
+    };
+    let out = drive(&mut s, ms(&[1, 2])).unwrap();
+    assert_eq!(s.tested, vec![vec![1, 2], vec![1, 2], vec![1], vec![2]]);
+    assert_eq!(s.landed, vec![vec![1]]);
+    assert_eq!(out.ejected.len(), 1);
+    assert_eq!(out.ejected[0].pr, 2);
+
+    // Two infra reds in a row: still exactly one rerun before the halves.
+    let mut s = Script {
+        infra_runs: 2,
+        ..Default::default()
+    };
+    let out = drive(&mut s, ms(&[1, 2])).unwrap();
+    assert_eq!(s.tested[..4], [vec![1, 2], vec![1, 2], vec![1], vec![2]]);
+    assert!(out.ejected.is_empty());
+    assert_eq!(s.landed.concat(), vec![1, 2]);
+}
+
+// trace:BUG-2577 | ai:claude
+#[test]
+fn drive_ejects_a_lone_member_after_one_infra_rerun() {
+    let mut s = Script {
+        infra_runs: 2,
+        ..Default::default()
+    };
+    let out = drive(&mut s, ms(&[7])).unwrap();
+    assert_eq!(s.tested, vec![vec![7], vec![7]]);
+    assert!(s.landed.is_empty());
+    assert_eq!(out.ejected.len(), 1);
+    assert_eq!(out.ejected[0].pr, 7);
+    assert!(
+        out.ejected[0]
+            .reason
+            .contains("no test result after one rerun"),
+        "{}",
+        out.ejected[0].reason
+    );
+    assert_eq!(out.ci_runs, 2);
+}
+
+// trace:BUG-2577 | ai:claude
+#[test]
+fn drive_ejects_a_lone_test_red_member_after_one_ci_run() {
+    let mut s = Script {
+        bad: vec![7],
+        ..Default::default()
+    };
+    let out = drive(&mut s, ms(&[7])).unwrap();
+    assert_eq!(s.tested, vec![vec![7]]);
+    assert_eq!(out.ejected.len(), 1);
+    assert_eq!(out.ci_runs, 1);
 }
 
 #[test]
@@ -381,11 +487,11 @@ fn drive_bisects_a_red_train_and_ejects_only_the_bad_member() {
         ..Default::default()
     };
     let out = drive(&mut s, ms(&[1, 2, 3, 4])).unwrap();
-    // full, rerun, then halves [1,2] and [3,4] in parallel; [1,2] lands, so
-    // [3,4]'s verdict is red and it splits; [3] is ejected, [4] lands.
+    // full, then halves [1,2] and [3,4] in parallel (no rerun of the full
+    // train); [1,2] lands, [3,4] is red and splits; [3] is ejected, [4] lands.
     assert_eq!(s.tested[0], vec![1, 2, 3, 4]);
-    assert_eq!(s.tested[1], vec![1, 2, 3, 4]);
-    assert_eq!(s.tested[2..4], [vec![1, 2], vec![3, 4]]);
+    assert_eq!(s.tested[1..3], [vec![1, 2], vec![3, 4]]);
+    assert_eq!(s.tested[3..], [vec![3], vec![4]]);
     assert_eq!(s.landed, vec![vec![1, 2], vec![4]]);
     assert_eq!(out.ejected.len(), 1);
     assert_eq!(out.ejected[0].pr, 3);
@@ -433,17 +539,11 @@ fn drive_retests_a_green_sibling_after_the_other_half_lands() {
     let s = p.0;
     assert_eq!(
         s.tested,
-        vec![
-            vec![1, 2, 3, 4],
-            vec![1, 2, 3, 4],
-            vec![1, 2],
-            vec![3, 4],
-            vec![3, 4],
-        ]
+        vec![vec![1, 2, 3, 4], vec![1, 2], vec![3, 4], vec![3, 4],]
     );
     assert_eq!(s.landed, vec![vec![1, 2], vec![3, 4]]);
     assert!(out.ejected.is_empty());
-    assert_eq!(out.ci_runs, 5);
+    assert_eq!(out.ci_runs, 4);
 }
 
 #[test]
@@ -462,14 +562,17 @@ fn drive_rebuilds_a_stale_train_and_drops_members_refused_at_land() {
 }
 
 #[test]
-fn drive_ejects_a_red_one_member_train_after_its_rerun() {
+fn drive_ejects_a_red_one_member_train_after_one_ci_run() {
+    // trace:BUG-2577 | ai:claude
     let mut s = Script {
         bad: vec![9],
         ..Default::default()
     };
     let out = drive(&mut s, ms(&[9])).unwrap();
-    assert_eq!(s.tested.len(), 2);
+    assert_eq!(s.tested, vec![vec![9]]);
+    assert_eq!(out.ci_runs, 1);
     assert!(s.landed.is_empty());
+    assert_eq!(out.ejected.len(), 1);
     assert_eq!(out.ejected[0].pr, 9);
 }
 
@@ -636,7 +739,7 @@ fn regression_demo_two_green_prs_that_conflict_semantically_never_turn_main_red(
         rails.check_rev(&both.tip).unwrap(),
         CiVerdict::Red(_)
     ));
-    // The train: red, rerun, bisect — A lands, B is ejected before main moves
+    // The train: red, bisect — A lands, B is ejected before main moves
     // to a red state.
     let out = drive(
         &mut rails,
@@ -2630,7 +2733,7 @@ fn train_required_aggregate_registration_and_precedence() {
         train_ci_readiness(&rows, &required, &cfg, false),
         TrainCiReadiness::Missing(_)
     ));
-    // Preserve genuine red-train rerun/bisection even before registration.
+    // Preserve genuine red-train bisection even before registration.
     rows[0].bucket = "fail".into();
     assert!(matches!(
         train_ci_readiness(&rows, &required, &CiGateConfig::default(), false),
@@ -2938,6 +3041,40 @@ fn bug2401_row(name: &str, bucket: &str) -> crate::ci_gate::CheckRow {
         workflow: "CI".into(),
         run_id: None,
     }
+}
+
+/// A cancelled check is a red with no test result; a failed check is a test
+/// red, whatever else was cancelled beside it.
+#[test]
+// trace:BUG-2577 | ai:claude
+fn bug2577_cancel_bucket_is_infra_and_fail_bucket_is_a_test_failure() {
+    let cfg = crate::ci_gate::CiGateConfig::default();
+    let required = vec!["Build (ubuntu-latest)".to_string()];
+    let readiness =
+        |rows: &[crate::ci_gate::CheckRow]| train_ci_readiness(rows, &required, &cfg, false);
+    let mut rows = required_train_rows();
+    rows[2].bucket = "cancel".into();
+    match readiness(&rows) {
+        TrainCiReadiness::InfraRed(why) => assert!(why.contains("Build lane 2"), "{why}"),
+        other => panic!("a cancelled lane is not a test failure: {other:?}"),
+    }
+    // The aggregate goes red whenever a lane is cancelled: still no test result.
+    rows.push(bug2401_row("Build (ubuntu-latest)", "fail"));
+    assert!(matches!(readiness(&rows), TrainCiReadiness::InfraRed(_)));
+    // A lane still running may yet fail: no verdict until it settles.
+    rows[4].bucket = "pending".into();
+    assert!(matches!(readiness(&rows), TrainCiReadiness::Pending(_)));
+    // A failed lane is a test failure, with or without a cancelled sibling.
+    rows[4].bucket = "fail".into();
+    match readiness(&rows) {
+        TrainCiReadiness::Red(why) => assert!(why.contains("Build lane 4"), "{why}"),
+        other => panic!("a failed lane is a test failure: {other:?}"),
+    }
+    rows[2].bucket = "pass".into();
+    assert!(matches!(readiness(&rows), TrainCiReadiness::Red(_)));
+    // The aggregate failing with no cancelled check is an ordinary red.
+    rows[4].bucket = "pass".into();
+    assert!(matches!(readiness(&rows), TrainCiReadiness::Red(_)));
 }
 
 /// An aggregate that registers only after its lanes finish is pending while
