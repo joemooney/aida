@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-13T13:53:20.390665880Z
-modified_at: 2026-11-14T07:24:05.455942178Z
+modified_at: 2026-11-14T07:34:07.555267549Z
 req_type: Bug
 tags:
 - hygiene
@@ -74,6 +74,12 @@ history:
 - id: 01a1d8ac-ffb7-7fd1-88bd-85ab2d9c6640
   author: joe
   timestamp: 2026-11-14T06:09:38.743739662Z
+  changes: []
+- id: 01a1d8fa-5d24-73c3-a92a-b71de9472d8e
+  author: dirtlab
+  timestamp: 2026-11-14T07:34:08.932096266Z
+  session_id: 01a1d8f9b72a
+  harness_version: codex-cli 0.167.0
   changes: []
 filed_at:
   code_sha: c8bc6df24ed06dd1eb73f897e164f5381d6d6e91
