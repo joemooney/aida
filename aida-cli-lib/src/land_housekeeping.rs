@@ -42,7 +42,8 @@ pub(crate) struct Orphan {
     /// Branches on origin named for the spec.
     pub branches: Vec<String>,
     /// A commit on the integration branch that main does not have names the
-    /// spec: its work is merged and waits for a promotion.
+    /// spec: its work is merged there. A promotion squashes, so those commits
+    /// never reach main: this stays true after the promotion too.
     pub awaits_promotion: bool,
 }
 
@@ -102,7 +103,9 @@ pub(crate) fn plan(lanes: Vec<DeadLane>, orphans: Vec<Orphan>, changes: &[Pr]) -
         if orphan.awaits_promotion {
             steps.push(Step::Skip {
                 what,
-                why: "its work is merged on integration and waits for a promotion".into(),
+                why:
+                    "integration carries its work (promoted by squash, or it waits for a promotion)"
+                        .into(),
             });
         } else if let Some(holder) = orphan.elsewhere {
             steps.push(Step::Skip {
