@@ -8,10 +8,18 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-14T02:53:44.322875636Z
-modified_at: 2026-11-14T10:50:27.815774963Z
+modified_at: 2026-11-14T10:50:35.715632616Z
 req_type: Bug
 tags:
 - track:integration
+comments:
+- id: 01a1d9ae-3743-77e2-9b8f-974a5b909331
+  author: joe
+  content: '[advisor 7b 03:51] Approved for the integration seat (track:integration, follow-ups from #3981 review). Scope as filed; LIGHT gate.'
+  created_at: 2026-11-14T10:50:35.715632616Z
+  modified_at: 2026-11-14T10:50:35.715632616Z
+  session_id: 01a1d8f3-f948-7072-b174-fa9507ed074b
+  harness_version: 2.1.325 (Claude Code)
 history:
 - id: 01a1d9ae-1867-7ac0-b979-a367f3e848fa
   author: joe
