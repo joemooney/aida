@@ -1,0 +1,35 @@
+id: 01a1da86-5355-7900-abf7-5486552aeb8e
+spec_id: STORY-b6b1278890774ef993d2ebc327862470-738
+agreed_id: STORY-2815
+title: 'Review PR-4035: [AI:claude] fix(gate): say which roster a refused parent grant read, and re-read it to expose a store-sync race (Refs BUG-2544)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `(no-sess`) for branch `bug-2544-fresh`.
+
+  - PR: <https://github.com/joemooney/aida/pull/4035>
+  - Branch: `bug-2544-fresh` → `main`
+
+  ## Slice of (Refs only — not completed by this PR)
+
+  Commit subjects carry `(Refs SPEC-ID)`: this PR is one slice of a spec that a later PR completes. Review this slice against that spec's acceptance criteria.
+
+  - BUG-2544
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 4035` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-14T14:46:38.677582264Z
+modified_at: 2026-11-14T14:46:38.677582264Z
+req_type: Story
+filed_at:
+  code_sha: 3350540dbab869a493924fe627364ed3a48ff9e4
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 3350540dbab
+  vendor: claude
