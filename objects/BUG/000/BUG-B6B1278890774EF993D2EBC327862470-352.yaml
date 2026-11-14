@@ -1,0 +1,37 @@
+id: 01a1dbd0-af34-7b11-95b7-1413a0531ff7
+spec_id: BUG-b6b1278890774ef993d2ebc327862470-352
+agreed_id: BUG-2587
+title: 'aida worktree gc: detached-HEAD worktrees are kept with a blank ''GC Git command failed:'' reason and can never be reclaimed; per-seat target dirs are not reclaimed either'
+description: |
+  Observed by Joe on dell1, 2026-11-14 13:46 MST: `aida worktree gc` prints many lines of the form
+  `kept /home/dirtlab/ai/aida-worktrees/integ-2543b (0 bytes): GC Git command failed: ` with nothing after the colon.
+
+  Cause (read in aida-cli-lib/src/worktree_lifecycle_gc.rs): `linked_branch` runs `git symbolic-ref --quiet HEAD`. On a detached HEAD that exits 1 with empty stderr by design of `--quiet`, and the `git` helper reports the empty stderr as the whole reason. The worktree itself is healthy (`git status` and `git rev-parse HEAD` work).
+
+  Two defects:
+  1. The reason is blank and reads as a Git failure. It should say `detached HEAD: no branch to prove merged`, and the size should be measured (it prints 0 bytes).
+  2. A detached-HEAD linked worktree can never become eligible, so the checkouts that seats make most (integration check trees `integ-*`, advisor merge trees `advisor-merge-*`, `adv-*`, pool trees) accumulate for ever. On dell1 on 2026-11-14 most of 70 registered worktrees were in this state while the disk was 90% full. The per-seat build output under target/lane-overlay (129 GB on dell1, 83 GB of it untouched for over 24 h and belonging to ended sessions) and target/worktrees is likewise not reclaimed by any command.
+
+  Acceptance:
+  - A detached-HEAD worktree is reported with a plain reason and its real size.
+  - A detached-HEAD worktree whose HEAD commit is reachable from the default branch or from an open/merged PR head on the remote, with a clean tree and no live session lease, is eligible and removed by `--apply`.
+  - `aida worktree gc` (or the umbrella gc, STORY-2711) reports and, with `--apply`, removes per-seat target directories (target/lane-overlay/<session>, target/worktrees/<name>) whose session or worktree no longer exists, and prints bytes reclaimed.
+  - A test covers the detached case and the blank-stderr case.
+status: Draft
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-14T20:47:29.076518272Z
+modified_at: 2026-11-14T20:47:29.076518272Z
+req_type: Bug
+tags:
+- disk
+- landing-emergency
+filed_at:
+  code_sha: ce660d553f782fd223ca091bb3bd2dc394352eb5
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: ce660d553f7
+  vendor: claude
+  session: 01a1db78-560d-7a81-a467-3742be1fefc3
