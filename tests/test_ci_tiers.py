@@ -83,7 +83,8 @@ class CiTiers(unittest.TestCase):
             self.assertEqual(result.returncode == 0, expected,
                              (full, tier, build, gates, compile_result))
 
-    def test_fast_inventory_does_not_compile(self):
+    # trace:TASK-3791 | ai:codex
+    def test_fast_inventory_only_compiles_lightweight_guards(self):
         import importlib.util
         spec = importlib.util.spec_from_file_location('gates', ROOT / 'scripts/check-ci-gates.py')
         gates = importlib.util.module_from_spec(spec)
@@ -94,7 +95,10 @@ class CiTiers(unittest.TestCase):
         self.assertEqual(tiers['Check aida-cli without default features'], 'full')
         self.assertEqual(tiers['TUI seam guard'], 'full')
         for name, command in steps:
-            if tiers.get(name) == 'fast':
+            if name == 'Rust structural ratchets':
+                self.assertEqual(tiers[name], 'fast')
+                self.assertIn('cargo test -p aida-ci-guards --lib', command)
+            elif tiers.get(name) == 'fast':
                 self.assertNotRegex(command, r'cargo (check|test|build)', name)
 
     def test_actual_fast_invocation_refuses_matching_source_and_ledger_growth(self):
@@ -181,6 +185,12 @@ class CiTiers(unittest.TestCase):
                 else:
                     write('aida-core/src/legacy.rs', 'use crate::*;')
                     write('scripts/crate-globs-legacy.json', json.dumps({'aida-core/src/legacy.rs': 1}))
+                # Model the actual PR checkout: its HEAD already contains the
+                # expanded ledger. Comparing against HEAD would silently pass;
+                # FAST must retain the older event-supplied trusted base.
+                git('add', '.')
+                git('commit', '-m', 'PR source and ledger ceiling increase')
+                self.assertNotEqual(git('rev-parse', 'HEAD'), base)
                 # Positive control: matching source/ledger growth alone passes
                 # this same FAST invocation. Its refusal below must come from
                 # the trusted base comparison, not an inconsistent fixture.
@@ -202,6 +212,16 @@ class CiTiers(unittest.TestCase):
                 unchecked = run(without_base, command='make check-ci-fast')
                 self.assertEqual(unchecked.returncode, 0,
                                  unchecked.stdout + unchecked.stderr)
+                if variable == 'GATE_DEPENDENCIES_BASE':
+                    for absent in ('', None, '0' * 40):
+                        pr_env = dict(without_base, GITHUB_EVENT_NAME='pull_request')
+                        if absent is not None:
+                            pr_env[variable] = absent
+                        refused = run(pr_env, command='make check-ci-fast')
+                        self.assertNotEqual(refused.returncode, 0,
+                                            refused.stdout + refused.stderr)
+                        self.assertIn('PR CI requires a trusted gate-dependency base',
+                                      refused.stdout + refused.stderr)
                 result = run()
                 self.assertNotEqual(result.returncode, 0, result.stdout + result.stderr)
                 self.assertIn('may only decrease' if variable == 'GATE_DEPENDENCIES_BASE' else 'may only shrink',

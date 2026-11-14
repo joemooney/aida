@@ -123,7 +123,11 @@ fn production_calls(src: &Path) -> Vec<(String, String, usize)> {
 }
 
 fn src_dir() -> std::path::PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("src")
+    // trace:TASK-3791 | ai:codex — shared with the lightweight FAST harness.
+    Path::new(env!("CARGO_MANIFEST_DIR"))
+        .parent()
+        .unwrap()
+        .join("aida-cli-lib/src")
 }
 
 #[test]
