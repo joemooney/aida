@@ -12,12 +12,12 @@ description: |
   4. Ambiguous multi-track tags are refused at the tag-write seam, or refused deterministically everywhere they are read, with one consistent message.
   5. Direct agent launches (`aida agent new --role implementer --spec`, including background lanes) apply the same fresh-pickup track admission before any resource or status change. Review and resume roles keep their current behaviour.
   6. Queue views suggest the matching launcher for foreign-track work (for example "set AIDA_TRACK=integration") consistently across list, next and drain previews.
-status: Approved
+status: InProgress
 priority: Medium
-owner: ''
+owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-13T16:07:16.079959811Z
-modified_at: 2026-11-13T16:10:13.390837398Z
+modified_at: 2026-11-14T07:35:24.634161356Z
 req_type: Story
 tags:
 - integration
@@ -40,6 +40,13 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Approved
+- id: 01a1d8fb-84da-7502-8dea-3845b477ae00
+  author: aida-session-start
+  timestamp: 2026-11-14T07:35:24.634158380Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: 5652ea465a222e7d3ade2cadb967ddd30a6b6b44
   branch: integration
