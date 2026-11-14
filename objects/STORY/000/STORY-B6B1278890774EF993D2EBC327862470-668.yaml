@@ -18,7 +18,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-13T00:35:57.525111678Z
-modified_at: 2026-11-14T17:04:05.844825008Z
+modified_at: 2026-11-14T17:24:54.685407606Z
 req_type: Story
 tags:
 - track:integration
@@ -154,6 +154,13 @@ comments:
   modified_at: 2026-11-14T17:04:05.844825008Z
   session_id: 01a1dab1-9447-7d22-b5ff-0c9084e122ea
   harness_version: 2.1.325 (Claude Code)
+- id: 01a1db17-391d-7d51-8ce9-0b0db12ef55c
+  author: dirtlab
+  content: 'Round 3 (PR #3950), commit 8b3b9bbde7 on story-2745-seat-mail-sq: fixed the blocking env-seat fallback in aida-core/src/mailbox_identity.rs (MailIdentityFacts::observed). The registry row now decides the seat once it exists: a bound row''s seat or none, no seat for an unverified row, the env seat only for a session with no row. New test story2745_a_seatless_row_overrides_a_stale_env_seat. Lane jobs: aida-core mailbox_identity 21 passed, aida-cli-lib story2745 16 passed. Not done: the push failed (the lane''s gh token is invalid), so the commit is local to the seat worktree; make check-ci-fast did not finish inside the lane''s 60s tool cap (4 gates ok, none failed, before the cut-off).'
+  created_at: 2026-11-14T17:24:54.685407606Z
+  modified_at: 2026-11-14T17:24:54.685407606Z
+  session_id: 01a1db0cdea8
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1d404-5b69-7883-a178-72d22e485802
   author: joe
