@@ -3,12 +3,12 @@ spec_id: BUG-b6b1278890774ef993d2ebc327862470-325
 agreed_id: BUG-2560
 title: Test fixture writes /tmp/.git/aida-allocation.toml and breaks tempdir mailbox tests on that host
 description: 'Seen twice on dell1 2026-11-13 (23:54, 05:04): /tmp/.git holding only aida-allocation.toml with version=1 authoritative=true (test-only fixture content, e.g. allocation_authority.rs home_fixture_backend ~1605). Every test tempdir under /tmp then resolves /tmp as its git root; mailbox tests fail (NotAGitCheckout, empty inbox). Fix: fixtures write authority strictly under their own tempdir; common_dir refuses a nonexistent gitdir target. Workaround: mv /tmp/.git aside (copies at dell1:/tmp/stray-dotgit-20261113*).'
-status: Approved
+status: InProgress
 priority: Medium
-owner: ''
+owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-13T13:53:20.390665880Z
-modified_at: 2026-11-14T05:31:59.150953543Z
+modified_at: 2026-11-14T05:45:35.367159379Z
 req_type: Bug
 tags:
 - hygiene
@@ -38,6 +38,13 @@ history:
   session_id: 01a1d852-16ef-7973-bdde-ac3f274752a2
   harness_version: 2.1.325 (Claude Code)
   changes: []
+- id: 01a1d896-f987-72c2-96e4-b5518a82fa46
+  author: aida-session-start
+  timestamp: 2026-11-14T05:45:35.367157029Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: c8bc6df24ed06dd1eb73f897e164f5381d6d6e91
   branch: integration
