@@ -22,7 +22,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-13T18:16:13.414258365Z
-modified_at: 2026-11-14T05:37:49.718020370Z
+modified_at: 2026-11-14T05:58:12.394088093Z
 req_type: Bug
 tags:
 - effort:open:4h
@@ -79,6 +79,12 @@ history:
   author: joe
   timestamp: 2026-11-14T05:37:51.357459348Z
   changes: []
+- id: 01a1d8a2-8778-7260-9a8e-ff3a0ed257af
+  author: joe
+  timestamp: 2026-11-14T05:58:12.600968609Z
+  session_id: 01a1d8a12613
+  harness_version: 2.1.325 (Claude Code)
+  changes: []
 filed_at:
   code_sha: ee8dd4b2bdf1495f699357a3f2f40f9bf3802983
   branch: main
@@ -94,3 +100,11 @@ attention_reason:
   lean: Approve parent-side structured draft collection with verified child reviewer authority and exact launch/current SHA checks; do not weaken the existing stamped-source collector.
   raised_by: implementer
   raised_at: 2026-11-14T05:35:18.787270969Z
+failure_reason:
+  phase: reviewer
+  phase_index: 3
+  kind: verdict:request-changes
+  detail: Sketch-only PR (one plan doc, no code) carries completing trailer (BUG-2564) with type fix:, so merge would auto-complete an unfixed high-priority bug; AC1/AC2 unverified (no implementation), AC3 post-deploy. Retitle as Refs, fix plan symbol.
+  recovery_hint: address the review findings, move BUG-2564 back to In Progress, and clear the PR hold only after approval
+  shelved_by: reviewer
+  shelved_at: 2026-11-14T05:58:12.394088093Z
