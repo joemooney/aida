@@ -10,8 +10,6 @@ feature: Uncategorized
 created_at: 2026-11-13T11:27:32.307973679Z
 modified_at: 2026-11-14T18:42:32.240264575Z
 req_type: Bug
-tags:
-- track:integration
 relationships:
 - rel_type:
     custom: implemented-by
@@ -98,12 +96,25 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: Completed
+- id: 01a1db5e-7bf9-7f11-a5d7-af756e00240f
+  author: aida-auto-bump
+  timestamp: 2026-11-14T18:42:44.857384620Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
 processing_record:
 - id: 01a1db5e-4ab0-7142-92fe-717f81e91f9c
   timestamp: 2026-11-14T18:42:32.240262560Z
   agent: aida
   commit_sha: e14d6c9a70b0a348e789051c741c6f5c49a113bd
   summary: Completed via merge e14d6c9a
+- id: 01a1db5e-7e90-7da2-aaa0-90ff6f38e3e4
+  timestamp: 2026-11-14T18:42:45.520421515Z
+  agent: aida
+  commit_sha: e14d6c9a70b0a348e789051c741c6f5c49a113bd
+  summary: 'All 3 BUG-2555 ACs met: write_atomic_mode stages with mode + fchmod then renames (fs_atomic.rs), used by every counter/binding writer (dispenser.rs open/save_state, work_binding.rs raise/restore/bootstrap, enroll-home); umask-002 child-process regression asserts 0644 across allocations, raise/restore, and that a 0664 counter is still refused unrepaired. Prepared-candidate publish_bytes already 0600. CI pending/not run at review time (integration base); merge-hold-gate green.'
+  review_verdict: approved
 filed_at:
   code_sha: 11bf5e9a018e0a304ec1af0d43435c1886b4328f
   branch: main
