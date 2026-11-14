@@ -1,3 +1,8 @@
+// trace:TASK-3783 | ai:codex
+pub use aida_term::output_format::{
+    format_weight, toon_status_token, TOON_LIST_DEFAULT_FIELDS, TOON_LIST_FIELD_ALIASES,
+    TOON_LIST_KNOWN_FIELDS,
+};
 // trace:TASK-3428 | ai:codex
 use crate::{
     status_display, toon_list_cell, Colorize, AGENT_LIST_DEFAULT_LIMIT, LIST_DEFAULT_SORT,
@@ -191,69 +196,6 @@ pub(crate) fn agent_list_truncation_header(
     )
 }
 
-// ── TASK-964: TOON agent-output renderers (AXI #1 token-efficient output +
-// #2 minimal default schemas). These run ONLY in agent mode; the human emoji /
-// table path is left byte-identical. Each command declares a minimal default
-// field set; `--fields` expands `aida list`. trace:TASK-964
-
-/// The minimal default column schema for `aida list` in agent mode (AXI #2).
-/// Five fields cover the agent's routine memory-lane need — id / title /
-/// status / type / modified_at — instead of the human table's
-/// id/origin/type/status/title/tags/glyph spread. `--fields` widens it.
-// trace:TASK-964
-// trace:TASK-1215 | ai:codex
-pub(crate) const TOON_LIST_DEFAULT_FIELDS: &[&str] =
-    &["id", "title", "status", "type", "modified_at"];
-
-/// The list fields the agent-mode `--fields` selector understands, mapped onto
-/// the cache summary plus the work-routing axis. Unknown names are rejected with
-/// this list in the error so the agent can self-correct.
-// trace:TASK-964
-pub(crate) const TOON_LIST_KNOWN_FIELDS: &[&str] = &[
-    "id",
-    // trace:STORY-B6B1278890774EF993D2EBC327862470-105 | ai:claude — local ID
-    // beside the agreed one, or `(agreed id pending)`.
-    "local_id",
-    "title",
-    "status",
-    "type",
-    "priority",
-    "feature",
-    "owner",
-    "assignee",
-    "tags",
-    "heft",
-    // trace:TASK-1215 | ai:codex — freshness signal for authored lane memory.
-    "modified_at",
-    // trace:TASK-2205 | ai:claude — creation time; see TOON_LIST_FIELD_ALIASES.
-    "opened",
-    // trace:FR-283 | ai:claude — the optional numeric weight/score.
-    "weight",
-    "queued",
-    "in_flight",
-    "blocked",
-    // trace:STORY-776 | ai:claude — the advisor's dispatch classification.
-    "mode",
-    // trace:STORY-634 | ai:claude — the multi-repo repo/component dimension.
-    "origin",
-    "deferred_reason",
-    // trace:STORY-1653 | ai:claude — derived driver of an in-progress spec.
-    "driver",
-    "driver_kind",
-    // trace:TASK-1951 trace:TASK-2003 | ai:claude — NeedsAttention review lens.
-    "review_lens",
-];
-
-/// Accepted alternate spellings for `--fields` entries, as `(alias, field)`.
-/// [`toon_list_fields`] rewrites each alias to its canonical field, and
-/// [`list_fields_help`] names them, so help and parser share one table.
-// trace:TASK-2205 | ai:claude
-pub(crate) const TOON_LIST_FIELD_ALIASES: &[(&str, &str)] = &[
-    ("req_type", "type"),
-    ("created_at", "opened"),
-    ("created", "opened"),
-];
-
 /// The `aida list --fields` help text, generated from
 /// [`TOON_LIST_KNOWN_FIELDS`], [`TOON_LIST_FIELD_ALIASES`] and
 /// [`TOON_LIST_DEFAULT_FIELDS`] so the documented set cannot drift from the
@@ -296,31 +238,6 @@ pub(crate) fn search_fields_help() -> String {
         TOON_LIST_KNOWN_FIELDS.join(", "),
         aliases.join(", ")
     )
-}
-
-/// Render a numeric weight/score for display: integral values drop the
-/// fractional part (`42`, not `42.0`); everything else uses the shortest
-/// round-trip float formatting (`0.75`).
-// trace:FR-283 | ai:claude
-pub fn format_weight(w: f64) -> String {
-    if w.fract() == 0.0 && w.abs() < 1e15 {
-        format!("{}", w as i64)
-    } else {
-        format!("{}", w)
-    }
-}
-
-/// Normalize a cache status string (`InProgress`, `in-progress`, `NeedsAttention`,
-/// …) to a stable lowercase-hyphen token for agent output, so the TOON value is
-/// uniform regardless of how the cache spelled it.
-// trace:TASK-964
-pub(crate) fn toon_status_token(status: &str) -> String {
-    let s = status.trim();
-    match s.to_ascii_lowercase().replace([' ', '_'], "-").as_str() {
-        "inprogress" | "in-progress" => "in-progress".to_string(),
-        "needsattention" | "needs-attention" => "needs-attention".to_string(),
-        other => other.to_string(),
-    }
 }
 
 /// The column header label for a `--fields` field name. The same field
