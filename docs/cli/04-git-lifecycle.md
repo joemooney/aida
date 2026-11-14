@@ -252,6 +252,16 @@ worker, serialized by a separate cleanup lock that never blocks merges.
 
 The worker records the final lease-end outcome in the ship activity log, even
 when it finishes after ship has returned. `--no-cleanup` skips the worker.
+Step 6 (reap plus merged-worktree pruning) runs under one supervised 60-second
+wall-clock budget, including clone probe setup and scans. On expiry the sweep
+and its observed descendants receive SIGKILL. Termination confirmation waits at
+most 200ms before handing off to a reaper; the sweep retains its inherited
+cleanup lock until it exits, including while kernel I/O delays termination.
+Direct sweep entry requires the supervisor’s verified lock handoff. Cleanup
+reports an interruption with `aida doctor` recovery advice. Earlier cleanup actions may already have
+applied; inspect before retrying. Lease end (step 5) is outside this budget.
+<!-- trace:BUG-2535 | ai:codex -->
+
 During ship cleanup each clone probe has a shared 10-second budget; timeouts and
 unreadable evidence retain the clone with a diagnostic. Shipped heads are
 checked in one Git batch, with exclusions streamed to revision walks. Existing
@@ -663,6 +673,23 @@ returns an error; a verdict anchor alone does not finish that protection.
 **Chains with** — `aida review` (request changes) → `aida rework` → back to the implementer → `aida queue done` again.
 
 ---
+
+### `aida integration tags`
+
+**One line**: mark the open specs whose work has reached the integration branch but not yet `main`.
+
+**Mental model.** Approved PRs can land on an `integration` branch first and reach `main` later, in one promotion. Until that promotion, a spec's completing commit is on `origin/integration`, the spec is not complete, and nothing in its status says its work has landed anywhere. `integration tags` closes that gap. It reads the completing-commit trailers on `origin/integration` that are not yet on `origin/main`. It adds the `landed-in-integration` tag to each open spec they name, and removes the tag from specs that are closed or no longer ahead of `main`. Completion is unchanged: a spec still completes when its commit reaches `main`.
+
+**Reach for it when**: you merge a PR into integration, or after a promotion, so `aida list --tag landed-in-integration` shows what is waiting to be promoted.
+
+**Don't reach for it when**: you want to complete a spec or promote integration to `main`. This command edits tags only.
+
+**Key options (rationale only).**
+- `--dry-run` prints the tag changes without making them. Use it to check the plan before tagging after a large merge.
+
+**Gotchas.** It reads the local `origin/` refs, so run `git fetch` first if they may be stale. Otherwise a fresh landing is missed, or a spec that was just promoted keeps its tag until the next run.
+
+**Chains with**: `git fetch` → `aida integration tags --dry-run` → `aida integration tags` → `aida list --tag landed-in-integration`.
 
 ## The two-leg git model: `fetch` / `pull` / `push`
 

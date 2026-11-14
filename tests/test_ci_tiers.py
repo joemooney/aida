@@ -53,7 +53,7 @@ class CiTiers(unittest.TestCase):
             self.assertEqual(JOBS[job]['if'], "needs.tier.outputs.full != 'true'")
         checkout = next(step for step in JOBS['fast-gates']['steps']
                         if step.get('uses', '').startswith('actions/checkout@'))
-        # Both ratchets compare against the trusted PR base, including when
+        # All ratchets compare against the trusted PR base, including when
         # the base is older than the shallow checkout's immediate parent.
         self.assertEqual(checkout['with']['fetch-depth'], 0)
         self.assertTrue(any(step.get('run', '').strip().endswith('make check-ci-fast') for step in JOBS['fast-gates']['steps']))
@@ -103,11 +103,12 @@ class CiTiers(unittest.TestCase):
 
     def test_actual_fast_invocation_refuses_matching_source_and_ledger_growth(self):
         # Keep the real Make target, planner and guard bodies. Limit the fixture
-        # inventory to the two affected guards; their unit suites run separately.
-        # trace:STORY-2735 | ai:codex
+        # inventory to the affected guards; their unit suites run separately.
+        # trace:STORY-2735 TASK-3785 | ai:codex
         step = next(s for s in JOBS['fast-gates']['steps'] if s.get('run', '').strip().endswith('make check-ci-fast'))
         guards = {'ExecContext environment ratchet': 'EXEC_CONTEXT_BASE',
-                  'Crate glob import ratchet': 'CRATE_GLOBS_BASE'}
+                  'Crate glob import ratchet': 'CRATE_GLOBS_BASE',
+                  'Gate downward dependency ratchet': 'GATE_DEPENDENCIES_BASE'}
         for name, variable in guards.items():
             with self.subTest(guard=name), tempfile.TemporaryDirectory() as directory:
                 root = Path(directory)
@@ -120,21 +121,26 @@ class CiTiers(unittest.TestCase):
                         '-c', 'gc.auto=0', '-c', 'user.name=Fixture',
                         '-c', 'user.email=fixture@example.test', *args], cwd=root, stderr=subprocess.PIPE).decode().strip()
                 for path in ('Makefile', 'scripts/check-ci-gates.py',
-                             'scripts/check-exec-context.py', 'scripts/check-crate-globs.py'):
+                             'scripts/check-exec-context.py', 'scripts/check-crate-globs.py',
+                             'scripts/check-gate-dependencies.py'):
                     write(path, (ROOT / path).read_text())
                 guard = next(s for s in JOBS['build']['steps'] if s.get('name') == name)
                 write('.github/workflows/ci.yml', yaml.safe_dump({'jobs': {'build': {
                     'defaults': JOBS['build']['defaults'], 'steps': [guard]}}}))
                 write('scripts/ci-gate-tiers.toml', '[tiers]\n' + json.dumps(name) + ' = "fast"\n')
-                for test in ('test_exec_context_ratchet.py', 'test_crate_split_tools.py'):
+                for test in ('test_exec_context_ratchet.py', 'test_crate_split_tools.py',
+                             'test_gate_dependency_ratchet.py'):
                     write('tests/' + test, 'import unittest\nclass Fixture(unittest.TestCase):\n def test_fixture(self): pass\n')
                 write('tests/__init__.py', '')
                 write('Cargo.toml', '[workspace]\nmembers = ["aida-core"]\n')
                 write('aida-core/src/legacy.rs', '')
+                write('aida-cli-lib/src/gate/new.rs', 'fn f() {}')
                 write('aida-core/src/exec_context.rs', 'fn capture() { std::env::vars_os(); }')
                 empty = {'version': 1, 'owner': 'STORY-2538', 'ceiling': 0, 'sites': {}}
                 write('scripts/exec-context-legacy.json', json.dumps(empty))
                 write('scripts/crate-globs-legacy.json', '{}')
+                write('scripts/gate-dependencies-legacy.json', json.dumps({
+                    'version': 1, 'owner': 'TASK-3785', 'ceiling': 0, 'edges': {}}))
                 git('init')
                 git('add', '.')
                 git('commit', '-m', 'trusted base')
@@ -152,17 +158,29 @@ class CiTiers(unittest.TestCase):
                 clean = run()
                 self.assertEqual(clean.returncode, 0, clean.stdout + clean.stderr)
                 # Missing trusted evidence must refuse even on a clean tree.
-                # Use a local origin so this exercises fetch failure without
-                # network access or relying on an unavailable external server.
+                # Full-history checkout must already contain the trusted base.
+                # Refuse before Make or any guard's optional no-base branch.
                 unavailable = dict(env, **{variable: '1' * 40})
                 missing = run(unavailable)
                 self.assertNotEqual(missing.returncode, 0,
                                     missing.stdout + missing.stderr)
-                self.assertIn('not our ref', missing.stdout + missing.stderr)
+                self.assertIn('FAST requires a trusted base resolving to a checked-out commit', missing.stderr)
+                self.assertNotIn('RUN   ', missing.stdout)
+                # A real Git object is insufficient when it is not a commit.
+                blob = git('rev-parse', 'HEAD:Makefile')
+                noncommit = run(dict(env, **{variable: blob}))
+                self.assertNotEqual(noncommit.returncode, 0,
+                                    noncommit.stdout + noncommit.stderr)
+                self.assertIn('FAST requires a trusted base resolving to a checked-out commit', noncommit.stderr)
+                self.assertNotIn('RUN   ', noncommit.stdout)
                 if variable == 'EXEC_CONTEXT_BASE':
                     write('aida-core/src/legacy.rs', 'fn f() { std::env::var("NEW"); }')
                     # Capture a matching expanded ledger without a base check.
                     subprocess.run(['python3', 'scripts/check-exec-context.py', '--write-ledger'],
+                                   cwd=root, check=True, capture_output=True)
+                elif variable == 'GATE_DEPENDENCIES_BASE':
+                    write('aida-cli-lib/src/gate/new.rs', 'fn f() { crate::session::launch(); }')
+                    subprocess.run(['python3', 'scripts/check-gate-dependencies.py', '--write-ledger'],
                                    cwd=root, check=True, capture_output=True)
                 else:
                     write('aida-core/src/legacy.rs', 'use crate::*;')
@@ -173,8 +191,9 @@ class CiTiers(unittest.TestCase):
                 without_base = {key: value for key, value in env.items()
                                 if key not in guards.values()}
                 # Local Make remains usable without a PR event, but CI must
-                # fail closed if event resolution supplied an empty base.
-                for absent in ('', None):
+                # fail closed if event resolution supplied an empty or null
+                # base. Guard bodies otherwise treat the null SHA as no base.
+                for absent in ('', None, '0' * 40):
                     incomplete = dict(env)
                     if absent is None:
                         incomplete.pop(variable)
@@ -189,5 +208,5 @@ class CiTiers(unittest.TestCase):
                                  unchecked.stdout + unchecked.stderr)
                 result = run()
                 self.assertNotEqual(result.returncode, 0, result.stdout + result.stderr)
-                self.assertIn('may only shrink',
+                self.assertIn('may only decrease' if variable == 'GATE_DEPENDENCIES_BASE' else 'may only shrink',
                               result.stdout + result.stderr)

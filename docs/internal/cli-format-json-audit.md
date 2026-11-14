@@ -211,6 +211,8 @@ hermetic audit. `JSON not honoured` means unsupported and explicitly rejected.
 | `aida mandate status` | COULD NOT VERIFY | Dedicated --json exists; needs command-specific state or external service. Fields: `protected_paths`: the effective protected set, `[{path, source}]` (source `built-in`, `origin/main:.aida/config.toml` or `~/.aida/config.toml`), or `{error, floor}` when the gate config is unreadable |
 | `aida tail` | COULD NOT VERIFY | Dedicated --json exists; needs command-specific state or external service |
 | `aida integrate` | COULD NOT VERIFY | Dedicated --json exists; needs command-specific state or external service |
+| `aida integration` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
+| `aida integration tags` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
 | `aida watch` | COULD NOT VERIFY | Dedicated --json exists; needs command-specific state or external service |
 | `aida contract` | COULD NOT VERIFY | Dedicated --json exists; needs command-specific state or external service |
 | `aida notify` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
@@ -456,6 +458,7 @@ hermetic audit. `JSON not honoured` means unsupported and explicitly rejected.
 | `aida pr emergency-land` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
 | `aida pr state` | COULD NOT VERIFY | Dedicated --json exists; needs command-specific state or external service |
 | `aida pr post-ship-cleanup` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
+| `aida pr post-ship-sweep` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
 | `aida pr auto-queue-review` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
 | `aida pr review` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
 | `aida pr list` | COULD NOT VERIFY | Dedicated --json exists; needs command-specific state or external service |
