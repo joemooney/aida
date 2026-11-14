@@ -37,12 +37,54 @@ pub(crate) fn pr_head_sha_best_effort(driver: &RealPhaseDriver, pr: u32) -> Opti
         .filter(|s| !s.trim().is_empty())
 }
 
+/// The project's `.aida/config.toml` text: the one read behind every
+/// `[review]` policy value in this file.
+fn project_config_text(project_root: &std::path::Path) -> std::io::Result<String> {
+    std::fs::read_to_string(project_root.join(".aida").join("config.toml"))
+}
+
 pub(crate) fn read_review_mode(project_root: &std::path::Path) -> String {
-    let path = project_root.join(".aida").join("config.toml");
-    let Ok(content) = std::fs::read_to_string(&path) else {
+    let Ok(content) = project_config_text(project_root) else {
         return "local".to_string();
     };
     parse_review_mode(&content)
+}
+
+/// The project's reviewer stale-base policy, `[review] stale_base`. Unset (or
+/// no config file) is the default, refuse-on-overlap. A config that cannot be
+/// read or parsed, or a value outside the allowed set, is an error: a
+/// mistyped policy must not silently become the default.
+// trace:STORY-2821 | ai:claude
+pub(crate) fn read_stale_base_policy(
+    project_root: &std::path::Path,
+) -> anyhow::Result<crate::pr_rebase::StaleBasePolicy> {
+    use anyhow::Context as _;
+    let content = match project_config_text(project_root) {
+        Ok(content) => content,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(Default::default()),
+        Err(error) => {
+            return Err(error).context("read .aida/config.toml for `[review] stale_base`")
+        }
+    };
+    parse_stale_base_policy(&content)
+}
+
+pub(crate) fn parse_stale_base_policy(
+    content: &str,
+) -> anyhow::Result<crate::pr_rebase::StaleBasePolicy> {
+    use anyhow::Context as _;
+    let config: toml::Value =
+        toml::from_str(content).context("parse .aida/config.toml for `[review] stale_base`")?;
+    let Some(value) = config.get("review").and_then(|r| r.get("stale_base")) else {
+        return Ok(Default::default());
+    };
+    let value = value.as_str().with_context(|| {
+        format!(
+            "`[review] stale_base` in .aida/config.toml must be a string; allowed values: {}",
+            crate::pr_rebase::StaleBasePolicy::ALLOWED.join(", ")
+        )
+    })?;
+    crate::pr_rebase::StaleBasePolicy::parse(value.trim()).map_err(anyhow::Error::msg)
 }
 
 pub(crate) fn parse_review_mode(content: &str) -> String {
