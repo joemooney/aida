@@ -30,7 +30,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-13T15:54:08.931576118Z
-modified_at: 2026-11-14T20:44:48.537021015Z
+modified_at: 2026-11-14T20:57:03.514133625Z
 req_type: Story
 tags:
 - architecture
@@ -338,6 +338,13 @@ comments:
   modified_at: 2026-11-14T20:44:36.796961338Z
   session_id: 01a1dbc0d535
   harness_version: 2.1.319 (Claude Code)
+- id: 01a1dbd9-731a-7b50-aaaa-ca085a51ad9e
+  author: joe
+  content: 'Advisor ruling (2026-11-14 14:00): the lane''s 13:55 verification is accepted (seven named tests pass at 36afa06, manual citation corrected, placeholder paths gone). No further rework: fresh review of PR-3956 at 36afa06 launched on deputy 2. Round-2 finding 3 stays with BUG-2566. The hold stays until that review approves and a full-tier run is green at the approved head.'
+  created_at: 2026-11-14T20:57:03.514133625Z
+  modified_at: 2026-11-14T20:57:03.514133625Z
+  session_id: 01a1dbd6-f8cd-7313-a123-75ebbeaa2afd
+  harness_version: 2.1.325 (Claude Code)
 history:
 - id: 01a1d59e-6b4b-7d10-8aea-02729132bc6f
   author: joe
