@@ -175,11 +175,12 @@ pub(crate) fn review_after_merge_eligible(
         let Some(facts) = facts else {
             return no(format!("{id} is not a spec in the store"));
         };
-        if let Some(tag) = facts
-            .tags
-            .iter()
-            .find(|tag| config.excluded_tags.iter().any(|excluded| excluded == *tag))
-        {
+        if let Some(tag) = facts.tags.iter().find(|tag| {
+            config
+                .excluded_tags
+                .iter()
+                .any(|excluded| excluded.eq_ignore_ascii_case(tag))
+        }) {
             return no(format!("{id} is tagged `{tag}`"));
         }
         use aida_core::ExecutionMode as M;
@@ -284,9 +285,8 @@ impl Reader {
                 (id, facts)
             })
             .collect();
-        // An unreadable gate file still checks the floor.
         let protected =
-            ProtectedPaths::of(&crate::gate::mandate_gates::load_human_gates(&self.root));
+            protected_or_unknown(crate::gate::mandate_gates::load_human_gates(&self.root))?;
         Ok(review_after_merge_eligible(
             config,
             &specs,
@@ -294,6 +294,21 @@ impl Reader {
             &protected,
         ))
     }
+}
+
+/// The protected paths eligibility checks: the built-in floor plus the
+/// project's and the operator's. A gate config that cannot be read leaves
+/// the project's paths unknown, so eligibility is unknown too (the caller
+/// refuses); it never falls back to the floor alone.
+// trace:STORY-2772 | ai:claude
+pub(crate) fn protected_or_unknown<E: std::fmt::Display>(
+    gates: std::result::Result<crate::gate::mandate_gates::HumanGates, E>,
+) -> Result<ProtectedPaths, String> {
+    gates.map(|gates| gates.protected).map_err(|error| {
+        format!(
+            "the gate config could not be read, so the project's protected paths are unknown: {error:#}"
+        )
+    })
 }
 
 /// How a change was admitted to integration.
@@ -478,7 +493,7 @@ impl Finding {
         let short = |sha: &str| sha.chars().take(11).collect::<String>();
         match self {
             Finding::Pending { constituent, why } => format!(
-                "#{} merged at {} (head {}): {why}. Review it, or take it out with `git revert -m 1 {}`",
+                "#{} merged at {} (head {}): {why}. Review it, or take it out with `git revert -m 1 {}` (a revert that changes nothing else clears this)",
                 constituent.pr,
                 short(&constituent.merge),
                 short(&constituent.head),
@@ -549,6 +564,58 @@ pub(crate) fn promotion_check(
         }
     }
     (approved, findings)
+}
+
+/// Take a pending change that was reverted out of the findings, with the
+/// commit that reverted it. `reverts(constituent, commit)` says whether
+/// `commit` (a later, single-parent commit that is otherwise refused as
+/// unreviewed) leaves exactly the tree that reverting the constituent's
+/// merge onto the commit's parent produces. A revert that also changes
+/// anything else is not exact, and both findings stay. Each commit accounts
+/// for one reverted change.
+// trace:STORY-2772 | ai:claude
+pub(crate) fn drop_reverted(
+    findings: Vec<Finding>,
+    commits: &[FirstParent],
+    reverts: &dyn Fn(&Constituent, &FirstParent) -> bool,
+) -> Vec<Finding> {
+    // `commits` is newest first: a later commit has a smaller index.
+    let at = |sha: &str| commits.iter().position(|commit| commit.sha == sha);
+    let mut dropped: Vec<String> = Vec::new();
+    for finding in &findings {
+        let Finding::Pending { constituent, .. } = finding else {
+            continue;
+        };
+        let Some(merged_at) = at(&constituent.merge) else {
+            continue;
+        };
+        let revert = findings.iter().find_map(|other| {
+            let Finding::Unreviewed { sha, .. } = other else {
+                return None;
+            };
+            let index = at(sha)?;
+            let commit = &commits[index];
+            (index < merged_at
+                && commit.parents.len() == 1
+                && !dropped.contains(sha)
+                && reverts(constituent, commit))
+            .then(|| sha.clone())
+        });
+        if let Some(revert) = revert {
+            dropped.push(constituent.merge.clone());
+            dropped.push(revert);
+        }
+    }
+    findings
+        .into_iter()
+        .filter(|finding| {
+            let sha = match finding {
+                Finding::Pending { constituent, .. } => &constituent.merge,
+                Finding::Unreviewed { sha, .. } => sha,
+            };
+            !dropped.contains(sha)
+        })
+        .collect()
 }
 
 /// The merge commit's subject for change `pr` titled `title`: the title's

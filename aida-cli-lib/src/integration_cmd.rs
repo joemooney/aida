@@ -396,6 +396,28 @@ fn run_merge(root: &Path, pr: u64, push: bool, dry_run: bool) -> Result<()> {
     Ok(())
 }
 
+/// Whether single-parent `commit` is exactly `git revert -m 1 <merge>`
+/// applied to its parent: its tree is the clean three-way result of taking
+/// the merge's change (merge back to its first parent) onto the parent.
+/// A conflict, any extra change, or a git that cannot answer is `false`.
+// trace:STORY-2772 | ai:claude
+pub(crate) fn is_exact_revert(root: &Path, merge: &str, commit: &review::FirstParent) -> bool {
+    let [parent] = commit.parents.as_slice() else {
+        return false;
+    };
+    git(
+        root,
+        &[
+            "merge-tree",
+            "--write-tree",
+            &format!("--merge-base={merge}"),
+            parent,
+            &format!("{merge}^1"),
+        ],
+    )
+    .is_ok_and(|tree| tree.lines().next() == Some(commit.tree.as_str()))
+}
+
 fn run_promotion_check(root: &Path, tip: Option<&str>, since: Option<&str>) -> Result<()> {
     use review::FirstParent;
     let main = "refs/remotes/origin/main";
@@ -505,6 +527,10 @@ fn run_promotion_check(root: &Path, tip: Option<&str>, since: Option<&str>) -> R
         )
     };
     let (approved, findings) = review::promotion_check(commits, &on_main, &verdict);
+    // A pending change that was reverted out is no longer in the snapshot.
+    let findings = review::drop_reverted(findings, commits, &|constituent, commit| {
+        is_exact_revert(root, &constituent.merge, commit)
+    });
     println!(
         "{} commit(s) on integration are not yet promoted; {} merged change(s) approved at the merged head.",
         commits.len(),

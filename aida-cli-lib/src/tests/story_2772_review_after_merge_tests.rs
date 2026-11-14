@@ -407,6 +407,7 @@ fn history() -> Vec<FirstParent> {
     ]
 }
 
+// trace:STORY-b6b1278890774ef993d2ebc327862470-695.acf93ff9 | ai:claude
 #[test]
 fn a_promotion_is_refused_naming_the_pending_constituent() {
     let verdict = |pr: u64, _: &str| if pr == 11 { approved_at(HEAD_A) } else { None };
@@ -419,6 +420,7 @@ fn a_promotion_is_refused_naming_the_pending_constituent() {
     assert!(text.contains("no review verdict"), "{text}");
 }
 
+// trace:STORY-b6b1278890774ef993d2ebc327862470-695.Tests | ai:claude
 #[test]
 fn a_promotion_is_allowed_once_every_constituent_is_approved_at_its_merged_head() {
     let verdict = |pr: u64, _: &str| match pr {
@@ -846,4 +848,161 @@ fn land_status_shows_the_eligibility_reason_on_integration_rows_only() {
     assert_eq!(row.reason, "no approval covers the head");
     let row = crate::land::derive(&change("integration"), &Unapproved(None));
     assert_eq!(row.reason, "no approval covers the head");
+}
+
+// ---- review round 3 ------------------------------------------------------
+
+fn direct(sha: &str, subject: &str) -> FirstParent {
+    FirstParent {
+        sha: sha.to_string(),
+        parents: vec!["0000000".into()],
+        tree: format!("tree-{sha}"),
+        subject: subject.to_string(),
+    }
+}
+
+/// A pending change and the commit that exactly reverts it both leave the
+/// findings; a revert that is not exact, or that precedes the merge, clears
+/// nothing; one revert accounts for one change.
+// trace:STORY-b6b1278890774ef993d2ebc327862470-695.acf93ff9 | ai:claude
+#[test]
+fn a_pending_change_that_was_reverted_out_no_longer_refuses_the_promotion() {
+    let mut commits = history();
+    commits.insert(0, direct("r3", "Revert \"merge PR #12 second\""));
+    let verdict = |pr: u64, _: &str| if pr == 11 { approved_at(HEAD_A) } else { None };
+    let (_, findings) = promotion_check(&commits, &on_main, &verdict);
+    assert_eq!(findings.len(), 2, "{findings:?}");
+
+    let exact = |c: &Constituent, commit: &FirstParent| c.merge == "m3" && commit.sha == "r3";
+    assert!(drop_reverted(findings.clone(), &commits, &exact).is_empty());
+
+    // A revert that also changes other content is not exact: both stay.
+    let never = |_: &Constituent, _: &FirstParent| false;
+    assert_eq!(drop_reverted(findings.clone(), &commits, &never), findings);
+
+    // A direct commit older than the merge cannot have reverted it.
+    let mut older = history();
+    older.push(direct("r0", "earlier"));
+    let (_, findings) = promotion_check(&older, &on_main, &verdict);
+    let any = |_: &Constituent, _: &FirstParent| true;
+    assert_eq!(drop_reverted(findings.clone(), &older, &any), findings);
+
+    // Two pending changes, one revert: one change is still refused.
+    let mut two = history();
+    two.insert(0, direct("r3", "Revert"));
+    let (_, findings) = promotion_check(&two, &on_main, &|_, _| None);
+    let left = drop_reverted(findings, &two, &any);
+    assert_eq!(left.len(), 1, "{left:?}");
+    assert!(matches!(&left[0], Finding::Pending { constituent, .. } if constituent.pr == 11));
+
+    // The remedy the refusal prints is the one that clears it.
+    let (_, findings) = promotion_check(&history(), &on_main, &verdict);
+    assert!(findings[0].describe().contains("`git revert -m 1 m3`"));
+}
+
+/// The live probe against real git: `git revert -m 1 <merge>` is an exact
+/// revert; the same revert with another change on top of it is not.
+// trace:STORY-2772 | ai:claude
+#[test]
+fn git_revert_of_the_merge_is_exact_and_a_revert_with_extra_content_is_not() {
+    let (dir, _, head) = repo();
+    let root = dir.path();
+    sh_git(
+        root,
+        &[
+            "merge",
+            "-q",
+            "--no-ff",
+            "-m",
+            "merge PR #7 change (BUG-1)",
+            &head,
+        ],
+    );
+    let merge = sh_git(root, &["rev-parse", "HEAD"]);
+    // An unrelated later commit, so the revert does not sit on the merge.
+    std::fs::write(root.join("later.txt"), "later\n").unwrap();
+    sh_git(root, &["add", "."]);
+    sh_git(root, &["commit", "-q", "-m", "later"]);
+    let commit_at = |rev: &str| FirstParent {
+        sha: sh_git(root, &["rev-parse", rev]),
+        parents: sh_git(root, &["log", "-1", "--format=%P", rev])
+            .split_whitespace()
+            .map(String::from)
+            .collect(),
+        tree: sh_git(root, &["rev-parse", &format!("{rev}^{{tree}}")]),
+        subject: String::new(),
+    };
+    assert!(!super::super::is_exact_revert(
+        root,
+        &merge,
+        &commit_at("HEAD")
+    ));
+    sh_git(root, &["revert", "--no-edit", "-m", "1", &merge]);
+    assert!(!root.join("change.txt").exists());
+    assert!(super::super::is_exact_revert(
+        root,
+        &merge,
+        &commit_at("HEAD")
+    ));
+    // The merge itself (two parents) is never a revert.
+    assert!(!super::super::is_exact_revert(
+        root,
+        &merge,
+        &commit_at(&merge)
+    ));
+
+    std::fs::write(root.join("extra.txt"), "extra\n").unwrap();
+    sh_git(root, &["add", "."]);
+    sh_git(root, &["commit", "-q", "--amend", "--no-edit"]);
+    assert!(!super::super::is_exact_revert(
+        root,
+        &merge,
+        &commit_at("HEAD")
+    ));
+}
+
+/// A gate config that cannot be read leaves the project's protected paths
+/// unknown: eligibility is an error (the caller refuses), never a check
+/// against the built-in paths alone.
+// trace:STORY-b6b1278890774ef993d2ebc327862470-695.ace3fe97 | ai:claude
+#[test]
+fn an_unreadable_gate_config_makes_eligibility_unknown_not_floor_only() {
+    use crate::gate::mandate_gates::{HumanGates, PathSource};
+    let unreadable: Result<HumanGates, String> = Err("bad toml".into());
+    let error = protected_or_unknown(unreadable).unwrap_err();
+    assert!(error.contains("protected paths are unknown"), "{error}");
+    assert!(error.contains("bad toml"), "{error}");
+
+    let mut gates = HumanGates {
+        protected: ProtectedPaths::floor(),
+        ..Default::default()
+    };
+    gates
+        .protected
+        .extend(PathSource::Committed, ["billing/".to_string()]);
+    let protected = protected_or_unknown(Ok::<_, String>(gates)).unwrap();
+    let has = |pattern: &str| protected.entries().iter().any(|e| e.pattern == pattern);
+    assert!(has("billing/"));
+    for built_in in ProtectedPaths::floor().entries() {
+        assert!(has(&built_in.pattern), "{}", built_in.pattern);
+    }
+    // And the project path decides: a change touching it is not eligible.
+    let refused = review_after_merge_eligible(
+        &low_risk(),
+        &[spec("BUG-1", &[])],
+        &paths(&["billing/invoice.rs"]),
+        &protected,
+    );
+    let why = refusal(refused);
+    assert!(why.contains("billing/"), "{why}");
+}
+
+#[test]
+fn an_excluded_tag_matches_whatever_its_case() {
+    let why = refusal(decide(
+        &low_risk(),
+        &[spec("BUG-1", &["Security"])],
+        &["src/a.rs"],
+    ));
+    assert!(why.contains("Security"), "{why}");
 }
