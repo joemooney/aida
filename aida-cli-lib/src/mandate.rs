@@ -1138,7 +1138,9 @@ pub(crate) fn handle_mandate(action: &crate::cli::MandateAction) -> Result<()> {
             }
             let ttl = match ttl {
                 Some(raw) => parse_ttl(raw)?,
-                None => DEFAULT_TTL,
+                // A cap configured below the default lowers the default too.
+                // trace:STORY-2828 | ai:claude
+                None => DEFAULT_TTL.min(crate::gate::mandate::max_ttl().duration()),
             };
             // STORY-1700: a drive mandate covers sensitive specs unless the
             // human opts out; the gate decides, and binds the human floor.
@@ -1207,7 +1209,7 @@ pub(crate) fn handle_mandate(action: &crate::cli::MandateAction) -> Result<()> {
             exclude_gate_paths,
             reason,
         } => {
-            // Same grammar and 24h cap as `start --ttl`, named for this flag.
+            // Same grammar and cap as `start --ttl`, named for this flag.
             let ttl = duration.as_deref().map(parse_renew_for).transpose()?;
             // trace:STORY-2771 | ai:claude
             let overrides = renew_overrides(

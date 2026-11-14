@@ -583,6 +583,148 @@ pub fn stale_base_warn_message(n: u64, behind: u32) -> String {
     )
 }
 
+/// The project's reviewer stale-base policy, `[review] stale_base` in
+/// `.aida/config.toml`: which stale heads a reviewer launch refuses. A
+/// project whose landing path rebuilds every change on the current base
+/// gains little from the strict refusal; one whose review is the last gate
+/// wants it. `--allow-stale-base` is `Warn` for one launch.
+// trace:STORY-2821 | ai:claude
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum StaleBasePolicy {
+    /// Refuse when the base has moved and touched a file the change also
+    /// touches (the default, STORY-281).
+    #[default]
+    RefuseOnOverlap,
+    /// Refuse only when the base no longer merges cleanly into the head.
+    RefuseOnConflict,
+    /// Never refuse; the reviewer is told how stale the head is.
+    Warn,
+}
+
+impl StaleBasePolicy {
+    /// The accepted setting values, default first.
+    pub const ALLOWED: [&'static str; 3] = ["refuse-on-overlap", "refuse-on-conflict", "warn"];
+
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::RefuseOnOverlap => Self::ALLOWED[0],
+            Self::RefuseOnConflict => Self::ALLOWED[1],
+            Self::Warn => Self::ALLOWED[2],
+        }
+    }
+
+    /// Parse a configured value; an unknown one is an error naming the
+    /// allowed values.
+    pub fn parse(value: &str) -> Result<Self, String> {
+        match value {
+            "refuse-on-overlap" => Ok(Self::RefuseOnOverlap),
+            "refuse-on-conflict" => Ok(Self::RefuseOnConflict),
+            "warn" => Ok(Self::Warn),
+            other => Err(format!(
+                "`[review] stale_base` in .aida/config.toml is set to `{other}`, which is not a \
+                 known value; allowed values: {}",
+                Self::ALLOWED.join(", ")
+            )),
+        }
+    }
+
+    /// Whether a head that is behind its base is refused, given whether the
+    /// base touched the change's paths and whether the base merges cleanly
+    /// into the head (`None`: not known).
+    pub fn refuses(self, overlap: bool, conflict: Option<bool>) -> bool {
+        match self {
+            Self::RefuseOnOverlap => overlap,
+            Self::RefuseOnConflict => conflict == Some(true),
+            Self::Warn => false,
+        }
+    }
+}
+
+/// What the reviewer pre-flight does with one [`StaleBaseOutcome`].
+// trace:STORY-2821 | ai:claude
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum StaleBaseLaunch {
+    /// The head is level with its base.
+    Silent,
+    /// Launch the reviewer after printing this warning.
+    Warn(String),
+    /// Refuse the launch with this message (unless `--allow-stale-base`).
+    Refuse(String),
+}
+
+/// Apply the project's policy to a pre-flight outcome. The default policy
+/// reproduces STORY-281: warn without overlap, refuse with it.
+// trace:STORY-2821 | ai:claude
+pub fn stale_base_launch(
+    n: u64,
+    policy: StaleBasePolicy,
+    outcome: &StaleBaseOutcome,
+) -> StaleBaseLaunch {
+    match outcome {
+        StaleBaseOutcome::Current => StaleBaseLaunch::Silent,
+        StaleBaseOutcome::StaleNoOverlap { behind } => {
+            StaleBaseLaunch::Warn(stale_base_warn_message(n, *behind))
+        }
+        StaleBaseOutcome::StaleOverlap {
+            behind,
+            overlap_files,
+            prediction,
+        } => {
+            let conflict = match prediction {
+                ConflictPrediction::Clean => Some(false),
+                ConflictPrediction::Conflicting { .. } => Some(true),
+                ConflictPrediction::Unknown => None,
+            };
+            if policy.refuses(true, conflict) {
+                StaleBaseLaunch::Refuse(stale_base_block_message(n, *behind, overlap_files))
+            } else {
+                StaleBaseLaunch::Warn(format!(
+                    "PR-{n} base is {behind} commit{plural} behind origin and overlaps {count} \
+                     file{file_plural} touched on base since the PR forked — proceeding with \
+                     reviewer (`[review] stale_base` is `{policy}`); the reviewer is told how \
+                     stale the head is.",
+                    plural = if *behind == 1 { "" } else { "s" },
+                    count = overlap_files.len(),
+                    file_plural = if overlap_files.len() == 1 { "" } else { "s" },
+                    policy = policy.as_str(),
+                ))
+            }
+        }
+    }
+}
+
+/// The staleness note appended to the reviewer's launch prompt whenever the
+/// reviewed head is behind its base, whatever the policy. `None` when the
+/// head is level.
+// trace:STORY-2821 | ai:claude
+pub fn stale_base_prompt_note(n: u64, outcome: &StaleBaseOutcome) -> Option<String> {
+    let (behind, overlap): (u32, &[String]) = match outcome {
+        StaleBaseOutcome::Current => return None,
+        StaleBaseOutcome::StaleNoOverlap { behind } => (*behind, &[]),
+        StaleBaseOutcome::StaleOverlap {
+            behind,
+            overlap_files,
+            ..
+        } => (*behind, overlap_files),
+    };
+    let mut note = format!(
+        "\n\nSTALE BASE: the head of PR-{n} under review is {behind} commit{plural} behind its \
+         base branch on origin. Review the head as it stands and say in the verdict where a \
+         finding depends on code the base has since changed.",
+        plural = if behind == 1 { "" } else { "s" },
+    );
+    if !overlap.is_empty() {
+        note.push_str(" Files the change touches that also changed on the base:");
+        for f in overlap.iter().take(10) {
+            note.push_str(&format!("\n  {f}"));
+        }
+        if overlap.len() > 10 {
+            note.push_str(&format!("\n  … and {} more", overlap.len() - 10));
+        }
+    }
+    Some(note)
+}
+
 // ---------------------------------------------------------------------------
 // TASK-480: intermediate / generated-only diff classifier.
 //

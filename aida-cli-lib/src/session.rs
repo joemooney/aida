@@ -15300,3 +15300,29 @@ pub(crate) fn stamp_containment_posture(
 #[cfg(test)]
 #[path = "tests/bug_2394_codex_posture_tests.rs"]
 mod bug_2394_codex_posture_tests;
+
+// trace:TASK-3784 | ai:codex
+#[cfg(test)]
+pub(crate) mod test_support {
+    pub(crate) fn forget_contained_export<'a>(keys: impl Iterator<Item = &'a str>) {
+        if keys.into_iter().any(|key| key == "AIDA_CONTAINED") {
+            super::forget_contained_env_for_children();
+        }
+    }
+}
+
+// trace:TASK-3784 | ai:codex
+#[cfg(test)]
+mod testkit_adapter_tests {
+    #[test]
+    fn adapter_cleans_child_export_for_keys_added_after_snapshot() {
+        let mut guard = crate::test_env::EnvVarsGuard::snapshot(&[]);
+        guard.set_key("AIDA_CONTAINED", "0");
+        super::set_contained_env_for_children(true);
+        assert!(super::CONTAINED_ENV_APPLIED.lock().unwrap().is_some());
+        drop(guard);
+        let _lock = aida_testkit::test_env::env_lock();
+        assert!(crate::test_env::holds_env_lock());
+        assert!(super::CONTAINED_ENV_APPLIED.lock().unwrap().is_none());
+    }
+}

@@ -761,8 +761,12 @@ mod tail_cmd;
 // trace:STORY-640 | ai:claude — team roster + distinct-identity guard + onboarding.
 mod team;
 mod team_cmd;
+// trace:TASK-3784 | ai:codex
 #[cfg(test)]
-mod test_env;
+#[path = "test_env.rs"]
+mod test_env_base;
+#[cfg(test)]
+use gate::test_support::test_env;
 #[cfg(test)]
 mod test_exec;
 // trace:BUG-2573 | ai:codex

@@ -49,12 +49,12 @@
   "aida-cli-lib/src/solo_cmd.rs": 1,
   "aida-cli-lib/src/solo_lock.rs": 1,
   "aida-cli-lib/src/standalone_implementer.rs": 1,
-  "aida-cli-lib/src/test_home.rs": 1,
   "aida-cli-lib/src/triage_cmd.rs": 1,
   "aida-cli-lib/src/worktree_gc.rs": 2,
   "aida-core/src/db/cache_location.rs": 1,
   "aida-core/src/driver_registry.rs": 1,
   "aida-core/src/mailbox_lifecycle/retire.rs": 1,
   "aida-core/src/worktree_pool.rs": 3,
+  "aida-testkit/src/test_home.rs": 1,
   "aida-tui/src/redesign/drain_panel.rs": 1
 }

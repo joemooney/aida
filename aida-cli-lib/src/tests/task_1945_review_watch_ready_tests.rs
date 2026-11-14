@@ -24,6 +24,7 @@ fn change(behind: u64, overlap: bool) -> forge::Change {
         author: "writer".into(),
         gitlab: false,
         overlap: Some(overlap),
+        conflict: None,
         behind: Some(behind),
         head_branch: None,
     }

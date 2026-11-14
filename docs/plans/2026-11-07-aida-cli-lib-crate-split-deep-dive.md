@@ -411,6 +411,50 @@ fixtures, agent_registry entries) stay in the kernel crate as its own
 `#[cfg(test)]` helpers, and testkit holds only env/home/git/exec/timing
 fixtures over aida-core.
 
+<!-- trace:TASK-3784 | ai:codex -->
+PR6 extraction keeps the five `crate::test_*` compatibility modules in cli-lib.
+Grant/ambient fixtures now live in `gate::test_support`, agent identity fixtures
+in `agent_registry::test_support`, containment cleanup in `session::test_support`,
+and the fake Codex probe in `codex_tool_env::test_support`. The shared multi-key
+environment guard accepts an owner cleanup callback, invoked after restoring
+values and before releasing the same process-wide environment lock. Test runner
+resolution uses `std::env::current_exe()` directly (the old wrapper did exactly
+that); standalone executable fixtures retain the bounded 5 x 50 ms ETXTBSY retry
+without importing a CLI crate. `aida-core` is testkit's only workspace dependency.
+The workspace's `rest` shard automatically discovers the extracted unit tests.
+
+Timing evidence collected before host publication:
+
+| Measurement | Before | After |
+| --- | --- | --- |
+| CI `lib-0`, `Run tests` step | 685 s | Pending host PR FULL CI |
+| CI `lib-1`, `Run tests` step | 556 s | Pending host PR FULL CI |
+
+The before source is successful main run
+[43562483470](https://github.com/joemooney/aida/actions/runs/43562483470),
+head `1801b34105752b7fda6dedc9cd1bf8b9e4881c59`, 2026-11-14 UTC.
+
+After-timing checkpoint (2026-11-14 14:30 UTC): PR #3994 is open at
+`201130b5ee606c894cac206d400c08822430bcb7`. Its
+[current-head CI run 43605077655](https://github.com/joemooney/aida/actions/runs/43605077655)
+selected FAST and skipped the FULL shard matrix; it cannot supply either after
+measurement. The PR currently has no `ci:full` label. The host must select FULL
+for a subsequent run and record both successful `Run tests` step durations here
+before completing timing acceptance.
+
+[Prior FULL run 43602038976](https://github.com/joemooney/aida/actions/runs/43602038976)
+at `4bdefcbaeb1bcc9938dc482465f458d35a9f1d81` was cancelled: lib-0 and lib-1
+both entered `Run tests` but were cancelled at 14:01:56 UTC, so their partial
+wall times are not after measurements. Run 43599084597 at `ecb4117cd3` was
+cancelled without jobs; successful extraction run 43586756860 used FAST.
+The existing `aida:merge-hold` and `aida:merge-hold-recorded` labels remain;
+publication must honor the hold through ordinary clearance policy.
+These are workflow step wall times, including compilation performed inside the
+test step. Record the same two steps from the published PR's FULL run before
+closing the timing acceptance criterion; local targeted tests are not a
+substitute for CI shard measurements. Native implementer seats cannot publish
+or trigger the after run themselves.
+
 ## 6. Split plan per hotspot file (merge-conflict relief before any crate split)
 
 Production/test line counts from the brace-matched scan; `#[test]` counts from
