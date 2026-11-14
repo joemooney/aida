@@ -1,0 +1,18 @@
+{
+  "id": "review-watch-2876d6683cc114994ea3f7b716e7da90ba4d37e9585f75a27a212ef0e57eb6bd",
+  "thread_id": "review-watch-2876d6683cc114994ea3f7b716e7da90ba4d37e9585f75a27a212ef0e57eb6bd",
+  "from": "review-watch",
+  "to": {
+    "kind": "agent",
+    "agent": "joemooney"
+  },
+  "timestamp": 1794695905330,
+  "body": "PR-4062 at af161ee1d7b9d343c4537657887a42d93ffb5dcb: the review by codex-reviewer (codex reviewer seat) recorded `request-changes` with 2 finding(s), round 2 of 2. The findings are in `.aida/gate-ledger/PR-4062.jsonl`. This was the last review round under the two-round cap: a new head is not reviewed automatically, and the advisor decides the next step.",
+  "subject": "PR-4062: review requested changes (round 2 of 2)",
+  "urgent": false,
+  "intent": "request",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "explicit"
+}
