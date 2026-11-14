@@ -278,7 +278,14 @@ pub(crate) fn route_rework(root: &Path, pr: u64, head: &str) -> Result<()> {
             "PR-{pr} at {head} conflicts with the protected base; resolve the conflict before review"
         );
         let args = [
-            "queue", "rework", id, "--for", "implementer", "--no-pull", "--reason", &reason,
+            "queue",
+            "rework",
+            id,
+            "--for",
+            "implementer",
+            "--no-pull",
+            "--reason",
+            &reason,
         ];
         anyhow::ensure!(
             dispatch_rework(root, &args)?,
@@ -758,10 +765,20 @@ mod tests {
         let call = &calls[0];
         assert_eq!(
             &call[..6],
-            ["queue", "rework", "STORY-1", "--for", "implementer", "--no-pull"]
+            [
+                "queue",
+                "rework",
+                "STORY-1",
+                "--for",
+                "implementer",
+                "--no-pull"
+            ]
         );
         assert_eq!(call[6], "--reason");
-        assert!(call[7].contains(&format!("PR-42 at {approved}")), "{call:?}");
+        assert!(
+            call[7].contains(&format!("PR-42 at {approved}")),
+            "{call:?}"
+        );
         assert!(
             freshness::decision_exists(root, 42, &approved, "rework-routed").unwrap(),
             "routing writes the per-head receipt"

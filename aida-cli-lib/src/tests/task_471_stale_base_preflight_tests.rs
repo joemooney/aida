@@ -387,7 +387,12 @@ fn fast_preflight_fixture(
     let tip = carry::commit(root, "base: edits a.txt");
     carry::git(
         root,
-        &["push", "--quiet", "origin", &format!("{tip}:refs/heads/{base}")],
+        &[
+            "push",
+            "--quiet",
+            "origin",
+            &format!("{tip}:refs/heads/{base}"),
+        ],
     );
     carry::git(root, &["checkout", "--quiet", "pr"]);
     carry::write(

@@ -3708,7 +3708,10 @@ fn review_watch_fast_rounds_count_patch_changes_and_strict_counts_heads() {
         }),
     );
     assert_eq!(store.history("PR-42").unwrap().blocking(), 2);
-    assert!(skipped_rounds(root).is_empty(), "plain history audits nothing");
+    assert!(
+        skipped_rounds(root).is_empty(),
+        "plain history audits nothing"
+    );
     assert_eq!(
         store.history_for_head("PR-42", &merged).unwrap().blocking(),
         1
