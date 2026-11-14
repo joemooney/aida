@@ -1249,12 +1249,48 @@ description: |
   ### finding-hash:d4e2f347
 
   review_watch.rs Store::retain with preserve_heads (fast policy): blocking recordings on base-merge-only heads spend no round, so such heads keep being re-reviewed, and once more than 16 blocking recordings are retained the ensure fails select_with_coverage and round_for on every poll instead of routing the change to the advisor.
+
+
+  ## Findings from STORY-2763
+  Reviewed sha: 36afa067467a75d0e3201ed946f059264ee113e7
+
+  ### finding-hash:4222a3d6
+
+  review_launch.rs review_prompt: when launch_context fails under the fast policy the reviewer launches with the ordinary prompt and only a stderr warning; no freshness ledger event records that the review ran without current-base evidence (AC2/AC5). Record a decision such as evidence-unavailable for the head.
+
+  ### finding-hash:8b8a3fb6
+
+  gate/review_freshness.rs glob(): ** compiles to .* without (?s), so a changed path containing a newline never matches a freshness_strict_paths glob and the PR is treated as fast.
+
+  ### finding-hash:1f7b8f62
+
+  review_watch.rs execute_reservation: a conflict first seen by the queue-work child (base moves after the watcher preflight) is recorded through transition(Exited) with the BUG-2450 setup conversion, so it can be classed a setup failure and retried once instead of the routed exit transition_routed records.
+
+  ### finding-hash:02bf8b4d
+
+  pr_cmd.rs preflight_stale_base_check_with_info fast branch: the refresh_base error and the head-moved ensure return before update-ref -d on the scratch preflight ref, leaving it behind.
+
+  ### finding-hash:036825d8
+
+  gate/review_carryover.rs proved_for_refusal: the second strict-policy check (after the base refresh) returns StrictPolicy without writing the re-review-required freshness event the first check writes (AC5).
+
+  ### finding-hash:1bf50580
+
+  No test carries a criterion-level trace comment for the six criteria (acef95eb, ac3d0be9, ac5a9c72, ac59d017, ac984425, ac39a51c), so aida criteria reports all six untraced although each has behavioural tests in this diff. Add trace:STORY-b6b1278890774ef993d2ebc327862470-686.<ac-id> comments on those tests.
+
+  ### finding-hash:fa83ec7a
+
+  review_launch.rs route_rework: with several covered specs, a dispatch failure after the first subject leaves no rework-routed receipt, so the next poll dispatches queue rework again for subjects already routed. Separately, review_watch.rs watch_change skips a head with a rework-routed receipt forever, even if the protected base later stops conflicting with that same head.
+
+  ### finding-hash:d4e2f347
+
+  review_watch.rs Store::retain with preserve_heads (fast policy): blocking recordings on base-merge-only heads spend no round, so such heads keep being re-reviewed, and once more than 16 blocking recordings are retained the ensure fails select_with_coverage and round_for on every poll instead of routing the change to the advisor.
 status: Draft
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-13T20:01:56.623034248Z
-modified_at: 2026-11-14T21:06:54.919474702Z
+modified_at: 2026-11-14T21:07:02.506430820Z
 req_type: Task
 tags:
 - carried-finding:BUG-2543:2a99ebfc
@@ -1435,16 +1471,24 @@ tags:
 - carried-finding:STORY-2745:2a4c4b85
 - carried-finding:STORY-2745:32088b60
 - carried-finding:STORY-2745:47f62f07
+- carried-finding:STORY-2763:02bf8b4d
+- carried-finding:STORY-2763:036825d8
 - carried-finding:STORY-2763:04ad58d8
 - carried-finding:STORY-2763:0d56e3a6
 - carried-finding:STORY-2763:138d1871
 - carried-finding:STORY-2763:15915e39
+- carried-finding:STORY-2763:1bf50580
+- carried-finding:STORY-2763:1f7b8f62
+- carried-finding:STORY-2763:4222a3d6
 - carried-finding:STORY-2763:6aee22bd
+- carried-finding:STORY-2763:8b8a3fb6
 - carried-finding:STORY-2763:97d326dd
 - carried-finding:STORY-2763:9b6c3c2d
 - carried-finding:STORY-2763:bf60843e
+- carried-finding:STORY-2763:d4e2f347
 - carried-finding:STORY-2763:d51c0f59
 - carried-finding:STORY-2763:dee3f3a7
+- carried-finding:STORY-2763:fa83ec7a
 - carried-finding:STORY-2765:2b087a82
 - carried-finding:STORY-2765:4e068149
 - carried-finding:STORY-2768:198d1196
@@ -2185,6 +2229,11 @@ history:
 - id: 01a1dbe2-7eff-7002-9977-6a8ee435a5b8
   author: joe
   timestamp: 2026-11-14T21:06:56.383393888Z
+  session_id: 01a1dbdee1b1
+  changes: []
+- id: 01a1dbe2-9cee-7743-a91e-63d6dc87d298
+  author: joe
+  timestamp: 2026-11-14T21:07:04.046655864Z
   session_id: 01a1dbdee1b1
   changes: []
 filed_at:
