@@ -453,12 +453,20 @@ description: |
   ### finding-hash:96ff0aa3
 
   aida-cli/tests/support/test_git.rs:205 enroll_synthetic_home (third copy of the fixture) still resolves authority via ancestor discovery with only a temp-dir check: called on a root without its own .git while /tmp/.git exists, it would write aida-allocation.toml into /tmp/.git. Apply the same root-local/linked-worktree confinement there.
+
+
+  ## Findings from BUG-2560
+  Reviewed sha: c937c805e96259611fa69e654ebb20fb0ee5f191
+
+  ### finding-hash:96ff0aa3
+
+  aida-cli/tests/support/test_git.rs:205 enroll_synthetic_home (third copy of the fixture) still resolves authority via ancestor discovery with only a temp-dir check: called on a root without its own .git while /tmp/.git exists, it would write aida-allocation.toml into /tmp/.git. Apply the same root-local/linked-worktree confinement there.
 status: Draft
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-13T20:01:56.623034248Z
-modified_at: 2026-11-14T08:30:56.321054103Z
+modified_at: 2026-11-14T08:31:07.183412628Z
 req_type: Task
 tags:
 - carried-finding:BUG-2543:2a99ebfc
@@ -473,6 +481,7 @@ tags:
 - carried-finding:BUG-2554:35d3eb09
 - carried-finding:BUG-2557:55e0cbfe
 - carried-finding:BUG-2557:f238ea37
+- carried-finding:BUG-2560:96ff0aa3
 - carried-finding:BUG-2563:0bff30e1
 - carried-finding:BUG-2570:4843b9fe
 - carried-finding:BUG-2570:76a786ef
@@ -545,6 +554,7 @@ tags:
 - carried-from:BUG-2551
 - carried-from:BUG-2554
 - carried-from:BUG-2557
+- carried-from:BUG-2560
 - carried-from:BUG-2563
 - carried-from:BUG-2570
 - carried-from:PR-3921
@@ -619,6 +629,7 @@ tags:
 - from-review:BUG-2551
 - from-review:BUG-2554
 - from-review:BUG-2557
+- from-review:BUG-2560
 - from-review:BUG-2563
 - from-review:BUG-2570
 - from-review:PR-3921
@@ -817,6 +828,11 @@ history:
 - id: 01a1d92e-63c9-7f53-b730-69dbf0a472ed
   author: joe
   timestamp: 2026-11-14T08:30:58.505853436Z
+  session_id: 01a1d92b3c7c
+  changes: []
+- id: 01a1d92e-8c39-7b51-ad9b-29082e0ded86
+  author: joe
+  timestamp: 2026-11-14T08:31:08.857077941Z
   session_id: 01a1d92b3c7c
   changes: []
 filed_at:
