@@ -18,7 +18,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-13T00:35:57.525111678Z
-modified_at: 2026-11-14T14:34:15.630440424Z
+modified_at: 2026-11-14T14:35:35.134664332Z
 req_type: Story
 tags:
 - track:integration
@@ -131,6 +131,13 @@ comments:
   content: '[advisor a22 07:04] Reviewer note for PR-3950 at 548d63d: the rework''s fixes are folded into merge commit 506994b (a merge of main into the branch). Review the diff against integration (81 files, +1449/-57), not commit by commit. Check both blocking findings from the 059e1b8 CR: the stale-seat path on the --bg relink, and the AC6 template master at aida-core/templates/.aida/discipline/standing-orders/integration.md with its tracked mirror.'
   created_at: 2026-11-14T14:02:21.267383436Z
   modified_at: 2026-11-14T14:02:21.267383436Z
+  session_id: 01a1d9ea-4e25-7033-85e8-3648f0195c7c
+  harness_version: 2.1.325 (Claude Code)
+- id: 01a1da7c-335e-7d50-a4d2-dad05813abe9
+  author: joe
+  content: '[advisor a22 07:38] RULING on PR-3950 CR at 548d63d: BLOCKING (identity correctness). A seatless session in a recycled --bg spare still acts as seat:<old> for mail, through the env fallback (mailbox_identity.rs:696, seat = bound_seat.or(env.seat); AIDA_ROTATION_SEAT is read at line 114). Fix: when the registry row is linked without --seat, the env seat must not be used (treat the row as authoritative once it exists). Add a test where the env carries an old seat and the row has none: the mail identity is seatless. The deferred AC3 thread rendering, F4 and F6 stand as ruled before.'
+  created_at: 2026-11-14T14:35:35.134664332Z
+  modified_at: 2026-11-14T14:35:35.134664332Z
   session_id: 01a1d9ea-4e25-7033-85e8-3648f0195c7c
   harness_version: 2.1.325 (Claude Code)
 history:
