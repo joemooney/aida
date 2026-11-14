@@ -3832,8 +3832,9 @@ impl Rails for ForgeRails<'_> {
                 self.retire(
                     change,
                     &format!(
-                        "Train CI ended without a test result ({why}); the same members are \
-                         retested once, then the train bisects, or ejects a lone member."
+                        "Train CI ended without a test result ({why}). If this is the first \
+                         such result for these members, they are retested once; if they were \
+                         already retested, the train bisects, or ejects a lone member."
                     ),
                 )?;
             } else {
