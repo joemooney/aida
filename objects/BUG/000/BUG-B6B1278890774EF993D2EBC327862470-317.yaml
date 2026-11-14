@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-13T08:32:25.181868902Z
-modified_at: 2026-11-14T05:51:37.206497541Z
+modified_at: 2026-11-14T05:57:23.520429723Z
 req_type: Bug
 tags:
 - force-claim
@@ -34,6 +34,13 @@ comments:
   content: 'Final validation: lane job j20261114T054955850-2-0 passed all 7 executed clone force-claim tests, including BUG-2552 refusal matrix and BUG-2491 checkpoint salvage. git diff --check passed. Edits remain uncommitted for native host publication; no implementation blockers. Codegraph client is absent at the configured operator path, confirmed by doctor; navigation used rg.'
   created_at: 2026-11-14T05:51:37.206497541Z
   modified_at: 2026-11-14T05:51:37.206497541Z
+  session_id: 01a1d893c44a
+  harness_version: codex-cli 0.167.0
+- id: 01a1d8a1-c7c0-78f2-8327-41f307cc81d3
+  author: dirtlab
+  content: 'Fast-gate fix round: moved the explicit clone force-claim liveness reader into ownership/reader.rs; pr_lease_takeover now consumes its OwnerVerdict. No ratchet exemption or baseline growth. The exact failing CI step passed all 10 Python tests, and lane job j20261114T055516859-2-0 passed all 7 clone force-claim Rust tests. git diff --check passed. Native follow-up edits remain uncommitted for host publication.'
+  created_at: 2026-11-14T05:57:23.520429723Z
+  modified_at: 2026-11-14T05:57:23.520429723Z
   session_id: 01a1d893c44a
   harness_version: codex-cli 0.167.0
 history:
