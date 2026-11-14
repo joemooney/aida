@@ -1,0 +1,25 @@
+id: 01a1da29-831f-7632-8df2-e3fba5b24041
+spec_id: BUG-b6b1278890774ef993d2ebc327862470-343
+agreed_id: BUG-2578
+title: 'Any label change on a PR cancels and restarts its CI run: merge-hold label toggles restart a 24-minute full run'
+description: |-
+  ci.yml triggers pull_request on types [opened, synchronize, reopened, labeled, unlabeled] for every label, and the workflow concurrency group cancels in-progress runs per PR. So setting or clearing aida:merge-hold (or any other label) cancels the PR's running CI and starts a new one. With the ci:full label now applied at approval, a hold-label toggle restarts a ~24 minute full-matrix run; 32 PR CI runs were cancelled in the 24h to 2026-11-14 13:00Z.
+
+  Fix: label events should start or cancel a CI run only when the label is ci:full (the only label that changes the tier). Options: gate the jobs with an if on github.event.action / github.event.label.name so other label events finish in seconds without joining the cancelling concurrency group, or give non-ci:full label events their own concurrency group. A hold-label change must not cancel an in-progress run on the same head.
+
+  Acceptance: (1) adding or removing aida:merge-hold* on a PR with a CI run in progress leaves that run running; (2) adding ci:full starts a full run; removing it starts a fast run; (3) push to the PR still cancels the superseded run; (4) train PR behaviour unchanged.
+status: Draft
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-14T13:05:16.063317537Z
+modified_at: 2026-11-14T13:05:16.063317537Z
+req_type: Bug
+filed_at:
+  code_sha: 2682c4c4fe5a42194a6f2eca01940008e3a41776
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 166920a3bf8
+  vendor: claude
+  session: fc28c702-2f6e-419e-b882-6ddfeb9134ff
