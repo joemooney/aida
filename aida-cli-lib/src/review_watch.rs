@@ -14,8 +14,10 @@ use std::os::unix::fs::{DirBuilderExt, MetadataExt, OpenOptionsExt};
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
 
+// The landing reconciler discovers through the same pinned forge reads.
+// trace:STORY-2768 | ai:claude
 #[path = "review_watch_forge.rs"]
-mod forge;
+pub(crate) mod forge;
 // Every process signal lives here, behind pidfd identity checks.
 // trace:TASK-1945 | ai:claude
 #[path = "review_watch_signal.rs"]
@@ -2086,7 +2088,7 @@ fn queue_args(key: &str, vendor: Option<&str>) -> Vec<String> {
 // Clear inherited orchestration/gate context so queue work must take its
 // ordinary standalone attested path in the same pinned repository.
 // trace:TASK-1993 | ai:codex
-fn watch_command(repo: &forge::Repository, root: &Path, program: &Path) -> Command {
+pub(crate) fn watch_command(repo: &forge::Repository, root: &Path, program: &Path) -> Command {
     let mut command = Command::new(program);
     command.current_dir(root).stdin(Stdio::null());
     for (key, _) in std::env::vars_os() {
