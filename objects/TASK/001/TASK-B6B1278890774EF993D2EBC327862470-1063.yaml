@@ -3,12 +3,12 @@ spec_id: TASK-b6b1278890774ef993d2ebc327862470-1063
 agreed_id: TASK-3783
 title: 'Crate-split PR5: extract aida-term and aida-cmdkit leaf crates (re-exports keep every path)'
 description: 'Per SPIKE-713 (docs/plans/2026-11-07-aida-cli-lib-crate-split-deep-dive.md) section 5.1-5.2 and section 7 row 5; EPIC-613 step 3. Acceptance: (1) new crate aida-term holds glyphs, glyph_config, toon, output_format, cache_output, git_arg_guard, process_retry, network_retry, usage with no clap and no dependency on aida-cli-lib; glyph_config takes the project root as a parameter; the gate->git_arg_guard and usage->cli edges are inverted. (2) new crate aida-cmdkit holds the cmdkit framework types, GlobalArgs, spec_arg and stakeholder_role (AddArgs coupling broken per 5.2); REGISTRY stays in aida-cli-lib. (3) aida-cli-lib re-exports keep all existing crate:: paths, so no importer line changes. (4) ledgers (exec-context-legacy.json, store-writers.toml, config-trust.toml) rewritten with scripts/relocate-ledger-paths.py in the same PR. (5) dell1 clean build and one-line-edit rebuild timed before and after, recorded on this spec. Two PRs (term, then cmdkit) are acceptable.'
-status: InProgress
+status: Completed
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-11T12:17:13.260009028Z
-modified_at: 2026-11-13T22:45:38.248767536Z
+modified_at: 2026-11-14T06:12:03.375322781Z
 req_type: Task
 relationships:
 - rel_type: BlockedBy
@@ -195,6 +195,15 @@ history:
   timestamp: 2026-11-13T22:29:10.398234574Z
   session_id: 01a1d706722f
   changes: []
+- id: 01a1d8af-34af-7561-be47-d449a8f1a27e
+  author: joe
+  timestamp: 2026-11-14T06:12:03.375311154Z
+  session_id: 01a1d852-16ef-7973-bdde-ac3f274752a2
+  harness_version: 2.1.325 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
 filed_at:
   code_sha: 11b131dfe3341e6d9c7127d64370f91366094711
   branch: main
@@ -204,3 +213,6 @@ filed_at:
   vendor: claude
   session: 01a1ca83-fabb-7663-852c-12c78d4e097f
   harness_version: 2.1.322 (Claude Code)
+implementation_info:
+  implemented: false
+  completed_at: 2026-11-14T06:12:03.375289537Z
