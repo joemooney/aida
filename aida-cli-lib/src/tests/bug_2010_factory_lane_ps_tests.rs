@@ -69,6 +69,7 @@ fn agent_entry(
         started_at: now,
         last_active_at: now,
         role: Some("implementer".to_string()),
+        seat: None,
         current_spec: current_spec.map(str::to_string),
         worktree_path: worktree,
         source: "agent-launcher".to_string(),

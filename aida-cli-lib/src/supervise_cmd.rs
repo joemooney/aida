@@ -400,6 +400,7 @@ fn send_advisor_request(
         archived: false,
         from_source,
         from_role,
+        from_seat: None,
         relayed_from: None,
     };
     persist_advisor_request(

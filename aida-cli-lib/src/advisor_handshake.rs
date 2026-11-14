@@ -505,6 +505,7 @@ pub(crate) fn hello_message(
         archived: false,
         from_source: ctx.from_source,
         from_role: Some(ctx.role.clone()),
+        from_seat: None,
         relayed_from: None,
     }
 }
@@ -625,6 +626,7 @@ fn ack_message(
         archived: false,
         from_source,
         from_role: Some(ADVISOR_ROLE.to_string()),
+        from_seat: None,
         relayed_from: None,
     }
 }

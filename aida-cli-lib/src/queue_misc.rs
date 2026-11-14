@@ -347,6 +347,18 @@ pub fn resolve_mail_sender_role() -> Option<String> {
         .map(|raw| canonical_role_name(&raw))
 }
 
+/// The named seat this session holds (its bound registry row's seat, else
+/// `AIDA_ROTATION_SEAT`), recorded on sent mail as `from_seat` so a reply
+/// reaches whoever holds the seat. The row covers a Codex tool shell or a
+/// `--bg` session whose env does not carry the seat.
+// trace:STORY-2745 | ai:claude
+pub fn resolve_mail_sender_seat() -> Option<String> {
+    crate::collect_mail_identity_facts()
+        .seat()
+        .and_then(aida_core::mailbox_identity::seat_address)
+        .map(|address| address["seat:".len()..].to_string())
+}
+
 /// The queue identity for DRAINABLE handoff work (`aida backlog groom`): the
 /// draining shell's `USER`, deliberately SKIPPING the agent's `AIDA_USER`
 /// mailbox id. An advisor agent grooming on the human's behalf must queue where

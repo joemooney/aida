@@ -133,6 +133,7 @@ fn recycled_row(pid: u32) -> AgentRegistryEntry {
         started_at: at,
         last_active_at: at + Duration::hours(2),
         role: Some("advisor".into()),
+        seat: None,
         current_spec: None,
         worktree_path: PathBuf::from("earlier-worktree"),
         source: "session-start-hook".into(),

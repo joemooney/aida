@@ -323,7 +323,7 @@ fn advisor_message(
         subject: Some(format!("{spec}: second empty rework of PR-{pr}")),
         body: format!("The automatic retry also exited without moving the blocked head. Advisor decision requested.\n{note}"),
         urgent: false, intent: Intent::Request, retracted: false, deleted: false, archived: false,
-        from_source: SenderSource::Explicit, from_role: None, relayed_from: None,
+        from_source: SenderSource::Explicit, from_role: None, from_seat: None, relayed_from: None,
     }
 }
 

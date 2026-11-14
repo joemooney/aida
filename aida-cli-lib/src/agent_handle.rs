@@ -72,6 +72,12 @@ pub(crate) const INHERITED_SESSION_ENV: &[&str] = &[
     // unless the launcher sets it explicitly afterwards.
     // trace:TASK-2737 | ai:claude
     crate::mail_wake::LAUNCH_WAKE_ENV,
+    // The launcher's named seat is the launcher's: a child holds only the
+    // seat its own launch names (set explicitly after this scrub, and
+    // recorded on its own registry row). Inherited, a headless child of the
+    // integration seat would read and send mail as `seat:integration`.
+    // trace:STORY-2745 | ai:claude
+    crate::agent_rotation::SEAT_ENV,
 ];
 
 /// Vendor names and aliases. A handle may not be one: `--to codex` must
@@ -1366,6 +1372,7 @@ mod tests {
             started_at: now,
             last_active_at: now,
             role: Some("implementer".to_string()),
+            seat: None,
             current_spec: None,
             worktree_path: project.to_path_buf(),
             source: "session-start-hook".to_string(),
@@ -1697,6 +1704,7 @@ mod tests {
             archived: false,
             from_source: SenderSource::Explicit,
             from_role: None,
+            from_seat: None,
             relayed_from: None,
         };
         let notice = build_notice(
@@ -2068,7 +2076,9 @@ mod tests {
         adoptee.pid = 4_000_004;
         adoptee.pid_start = None;
         agent_registry::write_entry(project, &adoptee).unwrap();
-        agent_registry::adopt_bg_session_identity(project, "s-a", "impl-1", None, None, project);
+        agent_registry::adopt_bg_session_identity(
+            project, "s-a", "impl-1", None, None, None, project,
+        );
         let rows = agent_registry::load_entries(project);
         let named: Vec<_> = rows
             .iter()
@@ -2113,6 +2123,7 @@ mod tests {
             archived: false,
             from_source: SenderSource::Explicit,
             from_role: None,
+            from_seat: None,
             relayed_from: None,
         }
     }

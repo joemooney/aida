@@ -1328,6 +1328,7 @@ fn mail_holder(main_root: &Path, c: &Candidate) {
         archived: false,
         from_source: aida_core::mailbox::SenderSource::Explicit,
         from_role: None,
+        from_seat: None,
         relayed_from: None,
     };
     let _ = crate::mailbox_store::write_message(main_root, &msg);

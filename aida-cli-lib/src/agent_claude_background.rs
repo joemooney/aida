@@ -593,6 +593,7 @@ pub(crate) mod tests {
                 native_session_id: None,
                 resumed_from: None,
                 description: None,
+                seat: None,
                 delegate_seats: vec![],
             },
         )
@@ -626,6 +627,7 @@ pub(crate) mod tests {
                 native_session_id: None,
                 resumed_from: None,
                 description: None,
+                seat: None,
                 delegate_seats: vec![],
             },
         )

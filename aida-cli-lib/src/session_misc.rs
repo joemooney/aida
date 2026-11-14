@@ -1684,6 +1684,7 @@ pub(crate) fn session_manifest_write(
         batch_name,
         agent_name: None,
         plan: None,
+        seat: None,
         items: manifest_items,
     };
 
@@ -1838,6 +1839,7 @@ pub(crate) fn write_queue_work_manifest(
         batch_name: batch_name.map(str::to_string),
         agent_name: None,
         plan: plan_context,
+        seat: None,
         items,
     };
     let path = session_manifest::manifest_path(project_root, &lease.id);
