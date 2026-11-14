@@ -169,12 +169,25 @@ history:
   - field_name: status
     old_value: NeedsAttention
     new_value: Completed
+- id: 01a1db5e-a6b9-7da3-934b-0e30a8ec5f04
+  author: aida-auto-bump
+  timestamp: 2026-11-14T18:42:55.801761500Z
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Completed
 processing_record:
 - id: 01a1db5e-7866-78d1-95ea-9f374a9188c9
   timestamp: 2026-11-14T18:42:43.942366708Z
   agent: aida
   commit_sha: 38a738f44f036cddc4327b137f5a3a3fef087095
   summary: Completed via merge 38a738f4
+- id: 01a1db5e-a8f8-72b2-ae13-10c0eab295ab
+  timestamp: 2026-11-14T18:42:56.376586056Z
+  agent: aida
+  commit_sha: 38a738f44f036cddc4327b137f5a3a3fef087095
+  summary: 'Test-only diff: regression test plants 0664 aida-work-node.toml in an ancestor .git and proves the triage requeue still lands; fixture isolation comes from #3987 on main; cause named in commit 7410052. CI green at head (run 43616687011). dell1-over-ssh rerun not performed (alternative acceptance branch satisfied).'
+  review_verdict: approved
 filed_at:
   code_sha: c219a07bf39e3e7210b8e3f14bf17708d20c3b5f
   branch: integration
