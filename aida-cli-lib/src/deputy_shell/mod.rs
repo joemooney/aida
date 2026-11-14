@@ -41,6 +41,8 @@ pub(crate) mod attribution;
 #[cfg(unix)]
 pub(crate) mod runner;
 pub(crate) mod socket;
+#[cfg(unix)]
+pub(crate) mod supervisor;
 
 #[cfg(test)]
 mod tests;

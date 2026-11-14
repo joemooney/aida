@@ -43,6 +43,21 @@ submit, the refresh interval, retention and the mandate it is tied to, and
 says plainly that every job runs as you, at that terminal. Starting it there is
 your consent to that.
 
+<!-- trace:STORY-2775 | ai:codex -->
+Add `--loop` to supervise the runner in the CLI. Clean exits, errors, and
+crashes restart after 1, 2, 4, 8, 16, 32, then 60 seconds; ten minutes of
+runner uptime resets the delay to one second. Ctrl-C or SIGTERM to the
+supervisor stops it and waits for the runner to finish cleanup. SIGHUP stops
+the runner and allows a restart. Existing terminal, shell-wrapper, and advisor
+grant requirements still apply; supervision does not renew an invalid grant.
+
+`aida deputy shell list --name N` reports whether loop mode is live and its
+restart count, including during backoff. Timestamped exit codes, signals, and
+ordinary stop/error reasons append to `~/.aida/deputy-shell/<name>/runner.log`
+(under the configured AIDA home when overridden), with notices on stderr.
+Lock files remain as reusable flock anchors after shutdown; no lock is held
+once the processes exit. The shell function forwards `--loop` unchanged.
+
 ### Submitting
 
 An advisor session queues a script with:
