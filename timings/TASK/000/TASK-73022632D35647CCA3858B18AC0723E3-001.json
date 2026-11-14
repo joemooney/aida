@@ -5,9 +5,23 @@
     {
       "at": "2026-11-14T10:31:22.717141166Z",
       "closed_by": "auto-bump"
+    },
+    {
+      "at": "2026-11-14T10:34:40.704127995Z",
+      "closed_by": "auto-bump"
     }
   ],
   "events": [
+    {
+      "ts": "2026-11-14T06:42:51.461762162Z",
+      "spec": "TASK-73022632d35647cca3858b18ac0723e3-001",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Draft",
+        "after": "Approved"
+      }
+    },
     {
       "ts": "2026-11-14T06:49:24.075365795Z",
       "spec": "TASK-73022632d35647cca3858b18ac0723e3-001",
@@ -20,6 +34,16 @@
     },
     {
       "ts": "2026-11-14T10:31:22.674564568Z",
+      "spec": "TASK-73022632d35647cca3858b18ac0723e3-001",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "e81b5754d976b81d044bb5aff1f29ba97aeaa730",
+        "pr": 3999,
+        "closed_by": "auto-bump"
+      }
+    },
+    {
+      "ts": "2026-11-14T10:34:39.963824665Z",
       "spec": "TASK-73022632d35647cca3858b18ac0723e3-001",
       "kind": {
         "event": "SpecCompleted",
