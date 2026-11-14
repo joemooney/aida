@@ -1181,12 +1181,28 @@ description: |
   ### finding-hash:ca169c0e
 
   Under refuse-on-conflict an overlapping head whose merge result is unknown (review_watch_forge.rs merge_conflicts returns None on timeout or old git; ConflictPrediction::Unknown in the pre-flight) is reviewed. The watcher prints nothing when this happens, so an operator cannot tell a clean merge from an unjudged one.
+
+
+  ## Findings from PR-4053
+  Reviewed sha: 231708f3eba43a29ea6a8e2fe6c695caf43f160b
+
+  ### finding-hash:24879d52
+
+  Read-only check can still repair .aida/config.toml: LiveChecks::message (pr_train.rs:1837) calls fetch_pr_ship_metadata_via_forge, which calls resolve_forge_kind (pr_cmd.rs:7216) and rewrites a stale [forge] provider = pure-git entry. The PR adds peek_forge_kind to avoid exactly this on the handler and approval paths. Fix: in read-only mode read title and body through self.forge.change_title_and_body(pr), and add a test.
+
+  ### finding-hash:0704b7b5
+
+  Gate::FullCi is a placeholder: pr_train.rs:1597-1598 enters FullCi and Corpus back to back with no rule, so the full-tier clause of acceptance 2 is unverified. PR-4027 (STORY-2809) inserts full_tier_gate at the same spot; it requests full CI and appends a skip event, so whichever PR lands second must make it honour read_only and enter Gate::FullCi, and add full-ci to the gate list in docs/cli/04-git-lifecycle.md.
+
+  ### finding-hash:a8474302
+
+  No test covers the live read-only branches: LiveChecks::checked_corpus (no mirror arming), LiveChecks::mandate_cover (mandate gate, MANDATE_NOT_ASKED), peek_forge_kind, or pr_train_check_handler exit status. Tests script FakeChecks only.
 status: Draft
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-13T20:01:56.623034248Z
-modified_at: 2026-11-14T20:40:53.648548922Z
+modified_at: 2026-11-14T20:41:45.077068234Z
 req_type: Task
 tags:
 - carried-finding:BUG-2543:2a99ebfc
@@ -1348,7 +1364,10 @@ tags:
 - carried-finding:PR-4052:9dab249d
 - carried-finding:PR-4052:ca169c0e
 - carried-finding:PR-4052:e40f3f6c
+- carried-finding:PR-4053:0704b7b5
+- carried-finding:PR-4053:24879d52
 - carried-finding:PR-4053:5b790bcc
+- carried-finding:PR-4053:a8474302
 - carried-finding:PR-4053:d7ad1d67
 - carried-finding:PR-4053:e95a72ea
 - carried-finding:PR-4053:fd4627d4
@@ -1471,6 +1490,7 @@ tags:
 - carried-from:TASK-3791
 - finding-hash:01721c41
 - finding-hash:04ad58d8
+- finding-hash:0704b7b5
 - finding-hash:0bdbec3f
 - finding-hash:0bff30e1
 - finding-hash:0cbc5c63
@@ -1481,6 +1501,7 @@ tags:
 - finding-hash:198d1196
 - finding-hash:1fce0788
 - finding-hash:236bf348
+- finding-hash:24879d52
 - finding-hash:276a9aea
 - finding-hash:28356795
 - finding-hash:2a257094
@@ -1555,6 +1576,7 @@ tags:
 - finding-hash:9b6c3c2d
 - finding-hash:9d27a4fe
 - finding-hash:9dab249d
+- finding-hash:a8474302
 - finding-hash:a8809039
 - finding-hash:a9731915
 - finding-hash:abbae117
@@ -2078,6 +2100,11 @@ history:
   author: joe
   timestamp: 2026-11-14T20:40:54.946278396Z
   session_id: 01a1dbc876a7
+  changes: []
+- id: 01a1dbcb-73f4-7590-b27a-94fa7ead6039
+  author: joe
+  timestamp: 2026-11-14T20:41:46.228435699Z
+  session_id: 01a1dbc79fe8
   changes: []
 filed_at:
   code_sha: 91fe1e337894199f15365d3f8ecfaf81366f8291
