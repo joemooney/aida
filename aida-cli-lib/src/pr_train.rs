@@ -16,9 +16,10 @@
 //! 3. [`drive`] tests the train tip (a `train/*` PR, so CI and the train mode
 //!    of merge-hold-gate run unchanged), lands a green train by a rebase merge
 //!    pinned to its tip — only while main is still the train's base — and on
-//!    red reruns once, then bisects by halves, two sub-trains at a time. A
-//!    one-member train that is red ejects that member. Main never receives an
-//!    untested combination.
+//!    red bisects by halves, two sub-trains at a time, with no same-composition
+//!    rerun (BUG-2577: every observed red was deterministic). A one-member
+//!    train that is red ejects that member. Main never receives an untested
+//!    combination.
 // trace:STORY-1690 | ai:claude
 
 #[path = "pr_train_journal.rs"]
@@ -365,8 +366,8 @@ pub(crate) struct Outcome {
 }
 
 /// Drive `members` to main through `rails`: build on the current main, test,
-/// land green trains while main is still their base, rerun the first red
-/// once, then bisect by halves with up to two sub-trains in flight. Every
+/// land green trains while main is still their base, bisect a red train by
+/// halves with up to two sub-trains in flight (a red is never rerun). Every
 /// member ends landed or ejected with a reason, unless unavailable CI pauses
 /// the run with its in-flight members retained.
 // trace:STORY-1690 | ai:claude
@@ -423,13 +424,12 @@ fn drive_into(rails: &mut dyn Rails, members: &[Member], out: &mut Outcome) -> R
     if members.is_empty() {
         return Ok(());
     }
-    // (group, may this group's red be rerun once?)
-    let mut pending: VecDeque<(Vec<Member>, bool)> = VecDeque::from([(members.to_vec(), true)]);
+    let mut pending: VecDeque<Vec<Member>> = VecDeque::from([members.to_vec()]);
     // A main that keeps moving under the train must not spin it forever.
     let mut waves_left = 4 * members.len() + 8;
     while !pending.is_empty() {
         if waves_left == 0 {
-            for (group, _) in pending.drain(..) {
+            for group in pending.drain(..) {
                 for m in group {
                     out.ejected.push(Ejected {
                         pr: m.pr,
@@ -441,20 +441,19 @@ fn drive_into(rails: &mut dyn Rails, members: &[Member], out: &mut Outcome) -> R
         }
         waves_left -= 1;
         let take = pending.len().min(PARALLEL_SUB_TRAINS);
-        let wave: Vec<(Vec<Member>, bool)> = pending.drain(..take).collect();
+        let wave: Vec<Vec<Member>> = pending.drain(..take).collect();
         let base = rails.main_tip()?;
-        let mut built = Vec::new();
-        for (group, rerun) in wave {
+        let mut trains: Vec<Built> = Vec::new();
+        for group in wave {
             let b = rails.build(&base, &group)?;
             out.ejected.extend(b.dropped.iter().cloned());
             if !b.cars.is_empty() {
-                built.push((b, rerun));
+                trains.push(b);
             }
         }
-        if built.is_empty() {
+        if trains.is_empty() {
             continue;
         }
-        let trains: Vec<Built> = built.iter().map(|(b, _)| b.clone()).collect();
         let verdicts = rails.test(&trains)?;
         anyhow::ensure!(
             verdicts.len() == trains.len(),
@@ -464,15 +463,15 @@ fn drive_into(rails: &mut dyn Rails, members: &[Member], out: &mut Outcome) -> R
         );
         out.ci_runs += trains.len();
         // Requeued groups go back to the FRONT, in their wave order.
-        let mut requeue: Vec<(Vec<Member>, bool)> = Vec::new();
-        for ((train, rerun), verdict) in built.into_iter().zip(verdicts) {
+        let mut requeue: Vec<Vec<Member>> = Vec::new();
+        for (train, verdict) in trains.into_iter().zip(verdicts) {
             let members = train.members();
             match verdict {
                 CiVerdict::Green => match rails.land(&train)? {
                     Landing::Landed(_) => out
                         .landed
                         .extend(train.cars.iter().map(|c| (c.member.pr, c.commit.clone()))),
-                    Landing::Stale => requeue.push((members, false)),
+                    Landing::Stale => requeue.push(members),
                     Landing::Refused(refused) => {
                         let rest: Vec<Member> = members
                             .into_iter()
@@ -480,14 +479,16 @@ fn drive_into(rails: &mut dyn Rails, members: &[Member], out: &mut Outcome) -> R
                             .collect();
                         out.ejected.extend(refused);
                         if !rest.is_empty() {
-                            requeue.push((rest, false));
+                            requeue.push(rest);
                         }
                     }
                 },
+                // A red is never rerun with the same composition: every
+                // observed red train was deterministic, so the rerun only
+                // spent a CI cycle. Unavailable CI is not a verdict and never
+                // reaches this arm. trace:BUG-2577 | ai:claude
                 CiVerdict::Red(detail) => {
-                    if rerun {
-                        requeue.push((members, false));
-                    } else if members.len() == 1 {
+                    if members.len() == 1 {
                         out.ejected.push(Ejected {
                             pr: members[0].pr,
                             reason: format!(
@@ -496,8 +497,8 @@ fn drive_into(rails: &mut dyn Rails, members: &[Member], out: &mut Outcome) -> R
                         });
                     } else {
                         let mid = members.len() / 2;
-                        requeue.push((members[..mid].to_vec(), false));
-                        requeue.push((members[mid..].to_vec(), false));
+                        requeue.push(members[..mid].to_vec());
+                        requeue.push(members[mid..].to_vec());
                     }
                 }
             }
@@ -701,7 +702,7 @@ enum TrainCiReadiness {
     Missing(Vec<String>),
     Pending(Vec<String>),
     Red(String),
-    /// Terminal and not a red train: no rerun or bisection can turn it green
+    /// Terminal and not a red train: no bisection can turn it green
     /// (a required check the train PR's CI skipped). trace:BUG-2401 | ai:claude
     Refused(String),
     Green,
@@ -715,7 +716,7 @@ fn train_ci_readiness(
     tolerate_hold: bool,
 ) -> TrainCiReadiness {
     let refined = crate::ci_gate::classify_red(rows, required, cfg, tolerate_hold, false);
-    // A genuine red remains a red train (including rerun/bisection), even
+    // A genuine red remains a red train (bisected or ejected), even
     // while an aggregate has not registered. Missing evidence never promotes it.
     if refined.is_real() {
         return TrainCiReadiness::Red(format!(
@@ -3751,7 +3752,7 @@ impl Rails for ForgeRails<'_> {
                 );
                 self.retire(
                     change,
-                    &format!("Train CI red ({why}); the train reruns or bisects."),
+                    &format!("Train CI red ({why}); the train bisects, or ejects a lone member."),
                 )?;
             } else {
                 println!(

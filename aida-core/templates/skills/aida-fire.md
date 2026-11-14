@@ -276,7 +276,7 @@ reason, and stacks one squash commit per PR on main. Each commit must carry
 exactly its PR's approved diff (patch-id), so no re-approval is needed. The
 stack is opened as a `train/*` PR and CI runs on exactly what main will
 receive. Green: it is rebase-merged pinned to its head and each member PR is
-closed with a pointer to its commit. Red: it is rerun once, then bisected in
+closed with a pointer to its commit. Red: it is not rerun, it is bisected in
 halves, and each PR that breaks it is left open with a comment saying why.
 The train never releases a merge hold. A held PR waits for the operator's
 `aida merge-hold clear N`, then rides the next train.
