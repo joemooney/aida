@@ -8,12 +8,18 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-13T08:32:25.181868902Z
-modified_at: 2026-11-14T05:57:23.520429723Z
+modified_at: 2026-11-14T06:14:24.396712993Z
 req_type: Bug
 tags:
 - force-claim
 - lanes
 - track:integration
+relationships:
+- rel_type:
+    custom: implemented-by
+  target_id: 01a1d8b0-b144-7c12-97f7-d13fa177d70f
+  created_at: 2026-11-14T06:14:24.396709243Z
+  created_by: joe
 comments:
 - id: 01a1d897-3aec-7a33-bb64-e9a433b7f2fa
   author: dirtlab
@@ -65,6 +71,10 @@ history:
   timestamp: 2026-11-14T05:42:34.460659101Z
   session_id: 01a1d893c44a
   harness_version: codex-cli 0.167.0
+  changes: []
+- id: 01a1d8b1-64d5-7401-923b-1ce54d39b7cc
+  author: joe
+  timestamp: 2026-11-14T06:14:26.773494480Z
   changes: []
 filed_at:
   code_sha: 9e5b788904e6f8b2f5e271583d1197b3173ce721
