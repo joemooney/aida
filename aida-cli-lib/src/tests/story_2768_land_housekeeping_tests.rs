@@ -166,6 +166,44 @@ fn an_orphan_held_on_another_host_or_possibly_worked_is_left_and_reported() {
 }
 
 #[test]
+fn only_a_live_driver_keeps_an_orphan_from_being_reset() {
+    use aida_core::driver_registry::DerivedDriver as Driver;
+    // Idle and queued say nothing is working the spec: a true orphan.
+    for none in [
+        None,
+        Some(Driver::Idle { since_secs: None }),
+        Some(Driver::Idle {
+            since_secs: Some(18042),
+        }),
+        Some(Driver::Queued {
+            batch: "night".into(),
+        }),
+    ] {
+        assert_eq!(worked_by(false, false, none.as_ref()), None, "{none:?}");
+    }
+    for (live, label) in [
+        (Driver::Relay { run: "r1".into() }, "relay:r1"),
+        (Driver::Drain { pid: 42 }, "drain:42"),
+        (
+            Driver::Agent {
+                who: "codex".into(),
+            },
+            "agent:codex",
+        ),
+    ] {
+        let why = worked_by(false, false, Some(&live)).expect("a live driver");
+        assert_eq!(why, format!("{label} is working it"));
+    }
+    let idle = Driver::Idle { since_secs: None };
+    assert!(worked_by(true, false, Some(&idle))
+        .unwrap()
+        .contains("fan-out"));
+    assert!(worked_by(false, true, Some(&idle))
+        .unwrap()
+        .contains("subagent"));
+}
+
+#[test]
 fn an_orphan_a_human_must_reset_is_listed_and_never_reset() {
     for tag in ["supervised", "operator-only", "architecture"] {
         let mut spec = orphan("STORY-8");

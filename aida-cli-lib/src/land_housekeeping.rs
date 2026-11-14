@@ -328,16 +328,11 @@ pub(crate) fn survey(
                         .find(|claim| claim.host != host && names(&claim.node_id))
                         .map(|claim| claim.host.clone())
                 });
-            let maybe_worked = if orphan.likely_fanout {
-                Some("a live fan-out names it".to_string())
-            } else if orphan.possibly_subagent {
-                Some("a subagent may be working in its worktree".to_string())
-            } else {
-                orphan
-                    .driver
-                    .as_ref()
-                    .map(|driver| format!("it has a driver ({driver:?})"))
-            };
+            let maybe_worked = worked_by(
+                orphan.likely_fanout,
+                orphan.possibly_subagent,
+                orphan.driver.as_ref(),
+            );
             Orphan {
                 branches: spec_branches(&ids, &remote_branches),
                 spec: orphan.spec,
@@ -349,6 +344,27 @@ pub(crate) fn survey(
         })
         .collect();
     Ok((lanes, orphans))
+}
+
+/// Why an In-Progress spec with no live session of its own may still be
+/// worked, so it is left alone: `None` for a true orphan. Only a live relay,
+/// drain or agent is a driver; an idle or merely queued spec has none and is
+/// exactly what this step resets.
+// trace:STORY-2768 | ai:claude
+fn worked_by(
+    likely_fanout: bool,
+    possibly_subagent: bool,
+    driver: Option<&aida_core::driver_registry::DerivedDriver>,
+) -> Option<String> {
+    if likely_fanout {
+        Some("a live fan-out names it".to_string())
+    } else if possibly_subagent {
+        Some("a subagent may be working in its worktree".to_string())
+    } else {
+        driver
+            .filter(|driver| driver.is_driven())
+            .map(|driver| format!("{} is working it", driver.label()))
+    }
 }
 
 #[cfg(test)]
