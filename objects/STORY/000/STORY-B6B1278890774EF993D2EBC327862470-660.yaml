@@ -23,7 +23,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-12T19:11:56.371806442Z
-modified_at: 2026-11-14T05:39:55.974483344Z
+modified_at: 2026-11-14T06:38:44.443210676Z
 req_type: Story
 tags:
 - operator-held
@@ -317,6 +317,13 @@ comments:
   content: '[advisor 114 22:43] Gap closed: #3926 landed at 22:38 (1801b34), 2h19m after 20:19. Train 13 gated 4 PRs but ejected 3 at gating (#3979 conflict; #3924/#3956 patch-id changed when stacked on main): approvals no longer covered what would land. Repairs on dell1 (dell1-merge.sh) -> delta re-reviews -> train 14. Observation for STORY-2768 S3: ejection at gating after a ~2h idle queue wasted the train''s members; a pre-train freshness probe at approval time would have triggered the merges earlier.'
   created_at: 2026-11-14T05:39:55.974483344Z
   modified_at: 2026-11-14T05:39:55.974483344Z
+  session_id: 01a1d852-16ef-7973-bdde-ac3f274752a2
+  harness_version: 2.1.325 (Claude Code)
+- id: 01a1d8c7-a2db-7043-8b50-fb41a1893707
+  author: joe
+  content: '[advisor 114 23:39] 60-min gap #2: main unmoved since 22:38 (1801b34, #3926). Train 14 (#3979 + #3924) went red on lib-1 (bug_2451_queue_workspace_dates_confirmed_merged_retained_branch; main green, #3924 green alone) and is retrying as #3993; train 15 (#3988 + others if approved) is queued behind it. Promotion 8 (#3992) is in review and canary.'
+  created_at: 2026-11-14T06:38:44.443210676Z
+  modified_at: 2026-11-14T06:38:44.443210676Z
   session_id: 01a1d852-16ef-7973-bdde-ac3f274752a2
   harness_version: 2.1.325 (Claude Code)
 history:
