@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-11T12:17:47.476312683Z
-modified_at: 2026-11-14T14:29:21.648718285Z
+modified_at: 2026-11-14T14:30:54.898350586Z
 req_type: Task
 relationships:
 - rel_type: BlockedBy
@@ -73,6 +73,13 @@ comments:
   created_at: 2026-11-14T13:56:28.626841941Z
   modified_at: 2026-11-14T13:56:28.626841941Z
   session_id: 01a1da55c7a5
+  harness_version: codex-cli 0.167.0
+- id: 01a1da77-ecb2-7441-b0ee-528f69db6c09
+  author: dirtlab
+  content: 'Resumed at 201130b5ee: shared fixture lane job j20261114T142946975-2-0 passed all 38 tests; git diff --check clean. Updated plan section 5.3 (uncommitted) with fresh timing evidence: prior FULL 43602038976 cancelled both lib test steps; current-head 43605077655 selected FAST and skipped shard matrix. No valid after timing exists; host must select FULL and record successful lib-0/lib-1 step durations before completing acceptance 5. PR 3994 retains both merge-hold labels; no publication declaration or queue completion attempted. Handoff: /tmp/TASK-3784-current-handoff.txt. Configured codegraph client remains absent; doctor confirms missing. untested=false.'
+  created_at: 2026-11-14T14:30:54.898350586Z
+  modified_at: 2026-11-14T14:30:54.898350586Z
+  session_id: 01a1da760da5
   harness_version: codex-cli 0.167.0
 history:
 - id: 01a1ca8b-157a-7c50-9f73-dc13d565bf63
