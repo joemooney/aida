@@ -26,6 +26,8 @@ use crate::stakeholder_role::StakeholderAction;
 const MAX_CONTENT_ROUNDS: usize = 3;
 /// The branch whose changes the integration seat lands.
 const INTEGRATION_BRANCH: &str = "integration";
+/// The branch trains land on.
+const MAIN_BRANCH: &str = "main";
 const TRAIN_PREFIX: &str = "train/";
 /// Where a pass fetches the commits it compares. The refs are shared by
 /// every pass and only ever read under [`FETCH_LOCK`], straight after the
@@ -355,6 +357,18 @@ pub(crate) fn derive(pr: &Pr, evidence: &dyn Evidence) -> Row {
         Err(why) => return unknown("approval", why),
         Ok(Approval::Approved(approval)) => {
             return match evidence.hold(pr) {
+                // A change stacked on another change's branch is reviewed
+                // like any other, and lands only once its base has: a train
+                // merges into the main branch and nowhere else.
+                Ok(None) if pr.base != MAIN_BRANCH && pr.base != INTEGRATION_BRANCH => row(
+                    State::Ready,
+                    Action::Wait,
+                    None,
+                    format!(
+                        "{approval}; stacked on `{}`: retarget it when that lands",
+                        pr.base
+                    ),
+                ),
                 Ok(None) => row(
                     State::Ready,
                     match track {

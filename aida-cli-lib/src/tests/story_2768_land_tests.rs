@@ -141,6 +141,29 @@ fn an_approved_change_is_ready_and_lands_by_its_track() {
 }
 
 #[test]
+fn an_approved_change_stacked_on_another_branch_waits_for_its_base() {
+    let row = derive(
+        &pr("story-1-first-slice", "story-1-second-slice"),
+        &approved(),
+    );
+    assert_eq!((row.state, row.action), (State::Ready, Action::Wait));
+    assert!(
+        row.reason.contains("stacked on `story-1-first-slice`"),
+        "{}",
+        row.reason
+    );
+    // It is still reviewed like any other change.
+    let unreviewed = derive(
+        &pr("story-1-first-slice", "story-1-second-slice"),
+        &Fake::default(),
+    );
+    assert_eq!(
+        (unreviewed.state, unreviewed.action),
+        (State::NeedsReview, Action::LaunchReview)
+    );
+}
+
+#[test]
 fn an_approval_wins_over_older_requested_changes() {
     let fake = Fake {
         rounds: blocking(2),
