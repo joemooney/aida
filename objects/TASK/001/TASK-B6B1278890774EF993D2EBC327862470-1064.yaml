@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-11T12:17:47.476312683Z
-modified_at: 2026-11-14T19:02:43.061749056Z
+modified_at: 2026-11-14T19:18:08.705840017Z
 req_type: Task
 relationships:
 - rel_type: BlockedBy
@@ -92,6 +92,13 @@ comments:
   content: 'Advisor ruling (2026-11-14 12:15, CR at 4174129): blocking = AC2 only. aida-testkit is the single home of the fixture-authority helpers. Port the BUG-2560 behaviour (the five helpers re-added in aida-cli-lib/src/test_env.rs by the conflict repair) into aida-testkit''s copies, then delete the duplicates from the shim so test_env.rs only re-exports; keep the BUG-2560 regression tests passing. AC5 (after timings) is non-blocking: it stays open under Refs and is recorded from the FULL run started at approval. Gate: ONE targeted cargo test run (the BUG-2560 regressions) plus make check-ci-compile (shared test infra), then check-ci-fast and push. Round 3: Fable lane.'
   created_at: 2026-11-14T19:02:43.061749056Z
   modified_at: 2026-11-14T19:02:43.061749056Z
+  session_id: 01a1db6d-e689-7532-9eef-772722add87b
+  harness_version: 2.1.325 (Claude Code)
+- id: 01a1db7e-e441-7740-bb60-5e83a6410bd3
+  author: joe
+  content: 'Advisor note (2026-11-14 12:18): an earlier dell1 seat left 3 uncommitted files (test_env.rs in cli-lib and testkit, aida-core allocation_authority.rs; +123/-6) that lane-run committed as 329d56b on the pre-repair base. Preserved as origin/wip/task-3784-1114; cherry-pick from it if it already ports the BUG-2560 behaviour into aida-testkit.'
+  created_at: 2026-11-14T19:18:08.705840017Z
+  modified_at: 2026-11-14T19:18:08.705840017Z
   session_id: 01a1db6d-e689-7532-9eef-772722add87b
   harness_version: 2.1.325 (Claude Code)
 history:
