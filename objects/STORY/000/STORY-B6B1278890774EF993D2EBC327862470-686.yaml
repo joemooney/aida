@@ -25,12 +25,12 @@ description: |
   - Cap: `History::blocking_keys` keys on the patch-id rather than the head under `fast`.
   - Config: add the key to the config schema with the existing protected-config write rules; defaults to `fast` with an empty strict list in this repo's committed config.
   - Out of scope: the transient store-pull retry (stays in BUG-2561); integration-track changes (frozen until 2026-11-14 19:00).
-status: InProgress
+status: NeedsAttention
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-13T15:54:08.931576118Z
-modified_at: 2026-11-13T22:36:17.212319951Z
+modified_at: 2026-11-14T00:41:29.024523842Z
 req_type: Story
 tags:
 - architecture
@@ -177,6 +177,15 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1d780-8ec0-78f3-85b5-b75d9e3b7871
+  author: aida-orchestrator
+  timestamp: 2026-11-14T00:41:29.024545750Z
+  session_id: 01a1d77d621f
+  harness_version: 2.1.325 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 filed_at:
   code_sha: 3631f7ca05567a6984ff2376b997539389b6f758
   branch: main
@@ -186,3 +195,11 @@ filed_at:
   vendor: claude
   session: 01a1d54b-060a-7951-aa40-7f0fd928126f
   harness_version: 2.1.323 (Claude Code)
+failure_reason:
+  phase: reviewer
+  phase_index: 3
+  kind: verdict:request-changes
+  detail: 'Round-2 P1s fixed (phase-3 evidence in common launch path, carried approval at auto-train, AC6 watcher regression). New blocking defects: fast policy makes non-protected-base PRs unreviewable, and the embedded landed-tree diff breaks reviewer launch for large PRs. CI green at head.'
+  recovery_hint: address the review findings, move STORY-2763 back to In Progress, and clear the PR hold only after approval
+  shelved_by: reviewer
+  shelved_at: 2026-11-14T00:41:29.024523842Z
