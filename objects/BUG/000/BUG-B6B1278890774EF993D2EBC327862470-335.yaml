@@ -17,12 +17,12 @@ description: |
   Fix: the approval read used by `aida land status` (gate::approval::merge_approval_subject_observed and approval_decision) and the hold premise read prefer the per-change ledger verdict for the change being judged; the spec-keyed file is used only when the change has no ledger record.
 
   Acceptance: with two open changes under one spec, each approved at its own head in either order, `aida land status` shows both READY and neither hold reports a stale premise. A test records the two approvals in both orders.
-status: InProgress
+status: Completed
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-14T02:19:26.646584262Z
-modified_at: 2026-11-14T13:06:36.396296225Z
+modified_at: 2026-11-14T13:17:05.851338503Z
 req_type: Bug
 tags:
 - effort:open:4h
@@ -91,6 +91,19 @@ history:
   author: joe
   timestamp: 2026-11-14T13:06:53.163153080Z
   changes: []
+- id: 01a1da34-57ac-73c2-a7d8-3c483e0dce97
+  author: aida-auto-bump
+  timestamp: 2026-11-14T13:17:05.836899550Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a1da34-57bb-7803-981b-ec4d07c49659
+  timestamp: 2026-11-14T13:17:05.851336841Z
+  agent: aida
+  commit_sha: 30872c0389dfcbd7ecbd7b9ceccf2d607ebc041c
+  summary: Completed via merge 30872c03
 filed_at:
   code_sha: a7a5c51d83e6e528432ae74c3e810d41da8dd7f8
   branch: integration
@@ -100,3 +113,7 @@ filed_at:
   vendor: claude
   session: 01a1d72e-0d28-76e0-890c-867fba05abcf
   harness_version: 2.1.325 (Claude Code)
+implementation_info:
+  implemented: false
+  completed_at: 2026-11-14T13:17:05.836894899Z
+  completion_sha: 30872c0389dfcbd7ecbd7b9ceccf2d607ebc041c
