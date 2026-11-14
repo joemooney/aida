@@ -20,7 +20,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-13T18:06:55.227979618Z
-modified_at: 2026-11-14T11:55:05.146454387Z
+modified_at: 2026-11-14T12:11:15.942091225Z
 req_type: Story
 tags:
 - config
@@ -88,6 +88,22 @@ comments:
   created_at: 2026-11-14T11:55:05.146454387Z
   modified_at: 2026-11-14T11:55:05.146454387Z
   session_id: 01a1d8f3-f948-7072-b174-fa9507ed074b
+  harness_version: 2.1.325 (Claude Code)
+- id: 01a1d9f8-1266-7253-b6e7-39d5f93c22a2
+  author: joe
+  content: |
+    Slice 1 is up as #4022 (base integration, head e763e3aa4e1), review before merge.
+
+    Built as sketched: [integration] config, one pure review_after_merge_eligible, `aida integration merge <PR> [--push] [--dry-run]`, `aida integration promotion-check`, land status shows the reason, tests.
+
+    Two deviations, both accepted by the advisor:
+    1. promotion-check takes --since <commit> (the integration commit the last promotion was cut from). Promotions are squashed into main, so origin/main..tip never shrinks and git alone cannot tell what a promotion carried once main changes the same files. Without --since the check falls back to tree equality and says the boundary is a guess. Slice 2 (STORY-2805) needs an automatic boundary: an Integration-Head trailer written at promotion time.
+    2. The [integration] table is read from the default branch's config (trusted_config), not the worktree copy: it turns a review requirement off and names shell commands.
+
+    Not tested end to end against the real forge and gate ledger; no test covers --push.
+  created_at: 2026-11-14T12:11:15.942091225Z
+  modified_at: 2026-11-14T12:11:15.942091225Z
+  session_id: 01a1d9b6-e721-73f1-9ad6-1343da1a030e
   harness_version: 2.1.325 (Claude Code)
 history:
 - id: 01a1d617-7531-7dc3-aba6-d82849880497
