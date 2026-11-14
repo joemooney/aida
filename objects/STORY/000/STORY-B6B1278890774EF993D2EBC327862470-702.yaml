@@ -1,0 +1,35 @@
+id: 01a1d77c-c52f-7912-9daf-38b5c86b1e86
+spec_id: STORY-b6b1278890774ef993d2ebc327862470-702
+agreed_id: STORY-2779
+title: 'Review PR-3921: [AI:codex] test(ci): isolate sccache fixtures from launcher environment (Refs STORY-2660)'
+description: |
+  Auto-filed by `aida session end` (backup trigger) (session `01a1d312`) for branch `story-b6b1278890774ef993d2ebc327862470-583`.
+
+  - PR: <https://github.com/joemooney/aida/pull/3921>
+  - Branch: `story-b6b1278890774ef993d2ebc327862470-583` → `main`
+
+  ## Slice of (Refs only — not completed by this PR)
+
+  Commit subjects carry `(Refs SPEC-ID)`: this PR is one slice of a spec that a later PR completes. Review this slice against that spec's acceptance criteria.
+
+  - STORY-2660
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 3921` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-14T00:37:20.815231906Z
+modified_at: 2026-11-14T00:37:20.815231906Z
+req_type: Story
+filed_at:
+  code_sha: bc24a1e6883b8fc1f036ca37e6fe3c4060d75255
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: bc24a1e6883
+  vendor: claude
