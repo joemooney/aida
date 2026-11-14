@@ -1507,17 +1507,37 @@ mod documentation_tests {
 // trace:BUG-2017 | ai:codex
 pub(crate) fn enroll_synthetic_home(root: &Path) -> anyhow::Result<()> {
     let resolved = root.canonicalize()?;
+    // A nested store may already belong to its fixture project's repository.
+    // Preserve that identity so pre-existing review evidence stays visible.
+    // Never adopt the shared temp directory itself or a bare stray `.git`.
+    // trace:BUG-2560 | ai:codex
+    let temporary = std::env::temp_dir().canonicalize()?;
+    let enclosing = resolved
+        .ancestors()
+        .skip(1)
+        .take_while(|p| p.starts_with(&temporary) && **p != temporary)
+        .find(|p| p.join(".git/HEAD").is_file() && p.join(".git/objects").is_dir());
+    let resolved = if !resolved.join(".git").try_exists()? {
+        enclosing.unwrap_or(&resolved).to_path_buf()
+    } else {
+        resolved
+    };
     anyhow::ensure!(
         resolved.starts_with(std::env::temp_dir().canonicalize()?),
         "fixture authority requires a temporary repository"
     );
-    if aida_core::allocation_authority::common_dir(&resolved).is_err() {
+    // Require an explicit root-local identity before discovering shared authority.
+    // Linked worktrees deliberately name a temporary common directory.
+    // trace:BUG-2560 | ai:codex
+    if !resolved.join(".git").try_exists()? {
         aida_core::git_ops::init(&resolved)?;
     }
     let common = aida_core::allocation_authority::common_dir(&resolved)?;
     anyhow::ensure!(
-        common.starts_with(std::env::temp_dir().canonicalize()?),
-        "fixture authority requires a temporary common Git directory"
+        common.starts_with(&resolved)
+            || (resolved.join(".git").is_file()
+                && common.starts_with(std::env::temp_dir().canonicalize()?)),
+        "fixture authority requires a local or explicitly linked temporary Git directory"
     );
     let setting = common.join(aida_core::allocation_authority::CONFIG_FILE);
     if setting.exists() {
@@ -1573,4 +1593,32 @@ pub(crate) fn write_project_config_fixture(project: &Path, content: &str) {
     let path = project.join(aida_core::adoption_projection::CONFIG);
     std::fs::create_dir_all(path.parent().expect("config has a parent dir")).unwrap();
     aida_core::write_config_atomic(&path, content).unwrap();
+}
+
+// trace:BUG-2560 | ai:codex
+#[test]
+fn bug_2560_cli_fixture_ignores_ancestor_git_identity() {
+    let parent = tempfile::tempdir().unwrap();
+    std::fs::create_dir(parent.path().join(".git")).unwrap();
+    let root = parent.path().join("fixture");
+    std::fs::create_dir(&root).unwrap();
+    enroll_synthetic_home(&root).unwrap();
+    let config = aida_core::allocation_authority::CONFIG_FILE;
+    assert!(root.join(".git").join(config).is_file());
+    assert!(!parent.path().join(".git").join(config).exists());
+}
+
+// trace:BUG-2560 | ai:codex
+#[test]
+fn bug_2560_cli_nested_store_preserves_project_identity() {
+    let project = tempfile::tempdir().unwrap();
+    aida_core::git_ops::init(project.path()).unwrap();
+    let root = project.path().join(".aida-store");
+    home_fixture_backend(&root).unwrap();
+    assert!(!root.join(".git").exists());
+    assert_eq!(
+        aida_core::allocation_authority::common_dir(&root).unwrap(),
+        project.path().join(".git").canonicalize().unwrap()
+    );
+    aida_core::allocation_authority::require_global(&root).unwrap();
 }
