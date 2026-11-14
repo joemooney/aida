@@ -1,0 +1,18 @@
+{
+  "id": "review-watch-28b55a524f21eb18c22cd351b232f638fe7492fc0010b2cbbe1b0dc1639d13f9",
+  "thread_id": "review-watch-28b55a524f21eb18c22cd351b232f638fe7492fc0010b2cbbe1b0dc1639d13f9",
+  "from": "review-watch",
+  "to": {
+    "kind": "agent",
+    "agent": "joemooney"
+  },
+  "timestamp": 1794684557234,
+  "body": "PR-3956 at be81871f295c9b08b07d409a26aba0ebcbcfa6c4: the review by claude-reviewer (claude reviewer seat) recorded `request-changes` with 8 finding(s), round 2 of 2. The findings are in `.aida/gate-ledger/PR-3956.jsonl`. This was the last review round under the two-round cap: a new head is not reviewed automatically, and the advisor decides the next step.",
+  "subject": "PR-3956: review requested changes (round 2 of 2)",
+  "urgent": false,
+  "intent": "request",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "explicit"
+}
