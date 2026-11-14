@@ -849,12 +849,36 @@ description: |
   ### finding-hash:2b087a82
 
   Test coverage gaps on otherwise correct code: the entry-point regression (agent_launcher_tests.rs:5384) drives agent_new_with_config and agent_new_bg_dispatch but not agent_new_codex_bg (agent_codex_background.rs:676), and the AC3 real-child test (queue_work_tests.rs:5286) covers Claude and Codex but not Agy.
+
+
+  ## Findings from PR-4040
+  Reviewed sha: 689c2687e92026636dee36cb49efc9b54b83f2b4
+
+  ### finding-hash:b29349ce
+
+  BUG-2543/BUG-2551 timing criteria are unmet and unmeasured: each key still resolves its publication through git (review_verdict.rs current_verdict), so review list and the pull reconcile over ~2,800 keys are not shown to finish in seconds; no test asserts O(1) git per listing and the only timing evidence is the ignored bench bug_2543_bench_listing_fresh_vs_shared. The trailer completes both specs at merge and no follow-up spec exists for the O(1)-git work. File it and re-measure aida pull and aida queue rework after landing.
+
+  ### finding-hash:6f4ab4b8
+
+  Discovery::unchanged (aida-cli-lib/src/gate/ledger/checked.rs) re-validates each ledger with path-based std::fs::symlink_metadata(ledger_path.join(name)) rather than fstatat on the pinned directory handle, so a directory swapped between the handle check and the stat passes once where fresh discovery refuses.
+
+  ### finding-hash:236bf348
+
+  store::read_regular (aida-cli-lib/src/gate/ledger/store.rs:164) checks is_file by path, then opens without O_NONBLOCK; a FIFO swapped in between still blocks the lossy reader although the doc comment says it never hangs.
+
+  ### finding-hash:43b83809
+
+  EntryStat (checked.rs) holds no content hash: a same-length in-place rewrite of a ledger within one mtime/ctime tick of discovery compares equal, so the shared ownership index would be reused. The doc comment claims only append, replacement, hard link and non-regular file are always detected.
+
+  ### finding-hash:a8809039
+
+  docs/cli/verify-manual.py defaults to target/debug/aida, while aida dev build writes target/agent/aida, so a local run can check a stale debug binary or refuse; the printed path is the only signal. Consider preferring the newest of target/{agent,debug}.
 status: Draft
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-13T20:01:56.623034248Z
-modified_at: 2026-11-14T17:36:46.594248650Z
+modified_at: 2026-11-14T17:44:43.081857556Z
 req_type: Task
 tags:
 - carried-finding:BUG-2543:2a99ebfc
@@ -979,6 +1003,11 @@ tags:
 - carried-finding:PR-4030:540b7d86
 - carried-finding:PR-4030:a9731915
 - carried-finding:PR-4030:f167aa2d
+- carried-finding:PR-4040:236bf348
+- carried-finding:PR-4040:43b83809
+- carried-finding:PR-4040:6f4ab4b8
+- carried-finding:PR-4040:a8809039
+- carried-finding:PR-4040:b29349ce
 - carried-finding:PR-4046:e5eb0aa5
 - carried-finding:PR-4046:fefd3308
 - carried-finding:STORY-2735:2c7ae2ea
@@ -1051,6 +1080,7 @@ tags:
 - carried-from:PR-4021
 - carried-from:PR-4024
 - carried-from:PR-4030
+- carried-from:PR-4040
 - carried-from:PR-4046
 - carried-from:STORY-2735
 - carried-from:STORY-2763
@@ -1068,6 +1098,7 @@ tags:
 - finding-hash:15915e39
 - finding-hash:198d1196
 - finding-hash:1fce0788
+- finding-hash:236bf348
 - finding-hash:276a9aea
 - finding-hash:28356795
 - finding-hash:2a257094
@@ -1085,6 +1116,7 @@ tags:
 - finding-hash:3cf67cda
 - finding-hash:3db33acc
 - finding-hash:3f4b4821
+- finding-hash:43b83809
 - finding-hash:45085c26
 - finding-hash:45e63a87
 - finding-hash:46a7a9dc
@@ -1104,6 +1136,7 @@ tags:
 - finding-hash:654190b6
 - finding-hash:6810bcf9
 - finding-hash:6935f83d
+- finding-hash:6f4ab4b8
 - finding-hash:735a4b90
 - finding-hash:73e42b4b
 - finding-hash:74641343
@@ -1120,9 +1153,11 @@ tags:
 - finding-hash:97ed1809
 - finding-hash:98776888
 - finding-hash:9d27a4fe
+- finding-hash:a8809039
 - finding-hash:a9731915
 - finding-hash:abbae117
 - finding-hash:ac11f20d
+- finding-hash:b29349ce
 - finding-hash:bf60843e
 - finding-hash:c0a8d165
 - finding-hash:c598b8f9
@@ -1188,6 +1223,7 @@ tags:
 - from-review:PR-4021
 - from-review:PR-4024
 - from-review:PR-4030
+- from-review:PR-4040
 - from-review:PR-4046
 - from-review:STORY-2735
 - from-review:STORY-2763
@@ -1521,6 +1557,11 @@ history:
   author: joe
   timestamp: 2026-11-14T17:36:48.283678918Z
   session_id: 01a1db1ec04c
+  changes: []
+- id: 01a1db29-6178-72e2-89e0-9b039ae1d43e
+  author: joe
+  timestamp: 2026-11-14T17:44:44.664678640Z
+  session_id: 01a1db249612
   changes: []
 filed_at:
   code_sha: 91fe1e337894199f15365d3f8ecfaf81366f8291
