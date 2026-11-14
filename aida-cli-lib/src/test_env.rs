@@ -162,3 +162,32 @@ mod documentation_tests {
         assert!(constant.contains("live-bwrap CI gate"), "{constant}");
     }
 }
+
+// trace:TASK-3784 | ai:codex
+// trace:BUG-2560 | ai:codex
+#[test]
+fn bug_2560_cli_fixture_ignores_ancestor_git_identity() {
+    let parent = tempfile::tempdir().unwrap();
+    std::fs::create_dir(parent.path().join(".git")).unwrap();
+    let root = parent.path().join("fixture");
+    std::fs::create_dir(&root).unwrap();
+    enroll_synthetic_home(&root).unwrap();
+    let config = aida_core::allocation_authority::CONFIG_FILE;
+    assert!(root.join(".git").join(config).is_file());
+    assert!(!parent.path().join(".git").join(config).exists());
+}
+
+// trace:BUG-2560 | ai:codex
+#[test]
+fn bug_2560_cli_nested_store_preserves_project_identity() {
+    let project = tempfile::tempdir().unwrap();
+    aida_core::git_ops::init(project.path()).unwrap();
+    let root = project.path().join(".aida-store");
+    home_fixture_backend(&root).unwrap();
+    assert!(!root.join(".git").exists());
+    assert_eq!(
+        aida_core::allocation_authority::common_dir(&root).unwrap(),
+        project.path().join(".git").canonicalize().unwrap()
+    );
+    aida_core::allocation_authority::require_global(&root).unwrap();
+}

@@ -1098,17 +1098,37 @@ fn find_matching_brace(source: &str, open_brace: usize) -> Option<usize> {
 // trace:BUG-2017 | ai:codex
 pub fn enroll_synthetic_home(root: &Path) -> anyhow::Result<()> {
     let resolved = root.canonicalize()?;
+    // A nested store may already belong to its fixture project's repository.
+    // Preserve that identity so pre-existing review evidence stays visible.
+    // Never adopt the shared temp directory itself or a bare stray `.git`.
+    // trace:BUG-2560 | ai:codex
+    let temporary = std::env::temp_dir().canonicalize()?;
+    let enclosing = resolved
+        .ancestors()
+        .skip(1)
+        .take_while(|p| p.starts_with(&temporary) && **p != temporary)
+        .find(|p| p.join(".git/HEAD").is_file() && p.join(".git/objects").is_dir());
+    let resolved = if !resolved.join(".git").try_exists()? {
+        enclosing.unwrap_or(&resolved).to_path_buf()
+    } else {
+        resolved
+    };
     anyhow::ensure!(
         resolved.starts_with(std::env::temp_dir().canonicalize()?),
         "fixture authority requires a temporary repository"
     );
-    if aida_core::allocation_authority::common_dir(&resolved).is_err() {
+    // Require an explicit root-local identity before discovering shared authority.
+    // Linked worktrees deliberately name a temporary common directory.
+    // trace:BUG-2560 | ai:codex
+    if !resolved.join(".git").try_exists()? {
         aida_core::git_ops::init(&resolved)?;
     }
     let common = aida_core::allocation_authority::common_dir(&resolved)?;
     anyhow::ensure!(
-        common.starts_with(std::env::temp_dir().canonicalize()?),
-        "fixture authority requires a temporary common Git directory"
+        common.starts_with(&resolved)
+            || (resolved.join(".git").is_file()
+                && common.starts_with(std::env::temp_dir().canonicalize()?)),
+        "fixture authority requires a local or explicitly linked temporary Git directory"
     );
     let setting = common.join(aida_core::allocation_authority::CONFIG_FILE);
     if setting.exists() {
