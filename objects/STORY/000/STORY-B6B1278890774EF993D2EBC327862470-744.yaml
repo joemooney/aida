@@ -24,7 +24,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-14T18:09:46.924768383Z
-modified_at: 2026-11-14T18:48:09.268878342Z
+modified_at: 2026-11-14T19:44:53.574311297Z
 req_type: Story
 tags:
 - config
@@ -48,6 +48,13 @@ comments:
   modified_at: 2026-11-14T18:36:07.717089567Z
   session_id: 01a1db4453c6
   harness_version: 2.1.319 (Claude Code)
+- id: 01a1db97-6146-7cb2-81d8-7181ddb2bf95
+  author: joe
+  content: 'Advisor ruling (2026-11-14 12:50): PR-4052 was approved at 0f1aae4 but its full-tier run 43631687984 is red on its own change, contracts shard, manual check: ''FAIL flags - 07-project-setup.md:125 --allow-stale-base cited under aida config''. Fix: reword docs/cli/07-project-setup.md:125 so the flag is cited under the command that owns it (aida queue work) and the config key is cited as a key, not a flag; run the manual check locally (the contracts step''s script) plus make check-ci-fast; push. Merge hold added; a delta review follows the new head.'
+  created_at: 2026-11-14T19:44:53.574311297Z
+  modified_at: 2026-11-14T19:44:53.574311297Z
+  session_id: 01a1db6d-e689-7532-9eef-772722add87b
+  harness_version: 2.1.325 (Claude Code)
 history:
 - id: 01a1db40-dee0-78e0-b36e-623ac494aa0d
   author: joe
