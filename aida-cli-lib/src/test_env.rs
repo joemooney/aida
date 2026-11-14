@@ -1511,13 +1511,18 @@ pub(crate) fn enroll_synthetic_home(root: &Path) -> anyhow::Result<()> {
         resolved.starts_with(std::env::temp_dir().canonicalize()?),
         "fixture authority requires a temporary repository"
     );
-    if aida_core::allocation_authority::common_dir(&resolved).is_err() {
+    // Require an explicit root-local identity before discovering shared authority.
+    // Linked worktrees deliberately name a temporary common directory.
+    // trace:BUG-2560 | ai:codex
+    if !resolved.join(".git").try_exists()? {
         aida_core::git_ops::init(&resolved)?;
     }
     let common = aida_core::allocation_authority::common_dir(&resolved)?;
     anyhow::ensure!(
-        common.starts_with(std::env::temp_dir().canonicalize()?),
-        "fixture authority requires a temporary common Git directory"
+        common.starts_with(&resolved)
+            || (resolved.join(".git").is_file()
+                && common.starts_with(std::env::temp_dir().canonicalize()?)),
+        "fixture authority requires a local or explicitly linked temporary Git directory"
     );
     let setting = common.join(aida_core::allocation_authority::CONFIG_FILE);
     if setting.exists() {
@@ -1573,4 +1578,17 @@ pub(crate) fn write_project_config_fixture(project: &Path, content: &str) {
     let path = project.join(aida_core::adoption_projection::CONFIG);
     std::fs::create_dir_all(path.parent().expect("config has a parent dir")).unwrap();
     aida_core::write_config_atomic(&path, content).unwrap();
+}
+
+// trace:BUG-2560 | ai:codex
+#[test]
+fn bug_2560_cli_fixture_ignores_ancestor_git_identity() {
+    let parent = tempfile::tempdir().unwrap();
+    std::fs::create_dir(parent.path().join(".git")).unwrap();
+    let root = parent.path().join("fixture");
+    std::fs::create_dir(&root).unwrap();
+    enroll_synthetic_home(&root).unwrap();
+    let config = aida_core::allocation_authority::CONFIG_FILE;
+    assert!(root.join(".git").join(config).is_file());
+    assert!(!parent.path().join(".git").join(config).exists());
 }
