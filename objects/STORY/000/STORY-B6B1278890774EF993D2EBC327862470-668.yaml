@@ -18,7 +18,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-13T00:35:57.525111678Z
-modified_at: 2026-11-14T05:36:04.272919220Z
+modified_at: 2026-11-14T05:36:07.475406300Z
 req_type: Story
 tags:
 - track:integration
@@ -88,6 +88,21 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Round-2 scoped re-review (F1/F2/F3/F5/F8 + delta): F2, F3, F5 fixed with tests; the F1 delta leaves a stale-seat path on --bg relink; F8/AC6 template added but its tracked mirror is missing, so the live repo never renders it. F4/F6/F7 deferred by advisor ruling. CI (non-hold) not reported at review time.. No triage reason was given.'
   created_at: 2026-11-14T05:36:04.272911770Z
   modified_at: 2026-11-14T05:36:04.272911770Z
+  session_id: 01a1d852-16ef-7973-bdde-ac3f274752a2
+  harness_version: 2.1.325 (Claude Code)
+- id: 01a1d88e-4e7e-7c31-9d53-69e6eb54b74c
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (STORY-2745):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 059e1b8fe065
+    Recorded: 2026-11-14T03:27:08.415937181+00:00
+    Findings:
+    1. [P2] A recycled --bg spare keeps an earlier launch's seat (aida-cli-lib/src/agent_registry.rs:1262 adopt_bg_session_identity `entry.seat = seat.map(..).or(entry.seat)`; agent_registry.rs:1042 `entry.seat = session_seat.or(entry.seat)` in the linked, env-untrusted branch). The adopt step exists because the spare may carry an earlier launch's env (its doc comment says so). A SessionStart hook that fires before the link trusts that env and writes its AIDA_ROTATION_SEAT, which this PR now exports on every seated claude --bg command. When the spare is then linked to a launch with no --seat, both writers fall back to the stale row seat. The seatless session then holds seat:<old>: it takes queued seat mail through the new binding notice, and its sends stamp the wrong from_seat. The fix: once a session is linked to a launch, that launch's seat decides, and None means no seat (current_spec is already handled this way). Add a test: a pre-link hook row with a stale env seat, then a seatless adopt and a post-link hook, leaves seat None and seat:<old> does not resolve to it.
+    2. [P2] AC6 mirror not synced: aida-core/templates/.aida/discipline/standing-orders/integration.md was added, but the tracked mirror .aida/discipline/standing-orders/integration.md is missing (git ls-files shows only advisor.md). render_standing_orders reads tracked_standing_orders_path (.aida/discipline/standing-orders/<seat>.md, seat_rotation.rs:405), so this repository's integration seat still renders no mailbox orders. The test passes only because it copies the template into a tempdir. make check-templates (check-agent-skills, Makefile:511-530) reports MISSING for this file. Run make sync-templates and commit the mirror.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-14T05:36:07.294890788Z
+  modified_at: 2026-11-14T05:36:07.294890788Z
   session_id: 01a1d852-16ef-7973-bdde-ac3f274752a2
   harness_version: 2.1.325 (Claude Code)
 history:
