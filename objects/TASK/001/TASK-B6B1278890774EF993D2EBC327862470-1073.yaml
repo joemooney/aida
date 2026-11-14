@@ -825,12 +825,24 @@ description: |
   ### finding-hash:fefd3308
 
   AC3 is proven at all_open_prs_for_spec_via_forge, not through an end-to-end train opening; PR body also still says the title uses Refs and criterion 2 is pending, both superseded by the advisor ruling
+
+
+  ## Findings from PR-4005
+  Reviewed sha: 5abc1d7dab05847f2eb8e21e01c655d8d68772d7
+
+  ### finding-hash:4e068149
+
+  AC6 has no test that renders the `set AIDA_TRACK=<owner>` hint through queue list, queue next and a drain preview; coverage is at the shared label only (queue_work_tests.rs:4928).
+
+  ### finding-hash:2b087a82
+
+  Test coverage gaps on otherwise correct code: the entry-point regression (agent_launcher_tests.rs:5384) drives agent_new_with_config and agent_new_bg_dispatch but not agent_new_codex_bg (agent_codex_background.rs:676), and the AC3 real-child test (queue_work_tests.rs:5286) covers Claude and Codex but not Agy.
 status: Draft
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-13T20:01:56.623034248Z
-modified_at: 2026-11-14T17:32:37.710135551Z
+modified_at: 2026-11-14T17:36:33.595560956Z
 req_type: Task
 tags:
 - carried-finding:BUG-2543:2a99ebfc
@@ -927,6 +939,8 @@ tags:
 - carried-finding:PR-3998:0bff30e1
 - carried-finding:PR-4000:73e42b4b
 - carried-finding:PR-4000:abbae117
+- carried-finding:PR-4005:2b087a82
+- carried-finding:PR-4005:4e068149
 - carried-finding:PR-4007:376b178e
 - carried-finding:PR-4007:3db33acc
 - carried-finding:PR-4007:45e63a87
@@ -1014,6 +1028,7 @@ tags:
 - carried-from:PR-3997
 - carried-from:PR-3998
 - carried-from:PR-4000
+- carried-from:PR-4005
 - carried-from:PR-4007
 - carried-from:PR-4012
 - carried-from:PR-4013
@@ -1042,6 +1057,7 @@ tags:
 - finding-hash:28356795
 - finding-hash:2a257094
 - finding-hash:2a99ebfc
+- finding-hash:2b087a82
 - finding-hash:2c08aa50
 - finding-hash:2c7ae2ea
 - finding-hash:2df54e83
@@ -1059,6 +1075,7 @@ tags:
 - finding-hash:46a7a9dc
 - finding-hash:4843b9fe
 - finding-hash:49b64e26
+- finding-hash:4e068149
 - finding-hash:51cbf3a8
 - finding-hash:52636ea7
 - finding-hash:540b7d86
@@ -1147,6 +1164,7 @@ tags:
 - from-review:PR-3997
 - from-review:PR-3998
 - from-review:PR-4000
+- from-review:PR-4005
 - from-review:PR-4007
 - from-review:PR-4012
 - from-review:PR-4013
@@ -1477,6 +1495,11 @@ history:
   author: joe
   timestamp: 2026-11-14T17:32:39.426510340Z
   session_id: 01a1db1bdf42
+  changes: []
+- id: 01a1db21-eb04-7082-9960-2d0bc1ee9530
+  author: joe
+  timestamp: 2026-11-14T17:36:35.588768116Z
+  session_id: 01a1db1ec04c
   changes: []
 filed_at:
   code_sha: 91fe1e337894199f15365d3f8ecfaf81366f8291
