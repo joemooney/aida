@@ -727,7 +727,7 @@ A change merged before review is not exempt from review. Its specs get the `merg
 
 **One line**: check that everything on `integration` not yet on `main` was reviewed at the head that was merged.
 
-**Mental model.** The check reads git, not tags. It walks integration's first-parent commits back to the last head a promotion carried to `main`. A merge of `main` is skipped. A merge of a change must have that change's newest verdict approving exactly the merged head. Any other commit is refused, because nothing reviewed it. Removing the `merged-before-review` tag by hand changes nothing: the merge is still there, and so is the missing approval.
+**Mental model.** The check reads git, not tags. It walks integration's first-parent commits back to the commit the last promotion was cut from. A merge of `main` is skipped. A merge of a change must have that change's newest verdict approving exactly the merged head. Any other commit is refused, because nothing reviewed it. Removing the `merged-before-review` tag by hand changes nothing: the merge is still there, and so is the missing approval.
 
 For each change that fails, the output names the change, its merge commit, and the `git revert -m 1` that takes it out of the snapshot. The command exits 1 when anything fails. For each change that passes, it removes the `merged-before-review` tag from the change's specs.
 
@@ -735,10 +735,11 @@ For each change that fails, the output names the change, its merge commit, and t
 
 **Key options (rationale only).**
 - `--tip <COMMIT>` checks a commit other than `origin/integration`, for example a promotion branch's head.
+- `--since <COMMIT>` names the integration commit the last promotion was cut from. A promotion is squashed into `main`, so git cannot always tell which commits it carried. Without `--since`, the check goes back to the newest integration commit whose content is exactly a commit on `main`. A promotion leaves such a commit only when `main` took nothing else in between; otherwise the check reaches further back than it needs to and may refuse over commits that are already on `main`.
 
-**Gotchas.** It reads the local `origin/` refs, so run `git fetch` first. An approval at a different head does not count, even when the difference is only a merge of the base.
+**Gotchas.** It reads the local `origin/` refs, so run `git fetch` first. An approval at a different head does not count, even when the difference is only a merge of the base. A `--since` commit that is not on the tip's first-parent line is an error, not an empty check.
 
-**Chains with**: `git fetch` → `aida integration promotion-check` → cut the promotion.
+**Chains with**: `git fetch` → `aida integration promotion-check --since <last cut>` → cut the promotion.
 
 ## The two-leg git model: `fetch` / `pull` / `push`
 

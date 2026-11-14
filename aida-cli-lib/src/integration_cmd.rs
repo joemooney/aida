@@ -397,7 +397,7 @@ fn run_merge(root: &Path, pr: u64, push: bool, dry_run: bool) -> Result<()> {
     Ok(())
 }
 
-fn run_promotion_check(root: &Path, tip: Option<&str>) -> Result<()> {
+fn run_promotion_check(root: &Path, tip: Option<&str>, since: Option<&str>) -> Result<()> {
     use review::FirstParent;
     let main = "refs/remotes/origin/main";
     let tip = tip.unwrap_or("refs/remotes/origin/integration");
@@ -440,7 +440,24 @@ fn run_promotion_check(root: &Path, tip: Option<&str>) -> Result<()> {
             })
         })
         .collect();
-    let commits = review::unpromoted(&commits, &main_trees);
+    let commits = match since {
+        Some(since) => {
+            let full = git(
+                root,
+                &[
+                    "rev-parse",
+                    "--verify",
+                    "-q",
+                    &format!("{since}^{{commit}}"),
+                ],
+            )
+            .with_context(|| format!("`{since}` is not a commit here"))?;
+            review::after(&commits, &full).with_context(|| {
+                format!("`{since}` is not on the first-parent line of `{tip}` after `main`")
+            })?
+        }
+        None => review::unpromoted(&commits, &main_trees),
+    };
     let ledger_root = crate::review_watch::forge::main_root(root)?;
     let on_main = |sha: &str| {
         Command::new("git")
@@ -518,7 +535,9 @@ fn run_integration(matches: &clap::ArgMatches, _ctx: &crate::cmdkit::DispatchCtx
     match args.command {
         IntegrationCommand::Tags { dry_run } => run_tags(&root, dry_run),
         IntegrationCommand::Merge { pr, push, dry_run } => run_merge(&root, pr, push, dry_run),
-        IntegrationCommand::PromotionCheck { tip } => run_promotion_check(&root, tip.as_deref()),
+        IntegrationCommand::PromotionCheck { tip, since } => {
+            run_promotion_check(&root, tip.as_deref(), since.as_deref())
+        }
     }
 }
 

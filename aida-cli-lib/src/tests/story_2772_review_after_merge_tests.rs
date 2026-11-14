@@ -464,6 +464,29 @@ fn commits_at_or_before_the_last_promoted_head_are_not_checked() {
 }
 
 #[test]
+fn a_named_boundary_cuts_the_check_and_an_unknown_one_is_refused() {
+    let mut commits = history();
+    for (commit, sha) in commits.iter_mut().zip([HEAD_B, MAIN_1, HEAD_A]) {
+        commit.sha = sha.to_string();
+    }
+    let shas = |left: Option<&[FirstParent]>| {
+        left.map(|left| left.iter().map(|c| c.sha.clone()).collect::<Vec<_>>())
+    };
+    assert_eq!(
+        shas(after(&commits, MAIN_1)),
+        Some(vec![HEAD_B.to_string()])
+    );
+    assert_eq!(
+        shas(after(&commits, &HEAD_A[..7])).map(|left| left.len()),
+        Some(2)
+    );
+    assert_eq!(shas(after(&commits, HEAD_B)), Some(vec![]));
+    // Off the line, or too short to name one commit: never "check nothing".
+    assert_eq!(after(&commits, "cccccccccccc"), None);
+    assert_eq!(after(&commits, "aaaa"), None);
+}
+
+#[test]
 fn merge_subjects_carry_the_change_and_its_trailer() {
     assert_eq!(
         merge_subject(

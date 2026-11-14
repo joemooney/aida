@@ -87,9 +87,11 @@ impl Config {
             config.mode = match value.as_str() {
                 Some("off") => Mode::Off,
                 Some("low-risk") => Mode::LowRisk,
-                _ => return Err(format!(
+                _ => {
+                    return Err(format!(
                     "[integration] review_after_merge must be \"off\" or \"low-risk\", not {value}"
-                )),
+                ))
+                }
             };
         }
         if let Some(value) = table.get("max_effort") {
@@ -341,6 +343,21 @@ pub(crate) fn unpromoted<'a>(
         .position(|commit| main_trees.contains(&commit.tree))
         .unwrap_or(commits.len());
     &commits[..end]
+}
+
+/// The commits of `commits` (newest first) after `since`, a commit on the
+/// same first-parent line named in full or by a prefix of 7 or more. `None`
+/// when `since` is not on the line: a boundary that cannot be found is
+/// never read as "check nothing".
+pub(crate) fn after<'a>(commits: &'a [FirstParent], since: &str) -> Option<&'a [FirstParent]> {
+    let since = since.trim().to_ascii_lowercase();
+    if since.len() < 7 {
+        return None;
+    }
+    commits
+        .iter()
+        .position(|commit| commit.sha.starts_with(&since))
+        .map(|end| &commits[..end])
 }
 
 /// The change a merge subject names: the number after `merge PR #`.
