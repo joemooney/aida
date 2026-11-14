@@ -569,12 +569,24 @@ description: |
   ### finding-hash:45e63a87
 
   waiter_refuses_pull_when_remote_moves_in_flight line 382 asserts !pull_reusable(store, root, false, false), but the code repo in that fixture has no origin remote, so the assertion passes vacuously. The real code-leg veto is covered by code_remote_freshness_independently_vetoes_reuse.
+
+
+  ## Findings from BUG-2565
+  Reviewed sha: 30e4a10ed70231954a26fcbbd49c919dc958bae9
+
+  ### finding-hash:c963d4df
+
+  pull_store_leg_locked now captures pre_sha before committing pending changes (store_push_pull.rs:2496), so the TASK-73 print_pull_summary delta lists the local chore: sync pending changes commit as if it had landed from upstream. The collision-scan guard already checks `pending` explicitly, so pre_sha could move back after the pending commit with a separate pre-commit SHA kept for `moved`.
+
+  ### finding-hash:45e63a87
+
+  waiter_refuses_pull_when_remote_moves_in_flight line 382 asserts !pull_reusable(store, root, false, false), but the code repo in that fixture has no origin remote, so the assertion passes vacuously. The real code-leg veto is covered by code_remote_freshness_independently_vetoes_reuse.
 status: Draft
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-13T20:01:56.623034248Z
-modified_at: 2026-11-14T11:15:49.228868139Z
+modified_at: 2026-11-14T11:15:56.873797489Z
 req_type: Task
 tags:
 - carried-finding:BUG-2543:2a99ebfc
@@ -592,6 +604,8 @@ tags:
 - carried-finding:BUG-2557:f238ea37
 - carried-finding:BUG-2560:96ff0aa3
 - carried-finding:BUG-2563:0bff30e1
+- carried-finding:BUG-2565:45e63a87
+- carried-finding:BUG-2565:c963d4df
 - carried-finding:BUG-2569:45085c26
 - carried-finding:BUG-2569:74641343
 - carried-finding:BUG-2570:4843b9fe
@@ -681,6 +695,7 @@ tags:
 - carried-from:BUG-2557
 - carried-from:BUG-2560
 - carried-from:BUG-2563
+- carried-from:BUG-2565
 - carried-from:BUG-2569
 - carried-from:BUG-2570
 - carried-from:BUG-2573
@@ -776,6 +791,7 @@ tags:
 - from-review:BUG-2557
 - from-review:BUG-2560
 - from-review:BUG-2563
+- from-review:BUG-2565
 - from-review:BUG-2569
 - from-review:BUG-2570
 - from-review:BUG-2573
@@ -1043,6 +1059,11 @@ history:
 - id: 01a1d9c5-5492-74f0-b3f7-c40c5158d33d
   author: joe
   timestamp: 2026-11-14T11:15:50.546014438Z
+  session_id: 01a1d9c2575b
+  changes: []
+- id: 01a1d9c5-72b2-7ba0-9647-5316a8468108
+  author: joe
+  timestamp: 2026-11-14T11:15:58.258033885Z
   session_id: 01a1d9c2575b
   changes: []
 filed_at:
