@@ -30,7 +30,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-13T15:54:08.931576118Z
-modified_at: 2026-11-14T09:47:23.530317826Z
+modified_at: 2026-11-14T10:01:30.210178383Z
 req_type: Story
 tags:
 - architecture
@@ -254,6 +254,13 @@ comments:
   modified_at: 2026-11-14T09:47:23.530317826Z
   session_id: 01a1d8f3-f948-7072-b174-fa9507ed074b
   harness_version: 2.1.325 (Claude Code)
+- id: 01a1d981-4562-7113-b53b-06bd219340c5
+  author: dirtlab
+  content: 'Round-two follow-up: verified the branch already composes reviewer evidence at the common queue launch boundary (including phase-3 verdict-file launches), accepts authoritative fast carry-over at automatic train admission, and covers the narrowed AC6 watcher workflow. Extended the real carry-over workflow regression to refuse a moved destination head and preserve Unavailable for failed forge head reads, then recover on stable head evidence. Lane validation: story2763 filter 9 passed; focused watcher_overlapping_clean_merge filter 1 passed. rustfmt check and git diff --check pass. Conflict re-probe on protected-base movement remains the accepted follow-up per the binding advisor ruling. Native seat leaves edits uncommitted for host publication.'
+  created_at: 2026-11-14T10:01:30.210178383Z
+  modified_at: 2026-11-14T10:01:30.210178383Z
+  session_id: 01a1d976c951
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1d59e-6b4b-7d10-8aea-02729132bc6f
   author: joe

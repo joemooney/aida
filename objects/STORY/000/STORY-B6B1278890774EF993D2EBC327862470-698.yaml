@@ -17,7 +17,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-13T22:18:52.888699274Z
-modified_at: 2026-11-14T09:50:22.837043792Z
+modified_at: 2026-11-14T10:03:08.946220957Z
 req_type: Story
 tags:
 - track:integration
@@ -96,6 +96,13 @@ comments:
   modified_at: 2026-11-14T09:47:14.698951136Z
   session_id: 01a1d8f3-f948-7072-b174-fa9507ed074b
   harness_version: 2.1.325 (Claude Code)
+- id: 01a1d982-c712-71b1-a66a-c0c202ff887e
+  author: dirtlab
+  content: 'Addressed the latest PR-4000 advisor ruling: SIGHUP to the supervisor now shares the stop flag with SIGINT/SIGTERM, so terminal hangup forwards shutdown to the runner, reaps it, removes live loop state, and releases lock ownership instead of restarting into terminal-admission refusals. Extended the isolated operator-signal regression to cover SIGHUP and verify child reaping, one exit log entry, state cleanup and released loop lock. Added the missing supervisor module trace and documented hangup shutdown. Changed only aida-cli-lib/src/deputy_shell/supervisor.rs, aida-cli-lib/src/deputy_shell/mod.rs and docs/advanced/deputies.md. Validation: launcher job j20261114T095106907-2-0 passed all 7 story_2775 tests; make check-ci-fast passed all 48 gates including 51 structural tests; rustfmt --check and git diff --check passed. Initial test invocation selected aida-cli, which has no library target; corrected to aida-cli-lib for the successful run. Navigation client at the supplied absolute path is absent; doctor confirms unavailable, so used source searches. No implementation blockers remain. Native edits remain uncommitted for host publication and queue completion.'
+  created_at: 2026-11-14T10:03:08.946220957Z
+  modified_at: 2026-11-14T10:03:08.946220957Z
+  session_id: 01a1d976acc5
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1d8cb-f2dc-7ec1-a627-8dfcb3f8fa5a
   author: joe
