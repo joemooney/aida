@@ -1341,12 +1341,32 @@ description: |
   ### finding-hash:036fb484
 
   aida-cli-lib/src/gate/test_support.rs:286 re-exports the crate::test_env facade through an explicit name list, so a helper later added to aida_testkit::test_env is not reachable as crate::test_env::X until it is added there and to ORCHESTRATOR_OUTSIDE_PATHS (gate/orchestrator_leaves.rs:19). Note this in the facade comment.
+
+
+  ## Findings from PR-4038
+  Reviewed sha: a073b9791a16abf83fdde2c532289b923505c162
+
+  ### finding-hash:8a372919
+
+  store.rs:427 write_events creates the binding before the change ledger exists, and readers take no lock: a selection of the same spec racing the first append to a new change refuses once with "bound to PR-N, whose ledger is missing; run the fix command" (checked.rs:1017, :853). Retry briefly on a missing bound ledger, or create the ledger file before binding.
+
+  ### finding-hash:d22062d4
+
+  checked.rs:844 load_owners folds only bound changes into the ownership index; a change recovered by the full read (lost binding) is selected but its phase-3 witnesses are not folded, so a misplaced copy it would disqualify is kept.
+
+  ### finding-hash:059e4a00
+
+  bindings.rs:404 bootstrap adds hint entries but never removes one naming a change whose ledger does not carry the label; binding_lost (checked.rs:491) then stays true and that label reads every change ledger on each selection, with no doctor signal. Rewrite each bound label hint to exactly its bound changes, or report it in the audit.
+
+  ### finding-hash:8a91c29a
+
+  checked.rs:374 discovery_refusal and the doctor oversized-ledger finding recommend quarantining a ledger without saying the fix command must follow (its bindings then name a missing ledger and those specs refuse); the refusal still says it blocks every spec; bindings.rs:8 calls a binding without an event harmless, which is untrue when the ledger is missing.
 status: Draft
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-13T20:01:56.623034248Z
-modified_at: 2026-11-14T21:56:36.917051829Z
+modified_at: 2026-11-14T22:04:39.760534226Z
 req_type: Task
 tags:
 - carried-finding:BUG-2543:2a99ebfc
@@ -1507,6 +1527,10 @@ tags:
 - carried-finding:PR-4030:540b7d86
 - carried-finding:PR-4030:a9731915
 - carried-finding:PR-4030:f167aa2d
+- carried-finding:PR-4038:059e4a00
+- carried-finding:PR-4038:8a372919
+- carried-finding:PR-4038:8a91c29a
+- carried-finding:PR-4038:d22062d4
 - carried-finding:PR-4040:236bf348
 - carried-finding:PR-4040:43b83809
 - carried-finding:PR-4040:6f4ab4b8
@@ -1645,6 +1669,7 @@ tags:
 - carried-from:PR-4027
 - carried-from:PR-4028
 - carried-from:PR-4030
+- carried-from:PR-4038
 - carried-from:PR-4040
 - carried-from:PR-4046
 - carried-from:PR-4048
@@ -1668,6 +1693,7 @@ tags:
 - finding-hash:036825d8
 - finding-hash:036fb484
 - finding-hash:04ad58d8
+- finding-hash:059e4a00
 - finding-hash:0704b7b5
 - finding-hash:0bdbec3f
 - finding-hash:0bff30e1
@@ -1751,7 +1777,9 @@ tags:
 - finding-hash:7ce2cb14
 - finding-hash:7d6b05ec
 - finding-hash:83e5954d
+- finding-hash:8a372919
 - finding-hash:8a49a174
+- finding-hash:8a91c29a
 - finding-hash:8b8a3fb6
 - finding-hash:8c6f0ae6
 - finding-hash:8cfe037b
@@ -1783,6 +1811,7 @@ tags:
 - finding-hash:cd9ab7dd
 - finding-hash:cddc71c1
 - finding-hash:d0b021ea
+- finding-hash:d22062d4
 - finding-hash:d4e2f347
 - finding-hash:d51c0f59
 - finding-hash:d7ad1d67
@@ -1857,6 +1886,7 @@ tags:
 - from-review:PR-4027
 - from-review:PR-4028
 - from-review:PR-4030
+- from-review:PR-4038
 - from-review:PR-4040
 - from-review:PR-4046
 - from-review:PR-4048
@@ -2330,6 +2360,11 @@ history:
   author: joe
   timestamp: 2026-11-14T21:56:38.298793336Z
   session_id: 01a1dc0ca6cb
+  changes: []
+- id: 01a1dc17-5cb1-7d72-abb1-8a40eba6ce92
+  author: joe
+  timestamp: 2026-11-14T22:04:41.009184488Z
+  session_id: 01a1dc11a2b8
   changes: []
 filed_at:
   code_sha: 91fe1e337894199f15365d3f8ecfaf81366f8291
