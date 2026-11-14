@@ -23,12 +23,12 @@ description: |
   - Generate a structured review prompt with `aida review prompt --pr 4060` and verify each spec's acceptance criteria.
   - Approve and merge, or request changes by spec id.
   - Mark this story `completed` once the PR is merged.
-status: Draft
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-14T21:02:01.188771930Z
-modified_at: 2026-11-14T21:02:18.766417509Z
+modified_at: 2026-11-14T22:37:01.116035222Z
 req_type: Story
 relationships:
 - rel_type:
@@ -41,6 +41,12 @@ relationships:
   target_id: 01a1dbc1-7f4f-7341-8da2-6bbd12e9ee4f
   created_at: 2026-11-14T21:02:18.766412331Z
   created_by: dirtlab
+comments:
+- id: 01a1dc34-f73c-76a2-9573-a4a465e1d0b2
+  author: aida-auto-bump
+  content: 'Auto-completed: PR #4060 merged without a reviewer session (the review story was never queued past Draft).'
+  created_at: 2026-11-14T22:37:01.116033930Z
+  modified_at: 2026-11-14T22:37:01.116033930Z
 history:
 - id: 01a1dbde-2232-7fd2-813c-d1f9ba97c1ae
   author: dirtlab
@@ -58,6 +64,13 @@ history:
   author: joe
   timestamp: 2026-11-14T21:41:08.347692261Z
   changes: []
+- id: 01a1dc34-f73c-76a2-9573-a4908539022a
+  author: aida-auto-bump
+  timestamp: 2026-11-14T22:37:01.116022429Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Completed
 filed_at:
   code_sha: 3484adef6ebc25d80a865cb1d1956cff3c31c8d6
   branch: story-b6b1278890774ef993d2ebc327862470-751
@@ -67,3 +80,7 @@ filed_at:
   vendor: claude
   session: 01a1dbcbb140
   harness_version: 2.1.319 (Claude Code)
+implementation_info:
+  implemented: false
+  completed_at: 2026-11-14T22:37:01.116017815Z
+  completion_sha: 72cfa08d38a826f2e27acbb0e5c322fff8b29e81
