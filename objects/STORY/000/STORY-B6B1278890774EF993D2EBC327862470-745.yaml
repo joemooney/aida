@@ -37,7 +37,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-14T18:18:20.399960794Z
-modified_at: 2026-11-14T22:04:11.723147155Z
+modified_at: 2026-11-14T22:14:34.609838583Z
 req_type: Story
 tags:
 - agent-ergonomics
@@ -116,6 +116,13 @@ comments:
   content: 'Friction (advisor, 2026-11-14 15:06): ''aida pr auto-queue-review'' on a promotion PR (#4064, eight trailer IDs) files the review story (STORY-2831) and then fails on ''aida rel add ... --type implements'' (''implements'' isn''t a standard relationship type), so the story is never queued and ''aida queue work PR-4064 --role reviewer'' is refused ''no queued review story''. Workaround: aida queue add STORY-2831 --for reviewer, relaunch. Cost 8 minutes of review time on the promotion.'
   created_at: 2026-11-14T22:04:11.723147155Z
   modified_at: 2026-11-14T22:04:11.723147155Z
+  session_id: 01a1dbd6-f8cd-7313-a123-75ebbeaa2afd
+  harness_version: 2.1.325 (Claude Code)
+- id: 01a1dc20-6b71-7021-9558-ce1f46b54e2f
+  author: joe
+  content: 'Friction (advisor, 2026-11-14 15:17): ''aida pr train 3956'' on a PR that had just been ejected and held spent 7+ minutes in a child ''git log --all --format= -p --unified=0 -G^(spec_id|agreed_id): ... -- objects/'' over the store history (cwd .aida-store), blocking the serial default deputy; the first attempt 2 minutes earlier ejected in under a minute. Cancelled via ''aida deputy shell cancel'' (no train PR existed). The same scan runs in ''aida pr auto-queue-review'' (3+ min).'
+  created_at: 2026-11-14T22:14:34.609838583Z
+  modified_at: 2026-11-14T22:14:34.609838583Z
   session_id: 01a1dbd6-f8cd-7313-a123-75ebbeaa2afd
   harness_version: 2.1.325 (Claude Code)
 history:
