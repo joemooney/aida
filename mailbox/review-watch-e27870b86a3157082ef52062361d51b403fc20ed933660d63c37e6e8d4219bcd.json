@@ -1,0 +1,18 @@
+{
+  "id": "review-watch-e27870b86a3157082ef52062361d51b403fc20ed933660d63c37e6e8d4219bcd",
+  "thread_id": "review-watch-e27870b86a3157082ef52062361d51b403fc20ed933660d63c37e6e8d4219bcd",
+  "from": "review-watch",
+  "to": {
+    "kind": "agent",
+    "agent": "joemooney"
+  },
+  "timestamp": 1794632401968,
+  "body": "PR-3950 at 059e1b8fe065f5711bcefb64c8906e015c9bb2fe: the review by claude-reviewer (claude reviewer seat) recorded `request-changes` with 2 finding(s), round 2 of 2. The findings are in `.aida/gate-ledger/PR-3950.jsonl`. This was the last review round under the two-round cap: a new head is not reviewed automatically, and the advisor decides the next step.",
+  "subject": "PR-3950: review requested changes (round 2 of 2)",
+  "urgent": false,
+  "intent": "request",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "explicit"
+}
