@@ -1,0 +1,31 @@
+id: 01a1da6f-4a3a-78f3-bc3d-74b3e45fb084
+spec_id: STORY-73022632d35647cca3858b18ac0723e3-012
+title: 'Review PR-4033: [AI:codex] fix(store): complete semantic pull and fail-closed writes (BUG-2501)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `(no-sess`) for branch `bug-b6b1278890774ef993d2ebc327862470-266`.
+
+  - PR: <https://github.com/joemooney/aida/pull/4033>
+  - Branch: `bug-b6b1278890774ef993d2ebc327862470-266` → `main`
+
+  ## Covers
+
+  - BUG-2501
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 4033` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-14T14:21:29.018429569Z
+modified_at: 2026-11-14T14:21:29.018429569Z
+req_type: Story
+filed_at:
+  code_sha: b63e2f597e16c70f98256ffa15d5481cb46c54b0
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: bc24a1e688
