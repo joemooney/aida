@@ -1,0 +1,30 @@
+id: 01a1d9d8-112c-7c40-a968-67db91cb2d2f
+spec_id: BUG-b6b1278890774ef993d2ebc327862470-340
+agreed_id: BUG-2575
+title: 'queue rework triage test fails on dell1 over ssh: the hermetic advisor seat is not honoured'
+description: |-
+  status_sections::queue_rework_tests::triage_loop_r_keystroke_lands_approved_queued_and_emits_spec_requeued fails on dell1 when run alone over ssh, under umask 022, at plain integration 9d260e5f7e7 (aida-cli-lib/src/tests/queue_rework_tests.rs:1624: left NeedsAttention, right Approved). CI passes it at the same commit (canary #3905), so the code is right and the test depends on something in the host environment.
+
+  The test takes an advisor seat through AmbientGuard::hermetic_with_seat_and and then presses r in rework_triage_loop. The spec stays NeedsAttention, so the rework was refused or skipped: the hermetic seat grant was most likely not accepted in an ssh session with no terminal (process binding or an ambient value the guard does not pin).
+
+  Reproduce: ssh dell1, umask 022, cargo test --profile agent -p aida-cli-lib --lib -- triage_loop_r_keystroke_lands_approved_queued_and_emits_spec_requeued.
+
+  Acceptance: the test passes on dell1 over ssh, or the guard pins whatever ambient state it reads, with the cause named. Not caused by BUG-2573 (umask 002 fixtures): it fails under umask 022 too.
+
+  Effect today: every targeted dell1 run that includes status_sections reports one failure that has to be explained by hand.
+status: Draft
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-14T11:36:18.476287136Z
+modified_at: 2026-11-14T11:36:18.476287136Z
+req_type: Bug
+filed_at:
+  code_sha: c219a07bf39e3e7210b8e3f14bf17708d20c3b5f
+  branch: integration
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: e81b5754d97
+  vendor: claude
+  session: 01a1d9b6-e721-73f1-9ad6-1343da1a030e
+  harness_version: 2.1.325 (Claude Code)
