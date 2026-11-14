@@ -10,12 +10,12 @@ description: |-
   Fix: add integration to the pull_request branches. A PR then gets the fast tier (fast-gates and fast-compile on hosted runners) on every head, as a PR into main does. The workflow is read from the PR's merge ref, so the change takes effect for integration PRs once it is on integration.
 
   Acceptance: a PR opened against integration after the change shows the ci-tier, fast-gates and fast-compile checks on its head. Tags: track:integration.
-status: InProgress
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-14T12:56:24.536092596Z
-modified_at: 2026-11-14T22:18:26.383123470Z
+modified_at: 2026-11-14T23:39:36.580554362Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -70,6 +70,20 @@ history:
   author: joe
   timestamp: 2026-11-14T22:18:27.766019009Z
   changes: []
+- id: 01a1dc6e-43c2-7140-ad0d-98bf378da6e1
+  author: aida-auto-bump
+  timestamp: 2026-11-14T23:39:36.258195255Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a1dc6e-4504-7ee1-8314-d79f4a7846ad
+  timestamp: 2026-11-14T23:39:36.580550523Z
+  agent: aida
+  commit_sha: 786738cea92618fee2d1eae01fe97b1d46eef12e
+  summary: 'AC verified: ci.yml:14 adds integration to pull_request branches; CI run 43599982383 on this integration-based PR head aab15d85 shows ci-tier: fast, fast gates and fast compile green. Base-dependent steps use github.base_ref. No defects.'
+  review_verdict: approved
 filed_at:
   code_sha: aa5de5d5ec762a52fcf366c321fd7c648d06086c
   branch: integration
@@ -79,3 +93,7 @@ filed_at:
   vendor: claude
   session: 01a1d9b6-e721-73f1-9ad6-1343da1a030e
   harness_version: 2.1.325 (Claude Code)
+implementation_info:
+  implemented: false
+  completed_at: 2026-11-14T23:39:36.258188361Z
+  completion_sha: 786738cea92618fee2d1eae01fe97b1d46eef12e
