@@ -5227,3 +5227,67 @@ fn story_2256_every_agent_subcommand_passes_the_default_new_rewrite() {
         AgentCommand::Wake { .. }
     ));
 }
+
+// trace:STORY-2765 | ai:codex
+#[test]
+fn story_2765_direct_track_admission_precedes_setup() {
+    let _env = crate::test_env::EnvVarsGuard::set(&[("AIDA_TRACK", "main")]);
+    let tmp = TempDir::new().unwrap();
+    let storage = crate::test_env::home_fixture_storage(tmp.path().join(".aida-store"));
+    let mut req = Requirement::new("track admission".into(), String::new());
+    req.spec_id = Some("STORY-2765".into());
+    req.status = RequirementStatus::Approved;
+    req.tags.insert("track:integration".into());
+    let mut store = aida_core::RequirementsStore::default();
+    store.requirements.push(req);
+    storage.save(&store).unwrap();
+    for background in [false, true] {
+        let error = crate::agent_launch::preflight_agent_new_track(
+            tmp.path(),
+            Some("implementer"),
+            Some("STORY-2765"),
+            false,
+            background,
+        )
+        .unwrap_err();
+        assert!(error.to_string().contains("set AIDA_TRACK=integration"));
+    }
+    for (role, resume) in [("reviewer", false), ("implementer", true)] {
+        crate::agent_launch::preflight_agent_new_track(
+            tmp.path(),
+            Some(role),
+            Some("STORY-2765"),
+            resume,
+            false,
+        )
+        .unwrap();
+    }
+    assert_eq!(
+        storage.load().unwrap().requirements[0].status,
+        RequirementStatus::Approved
+    );
+    assert!(!tmp.path().join(".aida/sessions").exists());
+    drop(_env);
+    let _matching = crate::test_env::EnvVarsGuard::set(&[("AIDA_TRACK", "integration")]);
+    crate::agent_launch::preflight_agent_new_track(
+        tmp.path(),
+        None,
+        Some("STORY-2765"),
+        false,
+        true,
+    )
+    .unwrap();
+    store.requirements[0].tags.insert("track:main".into());
+    storage.save(&store).unwrap();
+    let error = crate::agent_launch::preflight_agent_new_track(
+        tmp.path(),
+        None,
+        Some("STORY-2765"),
+        false,
+        false,
+    )
+    .unwrap_err();
+    assert!(error
+        .to_string()
+        .contains("tagged for several tracks (integration, main)"));
+}

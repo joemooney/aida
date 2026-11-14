@@ -3334,6 +3334,20 @@ pub(crate) fn agent_new_with_config_wake(
         return Ok(());
     }
 
+    // Resume selection has returned; only a fresh launch reaches admission.
+    // trace:STORY-2765 | ai:codex
+    preflight_agent_new_track(
+        &project_root,
+        role.as_deref().or_else(|| {
+            existing_owner
+                .as_ref()
+                .and_then(|lease| lease.role.as_deref())
+        }),
+        spec.as_deref(),
+        false,
+        false,
+    )?;
+
     // trace:STORY-2254 | ai:claude
     refuse_detached_scope_owner(&project_root, role.as_deref(), spec.as_deref())?;
     // A launch that fails before its child spawns releases its handle.
@@ -3688,6 +3702,10 @@ pub(crate) fn agent_new_bg_dispatch(
     )? {
         return Ok(());
     }
+
+    // Resume selection has returned; only a fresh launch reaches admission.
+    // trace:STORY-2765 | ai:codex
+    preflight_agent_new_track(&project_root, role.as_deref(), spec.as_deref(), false, true)?;
 
     // trace:STORY-2254 | ai:claude
     refuse_detached_scope_owner(&project_root, role.as_deref(), spec.as_deref())?;
@@ -4315,6 +4333,47 @@ pub(crate) fn agent_new_scope_role(scope: &str) -> &'static str {
     } else {
         "implementer"
     }
+}
+
+/// Fresh direct launches share queue track admission before resource setup.
+/// Explicit resumes and review scopes retain their existing admission.
+// trace:STORY-2765 | ai:codex
+pub(crate) fn preflight_agent_new_track(
+    project_root: &std::path::Path,
+    role: Option<&str>,
+    spec: Option<&str>,
+    resume: bool,
+    background: bool,
+) -> Result<()> {
+    let Some(spec) = spec else {
+        return Ok(());
+    };
+    let role = role.unwrap_or_else(|| agent_new_scope_role(spec));
+    if resume || canonical_role_name(role) != "implementer" {
+        return Ok(());
+    }
+    let path = aida_core::store_locate::detect_distributed_store_from(project_root)
+        .unwrap_or_else(|| project_root.join(".aida-store"));
+    let store = Storage::new(path).load()?;
+    let req = store
+        .requirements
+        .iter()
+        .find(|req| spec_matches(req, spec))
+        .ok_or_else(|| anyhow::anyhow!("Unknown spec: {spec}"))?;
+    let unattended = background
+        || aida_core::exec_context::Environment::capture()
+            .var("AIDA_HEADLESS")
+            .ok()
+            .as_deref()
+            == Some("1");
+    if let Some(refusal) = crate::queue_cmd::track_refusal(&req.tags, &req.status, unattended) {
+        anyhow::bail!(
+            "{}",
+            crate::queue_cmd::queue_fresh_pickup_reason_label(&refusal)
+                .expect("track refusals have a reason")
+        );
+    }
+    Ok(())
 }
 
 // Agent-new has always required delegated grants for seated children. Keep
