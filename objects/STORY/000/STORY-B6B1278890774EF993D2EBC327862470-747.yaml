@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-14T18:22:12.152871570Z
-modified_at: 2026-11-14T21:18:19.927342670Z
+modified_at: 2026-11-14T22:03:29.381668913Z
 req_type: Story
 tags:
 - docs:impacted
@@ -78,6 +78,25 @@ comments:
   modified_at: 2026-11-14T21:18:19.927342670Z
   session_id: 01a1dbd6-f8cd-7313-a123-75ebbeaa2afd
   harness_version: 2.1.325 (Claude Code)
+- id: 01a1dc16-44e5-7a22-b3d6-2136093769e3
+  author: joe
+  content: |-
+    Native-seat advisor-ruling fix ready, edits uncommitted for host publication.
+
+    Changed aida-cli-lib/src/gate/approval.rs and aida-cli-lib/src/pr_train.rs: inject a lazy base-observation callback from LiveChecks, reusing the forge resolved by pr_train_check.rs. Removed forge_for_kind and peek_forge_kind from approval.rs; ordinary merge paths retain forge_for. gate/orchestrator_leaves.rs is unchanged.
+
+    Launcher validation, all exit 0:
+    - story_1888_gate_paths: 52 passed, including the exact failing inventory test; job j20261114T213359905-3591104-0.
+    - story_2824_train_check_tests: 10 passed; job j20261114T213435349-3593672-0.
+    - make check-ci-fast: all 48 gates passed, including 51 Rust structural tests; job j20261114T214940308-3697523-0. Supersedes earlier interrupted direct attempt.
+    - rustfmt checks on both changed files and git diff --check pass.
+
+    Runner emitted overlay-stale cache-generation warnings; optional network fetches in some guards failed and those guards passed with local refs. Fixed Codegraph client missing; rg confirmed caller, doctor reports unreachable index.
+
+    Host follow-up: preserve PR-4053 hold; delta review with ci:full applied at review launch. No commit, push, PR, merge, review verdict or queue completion performed in seat. Needs Attention status remains: promotion refused for lack of advisor authority. MCP comment transport closed, so recording via CLI.
+  created_at: 2026-11-14T22:03:29.381668913Z
+  modified_at: 2026-11-14T22:03:29.381668913Z
+  session_id: 01a1dbf9b94d
 history:
 - id: 01a1db50-9f3b-76d0-bb89-e5b424c233d5
   author: aida-session-start
