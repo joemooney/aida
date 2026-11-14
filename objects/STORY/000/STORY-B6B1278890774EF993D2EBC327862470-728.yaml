@@ -1,0 +1,25 @@
+id: 01a1d999-8037-7703-afd6-40459071fabd
+spec_id: STORY-b6b1278890774ef993d2ebc327862470-728
+agreed_id: STORY-2805
+title: 'STORY-2772 slice 2: train member gate runs integration promotion-check for promote/integration-* heads'
+description: 'Child of STORY-2772 (advisor signoff 2026-11-14 03:27, split (a)). The train member gate runs the same constituent check as ''aida integration promotion-check'' for any member whose head branch is promote/integration-*, so a promotion cannot ship with a constituent unapproved at its merged head even if nobody ran the command at cut time. Main track, train gate code (gate/ protected path): review before merge. Blocked by STORY-2772 slice 1.'
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-14T10:27:58.135719171Z
+modified_at: 2026-11-14T10:27:58.135719171Z
+req_type: Story
+tags:
+- gate
+- integration
+- track:main
+filed_at:
+  code_sha: e81b5754d976b81d044bb5aff1f29ba97aeaa730
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 66d456dc13e
+  vendor: claude
+  session: 01a1d8f3-f948-7072-b174-fa9507ed074b
+  harness_version: 2.1.325 (Claude Code)
