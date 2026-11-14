@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-11T12:17:47.476312683Z
-modified_at: 2026-11-14T19:30:43.039947656Z
+modified_at: 2026-11-14T20:22:20.355471504Z
 req_type: Task
 relationships:
 - rel_type: BlockedBy
@@ -108,6 +108,13 @@ comments:
   modified_at: 2026-11-14T19:30:43.039947656Z
   session_id: 01a1db7f0585
   harness_version: 2.1.319 (Claude Code)
+- id: 01a1dbb9-a9c3-7230-ae72-8836832b16d8
+  author: joe
+  content: 'Advisor ruling (2026-11-14 13:24): PR-3994 approved at 64e1fd9 but its full-tier run is red on its own change, CI (lib-1), 3 of 7745: gate::mandate_gates::story_1888_gate_paths_tests::every_floor_source_file_carries_the_marker (story_1888_gate_paths_tests.rs:600), every_gate_module_is_a_dispatch_module_a_kernel_or_an_orchestrator, no_unprotected_file_reexports_gate_items (:799). The moved gate/agent_registry test_support files trip the gate-path ratchets. Fix the cause, not the ratchet: give each new file under gate/ the floor marker and its module classification, and do not re-export gate items from an unprotected file (route test-only re-exports through the protected module). Never weaken or allow-list the ratchet. Gate: cargo test -p aida-cli-lib --lib story_1888_gate_paths plus make check-ci-compile and check-ci-fast, then push. Merge hold added; delta review follows.'
+  created_at: 2026-11-14T20:22:20.355471504Z
+  modified_at: 2026-11-14T20:22:20.355471504Z
+  session_id: 01a1db6d-e689-7532-9eef-772722add87b
+  harness_version: 2.1.325 (Claude Code)
 history:
 - id: 01a1ca8b-157a-7c50-9f73-dc13d565bf63
   author: joe
