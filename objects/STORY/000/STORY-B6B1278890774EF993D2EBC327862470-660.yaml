@@ -23,7 +23,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-12T19:11:56.371806442Z
-modified_at: 2026-11-14T08:49:38.809419774Z
+modified_at: 2026-11-14T13:03:35.322502816Z
 req_type: Story
 tags:
 - operator-held
@@ -351,6 +351,13 @@ comments:
   created_at: 2026-11-14T08:49:38.809419774Z
   modified_at: 2026-11-14T08:49:38.809419774Z
   session_id: 01a1d8f3-f948-7072-b174-fa9507ed074b
+  harness_version: 2.1.325 (Claude Code)
+- id: 01a1da27-f99a-76d1-b90b-25ac8ad55e63
+  author: joe
+  content: Commit cdccd1a7731 references this requirement
+  created_at: 2026-11-14T13:03:35.322502816Z
+  modified_at: 2026-11-14T13:03:35.322502816Z
+  session_id: 01a1da22-e053-75c3-9cf4-7138db5805dd
   harness_version: 2.1.325 (Claude Code)
 history:
 - id: 01a1d175-992b-7501-a0fb-89a007208ac0
