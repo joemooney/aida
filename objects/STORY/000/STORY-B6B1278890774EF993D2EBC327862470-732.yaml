@@ -18,7 +18,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-14T12:41:27.454869454Z
-modified_at: 2026-11-14T16:15:23.618616486Z
+modified_at: 2026-11-14T20:12:50.248064152Z
 req_type: Story
 tags:
 - area:ci
@@ -144,6 +144,13 @@ comments:
   created_at: 2026-11-14T15:59:34.262907988Z
   modified_at: 2026-11-14T15:59:34.262907988Z
   session_id: 01a1dab1-9447-7d22-b5ff-0c9084e122ea
+  harness_version: 2.1.325 (Claude Code)
+- id: 01a1dbb0-f6c8-75a0-b0e5-a974fe915ad3
+  author: joe
+  content: 'Advisor (2026-11-14 13:15): train ejected PR-4027 at a31c450 (0 landed): its diff changes when stacked on main (patch-id 140b700e61 approved, fee46c6f65 in the train). Main merged into the PR (head ffc4b6d), merge hold added, independent re-review queued; the ci:full label re-runs the full tier at the new head.'
+  created_at: 2026-11-14T20:12:50.248064152Z
+  modified_at: 2026-11-14T20:12:50.248064152Z
+  session_id: 01a1db6d-e689-7532-9eef-772722add87b
   harness_version: 2.1.325 (Claude Code)
 history:
 - id: 01a1da15-71c2-7341-9db1-1661bad607cc
