@@ -1,0 +1,21 @@
+id: 01a1db4b-acb8-7f62-9b03-a36f911e5559
+spec_id: STORY-b6b1278890774ef993d2ebc327862470-747
+agreed_id: STORY-2824
+title: 'aida pr train --check N...: say whether each PR qualifies for a train right now, and why not'
+description: 'From the Agent CLI friction log (STORY-2822 item 13). Advisors re-implement train eligibility in shell (approved at exact head, no armed hold, checks green, passing ci-tier: full, failures only from superseded runs ignored) and got it wrong twice on 2026-11-14 (27 min of waits; stale cancelled rows read as red). Acceptance: (1) ''aida pr train --check N...'' and ''--check --all-open'' print one row per PR: eligible yes/no and the first failing gate with its remedy; (2) uses exactly the gates ''aida pr train'' applies plus the full-tier rule from STORY-2809 when configured; (3) changes nothing (no labels, no holds, no journal); (4) json output and exit 0 only if every named PR is eligible; (5) bounded time.'
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-14T18:22:12.152871570Z
+modified_at: 2026-11-14T18:22:12.152871570Z
+req_type: Story
+filed_at:
+  code_sha: 96fc262834527304fe85fc9ee32e4d04f1aaf4ea
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 5ea861d7358
+  vendor: claude
+  session: 01a1dab1-9447-7d22-b5ff-0c9084e122ea
+  harness_version: 2.1.325 (Claude Code)
