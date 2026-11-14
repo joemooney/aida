@@ -1,0 +1,18 @@
+{
+  "id": "deputy-shell-autoland-01a1d86c-a3c4-7f30-8076-4d2703217469",
+  "thread_id": "deputy-01a1d86c-a3c4-7f30-8076-4d2703217469",
+  "from": "deputy-shell:autoland",
+  "to": {
+    "kind": "agent",
+    "agent": "claude-advisor-114"
+  },
+  "timestamp": 1794696503812,
+  "body": "Script deputy \"autoland\" finished script job 01a1d86c-a3c4-7f30-8076-4d2703217469: rc 130 (exit).\nScript: #!/usr/bin/env bash\nTranscript: /home/joe/.aida/deputy-shell/autoland/jobs/01a1d86c-a3c4-7f30-8076-4d2703217469/transcript.log\nRead it with `aida deputy shell log 01a1d86c-a3c4-7f30-8076-4d2703217469 --name autoland`.\n`aida awaiting` lists it until you run `aida deputy shell ack 01a1d86c-a3c4-7f30-8076-4d2703217469 --name autoland`.\n",
+  "subject": "deputy script job 01a1d86c FAILED: rc 130",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "explicit"
+}
