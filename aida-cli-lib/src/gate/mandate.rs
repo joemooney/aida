@@ -7,7 +7,7 @@
 //! The git store is never consulted for authority. `.aida/events.jsonl`
 //! carries the audit copy (`MandateChanged`).
 //!
-//! Every load re-validates each record (24h cap, no future issue time, the
+//! Every load re-validates each record (the [`max_ttl`] cap, no future issue time, the
 //! advisor seat and known scope, the operator as principal, a 0600
 //! regular file owned by this uid, never a symlink); an invalid record is
 //! ignored with a warning and never shadows a valid one. Revocation is
@@ -40,7 +40,42 @@ pub(crate) const SCOPE_SHIP_HELD: &str = "ship-held";
 /// The only seat a mandate covers.
 pub(crate) const MANDATE_SEAT: &str = "advisor";
 pub(crate) const DEFAULT_TTL: Duration = Duration::hours(8);
+/// The default lifetime cap; [`max_ttl`] is the effective one.
 pub(crate) const MAX_TTL: Duration = Duration::hours(24);
+
+/// The effective mandate lifetime cap: `[mandate] max_ttl_hours` in the
+/// global `~/.aida/config.toml` (default [`MAX_TTL`]), through the seat
+/// grant's loader: a project value may only lower it, and it never exceeds
+/// the one 168h hard ceiling. Read from disk on every call, never cached.
+// trace:STORY-2828 | ai:claude
+pub(crate) fn max_ttl() -> super::seat_authority::HourCap {
+    // A test pins the cap on its own thread: the process environment is
+    // shared with every mandate test running beside it.
+    #[cfg(test)]
+    if let Some(cap) = TEST_MAX_TTL.with(|c| c.get()) {
+        return cap;
+    }
+    super::seat_authority::resolve_hour_cap_here(
+        super::seat_authority::MANDATE_MAX_TTL_KEY,
+        MAX_TTL.num_hours() as u32,
+    )
+}
+
+#[cfg(test)]
+thread_local! {
+    pub(crate) static TEST_MAX_TTL: std::cell::Cell<Option<super::seat_authority::HourCap>> =
+        const { std::cell::Cell::new(None) };
+}
+
+/// `24h (<where the cap was read from, and the key that changes it>)`.
+// trace:STORY-2828 | ai:claude
+fn cap_text(cap: &super::seat_authority::HourCap) -> String {
+    format!(
+        "{}h ({})",
+        cap.hours,
+        cap.origin(super::seat_authority::MANDATE_MAX_TTL_KEY)
+    )
+}
 /// Clock skew tolerated on a record's `issued_at`.
 pub(crate) const ISSUE_SKEW: Duration = Duration::minutes(5);
 /// The tag that keeps a spec human-only whatever the mandate says.
@@ -416,7 +451,13 @@ fn tombstone(dir: &Path, id: &str) -> Option<(DateTime<Utc>, Option<String>)> {
 
 /// Why a parsed record is not a valid mandate for `principal` at `now`.
 // trace:STORY-1698 | ai:claude
-fn record_problem(m: &Mandate, stem: &str, principal: &str, now: DateTime<Utc>) -> Option<String> {
+fn record_problem(
+    m: &Mandate,
+    stem: &str,
+    principal: &str,
+    now: DateTime<Utc>,
+    cap: &super::seat_authority::HourCap,
+) -> Option<String> {
     if m.id != stem {
         return Some("its id does not match its file name".into());
     }
@@ -440,13 +481,14 @@ fn record_problem(m: &Mandate, stem: &str, principal: &str, now: DateTime<Utc>) 
     // be a chain in time order that ends at the record's expiry.
     // trace:STORY-B6B1278890774EF993D2EBC327862470-166 | ai:claude
     let ttl = m.expires_at - m.lifetime_start();
-    if ttl <= Duration::zero() || ttl > MAX_TTL {
-        return Some("its lifetime exceeds the 24h cap".into());
+    // trace:STORY-2828 | ai:claude
+    if ttl <= Duration::zero() || ttl > cap.duration() {
+        return Some(format!("its lifetime exceeds the {}h cap", cap.hours));
     }
     if m.issued_at > now + ISSUE_SKEW || m.lifetime_start() > now + ISSUE_SKEW {
         return Some("it claims to be issued in the future".into());
     }
-    if let Some(why) = renewal_problem(m) {
+    if let Some(why) = renewal_problem(m, cap) {
         return Some(why);
     }
     None
@@ -456,9 +498,14 @@ fn record_problem(m: &Mandate, stem: &str, principal: &str, now: DateTime<Utc>) 
 /// previous one in time, extends from the expiry the previous one set, and
 /// the last one sets the record's expiry.
 // trace:STORY-B6B1278890774EF993D2EBC327862470-166 | ai:claude
-fn renewal_problem(m: &Mandate) -> Option<String> {
-    if m.original_ttl() <= Duration::zero() || m.original_ttl() > MAX_TTL {
-        return Some("its original lifetime exceeds the 24h cap".into());
+fn renewal_problem(m: &Mandate, cap: &super::seat_authority::HourCap) -> Option<String> {
+    // trace:STORY-2828 | ai:claude
+    let max = cap.duration();
+    if m.original_ttl() <= Duration::zero() || m.original_ttl() > max {
+        return Some(format!(
+            "its original lifetime exceeds the {}h cap",
+            cap.hours
+        ));
     }
     let mut since = m.issued_at;
     let mut expiry = m.issued_at + m.original_ttl();
@@ -484,8 +531,8 @@ fn renewal_problem(m: &Mandate) -> Option<String> {
             return Some("its renewal lineage renews an already-expired mandate".into());
         }
         let ttl = r.expires_at - r.renewed_at;
-        if ttl <= Duration::zero() || ttl > MAX_TTL {
-            return Some("a renewal exceeds the 24h cap".into());
+        if ttl <= Duration::zero() || ttl > max {
+            return Some(format!("a renewal exceeds the {}h cap", cap.hours));
         }
         since = r.renewed_at;
         expiry = r.expires_at;
@@ -507,6 +554,8 @@ pub(crate) fn load_valid(
     };
     let mut valid = Vec::new();
     let mut warnings = Vec::new();
+    // One read of the cap per load. trace:STORY-2828 | ai:claude
+    let cap = max_ttl();
     for entry in entries.flatten() {
         let path = entry.path();
         let (Some(stem), Some(ext)) = (
@@ -533,7 +582,7 @@ pub(crate) fn load_valid(
                 continue;
             }
         };
-        if let Some(why) = record_problem(&m, stem, principal, now) {
+        if let Some(why) = record_problem(&m, stem, principal, now, &cap) {
             warnings.push(format!("ignoring mandate record {name}: {why}"));
             continue;
         }
@@ -619,28 +668,35 @@ pub(crate) fn recheck(
     }
 }
 
-/// Parse `--ttl`: `<n>h` or `<n>m`, more than zero and at most [`MAX_TTL`].
+/// Parse `--ttl`: `<n>h` or `<n>m`, more than zero and at most [`max_ttl`].
 // trace:STORY-1698 | ai:claude
 pub(crate) fn parse_ttl(raw: &str) -> Result<Duration> {
-    parse_duration_flag(
-        raw,
-        "--ttl",
-        "--ttl may be at most 24h; extend an active mandate with `aida mandate renew`",
-    )
+    parse_duration_flag(raw, "--ttl", |cap| {
+        format!(
+            "--ttl may be at most {}; extend an active mandate with `aida mandate renew`",
+            cap_text(cap)
+        )
+    })
 }
 
-/// Parse `aida mandate renew --for`: the same grammar and [`MAX_TTL`] cap as
+/// Parse `aida mandate renew --for`: the same grammar and [`max_ttl`] cap as
 /// `--ttl`, with errors that name `--for` and no "use renew" hint.
 // trace:STORY-B6B1278890774EF993D2EBC327862470-166.ac139435 | ai:claude
 pub(crate) fn parse_renew_for(raw: &str) -> Result<Duration> {
-    parse_duration_flag(
-        raw,
-        "--for",
-        "--for may be at most 24h; a renewal runs at most 24h from now",
-    )
+    parse_duration_flag(raw, "--for", |cap| {
+        format!(
+            "--for may be at most {}; a renewal runs at most {}h from now",
+            cap_text(cap),
+            cap.hours
+        )
+    })
 }
 
-fn parse_duration_flag(raw: &str, flag: &str, too_long: &str) -> Result<Duration> {
+fn parse_duration_flag(
+    raw: &str,
+    flag: &str,
+    too_long: impl Fn(&super::seat_authority::HourCap) -> String,
+) -> Result<Duration> {
     let raw = raw.trim().to_ascii_lowercase();
     let (digits, unit) = raw.split_at(raw.len().saturating_sub(1));
     let n: i64 = digits
@@ -654,8 +710,10 @@ fn parse_duration_flag(raw: &str, flag: &str, too_long: &str) -> Result<Duration
     if ttl <= Duration::zero() {
         bail!("{flag} must be more than zero");
     }
-    if ttl > MAX_TTL {
-        bail!("{too_long}");
+    // trace:STORY-2828 | ai:claude
+    let cap = max_ttl();
+    if ttl > cap.duration() {
+        bail!("{}", too_long(&cap));
     }
     Ok(ttl)
 }
@@ -767,7 +825,7 @@ pub(crate) fn renew_reporting_revival(
 /// scopes, supervised flag, protected-path opt-in and reason unless
 /// `overrides` names them (STORY-2771); each change is recorded on the
 /// [`Renewal`]. The expiry becomes `now + ttl` (default: the original
-/// duration, at most [`MAX_TTL`]).
+/// duration, at most [`max_ttl`]).
 ///
 /// - An active mandate is extended in place: same id and issuance, and a
 ///   [`Renewal`] is appended to its lineage. The third value is `None`.
@@ -804,9 +862,14 @@ fn extend(
             bail!("no renewable mandate; run: aida mandate start --ship-held");
         }
     };
-    let ttl = ttl.unwrap_or_else(|| m.original_ttl()).min(MAX_TTL);
+    // trace:STORY-2828 | ai:claude
+    let cap = max_ttl();
+    let ttl = ttl.unwrap_or_else(|| m.original_ttl()).min(cap.duration());
     if ttl <= Duration::zero() {
-        bail!("a mandate lasts more than zero and at most 24h");
+        bail!(
+            "a mandate lasts more than zero and at most {}",
+            cap_text(&cap)
+        );
     }
     // trace:STORY-2733 | ai:codex
     // trace:STORY-2771 | ai:claude
@@ -947,8 +1010,13 @@ fn mint(
     if let Err(err) = human() {
         bail!("a mandate can only be started by a human at an interactive terminal ({err})");
     }
-    if ttl <= Duration::zero() || ttl > MAX_TTL {
-        bail!("a mandate lasts more than zero and at most 24h");
+    // trace:STORY-2828 | ai:claude
+    let cap = max_ttl();
+    if ttl <= Duration::zero() || ttl > cap.duration() {
+        bail!(
+            "a mandate lasts more than zero and at most {}",
+            cap_text(&cap)
+        );
     }
     let principal = principal.trim();
     if principal.is_empty() {
@@ -1940,3 +2008,7 @@ mod story_b6b_166_mandate_renew_tests;
 #[cfg(test)]
 #[path = "tests/story_2771_mandate_renew_overrides_tests.rs"]
 mod story_2771_mandate_renew_overrides_tests;
+// trace:STORY-2828 | ai:claude
+#[cfg(test)]
+#[path = "tests/story_2828_mandate_cap_tests.rs"]
+mod story_2828_mandate_cap_tests;

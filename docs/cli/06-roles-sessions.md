@@ -1090,6 +1090,16 @@ watcher is parking, with its reason and since when (`review_watch_skipped` in
 `--json`). Changes that are only waiting for a reviewer slot, or that are under
 review or already reviewed, are not listed.
 
+<!-- trace:STORY-2821 | ai:claude -->
+Which stale heads are held back is the project's `[review] stale_base`
+setting in `.aida/config.toml` (see `aida config` in Project setup). The
+paragraphs above describe the default, `refuse-on-overlap`. Under
+`refuse-on-conflict` the watcher reviews a stale head that overlaps its base
+and notifies the author only when the base no longer merges cleanly into the
+head; only such a conflicting head reaches the branch update and the advisor
+routing. Under `warn` every stale head is reviewed. In both, the watcher never
+runs `gh pr update-branch` on a head that merely overlaps its base.
+
 On enrolled publishing hosts, watcher discovery first synchronizes committed
 publications. Distributed admission additionally requires explicit trusted
 `[review] admission_hub` and `admission_ref` settings. A signed claim at the single

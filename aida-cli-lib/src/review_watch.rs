@@ -1457,6 +1457,45 @@ fn admitted(attempt: &Attempt) -> bool {
     matches!(attempt.phase, Phase::Reserved | Phase::Running)
 }
 
+/// Whether the project's `[review] stale_base` policy keeps a probed head
+/// from review: by default an overlapping stale head, under
+/// `refuse-on-conflict` only one the base no longer merges into cleanly, and
+/// under `warn` none. An unreadable or unknown setting is an error.
+// trace:STORY-2821 | ai:claude
+fn stale_refused(root: &Path, change: &forge::Change) -> Result<bool> {
+    let overlap = change
+        .overlap
+        .context("base-branch overlap evidence is unknown")?;
+    Ok(crate::review_helpers::read_stale_base_policy(root)?.refuses(overlap, change.conflict))
+}
+
+/// The stale-head follow-up (`update::follow_up`) for the heads the project's
+/// policy refuses, so the watcher never asks the forge to merge the base into
+/// a head that policy lets through. Under the default policy every notified
+/// head is refused and is settled before the base probe (`probed` false).
+/// Under `refuse-on-conflict` only a head the probe found conflicting is, so
+/// it is settled after the probe. Under `warn` no head is.
+// trace:STORY-2821 | ai:claude
+fn stale_follow_up(
+    root: &Path,
+    store: &Store,
+    change: &forge::Change,
+    probed: bool,
+    live: update::Liveness<'_>,
+    updater: update::Updater<'_>,
+) -> Result<Option<String>> {
+    use crate::pr_rebase::StaleBasePolicy;
+    let due = match crate::review_helpers::read_stale_base_policy(root)? {
+        StaleBasePolicy::RefuseOnOverlap => !probed,
+        StaleBasePolicy::RefuseOnConflict => probed && stale_refused(root, change)?,
+        StaleBasePolicy::Warn => false,
+    };
+    if !due {
+        return Ok(None);
+    }
+    update::follow_up(root, store, change, live, updater)
+}
+
 fn select(
     store: &Store,
     change: &forge::Change,
@@ -1480,9 +1519,9 @@ fn select_with_coverage(
     // Resolve remote proof evidence before taking the shared runtime lock.
     // Suppression is review coverage only: readiness still checks CI at H2.
     let carried = coverage();
-    let overlap = change
-        .overlap
-        .context("base-branch overlap evidence is unknown")?;
+    // Whether this head's staleness keeps it from review under the project's
+    // `[review] stale_base` policy. trace:STORY-2821 | ai:claude
+    let overlap = stale_refused(&store.root, change)?;
     store.transaction(&key, |state| {
         // trace:STORY-2571 | ai:codex
         service::check_controller_locked(&store.root, &store.dir)?;
@@ -1639,11 +1678,16 @@ fn probe_unneeded_with_coverage(
 ) -> Result<Option<String>> {
     let key = change.key();
     let head = change.head.as_str();
+    // A sent notice settles the head only under the default policy; under the
+    // others the head is probed, since an overlapping head may be reviewable.
+    // trace:STORY-2821 | ai:claude
+    let notice_settles = crate::review_helpers::read_stale_base_policy(&store.root)?
+        == crate::pr_rebase::StaleBasePolicy::RefuseOnOverlap;
     let recorded = store.transaction(&key, |state| {
         let Some(entry) = state.entries.get(&key) else {
             return Ok(None);
         };
-        if entry.notices.get(head).is_some_and(|n| n.sent) {
+        if notice_settles && entry.notices.get(head).is_some_and(|n| n.sent) {
             return Ok(Some((update::STALE_NOTIFIED.to_string(), false)));
         }
         Ok(entry
@@ -2135,7 +2179,7 @@ fn child_with_program(
                 anyhow::ensure!(
                     current.head == attempt.head
                         && current.key() == key
-                        && current.overlap == Some(false),
+                        && !stale_refused(root, &current)?,
                     "head changed before review dispatch"
                 );
                 round.set(store.round_for(key, attempt)?);
@@ -2366,7 +2410,7 @@ pub(crate) fn reviewer_launch_context(root: &Path, id: u64) -> Result<bool> {
         return Err(error);
     }
     anyhow::ensure!(
-        current.head == head && current.overlap == Some(false),
+        current.head == head && !stale_refused(root, &current)?,
         "review-watch head changed before reviewer launch; no review started"
     );
     let store = Store::open(root, &repository.identity)?;
@@ -2874,13 +2918,19 @@ fn watch_change(
     // A notified stale head whose author is gone gets its branch updated, or
     // is routed to the advisor, instead of waiting forever.
     // trace:BUG-2426 | ai:claude
-    if let Some(reason) = update::follow_up(
-        root,
-        store,
-        &change,
-        &|c| authors.author_live(root, c),
-        &|c| update::forge_update(root, repo, c),
-    )? {
+    // Which heads this covers follows the project's `[review] stale_base`
+    // policy (see `stale_follow_up`). trace:STORY-2821 | ai:claude
+    let follow_up = |change: &forge::Change, probed: bool| {
+        stale_follow_up(
+            root,
+            store,
+            change,
+            probed,
+            &|c| authors.author_live(root, c),
+            &|c| update::forge_update(root, repo, c),
+        )
+    };
+    if let Some(reason) = follow_up(&change, false)? {
         eprintln!("{key}: {reason}");
         record_skip(store, &change, Some(&reason))?;
         return report(root, store, &change, &live);
@@ -2893,6 +2943,11 @@ fn watch_change(
     }
     repo.probe(root, &mut change)
         .context("base evidence refused")?;
+    if let Some(reason) = follow_up(&change, true)? {
+        eprintln!("{key}: {reason}");
+        record_skip(store, &change, Some(&reason))?;
+        return report(root, store, &change, &live);
+    }
     crate::gate::seat_authority::validate_child_delegation(root, "reviewer")?;
     let action = select(
         store,
@@ -3351,6 +3406,10 @@ mod notice_tests;
 #[path = "tests/bug_2426_review_watch_update_tests.rs"]
 mod update_tests;
 
+#[cfg(test)]
+#[path = "tests/story_2821_stale_base_policy_tests.rs"]
+mod stale_policy_tests;
+
 // Exercise the real history/admission precheck from the two-clone publication
 // fixture without exposing watcher runtime internals to production callers.
 // trace:STORY-2492 | ai:codex
@@ -3370,6 +3429,7 @@ pub(crate) fn synced_history_precheck(root: &Path, id: u64, head: &str) -> Resul
             author: "fixture-author".into(),
             gitlab: false,
             overlap: None,
+            conflict: None,
             behind: None,
             head_branch: None,
         },
@@ -3400,6 +3460,7 @@ mod admission_fixture {
             author: "fixture-author".into(),
             gitlab: false,
             overlap: Some(false),
+            conflict: None,
             behind: Some(0),
             head_branch: None,
         };
@@ -3443,6 +3504,7 @@ pub(crate) fn fixture_admission_exit(
         author: "fixture-author".into(),
         gitlab: false,
         overlap: Some(false),
+        conflict: None,
         behind: Some(0),
         head_branch: None,
     };
@@ -3520,6 +3582,7 @@ pub(crate) fn fixture_admission_retry_cancel(
         author: "fixture-author".into(),
         gitlab: false,
         overlap: Some(false),
+        conflict: None,
         behind: Some(0),
         head_branch: None,
     };
@@ -3618,6 +3681,7 @@ pub(crate) fn fixture_admission_spawn_failure(
         author: "fixture-author".into(),
         gitlab: false,
         overlap: Some(false),
+        conflict: None,
         behind: Some(0),
         head_branch: None,
     };
