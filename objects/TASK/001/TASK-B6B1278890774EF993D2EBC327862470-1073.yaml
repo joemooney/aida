@@ -1197,12 +1197,28 @@ description: |
   ### finding-hash:a8474302
 
   No test covers the live read-only branches: LiveChecks::checked_corpus (no mirror arming), LiveChecks::mandate_cover (mandate gate, MANDATE_NOT_ASKED), peek_forge_kind, or pr_train_check_handler exit status. Tests script FakeChecks only.
+
+
+  ## Findings from STORY-2824
+  Reviewed sha: 231708f3eba43a29ea6a8e2fe6c695caf43f160b
+
+  ### finding-hash:24879d52
+
+  Read-only check can still repair .aida/config.toml: LiveChecks::message (pr_train.rs:1837) calls fetch_pr_ship_metadata_via_forge, which calls resolve_forge_kind (pr_cmd.rs:7216) and rewrites a stale [forge] provider = pure-git entry. The PR adds peek_forge_kind to avoid exactly this on the handler and approval paths. Fix: in read-only mode read title and body through self.forge.change_title_and_body(pr), and add a test.
+
+  ### finding-hash:0704b7b5
+
+  Gate::FullCi is a placeholder: pr_train.rs:1597-1598 enters FullCi and Corpus back to back with no rule, so the full-tier clause of acceptance 2 is unverified. PR-4027 (STORY-2809) inserts full_tier_gate at the same spot; it requests full CI and appends a skip event, so whichever PR lands second must make it honour read_only and enter Gate::FullCi, and add full-ci to the gate list in docs/cli/04-git-lifecycle.md.
+
+  ### finding-hash:a8474302
+
+  No test covers the live read-only branches: LiveChecks::checked_corpus (no mirror arming), LiveChecks::mandate_cover (mandate gate, MANDATE_NOT_ASKED), peek_forge_kind, or pr_train_check_handler exit status. Tests script FakeChecks only.
 status: Draft
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-13T20:01:56.623034248Z
-modified_at: 2026-11-14T20:41:45.077068234Z
+modified_at: 2026-11-14T20:41:50.719970068Z
 req_type: Task
 tags:
 - carried-finding:BUG-2543:2a99ebfc
@@ -1408,7 +1424,10 @@ tags:
 - carried-finding:STORY-2821:9dab249d
 - carried-finding:STORY-2821:ca169c0e
 - carried-finding:STORY-2821:e40f3f6c
+- carried-finding:STORY-2824:0704b7b5
+- carried-finding:STORY-2824:24879d52
 - carried-finding:STORY-2824:5b790bcc
+- carried-finding:STORY-2824:a8474302
 - carried-finding:STORY-2824:d7ad1d67
 - carried-finding:STORY-2824:e95a72ea
 - carried-finding:STORY-2824:fd4627d4
@@ -2104,6 +2123,11 @@ history:
 - id: 01a1dbcb-73f4-7590-b27a-94fa7ead6039
   author: joe
   timestamp: 2026-11-14T20:41:46.228435699Z
+  session_id: 01a1dbc79fe8
+  changes: []
+- id: 01a1dbcb-89f4-7223-8bec-67c222ab9b2c
+  author: joe
+  timestamp: 2026-11-14T20:41:51.860901902Z
   session_id: 01a1dbc79fe8
   changes: []
 filed_at:
