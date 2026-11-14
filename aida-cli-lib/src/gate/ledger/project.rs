@@ -252,6 +252,51 @@ pub(crate) fn newest_verdict_event(start: &Path, key: &str) -> Option<GateEvent>
     newest_of(verdict_events(&root, key))
 }
 
+/// The newest verdict event that speaks for change `pr` under `key`.
+///
+/// A spec key is shared by every change that ships the spec, so its newest
+/// event can be a verdict on some other change. Read for one change, a spec
+/// key answers with that change's own events and the spec's unbound ones; an
+/// event bound to another change counts only when it was recorded at `head`,
+/// the commit being judged. With no change (`pr` 0) or no head known, nothing
+/// is left out. A change key is read as [`newest_verdict_event`] reads it.
+// trace:BUG-2570 | ai:claude
+pub(crate) fn newest_verdict_event_for_change(
+    start: &Path,
+    key: &str,
+    pr: u64,
+    head: Option<&str>,
+) -> Option<GateEvent> {
+    let root = store_root(start).ok()?;
+    let mut events = verdict_events(&root, key);
+    if ChangeKey::parse(key).is_none() {
+        events.retain(|event| speaks_for_change(event, pr, head));
+    }
+    newest_of(events)
+}
+
+/// Whether `event`, read under a spec key, is evidence about change `pr` at
+/// `head` ([`newest_verdict_event_for_change`]).
+// trace:BUG-2570 | ai:claude
+fn speaks_for_change(event: &GateEvent, pr: u64, head: Option<&str>) -> bool {
+    let head = head.map(str::trim).filter(|head| !head.is_empty());
+    let (Some(bound), Some(head)) = (ChangeKey::parse(&event.change), head) else {
+        return true;
+    };
+    pr == 0
+        || bound.number == pr
+        || event
+            .head
+            .as_deref()
+            .is_some_and(|at| same_reviewed_sha(at, head))
+}
+
+/// Whether change `pr` has a verdict of its own on the ledger.
+// trace:BUG-2570 | ai:claude
+pub(crate) fn change_has_verdict(start: &Path, pr: u64) -> bool {
+    pr > 0 && newest_verdict_event(start, &ChangeKey::pr(pr).as_key()).is_some()
+}
+
 /// Select a review round before applying lifecycle annotations. An annotation
 /// carries no independent ordering authority against a legacy file: the source
 /// round must first win ordinary selection, then the exact-source overlay applies.
@@ -408,16 +453,16 @@ pub(crate) fn verdict_records(start: &Path, key: &str) -> Vec<JsonObj> {
         .collect()
 }
 
-/// [`verdict_records`] for one change through the strict reader: `Err` when
-/// the store root, the ledger or the change's file could not be read whole,
-/// so a caller never mistakes a corrupt or over-budget ledger for "no
-/// verdicts". Delivery-pending records are not acts of review and are left
-/// out.
+/// [`verdict_records`] for one change through the strict reader, each with
+/// the time the ledger took it: `Err` when the store root, the ledger or the
+/// change's file could not be read whole, so a caller never mistakes a
+/// corrupt or over-budget ledger for "no verdicts". Delivery-pending records
+/// are not acts of review and are left out.
 // trace:STORY-2768 | ai:claude
-pub(crate) fn change_verdict_records_checked(
+pub(crate) fn change_verdicts_checked(
     start: &Path,
     change: ChangeKey,
-) -> Result<Vec<JsonObj>, String> {
+) -> Result<Vec<(String, JsonObj)>, String> {
     let root = store_root(start)
         .map_err(|error| format!("the gate ledger's store could not be resolved: {error}"))?;
     let key = change.as_key();
@@ -426,12 +471,28 @@ pub(crate) fn change_verdict_records_checked(
     Ok(events
         .into_iter()
         .filter(|e| !e.is_spec_only() && terminal_annotation_matches(e, &key))
-        .filter_map(|e| e.verdict_record().cloned())
-        .filter(|record| {
+        .filter_map(|e| {
+            e.verdict_record()
+                .cloned()
+                .map(|record| (e.at.clone(), record))
+        })
+        .filter(|(_, record)| {
             !crate::gate::review_verdict::delivery_pending(&serde_json::Value::Object(
                 record.clone(),
             ))
         })
+        .collect())
+}
+
+/// [`change_verdicts_checked`] without the times.
+// trace:STORY-2768 | ai:claude
+pub(crate) fn change_verdict_records_checked(
+    start: &Path,
+    change: ChangeKey,
+) -> Result<Vec<JsonObj>, String> {
+    Ok(change_verdicts_checked(start, change)?
+        .into_iter()
+        .map(|(_, record)| record)
         .collect())
 }
 

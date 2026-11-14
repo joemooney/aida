@@ -5218,6 +5218,103 @@ fn bug2492_train_pending_inspection_waits_instead_of_rebuilding() {
     );
 }
 
+// trace:STORY-2691 | ai:codex
+#[test]
+fn story2691_automatic_empty_discovery_is_idle() {
+    ADVISOR_LOOP.with(|automatic| {
+        automatic.set(true);
+        // Both no open PRs and train-only discovery produce zero candidates.
+        assert!(automatic_idle(true, &[]));
+        assert!(!automatic_idle(true, &[7]));
+        assert!(!automatic_idle(false, &[]));
+        automatic.set(false);
+    });
+    assert!(!automatic_idle(true, &[]));
+}
+
+// trace:STORY-2691 | ai:codex
+#[test]
+fn story2691_settled_gate_refusals_eject_before_land_and_on_recovery() {
+    for reason in ["merge hold present", "approval withdrawn"] {
+        for recovery in [false, true] {
+            let dir = tempfile::tempdir().unwrap();
+            let train = train_of("main", &fms(&[1]));
+            let mut forge = FakeForge::mains(&["main"]);
+            forge.gates.insert(1, Err(reason.into()));
+            if recovery {
+                let mut entry = journal::Entry::new(train.clone(), "train/old-1".into());
+                entry.change_id = Some(901);
+                entry.step = journal::Step::Merge;
+                journal::activate(dir.path(), entry).unwrap();
+                journal::clear();
+                let mut rails =
+                    ForgeRails::new(&mut forge, "recovery".into()).with_journal(dir.path());
+                let outcome = rails.resume().unwrap();
+                assert_eq!(outcome.ejected.len(), 1);
+                assert!(outcome.ejected[0].reason.contains(reason));
+                assert!(journal::entries(dir.path()).unwrap().is_empty());
+            } else {
+                let mut rails = ForgeRails::new(&mut forge, "preland".into());
+                opened(&mut rails, &train);
+                let Landing::Refused(ejected) = rails.land(&train).unwrap() else {
+                    panic!("settled refusal must eject");
+                };
+                assert_eq!(ejected.len(), 1);
+                assert!(ejected[0].reason.contains(reason));
+            }
+            assert!(forge.merged.is_empty());
+            assert_eq!(forge.retired.len(), 1);
+        }
+    }
+}
+
+// trace:STORY-2691 | ai:codex
+#[test]
+fn story2691_recovered_last_member_is_logged_with_empty_discovery() {
+    for landed in [true, false] {
+        let dir = tempfile::tempdir().unwrap();
+        let train = train_of("main", &fms(&[1]));
+        let mut entry = journal::Entry::new(train, "train/old-1".into());
+        entry.change_id = Some(901);
+        entry.step = journal::Step::Merge;
+        journal::activate(dir.path(), entry).unwrap();
+        journal::clear();
+        let mut forge = FakeForge::mains(&["main"]);
+        forge.confirmation = Some(if landed {
+            crate::forge_observed::Confirmed::Positive
+        } else {
+            forge.gates.insert(1, Err("approval withdrawn".into()));
+            crate::forge_observed::Confirmed::Negative
+        });
+        let mut rails = ForgeRails::new(&mut forge, "recovery".into()).with_journal(dir.path());
+        let recovered = rails.resume().unwrap();
+        let mut output = Vec::new();
+        ADVISOR_LOOP.with(|automatic| {
+            automatic.set(true);
+            let idle = report_automatic_idle(true, &[], &recovered, &mut output);
+            // Idle must propagate a log failure instead of silently losing the
+            // only recovered rider's terminal outcome.
+            let failed_log =
+                report_automatic_idle(true, &[], &recovered, std::io::Cursor::new(&mut [][..]));
+            automatic.set(false);
+            assert!(failed_log.is_err());
+            assert!(idle.unwrap());
+        });
+        let output = String::from_utf8(output).unwrap();
+        if landed {
+            assert_eq!(recovered.landed.len(), 1);
+            assert!(output.contains("landed #1 ("), "{output}");
+        } else {
+            assert_eq!(recovered.ejected.len(), 1);
+            assert!(
+                output.contains("ejected #1: approval withdrawn"),
+                "{output}"
+            );
+        }
+        assert!(journal::entries(dir.path()).unwrap().is_empty());
+    }
+}
+
 // Reduced check-row fixture for recorded run 42913999193: seven CI matrix
 // checks and the skipped Release job identified by the review evidence.
 // trace:TASK-3782 | ai:codex
@@ -5630,4 +5727,51 @@ fn bug2547_abandon_cli_is_exclusive() {
             .try_parse_from(["aida", "pr", "train", "--abandon", "stale-1.json", extra])
             .is_err());
     }
+}
+
+// trace:STORY-2733 trace:TASK-3785 | ai:codex
+// Train policy and journaling assertions belong with the command that owns them.
+#[test]
+fn mandate_include_gate_paths_audits_train_member() {
+    use crate::gate::mandate_gates::ProtectedPaths;
+    use crate::gate::mandate_ship::MandateCover;
+
+    let paths = vec!["aida-cli-lib/src/gate/mandate.rs".to_owned()];
+    let cover = MandateCover::from_checked_paths(
+        "mandate-test".into(),
+        "joe".into(),
+        &paths,
+        ProtectedPaths::floor_ref(),
+        false,
+    );
+    let audit = cover.gate_audit().unwrap();
+    let records = || {
+        vec![(
+            "TASK-1".into(),
+            Vec::new(),
+            Some(aida_core::ExecutionMode::Guided),
+        )]
+    };
+    assert!(member_spec_policy_refusal(records(), false, || Ok(())).is_none());
+    assert!(
+        member_spec_policy_refusal(records(), false, || Err(Some("protected paths".into())))
+            .is_some()
+    );
+    let member = Member {
+        gate_audit: Some(audit.clone()),
+        cover: None,
+        pr: 7,
+        head: "a".repeat(40),
+        subject: "work".into(),
+        body: String::new(),
+        release: Some(cover),
+    };
+    let message = car_message(&member);
+    assert!(message.contains(&audit));
+    let restored: Member = serde_json::from_value(serde_json::to_value(&member).unwrap()).unwrap();
+    assert!(
+        restored.release.is_none(),
+        "live authority is never journaled"
+    );
+    assert_eq!(car_message(&restored), message);
 }

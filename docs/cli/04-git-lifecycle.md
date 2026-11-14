@@ -252,6 +252,16 @@ worker, serialized by a separate cleanup lock that never blocks merges.
 
 The worker records the final lease-end outcome in the ship activity log, even
 when it finishes after ship has returned. `--no-cleanup` skips the worker.
+Step 6 (reap plus merged-worktree pruning) runs under one supervised 60-second
+wall-clock budget, including clone probe setup and scans. On expiry the sweep
+and its observed descendants receive SIGKILL. Termination confirmation waits at
+most 200ms before handing off to a reaper; the sweep retains its inherited
+cleanup lock until it exits, including while kernel I/O delays termination.
+Direct sweep entry requires the supervisor’s verified lock handoff. Cleanup
+reports an interruption with `aida doctor` recovery advice. Earlier cleanup actions may already have
+applied; inspect before retrying. Lease end (step 5) is outside this budget.
+<!-- trace:BUG-2535 | ai:codex -->
+
 During ship cleanup each clone probe has a shared 10-second budget; timeouts and
 unreadable evidence retain the clone with a diagnostic. Shipped heads are
 checked in one Git batch, with exclusions streamed to revision walks. Existing
@@ -363,6 +373,14 @@ work, use a descriptive title and neutral branch without completion IDs; ship
 preserves the title without adding a trailer. Existing constituent commit
 trailers in squash bodies remain landing evidence for the auto-bump scanner.
 <!-- trace:TASK-1600 | ai:codex -->
+
+<!-- trace:STORY-2735 | ai:codex -->
+For tiered GitHub CI, direct ship requires FULL CI for the current Build run.
+FAST PRs should use `aida pr train`, or add the `ci:full` label and wait for a
+FULL run before shipping. The repository Actions variable `AIDA_PR_CI_TIER=full`
+opts ordinary PRs into FULL by default; unset or `fast` selects FAST. Train,
+main, merge-group, scheduled and manually dispatched runs always use FULL.
+See [CI tiers and lane policy](../internal/testing/ci-test-shards.md).
 
 **Rebase merge mode (`--rebase` / `--merge-method rebase`).** `aida pr ship [N]
 --rebase` runs the identical preflight, CI, independent review/approval,

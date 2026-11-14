@@ -175,18 +175,27 @@ fn read_entry_meta(
     let meta = file
         .metadata()
         .map_err(|e| Unsafe(format!("refusing gate-ledger entry {name}: {e}")))?;
-    if !meta.is_file() || meta.nlink() != 1 || meta.len() > cap {
+    if !meta.is_file() || meta.nlink() != 1 {
         return Err(Unsafe(format!(
             "refusing gate-ledger entry {name}: it must be a singly linked regular file of at most {cap} bytes"
+        )));
+    }
+    // trace:BUG-2542 | ai:claude
+    if meta.len() > cap {
+        return Err(Unsafe(format!(
+            "refusing gate-ledger entry {name}: it is {} bytes, over the {cap}-byte per-file cap",
+            meta.len()
         )));
     }
     // Bound actual I/O before reading, including growth after metadata. One
     // sentinel byte detects overflow; the operation then refuses immediately.
     // trace:BUG-2531 | ai:codex
     if meta.len() > budget.bytes {
-        return Err(Unsafe(
-            "the aggregate gate-ledger read budget is exhausted".into(),
-        ));
+        return Err(Unsafe(format!(
+            "the aggregate gate-ledger read budget is exhausted at {name} ({} bytes; {} remaining)",
+            meta.len(),
+            budget.bytes
+        )));
     }
     let read_cap = cap.min(budget.bytes);
     let mut body = Vec::new();
@@ -371,6 +380,39 @@ pub(crate) struct Discovery {
     selected: std::collections::HashMap<String, Vec<GateEvent>>,
 }
 
+/// `<root>/.aida/gate-ledger-quarantine`: where an operator moves a change
+/// ledger that blocks discovery. Outside the ledger directory, so discovery
+/// and capacity probes skip it; the evidence is kept, not deleted.
+// trace:BUG-2542 | ai:claude
+pub(crate) fn quarantine_dir(root: &Path) -> std::path::PathBuf {
+    root.join(".aida").join("gate-ledger-quarantine")
+}
+
+/// The shell command that quarantines the change ledger `name` under `root`.
+// trace:BUG-2542 | ai:claude
+pub(crate) fn quarantine_command(root: &Path, name: &str) -> String {
+    let q = quarantine_dir(root);
+    format!(
+        "mkdir -p '{}' && mv '{}' '{}/'",
+        q.display(),
+        super::ledger_dir(root).join(name).display(),
+        q.display()
+    )
+}
+
+/// A discovery refusal caused by one change ledger: it names the file and the
+/// fix, because the refusal blocks review selection for every spec.
+// trace:BUG-2542 | ai:claude
+fn discovery_refusal(root: &Path, name: &str, e: &Unsafe) -> Unsafe {
+    Unsafe(format!(
+        "refusing gate-ledger discovery: {e}. File: {}. This blocks review selection for every spec. \
+         Fix: if that change is closed or merged, quarantine its ledger (`{}`); \
+         `aida doctor` lists every oversized or budget-threatening change ledger",
+        super::ledger_dir(root).join(name).display(),
+        quarantine_command(root, name)
+    ))
+}
+
 /// Discover the gate ledger under `root`; `Ok(None)` when it does not exist.
 // trace:BUG-2403 | ai:claude
 pub(crate) fn discover(root: &Path) -> Result<Option<Discovery>, Unsafe> {
@@ -419,7 +461,7 @@ pub(crate) fn discover_with_budget(
         // One budget for the entire scan, including retries. Never reset this
         // per file: 4096 individually legal files can otherwise cost 64 GiB.
         let Some((events, stat)) = read_change_stat(&ledger, &name, &key, work)
-            .map_err(|e| Unsafe(format!("refusing gate-ledger discovery: {e}")))?
+            .map_err(|e| discovery_refusal(root, &name, &e))?
         else {
             return Err(Unsafe(format!(
                 "refusing gate-ledger discovery: {name} vanished while it was read"
@@ -869,13 +911,23 @@ impl Discovery {
     }
 }
 
+/// Active change-ledger sizes, largest first; no event payloads are read.
+// trace:BUG-2531 | ai:codex
+// trace:BUG-2542 | ai:claude
+#[derive(Debug, Default)]
+pub(crate) struct Capacity {
+    pub(crate) total: u64,
+    pub(crate) files: Vec<(String, u64)>,
+}
+
 /// Read-only capacity probe for doctor; no event payloads are read.
 // trace:BUG-2531 | ai:codex
-pub(crate) fn active_bytes(root: &Path) -> Result<u64, Unsafe> {
+// trace:BUG-2542 | ai:claude
+pub(crate) fn capacity(root: &Path) -> Result<Capacity, Unsafe> {
     let Some((ledger, _)) = ledger_dirs(root)? else {
-        return Ok(0);
+        return Ok(Capacity::default());
     };
-    let mut bytes = 0u64;
+    let mut out = Capacity::default();
     for name in list_pinned(&ledger, &super::ledger_dir(root))? {
         if !name
             .strip_suffix(".jsonl")
@@ -892,9 +944,12 @@ pub(crate) fn active_bytes(root: &Path) -> Result<u64, Unsafe> {
                 "gate-ledger entry {name} is not a regular file"
             )));
         }
-        bytes = bytes.saturating_add(meta.len());
+        out.total = out.total.saturating_add(meta.len());
+        out.files.push((name, meta.len()));
     }
-    Ok(bytes)
+    out.files
+        .sort_by(|a, b| b.1.cmp(&a.1).then_with(|| a.0.cmp(&b.0)));
+    Ok(out)
 }
 
 #[cfg(test)]
@@ -957,6 +1012,33 @@ mod discovery_work_tests {
         assert!(err.0.contains("event budget"), "{err}");
         assert_eq!(READ_BYTES.with(Cell::get), (size * 3) as u64);
         assert_eq!(PARSE_ATTEMPTS.with(Cell::get), 2);
+    }
+
+    // trace:BUG-2542 | ai:claude
+    #[test]
+    fn bug_2542_oversized_ledger_refusal_names_the_file_and_the_fix() {
+        let (root, _) = fixture();
+        let dir = super::super::ledger_dir(root.path());
+        std::fs::File::create(dir.join("PR-3888.jsonl"))
+            .unwrap()
+            .set_len(MAX_LEDGER_BYTES + 1)
+            .unwrap();
+        let err = discover(root.path()).err().unwrap();
+        let path = dir.join("PR-3888.jsonl");
+        assert!(err.0.contains(&path.display().to_string()), "{err}");
+        assert!(err.0.contains("over the"), "{err}");
+        assert!(err.0.contains("every spec"), "{err}");
+        assert!(
+            err.0
+                .contains(&quarantine_command(root.path(), "PR-3888.jsonl")),
+            "{err}"
+        );
+        assert!(err.0.contains("aida doctor"), "{err}");
+        // Following the named fix restores discovery for every other change.
+        let q = quarantine_dir(root.path());
+        std::fs::create_dir_all(&q).unwrap();
+        std::fs::rename(&path, q.join("PR-3888.jsonl")).unwrap();
+        assert!(discover(root.path()).unwrap().is_some());
     }
 
     #[test]

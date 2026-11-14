@@ -14,7 +14,7 @@ use toml_edit::{DocumentMut, Item, Table, Value};
 
 /// Which `config.toml` a glyph command targets.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum Scope {
+pub enum Scope {
     /// Project-level `.aida/config.toml` (default).
     Project,
     /// User-level `~/.aida/config.toml` (`--user`).
@@ -22,9 +22,9 @@ pub(crate) enum Scope {
 }
 
 /// Resolve the `config.toml` path for `scope`. The project path is derived from
-/// [`crate::find_project_root`]; the user path from the home dir.
+/// the supplied execution context; the user path comes from its home dir.
 // trace:STORY-2538 | ai:codex
-pub(crate) fn config_path_for(
+pub fn config_path_for(
     scope: Scope,
     exec: &aida_core::exec_context::ExecContext,
 ) -> Result<PathBuf> {
@@ -75,7 +75,7 @@ fn table_mut<'a>(doc: &'a mut DocumentMut, key: &str) -> &'a mut Table {
 
 /// Set `[glyphs] <name> = "<value>"`, preserving the rest of the file.
 /// `name` is assumed already validated by the caller. trace:STORY-633
-pub(crate) fn set_override(path: &Path, name: &str, value: &str) -> Result<()> {
+pub fn set_override(path: &Path, name: &str, value: &str) -> Result<()> {
     let mut doc = load_doc(path)?;
     let glyphs = table_mut(&mut doc, "glyphs");
     glyphs.insert(name, Item::Value(Value::from(value)));
@@ -84,7 +84,7 @@ pub(crate) fn set_override(path: &Path, name: &str, value: &str) -> Result<()> {
 
 /// Remove `[glyphs] <name>`. Returns whether an entry was actually present.
 /// Drops the `[glyphs]` table entirely if it becomes empty. trace:STORY-633
-pub(crate) fn unset_override(path: &Path, name: &str) -> Result<bool> {
+pub fn unset_override(path: &Path, name: &str) -> Result<bool> {
     let mut doc = load_doc(path)?;
     let mut removed = false;
     if let Some(glyphs) = doc.get_mut("glyphs").and_then(|i| i.as_table_mut()) {
@@ -101,7 +101,7 @@ pub(crate) fn unset_override(path: &Path, name: &str) -> Result<bool> {
 
 /// Clear the whole `[glyphs]` table. Returns whether anything was removed.
 /// trace:STORY-633
-pub(crate) fn reset_overrides(path: &Path) -> Result<bool> {
+pub fn reset_overrides(path: &Path) -> Result<bool> {
     let mut doc = load_doc(path)?;
     let removed = doc.remove("glyphs").is_some();
     if removed {
@@ -114,7 +114,7 @@ pub(crate) fn reset_overrides(path: &Path) -> Result<bool> {
 /// expanded `[glyphs]` table the user previously materialized? No — leave it;
 /// per-symbol overrides intentionally win over the theme (precedence tier).
 /// trace:STORY-633
-pub(crate) fn set_theme(path: &Path, name: &str) -> Result<()> {
+pub fn set_theme(path: &Path, name: &str) -> Result<()> {
     let mut doc = load_doc(path)?;
     let ui = table_mut(&mut doc, "ui");
     ui.insert("theme", Item::Value(Value::from(name)));
@@ -125,7 +125,7 @@ pub(crate) fn set_theme(path: &Path, name: &str) -> Result<()> {
 /// theme's base profile, instead of writing a named `[ui] theme` reference
 /// (`--expand`). Removes any existing `[ui] theme` so the expanded form is the
 /// single source. trace:STORY-633
-pub(crate) fn expand_theme(path: &Path, base_profile: &str, bundle: &[(&str, &str)]) -> Result<()> {
+pub fn expand_theme(path: &Path, base_profile: &str, bundle: &[(&str, &str)]) -> Result<()> {
     let mut doc = load_doc(path)?;
     {
         let ui = table_mut(&mut doc, "ui");

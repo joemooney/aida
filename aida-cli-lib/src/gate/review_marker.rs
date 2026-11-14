@@ -209,9 +209,108 @@ pub(crate) fn refuse_conclusive_head(
     head: Option<&str>,
 ) -> anyhow::Result<()> {
     if let Some(v) = conclusive_head(root, pr, head) {
-        anyhow::bail!("PR-{pr} already has a {} verdict at this exact head; a duplicate review is unnecessary", v.kind.label());
+        // trace:BUG-2557 | ai:claude
+        anyhow::bail!(
+            "PR-{pr} already has a {} verdict at this exact head; a duplicate review is unnecessary. \
+             If the review contract changed after that verdict, an advisor can admit one fresh \
+             review at this head with `--rereview <reason>`",
+            v.kind.label()
+        );
     }
     Ok(())
+}
+
+/// BUG-2557: an advisor admits one fresh review at a head that already
+/// carries a conclusive verdict — for when the review contract (the review
+/// story's coverage, say) changed after that verdict — instead of pushing an
+/// empty commit and paying a full CI run. Recorded on the change's gate
+/// ledger with the reason; [`refuse_conclusive_head`] admits a review while
+/// the superseded verdict is still the head's newest, so the next recorded
+/// verdict ends the admission. `Ok(None)` when the head has no conclusive
+/// verdict (nothing to admit; nothing recorded).
+// trace:BUG-2557 | ai:claude
+pub(crate) fn admit_rereview(
+    root: &Path,
+    pr: u64,
+    head: Option<&str>,
+    reason: &str,
+    by: &str,
+) -> anyhow::Result<Option<&'static str>> {
+    let reason = reason.trim();
+    anyhow::ensure!(
+        !reason.is_empty(),
+        "`--rereview` needs a reason (what changed in the review contract after the verdict)"
+    );
+    let head = head
+        .map(str::trim)
+        .filter(|h| !h.is_empty())
+        .ok_or_else(|| {
+            anyhow::anyhow!(
+                "cannot admit a re-review of PR-{pr}: its current head could not be resolved"
+            )
+        })?;
+    let Some(v) = conclusive_head(root, pr, Some(head)) else {
+        return Ok(None);
+    };
+    let recorded_at = v
+        .recorded_at
+        .clone()
+        .filter(|at| !at.trim().is_empty())
+        .ok_or_else(|| {
+            anyhow::anyhow!(
+            "cannot admit a re-review of PR-{pr}: its {} verdict carries no recording time, so a \
+             later verdict could not be told apart from it; push a new commit instead",
+            v.kind.label()
+        )
+        })?;
+    let mut event = crate::gate::ledger::GateEvent::new(
+        crate::gate::ledger::ChangeKey::pr(pr),
+        crate::gate::ledger::EventBody::RereviewAdmitted {
+            reason: reason.to_string(),
+            by: by.to_string(),
+            superseded_verdict: v.kind.label().to_string(),
+            superseded_recorded_at: recorded_at,
+        },
+    );
+    event.head = Some(head.to_string());
+    crate::gate::ledger::record_event(root, event).map_err(|e| {
+        anyhow::anyhow!(
+            "could not record the re-review admission for PR-{pr} on the gate ledger: {e}"
+        )
+    })?;
+    Ok(Some(v.kind.label()))
+}
+
+/// Has an advisor admitted a fresh review at `head` that supersedes `v`?
+// trace:BUG-2557 | ai:claude
+fn rereview_admitted(
+    root: &Path,
+    pr: u64,
+    head: &str,
+    v: &super::review_verdict::RecordedVerdict,
+) -> bool {
+    let Some(recorded_at) = v.recorded_at.as_deref().filter(|at| !at.trim().is_empty()) else {
+        return false;
+    };
+    let Ok(store) = crate::gate::ledger::store_root(root) else {
+        return false;
+    };
+    crate::gate::ledger::project::events(&store, crate::gate::ledger::ChangeKey::pr(pr))
+        .iter()
+        .any(|e| match &e.body {
+            crate::gate::ledger::EventBody::RereviewAdmitted {
+                superseded_verdict,
+                superseded_recorded_at,
+                ..
+            } => {
+                e.head
+                    .as_deref()
+                    .is_some_and(|h| super::review_verdict::same_reviewed_sha(h, head))
+                    && superseded_verdict == v.kind.label()
+                    && superseded_recorded_at == recorded_at
+            }
+            _ => false,
+        })
 }
 
 // trace:BUG-2530 | ai:codex
@@ -235,7 +334,10 @@ fn conclusive_head(
             v.reviewed_branch.as_deref(),
             &v,
         );
-    (v.reviewed_sha.as_deref() == Some(head) && conclusive).then_some(v)
+    (v.reviewed_sha.as_deref() == Some(head)
+        && conclusive
+        && !rereview_admitted(root, pr, head, &v))
+    .then_some(v)
 }
 
 /// An already-approved head cannot acquire a new blocking review merely

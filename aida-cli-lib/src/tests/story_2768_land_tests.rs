@@ -141,6 +141,29 @@ fn an_approved_change_is_ready_and_lands_by_its_track() {
 }
 
 #[test]
+fn an_approved_change_stacked_on_another_branch_waits_for_its_base() {
+    let row = derive(
+        &pr("story-1-first-slice", "story-1-second-slice"),
+        &approved(),
+    );
+    assert_eq!((row.state, row.action), (State::Ready, Action::Wait));
+    assert!(
+        row.reason.contains("stacked on `story-1-first-slice`"),
+        "{}",
+        row.reason
+    );
+    // It is still reviewed like any other change.
+    let unreviewed = derive(
+        &pr("story-1-first-slice", "story-1-second-slice"),
+        &Fake::default(),
+    );
+    assert_eq!(
+        (unreviewed.state, unreviewed.action),
+        (State::NeedsReview, Action::LaunchReview)
+    );
+}
+
+#[test]
 fn an_approval_wins_over_older_requested_changes() {
     let fake = Fake {
         rounds: blocking(2),
@@ -358,9 +381,69 @@ fn running_ci_gates_the_landing_and_never_the_review() {
 }
 
 #[test]
-fn a_met_hold_is_the_operators_to_clear() {
-    assert_eq!(Action::ClearHoldAndLand.owner(), "operator");
-    assert!(Action::ClearHoldAndLand.label().starts_with("operator"));
+fn a_met_hold_is_the_reconcilers_to_release() {
+    assert_eq!(Action::ClearHoldAndLand.owner(), "reconciler");
+    assert!(Action::ClearHoldAndLand.label().starts_with("release"));
+}
+
+#[test]
+fn a_head_whose_reviewers_timed_out_twice_goes_to_the_advisor() {
+    struct TimedOut(Fake, u32);
+    impl Evidence for TimedOut {
+        fn conflict(&self, pr: &Pr) -> std::result::Result<bool, String> {
+            self.0.conflict(pr)
+        }
+        fn reviewing(&self, pr: &Pr) -> std::result::Result<Option<String>, String> {
+            self.0.reviewing(pr)
+        }
+        fn ci(&self, pr: &Pr) -> std::result::Result<Ci, String> {
+            self.0.ci(pr)
+        }
+        fn approval(&self, pr: &Pr) -> std::result::Result<Approval, String> {
+            self.0.approval(pr)
+        }
+        fn hold(&self, pr: &Pr) -> std::result::Result<Option<Hold>, String> {
+            self.0.hold(pr)
+        }
+        fn rounds(&self, pr: &Pr) -> std::result::Result<Rounds, String> {
+            self.0.rounds(pr)
+        }
+        fn lane(&self, pr: &Pr) -> std::result::Result<Option<String>, String> {
+            self.0.lane(pr)
+        }
+        fn review_timeouts(&self, _: &Pr) -> u32 {
+            self.1
+        }
+        fn rework_stop(&self, _: &Pr) -> Option<String> {
+            Some("its seat has 2 commit(s) that no remote has".into())
+        }
+    }
+    let change = pr("main", "feature");
+    let once = derive(&change, &TimedOut(Fake::default(), 1));
+    assert_eq!(
+        (once.state, once.action),
+        (State::NeedsReview, Action::LaunchReview)
+    );
+    let twice = derive(&change, &TimedOut(Fake::default(), 2));
+    assert_eq!(
+        (twice.state, twice.action),
+        (State::Blocked, Action::AdvisorRuling)
+    );
+    // A lane that refused over unpushed seat work is never launched over.
+    let conflicted = Fake {
+        conflict: Ok(true),
+        ..Fake::default()
+    };
+    let stopped = derive(&change, &TimedOut(conflicted, 0));
+    assert_eq!(
+        (stopped.state, stopped.action),
+        (State::Blocked, Action::AdvisorRuling)
+    );
+    assert!(
+        stopped.reason.contains("no remote has"),
+        "{}",
+        stopped.reason
+    );
 }
 
 #[test]

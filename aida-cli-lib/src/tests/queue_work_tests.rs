@@ -2564,19 +2564,13 @@ fn queue_work_force_claim_flag_parses() {
     }
 }
 
-// BUG-311: the orchestrator's phase-1 `aida queue work` subprocess must
-// carry `--steal` when the outer drain was invoked with it. Without
-// threading, the inner subprocess's dormant-lease guard sees `steal=false`
-// and bails with the canned "pass --steal" message — exactly the
-// symptom this BUG reported. These tests pin the argv contract so a
-// refactor cannot silently drop the flag again. trace:BUG-311 | ai:claude
-
+// Phase-1 argv retains session identity without forwarding retired --steal.
+// trace:STORY-2325 | ai:codex
 #[test]
-fn implementer_phase_args_threads_steal() {
+fn implementer_phase_args_preserves_session_identity() {
     let args = build_implementer_phase_args(
         "BUG-311",
         "0192f1c8-aaaa-7000-8000-000000000001",
-        true,
         false,
         None,
         None,
@@ -2584,8 +2578,8 @@ fn implementer_phase_args_threads_steal() {
         None,
     );
     assert!(
-        args.iter().any(|a| a == "--steal"),
-        "--steal must be threaded to phase 1 when the outer drain set it; got {:?}",
+        args.iter().all(|a| a != "--steal"),
+        "phase 1 must omit retired --steal; got {:?}",
         args
     );
     assert_eq!(args[0], "queue");
@@ -2597,8 +2591,7 @@ fn implementer_phase_args_threads_steal() {
 
 #[test]
 fn implementer_phase_args_omits_steal_by_default() {
-    let args =
-        build_implementer_phase_args("BUG-311", "uuid", false, false, None, None, false, None);
+    let args = build_implementer_phase_args("BUG-311", "uuid", false, None, None, false, None);
     assert!(
         args.iter().all(|a| a != "--steal"),
         "--steal must not appear when the outer drain did not pass it; got {:?}",
@@ -2611,14 +2604,13 @@ fn implementer_phase_args_threads_no_human_and_permission() {
     let args = build_implementer_phase_args(
         "TASK-1",
         "uuid",
-        true,
         false,
         None,
         None,
         true,
         Some("bypassPermissions"),
     );
-    assert!(args.iter().any(|a| a == "--steal"));
+    assert!(args.iter().all(|a| a != "--steal"));
     assert!(args.iter().any(|a| a == "--no-human"));
     let i = args
         .iter()
@@ -2632,8 +2624,7 @@ fn implementer_phase_args_threads_no_human_and_permission() {
 
 #[test]
 fn implementer_phase_args_threads_force_claim() {
-    let args =
-        build_implementer_phase_args("TASK-559", "uuid", false, true, None, None, false, None);
+    let args = build_implementer_phase_args("TASK-559", "uuid", true, None, None, false, None);
     assert!(
         args.iter().any(|a| a == "--force-claim"),
         "--force-claim must be threaded to phase 1 when the outer drain set it; got {:?}",
@@ -2652,7 +2643,6 @@ fn implementer_retry_args_thread_branch_and_existing_path_without_steal() {
     let args = build_implementer_phase_args(
         "STORY-993",
         "uuid",
-        false,
         true,
         Some("story-993"),
         Some(path),
@@ -4468,40 +4458,29 @@ fn bug_1957_rework_match_hold_never_unmatches_the_specs_own_pr() {
 
 // trace:STORY-2475 BUG-2553 | ai:codex
 #[test]
-fn bug_2553_conflicts_preserve_selected_vendor_for_fresh_and_resume() {
+fn story_2710_conflicts_keep_configured_vendor_and_resume() {
     use crate::session::HeadlessVendor;
-    use std::cell::Cell;
     for vendor in [HeadlessVendor::Codex, HeadlessVendor::Claude] {
         for resume in [false, true] {
-            let notified = Cell::new(false);
-            let result = rework_conflict_route(
+            let (actual, files) = rework_conflict_route(
                 Ok(vec!["src/conflict.rs".into()]),
                 vendor,
                 resume,
-                "STORY-2475",
-                3398,
+                "STORY-2710",
+                3813,
                 "rework",
-                |subject, body| {
-                    notified.set(true);
-                    assert!(subject.contains("resolution"));
-                    assert!(body.contains("src/conflict.rs"));
-                    assert!(body.contains("aborted"));
-                    assert!(body.contains(vendor.as_str()));
-                    assert!(!body.contains("will not launch Codex"));
-                    Ok(())
-                },
-            );
-            assert!(notified.get());
-            let (routed, files) = result.unwrap();
-            assert_eq!(routed, vendor);
-            assert_eq!(files, vec!["src/conflict.rs"]);
+                |_, _| panic!("host-staged repair does not reroute or require mail"),
+            )
+            .unwrap();
+            assert_eq!(actual, vendor);
+            assert_eq!(files, ["src/conflict.rs"]);
         }
     }
 }
 
 // trace:STORY-2475 | ai:codex
 #[test]
-fn story_2475_preparation_or_mail_failure_cannot_admit_a_launch() {
+fn story_2710_preparation_failure_cannot_admit_a_launch() {
     use crate::session::HeadlessVendor;
     for why in ["fetch failed", "merge failed", "abort failed"] {
         let error = rework_conflict_route(
@@ -4517,16 +4496,6 @@ fn story_2475_preparation_or_mail_failure_cannot_admit_a_launch() {
         assert_eq!(error.to_string(), why);
     }
     assert!(rework_conflict_route(
-        Ok(vec!["conflict".into()]),
-        HeadlessVendor::Codex,
-        false,
-        "STORY-2475",
-        3398,
-        "rework",
-        |_, _| anyhow::bail!("mail unavailable"),
-    )
-    .is_err());
-    assert!(rework_conflict_route(
         Ok(vec![]),
         HeadlessVendor::Codex,
         false,
@@ -4540,17 +4509,13 @@ fn story_2475_preparation_or_mail_failure_cannot_admit_a_launch() {
     .is_empty());
 }
 
-/// STORY-2475 review: the `handle_queue_work` conflict wiring on real Git.
-/// The seat (a linked worktree on the PR head) and its lease exist before the
-/// host merge runs, as after `session_start`. A conflicting merge is aborted
-/// in place, the advisor is told the files, and the configured vendor and model
-/// remain selected with the conflict task appended. Clean merges are committed
-/// before launch. Headless and interactive pickups use the same routing.
+/// Real Git host preparation keeps the configured vendor/model, retains a
+/// conflicted merge and appends the host journal paths for both launch modes.
 // trace:BUG-2553 | ai:codex
 // trace:STORY-2475 | ai:claude
 // trace:BUG-2456 | ai:codex
 #[test]
-fn bug_2553_configured_vendor_survives_open_pr_rework_preparation() {
+fn story_2710_host_publishes_clean_rework_or_retains_conflicts_before_launch() {
     use crate::session::HeadlessVendor;
     use std::cell::Cell;
     // HOME is pinned to the fixture, so the test runs in its own process.
@@ -4639,7 +4604,14 @@ fn bug_2553_configured_vendor_survives_open_pr_rework_preparation() {
             let mut prompt = String::from("/aida-pickup STORY-2475");
             let mut model = Some("gpt-codex".to_string());
             let mailed = Cell::new(0);
-            let prepared = crate::seat_clone::prepare_rework_merge(&project, &seat, branch, false);
+            let prepared = crate::seat_clone::prepare_rework_merge(
+                &project,
+                &seat,
+                branch,
+                false,
+                3398,
+                "test-lane",
+            );
             let vendor = apply_rework_conflict_route(
                 &project,
                 prepared,
@@ -4661,21 +4633,23 @@ fn bug_2553_configured_vendor_survives_open_pr_rework_preparation() {
                 },
             )
             .unwrap_or_else(|e| panic!("{branch} interactive={interactive}: {e:#}"));
-            // Either way the seat is left clean with no merge in progress.
-            assert!(git(&seat, &["status", "--porcelain"]).is_empty());
+            assert_eq!(
+                git(&seat, &["status", "--porcelain"]).is_empty(),
+                !conflicts
+            );
             let merging = crate::test_git::git_command()
                 .current_dir(&seat)
                 .args(["rev-parse", "-q", "--verify", "MERGE_HEAD"])
                 .output()
                 .unwrap();
-            assert!(!merging.status.success(), "no unfinished merge");
+            assert_eq!(merging.status.success(), conflicts);
             // Remote evidence must agree before a vendor can be started.
             let remote = git(&origin, &["rev-parse", &format!("refs/heads/{branch}")]);
             if conflicts {
                 assert_eq!(remote, head, "conflicts must not publish");
                 assert_eq!(vendor, HeadlessVendor::Codex);
-                assert_eq!(mailed.get(), 1);
-                assert_eq!(git(&seat, &["rev-parse", "HEAD"]), head, "merge aborted");
+                assert_eq!(mailed.get(), 0);
+                assert_eq!(git(&seat, &["rev-parse", "HEAD"]), head, "merge retained");
                 assert!(prompt.contains("conflicting files: shared.rs"), "{prompt}");
                 assert_eq!(model.as_deref(), Some("gpt-codex"));
                 assert_eq!(std::env::var("AIDA_AGENT_MODEL").unwrap(), "gpt-codex");
