@@ -1065,12 +1065,24 @@ description: |
   ### finding-hash:d7ad1d67
 
   The time budget is polled only between PRs (check_all): the setup reads (default-branch lookup, PR listing, live_trains) and each PR check (several gh calls and a git fetch) are not bounded by --timeout. With the 45s default, `--check --all-open` on a repository with many open PRs is likely to report the tail as not checked and exit non-zero. `--max` is also accepted with --check and silently ignored.
+
+
+  ## Findings from PR-4027
+  Reviewed sha: a31c45019754f4a0a7fbf2d902c8b94fc64da747
+
+  ### finding-hash:c239c3d3
+
+  full_tier.rs label_plan counts any commit status in state PENDING as a run in flight. A held PR always carries the merge-hold-gate status as PENDING, so a held PR with a ci:full label left from an earlier head gets LabelPlan::Leave at re-approval and no FULL run starts. The train does not ask either while the hold stands, because typed_gate_member_with refuses a held member before full_tier_gate. The run starts only on the first train pass after clearance. Count only check runs (status not COMPLETED) on the CI workflow as in flight, or ignore the merge-hold-gate status.
+
+  ### finding-hash:8c6f0ae6
+
+  pr_train.rs full_tier_gate writes the train-admit-skip-full-check entry (status overridden) before the later member gates and before --max selection, so a candidate that is then refused or left out of the train still logs an override; docs/advanced/landing.md says each admission appends one entry. Write the entry after the member is selected, or word the entry and the doc as an override of the check.
 status: Draft
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-13T20:01:56.623034248Z
-modified_at: 2026-11-14T19:27:21.808884560Z
+modified_at: 2026-11-14T19:27:46.793776977Z
 req_type: Task
 tags:
 - carried-finding:BUG-2543:2a99ebfc
@@ -1201,6 +1213,8 @@ tags:
 - carried-finding:PR-4022:dbd4e4d5
 - carried-finding:PR-4024:0bdbec3f
 - carried-finding:PR-4024:2df54e83
+- carried-finding:PR-4027:8c6f0ae6
+- carried-finding:PR-4027:c239c3d3
 - carried-finding:PR-4030:1287747b
 - carried-finding:PR-4030:540b7d86
 - carried-finding:PR-4030:a9731915
@@ -1311,6 +1325,7 @@ tags:
 - carried-from:PR-4021
 - carried-from:PR-4022
 - carried-from:PR-4024
+- carried-from:PR-4027
 - carried-from:PR-4030
 - carried-from:PR-4040
 - carried-from:PR-4046
@@ -1395,6 +1410,7 @@ tags:
 - finding-hash:7ce2cb14
 - finding-hash:7d6b05ec
 - finding-hash:8a49a174
+- finding-hash:8c6f0ae6
 - finding-hash:8d1b3558
 - finding-hash:96ff0aa3
 - finding-hash:9750b6dd
@@ -1411,6 +1427,7 @@ tags:
 - finding-hash:b29349ce
 - finding-hash:bf60843e
 - finding-hash:c0a8d165
+- finding-hash:c239c3d3
 - finding-hash:c45fcedb
 - finding-hash:c598b8f9
 - finding-hash:c7c082c2
@@ -1482,6 +1499,7 @@ tags:
 - from-review:PR-4021
 - from-review:PR-4022
 - from-review:PR-4024
+- from-review:PR-4027
 - from-review:PR-4030
 - from-review:PR-4040
 - from-review:PR-4046
@@ -1873,6 +1891,11 @@ history:
   author: joe
   timestamp: 2026-11-14T19:27:23.408552701Z
   session_id: 01a1db8298f8
+  changes: []
+- id: 01a1db87-bbc8-7663-bd53-02a0a6c0db6c
+  author: joe
+  timestamp: 2026-11-14T19:27:48.168649880Z
+  session_id: 01a1db82ce45
   changes: []
 filed_at:
   code_sha: 91fe1e337894199f15365d3f8ecfaf81366f8291
