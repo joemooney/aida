@@ -493,12 +493,20 @@ description: |
   ### finding-hash:49b64e26
 
   force_claim_clone_owner accepts only Dead(Absent|Exited) for lease.active_pid; a dead worker whose PID was since reused (Dead(Reused)) or that died across a reboot (Dead(Reboot)) still gets refused, so the manual session-end workaround can still be needed (aida-cli-lib/src/ownership/reader.rs:79-88). Also the fixture stores HolderRecord::refused(..) instead of a real mismatched identity record, and the raw record identity is never probed (only the clone cwd-holder check in seat_clone::destroy backs that up).
+
+
+  ## Findings from PR-4012
+  Reviewed sha: 36ccaaeddc307d956a6032025d4aad19d3f2fa6d
+
+  ### finding-hash:9750b6dd
+
+  aida-core/src/test_umask.rs:19 fixture_permissions_are_private_under_ambient_group_writable_umask never establishes a group-writable ambient umask; under CI ambient 022 it passes with the init_array initializer deleted, so it cannot catch a regression off dell1. Spawn the test binary as a child with umask 002 (pre_exec or the isolated() re-exec pattern) and assert the child sees 022 (e.g. /proc/self/status Umask) and creates 0644 files.
 status: Draft
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-13T20:01:56.623034248Z
-modified_at: 2026-11-14T09:04:05.891149023Z
+modified_at: 2026-11-14T10:19:12.720043598Z
 req_type: Task
 tags:
 - carried-finding:BUG-2543:2a99ebfc
@@ -565,6 +573,7 @@ tags:
 - carried-finding:PR-3994:51cbf3a8
 - carried-finding:PR-3997:3f4b4821
 - carried-finding:PR-3998:0bff30e1
+- carried-finding:PR-4012:9750b6dd
 - carried-finding:STORY-2735:2c7ae2ea
 - carried-finding:STORY-2763:04ad58d8
 - carried-finding:STORY-2763:15915e39
@@ -614,6 +623,7 @@ tags:
 - carried-from:PR-3994
 - carried-from:PR-3997
 - carried-from:PR-3998
+- carried-from:PR-4012
 - carried-from:STORY-2735
 - carried-from:STORY-2763
 - carried-from:STORY-2768
@@ -653,6 +663,7 @@ tags:
 - finding-hash:7ce2cb14
 - finding-hash:8a49a174
 - finding-hash:96ff0aa3
+- finding-hash:9750b6dd
 - finding-hash:97d326dd
 - finding-hash:ac11f20d
 - finding-hash:bf60843e
@@ -695,6 +706,7 @@ tags:
 - from-review:PR-3994
 - from-review:PR-3997
 - from-review:PR-3998
+- from-review:PR-4012
 - from-review:STORY-2735
 - from-review:STORY-2763
 - from-review:STORY-2768
@@ -900,6 +912,11 @@ history:
   author: joe
   timestamp: 2026-11-14T09:04:07.225169708Z
   session_id: 01a1d94a013f
+  changes: []
+- id: 01a1d991-81d0-7271-9629-1e54105b7107
+  author: joe
+  timestamp: 2026-11-14T10:19:14.256097303Z
+  session_id: 01a1d98f8520
   changes: []
 filed_at:
   code_sha: 91fe1e337894199f15365d3f8ecfaf81366f8291
