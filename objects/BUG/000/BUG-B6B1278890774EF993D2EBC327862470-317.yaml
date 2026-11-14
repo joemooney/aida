@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-13T08:32:25.181868902Z
-modified_at: 2026-11-14T06:14:24.396712993Z
+modified_at: 2026-11-14T08:11:31.258718413Z
 req_type: Bug
 tags:
 - force-claim
@@ -49,6 +49,13 @@ comments:
   modified_at: 2026-11-14T05:57:23.520429723Z
   session_id: 01a1d893c44a
   harness_version: codex-cli 0.167.0
+- id: 01a1d91c-943a-75b2-9b5c-9f1653b989c3
+  author: joe
+  content: '[advisor 7b 01:12] REWORK (blocking, CI): train 15 (#4004) went red on CI (rest): aida-ci-guards task_1750_liveness_primitive_guard_tests::proc_identity_legacy_decisions_do_not_expand — ''new private process decisions must use proc_identity; aida-cli-lib/src/ownership/reader.rs: 1 identity decisions''. The new refused-holder branch in ownership/reader.rs calls aida_core::liveness::process_provably_dead(pid, None) on lease.active_pid. Route that decision through proc_identity (compare recorded pid + start time via the proc_identity primitive, as other reader.rs sites do) instead of raising the baseline. Verify with: cargo test --profile agent -p aida-ci-guards task_1750 (LIGHT gate: that one targeted run plus make check-ci-fast). On dell1, touch aida-core/src/lib.rs before the run; never use AIDA_UPDATE_SNAPSHOTS=1.'
+  created_at: 2026-11-14T08:11:31.258718413Z
+  modified_at: 2026-11-14T08:11:31.258718413Z
+  session_id: 01a1d8f3-f948-7072-b174-fa9507ed074b
+  harness_version: 2.1.325 (Claude Code)
 history:
 - id: 01a1d40a-9e19-7542-8546-7cff218b1eb4
   author: joe
