@@ -1,5 +1,6 @@
 id: 01a1da88-79cd-77d0-9aac-33d521b5545a
 spec_id: STORY-73022632d35647cca3858b18ac0723e3-014
+agreed_id: STORY-2359
 title: 'Review PR-4036: [AI:claude] fix(test): run the bug034 fake git through sh to end the ETXTBSY flake (BUG-2582)'
 description: |
   Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `(no-sess`) for branch `bug-b6b1278890774ef993d2ebc327862470-347`.
@@ -33,6 +34,12 @@ history:
 - id: 01a1da88-94c9-7880-8ef4-89bc3477ba39
   author: dirtlab
   timestamp: 2026-11-14T14:49:06.505668104Z
+  changes: []
+- id: 01a1da98-12d7-74f3-9846-b960cfaa0bb1
+  author: joe
+  timestamp: 2026-11-14T15:06:01.815651197Z
+  session_id: 01a1d9ea-4e25-7033-85e8-3648f0195c7c
+  harness_version: 2.1.325 (Claude Code)
   changes: []
 filed_at:
   code_sha: 3350540dbab869a493924fe627364ed3a48ff9e4

@@ -1,5 +1,6 @@
 id: 01a1da87-a52b-7863-8c43-d7e1da0fe1af
 spec_id: TASK-73022632d35647cca3858b18ac0723e3-005
+agreed_id: TASK-3106
 title: 'BUG-2582: confirm bug034 20/20 and umask 0002 runs on dell1 itself'
 description: |
   BUG-2582's acceptance asks for 20 of 20 consecutive passes of `cargo test --profile agent -p aida-core git_ops::commit_failure` on dell1. The implementer lane ran on host disrad-dvp98b3puw, not dell1: 20 of 20 passed there, and `git_ops:: node:: test_umask` passed 254/254 with the launching shell at umask 0002. The dell1 runs are still owed.
@@ -19,6 +20,13 @@ tags:
 - from-implementer:BUG-2582
 - kind:deviation
 - severity:minor
+history:
+- id: 01a1da98-0ed7-7191-adeb-ba8ddbb1b1b5
+  author: joe
+  timestamp: 2026-11-14T15:06:00.791044800Z
+  session_id: 01a1d9ea-4e25-7033-85e8-3648f0195c7c
+  harness_version: 2.1.325 (Claude Code)
+  changes: []
 filed_at:
   code_sha: b3296518a5e3ef89fac6a73f999a2e42523ea050
   branch: bug-b6b1278890774ef993d2ebc327862470-347

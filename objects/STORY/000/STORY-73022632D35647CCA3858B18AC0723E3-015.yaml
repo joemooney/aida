@@ -1,5 +1,6 @@
 id: 01a1da90-646d-7af3-b1a2-44e6175e8244
 spec_id: STORY-73022632d35647cca3858b18ac0723e3-015
+agreed_id: STORY-2358
 title: 'Review PR-4038: [AI:claude] fix: Gate-ledger discovery reads every change ledger against a 64 MiB budget (BUG-2531)'
 description: |
   Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `(no-sess`) for branch `bug-b6b1278890774ef993d2ebc327862470-296`.
@@ -348,6 +349,12 @@ history:
 - id: 01a1da93-f8ad-75a2-8a0b-8f489bc99ca2
   author: dirtlab
   timestamp: 2026-11-14T15:01:32.973432003Z
+  changes: []
+- id: 01a1da98-1232-7673-b180-714918086fbd
+  author: joe
+  timestamp: 2026-11-14T15:06:01.650473917Z
+  session_id: 01a1d9ea-4e25-7033-85e8-3648f0195c7c
+  harness_version: 2.1.325 (Claude Code)
   changes: []
 filed_at:
   code_sha: f5128d18cf1ff8dd78baa28e7bf57dcc4c69fc18
