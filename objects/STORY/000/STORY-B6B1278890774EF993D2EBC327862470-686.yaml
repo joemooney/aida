@@ -30,7 +30,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-13T15:54:08.931576118Z
-modified_at: 2026-11-14T00:41:29.024523842Z
+modified_at: 2026-11-14T00:43:38.985057946Z
 req_type: Story
 tags:
 - architecture
@@ -137,6 +137,13 @@ comments:
   modified_at: 2026-11-13T22:36:17.212319951Z
   session_id: 01a1d70063c2
   harness_version: codex-cli 0.167.0
+- id: 01a1d782-8a69-7fe0-a48c-b63d50f3af41
+  author: joe
+  content: 'Advisor 17:50 triage of the #3956 CR at b53f5ec. P1 BLOCKING: the fast policy''s review_prompt ensure!(base_ref == protected) aborts reviewer launch for integration-track and stacked PRs (AC2). Non-protected bases must fall back to the ordinary review prompt. P2 BLOCKING: the inline landed-tree diff can exceed MAX_ARG_STRLEN (128 KiB) as a single argv element and fail with E2BIG. Write it to a file the reviewer reads, or cap it well under 120 KiB with a pointer. Minor (round dedup at base-merge-only heads; the 16-key retain error): ACCEPTED, recorded as a known limit. The next round is a scoped re-review of P1 and P2.'
+  created_at: 2026-11-14T00:43:38.985057946Z
+  modified_at: 2026-11-14T00:43:38.985057946Z
+  session_id: 01a1d73b-e31c-7f33-b2fe-cee145ddc6fb
+  harness_version: 2.1.325 (Claude Code)
 history:
 - id: 01a1d59e-6b4b-7d10-8aea-02729132bc6f
   author: joe

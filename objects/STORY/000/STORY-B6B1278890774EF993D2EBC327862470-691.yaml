@@ -43,7 +43,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-13T16:52:56.270142081Z
-modified_at: 2026-11-14T00:14:42.699495648Z
+modified_at: 2026-11-14T00:43:40.525121149Z
 req_type: Story
 tags:
 - architecture
@@ -225,6 +225,13 @@ comments:
     The next round is a scoped re-review of F1-F4 only.
   created_at: 2026-11-14T00:14:42.699495648Z
   modified_at: 2026-11-14T00:14:42.699495648Z
+  session_id: 01a1d73b-e31c-7f33-b2fe-cee145ddc6fb
+  harness_version: 2.1.325 (Claude Code)
+- id: 01a1d782-906d-7fe1-b184-ead9332b744c
+  author: joe
+  content: 'Advisor 17:50 triage of the #3973 CR at d210788. BLOCKING (small): F1 the store-writer inventory loses auto_release when mandate_ship_cover moves into the bare with_live_io; regenerate it, or path-qualify the call so check-store-writers follows it. F2 add a READY-PENDING-COVER row to the now stage test: Stage::Blocked, absent from the READY count (advisor 15:21 condition). ACCEPTED, moved to the S2 remainder: with_live_io read failures become Unmet instead of Unknown; Live::approval reads origin/<base> instead of the pinned base (list it as a known limit in the PR body); AmbiguousBase/EmptyDiff stay UNKNOWN (give them BLOCKED with the reason in S2); STATE column width cosmetic.'
+  created_at: 2026-11-14T00:43:40.525121149Z
+  modified_at: 2026-11-14T00:43:40.525121149Z
   session_id: 01a1d73b-e31c-7f33-b2fe-cee145ddc6fb
   harness_version: 2.1.325 (Claude Code)
 history:

@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-13T03:10:47.302266912Z
-modified_at: 2026-11-14T00:39:15.594359620Z
+modified_at: 2026-11-14T00:43:37.452022875Z
 req_type: Bug
 tags:
 - track:dell1
@@ -106,6 +106,13 @@ comments:
   modified_at: 2026-11-13T22:49:59.656399471Z
   session_id: 01a1d70c1bbe
   harness_version: codex-cli 0.167.0
+- id: 01a1d782-846c-71a0-914a-26ae2f14aba5
+  author: joe
+  content: 'Advisor 17:50 triage of the #3924 CR at 863f4f6: P1 stays BLOCKING. canonical_resume_branch hard-fails pickup on merged residue (an origin-only branch whose PR merged) where main allocated a dated branch; restore the allocation fallback and add a test. Cosmetic (duplicate exit/recovery comments): ACCEPTED, not required. The next round is a scoped re-review of P1.'
+  created_at: 2026-11-14T00:43:37.452022875Z
+  modified_at: 2026-11-14T00:43:37.452022875Z
+  session_id: 01a1d73b-e31c-7f33-b2fe-cee145ddc6fb
+  harness_version: 2.1.325 (Claude Code)
 history:
 - id: 01a1d2e2-f946-73a0-bdee-dad6c72c0bc8
   author: joe
