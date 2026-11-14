@@ -1,0 +1,33 @@
+id: 01a1d7e5-b198-7340-ae9c-8f205f37e4aa
+spec_id: STORY-b6b1278890774ef993d2ebc327862470-707
+agreed_id: STORY-2784
+title: 'Review PR-3981: [AI:claude] feat(land): aida land run carries out each change''s action (STORY-2768)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `(no-sess`) for branch `story-2768-s2-run`.
+
+  - PR: <https://github.com/joemooney/aida/pull/3981>
+  - Branch: `story-2768-s2-run` → `integration`
+
+  ## Covers
+
+  - STORY-2768
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 3981` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-14T02:31:57.080342988Z
+modified_at: 2026-11-14T02:31:57.080342988Z
+req_type: Story
+filed_at:
+  code_sha: c0465bed52efb2c3d46d19594db8e494cc92373b
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: bc24a1e6883
+  vendor: claude
