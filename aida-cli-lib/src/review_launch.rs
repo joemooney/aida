@@ -329,6 +329,7 @@ mod tests {
             ],
         );
         let mut prompt = "/aida-review --pr 42".to_string();
+        assert!(!crate::queue_cmd::is_standalone_reviewer("reviewer", true));
         compose_launch_prompt(root, "reviewer", Some(42), false, &mut prompt).unwrap();
         let base = carry::git(root, &["rev-parse", "origin/main"]);
         assert!(prompt.contains(&format!("main at {base}")), "{prompt}");

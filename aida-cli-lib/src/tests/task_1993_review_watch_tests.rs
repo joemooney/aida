@@ -3760,12 +3760,18 @@ fn story2763_conflict_preflight_exits_reservation_without_failing_a_round() {
     .expect("a routed conflict is not a reviewer failure");
     assert!(!launched.get(), "no reviewer starts on a conflicting PR");
     let recorded = &store.load().unwrap().entries[&c.key()].attempts[0];
-    assert_eq!(recorded.phase, Phase::Exited);
+    // The shared transition classifies an observed exit before reviewer spawn
+    // as a retryable setup failure, rather than a completed reviewer attempt.
+    // trace:STORY-2763 | ai:codex
+    assert_eq!(recorded.phase, Phase::Failed);
     assert!(recorded
         .diagnostic
         .as_deref()
         .unwrap()
         .contains("conflicts with the protected base"));
+    assert_eq!(store.history(&c.key()).unwrap().blocking(), 0);
+    // A conflicting PR must release the sole slot for unrelated review work.
+    dispatch(select(&store, &change(2, 2, false), None, 1).unwrap());
 
     let (_temp, store) = fixture();
     let attempt = dispatch(select(&store, &c, None, 1).unwrap());

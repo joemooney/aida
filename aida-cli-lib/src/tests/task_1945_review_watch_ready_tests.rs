@@ -1429,8 +1429,20 @@ fn story2763_watcher_overlapping_clean_merge_fast_train_and_strict_review() {
         git(&["push", "--quiet", "origin", "main"]);
         git(&["fetch", "--quiet", "origin"]);
         git(&["checkout", "--quiet", "pr"]);
+        // Establish the AC6 trigger before merging: A and landed B really
+        // overlap by path, although their edits merge without a resolution.
+        let fork = fixture::git(root, &["merge-base", "HEAD", "origin/main"]);
+        let changed_paths = |tip: &str| {
+            fixture::git(root, &["diff", "--name-only", &fork, tip])
+                .lines()
+                .map(str::to_owned)
+                .collect::<BTreeSet<_>>()
+        };
+        assert!(changed_paths("HEAD").contains("a.txt"));
+        assert!(changed_paths("origin/main").contains("a.txt"));
         git(&["merge", "--quiet", "--no-edit", "main"]);
         let head = fixture::head(root);
+        assert_ne!(head, approved);
         let mut c = change(0, false);
         c.id = 42;
         c.head = head.clone();
@@ -1456,6 +1468,23 @@ fn story2763_watcher_overlapping_clean_merge_fast_train_and_strict_review() {
         let verdict = fixture::approval(&approved);
         let policy = fixture::policy(&verdict);
         let site = carry::CarryOverSite::read_only(root, Some("main"));
+        // Exercise the shipping consumer too: watcher suppression must agree
+        // with publication, rather than only with the train's evidence mock.
+        let ship = crate::gate::approval::pr_ship_approval_gate(
+            root,
+            42,
+            std::slice::from_ref(&verdict),
+            Some(&head),
+            &policy,
+            false,
+            true,
+            Some(&site),
+        );
+        if strict {
+            assert!(ship.is_err(), "strict cannot publish the old approval");
+        } else {
+            assert_eq!(ship.unwrap().as_deref(), Some(head.as_str()));
+        }
         let approval = ready::approval_at(42, &[verdict], &head, &policy, &site);
         let mut evidence = Fake::ready();
         evidence.approval = approval;
@@ -1481,6 +1510,22 @@ fn story2763_watcher_overlapping_clean_merge_fast_train_and_strict_review() {
                     launches.set(launches.get() + 1);
                     let verdict = fixture::approval(&head);
                     let policy = fixture::policy(&verdict);
+                    assert_eq!(
+                        crate::gate::approval::pr_ship_approval_gate(
+                            root,
+                            42,
+                            std::slice::from_ref(&verdict),
+                            Some(&head),
+                            &policy,
+                            false,
+                            true,
+                            Some(&site),
+                        )
+                        .unwrap()
+                        .as_deref(),
+                        Some(head.as_str()),
+                        "strict ships only after the merged head is reviewed"
+                    );
                     evidence.approval = ready::approval_at(42, &[verdict], &head, &policy, &site);
                     Ok(())
                 },
