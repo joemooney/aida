@@ -1,0 +1,28 @@
+id: 01a1db8f-a520-7830-aa03-4501052320c4
+spec_id: TASK-73022632d35647cca3858b18ac0723e3-013
+title: Let an active mandate covering the seat stand in for or renew a relay's parent grant (project setting)
+description: |
+  BUG-2585 item (4) asked to consider this; it is not implemented. Today a relay whose parent grant expires holds its session and waits for a human to run the printed renewal command. With a project setting, an active mandate that covers the seat could renew or replace the parent grant so an unattended run needs no human at all. This changes who can mint authority, so it needs a sketch and advisor signoff.
+
+  Raised by the implementer while working BUG-2585.
+  Branch: bug-b6b1278890774ef993d2ebc327862470-350  ·  Commit: 6538b1a222  (PR link added on merge)
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-14T19:36:26.656131506Z
+modified_at: 2026-11-14T19:36:26.656131506Z
+req_type: Task
+tags:
+- from-implementer:BUG-2585
+- kind:followup-suggestion
+- severity:minor
+filed_at:
+  code_sha: 6538b1a2222245dab5adf6889c59c8988ac1521b
+  branch: bug-b6b1278890774ef993d2ebc327862470-350
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: bc24a1e688
+  vendor: claude
+  session: 01a1db779f44
+  harness_version: 2.1.319 (Claude Code)

@@ -1,0 +1,28 @@
+id: 01a1db8f-d85c-7280-a3cd-c468242bd3a7
+spec_id: TASK-73022632d35647cca3858b18ac0723e3-015
+title: 'BUG-2585: doctor shows the relay parent grant only inside 2h; ahead-of-expiry mail is sent by the relay''s turn monitor'
+description: |
+  The spec asks for the parent grant expiry in aida doctor beside the mandate expiry. aida doctor prints findings only, so the relay parent grant appears there (category seat-grant) only inside 2h of expiry or after it; the always-on line is in the SessionStart banner (aida role expiry). The ahead-of-expiry mail to advisor and product is sent from the relay's turn monitor (aida-cli-lib/src/agent_rotation.rs), checked once a minute while a generation runs, and only for launches with --role. The PARENT GRANT banner line needs the SessionStart hook to call aida role expiry, which it does only when AIDA_SESSION_GRANT is set (aida-core/templates/hooks/aida-session-context.sh:249); its comment there still says the call is silent above 2h.
+
+  Raised by the implementer while working BUG-2585.
+  Branch: bug-b6b1278890774ef993d2ebc327862470-350  ·  Commit: 6538b1a222  (PR link added on merge)
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-14T19:36:39.772788240Z
+modified_at: 2026-11-14T19:36:39.772788240Z
+req_type: Task
+tags:
+- from-implementer:BUG-2585
+- kind:deviation
+- severity:minor
+filed_at:
+  code_sha: 6538b1a2222245dab5adf6889c59c8988ac1521b
+  branch: bug-b6b1278890774ef993d2ebc327862470-350
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: bc24a1e688
+  vendor: claude
+  session: 01a1db779f44
+  harness_version: 2.1.319 (Claude Code)
