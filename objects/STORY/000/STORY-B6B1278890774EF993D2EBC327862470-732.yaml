@@ -13,18 +13,48 @@ description: |
   3. Full runs for different PRs run concurrently, within the Actions concurrency limits; a train still runs its merge-result CI.
   4. Docs: docs/advanced (landing) states the new gate; make check-ci-list shows the tier.
   Track: main (CI workflow + train eligibility). Ship via train.
-status: InProgress
+status: NeedsAttention
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-14T12:41:27.454869454Z
-modified_at: 2026-11-14T12:44:08.263398759Z
+modified_at: 2026-11-14T13:12:54.564674306Z
 req_type: Story
 tags:
 - area:ci
 - area:train
 - priority:1
 - track:main
+comments:
+- id: 01a1da30-655a-7d73-9a2f-ee71622a2730
+  author: dirtlab
+  content: |-
+    ## Implementer handoff (committed locally, not published)
+
+    Commit 618859a229 on branch story-b6b1278890774ef993d2ebc327862470-732, rebased on origin/main 2682c4c4fe. The seat has no valid GitHub credential (gh returns HTTP 401), so the push and the PR were not possible from here.
+
+    ### What the commit does
+    - ci.yml: `ci:full` selects FULL except on `synchronize`, so a push is FAST again until the new head is approved.
+    - `aida review record` with an approving verdict and `--pr` re-applies `ci:full` (remove, then add), which starts FULL on the approved head.
+    - `aida pr train` (named, `--all-ready`, advisor loop): after the approval-pin check it reads the head's checks by commit and admits the member only when the run reporting `ci-tier: full` has a green `Build (ubuntu-latest)`. Refusals name the missing, running or red run. A head with no run gets one requested (not in `--dry-run`). `--skip-full-check` admits anyway and appends `train-admit-skip-full-check` to `.aida/advisor-activity.jsonl`.
+    - Docs: `docs/advanced/landing.md` (new), cross-links in `docs/cli/04-git-lifecycle.md` and `docs/internal/testing/ci-test-shards.md`; `make check-ci-list` prints the approved-head tier line.
+
+    ### Validation
+    - `cargo test --profile agent -p aida-cli-lib --lib -- train story_2809 full_tier live_gate skip_full_check story_2492 story_1917 commit_ci review_record help_surface`: 372 passed, 3 failed. The 3 failures: one needs a `debug/aida` binary the lane did not build; two (`story_1917_dispatch_exec_tests` reviewer-worktree cleanup) fail on a mail-retention writer scan. I did not confirm those two fail on main without this change.
+    - Fast gates were run one at a time (the 60s tool cap rules out `make check-ci-fast`): 44 of 48 passed. The 4 that did not (containment conformance, store mutation channel, self-hosted routing fixtures) fail on socket creation denied by the seat sandbox; formatting and the store-writer inventory failed first and pass after `cargo fmt` and the inventory regeneration.
+    - Help golden regenerated and committed.
+
+    ### Choices worth a look
+    1. `--skip-full-check` travels in a thread-local guard around the train handler (the ADVISOR_LOOP pattern), not a `TrainOptions` field. A journal resumed later without the flag refuses a skip-admitted member.
+    2. A repository with checks but no `ci-tier:` marker is admitted as untiered; a head with no checks at all is refused.
+    3. The label stays on the PR after a push; a later non-push label event on that unapproved head runs FULL. Wasteful, not unsafe.
+    4. Contained reviewers may be unable to edit labels; the train's own request covers that, at the cost of starting the run later. Applying the label from the launcher's verdict-collection path would close the gap.
+
+    Draft-task filing for these was refused: the ID dispenser file `.git/aida-work-dispenser.toml` in the primary checkout is mode 0664.
+  created_at: 2026-11-14T13:12:47.194921052Z
+  modified_at: 2026-11-14T13:12:47.194921052Z
+  session_id: 01a1da15645b
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1da15-71c2-7341-9db1-1661bad607cc
   author: aida-session-start
@@ -39,6 +69,15 @@ history:
   session_id: 01a1da15645b
   harness_version: 2.1.319 (Claude Code)
   changes: []
+- id: 01a1da30-8224-7530-ae0b-ee544d1f2026
+  author: dirtlab
+  timestamp: 2026-11-14T13:12:54.564686442Z
+  session_id: 01a1da15645b
+  harness_version: 2.1.319 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 filed_at:
   code_sha: 166920a3bf8bd517e8d670a09dd3a7a3de96b7f9
   branch: main
@@ -48,3 +87,9 @@ filed_at:
   vendor: claude
   session: 01a1d9ea-4e25-7033-85e8-3648f0195c7c
   harness_version: 2.1.325 (Claude Code)
+attention_reason:
+  category: other
+  detail: 'work complete locally but unable to publish: the seat has no valid GitHub credential (gh api returns HTTP 401; git push cannot read a username), so the branch was not pushed and no PR was opened'
+  lean: commit 618859a229 on story-b6b1278890774ef993d2ebc327862470-732 is clean and rebased on origin/main; publish it from the host with aida ship --from-seat, or restore the seat's gh token and re-run aida ship STORY-2809 --no-merge
+  raised_by: implementer
+  raised_at: 2026-11-14T13:12:54.564674306Z
