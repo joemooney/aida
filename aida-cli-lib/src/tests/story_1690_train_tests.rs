@@ -1005,6 +1005,8 @@ struct FakeChecks {
     mandate_active: bool,
     /// The IDs the spec-policy gates were asked about.
     asked: Vec<String>,
+    /// STORY-2824: the gate runs as a read-only report.
+    read_only: bool,
 }
 
 impl FakeChecks {
@@ -1022,6 +1024,7 @@ impl FakeChecks {
             mandate: Err(None),
             mandate_active: false,
             asked: Vec::new(),
+            read_only: false,
         }
     }
 
@@ -1117,6 +1120,9 @@ impl MemberChecks for FakeChecks {
     }
     fn mandate_active(&self) -> bool {
         self.mandate_active
+    }
+    fn read_only(&self) -> bool {
+        self.read_only
     }
 }
 
@@ -4663,6 +4669,7 @@ fn pr_train_journal_nested_member_reads_refuse_when_checkpoint_fails() {
         forge: &forge,
         base: "main",
         named: false,
+        read_only: false,
     };
     let dir = r.join("intent");
     std::fs::create_dir(&dir).unwrap();
@@ -5912,3 +5919,8 @@ fn mandate_include_gate_paths_audits_train_member() {
     );
     assert_eq!(car_message(&restored), message);
 }
+
+// The `--check` report runs this file's scripted member gate.
+// trace:STORY-2824 | ai:claude
+#[path = "story_2824_train_check_tests.rs"]
+mod story_2824_train_check_tests;

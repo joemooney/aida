@@ -23,6 +23,9 @@
 //!    Main never receives an untested combination.
 // trace:STORY-1690 | ai:claude
 
+#[path = "pr_train_check.rs"]
+mod check;
+pub(crate) use check::{pr_train_check_handler, CheckOptions};
 #[path = "pr_train_journal.rs"]
 mod journal;
 pub(crate) use journal::TrainJournalBusy;
@@ -1290,6 +1293,52 @@ pub(crate) trait MemberChecks {
     /// itself re-reads the mandate.
     // trace:BUG-2214 | ai:claude
     fn mandate_active(&self) -> bool;
+    /// A read-only report (`aida pr train --check`): the gate judges as
+    /// usual but must leave no state behind.
+    // trace:STORY-2824 | ai:claude
+    fn read_only(&self) -> bool {
+        false
+    }
+}
+
+/// The member gate's steps, in the order it runs them. `aida pr train
+/// --check` names the first one a PR fails.
+// trace:STORY-2824 | ai:claude
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub(crate) enum Gate {
+    /// Open, not a draft, same repository, on the default branch.
+    #[default]
+    PrState,
+    /// Already a member of a live train.
+    Riding,
+    Drive,
+    Hold,
+    HoldLabels,
+    ReviewClaim,
+    Head,
+    Approval,
+    /// Full-tier CI at the approved head, where the repository tiers its CI.
+    FullCi,
+    Corpus,
+    Message,
+    SpecPolicy,
+    /// An active mandate decides, and a read-only report does not ask it.
+    Mandate,
+}
+
+thread_local! { static LAST_GATE: std::cell::Cell<Gate> = const { std::cell::Cell::new(Gate::PrState) }; }
+
+/// Note the step the member gate is entering.
+// trace:STORY-2824 | ai:claude
+fn at_gate(gate: Gate) {
+    LAST_GATE.with(|g| g.set(gate));
+}
+
+/// The step the member gate on this thread last entered: after a refusal,
+/// the one that refused.
+// trace:STORY-2824 | ai:claude
+pub(crate) fn last_gate() -> Gate {
+    LAST_GATE.with(std::cell::Cell::get)
 }
 
 /// The spec IDs a member ships, read the way ship reads them: its branch and
@@ -1391,6 +1440,7 @@ fn typed_gate_member_with(
     base: &str,
     pr: u64,
 ) -> std::result::Result<Member, MemberGateError> {
+    at_gate(Gate::PrState);
     let meta = checks.metadata(pr).map_err(MemberGateError::Unavailable)?;
     if let Some(why) = member_metadata_refusal(&meta, base) {
         return Err(why.into());
@@ -1414,6 +1464,7 @@ fn typed_gate_member_with(
         }
     }
     // TASK-1602: ship's in-drive ownership gate. trace:STORY-1690 | ai:claude
+    at_gate(Gate::Drive);
     if let Some(detail) = checks.drive_block(pr) {
         return Err(MemberGateError::Refused(format!(
             "a live drive owns it ({detail}); its independent reviewer gates the merge"
@@ -1423,6 +1474,7 @@ fn typed_gate_member_with(
     // byte-identically to before; under one, the judgment defers to the
     // mandate cover below, where the ids and the head exist.
     // trace:BUG-2214 | ai:claude
+    at_gate(Gate::Hold);
     let held = checks.hold_marker(pr);
     if let Some(reason) = &held {
         if !checks.mandate_active() {
@@ -1432,6 +1484,7 @@ fn typed_gate_member_with(
             )));
         }
     }
+    at_gate(Gate::HoldLabels);
     match checks.labels(pr) {
         Ok(Some(c)) => {
             if let Some(why) = member_label_refusal(&c, held.is_some()) {
@@ -1447,14 +1500,22 @@ fn typed_gate_member_with(
     }
     // STORY-1405: a reviewer's claim on this head blocks the train exactly
     // as it blocks ship; the head is known, so the marker cannot be skipped.
-    if let crate::gate::review_marker::MergeGate::UnderReview(m) =
+    at_gate(Gate::ReviewClaim);
+    // A read-only report leaves an expired marker in place.
+    // trace:STORY-2824 | ai:claude
+    let claim = if checks.read_only() {
+        crate::gate::review_marker::merge_gate_peek(checks.marker_root(), pr, || Some(head.clone()))
+    } else {
         crate::gate::review_marker::merge_gate(checks.marker_root(), pr, || Some(head.clone()))
-    {
+    };
+    if let crate::gate::review_marker::MergeGate::UnderReview(m) = claim {
         return Err(crate::gate::review_marker::refusal_message(&m).into());
     }
+    at_gate(Gate::Head);
     checks.fetch_head(&head_ref).map_err(|e| {
         MemberGateError::Unavailable(format!("its head could not be fetched ({e})"))
     })?;
+    at_gate(Gate::Approval);
     let pin = match checks.checked_approval_pin(pr, &head_ref, &head) {
         Ok(Some(pin)) => pin,
         Ok(None) => return Err("no approval is recorded for it".to_string().into()),
@@ -1467,6 +1528,11 @@ fn typed_gate_member_with(
             short(&head)
         )));
     }
+    // The full-tier CI rule for an approved head belongs here, after the
+    // approval and before the corpus, so a report names it as its own step.
+    // trace:STORY-2824 | ai:claude
+    at_gate(Gate::FullCi);
+    at_gate(Gate::Corpus);
     // BUG-HOME-048: both id lists pass the PR's trailer coverage.
     // trace:BUG-B6B1278890774EF993D2EBC327862470-048 | ai:claude
     let hints = checks.covered_ids(
@@ -1475,9 +1541,11 @@ fn typed_gate_member_with(
         crate::pr_ship::extract_spec_ids_from_text(&format!("{head_ref} {}", meta.title)),
     );
     checks.checked_corpus(pr, &hints, &head)?;
+    at_gate(Gate::Message);
     let (subject, body) = checks
         .message(pr, &meta, &head)
         .map_err(MemberGateError::Unavailable)?;
+    at_gate(Gate::SpecPolicy);
     // STORY-529, BUG-727, STORY-1698: the spec-policy gates ship applies
     // before it merges. trace:STORY-1690 | ai:claude
     let ids = checks.covered_ids(
@@ -1511,6 +1579,7 @@ fn typed_gate_member_with(
     let release = match &held {
         None => None,
         Some(reason) => {
+            at_gate(Gate::Hold);
             let cover = match cover_slot {
                 Some(cover) => cover,
                 None => checks.mandate_cover(pr, &ids, &head_ref, &head),
@@ -1550,7 +1619,17 @@ pub(crate) struct LiveChecks<'a> {
     pub base: &'a str,
     /// The PR was named on the command line, not swept in by `--all-ready`.
     pub named: bool,
+    /// `aida pr train --check`: judge, and write nothing — no gate ledger
+    /// answer, no held-gate event, no hold mirror, no activity line.
+    // trace:STORY-2824 | ai:claude
+    pub read_only: bool,
 }
+
+/// What a read-only report says in place of an active mandate's cover: asking
+/// the cover notes exclusions and may record a carry-over.
+// trace:STORY-2824 | ai:claude
+pub(crate) const MANDATE_NOT_ASKED: &str =
+    "`--check` does not ask an active mandate for its cover, since asking records evidence";
 
 impl MemberChecks for LiveChecks<'_> {
     fn metadata(&mut self, pr: u64) -> std::result::Result<crate::forge::ChangeMetadata, String> {
@@ -1602,6 +1681,12 @@ impl MemberChecks for LiveChecks<'_> {
         head_ref: &str,
         head: &str,
     ) -> std::result::Result<Option<String>, String> {
+        // trace:STORY-2824 | ai:claude
+        if self.read_only {
+            return self
+                .checked_approval_pin(pr, head_ref, head)
+                .map_err(MemberGateError::reason);
+        }
         crate::gate::approval::merge_path_approval_gate(
             self.project_root,
             pr,
@@ -1617,13 +1702,13 @@ impl MemberChecks for LiveChecks<'_> {
         head_ref: &str,
         head: &str,
     ) -> std::result::Result<Option<String>, MemberGateError> {
-        match crate::gate::approval::observe_merge_path_approval_gate(
-            self.project_root,
-            pr,
-            &[],
-            Some(head_ref),
-            Some(head),
-        ) {
+        // trace:STORY-2824 | ai:claude
+        let observe = if self.read_only {
+            crate::gate::approval::peek_merge_path_approval_gate
+        } else {
+            crate::gate::approval::observe_merge_path_approval_gate
+        };
+        match observe(self.project_root, pr, &[], Some(head_ref), Some(head)) {
             crate::forge_observed::Observed::Known(result) => {
                 result.map_err(MemberGateError::Refused)
             }
@@ -1645,9 +1730,19 @@ impl MemberChecks for LiveChecks<'_> {
             hints,
             Some(self.base),
             || Some(head.to_string()),
-            true,
+            !self.read_only,
         )
         .map_err(|e| MemberGateError::Unavailable(format!("{e:#}")))?;
+        // A read-only report states the refusal without arming its mirrors.
+        // trace:STORY-2824 | ai:claude
+        if self.read_only {
+            return match decision {
+                crate::gate::merge_hold_core::CorpusMergeGate::Clear => Ok(()),
+                crate::gate::merge_hold_core::CorpusMergeGate::Refuse { message, .. } => {
+                    Err(MemberGateError::Refused(message))
+                }
+            };
+        }
         crate::gate::merge_hold_core::enforce_corpus_decision(self.project_root, pr, decision)
             .map_err(|e| MemberGateError::Refused(format!("{e:#}")))
     }
@@ -1655,6 +1750,12 @@ impl MemberChecks for LiveChecks<'_> {
         self.main_worktree
     }
     fn corpus(&mut self, pr: u64, hints: &[String], head: &str) -> std::result::Result<(), String> {
+        // trace:STORY-2824 | ai:claude
+        if self.read_only {
+            return self
+                .checked_corpus(pr, hints, head)
+                .map_err(MemberGateError::reason);
+        }
         crate::gate::merge_hold_core::enforce_corpus_gate_before_merge(
             self.project_root,
             pr,
@@ -1708,6 +1809,14 @@ impl MemberChecks for LiveChecks<'_> {
         head_ref: &str,
         head: &str,
     ) -> std::result::Result<crate::gate::mandate_ship::MandateCover, Option<String>> {
+        // trace:STORY-2824 | ai:claude
+        if self.read_only {
+            if !self.mandate_active() {
+                return Err(None);
+            }
+            at_gate(Gate::Mandate);
+            return Err(Some(MANDATE_NOT_ASKED.to_string()));
+        }
         let hold_root = crate::pr_cmd::pr_ship_hold_root(self.project_root);
         crate::gate::mandate_ship::mandate_ship_cover_for_ship(
             self.project_root,
@@ -1743,6 +1852,10 @@ impl MemberChecks for LiveChecks<'_> {
             crate::gate::mandate::current_state(),
             crate::gate::mandate::MandateState::Active(_)
         )
+    }
+    // trace:STORY-2824 | ai:claude
+    fn read_only(&self) -> bool {
+        self.read_only
     }
 }
 
@@ -2274,6 +2387,7 @@ pub(crate) fn gate_member(
             forge,
             base,
             named,
+            read_only: false,
         },
         base,
         pr,
@@ -2860,6 +2974,7 @@ impl TrainForge for LiveTrainForge<'_> {
                 forge: self.forge,
                 base: &self.base,
                 named: self.named,
+                read_only: false,
             },
             &self.base,
             pr,
@@ -4384,6 +4499,7 @@ pub(crate) fn pr_train_handler_with_dispatch_ctx(
                 forge: forge.as_ref(),
                 base: &base,
                 named: prs_named_on_command_line(opts),
+                read_only: false,
             },
             &base,
             pr,

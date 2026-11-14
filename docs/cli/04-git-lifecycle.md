@@ -427,6 +427,27 @@ command; `--max N` caps the batch (default 10), and naming more PRs than
 landed. The train is GitHub-only for now: GitLab's merge-hold gate has no
 train mode, so `aida pr train` refuses a GitLab project; ship its merge
 requests one at a time with `aida pr ship N`.
+
+**Would a PR ride a train right now? (`aida pr train --check <N...>` /
+`--check --all-open`).** Prints one line per PR: `yes` with the head the train
+would carry, or `no` with the first gate that stops it, the train's own reason
+and what clears it. The gates are the ones `aida pr train` runs, in the same
+order: PR state, already riding a train, a live drive, merge hold, hold
+labels, a review in progress, the head fetch, approval at the head,
+verdicts, the commit message, and spec policy. Named PRs are judged as
+`aida pr train N` would judge them, and `--all-open` as `--all-ready` would.
+Nothing is changed: no label, hold, journal, gate-ledger entry or event is
+written, and an expired review claim is left in place (the check does fetch,
+so remote-tracking refs are refreshed). One difference follows from that:
+when a fire-fighting mandate is active and a PR's answer depends on its
+cover, the check reports `no` at the `mandate` gate instead of asking,
+because asking records evidence; `aida pr train N --dry-run` asks. `--json`
+prints `{base, eligible, prs: [{pr, eligible, head, gate, reason, remedy,
+evidence}]}`. The exit status is 0 only when every PR is eligible. A read that
+fails counts as not eligible (`evidence: unavailable`). `--timeout SECS`
+(default 45) stops starting new PR checks; the PRs not reached are listed as
+not checked, so the run ends within the budget plus one PR's check.
+<!-- trace:STORY-2824 | ai:claude -->
 <!-- trace:STORY-2693 | ai:codex -->
 Train selection gates all candidates before applying `--max`. It greedily picks
 the PR with the smallest sum of shared-file counts against the remaining
