@@ -155,6 +155,9 @@ pub const DROPPED_AIDA_KEYS: &[&str] = &[
     // Build-local invalidation input, supplied by dev_build_command only.
     // trace:BUG-2499 | ai:codex
     "AIDA_DEV_BUILD_HEAD",
+    // Supervisor-to-sweep lock handoff (post-ship cleanup); never a vendor input.
+    // trace:BUG-2535 | ai:claude
+    "AIDA_SWEEP_PARENT",
     "AIDA_AGENT_CMD",
     "AIDA_ADD_NO_REMOTE_SYNC",
     "AIDA_ADVISOR_HANDSHAKE",
