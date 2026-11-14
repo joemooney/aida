@@ -1,0 +1,18 @@
+{
+  "id": "review-watch-841214310c06586cc84ca35d846a6cd32135a96c90295cf4e90ba6c4eb3bcd29",
+  "thread_id": "review-watch-841214310c06586cc84ca35d846a6cd32135a96c90295cf4e90ba6c4eb3bcd29",
+  "from": "review-watch",
+  "to": {
+    "kind": "agent",
+    "agent": "joemooney"
+  },
+  "timestamp": 1794641424817,
+  "body": "PR-3992 at 1fc751e041a4bd401b66ab8d9f9370df33f3cfb5: the review by claude-reviewer (claude reviewer seat) recorded `request-changes` with 2 finding(s), round 1 of 2. The findings are in `.aida/gate-ledger/PR-3992.jsonl`. Address them and push a new head; the watcher starts its review when it sees the head.",
+  "subject": "PR-3992: review requested changes (round 1 of 2)",
+  "urgent": false,
+  "intent": "request",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "explicit"
+}
