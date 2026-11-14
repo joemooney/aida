@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-13T13:53:20.390665880Z
-modified_at: 2026-11-14T07:34:07.555267549Z
+modified_at: 2026-11-14T07:44:10.776206393Z
 req_type: Bug
 tags:
 - hygiene
@@ -42,6 +42,13 @@ comments:
   modified_at: 2026-11-14T07:24:05.455942178Z
   session_id: 01a1d852-16ef-7973-bdde-ac3f274752a2
   harness_version: 2.1.325 (Claude Code)
+- id: 01a1d903-8c18-7540-967b-cd8370f5e050
+  author: dirtlab
+  content: 'Rework addressed in aida-core/src/allocation_authority.rs and aida-cli-lib/src/test_env.rs. Both fixtures require an explicit root-local .git identity before authority discovery; explicit linked worktrees may use a temporary shared common directory, while directory-backed fixtures remain confined to their repository. Added CLI ancestor-isolation and core linked-worktree regressions. Lane tests: core bug_2560 4 passed; cli-lib bug_2560 1 passed. make check-ci-fast: all 48 gates passed. rustfmt and git diff --check passed. Existing bug_2140 run: 1 passed, 1 failed at require_global because its existing allocation setting has shared-write permissions; the original inside-root refusal is resolved. Production permissions unchanged. Host codegraph client missing at configured absolute path; doctor confirms missing. Edits uncommitted for host publication.'
+  created_at: 2026-11-14T07:44:10.776206393Z
+  modified_at: 2026-11-14T07:44:10.776206393Z
+  session_id: 01a1d8f9b72a
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1d889-fed8-7962-86df-f0e26e40b385
   author: joe
