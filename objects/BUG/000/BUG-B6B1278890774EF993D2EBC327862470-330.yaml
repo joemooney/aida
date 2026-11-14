@@ -3,16 +3,26 @@ spec_id: BUG-b6b1278890774ef993d2ebc327862470-330
 agreed_id: BUG-2565
 title: Store pull (aida pull / db sync --pull) is CPU-bound for 15-30+ min and concurrent reviewer launches thrash it
 description: 'Observed 2026-11-13 13:52 MST on the primary checkout: six concurrent reviewer launches each ran ''aida db sync --pull'', each CPU-bound (25-30% CPU, 7-10 min CPU time, 26-32 min wall) with no git child most of the time; load 11-14 on 6 cores. The train''s post-merge ''aida pull'' (train #3962) took 14+ min (8 min CPU) and blocked the next queued train. Expected: a store pull completes in seconds; concurrent pulls serialize on one lock and later callers reuse the result instead of each re-running the full pull. Acceptance: (1) a store pull with no new upstream commits finishes in <10 s; (2) concurrent pulls in one checkout coalesce, so N launches run one pull; (3) a regression test bounds pull work on a store with 1000+ gate-ledger spec dirs.'
-status: Draft
+status: Approved
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-13T20:52:54.357683400Z
-modified_at: 2026-11-13T20:52:54.357683400Z
+modified_at: 2026-11-14T06:06:10.850019412Z
 req_type: Bug
 tags:
 - perf
 - track:integration
+history:
+- id: 01a1d8a9-d3a1-7243-a396-3ba4fdaf7412
+  author: joe
+  timestamp: 2026-11-14T06:06:10.850005026Z
+  session_id: 01a1d852-16ef-7973-bdde-ac3f274752a2
+  harness_version: 2.1.325 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Approved
 filed_at:
   code_sha: 268f02eb6b99bb5e89efe24ca2be475d5c33face
   branch: main
