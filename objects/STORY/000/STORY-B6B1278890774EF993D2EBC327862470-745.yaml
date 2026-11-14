@@ -37,11 +37,19 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-14T18:18:20.399960794Z
-modified_at: 2026-11-14T18:21:06.391302551Z
+modified_at: 2026-11-14T18:22:56.717844418Z
 req_type: Story
 tags:
 - agent-ergonomics
 - cli
+comments:
+- id: 01a1db4c-5acd-7a60-b68c-4c1372727530
+  author: joe
+  content: 'Advisor additions 2026-11-14 11:22: (a) ''aida queue work PR-N --role reviewer'' on a PR already MERGED under review-after-merge runs a whole reviewer that exits ''nothing to review'' with no verdict (#4043); it should refuse at preflight or support a post-merge review. (b) ''aida mailbox send --to <handle>'' is refused (''no live agent'') while that seat is mid-rotation, so a message to a rotating seat has no durable route except a spec comment. (c) reviewer preflight refusals (stale-base, duplicate verdict, wrong track, ''implementer lane live'') surface only after the launcher''s 90 s x 4 retry loop and only in the lane log. (d) ''aida comment add'' / ''aida edit'' print a cache block (''stale: false'' / ''store_head'') as their last line instead of the confirmation, so tail -1 cannot tell whether the write happened. (e) ''aida queue rework'' spins (BUG-2551 family) with no output.'
+  created_at: 2026-11-14T18:22:56.717844418Z
+  modified_at: 2026-11-14T18:22:56.717844418Z
+  session_id: 01a1dab1-9447-7d22-b5ff-0c9084e122ea
+  harness_version: 2.1.325 (Claude Code)
 history:
 - id: 01a1db4a-abd7-74b1-97e3-ad48fe26683e
   author: joe
