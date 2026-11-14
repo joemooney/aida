@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-11T12:18:44.426945707Z
-modified_at: 2026-11-14T19:09:58.974804573Z
+modified_at: 2026-11-14T19:10:17.027657083Z
 req_type: Task
 relationships:
 - rel_type: BlockedBy
@@ -18,6 +18,10 @@ relationships:
 - rel_type: Child
   target_id: 01a1c91e-cfa5-7032-a3a8-2a4d85e2321c
   created_at: 2026-11-11T12:19:03.656791975Z
+- rel_type: BlockedBy
+  target_id: 01a1ca8a-f7d4-79f1-bc7d-19935822a071
+  created_at: 2026-11-14T19:10:17.027653709Z
+  created_by: joe
 history:
 - id: 01a1ca8b-f5f0-7442-bac6-79814c7dc836
   author: joe
@@ -40,6 +44,12 @@ history:
 - id: 01a1db77-a546-7142-8c52-e7dfd51ffd4c
   author: joe
   timestamp: 2026-11-14T19:10:13.830617778Z
+  session_id: 01a1db6d-e689-7532-9eef-772722add87b
+  harness_version: 2.1.325 (Claude Code)
+  changes: []
+- id: 01a1db77-b87b-7000-a48d-504dd27da56c
+  author: joe
+  timestamp: 2026-11-14T19:10:18.747334573Z
   session_id: 01a1db6d-e689-7532-9eef-772722add87b
   harness_version: 2.1.325 (Claude Code)
   changes: []
