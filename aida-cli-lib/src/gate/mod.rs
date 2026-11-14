@@ -61,3 +61,7 @@ mod task_2707_cache_authority_tests;
 
 // trace:STORY-2492 | ai:codex
 pub(crate) mod review_publication;
+
+// trace:TASK-3784 | ai:codex
+#[cfg(test)]
+pub(crate) mod test_support;

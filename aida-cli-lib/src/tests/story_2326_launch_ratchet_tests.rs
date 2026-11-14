@@ -10,7 +10,14 @@
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
-const CRATES: &[&str] = &["aida-mcp", "aida-core", "aida-cli-lib", "aida-tui"];
+// trace:TASK-3784 | ai:codex
+const CRATES: &[&str] = &[
+    "aida-mcp",
+    "aida-core",
+    "aida-cli-lib",
+    "aida-tui",
+    "aida-testkit",
+];
 
 /// Modules that are the launcher itself.
 const LAUNCHER: &[&str] = &[
@@ -70,7 +77,7 @@ const LEDGER: &[(&str, usize, &str)] = &[
     ("aida-cli-lib/src/session.rs", 41, "slice A2: the three Claude resume paths; slice C: remaining Codex finalization/exec and vendor resume markers; the shared seat-env helper; the contained export (its aida control children convert in slice C); the interactive exec of a built launch"),
     ("aida-cli-lib/src/session_start.rs", 2, "not a vendor child: forge CLI"),
     ("aida-cli-lib/src/shift.rs", 2, "generic helper: shift command; pre_exec process group"),
-    ("aida-cli-lib/src/test_exec.rs", 1, "test-support helper compiled into the crate"),
+    ("aida-testkit/src/test_exec.rs", 1, "test-support helper compiled into the crate"),
     ("aida-cli-lib/src/transport_scan.rs", 1, "not a vendor child: pre_exec process group"),
     ("aida-cli-lib/src/upgrade_cmd.rs", 1, "not a vendor child: upgrade installer"),
     ("aida-core/src/ai/client.rs", 1, "slice D: the AI client's vendor CLI request"),

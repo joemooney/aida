@@ -67,6 +67,7 @@ dependencies = [
  "aida-cmdkit",
  "aida-core",
  "aida-term",
+ "aida-testkit",
  "aida-tui",
  "anyhow",
  "base64",
@@ -74,7 +75,6 @@ dependencies = [
  "clap",
  "colored",
  "crossterm",
- "etcetera",
  "fs2",
  "getrandom 0.2.17",
  "hostname",
@@ -238,6 +238,19 @@ dependencies = [
  "toml",
  "toml_edit 0.22.27",
  "unicode-width 0.2.2",
+]
+
+[[package]]
+name = "aida-testkit"
+version = "0.16.0"
+dependencies = [
+ "aida-core",
+ "anyhow",
+ "etcetera",
+ "libc",
+ "sysinfo",
+ "tempfile",
+ "uuid",
 ]
 
 [[package]]
