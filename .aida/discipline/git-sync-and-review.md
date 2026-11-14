@@ -58,8 +58,9 @@ aida pr train 2597 2599             # build, CI, land or bisect
 The train stacks one squash commit per PR on current main, proves by patch-id
 that each commit is exactly that PR's approved diff, runs CI on the stack as a
 `train/*` PR, and rebase-merges it pinned to its head only if main has not
-moved. On red it bisects, with no rerun; the PR that breaks the
-combination stays open with a comment. Drafts and held PRs are refused with
+moved. On a test failure it bisects, with no rerun; the PR that breaks the
+combination stays open with a comment. Only a train whose CI was cancelled
+before it gave a test result is rerun, once. Drafts and held PRs are refused with
 a reason. Details: `two-seat-protocol.md` § Merge train.
 <!-- trace:STORY-1690 | ai:claude -->
 
