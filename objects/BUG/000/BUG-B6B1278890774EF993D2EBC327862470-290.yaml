@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-11T14:11:33.148855447Z
-modified_at: 2026-11-14T05:14:40.874118630Z
+modified_at: 2026-11-14T06:49:23.311121214Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -50,6 +50,11 @@ relationships:
     custom: implemented-by
   target_id: 01a1d876-9b7c-7413-9ae2-0fc024358032
   created_at: 2026-11-14T05:14:40.874115861Z
+  created_by: joe
+- rel_type:
+    custom: implemented-by
+  target_id: 01a1d8ca-619f-7b01-af1f-9715ccaf15cf
+  created_at: 2026-11-14T06:49:23.311112975Z
   created_by: joe
 comments:
 - id: 01a1cb39-d707-7bb0-9099-8dcb38800944
@@ -306,6 +311,10 @@ history:
 - id: 01a1d87a-b444-7fd3-9b93-990d7dade71d
   author: joe
   timestamp: 2026-11-14T05:14:42.628738326Z
+  changes: []
+- id: 01a1d8d1-6ce5-7bb0-9f97-d4cb5ccc85ff
+  author: joe
+  timestamp: 2026-11-14T06:49:25.989109881Z
   changes: []
 filed_at:
   code_sha: 11b131dfe3341e6d9c7127d64370f91366094711
