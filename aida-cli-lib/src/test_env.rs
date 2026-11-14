@@ -46,6 +46,13 @@ mod tests {
         if manifest_dir.join("tests").is_dir() {
             offenders.extend(scan_raw_env_writes_in_dir(&manifest_dir.join("tests")));
         }
+        // trace:TASK-3784 | ai:codex
+        let testkit = manifest_dir.join("../aida-testkit");
+        for directory in [testkit.join("src"), testkit.join("tests")] {
+            if directory.is_dir() {
+                offenders.extend(scan_raw_env_writes_in_dir(&directory));
+            }
+        }
         assert!(
             offenders.is_empty(),
             "found raw env::set_var / remove_var in test code outside helpers:\n{}",
@@ -75,6 +82,13 @@ mod tests {
             offenders.extend(scan_unisolated_set_current_dir_in_dir(
                 &manifest_dir.join("tests"),
             ));
+        }
+        // trace:TASK-3784 | ai:codex
+        let testkit = manifest_dir.join("../aida-testkit");
+        for directory in [testkit.join("src"), testkit.join("tests")] {
+            if directory.is_dir() {
+                offenders.extend(scan_unisolated_set_current_dir_in_dir(&directory));
+            }
         }
         assert!(
             offenders.is_empty(),
