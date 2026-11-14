@@ -1,5 +1,6 @@
 id: 01a1db71-1977-7482-8256-49e7737dc8e6
 spec_id: STORY-73022632d35647cca3858b18ac0723e3-018
+agreed_id: STORY-2366
 title: 'Review PR-4053: [AI:claude] feat(train): aida pr train --check says whether each PR would ride a train, and why not (STORY-2824)'
 description: |
   Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `(no-sess`) for branch `story-b6b1278890774ef993d2ebc327862470-747`.
@@ -33,6 +34,12 @@ history:
 - id: 01a1db71-5867-7241-b7a3-dbfb497df7c0
   author: dirtlab
   timestamp: 2026-11-14T19:03:20.935601977Z
+  changes: []
+- id: 01a1db72-e5c4-7b81-b614-4d66b0f5a66d
+  author: joe
+  timestamp: 2026-11-14T19:05:02.660944960Z
+  session_id: 01a1db6d-e689-7532-9eef-772722add87b
+  harness_version: 2.1.325 (Claude Code)
   changes: []
 filed_at:
   code_sha: e14d6c9a70b0a348e789051c741c6f5c49a113bd
