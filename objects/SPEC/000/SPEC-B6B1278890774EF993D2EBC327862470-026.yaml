@@ -3,18 +3,23 @@ spec_id: SPEC-b6b1278890774ef993d2ebc327862470-026
 agreed_id: TASK-3098
 title: Define archive-aware gate-ledger retention before automatic closed-change rotation
 description: 'BUG-2531 partial implementation scopes aggregate selection payloads to relevant change ledgers and adds a 50% capacity warning. Automatic closed/merged rotation is not implemented: checked selection refuses by-spec references to missing active ledgers; direct change, audit, carry-over, legacy import and append readers all assume the active path. Simply moving files and pruning indexes can hide older refusals and make reopened-change history disappear. Decide an archive-aware read/write and revival contract (including missing/stale index discovery, concurrency under the ledger-wide lock and retention/forge-closure evidence), then implement rotation with regressions. Current discovery still strictly inspects all active files under independent per-file caps; this slice isolates aggregate byte exhaustion, not discovery I/O growth.'
-status: InProgress
+status: NeedsAttention
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-12T08:49:25.240326961Z
-modified_at: 2026-11-14T07:36:01.338154288Z
+modified_at: 2026-11-14T07:37:04.547409166Z
 req_type: Task
 tags:
 - from-implementer:BUG-2531
 - kind:design-choice
 - severity:major
 - track:integration
+relationships:
+- rel_type: BlockedBy
+  target_id: 01a1cee5-ebd6-7ff3-944c-0748e54f0d84
+  created_at: 2026-11-14T07:37:04.547406558Z
+  created_by: dirtlab
 comments:
 - id: 01a1d365-270b-7b03-b5ce-0e8931bb9c99
   author: joe
@@ -57,6 +62,26 @@ history:
   session_id: 01a1d8fb868e
   harness_version: codex-cli 0.167.0
   changes: []
+- id: 01a1d8fc-f817-71d1-b988-b1c25dd14595
+  author: dirtlab
+  timestamp: 2026-11-14T07:36:59.671737276Z
+  session_id: 01a1d8fb868e
+  harness_version: codex-cli 0.167.0
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
+- id: 01a1d8fd-1224-7ad2-803c-1263f0a5bb3c
+  author: dirtlab
+  timestamp: 2026-11-14T07:37:06.340449197Z
+  session_id: 01a1d8fb868e
+  harness_version: codex-cli 0.167.0
+  changes: []
 filed_at:
   aida_version: 0.16.0
   aida_build_sha: 296d1dd2958
+attention_reason:
+  category: blocked-dependency
+  detail: Advisor ruling 2026-11-12 22:55 MST explicitly sequences retention after BUG-2531 completeness lands. This checkout still has full active-ledger scanning in checked::discover_with_budget and event-before-best-effort-index persistence in store::write_events, without completeness bindings/marker/bootstrap. Rebase this lane onto the landed completeness slice before implementing archive resolution, rotation and revival. Updated the existing sketch with the approved disposition and proposed shared-reader/exclusive-rotation protocol. No runtime changes or completion claimed.
+  raised_by: implementer
+  raised_at: 2026-11-14T07:36:59.671722359Z
