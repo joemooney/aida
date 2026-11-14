@@ -166,6 +166,35 @@ fn an_orphan_held_on_another_host_or_possibly_worked_is_left_and_reported() {
 }
 
 #[test]
+fn a_spec_merged_on_integration_and_not_promoted_is_never_reset() {
+    let mut merged = orphan("BUG-25");
+    merged.awaits_promotion = true;
+    // Merged work wins over a tag a human would look at and over a branch.
+    merged.tags = vec!["architecture".into()];
+    merged.branches = vec!["bug-25-work".into()];
+    let steps = plan(Vec::new(), vec![merged], &[]);
+    let [Step::Skip { what, why }] = &steps[..] else {
+        panic!("{steps:?}")
+    };
+    assert_eq!(what, "BUG-25");
+    assert!(why.contains("waits for a promotion"), "{why}");
+
+    let ids = vec!["BUG-25".to_string(), "bug-b6b1-349".to_string()];
+    let subjects = |list: &[&str]| list.iter().map(|s| s.to_string()).collect::<Vec<_>>();
+    assert!(named_in(
+        &ids,
+        &subjects(&["[AI:claude] chore(integration): merge PR #9 a fix (BUG-25)"])
+    ));
+    assert!(named_in(&ids, &subjects(&["fix(x): y (Refs bug-25)"])));
+    assert!(named_in(&ids, &subjects(&["fix(x): y (BUG-B6B1-349)"])));
+    assert!(!named_in(
+        &ids,
+        &subjects(&["fix(x): y (BUG-255)", "BUG-2 and BUG-5"])
+    ));
+    assert!(!named_in(&ids, &[]));
+}
+
+#[test]
 fn only_a_live_driver_keeps_an_orphan_from_being_reset() {
     use aida_core::driver_registry::DerivedDriver as Driver;
     // Idle and queued say nothing is working the spec: a true orphan.

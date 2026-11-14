@@ -41,6 +41,9 @@ pub(crate) struct Orphan {
     pub maybe_worked: Option<String>,
     /// Branches on origin named for the spec.
     pub branches: Vec<String>,
+    /// A commit on the integration branch that main does not have names the
+    /// spec: its work is merged and waits for a promotion.
+    pub awaits_promotion: bool,
 }
 
 /// One thing the housekeeping step does, or reports and leaves.
@@ -96,7 +99,12 @@ pub(crate) fn plan(lanes: Vec<DeadLane>, orphans: Vec<Orphan>, changes: &[Pr]) -
             continue;
         }
         let what = orphan.spec.clone();
-        if let Some(holder) = orphan.elsewhere {
+        if orphan.awaits_promotion {
+            steps.push(Step::Skip {
+                what,
+                why: "its work is merged on integration and waits for a promotion".into(),
+            });
+        } else if let Some(holder) = orphan.elsewhere {
             steps.push(Step::Skip {
                 what,
                 why: format!("its latest session is on another host ({holder})"),
@@ -299,6 +307,20 @@ pub(crate) fn survey(
     .lines()
     .map(String::from)
     .collect();
+    // What integration carries that main does not. With no integration
+    // branch on origin there is nothing merged and waiting.
+    let unpromoted: Vec<String> = super::git_text(
+        root,
+        &[
+            "log",
+            "--format=%s",
+            "-n",
+            "2000",
+            "origin/main..origin/integration",
+        ],
+    )
+    .map(|text| text.lines().map(String::from).collect())
+    .unwrap_or_default();
     let orphans = orphans
         .into_iter()
         .map(|orphan| {
@@ -334,6 +356,7 @@ pub(crate) fn survey(
                 orphan.driver.as_ref(),
             );
             Orphan {
+                awaits_promotion: named_in(&ids, &unpromoted),
                 branches: spec_branches(&ids, &remote_branches),
                 spec: orphan.spec,
                 ids,
@@ -344,6 +367,17 @@ pub(crate) fn survey(
         })
         .collect();
     Ok((lanes, orphans))
+}
+
+/// Whether one of `subjects` names one of `ids` as a whole token (`BUG-25`
+/// is not named by `BUG-255`).
+// trace:STORY-2768 | ai:claude
+fn named_in(ids: &[String], subjects: &[String]) -> bool {
+    subjects.iter().any(|subject| {
+        subject
+            .split(|c: char| !(c.is_ascii_alphanumeric() || c == '-'))
+            .any(|token| ids.iter().any(|id| id.eq_ignore_ascii_case(token)))
+    })
 }
 
 /// Why an In-Progress spec with no live session of its own may still be
