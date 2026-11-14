@@ -13,12 +13,12 @@ description: |
   3. Full runs for different PRs run concurrently, within the Actions concurrency limits; a train still runs its merge-result CI.
   4. Docs: docs/advanced (landing) states the new gate; make check-ci-list shows the tier.
   Track: main (CI workflow + train eligibility). Ship via train.
-status: Done
+status: InProgress
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-14T12:41:27.454869454Z
-modified_at: 2026-11-14T23:13:51.885877913Z
+modified_at: 2026-11-14T23:13:54.111337746Z
 req_type: Story
 tags:
 - area:ci
@@ -311,6 +311,15 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: Done
+- id: 01a1dc56-bbbf-77a2-9018-e619cd4949fe
+  author: joe
+  timestamp: 2026-11-14T23:13:54.111331800Z
+  session_id: 01a1dc2c-25f2-7d52-aa8c-61e0f270e9d1
+  harness_version: 2.1.325 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: InProgress
 filed_at:
   code_sha: 166920a3bf8bd517e8d670a09dd3a7a3de96b7f9
   branch: main
@@ -324,3 +333,4 @@ implementation_info:
   implemented: true
   implemented_at: 2026-11-14T22:13:00.766009720Z
   implemented_by: dirtlab
+  reopened_at_sha: 336888d9a6aeeff7c9f5f74596aca06bfce0b7d1
