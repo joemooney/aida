@@ -808,6 +808,12 @@ exit 1
         None
     );
     git_ok(&fx.main, &["checkout", "bug-2451"]);
+    std::fs::write(
+        fx.main.join("post-merge-work"),
+        "unfinished implementation\n",
+    )
+    .unwrap();
+    git_ok(&fx.main, &["add", "post-merge-work"]);
     git_ok(
         &fx.main,
         &[
@@ -818,7 +824,6 @@ exit 1
             "-c",
             "gc.auto=0",
             "commit",
-            "--allow-empty",
             "-qm",
             "unfinished after merge",
         ],
@@ -857,6 +862,10 @@ exit 1
     let lease = crate::list_leases(&fx.main).remove(0);
     assert_eq!(lease.branch, "bug-2451");
     assert_eq!(git_ok(&lease.worktree_path, &["rev-parse", "HEAD"]), head);
+    assert_eq!(
+        std::fs::read_to_string(lease.worktree_path.join("post-merge-work")).unwrap(),
+        "unfinished implementation\n"
+    );
 }
 
 // Origin-only merged residue (no commits past the merged PR head) must not
@@ -943,6 +952,16 @@ fn bug_2549_detached_worktree_exit_captures_actual_head() {
     );
     let head = git_ok(&lease.worktree_path, &["rev-parse", "HEAD"]);
     assert_ne!(git_ok(&fx.main, &["rev-parse", &lease.branch]), head);
+    // A broken live HEAD must remain unknown, never fall back to the lease branch.
+    let git_dir = git_ok(&lease.worktree_path, &["rev-parse", "--absolute-git-dir"]);
+    let head_path = Path::new(&git_dir).join("HEAD");
+    let saved_head = std::fs::read(&head_path).unwrap();
+    std::fs::write(&head_path, "ref: refs/heads/missing-exit-head\n").unwrap();
+    assert_eq!(
+        crate::lane_recovery::exit_head(&fx.main, &lease.branch, &[lease.clone()]).unwrap(),
+        None
+    );
+    std::fs::write(&head_path, saved_head).unwrap();
     let captured =
         crate::lane_recovery::exit_head(&fx.main, &lease.branch, &[lease.clone()]).unwrap();
     assert_eq!(captured, Some(head.clone()));
@@ -1044,6 +1063,25 @@ fn bug_2549_unavailable_forge_preserves_exit_evidence() {
     .is_err());
     let retry = storage.load().unwrap();
     let req = retry.get_requirement_by_spec_id("BUG-2451").unwrap();
+    assert_eq!(req.comments.len(), comments);
+    assert_eq!(req.status, aida_core::RequirementStatus::InProgress);
+    // A successful spec search followed by a failed branch lookup is also
+    // unknown evidence; the durable captured facts must survive this path.
+    crate::test_exec::write_executable(
+        &gh,
+        "#!/bin/sh\nif [ \"$1\" = --version ]; then echo 'gh test'; exit 0; fi\ncase \" $* \" in *' --search '*) exit 0;; esac\nexit 1\n",
+    );
+    assert!(crate::lane_recovery::reconcile_observed(
+        &fx.main,
+        "BUG-2451",
+        "bug-2451",
+        Some(&captured)
+    )
+    .is_err());
+    let branch_failure = storage.load().unwrap();
+    let req = branch_failure
+        .get_requirement_by_spec_id("BUG-2451")
+        .unwrap();
     assert_eq!(req.comments.len(), comments);
     assert_eq!(req.status, aida_core::RequirementStatus::InProgress);
     // Only a later successful no-PR observation authorizes the transition.
