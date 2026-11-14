@@ -3,17 +3,16 @@ spec_id: BUG-b6b1278890774ef993d2ebc327862470-317
 agreed_id: BUG-2552
 title: 'Force-claim refuses a dead lane''s clean, fully pushed seat clone with holder refused: IdentityChanged / EvidenceUnavailable, so every autoland rework relaunch fails until the lease is ended by hand'
 description: 'Observed on dell1 2026-11-13 00:50-01:30 (advisor). Five rework relaunches (BUG-2501, TASK-3779, STORY-2660, TASK-3099, BUG-2549) were refused-before-start: ''cannot force-claim branch <b>: retained lease <id> and private clone <path>: holder refused: IdentityChanged'' (one: EvidenceUnavailable). In every case the clone had no tracked changes and HEAD equalled origin/<branch>. ''aida session end <id> --force'' cleared each one and the relaunch then started. Continues BUG-2455, BUG-2491 and BUG-2532 (completed): a new holder-refusal reason now blocks the same path. Acceptance: (1) force-claim takes over a retained lane lease whose holder process is dead and whose clone is clean and fully pushed, whatever the holder-identity check reports (IdentityChanged / EvidenceUnavailable), and salvages as session end does; (2) it still refuses when the clone has unpushed commits or tracked changes, or when the holder is alive; (3) a fixture covers the IdentityChanged and EvidenceUnavailable cases. Workaround meanwhile: verify the clone is clean and pushed, then run aida session end <lease> --force on that host.'
-status: InProgress
+status: Completed
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-13T08:32:25.181868902Z
-modified_at: 2026-11-14T08:18:37.683111027Z
+modified_at: 2026-11-14T09:49:35.529343878Z
 req_type: Bug
 tags:
 - force-claim
 - lanes
-- track:integration
 relationships:
 - rel_type:
     custom: implemented-by
@@ -96,6 +95,20 @@ history:
   session_id: 01a1d91dfec7
   harness_version: codex-cli 0.167.0
   changes: []
+- id: 01a1d976-5abe-76f2-b307-4979fe1b8159
+  author: aida-auto-bump
+  timestamp: 2026-11-14T09:49:34.782366446Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a1d976-5da9-7843-8b84-91f929362282
+  timestamp: 2026-11-14T09:49:35.529338765Z
+  agent: aida
+  commit_sha: 66d456dc13e8a96a9b4e75313b86d709c9847cab
+  summary: 'All BUG-2552 ACs met: force-claim-only fallback in ownership/reader.rs proves a refused local clone worker dead via proc_identity (Absent/Exited), keeps ownership binding and clean/remote-covered tree guards; bug_2552 matrix covers IdentityChanged+EvidenceUnavailable x clean/dirty/unpushed/live. Fast CI green, mergeState CLEAN.'
+  review_verdict: approved
 filed_at:
   code_sha: 9e5b788904e6f8b2f5e271583d1197b3173ce721
   branch: main
@@ -105,3 +118,7 @@ filed_at:
   vendor: claude
   session: 01a1d3ee-83e8-71b3-a2c5-aed5baed6fdc
   harness_version: 2.1.323 (Claude Code)
+implementation_info:
+  implemented: false
+  completed_at: 2026-11-14T09:49:34.782359650Z
+  completion_sha: 66d456dc13e8a96a9b4e75313b86d709c9847cab
