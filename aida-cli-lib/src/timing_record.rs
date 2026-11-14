@@ -1119,4 +1119,107 @@ mod tests {
         assert!(notes.is_empty(), "{notes:?}");
         assert_eq!(events.len(), 3, "both machines' completions survive");
     }
+
+    /// BUG-2559: the two-host auto-bump scenario, ready for the second host
+    /// to bring in the first one's publish. `seeded` puts an earlier record
+    /// on the hub first (both hosts modify it); otherwise both hosts add the
+    /// same new record file (add/add).
+    // trace:BUG-2559 | ai:claude
+    fn bug_2559_two_hosts(seeded: bool) -> (tempfile::TempDir, std::path::PathBuf) {
+        aida_core::git_ops::install_timing_record_merger(merge_conflicted);
+        let dir = tempfile::tempdir().unwrap();
+        let hub = dir.path().join("hub.git");
+        let (m1, m2) = (dir.path().join("m1"), dir.path().join("m2"));
+        std::fs::create_dir_all(&hub).unwrap();
+        git(&hub, &["init", "-q", "--bare", "-b", "aida-store"]);
+        std::fs::create_dir_all(&m1).unwrap();
+        git(&m1, &["init", "-q", "-b", "aida-store"]);
+        let rel = aida_core::object_store::relative_timing_record_path("BUG-9").unwrap();
+        let put = |root: &Path, text: &str, msg: &str| {
+            std::fs::create_dir_all(root.join(&rel).parent().unwrap()).unwrap();
+            std::fs::write(root.join(&rel), text).unwrap();
+            git(root, &["add", &rel]);
+            git(root, &["commit", "-q", "-m", msg]);
+        };
+        if seeded {
+            let seed = record_text(
+                vec![ev("2026-11-12T03:00:00Z", "BUG-9", EventKind::RunStarted)],
+                vec![stamp("2026-11-12T03:00:01Z", "queue-done")],
+            );
+            put(&m1, &seed, "seed");
+        } else {
+            std::fs::write(m1.join("README"), "store\n").unwrap();
+            git(&m1, &["add", "README"]);
+            git(&m1, &["commit", "-q", "-m", "init"]);
+        }
+        git(&m1, &["remote", "add", "origin", hub.to_str().unwrap()]);
+        git(&m1, &["push", "-q", "origin", "aida-store"]);
+        git(
+            dir.path(),
+            &[
+                "clone",
+                "-q",
+                "-b",
+                "aida-store",
+                hub.to_str().unwrap(),
+                "m2",
+            ],
+        );
+        let (ours, theirs) = two_machines();
+        put(&m1, &theirs, "timing: publish BUG-9 record (auto-bump)");
+        git(&m1, &["push", "-q", "origin", "aida-store"]);
+        git(&m2, &["config", "user.name", "T"]);
+        git(&m2, &["config", "user.email", "t@example.com"]);
+        git(&m2, &["config", "commit.gpgsign", "false"]);
+        put(&m2, &ours, "timing: publish BUG-9 record (auto-bump)");
+        (dir, m2)
+    }
+
+    // trace:BUG-2559 | ai:claude
+    fn bug_2559_assert_unioned(
+        m2: &Path,
+        outcome: aida_core::git_ops::StorePullOutcome,
+        expected_events: usize,
+    ) {
+        match outcome {
+            aida_core::git_ops::StorePullOutcome::AutoMerged { notes } => assert!(
+                notes.iter().any(|n| n.contains("timing record")),
+                "{notes:?}"
+            ),
+            other => panic!("expected an auto-merge, got {other:?}"),
+        }
+        let (events, notes) = load_published(m2, "BUG-9");
+        assert!(notes.is_empty(), "{notes:?}");
+        assert_eq!(events.len(), expected_events, "both hosts' events survive");
+    }
+
+    /// BUG-2559: both hosts ADD the same new record file (no base version);
+    /// the store pull-rebase still unions it.
+    // trace:BUG-2559 | ai:claude
+    #[test]
+    fn bug_2559_store_pull_unions_a_record_both_hosts_added() {
+        let (_dir, m2) = bug_2559_two_hosts(false);
+        let outcome = aida_core::git_ops::pull_rebase_auto_merge(&m2, "origin", "aida-store")
+            .expect("an add/add duplicate timing record must auto-merge");
+        bug_2559_assert_unioned(&m2, outcome, 3);
+    }
+
+    /// BUG-2559: the hub reconcile (`aida remote reconcile`, a merge, not a
+    /// rebase) unions a duplicate timing record instead of aborting, for
+    /// both a modified and a newly added record.
+    // trace:BUG-2559 | ai:claude
+    #[test]
+    fn bug_2559_reconcile_merge_unions_duplicate_timing_records() {
+        for (seeded, expected) in [(true, 3), (false, 3)] {
+            let (_dir, m2) = bug_2559_two_hosts(seeded);
+            git(&m2, &["fetch", "-q", "origin"]);
+            let outcome = aida_core::git_ops::merge_union_auto(
+                &m2,
+                "origin/aida-store",
+                "reconcile multi-hub store",
+            )
+            .unwrap_or_else(|e| panic!("seeded={seeded}: reconcile must union: {e:#}"));
+            bug_2559_assert_unioned(&m2, outcome, expected);
+        }
+    }
 }
