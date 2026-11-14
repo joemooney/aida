@@ -1,0 +1,40 @@
+{
+  "schema_version": 1,
+  "spec": "BUG-B6B1278890774EF993D2EBC327862470-346",
+  "publishes": [
+    {
+      "at": "2026-11-14T17:03:15.745196070Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-11-14T14:15:26.138239360Z",
+      "spec": "BUG-b6b1278890774ef993d2ebc327862470-346",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 1,
+        "slug": "implementer",
+        "attempt": 1
+      }
+    },
+    {
+      "ts": "2026-11-14T14:26:06.595407424Z",
+      "spec": "BUG-b6b1278890774ef993d2ebc327862470-346",
+      "kind": {
+        "event": "PuntFiled",
+        "spec": "BUG-b6b1278890774ef993d2ebc327862470-346"
+      }
+    },
+    {
+      "ts": "2026-11-14T17:03:15.633693890Z",
+      "spec": "BUG-b6b1278890774ef993d2ebc327862470-346",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "e26558378ecd396ccdcf8516a2b66ee66b06561c",
+        "pr": 4034,
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
