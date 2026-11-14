@@ -485,12 +485,20 @@ description: |
   ### finding-hash:49b64e26
 
   force_claim_clone_owner accepts only Dead(Absent|Exited) for lease.active_pid; a dead worker whose PID was since reused (Dead(Reused)) or that died across a reboot (Dead(Reboot)) still gets refused, so the manual session-end workaround can still be needed (aida-cli-lib/src/ownership/reader.rs:79-88). Also the fixture stores HolderRecord::refused(..) instead of a real mismatched identity record, and the raw record identity is never probed (only the clone cwd-holder check in seat_clone::destroy backs that up).
+
+
+  ## Findings from BUG-2552
+  Reviewed sha: 3df4803a3af2350e80190def730f2267220abcc8
+
+  ### finding-hash:49b64e26
+
+  force_claim_clone_owner accepts only Dead(Absent|Exited) for lease.active_pid; a dead worker whose PID was since reused (Dead(Reused)) or that died across a reboot (Dead(Reboot)) still gets refused, so the manual session-end workaround can still be needed (aida-cli-lib/src/ownership/reader.rs:79-88). Also the fixture stores HolderRecord::refused(..) instead of a real mismatched identity record, and the raw record identity is never probed (only the clone cwd-holder check in seat_clone::destroy backs that up).
 status: Draft
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-13T20:01:56.623034248Z
-modified_at: 2026-11-14T09:03:59.462299156Z
+modified_at: 2026-11-14T09:04:05.891149023Z
 req_type: Task
 tags:
 - carried-finding:BUG-2543:2a99ebfc
@@ -501,6 +509,7 @@ tags:
 - carried-finding:BUG-2549:fe70e901
 - carried-finding:BUG-2551:2a99ebfc
 - carried-finding:BUG-2551:6935f83d
+- carried-finding:BUG-2552:49b64e26
 - carried-finding:BUG-2554:2dfbd6d5
 - carried-finding:BUG-2554:35d3eb09
 - carried-finding:BUG-2557:55e0cbfe
@@ -579,6 +588,7 @@ tags:
 - carried-from:BUG-2546
 - carried-from:BUG-2549
 - carried-from:BUG-2551
+- carried-from:BUG-2552
 - carried-from:BUG-2554
 - carried-from:BUG-2557
 - carried-from:BUG-2560
@@ -659,6 +669,7 @@ tags:
 - from-review:BUG-2546
 - from-review:BUG-2549
 - from-review:BUG-2551
+- from-review:BUG-2552
 - from-review:BUG-2554
 - from-review:BUG-2557
 - from-review:BUG-2560
@@ -883,6 +894,11 @@ history:
 - id: 01a1d94c-a333-7a80-a625-ae6b2cf0e700
   author: joe
   timestamp: 2026-11-14T09:04:00.819910162Z
+  session_id: 01a1d94a013f
+  changes: []
+- id: 01a1d94c-bc39-7be3-b810-ac14d523ed04
+  author: joe
+  timestamp: 2026-11-14T09:04:07.225169708Z
   session_id: 01a1d94a013f
   changes: []
 filed_at:
