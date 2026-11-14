@@ -17,8 +17,16 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-14T11:36:18.476287136Z
-modified_at: 2026-11-14T11:37:23.585443889Z
+modified_at: 2026-11-14T11:37:34.513307902Z
 req_type: Bug
+comments:
+- id: 01a1d9d9-3a31-74f3-8623-ddea0172e3f3
+  author: joe
+  content: '[advisor 7b 04:38] Approved for a dell1 Codex lane, main track (the test exists on main). Make queue_rework_tests::triage_loop_r_keystroke_lands_approved_queued_and_emits_spec_requeued hermetic: it must not depend on a terminal or ambient seat; pin the advisor seat in the fixture. Verify on dell1 over ssh with no tty: cargo test --profile agent -p aida-cli-lib --lib triage_loop_r_keystroke, plus make check-ci-fast. dell1: touch aida-core/src/lib.rs first; never AIDA_UPDATE_SNAPSHOTS=1.'
+  created_at: 2026-11-14T11:37:34.513307902Z
+  modified_at: 2026-11-14T11:37:34.513307902Z
+  session_id: 01a1d8f3-f948-7072-b174-fa9507ed074b
+  harness_version: 2.1.325 (Claude Code)
 history:
 - id: 01a1d9d9-0f81-7752-9b38-a66eb0c96eaa
   author: joe
