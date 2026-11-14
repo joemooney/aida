@@ -1,0 +1,18 @@
+{
+  "id": "review-watch-d1641159e5e10703af90966e45049c518c397df8546fb0f972f8a5bbd1a8e4f5",
+  "thread_id": "review-watch-d1641159e5e10703af90966e45049c518c397df8546fb0f972f8a5bbd1a8e4f5",
+  "from": "review-watch",
+  "to": {
+    "kind": "agent",
+    "agent": "joemooney"
+  },
+  "timestamp": 1794677616732,
+  "body": "PR-4038 at 87aac0b863ecde1e1b4dc79353983e057a8835a1: the review by codex-reviewer (codex reviewer seat) recorded `request-changes` with 4 finding(s), round 1 of 2. The findings are in `.aida/gate-ledger/PR-4038.jsonl`. Address them and push a new head; the watcher starts its review when it sees the head.",
+  "subject": "PR-4038: review requested changes (round 1 of 2)",
+  "urgent": false,
+  "intent": "request",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "explicit"
+}
