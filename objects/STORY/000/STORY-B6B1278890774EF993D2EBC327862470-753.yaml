@@ -1,0 +1,33 @@
+id: 01a1dbf2-9277-7e42-9a3b-0284476de31d
+spec_id: STORY-b6b1278890774ef993d2ebc327862470-753
+agreed_id: STORY-2830
+title: 'Review PR-4062: [AI:claude] fix(worktree): gc reclaims detached-HEAD worktrees and ownerless per-seat build output (BUG-2587)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `(no-sess`) for branch `bug-b6b1278890774ef993d2ebc327862470-352`.
+
+  - PR: <https://github.com/joemooney/aida/pull/4062>
+  - Branch: `bug-b6b1278890774ef993d2ebc327862470-352` → `main`
+
+  ## Covers
+
+  - BUG-2587
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 4062` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-14T21:24:29.943771109Z
+modified_at: 2026-11-14T21:24:29.943771109Z
+req_type: Story
+filed_at:
+  code_sha: d5f90aedd3a51c92a559eb538784d3c12bf70325
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: d5f90aedd3a
+  vendor: claude
