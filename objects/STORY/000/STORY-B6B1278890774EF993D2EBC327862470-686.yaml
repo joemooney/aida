@@ -25,12 +25,12 @@ description: |
   - Cap: `History::blocking_keys` keys on the patch-id rather than the head under `fast`.
   - Config: add the key to the config schema with the existing protected-config write rules; defaults to `fast` with an empty strict list in this repo's committed config.
   - Out of scope: the transient store-pull retry (stays in BUG-2561); integration-track changes (frozen until 2026-11-14 19:00).
-status: InProgress
+status: NeedsAttention
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-13T15:54:08.931576118Z
-modified_at: 2026-11-14T20:21:28.715339862Z
+modified_at: 2026-11-14T20:44:48.537021015Z
 req_type: Story
 tags:
 - architecture
@@ -331,6 +331,13 @@ comments:
   modified_at: 2026-11-14T20:21:28.715339862Z
   session_id: 01a1db6d-e689-7532-9eef-772722add87b
   harness_version: 2.1.325 (Claude Code)
+- id: 01a1dbce-0e3c-75b1-b676-f98876eb2cc4
+  author: dirtlab
+  content: 'Lane claude-implementer-134, 2026-11-14 13:55 MST, verification of the 12:36 ruling at PR head 36afa06746 (no new commit; the fixes are in f751822030, already on the PR). (1) Manual: the rejected subcommand was ''aida config set'' in docs/cli/06-roles-sessions.md (''aida config set --help'' -> unrecognized subcommand ''set''); the sentence now cites ''aida config menu'', which the CLI accepts. No other ''aida config set'' citation remains under docs/cli. The dynamic verify-manual.py run did not finish inside the 60s tool cap, so the contracts shard is the record for it. (2) All seven named tests pass at 36afa06746 via lane jobs: lib story_1888 every_gate_module_is_a_dispatch_module_a_kernel_or_an_orchestrator ok and bug2406_real_builder_binding_and_production_gate_true ok (2 passed); aida-cli bug_2139_headless_child_grant 6 passed (incl. orchestrated_headless_reviewer_gets_its_own_reviewer_grant), bug_2187_reviewer_record_identity 1 passed, bug_2201_outside_project_reviewer 3 passed (all three named). All seven were caused by this change (review_freshness.rs unclassified gate module -> classified in orchestrator_leaves.rs; bug2406 fixture lacked a trusted default-branch config -> fixture commits one; reviewer launches fixed in be81871), so there is none to list as failing on origin/main and no origin/main run was made. Gate: make check-ci-fast cannot complete in this lane (one gate alone exceeds the 60s tool cap); CI ''fast gates'' and ''fast compile'' are green on run 43637500343 at 36afa06746. PR diff contains none of the nine placeholder paths. Stale round-2 findings: 1 (launch evidence composed in queue_cmd/work.rs:5269 common path) and 2 (advisor_loop_train accepts approval.carried) are in the code; 4 was ruled covered (17:03 ruling); 3 is unchanged and tracked as BUG-2566.'
+  created_at: 2026-11-14T20:44:36.796961338Z
+  modified_at: 2026-11-14T20:44:36.796961338Z
+  session_id: 01a1dbc0d535
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1d59e-6b4b-7d10-8aea-02729132bc6f
   author: joe
@@ -455,6 +462,15 @@ history:
   - field_name: status
     old_value: NeedsAttention
     new_value: InProgress
+- id: 01a1dbce-3c19-79c0-b5f4-f55bc113b5c0
+  author: dirtlab
+  timestamp: 2026-11-14T20:44:48.537040340Z
+  session_id: 01a1dbc0d535
+  harness_version: 2.1.319 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 filed_at:
   code_sha: 3631f7ca05567a6984ff2376b997539389b6f758
   branch: main
@@ -464,6 +480,12 @@ filed_at:
   vendor: claude
   session: 01a1d54b-060a-7951-aa40-7f0fd928126f
   harness_version: 2.1.323 (Claude Code)
+attention_reason:
+  category: other
+  detail: 'No new commit this round: nothing is left to change. The 12:36 ruling''s fixes (manual sentence, story_1888 gate-module classification, bug2406 fixture) are already on PR-3956 in f751822030; all seven named tests pass at head 36afa06746 and CI fast gates are green there (run 43637500343). Of the stale round-2 findings I dispute reworking finding 3 (conflict re-probe on base change) in this PR: the 17:03 ruling accepted the design with no further behavior changes and it is tracked as BUG-2566. Findings 1 and 2 are already in the code; finding 4 was ruled covered.'
+  lean: Re-review PR-3956 at 36afa06746 as is; fix finding 3 under BUG-2566 after merge.
+  raised_by: implementer
+  raised_at: 2026-11-14T20:44:48.537021015Z
 failure_reason:
   phase: reviewer
   phase_index: 3
