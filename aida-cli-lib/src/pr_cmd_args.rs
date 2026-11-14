@@ -327,6 +327,10 @@ pub enum PrCommand {
     /// split in halves (two at a time) until each bad PR is isolated and
     /// left out with a comment.
     ///
+    /// On a repository whose CI is tiered, a PR rides only when its exact
+    /// head already has a green full-tier CI run; recording an approval
+    /// starts that run. `--skip-full-check` admits a PR without one.
+    ///
     /// `--dry-run` gates and builds the train and prints the plan without
     /// pushing anything; add `--local-ci <CMD>` to simulate the whole run
     /// with a local command as CI, against a checkout of each train tip.
@@ -363,6 +367,12 @@ pub enum PrCommand {
         /// Skip the `aida pull` after a train lands.
         #[clap(long)]
         no_pull: bool,
+
+        /// Admit PRs whose head has no green full-tier CI run. Each
+        /// admission is written to the activity log.
+        // trace:STORY-2809 | ai:claude
+        #[clap(long, conflicts_with = "abandon")]
+        skip_full_check: bool,
     },
 
     /// Ship several PRs that need a human merge, one at a time, in order.

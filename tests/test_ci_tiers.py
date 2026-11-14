@@ -23,18 +23,24 @@ class CiTiers(unittest.TestCase):
         name = JOBS['tier']['name']
         self.assertIn(expression, name)
         expression = expression.replace('github.event.pull_request.labels.*.name', 'labels')
-        expression = expression.replace('||', ' or ')
-        for event, label, variable, head in itertools.product(
+        expression = expression.replace('||', ' or ').replace('&&', ' and ')
+        # A push to an approved PR (synchronize) is FAST again even while the
+        # ci:full label lingers; every other PR event honours the label, so
+        # (re)applying it on approval starts FULL on that head.
+        # trace:STORY-2809 | ai:claude
+        for event, label, variable, head, action in itertools.product(
             ('pull_request', 'push', 'merge_group', 'schedule', 'workflow_dispatch'),
             (False, True), ('', 'fast', 'full', 'FULL', 'invalid'), ('feature/x', 'train/batch'),
+            ('opened', 'synchronize', 'reopened', 'labeled', 'unlabeled', None),
         ):
             actual = eval(expression, {'__builtins__': {}, 'contains': lambda a, b: b in a, 'startsWith': lambda a, b: a.startswith(b)}, {
-                'github': SimpleNamespace(event_name=event, head_ref=head),
+                'github': SimpleNamespace(event_name=event, head_ref=head, event=SimpleNamespace(action=action)),
                 'vars': SimpleNamespace(AIDA_PR_CI_TIER=variable.lower()),
                 'labels': ['ci:full'] if label else [],
             })
-            self.assertEqual(actual, event != 'pull_request' or head.startswith('train/') or label or variable.lower() == 'full',
-                             (event, label, variable))
+            self.assertEqual(actual, event != 'pull_request' or head.startswith('train/')
+                             or (label and action != 'synchronize') or variable.lower() == 'full',
+                             (event, label, variable, action))
         self.assertEqual(JOBS['tier']['outputs']['full'], '${{ steps.select.outputs.full }}')
         self.assertEqual(select['run'], 'echo "full=$FULL" >> "$GITHUB_OUTPUT"')
 
@@ -44,6 +50,11 @@ class CiTiers(unittest.TestCase):
         self.assertTrue({'labeled', 'unlabeled', 'synchronize'} <= set(triggers['pull_request']['types']))
         for event in ('merge_group', 'schedule', 'workflow_dispatch'):
             self.assertIn(event, triggers)
+        # Full runs for different PRs never share a group, so they run side by
+        # side; only a superseded run of the same PR is cancelled.
+        # trace:STORY-2809 | ai:claude
+        self.assertEqual(WORKFLOW['concurrency']['group'],
+                         '${{ github.workflow }}-${{ github.event.pull_request.number || github.run_id }}')
         self.assertEqual(JOBS['build']['needs'], 'tier')
         self.assertEqual(JOBS['build']['if'], "needs.tier.outputs.full == 'true'")
         self.assertEqual(JOBS['build']['strategy']['matrix']['shard'],

@@ -1671,6 +1671,7 @@ fn bug2528_exact_tip_ci_wait_is_bounded_and_fails_closed() {
         checks: vec![CommitCheck {
             name: "merge-hold-gate".into(),
             outcome,
+            run_id: None,
         }],
     };
     let time = ExactTipCiClock::default();

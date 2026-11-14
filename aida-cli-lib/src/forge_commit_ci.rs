@@ -25,6 +25,10 @@ pub(crate) enum CheckOutcome {
 pub(crate) struct CommitCheck {
     pub name: String,
     pub outcome: CheckOutcome,
+    /// The workflow run that owns a GitHub Actions check run (from its
+    /// details link); `None` for commit statuses and other forges.
+    // trace:STORY-2809 | ai:claude
+    pub run_id: Option<String>,
 }
 
 /// Every check the forge reports on `sha`.
@@ -199,6 +203,10 @@ pub(crate) fn parse_gh_check_runs(
         out.push(CommitCheck {
             name: name.to_string(),
             outcome,
+            run_id: run
+                .get("details_url")
+                .and_then(|v| v.as_str())
+                .and_then(crate::ci_gate::run_id_from_check_link),
         });
     }
     Ok((total, out))
@@ -246,6 +254,7 @@ pub(crate) fn parse_gh_commit_status(
             Ok(CommitCheck {
                 name: name.to_string(),
                 outcome,
+                run_id: None,
             })
         })
         .collect()
@@ -331,7 +340,11 @@ pub(crate) fn parse_glab_commit_statuses(
     }
     Ok(latest
         .into_iter()
-        .map(|(name, (_, outcome))| CommitCheck { name, outcome })
+        .map(|(name, (_, outcome))| CommitCheck {
+            name,
+            outcome,
+            run_id: None,
+        })
         .collect())
 }
 

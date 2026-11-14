@@ -902,6 +902,10 @@ struct FakeChecks {
     mandate_active: bool,
     /// The IDs the spec-policy gates were asked about.
     asked: Vec<String>,
+    /// STORY-2809: full-tier CI at the head; `None` is an untiered repository.
+    full_tier: Option<crate::full_tier::FullTier>,
+    /// STORY-2809: the PRs a full-tier run was requested for.
+    full_requests: Vec<u64>,
 }
 
 impl FakeChecks {
@@ -919,6 +923,8 @@ impl FakeChecks {
             mandate: Err(None),
             mandate_active: false,
             asked: Vec::new(),
+            full_tier: None,
+            full_requests: Vec::new(),
         }
     }
 
@@ -1014,6 +1020,19 @@ impl MemberChecks for FakeChecks {
     }
     fn mandate_active(&self) -> bool {
         self.mandate_active
+    }
+    fn full_tier(
+        &mut self,
+        _head: &str,
+    ) -> std::result::Result<crate::full_tier::FullTier, String> {
+        Ok(self
+            .full_tier
+            .clone()
+            .unwrap_or(crate::full_tier::FullTier::Untiered))
+    }
+    fn request_full_tier(&mut self, pr: u64) -> Option<std::result::Result<bool, String>> {
+        self.full_requests.push(pr);
+        Some(Ok(true))
     }
 }
 
@@ -4526,6 +4545,7 @@ fn pr_train_journal_nested_member_reads_refuse_when_checkpoint_fails() {
         forge: &forge,
         base: "main",
         named: false,
+        request_full: false,
     };
     let dir = r.join("intent");
     std::fs::create_dir(&dir).unwrap();
@@ -5774,4 +5794,86 @@ fn mandate_include_gate_paths_audits_train_member() {
         "live authority is never journaled"
     );
     assert_eq!(car_message(&restored), message);
+}
+
+// ─────────────── full-tier CI on the approved head (STORY-2809) ───────────────
+
+// trace:STORY-2809 | ai:claude
+#[test]
+fn live_gate_refuses_an_approved_head_with_no_full_tier_run_and_requests_one() {
+    let mut c = FakeChecks::new();
+    c.full_tier = Some(crate::full_tier::FullTier::Missing);
+    let why = gate_member_with(&mut c, "main", 41).unwrap_err();
+    assert!(
+        why.contains("no full-tier CI run exists at its head aaaaaaa"),
+        "{why}"
+    );
+    assert!(why.contains("requested just now"), "{why}");
+    assert!(why.contains("--skip-full-check"), "{why}");
+    assert_eq!(c.full_requests, vec![41]);
+    // The check follows the approval and precedes every later gate.
+    assert_eq!(c.calls.last(), Some(&"approval"));
+}
+
+// trace:STORY-2809 | ai:claude
+#[test]
+fn live_gate_names_a_running_or_red_full_tier_run_without_requesting_another() {
+    for (tier, expected) in [
+        (
+            crate::full_tier::FullTier::Pending {
+                run: "901".into(),
+                waiting: vec!["CI (lib-0)".into()],
+            },
+            "full-tier CI run 901 at its head aaaaaaa has not finished (waiting on CI (lib-0))",
+        ),
+        (
+            crate::full_tier::FullTier::Failed {
+                run: "902".into(),
+                failing: vec!["CI (cli-1)".into()],
+            },
+            "full-tier CI run 902 at its head aaaaaaa is red (failing: CI (cli-1))",
+        ),
+    ] {
+        let mut c = FakeChecks::new();
+        c.full_tier = Some(tier);
+        let why = gate_member_with(&mut c, "main", 41).unwrap_err();
+        assert!(why.contains(expected), "{why}");
+        assert!(c.full_requests.is_empty());
+    }
+}
+
+// trace:STORY-2809 | ai:claude
+#[test]
+fn live_gate_admits_a_green_full_tier_head_and_never_asks_an_unapproved_one() {
+    let mut c = FakeChecks::new();
+    c.full_tier = Some(crate::full_tier::FullTier::Green { run: "900".into() });
+    gate_member_with(&mut c, "main", 41).unwrap();
+    assert!(c.full_requests.is_empty());
+
+    let mut c = FakeChecks::new();
+    c.full_tier = Some(crate::full_tier::FullTier::Missing);
+    c.pin = None;
+    let why = gate_member_with(&mut c, "main", 41).unwrap_err();
+    assert!(why.contains("no approval is recorded"), "{why}");
+    assert!(c.full_requests.is_empty());
+}
+
+// trace:STORY-2809 | ai:claude
+#[test]
+fn skip_full_check_admits_and_logs_the_override() {
+    let mut c = FakeChecks::new();
+    c.full_tier = Some(crate::full_tier::FullTier::Missing);
+    let m = with_skip_full_check(true, || gate_member_with(&mut c, "main", 41)).unwrap();
+    assert_eq!(m.pr, 41);
+    assert!(c.full_requests.is_empty());
+    let log = std::fs::read_to_string(c.root.path().join(".aida/advisor-activity.jsonl")).unwrap();
+    let event: serde_json::Value = serde_json::from_str(log.lines().next().unwrap()).unwrap();
+    assert_eq!(event["step"], "train-admit-skip-full-check");
+    assert_eq!(event["status"], "overridden");
+    assert_eq!(event["pr"], 41);
+    assert_eq!(event["head_sha"], "a".repeat(40));
+    // The override ends with the invocation that asked for it.
+    let mut c = FakeChecks::new();
+    c.full_tier = Some(crate::full_tier::FullTier::Missing);
+    assert!(gate_member_with(&mut c, "main", 41).is_err());
 }

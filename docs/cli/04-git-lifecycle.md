@@ -426,6 +426,13 @@ command; `--max N` caps the batch (default 10), and naming more PRs than
 landed. The train is GitHub-only for now: GitLab's merge-hold gate has no
 train mode, so `aida pr train` refuses a GitLab project; ship its merge
 requests one at a time with `aida pr ship N`.
+<!-- trace:STORY-2809 | ai:claude -->
+On tiered CI, a member also needs a green FULL run on its exact head before it
+is admitted. Recording an approval starts that run; a member without one is
+left out with a reason naming the missing, running or red run, and the train
+requests a run for a head that has none. `--skip-full-check` admits such a
+member and records the override in `.aida/advisor-activity.jsonl`. See
+[Landing approved work](../advanced/landing.md).
 <!-- trace:STORY-2693 | ai:codex -->
 Train selection gates all candidates before applying `--max`. It greedily picks
 the PR with the smallest sum of shared-file counts against the remaining

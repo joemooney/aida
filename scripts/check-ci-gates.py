@@ -680,6 +680,10 @@ def main(argv: list[str] | None = None) -> int:
         # trace:STORY-2735 | ai:codex
         print("CI scheduling: PR=fast by default; ci:full or AIDA_PR_CI_TIER=full selects full. "
               "Main/train/merge-group/schedule/manual runs are always full.")
+        # trace:STORY-2809 | ai:claude
+        print("Approved-head tier: recording an approval applies ci:full, so the [full] gates run "
+              "on that exact head; a new push is fast again until it is re-approved. "
+              "`aida pr train` admits a PR only once that full run is green.")
         for name, command in plan:
             # Print the reshaped command itself: it is not always `cargo test`. trace:TASK-1979 | ai:claude
             reshaped = f"  (local: {command})" if command != dict(steps)[name] else ""
