@@ -873,12 +873,36 @@ description: |
   ### finding-hash:a8809039
 
   docs/cli/verify-manual.py defaults to target/debug/aida, while aida dev build writes target/agent/aida, so a local run can check a stale debug binary or refuse; the printed path is the only signal. Consider preferring the newest of target/{agent,debug}.
+
+
+  ## Findings from PR-3956
+  Reviewed sha: 79220471910a9706f448ddbd805f59098a25e817
+
+  ### finding-hash:0d56e3a6
+
+  gate/review_freshness.rs glob(): `**` compiles to `.*` and the regex has no (?s) flag, so a changed path containing a newline never matches a freshness_strict_paths glob such as `aida-cli-lib/src/gate/**` and the PR is treated as fast. Compile with dot-matches-newline (or refuse such paths as strict) and add a case to review_watch_freshness_policy_is_closed_and_paths_raise_assurance.
+
+  ### finding-hash:138d1871
+
+  review_watch.rs execute_reservation: a conflict first seen by the queue-work child (protected base moves after the watcher preflight; compose_launch_prompt returns NeedsRework and the child exits non-zero) is recorded through transition(Exited) with the BUG-2450 setup conversion, so the attempt can be classed a setup failure and retried once instead of the routed Exited that the preflight path records via transition_routed.
+
+  ### finding-hash:9b6c3c2d
+
+  pr_cmd.rs preflight_stale_base_check_with_info fast branch: the refresh_base error and the `head moved during review preflight` ensure return before `update-ref -d` on the scratch preflight ref, so those two early exits leave the ref behind; the ordinary and conflict paths clean it up.
+
+  ### finding-hash:6aee22bd
+
+  gate/review_carryover.rs proved_for_refusal: the second strict-policy check (after the base refresh) returns StrictPolicy without writing the `re-review-required` freshness event that the first check writes, so a policy raise first seen by that refresh is refused but not audited on that call (AC5).
+
+  ### finding-hash:d51c0f59
+
+  No test carries a criterion-level trace comment for the six STORY-2763 criteria (acef95eb, ac3d0be9, ac5a9c72, ac59d017, ac984425, ac39a51c), so `aida criteria` reports all six untraced although each has tests in this diff. Add `trace:STORY-b6b1278890774ef993d2ebc327862470-686.<ac-id>` comments on the tests named in the summary.
 status: Draft
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-13T20:01:56.623034248Z
-modified_at: 2026-11-14T17:44:43.081857556Z
+modified_at: 2026-11-14T17:50:58.660698367Z
 req_type: Task
 tags:
 - carried-finding:BUG-2543:2a99ebfc
@@ -936,9 +960,14 @@ tags:
 - carried-finding:PR-3952:2dfbd6d5
 - carried-finding:PR-3952:35d3eb09
 - carried-finding:PR-3956:04ad58d8
+- carried-finding:PR-3956:0d56e3a6
+- carried-finding:PR-3956:138d1871
 - carried-finding:PR-3956:15915e39
+- carried-finding:PR-3956:6aee22bd
 - carried-finding:PR-3956:97d326dd
+- carried-finding:PR-3956:9b6c3c2d
 - carried-finding:PR-3956:bf60843e
+- carried-finding:PR-3956:d51c0f59
 - carried-finding:PR-3956:dee3f3a7
 - carried-finding:PR-3966:3961dae5
 - carried-finding:PR-3966:c598b8f9
@@ -1094,7 +1123,9 @@ tags:
 - finding-hash:0bdbec3f
 - finding-hash:0bff30e1
 - finding-hash:0cbc5c63
+- finding-hash:0d56e3a6
 - finding-hash:1287747b
+- finding-hash:138d1871
 - finding-hash:15915e39
 - finding-hash:198d1196
 - finding-hash:1fce0788
@@ -1136,6 +1167,7 @@ tags:
 - finding-hash:654190b6
 - finding-hash:6810bcf9
 - finding-hash:6935f83d
+- finding-hash:6aee22bd
 - finding-hash:6f4ab4b8
 - finding-hash:735a4b90
 - finding-hash:73e42b4b
@@ -1152,6 +1184,7 @@ tags:
 - finding-hash:97d326dd
 - finding-hash:97ed1809
 - finding-hash:98776888
+- finding-hash:9b6c3c2d
 - finding-hash:9d27a4fe
 - finding-hash:a8809039
 - finding-hash:a9731915
@@ -1166,6 +1199,7 @@ tags:
 - finding-hash:cd9ab7dd
 - finding-hash:cddc71c1
 - finding-hash:d0b021ea
+- finding-hash:d51c0f59
 - finding-hash:dee3f3a7
 - finding-hash:dfed3eb6
 - finding-hash:e391cb46
@@ -1562,6 +1596,11 @@ history:
   author: joe
   timestamp: 2026-11-14T17:44:44.664678640Z
   session_id: 01a1db249612
+  changes: []
+- id: 01a1db2f-1dab-7583-bbcb-732e96262f98
+  author: joe
+  timestamp: 2026-11-14T17:51:00.523588745Z
+  session_id: 01a1db2b3a52
   changes: []
 filed_at:
   code_sha: 91fe1e337894199f15365d3f8ecfaf81366f8291
