@@ -533,12 +533,24 @@ description: |
   ### finding-hash:73e42b4b
 
   AC2 stderr notice (supervisor.rs:40) has no test asserting the one-line stderr output; only the runner.log half is tested.
+
+
+  ## Findings from PR-4015
+  Reviewed sha: e15838b4c3921bbc53f0f757db24d954c753539d
+
+  ### finding-hash:45085c26
+
+  standing_refusal_in_head (gate/ledger/project.rs) treats a foreign refusal as superseded when the refused change's newest verdict approves, whatever commit that approval was recorded at. If the refused commit is in the judged head but the approved rework commit is not (e.g. PR-99 refused at X after merging to integration, then approved at Y, where the promotion only carries X), the carried approval rides past the refused commit. This follows the advisor ruling literally; a follow-up could require the superseding approval to be at or carried to a commit in the head.
+
+  ### finding-hash:74641343
+
+  The sketch listed an unbound spec refusal as a still-refuses test case; no new bug_2569 test pins it. speaks_for_change keeps unbound events by construction, so behaviour is unchanged, but a regression test would lock it in.
 status: Draft
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-13T20:01:56.623034248Z
-modified_at: 2026-11-14T10:51:39.893210048Z
+modified_at: 2026-11-14T10:58:23.732827657Z
 req_type: Task
 tags:
 - carried-finding:BUG-2543:2a99ebfc
@@ -609,6 +621,8 @@ tags:
 - carried-finding:PR-4000:73e42b4b
 - carried-finding:PR-4000:abbae117
 - carried-finding:PR-4012:9750b6dd
+- carried-finding:PR-4015:45085c26
+- carried-finding:PR-4015:74641343
 - carried-finding:STORY-2735:2c7ae2ea
 - carried-finding:STORY-2763:04ad58d8
 - carried-finding:STORY-2763:15915e39
@@ -663,6 +677,7 @@ tags:
 - carried-from:PR-3998
 - carried-from:PR-4000
 - carried-from:PR-4012
+- carried-from:PR-4015
 - carried-from:STORY-2735
 - carried-from:STORY-2763
 - carried-from:STORY-2768
@@ -684,6 +699,7 @@ tags:
 - finding-hash:3961dae5
 - finding-hash:3975f29b
 - finding-hash:3f4b4821
+- finding-hash:45085c26
 - finding-hash:46a7a9dc
 - finding-hash:4843b9fe
 - finding-hash:49b64e26
@@ -698,6 +714,7 @@ tags:
 - finding-hash:6810bcf9
 - finding-hash:6935f83d
 - finding-hash:73e42b4b
+- finding-hash:74641343
 - finding-hash:76a786ef
 - finding-hash:79f360e4
 - finding-hash:7bbbf9a9
@@ -751,6 +768,7 @@ tags:
 - from-review:PR-3998
 - from-review:PR-4000
 - from-review:PR-4012
+- from-review:PR-4015
 - from-review:STORY-2735
 - from-review:STORY-2763
 - from-review:STORY-2768
@@ -977,6 +995,11 @@ history:
   author: joe
   timestamp: 2026-11-14T10:51:41.893512879Z
   session_id: 01a1d9ab2dbf
+  changes: []
+- id: 01a1d9b5-6150-7bf1-96e6-10e11eabf9f7
+  author: joe
+  timestamp: 2026-11-14T10:58:25.232992082Z
+  session_id: 01a1d9b26775
   changes: []
 filed_at:
   code_sha: 91fe1e337894199f15365d3f8ecfaf81366f8291
