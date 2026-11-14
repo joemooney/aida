@@ -1,0 +1,25 @@
+id: 01a1d923-8600-7571-a7b5-f54eae3d153b
+spec_id: BUG-b6b1278890774ef993d2ebc327862470-339
+agreed_id: BUG-2574
+title: 'PR FAST tier misses the task_1750 proc_identity liveness ratchet: #3989 passed PR CI, broke train 15'
+description: 'Train 15 (#4004) went red on CI (rest): aida-ci-guards task_1750_liveness_primitive_guard_tests::proc_identity_legacy_decisions_do_not_expand (new raw liveness decision in aida-cli-lib/src/ownership/reader.rs from #3989/BUG-2552). #3989''s PR CI was green because the FAST tier does not run this ratchet, though the 2026-11-13 18:07 operator ruling (TASK-3791, #3979) put cheap structural ratchets on PRs. Acceptance: the FAST tier runs the aida-ci-guards ratchet tests (at least task_1750); a PR adding a raw process_provably_dead decision fails PR CI.'
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-14T08:19:06.368555426Z
+modified_at: 2026-11-14T08:19:06.368555426Z
+req_type: Bug
+tags:
+- ci
+- kind:bug-spotted
+- track:dell1
+filed_at:
+  code_sha: 60823a3cb079fb62463fd88934afe72619a87cae
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 1801b341057
+  vendor: claude
+  session: 01a1d8f3-f948-7072-b174-fa9507ed074b
+  harness_version: 2.1.325 (Claude Code)
