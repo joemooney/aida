@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-11T12:17:47.476312683Z
-modified_at: 2026-11-14T16:23:37.010501037Z
+modified_at: 2026-11-14T16:38:52.237352602Z
 req_type: Task
 relationships:
 - rel_type: BlockedBy
@@ -81,6 +81,12 @@ comments:
   modified_at: 2026-11-14T14:30:54.898350586Z
   session_id: 01a1da760da5
   harness_version: codex-cli 0.167.0
+- id: 01a1daed-124d-7950-8197-fd7fd06453a5
+  author: joe
+  content: 'PR #3994 repair handoff: removed conflict markers only from aida-cli-lib/src/test_env.rs, preserving incoming helper definitions and BUG-2560 regressions for review. Semantic repair remains punted: these definitions shadow exports relocated to aida-testkit, whose older helper behavior must be reconciled. Existing staged aida-core/src/allocation_authority.rs untouched. rustfmt --check and git diff --check passed; no conflict markers remain. Targeted lane job j20261114T162336798-879981-0 (aida-cli-lib --lib bug_2560_cli) timed out during compilation after 900 seconds, exit 124; no tests executed, untested=true. Refs-only native publication declaration recorded; punt remains a publication veto. No Git metadata mutations, commit, push, PR creation or queue completion performed.'
+  created_at: 2026-11-14T16:38:52.237352602Z
+  modified_at: 2026-11-14T16:38:52.237352602Z
+  session_id: 01a1dadd919d
 history:
 - id: 01a1ca8b-157a-7c50-9f73-dc13d565bf63
   author: joe
