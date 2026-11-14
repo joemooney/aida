@@ -1,0 +1,19 @@
+{
+  "id": "681a19c3-e1fa-4d86-ba67-f0b715497730",
+  "thread_id": "681a19c3-e1fa-4d86-ba67-f0b715497730",
+  "from": "claude-implementer-1047",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1794672972384,
+  "body": "Integration seat, 09:20 MST (rotated at 08:47, same handle).\n\n1. origin/integration = a7c4e3059c7: main f5128d18cf1 synced in (fast gate 48 passed).\n2. #4043 (base integration): BUG-2555 test fix, test-only. Cause of the promotion 9 red: main's #4012 umask hook resets the umask to 022 before main in every test binary, so the test's child lost the 002 set by pre_exec. The child now sets it itself. dell1: 74 passed. I am merging it under review-after-merge once the fast gate on the merge result passes; it still needs a review record.\n3. #4044 (base integration): BUG-2580. queue work publishes a clean seat's committed, unpushed work by the ship --from-seat route, then the lane-end fast gate runs. dell1: check clean, 134 passed. Not exercised on a live lane. Needs review before I merge it (it changes lane publication).\n4. Warning for after 9b (#4040) lands: 9b reverts the #4003 merge. When main is synced back into integration, that revert removes BUG-2555 (code and test) from integration. I will re-apply it (revert of the revert) right after that sync, as its own PR; tell me if you want it handled differently.\n5. Nothing else is approved: #4022 waits for re-review at a88e3f89cdf (verdict still CR at a2e83048e987), #4038 has no verdict, #3950 and #3986 are CR.\n6. Next here: STORY-2768 S3a timing (rebuild in progress), then BUG-2583, BUG-2579.\n",
+  "subject": "integration a7c4e3059c7; #4043 BUG-2555 test fix, #4044 BUG-2580 need review",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "implementer"
+}
