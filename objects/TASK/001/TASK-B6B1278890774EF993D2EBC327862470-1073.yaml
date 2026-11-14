@@ -921,12 +921,28 @@ description: |
   ### finding-hash:d51c0f59
 
   No test carries a criterion-level trace comment for the six STORY-2763 criteria (acef95eb, ac3d0be9, ac5a9c72, ac59d017, ac984425, ac39a51c), so `aida criteria` reports all six untraced although each has tests in this diff. Add `trace:STORY-b6b1278890774ef993d2ebc327862470-686.<ac-id>` comments on the tests named in the summary.
+
+
+  ## Findings from PR-4048
+  Reviewed sha: d2aeabea3dfcce83b9ba1550f36273863c41f73c
+
+  ### finding-hash:6d8c7712
+
+  pr_train_verified.rs:518-553: the `bind the train review` phase also contains `live.fetch_main()` (network), and `train structure` (222-245) also contains a main fetch, so a slow fetch is reported under a label that names something else. Give the in-collect fetches their own phase line.
+
+  ### finding-hash:f3b82bc9
+
+  pr_train_verified.rs:328: the whole per-member evidence block (~190 lines, the suspected slow span) is one phase, and the forge merge transport call in verified::merge has no line of its own (only derivable by subtracting from `verify and merge`). If the next train names `member evidence`, a second instrumentation round will be needed.
+
+  ### finding-hash:5f168a1d
+
+  story_1690_train_tests.rs:60 `final_gate_phase_counts_the_store_reads_made_inside_it` asserts only that the process-global totals rose, not that the phase attributed the delta; no test covers the Drop line on an early refusal return.
 status: Draft
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-13T20:01:56.623034248Z
-modified_at: 2026-11-14T17:51:08.461088408Z
+modified_at: 2026-11-14T17:56:08.718650228Z
 req_type: Task
 tags:
 - carried-finding:BUG-2543:2a99ebfc
@@ -1063,6 +1079,9 @@ tags:
 - carried-finding:PR-4040:b29349ce
 - carried-finding:PR-4046:e5eb0aa5
 - carried-finding:PR-4046:fefd3308
+- carried-finding:PR-4048:5f168a1d
+- carried-finding:PR-4048:6d8c7712
+- carried-finding:PR-4048:f3b82bc9
 - carried-finding:STORY-2735:2c7ae2ea
 - carried-finding:STORY-2763:04ad58d8
 - carried-finding:STORY-2763:0d56e3a6
@@ -1140,6 +1159,7 @@ tags:
 - carried-from:PR-4030
 - carried-from:PR-4040
 - carried-from:PR-4046
+- carried-from:PR-4048
 - carried-from:STORY-2735
 - carried-from:STORY-2763
 - carried-from:STORY-2765
@@ -1191,12 +1211,14 @@ tags:
 - finding-hash:5863b5f0
 - finding-hash:5b9e60ad
 - finding-hash:5d2b67f3
+- finding-hash:5f168a1d
 - finding-hash:6089dde5
 - finding-hash:6220a3dc
 - finding-hash:654190b6
 - finding-hash:6810bcf9
 - finding-hash:6935f83d
 - finding-hash:6aee22bd
+- finding-hash:6d8c7712
 - finding-hash:6f4ab4b8
 - finding-hash:735a4b90
 - finding-hash:73e42b4b
@@ -1236,6 +1258,7 @@ tags:
 - finding-hash:f167aa2d
 - finding-hash:f1e29cc2
 - finding-hash:f238ea37
+- finding-hash:f3b82bc9
 - finding-hash:fcb8f322
 - finding-hash:fe70e901
 - finding-hash:fefd3308
@@ -1288,6 +1311,7 @@ tags:
 - from-review:PR-4030
 - from-review:PR-4040
 - from-review:PR-4046
+- from-review:PR-4048
 - from-review:STORY-2735
 - from-review:STORY-2763
 - from-review:STORY-2765
@@ -1635,6 +1659,11 @@ history:
   author: joe
   timestamp: 2026-11-14T17:51:10.089345214Z
   session_id: 01a1db2b3a52
+  changes: []
+- id: 01a1db33-d809-7ff2-9ac6-3b9d26fc7c32
+  author: joe
+  timestamp: 2026-11-14T17:56:10.377634164Z
+  session_id: 01a1db31b43e
   changes: []
 filed_at:
   code_sha: 91fe1e337894199f15365d3f8ecfaf81366f8291
