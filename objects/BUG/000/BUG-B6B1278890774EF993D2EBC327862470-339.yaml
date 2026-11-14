@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-14T08:19:06.368555426Z
-modified_at: 2026-11-14T08:23:03.043711763Z
+modified_at: 2026-11-14T08:24:15.839316092Z
 req_type: Bug
 tags:
 - ci
@@ -22,6 +22,13 @@ comments:
   modified_at: 2026-11-14T08:20:43.481629537Z
   session_id: 01a1d8f3-f948-7072-b174-fa9507ed074b
   harness_version: 2.1.325 (Claude Code)
+- id: 01a1d928-3edf-7da0-8436-111070b91582
+  author: dirtlab
+  content: FAST already runs aida-ci-guards via the shared Rust structural ratchets gate in this baseline. Added an explicit selection assertion pinning the proc_identity production scan and documented verification. All 51 shared Rust guard tests and 10 Python CI fixtures passed. A temporary production process_provably_dead(0) addition in ownership/reader.rs failed the shared scan as expected (exit 101); removed afterward, full suite green. Edits left uncommitted for native host publication. Codegraph host client missing; doctor confirmed unavailable.
+  created_at: 2026-11-14T08:24:15.839316092Z
+  modified_at: 2026-11-14T08:24:15.839316092Z
+  session_id: 01a1d926b68d
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1d924-d042-7180-ad15-9313822f6e66
   author: joe
