@@ -13,7 +13,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-14T13:05:16.063317537Z
-modified_at: 2026-11-14T13:40:25.729420389Z
+modified_at: 2026-11-14T15:28:39.049753839Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -47,6 +47,13 @@ comments:
   modified_at: 2026-11-14T13:17:01.788833168Z
   session_id: 01a1da2e3d91
   harness_version: 2.1.319 (Claude Code)
+- id: 01a1daac-c889-7892-a72f-db4e21ea8927
+  author: joe
+  content: '[advisor a22 08:36] PR-4028 is red in train 27 (run 43607430762, lib-0): forge::commit_ci::tests::aggregator_const_matches_the_ci_workflow (task_1945_commit_ci_tests.rs:254). The PR made the Build job''s name an expression. ''Build (ubuntu-latest)'' is main''s required status check and the name the train reads, so the job name MUST stay literal. Gate label events another way: a job-level if, or a separate tiny job for skipped label events, with the Build aggregator name unchanged. Also check whether the gates shard''s tests::lane_fixture_fails count (42 vs 41) is this PR''s doing. Rework on a dell1 Fable lane; LIGHT gate (cargo test -p aida-cli-lib --lib commit_ci, plus tests/test_ci_tiers.py, plus make check-ci-fast).'
+  created_at: 2026-11-14T15:28:39.049753839Z
+  modified_at: 2026-11-14T15:28:39.049753839Z
+  session_id: 01a1d9ea-4e25-7033-85e8-3648f0195c7c
+  harness_version: 2.1.325 (Claude Code)
 history:
 - id: 01a1da2c-3b66-7010-95f7-26087a6c659f
   author: joe
