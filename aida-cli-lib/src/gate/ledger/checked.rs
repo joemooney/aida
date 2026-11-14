@@ -154,6 +154,18 @@ fn read_entry(
     cap: u64,
     budget: &mut Budget,
 ) -> Result<Option<Vec<u8>>, Unsafe> {
+    Ok(read_entry_meta(dir, name, cap, budget)?.map(|(body, _)| body))
+}
+
+/// [`read_entry`], plus the metadata of the file it read, taken before the
+/// read (a later append therefore always differs from it).
+// trace:BUG-2543 | ai:claude
+fn read_entry_meta(
+    dir: &File,
+    name: &str,
+    cap: u64,
+    budget: &mut Budget,
+) -> Result<Option<(Vec<u8>, std::fs::Metadata)>, Unsafe> {
     use std::os::unix::fs::MetadataExt;
     let file = match openat(dir, name, 0) {
         Ok(f) => f,
@@ -198,7 +210,7 @@ fn read_entry(
         )));
     }
     budget.spend_bytes(body.len() as u64)?;
-    Ok(Some(body))
+    Ok(Some((body, meta)))
 }
 
 /// Every event in `body`, strictly: a torn, oversized, unparseable,
@@ -315,9 +327,20 @@ fn read_change(
     change: &str,
     budget: &mut Budget,
 ) -> Result<Option<Vec<GateEvent>>, Unsafe> {
+    Ok(read_change_stat(ledger, name, change, budget)?.map(|(events, _)| events))
+}
+
+/// [`read_change`], plus the stat identity of the file it parsed.
+// trace:BUG-2543 | ai:claude
+fn read_change_stat(
+    ledger: &File,
+    name: &str,
+    change: &str,
+    budget: &mut Budget,
+) -> Result<Option<(Vec<GateEvent>, EntryStat)>, Unsafe> {
     let mut attempt = 0;
     loop {
-        let Some(body) = read_entry(ledger, name, MAX_LEDGER_BYTES, budget)? else {
+        let Some((body, meta)) = read_entry_meta(ledger, name, MAX_LEDGER_BYTES, budget)? else {
             return Ok(None);
         };
         let torn = !body.is_empty() && !body.ends_with(b"\n");
@@ -326,7 +349,8 @@ fn read_change(
             std::thread::sleep(std::time::Duration::from_millis(20));
             continue;
         }
-        return parse_events(name, &body, change, budget).map(Some);
+        let stat = EntryStat::of(&meta);
+        return parse_events(name, &body, change, budget).map(|events| Some((events, stat)));
     }
 }
 
@@ -344,6 +368,12 @@ pub(crate) struct Discovery {
     by_spec: Option<File>,
     discovered: Vec<String>,
     owners: super::project::MiskeyOwners,
+    /// The pinned ledger directory's (device, inode) and the stat identity
+    /// of every change ledger read, in `discovered` order: what a shared
+    /// discovery re-validates before each reuse (BUG-2543).
+    // trace:BUG-2543 | ai:claude
+    ledger_id: (u64, u64),
+    stats: Vec<EntryStat>,
     bound: std::collections::HashMap<String, Vec<String>>,
     /// Selected ledgers are read once across a list operation. Their total
     /// retained payload is bounded by the caller's selection budget.
@@ -404,6 +434,8 @@ pub(crate) fn discover_with_budget(
         return Ok(None);
     };
     let ledger_path = super::ledger_dir(root);
+    let ledger_id = dir_id(&ledger)?; // trace:BUG-2543 | ai:claude
+    let mut stats: Vec<EntryStat> = Vec::new();
     let mut discovered: Vec<String> = Vec::new();
     let mut bound: std::collections::HashMap<String, Vec<String>> = Default::default();
     // Inventory strings also have a finite aggregate budget, independent of
@@ -428,14 +460,15 @@ pub(crate) fn discover_with_budget(
         discovered.push(key.clone());
         // One budget for the entire scan, including retries. Never reset this
         // per file: 4096 individually legal files can otherwise cost 64 GiB.
-        let Some(events) = read_change(&ledger, &name, &key, work)
+        let Some((events, stat)) = read_change_stat(&ledger, &name, &key, work)
             .map_err(|e| discovery_refusal(root, &name, &e))?
         else {
             return Err(Unsafe(format!(
                 "refusing gate-ledger discovery: {name} vanished while it was read"
             )));
         };
-        // trace:BUG-2517 | ai:claude
+        stats.push(stat); // trace:BUG-2543 | ai:claude
+                          // trace:BUG-2517 | ai:claude
         inventory_budget.spend_bytes(owners.add(&events))?;
         for e in events.into_iter().filter(|e| e.verdict_record().is_some()) {
             if let Some(spec) = e.spec.as_deref() {
@@ -452,6 +485,8 @@ pub(crate) fn discover_with_budget(
     Ok(Some(Discovery {
         ledger,
         owners,
+        ledger_id,
+        stats,
         by_spec,
         discovered,
         bound,
@@ -615,6 +650,12 @@ pub(crate) fn filter_miskeyed_or_fail_closed(
     events: Vec<GateEvent>,
 ) -> Vec<GateEvent> {
     let mut events = events;
+    // Inside a [`DiscoveryScope`] the one shared discovery answers while it
+    // re-validates as unchanged; on any change it is this same fresh
+    // discovery, refusals included. trace:BUG-2543 | ai:claude
+    if shared_filter(root, &mut events) {
+        return events;
+    }
     match discover(root) {
         Ok(Some(discovery)) => discovery.filter_events(&mut events),
         // The directory can disappear after a legacy reader has read its
@@ -623,6 +664,181 @@ pub(crate) fn filter_miskeyed_or_fail_closed(
         Ok(None) | Err(_) => super::project::MiskeyOwners::fail_closed(&mut events),
     }
     events
+}
+
+/// The stat identity of one ledger file: which file (device, inode, link
+/// count, type), its length and its change times. Length, inode and link
+/// count are exact, so an append, a replacement, a hard link or a
+/// non-regular file always differs. None of its content is retained.
+// trace:BUG-2543 | ai:claude
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct EntryStat {
+    dev: u64,
+    ino: u64,
+    nlink: u64,
+    mode: u32,
+    len: u64,
+    mtime: (i64, i64),
+    ctime: (i64, i64),
+}
+
+impl EntryStat {
+    fn of(meta: &std::fs::Metadata) -> Self {
+        use std::os::unix::fs::MetadataExt;
+        Self {
+            dev: meta.dev(),
+            ino: meta.ino(),
+            nlink: meta.nlink(),
+            mode: meta.mode(),
+            len: meta.len(),
+            mtime: (meta.mtime(), meta.mtime_nsec()),
+            ctime: (meta.ctime(), meta.ctime_nsec()),
+        }
+    }
+}
+
+// trace:BUG-2543 | ai:claude
+fn dir_id(dir: &File) -> Result<(u64, u64), Unsafe> {
+    use std::os::unix::fs::MetadataExt;
+    let meta = dir
+        .metadata()
+        .map_err(|e| Unsafe(format!("refusing gate-ledger discovery: {e}")))?;
+    Ok((meta.dev(), meta.ino()))
+}
+
+/// The change-ledger names in `names`, selected exactly as discovery does.
+// trace:BUG-2543 | ai:claude
+fn ledger_names(names: Vec<String>) -> Vec<String> {
+    names
+        .into_iter()
+        .filter(|name| {
+            name.strip_suffix(".jsonl")
+                .and_then(ChangeKey::parse)
+                .is_some_and(|c| format!("{}.jsonl", c.as_key()) == *name)
+        })
+        .collect()
+}
+
+type SharedDiscoveries = std::collections::HashMap<std::path::PathBuf, Discovery>;
+
+thread_local! {
+    /// The active [`DiscoveryScope`]'s one discovery per store root.
+    // trace:BUG-2543 BUG-2551 | ai:claude
+    static SHARED: std::cell::RefCell<Option<SharedDiscoveries>> =
+        const { std::cell::RefCell::new(None) };
+}
+
+/// One gate-ledger discovery shared by every single-key verdict read on
+/// this thread while alive (a verdict listing; pull's wait reconciliation).
+///
+/// Not a snapshot: every key's events are still read fresh from disk by its
+/// own reader, and only the discovery's ownership index is reused. Before
+/// each reuse the shared discovery is re-validated against the ledger as it
+/// is now: the same path checks as a fresh discovery (a linked or
+/// non-directory component refuses), the same ledger directory, the same
+/// change-ledger names, and an unchanged stat identity for every ledger it
+/// read. Any difference (an append by this or any other writer, a hard
+/// link, a replacement by a symlink or FIFO) is answered by a fresh
+/// discovery, which becomes the shared one. A failed or absent discovery is
+/// never shared, so every refusal is exactly the fresh path's. Nested
+/// scopes join the outermost one.
+// trace:BUG-2543 BUG-2551 | ai:claude
+pub(crate) struct DiscoveryScope {
+    owner: bool,
+}
+
+impl DiscoveryScope {
+    pub(crate) fn enter() -> Self {
+        SHARED.with(|shared| {
+            let mut shared = shared.borrow_mut();
+            let owner = shared.is_none();
+            if owner {
+                *shared = Some(Default::default());
+            }
+            Self { owner }
+        })
+    }
+}
+
+impl Drop for DiscoveryScope {
+    fn drop(&mut self) {
+        if self.owner {
+            SHARED.with(|shared| *shared.borrow_mut() = None);
+        }
+    }
+}
+
+/// Filter `events` through the active scope's discovery of `root`,
+/// rediscovering first unless it is unchanged; `false` when no scope is
+/// active, so the caller runs the fresh path.
+// trace:BUG-2543 | ai:claude
+fn shared_filter(root: &Path, events: &mut Vec<GateEvent>) -> bool {
+    if !SHARED.with(|shared| shared.borrow().is_some()) {
+        return false;
+    }
+    let reusable = SHARED.with(|shared| {
+        shared
+            .borrow()
+            .as_ref()
+            .and_then(|m| m.get(root))
+            .is_some_and(|d| d.unchanged(root))
+    });
+    if !reusable {
+        let fresh = discover(root);
+        SHARED.with(|shared| {
+            if let Some(m) = shared.borrow_mut().as_mut() {
+                match fresh {
+                    Ok(Some(d)) => {
+                        m.insert(root.to_path_buf(), d);
+                    }
+                    // Never share a refusal or an absent ledger: the next
+                    // read rediscovers, exactly as outside a scope.
+                    Ok(None) | Err(_) => {
+                        m.remove(root);
+                    }
+                }
+            }
+        });
+    }
+    SHARED.with(
+        |shared| match shared.borrow().as_ref().and_then(|m| m.get(root)) {
+            Some(d) => d.filter_events(events),
+            // This read's fresh discovery found no ledger or refused: fail
+            // closed, as the fresh path does for the same outcome.
+            None => super::project::MiskeyOwners::fail_closed(events),
+        },
+    );
+    true
+}
+
+impl Discovery {
+    /// Whether a fresh discovery of `root` now would read exactly the files
+    /// this one read: the path components still open as [`ledger_dirs`]
+    /// requires, onto the same ledger directory; it lists the same change
+    /// ledgers; and each still has the stat identity it had when read.
+    // trace:BUG-2543 | ai:claude
+    fn unchanged(&self, root: &Path) -> bool {
+        let Ok(Some((ledger, _))) = ledger_dirs(root) else {
+            return false;
+        };
+        if dir_id(&ledger).ok() != Some(self.ledger_id) {
+            return false;
+        }
+        let ledger_path = super::ledger_dir(root);
+        let Ok(names) = list_pinned(&ledger, &ledger_path) else {
+            return false;
+        };
+        let names = ledger_names(names);
+        names.len() == self.discovered.len()
+            && names
+                .iter()
+                .zip(self.discovered.iter().zip(&self.stats))
+                .all(|(name, (key, stat))| {
+                    *name == format!("{key}.jsonl")
+                        && std::fs::symlink_metadata(ledger_path.join(name))
+                            .is_ok_and(|now| EntryStat::of(&now) == *stat)
+                })
+    }
 }
 
 /// STORY-2324: every event on `change`'s ledger under `root`, read strictly
