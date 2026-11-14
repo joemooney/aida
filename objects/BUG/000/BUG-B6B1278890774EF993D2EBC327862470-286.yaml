@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-11T04:08:39.262399078Z
-modified_at: 2026-11-14T15:01:19.867048685Z
+modified_at: 2026-11-14T16:24:58.367480632Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -66,6 +66,11 @@ relationships:
   target_id: 01a1da90-646d-7af3-b1a2-44e6175e8244
   created_at: 2026-11-14T15:01:19.867047226Z
   created_by: dirtlab
+- rel_type:
+    custom: implemented-by
+  target_id: 01a1dad7-ad3b-7b93-b96c-f1a8dba596ec
+  created_at: 2026-11-14T16:24:58.367477658Z
+  created_by: joe
 comments:
 - id: 01a1cd5d-0264-7490-92b2-682ec579baba
   author: dirtlab
@@ -307,6 +312,10 @@ history:
 - id: 01a1da93-cbb1-7692-a371-6427476069f8
   author: dirtlab
   timestamp: 2026-11-14T15:01:21.457983047Z
+  changes: []
+- id: 01a1dae0-62f3-7703-b79b-7bd0850ced0e
+  author: joe
+  timestamp: 2026-11-14T16:25:00.915962079Z
   changes: []
 filed_at:
   code_sha: fec48a790424718b7cfc26c0c9e7d7667ab48beb
