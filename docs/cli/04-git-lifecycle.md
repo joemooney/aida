@@ -691,6 +691,55 @@ returns an error; a verdict anchor alone does not finish that protection.
 
 **Chains with**: `git fetch` → `aida integration tags --dry-run` → `aida integration tags` → `aida list --tag landed-in-integration`.
 
+### `aida integration merge`
+
+**One line**: merge one open change into `integration`, after deciding whether it may go in.
+
+**Mental model.** A change enters `integration` in one of two ways. It is approved at its current head, or it is low-risk enough to be reviewed after the merge. The second way exists only when the default branch's `.aida/config.toml` turns it on:
+
+```toml
+[integration]
+review_after_merge = "low-risk"   # default "off"
+max_effort = "4h"                 # largest opening estimate a spec may carry
+excluded_tags = ["architecture", "security", "gate", "supervised"]
+checks = ["make check-ci-fast"]   # each must exit 0 on the merge result
+```
+
+A change is low-risk when every spec its title names is in the store, carries none of the excluded tags, is not supervised (execution mode guided, operator or decide), has an `effort:open:` estimate no larger than `max_effort`, and the change touches no protected path. Protected paths are always excluded; no setting removes them. The first rule that fails is the reason the command prints, and `aida land status` shows the same reason on integration rows that still need review.
+
+An armed merge hold refuses the merge in both cases. After the merge, each command in `checks` runs on the result. If one fails, or the merge stops on a conflict, the branch goes back to the commit it started from.
+
+A change merged before review is not exempt from review. Its specs get the `merged-before-review` tag, the merge commit says why it was eligible, and `aida integration promotion-check` refuses a promotion until the change is approved at the head that was merged.
+
+**Reach for it when**: you hold the integration worktree and a change targeting `integration` is ready to go in.
+
+**Don't reach for it when**: the change targets `main`. Those land on a train.
+
+**Key options (rationale only).**
+- `--dry-run` says whether the change would be admitted, and why, without merging.
+- `--push` pushes `integration` once the checks pass. Without it the merge stays local so you can run more checks first.
+
+**Gotchas.** Run it on `integration`, with no tracked changes, equal to `origin/integration`; it refuses otherwise. The `[integration]` table is read from the default branch, not from the worktree, so a change cannot switch the setting on for itself. A value the command cannot read is an error, not "off".
+
+**Chains with**: `aida land status` → `aida integration merge <PR> --dry-run` → `aida integration merge <PR> --push` → `aida integration tags`.
+
+### `aida integration promotion-check`
+
+**One line**: check that everything on `integration` not yet on `main` was reviewed at the head that was merged.
+
+**Mental model.** The check reads git, not tags. It walks integration's first-parent commits back to the last head a promotion carried to `main`. A merge of `main` is skipped. A merge of a change must have that change's newest verdict approving exactly the merged head. Any other commit is refused, because nothing reviewed it. Removing the `merged-before-review` tag by hand changes nothing: the merge is still there, and so is the missing approval.
+
+For each change that fails, the output names the change, its merge commit, and the `git revert -m 1` that takes it out of the snapshot. The command exits 1 when anything fails. For each change that passes, it removes the `merged-before-review` tag from the change's specs.
+
+**Reach for it when**: you are about to cut a promotion from `integration`.
+
+**Key options (rationale only).**
+- `--tip <COMMIT>` checks a commit other than `origin/integration`, for example a promotion branch's head.
+
+**Gotchas.** It reads the local `origin/` refs, so run `git fetch` first. An approval at a different head does not count, even when the difference is only a merge of the base.
+
+**Chains with**: `git fetch` → `aida integration promotion-check` → cut the promotion.
+
 ## The two-leg git model: `fetch` / `pull` / `push`
 
 Here's the thing raw git doesn't know about your AIDA project: **there are two branches that must move together** — your **code** branch, and the orphan **`aida-store`** branch that holds the specs. `aida fetch`/`pull`/`push` are the verbs that keep both legs in sync, because doing one and forgetting the other is the mistake everyone makes. Each takes `--code-only` / `--store-only` to scope to one leg when you mean to.
