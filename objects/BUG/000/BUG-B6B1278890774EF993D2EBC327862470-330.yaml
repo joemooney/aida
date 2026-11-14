@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-13T20:52:54.357683400Z
-modified_at: 2026-11-14T09:46:53.076413176Z
+modified_at: 2026-11-14T09:51:51.364196259Z
 req_type: Bug
 tags:
 - perf
@@ -79,6 +79,14 @@ comments:
   modified_at: 2026-11-14T09:44:58.485577465Z
   session_id: 01a1d8f3-f948-7072-b174-fa9507ed074b
   harness_version: 2.1.325 (Claude Code)
+- id: 01a1d978-7044-71c2-bae2-1786a71d8e96
+  author: dirtlab
+  content: |
+    Round 2 correction to the original implementation note: waiters now veto reuse unless fresh ls-remote evidence shows all requested store/code remote heads are contained locally. db sync uses one fallible remote-head query and skips canonical scans only for a clean HEAD exactly matching origin; pending and already committed local changes retain collision validation. The aida pull baseline is captured before committing pending changes. Restored operator controls: AIDA_PULL_COALESCE=0, AIDA_PULL_COALESCE_WAIT_SECS (default 1200), AIDA_RECONCILE_WATERMARK_TTL_SECS (default 900, zero disables watermark reuse). Added real db sync window coverage against a bare origin with 1200 ledger directories, moving-remote waiter regression, independent code freshness and collision regressions for both entry points. Validation is running through the lane runner; final host handoff will report the executed results. Operational detail: docs/internal/testing/bug-2565-pull-coalescing.md.
+  created_at: 2026-11-14T09:51:51.364196259Z
+  modified_at: 2026-11-14T09:51:51.364196259Z
+  session_id: 01a1d973dcb8
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1d8a9-d3a1-7243-a396-3ba4fdaf7412
   author: joe
