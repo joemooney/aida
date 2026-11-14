@@ -43,7 +43,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-13T16:52:56.270142081Z
-modified_at: 2026-11-14T01:23:37.033578606Z
+modified_at: 2026-11-14T02:31:50.297662305Z
 req_type: Story
 tags:
 - architecture
@@ -239,6 +239,13 @@ comments:
   content: '18:24 MST advisor: scoped re-reviews queued. #3972 at d6cb657 (F1-F4 fixes plus self-found: gh pr list moved from land.rs into forge::github_open_changes_detailed, raw-gh ratchet story_2401). #3973 at 46777be restacked on #3972 (F1 inventory/with_live_io, F2 READY-PENDING-COVER blocked, plus self-found: ship_refusal_release takes record_proof: bool and the retry sink is no longer a trait object, keeping gate/orchestrator_leaves.rs unchanged). Reviewers: verify the prior blocking findings and these three out-of-scope changes; the pinned-base vs origin/<base> approval read is an accepted known limit (PR body). Dell1 failures reported (forge::commit_ci relay needs debug binary; bug_2209 roster guard tmp-dir) are environment-only, so CI and the integration head decide them.'
   created_at: 2026-11-14T01:23:37.033578606Z
   modified_at: 2026-11-14T01:23:37.033578606Z
+  session_id: 01a1d797-2ccf-7771-899a-682081f10504
+  harness_version: 2.1.325 (Claude Code)
+- id: 01a1d7e5-9719-7733-8a4e-790c3c3b522d
+  author: joe
+  content: '19:32 MST advisor: review scope for #3981 (aida land run, S2) at 20a51b7, review-before-merge (architecture). Verify each of the six signoff conditions against the PR body, hardest on: (1) no train starts while any .aida/train/*.json remains or our own train child is alive; a train is never stopped (warning only after 90 min); (2) a reviewer past its limit has its verdict re-read before any stop; a second timeout at one head derives BLOCKED; (3) a lane that refused over unpushed seat work leaves that head BLOCKED until it moves; (4) children spawned in their own process group but never detached; (5) a stacked change waits for its base (no train boarding). Known and accepted: only --dry-run exercised; the live acceptance run is an operator act after the #3950/#3952 fixers finish.'
+  created_at: 2026-11-14T02:31:50.297662305Z
+  modified_at: 2026-11-14T02:31:50.297662305Z
   session_id: 01a1d797-2ccf-7771-899a-682081f10504
   harness_version: 2.1.325 (Claude Code)
 history:
