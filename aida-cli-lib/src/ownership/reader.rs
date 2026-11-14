@@ -75,9 +75,20 @@ pub(crate) fn force_claim_clone_owner(
         && aida_core::pid_observer::PidObserver::current().can_observe(lease.pid_namespace)
         && crate::leases::lease_holder_record(lease)
             .is_some_and(|record| record.refusal().is_some())
-        && lease
-            .active_pid
-            .is_some_and(|pid| aida_core::liveness::process_provably_dead(pid, None));
+        && lease.active_pid.is_some_and(|pid| {
+            pid != 0
+                && matches!(
+                    aida_core::proc_identity::observe_legacy_registry(
+                        pid,
+                        lease.active_pid_start_time.as_deref(),
+                        lease.pid_namespace,
+                    ),
+                    aida_core::proc_identity::Verdict::Dead(
+                        aida_core::proc_identity::DeadReason::Absent
+                            | aida_core::proc_identity::DeadReason::Exited
+                    )
+                )
+        });
     if dead {
         OwnerVerdict::Dead {
             proof: "local refused worker process exited".into(),
