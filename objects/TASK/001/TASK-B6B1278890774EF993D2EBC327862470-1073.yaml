@@ -545,12 +545,24 @@ description: |
   ### finding-hash:74641343
 
   The sketch listed an unbound spec refusal as a still-refuses test case; no new bug_2569 test pins it. speaks_for_change keeps unbound events by construction, so behaviour is unchanged, but a regression test would lock it in.
+
+
+  ## Findings from BUG-2569
+  Reviewed sha: e15838b4c3921bbc53f0f757db24d954c753539d
+
+  ### finding-hash:45085c26
+
+  standing_refusal_in_head (gate/ledger/project.rs) treats a foreign refusal as superseded when the refused change's newest verdict approves, whatever commit that approval was recorded at. If the refused commit is in the judged head but the approved rework commit is not (e.g. PR-99 refused at X after merging to integration, then approved at Y, where the promotion only carries X), the carried approval rides past the refused commit. This follows the advisor ruling literally; a follow-up could require the superseding approval to be at or carried to a commit in the head.
+
+  ### finding-hash:74641343
+
+  The sketch listed an unbound spec refusal as a still-refuses test case; no new bug_2569 test pins it. speaks_for_change keeps unbound events by construction, so behaviour is unchanged, but a regression test would lock it in.
 status: Draft
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-13T20:01:56.623034248Z
-modified_at: 2026-11-14T10:58:23.732827657Z
+modified_at: 2026-11-14T10:58:36.940988796Z
 req_type: Task
 tags:
 - carried-finding:BUG-2543:2a99ebfc
@@ -568,6 +580,8 @@ tags:
 - carried-finding:BUG-2557:f238ea37
 - carried-finding:BUG-2560:96ff0aa3
 - carried-finding:BUG-2563:0bff30e1
+- carried-finding:BUG-2569:45085c26
+- carried-finding:BUG-2569:74641343
 - carried-finding:BUG-2570:4843b9fe
 - carried-finding:BUG-2570:76a786ef
 - carried-finding:BUG-2570:7bbbf9a9
@@ -653,6 +667,7 @@ tags:
 - carried-from:BUG-2557
 - carried-from:BUG-2560
 - carried-from:BUG-2563
+- carried-from:BUG-2569
 - carried-from:BUG-2570
 - carried-from:BUG-2573
 - carried-from:PR-3921
@@ -744,6 +759,7 @@ tags:
 - from-review:BUG-2557
 - from-review:BUG-2560
 - from-review:BUG-2563
+- from-review:BUG-2569
 - from-review:BUG-2570
 - from-review:BUG-2573
 - from-review:PR-3921
@@ -999,6 +1015,11 @@ history:
 - id: 01a1d9b5-6150-7bf1-96e6-10e11eabf9f7
   author: joe
   timestamp: 2026-11-14T10:58:25.232992082Z
+  session_id: 01a1d9b26775
+  changes: []
+- id: 01a1d9b5-9476-7462-a6a8-13835b41101e
+  author: joe
+  timestamp: 2026-11-14T10:58:38.326124383Z
   session_id: 01a1d9b26775
   changes: []
 filed_at:
