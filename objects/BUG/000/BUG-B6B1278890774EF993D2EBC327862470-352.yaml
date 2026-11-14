@@ -22,7 +22,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-14T20:47:29.076518272Z
-modified_at: 2026-11-14T20:55:09.178321923Z
+modified_at: 2026-11-14T20:57:47.630171647Z
 req_type: Bug
 tags:
 - disk
@@ -35,6 +35,26 @@ comments:
   modified_at: 2026-11-14T20:52:07.893326900Z
   session_id: 01a1db6d-e689-7532-9eef-772722add87b
   harness_version: 2.1.325 (Claude Code)
+- id: 01a1dbda-1f6e-7e61-8ded-b0d68a7b7130
+  author: dirtlab
+  content: |-
+    ## Implementer approach
+
+    ### Acceptance criteria and evidence
+    - **Plain reason + real size for detached HEAD (unit, git fixture):** `bug_2587_detached_head_is_reported_plainly_with_its_size` in `worktree_lifecycle_gc.rs` — an unpublished detached worktree is kept with `detached HEAD: no branch to prove merged ...` and non-zero bytes.
+    - **Blank-stderr case (unit):** `bug_2587_git_failure_with_empty_stderr_names_the_command` — a quiet non-zero git exit reports the exit status and arguments, never an empty reason.
+    - **Detached eligibility + removal (unit, git fixture with bare origin):** `bug_2587_detached_head_on_default_or_remote_pr_head_is_removed` — HEAD on the default branch, and HEAD reachable from an advertised `refs/pull/N/head`, are eligible and removed by the apply path; dirty tree, live lease, or unpublished commit keep it.
+    - **Per-seat target dirs (unit, tempdir fixture):** `bug_2587_orphan_seat_target_dirs_are_reported_and_removed` — `target/lane-overlay/<session>` with no session file and `target/worktrees/<name>` with no worktree/seat/lease are eligible, removed on apply, counted in freed bytes; live ones are kept.
+
+    ### Expected files
+    - `aida-cli-lib/src/worktree_lifecycle_gc.rs` (code + tests)
+
+    ### Ambiguities / conflicts as questions
+    - "Open/merged PR head on the remote" is implemented as: HEAD is reachable from a ref origin advertises under `refs/heads/*`, `refs/pull/*/head` or `refs/merge-requests/*/head` (one `ls-remote`, no forge CLI). That also admits a closed-unmerged PR head, whose commits are equally still on the remote. Is that acceptable?
+  created_at: 2026-11-14T20:57:47.630171647Z
+  modified_at: 2026-11-14T20:57:47.630171647Z
+  session_id: 01a1dbd7ade0
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1dbd4-f7e2-7a82-bc00-323f2c6b3b3d
   author: joe
