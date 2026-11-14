@@ -15,12 +15,12 @@ description: |
   4. The promotion gate refuses to cut or ship a promotion that contains a merged-before-review constituent without an approval at its merged head. It names that constituent so it can be reverted out of the snapshot (throughput rule 1).
   5. Tests: eligibility matrix (tag, effort, protected path, config off); a promotion refused for a pending constituent; a promotion allowed once approved.
   First consumer: STORY-2771. Until this lands, the advisor applies the ruling by hand, per PR.
-status: NeedsAttention
+status: Approved
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-13T18:06:55.227979618Z
-modified_at: 2026-11-14T10:24:37.979062167Z
+modified_at: 2026-11-14T10:25:53.953116368Z
 req_type: Story
 tags:
 - config
@@ -71,6 +71,13 @@ comments:
   modified_at: 2026-11-14T10:24:37.979062167Z
   session_id: 01a1d874-d40d-7d13-8d29-0368fcee960d
   harness_version: 2.1.325 (Claude Code)
+- id: 01a1d997-9b21-7f73-9133-8b4c7c32536e
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida edit --status`. It was punted on: blocked-dependency: Seat baseline 60823a3cb0 lacks the STORY-2768 landing reconciler (no land command/module/registration) and an integration PR merge/promotion-cut gate. integration_cmd.rs only implements tags; current integration protocol is manual. AC2/3/4 require these boundaries and durable constituent merged-head evidence, so enabling a review bypass here cannot satisfy the promotion invariant. Store records later land work (PRs 3959, 3973, 3981, 3992) absent from this checkout. Host should rebase/relaunch on the integration baseline containing the landing owner and establish the promotion-cut/ship evidence seam. Also the operator-supplied /home/joe/ai/aida/.codegraph/proxy-state/bin/codegraph is absent; doctor reports missing client.. No triage reason was given.'
+  created_at: 2026-11-14T10:25:53.953106518Z
+  modified_at: 2026-11-14T10:25:53.953106518Z
+  session_id: 01a1d8f3-f948-7072-b174-fa9507ed074b
+  harness_version: 2.1.325 (Claude Code)
 history:
 - id: 01a1d617-7531-7dc3-aba6-d82849880497
   author: joe
@@ -103,6 +110,15 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a1d997-9b21-7f73-9133-8b3830a770e6
+  author: joe
+  timestamp: 2026-11-14T10:25:53.953079324Z
+  session_id: 01a1d8f3-f948-7072-b174-fa9507ed074b
+  harness_version: 2.1.325 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 filed_at:
   code_sha: ee8dd4b2bdf1495f699357a3f2f40f9bf3802983
   branch: main
@@ -112,9 +128,3 @@ filed_at:
   vendor: claude
   session: 01a1d5f7-27ab-7543-8808-b0ec6c271689
   harness_version: 2.1.323 (Claude Code)
-attention_reason:
-  category: blocked-dependency
-  detail: Seat baseline 60823a3cb0 lacks the STORY-2768 landing reconciler (no land command/module/registration) and an integration PR merge/promotion-cut gate. integration_cmd.rs only implements tags; current integration protocol is manual. AC2/3/4 require these boundaries and durable constituent merged-head evidence, so enabling a review bypass here cannot satisfy the promotion invariant. Store records later land work (PRs 3959, 3973, 3981, 3992) absent from this checkout. Host should rebase/relaunch on the integration baseline containing the landing owner and establish the promotion-cut/ship evidence seam. Also the operator-supplied /home/joe/ai/aida/.codegraph/proxy-state/bin/codegraph is absent; doctor reports missing client.
-  lean: Rebase onto the current integration implementation, then implement eligibility and merged-head promotion checks together; keep review-before-merge until both gates exist.
-  raised_by: implementer
-  raised_at: 2026-11-14T07:36:47.661768091Z
