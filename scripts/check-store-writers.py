@@ -20,7 +20,7 @@ import tomllib
 ROOT = Path(__file__).resolve().parents[1]
 INVENTORY = "scripts/store-writers.toml"
 # Include adjacent REST/TUI consumers, not just the two primary crates.
-RUST_ROOTS = ("aida-core/src", "aida-cli-lib/src", "aida-cli/src", "aida-server/src", "aida-tui/src", "aida-desktop/src", "aida-crate/src", "aida-generate-types/src")
+RUST_ROOTS = ("aida-core/src", "aida-term/src", "aida-cmdkit/src", "aida-cli-lib/src", "aida-cli/src", "aida-server/src", "aida-tui/src", "aida-desktop/src", "aida-crate/src", "aida-generate-types/src")
 SCRIPT_ROOTS = ("scripts", "aida-core/templates", "hooks", ".githooks")
 # Deliberately over-inclusive: a filesystem destination need not contain 'store'.
 APIS = (

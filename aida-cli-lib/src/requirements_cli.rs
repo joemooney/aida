@@ -10418,3 +10418,83 @@ mod origin_prompt_tests {
         }
     }
 }
+
+// trace:TASK-3783 | ai:codex
+use crate::stakeholder_role::{
+    active_stakeholder_role, add_csv_tag, parse_requester_add_type, requester_add_type_allowed,
+    stakeholder_refusal,
+};
+use crate::{Command, REQUESTER_INTAKE_FORBIDDEN_FIELDS};
+
+/// The decoded `aida add` args, when `command` is `aida add`. A decode
+/// failure is returned, not dropped, so the requester check can refuse it.
+// trace:STORY-1728 | ai:claude
+pub(crate) fn requester_add_args(
+    command: &Command,
+) -> Option<Result<crate::requirements_cli::AddArgs, clap::Error>> {
+    let Command::Registered(invocation) = command;
+    (invocation.reg.name == "add")
+        .then(|| clap::FromArgMatches::from_arg_matches(&invocation.matches))
+}
+
+/// The requester's `aida add` refusals. Args that do not decode are refused:
+/// an add whose fields cannot be checked must not pass as plain intake.
+// trace:STORY-1728 | ai:claude
+pub(crate) fn requester_intake_check(
+    add: Result<crate::requirements_cli::AddArgs, clap::Error>,
+) -> Result<()> {
+    let Ok(add) = add else {
+        return Err(stakeholder_refusal(
+            "requester",
+            "an add whose arguments could not be checked",
+        ));
+    };
+    if add.interactive {
+        return Err(stakeholder_refusal("requester", "interactive add"));
+    }
+    if add.queue || add.batch.is_some() || add.r#for.is_some() {
+        return Err(stakeholder_refusal("requester", "queueing intake"));
+    }
+    let forbidden_fields = [
+        ("parent", add.parent.is_some()),
+        ("feature", add.feature.is_some()),
+        ("owner", add.owner.is_some()),
+    ];
+    if REQUESTER_INTAKE_FORBIDDEN_FIELDS.iter().any(|field| {
+        forbidden_fields
+            .iter()
+            .any(|(candidate, is_set)| candidate == field && *is_set)
+    }) {
+        return Err(stakeholder_refusal(
+            "requester",
+            "setting parent, feature, or owner during intake",
+        ));
+    }
+    let req_type = parse_requester_add_type(add.r#type.as_deref())?;
+    if !requester_add_type_allowed(&req_type) {
+        return Err(stakeholder_refusal(
+            "requester",
+            "adding anything except change-request, bug, or user specs",
+        ));
+    }
+    Ok(())
+}
+
+/// Requester intake lands as a Draft change-request (unless typed) tagged
+/// for advisor grooming. Applied by the add handler when the active
+/// stakeholder role is `requester`; the refusals ran before dispatch.
+// trace:STORY-1728 | ai:claude
+pub(crate) fn apply_requester_intake(add: &mut crate::requirements_cli::AddArgs) {
+    if active_stakeholder_role().as_deref() != Some("requester") {
+        return;
+    }
+    coerce_requester_intake(add);
+}
+
+pub(crate) fn coerce_requester_intake(add: &mut crate::requirements_cli::AddArgs) {
+    add.status = Some("draft".to_string());
+    if add.r#type.is_none() {
+        add.r#type = Some("change-request".to_string());
+    }
+    add_csv_tag(&mut add.tags, "intake:requester");
+}
