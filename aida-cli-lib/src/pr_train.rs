@@ -16,9 +16,11 @@
 //! 3. [`drive`] tests the train tip (a `train/*` PR, so CI and the train mode
 //!    of merge-hold-gate run unchanged), lands a green train by a rebase merge
 //!    pinned to its tip — only while main is still the train's base — and on
-//!    red reruns once, then bisects by halves, two sub-trains at a time. A
-//!    one-member train that is red ejects that member. Main never receives an
-//!    untested combination.
+//!    a test failure bisects by halves, two sub-trains at a time, with no
+//!    same-composition rerun (BUG-2577: every observed test red was
+//!    deterministic). A one-member train that is red ejects that member. Only
+//!    a red with no test result (cancelled or lost checks) is rerun, once.
+//!    Main never receives an untested combination.
 // trace:STORY-1690 | ai:claude
 
 #[path = "pr_train_journal.rs"]
@@ -312,8 +314,12 @@ fn add_car(repo: &Path, base: &str, tip: &str, m: &Member) -> std::result::Resul
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum CiVerdict {
     Green,
-    /// Red, with where to look.
+    /// Red on a test or gate failure, with where to look. Never rerun.
     Red(String),
+    /// Red with no test result: every red check was cancelled or lost
+    /// (runner gone, cancelled run). It says nothing about the members, so
+    /// the same composition is rerun once. trace:BUG-2577 | ai:claude
+    InfraRed(String),
 }
 
 /// What landing a green train did.
@@ -365,8 +371,9 @@ pub(crate) struct Outcome {
 }
 
 /// Drive `members` to main through `rails`: build on the current main, test,
-/// land green trains while main is still their base, rerun the first red
-/// once, then bisect by halves with up to two sub-trains in flight. Every
+/// land green trains while main is still their base, bisect a red train by
+/// halves with up to two sub-trains in flight. A test red is never rerun; a
+/// red with no test result is rerun once with the same composition. Every
 /// member ends landed or ejected with a reason, unless unavailable CI pauses
 /// the run with its in-flight members retained.
 // trace:STORY-1690 | ai:claude
@@ -423,8 +430,9 @@ fn drive_into(rails: &mut dyn Rails, members: &[Member], out: &mut Outcome) -> R
     if members.is_empty() {
         return Ok(());
     }
-    // (group, may this group's red be rerun once?)
-    let mut pending: VecDeque<(Vec<Member>, bool)> = VecDeque::from([(members.to_vec(), true)]);
+    // (group, has this composition already spent its one infrastructure
+    // rerun?) trace:BUG-2577 | ai:claude
+    let mut pending: VecDeque<(Vec<Member>, bool)> = VecDeque::from([(members.to_vec(), false)]);
     // A main that keeps moving under the train must not spin it forever.
     let mut waves_left = 4 * members.len() + 8;
     while !pending.is_empty() {
@@ -443,12 +451,14 @@ fn drive_into(rails: &mut dyn Rails, members: &[Member], out: &mut Outcome) -> R
         let take = pending.len().min(PARALLEL_SUB_TRAINS);
         let wave: Vec<(Vec<Member>, bool)> = pending.drain(..take).collect();
         let base = rails.main_tip()?;
-        let mut built = Vec::new();
-        for (group, rerun) in wave {
+        let mut built: Vec<(Built, bool)> = Vec::new();
+        for (group, infra_rerun_spent) in wave {
             let b = rails.build(&base, &group)?;
             out.ejected.extend(b.dropped.iter().cloned());
             if !b.cars.is_empty() {
-                built.push((b, rerun));
+                // A build that dropped a member is a new composition.
+                let spent = infra_rerun_spent && b.dropped.is_empty();
+                built.push((b, spent));
             }
         }
         if built.is_empty() {
@@ -465,14 +475,27 @@ fn drive_into(rails: &mut dyn Rails, members: &[Member], out: &mut Outcome) -> R
         out.ci_runs += trains.len();
         // Requeued groups go back to the FRONT, in their wave order.
         let mut requeue: Vec<(Vec<Member>, bool)> = Vec::new();
-        for ((train, rerun), verdict) in built.into_iter().zip(verdicts) {
+        for ((train, infra_rerun_spent), verdict) in built.into_iter().zip(verdicts) {
             let members = train.members();
+            // A red with no test result is rerun once with the same
+            // composition; a second one is handled like a test red, so the
+            // run still ends. trace:BUG-2577 | ai:claude
+            let verdict = match verdict {
+                CiVerdict::InfraRed(_) if !infra_rerun_spent => {
+                    requeue.push((members, true));
+                    continue;
+                }
+                CiVerdict::InfraRed(detail) => {
+                    CiVerdict::Red(format!("no test result after one rerun: {detail}"))
+                }
+                other => other,
+            };
             match verdict {
                 CiVerdict::Green => match rails.land(&train)? {
                     Landing::Landed(_) => out
                         .landed
                         .extend(train.cars.iter().map(|c| (c.member.pr, c.commit.clone()))),
-                    Landing::Stale => requeue.push((members, false)),
+                    Landing::Stale => requeue.push((members, infra_rerun_spent)),
                     Landing::Refused(refused) => {
                         let rest: Vec<Member> = members
                             .into_iter()
@@ -484,10 +507,12 @@ fn drive_into(rails: &mut dyn Rails, members: &[Member], out: &mut Outcome) -> R
                         }
                     }
                 },
-                CiVerdict::Red(detail) => {
-                    if rerun {
-                        requeue.push((members, false));
-                    } else if members.len() == 1 {
+                // A test red is never rerun with the same composition: every
+                // observed one was deterministic, so the rerun only spent a
+                // CI cycle. Unavailable CI is not a verdict and never reaches
+                // this arm. trace:BUG-2577 | ai:claude
+                CiVerdict::InfraRed(detail) | CiVerdict::Red(detail) => {
+                    if members.len() == 1 {
                         out.ejected.push(Ejected {
                             pr: members[0].pr,
                             reason: format!(
@@ -669,7 +694,7 @@ fn train_ci_wait_details(rows: &[crate::ci_gate::CheckRow]) -> Vec<String> {
             };
             for row in checks {
                 if row.workflow == "CI"
-                    && crate::ci_gate::check_name_eq(&row.name, "Build (ubuntu-latest)")
+                    && crate::ci_gate::check_name_eq(&row.name, TRAIN_CI_AGGREGATE)
                 {
                     parts.push(format!("Build summary: {}", row.bucket));
                 } else if train_ci_is_shard(row) {
@@ -682,7 +707,7 @@ fn train_ci_wait_details(rows: &[crate::ci_gate::CheckRow]) -> Vec<String> {
                 && !rows.iter().any(|r| {
                     r.run_id.as_deref() == Some(run)
                         && r.workflow == "CI"
-                        && crate::ci_gate::check_name_eq(&r.name, "Build (ubuntu-latest)")
+                        && crate::ci_gate::check_name_eq(&r.name, TRAIN_CI_AGGREGATE)
                 })
             {
                 parts.push("Build summary appears after all shards finish".into());
@@ -701,11 +726,17 @@ enum TrainCiReadiness {
     Missing(Vec<String>),
     Pending(Vec<String>),
     Red(String),
-    /// Terminal and not a red train: no rerun or bisection can turn it green
+    /// Red, but no check reported a test or gate failure: every red check was
+    /// cancelled or lost. trace:BUG-2577 | ai:claude
+    InfraRed(String),
+    /// Terminal and not a red train: no bisection can turn it green
     /// (a required check the train PR's CI skipped). trace:BUG-2401 | ai:claude
     Refused(String),
     Green,
 }
+
+/// The CI workflow's aggregate check: red whenever any lane is red or cancelled.
+const TRAIN_CI_AGGREGATE: &str = "Build (ubuntu-latest)";
 
 // trace:BUG-2401 | ai:codex
 fn train_ci_readiness(
@@ -715,17 +746,49 @@ fn train_ci_readiness(
     tolerate_hold: bool,
 ) -> TrainCiReadiness {
     let refined = crate::ci_gate::classify_red(rows, required, cfg, tolerate_hold, false);
-    // A genuine red remains a red train (including rerun/bisection), even
+    // A genuine red remains a red train (bisected or ejected), even
     // while an aggregate has not registered. Missing evidence never promotes it.
     if refined.is_real() {
-        return TrainCiReadiness::Red(format!(
-            "failing checks: {}",
-            refined
-                .real
-                .iter()
+        let names = |rows: &[&crate::ci_gate::CheckRow]| {
+            rows.iter()
                 .map(|row| row.name.as_str())
                 .collect::<Vec<_>>()
                 .join(", ")
+        };
+        // A `fail` row is a test or gate failure and makes the train a test
+        // red at once. A `cancel` row carries no test result (cancelled run,
+        // lost runner). The CI aggregate only mirrors its lanes, so its `fail`
+        // beside a cancelled check is not a test result of its own.
+        // trace:BUG-2577 | ai:claude
+        let cancelled: Vec<_> = refined
+            .real
+            .iter()
+            .filter(|row| row.bucket == "cancel")
+            .collect();
+        let mirrors_lanes = |row: &crate::ci_gate::CheckRow| {
+            !cancelled.is_empty()
+                && row.workflow == "CI"
+                && crate::ci_gate::check_name_eq(&row.name, TRAIN_CI_AGGREGATE)
+        };
+        let failed: Vec<_> = refined
+            .real
+            .iter()
+            .filter(|row| row.bucket != "cancel" && !mirrors_lanes(row))
+            .collect();
+        if !failed.is_empty() || cancelled.is_empty() {
+            return TrainCiReadiness::Red(format!(
+                "failing checks: {}",
+                names(&refined.real.iter().collect::<Vec<_>>())
+            ));
+        }
+        // A check still running may yet report a test failure: decide only
+        // once the rest has settled.
+        if refined.has_pending() {
+            return TrainCiReadiness::Pending(refined.pending);
+        }
+        return TrainCiReadiness::InfraRed(format!(
+            "cancelled checks, no test result: {}",
+            names(&cancelled)
         ));
     }
     // One comparator for every gate: classify_red and the hold tolerance
@@ -750,7 +813,7 @@ fn train_ci_readiness(
                 missing
                     .into_iter()
                     .map(|n| {
-                        if crate::ci_gate::check_name_eq(&n, "Build (ubuntu-latest)") {
+                        if crate::ci_gate::check_name_eq(&n, TRAIN_CI_AGGREGATE) {
                             "Build summary appears after all shards finish".into()
                         } else {
                             format!("waiting for {n} to register")
@@ -884,6 +947,7 @@ fn wait_train_ci(
         let waiting = match state {
             TrainCiReadiness::Green => return Ok(CiVerdict::Green),
             TrainCiReadiness::Red(why) => return Ok(CiVerdict::Red(why)),
+            TrainCiReadiness::InfraRed(why) => return Ok(CiVerdict::InfraRed(why)),
             // trace:BUG-2401 | ai:claude
             TrainCiReadiness::Refused(why) => {
                 anyhow::bail!("train PR #{pr} CI refused: {why}")
@@ -896,7 +960,7 @@ fn wait_train_ci(
                 let display: Vec<_> = names
                     .iter()
                     .map(|name| {
-                        if crate::ci_gate::check_name_eq(name, "Build (ubuntu-latest)") {
+                        if crate::ci_gate::check_name_eq(name, TRAIN_CI_AGGREGATE) {
                             "Build summary appears after all shards finish".to_string()
                         } else {
                             name.clone()
@@ -3240,6 +3304,9 @@ impl TrainForge for LiveTrainForge<'_> {
             TrainCiReadiness::Red(why) => {
                 crate::forge_observed::Observed::Known(CiVerdict::Red(why))
             }
+            TrainCiReadiness::InfraRed(why) => {
+                crate::forge_observed::Observed::Known(CiVerdict::InfraRed(why))
+            }
             other => crate::forge_observed::Observed::Pending(format!(
                 "CI negative not confirmed: {other:?}"
             )),
@@ -3730,7 +3797,7 @@ impl Rails for ForgeRails<'_> {
             };
             // trace:STORY-2401 | ai:codex — confirm the CI negative itself,
             // then retirement independently proves the pinned tip did not land.
-            if matches!(v, CiVerdict::Red(_)) {
+            if matches!(v, CiVerdict::Red(_) | CiVerdict::InfraRed(_)) {
                 std::thread::sleep(self.ports.confirmation_backoff());
                 v = match self.ports.observe_ci(change, train) {
                     crate::forge_observed::Observed::Known(verdict) => verdict,
@@ -3751,7 +3818,24 @@ impl Rails for ForgeRails<'_> {
                 );
                 self.retire(
                     change,
-                    &format!("Train CI red ({why}); the train reruns or bisects."),
+                    &format!("Train CI red ({why}); the train bisects, or ejects a lone member."),
+                )?;
+            } else if let CiVerdict::InfraRed(why) = &v {
+                // trace:BUG-2577 | ai:claude
+                println!(
+                    "{}",
+                    train_progress(format_args!(
+                        "train PR #{} ended without a test result: {why}",
+                        change.id
+                    ))
+                );
+                self.retire(
+                    change,
+                    &format!(
+                        "Train CI ended without a test result ({why}). If this is the first \
+                         such result for these members, they are retested once; if they were \
+                         already retested, the train bisects, or ejects a lone member."
+                    ),
                 )?;
             } else {
                 println!(
