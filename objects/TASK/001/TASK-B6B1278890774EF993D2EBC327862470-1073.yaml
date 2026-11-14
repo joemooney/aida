@@ -713,12 +713,28 @@ description: |
   ### finding-hash:3db33acc
 
   The post-train aida pull spin (6-14 min at 100% CPU after trains 19 and 20, advisor notes 06:17 and 06:58) happens with new upstream commits, which this PR does not bound. The wall-clock bound described in the BUG-2565 comment for commit 014bd40268 (AIDA_POST_TRAIN_PULL_TIMEOUT_SECS) is not on the PR head, so that spec comment is stale. File a separate bug for the post-train pull. The PR body is also stale: it says the env knobs were removed and lists 7 tests.
+
+
+  ## Findings from PR-3924
+  Reviewed sha: da6f7d597ddd0bd72f93dfa330e391082a115a60
+
+  ### finding-hash:d0b021ea
+
+  aida-cli-lib/src/queue_cmd/work.rs canonical_resume_branch: the `still has a lease` ensure runs at pickup resolution, before the same-scope ownership reclaim sweep later in handle_queue_work. A PR-less canonical branch whose exited lane left a dead-owner lease now hard-errors without the automatic reclaim (documented as automatic), so resumption needs a manual `aida session end`. Run the lease check after the reclaim sweep, or return None for same-scope leases, and add a regression with a forge-backed fixture.
+
+  ### finding-hash:fcb8f322
+
+  aida-cli-lib/src/queue_cmd/work.rs canonical_branch_tip prefers the local branch and consults origin only when no local branch exists. When local residue sits at the merged head but origin carries post-merge commits pushed from another host, tip == merged head and pickup allocates a dated branch from main, omitting those commits. Compare both tips and resume when either is past the merged head.
+
+  ### finding-hash:7d6b05ec
+
+  aida-cli-lib/src/lane_recovery.rs reconcile_observed_in writes the `Lane exit evidence` comment before the forge lookup on every lane and session exit, including exits with an open PR, and a second `Lane recovery` comment follows when no PR is found. AC2 scopes the record to exits without an open PR; consider one comment, or skipping when an open PR is confirmed.
 status: Draft
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-13T20:01:56.623034248Z
-modified_at: 2026-11-14T14:30:12.906578216Z
+modified_at: 2026-11-14T15:04:55.899075377Z
 req_type: Task
 tags:
 - carried-finding:BUG-2543:2a99ebfc
@@ -757,6 +773,9 @@ tags:
 - carried-finding:PR-3921:0cbc5c63
 - carried-finding:PR-3924:3975f29b
 - carried-finding:PR-3924:79f360e4
+- carried-finding:PR-3924:7d6b05ec
+- carried-finding:PR-3924:d0b021ea
+- carried-finding:PR-3924:fcb8f322
 - carried-finding:PR-3924:fe70e901
 - carried-finding:PR-3938:654190b6
 - carried-finding:PR-3948:5d2b67f3
@@ -939,6 +958,7 @@ tags:
 - finding-hash:7bbbf9a9
 - finding-hash:7c082b28
 - finding-hash:7ce2cb14
+- finding-hash:7d6b05ec
 - finding-hash:8a49a174
 - finding-hash:96ff0aa3
 - finding-hash:9750b6dd
@@ -955,11 +975,13 @@ tags:
 - finding-hash:c963d4df
 - finding-hash:cd9ab7dd
 - finding-hash:cddc71c1
+- finding-hash:d0b021ea
 - finding-hash:dee3f3a7
 - finding-hash:dfed3eb6
 - finding-hash:e391cb46
 - finding-hash:f1e29cc2
 - finding-hash:f238ea37
+- finding-hash:fcb8f322
 - finding-hash:fe70e901
 - from-review:BUG-2543
 - from-review:BUG-2546
@@ -1283,6 +1305,11 @@ history:
   author: joe
   timestamp: 2026-11-14T14:30:14.708389991Z
   session_id: 01a1da717bd8
+  changes: []
+- id: 01a1da97-185b-7e23-a673-404494ca704b
+  author: joe
+  timestamp: 2026-11-14T15:04:57.691920145Z
+  session_id: 01a1da93c7e0
   changes: []
 filed_at:
   code_sha: 91fe1e337894199f15365d3f8ecfaf81366f8291
