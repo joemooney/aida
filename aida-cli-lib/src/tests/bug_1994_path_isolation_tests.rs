@@ -100,11 +100,14 @@ fn fake_git_path_probe_child() {
 fn fake_git_is_scoped_to_one_child_and_real_git_reader_is_unaffected() {
     let root = tempfile::tempdir().unwrap();
     let path = std::env::var_os("PATH");
-    let name = "test_env::bug_1994_path_isolation_tests::fake_git_path_probe_child";
+    // libtest names omit the crate prefix; follow the module if it moves again.
+    // trace:TASK-3784 | ai:codex
+    let module = module_path!().split_once("::").unwrap().1;
+    let name = format!("{module}::fake_git_path_probe_child");
     let mut child = child_command(&root.path().join("home"))
-        .env("AIDA_TEST_PATH_CHILD", name)
+        .env("AIDA_TEST_PATH_CHILD", &name)
         .env("AIDA_TEST_PATH_PROBE_ROOT", root.path())
-        .args(["--exact", "--nocapture", "--test-threads=1", name])
+        .args(["--exact", "--nocapture", "--test-threads=1", &name])
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
