@@ -30,7 +30,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-13T15:54:08.931576118Z
-modified_at: 2026-11-14T17:12:31.283381485Z
+modified_at: 2026-11-14T18:38:16.996838628Z
 req_type: Story
 tags:
 - architecture
@@ -296,6 +296,13 @@ comments:
   modified_at: 2026-11-14T17:11:41.901972006Z
   session_id: 01a1db070a53
   harness_version: 2.1.319 (Claude Code)
+- id: 01a1db5a-65a4-7dc1-a6db-409d97bcbe29
+  author: joe
+  content: 'Advisor ruling 2026-11-14 11:40: #3956 was approved at 7922047 but its FULL tier is red on the PR''s own change (run 43623758564): the new freshness preflight makes reviewer launches fail in pure-git fixtures with ''could not resolve change metadata - this project has no forge (pure-git)'' (aida-cli tests bug_2139_headless_child_grant::orchestrated_headless_reviewer_gets_its_own_reviewer_grant, bug_2187_reviewer_record_identity::scrubbed_headless_reviewer_records_but_implementer_shell_refuses, bug_2201_outside_project_reviewer::contained_reviewer_without_reviewer_config_is_refused_before_launch; plus failures in the contracts and lib-1 shards: read the run log). BLOCKING: the preflight must degrade (skip freshness, keep today''s behaviour) when the project has no forge, not refuse the launch. Run those three test binaries and the failing lib/contracts tests on dell1 before pushing. Hold placed; ci:full removed until re-approved.'
+  created_at: 2026-11-14T18:38:16.996838628Z
+  modified_at: 2026-11-14T18:38:16.996838628Z
+  session_id: 01a1dab1-9447-7d22-b5ff-0c9084e122ea
+  harness_version: 2.1.325 (Claude Code)
 history:
 - id: 01a1d59e-6b4b-7d10-8aea-02729132bc6f
   author: joe
