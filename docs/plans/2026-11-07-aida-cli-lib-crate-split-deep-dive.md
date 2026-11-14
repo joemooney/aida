@@ -434,15 +434,21 @@ The before source is successful main run
 [43562483470](https://github.com/joemooney/aida/actions/runs/43562483470),
 head `1801b34105752b7fda6dedc9cd1bf8b9e4881c59`, 2026-11-14 UTC.
 
-After-timing checkpoint (2026-11-14 13:55 UTC): PR #3994 has `ci:full`;
-[current-head CI run 43602038976](https://github.com/joemooney/aida/actions/runs/43602038976)
-at `4bdefcbaeb1bcc9938dc482465f458d35a9f1d81` selected FULL. Both lib shards
-are building the aida binary; their `Run tests` steps have not started.
-Previously recorded run 43599084597 at `ecb4117cd3` was cancelled without jobs.
-Successful extraction run 43586756860 used FAST and skipped the lib shards, so
-it cannot supply the after measurements. Record both FULL `Run tests` step
-durations here before completing timing acceptance. The existing merge hold
-remains in place.
+After-timing checkpoint (2026-11-14 14:30 UTC): PR #3994 is open at
+`201130b5ee606c894cac206d400c08822430bcb7`. Its
+[current-head CI run 43605077655](https://github.com/joemooney/aida/actions/runs/43605077655)
+selected FAST and skipped the FULL shard matrix; it cannot supply either after
+measurement. The PR currently has no `ci:full` label. The host must select FULL
+for a subsequent run and record both successful `Run tests` step durations here
+before completing timing acceptance.
+
+[Prior FULL run 43602038976](https://github.com/joemooney/aida/actions/runs/43602038976)
+at `4bdefcbaeb1bcc9938dc482465f458d35a9f1d81` was cancelled: lib-0 and lib-1
+both entered `Run tests` but were cancelled at 14:01:56 UTC, so their partial
+wall times are not after measurements. Run 43599084597 at `ecb4117cd3` was
+cancelled without jobs; successful extraction run 43586756860 used FAST.
+The existing `aida:merge-hold` and `aida:merge-hold-recorded` labels remain;
+publication must honor the hold through ordinary clearance policy.
 These are workflow step wall times, including compilation performed inside the
 test step. Record the same two steps from the published PR's FULL run before
 closing the timing acceptance criterion; local targeted tests are not a
