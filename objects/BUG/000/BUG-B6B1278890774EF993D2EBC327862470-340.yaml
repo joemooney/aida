@@ -17,7 +17,7 @@ priority: Low
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-14T11:36:18.476287136Z
-modified_at: 2026-11-14T14:05:02.518712235Z
+modified_at: 2026-11-14T14:44:13.173060383Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -85,6 +85,13 @@ comments:
   modified_at: 2026-11-14T14:04:54.011920253Z
   session_id: 01a1da5c577c
   harness_version: 2.1.319 (Claude Code)
+- id: 01a1da84-1af5-7c63-8e9c-8bbb7c1830af
+  author: joe
+  content: '[advisor a22 07:46] CAUSE FOUND (the lane''s requested ssh run, PR-4021 head 34ea340): all three queue_rework tests fail over ssh with ''unsafe WORK allocation state: /tmp/.git/aida-work-node.toml is group- or other-writable (mode 0664)''. dell1 had a stale /tmp/.git (aida-allocation.toml, aida-work-dispenser.{toml,lock}, aida-work-node.toml from 2026-11-13 09:10-22:25), litter from the BUG-2560 fixture leak (#3987), and the test''s tempdir under /tmp walks up to it. Lanes pass because bwrap gives them a private /tmp. The env is not the cause (no AIDA_* vars set over ssh). Action taken: moved dell1:/tmp/.git to ~/tmp-dotgit-litter-20261114. RULING for the PR-4021 rework: make the hermetic fixture immune to ancestor litter. AmbientGuard sets GIT_CEILING_DIRECTORIES (or the allocation discovery stops at the fixture root), and a test plants a group-writable <tmp>/.git/aida-work-node.toml above the fixture root and asserts the triage loop still requeues. Keep the diagnostics. Name the cause in the PR body.'
+  created_at: 2026-11-14T14:44:13.173060383Z
+  modified_at: 2026-11-14T14:44:13.173060383Z
+  session_id: 01a1d9ea-4e25-7033-85e8-3648f0195c7c
+  harness_version: 2.1.325 (Claude Code)
 history:
 - id: 01a1d9d9-0f81-7752-9b38-a66eb0c96eaa
   author: joe
