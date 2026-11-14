@@ -1116,6 +1116,16 @@ fn handle_role_expiry(warn_within: &str, refuse_within: Option<&str>) -> Result<
     };
     let warn_within = span(warn_within)?;
     let refuse_within = refuse_within.map(span).transpose()?;
+    // A supervised (`--rotate`) seat also shows the grant its relay
+    // relaunches under, whatever its own seat: the relay cannot rotate once
+    // that grant expires. Shown beside the mandate line at session start.
+    // trace:BUG-2585 | ai:claude
+    if refuse_within.is_none() {
+        let now = chrono::Utc::now();
+        if let Some(life) = crate::relay_grant::seat_life(now) {
+            println!("{}", life.line(now));
+        }
+    }
     // In refuse mode a grant handle that resolves to nothing fails closed: a
     // relay would otherwise launch a session that meets refusals mid-run. No
     // handle at all stays silent; every valid exported grant supplies expiry.

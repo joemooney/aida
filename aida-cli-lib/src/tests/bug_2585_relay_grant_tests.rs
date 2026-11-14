@@ -1,0 +1,316 @@
+// trace:BUG-2585 | ai:claude
+use super::*;
+use crate::agent_rotation::GENERATION_ENV;
+use crate::gate::seat_authority::test_support::{mint_grant_for, put_grant, rewrite_grant};
+use crate::gate::seat_authority::GRANT_ENV;
+use crate::test_env::EnvVarsGuard;
+use std::sync::atomic::{AtomicBool, Ordering};
+
+const SUBJECT: &str = "relay-grant-fixture-user";
+
+/// One env guard for the whole test: the fixture identity, a private grant
+/// store, and every variable these tests set, restored on drop.
+fn pinned_env(home: &Path) -> EnvVarsGuard {
+    let mut env = EnvVarsGuard::snapshot(&[
+        "AIDA_USER",
+        "AIDA_HOME",
+        GRANT_ENV,
+        GENERATION_ENV,
+        BIND_PID_ENV,
+    ]);
+    env.set_key("AIDA_USER", SUBJECT);
+    env.set_key("AIDA_HOME", home.join("home"));
+    env.unset_key(GRANT_ENV);
+    env.unset_key(GENERATION_ENV);
+    env.unset_key(BIND_PID_ENV);
+    env
+}
+
+/// Expire `id` an hour ago (issued a day before that).
+fn expire(id: &str) -> SeatGrant {
+    rewrite_grant(id, |g| {
+        g.issued_at = Utc::now() - Duration::hours(25);
+        g.expires_at = Utc::now() - Duration::hours(1);
+    })
+}
+
+fn life(left: Duration, now: DateTime<Utc>) -> ParentLife {
+    ParentLife {
+        id: "52956836-0000-4000-8000-000000000000".into(),
+        seat: "advisor".into(),
+        expires_at: now + left,
+        command: "eval \"$(aida role enter advisor --delegate-seat implementer --bind-pid 4242)\""
+            .into(),
+    }
+}
+
+/// The banner line always names the expiry; the renewal command and the
+/// statusline suffix appear from two hours ahead, and after expiry.
+#[test]
+fn parent_life_is_shown_always_and_warns_two_hours_ahead() {
+    let now = Utc::now();
+    let far = life(Duration::hours(18), now);
+    assert!(far
+        .line(now)
+        .starts_with("PARENT GRANT advisor · 18h00m left · expires "));
+    assert!(!far.line(now).contains("renew"));
+    assert_eq!(far.suffix(now), None);
+
+    let near = life(Duration::minutes(119), now);
+    assert!(near.line(now).contains("1h59m left"), "{}", near.line(now));
+    assert!(near.line(now).contains(&near.command), "verbatim command");
+    assert_eq!(
+        near.suffix(now).as_deref(),
+        Some("parent grant expires in 1h59m")
+    );
+    assert_eq!(life(WARN_WITHIN, now).suffix(now), None);
+
+    let gone = life(Duration::minutes(-64), now);
+    assert!(gone.line(now).contains("expired "), "{}", gone.line(now));
+    assert!(gone.line(now).contains("keeps this session"));
+    assert!(gone.line(now).contains(&gone.command));
+    assert_eq!(gone.suffix(now).as_deref(), Some("parent grant expired"));
+}
+
+/// A relay whose grant expired holds (it neither ends the session nor
+/// dies), prints the renewal command verbatim, and continues under a grant
+/// a human renewed for it; a grant it cannot present is never adopted.
+#[test]
+fn an_expired_relay_grant_holds_until_a_renewed_grant_is_valid() {
+    let tmp = tempfile::tempdir().unwrap();
+    let root = tmp.path();
+    let mut env = pinned_env(root);
+    let old = mint_grant_for(root, SUBJECT, "advisor", &["implementer"]);
+    env.set_key(GRANT_ENV, &old);
+    assert_eq!(hold(root, "implementer", false), None, "a live grant");
+
+    expire(&old);
+    let refusal = authority::validate_child_delegation(root, "implementer").unwrap_err();
+    assert!(refusal.to_string().contains("expired at"), "{refusal}");
+    let held = hold(root, "implementer", true).expect("an expired grant holds");
+    assert!(held.resumes);
+    assert_eq!(held.seat, "advisor");
+    let pid = bind_pid(authority::read_grant(&old).ok().as_ref()).unwrap();
+    let command =
+        format!("eval \"$(aida role enter advisor --delegate-seat implementer --bind-pid {pid})\"");
+    assert_eq!(held.command, command);
+    for kept in [true, false] {
+        let text = held.message("claude-implementer-1047", kept);
+        assert!(text.contains(&command), "{text}");
+        assert!(text.contains("claude-implementer-1047"), "{text}");
+    }
+    assert!(held.message("h", true).contains("keeps running"));
+
+    // Renewed grants this relay may not use: another seat set, another
+    // principal, or bound to a process this relay does not run under.
+    let narrow = mint_grant_for(root, SUBJECT, "advisor", &["reviewer"]);
+    let foreign = mint_grant_for(root, "someone-else", "advisor", &["implementer"]);
+    let unbound = mint_grant_for(root, SUBJECT, "advisor", &["implementer"]);
+    rewrite_grant(&unbound, |g| g.binding = vec!["proc:1@1".into()]);
+    assert!(hold(root, "implementer", true).is_some());
+    assert_eq!(std::env::var(GRANT_ENV).unwrap(), old);
+
+    // The wait stops on Ctrl-C and has printed the command once.
+    let stop = AtomicBool::new(false);
+    let mut out = Vec::new();
+    let proceeded = await_parent(
+        root,
+        "claude-implementer-1047",
+        "implementer",
+        &stop,
+        &mut || stop.store(true, Ordering::SeqCst),
+        &mut out,
+    );
+    assert!(!proceeded);
+    let printed = String::from_utf8(out).unwrap();
+    assert_eq!(printed.matches(&command).count(), 1, "{printed}");
+
+    // A human renews the grant mid-wait: the relay adopts it and goes on.
+    let stop = AtomicBool::new(false);
+    let mut out = Vec::new();
+    let mut renewed_id = None;
+    let proceeded = await_parent(
+        root,
+        "claude-implementer-1047",
+        "implementer",
+        &stop,
+        &mut || {
+            if renewed_id.is_none() {
+                renewed_id = Some(mint_grant_for(root, SUBJECT, "advisor", &["implementer"]));
+            }
+        },
+        &mut out,
+    );
+    assert!(proceeded);
+    let renewed_id = renewed_id.unwrap();
+    assert_eq!(std::env::var(GRANT_ENV).unwrap(), renewed_id);
+    assert!(String::from_utf8(out).unwrap().contains("renewed"));
+    let parent = authority::validate_child_delegation(root, "implementer").unwrap();
+    assert_eq!(parent.id, renewed_id);
+    assert_eq!(hold(root, "implementer", false), None);
+    for id in [narrow, foreign, unbound] {
+        assert_ne!(id, renewed_id);
+    }
+}
+
+/// The turn-boundary check keeps the session without adopting anything,
+/// and lets the rotation through once a renewed grant is usable.
+#[test]
+fn the_turn_boundary_check_keeps_the_session_while_the_grant_is_expired() {
+    let tmp = tempfile::tempdir().unwrap();
+    let root = tmp.path();
+    let mut env = pinned_env(root);
+    let old = mint_grant_for(root, SUBJECT, "advisor", &["implementer"]);
+    env.set_key(GRANT_ENV, &old);
+    let mut announced = false;
+    assert!(!hold_before_end(root, "h", "implementer", &mut announced));
+    expire(&old);
+    assert!(hold_before_end(root, "h", "implementer", &mut announced));
+    assert!(announced);
+    mint_grant_for(root, SUBJECT, "advisor", &["implementer"]);
+    assert!(!hold_before_end(root, "h", "implementer", &mut announced));
+    assert_eq!(std::env::var(GRANT_ENV).unwrap(), old, "no adoption here");
+}
+
+/// A relay under a delegated grant holds too, but says the seat must be
+/// started again: a renewed root is never adopted over a narrowed grant.
+#[test]
+fn a_delegated_relay_grant_holds_without_adopting_a_renewed_root() {
+    let tmp = tempfile::tempdir().unwrap();
+    let root = tmp.path();
+    let mut env = pinned_env(root);
+    let top = mint_grant_for(root, SUBJECT, "advisor", &["advisor", "implementer"]);
+    let parent = authority::read_grant(&top).unwrap();
+    let mut mid = parent.clone();
+    mid.id = uuid::Uuid::new_v4().to_string();
+    mid.parent_grant_id = Some(top.clone());
+    mid.delegable_seats = vec!["implementer".into()];
+    put_grant(&mid);
+    env.set_key(GRANT_ENV, &mid.id);
+    assert_eq!(hold(root, "implementer", true), None);
+    expire(&top);
+    mint_grant_for(root, SUBJECT, "advisor", &["advisor", "implementer"]);
+    let held = hold(root, "implementer", true).expect("a delegated grant is not renewed");
+    assert!(!held.resumes);
+    assert!(!held.command.contains("--bind-pid"), "{}", held.command);
+    assert!(held.message("h", false).contains("start h again"));
+    assert_eq!(std::env::var(GRANT_ENV).unwrap(), mid.id);
+}
+
+/// The seat of a supervised session reports its relay's grant: in the
+/// banner line, the statusline suffix and `aida doctor`, for a baseline
+/// seat too, and only under `--rotate`.
+#[test]
+fn a_supervised_seat_reports_its_relays_grant() {
+    let tmp = tempfile::tempdir().unwrap();
+    let root = tmp.path();
+    let mut env = pinned_env(root);
+    let top = mint_grant_for(root, SUBJECT, "advisor", &["implementer"]);
+    let mut kid = authority::read_grant(&top).unwrap();
+    kid.id = uuid::Uuid::new_v4().to_string();
+    kid.seat = "implementer".into();
+    kid.parent_grant_id = Some(top.clone());
+    kid.delegable_seats = Vec::new();
+    put_grant(&kid);
+    env.set_key(GRANT_ENV, &kid.id);
+    let now = Utc::now();
+    assert_eq!(seat_life(now), None, "not a supervised session");
+
+    env.set_key(GENERATION_ENV, "2");
+    env.set_key(BIND_PID_ENV, "4242");
+    let far = seat_life(now).unwrap();
+    assert_eq!(far.seat, "advisor");
+    assert_eq!(far.suffix(now), None);
+    assert!(doctor_scan(now).is_empty());
+
+    rewrite_grant(&top, |g| g.expires_at = now + Duration::minutes(90));
+    let near = seat_life(now).unwrap();
+    assert_eq!(
+        near.command,
+        "eval \"$(aida role enter advisor --delegate-seat implementer --bind-pid 4242)\""
+    );
+    assert!(near.line(now).contains(&near.command));
+    assert_eq!(
+        near.suffix(now).as_deref(),
+        Some("parent grant expires in 1h30m")
+    );
+    let findings = doctor_scan(now);
+    assert_eq!(findings.len(), 1);
+    assert_eq!(findings[0].category, authority::DOCTOR_CATEGORY);
+    assert!(findings[0].summary.starts_with("PARENT GRANT advisor"));
+    assert!(findings[0].action.contains(&near.command));
+
+    expire(&top);
+    let gone = seat_life(now).unwrap();
+    assert_eq!(gone.suffix(now).as_deref(), Some("parent grant expired"));
+
+    // Renewed for the relay: the seat reports the renewed life.
+    mint_grant_for(root, SUBJECT, "advisor", &["implementer"]);
+    assert_eq!(seat_life(now).unwrap().suffix(now), None);
+    assert!(doctor_scan(now).is_empty());
+}
+
+/// Ahead of expiry the relay mails the advisor and product seats once per
+/// grant and expiry; a hold mails them again, once.
+#[test]
+fn the_relay_mails_the_advisor_and_product_seats_once_per_stage() {
+    let tmp = tempfile::tempdir().unwrap();
+    let root = tmp.path();
+    let mut env = pinned_env(root);
+    let old = mint_grant_for(root, SUBJECT, "advisor", &["implementer"]);
+    env.set_key(GRANT_ENV, &old);
+    // The project has a product role, so its queue is addressable.
+    let role = crate::project_role_file(root, "product");
+    std::fs::create_dir_all(role.parent().unwrap()).unwrap();
+    let stamp = Utc::now().to_rfc3339();
+    std::fs::write(
+        &role,
+        format!("name = \"product\"\ncreated_at = \"{stamp}\"\nlast_active_at = \"{stamp}\"\n"),
+    )
+    .unwrap();
+    let now = Utc::now();
+    let to = |seat: &str| aida_core::mailbox::Recipient::Agent(seat.into());
+    let mail = || aida_core::mailbox::read_local_messages(root).unwrap_or_default();
+
+    warn_ahead(root, "claude-implementer-1047", "implementer", now);
+    assert!(mail().is_empty(), "nothing with 24h left");
+
+    rewrite_grant(&old, |g| g.expires_at = now + Duration::minutes(110));
+    warn_ahead(root, "claude-implementer-1047", "implementer", now);
+    warn_ahead(root, "claude-implementer-1047", "implementer", now);
+    let soon = mail();
+    assert_eq!(soon.len(), 2, "{soon:?}");
+    for seat in ["advisor", "product"] {
+        let message = soon.iter().find(|m| m.to == to(seat)).expect(seat);
+        assert!(message.body.contains("claude-implementer-1047"));
+        assert!(
+            message
+                .body
+                .contains("aida role enter advisor --delegate-seat implementer --bind-pid"),
+            "{}",
+            message.body
+        );
+    }
+
+    expire(&old);
+    let mut announced = false;
+    assert!(hold_before_end(
+        root,
+        "claude-implementer-1047",
+        "implementer",
+        &mut announced
+    ));
+    let mut again = false;
+    assert!(hold_before_end(
+        root,
+        "claude-implementer-1047",
+        "implementer",
+        &mut again
+    ));
+    let all = mail();
+    assert_eq!(all.len(), 4, "{all:?}");
+    assert_eq!(
+        all.iter().filter(|m| m.body.contains("expired at")).count(),
+        2
+    );
+}

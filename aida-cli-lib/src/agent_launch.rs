@@ -7512,14 +7512,28 @@ fn run_rotating_agent(
             return Ok(RotationOutcome::Exited(status));
         };
         let stop = agent_rotation::StopFlag::install()?;
-        let proceed = agent_rotation::countdown(
-            &plan.name,
-            generation + 1,
-            policy.countdown_secs,
-            &stop.flag,
-            &mut || std::thread::sleep(std::time::Duration::from_secs(1)),
-            &mut std::io::stderr(),
-        );
+        // An expired relay grant cannot mint the next generation's seat
+        // grant: wait for a renewed one instead of dying with the handle.
+        // trace:BUG-2585 | ai:claude
+        let granted = plan.role.as_deref().is_none_or(|role| {
+            crate::relay_grant::await_parent(
+                &plan.project_root,
+                &plan.name,
+                &canonical_role_name(role),
+                &stop.flag,
+                &mut || std::thread::sleep(std::time::Duration::from_secs(1)),
+                &mut std::io::stderr(),
+            )
+        });
+        let proceed = granted
+            && agent_rotation::countdown(
+                &plan.name,
+                generation + 1,
+                policy.countdown_secs,
+                &stop.flag,
+                &mut || std::thread::sleep(std::time::Duration::from_secs(1)),
+                &mut std::io::stderr(),
+            );
         drop(stop);
         if !proceed {
             // Sketch §6: an operator stop ends the relay run and releases
@@ -7714,6 +7728,16 @@ pub(crate) fn run_agent_generation_with_io(
                 rotation.generation.to_string(),
             )
             .env(crate::agent_rotation::SEAT_ENV, rotation.seat);
+        // The seat names the pid a renewed relay grant must be bound to.
+        // trace:BUG-2585 | ai:claude
+        let renew_pid = crate::gate::seat_authority::current_grant_id()
+            .and_then(|id| crate::gate::seat_authority::read_grant(&id).ok())
+            .filter(|grant| grant.parent_grant_id.is_none())
+            .and_then(|grant| crate::relay_grant::bind_pid(Some(&grant)));
+        match renew_pid {
+            Some(pid) => command.env(crate::relay_grant::BIND_PID_ENV, pid.to_string()),
+            None => command.env_remove(crate::relay_grant::BIND_PID_ENV),
+        };
         if let Some((path, stamp)) = rotation.handoff {
             command
                 .env(crate::agent_rotation::HANDOFF_ENV, path)
@@ -7996,6 +8020,8 @@ pub(crate) fn run_agent_generation_with_io(
             generation_started_at,
             child_pid,
             plan.native_session_id.clone(),
+            // trace:BUG-2585 | ai:claude
+            plan.role.as_deref().map(canonical_role_name),
         )
     });
     let status = supervise_spawned_child(
