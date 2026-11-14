@@ -947,6 +947,16 @@ solo_human_self_approval = "policy" # STORY-1655: presence probed for an "ignore
 [keys.trusted.worktree_pool]
 trust_seat_worktrees = "policy"
 
+# STORY-2772: the whole table comes from the default-branch copy. It turns a
+# review requirement off and `checks` are shell commands, so a branch must not
+# set either for itself.
+# trace:STORY-2772 | ai:claude
+[keys.trusted.integration]
+review_after_merge = "policy"
+max_effort = "policy"
+excluded_tags = "policy"
+checks = "command"
+
 # STORY-2220: the docs sweep reads its whole table from the default-branch
 # copy (trusted_config, local refs), because `regenerate` runs shell commands.
 # trace:STORY-2220 | ai:claude

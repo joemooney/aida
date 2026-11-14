@@ -10,12 +10,14 @@
 // trace:STORY-2737 | ai:claude
 
 use anyhow::{Context, Result};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 
 #[path = "integration_cmd_args.rs"]
 pub(crate) mod integration_cmd_args;
 pub(crate) use integration_cmd_args::*;
+#[path = "integration_review.rs"]
+pub(crate) mod review;
 
 /// The tag on a spec whose completing commit is on integration, not main.
 pub(crate) const LANDED_TAG: &str = "landed-in-integration";
@@ -160,7 +162,7 @@ pub(crate) fn plan_tag_changes<'a>(
 /// Every stored spec, read from the store itself: no list query, so no
 /// role scope, focus or status filter can hide a landed or tagged spec.
 // trace:STORY-2737 | ai:claude
-fn load_store(root: &Path) -> Result<aida_core::RequirementsStore> {
+pub(crate) fn load_store(root: &Path) -> Result<aida_core::RequirementsStore> {
     let path = aida_core::store_locate::detect_distributed_store_from(root)
         .unwrap_or_else(|| root.join(".aida-store"));
     aida_core::Storage::new(path)
@@ -231,6 +233,275 @@ fn run_tags(root: &Path, dry_run: bool) -> Result<()> {
     Ok(())
 }
 
+/// Add or remove `tag` on the spec `uuid` through `aida edit`, the one
+/// validated tag-write path.
+fn edit_tag(root: &Path, uuid: &uuid::Uuid, flag: &str, tag: &str) -> Result<()> {
+    let status = Command::new(crate::kernel::aida_exe_path())
+        .current_dir(root)
+        .args(["edit", &uuid.to_string(), flag, tag])
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .status()
+        .context("running aida edit")?;
+    anyhow::ensure!(status.success(), "aida edit {flag} {tag} failed");
+    Ok(())
+}
+
+/// Merge `head` into the checked-out branch with `subject` and `body`, then
+/// run each of `checks` on the result. A merge that stops, a merge of some
+/// other commit, or a failing check puts the branch back at the commit it
+/// started from and is an error.
+// trace:STORY-2772 | ai:claude
+pub(crate) fn merge_checked(
+    root: &Path,
+    head: &str,
+    subject: &str,
+    body: &str,
+    checks: &[String],
+) -> Result<String> {
+    let before = git(root, &["rev-parse", "HEAD"])?;
+    let undo = |why: String| -> anyhow::Error {
+        let _ = git(root, &["merge", "--abort"]);
+        match git(root, &["reset", "--hard", &before]) {
+            Ok(_) => anyhow::anyhow!("{why}; `integration` is back at {}", &before[..11]),
+            Err(error) => anyhow::anyhow!(
+                "{why}; and the branch could not be put back at {before}: {error:#}"
+            ),
+        }
+    };
+    if let Err(error) = git(
+        root,
+        &[
+            "merge",
+            "--no-ff",
+            "--no-edit",
+            "-m",
+            subject,
+            "-m",
+            body,
+            head,
+        ],
+    ) {
+        return Err(undo(format!("the merge did not complete ({error:#})")));
+    }
+    match git(root, &["rev-parse", "HEAD^2"]) {
+        Ok(second) if second == head => {}
+        _ => return Err(undo("the merge did not record the change's head".into())),
+    }
+    for check in checks {
+        println!("check: {check}");
+        let passed = Command::new("sh")
+            .current_dir(root)
+            .args(["-c", check])
+            .stdin(Stdio::null())
+            .status()
+            .map(|status| status.success())
+            .unwrap_or(false);
+        if !passed {
+            return Err(undo(format!("`{check}` failed on the merge result")));
+        }
+    }
+    git(root, &["rev-parse", "HEAD"])
+}
+
+fn run_merge(root: &Path, pr: u64, push: bool, dry_run: bool) -> Result<()> {
+    use review::Admission;
+    let root = PathBuf::from(git(root, &["rev-parse", "--show-toplevel"])?);
+    let root = root.as_path();
+    let branch = git(root, &["symbolic-ref", "--short", "-q", "HEAD"]).unwrap_or_default();
+    anyhow::ensure!(
+        branch == crate::land::INTEGRATION_BRANCH,
+        "this checkout is on `{}`, not `integration`",
+        if branch.is_empty() {
+            "a detached HEAD"
+        } else {
+            &branch
+        }
+    );
+    anyhow::ensure!(
+        git(root, &["status", "--porcelain", "--untracked-files=no"])?.is_empty(),
+        "tracked changes are present; commit or discard them first"
+    );
+    git(root, &["fetch", "-q", "origin", "integration"])?;
+    anyhow::ensure!(
+        git(root, &["rev-parse", "HEAD"])? == git(root, &["rev-parse", "origin/integration"])?,
+        "local `integration` is not `origin/integration`; pull or push first"
+    );
+
+    let pass = crate::land::live_pass(root)?;
+    let found = pass
+        .changes
+        .iter()
+        .zip(&pass.rows)
+        .find(|(change, _)| change.id == pr);
+    let Some((change, row)) = found else {
+        anyhow::bail!("#{pr} is not an open change");
+    };
+    let reader = review::Reader::new(&pass.root);
+    let config = reader.config().map_err(anyhow::Error::msg)?.clone();
+    let hold = crate::land::hold_of(&pass.root, change).map(|hold| hold.map(|hold| hold.detail));
+    let admission = review::admit(row, hold, || {
+        let paths = crate::land::changed_paths(root, "origin/integration", &change.head)?;
+        reader.eligibility(&crate::land::specs_of(change), &paths)
+    })
+    .map_err(|why| anyhow::anyhow!("#{pr} is not merged: {why}"))?;
+    let (how, body) = match &admission {
+        Admission::Approved(why) => (
+            format!("approved ({why})"),
+            format!("Approved at the head {}: {why}. No merge hold.", change.head),
+        ),
+        Admission::ReviewAfterMerge(why) => (
+            format!("review after merge: {why}"),
+            format!(
+                "Review after merge: {why}. Merged head {}; a promotion to main needs its approval at that head.",
+                change.head
+            ),
+        ),
+    };
+    println!("#{pr} admitted: {how}");
+    if dry_run {
+        println!("(dry run) nothing merged.");
+        return Ok(());
+    }
+    let subject = review::merge_subject(pr, &change.title);
+    let tip = merge_checked(root, &change.head, &subject, &body, &config.checks)?;
+    println!("merged #{pr} at {}", &tip[..11]);
+    if matches!(admission, Admission::ReviewAfterMerge(_)) {
+        let specs = reader
+            .resolve(&crate::land::specs_of(change))
+            .map_err(anyhow::Error::msg)?;
+        for (id, spec) in specs {
+            let Some(spec) = spec else { continue };
+            if spec.tags.contains(review::MERGED_BEFORE_REVIEW_TAG) {
+                continue;
+            }
+            match edit_tag(
+                root,
+                &spec.id,
+                "--add-tag",
+                review::MERGED_BEFORE_REVIEW_TAG,
+            ) {
+                Ok(()) => println!("  tagged {id} `{}`", review::MERGED_BEFORE_REVIEW_TAG),
+                // The tag is what the open list shows; the promotion check
+                // reads the merge itself and does not need it.
+                Err(error) => eprintln!("  {id} was not tagged: {error:#}"),
+            }
+        }
+    }
+    if push {
+        git(root, &["push", "origin", "HEAD:refs/heads/integration"])?;
+        println!("pushed `integration` at {}", &tip[..11]);
+    } else {
+        println!("not pushed (pass --push, or `git push origin integration`).");
+    }
+    Ok(())
+}
+
+fn run_promotion_check(root: &Path, tip: Option<&str>) -> Result<()> {
+    use review::FirstParent;
+    let main = "refs/remotes/origin/main";
+    let tip = tip.unwrap_or("refs/remotes/origin/integration");
+    for r in [main, tip] {
+        git(
+            root,
+            &["rev-parse", "--verify", "-q", &format!("{r}^{{commit}}")],
+        )
+        .with_context(|| format!("`{r}` is not a commit here; run `git fetch origin` first"))?;
+    }
+    let main_trees: std::collections::HashSet<String> = git(
+        root,
+        &["log", "--first-parent", "-n", "500", "--format=%T", main],
+    )?
+    .lines()
+    .map(String::from)
+    .collect();
+    let log = git(
+        root,
+        &[
+            "log",
+            "--first-parent",
+            "--format=%H%x1f%P%x1f%T%x1f%s",
+            &format!("{main}..{tip}"),
+        ],
+    )?;
+    let commits: Vec<FirstParent> = log
+        .lines()
+        .filter_map(|line| {
+            let mut fields = line.splitn(4, '\x1f');
+            Some(FirstParent {
+                sha: fields.next()?.to_string(),
+                parents: fields
+                    .next()?
+                    .split_whitespace()
+                    .map(String::from)
+                    .collect(),
+                tree: fields.next()?.to_string(),
+                subject: fields.next()?.to_string(),
+            })
+        })
+        .collect();
+    let commits = review::unpromoted(&commits, &main_trees);
+    let ledger_root = crate::review_watch::forge::main_root(root)?;
+    let on_main = |sha: &str| {
+        Command::new("git")
+            .current_dir(root)
+            .args(["merge-base", "--is-ancestor", sha, main])
+            .env_remove("GIT_DIR")
+            .env_remove("GIT_WORK_TREE")
+            .stdin(Stdio::null())
+            .status()
+            .is_ok_and(|status| status.success())
+    };
+    let verdict = |pr: u64| {
+        crate::gate::review_verdict::read_recorded_verdict(&ledger_root, &format!("PR-{pr}")).map(
+            |verdict| review::Verdict {
+                approves: verdict.kind.approves(),
+                label: verdict.kind.label().to_string(),
+                sha: verdict.reviewed_sha,
+            },
+        )
+    };
+    let (approved, findings) = review::promotion_check(commits, &on_main, &verdict);
+    println!(
+        "{} commit(s) on integration are not yet promoted; {} merged change(s) approved at the merged head.",
+        commits.len(),
+        approved.len()
+    );
+    // An approved change no longer needs its marker in the open list.
+    if let Ok(store) = load_store(root) {
+        for constituent in &approved {
+            for token in crate::pr_ship::extract_spec_ids_from_text(&constituent.subject) {
+                let spec = resolve_trailer(&store, &token)
+                    .and_then(|uuid| store.requirements.iter().find(|r| r.id == uuid));
+                let Some(spec) = spec else { continue };
+                if spec.tags.contains(review::MERGED_BEFORE_REVIEW_TAG) {
+                    let id = aida_core::node_alias::display_spec_id(&token);
+                    match edit_tag(
+                        root,
+                        &spec.id,
+                        "--remove-tag",
+                        review::MERGED_BEFORE_REVIEW_TAG,
+                    ) {
+                        Ok(()) => println!("  untagged {id}"),
+                        Err(error) => eprintln!("  {id} was not untagged: {error:#}"),
+                    }
+                }
+            }
+        }
+    }
+    if findings.is_empty() {
+        println!("Promotion allowed.");
+        return Ok(());
+    }
+    for finding in &findings {
+        println!("  {}", finding.describe());
+    }
+    anyhow::bail!(
+        "promotion refused: {} commit(s) on integration are not reviewed at the merged head",
+        findings.len()
+    )
+}
+
 /// The integration-branch flow: `integration` takes work fast; `main` is the
 /// batched checkpoint that completes specs.
 // trace:STORY-2737 | ai:claude
@@ -246,6 +517,8 @@ fn run_integration(matches: &clap::ArgMatches, _ctx: &crate::cmdkit::DispatchCtx
     let root = std::env::current_dir().context("reading the current directory")?;
     match args.command {
         IntegrationCommand::Tags { dry_run } => run_tags(&root, dry_run),
+        IntegrationCommand::Merge { pr, push, dry_run } => run_merge(&root, pr, push, dry_run),
+        IntegrationCommand::PromotionCheck { tip } => run_promotion_check(&root, tip.as_deref()),
     }
 }
 
