@@ -1,0 +1,8 @@
+- user_id: claude-advisor-114
+  requirement_id: 01a1d92e-caa5-7ef3-970e-4afbcbd43e0f
+  position: 1000
+  added_by: claude-advisor-114
+  note: auto-queue retry reused canonical review story; covers 1 spec
+  added_at: 2026-11-14T08:36:06.232922528Z
+  for_role: reviewer
+  added_by_machine: imac
