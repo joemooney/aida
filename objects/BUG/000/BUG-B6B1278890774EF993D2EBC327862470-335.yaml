@@ -22,13 +22,21 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-14T02:19:26.646584262Z
-modified_at: 2026-11-14T02:19:57.443024360Z
+modified_at: 2026-11-14T02:19:59.323160259Z
 req_type: Bug
 tags:
 - effort:open:4h
 - landing
 - review
 - track:integration
+comments:
+- id: 01a1d7da-bddb-7571-975a-8916d8c1f374
+  author: joe
+  content: '19:20 MST advisor: approved. Reproduced 19:12: #3972/#3973 share STORY-2768; .aida/review-verdicts/STORY-2768.json held #3972''s APPROVED at d6cb657, so the #3973 hold premise and land status read it as unapproved although the PR-3973 ledger verdict was APPROVED at 46777be. Order for the integration seat: BUG-2569, BUG-2570, BUG-2555.'
+  created_at: 2026-11-14T02:19:59.323160259Z
+  modified_at: 2026-11-14T02:19:59.323160259Z
+  session_id: 01a1d797-2ccf-7771-899a-682081f10504
+  harness_version: 2.1.325 (Claude Code)
 history:
 - id: 01a1d7da-b683-7c60-a856-93fd59ac1c74
   author: joe
