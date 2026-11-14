@@ -20,7 +20,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-13T18:06:55.227979618Z
-modified_at: 2026-11-14T07:36:47.661768091Z
+modified_at: 2026-11-14T10:24:37.979062167Z
 req_type: Story
 tags:
 - config
@@ -28,6 +28,49 @@ tags:
 - integration
 - landing
 - track:integration
+comments:
+- id: 01a1d996-725b-7ab0-9286-4c386d321898
+  author: joe
+  content: |
+    SKETCH for signoff (integration seat, 2026-11-14). Nothing is built yet.
+
+    WHAT EXISTS TODAY. Neither path the acceptance names exists in code. A change enters integration when the integration seat runs `git merge --no-ff` by hand and pushes; a promotion is a branch the advisor cuts from the integration tip and ships on a train. `aida integration` has one subcommand (tags). So acceptance 3 and 4 need two new commands, not a change to an existing gate.
+
+    1. CONFIG (.aida/config.toml), parsed in one place and defaulting to off:
+       [integration]
+       review_after_merge = "off" | "low-risk"
+       max_effort = "4h"
+       excluded_tags = ["architecture", "security", "gate", "supervised"]
+       checks = ["make check-ci-fast"]        # commands that must exit 0 on the merge result
+       An unknown value for review_after_merge is an error, not "off".
+
+    2. ELIGIBILITY. `review_after_merge_eligible(config, specs, changed_paths) -> Eligible | Ineligible(reason)`, pure, in a new module integration_review.rs. Ineligible when: config is off; the change names no resolvable spec; any spec carries an excluded tag or is supervised (execution mode guided/operator); any spec has no `effort:open:` tag or one above max_effort; any changed path is protected (gate::mandate_gates floor plus the project's human gates; not configurable). The first failing rule is the reason, worded for an operator. `aida land status` shows it on integration-track rows.
+
+    3. MERGE PATH: `aida integration merge <PR> [--push]`, run in the integration worktree on branch integration with a clean tree equal to origin/integration.
+       - Refuses unless the PR is open, targets integration and is mergeable.
+       - Admits the PR when EITHER it is approved at its exact head with no armed merge hold (the existing approval and hold reads), OR it is Eligible. An armed hold refuses in both cases.
+       - Merges --no-ff with the subject the seat uses today, runs each configured check on the merge result, and on any failure resets the local branch to origin/integration and refuses.
+       - When admitted by eligibility: adds the tag `merged-before-review` to each spec (the validated tag-write path `aida integration tags` uses) and says so in the merge commit body ("Review after merge: <reason it was eligible>").
+       - Pushes only with --push, fast-forward only.
+
+    4. PROMOTION GATE: `aida integration promotion-check [--tip <sha>]`, read-only, exit 1 on refusal.
+       - Constituents are derived from git, not from tags: every first-parent commit in origin/main..tip. A merge whose second parent is already on main (a main sync) is skipped. A merge with subject "merge PR #N" is constituent N with merged head = its second parent. Anything else on the first-parent line (a direct commit) refuses as "not a reviewed change".
+       - Each constituent needs an APPROVED verdict for PR-N at exactly its merged head, with no later refusal for PR-N. Otherwise the check names the PR, the merge commit and `git revert -m 1 <merge>`.
+       - A tag can be removed by hand; the git-derived read cannot be talked out of a missing approval. The tag is only what the open list and land status show; promotion-check removes it from specs whose constituents are approved.
+
+    5. ENFORCEMENT AT SHIP, proposed as a SECOND slice with its own review: the train member gate runs the same check for a member whose head branch is promote/integration-*, so a promotion cannot ship past it even if nobody ran the command. That is train gate code on the main track; I would rather land 1-4 first and have you run promotion-check when you cut.
+
+    6. TESTS. Eligibility matrix (config off, excluded tag, supervised, effort missing, effort above the cap, protected path, eligible). Merge: eligible PR merges with no approval and gets the tag; ineligible unapproved PR refuses; a failing check leaves integration untouched. Promotion: refused naming the pending constituent; allowed once approved at the merged head; refused when the approval is at another head; main-sync merges ignored; direct commit refused.
+
+    OPEN QUESTIONS FOR THE ADVISOR.
+    a. Is splitting off 5 acceptable, or must ship-time enforcement be in the first PR for acceptance 4 ("refuses to cut or ship")?
+    b. A spec with no effort tag: I treat it as Ineligible. Agree?
+    c. "the configured compile check": I propose it is simply another entry in `checks`, with no built-in compile step. Agree?
+    d. This seat's operator instruction limits review-after-merge to MY low-risk PRs. The command as sketched admits any eligible PR. Should eligibility also require that the PR's author is the integration seat, or is that a seat rule that stays outside the tool? I recommend leaving it outside the tool and asking Joe.
+  created_at: 2026-11-14T10:24:37.979062167Z
+  modified_at: 2026-11-14T10:24:37.979062167Z
+  session_id: 01a1d874-d40d-7d13-8d29-0368fcee960d
+  harness_version: 2.1.325 (Claude Code)
 history:
 - id: 01a1d617-7531-7dc3-aba6-d82849880497
   author: joe
