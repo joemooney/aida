@@ -509,12 +509,24 @@ description: |
   ### finding-hash:9750b6dd
 
   aida-core/src/test_umask.rs:19 fixture_permissions_are_private_under_ambient_group_writable_umask never establishes a group-writable ambient umask; under CI ambient 022 it passes with the init_array initializer deleted, so it cannot catch a regression off dell1. Spawn the test binary as a child with umask 002 (pre_exec or the isolated() re-exec pattern) and assert the child sees 022 (e.g. /proc/self/status Umask) and creates 0644 files.
+
+
+  ## Findings from PR-4000
+  Reviewed sha: 596e0a5048a4941783d1777df57bf832942810f1
+
+  ### finding-hash:abbae117
+
+  supervisor.rs:72 re-execs /proc/self/exe, so every restart reuses the binary image the supervisor started with; after aida dev build promotes a new live pair, a looped runner keeps restarting the old (possibly unlinked) binary until the operator restarts the loop. Consider resolving the installed aida path or documenting it.
+
+  ### finding-hash:73e42b4b
+
+  AC2 stderr notice (supervisor.rs:40) has no test asserting the one-line stderr output; only the runner.log half is tested.
 status: Draft
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-13T20:01:56.623034248Z
-modified_at: 2026-11-14T10:19:27.716259880Z
+modified_at: 2026-11-14T10:51:26.499952240Z
 req_type: Task
 tags:
 - carried-finding:BUG-2543:2a99ebfc
@@ -582,6 +594,8 @@ tags:
 - carried-finding:PR-3994:51cbf3a8
 - carried-finding:PR-3997:3f4b4821
 - carried-finding:PR-3998:0bff30e1
+- carried-finding:PR-4000:73e42b4b
+- carried-finding:PR-4000:abbae117
 - carried-finding:PR-4012:9750b6dd
 - carried-finding:STORY-2735:2c7ae2ea
 - carried-finding:STORY-2763:04ad58d8
@@ -633,6 +647,7 @@ tags:
 - carried-from:PR-3994
 - carried-from:PR-3997
 - carried-from:PR-3998
+- carried-from:PR-4000
 - carried-from:PR-4012
 - carried-from:STORY-2735
 - carried-from:STORY-2763
@@ -667,6 +682,7 @@ tags:
 - finding-hash:654190b6
 - finding-hash:6810bcf9
 - finding-hash:6935f83d
+- finding-hash:73e42b4b
 - finding-hash:76a786ef
 - finding-hash:79f360e4
 - finding-hash:7bbbf9a9
@@ -675,6 +691,7 @@ tags:
 - finding-hash:96ff0aa3
 - finding-hash:9750b6dd
 - finding-hash:97d326dd
+- finding-hash:abbae117
 - finding-hash:ac11f20d
 - finding-hash:bf60843e
 - finding-hash:c0a8d165
@@ -717,6 +734,7 @@ tags:
 - from-review:PR-3994
 - from-review:PR-3997
 - from-review:PR-3998
+- from-review:PR-4000
 - from-review:PR-4012
 - from-review:STORY-2735
 - from-review:STORY-2763
@@ -933,6 +951,11 @@ history:
   author: joe
   timestamp: 2026-11-14T10:19:29.424443492Z
   session_id: 01a1d98f8520
+  changes: []
+- id: 01a1d9af-0474-7072-80b0-af94e48be275
+  author: joe
+  timestamp: 2026-11-14T10:51:28.244549240Z
+  session_id: 01a1d9ab2dbf
   changes: []
 filed_at:
   code_sha: 91fe1e337894199f15365d3f8ecfaf81366f8291
