@@ -429,29 +429,6 @@ pub(crate) struct Verdict {
     pub authority: Result<(), String>,
 }
 
-/// The ship gate's approval-authority check (BUG-1918), for the newest
-/// approval among a merged change's `candidates`. Unknown is refused.
-// trace:STORY-2772 | ai:claude
-pub(crate) fn approval_authority(
-    pr: u64,
-    candidates: &[crate::gate::review_verdict::RecordedVerdict],
-    policy: &crate::gate::ship::ShipApprovalPolicy,
-    forge_answered: bool,
-) -> Result<(), String> {
-    if !forge_answered {
-        return Err(
-            "the authority of its approval could not be checked: the forge did not report the change's commits"
-                .into(),
-        );
-    }
-    match crate::gate::ship::approval_authority_refusal(candidates, policy) {
-        None => Ok(()),
-        Some(refusal) => Err(crate::gate::ship::approval_authority_refusal_message(
-            pr, &refusal,
-        )),
-    }
-}
-
 /// The spec tokens whose `merged-before-review` mark may come off: those an
 /// approved change names and no finding still names. A spec with one change
 /// approved and another pending keeps its mark.

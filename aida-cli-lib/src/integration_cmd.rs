@@ -491,17 +491,7 @@ fn run_promotion_check(root: &Path, tip: Option<&str>, since: Option<&str>) -> R
                 // merged: an approval the author recorded, or one with no
                 // attested recorder, does not review the change.
                 let authority = if approves {
-                    let ledger = ledger_root.as_path();
-                    let (candidates, policy, _, forge_answered) =
-                        crate::gate::approval::merge_approval_subject_observed(
-                            &[ledger],
-                            ledger,
-                            pr,
-                            &[],
-                            None,
-                            Some(head),
-                        );
-                    review::approval_authority(pr, &candidates, &policy, forge_answered)
+                    crate::gate::approval::merged_change_approval_authority(&ledger_root, pr, head)
                 } else {
                     Ok(())
                 };

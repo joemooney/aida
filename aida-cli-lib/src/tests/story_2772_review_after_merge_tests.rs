@@ -516,19 +516,22 @@ fn an_approval_without_the_ship_gates_authority_is_refused() {
     };
     // Recorded by the authoring session itself.
     let own = [approval(Some(attested("session:author")))];
-    let why = approval_authority(12, &own, &policy(&own), true).unwrap_err();
+    let why =
+        crate::gate::approval::approval_authority_of(12, &own, &policy(&own), true).unwrap_err();
     assert!(why.contains("cannot approve its own work"), "{why}");
     // No attested recorder at all, as a legacy verdict file has it.
     let bare = [approval(None)];
-    let why = approval_authority(12, &bare, &policy(&bare), true).unwrap_err();
+    let why =
+        crate::gate::approval::approval_authority_of(12, &bare, &policy(&bare), true).unwrap_err();
     assert!(why.contains("PR-12"), "{why}");
     // Another session's attested approval passes; unreadable does not.
     let other = [approval(Some(attested("session:reviewer")))];
     assert_eq!(
-        approval_authority(12, &other, &policy(&other), true),
+        crate::gate::approval::approval_authority_of(12, &other, &policy(&other), true),
         Ok(())
     );
-    let why = approval_authority(12, &other, &policy(&other), false).unwrap_err();
+    let why = crate::gate::approval::approval_authority_of(12, &other, &policy(&other), false)
+        .unwrap_err();
     assert!(why.contains("could not be checked"), "{why}");
 
     // And the check refuses the promotion on it, naming the change.
