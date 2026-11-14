@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-13T13:53:20.390665880Z
-modified_at: 2026-11-14T11:15:28.605643734Z
+modified_at: 2026-11-14T11:25:37.793484194Z
 req_type: Bug
 tags:
 - hygiene
@@ -56,6 +56,13 @@ comments:
   modified_at: 2026-11-14T11:15:28.605643734Z
   session_id: 01a1d8f3-f948-7072-b174-fa9507ed074b
   harness_version: 2.1.325 (Claude Code)
+- id: 01a1d9ce-4a81-7f62-8700-8f3cd5a7145e
+  author: dirtlab
+  content: 'Blocking train rework fixed in aida-cli-lib/src/test_env.rs: synthetic HOME enrollment preserves an enclosing temporary project repository with HEAD and objects, instead of creating a nested store Git identity that hides previously recorded approvals. Shared temp root and stray ancestor .git remain excluded. Added nested-store identity regression; existing bug2406 tests unchanged. Lane validation: cargo test --profile agent -p aida-cli-lib --lib bug2406: 67 passed; --lib bug_2560: 2 passed. make check-ci-fast passed; rustfmt and git diff --check passed. Host codegraph client unavailable (doctor reports missing). Edits remain uncommitted for host publication; no implementation blockers.'
+  created_at: 2026-11-14T11:25:37.793484194Z
+  modified_at: 2026-11-14T11:25:37.793484194Z
+  session_id: 01a1d9c7155e
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1d889-fed8-7962-86df-f0e26e40b385
   author: joe
@@ -93,6 +100,12 @@ history:
   author: dirtlab
   timestamp: 2026-11-14T07:34:08.932096266Z
   session_id: 01a1d8f9b72a
+  harness_version: codex-cli 0.167.0
+  changes: []
+- id: 01a1d9c7-93f7-7b70-babf-017926e41240
+  author: dirtlab
+  timestamp: 2026-11-14T11:18:17.847871811Z
+  session_id: 01a1d9c7155e
   harness_version: codex-cli 0.167.0
   changes: []
 filed_at:
