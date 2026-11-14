@@ -1364,6 +1364,7 @@ queue work --no-human TASK-1	Queue	false	false	true
 queue work --no-launch	Queue	false	false	true
 queue work --no-pull	Queue	false	false	true
 queue work --no-tee-headless	Queue	false	false	true
+queue work --over-wip	Queue	false	false	true
 queue work --panes TASK-1	Queue	false	false	true
 queue work --path TASK-1	Queue	false	false	true
 queue work --pause-always	Queue	false	false	true

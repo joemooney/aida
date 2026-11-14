@@ -279,6 +279,7 @@ fn queue_work_sync(
         false,
         false,
         None,
+        /* over_wip */ false,
     )
 }
 
