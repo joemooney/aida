@@ -13,8 +13,16 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-14T13:05:16.063317537Z
-modified_at: 2026-11-14T13:08:14.310428280Z
+modified_at: 2026-11-14T13:08:25.605942387Z
 req_type: Bug
+comments:
+- id: 01a1da2c-6785-77a1-8af1-0ca2cb17d67e
+  author: joe
+  content: '[advisor a22 06:10] Approved (filed by the product seat aida-19). ci.yml-only change, main track, on a dell1 Fable lane. LIGHT gate: make check-ci-fast; no cargo needed.'
+  created_at: 2026-11-14T13:08:25.605942387Z
+  modified_at: 2026-11-14T13:08:25.605942387Z
+  session_id: 01a1d9ea-4e25-7033-85e8-3648f0195c7c
+  harness_version: 2.1.325 (Claude Code)
 history:
 - id: 01a1da2c-3b66-7010-95f7-26087a6c659f
   author: joe
