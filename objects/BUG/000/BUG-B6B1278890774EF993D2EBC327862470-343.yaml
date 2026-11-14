@@ -13,7 +13,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-14T13:05:16.063317537Z
-modified_at: 2026-11-14T13:10:27.618015065Z
+modified_at: 2026-11-14T13:17:01.788833168Z
 req_type: Bug
 comments:
 - id: 01a1da2c-6785-77a1-8af1-0ca2cb17d67e
@@ -23,6 +23,24 @@ comments:
   modified_at: 2026-11-14T13:08:25.605942387Z
   session_id: 01a1d9ea-4e25-7033-85e8-3648f0195c7c
   harness_version: 2.1.325 (Claude Code)
+- id: 01a1da34-47dc-7b21-90ef-6625d68bac78
+  author: dirtlab
+  content: |-
+    ## Implementer notes (commit on seat branch bug-b6b1278890774ef993d2ebc327862470-343)
+
+    **Change:** `.github/workflows/ci.yml` only (plus tests and `docs/internal/testing/ci-test-shards.md`). A `labeled`/`unlabeled` event for any label other than `ci:full` now gets its own concurrency group (`CI-label-<run_id>`) and skips every job, so it neither cancels nor restarts the PR's CI. `ci:full` label events and pushes keep the per-PR cancelling group.
+
+    **Why the skipped jobs are renamed:** in such a run the jobs report as `label event (...)`. A skipped `Build (ubuntu-latest)` would satisfy the required check on a head whose real run is red or still running, and a newer `ci-tier:` marker would make `require_full_ship_ci` refuse a head with confirmed FULL CI (it requires every marker run id <= Build's).
+
+    **Train PRs:** tier selection is untouched (always FULL). A non-`ci:full` label event on a train PR is also a no-op now; before, it restarted the full run.
+
+    **Evidence:** `python3 -m unittest tests/test_ci_tiers.py tests/test_ci_test_shards.py` passes (38 tests); two new tests evaluate the workflow's own expressions for every event/label combination. `check-ci-gates.py --audit` passes.
+
+    **Not verified:** (1) behaviour on GitHub itself — nothing here can run Actions; the first hold-label toggle on a PR with CI running is the live check, and it also confirms GitHub evaluates the `name` expression of a skipped job (if it shows the raw expression or the job key instead, the names still do not collide). (2) `make check-ci-fast` did not finish inside the lane's 60-second tool limit; the gates it reached passed. (3) The seat has no forge credentials, so the push failed and no PR is open; the commit waits for host publication.
+  created_at: 2026-11-14T13:17:01.788833168Z
+  modified_at: 2026-11-14T13:17:01.788833168Z
+  session_id: 01a1da2e3d91
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1da2c-3b66-7010-95f7-26087a6c659f
   author: joe
