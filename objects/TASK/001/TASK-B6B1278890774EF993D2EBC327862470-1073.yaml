@@ -765,12 +765,32 @@ description: |
   ### finding-hash:1287747b
 
   aida-cli-lib/src/pr_train.rs:950, 3307-3309, 3800 and 3823-3840: no test reaches the forge-side InfraRed path (wait_train_ci and observe_ci mapping, the red confirmation re-read, the no-result close comment). The driver and classifier are tested on either side of it only.
+
+
+  ## Findings from BUG-2577
+  Reviewed sha: 9d9213f8e2b4b66fbbc4c3b3222dbc12fe11228a
+
+  ### finding-hash:540b7d86
+
+  aida-cli-lib/src/tests/story_1690_train_tests.rs: the BUG-2577 tests carry `trace:BUG-2577` with no criterion anchor, so `aida criteria BUG-2577` still lists ac1f90e3, acc82b7a and acec78a1 as untested. Anchor drive_splits_a_red_two_member_train_into_exactly_two_sub_trains (ac1f90e3) and drive_ejects_a_red_one_member_train_after_one_ci_run (acc82b7a), and declare acec78a1 documentation-inspection evidence.
+
+  ### finding-hash:a9731915
+
+  aida-cli-lib/src/pr_train.rs:763-792: only `cancel`-bucket rows are infra. gh maps TIMED_OUT and STARTUP_FAILURE to the `fail` bucket, and a lost self-hosted runner usually concludes `failure`, so the advisor ruling’s "runner lost" and "timeout without a test result" cases are treated as test reds: a multi-member train bisects, and a lone good member is ejected after one run where it used to get a rerun.
+
+  ### finding-hash:f167aa2d
+
+  aida-cli-lib/src/pr_train.rs:460 vs 498: the spent flag is reset when a build drops a member but kept across Landing::Stale, although a rebuild on a moved main is also a new tip; the "one rerun per composition" rule is applied inconsistently.
+
+  ### finding-hash:1287747b
+
+  aida-cli-lib/src/pr_train.rs:950, 3307-3309, 3800 and 3823-3840: no test reaches the forge-side InfraRed path (wait_train_ci and observe_ci mapping, the red confirmation re-read, the no-result close comment). The driver and classifier are tested on either side of it only.
 status: Draft
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-13T20:01:56.623034248Z
-modified_at: 2026-11-14T16:44:11.430163190Z
+modified_at: 2026-11-14T16:44:32.240525637Z
 req_type: Task
 tags:
 - carried-finding:BUG-2543:2a99ebfc
@@ -809,6 +829,10 @@ tags:
 - carried-finding:BUG-2571:5863b5f0
 - carried-finding:BUG-2571:e391cb46
 - carried-finding:BUG-2573:9750b6dd
+- carried-finding:BUG-2577:1287747b
+- carried-finding:BUG-2577:540b7d86
+- carried-finding:BUG-2577:a9731915
+- carried-finding:BUG-2577:f167aa2d
 - carried-finding:PR-3921:0cbc5c63
 - carried-finding:PR-3924:3975f29b
 - carried-finding:PR-3924:79f360e4
@@ -920,6 +944,7 @@ tags:
 - carried-from:BUG-2570
 - carried-from:BUG-2571
 - carried-from:BUG-2573
+- carried-from:BUG-2577
 - carried-from:PR-3921
 - carried-from:PR-3924
 - carried-from:PR-3938
@@ -1045,6 +1070,7 @@ tags:
 - from-review:BUG-2570
 - from-review:BUG-2571
 - from-review:BUG-2573
+- from-review:BUG-2577
 - from-review:PR-3921
 - from-review:PR-3924
 - from-review:PR-3938
@@ -1368,6 +1394,11 @@ history:
 - id: 01a1daf1-f7cd-73a0-9e26-c69b18701838
   author: joe
   timestamp: 2026-11-14T16:44:13.133912469Z
+  session_id: 01a1daeeeb55
+  changes: []
+- id: 01a1daf2-4a1e-7180-9739-19bc55a866d0
+  author: joe
+  timestamp: 2026-11-14T16:44:34.206567185Z
   session_id: 01a1daeeeb55
   changes: []
 filed_at:
