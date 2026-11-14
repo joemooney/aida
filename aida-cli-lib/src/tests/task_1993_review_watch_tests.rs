@@ -2263,7 +2263,7 @@ fn retained_rounds_are_capped_on_write() {
             true,
         )
     });
-    store.retain("PR-1", keys).unwrap();
+    store.retain("PR-1", keys, false).unwrap();
     assert_eq!(store.retained("PR-1").unwrap().len(), RETAINED_ROUNDS);
 }
 
@@ -3686,4 +3686,151 @@ fn bug2534_ledger_only_verdict_stops_retries_and_preserves_rounds() {
         .unwrap();
         assert!(store.history(&c.key()).is_err());
     }
+}
+
+// trace:STORY-2763 | ai:codex
+#[test]
+fn review_watch_fast_rounds_count_patch_changes_and_strict_counts_heads() {
+    use crate::gate::review_carryover::tests as carry;
+    let _env = crate::test_env::EnvVarsGuard::apply(&[("AIDA_CONTAINED", None)]);
+    let (fixture, approved) = carry::fixture();
+    let root = fixture.path();
+    carry::git(root, &["merge", "--quiet", "--no-edit", "main"]);
+    let merged = carry::head(root);
+    let store = Store::open(root, "github:github.com/owner/repo").unwrap();
+    let dir = root.join(".aida/review-verdicts");
+    std::fs::create_dir_all(&dir).unwrap();
+    write_verdict(
+        &dir.join("PR-42.json"),
+        &serde_json::json!({
+            "reviewed_sha": merged, "recorded_by": "reviewer", "recorded_at": "2026-11-13T00:01:00Z", "verdict": "FAIL",
+            "rounds": [{"reviewed_sha": approved, "recorded_by": "reviewer", "recorded_at": "2026-11-13T00:00:00Z", "verdict": "FAIL"}]
+        }),
+    );
+    assert_eq!(store.history("PR-42").unwrap().blocking(), 2);
+    assert!(skipped_rounds(root).is_empty(), "plain history audits nothing");
+    assert_eq!(
+        store.history_for_head("PR-42", &merged).unwrap().blocking(),
+        1
+    );
+    // AC5: the skipped round is audited on the ledger with its patch proof.
+    // trace:STORY-2763 | ai:claude
+    let skipped = skipped_rounds(root);
+    assert_eq!(skipped.len(), 1, "{skipped:?}");
+    let (head, policy, proof) = &skipped[0];
+    assert_eq!(head.as_deref(), Some(merged.as_str()));
+    assert_eq!(policy, "fast");
+    let pair: BTreeSet<&str> = [&proof["reviewed_sha"], &proof["same_patch_as"]]
+        .into_iter()
+        .map(|v| v.as_str().unwrap())
+        .collect();
+    assert_eq!(pair, BTreeSet::from([approved.as_str(), merged.as_str()]));
+    let patch = proof["patch_id"].as_str().unwrap();
+    assert!(
+        patch.len() == 40 && patch.chars().all(|c| c.is_ascii_hexdigit()),
+        "{proof}"
+    );
+    // A genuine new patch still consumes a distinct round.
+    carry::write(root, "new.txt", "new patch content\n");
+    let changed = carry::commit(root, "own patch changed");
+    let mut history = store.history_for_head("PR-42", &changed).unwrap();
+    history
+        .add(
+            &serde_json::to_vec(&verdict_json(&changed, "FAIL")).unwrap(),
+            "new.json",
+        )
+        .unwrap();
+    assert_eq!(history.blocking(), 2);
+    carry::git(root, &["checkout", "--quiet", "main"]);
+    carry::write(
+        root,
+        ".aida/config.toml",
+        "[review]\nfreshness = 'strict'\n",
+    );
+    let strict = carry::commit(root, "strict policy");
+    carry::git(root, &["update-ref", "refs/remotes/origin/main", &strict]);
+    let audited = skipped_rounds(root).len();
+    assert_eq!(
+        store.history_for_head("PR-42", &merged).unwrap().blocking(),
+        2
+    );
+    assert_eq!(
+        skipped_rounds(root).len(),
+        audited,
+        "the strict policy skips no round, so it audits none"
+    );
+}
+
+/// PR-42's `skipped-round` freshness decisions: (head, policy, proof).
+// trace:STORY-2763 | ai:claude
+fn skipped_rounds(root: &Path) -> Vec<(Option<String>, String, serde_json::Value)> {
+    use crate::gate::ledger::{self, ChangeKey, EventBody};
+    let Ok(store) = ledger::store_root(root) else {
+        return Vec::new();
+    };
+    ledger::checked::read_change_events(
+        &store,
+        ChangeKey::pr(42),
+        &mut ledger::checked::Budget::default(),
+    )
+    .unwrap_or_default()
+    .into_iter()
+    .filter_map(|e| match e.body {
+        EventBody::FreshnessDecision {
+            policy,
+            decision,
+            proof,
+        } if decision == "skipped-round" => Some((e.head, policy, proof)),
+        _ => None,
+    })
+    .collect()
+}
+
+// AC2: a textual conflict found in preflight routes to rework, so the
+// reservation exits without launching work or failing a review round; any
+// other preflight refusal still fails the attempt.
+// trace:STORY-2763 | ai:claude
+#[test]
+fn story2763_conflict_preflight_exits_reservation_without_failing_a_round() {
+    let (_temp, store) = fixture();
+    let c = change(1, 1, false);
+    let attempt = dispatch(select(&store, &c, None, 1).unwrap());
+    let launched = std::cell::Cell::new(false);
+    execute_reservation(
+        &store,
+        &c.key(),
+        &attempt.token,
+        |_| Err(crate::gate::review_freshness::NeedsRework.into()),
+        |_| {
+            launched.set(true);
+            Ok(())
+        },
+    )
+    .expect("a routed conflict is not a reviewer failure");
+    assert!(!launched.get(), "no reviewer starts on a conflicting PR");
+    let recorded = &store.load().unwrap().entries[&c.key()].attempts[0];
+    // A routed conflict is a deliberate exit, never phase=failed.
+    // trace:STORY-2763 | ai:claude
+    assert_eq!(recorded.phase, Phase::Exited);
+    assert!(recorded
+        .diagnostic
+        .as_deref()
+        .unwrap()
+        .contains("conflicts with the protected base"));
+    assert_eq!(store.history(&c.key()).unwrap().blocking(), 0);
+    // A conflicting PR must release the sole slot for unrelated review work.
+    dispatch(select(&store, &change(2, 2, false), None, 1).unwrap());
+
+    let (_temp, store) = fixture();
+    let attempt = dispatch(select(&store, &c, None, 1).unwrap());
+    execute_reservation(
+        &store,
+        &c.key(),
+        &attempt.token,
+        |_| anyhow::bail!("other preflight refusal"),
+        |_| Ok(()),
+    )
+    .unwrap_err();
+    let recorded = &store.load().unwrap().entries[&c.key()].attempts[0];
+    assert_eq!(recorded.phase, Phase::Failed);
 }

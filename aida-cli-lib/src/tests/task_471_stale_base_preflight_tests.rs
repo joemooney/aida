@@ -361,3 +361,136 @@ fn file_sets_exclude_base_only_files_from_pr_side() {
         pr_rebase::StaleBaseOutcome::StaleNoOverlap { behind: 1 }
     );
 }
+
+// --- STORY-2763: the fast-policy preflight branch ---
+
+/// The carry-over fixture with the PR head published as `refs/pull/42/head`
+/// and `base` advanced by `edit` to `a.txt` (the PR edits line 5).
+/// Returns (fixture, pr head, fake gh) with the forge reporting `base`.
+// trace:STORY-2763 | ai:claude
+#[cfg(unix)]
+fn fast_preflight_fixture(
+    edit: (&str, &str),
+    base: &str,
+) -> (
+    crate::gate::review_carryover::tests::Fixture,
+    String,
+    std::path::PathBuf,
+) {
+    use crate::gate::review_carryover::tests as carry;
+    let (fixture, head) = carry::fixture();
+    let root = fixture.path();
+    carry::git(root, &["push", "--quiet", "origin", "pr:refs/pull/42/head"]);
+    carry::git(root, &["checkout", "--quiet", "main"]);
+    let a = std::fs::read_to_string(root.join("a.txt")).unwrap();
+    carry::write(root, "a.txt", &a.replace(edit.0, edit.1));
+    let tip = carry::commit(root, "base: edits a.txt");
+    carry::git(
+        root,
+        &["push", "--quiet", "origin", &format!("{tip}:refs/heads/{base}")],
+    );
+    carry::git(root, &["checkout", "--quiet", "pr"]);
+    carry::write(
+        root,
+        ".aida/config.toml",
+        "[review]\nfreshness = 'fast'\n[forge]\nprovider = \"github\"\n",
+    );
+    let bin = root.join("fake-bin");
+    std::fs::create_dir_all(&bin).unwrap();
+    let gh = bin.join("gh");
+    crate::test_exec::write_executable(&gh, &format!(
+        "#!/bin/sh\nprintf '%s\\n' '{{\"baseRefName\":\"{base}\",\"headRefName\":\"pr\",\"headRefOid\":\"{head}\",\"isCrossRepository\":false,\"headRepository\":{{\"nameWithOwner\":\"local/aida\"}},\"isDraft\":false}}'\n"
+    ));
+    (fixture, head, gh)
+}
+
+#[cfg(unix)]
+fn hermetic_gh(root: &std::path::Path, gh: &std::path::Path) -> crate::test_env::AmbientGuard {
+    let path = format!("{}:/usr/bin:/bin", gh.parent().unwrap().display());
+    crate::test_env::AmbientGuard::hermetic_and(
+        root,
+        None,
+        &[("PATH", Some(&path)), ("AIDA_CONTAINED", None)],
+    )
+}
+
+// A same-file edit that merges cleanly is no refusal under the fast policy
+// (the ordinary classifier would call a.txt an overlap).
+// trace:STORY-2763 | ai:claude
+#[cfg(unix)]
+#[test]
+fn story2763_fast_preflight_clean_overlap_is_not_refused() {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
+    let (fixture, _, gh) = fast_preflight_fixture(("a line 25\n", "a line 25 main\n"), "main");
+    let root = fixture.path();
+    let _env = hermetic_gh(root, &gh);
+    let (outcome, calls) = crate::review_launch::recording_rework_dispatches(|| {
+        preflight_stale_base_check_with_gh(root, 42, gh.as_os_str())
+    });
+    assert_eq!(
+        outcome.unwrap(),
+        pr_rebase::StaleBaseOutcome::StaleNoOverlap { behind: 2 }
+    );
+    assert!(calls.is_empty(), "a clean merge routes no rework");
+}
+
+// A textual conflict refuses with NeedsRework and routes implementer rework.
+// trace:STORY-2763 | ai:claude
+#[cfg(unix)]
+#[test]
+fn story2763_fast_preflight_conflict_routes_rework() {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
+    let (fixture, head, gh) =
+        fast_preflight_fixture(("a line 5\n", "a line 5 main competes\n"), "main");
+    let root = fixture.path();
+    let _env = hermetic_gh(root, &gh);
+    let subject = crate::ReviewPrSubject {
+        head_ref: "pr".to_string(),
+        commit_subjects: vec!["[AI:claude] feat(x): conflicting work (STORY-1)".to_string()],
+    };
+    let (outcome, calls) = crate::with_review_pr_subject(subject, || {
+        crate::review_launch::recording_rework_dispatches(|| {
+            preflight_stale_base_check_with_gh(root, 42, gh.as_os_str())
+        })
+    });
+    let error = outcome.unwrap_err();
+    assert!(
+        error.is::<crate::gate::review_freshness::NeedsRework>(),
+        "{error:#}"
+    );
+    assert_eq!(calls.len(), 1, "{calls:?}");
+    assert_eq!(&calls[0][..3], ["queue", "rework", "STORY-1"]);
+    assert!(
+        crate::gate::review_freshness::decision_exists(root, 42, &head, "rework-routed").unwrap()
+    );
+    let refs = git(root, &["for-each-ref", "refs/aida/preflight/"]);
+    assert!(refs.is_empty(), "the scratch ref is removed: {refs}");
+}
+
+// A non-protected base keeps the ordinary stale-base classification.
+// trace:STORY-2763 | ai:claude
+#[cfg(unix)]
+#[test]
+fn story2763_non_protected_base_keeps_classify_stale_base() {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
+    let (fixture, _, gh) =
+        fast_preflight_fixture(("a line 25\n", "a line 25 integration\n"), "integration");
+    let root = fixture.path();
+    let _env = hermetic_gh(root, &gh);
+    let (outcome, calls) = crate::review_launch::recording_rework_dispatches(|| {
+        preflight_stale_base_check_with_gh(root, 42, gh.as_os_str())
+    });
+    match outcome.unwrap() {
+        pr_rebase::StaleBaseOutcome::StaleOverlap { overlap_files, .. } => {
+            assert_eq!(overlap_files, vec!["a.txt".to_string()]);
+        }
+        other => panic!("expected the ordinary stale overlap, got {other:?}"),
+    }
+    assert!(calls.is_empty());
+}

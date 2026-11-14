@@ -913,6 +913,9 @@ smoke_check = "command" # accepted alternate section spelling
 confirm_bypass = "policy" # can only tighten; malformed means "on"
 
 [keys.trusted.review]
+# trace:STORY-2763 | ai:codex — shared trusted_config reader owns the path site.
+freshness = "policy"
+freshness_strict_paths = "policy"
 admission_hub = "command" # Git transport endpoint: only the reviewed GitHub authority
 admission_ref = "policy"
 run_acceptance_commands = "policy" # presence probed for a display note

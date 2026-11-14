@@ -406,6 +406,20 @@ impl Repository {
             if behind == 0 {
                 return Ok((false, 0));
             }
+            // Under fast policy overlap means a real conflict, not two edits
+            // in the same file. Keep the original head as the review identity.
+            // trace:STORY-2763 | ai:codex
+            // A non-protected base (integration track, stacked PR) falls
+            // through to the ordinary overlap probe. trace:STORY-2763 | ai:claude
+            if super::fast_freshness(root, change) {
+                return match crate::gate::review_freshness::landed_tree(root, &base, &head) {
+                    Ok(_) => Ok((false, behind)),
+                    Err(e) if e.is::<crate::gate::review_freshness::NeedsRework>() => {
+                        Ok((true, behind))
+                    }
+                    Err(e) => Err(e),
+                };
+            }
             let ancestor = git(root, &["merge-base", &base, &head])?;
             let ancestor = ancestor.trim();
             anyhow::ensure!(valid_sha(ancestor), "invalid merge-base evidence");

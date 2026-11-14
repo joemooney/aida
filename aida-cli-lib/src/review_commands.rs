@@ -1170,6 +1170,13 @@ pub(crate) fn handle_review_spec(
         Some(n) => format!("/aida-review --pr {n}"),
         None => "/aida-review".to_string(),
     };
+    // trace:STORY-2763 | ai:codex
+    let prompt = match pr_number {
+        Some(pr) => {
+            crate::review_launch::review_prompt(project_root, pr, &prompt)?.unwrap_or(prompt)
+        }
+        None => prompt,
+    };
     let session_id = uuid::Uuid::new_v4().to_string();
 
     println!(

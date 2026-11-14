@@ -582,3 +582,9 @@ enabled = true
 format = "cargo fmt --all -- --check"
 test = "make test-touched"
 fast_check = "make check-ci-fast"
+
+# Review current-base content; clean base merges retain attested approvals.
+# trace:STORY-2763 | ai:codex
+[review]
+freshness = "fast"
+freshness_strict_paths = []

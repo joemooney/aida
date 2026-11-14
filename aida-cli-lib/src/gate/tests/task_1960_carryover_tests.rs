@@ -139,6 +139,10 @@ pub(crate) fn fixture() -> (Fixture, String) {
     git(repo, &["config", "commit.gpgsign", "false"]);
     // Gate-ledger and activity writes never ride along in a test commit.
     std::fs::write(repo.join(".git/info/exclude"), ".aida/\n").unwrap();
+    // trace:STORY-2763 | ai:codex
+    std::fs::create_dir_all(repo.join(".aida")).unwrap();
+    write(repo, ".aida/config.toml", "[review]\nfreshness = 'fast'\n");
+    git(repo, &["add", "-f", ".aida/config.toml"]);
     write(repo, "a.txt", &lines(30, "a"));
     write(repo, "b.txt", &lines(30, "b"));
     commit(repo, "base");
@@ -604,7 +608,7 @@ fn unresolvable_inputs_refuse() {
 }
 
 /// An attested, independent approval recorded at `sha`.
-fn approval(sha: &str) -> crate::gate::review_verdict::RecordedVerdict {
+pub(crate) fn approval(sha: &str) -> crate::gate::review_verdict::RecordedVerdict {
     use crate::gate::review_verdict::{RecordedVerdict, RecorderAttestation, VerdictKind};
     RecordedVerdict {
         kind: VerdictKind::Approved,
@@ -624,7 +628,7 @@ fn approval(sha: &str) -> crate::gate::review_verdict::RecordedVerdict {
 
 /// A ship policy under which [`approval`]'s attestation verifies and the
 /// shipper is not its author.
-fn policy(
+pub(crate) fn policy(
     v: &crate::gate::review_verdict::RecordedVerdict,
 ) -> crate::gate::ship::ShipApprovalPolicy {
     let mut p = crate::gate::ship::ShipApprovalPolicy {
@@ -1647,6 +1651,105 @@ fn story_2696_corpus_superseded_policy_cannot_veto_clean_merge() {
                 corpus_merge_gate_carrying(PR, &corpus, Some(&head), prove),
                 CorpusMergeGate::Clear
             ));
+        }
+    }
+}
+
+// trace:STORY-2763 | ai:codex
+#[test]
+fn review_watch_fast_proof_is_revoked_by_trusted_strict_policy() {
+    use crate::gate::review_freshness::{for_head, Freshness};
+    let _env = crate::test_env::EnvVarsGuard::apply(&[("AIDA_CONTAINED", None)]);
+    let (tmp, approved) = fixture();
+    let repo = tmp.path();
+    // Two changes in the same file, in disjoint hunks, merge cleanly.
+    git(repo, &["checkout", "--quiet", "main"]);
+    set_line(repo, "a.txt", 25, "main moved in the same file");
+    commit(repo, "overlapping file, disjoint hunk");
+    publish_main(repo);
+    git(repo, &["checkout", "--quiet", "pr"]);
+    git(repo, &["merge", "--quiet", "--no-edit", "main"]);
+    let h = head(repo);
+    let site = CarryOverSite::new(repo, Some("main"));
+    assert_eq!(for_head(repo, &h), Freshness::Fast);
+    assert!(carry_over_for_refusal(&site, PR, &moved(&approved, &h))
+        .unwrap()
+        .is_ok());
+    assert_eq!(carry_events(repo, &h).len(), 1);
+    // A branch cannot lower trusted strict policy, including by reusing a proof.
+    git(repo, &["checkout", "--quiet", "main"]);
+    write(
+        repo,
+        ".aida/config.toml",
+        "[review]\nfreshness = 'strict'\n",
+    );
+    commit(repo, "operator raises assurance");
+    publish_main(repo);
+    git(repo, &["checkout", "--quiet", "pr"]);
+    write(repo, ".aida/config.toml", "[review]\nfreshness = 'fast'\n");
+    assert_eq!(for_head(repo, &h), Freshness::Strict);
+    assert_eq!(
+        carry_over_for_refusal(&site, PR, &moved(&approved, &h)).unwrap(),
+        Err(CarryOverRefusal::StrictPolicy)
+    );
+    assert_eq!(
+        carry_events(repo, &h).len(),
+        1,
+        "strict does not replace the historical proof"
+    );
+}
+
+// trace:STORY-2763 | ai:codex
+#[test]
+fn review_watch_current_base_tree_accepts_overlap_and_types_textual_conflict() {
+    use crate::gate::review_freshness::{landed_tree, NeedsRework};
+    let (tmp, approved) = fixture();
+    let repo = tmp.path();
+    git(repo, &["checkout", "--quiet", "main"]);
+    set_line(repo, "a.txt", 25, "main changed this distant hunk");
+    let base = commit(repo, "same file without conflict");
+    let tree = landed_tree(repo, &base, &approved).unwrap();
+    let patch = git(repo, &["diff", &base, &tree]);
+    assert!(patch.contains("reviewed change"));
+    assert!(!patch.contains("main changed this distant hunk"));
+    set_line(repo, "a.txt", 5, "main competes with the reviewed hunk");
+    let conflicting = commit(repo, "textual conflict");
+    let error = landed_tree(repo, &conflicting, &approved).unwrap_err();
+    assert!(error.is::<NeedsRework>(), "{error:#}");
+}
+
+// AC4: a trusted `freshness_strict_paths` glob raises a fast project to strict
+// for a PR whose own diff (merge-base(trusted base, head)..head) touches it:
+// carry-over is refused, so the review is a full one. A PR that does not touch
+// the glob keeps the fast policy.
+// trace:STORY-2763 | ai:claude
+#[test]
+fn review_watch_strict_path_glob_refuses_carry_over_under_fast_policy() {
+    use crate::gate::review_freshness::{for_head, Freshness};
+    let _env = crate::test_env::EnvVarsGuard::apply(&[("AIDA_CONTAINED", None)]);
+    for (glob, expected) in [("a.*", Freshness::Strict), ("gate/**", Freshness::Fast)] {
+        let (tmp, approved) = fixture();
+        let repo = tmp.path();
+        git(repo, &["checkout", "--quiet", "main"]);
+        write(
+            repo,
+            ".aida/config.toml",
+            &format!("[review]\nfreshness = 'fast'\nfreshness_strict_paths = ['{glob}']\n"),
+        );
+        commit(repo, "operator protects a path");
+        publish_main(repo);
+        git(repo, &["checkout", "--quiet", "pr"]);
+        let h = clean_merge(repo);
+        // b.txt and the config arrive from the base: only the PR's own a.txt
+        // edit is in merge-base(base, head)..head.
+        assert_eq!(for_head(repo, &h), expected, "glob {glob}");
+        let site = CarryOverSite::new(repo, Some("main"));
+        let answer = carry_over_for_refusal(&site, PR, &moved(&approved, &h)).unwrap();
+        if expected == Freshness::Strict {
+            assert_eq!(answer, Err(CarryOverRefusal::StrictPolicy));
+            assert!(proof_event(repo, &h).is_none());
+        } else {
+            assert!(answer.is_ok(), "{answer:?}");
         }
     }
 }

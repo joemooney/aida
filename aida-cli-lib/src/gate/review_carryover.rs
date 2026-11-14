@@ -84,22 +84,36 @@ pub(crate) enum CarryOverRefusal {
     /// Reviewer policy forbids extending the approval to another head.
     // trace:STORY-2696 | ai:codex
     ReviewerPolicy,
+    // trace:STORY-2763 | ai:codex
+    StrictPolicy,
     /// A commit or ref could not be resolved locally.
-    Unresolvable { what: String },
+    Unresolvable {
+        what: String,
+    },
     /// The head does not descend from the approved commit (a rebase or other
     /// rewritten history).
     NotDescendant,
     /// A commit after the approved one is not a merge.
-    NotAMerge { commit: String },
+    NotAMerge {
+        commit: String,
+    },
     /// A merge's parents are not one PR-side commit plus one commit already
     /// on the base branch.
-    NotABaseMerge { commit: String },
+    NotABaseMerge {
+        commit: String,
+    },
     /// A merge's tree differs from git's automatic merge of its parents.
-    MergeEdited { commit: String },
+    MergeEdited {
+        commit: String,
+    },
     /// A merge's parents do not merge cleanly (a conflict was resolved).
-    MergeConflicted { commit: String },
+    MergeConflicted {
+        commit: String,
+    },
     /// A diff endpoint has more than one merge base with the base branch.
-    AmbiguousBase { sha: String },
+    AmbiguousBase {
+        sha: String,
+    },
     /// The PR's own diff is empty, so there is nothing to compare.
     EmptyDiff,
     /// The PR's own diff changed.
@@ -109,12 +123,19 @@ pub(crate) enum CarryOverRefusal {
     },
     /// The PR's base is not the remote's default branch, so the carry-over
     /// has no protected base to be proven against.
-    BaseNotProtected { base: String, protected: String },
+    BaseNotProtected {
+        base: String,
+        protected: String,
+    },
     /// git itself failed.
-    Git { detail: String },
+    Git {
+        detail: String,
+    },
     /// An active train could not persist its intent before a remote call.
     // trace:STORY-2401 | ai:codex
-    IntentUnavailable { detail: String },
+    IntentUnavailable {
+        detail: String,
+    },
 }
 
 impl CarryOverRefusal {
@@ -123,6 +144,7 @@ impl CarryOverRefusal {
     pub(crate) fn reason(&self) -> String {
         let short = |s: &str| crate::gate::review_verdict::short_sha(s).to_string();
         match self {
+            Self::StrictPolicy => "strict policy: re-review required".into(),
             Self::ReviewerPolicy => "the reviewer marked this approval as not carry-eligible; fresh review of the new head is required".into(),
             Self::Unresolvable { what } => format!("{what} could not be resolved locally"),
             Self::NotDescendant => "the head does not descend from the approved commit (a rebase \
@@ -178,7 +200,8 @@ impl CarryOverRefusal {
     pub(crate) fn is_deterministic(&self) -> bool {
         !matches!(
             self,
-            Self::ReviewerPolicy
+            Self::StrictPolicy
+                | Self::ReviewerPolicy
                 | Self::Unresolvable { .. }
                 | Self::Git { .. }
                 | Self::BaseNotProtected { .. }
@@ -364,6 +387,31 @@ fn proved_for_refusal(
     else {
         return None;
     };
+    // Evaluate policy before reusing any cached proof. A raised policy revokes
+    // carry-over without deleting historical evidence.
+    // trace:STORY-2763 | ai:codex
+    if super::review_freshness::for_head(site.repo, head_sha)
+        == super::review_freshness::Freshness::Strict
+    {
+        // The refusal stays fail-closed either way; an unaudited refusal is
+        // surfaced rather than silently dropped.
+        // trace:STORY-2763 | ai:claude
+        if site.append {
+            if let Err(error) = super::review_freshness::record(
+                site.repo,
+                pr,
+                head_sha,
+                super::review_freshness::Freshness::Strict,
+                "re-review-required",
+                serde_json::json!({"approved_sha": reviewed_sha}),
+            ) {
+                eprintln!(
+                    "warning: PR-{pr}: strict re-review requirement could not be recorded on the gate ledger: {error:#}"
+                );
+            }
+        }
+        return Some(Err(CarryOverRefusal::StrictPolicy));
+    }
     let pr_base = site
         .base_branch
         .map(str::trim)
@@ -386,6 +434,14 @@ fn proved_for_refusal(
         Ok(protected) => protected,
         Err(why) => return Some(Err(why)),
     };
+    // Refresh can reveal an operator's policy change. Recheck it before
+    // treating any previously stored proof as authority.
+    // trace:STORY-2763 | ai:codex
+    if super::review_freshness::for_head(site.repo, head_sha)
+        == super::review_freshness::Freshness::Strict
+    {
+        return Some(Err(CarryOverRefusal::StrictPolicy));
+    }
     if let Some(stored) = stored_answer(site.repo, pr, &pr_base, reviewed_sha, head_sha) {
         return Some(stored);
     }
@@ -480,6 +536,10 @@ fn append_answer(
     event.base_ref = Some(base.to_string());
     event.base_tip = Some(base_tip);
     record_event(repo, event).is_ok()
+        && super::review_freshness::record(repo, pr, head,
+            super::review_freshness::Freshness::Fast,
+            if proved.is_ok() { "carried-over" } else { "carry-over-refused" },
+            serde_json::json!({"approved_sha": approved, "proof_version": PROOF_VERSION, "result": proved})).is_ok()
 }
 
 /// [`prove_for_refusal`] for the gate that pins the merge. A proof that is
@@ -572,7 +632,7 @@ pub(crate) fn prove_carry_over(
 }
 
 // trace:STORY-2694 | ai:codex
-fn refresh_base(repo: &Path, base_branch: &str) -> Result<(), CarryOverRefusal> {
+pub(crate) fn refresh_base(repo: &Path, base_branch: &str) -> Result<(), CarryOverRefusal> {
     if base_branch.is_empty()
         || base_branch.starts_with('-')
         || !git_ok(repo, &["check-ref-format", "--branch", base_branch])
@@ -838,7 +898,7 @@ pub(crate) fn patch_id(repo: &Path, from: &str, to: &str) -> Result<String, Carr
 /// `sha` resolved to a full commit id; a full sha missing locally is fetched
 /// from `origin` once. An abbreviated sha is never fetched or guessed.
 // trace:TASK-1960 | ai:claude
-fn resolve_sha_fetching(repo: &Path, sha: &str) -> Option<String> {
+pub(crate) fn resolve_sha_fetching(repo: &Path, sha: &str) -> Option<String> {
     let sha = sha.trim().to_ascii_lowercase();
     if sha.len() < 7 || !sha.bytes().all(|c| c.is_ascii_hexdigit()) {
         return None;

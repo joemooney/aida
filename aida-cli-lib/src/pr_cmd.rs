@@ -7783,7 +7783,46 @@ pub(crate) fn preflight_stale_base_check_with_info(
         Err(_) => ConflictPrediction::Unknown,
     };
 
-    let outcome = classify_stale_base(behind, &pr_files, &base_files, prediction);
+    // trace:STORY-2763 | ai:codex
+    // A non-protected base (integration track, stacked PR) keeps the ordinary
+    // stale-base classification. trace:STORY-2763 | ai:claude
+    let protected = crate::gate::review_carryover::protected_base(project_root).ok();
+    let fast = crate::gate::review_freshness::for_head(project_root, &info.head_oid)
+        == crate::gate::review_freshness::Freshness::Fast
+        && protected.as_deref() == Some(info.base_ref.as_str());
+    let outcome = if let (true, Some(protected)) = (fast, protected) {
+        crate::gate::review_carryover::refresh_base(project_root, &protected)
+            .map_err(|e| anyhow::anyhow!(e.reason()))?;
+        // Resolve the fetched head, not a branch that can move underneath us.
+        let head = crate::gate::review_freshness::git(
+            project_root,
+            &["rev-parse", "--verify", &pr_local_branch],
+        )?;
+        anyhow::ensure!(
+            head.trim() == info.head_oid,
+            "head moved during review preflight"
+        );
+        let landed =
+            crate::gate::review_freshness::landed_tree(project_root, &origin_base, head.trim());
+        // Always remove our scratch ref, including a textual conflict.
+        let _ = crate::gate::review_freshness::git(
+            project_root,
+            &["update-ref", "-d", &pr_local_branch],
+        );
+        if let Err(e) = landed {
+            if e.is::<crate::gate::review_freshness::NeedsRework>() {
+                crate::review_launch::route_rework(project_root, n, head.trim())?;
+            }
+            return Err(e);
+        }
+        if behind == 0 {
+            pr_rebase::StaleBaseOutcome::Current
+        } else {
+            pr_rebase::StaleBaseOutcome::StaleNoOverlap { behind }
+        }
+    } else {
+        classify_stale_base(behind, &pr_files, &base_files, prediction)
+    };
     let _ = std::process::Command::new("git")
         .arg("-C")
         .arg(project_root)
