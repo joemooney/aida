@@ -15,7 +15,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-08T19:27:28.525198886Z
-modified_at: 2026-11-14T14:05:25.103907364Z
+modified_at: 2026-11-14T14:20:09.147876554Z
 req_type: Bug
 tags:
 - track:dell1
@@ -377,6 +377,28 @@ comments:
   modified_at: 2026-11-14T14:05:25.103907364Z
   session_id: 01a1d9ea-4e25-7033-85e8-3648f0195c7c
   harness_version: 2.1.325 (Claude Code)
+- id: 01a1da6e-123b-78e3-b8a0-f89110b17298
+  author: dirtlab
+  content: |-
+    Completion slice handoff (claude lane 01a1da634126), commit 37e1699462 on bug-b6b1278890774ef993d2ebc327862470-266, NOT pushed: this contained seat has no forge credentials (git push: 'could not read Username'; gh: 401). Host must push and open the PR.
+
+    Branch state: merged origin/main b63e2f597e with a real merge (dabd27ef4b). Two conflicts (scripts/exec-context-legacy.json, tests/test_bug_2135_sccache_tmpdir.py) were the branch's pre-squash copies of #3921; resolved to main. After the merge the tree was byte-identical to main: everything earlier on this branch already landed through #3717, #3920 and #3921.
+
+    PR body — AC verification on main (tests in aida-cli-lib store_sync::pull_failure_tests unless noted):
+    - AC1: sync_pull_merges_concurrent_objects_with_upstream_scalars (also aida-core conflict::pull_merge_preserves_nested_replies_reactions_and_upstream_edits and pull_merge_two_hosts_recording_same_completion_retains_both_audit_events).
+    - AC2: sync_pull_refuses_dirty_store_and_unreachable_remote, sync_pull_skips_remote_without_store_branch, sync_pull_preserves_staged_changes_on_refusal; call sites: bug_2501_pull_failure_stops_pickup_before_implicit_queue_write and bug_2501_burndown_residual_refuses_failed_pull.
+    - AC3: allocation_retry_dirty_store_stops_before_fetch (git_ops suggest_free_node_id propagation is asserted in coordination.rs tests).
+    - Gap found: none. The only diff is AC-labelled trace comments on the two untraced tests (4 comment lines in store_sync.rs).
+    - AC4: the BUG-2490 stopgaps are dell1:~/store-sync.sh, ~/store-resolve.py and ~/lane-run.sh. rg finds no reference to any of them in the repo, so there is no in-repo stopgap to remove; the operator-side ones stay per the brief.
+
+    Validation:
+    - Lane job j20261114T141011375-3-0, cargo test -p aida-cli-lib --lib -- store_sync: 47 executed, 47 passed, exit 0. It ran on the merged tree before the comment-only edit; not re-run after it.
+    - rustfmt --check on store_sync.rs, git diff --check, check-ci-gates --audit (89 gates classified): passed.
+    - make check-ci-fast: NOT passed here. It stops at 'Containment conformance evidence tests' with 7 errors, all PermissionError on socket creation inside this seat's sandbox; later gates did not run. Host must run make check-ci-fast before merge.
+  created_at: 2026-11-14T14:20:09.147876554Z
+  modified_at: 2026-11-14T14:20:09.147876554Z
+  session_id: 01a1da634126
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1bcc3-bd29-7692-a764-d1e8c8dbaa00
   author: aida-session-start
