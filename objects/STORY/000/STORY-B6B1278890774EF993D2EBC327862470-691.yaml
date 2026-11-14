@@ -43,7 +43,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-13T16:52:56.270142081Z
-modified_at: 2026-11-14T02:51:05.387575278Z
+modified_at: 2026-11-14T02:53:41.958614999Z
 req_type: Story
 tags:
 - architecture
@@ -251,6 +251,13 @@ comments:
   content: '19:32 MST advisor: review scope for #3981 (aida land run, S2) at 20a51b7, review-before-merge (architecture). Verify each of the six signoff conditions against the PR body, hardest on: (1) no train starts while any .aida/train/*.json remains or our own train child is alive; a train is never stopped (warning only after 90 min); (2) a reviewer past its limit has its verdict re-read before any stop; a second timeout at one head derives BLOCKED; (3) a lane that refused over unpushed seat work leaves that head BLOCKED until it moves; (4) children spawned in their own process group but never detached; (5) a stacked change waits for its base (no train boarding). Known and accepted: only --dry-run exercised; the live acceptance run is an operator act after the #3950/#3952 fixers finish.'
   created_at: 2026-11-14T02:31:50.297662305Z
   modified_at: 2026-11-14T02:31:50.297662305Z
+  session_id: 01a1d797-2ccf-7771-899a-682081f10504
+  harness_version: 2.1.325 (Claude Code)
+- id: 01a1d7f9-9ac6-73b2-a840-9b21556d19af
+  author: joe
+  content: '19:57 MST advisor triage of #3981 CR at 20a51b7 (aggressive triage). BLOCKING: F1 verdict_at must count only verdicts recorded at/after the supervised child''s start (else endless relaunch, never BLOCKED; condition 4) + test with an older verdict at the head; F2 write a log header (head, base, merge tree, args) before spawn (ruling a); F3 review cap counts live Kind::Review children too, deduped by PR (cap correctness); F5 book IO errors in loop and --once wait report-and-continue, never exit and orphan children. ACCEPTED as follow-up draft (non-blocking): F4 inherited-children timeouts after restart (fails safe: spurious BLOCKED a human can see); F6 --once wait loop uses the pre-wait list and drops settle notes (test mode only); F7 limits as KnobSpec with out-of-range warning. Next round: scoped re-review of F1/F2/F3/F5.'
+  created_at: 2026-11-14T02:53:41.958614999Z
+  modified_at: 2026-11-14T02:53:41.958614999Z
   session_id: 01a1d797-2ccf-7771-899a-682081f10504
   harness_version: 2.1.325 (Claude Code)
 history:
