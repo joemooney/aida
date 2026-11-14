@@ -15,8 +15,16 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-14T12:56:24.536092596Z
-modified_at: 2026-11-14T13:02:26.803242097Z
+modified_at: 2026-11-14T13:02:28.945334186Z
 req_type: Bug
+comments:
+- id: 01a1da26-f651-7672-8da8-c7681195a273
+  author: joe
+  content: '[advisor a22 06:03] Promoted to Approved (request from the product seat aida-19): a one-line ci.yml trigger fix so PRs into integration run CI. Integration track; review-after-merge eligible (low risk, CI config only).'
+  created_at: 2026-11-14T13:02:28.945334186Z
+  modified_at: 2026-11-14T13:02:28.945334186Z
+  session_id: 01a1d9ea-4e25-7033-85e8-3648f0195c7c
+  harness_version: 2.1.325 (Claude Code)
 history:
 - id: 01a1da26-edf3-75a2-8f88-f6560b5d5b08
   author: joe
