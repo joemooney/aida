@@ -897,12 +897,36 @@ description: |
   ### finding-hash:d51c0f59
 
   No test carries a criterion-level trace comment for the six STORY-2763 criteria (acef95eb, ac3d0be9, ac5a9c72, ac59d017, ac984425, ac39a51c), so `aida criteria` reports all six untraced although each has tests in this diff. Add `trace:STORY-b6b1278890774ef993d2ebc327862470-686.<ac-id>` comments on the tests named in the summary.
+
+
+  ## Findings from STORY-2763
+  Reviewed sha: 79220471910a9706f448ddbd805f59098a25e817
+
+  ### finding-hash:0d56e3a6
+
+  gate/review_freshness.rs glob(): `**` compiles to `.*` and the regex has no (?s) flag, so a changed path containing a newline never matches a freshness_strict_paths glob such as `aida-cli-lib/src/gate/**` and the PR is treated as fast. Compile with dot-matches-newline (or refuse such paths as strict) and add a case to review_watch_freshness_policy_is_closed_and_paths_raise_assurance.
+
+  ### finding-hash:138d1871
+
+  review_watch.rs execute_reservation: a conflict first seen by the queue-work child (protected base moves after the watcher preflight; compose_launch_prompt returns NeedsRework and the child exits non-zero) is recorded through transition(Exited) with the BUG-2450 setup conversion, so the attempt can be classed a setup failure and retried once instead of the routed Exited that the preflight path records via transition_routed.
+
+  ### finding-hash:9b6c3c2d
+
+  pr_cmd.rs preflight_stale_base_check_with_info fast branch: the refresh_base error and the `head moved during review preflight` ensure return before `update-ref -d` on the scratch preflight ref, so those two early exits leave the ref behind; the ordinary and conflict paths clean it up.
+
+  ### finding-hash:6aee22bd
+
+  gate/review_carryover.rs proved_for_refusal: the second strict-policy check (after the base refresh) returns StrictPolicy without writing the `re-review-required` freshness event that the first check writes, so a policy raise first seen by that refresh is refused but not audited on that call (AC5).
+
+  ### finding-hash:d51c0f59
+
+  No test carries a criterion-level trace comment for the six STORY-2763 criteria (acef95eb, ac3d0be9, ac5a9c72, ac59d017, ac984425, ac39a51c), so `aida criteria` reports all six untraced although each has tests in this diff. Add `trace:STORY-b6b1278890774ef993d2ebc327862470-686.<ac-id>` comments on the tests named in the summary.
 status: Draft
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-13T20:01:56.623034248Z
-modified_at: 2026-11-14T17:50:58.660698367Z
+modified_at: 2026-11-14T17:51:08.461088408Z
 req_type: Task
 tags:
 - carried-finding:BUG-2543:2a99ebfc
@@ -1041,9 +1065,14 @@ tags:
 - carried-finding:PR-4046:fefd3308
 - carried-finding:STORY-2735:2c7ae2ea
 - carried-finding:STORY-2763:04ad58d8
+- carried-finding:STORY-2763:0d56e3a6
+- carried-finding:STORY-2763:138d1871
 - carried-finding:STORY-2763:15915e39
+- carried-finding:STORY-2763:6aee22bd
 - carried-finding:STORY-2763:97d326dd
+- carried-finding:STORY-2763:9b6c3c2d
 - carried-finding:STORY-2763:bf60843e
+- carried-finding:STORY-2763:d51c0f59
 - carried-finding:STORY-2763:dee3f3a7
 - carried-finding:STORY-2765:2b087a82
 - carried-finding:STORY-2765:4e068149
@@ -1600,6 +1629,11 @@ history:
 - id: 01a1db2f-1dab-7583-bbcb-732e96262f98
   author: joe
   timestamp: 2026-11-14T17:51:00.523588745Z
+  session_id: 01a1db2b3a52
+  changes: []
+- id: 01a1db2f-4309-7fd1-9a6d-bda82b8dffab
+  author: joe
+  timestamp: 2026-11-14T17:51:10.089345214Z
   session_id: 01a1db2b3a52
   changes: []
 filed_at:
