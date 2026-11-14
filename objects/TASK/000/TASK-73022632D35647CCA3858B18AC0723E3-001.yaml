@@ -3,12 +3,12 @@ spec_id: TASK-73022632d35647cca3858b18ac0723e3-001
 agreed_id: TASK-3101
 title: Fast CI mail-wake fixtures refuse temporary health directories in native lane
 description: 'During BUG-2553 validation, make check-ci-fast failed in unchanged tests/test_codex_mail_wake.py: 53 tests, 4 failures, 17 errors, 1 skipped. Common refusal: health project directory must be owned without shared writes. Investigate fixture directory permissions/umask in native lane. BUG-2553 targeted tests passed (2), vendor ratchet checks passed (3); no mail-wake files were changed.'
-status: InProgress
+status: Completed
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-13T09:04:38.611892111Z
-modified_at: 2026-11-14T07:24:15.400823814Z
+modified_at: 2026-11-14T10:31:16.337402988Z
 req_type: Task
 tags:
 - from-advisor:general
@@ -77,9 +77,26 @@ history:
   author: joe
   timestamp: 2026-11-14T07:24:29.401310749Z
   changes: []
+- id: 01a1d99c-865e-7b93-89d0-f07a831edb42
+  author: aida-auto-bump
+  timestamp: 2026-11-14T10:31:16.318085714Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a1d99c-8671-7f12-9fdd-2ac0c30685f3
+  timestamp: 2026-11-14T10:31:16.337402170Z
+  agent: aida
+  commit_sha: e81b5754d976b81d044bb5aff1f29ba97aeaa730
+  summary: Completed via merge e81b5754
 filed_at:
   aida_version: 0.16.0
   aida_build_sha: 5b9a248a1b
   vendor: codex
   session: 01a1d41f35fa
   harness_version: codex-cli 0.167.0
+implementation_info:
+  implemented: false
+  completed_at: 2026-11-14T10:31:16.315190236Z
+  completion_sha: e81b5754d976b81d044bb5aff1f29ba97aeaa730
