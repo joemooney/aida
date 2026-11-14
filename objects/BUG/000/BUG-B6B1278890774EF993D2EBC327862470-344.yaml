@@ -15,7 +15,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-14T13:30:29.047902507Z
-modified_at: 2026-11-14T18:38:08.755385240Z
+modified_at: 2026-11-14T18:45:54.539251199Z
 req_type: Bug
 tags:
 - area:deputy
@@ -52,6 +52,13 @@ comments:
   content: 'Advisor SIGNOFF 2026-11-14 09:32 on the integration seat''s sketch (cancel/ack/wait ownership by valid seat grant with equal seat+subject+principal; list shows will-run/would-be-refused; rotation context lists queued deputy jobs; claim-side acceptance unchanged). Open point ruled: accept that two ''aida role enter'' sessions of the same OS user on the same seat can cancel each other''s jobs; no lease id on the job. Review-before-merge (deputy authority code).'
   created_at: 2026-11-14T16:29:51.096770780Z
   modified_at: 2026-11-14T16:29:51.096770780Z
+  session_id: 01a1dab1-9447-7d22-b5ff-0c9084e122ea
+  harness_version: 2.1.325 (Claude Code)
+- id: 01a1db61-60eb-7e21-b3ae-1e5b3b7a5fdf
+  author: joe
+  content: 'Advisor ruling on the #4047 verdict at b23678f (CHANGES REQUESTED): the ownership rule is accepted. BLOCKING (1, AC2): the ''deputy shell list'' forecast (will run / would be refused) is wrong when called from a sandboxed seat; make it correct there or print ''unknown from this sandbox'' rather than a wrong answer. BLOCKING (2, AC4): the rotated-cancel test asserts nothing on success; assert the job is cancelled. Not blocking: status/wait unscoped by source.'
+  created_at: 2026-11-14T18:45:54.539251199Z
+  modified_at: 2026-11-14T18:45:54.539251199Z
   session_id: 01a1dab1-9447-7d22-b5ff-0c9084e122ea
   harness_version: 2.1.325 (Claude Code)
 history:
