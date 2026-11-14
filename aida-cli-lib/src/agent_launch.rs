@@ -3846,7 +3846,7 @@ pub(crate) fn agent_new_bg_dispatch(
     let mut grant_rollback = IssuedLaunchGrant::from_command(&command);
     if config.agent_type == "codex" {
         command.env(crate::gate::seat_authority::GRANT_ENV, "");
-        crate::launch::profile::finalize_codex(&mut command)?;
+        crate::vendors::profile::finalize_codex(&mut command)?;
     }
     command
         .stdin(std::process::Stdio::null())
@@ -7770,7 +7770,7 @@ pub(crate) fn run_agent_generation_with_io(
         if plan.role.is_none() {
             command.env(crate::gate::seat_authority::GRANT_ENV, "");
         }
-        crate::launch::profile::finalize_codex(&mut command)?;
+        crate::vendors::profile::finalize_codex(&mut command)?;
     }
     command
         .stdin(std::process::Stdio::inherit())

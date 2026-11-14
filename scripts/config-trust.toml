@@ -78,6 +78,12 @@ sites = 1
 channels = ["worktree"]
 sites = 1
 
+# `aida now` reads the open-change limit it shows beside the queue counts.
+# trace:STORY-2768 | ai:claude
+[readers."aida-cli-lib/src/now.rs"]
+channels = ["worktree"]
+sites = 1
+
 [readers."aida-cli-lib/src/ci_gate.rs"]
 channels = ["worktree"]
 sites = 1
@@ -668,6 +674,11 @@ ctrl_d_palette = "policy"
 [keys.worktree.review_watch]
 required_checks = "policy"
 max_concurrent = "policy" # Bounds reviewer count; selects no executable. TASK-3472.
+
+# A count the `aida now` screen compares open changes against; it selects
+# nothing and launches nothing. STORY-2768.
+[keys.worktree.land]
+wip_max = "policy"
 
 [keys.worktree.drain]
 gh_verify_retries = "policy"

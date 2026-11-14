@@ -81,6 +81,28 @@ pub(super) fn send(
         }
         Ok(pending)
     })?;
+    // trace:BUG-2548 | ai:codex
+    // Record even an already-delivered cap notice (upgrade/recovery). A failed
+    // append leaves delivery pending; the ledger deduplicates by request ID.
+    if cap {
+        let notice = store
+            .transaction(&key, |state| {
+                Ok(state.entries.get(&key).and_then(|entry| entry.cap.clone()))
+            })?
+            .context("review cap receipt disappeared")?;
+        let change_key =
+            crate::gate::ledger::ChangeKey::parse(&key).context("invalid review change key")?;
+        let mut event = crate::gate::ledger::GateEvent::new(
+            change_key,
+            crate::gate::ledger::EventBody::ManualReviewRequested {
+                request_id: notice.message.id.clone(),
+                recipient: "advisor".into(),
+            },
+        );
+        event.head = Some(change.head.clone());
+        let ledger_root = crate::gate::ledger::store_root(root)?;
+        crate::gate::ledger::store::append(&ledger_root, change_key, vec![event])?;
+    }
     for notice in pending {
         deliver(root, &notice)?;
         store.transaction(&key, |state| {
@@ -264,7 +286,7 @@ fn cap_message(
         .join(", ");
     let body = format!(
         "{key} reached the two-round review cap: the reviews of {shas} each blocked done. \
-         Its head {head} has no review, and the watcher will not start another. Decide the next \
+         Its head {head} has no review, and the watcher will not start another. Manual review requested. Decide the next \
          step: review the head by hand, or re-scope or close the change. Its findings are in \
          `.aida/review-verdicts/{file}`.",
         head = change.head,

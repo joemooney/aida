@@ -4183,7 +4183,7 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
             if let Some(lease) = &self.implementer_lease {
                 child_cmd.env(crate::gate::review_authority::WORKER_SESSION_ENV, lease);
             }
-            crate::launch::profile::finalize_codex(&mut child_cmd)
+            crate::vendors::profile::finalize_codex(&mut child_cmd)
                 .map_err(|e| std::io::Error::other(format!("{e:#}")))
         } else {
             Ok(())

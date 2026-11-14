@@ -96,6 +96,7 @@ fn kinds(events: &[GateEvent]) -> Vec<&'static str> {
     events
         .iter()
         .map(|e| match e.body {
+            EventBody::ManualReviewRequested { .. } => "manual-review-requested",
             EventBody::TrainCoverage { .. } => "train-coverage",
             EventBody::Verdict { .. } => "verdict",
             EventBody::LegacyImported { .. } => "legacy-imported",
@@ -1474,7 +1475,7 @@ fn a_refused_or_unparseable_file_keeps_the_ledger_out_of_every_reader() {
     ledger_holds(&root, ChangeKey::pr(50), record("approved", &ts(-60), None));
     let hold = typed_hold(50, HoldReasonKind::Rework, "CHANGES REQUESTED", None);
     let approved_by_every_reader = || {
-        let release = crate::pr_cmd::ship_refusal_release(&[&root], &hold, Some(HEAD));
+        let release = crate::pr_cmd::ship_refusal_release(&[&root], &hold, Some(HEAD), true);
         let dispatch = crate::gate::dispatch_authority::verdict_at_head(&root, 50, HEAD);
         (
             rv::read_recorded_verdict(&root, "PR-50").is_some(),
