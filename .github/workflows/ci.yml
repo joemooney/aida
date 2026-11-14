@@ -15,8 +15,17 @@ on:
 # Superseded PR heads must not starve merge-train CI.
 # Non-PR runs have unique groups and are never grouped together or cancelled.
 # trace:TASK-3267 | ai:codex
+#
+# Only `ci:full` changes the tier, so only its label events may restart CI.
+# Any other label event (a merge-hold toggle, say) gets a group of its own,
+# which leaves the PR's running CI alone, and every job below is skipped
+# under a name of its own: a skipped `Build (ubuntu-latest)` would satisfy
+# the required check, and a newer `ci-tier:` marker would unconfirm FULL CI.
+# The same label-event condition is repeated in each place; keep the copies
+# identical (tests/test_ci_tiers.py compares them).
+# trace:BUG-2578 | ai:claude
 concurrency:
-  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.run_id }}
+  group: ${{ github.workflow }}-${{ ((github.event.action == 'labeled' || github.event.action == 'unlabeled') && github.event.label.name != 'ci:full') && format('label-{0}', github.run_id) || github.event.pull_request.number || github.run_id }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 env:
@@ -30,7 +39,8 @@ jobs:
   # One selection feeds scheduling and the forge-readable check name.
   # trace:STORY-2735 | ai:codex
   tier:
-    name: "ci-tier: ${{ (github.event_name != 'pull_request' || startsWith(github.head_ref, 'train/') || contains(github.event.pull_request.labels.*.name, 'ci:full') || vars.AIDA_PR_CI_TIER == 'full') && 'full' || 'fast' }}"
+    name: "${{ ((github.event.action == 'labeled' || github.event.action == 'unlabeled') && github.event.label.name != 'ci:full') && 'label event (CI tier unchanged)' || format('ci-tier: {0}', (github.event_name != 'pull_request' || startsWith(github.head_ref, 'train/') || contains(github.event.pull_request.labels.*.name, 'ci:full') || vars.AIDA_PR_CI_TIER == 'full') && 'full' || 'fast') }}"
+    if: ${{ !((github.event.action == 'labeled' || github.event.action == 'unlabeled') && github.event.label.name != 'ci:full') }}
     runs-on: ubuntu-latest
     outputs:
       full: ${{ steps.select.outputs.full }}
@@ -42,7 +52,7 @@ jobs:
         run: echo "full=$FULL" >> "$GITHUB_OUTPUT"
 
   fast-gates:
-    name: CI (fast gates)
+    name: "${{ ((github.event.action == 'labeled' || github.event.action == 'unlabeled') && github.event.label.name != 'ci:full') && 'label event (fast gates not rerun)' || 'CI (fast gates)' }}"
     needs: tier
     if: needs.tier.outputs.full != 'true'
     runs-on: ubuntu-latest
@@ -89,7 +99,7 @@ jobs:
           GATE_DEPENDENCIES_BASE: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha || github.event.before }}
 
   fast-compile:
-    name: CI (fast compile)
+    name: "${{ ((github.event.action == 'labeled' || github.event.action == 'unlabeled') && github.event.label.name != 'ci:full') && 'label event (fast compile not rerun)' || 'CI (fast compile)' }}"
     needs: tier
     if: needs.tier.outputs.full != 'true'
     runs-on: ubuntu-latest
@@ -1199,11 +1209,12 @@ jobs:
 
   # Preserve the branch-protection check while every lane runs independently.
   # always() is essential: a failed or cancelled lane must make this check red.
+  # A label event that leaves the tier alone must not report under this name.
   # trace:TASK-1949 | ai:codex
   build-result:
-    name: Build (ubuntu-latest)
+    name: "${{ ((github.event.action == 'labeled' || github.event.action == 'unlabeled') && github.event.label.name != 'ci:full') && 'label event (Build not rerun)' || 'Build (ubuntu-latest)' }}"
     needs: [tier, build, fast-gates, fast-compile]
-    if: ${{ always() }}
+    if: ${{ always() && !((github.event.action == 'labeled' || github.event.action == 'unlabeled') && github.event.label.name != 'ci:full') }}
     runs-on: ubuntu-latest
     steps:
       - name: Require every CI lane

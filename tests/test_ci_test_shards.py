@@ -195,9 +195,11 @@ class ShardsTest(unittest.TestCase):
         self.assertEqual(build['strategy']['matrix']['shard'], [*shards.SHARDS, 'gates', 'contracts'])
         self.assertFalse(build['strategy']['fail-fast'])
         aggregate = workflow['jobs']['build-result']
-        self.assertEqual(aggregate['name'], 'Build (ubuntu-latest)')
+        # Label events that leave the tier alone report under another name.
+        # trace:BUG-2578 | ai:claude
+        self.assertTrue(aggregate['name'].endswith("|| 'Build (ubuntu-latest)' }}"))
         self.assertEqual(set(aggregate['needs']), {'tier', 'build', 'fast-gates', 'fast-compile'})
-        self.assertEqual(aggregate['if'], '${{ always() }}')
+        self.assertTrue(aggregate['if'].startswith('${{ always() && '))
         command = aggregate['steps'][0]['run']
         for status in ('success', 'failure', 'cancelled', 'skipped'):
             result = subprocess.run(['bash', '-e', '-c', command],
