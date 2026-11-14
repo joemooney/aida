@@ -13,7 +13,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-14T13:05:16.063317537Z
-modified_at: 2026-11-14T21:02:12.349446465Z
+modified_at: 2026-11-14T21:23:03.494495905Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -106,6 +106,13 @@ comments:
   modified_at: 2026-11-14T19:15:35.669367810Z
   session_id: 01a1db761933
   harness_version: 2.1.319 (Claude Code)
+- id: 01a1dbf1-40c6-7883-a714-f1eeddb48817
+  author: joe
+  content: 'Advisor finding (2026-11-14 14:28): hold-label events on PR-4053 at 21:18:14-15Z still produced two CI runs in one group (43642093348 cancelled, 43642093369 a fresh full run), 31 min after #4028 reached main. Cause is (b), not a defect in the fix: both runs executed the OLD ci.yml (job names ''CI (${{ matrix.shard }})'', no ''label event'' jobs). The PR''s merge ref was still built on base ce660d5 (pulls/4053 base.sha=ce660d5, its merge commit''s ci.yml has no ''label event'' text), so the workflow file predates the fix. PRs whose head was pushed after 20:47Z carry the fix in their merge ref (#3994 a463e05, #4060, #4062: yes); those not pushed since do not (#3956, #4053). No in-flight run was lost this time: 43639772537 had already completed (failure, lib-1) before the hold was added. Not verified: when GitHub refreshes a merge ref without a push; observed only that 31 min and many API reads did not. Rule until every open PR has a head newer than d5f90ae: on a PR whose merge ref lacks the fix, do not add or clear a hold while its full run is in flight unless that run is already red; check with ''gh api repos/joemooney/aida/pulls/N --jq .merge_commit_sha'' and grep its ci.yml for ''label event''. A hold clear on such a PR after a green run still starts one redundant full run (~20-25 min) before a train can take it.'
+  created_at: 2026-11-14T21:23:03.494495905Z
+  modified_at: 2026-11-14T21:23:03.494495905Z
+  session_id: 01a1dbd6-f8cd-7313-a123-75ebbeaa2afd
+  harness_version: 2.1.325 (Claude Code)
 history:
 - id: 01a1da2c-3b66-7010-95f7-26087a6c659f
   author: joe
