@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-13T20:52:54.357683400Z
-modified_at: 2026-11-14T08:59:55.641141882Z
+modified_at: 2026-11-14T09:08:33.436698359Z
 req_type: Bug
 tags:
 - perf
@@ -45,6 +45,13 @@ comments:
   content: '[advisor 7b 00:40] Live evidence: 9 concurrent ''aida db sync --pull'' (oldest 40m, under an autoland codex reviewer for already-approved PR-3994) plus train 14''s post-merge ''aida pull'' (12m, hrtimer sleep) all serialized on the primary; train 15 is queued behind it on deputy default, so main cannot move. Coalescing must let late callers return on the in-flight pull''s result instead of each waiting their turn.'
   created_at: 2026-11-14T07:37:57.487110607Z
   modified_at: 2026-11-14T07:37:57.487110607Z
+  session_id: 01a1d8f3-f948-7072-b174-fa9507ed074b
+  harness_version: 2.1.325 (Claude Code)
+- id: 01a1d950-cc1c-72d1-8adc-faf182e19044
+  author: joe
+  content: '[advisor 7b 02:09] RULING on PR-4007 CR at 0ef99b3: BLOCKING (correctness + AC1/AC3). (1) A coalesced caller must not report success from a pull that started before its own request: join only an in-flight pull whose start postdates the caller''s request, or re-pull once after joining; never return a stale result as success. (2) The AC1/AC3 tests must exercise real pull work (a remote commit arrives during the coalesced window and every caller observes it), not only the no-op path. No other changes.'
+  created_at: 2026-11-14T09:08:33.436698359Z
+  modified_at: 2026-11-14T09:08:33.436698359Z
   session_id: 01a1d8f3-f948-7072-b174-fa9507ed074b
   harness_version: 2.1.325 (Claude Code)
 history:
