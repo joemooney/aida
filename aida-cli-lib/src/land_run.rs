@@ -656,6 +656,11 @@ struct Live {
     /// Another `aida land run` holds the run lock: the recorded children
     /// are its own, and a dry run beside it must not call them abandoned.
     other_run: bool,
+    /// The session-hygiene pass this run started in the background, with
+    /// its log. One at a time: the pass probes every dead session and can
+    /// take minutes, so the landing pass never waits for it.
+    // trace:STORY-2768 | ai:claude
+    hygiene: Option<(std::process::Child, PathBuf)>,
 }
 
 impl Live {
@@ -776,24 +781,107 @@ impl super::housekeeping::Keeper for Live {
     }
 }
 
-/// The housekeeping step: the hygiene pass (reap, agent gc, reclaim), then
-/// dead lanes' work is saved and orphaned specs go back to the queue.
+/// What to do about the background hygiene pass at a housekeeping step.
+// trace:STORY-2768 | ai:claude
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum HygieneStep {
+    /// The one started earlier has not finished: start nothing.
+    StillRunning,
+    /// Start one; `last` is the exit code of the one that finished since
+    /// the previous step (`None` in it when a signal ended it).
+    Start { last: Option<Option<i32>> },
+}
+
+/// PURE: `previous` is the earlier pass's state: `None` when none was
+/// started, `Some(None)` while it runs, `Some(Some(code))` once it exited.
+// trace:STORY-2768 | ai:claude
+pub(crate) fn hygiene_step(previous: Option<Option<Option<i32>>>) -> HygieneStep {
+    match previous {
+        Some(None) => HygieneStep::StillRunning,
+        Some(Some(code)) => HygieneStep::Start { last: Some(code) },
+        None => HygieneStep::Start { last: None },
+    }
+}
+
+impl Live {
+    /// Start `aida session hygiene` (reap, agent gc, reclaim) in the
+    /// background, unless the one this run started earlier is still going.
+    // trace:STORY-2768 | ai:claude
+    fn start_hygiene(&mut self, dry_run: bool) -> Vec<String> {
+        use std::os::unix::process::CommandExt as _;
+        if dry_run {
+            return vec![
+                "housekeeping: would start `aida session hygiene` in the background (dry run)"
+                    .to_string(),
+            ];
+        }
+        let previous = self
+            .hygiene
+            .as_mut()
+            .map(|(child, _)| match child.try_wait() {
+                Ok(Some(status)) => Some(status.code()),
+                // Unreadable counts as running: never two at once.
+                Ok(None) | Err(_) => None,
+            });
+        let mut notes = Vec::new();
+        match hygiene_step(previous) {
+            HygieneStep::StillRunning => {
+                return vec![
+                    "housekeeping: the session hygiene pass started earlier is still running; not starting another"
+                        .to_string(),
+                ];
+            }
+            HygieneStep::Start { last: Some(code) } if code != Some(0) => {
+                if let Some((_, log)) = &self.hygiene {
+                    notes.push(format!(
+                        "housekeeping: the last session hygiene pass ended {}; see {}",
+                        code.map(|c| format!("with code {c}"))
+                            .unwrap_or_else(|| "on a signal".to_string()),
+                        log.display()
+                    ));
+                }
+            }
+            HygieneStep::Start { .. } => {}
+        }
+        self.hygiene = None;
+        let started = (|| -> Result<PathBuf> {
+            let dir = self.root.join(LOG_DIR);
+            std::fs::create_dir_all(&dir).with_context(|| format!("creating {}", dir.display()))?;
+            let log = dir.join(format!(
+                "hygiene-{}.log",
+                Utc::now().format("%Y%m%dT%H%M%SZ")
+            ));
+            let out = std::fs::File::create(&log)
+                .with_context(|| format!("creating {}", log.display()))?;
+            let err = out.try_clone()?;
+            let mut command = self.command(&strings(&["session", "hygiene"]));
+            command
+                .stdin(std::process::Stdio::null())
+                .stdout(out)
+                .stderr(err)
+                .process_group(0);
+            let child = command.spawn().context("starting `aida session hygiene`")?;
+            self.hygiene = Some((child, log.clone()));
+            Ok(log)
+        })();
+        notes.push(match started {
+            Ok(log) => format!(
+                "housekeeping: session hygiene started in the background (log {})",
+                log.display()
+            ),
+            Err(error) => format!("housekeeping: session hygiene was not started: {error:#}"),
+        });
+        notes
+    }
+}
+
+/// The housekeeping step: the hygiene pass (reap, agent gc, reclaim) is
+/// started in the background, then dead lanes' work is saved and orphaned
+/// specs go back to the queue.
 // trace:STORY-2768 | ai:claude
 fn housekeep(pass: &super::Pass, live: &mut Live, dry_run: bool) -> Vec<String> {
     use super::housekeeping;
-    let hygiene = crate::session_hygiene::pass(
-        &pass.root,
-        &crate::session_hygiene::HygieneOptions {
-            dry_run,
-            idle_hours: crate::session_hygiene::DEFAULT_IDLE_HOURS,
-        },
-    );
-    let mut notes = vec![format!(
-        "housekeeping: {} dead session(s) reaped, {} cache(s) reclaimed{}",
-        hygiene.reap.len(),
-        hygiene.reclaimed.len(),
-        if dry_run { " (dry run)" } else { "" }
-    )];
+    let mut notes = live.start_hygiene(dry_run);
     match housekeeping::survey(&pass.root, &pass.foreign_lanes) {
         Ok((lanes, orphans)) => {
             let steps = housekeeping::plan(lanes, orphans, &pass.changes);
@@ -1050,6 +1138,7 @@ pub(super) fn run(start: &Path, args: &super::land_args::RunArgs) -> Result<()> 
         vendor: args.vendor.clone(),
         gitlab: false,
         handles: Vec::new(),
+        hygiene: None,
         root: root.clone(),
     };
     let mut last: Vec<Pr> = Vec::new();
