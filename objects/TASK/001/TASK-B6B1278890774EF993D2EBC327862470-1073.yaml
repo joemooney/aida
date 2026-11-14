@@ -445,12 +445,20 @@ description: |
   ### finding-hash:2a99ebfc
 
   store::read_regular (aida-cli-lib/src/gate/ledger/store.rs:164) checks is_file by path, then opens without O_NONBLOCK. A FIFO swapped in between the two can still block the lossy reader, even though the doc comment says it never hangs. Opening with O_NONBLOCK|O_NOFOLLOW-free flags and then fstat-checking would close the window.
+
+
+  ## Findings from PR-3987
+  Reviewed sha: c937c805e96259611fa69e654ebb20fb0ee5f191
+
+  ### finding-hash:96ff0aa3
+
+  aida-cli/tests/support/test_git.rs:205 enroll_synthetic_home (third copy of the fixture) still resolves authority via ancestor discovery with only a temp-dir check: called on a root without its own .git while /tmp/.git exists, it would write aida-allocation.toml into /tmp/.git. Apply the same root-local/linked-worktree confinement there.
 status: Draft
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-13T20:01:56.623034248Z
-modified_at: 2026-11-14T07:58:02.956749008Z
+modified_at: 2026-11-14T08:30:56.321054103Z
 req_type: Task
 tags:
 - carried-finding:BUG-2543:2a99ebfc
@@ -507,6 +515,7 @@ tags:
 - carried-finding:PR-3983:76a786ef
 - carried-finding:PR-3983:7bbbf9a9
 - carried-finding:PR-3983:dfed3eb6
+- carried-finding:PR-3987:96ff0aa3
 - carried-finding:PR-3990:2a99ebfc
 - carried-finding:PR-3990:6935f83d
 - carried-finding:PR-3994:46a7a9dc
@@ -552,6 +561,7 @@ tags:
 - carried-from:PR-3973
 - carried-from:PR-3979
 - carried-from:PR-3983
+- carried-from:PR-3987
 - carried-from:PR-3990
 - carried-from:PR-3994
 - carried-from:PR-3998
@@ -590,6 +600,7 @@ tags:
 - finding-hash:7bbbf9a9
 - finding-hash:7ce2cb14
 - finding-hash:8a49a174
+- finding-hash:96ff0aa3
 - finding-hash:97d326dd
 - finding-hash:ac11f20d
 - finding-hash:bf60843e
@@ -624,6 +635,7 @@ tags:
 - from-review:PR-3973
 - from-review:PR-3979
 - from-review:PR-3983
+- from-review:PR-3987
 - from-review:PR-3990
 - from-review:PR-3994
 - from-review:PR-3998
@@ -801,6 +813,11 @@ history:
   author: joe
   timestamp: 2026-11-14T07:58:04.457246994Z
   session_id: 01a1d90ca510
+  changes: []
+- id: 01a1d92e-63c9-7f53-b730-69dbf0a472ed
+  author: joe
+  timestamp: 2026-11-14T08:30:58.505853436Z
+  session_id: 01a1d92b3c7c
   changes: []
 filed_at:
   code_sha: 91fe1e337894199f15365d3f8ecfaf81366f8291
