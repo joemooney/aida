@@ -386,6 +386,7 @@ fn worker_ambient_env(
 #[cfg(test)]
 mod env_passthrough_tests {
     // trace:STORY-2765 | ai:codex
+    #[cfg(unix)]
     #[test]
     fn story_2765_detached_worker_child_keeps_track() {
         let env = super::worker_ambient_env([("AIDA_TRACK".into(), "integration".into())], &[]);

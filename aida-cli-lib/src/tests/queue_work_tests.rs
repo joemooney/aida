@@ -5281,6 +5281,7 @@ fn story_2749_auto_complete_head_skips_operator_track_on_an_operator_launcher() 
 }
 
 // trace:STORY-2765 | ai:codex
+#[cfg(unix)]
 #[test]
 fn story_2765_real_child_inherits_projected_track() {
     let parent = aida_core::exec_context::Environment::from_pairs([(
