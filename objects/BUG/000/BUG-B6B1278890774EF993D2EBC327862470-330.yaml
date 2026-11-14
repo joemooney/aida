@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-13T20:52:54.357683400Z
-modified_at: 2026-11-14T12:02:03.707016557Z
+modified_at: 2026-11-14T12:14:45.751771050Z
 req_type: Bug
 tags:
 - perf
@@ -94,6 +94,18 @@ comments:
   modified_at: 2026-11-14T11:39:11.066434499Z
   session_id: 01a1d8f3-f948-7072-b174-fa9507ed074b
   harness_version: 2.1.325 (Claude Code)
+- id: 01a1d9fb-45f7-77a1-99d9-bfc256121f02
+  author: dirtlab
+  content: |
+    Round 2 final validation and handoff: no findings disputed. Existing branch commit 3f9d752f6d addresses findings 1-5: fresh store/code remote containment before reuse, a real bare-origin db_sync_local_window fast-path test with 1200 ledger directories and a <10s bound, one fallible remote-head query, collision checks for pending and unpushed committed objects on both entry points, and restored coalescing/watermark operator controls. This follow-up adds a moving-code-remote coalescing race and verifies both races actually enter the reuse veto and observe the writer commit; clarifies the waiting diagnostic; documents the controls in the CLI manual. Also resolves the newer blocking fast-gate note by classifying all three controls as inherited non-authority configuration in AMBIENT_AIDA_KEYS.
+
+    Executed via the lane runner: cargo test --profile agent -p aida-cli-lib --lib -- store_pull_coalesce::tests: 15 passed, 0 failed, 0.82s. make check-ci-fast: 48 gates passed, including 51 Rust structural tests and story_2326_ambient_aida_inputs_have_a_disposition. rustfmt --check on all changed Rust files and git diff --check passed. An earlier filename-filter run matched zero tests and is not counted. GitHub refresh attempts in fast checks logged DNS failures but the gate completed successfully. Supplied host codegraph executable is absent; doctor reports missing client; used rg source navigation.
+
+    Native seat: four changed files remain uncommitted for host publication; no queue completion or review recording performed. Current controls supersede the original implementation comment: AIDA_PULL_COALESCE=0 disables coalescing, WAIT_SECS defaults to 1200, watermark TTL defaults to 900 and zero disables watermark reuse. Disabling coalescing alone leaves the watermark active.
+  created_at: 2026-11-14T12:14:45.751771050Z
+  modified_at: 2026-11-14T12:14:45.751771050Z
+  session_id: 01a1d9ef96df
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1d8a9-d3a1-7243-a396-3ba4fdaf7412
   author: joe
