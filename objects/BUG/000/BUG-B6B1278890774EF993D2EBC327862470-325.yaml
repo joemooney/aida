@@ -3,17 +3,16 @@ spec_id: BUG-b6b1278890774ef993d2ebc327862470-325
 agreed_id: BUG-2560
 title: Test fixture writes /tmp/.git/aida-allocation.toml and breaks tempdir mailbox tests on that host
 description: 'Seen twice on dell1 2026-11-13 (23:54, 05:04): /tmp/.git holding only aida-allocation.toml with version=1 authoritative=true (test-only fixture content, e.g. allocation_authority.rs home_fixture_backend ~1605). Every test tempdir under /tmp then resolves /tmp as its git root; mailbox tests fail (NotAGitCheckout, empty inbox). Fix: fixtures write authority strictly under their own tempdir; common_dir refuses a nonexistent gitdir target. Workaround: mv /tmp/.git aside (copies at dell1:/tmp/stray-dotgit-20261113*).'
-status: InProgress
+status: Completed
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-13T13:53:20.390665880Z
-modified_at: 2026-11-14T11:25:37.793484194Z
+modified_at: 2026-11-14T14:54:36.055520359Z
 req_type: Bug
 tags:
 - hygiene
 - tests
-- track:integration
 relationships:
 - rel_type:
     custom: implemented-by
@@ -108,6 +107,20 @@ history:
   session_id: 01a1d9c7155e
   harness_version: codex-cli 0.167.0
   changes: []
+- id: 01a1da8d-9986-7912-959d-e5616eed2494
+  author: aida-auto-bump
+  timestamp: 2026-11-14T14:54:35.398006998Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a1da8d-9c17-70f3-a7e1-474099c89387
+  timestamp: 2026-11-14T14:54:36.055510789Z
+  agent: aida
+  commit_sha: f5128d18cf1ff8dd78baa28e7bf57dcc4c69fc18
+  summary: 'BUG-2560 criteria checked one by one. (1) Fixtures write authority only under their own tempdir: covered by bug_2560_fixture_authority_stays_inside_root, bug_2560_cli_fixture_ignores_ancestor_git_identity and bug_2560_fixture_refuses_external_common_directory. (2) common_dir refuses a missing or file gitdir target: covered by bug_2560_missing_or_file_gitdir_refuses. The canonicalize-before-commondir change resolves paths the same way as before. Rework (a) linked worktrees stay valid: bug_2560_fixture_accepts_explicit_linked_worktree. Rework (b) the cli-lib duplicate fixture is fixed: CLI ancestor test. Rework (c) bug2406 nested-store approvals stay visible: bug_2560_cli_nested_store_preserves_project_identity, and the lane ran 67 bug2406 tests green. The enclosing-repo check requires HEAD and objects and stops below the temp dir, so a stray /tmp/.git is never adopted. Non-blocking: the core fixture does not preserve an enclosing project repo the way cli-lib does; I found no core caller that depends on it. CI fast tier is green; the full shards were skipped in the fast tier, so the full suite runs at train.'
+  review_verdict: approved
 filed_at:
   code_sha: c8bc6df24ed06dd1eb73f897e164f5381d6d6e91
   branch: integration
@@ -117,3 +130,7 @@ filed_at:
   vendor: claude
   session: 01a1d4ab-2dc9-7493-b77d-07f578345e59
   harness_version: 2.1.323 (Claude Code)
+implementation_info:
+  implemented: false
+  completed_at: 2026-11-14T14:54:35.398000169Z
+  completion_sha: f5128d18cf1ff8dd78baa28e7bf57dcc4c69fc18
