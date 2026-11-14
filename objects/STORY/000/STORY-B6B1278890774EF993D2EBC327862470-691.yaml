@@ -43,7 +43,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-13T16:52:56.270142081Z
-modified_at: 2026-11-13T23:51:32.656297843Z
+modified_at: 2026-11-14T00:14:42.699495648Z
 req_type: Story
 tags:
 - architecture
@@ -215,6 +215,17 @@ comments:
   created_at: 2026-11-13T23:50:25.092698489Z
   modified_at: 2026-11-13T23:50:25.092698489Z
   session_id: 01a1d72e-0d28-76e0-890c-867fba05abcf
+  harness_version: 2.1.325 (Claude Code)
+- id: 01a1d768-0c0b-76d2-aebf-bf8f8caca80f
+  author: joe
+  content: |-
+    Advisor 17:20 triage of the #3972 CHANGES REQUESTED verdict at 27dd911 (aggressive-triage order):
+    BLOCKING (correctness or acceptance): F1 ci_of_rollup counts superseded cancelled runs as Red; keep the latest run per check name (same as S2 condition 2). F2 the GitLab fallback derives every change UNKNOWN; treat an unreported rollup as Ci::None and fill the title. F3 the ATTENTION rule excludes READY; include stages with no live actor for over 2h, per the 2h metric. F4 an unreadable lease store silently drops lanes; surface it as a header warning or an ATTENTION entry.
+    ACCEPTED, moved to the S2 remainder: F5 the aida ps/status pointer (design item 4, not an acceptance criterion; one line, lands with S2); F7 multi-spec keying uses only the first spec, so the reason string is wrong (cosmetic); F6 was already deferred by the reviewer (hold stage label, carried by S2).
+    The next round is a scoped re-review of F1-F4 only.
+  created_at: 2026-11-14T00:14:42.699495648Z
+  modified_at: 2026-11-14T00:14:42.699495648Z
+  session_id: 01a1d73b-e31c-7f33-b2fe-cee145ddc6fb
   harness_version: 2.1.325 (Claude Code)
 history:
 - id: 01a1d5d3-fe28-7cc2-a7e3-638454ed4798
