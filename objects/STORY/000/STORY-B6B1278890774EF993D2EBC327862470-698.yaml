@@ -17,7 +17,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-13T22:18:52.888699274Z
-modified_at: 2026-11-14T08:48:53.511136881Z
+modified_at: 2026-11-14T08:57:48.453799068Z
 req_type: Story
 tags:
 - track:integration
@@ -80,6 +80,13 @@ comments:
   content: 'Correction: draft finding creation was refused before writing because the host WORK allocation file /home/dirtlab/ai/aida/.git/aida-work-dispenser.toml has mode 0664 (group/other writable). The CLI requests host chmod go-w on that file. This seat has read-only Git metadata, so no permission repair attempted. The structural-ratchet blocker remains captured in this spec comment instead.'
   created_at: 2026-11-14T08:48:53.511136881Z
   modified_at: 2026-11-14T08:48:53.511136881Z
+  session_id: 01a1d936bd99
+  harness_version: codex-cli 0.167.0
+- id: 01a1d946-f4a5-7f21-aa05-ec4a16a1bec8
+  author: dirtlab
+  content: 'Host fast-gate fix round: migrated the two production supervisor identity calls to aida_core::proc_identity. loop.json now carries optional ProcIdentity evidence; list accepts only Alive observations with matching recorded PID, and legacy/incomplete records display loop off. Added regression for live identity, changed starttime, PID mismatch and legacy string state. No ratchet baseline changes. Validation: launcher j20261114T085528905-2-0 passed all 51 aida-ci-guards tests, including the previously failing proc_identity_legacy_decisions_do_not_expand; launcher j20261114T085527751-2-0 passed all 7 story_2775 supervisor tests. rustfmt --check and git diff --check passed. Full fast suite was not repeated; the failing structural step was rerun in full. Only aida-cli-lib/src/deputy_shell/supervisor.rs changed, left uncommitted for host publication. Existing Refs declaration retained.'
+  created_at: 2026-11-14T08:57:48.453799068Z
+  modified_at: 2026-11-14T08:57:48.453799068Z
   session_id: 01a1d936bd99
   harness_version: codex-cli 0.167.0
 history:
