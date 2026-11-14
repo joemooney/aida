@@ -41,6 +41,28 @@ fn git(root: &Path, args: &[&str]) -> Result<String> {
     Ok(String::from_utf8_lossy(&out.stdout).trim_end().to_string())
 }
 
+/// The tracked files of `root` that differ from its HEAD, as `git status`
+/// lists them. A status walks the tree, so it is built from the hardened
+/// host git command and not from the raw wrapper above.
+// trace:STORY-2772 | ai:claude
+fn tracked_changes(root: &Path) -> Result<String> {
+    let args = ["status", "--porcelain", "--untracked-files=no"];
+    let out = aida_core::git_ops::host_git_command(root)
+        .args(args)
+        .env_remove("GIT_DIR")
+        .env_remove("GIT_WORK_TREE")
+        .stdin(Stdio::null())
+        .output()
+        .with_context(|| format!("running git {}", args.join(" ")))?;
+    anyhow::ensure!(
+        out.status.success(),
+        "git {} failed: {}",
+        args.join(" "),
+        String::from_utf8_lossy(&out.stderr).trim()
+    );
+    Ok(String::from_utf8_lossy(&out.stdout).trim_end().to_string())
+}
+
 /// The spec ids the commit `subjects` complete, upper-cased and deduplicated
 /// only as literal tokens, in first-seen order. Padding-equal tokens
 /// (`BUG-9`, `BUG-09`) stay distinct: each may name its own stored spec, so
@@ -319,7 +341,7 @@ fn run_merge(root: &Path, pr: u64, push: bool, dry_run: bool) -> Result<()> {
         }
     );
     anyhow::ensure!(
-        git(root, &["status", "--porcelain", "--untracked-files=no"])?.is_empty(),
+        tracked_changes(root)?.is_empty(),
         "tracked changes are present; commit or discard them first"
     );
     git(root, &["fetch", "-q", "origin", "integration"])?;
