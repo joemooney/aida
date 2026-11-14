@@ -15,12 +15,12 @@ description: |
   - red 2-member train -> exactly two one-member sub-trains next, no same-composition rerun
   - red 1-member train -> member ejected after ONE CI run
   - module docs, the train PR close comment, CLI help and the discipline/docs prose no longer claim a rerun
-status: NeedsAttention
+status: Completed
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-14T12:59:48.856339929Z
-modified_at: 2026-11-14T16:33:45.051390675Z
+modified_at: 2026-11-14T18:05:10.310928802Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -117,6 +117,20 @@ history:
   session_id: 01a1dad19ec9
   harness_version: 2.1.325 (Claude Code)
   changes: []
+- id: 01a1db3c-1269-7442-9e38-0fb03ee97468
+  author: aida-auto-bump
+  timestamp: 2026-11-14T18:05:09.609619081Z
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Completed
+processing_record:
+- id: 01a1db3c-1526-76b3-8d9e-4f8bd7efc993
+  timestamp: 2026-11-14T18:05:10.310923965Z
+  agent: aida
+  commit_sha: 880aa4c3710223833dd3732b4252ef37822c899c
+  summary: All three criteria covered by named driver tests and inspected prose; the one blocking finding from 759d2a2 (train PR close comment claimed a retest on a second no-result red) is fixed at 9d9213f. CI fast tier green at head; test shards skipped by the fast tier, so the full suite runs on the train.
+  review_verdict: approved
 filed_at:
   code_sha: 166920a3bf8bd517e8d670a09dd3a7a3de96b7f9
   branch: worktree-agent-a132ca8b8dbec7979
@@ -125,17 +139,13 @@ filed_at:
   aida_build_sha: 166920a3bf8
   vendor: claude
   session: fc28c702-2f6e-419e-b882-6ddfeb9134ff
+implementation_info:
+  implemented: false
+  completed_at: 2026-11-14T18:05:09.609612989Z
+  completion_sha: 880aa4c3710223833dd3732b4252ef37822c899c
 attention_reason:
   category: other
   detail: 'work complete locally but unable to publish: the seat has no valid GitHub credential (gh token invalid; git push cannot authenticate), so the rework commit f71bbde68a for PR #4030 is not on origin'
   lean: 'branch is ready; from the seat worktree run git push --force-with-lease origin fix/train-no-blind-rerun-BUG-2577 (aida ship rebased it onto origin/main), then re-review PR #4030'
   raised_by: implementer
   raised_at: 2026-11-14T15:05:42.835781549Z
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: 'Driver and classifier logic are correct and tested for all three criteria, but the train PR close comment claims a retest that does not happen on a second no-result red, and no test carries a criterion anchor so aida criteria still reports all three untested. CI at head is fast tier (shards skipped): new tests not run by CI, verified by source trace.'
-  recovery_hint: address the review findings, move BUG-2577 back to In Progress, and clear the PR hold only after approval
-  shelved_by: reviewer
-  shelved_at: 2026-11-14T16:12:18.749811548Z
