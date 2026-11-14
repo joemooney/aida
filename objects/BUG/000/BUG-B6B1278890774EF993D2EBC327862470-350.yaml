@@ -12,12 +12,12 @@ description: |-
   Wanted: (1) the relay checks the parent grant's remaining life before it ends the outgoing session; under a threshold (e.g. 2h) it warns in the seat's status line and mails the advisor and product seats; (2) when the grant is already expired at rotation, the relay does not end the working session: it keeps it running, prints the exact operator command that renews the grant, and retries the relaunch when a valid grant appears; (3) 'aida doctor' and the session-start banner show the parent grant expiry beside the mandate expiry; (4) consider letting an active mandate that covers the seat renew or stand in for the relay's parent grant, as a project setting.
 
   Acceptance: a relay whose parent grant expires mid-run survives the next rotation attempt without losing the seat; the expiry is visible at least 2h ahead in the banner and by mail; the renewal command is printed verbatim.
-status: Approved
+status: InProgress
 priority: High
-owner: ''
+owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-14T18:25:05.674074503Z
-modified_at: 2026-11-14T18:30:23.338286039Z
+modified_at: 2026-11-14T19:10:14.397207431Z
 req_type: Bug
 tags:
 - landing
@@ -33,6 +33,13 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Approved
+- id: 01a1db77-a77d-7181-a87d-daf4635f7b35
+  author: aida-session-start
+  timestamp: 2026-11-14T19:10:14.397205862Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: 96fc262834527304fe85fc9ee32e4d04f1aaf4ea
   branch: main
