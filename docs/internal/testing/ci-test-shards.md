@@ -8,7 +8,8 @@
 
 Ordinary PR events default to **FAST**: the source guards from
 `make check-ci-fast` plus `cargo check --profile dev --workspace --tests`, in
-parallel. No test shard or binary contract runs. The warm-cache wall-time
+parallel. The FAST source gates also execute the dependency-light
+`aida-ci-guards` tests; no application test shard or binary contract runs. The warm-cache wall-time
 target is six minutes; cold compilation can take longer. The compile job keeps
 40 minutes of headroom. Feature-disabled and TUI Cargo checks remain FULL gates.
 
@@ -136,3 +137,44 @@ Do not concatenate interleaved multi-job logs before parsing them.
 Baseline: main `6657ffff6d`, run `39476669725`, **11,799 passed + ignored**
 tests (lib-0 3,887, lib-1 5,404, cli-0 188, cli-1 143, rest 2,177). PR timing and coverage evidence belongs in the PR body; the
 12-minute target requires an actual completed PR run.
+
+<!-- trace:TASK-3791 | ai:codex -->
+
+FAST runs `Rust structural ratchets` through the same Build step and
+`ci-gate-tiers.toml` classification as `make check-ci-fast`. Its two-minute
+step budget includes compilation of a small crate with regex, syn, TOML and
+YAML/JSON dependencies, without compiling the application or its native libraries.
+`aida-ci-guards/lib.rs` is the checked selection: it imports the original FULL
+shard test modules by path, including launch/env-key, raw Git/forge, vendor
+literal, entry-point, display-ID, config-trust, liveness, grant-env and CI-gate inventories. The
+launch key tables live in a shared data-only module re-exported by launch_policy.
+The existing store-writer inventory and its mutation fixtures remain FAST.
+
+`tests/test_ci_structural_guards.py` checks new ratchet/inventory test names
+and ratchet/inventory test-module conventions across workspace Rust sources.
+It masks Rust comments and string fixtures before discovery. Mixed runtime
+suites retain explicit per-test exclusions in
+`scripts/ci-structural-exclusions.json`; additions to those suites still need a
+new reviewed disposition. New structural guards should use `ratchet` or
+`inventory` in the test name (or a `*_ratchet_tests.rs` / `*_inventory_tests.rs`
+module). The audit rejects missing selection and stale exclusions.
+
+The #3926 regression is exercised by
+`story_2326_ambient_aida_inputs_have_a_disposition`: introducing
+a production literal `"AIDA_SWEEP_PARENT"` without adding it to the shared
+key inventory makes this FAST test fail with `unclassified production input
+AIDA_SWEEP_PARENT`. Restore the inventory before publishing. FAST remains a
+train-only publication proof; it does not authorize direct shipping.
+
+Lane validation for TASK-3791: all 50 shared tests passed in 6.18 seconds;
+seven core launch-policy tests passed, and the three selection-audit plus five
+CI-tier fixtures passed. Injecting an unclassified production
+`AIDA_SWEEP_PARENT` literal produced the expected FAST-test refusal; the temporary
+fixture was removed. These are lane measurements, not hosted-runner timings.
+
+The #3926 lib-0 failure is also covered by the shared
+`resolve_aida_exe_ratchet_tests::no_cli_source_outside_the_resolver_uses_raw_current_executable_lookup`
+guard. Its dedicated ratchet module runs in FAST and FULL; the selection audit
+explicitly verifies that removing that module from FAST fails coverage. Adding
+`std::env::current_exe()` outside the resolver makes the shared guard fail.
+<!-- trace:TASK-3791 | ai:codex -->

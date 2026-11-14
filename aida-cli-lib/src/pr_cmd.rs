@@ -46,6 +46,13 @@ pub(crate) fn handle_pr_command(cmd: &PrCommand) -> Result<()> {
         PrCommand::State(args) => crate::pr_state::run(args),
         // Internal worker preserves the existing cleanup gates after ship exits.
         // trace:BUG-2384 | ai:codex
+        // trace:BUG-2535 | ai:codex
+        PrCommand::PostShipSweep => {
+            let inputs = aida_core::exec_context::Environment::capture();
+            let _lock = verify_post_ship_sweep_handoff(&inputs)?;
+            run_post_ship_sweep();
+            Ok(())
+        }
         PrCommand::PostShipCleanup {
             pr,
             lease,
@@ -4724,8 +4731,119 @@ fn post_ship_cleanup_worker(args: PostShipCleanupArgs<'_>) -> Result<()> {
         };
         log_ship_activity(&main, args.pr, &ShipStep::EndLease, &outcome);
     }
+    // A process boundary covers the entire sweep, including synchronous
+    // filesystem reads and probe setup outside the cooperative scan deadline.
+    // Keep the cleanup lock in this parent until the sweep has stopped.
+    // trace:BUG-2535 | ai:codex
+    if args.sweep {
+        let mut cmd = std::process::Command::new(pr_ship_post_merge_aida_exe());
+        cmd.current_dir(&main).args(["pr", "post-ship-sweep"]);
+        if let Err(error) =
+            run_post_ship_sweep_bounded(cmd, doctor_cmd::POST_SHIP_GC_BUDGET, cleanup_lock)
+        {
+            eprintln!(
+                "  post-merge cleanup deferred: {error:#}; run `aida doctor` to inspect and retry"
+            );
+        }
+    }
+    if let Some(failure) = end_failure {
+        anyhow::bail!(failure);
+    }
+    Ok(())
+}
+
+// The inherited open file description retains the flock even if the supervisor
+// exits while SIGKILL is pending in uninterruptible I/O.
+// trace:BUG-2535 | ai:codex
+const SWEEP_LOCK_FD: std::os::fd::RawFd = 198;
+
+// trace:BUG-2535 | ai:codex
+fn verify_post_ship_sweep_handoff(
+    inputs: &aida_core::exec_context::Environment,
+) -> Result<std::fs::File> {
+    let main = main_worktree_root_from(&find_project_root()?);
+    verify_sweep_lock(&main.join(".aida/post-ship-cleanup.lock"), inputs)
+}
+
+// trace:BUG-2535 | ai:codex
+fn verify_sweep_lock(
+    path: &std::path::Path,
+    inputs: &aida_core::exec_context::Environment,
+) -> Result<std::fs::File> {
+    use fs2::FileExt;
+    use std::os::{fd::FromRawFd, unix::fs::MetadataExt};
+    anyhow::ensure!(
+        inputs.var("AIDA_SWEEP_PARENT").ok()
+            == Some(unsafe { libc::getppid() }.to_string().as_str()),
+        "post-ship-sweep requires a supervisor lock handoff"
+    );
+    let fd = unsafe { libc::fcntl(SWEEP_LOCK_FD, libc::F_DUPFD_CLOEXEC, 3) };
+    anyhow::ensure!(fd >= 0, "missing inherited cleanup lock");
+    let inherited = unsafe { std::fs::File::from_raw_fd(fd) };
+    let independent = std::fs::OpenOptions::new()
+        .read(true)
+        .write(true)
+        .open(path)?;
+    let actual = inherited.metadata()?;
+    let expected = independent.metadata()?;
+    anyhow::ensure!(
+        actual.is_file() && actual.dev() == expected.dev() && actual.ino() == expected.ino(),
+        "cleanup lock identity mismatch"
+    );
+    // A new description must conflict while the inherited description must
+    // already own the exclusive lock. This also refuses an unlocked fd.
+    anyhow::ensure!(
+        matches!(independent.try_lock_exclusive(), Err(e)
+        if e.kind() == std::io::ErrorKind::WouldBlock),
+        "cleanup lock is not held"
+    );
+    inherited
+        .try_lock_exclusive()
+        .context("cleanup lock handoff does not own the lock")?;
+    // Only the sweep itself needs the descriptor, not its exec descendants.
+    unsafe {
+        libc::close(SWEEP_LOCK_FD);
+    }
+    Ok(inherited)
+}
+
+// Bound the caller's termination wait. A separate reaper owns both resources
+// until wait confirms exit; the sweep's inherited descriptor additionally keeps
+// serialization intact if this supervisor process exits first.
+// trace:BUG-2535 | ai:codex
+fn reap_sweep_bounded(
+    mut child: std::process::Child,
+    lock: std::fs::File,
+    budget: std::time::Duration,
+    mut poll: impl FnMut(&mut std::process::Child) -> std::io::Result<Option<std::process::ExitStatus>>,
+) {
+    let started = std::time::Instant::now();
+    loop {
+        if matches!(poll(&mut child), Ok(Some(_))) {
+            return;
+        }
+        if started.elapsed() >= budget {
+            break;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(10));
+    }
+    std::thread::spawn(move || {
+        let _lock = lock;
+        // Never release ownership on an observation error.
+        loop {
+            if child.wait().is_ok() {
+                break;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(100));
+        }
+    });
+}
+
+// trace:BUG-2535 | ai:codex
+fn run_post_ship_sweep() {
+    crate::seat_clone::scope_probe_budget_to_ship_cleanup();
     run_post_merge_worktree_gc(
-        args.sweep,
+        true,
         false,
         || {
             crate::session_reap::run_session_reap(crate::session_reap::ReapOptions {
@@ -4740,10 +4858,77 @@ fn post_ship_cleanup_worker(args: PostShipCleanupArgs<'_>) -> Result<()> {
         worktree_gc::run_merged_agent_worktree_gc_quiet,
         &mut std::io::stderr(),
     );
-    if let Some(failure) = end_failure {
-        anyhow::bail!(failure);
+}
+
+/// Inherit the terminal and progress streams while enforcing one wall-clock
+/// ceiling over reap, discovery, clone probes and pruning together.
+// trace:BUG-2535 | ai:codex
+fn run_post_ship_sweep_bounded(
+    mut cmd: std::process::Command,
+    budget: std::time::Duration,
+    cleanup_lock: std::fs::File,
+) -> Result<()> {
+    use std::os::{fd::AsRawFd, unix::process::CommandExt};
+    let lock_fd = cleanup_lock.as_raw_fd();
+    cmd.env("AIDA_SWEEP_PARENT", std::process::id().to_string());
+    unsafe {
+        cmd.pre_exec(move || {
+            if libc::dup2(lock_fd, SWEEP_LOCK_FD) < 0 {
+                return Err(std::io::Error::last_os_error());
+            }
+            if libc::fcntl(SWEEP_LOCK_FD, libc::F_SETFD, 0) < 0 {
+                return Err(std::io::Error::last_os_error());
+            }
+            Ok(())
+        });
     }
-    Ok(())
+    cmd.process_group(0);
+    let mut forwarding = crate::forwarded_signals::Forwarding::install()?;
+    let started = std::time::Instant::now();
+    let mut child = cmd.spawn_retrying_etxtbsy()?;
+    loop {
+        let signal = forwarding.take();
+        let result = if signal.is_some() {
+            Ok(None)
+        } else {
+            child.try_wait()
+        };
+        match result {
+            Ok(Some(status)) => {
+                anyhow::ensure!(status.success(), "cleanup sweep exited with {status}");
+                return Ok(());
+            }
+            Ok(None) if signal.is_none() && started.elapsed() < budget => {
+                std::thread::sleep(std::time::Duration::from_millis(20));
+            }
+            result => {
+                // Probe subprocesses may create their own groups. Stop the
+                // whole observed tree as well as the sweep's original group.
+                let tree = crate::exit_signal::collect_process_tree(child.id());
+                crate::forwarded_signals::signal_child_tree(child.id(), &tree, libc::SIGKILL);
+                crate::kill_process_group(child.id());
+                let _ = child.kill();
+                reap_sweep_bounded(
+                    child,
+                    cleanup_lock,
+                    std::time::Duration::from_millis(200),
+                    |child| child.try_wait(),
+                );
+                if let Some(signal) = signal {
+                    drop(forwarding);
+                    crate::forwarded_signals::reraise(signal);
+                    anyhow::bail!("cleanup sweep interrupted by signal {signal}");
+                }
+                if let Err(error) = result {
+                    return Err(error.into());
+                }
+                anyhow::bail!(
+                    "cleanup sweep exceeded its {}s budget; termination requested; cleanup lock retained until exit; inspect remaining work",
+                    budget.as_secs()
+                );
+            }
+        }
+    }
 }
 
 /// Why a post-ship cleanup run did not succeed: the worker never started
@@ -4808,8 +4993,8 @@ fn run_ship_cleanup_attended(
     Ok(true)
 }
 
-// The foreground wait is bounded, but cleanup itself is never killed midway
-// through mail retention or salvage. A detached worker keeps its safety gates.
+// The foreground wait is bounded. Lease end can continue in the background;
+// the step-6 sweep has its own supervised budget and keeps its safety gates.
 // `true` means completed, `false` means continuing in the background.
 // trace:BUG-2384 | ai:codex
 fn run_ship_cleanup_command(
@@ -4881,8 +5066,8 @@ fn run_ship_cleanup_command(
 
 /// Step 6 of `aida pr ship`: after a merge this run performed, reap exited
 /// sessions (`reap`) and prune merged agent worktrees (`prune`), in that
-/// order. `--no-cleanup` skips both and says so. Only the prune runs under the
-/// post-ship time budget; the reap is not bounded. Best-effort: a failure is
+/// order. `--no-cleanup` skips both and says so. The worker supervisor bounds
+/// the entire phase; prune also keeps its cooperative deadline. A failure is
 /// printed as a warning and never fails the ship.
 // trace:BUG-B6B1278890774EF993D2EBC327862470-033 | ai:claude
 pub(crate) fn run_post_merge_worktree_gc(
@@ -10577,3 +10762,8 @@ mod bug_2384_cleanup_tests {
 #[cfg(test)]
 #[path = "tests/bug_2515_gitlab_ship_tests.rs"]
 mod bug_2515_gitlab_ship_tests;
+
+// trace:BUG-2535 | ai:codex
+#[cfg(all(test, target_os = "linux"))]
+#[path = "tests/bug_2535_tests.rs"]
+mod bug_2535_tests;
