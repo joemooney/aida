@@ -85,7 +85,8 @@ mod client;
 // trace:TASK-3425 | ai:codex
 // Direct framework imports are also used by the MCP transport crate.
 // trace:TASK-3448 | ai:codex
-pub mod cmdkit;
+// trace:TASK-3783 | ai:codex
+pub use aida_cmdkit as cmdkit;
 pub mod command_registry;
 
 // Inject the production command tree and decoder at the composition root.
@@ -246,7 +247,8 @@ mod drain_lock;
 mod drain_signal;
 mod freshness_gate;
 // trace:BUG-1622 | ai:claude — keeps user-supplied refs from reading as git options.
-mod git_arg_guard;
+// trace:TASK-3783 | ai:codex
+pub(crate) use aida_term::git_arg_guard;
 pub mod git_backend_cmd;
 pub(crate) mod intent_capture;
 mod machine_readiness;
@@ -492,7 +494,8 @@ mod import_plan_cmd;
 mod interview;
 mod regen; // trace:TASK-1729 | ai:codex
            // trace:STORY-633 | ai:claude — toml_edit writer for `aida config glyph`.
-mod glyph_config;
+           // trace:TASK-3783 | ai:codex
+pub(crate) use aida_term::glyph_config;
 pub mod glyphs;
 pub mod goal_cmd;
 // trace:EPIC-36 | ai:claude — session-vs-drain misclassification-gap metric.
@@ -590,7 +593,8 @@ mod metrics;
 mod metrics_cmd;
 // trace:TASK-1951 trace:TASK-2003 | ai:claude
 mod needs_attention_lens;
-mod network_retry;
+// trace:TASK-3783 | ai:codex
+pub(crate) use aida_term::network_retry;
 mod node_cmd;
 mod not_found;
 mod pr_claim_surface;
@@ -766,7 +770,8 @@ mod test_home;
 #[cfg(test)]
 mod test_timing;
 // trace:TASK-964 | ai:claude — TOON agent-output encoder (token-efficient).
-mod toon;
+// trace:TASK-3783 | ai:codex
+pub(crate) use aida_term::toon;
 mod trace_cmd;
 mod tracker_cmd;
 mod triage_cmd;
@@ -1500,3 +1505,5 @@ mod bug_1638_race_seam_tests;
 #[cfg(test)]
 #[path = "tests/stale_cache_fixture.rs"]
 mod stale_cache_fixture;
+
+mod reviewer_completion; // trace:BUG-2546 | ai:codex

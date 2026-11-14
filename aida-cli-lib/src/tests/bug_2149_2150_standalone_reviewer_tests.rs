@@ -1094,6 +1094,7 @@ fn bug2187_granted_reviewer_resume_sets_identity() {
         None,
         false,
         Some("grant-id"),
+        None,
     )
     .unwrap();
     assert!(status.success(), "the resumed reviewer saw no identity");

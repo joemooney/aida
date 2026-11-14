@@ -1596,6 +1596,27 @@ fn choose_current(
         }
         return Some(terminal_wait_overlay(start, key, remote));
     }
+    choose_local_current(start, key, path, file_body)
+        .map(|current| terminal_wait_overlay(start, key, current))
+}
+
+/// Raw local handoff/ledger evidence for reviewer shutdown only. Signed
+/// publications and lifecycle overlays omit the child grant or replace the
+/// recording, so they cannot establish this launch's completion. Acceptance
+/// continues to use the effective verdict readers.
+// trace:BUG-2546 | ai:codex
+pub(crate) fn local_completion_verdict(start: &Path, key: &str) -> Option<CurrentVerdict> {
+    let path = verdict_path(start, key);
+    let file_body = read_verdict_body(&path).ok();
+    choose_local_current(start, key, path, file_body)
+}
+
+fn choose_local_current(
+    start: &Path,
+    key: &str,
+    path: PathBuf,
+    file_body: Option<String>,
+) -> Option<CurrentVerdict> {
     // A current file that exists but the anchored reader refuses (unreadable,
     // or a linked file or directory) is not evidence, and the ledger must not
     // answer in its place: every gate fails closed on it (TASK-1801).
@@ -1629,9 +1650,7 @@ fn choose_current(
                 },
             })
         });
-    ledger
-        .or_else(|| file_body.map(from_file))
-        .map(|current| terminal_wait_overlay(start, key, current))
+    ledger.or_else(|| file_body.map(from_file))
 }
 
 /// Read the recorded verdict of ONE requirement known by several labels (its

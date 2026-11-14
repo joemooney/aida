@@ -6697,6 +6697,31 @@ pub(crate) fn run_standalone_reviewer(
     // contained reviewer whose grant key cannot be held before it spawns.
     // trace:BUG-b6b1278890774ef993d2ebc327862470-045 | ai:claude
     refuse_unpresentable_contained_reviewer(contained)?;
+    let pr_spec_ids: Vec<String> = fetch_pr_ship_metadata_via_forge(project_root, pr)
+        // trace:BUG-2515 | ai:codex
+        // Standalone PR reviewers can lack local forge configuration (for
+        // example in a scratch launch root). Preserve their GitHub recovery
+        // lookup without redirecting a configured GitLab MR to GitHub.
+        .or_else(|err| {
+            if crate::forge::resolve_forge_kind(project_root) != crate::forge::ForgeKind::None {
+                return Err(err);
+            }
+            crate::forge::forge_for_kind(project_root, crate::forge::ForgeKind::GitHub)
+                .change_title_and_body(pr)
+                .map(|(title, body)| crate::pr_cmd::PrShipMetadata {
+                    title,
+                    body,
+                    number: Some(pr),
+                })
+        })
+        .map(|meta| review_calibration_spec_ids(project_root, &meta.title, branch, &meta.body))
+        .unwrap_or_default();
+
+    // trace:BUG-2546 | ai:codex
+    let _completion = no_human
+        .then(|| crate::reviewer_completion::Scope::new(project_root, worktree, pr, &pr_spec_ids));
+    let policy_prompt = format!("{prompt}\n\nReviewer policy: do not run Cargo or local test/build commands unless explicitly requested by the operator. Use source and existing CI evidence. After successfully recording your verdict, give a brief final response and exit immediately; do not perform further work.");
+    let prompt = policy_prompt.as_str();
     let watch_prompt = crate::review_watch::reviewer_launch_prompt(project_root, pr, prompt)?;
     let prompt = watch_prompt.as_deref().unwrap_or(prompt);
     // Keep a recoverable final draft even if a tool refuses the recording.
@@ -6827,6 +6852,9 @@ pub(crate) fn run_standalone_reviewer(
                             host_main, // trace:TASK-2032 | ai:claude
                         },
                     )?;
+                    // Codex resume accepts a trailing message for this turn.
+                    // trace:BUG-2546 | ai:codex
+                    cmd.arg(session::codex_interactive_prompt(prompt));
                     cmd.current_dir(worktree);
                     // trace:BUG-2386 | ai:claude
                     if let Err(error) = session::finalize_codex_resume(&mut cmd, project_root) {
@@ -6876,6 +6904,7 @@ pub(crate) fn run_standalone_reviewer(
                             permission_mode,
                             contained,
                             Some(&grant.id),
+                            Some(prompt),
                         )?,
                         None,
                         Some(grant.id),
@@ -6990,26 +7019,6 @@ pub(crate) fn run_standalone_reviewer(
     // Commit it now, or the mandate's fail-closed store snapshot refuses
     // every ship until someone commits by hand. trace:BUG-2180 | ai:claude
     store_commit.commit();
-
-    let pr_spec_ids: Vec<String> = fetch_pr_ship_metadata_via_forge(project_root, pr)
-        // trace:BUG-2515 | ai:codex
-        // Standalone PR reviewers can lack local forge configuration (for
-        // example in a scratch launch root). Preserve their GitHub recovery
-        // lookup without redirecting a configured GitLab MR to GitHub.
-        .or_else(|err| {
-            if crate::forge::resolve_forge_kind(project_root) != crate::forge::ForgeKind::None {
-                return Err(err);
-            }
-            crate::forge::forge_for_kind(project_root, crate::forge::ForgeKind::GitHub)
-                .change_title_and_body(pr)
-                .map(|(title, body)| crate::pr_cmd::PrShipMetadata {
-                    title,
-                    body,
-                    number: Some(pr),
-                })
-        })
-        .map(|meta| review_calibration_spec_ids(project_root, &meta.title, branch, &meta.body))
-        .unwrap_or_default();
 
     // BUG-2149: a contained reviewer can only write inside its review
     // worktree, so its `aida review record` lands there and never reaches
