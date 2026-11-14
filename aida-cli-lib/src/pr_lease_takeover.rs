@@ -186,37 +186,14 @@ fn check_pr_lease_with_force_claim(
     } else {
         return PrLeaseCheck::NotProvable("this lease no longer holds the ownership record".into());
     };
-    match crate::ownership::reader::owner(&cleanup_record) {
+    let owner = if force_claim {
+        crate::ownership::reader::force_claim_clone_owner(&cleanup_record, lease)
+    } else {
+        crate::ownership::reader::owner(&cleanup_record)
+    };
+    match owner {
         crate::ownership::OwnerVerdict::Alive { .. } => return PrLeaseCheck::Live,
-        crate::ownership::OwnerVerdict::Unknown { why } => {
-            // Admission refusal is not process liveness. Require a local,
-            // observable recorded worker PID to be absent; never infer death
-            // from a changed start identity or an expired heartbeat here.
-            // trace:BUG-2552 | ai:codex
-            let refused_holder = cleanup_record.holder.as_ref().is_some_and(|holder| {
-                !holder.witnesses.is_empty()
-                    && holder.witnesses.iter().all(|witness| {
-                        matches!(witness.kind, crate::ownership::WitnessKind::Process { .. })
-                            && witness
-                                .admission
-                                .as_ref()
-                                .is_some_and(|record| record.refusal().is_some())
-                    })
-            });
-            let dead = force_claim
-                && refused_holder
-                && lease.tree_kind == crate::seat_clone::TreeKind::Clone
-                && lease.hostname == crate::coordination::hostname()
-                && aida_core::pid_observer::PidObserver::current().can_observe(lease.pid_namespace)
-                && crate::leases::lease_holder_record(lease)
-                    .is_some_and(|record| record.refusal().is_some())
-                && lease
-                    .active_pid
-                    .is_some_and(|pid| aida_core::liveness::process_provably_dead(pid, None));
-            if !dead {
-                return PrLeaseCheck::NotProvable(why);
-            }
-        }
+        crate::ownership::OwnerVerdict::Unknown { why } => return PrLeaseCheck::NotProvable(why),
         crate::ownership::OwnerVerdict::Dead { .. } => {}
     }
     let seat = read_seat(main, lease, pr_branch);
