@@ -1,0 +1,30 @@
+id: 01a1daaa-e7aa-76f2-a2b5-3c5558582a55
+spec_id: BUG-b6b1278890774ef993d2ebc327862470-348
+agreed_id: BUG-2583
+title: Train opening fails for every train when any open PR has over 250 commits (incomplete commit page)
+description: |
+  Observed 2026-11-14 08:06 and 08:20 MST. Train 27's bisect and train 30 (#4028 alone, unrelated to #4038) both stopped at opening: "the train stopped early: train opening result is unconfirmed for `train/...`: cannot establish open changes for BUG-2578: CliFailed("invalid or incomplete commit page for PR 4038"); journal retained for retry". PR #4038 had 254 commits against main (an integration-based branch opened against main). The GitHub PR-commits API pages stop at 250, so the open-changes scan could not complete, and every train refused to open while #4038 stayed open. Retargeting #4038 to integration (7 commits) cleared it.
+
+  Acceptance criteria:
+  1. The open-changes scan that train opening runs does not fail on a PR with more than 250 commits: page through correctly, or use a bounded query that needs no full commit list (for example, the PR title and head ref for spec IDs).
+  2. An unreadable unrelated PR does not stop a train: it is reported and skipped, and the train refuses only when the unreadable PR could name one of the train's own specs.
+  3. Test: a fixture forge returns an incomplete commit page for an unrelated PR, and the train opens.
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-14T15:26:35.946322613Z
+modified_at: 2026-11-14T15:26:35.946322613Z
+req_type: Bug
+tags:
+- area:train
+- track:integration
+filed_at:
+  code_sha: f5128d18cf1ff8dd78baa28e7bf57dcc4c69fc18
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 3350540dbab
+  vendor: claude
+  session: 01a1d9ea-4e25-7033-85e8-3648f0195c7c
+  harness_version: 2.1.325 (Claude Code)
