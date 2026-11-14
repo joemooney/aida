@@ -10,12 +10,12 @@ description: |
   2. `aida deputy shell list` shows, for each queued job, whether its submitter is still live or would be refused at claim, so a rotated seat knows what will run.
   3. The rotation handoff lists the outgoing session's queued deputy jobs with their ids, so the successor can keep or cancel them.
   4. Tests: a rotated session cancels a predecessor's queued job; a different handle still cannot.
-status: Approved
+status: InProgress
 priority: Medium
-owner: ''
+owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-14T13:30:29.047902507Z
-modified_at: 2026-11-14T16:29:51.096770780Z
+modified_at: 2026-11-14T16:52:04.480075094Z
 req_type: Bug
 tags:
 - area:deputy
@@ -48,6 +48,16 @@ comments:
   modified_at: 2026-11-14T16:29:51.096770780Z
   session_id: 01a1dab1-9447-7d22-b5ff-0c9084e122ea
   harness_version: 2.1.325 (Claude Code)
+history:
+- id: 01a1daf9-2900-7620-8994-b64b4e3a91fb
+  author: aida-session-start
+  timestamp: 2026-11-14T16:52:04.480073995Z
+  session_id: 01a1dabe-503c-7aa1-a630-609dbc4400f2
+  harness_version: 2.1.325 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: 2682c4c4fe5a42194a6f2eca01940008e3a41776
   branch: main
