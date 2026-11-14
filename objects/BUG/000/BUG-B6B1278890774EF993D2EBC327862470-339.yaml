@@ -8,12 +8,18 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-14T08:19:06.368555426Z
-modified_at: 2026-11-14T08:24:15.839316092Z
+modified_at: 2026-11-14T08:48:30.724605827Z
 req_type: Bug
 tags:
 - ci
 - kind:bug-spotted
 - track:dell1
+relationships:
+- rel_type:
+    custom: implemented-by
+  target_id: 01a1d936-2a2d-7571-a9d9-c3f2255a5d35
+  created_at: 2026-11-14T08:48:30.724602152Z
+  created_by: joe
 comments:
 - id: 01a1d925-0159-7930-8795-7aa1d6f0baed
   author: joe
@@ -57,6 +63,10 @@ history:
   timestamp: 2026-11-14T08:23:03.870369396Z
   session_id: 01a1d926b68d
   harness_version: codex-cli 0.167.0
+  changes: []
+- id: 01a1d93e-79e3-7703-bdc8-8eb6d5f4cb24
+  author: joe
+  timestamp: 2026-11-14T08:48:32.739355988Z
   changes: []
 filed_at:
   code_sha: 60823a3cb079fb62463fd88934afe72619a87cae
