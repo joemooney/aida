@@ -91,6 +91,21 @@ are TASK-3098.
   indexes stay hints: they may add a change, never hide one. A bound change
   whose ledger is missing, or a ledger that records a spec's reviews without
   a binding, refuses and names the fix.
+- A selection by spec label trusts the bindings only while the label's
+  `by-spec` hint confirms them (it exists and names exactly the bound
+  changes, which is how a writer leaves them). When the hint is absent or
+  names other changes, the selection reads every change ledger strictly and
+  takes every change whose events carry the label, so a deleted binding does
+  not hide a newer refusal. That read retains no payload, runs under the
+  bootstrap's work ceiling (4 GiB, 20 million events) rather than the
+  selection budget, and is reused within a process while every change ledger
+  keeps the size, inode and times it was read with. Costs: a label with no
+  hint (one never recorded, such as an unused alias) takes this read every
+  time, and a change ledger that cannot be read strictly then refuses that
+  selection, naming the file and the quarantine command. Limit: when a
+  binding and the hint both lack the same change, the label looks exactly
+  like one never recorded on that change, and only the deep doctor check
+  (`--category gate-ledger-bindings`) reports it.
 - The event format is 2. Readers accept 1 and 2. A writer refuses a ledger
   that holds events of a format newer than it writes.
 - Binaries older than format 2 cannot write the ledger. Format 2 moved the

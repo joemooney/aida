@@ -123,6 +123,7 @@ fn bug_2531_selection_after_bootstrap_reads_only_bound_ledgers() {
     let lines = std::fs::read_to_string(&bound).unwrap().lines().count();
     work::READ_BYTES.with(|n| n.set(0));
     work::PARSE_ATTEMPTS.with(|n| n.set(0));
+    work::FULL_READ_ANSWERS.with(|n| n.set(0));
     let small = expected * 2;
     assert!(small < unrelated);
     let mut d = checked::discover_with_budget(&root, Budget::with_limits(small, 100))
@@ -137,6 +138,8 @@ fn bug_2531_selection_after_bootstrap_reads_only_bound_ledgers() {
     );
     assert_eq!(work::READ_BYTES.with(Cell::get), expected);
     assert_eq!(work::PARSE_ATTEMPTS.with(Cell::get), lines);
+    // The hint confirms the bindings, so nothing was read in full.
+    assert_eq!(work::FULL_READ_ANSWERS.with(Cell::get), 0);
 }
 
 /// (b) a ledger with change history and no marker, or an unsupported one,
@@ -215,15 +218,44 @@ fn bug_2531_stale_or_missing_hint_still_finds_the_newer_refusal() {
             "{hint:?}"
         );
     }
-    // A deleted binding is an inconsistency once its ledger is read.
-    std::fs::write(&index, r#"{"changes":["PR-1","PR-2"]}"#).unwrap();
+    // A deleted binding does not hide the refusal either: the hint names a
+    // change the bindings do not, or is absent, so selection reads every
+    // change ledger and finds the one that records the spec.
     std::fs::remove_file(bindings_dir(&root).join("BUG-9/PR-2")).unwrap();
+    for hint in [Some(r#"{"changes":["PR-1","PR-2"]}"#), None] {
+        match hint {
+            Some(body) => std::fs::write(&index, body).unwrap(),
+            None => std::fs::remove_file(&index).unwrap(),
+        }
+        work::FULL_READ_ANSWERS.with(|n| n.set(0));
+        let mut d = checked::discover(&root).unwrap().unwrap();
+        let got = d
+            .events_for(&["BUG-9".into()], &mut Budget::default())
+            .unwrap();
+        assert_eq!(
+            newest_verdict(&got[0].1).as_deref(),
+            Some("request-changes"),
+            "{hint:?}"
+        );
+        assert_eq!(work::FULL_READ_ANSWERS.with(Cell::get), 1, "{hint:?}");
+        let (_, changes) = d.spec_entries("BUG-9", &mut Budget::default()).unwrap();
+        assert!(changes.contains(&ChangeKey::pr(2)), "{hint:?}");
+        assert_eq!(
+            project::newest_verdict(&root, "BUG-9").and_then(|r| r.get("verdict").cloned()),
+            Some(serde_json::json!("request-changes")),
+            "{hint:?}"
+        );
+    }
+    // The full read is strict: a change ledger it cannot read refuses the
+    // selection, naming the file, and the lossy reader withholds the reviews.
+    let bad = store::ledger_file(&root, ChangeKey::pr(9999));
+    std::fs::write(&bad, b"invalid\n").unwrap();
     let mut d = checked::discover(&root).unwrap().unwrap();
     let err = d
         .events_for(&["BUG-9".into()], &mut Budget::default())
         .unwrap_err();
-    assert!(err.0.contains("without a binding"), "{err}");
-    assert!(err.0.contains(FIX_COMMAND), "{err}");
+    assert!(err.0.contains("PR-9999.jsonl"), "{err}");
+    assert_eq!(project::newest_verdict(&root, "BUG-9"), None);
 }
 
 /// (d) a binding that cannot be written fails the append, and nothing is
@@ -562,13 +594,18 @@ fn bug_2531_fix_repairs_inconsistencies_under_a_valid_marker() {
     );
     assert!(scan(true).is_empty());
 
-    // A ledger records BUG-1 with neither binding nor hint: the marker is
-    // valid, nothing leads selection to the ledger, and the refusal is
-    // missed. Only the named, deep check can see it.
+    // A ledger records BUG-1 with neither binding nor hint, under a valid
+    // marker. The absent hint sends selection to a full read of the change
+    // ledgers, so the refusal is still seen; the named, deep check reports
+    // the lost binding and the fix restores it.
     std::fs::remove_file(bindings_dir(&root).join("BUG-1/PR-1")).unwrap();
     std::fs::remove_file(ledger_dir(&root).join("by-spec/BUG-1.json")).unwrap();
     assert_eq!(marker_state(&root).unwrap(), MarkerState::Complete);
-    assert_eq!(newest("BUG-1").unwrap(), None);
+    assert_eq!(newest("BUG-1").unwrap().as_deref(), Some("request-changes"));
+    assert_eq!(
+        project::newest_verdict(&root, "BUG-1").and_then(|r| r.get("verdict").cloned()),
+        Some(serde_json::json!("request-changes"))
+    );
     assert!(scan(false).is_empty());
     let findings = scan(true);
     assert_eq!(findings.len(), 1);

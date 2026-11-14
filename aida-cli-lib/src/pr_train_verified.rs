@@ -46,6 +46,8 @@ impl VerifiedTrainMerge<'_> {
             evidence == self.evidence && mapped == self.mapped,
             "train proof or original source review evidence changed; rebuild and retest"
         );
+        // trace:BUG-2584 | ai:claude
+        let phase = FinalGatePhase::start("recheck: train review corpus");
         // A persisted audit is required, but it cannot create this value or
         // substitute for the live refresh above.
         let store = ledger::store_root(root)?;
@@ -117,6 +119,8 @@ impl VerifiedTrainMerge<'_> {
             change.id,
             corpus::corpus_merge_gate(change.id, &remaining, Some(self.tip.as_str())),
         )?;
+        drop(phase);
+        let _phase = FinalGatePhase::start("recheck: train head");
         let meta = forge.change_metadata(change.id, &mut crate::network_retry::NoopSink)?;
         anyhow::ensure!(
             meta.head_sha == self.tip,
@@ -171,7 +175,9 @@ fn verified<'a>(
     train: &'a Built,
     lease: &'a crate::merge_lock::MergeLease,
 ) -> Result<VerifiedTrainMerge<'a>> {
-    let (evidence, mapped) = collect(live, change, train, lease)?;
+    let (evidence, mapped) = collect(live, change, train, lease, "proof")?;
+    // trace:BUG-2584 | ai:claude
+    let phase = FinalGatePhase::start("proof: record the coverage audit");
     let root = live.project_root.canonicalize()?;
     let store = ledger::store_root(&root)?;
     let mut event = ledger::GateEvent::new(
@@ -192,13 +198,14 @@ fn verified<'a>(
     };
     ensure_budget(existing + serde_json::to_vec(&event)?.len() as u64 + 1024)?;
     ledger::record_event(&store, event).context("persisting train coverage audit")?;
+    drop(phase);
     Ok(VerifiedTrainMerge {
         root,
         change: change.clone(),
         tip: train.tip.clone(),
         evidence,
         mapped,
-        refresh: Box::new(|| collect(live, change, train, lease)),
+        refresh: Box::new(|| collect(live, change, train, lease, "recheck")),
         reached_forge: false,
     })
 }
@@ -208,7 +215,11 @@ fn collect(
     change: &ChangeRef,
     train: &Built,
     lease: &crate::merge_lock::MergeLease,
+    pass: &str,
 ) -> Result<(Value, Bodies)> {
+    // One line per phase, labelled by pass: the proof is collected once, then
+    // collected again before each merge attempt. trace:BUG-2584 | ai:claude
+    let phase = FinalGatePhase::start(format!("{pass}: train structure"));
     live.dispatch_check()?;
     crate::standalone_implementer::refuse_under_marker("pr train")?;
     anyhow::ensure!(
@@ -232,6 +243,8 @@ fn collect(
         "train main moved; rebuild and retest"
     );
     let cars = verify_structure(&live.main_worktree, train)?;
+    drop(phase);
+    let phase = FinalGatePhase::start(format!("{pass}: train PR state"));
     let meta = live
         .forge
         .change_metadata(change.id, &mut crate::network_retry::NoopSink)?;
@@ -270,6 +283,8 @@ fn collect(
             "train labels hold the merge"
         );
     }
+    drop(phase);
+    let phase = FinalGatePhase::start(format!("{pass}: exact-tip CI"));
     // Read CI by exact commit, never by branch. Required-check discovery must
     // itself succeed; an API error is not an empty required-check policy.
     let required = crate::forge::github_required_checks(&live.project_root, change)?;
@@ -293,6 +308,7 @@ fn collect(
         || clock.elapsed(),
         || clock.sleep(),
     )?;
+    drop(phase);
     let mut sources = Vec::new();
     let mut mapped = Vec::new();
     // trace:BUG-2438 | ai:claude
@@ -306,7 +322,10 @@ fn collect(
                 "train release mandate expired, was revoked, or was narrowed by a renewal"
             );
         }
+        let phase = FinalGatePhase::start(format!("{pass}: member #{} gate", car.member.pr));
         let fresh = live.gate(car.member.pr).map_err(anyhow::Error::msg)?;
+        drop(phase);
+        let _phase = FinalGatePhase::start(format!("{pass}: member #{} evidence", car.member.pr));
         anyhow::ensure!(
             fresh.head == car.member.head
                 && fresh.subject == car.member.subject
@@ -485,6 +504,7 @@ fn collect(
     }
     all_specs.sort();
     all_specs.dedup();
+    let _phase = FinalGatePhase::start(format!("{pass}: bind the train review"));
     // The train-key exemption is ONLY the selected M1 copy bound to one of
     // these covered source aliases. Content equality at an unrelated key or
     // with an unrelated spec is not provenance. Pin the exact event too.

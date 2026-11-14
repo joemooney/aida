@@ -7,7 +7,14 @@
 //! write fails the append. Every label is bound, whatever its spelling
 //! ([`binding_key`]). A binding without an event is harmless extra work; an
 //! event without a binding is forbidden. The `by-spec` indexes stay lossy
-//! hints.
+//! hints, but a writer leaves a label's hint naming exactly its bound
+//! changes, so selection trusts the bindings only while the hint confirms
+//! them: an absent hint, or one naming other changes, sends that selection
+//! to a full read of the change ledgers
+//! ([`super::checked::recorded_changes`]), so a deleted binding does not
+//! hide a review. A binding and a hint that both lack the same change are
+//! indistinguishable from a spec never recorded on it; only the deep
+//! [`audit`] sees that.
 //!
 //! Only a format 2 writer binds, so binaries older than format 2 are fenced
 //! out of the ledger before anything is certified

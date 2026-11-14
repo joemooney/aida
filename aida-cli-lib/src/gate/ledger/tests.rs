@@ -2540,8 +2540,13 @@ fn bug_2517_foreign_copy_is_ignored_without_rewriting_history() {
     // failing ledger is bound to the spec (an unbound one is never read).
     let unrelated = store::ledger_file(&root, ChangeKey::pr(9999));
     let unrelated_binding = super::bindings::bindings_dir(&root).join("BUG-2492/PR-9999");
+    // The hint names it too, as a writer leaves them: a hint that disagrees
+    // with the bindings sends the spec-keyed reader to a full read instead.
+    let hint = ledger_dir(&root).join("by-spec/BUG-2492.json");
+    let hint_before = std::fs::read(&hint).unwrap();
     for failure in ["malformed", "symlink", "oversized"] {
         std::fs::write(&unrelated_binding, b"").unwrap();
+        project::index_spec(&root, "BUG-2492", ChangeKey::pr(9999)).unwrap();
         match failure {
             "malformed" => std::fs::write(&unrelated, b"invalid\n").unwrap(),
             "symlink" => std::os::unix::fs::symlink(&second_file, &unrelated).unwrap(),
@@ -2583,6 +2588,7 @@ fn bug_2517_foreign_copy_is_ignored_without_rewriting_history() {
         assert_eq!(std::fs::read(&file).unwrap(), before);
         std::fs::remove_file(&unrelated).unwrap();
         std::fs::remove_file(&unrelated_binding).unwrap();
+        std::fs::write(&hint, &hint_before).unwrap();
         // Recovery restores the first PR's own historical verdict, without
         // restoring the foreign copy or persisting the conservative fallback.
         assert_eq!(

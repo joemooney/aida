@@ -383,13 +383,104 @@ fn discovery_refusal(root: &Path, name: &str, e: &Unsafe) -> Unsafe {
 
 /// The full, strict scan the bindings bootstrap needs: every change ledger
 /// and every spec its events carry. It reads every active ledger, so only
-/// the maintenance bootstrap ([`super::bindings::bootstrap`]) runs it;
-/// selection reads bindings instead.
+/// the maintenance bootstrap ([`super::bindings::bootstrap`]) and a
+/// selection whose by-spec hint does not confirm its bindings
+/// ([`recorded_changes`]) run it; any other selection reads bindings instead.
 // trace:BUG-2531 | ai:claude
 #[derive(Debug, Default)]
 pub(crate) struct Scan {
     pub(crate) changes: std::collections::BTreeSet<String>,
     pub(crate) bound: std::collections::BTreeMap<String, std::collections::BTreeSet<String>>,
+    /// The pinned ledger directory's (device, inode) and, in listing order,
+    /// every change ledger read with its stat identity: what a reuse of this
+    /// scan re-validates ([`Scan::current`]).
+    ledger_id: Option<(u64, u64)>,
+    read: Vec<(String, EntryStat)>,
+}
+
+impl Scan {
+    /// Whether a scan of `root` now would read exactly the files this one
+    /// read: the same ledger directory, listing the same change ledgers,
+    /// each with the stat identity it had when read.
+    // trace:BUG-2531 | ai:claude
+    fn current(&self, root: &Path) -> bool {
+        let Ok(Some((ledger, _))) = ledger_dirs(root) else {
+            return false;
+        };
+        if dir_id(&ledger).ok() != self.ledger_id {
+            return false;
+        }
+        let ledger_path = super::ledger_dir(root);
+        let Ok(names) = list_pinned(&ledger, &ledger_path) else {
+            return false;
+        };
+        let mut names = names
+            .into_iter()
+            .filter(|n| change_ledger_name(n).is_some());
+        self.read.iter().all(|(name, stat)| {
+            names.next().as_deref() == Some(name.as_str())
+                && std::fs::symlink_metadata(ledger_path.join(name))
+                    .is_ok_and(|now| EntryStat::of(&now) == *stat)
+        }) && names.next().is_none()
+    }
+}
+
+type FullReads = std::collections::HashMap<std::path::PathBuf, std::rc::Rc<Scan>>;
+
+thread_local! {
+    /// The last full read of each store root on this thread, reused only
+    /// while [`Scan::current`] holds.
+    // trace:BUG-2531 | ai:claude
+    static FULL_READS: std::cell::RefCell<FullReads> =
+        std::cell::RefCell::new(Default::default());
+}
+
+/// Every change whose ledger carries an event for the normalized label
+/// `spec`, from a full strict read of every change ledger: the answer no
+/// lost binding or hint can shorten. A selection falls back to it when the
+/// label's by-spec hint is absent or disagrees with its bindings, because
+/// the two are then not two agreeing records of the same appends, and a
+/// deleted binding would otherwise hide a newer refusal.
+///
+/// The read streams (no payload is retained) under the bootstrap's work
+/// ceiling, not the selection's budget; its result is reused on this thread
+/// while every change ledger keeps the stat identity it was read with. A
+/// change ledger that cannot be read strictly refuses, naming the file.
+// trace:BUG-2531 | ai:claude
+pub(crate) fn recorded_changes(root: &Path, spec: &str) -> Result<Vec<String>, Unsafe> {
+    let cached = FULL_READS.with(|c| c.borrow().get(root).cloned());
+    let scan = match cached.filter(|s| s.current(root)) {
+        Some(scan) => scan,
+        None => {
+            let mut work = Budget::with_limits(
+                super::bindings::MAX_BOOTSTRAP_BYTES,
+                super::bindings::MAX_BOOTSTRAP_EVENTS,
+            );
+            let Some(scan) = scan_bindings(root, &mut work)? else {
+                return Ok(Vec::new());
+            };
+            let scan = std::rc::Rc::new(scan);
+            FULL_READS.with(|c| c.borrow_mut().insert(root.to_path_buf(), scan.clone()));
+            scan
+        }
+    };
+    #[cfg(test)]
+    discovery_work_tests::FULL_READ_ANSWERS.with(|n| n.set(n.get() + 1));
+    Ok(scan
+        .bound
+        .get(spec)
+        .map(|changes| changes.iter().cloned().collect())
+        .unwrap_or_default())
+}
+
+/// Whether the by-spec hint confirms the bindings: present, and naming
+/// exactly the bound changes.
+// trace:BUG-2531 | ai:claude
+pub(crate) fn hint_confirms<T: Ord>(hint: Option<&[T]>, bound: &[T]) -> bool {
+    hint.is_some_and(|hint| {
+        hint.iter().collect::<std::collections::BTreeSet<_>>()
+            == bound.iter().collect::<std::collections::BTreeSet<_>>()
+    })
 }
 
 // trace:BUG-2531 | ai:codex
@@ -399,7 +490,10 @@ pub(crate) fn scan_bindings(root: &Path, work: &mut Budget) -> Result<Option<Sca
         return Ok(None);
     };
     let ledger_path = super::ledger_dir(root);
-    let mut scan = Scan::default();
+    let mut scan = Scan {
+        ledger_id: Some(dir_id(&ledger)?),
+        ..Default::default()
+    };
     for name in list_pinned(&ledger, &ledger_path)? {
         let Some(key) = change_ledger_name(&name) else {
             continue;
@@ -411,13 +505,14 @@ pub(crate) fn scan_bindings(root: &Path, work: &mut Budget) -> Result<Option<Sca
         }
         // One budget for the entire scan, including retries. Never reset this
         // per file: 4096 individually legal files can otherwise cost 64 GiB.
-        let Some((events, _, _)) = read_change(&ledger, &name, &key, work)
+        let Some((events, _, stat)) = read_change(&ledger, &name, &key, work)
             .map_err(|e| discovery_refusal(root, &name, &e))?
         else {
             return Err(Unsafe(format!(
                 "refusing gate-ledger discovery: {name} vanished while it was read"
             )));
         };
+        scan.read.push((name.clone(), stat));
         // Bind exactly what a writer binds: every spec an event carries,
         // whatever its spelling.
         for spec in events
@@ -556,8 +651,10 @@ fn list_bound(
 
 /// Bound-only discovery (BUG-2531): an operation reads the requested
 /// labels' write-ahead bindings and only the change ledgers they name, plus
-/// the by-spec hints, which may add a change but never hide one. The
-/// completeness marker is checked when the discovery opens.
+/// the by-spec hints, which may add a change but never hide one. A label
+/// whose hint does not confirm its bindings is answered from a full read
+/// instead ([`Discovery::spec_changes`]). The completeness marker is checked
+/// when the discovery opens.
 ///
 /// BUG-2517: the mis-key ownership index is built from the same bound
 /// ledgers. A copy is disqualified only by a phase-3 witness with the same
@@ -585,6 +682,12 @@ pub(crate) struct Discovery {
     /// Discovery's own work (ownership reads), separate from selections.
     work: Budget,
     bound: std::collections::HashMap<String, Vec<String>>,
+    /// The store root, for the full read a selection falls back to, and
+    /// what that read found beyond the bindings: per label, the changes
+    /// whose ledger carries it although no binding names them.
+    // trace:BUG-2531 | ai:claude
+    root: std::path::PathBuf,
+    recovered: std::collections::HashMap<String, Vec<String>>,
     /// Ledgers are read once across a list operation. Their total retained
     /// payload is bounded by the work and selection budgets.
     cache: std::collections::HashMap<String, Cached>,
@@ -623,6 +726,8 @@ pub(crate) fn discover_with_budget(root: &Path, work: Budget) -> Result<Option<D
         owned_changes: Default::default(),
         work,
         bound: Default::default(),
+        root: root.to_path_buf(),
+        recovered: Default::default(),
         cache: Default::default(),
     }))
 }
@@ -672,7 +777,13 @@ impl Discovery {
             .filter_map(|e| e.spec.as_deref().map(binding_key))
             .collect();
         for spec in reviewed {
-            if !self.bound_changes(&spec)?.iter().any(|c| c == key) {
+            // A change the full read recovered for a label is read although
+            // its binding is gone. trace:BUG-2531 | ai:claude
+            let recovered = self
+                .recovered
+                .get(&spec)
+                .is_some_and(|changes| changes.iter().any(|c| c == key));
+            if !recovered && !self.bound_changes(&spec)?.iter().any(|c| c == key) {
                 return Err(not_bound(format!(
                     "refusing gate-ledger selection: {key} records {spec} reviews without a binding"
                 )));
@@ -766,15 +877,16 @@ impl Discovery {
     }
 
     /// The changes `spec`'s by-spec index names, strictly: a hint that may
-    /// add a change, never hide one. A named change without a ledger refuses.
+    /// add a change, never hide one; `None` when the label has no index. A
+    /// named change without a ledger refuses.
     // trace:BUG-2531 | ai:claude
-    fn index_hint(&self, spec: &str, budget: &mut Budget) -> Result<Vec<String>, Unsafe> {
+    fn index_hint(&self, spec: &str, budget: &mut Budget) -> Result<Option<Vec<String>>, Unsafe> {
         let Some(by_spec) = &self.by_spec else {
-            return Ok(Vec::new());
+            return Ok(None);
         };
         let index_name = format!("{spec}.json");
         let Some(body) = read_entry(by_spec, &index_name, MAX_INDEX_BYTES, budget)? else {
-            return Ok(Vec::new());
+            return Ok(None);
         };
         let index: SpecIndex = serde_json::from_slice(&body)
             .map_err(|e| Unsafe(format!("refusing gate-ledger index {index_name}: {e}")))?;
@@ -800,7 +912,7 @@ impl Discovery {
             }
             out.push(key);
         }
-        Ok(out)
+        Ok(Some(out))
     }
 
     /// `spec`'s unbound verdict events, strictly.
@@ -820,11 +932,31 @@ impl Discovery {
         )
     }
 
-    /// The bound changes of `spec` together with its index hints.
+    /// The bound changes of `spec` together with its index hints. The hint
+    /// and the bindings are two records of the same appends: when the hint
+    /// is absent or names other changes than the bindings, neither is
+    /// trusted to be complete (a deleted binding would hide a newer
+    /// refusal), and every change whose ledger carries the label is added
+    /// from a full read ([`recorded_changes`]).
     // trace:BUG-2531 | ai:claude
     fn spec_changes(&mut self, spec: &str, budget: &mut Budget) -> Result<Vec<String>, Unsafe> {
         let mut changes = self.bound_changes(spec)?;
-        for key in self.index_hint(spec, budget)? {
+        let hint = self.index_hint(spec, budget)?;
+        if !hint_confirms(hint.as_deref(), &changes) {
+            let found = match self.recovered.get(spec) {
+                Some(found) => found.clone(),
+                None => {
+                    let found: Vec<String> = recorded_changes(&self.root, spec)?
+                        .into_iter()
+                        .filter(|key| !changes.contains(key))
+                        .collect();
+                    self.recovered.insert(spec.to_string(), found.clone());
+                    found
+                }
+            };
+            changes.extend(found);
+        }
+        for key in hint.unwrap_or_default() {
             if !changes.contains(&key) {
                 changes.push(key);
             }
@@ -1200,6 +1332,8 @@ pub(crate) mod discovery_work_tests {
     thread_local! {
         pub(crate) static READ_BYTES: Cell<u64> = const { Cell::new(0) };
         pub(crate) static PARSE_ATTEMPTS: Cell<usize> = const { Cell::new(0) };
+        /// Selections answered from a full read ([`recorded_changes`]).
+        pub(crate) static FULL_READ_ANSWERS: Cell<usize> = const { Cell::new(0) };
     }
 
     fn fixture() -> (tempfile::TempDir, usize) {
