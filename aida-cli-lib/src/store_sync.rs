@@ -1973,6 +1973,121 @@ pub(crate) fn maybe_spawn_bg_fetch(project_root: &std::path::Path, store_path: &
 mod pull_failure_tests {
     use super::*;
 
+    // trace:BUG-2501 | ai:codex — AC1 through the same refresh used by --sync.
+    #[test]
+    fn sync_pull_merges_concurrent_objects_with_upstream_scalars() {
+        use aida_core::git_ops as git;
+        use aida_core::models::{Comment, FieldChange, HistoryEntry, Requirement};
+
+        let temp = tempfile::tempdir().unwrap();
+        let remote = temp.path().join("remote.git");
+        let upstream = temp.path().join("upstream");
+        let local = temp.path().join("local");
+        let run = |root: &std::path::Path, args: &[&str]| {
+            let output = crate::test_git::git_command()
+                .arg("-C")
+                .arg(root)
+                .args(args)
+                .output()
+                .unwrap();
+            assert!(output.status.success(), "{output:?}");
+        };
+        run(temp.path(), &["init", "--bare", remote.to_str().unwrap()]);
+        std::fs::create_dir_all(&upstream).unwrap();
+        git::init(&upstream).unwrap();
+        git::configure_user(&upstream, "Test", "test@example.com").unwrap();
+        run(&upstream, &["checkout", "-b", "aida-store"]);
+        let path = "objects/BUG/000/BUG-test.yaml";
+        std::fs::create_dir_all(upstream.join("objects/BUG/000")).unwrap();
+        let mut seed = Requirement::new("seed".into(), "description".into());
+        seed.comments
+            .push(Comment::new("author".into(), "original".into()));
+        let save = |root: &std::path::Path, req: &Requirement| {
+            std::fs::write(root.join(path), serde_yaml::to_string(req).unwrap()).unwrap();
+            git::add(root, &[path]).unwrap();
+            git::commit(root, "edit object").unwrap();
+        };
+        save(&upstream, &seed);
+        run(
+            &upstream,
+            &["remote", "add", "origin", remote.to_str().unwrap()],
+        );
+        assert!(git::push(&upstream, "origin", "aida-store").unwrap());
+        run(
+            temp.path(),
+            &[
+                "clone",
+                "--branch",
+                "aida-store",
+                remote.to_str().unwrap(),
+                local.to_str().unwrap(),
+            ],
+        );
+        git::configure_user(&local, "Test", "test@example.com").unwrap();
+
+        let mut theirs = seed.clone();
+        theirs.title = "upstream".into();
+        theirs.comments[0].content = "upstream edit".into();
+        theirs.comments[0]
+            .replies
+            .push(Comment::new("remote".into(), "remote reply".into()));
+        theirs.history.push(HistoryEntry::new(
+            "remote".into(),
+            vec![FieldChange {
+                field_name: "title".into(),
+                old_value: "seed".into(),
+                new_value: "upstream".into(),
+            }],
+        ));
+        save(&upstream, &theirs);
+        assert!(git::push(&upstream, "origin", "aida-store").unwrap());
+        let mut ours = seed.clone();
+        ours.title = "local".into();
+        ours.modified_at = theirs.modified_at + chrono::Duration::days(1);
+        ours.comments[0]
+            .replies
+            .push(Comment::new("local".into(), "local reply".into()));
+        ours.history.push(HistoryEntry::new(
+            "local".into(),
+            vec![FieldChange {
+                field_name: "title".into(),
+                old_value: "seed".into(),
+                new_value: "local".into(),
+            }],
+        ));
+        save(&local, &ours);
+
+        maybe_sync_pull(&local).unwrap();
+        let merged: Requirement =
+            serde_yaml::from_str(&std::fs::read_to_string(local.join(path)).unwrap()).unwrap();
+        assert_eq!(merged.title, theirs.title);
+        assert_eq!(merged.modified_at, theirs.modified_at);
+        assert_eq!(merged.comments.len(), 1);
+        assert_eq!(merged.comments[0].content, "upstream edit");
+        assert_eq!(merged.comments[0].replies.len(), 2);
+        for reply in theirs.comments[0]
+            .replies
+            .iter()
+            .chain(&ours.comments[0].replies)
+        {
+            assert!(merged.comments[0].replies.contains(reply));
+        }
+        assert_eq!(merged.history.len(), 2);
+        assert!(merged.history.contains(&theirs.history[0]));
+        assert!(merged.history.contains(&ours.history[0]));
+        assert!(merged
+            .history
+            .windows(2)
+            .all(|pair| pair[0].timestamp <= pair[1].timestamp));
+        assert!(!git::has_tracked_changes_checked(&local).unwrap());
+        assert!(!git::rebase_in_progress(&local));
+        maybe_sync_pull(&local).unwrap();
+        let replay: Requirement =
+            serde_yaml::from_str(&std::fs::read_to_string(local.join(path)).unwrap()).unwrap();
+        assert_eq!(replay.comments, merged.comments);
+        assert_eq!(replay.history, merged.history);
+    }
+
     #[test]
     fn allocation_retry_dirty_store_stops_before_fetch() {
         let temp = tempfile::tempdir().unwrap();
@@ -1986,9 +2101,11 @@ mod pull_failure_tests {
         // No remote exists: any attempt to fetch or exhaust the retry loop
         // would replace this actionable refusal with a different error.
         let error = pull_store_allocation_retry(repo, "aida-store", 3).unwrap_err();
+        assert!(aida_core::git_ops::is_dirty_store_refusal(&error));
         let message = error.to_string();
         assert!(message.contains("commit or stash"), "{message}");
         assert!(!message.contains("after 3 attempt"), "{message}");
+        assert!(!message.contains("rebase --abort"), "{message}");
         assert_eq!(std::fs::read_to_string(repo.join("seed")).unwrap(), "dirty");
     }
 
@@ -2062,5 +2179,50 @@ mod pull_failure_tests {
             "{error:#}"
         );
         assert!(!aida_core::git_ops::rebase_in_progress(repo));
+    }
+
+    // trace:BUG-2501 | ai:codex — refusal must preserve staged writes as well.
+    #[test]
+    fn sync_pull_preserves_staged_changes_on_refusal() {
+        use aida_core::git_ops as git;
+
+        let temp = tempfile::tempdir().unwrap();
+        let repo = temp.path();
+        git::init(repo).unwrap();
+        git::configure_user(repo, "Test", "test@example.com").unwrap();
+        std::fs::write(repo.join("seed"), "seed").unwrap();
+        git::add(repo, &["seed"]).unwrap();
+        git::commit(repo, "seed").unwrap();
+        let head = git::head_sha(repo).unwrap();
+        let output = crate::test_git::git_command()
+            .arg("-C")
+            .arg(repo)
+            .args(["remote", "add", "origin"])
+            .arg(repo.join("missing"))
+            .output()
+            .unwrap();
+        assert!(output.status.success());
+        std::fs::write(repo.join("seed"), "staged write").unwrap();
+        git::add(repo, &["seed"]).unwrap();
+        // A later worktree edit must also survive; neither snapshot is ours
+        // to commit, stash or discard when the refresh refuses.
+        std::fs::write(repo.join("seed"), "pending write").unwrap();
+
+        let error = maybe_sync_pull(repo).unwrap_err();
+        assert!(git::is_dirty_store_refusal(&error), "{error:#}");
+        assert_eq!(git::head_sha(repo).unwrap(), head);
+        assert_eq!(
+            std::fs::read_to_string(repo.join("seed")).unwrap(),
+            "pending write"
+        );
+        let staged = crate::test_git::git_command()
+            .arg("-C")
+            .arg(repo)
+            .args(["show", ":seed"])
+            .output()
+            .unwrap();
+        assert!(staged.status.success());
+        assert_eq!(staged.stdout, b"staged write");
+        assert!(!git::rebase_in_progress(repo));
     }
 }

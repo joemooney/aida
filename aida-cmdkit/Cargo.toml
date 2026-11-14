@@ -1,0 +1,13 @@
+[package]
+name = "aida-cmdkit"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Shared command registration and dispatch framework for AIDA"
+
+[dependencies]
+aida-core = { version = "0.16", path = "../aida-core" }
+anyhow.workspace = true
+clap = { workspace = true, features = ["string"] }
