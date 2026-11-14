@@ -1857,8 +1857,16 @@ impl MemberChecks for LiveChecks<'_> {
         let ship_meta = if self.forge.kind() == crate::forge::ForgeKind::GitHub {
             // trace:STORY-2401 | ai:codex
             journal::before("read member title and body").map_err(|e| format!("{e:#}"))?;
-            crate::pr_cmd::fetch_pr_ship_metadata_via_forge(self.project_root, pr)
-                .map_err(|e| format!("its title and body could not be read ({e:#})"))?
+            // trace:STORY-2824 | ai:codex
+            let (title, body) = self
+                .forge
+                .change_title_and_body(pr)
+                .map_err(|e| format!("its title and body could not be read ({e:#})"))?;
+            crate::pr_cmd::PrShipMetadata {
+                title,
+                body,
+                number: Some(pr),
+            }
         } else {
             crate::pr_cmd::PrShipMetadata {
                 title: meta.title.clone(),

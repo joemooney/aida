@@ -234,48 +234,78 @@ pub(crate) fn render_json(base: &str, rows: &[Row]) -> serde_json::Value {
     })
 }
 
+/// Refuse incomplete discovery before train reads or eligibility reporting.
+// trace:STORY-2824 | ai:codex
+pub(crate) fn all_open_candidates(root: &Path, base: &str) -> Result<Vec<u64>> {
+    let rows = crate::forge::pr_state_batch(root, Duration::from_secs(15))?;
+    let mut ids = Vec::new();
+    for row in rows {
+        let id = row["number"]
+            .as_u64()
+            .filter(|id| *id > 0)
+            .context("open PR listing row has no valid number")?;
+        let branch = row["headRefName"]
+            .as_str()
+            .filter(|s| !s.is_empty())
+            .context("open PR listing row has no head branch")?;
+        let target = row["baseRefName"]
+            .as_str()
+            .filter(|s| !s.is_empty())
+            .context("open PR listing row has no base branch")?;
+        anyhow::ensure!(
+            row["state"].as_str() == Some("OPEN"),
+            "open PR listing row has invalid state"
+        );
+        if target == base && !branch.starts_with(BRANCH_PREFIX) {
+            ids.push(id);
+        }
+    }
+    ids.sort_unstable();
+    ids.dedup();
+    Ok(ids)
+}
+
 /// `aida pr train --check`. Fails unless every PR is eligible.
 // trace:STORY-2824 | ai:claude
 pub(crate) fn pr_train_check_handler(opts: &CheckOptions<'_>) -> Result<()> {
-    let started = Instant::now();
     let project_root = crate::find_project_root()?;
     let main_worktree = crate::main_worktree_root_from(&project_root);
-    let kind = crate::forge::peek_forge_kind(&project_root);
+    check_at(opts, &project_root, &main_worktree)
+}
+
+// trace:STORY-2824 | ai:codex
+pub(crate) fn check_at(
+    opts: &CheckOptions<'_>,
+    project_root: &Path,
+    main_worktree: &Path,
+) -> Result<()> {
+    let started = Instant::now();
+    let kind = crate::forge::peek_forge_kind(project_root);
     if let Some(why) = forge_refusal(kind) {
         anyhow::bail!(why);
     }
-    let forge = crate::forge::forge_for_kind(&project_root, kind);
-    let base = crate::gate::review_carryover::protected_base(&main_worktree)
+    let forge = crate::forge::forge_for_kind(project_root, kind);
+    let base = crate::gate::review_carryover::protected_base(main_worktree)
         .map_err(|e| anyhow::anyhow!("could not read origin's default branch: {}", e.reason()))?;
     let candidates: Vec<u64> = if opts.all_open {
-        let mut ids: Vec<u64> = forge
-            .list_changes(crate::forge::ChangeFilter {
-                base: Some(base.clone()),
-                open_only: true,
-            })?
-            .into_iter()
-            .filter(|c| !c.branch.starts_with(BRANCH_PREFIX))
-            .map(|c| c.id)
-            .collect();
-        ids.sort_unstable();
-        ids
+        all_open_candidates(project_root, &base)?
     } else {
         opts.prs.to_vec()
     };
     // The trains a candidate may already ride. An abandoned train does not
     // block: the next `aida pr train` closes it.
-    let (open_trains, leased_trains, _abandoned) = live_trains(&main_worktree)?;
+    let (open_trains, leased_trains, _abandoned) = live_trains(main_worktree)?;
     let rows = check_all(
         &candidates,
         || started.elapsed() >= opts.timeout,
         |pr| {
-            let rider = ownership_rider_refusal(&main_worktree, pr, true, forge.as_ref())
+            let rider = ownership_rider_refusal(main_worktree, pr, true, forge.as_ref())
                 .map(|own| own.or_else(|| train_rider_refusal(pr, &open_trains, &leased_trains)))
                 .map_err(|e| format!("its train ownership could not be read ({e:#})"));
             check_one(
                 &mut LiveChecks {
-                    project_root: &project_root,
-                    main_worktree: &main_worktree,
+                    project_root,
+                    main_worktree,
                     forge: forge.as_ref(),
                     base: &base,
                     named: !opts.all_open,

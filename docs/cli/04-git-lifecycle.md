@@ -444,10 +444,14 @@ cover, the check reports `no` at the `mandate` gate instead of asking,
 because asking records evidence; `aida pr train N --dry-run` asks. `--json`
 prints `{base, eligible, prs: [{pr, eligible, head, gate, reason, remedy,
 evidence}]}`. The exit status is 0 only when every PR is eligible. A read that
-fails counts as not eligible (`evidence: unavailable`). `--timeout SECS`
-(default 45) stops starting new PR checks; the PRs not reached are listed as
-not checked, so the run ends within the budget plus one PR's check.
+fails counts as not eligible (`evidence: unavailable`). `--all-open` uses an
+explicit 1,000-PR listing limit and refuses results at that limit, failed
+listings, or malformed rows with a nonzero exit instead of reporting eligibility.
+A confirmed empty list remains successful. `--timeout SECS` (default 45) is
+checked between candidates, not during subprocesses; the PRs not reached are
+listed as not checked. Discovery and a running candidate can exceed the budget.
 <!-- trace:STORY-2824 | ai:claude -->
+<!-- trace:STORY-2824 | ai:codex -->
 <!-- trace:STORY-2693 | ai:codex -->
 Train selection gates all candidates before applying `--max`. It greedily picks
 the PR with the smallest sum of shared-file counts against the remaining

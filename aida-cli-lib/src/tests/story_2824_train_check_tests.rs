@@ -286,3 +286,88 @@ fn check_takes_named_prs_or_all_open_and_excludes_the_landing_flags() {
         assert!(parse(bad).is_err(), "{bad:?}");
     }
 }
+
+// trace:STORY-2824 | ai:codex
+#[test]
+fn story_2824_all_open_refuses_failed_malformed_and_capped_listings() {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
+    let environment = aida_core::exec_context::Environment::capture();
+    let root = repo();
+    let r = root.path();
+    git(
+        r,
+        &[
+            "remote",
+            "add",
+            "origin",
+            "https://github.com/example/project.git",
+        ],
+    );
+    crate::test_exec::write_executable(
+        &r.join("gh"),
+        r#"#!/bin/sh
+printf '%s\n' "$*" >> gh-calls
+case "$*" in
+  *'number,headRefName,body'*) printf '[]\n' ;;
+  *'--limit 1000'*) cat listing; exit "$(cat listing-exit)" ;;
+  *) printf '[]\n' ;;
+esac
+"#,
+    );
+    let path = format!("{}:{}", r.display(), environment.var("PATH").unwrap());
+    let _env = crate::test_env::EnvVarsGuard::set(&[("PATH", &path)]);
+    let row = |id| {
+        serde_json::json!({
+            "number": id, "headRefName": format!("work/{id}"),
+            "baseRefName": "main", "state": "OPEN"
+        })
+    };
+    let list = |rows: serde_json::Value, code: &str| {
+        std::fs::write(r.join("listing"), rows.to_string()).unwrap();
+        std::fs::write(r.join("listing-exit"), code).unwrap();
+        crate::pr_train::check::all_open_candidates(r, "main")
+    };
+    assert!(list(serde_json::json!([]), "1").is_err());
+    // The command must return an error (a nonzero CLI exit), even though
+    // the next train-list read can succeed with no live trains.
+    crate::test_exec::write_executable(
+        &r.join("git"),
+        r#"#!/bin/sh
+case "$*" in
+  *'ls-remote --symref origin HEAD'*) printf 'ref: refs/heads/main\tHEAD\n' ;;
+  *) exec /usr/bin/git "$@" ;;
+esac
+"#,
+    );
+    let opts = crate::pr_train::check::CheckOptions {
+        prs: &[],
+        all_open: true,
+        json: true,
+        timeout: std::time::Duration::from_secs(45),
+    };
+    let error = crate::pr_train::check::check_at(&opts, r, r).unwrap_err();
+    assert!(
+        format!("{error:#}").contains("forge observation failed"),
+        "{error:#}"
+    );
+    assert!(live_trains(r).is_ok());
+    assert!(list(serde_json::json!([row(1), {"number": 2}]), "0").is_err());
+    assert!(list(serde_json::json!({"number": 1}), "0").is_err());
+    std::fs::write(r.join("listing"), "not json").unwrap();
+    assert!(crate::pr_train::check::all_open_candidates(r, "main").is_err());
+    let rows: Vec<_> = (1..=31).map(row).collect();
+    assert_eq!(
+        list(serde_json::json!(rows), "0").unwrap(),
+        (1..=31).collect::<Vec<_>>()
+    );
+    let rows: Vec<_> = (1..=1000).map(row).collect();
+    assert!(list(serde_json::json!(rows), "0").is_err());
+    assert!(list(serde_json::json!([]), "0").unwrap().is_empty());
+    let calls = std::fs::read_to_string(r.join("gh-calls")).unwrap();
+    assert!(calls
+        .lines()
+        .filter(|s| !s.contains("number,headRefName,body"))
+        .all(|s| s.contains("--limit 1000")));
+}

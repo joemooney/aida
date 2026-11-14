@@ -388,7 +388,8 @@ pub enum PrCommand {
         json: bool,
 
         /// With --check: stop starting new PR checks after this many
-        /// seconds; the PRs not reached are reported as not checked.
+        /// seconds, checked between candidates (not during subprocesses);
+        /// the PRs not reached are reported as not checked.
         // trace:STORY-2824 | ai:claude
         #[clap(long, value_name = "SECS", default_value_t = 45, requires = "check")]
         timeout: u64,
