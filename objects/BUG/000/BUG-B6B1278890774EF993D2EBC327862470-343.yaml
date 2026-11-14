@@ -13,7 +13,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-14T13:05:16.063317537Z
-modified_at: 2026-11-14T19:02:42.161970945Z
+modified_at: 2026-11-14T19:15:35.669367810Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -87,6 +87,20 @@ comments:
   modified_at: 2026-11-14T19:02:42.161970945Z
   session_id: 01a1db6d-e689-7532-9eef-772722add87b
   harness_version: 2.1.325 (Claude Code)
+- id: 01a1db7c-8e75-76e0-90f6-2fe5de89c790
+  author: dirtlab
+  content: |-
+    ## Implementer rework per the 12:15 ruling (option A), commit bf74a91943 on the seat branch
+
+    Only `aida-cli-lib/src/tests/task_1945_commit_ci_tests.rs` changed; ci.yml is as in PR-4028. `aggregator_const_matches_the_ci_workflow` now requires build-result's name to be exactly `${{ <label-event condition> && '<label name>' || '<aggregator>' }}`: the non-label branch equals CI_AGGREGATOR_CHECK, the label branch is non-empty (an empty string is falsy and would fall through to the aggregator name) and differs from it, and the job's `if` skips it under the same condition.
+
+    **AC4 evidence (dell1, lane job j20261114T190935610-3-0):** `cargo test --profile agent -p aida-cli-lib --lib -- aggregator_const_matches_the_ci_workflow` -> 1 passed, 0 failed. `python3 -m unittest tests/test_ci_tiers.py tests/test_ci_test_shards.py` -> 33 passed. rustfmt check clean on the file.
+
+    **Not done:** the push was refused in this seat (no permission to push), so PR-4028 does not have the commit yet; it waits for host publication. `make check-ci-fast` not run (does not fit the 60-second tool limit). The spec status is still needs-attention: the move to in-progress needs advisor authority.
+  created_at: 2026-11-14T19:15:35.669367810Z
+  modified_at: 2026-11-14T19:15:35.669367810Z
+  session_id: 01a1db761933
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1da2c-3b66-7010-95f7-26087a6c659f
   author: joe
