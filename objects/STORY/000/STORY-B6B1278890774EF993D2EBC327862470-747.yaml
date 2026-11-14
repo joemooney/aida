@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-14T18:22:12.152871570Z
-modified_at: 2026-11-14T19:53:05.428722170Z
+modified_at: 2026-11-14T20:25:53.848763607Z
 req_type: Story
 tags:
 - docs:impacted
@@ -51,6 +51,13 @@ comments:
   created_at: 2026-11-14T19:53:05.428722170Z
   modified_at: 2026-11-14T19:53:05.428722170Z
   session_id: 01a1db6d-e689-7532-9eef-772722add87b
+  harness_version: 2.1.325 (Claude Code)
+- id: 01a1dbbc-ebb8-7540-a88c-39627f2f5256
+  author: joe
+  content: 'Advisor ruling 2026-11-14 addressed on PR-4053 at 231708f: docs/internal/cli-format-json-audit.md row for ''aida pr train'' is now COULD NOT VERIFY (the leaf declares --json with --check). cargo test -p aida-cli --test bug_1502_format_json_audit: 14 passed, 0 failed (agent profile, lane job). make check-ci-fast did NOT complete in this lane: the 60s per-call cap cut it off during ''Containment conformance evidence tests''; the gates it reached passed. Audit row was edited to the generator''s exact output for that row, not produced by running scripts/generate-format-json-audit.py (running it against the lane binary was denied).'
+  created_at: 2026-11-14T20:25:53.848763607Z
+  modified_at: 2026-11-14T20:25:53.848763607Z
+  session_id: 01a1dbae5cc4
   harness_version: 2.1.325 (Claude Code)
 history:
 - id: 01a1db50-9f3b-76d0-bb89-e5b424c233d5
