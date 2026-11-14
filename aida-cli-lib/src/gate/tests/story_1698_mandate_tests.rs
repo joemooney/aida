@@ -3821,6 +3821,7 @@ fn bug_2554_a_deleted_ref_collected_after_a_refresh_rebuilds() {
 /// A `git` shim directory that runs `case_arm` (a `case "$*"` arm) before
 /// handing every other call to the real git.
 // trace:BUG-2554 | ai:claude
+#[cfg(unix)]
 fn bug_2554_git_shim(case_arm: &str) -> (tempfile::TempDir, String) {
     // The inherited PATH, read by a shell (the shim restores it to reach
     // the real git).
@@ -3843,6 +3844,7 @@ fn bug_2554_git_shim(case_arm: &str) -> (tempfile::TempDir, String) {
 /// cannot be read), a warm index over unchanged refs is not reused: the read
 /// refuses instead of answering without that history.
 // trace:BUG-2554 | ai:claude
+#[cfg(unix)]
 #[test]
 fn bug_2554_a_failing_start_point_probe_refuses_not_reuses() {
     if crate::test_env::run_path_isolated_test() {
@@ -3864,6 +3866,7 @@ fn bug_2554_a_failing_start_point_probe_refuses_not_reuses() {
 /// BUG-2554 review: the anchor check a warm read runs keeps the
 /// store-history deadline; a stalled check is a timeout, not a hang.
 // trace:BUG-2554 | ai:claude
+#[cfg(unix)]
 #[test]
 fn bug_2554_a_stalled_anchor_check_times_out() {
     if crate::test_env::run_path_isolated_test() {
