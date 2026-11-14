@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-13T20:52:54.357683400Z
-modified_at: 2026-11-14T07:02:11.110207127Z
+modified_at: 2026-11-14T07:17:34.990596098Z
 req_type: Bug
 tags:
 - perf
@@ -20,6 +20,19 @@ comments:
   created_at: 2026-11-14T06:06:22.367728722Z
   modified_at: 2026-11-14T06:06:22.367728722Z
   session_id: 01a1d852-16ef-7973-bdde-ac3f274752a2
+  harness_version: 2.1.325 (Claude Code)
+- id: 01a1d8eb-328e-7bd2-9b9e-2c7060518696
+  author: joe
+  content: |-
+    Implementer (claude): scope per advisor 23:10 — AC1 no-op fast path + AC2 coalescing + AC3 regression test; reconcile/discovery code untouched (BUG-2543/2551 own it). Not stacked on bug-2543-single-discovery: no file overlap with 30f14d9, so the PRs land independently.
+
+    - New `aida-cli-lib/src/store_pull_coalesce.rs`.
+    - AC2: `aida pull` and pull-only `aida db sync --pull` take a per-(kind, checkout) flock under `<store>/.aida/pull-*.lock`. A caller that had to wait reuses the in-flight pull's result only if that pull succeeded while it waited AND the store has no uncommitted changes. Otherwise it runs its own. `--push` syncs never coalesce. Wait budget is 20 min (`AIDA_PULL_COALESCE_WAIT_SECS`), and `AIDA_PULL_COALESCE=0` turns it off.
+    - AC1: (a) `db sync --pull` asks `ls-remote` first; when origin's head is already in local HEAD it skips the rebase, both strict full-store loads and the conflict scan. (b) `aida pull`'s store leg skips the collision scan when the pull did not move HEAD. (c) Reconcile watermark: a wide auto-bump (no scan base) is skipped when code HEAD + store HEAD match the last completed reconcile, the store is clean, and the watermark is less than 15 min old (`AIDA_RECONCILE_WATERMARK_TTL_SECS`, 0 disables). A scan base (new commits) always reconciles, and the BUG-404 gh-merge case moves code HEAD so it still rescans. Trade-off: forge-only changes that move neither HEAD (a review PR closed without merge) are picked up within the TTL instead of on the very next pull.
+    - AC3 test: `store_pull_coalesce::tests::noop_pull_skips_reconcile_with_large_gate_ledger` (1200 gate-ledger spec dirs; the second reconcile runs 0 times and takes <10s), plus coalescing tests (N=4 waiters → 1 run; a failed in-flight pull is not reused).
+  created_at: 2026-11-14T07:17:34.990596098Z
+  modified_at: 2026-11-14T07:17:34.990596098Z
+  session_id: 01a1d8dd02d7
   harness_version: 2.1.325 (Claude Code)
 history:
 - id: 01a1d8a9-d3a1-7243-a396-3ba4fdaf7412
