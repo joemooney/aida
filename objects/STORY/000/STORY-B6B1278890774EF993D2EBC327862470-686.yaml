@@ -30,7 +30,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-13T15:54:08.931576118Z
-modified_at: 2026-11-14T01:33:53.059709483Z
+modified_at: 2026-11-14T01:57:17.959721907Z
 req_type: Story
 tags:
 - architecture
@@ -177,6 +177,13 @@ comments:
   content: '18:36 MST advisor: CR at 8a541a6 — P1 (non-protected base aborts reviewer launch) and P2 (argv-inlined diff E2BIG) unaddressed; the Codex rework added comments/assertions only. Reassigned to a Claude fixer (advisor-launched, pushes to the PR branch), then a scoped re-review.'
   created_at: 2026-11-14T01:33:53.059709483Z
   modified_at: 2026-11-14T01:33:53.059709483Z
+  session_id: 01a1d797-2ccf-7771-899a-682081f10504
+  harness_version: 2.1.325 (Claude Code)
+- id: 01a1d7c5-f807-72e0-a2c7-4613435af16c
+  author: joe
+  content: 'PR-3956 rework (head 352a2dbe4c8). P1: review_freshness::review_prompt now returns the ordinary prompt (Ok(None)) when the PR base is not the protected branch, instead of ensure!-aborting. The same base check now gates every fast-path site through review_watch::fast_freshness(root, change) (fast policy AND base == protected): watcher overlap probe (review_watch_forge: non-protected bases fall through to the ordinary overlap probe), watch_change, child_with_program, reviewer_launch_context, probe_unneeded notices, and the pr_cmd reviewer stale-base preflight. Integration-track and stacked PRs keep the ordinary strict handling. P2: the landed-tree diff is no longer put inline in the prompt, and the 1 MiB refusal is gone. git diff --output writes it to <project>/.aida/review-evidence-PR-<n>-<baseline>-<tree>.diff, and the prompt carries only that path, the byte count and the git diff reproduction command. Tests: gate::review_freshness::tests::story2763_non_protected_base_launches_ordinary_review_prompt (bases integration and feature/parent), story2763_large_review_diff_launches_via_evidence_file (diff over 256 KiB, prompt under 16 KiB, file holds the full diff), and story2763_phase3_verdict_file_keeps_current_base_evidence updated to read the evidence file. dell1: review_freshness/review_watch/story2763 filter 203 passed on the first commit; on the final commit 202 passed and 1 failed: task1993_orphaned_reviewer_keeps_its_slot_until_it_exits, a process-spawn race that passed 3/3 reruns. The ratchets story_2326/resolve_aida_exe_tests/store_writer passed. make check-ci-fast passed (46 gates). Note: git writes the evidence file itself so that scripts/store-writers.toml needs no new rows.'
+  created_at: 2026-11-14T01:57:17.959721907Z
+  modified_at: 2026-11-14T01:57:17.959721907Z
   session_id: 01a1d797-2ccf-7771-899a-682081f10504
   harness_version: 2.1.325 (Claude Code)
 history:
