@@ -30,7 +30,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-13T15:54:08.931576118Z
-modified_at: 2026-11-14T20:09:47.769617724Z
+modified_at: 2026-11-14T20:21:28.715339862Z
 req_type: Story
 tags:
 - architecture
@@ -322,6 +322,13 @@ comments:
   content: 'Advisor note (2026-11-14 13:10): the lane was stopped at 13:01 for the dell1 power-off. Its uncommitted work (3 files) is preserved as origin/wip/story-2763-1114 (f7f9f07) and committed in the retained dell1 seat as a WIP commit on the PR branch; continue from there with the 12:36 ruling. Nothing was pushed to the PR since be81871.'
   created_at: 2026-11-14T20:09:47.769617724Z
   modified_at: 2026-11-14T20:09:47.769617724Z
+  session_id: 01a1db6d-e689-7532-9eef-772722add87b
+  harness_version: 2.1.325 (Claude Code)
+- id: 01a1dbb8-e00b-7730-a237-714177a58134
+  author: joe
+  content: 'Advisor correction (2026-11-14 13:22): my WIP snapshot commit f751822 used ''git add -A'' in the seat and picked up nine empty sandbox placeholder files (.claude/agents, .claude/launch.json, .claude/loop.md, .claude/output-styles, .claude/routines, .claude/scheduled_tasks.json, .gitmodules, .idea, .vscode); the lane wrapper then published f751822 to PR-3956. A follow-up commit in the seat removes them; the lane publishes it with its next head. The PR diff must show none of those nine paths before review. origin/wip/story-2763-1114 carries the same junk and can be deleted once the PR head is past it.'
+  created_at: 2026-11-14T20:21:28.715339862Z
+  modified_at: 2026-11-14T20:21:28.715339862Z
   session_id: 01a1db6d-e689-7532-9eef-772722add87b
   harness_version: 2.1.325 (Claude Code)
 history:
