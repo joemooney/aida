@@ -319,6 +319,7 @@ mod store_local;
 // trace:TASK-3223 | ai:codex
 pub mod store_mutation_client;
 mod store_mutation_entry;
+mod store_pull_coalesce; // trace:BUG-2565 | ai:claude
 mod store_push_pull;
 pub mod store_sync;
 mod supervise_cmd;
