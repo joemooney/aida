@@ -3856,7 +3856,7 @@ pub(crate) fn check_exited_branch_clone(
         "cannot force-claim branch `{branch}`: private clone {} no longer has the expected lease",
         path.display()
     );
-    match crate::pr_lease_takeover::check_pr_lease(root, lease, branch) {
+    match crate::pr_lease_takeover::check_force_claim_clone(root, lease, branch) {
         crate::pr_lease_takeover::PrLeaseCheck::SafeToEnd => {}
         other => {
             let reason = match other {
