@@ -30,7 +30,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-13T15:54:08.931576118Z
-modified_at: 2026-11-14T20:57:03.514133625Z
+modified_at: 2026-11-14T22:00:04.342575775Z
 req_type: Story
 tags:
 - architecture
@@ -343,6 +343,13 @@ comments:
   content: 'Advisor ruling (2026-11-14 14:00): the lane''s 13:55 verification is accepted (seven named tests pass at 36afa06, manual citation corrected, placeholder paths gone). No further rework: fresh review of PR-3956 at 36afa06 launched on deputy 2. Round-2 finding 3 stays with BUG-2566. The hold stays until that review approves and a full-tier run is green at the approved head.'
   created_at: 2026-11-14T20:57:03.514133625Z
   modified_at: 2026-11-14T20:57:03.514133625Z
+  session_id: 01a1dbd6-f8cd-7313-a123-75ebbeaa2afd
+  harness_version: 2.1.325 (Claude Code)
+- id: 01a1dc13-23f6-7f10-96e7-20ad2bbf7a27
+  author: joe
+  content: 'Advisor ruling (2026-11-14 15:02): PR-3956 was approved at 36afa06 with a green full run, then EJECTED by the train: it conflicts with main since #4052 (STORY-2821, reviewer stale-base policy as a project setting) landed at 14:41. Conflicts: aida-cli-lib/src/phase_driver_trait.rs and aida-cli-lib/src/review_watch.rs. Hold added, ci:full removed. This is a semantic merge, not a textual one: both changes decide what a reviewer launch does with a stale base. Rework: merge origin/main (a real merge); the [review] stale_base setting from STORY-2821 stays the single policy knob for ''refuse a stale head'', and this story''s freshness assurance (fast/strict, review against current base, carry-over) must read it rather than add a second decision; where the two disagree, STORY-2821''s setting wins for the refusal and this story''s code decides only what evidence the review records. State on this spec, in two lines, how the two interact after the merge. Gate: story2763 and story_2821 tests plus bug_2139/bug_2187/bug_2201 and story_1888_gate_paths in one dell1 run, make check-ci-fast, push. Then delta review of the merge (ci:full at its launch). Past round 2, so a Claude Fable lane on dell1, hand-launched now (autoland would send codex).'
+  created_at: 2026-11-14T22:00:04.342575775Z
+  modified_at: 2026-11-14T22:00:04.342575775Z
   session_id: 01a1dbd6-f8cd-7313-a123-75ebbeaa2afd
   harness_version: 2.1.325 (Claude Code)
 history:
