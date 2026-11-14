@@ -985,12 +985,32 @@ description: |
   ### finding-hash:dbd4e4d5
 
   docs/cli/04-git-lifecycle.md (promotion-check) says every passing change has its tag removed, but a spec keeps it while another pending change names it, and the section does not say that only an exact `git revert -m 1` with no other change clears a refusal. Also `checks = []` in the trusted config merges with no check at all; say so in the docs or refuse an empty list.
+
+
+  ## Findings from PR-4052
+  Reviewed sha: 0f1aae45588a5ba421496c7080e4f05d7da7f71b
+
+  ### finding-hash:9dab249d
+
+  .aida/config.toml:518-530: the new [review] block sits between the TASK-1945 required_checks comment and the [review_watch] table it documents, so that comment now reads as part of [review]. Move the STORY-2821 comment and [review] table above line 518.
+
+  ### finding-hash:e40f3f6c
+
+  aida-cli-lib/src/config_cmd.rs:4660-4667: story2821_config_lists_the_stale_base_policy_and_its_values was inserted between the reverse-guard doc comment and policy_registry_emits_only_known_sections, so that doc comment now sits on the wrong test. Move the new test above the doc comment.
+
+  ### finding-hash:8d1b3558
+
+  aida-cli-lib/src/queue_cmd_args.rs:1121-1128: --allow-stale-base help still says an overlapping stale head is always refused; it does not mention that [review] stale_base now decides which heads are refused.
+
+  ### finding-hash:4b183b41
+
+  Under refuse-on-conflict an overlapping head whose merge-tree result is unknown (git error, timeout, old git) is reviewed as if clean, in both pr_rebase.rs stale_base_launch (ConflictPrediction::Unknown) and review_watch_forge.rs merge_conflicts (None); the launch warning and docs do not say the conflict check could not be judged.
 status: Draft
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-13T20:01:56.623034248Z
-modified_at: 2026-11-14T18:24:49.095121259Z
+modified_at: 2026-11-14T19:14:01.742472752Z
 req_type: Task
 tags:
 - carried-finding:BUG-2543:2a99ebfc
@@ -1135,6 +1155,10 @@ tags:
 - carried-finding:PR-4048:5f168a1d
 - carried-finding:PR-4048:6d8c7712
 - carried-finding:PR-4048:f3b82bc9
+- carried-finding:PR-4052:4b183b41
+- carried-finding:PR-4052:8d1b3558
+- carried-finding:PR-4052:9dab249d
+- carried-finding:PR-4052:e40f3f6c
 - carried-finding:STORY-2735:2c7ae2ea
 - carried-finding:STORY-2763:04ad58d8
 - carried-finding:STORY-2763:0d56e3a6
@@ -1219,6 +1243,7 @@ tags:
 - carried-from:PR-4040
 - carried-from:PR-4046
 - carried-from:PR-4048
+- carried-from:PR-4052
 - carried-from:STORY-2735
 - carried-from:STORY-2763
 - carried-from:STORY-2765
@@ -1263,6 +1288,7 @@ tags:
 - finding-hash:46a7a9dc
 - finding-hash:4843b9fe
 - finding-hash:49b64e26
+- finding-hash:4b183b41
 - finding-hash:4e068149
 - finding-hash:51cbf3a8
 - finding-hash:52636ea7
@@ -1293,6 +1319,7 @@ tags:
 - finding-hash:7ce2cb14
 - finding-hash:7d6b05ec
 - finding-hash:8a49a174
+- finding-hash:8d1b3558
 - finding-hash:96ff0aa3
 - finding-hash:9750b6dd
 - finding-hash:97d326dd
@@ -1300,6 +1327,7 @@ tags:
 - finding-hash:98776888
 - finding-hash:9b6c3c2d
 - finding-hash:9d27a4fe
+- finding-hash:9dab249d
 - finding-hash:a8809039
 - finding-hash:a9731915
 - finding-hash:abbae117
@@ -1319,6 +1347,7 @@ tags:
 - finding-hash:dee3f3a7
 - finding-hash:dfed3eb6
 - finding-hash:e391cb46
+- finding-hash:e40f3f6c
 - finding-hash:e5eb0aa5
 - finding-hash:f167aa2d
 - finding-hash:f1e29cc2
@@ -1378,6 +1407,7 @@ tags:
 - from-review:PR-4040
 - from-review:PR-4046
 - from-review:PR-4048
+- from-review:PR-4052
 - from-review:STORY-2735
 - from-review:STORY-2763
 - from-review:STORY-2765
@@ -1741,6 +1771,11 @@ history:
   author: joe
   timestamp: 2026-11-14T18:24:51.378220896Z
   session_id: 01a1db49870b
+  changes: []
+- id: 01a1db7b-254e-7a90-a764-f4fc176dc857
+  author: joe
+  timestamp: 2026-11-14T19:14:03.214160009Z
+  session_id: 01a1db76f7e1
   changes: []
 filed_at:
   code_sha: 91fe1e337894199f15365d3f8ecfaf81366f8291
