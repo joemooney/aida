@@ -10,8 +10,6 @@ feature: Uncategorized
 created_at: 2026-11-13T05:04:27.319151195Z
 modified_at: 2026-11-14T18:42:28.687455241Z
 req_type: Bug
-tags:
-- track:integration
 relationships:
 - rel_type:
     custom: implemented-by
@@ -162,12 +160,25 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: Completed
+- id: 01a1db5e-666c-7623-883c-4713a0e37838
+  author: aida-auto-bump
+  timestamp: 2026-11-14T18:42:39.340755874Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
 processing_record:
 - id: 01a1db5e-3ccf-7720-a475-3164cb79a121
   timestamp: 2026-11-14T18:42:28.687452781Z
   agent: aida
   commit_sha: e14d6c9a70b0a348e789051c741c6f5c49a113bd
   summary: Completed via merge e14d6c9a
+- id: 01a1db5e-68d2-75b3-8147-197da220599f
+  timestamp: 2026-11-14T18:42:39.954544043Z
+  agent: aida
+  commit_sha: e14d6c9a70b0a348e789051c741c6f5c49a113bd
+  summary: 'Scope matches the 2026-11-13 09:38 advisor ruling: one gate-ledger discovery per listing/reconcile, re-validated by dir identity, name list and per-file stat (dev/ino/nlink/mode/len/mtime/ctime) before reuse, so refusals and fail-closed match fresh discovery; key events still read fresh; lossy readers skip FIFOs. Parity regressions cover hardlink/symlink/FIFO/linked-dir/foreign-append. No aggregate read, snapshot, memo or fold. Per-key git cost was ruled a follow-up. CI pending at review time (only hold gates ran on the integration base).'
+  review_verdict: approved
 filed_at:
   code_sha: 2a62f92c2a200b58e0d95446df07e355e062ab49
   branch: main
