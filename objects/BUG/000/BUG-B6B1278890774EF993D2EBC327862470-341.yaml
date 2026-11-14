@@ -10,12 +10,12 @@ description: |-
   Fix: add integration to the pull_request branches. A PR then gets the fast tier (fast-gates and fast-compile on hosted runners) on every head, as a PR into main does. The workflow is read from the PR's merge ref, so the change takes effect for integration PRs once it is on integration.
 
   Acceptance: a PR opened against integration after the change shows the ci-tier, fast-gates and fast-compile checks on its head. Tags: track:integration.
-status: Approved
+status: InProgress
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-14T12:56:24.536092596Z
-modified_at: 2026-11-14T13:17:13.161506582Z
+modified_at: 2026-11-14T13:17:24.594354702Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -45,6 +45,13 @@ history:
   author: joe
   timestamp: 2026-11-14T13:17:15.051246094Z
   changes: []
+- id: 01a1da34-a0f2-7f71-9f83-474c4cc9ad1d
+  author: aida-pr-open
+  timestamp: 2026-11-14T13:17:24.594352181Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: aa5de5d5ec762a52fcf366c321fd7c648d06086c
   branch: integration
