@@ -12,12 +12,12 @@ description: |-
   Acceptance: the test passes on dell1 over ssh, or the guard pins whatever ambient state it reads, with the cause named. Not caused by BUG-2573 (umask 002 fixtures): it fails under umask 022 too.
 
   Effect today: every targeted dell1 run that includes status_sections reports one failure that has to be explained by hand.
-status: InProgress
+status: NeedsAttention
 priority: Low
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-14T11:36:18.476287136Z
-modified_at: 2026-11-14T11:40:30.702260966Z
+modified_at: 2026-11-14T11:53:23.697784048Z
 req_type: Bug
 comments:
 - id: 01a1d9d9-3a31-74f3-8623-ddea0172e3f3
@@ -27,6 +27,20 @@ comments:
   modified_at: 2026-11-14T11:37:34.513307902Z
   session_id: 01a1d8f3-f948-7072-b174-fa9507ed074b
   harness_version: 2.1.325 (Claude Code)
+- id: 01a1d9e4-9c80-7eb2-ae28-6921120fcce8
+  author: dirtlab
+  content: 'Native lane on disrad-dvp98b3puw at e81b5754d9: original focused triage test passed without a terminal (lane job j20261114T114043213-2-0, 1 passed). Added test-only assertions reporting the full GrantCheck rejection and checking resolved advisor authority before the triage loop, which otherwise swallows rework refusals. Modified focused test also passed (j20261114T114732486-2-0, 1 passed). No root cause established: dell1-over-ssh reproduction is still required; this host is not dell1. Supplied codegraph absolute path /home/joe/ai/aida/.codegraph/proxy-state/bin/codegraph is absent; doctor reports missing. Edits remain uncommitted for host review; do not treat this diagnostic slice as completion.'
+  created_at: 2026-11-14T11:50:00.576634473Z
+  modified_at: 2026-11-14T11:50:00.576634473Z
+  session_id: 01a1d9db6859
+  harness_version: codex-cli 0.167.0
+- id: 01a1d9e7-b5f1-7202-8a34-dd88d7a26a83
+  author: dirtlab
+  content: 'Validation complete for the uncommitted diagnostic slice: modified focused test executed 1 test and passed; make check-ci-fast exited 0 with 48 gates passed; rustfmt --check and git diff --check passed. BUG remains punted for dell1-over-ssh reproduction and cause identification; no completion or publication declaration recorded.'
+  created_at: 2026-11-14T11:53:23.697784048Z
+  modified_at: 2026-11-14T11:53:23.697784048Z
+  session_id: 01a1d9db6859
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1d9d9-0f81-7752-9b38-a66eb0c96eaa
   author: joe
@@ -50,6 +64,15 @@ history:
   session_id: 01a1d9db6859
   harness_version: codex-cli 0.167.0
   changes: []
+- id: 01a1d9e4-d782-7bf3-aada-5204f09d5878
+  author: dirtlab
+  timestamp: 2026-11-14T11:50:15.682476923Z
+  session_id: 01a1d9db6859
+  harness_version: codex-cli 0.167.0
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 filed_at:
   code_sha: c219a07bf39e3e7210b8e3f14bf17708d20c3b5f
   branch: integration
@@ -59,3 +82,8 @@ filed_at:
   vendor: claude
   session: 01a1d9b6-e721-73f1-9ad6-1343da1a030e
   harness_version: 2.1.325 (Claude Code)
+attention_reason:
+  category: missing-context
+  detail: Required dell1-over-ssh reproduction is unavailable in this lane, which runs on disrad-dvp98b3puw. Original and diagnostic-enhanced focused tests both pass without a terminal here. No root cause established. Uncommitted test-only assertions now expose GrantCheck rejection and resolved advisor authority before triage; rerun on dell1 with umask 022 and --nocapture to distinguish rejected fixture authority from a later rework refusal. Do not mark complete or publish as a fix.
+  raised_by: implementer
+  raised_at: 2026-11-14T11:50:15.682463167Z
