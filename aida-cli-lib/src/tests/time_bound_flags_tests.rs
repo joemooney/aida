@@ -147,6 +147,11 @@ fn classified_flags() -> Vec<(&'static str, Kind)> {
             "aida changelog generate --since",
             NotATimeBound("release tag"),
         ),
+        // trace:STORY-2772 | ai:claude
+        (
+            "aida integration promotion-check --since",
+            NotATimeBound("git commit: the last promotion's cut on integration's first-parent line"),
+        ),
         (
             "aida changelog generate --until",
             NotATimeBound("release tag"),
