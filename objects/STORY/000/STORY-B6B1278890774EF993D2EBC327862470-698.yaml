@@ -12,15 +12,13 @@ description: |-
   4. 'aida deputy shell list --name N' shows loop mode and restart count.
   5. The interactive aida shell function forwards --loop unchanged (no separate loop logic in the function).
   6. The runner records why it exits (the reason today's review runner died is unknown; log it on the next occurrence).
-status: InProgress
+status: Completed
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-13T22:18:52.888699274Z
-modified_at: 2026-11-14T22:19:40.224703008Z
+modified_at: 2026-11-14T23:39:50.452418445Z
 req_type: Story
-tags:
-- track:integration
 relationships:
 - rel_type:
     custom: implemented-by
@@ -169,6 +167,20 @@ history:
   author: joe
   timestamp: 2026-11-14T22:19:41.721366805Z
   changes: []
+- id: 01a1dc6e-79e2-7371-8748-570dfc4f2173
+  author: aida-auto-bump
+  timestamp: 2026-11-14T23:39:50.114200606Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a1dc6e-7b34-74f1-9955-c74c70adca14
+  timestamp: 2026-11-14T23:39:50.452414288Z
+  agent: aida
+  commit_sha: 786738cea92618fee2d1eae01fe97b1d46eef12e
+  summary: 'STORY-2775 --loop supervisor meets AC1-6: backoff 1s->60s with 600s reset (story_2775_backoff_caps_and_resets), clean/signal restarts (restarts_clean_and_signal_exits), INT/TERM/HUP stop+reap+lock release (operator_signals_stop_supervisor), timestamped runner.log before fallible stderr (broken_stderr_preserves_exit_reason, a_job_records... rc=0 reason), list loop/restarts with proc identity (status_requires_matching_process_identity), wrapper forwards "$@" unchanged (dev_cmd.rs deputy branch). Merged-in #3979/#3988/#3989 out of scope. CI pending at review time.'
+  review_verdict: approved
 filed_at:
   code_sha: 97d2f9fda0856183dee299b29760f3004c5db881
   branch: main
@@ -178,3 +190,7 @@ filed_at:
   vendor: claude
   session: 01a1d684-8599-70e0-a01c-714f54d2f8de
   harness_version: 2.1.323 (Claude Code)
+implementation_info:
+  implemented: false
+  completed_at: 2026-11-14T23:39:50.114192555Z
+  completion_sha: 786738cea92618fee2d1eae01fe97b1d46eef12e
