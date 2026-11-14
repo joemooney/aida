@@ -9,16 +9,15 @@ description: |
   1. The open-changes scan that train opening runs does not fail on a PR with more than 250 commits: page through correctly, or use a bounded query that needs no full commit list (for example, the PR title and head ref for spec IDs).
   2. An unreadable unrelated PR does not stop a train: it is reported and skipped, and the train refuses only when the unreadable PR could name one of the train's own specs.
   3. Test: a fixture forge returns an incomplete commit page for an unrelated PR, and the train opens.
-status: InProgress
+status: Completed
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-14T15:26:35.946322613Z
-modified_at: 2026-11-14T22:17:51.413716406Z
+modified_at: 2026-11-14T23:39:43.126536510Z
 req_type: Bug
 tags:
 - area:train
-- track:integration
 relationships:
 - rel_type:
     custom: implemented-by
@@ -66,6 +65,20 @@ history:
   author: joe
   timestamp: 2026-11-14T22:17:52.776463179Z
   changes: []
+- id: 01a1dc6e-5d4e-7f10-9453-a71ef7a5e555
+  author: aida-auto-bump
+  timestamp: 2026-11-14T23:39:42.798901957Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a1dc6e-5e96-7711-8c6c-47586aa91e7f
+  timestamp: 2026-11-14T23:39:43.126532942Z
+  agent: aida
+  commit_sha: 786738cea92618fee2d1eae01fe97b1d46eef12e
+  summary: 'AC1 verified: PRs over 250 commits page compare/<base sha>...<head sha> with total_commits==declared count, distinct shas, last==head and snapshot re-read; every mismatch fails closed (pr_lookup.rs:622-660). AC2 not-applicable: dropped by advisor ruling on the spec. AC3 verified at the lookup train opening uses (bug_2583_a_pr_over_the_commit_endpoint_ceiling_is_paged_by_compare; forge.rs:2298 -> all_open_pr_info_for_spec). CI green at head.'
+  review_verdict: approved
 filed_at:
   code_sha: f5128d18cf1ff8dd78baa28e7bf57dcc4c69fc18
   branch: main
@@ -75,3 +88,7 @@ filed_at:
   vendor: claude
   session: 01a1d9ea-4e25-7033-85e8-3648f0195c7c
   harness_version: 2.1.325 (Claude Code)
+implementation_info:
+  implemented: false
+  completed_at: 2026-11-14T23:39:42.798893645Z
+  completion_sha: 786738cea92618fee2d1eae01fe97b1d46eef12e
