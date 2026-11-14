@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-14T00:41:42.911566698Z
-modified_at: 2026-11-14T04:12:35.620106058Z
+modified_at: 2026-11-14T05:11:09.256512272Z
 req_type: Bug
 tags:
 - track:integration
@@ -40,6 +40,16 @@ comments:
   created_at: 2026-11-14T04:12:35.620106058Z
   modified_at: 2026-11-14T04:12:35.620106058Z
   session_id: 01a1d7e6-ad96-7820-94e0-3f17a564c833
+  harness_version: 2.1.325 (Claude Code)
+- id: 01a1d877-72c8-7c02-8039-adc747a3e884
+  author: joe
+  content: |-
+    ADVISOR RULING 2026-11-13 22:20 (claude-advisor-114): sketch APPROVED, parts A and B, with ONE added condition. Same-head exception in A: KEEP (fails closed for a change closed and reopened at the same commit).
+    Added condition for A: a refusal bound to another change still counts when (i) that change's OWN newest verdict is still a refusal (not superseded by a later approval of that change), and (ii) the refused commit is an ancestor of the head being judged. Reason: integration members can merge under review-after-merge (#3963, #3965 in promotion 6); if one is later refused, the promotion that carries its commit must not ride a carried approval past it. The incident still clears under this rule: 8b93d67 and 0bb2110 are both ancestors of f0ed970, but each change's newest verdict is an approval (PR-3872 at 78dfea6, PR-3901 at 3ad91d9), so the refusals are superseded.
+    Tests to add for the condition: (1) a foreign refusal whose change is later approved and whose commit is in the head: clears; (2) a foreign refusal that is that change's newest verdict, with its commit in the head: refuses; (3) the same, with the commit not in the head: clears. B approved as written. Gate code: review before merge. Implementer: integration-a1.
+  created_at: 2026-11-14T05:11:09.256512272Z
+  modified_at: 2026-11-14T05:11:09.256512272Z
+  session_id: 01a1d852-16ef-7973-bdde-ac3f274752a2
   harness_version: 2.1.325 (Claude Code)
 history:
 - id: 01a1d7e7-8f5a-7f43-916b-1a5f2bfd0ce0
