@@ -22,7 +22,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-14T20:47:29.076518272Z
-modified_at: 2026-11-14T22:15:51.615759050Z
+modified_at: 2026-11-14T22:46:26.672613913Z
 req_type: Bug
 tags:
 - disk
@@ -80,6 +80,13 @@ comments:
   modified_at: 2026-11-14T22:15:51.615759050Z
   session_id: 01a1dc1226eb
   harness_version: 2.1.319 (Claude Code)
+- id: 01a1dc3d-9870-72f3-8a98-08fbdb06cc88
+  author: joe
+  content: 'Advisor ruling 15:46 on PR-4062 CR at af161ee: both findings BLOCKING. P1 (data loss): before any recursive delete, canonicalize and pin the cleanup roots (target, target/worktrees, lane-overlay), refuse a root that is or passes through a symlink, and require each candidate''s physical path to stay under the pinned root; regression test with an outside sentinel dir behind a symlinked root that must survive --apply. P2: an unreadable root, ownership-read error or entry error makes the scan partial (partial=true, bytes_complete=false, a partial-scan finding, --fail-on-findings fails); test root and entry read failures. Gate before push: cargo test -p aida-cli-lib worktree_lifecycle_gc plus the four ratchet tests (story_1888_gate_paths, bug_1502_format_json_audit, bug_1985_host_status_guard, help_surface_matches_golden_snapshot) and make check-ci-fast. Hold stays; ci:full off until the delta review is launched.'
+  created_at: 2026-11-14T22:46:26.672613913Z
+  modified_at: 2026-11-14T22:46:26.672613913Z
+  session_id: 01a1dc2c-25f2-7d52-aa8c-61e0f270e9d1
+  harness_version: 2.1.325 (Claude Code)
 history:
 - id: 01a1dbd4-f7e2-7a82-bc00-323f2c6b3b3d
   author: joe
