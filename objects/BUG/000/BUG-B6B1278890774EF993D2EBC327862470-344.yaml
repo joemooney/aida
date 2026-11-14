@@ -10,12 +10,12 @@ description: |
   2. `aida deputy shell list` shows, for each queued job, whether its submitter is still live or would be refused at claim, so a rotated seat knows what will run.
   3. The rotation handoff lists the outgoing session's queued deputy jobs with their ids, so the successor can keep or cancel them.
   4. Tests: a rotated session cancels a predecessor's queued job; a different handle still cannot.
-status: InProgress
+status: NeedsAttention
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-14T13:30:29.047902507Z
-modified_at: 2026-11-14T18:04:59.146687682Z
+modified_at: 2026-11-14T18:38:08.755385240Z
 req_type: Bug
 tags:
 - area:deputy
@@ -68,6 +68,15 @@ history:
   author: joe
   timestamp: 2026-11-14T18:05:02.880146072Z
   changes: []
+- id: 01a1db5a-4573-7ba0-b395-f12b4cf17eed
+  author: aida-orchestrator
+  timestamp: 2026-11-14T18:38:08.755410468Z
+  session_id: 01a1db57ac7c
+  harness_version: 2.1.325 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 filed_at:
   code_sha: 2682c4c4fe5a42194a6f2eca01940008e3a41776
   branch: main
@@ -77,3 +86,11 @@ filed_at:
   vendor: claude
   session: 01a1d9ea-4e25-7033-85e8-3648f0195c7c
   harness_version: 2.1.325 (Claude Code)
+failure_reason:
+  phase: reviewer
+  phase_index: 3
+  kind: verdict:request-changes
+  detail: 'Ownership rule (owns_job) is sound and fails closed, but the list forecast is wrong from a sandboxed seat and AC4''s rotated-cancel test asserts nothing on success. AC1 cancel/ack: verified at the ownership check by bug_2579_a_rotated_seat_owns_... and ..._acknowledges_...; status/wait unscoped by source (deputy_shell_cmd.rs:416,490). AC2: unverified for sandboxed callers. AC3: verified by bug_2579_rotation_handoff_lists_...; wiring at agent_rotation.rs:466 by inspection. AC4: other-handle refusal verified; rotated cancel unverified. CI at head is the fast tier (compile + gates green, test shards skipped), so test evidence is the PR body''s dell1 run.'
+  recovery_hint: address the review findings, move BUG-2579 back to In Progress, and clear the PR hold only after approval
+  shelved_by: reviewer
+  shelved_at: 2026-11-14T18:38:08.755385240Z
