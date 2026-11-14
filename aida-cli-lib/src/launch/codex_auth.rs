@@ -70,6 +70,8 @@ pub(crate) const PROGRAM_SHA256: &str =
 
 /// Pin the probed interface without executing lane-selected code on the host.
 /// The actual vendor execution still happens only within the contained lane.
+/// Hash each launch: unchanged device/inode/size/mtime can conceal rewritten
+/// bytes, so that metadata tuple alone is insufficient for a cached admission.
 pub(crate) fn require_program(program: &Path, expected_sha256: &str) -> Result<()> {
     use sha2::{Digest, Sha256};
     use std::io::Read;

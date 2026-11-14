@@ -26,7 +26,7 @@ const DEFAULT_BACKOFF_FACTOR: u32 = 4;
 /// Tunables the orchestrator passes to [`run_with_retry`]. Loaded from
 /// `.aida/config.toml [orchestrator]` via [`RetryConfig::load`].
 #[derive(Debug, Clone)]
-pub(crate) struct RetryConfig {
+pub struct RetryConfig {
     pub max_attempts: u32,
     pub base_delay: Duration,
     pub factor: u32,
@@ -51,7 +51,7 @@ impl RetryConfig {
     /// Load `[orchestrator]` overrides from `.aida/config.toml`. Silently
     /// falls back to defaults when the file is missing or malformed — a
     /// broken config must not poison the retry path.
-    pub(crate) fn load(project_root: &Path) -> Self {
+    pub fn load(project_root: &Path) -> Self {
         let mut cfg = Self::default();
         let path = project_root.join(".aida").join("config.toml");
         let Ok(content) = std::fs::read_to_string(&path) else {
@@ -90,7 +90,7 @@ impl RetryConfig {
 /// against the captured stderr of the failed attempt; any substring hit
 /// classifies the failure as transient. Mirrors the patterns BUG-257 /
 /// BUG-266 already use for the phase-1 implementer leg.
-pub(crate) fn default_transient_patterns() -> &'static [&'static str] {
+pub fn default_transient_patterns() -> &'static [&'static str] {
     &[
         // gh / git network layer
         "error connecting to",
@@ -136,7 +136,7 @@ pub struct RetryEvent {
 
 /// Where retry events go. The orchestrator wires a [`DualSink`] of
 /// [`StderrSink`] + drain-state sink so post-hoc analysis can correlate.
-/// `pub` (not `pub(crate)`) so it can appear in the `Forge::merge_change`
+/// `pub` (not `pub`) so it can appear in the `Forge::merge_change`
 /// signature — STORY-516 routes the orchestrator merge's DualSink through it.
 /// trace:STORY-516 | ai:claude
 pub trait RetrySink {
@@ -145,7 +145,7 @@ pub trait RetrySink {
 
 /// Default sink: prints the orchestrator's `↻ <label> — transient error
 /// (attempt N/M) — retrying in Xms` line to stderr.
-pub(crate) struct StderrSink;
+pub struct StderrSink;
 
 impl RetrySink for StderrSink {
     fn on_retry(&mut self, ev: &RetryEvent) {
@@ -167,7 +167,7 @@ impl RetrySink for StderrSink {
 /// Discard sink — used by tests and by hypothetical non-orchestrator callers
 /// that just want the retry behaviour without the user-facing log line.
 #[allow(dead_code)]
-pub(crate) struct NoopSink;
+pub struct NoopSink;
 
 impl RetrySink for NoopSink {
     fn on_retry(&mut self, _ev: &RetryEvent) {}
@@ -175,7 +175,7 @@ impl RetrySink for NoopSink {
 
 /// Fan-out to two sinks. Lets the orchestrator mirror to stderr *and* the
 /// drain-state file in one `run_with_retry` call.
-pub(crate) struct DualSink<'a, A: RetrySink + ?Sized, B: RetrySink + ?Sized> {
+pub struct DualSink<'a, A: RetrySink + ?Sized, B: RetrySink + ?Sized> {
     pub a: &'a mut A,
     pub b: &'a mut B,
 }
@@ -190,7 +190,7 @@ impl<'a, A: RetrySink + ?Sized, B: RetrySink + ?Sized> RetrySink for DualSink<'a
 /// Substring-match against the transient-error allow-list. Empty patterns
 /// are skipped so an empty config entry can't accidentally classify
 /// everything as transient.
-pub(crate) fn classify_transient(stderr: &str, patterns: &[String]) -> bool {
+pub fn classify_transient(stderr: &str, patterns: &[String]) -> bool {
     // external-prose-classifier: network_retry::classify_transient
     patterns
         .iter()
@@ -216,7 +216,7 @@ fn first_meaningful_stderr_line(stderr: &str) -> String {
 ///
 /// `build` is a closure rather than a `Command` because `Command` is not
 /// cloneable; we mint a fresh one per attempt.
-pub(crate) fn run_with_retry(
+pub fn run_with_retry(
     label: &str,
     config: &RetryConfig,
     sink: &mut dyn RetrySink,
@@ -227,7 +227,7 @@ pub(crate) fn run_with_retry(
 
 // trace:BUG-b6b1278890774ef993d2ebc327862470-179 | ai:codex
 /// A fallible pre-attempt gate; refusal never launches another transport.
-pub(crate) fn run_with_retry_checked(
+pub fn run_with_retry_checked(
     label: &str,
     config: &RetryConfig,
     sink: &mut dyn RetrySink,

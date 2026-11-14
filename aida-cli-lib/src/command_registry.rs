@@ -320,7 +320,11 @@ pub(crate) fn cli_from_matches(matches: &mut ArgMatches) -> Result<Cli, clap::Er
         .expect("subcommand_name returned a name");
     Ok(Cli {
         globals,
-        command: Command::Registered(Invocation { reg, matches: sub }),
+        command: Command::Registered(Invocation {
+            reg,
+            matches: sub,
+            initialize_aliases: crate::spec_arg::ensure_alias_map,
+        }),
     })
 }
 

@@ -38,6 +38,11 @@ mod update;
 // trace:STORY-2571 | ai:codex
 #[path = "review_watch_service.rs"]
 pub(crate) mod service;
+#[path = "advisor_loop_train.rs"]
+mod train;
+#[allow(dead_code)] // Shared engine also contains review-watch-only entry points.
+#[path = "review_watch_train_service.rs"]
+pub(crate) mod train_service;
 
 #[derive(Args, Debug, Clone)]
 pub struct ReviewWatchArgs {
@@ -2427,12 +2432,24 @@ pub(crate) fn reviewer_status_on_spawn(
     on_spawn: impl FnOnce(),
 ) -> std::io::Result<std::process::ExitStatus> {
     use crate::process_retry::RetryEtxtbsy;
+    // trace:BUG-2546 | ai:codex
+    if let Some(grant) = cmd
+        .get_envs()
+        .find_map(|(key, value)| {
+            (key == aida_core::launch_policy::GRANT_ENV)
+                .then_some(value)
+                .flatten()
+        })
+        .and_then(|v| v.to_str())
+    {
+        crate::reviewer_completion::bind_grant(grant);
+    }
     let launch = LAUNCH.with(|launch| launch.borrow().clone());
     let Some((root, identity, key, head)) = launch else {
         let mut child = cmd.spawn_retrying_etxtbsy()?;
         note_agent_spawned();
         on_spawn();
-        return child.wait();
+        return crate::reviewer_completion::wait(&mut child);
     };
     let store = Store::open(&root, &identity).map_err(std::io::Error::other)?;
     retry_busy(|| store.record_reviewer(&key, &head, None)).map_err(std::io::Error::other)?;
@@ -2451,7 +2468,7 @@ pub(crate) fn reviewer_status_on_spawn(
             "{key}: reviewer identity unavailable; the attempt stays held as ambiguous: {error:#}"
         ),
     }
-    child.wait()
+    crate::reviewer_completion::wait(&mut child)
 }
 
 // trace:TASK-3472 | ai:codex
@@ -2524,23 +2541,15 @@ pub(crate) fn run_with_program(
     let mut reported_trains = BTreeSet::new();
     loop {
         service::check_controller(&root)?;
-        children.retain_mut(|d| match d.child.try_wait() {
-            Ok(Some(status)) => {
-                if let Err(error) =
-                    mark_unclaimed_exit(&store, &d.key, &d.token, &status.to_string())
-                {
-                    eprintln!("{}: could not record dispatcher exit: {error:#}", d.key);
-                }
-                false
-            }
-            _ => true,
-        });
+        for outcome in reap_dispatchers(&store, &mut children) {
+            service::controller_dispatch(&root, outcome.as_deref(), outcome.is_none())?;
+        }
         // trace:STORY-2492 | ai:codex
         if !sync_pass(&root, args.once)? {
             std::thread::sleep(std::time::Duration::from_secs(args.interval));
             continue;
         }
-        let changes = match repo.discover(&root) {
+        let changes = match observe_pass_input(&root, "discovery", repo.discover(&root)) {
             Ok(changes) => changes,
             Err(error) if !args.once => {
                 eprintln!("review-watch discovery refused: {error:#}");
@@ -2577,7 +2586,7 @@ pub(crate) fn run_with_program(
             &store,
             reviewable_changes(changes, &mut reported_trains),
             |change| {
-                watch_change(
+                let result = watch_change(
                     &root,
                     &repo,
                     &store,
@@ -2586,14 +2595,63 @@ pub(crate) fn run_with_program(
                     &authors,
                     change,
                     program,
-                )
+                );
+                observe_dispatch_result(&root, result)
             },
         )?;
+        // Synchronous setup/spawn errors are dispatch failures too: an idle
+        // discovery pass must not clear them before a dispatch succeeds.
+        // trace:STORY-2691 | ai:codex
+        service::controller_pass(&root, None)?;
         if args.once {
             return Ok(children.into_iter().map(|d| d.child).collect());
         }
         std::thread::sleep(std::time::Duration::from_secs(args.interval));
     }
+}
+
+// Count every synchronous dispatch refusal as it occurs, including several
+// failures in one pass and a fatal refusal that stops the pass early.
+// trace:STORY-2691 | ai:codex
+fn observe_dispatch_result(root: &Path, result: Result<()>) -> Result<()> {
+    if let Err(error) = &result {
+        if !is_busy(error) {
+            service::controller_dispatch(root, Some(&format!("{error:#}")), false)?;
+        }
+    }
+    result
+}
+
+// Confirm outcomes by reaping our own children; reservations alone are not success.
+// trace:STORY-2691 | ai:codex
+fn reap_dispatchers(store: &Store, children: &mut Vec<Dispatcher>) -> Vec<Option<String>> {
+    let mut outcomes = Vec::new();
+    children.retain_mut(|d| match d.child.try_wait() {
+        Ok(Some(status)) => {
+            // Match the durable receipt by both change and attempt token. A
+            // superseded attempt may already be terminal by the time we reap.
+            // Unreadable evidence cannot excuse an unexpected child failure.
+            let cancelled = store.load().ok().is_some_and(|state| {
+                state.entries.get(&d.key).is_some_and(|entry| {
+                    entry
+                        .attempts
+                        .iter()
+                        .any(|attempt| attempt.token == d.token && attempt.supersede.is_some())
+                })
+            });
+            if !cancelled {
+                outcomes.push(
+                    (!status.success()).then(|| format!("{}: dispatcher exited {status}", d.key)),
+                );
+            }
+            if let Err(error) = mark_unclaimed_exit(store, &d.key, &d.token, &status.to_string()) {
+                eprintln!("{}: could not record dispatcher exit: {error:#}", d.key);
+            }
+            false
+        }
+        _ => true,
+    });
+    outcomes
 }
 
 // Train members were reviewed at their own heads. Exclude the landing PR
@@ -2627,8 +2685,17 @@ fn reviewable_changes(
 // A transient synchronization refusal skips only this pass. `--once` retains
 // its nonzero contract; continuous mode will try again after the interval.
 // trace:STORY-b6b1278890774ef993d2ebc327862470-418.ac8cff0f | ai:codex
+fn observe_pass_input<T>(root: &Path, label: &str, result: Result<T>) -> Result<T> {
+    if let Err(error) = &result {
+        if !is_busy(error) {
+            service::controller_pass(root, Some(&format!("{label}: {error:#}")))?;
+        }
+    }
+    result
+}
+
 fn sync_pass(root: &Path, once: bool) -> Result<bool> {
-    match admission::sync(root) {
+    match observe_pass_input(root, "synchronization", admission::sync(root)) {
         Ok(()) => Ok(true),
         Err(error) if once => Err(error),
         Err(error) => {
@@ -3569,6 +3636,21 @@ pub(crate) fn fixture_admission_spawn_failure(
         "local capacity leaked after hub cancellation error"
     );
     Ok(())
+}
+
+// Automatic trains deliberately require an approval recorded on this exact
+// head. The train's ordinary member gate still checks all publication gates.
+// trace:STORY-2691 | ai:codex
+pub(crate) fn advisor_train_eligible(
+    root: &Path,
+    pr: u64,
+) -> std::result::Result<String, crate::pr_train::MemberGateError> {
+    let unavailable =
+        |e: anyhow::Error| crate::pr_train::MemberGateError::Unavailable(format!("{e:#}"));
+    let repo = forge::Repository::load(root).map_err(unavailable)?;
+    let change = repo.change(root, pr).map_err(unavailable)?;
+    train::eligible(&change, &ready::Live { root, repo: &repo })?;
+    Ok(change.head)
 }
 
 /// Read the existing receipt store without acquiring a writer lock or creating it.
