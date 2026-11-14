@@ -17,7 +17,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-13T16:07:16.079959811Z
-modified_at: 2026-11-14T10:44:22.102687345Z
+modified_at: 2026-11-14T11:51:01.028931698Z
 req_type: Story
 tags:
 - integration
@@ -56,6 +56,13 @@ comments:
   created_at: 2026-11-14T10:39:38.164968103Z
   modified_at: 2026-11-14T10:39:38.164968103Z
   session_id: 01a1d8f3-f948-7072-b174-fa9507ed074b
+  harness_version: 2.1.325 (Claude Code)
+- id: 01a1d9e5-88a4-7143-9771-463422efac0f
+  author: joe
+  content: 'Round 2 review fixes: (1) contained lanes env_clear their final env and rebuild it from launch/contained.rs ENV, which lacked AIDA_TRACK — added it, with a selected_environment regression. (3) Track admission now runs before gate_agent_bypass and the resume/duplicate prompt in both foreground and --bg paths (explicit --resume target exempt), consistent with TASK-121. (4) Both paths derive the role via a shared launch_track_role helper (explicit --role, else existing lease role, else scope role). (2) New entry-point regression drives agent_new_with_config and agent_new_bg_dispatch: foreign-track implementer refused with no on-disk footprint and no status change; reviewer and explicit-resume launches pass track admission. Removed the vacuous .aida/sessions assert.'
+  created_at: 2026-11-14T11:51:01.028931698Z
+  modified_at: 2026-11-14T11:51:01.028931698Z
+  session_id: 01a1d9dfda92
   harness_version: 2.1.325 (Claude Code)
 history:
 - id: 01a1d5ab-b363-7a91-8355-50d0017404d4
