@@ -581,12 +581,20 @@ description: |
   ### finding-hash:45e63a87
 
   waiter_refuses_pull_when_remote_moves_in_flight line 382 asserts !pull_reusable(store, root, false, false), but the code repo in that fixture has no origin remote, so the assertion passes vacuously. The real code-leg veto is covered by code_remote_freshness_independently_vetoes_reuse.
+
+
+  ## Findings from PR-3994
+  Reviewed sha: 0e37a6bbbf542f864e7946af11bd56f9bbdc20c7
+
+  ### finding-hash:7c082b28
+
+  aida-testkit/src/test_exec.rs:39-49 reimplements the 5x50ms ETXTBSY retry from aida-term/src/process_retry.rs:9-33 (needed because testkit may depend only on aida-core); nothing ties the two policies, so they can drift silently
 status: Draft
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-13T20:01:56.623034248Z
-modified_at: 2026-11-14T11:15:56.873797489Z
+modified_at: 2026-11-14T11:44:04.444875807Z
 req_type: Task
 tags:
 - carried-finding:BUG-2543:2a99ebfc
@@ -656,6 +664,7 @@ tags:
 - carried-finding:PR-3990:6935f83d
 - carried-finding:PR-3994:46a7a9dc
 - carried-finding:PR-3994:51cbf3a8
+- carried-finding:PR-3994:7c082b28
 - carried-finding:PR-3997:3f4b4821
 - carried-finding:PR-3998:0bff30e1
 - carried-finding:PR-4000:73e42b4b
@@ -764,6 +773,7 @@ tags:
 - finding-hash:76a786ef
 - finding-hash:79f360e4
 - finding-hash:7bbbf9a9
+- finding-hash:7c082b28
 - finding-hash:7ce2cb14
 - finding-hash:8a49a174
 - finding-hash:96ff0aa3
@@ -1065,6 +1075,11 @@ history:
   author: joe
   timestamp: 2026-11-14T11:15:58.258033885Z
   session_id: 01a1d9c2575b
+  changes: []
+- id: 01a1d9df-32da-7aa3-b99c-adca16262bb5
+  author: joe
+  timestamp: 2026-11-14T11:44:05.850203256Z
+  session_id: 01a1d9da4c4a
   changes: []
 filed_at:
   code_sha: 91fe1e337894199f15365d3f8ecfaf81366f8291
