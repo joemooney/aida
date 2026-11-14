@@ -4624,6 +4624,20 @@ pub(crate) fn pr_ship_with_method_and_dispatch_ctx(
         );
     }
 
+    // trace:BUG-2549 | ai:codex — a reference merge leaves work to resume.
+    // Session-end repeats this after asynchronous lease cleanup if necessary.
+    if let Some((title, _)) = &pr_title_body {
+        for spec in pr_ship::extract_trailing_refs_spec_ids_from_subject(title) {
+            if let Err(error) = crate::lane_recovery::reconcile_reference(
+                &main_worktree,
+                &spec,
+                &format!("PR-{pr_number}"),
+            ) {
+                eprintln!("warning: reference-merge recovery for {spec} needs retry: {error:#}");
+            }
+        }
+    }
+
     // BUG-1537: `merged_this_run` (set only where THIS invocation performed
     // the merge, never in the `already_merged` no-op path) is the one signal
     // that distinguishes an act this run performed from one it merely
