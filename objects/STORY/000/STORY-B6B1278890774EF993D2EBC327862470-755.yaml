@@ -63,7 +63,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-14T22:17:14.287572154Z
-modified_at: 2026-11-14T22:23:52.448763006Z
+modified_at: 2026-11-14T22:24:00.563057904Z
 req_type: Story
 relationships:
 - rel_type:
@@ -236,6 +236,11 @@ relationships:
   target_id: 01a1caf3-1e9c-7133-8ca2-304f31b1bf41
   created_at: 2026-11-14T22:23:52.448758187Z
   created_by: joe
+- rel_type:
+    custom: covers
+  target_id: 01a1d275-98cf-79d2-a593-ddcf2c905ca6
+  created_at: 2026-11-14T22:24:00.563054534Z
+  created_by: joe
 history:
 - id: 01a1dc23-20a0-7e10-b2e9-4696957f297d
   author: joe
@@ -372,6 +377,10 @@ history:
 - id: 01a1dc28-f3ec-7c40-ba18-ae081954ad3a
   author: joe
   timestamp: 2026-11-14T22:23:53.836823828Z
+  changes: []
+- id: 01a1dc29-1364-7a90-a3ae-da4ef87f27a7
+  author: joe
+  timestamp: 2026-11-14T22:24:01.892261344Z
   changes: []
 filed_at:
   code_sha: 3cb7ba4fab12c60797d42bf51c7845633680c7d2
