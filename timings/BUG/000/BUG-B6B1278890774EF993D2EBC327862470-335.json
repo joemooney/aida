@@ -1,0 +1,22 @@
+{
+  "schema_version": 1,
+  "spec": "BUG-B6B1278890774EF993D2EBC327862470-335",
+  "publishes": [
+    {
+      "at": "2026-11-14T13:17:20.590608205Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-11-14T13:17:20.533488263Z",
+      "spec": "BUG-b6b1278890774ef993d2ebc327862470-335",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "30872c0389dfcbd7ecbd7b9ceccf2d607ebc041c",
+        "pr": 3992,
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
