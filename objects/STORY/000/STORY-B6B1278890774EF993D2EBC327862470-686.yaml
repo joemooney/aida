@@ -30,7 +30,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-13T15:54:08.931576118Z
-modified_at: 2026-11-14T19:34:46.151001895Z
+modified_at: 2026-11-14T20:09:47.769617724Z
 req_type: Story
 tags:
 - architecture
@@ -315,6 +315,13 @@ comments:
   content: 'Advisor ruling (2026-11-14 12:36, CR on PR-3956 at be81871): both items are blocking. (1) The manual cites a subcommand the CLI rejects (contracts shard: ''FAIL subcommands - 1 cited subcommand(s) the CLI rejects as unrecognized''); find it with the manual check under scripts/ and correct the sentence (the ReadOnly knobs sentence the reviewer named). (2) Failures of full-tier run 43623758564 (head f272c6b), read by the advisor from the job log: aida-cli tests bug_2201_outside_project_reviewer (contained_reviewer_in_outside_project_records_its_verdict, contained_reviewer_without_reviewer_config_is_refused_before_launch, denied_reviewer_error_names_the_denied_calls), bug_2139_headless_child_grant::orchestrated_headless_reviewer_gets_its_own_reviewer_grant, bug_2187_reviewer_record_identity::scrubbed_headless_reviewer_records_but_implementer_shell_refuses; aida-cli-lib lib tests gate::mandate_gates::story_1888_gate_paths_tests::every_gate_module_is_a_dispatch_module_a_kernel_or_an_orchestrator and pr_train::verified::bug2406::bug2406_real_builder_binding_and_production_gate_true (panic at aida-cli-lib/src/test_env.rs:109). be81871 addressed the pure-git reviewer launches; run each of these seven by name on dell1 at the new head, fix the ones this change causes (story_1888 gate-paths is a module-classification ratchet: classify any new gate module), and list on the spec, with evidence from a run on origin/main, any that fail without this change. Gate: those named tests plus make check-ci-fast, then push.'
   created_at: 2026-11-14T19:34:46.151001895Z
   modified_at: 2026-11-14T19:34:46.151001895Z
+  session_id: 01a1db6d-e689-7532-9eef-772722add87b
+  harness_version: 2.1.325 (Claude Code)
+- id: 01a1dbae-2df9-7352-94a9-4b8f0670e20e
+  author: joe
+  content: 'Advisor note (2026-11-14 13:10): the lane was stopped at 13:01 for the dell1 power-off. Its uncommitted work (3 files) is preserved as origin/wip/story-2763-1114 (f7f9f07) and committed in the retained dell1 seat as a WIP commit on the PR branch; continue from there with the 12:36 ruling. Nothing was pushed to the PR since be81871.'
+  created_at: 2026-11-14T20:09:47.769617724Z
+  modified_at: 2026-11-14T20:09:47.769617724Z
   session_id: 01a1db6d-e689-7532-9eef-772722add87b
   harness_version: 2.1.325 (Claude Code)
 history:
