@@ -13,12 +13,12 @@ description: |
   3. Full runs for different PRs run concurrently, within the Actions concurrency limits; a train still runs its merge-result CI.
   4. Docs: docs/advanced (landing) states the new gate; make check-ci-list shows the tier.
   Track: main (CI workflow + train eligibility). Ship via train.
-status: InProgress
+status: Done
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-14T12:41:27.454869454Z
-modified_at: 2026-11-14T21:59:21.424839664Z
+modified_at: 2026-11-14T22:13:00.766009720Z
 req_type: Story
 tags:
 - area:ci
@@ -191,6 +191,25 @@ comments:
   modified_at: 2026-11-14T21:43:46.055007400Z
   session_id: 01a1dbd6-f8cd-7313-a123-75ebbeaa2afd
   harness_version: 2.1.325 (Claude Code)
+- id: 01a1dc1e-e79e-72b0-8d7d-0d2aa1cb749c
+  author: dirtlab
+  content: |-
+    ## Implementer handoff: rework for the 14:46 advisor ruling (pushed, 5d71c441e0 on PR-4027)
+
+    - `forge_commit_ci.rs` `latest_per_name`: a workflow run whose jobs were all skipped, or that carries the `label event (CI tier unchanged)` row, is dropped whole. It neither counts nor supersedes; supersession is decided only among runs that executed.
+    - `judge_commit_checks`: a commit on which no check passed (none reported, or only skipped rows) is `NoChecks`, never Green. This applies to every forge and to rows with no owning run. The TASK-1945 test that pinned "only skipped checks, no required list -> Green" now expects `NoChecks`.
+    - Tests (`task_1945_commit_ci_tests.rs`, `story_2809_full_tier_tests.rs`): (a) green real run then label-event run -> Green and `FullTier::Green`; (b) red real run then label-event run -> Failed; (c) only a label-event run -> `NoChecks` / `FullTier::Missing`; (d) each with and without a required list.
+    - `docs/advanced/landing.md`: states that a non-tier label run is ignored.
+    - Round-2 findings 1-3 were already fixed in dc532a7a6f; no further change.
+
+    ### Validation
+    - Lane job `cargo test --profile agent -p aida-cli-lib --lib -- commit_ci story_2809 full_tier review_watch_ready story_1689 bug2406`: 108 passed, 1 failed. The failure is `aida_sized_relay_native_statuses_reach_required_pr_and_train_gates`, which needs a `debug/aida` binary this lane does not build.
+    - `python3 -m unittest tests.test_ci_tiers`: 7 passed.
+    - `make check-ci-fast`: NOT completed. It stops at `Containment conformance evidence tests` (7 errors, AF_UNIX sockets denied by the seat sandbox); the gates after it did not run here. `rustfmt --check` on the touched files is clean.
+  created_at: 2026-11-14T22:12:55.326524734Z
+  modified_at: 2026-11-14T22:12:55.326524734Z
+  session_id: 01a1dc121600
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1da15-71c2-7341-9db1-1661bad607cc
   author: aida-session-start
@@ -276,6 +295,15 @@ history:
   session_id: 01a1dc121600
   harness_version: 2.1.319 (Claude Code)
   changes: []
+- id: 01a1dc1e-fd18-7ff2-bf0b-292ac7bcad88
+  author: dirtlab
+  timestamp: 2026-11-14T22:13:00.824538642Z
+  session_id: 01a1dc121600
+  harness_version: 2.1.319 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Done
 filed_at:
   code_sha: 166920a3bf8bd517e8d670a09dd3a7a3de96b7f9
   branch: main
@@ -285,3 +313,7 @@ filed_at:
   vendor: claude
   session: 01a1d9ea-4e25-7033-85e8-3648f0195c7c
   harness_version: 2.1.325 (Claude Code)
+implementation_info:
+  implemented: true
+  implemented_at: 2026-11-14T22:13:00.766009720Z
+  implemented_by: dirtlab

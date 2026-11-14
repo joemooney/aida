@@ -30,7 +30,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-13T15:54:08.931576118Z
-modified_at: 2026-11-14T22:00:33.476287425Z
+modified_at: 2026-11-14T22:11:18.605273165Z
 req_type: Story
 tags:
 - architecture
@@ -359,6 +359,13 @@ comments:
   modified_at: 2026-11-14T22:00:33.476279733Z
   session_id: 01a1dbd6-f8cd-7313-a123-75ebbeaa2afd
   harness_version: 2.1.325 (Claude Code)
+- id: 01a1dc1d-6dcd-7c42-b1bb-d725ed5d26cd
+  author: dirtlab
+  content: "Interaction with STORY-2821 after merging main (#4052): \n1. [review] stale_base is the only decision on refusing a stale head, at every reviewer launch (watcher, queue work, phase 3, aida review); fast freshness no longer redefines overlap or refuses anything itself, and --allow-stale-base lowers it to warn for one launch as before.\n2. Freshness decides only the evidence: a head the policy lets through is reviewed against the landed tree (ordinary prompt if the base conflicts and no landed tree exists); a fast head the policy refuses for a real conflict is recorded as rework-routed and sent to the implementer instead of a merge-base notice or branch update."
+  created_at: 2026-11-14T22:11:18.605273165Z
+  modified_at: 2026-11-14T22:11:18.605273165Z
+  session_id: 01a1dc15a9fb
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1d59e-6b4b-7d10-8aea-02729132bc6f
   author: joe

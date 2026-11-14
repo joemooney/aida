@@ -821,10 +821,3 @@
   added_at: 2026-11-14T21:40:30.341624722Z
   for_role: implementer
   added_by_machine: imac
-- user_id: role:implementer
-  requirement_id: 01a1da13-b69e-7432-8a3a-2159ce6e0b5e
-  position: 628000
-  added_by: role:implementer
-  added_at: 2026-11-14T21:43:51.725064116Z
-  for_role: implementer
-  added_by_machine: imac
