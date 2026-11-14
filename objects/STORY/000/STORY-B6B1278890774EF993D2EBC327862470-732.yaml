@@ -18,7 +18,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-14T12:41:27.454869454Z
-modified_at: 2026-11-14T21:40:03.985915037Z
+modified_at: 2026-11-14T21:43:41.583359983Z
 req_type: Story
 tags:
 - area:ci
@@ -177,6 +177,13 @@ comments:
   created_at: 2026-11-14T21:27:06.346033566Z
   modified_at: 2026-11-14T21:27:06.346033566Z
   session_id: 01a1dbe53d1f
+- id: 01a1dc04-250f-7080-ba70-c7c261f1b93c
+  author: joe
+  content: 'Advisor ruling (2026-11-14 14:46, CR on PR-4027 at 58f58c0): BLOCKING, correctness. latest_per_name takes the newest check per name, so a label-event run (BUG-2578, #4028: every job skipped under ''label event (...)'' names, plus its own skipped rows) can supersede the real CI run on the head: false not-ready when a required list is set, and fail-open Green when none is. Fix: a run whose jobs are all skipped (or whose tier job is the ''label event (CI tier unchanged)'' marker) never supersedes a real run at the same head; select per name among runs that actually executed, and when nothing executed the answer is not-green, never Green. Tests: (a) real full run green then a later label-event run at the same head -> still green and still FULL-confirmed; (b) real run red then label-event run -> still red; (c) only a label-event run at the head -> not green; (d) no required list configured, same three cases. Gate: the story_2809 tests plus tests/test_ci_tiers.py, make check-ci-fast, push. Delta review; ci:full was removed for the rework and is re-added at that review''s launch. If this is round 3 for the spec, the rework goes to a Claude Fable lane (standing order).'
+  created_at: 2026-11-14T21:43:41.583359983Z
+  modified_at: 2026-11-14T21:43:41.583359983Z
+  session_id: 01a1dbd6-f8cd-7313-a123-75ebbeaa2afd
+  harness_version: 2.1.325 (Claude Code)
 history:
 - id: 01a1da15-71c2-7341-9db1-1661bad607cc
   author: aida-session-start
