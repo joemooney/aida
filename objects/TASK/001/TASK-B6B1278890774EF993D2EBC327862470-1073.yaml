@@ -401,12 +401,20 @@ description: |
   ### finding-hash:0bff30e1
 
   verify-manual.py defaults to target/debug/aida, but the repo dev build (aida dev build / make build-fast) produces target/agent/aida, so a local run may silently check a stale target/debug binary (the printed path is the only signal); consider preferring the newest of target/{agent,debug} or warning on mtime older than HEAD
+
+
+  ## Findings from BUG-2563
+  Reviewed sha: bae09674fd695e30f02bea4dd7565dba2d51401e
+
+  ### finding-hash:0bff30e1
+
+  verify-manual.py defaults to target/debug/aida, but the repo dev build (aida dev build / make build-fast) produces target/agent/aida, so a local run may silently check a stale target/debug binary (the printed path is the only signal); consider preferring the newest of target/{agent,debug} or warning on mtime older than HEAD
 status: Draft
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-13T20:01:56.623034248Z
-modified_at: 2026-11-14T07:54:33.968523167Z
+modified_at: 2026-11-14T07:54:42.509203124Z
 req_type: Task
 tags:
 - carried-finding:BUG-2546:56ed8b81
@@ -417,6 +425,7 @@ tags:
 - carried-finding:BUG-2554:35d3eb09
 - carried-finding:BUG-2557:55e0cbfe
 - carried-finding:BUG-2557:f238ea37
+- carried-finding:BUG-2563:0bff30e1
 - carried-finding:BUG-2570:4843b9fe
 - carried-finding:BUG-2570:76a786ef
 - carried-finding:BUG-2570:7bbbf9a9
@@ -483,6 +492,7 @@ tags:
 - carried-from:BUG-2549
 - carried-from:BUG-2554
 - carried-from:BUG-2557
+- carried-from:BUG-2563
 - carried-from:BUG-2570
 - carried-from:PR-3921
 - carried-from:PR-3924
@@ -549,6 +559,7 @@ tags:
 - from-review:BUG-2549
 - from-review:BUG-2554
 - from-review:BUG-2557
+- from-review:BUG-2563
 - from-review:BUG-2570
 - from-review:PR-3921
 - from-review:PR-3924
@@ -719,6 +730,11 @@ history:
 - id: 01a1d90d-1559-7f31-a743-7a65ead11b06
   author: joe
   timestamp: 2026-11-14T07:54:35.737643429Z
+  session_id: 01a1d90b0ab1
+  changes: []
+- id: 01a1d90d-3657-7de2-b4b6-ff4940f9caa0
+  author: joe
+  timestamp: 2026-11-14T07:54:44.183718301Z
   session_id: 01a1d90b0ab1
   changes: []
 filed_at:
