@@ -1,0 +1,19 @@
+{
+  "id": "27a4eea3-0e6e-4a1d-b432-8c06e4d99e3d",
+  "thread_id": "27a4eea3-0e6e-4a1d-b432-8c06e4d99e3d",
+  "from": "claude-implementer-1056",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1794686924352,
+  "body": "PR #4058 is open against integration: STORY-2768 S3a, land run housekeeping, head 111afc8953e. It needs an independent review before merge.\n\nEvidence and the known limit (specs ever merged on integration are skipped, never reset) are in the PR body. Not yet run at the head: the dell1 rerun of `land:: session_hygiene` (the head is one wording-only commit past the checked d2327f3a7b6); I will post it on the PR when dell1 is back.\n",
+  "subject": "Review request: PR #4058 STORY-2768 S3a housekeeping, head 111afc8953e",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "implementer"
+}
