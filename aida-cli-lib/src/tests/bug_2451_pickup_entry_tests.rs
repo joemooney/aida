@@ -835,7 +835,19 @@ exit 1
         );
     }
     // Origin-only retained work also resumes, despite the historical merge.
-    git_ok(&fx.main, &["push", "-q", "origin", "bug-2451"]);
+    git_ok(
+        &fx.main,
+        &[
+            "-c",
+            "maintenance.auto=false",
+            "-c",
+            "gc.auto=0",
+            "push",
+            "-q",
+            "origin",
+            "bug-2451",
+        ],
+    );
     git_ok(&fx.main, &["branch", "-D", "bug-2451"]);
     assert_eq!(
         crate::queue_cmd::canonical_resume_branch(&fx.main, "BUG-2451", true).unwrap(),
@@ -982,6 +994,10 @@ fn bug_2549_unavailable_forge_preserves_exit_evidence() {
         &[
             "-c",
             "core.hooksPath=/dev/null",
+            "-c",
+            "maintenance.auto=false",
+            "-c",
+            "gc.auto=0",
             "commit",
             "--allow-empty",
             "-qm",
