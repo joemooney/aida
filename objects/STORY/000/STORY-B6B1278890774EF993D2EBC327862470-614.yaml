@@ -3,12 +3,12 @@ spec_id: STORY-b6b1278890774ef993d2ebc327862470-614
 agreed_id: STORY-2691
 title: 'Supervised advisor loops: run review watch, train and rework as services that adopt a renewed grant and alert when dispatch fails'
 description: 'Problem: on 2026-11-08 every review dispatch failed with no-valid-parent-seat-grant after a grant renewal, and nothing raised it until a manual inventory; recovery meant hand-killing parent processes. STORY-2571 covers review-watch grant rotation only. Requirement: these loops run under a supervisor, adopt a renewed grant without manual restart, leave in-progress trains alone, and report repeated dispatch failure through an operator-visible alert. Acceptance: renewing the grant restores dispatch with no manual step; N consecutive dispatch failures produce one alert.'
-status: InProgress
+status: Approved
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-09T01:58:46.910276326Z
-modified_at: 2026-11-13T15:32:41.557283122Z
+modified_at: 2026-11-14T18:04:05.174502942Z
 req_type: Story
 tags:
 - area:orchestration
@@ -282,6 +282,11 @@ comments:
   modified_at: 2026-11-13T15:32:41.557283122Z
   session_id: 01a1d54b-060a-7951-aa40-7f0fd928126f
   harness_version: 2.1.323 (Claude Code)
+- id: 01a1db3b-16b6-7412-b17a-0d1d1ed8fa76
+  author: lane-recovery
+  content: Reference merge `d99193947907b47f1c29b39e86a0e34b41030868` left unfinished work with no lease or open PR; returned to Approved.
+  created_at: 2026-11-14T18:04:05.174494517Z
+  modified_at: 2026-11-14T18:04:05.174494517Z
 history:
 - id: 01a1c5dd-0f8f-79d0-9864-f10de50286f7
   author: joe
@@ -567,6 +572,13 @@ history:
   timestamp: 2026-11-12T23:45:54.721943637Z
   session_id: 01a1d1fcea89
   changes: []
+- id: 01a1db3b-16b6-7412-b17a-0d2fb6821837
+  author: lane-recovery
+  timestamp: 2026-11-14T18:04:05.174502705Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Approved
 filed_at:
   code_sha: a7a14984cec5533987dfeccb70d1f91aaebbf22a
   branch: main
