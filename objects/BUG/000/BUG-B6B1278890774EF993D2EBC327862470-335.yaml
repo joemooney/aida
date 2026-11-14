@@ -1,0 +1,40 @@
+id: 01a1d7da-3e36-73b2-9d4a-d55cafe510e9
+spec_id: BUG-b6b1278890774ef993d2ebc327862470-335
+agreed_id: BUG-2570
+title: 'Two open changes under one spec overwrite each other''s verdict: land status and the hold premise read the wrong head'
+description: |
+  Two open changes that ship the same spec overwrite each other's verdict in the spec-keyed verdict file, so readers of that file see the wrong head for one of them.
+
+  Seen 2026-11-13 with #3972 and #3973 (stacked, both STORY-2768). #3973 was approved at 46777beb1b25 (01:42Z), then #3972 at d6cb65736391 (01:57Z). Afterwards:
+  - `aida land status` derived #3973 as NEEDS-REVIEW: "its approval was recorded at d6cb65736391 but the PR head is now 46777beb1b25".
+  - `aida merge-hold list` on #3973's hold: "premise stale: STORY-2768's verdict is now APPROVED at d6cb65736391".
+  - `aida review verdict PR-3973` read correctly: "APPROVED against 46777beb1b25" (gate ledger PR-3973.jsonl).
+
+  Cause: `.aida/review-verdicts/<SPEC>.json` is last-writer-wins per spec. The per-change records in the gate ledger are right.
+
+  Effect: a reconciler acting on the status row would launch a second reviewer for an approved change, and an approved change can be refused at the merge gate. It affects every stacked pair and any two changes under one spec.
+
+  Fix: the approval read used by `aida land status` (gate::approval::merge_approval_subject_observed and approval_decision) and the hold premise read prefer the per-change ledger verdict for the change being judged; the spec-keyed file is used only when the change has no ledger record.
+
+  Acceptance: with two open changes under one spec, each approved at its own head in either order, `aida land status` shows both READY and neither hold reports a stale premise. A test records the two approvals in both orders.
+status: Draft
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-14T02:19:26.646584262Z
+modified_at: 2026-11-14T02:19:26.646584262Z
+req_type: Bug
+tags:
+- effort:open:4h
+- landing
+- review
+- track:integration
+filed_at:
+  code_sha: a7a5c51d83e6e528432ae74c3e810d41da8dd7f8
+  branch: integration
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: bc24a1e6883
+  vendor: claude
+  session: 01a1d72e-0d28-76e0-890c-867fba05abcf
+  harness_version: 2.1.325 (Claude Code)
