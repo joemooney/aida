@@ -18,7 +18,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-13T00:35:57.525111678Z
-modified_at: 2026-11-14T14:52:12.560134506Z
+modified_at: 2026-11-14T17:04:05.844825008Z
 req_type: Story
 tags:
 - track:integration
@@ -146,6 +146,13 @@ comments:
   created_at: 2026-11-14T14:40:08.384566247Z
   modified_at: 2026-11-14T14:40:08.384566247Z
   session_id: 01a1d9ea-4e25-7033-85e8-3648f0195c7c
+  harness_version: 2.1.325 (Claude Code)
+- id: 01a1db04-2ad4-7ba2-a8d3-d443b56389bc
+  author: joe
+  content: 'Advisor ruling on the #3950 verdict at 07a7da8 (CHANGES REQUESTED): the single BLOCKING item is the env-seat fallback at mailbox_identity.rs:696: fix it and add a test. AC3 stays deferred by the earlier ruling, AC5 optional. Next review scoped to that fix.'
+  created_at: 2026-11-14T17:04:05.844825008Z
+  modified_at: 2026-11-14T17:04:05.844825008Z
+  session_id: 01a1dab1-9447-7d22-b5ff-0c9084e122ea
   harness_version: 2.1.325 (Claude Code)
 history:
 - id: 01a1d404-5b69-7883-a178-72d22e485802
