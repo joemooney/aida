@@ -17,7 +17,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-14T18:25:05.674074503Z
-modified_at: 2026-11-14T20:58:09.710985509Z
+modified_at: 2026-11-14T21:18:09.698644181Z
 req_type: Bug
 tags:
 - landing
@@ -75,6 +75,12 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a1dbec-c587-7061-93ea-bdf0bc2bd8f2
+  author: joe
+  timestamp: 2026-11-14T21:18:09.799242980Z
+  session_id: 01a1dbe6dc10
+  harness_version: 2.1.325 (Claude Code)
+  changes: []
 filed_at:
   code_sha: 96fc262834527304fe85fc9ee32e4d04f1aaf4ea
   branch: main
@@ -89,3 +95,11 @@ attention_reason:
   lean: branch bug-b6b1278890774ef993d2ebc327862470-350 is committed and rebased on origin/main; push it and open the PR from the host (aida ship BUG-2585 --no-merge), no code change needed
   raised_by: implementer
   raised_at: 2026-11-14T19:37:08.586861408Z
+failure_reason:
+  phase: reviewer
+  phase_index: 3
+  kind: verdict:request-changes
+  detail: Hold/adopt logic is sound and uses the full grant verdict, but the ExecContext environment ratchet fails on 7 new env sites (fast gates red, so no test shard ran), and the seat-side warning is suppressed by any later same-seat grant; bug protocol test-file item met
+  recovery_hint: address the review findings, move BUG-2585 back to In Progress, and clear the PR hold only after approval
+  shelved_by: reviewer
+  shelved_at: 2026-11-14T21:18:09.698644181Z
