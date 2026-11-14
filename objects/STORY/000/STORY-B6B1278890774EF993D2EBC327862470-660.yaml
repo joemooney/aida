@@ -23,7 +23,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-12T19:11:56.371806442Z
-modified_at: 2026-11-14T14:58:14.545072048Z
+modified_at: 2026-11-14T15:30:34.279387024Z
 req_type: Story
 tags:
 - operator-held
@@ -368,6 +368,13 @@ comments:
   created_at: 2026-11-14T13:03:35.322502816Z
   modified_at: 2026-11-14T13:03:35.322502816Z
   session_id: 01a1da22-e053-75c3-9cf4-7138db5805dd
+  harness_version: 2.1.325 (Claude Code)
+- id: 01a1daae-8aa7-7641-be32-bc4bfd7c15a7
+  author: joe
+  content: '[advisor a22 08:38] MAIN GAP 07:47 to now (it reaches 60 min at 08:47), cause known: (1) train 27 red, with promotion 9''s bug_2555 umask test and #4028''s Build-name test both failing; (2) from 08:06 to 08:30 every train stopped at opening on PR-4038''s 254-commit page (BUG-2583; #4038 retargeted to integration); (3) trains 28, 29 and 31 skipped members whose ci:full runs were still pending. Next landing: train 33b (#4034, full tier green at head).'
+  created_at: 2026-11-14T15:30:34.279387024Z
+  modified_at: 2026-11-14T15:30:34.279387024Z
+  session_id: 01a1d9ea-4e25-7033-85e8-3648f0195c7c
   harness_version: 2.1.325 (Claude Code)
 history:
 - id: 01a1d175-992b-7501-a0fb-89a007208ac0
