@@ -233,7 +233,8 @@ impl FileDispenser {
             if !path.try_exists()? {
                 let state = DispenserState::new(mode.clone());
                 let content = toml::to_string_pretty(&state)?;
-                crate::write_atomic(&path, content)?;
+                // trace:BUG-2555 | ai:claude
+                crate::write_atomic_mode(&path, content, crate::OWNER_WRITABLE_MODE)?;
             }
             Ok(())
         })?;
@@ -274,7 +275,10 @@ impl FileDispenser {
         // Atomic write: the advisory lock in `next()` serializes writers, but
         // atomic rename additionally guarantees a reader (or a crash) never
         // sees a half-written counter file. trace:TASK-331 | ai:claude
-        crate::write_atomic(&self.path, content)?;
+        // The mode is explicit: the reader refuses a counter that its group
+        // may write, which is what a umask of 002 would otherwise leave.
+        // trace:BUG-2555 | ai:claude
+        crate::write_atomic_mode(&self.path, content, crate::OWNER_WRITABLE_MODE)?;
         Ok(())
     }
 }
