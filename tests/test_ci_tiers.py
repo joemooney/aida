@@ -3,6 +3,7 @@ trace:STORY-2735 | ai:codex
 """
 import itertools
 import json
+import re
 import tempfile
 from pathlib import Path
 from types import SimpleNamespace
@@ -14,6 +15,41 @@ import yaml
 ROOT = Path(__file__).resolve().parents[1]
 WORKFLOW = yaml.safe_load((ROOT / '.github/workflows/ci.yml').read_text())
 JOBS = WORKFLOW['jobs']
+# A label event for any label but ci:full: it must not restart or cancel CI.
+# trace:BUG-2578 | ai:claude
+LABEL_NOOP = ("(github.event.action == 'labeled' || github.event.action == 'unlabeled')"
+              " && github.event.label.name != 'ci:full'")
+
+
+def render(template, event='pull_request', action='synchronize', label=None,
+           labels=(), head='feature/x', variable='', number=7, run_id=99):
+    """Evaluate a workflow string's ${{ }} expressions for one event."""
+    pull_request = event == 'pull_request'
+    github = SimpleNamespace(
+        workflow='CI', event_name=event, run_id=run_id, head_ref=head if pull_request else '',
+        event=SimpleNamespace(
+            action=action if pull_request else None,
+            label=SimpleNamespace(name=label),
+            pull_request=SimpleNamespace(number=number if pull_request else None)))
+    scope = {'github': github, 'vars': SimpleNamespace(AIDA_PR_CI_TIER=variable),
+             'labels': list(labels), 'contains': lambda a, b: b in a,
+             'startsWith': lambda a, b: a.startswith(b), 'always': lambda: True,
+             'format': lambda text, *args: text.format(*args)}
+
+    def evaluate(match):
+        expression = match.group(1).strip()
+        expression = expression.replace('github.event.pull_request.labels.*.name', 'labels')
+        expression = expression.replace('||', ' or ').replace('&&', ' and ')
+        expression = re.sub(r'!(?!=)', ' not ', expression)
+        return str(eval(expression, {'__builtins__': {}}, scope))
+    return re.sub(r'\$\{\{(.*?)\}\}', evaluate, str(template))
+
+
+LABEL_EVENTS = [(action, label) for action in ('labeled', 'unlabeled')
+                for label in ('aida:merge-hold', 'aida:merge-hold-cleared',
+                              'aida:merge-hold-recorded', 'ci:fast', 'bug')]
+TIER_EVENTS = [('opened', None), ('synchronize', None), ('reopened', None),
+               ('labeled', 'ci:full'), ('unlabeled', 'ci:full')]
 
 
 class CiTiers(unittest.TestCase):
@@ -60,10 +96,74 @@ class CiTiers(unittest.TestCase):
         self.assertIn({'run': 'cargo check --profile dev --workspace --tests'},
                       JOBS['fast-compile']['steps'])
 
+    # trace:BUG-2578 | ai:claude
+    def test_only_tier_changing_events_join_the_cancelling_pr_group(self):
+        concurrency = WORKFLOW['concurrency']
+        self.assertEqual(concurrency['cancel-in-progress'], "${{ github.event_name == 'pull_request' }}")
+        group = concurrency['group']
+        # Pushes and ci:full label changes share the PR's group, so they
+        # cancel the run they supersede.
+        for action, label in TIER_EVENTS:
+            self.assertEqual(render(group, action=action, label=label), 'CI-7', (action, label))
+        # Every other label event is alone in its group: it can neither
+        # cancel the PR's running CI nor be cancelled into restarting it.
+        for action, label in LABEL_EVENTS:
+            first = render(group, action=action, label=label, run_id=99)
+            second = render(group, action=action, label=label, run_id=100)
+            self.assertEqual((first, second), ('CI-label-99', 'CI-label-100'), (action, label))
+        for head in ('feature/x', 'train/batch'):
+            self.assertEqual(render(group, action='labeled', label='aida:merge-hold', head=head),
+                             'CI-label-99')
+            self.assertEqual(render(group, action='synchronize', head=head), 'CI-7')
+        for event in ('push', 'merge_group', 'schedule', 'workflow_dispatch'):
+            self.assertEqual(render(group, event=event), 'CI-99', event)
+
+    # trace:BUG-2578 | ai:claude
+    def test_other_label_events_skip_every_job_under_names_of_their_own(self):
+        text = (ROOT / '.github/workflows/ci.yml').read_text()
+        # One condition, copied; a divergent copy would split the behaviour.
+        self.assertEqual(text.count(LABEL_NOOP), 7)
+        self.assertEqual(text.count('github.event.label'), 7)
+        tier, aggregate = JOBS['tier'], JOBS['build-result']
+        real = {'tier': None, 'fast-gates': 'CI (fast gates)',
+                'fast-compile': 'CI (fast compile)', 'build-result': 'Build (ubuntu-latest)'}
+        for action, label in TIER_EVENTS:
+            for ci_full in (False, True):
+                event = dict(action=action, label=label, labels=['ci:full'] if ci_full else [])
+                self.assertEqual(render(tier['if'], **event), 'True', event)
+                self.assertEqual(render(aggregate['if'], **event), 'True', event)
+                self.assertEqual(render(tier['name'], **event),
+                                 'ci-tier: full' if ci_full else 'ci-tier: fast', event)
+                for job, name in real.items():
+                    if name:
+                        self.assertEqual(render(JOBS[job]['name'], **event), name, event)
+        for event in ('push', 'merge_group', 'schedule', 'workflow_dispatch'):
+            self.assertEqual(render(tier['if'], event=event), 'True', event)
+            self.assertEqual(render(aggregate['if'], event=event), 'True', event)
+            self.assertEqual(render(tier['name'], event=event), 'ci-tier: full', event)
+            self.assertEqual(render(aggregate['name'], event=event), 'Build (ubuntu-latest)', event)
+        for action, label in LABEL_EVENTS:
+            for ci_full in (False, True):
+                event = dict(action=action, label=label, labels=['ci:full'] if ci_full else [])
+                self.assertEqual(render(tier['if'], **event), 'False', event)
+                # always() alone would run the aggregate after a skipped tier.
+                self.assertEqual(render(aggregate['if'], **event), 'False', event)
+                for job in real:
+                    name = render(JOBS[job]['name'], **event)
+                    # The ship gate reads `ci-tier: ` markers and branch
+                    # protection reads Build; neither may see this run.
+                    self.assertTrue(name.startswith('label event ('), (job, name))
+                    self.assertNotIn(name.lower(), {n.lower() for n in real.values() if n})
+        # A skipped tier skips its dependents: none overrides the implicit
+        # success() with a status function.
+        for job in ('build', 'fast-gates', 'fast-compile'):
+            self.assertEqual(JOBS[job]['needs'], 'tier')
+            self.assertNotRegex(JOBS[job]['if'], r'always\(|cancelled\(|failure\(')
+
     def test_aggregate_runs_and_rejects_failed_cancelled_or_missing_selected_jobs(self):
         aggregate = JOBS['build-result']
-        self.assertEqual(aggregate['name'], 'Build (ubuntu-latest)')
-        self.assertEqual(aggregate['if'], '${{ always() }}')
+        self.assertEqual(render(aggregate['name']), 'Build (ubuntu-latest)')
+        self.assertEqual(aggregate['if'], '${{ always() && !(%s) }}' % LABEL_NOOP)
         self.assertEqual(set(aggregate['needs']), {'tier', 'build', 'fast-gates', 'fast-compile'})
         command = aggregate['steps'][0]['run']
         # Execute the workflow shell, including its -e contract: a failed first
