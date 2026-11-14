@@ -30,7 +30,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-13T15:54:08.931576118Z
-modified_at: 2026-11-14T01:02:00.844200818Z
+modified_at: 2026-11-14T01:14:18.581102800Z
 req_type: Story
 tags:
 - architecture
@@ -38,6 +38,12 @@ tags:
 - review
 - throughput
 - track:dell1
+relationships:
+- rel_type:
+    custom: implemented-by
+  target_id: 01a1d79e-4efa-7c21-b552-7c27b02dcf71
+  created_at: 2026-11-14T01:14:18.581099779Z
+  created_by: joe
 comments:
 - id: 01a1d59e-8403-7ec0-ae99-a8aca440a95a
   author: joe
@@ -215,6 +221,10 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a1d79e-a189-7d90-9386-681ba3021173
+  author: joe
+  timestamp: 2026-11-14T01:14:19.913350782Z
+  changes: []
 filed_at:
   code_sha: 3631f7ca05567a6984ff2376b997539389b6f758
   branch: main
