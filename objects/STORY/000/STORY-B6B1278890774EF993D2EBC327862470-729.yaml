@@ -1,0 +1,33 @@
+id: 01a1d9d7-77cc-7d21-b977-b65b821e50ff
+spec_id: STORY-b6b1278890774ef993d2ebc327862470-729
+agreed_id: STORY-2806
+title: 'Review PR-4020: [AI:claude] fix(land): land run stops an earlier run''s reviewers uncounted, rereads changes while it waits, and declares its limits (BUG-2571)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `(no-sess`) for branch `bug-2571-land-run-followups`.
+
+  - PR: <https://github.com/joemooney/aida/pull/4020>
+  - Branch: `bug-2571-land-run-followups` → `integration`
+
+  ## Covers
+
+  - BUG-2571
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 4020` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-14T11:35:39.212682115Z
+modified_at: 2026-11-14T11:35:39.212682115Z
+req_type: Story
+filed_at:
+  code_sha: e81b5754d976b81d044bb5aff1f29ba97aeaa730
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: e81b5754d97
+  vendor: claude
