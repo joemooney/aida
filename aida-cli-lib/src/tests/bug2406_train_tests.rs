@@ -1807,19 +1807,25 @@ fn bug2538_oversized_import_ejects_before_publication() {
     assert!(ensure_budget(MAX_EVIDENCE_BYTES + 1).is_err());
 }
 
+/// BUG-2569: a promotion branch claims no spec, so the coverage filter keeps
+/// every spec its car message names (promotion #3966 named 45).
+// trace:BUG-2569 | ai:claude
+const BUG2569_BRANCH: &str = "promote/fixture-6";
+
 /// BUG-2569: move main, merge it cleanly into PR 11's branch with `message`
 /// and point the forge at the new head. PR 11's approval stays at the old
 /// head, so it reaches the new one only by carry-over.
 // trace:BUG-2569 | ai:claude
 fn bug2569_carried_head(f: &Fixture, message: &str) -> String {
+    const BRANCH: &str = BUG2569_BRANCH;
     let root = f.root();
     fs::write(root.join("moved"), "main moved\n").unwrap();
     commit(root, "main moves");
     g(root, &["push", "-q", "origin", "main"]);
-    g(root, &["checkout", "-q", "source/BUG-2400"]);
+    g(root, &["checkout", "-q", BRANCH]);
     g(root, &["merge", "-q", "--no-ff", "-m", message, "main"]);
     let head = g(root, &["rev-parse", "HEAD"]);
-    g(root, &["push", "-q", "origin", "source/BUG-2400"]);
+    g(root, &["push", "-q", "origin", BRANCH]);
     g(root, &["checkout", "-q", "main"]);
     let mut state: Value =
         serde_json::from_slice(&fs::read(root.join("transport.json")).unwrap()).unwrap();
@@ -1857,7 +1863,7 @@ fn bug_2569_train_lands_a_carried_member_whose_car_names_a_spec_refused_elsewher
     if crate::test_env::run_path_isolated_test() {
         return;
     }
-    let f = Fixture::new(false);
+    let f = Fixture::with_member_metadata(false, Some(BUG2569_BRANCH), None);
     bug2569_carried_head(&f, "Merge main into the member (STORY-2220)");
     bug2569_refusal(&f, 99, &"c".repeat(40));
     let forge = GitHubForge::new(f.root());
@@ -1879,7 +1885,7 @@ fn bug_2569_member_gate_refuses_what_the_merge_step_would_refuse() {
     if crate::test_env::run_path_isolated_test() {
         return;
     }
-    let f = Fixture::new(false);
+    let f = Fixture::with_member_metadata(false, Some(BUG2569_BRANCH), None);
     bug2569_carried_head(&f, "Merge main into the member (STORY-2220)");
     let inside = f.records[0]["reviewed_sha"].as_str().unwrap().to_string();
     bug2569_refusal(&f, 99, &inside);
