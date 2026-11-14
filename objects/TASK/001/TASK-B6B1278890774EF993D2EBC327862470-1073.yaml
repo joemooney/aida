@@ -73,14 +73,23 @@ description: |
   ### finding-hash:56ed8b81
 
   story_2492_publication_tests.rs:1314-1315: the sleep(2100ms) + should_stop() assertion kept from main by the merge is redundant after reviewer_completion::wait has already returned via should_stop(); it adds 2.1s to the test without new coverage.
+
+
+  ## Findings from BUG-2546
+  Reviewed sha: eea1e099ccce691971930729c83d661c7147478f
+
+  ### finding-hash:56ed8b81
+
+  story_2492_publication_tests.rs:1314-1315: the sleep(2100ms) + should_stop() assertion kept from main by the merge is redundant after reviewer_completion::wait has already returned via should_stop(); it adds 2.1s to the test without new coverage.
 status: Draft
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-13T20:01:56.623034248Z
-modified_at: 2026-11-14T01:00:07.939307773Z
+modified_at: 2026-11-14T01:00:13.279137441Z
 req_type: Task
 tags:
+- carried-finding:BUG-2546:56ed8b81
 - carried-finding:BUG-2557:55e0cbfe
 - carried-finding:BUG-2557:f238ea37
 - carried-finding:PR-3938:654190b6
@@ -92,6 +101,7 @@ tags:
 - carried-finding:PR-3971:55e0cbfe
 - carried-finding:PR-3971:f238ea37
 - carried-finding:STORY-2735:2c7ae2ea
+- carried-from:BUG-2546
 - carried-from:BUG-2557
 - carried-from:PR-3938
 - carried-from:PR-3948
@@ -108,6 +118,7 @@ tags:
 - finding-hash:654190b6
 - finding-hash:c7c082c2
 - finding-hash:f238ea37
+- from-review:BUG-2546
 - from-review:BUG-2557
 - from-review:PR-3938
 - from-review:PR-3948
@@ -149,6 +160,11 @@ history:
 - id: 01a1d791-a606-7e82-89a2-2c84bf5e87b5
   author: joe
   timestamp: 2026-11-14T01:00:09.094832748Z
+  session_id: 01a1d78fe74b
+  changes: []
+- id: 01a1d791-bb2f-7820-a884-03d45b857c15
+  author: joe
+  timestamp: 2026-11-14T01:00:14.511684979Z
   session_id: 01a1d78fe74b
   changes: []
 filed_at:
