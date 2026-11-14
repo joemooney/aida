@@ -17,7 +17,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-13T22:18:52.888699274Z
-modified_at: 2026-11-14T06:49:47.577797308Z
+modified_at: 2026-11-14T07:14:41.831434732Z
 req_type: Story
 tags:
 - track:integration
@@ -29,6 +29,32 @@ comments:
   modified_at: 2026-11-14T06:43:39.110759791Z
   session_id: 01a1d852-16ef-7973-bdde-ac3f274752a2
   harness_version: 2.1.325 (Claude Code)
+- id: 01a1d8e0-1fc1-7a02-a299-87b2c447008b
+  author: dirtlab
+  content: |
+    Implemented CLI-owned script-runner supervision via --loop. The supervisor executes the running CLI image with the original arguments minus --loop, retains terminal/grant admission, restarts after clean/error/signal exits, uses 1s doubling backoff capped at 60s and resets after 600s uptime. INT/TERM to the supervisor forwards shutdown and reaps the runner; HUP permits restart. Timestamped runner.log records ordinary stop/error reasons and supervised exit code/signal/uptime; list reports live loop identity and restart count, including backoff. The existing shell wrapper already forwards arguments unchanged. Lock files remain reusable flock anchors; shutdown releases ownership and removes live loop state.
+
+    Changed deputy_shell module registration, runner and tests; added deputy_shell/supervisor.rs; updated deputy_shell_cmd and args, help golden snapshot and catalog, operator docs, and seven regenerated store-writer inventory sink entries. The inventory additions keep the existing blocked/no-new-authority classification.
+
+    Validation: launcher job j20261114T065946660-2-0 passed 75 deputy-shell/command-registry tests in parallel, including supervisor PID-targeted SIGINT/SIGTERM and child reaping, clean/crash restarts, backoff, stop during backoff, ordinary reason logging, and golden help. Job j20261114T070142228-2-0 repeated the same 75 tests serially and passed. Earlier runs exposed a fixture directory permission issue (fixed), missing help catalog entry (fixed), and two transient existing runner-lock test failures that did not recur in the final parallel or serial runs. Fast CI gates passed through the store-writer inventory gate after fixing formatting; after regenerating and reviewing the seven expected inventory entries, resumed CI's own fast-tier plan at that failed gate, and all 11 remaining gates passed. git diff --check passes.
+
+    Navigation limitation: the operator-supplied /home/joe/ai/aida/.codegraph/proxy-state/bin/codegraph is absent; aida doctor check codegraph confirms unavailable. Used source searches. Existing advisor grant, wrapper and human-terminal restrictions remain; --loop does not authorize unattended non-terminal execution or renew an invalid grant.
+
+    Native-seat handoff: edits remain uncommitted. Host launcher owns commit/push/PR and queue completion.
+  created_at: 2026-11-14T07:05:29.281838817Z
+  modified_at: 2026-11-14T07:05:29.281838817Z
+  session_id: 01a1d8d14e9e
+  harness_version: codex-cli 0.167.0
+- id: 01a1d8e8-8e27-7c31-bb59-2a4eb50d6dcd
+  author: dirtlab
+  content: |
+    Host fast-gate fix round: added an explicit target_os = "linux" guard to the supervisor test module. Its procfs self-executable and POSIX shell/signal fixtures are Linux-specific; the portability scanner does not infer the file's enclosing Unix module declaration from mod.rs. Kept cfg(test) separate so both source scanners and Rust see the intended scopes. A later ExecContext gate also found the helper's direct ambient read; replaced it with Environment::capture().get(CHILD_ROOT), using the shared capture boundary. Runtime implementation and ratchet baselines are unchanged.
+
+    Validation: scripts/check-portability.sh, rustfmt --check for supervisor.rs, git diff --check, and the five supervisor tests passed. make check-ci-fast passed the originally failing portability gate and all preceding gates; after fixing the later ambient-read finding, resumed CI's own fast plan at ExecContext and all remaining gates passed. Native edits remain uncommitted for host publication.
+  created_at: 2026-11-14T07:14:41.831434732Z
+  modified_at: 2026-11-14T07:14:41.831434732Z
+  session_id: 01a1d8d14e9e
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1d8cb-f2dc-7ec1-a627-8dfcb3f8fa5a
   author: joe
