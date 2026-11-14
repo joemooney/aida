@@ -5266,7 +5266,6 @@ fn story_2765_direct_track_admission_precedes_setup() {
         storage.load().unwrap().requirements[0].status,
         RequirementStatus::Approved
     );
-    assert!(!tmp.path().join(".aida/sessions").exists());
     drop(_env);
     let _matching = crate::test_env::EnvVarsGuard::set(&[("AIDA_TRACK", "integration")]);
     crate::agent_launch::preflight_agent_new_track(
@@ -5290,4 +5289,129 @@ fn story_2765_direct_track_admission_precedes_setup() {
     assert!(error
         .to_string()
         .contains("tagged for several tracks (integration, main)"));
+}
+
+/// Every path under `root` except git internals and the store itself: a
+/// refused launch must leave no handle, lease, session or worktree behind.
+// trace:STORY-2765 | ai:claude
+fn story_2765_launch_footprint(root: &std::path::Path) -> Vec<std::path::PathBuf> {
+    fn walk(dir: &std::path::Path, root: &std::path::Path, out: &mut Vec<std::path::PathBuf>) {
+        let Ok(entries) = std::fs::read_dir(dir) else {
+            return;
+        };
+        for entry in entries.flatten() {
+            let path = entry.path();
+            let rel = path.strip_prefix(root).unwrap().to_path_buf();
+            if rel.ends_with(".git") || rel.ends_with(".aida-store") {
+                continue;
+            }
+            out.push(rel);
+            if path.is_dir() {
+                walk(&path, root, out);
+            }
+        }
+    }
+    let mut out = Vec::new();
+    walk(root, root, &mut out);
+    out.sort();
+    out
+}
+
+/// Drive the real foreground and `--bg` entry points. The invalid build
+/// profile makes the pre-consent binary check fail, so a track admission that
+/// moved after consent (or was deleted) surfaces as a different error.
+// trace:STORY-2765 | ai:claude
+#[test]
+fn story_2765_entry_points_refuse_foreign_track_before_consent_and_setup() {
+    let _env = crate::test_env::EnvVarsGuard::set(&[
+        ("AIDA_TRACK", "main"),
+        ("AIDA_BUILD_PROFILE", "invalid-for-test"),
+    ]);
+    assert!(crate::aida_bin::process().is_err());
+    let tmp = TempDir::new().unwrap();
+    let project = tmp.path().join("project");
+    std::fs::create_dir_all(project.join(".aida")).unwrap();
+    assert!(crate::test_git::git_command()
+        .args(["init", "-q", "-b", "main"])
+        .arg(&project)
+        .status()
+        .unwrap()
+        .success());
+    std::fs::write(
+        project.join(".aida/config.toml"),
+        "store_path = \".aida-store\"\n",
+    )
+    .unwrap();
+    let storage = crate::test_env::home_fixture_storage(project.join(".aida-store"));
+    let mut req = Requirement::new("track admission".into(), String::new());
+    req.spec_id = Some("STORY-2765".into());
+    req.status = RequirementStatus::Approved;
+    req.tags.insert("track:integration".into());
+    let mut store = aida_core::RequirementsStore::default();
+    store.requirements.push(req);
+    storage.save(&store).unwrap();
+
+    let launch = |background: bool, role: &str, resume: AgentResumeOptions| {
+        let launch = if background {
+            agent_new_bg_dispatch
+        } else {
+            agent_new_with_config
+        };
+        launch(
+            AgentLaunchConfig {
+                delegate_seats: Vec::new(),
+                agent_type: "claude",
+                binary: "/usr/bin/true",
+                default_args: vec!["--permission-mode".into(), "bypassPermissions".into()],
+                prompt_style: AgentPromptStyle::Positional,
+                contained: false,
+            },
+            Some(role.into()),
+            Some("STORY-2765".into()),
+            false,
+            Some(&project),
+            AgentContextOptions::new(false, false),
+            false,
+            false,
+            false,
+            false,
+            AgentPromptOptions::new(Some("fresh work".into()), false),
+            resume,
+            AgentDefaultFlagOptions::new(false, Vec::new(), None),
+            Some("story-2765-launch".into()),
+            None,
+            false,
+        )
+        .unwrap_err()
+        .to_string()
+    };
+
+    for background in [false, true] {
+        let before = story_2765_launch_footprint(tmp.path());
+        // A fresh implementer launch is refused on track, ahead of the
+        // pre-consent binary check and of every resource setup step.
+        let error = launch(
+            background,
+            "implementer",
+            AgentResumeOptions::new(true, None, false, true),
+        );
+        assert!(error.contains("set AIDA_TRACK=integration"), "{error}");
+        assert_eq!(story_2765_launch_footprint(tmp.path()), before);
+        assert_eq!(
+            storage.load().unwrap().requirements[0].status,
+            RequirementStatus::Approved
+        );
+        // Review and explicit-resume launches keep their existing admission:
+        // they pass the track check and stop at the later binary check.
+        for (role, resume) in [
+            ("reviewer", AgentResumeOptions::new(true, None, false, true)),
+            (
+                "implementer",
+                AgentResumeOptions::new(false, Some("latest".into()), false, false),
+            ),
+        ] {
+            let error = launch(background, role, resume);
+            assert!(!error.contains("AIDA_TRACK"), "{role}: {error}");
+        }
+    }
 }

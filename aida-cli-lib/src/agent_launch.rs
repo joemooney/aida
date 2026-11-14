@@ -3294,6 +3294,17 @@ pub(crate) fn agent_new_with_config_wake(
         spec = scope_preflight_before_consent(&project_root, role.as_deref(), spec, cwd)?;
     }
 
+    // Track admission refuses before the bypass consent and resume prompts,
+    // like the scope conflict above; only an explicit resume target is exempt.
+    // trace:STORY-2765 | ai:claude
+    preflight_agent_new_track(
+        &project_root,
+        launch_track_role(role.as_deref(), existing_owner.as_ref()),
+        spec.as_deref(),
+        resume.direct_target.is_some(),
+        false,
+    )?;
+
     // Validate before any real agent launch even when --verbose is absent;
     // preview mode validates in its renderer above. Resolve the binary BEFORE
     // the consent gate so an unresolvable build fails fast rather than after a
@@ -3333,20 +3344,6 @@ pub(crate) fn agent_new_with_config_wake(
     )? {
         return Ok(());
     }
-
-    // Resume selection has returned; only a fresh launch reaches admission.
-    // trace:STORY-2765 | ai:codex
-    preflight_agent_new_track(
-        &project_root,
-        role.as_deref().or_else(|| {
-            existing_owner
-                .as_ref()
-                .and_then(|lease| lease.role.as_deref())
-        }),
-        spec.as_deref(),
-        false,
-        false,
-    )?;
 
     // trace:STORY-2254 | ai:claude
     refuse_detached_scope_owner(&project_root, role.as_deref(), spec.as_deref())?;
@@ -3670,6 +3667,16 @@ pub(crate) fn agent_new_bg_dispatch(
         spec = scope_preflight_before_consent(&project_root, role.as_deref(), spec, cwd)?;
     }
 
+    // Same track admission, lease-role fallback and ordering as the
+    // foreground path. trace:STORY-2765 | ai:claude
+    preflight_agent_new_track(
+        &project_root,
+        launch_track_role(role.as_deref(), existing_owner.as_ref()),
+        spec.as_deref(),
+        resume.direct_target.is_some(),
+        true,
+    )?;
+
     // Validate before the detached/background launch too, and before the
     // consent gate for the same fail-fast reason. trace:TASK-1499 | ai:codex
     let _resolved_aida = aida_bin::process()?;
@@ -3702,10 +3709,6 @@ pub(crate) fn agent_new_bg_dispatch(
     )? {
         return Ok(());
     }
-
-    // Resume selection has returned; only a fresh launch reaches admission.
-    // trace:STORY-2765 | ai:codex
-    preflight_agent_new_track(&project_root, role.as_deref(), spec.as_deref(), false, true)?;
 
     // trace:STORY-2254 | ai:claude
     refuse_detached_scope_owner(&project_root, role.as_deref(), spec.as_deref())?;
@@ -4333,6 +4336,17 @@ pub(crate) fn agent_new_scope_role(scope: &str) -> &'static str {
     } else {
         "implementer"
     }
+}
+
+/// The role track admission judges: the explicit `--role`, else the existing
+/// owner's lease role (else `preflight_agent_new_track` derives it from scope).
+/// Shared so the foreground and `--bg` paths cannot derive different roles.
+// trace:STORY-2765 | ai:claude
+pub(crate) fn launch_track_role<'a>(
+    role: Option<&'a str>,
+    existing_owner: Option<&'a SessionLease>,
+) -> Option<&'a str> {
+    role.or_else(|| existing_owner.and_then(|lease| lease.role.as_deref()))
 }
 
 /// Fresh direct launches share queue track admission before resource setup.
