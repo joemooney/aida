@@ -89,12 +89,6 @@
   added_at: 2026-11-14T07:34:19.902530124Z
   for_role: implementer
 - user_id: dirtlab
-  requirement_id: 01a1da29-831f-7632-8df2-e3fba5b24041
-  position: 434000
-  added_by: dirtlab
-  added_at: 2026-11-14T13:09:31.353662568Z
-  for_role: implementer
-- user_id: dirtlab
   requirement_id: 01a1d545-f6d3-7cb0-bd6b-7419f276756f
   position: 449000
   added_by: dirtlab
@@ -144,14 +138,6 @@
   added_by: dirtlab
   added_at: 2026-11-14T19:09:11.241725315Z
   for_role: implementer
-- user_id: dirtlab
-  requirement_id: 01a1da48-d829-7040-8ada-fc5bb29c34a7
-  position: 471000
-  added_by: dirtlab
-  note: auto-queue retry reused canonical review story; covers 1 spec
-  added_at: 2026-11-14T19:16:48.865654801Z
-  for_role: reviewer
-  added_by_machine: disrad-dvp98b3puw
 - user_id: dirtlab
   requirement_id: 01a1da90-646d-7af3-b1a2-44e6175e8244
   position: 475000
