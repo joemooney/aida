@@ -1,0 +1,18 @@
+{
+  "id": "4026975c-ec1e-451b-be31-db8d6b08daea",
+  "thread_id": "4026975c-ec1e-451b-be31-db8d6b08daea",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1794651593404,
+  "body": "REVIEW DEBT: heads with no verdict and no live reviewer for 20+ min: #4013@9d260e5f(25m) #3994@dc5c5f74(25m). Queue reviews (one deputy per reviewer, preflight first).",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "advisor"
+}
