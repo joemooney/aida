@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-11T12:17:47.476312683Z
-modified_at: 2026-11-14T19:18:08.705840017Z
+modified_at: 2026-11-14T19:30:43.039947656Z
 req_type: Task
 relationships:
 - rel_type: BlockedBy
@@ -101,6 +101,13 @@ comments:
   modified_at: 2026-11-14T19:18:08.705840017Z
   session_id: 01a1db6d-e689-7532-9eef-772722add87b
   harness_version: 2.1.325 (Claude Code)
+- id: 01a1db8a-66df-75b0-9a3e-06f6f953e7a1
+  author: dirtlab
+  content: 'Round 3 (Fable lane), commit 64e1fd9cfa on task-b6b1278890774ef993d2ebc327862470-1064, NOT pushed: this seat has no GitHub credentials (git push: could not read Username; gh: 401). AC2: BUG-2560 enrolment behaviour ported into aida-testkit enroll_synthetic_home; the five duplicate helpers removed from aida-cli-lib/src/test_env.rs (shim now re-exports them via the testkit glob); both BUG-2560 regressions moved beside the helpers as test_env::bug_2560_testkit_*. Validation: lane job j20261114T191910771-3-0 cargo test -p aida-testkit --lib -- bug_2560: 2 passed, 0 failed. Lane job j20261114T192040247-3-0 cargo test --workspace --no-run (check-ci-compile''s command): exit 0. make check-ci-fast NOT completed: it exceeds this lane''s 60s tool cap (killed twice at ~50s, 4 gates ok, none failed). Host must run check-ci-fast and push. AC5 remains open under Refs. Status promotion to in-progress was refused for this seat (needs advisor authority).'
+  created_at: 2026-11-14T19:30:43.039947656Z
+  modified_at: 2026-11-14T19:30:43.039947656Z
+  session_id: 01a1db7f0585
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1ca8b-157a-7c50-9f73-dc13d565bf63
   author: joe
