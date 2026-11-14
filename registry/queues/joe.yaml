@@ -23,51 +23,11 @@
   added_at: 2026-11-05T02:57:13.316633961Z
   for_role: advisor
 - user_id: joe
-  requirement_id: 01a1d558-399a-7e90-a3f0-291fc257087e
-  position: 561000
-  added_by: joe
-  note: auto-queue retry reused canonical review story; covers 1 spec
-  added_at: 2026-11-14T03:09:39.332166410Z
-  for_role: reviewer
-  added_by_machine: imac
-- user_id: joe
   requirement_id: 01a1d88f-25f0-78c3-9e23-6bbad59de4ad
   position: 566000
   added_by: joe
   note: auto-queued by `aida pr` ((no-sess); covers 1 spec
   added_at: 2026-11-14T05:37:53.047940120Z
-  for_role: reviewer
-  added_by_machine: imac
-- user_id: joe
-  requirement_id: 01a1d936-2a2d-7571-a9d9-c3f2255a5d35
-  position: 592000
-  added_by: joe
-  note: auto-queue retry reused canonical review story; covers 1 spec
-  added_at: 2026-11-14T08:48:37.213085859Z
-  for_role: reviewer
-  added_by_machine: imac
-- user_id: joe
-  requirement_id: 01a1d8ca-619f-7b01-af1f-9715ccaf15cf
-  position: 596000
-  added_by: joe
-  note: auto-queue retry reused canonical review story; covers 21 specs
-  added_at: 2026-11-14T09:09:47.590355786Z
-  for_role: reviewer
-  added_by_machine: imac
-- user_id: joe
-  requirement_id: 01a1d976-2360-7b33-b3f7-1940f8f40291
-  position: 600000
-  added_by: joe
-  note: auto-queued by `aida pr` ((no-sess); covers 1 spec
-  added_at: 2026-11-14T09:51:12.522215385Z
-  for_role: reviewer
-  added_by_machine: imac
-- user_id: joe
-  requirement_id: 01a1d936-2143-7b81-9d9a-dad03c02ecfa
-  position: 605000
-  added_by: joe
-  note: auto-queue retry reused canonical review story; covers 1 spec
-  added_at: 2026-11-14T10:18:45.478631580Z
   for_role: reviewer
   added_by_machine: imac
 - user_id: joe
@@ -116,14 +76,6 @@
   added_by: joe
   note: auto-queued by `aida pr` ((no-sess); covers 25 specs
   added_at: 2026-11-14T13:14:21.351204614Z
-  for_role: reviewer
-  added_by_machine: imac
-- user_id: joe
-  requirement_id: 01a1da33-f3dc-7aa1-9444-2ccce7be974d
-  position: 620000
-  added_by: joe
-  note: auto-queued by `aida pr` ((no-sess); covers 1 spec
-  added_at: 2026-11-14T13:17:17.730919475Z
   for_role: reviewer
   added_by_machine: imac
 - user_id: joe
