@@ -1,0 +1,41 @@
+id: 01a1da30-08f3-7c62-8d0e-141005b246d5
+spec_id: FAQ-b6b1278890774ef993d2ebc327862470-047
+agreed_id: FAQ-154
+title: 'How do I start an implementer lane on dell1 over ssh without it hanging or failing with ''aida: No such file''?'
+description: |-
+  Use the launcher, one call, with a timeout:
+
+      timeout 60 ssh dell1 '~/lane-start.sh [--track main|integration] SPEC VENDOR [extra args for aida queue work]' < /dev/null
+      timeout 30 ssh dell1 '~/lane-start.sh --check' < /dev/null     # verify the environment, start nothing
+
+  Example: timeout 60 ssh dell1 '~/lane-start.sh BUG-2578 claude --model claude-fable-5-2' < /dev/null
+
+  It prints 'started SPEC' or 'FAILED to start SPEC' plus the reason within about two seconds, refuses a second lane for a spec that already has one, and the lane log is ~/lane-SPEC.log on dell1. Do not hand-write 'ssh dell1 "cd ... && setsid nohup ~/lane-run.sh ... &"'.
+
+  Two failures on 2026-11-14 are why:
+
+  1. 'env: aida: No such file or directory', lane log shows only 'nothing to publish ()'. A non-login ssh shell on dell1 has PATH without ~/.local/bin, where aida lives. The lane never starts but the launch looks like it worked. lane-run.sh and lane-start.sh now export PATH themselves.
+
+  2. The launching session hangs for the whole life of the lane (19 minutes observed, advisor could not read mail or land a green train). In 'cd DIR && VAR=x setsid nohup CMD > log 2>&1 < /dev/null &' the redirects bind only to CMD; the backgrounded 'cd && ...' subshell keeps ssh's stdout and stderr open, so ssh waits until the lane exits. lane-start.sh redirects all three streams of the whole background job. If a session is already stuck this way, kill only the local ssh client process; the lane on dell1 keeps running.
+
+  Editing lane-run.sh (or any wrapper a running lane executes): never write it in place. bash reads a running script from the file by byte offset, so an in-place edit makes running lanes resume mid-line, which can truncate the lane log and skip publishing. Write the new version to a temp file and mv it over the old one; running lanes keep the old file.
+
+  Also: lane-run.sh takes SPEC as its first argument. Flags such as --force-claim go after VENDOR (a 'lane---force-claim.log' on dell1 is that mistake).
+status: Completed
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-14T13:12:23.539292164Z
+modified_at: 2026-11-14T13:12:23.539292164Z
+req_type: Faq
+filed_at:
+  code_sha: 2682c4c4fe5a42194a6f2eca01940008e3a41776
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 166920a3bf8
+  vendor: claude
+  session: fc28c702-2f6e-419e-b882-6ddfeb9134ff
+implementation_info:
+  implemented: false
+  completed_at: 2026-11-14T13:12:23.539308576Z
