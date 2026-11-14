@@ -205,12 +205,36 @@ description: |
   ### finding-hash:04ad58d8
 
   No watcher-level integration test drives a conflicted or evil-merge head into an actual delta-review launch, or a textual conflict into implementer rework routing (AC1 delta half, AC2 refusal half). Only helper-level delta_baseline/landed_tree tests exist.
+
+
+  ## Findings from STORY-2763
+  Reviewed sha: 352a2dbe4c8209a2b5faad48e1d59222c587cf8b
+
+  ### finding-hash:dee3f3a7
+
+  Review evidence files .aida/review-evidence-PR-<n>-<baseline>-<tree>.diff (gate/review_freshness.rs:303-327) are never pruned; every new head/base pair leaves a possibly multi-MB file in the primary checkout.
+
+  ### finding-hash:bf60843e
+
+  write_evidence now lets git truncate and rewrite the target in place (git diff --output), dropping the earlier temp+rename atomicity; a relaunch for the same PR/baseline/tree can truncate the file while an earlier reviewer is reading it (review_freshness.rs:312-317).
+
+  ### finding-hash:97d326dd
+
+  Store-writer ratchet blind spot: git subprocess writes via diff --output are not in GIT_WRITERS (scripts/check-store-writers.py), so the evidence-file write is invisible to the inventory. Consider classifying it or widening the vocabulary.
+
+  ### finding-hash:15915e39
+
+  Rework-routed receipts are keyed only by PR/head (review_freshness.rs:362-399, review_watch watch_change), so a conflict later fixed on the base alone is never re-probed for the same head.
+
+  ### finding-hash:04ad58d8
+
+  No watcher-level integration test drives a conflicted or evil-merge head into an actual delta-review launch, or a textual conflict into implementer rework routing (AC1 delta half, AC2 refusal half). Only helper-level delta_baseline/landed_tree tests exist.
 status: Draft
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-13T20:01:56.623034248Z
-modified_at: 2026-11-14T02:15:41.114327364Z
+modified_at: 2026-11-14T02:15:49.335755275Z
 req_type: Task
 tags:
 - carried-finding:BUG-2546:56ed8b81
@@ -241,6 +265,11 @@ tags:
 - carried-finding:PR-3973:6810bcf9
 - carried-finding:PR-3973:c0a8d165
 - carried-finding:STORY-2735:2c7ae2ea
+- carried-finding:STORY-2763:04ad58d8
+- carried-finding:STORY-2763:15915e39
+- carried-finding:STORY-2763:97d326dd
+- carried-finding:STORY-2763:bf60843e
+- carried-finding:STORY-2763:dee3f3a7
 - carried-finding:STORY-2768:198d1196
 - carried-finding:STORY-2768:28356795
 - carried-finding:STORY-2768:6220a3dc
@@ -262,6 +291,7 @@ tags:
 - carried-from:PR-3972
 - carried-from:PR-3973
 - carried-from:STORY-2735
+- carried-from:STORY-2763
 - carried-from:STORY-2768
 - finding-hash:04ad58d8
 - finding-hash:0cbc5c63
@@ -302,6 +332,7 @@ tags:
 - from-review:PR-3972
 - from-review:PR-3973
 - from-review:STORY-2735
+- from-review:STORY-2763
 - from-review:STORY-2768
 - kind:finding-sweep
 history:
@@ -387,6 +418,11 @@ history:
 - id: 01a1d7d6-d285-7d52-aad2-070fc6b663de
   author: joe
   timestamp: 2026-11-14T02:15:42.469202515Z
+  session_id: 01a1d7d3f479
+  changes: []
+- id: 01a1d7d6-f270-78a1-88bb-6c58e4c87b4a
+  author: joe
+  timestamp: 2026-11-14T02:15:50.640250156Z
   session_id: 01a1d7d3f479
   changes: []
 filed_at:
