@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-11T12:17:47.476312683Z
-modified_at: 2026-11-14T15:30:15.677018119Z
+modified_at: 2026-11-14T16:23:37.010501037Z
 req_type: Task
 relationships:
 - rel_type: BlockedBy
@@ -146,6 +146,11 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a1dadf-22ef-7261-9c22-72e43a6e86a8
+  author: joe
+  timestamp: 2026-11-14T16:23:38.991155461Z
+  session_id: 01a1dadd919d
+  changes: []
 filed_at:
   code_sha: 11b131dfe3341e6d9c7127d64370f91366094711
   branch: main
@@ -156,7 +161,8 @@ filed_at:
   session: 01a1ca83-fabb-7663-852c-12c78d4e097f
   harness_version: 2.1.322 (Claude Code)
 attention_reason:
-  category: other
-  detail: 'PR #3994 merge repair overlaps synthetic HOME fixture behavior: proposed working-tree resolution transfers BUG-2560 authority-boundary changes into the relocated aida-testkit helper and retains CLI regressions. Operator instruction requires punt for overlapping behavior; host review required before publication.'
+  category: design-fork
+  detail: 'PR #3994 host-staged merge overlaps relocated fixture behavior: BUG-2560 adds enroll_synthetic_home and related helpers/tests in aida-cli-lib/src/test_env.rs, but TASK-3784 moved these helpers to aida-testkit/src/test_env.rs. Conflict markers removed preserving incoming content for review; local definitions now shadow moved exports, and testkit retains older authority discovery. Requires advisor reconciliation before publication. Existing Needs Attention signal must remain a publication veto.'
+  lean: Port BUG-2560 changes and regressions into aida-testkit, preserving the CLI re-export shim, after advisor authorization.
   raised_by: implementer
-  raised_at: 2026-11-14T15:30:15.677018119Z
+  raised_at: 2026-11-14T16:23:37.010501037Z
