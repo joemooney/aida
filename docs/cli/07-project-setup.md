@@ -103,6 +103,36 @@ in GitLab. On a resumed repository, commit and push any newly generated pipeline
 - `user` — writes `~/.aida/preferences.toml` (preferred node id, fallback email). Machine-global, not per-project — it seeds defaults for future `init`s.
 - `menu` — a navigable TUI listing every configurable item — per row the knob's name, current value, built-in default, where it was set (scope: `.aida/config.toml` / env / built-in default), and a one-line explanation. The visual companion to `config show`: same resolved surface (it reuses the same policy registry), one scrollable screen, arrow-key navigation (↑/↓ or j/k, PgUp/PgDn, g/G, q/Esc). Read-only for now — edit knobs with the matching `config` subcommand or your `config.toml`. Needs a TTY; without one it prints a pointer to `config show` and exits cleanly.
 
+<!-- trace:STORY-2821 | ai:claude -->
+**Reviewer stale-base policy.** `[review] stale_base` in `.aida/config.toml`
+decides which stale change heads a reviewer launch refuses. It is listed by
+`aida config show` and `aida config menu`, and has three values:
+
+```toml
+[review]
+stale_base = "refuse-on-overlap"   # default
+```
+
+| Value | A reviewer is refused when |
+|---|---|
+| `refuse-on-overlap` | the base branch has moved and touched a file the change also touches |
+| `refuse-on-conflict` | the base branch no longer merges cleanly into the change's head |
+| `warn` | never |
+
+Every reviewer launch reads it: `aida queue work <PR-N> --role reviewer`, the
+review watcher, the drain's review phase, `aida review` and `aida human
+review` (the last two never refuse; there the setting decides whether the
+inline rebase offer defaults to yes).
+`aida queue work <PR-N> --role reviewer --allow-stale-base` overrides a refusal
+for one launch, as setting the `stale_base` key to `warn` would. Whatever the
+value, a reviewer launched on a
+stale head is told in its prompt how many commits behind the base the head is
+and which of its files changed there. A value outside the three is a
+configuration error that names them; it is never read as the default. Use the
+default where review is the last gate before merge; `refuse-on-conflict` or
+`warn` suit a project whose landing path rebuilds and retests each change on
+the current base.
+
 **Gotchas.** `config user` is *machine-global* (`~/.aida/`), while `config show`/`format`/`menu`/etc. are *project-local*. Same command noun, two scopes — don't expect `config user` to behave per-project.
 
 **Chains with** — set once near `init`; `migrate` is the rare follow-up. Pairs with `type` / `feature` to define the ID *taxonomy*.

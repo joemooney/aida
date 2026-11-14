@@ -419,33 +419,57 @@ fn hermetic_gh(root: &std::path::Path, gh: &std::path::Path) -> crate::test_env:
     )
 }
 
-// A same-file edit that merges cleanly is no refusal under the fast policy
-// (the ordinary classifier would call a.txt an overlap).
+// Fast freshness adds no refusal decision of its own: a same-file edit that
+// merges cleanly is classified as the ordinary overlap, and only the
+// project's `[review] stale_base` policy says whether that refuses the
+// launch. A refused clean overlap routes no rework.
 // trace:STORY-2763 | ai:claude
 #[cfg(unix)]
 #[test]
-fn story2763_fast_preflight_clean_overlap_is_not_refused() {
+fn story2763_fast_preflight_clean_overlap_follows_stale_base_policy() {
+    use pr_rebase::{stale_base_launch, StaleBaseLaunch, StaleBasePolicy};
     if crate::test_env::run_path_isolated_test() {
         return;
     }
     let (fixture, _, gh) = fast_preflight_fixture(("a line 25\n", "a line 25 main\n"), "main");
     let root = fixture.path();
     let _env = hermetic_gh(root, &gh);
-    let (outcome, calls) = crate::review_launch::recording_rework_dispatches(|| {
-        preflight_stale_base_check_with_gh(root, 42, gh.as_os_str())
+    let (routed, calls) = crate::review_launch::recording_rework_dispatches(|| {
+        let outcome = preflight_stale_base_check_with_gh(root, 42, gh.as_os_str()).unwrap();
+        assert!(
+            matches!(
+                &outcome,
+                pr_rebase::StaleBaseOutcome::StaleOverlap {
+                    prediction: pr_rebase::ConflictPrediction::Clean,
+                    ..
+                }
+            ),
+            "{outcome:?}"
+        );
+        assert!(matches!(
+            stale_base_launch(42, StaleBasePolicy::RefuseOnOverlap, &outcome),
+            StaleBaseLaunch::Refuse(_)
+        ));
+        for policy in [StaleBasePolicy::RefuseOnConflict, StaleBasePolicy::Warn] {
+            assert!(matches!(
+                stale_base_launch(42, policy, &outcome),
+                StaleBaseLaunch::Warn(_)
+            ));
+        }
+        crate::review_launch::route_refused_conflict(root, 42, &outcome).unwrap()
     });
-    assert_eq!(
-        outcome.unwrap(),
-        pr_rebase::StaleBaseOutcome::StaleNoOverlap { behind: 2 }
-    );
+    assert!(!routed, "a clean merge is no conflict to route");
     assert!(calls.is_empty(), "a clean merge routes no rework");
 }
 
-// A textual conflict refuses with NeedsRework and routes implementer rework.
+// A textual conflict is refused by the `[review] stale_base` policy (never
+// under `warn`), and the refused fast head is then routed to implementer
+// rework.
 // trace:STORY-2763 | ai:claude
 #[cfg(unix)]
 #[test]
-fn story2763_fast_preflight_conflict_routes_rework() {
+fn story2763_fast_preflight_refused_conflict_routes_rework() {
+    use pr_rebase::{stale_base_launch, StaleBaseLaunch, StaleBasePolicy};
     if crate::test_env::run_path_isolated_test() {
         return;
     }
@@ -457,16 +481,35 @@ fn story2763_fast_preflight_conflict_routes_rework() {
         head_ref: "pr".to_string(),
         commit_subjects: vec!["[AI:claude] feat(x): conflicting work (STORY-1)".to_string()],
     };
-    let (outcome, calls) = crate::with_review_pr_subject(subject, || {
+    let ((outcome, routed), calls) = crate::with_review_pr_subject(subject, || {
         crate::review_launch::recording_rework_dispatches(|| {
-            preflight_stale_base_check_with_gh(root, 42, gh.as_os_str())
+            // The preflight itself neither refuses nor routes.
+            let outcome = preflight_stale_base_check_with_gh(root, 42, gh.as_os_str()).unwrap();
+            assert!(!crate::gate::review_freshness::decision_exists(
+                root,
+                42,
+                &head,
+                "rework-routed"
+            )
+            .unwrap());
+            let routed = crate::review_launch::route_refused_conflict(root, 42, &outcome);
+            (outcome, routed)
         })
     });
-    let error = outcome.unwrap_err();
-    assert!(
-        error.is::<crate::gate::review_freshness::NeedsRework>(),
-        "{error:#}"
-    );
+    for policy in [
+        StaleBasePolicy::RefuseOnOverlap,
+        StaleBasePolicy::RefuseOnConflict,
+    ] {
+        assert!(matches!(
+            stale_base_launch(42, policy, &outcome),
+            StaleBaseLaunch::Refuse(_)
+        ));
+    }
+    assert!(matches!(
+        stale_base_launch(42, StaleBasePolicy::Warn, &outcome),
+        StaleBaseLaunch::Warn(_)
+    ));
+    assert!(routed.unwrap(), "a refused fast conflict is routed");
     assert_eq!(calls.len(), 1, "{calls:?}");
     assert_eq!(&calls[0][..3], ["queue", "rework", "STORY-1"]);
     assert!(
@@ -474,6 +517,67 @@ fn story2763_fast_preflight_conflict_routes_rework() {
     );
     let refs = git(root, &["for-each-ref", "refs/aida/preflight/"]);
     assert!(refs.is_empty(), "the scratch ref is removed: {refs}");
+}
+
+// Whether a conflicting fast head launches is the `[review] stale_base`
+// policy's decision: refused, the launch stops and routes rework; under
+// `warn` or `--allow-stale-base` it proceeds on the ordinary prompt, with no
+// landed-tree evidence and no rework.
+// trace:STORY-2763 | ai:claude
+#[cfg(unix)]
+#[test]
+fn story2763_conflicting_launch_evidence_follows_stale_base_policy() {
+    use crate::gate::review_carryover::tests as carry;
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
+    let (fixture, head, gh) =
+        fast_preflight_fixture(("a line 5\n", "a line 5 main competes\n"), "main");
+    let root = fixture.path();
+    let _env = hermetic_gh(root, &gh);
+    let config = |stale: &str| {
+        carry::write(
+            root,
+            ".aida/config.toml",
+            &format!("[review]\nfreshness = 'fast'\n{stale}[forge]\nprovider = \"github\"\n"),
+        );
+    };
+    let launch = |allow: bool| {
+        let subject = crate::ReviewPrSubject {
+            head_ref: "pr".to_string(),
+            commit_subjects: vec!["[AI:claude] feat(x): conflicting work (STORY-1)".to_string()],
+        };
+        crate::with_review_pr_subject(subject, || {
+            crate::review_launch::recording_rework_dispatches(|| {
+                crate::review_launch::review_prompt(root, 42, allow, "/aida-review --pr 42")
+            })
+        })
+    };
+    let routed =
+        || crate::gate::review_freshness::decision_exists(root, 42, &head, "rework-routed");
+
+    config("stale_base = 'warn'\n");
+    let (prompt, calls) = launch(false);
+    assert_eq!(prompt.unwrap(), None, "warn launches the ordinary prompt");
+    assert!(calls.is_empty(), "{calls:?}");
+
+    config("stale_base = 'refuse-on-conflict'\n");
+    let (prompt, calls) = launch(true);
+    assert_eq!(prompt.unwrap(), None, "--allow-stale-base launches");
+    assert!(calls.is_empty(), "{calls:?}");
+    assert!(!routed().unwrap());
+
+    // The default policy and refuse-on-conflict both refuse a conflict.
+    for stale in ["stale_base = 'refuse-on-conflict'\n", ""] {
+        config(stale);
+        let (prompt, _) = launch(false);
+        let error = prompt.unwrap_err();
+        assert!(
+            error.is::<crate::gate::review_freshness::NeedsRework>(),
+            "{error:#}"
+        );
+        assert!(routed().unwrap());
+    }
 }
 
 // A non-protected base keeps the ordinary stale-base classification.

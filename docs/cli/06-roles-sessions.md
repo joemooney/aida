@@ -1090,6 +1090,16 @@ watcher is parking, with its reason and since when (`review_watch_skipped` in
 `--json`). Changes that are only waiting for a reviewer slot, or that are under
 review or already reviewed, are not listed.
 
+<!-- trace:STORY-2821 | ai:claude -->
+Which stale heads are held back is the project's `[review] stale_base`
+setting in `.aida/config.toml` (see `aida config` in Project setup). The
+paragraphs above describe the default, `refuse-on-overlap`. Under
+`refuse-on-conflict` the watcher reviews a stale head that overlaps its base
+and notifies the author only when the base no longer merges cleanly into the
+head; only such a conflicting head reaches the branch update and the advisor
+routing. Under `warn` every stale head is reviewed. In both, the watcher never
+runs `gh pr update-branch` on a head that merely overlaps its base.
+
 On enrolled publishing hosts, watcher discovery first synchronizes committed
 publications. Distributed admission additionally requires explicit trusted
 `[review] admission_hub` and `admission_ref` settings. A signed claim at the single
@@ -1572,15 +1582,19 @@ freshness_strict_paths = []
 
 `fast` reviews the diff of an automatic merge into the current protected base,
 without updating the PR branch. The verdict still names the original PR head.
-A textual conflict routes the work back to the implementer before review.
+Freshness decides what evidence a review records; which stale heads a reviewer
+launch refuses is the `[review] stale_base` setting alone. When that setting
+refuses a `fast` head its base no longer merges into, the work is routed back
+to the implementer instead of the author being asked to merge. When it lets
+such a head through (`warn`, or `--allow-stale-base`), the review runs on the
+ordinary diff, since no merged tree exists.
 An existing authorized approval survives only when the shared gate proves clean
 base merges and unchanged patch identity; CI at the current head is still required.
 A resolved conflict or edited merge requires a delta review of the resolution or
 manual edits, with current-base context. Blocking rounds with identical patch IDs
 count once. Unknown old patch evidence retains the original round count.
 
-`strict` requires a fresh review for each head, retains stale-base overlap
-refusals, and counts every blocking head toward the review cap. To force strict
+`strict` requires a fresh review for each head and counts every blocking head toward the review cap. To force strict
 assurance on selected paths even under fast policy, use for example
 `freshness_strict_paths = ["aida-cli-lib/src/gate/**"]`. Patterns support literal
 paths, `*`, `**`, and `?`; unsupported syntax refuses fast assurance. Renames

@@ -17,6 +17,7 @@ fn change(id: u64, head: u64, overlap: bool) -> forge::Change {
         author: "writer".into(),
         gitlab: false,
         overlap: Some(overlap),
+        conflict: None,
         behind: Some(u64::from(overlap)),
         head_branch: None,
     }
@@ -758,9 +759,16 @@ fn task1993_live_discovery_probes_both_forges_and_refuses_moving_or_unknown_head
                 Some(true),
                 "probe ignored the change's base branch"
             );
+            // The release branch rewrote the file the head also rewrote: the
+            // probe reports that the base no longer merges cleanly, the
+            // evidence `[review] stale_base = "refuse-on-conflict"` refuses
+            // on. It is judged only for an overlapping head.
+            // trace:STORY-2821 | ai:claude
+            assert_eq!(changes[0].conflict, Some(true));
             changes[0].base = "main".into();
             repo.probe(&root, &mut changes[0]).unwrap();
             assert_eq!(changes[0].overlap, Some(false));
+            assert_eq!(changes[0].conflict, None);
         }
         // A credentialed origin never reaches git argv (BUG-2181): the probe
         // fetches by remote name through the credential gate.

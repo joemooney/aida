@@ -519,6 +519,7 @@ fn a_change_from_a_forge_without_a_check_rollup_has_no_checks_and_keeps_its_titl
         author: "someone".into(),
         gitlab: true,
         overlap: None,
+        conflict: None,
         behind: None,
         head_branch: Some("feature".into()),
     };

@@ -17,11 +17,12 @@ pub(crate) fn compose_launch_prompt(
     role: &str,
     pr: Option<u64>,
     no_launch: bool,
+    allow_stale_base: bool,
     prompt: &mut String,
 ) -> Result<()> {
     if !no_launch && role.eq_ignore_ascii_case("reviewer") {
         if let Some(pr) = pr {
-            if let Some(composed) = review_prompt(root, pr, prompt)? {
+            if let Some(composed) = review_prompt(root, pr, allow_stale_base, prompt)? {
                 *prompt = composed;
             }
         }
@@ -29,7 +30,55 @@ pub(crate) fn compose_launch_prompt(
     Ok(())
 }
 
-pub(crate) fn review_prompt(root: &Path, pr: u64, prompt: &str) -> Result<Option<String>> {
+/// Whether this launch refuses a head its base no longer merges into: the
+/// project's `[review] stale_base` policy, which `--allow-stale-base` lowers
+/// to `warn` for one launch. Fast freshness never makes this decision itself.
+// trace:STORY-2763 | ai:claude
+fn conflict_refused(root: &Path, allow_stale_base: bool) -> Result<bool> {
+    Ok(!allow_stale_base
+        && crate::review_helpers::read_stale_base_policy(root)?.refuses(true, Some(true)))
+}
+
+/// After the stale-base policy refused a launch: when the refused head is a
+/// fast change on the protected base that the base no longer merges into,
+/// route it to implementer rework (a fast head never has its branch updated)
+/// and report `true`. Any other refusal keeps its ordinary handling.
+// trace:STORY-2763 | ai:claude
+pub(crate) fn route_refused_conflict(
+    root: &Path,
+    pr: u64,
+    outcome: &crate::pr_rebase::StaleBaseOutcome,
+) -> Result<bool> {
+    use crate::pr_rebase::{ConflictPrediction, StaleBaseOutcome};
+    let conflicting = matches!(
+        outcome,
+        StaleBaseOutcome::StaleOverlap {
+            prediction: ConflictPrediction::Conflicting { .. },
+            ..
+        }
+    );
+    if !conflicting || !freshness::project_admits_fast(root) {
+        return Ok(false);
+    }
+    let forge_kind = crate::forge::resolve_open_change_forge_kind(root);
+    if forge_kind == crate::forge::ForgeKind::None {
+        return Ok(false);
+    }
+    // No fast context (strict head, another base, forge outage): the ordinary
+    // refusal stands.
+    let Ok(Some((_, _, head))) = launch_context(root, pr, forge_kind) else {
+        return Ok(false);
+    };
+    route_rework(root, pr, &head)?;
+    Ok(true)
+}
+
+pub(crate) fn review_prompt(
+    root: &Path,
+    pr: u64,
+    allow_stale_base: bool,
+    prompt: &str,
+) -> Result<Option<String>> {
     // Strict projects do not need a new forge request or synthetic evidence.
     if !freshness::project_admits_fast(root) {
         return Ok(None);
@@ -59,9 +108,21 @@ pub(crate) fn review_prompt(root: &Path, pr: u64, prompt: &str) -> Result<Option
     };
     let tree = match freshness::landed_tree(root, &base, &head) {
         Ok(tree) => tree,
+        // No landed tree exists to review. Whether that refuses the launch is
+        // the `[review] stale_base` policy's decision, not this evidence's:
+        // refused, the conflict goes to implementer rework; let through
+        // (`warn`, `--allow-stale-base`), the review runs on the ordinary
+        // prompt. trace:STORY-2763 | ai:claude
         Err(e) if e.is::<freshness::NeedsRework>() => {
-            route_rework(root, pr, &head)?;
-            return Err(e);
+            if conflict_refused(root, allow_stale_base)? {
+                route_rework(root, pr, &head)?;
+                return Err(e);
+            }
+            eprintln!(
+                "  warning: change {pr} conflicts with {protected}, so there is no landed tree \
+                 to review; launching the reviewer with the ordinary prompt"
+            );
+            return Ok(None);
         }
         Err(e) => return Err(e),
     };
@@ -414,7 +475,7 @@ mod tests {
         );
         let mut prompt = "/aida-review --pr 42".to_string();
         assert!(!crate::queue_cmd::is_standalone_reviewer("reviewer", true));
-        compose_launch_prompt(root, "reviewer", Some(42), false, &mut prompt).unwrap();
+        compose_launch_prompt(root, "reviewer", Some(42), false, false, &mut prompt).unwrap();
         let base = carry::git(root, &["rev-parse", "origin/main"]);
         assert!(prompt.contains(&format!("main at {base}")), "{prompt}");
         assert!(prompt.contains("Landed tree:"));
@@ -464,7 +525,7 @@ mod tests {
             ],
         );
         let mut prompt = "/aida-review --pr 42".to_string();
-        compose_launch_prompt(root, "reviewer", Some(42), false, &mut prompt)?;
+        compose_launch_prompt(root, "reviewer", Some(42), false, false, &mut prompt)?;
         Ok(prompt)
     }
 
@@ -491,11 +552,11 @@ mod tests {
                 crate::forge::ForgeKind::None
             );
             let mut prompt = "/aida-review --pr 42".to_string();
-            compose_launch_prompt(root, "reviewer", Some(42), false, &mut prompt)
+            compose_launch_prompt(root, "reviewer", Some(42), false, false, &mut prompt)
                 .unwrap_or_else(|e| panic!("pure-git must launch ({config:?}): {e:#}"));
             assert_eq!(prompt, "/aida-review --pr 42", "config {config:?}");
             assert_eq!(
-                review_prompt(root, 42, "/aida-review --pr 42").unwrap(),
+                review_prompt(root, 42, false, "/aida-review --pr 42").unwrap(),
                 None
             );
         }
@@ -539,7 +600,7 @@ mod tests {
             &[("PATH", Some(&path)), ("AIDA_CONTAINED", None)],
         );
         let mut prompt = "/aida-review --pr 42".to_string();
-        compose_launch_prompt(root, "reviewer", Some(42), false, &mut prompt)
+        compose_launch_prompt(root, "reviewer", Some(42), false, false, &mut prompt)
             .unwrap_or_else(|e| panic!("forge outage must not refuse the launch: {e:#}"));
         assert_eq!(prompt, "/aida-review --pr 42");
     }
