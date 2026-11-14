@@ -8,12 +8,12 @@ description: |-
   Fix: label events should start or cancel a CI run only when the label is ci:full (the only label that changes the tier). Options: gate the jobs with an if on github.event.action / github.event.label.name so other label events finish in seconds without joining the cancelling concurrency group, or give non-ci:full label events their own concurrency group. A hold-label change must not cancel an in-progress run on the same head.
 
   Acceptance: (1) adding or removing aida:merge-hold* on a PR with a CI run in progress leaves that run running; (2) adding ci:full starts a full run; removing it starts a fast run; (3) push to the PR still cancels the superseded run; (4) train PR behaviour unchanged.
-status: InProgress
+status: NeedsAttention
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-14T13:05:16.063317537Z
-modified_at: 2026-11-14T15:32:26.549764055Z
+modified_at: 2026-11-14T15:35:58.849358664Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -54,6 +54,32 @@ comments:
   modified_at: 2026-11-14T15:28:39.049753839Z
   session_id: 01a1d9ea-4e25-7033-85e8-3648f0195c7c
   harness_version: 2.1.325 (Claude Code)
+- id: 01a1dab3-77b7-7b40-80ad-7906dbb5b2ff
+  author: dirtlab
+  content: |-
+    ## Implementer rework finding: literal Build name conflicts with skipping the job (no edits made)
+
+    The directive is to keep `name: Build (ubuntu-latest)` literal and gate label events with a job-level `if` or a tiny separate job. I did not implement it, because every literal-name variant I can construct regresses a reader, and I cannot test GitHub behaviour from the lane.
+
+    **Why a literal name plus job-level `if` is unsafe.** A job skipped by `if` still registers a check run under its name. A hold-label toggle would then put a newer *skipped* `Build (ubuntu-latest)` on the head:
+    - `require_full_ship_ci` (`aida-cli-lib/src/ci_gate.rs:246-270`) needs Build `bucket == "pass"` plus a `ci-tier: full` marker on Build's run id. `gh pr checks` returns the newest row per name, so after clearing a hold the row is `skipping` and `aida pr ship` refuses a head whose FULL CI passed. Clearing the hold is the step before shipping.
+    - GitHub branch protection counts a skipped required check as passing, and uses the newest check run per name, so a hold toggle on a red head would turn the required check green.
+
+    **Why a Build job that runs and mirrors the real result is unsafe.** The real Build registers only after every lane finishes (`pr_train.rs` BUG-2401 comment), so with a toggle during a run the rollup can pair the real Build (older run id) with the label run's newer marker, or the mirror Build with no marker; `require_full_ship_ci` refuses either way.
+
+    **Why a separate workflow does not work.** GitHub has no label-name trigger filter. A label workflow can start ci.yml only via `workflow_dispatch` (head ref instead of merge ref, no PR concurrency group, always FULL) or `gh run rerun` (replays the old event payload, so the tier cannot change). `workflow_call` prefixes check names.
+
+    **So the choice is:**
+    - **A (current PR-4028 shape, my lean):** keep the name expression, whose non-label branch is the literal `Build (ubuntu-latest)`, and change `aggregator_const_matches_the_ci_workflow` to accept exactly that expression shape. Every run that does CI still reports `Build (ubuntu-latest)`; only the no-op label run reports `label event (...)`. The train-27 red is that one test pinning a literal.
+    - **B:** literal name with a skipped Build, accepting the two regressions above (or changing `require_full_ship_ci` and living with the branch-protection hole).
+    - **C:** drop the job gating; non-`ci:full` label events only get their own concurrency group. Nothing is cancelled, but each hold toggle starts a duplicate full run and a new pending Build.
+    - **D:** redesign tier selection around `workflow_dispatch` with PR inputs; an architecture change needing a sketch.
+
+    **`tests::lane_fixture_fails` (42 vs 41) is not this PR.** It is the deliberate failing fixture test in `aida-cli-lib/src/tests/bug_2383_seat_target_overlay_tests.rs:1271` (`assert_eq!(answer(), 41)` with `answer() == 42`); its panic text is printed by a passing test. PR-4028 touches only `ci.yml`, two Python tests and a doc.
+  created_at: 2026-11-14T15:35:57.111736122Z
+  modified_at: 2026-11-14T15:35:57.111736122Z
+  session_id: 01a1daafb9ad
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1da2c-3b66-7010-95f7-26087a6c659f
   author: joe
@@ -81,6 +107,15 @@ history:
   session_id: 01a1daafb9ad
   harness_version: 2.1.319 (Claude Code)
   changes: []
+- id: 01a1dab3-7e81-7c50-907a-bd6968ea0dc3
+  author: dirtlab
+  timestamp: 2026-11-14T15:35:58.849368674Z
+  session_id: 01a1daafb9ad
+  harness_version: 2.1.319 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 filed_at:
   code_sha: 2682c4c4fe5a42194a6f2eca01940008e3a41776
   branch: main
@@ -89,3 +124,9 @@ filed_at:
   aida_build_sha: 166920a3bf8
   vendor: claude
   session: fc28c702-2f6e-419e-b882-6ddfeb9134ff
+attention_reason:
+  category: design-fork
+  detail: 'Advisor rework says the Build job name must stay literal and label events be gated by a job-level if. A skipped literal ''Build (ubuntu-latest)'' from a hold-label run becomes the newest Build row: require_full_ship_ci (ci_gate.rs:246-270) then refuses a head with passed FULL CI, and branch protection counts the skipped required check as green on a red head. A mirroring Build job and a separate label workflow fail too (details in the spec comment). Need a ruling: A keep the name expression and relax aggregator_const_matches_the_ci_workflow; B literal name, accept the regressions; C own concurrency group only (duplicate full run per toggle); D workflow_dispatch redesign.'
+  lean: 'A: keep PR-4028''s expression name (real runs still report ''Build (ubuntu-latest)'') and change the Rust test to accept exactly that expression; one-test change, then cargo test commit_ci + test_ci_tiers.py + check-ci-fast.'
+  raised_by: implementer
+  raised_at: 2026-11-14T15:35:58.849358664Z
