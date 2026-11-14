@@ -1870,8 +1870,9 @@ fn bug_2569_train_lands_a_carried_member_whose_car_names_a_spec_refused_elsewher
 }
 
 /// BUG-2569: the member gate asks about the specs the car message names, as
-/// the merge step does. PR 11's own refusal under a spec only its car
-/// message names stops it at the gate, before a train is built.
+/// the merge step does. Change 99 stands refused at a commit PR 11's head
+/// contains, under a spec only PR 11's car message names: that stops PR 11
+/// at the gate, before a train is built, not at the merge after the CI run.
 // trace:BUG-2569 | ai:claude
 #[test]
 fn bug_2569_member_gate_refuses_what_the_merge_step_would_refuse() {
@@ -1880,7 +1881,8 @@ fn bug_2569_member_gate_refuses_what_the_merge_step_would_refuse() {
     }
     let f = Fixture::new(false);
     bug2569_carried_head(&f, "Merge main into the member (STORY-2220)");
-    bug2569_refusal(&f, 11, &"c".repeat(40));
+    let inside = f.records[0]["reviewed_sha"].as_str().unwrap().to_string();
+    bug2569_refusal(&f, 99, &inside);
     let forge = GitHubForge::new(f.root());
     let mut live = f.live(&forge);
     let refused = match live.gate(11) {
