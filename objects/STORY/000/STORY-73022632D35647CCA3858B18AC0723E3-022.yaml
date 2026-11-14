@@ -1,0 +1,35 @@
+id: 01a1dc2b-5d70-7b10-8eac-35f06eb642aa
+spec_id: STORY-73022632d35647cca3858b18ac0723e3-022
+title: 'Review PR-4057: [AI:claude] fix(rotation): a relay holds its seat when its parent grant expires, and warns 2h ahead (BUG-2585)'
+description: |
+  Auto-filed by `aida session end` (backup trigger) (session `01a1dc0c`) for branch `bug-b6b1278890774ef993d2ebc327862470-350`.
+
+  - PR: <https://github.com/joemooney/aida/pull/4057>
+  - Branch: `bug-b6b1278890774ef993d2ebc327862470-350` → `integration`
+
+  ## Covers
+
+  - BUG-2585
+  - STORY-2821
+  - BUG-2578
+  - BUG-2582
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 4057` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-14T22:26:31.920334931Z
+modified_at: 2026-11-14T22:26:31.920334931Z
+req_type: Story
+filed_at:
+  code_sha: 3cb7ba4fab12c60797d42bf51c7845633680c7d2
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: bc24a1e688
+  session: 01a1dc0cc085
