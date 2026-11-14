@@ -20,7 +20,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-14T12:59:48.856339929Z
-modified_at: 2026-11-14T15:41:05.472426114Z
+modified_at: 2026-11-14T16:12:18.749811548Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -97,6 +97,12 @@ history:
   author: joe
   timestamp: 2026-11-14T15:41:07.330800859Z
   changes: []
+- id: 01a1dad4-c25d-7812-b23b-420dcc841c94
+  author: joe
+  timestamp: 2026-11-14T16:12:18.909166349Z
+  session_id: 01a1dad19ec9
+  harness_version: 2.1.325 (Claude Code)
+  changes: []
 filed_at:
   code_sha: 166920a3bf8bd517e8d670a09dd3a7a3de96b7f9
   branch: worktree-agent-a132ca8b8dbec7979
@@ -111,3 +117,11 @@ attention_reason:
   lean: 'branch is ready; from the seat worktree run git push --force-with-lease origin fix/train-no-blind-rerun-BUG-2577 (aida ship rebased it onto origin/main), then re-review PR #4030'
   raised_by: implementer
   raised_at: 2026-11-14T15:05:42.835781549Z
+failure_reason:
+  phase: reviewer
+  phase_index: 3
+  kind: verdict:request-changes
+  detail: 'Driver and classifier logic are correct and tested for all three criteria, but the train PR close comment claims a retest that does not happen on a second no-result red, and no test carries a criterion anchor so aida criteria still reports all three untested. CI at head is fast tier (shards skipped): new tests not run by CI, verified by source trace.'
+  recovery_hint: address the review findings, move BUG-2577 back to In Progress, and clear the PR hold only after approval
+  shelved_by: reviewer
+  shelved_at: 2026-11-14T16:12:18.749811548Z
