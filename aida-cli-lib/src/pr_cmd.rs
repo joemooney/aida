@@ -2099,11 +2099,16 @@ pub(crate) fn ship_unlabel_failure(pr: u64, err: &crate::merge_hold::LabelSyncEr
 /// hold? Verdicts are read under every root (the main clone and the calling
 /// worktree can both hold `.aida/review-verdicts/`); the first root with an
 /// answer wins. Never clears anything.
+///
+/// With `record_proof` off a carry-over proven here is not written to the
+/// gate ledger, so the answer leaves no state behind (a status report).
 // trace:BUG-1532 | ai:claude
+// trace:STORY-2768 | ai:claude
 pub(crate) fn ship_refusal_release(
     roots: &[&std::path::Path],
     record: &crate::gate::merge_hold_core::MergeHoldRecord,
     head: Option<&str>,
+    record_proof: bool,
 ) -> crate::gate::merge_hold_core::RefusalRelease {
     let exact = crate::gate::merge_hold_core::refusal_release(
         record,
@@ -2125,7 +2130,13 @@ pub(crate) fn ship_refusal_release(
         let head = head.ok_or("the PR head is unavailable")?;
         let keys = crate::gate::merge_hold_core::refusal_verdict_keys(record);
         crate::gate::merge_hold_core::live_carried_approval(
-            roots, root, record.pr, head, None, &keys, true,
+            roots,
+            root,
+            record.pr,
+            head,
+            None,
+            &keys,
+            record_proof,
         )
     })
 }
@@ -3129,6 +3140,7 @@ pub(crate) fn pr_ship_with_method_and_dispatch_ctx(
                     &[main_worktree.as_path(), project_root.as_path()],
                     record,
                     head.as_deref(),
+                    true,
                 )
             },
         ) {
@@ -3688,6 +3700,16 @@ pub(crate) fn pr_ship_with_method_and_dispatch_ctx(
         )?;
         let sanitized_squash_body =
             ship_squash_body(merge_method, declares_non_completing, checked_squash_body);
+        // trace:STORY-2733 | ai:codex
+        let sanitized_squash_body =
+            if let Some(audit) = mandate_cover.as_ref().ok().and_then(|c| c.gate_audit()) {
+                Some(format!(
+                    "{}\n\n{audit}",
+                    sanitized_squash_body.unwrap_or_default()
+                ))
+            } else {
+                sanitized_squash_body
+            };
         let mut merge_opts = crate::forge::MergeOptions {
             method: merge_method,
             squash_subject: explicit_squash_subject.clone(),
@@ -3777,6 +3799,7 @@ pub(crate) fn pr_ship_with_method_and_dispatch_ctx(
                 &[hold_root.as_path(), project_root.as_path()],
                 record,
                 head_sha.as_deref(),
+                true,
             ) {
                 crate::gate::merge_hold_core::RefusalRelease::Released(verdict) => Some(verdict),
                 crate::gate::merge_hold_core::RefusalRelease::Held(why) => {
@@ -4017,13 +4040,16 @@ pub(crate) fn pr_ship_with_method_and_dispatch_ctx(
         let dispatch_err = dispatch_ship_checkpoint(dispatch_ctx, ShipCheckpoint::PreMerge).err();
         let lapsed = mandate_release
             .as_ref()
-            .filter(|cover| !mandate_still_active(&cover.id));
+            .filter(|cover| !mandate_cover_still_active(cover));
         if dispatch_err.is_some() || lapsed.is_some() {
             let cause = match (&dispatch_err, lapsed) {
                 (Some(err), _) => {
                     format!("its dispatch request no longer has authority to merge ({err:#})")
                 }
-                (None, Some(cover)) => format!("mandate {} ended before the merge", cover.id),
+                (None, Some(cover)) => format!(
+                    "mandate {} ended or was narrowed by a renewal before the merge",
+                    cover.id
+                ),
                 (None, None) => String::new(),
             };
             let rearm = if mandate_release.is_some() {
@@ -4184,7 +4210,7 @@ pub(crate) fn pr_ship_with_method_and_dispatch_ctx(
                 &cover.id,
                 pr_number,
                 crate::gate::dispatch_types::Outcome::Done,
-                None,
+                cover.gate_audit(),
             );
         }
     }
@@ -6912,6 +6938,8 @@ pub(crate) fn dispatch_ledger_cover(
     ctx: &crate::gate::dispatch_auth::DispatchExecutionContext,
 ) -> MandateCover {
     MandateCover {
+        gate_match: None,
+        issued_supervised: false,
         id: ctx.mandate_id().to_string(),
         principal: ctx.principal().to_string(),
     }
@@ -6934,7 +6962,10 @@ pub(crate) fn ledger_mandate_ship_failure(
             &cover.id,
             pr,
             crate::gate::dispatch_types::Outcome::Refused,
-            Some(why.to_string()),
+            Some(match cover.gate_audit() {
+                Some(audit) => format!("{why}\n{audit}"),
+                None => why.to_string(),
+            }),
         );
     }
 }

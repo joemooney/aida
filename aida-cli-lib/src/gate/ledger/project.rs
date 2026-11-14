@@ -408,6 +408,33 @@ pub(crate) fn verdict_records(start: &Path, key: &str) -> Vec<JsonObj> {
         .collect()
 }
 
+/// [`verdict_records`] for one change through the strict reader: `Err` when
+/// the store root, the ledger or the change's file could not be read whole,
+/// so a caller never mistakes a corrupt or over-budget ledger for "no
+/// verdicts". Delivery-pending records are not acts of review and are left
+/// out.
+// trace:STORY-2768 | ai:claude
+pub(crate) fn change_verdict_records_checked(
+    start: &Path,
+    change: ChangeKey,
+) -> Result<Vec<JsonObj>, String> {
+    let root = store_root(start)
+        .map_err(|error| format!("the gate ledger's store could not be resolved: {error}"))?;
+    let key = change.as_key();
+    let events = super::checked::read_change_events(&root, change, &mut Default::default())
+        .map_err(|refused| refused.0)?;
+    Ok(events
+        .into_iter()
+        .filter(|e| !e.is_spec_only() && terminal_annotation_matches(e, &key))
+        .filter_map(|e| e.verdict_record().cloned())
+        .filter(|record| {
+            !crate::gate::review_verdict::delivery_pending(&serde_json::Value::Object(
+                record.clone(),
+            ))
+        })
+        .collect())
+}
+
 /// The newest verdict record the ledger holds for `key`.
 pub(crate) fn newest_verdict(start: &Path, key: &str) -> Option<JsonObj> {
     newest_verdict_event(start, key).and_then(|e| e.verdict_record().cloned())

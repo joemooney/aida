@@ -260,6 +260,9 @@ pub enum EventKind {
         expires_at: String,
         #[serde(default)]
         include_supervised: bool,
+        // trace:STORY-2733 | ai:codex
+        #[serde(default)]
+        include_gate_paths: bool,
         #[serde(default, skip_serializing_if = "Option::is_none")]
         reason: Option<String>,
         /// Set only on a renewal (`aida mandate renew`): the expiry the
@@ -268,6 +271,11 @@ pub enum EventKind {
         // trace:STORY-B6B1278890774EF993D2EBC327862470-166 | ai:claude
         #[serde(default, skip_serializing_if = "Option::is_none")]
         renewed_from: Option<String>,
+        /// What a renewal or revival changed besides the expiry, one
+        /// `name: before -> after` line each.
+        // trace:STORY-2771 | ai:claude
+        #[serde(default, skip_serializing_if = "Vec::is_empty")]
+        changes: Vec<String>,
     },
     /// A review verdict was recorded for a spec (`aida review record`) — the
     /// other coordination-seat action BUG-1423's event feed still missed:

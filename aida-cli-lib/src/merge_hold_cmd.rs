@@ -650,6 +650,7 @@ pub(crate) fn handle_merge_hold(action: &crate::cli::MergeHoldAction) -> Result<
                             &[root.as_path()],
                             &record,
                             head_of(pr).as_deref(),
+                            true,
                         )
                     })
                 };
@@ -1148,6 +1149,7 @@ pub(crate) fn handle_merge_hold(action: &crate::cli::MergeHoldAction) -> Result<
                                 &[root.as_path()],
                                 record,
                                 head.as_deref(),
+                                true,
                             ) {
                                 crate::gate::merge_hold_core::RefusalRelease::Released(v) => {
                                     Some(v)
