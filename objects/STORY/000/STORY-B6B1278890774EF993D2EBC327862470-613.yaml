@@ -3,12 +3,12 @@ spec_id: STORY-b6b1278890774ef993d2ebc327862470-613
 agreed_id: STORY-2690
 title: 'Spec status invariants and typed lane exits: a spec with an open PR is never unpickable for rework, and every lane exit has a typed result'
 description: 'Problem: on 2026-11-08 STORY-2571 stayed needs-attention so rework lanes died with not-pickable needs-triage, and PR-3640 received no fix across three attempts. The advisor inbox collected many exited-without-changes notices needing manual reading. BUG-2502 fixes one instance. Requirement: enforce that rework routing leaves the spec pickable, or refuses loudly at routing time; each lane exit records a closed-set result such as pushed, no-change-with-reason, refused-before-start or punted. Acceptance: a refused-before-start lane is never reported as a launched rework; repeated identical refusals surface once.'
-status: InProgress
+status: NeedsAttention
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-09T01:58:39.064485765Z
-modified_at: 2026-11-14T14:05:35.397306327Z
+modified_at: 2026-11-14T14:17:39.580294023Z
 req_type: Story
 tags:
 - area:orchestration
@@ -495,6 +495,15 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1da6b-c9fc-71d3-828d-9ba6c739cc3e
+  author: dirtlab
+  timestamp: 2026-11-14T14:17:39.580317295Z
+  session_id: 01a1da63b74f
+  harness_version: 2.1.319 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 filed_at:
   code_sha: a7a14984cec5533987dfeccb70d1f91aaebbf22a
   branch: main
@@ -503,3 +512,9 @@ filed_at:
   aida_build_sha: 8a4a909a967
   vendor: claude
   session: 20abb7c3-8f9b-4a5e-b326-404921f3b450
+attention_reason:
+  category: other
+  detail: 'Round 5 finding 1 (queue_rework_tests.rs parking-test time budget) is already resolved and merged: main carries it as 9e5b788904 (#3918), and aida-cli-lib/src/tests/queue_rework_tests.rs at this branch head b5b5d11596 is byte-identical to origin/main. The branch is a pre-squash copy of that merged commit, 41 commits behind main; merging main leaves no diff, so there is nothing to commit or open a PR for. Measured now: lane job j20261114T140929189-3-0 ran the three story_2690_rework_ tests, all passed, 1.16s total (82-case matrix is a pure validator test; 6 command cases share one Git fixture; no budget entry needed against the 30s limit). I could not read CI: gh returns 401 in this seat. Still outstanding on the story and not covered by this finding: S1 remainder (drain and explicit-resume receipt integration) and S2 (refusal-notice dedup).'
+  lean: 'Close this rework round as satisfied by #3918, retire the stale branch, and dispatch the S1 remainder and S2 as fresh implementer lanes from current main.'
+  raised_by: implementer
+  raised_at: 2026-11-14T14:17:39.580294023Z

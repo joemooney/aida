@@ -3,12 +3,12 @@ spec_id: TASK-b6b1278890774ef993d2ebc327862470-1072
 agreed_id: TASK-3099
 title: Nested lane Cargo fixture inherits an unavailable /dev/shm TMPDIR
 description: 'During BUG-2539 validation, lane job j20261112T213757568-2-0 executed the overlay suite: 21 passed, 1 failed. bug_2383_bwrap_real_cargo_test_job_reports_pass_and_fail_through_the_cli failed because nested rustc could not create /dev/shm/cargo-tmp-1000-1029904/rustc... (No such file or directory). The outer runner sets TMPDIR under /dev/shm, while the nested bwrap sandbox has a fresh /dev/shm. The same suite passed the live Fresh-dependency regression and the new-layout snapshot test. Investigate fixture TMPDIR projection separately from Cargo artifact layout. Full output: /home/joe/ai/aida/.aida/lane-jobs/01a1d1ad9eb0/j20261112T213757568-2-0.out'
-status: InProgress
+status: Done
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-12T21:59:52.896824799Z
-modified_at: 2026-11-14T14:05:20.548711540Z
+modified_at: 2026-11-14T14:17:49.762994520Z
 req_type: Task
 tags:
 - from-advisor:BUG-2539
@@ -52,6 +52,13 @@ comments:
   modified_at: 2026-11-14T14:05:20.548711540Z
   session_id: 01a1d9ea-4e25-7033-85e8-3648f0195c7c
   harness_version: 2.1.325 (Claude Code)
+- id: 01a1da6b-abaa-75c1-90b6-56cd4a3293f0
+  author: dirtlab
+  content: 'Resume on dell1 lane: the fix and both regressions already landed on main via PR #3928 (4c73cd7740, Refs trailer, so no auto-completion). Merged origin/main into the lane branch with a real merge; the tree is identical to origin/main, so there is nothing left to push or open a PR for. Validation on merged main: lane job j20261114T140920640-4-0 ran task_3099_job_tmpdir_is_private_for_cargo_and_fast_gates and bug_2383_bwrap_real_cargo_test_job_reports_pass_and_fail_through_the_cli, 2 passed, 0 failed; rerun j20261114T141714847-3-0 with --nocapture confirms the real nested-bwrap Cargo fixture executed live (no SKIP; fixture pass and fail cases both reported). make check-ci-fast not run: zero diff against origin/main. Marking Done.'
+  created_at: 2026-11-14T14:17:31.818549093Z
+  modified_at: 2026-11-14T14:17:31.818549093Z
+  session_id: 01a1da63321c
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1d1cd-34b7-7111-ada2-c651b7c61e56
   author: joe
@@ -85,8 +92,21 @@ history:
   session_id: 01a1d40988ed
   harness_version: codex-cli 0.167.0
   changes: []
+- id: 01a1da6b-f23e-7293-a33c-f9dea7798042
+  author: dirtlab
+  timestamp: 2026-11-14T14:17:49.886360754Z
+  session_id: 01a1da63321c
+  harness_version: 2.1.319 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Done
 filed_at:
   aida_version: 0.16.0
   aida_build_sha: 0d6c60e6d98
   vendor: codex
   session: 01a1d1ad9eb0
+implementation_info:
+  implemented: true
+  implemented_at: 2026-11-14T14:17:49.762994520Z
+  implemented_by: dirtlab
