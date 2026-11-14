@@ -21,6 +21,106 @@ pub(crate) enum QueueFreshPickup {
     AwaitingRework,
     Terminal(RequirementStatus),
     Blocked(aida_core::pickability::BlockedReason),
+    /// The spec carries `track:<owner>` and this launcher runs another track
+    /// (`AIDA_TRACK`, default `main`): one track per spec.
+    // trace:STORY-2749 | ai:claude
+    OtherTrack {
+        owner: String,
+        launcher: String,
+    },
+    /// The spec carries `track:` tags naming more than one owner: no
+    /// launcher may take it until exactly one remains.
+    // trace:STORY-2749 | ai:claude
+    AmbiguousTrack(Vec<String>),
+}
+
+/// The tag family that assigns a spec to one track's launcher.
+// trace:STORY-2749 | ai:claude
+pub(crate) const TRACK_TAG_PREFIX: &str = "track:";
+
+/// The track reserved for supervised, human-driven work: no headless lane
+/// takes it, whatever the launcher's own track.
+// trace:STORY-2749 | ai:claude
+pub(crate) const OPERATOR_TRACK: &str = "operator";
+
+/// Which launcher a spec belongs to, from its `track:<owner>` tags.
+// trace:STORY-2749 | ai:claude
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum SpecTrack {
+    /// No track tag: any launcher may take it.
+    Free,
+    Owner(String),
+    /// Tags name several owners (sorted). Tags are a set, so picking one
+    /// would let different processes admit different launchers: refuse.
+    Ambiguous(Vec<String>),
+}
+
+/// The track a spec is assigned to: the distinct owners of its
+/// `track:<owner>` tags, compared case-insensitively.
+// trace:STORY-2749 | ai:claude
+pub(crate) fn spec_track(req: &aida_core::Requirement) -> SpecTrack {
+    tags_track(&req.tags)
+}
+
+/// [`spec_track`] over a spec's tags alone, for queue projections that
+/// carry tags rather than the stored spec.
+// trace:STORY-2749 | ai:claude
+pub(crate) fn tags_track<'a>(tags: impl IntoIterator<Item = &'a String>) -> SpecTrack {
+    let owners: std::collections::BTreeSet<String> = tags
+        .into_iter()
+        .flat_map(|tag| tag.split_whitespace())
+        .filter_map(|tag| tag.strip_prefix(TRACK_TAG_PREFIX))
+        .map(|owner| owner.trim().to_ascii_lowercase())
+        .filter(|owner| !owner.is_empty())
+        .collect();
+    let mut owners: Vec<String> = owners.into_iter().collect();
+    match owners.len() {
+        0 => SpecTrack::Free,
+        1 => SpecTrack::Owner(owners.remove(0)),
+        _ => SpecTrack::Ambiguous(owners),
+    }
+}
+
+/// The execution mode unattended admission enforces: the groomed mode, but
+/// `Operator` for a `track:operator` spec, which is supervised by
+/// definition whatever mode it groomed to.
+// trace:STORY-2749 | ai:claude
+pub(crate) fn effective_execution_mode(
+    req: &aida_core::Requirement,
+) -> Option<aida_core::ExecutionMode> {
+    use aida_core::ExecutionMode as M;
+    match req.execution_mode {
+        Some(mode @ (M::Guided | M::Operator | M::Decide)) => Some(mode),
+        _ if spec_track(req) == SpecTrack::Owner(OPERATOR_TRACK.into()) => Some(M::Operator),
+        mode => mode,
+    }
+}
+
+/// The pickup's spec track for the launch preflight line: its owner, or
+/// `free` when untagged or unreadable.
+// trace:STORY-2749 | ai:claude
+fn store_track_label(storage: &Storage, scope: &str) -> String {
+    let track = storage
+        .load()
+        .ok()
+        .and_then(|store| store.get_requirement_by_spec_id(scope).map(spec_track));
+    match track {
+        Some(SpecTrack::Owner(owner)) => owner,
+        Some(SpecTrack::Ambiguous(owners)) => format!("ambiguous ({})", owners.join(", ")),
+        Some(SpecTrack::Free) | None => "free".to_string(),
+    }
+}
+
+/// The track this launcher runs: `AIDA_TRACK`, or `main` when unset.
+// trace:STORY-2749 | ai:claude
+pub(crate) fn launcher_track() -> String {
+    // Read through the ExecContext capture boundary, not a raw env site.
+    aida_core::exec_context::Environment::capture()
+        .var("AIDA_TRACK")
+        .ok()
+        .map(|t| t.trim().to_ascii_lowercase())
+        .filter(|t| !t.is_empty())
+        .unwrap_or_else(|| "main".to_string())
 }
 
 /// BUG-1017: one policy for fresh queue pickup surfaces. `Done` stays visible
@@ -47,6 +147,9 @@ pub(crate) fn queue_fresh_pickup_policy(
     }
     if req.archived {
         return QueueFreshPickup::Archived;
+    }
+    if let Some(refusal) = track_refusal(&req.tags, &req.status, false) {
+        return refusal;
     }
     if matches!(req.status, RequirementStatus::Done) {
         if let Some(root) = project_root {
@@ -77,6 +180,107 @@ pub(crate) fn queue_fresh_pickup_policy(
     }
 }
 
+/// A spec on another launcher's track, or on several, is never fresh work
+/// here: the one track check every pickup surface shares, from single-spec
+/// pickup to the queue-wide auto-complete head and its projections. A
+/// terminal spec reports its terminal state, not a stale track.
+///
+/// `unattended` marks an admission with nobody at the keyboard: a
+/// `--no-human` pickup, a drain, or the auto-complete head. A
+/// `track:operator` spec is supervised work, so every such admission refuses
+/// it, even on a matching `AIDA_TRACK=operator` launcher.
+// trace:STORY-2749 | ai:claude
+pub(crate) fn track_refusal<'a>(
+    tags: impl IntoIterator<Item = &'a String>,
+    status: &RequirementStatus,
+    unattended: bool,
+) -> Option<QueueFreshPickup> {
+    if is_terminal_status(status) {
+        return None;
+    }
+    match tags_track(tags) {
+        SpecTrack::Free => None,
+        SpecTrack::Ambiguous(owners) => Some(QueueFreshPickup::AmbiguousTrack(owners)),
+        SpecTrack::Owner(owner) if unattended && owner == OPERATOR_TRACK => Some(
+            QueueFreshPickup::NeedsGuidedOrOperatorSession(aida_core::ExecutionMode::Operator),
+        ),
+        SpecTrack::Owner(owner) => {
+            let launcher = launcher_track();
+            (owner != launcher).then_some(QueueFreshPickup::OtherTrack { owner, launcher })
+        }
+    }
+}
+
+/// The skip reason the auto-complete head and its drain projections show for
+/// a spec [`track_refusal`] refuses. Both are unattended admissions.
+// trace:STORY-2749 | ai:claude
+fn track_skip_reason<'a>(
+    tags: impl IntoIterator<Item = &'a String>,
+    status: &RequirementStatus,
+) -> Option<String> {
+    track_refusal(tags, status, true).map(|refusal| {
+        queue_fresh_pickup_reason_label(&refusal).unwrap_or_else(|| "on another track".into())
+    })
+}
+
+/// STORY-2749 review: an unattended (`--no-human`) pickup applies the
+/// unattended [`track_refusal`] to a spec before any setup, status or lease
+/// change, so a `track:operator` spec never runs headless even on an operator
+/// launcher. At the keyboard it proceeds.
+// trace:STORY-2749 | ai:claude
+pub(crate) fn operator_track_headless_refusal(
+    req: &aida_core::Requirement,
+    no_human: bool,
+) -> Option<anyhow::Error> {
+    if !no_human {
+        return None;
+    }
+    let refusal = track_refusal(&req.tags, &req.status, true)?;
+    Some(
+        if spec_track(req) == SpecTrack::Owner(OPERATOR_TRACK.into()) {
+            anyhow::anyhow!(
+                "{} is on the `{OPERATOR_TRACK}` track: supervised work never runs headless. \
+             Drop --no-human and drive it at the keyboard.",
+                req.friendly_id()
+            )
+        } else {
+            let reason = queue_fresh_pickup_reason_label(&refusal)
+                .unwrap_or_else(|| "on another track".into());
+            anyhow::anyhow!(
+                "{} cannot be picked up headless: {reason}",
+                req.friendly_id()
+            )
+        },
+    )
+}
+
+/// The unattended admission for a whole resolved pickup plan: the anchor and
+/// every member, before any setup. `None` at the keyboard.
+// trace:STORY-2749 | ai:claude
+pub(crate) fn headless_plan_refusal(
+    plan: &QueueWorkPlan,
+    store: &aida_core::RequirementsStore,
+    no_human: bool,
+) -> Option<anyhow::Error> {
+    if !no_human {
+        return None;
+    }
+    let anchor = store
+        .requirements
+        .iter()
+        .find(|r| spec_matches(r, &plan.anchor_display));
+    let members = plan.entries.iter().filter_map(|entry| {
+        store
+            .requirements
+            .iter()
+            .find(|r| r.id == entry.queue.requirement_id)
+    });
+    anchor
+        .into_iter()
+        .chain(members)
+        .find_map(|req| operator_track_headless_refusal(req, no_human))
+}
+
 pub(crate) fn queue_fresh_pickup_reason_label(policy: &QueueFreshPickup) -> Option<String> {
     match policy {
         QueueFreshPickup::Pickable => None,
@@ -101,6 +305,17 @@ pub(crate) fn queue_fresh_pickup_reason_label(policy: &QueueFreshPickup) -> Opti
                 .to_string(),
         ),
         QueueFreshPickup::Terminal(status) => Some(format!("{status} — already terminal")),
+        // trace:STORY-2749 | ai:claude
+        QueueFreshPickup::OtherTrack { owner, launcher } => Some(format!(
+            "on the `{owner}` track — only a `{owner}` launcher takes it (this one runs `{launcher}`; \
+             set AIDA_TRACK={owner} to launch it there)"
+        )),
+        // trace:STORY-2749 | ai:claude
+        QueueFreshPickup::AmbiguousTrack(owners) => Some(format!(
+            "tagged for several tracks ({}) — no launcher takes it until one \
+             `track:<owner>` tag remains",
+            owners.join(", ")
+        )),
         QueueFreshPickup::Blocked(reason) => {
             Some(aida_core::pickability::pickability_reason_label(reason))
         }
@@ -160,16 +375,15 @@ pub(crate) fn queue_drain_pickup_policy(
     {
         return QueueFreshPickup::NeedsReleaseOperatorSession;
     }
+    // A drain is unattended: the shared track check refuses a
+    // `track:operator` spec whatever it groomed to, on any launcher.
+    // trace:STORY-2749 | ai:claude
+    if let Some(refusal) = track_refusal(&req.tags, &req.status, true) {
+        return refusal;
+    }
     // trace:BUG-1120 | ai:codex
-    if matches!(
-        req.execution_mode,
-        Some(aida_core::ExecutionMode::Guided)
-            | Some(aida_core::ExecutionMode::Operator)
-            | Some(aida_core::ExecutionMode::Decide)
-    ) {
-        return QueueFreshPickup::NeedsGuidedOrOperatorSession(
-            req.execution_mode.expect("matched Some execution_mode"),
-        );
+    if let Some(mode) = queued_supervised_mode(req) {
+        return QueueFreshPickup::NeedsGuidedOrOperatorSession(mode);
     }
     queue_fresh_pickup_policy(req, store, force_needs_attention, project_root)
 }
@@ -178,7 +392,8 @@ pub(crate) fn queue_drain_pickup_policy(
 pub(crate) fn queued_supervised_mode(
     req: &aida_core::Requirement,
 ) -> Option<aida_core::ExecutionMode> {
-    match req.execution_mode {
+    // trace:STORY-2749 | ai:claude
+    match effective_execution_mode(req) {
         Some(
             mode @ (aida_core::ExecutionMode::Guided
             | aida_core::ExecutionMode::Operator
@@ -195,6 +410,8 @@ pub(crate) fn queued_supervised_mode(
 pub(crate) struct QueueWorkRoleInput<'a> {
     pickup: Option<&'a str>,
     explicit: Option<&'a str>,
+    /// BUG-2557: an advisor's `--rereview <reason>`.
+    rereview: Option<&'a str>,
 }
 
 impl<'a> QueueWorkRoleInput<'a> {
@@ -202,7 +419,14 @@ impl<'a> QueueWorkRoleInput<'a> {
         Self {
             pickup: role,
             explicit: role,
+            rereview: None,
         }
+    }
+
+    // trace:BUG-2557 | ai:claude
+    pub(crate) fn with_rereview(mut self, reason: Option<&'a str>) -> Self {
+        self.rereview = reason;
+        self
     }
 
     pub(crate) fn review_coexistence<'p>(
@@ -224,6 +448,7 @@ pub(crate) fn rework_role_input<'a>(
     QueueWorkRoleInput {
         pickup: resolved_route,
         explicit: raw_for,
+        rereview: None,
     }
 }
 
@@ -2346,6 +2571,88 @@ pub(crate) fn reviewer_preflight_pr_n(review_target: Option<(ReviewForge, u64)>)
     review_target.map(|(_, n)| n)
 }
 
+/// BUG-2557: validate `--rereview <reason>` before any pickup mutation. It
+/// admits a review, so it needs a launched reviewer pickup of a PR, and
+/// only the advisor seat may admit one. `None` when the flag is absent.
+// trace:BUG-2557 | ai:claude
+pub(crate) fn rereview_target<'a>(
+    reason: Option<&'a str>,
+    pickup_role: &str,
+    no_launch: bool,
+    pr: Option<u64>,
+) -> Result<Option<(u64, &'a str)>> {
+    let Some(reason) = reason else {
+        return Ok(None);
+    };
+    check_rereview_target(
+        reason,
+        crate::store_mutation_client::session_role(
+            &aida_core::exec_context::Environment::capture(),
+        )
+        .ok()
+        .flatten()
+        .as_deref(),
+        pickup_role,
+        no_launch,
+        pr,
+    )
+    .map(|pr| Some((pr, reason)))
+}
+
+/// The pure half of [`rereview_target`]: the session role is passed in.
+// trace:BUG-2557 | ai:claude
+pub(crate) fn check_rereview_target(
+    reason: &str,
+    session_role: Option<&str>,
+    pickup_role: &str,
+    no_launch: bool,
+    pr: Option<u64>,
+) -> Result<u64> {
+    anyhow::ensure!(
+        session_role.is_some_and(|r| crate::canonical_role_name(r.trim()) == "advisor"),
+        "`--rereview` is advisor-only: run it from the advisor seat (`eval \"$(aida role enter advisor)\"`)"
+    );
+    anyhow::ensure!(
+        !reason.trim().is_empty(),
+        "`--rereview` needs a reason (what changed in the review contract after the verdict)"
+    );
+    anyhow::ensure!(
+        pickup_role == "reviewer" && !no_launch,
+        "`--rereview` admits a fresh review, so it needs a launched reviewer pickup: \
+         `aida queue work PR-<N> --role reviewer --rereview <reason>`"
+    );
+    pr.ok_or_else(|| {
+        anyhow::anyhow!("`--rereview` needs a pull request target: `aida queue work PR-<N> --role reviewer --rereview <reason>`")
+    })
+}
+
+/// BUG-2557: record the advisor's admission on the gate ledger and say so.
+// trace:BUG-2557 | ai:claude
+fn admit_rereview_for_pickup(
+    project_root: &std::path::Path,
+    pr: u64,
+    head: Option<&str>,
+    reason: &str,
+) -> Result<()> {
+    let by = crate::coordination::hostname();
+    let by = format!("advisor@{by}");
+    match crate::gate::review_marker::admit_rereview(
+        &crate::main_worktree_root_from(project_root),
+        pr,
+        head,
+        reason,
+        &by,
+    )? {
+        Some(superseded) => eprintln!(
+            "  re-review admitted on PR-{pr}: one fresh review supersedes its {superseded} verdict at this head (recorded on the gate ledger)"
+        ),
+        None => eprintln!(
+            "  --rereview: PR-{pr} has no conclusive verdict blocking a review at this head; nothing to admit"
+        ),
+    }
+    Ok(())
+}
+
 // BUG-1213: keep durable-history round derivation on the same path used to
 /// assemble the production pickup prompt, so callers cannot accidentally
 /// reintroduce a constant round.
@@ -4097,10 +4404,10 @@ pub(crate) fn handle_queue_work(
         // Recheck the resolved anchor, including no-argument queue-head pickup.
         // This runs before launch resolution, calibration, worktree creation, or
         // lease acquisition, so held work cannot be picked indirectly. trace:BUG-1793
-        if let Some(req) = storage
-            .load()?
+        let store = storage.load()?;
+        if let Some(req) = store
             .requirements
-            .into_iter()
+            .iter()
             .find(|r| spec_matches(r, &plan.anchor_display))
         {
             let display = req.spec_id.as_deref().unwrap_or(&plan.anchor_display);
@@ -4112,6 +4419,12 @@ pub(crate) fn handle_queue_work(
             ) {
                 return Err(refusal);
             }
+        }
+        // Unattended admission covers the anchor AND every resolved member:
+        // a free cluster parent must not carry a `track:operator` child into
+        // a headless session. trace:STORY-2749 | ai:claude
+        if let Some(refusal) = headless_plan_refusal(&plan, &store, no_human) {
+            return Err(refusal);
         }
 
         // TASK-304: on a no-arg head pickup, surface the ultraplan suggestion
@@ -4404,6 +4717,12 @@ pub(crate) fn handle_queue_work(
         let mut _standalone_slot = None;
         if !list_sessions {
             eprintln!("  pickup role: {role} ({role_origin}); --role overrides queue routing, then scope default");
+            // trace:STORY-2749 | ai:claude
+            eprintln!(
+                "  track: {} (spec: {})",
+                launcher_track(),
+                store_track_label(&storage, &plan.scope)
+            );
             if let Some(message) = queue_work_role_mismatch(
                 &role,
                 role_origin,
@@ -4539,11 +4858,27 @@ pub(crate) fn handle_queue_work(
                 )?;
                 }
 
+                // trace:BUG-2557 | ai:claude — `--rereview` needs a launched review of a PR.
+                let rereview_pr = rereview_target(
+                    role_input.rereview,
+                    &role,
+                    no_launch,
+                    reviewer_preflight_pr_n(plan.review_target),
+                )?;
                 // trace:BUG-2530 | ai:codex — after sync, before any pickup mutation.
                 if !no_launch && role == "reviewer" {
                     if let Some(pr_n) = reviewer_preflight_pr_n(plan.review_target) {
                         // trace:BUG-2530 | ai:codex
                         let head = standalone_review_pr_head(&project_root, pr_n);
+                        // trace:BUG-2557 | ai:claude
+                        if let Some((pr_n, reason)) = rereview_pr {
+                            admit_rereview_for_pickup(
+                                &project_root,
+                                pr_n,
+                                head.as_deref(),
+                                reason,
+                            )?;
+                        }
                         crate::gate::review_marker::refuse_conclusive_head(
                             &crate::main_worktree_root_from(&project_root),
                             pr_n,
@@ -7637,6 +7972,13 @@ pub(crate) fn pick_auto_complete_head_for_role(
             release_skipped.push(candidate.id.clone());
             continue;
         }
+        // A foreign or ambiguous track is skipped before selection, so the
+        // drain never registers or bumps work its phase-1 child would refuse.
+        // trace:STORY-2749 | ai:claude
+        if let Some(reason) = track_skip_reason(&candidate.tags, &candidate.status) {
+            blocked_skipped.push((candidate.id.clone(), reason));
+            continue;
+        }
         // trace:BUG-1120 | ai:codex
         if let Some(
             mode @ (aida_core::ExecutionMode::Guided
@@ -7702,7 +8044,8 @@ pub(crate) fn auto_complete_head_candidates_with_roles(
                     deferred: r.deferred,
                     deferred_reason: r.deferred_reason.clone(),
                     deferred_until: r.deferred_until.clone(),
-                    execution_mode: r.execution_mode,
+                    // trace:STORY-2749 | ai:claude
+                    execution_mode: effective_execution_mode(r),
                     tags: r.tags.clone(),
                     // BUG-1608: PRIN-5 fail closed — `pickability` treats a
                     // dangling or non-Completed `BlockedBy` target as blocked,
@@ -7765,7 +8108,9 @@ pub(crate) fn auto_complete_head_candidates_with_blocked(
         if candidate.deferred {
             continue;
         }
-        out.push((candidate.id, candidate.status, candidate.blocked));
+        // trace:STORY-2749 | ai:claude
+        let blocked = track_skip_reason(&candidate.tags, &candidate.status).or(candidate.blocked);
+        out.push((candidate.id, candidate.status, blocked));
     }
     Ok(out)
 }
@@ -8280,6 +8625,7 @@ pub(super) fn handle_queue_command(
             dry_run,
             resume,
             fresh,
+            rereview,
             list_sessions,
             session_id,
             vendor,
@@ -9352,7 +9698,7 @@ pub(super) fn handle_queue_command(
                 permission_mode.as_deref(),
                 *sandbox,
                 *no_launch,
-                QueueWorkRoleInput::direct(role.as_deref()),
+                QueueWorkRoleInput::direct(role.as_deref()).with_rereview(rereview.as_deref()),
                 *no_pull,
                 type_filter.as_deref(),
                 branch.as_deref(),
@@ -9419,4 +9765,61 @@ pub(super) fn handle_queue_command(
         _ => unreachable!("dispatcher selected another queue subcommand"),
     }
     Ok(())
+}
+
+// trace:BUG-2557 | ai:claude
+#[cfg(test)]
+mod bug2557_rereview_target_tests {
+    use super::check_rereview_target;
+
+    #[test]
+    fn rereview_is_advisor_only_and_needs_a_launched_pr_review() {
+        let ok = |role: Option<&str>, pickup: &str, no_launch: bool, pr: Option<u64>| {
+            check_rereview_target("coverage fixed", role, pickup, no_launch, pr)
+        };
+        assert_eq!(
+            ok(Some("advisor"), "reviewer", false, Some(3922)).unwrap(),
+            3922
+        );
+        assert_eq!(ok(Some(" dialog "), "reviewer", false, Some(1)).unwrap(), 1);
+        for (role, pickup, no_launch, pr, needle) in [
+            (None, "reviewer", false, Some(1), "advisor-only"),
+            (Some("reviewer"), "reviewer", false, Some(1), "advisor-only"),
+            (
+                Some("implementer"),
+                "reviewer",
+                false,
+                Some(1),
+                "advisor-only",
+            ),
+            (
+                Some("advisor"),
+                "implementer",
+                false,
+                Some(1),
+                "launched reviewer pickup",
+            ),
+            (
+                Some("advisor"),
+                "reviewer",
+                true,
+                Some(1),
+                "launched reviewer pickup",
+            ),
+            (
+                Some("advisor"),
+                "reviewer",
+                false,
+                None,
+                "pull request target",
+            ),
+        ] {
+            let err = ok(role, pickup, no_launch, pr).unwrap_err().to_string();
+            assert!(
+                err.contains(needle),
+                "{role:?}/{pickup}/{no_launch}/{pr:?}: {err}"
+            );
+        }
+        assert!(check_rereview_target("  ", Some("advisor"), "reviewer", false, Some(1)).is_err());
+    }
 }

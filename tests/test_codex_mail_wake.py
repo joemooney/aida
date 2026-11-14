@@ -22,6 +22,11 @@ THREAD = "01a1700b-717d-71f2-b7e0-0569b05f3dee"
 
 class WatcherTests(unittest.TestCase):
     def setUp(self):
+        # Fixture directories must satisfy the adapter's private-state checks
+        # even when the host uses a shared-write umask. Restore it per test.
+        # trace:STORY-2660 | ai:codex
+        previous_umask = os.umask(0o077)
+        self.addCleanup(os.umask, previous_umask)
         self.tmp = tempfile.TemporaryDirectory()
         self.addCleanup(self.tmp.cleanup)
         self.root = Path(self.tmp.name)

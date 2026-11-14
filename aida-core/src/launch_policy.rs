@@ -136,6 +136,9 @@ pub const AMBIENT_AIDA_KEYS: &[&str] = &[
     "AIDA_STORE_PATH",
     "AIDA_TEE_HEADLESS",
     "AIDA_TELEMETRY",
+    // The launcher's track (STORY-2749): the child's own `aida` commands
+    // must run on the track its parent admitted it under.
+    "AIDA_TRACK",
     "AIDA_TRANSPORT_SCAN_DEADLINE_MS",
     "AIDA_TUI_EPIC",
     "AIDA_TUI_LIVENESS_TTL_SECS",
@@ -155,6 +158,9 @@ pub const DROPPED_AIDA_KEYS: &[&str] = &[
     // Build-local invalidation input, supplied by dev_build_command only.
     // trace:BUG-2499 | ai:codex
     "AIDA_DEV_BUILD_HEAD",
+    // Supervisor-to-sweep lock handoff (post-ship cleanup); never a vendor input.
+    // trace:BUG-2535 | ai:claude
+    "AIDA_SWEEP_PARENT",
     "AIDA_AGENT_CMD",
     "AIDA_ADD_NO_REMOTE_SYNC",
     "AIDA_ADVISOR_HANDSHAKE",
