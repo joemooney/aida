@@ -801,12 +801,24 @@ description: |
   ### finding-hash:6089dde5
 
   PR body does not name the cause (advisor ruling asked for it): stale dell1:/tmp/.git with a group-writable aida-work-node.toml reached by allocation discovery walking up from the fixture. It is named only in commit 7410052 body and the test doc comment at aida-cli-lib/src/tests/queue_rework_tests.rs:1616.
+
+
+  ## Findings from PR-4046
+  Reviewed sha: d699209a05f47512bc976b32d7989e4b046e7962
+
+  ### finding-hash:e5eb0aa5
+
+  bug_2583 test case labelled as a final page not ending on the PR head (page 3 = 201..=253) actually exercises the short-page/under-count branch; a compare listing with the full count whose last row is not the head is not covered for the compare path (aida-cli-lib/src/tests/bug_2400_exact_pr_association_tests.rs:1117)
+
+  ### finding-hash:fefd3308
+
+  AC3 is proven at all_open_prs_for_spec_via_forge, not through an end-to-end train opening; PR body also still says the title uses Refs and criterion 2 is pending, both superseded by the advisor ruling
 status: Draft
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-13T20:01:56.623034248Z
-modified_at: 2026-11-14T17:20:21.858830899Z
+modified_at: 2026-11-14T17:32:26.092636427Z
 req_type: Task
 tags:
 - carried-finding:BUG-2543:2a99ebfc
@@ -927,6 +939,8 @@ tags:
 - carried-finding:PR-4030:540b7d86
 - carried-finding:PR-4030:a9731915
 - carried-finding:PR-4030:f167aa2d
+- carried-finding:PR-4046:e5eb0aa5
+- carried-finding:PR-4046:fefd3308
 - carried-finding:STORY-2735:2c7ae2ea
 - carried-finding:STORY-2763:04ad58d8
 - carried-finding:STORY-2763:15915e39
@@ -993,6 +1007,7 @@ tags:
 - carried-from:PR-4021
 - carried-from:PR-4024
 - carried-from:PR-4030
+- carried-from:PR-4046
 - carried-from:STORY-2735
 - carried-from:STORY-2763
 - carried-from:STORY-2768
@@ -1072,11 +1087,13 @@ tags:
 - finding-hash:dee3f3a7
 - finding-hash:dfed3eb6
 - finding-hash:e391cb46
+- finding-hash:e5eb0aa5
 - finding-hash:f167aa2d
 - finding-hash:f1e29cc2
 - finding-hash:f238ea37
 - finding-hash:fcb8f322
 - finding-hash:fe70e901
+- finding-hash:fefd3308
 - from-review:BUG-2543
 - from-review:BUG-2546
 - from-review:BUG-2549
@@ -1122,6 +1139,7 @@ tags:
 - from-review:PR-4021
 - from-review:PR-4024
 - from-review:PR-4030
+- from-review:PR-4046
 - from-review:STORY-2735
 - from-review:STORY-2763
 - from-review:STORY-2768
@@ -1433,6 +1451,11 @@ history:
   author: joe
   timestamp: 2026-11-14T17:20:24.089205414Z
   session_id: 01a1db10ee1e
+  changes: []
+- id: 01a1db1e-2438-7c22-90ea-f7c609ffc5f2
+  author: joe
+  timestamp: 2026-11-14T17:32:28.088469518Z
+  session_id: 01a1db1bdf42
   changes: []
 filed_at:
   code_sha: 91fe1e337894199f15365d3f8ecfaf81366f8291
