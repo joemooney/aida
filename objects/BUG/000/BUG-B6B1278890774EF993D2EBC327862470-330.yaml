@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-13T20:52:54.357683400Z
-modified_at: 2026-11-14T07:17:34.990596098Z
+modified_at: 2026-11-14T07:37:57.487110607Z
 req_type: Bug
 tags:
 - perf
@@ -33,6 +33,13 @@ comments:
   created_at: 2026-11-14T07:17:34.990596098Z
   modified_at: 2026-11-14T07:17:34.990596098Z
   session_id: 01a1d8dd02d7
+  harness_version: 2.1.325 (Claude Code)
+- id: 01a1d8fd-d9ef-76e3-a5bb-b50519eb425a
+  author: joe
+  content: '[advisor 7b 00:40] Live evidence: 9 concurrent ''aida db sync --pull'' (oldest 40m, under an autoland codex reviewer for already-approved PR-3994) plus train 14''s post-merge ''aida pull'' (12m, hrtimer sleep) all serialized on the primary; train 15 is queued behind it on deputy default, so main cannot move. Coalescing must let late callers return on the in-flight pull''s result instead of each waiting their turn.'
+  created_at: 2026-11-14T07:37:57.487110607Z
+  modified_at: 2026-11-14T07:37:57.487110607Z
+  session_id: 01a1d8f3-f948-7072-b174-fa9507ed074b
   harness_version: 2.1.325 (Claude Code)
 history:
 - id: 01a1d8a9-d3a1-7243-a396-3ba4fdaf7412
