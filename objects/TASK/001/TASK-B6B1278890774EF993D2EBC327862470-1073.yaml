@@ -1089,12 +1089,28 @@ description: |
   ### finding-hash:8c6f0ae6
 
   pr_train.rs full_tier_gate writes the train-admit-skip-full-check entry (status overridden) before the later member gates and before --max selection, so a candidate that is then refused or left out of the train still logs an override; docs/advanced/landing.md says each admission appends one entry. Write the entry after the member is selected, or word the entry and the doc as an override of the check.
+
+
+  ## Findings from PR-3950
+  Reviewed sha: c03d5d16801fa5fb122d181174d6ff1159a3957d
+
+  ### finding-hash:2a4c4b85
+
+  The --seat help text (agent_launch_args.rs:1352 and :1529, and the help snapshot) says Default: the role, but a launch without --rotate and without --seat records no seat and is not reachable as seat:<role>. Say that the role is the default only under --rotate.
+
+  ### finding-hash:32088b60
+
+  rustfmt re-attached existing trace comments as trailing comments after the new plan.seat assignments (agent_launch.rs:3383 and :3745, agent_codex_background.rs:759), so the BUG-2169 and TASK-2712 comments no longer sit above the code they describe. Put the plan.seat line after those comment blocks or give it its own comment line.
+
+  ### finding-hash:47f62f07
+
+  The integration standing orders (aida-core/templates/.aida/discipline/standing-orders/integration.md and its mirror) cite `aida mailbox history`, which is not a command: the verbs are `aida mailbox thread <id>` and `aida mailbox list`. The same file and the --to help (mailbox_cmd_args.rs:135) say a reply goes to the sender seat, then its role; since c03d5d1 a seat-sent parent is answered to the seat only and never falls through to the role. Name the real verb and correct the fallback wording in the template master, then run make sync-templates.
 status: Draft
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-13T20:01:56.623034248Z
-modified_at: 2026-11-14T19:27:57.120660601Z
+modified_at: 2026-11-14T19:29:53.866470932Z
 req_type: Task
 tags:
 - carried-finding:BUG-2543:2a99ebfc
@@ -1149,6 +1165,9 @@ tags:
 - carried-finding:PR-3924:fe70e901
 - carried-finding:PR-3938:654190b6
 - carried-finding:PR-3948:5d2b67f3
+- carried-finding:PR-3950:2a4c4b85
+- carried-finding:PR-3950:32088b60
+- carried-finding:PR-3950:47f62f07
 - carried-finding:PR-3952:2dfbd6d5
 - carried-finding:PR-3952:35d3eb09
 - carried-finding:PR-3956:04ad58d8
@@ -1313,6 +1332,7 @@ tags:
 - carried-from:PR-3924
 - carried-from:PR-3938
 - carried-from:PR-3948
+- carried-from:PR-3950
 - carried-from:PR-3952
 - carried-from:PR-3956
 - carried-from:PR-3966
@@ -1372,6 +1392,7 @@ tags:
 - finding-hash:276a9aea
 - finding-hash:28356795
 - finding-hash:2a257094
+- finding-hash:2a4c4b85
 - finding-hash:2a99ebfc
 - finding-hash:2b087a82
 - finding-hash:2c08aa50
@@ -1379,6 +1400,7 @@ tags:
 - finding-hash:2df54e83
 - finding-hash:2dfbd6d5
 - finding-hash:2fb703ca
+- finding-hash:32088b60
 - finding-hash:35d3eb09
 - finding-hash:360471e3
 - finding-hash:376b178e
@@ -1391,6 +1413,7 @@ tags:
 - finding-hash:45085c26
 - finding-hash:45e63a87
 - finding-hash:46a7a9dc
+- finding-hash:47f62f07
 - finding-hash:4843b9fe
 - finding-hash:49b64e26
 - finding-hash:4b183b41
@@ -1488,6 +1511,7 @@ tags:
 - from-review:PR-3924
 - from-review:PR-3938
 - from-review:PR-3948
+- from-review:PR-3950
 - from-review:PR-3952
 - from-review:PR-3956
 - from-review:PR-3966
@@ -1917,6 +1941,11 @@ history:
   author: joe
   timestamp: 2026-11-14T19:27:58.474843059Z
   session_id: 01a1db82ce45
+  changes: []
+- id: 01a1db89-ac73-76b0-9ba1-3cafa6d4a3f0
+  author: joe
+  timestamp: 2026-11-14T19:29:55.315937733Z
+  session_id: 01a1db835ac8
   changes: []
 filed_at:
   code_sha: 91fe1e337894199f15365d3f8ecfaf81366f8291
