@@ -1,0 +1,52 @@
+id: 01a1db48-236f-7ae1-8ad0-dd0c400e3179
+spec_id: STORY-b6b1278890774ef993d2ebc327862470-745
+agreed_id: STORY-2822
+title: 'Agent CLI friction log: places where an agent had to guess, work around, or relearn (2026-11-14 landing emergency)'
+description: |-
+  Purpose: one running list of concrete moments where the CLI or the handoff made an agent session guess or relearn something, so each can be fixed or documented once. Add an item as a comment on this spec when it happens (command, what the agent expected, what happened, the workaround). Split an item into its own bug when it is worked on. Vendor-neutral on purpose: the same list applies to Codex sessions.
+
+  Observed 2026-11-14 (product seat aida-19, advisors a22/d1, integration seats fb/90/c0):
+
+  State that lived only in a session or handoff note
+  1. 'PR #4028 is red on its own change, do not train it' existed only in the outgoing advisor's context. The successor resumed its orphaned train journal and burned two more trains. Wanted: when a train ejects a member or a PR is sent to rework, the reason is recorded on the PR (a merge-hold with the reason, or an equivalent the train gate reads) so no successor can train it by accident.
+  2. Deputy jobs queued by a rotated seat cannot be cancelled or re-owned by the successor (BUG-2579).
+  3. Standing orders (launch recipe, admission rule, watchdog, label order) are per-session notes carried by handoff. Wanted: one durable, versioned place every advisor session reads at start, with a command that prints it.
+  4. An orphaned train journal blocks all later trains ('stale train journal present - not training') and must be moved to an attic by hand.
+
+  Commands that hang or look hung
+  5. 'aida queue rework' hung 30 min on the store; the post-train 'aida pull' spins (BUG-2551); 'aida pr train' is silent for 7.5 min between green and merge (BUG-2584). Wanted: every long step prints progress, and store commands have a default deadline with a clear timeout error.
+
+  IDs and promotion
+  6. A sandboxed session's 'aida add' prints only a local alias ('aida show BUG-HOME-345 works here now'); the agreed ID (BUG-2580) is known only after another session syncs. Agents then pass aliases between sessions that the receiver cannot resolve reliably. Wanted: print the origin id in a form any session can resolve, and say so.
+  7. 'aida edit <ID> --status approved' is refused for a non-advisor seat with no way to request promotion; the agent has to message an advisor by hand. Wanted: the refusal queues a promotion request the advisor's worklist shows.
+  8. The local cache showed BUG-2577 as Draft after it was Approved in the store; the status footer said 'stale: true, refreshing' on many calls.
+
+  Surfaces that are missing or inconsistent
+  9. No 'aida faq' command although FAQs exist ('aida add --type faq', 'aida list --type faq'); 'aida search' has no --type.
+  10. '--tags "a b"' is rejected for whitespace; the accepted separator (comma) is only learned from the error.
+  11. 'aida ship --from-seat' has no base option and always opens against main, even for a spec on the integration track (BUG-2583, #4038 stopped all trains for 24 min).
+  12. No command answers 'what is the train doing now' (members, phase, time in phase); agents read .aida/train/*.json and the deputy transcript by hand.
+  13. No command answers 'does this PR qualify for a train right now' (approved at exact head, hold-free, passing ci-tier: full); each advisor re-implements it in shell, and two versions were wrong (accepted a fast-tier green; waited 27 min).
+  14. Starting a lane on a remote host is a hand-written ssh line; two forms failed (non-login PATH, ssh held open by a background subshell). Stopgap ~/lane-start.sh on dell1 (FAQ-154).
+  15. A headless implementer that commits without pushing ends as an error (BUG-2580).
+  16. gh-created PRs are not registered for review unless a script runs auto-queue-review first.
+
+  Acceptance for closing this log: each item is fixed, split into its own spec, or recorded as an FAQ with the working command.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-14T18:18:20.399960794Z
+modified_at: 2026-11-14T18:18:20.399960794Z
+req_type: Story
+tags:
+- agent-ergonomics
+- cli
+filed_at:
+  code_sha: 96fc262834527304fe85fc9ee32e4d04f1aaf4ea
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 5ea861d7358
+  vendor: claude
+  session: fc28c702-2f6e-419e-b882-6ddfeb9134ff
