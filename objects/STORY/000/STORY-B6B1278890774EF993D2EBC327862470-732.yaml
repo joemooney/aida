@@ -1,0 +1,36 @@
+id: 01a1da13-b69e-7432-8a3a-2159ce6e0b5e
+spec_id: STORY-b6b1278890774ef993d2ebc327862470-732
+agreed_id: STORY-2809
+title: Full CI on approved PR heads before train admission, so trains stop finding full-suite failures
+description: |
+  Problem: PR CI runs only the FAST tier, so the full suite first runs inside a train. In the 30h to 2026-11-14 12:00Z, 16 trains failed or ejected against 24 that merged. #3924 was ejected 4 times, and #3987 failed bug2406 tests in train 17. Each red train costs a bisect (3 serial CI runs), and trains are serial at 25-40 min each, which caps landing at about 2 PRs/hour.
+
+  Operator ruling 2026-11-14 05:40 MST ("agreed"): run the full suite on an approved PR head, in parallel across PRs, and admit to a train only PRs whose exact head is green on full CI.
+
+  Acceptance criteria:
+  1. When a PR against main records an APPROVED verdict at head H (or carries a label such as ci:full that the advisor or autoland applies), a full-tier CI run (the same shards a train runs) starts on H. A new push re-runs FAST only, until it is approved again.
+  2. `aida pr train` (and autoland or land run eligibility) refuses or defers a member with no green full-tier run at its exact head, naming the missing run. --skip-full-check overrides and is logged.
+  3. Full runs for different PRs run concurrently, within the Actions concurrency limits; a train still runs its merge-result CI.
+  4. Docs: docs/advanced (landing) states the new gate; make check-ci-list shows the tier.
+  Track: main (CI workflow + train eligibility). Ship via train.
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-14T12:41:27.454869454Z
+modified_at: 2026-11-14T12:41:27.454869454Z
+req_type: Story
+tags:
+- area:ci
+- area:train
+- priority:1
+- track:main
+filed_at:
+  code_sha: 166920a3bf8bd517e8d670a09dd3a7a3de96b7f9
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 166920a3bf8
+  vendor: claude
+  session: 01a1d9ea-4e25-7033-85e8-3648f0195c7c
+  harness_version: 2.1.325 (Claude Code)
