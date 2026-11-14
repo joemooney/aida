@@ -18,7 +18,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-14T12:41:27.454869454Z
-modified_at: 2026-11-14T14:16:58.431222129Z
+modified_at: 2026-11-14T14:25:59.319831053Z
 req_type: Story
 tags:
 - area:ci
@@ -75,6 +75,28 @@ comments:
   modified_at: 2026-11-14T14:16:58.431222129Z
   session_id: 01a1d9ea-4e25-7033-85e8-3648f0195c7c
   harness_version: 2.1.325 (Claude Code)
+- id: 01a1da73-6a17-7e12-8dcd-17142fcf371d
+  author: dirtlab
+  content: |-
+    ## Implementer approach (rework after PR-4027 request-changes, advisor ruling 07:22)
+
+    ### Acceptance criteria and evidence
+    - **AC1 (unit, `story_2809_full_tier_tests`)**: the label request adds `ci:full` only when absent, leaves the PR alone while checks on the head are in progress or a full-tier run already exists there, and re-applies a stale label only when nothing is running. `judge_commit_checks` keeps the latest run per check name (unit, `task_1945_commit_ci_tests`).
+    - **AC1 wiring (unit, runner injected)**: approve with `--pr` requests; all-deferred approve requests; request-changes, rejected, waiting and no `--pr` request nothing.
+    - **AC2 (unit + `story_1690_train_tests`)**: tieredness comes from the repository workflows, so a tiered repo whose head has checks but no `ci-tier` check is refused; a failed `--skip-full-check` activity-log write refuses the member.
+    - **AC3/AC4**: unchanged from the first pass (workflow + docs; `tests/test_ci_tiers.py`).
+
+    ### Expected files
+    - `aida-cli-lib/src/full_tier.rs`, `forge_commit_ci.rs`, `pr_train.rs`, `pr_cmd.rs`, `review_commands.rs`, `lib.rs`
+    - tests: `story_2809_full_tier_tests.rs`, `story_1690_train_tests.rs`, `task_1945_commit_ci_tests.rs`
+    - `docs/advanced/landing.md` if wording changes
+
+    ### Ambiguities / conflicts as questions
+    - None; the ruling decides each point.
+  created_at: 2026-11-14T14:25:59.319831053Z
+  modified_at: 2026-11-14T14:25:59.319831053Z
+  session_id: 01a1da71393c
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1da15-71c2-7341-9db1-1661bad607cc
   author: aida-session-start
