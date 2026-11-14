@@ -840,6 +840,61 @@ exit 1
     assert_eq!(git_ok(&lease.worktree_path, &["rev-parse", "HEAD"]), head);
 }
 
+// Origin-only merged residue (no commits past the merged PR head) must not
+// fail pickup: it allocates a fresh dated branch as main did before.
+// trace:BUG-2549 | ai:claude
+#[test]
+fn bug_2549_merged_residue_allocates_a_fresh_branch() {
+    let fx = fixture();
+    let mut ambient =
+        crate::test_env::AmbientGuard::hermetic_with_seat(&fx.main, "implementer", &[]);
+    let gh = recovery_forge_fixture(&fx.main, &fx.root);
+    ambient.set_key("AIDA_TEST_GH_BINARY", &gh);
+    let merged_head = git_ok(&fx.main, &["rev-parse", "HEAD"]);
+    git_ok(
+        &fx.main,
+        &[
+            "-c",
+            "maintenance.auto=false",
+            "-c",
+            "gc.auto=0",
+            "push",
+            "-q",
+            "origin",
+            "HEAD:refs/heads/bug-2451",
+        ],
+    );
+    assert!(!super::tests::ref_exists(&fx.main, "refs/heads/bug-2451"));
+    assert!(crate::branch_exists_anywhere(&fx.main, "bug-2451"));
+    crate::test_exec::write_executable(
+        &gh,
+        format!(
+            r#"#!/bin/sh
+if [ "$1" = --version ]; then echo 'gh test'; exit 0; fi
+if [ "$1 $2" = 'pr list' ]; then
+  case " $* " in
+    *' --state merged '*) printf '42\tRefs BUG-2451\thttps://example.invalid/42\tbug-2451\n';;
+  esac
+  exit 0
+fi
+if [ "$1 $2" = 'pr view' ]; then
+  printf '%s\n' '{{"state":"MERGED","headRefOid":"{merged_head}","headRefName":"bug-2451","baseRefName":"main"}}'
+  exit 0
+fi
+exit 1
+"#
+        ),
+    );
+    assert_eq!(
+        crate::queue_cmd::canonical_resume_branch(&fx.main, "BUG-2451", true).unwrap(),
+        None
+    );
+    let (storage, _) = super::orphan_reentry_tests::queued_scope(&fx.main, "BUG-2451");
+    queue_work(&storage, false).unwrap();
+    let lease = crate::list_leases(&fx.main).remove(0);
+    assert!(lease.branch.starts_with("bug-2451-"), "{}", lease.branch);
+}
+
 // trace:BUG-2549 | ai:codex
 #[test]
 fn bug_2549_detached_worktree_exit_captures_actual_head() {

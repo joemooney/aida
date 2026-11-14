@@ -689,20 +689,13 @@ pub(crate) fn canonical_resume_branch(
                 !metadata.head_sha.is_empty(),
                 "merged change head is unavailable"
             );
-            let output = aida_core::git_ops::host_git_command(root)
-                .args([
-                    "rev-parse",
-                    "--verify",
-                    &format!("refs/heads/{branch}^{{commit}}"),
-                ])
-                .output()?;
-            anyhow::ensure!(
-                output.status.success(),
-                "canonical branch head is unavailable"
-            );
-            let tip = String::from_utf8_lossy(&output.stdout).trim().to_owned();
-            if tip == metadata.head_sha {
-                return Ok(None);
+            // Merged residue (including an origin-only branch) with no commits
+            // past the merged head allocates a fresh dated branch, as before;
+            // only a tip that moved past the merged head resumes.
+            // trace:BUG-2549 | ai:claude
+            match canonical_branch_tip(root, &branch) {
+                Some(tip) if tip != metadata.head_sha => {}
+                _ => return Ok(None),
             }
         }
         _ => anyhow::bail!("cannot establish merged change evidence for `{branch}`"),
@@ -715,6 +708,27 @@ pub(crate) fn canonical_resume_branch(
         "canonical branch `{branch}` still has a lease; inspect or resume that lease explicitly"
     );
     Ok(Some(branch))
+}
+
+/// The canonical branch tip: the local branch when present, otherwise the
+/// origin branch (merged residue is often origin-only). `None` when neither
+/// resolves.
+// trace:BUG-2549 | ai:claude
+fn canonical_branch_tip(root: &std::path::Path, branch: &str) -> Option<String> {
+    let output = aida_core::git_ops::host_git_command(root)
+        .args([
+            "rev-parse",
+            "--verify",
+            "--quiet",
+            &format!("refs/heads/{branch}^{{commit}}"),
+        ])
+        .output()
+        .ok()?;
+    let local = String::from_utf8_lossy(&output.stdout).trim().to_owned();
+    if output.status.success() && !local.is_empty() {
+        return Some(local);
+    }
+    aida_core::git_ops::remote_branch_head_sha(root, "origin", branch)
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
