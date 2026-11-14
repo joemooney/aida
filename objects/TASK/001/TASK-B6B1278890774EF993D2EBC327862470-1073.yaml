@@ -41,30 +41,54 @@ description: |
   ### finding-hash:654190b6
 
   PR title says test(mcp): remove hard-coded temporary fixture paths, but after the merge with main the remaining diff is a containment binary-pin regression plus doc lines; retitle before squash so the landed commit subject describes the change, e.g. test(containment): reject metadata-preserving binary rewrites (Refs STORY-2593). PR body fast_gate=fail marker refers to stale head 12e20ac.
+
+
+  ## Findings from PR-3970
+  Reviewed sha: 6a9a2fadf50e7a6eb1cb8e41aa30f72043997ac1
+
+  ### finding-hash:5b9e60ad
+
+  discovery_refusal wraps every read_change error, so an aggregate budget exhaustion (total > 128 MiB) names whichever ledger the budget ran out on and suggests quarantining it, even if it is a small active change (checked.rs:432 + read_entry budget branch). Prefer naming doctor/largest files for the budget case.
+
+  ### finding-hash:52636ea7
+
+  quarantine_command wraps paths in single quotes without escaping embedded single quotes (checked.rs:364); a project root containing a quote yields a broken shell command.
+
+  ### finding-hash:c7c082c2
+
+  No test covers the doctor aggregate state over MAX_DISCOVERY_BYTES (the review-selection-unavailable label in store_repair.rs), and the reworked bug_2531 test dropped its half+1 assertion.
 status: Draft
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-13T20:01:56.623034248Z
-modified_at: 2026-11-14T00:26:40.247638080Z
+modified_at: 2026-11-14T00:34:42.628510155Z
 req_type: Task
 tags:
 - carried-finding:BUG-2557:55e0cbfe
 - carried-finding:BUG-2557:f238ea37
 - carried-finding:PR-3938:654190b6
+- carried-finding:PR-3970:52636ea7
+- carried-finding:PR-3970:5b9e60ad
+- carried-finding:PR-3970:c7c082c2
 - carried-finding:PR-3971:55e0cbfe
 - carried-finding:PR-3971:f238ea37
 - carried-finding:STORY-2735:2c7ae2ea
 - carried-from:BUG-2557
 - carried-from:PR-3938
+- carried-from:PR-3970
 - carried-from:PR-3971
 - carried-from:STORY-2735
 - finding-hash:2c7ae2ea
+- finding-hash:52636ea7
 - finding-hash:55e0cbfe
+- finding-hash:5b9e60ad
 - finding-hash:654190b6
+- finding-hash:c7c082c2
 - finding-hash:f238ea37
 - from-review:BUG-2557
 - from-review:PR-3938
+- from-review:PR-3970
 - from-review:PR-3971
 - from-review:STORY-2735
 - kind:finding-sweep
@@ -87,6 +111,11 @@ history:
   author: joe
   timestamp: 2026-11-14T00:26:42.078081929Z
   session_id: 01a1d7711e6e
+  changes: []
+- id: 01a1d77a-606b-7253-bccd-53332a717b53
+  author: joe
+  timestamp: 2026-11-14T00:34:43.947226999Z
+  session_id: 01a1d778f160
   changes: []
 filed_at:
   code_sha: 91fe1e337894199f15365d3f8ecfaf81366f8291
