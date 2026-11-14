@@ -37,7 +37,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-14T18:18:20.399960794Z
-modified_at: 2026-11-14T22:14:34.609838583Z
+modified_at: 2026-11-14T23:54:01.854049149Z
 req_type: Story
 tags:
 - agent-ergonomics
@@ -124,6 +124,13 @@ comments:
   created_at: 2026-11-14T22:14:34.609838583Z
   modified_at: 2026-11-14T22:14:34.609838583Z
   session_id: 01a1dbd6-f8cd-7313-a123-75ebbeaa2afd
+  harness_version: 2.1.325 (Claude Code)
+- id: 01a1dc7b-78fe-7080-877b-50c61c6d117e
+  author: joe
+  content: 'Friction 16:54: on dell1, a non-login ''ssh dell1 git pull'' runs the post-merge sync-agent-skills hook, which fails with ''make: cargo: No such file'' (cargo is not on PATH there) and prints ''pack regeneration failed''. The hook should find cargo via ~/.cargo/bin or skip quietly.'
+  created_at: 2026-11-14T23:54:01.854049149Z
+  modified_at: 2026-11-14T23:54:01.854049149Z
+  session_id: 01a1dc2c-25f2-7d52-aa8c-61e0f270e9d1
   harness_version: 2.1.325 (Claude Code)
 history:
 - id: 01a1db4a-abd7-74b1-97e3-ad48fe26683e
