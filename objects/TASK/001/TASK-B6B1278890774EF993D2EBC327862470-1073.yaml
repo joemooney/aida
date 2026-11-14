@@ -1005,12 +1005,32 @@ description: |
   ### finding-hash:4b183b41
 
   Under refuse-on-conflict an overlapping head whose merge-tree result is unknown (git error, timeout, old git) is reviewed as if clean, in both pr_rebase.rs stale_base_launch (ConflictPrediction::Unknown) and review_watch_forge.rs merge_conflicts (None); the launch warning and docs do not say the conflict check could not be judged.
+
+
+  ## Findings from STORY-2821
+  Reviewed sha: 0f1aae45588a5ba421496c7080e4f05d7da7f71b
+
+  ### finding-hash:9dab249d
+
+  .aida/config.toml:518-530: the new [review] block sits between the TASK-1945 required_checks comment and the [review_watch] table it documents, so that comment now reads as part of [review]. Move the STORY-2821 comment and [review] table above line 518.
+
+  ### finding-hash:e40f3f6c
+
+  aida-cli-lib/src/config_cmd.rs:4660-4667: story2821_config_lists_the_stale_base_policy_and_its_values was inserted between the reverse-guard doc comment and policy_registry_emits_only_known_sections, so that doc comment now sits on the wrong test. Move the new test above the doc comment.
+
+  ### finding-hash:8d1b3558
+
+  aida-cli-lib/src/queue_cmd_args.rs:1121-1128: --allow-stale-base help still says an overlapping stale head is always refused; it does not mention that [review] stale_base now decides which heads are refused.
+
+  ### finding-hash:4b183b41
+
+  Under refuse-on-conflict an overlapping head whose merge-tree result is unknown (git error, timeout, old git) is reviewed as if clean, in both pr_rebase.rs stale_base_launch (ConflictPrediction::Unknown) and review_watch_forge.rs merge_conflicts (None); the launch warning and docs do not say the conflict check could not be judged.
 status: Draft
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-13T20:01:56.623034248Z
-modified_at: 2026-11-14T19:14:01.742472752Z
+modified_at: 2026-11-14T19:14:34.485599450Z
 req_type: Task
 tags:
 - carried-finding:BUG-2543:2a99ebfc
@@ -1185,6 +1205,10 @@ tags:
 - carried-finding:STORY-2772:dbd4e4d5
 - carried-finding:STORY-2775:73e42b4b
 - carried-finding:STORY-2775:abbae117
+- carried-finding:STORY-2821:4b183b41
+- carried-finding:STORY-2821:8d1b3558
+- carried-finding:STORY-2821:9dab249d
+- carried-finding:STORY-2821:e40f3f6c
 - carried-finding:TASK-3785:3f4b4821
 - carried-finding:TASK-3791:2c08aa50
 - carried-finding:TASK-3791:360471e3
@@ -1250,6 +1274,7 @@ tags:
 - carried-from:STORY-2768
 - carried-from:STORY-2772
 - carried-from:STORY-2775
+- carried-from:STORY-2821
 - carried-from:TASK-3785
 - carried-from:TASK-3791
 - finding-hash:01721c41
@@ -1414,6 +1439,7 @@ tags:
 - from-review:STORY-2768
 - from-review:STORY-2772
 - from-review:STORY-2775
+- from-review:STORY-2821
 - from-review:TASK-3785
 - from-review:TASK-3791
 - kind:finding-sweep
@@ -1775,6 +1801,11 @@ history:
 - id: 01a1db7b-254e-7a90-a764-f4fc176dc857
   author: joe
   timestamp: 2026-11-14T19:14:03.214160009Z
+  session_id: 01a1db76f7e1
+  changes: []
+- id: 01a1db7b-a746-7f71-ac33-397ac9ea36fa
+  author: joe
+  timestamp: 2026-11-14T19:14:36.486576747Z
   session_id: 01a1db76f7e1
   changes: []
 filed_at:
