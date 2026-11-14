@@ -20,7 +20,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-13T18:06:55.227979618Z
-modified_at: 2026-11-14T22:17:58.695775316Z
+modified_at: 2026-11-14T22:40:45.729861218Z
 req_type: Story
 tags:
 - config
@@ -161,6 +161,13 @@ comments:
   created_at: 2026-11-14T21:54:28.692403119Z
   modified_at: 2026-11-14T21:54:28.692403119Z
   session_id: 01a1dbaa-d75c-7d30-894c-172db7629c58
+  harness_version: 2.1.325 (Claude Code)
+- id: 01a1dc38-64a1-7c71-9ee3-7e70cc57964e
+  author: joe
+  content: 'Advisor 2026-11-14 15:43: PR #4022 and #4063 reverted out of promotion 10b (#4067 head 83d83e8) after two full-tier reds on #4022''s own code: task_2001_every_host_remote_call_routes_its_credentials (integration_cmd.rs:347, :394 lack remote credential routing) and every_time_bound_flag_is_classified (promotion-check --since unclassified). Both stay on integration; fix there (no waiver comment), then promotion 11. Integration seat told by message.'
+  created_at: 2026-11-14T22:40:45.729861218Z
+  modified_at: 2026-11-14T22:40:45.729861218Z
+  session_id: 01a1dc2c-25f2-7d52-aa8c-61e0f270e9d1
   harness_version: 2.1.325 (Claude Code)
 history:
 - id: 01a1d617-7531-7dc3-aba6-d82849880497
