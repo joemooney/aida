@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-12T19:10:49.027850777Z
-modified_at: 2026-11-14T15:00:39.962635463Z
+modified_at: 2026-11-14T16:22:42.894553623Z
 req_type: Task
 relationships:
 - rel_type:
@@ -61,6 +61,11 @@ relationships:
   target_id: 01a1da90-646d-7af3-b1a2-44e6175e8244
   created_at: 2026-11-14T15:00:39.962634042Z
   created_by: dirtlab
+- rel_type:
+    custom: implemented-by
+  target_id: 01a1dad7-ad3b-7b93-b96c-f1a8dba596ec
+  created_at: 2026-11-14T16:22:42.894550463Z
+  created_by: joe
 history:
 - id: 01a1d175-c514-74b1-97b5-274b06bcbe9c
   author: joe
@@ -125,6 +130,10 @@ history:
 - id: 01a1da93-2fc2-7aa3-9f40-0da59d8d8df3
   author: dirtlab
   timestamp: 2026-11-14T15:00:41.538081485Z
+  changes: []
+- id: 01a1dade-5197-71f2-9606-d94f65c8c404
+  author: joe
+  timestamp: 2026-11-14T16:22:45.399641331Z
   changes: []
 filed_at:
   code_sha: 0d6c60e6d982aad0c2c4ad38214010289a267d92
