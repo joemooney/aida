@@ -10,15 +10,13 @@ description: |
   2. A failed store pull stops store writes instead of proceeding on a local view: queue_cmd.rs pre-pickup pull, store_sync.rs maybe_sync_pull fallback, and burndown_run.rs, which discards the result.
   3. Retry sites that hold the writer lock then plain pull_rebase (git_ops.rs and store_sync.rs) report a dirty store accurately, not as 'remote unreachable'.
   4. Remove the stopgaps noted on BUG-2490 when this lands.
-status: Approved
+status: Completed
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-08T19:27:28.525198886Z
-modified_at: 2026-11-14T18:03:04.418182106Z
+modified_at: 2026-11-14T18:04:56.501819867Z
 req_type: Bug
-tags:
-- track:dell1
 relationships:
 - rel_type:
     custom: implemented-by
@@ -682,6 +680,20 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: Approved
+- id: 01a1db3b-dc30-7492-9c32-41a2d97cc578
+  author: aida-auto-bump
+  timestamp: 2026-11-14T18:04:55.728594803Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 01a1db3b-df35-7683-b00d-bddbcff92bb5
+  timestamp: 2026-11-14T18:04:56.501815498Z
+  agent: aida
+  commit_sha: 96fc262834527304fe85fc9ee32e4d04f1aaf4ea
+  summary: 'Comment-only diff (4 trace-comment lines in store_sync.rs) with no defects. AC1 verified by sync_pull_merges_concurrent_objects_with_upstream_scalars; AC2 verified by sync_pull_refuses_dirty_store_and_unreachable_remote, sync_pull_skips_remote_without_store_branch, bug_2501_pull_failure_stops_pickup_before_implicit_queue_write, bug_2501_burndown_residual_refuses_failed_pull; AC3 verified by allocation_retry_dirty_store_stops_before_fetch and coordination.rs suggest_free_node_id dirty-refusal assertion; AC4 not-applicable in repo: BUG-2490 stopgaps are operator-side host scripts, none tracked (operator still retires them). CI fast compile/gates green at head; full shards skipped by fast tier.'
+  review_verdict: approved
 filed_at:
   code_sha: db2eb4c39e46704132705ccb2b8300574ead41a6
   branch: main
@@ -691,17 +703,13 @@ filed_at:
   vendor: claude
   session: 01a1bc93-77a0-7740-8b03-df4e3e8d1df5
   harness_version: 2.1.319 (Claude Code)
+implementation_info:
+  implemented: false
+  completed_at: 2026-11-14T18:04:55.728588247Z
+  completion_sha: 96fc262834527304fe85fc9ee32e4d04f1aaf4ea
 attention_reason:
   category: blocked-dependency
   detail: 'Seat sandbox blocks the mandated ''git merge origin/main'': main adds symlink .claude/skills/aida-emergency-fix and .claude/skills is read-only in this seat (also .git/config is locked, so sparse-checkout cannot be enabled). The failed merge left ~133 untracked files in the worktree; git clean and moving them were both denied. Needs the operator to merge origin/main into bug-b6b1278890774ef993d2ebc327862470-266 (conflicts: db_block.rs, store_sync.rs, scripts/store-writers.toml) or relaunch the seat with .claude/skills writable.'
   lean: 'Operator runs: git clean -fd && git merge origin/main in this seat, then relaunch'
   raised_by: implementer
   raised_at: 2026-11-13T04:11:32.661301496Z
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: 'Head only merges main (of PR files, just store-writers.toml moved, from main''s TASK-3608 rows), so all nine findings from e5282fa stand; one new one. AC1 partial: verified by pull_merge_upstream_scalars_and_ordered_evidence and pull_merges_concurrent_spec_edits_with_upstream_scalars for scalars/sets/flat comments; nested replies lost. AC2 partial: pickup pull precedes queue write (work.rs:4003 vs 4047), verified by bug_2501_pull_failure_stops_pickup_before_implicit_queue_write and bug_2501_burndown_residual_refuses_failed_pull; no-store-branch remote hard-fails. AC3 partial: verified at allocation retry by allocation_retry_dirty_store_stops_before_fetch; suggest_free_node_id swallows the refusal and rebase-in-progress is misreported. AC4 unverified: external dell1 host action, Refs trailer correctly retained. CI at this head still pending (8 jobs); e5282fa CI failed and no fix has landed. Protocol BUG-2501 PR touches at least one test file: met.'
-  recovery_hint: address the review findings, move BUG-2501 back to In Progress, and clear the PR hold only after approval
-  shelved_by: reviewer
-  shelved_at: 2026-11-09T08:58:02.480000439Z
