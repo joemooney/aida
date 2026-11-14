@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-13T20:52:54.357683400Z
-modified_at: 2026-11-14T21:07:56.108439818Z
+modified_at: 2026-11-14T21:08:53.235888420Z
 req_type: Bug
 tags:
 - perf
@@ -153,6 +153,13 @@ comments:
   content: 'Advisor sample (2026-11-14 14:02-14:08, primary, binary ce660d5, three reviewer launches running concurrently): ''timeout 600 aida pull'' finished rc=0 in 351 s wall with one status change to apply. Not a post-train pull, so no watchdog TERM and it says nothing new about BUG-2551.'
   created_at: 2026-11-14T21:07:56.108439818Z
   modified_at: 2026-11-14T21:07:56.108439818Z
+  session_id: 01a1dbd6-f8cd-7313-a123-75ebbeaa2afd
+  harness_version: 2.1.325 (Claude Code)
+- id: 01a1dbe4-4773-7872-a0f3-76cb1a04fa34
+  author: joe
+  content: 'Advisor finding (2026-11-14 14:12): the fix for this bug (PR-4007, coalesce concurrent pulls and skip scans at a clean head) is on origin/integration (b7830c2) but NOT on main, so the live binary and every lane, reviewer launch and post-train pull still run the unfixed pull. The 351 s sample above is the unfixed code. Product seat ruling 14:08: pull time is a landing loss and comes first. Action: no new lane; the next promotion must carry b7830c2 (asked the integration seat for its state). After it lands and the binary is rebuilt, re-time ''aida pull'' on the primary idle and with reviewers running; only if it is still over ~60 s take a perf profile and brief a lane. BUG-2551: its fix (one gate-ledger discovery per reconcile, #4040) is on main and removed the 100% CPU spin, but pulls stayed 100-350 s; treat it as fixed-but-insufficient and close it once the re-timing after this promotion is under the watchdog''s 75 s, otherwise reopen it with the profile.'
+  created_at: 2026-11-14T21:08:53.235888420Z
+  modified_at: 2026-11-14T21:08:53.235888420Z
   session_id: 01a1dbd6-f8cd-7313-a123-75ebbeaa2afd
   harness_version: 2.1.325 (Claude Code)
 history:
