@@ -17,7 +17,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-13T16:07:16.079959811Z
-modified_at: 2026-11-14T07:48:44.356998256Z
+modified_at: 2026-11-14T07:52:29.222594290Z
 req_type: Story
 tags:
 - integration
@@ -35,6 +35,13 @@ comments:
   content: 'Implemented remaining direct-launch and detached-worker gaps. Fresh foreground/background agent-new implementers now use the shared track refusal and launcher hint before handle/worktree/lease/status setup, after resume selection; review and resume behavior remains. Detached Codex worker projection retains AIDA_TRACK. Existing code already resolves landing trailers to stored identities, retains Done markers, reads the complete store without role-scoped list queries, and uses deterministic shared ambiguity/foreign-track diagnostics. Added active scoped-role discovery, direct admission, and real vendor/worker child regressions. Validation via lane runner: story_2765 4 passed; integration_cmd::tests 5 passed; story_2749 11 passed. Touched-file rustfmt checks and git diff --check passed. Initial test-import compile error corrected before successful rerun. Reviewed Codegraph client path is absent; doctor confirms missing client, so navigation used rg. Native seat leaves five changed files uncommitted for host publication.'
   created_at: 2026-11-14T07:48:44.356998256Z
   modified_at: 2026-11-14T07:48:44.356998256Z
+  session_id: 01a1d8fb7710
+  harness_version: codex-cli 0.167.0
+- id: 01a1d90b-2726-7cb3-b07b-522ec5dbb872
+  author: dirtlab
+  content: 'Fast-gate fix round: added #[cfg(unix)] to the two new /bin/sh child-process regressions in agent_codex_background.rs and tests/queue_work_tests.rs. scripts/check-portability.sh now exits 0; touched-file rustfmt --check and git diff --check pass. No allowlist changes. Existing Linux runtime test results remain applicable; this round changes only cfg attributes. Edits left uncommitted for host publication.'
+  created_at: 2026-11-14T07:52:29.222594290Z
+  modified_at: 2026-11-14T07:52:29.222594290Z
   session_id: 01a1d8fb7710
   harness_version: codex-cli 0.167.0
 history:
