@@ -18,7 +18,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-14T12:41:27.454869454Z
-modified_at: 2026-11-14T22:13:00.766009720Z
+modified_at: 2026-11-14T23:13:51.885877913Z
 req_type: Story
 tags:
 - area:ci
@@ -210,6 +210,13 @@ comments:
   modified_at: 2026-11-14T22:12:55.326524734Z
   session_id: 01a1dc121600
   harness_version: 2.1.319 (Claude Code)
+- id: 01a1dc56-b30d-73c3-ad1f-831a9a6cdbbc
+  author: joe
+  content: 'Advisor ruling 16:13 on PR-4027 CR at 5d71c44: both findings BLOCKING (gate fail-open). P1: run supersession in forge_commit_ci.rs must key on workflow identity; a run supersedes another only when both belong to the same workflow; add the overlapping-job-name/distinct-workflow regression and keep the cancelled FAST/FULL and all-skipped label tests. P2: repo_is_tiered returns fallible evidence; unreadable workflow dir/entry/file is MemberGateError::Unavailable, never Untiered; test that a markerless head is refused on each read failure. Gate before push: cargo test -p aida-cli-lib forge_commit_ci full_tier, the four ratchet tests, make check-ci-fast. Codex lane, next in single-file order after the running STORY-2833 lane. Hold stays; ci:full removed.'
+  created_at: 2026-11-14T23:13:51.885877913Z
+  modified_at: 2026-11-14T23:13:51.885877913Z
+  session_id: 01a1dc2c-25f2-7d52-aa8c-61e0f270e9d1
+  harness_version: 2.1.325 (Claude Code)
 history:
 - id: 01a1da15-71c2-7341-9db1-1661bad607cc
   author: aida-session-start
