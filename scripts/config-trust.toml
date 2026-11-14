@@ -611,6 +611,7 @@ node_seq_width = "policy"
 
 [keys.worktree.review]
 mode = "policy"
+stale_base = "policy" # which stale heads a reviewer launch refuses (STORY-2821)
 mass_change_mode = "policy"
 mass_change_started_at = "policy"
 mass_change_started_by = "policy"
