@@ -408,16 +408,16 @@ pub(crate) fn verdict_records(start: &Path, key: &str) -> Vec<JsonObj> {
         .collect()
 }
 
-/// [`verdict_records`] for one change through the strict reader: `Err` when
-/// the store root, the ledger or the change's file could not be read whole,
-/// so a caller never mistakes a corrupt or over-budget ledger for "no
-/// verdicts". Delivery-pending records are not acts of review and are left
-/// out.
+/// [`verdict_records`] for one change through the strict reader, each with
+/// the time the ledger took it: `Err` when the store root, the ledger or the
+/// change's file could not be read whole, so a caller never mistakes a
+/// corrupt or over-budget ledger for "no verdicts". Delivery-pending records
+/// are not acts of review and are left out.
 // trace:STORY-2768 | ai:claude
-pub(crate) fn change_verdict_records_checked(
+pub(crate) fn change_verdicts_checked(
     start: &Path,
     change: ChangeKey,
-) -> Result<Vec<JsonObj>, String> {
+) -> Result<Vec<(String, JsonObj)>, String> {
     let root = store_root(start)
         .map_err(|error| format!("the gate ledger's store could not be resolved: {error}"))?;
     let key = change.as_key();
@@ -426,12 +426,28 @@ pub(crate) fn change_verdict_records_checked(
     Ok(events
         .into_iter()
         .filter(|e| !e.is_spec_only() && terminal_annotation_matches(e, &key))
-        .filter_map(|e| e.verdict_record().cloned())
-        .filter(|record| {
+        .filter_map(|e| {
+            e.verdict_record()
+                .cloned()
+                .map(|record| (e.at.clone(), record))
+        })
+        .filter(|(_, record)| {
             !crate::gate::review_verdict::delivery_pending(&serde_json::Value::Object(
                 record.clone(),
             ))
         })
+        .collect())
+}
+
+/// [`change_verdicts_checked`] without the times.
+// trace:STORY-2768 | ai:claude
+pub(crate) fn change_verdict_records_checked(
+    start: &Path,
+    change: ChangeKey,
+) -> Result<Vec<JsonObj>, String> {
+    Ok(change_verdicts_checked(start, change)?
+        .into_iter()
+        .map(|(_, record)| record)
         .collect())
 }
 

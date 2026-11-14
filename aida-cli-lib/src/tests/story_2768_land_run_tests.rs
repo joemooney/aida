@@ -60,7 +60,8 @@ fn child(kind: Kind, pr: u64, minutes_ago: i64) -> Child {
 struct Fake {
     calls: Vec<String>,
     train_blocker: Option<String>,
-    verdict: Option<std::result::Result<bool, String>>,
+    /// How many minutes ago each verdict at the head was recorded.
+    verdict: Option<std::result::Result<Vec<i64>, String>>,
     fail_launch: bool,
     release: Option<String>,
 }
@@ -94,9 +95,17 @@ impl Acts for Fake {
     fn train_blocker(&mut self) -> Option<String> {
         self.train_blocker.clone()
     }
-    fn verdict_at(&mut self, pr: u64, _: &str) -> std::result::Result<bool, String> {
+    fn verdict_times(
+        &mut self,
+        pr: u64,
+        _: &str,
+    ) -> std::result::Result<Vec<DateTime<Utc>>, String> {
         self.calls.push(format!("verdict? {pr}"));
-        self.verdict.clone().unwrap_or(Ok(false))
+        self.verdict.clone().unwrap_or(Ok(Vec::new())).map(|ago| {
+            ago.into_iter()
+                .map(|minutes| now() - chrono::Duration::minutes(minutes))
+                .collect()
+        })
     }
     fn stop(&mut self, child: &Child) {
         self.calls.push(format!("stop {}", child.prs[0]));
@@ -328,7 +337,7 @@ fn a_reviewer_past_the_limit_is_stopped_and_counted_only_without_a_verdict() {
     // The verdict is recorded: the reviewer is only slow to exit. It is
     // stopped and nothing counts against the head.
     let (mut book, mut fake) = (late(), Fake::default());
-    fake.verdict = Some(Ok(true));
+    fake.verdict = Some(Ok(vec![3]));
     supervised(&mut book, &mut fake);
     assert_eq!(fake.calls, ["verdict? 1", "stop 1"]);
     assert_eq!(book.timeouts(&change(1, "main")), 0);
@@ -340,6 +349,92 @@ fn a_reviewer_past_the_limit_is_stopped_and_counted_only_without_a_verdict() {
     assert_eq!(fake.calls, ["verdict? 1"]);
     assert_eq!(book.children.len(), 1);
     assert!(notes[0].contains("could not be read"), "{notes:?}");
+}
+
+#[test]
+fn a_verdict_older_than_the_reviewer_does_not_excuse_its_timeout() {
+    // The head already carries a verdict from before this reviewer started
+    // (a re-review of the same head). It is not this reviewer's work.
+    let mut book = Book {
+        children: vec![child(Kind::Review, 1, 46)],
+        ..Book::default()
+    };
+    let mut fake = Fake {
+        verdict: Some(Ok(vec![120])),
+        ..Fake::default()
+    };
+    let notes = supervised(&mut book, &mut fake);
+    assert_eq!(fake.calls, ["verdict? 1", "stop 1"]);
+    assert!(notes[0].contains("no verdict after 46 min"), "{notes:?}");
+    assert_eq!(book.timeouts(&change(1, "main")), 1);
+    // The relaunched reviewer times out the same way: the head reaches the
+    // limit that derives BLOCKED, where a counted-as-done stop never would.
+    book.children.push(child(Kind::Review, 1, 46));
+    supervised(&mut book, &mut fake);
+    assert_eq!(book.timeouts(&change(1, "main")), MAX_REVIEW_TIMEOUTS);
+
+    // A verdict recorded the moment the reviewer started is its own.
+    let mut book = Book {
+        children: vec![child(Kind::Review, 1, 46)],
+        ..Book::default()
+    };
+    fake.verdict = Some(Ok(vec![120, 46]));
+    supervised(&mut book, &mut fake);
+    assert_eq!(book.timeouts(&change(1, "main")), 0);
+}
+
+#[test]
+fn a_live_reviewer_of_ours_counts_against_the_cap_once_per_change() {
+    let changes: Vec<Pr> = (1..=4).map(|id| change(id, "main")).collect();
+    // Our reviewer of #1 is alive but its row does not read as in review
+    // (its lease was not seen); #2 reads as in review and is also ours.
+    let rows = vec![
+        row(1, State::NeedsReview, Action::Wait),
+        row(2, State::Reviewing, Action::Wait),
+        row(3, State::NeedsReview, Action::LaunchReview),
+    ];
+    let mut book = Book {
+        children: vec![child(Kind::Review, 1, 5), child(Kind::Review, 2, 5)],
+        ..Book::default()
+    };
+    let mut fake = Fake::default();
+    let notes = acted(&changes, &rows, &mut book, &mut fake);
+    assert!(fake.calls.is_empty(), "{:?}", fake.calls);
+    assert_eq!(notes, ["#3: review waits: 2 of 2 reviews are running"]);
+
+    // One change in review and ours at once is one review, not two.
+    let rows = vec![
+        row(2, State::Reviewing, Action::Wait),
+        row(3, State::NeedsReview, Action::LaunchReview),
+        row(4, State::NeedsReview, Action::LaunchReview),
+    ];
+    let mut book = Book {
+        children: vec![child(Kind::Review, 2, 5)],
+        ..Book::default()
+    };
+    let mut fake = Fake::default();
+    let notes = acted(&changes, &rows, &mut book, &mut fake);
+    assert_eq!(fake.calls, ["review 3 tree3"]);
+    assert_eq!(
+        notes.last().unwrap(),
+        "#4: review waits: 2 of 2 reviews are running"
+    );
+}
+
+#[test]
+fn a_log_starts_with_what_the_child_was_launched_against() {
+    let header = log_header(
+        now(),
+        &[7],
+        &[("head", HEAD), ("base", "main"), ("merge tree", "tree7")],
+        &strings(&["queue", "work", "PR-7", "--allow-stale-base"]),
+    );
+    assert_eq!(
+        header,
+        format!(
+            "# aida land run launched this at {NOW}\n# changes: #7\n# head: {HEAD}\n# base: main\n# merge tree: tree7\n# command: aida queue work PR-7 --allow-stale-base\n"
+        )
+    );
 }
 
 #[test]

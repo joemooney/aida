@@ -80,10 +80,14 @@ impl Child {
         )
     }
 
-    fn age_secs(&self, now: DateTime<Utc>) -> i64 {
+    fn started(&self) -> Option<DateTime<Utc>> {
         DateTime::parse_from_rfc3339(&self.started_at)
-            .map(|at| (now - at.with_timezone(&Utc)).num_seconds())
-            .unwrap_or(0)
+            .ok()
+            .map(|at| at.with_timezone(&Utc))
+    }
+
+    fn age_secs(&self, now: DateTime<Utc>) -> i64 {
+        self.started().map_or(0, |at| (now - at).num_seconds())
     }
 }
 
@@ -300,8 +304,12 @@ pub(crate) trait Acts {
     fn train(&mut self, prs: &[u64]) -> Result<Child>;
     /// Why no train may start now.
     fn train_blocker(&mut self) -> Option<String>;
-    /// Whether a verdict is recorded for `pr` at `head`.
-    fn verdict_at(&mut self, pr: u64, head: &str) -> std::result::Result<bool, String>;
+    /// When each verdict recorded for `pr` at `head` was recorded.
+    fn verdict_times(
+        &mut self,
+        pr: u64,
+        head: &str,
+    ) -> std::result::Result<Vec<DateTime<Utc>>, String>;
     /// Stop a child and everything it started.
     fn stop(&mut self, child: &Child);
 }
@@ -309,7 +317,8 @@ pub(crate) trait Acts {
 /// Look after the children already running: a reviewer whose head moved or
 /// whose change closed is stopped, and one past the time limit is stopped
 /// unless its verdict cannot be read. A stop past the limit counts against
-/// the head only when no verdict was recorded there.
+/// the head only when that reviewer recorded no verdict there: a verdict
+/// older than the reviewer is not its work.
 pub(crate) fn supervise(
     changes: &[Pr],
     book: &mut Book,
@@ -347,7 +356,16 @@ pub(crate) fn supervise(
                 } else if age > limits.review_timeout_secs {
                     // A reviewer that recorded its verdict and is only slow
                     // to exit has done its work.
-                    match acts.verdict_at(pr, &child.head) {
+                    // Only a verdict recorded since this reviewer started is
+                    // its own. An older one at the same head (a re-review)
+                    // must not excuse it, or the head would be relaunched
+                    // without ever counting a timeout.
+                    let own = acts.verdict_times(pr, &child.head).map(|times| {
+                        child
+                            .started()
+                            .is_some_and(|started| times.iter().any(|at| *at >= started))
+                    });
+                    match own {
                         Ok(true) => stop(
                             "its verdict is recorded and it had not exited".into(),
                             &mut notes,
@@ -415,11 +433,21 @@ pub(crate) fn act(
     dry_run: bool,
 ) -> Vec<String> {
     let mut notes = Vec::new();
-    // Every review in progress counts against the cap, whoever started it.
+    // Every review in progress counts against the cap, whoever started it:
+    // a change the pass derived as in review, and a reviewer of ours that is
+    // alive whatever its change's row says. Each change counts once.
     let mut reviews = rows
         .iter()
         .filter(|row| row.state == State::Reviewing)
-        .count();
+        .map(|row| row.pr)
+        .chain(
+            book.children
+                .iter()
+                .filter(|child| child.kind == Kind::Review)
+                .flat_map(|child| child.prs.iter().copied()),
+        )
+        .collect::<std::collections::BTreeSet<u64>>()
+        .len();
     let mut lanes = book
         .children
         .iter()
@@ -603,6 +631,7 @@ impl Live {
         name: &str,
         prs: &[u64],
         head: &str,
+        launched: &[(&str, &str)],
         args: &[String],
     ) -> Result<Child> {
         use std::os::unix::process::CommandExt as _;
@@ -610,8 +639,15 @@ impl Live {
         let dir = self.root.join(LOG_DIR);
         std::fs::create_dir_all(&dir).with_context(|| format!("creating {}", dir.display()))?;
         let log = dir.join(format!("{name}-{}.log", now.format("%Y%m%dT%H%M%SZ")));
-        let out =
+        let mut out =
             std::fs::File::create(&log).with_context(|| format!("creating {}", log.display()))?;
+        // What the child was launched against goes first, before it can
+        // write anything, so its work can be checked against that later.
+        {
+            use std::io::Write as _;
+            out.write_all(log_header(now, prs, launched, args).as_bytes())
+                .with_context(|| format!("writing {}", log.display()))?;
+        }
         let err = out.try_clone()?;
         let mut command = self.command(args);
         command.stdout(out).stderr(err).process_group(0);
@@ -646,6 +682,26 @@ impl Live {
         self.handles
             .retain_mut(|child| matches!(child.try_wait(), Ok(None)));
     }
+}
+
+/// The first lines of a child's log: when it was launched, for which
+/// changes, against what, and with which command.
+fn log_header(
+    now: DateTime<Utc>,
+    prs: &[u64],
+    launched: &[(&str, &str)],
+    args: &[String],
+) -> String {
+    let mut header = format!(
+        "# aida land run launched this at {}\n# changes: {}\n",
+        now.to_rfc3339(),
+        numbers(prs)
+    );
+    for (name, value) in launched {
+        header.push_str(&format!("# {name}: {value}\n"));
+    }
+    header.push_str(&format!("# command: aida {}\n", args.join(" ")));
+    header
 }
 
 fn strings(args: &[&str]) -> Vec<String> {
@@ -689,6 +745,14 @@ impl Acts for Live {
             &format!("review-{}", pr.id),
             &[pr.id],
             &pr.head,
+            &[
+                ("head", &pr.head),
+                ("base", &pr.base),
+                (
+                    "merge tree",
+                    merge_tree.unwrap_or("none (the head did not merge cleanly into its base)"),
+                ),
+            ],
             &args,
         )?;
         child.merge_tree = merge_tree.map(str::to_string);
@@ -710,6 +774,7 @@ impl Acts for Live {
             &format!("rework-{}", pr.id),
             &[pr.id],
             &pr.head,
+            &[("head", &pr.head), ("base", &pr.base), ("spec", spec)],
             &strings(&[
                 "queue",
                 "work",
@@ -735,7 +800,7 @@ impl Acts for Live {
     fn train(&mut self, prs: &[u64]) -> Result<Child> {
         let mut args = strings(&["pr", "train"]);
         args.extend(prs.iter().map(u64::to_string));
-        self.start(Kind::Train, "train", prs, "", &args)
+        self.start(Kind::Train, "train", prs, "", &[], &args)
     }
 
     fn train_blocker(&mut self) -> Option<String> {
@@ -766,7 +831,11 @@ impl Acts for Live {
         }
     }
 
-    fn verdict_at(&mut self, pr: u64, head: &str) -> std::result::Result<bool, String> {
+    fn verdict_times(
+        &mut self,
+        pr: u64,
+        head: &str,
+    ) -> std::result::Result<Vec<DateTime<Utc>>, String> {
         let change = crate::gate::ledger::ChangeKey {
             forge: if self.gitlab {
                 crate::gate::ledger::ChangeForge::Mr
@@ -775,16 +844,20 @@ impl Acts for Live {
             },
             number: pr,
         };
-        Ok(
-            crate::gate::ledger::project::change_verdict_records_checked(&self.root, change)?
-                .iter()
-                .any(|record| {
-                    crate::gate::review_verdict::recording_key(record)
-                        .0
-                        .as_deref()
-                        == Some(head)
-                }),
-        )
+        crate::gate::ledger::project::change_verdicts_checked(&self.root, change)?
+            .iter()
+            .filter(|(_, record)| {
+                crate::gate::review_verdict::recording_key(record)
+                    .0
+                    .as_deref()
+                    == Some(head)
+            })
+            .map(|(at, _)| {
+                DateTime::parse_from_rfc3339(at)
+                    .map(|at| at.with_timezone(&Utc))
+                    .map_err(|error| format!("a verdict's recorded time `{at}`: {error}"))
+            })
+            .collect()
     }
 
     fn stop(&mut self, child: &Child) {
@@ -838,8 +911,23 @@ pub(super) fn run(start: &Path, args: &super::land_args::RunArgs) -> Result<()> 
         root: root.clone(),
     };
     let mut last: Vec<Pr> = Vec::new();
+    // A record of children that could not be written. The children are
+    // running, so the run goes on, and nothing more is launched until the
+    // record is on disk: a pass reading the older one would start a second
+    // reviewer beside a live one.
+    let mut unsaved: Option<Book> = None;
     loop {
         acts.reap();
+        if let Some(book) = unsaved.take() {
+            if let Err(error) = book.write(&root) {
+                eprintln!(
+                    "aida land run: the record of running children is still not written, so this pass launches nothing: {error:#}"
+                );
+                unsaved = Some(book);
+                std::thread::sleep(std::time::Duration::from_secs(args.interval));
+                continue;
+            }
+        }
         let started = std::time::Instant::now();
         match super::live_pass(&root) {
             Ok(mut pass) => {
@@ -863,7 +951,12 @@ pub(super) fn run(start: &Path, args: &super::land_args::RunArgs) -> Result<()> 
                     args.dry_run,
                 ));
                 if !args.dry_run {
-                    pass.book.write(&root)?;
+                    if let Err(error) = pass.book.write(&root) {
+                        eprintln!(
+                            "aida land run: the record of running children was not written; it is retried before the next pass: {error:#}"
+                        );
+                        unsaved = Some(pass.book.clone());
+                    }
                 }
                 let snapshot = crate::now::build(&pass, started.elapsed());
                 if let Err(error) = crate::now::write(&pass.root, &snapshot) {
@@ -896,12 +989,34 @@ pub(super) fn run(start: &Path, args: &super::land_args::RunArgs) -> Result<()> 
         }
         std::thread::sleep(std::time::Duration::from_secs(15));
         acts.reap();
-        let mut book = Book::read(&root)?;
+        // An error here is reported and the wait goes on: leaving now
+        // would abandon the children this run started.
+        let read = match unsaved.take() {
+            Some(book) => Ok(book),
+            None => Book::read(&root),
+        };
+        let mut book = match read {
+            Ok(book) => book,
+            Err(error) => {
+                eprintln!("aida land run: still waiting for its children: {error:#}");
+                continue;
+            }
+        };
         book.settle(&last, &alive, &log_tail);
         for note in supervise(&last, &mut book, &limits, Utc::now(), &mut acts, false) {
             println!("  {note}");
         }
-        book.write(&root)?;
+        if let Err(error) = book.write(&root) {
+            eprintln!("aida land run: the record of running children was not written: {error:#}");
+            unsaved = Some(book);
+        }
+    }
+    if let Some(book) = unsaved {
+        if let Err(error) = book.write(&root) {
+            eprintln!(
+                "aida land run: the record of its children was not written at exit; the next run settles it against what is alive: {error:#}"
+            );
+        }
     }
     Ok(())
 }
