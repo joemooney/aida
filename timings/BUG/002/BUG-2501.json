@@ -1,0 +1,91 @@
+{
+  "schema_version": 1,
+  "spec": "BUG-2501",
+  "publishes": [
+    {
+      "at": "2026-11-14T18:05:38.985419053Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-11-08T20:57:31.364824386Z",
+      "spec": "BUG-2501",
+      "seat": "advisor",
+      "kind": {
+        "event": "SpecRequeued",
+        "via": "queue-rework",
+        "actor": "joe",
+        "from": "Needs Attention",
+        "to": "Approved"
+      }
+    },
+    {
+      "ts": "2026-11-08T22:32:11.577762959Z",
+      "spec": "BUG-2501",
+      "seat": "advisor",
+      "kind": {
+        "event": "SpecRequeued",
+        "via": "queue-rework",
+        "actor": "joe",
+        "from": "Needs Attention",
+        "to": "Approved"
+      }
+    },
+    {
+      "ts": "2026-11-09T05:01:00.701534733Z",
+      "spec": "BUG-2501",
+      "seat": "advisor",
+      "kind": {
+        "event": "SpecRequeued",
+        "via": "queue-rework",
+        "actor": "joe",
+        "from": "Needs Attention",
+        "to": "Approved"
+      }
+    },
+    {
+      "ts": "2026-11-09T06:27:05.092491637Z",
+      "spec": "BUG-2501",
+      "seat": "advisor",
+      "kind": {
+        "event": "SpecRequeued",
+        "via": "queue-rework",
+        "actor": "joe",
+        "from": "Needs Attention",
+        "to": "Approved"
+      }
+    },
+    {
+      "ts": "2026-11-09T08:43:59.095790575Z",
+      "spec": "BUG-2501",
+      "seat": "advisor",
+      "kind": {
+        "event": "SpecRequeued",
+        "via": "queue-rework",
+        "actor": "joe",
+        "from": "Needs Attention",
+        "to": "Approved"
+      }
+    },
+    {
+      "ts": "2026-11-14T17:58:08.608890807Z",
+      "spec": "BUG-2501",
+      "seat": "advisor",
+      "kind": {
+        "event": "PrMerged",
+        "pr": 4033
+      }
+    },
+    {
+      "ts": "2026-11-14T18:05:38.732010209Z",
+      "spec": "BUG-2501",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "96fc262834527304fe85fc9ee32e4d04f1aaf4ea",
+        "pr": 4033,
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
