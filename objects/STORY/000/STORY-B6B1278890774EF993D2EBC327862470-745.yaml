@@ -37,7 +37,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-14T18:18:20.399960794Z
-modified_at: 2026-11-14T21:03:24.770560284Z
+modified_at: 2026-11-14T21:36:22.276602222Z
 req_type: Story
 tags:
 - agent-ergonomics
@@ -102,6 +102,13 @@ comments:
   content: 'Friction (advisor, 2026-11-14 14:00): gh pr checks counts ''fail'' rows from cancelled, superseded runs at the same head, so ''is this PR green'' needs the run id of the passing ci-tier: full job and a filter on it (ship-train-next.sh does this by hand). aida pr train --check should own that.'
   created_at: 2026-11-14T21:03:24.770560284Z
   modified_at: 2026-11-14T21:03:24.770560284Z
+  session_id: 01a1dbd6-f8cd-7313-a123-75ebbeaa2afd
+  harness_version: 2.1.325 (Claude Code)
+- id: 01a1dbfd-7104-7d01-967d-a062a86a7476
+  author: joe
+  content: 'Friction (advisor, 2026-11-14 14:35, live binary d5f90ae): ''aida queue rework BUG-2585 --for implementer'' (AIDA_TRACK=integration) ran 200 s with no output and was killed by timeout; the same for TASK-3784 at 14:25 (240 s). Workaround again: aida edit --status in-progress + aida queue add --for implementer. Also ''aida mailbox show <id>'' does not exist (one message can only be read by grepping the whole inbox), and ''aida merge-hold show N'' does not exist (the hold reason is readable only from the marker file or the PR comment).'
+  created_at: 2026-11-14T21:36:22.276602222Z
+  modified_at: 2026-11-14T21:36:22.276602222Z
   session_id: 01a1dbd6-f8cd-7313-a123-75ebbeaa2afd
   harness_version: 2.1.325 (Claude Code)
 history:
