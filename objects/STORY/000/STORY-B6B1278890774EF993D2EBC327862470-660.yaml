@@ -23,7 +23,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-12T19:11:56.371806442Z
-modified_at: 2026-11-13T23:51:34.124187412Z
+modified_at: 2026-11-14T00:53:17.790628303Z
 req_type: Story
 tags:
 - operator-held
@@ -263,6 +263,13 @@ comments:
   content: '16:50 main moved: train 8 landed #3949 (TASK-3783) at bc24a1e, closing the 75-min gap (15:35 to 16:50). Cause: the ship queue was idle while CI ran on the only ready PR. Supply was short because three conflict PRs failed on dell1''s stale binary (it lacked STORY-2710; rebuilding now) and two Claude lanes couldn''t push (BUG-2568). Next: promotion 6 #3966 is shipping at f0ed970.'
   created_at: 2026-11-13T23:51:34.124187412Z
   modified_at: 2026-11-13T23:51:34.124187412Z
+  session_id: 01a1d73b-e31c-7f33-b2fe-cee145ddc6fb
+  harness_version: 2.1.325 (Claude Code)
+- id: 01a1d78b-5f5e-7e91-8544-5b147b5f960c
+  author: joe
+  content: '17:52 main gap 62 min (last merge #3949 at 16:50). Train 9 (#3966 + #3971) went CI-green and then merged nothing, because the merge-time check rejected the carry-over approval the member gate had accepted (BUG-2569). Train 10 (#3926 + #3938) is in CI now; train 11 (#3970 + #3971, plus #3966 after a fresh review) is queued behind it.'
+  created_at: 2026-11-14T00:53:17.790628303Z
+  modified_at: 2026-11-14T00:53:17.790628303Z
   session_id: 01a1d73b-e31c-7f33-b2fe-cee145ddc6fb
   harness_version: 2.1.325 (Claude Code)
 history:
