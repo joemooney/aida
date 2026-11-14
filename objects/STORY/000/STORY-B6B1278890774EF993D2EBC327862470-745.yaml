@@ -37,7 +37,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-14T18:18:20.399960794Z
-modified_at: 2026-11-14T19:12:53.524373572Z
+modified_at: 2026-11-14T19:13:30.495522980Z
 req_type: Story
 tags:
 - agent-ergonomics
@@ -56,6 +56,13 @@ comments:
   created_at: 2026-11-14T19:12:53.524373572Z
   modified_at: 2026-11-14T19:12:53.524373572Z
   session_id: 01a1db6d-e689-7532-9eef-772722add87b
+  harness_version: 2.1.325 (Claude Code)
+- id: 01a1db7a-a57f-7980-87fb-780c9719cdad
+  author: joe
+  content: 'Product seat additions 2026-11-14 19:20Z (session start after rotation): (a) the mail commands an incoming seat guesses all fail: ''aida mail'', ''aida mailbox read --unread'', ''aida mailbox list --unread''; the working one is ''aida mailbox inbox'', and nothing in the refusals names it. (b) ''aida mailbox inbox'' for a new product seat shows two REQUEST_CHANGES mails from 2026-09-22 addressed to the agent type ''claude'' (BUG-1500, BUG-1503) as unread, plus ''mail view partial: 1 source not fully read (OverBudget)'' with no way stated to read the rest. (c) the product session was given the same session name as the main-track advisor (both ''aida-5d''), so bare-name SendMessage is ambiguous and a peer cannot tell which seat it is answering; seat names should be unique per live session or carry the role. (d) no command prints a relay''s parent grant id or expiry: ''aida whoami'' and ''aida role show'' omit it; the record had to be read from ~/.aida/session-grants/<id>.json. (e) the product seat''s sandbox cannot see other sessions'' processes or write .git/FETCH_HEAD, so it cannot verify the train watchdog is alive, see a train in its post-green step, or ''git fetch''; ''aida pr train'' has no status view that would replace ps (STORY-2823 covers the status half). (f) the session handoff still said #4038 was ''with the integration seat'' while that seat considers it a dell1 lane''s: ownership of a PR in rework is not recorded anywhere both seats read.'
+  created_at: 2026-11-14T19:13:30.495522980Z
+  modified_at: 2026-11-14T19:13:30.495522980Z
+  session_id: 01a1db78-560d-7a81-a467-3742be1fefc3
   harness_version: 2.1.325 (Claude Code)
 history:
 - id: 01a1db4a-abd7-74b1-97e3-ad48fe26683e
