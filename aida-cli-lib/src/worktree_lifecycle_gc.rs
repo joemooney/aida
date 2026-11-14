@@ -1574,6 +1574,7 @@ mod tests {
     #[test]
     fn bug_2587_git_failure_with_empty_stderr_names_the_command() {
         // trace:BUG-2587 | ai:claude
+        // trace:BUG-2587.acc62c33 | ai:claude
         let (_tmp, main) = fixture();
         let tree = detached(&main, "integ-quiet");
         // `--quiet` exits 1 and prints nothing on a detached HEAD.
@@ -1596,6 +1597,8 @@ mod tests {
     #[test]
     fn bug_2587_detached_head_is_reported_plainly_with_its_size() {
         // trace:BUG-2587 | ai:claude
+        // trace:BUG-2587.ac0e26fa | ai:claude
+        // trace:BUG-2587.acc62c33 | ai:claude
         let (_tmp, main) = fixture();
         let tree = detached(&main, "integ-local");
         let head = commit(&tree, "local-only");
@@ -1626,6 +1629,7 @@ mod tests {
     #[test]
     fn bug_2587_detached_head_on_default_or_remote_pr_head_is_removed() {
         // trace:BUG-2587 | ai:claude
+        // trace:BUG-2587.ac82fd75 | ai:claude
         let (_tmp, main) = fixture();
         // On the default branch: no forge and no remote listing is consulted.
         let merged = detached(&main, "integ-merged");
@@ -1694,6 +1698,7 @@ mod tests {
     #[test]
     fn bug_2587_orphan_seat_target_dirs_are_reported_and_removed() {
         // trace:BUG-2587 | ai:claude
+        // trace:BUG-2587.acd1fb99 | ai:claude
         use std::os::unix::fs::PermissionsExt;
         let (_tmp, main) = fixture();
         let tree = linked(&main, "feature");
