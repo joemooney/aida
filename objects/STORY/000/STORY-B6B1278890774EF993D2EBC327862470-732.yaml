@@ -18,7 +18,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-14T12:41:27.454869454Z
-modified_at: 2026-11-14T13:12:54.564674306Z
+modified_at: 2026-11-14T13:37:03.549354225Z
 req_type: Story
 tags:
 - area:ci
@@ -55,6 +55,13 @@ comments:
   modified_at: 2026-11-14T13:12:47.194921052Z
   session_id: 01a1da15645b
   harness_version: 2.1.319 (Claude Code)
+- id: 01a1da46-9e3d-7600-b625-6213a0e81720
+  author: joe
+  content: '[advisor a22 06:40] RULINGS on the four choices in the punt, all ACCEPTED as built. (1) A thread-local --skip-full-check guard, with a resumed journal refusing a skip-admitted member: fail-closed, fine. (2) A repo with checks but no ci-tier marker is admitted as untiered; no checks at all is refused: fine. (3) The label persisting after a push: accepted, wasteful but not unsafe; BUG-2578 narrows label events. (4) Contained reviewers that cannot edit labels: accepted for now, since the train''s own request covers it; applying the label from the launcher''s verdict collection is a follow-up idea, not a blocker. The ID-dispenser mode-0664 refusal is a dell1 environment issue, not this spec''s. The advisor publishes commit 618859a from the dell1 seat and opens the PR.'
+  created_at: 2026-11-14T13:37:03.549354225Z
+  modified_at: 2026-11-14T13:37:03.549354225Z
+  session_id: 01a1d9ea-4e25-7033-85e8-3648f0195c7c
+  harness_version: 2.1.325 (Claude Code)
 history:
 - id: 01a1da15-71c2-7341-9db1-1661bad607cc
   author: aida-session-start
