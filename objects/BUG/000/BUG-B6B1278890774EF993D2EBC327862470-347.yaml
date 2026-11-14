@@ -13,7 +13,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-14T14:13:23.824117090Z
-modified_at: 2026-11-14T14:49:07.763293300Z
+modified_at: 2026-11-14T16:55:19.032033025Z
 req_type: Bug
 tags:
 - area:tests
@@ -25,6 +25,14 @@ relationships:
   target_id: 01a1da88-79cd-77d0-9aac-33d521b5545a
   created_at: 2026-11-14T14:49:07.763291057Z
   created_by: dirtlab
+comments:
+- id: 01a1dafc-20f8-7df2-a350-ff010ba7b4c0
+  author: joe
+  content: 'Advisor evidence 2026-11-14 09:55 for #4036 at b3296518a5 on dell1: git_ops lib tests (incl. bug034) 20/20 green under umask 022 and 20/20 under umask 002 (210 passed each). This is the evidence the 16:40Z CHANGES REQUESTED verdict said was absent; no code finding is open. Re-review scoped to this evidence.'
+  created_at: 2026-11-14T16:55:19.032033025Z
+  modified_at: 2026-11-14T16:55:19.032033025Z
+  session_id: 01a1dab1-9447-7d22-b5ff-0c9084e122ea
+  harness_version: 2.1.325 (Claude Code)
 history:
 - id: 01a1da80-cf69-7e40-b91f-a4156eaa46cb
   author: aida-session-start
