@@ -1,0 +1,33 @@
+id: 01a1d8b0-b144-7c12-97f7-d13fa177d70f
+spec_id: STORY-b6b1278890774ef993d2ebc327862470-714
+agreed_id: STORY-2791
+title: 'Review PR-3989: [AI:codex] fix(queue): recover dead clones with refused holder evidence (BUG-2552)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `(no-sess`) for branch `bug-b6b1278890774ef993d2ebc327862470-317`.
+
+  - PR: <https://github.com/joemooney/aida/pull/3989>
+  - Branch: `bug-b6b1278890774ef993d2ebc327862470-317` → `main`
+
+  ## Covers
+
+  - BUG-2552
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 3989` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-14T06:13:40.804550216Z
+modified_at: 2026-11-14T06:13:40.804550216Z
+req_type: Story
+filed_at:
+  code_sha: 1801b34105752b7fda6dedc9cd1bf8b9e4881c59
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 1801b341057
+  vendor: claude
