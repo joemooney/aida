@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-13T20:52:54.357683400Z
-modified_at: 2026-11-14T13:35:46.916860146Z
+modified_at: 2026-11-14T13:36:02.770686013Z
 req_type: Bug
 tags:
 - perf
@@ -132,6 +132,13 @@ comments:
   content: Commit 014bd40268 references this requirement
   created_at: 2026-11-14T13:35:46.916860146Z
   modified_at: 2026-11-14T13:35:46.916860146Z
+  session_id: 01a1da3d6ea0
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a1da45-b0d2-7cd2-a8ac-8749241d0d37
+  author: dirtlab
+  content: 'Round 2 re-run (claude), commit 014bd40268 on the lane branch (local; git push from this seat failed for lack of GitHub credentials, so the host must publish it). No finding disputed. Findings 1-5 from the review at 0ef99b3 were re-checked against the branch head and are already fixed by 3f9d752f6d and d6eb35f081: (1) waiters reuse only after ls-remote shows the store and code remote heads contained locally, with moving-store-remote and moving-code-remote tests; (2) db_sync_noop_remote_skips_strict_scans_with_large_ledger drives db_sync_local_window against a bare origin with 1200 ledger dirs, <10 s, no fetch, no strict scan; (3) one remote-head query; (4) pre_sha is taken before the pending commit and collision checks run for pending and unpushed commits; (5) AIDA_PULL_COALESCE=0, AIDA_PULL_COALESCE_WAIT_SECS and AIDA_RECONCILE_WATERMARK_TTL_SECS exist and are documented. New in this commit, per the advisor note of 06:17: the aida pull that aida pr train runs after landing is bounded at 300 s (SIGTERM, SIGKILL after 5 s, warning, train returns); AIDA_POST_TRAIN_PULL_TIMEOUT_SECS sets it, 0 removes it, classified in AMBIENT_AIDA_KEYS. Tests via lane runner: aida-cli-lib post_train_pull:: + store_pull_coalesce::tests 19 passed; aida-ci-guards --lib 51 passed (incl. story_2326_ambient_aida_inputs_have_a_disposition); aida-cli-lib story_2326 filter exit 0. make check-ci-fast did NOT complete here: it stops at ''Containment conformance evidence tests'', which fail with PermissionError creating a socket in this sandbox; gates after it were not run.'
+  created_at: 2026-11-14T13:36:02.770686013Z
+  modified_at: 2026-11-14T13:36:02.770686013Z
   session_id: 01a1da3d6ea0
   harness_version: 2.1.319 (Claude Code)
 history:
