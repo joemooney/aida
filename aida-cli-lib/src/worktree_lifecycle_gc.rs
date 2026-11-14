@@ -16,32 +16,120 @@ struct Candidate {
     eligible: bool,
     reason: String,
     removed: bool,
+    /// `worktree`, `seat-clone`, `lane-overlay` or `seat-target`.
+    // trace:BUG-2587 | ai:claude
+    kind: &'static str,
     #[serde(skip)]
     identity: Option<(u64, u64)>,
 }
 
 /// Bound Git commands and preserve diagnostics; an error is never a clean tree.
 fn git(root: &Path, args: &[&str]) -> Result<String> {
-    let mut cmd = aida_core::git_ops::host_git_command(root);
-    cmd.args(args);
-    let out = crate::command_output_with_timeout(cmd, Duration::from_secs(10))
-        .context("GC Git command timed out")?;
-    anyhow::ensure!(
-        out.status.success(),
-        "GC Git command failed: {}",
-        String::from_utf8_lossy(&out.stderr)
-    );
+    let out = git_output(root, args)?;
+    anyhow::ensure!(out.status.success(), "{}", git_failure(args, &out));
     Ok(String::from_utf8(out.stdout)?.trim_end().to_owned())
 }
 
+fn git_output(root: &Path, args: &[&str]) -> Result<std::process::Output> {
+    let mut cmd = aida_core::git_ops::host_git_command(root);
+    cmd.args(args);
+    crate::command_output_with_timeout(cmd, Duration::from_secs(10))
+        .context("GC Git command timed out")
+}
+
+/// A quiet Git failure (`--quiet`, `--verify`) prints nothing: name the
+/// command and its exit status, so the reason is never blank.
+// trace:BUG-2587 | ai:claude
+fn git_failure(args: &[&str], out: &std::process::Output) -> String {
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    match stderr.trim() {
+        "" => format!(
+            "GC Git command failed: `git {}` ended with {} and no message",
+            args.join(" "),
+            out.status
+        ),
+        message => format!("GC Git command failed: {message}"),
+    }
+}
+
+/// The checked-out local branch, or `None` on a detached HEAD.
 // Full refs avoid Git's ambiguous short names when a tag shares the branch name.
 // trace:TASK-1222.acfbfd06 | ai:codex
-fn linked_branch(path: &Path) -> Result<String> {
-    let reference = git(path, &["symbolic-ref", "--quiet", "HEAD"])?;
-    Ok(reference
-        .strip_prefix("refs/heads/")
-        .context("linked checkout does not name a local branch")?
-        .to_owned())
+fn linked_branch(path: &Path) -> Result<Option<String>> {
+    let args = ["symbolic-ref", "--quiet", "HEAD"];
+    let out = git_output(path, &args)?;
+    // `--quiet` reports a detached HEAD as exit 1 with no output at all. That
+    // is a healthy checkout with no branch, not a Git failure.
+    // trace:BUG-2587 | ai:claude
+    if out.status.code() == Some(1) && out.stdout.is_empty() && out.stderr.is_empty() {
+        return Ok(None);
+    }
+    anyhow::ensure!(out.status.success(), "{}", git_failure(&args, &out));
+    Ok(Some(
+        String::from_utf8(out.stdout)?
+            .trim_end()
+            .strip_prefix("refs/heads/")
+            .context("linked checkout does not name a local branch")?
+            .to_owned(),
+    ))
+}
+
+/// Commits `remote` advertises as branch tips and PR / merge-request heads.
+/// One listing; nothing is fetched.
+// trace:BUG-2587 | ai:claude
+fn remote_heads(main: &Path, remote: &str) -> Result<Vec<String>> {
+    let mut cmd = aida_core::git_ops::host_git_command(main);
+    cmd.args([
+        "ls-remote",
+        remote,
+        "refs/heads/*",
+        "refs/pull/*/head",
+        "refs/merge-requests/*/head",
+    ])
+    .env("GIT_TERMINAL_PROMPT", "0")
+    .stdin(std::process::Stdio::null());
+    let out = crate::command_output_with_timeout(cmd, Duration::from_secs(30))
+        .context("remote branch and PR head listing timed out")?;
+    anyhow::ensure!(
+        out.status.success(),
+        "remote branch and PR heads unknown: {}",
+        String::from_utf8_lossy(&out.stderr).trim()
+    );
+    Ok(String::from_utf8(out.stdout)?
+        .lines()
+        .filter_map(|line| line.split_whitespace().next())
+        .filter(|oid| matches!(oid.len(), 40 | 64) && oid.bytes().all(|b| b.is_ascii_hexdigit()))
+        .map(str::to_owned)
+        .collect())
+}
+
+/// Whether `head` is reachable from one of `heads`. A listed commit this
+/// repository does not hold proves nothing and is ignored.
+// trace:BUG-2587 | ai:claude
+fn reachable_from(main: &Path, head: &str, heads: &[String]) -> Result<bool> {
+    use std::io::{Seek, Write};
+    if heads.is_empty() {
+        return Ok(false);
+    }
+    let mut input = tempfile::tempfile()?;
+    for oid in heads {
+        writeln!(input, "^{oid}")?;
+    }
+    input.rewind()?;
+    let args = ["rev-list", "--count", "--ignore-missing", head, "--stdin"];
+    let mut cmd = aida_core::git_ops::host_git_command(main);
+    cmd.args(args).stdin(input);
+    let out = crate::command_output_with_timeout(cmd, Duration::from_secs(30))
+        .context("GC Git command timed out")?;
+    anyhow::ensure!(out.status.success(), "{}", git_failure(&args, &out));
+    Ok(String::from_utf8(out.stdout)?.trim() == "0")
+}
+
+/// The remote the default branch ref names (`origin/main` -> `origin`).
+fn default_remote(default: &str) -> &str {
+    default
+        .split_once('/')
+        .map_or("origin", |(remote, _)| remote)
 }
 
 /// Logical bytes, without following symlinks (including a symlinked root).
@@ -63,7 +151,15 @@ fn bytes_until(path: &Path, deadline: Instant) -> Result<u64> {
         return Ok(meta.len());
     }
     let mut total = 0u64;
-    for entry in std::fs::read_dir(path)? {
+    let entries = match std::fs::read_dir(path) {
+        Ok(entries) => entries,
+        // An overlay's kernel scratch directory (`work/work`) is mode 000 and
+        // empty at rest; count the directory itself and go on.
+        // trace:BUG-2587 | ai:claude
+        Err(error) if error.kind() == std::io::ErrorKind::PermissionDenied => return Ok(meta.len()),
+        Err(error) => return Err(error.into()),
+    };
+    for entry in entries {
         total = total.saturating_add(bytes_until(&entry?.path(), deadline)?);
     }
     Ok(total)
@@ -110,7 +206,7 @@ fn same_path(a: &Path, b: &Path) -> bool {
 
 /// An ended lease is absent, not merely old or attached to an exited process.
 /// Require explicit session retirement; GC never releases someone else's lease.
-fn ownership_clear(main: &Path, path: &Path, branch: &str) -> Result<()> {
+fn ownership_clear(main: &Path, path: &Path, branch: Option<&str>) -> Result<()> {
     // Pool reservations survive session retirement; unreadable inventory retains work.
     // trace:TASK-1222 | ai:codex
     let directory = aida_core::worktree_pool::pool_dir(main);
@@ -143,9 +239,8 @@ fn ownership_clear(main: &Path, path: &Path, branch: &str) -> Result<()> {
     }
     let leases = crate::leases::list_leases_strict_all(main).map_err(anyhow::Error::msg)?;
     anyhow::ensure!(
-        !leases
-            .iter()
-            .any(|l| same_path(&l.worktree_path, path) || l.branch == branch),
+        !leases.iter().any(|l| same_path(&l.worktree_path, path)
+            || branch.is_some_and(|branch| l.branch == branch)),
         "session lease still exists; end/reap the session first"
     );
     let dir = aida_core::liveness::leases_dir(main);
@@ -182,16 +277,35 @@ fn ownership_clear(main: &Path, path: &Path, branch: &str) -> Result<()> {
     Ok(())
 }
 
-fn inspect(main: &Path, invoking: &Path, path: &Path, is_clone: bool, default: &str) -> Candidate {
-    let mut row = inspect_with(
+fn inspect(
+    main: &Path,
+    invoking: &Path,
+    path: &Path,
+    is_clone: bool,
+    default: &str,
+    heads: &mut impl FnMut(&Path, &str) -> Result<Vec<String>>,
+) -> Candidate {
+    let mut row = inspect_full(
         main,
         path,
         is_clone,
         default,
         &mut crate::forge::observe_gc_branch_closed,
+        heads,
     );
     protect_invoking(&mut row, invoking);
     row
+}
+
+/// One remote listing serves a whole scan; removal rereads it.
+// trace:BUG-2587 | ai:claude
+fn memoized_heads() -> impl FnMut(&Path, &str) -> Result<Vec<String>> {
+    let mut memo: Option<std::result::Result<Vec<String>, String>> = None;
+    move |main: &Path, remote: &str| {
+        memo.get_or_insert_with(|| remote_heads(main, remote).map_err(|error| format!("{error:#}")))
+            .clone()
+            .map_err(anyhow::Error::msg)
+    }
 }
 
 // The holder guard exempts this process; explicitly retain its checkout.
@@ -210,6 +324,17 @@ fn inspect_with(
     default: &str,
     closed: &mut impl FnMut(&Path, &str, &str) -> crate::forge_observed::Observed<bool>,
 ) -> Candidate {
+    inspect_full(main, path, is_clone, default, closed, &mut remote_heads)
+}
+
+fn inspect_full(
+    main: &Path,
+    path: &Path,
+    is_clone: bool,
+    default: &str,
+    closed: &mut impl FnMut(&Path, &str, &str) -> crate::forge_observed::Observed<bool>,
+    heads: &mut impl FnMut(&Path, &str) -> Result<Vec<String>>,
+) -> Candidate {
     let mut row = Candidate {
         path: path.to_owned(),
         clone: is_clone,
@@ -220,6 +345,7 @@ fn inspect_with(
         eligible: false,
         reason: String::new(),
         removed: false,
+        kind: if is_clone { "seat-clone" } else { "worktree" },
         identity: None,
     };
     let result = (|| -> Result<()> {
@@ -265,18 +391,21 @@ fn inspect_with(
             );
             row.branch = crate::seat_clone::checked_out_branch(path);
         } else {
-            row.branch = Some(linked_branch(path)?);
+            row.branch = linked_branch(path)?;
         }
-        let branch = row
-            .branch
-            .as_deref()
-            .context("detached or unreadable branch")?;
-        anyhow::ensure!(
-            !["main", "master", "aida-store"].contains(&branch)
-                && branch != default.trim_start_matches("origin/"),
-            "protected branch"
-        );
-        ownership_clear(main, path, branch)?;
+        // A linked worktree on a detached HEAD has no branch to prove merged
+        // or to delete; its commit alone decides. A seat clone always has one.
+        // trace:BUG-2587 | ai:claude
+        let branch = row.branch.clone();
+        if is_clone || branch.is_some() {
+            let branch = branch.as_deref().context("detached or unreadable branch")?;
+            anyhow::ensure!(
+                !["main", "master", "aida-store"].contains(&branch)
+                    && branch != default.trim_start_matches("origin/"),
+                "protected branch"
+            );
+        }
+        ownership_clear(main, path, branch.as_deref())?;
         // Git worktree locks live in its administrative gitdir.
         if !is_clone {
             let dir = git(path, &["rev-parse", "--absolute-git-dir"])?;
@@ -308,7 +437,11 @@ fn inspect_with(
                 }
             }
             anyhow::ensure!(
-                crate::seat_clone::origin_missing_commits(main, path, branch)? == 0,
+                crate::seat_clone::origin_missing_commits(
+                    main,
+                    path,
+                    branch.as_deref().unwrap_or_default()
+                )? == 0,
                 "seat clone has commits missing from origin"
             );
         }
@@ -320,7 +453,7 @@ fn inspect_with(
                 main,
                 &["rev-list", "--count", &format!("{default}..{head}")],
             )? == "0";
-        if !ancestor {
+        if let (false, Some(branch)) = (ancestor, branch.as_deref()) {
             match closed(main, branch, head) {
                 crate::forge_observed::Observed::Known(true) => {}
                 crate::forge_observed::Observed::Known(false) => {
@@ -331,6 +464,16 @@ fn inspect_with(
                     bail!("PR state unknown: {why}")
                 }
             }
+        } else if !ancestor {
+            // Detached: the commit must already be on the remote, under a
+            // branch tip or a PR head, so removing the tree loses nothing.
+            // trace:BUG-2587 | ai:claude
+            let heads = heads(main, default_remote(default))?;
+            anyhow::ensure!(
+                reachable_from(main, head, &heads)?,
+                "detached HEAD: no branch to prove merged, and its commit is on neither \
+                 the default branch nor a remote branch or PR head"
+            );
         }
         aida_core::worktree_holders::check_worktree_removal(path)?;
         estimate_bytes(&mut row, bytes(path));
@@ -344,10 +487,11 @@ fn inspect_with(
                 Err(_) => row.bytes_complete = false,
             }
         }
-        row.reason = if ancestor {
-            "branch merged into default branch"
-        } else {
-            "matching PR merged or closed"
+        row.reason = match (branch.is_some(), ancestor) {
+            (true, true) => "branch merged into default branch",
+            (true, false) => "matching PR merged or closed",
+            (false, true) => "detached HEAD is on the default branch",
+            (false, false) => "detached HEAD is on a remote branch or PR head",
         }
         .into();
         row.eligible = true;
@@ -355,6 +499,12 @@ fn inspect_with(
     })();
     if let Err(error) = result {
         row.reason = format!("{error:#}");
+        // A kept tree still reports its size; a short walk, never a veto.
+        // trace:BUG-2587 | ai:claude
+        if row.identity.is_some() {
+            let size = bytes_until(path, Instant::now() + Duration::from_secs(2));
+            estimate_bytes(&mut row, size);
+        }
     }
     row
 }
@@ -376,15 +526,9 @@ fn inventory(main: &Path) -> Result<Vec<(PathBuf, bool)>> {
         .filter(|w| !same_path(main, &w.path) && w.branch.as_deref() != Some("aida-store"))
         .map(|w| (w.path, false))
         .collect();
-    let configured = crate::worktree_gc::worktree_pool_config_worktree_parent(main);
-    let sample = aida_core::worktree_pool::worktree_placement_path(
-        main,
-        "aida-seat-placeholder",
-        configured.as_deref(),
-    );
-    let parent = sample.parent().context("no seat parent")?;
+    let parent = seat_parent(main)?;
     if parent.try_exists()? {
-        for entry in std::fs::read_dir(parent)? {
+        for entry in std::fs::read_dir(&parent)? {
             let entry = entry?;
             let name = entry.file_name();
             if !name
@@ -404,7 +548,213 @@ fn inventory(main: &Path) -> Result<Vec<(PathBuf, bool)>> {
     Ok(paths)
 }
 
+/// The directory this project's seat clones and placed worktrees live in.
+fn seat_parent(main: &Path) -> Result<PathBuf> {
+    let configured = crate::worktree_gc::worktree_pool_config_worktree_parent(main);
+    let sample = aida_core::worktree_pool::worktree_placement_path(
+        main,
+        "aida-seat-placeholder",
+        configured.as_deref(),
+    );
+    Ok(sample.parent().context("no seat parent")?.to_owned())
+}
+
+// Per-seat build output under the main checkout's `target/`. A lane's overlay
+// (`lane-overlay/<session id>`) outlives its session, and a seat's target
+// (`worktrees/<checkout name>`) outlives a checkout removed by other means.
+// trace:BUG-2587 | ai:claude
+const LANE_OVERLAY: &str = "lane-overlay";
+const SEAT_TARGET: &str = "seat-target";
+/// A directory this young may belong to a session that is still starting.
+const TARGET_GRACE: Duration = Duration::from_secs(600);
+
+struct TargetOwners {
+    sessions: PathBuf,
+    lease_ids: Vec<String>,
+    checkout_names: std::collections::BTreeSet<std::ffi::OsString>,
+    seat_parent: PathBuf,
+}
+
+// Unreadable leases or registrations are an error, never an empty owner list.
+fn target_owners(main: &Path) -> Result<TargetOwners> {
+    let leases = crate::leases::list_leases_strict_all(main).map_err(anyhow::Error::msg)?;
+    let registered = git(main, &["worktree", "list", "--porcelain"])?;
+    let mut checkout_names: std::collections::BTreeSet<_> =
+        crate::worktree_reclaim::parse_worktree_entries(&registered)
+            .iter()
+            .filter_map(|w| w.path.file_name().map(ToOwned::to_owned))
+            .collect();
+    checkout_names.extend(
+        leases
+            .iter()
+            .filter_map(|l| l.worktree_path.file_name().map(ToOwned::to_owned)),
+    );
+    Ok(TargetOwners {
+        sessions: aida_core::liveness::leases_dir(main),
+        lease_ids: leases.into_iter().map(|l| l.id).collect(),
+        checkout_names,
+        seat_parent: seat_parent(main)?,
+    })
+}
+
+// exists() is also false on a permission error; only NotFound proves absence.
+fn absent(path: &Path) -> Result<bool> {
+    match std::fs::symlink_metadata(path) {
+        Ok(_) => Ok(false),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(true),
+        Err(error) => Err(error).with_context(|| format!("unreadable {}", path.display())),
+    }
+}
+
+/// `Ok(None)`: the owning session or checkout still exists. `Ok(Some(why))`:
+/// the owner is gone and the directory may be removed. `Err`: the owner is
+/// gone, but something else retains the directory.
+fn target_verdict(
+    kind: &str,
+    path: &Path,
+    owners: &TargetOwners,
+    grace: Duration,
+) -> Result<Option<&'static str>> {
+    let name = path.file_name().context("unnamed build directory")?;
+    let why = if kind == LANE_OVERLAY {
+        let id = name.to_string_lossy();
+        if owners.lease_ids.iter().any(|lease| *lease == id)
+            || !absent(&owners.sessions.join(format!("{id}.toml")))?
+        {
+            return Ok(None);
+        }
+        "build output of an ended session"
+    } else {
+        if owners.checkout_names.contains(name) || !absent(&owners.seat_parent.join(name))? {
+            return Ok(None);
+        }
+        "build output of a removed worktree"
+    };
+    let modified = std::fs::symlink_metadata(path)?.modified()?;
+    anyhow::ensure!(
+        std::time::SystemTime::now()
+            .duration_since(modified)
+            .is_ok_and(|age| age >= grace),
+        "created or changed in the last {} minutes; retained",
+        grace.as_secs() / 60
+    );
+    aida_core::worktree_holders::check_worktree_removal(path)?;
+    Ok(Some(why))
+}
+
+/// Ownerless per-seat build directories, and how many were left uninspected
+/// when `deadline` passed.
+fn orphan_targets(
+    main: &Path,
+    deadline: Option<Instant>,
+    grace: Duration,
+) -> (Vec<Candidate>, usize) {
+    let mut rows = Vec::new();
+    let mut deferred = 0usize;
+    let owners = match target_owners(main) {
+        Ok(owners) => owners,
+        Err(error) => {
+            eprintln!("warning: per-seat build output not inspected: {error:#}");
+            return (rows, deferred);
+        }
+    };
+    for (kind, dir) in [(LANE_OVERLAY, "lane-overlay"), (SEAT_TARGET, "worktrees")] {
+        let dir = main.join("target").join(dir);
+        let mut paths: Vec<PathBuf> = match std::fs::read_dir(&dir) {
+            Ok(entries) => entries.flatten().map(|entry| entry.path()).collect(),
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => continue,
+            Err(error) => {
+                eprintln!("warning: {} not inspected: {error}", dir.display());
+                continue;
+            }
+        };
+        paths.sort();
+        for path in paths {
+            // Lock files, and anything that is not a real directory, stay.
+            let Ok(identity) = crate::seat_clone::dir_identity(&path) else {
+                continue;
+            };
+            if deadline.is_some_and(|deadline| Instant::now() >= deadline) {
+                deferred += 1;
+                continue;
+            }
+            let (eligible, reason) = match target_verdict(kind, &path, &owners, grace) {
+                Ok(None) => continue,
+                Ok(Some(why)) => (true, why.to_owned()),
+                Err(error) => (false, format!("{error:#}")),
+            };
+            let mut row = Candidate {
+                path,
+                clone: false,
+                branch: None,
+                head: None,
+                bytes: 0,
+                bytes_complete: true,
+                eligible,
+                reason,
+                removed: false,
+                kind,
+                identity: Some(identity),
+            };
+            let budget = Instant::now() + Duration::from_secs(15);
+            let size = bytes_until(&row.path, deadline.map_or(budget, |d| d.min(budget)));
+            estimate_bytes(&mut row, size);
+            rows.push(row);
+        }
+    }
+    (rows, deferred)
+}
+
+fn remove_target(main: &Path, row: &Candidate, grace: Duration) -> Result<bool> {
+    let parent = main.join("target").join(if row.kind == LANE_OVERLAY {
+        "lane-overlay"
+    } else {
+        "worktrees"
+    });
+    anyhow::ensure!(
+        row.path.parent() == Some(parent.as_path()),
+        "not a per-seat build directory"
+    );
+    // Reread ownership and identity directly before deleting.
+    crate::seat_clone::ensure_dir_identity(
+        &row.path,
+        row.identity.context("missing scan identity")?,
+    )?;
+    anyhow::ensure!(
+        target_verdict(row.kind, &row.path, &target_owners(main)?, grace)?.is_some(),
+        "its session or worktree exists again"
+    );
+    remove_tree(&row.path)?;
+    Ok(true)
+}
+
+/// Remove a directory tree without following symlinks. The kernel leaves an
+/// overlay's scratch directory (`work/work`) at mode 000, which a plain
+/// recursive removal cannot enter; give the owner access first.
+fn remove_tree(path: &Path) -> std::io::Result<()> {
+    use std::os::unix::fs::PermissionsExt;
+    fn unlock(dir: &Path) -> std::io::Result<()> {
+        let mode = std::fs::symlink_metadata(dir)?.permissions().mode();
+        if mode & 0o700 != 0o700 {
+            std::fs::set_permissions(dir, std::fs::Permissions::from_mode(0o700))?;
+        }
+        for entry in std::fs::read_dir(dir)? {
+            let entry = entry?;
+            // file_type() does not follow a symlink.
+            if entry.file_type()?.is_dir() {
+                unlock(&entry.path())?;
+            }
+        }
+        Ok(())
+    }
+    unlock(path)?;
+    std::fs::remove_dir_all(path)
+}
+
 fn remove(main: &Path, row: &Candidate, default: &str) -> Result<bool> {
+    if row.kind == LANE_OVERLAY || row.kind == SEAT_TARGET {
+        return remove_target(main, row, TARGET_GRACE);
+    }
     remove_with(
         main,
         row,
@@ -452,7 +802,7 @@ fn remove_with(
             &row.path,
             row.identity.context("missing scan identity")?,
         )
-        .and_then(|_| ownership_clear(main, &row.path, row.branch.as_deref().unwrap_or_default()));
+        .and_then(|_| ownership_clear(main, &row.path, row.branch.as_deref()));
         if let Err(error) = final_check {
             crate::mail_retention::reopen_quietly(retired);
             return Err(error);
@@ -477,16 +827,12 @@ fn remove_with(
             &row.path,
             row.identity.context("missing scan identity")?,
         )?;
-        ownership_clear(
-            main,
-            &row.path,
-            row.branch.as_deref().context("missing branch")?,
-        )?;
+        ownership_clear(main, &row.path, row.branch.as_deref())?;
         // Forge and byte-size reads can take time. Reread the local mutation
         // evidence after those reads, directly before shared teardown.
         anyhow::ensure!(
             Some(git(&row.path, &["rev-parse", "HEAD^{commit}"])?).as_ref() == row.head.as_ref()
-                && Some(linked_branch(&row.path)?).as_ref() == row.branch.as_ref()
+                && linked_branch(&row.path)? == row.branch
                 && linked_clean(&row.path)?,
             "linked worktree changed before teardown"
         );
@@ -497,8 +843,8 @@ fn remove_with(
         )?;
         // Keep the ref if it moved or another checkout adopted it; cleanup
         // must not delete a new branch incarnation after removing an old tree.
-        if removed {
-            let branch = row.branch.as_deref().context("missing branch")?;
+        // A detached tree had no branch, so there is no ref to delete.
+        if let (true, Some(branch)) = (removed, row.branch.as_deref()) {
             let registered = git(main, &["worktree", "list", "--porcelain"])?;
             if !crate::worktree_reclaim::parse_worktree_entries(&registered)
                 .iter()
@@ -574,6 +920,7 @@ fn render_toon(report: &serde_json::Value) -> String {
         "removed",
         "reason",
         "bytes_complete",
+        "kind",
     ];
     let rows: Vec<Vec<String>> = report["items"]
         .as_array()
@@ -686,14 +1033,16 @@ pub(crate) fn run(apply: bool, json: bool, fail_on_findings: bool) -> Result<()>
         rotate_inventory(&mut inventory, after.as_deref());
     }
     let total = inventory.len();
-    let mut rows = if scan_requires_budget(autonomous, scheduled) {
+    let budgeted = scan_requires_budget(autonomous, scheduled);
+    let mut heads = memoized_heads();
+    let mut rows = if budgeted {
         scan_budgeted(inventory, Duration::from_secs(60), |(p, c)| {
-            inspect(&main, &invoking, &p, c, &default)
+            inspect(&main, &invoking, &p, c, &default, &mut heads)
         })
     } else {
         inventory
             .into_iter()
-            .map(|(p, c)| inspect(&main, &invoking, &p, c, &default))
+            .map(|(p, c)| inspect(&main, &invoking, &p, c, &default, &mut heads))
             .collect()
     };
     // A failed hint write is visible but cannot discard scan results.
@@ -701,7 +1050,16 @@ pub(crate) fn run(apply: bool, json: bool, fail_on_findings: bool) -> Result<()>
     {
         eprintln!("warning: GC scan cursor not saved: {error:#}");
     }
-    let remaining = total - rows.len();
+    let mut remaining = total - rows.len();
+    // Build output whose session or worktree is gone, after the checkouts.
+    // trace:BUG-2587 | ai:claude
+    let (targets, deferred) = orphan_targets(
+        &main,
+        budgeted.then(|| Instant::now() + Duration::from_secs(30)),
+        TARGET_GRACE,
+    );
+    rows.extend(targets);
+    remaining += deferred;
     let eligible = rows.iter().filter(|r| r.eligible).count();
     let reclaimable_bytes: u64 = rows.iter().filter(|r| r.eligible).map(|r| r.bytes).sum();
     let mut failures = 0usize;
@@ -820,7 +1178,7 @@ mod tests {
         let (_tmp, main) = fixture();
         let tree = linked(&main, "feature");
         git_ok(&main, &["tag", "feature"]);
-        assert_eq!(linked_branch(&tree).unwrap(), "feature");
+        assert_eq!(linked_branch(&tree).unwrap().as_deref(), Some("feature"));
         let row = inspect_with(&main, &tree, false, "origin/main", &mut absent);
         assert!(row.eligible, "{}", row.reason);
         assert_eq!(row.branch.as_deref(), Some("feature"));
@@ -1184,6 +1542,251 @@ mod tests {
         );
         path
     }
+    fn detached(main: &Path, name: &str) -> PathBuf {
+        let path = main.parent().unwrap().join(name);
+        git_ok(
+            main,
+            &[
+                "worktree",
+                "add",
+                "-q",
+                "--detach",
+                path.to_str().unwrap(),
+                "origin/main",
+            ],
+        );
+        path
+    }
+    fn commit(tree: &Path, file: &str) -> String {
+        std::fs::write(tree.join(file), "work").unwrap();
+        git_ok(tree, &["add", file]);
+        git_ok(tree, &["commit", "-qm", file]);
+        git_ok(tree, &["rev-parse", "HEAD"])
+    }
+    fn lease(main: &Path, id: &str, worktree: &Path) -> PathBuf {
+        let dir = aida_core::liveness::leases_dir(main);
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join(format!("{id}.toml"));
+        std::fs::write(&path, format!("id = '{id}'\nscope = 'BUG-2587'\nslug = 'test'\nowner = 'test'\nworktree_path = '{}'\nbranch = 'leased'\nstarted_at = '2026-10-01T00:00:00Z'\nhostname = 'test'\ntree_kind = 'clone'\nactive_pid = 4294967294\n", worktree.display())).unwrap();
+        path
+    }
+
+    #[test]
+    fn bug_2587_git_failure_with_empty_stderr_names_the_command() {
+        // trace:BUG-2587 | ai:claude
+        let (_tmp, main) = fixture();
+        let tree = detached(&main, "integ-quiet");
+        // `--quiet` exits 1 and prints nothing on a detached HEAD.
+        let args = ["symbolic-ref", "--quiet", "HEAD"];
+        let reason = format!("{:#}", git(&tree, &args).unwrap_err());
+        assert!(
+            reason.contains("`git symbolic-ref --quiet HEAD`") && reason.contains("exit status: 1"),
+            "{reason}"
+        );
+        assert!(!reason.trim_end().ends_with(':'), "{reason}");
+        // A failure that does print keeps its message.
+        let loud = format!(
+            "{:#}",
+            git(&tree, &["rev-parse", "no-such-ref^{commit}"]).unwrap_err()
+        );
+        assert!(loud.contains("no-such-ref"), "{loud}");
+        assert_eq!(linked_branch(&tree).unwrap(), None);
+    }
+
+    #[test]
+    fn bug_2587_detached_head_is_reported_plainly_with_its_size() {
+        // trace:BUG-2587 | ai:claude
+        let (_tmp, main) = fixture();
+        let tree = detached(&main, "integ-local");
+        let head = commit(&tree, "local-only");
+        let row = inspect_with(&main, &tree, false, "origin/main", &mut closed);
+        assert!(!row.eligible);
+        assert!(
+            row.reason
+                .starts_with("detached HEAD: no branch to prove merged"),
+            "{}",
+            row.reason
+        );
+        assert_eq!(row.branch, None);
+        assert_eq!(row.head.as_deref(), Some(head.as_str()));
+        assert!(row.bytes > 0 && row.bytes_complete);
+        // A kept tree of any kind reports its size, not 0 bytes.
+        std::fs::write(tree.join("untracked"), "precious").unwrap();
+        let dirty = inspect_with(&main, &tree, false, "origin/main", &mut closed);
+        assert!(
+            !dirty.eligible && dirty.reason.contains("uncommitted"),
+            "{}",
+            dirty.reason
+        );
+        assert!(dirty.bytes > row.bytes);
+        assert!(remove_with(&main, &row, "origin/main", &[], &mut closed).is_err());
+        assert!(tree.join("local-only").exists());
+    }
+
+    #[test]
+    fn bug_2587_detached_head_on_default_or_remote_pr_head_is_removed() {
+        // trace:BUG-2587 | ai:claude
+        let (_tmp, main) = fixture();
+        // On the default branch: no forge and no remote listing is consulted.
+        let merged = detached(&main, "integ-merged");
+        let row = inspect_full(
+            &main,
+            &merged,
+            false,
+            "origin/main",
+            &mut |_, _, _| panic!("a detached HEAD has no PR branch to look up"),
+            &mut |_, _| panic!("merged needs no remote listing"),
+        );
+        assert!(row.eligible, "{}", row.reason);
+        assert_eq!(row.reason, "detached HEAD is on the default branch");
+        assert!(row.bytes > 0);
+        assert!(remove_with(&main, &row, "origin/main", &[], &mut absent).unwrap());
+        assert!(!merged.exists());
+        assert!(git(&main, &["show-ref", "--verify", "refs/heads/main"]).is_ok());
+
+        // Behind a PR head the remote advertises, at or below its tip.
+        let tree = detached(&main, "integ-pr");
+        let below = commit(&tree, "first");
+        let tip = commit(&tree, "second");
+        assert!(!inspect_with(&main, &tree, false, "origin/main", &mut absent).eligible);
+        git_ok(&tree, &["push", "-q", "origin", "HEAD:refs/pull/7/head"]);
+        git_ok(&tree, &["checkout", "-q", "--detach", &below]);
+        let row = inspect_with(&main, &tree, false, "origin/main", &mut absent);
+        assert!(row.eligible, "{}", row.reason);
+        assert_eq!(row.reason, "detached HEAD is on a remote branch or PR head");
+        assert_eq!(row.head.as_deref(), Some(below.as_str()));
+        assert!(reachable_from(&main, &tip, &remote_heads(&main, "origin").unwrap()).unwrap());
+        // A listed commit this repository lacks proves nothing.
+        assert!(!reachable_from(&main, &tip, &["1".repeat(40)]).unwrap());
+        // An unknown remote listing retains the tree.
+        let unknown = inspect_full(
+            &main,
+            &tree,
+            false,
+            "origin/main",
+            &mut absent,
+            &mut |_, _| bail!("remote branch and PR heads unknown: offline"),
+        );
+        assert!(
+            !unknown.eligible && unknown.reason.contains("offline"),
+            "{}",
+            unknown.reason
+        );
+        // A session lease on the tree retains it, at scan and at removal.
+        let held = lease(&main, "held", &tree);
+        let leased = inspect_with(&main, &tree, false, "origin/main", &mut absent);
+        assert!(
+            !leased.eligible && leased.reason.contains("session lease still exists"),
+            "{}",
+            leased.reason
+        );
+        assert!(remove_with(&main, &row, "origin/main", &[], &mut absent).is_err());
+        std::fs::remove_file(held).unwrap();
+        // The HEAD moved since the scan: the stale plan removes nothing.
+        git_ok(&tree, &["checkout", "-q", "--detach", &tip]);
+        assert!(remove_with(&main, &row, "origin/main", &[], &mut absent).is_err());
+        assert!(tree.exists());
+        let row = inspect_with(&main, &tree, false, "origin/main", &mut absent);
+        assert!(remove_with(&main, &row, "origin/main", &[], &mut absent).unwrap());
+        assert!(!tree.exists());
+    }
+
+    #[test]
+    fn bug_2587_orphan_seat_target_dirs_are_reported_and_removed() {
+        // trace:BUG-2587 | ai:claude
+        use std::os::unix::fs::PermissionsExt;
+        let (_tmp, main) = fixture();
+        let tree = linked(&main, "feature");
+        lease(&main, "live", &main.parent().unwrap().join("leased-seat"));
+        let overlays = main.join("target/lane-overlay");
+        let targets = main.join("target/worktrees");
+        for dir in [
+            overlays.join("live/upper"),
+            overlays.join("gone/upper/agent"),
+            overlays.join("gone/work/work"),
+            targets.join("feature"),
+            targets.join("leased-seat"),
+            targets.join("vanished/agent"),
+        ] {
+            std::fs::create_dir_all(dir).unwrap();
+        }
+        std::fs::write(overlays.join(".lock"), "").unwrap();
+        std::fs::write(overlays.join("live/upper/lib"), [0u8; 10]).unwrap();
+        std::fs::write(overlays.join("gone/upper/agent/lib"), [0u8; 1000]).unwrap();
+        std::fs::write(targets.join("feature/lib"), [0u8; 10]).unwrap();
+        std::fs::write(targets.join("vanished/agent/lib"), [0u8; 500]).unwrap();
+        // The kernel leaves an overlay's scratch directory unreadable.
+        let scratch = overlays.join("gone/work/work");
+        std::fs::set_permissions(&scratch, std::fs::Permissions::from_mode(0)).unwrap();
+
+        // A directory this young may belong to a session still starting.
+        let (young, _) = orphan_targets(&main, None, TARGET_GRACE);
+        assert_eq!(young.len(), 2);
+        assert!(young
+            .iter()
+            .all(|row| !row.eligible && row.reason.contains("last 10 minutes")));
+
+        let (rows, deferred) = orphan_targets(&main, None, Duration::ZERO);
+        assert_eq!(deferred, 0);
+        let found: Vec<_> = rows
+            .iter()
+            .map(|row| {
+                (
+                    row.kind,
+                    row.path.clone(),
+                    row.eligible,
+                    row.reason.as_str(),
+                )
+            })
+            .collect();
+        assert_eq!(
+            found,
+            vec![
+                (
+                    LANE_OVERLAY,
+                    overlays.join("gone"),
+                    true,
+                    "build output of an ended session"
+                ),
+                (
+                    SEAT_TARGET,
+                    targets.join("vanished"),
+                    true,
+                    "build output of a removed worktree"
+                ),
+            ]
+        );
+        assert!(rows[0].bytes >= 1000 && rows[0].bytes_complete);
+        assert!(rows[1].bytes >= 500 && rows[1].bytes_complete);
+        // An exhausted budget defers every directory instead of guessing.
+        let (none, deferred) = orphan_targets(&main, Some(Instant::now()), Duration::ZERO);
+        assert!(none.is_empty());
+        assert_eq!(deferred, 5);
+
+        // A session that starts after the scan keeps its overlay.
+        let reborn = lease(&main, "gone", &tree);
+        assert!(remove(&main, &rows[0], "origin/main").is_err());
+        std::fs::remove_file(reborn).unwrap();
+        let mut rows = rows;
+        for row in &mut rows {
+            assert!(remove_target(&main, row, Duration::ZERO).unwrap());
+            row.removed = true;
+        }
+        assert!(!overlays.join("gone").exists() && !targets.join("vanished").exists());
+        assert!(overlays.join("live/upper/lib").exists());
+        assert!(targets.join("feature/lib").exists() && targets.join("leased-seat").exists());
+        assert!(tree.exists());
+        assert_eq!(freed_bytes(&main, &rows), rows[0].bytes + rows[1].bytes);
+        assert!(orphan_targets(&main, None, Duration::ZERO).0.is_empty());
+        // Only a direct child of the two per-seat roots is ever removed.
+        let mut stray = rows[1].clone();
+        stray.path = main.join("target/agent");
+        std::fs::create_dir_all(&stray.path).unwrap();
+        stray.identity = Some(crate::seat_clone::dir_identity(&stray.path).unwrap());
+        assert!(remove_target(&main, &stray, Duration::ZERO).is_err());
+        assert!(stray.path.exists());
+    }
+
     fn closed(_: &Path, _: &str, _: &str) -> Observed<bool> {
         Observed::Known(true)
     }

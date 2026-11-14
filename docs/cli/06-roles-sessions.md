@@ -189,7 +189,14 @@ does not authorize coexistence.
 `aida worktree gc` previews lifecycle cleanup across linked worktrees and private
 `aida-seat-*` clones in the configured worktree parent. `--json` reports per-item
 reasons, candidate/retained counts, and estimated logical bytes reclaimable or
-freed. It does not delete by default. After reviewing the preview, an operator
+freed. A linked worktree on a detached HEAD is a candidate when it is clean, no
+session holds it, and its commit is on the default branch or reachable from a
+branch or pull-request head the remote advertises; otherwise it is kept with
+the reason `detached HEAD: no branch to prove merged`. The same scan lists
+per-seat build output under the main checkout's `target/lane-overlay/<session>`
+and `target/worktrees/<name>` whose session or worktree no longer exists.
+<!-- trace:BUG-2587 | ai:claude -->
+It does not delete by default. After reviewing the preview, an operator
 can run `aida worktree gc --apply` at an interactive host terminal; scheduled
 and unattended contexts refuse removal. The legacy `--yes --force` combination
 also requests removal through the same gate. Unattended scans have a soft budget
