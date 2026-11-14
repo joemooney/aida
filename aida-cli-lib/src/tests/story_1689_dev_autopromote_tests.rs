@@ -58,7 +58,7 @@ fn set_live(f: &Fixture, sha: &str, repo: Option<String>) {
 fn clean_main() -> CheckoutState {
     CheckoutState {
         branch: Some("main".into()),
-        has_origin_main: true,
+        has_upstream: true,
         head: Some(LIVE_SHA.into()),
         ..Default::default()
     }

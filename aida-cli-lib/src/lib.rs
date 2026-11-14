@@ -85,7 +85,8 @@ mod client;
 // trace:TASK-3425 | ai:codex
 // Direct framework imports are also used by the MCP transport crate.
 // trace:TASK-3448 | ai:codex
-pub mod cmdkit;
+// trace:TASK-3783 | ai:codex
+pub use aida_cmdkit as cmdkit;
 pub mod command_registry;
 
 // Inject the production command tree and decoder at the composition root.
@@ -180,8 +181,11 @@ mod knowledge_list;
 // trace:STORY-1662 | ai:claude
 pub mod lane_env;
 // trace:BUG-2383 | ai:claude — the lane job runner and `aida lane job`.
+// trace:STORY-2768 | ai:claude
+mod land;
 mod lane_cmd;
 mod lane_job;
+mod now;
 // trace:STORY-2640 | ai:codex
 mod lane_fast_gate;
 mod project_checks;
@@ -246,7 +250,8 @@ mod drain_lock;
 mod drain_signal;
 mod freshness_gate;
 // trace:BUG-1622 | ai:claude — keeps user-supplied refs from reading as git options.
-mod git_arg_guard;
+// trace:TASK-3783 | ai:codex
+pub(crate) use aida_term::git_arg_guard;
 pub mod git_backend_cmd;
 pub(crate) mod intent_capture;
 mod machine_readiness;
@@ -254,6 +259,7 @@ mod mcp_cmd;
 mod orchestrator_cmd;
 mod pr_cmd;
 // trace:STORY-2732 | ai:codex
+mod integration_cmd;
 mod pr_emergency_land;
 pub(crate) mod pr_list;
 mod pr_state;
@@ -491,7 +497,8 @@ mod import_plan_cmd;
 mod interview;
 mod regen; // trace:TASK-1729 | ai:codex
            // trace:STORY-633 | ai:claude — toml_edit writer for `aida config glyph`.
-mod glyph_config;
+           // trace:TASK-3783 | ai:codex
+pub(crate) use aida_term::glyph_config;
 pub mod glyphs;
 pub mod goal_cmd;
 // trace:EPIC-36 | ai:claude — session-vs-drain misclassification-gap metric.
@@ -589,7 +596,8 @@ mod metrics;
 mod metrics_cmd;
 // trace:TASK-1951 trace:TASK-2003 | ai:claude
 mod needs_attention_lens;
-mod network_retry;
+// trace:TASK-3783 | ai:codex
+pub(crate) use aida_term::network_retry;
 mod node_cmd;
 mod not_found;
 mod pr_claim_surface;
@@ -755,6 +763,10 @@ mod team_cmd;
 mod test_env;
 #[cfg(test)]
 mod test_exec;
+// trace:BUG-2573 | ai:codex
+#[cfg(test)]
+#[path = "../../aida-core/src/test_umask.rs"]
+mod test_umask;
 // trace:BUG-2191 | ai:claude — fixture git without detached auto-maintenance.
 #[cfg(test)]
 mod test_git;
@@ -765,7 +777,8 @@ mod test_home;
 #[cfg(test)]
 mod test_timing;
 // trace:TASK-964 | ai:claude — TOON agent-output encoder (token-efficient).
-mod toon;
+// trace:TASK-3783 | ai:codex
+pub(crate) use aida_term::toon;
 mod trace_cmd;
 mod tracker_cmd;
 mod triage_cmd;
@@ -1499,3 +1512,5 @@ mod bug_1638_race_seam_tests;
 #[cfg(test)]
 #[path = "tests/stale_cache_fixture.rs"]
 mod stale_cache_fixture;
+
+mod reviewer_completion; // trace:BUG-2546 | ai:codex

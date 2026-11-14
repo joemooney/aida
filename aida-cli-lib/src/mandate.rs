@@ -489,6 +489,7 @@ pub(crate) fn emit_renewed(project_root: &Path, mandate: &Mandate, renewal: &Ren
             include_gate_paths: mandate.include_gate_paths,
             reason: mandate.reason.clone(),
             renewed_from: Some(renewal.previous_expires_at.to_rfc3339()),
+            changes: renewal.changes.clone(),
         },
     );
     event.seat = crate::events::active_seat();
@@ -497,9 +498,15 @@ pub(crate) fn emit_renewed(project_root: &Path, mandate: &Mandate, renewal: &Ren
 
 /// The audit copy of a revival in `.aida/events.jsonl`: a start whose
 /// `renewed_from` names the expired mandate it re-minted, so the trail links
-/// the two. Best-effort.
+/// the two, with what the revival changed. Best-effort.
 // trace:STORY-2346 | ai:claude
-pub(crate) fn emit_revived(project_root: &Path, mandate: &Mandate, old_id: &str) {
+// trace:STORY-2771 | ai:claude
+pub(crate) fn emit_revived(
+    project_root: &Path,
+    mandate: &Mandate,
+    old_id: &str,
+    receipt: &Renewal,
+) {
     let mut event = crate::events::Event::new(
         None,
         "",
@@ -512,6 +519,7 @@ pub(crate) fn emit_revived(project_root: &Path, mandate: &Mandate, old_id: &str)
             include_gate_paths: mandate.include_gate_paths,
             reason: mandate.reason.clone(),
             renewed_from: Some(old_id.to_string()),
+            changes: receipt.changes.clone(),
         },
     );
     event.seat = crate::events::active_seat();
@@ -523,12 +531,18 @@ pub(crate) fn emit_revived(project_root: &Path, mandate: &Mandate, old_id: &str)
 // trace:STORY-2346 | ai:claude
 pub(crate) fn revived_message(old_id: &str, m: &Mandate, receipt: &Renewal) -> String {
     format!(
-        "Revived mandate {old_id} (expired {}) as {} ({}, supervised: {}); active until {}. Scope, supervised flag and human gates retained; protected paths: {}.",
+        "Revived mandate {old_id} (expired {}) as {} ({}, supervised: {}); active until {}. {}; protected paths: {}.",
         receipt.previous_expires_at.to_rfc3339(),
         m.id,
         m.effective_scopes().iter().map(|s| s.as_str()).collect::<Vec<_>>().join(", "),
         m.include_supervised,
         m.expires_at.to_rfc3339(),
+        // trace:STORY-2771 | ai:claude
+        if receipt.changes.is_empty() {
+            "Scope, supervised flag and human gates retained"
+        } else {
+            "Everything not listed above retained"
+        },
         m.include_gate_paths
     )
 }
@@ -548,6 +562,7 @@ pub(crate) fn emit_changed(project_root: &Path, mandate: &Mandate, active: bool)
             include_gate_paths: mandate.include_gate_paths,
             reason: mandate.reason.clone(),
             renewed_from: None,
+            changes: Vec::new(),
         },
     );
     event.seat = crate::events::active_seat();
@@ -881,6 +896,19 @@ fn status_text(state: &MandateState, now: DateTime<Utc>) -> String {
                 last.previous_expires_at.to_rfc3339()
             ),
         });
+        // trace:STORY-2771 | ai:claude
+        if let Some(revival) = &m.revived {
+            lines.push(format!(
+                "  revived:   from {} (expired {}){}",
+                revival.from_id,
+                revival.receipt.previous_expires_at.to_rfc3339(),
+                if revival.receipt.changes.is_empty() {
+                    String::new()
+                } else {
+                    format!("; changed {}", revival.receipt.changes.join("; "))
+                }
+            ));
+        }
         lines.join("\n")
     };
     match state {
@@ -910,6 +938,53 @@ fn state_mandate(state: &MandateState) -> Option<&Mandate> {
         MandateState::None => None,
         MandateState::Active(m) | MandateState::Expired(m) | MandateState::Stopped(m) => Some(m),
     }
+}
+
+/// The line a renewal or revival prints when it carries the protected-path
+/// opt-in forward unchanged, so a kept opt-in is never silent.
+// trace:STORY-2771 | ai:claude
+pub(crate) fn kept_gate_paths_line(m: &Mandate, renewal: &Renewal) -> Option<String> {
+    let changed = renewal
+        .changes
+        .iter()
+        .any(|change| change.starts_with("include-gate-paths:"));
+    (m.include_gate_paths && !changed)
+        .then(|| "includes protected paths: KEPT (pass --exclude-gate-paths to drop)".to_string())
+}
+
+/// The overrides `aida mandate renew`'s flags ask for. An absent flag asks
+/// for nothing, so the renewed mandate keeps that value.
+// trace:STORY-2771 | ai:claude
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn renew_overrides(
+    ship_held: bool,
+    scopes: &[String],
+    drive: bool,
+    include_supervised: bool,
+    exclude_supervised: bool,
+    include_gate_paths: bool,
+    exclude_gate_paths: bool,
+    reason: Option<String>,
+) -> Result<crate::gate::mandate::RenewOverrides> {
+    let mut add_scopes = BTreeSet::new();
+    if ship_held {
+        add_scopes.insert(Scope::ShipHeld);
+    }
+    for raw in scopes {
+        add_scopes.insert(Scope::parse(raw)?);
+    }
+    let flag = |on: bool, off: bool| match (on, off) {
+        (true, _) => Some(true),
+        (_, true) => Some(false),
+        _ => None,
+    };
+    Ok(crate::gate::mandate::RenewOverrides {
+        drive,
+        add_scopes,
+        include_supervised: flag(include_supervised, exclude_supervised),
+        include_gate_paths: flag(include_gate_paths, exclude_gate_paths),
+        reason,
+    })
 }
 
 /// `aida mandate start|renew|stop|status`.
@@ -1000,21 +1075,45 @@ pub(crate) fn handle_mandate(action: &crate::cli::MandateAction) -> Result<()> {
         // trace:STORY-B6B1278890774EF993D2EBC327862470-166 | ai:claude
         crate::cli::MandateAction::Renew {
             duration,
+            ship_held,
+            scopes,
+            drive,
+            include_supervised,
+            exclude_supervised,
             include_gate_paths,
+            exclude_gate_paths,
+            reason,
         } => {
             // Same grammar and 24h cap as `start --ttl`, named for this flag.
             let ttl = duration.as_deref().map(parse_renew_for).transpose()?;
+            // trace:STORY-2771 | ai:claude
+            let overrides = renew_overrides(
+                *ship_held,
+                scopes,
+                *drive,
+                *include_supervised,
+                *exclude_supervised,
+                *include_gate_paths,
+                *exclude_gate_paths,
+                reason.clone(),
+            )?;
             let (m, renewal, revived_from) = renew_as_human(
                 &dir,
                 &crate::gate::mandate::operator_principal(),
                 ttl,
-                *include_gate_paths,
+                &overrides,
                 Utc::now(),
             )?;
+            for change in &renewal.changes {
+                println!("{change}");
+            }
+            if let Some(kept) = kept_gate_paths_line(&m, &renewal) {
+                println!("{kept}");
+            }
             // trace:STORY-2346 | ai:claude
             if let Some(old_id) = revived_from {
                 if let Some(root) = &audit_root {
-                    emit_revived(root, &m, &old_id);
+                    emit_revived(root, &m, &old_id, &renewal);
                 }
                 println!("{}", revived_message(&old_id, &m, &renewal));
                 return Ok(());
@@ -1023,10 +1122,15 @@ pub(crate) fn handle_mandate(action: &crate::cli::MandateAction) -> Result<()> {
                 emit_renewed(root, &m, &renewal);
             }
             println!(
-                "Mandate {} renewed until {} (was {}); scope, supervised flag and reason retained; protected paths: {} (renewal {}).",
+                "Mandate {} renewed until {} (was {}); {}; protected paths: {} (renewal {}).",
                 m.id,
                 renewal.expires_at.to_rfc3339(),
                 renewal.previous_expires_at.to_rfc3339(),
+                if renewal.changes.is_empty() {
+                    "scope, supervised flag and reason retained"
+                } else {
+                    "everything else retained"
+                },
                 m.include_gate_paths,
                 m.renewals.len()
             );

@@ -268,13 +268,13 @@ pub(crate) fn authority_stderr_is_terminal() -> bool {
 
 /// Marks the end of git's options: every later argument is a revision or a
 /// path, even when it starts with `-`. Supported since git 2.24.
-pub(crate) const END_OF_OPTIONS: &str = "--end-of-options";
+pub(crate) use crate::git_arg_guard::END_OF_OPTIONS;
 
 /// True when `value` is an abbreviated or full commit ID: 7 to 64 hex
 /// digits (SHA-1 or SHA-256). A value read from the store, a commit trailer
 /// or a verdict must pass this before it becomes a git revision argument.
 pub(crate) fn is_hex_sha(value: &str) -> bool {
-    (7..=64).contains(&value.len()) && value.bytes().all(|b| b.is_ascii_hexdigit())
+    crate::git_arg_guard::is_hex_sha(value)
 }
 
 // ── Verdict freshness ───────────────────────────────────────────────────────

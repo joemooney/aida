@@ -379,7 +379,6 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
         let args = build_implementer_phase_args(
             &self.spec,
             &session_uuid,
-            self.steal,
             self.force_claim || self.retry_implementer_worktree.is_some(),
             Some(intended_branch.as_str()),
             Some(intended_path.as_path()),

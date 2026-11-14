@@ -60,7 +60,7 @@ const LEDGER: &[(&str, usize, &str)] = &[
     ("aida-cli-lib/src/pane_host.rs", 1, "not a vendor child: pane host argv"),
     ("aida-cli-lib/src/phase_driver.rs", 4, "slice C: phase advisor and auto-punt control child"),
     ("aida-cli-lib/src/phase_driver_trait.rs", 3, "slice C: CI-fix launch"),
-    ("aida-cli-lib/src/pr_cmd.rs", 1, "not a vendor child: pre_exec process group"),
+    ("aida-cli-lib/src/pr_cmd.rs", 2, "not a vendor child: pre_exec process group; bounded post-ship sweep child"),
     ("aida-cli-lib/src/regen/score.rs", 2, "not a vendor child: scoring sandbox (argv, pre_exec)"),
     ("aida-cli-lib/src/relay_mail.rs", 1, "not a vendor child: pre_exec process group"),
     ("aida-cli-lib/src/remote_create.rs", 1, "not a vendor child: forge CLI"),
@@ -525,7 +525,11 @@ fn story_2326_grant_owner_mutants() {
 // trace:STORY-2326 | ai:codex
 #[test]
 fn story_2326_profile_and_grant_issuance_have_one_owner() {
-    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
+    // trace:TASK-3791 | ai:codex — also executed by aida-ci-guards.
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .parent()
+        .unwrap()
+        .join("aida-cli-lib/src");
     let mut files = Vec::new();
     rust_files(&root, &mut files);
     for file in files {

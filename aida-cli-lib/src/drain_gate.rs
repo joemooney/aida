@@ -573,7 +573,8 @@ pub(crate) fn guarded_execution_mode_for_drain(
         .load()
         .ok()
         .and_then(|store| store.get_requirement_by_spec_id(spec).cloned())
-        .and_then(|req| req.execution_mode)
+        // trace:STORY-2749 | ai:claude
+        .and_then(|req| crate::queue_cmd::effective_execution_mode(&req))
         .filter(|mode| {
             matches!(
                 mode,
@@ -609,8 +610,10 @@ pub(crate) fn spec_is_keyboard_only(req: &aida_core::Requirement) -> bool {
     req.tags
         .iter()
         .any(|t| t.eq_ignore_ascii_case("keyboard-only"))
+        // A `track:operator` spec is supervised whatever it groomed to.
+        // trace:STORY-2749 | ai:claude
         || matches!(
-            req.execution_mode,
+            crate::queue_cmd::effective_execution_mode(req),
             Some(aida_core::ExecutionMode::Guided)
                 | Some(aida_core::ExecutionMode::Operator)
                 | Some(aida_core::ExecutionMode::Decide)

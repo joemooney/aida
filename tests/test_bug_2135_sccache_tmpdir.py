@@ -239,7 +239,9 @@ class TestTask2772BoundedServerStart(unittest.TestCase):
         self.saved_env = dict(os.environ)
         self.env = dict(self.saved_env)
         # trace:BUG-2501 | ai:codex — the restart case must inspect its fake PID.
-        self.env.pop("AIDA_SCCACHE_PIDS", None)
+        # trace:STORY-2325 | ai:codex — a lane opt-out must not skip the fixture.
+        for name in ("AIDA_SCCACHE_PIDS", "AIDA_SCCACHE_DISABLE"):
+            self.env.pop(name, None)
         runner_os = SimpleNamespace(**vars(os))
         runner_os.environ = self.env
         self.enterContext(mock.patch.object(check_ci, "os", runner_os))

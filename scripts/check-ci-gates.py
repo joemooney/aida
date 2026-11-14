@@ -288,7 +288,8 @@ def substitute(command: str, branch: str | None) -> str:
 def aida_stub_dir(root: Path, stack) -> str:
     """A directory whose `aida` fails loudly, for the no-build tier.
 
-    The fast tier promises no cargo build. `implementer_preflight` deliberately
+    trace:TASK-3791 | ai:codex
+    The fast tier builds only the lightweight structural test harness. `implementer_preflight` deliberately
     refuses to decide "does this gate need the binary?" from the gate's text,
     because a gate can reach `aida` through a script it calls (BUG-1420) — so it
     builds the worktree binary before any gate runs.
@@ -611,7 +612,7 @@ def main(argv: list[str] | None = None) -> int:
         "--tier",
         choices=["fast", "full", "all", *DERIVED_TIERS],
         default="all",
-        help="fast = no cargo build, cheap enough before every push; "
+        help="fast = source guards and lightweight Rust tests, no application build; "
         "all = every gate that can run locally (default); "
         "compile = compile every test target, run none (after merging main)",
     )
@@ -676,6 +677,9 @@ def main(argv: list[str] | None = None) -> int:
             print(f"SKIP  {name}\n        not in the {args.tier} tier (it is {tiers[name]})")
 
     if args.list:
+        # trace:STORY-2735 | ai:codex
+        print("CI scheduling: PR=fast by default; ci:full or AIDA_PR_CI_TIER=full selects full. "
+              "Main/train/merge-group/schedule/manual runs are always full.")
         for name, command in plan:
             # Print the reshaped command itself: it is not always `cargo test`. trace:TASK-1979 | ai:claude
             reshaped = f"  (local: {command})" if command != dict(steps)[name] else ""

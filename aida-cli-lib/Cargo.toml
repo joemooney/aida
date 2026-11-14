@@ -11,6 +11,9 @@ keywords = ["requirements", "ai", "traceability", "cli", "mcp"]
 categories = ["development-tools", "command-line-utilities"]
 
 [dependencies]
+aida-term = { version = "0.16", path = "../aida-term" }
+# trace:TASK-3783 | ai:codex
+aida-cmdkit = { version = "0.16", path = "../aida-cmdkit" }
 aida-core = { version = "0.16", path = "../aida-core", features = ["postgres", "gitlab", "github", "jira"] }
 # `aida schema` derives the Requirement field/enum detail from the same
 # ts-rs type reflection that backs aida-generate-types — the TS::decl()

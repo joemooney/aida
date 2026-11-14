@@ -55,6 +55,10 @@ SYNTH_FILES = {
     "aida-core/src/db/cache.rs": "#[cfg(test)]\nmod tests {}\n",
     "aida-core/src/ai/mod.rs": "\n",
     "aida-core/src/orphan.rs": "// declared nowhere\n",
+    # This sorts before lib.rs but is not reachable from the crate root.
+    # It must not shadow the active declaration of the same test file.
+    # trace:STORY-2660 | ai:codex
+    "aida-core/src/aaa_orphan.rs": '#[path = "tests/y_tests.rs"]\nmod stale_tests;\n',
     "aida-core/src/embed.rs": 'const S: &str = include_str!("embed/schema.sql");\n',
     "aida-core/src/embed/schema.sql": "create table t();\n",
     "aida-core/tests/context_budget.rs": "\n",
@@ -97,6 +101,13 @@ class SynthTest(unittest.TestCase):
 
     def run_plan(self, changed, extra=()):
         return tt.plan(changed, self.pkgs, "agent", list(extra), self.idx)
+
+    def test_orphan_declaration_does_not_shadow_live_test_module(self):
+        pkg = next(p for p in self.pkgs if p.name == "aida-core")
+        self.assertEqual(
+            tt.module_path("aida-core/src/tests/y_tests.rs", pkg, self.idx),
+            ["y_tests"],
+        )
 
     def test_docs_only_plan_nothing(self):
         p = self.run_plan(["docs/a.md", "README.md"])

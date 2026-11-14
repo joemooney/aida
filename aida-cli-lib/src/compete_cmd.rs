@@ -1972,7 +1972,9 @@ mod containment_tests {
             false,
         )
         .is_err());
-        assert!(session::spawn_claude_resume_with_grant(None, "sid", None, true, None).is_err());
+        assert!(
+            session::spawn_claude_resume_with_grant(None, "sid", None, true, None, None).is_err()
+        );
         assert!(handle_compete_command(
             "TASK-1",
             &["claude".into()],

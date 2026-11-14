@@ -1248,3 +1248,75 @@ fn bug2530_synced_verdict_controls_admission_and_redundant_claims() {
         assert!(super::super::review_marker::read(&f.a, 7).is_some());
     }
 }
+
+// A signed same-head projection intentionally omits grant_id. It must retain
+// gate authority without hiding a child grant's local completion from shutdown.
+// trace:BUG-2546 | ai:codex
+#[test]
+fn bug2546_publisher_projection_does_not_hide_local_child_completion() {
+    assert!(available(), "publisher regression requires OpenSSH");
+    let f = Fixture::new();
+    let _env = env(&f.temp.path().join("home-b"));
+    let signed_record = f.record("approved", "reviewer-session");
+    f.collect(&signed_record).unwrap();
+    let _scope = crate::reviewer_completion::Scope::new(&f.b, &f.b, 7, &[]);
+    crate::reviewer_completion::bind_grant("child");
+    let recorded_at = chrono::Utc::now();
+    let mut local = serde_json::json!({
+        "verdict": "APPROVED", "reviewed_sha": f.sha,
+        "recorded_at": recorded_at.to_rfc3339(), "sweep_pending": true,
+        "recorder_attestation": { "sha": f.sha, "grant_id": "child" }
+    });
+    let path = rv::verdict_path(&f.b, "PR-7");
+    let put = |body: &serde_json::Value| {
+        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+        std::fs::write(&path, body.to_string()).unwrap();
+    };
+    put(&local);
+    let effective = rv::current_verdict(&f.b, "PR-7").unwrap();
+    let projected = rv::parse_recorded_verdict(&effective.body).unwrap();
+    assert!(projected.attestation.unwrap().grant_id.is_none());
+    assert!(!crate::reviewer_completion::should_stop());
+    // Pending evidence must not start the grace period behind a publication.
+    std::thread::sleep(std::time::Duration::from_millis(2100));
+    assert!(!crate::reviewer_completion::should_stop());
+    local["sweep_pending"] = false.into();
+    local["recorder_attestation"]["grant_id"] = "other".into();
+    put(&local);
+    assert!(!crate::reviewer_completion::should_stop());
+    local["recorder_attestation"]["grant_id"] = "child".into();
+    local["recorded_at"] = (recorded_at - chrono::Duration::hours(1))
+        .to_rfc3339()
+        .into();
+    put(&local);
+    assert!(!crate::reviewer_completion::should_stop());
+    local["recorded_at"] = recorded_at.to_rfc3339().into();
+    put(&local);
+    assert!(
+        !crate::reviewer_completion::should_stop(),
+        "fresh completion starts grace"
+    );
+    let raw = rv::local_completion_verdict(&f.b, "PR-7").unwrap();
+    assert_eq!(
+        rv::parse_recorded_verdict(&raw.body).unwrap().recorded_at,
+        Some(recorded_at.to_rfc3339())
+    );
+    // Exercise the headless wait path with publication enabled, including
+    // reaping a vendor that keeps running after recording its local verdict.
+    let mut child = Command::new("sleep").arg("30").spawn().unwrap();
+    assert!(crate::reviewer_completion::wait(&mut child)
+        .unwrap()
+        .success());
+    assert!(
+        !child.try_wait().unwrap().unwrap().success(),
+        "the completion watcher must terminate the lingering reviewer"
+    );
+    std::thread::sleep(std::time::Duration::from_millis(2100));
+    assert!(crate::reviewer_completion::should_stop());
+    // Stopping neither replaces the signed projection nor accepts this local
+    // synthetic child record; the ordinary collector still owns acceptance.
+    assert_eq!(
+        rv::current_verdict(&f.b, "PR-7").unwrap().body,
+        effective.body
+    );
+}

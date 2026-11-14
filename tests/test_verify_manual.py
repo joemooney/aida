@@ -78,6 +78,24 @@ External commands
 
 
 class VerifyManualFlagsTest(unittest.TestCase):
+    # trace:TASK-3779 | ai:codex
+    def test_permissions_show_citations_bind_to_config(self):
+        vm = load_verify_manual()
+        chapter = REPO / "docs/cli/07-project-setup.md"
+        paths = {("add",), ("config",), ("config", "permissions", "show")}
+        with patch.object(vm, "help_command_paths", return_value=paths), patch.object(
+            vm, "command_path_exists",
+            side_effect=lambda command: tuple(command.split()) in paths,
+        ):
+            documented = vm.parse_chapters([str(chapter)])
+        citations = [
+            citation for citation in documented["config"]
+            if citation["path"] == "config permissions show"
+        ]
+        self.assertTrue({"--verbose", "--json"}.issubset(
+            {citation["flag"] for citation in citations}
+        ))
+
     def setUp(self):
         self.vm = load_verify_manual()
         self.old_help_flags = self.vm.help_flags

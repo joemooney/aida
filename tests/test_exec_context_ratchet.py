@@ -253,7 +253,9 @@ class ExecContextRatchetTests(unittest.TestCase):
 
     def test_merge_queue_uses_its_base_sha(self):
         workflow = (GUARD.ROOT / ".github/workflows/ci.yml").read_text()
-        base = next(line for line in workflow.splitlines() if "EXEC_CONTEXT_BASE:" in line)
+        # Match the YAML env key, not shell parameter validation.
+        # trace:STORY-2735 | ai:codex
+        base = next(line for line in workflow.splitlines() if line.lstrip().startswith("EXEC_CONTEXT_BASE:"))
         self.assertIn("github.event.pull_request.base.sha || github.event.merge_group.base_sha || github.event.before", base)
 
     def test_write_ledger_bootstraps_and_refuses_growth_before_writing(self):

@@ -657,7 +657,7 @@ fn a_refused_current_verdict_does_not_fall_back_to_its_archive() {
     };
     assert!(matches!(release(), RefusalRelease::Released(_)));
     assert!(matches!(
-        crate::pr_cmd::ship_refusal_release(&[root], &hold, Some(HEAD)),
+        crate::pr_cmd::ship_refusal_release(&[root], &hold, Some(HEAD), true),
         RefusalRelease::Released(_)
     ));
 
@@ -667,7 +667,7 @@ fn a_refused_current_verdict_does_not_fall_back_to_its_archive() {
     assert!(read_verdict_for_sha(root, "TASK-1801", HEAD).is_none());
     assert!(matches!(release(), RefusalRelease::Held(_)));
     assert!(matches!(
-        crate::pr_cmd::ship_refusal_release(&[root], &hold, Some(HEAD)),
+        crate::pr_cmd::ship_refusal_release(&[root], &hold, Some(HEAD), true),
         RefusalRelease::Held(_)
     ));
 }

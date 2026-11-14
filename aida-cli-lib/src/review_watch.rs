@@ -14,8 +14,10 @@ use std::os::unix::fs::{DirBuilderExt, MetadataExt, OpenOptionsExt};
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
 
+// The landing reconciler discovers through the same pinned forge reads.
+// trace:STORY-2768 | ai:claude
 #[path = "review_watch_forge.rs"]
-mod forge;
+pub(crate) mod forge;
 // Every process signal lives here, behind pidfd identity checks.
 // trace:TASK-1945 | ai:claude
 #[path = "review_watch_signal.rs"]
@@ -2086,7 +2088,7 @@ fn queue_args(key: &str, vendor: Option<&str>) -> Vec<String> {
 // Clear inherited orchestration/gate context so queue work must take its
 // ordinary standalone attested path in the same pinned repository.
 // trace:TASK-1993 | ai:codex
-fn watch_command(repo: &forge::Repository, root: &Path, program: &Path) -> Command {
+pub(crate) fn watch_command(repo: &forge::Repository, root: &Path, program: &Path) -> Command {
     let mut command = Command::new(program);
     command.current_dir(root).stdin(Stdio::null());
     for (key, _) in std::env::vars_os() {
@@ -2430,12 +2432,24 @@ pub(crate) fn reviewer_status_on_spawn(
     on_spawn: impl FnOnce(),
 ) -> std::io::Result<std::process::ExitStatus> {
     use crate::process_retry::RetryEtxtbsy;
+    // trace:BUG-2546 | ai:codex
+    if let Some(grant) = cmd
+        .get_envs()
+        .find_map(|(key, value)| {
+            (key == aida_core::launch_policy::GRANT_ENV)
+                .then_some(value)
+                .flatten()
+        })
+        .and_then(|v| v.to_str())
+    {
+        crate::reviewer_completion::bind_grant(grant);
+    }
     let launch = LAUNCH.with(|launch| launch.borrow().clone());
     let Some((root, identity, key, head)) = launch else {
         let mut child = cmd.spawn_retrying_etxtbsy()?;
         note_agent_spawned();
         on_spawn();
-        return child.wait();
+        return crate::reviewer_completion::wait(&mut child);
     };
     let store = Store::open(&root, &identity).map_err(std::io::Error::other)?;
     retry_busy(|| store.record_reviewer(&key, &head, None)).map_err(std::io::Error::other)?;
@@ -2454,7 +2468,7 @@ pub(crate) fn reviewer_status_on_spawn(
             "{key}: reviewer identity unavailable; the attempt stays held as ambiguous: {error:#}"
         ),
     }
-    child.wait()
+    crate::reviewer_completion::wait(&mut child)
 }
 
 // trace:TASK-3472 | ai:codex
