@@ -1,5 +1,6 @@
 id: 01a1dc11-3ba2-7692-aa73-c9e720a2c9f8
 spec_id: TASK-73022632d35647cca3858b18ac0723e3-023
+agreed_id: TASK-3128
 title: Train lock tests race with fork-inherited lock handles under threaded lib tests
 description: |
   pr_train::tests::bug2547_abandon_is_locked_and_local_even_for_malformed_journals and pr_train_journal_lock_contention_is_typed_and_releases_on_exit (aida-cli-lib/src/tests/story_1690_train_tests.rs:5895, :5295) drop the run lock and immediately re-take it. The flock belongs to the open file description, so a child forked by a concurrent test thread while the handle was open keeps the lock until it execs. Under `cargo test --lib` (threads, many git spawns) the re-take then fails with "another train owns the train journal".
@@ -19,6 +20,13 @@ tags:
 - from-implementer:STORY-2823
 - kind:bug-spotted
 - severity:minor
+history:
+- id: 01a1dc13-cc01-74f3-8d86-4144522801e0
+  author: joe
+  timestamp: 2026-11-14T22:00:47.361999386Z
+  session_id: 01a1dbd6-f8cd-7313-a123-75ebbeaa2afd
+  harness_version: 2.1.325 (Claude Code)
+  changes: []
 filed_at:
   code_sha: 55849dcf548b2cc599cc73af9af4cb6d7b7c4e5b
   branch: story-b6b1278890774ef993d2ebc327862470-746

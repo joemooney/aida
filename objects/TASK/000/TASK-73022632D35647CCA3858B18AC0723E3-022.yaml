@@ -1,5 +1,6 @@
 id: 01a1dc11-223b-77e3-b40e-aaab8152167e
 spec_id: TASK-73022632d35647cca3858b18ac0723e3-022
+agreed_id: TASK-3127
 title: 'pr train --status: step names, exit codes and driver-written sidecars chosen by the implementer'
 description: |
   Three calls made within STORY-2823 that the advisor should know shipped:
@@ -23,6 +24,13 @@ tags:
 - from-implementer:STORY-2823
 - kind:design-choice
 - severity:minor
+history:
+- id: 01a1dc13-cbde-7eb3-b7f0-602f7ada333b
+  author: joe
+  timestamp: 2026-11-14T22:00:47.326475619Z
+  session_id: 01a1dbd6-f8cd-7313-a123-75ebbeaa2afd
+  harness_version: 2.1.325 (Claude Code)
+  changes: []
 filed_at:
   code_sha: 55849dcf548b2cc599cc73af9af4cb6d7b7c4e5b
   branch: story-b6b1278890774ef993d2ebc327862470-746

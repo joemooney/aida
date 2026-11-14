@@ -1,5 +1,6 @@
 id: 01a1dc10-4d3a-7a13-a44e-1d733e6945af
 spec_id: STORY-73022632d35647cca3858b18ac0723e3-021
+agreed_id: STORY-2369
 title: 'Review PR-4065: [AI:claude] feat(train): aida pr train --status says what the train is doing (STORY-2823)'
 description: |
   Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a1dbdd`) for branch `story-b6b1278890774ef993d2ebc327862470-746`.
@@ -47,6 +48,12 @@ history:
   timestamp: 2026-11-14T21:57:09.247356876Z
   session_id: 01a1dbdd5de5
   harness_version: 2.1.319 (Claude Code)
+  changes: []
+- id: 01a1dc13-cf1f-7781-80d9-2f69fb4b3139
+  author: joe
+  timestamp: 2026-11-14T22:00:48.159907882Z
+  session_id: 01a1dbd6-f8cd-7313-a123-75ebbeaa2afd
+  harness_version: 2.1.325 (Claude Code)
   changes: []
 filed_at:
   code_sha: 55849dcf548b2cc599cc73af9af4cb6d7b7c4e5b
