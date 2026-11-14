@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-14T18:22:12.152871570Z
-modified_at: 2026-11-14T22:35:52.760388698Z
+modified_at: 2026-11-14T22:58:35.672742273Z
 req_type: Story
 tags:
 - docs:impacted
@@ -128,6 +128,60 @@ comments:
   modified_at: 2026-11-14T22:35:52.760388698Z
   session_id: 01a1dc2c-25f2-7d52-aa8c-61e0f270e9d1
   harness_version: 2.1.325 (Claude Code)
+- id: 01a1dc43-589b-7723-a2ee-e92e55462b68
+  author: dirtlab
+  content: |
+    STORY-2824 advisor round-3 delta (2026-11-14)
+
+    Changed files:
+    - aida-cli-lib/src/pr_train_check.rs: replace Forge::list_changes with repository-pinned bounded pr_state_batch (explicit --limit 1000, failed/capped lists refuse), validate every row before filtering; extract root-parameterized handler for regression coverage.
+    - aida-cli-lib/src/tests/story_2824_train_check_tests.rs: isolated fake-forge regression for failed listing plus successful train read, malformed JSON/rows, 31 complete rows, 1000-row refusal and confirmed empty listing.
+    - aida-cli-lib/src/pr_train.rs: read title/body through self.forge.change_title_and_body to avoid config repair.
+    - aida-cli-lib/src/pr_cmd_args.rs and src/tests/golden/cli_help_snapshot.txt: timeout checked between candidates, not within subprocesses.
+    - docs/cli/04-git-lifecycle.md: describe bounded discovery and timeout semantics.
+
+    PR-4027 was OPEN with mergedAt=null at lane start. FullCi remains unchanged under the binding ruling.
+    Deadline propagation filed as draft TASK-73022632D35647CCA3858B18AC0723E3-024.
+    Codegraph client absent at supplied /home/joe/ai/aida/.codegraph/proxy-state/bin/codegraph; doctor reports missing. Used rg.
+
+    Validation (to be updated):
+    - git diff --check and changed-file rustfmt checks passed.
+    - Targeted STORY-2824 and help golden lane jobs pending.
+    - make check-ci-fast failed at STORY-1853 test-speed tooling tests: four cargo metadata invocations cannot be routed through the lane cargo-test/check/build adapter. Earlier gates passed. Full log: /tmp/story-2824-fast.log. Host must run the complete gate before push.
+
+    No commit, push, PR, queue completion, review record, or ship/merge performed. Existing hold remains a publication veto. Host must complete gates, then delta review and add ci:full at review launch.
+  created_at: 2026-11-14T22:52:43.547371485Z
+  modified_at: 2026-11-14T22:52:43.547371485Z
+  session_id: 01a1dc3d2cdc
+  harness_version: codex-cli 0.167.0
+- id: 01a1dc48-b818-7571-81b3-08a83f0fc91a
+  author: dirtlab
+  content: |
+    STORY-2824 advisor round-3 delta (2026-11-14)
+
+    Changed files:
+    - aida-cli-lib/src/pr_train_check.rs: replace Forge::list_changes with repository-pinned bounded pr_state_batch (explicit --limit 1000, failed/capped lists refuse), validate every row before filtering; extract root-parameterized handler for regression coverage.
+    - aida-cli-lib/src/tests/story_2824_train_check_tests.rs: isolated fake-forge regression for failed listing plus successful train read, malformed JSON/rows, 31 complete rows, 1000-row refusal and confirmed empty listing.
+    - aida-cli-lib/src/pr_train.rs: read title/body through self.forge.change_title_and_body to avoid config repair.
+    - aida-cli-lib/src/pr_cmd_args.rs and src/tests/golden/cli_help_snapshot.txt: timeout checked between candidates, not within subprocesses.
+    - docs/cli/04-git-lifecycle.md: describe bounded discovery and timeout semantics.
+
+    PR-4027 was OPEN with mergedAt=null at lane start. FullCi remains unchanged under the binding ruling.
+    Deadline propagation filed as draft TASK-73022632D35647CCA3858B18AC0723E3-024.
+    Codegraph client absent at supplied /home/joe/ai/aida/.codegraph/proxy-state/bin/codegraph; doctor reports missing. Used rg.
+
+    Validation:
+    - git diff --check and changed-file rustfmt checks passed.
+    - Final-source STORY-2824 lane run j20261114T224957627-2-0: 13 passed, 0 failed (first run also passed 13).
+    - Help golden lane run j20261114T225016181-2-0: 1 passed, 0 failed.
+    - Trace-header stranding and help-golden co-change fixture checks passed.
+    - make check-ci-fast failed at STORY-1853 test-speed tooling tests: four cargo metadata invocations cannot be routed through the lane cargo-test/check/build adapter. Earlier gates passed. Full log: /tmp/story-2824-fast.log. Host must run the complete gate before push.
+
+    Native publication declaration recorded: [AI:codex] fix(train): refuse incomplete eligibility discovery (STORY-2824). No commit, push, PR, queue completion, review record, or merge performed. Existing hold remains a publication veto. Host must complete gates, then delta review and add ci:full at review launch.
+  created_at: 2026-11-14T22:58:35.672742273Z
+  modified_at: 2026-11-14T22:58:35.672742273Z
+  session_id: 01a1dc3d2cdc
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1db50-9f3b-76d0-bb89-e5b424c233d5
   author: aida-session-start

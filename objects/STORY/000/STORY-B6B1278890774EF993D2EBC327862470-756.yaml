@@ -31,7 +31,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-14T22:34:21.521062494Z
-modified_at: 2026-11-14T22:46:00.052164073Z
+modified_at: 2026-11-14T22:52:41.138799448Z
 req_type: Story
 tags:
 - ci
@@ -50,6 +50,13 @@ comments:
   created_at: 2026-11-14T22:40:43.335848188Z
   modified_at: 2026-11-14T22:40:43.335848188Z
   session_id: 01a1db78-560d-7a81-a467-3742be1fefc3
+- id: 01a1dc43-4f32-7aa3-b044-6780ad839bbc
+  author: dirtlab
+  content: 'Implementation in native lane: added scripts/ratchet-set.json (frozen application and shared-module test inventories), one check-ratchets.py runner, make check-ratchets and check-ci-source; check-ci-fast now includes ratchets so existing host lane wrapper executes them. Hosted FAST runs the same set after workspace checking; implementer preflight names it and review policy makes red blocking. TASK-1717 is exempt: real subprocess/store-lock barrier integration, not a source ratchet. Python selection/CI/inventory/manual fixtures: 88 passed before the additional empty-filter negative control (now 89 total expected); targeted Cargo jobs and full fast gate are queued/running through launcher. Acceptance evidence remains incomplete: historical failed-head replay and three hosted PR warm before/after timings need host runs; no warm budget claim is made. PR-4027 remains OPEN as of 2026-11-14 22:50Z, so the requested sequencing is not yet satisfied. This lane will declare Refs and retain In Progress until that evidence/sequencing is resolved.'
+  created_at: 2026-11-14T22:52:41.138799448Z
+  modified_at: 2026-11-14T22:52:41.138799448Z
+  session_id: 01a1dc3cc346
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1dc35-456f-7f80-bca9-be00d457be73
   author: joe
