@@ -1,10 +1,4 @@
 - user_id: role:implementer
-  requirement_id: 01a1d59d-c4a3-76d3-9462-7ce61063fcec
-  position: -725000
-  added_by: role:implementer
-  added_at: 2026-11-14T06:07:39.285052615Z
-  for_role: implementer
-- user_id: role:implementer
   requirement_id: 01a1d255-23d5-7b33-88ea-ad2d8dfcbe59
   position: -724000
   added_by: role:implementer
@@ -559,6 +553,114 @@
     mergeable=CONFLICTING: resolve the merge conflicts
     Address these blockers, commit and push. If disputing a finding, use `aida punt` and name that finding.
   added_at: 2026-11-13T23:15:49.538504509Z
+  for_role: implementer
+- user_id: role:implementer
+  requirement_id: 01a1d59d-c4a3-76d3-9462-7ce61063fcec
+  position: 0
+  added_by: fast-gate
+  note: |-
+    The host's sandboxed configured fast-check command failed. This is your ONE fast-gate fix round. Fix the failing gates below and finish. Native seats must leave edits uncommitted for host publication; retain all punt/hold instructions.
+    RUN   PreCompact handoff hook protocol  [fast]
+    ..............................
+    ----------------------------------------------------------------------
+    Ran 30 tests in 47.279s
+
+    OK
+    ok    PreCompact handoff hook protocol  (47.6s)
+    RUN   Grant expiry hook protocol  [fast]
+    .............
+    ----------------------------------------------------------------------
+    Ran 13 tests in 3.290s
+
+    OK
+    ok    Grant expiry hook protocol  (3.5s)
+    RUN   Book glossary generator tests (stub binary, no build)  [fast]
+    ok: generate-glossary.sh --check
+    ok    Book glossary generator tests (stub binary, no build)  (2.0s)
+    RUN   Performance profile guard  [fast]
+    Checking release profile opt-level...
+    [profile.release] is omitted, using cargo default (opt-level 3). OK.
+    Checking agent profile...
+    Performance profile gate passed.
+    ok    Performance profile guard  (0.0s)
+    RUN   Check formatting  [fast]
+    Diff in /home/joe/ai/aida-worktrees/aida-seat-aida-story-b6b1278890774ef993d2ebc327862470-686/aida-cli-lib/src/review_commands.rs:1172:
+         };
+         // trace:STORY-2763 | ai:codex
+         let prompt = match pr_number {
+    -        Some(pr) => crate::review_launch::review_prompt(project_root, pr, &prompt)?
+    -            .unwrap_or(prompt),
+    +        Some(pr) => {
+    +            crate::review_launch::review_prompt(project_root, pr, &prompt)?.unwrap_or(prompt)
+    +        }
+             None => prompt,
+         };
+         let session_id = uuid::Uuid::new_v4().to_string();
+    FAIL  Check formatting  (50.2s)
+            this is CI's own `Check formatting` step, run locally.
+    make: *** [Makefile:563: check-ci-fast] Error 1
+    lane sccache: final job statistics
+    Compile requests                      1
+    Compile requests executed             0
+    Cache hits                            0
+    Cache misses                          0
+    Cache hits rate                       -
+    Cache timeouts                        0
+    Cache read errors                     0
+    Forced recaches                       0
+    Cache write errors                    0
+    Cache errors                          0
+    Compilations                          0
+    Compilation failures                  0
+    Non-cacheable compilations            0
+    Non-cacheable calls                   1
+    Non-compilation calls                 0
+    Unsupported compiler calls            0
+    Average cache write               0.000 s
+    Average compiler                  0.000 s
+    Average cache read hit            0.000 s
+    Failed distributed compilations       0
+
+    Non-cacheable reasons:
+    missing input                         1
+
+    Cache location                  Local disk: "/home/joe/.cache/aida/lane-sccache"
+    Base directories                (none)
+    Use direct/preprocessor mode?   yes
+    Version (client)                0.18.0
+    Max cache size                       10 GiB
+    Stopping sccache server...
+    Compile requests                      1
+    Compile requests executed             0
+    Cache hits                            0
+    Cache misses                          0
+    Cache hits rate                       -
+    Cache timeouts                        0
+    Cache read errors                     0
+    Forced recaches                       0
+    Cache write errors                    0
+    Cache errors                          0
+    Compilations                          0
+    Compilation failures                  0
+    Non-cacheable compilations            0
+    Non-cacheable calls                   1
+    Non-compilation calls                 0
+    Unsupported compiler calls            0
+    Average cache write               0.000 s
+    Average compiler                  0.000 s
+    Average cache read hit            0.000 s
+    Failed distributed compilations       0
+
+    Non-cacheable reasons:
+    missing input                         1
+
+    Cache location                  Local disk: "/home/joe/.cache/aida/lane-sccache"
+    Base directories                (none)
+    Use direct/preprocessor mode?   yes
+    Version (client)                0.18.0
+    Max cache size                       10 GiB
+    lane sccache: server exited before sandbox teardown
+  added_at: 2026-11-14T08:06:45.406879492Z
   for_role: implementer
 - user_id: role:implementer
   requirement_id: 01a1965c-3483-70e3-af35-1caaf7df3f96
