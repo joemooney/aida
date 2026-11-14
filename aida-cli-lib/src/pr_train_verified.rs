@@ -362,25 +362,14 @@ fn collect(
         let metadata = json!({"state":format!("{:?}",source.state), "title":source.title,
             "author":source.author,"base":source.base_ref,"branch":source.head_ref,"head":source.head_sha,
             "draft":source.is_draft,"cross_repository":source.is_cross_repository,"repository":source.head_repo});
-        let ids = resolved_member_spec_ids(
+        let ids = merge_step_spec_ids(
             &live.project_root,
+            fresh.pr,
             &source.head_ref,
             &source.title,
             &fresh.subject,
             &fresh.body,
         )?;
-        let covered = crate::gate::trailer_coverage::covered_gate_ids(
-            &live.project_root,
-            &source.head_ref,
-            Some(fresh.pr),
-            ids.clone(),
-        );
-        // trace:TASK-3111 trace:TASK-2843 | ai:codex
-        anyhow::ensure!(
-            ids.is_empty() || !covered.is_empty(),
-            "train source specs are uncovered by the branch/lease coverage filter"
-        );
-        let ids = aliases(&live.project_root, &covered)?;
         let mut policy_specs =
             crate::pr_cmd::ship_gate_spec_records_for_ids(&live.project_root, ids.clone());
         for (_, tags, _) in &mut policy_specs {
@@ -808,6 +797,31 @@ fn verify_structure(repo: &Path, train: &Built) -> Result<Vec<Value>> {
     Ok(proof)
 }
 
+/// The spec ids the merge step asks the verdict corpus about for one member:
+/// every id its branch, title and car message name, through the coverage
+/// filter, with each spec's aliases. The member gate asks about the same set
+/// ([`MemberChecks::corpus_ids`]), so a verdict that would stop the merge
+/// stops the member before the train is built.
+// trace:BUG-2569 | ai:claude
+pub(crate) fn merge_step_spec_ids(
+    root: &Path,
+    pr: u64,
+    head_ref: &str,
+    title: &str,
+    subject: &str,
+    body: &str,
+) -> Result<Vec<String>> {
+    let ids = resolved_member_spec_ids(root, head_ref, title, subject, body)?;
+    let covered =
+        crate::gate::trailer_coverage::covered_gate_ids(root, head_ref, Some(pr), ids.clone());
+    // trace:TASK-3111 trace:TASK-2843 | ai:codex
+    anyhow::ensure!(
+        ids.is_empty() || !covered.is_empty(),
+        "train source specs are uncovered by the branch/lease coverage filter"
+    );
+    aliases(root, &covered)
+}
+
 /// Branch names are hints: queue-work may append a rework suffix which the
 /// broad ID parser includes. Only discard an unresolved branch-only hint when
 /// explicit metadata supplies a resolvable spec. Ambiguous lookups still refuse,
@@ -917,7 +931,8 @@ fn read_bodies(root: &Path, pr: u64, ids: &[String], head: &str) -> Result<Bodie
             return Ok(vec![(key, serde_json::from_str(&publication.body)?)]);
         }
     }
-    corpus::corpus_gate_bodies(&[root, main.as_path()], pr, ids)
+    // trace:BUG-2569 | ai:claude — the same head-aware read the gate makes.
+    corpus::corpus_gate_bodies_at(&[root, main.as_path()], pr, ids, Some(head))
         .map_err(anyhow::Error::msg)?
         .into_iter()
         .map(|(key, body)| Ok((key, serde_json::from_str(&body)?)))

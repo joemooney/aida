@@ -192,7 +192,12 @@ pub fn raise_counter(
             }
         }
         if changed {
-            crate::write_atomic(&counter, toml::to_string_pretty(&state)?)?;
+            // trace:BUG-2555 | ai:claude
+            crate::write_atomic_mode(
+                &counter,
+                toml::to_string_pretty(&state)?,
+                crate::OWNER_WRITABLE_MODE,
+            )?;
         }
         Ok(prior)
     })
@@ -203,7 +208,7 @@ pub fn raise_counter(
 pub fn restore_counter(root: &Path, prior: &str) -> Result<()> {
     let counter = counter_path(root)?;
     crate::BlockRegistry::with_dispense_lock(&counter, || {
-        crate::write_atomic(&counter, prior)?;
+        crate::write_atomic_mode(&counter, prior, crate::OWNER_WRITABLE_MODE)?;
         Ok(())
     })
 }
@@ -251,10 +256,16 @@ pub fn bootstrap(root: &Path) -> Result<Option<WorkBinding>> {
                 // both records is cold bootstrap. Never infer a zero high-water.
                 // trace:BUG-2017 | ai:codex
                 merge_legacy_state(root, &legacy, &mut state)?;
-                crate::write_atomic(&counter, toml::to_string_pretty(&state)?)?;
-                crate::write_atomic(
+                // trace:BUG-2555 | ai:claude
+                crate::write_atomic_mode(
+                    &counter,
+                    toml::to_string_pretty(&state)?,
+                    crate::OWNER_WRITABLE_MODE,
+                )?;
+                crate::write_atomic_mode(
                     &common.join(BINDING_FILE),
                     toml::to_string_pretty(&binding)?,
+                    crate::OWNER_WRITABLE_MODE,
                 )?;
                 Ok(())
             })?;
@@ -832,5 +843,94 @@ mod tests {
         .is_err());
         assert!(!common.join(COUNTER_FILE).exists());
         assert!(bootstrap(d.path()).is_err());
+    }
+
+    // Under a umask of 002 (dell1's shells) every rewrite of the counter
+    // left it group-writable, and the next allocation refused it. A umask is
+    // process-wide, so the check runs in a child of this test binary and the
+    // test process's own umask is never touched.
+    // trace:BUG-2555 | ai:claude
+    #[cfg(unix)]
+    #[test]
+    fn bug_2555_counter_stays_owner_writable_under_umask_002() {
+        use std::os::unix::fs::PermissionsExt;
+        use std::os::unix::process::CommandExt;
+        // The child is told it is the child by its working directory, which
+        // holds this marker; the environment is not consulted.
+        const CHILD: &str = "bug-2555-umask-child";
+        if !std::path::Path::new(CHILD).exists() {
+            let cwd = tempfile::tempdir().unwrap();
+            std::fs::write(cwd.path().join(CHILD), "").unwrap();
+            let mut child = std::process::Command::new(std::env::current_exe().unwrap());
+            child
+                .args([
+                    "--exact",
+                    "work_binding::tests::bug_2555_counter_stays_owner_writable_under_umask_002",
+                    "--test-threads=1",
+                ])
+                .current_dir(cwd.path());
+            // SAFETY: `umask` is async-signal-safe and touches no memory.
+            unsafe {
+                child.pre_exec(|| {
+                    libc::umask(0o002);
+                    Ok(())
+                });
+            }
+            let out = child.output().unwrap();
+            let text = format!(
+                "{}{}",
+                String::from_utf8_lossy(&out.stdout),
+                String::from_utf8_lossy(&out.stderr)
+            );
+            assert!(out.status.success(), "{text}");
+            assert!(text.contains("1 passed"), "the child ran no test: {text}");
+            return;
+        }
+        // SAFETY: reads the umask by setting it to the value it must have.
+        assert_eq!(unsafe { libc::umask(0o002) }, 0o002);
+        let d = tempfile::tempdir().unwrap();
+        crate::git_ops::init(d.path()).unwrap();
+        bootstrap(d.path()).unwrap().unwrap();
+        let common = crate::allocation_authority::common_dir(d.path()).unwrap();
+        let mode = |name: &str| {
+            std::fs::metadata(common.join(name))
+                .unwrap()
+                .permissions()
+                .mode()
+                & 0o777
+        };
+        // The umask is in force: a file written the ordinary way gets it.
+        std::fs::write(common.join("plain"), "x").unwrap();
+        assert_eq!(mode("plain"), 0o664);
+        assert_eq!(mode(COUNTER_FILE), 0o644);
+        assert_eq!(mode(BINDING_FILE), 0o644);
+        for _ in 0..3 {
+            crate::allocation_authority::dispenser(d.path(), None)
+                .unwrap()
+                .next_id("BUG")
+                .unwrap();
+            assert_eq!(mode(COUNTER_FILE), 0o644);
+        }
+        let floor = [("BUG".to_string(), 50)].into_iter().collect();
+        let prior = raise_counter(d.path(), &floor).unwrap();
+        assert_eq!(mode(COUNTER_FILE), 0o644);
+        restore_counter(d.path(), &prior).unwrap();
+        assert_eq!(mode(COUNTER_FILE), 0o644);
+
+        // A counter someone else made writable is still refused, not repaired.
+        std::fs::set_permissions(
+            common.join(COUNTER_FILE),
+            std::fs::Permissions::from_mode(0o664),
+        )
+        .unwrap();
+        let refused = crate::allocation_authority::dispenser(d.path(), None)
+            .unwrap()
+            .next_id("BUG")
+            .unwrap_err();
+        assert!(
+            format!("{refused:#}").contains("group- or other-writable"),
+            "{refused:#}"
+        );
+        assert_eq!(mode(COUNTER_FILE), 0o664);
     }
 }

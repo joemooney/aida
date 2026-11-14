@@ -155,10 +155,31 @@ fn open_append(path: &Path) -> std::io::Result<std::fs::File> {
     })
 }
 
+/// The text of the regular file at `path`; `None` when it is absent,
+/// unreadable, not UTF-8 or not a regular file. A regular-file check comes
+/// before the open, so a FIFO or device in a ledger's place never hangs a
+/// lossy reader (the strict reader in `checked` refuses it); the opened
+/// handle is checked again before any read.
+// trace:BUG-2543 | ai:claude
+pub(crate) fn read_regular(path: &Path) -> Option<String> {
+    use std::io::Read as _;
+    if !std::fs::metadata(path).ok()?.is_file() {
+        return None;
+    }
+    let mut file = std::fs::File::open(path).ok()?;
+    if !file.metadata().ok()?.is_file() {
+        return None;
+    }
+    let mut body = String::new();
+    file.read_to_string(&mut body).ok()?;
+    Some(body)
+}
+
 /// Every parseable event on the change's ledger, in file order. A line that
 /// does not parse (a torn final write) is skipped, never fatal.
 pub(crate) fn read_file(root: &Path, change: ChangeKey) -> Vec<GateEvent> {
-    let Ok(body) = std::fs::read_to_string(ledger_file(root, change)) else {
+    // trace:BUG-2543 | ai:claude — never blocks on a FIFO.
+    let Some(body) = read_regular(&ledger_file(root, change)) else {
         return Vec::new();
     };
     body.lines()
@@ -346,7 +367,8 @@ pub(crate) fn unbound_file(root: &Path, spec: &str) -> PathBuf {
 
 /// Every parseable event on `spec`'s unbound ledger, in file order.
 pub(crate) fn read_unbound(root: &Path, spec: &str) -> Vec<GateEvent> {
-    let Ok(body) = std::fs::read_to_string(unbound_file(root, spec)) else {
+    // trace:BUG-2543 | ai:claude — never blocks on a FIFO.
+    let Some(body) = read_regular(&unbound_file(root, spec)) else {
         return Vec::new();
     };
     body.lines()

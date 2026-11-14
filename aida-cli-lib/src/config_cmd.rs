@@ -748,6 +748,37 @@ const CONFIG_KNOBS: &[KnobSpec] = &[
             max: 100_000,
         },
     },
+    // --- [land]. The ranges are land run's own. trace:BUG-2571 | ai:claude ---
+    KnobSpec {
+        section: "land",
+        key: "max_reviews",
+        doc: "How many reviewers `aida land run` keeps running at once.",
+        default: "2",
+        edit: EditSafety::Integer {
+            min: crate::land::run::MAX_REVIEWS.min,
+            max: crate::land::run::MAX_REVIEWS.max,
+        },
+    },
+    KnobSpec {
+        section: "land",
+        key: "max_lanes",
+        doc: "How many rework lanes `aida land run` keeps running at once.",
+        default: "2",
+        edit: EditSafety::Integer {
+            min: crate::land::run::MAX_LANES.min,
+            max: crate::land::run::MAX_LANES.max,
+        },
+    },
+    KnobSpec {
+        section: "land",
+        key: "review_timeout_secs",
+        doc: "How long `aida land run` lets a reviewer run without a verdict before stopping it.",
+        default: "2700",
+        edit: EditSafety::Integer {
+            min: crate::land::run::REVIEW_TIMEOUT_SECS.min,
+            max: crate::land::run::REVIEW_TIMEOUT_SECS.max,
+        },
+    },
     // --- [telemetry]. ---
     KnobSpec {
         section: "telemetry",
@@ -3099,6 +3130,47 @@ fn policy_registry(project_root: &std::path::Path) -> Vec<PolicySection> {
                 value,
                 source,
             }],
+        }
+    });
+
+    // --- `aida land run` limits. trace:BUG-2571 | ai:claude ---
+    sections.push({
+        let (limits, _) = crate::land::run::Limits::from_config(cfg.as_ref());
+        let row = |knob: &crate::land::run::LimitKnob, value: i64, unit: &str| {
+            let raw = config_lookup(cfg.as_ref(), "land", knob.key);
+            let used = raw.and_then(|raw| raw.as_integer()) == Some(value);
+            PolicyRow {
+                key: knob.key,
+                value: match (raw.is_some(), used) {
+                    (true, true) => format!("{value}{unit}"),
+                    (true, false) => {
+                        format!("{value}{unit} (default; the value set is out of range)")
+                    }
+                    (false, _) => format!("{value}{unit} (default)"),
+                },
+                source: if used {
+                    PolicySource::ProjectConfig
+                } else {
+                    PolicySource::Default
+                },
+            }
+        };
+        PolicySection {
+            section: "land",
+            header: "[land]".to_string(),
+            rows: vec![
+                row(
+                    &crate::land::run::MAX_REVIEWS,
+                    limits.max_reviews as i64,
+                    "",
+                ),
+                row(&crate::land::run::MAX_LANES, limits.max_lanes as i64, ""),
+                row(
+                    &crate::land::run::REVIEW_TIMEOUT_SECS,
+                    limits.review_timeout_secs,
+                    " s",
+                ),
+            ],
         }
     });
 
@@ -6355,7 +6427,14 @@ fn configure_allocation(command: &AllocationCommand) -> Result<()> {
             aida_core::BlockRegistry::with_dispense_lock(&path, || {
                 // Revalidate existing settings under the local writer lock.
                 aida_core::allocation_authority::resolve(&root)?;
-                aida_core::write_atomic(&path, "version = 1\nauthoritative = true\n")?;
+                // The reader refuses a setting anyone else may write, so
+                // the mode is not left to the umask.
+                // trace:BUG-2555 | ai:claude
+                aida_core::write_atomic_mode(
+                    &path,
+                    "version = 1\nauthoritative = true\n",
+                    aida_core::OWNER_WRITABLE_MODE,
+                )?;
                 Ok(())
             })?;
             println!("This clone is now HOME allocation authority.");
