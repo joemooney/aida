@@ -137,7 +137,8 @@ fn stage_of(state: &State, ci: Option<&str>) -> Stage {
         State::Conflict | State::CiFailed | State::ChangesRequested => Stage::Reworking,
         State::Reviewing | State::NeedsReview => Stage::Reviewing,
         State::Ready => Stage::Ready,
-        State::Blocked | State::Unknown => Stage::Blocked,
+        // Awaiting the mandate's cover is not landable yet: never READY.
+        State::Blocked | State::Unknown | State::ReadyPendingCover => Stage::Blocked,
     }
 }
 

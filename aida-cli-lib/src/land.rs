@@ -25,8 +25,12 @@ const MAX_CONTENT_ROUNDS: usize = 3;
 /// The branch whose changes the integration seat lands.
 const INTEGRATION_BRANCH: &str = "integration";
 const TRAIN_PREFIX: &str = "train/";
-/// Where a pass keeps the commits it compares; rewritten on every pass.
+/// Where a pass fetches the commits it compares. The refs are shared by
+/// every pass and only ever read under [`FETCH_LOCK`], straight after the
+/// fetch, to pin commit ids; nothing dereferences them afterwards.
 const REF_PREFIX: &str = "refs/aida/land/";
+/// Serializes the fetch and the pinning of one pass against another's.
+const FETCH_LOCK: &str = ".aida/cache/land-fetch.lock";
 
 /// One open change, as the forge reports it.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -84,6 +88,9 @@ pub(crate) enum State {
     /// A check failed on the head: the head is about to change.
     CiFailed,
     Ready,
+    /// Approved, with a hold whose release passes every check except the
+    /// mandate's cover, which only the release itself judges. Not READY.
+    ReadyPendingCover,
     ChangesRequested,
     NeedsReview,
     Blocked,
@@ -99,6 +106,7 @@ impl State {
             State::Conflict => "CONFLICT",
             State::Reviewing => "REVIEWING",
             State::Ready => "READY",
+            State::ReadyPendingCover => "READY-PENDING-COVER",
             State::ChangesRequested => "CHANGES-REQUESTED",
             State::NeedsReview => "NEEDS-REVIEW",
             State::Blocked => "BLOCKED",
@@ -150,13 +158,33 @@ impl Action {
     }
 }
 
-/// A merge hold and whether the reconciler may release it itself.
+/// A merge hold and whether its release condition is met.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct Hold {
     pub detail: String,
-    /// Its release condition is an approval covering the content (a rework
-    /// hold), so an approved change has met it whatever head placed it.
-    pub released_by_approval: bool,
+    pub release: HoldRelease,
+    /// When the hold was placed.
+    pub since: Option<String>,
+}
+
+/// What the hold's own release decision says at the current head. This is a
+/// read-only answer: the release itself decides again.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum HoldRelease {
+    /// Every release check passes without a mandate.
+    Met,
+    /// Every other check passes; a covered spec is sensitive, so the release
+    /// also needs this mandate's cover, which only the release judges.
+    PendingCover(String),
+    Unmet(String),
+}
+
+/// Whether an approval covers the head's content.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum Approval {
+    Approved(String),
+    /// The gate's settled refusal.
+    Refused(String),
 }
 
 /// The requested-changes history of a change, counted by content: two heads
@@ -176,12 +204,12 @@ pub(crate) trait Evidence {
     /// Whether merging the head into its base conflicts.
     fn conflict(&self, pr: &Pr) -> std::result::Result<bool, String>;
     /// A live review of the head, described.
-    fn reviewing(&self, pr: &Pr) -> Option<String>;
+    fn reviewing(&self, pr: &Pr) -> std::result::Result<Option<String>, String>;
     /// CI on the head.
     fn ci(&self, pr: &Pr) -> std::result::Result<Ci, String>;
-    /// An approval covering the head's content, described; `Err` is the
-    /// gate's refusal.
-    fn approval(&self, pr: &Pr) -> std::result::Result<String, String>;
+    /// Whether an approval covers the head's content. `Err` only when the
+    /// evidence could not be read: a refusal is `Ok`.
+    fn approval(&self, pr: &Pr) -> std::result::Result<Approval, String>;
     fn hold(&self, pr: &Pr) -> std::result::Result<Option<Hold>, String>;
     fn rounds(&self, pr: &Pr) -> std::result::Result<Rounds, String>;
     /// A live lane working the change's branch, described.
@@ -276,11 +304,17 @@ pub(crate) fn derive(pr: &Pr, evidence: &dyn Evidence) -> Row {
         }
         Err(why) => return unknown("mergeability", why),
     }
-    if let Some(review) = evidence.reviewing(pr) {
-        return Row {
-            actor: Some(review.clone()),
-            ..row(State::Reviewing, Action::Wait, None, review)
-        };
+    match evidence.reviewing(pr) {
+        Ok(None) => {}
+        Ok(Some(review)) => {
+            return Row {
+                actor: Some(review.clone()),
+                ..row(State::Reviewing, Action::Wait, None, review)
+            }
+        }
+        // Who holds the review is unknown: neither a second reviewer nor a
+        // landing may be scheduled on a guess.
+        Err(why) => return unknown("review ownership", why),
     }
     let ci = match evidence.ci(pr) {
         Ok(ci) => ci,
@@ -295,7 +329,8 @@ pub(crate) fn derive(pr: &Pr, evidence: &dyn Evidence) -> Row {
         );
     }
     let refusal = match evidence.approval(pr) {
-        Ok(approval) => {
+        Err(why) => return unknown("approval", why),
+        Ok(Approval::Approved(approval)) => {
             return match evidence.hold(pr) {
                 Ok(None) => row(
                     State::Ready,
@@ -306,22 +341,36 @@ pub(crate) fn derive(pr: &Pr, evidence: &dyn Evidence) -> Row {
                     None,
                     approval,
                 ),
-                Ok(Some(hold)) if hold.released_by_approval => row(
-                    State::Ready,
-                    Action::ClearHoldAndLand,
-                    None,
-                    format!("{approval}; hold met by the approval: {}", hold.detail),
-                ),
-                Ok(Some(hold)) => row(
-                    State::Blocked,
-                    Action::AdvisorRuling,
-                    None,
-                    format!("approved, held: {}", hold.detail),
-                ),
+                Ok(Some(hold)) => match hold.release {
+                    HoldRelease::Met => row(
+                        State::Ready,
+                        Action::ClearHoldAndLand,
+                        None,
+                        format!("{approval}; hold met by the approval: {}", hold.detail),
+                    ),
+                    // Not READY: the mandate's cover is judged only when
+                    // the hold is released, so nothing may count this as
+                    // landable yet.
+                    HoldRelease::PendingCover(mandate) => row(
+                        State::ReadyPendingCover,
+                        Action::ClearHoldAndLand,
+                        hold.since,
+                        format!(
+                            "{approval}; hold release needs mandate {mandate}'s cover, judged at release: {}",
+                            hold.detail
+                        ),
+                    ),
+                    HoldRelease::Unmet(why) => row(
+                        State::Blocked,
+                        Action::AdvisorRuling,
+                        hold.since,
+                        format!("approved, held: {} ({why})", hold.detail),
+                    ),
+                },
                 Err(why) => unknown("merge hold", why),
-            }
+            };
         }
-        Err(refusal) => refusal,
+        Ok(Approval::Refused(refusal)) => refusal,
     };
     let rounds = match evidence.rounds(pr) {
         Ok(rounds) => rounds,
@@ -411,12 +460,16 @@ pub(crate) fn render(rows: &[Row]) -> String {
 
 // ---- live evidence -------------------------------------------------------
 
+/// Git in `root` and nowhere else: inherited routing (`GIT_DIR`,
+/// `GIT_WORK_TREE`, `GIT_NAMESPACE`, injected config) is cleared, as the
+/// pinned discovery clears it, so a probe cannot run in another repository.
 fn git(root: &Path, args: &[&str], timeout_secs: u64) -> Result<std::process::Output> {
     let mut command = std::process::Command::new("git");
     command
         .current_dir(root)
         .args(args)
         .stdin(std::process::Stdio::null());
+    crate::review_watch::forge::clear_routing(&mut command);
     crate::command_output_with_timeout(command, std::time::Duration::from_secs(timeout_secs))
         .with_context(|| format!("`git {}` failed to run or timed out", args.join(" ")))
 }
@@ -440,10 +493,41 @@ fn base_ref(base: &str) -> String {
     format!("{REF_PREFIX}base/{base}")
 }
 
-/// Fetch every change's head and base into this pass's refs in one call, and
-/// drop the refs of changes that are no longer open.
-fn fetch(root: &Path, changes: &[Pr], gitlab: bool) -> Result<()> {
+/// The commits one pass compares, pinned once: every later git call names
+/// these ids, never a ref another pass could move.
+#[derive(Debug, Default)]
+struct Pins {
+    heads: BTreeMap<u64, String>,
+    bases: BTreeMap<String, String>,
+}
+
+/// Fetch every change's head and base in one call, drop the refs of changes
+/// that are no longer open, and pin what was fetched. The fetch and the
+/// pinning hold [`FETCH_LOCK`], so a concurrent pass cannot move a ref
+/// between the two; `repo` is the origin discovery pinned, rechecked before
+/// the network is touched.
+fn fetch(
+    root: &Path,
+    repo: &crate::review_watch::forge::Repository,
+    changes: &[Pr],
+    gitlab: bool,
+) -> Result<Pins> {
     use aida_core::git_ops::RemoteCredentialsExt as _;
+    use fs2::FileExt as _;
+    let lock_path = root.join(FETCH_LOCK);
+    if let Some(parent) = lock_path.parent() {
+        std::fs::create_dir_all(parent)
+            .with_context(|| format!("creating {}", parent.display()))?;
+    }
+    let lock = std::fs::OpenOptions::new()
+        .create(true)
+        .truncate(false)
+        .write(true)
+        .open(&lock_path)
+        .with_context(|| format!("opening {}", lock_path.display()))?;
+    lock.lock_exclusive()
+        .with_context(|| format!("locking {}", lock_path.display()))?;
+    // Released when `lock` drops, on every return below.
     let mut specs: BTreeSet<String> = BTreeSet::new();
     for pr in changes {
         git_text(
@@ -468,8 +552,12 @@ fn fetch(root: &Path, changes: &[Pr], gitlab: bool) -> Result<()> {
         let _ = git_text(root, &["update-ref", "-d", stale]);
     }
     if specs.is_empty() {
-        return Ok(());
+        return Ok(Pins::default());
     }
+    anyhow::ensure!(
+        crate::review_watch::forge::Repository::load(root)?.identity == repo.identity,
+        "origin changed since the open changes were discovered"
+    );
     let mut command = std::process::Command::new("git");
     command
         .current_dir(root)
@@ -482,6 +570,8 @@ fn fetch(root: &Path, changes: &[Pr], gitlab: bool) -> Result<()> {
         ])
         .args(&specs)
         .stdin(std::process::Stdio::null());
+    // Routing first: the credentials are passed through the environment.
+    crate::review_watch::forge::clear_routing(&mut command);
     command.remote_credentials(root, "origin");
     let out = crate::command_output_with_timeout(command, std::time::Duration::from_secs(120))
         .context("the fetch of open changes failed to run or timed out")?;
@@ -490,14 +580,38 @@ fn fetch(root: &Path, changes: &[Pr], gitlab: bool) -> Result<()> {
         "the fetch of open changes failed: {}",
         one_line(&String::from_utf8_lossy(&out.stderr), 300)
     );
-    Ok(())
+    // A ref that does not resolve leaves its change unpinned, which reads
+    // as unknown for that change alone.
+    let commit = |name: &str| {
+        git_text(
+            root,
+            &["rev-parse", "--verify", &format!("{name}^{{commit}}")],
+        )
+        .ok()
+        .filter(|sha| sha.len() == 40 && sha.bytes().all(|c| c.is_ascii_hexdigit()))
+    };
+    let mut pins = Pins::default();
+    for pr in changes {
+        if let Some(sha) = commit(&head_ref(pr.id)) {
+            pins.heads.insert(pr.id, sha);
+        }
+        if !pins.bases.contains_key(&pr.base) {
+            if let Some(sha) = commit(&base_ref(&pr.base)) {
+                pins.bases.insert(pr.base.clone(), sha);
+            }
+        }
+    }
+    Ok(pins)
 }
 
 /// The production evidence: the readers the merge gates use, all read-only.
 struct Live {
     root: PathBuf,
-    /// Set when the pass's fetch failed: every git-backed fact is unknown.
-    fetch_error: Option<String>,
+    /// The commits this pass compares; `Err` when its fetch failed, which
+    /// makes every git-backed fact unknown.
+    pins: std::result::Result<Pins, String>,
+    /// The forge keys its changes `MR-N`.
+    gitlab: bool,
     leases: std::cell::OnceCell<std::result::Result<Vec<crate::leases::SessionLease>, String>>,
     /// Live claims from other clones and hosts, read once per pass from the
     /// synced store: never a process probe of another machine.
@@ -505,26 +619,31 @@ struct Live {
 }
 
 impl Live {
-    fn fetched(&self, pr: &Pr) -> std::result::Result<(), String> {
-        if let Some(error) = &self.fetch_error {
-            return Err(error.clone());
-        }
-        let at = git_text(&self.root, &["rev-parse", "--verify", &head_ref(pr.id)])
-            .map_err(|e| format!("{e:#}"))?;
-        if at != pr.head {
+    /// The pinned head and base of `pr`, as commit ids. The head must be
+    /// the one discovery reported: a result is never attached to a change
+    /// whose head it was not computed from.
+    fn pinned(&self, pr: &Pr) -> std::result::Result<(&str, &str), String> {
+        let pins = self.pins.as_ref().map_err(Clone::clone)?;
+        let head = pins
+            .heads
+            .get(&pr.id)
+            .ok_or("the change's head was not fetched")?;
+        if head != &pr.head {
             return Err("the head moved during the pass".into());
         }
-        Ok(())
+        let base = pins
+            .bases
+            .get(&pr.base)
+            .ok_or("the change's base was not fetched")?;
+        Ok((head, base))
     }
 
-    /// The identity of a commit's own diff against the change's base: equal
-    /// for two heads that differ only by merges of the base. A commit that
-    /// cannot be compared is its own identity.
-    fn content_id(&self, pr: &Pr, sha: &str) -> String {
-        let base = base_ref(&pr.base);
-        crate::gate::review_carryover::single_merge_base(&self.root, &base, sha)
+    /// The identity of a commit's own diff against the pinned base: equal
+    /// for two heads that differ only by merges of the base.
+    fn content_id(&self, base: &str, sha: &str) -> std::result::Result<String, String> {
+        crate::gate::review_carryover::single_merge_base(&self.root, base, sha)
             .and_then(|fork| crate::gate::review_carryover::patch_id(&self.root, &fork, sha))
-            .unwrap_or_else(|_| sha.to_string())
+            .map_err(|refusal| refusal.reason())
     }
 
     fn local_leases(&self) -> std::result::Result<&[crate::leases::SessionLease], String> {
@@ -597,16 +716,10 @@ pub(crate) fn specs_of(pr: &Pr) -> Vec<String> {
 
 impl Evidence for Live {
     fn conflict(&self, pr: &Pr) -> std::result::Result<bool, String> {
-        self.fetched(pr)?;
+        let (head, base) = self.pinned(pr)?;
         let out = git(
             &self.root,
-            &[
-                "merge-tree",
-                "--write-tree",
-                "--no-messages",
-                &base_ref(&pr.base),
-                &head_ref(pr.id),
-            ],
+            &["merge-tree", "--write-tree", "--no-messages", base, head],
             60,
         )
         .map_err(|e| format!("{e:#}"))?;
@@ -617,29 +730,33 @@ impl Evidence for Live {
         }
     }
 
-    fn reviewing(&self, pr: &Pr) -> Option<String> {
-        if let Some(claimed) =
-            crate::gate::review_marker::live_description(&self.root, pr.id, Some(&pr.head))
-        {
-            return Some(claimed);
+    fn reviewing(&self, pr: &Pr) -> std::result::Result<Option<String>, String> {
+        // A marker that is there but unreadable is not "no reviewer".
+        match crate::gate::review_marker::live_description_checked(
+            &self.root,
+            pr.id,
+            Some(&pr.head),
+        ) {
+            Ok(Some(claimed)) => return Ok(Some(claimed)),
+            Ok(None) => {}
+            Err(error) => return Err(format!("the review marker could not be read ({error})")),
         }
         // A reviewer that has launched but not yet claimed the head holds a
-        // lease scoped to the change. Unreadable leases read as a review in
-        // progress: a second reviewer must never be launched on a guess.
+        // lease scoped to the change.
         let scope = format!("PR-{}", pr.id);
-        match self.local_leases() {
-            Ok(leases) => leases
-                .iter()
-                .find(|lease| lease.scope.eq_ignore_ascii_case(&scope))
-                .map(|lease| format!("{} launched, no claim yet", lease_actor(lease)))
-                .or_else(|| {
-                    self.claims
-                        .iter()
-                        .find(|claim| claim.scope.eq_ignore_ascii_case(&scope))
-                        .map(|claim| format!("{} reviewing", claim_actor(claim)))
-                }),
-            Err(why) => Some(format!("reviewer leases unreadable ({why})")),
-        }
+        let leases = self
+            .local_leases()
+            .map_err(|why| format!("reviewer leases unreadable ({why})"))?;
+        Ok(leases
+            .iter()
+            .find(|lease| lease.scope.eq_ignore_ascii_case(&scope))
+            .map(|lease| format!("{} launched, no claim yet", lease_actor(lease)))
+            .or_else(|| {
+                self.claims
+                    .iter()
+                    .find(|claim| claim.scope.eq_ignore_ascii_case(&scope))
+                    .map(|claim| format!("{} reviewing", claim_actor(claim)))
+            }))
     }
 
     fn ci(&self, pr: &Pr) -> std::result::Result<Ci, String> {
@@ -648,17 +765,36 @@ impl Evidence for Live {
             .ok_or_else(|| "discovery did not report checks".to_string())
     }
 
-    fn approval(&self, pr: &Pr) -> std::result::Result<String, String> {
+    fn approval(&self, pr: &Pr) -> std::result::Result<Approval, String> {
+        use crate::gate::approval::HeadDecision;
+        use crate::gate::merge_hold_core::CorpusMergeGate;
         let root = self.root.as_path();
         let head = pr.head.as_str();
-        let (candidates, policy, ids) = crate::gate::approval::merge_approval_subject(
-            &[root],
+        let (candidates, policy, ids, forge_answered) =
+            crate::gate::approval::merge_approval_subject_observed(
+                &[root],
+                root,
+                pr.id,
+                &[],
+                pr.branch.as_deref(),
+                Some(head),
+            );
+        // Without the forge's answer the verdicts were looked up under only
+        // the specs the title and branch claim: "none found" proves nothing.
+        if !forge_answered {
+            return Err("the forge did not report the change's commits".into());
+        }
+        // The corpus is read before any refusal is considered, so a verdict
+        // artifact that cannot be read is unknown, never "not approved".
+        let corpus = crate::gate::merge_hold_core::corpus_gate_decision(
             root,
             pr.id,
-            &[],
-            pr.branch.as_deref(),
-            Some(head),
-        );
+            &ids,
+            Some(&pr.base),
+            || Some(pr.head.clone()),
+            false,
+        )
+        .map_err(|error| format!("{error:#}"))?;
         let site = crate::gate::review_carryover::CarryOverSite::read_only(root, Some(&pr.base));
         let approval = match crate::gate::approval::approval_decision(
             pr.id,
@@ -666,53 +802,61 @@ impl Evidence for Live {
             Some(head),
             &policy,
             Some(&site),
-        )? {
-            crate::gate::approval::HeadDecision::Covered(Some(sha)) => {
-                format!("approved at {}", short(&sha))
+        ) {
+            Err(refusal) => return Ok(Approval::Refused(refusal)),
+            Ok(HeadDecision::Covered(Some(sha))) => format!("approved at {}", short(&sha)),
+            Ok(HeadDecision::Covered(None)) => {
+                return Ok(Approval::Refused("no approval covers the head".into()))
             }
-            crate::gate::approval::HeadDecision::Covered(None) => {
-                return Err("no approval covers the head".into())
-            }
-            crate::gate::approval::HeadDecision::CarriedOver(proof, _) => format!(
+            Ok(HeadDecision::CarriedOver(proof, _)) => format!(
                 "approved at {}, carried over clean merges of `{}`",
                 short(&proof.approved_sha),
                 proof.base_branch()
             ),
-            crate::gate::approval::HeadDecision::Stale { message, .. } => return Err(message),
+            Ok(HeadDecision::Stale { message, .. }) => return Ok(Approval::Refused(message)),
         };
         // A blocking verdict the approval does not answer refuses the head.
-        match crate::gate::merge_hold_core::corpus_gate_decision(
-            root,
-            pr.id,
-            &ids,
-            Some(&pr.base),
-            || Some(pr.head.clone()),
-            false,
-        ) {
-            Ok(crate::gate::merge_hold_core::CorpusMergeGate::Clear) => Ok(approval),
-            Ok(crate::gate::merge_hold_core::CorpusMergeGate::Refuse { message, .. }) => {
-                Err(message)
-            }
-            Err(error) => Err(format!("{error:#}")),
-        }
+        Ok(match corpus {
+            CorpusMergeGate::Clear => Approval::Approved(approval),
+            CorpusMergeGate::Refuse { message, .. } => Approval::Refused(message),
+        })
     }
 
     fn hold(&self, pr: &Pr) -> std::result::Result<Option<Hold>, String> {
-        use crate::gate::merge_hold_core::{read_hold, read_hold_record, HoldReasonKind};
+        use crate::gate::merge_hold_core::{hold_placed_at, read_hold, read_hold_record};
+        use crate::gate::rework_hold_release::{release_condition, ReleaseCondition};
+        let since = || {
+            hold_placed_at(&self.root, pr.id)
+                .map(|at| chrono::DateTime::<chrono::Utc>::from(at).to_rfc3339())
+        };
+        let human_only = |what: &str| HoldRelease::Unmet(format!("{what}; a human clears it"));
         if let Some(record) = read_hold_record(&self.root, pr.id) {
+            let detail = format!(
+                "{} hold: {}",
+                format!("{:?}", record.reason_kind).to_lowercase(),
+                record.detail
+            );
+            // The release's own decision, read-only: the hold's kind alone
+            // says nothing about composed holds, sensitive specs or grants.
+            let release = match release_condition(&self.root, pr.id) {
+                ReleaseCondition::Met => HoldRelease::Met,
+                ReleaseCondition::PendingCover(mandate) => HoldRelease::PendingCover(mandate),
+                ReleaseCondition::Unmet(why) => HoldRelease::Unmet(why),
+                ReleaseCondition::Unknown(why) => return Err(why),
+                // Released between the two reads: the next pass sees it gone.
+                ReleaseCondition::NoHold => return Err("the hold changed during the pass".into()),
+            };
             return Ok(Some(Hold {
-                detail: format!(
-                    "{} hold: {}",
-                    format!("{:?}", record.reason_kind).to_lowercase(),
-                    record.detail
-                ),
-                released_by_approval: record.reason_kind == HoldReasonKind::Rework,
+                detail,
+                release,
+                since: since(),
             }));
         }
         if let Some(detail) = read_hold(&self.root, pr.id) {
             return Ok(Some(Hold {
                 detail,
-                released_by_approval: false,
+                release: human_only("an untyped hold has no release condition"),
+                since: since(),
             }));
         }
         let labelled = match pr.hold_label {
@@ -721,24 +865,41 @@ impl Evidence for Live {
         };
         Ok(labelled.then(|| Hold {
             detail: "the merge-hold label is set on the forge".into(),
-            released_by_approval: false,
+            release: human_only("the label has no recorded hold behind it"),
+            since: None,
         }))
     }
 
     fn rounds(&self, pr: &Pr) -> std::result::Result<Rounds, String> {
-        self.fetched(pr)?;
-        let current = self.content_id(pr, &pr.head);
+        let (head, base) = self.pinned(pr)?;
+        // The current content must be identified: every comparison below is
+        // against it.
+        let current = self
+            .content_id(base, head)
+            .map_err(|why| format!("the head's own diff could not be identified: {why}"))?;
+        let change = crate::gate::ledger::ChangeKey {
+            forge: if self.gitlab {
+                crate::gate::ledger::ChangeForge::Mr
+            } else {
+                crate::gate::ledger::ChangeForge::Pr
+            },
+            number: pr.id,
+        };
         let mut contents: BTreeSet<String> = BTreeSet::new();
         let mut rounds = Rounds::default();
+        // The strict reader: a corrupt, unreadable or over-budget ledger is
+        // an error here, never an empty history.
         for record in
-            crate::gate::ledger::project::verdict_records(&self.root, &format!("PR-{}", pr.id))
+            crate::gate::ledger::project::change_verdict_records_checked(&self.root, change)?
         {
             let key = crate::gate::review_verdict::recording_key(&record);
             if !VerdictKind::parse(&key.2).requires_changes() {
                 continue;
             }
             let Some(sha) = key.0 else { continue };
-            let content = self.content_id(pr, &sha);
+            // An older head that can no longer be compared (its commits are
+            // gone after a force push) counts as content of its own.
+            let content = self.content_id(base, &sha).unwrap_or_else(|_| sha.clone());
             if content == current {
                 rounds.at_content = true;
                 let at = record
@@ -974,9 +1135,8 @@ pub(crate) fn live_pass(start: &Path) -> Result<Pass> {
         &crate::coordination::hostname(),
     );
     let live = Live {
-        fetch_error: fetch(&root, &changes, gitlab)
-            .err()
-            .map(|e| format!("{e:#}")),
+        pins: fetch(&root, &repo, &changes, gitlab).map_err(|e| format!("{e:#}")),
+        gitlab,
         root: root.clone(),
         leases: std::cell::OnceCell::new(),
         claims,

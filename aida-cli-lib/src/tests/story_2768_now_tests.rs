@@ -313,6 +313,42 @@ fn lanes_that_could_not_be_read_are_a_warning_on_the_screen_not_an_empty_list() 
 }
 
 #[test]
+fn a_hold_awaiting_the_mandates_cover_is_blocked_and_never_counted_as_ready() {
+    let pass = pass(
+        vec![change(1, "BUG-1"), change(2, "BUG-2")],
+        vec![
+            row(1, State::ReadyPendingCover, Action::ClearHoldAndLand, None),
+            row(2, State::Ready, Action::Train, None),
+        ],
+        Vec::new(),
+    );
+    let snapshot = snapshot(&pass, &[]);
+    let stages: Vec<(Option<u64>, Stage)> = snapshot
+        .items
+        .iter()
+        .map(|item| (item.pr, item.stage))
+        .collect();
+    assert_eq!(
+        stages,
+        vec![(Some(2), Stage::Ready), (Some(1), Stage::Blocked)]
+    );
+    // It is in the attention list as blocked, with its reason.
+    assert!(
+        snapshot
+            .attention
+            .iter()
+            .any(|entry| entry.spec == "BUG-1 (#1)" && entry.why.starts_with("blocked:")),
+        "{:?}",
+        snapshot.attention
+    );
+    colored::control::set_override(false);
+    let screen = render(&snapshot, now());
+    // One change is ready, not two.
+    assert!(screen.contains("\nREADY (1)\n"), "{screen}");
+    assert!(screen.contains("\nBLOCKED (1)\n"), "{screen}");
+}
+
+#[test]
 fn the_screen_shows_the_header_stages_queues_and_attention() {
     let pass = pass(
         vec![change(1, "BUG-1")],

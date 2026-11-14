@@ -4,9 +4,9 @@ use super::*;
 /// A snapshot of every fact; each test changes only what it is about.
 struct Fake {
     conflict: std::result::Result<bool, String>,
-    reviewing: Option<String>,
+    reviewing: std::result::Result<Option<String>, String>,
     ci: std::result::Result<Ci, String>,
-    approval: std::result::Result<String, String>,
+    approval: std::result::Result<Approval, String>,
     hold: std::result::Result<Option<Hold>, String>,
     rounds: std::result::Result<Rounds, String>,
     lane: std::result::Result<Option<String>, String>,
@@ -16,9 +16,9 @@ impl Default for Fake {
     fn default() -> Self {
         Self {
             conflict: Ok(false),
-            reviewing: None,
+            reviewing: Ok(None),
             ci: Ok(Ci::Green),
-            approval: Err("no approval covers the head".into()),
+            approval: Ok(Approval::Refused("no approval covers the head".into())),
             hold: Ok(None),
             rounds: Ok(Rounds::default()),
             lane: Ok(None),
@@ -30,13 +30,13 @@ impl Evidence for Fake {
     fn conflict(&self, _: &Pr) -> std::result::Result<bool, String> {
         self.conflict.clone()
     }
-    fn reviewing(&self, _: &Pr) -> Option<String> {
+    fn reviewing(&self, _: &Pr) -> std::result::Result<Option<String>, String> {
         self.reviewing.clone()
     }
     fn ci(&self, _: &Pr) -> std::result::Result<Ci, String> {
         self.ci.clone()
     }
-    fn approval(&self, _: &Pr) -> std::result::Result<String, String> {
+    fn approval(&self, _: &Pr) -> std::result::Result<Approval, String> {
         self.approval.clone()
     }
     fn hold(&self, _: &Pr) -> std::result::Result<Option<Hold>, String> {
@@ -70,7 +70,7 @@ fn decided(fake: Fake) -> (State, Action) {
 
 fn approved() -> Fake {
     Fake {
-        approval: Ok("approved at aaaaaaaaaaaa".into()),
+        approval: Ok(Approval::Approved("approved at aaaaaaaaaaaa".into())),
         ..Fake::default()
     }
 }
@@ -95,7 +95,7 @@ fn an_unreviewed_change_needs_a_review() {
 fn a_conflict_wins_over_every_later_fact_and_dispatches_rework() {
     let fake = Fake {
         conflict: Ok(true),
-        reviewing: Some("reviewer".into()),
+        reviewing: Ok(Some("reviewer".into())),
         ..approved()
     };
     assert_eq!(decided(fake), (State::Conflict, Action::DispatchRework));
@@ -120,7 +120,7 @@ fn rework_is_not_dispatched_twice_while_a_lane_is_live() {
 #[test]
 fn a_live_review_waits_even_when_an_approval_exists() {
     let fake = Fake {
-        reviewing: Some("codex reviewing".into()),
+        reviewing: Ok(Some("codex reviewing".into())),
         ..approved()
     };
     assert_eq!(decided(fake), (State::Reviewing, Action::Wait));
@@ -151,21 +151,137 @@ fn an_approval_wins_over_older_requested_changes() {
 
 #[test]
 fn a_hold_is_judged_by_its_release_condition() {
-    let held = |released_by_approval| Fake {
-        hold: Ok(Some(Hold {
-            detail: "rework hold: round 1".into(),
-            released_by_approval,
-        })),
-        ..approved()
-    };
     assert_eq!(
-        decided(held(true)),
+        decided(held(HoldRelease::Met)),
         (State::Ready, Action::ClearHoldAndLand)
     );
     assert_eq!(
-        decided(held(false)),
+        decided(held(HoldRelease::Unmet(
+            "operator-only spec always requires a human clear".into()
+        ))),
         (State::Blocked, Action::AdvisorRuling)
     );
+}
+
+fn held(release: HoldRelease) -> Fake {
+    Fake {
+        hold: Ok(Some(Hold {
+            detail: "rework hold: round 1".into(),
+            release,
+            since: Some("2026-11-13T08:00:00Z".into()),
+        })),
+        ..approved()
+    }
+}
+
+#[test]
+fn a_hold_awaiting_the_mandates_cover_is_not_ready() {
+    let row = derive(
+        &pr("main", "feature"),
+        &held(HoldRelease::PendingCover("m-1".into())),
+    );
+    assert_eq!(
+        (row.state.clone(), row.action.clone()),
+        (State::ReadyPendingCover, Action::ClearHoldAndLand)
+    );
+    assert_eq!(row.state.label(), "READY-PENDING-COVER");
+    assert_ne!(row.state, State::Ready);
+    assert!(
+        row.reason
+            .contains("needs mandate m-1's cover, judged at release"),
+        "{}",
+        row.reason
+    );
+    // The table's summary counts it under its own label, never as READY.
+    let table = render(&[row]);
+    assert!(table.contains("READY-PENDING-COVER"), "{table}");
+    assert!(
+        !table.contains("1 READY,") && !table.contains("1 READY\n"),
+        "{table}"
+    );
+}
+
+#[test]
+fn a_blocked_hold_carries_its_reason_and_when_it_was_placed() {
+    let row = derive(
+        &pr("main", "feature"),
+        &held(HoldRelease::Unmet(
+            "composed holds require a human clear".into(),
+        )),
+    );
+    assert_eq!(row.state, State::Blocked);
+    assert_eq!(row.since.as_deref(), Some("2026-11-13T08:00:00Z"));
+    assert!(
+        row.reason.contains("composed holds require a human clear"),
+        "{}",
+        row.reason
+    );
+}
+
+#[test]
+fn unreadable_approval_or_review_ownership_waits_and_launches_nothing() {
+    // An unreadable verdict artifact is not "no approval": no reviewer is
+    // launched and no rework dispatched, even with a refusal on record.
+    let unread = Fake {
+        approval: Err("unreadable verdict artifact".into()),
+        rounds: blocking(1),
+        ..Fake::default()
+    };
+    let row = derive(&pr("main", "feature"), &unread);
+    assert_eq!((row.state, row.action), (State::Unknown, Action::Wait));
+    assert!(row.reason.starts_with("approval unknown"), "{}", row.reason);
+
+    // A marker that is there but unreadable is not "no reviewer": an
+    // approved change does not land and an unapproved one gets no second
+    // reviewer.
+    for fake in [
+        Fake {
+            reviewing: Err("the review marker could not be read".into()),
+            ..approved()
+        },
+        Fake {
+            reviewing: Err("the review marker could not be read".into()),
+            ..Fake::default()
+        },
+    ] {
+        let row = derive(&pr("main", "feature"), &fake);
+        assert_eq!((row.state, row.action), (State::Unknown, Action::Wait));
+        assert!(
+            row.reason.starts_with("review ownership unknown"),
+            "{}",
+            row.reason
+        );
+    }
+}
+
+#[test]
+fn the_review_marker_read_tells_missing_from_unreadable() {
+    let tmp = tempfile::tempdir().unwrap();
+    let root = tmp.path();
+    let read = |pr| crate::gate::review_marker::live_description_checked(root, pr, None);
+    assert_eq!(read(7).unwrap(), None);
+    // A directory where the marker file belongs cannot be read as one.
+    std::fs::create_dir_all(crate::gate::review_marker::marker_path(root, 7)).unwrap();
+    assert!(read(7).is_err());
+}
+
+#[test]
+fn the_round_history_read_refuses_a_ledger_it_cannot_read_whole() {
+    use crate::gate::ledger::{project::change_verdict_records_checked, ChangeKey};
+    let tmp = tempfile::tempdir().unwrap();
+    let root = tmp.path().canonicalize().unwrap();
+    let root = root.as_path();
+    // No ledger at all is an empty history.
+    assert_eq!(
+        change_verdict_records_checked(root, ChangeKey::pr(7)).unwrap(),
+        Vec::new()
+    );
+    // A ledger file that is not valid events is an error, never "no rounds".
+    let file = crate::gate::ledger::store::ledger_file(root, ChangeKey::pr(7));
+    std::fs::create_dir_all(file.parent().unwrap()).unwrap();
+    std::fs::write(&file, "{ this is not an event\n{\"nor\": \"this\"}\n").unwrap();
+    let refused = change_verdict_records_checked(root, ChangeKey::pr(7));
+    assert!(refused.is_err(), "{refused:?}");
 }
 
 #[test]

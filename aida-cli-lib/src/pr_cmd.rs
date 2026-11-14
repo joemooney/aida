@@ -2099,11 +2099,16 @@ pub(crate) fn ship_unlabel_failure(pr: u64, err: &crate::merge_hold::LabelSyncEr
 /// hold? Verdicts are read under every root (the main clone and the calling
 /// worktree can both hold `.aida/review-verdicts/`); the first root with an
 /// answer wins. Never clears anything.
+///
+/// With `record_proof` off a carry-over proven here is not written to the
+/// gate ledger, so the answer leaves no state behind (a status report).
 // trace:BUG-1532 | ai:claude
+// trace:STORY-2768 | ai:claude
 pub(crate) fn ship_refusal_release(
     roots: &[&std::path::Path],
     record: &crate::gate::merge_hold_core::MergeHoldRecord,
     head: Option<&str>,
+    record_proof: bool,
 ) -> crate::gate::merge_hold_core::RefusalRelease {
     let exact = crate::gate::merge_hold_core::refusal_release(
         record,
@@ -2125,7 +2130,13 @@ pub(crate) fn ship_refusal_release(
         let head = head.ok_or("the PR head is unavailable")?;
         let keys = crate::gate::merge_hold_core::refusal_verdict_keys(record);
         crate::gate::merge_hold_core::live_carried_approval(
-            roots, root, record.pr, head, None, &keys, true,
+            roots,
+            root,
+            record.pr,
+            head,
+            None,
+            &keys,
+            record_proof,
         )
     })
 }
@@ -3129,6 +3140,7 @@ pub(crate) fn pr_ship_with_method_and_dispatch_ctx(
                     &[main_worktree.as_path(), project_root.as_path()],
                     record,
                     head.as_deref(),
+                    true,
                 )
             },
         ) {
@@ -3787,6 +3799,7 @@ pub(crate) fn pr_ship_with_method_and_dispatch_ctx(
                 &[hold_root.as_path(), project_root.as_path()],
                 record,
                 head_sha.as_deref(),
+                true,
             ) {
                 crate::gate::merge_hold_core::RefusalRelease::Released(verdict) => Some(verdict),
                 crate::gate::merge_hold_core::RefusalRelease::Held(why) => {
