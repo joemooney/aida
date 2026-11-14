@@ -30,7 +30,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-13T15:54:08.931576118Z
-modified_at: 2026-11-14T01:14:18.581102800Z
+modified_at: 2026-11-14T01:28:42.584188918Z
 req_type: Story
 tags:
 - architecture
@@ -225,6 +225,12 @@ history:
   author: joe
   timestamp: 2026-11-14T01:14:19.913350782Z
   changes: []
+- id: 01a1d7ab-cbbf-7d91-ab0a-cfd9a010051e
+  author: joe
+  timestamp: 2026-11-14T01:28:42.687661537Z
+  session_id: 01a1d7aae442
+  harness_version: 2.1.325 (Claude Code)
+  changes: []
 filed_at:
   code_sha: 3631f7ca05567a6984ff2376b997539389b6f758
   branch: main
@@ -238,7 +244,7 @@ failure_reason:
   phase: reviewer
   phase_index: 3
   kind: verdict:request-changes
-  detail: 'Round-2 P1s fixed (phase-3 evidence in common launch path, carried approval at auto-train, AC6 watcher regression). New blocking defects: fast policy makes non-protected-base PRs unreviewable, and the embedded landed-tree diff breaks reviewer launch for large PRs. CI green at head.'
-  recovery_hint: address the review findings, move STORY-2763 back to In Progress, and clear the PR hold only after approval
+  detail: 'New head 8a541a6 adds only comment edits and extra test assertions; both prior blocking findings (non-protected-base launch/probe failure; argv-inlined diff E2BIG/1MiB refusal) remain unaddressed. ACs: AC1 verified by story2763_watcher_overlapping_clean_merge_fast_train_and_strict_review + review_watch_delta_excludes_clean_base_content_and_includes_resolutions; AC2 partial (landed-tree review implemented, broken for non-protected bases and large diffs); AC3 verified by review_watch_fast_rounds_count_patch_changes_and_strict_counts_heads; AC4 verified by review_watch_freshness_policy_is_closed_and_paths_raise_assurance + review_watch_fast_proof_is_revoked_by_trusted_strict_policy + scripts/config-trust.toml; AC5 verified by gate ledger event tests + gate_state_cmd rendering (review_watch_strict_effective_state_requires_review_of_each_head); AC6 verified by story2763_watcher_overlapping_clean_merge_fast_train_and_strict_review (fast skip/strict dispatch) + delta test for conflicts. CI fast gates green; merge-hold-gate pending.'
+  recovery_hint: address the review findings, move STORY-B6B1278890774EF993D2EBC327862470-686 back to In Progress, and clear the PR hold only after approval
   shelved_by: reviewer
-  shelved_at: 2026-11-14T00:41:29.024523842Z
+  shelved_at: 2026-11-14T01:28:42.584188918Z
