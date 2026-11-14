@@ -123,9 +123,9 @@ pub(crate) fn changes_for_spec(root: &Path, spec: &str) -> Vec<ChangeKey> {
     let Some(path) = index_file(root, spec) else {
         return Vec::new();
     };
-    std::fs::read(&path)
-        .ok()
-        .and_then(|b| serde_json::from_slice::<SpecIndex>(&b).ok())
+    // trace:BUG-2543 | ai:claude — never blocks on a FIFO.
+    store::read_regular(&path)
+        .and_then(|b| serde_json::from_str::<SpecIndex>(&b).ok())
         .map(|i| {
             i.changes
                 .iter()
