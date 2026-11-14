@@ -83,7 +83,8 @@ class CiTiers(unittest.TestCase):
             self.assertEqual(result.returncode == 0, expected,
                              (full, tier, build, gates, compile_result))
 
-    def test_fast_inventory_does_not_compile(self):
+    # trace:TASK-3791 | ai:codex
+    def test_fast_inventory_only_compiles_lightweight_guards(self):
         import importlib.util
         spec = importlib.util.spec_from_file_location('gates', ROOT / 'scripts/check-ci-gates.py')
         gates = importlib.util.module_from_spec(spec)
@@ -94,7 +95,10 @@ class CiTiers(unittest.TestCase):
         self.assertEqual(tiers['Check aida-cli without default features'], 'full')
         self.assertEqual(tiers['TUI seam guard'], 'full')
         for name, command in steps:
-            if tiers.get(name) == 'fast':
+            if name == 'Rust structural ratchets':
+                self.assertEqual(tiers[name], 'fast')
+                self.assertIn('cargo test -p aida-ci-guards --lib', command)
+            elif tiers.get(name) == 'fast':
                 self.assertNotRegex(command, r'cargo (check|test|build)', name)
 
     def test_actual_fast_invocation_refuses_matching_source_and_ledger_growth(self):
