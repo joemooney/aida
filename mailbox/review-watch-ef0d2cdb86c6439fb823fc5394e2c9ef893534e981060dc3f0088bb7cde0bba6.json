@@ -1,0 +1,18 @@
+{
+  "id": "review-watch-ef0d2cdb86c6439fb823fc5394e2c9ef893534e981060dc3f0088bb7cde0bba6",
+  "thread_id": "review-watch-ef0d2cdb86c6439fb823fc5394e2c9ef893534e981060dc3f0088bb7cde0bba6",
+  "from": "review-watch",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1794635004069,
+  "body": "PR-3924 reached the two-round review cap: the reviews of `25e6467e431bc636d33212a6f6e0886163e3e605`, `461674de85c7a77f8f9360d95f6f3d778051a770`, `863f4f684b19468d8b4fe6e563b90463ad89b3bf`, `930ad5a2d79398aa1b7755b33fa31d64bdeb2848`, `f89f30a4409729186126c286b202006f47efafd9` each blocked done. Its head ac90a563dabbbb791db73b6118e901255dbd05dc has no review, and the watcher will not start another. Manual review requested. Decide the next step: review the head by hand, or re-scope or close the change. Its findings are in `.aida/review-verdicts/PR-3924.json`.",
+  "subject": "PR-3924: two-round review cap reached",
+  "urgent": false,
+  "intent": "request",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "explicit"
+}
