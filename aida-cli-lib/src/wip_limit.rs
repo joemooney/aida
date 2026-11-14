@@ -7,6 +7,57 @@ use std::path::Path;
 
 use anyhow::Result;
 
+/// What a pickup is to the limit.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum Pickup {
+    /// It continues existing work (an open change's rework, a review, a
+    /// resumed or adopted session, a spec already started) or is not an
+    /// implementer pickup: never limited, nothing to record.
+    Continues,
+    /// An explicit `--branch`: exempt, because it names work that exists,
+    /// but the caller chose it, so passing the limit is recorded.
+    Branch,
+    /// A new spec: limited.
+    New,
+}
+
+/// The facts of a pickup the limit reads, as `aida queue work` resolved them.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub(crate) struct Facts {
+    pub implementer: bool,
+    /// The target is a change to review.
+    pub review: bool,
+    /// An open change already carries the spec.
+    pub rework: bool,
+    /// `--resume`, or an orphaned session being re-entered.
+    pub resumed: bool,
+    /// The spec is already In Progress or Done.
+    pub started: bool,
+    /// `--branch` was passed.
+    pub branch: bool,
+}
+
+pub(crate) fn classify(facts: &Facts) -> Pickup {
+    if !facts.implementer || facts.review || facts.rework || facts.resumed || facts.started {
+        Pickup::Continues
+    } else if facts.branch {
+        Pickup::Branch
+    } else {
+        Pickup::New
+    }
+}
+
+/// The line to record when a `--branch` pickup passes the limit; `None`
+/// under it.
+pub(crate) fn branch_note(spec: &str, open: usize, max: u64) -> Option<String> {
+    ((open as u64) >= max).then(|| {
+        format!(
+            "{open} changes are open and the limit is {max}; {spec} continues on the branch \
+             `--branch` names, which is not limited"
+        )
+    })
+}
+
 /// What the limit says about one fresh pickup.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum Verdict {
@@ -60,11 +111,20 @@ fn open_changes(root: &Path) -> Result<usize> {
     crate::land::open_change_count(root)
 }
 
-/// Apply the limit to a fresh pickup of `spec`. A count that cannot be read
+/// Apply the limit to a pickup of `spec`. A count that cannot be read
 /// does not refuse (an unreadable forge is not evidence of too much work):
 /// the pickup proceeds and says the limit was not applied. A `preview`
 /// refuses nothing and records nothing.
-pub(crate) fn admit(root: &Path, spec: &str, over_wip: bool, preview: bool) -> Result<()> {
+pub(crate) fn admit(
+    root: &Path,
+    spec: &str,
+    pickup: Pickup,
+    over_wip: bool,
+    preview: bool,
+) -> Result<()> {
+    if pickup == Pickup::Continues {
+        return Ok(());
+    }
     let open = match open_changes(root) {
         Ok(open) => open,
         Err(why) => {
@@ -75,7 +135,23 @@ pub(crate) fn admit(root: &Path, spec: &str, over_wip: bool, preview: bool) -> R
             return Ok(());
         }
     };
-    match verdict(spec, open, crate::now::wip_max(root), over_wip) {
+    let max = crate::now::wip_max(root);
+    if pickup == Pickup::Branch {
+        if let Some(line) = branch_note(spec, open, max) {
+            if !preview {
+                crate::events::record_gate_held(
+                    root,
+                    crate::events::GATE_WIP_LIMIT_OVERRIDE,
+                    Some(spec.to_string()),
+                    None,
+                    &line,
+                );
+            }
+            eprintln!("  WIP limit passed: {line}");
+        }
+        return Ok(());
+    }
+    match verdict(spec, open, max, over_wip) {
         Verdict::Admit => Ok(()),
         Verdict::Override(line) => {
             if !preview {
@@ -137,6 +213,76 @@ mod tests {
             panic!("--over-wip must pass");
         };
         assert!(line.contains("12 changes are open"), "{line}");
+        assert!(line.contains("BUG-1"), "{line}");
+    }
+
+    #[test]
+    fn only_a_new_implementer_spec_is_limited_and_a_branch_pickup_is_recorded() {
+        let new = Facts {
+            implementer: true,
+            ..Facts::default()
+        };
+        assert_eq!(classify(&new), Pickup::New);
+        assert_eq!(
+            classify(&Facts {
+                branch: true,
+                ..new
+            }),
+            Pickup::Branch,
+            "--branch"
+        );
+        for (what, continues) in [
+            (
+                "a reviewer",
+                Facts {
+                    implementer: false,
+                    ..new
+                },
+            ),
+            (
+                "a review target",
+                Facts {
+                    review: true,
+                    ..new
+                },
+            ),
+            (
+                "an open change's rework",
+                Facts {
+                    rework: true,
+                    ..new
+                },
+            ),
+            (
+                "--resume",
+                Facts {
+                    resumed: true,
+                    ..new
+                },
+            ),
+            (
+                "a started spec",
+                Facts {
+                    started: true,
+                    ..new
+                },
+            ),
+            // What continues work stays unrecorded even with --branch.
+            (
+                "rework on --branch",
+                Facts {
+                    rework: true,
+                    branch: true,
+                    ..new
+                },
+            ),
+        ] {
+            assert_eq!(classify(&continues), Pickup::Continues, "{what}");
+        }
+        assert_eq!(branch_note("BUG-1", 9, 10), None);
+        let line = branch_note("BUG-1", 12, 10).expect("at the limit");
+        assert!(line.contains("12 changes are open"), "{line}");
+        assert!(line.contains("limit is 10"), "{line}");
         assert!(line.contains("BUG-1"), "{line}");
     }
 

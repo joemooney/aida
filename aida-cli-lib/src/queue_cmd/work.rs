@@ -4707,15 +4707,22 @@ pub(crate) fn handle_queue_work(
         // rework, a resumed or adopted session, an explicit --branch, and a
         // spec already In Progress or Done. Admission precedes every write.
         // trace:STORY-2768 | ai:claude
-        let new_spec = crate::kernel::canonical_role_name(&role) == "implementer"
-            && plan.review_target.is_none()
-            && rework_pr.is_none()
-            && resume.is_none()
-            && adopt_orphan.is_none()
-            && branch_override.is_none()
-            && !queue_work_plan_wants_pr_head_branch(&plan);
-        if new_spec && !list_sessions && !plan_only {
-            crate::wip_limit::admit(&project_root, &plan.anchor_display, over_wip, dry_run)?;
+        let pickup = crate::wip_limit::classify(&crate::wip_limit::Facts {
+            implementer: crate::kernel::canonical_role_name(&role) == "implementer",
+            review: plan.review_target.is_some(),
+            rework: rework_pr.is_some(),
+            resumed: resume.is_some() || adopt_orphan.is_some(),
+            started: queue_work_plan_wants_pr_head_branch(&plan),
+            branch: branch_override.is_some(),
+        });
+        if !list_sessions && !plan_only {
+            crate::wip_limit::admit(
+                &project_root,
+                &plan.anchor_display,
+                pickup,
+                over_wip,
+                dry_run,
+            )?;
         }
         // STORY-1662: a fresh headless implementer pickup outside a drain waits
         // for its child and reports the outcome. Its concurrency slot is taken
