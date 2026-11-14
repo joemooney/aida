@@ -1,0 +1,33 @@
+id: 01a1d919-b746-7b03-8796-434319db2d5e
+spec_id: STORY-b6b1278890774ef993d2ebc327862470-721
+agreed_id: STORY-2798
+title: 'Review PR-4003: [AI:claude] fix(alloc): allocation state is written with an explicit mode, whatever the umask (BUG-2555)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `(no-sess`) for branch `bug-2555-dispenser-mode`.
+
+  - PR: <https://github.com/joemooney/aida/pull/4003>
+  - Branch: `bug-2555-dispenser-mode` → `integration`
+
+  ## Covers
+
+  - BUG-2555
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 4003` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-14T08:08:23.622584807Z
+modified_at: 2026-11-14T08:08:23.622584807Z
+req_type: Story
+filed_at:
+  code_sha: 60823a3cb079fb62463fd88934afe72619a87cae
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 1801b341057
+  vendor: claude
