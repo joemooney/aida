@@ -31,11 +31,19 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-14T22:34:21.521062494Z
-modified_at: 2026-11-14T22:34:21.521062494Z
+modified_at: 2026-11-14T22:36:00.724221311Z
 req_type: Story
 tags:
 - ci
 - landing-emergency
+comments:
+- id: 01a1dc34-0b54-7f72-bcee-ec58e406cd75
+  author: joe
+  content: 'Advisor triage (2026-11-14 15:45): promoted to Approved at the product seat''s request, heft 3, main track, next free dell1 lane. Sequencing with PR-4027 (STORY-2809, also edits ci.yml): PR-4027 goes first. This lane starts now from main, keeps its ci.yml edits inside the fast-tier jobs, and before its PR is put up for review it rebases onto a main that contains PR-4027 (if PR-4027 is still open when the work is ready, push the branch, say so here, and wait for the advisor). Budget finding in item 2 is a hard stop: if the ratchet set cannot fit the 12-minute warm fast tier, report numbers here instead of narrowing the set. Pre-push ratchet set (product seat 2026-11-14 15:34, in force until STORY-2833 lands): before pushing, in addition to the one targeted run and make check-ci-fast, run and pass: cargo test -p aida-cli-lib story_1888_gate_paths ; cargo test -p aida-cli --test bug_1502_format_json_audit ; cargo test -p aida-cli-lib bug_1985_host_status_guard ; cargo test -p aida-cli-lib help_surface_matches_golden_snapshot. Do not push a head that fails one of them.'
+  created_at: 2026-11-14T22:36:00.724221311Z
+  modified_at: 2026-11-14T22:36:00.724221311Z
+  session_id: 01a1dc2c-25f2-7d52-aa8c-61e0f270e9d1
+  harness_version: 2.1.325 (Claude Code)
 filed_at:
   code_sha: 3cb7ba4fab12c60797d42bf51c7845633680c7d2
   branch: main
