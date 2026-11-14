@@ -515,7 +515,7 @@ fn merge_subjects_carry_the_change_and_its_trailer() {
 // ---- the merge itself ----------------------------------------------------
 
 fn sh_git(dir: &std::path::Path, args: &[&str]) -> String {
-    let out = std::process::Command::new("git")
+    let out = crate::test_git::git_command()
         .current_dir(dir)
         .args(args)
         .output()
