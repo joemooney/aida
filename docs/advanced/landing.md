@@ -47,6 +47,10 @@ FULL runs for different pull requests run at the same time, within the
 repository's Actions concurrency limits. Only a superseded run of the same
 pull request is cancelled.
 
+A change to any other label (a merge hold, for example) starts a run in which
+every job is skipped. That run is ignored: it does not replace the FAST or FULL
+run on the head, and a head that carries only such a run has no CI result.
+
 ## The train admits only a green full-tier head
 
 `aida pr train` (named PRs, `--all-ready`, and the advisor's automatic train)

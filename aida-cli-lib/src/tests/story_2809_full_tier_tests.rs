@@ -176,6 +176,42 @@ fn a_green_rerun_at_the_same_head_outranks_an_earlier_red_or_cancelled_run() {
     assert!(matches!(judge(&checks(&rows), true), FullTier::Pending { run, .. } if run == "12"));
 }
 
+/// A label event that leaves the tier alone: every job skipped, the tier job
+/// under its label-event name.
+fn label_event_run(run: &'static str) -> Vec<(&'static str, CheckOutcome, Option<&'static str>)> {
+    vec![
+        ("label event (CI tier unchanged)", Skipped, Some(run)),
+        ("label event (fast gates not rerun)", Skipped, Some(run)),
+        ("CI (${{ matrix.shard }})", Skipped, Some(run)),
+        ("label event (Build not rerun)", Skipped, Some(run)),
+    ]
+}
+
+/// AC2: a later label-event run at the same head (a merge-hold toggle)
+/// neither unconfirms nor replaces the full run, and proves nothing alone.
+#[test]
+fn a_label_event_run_leaves_the_full_tier_verdict_alone() {
+    // trace:STORY-b6b1278890774ef993d2ebc327862470-732.accf1a65 | ai:claude
+    let with_label_event = |mut rows: Vec<_>| {
+        rows.extend(label_event_run("13"));
+        checks(&rows)
+    };
+    let green = with_label_event(full_run("12", Passed, Some(Passed)));
+    assert_eq!(judge(&green, true), FullTier::Green { run: "12".into() });
+    assert_eq!(
+        crate::forge::judge_commit_checks(&green, &["Build (ubuntu-latest)"]),
+        crate::forge::CommitCi::Green
+    );
+    let red = with_label_event(full_run("12", Failed, Some(Failed)));
+    assert!(matches!(judge(&red, true), FullTier::Failed { run, .. } if run == "12"));
+    let alone = with_label_event(Vec::new());
+    assert_eq!(judge(&alone, true), FullTier::Missing);
+    assert_eq!(
+        crate::forge::judge_commit_checks(&alone, &[]),
+        crate::forge::CommitCi::NoChecks
+    );
+}
+
 /// AC2
 #[test]
 fn a_marker_without_a_run_or_with_a_second_tier_proves_nothing() {

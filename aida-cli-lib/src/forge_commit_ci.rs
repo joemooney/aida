@@ -41,10 +41,11 @@ pub(crate) struct CommitChecks {
 /// The verdict on a commit's checks.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum CommitCi {
-    /// At least one check, every one passed or skipped, and every
-    /// required check passed.
+    /// At least one check passed, every other one passed or was skipped,
+    /// and every required check passed.
     Green,
-    /// No check at all is reported on the commit.
+    /// No check ran on the commit: none is reported, or every one was skipped
+    /// (a label-event run executes no job).
     NoChecks,
     /// A required check is absent, skipped or neutral: it did not report
     /// success, so the commit's CI is unknown.
@@ -63,37 +64,67 @@ pub(crate) enum CommitCi {
 #[cfg(test)]
 pub(crate) const CI_AGGREGATOR_CHECK: &str = "Build (ubuntu-latest)";
 
-/// The rows that count: every row except those of a superseded workflow run.
-/// A run is superseded when a newer run on the commit reports a check of the
-/// same name; it then contributes nothing, whatever else it reported. A label
-/// event restarts a PR's CI, and the cancelled run leaves rows the newer run
-/// never repeats: its own tier marker (`ci-tier: fast` against the newer
-/// run's `ci-tier: full`) and matrix jobs cancelled before their names
-/// expanded. Rows with no owning run (commit statuses) are kept as reported.
+/// The name the CI workflow's tier job takes on a label event that leaves the
+/// tier alone (`.github/workflows/ci.yml`): every job of such a run is
+/// skipped, so the run says nothing about the commit.
+// trace:STORY-2809 | ai:claude
+const LABEL_EVENT_MARKER: &str = "label event (CI tier unchanged)";
+
+/// The rows that count: every row except those of a workflow run that
+/// executed nothing or was superseded.
+///
+/// A run executed nothing when every job in it was skipped, or when its tier
+/// job is the label-event marker. Such a run is dropped whole: it neither
+/// counts nor supersedes. Its skipped rows repeat names the real run on the
+/// commit reports (a skipped matrix or release job), so a later label event
+/// would otherwise displace the run that did the work.
+///
+/// Among the runs that executed, a run is superseded when a newer one reports
+/// a check of the same name; it then contributes nothing, whatever else it
+/// reported. A `ci:full` label event restarts a PR's CI, and the cancelled run
+/// leaves rows the newer run never repeats: its own tier marker (`ci-tier:
+/// fast` against the newer run's `ci-tier: full`) and matrix jobs cancelled
+/// before their names expanded. Rows with no owning run (commit statuses) are
+/// kept as reported.
 // trace:STORY-2809 | ai:claude
 fn latest_per_name(checks: &[CommitCheck]) -> Vec<&CommitCheck> {
+    use std::collections::{HashMap, HashSet};
     let order = |c: &CommitCheck| c.run_id.as_deref().and_then(|id| id.parse::<u64>().ok());
-    let mut newest: std::collections::HashMap<&str, u64> = std::collections::HashMap::new();
+    let mut executed: HashSet<u64> = HashSet::new();
+    let mut label_event: HashSet<u64> = HashSet::new();
     for check in checks {
         if let Some(run) = order(check) {
+            if check.outcome != CheckOutcome::Skipped {
+                executed.insert(run);
+            }
+            if check.name == LABEL_EVENT_MARKER {
+                label_event.insert(run);
+            }
+        }
+    }
+    let ran = |run: &u64| executed.contains(run) && !label_event.contains(run);
+    let mut newest: HashMap<&str, u64> = HashMap::new();
+    for check in checks {
+        if let Some(run) = order(check).filter(|run| ran(run)) {
             let slot = newest.entry(check.name.as_str()).or_insert(run);
             *slot = (*slot).max(run);
         }
     }
-    let superseded: std::collections::HashSet<u64> = checks
+    let superseded: HashSet<u64> = checks
         .iter()
-        .filter_map(|c| order(c).filter(|run| newest[c.name.as_str()] > *run))
+        .filter_map(|c| order(c).filter(|run| ran(run) && newest[c.name.as_str()] > *run))
         .collect();
     checks
         .iter()
-        .filter(|c| order(c).is_none_or(|run| !superseded.contains(&run)))
+        .filter(|c| order(c).is_none_or(|run| ran(&run) && !superseded.contains(&run)))
         .collect()
 }
 
 /// Judge `checks`: a failure outranks a pending check, which outranks a
 /// required check that did not succeed. A skipped check passes only when it
-/// is not required. An empty set is never green. A workflow run superseded by
-/// a newer one on the commit does not count.
+/// is not required, and only beside a check that passed: a commit on which
+/// nothing ran is never green. A workflow run that executed nothing, or that
+/// a newer one on the commit superseded, does not count.
 pub(crate) fn judge_commit_checks(checks: &CommitChecks, required: &[&str]) -> CommitCi {
     let latest = latest_per_name(&checks.checks);
     let named = |outcome: CheckOutcome| -> Vec<String> {
@@ -103,9 +134,6 @@ pub(crate) fn judge_commit_checks(checks: &CommitChecks, required: &[&str]) -> C
             .map(|c| c.name.clone())
             .collect()
     };
-    if checks.checks.is_empty() {
-        return CommitCi::NoChecks;
-    }
     let failed = named(CheckOutcome::Failed);
     if !failed.is_empty() {
         return CommitCi::Failed(failed);
@@ -113,6 +141,11 @@ pub(crate) fn judge_commit_checks(checks: &CommitChecks, required: &[&str]) -> C
     let pending = named(CheckOutcome::Pending);
     if !pending.is_empty() {
         return CommitCi::Pending(pending);
+    }
+    // Only skipped rows are left, or none: nothing ran on the commit.
+    // trace:STORY-2809 | ai:claude
+    if !latest.iter().any(|c| c.outcome == CheckOutcome::Passed) {
+        return CommitCi::NoChecks;
     }
     if let Some(missing) = required.iter().find(|name| {
         !latest

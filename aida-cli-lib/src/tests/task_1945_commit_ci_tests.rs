@@ -236,10 +236,12 @@ fn required_check_absent_is_unknown_not_green() {
         CommitCi::MissingRequired(CI_AGGREGATOR_CHECK.into())
     );
     // A skipped or neutral aggregator (its `if:` did not fire) is not a
-    // success: unknown, never green. A skipped optional check still passes.
+    // success: unknown, never green. A skipped optional check still passes
+    // beside a check that ran.
     for conclusion in ["skipped", "neutral"] {
         let (checks, _) = github(
-            vec![json!({"total_count": 2, "check_runs": [
+            vec![json!({"total_count": 3, "check_runs": [
+                run("CI (lib-0)", "completed", Some("success")),
                 run("Release (ubuntu)", "completed", Some("skipped")),
                 run(CI_AGGREGATOR_CHECK, "completed", Some(conclusion)),
             ]})],
@@ -252,6 +254,113 @@ fn required_check_absent_is_unknown_not_green() {
             "{conclusion}"
         );
         assert_eq!(judge_commit_checks(&checks, &[]), CommitCi::Green);
+        // With nothing but skipped checks, nothing ran: never green.
+        // trace:STORY-2809 | ai:claude
+        let (checks, _) = github(
+            vec![json!({"total_count": 2, "check_runs": [
+                run("Release (ubuntu)", "completed", Some("skipped")),
+                run(CI_AGGREGATOR_CHECK, "completed", Some(conclusion)),
+            ]})],
+            no_statuses(),
+        );
+        let checks = checks.unwrap();
+        for required in [&[CI_AGGREGATOR_CHECK][..], &[]] {
+            assert_eq!(
+                judge_commit_checks(&checks, required),
+                CommitCi::NoChecks,
+                "{conclusion}"
+            );
+        }
+    }
+}
+
+/// A label event that leaves the tier alone (a merge-hold toggle) starts a
+/// run whose every job is skipped. It is newer than the real run on the head
+/// and repeats some of its check names, and it must neither displace that
+/// run nor read as green by itself. Each case holds with and without a
+/// required-check list.
+// trace:STORY-2809 | ai:claude
+#[test]
+fn a_label_event_run_never_supersedes_the_run_that_executed() {
+    // trace:STORY-b6b1278890774ef993d2ebc327862470-732.accf1a65 | ai:claude
+    const REAL: &str = "43603377600";
+    const LABEL: &str = "43603379999";
+    const BUILD: &str = "Build (ubuntu-latest)";
+    let row = |name: &str, outcome, run: &str| CommitCheck {
+        name: name.to_string(),
+        outcome,
+        run_id: Some(run.to_string()),
+    };
+    let real = |build| {
+        vec![
+            row("ci-tier: full", CheckOutcome::Passed, REAL),
+            row("CI (lib-0)", CheckOutcome::Passed, REAL),
+            row("CI (fast gates)", CheckOutcome::Skipped, REAL),
+            row("Release (${{ matrix.os }})", CheckOutcome::Skipped, REAL),
+            row(BUILD, build, REAL),
+        ]
+    };
+    let label_event = || {
+        [
+            "label event (CI tier unchanged)",
+            "label event (fast gates not rerun)",
+            "label event (fast compile not rerun)",
+            "CI (${{ matrix.shard }})",
+            "label event (Build not rerun)",
+            "Release (${{ matrix.os }})",
+        ]
+        .into_iter()
+        .map(|name| row(name, CheckOutcome::Skipped, LABEL))
+        .collect::<Vec<_>>()
+    };
+    let on = |first: Vec<CommitCheck>, second: Vec<CommitCheck>| CommitChecks {
+        sha: SHA.to_string(),
+        checks: first.into_iter().chain(second).collect(),
+    };
+    for required in [&[BUILD][..], &[]] {
+        // (a) A green real run, then a label event: still green, in either
+        // listing order.
+        assert_eq!(
+            judge_commit_checks(&on(real(CheckOutcome::Passed), label_event()), required),
+            CommitCi::Green,
+            "{required:?}"
+        );
+        assert_eq!(
+            judge_commit_checks(&on(label_event(), real(CheckOutcome::Passed)), required),
+            CommitCi::Green,
+            "{required:?}"
+        );
+        // (b) A red real run, then a label event: still red.
+        assert_eq!(
+            judge_commit_checks(&on(real(CheckOutcome::Failed), label_event()), required),
+            CommitCi::Failed(vec![BUILD.into()]),
+            "{required:?}"
+        );
+        // A real run in flight stays pending.
+        assert_eq!(
+            judge_commit_checks(&on(real(CheckOutcome::Pending), label_event()), required),
+            CommitCi::Pending(vec![BUILD.into()]),
+            "{required:?}"
+        );
+        // (c) Only a label-event run on the head: nothing ran, not green.
+        assert_eq!(
+            judge_commit_checks(&on(label_event(), Vec::new()), required),
+            CommitCi::NoChecks,
+            "{required:?}"
+        );
+        // The marker alone marks the run, whatever its other jobs report.
+        let mut odd = label_event();
+        odd.push(row(BUILD, CheckOutcome::Passed, LABEL));
+        assert_eq!(
+            judge_commit_checks(&on(odd.clone(), Vec::new()), required),
+            CommitCi::NoChecks,
+            "{required:?}"
+        );
+        assert_eq!(
+            judge_commit_checks(&on(real(CheckOutcome::Failed), odd), required),
+            CommitCi::Failed(vec![BUILD.into()]),
+            "{required:?}"
+        );
     }
 }
 
