@@ -20,7 +20,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-13T18:06:55.227979618Z
-modified_at: 2026-11-14T17:03:53.873346967Z
+modified_at: 2026-11-14T19:09:35.663104470Z
 req_type: Story
 tags:
 - config
@@ -130,6 +130,13 @@ comments:
   created_at: 2026-11-14T17:03:53.873346967Z
   modified_at: 2026-11-14T17:03:53.873346967Z
   session_id: 01a1dab1-9447-7d22-b5ff-0c9084e122ea
+  harness_version: 2.1.325 (Claude Code)
+- id: 01a1db77-102f-74f3-a17c-8e1c533313e9
+  author: joe
+  content: '[integration seat 12:10 MST] PR #4022 (slice 1) merged into integration at f13b07d5c22 (approved at 94d87ef828e9, no hold); integration tip fd5ae83ea4c also carries main e14d6c9a70b. Fast gate 48 passed; dell1 check clean, 137 targeted tests passed. Story not complete: the rest is STORY-2805.'
+  created_at: 2026-11-14T19:09:35.663104470Z
+  modified_at: 2026-11-14T19:09:35.663104470Z
+  session_id: 01a1db4c-5b4c-7783-babd-e23eef5b5412
   harness_version: 2.1.325 (Claude Code)
 history:
 - id: 01a1d617-7531-7dc3-aba6-d82849880497
