@@ -3,12 +3,12 @@ spec_id: BUG-b6b1278890774ef993d2ebc327862470-316
 agreed_id: BUG-2551
 title: aida pull spins CPU-bound for 10+ minutes on gate-ledger/by-spec and cache.db; blocks deputy train and ship jobs
 description: '2026-11-12 21:40-22:05 MST, primary checkout, load avg 10-28. Two separate ''aida pull'' runs (deputy job scripts) each ran >10 min at ~50% CPU with only .aida/gate-ledger, gate-ledger/by-spec (1010 entries, 36M) and cache-db/cache.db open; ''aida review list'' did the same for 21 min. Killed by hand. Started after the 20:55 store rebase repair (BUG-2550). Expected: pull finishes in seconds; any ledger/cache rebuild is bounded, incremental, or deferred to the cache worker.'
-status: NeedsAttention
+status: Approved
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-13T05:04:27.319151195Z
-modified_at: 2026-11-14T02:43:47.311227794Z
+modified_at: 2026-11-14T05:12:40.323266842Z
 req_type: Bug
 tags:
 - track:integration
@@ -39,6 +39,11 @@ comments:
   modified_at: 2026-11-14T02:43:47.311227794Z
   session_id: 01a1d797-2ccf-7771-899a-682081f10504
   harness_version: 2.1.325 (Claude Code)
+- id: 01a1d878-d683-76e1-94ce-b555e3496647
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida edit --status`. It was shelved on: reviewer/verdict:request-changes: Two P1 cached-reread defects: linked evidence bypasses fresh discovery refusal, and FIFO replacement blocks review/pull; advisor round-4 escalation applies.. No triage reason was given.'
+  created_at: 2026-11-14T05:12:40.323254674Z
+  modified_at: 2026-11-14T05:12:40.323254674Z
 history:
 - id: 01a1d363-766b-7430-8bca-0c0a924878fa
   author: joe
@@ -86,6 +91,13 @@ history:
   session_id: 01a1d797-2ccf-7771-899a-682081f10504
   harness_version: 2.1.325 (Claude Code)
   changes: []
+- id: 01a1d878-d683-76e1-94ce-b54d815a724a
+  author: joe
+  timestamp: 2026-11-14T05:12:40.323232257Z
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 filed_at:
   code_sha: 2a62f92c2a200b58e0d95446df07e355e062ab49
   branch: main
@@ -95,11 +107,3 @@ filed_at:
   vendor: claude
   session: 01a1d2e6-f5db-7f33-9b74-3ae5fdaf9e0c
   harness_version: 2.1.323 (Claude Code)
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: 'Two P1 cached-reread defects: linked evidence bypasses fresh discovery refusal, and FIFO replacement blocks review/pull; advisor round-4 escalation applies.'
-  recovery_hint: address the review findings, move BUG-2551 back to In Progress, and clear the PR hold only after approval
-  shelved_by: reviewer
-  shelved_at: 2026-11-13T14:38:55.428665254Z
