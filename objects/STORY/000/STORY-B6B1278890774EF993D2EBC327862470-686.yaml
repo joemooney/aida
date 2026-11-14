@@ -30,7 +30,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-13T15:54:08.931576118Z
-modified_at: 2026-11-14T10:53:07.723479838Z
+modified_at: 2026-11-14T10:58:35.433393883Z
 req_type: Story
 tags:
 - architecture
@@ -261,6 +261,13 @@ comments:
   modified_at: 2026-11-14T10:01:30.210178383Z
   session_id: 01a1d976c951
   harness_version: codex-cli 0.167.0
+- id: 01a1d9b5-8929-7860-80d1-c8a3a563f2be
+  author: joe
+  content: '[advisor 7b 03:59] Round 5 moves to a LOCAL Claude lane (the dell1 Codex lane missed ruled items 2 and 3 twice). The 02:52 ruling stands unchanged: (1) fast gates green, including the two ratchets this PR''s code trips (run make check-ci-fast and read every failure); (2) the AC2 conflict refusal must be asserted strictly, not as phase=Failed; (3) tests for rework dispatch to implementer, the pr_cmd.rs preflight fast branch and the skipped-round event. Do not push until make check-ci-fast is green.'
+  created_at: 2026-11-14T10:58:35.433393883Z
+  modified_at: 2026-11-14T10:58:35.433393883Z
+  session_id: 01a1d8f3-f948-7072-b174-fa9507ed074b
+  harness_version: 2.1.325 (Claude Code)
 history:
 - id: 01a1d59e-6b4b-7d10-8aea-02729132bc6f
   author: joe
