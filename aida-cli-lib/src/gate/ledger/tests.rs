@@ -3030,3 +3030,7 @@ fn bug_2517_local_review_survives_open_record_and_collect_without_binding() {
             .any(|e| e.verdict_record() == Some(&local)));
     }
 }
+
+// trace:BUG-2543 BUG-2551 | ai:claude — one shared, re-validated discovery.
+#[path = "bug_2543_shared_discovery_tests.rs"]
+mod bug_2543_shared_discovery;

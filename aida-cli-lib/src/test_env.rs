@@ -1523,7 +1523,11 @@ pub(crate) fn enroll_synthetic_home(root: &Path) -> anyhow::Result<()> {
     if setting.exists() {
         aida_core::allocation_authority::require_global(&resolved)?;
     } else {
-        aida_core::write_atomic(&setting, "version=1\nauthoritative=true\n")?;
+        aida_core::write_atomic_mode(
+            &setting,
+            "version=1\nauthoritative=true\n",
+            aida_core::OWNER_WRITABLE_MODE,
+        )?;
         // The allocation reader refuses shared writes. Synthetic authority must
         // satisfy that contract even under a collaborative host's umask 0002.
         // Match the core fixture: shared-write umasks must not invalidate authority.
