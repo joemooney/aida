@@ -18,7 +18,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-13T00:35:57.525111678Z
-modified_at: 2026-11-13T16:35:25.184280956Z
+modified_at: 2026-11-14T03:09:12.888290011Z
 req_type: Story
 tags:
 - track:integration
@@ -62,6 +62,13 @@ comments:
   modified_at: 2026-11-13T16:35:25.184280956Z
   session_id: 01a1d54b-060a-7951-aa40-7f0fd928126f
   harness_version: 2.1.323 (Claude Code)
+- id: 01a1d807-cf38-7a23-a636-a2b80533d275
+  author: joe
+  content: '[fixer] PR #3950 round-1 rework, new head ccf0d40e668 (merged origin/integration, fast-forward on story-2745-seat-mail-sq). Fixed as the advisor scoped: F1 (seat persists through either registration order and for lease-linked sessions; --bg link adopts it from plan/manifest), tests story2745_hook_then_launcher_keeps_the_seat, story2745_launcher_then_hook_keeps_the_seat, story2745_lease_linked_session_records_the_seat_from_its_env, story2745_lease_linked_bg_session_takes_the_manifest_seat_not_a_stale_env, story2745_bg_link_adopts_the_seat_onto_an_earlier_hook_row. F2 (Claude --bg and the detached Codex worker export AIDA_ROTATION_SEAT; the Codex SupervisorInit carries seat to the worker row; a bound row''s seat feeds the mail audience and from_seat, since Codex tool shells do not get AIDA_ROTATION_SEAT), tests story2745_background_workers_carry_the_named_seat, story2745_codex_supervisor_init_carries_the_seat, story2745_a_bound_rows_seat_is_the_sessions_seat. F3 (unknown seat refuses even with --queue-for-role, listing known seats from registry rows and handoff dirs), test story2745_unknown_seat_refuses_even_with_queue_flag_and_lists_known_seats. F5 (awaiting --notice binds queued role/seat mail; status/statusline/whoami still never bind), tests story2745_notice_mail_channel_takes_seat_mail_queued_before_launch, story2745_codex_prompt_hook_runs_the_binding_notice. F8/AC6 (new standing-orders/integration.md and integrator-role.md send advisor coordination via aida mailbox send --to seat:advisor / --to advisor, never SendMessage alone), test story2745_integration_seat_orders_use_the_mailbox_not_sendmessage. Deferred by advisor ruling (not touched): F4 and F6 go to a follow-up slice; F7 non-blocking. make check-ci-fast 47/47 passed. dell1: all 14 story2745 cli tests and aida-core mailbox_identity tests pass. 4 tests that fail on this branch (story_2326_pr_b_session_and_phase_refuse_weaker_parent, story1843_local_only_project_reads_its_own_mail_as_partial, whoami collecting_twice/handle_is_the_send_and_notice_address) fail the same way on the integration base a0b7db7e63 in the same filtered run, so they were already failing.'
+  created_at: 2026-11-14T03:09:12.888290011Z
+  modified_at: 2026-11-14T03:09:12.888290011Z
+  session_id: 01a1d797-2ccf-7771-899a-682081f10504
+  harness_version: 2.1.325 (Claude Code)
 history:
 - id: 01a1d404-5b69-7883-a178-72d22e485802
   author: joe
