@@ -1,0 +1,30 @@
+id: 01a1da86-99bf-7c23-94e2-3f40bc21a2c7
+spec_id: TASK-73022632d35647cca3858b18ac0723e3-004
+title: A cancelled full-tier run on an approved head is never re-requested; it reads red until someone reruns it
+description: |
+  `full_tier::label_plan` (aida-cli-lib/src/full_tier.rs) leaves the PR's labels alone whenever the head already carries a `ci-tier: full` check, so a request never cancels a full run. The cost: when that run was cancelled (for example by an unrelated label event, BUG-2578), the train reports it as red and nobody starts another; an operator has to rerun the cancelled jobs. A narrower rule could re-apply the label when the head's only full-tier run is completed and cancelled.
+
+  Related: `judge_commit_checks` now judges the latest run per check name, but a check that only the cancelled run reported still counts as failed.
+
+  Raised by the implementer while working STORY-2809.
+  Branch: story-b6b1278890774ef993d2ebc327862470-732  ·  Commit: 19ed47f1cf  (PR-4027)
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-14T14:46:56.703796673Z
+modified_at: 2026-11-14T14:46:56.703796673Z
+req_type: Task
+tags:
+- from-implementer:STORY-2809
+- kind:design-choice
+- severity:minor
+filed_at:
+  code_sha: 19ed47f1cf06739e7d5010e06f4d3c3b6015187f
+  branch: story-b6b1278890774ef993d2ebc327862470-732
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: bc24a1e688
+  vendor: claude
+  session: 01a1da71393c
+  harness_version: 2.1.319 (Claude Code)

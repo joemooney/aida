@@ -18,7 +18,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-14T12:41:27.454869454Z
-modified_at: 2026-11-14T14:25:59.319831053Z
+modified_at: 2026-11-14T14:47:27.708543707Z
 req_type: Story
 tags:
 - area:ci
@@ -97,6 +97,31 @@ comments:
   modified_at: 2026-11-14T14:25:59.319831053Z
   session_id: 01a1da71393c
   harness_version: 2.1.319 (Claude Code)
+- id: 01a1da86-e481-7c13-9bf5-bf9009963b85
+  author: dirtlab
+  content: |-
+    ## Implementer handoff: rework for the PR-4027 review (committed locally, not pushed)
+
+    Commit 19ed47f1cf on `story-b6b1278890774ef993d2ebc327862470-732`, on top of merge ec86fa7be7. `git push` fails in this seat (no GitHub credential: `could not read Username`; `gh` returns HTTP 401), so PR-4027 does not have it yet.
+
+    ### Ruling items
+    1. **Relabel cancels CI**: the request now runs `gh pr view --json labels,statusCheckRollup` first. Label absent: add. Label present and nothing running on the head: remove and add. Head already has a `ci-tier: full` check, or a labelled head has a check in flight: no edit. `judge_commit_checks` judges the latest run per check name.
+    2. **Untiered fails open**: `repo_is_tiered` reads `.github/workflows/*.yml` for the `ci-tier:` job; a tiered repo refuses a head with checks but no tier check. Tests added.
+    3. **AC1 wiring**: `request_full_ci_after_approval` takes the request as a parameter; tests cover approve with `--pr`, all-deferred approve, and request-changes / rejected / waiting / no `--pr`.
+    4b. A `--skip-full-check` admission is refused when the activity-log entry cannot be written.
+    5. Trace moved to `mod full_tier`; tests name their criterion.
+
+    ### Validation
+    - `cargo test --profile agent -p aida-cli-lib --lib -- pr_train story_1690 story_2809 full_tier commit_ci review_record --skip aida_sized_relay_native`: 273 passed, 0 failed. The skipped test needs a `debug/aida` binary this lane does not build.
+    - Fast gates, run one at a time under the 60s cap: 44 of 48 passed. Not passing: store mutation channel, self-hosted routing fixtures (AF_UNIX socket denied by the seat sandbox); containment conformance (did not finish inside 55s); Rust structural ratchets (cargo-based, not run).
+    - Store-writer inventory regenerated for the new `try_append_ship_activity_line`.
+
+    ### Finding filed
+    - TASK-73022632d35647cca3858b18ac0723e3-004: a cancelled full-tier run on the head is left alone and reads red until rerun by hand.
+  created_at: 2026-11-14T14:47:15.841752422Z
+  modified_at: 2026-11-14T14:47:15.841752422Z
+  session_id: 01a1da71393c
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1da15-71c2-7341-9db1-1661bad607cc
   author: aida-session-start
@@ -130,6 +155,12 @@ history:
   session_id: 01a1da61ce98
   harness_version: 2.1.325 (Claude Code)
   changes: []
+- id: 01a1da87-1840-7861-89ee-e1e1bbad3a11
+  author: dirtlab
+  timestamp: 2026-11-14T14:47:29.088745890Z
+  session_id: 01a1da71393c
+  harness_version: 2.1.319 (Claude Code)
+  changes: []
 filed_at:
   code_sha: 166920a3bf8bd517e8d670a09dd3a7a3de96b7f9
   branch: main
@@ -141,10 +172,10 @@ filed_at:
   harness_version: 2.1.325 (Claude Code)
 attention_reason:
   category: other
-  detail: 'work complete locally but unable to publish: the seat has no valid GitHub credential (gh api returns HTTP 401; git push cannot read a username), so the branch was not pushed and no PR was opened'
-  lean: commit 618859a229 on story-b6b1278890774ef993d2ebc327862470-732 is clean and rebased on origin/main; publish it from the host with aida ship --from-seat, or restore the seat's gh token and re-run aida ship STORY-2809 --no-merge
+  detail: 'rework complete locally but unable to publish: the seat has no GitHub credential (git push cannot read a username; gh returns HTTP 401), so commit 19ed47f1cf is not on PR-4027'
+  lean: 'publish from the host: aida ship --from-seat for this seat, or push branch story-b6b1278890774ef993d2ebc327862470-732 to update PR-4027, then re-queue the review'
   raised_by: implementer
-  raised_at: 2026-11-14T13:12:54.564674306Z
+  raised_at: 2026-11-14T14:47:27.708543707Z
 failure_reason:
   phase: reviewer
   phase_index: 3
