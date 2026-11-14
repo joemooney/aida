@@ -20,7 +20,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-13T18:05:13.304899533Z
-modified_at: 2026-11-14T16:20:01.143206611Z
+modified_at: 2026-11-14T22:07:46.978059618Z
 req_type: Story
 tags:
 - cli
@@ -57,6 +57,11 @@ relationships:
     custom: implemented-by
   target_id: 01a1dad7-ad3b-7b93-b96c-f1a8dba596ec
   created_at: 2026-11-14T16:20:01.143199756Z
+  created_by: joe
+- rel_type:
+    custom: implemented-by
+  target_id: 01a1dc10-1da9-71d0-befb-f21a893f3784
+  created_at: 2026-11-14T22:07:46.978056485Z
   created_by: joe
 comments:
 - id: 01a1d66b-477c-7893-9161-8c56898ed2ed
@@ -142,6 +147,10 @@ history:
 - id: 01a1dadb-dab9-71e2-a4ba-1b9b356d3d21
   author: joe
   timestamp: 2026-11-14T16:20:03.897216706Z
+  changes: []
+- id: 01a1dc1a-38d5-7951-a7db-2879c38cfce7
+  author: joe
+  timestamp: 2026-11-14T22:07:48.437172561Z
   changes: []
 processing_record:
 - id: 01a1da34-7e0d-76e0-a0df-45730164770e
