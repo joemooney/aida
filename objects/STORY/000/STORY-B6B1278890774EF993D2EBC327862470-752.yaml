@@ -1,0 +1,35 @@
+id: 01a1dbee-81af-7b03-b664-806b6b5c084f
+spec_id: STORY-b6b1278890774ef993d2ebc327862470-752
+agreed_id: STORY-2829
+title: 'Review PR-4063: [AI:claude] fix(integration): the sync-main dirty check runs git status through the hardened host command (Refs STORY-2772)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `(no-sess`) for branch `fix/story-2772-status-guard`.
+
+  - PR: <https://github.com/joemooney/aida/pull/4063>
+  - Branch: `fix/story-2772-status-guard` → `integration`
+
+  ## Slice of (Refs only — not completed by this PR)
+
+  Commit subjects carry `(Refs SPEC-ID)`: this PR is one slice of a spec that a later PR completes. Review this slice against that spec's acceptance criteria.
+
+  - STORY-2772
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 4063` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-14T21:20:03.503375920Z
+modified_at: 2026-11-14T21:20:03.503375920Z
+req_type: Story
+filed_at:
+  code_sha: d5f90aedd3a51c92a559eb538784d3c12bf70325
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: d5f90aedd3a
+  vendor: claude
