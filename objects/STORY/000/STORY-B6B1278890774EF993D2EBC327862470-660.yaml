@@ -23,7 +23,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-12T19:11:56.371806442Z
-modified_at: 2026-11-14T02:34:41.355827586Z
+modified_at: 2026-11-14T02:57:42.009246528Z
 req_type: Story
 tags:
 - operator-held
@@ -291,6 +291,13 @@ comments:
   content: '19:34 MST: train 11 landed #3966 (promotion 6) + #3970 + #3971 -> main 01b8e71 (3 merges; previous 18:46). Train 12 (#3921 #3948 #3968 #3940) next, then train 13 (#3924 #3926 #3956 #3979).'
   created_at: 2026-11-14T02:34:41.355827586Z
   modified_at: 2026-11-14T02:34:41.355827586Z
+  session_id: 01a1d797-2ccf-7771-899a-682081f10504
+  harness_version: 2.1.325 (Claude Code)
+- id: 01a1d7fd-4479-7920-b40a-66bccb3dd7c9
+  author: joe
+  content: '19:58 MST advisor: canary #3905 had been running only the FAST tier since STORY-2735 (pull_request default), so throughput rule (2) ''cut promotions only from a head green on the canary'' was not checking full shards. Added label ci:full to #3905 (permanent), which makes every integration push run full CI there. Promotion 7 = #3961 (STORY-2771) + #3959/#3972/#3973 (STORY-2768) waits on full canary green at a0b7db7.'
+  created_at: 2026-11-14T02:57:42.009246528Z
+  modified_at: 2026-11-14T02:57:42.009246528Z
   session_id: 01a1d797-2ccf-7771-899a-682081f10504
   harness_version: 2.1.325 (Claude Code)
 history:
