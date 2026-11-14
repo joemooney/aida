@@ -26,7 +26,7 @@ INSTALL_STEPS = {
 }
 # Runner-owned shell inputs must be explicitly supplied, never inherited by accident.
 # trace:STORY-2606 | ai:codex
-RUNNER_VARIABLES = {"GITHUB_STEP_SUMMARY", "RUNNER_TEMP"}
+RUNNER_VARIABLES = {"GITHUB_STEP_SUMMARY", "RUNNER_TEMP", "GITHUB_EVENT_NAME"}
 RUNNER_REFERENCE = re.compile(r"\$\{?((?:RUNNER_|GITHUB_)[A-Za-z0-9_]+)")
 ACTIONS = {
     "actions/checkout", "dorny/paths-filter", "dtolnay/rust-toolchain",
@@ -326,6 +326,9 @@ def main(argv=None, environ=None):
     environment["GDMA_LANE"] = args.lane
     environment["GDMA_BASE_REF"] = base_ref
     environment["GDMA_EVENT_NAME"] = event_name(environ)
+    # Match the expression context for PR guards in upstream run bodies.
+    # trace:TASK-3785 | ai:codex
+    environment["GITHUB_EVENT_NAME"] = event_name(environ)
     (ROOT / "target").mkdir(exist_ok=True)
     environment["GITHUB_STEP_SUMMARY"] = str(ROOT / "target/ci-summary.md")
     environment["RUNNER_TEMP"] = tempfile.mkdtemp(prefix="gdma-runner-", dir=ROOT / "target")
