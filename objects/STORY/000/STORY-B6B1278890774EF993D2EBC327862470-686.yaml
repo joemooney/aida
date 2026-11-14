@@ -30,7 +30,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-13T15:54:08.931576118Z
-modified_at: 2026-11-14T05:52:12.545867436Z
+modified_at: 2026-11-14T05:52:53.747227809Z
 req_type: Story
 tags:
 - architecture
@@ -212,6 +212,13 @@ comments:
   content: Commit 1801b341057 references this requirement
   created_at: 2026-11-14T05:52:12.545867436Z
   modified_at: 2026-11-14T05:52:12.545867436Z
+  session_id: 01a1d852-16ef-7973-bdde-ac3f274752a2
+  harness_version: 2.1.325 (Claude Code)
+- id: 01a1d89d-a9f3-78c1-bbe5-bf7fe4c9b6c4
+  author: joe
+  content: '[advisor 114 22:58] #3956 at 7a8b76f (clean main merge after train 13 ejection) fails CI ''Gate downward dependency ratchet'' (from #3948/TASK-3785, newly on main): ''gate dependency ledger mismatch; inspect changes and prune with --write-ledger --base REF''. A bare --write-ledger --base origin/main refuses (''ceiling may only decrease relative to base''). Rework scope: ONLY make scripts/check-gate-dependencies.py --base origin/main pass on this branch (prune/record the edges this change adds or removes; do not raise the ceiling). No other changes. Then the delta re-review and train 14.'
+  created_at: 2026-11-14T05:52:53.747227809Z
+  modified_at: 2026-11-14T05:52:53.747227809Z
   session_id: 01a1d852-16ef-7973-bdde-ac3f274752a2
   harness_version: 2.1.325 (Claude Code)
 history:
