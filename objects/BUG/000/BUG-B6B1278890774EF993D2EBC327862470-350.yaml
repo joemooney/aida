@@ -12,12 +12,12 @@ description: |-
   Wanted: (1) the relay checks the parent grant's remaining life before it ends the outgoing session; under a threshold (e.g. 2h) it warns in the seat's status line and mails the advisor and product seats; (2) when the grant is already expired at rotation, the relay does not end the working session: it keeps it running, prints the exact operator command that renews the grant, and retries the relaunch when a valid grant appears; (3) 'aida doctor' and the session-start banner show the parent grant expiry beside the mandate expiry; (4) consider letting an active mandate that covers the seat renew or stand in for the relay's parent grant, as a project setting.
 
   Acceptance: a relay whose parent grant expires mid-run survives the next rotation attempt without losing the seat; the expiry is visible at least 2h ahead in the banner and by mail; the renewal command is printed verbatim.
-status: NeedsAttention
+status: InProgress
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-14T18:25:05.674074503Z
-modified_at: 2026-11-14T21:24:11.880846341Z
+modified_at: 2026-11-14T21:36:11.613389880Z
 req_type: Bug
 tags:
 - landing
@@ -56,6 +56,13 @@ comments:
   modified_at: 2026-11-14T21:24:11.880846341Z
   session_id: 01a1dbd6-f8cd-7313-a123-75ebbeaa2afd
   harness_version: 2.1.325 (Claude Code)
+- id: 01a1dbfd-475d-7112-8de7-322dbd31b503
+  author: joe
+  content: 'Returned from NeedsAttention to In Progress via `aida edit --status`. It was shelved on: reviewer/verdict:request-changes: Hold/adopt logic is sound and uses the full grant verdict, but the ExecContext environment ratchet fails on 7 new env sites (fast gates red, so no test shard ran), and the seat-side warning is suppressed by any later same-seat grant; bug protocol test-file item met. It was punted on: other: work complete locally but unable to publish: git push from this contained lane fails (no GitHub credentials: ''could not read Username for https://github.com''; gh token invalid). No triage reason was given.'
+  created_at: 2026-11-14T21:36:11.613376143Z
+  modified_at: 2026-11-14T21:36:11.613376143Z
+  session_id: 01a1dbd6-f8cd-7313-a123-75ebbeaa2afd
+  harness_version: 2.1.325 (Claude Code)
 history:
 - id: 01a1db53-2b6a-7e82-8f53-418729abd49e
   author: joe
@@ -88,6 +95,15 @@ history:
   session_id: 01a1dbe6dc10
   harness_version: 2.1.325 (Claude Code)
   changes: []
+- id: 01a1dbfd-475d-7112-8de7-321ed7aff90b
+  author: joe
+  timestamp: 2026-11-14T21:36:11.613346731Z
+  session_id: 01a1dbd6-f8cd-7313-a123-75ebbeaa2afd
+  harness_version: 2.1.325 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: InProgress
 filed_at:
   code_sha: 96fc262834527304fe85fc9ee32e4d04f1aaf4ea
   branch: main
@@ -96,17 +112,3 @@ filed_at:
   aida_build_sha: 5ea861d7358
   vendor: claude
   session: fc28c702-2f6e-419e-b882-6ddfeb9134ff
-attention_reason:
-  category: other
-  detail: 'work complete locally but unable to publish: git push from this contained lane fails (no GitHub credentials: ''could not read Username for https://github.com''; gh token invalid)'
-  lean: branch bug-b6b1278890774ef993d2ebc327862470-350 is committed and rebased on origin/main; push it and open the PR from the host (aida ship BUG-2585 --no-merge), no code change needed
-  raised_by: implementer
-  raised_at: 2026-11-14T19:37:08.586861408Z
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: Hold/adopt logic is sound and uses the full grant verdict, but the ExecContext environment ratchet fails on 7 new env sites (fast gates red, so no test shard ran), and the seat-side warning is suppressed by any later same-seat grant; bug protocol test-file item met
-  recovery_hint: address the review findings, move BUG-2585 back to In Progress, and clear the PR hold only after approval
-  shelved_by: reviewer
-  shelved_at: 2026-11-14T21:18:09.698644181Z
