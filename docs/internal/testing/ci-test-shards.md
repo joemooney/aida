@@ -150,6 +150,15 @@ literal, entry-point, display-ID, config-trust, liveness, grant-env and CI-gate 
 launch key tables live in a shared data-only module re-exported by launch_policy.
 The existing store-writer inventory and its mutation fixtures remain FAST.
 
+The selection audit explicitly pins
+`task_1750_liveness_primitive_guard_tests::proc_identity_legacy_decisions_do_not_expand`
+in FAST, even though that test name lacks the discovery keywords. A lane
+negative control adding `process_provably_dead(0)` to production
+`ownership/reader.rs` failed this shared guard with `1 identity decisions`;
+the temporary addition was removed. The four liveness tests passed on the
+unchanged source. No legacy baseline allowance was added.
+<!-- trace:BUG-2574 | ai:codex -->
+
 `tests/test_ci_structural_guards.py` checks new ratchet/inventory test names
 and ratchet/inventory test-module conventions across workspace Rust sources.
 It masks Rust comments and string fixtures before discovery. Mixed runtime
