@@ -30,7 +30,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-13T15:54:08.931576118Z
-modified_at: 2026-11-14T19:08:54.780614182Z
+modified_at: 2026-11-14T19:34:46.151001895Z
 req_type: Story
 tags:
 - architecture
@@ -310,6 +310,13 @@ comments:
   modified_at: 2026-11-14T19:08:54.780614182Z
   session_id: 01a1db5ff6eb
   harness_version: 2.1.319 (Claude Code)
+- id: 01a1db8e-1c87-7603-8e26-679792337b8c
+  author: joe
+  content: 'Advisor ruling (2026-11-14 12:36, CR on PR-3956 at be81871): both items are blocking. (1) The manual cites a subcommand the CLI rejects (contracts shard: ''FAIL subcommands - 1 cited subcommand(s) the CLI rejects as unrecognized''); find it with the manual check under scripts/ and correct the sentence (the ReadOnly knobs sentence the reviewer named). (2) Failures of full-tier run 43623758564 (head f272c6b), read by the advisor from the job log: aida-cli tests bug_2201_outside_project_reviewer (contained_reviewer_in_outside_project_records_its_verdict, contained_reviewer_without_reviewer_config_is_refused_before_launch, denied_reviewer_error_names_the_denied_calls), bug_2139_headless_child_grant::orchestrated_headless_reviewer_gets_its_own_reviewer_grant, bug_2187_reviewer_record_identity::scrubbed_headless_reviewer_records_but_implementer_shell_refuses; aida-cli-lib lib tests gate::mandate_gates::story_1888_gate_paths_tests::every_gate_module_is_a_dispatch_module_a_kernel_or_an_orchestrator and pr_train::verified::bug2406::bug2406_real_builder_binding_and_production_gate_true (panic at aida-cli-lib/src/test_env.rs:109). be81871 addressed the pure-git reviewer launches; run each of these seven by name on dell1 at the new head, fix the ones this change causes (story_1888 gate-paths is a module-classification ratchet: classify any new gate module), and list on the spec, with evidence from a run on origin/main, any that fail without this change. Gate: those named tests plus make check-ci-fast, then push.'
+  created_at: 2026-11-14T19:34:46.151001895Z
+  modified_at: 2026-11-14T19:34:46.151001895Z
+  session_id: 01a1db6d-e689-7532-9eef-772722add87b
+  harness_version: 2.1.325 (Claude Code)
 history:
 - id: 01a1d59e-6b4b-7d10-8aea-02729132bc6f
   author: joe
