@@ -1,0 +1,33 @@
+id: 01a1db96-022a-7991-9393-e78297ca2159
+spec_id: STORY-b6b1278890774ef993d2ebc327862470-750
+agreed_id: STORY-2827
+title: 'Review PR-4056: [AI:claude] fix(store): allocation state is written with an explicit mode (BUG-2555)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `(no-sess`) for branch `fix/bug-2555-reapply`.
+
+  - PR: <https://github.com/joemooney/aida/pull/4056>
+  - Branch: `fix/bug-2555-reapply` → `integration`
+
+  ## Covers
+
+  - BUG-2555
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 4056` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-14T19:43:23.690139702Z
+modified_at: 2026-11-14T19:43:23.690139702Z
+req_type: Story
+filed_at:
+  code_sha: ce660d553f782fd223ca091bb3bd2dc394352eb5
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: ce660d553f7
+  vendor: claude
