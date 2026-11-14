@@ -1,0 +1,23 @@
+id: 01a1d780-c4ff-7f03-b9a9-e425c79900ad
+spec_id: BUG-b6b1278890774ef993d2ebc327862470-334
+agreed_id: BUG-2569
+title: 'pr train: member gate carries an approval across a clean main merge, then the merge-time check rejects the same head, so a green train merges nothing'
+description: '2026-11-13 train 9 (#3974 = #3966 + #3971). At gating, the train logged ''approval carried over: PR-3966 approved at 2eb10a739b38 covers head f0ed9707062f, 1 clean merge of origin/main, patch-id unchanged (0c245b6f3356)'' (STORY-2694). Train CI went green after ~40 min. The merge step then refused: ''PR-3966''s recorded review verdicts do not approve its current head f0ed9707062f; a head move alone does not lift a recorded refusal, and an approval at an older commit is not evidence this head was reviewed''. Both members ejected: 0 landed. PR-3966''s ledger has CHANGES REQUESTED at bb40b8b, then APPROVED at 2eb10a7, then a clean update to f0ed970. Likely cause: the merge-time verdict check doesn''t use the STORY-2694 carry-over proof the member gate uses, or it reads the older refusal. Same family as the earlier pr ship rc=20/23 mismatch. Cost: one 40-min train CI run plus #3971''s landing. Acceptance: the gate and the merge step make one shared decision; a test where carry-over admits a member and the train merges it.'
+status: Draft
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-14T00:41:42.911566698Z
+modified_at: 2026-11-14T00:41:42.911566698Z
+req_type: Bug
+tags:
+- track:integration
+filed_at:
+  code_sha: bc24a1e6883b8fc1f036ca37e6fe3c4060d75255
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: bc24a1e6883
+  vendor: claude
+  session: 01a1d73b-e31c-7f33-b2fe-cee145ddc6fb
+  harness_version: 2.1.325 (Claude Code)
