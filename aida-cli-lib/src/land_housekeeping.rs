@@ -5,7 +5,11 @@
 //! Nothing here deletes a worktree or a branch. A dead lane's uncommitted
 //! work is written to a patch, the patch path is recorded on the spec, and
 //! only then is the dead lease released. A patch that cannot be written
-//! leaves the lease where it is.
+//! whole, or a path that cannot be recorded, leaves the lease where it is,
+//! and the lane's spec is not sent back to the queue in that pass.
+//!
+//! Every fact that permits a reset is read, not assumed: what origin holds
+//! is asked of origin, and a read that fails stops the step.
 // trace:STORY-2768 | ai:claude
 
 use super::{specs_of, Pr};
@@ -56,6 +60,8 @@ pub(crate) enum Step {
     /// no open change: the next pickup continues it.
     Reset {
         spec: String,
+        /// Every id the spec answers to, for matching a dead lane's scope.
+        ids: Vec<String>,
         resume: Option<String>,
     },
     /// Left for a human, with the reason.
@@ -127,7 +133,11 @@ pub(crate) fn plan(lanes: Vec<DeadLane>, orphans: Vec<Orphan>, changes: &[Pr]) -
             let resume = orphan.branches.into_iter().find(|branch| {
                 !open_branches.contains(&branch.as_str()) && !landing_branch(branch)
             });
-            steps.push(Step::Reset { spec: what, resume });
+            steps.push(Step::Reset {
+                spec: what,
+                ids: orphan.ids,
+                resume,
+            });
         }
     }
     steps
@@ -150,6 +160,8 @@ pub(crate) trait Keeper {
 /// line per step.
 pub(crate) fn keep(steps: &[Step], keeper: &mut dyn Keeper, dry_run: bool) -> Vec<String> {
     let mut notes = Vec::new();
+    // The scopes of dead lanes whose work this pass did not save and record.
+    let mut unsaved_scopes: Vec<String> = Vec::new();
     for step in steps {
         match step {
             Step::Skip { what, why } => notes.push(format!("{what}: left alone, {why}")),
@@ -166,13 +178,22 @@ pub(crate) fn keep(steps: &[Step], keeper: &mut dyn Keeper, dry_run: bool) -> Ve
                     ));
                     continue;
                 }
+                // Until the work is saved and its place recorded, the lane's
+                // spec is not sent back to the queue by a later step.
+                let mut unsaved = |notes: &mut Vec<String>, note: String| {
+                    notes.push(note);
+                    unsaved_scopes.extend(lane.spec.clone());
+                };
                 let patch = match keeper.salvage(lane) {
                     Ok(Some(patch)) if patch.is_file() => patch,
                     Ok(Some(patch)) => {
-                        notes.push(format!(
-                            "{what}: the patch {} is not there; the lease is kept",
-                            patch.display()
-                        ));
+                        unsaved(
+                            &mut notes,
+                            format!(
+                                "{what}: the patch {} is not there; the lease is kept",
+                                patch.display()
+                            ),
+                        );
                         continue;
                     }
                     Ok(None) => {
@@ -182,41 +203,66 @@ pub(crate) fn keep(steps: &[Step], keeper: &mut dyn Keeper, dry_run: bool) -> Ve
                         continue;
                     }
                     Err(error) => {
-                        notes.push(format!(
-                            "{what}: its work could not be saved, so the lease is kept: {error:#}"
-                        ));
+                        unsaved(
+                            &mut notes,
+                            format!(
+                                "{what}: its work could not be saved, so the lease is kept: {error:#}"
+                            ),
+                        );
                         continue;
                     }
                 };
-                // The patch is safe on disk; a failed record is reported and
-                // does not keep a dead lease that would be salvaged again.
-                let recorded = match &lane.spec {
-                    Some(spec) => match keeper.note(
-                        spec,
-                        &format!(
-                            "aida land run: the lane in {} died with uncommitted work. It is saved in {} (apply with `git apply`). The worktree and its branch `{}` were left as they are.",
-                            lane.worktree.display(),
-                            patch.display(),
-                            lane.branch
-                        ),
-                    ) {
-                        Ok(()) => format!("recorded on {spec}"),
-                        Err(error) => format!("not recorded on {spec} ({error:#})"),
-                    },
-                    None => "no spec to record it on".into(),
+                // The lease is what leads the next pickup to the saved work
+                // until the spec says where it is: no record, no release.
+                let Some(spec) = &lane.spec else {
+                    notes.push(format!(
+                        "{what}: saved to {}, but its lease names no spec to record that on; the lease is kept and a human releases it",
+                        patch.display()
+                    ));
+                    continue;
                 };
+                if let Err(error) = keeper.note(
+                    spec,
+                    &format!(
+                        "aida land run: the lane in {} died with uncommitted work. It is saved in {} (apply with `git apply`). The worktree and its branch `{}` were left as they are.",
+                        lane.worktree.display(),
+                        patch.display(),
+                        lane.branch
+                    ),
+                ) {
+                    unsaved(
+                        &mut notes,
+                        format!(
+                            "{what}: saved to {}, but that could not be recorded on {spec}, so the lease is kept: {error:#}",
+                            patch.display()
+                        ),
+                    );
+                    continue;
+                }
                 match keeper.release(lane) {
                     Ok(()) => notes.push(format!(
-                        "{what}: saved to {} ({recorded}); lease released, worktree left alone",
+                        "{what}: saved to {} (recorded on {spec}); lease released, worktree left alone",
                         patch.display()
                     )),
                     Err(error) => notes.push(format!(
-                        "{what}: saved to {} ({recorded}); the lease was not released: {error:#}",
+                        "{what}: saved to {} (recorded on {spec}); the lease was not released: {error:#}",
                         patch.display()
                     )),
                 }
             }
-            Step::Reset { spec, resume } => {
+            Step::Reset { spec, ids, resume } => {
+                // Its dead lane's work is not saved (or not findable): a
+                // reset now would start it fresh over that work.
+                if let Some(scope) = unsaved_scopes.iter().find(|scope| {
+                    std::iter::once(spec)
+                        .chain(ids)
+                        .any(|id| id.eq_ignore_ascii_case(scope))
+                }) {
+                    notes.push(format!(
+                        "{spec}: not reset, because the work of its dead lane ({scope}) was not saved and recorded in this pass"
+                    ));
+                    continue;
+                }
                 let how = match resume {
                     Some(branch) => format!("its branch `{branch}` on origin has no open change, so the next pickup continues it"),
                     None => "no branch of it is on origin".into(),
@@ -299,31 +345,9 @@ pub(crate) fn survey(
     let store = crate::integration_cmd::load_store(root)?;
     let host = crate::coordination::hostname();
     let leases = crate::leases::list_leases(root);
-    let remote_branches: Vec<String> = super::git_text(
-        root,
-        &[
-            "for-each-ref",
-            "--format=%(refname:lstrip=3)",
-            "refs/remotes/origin",
-        ],
-    )?
-    .lines()
-    .map(String::from)
-    .collect();
-    // What integration carries that main does not. With no integration
-    // branch on origin there is nothing merged and waiting.
-    let unpromoted: Vec<String> = super::git_text(
-        root,
-        &[
-            "log",
-            "--format=%s",
-            "-n",
-            "2000",
-            "origin/main..origin/integration",
-        ],
-    )
-    .map(|text| text.lines().map(String::from).collect())
-    .unwrap_or_default();
+    // Asked of origin now; a read that fails stops the step, so a missing
+    // answer is never read as "no branch" or "nothing merged".
+    let origin = origin_evidence(root)?;
     let orphans = orphans
         .into_iter()
         .map(|orphan| {
@@ -338,29 +362,15 @@ pub(crate) fn survey(
                 tags = spec.tags.iter().cloned().collect();
                 tags.sort();
             }
-            let names = |text: &str| ids.iter().any(|id| id.eq_ignore_ascii_case(text));
-            // The newest lease scoped to the spec says where it was last
-            // worked; a live claim from another host says it still is.
-            let elsewhere = leases
-                .iter()
-                .filter(|lease| names(&lease.scope))
-                .max_by_key(|lease| lease.started_at)
-                .filter(|lease| lease.hostname != host)
-                .map(|lease| lease.hostname.clone())
-                .or_else(|| {
-                    foreign
-                        .iter()
-                        .find(|claim| claim.host != host && names(&claim.node_id))
-                        .map(|claim| claim.host.clone())
-                });
+            let elsewhere = held_elsewhere(&ids, &leases, foreign, &host);
             let maybe_worked = worked_by(
                 orphan.likely_fanout,
                 orphan.possibly_subagent,
                 orphan.driver.as_ref(),
             );
             Orphan {
-                awaits_promotion: named_in(&ids, &unpromoted),
-                branches: spec_branches(&ids, &remote_branches),
+                awaits_promotion: named_in(&ids, &origin.unpromoted),
+                branches: spec_branches(&ids, &origin.branches),
                 spec: orphan.spec,
                 ids,
                 tags,
@@ -370,6 +380,104 @@ pub(crate) fn survey(
         })
         .collect();
     Ok((lanes, orphans))
+}
+
+/// The host that holds a spec with these `ids`, when it is not `host`: the
+/// newest lease scoped to the spec says where it was last worked, and a live
+/// claim another host took on the spec says it still is. A claim's `scope`
+/// is the spec; its `node_id` is only the clone that holds it.
+// trace:STORY-2768 | ai:claude
+pub(crate) fn held_elsewhere(
+    ids: &[String],
+    leases: &[crate::leases::SessionLease],
+    foreign: &[crate::coordination::Claim],
+    host: &str,
+) -> Option<String> {
+    let names = |text: &str| ids.iter().any(|id| id.eq_ignore_ascii_case(text.trim()));
+    leases
+        .iter()
+        .filter(|lease| names(&lease.scope))
+        .max_by_key(|lease| lease.started_at)
+        .filter(|lease| lease.hostname != host)
+        .map(|lease| lease.hostname.clone())
+        .or_else(|| {
+            foreign
+                .iter()
+                .find(|claim| claim.host != host && names(&claim.scope))
+                .map(|claim| claim.host.clone())
+        })
+}
+
+/// What origin holds, read from origin in this pass.
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub(crate) struct OriginEvidence {
+    /// Every branch on origin.
+    pub branches: Vec<String>,
+    /// The subject of every commit the integration branch has and main does
+    /// not. Empty when origin has no integration branch.
+    pub unpromoted: Vec<String>,
+}
+
+/// Where this step keeps the two branch tips it compares. Outside the
+/// landing pass's own ref space, which that pass prunes.
+const KEEP_REF_PREFIX: &str = "refs/aida/keep/";
+
+/// Ask origin for its branches and for what integration carries that main
+/// does not. Every read is bounded, and any that fails is an error: the
+/// caller then resets nothing. The history is read whole, with no cap.
+// trace:STORY-2768 | ai:claude
+pub(crate) fn origin_evidence(root: &Path) -> Result<OriginEvidence> {
+    use anyhow::Context as _;
+    let listing = super::origin_git(root, &["ls-remote", "--heads", "--", "origin"], 60)
+        .context("origin's branches could not be listed")?;
+    let mut branches = Vec::new();
+    for line in listing.lines() {
+        let name = line
+            .split_once('\t')
+            .and_then(|(_, name)| name.strip_prefix("refs/heads/"))
+            .with_context(|| {
+                format!("origin's branch listing has a line that is not a branch: {line}")
+            })?;
+        branches.push(name.to_string());
+    }
+    let main = super::MAIN_BRANCH;
+    let integration = super::INTEGRATION_BRANCH;
+    let has = |name: &str| branches.iter().any(|branch| branch == name);
+    if !has(integration) {
+        // Origin answered, and it has no integration branch: nothing is
+        // merged and waiting.
+        return Ok(OriginEvidence {
+            branches,
+            unpromoted: Vec::new(),
+        });
+    }
+    anyhow::ensure!(
+        has(main),
+        "origin has `{integration}` but no `{main}` to compare it with"
+    );
+    let keep = |name: &str| format!("{KEEP_REF_PREFIX}{name}");
+    super::origin_git(
+        root,
+        &[
+            "fetch",
+            "--no-write-fetch-head",
+            "--no-tags",
+            "--",
+            "origin",
+            &format!("+refs/heads/{main}:{}", keep(main)),
+            &format!("+refs/heads/{integration}:{}", keep(integration)),
+        ],
+        120,
+    )
+    .with_context(|| format!("origin's `{main}` and `{integration}` could not be fetched"))?;
+    let range = format!("{}..{}", keep(main), keep(integration));
+    let subjects = super::git_text(root, &["log", "--format=%s", &range]).with_context(|| {
+        format!("what `{integration}` carries beyond `{main}` could not be read")
+    })?;
+    Ok(OriginEvidence {
+        branches,
+        unpromoted: subjects.lines().map(String::from).collect(),
+    })
 }
 
 /// Whether one of `subjects` names one of `ids` as a whole token (`BUG-25`

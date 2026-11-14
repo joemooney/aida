@@ -756,7 +756,9 @@ impl Live {
 // trace:STORY-2768 | ai:claude
 impl super::housekeeping::Keeper for Live {
     fn salvage(&mut self, lane: &super::housekeeping::DeadLane) -> Result<Option<PathBuf>> {
-        crate::worktree_gc::salvage_worktree_patch(
+        // The lease is released on the strength of this patch, so a
+        // capture that is not whole is an error, not a shorter patch.
+        crate::worktree_gc::salvage_worktree_patch_complete(
             &self.root,
             lane.spec.as_deref().unwrap_or(&lane.branch),
             lane.agent.as_deref(),
@@ -769,8 +771,7 @@ impl super::housekeeping::Keeper for Live {
     }
 
     fn release(&mut self, lane: &super::housekeeping::DeadLane) -> Result<()> {
-        crate::session_reap::release_lease_files(&self.root, &lane.lease);
-        Ok(())
+        release_lease(&self.root, &lane.lease)
     }
 
     fn reset(&mut self, spec: &str) -> Result<()> {
@@ -779,6 +780,21 @@ impl super::housekeeping::Keeper for Live {
             60,
         )
     }
+}
+
+/// Release a dead lease, and say so only when its file is gone. The shared
+/// release removes what it can and reports nothing; a lease file that is
+/// still there would be salvaged and commented on again every pass.
+// trace:STORY-2768 | ai:claude
+pub(crate) fn release_lease(root: &Path, lease: &str) -> Result<()> {
+    crate::session_reap::release_lease_files(root, lease);
+    let path = crate::lease_path(root, lease);
+    anyhow::ensure!(
+        !path.exists(),
+        "the lease file {} could not be removed",
+        path.display()
+    );
+    Ok(())
 }
 
 /// What to do about the background hygiene pass at a housekeeping step.

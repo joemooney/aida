@@ -549,6 +549,59 @@ pub(crate) fn salvage_worktree_patch(
     agent: Option<&str>,
     worktree: &std::path::Path,
 ) -> Result<Option<std::path::PathBuf>> {
+    salvage_worktree_patch_with(project_root, spec_id, agent, worktree, false)
+}
+
+/// [`salvage_worktree_patch`] for a caller that gives up the lane's lease
+/// unattended once the patch exists: every git read must succeed, or no
+/// patch is written and the error says which read failed. The lossy form
+/// keeps whatever git printed, so a read that failed halfway still leaves a
+/// patch behind that looks whole.
+// trace:STORY-2768 | ai:claude
+pub(crate) fn salvage_worktree_patch_complete(
+    project_root: &std::path::Path,
+    spec_id: &str,
+    agent: Option<&str>,
+    worktree: &std::path::Path,
+) -> Result<Option<std::path::PathBuf>> {
+    salvage_worktree_patch_with(project_root, spec_id, agent, worktree, true)
+}
+
+/// Git's output for a salvage read. `complete` makes a failed read an
+/// error; `differs_ok` accepts exit 1, which `git diff --no-index` returns
+/// for two sides that differ.
+// trace:STORY-2768 | ai:claude
+fn salvage_read(
+    worktree: &std::path::Path,
+    args: &[&str],
+    complete: bool,
+    differs_ok: bool,
+) -> Result<String> {
+    if !complete {
+        return Ok(git_output_lossy(worktree, args));
+    }
+    let out = aida_core::git_ops::host_git_command(worktree)
+        .args(args)
+        .output()
+        .with_context(|| format!("`git {}` did not run", args.join(" ")))?;
+    let ok = out.status.success() || (differs_ok && out.status.code() == Some(1));
+    anyhow::ensure!(
+        ok,
+        "`git {}` failed in {} ({}); the work was not captured whole, so no patch was written",
+        args.join(" "),
+        worktree.display(),
+        String::from_utf8_lossy(&out.stderr).trim()
+    );
+    Ok(String::from_utf8_lossy(&out.stdout).to_string())
+}
+
+fn salvage_worktree_patch_with(
+    project_root: &std::path::Path,
+    spec_id: &str,
+    agent: Option<&str>,
+    worktree: &std::path::Path,
+    complete: bool,
+) -> Result<Option<std::path::PathBuf>> {
     // BUG-2169: a seat clone is salvaged by its sandboxed accessor; host git
     // never runs in it. An unreadable clone is an error, so the caller keeps
     // it rather than tear down work it could not capture.
@@ -590,12 +643,24 @@ pub(crate) fn salvage_worktree_patch(
         "# AIDA salvage patch\n# worktree: {}\n\n",
         worktree.display()
     ));
-    body.push_str(&git_output_lossy(worktree, &["diff", "--binary", "HEAD"]));
-    body.push_str(&git_output_lossy(
+    body.push_str(&salvage_read(
+        worktree,
+        &["diff", "--binary", "HEAD"],
+        complete,
+        false,
+    )?);
+    body.push_str(&salvage_read(
         worktree,
         &["diff", "--binary", "--cached"],
-    ));
-    let untracked = git_output_lossy(worktree, &["ls-files", "--others", "--exclude-standard"]);
+        complete,
+        false,
+    )?);
+    let untracked = salvage_read(
+        worktree,
+        &["ls-files", "--others", "--exclude-standard"],
+        complete,
+        false,
+    )?;
     if !untracked.trim().is_empty() {
         // BUG-696: index the untracked files as comments AND capture their
         // CONTENT below — previously only the names were recorded, so an
@@ -618,12 +683,14 @@ pub(crate) fn salvage_worktree_patch(
             if f.is_empty() {
                 continue;
             }
-            body.push_str(&git_output_lossy(
+            body.push_str(&salvage_read(
                 worktree,
                 // `--` so an untracked file named like an option stays a
                 // path. trace:BUG-1622 | ai:claude
                 &["diff", "--no-index", "--binary", "--", "/dev/null", f],
-            ));
+                complete,
+                true,
+            )?);
         }
     }
     if body.trim().is_empty() {

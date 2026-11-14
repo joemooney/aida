@@ -548,6 +548,38 @@ fn git(root: &Path, args: &[&str], timeout_secs: u64) -> Result<std::process::Ou
         .with_context(|| format!("`git {}` failed to run or timed out", args.join(" ")))
 }
 
+/// A git command in `root` that contacts origin: routing cleared first,
+/// then origin's credentials passed through the environment.
+fn origin_command(root: &Path, args: &[&str]) -> std::process::Command {
+    use aida_core::git_ops::RemoteCredentialsExt as _;
+    let mut command = std::process::Command::new("git");
+    command
+        .current_dir(root)
+        .args(args)
+        .stdin(std::process::Stdio::null());
+    crate::review_watch::forge::clear_routing(&mut command);
+    command.remote_credentials(root, "origin");
+    command
+}
+
+/// The output of a git command that contacts origin, bounded by
+/// `timeout_secs`. A command that fails, or does not finish, is an error.
+// trace:STORY-2768 | ai:claude
+fn origin_git(root: &Path, args: &[&str], timeout_secs: u64) -> Result<String> {
+    let out = crate::command_output_with_timeout(
+        origin_command(root, args),
+        std::time::Duration::from_secs(timeout_secs),
+    )
+    .with_context(|| format!("`git {}` failed to run or timed out", args.join(" ")))?;
+    anyhow::ensure!(
+        out.status.success(),
+        "`git {}` failed: {}",
+        args.join(" "),
+        one_line(&String::from_utf8_lossy(&out.stderr), 300)
+    );
+    Ok(String::from_utf8_lossy(&out.stdout).trim().to_string())
+}
+
 fn git_text(root: &Path, args: &[&str]) -> Result<String> {
     let out = git(root, args, 30)?;
     anyhow::ensure!(
@@ -601,7 +633,6 @@ fn fetch(
     changes: &[Pr],
     gitlab: bool,
 ) -> Result<Pins> {
-    use aida_core::git_ops::RemoteCredentialsExt as _;
     use fs2::FileExt as _;
     let lock_path = root.join(FETCH_LOCK);
     if let Some(parent) = lock_path.parent() {
@@ -647,21 +678,17 @@ fn fetch(
         crate::review_watch::forge::Repository::load(root)?.identity == repo.identity,
         "origin changed since the open changes were discovered"
     );
-    let mut command = std::process::Command::new("git");
-    command
-        .current_dir(root)
-        .args([
+    let mut command = origin_command(
+        root,
+        &[
             "fetch",
             "--no-write-fetch-head",
             "--no-tags",
             "--",
             "origin",
-        ])
-        .args(&specs)
-        .stdin(std::process::Stdio::null());
-    // Routing first: the credentials are passed through the environment.
-    crate::review_watch::forge::clear_routing(&mut command);
-    command.remote_credentials(root, "origin");
+        ],
+    );
+    command.args(&specs);
     let out = crate::command_output_with_timeout(command, std::time::Duration::from_secs(120))
         .context("the fetch of open changes failed to run or timed out")?;
     anyhow::ensure!(

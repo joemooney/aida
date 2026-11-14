@@ -67,6 +67,14 @@ impl Keeper for Fake {
     }
 }
 
+fn reset(spec: &str, resume: Option<&str>) -> Step {
+    Step::Reset {
+        spec: spec.into(),
+        ids: vec![spec.into()],
+        resume: resume.map(String::from),
+    }
+}
+
 fn patch_in(dir: &Path) -> PathBuf {
     let patch = dir.join("saved.patch");
     std::fs::write(&patch, "diff\n").unwrap();
@@ -122,6 +130,7 @@ fn an_orphan_with_no_change_goes_back_to_the_queue() {
         steps,
         [Step::Reset {
             spec: "BUG-5".into(),
+            ids: vec!["BUG-5".into()],
             resume: None
         }]
     );
@@ -143,6 +152,7 @@ fn an_orphan_resumes_its_origin_branch_unless_a_change_or_the_landing_owns_it() 
         steps,
         [Step::Reset {
             spec: "BUG-5".into(),
+            ids: vec!["BUG-5".into()],
             resume: Some("bug-5-unfinished".into())
         }]
     );
@@ -299,7 +309,7 @@ fn a_failed_or_missing_patch_releases_nothing() {
 }
 
 #[test]
-fn a_patch_that_cannot_be_recorded_is_reported_and_the_lease_still_goes() {
+fn a_patch_that_cannot_be_recorded_keeps_the_lease() {
     let dir = tempfile::tempdir().unwrap();
     let patch = patch_in(dir.path());
     let mut fake = Fake {
@@ -308,24 +318,102 @@ fn a_patch_that_cannot_be_recorded_is_reported_and_the_lease_still_goes() {
         ..Fake::default()
     };
     let lane = lane(dir.path(), "bug-7-fix", Some("BUG-7"));
-    let notes = keep(&[Step::Salvage(lane.clone())], &mut fake, false);
-    assert_eq!(fake.released, [lane.lease]);
-    assert!(notes[0].contains("not recorded on BUG-7"), "{notes:?}");
+    let notes = keep(&[Step::Salvage(lane)], &mut fake, false);
+    // The lease is the only thing that still leads to the saved work.
+    assert!(fake.released.is_empty(), "{notes:?}");
+    assert!(
+        notes[0].contains("could not be recorded on BUG-7") && notes[0].contains("lease is kept"),
+        "{notes:?}"
+    );
     assert!(notes[0].contains(&patch.display().to_string()), "{notes:?}");
+}
+
+#[test]
+fn a_lane_with_no_spec_to_record_on_keeps_its_lease_and_is_reported() {
+    let dir = tempfile::tempdir().unwrap();
+    let patch = patch_in(dir.path());
+    let mut fake = Fake {
+        patch: Some(patch.clone()),
+        ..Fake::default()
+    };
+    let notes = keep(
+        &[Step::Salvage(lane(dir.path(), "scratch-work", None))],
+        &mut fake,
+        false,
+    );
+    assert_eq!(fake.salvaged.len(), 1);
+    assert!(
+        fake.released.is_empty() && fake.noted.is_empty(),
+        "{notes:?}"
+    );
+    assert!(
+        notes[0].contains("names no spec") && notes[0].contains("a human releases it"),
+        "{notes:?}"
+    );
+    assert!(notes[0].contains(&patch.display().to_string()), "{notes:?}");
+}
+
+// A stale dirty lane and its In-Progress spec arrive in one pass. The spec
+// goes back to the queue only when the lane's work was saved and recorded.
+#[test]
+fn a_spec_is_not_reset_when_its_dead_lanes_work_was_not_saved_and_recorded() {
+    let dir = tempfile::tempdir().unwrap();
+    let patch = patch_in(dir.path());
+    // The lane's lease is scoped to an alias of the spec the orphan names.
+    let steps = [
+        Step::Salvage(lane(dir.path(), "bug-7-fix", Some("bug-b6b1-7"))),
+        Step::Reset {
+            spec: "BUG-7".into(),
+            ids: vec!["BUG-7".into(), "BUG-B6B1-7".into()],
+            resume: None,
+        },
+        reset("BUG-8", None),
+    ];
+    let failing = [
+        // The work could not be captured.
+        Fake {
+            salvage_fails: true,
+            ..Fake::default()
+        },
+        // The salvage named a patch that is not on disk.
+        Fake {
+            patch: Some(dir.path().join("absent.patch")),
+            ..Fake::default()
+        },
+        // The patch is on disk and its path could not be recorded.
+        Fake {
+            patch: Some(patch.clone()),
+            note_fails: true,
+            ..Fake::default()
+        },
+    ];
+    for mut fake in failing {
+        let notes = keep(&steps, &mut fake, false);
+        assert!(fake.released.is_empty(), "{notes:?}");
+        // The unrelated orphan is still reset; the lane's spec is not.
+        assert_eq!(fake.reset, ["BUG-8"], "{notes:?}");
+        assert!(
+            notes[1].starts_with("BUG-7: not reset") && notes[1].contains("was not saved"),
+            "{notes:?}"
+        );
+    }
+
+    // Saved and recorded: the lease goes and the spec is reset.
+    let mut fake = Fake {
+        patch: Some(patch),
+        ..Fake::default()
+    };
+    let notes = keep(&steps, &mut fake, false);
+    assert_eq!(fake.released.len(), 1, "{notes:?}");
+    assert_eq!(fake.reset, ["BUG-7", "BUG-8"], "{notes:?}");
 }
 
 #[test]
 fn a_reset_records_the_branch_to_resume_first_and_resets_once() {
     let mut fake = Fake::default();
     let steps = [
-        Step::Reset {
-            spec: "BUG-5".into(),
-            resume: Some("bug-5-unfinished".into()),
-        },
-        Step::Reset {
-            spec: "BUG-6".into(),
-            resume: None,
-        },
+        reset("BUG-5", Some("bug-5-unfinished")),
+        reset("BUG-6", None),
     ];
     let notes = keep(&steps, &mut fake, false);
     assert_eq!(fake.reset, ["BUG-5", "BUG-6"]);
@@ -352,10 +440,7 @@ fn a_dry_run_and_the_reported_steps_call_nothing() {
     let dir = tempfile::tempdir().unwrap();
     let steps = [
         Step::Salvage(lane(dir.path(), "bug-7-fix", Some("BUG-7"))),
-        Step::Reset {
-            spec: "BUG-5".into(),
-            resume: Some("bug-5-unfinished".into()),
-        },
+        reset("BUG-5", Some("bug-5-unfinished")),
     ];
     let mut fake = Fake::default();
     let notes = keep(&steps, &mut fake, true);
@@ -404,4 +489,297 @@ fn spec_branches_match_the_id_alone_or_followed_by_a_dash() {
             "bug-b6b1278890774ef993d2ebc327862470-314-x"
         ]
     );
+}
+
+// ---- what the plan is decided from ------------------------------------------
+
+fn claim(scope: &str, node: &str, host: &str) -> crate::coordination::Claim {
+    serde_json::from_value(serde_json::json!({
+        "scope": scope,
+        "node_id": node,
+        "clone_path": "/home/other/aida",
+        "host": host,
+        "pid": 4242,
+        "agent": "implementer",
+        "started_at": "2026-11-14T10:00:00Z",
+        "heartbeat_at": "2026-11-14T10:00:00Z",
+        "ttl_secs": 3600,
+    }))
+    .unwrap()
+}
+
+// A live claim another host took on the spec, with no lease here: the spec
+// is held there. The claim's scope is the spec; its node id is the clone.
+#[test]
+fn a_live_claim_on_another_host_holds_the_spec_by_its_scope() {
+    let ids = vec!["BUG-5".to_string(), "bug-b6b1-5".to_string()];
+    let held = |claims: &[crate::coordination::Claim]| held_elsewhere(&ids, &[], claims, "here");
+    assert_eq!(
+        held(&[claim("BUG-5", "node-dell1", "dell1")]).as_deref(),
+        Some("dell1")
+    );
+    // By any id the spec answers to, whatever the case.
+    assert_eq!(
+        held(&[claim("BUG-B6B1-5", "node-dell1", "dell1")]).as_deref(),
+        Some("dell1")
+    );
+    // A clone whose node id happens to read like the spec holds nothing.
+    assert_eq!(held(&[claim("STORY-9", "BUG-5", "dell1")]), None);
+    // A claim on this host is this host's own lease table to answer for.
+    assert_eq!(held(&[claim("BUG-5", "node-here", "here")]), None);
+    assert_eq!(held(&[]), None);
+
+    // Through the plan: the held spec is left alone, never reset.
+    let mut spec = orphan("BUG-5");
+    spec.elsewhere = held(&[claim("BUG-5", "node-dell1", "dell1")]);
+    let steps = plan(Vec::new(), vec![spec], &[]);
+    assert!(
+        matches!(&steps[..], [Step::Skip { why, .. }] if why.contains("dell1")),
+        "{steps:?}"
+    );
+}
+
+fn git(dir: &Path, args: &[&str]) -> String {
+    let out = crate::test_git::git_command()
+        .current_dir(dir)
+        .args(args)
+        .output()
+        .unwrap();
+    assert!(out.status.success(), "git {args:?}: {out:?}");
+    String::from_utf8_lossy(&out.stdout).trim().to_string()
+}
+
+/// A bare origin holding `main`, and a clone of it with one commit.
+fn origin_and_clone(dir: &Path) -> (PathBuf, PathBuf) {
+    let origin = dir.join("origin.git");
+    let clone = dir.join("clone");
+    std::fs::create_dir_all(&clone).unwrap();
+    git(dir, &["init", "-q", "--bare", "-b", "main", "origin.git"]);
+    git(&clone, &["init", "-q", "-b", "main"]);
+    git(&clone, &["config", "user.email", "t@example.invalid"]);
+    git(&clone, &["config", "user.name", "T"]);
+    git(&clone, &["commit", "-q", "--allow-empty", "-m", "first"]);
+    git(
+        &clone,
+        &["remote", "add", "origin", &origin.display().to_string()],
+    );
+    git(&clone, &["push", "-q", "origin", "main"]);
+    git(&clone, &["fetch", "-q", "origin"]);
+    (origin, clone)
+}
+
+/// Commits made in the bare origin itself, as another clone's push would.
+fn commit_on_origin(origin: &Path, branch: &str, from: &str, subjects: &[String]) {
+    use std::io::Write as _;
+    let mut stream = String::new();
+    for (n, subject) in subjects.iter().enumerate() {
+        stream.push_str(&format!(
+            "commit refs/heads/{branch}\ncommitter T <t@example.invalid> {} +0000\ndata {}\n{subject}\n",
+            1_700_000_000 + n,
+            subject.len()
+        ));
+        if n == 0 {
+            stream.push_str(&format!("from refs/heads/{from}\n"));
+        }
+        stream.push('\n');
+    }
+    let mut child = crate::test_git::git_command()
+        .current_dir(origin)
+        .args(["fast-import", "--quiet"])
+        .stdin(std::process::Stdio::piped())
+        .spawn()
+        .unwrap();
+    child
+        .stdin
+        .take()
+        .unwrap()
+        .write_all(stream.as_bytes())
+        .unwrap();
+    assert!(child.wait().unwrap().success());
+}
+
+// A branch pushed to origin after this clone last fetched is still found:
+// origin is asked, the clone's remembered refs are not.
+#[test]
+fn origin_is_asked_for_its_branches_not_the_clones_last_fetch() {
+    let dir = tempfile::tempdir().unwrap();
+    let (origin, clone) = origin_and_clone(dir.path());
+    commit_on_origin(&origin, "bug-5-unfinished", "main", &["wip".to_string()]);
+    let remembered = git(
+        &clone,
+        &[
+            "for-each-ref",
+            "--format=%(refname:lstrip=3)",
+            "refs/remotes/origin",
+        ],
+    );
+    assert!(!remembered.contains("bug-5-unfinished"), "{remembered}");
+
+    let evidence = origin_evidence(&clone).unwrap();
+    assert!(
+        evidence.branches.contains(&"bug-5-unfinished".to_string()),
+        "{evidence:?}"
+    );
+    // Origin answered and has no integration branch: nothing is waiting.
+    assert_eq!(evidence.unpromoted, Vec::<String>::new());
+    assert_eq!(
+        spec_branches(&["BUG-5".to_string()], &evidence.branches),
+        ["bug-5-unfinished"]
+    );
+}
+
+// The whole of what integration carries is read, however long it is, and
+// from origin as it is now.
+#[test]
+fn integration_history_is_read_whole_past_two_thousand_commits() {
+    let dir = tempfile::tempdir().unwrap();
+    let (origin, clone) = origin_and_clone(dir.path());
+    let mut subjects = vec!["fix(x): the oldest merged work (BUG-25)".to_string()];
+    subjects.extend((0..2100).map(|n| format!("chore: filler {n}")));
+    commit_on_origin(&origin, "integration", "main", &subjects);
+
+    let evidence = origin_evidence(&clone).unwrap();
+    assert_eq!(evidence.unpromoted.len(), 2101);
+    assert!(named_in(&["BUG-25".to_string()], &evidence.unpromoted));
+    assert!(!named_in(&["BUG-26".to_string()], &evidence.unpromoted));
+}
+
+// An origin that cannot be read is an error, never "no branches" or
+// "nothing merged": the caller then resets nothing.
+#[test]
+fn an_unreadable_origin_is_an_error_and_not_an_empty_answer() {
+    let dir = tempfile::tempdir().unwrap();
+    let (origin, clone) = origin_and_clone(dir.path());
+    commit_on_origin(
+        &origin,
+        "integration",
+        "main",
+        &["fix(x): merged (BUG-25)".to_string()],
+    );
+    assert_eq!(origin_evidence(&clone).unwrap().unpromoted.len(), 1);
+
+    // Integration is there and main is not: nothing to compare it with.
+    git(&origin, &["update-ref", "-d", "refs/heads/main"]);
+    let error = origin_evidence(&clone).unwrap_err();
+    assert!(format!("{error:#}").contains("no `main`"), "{error:#}");
+
+    // Origin is gone altogether.
+    std::fs::rename(&origin, dir.path().join("moved.git")).unwrap();
+    let error = origin_evidence(&clone).unwrap_err();
+    assert!(
+        format!("{error:#}").contains("origin's branches could not be listed"),
+        "{error:#}"
+    );
+}
+
+/// Whether this process can be refused a read by file mode (root cannot).
+fn modes_are_enforced(dir: &Path) -> bool {
+    use std::os::unix::fs::PermissionsExt as _;
+    let probe = dir.join("mode-probe");
+    std::fs::write(&probe, "x").unwrap();
+    std::fs::set_permissions(&probe, std::fs::Permissions::from_mode(0o000)).unwrap();
+    let enforced = std::fs::read(&probe).is_err();
+    std::fs::remove_file(&probe).unwrap();
+    enforced
+}
+
+// The salvage the lease is released on captures everything or writes no
+// patch. Real git, failing on a file it cannot read.
+#[test]
+fn a_salvage_that_cannot_capture_every_file_writes_no_patch() {
+    use std::os::unix::fs::PermissionsExt as _;
+    let dir = tempfile::tempdir().unwrap();
+    if !modes_are_enforced(dir.path()) {
+        return;
+    }
+    let root = dir.path().join("root");
+    let tree = dir.path().join("tree");
+    std::fs::create_dir_all(&root).unwrap();
+    std::fs::create_dir_all(&tree).unwrap();
+    git(&tree, &["init", "-q", "-b", "main"]);
+    git(&tree, &["config", "user.email", "t@example.invalid"]);
+    git(&tree, &["config", "user.name", "T"]);
+    std::fs::write(tree.join("tracked.txt"), "one\n").unwrap();
+    git(&tree, &["add", "tracked.txt"]);
+    git(&tree, &["commit", "-q", "-m", "first"]);
+    let salvage = || {
+        crate::worktree_gc::salvage_worktree_patch_complete(
+            &root,
+            "BUG-7",
+            Some("implementer"),
+            &tree,
+        )
+    };
+    let patches = || {
+        std::fs::read_dir(root.join(".aida").join("salvage"))
+            .map(|entries| entries.count())
+            .unwrap_or(0)
+    };
+    let mode = |name: &str, mode: u32| {
+        std::fs::set_permissions(tree.join(name), std::fs::Permissions::from_mode(mode)).unwrap()
+    };
+
+    // A tracked edit git cannot read.
+    std::fs::write(tree.join("tracked.txt"), "one\ntwo\n").unwrap();
+    mode("tracked.txt", 0o000);
+    let error = salvage().unwrap_err();
+    assert!(
+        format!("{error:#}").contains("no patch was written"),
+        "{error:#}"
+    );
+    assert_eq!(patches(), 0);
+    mode("tracked.txt", 0o644);
+
+    // An untracked file git cannot read, beside a readable tracked edit.
+    std::fs::write(tree.join("new.txt"), "new\n").unwrap();
+    mode("new.txt", 0o000);
+    let error = salvage().unwrap_err();
+    assert!(
+        format!("{error:#}").contains("no patch was written"),
+        "{error:#}"
+    );
+    assert_eq!(patches(), 0);
+    // The lossy form writes a patch that looks whole and is missing the file.
+    let partial = crate::worktree_gc::salvage_worktree_patch(&root, "BUG-7", None, &tree)
+        .unwrap()
+        .expect("the lossy salvage still writes a patch");
+    assert!(!std::fs::read_to_string(&partial).unwrap().contains("+new"));
+    std::fs::remove_file(&partial).unwrap();
+    mode("new.txt", 0o644);
+
+    // Everything readable: one patch, holding both.
+    let patch = salvage().unwrap().expect("a patch");
+    let text = std::fs::read_to_string(&patch).unwrap();
+    assert!(text.contains("+two") && text.contains("+new"), "{text}");
+    assert_eq!(patches(), 1);
+}
+
+// A lease file that cannot be removed is reported as not released.
+#[test]
+fn a_lease_that_cannot_be_removed_is_not_reported_released() {
+    use std::os::unix::fs::PermissionsExt as _;
+    let dir = tempfile::tempdir().unwrap();
+    if !modes_are_enforced(dir.path()) {
+        return;
+    }
+    let root = dir.path();
+    let path = crate::lease_path(root, "lease-1");
+    let sessions = path.parent().unwrap().to_path_buf();
+    std::fs::create_dir_all(&sessions).unwrap();
+    std::fs::write(&path, "id = \"lease-1\"\n").unwrap();
+    let mode = |mode: u32| {
+        std::fs::set_permissions(&sessions, std::fs::Permissions::from_mode(mode)).unwrap()
+    };
+
+    mode(0o555);
+    let error = super::super::run::release_lease(root, "lease-1").unwrap_err();
+    mode(0o755);
+    assert!(
+        format!("{error:#}").contains("could not be removed"),
+        "{error:#}"
+    );
+    assert!(path.exists());
+
+    super::super::run::release_lease(root, "lease-1").unwrap();
+    assert!(!path.exists());
 }
