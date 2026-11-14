@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-13T05:04:27.319151195Z
-modified_at: 2026-11-14T02:43:45.230980159Z
+modified_at: 2026-11-14T02:43:47.311227794Z
 req_type: Bug
 tags:
 - track:integration
@@ -32,6 +32,13 @@ comments:
   created_at: 2026-11-13T05:58:42.297747178Z
   modified_at: 2026-11-13T05:58:42.297747178Z
   session_id: 92a24ff6-1324-4fe1-a02b-b2601f384b4b
+- id: 01a1d7f0-87ef-7f41-a588-34e702ed95ae
+  author: joe
+  content: '19:47 MST advisor: still costs ~13 min per train (train 10 and train 11 both sat in post-merge ''aida pull'' 9-13 min CPU-bound on gate-ledger, blocking the next train). Raised to high. The 09:38 BUG-2543 ruling was never acted on (#3932 still open); an advisor-launched Claude fixer is now building the narrowed replacement PR against integration and will close #3932.'
+  created_at: 2026-11-14T02:43:47.311227794Z
+  modified_at: 2026-11-14T02:43:47.311227794Z
+  session_id: 01a1d797-2ccf-7771-899a-682081f10504
+  harness_version: 2.1.325 (Claude Code)
 history:
 - id: 01a1d363-766b-7430-8bca-0c0a924878fa
   author: joe
