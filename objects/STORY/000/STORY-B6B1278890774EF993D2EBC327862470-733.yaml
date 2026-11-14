@@ -1,0 +1,65 @@
+id: 01a1da29-15a5-78b2-8b72-95f239bbba9e
+spec_id: STORY-b6b1278890774ef993d2ebc327862470-733
+agreed_id: STORY-2810
+title: 'Review PR-4013: [AI:claude] chore(integration): manual verified against worktree binary, one gate-ledger discovery per reconcile, explicit-mode allocation state (BUG-2563 BUG-2543 BUG-2551 BUG-2555) ['
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `(no-sess`) for branch `promote/integration-9`.
+
+  - PR: <https://github.com/joemooney/aida/pull/4013>
+  - Branch: `promote/integration-9` → `main`
+
+  ## Covers
+
+  - BUG-2555
+  - BUG-2543
+  - BUG-2551
+  - BUG-2563
+  - STORY-2737
+  - BUG-2570
+  - STORY-2768
+  - STORY-2771
+  - STORY-2749
+  - BUG-2559
+  - BUG-2556
+  - BUG-2550
+  - BUG-2545
+  - BUG-2539
+  - BUG-2540
+  - BUG-2534
+  - TASK-3790
+  - BUG-2537
+  - TASK-3789
+  - BUG-2538
+  - TASK-3448
+  - BUG-2533
+  - BUG-2522
+  - BUG-2521
+  - BUG-2525
+
+  ## Slice of (Refs only — not completed by this PR)
+
+  Commit subjects carry `(Refs SPEC-ID)`: this PR is one slice of a spec that a later PR completes. Review this slice against that spec's acceptance criteria.
+
+  - BUG-2544
+  - STORY-2732
+  - BUG-2531
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 4013` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-14T13:04:48.037888827Z
+modified_at: 2026-11-14T13:04:48.037888827Z
+req_type: Story
+filed_at:
+  code_sha: 2682c4c4fe5a42194a6f2eca01940008e3a41776
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 166920a3bf8
+  vendor: claude
