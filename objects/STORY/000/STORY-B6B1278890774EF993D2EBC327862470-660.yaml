@@ -23,7 +23,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-12T19:11:56.371806442Z
-modified_at: 2026-11-14T01:12:04.781921680Z
+modified_at: 2026-11-14T01:47:14.003630469Z
 req_type: Story
 tags:
 - operator-held
@@ -277,6 +277,13 @@ comments:
   content: '18:12 MST gap log: main unmoved since 16:50 (bc24a1e, 82 min). Cause: train 10 (#3926+#3938) red on lib-1 — #3926 missed STORY-2326 ratchet entries for AIDA_SWEEP_PARENT, which the FAST PR tier does not run (operator agreed fix: TASK-3791, dell1 lane launched 18:11). Train 10 now bisecting (#3977=#3926 alone, #3978=#3938 alone). Fix 490364816fc pushes to #3926 when the train job ends. Queued behind: train 11 (#3966 #3970 #3971, all APPROVED at head) and train 12 (#3921 #3948 #3968 #3940, all APPROVED at head, fast CI green). ~9 PRs approved and queued for trains; the bottleneck is serial train CI on deputy default.'
   created_at: 2026-11-14T01:12:04.781921680Z
   modified_at: 2026-11-14T01:12:04.781921680Z
+  session_id: 01a1d797-2ccf-7771-899a-682081f10504
+  harness_version: 2.1.325 (Claude Code)
+- id: 01a1d7bc-c0d3-7000-a394-036458a62be6
+  author: joe
+  content: '18:46 MST gap closed: #3938 landed via train 10 bisect (#3978) -> main c0465be. Gap 16:50-18:46 = 116 min. #3926 dropped (two FAST-tier-invisible ratchet failures: story_2326 lib-1, raw current_exe lib-0); both fixed on advisor-merge/pr-3926 and pushed to #3926 when the train job exits. TASK-3791 (#3979, in review) moves these ratchets onto PR CI.'
+  created_at: 2026-11-14T01:47:14.003630469Z
+  modified_at: 2026-11-14T01:47:14.003630469Z
   session_id: 01a1d797-2ccf-7771-899a-682081f10504
   harness_version: 2.1.325 (Claude Code)
 history:
