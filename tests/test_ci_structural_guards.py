@@ -74,6 +74,17 @@ class StructuralSelection(unittest.TestCase):
         self.assertIn(test, missing(ROOT, selected() - {path}, {}))
         self.assertNotIn(test, missing(ROOT, selected(), {}))
 
+    # trace:BUG-2574 | ai:codex
+    def test_process_identity_guard_requires_fast_selection(self):
+        path = 'aida-cli-lib/src/tests/task_1750_liveness_primitive_guard_tests.rs'
+        # The production scan's name has neither "ratchet" nor "inventory".
+        # Pin it explicitly so removing/renaming its companion syntax test
+        # cannot make the train regression disappear from the selection audit.
+        names = TEST.findall(_mask.mask_rust((ROOT / path).read_text()))
+        self.assertIn('proc_identity_legacy_decisions_do_not_expand', names)
+        self.assertIn(path, selected())
+
+
     def test_fast_runs_the_shared_harness_and_selection_audit(self):
         import tomllib
         import yaml

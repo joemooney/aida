@@ -3347,7 +3347,7 @@ impl TrainForge for LiveTrainForge<'_> {
         // before the release that precedes the merge.
         if !crate::gate::mandate_ship::mandate_cover_still_active(cover) {
             return Err(format!(
-                "mandate {} is no longer active or no longer covers protected paths",
+                "mandate {} is no longer active or was narrowed by a renewal",
                 cover.id
             ));
         }

@@ -181,8 +181,11 @@ mod knowledge_list;
 // trace:STORY-1662 | ai:claude
 pub mod lane_env;
 // trace:BUG-2383 | ai:claude — the lane job runner and `aida lane job`.
+// trace:STORY-2768 | ai:claude
+mod land;
 mod lane_cmd;
 mod lane_job;
+mod now;
 // trace:STORY-2640 | ai:codex
 mod lane_fast_gate;
 mod project_checks;
@@ -762,6 +765,10 @@ mod team_cmd;
 mod test_env;
 #[cfg(test)]
 mod test_exec;
+// trace:BUG-2573 | ai:codex
+#[cfg(test)]
+#[path = "../../aida-core/src/test_umask.rs"]
+mod test_umask;
 // trace:BUG-2191 | ai:claude — fixture git without detached auto-maintenance.
 #[cfg(test)]
 mod test_git;
