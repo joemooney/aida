@@ -3,12 +3,12 @@ spec_id: BUG-b6b1278890774ef993d2ebc327862470-330
 agreed_id: BUG-2565
 title: Store pull (aida pull / db sync --pull) is CPU-bound for 15-30+ min and concurrent reviewer launches thrash it
 description: 'Observed 2026-11-13 13:52 MST on the primary checkout: six concurrent reviewer launches each ran ''aida db sync --pull'', each CPU-bound (25-30% CPU, 7-10 min CPU time, 26-32 min wall) with no git child most of the time; load 11-14 on 6 cores. The train''s post-merge ''aida pull'' (train #3962) took 14+ min (8 min CPU) and blocked the next queued train. Expected: a store pull completes in seconds; concurrent pulls serialize on one lock and later callers reuse the result instead of each re-running the full pull. Acceptance: (1) a store pull with no new upstream commits finishes in <10 s; (2) concurrent pulls in one checkout coalesce, so N launches run one pull; (3) a regression test bounds pull work on a store with 1000+ gate-ledger spec dirs.'
-status: NeedsAttention
+status: Approved
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-13T20:52:54.357683400Z
-modified_at: 2026-11-14T09:08:33.436698359Z
+modified_at: 2026-11-14T09:44:54.052066172Z
 req_type: Bug
 tags:
 - perf
@@ -54,6 +54,13 @@ comments:
   modified_at: 2026-11-14T09:08:33.436698359Z
   session_id: 01a1d8f3-f948-7072-b174-fa9507ed074b
   harness_version: 2.1.325 (Claude Code)
+- id: 01a1d972-1224-7511-8c93-d145cfe3ea0a
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: The no-op fast path and the watermark look correct, but coalescing can return a stale pull as success, and the AC3/AC1 tests do not exercise pull work. CI pending at review time (only hold gates reported).. No triage reason was given.'
+  created_at: 2026-11-14T09:44:54.052061122Z
+  modified_at: 2026-11-14T09:44:54.052061122Z
+  session_id: 01a1d8f3-f948-7072-b174-fa9507ed074b
+  harness_version: 2.1.325 (Claude Code)
 history:
 - id: 01a1d8a9-d3a1-7243-a396-3ba4fdaf7412
   author: joe
@@ -95,6 +102,15 @@ history:
   - field_name: status
     old_value: Done
     new_value: NeedsAttention
+- id: 01a1d972-1224-7511-8c93-d13449125af3
+  author: joe
+  timestamp: 2026-11-14T09:44:54.052044012Z
+  session_id: 01a1d8f3-f948-7072-b174-fa9507ed074b
+  harness_version: 2.1.325 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 filed_at:
   code_sha: 268f02eb6b99bb5e89efe24ca2be475d5c33face
   branch: main
@@ -108,11 +124,3 @@ implementation_info:
   implemented: true
   implemented_at: 2026-11-14T08:19:31.886174365Z
   implemented_by: joe
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: The no-op fast path and the watermark look correct, but coalescing can return a stale pull as success, and the AC3/AC1 tests do not exercise pull work. CI pending at review time (only hold gates reported).
-  recovery_hint: address the review findings, move BUG-2565 back to In Progress, and clear the PR hold only after approval
-  shelved_by: reviewer
-  shelved_at: 2026-11-14T08:59:55.641141882Z
