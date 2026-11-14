@@ -12,12 +12,12 @@ description: |-
   Acceptance: the test passes on dell1 over ssh, or the guard pins whatever ambient state it reads, with the cause named. Not caused by BUG-2573 (umask 002 fixtures): it fails under umask 022 too.
 
   Effect today: every targeted dell1 run that includes status_sections reports one failure that has to be explained by hand.
-status: NeedsAttention
+status: Completed
 priority: Low
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-14T11:36:18.476287136Z
-modified_at: 2026-11-14T16:37:22.490475392Z
+modified_at: 2026-11-14T18:42:40.395454837Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -162,6 +162,19 @@ history:
   session_id: 01a1da5c577c
   harness_version: 2.1.319 (Claude Code)
   changes: []
+- id: 01a1db5e-6a81-7ba1-bb16-46731d680d24
+  author: aida-auto-bump
+  timestamp: 2026-11-14T18:42:40.385355141Z
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Completed
+processing_record:
+- id: 01a1db5e-6a8b-7f53-b4ad-8ccdc95c2493
+  timestamp: 2026-11-14T18:42:40.395452205Z
+  agent: aida
+  commit_sha: 38a738f44f036cddc4327b137f5a3a3fef087095
+  summary: Completed via merge 38a738f4
 filed_at:
   code_sha: c219a07bf39e3e7210b8e3f14bf17708d20c3b5f
   branch: integration
@@ -171,6 +184,10 @@ filed_at:
   vendor: claude
   session: 01a1d9b6-e721-73f1-9ad6-1343da1a030e
   harness_version: 2.1.325 (Claude Code)
+implementation_info:
+  implemented: false
+  completed_at: 2026-11-14T18:42:40.385349012Z
+  completion_sha: 38a738f44f036cddc4327b137f5a3a3fef087095
 attention_reason:
   category: missing-context
   detail: 'Cause still not named and no code changed this round. The lane can only run cargo inside bubblewrap, where the test passes; it has no host shell or ssh, so the failing dell1 run cannot be captured from here. Reading rules out host HOME state (test_home.rs redirects HOME and clears AIDA_SESSION_*, AIDA_HOME and XDG_*_HOME before main), the project root and authority TTY (pinned by AmbientGuard) and seat authority (PR-4021 asserts pass on dell1). Still able to leak: non-session AIDA_* variables, PATH-resolved gh/git, the host process table, cwd, TMPDIR. Needed from one dell1 ssh run of PR-4021 head: the failing test''s stdout block (cargo prints it without --nocapture; it holds either an ''error:'' line from handle_queue_rework or ''unknown key r'' with no [r] in the prompt), env | grep ^AIDA_ from the same ssh command, and whether rework_reason_is_recorded_once and triage_loop_d_decides pass. Details in the 07:00 spec comment.'
