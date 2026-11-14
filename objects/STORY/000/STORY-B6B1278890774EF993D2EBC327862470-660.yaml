@@ -23,7 +23,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-12T19:11:56.371806442Z
-modified_at: 2026-11-14T07:26:15.935926339Z
+modified_at: 2026-11-14T08:18:25.349487365Z
 req_type: Story
 tags:
 - operator-held
@@ -337,6 +337,13 @@ comments:
   created_at: 2026-11-14T07:26:15.935926339Z
   modified_at: 2026-11-14T07:26:15.935926339Z
   session_id: 01a1d852-16ef-7973-bdde-ac3f274752a2
+  harness_version: 2.1.325 (Claude Code)
+- id: 01a1d922-e5c5-7912-9981-bd6aae17eff6
+  author: joe
+  content: '[advisor 7b 01:18] MAIN GAP: main at 60823a3 since 00:25 (#3979); reaches 60 min at 01:25. Causes: (1) train 14''s post-merge ''aida pull'' hung ~25 min (store-pull pileup, 9 concurrent db sync --pull; logged on BUG-2565), holding the train run.lock so train 15 could not start until 00:56; (2) train 15 (#3988 #3989 #3994, #4004) went red on CI (rest): #3989 (BUG-2552) adds a raw liveness decision in ownership/reader.rs that the full-tier proc_identity ratchet (task_1750) rejects; the PR''s FAST tier does not run it (TASK-3791 follow-up scope). Train is bisecting (#4006 = #3988+#3989, will fail again); #3988/#3994 should land after. BUG-2552 rework lane started on dell1. Promotion 8 (#3992) fast-forwarded to canary-green ffa77a2, re-review queued.'
+  created_at: 2026-11-14T08:18:25.349487365Z
+  modified_at: 2026-11-14T08:18:25.349487365Z
+  session_id: 01a1d8f3-f948-7072-b174-fa9507ed074b
   harness_version: 2.1.325 (Claude Code)
 history:
 - id: 01a1d175-992b-7501-a0fb-89a007208ac0
