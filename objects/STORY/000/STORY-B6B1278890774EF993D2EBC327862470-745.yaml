@@ -37,7 +37,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-14T18:18:20.399960794Z
-modified_at: 2026-11-14T19:43:38.564458659Z
+modified_at: 2026-11-14T19:51:36.100339275Z
 req_type: Story
 tags:
 - agent-ergonomics
@@ -76,6 +76,13 @@ comments:
   created_at: 2026-11-14T19:43:38.564458659Z
   modified_at: 2026-11-14T19:43:38.564458659Z
   session_id: 01a1db4c-5b4c-7783-babd-e23eef5b5412
+  harness_version: 2.1.325 (Claude Code)
+- id: 01a1db9d-85a4-7331-a3f0-349f396d2607
+  author: joe
+  content: 'Friction (advisor, 2026-11-14 12:50): ''aida queue rework STORY-2821 --for implementer'' still spins past 120 s on the ce660d5 binary (killed by timeout); the dell1 lane then refuses with ''isn''t queued. Status is Done''. Workaround so far was --force-claim, which does not get past a Done status.'
+  created_at: 2026-11-14T19:51:36.100339275Z
+  modified_at: 2026-11-14T19:51:36.100339275Z
+  session_id: 01a1db6d-e689-7532-9eef-772722add87b
   harness_version: 2.1.325 (Claude Code)
 history:
 - id: 01a1db4a-abd7-74b1-97e3-ad48fe26683e
