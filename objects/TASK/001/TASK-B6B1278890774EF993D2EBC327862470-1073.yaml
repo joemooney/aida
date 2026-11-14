@@ -393,12 +393,20 @@ description: |
   ### finding-hash:51cbf3a8
 
   aida-testkit/src/test_exec.rs:39-49 hand-copies the 5x50ms ETXTBSY retry from aida-term/src/process_retry.rs (ETXTBSY_MAX_RETRIES/ETXTBSY_RETRY_DELAY); the two policies can drift. Add a comment cross-reference or a guard test pinning equality.
+
+
+  ## Findings from PR-3998
+  Reviewed sha: bae09674fd695e30f02bea4dd7565dba2d51401e
+
+  ### finding-hash:0bff30e1
+
+  verify-manual.py defaults to target/debug/aida, but the repo dev build (aida dev build / make build-fast) produces target/agent/aida, so a local run may silently check a stale target/debug binary (the printed path is the only signal); consider preferring the newest of target/{agent,debug} or warning on mtime older than HEAD
 status: Draft
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-13T20:01:56.623034248Z
-modified_at: 2026-11-14T07:19:51.303360598Z
+modified_at: 2026-11-14T07:54:33.968523167Z
 req_type: Task
 tags:
 - carried-finding:BUG-2546:56ed8b81
@@ -452,6 +460,7 @@ tags:
 - carried-finding:PR-3983:dfed3eb6
 - carried-finding:PR-3994:46a7a9dc
 - carried-finding:PR-3994:51cbf3a8
+- carried-finding:PR-3998:0bff30e1
 - carried-finding:STORY-2735:2c7ae2ea
 - carried-finding:STORY-2763:04ad58d8
 - carried-finding:STORY-2763:15915e39
@@ -490,11 +499,13 @@ tags:
 - carried-from:PR-3979
 - carried-from:PR-3983
 - carried-from:PR-3994
+- carried-from:PR-3998
 - carried-from:STORY-2735
 - carried-from:STORY-2763
 - carried-from:STORY-2768
 - carried-from:TASK-3791
 - finding-hash:04ad58d8
+- finding-hash:0bff30e1
 - finding-hash:0cbc5c63
 - finding-hash:15915e39
 - finding-hash:198d1196
@@ -554,6 +565,7 @@ tags:
 - from-review:PR-3979
 - from-review:PR-3983
 - from-review:PR-3994
+- from-review:PR-3998
 - from-review:STORY-2735
 - from-review:STORY-2763
 - from-review:STORY-2768
@@ -703,6 +715,11 @@ history:
   author: joe
   timestamp: 2026-11-14T07:19:53.075183353Z
   session_id: 01a1d8e964cc
+  changes: []
+- id: 01a1d90d-1559-7f31-a743-7a65ead11b06
+  author: joe
+  timestamp: 2026-11-14T07:54:35.737643429Z
+  session_id: 01a1d90b0ab1
   changes: []
 filed_at:
   code_sha: 91fe1e337894199f15365d3f8ecfaf81366f8291
