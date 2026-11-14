@@ -541,14 +541,17 @@ fn git_text(root: &Path, args: &[&str]) -> Result<String> {
     Ok(String::from_utf8_lossy(&out.stdout).trim().to_string())
 }
 
-/// The paths `head` changes since it forked from `base`.
+/// The paths `head` changes since it forked from `base`. Renames are not
+/// detected: a file moved out of a protected path is listed at both its old
+/// and its new place, so the move cannot hide it.
 // trace:STORY-2772 | ai:claude
 pub(crate) fn changed_paths(
     root: &Path,
     base: &str,
     head: &str,
 ) -> std::result::Result<Vec<String>, String> {
-    git_text(root, &["diff", "--name-only", &format!("{base}...{head}")])
+    let range = format!("{base}...{head}");
+    git_text(root, &["diff", "--name-only", "--no-renames", &range])
         .map(|out| out.lines().map(String::from).collect())
         .map_err(|error| format!("{error:#}"))
 }

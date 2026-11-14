@@ -307,7 +307,15 @@ pub(crate) fn admit(
     }
     match row.state {
         State::Ready => Ok(Admission::Approved(row.reason.clone())),
-        State::NeedsReview | State::Reviewing => match eligibility() {
+        // A change under review is refused, not admitted: its row was
+        // derived before CI, the approval and the review rounds were read,
+        // so red CI or changes requested at this content may stand behind
+        // it. The review in progress decides.
+        State::Reviewing => Err(format!(
+            "it is under review ({}); CI and earlier verdicts are not read while a review runs, so wait for its verdict",
+            row.reason
+        )),
+        State::NeedsReview => match eligibility() {
             Ok(Eligibility::Eligible(why)) => Ok(Admission::ReviewAfterMerge(why)),
             Ok(Eligibility::Ineligible(why)) => Err(format!(
                 "it is not approved ({}) and may not merge before review: {why}",
@@ -319,6 +327,27 @@ pub(crate) fn admit(
         },
         _ => Err(format!("it is {}: {}", row.state.label(), row.reason)),
     }
+}
+
+/// The specs a merge marks `merged-before-review`: those of a change
+/// admitted before its review that are known and not already marked. An
+/// approved change marks none. `specs` pairs each named spec with its tags,
+/// `None` when the store does not know it.
+// trace:STORY-2772 | ai:claude
+pub(crate) fn specs_to_mark<'a, T>(
+    admission: &Admission,
+    specs: &'a [(String, Option<(T, Vec<String>)>)],
+) -> Vec<(&'a str, &'a T)> {
+    if !matches!(admission, Admission::ReviewAfterMerge(_)) {
+        return Vec::new();
+    }
+    specs
+        .iter()
+        .filter_map(|(id, spec)| {
+            let (key, tags) = spec.as_ref()?;
+            (!tags.iter().any(|tag| tag == MERGED_BEFORE_REVIEW_TAG)).then_some((id.as_str(), key))
+        })
+        .collect()
 }
 
 /// One commit on integration's first-parent line.

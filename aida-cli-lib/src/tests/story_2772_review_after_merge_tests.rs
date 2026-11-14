@@ -1,5 +1,5 @@
 //! STORY-2772: review after merge on the integration track.
-// trace:STORY-2772 | ai:claude
+// trace:STORY-2772 STORY-2772.Tests | ai:claude
 
 use super::*;
 
@@ -39,6 +39,7 @@ fn refusal(eligibility: Eligibility) -> String {
 }
 
 // ---- config --------------------------------------------------------------
+// trace:STORY-2772.ace3fe97 | ai:claude
 
 #[test]
 fn config_defaults_to_off_with_the_stated_knobs() {
@@ -93,6 +94,8 @@ fn config_refuses_a_value_it_cannot_read() {
 
 // ---- eligibility matrix --------------------------------------------------
 
+// The one eligibility function and its matrix.
+// trace:STORY-2772.acbbdc03 STORY-2772.Tests | ai:claude
 #[test]
 fn eligible_when_every_rule_passes() {
     let specs = [
@@ -251,12 +254,44 @@ fn an_approved_change_merges_without_asking_eligibility() {
     assert_eq!(got, Ok(Admission::Approved("the row's reason".into())));
 }
 
+// trace:STORY-2772.ac77df43 | ai:claude
 #[test]
 fn an_eligible_unapproved_change_merges_before_review() {
-    for state in [State::NeedsReview, State::Reviewing] {
-        let got = admit(&row(Track::Integration, state), Ok(None), eligible);
-        assert_eq!(got, Ok(Admission::ReviewAfterMerge("low-risk".into())));
-    }
+    let got = admit(
+        &row(Track::Integration, State::NeedsReview),
+        Ok(None),
+        eligible,
+    );
+    assert_eq!(got, Ok(Admission::ReviewAfterMerge("low-risk".into())));
+}
+
+/// A row under review was derived before CI, the approval and the review
+/// rounds were read, so it is refused without asking eligibility.
+#[test]
+fn a_change_under_review_is_refused_without_asking_eligibility() {
+    let why = admit(&row(Track::Integration, State::Reviewing), Ok(None), || {
+        panic!("eligibility must not be read for a change under review")
+    })
+    .unwrap_err();
+    assert!(why.contains("under review"), "{why}");
+    assert!(why.contains("the row's reason"), "{why}");
+}
+
+// trace:STORY-2772.ac77df43 | ai:claude
+#[test]
+fn only_a_merge_before_review_marks_its_known_unmarked_specs() {
+    let specs = vec![
+        ("BUG-1".to_string(), Some((1u8, vec!["bug".to_string()]))),
+        (
+            "BUG-2".to_string(),
+            Some((2u8, vec![MERGED_BEFORE_REVIEW_TAG.to_string()])),
+        ),
+        ("BUG-3".to_string(), None),
+    ];
+    let before_review = Admission::ReviewAfterMerge("low-risk".into());
+    assert_eq!(specs_to_mark(&before_review, &specs), [("BUG-1", &1u8)]);
+    let approved = Admission::Approved("approved at the head".into());
+    assert!(specs_to_mark(&approved, &specs).is_empty());
 }
 
 #[test]
@@ -317,6 +352,7 @@ fn every_other_state_and_the_main_track_refuse() {
 }
 
 // ---- promotion check -----------------------------------------------------
+// trace:STORY-2772.acf93ff9 STORY-2772.Tests | ai:claude
 
 const HEAD_A: &str = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
 const HEAD_B: &str = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
@@ -603,7 +639,40 @@ fn a_conflicting_merge_leaves_integration_where_it_was() {
     assert_eq!(sh_git(dir.path(), &["status", "--porcelain"]), "");
 }
 
+/// A protected file moved out of its path is still listed at the protected
+/// path, so the move cannot make the change eligible.
+// trace:STORY-2772.ace3fe97 | ai:claude
+#[test]
+fn a_rename_out_of_a_protected_path_still_lists_it_and_refuses() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path();
+    sh_git(root, &["init", "-q", "-b", "integration"]);
+    sh_git(root, &["config", "user.name", "Test"]);
+    sh_git(root, &["config", "user.email", "test@example.invalid"]);
+    sh_git(root, &["config", "commit.gpgsign", "false"]);
+    let protected = "aida-cli-lib/src/gate/approval.rs";
+    std::fs::create_dir_all(root.join("aida-cli-lib/src/gate")).unwrap();
+    let body: String = (0..40).map(|n| format!("fn rule_{n}() {{}}\n")).collect();
+    std::fs::write(root.join(protected), body).unwrap();
+    sh_git(root, &["add", "."]);
+    sh_git(root, &["commit", "-q", "-m", "base"]);
+    sh_git(root, &["checkout", "-q", "-b", "side"]);
+    sh_git(root, &["mv", protected, "aida-cli-lib/src/approval.rs"]);
+    sh_git(root, &["commit", "-q", "-m", "move the gate file"]);
+
+    let changed = crate::land::changed_paths(root, "integration", "side").unwrap();
+    assert!(changed.iter().any(|path| path == protected), "{changed:?}");
+    let changed: Vec<&str> = changed.iter().map(String::as_str).collect();
+    let why = refusal(decide(
+        &low_risk(),
+        &[spec("BUG-1", &["effort:open:1h"])],
+        &changed,
+    ));
+    assert!(why.contains(protected), "{why}");
+}
+
 // ---- land status ---------------------------------------------------------
+// trace:STORY-2772.acbbdc03 | ai:claude
 
 struct Unapproved(Option<&'static str>);
 

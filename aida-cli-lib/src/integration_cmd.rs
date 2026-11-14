@@ -366,33 +366,27 @@ fn run_merge(root: &Path, pr: u64, push: bool, dry_run: bool) -> Result<()> {
     let subject = review::merge_subject(pr, &change.title);
     let tip = merge_checked(root, &change.head, &subject, &body, &config.checks)?;
     println!("merged #{pr} at {}", &tip[..11]);
-    if matches!(admission, Admission::ReviewAfterMerge(_)) {
-        let specs = reader
-            .resolve(&crate::land::specs_of(change))
-            .map_err(anyhow::Error::msg)?;
-        for (id, spec) in specs {
-            let Some(spec) = spec else { continue };
-            if spec.tags.contains(review::MERGED_BEFORE_REVIEW_TAG) {
-                continue;
-            }
-            match edit_tag(
-                root,
-                &spec.id,
-                "--add-tag",
-                review::MERGED_BEFORE_REVIEW_TAG,
-            ) {
-                Ok(()) => println!("  tagged {id} `{}`", review::MERGED_BEFORE_REVIEW_TAG),
-                // The tag is what the open list shows; the promotion check
-                // reads the merge itself and does not need it.
-                Err(error) => eprintln!("  {id} was not tagged: {error:#}"),
-            }
-        }
-    }
+    // Pushed first: a refused push must not leave specs marked for a merge
+    // that is not on `origin/integration`.
     if push {
         git(root, &["push", "origin", "HEAD:refs/heads/integration"])?;
         println!("pushed `integration` at {}", &tip[..11]);
     } else {
         println!("not pushed (pass --push, or `git push origin integration`).");
+    }
+    let specs: Vec<(String, Option<(uuid::Uuid, Vec<String>)>)> = reader
+        .resolve(&crate::land::specs_of(change))
+        .map_err(anyhow::Error::msg)?
+        .into_iter()
+        .map(|(id, spec)| (id, spec.map(|s| (s.id, s.tags.iter().cloned().collect()))))
+        .collect();
+    for (id, uuid) in review::specs_to_mark(&admission, &specs) {
+        match edit_tag(root, uuid, "--add-tag", review::MERGED_BEFORE_REVIEW_TAG) {
+            Ok(()) => println!("  tagged {id} `{}`", review::MERGED_BEFORE_REVIEW_TAG),
+            // The tag is what the open list shows; the promotion check
+            // reads the merge itself and does not need it.
+            Err(error) => eprintln!("  {id} was not tagged: {error:#}"),
+        }
     }
     Ok(())
 }
