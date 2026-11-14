@@ -31,6 +31,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "aida-ci-guards"
+version = "0.16.0"
+dependencies = [
+ "proc-macro2",
+ "regex",
+ "serde_json",
+ "serde_norway",
+ "syn",
+ "toml",
+]
+
+[[package]]
 name = "aida-cli"
 version = "0.16.0"
 dependencies = [
