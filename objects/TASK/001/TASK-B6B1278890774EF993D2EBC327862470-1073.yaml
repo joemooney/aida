@@ -325,12 +325,28 @@ description: |
   ### finding-hash:4843b9fe
 
   Pre-existing, related: record_verdict_at_inner (gate/ledger/mod.rs:290-300) binds a spec-only aida review record SPEC to changes_for_spec().last(). With two open changes, a spec-only refusal meant for change A lands on change B's ledger, and the new reader then counts it for B (bound.number == B) whatever its head.
+
+
+  ## Findings from PR-3979
+  Reviewed sha: aafe7a84acd65afca93ba68c6c53f4041a659c05
+
+  ### finding-hash:2c08aa50
+
+  Selection-audit discovery (tests/test_ci_structural_guards.py candidates()) relies on the ratchet/inventory naming convention, so differently named source-scanning guards (e.g. bug_1670 destructive_callers_do_not_use_tolerant_cache_reads, story_1728 cmdkit_framework_never_routes_through_command_registry) remain FULL-only and invisible to the audit.
+
+  ### finding-hash:cd9ab7dd
+
+  timeout-minutes: 2 on the Build-job Rust structural ratchets step is not enforced on the PR FAST path (gates run inside make check-ci-fast), so the key test overstates the <2 min guarantee; fast-gates job is 6m50s at this head vs ~5m50s before.
+
+  ### finding-hash:ac11f20d
+
+  docs/internal/testing/ci-test-shards.md says all 50 shared tests passed, but the harness now has 51 after resolve_aida_exe_ratchet_tests was added.
 status: Draft
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-13T20:01:56.623034248Z
-modified_at: 2026-11-14T05:31:47.372894813Z
+modified_at: 2026-11-14T06:10:03.885828169Z
 req_type: Task
 tags:
 - carried-finding:BUG-2546:56ed8b81
@@ -368,8 +384,11 @@ tags:
 - carried-finding:PR-3973:28356795
 - carried-finding:PR-3973:6810bcf9
 - carried-finding:PR-3973:c0a8d165
+- carried-finding:PR-3979:2c08aa50
 - carried-finding:PR-3979:360471e3
 - carried-finding:PR-3979:8a49a174
+- carried-finding:PR-3979:ac11f20d
+- carried-finding:PR-3979:cd9ab7dd
 - carried-finding:PR-3979:f1e29cc2
 - carried-finding:PR-3983:4843b9fe
 - carried-finding:PR-3983:76a786ef
@@ -418,6 +437,7 @@ tags:
 - finding-hash:15915e39
 - finding-hash:198d1196
 - finding-hash:28356795
+- finding-hash:2c08aa50
 - finding-hash:2c7ae2ea
 - finding-hash:2dfbd6d5
 - finding-hash:35d3eb09
@@ -437,10 +457,12 @@ tags:
 - finding-hash:7ce2cb14
 - finding-hash:8a49a174
 - finding-hash:97d326dd
+- finding-hash:ac11f20d
 - finding-hash:bf60843e
 - finding-hash:c0a8d165
 - finding-hash:c598b8f9
 - finding-hash:c7c082c2
+- finding-hash:cd9ab7dd
 - finding-hash:dee3f3a7
 - finding-hash:dfed3eb6
 - finding-hash:f1e29cc2
@@ -589,6 +611,11 @@ history:
   author: joe
   timestamp: 2026-11-14T05:31:48.720692691Z
   session_id: 01a1d8872386
+  changes: []
+- id: 01a1d8ad-6730-7353-bb88-e2577eb6a319
+  author: joe
+  timestamp: 2026-11-14T06:10:05.232819070Z
+  session_id: 01a1d8aa6a5d
   changes: []
 filed_at:
   code_sha: 91fe1e337894199f15365d3f8ecfaf81366f8291
