@@ -1,0 +1,33 @@
+id: 01a1d8f0-263c-78c1-aab6-e52eb65e7041
+spec_id: STORY-b6b1278890774ef993d2ebc327862470-717
+agreed_id: STORY-2794
+title: 'Review PR-4000: [AI:codex] feat(deputy): supervise script runners with restart logging (STORY-2775)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `(no-sess`) for branch `story-b6b1278890774ef993d2ebc327862470-698`.
+
+  - PR: <https://github.com/joemooney/aida/pull/4000>
+  - Branch: `story-b6b1278890774ef993d2ebc327862470-698` → `integration`
+
+  ## Covers
+
+  - STORY-2775
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 4000` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-14T07:22:59.516654500Z
+modified_at: 2026-11-14T07:22:59.516654500Z
+req_type: Story
+filed_at:
+  code_sha: 1801b34105752b7fda6dedc9cd1bf8b9e4881c59
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 1801b341057
+  vendor: claude
