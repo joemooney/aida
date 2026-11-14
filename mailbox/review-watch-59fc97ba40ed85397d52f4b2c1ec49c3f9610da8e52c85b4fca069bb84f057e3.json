@@ -1,0 +1,18 @@
+{
+  "id": "review-watch-59fc97ba40ed85397d52f4b2c1ec49c3f9610da8e52c85b4fca069bb84f057e3",
+  "thread_id": "review-watch-59fc97ba40ed85397d52f4b2c1ec49c3f9610da8e52c85b4fca069bb84f057e3",
+  "from": "review-watch",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1794667364428,
+  "body": "PR-4007 at 26a2f7666ac0b1c872c572054c277aff1657161e is ready to ship: an authorized approval of 26a2f7666ac0b1c872c572054c277aff1657161e covers the head, every CI check on 26a2f7666ac0b1c872c572054c277aff1657161e passed, it is 3 commit(s) behind `integration` on paths it does not touch, and no merge hold or review in progress is recorded. Update the branch with `gh pr update-branch 4007`, then run `aida pr ship 4007` once CI on the new head is green. The watcher only reports; it did not merge or update the branch.",
+  "subject": "PR-4007: ready to ship after its branch is updated",
+  "urgent": false,
+  "intent": "request",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "explicit"
+}
