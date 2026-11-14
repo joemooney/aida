@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-11T12:17:47.476312683Z
-modified_at: 2026-11-14T20:47:10.461707138Z
+modified_at: 2026-11-14T21:24:09.484907963Z
 req_type: Task
 relationships:
 - rel_type: BlockedBy
@@ -127,6 +127,13 @@ comments:
   modified_at: 2026-11-14T20:47:10.461707138Z
   session_id: 01a1dbbcb9c2
   harness_version: codex-cli 0.167.0
+- id: 01a1dbf2-428c-7943-b972-d9302f388a57
+  author: joe
+  content: 'Advisor ruling (2026-11-14 14:32, PR-3994 stays held): approved at d7486d5 but full-tier run at that head fails lib-1 on ONE test, test_env_base::bug_1994_path_isolation_tests::fake_git_is_scoped_to_one_child_and_real_git_reader_is_unaffected (''probe child exited before readiness'', child printed ''running 0 tests''). Cause is this PR: the module is now mounted as test_env_base::bug_1994_path_isolation_tests, but aida-cli-lib/src/tests/bug_1994_path_isolation_tests.rs still passes the hard-coded child test name ''test_env::bug_1994_path_isolation_tests::fake_git_path_probe_child'' to --exact, so the child matches nothing. Fix: derive the child name from module_path!() (preferred, survives the next move) or correct the literal; apply the same to every other hard-coded ''test_env::'' child name in that file and grep the moved test files for the same pattern. Gate: cargo test -p aida-cli-lib bug_1994_path_isolation (whole module) plus story_1888_gate_paths, then make check-ci-fast, push. Delta review of that commit only; ci:full is already on the PR.'
+  created_at: 2026-11-14T21:24:09.484907963Z
+  modified_at: 2026-11-14T21:24:09.484907963Z
+  session_id: 01a1dbd6-f8cd-7313-a123-75ebbeaa2afd
+  harness_version: 2.1.325 (Claude Code)
 history:
 - id: 01a1ca8b-157a-7c50-9f73-dc13d565bf63
   author: joe
