@@ -12,7 +12,6 @@ modified_at: 2026-11-14T18:42:36.883474160Z
 req_type: Bug
 tags:
 - docs
-- track:integration
 relationships:
 - rel_type:
     custom: implemented-by
@@ -95,12 +94,25 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: Completed
+- id: 01a1db5e-910d-78e2-9b9c-1d15f0d3bbb6
+  author: aida-auto-bump
+  timestamp: 2026-11-14T18:42:50.253011544Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
 processing_record:
 - id: 01a1db5e-5cd3-7051-9058-d9f6da96bf39
   timestamp: 2026-11-14T18:42:36.883471947Z
   agent: aida
   commit_sha: e14d6c9a70b0a348e789051c741c6f5c49a113bd
   summary: Completed via merge e14d6c9a
+- id: 01a1db5e-9343-7e50-820c-3c43efdf25e4
+  timestamp: 2026-11-14T18:42:50.819367727Z
+  agent: aida
+  commit_sha: e14d6c9a70b0a348e789051c741c6f5c49a113bd
+  summary: 'All BUG-2563 criteria met: all four probe paths (help_text/help_flags, help_all_commands, help_command_paths, subcommand_unrecognized) use one pinned AIDA_BIN-or-target/debug/aida binary, path printed before dynamic checks, refuses with no PATH fallback, --static stays build-free; covered by 4 new executable-fixture unit tests. Fast-tier CI green; contracts shard (live drift-guard) not run at fast tier.'
+  review_verdict: approved
 filed_at:
   code_sha: de8ddb0ee6ad36eb19103f8a60a4c66f26cfc037
   branch: integration
