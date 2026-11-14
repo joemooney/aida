@@ -3,16 +3,24 @@ spec_id: TASK-b6b1278890774ef993d2ebc327862470-1074
 agreed_id: TASK-3791
 title: FAST PR CI tier runs the cheap ratchet and inventory tests
 description: 'Operator agreed 2026-11-13 18:07 MST. Since STORY-2735, PR pushes run only fast gates + compile; the cheap ratchet/inventory tests (STORY-2326 env-key ratchet incl. DROPPED_AIDA_KEYS, launch-site count inventories such as pr_cmd.rs, store-writer inventory, and similar sub-second structural tests) only run in the lib/cli shards on train/main. Result: train 10 (#3975/#3976) went red on lib-1 because #3926 added AIDA_SWEEP_PARENT without its ratchet entry, costing a full train cycle. Acceptance: (1) the FAST tier (ci-gate-tiers fast + the Build fast-gates step) runs these tests by name/filter, adding <2 min wall time; (2) the selection is a checked list in one place, with a test that fails when a new ratchet/inventory test exists in the shards but not in the list (or a naming convention it globs); (3) make check-ci-fast runs the same set locally; (4) a fixture or note demonstrating that the #3926 class of failure is caught on the PR tier. Main track (ship by train).'
-status: Approved
+status: InProgress
 priority: High
-owner: ''
+owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-14T01:08:38.387968366Z
-modified_at: 2026-11-14T01:08:38.387968366Z
+modified_at: 2026-11-14T01:11:43.642939377Z
 req_type: Task
 tags:
 - ci
 - track:dell1
+history:
+- id: 01a1d79c-3f1a-70f1-b913-d2c94ef25eeb
+  author: aida-session-start
+  timestamp: 2026-11-14T01:11:43.642938240Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: bc24a1e6883b8fc1f036ca37e6fe3c4060d75255
   branch: main
