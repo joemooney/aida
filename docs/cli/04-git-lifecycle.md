@@ -789,6 +789,14 @@ A moved or unreadable remote vetoes
 reuse. For diagnosis, `AIDA_PULL_COALESCE=0 aida pull` disables coalescing;
 the same setting applies to `aida db sync --pull`.
 
+The pull in flight is named by a marker file beside the coalescing lock
+(`pull-<kind>-running.lock`: process id, process start identity, call token).
+The lock itself is taken only while a caller decides whether to wait, reuse or
+run, and is closed before the pull starts, so no coalescing lock is held or
+inherited while the store window, its hooks or `git gc` run. A marker whose
+process is gone is ignored. A pull started by a hook of the running pull does
+not wait for it: it runs at once and meets the ordinary store lock.
+
 `AIDA_PULL_COALESCE_WAIT_SECS` sets the wait budget in seconds (default 1200).
 On expiry the caller runs its own pull through the ordinary store lock.
 `AIDA_RECONCILE_WATERMARK_TTL_SECS` bounds reuse of a completed code-derived

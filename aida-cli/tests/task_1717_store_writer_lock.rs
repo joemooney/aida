@@ -1126,7 +1126,6 @@ fn a_pull_started_by_a_hook_inside_the_window_does_not_wait_for_its_parent() {
     let rc =
         std::fs::read_to_string(fx.obs.join("nested.rc")).expect("the hook ran the nested pull");
     let nested_out = std::fs::read_to_string(fx.obs.join("nested.out")).unwrap_or_default();
-    eprintln!("nested pull: rc/secs {rc:?}; output: {nested_out}");
     let mut parts = rc.split_whitespace();
     let code: i32 = parts.next().unwrap().parse().unwrap();
     let secs: u64 = parts.next().unwrap().parse().unwrap();
@@ -1138,8 +1137,13 @@ fn a_pull_started_by_a_hook_inside_the_window_does_not_wait_for_its_parent() {
         !nested_out.contains("waiting for a store pull already running"),
         "the nested pull waited for its own parent: {nested_out}"
     );
-    // The store lock is the outer pull's: the nested pull cannot have it.
+    // The store lock is the outer pull's: the nested pull cannot have it,
+    // and that lock, not anything else, is what ended it.
     assert_ne!(code, 0, "{nested_out}");
+    assert!(
+        nested_out.contains("waiting for the store write lock"),
+        "the nested pull ended for another reason: {nested_out}"
+    );
 }
 
 /// A read command's `--sync` pull holds the lock across the rebase, and a
