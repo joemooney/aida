@@ -1025,12 +1025,32 @@ description: |
   ### finding-hash:4b183b41
 
   Under refuse-on-conflict an overlapping head whose merge-tree result is unknown (git error, timeout, old git) is reviewed as if clean, in both pr_rebase.rs stale_base_launch (ConflictPrediction::Unknown) and review_watch_forge.rs merge_conflicts (None); the launch warning and docs do not say the conflict check could not be judged.
+
+
+  ## Findings from PR-4053
+  Reviewed sha: 3b1384288a404f27c73f68a7b50dfac5fd47d5b6
+
+  ### finding-hash:e95a72ea
+
+  Read-only gap: LiveChecks::message (pr_train.rs, GitHub branch) calls pr_cmd::fetch_pr_ship_metadata_via_forge, which resolves the forge with resolve_forge_kind (pr_cmd.rs:7216) and so rewrites a stale `[forge] provider = "pure-git"` config entry during `aida pr train --check`. The handler and the approval peek use peek_forge_kind to avoid exactly this, and the PR body and docs say the config is not repaired. Route the message read (and any other forge_for/resolve_forge_kind call reached with read_only set) through the peeked kind.
+
+  ### finding-hash:5b790bcc
+
+  The live read-only branches have no test: pr_train_check_handler, LiveChecks::checked_corpus with read_only (verdict judged without enforce_corpus_decision arming a hold or label), LiveChecks::mandate_cover with read_only (MANDATE_NOT_ASKED and the `mandate` gate token), and the non-zero exit. The story_2824 tests script FakeChecks, so the `mandate` gate name and the no-hold-armed corpus path are verified by source reading only.
+
+  ### finding-hash:fd4627d4
+
+  Acceptance 2 names the STORY-2809 full-tier rule, which is not on main (PR-4027 is open). Gate::FullCi is entered and immediately left at pr_train.rs:1597-1598, so it can never be reported, and docs/cli/04-git-lifecycle.md omits it. PR-4027 adds full_tier_gate inside typed_gate_member_with, and that gate appends a skip event and requests full CI; whichever PR lands second must set at_gate(Gate::FullCi) there and make it honour read_only, or --check will write.
+
+  ### finding-hash:d7ad1d67
+
+  The time budget is polled only between PRs (check_all): the setup reads (default-branch lookup, PR listing, live_trains) and each PR check (several gh calls and a git fetch) are not bounded by --timeout. With the 45s default, `--check --all-open` on a repository with many open PRs is likely to report the tail as not checked and exit non-zero. `--max` is also accepted with --check and silently ignored.
 status: Draft
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-13T20:01:56.623034248Z
-modified_at: 2026-11-14T19:14:34.485599450Z
+modified_at: 2026-11-14T19:27:04.093378821Z
 req_type: Task
 tags:
 - carried-finding:BUG-2543:2a99ebfc
@@ -1179,6 +1199,10 @@ tags:
 - carried-finding:PR-4052:8d1b3558
 - carried-finding:PR-4052:9dab249d
 - carried-finding:PR-4052:e40f3f6c
+- carried-finding:PR-4053:5b790bcc
+- carried-finding:PR-4053:d7ad1d67
+- carried-finding:PR-4053:e95a72ea
+- carried-finding:PR-4053:fd4627d4
 - carried-finding:STORY-2735:2c7ae2ea
 - carried-finding:STORY-2763:04ad58d8
 - carried-finding:STORY-2763:0d56e3a6
@@ -1268,6 +1292,7 @@ tags:
 - carried-from:PR-4046
 - carried-from:PR-4048
 - carried-from:PR-4052
+- carried-from:PR-4053
 - carried-from:STORY-2735
 - carried-from:STORY-2763
 - carried-from:STORY-2765
@@ -1322,6 +1347,7 @@ tags:
 - finding-hash:56ed8b81
 - finding-hash:5863b5f0
 - finding-hash:5b62cb1c
+- finding-hash:5b790bcc
 - finding-hash:5b9e60ad
 - finding-hash:5d2b67f3
 - finding-hash:5d395d55
@@ -1368,17 +1394,20 @@ tags:
 - finding-hash:cddc71c1
 - finding-hash:d0b021ea
 - finding-hash:d51c0f59
+- finding-hash:d7ad1d67
 - finding-hash:dbd4e4d5
 - finding-hash:dee3f3a7
 - finding-hash:dfed3eb6
 - finding-hash:e391cb46
 - finding-hash:e40f3f6c
 - finding-hash:e5eb0aa5
+- finding-hash:e95a72ea
 - finding-hash:f167aa2d
 - finding-hash:f1e29cc2
 - finding-hash:f238ea37
 - finding-hash:f3b82bc9
 - finding-hash:fcb8f322
+- finding-hash:fd4627d4
 - finding-hash:fe70e901
 - finding-hash:fefd3308
 - from-review:BUG-2543
@@ -1433,6 +1462,7 @@ tags:
 - from-review:PR-4046
 - from-review:PR-4048
 - from-review:PR-4052
+- from-review:PR-4053
 - from-review:STORY-2735
 - from-review:STORY-2763
 - from-review:STORY-2765
@@ -1807,6 +1837,11 @@ history:
   author: joe
   timestamp: 2026-11-14T19:14:36.486576747Z
   session_id: 01a1db76f7e1
+  changes: []
+- id: 01a1db87-1575-7493-9525-e446726542d6
+  author: joe
+  timestamp: 2026-11-14T19:27:05.589533533Z
+  session_id: 01a1db8298f8
   changes: []
 filed_at:
   code_sha: 91fe1e337894199f15365d3f8ecfaf81366f8291
