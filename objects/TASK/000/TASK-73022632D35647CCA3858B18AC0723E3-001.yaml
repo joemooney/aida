@@ -84,12 +84,25 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: Completed
+- id: 01a1d99f-3f7d-7b41-9802-37aadc5a6869
+  author: aida-auto-bump
+  timestamp: 2026-11-14T10:34:14.781889890Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
 processing_record:
 - id: 01a1d99c-8671-7f12-9fdd-2ac0c30685f3
   timestamp: 2026-11-14T10:31:16.337402170Z
   agent: aida
   commit_sha: e81b5754d976b81d044bb5aff1f29ba97aeaa730
   summary: Completed via merge e81b5754
+- id: 01a1d99f-4479-71d3-9347-8bd5b9cf6f2a
+  timestamp: 2026-11-14T10:34:16.057642454Z
+  agent: aida
+  commit_sha: e81b5754d976b81d044bb5aff1f29ba97aeaa730
+  summary: 'Test-only PR: subprocess regression under umask 002 exercises real health install via WatcherTests and asserts umask restore; it would fail if the STORY-2660 setUp fix were removed (.aida 0775 trips the shared-write refusal). No production code changed; CI fast gates green.'
+  review_verdict: approved
 filed_at:
   aida_version: 0.16.0
   aida_build_sha: 5b9a248a1b
