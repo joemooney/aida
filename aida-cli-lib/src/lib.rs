@@ -319,6 +319,7 @@ mod store_local;
 // trace:TASK-3223 | ai:codex
 pub mod store_mutation_client;
 mod store_mutation_entry;
+mod store_pull_coalesce; // trace:BUG-2565 | ai:claude
 mod store_push_pull;
 pub mod store_sync;
 mod supervise_cmd;
@@ -763,6 +764,10 @@ mod team_cmd;
 mod test_env;
 #[cfg(test)]
 mod test_exec;
+// trace:BUG-2573 | ai:codex
+#[cfg(test)]
+#[path = "../../aida-core/src/test_umask.rs"]
+mod test_umask;
 // trace:BUG-2191 | ai:claude — fixture git without detached auto-maintenance.
 #[cfg(test)]
 mod test_git;

@@ -730,6 +730,24 @@ absence of an active rebase does not imply a transient network problem. This
 target isolation does not serialize concurrent store commits or rebases.
 <!-- trace:TASK-1604 | ai:codex -->
 
+Concurrent pulls of the same kind in one checkout can reuse a successful
+in-flight pull only after checking that each selected leg contains the
+currently advertised origin head and the selected store leg has no pending
+writes. `aida pull` checks the code remote unless `--store-only` was selected.
+A moved or unreadable remote vetoes
+reuse. For diagnosis, `AIDA_PULL_COALESCE=0 aida pull` disables coalescing;
+the same setting applies to `aida db sync --pull`.
+
+`AIDA_PULL_COALESCE_WAIT_SECS` sets the wait budget in seconds (default 1200).
+On expiry the caller runs its own pull through the ordinary store lock.
+`AIDA_RECONCILE_WATERMARK_TTL_SECS` bounds reuse of a completed code-derived
+reconcile for unchanged code and store HEADs (default 900); set it to `0` to
+force reconciliation on every pull. These controls accept unsigned integer
+seconds; invalid values use the defaults. Disabling coalescing does not disable
+the reconcile watermark, so set both controls when diagnosing stale reconcile
+results.
+<!-- trace:BUG-2565 | ai:codex -->
+
 **Reach for it when** — starting work, syncing after others merged, or right after a merge to trigger the auto-bump. The `--dry-run` (and `--json`) variant shows what *would* come down — the safe "what changed upstream?" check.
 
 **Don't reach for it when** — the code leg refuses with "diverged" — that's not a `pull` failure, it's `pull` correctly refusing to auto-rebase. Follow the printed hint (`git pull --rebase` after inspecting) or use `aida rebase`. The `--auto` flag handles *stacked-branch* re-basing specifically; it deliberately refuses anything the classifier flags `diverged-risky`.
