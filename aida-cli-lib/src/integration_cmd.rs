@@ -456,7 +456,22 @@ fn run_promotion_check(root: &Path, tip: Option<&str>, since: Option<&str>) -> R
                 format!("`{since}` is not on the first-parent line of `{tip}` after `main`")
             })?
         }
-        None => review::unpromoted(&commits, &main_trees),
+        None => {
+            let left = review::unpromoted(&commits, &main_trees);
+            // Squashed promotions leave no ancestry: without `--since` the
+            // boundary is inferred, and says so.
+            println!(
+                "No --since given: the last promotion's cut is a guess ({}). Pass --since <commit> to state it.",
+                match commits.get(left.len()) {
+                    Some(cut) => format!(
+                        "{}, the newest integration commit whose content is a commit on main",
+                        &cut.sha[..11.min(cut.sha.len())]
+                    ),
+                    None => "none found, so every commit not on main is checked".to_string(),
+                }
+            );
+            left
+        }
     };
     let ledger_root = crate::review_watch::forge::main_root(root)?;
     let on_main = |sha: &str| {
