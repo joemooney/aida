@@ -111,6 +111,7 @@ mod tests {
             author: "writer".into(),
             gitlab: false,
             overlap: Some(false),
+            conflict: None,
             behind: Some(0),
             head_branch: None,
         }
@@ -999,6 +1000,7 @@ mod tests {
             author: "writer".into(),
             gitlab: false,
             overlap: Some(false),
+            conflict: None,
             behind: Some(0),
             head_branch: None,
         };
@@ -1138,6 +1140,7 @@ mod tests {
             author: "writer".into(),
             gitlab: false,
             overlap: Some(false),
+            conflict: None,
             behind: Some(0),
             head_branch: None,
         };
