@@ -1,0 +1,36 @@
+id: 01a1dbee-76ee-7a50-a0d9-3cbc41002869
+spec_id: BUG-b6b1278890774ef993d2ebc327862470-353
+agreed_id: BUG-2588
+title: 'Handshake hook test fails in a group: another test''s advisor grant on the test process reads as a live advisor'
+description: |
+  The lib test `seat_clone::seat_clone_handshake_tests::the_hook_reports_queued_then_unreachable_then_the_ack` passes alone and fails when run in one process with other tests.
+
+  Observed on dell1, 2026-11-14, at integration 7d0c929ce9d and at 31ab86c57e2:
+  - Alone (`cargo test --profile agent -p aida-cli-lib --lib -- the_hook_reports_queued_then_unreachable_then_the_ack`): passes, 3 of 3 runs at each of four commits.
+  - With the filter `seat_clone_handshake story2745 story_2745 deputy_shell agent_launcher handshake`: fails 3 of 3 at both commits, at story_b6b_100_seat_clone_handshake_tests.rs:284, with "advisor unreachable: an advisor is live but unregistered (pid <the test process> holds advisor seat grant <id> until ...)" where the test expects "advisor unreachable: no registered advisor".
+
+  Cause as far as read, not proven: the lib test binary has one temp home per process (test_home), and the grant store is `<home>/.aida/<grants>`. Some other test in the group writes an advisor seat grant bound to the test process's own pid. `advisor_handshake::advisor_presence` reads `seat_authority::held_grants`, finds that live holder, and reports an unregistered live advisor. The deputy_shell tests are the likely writer; I did not identify which one.
+
+  Also intermittent in the same group at both commits (cause not looked at): `deputy_shell::tests::a_paused_deputy_claims_nothing`, `deputy_shell::tests::status_tells_queued_running_done_and_cancelled_apart`, `agent_launcher_tests::apply_agent_default_flags_sets_contained_flag_for_claude`.
+
+  Cost so far: one held integration candidate and a four-commit bisect.
+
+  Acceptance:
+  - The handshake test passes when run in one process with the deputy_shell, agent_launcher and story2745 tests, 10 runs in a row.
+  - A test that mints a seat grant bound to the test process does so in a grant store no other test reads, or removes it before it returns.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-14T21:20:00.750959387Z
+modified_at: 2026-11-14T21:20:00.750959387Z
+req_type: Bug
+filed_at:
+  code_sha: 31ab86c57e2339ad2818dbe399a8b3ade84b5373
+  branch: integration
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: d5f90aedd3a
+  vendor: claude
+  session: 01a1dbaa-d75c-7d30-894c-172db7629c58
+  harness_version: 2.1.325 (Claude Code)
