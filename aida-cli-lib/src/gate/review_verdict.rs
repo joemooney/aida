@@ -3859,6 +3859,10 @@ pub fn active_verdicts_for(
     project_root: &Path,
     keys: impl IntoIterator<Item = String>,
 ) -> Vec<(String, RecordedVerdict)> {
+    // One gate-ledger discovery for the whole listing, re-validated before
+    // each reuse; every key's events are still read fresh.
+    // trace:BUG-2543 | ai:claude
+    let _discovery = super::ledger::checked::DiscoveryScope::enter();
     let mut out: Vec<(String, RecordedVerdict)> = keys
         .into_iter()
         .filter_map(|key| {
