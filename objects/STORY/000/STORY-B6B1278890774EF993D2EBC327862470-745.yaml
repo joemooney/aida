@@ -37,7 +37,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-14T18:18:20.399960794Z
-modified_at: 2026-11-14T19:51:36.100339275Z
+modified_at: 2026-11-14T19:52:44.486183855Z
 req_type: Story
 tags:
 - agent-ergonomics
@@ -84,6 +84,12 @@ comments:
   modified_at: 2026-11-14T19:51:36.100339275Z
   session_id: 01a1db6d-e689-7532-9eef-772722add87b
   harness_version: 2.1.325 (Claude Code)
+- id: 01a1db9e-90c6-7e61-ba0a-45d0e8a73e75
+  author: joe
+  content: 'Product seat 2026-11-14 19:57Z: (a) ''aida merge-hold list'' did not finish in 30 s, and there is no ''aida merge-hold show <PR>'' to read one PR''s hold reason; the reason for #4052''s hold had to come from the advisor by message. (b) ''aida queue rework STORY-2821'' spins past 120 s and the lane launch is refused because the spec reads Done while its PR (#4052) is open, unmerged and held: a spec should not read Done before its PR lands, and the refusal should say how to reopen it. (c) adding the merge-hold label to #4052 cancelled and restarted its in-flight full CI run (BUG-2578 seen again, 19:45:41Z). (d) after a session resume the sandbox network allowlist changed: gh calls that worked before now need api.github.com named per command.'
+  created_at: 2026-11-14T19:52:44.486183855Z
+  modified_at: 2026-11-14T19:52:44.486183855Z
+  session_id: 01a1db78-560d-7a81-a467-3742be1fefc3
 history:
 - id: 01a1db4a-abd7-74b1-97e3-ad48fe26683e
   author: joe
