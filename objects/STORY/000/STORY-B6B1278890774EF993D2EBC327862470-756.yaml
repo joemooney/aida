@@ -31,7 +31,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-14T22:34:21.521062494Z
-modified_at: 2026-11-14T22:52:41.138799448Z
+modified_at: 2026-11-14T23:00:23.958183512Z
 req_type: Story
 tags:
 - ci
@@ -55,6 +55,13 @@ comments:
   content: 'Implementation in native lane: added scripts/ratchet-set.json (frozen application and shared-module test inventories), one check-ratchets.py runner, make check-ratchets and check-ci-source; check-ci-fast now includes ratchets so existing host lane wrapper executes them. Hosted FAST runs the same set after workspace checking; implementer preflight names it and review policy makes red blocking. TASK-1717 is exempt: real subprocess/store-lock barrier integration, not a source ratchet. Python selection/CI/inventory/manual fixtures: 88 passed before the additional empty-filter negative control (now 89 total expected); targeted Cargo jobs and full fast gate are queued/running through launcher. Acceptance evidence remains incomplete: historical failed-head replay and three hosted PR warm before/after timings need host runs; no warm budget claim is made. PR-4027 remains OPEN as of 2026-11-14 22:50Z, so the requested sequencing is not yet satisfied. This lane will declare Refs and retain In Progress until that evidence/sequencing is resolved.'
   created_at: 2026-11-14T22:52:41.138799448Z
   modified_at: 2026-11-14T22:52:41.138799448Z
+  session_id: 01a1dc3cc346
+  harness_version: codex-cli 0.167.0
+- id: 01a1dc4a-5f16-72c1-9ad4-91710be55524
+  author: dirtlab
+  content: 'Measured lane results so far: seeded agent-profile gate-path build 7m48s, then 52/52 tests passed in 1.44s; JSON-audit integration build 4m21s, then 2/2 selected audits passed in 9.64s. These sequential first-build costs already total 12m09s of compilation (not a hosted warm-FAST measurement). No test selection was narrowed. Proposed fallback if hosted warm FAST exceeds 12 minutes: extract the application source scanners into the existing dependency-light shared guard harness, retaining the linked CLI audit/help/manual checks as a parallel cached application lane; preserve the same checked manifest and blocking aggregate. Warm three-PR comparison is still required before calling the performance acceptance met.'
+  created_at: 2026-11-14T23:00:23.958183512Z
+  modified_at: 2026-11-14T23:00:23.958183512Z
   session_id: 01a1dc3cc346
   harness_version: codex-cli 0.167.0
 history:
