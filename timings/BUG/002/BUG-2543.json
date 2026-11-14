@@ -9,9 +9,33 @@
     {
       "at": "2026-11-14T18:43:11.025765787Z",
       "closed_by": "auto-bump"
+    },
+    {
+      "at": "2026-11-14T18:43:13.090255235Z",
+      "closed_by": "auto-bump"
     }
   ],
   "events": [
+    {
+      "ts": "2026-11-13T05:59:03.614710574Z",
+      "spec": "BUG-2543",
+      "kind": {
+        "event": "UnshippedWorkDetected",
+        "spec": "BUG-2543",
+        "branch": "bug-2543-listing-snapshot",
+        "first_seen": "2026-11-13T05:59:03.614648350+00:00"
+      }
+    },
+    {
+      "ts": "2026-11-14T05:27:26.572514493Z",
+      "spec": "BUG-2543",
+      "kind": {
+        "event": "UnshippedWorkDetected",
+        "spec": "BUG-2543",
+        "branch": "bug-2543-single-discovery",
+        "first_seen": "2026-11-14T05:27:26.572449777+00:00"
+      }
+    },
     {
       "ts": "2026-11-14T18:43:04.580109095Z",
       "spec": "BUG-2543",
@@ -24,6 +48,16 @@
     },
     {
       "ts": "2026-11-14T18:43:10.322212714Z",
+      "spec": "BUG-2543",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "e14d6c9a70b0a348e789051c741c6f5c49a113bd",
+        "pr": 4040,
+        "closed_by": "auto-bump"
+      }
+    },
+    {
+      "ts": "2026-11-14T18:43:12.767843438Z",
       "spec": "BUG-2543",
       "kind": {
         "event": "SpecCompleted",
