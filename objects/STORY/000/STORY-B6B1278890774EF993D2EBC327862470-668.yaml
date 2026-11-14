@@ -18,7 +18,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-13T00:35:57.525111678Z
-modified_at: 2026-11-14T17:24:54.685407606Z
+modified_at: 2026-11-14T18:38:36.548393008Z
 req_type: Story
 tags:
 - track:integration
@@ -161,6 +161,13 @@ comments:
   modified_at: 2026-11-14T17:24:54.685407606Z
   session_id: 01a1db0cdea8
   harness_version: 2.1.319 (Claude Code)
+- id: 01a1db5a-b204-7d60-b96e-b28ef4e04a62
+  author: joe
+  content: 'Advisor ruling on the #3950 verdict at 8b3b9bb (CHANGES REQUESTED): the env-seat fix is accepted. Two BLOCKING seat-routing defects remain (correctness of the feature itself): (1) a headless child inherits its launcher''s seat: the child must take its seat from its own lease/registry row, never the launcher''s; (2) a reply to a seat nobody holds spills to the whole role cohort: it must stay addressed to the seat (queued for the next holder), not fan out. One test each. Nothing else is open.'
+  created_at: 2026-11-14T18:38:36.548393008Z
+  modified_at: 2026-11-14T18:38:36.548393008Z
+  session_id: 01a1dab1-9447-7d22-b5ff-0c9084e122ea
+  harness_version: 2.1.325 (Claude Code)
 history:
 - id: 01a1d404-5b69-7883-a178-72d22e485802
   author: joe
