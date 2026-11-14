@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-11T12:17:47.476312683Z
-modified_at: 2026-11-14T06:26:13.137299133Z
+modified_at: 2026-11-14T06:32:35.909338133Z
 req_type: Task
 relationships:
 - rel_type: BlockedBy
@@ -24,6 +24,13 @@ comments:
   content: 'PR6 extraction implemented in native seat; edits remain uncommitted for host publication. Shared aida-testkit tests: 38 passed. Tooling checks passed: crate-split tools (17), ownership liveness (2), executable fixtures (8), git maintenance (8), crate-glob and gate dependency ratchets. Final CLI adapter/importer tests are running in lane job j20261114T062429047-2-0. CI before evidence is recorded in plan section 5.3 (run 43562483470: lib-0 test step 685s; lib-1 556s). After timing must be collected from host-published FULL CI before closing criterion 5; declaration will retain Refs. Headless draft-finding filing failed closed because host WORK allocation dispenser is group-writable mode 0664; no finding was created. Configured reviewed codegraph executable /home/joe/ai/aida/.codegraph/proxy-state/bin/codegraph is absent; host deployment/path correction needed. No Git metadata permissions were changed.'
   created_at: 2026-11-14T06:26:13.137299133Z
   modified_at: 2026-11-14T06:26:13.137299133Z
+  session_id: 01a1d8b27330
+  harness_version: codex-cli 0.167.0
+- id: 01a1d8c2-0345-7360-ab6f-90f29df3d8b0
+  author: dirtlab
+  content: 'Final validation: shared aida-testkit 38 passed; combined CLI selection j20261114T063001119-2-0 passed with 111 passed, 0 failed, 1 scheduled stress ignored at --test-threads=16. The earlier combined run exposed three unlocked ambient-identity heartbeat-fixture races; adding the existing shared env_lock to all 13 heartbeat tests fixed the combined run. Extraction-only CLI selection also passed (14 passed, 1 ignored). Formatting, whitespace, ledger no-growth, crate-glob, gate dependency and fixture/source guards pass. Full changed-file list and validation/blockers are in /tmp/TASK-3784-handoff.txt. Host publication should retain Refs until after FULL CI shard timings are recorded. No queue completion from this native seat.'
+  created_at: 2026-11-14T06:32:35.909338133Z
+  modified_at: 2026-11-14T06:32:35.909338133Z
   session_id: 01a1d8b27330
   harness_version: codex-cli 0.167.0
 history:
