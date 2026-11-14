@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-12T08:35:37.046532324Z
-modified_at: 2026-11-14T19:13:59.197512230Z
+modified_at: 2026-11-14T19:44:16.476465552Z
 req_type: Bug
 tags:
 - track:integration
@@ -268,6 +268,13 @@ comments:
   modified_at: 2026-11-14T19:13:59.197512230Z
   session_id: 01a1db6d-e689-7532-9eef-772722add87b
   harness_version: 2.1.325 (Claude Code)
+- id: 01a1db96-d05c-7f72-94f9-aa30770ba452
+  author: dirtlab
+  content: 'Round 8 (lane on bug-b6b1278890774ef993d2ebc327862470-296, uncommitted working tree on top of 723df3554f; host stages and commits). (1) Staged merge of integration 91d3b85f92: both conflicted files (gate/ledger/checked.rs, gate/ledger/bug_2543_shared_discovery_tests.rs) resolved to the PR side in every hunk; the incoming BUG-2543 code is the same commit this branch already ported onto bound-only discovery (30f14d9b33 then 3060a9a4f7), so nothing from integration is dropped. (2) Advisor ruling 2026-11-14 12:14: a selection by spec label now trusts the bindings only while the by-spec hint confirms them (present and naming exactly the bound changes). Hint absent or different: the selection strictly reads every change ledger (bootstrap ceiling, no payload retained, reused per thread while every ledger keeps its stat identity) and takes every change whose events carry the label. Both the strict selector (Discovery::spec_changes) and the lossy spec-keyed reader (project::verdict_events) do this; a full read that refuses makes the strict one refuse naming the file and the lossy one withhold the bound reviews. Tests inverted: binding deleted with hint missing, and binding deleted with hint still naming it, both now see the request-changes verdict. Tests: gate::ledger + bug_2403 alias + review_alias 154 passed 0 failed; wider gate::/review_/doctor run 2535 passed, 10 failed, none in the ledger (7 need a built aida binary, 2 mail-retention writer admission, 1 mandate expiry timestamp). make check-ci-fast could not finish inside this lane''s 60 s tool cap (first 4 gates passed, then killed); rustfmt on the changed files is clean. OPEN FOR THE ADVISOR: (a) a binding deleted while the hint is stale in the same way (both lack the same change) is byte-identical to a spec never recorded on that change, so this fix does not catch it; only a full read on every selection or a new stat-verified index would. (b) Cost of the ruling as written: a label with no hint at all (never reviewed, or an unused alias in a cross-alias selection) takes the full read on every selection, and an unreadable unrelated change ledger then refuses that selection again. (c) aida ship refused the Refs declaration here (standalone implementer launch), so none is recorded.'
+  created_at: 2026-11-14T19:44:16.476465552Z
+  modified_at: 2026-11-14T19:44:16.476465552Z
+  session_id: 01a1db7e239f
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1cee6-975b-7d40-8689-d35e1f109d99
   author: joe
