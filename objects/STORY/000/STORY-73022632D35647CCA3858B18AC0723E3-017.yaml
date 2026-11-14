@@ -21,8 +21,19 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-14T18:41:33.866005083Z
-modified_at: 2026-11-14T18:41:33.866005083Z
+modified_at: 2026-11-14T18:41:40.320321457Z
 req_type: Story
+relationships:
+- rel_type:
+    custom: implements
+  target_id: 01a1db40-4dac-7683-8862-684cc2eb5629
+  created_at: 2026-11-14T18:41:40.320302569Z
+  created_by: dirtlab
+history:
+- id: 01a1db5d-8639-7872-9bce-274b7bae228b
+  author: dirtlab
+  timestamp: 2026-11-14T18:41:41.945161015Z
+  changes: []
 filed_at:
   code_sha: e14d6c9a70b0a348e789051c741c6f5c49a113bd
   branch: main
