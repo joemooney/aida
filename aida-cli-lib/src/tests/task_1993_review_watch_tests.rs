@@ -3708,9 +3708,27 @@ fn review_watch_fast_rounds_count_patch_changes_and_strict_counts_heads() {
         }),
     );
     assert_eq!(store.history("PR-42").unwrap().blocking(), 2);
+    assert!(skipped_rounds(root).is_empty(), "plain history audits nothing");
     assert_eq!(
         store.history_for_head("PR-42", &merged).unwrap().blocking(),
         1
+    );
+    // AC5: the skipped round is audited on the ledger with its patch proof.
+    // trace:STORY-2763 | ai:claude
+    let skipped = skipped_rounds(root);
+    assert_eq!(skipped.len(), 1, "{skipped:?}");
+    let (head, policy, proof) = &skipped[0];
+    assert_eq!(head.as_deref(), Some(merged.as_str()));
+    assert_eq!(policy, "fast");
+    let pair: BTreeSet<&str> = [&proof["reviewed_sha"], &proof["same_patch_as"]]
+        .into_iter()
+        .map(|v| v.as_str().unwrap())
+        .collect();
+    assert_eq!(pair, BTreeSet::from([approved.as_str(), merged.as_str()]));
+    let patch = proof["patch_id"].as_str().unwrap();
+    assert!(
+        patch.len() == 40 && patch.chars().all(|c| c.is_ascii_hexdigit()),
+        "{proof}"
     );
     // A genuine new patch still consumes a distinct round.
     carry::write(root, "new.txt", "new patch content\n");
@@ -3731,10 +3749,41 @@ fn review_watch_fast_rounds_count_patch_changes_and_strict_counts_heads() {
     );
     let strict = carry::commit(root, "strict policy");
     carry::git(root, &["update-ref", "refs/remotes/origin/main", &strict]);
+    let audited = skipped_rounds(root).len();
     assert_eq!(
         store.history_for_head("PR-42", &merged).unwrap().blocking(),
         2
     );
+    assert_eq!(
+        skipped_rounds(root).len(),
+        audited,
+        "the strict policy skips no round, so it audits none"
+    );
+}
+
+/// PR-42's `skipped-round` freshness decisions: (head, policy, proof).
+// trace:STORY-2763 | ai:claude
+fn skipped_rounds(root: &Path) -> Vec<(Option<String>, String, serde_json::Value)> {
+    use crate::gate::ledger::{self, ChangeKey, EventBody};
+    let Ok(store) = ledger::store_root(root) else {
+        return Vec::new();
+    };
+    ledger::checked::read_change_events(
+        &store,
+        ChangeKey::pr(42),
+        &mut ledger::checked::Budget::default(),
+    )
+    .unwrap_or_default()
+    .into_iter()
+    .filter_map(|e| match e.body {
+        EventBody::FreshnessDecision {
+            policy,
+            decision,
+            proof,
+        } if decision == "skipped-round" => Some((e.head, policy, proof)),
+        _ => None,
+    })
+    .collect()
 }
 
 // AC2: a textual conflict found in preflight routes to rework, so the
@@ -3760,10 +3809,9 @@ fn story2763_conflict_preflight_exits_reservation_without_failing_a_round() {
     .expect("a routed conflict is not a reviewer failure");
     assert!(!launched.get(), "no reviewer starts on a conflicting PR");
     let recorded = &store.load().unwrap().entries[&c.key()].attempts[0];
-    // The shared transition classifies an observed exit before reviewer spawn
-    // as a retryable setup failure, rather than a completed reviewer attempt.
-    // trace:STORY-2763 | ai:codex
-    assert_eq!(recorded.phase, Phase::Failed);
+    // A routed conflict is a deliberate exit, never phase=failed.
+    // trace:STORY-2763 | ai:claude
+    assert_eq!(recorded.phase, Phase::Exited);
     assert!(recorded
         .diagnostic
         .as_deref()

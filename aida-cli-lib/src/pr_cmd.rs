@@ -7805,11 +7805,10 @@ pub(crate) fn preflight_stale_base_check_with_info(
         let landed =
             crate::gate::review_freshness::landed_tree(project_root, &origin_base, head.trim());
         // Always remove our scratch ref, including a textual conflict.
-        let _ = std::process::Command::new("git")
-            .arg("-C")
-            .arg(project_root)
-            .args(["update-ref", "-d", &pr_local_branch])
-            .status();
+        let _ = crate::gate::review_freshness::git(
+            project_root,
+            &["update-ref", "-d", &pr_local_branch],
+        );
         if let Err(e) = landed {
             if e.is::<crate::gate::review_freshness::NeedsRework>() {
                 crate::review_launch::route_rework(project_root, n, head.trim())?;

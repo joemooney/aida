@@ -274,13 +274,14 @@ pub(crate) fn route_rework(root: &Path, pr: u64, head: &str) -> Result<()> {
             info.head_oid == head,
             "head moved before conflict rework routing"
         );
-        let status = crate::launch::control_child()?
-            .current_dir(root)
-            .args(["queue", "rework", id, "--for", "implementer", "--no-pull", "--reason",
-                &format!("PR-{pr} at {head} conflicts with the protected base; resolve the conflict before review")])
-            .status()?;
+        let reason = format!(
+            "PR-{pr} at {head} conflicts with the protected base; resolve the conflict before review"
+        );
+        let args = [
+            "queue", "rework", id, "--for", "implementer", "--no-pull", "--reason", &reason,
+        ];
         anyhow::ensure!(
-            status.success(),
+            dispatch_rework(root, &args)?,
             "implementer rework routing failed for {id}"
         );
     }
@@ -292,6 +293,55 @@ pub(crate) fn route_rework(root: &Path, pr: u64, head: &str) -> Result<()> {
         "rework-routed",
         serde_json::json!({"subjects": ids}),
     )
+}
+
+#[cfg(test)]
+thread_local! {
+    static TEST_REWORK_DISPATCHES: std::cell::RefCell<Option<Vec<Vec<String>>>> =
+        const { std::cell::RefCell::new(None) };
+}
+
+/// Run one `aida queue rework` control child. Under test, a recording scope
+/// captures the invocation instead (the test binary is no AIDA executable).
+// trace:STORY-2763 | ai:claude
+fn dispatch_rework(root: &Path, args: &[&str]) -> Result<bool> {
+    #[cfg(test)]
+    {
+        let recorded = TEST_REWORK_DISPATCHES.with(|d| {
+            d.borrow_mut()
+                .as_mut()
+                .map(|calls| calls.push(args.iter().map(|a| a.to_string()).collect()))
+                .is_some()
+        });
+        if recorded {
+            return Ok(true);
+        }
+    }
+    Ok(crate::launch::control_child()?
+        .current_dir(root)
+        .args(args)
+        .status()?
+        .success())
+}
+
+/// Run `f` recording every rework dispatch as a successful control child.
+// trace:STORY-2763 | ai:claude
+#[cfg(test)]
+pub(crate) fn recording_rework_dispatches<R>(f: impl FnOnce() -> R) -> (R, Vec<Vec<String>>) {
+    struct Reset(Option<Vec<Vec<String>>>);
+    impl Drop for Reset {
+        fn drop(&mut self) {
+            let prev = self.0.take();
+            TEST_REWORK_DISPATCHES.with(|d| *d.borrow_mut() = prev);
+        }
+    }
+    let reset = Reset(TEST_REWORK_DISPATCHES.with(|d| d.borrow_mut().replace(Vec::new())));
+    let out = f();
+    let calls = TEST_REWORK_DISPATCHES
+        .with(|d| d.borrow_mut().take())
+        .unwrap_or_default();
+    drop(reset);
+    (out, calls)
 }
 
 #[cfg(test)]
@@ -666,6 +716,59 @@ mod tests {
             route_rework(root, 42, "f".repeat(40).as_str()).is_err(),
             "a receipt for one head never covers another"
         );
+    }
+
+    // AC2: a conflict on the current head dispatches exactly one implementer
+    // rework per subject, then writes the rework-routed receipt so the next
+    // poll dispatches nothing.
+    // trace:STORY-2763 | ai:claude
+    #[test]
+    fn story2763_conflict_dispatches_implementer_rework_and_records_receipt() {
+        if crate::test_env::run_path_isolated_test() {
+            return;
+        }
+        use crate::gate::review_carryover::tests as carry;
+        let (fixture, approved) = carry::fixture();
+        let root = fixture.path();
+        carry::write(
+            root,
+            ".aida/config.toml",
+            "[review]\nfreshness = 'fast'\n[forge]\nprovider = \"github\"\n",
+        );
+        let bin = root.join("fake-bin");
+        std::fs::create_dir(&bin).unwrap();
+        crate::test_exec::write_executable(&bin.join("gh"), &format!(
+            "#!/bin/sh\nprintf '%s\\n' '{{\"baseRefName\":\"main\",\"headRefName\":\"pr\",\"headRefOid\":\"{approved}\",\"isCrossRepository\":false,\"isDraft\":false}}'\n"
+        ));
+        let path = format!("{}:/usr/bin:/bin", bin.display());
+        let _env = crate::test_env::AmbientGuard::hermetic_and(
+            root,
+            None,
+            &[("PATH", Some(&path)), ("AIDA_CONTAINED", None)],
+        );
+        let subject = crate::ReviewPrSubject {
+            head_ref: "pr".to_string(),
+            commit_subjects: vec!["[AI:claude] feat(x): conflicting work (STORY-1)".to_string()],
+        };
+        let (routed, calls) = crate::with_review_pr_subject(subject, || {
+            recording_rework_dispatches(|| route_rework(root, 42, &approved))
+        });
+        routed.expect("conflict routes to implementer rework");
+        assert_eq!(calls.len(), 1, "{calls:?}");
+        let call = &calls[0];
+        assert_eq!(
+            &call[..6],
+            ["queue", "rework", "STORY-1", "--for", "implementer", "--no-pull"]
+        );
+        assert_eq!(call[6], "--reason");
+        assert!(call[7].contains(&format!("PR-42 at {approved}")), "{call:?}");
+        assert!(
+            freshness::decision_exists(root, 42, &approved, "rework-routed").unwrap(),
+            "routing writes the per-head receipt"
+        );
+        let (again, calls) = recording_rework_dispatches(|| route_rework(root, 42, &approved));
+        again.unwrap();
+        assert!(calls.is_empty(), "the receipt prevents a second dispatch");
     }
 
     // Evidence for a superseded head of the same PR, or past the age limit,

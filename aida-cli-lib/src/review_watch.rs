@@ -1157,6 +1157,23 @@ impl Store {
         phase: Phase,
         diagnostic: Option<String>,
     ) -> Result<Attempt> {
+        self.transition_classified(key, token, phase, diagnostic, true)
+    }
+    /// A textual conflict routed to rework in preflight is a deliberate exit,
+    /// not a queue setup failure: record it Exited without the setup
+    /// conversion, so it spends no retry and is never phase=failed.
+    // trace:STORY-2763 | ai:claude
+    fn transition_routed(&self, key: &str, token: &str, diagnostic: String) -> Result<Attempt> {
+        self.transition_classified(key, token, Phase::Exited, Some(diagnostic), false)
+    }
+    fn transition_classified(
+        &self,
+        key: &str,
+        token: &str,
+        phase: Phase,
+        diagnostic: Option<String>,
+        setup_conversion: bool,
+    ) -> Result<Attempt> {
         let me = Identity::current()?;
         self.transaction(key, |state| {
             let attempt = state
@@ -1192,7 +1209,8 @@ impl Store {
             // attempt. Retry this head at most once for a transient lease/setup blocker.
             // An ambiguous or still-live child retains the terminal refusal.
             // trace:BUG-2450 | ai:codex
-            let setup_failed = phase == Phase::Exited
+            let setup_failed = setup_conversion
+                && phase == Phase::Exited
                 && (!attempt.setup_retry || attempt.retryable_fetch)
                 && !attempt.reviewer_spawning
                 && attempt.descendants_gone();
@@ -2342,9 +2360,7 @@ fn execute_reservation(
         // without consuming a review round or claiming reviewer completion.
         // trace:STORY-2763 | ai:codex
         if error.is::<crate::gate::review_freshness::NeedsRework>() {
-            retry_busy(|| {
-                store.transition_with(key, token, Phase::Exited, Some(error.to_string()))
-            })?;
+            retry_busy(|| store.transition_routed(key, token, error.to_string()))?;
             return Ok(());
         }
         retry_busy(|| store.transition(key, token, Phase::Failed))?;
@@ -2983,16 +2999,9 @@ fn watch_change(
             )?;
             return Ok(());
         }
-        repo.probe(root, &mut change)?;
-        if change.overlap == Some(true) {
-            crate::review_launch::route_rework(root, change.id, &change.head)?;
-            record_skip(
-                store,
-                &change,
-                Some("textual conflict routed to implementer rework"),
-            )?;
-            return Ok(());
-        }
+        // The shared base probe below supplies the synthetic-merge evidence.
+        // A fast change skips the branch update, so a conflict is still
+        // routed before any reviewer reservation.
     }
     // A reviewed head is reported on, and needs no base probe to be skipped.
     // trace:TASK-1945 | ai:claude
@@ -3023,6 +3032,17 @@ fn watch_change(
     }
     repo.probe(root, &mut change)
         .context("base evidence refused")?;
+    // trace:STORY-2763 | ai:claude — fast reviews route a textual conflict
+    // to implementer rework instead of reserving a reviewer.
+    if fast && change.overlap == Some(true) {
+        crate::review_launch::route_rework(root, change.id, &change.head)?;
+        record_skip(
+            store,
+            &change,
+            Some("textual conflict routed to implementer rework"),
+        )?;
+        return Ok(());
+    }
     crate::gate::seat_authority::validate_child_delegation(root, "reviewer")?;
     let action = select(
         store,
