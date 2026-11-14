@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-13T20:52:54.357683400Z
-modified_at: 2026-11-14T22:18:05.658130499Z
+modified_at: 2026-11-14T23:17:22.159457860Z
 req_type: Bug
 tags:
 - perf
@@ -178,6 +178,13 @@ comments:
   created_at: 2026-11-14T22:10:00.038333956Z
   modified_at: 2026-11-14T22:10:00.038333956Z
   session_id: 01a1dbd6-f8cd-7313-a123-75ebbeaa2afd
+  harness_version: 2.1.325 (Claude Code)
+- id: 01a1dc59-e86f-72b1-bd22-aa64c0c63445
+  author: joe
+  content: 'Fix PR #4070 against integration at 2b88689f26e: coalescing lock released before the pull, in-flight pull named by a marker judged through proc_identity, hook-invoked pull runs at once. dell1: task_1717_store_writer_lock 47/47, lib 18/18, check-ci-fast 48 gates.'
+  created_at: 2026-11-14T23:17:22.159457860Z
+  modified_at: 2026-11-14T23:17:22.159457860Z
+  session_id: 01a1dc22-6890-7591-9d0d-b7e90d52018c
   harness_version: 2.1.325 (Claude Code)
 history:
 - id: 01a1d8a9-d3a1-7243-a396-3ba4fdaf7412
