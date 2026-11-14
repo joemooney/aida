@@ -1575,6 +1575,26 @@ fn story2763_watcher_overlapping_clean_merge_fast_train_and_strict_review() {
                 train::eligible(&c, &evidence).is_err(),
                 "CI must cover destination head"
             );
+            // A proved carry-over covers this destination only. Re-reading
+            // the forge head remains mandatory after approval and CI reads.
+            // trace:STORY-2763 | ai:codex
+            evidence.ci = Ok(green(&head));
+            evidence.head = Ok(approved.clone());
+            let refusal = train::eligible(&c, &evidence).unwrap_err();
+            assert!(
+                matches!(refusal, crate::pr_train::MemberGateError::Refused(ref reason)
+                    if reason.contains("head moved")),
+                "carry-over must refuse a changed destination: {refusal:?}"
+            );
+            evidence.head = Err("forge head unavailable".into());
+            let refusal = train::eligible(&c, &evidence).unwrap_err();
+            assert!(
+                matches!(refusal, crate::pr_train::MemberGateError::Unavailable(ref reason)
+                    if reason.contains("forge head unavailable")),
+                "missing destination evidence must stay unavailable: {refusal:?}"
+            );
+            evidence.head = Ok(head.clone());
+            train::eligible(&c, &evidence).unwrap();
         }
     }
 }
