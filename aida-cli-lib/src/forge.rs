@@ -2100,6 +2100,46 @@ impl GitHubForge {
     }
 }
 
+/// Every open GitHub change with its title, labels and check rollup, in one
+/// bounded read. `pin` fixes the host and clears inherited routing, as the
+/// caller's pinned discovery does. This is a plain read for the landing
+/// reconciler's pass: it is not a train forge call.
+// trace:STORY-2768 | ai:claude
+pub(crate) fn github_open_changes_detailed(
+    root: &Path,
+    slug: &str,
+    pin: &dyn Fn(&mut Command),
+) -> Result<Vec<serde_json::Value>> {
+    let mut command = Command::new("gh");
+    command
+        .args([
+            "pr",
+            "list",
+            "--state",
+            "open",
+            "--limit",
+            "1000",
+            "--repo",
+            slug,
+            "--json",
+            "number,title,headRefOid,headRefName,baseRefName,isDraft,labels,statusCheckRollup,updatedAt",
+        ])
+        .current_dir(root)
+        .stdin(std::process::Stdio::null());
+    pin(&mut command);
+    let out = crate::command_output_with_timeout(command, std::time::Duration::from_secs(60))
+        .context("the forge listing of open changes failed to run or timed out")?;
+    anyhow::ensure!(
+        out.status.success(),
+        "the forge listing of open changes failed: {}",
+        String::from_utf8_lossy(&out.stderr)
+            .split_whitespace()
+            .collect::<Vec<_>>()
+            .join(" ")
+    );
+    serde_json::from_slice(&out.stdout).context("invalid forge listing")
+}
+
 impl Forge for GitHubForge {
     // trace:TASK-1529 | ai:codex
     fn authenticated_user_login(&self) -> Result<String> {
