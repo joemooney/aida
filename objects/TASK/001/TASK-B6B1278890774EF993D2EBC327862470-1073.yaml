@@ -729,12 +729,28 @@ description: |
   ### finding-hash:7d6b05ec
 
   aida-cli-lib/src/lane_recovery.rs reconcile_observed_in writes the `Lane exit evidence` comment before the forge lookup on every lane and session exit, including exits with an open PR, and a second `Lane recovery` comment follows when no PR is found. AC2 scopes the record to exits without an open PR; consider one comment, or skipping when an open PR is confirmed.
+
+
+  ## Findings from BUG-2549
+  Reviewed sha: da6f7d597ddd0bd72f93dfa330e391082a115a60
+
+  ### finding-hash:d0b021ea
+
+  aida-cli-lib/src/queue_cmd/work.rs canonical_resume_branch: the `still has a lease` ensure runs at pickup resolution, before the same-scope ownership reclaim sweep later in handle_queue_work. A PR-less canonical branch whose exited lane left a dead-owner lease now hard-errors without the automatic reclaim (documented as automatic), so resumption needs a manual `aida session end`. Run the lease check after the reclaim sweep, or return None for same-scope leases, and add a regression with a forge-backed fixture.
+
+  ### finding-hash:fcb8f322
+
+  aida-cli-lib/src/queue_cmd/work.rs canonical_branch_tip prefers the local branch and consults origin only when no local branch exists. When local residue sits at the merged head but origin carries post-merge commits pushed from another host, tip == merged head and pickup allocates a dated branch from main, omitting those commits. Compare both tips and resume when either is past the merged head.
+
+  ### finding-hash:7d6b05ec
+
+  aida-cli-lib/src/lane_recovery.rs reconcile_observed_in writes the `Lane exit evidence` comment before the forge lookup on every lane and session exit, including exits with an open PR, and a second `Lane recovery` comment follows when no PR is found. AC2 scopes the record to exits without an open PR; consider one comment, or skipping when an open PR is confirmed.
 status: Draft
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-13T20:01:56.623034248Z
-modified_at: 2026-11-14T15:04:55.899075377Z
+modified_at: 2026-11-14T15:05:05.121746713Z
 req_type: Task
 tags:
 - carried-finding:BUG-2543:2a99ebfc
@@ -742,6 +758,9 @@ tags:
 - carried-finding:BUG-2546:56ed8b81
 - carried-finding:BUG-2549:3975f29b
 - carried-finding:BUG-2549:79f360e4
+- carried-finding:BUG-2549:7d6b05ec
+- carried-finding:BUG-2549:d0b021ea
+- carried-finding:BUG-2549:fcb8f322
 - carried-finding:BUG-2549:fe70e901
 - carried-finding:BUG-2551:2a99ebfc
 - carried-finding:BUG-2551:6935f83d
@@ -1309,6 +1328,11 @@ history:
 - id: 01a1da97-185b-7e23-a673-404494ca704b
   author: joe
   timestamp: 2026-11-14T15:04:57.691920145Z
+  session_id: 01a1da93c7e0
+  changes: []
+- id: 01a1da97-3bb5-7a31-b16d-53ef6da25d5b
+  author: joe
+  timestamp: 2026-11-14T15:05:06.741356999Z
   session_id: 01a1da93c7e0
   changes: []
 filed_at:
