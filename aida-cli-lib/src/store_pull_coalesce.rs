@@ -17,6 +17,7 @@
 //! that move neither HEAD are still picked up).
 // trace:BUG-2565 | ai:claude
 
+use aida_core::exec_context::Environment;
 use fs2::FileExt;
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
@@ -114,8 +115,26 @@ pub(crate) fn coalesce(
     reusable: impl FnOnce() -> bool,
     run: impl FnOnce() -> anyhow::Result<()>,
 ) -> anyhow::Result<Turn> {
+    coalesce_with_environment(
+        store_path,
+        project_root,
+        kind,
+        &Environment::capture(),
+        reusable,
+        run,
+    )
+}
+
+fn coalesce_with_environment(
+    store_path: &Path,
+    project_root: &Path,
+    kind: &str,
+    environment: &Environment,
+    reusable: impl FnOnce() -> bool,
+    run: impl FnOnce() -> anyhow::Result<()>,
+) -> anyhow::Result<Turn> {
     // Only a real store gets lock files; never create `.aida/` elsewhere.
-    if !store_path.join(".git").exists() {
+    if environment.var("AIDA_PULL_COALESCE") == Ok("0") || !store_path.join(".git").exists() {
         return run().map(|()| Turn::Ran);
     }
     let (lock_path, state_path) = coalesce_paths(store_path, project_root, kind);
@@ -143,7 +162,7 @@ pub(crate) fn coalesce(
         eprintln!(
             "  waiting for a store pull already running in this checkout (its result is reused)…"
         );
-        let budget = WAIT_BUDGET;
+        let budget = duration_setting(environment, "AIDA_PULL_COALESCE_WAIT_SECS", WAIT_BUDGET);
         let start = Instant::now();
         loop {
             std::thread::sleep(POLL);
@@ -192,6 +211,30 @@ pub(crate) fn store_already_has_remote_head(store_path: &Path, branch: &str) -> 
     remote == local || git_ops::is_ancestor(store_path, &remote, &local).unwrap_or(false)
 }
 
+fn duration_setting(environment: &Environment, name: &str, default: Duration) -> Duration {
+    environment
+        .var(name)
+        .ok()
+        .and_then(|v| v.parse().ok())
+        .map(Duration::from_secs)
+        .unwrap_or(default)
+}
+
+/// Refuse reuse when pending writes or a newly advertised remote head exist.
+// trace:BUG-2565 | ai:codex
+pub(crate) fn store_pull_reusable(store: &Path) -> bool {
+    !aida_core::git_ops::has_changes_checked(store).unwrap_or(true)
+        && aida_core::git_ops::current_branch(store)
+            .ok()
+            .is_some_and(|branch| store_already_has_remote_head(store, &branch))
+}
+
+pub(crate) fn pull_reusable(store: &Path, root: &Path, code_only: bool, store_only: bool) -> bool {
+    (code_only || store_pull_reusable(store))
+        && (store_only
+            || store_already_has_remote_head(root, &aida_core::git_ops::default_branch_name(root)))
+}
+
 fn now_secs() -> u64 {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
@@ -224,6 +267,14 @@ pub(crate) fn parse_watermark(body: &str) -> Option<(String, String, u64)> {
 /// code HEAD and store HEAD within the TTL, so re-running it can only repeat
 /// the same forge lookups.
 pub(crate) fn reconcile_is_current(project_root: &Path, store_path: &Path) -> bool {
+    reconcile_is_current_with_environment(project_root, store_path, &Environment::capture())
+}
+
+fn reconcile_is_current_with_environment(
+    project_root: &Path,
+    store_path: &Path,
+    environment: &Environment,
+) -> bool {
     let Some((code, store)) = reconcile_key(project_root, store_path) else {
         return false;
     };
@@ -232,7 +283,15 @@ pub(crate) fn reconcile_is_current(project_root: &Path, store_path: &Path) -> bo
     let Some((w_code, w_store, at)) = lines.first().and_then(|l| parse_watermark(l)) else {
         return false;
     };
-    w_code == code && w_store == store && now_secs().saturating_sub(at) < WATERMARK_TTL.as_secs()
+    w_code == code
+        && w_store == store
+        && now_secs().saturating_sub(at)
+            < duration_setting(
+                environment,
+                "AIDA_RECONCILE_WATERMARK_TTL_SECS",
+                WATERMARK_TTL,
+            )
+            .as_secs()
 }
 
 /// Record that a reconcile completed against the current code and store

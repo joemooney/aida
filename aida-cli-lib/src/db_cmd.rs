@@ -792,7 +792,7 @@ fn run_db(
                             store_path,
                             project_root,
                             "db-sync-pull",
-                            || !aida_core::git_ops::has_changes_checked(store_path).unwrap_or(true),
+                            || crate::store_pull_coalesce::store_pull_reusable(store_path),
                             sync,
                         )?;
                         if turn == crate::store_pull_coalesce::Turn::Reused {

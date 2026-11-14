@@ -34,6 +34,7 @@ fn init_repo(dir: &Path, branch: &str) {
 }
 
 fn commit(dir: &Path, file: &str) {
+    std::fs::create_dir_all(dir.join(file).parent().unwrap()).unwrap();
     std::fs::write(dir.join(file), file).unwrap();
     git(dir, &["add", "-A"]);
     git(dir, &["commit", "-m", &format!("chore: {file}"), "--quiet"]);
@@ -253,4 +254,259 @@ fn remote_head_containment() {
     commit(&other, "objects/remote.yaml");
     git(&other, &["push", "--quiet", "origin", "aida-store"]);
     assert!(!store_already_has_remote_head(&store, "aida-store"));
+}
+
+// trace:BUG-2565 | ai:codex
+fn add_origin(tmp: &Path, store: &Path) -> std::path::PathBuf {
+    let bare = tmp.join("origin.git");
+    git(
+        tmp,
+        &[
+            "clone",
+            "--bare",
+            "--quiet",
+            store.to_str().unwrap(),
+            bare.to_str().unwrap(),
+        ],
+    );
+    git(store, &["remote", "add", "origin", bare.to_str().unwrap()]);
+    bare
+}
+
+#[test]
+fn db_sync_noop_remote_skips_strict_scans_with_large_ledger() {
+    let (tmp, root, store) = project();
+    // A strict conflict or collision scan would refuse this object. A clean,
+    // unchanged remote needs neither scan.
+    commit(&store, "objects/bug/00/invalid.yaml");
+    add_origin(tmp.path(), &store);
+    for n in 0..1200 {
+        let dir = root.join(".aida/gate-ledger").join(format!("STORY-{n}"));
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join("events.jsonl"), "").unwrap();
+    }
+    let start = Instant::now();
+    let result = crate::git_backend_cmd::db_sync_local_window(&store, true, false, None).unwrap();
+    assert!(result.conflicts.unwrap().is_empty());
+    assert!(
+        start.elapsed() < Duration::from_secs(10),
+        "{:?}",
+        start.elapsed()
+    );
+    assert!(
+        !store.join(".git/FETCH_HEAD").exists(),
+        "fast path must not fetch"
+    );
+}
+
+#[test]
+fn db_sync_checks_pending_and_locally_committed_objects() {
+    for pending in [false, true] {
+        let (tmp, _root, store) = project();
+        add_origin(tmp.path(), &store);
+        if pending {
+            std::fs::create_dir_all(store.join("objects/bug/00")).unwrap();
+            std::fs::write(store.join("objects/bug/00/invalid.yaml"), "invalid").unwrap();
+        } else {
+            commit(&store, "objects/bug/00/invalid.yaml");
+        }
+        assert!(
+            crate::git_backend_cmd::db_sync_local_window(&store, true, false, None).is_err(),
+            "local canonical changes must be scanned (pending={pending})"
+        );
+    }
+}
+
+#[test]
+fn waiter_refuses_pull_when_remote_moves_in_flight() {
+    let (tmp, root, store) = project();
+    let bare = add_origin(tmp.path(), &store);
+    let fetched = Arc::new(Barrier::new(2));
+    let release = Arc::new(Barrier::new(2));
+    let first = {
+        let (store, root) = (store.clone(), root.clone());
+        let (fetched, release) = (fetched.clone(), release.clone());
+        std::thread::spawn(move || {
+            coalesce(
+                &store,
+                &root,
+                "moving",
+                || store_pull_reusable(&store),
+                || {
+                    git(&store, &["fetch", "origin"]);
+                    fetched.wait();
+                    release.wait();
+                    Ok(())
+                },
+            )
+            .unwrap()
+        })
+    };
+    fetched.wait();
+    let other = tmp.path().join("writer");
+    git(
+        tmp.path(),
+        &[
+            "clone",
+            "--quiet",
+            bare.to_str().unwrap(),
+            other.to_str().unwrap(),
+        ],
+    );
+    git(&other, &["config", "user.email", "test@example.com"]);
+    git(&other, &["config", "user.name", "Test"]);
+    commit(&other, "remote.txt");
+    git(&other, &["push", "--quiet", "origin", "aida-store"]);
+    let waiter = {
+        let (store, root) = (store.clone(), root.clone());
+        std::thread::spawn(move || {
+            coalesce(
+                &store,
+                &root,
+                "moving",
+                || store_pull_reusable(&store),
+                || {
+                    git(&store, &["pull", "--ff-only", "origin", "aida-store"]);
+                    Ok(())
+                },
+            )
+            .unwrap()
+        })
+    };
+    std::thread::sleep(Duration::from_millis(600));
+    release.wait();
+    assert_eq!(first.join().unwrap(), Turn::Ran);
+    assert_eq!(waiter.join().unwrap(), Turn::Ran);
+    assert!(store_pull_reusable(&store));
+    // The code leg must independently veto reuse when its remote advances.
+    assert!(!pull_reusable(&store, &root, false, false));
+}
+
+#[test]
+fn noop_remote_still_refuses_local_spec_id_collisions() {
+    for (pending, store_leg) in [(false, false), (true, false), (false, true), (true, true)] {
+        let (tmp, _root, store) = project();
+        add_origin(tmp.path(), &store);
+        std::fs::create_dir_all(store.join("objects/bug/00")).unwrap();
+        for title in ["first", "second"] {
+            let mut req = aida_core::Requirement::new(title.to_string(), String::new());
+            req.spec_id = Some("BUG-123".to_string());
+            std::fs::write(
+                store
+                    .join("objects/bug/00")
+                    .join(format!("{}.yaml", req.id)),
+                serde_yaml::to_string(&req).unwrap(),
+            )
+            .unwrap();
+        }
+        if !pending {
+            git(&store, &["add", "-A"]);
+            git(&store, &["commit", "-qm", "local duplicates"]);
+        }
+        let error = if store_leg {
+            crate::store_push_pull::pull_store_leg_locked(&store, true, true, 0)
+                .err()
+                .expect("store pull collision must refuse")
+        } else {
+            crate::git_backend_cmd::db_sync_local_window(&store, true, false, None)
+                .err()
+                .expect("db sync collision must refuse")
+                .to_string()
+        };
+        assert!(error.to_string().contains("BUG-123"), "{error:#}");
+    }
+}
+
+#[test]
+fn operator_controls_disable_coalescing_and_watermark() {
+    let (_tmp, root, store) = project();
+    let environment = Environment::from_pairs(
+        [
+            ("AIDA_PULL_COALESCE", "0"),
+            ("AIDA_RECONCILE_WATERMARK_TTL_SECS", "0"),
+            ("AIDA_PULL_COALESCE_WAIT_SECS", "1"),
+        ]
+        .map(|(key, value)| (key.into(), value.into())),
+    );
+    let (lock_path, _) = coalesce_paths(&store, &root, "disabled");
+    std::fs::create_dir_all(lock_path.parent().unwrap()).unwrap();
+    let lock = std::fs::File::create(lock_path).unwrap();
+    lock.lock_exclusive().unwrap();
+    assert_eq!(
+        coalesce_with_environment(
+            &store,
+            &root,
+            "disabled",
+            &environment,
+            || panic!("reuse disabled"),
+            || Ok(())
+        )
+        .unwrap(),
+        Turn::Ran
+    );
+    record_reconcile(&root, &store);
+    assert!(!reconcile_is_current_with_environment(
+        &root,
+        &store,
+        &environment
+    ));
+    assert_eq!(
+        duration_setting(&environment, "AIDA_PULL_COALESCE_WAIT_SECS", WAIT_BUDGET),
+        Duration::from_secs(1)
+    );
+}
+
+#[test]
+fn code_remote_freshness_independently_vetoes_reuse() {
+    let (tmp, root, store) = project();
+    add_origin(tmp.path(), &store);
+    let bare = tmp.path().join("code.git");
+    git(
+        tmp.path(),
+        &[
+            "clone",
+            "--bare",
+            "--quiet",
+            root.to_str().unwrap(),
+            bare.to_str().unwrap(),
+        ],
+    );
+    git(&root, &["remote", "add", "origin", bare.to_str().unwrap()]);
+    assert!(pull_reusable(&store, &root, false, false));
+    let writer = tmp.path().join("code-writer");
+    git(
+        tmp.path(),
+        &[
+            "clone",
+            "--quiet",
+            bare.to_str().unwrap(),
+            writer.to_str().unwrap(),
+        ],
+    );
+    git(&writer, &["config", "user.email", "test@example.com"]);
+    git(&writer, &["config", "user.name", "Test"]);
+    commit(&writer, "new-code.txt");
+    git(&writer, &["push", "--quiet", "origin", "main"]);
+    assert!(!pull_reusable(&store, &root, false, false));
+    assert!(pull_reusable(&store, &root, false, true));
+}
+
+#[test]
+fn remote_head_query_distinguishes_absent_branch_and_failure() {
+    let (tmp, _root, store) = project();
+    add_origin(tmp.path(), &store);
+    assert_eq!(
+        aida_core::git_ops::remote_branch_head_sha_checked(&store, "origin", "absent").unwrap(),
+        None
+    );
+    assert!(aida_core::git_ops::remote_branch_head_sha_checked(
+        &store,
+        "missing-remote",
+        "aida-store"
+    )
+    .is_err());
+    assert_eq!(
+        aida_core::git_ops::remote_branch_head_sha_checked(&store, "origin", "aida-store").unwrap(),
+        Some(git(&store, &["rev-parse", "HEAD"]))
+    );
 }

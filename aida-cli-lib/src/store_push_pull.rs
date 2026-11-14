@@ -2483,13 +2483,18 @@ mod bug_1500_store_pull_hint_tests {
 /// reconcile. The caller holds the store write lock. `Err` carries the
 /// store-leg failure text for the exit summary (already warned).
 // trace:TASK-1717 | ai:claude
-fn pull_store_leg_locked(
+pub(crate) fn pull_store_leg_locked(
     store_path: &std::path::Path,
     quiet: bool,
     no_gate: bool,
     mailbox_published: usize,
 ) -> std::result::Result<(), String> {
     use aida_core::git_ops;
+    // TASK-73: snapshot the orphan-store HEAD SHA before committing pending writes or pulling so we
+    // can summarize what landed once it completes. None when the
+    // store is empty / not yet committed. trace:TASK-73 | ai:claude
+    let pre_sha = git_ops::head_sha(store_path).ok();
+
     // Mirror `aida db sync --pull`: commit any pending orphan
     // changes first, then pull --rebase. Without the pre-commit
     // step, rebase refuses on a dirty tree and leaves the user
@@ -2522,11 +2527,6 @@ fn pull_store_leg_locked(
     let branch = git_ops::current_branch(store_path).unwrap_or_else(|_| "aida-store".to_string());
     println!("{}", pull_store_start_line());
 
-    // TASK-73: snapshot the orphan-store HEAD SHA before pull so we
-    // can summarize what landed once it completes. None when the
-    // store is empty / not yet committed. trace:TASK-73 | ai:claude
-    let pre_sha = git_ops::head_sha(store_path).ok();
-
     // STORY-641 / MU-204: auto-reconcile conflicting spec objects instead
     // of stopping for manual resolution. Two clones editing the SAME spec
     // (each appending a HistoryEntry + a scalar edit) are structurally
@@ -2552,10 +2552,14 @@ fn pull_store_leg_locked(
         }
     }
     println!("  {}", "store pull complete".green());
-    // BUG-2565: a pull that moved nothing cannot have introduced a collision;
-    // skip the full-store scan. trace:BUG-2565 | ai:claude
+    // Skip only when neither pending nor unpushed local changes need checking.
+    // trace:BUG-2565 | ai:codex
     let moved = pre_sha.is_none() || git_ops::head_sha(store_path).ok() != pre_sha;
-    if moved {
+    if pending
+        || moved
+        || git_ops::remote_branch_head_sha(store_path, "origin", &branch)
+            != git_ops::head_sha(store_path).ok()
+    {
         if let Err(e) = ensure_no_spec_id_collisions_canonical(store_path) {
             eprintln!("  {} {}", "Warning:".yellow().bold(), e);
             return Err(format!("store collision scan failed: {}", e));
@@ -2638,7 +2642,14 @@ pub(crate) fn handle_pull_command_coalesced(
         store_path,
         &project_root,
         &kind,
-        || !aida_core::git_ops::has_changes_checked(store_path).unwrap_or(true),
+        || {
+            crate::store_pull_coalesce::pull_reusable(
+                store_path,
+                &project_root,
+                code_only,
+                store_only,
+            )
+        },
         || handle_pull_command(store_path, code_only, store_only, quiet, no_gate, auto),
     )?;
     if turn == crate::store_pull_coalesce::Turn::Reused {
