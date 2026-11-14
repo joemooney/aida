@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-12T08:35:37.046532324Z
-modified_at: 2026-11-14T20:02:06.992755889Z
+modified_at: 2026-11-14T20:02:53.245512574Z
 req_type: Bug
 tags:
 - track:integration
@@ -275,6 +275,13 @@ comments:
   modified_at: 2026-11-14T19:44:16.476465552Z
   session_id: 01a1db7e239f
   harness_version: 2.1.319 (Claude Code)
+- id: 01a1dba7-dabd-7471-8619-a00bf73f2f9c
+  author: joe
+  content: 'Advisor ruling (2026-11-14 13:06, CR on PR-4038 at e509cb3, round 3): blocking, one item. The full-read fallback from the 12:14 ruling is too wide: it fires whenever an alias has no hint, and on the normal two-label selection one alias is simply never recorded, so most verdict selections read every change ledger again and the bug''s purpose (bound-only discovery) is lost. Narrow it: fall back to a full read only on evidence that a binding existed and was deleted or is stale (a deletion marker/tombstone, or a hint that points at a ledger that no longer holds the key); a never-recorded alias takes the bound-only path. Tests: (a) normal two-label selection reads only bound ledgers (assert the read count); (b) deleted binding with missing or stale hint still finds the newer refusal. Lane relaunch after dell1 is back (power-off 13:10).'
+  created_at: 2026-11-14T20:02:53.245512574Z
+  modified_at: 2026-11-14T20:02:53.245512574Z
+  session_id: 01a1db6d-e689-7532-9eef-772722add87b
+  harness_version: 2.1.325 (Claude Code)
 history:
 - id: 01a1cee6-975b-7d40-8689-d35e1f109d99
   author: joe
