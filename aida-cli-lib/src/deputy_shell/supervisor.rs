@@ -1,6 +1,7 @@
 //! Process supervision for the operator's script deputy.
 // trace:STORY-2775 | ai:codex
 use super::Queue;
+use aida_core::proc_identity::{observe, ProcIdentity, Verdict};
 use anyhow::{Context, Result};
 use fs2::FileExt;
 use serde::{Deserialize, Serialize};
@@ -16,7 +17,7 @@ use std::time::{Duration, Instant};
 #[derive(Serialize, Deserialize)]
 struct State {
     pid: u32,
-    identity: Option<String>,
+    identity: Option<ProcIdentity>,
     restarts: u64,
 }
 
@@ -45,7 +46,12 @@ pub(crate) fn write_status(q: &Queue, out: &mut dyn Write) -> Result<()> {
         .ok()
         .and_then(|b| serde_json::from_slice::<State>(&b).ok());
     if let Some(s) = state.filter(|s| {
-        s.identity.is_some() && aida_core::liveness::process_start_identity(s.pid) == s.identity
+        // Informational status requires the recorded boot and PID coordinates.
+        // Legacy/incomplete records cannot establish a live loop.
+        // trace:STORY-2775 | ai:codex
+        s.identity
+            .as_ref()
+            .is_some_and(|id| id.pid == s.pid && observe(id, true) == Verdict::Alive)
     }) {
         writeln!(out, "loop: live, pid {}, restarts {}", s.pid, s.restarts)?;
     } else {
@@ -100,7 +106,7 @@ fn run_command(q: &Queue, command: &mut Command) -> Result<()> {
 fn supervise(q: &Queue, stop: &AtomicBool, command: &mut Command) -> Result<()> {
     let mut state = State {
         pid: std::process::id(),
-        identity: aida_core::liveness::process_start_identity(std::process::id()),
+        identity: ProcIdentity::capture(std::process::id()).ok(),
         restarts: 0,
     };
     let mut delay = Duration::ZERO;
@@ -162,6 +168,41 @@ fn supervise(q: &Queue, stop: &AtomicBool, command: &mut Command) -> Result<()> 
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn story_2775_status_requires_matching_process_identity() {
+        let dir = tempfile::tempdir().unwrap();
+        let q = super::super::queue_in(&dir.path().join("queues"), "test").unwrap();
+        q.ensure().unwrap();
+        let mut state = State {
+            pid: std::process::id(),
+            identity: Some(ProcIdentity::capture(std::process::id()).unwrap()),
+            restarts: 3,
+        };
+        let status = |state: &State| {
+            std::fs::write(q.root.join("loop.json"), serde_json::to_vec(state).unwrap()).unwrap();
+            let mut out = Vec::new();
+            write_status(&q, &mut out).unwrap();
+            String::from_utf8(out).unwrap()
+        };
+        assert!(status(&state).contains("restarts 3"));
+        state.identity.as_mut().unwrap().starttime += 1;
+        assert_eq!(status(&state), "loop: off\n");
+        state.identity = Some(ProcIdentity::capture(std::process::id()).unwrap());
+        state.pid += 1;
+        assert_eq!(status(&state), "loop: off\n");
+        std::fs::write(
+            q.root.join("loop.json"),
+            serde_json::to_vec(&serde_json::json!({
+                "pid": std::process::id(), "identity": "linux-starttime:1", "restarts": 3
+            }))
+            .unwrap(),
+        )
+        .unwrap();
+        let mut out = Vec::new();
+        write_status(&q, &mut out).unwrap();
+        assert_eq!(out, b"loop: off\n");
+    }
+
     #[test]
     fn story_2775_broken_stderr_preserves_exit_reason() {
         const CHILD_ROOT: &str = "AIDA_TEST_2775_BROKEN_STDERR_ROOT";
