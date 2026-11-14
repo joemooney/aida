@@ -18,7 +18,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-14T12:41:27.454869454Z
-modified_at: 2026-11-14T15:59:27.908598818Z
+modified_at: 2026-11-14T15:59:34.540760936Z
 req_type: Story
 tags:
 - area:ci
@@ -127,6 +127,22 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Round-1 findings 2, 3 and 4b are fixed and tested; one blocking residue of finding 1 remains: re-applying a stale ci:full label leaves cancelled check rows that no later run supersedes, so the approved head still reads red. FAST CI green at 19ed47f; FULL not yet run on this head.. It was punted on: other: rework complete locally but unable to publish: the seat has no GitHub credential (git push cannot read a username; gh returns HTTP 401), so commit 19ed47f1cf is not on PR-4027. No triage reason was given.'
   created_at: 2026-11-14T15:59:27.908592443Z
   modified_at: 2026-11-14T15:59:27.908592443Z
+  session_id: 01a1dab1-9447-7d22-b5ff-0c9084e122ea
+  harness_version: 2.1.325 (Claude Code)
+- id: 01a1dac9-1776-74a2-9b7e-5983b390d3c5
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (STORY-2809):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 19ed47f1cf06
+    Recorded: 2026-11-14T15:34:37.825871445+00:00
+    Findings:
+    1. Re-applying a stale ci:full label still leaves the approved head red for the exact-head CI readers. full_tier.rs request_full_ci_with (LabelPlan::Reapply) removes the label, whose `unlabeled` event starts a FAST run, then adds it, whose FULL run cancels that FAST run within seconds. The cancelled run leaves `ci-tier: fast` = cancelled and `CI (${{ matrix.shard }})` = cancelled on the SHA (observed on exactly such runs: 43603377514 on 323ac15 and 43602316202 on e401cbb). The FULL run reports `ci-tier: full` and `CI (lib-0)`... instead, so forge_commit_ci.rs latest_per_name, which supersedes only by identical check name, keeps both cancelled rows and judge_commit_checks returns Failed; task_1945_commit_ci_tests.rs `leftover` case pins that behaviour. review_watch_ready.rs:156 (and advisor_loop_train.rs:60 when no required-check list is configured, forge.rs:4850) then report CI failed on the approved head permanently. Reapply is the normal path for every re-approval after a rework push or a merge from main, because the label lingers and FAST has usually finished. Fix so a superseded run contributes nothing (e.g. drop every row of a workflow run when a newer run on the commit shares a check name with it, such as the aggregate), or start the run without the intermediate `unlabeled` FAST run; add a test with the observed row shape (cancelled `ci-tier: fast` + cancelled `CI (${{ matrix.shard }})` in the older run, green FULL run after it) expecting Green. The same shape arises on the Add path when the label lands before the FAST run tier job completes.
+    2. Criterion traces still missing: the advisor ruling (item 5) asked for the criterion ids on the tests. story_2809_full_tier_tests.rs, story_1690_train_tests.rs and tests/test_ci_tiers.py label tests `AC1`/`AC2` in prose only, so `aida criteria` still lists all four criteria (.acbd1c12, .accf1a65, .acf5d38c, .Docs) as untraced. Add `trace:STORY-b6b1278890774ef993d2ebc327862470-732.<id>` to the tests that cover each (AC1: label_plan/request and request_full_ci_after_approval tests plus test_ci_tiers synchronize case; AC2: live_gate_* and skip_full_check_* tests; AC3: test_ci_tiers concurrency-group assertion; Docs: docs/advanced/landing.md).
+    3. pr_train.rs full_tier_gate writes the `train-admit-skip-full-check` activity entry (status `overridden`) on every gate call: also under `--dry-run`, where nothing is admitted, and again on each pre-landing re-check, so one admission can log several entries and a dry run logs an override that never happened. Skip the write (or mark it dry-run) when the gate run may not write, as request_full_tier already does.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-14T15:59:34.262907988Z
+  modified_at: 2026-11-14T15:59:34.262907988Z
   session_id: 01a1dab1-9447-7d22-b5ff-0c9084e122ea
   harness_version: 2.1.325 (Claude Code)
 history:
