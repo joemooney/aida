@@ -8,12 +8,20 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-14T08:19:06.368555426Z
-modified_at: 2026-11-14T08:20:30.914495148Z
+modified_at: 2026-11-14T08:20:43.481629537Z
 req_type: Bug
 tags:
 - ci
 - kind:bug-spotted
 - track:dell1
+comments:
+- id: 01a1d925-0159-7930-8795-7aa1d6f0baed
+  author: joe
+  content: '[advisor 7b 01:21] Approved for a dell1 Codex lane: smallest change that makes the PR FAST tier run task_1750 (and any other aida-ci-guards ratchet that is cheap, <30s). LIGHT gate. On dell1 touch aida-core/src/lib.rs first; never AIDA_UPDATE_SNAPSHOTS=1.'
+  created_at: 2026-11-14T08:20:43.481629537Z
+  modified_at: 2026-11-14T08:20:43.481629537Z
+  session_id: 01a1d8f3-f948-7072-b174-fa9507ed074b
+  harness_version: 2.1.325 (Claude Code)
 history:
 - id: 01a1d924-d042-7180-ad15-9313822f6e66
   author: joe
