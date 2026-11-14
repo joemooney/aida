@@ -20,7 +20,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-14T12:59:48.856339929Z
-modified_at: 2026-11-14T14:49:18.342117862Z
+modified_at: 2026-11-14T15:05:37.160292952Z
 req_type: Bug
 comments:
 - id: 01a1da27-3618-7463-8d20-0317f275eec5
@@ -43,6 +43,24 @@ comments:
   modified_at: 2026-11-14T14:47:43.787720720Z
   session_id: 01a1d9ea-4e25-7033-85e8-3648f0195c7c
   harness_version: 2.1.325 (Claude Code)
+- id: 01a1da97-b288-7f42-a50c-3befe341c44d
+  author: dirtlab
+  content: |-
+    ## Rework for the PR-4030 ruling (local commit f71bbde68a, NOT pushed)
+
+    1. Infra red vs test red: `train_ci_readiness` returns `InfraRed` when every real red row is in the `cancel` bucket and the rest of CI has settled; any `fail`-bucket row is a test red (`Red`). `drive_into` reruns an `InfraRed` composition exactly once, then bisects or ejects; a `Red` bisects or ejects at once.
+    2. Tests (story_1690_train_tests.rs): `drive_reruns_an_infra_red_once_then_lands_the_same_composition`, `drive_bisects_after_one_infra_rerun_whatever_the_second_red_is`, `drive_ejects_a_lone_member_after_one_infra_rerun`, `drive_ejects_a_lone_test_red_member_after_one_ci_run`, `bug2577_cancel_bucket_is_infra_and_fail_bucket_is_a_test_failure`.
+    3. docs/what-is-aida.md (rows 163 and 342) and what-is-aida.html (702, 1047) plus help, golden, discipline pack and aida-fire describe both cases.
+
+    Design calls for the reviewer: (a) the CI aggregate `Build (ubuntu-latest)` failing beside a cancelled lane is not counted as a test failure, because it goes red whenever a lane is cancelled; without this no real cancelled run would classify as infra. (b) The one rerun is per composition: halves after a bisect get their own. (c) A run-level timeout with no rows (CI ceiling, never-registered CI) keeps its existing unavailable/error path and is not rerun by the driver. (d) Cancel-only red waits as Pending while other checks still run.
+
+    Validation: `cargo test -p aida-cli-lib --lib -- pr_train story_1690` 219 passed; `help_surface_matches_golden_snapshot` passed; `make check-templates` OK; rustfmt clean. `make check-ci-fast` could not finish in the seat: it stops at the containment conformance gate, which needs AF_UNIX sockets the sandbox denies (unrelated to this change).
+
+    Publication blocked: the seat has no valid GitHub credential (`gh` token invalid, `git push` cannot authenticate). `aida ship --no-merge` rebased the local branch onto origin/main (two linear commits) before the push failed, so publishing needs `git push --force-with-lease origin fix/train-no-blind-rerun-BUG-2577` from the seat worktree.
+  created_at: 2026-11-14T15:05:37.160292952Z
+  modified_at: 2026-11-14T15:05:37.160292952Z
+  session_id: 01a1da88bc20
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1da27-2bb7-7361-9d4b-679eedfaa209
   author: joe
