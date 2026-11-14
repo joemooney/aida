@@ -559,17 +559,6 @@
   added_at: 2026-11-14T13:36:56.612011124Z
   for_role: implementer
 - user_id: role:implementer
-  requirement_id: 01a1d59d-c4a3-76d3-9462-7ce61063fcec
-  position: 0
-  added_by: empty-rework
-  note: |-
-    Empty rework of PR-3956 at 15f787649eb2adb64e4d365cba63ddd2285004ac: no new pushed commit.
-    required check failed: Build (ubuntu-latest)
-    required check failed: Build (ubuntu-latest)
-    Address these blockers, commit and push. If disputing a finding, use `aida punt` and name that finding.
-  added_at: 2026-11-14T17:12:40.623607768Z
-  for_role: implementer
-- user_id: role:implementer
   requirement_id: 01a1cee5-ebd6-7ff3-944c-0748e54f0d84
   position: 0
   added_by: fast-gate
@@ -676,6 +665,16 @@
     Max cache size                       10 GiB
     lane sccache: server exited before sandbox teardown
   added_at: 2026-11-14T20:37:37.479332103Z
+  for_role: implementer
+- user_id: role:implementer
+  requirement_id: 01a1d59d-c4a3-76d3-9462-7ce61063fcec
+  position: 0
+  added_by: empty-rework
+  note: |-
+    Empty rework of PR-3956 at 36afa067467a75d0e3201ed946f059264ee113e7: no new pushed commit.
+    mergeable=CONFLICTING: resolve the merge conflicts
+    Address these blockers, commit and push. If disputing a finding, use `aida punt` and name that finding.
+  added_at: 2026-11-14T22:22:38.967106828Z
   for_role: implementer
 - user_id: role:implementer
   requirement_id: 01a1965c-3483-70e3-af35-1caaf7df3f96
