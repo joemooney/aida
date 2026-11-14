@@ -17,7 +17,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-13T16:07:16.079959811Z
-modified_at: 2026-11-14T10:39:38.164968103Z
+modified_at: 2026-11-14T10:44:22.102687345Z
 req_type: Story
 tags:
 - integration
@@ -93,6 +93,12 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a1d9a8-8718-7670-870f-04c2802b4c37
+  author: dirtlab
+  timestamp: 2026-11-14T10:44:22.936513253Z
+  session_id: 01a1d9a7e652
+  harness_version: codex-cli 0.167.0
+  changes: []
 filed_at:
   code_sha: 5652ea465a222e7d3ade2cadb967ddd30a6b6b44
   branch: integration
@@ -102,6 +108,11 @@ filed_at:
   vendor: claude
   session: 01a1d544-f5ad-79c2-97f9-6fbd19ddbd45
   harness_version: 2.1.323 (Claude Code)
+attention_reason:
+  category: other
+  detail: 'Native implementer pickup refused: Needs Attention to InProgress requires advisor authority. Existing request-changes publication veto retained. Latest advisor ruling requests contained AIDA_TRACK allowlist/child regression and actual-entry-point pre-setup track refusal regression; advisor must reopen before implementation.'
+  raised_by: implementer
+  raised_at: 2026-11-14T10:44:22.102687345Z
 failure_reason:
   phase: reviewer
   phase_index: 3
