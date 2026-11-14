@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-13T04:07:35.213330891Z
-modified_at: 2026-11-14T14:59:49.514650065Z
+modified_at: 2026-11-14T16:20:15.616651241Z
 req_type: Story
 tags:
 - track:integration
@@ -43,6 +43,11 @@ relationships:
   target_id: 01a1da90-646d-7af3-b1a2-44e6175e8244
   created_at: 2026-11-14T14:59:49.514631604Z
   created_by: dirtlab
+- rel_type:
+    custom: implemented-by
+  target_id: 01a1dad7-ad3b-7b93-b96c-f1a8dba596ec
+  created_at: 2026-11-14T16:20:15.616647735Z
+  created_by: joe
 comments:
 - id: 01a1d335-e461-7f33-b9d9-3172b780e847
   author: joe
@@ -183,6 +188,10 @@ history:
 - id: 01a1da92-6be6-7420-acbc-b73703e8505c
   author: dirtlab
   timestamp: 2026-11-14T14:59:51.398240932Z
+  changes: []
+- id: 01a1dadc-1107-78b2-83d0-df9e4fff5d4d
+  author: joe
+  timestamp: 2026-11-14T16:20:17.799337809Z
   changes: []
 processing_record:
 - id: 01a1d7f1-c108-7702-b8ce-5422b8037d37
