@@ -1806,3 +1806,95 @@ fn bug2538_oversized_import_ejects_before_publication() {
     assert!(ensure_budget(MAX_EVIDENCE_BYTES).is_ok());
     assert!(ensure_budget(MAX_EVIDENCE_BYTES + 1).is_err());
 }
+
+/// BUG-2569: a promotion branch claims no spec, so the coverage filter keeps
+/// every spec its car message names (promotion #3966 named 45).
+// trace:BUG-2569 | ai:claude
+const BUG2569_BRANCH: &str = "promote/fixture-6";
+
+/// BUG-2569: move main, merge it cleanly into PR 11's branch with `message`
+/// and point the forge at the new head. PR 11's approval stays at the old
+/// head, so it reaches the new one only by carry-over.
+// trace:BUG-2569 | ai:claude
+fn bug2569_carried_head(f: &Fixture, message: &str) -> String {
+    const BRANCH: &str = BUG2569_BRANCH;
+    let root = f.root();
+    fs::write(root.join("moved"), "main moved\n").unwrap();
+    commit(root, "main moves");
+    g(root, &["push", "-q", "origin", "main"]);
+    g(root, &["checkout", "-q", BRANCH]);
+    g(root, &["merge", "-q", "--no-ff", "-m", message, "main"]);
+    let head = g(root, &["rev-parse", "HEAD"]);
+    g(root, &["push", "-q", "origin", BRANCH]);
+    g(root, &["checkout", "-q", "main"]);
+    let mut state: Value =
+        serde_json::from_slice(&fs::read(root.join("transport.json")).unwrap()).unwrap();
+    state["prs"]["11"]["headRefOid"] = json!(head);
+    save(root, &state);
+    head
+}
+
+/// BUG-2569: a refusal for STORY-2220 recorded on `change` at `sha`.
+// trace:BUG-2569 | ai:claude
+fn bug2569_refusal(f: &Fixture, change: u64, sha: &str) {
+    let record = json!({"verdict":"request-changes", "reviewed_sha":sha,
+        "recorded_at":chrono::Utc::now().to_rfc3339(), "recorded_by":"fixture other reviewer"});
+    let spec = ledger::GateSpec::with_key("STORY-b6b1278890774ef993d2ebc327862470-123", None);
+    ledger::store::append_one(
+        f.root(),
+        ledger::event::verdict_event(
+            f.root(),
+            ledger::ChangeKey::pr(change),
+            record.as_object().unwrap(),
+            Some(&spec),
+        ),
+    )
+    .unwrap();
+}
+
+/// BUG-2569 (train 9): PR 11's approval carried over a clean merge of main.
+/// Its car message names STORY-2220, whose newest verdict is a refusal of
+/// another change at another commit. The member gate admitted it and the
+/// merge step refused it after the CI run. Both now read that refusal as
+/// being about the other change, and the train lands.
+// trace:BUG-2569 | ai:claude
+#[test]
+fn bug_2569_train_lands_a_carried_member_whose_car_names_a_spec_refused_elsewhere() {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
+    let f = Fixture::with_member_metadata(false, Some(BUG2569_BRANCH), None);
+    bug2569_carried_head(&f, "Merge main into the member (STORY-2220)");
+    bug2569_refusal(&f, 99, &"c".repeat(40));
+    let forge = GitHubForge::new(f.root());
+    let mut live = f.live(&forge);
+    let (train, change) = f.opened(&mut live);
+    let lease = live.lease(change.id).unwrap();
+    live.merge_verified(&change, &train, lease.as_ref())
+        .unwrap_or_else(|e| panic!("the carried member must land: {e:#}"));
+    assert_eq!(calls(f.root()).len(), 1, "the train merges once");
+}
+
+/// BUG-2569: the member gate asks about the specs the car message names, as
+/// the merge step does. Change 99 stands refused at a commit PR 11's head
+/// contains, under a spec only PR 11's car message names: that stops PR 11
+/// at the gate, before a train is built, not at the merge after the CI run.
+// trace:BUG-2569 | ai:claude
+#[test]
+fn bug_2569_member_gate_refuses_what_the_merge_step_would_refuse() {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
+    let f = Fixture::with_member_metadata(false, Some(BUG2569_BRANCH), None);
+    bug2569_carried_head(&f, "Merge main into the member (STORY-2220)");
+    let inside = f.records[0]["reviewed_sha"].as_str().unwrap().to_string();
+    bug2569_refusal(&f, 99, &inside);
+    let forge = GitHubForge::new(f.root());
+    let mut live = f.live(&forge);
+    let refused = match live.gate(11) {
+        Ok(_) => panic!("the member gate admitted a member the merge step refuses"),
+        Err(why) => format!("{why:#}"),
+    };
+    assert!(refused.contains("do not approve"), "{refused}");
+    assert!(calls(f.root()).is_empty());
+}

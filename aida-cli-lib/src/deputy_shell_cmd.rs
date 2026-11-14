@@ -27,7 +27,18 @@ const DEFAULT_DELEGATE_SEATS: [&str; 4] = ["advisor", "implementer", "reviewer",
 pub(crate) fn run(args: DeputyShellArgs) -> Result<()> {
     let mut out = std::io::stdout();
     match args.command {
-        DeputyShellCommand::Run(a) => start(&a),
+        DeputyShellCommand::Run(a) => {
+            let result = start(&a);
+            // trace:STORY-2775 | ai:codex
+            if let Err(e) = &result {
+                if let Ok(q) = ds::current_queue(&a.name) {
+                    if q.root.exists() {
+                        let _ = ds::supervisor::record_exit(&q, &format!("rc=1 error={e:#}"));
+                    }
+                }
+            }
+            result
+        }
         DeputyShellCommand::Submit(a) => {
             let q = ds::current_queue(&a.name)?;
             let main = main_root()?;
@@ -124,6 +135,11 @@ fn start(a: &ShellRunArgs) -> Result<()> {
     let q = ds::current_queue(&a.name)?;
     q.ensure()?;
     drop(ds::runner::acquire_lock(&q)?); // fail fast before the banner
+
+    // trace:STORY-2775 | ai:codex
+    if a.loop_mode {
+        return ds::supervisor::run(&q);
+    }
     let config = ds::load_config(&main);
     let keep_days = a.keep_days.unwrap_or(config.keep_days).max(1);
     let submit_seats = submit_seats(&ds::default_submit_seats(), &a.allow_seat);
@@ -740,6 +756,9 @@ pub(crate) fn list(q: &Queue, a: &ShellListArgs, out: &mut dyn Write) -> Result<
         return Ok(());
     }
     write_runner_status(q.runner_status(), out)?;
+    // trace:STORY-2775 | ai:codex
+    #[cfg(unix)]
+    ds::supervisor::write_status(q, out)?;
     if q.paused() {
         writeln!(
             out,

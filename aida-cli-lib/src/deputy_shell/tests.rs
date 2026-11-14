@@ -716,6 +716,12 @@ fn a_job_records_who_what_when_and_its_transcript() {
     assert!(q_at <= started && started <= finished);
     assert_eq!(s.attribution.as_ref().unwrap().verdict, "ok");
     assert!(f.transcript(&j.id).contains("hi"));
+    // trace:STORY-2775 | ai:codex
+    let exit_log = std::fs::read_to_string(f.q.root.join("runner.log")).unwrap();
+    assert!(
+        exit_log.contains("rc=0 reason=test limit reached"),
+        "{exit_log}"
+    );
     assert_eq!(
         events(&f.q),
         [
