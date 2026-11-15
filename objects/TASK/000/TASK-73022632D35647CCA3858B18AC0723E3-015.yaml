@@ -12,12 +12,20 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-14T19:36:39.772788240Z
-modified_at: 2026-11-14T19:36:39.772788240Z
+modified_at: 2026-11-15T20:46:22.760561370Z
 req_type: Task
 tags:
 - from-implementer:BUG-2585
 - kind:deviation
 - severity:minor
+comments:
+- id: 01a1e0f6-0828-7ef3-b9dc-a95b30ae2c38
+  author: joe
+  content: 'Advisor 13:50: merged into BUG-2585. Same root cause.'
+  created_at: 2026-11-15T20:46:22.760561370Z
+  modified_at: 2026-11-15T20:46:22.760561370Z
+  session_id: 01a1e03d-c6d9-7c61-8d35-47020bb6f858
+  harness_version: 2.1.325 (Claude Code)
 history:
 - id: 01a1db97-a138-7d13-9b56-a1ffbaf9c714
   author: joe
