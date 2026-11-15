@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T15:34:33.363448Z
-modified_at: 2026-11-13T03:25:34.997846483Z
+modified_at: 2026-11-15T21:04:23.306956405Z
 req_type: Story
 relationships:
 - rel_type: Supersedes
@@ -1140,6 +1140,13 @@ comments:
   modified_at: 2026-11-13T03:01:08.011416006Z
   session_id: 01a1d240-c397-7b61-b29f-bb337c138943
   harness_version: 2.1.323 (Claude Code)
+- id: 01a1e106-850a-7ba3-94c5-4126b240e569
+  author: joe
+  content: 'ADVISOR RULING 2026-11-15 14:10 MST (proxy ruling by aida-d0): COMPLETE on the delivered slices #3607, #3632 and #3662. AC2 and AC5 are REJECTED as out of scope; their partial work stays on branch wip/story-2630-553-1112 (do not delete it).'
+  created_at: 2026-11-15T21:04:23.306956405Z
+  modified_at: 2026-11-15T21:04:23.306956405Z
+  session_id: 01a1e102-33bf-7993-a7a1-f4664089251e
+  harness_version: 2.1.325 (Claude Code)
 history:
 - id: 01a1b6a6-1e2f-7932-a527-6de38b6d8545
   author: joe
