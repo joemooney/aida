@@ -1,0 +1,69 @@
+id: 01a1dd4b-6390-7523-9611-3fc54414ac35
+spec_id: STORY-b6b1278890774ef993d2ebc327862470-761
+agreed_id: STORY-2838
+title: Tailor aida init sandbox allowlists and permission configs to enabled agents and detected forge hosts
+description: |-
+  ### Problem
+
+  Forensic analysis of interactive advisor and operator sessions revealed four configuration gaps in `aida init`, `aida scaffold`, and `aida config permissions`:
+
+  1. **Interactive Claude sessions lack `sandbox.network.allowedDomains` in `.claude/settings.json`:**
+     - Today `aida init` scaffolds `[contained] allowed_hosts` in `.aida/config.toml` (`aida-cli-lib/src/config_init.rs:653-685`), but only injects those hosts into Claude via an ephemeral `--settings <json>` flag during `aida agent new --contained` (`aida-cli-lib/src/session.rs:5410-5425`).
+     - When a user runs `claude` interactively in the repo with Claude's native sandbox enabled (e.g., via `/sandbox` or `.claude/settings.local.json`), `.claude/settings.json` has no `sandbox.network.allowedDomains` list. Every sandboxed `git fetch`, `git push`, or `gh` call fails with `CONNECT tunnel failed, response 403`, and agent attempts to pass `allowed_domains` on unsandboxed `Bash` calls fail with `InputValidationError`.
+
+  2. **`write_permission_posture` unconditionally writes agent configs even when an agent is not used/selected:**
+     - A user may only have a subset of `{claude, codex, antigravity}` installed or enabled via `aida init --agent <list>` (`AgentSelection` in `aida-cli-lib/src/init_cmd.rs:538`).
+     - Today `write_permission_posture()` (`aida-cli-lib/src/config_cmd.rs:1352-1377`) unconditionally creates and writes `.codex/config.toml` and sets `[agents.codex]` in `.aida/agents.toml` even in a Claude-only or Antigravity-only repository.
+
+  3. **Fresh repos initialized via `aida init` cannot auto-populate custom/self-hosted forge hosts before `git remote add`:**
+     - `aida-core/templates/contained.toml` hardcodes `github.com` and tells users in a comment to manually add self-hosted forges (e.g., self-hosted GitLab or GitHub Enterprise).
+     - Because `aida init` is often run to create or bootstrap a repo before `origin` is added (or alongside a secondary mirror remote), relying solely on `origin` misses the user's actual forge.
+
+  4. **Missing `[contained.vendors]` and Claude `autoMode` guidance:**
+     - When Codex is enabled and contained posture is selected, `[contained.vendors] codex = "native"` (`TASK-2631`) is required on the default branch to avoid launch refusal (`config_cmd.rs:1730-1741`), but `templates/contained.toml` neither documents nor seeds it for Codex-enabled repos.
+
+  ### Proposed Solution
+
+  1. **Respect `AgentSelection` and installed-agent detection across `init`, `scaffold`, and `config permissions`:**
+     - Gate `.claude/settings.json` sandbox network seeding on `selection.claude`.
+     - Gate `.codex/config.toml` and `[agents.codex]` writes in `write_permission_posture()` (`config_cmd.rs:1352`) on `selection.codex` (or detected `codex` usage) so Claude-only / AGY-only users do not get stray `.codex/` directories.
+     - Only prompt or configure settings for agents that are enabled in the project (`read_enabled_agent_selection`) or detected on `PATH`.
+
+  2. **Detect likely forge host(s) during `aida init` and `aida scaffold upgrade/refresh` (without network calls):**
+     - Discover candidate forge DNS hostnames (validated as exact lowercase DNS names per `launch/contained.rs:456`) from a layered local probe:
+       1. Configured Git remotes in the repo (`git remote -v` — all remotes, not just `origin`).
+       2. Environment variables: `GH_HOST`, `GITHUB_SERVER_URL`, `GITHUB_API_URL`, `GITLAB_HOST`, `GITLAB_URI`, `CI_SERVER_HOST`.
+       3. Git config URL rules and forge keys: `url.<base>.insteadOf`, `hub.host`, `gitlab.host`.
+       4. Local forge CLI host configs (if present and readable): `~/.config/gh/hosts.yml` and `~/.config/glab-cli/config.yml`.
+       5. Default fallback to `github.com`, `api.github.com`, `objects.githubusercontent.com`, `codeload.github.com`.
+     - Populate discovered forge hosts into `[contained] allowed_hosts` in `.aida/config.toml`.
+
+  3. **Mirror `allowed_hosts` into `.claude/settings.json` (`sandbox.network.allowedDomains`) when Claude is enabled:**
+     - In `generate_claude_settings_json()` (`aida-core/src/scaffolding/settings.rs:337`) and `ensure_contained_reviewer_config()` (`aida-cli-lib/src/config_init.rs:722`), merge `sandbox.network.allowedDomains` from the project's `[contained] allowed_hosts` (via additive `slot_merge` so user-added domains are preserved).
+     - Do not force `sandbox.enabled = true` in `.claude/settings.json` by default, so interactive users who keep the sandbox off are unaffected while users who enable `/sandbox` get working forge/crate egress immediately.
+
+  ### Acceptance Criteria
+
+  - [ ] `aida init --agent claude` scaffolds `sandbox.network.allowedDomains` in `.claude/settings.json` matching `[contained] allowed_hosts` and does not create `.codex/config.toml` when contained posture is applied.
+  - [ ] `aida init --agent codex` does not create `.claude/settings.json` and documents/configures `[contained.vendors] codex = "native"` when contained posture is chosen.
+  - [ ] `aida init` on a brand-new repo (no `origin` remote yet) detects custom forge hosts from `GH_HOST` / `GITLAB_HOST`, `git config` `insteadOf`, or `~/.config/gh/hosts.yml` / `~/.config/glab-cli/config.yml` and includes them in `[contained] allowed_hosts` (and `.claude/settings.json` when Claude is enabled).
+  - [ ] `aida scaffold upgrade` and `aida scaffold refresh` additively merge missing `[contained] allowed_hosts` into `.claude/settings.json`'s `sandbox.network.allowedDomains` without clobbering existing user domains.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-15T03:41:07.856444039Z
+modified_at: 2026-11-15T03:41:07.856444039Z
+req_type: Story
+tags:
+- containment
+- init
+- scaffold
+- ux
+filed_at:
+  code_sha: e351be429570bde045d975f8a19c733d65360ded
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: e351be42957
+  vendor: antigravity
