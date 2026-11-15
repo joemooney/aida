@@ -27,7 +27,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-14T20:30:53.775714194Z
-modified_at: 2026-11-14T22:36:12.188982310Z
+modified_at: 2026-11-15T20:46:33.427254480Z
 req_type: Story
 tags:
 - landing-emergency
@@ -85,6 +85,13 @@ comments:
   content: Reference merge `72cfa08d38a826f2e27acbb0e5c322fff8b29e81` left unfinished work with no lease or open PR; returned to Approved.
   created_at: 2026-11-14T22:36:12.188971829Z
   modified_at: 2026-11-14T22:36:12.188971829Z
+- id: 01a1e0f6-31d3-7e62-8cfe-67e87b3d1f47
+  author: joe
+  content: 'Advisor 13:50: absorbs TASK-3124 (product seat burndown batch). Same scope.'
+  created_at: 2026-11-15T20:46:33.427254480Z
+  modified_at: 2026-11-15T20:46:33.427254480Z
+  session_id: 01a1e03d-c6d9-7c61-8d35-47020bb6f858
+  harness_version: 2.1.325 (Claude Code)
 history:
 - id: 01a1dbc9-8d7f-7011-a059-a04197eb5620
   author: joe
