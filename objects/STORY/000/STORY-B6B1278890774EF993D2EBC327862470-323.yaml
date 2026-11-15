@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-02T19:20:50.092491662Z
-modified_at: 2026-11-14T00:06:17.301673593Z
+modified_at: 2026-11-15T20:51:04.995513129Z
 req_type: Story
 tags:
 - architecture
@@ -822,6 +822,13 @@ comments:
   created_at: 2026-11-14T00:06:17.301673593Z
   modified_at: 2026-11-14T00:06:17.301673593Z
   session_id: 01a1d73b-e31c-7f33-b2fe-cee145ddc6fb
+  harness_version: 2.1.325 (Claude Code)
+- id: 01a1e0fa-56a3-71e2-9576-0e61f3d48efc
+  author: joe
+  content: 'Advisor 14:00 (product seat needs-attention batch 2026-11-15): COMPLETE: #3600/#3619/#3940 (8515275); remainder TASK-3420 Completed per the 11-07 ruling.'
+  created_at: 2026-11-15T20:51:04.995513129Z
+  modified_at: 2026-11-15T20:51:04.995513129Z
+  session_id: 01a1e03d-c6d9-7c61-8d35-47020bb6f858
   harness_version: 2.1.325 (Claude Code)
 history:
 - id: 01a19ed2-508b-7401-9865-70193fa0d0af
