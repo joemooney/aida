@@ -1,5 +1,6 @@
 id: 01a1dffa-97b1-7ff0-bc9b-02b6f0de7bde
 spec_id: STORY-73022632d35647cca3858b18ac0723e3-030
+agreed_id: STORY-2378
 title: 'Review PR-4095: [AI:codex] fix(pull): reuse reconciliation for unchanged pending store writes (Refs BUG-2593)'
 description: |
   Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a1dfe0`) for branch `bug-b6b1278890774ef993d2ebc327862470-357`.
@@ -36,6 +37,12 @@ history:
   author: dirtlab
   timestamp: 2026-11-15T16:11:51.120305860Z
   session_id: 01a1dfe04a83
+  changes: []
+- id: 01a1dffc-792b-7092-b3ac-8783f4ff251a
+  author: joe
+  timestamp: 2026-11-15T16:13:47.691797916Z
+  session_id: 01a1dfb4-d9c9-7983-b095-3818d6fa2f68
+  harness_version: 2.1.325 (Claude Code)
   changes: []
 filed_at:
   code_sha: 030d18576df43e51cb9a03ad835504b05fdb3b1a
