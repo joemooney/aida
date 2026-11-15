@@ -31,7 +31,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-14T22:34:21.521062494Z
-modified_at: 2026-11-15T07:28:11.649723178Z
+modified_at: 2026-11-15T07:30:27.874179134Z
 req_type: Story
 tags:
 - ci
@@ -180,6 +180,19 @@ comments:
   content: Commit f3b5c6eb35 references this requirement
   created_at: 2026-11-15T07:28:11.649723178Z
   modified_at: 2026-11-15T07:28:11.649723178Z
+  session_id: 01a1de109bbb
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a1de1d-59a2-74c1-aa2e-258e36bc7eee
+  author: dirtlab
+  content: |-
+    Round-3 rework (claude) pushed f3b5c6e to #4071, scope per 00:17 CR only.
+    (1) ratchet-set.json selects task_2001_every_host_remote_call_routes_its_credentials and every_time_bound_flag_is_classified. Negative control test_failing_credential_or_time_flag_ratchet_blocks_fast_and_integration_tip: a failing cargo run for either guard makes check-ratchets.py exit 101; integration heads evaluate to FAST (fast-compile runs the Ratchet set); integration-sync-main.sh refuses to push when make check-ci-fast fails, and check-ci-fast depends on check-ratchets.
+    (2) test_ratchet_set no longer filters names: every #[test] in a selected module needs a selection or a per-test disposition. test_ci_structural_guards makes every test in a ratchet-kind or mixed module a candidate (mixed = has a ratchet/inventory-named test or a ratchet-set selection). 443 behavioral tests got per-module justified dispositions in ci-structural-exclusions.json. Negative controls inject an unlisted test into bug_2398_codex_tool_env_tests.rs (both checks) and a temp mixed module.
+    Gates: python3 -m unittest test_ratchet_set/test_ci_structural_guards/test_ci_tiers 20/20 OK; cargo test aida-cli-lib --lib (story_1888_gate_paths, both new guards, bug_1985_host_status_guard, help_surface_matches_golden_snapshot) 56 passed; aida-cli bug_1502_format_json_audit 14 passed; aida-ci-guards --lib 51 passed; trace-headers, store-writers, verify-manual unit tests, cargo fmt --check OK.
+    NOT run in full: make check-ci-fast. Its Containment conformance evidence tests fail with PermissionError under this seat's sandbox (no changed files involved), and the seat's 60s call cap cannot hold the full gate. Hosted FAST/FULL is the authority.
+    Review note: a few disposed tests look source-shaped (bug_1929_store_git_guard, scaffolding/inventory.rs every_skill_master_is_portable_or_claude_only, ci_inventory.rs committed_aida_templates_select_only_relay_merge_jobs). They are disposed rather than selected, since the CR said these two items and nothing else. They are candidates for TASK-3794.
+  created_at: 2026-11-15T07:30:27.874179134Z
+  modified_at: 2026-11-15T07:30:27.874179134Z
   session_id: 01a1de109bbb
   harness_version: 2.1.319 (Claude Code)
 history:
