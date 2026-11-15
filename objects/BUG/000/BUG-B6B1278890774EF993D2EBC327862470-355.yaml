@@ -3,12 +3,12 @@ spec_id: BUG-b6b1278890774ef993d2ebc327862470-355
 agreed_id: BUG-2590
 title: Session-start hook can overwrite a background launch's adopted seat with the old seat (race in seat selection vs link/adopt)
 description: 'Found by the promotion 12 review (PR-4083 @ 10d112c, finding [P2]). agent_registry.rs:348, 940-960, 1044-1048, 1068-1077: touch_session_start_agent_for resolves the linked launch and computes its seat BEFORE taking the namespace write lock. If link_bg_session/adopt_bg_session_identity installs a new launch seat (including None) in between, the hook overwrites it with old-seat; carry_concurrent_launcher_write ignores an adopted session-start-hook row, and disk.seat.or(entry.seat) restores the stale seat when the adopted seat is None. Effect: the session binds/reads old-seat mail and stamps an incorrect from_seat after adoption. Fix: revalidate the linked launch under the write lock (or generation/CAS), preserving an authoritative None. Test: deterministic interleaving regression (pause hook after observing the old launch, link/adopt a seatless or newly seated launch, resume, assert final identity None/new-seat and no old-seat mail access). Introduced by STORY-2745 (#3950).'
-status: InProgress
+status: Completed
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-15T12:04:33.671828507Z
-modified_at: 2026-11-15T14:42:59.150172647Z
+modified_at: 2026-11-15T15:52:49.095445339Z
 req_type: Bug
 tags:
 - mailbox
@@ -62,6 +62,20 @@ history:
   timestamp: 2026-11-15T14:43:03.320842992Z
   session_id: 01a1df94c082
   changes: []
+- id: 01a1dfe9-4388-7840-a88e-89ba00d57cc1
+  author: aida-auto-bump
+  timestamp: 2026-11-15T15:52:48.776572843Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a1dfe9-44c7-79c3-b7b3-201ec1e75797
+  timestamp: 2026-11-15T15:52:49.095442713Z
+  agent: aida
+  commit_sha: 030d18576df43e51cb9a03ad835504b05fdb3b1a
+  summary: 'PASS BUG-2590: all seven derived criteria verified; full landed diff reviewed, no actionable defects. Exact-head full CI 43726020672 passed (105 registry tests); earlier fast aggregate failed on cancelled lanes. Pinned-base changes do not affect this surface. Checklist: .aida/review-checklist-pr-4088.md; codegraph unavailable, source navigation used.'
+  review_verdict: approved
 filed_at:
   code_sha: 09b509ffd700d22b58cf4e2cce723be71655ddef
   branch: main
@@ -71,3 +85,7 @@ filed_at:
   vendor: claude
   session: 01a1de7f-09f6-7f22-a833-c094b4ed8e83
   harness_version: 2.1.325 (Claude Code)
+implementation_info:
+  implemented: false
+  completed_at: 2026-11-15T15:52:48.776567241Z
+  completion_sha: 030d18576df43e51cb9a03ad835504b05fdb3b1a
