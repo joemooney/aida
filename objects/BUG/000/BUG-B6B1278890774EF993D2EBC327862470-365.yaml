@@ -8,8 +8,16 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-15T19:48:55.552088132Z
-modified_at: 2026-11-15T20:27:55.175880041Z
+modified_at: 2026-11-15T20:27:59.703973708Z
 req_type: Bug
+comments:
+- id: 01a1e0e5-3357-7050-8794-49f7b6ae9f92
+  author: joe
+  content: 'Advisor lane brief 13:31 (codex, MAIN track, product seat aida-d0''s fill list). Scope: acceptance (1) and (2) as written. (1) In aida-core/src/git_ops.rs is_recent_cache_ancestor (~3399): replace the hard 64 first-parent cap with ''git cat-file -e <recorded>'' (missing -> false -> rebuild), then a bounded is_ancestor_with_timeout(...).unwrap_or(false), so a true ancestor beyond 64 commits takes the incremental refresh again. Keep #4103''s guarantee: a timeout or missing head never surfaces as a write error. (2) Add a write-path seam (the ANCESTOR_CHECK_SPAWN_DELAY pattern) so bug2599_rewritten_cache_head_allows_comment_write drives the timeout branch. That test must FAIL on 0dacba5 (pre-#4103) and PASS now; state both in the PR body. Gate: STRICT store path, so cargo test -p aida-core db:: and cargo test -p aida-core git_ops, plus the lane pre-push gate. Do not push while red. Trailer (BUG-2601). Session rules: allowed_domains only on sandboxed Bash calls, never with dangerouslyDisableSandbox. A classifier-denied kill or destructive step is reported, never retried another way. Never sleep in a foreground Bash call.'
+  created_at: 2026-11-15T20:27:59.703973708Z
+  modified_at: 2026-11-15T20:27:59.703973708Z
+  session_id: 01a1e03d-c6d9-7c61-8d35-47020bb6f858
+  harness_version: 2.1.325 (Claude Code)
 history:
 - id: 01a1e0e5-21a7-7d90-b7f1-0443150cba25
   author: joe
