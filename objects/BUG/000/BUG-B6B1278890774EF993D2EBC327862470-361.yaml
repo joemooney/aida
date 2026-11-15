@@ -10,12 +10,12 @@ description: |
   2. The projection falls back to the latest status-history entry whose new value is Completed when the stamp is absent. After this lands, a full cache rebuild leaves 0 Completed specs with completed_at NULL, or every remaining one is listed with its reason.
   3. Rejected and Superseded specs get a closed_at, projected from their terminal status-history entry.
   4. One-time backfill: write the derived completed_at into the store objects (single user, data rewrite OK). It must run idempotently.
-status: Approved
+status: InProgress
 priority: High
-owner: ''
+owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-15T18:04:25.086962515Z
-modified_at: 2026-11-15T18:21:46.815849363Z
+modified_at: 2026-11-15T18:26:01.712449583Z
 req_type: Bug
 comments:
 - id: 01a1e06b-cdff-78c0-bed3-e2ede2e0ba80
@@ -49,6 +49,13 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Approved
+- id: 01a1e075-8970-7010-9635-18e072d23fe8
+  author: aida-session-start
+  timestamp: 2026-11-15T18:26:01.712447892Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: c33029425f985ee31fe6254bf343da3463196e28
   branch: main
