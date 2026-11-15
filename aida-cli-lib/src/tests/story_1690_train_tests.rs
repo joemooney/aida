@@ -6031,7 +6031,7 @@ fn live_gate_refuses_an_approved_head_with_no_full_tier_run_and_requests_one() {
 
 // trace:STORY-2809 | ai:claude — AC2
 #[test]
-fn live_gate_names_a_running_or_red_full_tier_run_without_requesting_another() {
+fn live_gate_preserves_running_full_ci_and_checks_red_runs_for_cancelled_retries() {
     // trace:STORY-b6b1278890774ef993d2ebc327862470-732.accf1a65 | ai:claude
     for (tier, expected) in [
         (
@@ -6050,10 +6050,12 @@ fn live_gate_names_a_running_or_red_full_tier_run_without_requesting_another() {
         ),
     ] {
         let mut c = FakeChecks::new();
+        // trace:TASK-3105 | ai:codex
+        let red = matches!(tier, crate::full_tier::FullTier::Failed { .. });
         c.full_tier = Some(tier);
         let why = gate_member_with(&mut c, "main", 41).unwrap_err();
         assert!(why.contains(expected), "{why}");
-        assert!(c.full_requests.is_empty());
+        assert_eq!(c.full_requests, if red { vec![41] } else { vec![] });
     }
 }
 
