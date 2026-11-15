@@ -8,7 +8,7 @@ priority: Low
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T10:46:47.827833836Z
-modified_at: 2026-11-13T03:21:17.481397906Z
+modified_at: 2026-11-15T20:55:15.329879459Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -238,6 +238,13 @@ comments:
   modified_at: 2026-11-13T02:58:49.295578572Z
   session_id: 01a1d240-c397-7b61-b29f-bb337c138943
   harness_version: 2.1.323 (Claude Code)
+- id: 01a1e0fe-2881-78b3-8774-90cacd70b917
+  author: joe
+  content: 'Advisor 14:00 (product seat needs-attention batch 2026-11-15): Ruling: closed at the disabled broker. An enable slice is filed only when it has a consumer.'
+  created_at: 2026-11-15T20:55:15.329879459Z
+  modified_at: 2026-11-15T20:55:15.329879459Z
+  session_id: 01a1e03d-c6d9-7c61-8d35-47020bb6f858
+  harness_version: 2.1.325 (Claude Code)
 history:
 - id: 01a1b59e-5972-7d63-967f-d8572322d9d1
   author: joe
