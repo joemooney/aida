@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-12T23:29:14.437520729Z
-modified_at: 2026-11-13T23:33:25.745101166Z
+modified_at: 2026-11-15T20:51:09.233132088Z
 req_type: Bug
 tags:
 - track:integration
@@ -35,6 +35,13 @@ comments:
   created_at: 2026-11-13T23:33:25.745101166Z
   modified_at: 2026-11-13T23:33:25.745101166Z
   session_id: 01a1d73b-e31c-7f33-b2fe-cee145ddc6fb
+  harness_version: 2.1.325 (Claude Code)
+- id: 01a1e0fa-6731-7532-afc2-6a96517f9d25
+  author: joe
+  content: 'Advisor 14:00 (product seat needs-attention batch 2026-11-15): COMPLETE: AC1-2 in #3970. AC3 is carried by existing TASK-3098.'
+  created_at: 2026-11-15T20:51:09.233132088Z
+  modified_at: 2026-11-15T20:51:09.233132088Z
+  session_id: 01a1e03d-c6d9-7c61-8d35-47020bb6f858
   harness_version: 2.1.325 (Claude Code)
 history:
 - id: 01a1d363-4409-75b0-b91c-374998062348
