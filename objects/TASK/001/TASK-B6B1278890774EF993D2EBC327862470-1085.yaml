@@ -10,6 +10,17 @@ feature: Uncategorized
 created_at: 2026-11-15T20:52:29.096873677Z
 modified_at: 2026-11-15T20:52:29.096873677Z
 req_type: Task
+relationships:
+- rel_type: Child
+  target_id: 01a1b862-584a-7491-b07f-b81dcf3bf545
+  created_at: 2026-11-15T20:52:47.057647055Z
+history:
+- id: 01a1e0fb-ec1e-7b20-b539-0e5167bc623e
+  author: joe
+  timestamp: 2026-11-15T20:52:48.798847602Z
+  session_id: 01a1e03d-c6d9-7c61-8d35-47020bb6f858
+  harness_version: 2.1.325 (Claude Code)
+  changes: []
 filed_at:
   code_sha: 6f0d951dd9bd8ac704f942526e974d9a1f06f97e
   branch: main
