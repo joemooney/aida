@@ -9,12 +9,12 @@ description: |
 
   Raised by the implementer while working STORY-2809.
   Branch: story-b6b1278890774ef993d2ebc327862470-732  ·  Commit: 19ed47f1cf  (PR-4027)
-status: Approved
+status: InProgress
 priority: Medium
-owner: ''
+owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-14T14:46:56.703796673Z
-modified_at: 2026-11-15T20:46:56.440563183Z
+modified_at: 2026-11-15T21:04:00.455427478Z
 req_type: Task
 tags:
 - from-implementer:STORY-2809
@@ -44,6 +44,13 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Approved
+- id: 01a1e106-2bc7-7f51-95c9-0cca266191a5
+  author: aida-session-start
+  timestamp: 2026-11-15T21:04:00.455425760Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: 19ed47f1cf06739e7d5010e06f4d3c3b6015187f
   branch: story-b6b1278890774ef993d2ebc327862470-732
