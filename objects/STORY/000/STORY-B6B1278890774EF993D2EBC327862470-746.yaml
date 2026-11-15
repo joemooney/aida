@@ -3,12 +3,12 @@ spec_id: STORY-b6b1278890774ef993d2ebc327862470-746
 agreed_id: STORY-2823
 title: 'aida pr train --status: one command that says what the train is doing'
 description: 'From the Agent CLI friction log (STORY-2822 item 12). Today every advisor reads .aida/train/*.json, the deputy transcript and gh by hand to learn the train''s state, and two shell versions were wrong. Acceptance: (1) ''aida pr train --status'' (or ''aida train status'') prints, for the current journal or ''no train'': train PR number, members with heads, step (Gate/Ci/Merge/Members/Cleanup), time in step, CI shard summary, and the PID driving it or ''no live driver (orphaned journal)''; (2) exit code distinguishes none / running / orphaned; (3) json output; (4) read-only, bounded time (no gate-ledger rediscovery); (5) documented in docs/cli.'
-status: InProgress
+status: NeedsAttention
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-14T18:21:33.508922524Z
-modified_at: 2026-11-15T06:15:27.486096015Z
+modified_at: 2026-11-15T06:18:11.225332812Z
 req_type: Story
 relationships:
 - rel_type:
@@ -136,6 +136,15 @@ history:
   session_id: 01a1dd9982af
   harness_version: codex-cli 0.167.0
   changes: []
+- id: 01a1dddb-2d99-7272-b428-ddddcb7de058
+  author: dirtlab
+  timestamp: 2026-11-15T06:18:11.225341091Z
+  session_id: 01a1ddda32ac
+  harness_version: codex-cli 0.167.0
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 filed_at:
   code_sha: 96fc262834527304fe85fc9ee32e4d04f1aaf4ea
   branch: main
@@ -150,3 +159,8 @@ implementation_info:
   implemented_at: 2026-11-14T21:57:34.285073799Z
   implemented_by: dirtlab
   reopened_at_sha: 3cb7ba4fab12c60797d42bf51c7845633680c7d2
+attention_reason:
+  category: other
+  detail: 'Host-staged merge has overlapping --status/--check JSON behavior beyond the two conflict paths: pr_cmd.rs contains duplicate json bindings and status-only JSON validation rejects check JSON. Conflict markers removed and shared argument/help reconciled; host or advisor must authorize and resolve dispatch overlap before publication per repair instructions.'
+  raised_by: implementer
+  raised_at: 2026-11-15T06:18:11.225332812Z
