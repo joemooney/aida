@@ -1,0 +1,23 @@
+id: 01a1df9a-0a70-79e2-8e1d-072a12a1ecc9
+spec_id: BUG-b6b1278890774ef993d2ebc327862470-356
+agreed_id: BUG-2591
+title: 'Cache incremental refresh: an ancestry-check timeout inside the transaction falls through to a full rebuild'
+description: 'From the PR-4085 re-review [P2] @ d135568: aida-core/src/db/cache.rs:639-640. If store HEAD advances after try_incremental_update checks its target but before apply_incremental calls refresh_head_reached, the new 2 s ancestry check can time out. The error reaches ensure_cache_fresh (cached_git_backend.rs:744-746), whose generic arm breaks into full_rebuild(true) at :762, so the whole store is reloaded under the same disk contention. Fix: distinguish ancestry-timeout errors and propagate them without a rebuild. Regression test: HEAD advances before the transaction, the ancestry check times out, and no full rebuild happens. Judge priority with the TASK-3798 timing evidence.'
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-15T14:26:16.816827522Z
+modified_at: 2026-11-15T14:26:16.816827522Z
+req_type: Bug
+tags:
+- performance
+filed_at:
+  code_sha: 02db2bdce6d88e82943635a4fbbc6506125b43b7
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 02db2bdce6d
+  vendor: claude
+  session: 01a1de7f-09f6-7f22-a833-c094b4ed8e83
+  harness_version: 2.1.325 (Claude Code)
