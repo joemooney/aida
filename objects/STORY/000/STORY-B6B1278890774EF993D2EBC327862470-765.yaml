@@ -66,7 +66,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-15T11:39:14.624162873Z
-modified_at: 2026-11-15T11:43:35.793995947Z
+modified_at: 2026-11-15T12:04:53.466853587Z
 req_type: Story
 relationships:
 - rel_type:
@@ -269,6 +269,14 @@ relationships:
   target_id: 01a1cee5-ebd6-7ff3-944c-0748e54f0d84
   created_at: 2026-11-15T11:43:35.793991147Z
   created_by: joe
+comments:
+- id: 01a1df18-985a-7f52-b530-66e2897a5c33
+  author: joe
+  content: 'Advisor ruling 2026-11-15 05:08 on PR-4083 (promotion 12) CR @ 10d112c, round 1: the single [P2] finding (session-start hook vs background link/adopt seat race, agent_registry.rs:348/940-960/1044-1077, introduced by #3950 STORY-2745) is NON-BLOCKING, ruled once and filed as BUG-2590 (high). Reason: no data loss and no security boundary (single-user host). The stale value is the same session lineage''s predecessor seat, whose mail the relay hands over by design, so the worst effect is a misattributed from_seat or mail read one generation early, both visible and recoverable. The reviewer verified the TASK-3795 fixes and both glue commits. Not waived: the approval gate. One re-review at 10d112c is launched with this ruling as context, so the approval is a reviewer''s at the exact head.'
+  created_at: 2026-11-15T12:04:53.466853587Z
+  modified_at: 2026-11-15T12:04:53.466853587Z
+  session_id: 01a1de7f-09f6-7f22-a833-c094b4ed8e83
+  harness_version: 2.1.325 (Claude Code)
 history:
 - id: 01a1df01-4a52-7642-a2f5-7fc505d5a4d5
   author: joe
