@@ -1,0 +1,32 @@
+id: 01a1e0ab-1994-76c0-a089-f734e912eaf7
+spec_id: STORY-73022632d35647cca3858b18ac0723e3-034
+title: 'Review PR-4105: [AI:codex] fix(lifecycle): preserve terminal status timestamps (BUG-2597)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a1e075`) for branch `bug-b6b1278890774ef993d2ebc327862470-361`.
+
+  - PR: <https://github.com/joemooney/aida/pull/4105>
+  - Branch: `bug-b6b1278890774ef993d2ebc327862470-361` → `main`
+
+  ## Covers
+
+  - BUG-2597
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 4105` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-15T19:24:32.020784168Z
+modified_at: 2026-11-15T19:24:32.020784168Z
+req_type: Story
+filed_at:
+  code_sha: 15f4d33fffe9b62719c22285b4acac44aab4dabc
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: bc24a1e688
+  session: 01a1e0757b9b
