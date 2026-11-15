@@ -3,12 +3,12 @@ spec_id: BUG-b6b1278890774ef993d2ebc327862470-309
 agreed_id: BUG-2544
 title: Second concurrent 'aida queue work PR-N --role reviewer' from the same deputy shell fails 'no valid parent seat grant is active'
 description: 'Observed 2026-11-12 17:52 and 18:03: a deputy script launched reviewers for PR-3902 and PR-3896 in parallel from the operator''s default deputy (same AIDA_SESSION_GRANT). Both times the first launch proceeded (PR-3902 reviewed, verdict at 453348f) and the second failed with: error: "no valid parent seat grant is active" (exit 1, setup rolled back). Sequential launches from the same shell work (PR-3904 at 17:12). Expected: a parent grant can delegate several concurrent reviewer children, or the error names the real cause (grant consumed or swapped by the sibling delegation) and suggests launching them sequentially. Logs: .aida/tmp/lanes/review-3896.log.'
-status: NeedsAttention
+status: Approved
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-13T01:11:24.623933148Z
-modified_at: 2026-11-15T20:51:43.034762294Z
+modified_at: 2026-11-15T20:57:01.282680791Z
 req_type: Bug
 relationships:
 - rel_type: Supersedes
@@ -89,6 +89,13 @@ comments:
   modified_at: 2026-11-15T20:51:43.034762294Z
   session_id: 01a1e03d-c6d9-7c61-8d35-47020bb6f858
   harness_version: 2.1.325 (Claude Code)
+- id: 01a1e0ff-c662-7710-b29d-20c38d213408
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida edit --status`. It was punted on: other: work complete locally but unable to publish: git push from the contained seat fails (no GitHub credential in the sandbox; gh reports the token for joemooney is invalid). Commit 90810a0e3f on bug-b6b1278890774ef993d2ebc327862470-309 is one commit on top of origin/main 3350540dba, tested (cargo test -p aida-cli-lib --lib bug_2544: 4 passed); make check-ci-fast did not finish inside the 60 s tool cap. It is a Refs diagnostic slice: the concurrent root cause is not reproduced.. No triage reason was given.'
+  created_at: 2026-11-15T20:57:01.282677220Z
+  modified_at: 2026-11-15T20:57:01.282677220Z
+  session_id: 01a1e03d-c6d9-7c61-8d35-47020bb6f858
+  harness_version: 2.1.325 (Claude Code)
 history:
 - id: 01a1d29d-457f-7573-94fd-e6604893c979
   author: joe
@@ -133,6 +140,15 @@ history:
   session_id: 01a1e03d-c6d9-7c61-8d35-47020bb6f858
   harness_version: 2.1.325 (Claude Code)
   changes: []
+- id: 01a1e0ff-c662-7710-b29d-20bf3727518a
+  author: joe
+  timestamp: 2026-11-15T20:57:01.282657665Z
+  session_id: 01a1e03d-c6d9-7c61-8d35-47020bb6f858
+  harness_version: 2.1.325 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 filed_at:
   code_sha: 9968a8ab4ec2b4110f24d64122a7e60ab755a95b
   branch: main
@@ -142,9 +158,3 @@ filed_at:
   vendor: claude
   session: 01a1d240-c397-7b61-b29f-bb337c138943
   harness_version: 2.1.323 (Claude Code)
-attention_reason:
-  category: other
-  detail: 'work complete locally but unable to publish: git push from the contained seat fails (no GitHub credential in the sandbox; gh reports the token for joemooney is invalid). Commit 90810a0e3f on bug-b6b1278890774ef993d2ebc327862470-309 is one commit on top of origin/main 3350540dba, tested (cargo test -p aida-cli-lib --lib bug_2544: 4 passed); make check-ci-fast did not finish inside the 60 s tool cap. It is a Refs diagnostic slice: the concurrent root cause is not reproduced.'
-  lean: 'branch is ready; from the host run ''aida ship BUG-2544 --no-merge'' in the seat (or re-auth gh and relaunch). Force-push is needed: the branch was linearized onto main. Keep BUG-2544 open until the parallel deputy launch is re-run on a current build; see findings TASK-...-002 and -003.'
-  raised_by: implementer
-  raised_at: 2026-11-14T14:27:29.778148610Z
