@@ -1,0 +1,25 @@
+id: 01a1dfd6-b845-71c2-b846-3a66025e02bd
+spec_id: BUG-b6b1278890774ef993d2ebc327862470-358
+agreed_id: BUG-2594
+title: Script deputy submit from a PID-sandboxed seat ignores the runner's --allow-seat list
+description: |
+  Problem: `aida deputy shell submit` from a PID-sandboxed seat ignores the live runner's `--allow-seat` list. Submit reads the seats through `q.live_runner()` (aida-cli-lib/src/deputy_shell_cmd.rs, the Submit arm). In a PID sandbox the runner process can't be seen (`list` prints "runner: UNKNOWN (cannot see host processes from this sandbox)"), so `live_runner()` returns None and the seats fall back to `default_submit_seats()` (advisor only). Seen 2026-11-15 08:31: Joe started `aida deputy shell run --allow-seat product --name product`. Its runner.json lists submit_seats ["advisor","product"], yet the product seat's submit was refused with "(allowed: advisor)". The refusal tells the operator to run the flag they had already passed, which misleads.
+
+  Acceptance:
+  1. When the runner's liveness is unknown (the sandbox can't see host processes), submit reads submit_seats from runner.json. The runner keeps its existing check of each job's submitter at execution, so authority stays enforced on the host side.
+  2. When the runner is known dead, the default stays in force. A test covers the unknown-liveness case using the existing injected runner_status observer.
+  3. A refusal while liveness is unknown says so instead of telling the operator to pass --allow-seat.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-15T15:32:33.477802536Z
+modified_at: 2026-11-15T15:32:33.477802536Z
+req_type: Bug
+filed_at:
+  code_sha: 80fefce8053d47816939bd636cd11cb5cfa4f189
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 80fefce8053
+  vendor: claude
