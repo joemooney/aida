@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-14T18:21:33.508922524Z
-modified_at: 2026-11-15T02:05:29.628358757Z
+modified_at: 2026-11-15T02:24:58.819763566Z
 req_type: Story
 relationships:
 - rel_type:
@@ -38,6 +38,13 @@ comments:
   modified_at: 2026-11-14T22:35:56.881806920Z
   session_id: 01a1dc2c-25f2-7d52-aa8c-61e0f270e9d1
   harness_version: 2.1.325 (Claude Code)
+- id: 01a1dd05-abc3-76b3-8ffb-d8c447f1f935
+  author: dirtlab
+  content: 'Native implementation follow-up complete, edits left uncommitted for host publication. Status now uses read-only bounded forge classification with a shared 20s CI budget; run-lock occupancy decides running state and process records only identify the driver; step clocks publish by temp-file rename. Updated CLI documentation, JSON audit and config/store-writer inventories. Passed lane-runner tests: 13 train-status, 52 gate-path, 14 JSON audit, 1 host-status and 1 help snapshot; 51 structural guards; make check-ci-fast passed all 48 gates. Missing operator-supplied codegraph client was diagnosed and rg used without index mutation. Host retains commit/publication/queue completion.'
+  created_at: 2026-11-15T02:24:58.819763566Z
+  modified_at: 2026-11-15T02:24:58.819763566Z
+  session_id: 01a1dcf365b7
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1dbdd-64db-7081-86bd-0d20eb1790fa
   author: aida-session-start
