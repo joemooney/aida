@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-15T15:24:30.864809950Z
-modified_at: 2026-11-15T18:01:28.771668480Z
+modified_at: 2026-11-15T18:41:55.185524742Z
 req_type: Task
 tags:
 - landing
@@ -199,6 +199,13 @@ comments:
   modified_at: 2026-11-15T18:01:28.771668480Z
   session_id: 01a1e03bb6bc
   harness_version: codex-cli 0.167.0
+- id: 01a1e084-15f1-70a0-8be7-7d134f6c03d6
+  author: joe
+  content: 'Advisor ruling 11:42: #4094 STRICT approved at 6cb79d8. Its one finding (wip_limit.rs:117 admit_phase1 runs twice per fresh auto-complete member at the limit, so it writes duplicate wip-limit-override events and repeats lookups) is non-blocking: no correctness, security or data loss, and the behaviour stays right. Accepted and filed as a draft follow-up.'
+  created_at: 2026-11-15T18:41:55.185524742Z
+  modified_at: 2026-11-15T18:41:55.185524742Z
+  session_id: 01a1e03d-c6d9-7c61-8d35-47020bb6f858
+  harness_version: 2.1.325 (Claude Code)
 history:
 - id: 01a1dfd1-419b-7433-aa20-2bb3c92d78a1
   author: aida-session-start
