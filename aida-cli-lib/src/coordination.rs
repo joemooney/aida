@@ -839,6 +839,17 @@ pub(crate) fn acquire_claim_receipted(
             None,
         ));
     }
+    // A legacy directory-backed store can sit inside the code repository.
+    // Git discovery there inherits the CODE origin, not a shared store origin.
+    // Do not refresh that repository or treat it as the claim registry.
+    // Linked store worktrees have their own `.git` file and remain admitted.
+    // trace:BUG-2586 | ai:codex
+    if !store_root.join(".git").try_exists()? {
+        return Ok((
+            AcquireOutcome::Unavailable("no git-canonical store attached".to_string()),
+            None,
+        ));
+    }
     // Cross-clone coordination only matters when clones SHARE a remote store.
     // A solo clone (no origin) has nothing to coordinate against — proceed.
     if !aida_core::git_ops::has_remote(store_root, "origin") {
@@ -1810,6 +1821,25 @@ mod tests {
         let branch = aida_core::git_ops::current_branch(&store).unwrap();
         assert!(aida_core::git_ops::push(&store, "origin", &branch).unwrap());
         store
+    }
+
+    #[test]
+    // trace:BUG-2586 | ai:codex
+    fn bug2586_directory_store_does_not_inherit_code_origin() {
+        let dir = tempfile::tempdir().unwrap();
+        let repo = bug2586_store(dir.path());
+        let store = repo.join(".aida-store");
+        std::fs::create_dir(&store).unwrap();
+        let head = aida_core::git_ops::head_sha(&repo).unwrap();
+        for force in [false, true] {
+            let (outcome, receipt) =
+                acquire_claim_receipted(&store, "BUG-2586", &repo, "implementer", false, force)
+                    .unwrap();
+            assert!(matches!(outcome, AcquireOutcome::Unavailable(_)));
+            assert!(receipt.is_none());
+        }
+        assert!(!leases_dir(&store).exists());
+        assert_eq!(aida_core::git_ops::head_sha(&repo).unwrap(), head);
     }
 
     #[test]
