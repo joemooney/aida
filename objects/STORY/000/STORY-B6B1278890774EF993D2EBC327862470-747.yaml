@@ -3,12 +3,12 @@ spec_id: STORY-b6b1278890774ef993d2ebc327862470-747
 agreed_id: STORY-2824
 title: 'aida pr train --check N...: say whether each PR qualifies for a train right now, and why not'
 description: 'From the Agent CLI friction log (STORY-2822 item 13). Advisors re-implement train eligibility in shell (approved at exact head, no armed hold, checks green, passing ci-tier: full, failures only from superseded runs ignored) and got it wrong twice on 2026-11-14 (27 min of waits; stale cancelled rows read as red). Acceptance: (1) ''aida pr train --check N...'' and ''--check --all-open'' print one row per PR: eligible yes/no and the first failing gate with its remedy; (2) uses exactly the gates ''aida pr train'' applies plus the full-tier rule from STORY-2809 when configured; (3) changes nothing (no labels, no holds, no journal); (4) json output and exit 0 only if every named PR is eligible; (5) bounded time.'
-status: InProgress
+status: Completed
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-14T18:22:12.152871570Z
-modified_at: 2026-11-15T04:49:09.118925093Z
+modified_at: 2026-11-15T06:16:15.870000149Z
 req_type: Story
 tags:
 - docs:impacted
@@ -283,6 +283,19 @@ history:
   session_id: 01a1dc2c-25f2-7d52-aa8c-61e0f270e9d1
   harness_version: 2.1.325 (Claude Code)
   changes: []
+- id: 01a1ddd9-6aec-7af0-a0c9-7c4bbc477c6c
+  author: aida-auto-bump
+  timestamp: 2026-11-15T06:16:15.852719574Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a1ddd9-6afd-7821-853e-d1048434cb79
+  timestamp: 2026-11-15T06:16:15.869998459Z
+  agent: aida
+  commit_sha: 2fc46e46a2c3326c46f64f6b8647cc4241345972
+  summary: Completed via merge 2fc46e46
 filed_at:
   code_sha: 96fc262834527304fe85fc9ee32e4d04f1aaf4ea
   branch: main
@@ -292,3 +305,7 @@ filed_at:
   vendor: claude
   session: 01a1dab1-9447-7d22-b5ff-0c9084e122ea
   harness_version: 2.1.325 (Claude Code)
+implementation_info:
+  implemented: false
+  completed_at: 2026-11-15T06:16:15.852715854Z
+  completion_sha: 2fc46e46a2c3326c46f64f6b8647cc4241345972
