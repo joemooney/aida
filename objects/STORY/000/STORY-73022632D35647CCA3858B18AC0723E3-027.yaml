@@ -1,5 +1,6 @@
 id: 01a1dfd1-3657-71c2-9db6-68b5496509f5
 spec_id: STORY-73022632d35647cca3858b18ac0723e3-027
+agreed_id: STORY-2374
 title: 'Review PR-4091: [AI:codex] fix(train): reuse validated gate-ledger inventories (Refs BUG-2584)'
 description: |
   Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a1dfad`) for branch `bug-2584-train-gate-reuse`.
@@ -36,6 +37,10 @@ history:
   author: dirtlab
   timestamp: 2026-11-15T15:26:41.115696124Z
   session_id: 01a1dfad5d97
+  changes: []
+- id: 01a1dfe6-63fb-7d92-8548-ac7e0b64d297
+  author: joe
+  timestamp: 2026-11-15T15:49:40.475104200Z
   changes: []
 filed_at:
   code_sha: 80fefce8053d47816939bd636cd11cb5cfa4f189

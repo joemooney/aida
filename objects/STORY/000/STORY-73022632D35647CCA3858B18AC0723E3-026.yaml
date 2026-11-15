@@ -1,5 +1,6 @@
 id: 01a1dfd0-7b45-74d1-944f-f6e80ac23cbb
 spec_id: STORY-73022632d35647cca3858b18ac0723e3-026
+agreed_id: STORY-2375
 title: 'Review PR-4090: [AI:codex] fix: Crate-split PR7: lift inline tests batch B and split session.rs by concern (TASK-3787)'
 description: |
   Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `(no-sess`) for branch `task-b6b1278890774ef993d2ebc327862470-1067`.
@@ -33,6 +34,10 @@ history:
 - id: 01a1dfd0-977f-7de1-9b7a-6a9ba94c2d04
   author: dirtlab
   timestamp: 2026-11-15T15:25:51.871486594Z
+  changes: []
+- id: 01a1dfe6-6430-7350-9059-b5ecbdfa4e18
+  author: joe
+  timestamp: 2026-11-15T15:49:40.528628543Z
   changes: []
 filed_at:
   code_sha: 80fefce8053d47816939bd636cd11cb5cfa4f189
