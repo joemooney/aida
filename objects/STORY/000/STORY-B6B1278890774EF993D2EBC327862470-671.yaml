@@ -2,14 +2,24 @@ id: 01a1d2e6-3ee2-76c1-9301-d86cc8a606aa
 spec_id: STORY-b6b1278890774ef993d2ebc327862470-671
 agreed_id: STORY-2748
 title: 'Live fleet view: vendor hooks heartbeat agent activity into the event log; aida ps shows every host'
-description: 'Operator 2026-11-12 20:13: wants a snappy view of what every agent/subagent is doing per open spec. Today ''aida ps'' is host-local (dell1 lanes show as orphaned/idle on the primary) and its activity column is ''unknown''. Want: AC1 Claude Code (PostToolUse/Stop/SubagentStop hooks) and Codex (notify/session events) append a bounded heartbeat (lease id, spec, role, vendor, host, tool, path, one-line summary, ts) to the AIDA event log, rate-limited; AC2 heartbeats from other hosts reach the primary through the existing store/mail sync; AC3 ''aida ps'' shows one row per live session across hosts with last activity and age, and flags a lease with no heartbeat for >10 min; AC4 ''aida ps --watch'' refreshes in place; AC5 subagents appear nested under their parent session. Template-managed hooks (aida-core/templates) so every seat gets them.'
+description: |
+  Operator 2026-11-12 20:13: wants a snappy view of what every agent/subagent is doing per open spec. Today 'aida ps' is host-local (dell1 lanes show as orphaned/idle on the primary) and its activity column is 'unknown'. Want: AC1 Claude Code (PostToolUse/Stop/SubagentStop hooks) and Codex (notify/session events) append a bounded heartbeat (lease id, spec, role, vendor, host, tool, path, one-line summary, ts) to the AIDA event log, rate-limited; AC2 heartbeats from other hosts reach the primary through the existing store/mail sync; AC3 'aida ps' shows one row per live session across hosts with last activity and age, and flags a lease with no heartbeat for >10 min; AC4 'aida ps --watch' refreshes in place; AC5 subagents appear nested under their parent session. Template-managed hooks (aida-core/templates) so every seat gets them.
+
+  Slice 1 (advisor 13:58, product seat batch): implement AC1 (Claude Code and Codex hooks append a bounded, rate-limited heartbeat to the event log) and AC3 ('aida ps' shows each live session with the age of its last heartbeat) for the local host only. AC2 (cross-host delivery), AC4 and AC5 are later slices; file them as children when slice 1 lands. Acceptance for slice 1: hook heartbeat written and rate-limited (test); 'aida ps' age column from the heartbeat (test); no change to cross-host behaviour.
 status: Draft
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-13T03:14:27.170658789Z
-modified_at: 2026-11-13T03:14:27.170658789Z
+modified_at: 2026-11-15T20:49:38.751142964Z
 req_type: Story
+history:
+- id: 01a1e0f9-061c-7070-b6d4-eefd63f30ba6
+  author: joe
+  timestamp: 2026-11-15T20:49:38.844581084Z
+  session_id: 01a1e03d-c6d9-7c61-8d35-47020bb6f858
+  harness_version: 2.1.325 (Claude Code)
+  changes: []
 filed_at:
   code_sha: 0558a9e06aac10a087327ade1e1ab0a0c3d4ad50
   branch: main
