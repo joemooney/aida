@@ -1,0 +1,25 @@
+id: 01a1e062-b5ee-7a33-a394-7865bdcc54a0
+spec_id: BUG-b6b1278890774ef993d2ebc327862470-362
+agreed_id: BUG-2598
+title: History index stuck BEHIND after a store history rewrite; cache WAL never checkpointed and stale cache DB files never pruned
+description: |
+  Problem: `aida cache status` has shown the history index (history-v6-6.db) as BEHIND since 2026-11-12, with "store history was rewritten" and only 23 events. It says it "catches up on the next `aida history events` query", yet it hasn't in 3 days. Separately, .aida/cache-db holds about 220 MB of dead or bloated state: a 137 MB uncheckpointed cache.db-wal next to an 86 MB cache.db, malformed-* backups from Oct 10 and Oct 14 (85 MB), and superseded history-v6-4/-5 files. Found by an agy audit 2026-11-15 and re-checked.
+
+  Acceptance:
+  1. Find out why the rewritten-history reset never catches up: the background refresh exiting non-zero, or the query path not triggering a rebuild. After the fix, a store history rewrite rebuilds the index automatically. A test covers the rewritten-history case.
+  2. `aida cache rebuild` ends with a WAL checkpoint (TRUNCATE). The WAL doesn't grow without bound during normal refreshes.
+  3. `aida doctor` reports superseded history-v6-* files and malformed-* backups older than 14 days, and offers a fix that removes them. It reports by default and deletes only through the prescribed fix.
+status: Draft
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-15T18:05:27.918013457Z
+modified_at: 2026-11-15T18:05:27.918013457Z
+req_type: Bug
+filed_at:
+  code_sha: c33029425f985ee31fe6254bf343da3463196e28
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: c33029425f9
+  vendor: claude
