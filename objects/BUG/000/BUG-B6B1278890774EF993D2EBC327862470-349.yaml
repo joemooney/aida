@@ -20,7 +20,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-14T16:58:10.857853786Z
-modified_at: 2026-11-15T15:28:29.457523766Z
+modified_at: 2026-11-15T15:28:31.302994500Z
 req_type: Bug
 tags:
 - landing
@@ -84,6 +84,13 @@ comments:
   modified_at: 2026-11-15T15:12:19.357179925Z
   session_id: 01a1dfad5d97
   harness_version: codex-cli 0.167.0
+- id: 01a1dfd3-0646-7c23-b07d-2f083852e9e1
+  author: joe
+  content: 'Advisor ruling 08:45: BUG-2584 moves to the MAIN track (tag track:integration removed). Its lane published #4091 as one commit (bd416da) on top of main, touching pr_train.rs and gate/ledger. The fix is train speed, which the main track needs in order to land, so per the 2026-11-12 23:20 order it goes straight to main rather than through a promotion. One track per spec: nothing for BUG-2584 is on integration. Next: ci:full now, review when the full run is green. Lane note: one broad train-filter fixture failed only because AIDA_TEST_BIN is not transported in the runner (environment, not the change).'
+  created_at: 2026-11-15T15:28:31.302994500Z
+  modified_at: 2026-11-15T15:28:31.302994500Z
+  session_id: 01a1dfb4-d9c9-7983-b095-3818d6fa2f68
+  harness_version: 2.1.325 (Claude Code)
 history:
 - id: 01a1daff-e2f5-7ce1-9f15-a0d8c0c25a15
   author: joe
