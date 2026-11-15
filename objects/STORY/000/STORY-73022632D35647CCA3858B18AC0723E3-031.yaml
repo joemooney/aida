@@ -1,0 +1,32 @@
+id: 01a1e05b-537a-7be3-a35d-13ce0042fd0c
+spec_id: STORY-73022632d35647cca3858b18ac0723e3-031
+title: 'Review PR-4099: [AI:codex] fix(train): allow bounded large status journals (BUG-2595)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a1e03e`) for branch `bug-b6b1278890774ef993d2ebc327862470-359`.
+
+  - PR: <https://github.com/joemooney/aida/pull/4099>
+  - Branch: `bug-b6b1278890774ef993d2ebc327862470-359` → `main`
+
+  ## Covers
+
+  - BUG-2595
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 4099` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-15T17:57:23.962795182Z
+modified_at: 2026-11-15T17:57:23.962795182Z
+req_type: Story
+filed_at:
+  code_sha: d210d2e231f15f55bbc6bcb869032d494ec26290
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: bc24a1e688
+  session: 01a1e03e03b6
