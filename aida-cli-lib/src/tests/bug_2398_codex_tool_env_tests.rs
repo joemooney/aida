@@ -601,8 +601,12 @@ const LAUNCH_INVENTORY: &[(&str, usize, Finalization)] = &[
     // seat writes moved into launch::assign_seat: 9 grant/coordinator markers
     // plus 16 launcher calls (8 spawn_agent, 8 assign_seat); PR-B removes
     // two direct grant writes.
-    // trace:STORY-2326 | ai:claude
-    ("session.rs", 26, Finalization::PrepareLaunch(7)),
+    // STORY-2745 adds one counted site that launches nothing: the inline
+    // test story2745_headless_child_does_not_inherit_the_launcher_seat calls
+    // apply_headless_child_seat_env(&mut cmd, ..) only to inspect the env it
+    // sets; it spawns no child and needs no Codex finalization.
+    // trace:STORY-2326 STORY-2745 | ai:claude
+    ("session.rs", 27, Finalization::PrepareLaunch(7)),
     // trace:BUG-2416 | ai:claude — the guided `aida do` session.
     ("zen_drive_root.rs", 2, Finalization::PrepareLaunch(1)),
 ];

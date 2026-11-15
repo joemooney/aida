@@ -44,6 +44,8 @@ pub(crate) struct LedgerView {
 pub(crate) struct GatePolicy {
     /// An interactive human at a TTY is the explicit supervised merge.
     pub interactive_tty: bool,
+    // trace:STORY-2763 | ai:codex
+    pub strict_freshness: bool,
 }
 
 /// One member's (or the change's own) current verdict.
@@ -231,6 +233,7 @@ fn sequence_verdict(
     // Some(n) identifies a member sequence: the first n events are unbound.
     // The rest are from the single change ledger, where seq is comparable.
     unbound_count: Option<usize>,
+    strict_freshness: bool,
 ) -> Verdict {
     // trace:STORY-2324 | ai:codex — only a member's proved old-head
     // refusal can be answered across buckets by a later change approval.
@@ -307,7 +310,7 @@ fn sequence_verdict(
                     findings: r.findings.clone(),
                 };
             }
-            approval_at_head(newest.seq, &v, head, change_events)
+            approval_at_head(newest.seq, &v, head, change_events, strict_freshness)
         }
     }
 }
@@ -363,6 +366,7 @@ fn approval_at_head(
     v: &rv::RecordedVerdict,
     head: &str,
     change_events: &[GateEvent],
+    strict_freshness: bool,
 ) -> Verdict {
     let Some(reviewed) = v.reviewed_sha.as_deref().map(str::trim) else {
         return Verdict::Stale {
@@ -377,6 +381,15 @@ fn approval_at_head(
             seq,
             reviewed_sha: reviewed.to_string(),
             carried_over: false,
+        };
+    }
+    // trace:STORY-2763 | ai:codex
+    if strict_freshness {
+        return Verdict::Stale {
+            seq,
+            reviewed: Some(reviewed.into()),
+            head: head.into(),
+            reason: "strict policy: re-review required".into(),
         };
     }
     // trace:STORY-2696 | ai:codex — a cached proof cannot override reviewer policy.
@@ -535,7 +548,15 @@ pub(crate) fn effective_gate_state(
     // trace:STORY-2324 | ai:claude
     let foreign_answers: Vec<Verdict> = foreign
         .into_values()
-        .map(|events| sequence_verdict(events, head, &view.change_events, None))
+        .map(|events| {
+            sequence_verdict(
+                events,
+                head,
+                &view.change_events,
+                None,
+                policy.strict_freshness,
+            )
+        })
         .filter(|v| {
             matches!(
                 v,
@@ -574,10 +595,22 @@ pub(crate) fn effective_gate_state(
         members.push((
             m,
             mode,
-            sequence_verdict(events, head, &view.change_events, Some(unbound_count)),
+            sequence_verdict(
+                events,
+                head,
+                &view.change_events,
+                Some(unbound_count),
+                policy.strict_freshness,
+            ),
         ));
     }
-    let change_verdict = sequence_verdict(change_own, head, &view.change_events, None);
+    let change_verdict = sequence_verdict(
+        change_own,
+        head,
+        &view.change_events,
+        None,
+        policy.strict_freshness,
+    );
     let verdict = aggregate(
         std::iter::once(&change_verdict)
             .chain(std::iter::once(&foreign_verdict))

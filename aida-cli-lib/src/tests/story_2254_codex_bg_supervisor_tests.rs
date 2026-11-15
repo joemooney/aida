@@ -125,6 +125,7 @@ impl Harness {
             description: None,
             mail_wake: "unsupported".into(),
             context_path: None,
+            seat: None,
         }
     }
     /// The dispatcher's durable ownership transfer.
@@ -430,6 +431,7 @@ fn story_2254_bg_supervisor_end_to_end_accepts_registers_and_cleans_up() {
             native_session_id: None,
             resumed_from: None,
             description: None,
+            seat: None,
         },
     )
     .unwrap();

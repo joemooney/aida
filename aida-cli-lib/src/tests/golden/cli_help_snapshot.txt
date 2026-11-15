@@ -5671,7 +5671,10 @@ Arguments:
 
 Options:
       --to <TO>
-          Recipient agent id (e.g. `codex`). Omit and pass `--broadcast` to reach everyone
+          Recipient: an agent id or handle (e.g. `codex`), a role, `person:<name>`, or `seat:<name>`
+          for whichever session holds that seat (e.g. `seat:integration`). Omit with `--in-reply-to`
+          to answer the original sender's seat, else its role, else its id; pass `--broadcast` to
+          reach everyone
 
       --broadcast
           Broadcast to every agent instead of a single recipient
@@ -7395,8 +7398,9 @@ Options:
           With --drive: keep sensitive specs human-only
 
       --ttl <TTL>
-          How long it lasts, e.g. `8h` or `90m` (default 8h, at most 24h). Extend an active one with
-          `aida mandate renew`
+          How long it lasts, e.g. `8h` or `90m` (default 8h, at most 24h unless `[mandate]
+          max_ttl_hours` in ~/.aida/config.toml raises the cap). Extend an active one with `aida
+          mandate renew`
 
       --reason <REASON>
           Why the mandate exists, recorded with it
@@ -7436,7 +7440,7 @@ Usage: aida mandate renew [OPTIONS]
 Options:
       --for <DURATION>
           How long from now it lasts, e.g. `8h` or `90m` (default: the duration it was started with,
-          at most 24h)
+          at most 24h unless `[mandate] max_ttl_hours` in ~/.aida/config.toml raises the cap)
           
           [aliases: --ttl]
 
@@ -7699,11 +7703,24 @@ completes specs
 Usage: aida integration [OPTIONS] <COMMAND>
 
 Commands:
-  tags  Tag the open specs whose completing commits are on `origin/integration` but not yet on
-        `origin/main` with `landed-in-integration`, and remove the tag from specs that are closed or
-        no longer ahead of `main`. Reads the local `origin/` refs; run `git fetch` first if they may
-        be stale. Completion itself still happens when the commit reaches `main`
-  help  Print this message or the help of the given subcommand(s)
+  tags             Tag the open specs whose completing commits are on `origin/integration` but not
+                   yet on `origin/main` with `landed-in-integration`, and remove the tag from specs
+                   that are closed or no longer ahead of `main`. Reads the local `origin/` refs; run
+                   `git fetch` first if they may be stale. Completion itself still happens when the
+                   commit reaches `main`
+  merge            Merge one open change into `integration`. Run it in the integration worktree, on
+                   `integration`, clean and equal to `origin/integration`. The change is admitted
+                   when it is approved at its head, or, with `[integration] review_after_merge =
+                   "low-risk"`, when it is low-risk enough to be reviewed after the merge; an armed
+                   merge hold refuses either way. The configured checks then run on the merge
+                   result, and a failing check puts the branch back where it was
+  promotion-check  Check that everything on `integration` not yet promoted to `main` was reviewed:
+                   each merged change needs an approval at exactly the head that was merged. Exits 1
+                   and names each change that lacks one, with the revert that takes it out. Reads
+                   the local `origin/` refs. A promotion is squashed into `main`, so git alone
+                   cannot always tell which commits it carried: pass `--since` to say where the last
+                   one was cut
+  help             Print this message or the help of the given subcommand(s)
 
 Options:
       --format <FORMAT>
@@ -7733,6 +7750,76 @@ Usage: aida integration tags [OPTIONS]
 Options:
       --dry-run
           Print the tag changes without making them
+
+      --format <FORMAT>
+          Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
+          compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
+          piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)
+
+          Possible values:
+          - human: Human-readable tables / emoji (the interactive default at a TTY)
+          - toon:  Token-efficient TOON — the compact agent default when piped/captured
+          - json:  Machine JSON, for commands that support a JSON projection
+
+      --canonical-ids
+          Show node-local spec IDs in their canonical form instead of the node's friendly label (for
+          scripts). Also settable via AIDA_CANONICAL_IDS=1
+
+  -h, --help
+          Print help (see a summary with '-h')
+===== aida integration merge
+Merge one open change into `integration`. Run it in the integration worktree, on `integration`,
+clean and equal to `origin/integration`. The change is admitted when it is approved at its head, or,
+with `[integration] review_after_merge = "low-risk"`, when it is low-risk enough to be reviewed
+after the merge; an armed merge hold refuses either way. The configured checks then run on the merge
+result, and a failing check puts the branch back where it was
+
+Usage: aida integration merge [OPTIONS] <PR>
+
+Arguments:
+  <PR>
+          The change's number
+
+Options:
+      --push
+          Push `integration` once the checks pass
+
+      --dry-run
+          Say whether the change would be admitted, and merge nothing
+
+      --format <FORMAT>
+          Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
+          compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
+          piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)
+
+          Possible values:
+          - human: Human-readable tables / emoji (the interactive default at a TTY)
+          - toon:  Token-efficient TOON — the compact agent default when piped/captured
+          - json:  Machine JSON, for commands that support a JSON projection
+
+      --canonical-ids
+          Show node-local spec IDs in their canonical form instead of the node's friendly label (for
+          scripts). Also settable via AIDA_CANONICAL_IDS=1
+
+  -h, --help
+          Print help (see a summary with '-h')
+===== aida integration promotion-check
+Check that everything on `integration` not yet promoted to `main` was reviewed: each merged change
+needs an approval at exactly the head that was merged. Exits 1 and names each change that lacks one,
+with the revert that takes it out. Reads the local `origin/` refs. A promotion is squashed into
+`main`, so git alone cannot always tell which commits it carried: pass `--since` to say where the
+last one was cut
+
+Usage: aida integration promotion-check [OPTIONS]
+
+Options:
+      --tip <COMMIT>
+          The commit to check; `origin/integration` when omitted
+
+      --since <COMMIT>
+          The integration commit the last promotion was cut from: only commits after it are checked.
+          Without it the check goes back to the newest integration commit whose content is exactly a
+          commit on `main`, which a promotion leaves only when `main` took nothing else in between
 
       --format <FORMAT>
           Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
@@ -16806,16 +16893,36 @@ When a test fails, it is not rerun: it is split in halves (two at a time) until 
 isolated and left out with a comment. Only a train whose CI was cancelled before it gave a test
 result is rerun, once.
 
+On a repository whose CI is tiered, a PR rides only when its exact head already has a green
+full-tier CI run; recording an approval starts that run. `--skip-full-check` admits a PR without
+one.
+
 `--dry-run` gates and builds the train and prints the plan without pushing anything; add `--local-ci
 <CMD>` to simulate the whole run with a local command as CI, against a checkout of each train tip.
 
-Usage: aida pr train [OPTIONS] <N|--all-ready|--abandon <JOURNAL>>
+`--check N...` (or `--check --all-open`) only answers whether each PR would ride a train right now:
+one line per PR with yes or no, and for a no the first gate that stops it and what clears it. It
+runs the same gates and changes nothing: no label, hold or journal is written. It exits 0 only when
+every PR is eligible.
+
+`--status` says what the train is doing right now and changes nothing: the train PR, each member
+with its head, the step and the time spent in it, a CI summary, and the PID driving it. It exits 0
+while a live process drives the train, 40 when there is no train, and 41 when a journal remains but
+nothing drives it.
+
+Usage: aida pr train [OPTIONS] <N|--all-ready|--abandon <JOURNAL>|--status|--all-open>
 
 Arguments:
   [N]...
           PR numbers to train, in landing order
 
 Options:
+      --status
+          Show what the train is doing now; read-only
+
+      --json
+          With --status or --check: print the report as JSON
+
       --abandon <JOURNAL>
           Discard a local journal by filename; leave forge PRs and branches unchanged
 
@@ -16835,9 +16942,6 @@ Options:
           
           [default: 10]
 
-      --no-pull
-          Skip the `aida pull` after a train lands
-
       --format <FORMAT>
           Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
           compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
@@ -16848,9 +16952,28 @@ Options:
           - toon:  Token-efficient TOON — the compact agent default when piped/captured
           - json:  Machine JSON, for commands that support a JSON projection
 
+      --no-pull
+          Skip the `aida pull` after a train lands
+
       --canonical-ids
           Show node-local spec IDs in their canonical form instead of the node's friendly label (for
           scripts). Also settable via AIDA_CANONICAL_IDS=1
+
+      --check
+          Report whether each PR would ride a train right now, and why not; build and land nothing
+
+      --all-open
+          With --check: every open PR on the default branch
+
+      --timeout <SECS>
+          With --check: stop starting new PR checks after this many seconds, checked between
+          candidates (not during subprocesses); the PRs not reached are reported as not checked
+          
+          [default: 45]
+
+      --skip-full-check
+          Admit PRs whose head has no green full-tier CI run. Each admission is written to the
+          activity log
 
   -h, --help
           Print help (see a summary with '-h')
@@ -18359,6 +18482,11 @@ Options:
           exit without a fresh handoff, ends it for real. Default: `[agents.claude] rotate` in
           agents.toml, else off
 
+      --seat <NAME>
+          Name the seat this session holds, e.g. `integration` for a session whose role is
+          `implementer`. Exported as `AIDA_ROTATION_SEAT`, it keys rotation handoffs and lets mail
+          reach the session as `seat:<name>` whatever its vendor. Default: the role
+
   -h, --help
           Print help (see a summary with '-h')
 ===== aida agent new codex
@@ -18507,6 +18635,11 @@ Options:
           thread id, or, before the thread is known, was written after the launch under this handle.
           `aida session handoff --write --final`, or an exit without a fresh handoff, ends it for
           real. Default: `[agents.codex] rotate` in agents.toml, else off
+
+      --seat <NAME>
+          Name the seat this session holds, e.g. `integration` for a session whose role is
+          `implementer`. Exported as `AIDA_ROTATION_SEAT`, it keys rotation handoffs and lets mail
+          reach the session as `seat:<name>` whatever its vendor. Default: the role
 
       --bg
           Launch a detached Codex implementer or reviewer for SPEC: a fresh `codex exec` worker
@@ -25798,6 +25931,11 @@ Options:
           orphan holding uncommitted work, still refuses. Terminal statuses and Draft still refuse.
           Does NOT cross role routing: a spec routed to another role still requires `aida role enter
           <role>` first
+
+      --over-wip
+          Start a new spec although the project is at its limit of open changes (`[land] wip_max`).
+          Without it a fresh implementer pickup is refused at the limit; rework and review pickups
+          are never limited. The override is recorded
 
       --force
           Override the focus-scope drift guard: start work on a spec outside the active `aida focus`
@@ -38026,7 +38164,7 @@ Working on aida itself
       {
         "name": "to",
         "takes_value": true,
-        "help": "Recipient agent id (e.g. `codex`). Omit and pass `--broadcast` to reach everyone"
+        "help": "Recipient: an agent id or handle (e.g. `codex`), a role, `person:<name>`, or `seat:<name>` for whichever session holds that seat (e.g. `seat:integration`). Omit with `--in-reply-to` to answer the original sender's seat, else its role, else its id; pass `--broadcast` to reach everyone"
       },
       {
         "name": "urgent",
@@ -39655,7 +39793,7 @@ Working on aida itself
       {
         "name": "ttl",
         "takes_value": true,
-        "help": "How long it lasts, e.g. `8h` or `90m` (default 8h, at most 24h). Extend an active one with `aida mandate renew`"
+        "help": "How long it lasts, e.g. `8h` or `90m` (default 8h, at most 24h unless `[mandate] max_ttl_hours` in ~/.aida/config.toml raises the cap). Extend an active one with `aida mandate renew`"
       }
     ],
     "hidden": false
@@ -39691,7 +39829,7 @@ Working on aida itself
       {
         "name": "for",
         "takes_value": true,
-        "help": "How long from now it lasts, e.g. `8h` or `90m` (default: the duration it was started with, at most 24h)"
+        "help": "How long from now it lasts, e.g. `8h` or `90m` (default: the duration it was started with, at most 24h unless `[mandate] max_ttl_hours` in ~/.aida/config.toml raises the cap)"
       },
       {
         "name": "format",
@@ -40005,6 +40143,78 @@ Working on aida itself
         "name": "help",
         "takes_value": false,
         "help": "Print help (see more with '--help')"
+      }
+    ],
+    "hidden": false
+  },
+  {
+    "path": [
+      "aida",
+      "integration",
+      "merge"
+    ],
+    "about": "Merge one open change into `integration`. Run it in the integration worktree, on `integration`, clean and equal to `origin/integration`. The change is admitted when it is approved at its head, or, with `[integration] review_after_merge = \"low-risk\"`, when it is low-risk enough to be reviewed after the merge; an armed merge hold refuses either way. The configured checks then run on the merge result, and a failing check puts the branch back where it was",
+    "flags": [
+      {
+        "name": "canonical-ids",
+        "takes_value": false,
+        "help": "Show node-local spec IDs in their canonical form instead of the node's friendly label (for scripts). Also settable via AIDA_CANONICAL_IDS=1"
+      },
+      {
+        "name": "dry-run",
+        "takes_value": false,
+        "help": "Say whether the change would be admitted, and merge nothing"
+      },
+      {
+        "name": "format",
+        "takes_value": true,
+        "help": "Pin the output format regardless of whether stdout is a terminal: human = tables, toon = compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)"
+      },
+      {
+        "name": "help",
+        "takes_value": false,
+        "help": "Print help (see more with '--help')"
+      },
+      {
+        "name": "push",
+        "takes_value": false,
+        "help": "Push `integration` once the checks pass"
+      }
+    ],
+    "hidden": false
+  },
+  {
+    "path": [
+      "aida",
+      "integration",
+      "promotion-check"
+    ],
+    "about": "Check that everything on `integration` not yet promoted to `main` was reviewed: each merged change needs an approval at exactly the head that was merged. Exits 1 and names each change that lacks one, with the revert that takes it out. Reads the local `origin/` refs. A promotion is squashed into `main`, so git alone cannot always tell which commits it carried: pass `--since` to say where the last one was cut",
+    "flags": [
+      {
+        "name": "canonical-ids",
+        "takes_value": false,
+        "help": "Show node-local spec IDs in their canonical form instead of the node's friendly label (for scripts). Also settable via AIDA_CANONICAL_IDS=1"
+      },
+      {
+        "name": "format",
+        "takes_value": true,
+        "help": "Pin the output format regardless of whether stdout is a terminal: human = tables, toon = compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)"
+      },
+      {
+        "name": "help",
+        "takes_value": false,
+        "help": "Print help (see more with '--help')"
+      },
+      {
+        "name": "since",
+        "takes_value": true,
+        "help": "The integration commit the last promotion was cut from: only commits after it are checked. Without it the check goes back to the newest integration commit whose content is exactly a commit on `main`, which a promotion leaves only when `main` took nothing else in between"
+      },
+      {
+        "name": "tip",
+        "takes_value": true,
+        "help": "The commit to check; `origin/integration` when omitted"
       }
     ],
     "hidden": false
@@ -49121,6 +49331,11 @@ Working on aida itself
         "help": "Discard a local journal by filename; leave forge PRs and branches unchanged"
       },
       {
+        "name": "all-open",
+        "takes_value": false,
+        "help": "With --check: every open PR on the default branch"
+      },
+      {
         "name": "all-ready",
         "takes_value": false,
         "help": "Train every open PR on the default branch that passes the gates, oldest first"
@@ -49129,6 +49344,11 @@ Working on aida itself
         "name": "canonical-ids",
         "takes_value": false,
         "help": "Show node-local spec IDs in their canonical form instead of the node's friendly label (for scripts). Also settable via AIDA_CANONICAL_IDS=1"
+      },
+      {
+        "name": "check",
+        "takes_value": false,
+        "help": "Report whether each PR would ride a train right now, and why not; build and land nothing"
       },
       {
         "name": "dry-run",
@@ -49146,6 +49366,11 @@ Working on aida itself
         "help": "Print help (see more with '--help')"
       },
       {
+        "name": "json",
+        "takes_value": false,
+        "help": "With --status or --check: print the report as JSON"
+      },
+      {
         "name": "local-ci",
         "takes_value": true,
         "help": "With --dry-run: run CMD in a checkout of each train tip as the CI, and simulate the full land / bisect run locally"
@@ -49159,6 +49384,21 @@ Working on aida itself
         "name": "no-pull",
         "takes_value": false,
         "help": "Skip the `aida pull` after a train lands"
+      },
+      {
+        "name": "skip-full-check",
+        "takes_value": false,
+        "help": "Admit PRs whose head has no green full-tier CI run. Each admission is written to the activity log"
+      },
+      {
+        "name": "status",
+        "takes_value": false,
+        "help": "Show what the train is doing now; read-only"
+      },
+      {
+        "name": "timeout",
+        "takes_value": true,
+        "help": "With --check: stop starting new PR checks after this many seconds, checked between candidates (not during subprocesses); the PRs not reached are reported as not checked"
       }
     ],
     "hidden": false
@@ -50635,6 +50875,11 @@ Working on aida itself
         "help": "Launch Claude in contained mode: strict Bash sandboxing, no unsandboxed fallback, destructive-command deny rules, and project-relative edit auto-allow only"
       },
       {
+        "name": "seat",
+        "takes_value": true,
+        "help": "Name the seat this session holds, e.g. `integration` for a session whose role is `implementer`. Exported as `AIDA_ROTATION_SEAT`, it keys rotation handoffs and lets mail reach the session as `seat:<name>` whatever its vendor. Default: the role"
+      },
+      {
         "name": "show-context",
         "takes_value": false,
         "help": "Print the generated launch-context snapshot before spawning"
@@ -50815,6 +51060,11 @@ Working on aida itself
         "name": "rotate",
         "takes_value": false,
         "help": "Supervise the session across context rotations: when it exits after writing a fresh seat handoff, relaunch it in the same worktree under the same handle and lease with the handoff loaded (a 5s countdown; Ctrl-C stops it). A handoff counts once it carries this session's thread id, or, before the thread is known, was written after the launch under this handle. `aida session handoff --write --final`, or an exit without a fresh handoff, ends it for real. Default: `[agents.codex] rotate` in agents.toml, else off"
+      },
+      {
+        "name": "seat",
+        "takes_value": true,
+        "help": "Name the seat this session holds, e.g. `integration` for a session whose role is `implementer`. Exported as `AIDA_ROTATION_SEAT`, it keys rotation handoffs and lets mail reach the session as `seat:<name>` whatever its vendor. Default: the role"
       },
       {
         "name": "show-context",
@@ -58589,6 +58839,11 @@ Working on aida itself
         "name": "no-tee-headless",
         "takes_value": false,
         "help": "Suppress the high-signal headless tee under `--no-human`. By default the parent prints `│ [headless] ...` lines for the headless Claude's `system.init`, `assistant.text`, `tool_use`, and `result` events so the operator can follow progress without a second terminal. With this flag (or `AIDA_TEE_HEADLESS=0`), the chatter is silenced but failures (`is_error`, `permission_denials`) still stream — they must NEVER hide"
+      },
+      {
+        "name": "over-wip",
+        "takes_value": false,
+        "help": "Start a new spec although the project is at its limit of open changes (`[land] wip_max`). Without it a fresh implementer pickup is refused at the limit; rework and review pickups are never limited. The override is recorded"
       },
       {
         "name": "panes",

@@ -75,6 +75,7 @@ standalone_implementer_cap = 4
 [preflight]
 guards = [
   "Check formatting",
+  "Ratchet set", # trace:STORY-2833 | ai:codex
   "Run clippy",
   "Check Rust test portability ratchet",
   "CLI-manual drift-guard (every command documented)",
@@ -519,6 +520,22 @@ block_primary_commits = true
 # every CI check on its head passed AND these named checks are present and
 # green. Names are this project's own: AIDA's `build-result` job, which
 # requires every CI lane. A test pins it to .github/workflows/ci.yml.
+# STORY-2821 (2026-11-14): which stale PR heads a reviewer launch refuses.
+# The default, "refuse-on-overlap", refuses a head whose base moved and touched
+# a file the PR touches; that cost promotion 9b (#4040) about 55 minutes and
+# stopped three other PRs the same morning. Here the train rebuilds every
+# member on current main and runs the full matrix before landing, so a review
+# of a stale but mergeable head is still worth having: refuse only a head the
+# base no longer merges into cleanly. "warn" never refuses.
+[review]
+stale_base = "refuse-on-conflict"
+# Review current-base content; clean base merges retain attested approvals.
+# Freshness decides what evidence a review records, never which stale heads
+# are refused: that is `stale_base` above.
+# trace:STORY-2763 | ai:codex
+freshness = "fast"
+freshness_strict_paths = []
+
 [review_watch]
 # trace:TASK-3472 | ai:codex
 max_concurrent = 4

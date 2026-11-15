@@ -186,6 +186,73 @@ fn legacy_runner_start_forms_and_submit_guidance_agree_with_list() {
     }
 }
 
+// trace:BUG-2594 | ai:codex
+#[test]
+fn submit_uses_recorded_seats_only_when_runner_is_live_or_unknown() {
+    let f = Fixture::new("t");
+    let info = RunnerInfo {
+        pid: LIVE_PID,
+        pid_start: Some("linux-starttime:100".into()),
+        tty: None,
+        boot_id: host().boot_id,
+        grant_prefix: "native".into(),
+        submit_seats: vec!["advisor".into(), "product".into()],
+        started_at: Utc::now(),
+    };
+    std::fs::write(f.q.runner_json(), serde_json::to_vec(&info).unwrap()).unwrap();
+    let file = f.root().join("job.sh");
+    std::fs::write(&file, "true\n").unwrap();
+    let args = crate::deputy_shell_cmd::ShellSubmitArgs {
+        name: "t".into(),
+        file,
+        timeout: "1m".into(),
+        spec: None,
+        wait: false,
+    };
+    for (status, seat, expected) in [
+        (
+            RunnerStatus::Unknown("cannot see host processes from this sandbox"),
+            "product",
+            "no script deputy",
+        ),
+        (
+            RunnerStatus::Live(info.clone()),
+            "product",
+            "no script deputy",
+        ),
+        (RunnerStatus::NotRunning, "product", "allowed: advisor)"),
+        (
+            RunnerStatus::Unknown("cannot see host processes from this sandbox"),
+            "reviewer",
+            "allowed: advisor, product",
+        ),
+    ] {
+        let unknown = matches!(status, RunnerStatus::Unknown(_));
+        let mut actor = submitter(&advisor(), LIVE_TOKEN, f.root(), "s");
+        actor.seat = seat.into();
+        let err = crate::deputy_shell_cmd::submit_with_runner_status(
+            &f.q,
+            &args,
+            actor,
+            &default_submit_seats(),
+            &mut Vec::new(),
+            || status,
+        )
+        .unwrap_err()
+        .to_string();
+        assert!(err.contains(expected), "{err}");
+        if seat == "product" && expected == "no script deputy" {
+            // Seat preflight passed and reached the socket, which is absent.
+            assert!(!err.contains("may not submit"), "{err}");
+        }
+        if unknown && seat == "reviewer" {
+            assert!(err.contains("UNKNOWN (cannot see host processes"), "{err}");
+            assert!(!err.contains("--allow-seat"), "{err}");
+        }
+        assert!(f.q.job_ids().is_empty());
+    }
+}
+
 // trace:TASK-b6b1278890774ef993d2ebc327862470-905 | ai:codex
 #[test]
 fn submit_preserves_unknown_runner_reasons_without_queueing() {
@@ -1588,6 +1655,7 @@ fn awaiting_lists_failed_script_jobs_beside_command_jobs_until_acked() {
         f.root(),
         &args(vec![failed.id.clone()]),
         Some("sess-b"),
+        None,
         &actor,
         &mut Vec::new()
     )
@@ -1597,6 +1665,7 @@ fn awaiting_lists_failed_script_jobs_beside_command_jobs_until_acked() {
         f.root(),
         &args(vec![failed.id.clone()]),
         Some("sess-a"),
+        None,
         &actor,
         &mut Vec::new(),
     )
@@ -2312,4 +2381,304 @@ fn delegated_advisor_jobs_validate_operator_principal_and_chain() {
         Some("refused:grant")
     );
     assert!(!f.q.script_path(&revoked.id).exists());
+}
+
+/// BUG-2579: a seat keeps its handle across a rotation and gets a new
+/// session id and a new grant. The rotated session owns what its predecessor
+/// queued; another handle, another seat, another principal or another
+/// project does not.
+// trace:BUG-2579 | ai:claude
+#[test]
+fn bug_2579_a_rotated_seat_owns_its_predecessors_jobs_and_another_handle_does_not() {
+    use crate::deputy_shell_cmd::{cancel, owns_job, Caller};
+    let f = Fixture::new("t");
+    let handle = |id: &str, subject: &str, seat: &str| {
+        let mut g = grant(id, seat, &[LIVE_TOKEN]);
+        g.subject = subject.into();
+        g
+    };
+    let old = handle(
+        "22222222-0000-4000-8000-00000000000a",
+        "claude-advisor-114",
+        "advisor",
+    );
+    let queued = f.submit_as(
+        "echo train",
+        submitter(&old, LIVE_TOKEN, f.root(), "sess-old"),
+    );
+    let s = &queued.submitter;
+    let rotated = handle(
+        "22222222-0000-4000-8000-00000000000b",
+        "claude-advisor-114",
+        "advisor",
+    );
+    let other_handle = handle(
+        "22222222-0000-4000-8000-00000000000c",
+        "claude-advisor-115",
+        "advisor",
+    );
+    let other_seat = handle(
+        "22222222-0000-4000-8000-00000000000d",
+        "claude-advisor-114",
+        "reviewer",
+    );
+    let mut other_principal = rotated.clone();
+    other_principal.principal = "someone-else".into();
+    let elsewhere = tempfile::tempdir().unwrap();
+    let caller = |session: &'static str, g: Option<&'_ SeatGrant>, main: &'_ Path| -> bool {
+        owns_job(
+            s,
+            &Caller {
+                session: Some(session),
+                grant: g,
+                main: Some(main),
+            },
+        )
+    };
+    assert!(caller("sess-old", None, f.root()), "the submitting session");
+    assert!(
+        caller("sess-new", Some(&rotated), f.root()),
+        "the rotated seat"
+    );
+    assert!(!caller("sess-new", None, f.root()), "no grant");
+    assert!(!caller("sess-new", Some(&other_handle), f.root()));
+    assert!(!caller("sess-new", Some(&other_seat), f.root()));
+    assert!(!caller("sess-new", Some(&other_principal), f.root()));
+    assert!(!caller("sess-new", Some(&rotated), elsewhere.path()));
+    // A job with no subject is owned by its session only.
+    let mut anonymous = s.clone();
+    anonymous.subject = String::new();
+    let mut blank = rotated.clone();
+    blank.subject = String::new();
+    assert!(!owns_job(
+        &anonymous,
+        &Caller {
+            session: Some("sess-new"),
+            grant: Some(&blank),
+            main: Some(f.root()),
+        }
+    ));
+
+    // `cancel` applies the same rule before it reaches the runner: another
+    // handle is refused, and the rotated seat's request is accepted by the
+    // runner's socket and the job never runs.
+    #[cfg(unix)]
+    let server = socket::serve(&f.q, probes(&[], &[], &[]), system_clock()).expect("serve");
+    let refused = cancel(
+        &f.q,
+        &queued.id,
+        &Caller {
+            session: Some("sess-new"),
+            grant: Some(&other_handle),
+            main: Some(f.root()),
+        },
+        false,
+        &mut Vec::new(),
+    )
+    .unwrap_err()
+    .to_string();
+    assert!(
+        refused.contains("not this session or its seat"),
+        "{refused}"
+    );
+    let still = f.q.locate(&queued.id).unwrap().expect("the job");
+    assert_eq!(still.state.state, JobState::Queued, "a refused cancel");
+    #[cfg(unix)]
+    {
+        let mut said = Vec::new();
+        cancel(
+            &f.q,
+            &queued.id,
+            &Caller {
+                session: Some("sess-new"),
+                grant: Some(&rotated),
+                main: Some(f.root()),
+            },
+            false,
+            &mut said,
+        )
+        .expect("the rotated seat's cancel is accepted");
+        let said = String::from_utf8(said).unwrap();
+        assert!(said.contains("cancel requested"), "{said}");
+        drop(server);
+        run(&f.q, &f.cfg(probes(&[old.clone()], &[], &[])));
+        let s = f.state(&queued.id);
+        assert_eq!((s.state, s.rc), (JobState::Cancelled, Some(RC_CANCELLED)));
+    }
+}
+
+/// BUG-2579: the rotated seat may acknowledge its predecessor's failed job.
+// trace:BUG-2579 | ai:claude
+#[test]
+fn bug_2579_a_rotated_seat_acknowledges_its_predecessors_failed_job() {
+    let f = Fixture::new("t");
+    let mut old = advisor();
+    old.subject = "claude-advisor-114".into();
+    let failed = f.submit_as("exit 3", submitter(&old, LIVE_TOKEN, f.root(), "sess-old"));
+    run(&f.q, &f.cfg(probes(&[old.clone()], &[], &[])));
+    assert!(f.state(&failed.id).failed());
+    let args = crate::deputy_shell_cmd::ShellAckArgs {
+        ids: vec![failed.id.clone()],
+        all: false,
+        name: "t".into(),
+    };
+    let mut rotated = old.clone();
+    rotated.id = "22222222-0000-4000-8000-00000000000b".into();
+    let mut stranger = rotated.clone();
+    stranger.subject = "claude-advisor-115".into();
+    assert!(crate::deputy_shell_cmd::ack(
+        &f.q,
+        f.root(),
+        &args,
+        Some("sess-new"),
+        Some(&stranger),
+        "x",
+        &mut Vec::new()
+    )
+    .is_err());
+    assert!(!f.q.acknowledged(&failed.id));
+    crate::deputy_shell_cmd::ack(
+        &f.q,
+        f.root(),
+        &args,
+        Some("sess-new"),
+        Some(&rotated),
+        "x",
+        &mut Vec::new(),
+    )
+    .unwrap();
+    assert!(f.q.acknowledged(&failed.id));
+}
+
+/// BUG-2579: the list says, for each queued job, what the runner would do
+/// with it at claim; finished jobs carry no forecast.
+// trace:BUG-2579 | ai:claude
+#[test]
+fn bug_2579_list_shows_whether_each_queued_job_will_run() {
+    let f = Fixture::new("t");
+    let live = advisor();
+    let gone = grant(
+        "33333333-0000-4000-8000-000000000003",
+        "advisor",
+        &[LIVE_TOKEN],
+    );
+    let done = f.submit("true");
+    run(&f.q, &f.default_cfg());
+    let runs = f.submit_as(
+        "echo keep",
+        submitter(&live, LIVE_TOKEN, f.root(), "sess-a"),
+    );
+    let stale = f.submit_as(
+        "echo stale",
+        submitter(&gone, LIVE_TOKEN, f.root(), "sess-old"),
+    );
+    let world = probes(&[live], &[], &[]);
+    let seats = vec!["advisor".to_string()];
+    let mut out = Vec::new();
+    crate::deputy_shell_cmd::list_with(
+        &f.q,
+        &crate::deputy_shell_cmd::ShellListArgs {
+            name: "t".into(),
+            state: None,
+            limit: 50,
+        },
+        &mut out,
+        &|job| {
+            crate::deputy_shell_cmd::claim_forecast(attribution::verdict(
+                job,
+                &seats,
+                &world,
+                Utc::now(),
+            ))
+        },
+    )
+    .unwrap();
+    let text = String::from_utf8(out).unwrap();
+    let line = |id: &str| {
+        text.lines()
+            .find(|l| l.contains(id))
+            .unwrap_or_else(|| panic!("no line for {id}: {text}"))
+            .to_string()
+    };
+    assert!(line(&runs.id).ends_with("[will run]"), "{text}");
+    assert!(
+        line(&stale.id).ends_with("[would be refused: grant]"),
+        "{text}"
+    );
+    assert!(!line(&done.id).contains('['), "{text}");
+
+    // From a sandbox the runner cannot be observed, so the same verdict
+    // would be this process's, not the runner's: the list says unknown.
+    let blind = crate::deputy_shell_cmd::forecast_blind(&RunnerStatus::Unknown(
+        "cannot see host processes from this sandbox",
+    ))
+    .expect("an unobservable runner has no forecast");
+    assert_eq!(
+        blind,
+        "claim unknown: cannot see host processes from this sandbox"
+    );
+    for seen in [RunnerStatus::NotRunning, RunnerStatus::Legacy(4242)] {
+        assert_eq!(crate::deputy_shell_cmd::forecast_blind(&seen), None);
+    }
+    let mut out = Vec::new();
+    crate::deputy_shell_cmd::list_with(
+        &f.q,
+        &crate::deputy_shell_cmd::ShellListArgs {
+            name: "t".into(),
+            state: None,
+            limit: 50,
+        },
+        &mut out,
+        &|_| blind.clone(),
+    )
+    .unwrap();
+    let text = String::from_utf8(out).unwrap();
+    for id in [&runs.id, &stale.id] {
+        let row = text.lines().find(|l| l.contains(id.as_str())).unwrap();
+        assert!(
+            row.ends_with("[claim unknown: cannot see host processes from this sandbox]"),
+            "{text}"
+        );
+    }
+}
+
+/// BUG-2579: the rotation handoff names the outgoing session's queued jobs.
+// trace:BUG-2579 | ai:claude
+#[test]
+fn bug_2579_rotation_handoff_lists_the_outgoing_sessions_queued_jobs() {
+    let f = Fixture::new("t");
+    let base = f.root().join("deputy-shell");
+    let mine = advisor();
+    let other = grant(
+        "33333333-0000-4000-8000-000000000003",
+        "advisor",
+        &[LIVE_TOKEN],
+    );
+    let finished = f.submit("true");
+    run(&f.q, &f.default_cfg());
+    let queued = f.submit("echo train 21\necho second line");
+    let theirs = f.submit_as(
+        "echo theirs",
+        submitter(&other, LIVE_TOKEN, f.root(), "sess-b"),
+    );
+    let jobs = queued_jobs_for_grant(&base, &mine.id);
+    assert_eq!(
+        jobs,
+        vec![(
+            "t".to_string(),
+            queued.id.clone(),
+            "echo train 21".to_string()
+        )]
+    );
+    let section = crate::agent_rotation::queued_deputy_jobs_section(Some(&base), Some(&mine.id));
+    assert!(
+        section.contains(&format!("- {} (deputy t): echo train 21", queued.id)),
+        "{section}"
+    );
+    assert!(!section.contains(&theirs.id) && !section.contains(&finished.id));
+    assert!(section.contains("aida deputy shell cancel <id> --name <deputy>"));
+    let none = crate::agent_rotation::queued_deputy_jobs_section(Some(&base), Some("no-such"));
+    assert!(none.contains("None."), "{none}");
+    let unknown = crate::agent_rotation::queued_deputy_jobs_section(None, None);
+    assert!(unknown.contains("queued jobs unknown"), "{unknown}");
 }

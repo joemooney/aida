@@ -328,15 +328,40 @@ pub enum PrCommand {
     /// left out with a comment. Only a train whose CI was cancelled before it
     /// gave a test result is rerun, once.
     ///
+    /// On a repository whose CI is tiered, a PR rides only when its exact
+    /// head already has a green full-tier CI run; recording an approval
+    /// starts that run. `--skip-full-check` admits a PR without one.
+    ///
     /// `--dry-run` gates and builds the train and prints the plan without
     /// pushing anything; add `--local-ci <CMD>` to simulate the whole run
     /// with a local command as CI, against a checkout of each train tip.
+    ///
+    /// `--check N...` (or `--check --all-open`) only answers whether each PR
+    /// would ride a train right now: one line per PR with yes or no, and for
+    /// a no the first gate that stops it and what clears it. It runs the
+    /// same gates and changes nothing: no label, hold or journal is written.
+    /// It exits 0 only when every PR is eligible.
     // trace:STORY-1690 | ai:claude
-    #[clap(group(ArgGroup::new("train_members").required(true).args(["prs", "all_ready", "abandon"])))]
+    ///
+    /// `--status` says what the train is doing right now and changes
+    /// nothing: the train PR, each member with its head, the step and the
+    /// time spent in it, a CI summary, and the PID driving it. It exits 0
+    /// while a live process drives the train, 40 when there is no train,
+    /// and 41 when a journal remains but nothing drives it.
+    #[clap(group(ArgGroup::new("train_members").required(true).args(["prs", "all_ready", "abandon", "status", "all_open"])))]
+    #[clap(group(ArgGroup::new("train_report").multiple(true).args(["status", "check"])))]
     Train {
+        /// Show what the train is doing now; read-only.
+        // trace:STORY-2823 | ai:claude
+        #[clap(long, conflicts_with_all = ["prs", "all_ready", "abandon", "dry_run", "local_ci", "no_pull", "check", "all_open"])]
+        status: bool,
+        /// With --status or --check: print the report as JSON.
+        // trace:STORY-2823 | ai:claude
+        #[clap(long, requires = "train_report")]
+        json: bool,
         /// Discard a local journal by filename; leave forge PRs and branches unchanged.
         // trace:BUG-2547 | ai:codex
-        #[clap(long, value_name = "JOURNAL", conflicts_with_all = ["prs", "all_ready", "dry_run", "local_ci", "no_pull"])]
+        #[clap(long, value_name = "JOURNAL", conflicts_with_all = ["prs", "all_ready", "dry_run", "local_ci", "no_pull", "check"])]
         abandon: Option<String>,
         /// PR numbers to train, in landing order.
         #[clap(value_name = "N")]
@@ -364,6 +389,29 @@ pub enum PrCommand {
         /// Skip the `aida pull` after a train lands.
         #[clap(long)]
         no_pull: bool,
+
+        /// Report whether each PR would ride a train right now, and why
+        /// not; build and land nothing.
+        // trace:STORY-2824 | ai:claude
+        #[clap(long, conflicts_with_all = ["all_ready", "dry_run", "local_ci", "no_pull"])]
+        check: bool,
+
+        /// With --check: every open PR on the default branch.
+        // trace:STORY-2824 | ai:claude
+        #[clap(long, requires = "check", conflicts_with = "prs")]
+        all_open: bool,
+
+        /// With --check: stop starting new PR checks after this many
+        /// seconds, checked between candidates (not during subprocesses);
+        /// the PRs not reached are reported as not checked.
+        // trace:STORY-2824 | ai:claude
+        #[clap(long, value_name = "SECS", default_value_t = 45, requires = "check")]
+        timeout: u64,
+        /// Admit PRs whose head has no green full-tier CI run. Each
+        /// admission is written to the activity log.
+        // trace:STORY-2809 | ai:claude
+        #[clap(long, conflicts_with = "abandon")]
+        skip_full_check: bool,
     },
 
     /// Ship several PRs that need a human merge, one at a time, in order.

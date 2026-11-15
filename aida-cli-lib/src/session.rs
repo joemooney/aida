@@ -7304,6 +7304,9 @@ pub(crate) fn scrub_launcher_session_env(cmd: &mut std::process::Command) {
     cmd.env_remove(crate::standalone_implementer::MARKER_ENV);
     // A child lane gets its own lane marker. trace:BUG-B6B1278890774EF993D2EBC327862470-050 | ai:claude
     cmd.env_remove(crate::headless_background::LANE_MARKER_ENV);
+    // Nor the launcher's named seat: the child's seat is its own registry
+    // row's. trace:STORY-2745 | ai:claude
+    cmd.env_remove(crate::agent_rotation::SEAT_ENV);
 }
 
 /// STORY-1662: per-launch additions to a headless child. `customize` runs on
@@ -11131,6 +11134,7 @@ mod tests {
             batch_name: None,
             agent_name: None,
             plan: None,
+            seat: None,
             items: items
                 .iter()
                 .map(|(spec, pos, started)| ManifestItem {
@@ -15231,6 +15235,53 @@ mod tests {
         }
     }
 
+    // Advisor ruling 2026-11-14: a headless child never inherits its
+    // launcher's named seat. Every headless child command drops the
+    // launcher's `AIDA_ROTATION_SEAT`, so the child's seat comes from its
+    // own registry row (none, unless its own launch named one).
+    // trace:STORY-2745 | ai:claude
+    #[test]
+    fn story2745_headless_child_does_not_inherit_the_launcher_seat() {
+        let root = tempfile::tempdir().unwrap();
+        let _cwd = contained_cwd_seam::pin(root.path());
+        let _env = crate::test_env::EnvVarsGuard::apply(&[(
+            crate::agent_rotation::SEAT_ENV,
+            Some("integration"),
+        )]);
+        let seat_of = |cmd: &std::process::Command| {
+            cmd.get_envs()
+                .find(|(k, _)| *k == crate::agent_rotation::SEAT_ENV)
+                .map(|(_, v)| v.map(|v| v.to_string_lossy().into_owned()))
+        };
+        for vendor in [
+            HeadlessVendor::Claude,
+            HeadlessVendor::Codex,
+            HeadlessVendor::Agy,
+        ] {
+            for resume in [false, true] {
+                let mut guard = child_reservation_guard();
+                let mut cmd = std::process::Command::new("unused");
+                if resume {
+                    apply_resumed_child_agent_identity(&mut cmd, vendor, "reviewer", "own-session");
+                } else {
+                    apply_child_agent_identity(&mut cmd, vendor, "implementer");
+                }
+                // Explicitly removed: the spawned child sees no seat.
+                assert_eq!(seat_of(&cmd), Some(None), "{vendor:?} resume={resume}");
+                drop(cmd);
+                drop(guard.take());
+            }
+        }
+        // The seat env every headless child gets, and the launcher-session
+        // scrub alone (phase drivers, autopilot intake), drop it too.
+        let mut cmd = std::process::Command::new("unused");
+        apply_headless_child_seat_env(&mut cmd, "implementer", "grant");
+        assert_eq!(seat_of(&cmd), Some(None));
+        let mut cmd = std::process::Command::new("unused");
+        scrub_launcher_session_env(&mut cmd);
+        assert_eq!(seat_of(&cmd), Some(None));
+    }
+
     // trace:STORY-1843 | ai:codex
     #[test]
     fn story_1843_pr3_headless_children_scrub_every_parent_session_key() {
@@ -15300,3 +15351,29 @@ pub(crate) fn stamp_containment_posture(
 #[cfg(test)]
 #[path = "tests/bug_2394_codex_posture_tests.rs"]
 mod bug_2394_codex_posture_tests;
+
+// trace:TASK-3784 | ai:codex
+#[cfg(test)]
+pub(crate) mod test_support {
+    pub(crate) fn forget_contained_export<'a>(keys: impl Iterator<Item = &'a str>) {
+        if keys.into_iter().any(|key| key == "AIDA_CONTAINED") {
+            super::forget_contained_env_for_children();
+        }
+    }
+}
+
+// trace:TASK-3784 | ai:codex
+#[cfg(test)]
+mod testkit_adapter_tests {
+    #[test]
+    fn adapter_cleans_child_export_for_keys_added_after_snapshot() {
+        let mut guard = crate::test_env::EnvVarsGuard::snapshot(&[]);
+        guard.set_key("AIDA_CONTAINED", "0");
+        super::set_contained_env_for_children(true);
+        assert!(super::CONTAINED_ENV_APPLIED.lock().unwrap().is_some());
+        drop(guard);
+        let _lock = aida_testkit::test_env::env_lock();
+        assert!(crate::test_env::holds_env_lock());
+        assert!(super::CONTAINED_ENV_APPLIED.lock().unwrap().is_none());
+    }
+}

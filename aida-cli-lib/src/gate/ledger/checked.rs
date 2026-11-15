@@ -680,26 +680,26 @@ fn list_bound(
 /// ledgers. A copy is disqualified only by a phase-3 witness with the same
 /// fingerprint, which includes the spec, so the witnesses of a candidate are
 /// exactly on the changes bound to its spec. Each ledger is folded into the
-/// index once per discovery.
+/// index once per [`Inventory`], which every discovery of one
+/// [`DiscoveryScope`] shares while it stays current (BUG-2584).
 // trace:BUG-2531 | ai:codex
 // trace:BUG-2531 | ai:claude
 // trace:BUG-2517 | ai:claude
 pub(crate) struct Discovery {
     ledger: File,
     ledger_path: std::path::PathBuf,
-    /// The pinned ledger directory's (device, inode): with the bindings
-    /// listed and the stat identity of every ledger read, what a shared
-    /// discovery re-validates before each reuse (BUG-2543).
-    // trace:BUG-2543 | ai:claude
-    ledger_id: (u64, u64),
     by_spec: Option<File>,
     /// The completeness marker was present (otherwise the ledger held no
     /// change ledger when the discovery opened).
     marked: bool,
-    owners: super::project::MiskeyOwners,
-    owned_specs: std::collections::HashSet<String>,
-    owned_changes: std::collections::HashSet<String>,
-    /// Discovery's own work (ownership reads), separate from selections.
+    /// The ownership index; shared with the other discoveries of the active
+    /// [`DiscoveryScope`] only after [`Inventory::current`] held at open.
+    // trace:BUG-2584 | ai:claude
+    inventory: std::rc::Rc<std::cell::RefCell<Inventory>>,
+    /// Discovery's own work (ownership reads it makes itself), separate
+    /// from selections. An inherited inventory costs it nothing, so a
+    /// discovery that joins a shared inventory refuses on work only where a
+    /// fresh one would.
     work: Budget,
     /// Per listed label, its bound changes; `None` when it has no bindings
     /// directory.
@@ -715,37 +715,139 @@ pub(crate) struct Discovery {
     cache: std::collections::HashMap<String, Cached>,
 }
 
+/// The mis-key ownership index of a ledger and exactly what it was folded
+/// from: per spec, the bindings it was folded under, and per change ledger,
+/// the stat identity it was read with. It retains no review payload, only
+/// witness fingerprints, charged to the work budget of the discovery that
+/// read them.
+///
+/// BUG-2584: a train's re-gate, carry-over proof and retries open several
+/// strict discoveries of one ledger. Inside a [`DiscoveryScope`] they share
+/// one inventory instead of re-reading and re-fingerprinting every ledger
+/// bound to their specs, while each still reads its selected events fresh,
+/// under its own selection budget, through freshly pinned directories.
+// trace:BUG-2584 | ai:claude
+// trace:BUG-2531 | ai:claude
+pub(crate) struct Inventory {
+    ledger_id: (u64, u64),
+    marked: bool,
+    owners: super::project::MiskeyOwners,
+    specs: std::collections::HashMap<String, Option<Vec<String>>>,
+    changes: std::collections::HashMap<String, EntryStat>,
+    retained: u64,
+}
+
+impl Inventory {
+    // trace:BUG-2584 | ai:claude
+    fn new(ledger_id: (u64, u64), marked: bool) -> Self {
+        Self {
+            ledger_id,
+            marked,
+            // trace:BUG-2517 | ai:claude
+            owners: super::project::MiskeyOwners::new(std::iter::empty()),
+            specs: Default::default(),
+            changes: Default::default(),
+            retained: 0,
+        }
+    }
+
+    /// Whether a discovery that opened `ledger` (pinned at `ledger_path`,
+    /// directory identity `ledger_id`, marker state `marked`) would fold
+    /// exactly this index: the same ledger directory and marker, every spec
+    /// still bound to the changes it was folded under, and every folded
+    /// ledger with the stat identity it was read with. Any append, binding,
+    /// hard link, replacement or non-regular file differs. Only stats and
+    /// directory listings are read, never a payload, so a FIFO cannot block.
+    // trace:BUG-2584 | ai:claude
+    // trace:BUG-2543 | ai:claude
+    fn current(
+        &self,
+        ledger: &File,
+        ledger_path: &Path,
+        ledger_id: (u64, u64),
+        marked: bool,
+    ) -> bool {
+        self.ledger_id == ledger_id
+            && self.marked == marked
+            && self.retained <= MAX_DISCOVERY_BYTES
+            && self.specs.iter().all(|(spec, changes)| {
+                list_bound(ledger, ledger_path, marked, spec).is_ok_and(|now| now == *changes)
+            })
+            && self.changes.iter().all(|(key, stat)| {
+                std::fs::symlink_metadata(ledger_path.join(format!("{key}.jsonl")))
+                    .is_ok_and(|now| EntryStat::of(&now) == *stat)
+            })
+    }
+}
+
 /// Open bound-only discovery of the gate ledger under `root`; `Ok(None)`
-/// when it does not exist.
+/// when it does not exist. Inside a [`DiscoveryScope`] it joins the scope's
+/// ownership [`Inventory`] of `root` while that is current, and otherwise
+/// makes its own the scope's; an absent or refused discovery leaves none.
 // trace:BUG-2403 | ai:claude
+// trace:BUG-2584 | ai:claude
 pub(crate) fn discover(root: &Path) -> Result<Option<Discovery>, Unsafe> {
-    discover_with_budget(
+    let found = open_discovery(
         root,
         Budget {
             bytes: MAX_DISCOVERY_BYTES,
             events: MAX_SELECTION_EVENTS,
         },
-    )
+        true,
+    );
+    if !matches!(found, Ok(Some(_))) {
+        SHARED.with(|shared| {
+            if let Some(m) = shared.borrow_mut().as_mut() {
+                m.remove(root);
+            }
+        });
+    }
+    found
+}
+
+/// A discovery of its own (never shared) whose ownership reads charge `work`.
+// trace:BUG-2531 | ai:claude
+pub(crate) fn discover_with_budget(root: &Path, work: Budget) -> Result<Option<Discovery>, Unsafe> {
+    open_discovery(root, work, false)
 }
 
 // trace:BUG-2531 | ai:claude
-pub(crate) fn discover_with_budget(root: &Path, work: Budget) -> Result<Option<Discovery>, Unsafe> {
+// trace:BUG-2584 | ai:claude
+fn open_discovery(root: &Path, work: Budget, share: bool) -> Result<Option<Discovery>, Unsafe> {
     let Some((ledger, by_spec)) = ledger_dirs(root)? else {
         return Ok(None);
     };
     let ledger_path = super::ledger_dir(root);
     let ledger_id = dir_id(&ledger)?; // trace:BUG-2543 | ai:claude
     let marked = require_complete(root, &ledger, &ledger_path)?;
+    let joined = if share {
+        SHARED.with(|shared| {
+            let mut shared = shared.borrow_mut();
+            let m = shared.as_mut()?;
+            if let Some(inventory) = m.get(root).filter(|inventory| {
+                inventory
+                    .borrow()
+                    .current(&ledger, &ledger_path, ledger_id, marked)
+            }) {
+                return Some(inventory.clone());
+            }
+            let inventory =
+                std::rc::Rc::new(std::cell::RefCell::new(Inventory::new(ledger_id, marked)));
+            m.insert(root.to_path_buf(), inventory.clone());
+            Some(inventory)
+        })
+    } else {
+        None
+    };
+    let inventory = joined.unwrap_or_else(|| {
+        std::rc::Rc::new(std::cell::RefCell::new(Inventory::new(ledger_id, marked)))
+    });
     Ok(Some(Discovery {
         ledger,
         ledger_path,
-        ledger_id,
         by_spec,
         marked,
-        // trace:BUG-2517 | ai:claude
-        owners: super::project::MiskeyOwners::new(std::iter::empty()),
-        owned_specs: Default::default(),
-        owned_changes: Default::default(),
+        inventory,
         work,
         bound: Default::default(),
         root: root.to_path_buf(),
@@ -842,11 +944,12 @@ impl Discovery {
     // trace:BUG-2531 | ai:claude
     // trace:BUG-2517 | ai:claude
     fn load_owners(&mut self, spec: &str) -> Result<(), Unsafe> {
-        if self.owned_specs.contains(spec) {
+        if self.inventory.borrow().specs.contains_key(spec) {
             return Ok(());
         }
-        for key in self.bound_changes(spec)? {
-            if self.owned_changes.contains(&key) {
+        let bound = self.listed(spec)?;
+        for key in bound.clone().unwrap_or_default() {
+            if self.inventory.borrow().changes.contains_key(&key) {
                 continue;
             }
             if !self.load(&key, None)? {
@@ -854,11 +957,21 @@ impl Discovery {
                     "refusing gate-ledger ownership: {spec} is bound to {key}, whose ledger is missing"
                 )));
             }
-            let retained = self.owners.add(&self.cache[&key].events);
+            let cached = &self.cache[&key];
+            let retained = {
+                // trace:BUG-2584 | ai:claude
+                let mut inventory = self.inventory.borrow_mut();
+                let retained = inventory.owners.add(&cached.events);
+                inventory.retained = inventory.retained.saturating_add(retained);
+                inventory.changes.insert(key, cached.stat.clone());
+                retained
+            };
             self.work.spend_bytes(retained)?;
-            self.owned_changes.insert(key);
         }
-        self.owned_specs.insert(spec.to_string());
+        self.inventory
+            .borrow_mut()
+            .specs
+            .insert(spec.to_string(), bound);
         Ok(())
     }
 
@@ -873,7 +986,7 @@ impl Discovery {
         }
         // Every candidate's spec has a binding key, so the index holds every
         // witness that could disqualify it: no review is withheld unproven.
-        self.owners.filter(events);
+        self.inventory.borrow().owners.filter(events);
         Ok(())
     }
 
@@ -1116,12 +1229,9 @@ pub(crate) fn filter_miskeyed_or_fail_closed(
 ) -> Vec<GateEvent> {
     let mut events = events;
     if super::project::needs_witnesses(&events) {
-        // Inside a [`DiscoveryScope`] the one shared discovery answers while
-        // it re-validates as unchanged; on any change it is this same fresh
-        // discovery, refusals included. trace:BUG-2543 | ai:claude
-        if shared_filter(root, &mut events) {
-            return events;
-        }
+        // Inside a [`DiscoveryScope`] the discovery joins the scope's
+        // ownership inventory while it is current; it refuses exactly where
+        // a fresh one does. trace:BUG-2543 BUG-2584 | ai:claude
         if let Ok(Some(mut discovery)) = discover(root) {
             let mut filtered = events.clone();
             if discovery.filter_events(&mut filtered).is_ok() {
@@ -1176,30 +1286,32 @@ fn dir_id(dir: &File) -> Result<(u64, u64), Unsafe> {
     Ok((meta.dev(), meta.ino()))
 }
 
-type SharedDiscoveries = std::collections::HashMap<std::path::PathBuf, Discovery>;
+type SharedDiscoveries =
+    std::collections::HashMap<std::path::PathBuf, std::rc::Rc<std::cell::RefCell<Inventory>>>;
 
 thread_local! {
-    /// The active [`DiscoveryScope`]'s one discovery per store root.
-    // trace:BUG-2543 BUG-2551 | ai:claude
+    /// The active [`DiscoveryScope`]'s one ownership inventory per store root.
+    // trace:BUG-2543 BUG-2551 BUG-2584 | ai:claude
     static SHARED: std::cell::RefCell<Option<SharedDiscoveries>> =
         const { std::cell::RefCell::new(None) };
 }
 
-/// One gate-ledger discovery shared by every single-key verdict read on
-/// this thread while alive (a verdict listing; pull's wait reconciliation).
+/// One gate-ledger inventory shared by strict discoveries and single-key
+/// verdict reads on this thread while alive (listings, reconciliation, trains).
 ///
-/// Not a snapshot: every key's events are still read fresh from disk by its
-/// own reader, and only the discovery's ownership index is reused. Before
-/// each reuse the shared discovery is re-validated against the ledger as it
-/// is now: the same path checks as a fresh discovery (a linked or
-/// non-directory component refuses), the same ledger directory and marker,
-/// the same bindings for every spec it listed, and an unchanged stat
-/// identity for every ledger it read. Any difference (an append by this or
-/// any other writer, a new binding, a hard link, a replacement by a symlink
-/// or FIFO) is answered by a fresh discovery, which becomes the shared one. A failed or absent discovery is
-/// never shared, so every refusal is exactly the fresh path's. Nested
-/// scopes join the outermost one.
+/// Not a snapshot: every discovery opens its directories afresh (the same
+/// path checks: a linked or non-directory component refuses) and reads
+/// every selected event fresh from disk under its own selection budget; only
+/// the ownership [`Inventory`] is reused, and only while
+/// [`Inventory::current`] holds when a discovery opens: the same ledger
+/// directory and marker, the same bindings for every spec it folded, and an
+/// unchanged stat identity for every ledger it folded. Any difference (an
+/// append by this or any other writer, a new binding, a hard link, a
+/// replacement by a symlink or FIFO) starts a new inventory, which becomes
+/// the shared one. A failed or absent discovery leaves none, so every
+/// refusal is exactly the fresh path's. Nested scopes join the outermost one.
 // trace:BUG-2543 BUG-2551 | ai:claude
+// trace:BUG-2584 | ai:claude
 pub(crate) struct DiscoveryScope {
     owner: bool,
 }
@@ -1222,80 +1334,6 @@ impl Drop for DiscoveryScope {
         if self.owner {
             SHARED.with(|shared| *shared.borrow_mut() = None);
         }
-    }
-}
-
-/// Filter `events` through the active scope's discovery of `root`,
-/// rediscovering first unless it is unchanged; `false` when no scope is
-/// active, so the caller runs the fresh path.
-// trace:BUG-2543 | ai:claude
-fn shared_filter(root: &Path, events: &mut Vec<GateEvent>) -> bool {
-    if !SHARED.with(|shared| shared.borrow().is_some()) {
-        return false;
-    }
-    // The discovery leaves the scope while it works: a refusal or an absent
-    // ledger is never shared, so the next read rediscovers, exactly as
-    // outside a scope.
-    let mut reused = SHARED
-        .with(|shared| shared.borrow_mut().as_mut().and_then(|m| m.remove(root)))
-        .filter(|d| d.unchanged(root));
-    loop {
-        let was_reused = reused.is_some();
-        let mut discovery = match reused.take() {
-            Some(d) => d,
-            None => match discover(root) {
-                Ok(Some(d)) => d,
-                Ok(None) | Err(_) => break,
-            },
-        };
-        let mut filtered = events.clone();
-        if discovery.filter_events(&mut filtered).is_ok() {
-            *events = filtered;
-            SHARED.with(|shared| {
-                if let Some(m) = shared.borrow_mut().as_mut() {
-                    m.insert(root.to_path_buf(), discovery);
-                }
-            });
-            return true;
-        }
-        // A reused discovery can refuse where a fresh one answers (its work
-        // budget is spent across the scope): only a fresh refusal stands.
-        // trace:BUG-2531 | ai:claude
-        if !was_reused {
-            break;
-        }
-    }
-    // This read's fresh discovery found no ledger or refused: fail closed,
-    // as the fresh path does for the same outcome.
-    super::project::MiskeyOwners::fail_closed(events);
-    true
-}
-
-impl Discovery {
-    /// Whether a fresh discovery of `root` now would read exactly what this
-    /// one read: the path components still open as [`ledger_dirs`] requires,
-    /// onto the same ledger directory; the completeness marker stands as it
-    /// did; every spec this one listed is bound to the same changes; and
-    /// every ledger it read still has the stat identity it had when read.
-    // trace:BUG-2543 | ai:claude
-    // trace:BUG-2531 | ai:claude
-    fn unchanged(&self, root: &Path) -> bool {
-        let Ok(Some((ledger, _))) = ledger_dirs(root) else {
-            return false;
-        };
-        if dir_id(&ledger).ok() != Some(self.ledger_id) {
-            return false;
-        }
-        let ledger_path = super::ledger_dir(root);
-        if require_complete(root, &ledger, &ledger_path).ok() != Some(self.marked) {
-            return false;
-        }
-        self.bound.iter().all(|(spec, changes)| {
-            list_bound(&ledger, &ledger_path, self.marked, spec).is_ok_and(|now| now == *changes)
-        }) && self.cache.iter().all(|(key, cached)| {
-            std::fs::symlink_metadata(ledger_path.join(format!("{key}.jsonl")))
-                .is_ok_and(|now| EntryStat::of(&now) == cached.stat)
-        })
     }
 }
 

@@ -25,7 +25,7 @@ use crate::stakeholder_role::StakeholderAction;
 /// reworked and goes to the advisor.
 const MAX_CONTENT_ROUNDS: usize = 3;
 /// The branch whose changes the integration seat lands.
-const INTEGRATION_BRANCH: &str = "integration";
+pub(crate) const INTEGRATION_BRANCH: &str = "integration";
 /// The branch trains land on.
 const MAIN_BRANCH: &str = "main";
 const TRAIN_PREFIX: &str = "train/";
@@ -227,6 +227,12 @@ pub(crate) trait Evidence {
     /// Why no rework lane may be launched for this head, when one refused
     /// in a way a relaunch cannot fix.
     fn rework_stop(&self, _pr: &Pr) -> Option<String> {
+        None
+    }
+    /// For an unapproved integration-track change: whether it may merge
+    /// before its review, and why. `None` when that path is switched off.
+    // trace:STORY-2772 | ai:claude
+    fn review_after_merge(&self, _pr: &Pr) -> Option<String> {
         None
     }
 }
@@ -443,7 +449,11 @@ pub(crate) fn derive(pr: &Pr, evidence: &dyn Evidence) -> Row {
             format!("{timeouts} reviewers of this head were stopped for running too long"),
         );
     }
-    row(State::NeedsReview, Action::LaunchReview, None, refusal)
+    let reason = match (track, evidence.review_after_merge(pr)) {
+        (Track::Integration, Some(note)) => format!("{refusal}; {note}"),
+        _ => refusal,
+    };
+    row(State::NeedsReview, Action::LaunchReview, None, reason)
 }
 
 /// One pass over `changes`: a row each, in change order.
@@ -453,7 +463,21 @@ pub(crate) fn pass(changes: &[Pr], evidence: &dyn Evidence) -> Vec<Row> {
     rows
 }
 
-fn one_line(text: &str, limit: usize) -> String {
+/// The change `pr` and its own row. [`pass`] sorts rows by PR number while
+/// discovery keeps the forge's order, so the two lists are joined by id,
+/// never by position: another change's row would admit this one.
+// trace:STORY-2772 | ai:claude
+pub(crate) fn change_and_row<'a>(
+    changes: &'a [Pr],
+    rows: &'a [Row],
+    pr: u64,
+) -> Option<(&'a Pr, &'a Row)> {
+    let change = changes.iter().find(|change| change.id == pr)?;
+    let row = rows.iter().find(|row| row.pr == pr)?;
+    Some((change, row))
+}
+
+pub(crate) fn one_line(text: &str, limit: usize) -> String {
     let flat = text.split_whitespace().collect::<Vec<_>>().join(" ");
     if flat.chars().count() <= limit {
         return flat;
@@ -529,6 +553,47 @@ fn git_text(root: &Path, args: &[&str]) -> Result<String> {
         String::from_utf8_lossy(&out.stderr).trim()
     );
     Ok(String::from_utf8_lossy(&out.stdout).trim().to_string())
+}
+
+/// The paths `head` changes since it forked from `base`. Renames are not
+/// detected: a file moved out of a protected path is listed at both its old
+/// and its new place, so the move cannot hide it.
+// trace:STORY-2772 | ai:claude
+pub(crate) fn changed_paths(
+    root: &Path,
+    base: &str,
+    head: &str,
+) -> std::result::Result<Vec<String>, String> {
+    let range = format!("{base}...{head}");
+    let args = ["diff", "--name-only", "--no-renames", "-z", &range];
+    let out = git(root, &args, 30).map_err(|error| format!("{error:#}"))?;
+    if !out.status.success() {
+        return Err(format!(
+            "`git {}` failed: {}",
+            args.join(" "),
+            String::from_utf8_lossy(&out.stderr).trim()
+        ));
+    }
+    nul_separated_paths(&out.stdout)
+}
+
+/// Paths from `-z` output, exactly as git stores them: no quoting, no
+/// trimming, a newline or tab inside a name kept. A name that is not UTF-8
+/// cannot be matched against a protected prefix and is refused, never
+/// guessed at.
+// trace:STORY-2772 | ai:claude
+pub(crate) fn nul_separated_paths(out: &[u8]) -> std::result::Result<Vec<String>, String> {
+    out.split(|byte| *byte == 0)
+        .filter(|name| !name.is_empty())
+        .map(|name| {
+            String::from_utf8(name.to_vec()).map_err(|_| {
+                format!(
+                    "a changed path is not UTF-8 ({}); it cannot be checked against the protected paths",
+                    String::from_utf8_lossy(name)
+                )
+            })
+        })
+        .collect()
 }
 
 fn head_ref(id: u64) -> String {
@@ -667,6 +732,8 @@ struct Live {
     book: run::Book,
     /// The tree each clean merge of a head into its base produced.
     merge_trees: std::cell::RefCell<BTreeMap<u64, String>>,
+    /// What review-after-merge eligibility reads, once per pass.
+    review_after_merge: crate::integration_cmd::review::Reader,
 }
 
 impl Live {
@@ -763,6 +830,54 @@ pub(crate) fn specs_of(pr: &Pr) -> Vec<String> {
     } else {
         ids
     }
+}
+
+/// The merge hold armed on `pr`, with its release condition, read-only.
+pub(crate) fn hold_of(root: &Path, pr: &Pr) -> std::result::Result<Option<Hold>, String> {
+    use crate::gate::merge_hold_core::{hold_placed_at, read_hold, read_hold_record};
+    use crate::gate::rework_hold_release::{release_condition, ReleaseCondition};
+    let since = || {
+        hold_placed_at(root, pr.id).map(|at| chrono::DateTime::<chrono::Utc>::from(at).to_rfc3339())
+    };
+    let human_only = |what: &str| HoldRelease::Unmet(format!("{what}; a human clears it"));
+    if let Some(record) = read_hold_record(root, pr.id) {
+        let detail = format!(
+            "{} hold: {}",
+            format!("{:?}", record.reason_kind).to_lowercase(),
+            record.detail
+        );
+        // The release's own decision, read-only: the hold's kind alone
+        // says nothing about composed holds, sensitive specs or grants.
+        let release = match release_condition(root, pr.id) {
+            ReleaseCondition::Met => HoldRelease::Met,
+            ReleaseCondition::PendingCover(mandate) => HoldRelease::PendingCover(mandate),
+            ReleaseCondition::Unmet(why) => HoldRelease::Unmet(why),
+            ReleaseCondition::Unknown(why) => return Err(why),
+            // Released between the two reads: the next pass sees it gone.
+            ReleaseCondition::NoHold => return Err("the hold changed during the pass".into()),
+        };
+        return Ok(Some(Hold {
+            detail,
+            release,
+            since: since(),
+        }));
+    }
+    if let Some(detail) = read_hold(root, pr.id) {
+        return Ok(Some(Hold {
+            detail,
+            release: human_only("an untyped hold has no release condition"),
+            since: since(),
+        }));
+    }
+    let labelled = match pr.hold_label {
+        Some(labelled) => labelled,
+        None => crate::merge_hold::label_present(root, pr.id)?,
+    };
+    Ok(labelled.then(|| Hold {
+        detail: "the merge-hold label is set on the forge".into(),
+        release: human_only("the label has no recorded hold behind it"),
+        since: None,
+    }))
 }
 
 impl Evidence for Live {
@@ -886,51 +1001,7 @@ impl Evidence for Live {
     }
 
     fn hold(&self, pr: &Pr) -> std::result::Result<Option<Hold>, String> {
-        use crate::gate::merge_hold_core::{hold_placed_at, read_hold, read_hold_record};
-        use crate::gate::rework_hold_release::{release_condition, ReleaseCondition};
-        let since = || {
-            hold_placed_at(&self.root, pr.id)
-                .map(|at| chrono::DateTime::<chrono::Utc>::from(at).to_rfc3339())
-        };
-        let human_only = |what: &str| HoldRelease::Unmet(format!("{what}; a human clears it"));
-        if let Some(record) = read_hold_record(&self.root, pr.id) {
-            let detail = format!(
-                "{} hold: {}",
-                format!("{:?}", record.reason_kind).to_lowercase(),
-                record.detail
-            );
-            // The release's own decision, read-only: the hold's kind alone
-            // says nothing about composed holds, sensitive specs or grants.
-            let release = match release_condition(&self.root, pr.id) {
-                ReleaseCondition::Met => HoldRelease::Met,
-                ReleaseCondition::PendingCover(mandate) => HoldRelease::PendingCover(mandate),
-                ReleaseCondition::Unmet(why) => HoldRelease::Unmet(why),
-                ReleaseCondition::Unknown(why) => return Err(why),
-                // Released between the two reads: the next pass sees it gone.
-                ReleaseCondition::NoHold => return Err("the hold changed during the pass".into()),
-            };
-            return Ok(Some(Hold {
-                detail,
-                release,
-                since: since(),
-            }));
-        }
-        if let Some(detail) = read_hold(&self.root, pr.id) {
-            return Ok(Some(Hold {
-                detail,
-                release: human_only("an untyped hold has no release condition"),
-                since: since(),
-            }));
-        }
-        let labelled = match pr.hold_label {
-            Some(labelled) => labelled,
-            None => crate::merge_hold::label_present(&self.root, pr.id)?,
-        };
-        Ok(labelled.then(|| Hold {
-            detail: "the merge-hold label is set on the forge".into(),
-            release: human_only("the label has no recorded hold behind it"),
-            since: None,
-        }))
+        hold_of(&self.root, pr)
     }
 
     fn rounds(&self, pr: &Pr) -> std::result::Result<Rounds, String> {
@@ -1002,6 +1073,25 @@ impl Evidence for Live {
 
     fn review_timeouts(&self, pr: &Pr) -> u32 {
         self.book.timeouts(pr)
+    }
+
+    fn review_after_merge(&self, pr: &Pr) -> Option<String> {
+        use crate::integration_cmd::review::{Eligibility, Mode};
+        let reader = &self.review_after_merge;
+        match reader.config() {
+            Ok(config) if config.mode == Mode::Off => return None,
+            Ok(_) => {}
+            Err(why) => return Some(format!("review after merge: unknown ({why})")),
+        }
+        let verdict = self
+            .pinned(pr)
+            .and_then(|(head, base)| changed_paths(&self.root, base, head))
+            .and_then(|paths| reader.eligibility(&specs_of(pr), &paths));
+        Some(match verdict {
+            Ok(Eligibility::Eligible(why)) => format!("may merge before review: {why}"),
+            Ok(Eligibility::Ineligible(why)) => format!("review before merge: {why}"),
+            Err(why) => format!("review after merge: unknown ({why})"),
+        })
     }
 
     fn rework_stop(&self, pr: &Pr) -> Option<String> {
@@ -1183,6 +1273,18 @@ pub(crate) fn lanes_unreadable(why: &str) -> String {
     )
 }
 
+/// How many open changes the forge lists now, on every base, drafts left
+/// out: the number a pass would show, without the pass.
+// trace:STORY-2768 | ai:claude
+pub(crate) fn open_change_count(start: &Path) -> Result<usize> {
+    let root = crate::review_watch::forge::main_root(start)?;
+    let repo = crate::review_watch::forge::Repository::load(&root)?;
+    Ok(match discover_rich(&root, &repo)? {
+        Some(changes) => changes.len(),
+        None => repo.discover(&root)?.len(),
+    })
+}
+
 /// Discover the open changes and derive a row for each.
 pub(crate) fn live_pass(start: &Path) -> Result<Pass> {
     let root = crate::review_watch::forge::main_root(start)?;
@@ -1227,6 +1329,7 @@ pub(crate) fn live_pass(start: &Path) -> Result<Pass> {
         root: root.clone(),
         leases: std::cell::OnceCell::new(),
         claims,
+        review_after_merge: crate::integration_cmd::review::Reader::new(&root),
     };
     let rows = pass(&changes, &live);
     // Lanes that could not be read are said to be missing, never shown as

@@ -2565,13 +2565,15 @@ fn payload(m: &Message) -> Payload<'_> {
 }
 
 /// The optional, writer-enriched metadata keys, in [`Recorded`] order.
-const METADATA_KEYS: [&str; 6] = [
+const METADATA_KEYS: [&str; 7] = [
     "subject",
     "urgent",
     "intent",
     "from_source",
     "from_role",
     "relayed_from",
+    // trace:STORY-2745 | ai:claude
+    "from_seat",
 ];
 
 /// Which [`METADATA_KEYS`] a replica's file actually carried (non-null).
@@ -2616,7 +2618,8 @@ fn merge_metadata(
     other: &Message,
     other_recorded: Recorded,
 ) -> bool {
-    let [subject, urgent, intent, from_source, from_role, relayed_from] = &mut into_recorded.0;
+    let [subject, urgent, intent, from_source, from_role, relayed_from, from_seat] =
+        &mut into_recorded.0;
     let o = other_recorded.0;
     fill(&mut into.subject, subject, &other.subject, o[0])
         & fill(&mut into.urgent, urgent, &other.urgent, o[1])
@@ -2629,6 +2632,7 @@ fn merge_metadata(
             &other.relayed_from,
             o[5],
         )
+        & fill(&mut into.from_seat, from_seat, &other.from_seat, o[6])
 }
 
 /// Give every replica of a message whose file carried no time one shared

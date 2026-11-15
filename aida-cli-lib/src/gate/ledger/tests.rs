@@ -96,6 +96,7 @@ fn kinds(events: &[GateEvent]) -> Vec<&'static str> {
     events
         .iter()
         .map(|e| match e.body {
+            EventBody::FreshnessDecision { .. } => "freshness-decision",
             EventBody::ManualReviewRequested { .. } => "manual-review-requested",
             EventBody::TrainCoverage { .. } => "train-coverage",
             EventBody::RereviewAdmitted { .. } => "rereview-admitted",

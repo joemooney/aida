@@ -1,0 +1,326 @@
+{
+  "version": 1,
+  "groups": [
+    {
+      "package": "aida-cli-lib",
+      "target": [
+        "--lib"
+      ],
+      "filter": "story_1888_gate_paths",
+      "source": "aida-cli-lib/src/tests/story_1888_gate_paths_tests.rs",
+      "tests": [
+        "a_branch_only_edit_to_the_committed_layer_has_no_effect",
+        "a_directory_entry_without_a_trailing_slash_matches_files_under_it",
+        "a_directory_prefix_matches_nested_files_on_a_component_boundary",
+        "a_prefix_floor_entry_covers_the_gate_module",
+        "an_exemption_covers_only_its_own_function",
+        "an_unreadable_load_still_checks_the_floor",
+        "crate_root_mounts_the_gate_plainly_and_hides_no_macros",
+        "crate_root_name_detection_sees_evasive_forms",
+        "dispatch_authority_inputs_are_bound_in_the_gate",
+        "dispatch_authority_is_defined_only_in_the_gate",
+        "dispatch_item_detection",
+        "dispatch_item_detection_sees_evasive_forms",
+        "dispatch_orchestration_calls_the_gate_at_each_admission_point",
+        "dispatch_policy_suites_are_mounted_on_the_floor",
+        "drive_tick_authority_inputs_are_private_to_the_gate",
+        "every_floor_source_file_carries_the_marker",
+        "every_gate_module_class_refuses_new_outside_reach",
+        "every_gate_module_is_a_dispatch_module_a_kernel_or_an_orchestrator",
+        "gate_authority_code_is_on_the_floor",
+        "gate_dispatch_external_reach_sees_two_hop_forms",
+        "gate_dispatch_imports_nothing_authority_bearing_from_dispatch",
+        "gate_dispatch_includes_no_source_from_outside_the_gate",
+        "gate_dispatch_one_hop_sees_outside_reach_in_named_gate_modules",
+        "gate_dispatch_reaches_outside_only_through_the_facade_or_listed_leaves",
+        "gate_kernels_reach_outside_only_through_listed_leaves",
+        "gate_orchestrators_reach_outside_only_through_their_frozen_inventory",
+        "gate_path_mount_detection",
+        "gate_path_mount_detection_sees_inline_and_raw_forms",
+        "malformed_protected_entries_are_config_errors",
+        "mandate_start_and_stop_bind_the_human_floor_in_the_gate",
+        "mandate_status_lists_every_protected_entry_with_its_source",
+        "mandate_status_with_an_unreadable_committed_layer_shows_the_floor_only",
+        "mount_detection_follows_path_and_plain_modules",
+        "no_gate_module_glob_imports_outside_the_gate",
+        "no_layer_can_shrink_the_floor",
+        "no_unprotected_file_mounts_a_gate_module",
+        "no_unprotected_file_names_a_gate_only_authority_input",
+        "no_unprotected_file_reexports_gate_items",
+        "not_gate_authority_only_shrinks",
+        "protected_paths_parse_exact_and_prefix_entries",
+        "ratchet_sees_qualified_fns",
+        "ratchet_skips_test_items",
+        "reexport_detection",
+        "reexport_detection_sees_aliases",
+        "refusal_text_names_the_entry_and_its_source",
+        "root_macro_detection_sees_hidden_mounts_and_bindings",
+        "root_module_mount_detection_sees_redirected_modules",
+        "root_textual_macro_detection_sees_evasive_forms",
+        "source_inclusion_detection_sees_evasive_forms",
+        "status_json_lists_each_entry_with_its_source",
+        "the_floor_is_the_gate_prefix_config_and_protected_tests",
+        "the_ship_cover_decision_is_bound_in_the_gate"
+      ],
+      "scope": "module"
+    },
+    {
+      "package": "aida-cli-lib",
+      "target": [
+        "--lib"
+      ],
+      "filter": "story_1728_command_registry_tests",
+      "source": "aida-cli-lib/src/tests/story_1728_command_registry_tests.rs",
+      "tests": [
+        "adding_a_flag_to_a_command_cannot_require_a_hot_file_edit",
+        "bg_fetch_handler_receives_its_positional",
+        "cmdkit_boundary_guard_rejects_restored_reexport_and_consumer_import",
+        "cmdkit_framework_never_routes_through_command_registry",
+        "early_handlers_run_without_a_store_and_continue_reaches_the_store_phase",
+        "every_registered_command_parses_through_the_registry_path",
+        "every_top_level_name_has_exactly_one_owner",
+        "global_args_reach_registered_and_legacy_commands",
+        "help_after_cycle_is_rejected",
+        "help_surface_matches_golden_snapshot",
+        "imported_command_verbs_checks_each_qualified_enum_segment",
+        "legacy_command_enum_only_shrinks",
+        "match_arm_patterns_reads_patterns_not_bodies_or_guards",
+        "migrated_commands_keep_their_legacy_policy",
+        "per_verb_stakeholder_policy_matches_the_legacy_table",
+        "production_code_uses_only_the_built_command_tree",
+        "registered_commands_shadow_path_extensions",
+        "registry_is_sorted_unique_and_self_consistent",
+        "run_dispatches_early_handlers_before_any_store_is_opened",
+        "shared_help_after_anchor_places_entries_in_name_order",
+        "task118_retention_prune_is_a_write_and_its_dry_run_a_read",
+        "team_identity_guard_exemptions_match_main",
+        "team_identity_write_matches_mains_is_write_command_for_every_verb"
+      ],
+      "scope": "module"
+    },
+    {
+      "package": "aida-cli-lib",
+      "target": [
+        "--lib"
+      ],
+      "filter": "bug_1985_host_status_guard",
+      "source": "aida-cli-lib/src/tests/bug_1929_contained_store_tests.rs",
+      "tests": [
+        "bug_1985_host_status_guard"
+      ],
+      "scope": "filter"
+    },
+    {
+      "package": "aida-cli",
+      "target": [
+        "--test",
+        "bug_1502_format_json_audit"
+      ],
+      "filter": "checked_in_audit_",
+      "source": "aida-cli/tests/bug_1502_format_json_audit.rs",
+      "tests": [
+        "checked_in_audit_catalog_matches_without_store_setup",
+        "checked_in_audit_is_exhaustive_and_every_honoured_probe_parses"
+      ],
+      "scope": "filter"
+    },
+    {
+      "package": "aida-cli-lib",
+      "target": [
+        "--lib"
+      ],
+      "filter": "bug_2398_final_spawn_boundary_ratchet",
+      "source": "aida-cli-lib/src/tests/bug_2398_codex_tool_env_tests.rs",
+      "scope": "filter",
+      "tests": [
+        "bug_2398_final_spawn_boundary_ratchet"
+      ]
+    },
+    {
+      "package": "aida-cli-lib",
+      "target": [
+        "--lib"
+      ],
+      "filter": "bug_2398_whitelist_encoding_absent_empty_and_secret_ratchet",
+      "source": "aida-cli-lib/src/tests/bug_2398_codex_tool_env_tests.rs",
+      "scope": "filter",
+      "tests": [
+        "bug_2398_whitelist_encoding_absent_empty_and_secret_ratchet"
+      ]
+    },
+    {
+      "package": "aida-cli-lib",
+      "target": [
+        "--lib"
+      ],
+      "filter": "bug_2395_every_role_launch_site_is_inventoried",
+      "source": "aida-cli-lib/src/tests/bug_2398_codex_tool_env_tests.rs",
+      "scope": "filter",
+      "tests": [
+        "bug_2395_every_role_launch_site_is_inventoried"
+      ]
+    },
+    {
+      "package": "aida-cli-lib",
+      "target": [
+        "--lib"
+      ],
+      "filter": "story_2326_inventories_count_launcher_callers",
+      "source": "aida-cli-lib/src/tests/bug_2398_codex_tool_env_tests.rs",
+      "scope": "filter",
+      "tests": [
+        "story_2326_inventories_count_launcher_callers"
+      ]
+    },
+    {
+      "package": "aida-cli-lib",
+      "target": [
+        "--lib"
+      ],
+      "filter": "task_2759_ratchet",
+      "source": "aida-cli-lib/src/tests/bug_2398_codex_tool_env_tests.rs",
+      "scope": "filter",
+      "tests": [
+        "task_2759_ratchet_flags_envs_array_grant_selector",
+        "task_2759_ratchet_flags_imported_grant_env_and_aliases",
+        "task_2759_ratchet_flags_literal_grant_selector"
+      ]
+    },
+    {
+      "package": "aida-cli-lib",
+      "target": [
+        "--lib"
+      ],
+      "filter": "is_inventoried_and_guarded",
+      "source": "aida-cli-lib/src/tests/task_2708_codex_fail_closed_tests.rs",
+      "scope": "filter",
+      "tests": [
+        "task_2708_every_codex_spawn_path_is_inventoried_and_guarded",
+        "task_2708_every_spawn_agent_builder_is_inventoried_and_guarded"
+      ]
+    },
+    {
+      "package": "aida-cli-lib",
+      "target": [
+        "--lib"
+      ],
+      "filter": "parser_version_ratchet",
+      "source": "aida-cli-lib/src/tests/bug_2221_linkage_index_tests.rs",
+      "scope": "filter",
+      "tests": [
+        "parser_version_ratchet"
+      ]
+    },
+    {
+      "package": "aida-cli-lib",
+      "target": [
+        "--lib"
+      ],
+      "filter": "pr_emergency_land_skill_reaches_claude_and_portable_inventory",
+      "source": "aida-cli-lib/src/pr_emergency_land.rs",
+      "scope": "filter",
+      "tests": [
+        "pr_emergency_land_skill_reaches_claude_and_portable_inventory"
+      ]
+    },
+    {
+      "package": "aida-cli-lib",
+      "target": [
+        "--lib"
+      ],
+      "filter": "task_2001_every_host_remote_call_routes_its_credentials",
+      "source": "aida-cli-lib/src/tests/bug_2181_host_remote_credentials_tests.rs",
+      "scope": "filter",
+      "tests": [
+        "task_2001_every_host_remote_call_routes_its_credentials"
+      ]
+    },
+    {
+      "package": "aida-cli-lib",
+      "target": [
+        "--lib"
+      ],
+      "filter": "every_time_bound_flag_is_classified",
+      "source": "aida-cli-lib/src/tests/time_bound_flags_tests.rs",
+      "scope": "filter",
+      "tests": [
+        "every_time_bound_flag_is_classified"
+      ]
+    }
+  ],
+  "shared_modules": {
+    "aida-cli-lib/src/tests/bug_1723_config_trust_tests.rs": [
+      "detector_sees_through_test_regions_and_comments",
+      "every_config_toml_site_is_inventoried_and_every_worktree_key_is_policy",
+      "every_project_config_writer_goes_through_the_adoption_guard",
+      "grandfathering_is_frozen_to_the_guards_own_list",
+      "guard_fails_on_a_site_count_change",
+      "guard_fails_on_an_uninventoried_site_and_on_a_stale_entry",
+      "guard_rejects_a_command_class_and_a_path_key_from_the_worktree",
+      "guard_rejects_an_executable_key_even_when_labelled_policy",
+      "guard_rejects_pre_move_root_inventory_against_current_sources",
+      "relocated_root_readers_preserve_their_trust_channels",
+      "the_write_guard_detector_sees_a_split_raw_write",
+      "todays_agent_registry_keys_pass_the_classifier"
+    ],
+    "aida-cli-lib/src/tests/node_alias_display_ratchet_tests.rs": [
+      "scanner_skips_comments_markers_and_test_modules",
+      "unmigrated_display_id_print_sites_only_go_down"
+    ],
+    "aida-cli-lib/src/tests/story_2326_launch_ratchet_tests.rs": [
+      "launch_sites_outside_the_launcher_match_the_ledger",
+      "scanner_catches_every_mutant_spelling",
+      "scanner_distinguishes_clap_and_injected_cargo_from_vendor_launches",
+      "story_2326_ambient_aida_inputs_have_a_disposition",
+      "story_2326_control_env_users_are_checked_aida_constructors",
+      "story_2326_grant_owner_mutants",
+      "story_2326_profile_and_grant_issuance_have_one_owner"
+    ],
+    "aida-cli-lib/src/tests/story_2401_forge_read_ratchet_tests.rs": [
+      "story_2401_no_new_raw_gh_reads_outside_forge",
+      "story_2401_ratchet_catches_new_train_helper_callers_and_aliases",
+      "story_2401_ratchet_fails_up_down_new_and_stale",
+      "story_2401_raw_gh_scanner_counts_spawns_and_skips_tests_comments_and_escapes"
+    ],
+    "aida-cli-lib/src/tests/story_2539_vendor_literal_ratchet_tests.rs": [
+      "story_2539_test_only_attributes_are_excluded",
+      "story_2539_vendor_literal_ratchet",
+      "story_2539_vendor_literal_ratchet_mutants"
+    ],
+    "aida-cli-lib/src/tests/task_1555_ci_gate_tiers_tests.rs": [
+      "task_1555_every_ci_build_gate_is_classified_for_the_local_runner",
+      "task_1555_every_tier_value_is_one_the_runner_runs",
+      "task_1555_runner_mirrors_cis_declared_shell",
+      "task_1763_compile_tier_is_wired_and_derives_from_ci_run_tests"
+    ],
+    "aida-cli-lib/src/tests/task_1750_liveness_primitive_guard_tests.rs": [
+      "proc_identity_legacy_decisions_do_not_expand",
+      "proc_identity_ratchet_recognizes_alternate_syntax",
+      "production_code_has_no_raw_kill_zero_liveness_probe",
+      "raw_probe_scan_sees_code_and_skips_comments_and_test_modules"
+    ],
+    "aida-cli-lib/src/gate/tests/task_1752_grant_env_guard_tests.rs": [
+      "only_seat_authority_names_or_reads_the_grant_env_var",
+      "scan_catches_split_aliased_and_iterated_reads",
+      "scan_fails_closed_on_an_unclosed_test_module",
+      "scan_requires_cfg_test_on_modules_in_skipped_test_dirs",
+      "scan_skips_inline_test_modules_anywhere_and_keeps_comments"
+    ],
+    "aida-cli-lib/src/tests/task_2032_launcher_main_ratchet_tests.rs": [
+      "task_2032_chdir_entry_points_resolve_the_host_main_before_the_chdir",
+      "task_2032_launcher_main_is_called_only_from_entry_points"
+    ],
+    "aida-cli-lib/src/tests/task_2143_clone_git_ratchet_tests.rs": [
+      "task_2143_no_new_raw_git_where_a_lease_tree_is_read",
+      "task_2143_ratchet_fails_up_down_new_and_stale",
+      "task_2143_raw_git_scanner_counts_only_lease_readers",
+      "task_2143_test_modules_are_skipped_by_brace_balance",
+      "task_2190_raw_string_braces_do_not_swallow_production_git",
+      "task_3426_all_queue_modules_reject_new_raw_git",
+      "task_3428_review_git_evidence_rejects_new_raw_git_without_lease_field"
+    ],
+    "aida-cli-lib/src/tests/resolve_aida_exe_ratchet_tests.rs": [
+      "no_cli_source_outside_the_resolver_uses_raw_current_executable_lookup"
+    ]
+  }
+}

@@ -609,6 +609,7 @@ pub(crate) fn notify_advisor(
         archived: false,
         from_source: SenderSource::Explicit,
         from_role: None,
+        from_seat: None,
         relayed_from: None,
     };
     // Keep an existing notice's archive/retraction state and timestamp.
