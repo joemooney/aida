@@ -12,12 +12,12 @@ description: |
   2. A pull after one new main merge scans only the new commit range. Its completion scan takes under 30 s, and the whole post-train pull under 60 s. Show three consecutive post-train pulls with timing logs on TASK-3798.
   3. A regression test proves that a second reconcile with unchanged inputs makes no forge (gh) calls and no full-history walk. It uses the existing note_reconcile_run counter or an equivalent.
   4. Completed specs still get flipped: the existing auto-bump tests stay green.
-status: Approved
+status: NeedsAttention
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-15T15:27:18.524971472Z
-modified_at: 2026-11-15T19:42:43.113240144Z
+modified_at: 2026-11-15T19:46:03.603487737Z
 req_type: Bug
 comments:
 - id: 01a1dfd3-6086-75b3-8b71-da3817a81056
@@ -144,6 +144,13 @@ comments:
   modified_at: 2026-11-15T19:42:43.113240144Z
   session_id: 01a1e03d-c6d9-7c61-8d35-47020bb6f858
   harness_version: 2.1.325 (Claude Code)
+- id: 01a1e0be-ac80-7683-912a-0e4c07726d23
+  author: dirtlab
+  content: 'Measure-first follow-up: reviewed the 19:40 host diagnosis and BUG-2599 evidence. The held-off control rules out tick/hygiene contention in that run; no shared BUG-2599 cause is established. However the ~209 s remainder still lacks the binding brief requested per-step breakdown. Source shows auto_bump_done_to_completed_with invokes reconcile_reference_in for every Refs trailer before its store-load timer; each invocation loads storage and can query the forge and update_atomically under the store writer lock. Thus the remainder cannot yet be attributed specifically to per-candidate ancestry. Needed measured substeps: waiting-verdict reconciliation, git-log execution, Refs recovery (load/forge/update), candidate eligibility and application, plus watermark stored/computed keys and miss reason. This seat cannot run the primary control or observe host locks; configured absolute codegraph client is absent and doctor confirms missing. No fix code written; no files changed; untested=true. Request advisor measurement/clarification before choosing ancestry batching versus recovery/store work.'
+  created_at: 2026-11-15T19:45:54.816369420Z
+  modified_at: 2026-11-15T19:45:54.816369420Z
+  session_id: 01a1e0bc1da3
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1dfd3-596b-7b43-b2db-9991c5ddde70
   author: joe
@@ -206,6 +213,24 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1e0be-c72d-7ae1-8b44-8c7e9c8b7682
+  author: dirtlab
+  timestamp: 2026-11-15T19:46:01.645481539Z
+  session_id: 01a1e0bc1da3
+  harness_version: codex-cli 0.167.0
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
+- id: 01a1e0be-ced3-73e3-a645-00f432bfabcc
+  author: dirtlab
+  timestamp: 2026-11-15T19:46:03.603499195Z
+  session_id: 01a1e0bc1da3
+  harness_version: codex-cli 0.167.0
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 filed_at:
   code_sha: 80fefce8053d47816939bd636cd11cb5cfa4f189
   branch: main
@@ -213,3 +238,8 @@ filed_at:
   aida_version: 0.16.0
   aida_build_sha: 80fefce8053
   vendor: claude
+attention_reason:
+  category: missing-context
+  detail: Binding measure-first brief requires per-step completion-scan timings before fix code. Host control leaves ~209 s undivided between Refs recovery (storage load, forge, writer update) and ancestry work. Need measured breakdown or explicit waiver before choosing the fix. Primary host processes and locks are unavailable in this seat.
+  raised_by: implementer
+  raised_at: 2026-11-15T19:46:03.603487737Z
