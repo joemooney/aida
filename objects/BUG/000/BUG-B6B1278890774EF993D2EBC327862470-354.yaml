@@ -2,24 +2,34 @@ id: 01a1de55-33d2-7521-bc2c-5308e0574697
 spec_id: BUG-b6b1278890774ef993d2ebc327862470-354
 agreed_id: BUG-2589
 title: 'aida pull is slow even when idle: 60 s with no new commits, 278 s after a promotion, on the build with both pull fixes'
-description: |
-  Measured by the advisor on the primary, live build 15d4cd0 (includes BUG-2551 spin fix #4040 and BUG-2565 pull coalescing b562c42), 2026-11-15 ~01:25 MST:
+description: 'Measured by the advisor on the primary, live build 15d4cd0 (includes BUG-2551 spin fix #4040 and BUG-2565 pull coalescing b562c42), 2026-11-15 ~01:25 MST:
+
   - first pull after a promotion, fetching new commits and completing one spec: 278 s, rc 0;
+
   - idle pull with no new commits: 60 s, rc 0.
-  Earlier on the unfixed code: 351 s with three reviewer launches alongside (2026-11-14). Every post-train pull today was cut off by the product seat's 75 s watchdog (.aida/tmp/train-pull-watchdog.log).
-  The CPU spin (BUG-2551) and lock contention (BUG-2565) are both fixed, so the remaining time is the pull's own work. Every lane pickup, reviewer launch, rework start and post-train step pays it.
+
+  Earlier on the unfixed code: 351 s with three reviewer launches alongside (2026-11-14). Every post-train pull today was cut off by the product seat''s 75 s watchdog (.aida/tmp/train-pull-watchdog.log).
+
+  The CPU spin (BUG-2551) and lock contention (BUG-2565) are both fixed, so the remaining time is the pull''s own work. Every lane pickup, reviewer launch, rework start and post-train step pays it.
+
 
   Wanted: a profile of where an idle pull and a post-train pull spend their time (phase timings printed by the command, like the BUG-2584 final-gate lines), then the fix for the largest phase.
+
   Acceptance:
+
   - `aida pull` with no new commits completes in under 10 s on the primary.
+
   - A post-train pull that fetches one landing and completes its specs completes in under 60 s, three runs in a row.
+
   - `aida pull` prints one timed line per phase (fetch, scan, cache refresh, completion, push) so the next regression is visible without a profiler.
+
+  '
 status: InProgress
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
-created_at: 2026-11-15T08:31:28.210014066Z
-modified_at: 2026-11-15T13:28:27.177515447Z
+created_at: 2026-11-15 08:31:28.210014+00:00
+modified_at: 2026-11-15 13:28:27.177515+00:00
 req_type: Bug
 tags:
 - landing-emergency
@@ -28,56 +38,63 @@ comments:
 - id: 01a1de55-bcd1-7552-b537-e70557f988ca
   author: joe
   content: 'Advisor triage 2026-11-15 01:33: Approved, high. First implementer lane after the single-file window ends (~02:45), unless #4071 (STORY-2833) still needs the lane. Brief: (1) first add per-phase timing lines to aida pull (fetch, merge, cache rebuild, gate-ledger index, spec completion, mirror), so every pull reports where its time goes; (2) measure on the primary with an idle pull and a pull after a store change; (3) remove the dominant cost. Targets: idle under 10 s, post-train under 60 s. Lane: codex on dell1 (Claude Opus if it reaches round 3). LIGHT gate plus the four ratchet tests until STORY-2833 lands; tool rules as in the lane briefs.'
-  created_at: 2026-11-15T08:32:03.281412776Z
-  modified_at: 2026-11-15T08:32:03.281412776Z
+  created_at: 2026-11-15 08:32:03.281412+00:00
+  modified_at: 2026-11-15 08:32:03.281412+00:00
   session_id: 01a1dd3e-f8c4-7e91-b882-85a32a9ee203
   harness_version: 2.1.325 (Claude Code)
 - id: 01a1de71-f8c4-7340-bc11-f5ff68cd5e48
   author: joe
   content: 'Advisor 2026-11-15 02:03, third sample: the post-train pull after the #4071 train (01:46-02:02; binary target/agent/aida built at 15d4cd0, with both pull fixes) was TERM''d by the watchdog at 76 s, so it didn''t finish; its store pull part reported ''no new commits''. Over the 60 s post-train target. Samples so far: 278 s (first pull after promotion, real work), 60 s idle, 76 s+ post-train.'
-  created_at: 2026-11-15T09:02:53.636506474Z
-  modified_at: 2026-11-15T09:02:53.636506474Z
+  created_at: 2026-11-15 09:02:53.636506+00:00
+  modified_at: 2026-11-15 09:02:53.636506+00:00
   session_id: 01a1dd3e-f8c4-7e91-b882-85a32a9ee203
   harness_version: 2.1.325 (Claude Code)
 - id: 01a1dee0-a19f-7083-9053-d0034ed857da
   author: joe
   content: 'BUG-2589 evidence (advisor 2026-11-15 03:30-03:50 MST, primary host): while the root-run self-hosted CI shards of #4058''s full run (43704925800) executed, /proc/pressure/io stayed at some 65-87% / full ~52%. `aida pull --store-only` hit rc 124 at 600 s with only ''Pulling store aida-store <- origin'' printed; three `aida comment add` calls timed out at 100-180 s with no output. The pull''s child git `merge-base --is-ancestor <store_head> <cache_head>` sat in D state for 2-9 min; three such gits stacked up (one parented to systemd --user, i.e. the cache refresh worker) and `git rev-list --count <store_head>` used 1.7 s CPU in a 60 s wall. So under disk contention the pull and cache refresh ancestry walks are IO-bound and unbounded, and concurrent ones pile up. Ask: bound/skip the is-ancestor walk (commit-graph, or compare against a recorded store head), single-flight the cache worker''s walk, and print a phase line before each git step.'
-  created_at: 2026-11-15T11:03:45.823644553Z
-  modified_at: 2026-11-15T11:03:45.823644553Z
+  created_at: 2026-11-15 11:03:45.823644+00:00
+  modified_at: 2026-11-15 11:03:45.823644+00:00
   session_id: 01a1de7f-09f6-7f22-a833-c094b4ed8e83
   harness_version: 2.1.325 (Claude Code)
 - id: 01a1df2f-ea53-7f30-aff6-9ae3603f024a
   author: dirtlab
   content: 'Implementation slice in native Codex lane: added start/elapsed phase diagnostics for code fetch/merge, store transaction and fetch/merge, collision/gate, completion store load, forge eligibility, writes, gate-ledger followups, archive cache/sweep, schedules and mirror push. Removed the reverse ancestry walk from cache refresh when target equals current store HEAD; bounded remaining strict cache ancestry checks to 2 seconds, propagating timeout rather than triggering a full rebuild. Disabled archive sweeps no longer open/refresh a cache. New regression executed and passed; further targeted pull/cache tests running. Primary idle and three post-train measurements remain required after host build/publication; this seat has read-only Git metadata and cannot run the primary acceptance experiment. Codegraph client at configured /home/joe/ai/aida/.codegraph/proxy-state/bin/codegraph is absent; doctor confirms missing tool, so rg used for navigation.'
-  created_at: 2026-11-15T12:30:21.779281170Z
-  modified_at: 2026-11-15T12:30:21.779281170Z
+  created_at: 2026-11-15 12:30:21.779281+00:00
+  modified_at: 2026-11-15 12:30:21.779281+00:00
   session_id: 01a1df2abd1e
   harness_version: codex-cli 0.167.0
 - id: 01a1df32-4678-7001-b58e-c5e32f24f4bd
   author: dirtlab
   content: 'Validation complete for this implementation slice: lane-runner cargo tests passed: bug2589_current_target_refresh_skips_ancestry_walk (1), handle_pull_command_tests (12), incremental (14 passed, 1 ignored timing demonstration), refresh_txn_rechecks_head_inside_txn (1). Python structural/manual/inventory guard tests: 86 passed. Store-writer inventory check, rustfmt check on all four changed Rust files, and git diff --check passed. Total 28 executed Rust tests passed. No primary performance measurements were attempted from this native Git-read-only seat. Keep in progress; host must build/deploy, measure idle under 10 seconds and three post-train pulls under 60 seconds, inspect new phase timings, and investigate remaining dominant phases if targets fail. Publication is Refs-only pending that evidence.'
-  created_at: 2026-11-15T12:32:56.440463036Z
-  modified_at: 2026-11-15T12:32:56.440463036Z
+  created_at: 2026-11-15 12:32:56.440463+00:00
+  modified_at: 2026-11-15 12:32:56.440463+00:00
   session_id: 01a1df2abd1e
   harness_version: codex-cli 0.167.0
 - id: 01a1df57-6917-77d3-bc8c-5a3d142fc262
   author: joe
   content: 'Advisor ruling 2026-11-15 06:16 on PR-4085 @ 5697d34: full run 43715667752 RED on the PR''s own change. CI (contracts) tests/test_bug_1796_normal_two_remote_pull_byte_identical.sh fails because the new per-phase ''[pull] <phase>: starting/finished after Ns'' lines print by default and change aida pull''s legacy output bytes. Fix: the phase timing is opt-in (e.g. aida pull --timing and/or AIDA_PULL_TIMING=1, written to stderr). Default output stays byte-identical, so the bug_1796 contract passes unchanged. Do not edit the contract''s expected bytes. Keep the timing measurement itself, and add a test that the opt-in prints every phase. Same rework round, codex lane, next free lane (single-file; the S3a lane holds the slot now). Gate: lane pre-push gate plus bash tests/test_bug_1796_normal_two_remote_pull_byte_identical.sh plus the targeted pull timing test.'
-  created_at: 2026-11-15T13:13:30.135561974Z
-  modified_at: 2026-11-15T13:13:30.135561974Z
+  created_at: 2026-11-15 13:13:30.135561+00:00
+  modified_at: 2026-11-15 13:13:30.135561+00:00
   session_id: 01a1de7f-09f6-7f22-a833-c094b4ed8e83
   harness_version: 2.1.325 (Claude Code)
 - id: 01a1df65-1929-71b0-9e1d-45ea1567a9b2
   author: joe
   content: 'Sample 2026-11-15 06:23 (advisor, primary, live build 02db2bd): hand-run post-train ''aida pull'' after promotion 12 took 264 s, rc 0, and correctly completed TASK-3795 and STORY-2745. The train''s own post-train pull did not finish (the watchdog TERMed it). Host disk was quiet (no local CI shards).'
-  created_at: 2026-11-15T13:28:27.177515447Z
-  modified_at: 2026-11-15T13:28:27.177515447Z
+  created_at: 2026-11-15 13:28:27.177515+00:00
+  modified_at: 2026-11-15 13:28:27.177515+00:00
   session_id: 01a1de7f-09f6-7f22-a833-c094b4ed8e83
   harness_version: 2.1.325 (Claude Code)
+- id: 01a1df65-c861-70d1-aa23-19657d8b19dd
+  author: dirtlab
+  content: 'Rework for PR-4085 output contract: phase diagnostics now require AIDA_PULL_TIMING=1 and remain on stderr; default legacy bytes and the contract expected block are unchanged. Uses Environment snapshot API; timing key is explicitly dropped from child launch forwarding. Added opt-in assertions to the two-remote fixture for stdout isolation and paired start/elapsed lines for every entered phase, and documented the switch. Validation: final handle_pull_command_tests 12 passed; aida-ci-guards 51 passed; normal two-remote byte-identical plus timing fixture passed against lane-built CLI; all non-Cargo FAST gates passed (resumed after fixing the environment ratchet), 7 Python structural tests passed, changed-file rustfmt, shell syntax and diff checks passed. Initial ratchet failures were fixed and rerun green. Native seat leaves four files uncommitted. Refs-only: primary idle under 10s and three post-train pulls under 60s remain unverified and require host deployment/measurement.'
+  created_at: 2026-11-15 13:29:12.033052+00:00
+  modified_at: 2026-11-15 13:29:12.033052+00:00
+  session_id: 01a1df5a2d67
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1de55-aee3-7dd3-ae75-789e6cc7f1be
   author: joe
-  timestamp: 2026-11-15T08:31:59.715824723Z
+  timestamp: 2026-11-15 08:31:59.715824+00:00
   session_id: 01a1dd3e-f8c4-7e91-b882-85a32a9ee203
   harness_version: 2.1.325 (Claude Code)
   changes:
@@ -86,15 +103,21 @@ history:
     new_value: Approved
 - id: 01a1df2a-c376-7742-becc-00db46357b1c
   author: aida-session-start
-  timestamp: 2026-11-15T12:24:44.150327820Z
+  timestamp: 2026-11-15 12:24:44.150327+00:00
   changes:
   - field_name: status
     old_value: Approved
     new_value: InProgress
 - id: 01a1df2b-3276-7432-accc-abf3e6f33836
   author: dirtlab
-  timestamp: 2026-11-15T12:25:12.566748202Z
+  timestamp: 2026-11-15 12:25:12.566748+00:00
   session_id: 01a1df2abd1e
+  harness_version: codex-cli 0.167.0
+  changes: []
+- id: 01a1df5a-a711-7233-abb7-92487726847c
+  author: dirtlab
+  timestamp: 2026-11-15 13:17:02.609931+00:00
+  session_id: 01a1df5a2d67
   harness_version: codex-cli 0.167.0
   changes: []
 filed_at:
