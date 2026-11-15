@@ -20,7 +20,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-13T18:06:55.227979618Z
-modified_at: 2026-11-15T06:02:58.975572170Z
+modified_at: 2026-11-15T06:48:15.709667559Z
 req_type: Story
 tags:
 - config
@@ -194,6 +194,13 @@ comments:
   created_at: 2026-11-15T06:02:58.975572170Z
   modified_at: 2026-11-15T06:02:58.975572170Z
   session_id: 01a1dd71-ad1f-7413-b80c-6ef977f716a0
+  harness_version: 2.1.325 (Claude Code)
+- id: 01a1ddf6-b65d-76d0-9f00-9565263b2022
+  author: joe
+  content: 'Advisor ruling 2026-11-14 23:58 on promotion 11 round-2 CR (#4075 @ 0fbfcdb, 2 x P2 incomplete-fix): both NON-BLOCKING, moved to TASK-3795. Reason: round 2 (cap); (1) is a fail-closed false refusal of an otherwise-allowed promotion after a delayed approval, with operator remedy (re-run the check after the approval settles or hand-verify the revert); (2) affects only the merged-before-review visibility tag: promotion admission is decided by findings, and the pending constituent still refuses the promotion. Neither is correctness of admission, security or data loss. Round-1 fixes (#4077) are not implicated. Delta re-review requested at the same head with this ruling.'
+  created_at: 2026-11-15T06:48:15.709667559Z
+  modified_at: 2026-11-15T06:48:15.709667559Z
+  session_id: 01a1dd3e-f8c4-7e91-b882-85a32a9ee203
   harness_version: 2.1.325 (Claude Code)
 history:
 - id: 01a1d617-7531-7dc3-aba6-d82849880497
