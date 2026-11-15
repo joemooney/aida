@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-14T18:22:12.152871570Z
-modified_at: 2026-11-14T22:58:35.672742273Z
+modified_at: 2026-11-15T02:55:03.743557298Z
 req_type: Story
 tags:
 - docs:impacted
@@ -182,6 +182,13 @@ comments:
   modified_at: 2026-11-14T22:58:35.672742273Z
   session_id: 01a1dc3d2cdc
   harness_version: codex-cli 0.167.0
+- id: 01a1dd21-363f-7bc1-a017-aaf64d062f81
+  author: joe
+  content: 'Advisor ruling 19:55: PR-4053 was approved at 3ee43d9 but the train ejected it: it conflicts with main since #4027 (STORY-2809) landed. Rework: merge main into the branch; per the round-0/round-3 disposition, now that full_tier_gate is on main, make it honour read_only and enter Gate::FullCi in the member gate (no CI request, no label/event writes under --check), and add full-ci to the gate list in docs/cli/04-git-lifecycle.md. Gate: cargo test -p aida-cli-lib story_2824 pr_train, the four ratchets, make check-ci-fast. FIRST in the lane queue (closest to landing); held (rework); ci:full off until the resolved head is pushed.'
+  created_at: 2026-11-15T02:55:03.743557298Z
+  modified_at: 2026-11-15T02:55:03.743557298Z
+  session_id: 01a1dc2c-25f2-7d52-aa8c-61e0f270e9d1
+  harness_version: 2.1.325 (Claude Code)
 history:
 - id: 01a1db50-9f3b-76d0-bb89-e5b424c233d5
   author: aida-session-start
